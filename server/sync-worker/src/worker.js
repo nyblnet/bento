@@ -20,9 +20,13 @@
 //                     { i, d }            ephemeral (presence, hello, need)
 //                     { p:1, i, d }       persist an op batch
 //                     { snap:1, q, i, d } encrypted snapshot covering seq ≤ q
-//   server → clients: same frames fanned out, ops stamped with { q: seq };
+//   server → clients: same frames fanned out, ops stamped with { q: seq } and
+//                     signed frames re-stamped with the { g } this relay
+//                     VERIFIED (never one it didn't — that stamp is what tells
+//                     a peer the sender was allowed to write);
 //                     on join: snapshot (if any) + ops since ?since= then
-//                     { ctl:'ready', q: latest }
+//                     { ctl:'ready', q: latest, wt? } — wt is the blob write
+//                     ticket, issued only to certified writer sockets
 
 const IDLE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 // The binding constraint is DURABLE OBJECT STORAGE, not the WebSocket message
@@ -93,6 +97,15 @@ const rawFrameId = (raw) =>
 // pubkey but not the private half — their writes are dropped, so read-only is
 // ENFORCED here while the relay stays blind to content. 'r' rooms are legacy
 // and stay permissive.
+//
+// Blindness has a cost the enforcement above does not cover: the relay cannot
+// tell an op batch from a presence beat, because both are opaque {i,d}. So it
+// cannot refuse to FAN OUT a reader's frame — a read-only copy holds the room
+// key and can encrypt anything. What the relay can do is say what it checked:
+// `q` on a frame it persisted (signature-verified before storage) and the
+// echoed `g` on a signed frame it fanned out. A client refuses content-bearing
+// frames (op batches, whole-document fork snapshots) that carry neither, so
+// read-only holds for live peers too and not merely for the stored log.
 const b64uDec = (s) => {
   const b = atob(s.replace(/-/g, '+').replace(/_/g, '/'))
   const out = new Uint8Array(b.length)
@@ -174,10 +187,15 @@ export default {
  *  how a client skips re-uploading an asset a peer already sent — content
  *  addressing means an identical asset has an identical key).
  *
- *  Auth is the room token, same possession proof as the socket. That is
+ *  READS take the room token, same possession proof as the socket. That is
  *  deliberately no stronger than the room itself: anyone who can read the
  *  room's frames can already read its assets, and the bytes are ciphertext
  *  either way.
+ *
+ *  WRITES take the room's write ticket instead (Room.writeTicket) — the token
+ *  is the READ capability, and authorizing an upload with it let a read-only
+ *  copy burn the room's ROOM_BLOB_CAP. Same field, so the wire is unchanged:
+ *  the DO decides which credential a request satisfied.
  *
  *  R2 is OPTIONAL. Without the binding these routes answer 501 and clients
  *  keep inlining small assets, so a self-hoster who hasn't set up a bucket
@@ -283,6 +301,25 @@ export class Room {
     return this.verifyWith(meta.w, f.g, `${f.i}.${f.d}`)
   }
 
+  /** The room's blob WRITE ticket — a capability handed out over the socket,
+   *  and only to a socket whose writer key this room certified. Blob PUTs are
+   *  otherwise authorized by the room token alone, which every copy carries
+   *  including read-only ones, so a viewer could fill the room's ROOM_BLOB_CAP
+   *  and squat the content-addressed keys real assets will land on.
+   *
+   *  Minted lazily and stable thereafter; a revocation re-mints it, because a
+   *  removed member's held ticket would otherwise outlive their access. */
+  async writeTicket() {
+    let t = await this.state.storage.get('wt')
+    if (!t) {
+      const b = new Uint8Array(24)
+      crypto.getRandomValues(b)
+      t = b64uEnc(b) // 32 chars — inside the blob route's token charset/length
+      await this.state.storage.put('wt', t)
+    }
+    return t
+  }
+
   async fetch(req) {
     // Token check for the blob routes — the DO is the only holder of the
     // room's token, so blob auth asks it rather than duplicating the rule.
@@ -292,12 +329,23 @@ export class Room {
     if (u0.pathname === '/authz') {
       const saved = await this.state.storage.get('tok')
       const given = u0.searchParams.get('tok') || ''
-      if (saved === undefined || saved !== given) return new Response(null, { status: 403 })
+      const ticket = await this.state.storage.get('wt')
+      const byTok = saved !== undefined && saved === given
+      const byTicket = !!ticket && given === ticket
+      if (!byTok && !byTicket) return new Response(null, { status: 403 })
       // Blob accounting rides on the same call the blob route already makes.
       // `size` present = a PUT asking to reserve quota; absent = a read.
       const size = parseInt(u0.searchParams.get('size') || '0', 10) || 0
       const bkey = u0.searchParams.get('bkey') || ''
       if (!size || !bkey) return new Response(null, { status: 200 })
+      // A WRITE needs the write ticket — but only once this room has actually
+      // seen a ticket-capable writer (?bt=1). Shipped clients PUT with the room
+      // token and know nothing about tickets, so without that latch this relay
+      // could not be deployed ahead of them: every existing file's asset
+      // offload would start 403ing the moment it went live.
+      if (!byTicket && (await this.state.storage.get('wtReq'))) {
+        return new Response(null, { status: 403 })
+      }
       // Already counted? Then this is a re-upload of identical content
       // (content-addressed keys) — admit it without double-charging.
       if (await this.state.storage.get(BKEY(bkey))) {
@@ -375,9 +423,38 @@ export class Room {
     // Per-socket rate-limit state rides on the socket's serialized attachment
     // (in-memory Maps don't survive hibernation).
     this.state.acceptWebSocket(server)
-    server.serializeAttachment({ count: 0, windowStart: Date.now(), signed, w: sockW })
 
-    await this.replay(server, since)
+    // CERTIFIED IS NOT PROVEN. The direct path above accepts a socket whose
+    // `?w=` hash-matches the room name — and that key is the owner's PUBLIC
+    // key, which every copy of the file carries, read-only copies included. A
+    // hash-match therefore says "this socket knows the owner's public key",
+    // which every reader does. It does NOT say the socket holds the private
+    // half. The op channel never needed it to: every persisted frame carries
+    // its own signature and is verified against `w` before storage, so a
+    // reader presenting `?w=` can be certified all day and still write nothing.
+    //
+    // The blob write TICKET is different. It is a bearer capability issued over
+    // the socket, and issuing it on the hash-match alone handed it to any reader
+    // — who could then fill ROOM_BLOB_CAP, squat content-addressed keys, and
+    // (via `bt=1`) latch the room so every older client's upload 403s. So the
+    // ticket, and the latch, wait for PROOF: `ready` carries a per-socket nonce,
+    // the client signs `prove.<nonce>.<name>` with the private key, and only a
+    // socket that answers is marked `proven` and handed a ticket (on its own
+    // `wt` frame). The chain path is proof already (`dg` needs the invite's
+    // private key) but is challenged the same way — one rule, no exceptions.
+    let nonce = null
+    let wantsTicket = false
+    if (sockW) {
+      const b = new Uint8Array(16)
+      crypto.getRandomValues(b)
+      nonce = b64uEnc(b)
+      wantsTicket = url.searchParams.get('bt') === '1'
+    }
+    server.serializeAttachment({
+      count: 0, windowStart: Date.now(), signed, w: sockW,
+      nonce, bt: wantsTicket, proven: false,
+    })
+    await this.replay(server, since, nonce)
     await this.state.storage.setAlarm(Date.now() + IDLE_TTL_MS)
     return new Response(null, { status: 101, webSocket: client })
   }
@@ -391,7 +468,9 @@ export class Room {
   }
   webSocketError() { /* the runtime drops the socket; nothing to clean up */ }
 
-  async replay(ws, since) {
+  /** `nonce` is the possession challenge for a certified socket — sent on
+   *  `ready` as `c`; the ticket itself never rides here (see `prove`). */
+  async replay(ws, since, nonce = null) {
     const seq = (await this.state.storage.get('seq')) || 0
     const snap = await this.state.storage.get('snap')
     let from = since
@@ -409,7 +488,7 @@ export class Room {
           ws.send(JSON.stringify({ q: parseInt(key.slice(3), 10), i: f.i, d: f.d }))
         }
       }
-      ws.send(JSON.stringify({ ctl: 'ready', q: seq }))
+      ws.send(JSON.stringify(nonce ? { ctl: 'ready', q: seq, c: nonce } : { ctl: 'ready', q: seq }))
     } catch {
       /* socket died mid-replay */
     }
@@ -447,6 +526,29 @@ export class Room {
     } catch {
       return
     }
+    // Possession proof (see the connect path for why a hash-match is not one).
+    // A certified socket signs `prove.<nonce>.<name>` with the private half of
+    // the key it presented; the name is in the text so the signature cannot be
+    // replayed into another room, and the nonce is consumed on first use so it
+    // cannot be replayed into this one. Only a proven socket is handed the
+    // blob write ticket, and only a proven socket that asked (`bt=1`) latches
+    // the room into requiring it.
+    if (f.ctl === 'prove') {
+      if (!meta.w || !meta.nonce || meta.proven || typeof f.g !== 'string') return
+      const name = (await this.state.storage.get('name')) || ''
+      const ok = await this.verifyWith(meta.w, f.g, `prove.${meta.nonce}.${name}`)
+      // consumed either way — a wrong answer does not get a second try
+      meta.nonce = null
+      if (!ok) { ws.serializeAttachment(meta); return }
+      meta.proven = true
+      ws.serializeAttachment(meta)
+      const ticket = await this.writeTicket()
+      if (meta.bt && !(await this.state.storage.get('wtReq'))) {
+        await this.state.storage.put('wtReq', 1)
+      }
+      try { ws.send(JSON.stringify({ ctl: 'wt', wt: ticket })) } catch { /* gone */ }
+      return
+    }
     // owner-signed revocation: cut off ONE member key (or a whole invite
     // lineage) without re-keying the room. Plaintext control frame — it names
     // only pubkeys, never content. Live sockets on the revoked key are closed.
@@ -456,11 +558,25 @@ export class Room {
       if (!(await this.verifyWith(f.o, f.g, `rev.${f.p}`))) return
       const rev = (await this.state.storage.get('rev')) || []
       if (!rev.includes(f.p)) await this.state.storage.put('rev', [...rev, f.p])
+      // Closing the socket and refusing reconnects revokes the OP channel; the
+      // blob write ticket is a bearer capability the removed member already
+      // holds, so it has to be re-minted or removal leaks a write path. The
+      // fresh one goes only to sockets that are still certified — sending it
+      // in the note everyone gets would hand it to every reader in the room.
+      await this.state.storage.delete('wt')
+      const fresh = await this.writeTicket()
       const note = JSON.stringify({ ctl: 'revoked', p: f.p })
+      const noteW = JSON.stringify({ ctl: 'revoked', p: f.p, wt: fresh })
       for (const peer of this.state.getWebSockets()) {
         const m = peer.deserializeAttachment() || {}
-        try { peer.send(note) } catch { /* gone */ }
-        if (m.w === f.p) { try { peer.close(1008, 'revoked') } catch { /* gone */ } }
+        if (m.w === f.p) {
+          try { peer.send(note) } catch { /* gone */ }
+          try { peer.close(1008, 'revoked') } catch { /* gone */ }
+          continue
+        }
+        // PROVEN, not merely certified: a reader that presented the owner's
+        // public key has a pinned `w` too, and must not receive the fresh ticket
+        try { peer.send(m.proven ? noteW : note) } catch { /* gone */ }
       }
       return
     }
@@ -475,11 +591,18 @@ export class Room {
     // Signed rooms: a persisted frame (op batch / snapshot) must carry a valid
     // writer signature, else DROP it — this is what enforces read-only. A
     // reader (no private key) can still send ephemeral frames (presence).
-    if (meta.signed && (f.p === 1 || f.snap === 1)) {
+    //
+    // A frame that merely fans out is verified too WHEN IT CLAIMS a signature:
+    // the fork snapshot is ephemeral yet replaces a peer's whole document, so
+    // it signs itself, and the echo below must never carry a `g` this relay
+    // did not check — a stamp you don't verify is worse than no stamp.
+    const claimed = typeof f.g === 'string'
+    if (meta.signed && (f.p === 1 || f.snap === 1 || claimed)) {
       if (!(await this.verifySig(f, ws))) return
     }
 
     const out = { i: f.i, d: f.d }
+    if (meta.signed && claimed) out.g = f.g
     const weight = (f.i?.length || 0) + (f.d?.length || 0)
     if (f.p === 1) {
       // Per-room storage ceiling. Room creation is unauthenticated by design
@@ -509,7 +632,19 @@ export class Room {
         /* gone */
       }
     } else if (f.snap === 1 && typeof f.q === 'number') {
-      // client-produced encrypted snapshot: keep the newest, prune covered ops
+      // client-produced encrypted snapshot: keep the newest, prune covered ops.
+      //
+      // CLAMPED to the room's own seq. `q` is the client's claim of what the
+      // snapshot covers, and the prune below deletes every op up to it — so a
+      // snapshot claiming q = 10^9 would wipe the whole log with one frame and
+      // leave every later joiner with a snapshot and no ops. A writer is
+      // trusted to edit, not to destroy the log. Refused with a code, not
+      // silently dropped: a client that produces one has a drifted counter,
+      // and silence is how that kind of bug stays hidden.
+      const seq = (await this.state.storage.get('seq')) || 0
+      if (f.q > seq) {
+        return refuse(ws, 'snap-ahead', { q: f.q, seq, k: f.k })
+      }
       const cur = await this.state.storage.get('snap')
       if (!cur || f.q > cur.q) {
         // A snapshot supersedes every op it covers, so it RELIEVES pressure —
