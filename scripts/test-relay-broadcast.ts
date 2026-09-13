@@ -181,6 +181,45 @@ const frames = (s: Sock) => s.sent.map(parse)
 
 // ---------------------------------------------------------------------------
 {
+  console.log('a certified-but-unproven socket is a reader to the show…')
+  const { state, room, presenter } = await stage()
+  await goLive(room, presenter)
+  const a = await connect(room, NAME, await audQuery(viewerA))
+  // The socket every reader copy can open: `?w=` is the owner's PUBLIC key,
+  // which hash-matches the room name and pins `w` — without the private half
+  // it can never answer the nonce, so it is never `proven`.
+  const imp = await connect(room, NAME, `&bt=1&w=${owner.pub}`)
+  ok(typeof imp.ready?.c === 'string' && !(imp.server.deserializeAttachment() as { proven?: boolean }).proven, 'a reader presenting the owner’s public key is certified and challenged, not proven')
+  a.server.sent.length = 0; presenter.sent.length = 0
+  const held = (await state.storage.list({ prefix: 'show:op:' })).size
+
+  await room.onMessage(imp.server, JSON.stringify({ s: 'aud', p: 1, i: IV, d: CT }))
+  await room.onMessage(imp.server, JSON.stringify({ ctl: 'laser', s: 'aud', i: IV, d: CT }))
+  await room.onMessage(imp.server, JSON.stringify({ ctl: 'audsnap', i: IV, d: CT }))
+  await room.onMessage(imp.server, JSON.stringify({ ctl: 'end', g: await owner.sign('end') }))
+  ok(a.server.sent.length === 0, 'its aud op, laser and audsnap reach no audience socket')
+  ok((await state.storage.list({ prefix: 'show:op:' })).size === held, 'nothing it sent is held for late joiners')
+  ok((await state.storage.get('show:snap')) === undefined, 'it cannot replace the held snapshot')
+  ok((await state.storage.get('show:live')) === 1, 'and it cannot end the show — even carrying the owner’s real `end` signature, on an unproven socket')
+
+  // nor can it fill the show
+  const big = 'x'.repeat(300 * 1024)
+  await room.onMessage(imp.server, JSON.stringify({ s: 'aud', i: big, d: big }))
+  await room.onMessage(imp.server, JSON.stringify({ s: 'aud', i: big, d: big }))
+  ok((await state.storage.get('show:full')) === undefined, 'two oversize frames from it do not mark the show full')
+  const late = await connect(room, NAME, await audQuery(viewerB))
+  ok(late.status === 101 && !late.server.closed, 'and joiners are still admitted')
+
+  // a chain-admitted co-presenter who DOES prove is not locked out
+  const co = await connect(room, NAME, await chainQuery(owner, writerInvite, member, 'writer'))
+  await prove(room, co, member, NAME)
+  a.server.sent.length = 0
+  await room.onMessage(co.server, JSON.stringify({ ctl: 'laser', s: 'aud', i: IV, d: CT }))
+  ok(frames(a.server).some((f) => f.ctl === 'laser'), 'a proven co-presenter’s laser reaches the audience')
+}
+
+// ---------------------------------------------------------------------------
+{
   console.log('control verbs verify by role; nav/black retained, laser not…')
   const { state, room, presenter } = await stage()
   const reader = await connect(room, NAME, '')
@@ -286,12 +325,26 @@ const frames = (s: Sock) => s.sent.map(parse)
   }
   ok(asked === 1, `the presenter was asked to checkpoint exactly once (after ${n} frames)`)
   ok((await state.storage.get('show:full')) === 1, 'past twice the cap the show is marked full')
+  const heldAtCap = await state.storage.get('show:bytes') as number
+  presenter.sent.length = 0
+  await room.onMessage(presenter, JSON.stringify({ s: 'aud', k: 'k-over', i: big, d: big }))
+  ok((await state.storage.get('show:bytes')) === heldAtCap, 'past the hard cap nothing more is appended')
+  ok(frames(presenter).some((f) => f.ctl === 'refused' && f.code === 'show-full' && f.k === 'k-over'), 'and the sender is refused with a code naming the frame')
   const refused = await connect(room, NAME, await audQuery(viewerA))
   ok(refused.server.closeCode === 4003 && refused.server.closeReason === 'show-full', 'a joiner is refused 4003 show-full')
   await room.onMessage(presenter, JSON.stringify({ ctl: 'audsnap', i: 'AUDI', d: 'AUDD' }))
   ok((await state.storage.get('show:full')) === undefined && (await state.storage.get('show:bytes')) === 0, 'a checkpoint resets the cap')
   const admitted = await connect(room, NAME, await audQuery(viewerA))
   ok(admitted.status === 101 && !admitted.server.closed, 'and joiners are admitted again')
+
+  // a co-presenter pushing the show over the SOFT line: the request still goes
+  // to the socket that sent `live`, not to the sender
+  const co = await connect(room, NAME, await chainQuery(owner, writerInvite, member, 'writer'))
+  await prove(room, co, member, NAME)
+  presenter.sent.length = 0; co.server.sent.length = 0
+  for (let i = 0; i < 40; i++) await room.onMessage(co.server, JSON.stringify({ s: 'aud', i: big, d: big }))
+  ok(frames(presenter).some((f) => f.ctl === 'audckpt'), 'a co-presenter’s ops ask the PRESENTER to checkpoint')
+  ok(!frames(co.server).some((f) => f.ctl === 'audckpt'), 'not the co-presenter')
 }
 
 // ---------------------------------------------------------------------------
@@ -312,8 +365,12 @@ const frames = (s: Sock) => s.sent.map(parse)
 
   // a writer's `live` cancels it — here a co-presenter on a member chain
   const co = await connect(room, NAME, await chainQuery(owner, writerInvite, member, 'writer'))
+  // unproven, the co-presenter's `live` is nothing — a certified socket is a reader to the show
   await room.onMessage(co.server, JSON.stringify({ ctl: 'live', g: await member.sign('live') }))
-  ok((await state.storage.get('al:grace')) === undefined, 'a writer’s `live` cancels the grace')
+  ok((await state.storage.get('al:grace')) !== undefined, 'an UNPROVEN co-presenter’s `live` does not cancel the grace')
+  await prove(room, co, member, NAME)
+  await room.onMessage(co.server, JSON.stringify({ ctl: 'live', g: await member.sign('live') }))
+  ok((await state.storage.get('al:grace')) === undefined, 'a PROVEN writer’s `live` cancels the grace')
   ok((await state.storage.get('show:live')) === 1, 'and the show continues')
 
   // grace runs out: the show ends and THE ROOM SURVIVES
@@ -361,6 +418,15 @@ const frames = (s: Sock) => s.sent.map(parse)
   const { state, room, presenter } = await stage()
   await goLive(room, presenter)
   const a = await connect(room, NAME, await audQuery(viewerA))
+
+  // revoking a COLLABORATOR's member key: the audience hears nothing
+  a.server.sent.length = 0
+  await room.onMessage(presenter, JSON.stringify({
+    ctl: 'revoke', p: member.pub, o: owner.pub, g: await owner.sign(`rev.${member.pub}`),
+  }))
+  ok(a.server.sent.length === 0 && !a.server.closed, 'a collaborator revocation reaches no audience socket')
+
+  // "Issue new tickets": revoking the AUDIENCE invite
   await room.onMessage(presenter, JSON.stringify({
     ctl: 'revoke', p: audInvite.pub, o: owner.pub, g: await owner.sign(`rev.${audInvite.pub}`),
   }))

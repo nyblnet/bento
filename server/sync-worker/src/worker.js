@@ -699,6 +699,8 @@ export class Room {
           try { peer.close(1008, 'revoked') } catch { /* gone */ }
           continue
         }
+        // the audience is told nothing about the room's membership
+        if (m.audience) continue
         // PROVEN, not merely certified: a reader that presented the owner's
         // public key has a pinned `w` too, and must not receive the fresh ticket
         try { peer.send(m.proven ? noteW : note) } catch { /* gone */ }
@@ -729,9 +731,19 @@ export class Room {
     // whatever else it carries, routed to audience sockets only, and appended
     // to the relay-held show state so a late joiner is served the same ops.
     if (f.s === 'aud') {
-      if (!meta.w || !meta.signed || !(await this.state.storage.get('show:live'))) return
+      // PROVEN, not merely certified. `w` is pinned at connect on a hash-match
+      // of the owner's PUBLIC key, which every reader copy carries; `proven`
+      // is the socket that answered the nonce with the private half. The room
+      // stream can gate on `w` because its persisted frames sign themselves;
+      // this stream is unsigned by design, so the socket must be the proof.
+      if (!meta.proven || !(await this.state.storage.get('show:live'))) return
       if (typeof f.i !== 'string' || typeof f.d !== 'string') return
-      await this.appendShowOp(ws, f)
+      if (!(await this.appendShowOp(f))) {
+        // past the hard cap with no checkpoint: refuse, and say so to the
+        // sender — storage stops growing, and the presenter is told twice
+        // (audckpt earlier, this refusal now) rather than silently dropped
+        return refuse(ws, 'show-full', { k: f.k })
+      }
       this.fanTo('aud', JSON.stringify({ s: 'aud', i: f.i, d: f.d }), ws)
       return
     }
@@ -849,10 +861,14 @@ export class Room {
   async onBroadcastFrame(ws, meta, f) {
     const ctl = f.ctl
     if (ctl !== 'live' && ctl !== 'end' && ctl !== 'nav' && ctl !== 'black' && ctl !== 'laser' && ctl !== 'audsnap') return false
-    // Every broadcast verb is a WRITER's. Verified by role (the pinned `w` on
-    // this socket), never by chain membership — the audience invite is on the
-    // same chain, and membership would let a ticket drive.
-    if (!meta.w || !meta.signed) return true
+    // Every broadcast verb is a PROVEN writer's. `proven` — the socket answered
+    // the possession nonce with the private half of the key it presented — and
+    // never `w` alone, which a reader earns by presenting the owner's public
+    // key; never chain membership either, since the audience invite is on the
+    // same chain and membership would let a ticket drive. Chain-admitted
+    // co-presenters are challenged like everyone else, so nothing legitimate
+    // is locked out by this.
+    if (!meta.proven) return true
 
     if (ctl === 'live' || ctl === 'end') {
       if (typeof f.g !== 'string' || !(await this.verifyWith(meta.w, f.g, ctl))) return true
@@ -905,22 +921,33 @@ export class Room {
     return true
   }
 
-  /** Append an aud op to the held show state, and police its size. */
-  async appendShowOp(ws, f) {
+  /** Append an aud op to the held show state, and police its size. Returns
+   *  false — nothing appended — once the hard cap is reached. */
+  async appendShowOp(f) {
+    const held = (await this.state.storage.get('show:bytes')) || 0
+    const bytes = held + f.i.length + f.d.length
+    // Past twice the ceiling with no checkpoint: STOP. Joiners are refused
+    // (show:full) and so is this frame — otherwise storage keeps growing with
+    // every op the presenter sends while the checkpoint request is unanswered.
+    if (bytes > 2 * SHOW_OPS_CAP) {
+      await this.state.storage.put('show:full', 1)
+      return false
+    }
     const n = ((await this.state.storage.get('show:opn')) || 0) + 1
-    const bytes = ((await this.state.storage.get('show:bytes')) || 0) + f.i.length + f.d.length
     await this.state.storage.put(`show:op:${String(n).padStart(8, '0')}`, { i: f.i, d: f.d })
     await this.state.storage.put('show:opn', n)
     await this.state.storage.put('show:bytes', bytes)
-    // Past the ceiling, ask the presenter to checkpoint (once per crossing).
-    // Past twice the ceiling with no checkpoint, stop admitting joiners
-    // rather than serve them an ever-growing, possibly incoherent state; the
-    // audience already present keeps streaming.
+    // Past the ceiling, ask the PRESENTER to checkpoint (once per crossing) —
+    // the socket that sent `live`, not whichever writer sent this frame.
     if (bytes > SHOW_OPS_CAP && !(await this.state.storage.get('show:ckpt-asked'))) {
       await this.state.storage.put('show:ckpt-asked', 1)
-      try { ws.send(JSON.stringify({ ctl: 'audckpt' })) } catch { /* gone */ }
+      const presenter = await this.state.storage.get('show:presenter')
+      for (const peer of this.state.getWebSockets()) {
+        const m = peer.deserializeAttachment() || {}
+        if (m.sid === presenter) { try { peer.send(JSON.stringify({ ctl: 'audckpt' })) } catch { /* gone */ } }
+      }
     }
-    if (bytes > 2 * SHOW_OPS_CAP) await this.state.storage.put('show:full', 1)
+    return true
   }
 
   /** The show is over — by `end`, or by the grace period running out. */
