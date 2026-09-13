@@ -6543,3 +6543,38 @@ derived rooms and trust-on-first-use pinning, `doc.broadcast`, the hosting
 URL, the hosted client, and the relay integration check that tested them.
 The contributor's relay verb logic, follow UI and off-by-default rule are the
 surviving core; the PR stays theirs.
+
+## 2026-09 — Shared UI primitives, tier 2: the side panel + resizer
+
+**Decision.** The resizable, collapsible side panel moves into the kernel as
+`kernel/src/ui/panel.ts` + `panel.css`, guarded by `scripts/test-ui-panel.ts`.
+Kernel definition only — each app's migration is that zone's own change, as with
+the menu (tier 1). Same rules: structure and behaviour are shared; token VALUES
+read through `--bkp-*` fallback chains onto whatever the host app already
+defines, so adoption is appearance-neutral and no theme mechanism is imposed
+(never `light-dark()`, for the reason in the tier-1 entry). The persistence key
+is INJECTED — the kernel does not hardcode an app's localStorage namespace.
+
+**Why, measured by concept.** Three apps implement the same resizable panel and
+a fourth stubs it: slides (`.ed-sidebar`/`.ed-props`, two resizers, RTL widen,
+`bento-ed-panels`, phone drawers), spaces (`.sp-insp`, `bento-sp-*`), dash
+(explicitly "ported from slides", one panel, `]` collapse, `bento-dash-panels`),
+and type, whose `.t-props` is a FIXED-WIDTH aside with no resizer, collapse or
+persistence — its CSS even says it copied the row metrics "at a fixed width, as
+slides and dash both do" and none of the machinery. So "slides is the basis"
+again gives the fourth app the LEAST; type would gain drag/collapse/persistence
+from adopting this, not lose anything.
+
+**The value is knowledge, not bytes**, as with the menu. Each app learned the
+same non-obvious things alone: a panel needs a no-animation class DURING a drag
+or its width transition chases the cursor; the collapse chevron docks flush to
+the screen edge when shut; widening flips direction under RTL because the drag
+delta is physical while the panel is docked logically; a panel boots SHUT below
+a phone width; and (hard-won detail 10) a panel is `overflow:auto`, so anything
+floating inside it is clipped on both axes and must escape rather than overflow.
+`panel.ts`/`panel.css` are the one home for each.
+
+Pointers: `kernel/src/ui/panel.ts`, `kernel/src/ui/panel.css`,
+`scripts/test-ui-panel.ts` (62 checks; the drag/RTL/collapse/persistence/drawer
+behaviours are each mutation-caught, and the theming guard is reproduced from
+tier 1 — to be factored into one shared helper when both primitives have landed).

@@ -319,6 +319,17 @@ jobs:
         # bugs found in review ride along.
         run: node scripts/test-codediff.ts
 
+      - name: Shared panel primitive rig
+        # kernel/src/ui/panel.ts is the second UI primitive (after the menu):
+        # the resizable, collapsible side panel three apps hand-rolled and a
+        # fourth stubbed. Every check guards a piece of invisible behaviour each
+        # app learned alone — the no-animation-during-drag class, the RTL widen
+        # direction, a collapsed panel refusing to drag, per-viewer persistence
+        # clamped on restore, the drawer that boots shut below a phone width —
+        # plus the theming guard (every colour chain reaches a token each of the
+        # four apps defines and themes). Each is mutation-caught.
+        run: node scripts/test-ui-panel.ts
+
       - name: First-page preview rig
         # Every save writes a static render of page one for file-manager
         # thumbnails. Two decisions in that path fail silently: an encrypted
