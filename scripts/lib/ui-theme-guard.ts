@@ -71,6 +71,16 @@ export function tokensOf(cssPath: string): { all: Set<string>; themed: Set<strin
     }
     for (const m of src.slice(start.index!, i).matchAll(/(--[a-z0-9-]+)\s*:/g)) themed.add(m[1])
   }
+  // Follow ALIAS indirection: a token defined as `--x: var(--y)` is themed iff
+  // --y is themed. dash writes `--chrome-2: var(--hover)`, and --hover is
+  // themed via light-dark(); without this, --chrome-2 reads as un-themed though
+  // at runtime it inverts. Iterate to a fixpoint for alias chains.
+  const aliases: Array<[string, string]> = []
+  for (const m of src.matchAll(/(--[a-z0-9-]+)\s*:\s*var\(\s*(--[a-z0-9-]+)/g)) aliases.push([m[1], m[2]])
+  for (let changed = true; changed;) {
+    changed = false
+    for (const [x, y] of aliases) if (themed.has(y) && !themed.has(x)) { themed.add(x); changed = true }
+  }
   return { all, themed }
 }
 
