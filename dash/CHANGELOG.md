@@ -12,6 +12,33 @@ There is no server, so a break here would be permanent.
 
 The release that came out of watching somebody use 0.2.0.
 
+- **Renaming a sheet renames it everywhere.** `=SUM(Pipeline!D1:D8)` names the
+  sheet by name, and renaming the tab used to leave it pointing at a sheet that
+  no longer existed — the starter workbook's own cross-sheet totals read
+  `#REF!` after the first rename. Now every formula, column expression and
+  defined name that named the sheet is respelled in the same edit, and one undo
+  takes the name and the formulas back together.
+
+- **Inserting or deleting rows moves the other sheets' references too.** A row
+  added inside Pipeline now widens `Pipeline!D1:D8` on Scratch to `D1:D9`,
+  exactly as it already moved Pipeline's own formulas; before, the range stayed
+  put and the total quietly summed eight of nine deals. A reference to a deleted
+  row becomes `#REF!` on every sheet, never the row that slid into its place.
+
+- **Enter after a Tab run comes home.** Type Widget⇥12⇥4.50⏎ and the cursor
+  lands on the next row's first column, not diagonally two columns over. The
+  selection model already knew how; the editor's commit never asked it, and a
+  document change mid-run forgot the run. A new rig drives the real editor.
+
+- **A word in a number column is marked, not hidden.** A dataset column typed
+  Number used to accept "hello" and say nothing; the total silently left it out
+  and a formula reading it gave `#VALUE!`. The cell now wears the same ring a
+  validation failure wears, with the reason on hover, and the column header
+  counts it.
+
+- **The formula bar follows a paste and a right-click.** Both moved the cursor
+  without re-reading the cell, so the bar described the value from before.
+
 - **Sheet tabs along the bottom**, where every spreadsheet has kept them since
   Excel 5. They were a list inside the left panel; that panel is gone, and the
   grid is about 200px wider at every window size. Drag to reorder — and because

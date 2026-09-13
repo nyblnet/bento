@@ -750,4 +750,5 @@ export const ja: Catalog = {
   "“{name}” is the older Excel format. Open it in Excel and save it as .xlsx, and dash will read it.": "「{name}」は古い形式の Excel ファイルです。Excel で開いて .xlsx で保存すれば、dash が読み取れます。",
   "…or cut at character positions": "…または文字位置で区切る",
   "＋ Comment on the selected cell": "＋ 選択したセルにコメント",
+  "Not a number — left out of totals, and a formula that reads it gives #VALUE!": "数値ではありません — 合計から除外され、これを参照する数式は #VALUE! になります",
 }

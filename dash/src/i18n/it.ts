@@ -750,4 +750,5 @@ export const it: Catalog = {
   "“{name}” is the older Excel format. Open it in Excel and save it as .xlsx, and dash will read it.": "“{name}” è nel vecchio formato Excel. Aprilo in Excel e salvalo come .xlsx, e dash lo leggerà.",
   "…or cut at character positions": "…oppure taglia a posizioni di carattere",
   "＋ Comment on the selected cell": "＋ Commenta la cella selezionata",
+  "Not a number — left out of totals, and a formula that reads it gives #VALUE!": "Non è un numero — escluso dai totali, e una formula che lo legge dà #VALUE!",
 }

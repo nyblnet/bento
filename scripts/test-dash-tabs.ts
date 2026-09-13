@@ -51,7 +51,7 @@ registerHooks({
 const {
   dropIndex, moveSheetPatches, nudgeSheetPatches, duplicateSheetPatches,
   deleteSheetPlan, sheetAfterDelete, stepSheet, blankSheet, mintSheetId,
-  mintSheetName, renameSheetPatch, describeKind, isTable,
+  mintSheetName, renameSheetPatch, renameSheetPatches, describeKind, isTable,
 } = await import('../dash/src/tabs.ts')
 
 const { parseDoc } = await import('../dash/src/model.ts')
@@ -513,6 +513,82 @@ console.log('\na name belongs to a SHEET, not to a dataset')
     'and a sheet cannot change kind through a props write')
   ok(refuses({ op: 'setSheetProps', sheet: 'nope', props: { name: 'X' } }),
     'a sheet that is not in the workbook is still refused LOUDLY — a silent no-op is an edit the user believes landed')
+}
+
+// ================================== a rename follows the formulas that name it
+//
+// A cross-sheet reference names the sheet by NAME, so the rename has to reach
+// every formula in the workbook or it strands them. It did: renaming the
+// starter's Pipeline tab left `=SUM(Pipeline!D1:D8)` on Scratch reading `#REF!`
+// — four of them, in the first workbook every reader opens. The rename and the
+// rewrites are one commit, and one undo takes the whole thing back.
+console.log('\na rename rewrites every formula that named the sheet')
+{
+  const withRefs = (): DashDoc => {
+    const d = fresh()
+    const r = parseDoc(JSON.stringify({
+      ...d,
+      names: { Top: { ref: 'Alpha!X1' }, Rate: { v: 0.2 } },
+      sheets: [
+        {
+          ...d.sheets[0],
+          columns: [{ id: 'x', name: 'X', type: 'number' }, { id: 'dbl', name: 'Dbl', type: 'number', formula: 'X * 2' }],
+          cells: { 'x:2': { note: 'hand-checked', f: '=Beta!Y1' } },
+        },
+        {
+          ...d.sheets[1],
+          columns: [{ id: 'y', name: 'Y', type: 'text' }, { id: 'k', name: 'K', type: 'number', formula: 'SUM(alpha!X)' }],
+        },
+        ...d.sheets.slice(2),
+        {
+          id: 'ss', name: 'Scratch', kind: 'canvas',
+          cells: {
+            A1: { f: '=SUM(Alpha!X1:X3)', format: '£#,##0' },
+            A2: { f: "='Alpha'!$X$1 + Beta!Y1" },
+            A3: { f: '="Alpha!X1 is " & 1' },
+            A4: { v: 'Alpha!X1' },
+          },
+        },
+      ],
+    }))
+    if (!r.ok) throw new Error(`fixture does not parse: ${JSON.stringify(r)}`)
+    return r.doc
+  }
+  const st = new Store(withRefs())
+  const shape = (d: DashDoc): string => JSON.stringify({ ...d, modified: undefined })
+  const before = shape(st.doc)
+  const ps = renameSheetPatches(st.doc, st.doc.sheets[0], 'Q3 deals')
+  st.commit(ps)
+  const ss = st.doc.sheets.find((s) => s.id === 'ss') as CanvasSheet
+  const a = st.doc.sheets[0] as TableSheet
+  const b = st.doc.sheets[1] as TableSheet
+  ok(a.name === 'Q3 deals', 'the tab is renamed')
+  ok(ss.cells.A1?.f === "=SUM('Q3 deals'!X1:X3)", `a spreadsheet formula follows it, quoted because the new name needs it — ${ss.cells.A1?.f}`)
+  ok(ss.cells.A1?.format === '£#,##0', 'and keeps the rest of the cell')
+  ok(ss.cells.A2?.f === "='Q3 deals'!$X$1 + Beta!Y1", `both spellings of the old name change, the other sheet's qualifier does not — ${ss.cells.A2?.f}`)
+  ok(ss.cells.A3?.f === '="Alpha!X1 is " & 1', 'a string literal is not a reference')
+  ok(ss.cells.A4?.v === 'Alpha!X1', 'and a VALUE that happens to look like one is not touched')
+  ok(a.cells?.['x:2']?.f === '=Beta!Y1' && a.cells?.['x:2']?.note === 'hand-checked',
+    'a dataset cell naming a DIFFERENT sheet is left alone, note and all')
+  ok(b.columns[1]?.formula === "SUM('Q3 deals'!X)", `a column expression on another dataset follows too, case-insensitively — ${b.columns[1]?.formula}`)
+  ok(a.columns[1]?.formula === 'X * 2', 'a column expression with no qualifier is untouched')
+  ok(st.doc.names?.Top?.ref === "'Q3 deals'!X1", `a defined name follows — ${st.doc.names?.Top?.ref}`)
+  ok(st.doc.names?.Rate?.v === 0.2, 'and one with no reference is untouched')
+  st.undo()
+  ok(shape(st.doc) === before, 'ONE undo puts the name and every formula back — it was one edit (`modified` aside)')
+
+  // Renaming to a bare word drops the quotes — unless the word is cell-shaped,
+  // which `Q3` is (column Q, row 3), and then the quotes are what keeps the
+  // scanner from reading it as an address. A rename nothing references is one patch.
+  const st2 = new Store(withRefs())
+  st2.commit(renameSheetPatches(st2.doc, st2.doc.sheets[0], 'Deals'))
+  const f1 = (): string | undefined => (st2.doc.sheets.find((s) => s.id === 'ss') as CanvasSheet).cells.A1?.f
+  ok(f1() === '=SUM(Deals!X1:X3)', `a bare-word name is written bare — ${f1()}`)
+  st2.commit(renameSheetPatches(st2.doc, st2.doc.sheets[0], 'Q3'))
+  ok(f1() === "=SUM('Q3'!X1:X3)", `a cell-shaped name stays quoted, so it can never be read as an address — ${f1()}`)
+  ok(renameSheetPatches(st2.doc, st2.doc.sheets[2], 'Totals').length === 1,
+    'renaming a sheet nothing references is the one props patch and nothing else')
+  ok(renameSheetPatches(st2.doc, st2.doc.sheets[0], '  ').length === 0, 'a blank rename is still refused')
 }
 
 // ============================================================ what a tab says

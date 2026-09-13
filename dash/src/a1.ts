@@ -267,6 +267,9 @@ interface Unit {
   to?: CellRef
   /** The sheet named before `!`, unquoted. Absent = this formula's own sheet. */
   sheet?: string
+  /** Exactly what the author wrote, qualifier included — for a mapper that
+   *  decides this unit is not its business and must hand it back untouched. */
+  text: string
 }
 type MapUnit = (u: Unit) => string
 /** A bare word that is not a reference, not a call and not a qualifier. */
@@ -335,6 +338,22 @@ export interface SheetQualifier {
  * dataset author reaches for and the one a naive `!`-hunt would find while a
  * reference-only walk would miss.
  */
+/**
+ * Every qualifier naming `from` respelled as `to` — what a sheet rename owes
+ * the formulas on every OTHER sheet. Before this existed, renaming the
+ * starter's `Pipeline` tab turned the four cross-sheet totals on `Scratch`
+ * into `#REF!`, because a qualifier is a NAME and nothing rewrote it.
+ *
+ * Only the qualifier changes: the reference after it (and its spacing, its
+ * case, its `$`) is copied as the author wrote it, so a formula that named the
+ * old sheet differs from its old self by exactly the name. Quoting follows the
+ * new name — `'Q3 deals'!A1` when it needs it, `Q3!A1` when it does not.
+ */
+export function renameSheetRefs(src: string, from: string, to: string): string {
+  if (src.indexOf('!') < 0 || sameSheet(from, to)) return src
+  return rewrite(src, null, undefined, undefined, { from, to })
+}
+
 export function sheetQualifiers(src: string): SheetQualifier[] {
   // Free when there is no `!` at all, which is almost every expression ever
   // evaluated — this runs in the recalculation hot path.
@@ -376,6 +395,7 @@ function rewrite(
   map: MapUnit | null,
   mapName?: MapName,
   onQualifier?: (sheet: string, after: string) => void,
+  renameSheet?: { from: string; to: string },
 ): string {
   const n = src.length
   const skipSpace = (j: number): number => {
@@ -407,10 +427,10 @@ function rewrite(
       const to = parseRef(src.slice(m, e2))
       const after = skipSpace(e2)
       if (to && src[after] !== '(' && src[after] !== '!' && src[after] !== '[') {
-        return { unit: { from, to }, end: e2 }
+        return { unit: { from, to, text: src.slice(j, e2) }, end: e2 }
       }
     }
-    return { unit: { from }, end: e }
+    return { unit: { from, text: src.slice(j, e) }, end: e }
   }
 
   /** `'Q3 pipeline'` at `j` — the index after the closing quote, or -1. */
@@ -432,7 +452,8 @@ function rewrite(
     if (src[k] !== '!') return null
     const r = refAt(skipSpace(k + 1))
     if (!r) return null
-    return { text: map ? map({ ...r.unit, sheet: name }) : src.slice(at, r.end), end: r.end }
+    const text = src.slice(at, r.end)
+    return { text: map ? map({ ...r.unit, sheet: name, text }) : text, end: r.end }
   }
 
   let out = ''
@@ -464,6 +485,11 @@ function rewrite(
       const name = q > 0 ? unquoteSheet(src.slice(i, q)) : ''
       if (q > 0 && src[skipSpace(q)] === '!') {
         onQualifier?.(name, src.slice(skipSpace(skipSpace(q) + 1), word(skipSpace(skipSpace(q) + 1))))
+        // The sheet was renamed: only the qualifier changes, and the `!` and
+        // whatever follows it are copied by the loop exactly as written.
+        if (renameSheet && sameSheet(name, renameSheet.from)) {
+          out += quoteSheet(renameSheet.to); i = q; continue
+        }
       }
       const hit = q > 0 ? qualified(name, i, q) : null
       if (hit) { out += hit.text; i = hit.end; continue }
@@ -508,6 +534,11 @@ function rewrite(
       // unit — dropping the name here is what made `Sheet1!A1` read the local
       // A1. When what follows is not a reference, the name is left alone.
       if (src[k] === '!') {
+        // A rename spells the qualifier anew and leaves the rest to the loop —
+        // `Jan!A1` and `Jan!Amount` alike, since both name the sheet.
+        if (renameSheet && sameSheet(text, renameSheet.from)) {
+          out += quoteSheet(renameSheet.to); i = j; continue
+        }
         // WHOEVER IS WATCHING hears about the qualifier here, in BOTH of the
         // branches below, because both are a formula naming another sheet:
         // `Jan!A1` is one dash cannot mistake, and `Jan!Amount` — a sheet and a
@@ -634,8 +665,10 @@ export function shiftRefsForInsert(
 
   return rewrite(src, (u) => {
     if (!sameSheet(u.sheet ?? scope.self, edited)) {
-      // Another sheet's cells did not move, so neither does this reference.
-      return qualify(u.sheet, u.to ? `${formatRef(u.from)}:${formatRef(u.to)}` : formatRef(u.from))
+      // Another sheet's cells did not move, so neither does this reference —
+      // not even its spelling, or `'Pipeline'!D4` would come back as
+      // `Pipeline!D4` and read as a change to whoever diffs the two.
+      return u.text
     }
     const a = moved(val(u.from))
     if (!u.to) return a === null ? REF_ERR : qualify(u.sheet, formatRef(put(u.from, a)))

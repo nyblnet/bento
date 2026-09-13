@@ -77,14 +77,14 @@ async function mintKeypair(): Promise<{ pub: string; priv: string }> {
   }
 }
 
-export type CollabInvite = { pub: string; priv: string; role: 'writer' | 'commenter'; exp?: number; sig: string }
+export type CollabInvite = { pub: string; priv: string; role: 'writer' | 'commenter' | 'audience'; exp?: number; sig: string }
 
 /** Owner-signed invite: a delegation keypair whose private half rides in the
  *  shared copy. Chain: owner signs `inv.${pub}.${role}.${exp||0}`; a joining
  *  device later signs its own pubkey with the invite key (`dlg.${memberPub}`).
  *  The relay verifies both signatures and never sees private material — so a
  *  blind relay still cannot certify its own key. */
-export async function mintInvite(ownerPrivB64: string, role: 'writer' | 'commenter' = 'writer', exp = 0): Promise<CollabInvite> {
+export async function mintInvite(ownerPrivB64: string, role: 'writer' | 'commenter' | 'audience' = 'writer', exp = 0): Promise<CollabInvite> {
   const kp = await mintKeypair()
   const sig = await signText(ownerPrivB64, `inv.${kp.pub}.${role}.${exp}`)
   return { pub: kp.pub, priv: kp.priv, role, ...(exp ? { exp } : {}), sig }
@@ -242,11 +242,31 @@ export class OnlineTransport implements Transport {
       /** the relay refused a frame; `ops` are the ones it will never accept
        *  (null when the refusal couldn't be pinned to a frame we sent) */
       onRefused?: (code: RefusalCode, ops: Op[] | null) => void
+      // ——— broadcast reception (audience side, and the presenter's own
+      // checkpoint/count signals). All optional: a session with no show wires
+      // none of them and nothing below fires. ———
+      /** an aud op batch (audience): apply through the reader path */
+      onShowOps?: (ops: Op[]) => void
+      /** an aud snapshot (audience): the whole show document under Ke */
+      onShowSnap?: (doc: SyncDoc, state: SyncStateJSON) => void
+      /** a control verb (audience): nav/black/laser with its decrypted payload */
+      onShowVerb?: (kind: 'nav' | 'black' | 'laser', payload: unknown) => void
+      /** the relay asks the presenter to checkpoint (soft cap or show-full) */
+      onShowCheckpoint?: () => void
+      /** coarse audience count, to the presenter */
+      onShowCount?: (n: number) => void
+      /** an audience socket was closed by the relay (4001 end/grace, 4002
+       *  not-live, 4003 show-full, 1008 revoked) */
+      onShowClosed?: (code: number) => void
     },
     private auth?: AuthSpec,
   ) {
     this.docId = docId
     this.writeReadyP = new Promise<void>((r) => { this.resolveWriteReady = r })
+    // Known before init's async work: an audience socket is a chain whose
+    // invite the owner signed with role 'audience'. Set here so startShow and
+    // the send guards see it immediately.
+    this.audienceMode = auth?.kind === 'chain' && auth.invite.role === 'audience'
     this.init(room)
   }
 
@@ -289,6 +309,14 @@ export class OnlineTransport implements Transport {
    *  something and unstamped content-bearing frames can be refused. Legacy
    *  `r` rooms sign nothing — gating there would drop every legitimate frame. */
   private signedRoom = false
+  /** An audience socket: connects on the audience path (ivr=audience) and is
+   *  RECEIVE-ONLY — it sends no protocol frame, only the transport keepalive.
+   *  The relay drops anything else it sent, but a client that does not send it
+   *  in the first place cannot leak presence or an op it should not have. */
+  private audienceMode = false
+  /** True when this transport is an audience socket — receive-only. The session
+   *  refuses startShow on it, and every show sender below no-ops. */
+  get audience(): boolean { return this.audienceMode }
 
   private async init(room: string) {
     const raw = b64u.dec(this.keyB64)
@@ -327,7 +355,11 @@ export class OnlineTransport implements Transport {
       this.myPub = id.pub
       const iv = a.invite
       const dg = await signText(iv.priv, `dlg.${id.pub}`)
-      this.url = `${room}?tok=${tok}&bt=1&w=${id.pub}&o=${a.owner}` +
+      // An audience member connects on the audience path: ivr=audience (which
+      // the owner signed into the invite), no bt (it never proves, never gets a
+      // ticket), and receive-only. audienceMode was set in the constructor.
+      const bt = this.audienceMode ? '' : '&bt=1'
+      this.url = `${room}?tok=${tok}${bt}&w=${id.pub}&o=${a.owner}` +
         `&ivp=${iv.pub}&ivr=${iv.role}&ive=${iv.exp ?? 0}&ivs=${iv.sig}&dg=${dg}`
     } else {
       this.url = `${room}?tok=${tok}`
@@ -377,15 +409,24 @@ export class OnlineTransport implements Transport {
       if (data === 'pong') { this.awaitingPong = false; return } // keepalive reply
       this.onEnvelope(data).catch(() => {})
     }
-    const drop = () => {
+    const drop = (ev?: { code?: number }) => {
       if (this.ws !== ws) return
       this.stopHeartbeat()
       this.ws = null
       this.setStatus('closed')
+      // Broadcast close codes carry meaning: the relay closed an audience
+      // socket deliberately. 4001 end/grace and 1008 revoked are TERMINAL —
+      // the show is over or access is gone, so do not reconnect into a wall;
+      // 4002 not-live and 4003 show-full are transient (the presenter has not
+      // gone live yet, or the show is momentarily full), so reconnect with
+      // backoff — that IS the "waiting for the presenter" state.
+      const code = ev?.code
+      if (code && code >= 4001 && code <= 4003 || code === 1008) this.hooks.onShowClosed?.(code!)
+      if (code === 4001 || code === 1008) { this.closed = true; return }
       this.retry()
     }
     ws.onclose = drop
-    ws.onerror = drop
+    ws.onerror = () => drop()
   }
 
   private startHeartbeat(ws: WebSocket) {
@@ -538,6 +579,9 @@ export class OnlineTransport implements Transport {
       wt?: string
       /** possession nonce on `ready`: sign it to prove the `?w=` key is ours */
       c?: string
+      /** broadcast: the audience stream tag, the verb name, the count */
+      s?: string
+      n?: number
     } & RefusedEnv
     try {
       env = JSON.parse(text)
@@ -573,12 +617,23 @@ export class OnlineTransport implements Transport {
       this.handleRefusal(env)
       return
     }
+    // ——— broadcast control, no encrypted body ———
+    if (env.ctl === 'audckpt') { this.hooks.onShowCheckpoint?.(); return }
+    if (env.ctl === 'audcount') { if (typeof env.n === 'number') this.hooks.onShowCount?.(env.n); return }
     if (env.ctl === 'ack' || env.ctl === 'ready') {
       // one ack = the oldest un-acked persisted frame landed
       if (env.ctl === 'ack') this.awaitingAck.shift()
       if (typeof env.q === 'number') {
         this.saveSeq(env.q)
         this.maybeSnapshot(env.q)
+      }
+      if (env.ctl === 'ready' && typeof env.q !== 'number') {
+        // An AUDIENCE ready: `bc`/`v`, no `q`. The audience is receive-only and
+        // has no op log to replay or snapshot — running the collab path below
+        // would make it try to upload one. It is simply live now.
+        this.inReplay = false
+        this.resolveWriteReady()
+        return
       }
       if (env.ctl === 'ready') {
         // `c` is the relay's possession challenge, present only for a socket
@@ -614,6 +669,25 @@ export class OnlineTransport implements Transport {
       return // wrong key / corrupted — ignore
     }
     if (typeof env.q === 'number') this.saveSeq(env.q)
+    // ——— broadcast reception (audience side). These arrive pre-routed by the
+    // relay, which only fans them to audience sockets and verified every
+    // signed one; the payload is under Ke, which only show participants hold.
+    // So they do not go through vouched() — that is the ROOM's read-only
+    // guarantee, a different trust path from the relay-routed show stream. ———
+    if (env.s === 'aud' && !env.ctl) {
+      const f = payload as { ops?: Op[] }
+      if (f?.ops) this.hooks.onShowOps?.(f.ops)
+      return
+    }
+    if (env.ctl === 'audsnap') {
+      const sn = payload as { doc: SyncDoc; state: SyncStateJSON }
+      if (sn?.doc && sn.state) this.hooks.onShowSnap?.(sn.doc, sn.state)
+      return
+    }
+    if (env.ctl === 'nav' || env.ctl === 'black' || env.ctl === 'laser') {
+      this.hooks.onShowVerb?.(env.ctl, payload)
+      return
+    }
     if (env.snap === 1) {
       if (!this.vouched(env)) return
       const s = payload as { doc: SyncDoc; state: SyncStateJSON }
@@ -691,19 +765,82 @@ export class OnlineTransport implements Transport {
     }
   }
 
-  private async encrypt(plain: string): Promise<{ i: string; d: string } | null> {
-    if (!this.key) return null
+  private async encrypt(plain: string, key: CryptoKey | null = this.key): Promise<{ i: string; d: string } | null> {
+    if (!key) return null
     const iv = new Uint8Array(12)
     crypto.getRandomValues(iv)
     const ct = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv: iv as BufferSource },
-      this.key,
+      key,
       new TextEncoder().encode(plain),
     )
     return { i: b64u.enc(iv), d: b64u.enc(new Uint8Array(ct)) }
   }
 
+  // ——— BROADCAST: the presenter's audience stream ———
+  // The presenter's socket carries the room key (this.key). A show's audience
+  // holds a SEPARATE show key Ke; the presenter encrypts a second copy of each
+  // op batch and each control frame under Ke, tagged s:'aud', and the relay
+  // routes those to audience sockets only. Only the presenter side needs this:
+  // an audience copy's own this.key already IS Ke (its collab.key is the show
+  // key), so it decrypts s:'aud' frames on the ordinary path below.
+  private showKey: CryptoKey | null = null
+
+  /** Install (or clear) the show key. Raw AES-GCM key, base64url. */
+  async setShowKey(rawB64: string | null): Promise<void> {
+    if (this.audienceMode) return
+    this.showKey = rawB64
+      ? await crypto.subtle.importKey('raw', b64u.dec(rawB64) as BufferSource, 'AES-GCM', false, ['encrypt'])
+      : null
+  }
+
+  /** One op batch to the audience: sealed under Ke, tagged s:'aud'. NEVER
+   *  persisted by the relay (it ignores p on this stream), so it does not join
+   *  the resend log — a dropped aud batch is recovered by the next audsnap, not
+   *  by replay. Silent no-op if there is no show key or the socket is gone. */
+  async sendAud(ops: Op[]): Promise<void> {
+    if (this.audienceMode) return
+    const enc = await this.encrypt(JSON.stringify({ t: 'ops', a: 'show', ops }), this.showKey)
+    if (!enc || !this.ws) return
+    try { this.ws.send(JSON.stringify({ s: 'aud', i: enc.i, d: enc.d })) } catch { /* gone */ }
+  }
+
+  /** The whole (already app-projected) document to the audience, under Ke. */
+  async sendAudSnap(doc: SyncDoc, state: SyncStateJSON): Promise<void> {
+    if (this.audienceMode) return
+    const enc = await this.encrypt(JSON.stringify({ doc, state }), this.showKey)
+    if (!enc || !this.ws) return
+    try { this.ws.send(JSON.stringify({ ctl: 'audsnap', i: enc.i, d: enc.d })) } catch { /* gone */ }
+  }
+
+  /** A control verb. live/end sign the literal; nav/black encrypt their payload
+   *  under Ke and sign the ciphertext with the stream in the text (so a
+   *  room-stream signature cannot be replayed as the audience's); laser is
+   *  unsigned. The relay checks all of this against the socket's proven key. */
+  async sendVerb(kind: 'live' | 'end' | 'nav' | 'black' | 'laser', payload?: unknown): Promise<void> {
+    if (this.audienceMode || !this.ws) return
+    try {
+      if (kind === 'live' || kind === 'end') {
+        const g = this.signKey ? await signWith(this.signKey, kind) : undefined
+        this.ws.send(JSON.stringify({ ctl: kind, g }))
+        return
+      }
+      const enc = await this.encrypt(JSON.stringify(payload ?? null), this.showKey)
+      if (!enc) return
+      if (kind === 'laser') {
+        this.ws.send(JSON.stringify({ ctl: 'laser', s: 'aud', i: enc.i, d: enc.d }))
+        return
+      }
+      const g = this.signKey ? await signFrame(this.signKey, `${kind}.aud.${enc.i}`, enc.d) : undefined
+      this.ws.send(JSON.stringify({ ctl: kind, s: 'aud', i: enc.i, d: enc.d, g }))
+    } catch { /* gone */ }
+  }
+
   send(frame: Frame) {
+    // An audience socket is receive-only: it never puts a protocol frame on the
+    // wire (the relay would drop it, but not sending it is the guarantee). The
+    // keepalive ping is not a protocol frame and is left alone.
+    if (this.audienceMode) return
     void (async () => {
       const enc = await this.encrypt(JSON.stringify(frame))
       if (!enc) return
@@ -787,7 +924,15 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
     // v2 owner → direct with ownerPriv; v2 member → invite chain (device key
     // minted per-machine); legacy → the shared writer key pair.
     let auth: AuthSpec | undefined
-    if (collab.role !== 'reader') {
+    if (collab.role === 'audience') {
+      // An AUDIENCE copy: its collab.key is the show key Ke, its invite is the
+      // owner-signed `audience` ticket. It joins on the chain (ivr=audience,
+      // set from the invite role) and the transport makes it receive-only. No
+      // audience invite, no join — there is nothing to fall back to.
+      if (collab.owner && collab.invite) {
+        auth = { kind: 'chain', owner: collab.owner, invite: collab.invite, docId }
+      }
+    } else if (collab.role !== 'reader') {
       if (collab.v === 2 && collab.owner && collab.ownerPriv) {
         auth = { kind: 'direct', pub: collab.owner, priv: collab.ownerPriv }
       } else if (collab.v === 2 && collab.owner && collab.invite) {
@@ -801,7 +946,18 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
       getSnapshot: () => session.snapshot(),
       onOpen: () => session.hello(),
       onReady: (seen) => session.onRelayReady(seen),
-      onRefused: (code, ops) => session.refused(code, ops),
+      onRefused: (code, ops) => {
+        // show-full is a broadcast refusal: it means "checkpoint now", handled
+        // by the show path, not the collab resend log.
+        if ((code as string) === 'show-full') { session.showCheckpoint(); return }
+        session.refused(code, ops)
+      },
+      onShowOps: (ops) => session.applyShowOps(ops),
+      onShowSnap: (doc, state) => session.applyShowSnap(doc, state),
+      onShowVerb: (kind, payload) => session.showVerb(kind, payload),
+      onShowCheckpoint: () => session.showCheckpoint(),
+      onShowCount: (n) => session.showCount(n),
+      onShowClosed: (code) => session.showClosed(code),
     }, auth)
     return active
   })

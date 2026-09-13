@@ -181,11 +181,11 @@ export interface CollabCreds {
   sync?: SyncStateJSON
   writerPub?: string
   writerPriv?: string
-  role?: 'writer' | 'reader'
+  role?: 'writer' | 'reader' | 'audience'
   v?: number
   owner?: string
   ownerPriv?: string
-  invite?: { pub: string; priv: string; role: 'writer' | 'commenter'; exp?: number; sig: string }
+  invite?: { pub: string; priv: string; role: 'writer' | 'commenter' | 'audience'; exp?: number; sig: string }
 }
 
 /** A blob the document references but does not inline. */

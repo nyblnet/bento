@@ -717,6 +717,17 @@ jobs:
       - name: bento/dash selection and clipboard
         run: node scripts/test-dash-select.ts
 
+      - name: bento/dash data entry through the real editor
+        # Widget⇥12⇥4.50⏎ has to come home to column A. select.ts had the
+        # Tab-run model and test-dash-select.ts proved it; the editor's finish()
+        # never called it. This one drives typeInto + the cell's own onkeydown.
+        run: node scripts/test-dash-entry.ts
+
+      - name: bento/dash cross-sheet structure
+        # Insert a row on Pipeline and =SUM(Pipeline!D1:D8) on Scratch has to
+        # widen. a1.ts had the scope rule; Grid.shiftFormulas walked one sheet.
+        run: node scripts/test-dash-xshift.ts
+
       - name: bento/dash conditional formatting
         run: node scripts/test-dash-condfmt.ts
 
@@ -891,6 +902,15 @@ jobs:
           slides/node_modules/.bin/esbuild scripts/test-sync-vouch.ts --bundle --platform=node --format=esm \
             --outfile="$RUNNER_TEMP/test-sync-vouch.mjs"
           node "$RUNNER_TEMP/test-sync-vouch.mjs"
+
+      - name: session broadcast surface rig
+        # startShow/endShow, the verb channel, and the audience's reception.
+        # What breaks silently if it regresses: the audsnap under the show key
+        # is the LIVE sync state instead of a fresh adopt of the projected doc,
+        # which leaks `stash` (deleted slides' notes) and the whole per-keystroke
+        # text history past the projection; or a local op reaches the audience
+        # without the app's projection applied. Both are mutation-caught here.
+        run: node scripts/test-sync-show.ts
 
       - name: dash validator rig
         # 109 checks over the shapes that read as DATA rather than as damage —

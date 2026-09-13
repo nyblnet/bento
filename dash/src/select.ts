@@ -506,7 +506,17 @@ export class Selection {
     this.active = fix(this.active)
     this.extra = this.extra.map(fix)
     this.cursor = this.clamp(this.cursor.row, this.cursor.col)
-    this.run = null
+    // THE RUN SURVIVES A RESIZE THAT DID NOT MOVE IT. The grid calls resize()
+    // on EVERY document event — a typed value included — and this used to
+    // clear the run unconditionally. So the one thing that always happens
+    // between a Tab and the Enter that should come home is the commit of
+    // what was typed, and that commit erased the run just before enter()
+    // looked for it. Every Enter after a Tab run then moved plainly down,
+    // and the typist walked diagonally across their table — the exact bug
+    // test-dash-select.ts names and proves the model does not have, because
+    // the model was never told the grid does this. The run only goes when the
+    // sheet actually shrank past it.
+    if (this.run && (this.run.row >= this.rows || this.run.col >= this.cols)) this.run = null
     return this
   }
 

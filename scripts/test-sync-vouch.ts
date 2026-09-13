@@ -35,6 +35,10 @@ import { webcrypto } from 'node:crypto'
 type Listener = (ev: unknown) => void
 class FakeSocket {
   static last: FakeSocket | null = null
+  static readonly CONNECTING = 0
+  static readonly OPEN = 1
+  static readonly CLOSING = 2
+  static readonly CLOSED = 3
   readyState = 0
   sent: string[] = []
   private ls = new Map<string, Listener[]>()
@@ -48,6 +52,7 @@ class FakeSocket {
   removeEventListener(t: string, fn: Listener) { this.ls.set(t, (this.ls.get(t) ?? []).filter((f) => f !== fn)) }
   send(s: string) { this.sent.push(s) }
   close() { this.readyState = 3; this.fire('close', {}) }
+  serverClose(code: number) { this.readyState = 3; this.fire('close', { code }) }
   fire(t: string, ev: Record<string, unknown>) {
     const h = (this as unknown as Record<string, Listener | null>)[`on${t}`]
     if (h) h(ev)
@@ -179,6 +184,107 @@ for (const [name, Transport] of [['kernel', KernelTransport], ['dash', DashTrans
   r.ws.deliver({ ...(await seal(SNAP)) })
   await tick()
   ok(r.applied.includes('ops') && r.applied.includes('snap'), `${name}: an r-room applies unstamped ops and snapshots`)
+}
+
+// ————— the audience transport: receive-only, and close codes mean things —————
+//
+// An audience socket connects on the chain with role 'audience'. It must put NO
+// protocol frame on the wire (the relay drops them, but not sending is the
+// guarantee), decrypt s:'aud' frames under its own key (which IS the show key),
+// and act on the relay's deliberate close codes: 4001/1008 are terminal (do not
+// reconnect into a wall), 4002/4003 are transient (reconnect — that is the
+// "waiting for the presenter" state).
+{
+  console.log('the audience transport is receive-only and reads close codes…')
+  const kp = (await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])) as CryptoKeyPair
+  const priv = b64u.enc(new Uint8Array(await webcrypto.subtle.exportKey('pkcs8', kp.privateKey)))
+  const pub = b64u.enc(new Uint8Array(await webcrypto.subtle.exportKey('raw', kp.publicKey)))
+
+  const showOps: unknown[][] = []
+  let closedCode: number | null = null
+  FakeSocket.last = null
+  const tr = new KernelTransport(
+    'wss://relay.test/d/wAUDIENCEROOMwAUDIENCEROOMwAUDIENCEROOMwAUD', keyB64, 'doc-1',
+    () => {},
+    {
+      onSnap: () => {}, getSnapshot: () => ({ doc: { docId: 'doc-1' }, state: { v: 2 } as never }),
+      onOpen: () => {}, onReady: () => false,
+      onShowOps: (ops) => { showOps.push(ops) },
+      onShowClosed: (code) => { closedCode = code },
+    },
+    { kind: 'chain', owner: pub, invite: { pub, priv, role: 'audience', sig: 'x' }, docId: 'doc-1' },
+  )
+  for (let i = 0; i < 50 && !FakeSocket.last; i++) await new Promise((r) => setTimeout(r, 2))
+  const ws = FakeSocket.last!
+  ok(!!ws, 'the audience transport opened a socket')
+  ok(ws.url.includes('ivr=audience'), 'it connected on the audience path (ivr=audience)')
+  ok(!ws.url.includes('bt=1'), 'and did not ask for a write ticket (it never proves)')
+  ws.open()
+  ws.deliver({ ctl: 'ready', bc: 1, v: 2 })
+  await tick()
+
+  // receive-only, as a CONTRAST against a normal reader: the same send() on a
+  // non-audience transport reaches the wire, on the audience it does not — so
+  // the assertion isolates the gate, not write()'s buffering.
+  {
+    FakeSocket.last = null
+    const reader = new KernelTransport(
+      'wss://relay.test/d/wREADERREADERREADERREADERREADERREADERREADE', keyB64, 'doc-1',
+      () => {}, { onSnap: () => {}, getSnapshot: () => ({ doc: { docId: 'doc-1' }, state: { v: 2 } as never }), onOpen: () => {}, onReady: () => false }, undefined,
+    )
+    for (let i = 0; i < 50 && !FakeSocket.last; i++) await new Promise((r) => setTimeout(r, 2))
+    const rws = FakeSocket.last!
+    rws.open()
+    const rBefore = rws.sent.length
+    reader.send({ t: 'p', a: 'x', p: { name: 'x' } } as never)
+    await tick()
+    ok(rws.sent.length > rBefore, 'a normal reader transport DOES put a sent frame on the wire (the gate is observable)')
+    reader.close()
+  }
+  const before = ws.sent.length
+  tr.send({ t: 'p', a: 'x', p: { name: 'x' } } as never)
+  tr.send({ t: 'ops', a: 'x', ops: [] } as never)
+  await tick()
+  ok(ws.sent.length === before, 'but nothing the session sends leaves an AUDIENCE socket')
+
+  // the SHOW senders are guarded too, not just send(). Security probed exactly
+  // this: on an audience transport, setShowKey + the three senders put five
+  // frames (live/nav/laser/aud/audsnap) on the wire. Unreachable from the
+  // shipped boot and the relay drops them, but "not sending is the guarantee"
+  // must hold for all four senders, not one of four.
+  ok(tr.audience === true, 'the transport reports itself as an audience socket')
+  await tr.setShowKey(keyB64)
+  const b2 = ws.sent.length
+  await tr.sendVerb('live')
+  await tr.sendVerb('nav', { id: 's1' })
+  await tr.sendVerb('laser', { x: 1, y: 2 })
+  await tr.sendAud([{ a: 'p', s: 1, l: 1, op: 'set', sl: 's1', el: 's1x', k: 'x', v: 1 } as never])
+  await tr.sendAudSnap({ docId: 'd' } as never, { v: 2 } as never)
+  await tick()
+  ok(ws.sent.length === b2, 'an audience transport puts NO show frame on the wire either (all four senders guarded)')
+
+  // an aud op frame (sealed under the show key = this.key) applies via onShowOps
+  ws.deliver({ s: 'aud', ...(await seal({ t: 'ops', a: 'pres', ops: [{ a: 'pres', s: 1, l: 1, op: 'set', sl: 's1', el: 's1x', k: 'x', v: 1 }] })) })
+  await tick()
+  ok(showOps.length === 1, 'an s:aud op frame is delivered to onShowOps')
+
+  // 4002 not-live: transient — surface the code AND reconnect
+  const sock1 = FakeSocket.last
+  ws.serverClose(4002)
+  ok(closedCode === 4002, 'a 4002 close surfaces its code')
+  await new Promise((r) => setTimeout(r, 950))
+  ok(FakeSocket.last !== sock1, '4002 reconnects (waiting for the presenter)')
+
+  // 4001 end: terminal — surface the code and do NOT reconnect
+  const ws2 = FakeSocket.last!
+  ws2.open()
+  closedCode = null
+  const sock2 = FakeSocket.last
+  ws2.serverClose(4001)
+  ok(closedCode === 4001, 'a 4001 close surfaces its code')
+  await new Promise((r) => setTimeout(r, 950))
+  ok(FakeSocket.last === sock2, '4001 does NOT reconnect (the show is over)')
+  tr.close()
 }
 
 console.log(failures === 0 ? `\nALL PASS (${checks} checks)` : `\n${failures} FAILURES of ${checks} checks`)

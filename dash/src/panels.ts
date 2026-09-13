@@ -44,7 +44,7 @@ import {
   buildValidationSection, canvasEntryAt, canvasRulePatch, canvasRules, columnRule,
   countViolations, columnRulePatch, boxRef, type DataRule,
 } from './datavalid.ts'
-import { mountTabs, renameSheetPatch } from './tabs.ts'
+import { mountTabs, renameSheetPatches } from './tabs.ts'
 import { inferComputedType } from './computedtype.ts'
 import { buildCondFmtSection, condFmtPatch, readCondFmt } from './condfmtui.ts'
 import { toast } from './saveui.ts'
@@ -63,7 +63,7 @@ import {
  * about sheets, not about which file happens to draw them today.
  */
 export {
-  blankSheet, mintSheetId, mintSheetName, renameSheetPatch,
+  blankSheet, mintSheetId, mintSheetName, renameSheetPatch, renameSheetPatches,
 } from './tabs.ts'
 
 /**
@@ -673,8 +673,8 @@ export function mountPanels(host: PanelsHost): Panels {
   function buildSheetSection(sheet: TableSheet): void {
     section(right, t('Sheet'))
     row(right, t('Name'), text(sheet.name, (v) => {
-      const p = renameSheetPatch(sheet, v)
-      if (p) commit(p)
+      const p = renameSheetPatches(store.doc, sheet, v)
+      if (p.length) commit(p)
     }))
     readonlyRow(right, t('Rows'), String(rowsOf(sheet)))
     readonlyRow(right, t('Columns'), String(sheet.columns.length))

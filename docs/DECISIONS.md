@@ -6442,3 +6442,41 @@ Deploy: after #452's relay (deployed 2026-09-13 as `62a12ffa`, from
 `ivr=audience` or `s:'aud'`, and `v`/`bc` on `ready` are ignored by clients
 that do not read them. The client half (slides) feature-detects and lands
 separately. Design note: private until the client ships, then promoted.
+
+## 2026-09-13 — dash: a sheet's name is a reference key, so a rename is a formula edit
+
+Cross-sheet references in dash are by NAME (`Pipeline!D1:D8`), as in Excel, and
+that was the whole of the design: a1.ts could parse, quote and shift them, and
+cellformula.ts resolved them. What nobody had written down was the consequence —
+if the name is the key, then renaming the sheet is an edit to every formula
+that holds the key, and it has to land in the same commit or a document exists
+in which the tab says one thing and the formulas say another. It did exist:
+renaming the starter's Pipeline tab turned Scratch's four totals into `#REF!`.
+
+Decided:
+
+- `renameSheetPatches(doc, sheet, name)` (tabs.ts) is the rename. It returns
+  the props patch AND a rewrite for every cell formula on every sheet kind,
+  every column expression, and every defined name that qualified with the old
+  name — through the op each one is owned by, so undo is one step. Both the tab
+  strip and the panel's Name field go through it; `renameSheetPatch` stays as
+  the one-patch primitive the rigs already cover.
+- `renameSheetRefs(src, from, to)` (a1.ts) respells ONLY the qualifier. The
+  reference after it is copied as the author wrote it; quoting follows the new
+  name's needs (`'Q3 deals'!A1`, `Deals!A1`, and `'Q3'!A1` because `Q3` is
+  cell-shaped). Strings, values that look like references, and other sheets'
+  qualifiers are untouched. Case-insensitive, as `sameSheet` already was.
+- The same session found the mirror bug: `shiftRefsForInsert` had carried a
+  `scope` (which sheet the edit was on, which sheet the formula lives on) since
+  sheets could be named, and `Grid.shiftFormulas` never passed it — it walked
+  the edited sheet's own formulas and nothing else, so a row inserted on
+  Pipeline left `Pipeline!D1:D8` on Scratch summing eight of nine deals. It now
+  walks every sheet with `{on, self}` plus the defined names, and a reference to
+  another sheet is handed back as the author spelled it (`Unit.text`) rather
+  than re-canonicalised, so an unaffected formula never reads as changed.
+- Rig: `scripts/test-dash-xshift.ts` drives the grid's patch factory over a
+  three-sheet workbook and reads the recalculated numbers back; the rename
+  cases live in `test-dash-tabs.ts`. Both are the shape this repo keeps
+  finding — a correct engine and an interface that did not call it — and both
+  were found by using the built shell as a first-time user, not by reading code.
+

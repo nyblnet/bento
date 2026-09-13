@@ -573,7 +573,7 @@ export interface BentoDoc {
     invite?: {
       pub: string
       priv: string
-      role: 'writer' | 'commenter'
+      role: 'writer' | 'commenter' | 'audience'
       /** unix ms expiry; 0/absent = no expiry */
       exp?: number
       /** owner's signature over `inv.${pub}.${role}.${exp||0}` */
