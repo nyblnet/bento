@@ -27,7 +27,7 @@ import { Store } from './store'
 import { Editor } from './editor/editor'
 import { startPresentation } from './present'
 import { SyncSession } from './sync/session'
-import { onlineTransport, startSharing, stopSharing } from './sync/online'
+import { onlineTransport, startSharing, stopSharing, disconnectOnline, joinFromDoc } from './sync/online'
 
 // Tell the kernel who this app is — must precede any kernel module use
 // (window title suffix, save-picker label, update manifest + its `app` check).
@@ -133,8 +133,76 @@ function bootWith(doc: BentoDoc, docIsFresh = false) {
   // re-derives through the editor's `doc` hook; nothing else would visit a
   // player file at all.
   resolveThemeRefs(doc)
-  if (doc.readonly) playerMode(doc)
+  if (doc.collab?.role === 'audience') audienceMode(doc)
+  else if (doc.readonly) playerMode(doc)
   else editorMode(doc, docIsFresh)
+}
+
+/**
+ * An AUDIENCE copy boots straight into the show and follows the presenter
+ * while they are live. It is a collaborator holding a ticket: `collab.key` is
+ * the per-show key, the invite is the owner-signed audience one, and the
+ * session's transport connects receive-only on that role — it never mints or
+ * joins a session of its own, never sends a frame. The projected deck (no
+ * notes, no comments) streams in through the ordinary reader path, so the
+ * slides update live as the presenter edits; the three verbs (nav, black,
+ * laser) reach the overlay through the session's show events. Between shows
+ * the file is a plain, working deck — leaving the show lands on a card, never
+ * the editor. (docs/DECISIONS.md, the broadcast entry.)
+ */
+function audienceMode(doc: BentoDoc) {
+  document.title = `${doc.title} — ${appConfig().appName}`
+  if (doc.fonts?.length) injectFonts(doc)
+  document.getElementById('bento-splash')?.remove()
+
+  const store = new Store(doc)
+  const session = new SyncSession(store)
+  joinFromDoc(session, store)
+
+  let exited = false
+  let unsubscribeDoc: (() => void) | null = null
+  const exitCard = () => {
+    if (exited) return
+    exited = true
+    disconnectOnline(session)
+    unsubscribeDoc?.()
+    const card = document.createElement('div')
+    card.className = 'ed-player'
+    card.innerHTML =
+      `<div class="ed-playercard"><h1>${doc.title.replace(/</g, '&lt;')}</h1>` +
+      `<p>${t('You left the show — reopen this file to rejoin')}</p></div>`
+    document.body.appendChild(card)
+  }
+
+  const show = startPresentation(doc, 0, exitCard, {
+    broadcast: { audience: true, onShow: (fn) => session.onShow(fn) },
+    onDocChange: ({ slidesEl, deck, buildSection }) => {
+      const applyDoc = () => {
+        const cur = deck.getIndices().h
+        const curId = doc.slides[cur]?.id
+        if (doc.slides.length !== slidesEl.children.length) {
+          // structural change: rebuild the section list and re-settle on the
+          // same slide BY ID (an insert before it must not move the audience)
+          slidesEl.replaceChildren(...doc.slides.map(buildSection))
+          deck.sync()
+          const back = doc.slides.findIndex((sl) => sl.id === curId)
+          show.goTo(back >= 0 ? back : Math.min(cur, doc.slides.length - 1))
+        } else {
+          // content change: re-render the current slide in place (no fx replay —
+          // the slide is already shown; entrance fx run on slidechange only).
+          // The CONTENTS of a fresh section, not the section itself: a
+          // <section> nested inside a <section> is a vertical slide to Reveal,
+          // and the next arrow would descend into it instead of advancing.
+          const section = slidesEl.children[cur] as HTMLElement | undefined
+          const slide = doc.slides[cur]
+          if (section && slide) section.replaceChildren(...buildSection(slide, cur).childNodes)
+        }
+      }
+      unsubscribeDoc = store.on('doc', applyDoc)
+    },
+  })
+
+  ;(window as any).bento = { format: doc.format, doc }
 }
 
 /**
@@ -238,7 +306,8 @@ if (location.hash === '#present') {
     transports: () => session.transportKinds,
     /** start an online session (mints doc.collab, connects the relay) */
     share: () => {
-      void startSharing(session, store)
+      // same guard as editor.goLive(): an audience copy never mints a session
+      if (store.doc.collab?.role !== 'audience') void startSharing(session, store)
       return store.doc.collab
     },
     unshare: () => stopSharing(session, store),

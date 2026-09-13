@@ -3621,6 +3621,53 @@ payload 72KB → 79KB). Most of it is the finding messages, which are the
 product: a code with no explanation is not actionable. Anyone tempted to shrink
 this should shorten prose, not drop checks.
 
+## 2026-08-08 — Live broadcast control channel
+
+**Decision.** The presenter of a deck can broadcast to copies of it over the
+existing relay: a "Save broadcast copy…" Share-menu export embeds
+`collab.broadcast = {room, relay}` and boots the copy into a locked
+present-follow viewer; the presenter's speaker view arms a broadcast per show
+(off by default) and sends signed control frames over a dedicated
+BroadcastSocket. Frame types: `{ctl:'nav',n,g}` (presenter-visible slide
+number, 1-based with interactive states excluded), `{ctl:'laser',p,g}` /
+`{ctl:'laser',off:1,g}` (slide-fraction stroke points, hold-to-draw, ~30fps
+client throttle) and `{ctl:'black',on:1|0,g}` (persisted as `lastBlack` and
+replayed to late joiners, unlike laser which is transient). Signatures over
+literal texts (`nav.${n}`, `laser.${p}`, `laser.off`, `black.on`/`black.off`)
+with the presenter's key; the relay fans a signature-less copy (clients trust
+its verification, like ops) and sends `{ctl:'presence',n}` viewer counts on
+connect/close. The relay keeps the generic per-socket rate limiter (RATE_BURST
+400/10s — enough for a full laser stroke with nav headroom) and the storage is
+two small values (`lastNav`/`lastBlack`) replayed ahead of any live frame, so
+a late joiner always lands on the newest slide. Relay changes are
+backward-compatible: old copies ignore unknown ctl frames. Details:
+docs/broadcast-design.md, server/sync-worker/src/worker.js,
+slides/src/present.ts, slides/src/main.ts.
+
+## 2026-08-10 — Broadcast rooms derived from the presenter's signing key; hosted client
+
+**Decision.** One room system for ALL broadcasts: the room is derived from the
+PRESENTER's signing key — the key this copy signs control frames with: the
+owner key (owner deck), the per-copy invite key (a shared editor copy — each
+invitee's room is unique to their copy), the shared writer key (legacy), or a
+device-local broadcast key (no-collab decks). `room = b64url(sha256(signerPub))
+[0:10]`, re-hashed until it doesn't start with 'w' (a 'w' name would be
+mistaken for a signed collab room by the relay); the relay connect token is
+derived from the room name (`tok = b64url(sha256(room))[0:18]`). Presenter and
+viewers compute the same values, so the shareable link is
+`<hostClient>?room=<name>` (no tok) and the copy embeds `broadcast:{room,relay}`
+(no tok). The relay TOFUs the presenter's `?w=` signer key per non-`w` room
+(like the tok) and verifies nav/laser/black against it; signed rooms keep the
+owner-key commitment. The collab-socket reuse path is removed; earlier
+`?b=` re-pointing and `?room=&tok=` URL formats were dropped during
+development (no backward compatibility). The hosted variant: a broadcast copy
+hosted once on the presenter's server (`doc.meta.hostClient`, set in the
+About dialog's Document properties — no prompt), re-pointed at any presenter
+via `?room=`, and joining the deck's collab room as a live reader replica so
+content updates in real time. The URL carries only the nav capability; the
+file carries the deck key (same trust as the read-only copy). Key rotation
+breaks the pinned signer key until the deck is duplicated (new docId) —
+accepted. Design: docs/broadcast-design.md, docs/hosted-broadcast-design.md.
 ## dash: a workbook holds two kinds of sheet — spreadsheets and datasets
 
 2026-08-11. Settles a tension that was shipping as a visual lie.
@@ -6390,3 +6437,109 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+## 2026-09-13 — Broadcast is a special case of collaboration: the relay half
+
+**Decision.** A live show is not a second transport. An audience member is a
+collaborator holding a TICKET — an owner-signed invite with role `audience`,
+on the same chain as "Invite to edit" — whose `collab.key` is a per-show SHOW
+KEY rather than the room key. The relay (`server/sync-worker/`) implements
+the show as five rules, each guarded by `scripts/test-relay-broadcast.ts`:
+
+1. **Admission is the invite, not the token.** `?tok=` is a hash of the room
+   key and an audience copy cannot derive it, so the token compare is skipped
+   for the `audience` role and only for it. `w` rooms only; only while live
+   (else close `4002 not-live`); refused on a revoked invite; refused `4003
+   show-full` when the held show has outgrown its cap.
+2. **Audience sockets are receive-only.** Every frame from one is dropped.
+   Control verbs verify by ROLE — the socket's pinned writer key — never by
+   chain membership, because the audience invite is on the same chain.
+3. **Two streams.** A frame tagged `s:'aud'` goes to audience sockets only,
+   is never persisted whatever else it carries, and comes only from writer
+   sockets while live. The room stream never reaches an audience socket —
+   including presence, in either direction. `nav`/`black` are signed with the
+   stream in the text and retained as latest state; `laser` is unsigned and
+   never retained.
+4. **The relay holds the show, in DO storage.** One presenter `audsnap` on
+   `live` and at checkpoints; aud ops since; nav/black. A late joiner is served
+   that and never the op log or the room's persisted snapshot. Storage, not
+   memory: the Hibernation API evicts the object mid-connection, and an
+   in-memory show would vanish silently. Past 256 KB of held ops the presenter
+   is asked to checkpoint once; past twice that, joiners are refused until it
+   does.
+5. **`end` is any writer's; grace is the only unsigned path.** Presenter
+   socket loss starts 60 s; a writer's `live` cancels it; audience activity
+   never extends it. When it fires the show ends and **the room survives**.
+
+**The Durable Object has one alarm, and it used to mean "wipe the room".**
+Every timer now goes through one multiplexer (`schedule`/`rearm`/`alarm`):
+each kind stores its due time, the DO alarm is armed to the earliest, and the
+handler runs whichever are due. Arming the grace timer with a bare `setAlarm`
+would have replaced the idle alarm and, on firing, run the wipe on a live
+room. The rig asserts the room survives a grace expiry and that the idle
+alarm still evaporates it.
+
+**`ready` carries `v` (relay protocol version, 2) and `bc:1`.** `v` is the
+one read-only way to tell a deployed relay from the last one; every other
+discriminator is a write or needs an owner key. Clients feature-detect
+broadcast on `bc`.
+
+Deploy: after #452's relay (deployed 2026-09-13 as `62a12ffa`, from
+`b1b4a67`), as its own deploy. Additive to every shipped client — none sends
+`ivr=audience` or `s:'aud'`, and `v`/`bc` on `ready` are ignored by clients
+that do not read them. The client half (slides) feature-detects and lands
+separately. Design note: private until the client ships, then promoted.
+
+## 2026-09-13 — Broadcast: the client half is a projection, a ticket, and two toggles
+
+The relay half is the entry above. This is what the slides client decided,
+built on the same day against it, with the reasoning that should not be
+re-derived.
+
+**The audience receives a PROJECTION, and one module builds all three
+surfaces.** `slides/src/audience.ts` builds the handout ("Audience copy…"),
+the join snapshot the relay serves (`projectDoc`), and filters every op the
+presenter streams (`projectOp`). Speaker notes and review comments are kept
+back — no export path stripped either before, so the first draft would have
+sent a presenter's notes to the room in the file, in the snapshot, and LIVE
+as they typed. Hidden slides stay: reachable by link, part of the deck. The
+rule that made the module honest, found by driving the real CRDT rather than
+hand-built ops: **every place the doc projection strips, the op projection
+must strip the op carrying the same content** — `doc.layouts` syncs as one
+document-level register, not as slide nodes, and "Save slide as layout"
+mid-show would have streamed a layout's notes while the handout was clean.
+`scripts/test-audience-projection.ts` diffs eight real editor edits through
+the engine and searches the projected wire for a sentinel, content-agnostic,
+so a register nobody knows about yet is caught; CI runs its negative control
+first.
+
+**An audience copy is `role: 'audience'`, not `'reader'`.** Every check that
+reads `collab.role` would otherwise do reader things — join the room path,
+boot the locked editor, skip autosave — and the audience boot path is the
+show. It holds the SHOW key as `collab.key`, the owner-signed audience invite,
+no room key, no private halves, blobs inlined (blob keys derive from
+`collab.key`, so a show-key copy could never open room-key blobs). The ticket
+(invite + show key) lives in the presenter's `collab.audience`, minted once
+and reused for every show; "Issue new tickets" re-mints it and revokes the old
+invite at the relay — defence in depth behind the cryptographic cut.
+
+**The join snapshot is built from a FRESH sync state**, never the save-time
+one: `stash` carries dead-window values including deleted slides' notes, and
+the text history carries every keystroke. The client hands the session the
+projected document only; the session builds the state.
+
+**Navigation is by slide ID; the visible index is only a fallback.** The
+design this replaced navigated by index, and an insert mid-talk moved every
+viewer to the wrong slide, silently. **Follow is the viewer's toggle; Lock is
+the presenter's and wins** — it forces follow on and makes the toggle inert.
+Lock is a UX constraint, not a security one: the viewer holds the whole deck,
+and the button says so in those words rather than implying otherwise. **Live
+is off on every show**; presenting locally never broadcasts by itself. Laser
+samples leave at ≤ 20 fps with pen-up always sent (`slides/src/follow.ts`,
+`scripts/test-broadcast-follow.ts`).
+
+**What was deleted with the old shape:** the separate broadcast socket, its
+derived rooms and trust-on-first-use pinning, `doc.broadcast`, the hosting
+URL, the hosted client, and the relay integration check that tested them.
+The contributor's relay verb logic, follow UI and off-by-default rule are the
+surviving core; the PR stays theirs.

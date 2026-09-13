@@ -201,6 +201,51 @@ export interface Transport {
   readonly kind: string
   send(frame: Frame): void
   close(): void
+  // ——— broadcast (the online transport only; BroadcastChannel has no show) ———
+  /** resolves once the socket may write (proven, or an older/relay reader) */
+  writeReady?(): Promise<void>
+  /** true when this is a receive-only audience socket */
+  readonly audience?: boolean
+  /** import (or clear, with null) the per-show key Ke */
+  setShowKey?(rawB64: string | null): Promise<void>
+  /** an op batch to the audience, sealed under Ke */
+  sendAud?(ops: Op[]): void | Promise<void>
+  /** the whole projected document to the audience, under Ke */
+  sendAudSnap?(doc: SyncDoc, state: SyncStateJSON): void | Promise<void>
+  /** a control verb: live/end (signed literal) or nav/black/laser (under Ke) */
+  sendVerb?(kind: 'live' | 'end' | 'nav' | 'black' | 'laser', payload?: unknown): void | Promise<void>
+}
+
+/** What a broadcast surfaces to the app. The audience acts on `verb` and
+ *  `closed`; the presenter on `checkpoint` (send a fresh audsnap — the session
+ *  does that for you) and `count`. */
+export type ShowEvent =
+  | { t: 'verb'; kind: 'nav' | 'black' | 'laser'; payload: unknown }
+  | { t: 'closed'; code: number }
+  | { t: 'checkpoint' }
+  | { t: 'count'; n: number }
+
+/** The presenter's control surface, live only while a show is on. Every call
+ *  is a no-op before the socket is proven — startShow awaits that first. */
+export interface ShowVerbs {
+  nav(payload: unknown): void
+  black(payload: unknown): void
+  laser(payload: unknown): void
+}
+
+/** What the app injects to run a show. The kernel never learns the app's field
+ *  names: `projectOp` decides which ops an audience may see, `snapshot` returns
+ *  the ALREADY-PROJECTED document. Both are the app's (slides/src/audience.ts). */
+export interface ShowConfig {
+  /** raw AES-GCM show key Ke, base64url */
+  showKey: string
+  /** null = this op is not for the audience (dropped from the aud stream) */
+  projectOp(op: Op): Op | null
+  /** the projected document ONLY. The session builds the sync state itself
+   *  (freshAudState) — an adopt of this doc, so no stash or text history leaks
+   *  past the projection. The app must NOT supply a state; there is nowhere it
+   *  could get a safe one. */
+  snapshot(): { doc: SyncDoc }
 }
 
 /**
@@ -524,6 +569,7 @@ export class SyncSession {
     if (!ops.length) return
     this.log.push(...ops)
     this.broadcast({ t: 'ops', a: this.actor, ops })
+    if (this.showCfg) this.projectToAudience(ops)
   }
 
   /**
@@ -619,6 +665,13 @@ export class SyncSession {
     } finally {
       this.applying = false
     }
+    // While presenting, a CO-PRESENTER's edits arrive here, not through flush,
+    // so they must be projected onto the aud stream too — otherwise the
+    // audience sees another writer's changes only at the next checkpoint. Only
+    // the presenter has a show config, so this fires for it alone; the audience
+    // (which reaches applyRemote via applyShowOps) has none and re-projects
+    // nothing.
+    if (this.showCfg) this.projectToAudience(ops)
     if (this.state.gappedActors.length) {
       this.send({ t: 'need', a: this.actor, vv: this.state.vv })
     }
@@ -726,6 +779,94 @@ export class SyncSession {
   }
 
   // --- relay refusals -------------------------------------------------------
+
+  // ——— broadcast: the presenter's show, and the audience's reception ———
+  private showCfg: ShowConfig | null = null
+  private showListeners = new Set<(e: ShowEvent) => void>()
+
+  /** The presenter's live-verb surface, or null when no show is running. */
+  show: ShowVerbs | null = null
+
+  /** Subscribe to show events (verbs, count, checkpoint, close). */
+  onShow(fn: (e: ShowEvent) => void): () => void {
+    this.showListeners.add(fn)
+    return () => this.showListeners.delete(fn)
+  }
+  private emitShow(e: ShowEvent) { this.showListeners.forEach((fn) => fn(e)) }
+
+  /** The online transport, if one is connected — the only one with a show. */
+  private showTransport(): Transport | undefined {
+    return this.transports.find((t) => typeof t.setShowKey === 'function')
+  }
+
+  /** A sync state built ONLY from the projected doc — adopt-shaped, so it
+   *  carries no stash and no text history to leak past the projection. */
+  private freshAudState(doc: SyncDoc): SyncStateJSON {
+    const eng = new this.host.engine(this.actor)
+    eng.adopt(doc as never)
+    return JSON.parse(JSON.stringify(eng.toJSON())) as SyncStateJSON
+  }
+
+  /**
+   * Begin broadcasting. The caller is already sharing (a proven writer); this
+   * installs the show key, waits until the socket may write, sends the first
+   * audsnap, and opens the verb surface. Ops flow to the audience from the next
+   * flush on. Idempotent-ish: a second call replaces the config.
+   */
+  async startShow(cfg: ShowConfig): Promise<void> {
+    const tr = this.showTransport()
+    if (!tr?.setShowKey) throw new Error('startShow: no online transport to broadcast on')
+    if (tr.audience) throw new Error('startShow: an audience copy cannot present')
+    this.showCfg = cfg
+    await tr.setShowKey(cfg.showKey)
+    await tr.writeReady?.()
+    await tr.sendVerb?.('live')
+    const snap = cfg.snapshot()
+    await tr.sendAudSnap?.(snap.doc, this.freshAudState(snap.doc))
+    this.show = {
+      nav: (p) => { void this.showTransport()?.sendVerb?.('nav', p) },
+      black: (p) => { void this.showTransport()?.sendVerb?.('black', p) },
+      laser: (p) => { void this.showTransport()?.sendVerb?.('laser', p) },
+    }
+  }
+
+  /** End the show: a signed `end`, then the key is dropped. */
+  async endShow(): Promise<void> {
+    const tr = this.showTransport()
+    this.show = null
+    this.showCfg = null
+    await tr?.sendVerb?.('end')
+    await tr?.setShowKey?.(null)
+  }
+
+  /** Each local op batch, projected onto the aud stream. An op the app maps to
+   *  null is not the audience's to see; a batch that projects to nothing sends
+   *  no frame. */
+  private projectToAudience(ops: Op[]) {
+    if (!this.showCfg) return
+    const projected: Op[] = []
+    for (const op of ops) { const p = this.showCfg.projectOp(op); if (p) projected.push(p) }
+    if (projected.length) void this.showTransport()?.sendAud?.(projected)
+  }
+
+  /** The relay asked us to checkpoint (soft cap) or refused an aud op
+   *  (show-full). Either way a fresh audsnap re-bases the audience and resets
+   *  the relay's cap; the audsnap subsumes any refused batch, so nothing needs
+   *  resending. The session does this itself (it holds snapshot()); the event
+   *  is for the app's awareness. */
+  showCheckpoint(): void {
+    if (!this.showCfg) return
+    const snap = this.showCfg.snapshot()
+    void this.showTransport()?.sendAudSnap?.(snap.doc, this.freshAudState(snap.doc))
+    this.emitShow({ t: 'checkpoint' })
+  }
+  showCount(n: number): void { this.emitShow({ t: 'count', n }) }
+  showVerb(kind: 'nav' | 'black' | 'laser', payload: unknown): void { this.emitShow({ t: 'verb', kind, payload }) }
+  showClosed(code: number): void { this.emitShow({ t: 'closed', code }) }
+  /** An aud op batch arrived (audience): apply through the reader path. */
+  applyShowOps(ops: Op[]): void { this.applyRemote(ops) }
+  /** An aud snapshot arrived (audience). */
+  applyShowSnap(doc: SyncDoc, state: SyncStateJSON): void { this.applySnapshot(doc, state) }
 
   /** the editor subscribes here to toast what the relay refused */
   onNotice(fn: (n: SyncNotice) => void): () => void {

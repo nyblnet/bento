@@ -857,6 +857,60 @@ jobs:
         # in people's files. This diffs only what goes on the wire.
         run: node scripts/test-relay-protocol.ts
 
+      - name: relay broadcast rig
+        # A show is a special case of collaboration: an audience member holds
+        # an owner-signed `audience` invite and a per-show key, and the relay
+        # routes by stream. What breaks silently if this regresses: an audience
+        # socket admitted on the room token (it holds the show key, not the
+        # room key, so the compare must be skipped for the role and only the
+        # role); an audience socket that can send anything (the invite is on the
+        # same chain as a writer's, so the check is by role); an aud frame that
+        # reaches the room stream or the room's op log (show-key ciphertext
+        # persisted forever, replayed to every future collaborator as noise); a
+        # late joiner served the room's op log; show state kept in memory,
+        # which hibernation evicts mid-show; and the presenter-loss grace timer
+        # firing the DO's single alarm as the 30-day room WIPE. Each is a
+        # mutation this rig turns red on.
+        run: node scripts/test-relay-broadcast.ts
+
+      - name: relay authorization rig
+        # Drives the real Room durable object with fake sockets and storage.
+        # What it guards: the relay stamps a fanned-out frame with exactly what
+        # it verified and never with what it did not; a socket that merely
+        # hash-matches the room's public key is challenged and handed no blob
+        # write ticket, cannot latch the room, and cannot answer with a forged,
+        # replayed or cross-room proof; revocation re-mints the ticket to
+        # proven sockets only; and a snapshot claiming a seq the room has not
+        # reached is refused rather than allowed to prune the op log. Every
+        # one of these is silent when it regresses — the relay keeps working
+        # and simply trusts more than it should.
+        run: node scripts/test-relay-auth.ts
+
+      - name: client vouch rig — the other half of read-only
+        # Drives a REAL OnlineTransport (kernel's and dash's twin) through a
+        # fake socket in a signed room. Every copy holds the room key, so a
+        # reader can encrypt an op batch and the blind relay fans it out
+        # unstamped; the client's `vouched()` is the only thing between that
+        # frame and every live editor applying it. With `vouched` mutated to
+        # `return true`, every other rig in the tree stayed green — security
+        # found that by mutation, and this rig is the answer: unstamped ops and
+        # snapshots refused, stamped ones applied, presence unaffected, legacy
+        # r-rooms permissive. Bundled because the kernel transport uses
+        # parameter properties, which node's strip-only loader rejects.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-sync-vouch.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-sync-vouch.mjs"
+          node "$RUNNER_TEMP/test-sync-vouch.mjs"
+
+      - name: session broadcast surface rig
+        # startShow/endShow, the verb channel, and the audience's reception.
+        # What breaks silently if it regresses: the audsnap under the show key
+        # is the LIVE sync state instead of a fresh adopt of the projected doc,
+        # which leaks `stash` (deleted slides' notes) and the whole per-keystroke
+        # text history past the projection; or a local op reaches the audience
+        # without the app's projection applied. Both are mutation-caught here.
+        run: node scripts/test-sync-show.ts
+
       - name: dash validator rig
         # 109 checks over the shapes that read as DATA rather than as damage —
         # a column shorter than the sheet has rows, a dictionary index past the
@@ -1194,6 +1248,32 @@ jobs:
         # deck. Nothing structural could see it — the fix is arithmetic, and so
         # is the regression.
         run: node scripts/test-layouts.ts
+
+      - name: slides asset-pruning rig
+        # doc.assets was append-only: delete every slide, save, and the "empty"
+        # deck was still 20 MB (#442). A save now writes a copy with the
+        # unreferenced assets dropped. Weighted toward "kept", one case per
+        # reference form, because dropping too much is the worse failure — an
+        # image gone from a file with nothing on screen to say so.
+        run: node scripts/test-slides-assets.ts
+
+      - name: Audience projection rig
+        # Live broadcast: the handout, the join snapshot and every streamed op
+        # go through slides/src/audience.ts, which keeps back speaker notes
+        # and review comments and nothing else. Runs the negative control
+        # first — with the boundary emptied the rig must go red, or it is
+        # checking nothing.
+        run: |
+          if node scripts/test-audience-projection.ts --mutate > /dev/null 2>&1; then
+            echo 'negative control passed with the boundary removed'; exit 1; fi
+          node scripts/test-audience-projection.ts
+
+      - name: Broadcast follow-mode rig
+        # The audience side's decisions (slides/src/follow.ts): nav by slide
+        # ID with the index only as fallback — an insert mid-talk moves nobody;
+        # follow is the viewer's, lock is the presenter's and wins; laser
+        # samples rate-limited at the source with pen-up always sent.
+        run: node scripts/test-broadcast-follow.ts
 
       - name: slides store rig
         # The editor's undo/redo, selection and whole-deck replacement, at the

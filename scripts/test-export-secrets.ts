@@ -154,13 +154,20 @@ const collabBlock = (() => {
   return src.slice(open, i + 1)
 })()
 
-const collabFields = [...collabBlock.matchAll(/^ {4}([A-Za-z_$][\w$]*)\??:/gm)].map((m) => m[1])
-// Private key material: anything ending in -Priv, plus the delegation keypair.
+const fieldDecls = [...collabBlock.matchAll(/^ {4}([A-Za-z_$][\w$]*)\??:/gm)]
+const collabFields = fieldDecls.map((m) => m[1])
+// Private key material: anything ending in -Priv, the delegation keypair, and
+// ANY field whose declared type carries a `priv` key inside it — the audience
+// ticket store (`audience: { invite: { priv … }, key }`) is an object, matched
+// neither -Priv nor 'invite', and rode into every keepRoom copy until security
+// found it (2026-09-13): a reader could mint audience tickets the presenter
+// never issued. Discovery by SHAPE so the next nested keypair is caught too.
 // `key` and `room` are the read capability — a copy that must follow the live
 // session keeps them, so they are only covered by the drop-the-block default.
-const privateFields = collabFields.filter((f) => /Priv$/.test(f) || f === 'invite')
+const typeOf = (i: number) => collabBlock.slice(fieldDecls[i].index!, fieldDecls[i + 1]?.index ?? collabBlock.length)
+const privateFields = collabFields.filter((f, i) => /Priv$/.test(f) || f === 'invite' || /\bpriv\??:/.test(typeOf(i)))
 
-ok(collabFields.includes('key') && privateFields.length >= 3,
+ok(collabFields.includes('key') && privateFields.length >= 4 && privateFields.includes('audience'),
   `model.ts declares ${collabFields.length} collab fields, ${privateFields.length} of them private (${privateFields.join(', ')})`)
 
 const stripper = body('stripCollabSecrets')
@@ -185,6 +192,35 @@ for (const name of EXPORTS) {
 
 ok(!/writeText\(JSON\.stringify\(this\.store\.doc\)/.test(body('copyDocJson')),
   'copyDocJson() copies a stripped CLONE, never the live document')
+
+// The audience copy (live broadcast) is the one export that does NOT go
+// through stripCollabSecrets: it is built by the audience PROJECTION, which
+// replaces the collab block outright (show key as collab.key, audience
+// invite, no private halves) and also strips speaker notes and comments — the
+// two fields no other export strips. It is invisible to the catch-all below
+// (projectDoc clones internally), so it is pinned here by shape AND by running
+// the projection on a deck that carries everything it must lose.
+{
+  const aud = body('saveAudienceCopy')
+  ok(/\bprojectDoc\(this\.store\.doc,/.test(aud), 'saveAudienceCopy() builds the copy with projectDoc(this.store.doc, …)')
+  ok(!/serializeAuto\(this\.store\.doc\)|writeUpdatedFileAs\([^)]*this\.store\.doc/.test(mask(aud)),
+    'saveAudienceCopy() never hands the LIVE document to the sink')
+  const { projectDoc, carriesHidden } = await import('../slides/src/audience.ts')
+  const ROOM = 'ROOM-KEY-MUST-NOT-TRAVEL', PRIV = 'OWNER-PRIV-MUST-NOT-TRAVEL', NOTE = 'NOTES-MUST-NOT-TRAVEL'
+  const deck = {
+    format: 'bento/slides', version: 1, docId: 'd', title: 't', size: { width: 1, height: 1 },
+    theme: { background: '#fff', color: '#000', accent: '#f00', fontFamily: 'x' },
+    slides: [{ id: 's', background: '#fff', transition: 'fade', elements: [], notes: NOTE,
+      comments: [{ id: 'c', author: 'a', text: NOTE, at: 'now' }] }],
+    collab: { room: 'w1', key: ROOM, on: true, v: 2, owner: 'O', ownerPriv: PRIV, writerPriv: PRIV,
+      invite: { pub: 'I', priv: PRIV, role: 'writer', sig: 'S' } },
+  }
+  const out = JSON.stringify(projectDoc(deck as never, { invite: { pub: 'A', priv: 'AP', role: 'audience', sig: 'S' }, key: 'SHOW' }).doc)
+  ok(!out.includes(ROOM), 'an audience copy carries no room key')
+  ok(!out.includes(PRIV), 'an audience copy carries no private half')
+  ok(!out.includes(NOTE), 'an audience copy carries no speaker notes and no comments')
+  ok(carriesHidden(JSON.parse(out)).length === 0, 'carriesHidden() agrees: nothing hidden travels')
+}
 
 // The catch-all: any method that clones the document and then hands it to an
 // outbound sink is an export, named in the list above or not. saveAsNewDeck is
@@ -218,8 +254,16 @@ console.log('\npasswords')
 // serializeFile has exactly one legitimate caller left in the app: the
 // documented window.bento.serialize() tooling hook, which is synchronous by
 // contract and never writes a file for a person.
+//
+// A CALL, not a definition: slides/src/save.ts shadows serializeFile with a
+// wrapper (it prunes unreferenced assets before handing off to the kernel —
+// #442), and `function serializeFile(` is that wrapper being declared, not
+// the plain serializer being reached for. The wrapper's own call goes to the
+// kernel under the alias `kernelSerializeFile`, which this pattern does not
+// match — so a NEW call to the plain path anywhere in these files still fails
+// here, which is the property this check exists for.
 const callers = ['slides/src/editor/editor.ts', 'slides/src/main.ts', 'slides/src/save.ts', 'slides/src/autosave.ts', 'slides/src/present.ts']
-  .filter((f) => /\bserializeFile\(/.test(mask(read(f))))
+  .filter((f) => /(?<!function )\bserializeFile\(/.test(mask(read(f))))
 ok(callers.length === 1 && callers[0] === 'slides/src/main.ts',
   `serializeFile() is called from ${callers.join(', ') || 'nowhere'} — and only there`)
 ok(/serialize:\s*\(\)\s*=>\s*\{[^}]*\bserializeFile\(store\.doc\)/.test(read('slides/src/main.ts')),

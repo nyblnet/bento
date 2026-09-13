@@ -35,7 +35,8 @@ import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, is
 import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, stageForFile, unstageFromFile } from '../packs'
 import { injectFonts } from '../fonts'
 import { appConfig } from '../../../kernel/src/app.ts'
-import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, mintRoomKey, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 
 const i18nT = t
@@ -962,6 +963,72 @@ export class Editor {
     }
   }
 
+  /**
+   * The audience TICKET for live broadcast — minted once per deck, reused for
+   * every show, replaced only by "Issue new tickets". An audience member is a
+   * collaborator whose `collab.key` is the SHOW key, not the room key: the
+   * presenter double-encrypts while live and the relay never persists that
+   * stream, so between shows the ticket decrypts nothing (docs/DECISIONS.md,
+   * the broadcast entry). Owner-only: the invite is owner-signed.
+   */
+  private async audienceTicket(): Promise<AudienceTicket | null> {
+    const c = this.store.doc.collab
+    if (!(c?.room && c.key && c.v === 2 && c.ownerPriv)) return null
+    if (c.audience) return c.audience
+    const invite = await mintInvite(c.ownerPriv, 'audience')
+    const ticket: AudienceTicket = { invite: { ...invite, role: 'audience' }, key: mintRoomKey() }
+    this.store.commit(() => { this.store.doc.collab!.audience = ticket })
+    return ticket
+  }
+
+  /** A live broadcast hand-out: opens straight into the show and follows the
+   *  presenter while they are live. Built by the audience PROJECTION
+   *  (src/audience.ts) — the same function that builds the join snapshot the
+   *  relay serves — so it never carries speaker notes, comments, the room key
+   *  or any private half; blobs are inlined because a show-key copy cannot
+   *  open room-key blobs. Between shows it is a plain, working deck. */
+  private async saveAudienceCopy() {
+    await this.goLive()
+    const ticket = await this.audienceTicket()
+    if (!ticket) {
+      this.toast(t('Only the deck owner can issue audience tickets'))
+      return
+    }
+    this.canvas.commitTextEdit()
+    const { doc: copy, missingAssets } = projectDoc(this.store.doc, ticket)
+    copy.docId = this.store.doc.docId // same document: the audience follows THIS deck
+    if (missingAssets.length) this.toast(t('Some offloaded images are not on this machine yet and will be missing from the copy'))
+    try {
+      // serializeAuto, like every other copy written for a person: an active
+      // password reaches the file. A viewer of an encrypted deck needs the
+      // password, which is what encrypting the deck meant.
+      const ok = await writeUpdatedFileAs(await serializeAuto(copy), copy, { suffix: 'audience', keepHandle: false })
+      if (ok) this.toast(t('Audience copy saved — it opens into the show and follows you while you are live'))
+    } catch {
+      this.toast(t('Saving failed'))
+    }
+  }
+
+  /** Re-mint the audience ticket. Every audience copy handed out so far is
+   *  dead from this moment — cryptographically (a new show key; nothing is
+   *  ever encrypted under the old one again) and at the door (the old invite
+   *  is revoked at the relay). A recurring class's handouts included: say so. */
+  private async issueNewTickets() {
+    const c = this.store.doc.collab
+    if (!(c?.v === 2 && c.ownerPriv && c.owner)) {
+      this.toast(t('Only the deck owner can issue audience tickets'))
+      return
+    }
+    const old = c.audience
+    if (!old) { this.toast(t('No audience tickets have been issued for this deck')); return }
+    if (!confirm(t('Issue new tickets? Every audience copy saved so far will stop working, including ones you handed out for a recurring session.'))) return
+    const tr = onlineTransport()
+    if (tr) await tr.revokeKey(old.invite.pub, c.owner, c.ownerPriv) // defence in depth behind the key change
+    this.store.commit(() => { delete this.store.doc.collab!.audience })
+    const fresh = await this.audienceTicket()
+    if (fresh) this.toast(t('New tickets issued — save a new audience copy to hand out'))
+  }
+
   /** A live viewer: follows the shared session read-only. Keeps the room + read
    *  key + writer PUBKEY (so the relay knows the room's writer) but drops the
    *  writer PRIVATE key — the relay then rejects any op it tries to send. */
@@ -1348,6 +1415,12 @@ export class Editor {
         t('A live viewer: follows every edit as it happens but can never change the deck — the relay enforces it.'))
       action(ICONS.slideshow, t('Present-only file…'), false, () => void this.savePresentationPackage(),
         t('A sealed hand-out that opens straight into the show — no editor, no live connection.'))
+      action(ICONS.broadcast, t('Audience copy…'), false, () => void this.saveAudienceCopy(),
+        t('A hand-out for a live show: opens into the presentation and follows your slides while you are live. Never carries your speaker notes or comments.'))
+      if (this.store.doc.collab?.audience) {
+        action(ICONS.broadcast, t('Issue new tickets…'), false, () => void this.issueNewTickets(),
+          t('Replaces the audience tickets: every audience copy saved so far stops working.'))
+      }
       action(ICONS.template, t('Template…'), false, () => void this.saveAsTemplate(),
         t('A reusable starter: everyone who opens it gets their own fresh, independent deck.'))
     } else {
@@ -1382,6 +1455,9 @@ export class Editor {
    *  "share" is one action for users — no separate start-a-session step. */
   private async goLive() {
     if (!this.session || offlineEnabled()) return
+    // An audience copy holds the SHOW key, not the room key, and must never
+    // mint or join a session of its own — its only path is the show (main.ts).
+    if (this.store.doc.collab?.role === 'audience') return
     this.session.enableSharing()
     await startSharing(this.session, this.store)
     this.wireOnlineStatus()
@@ -1755,17 +1831,15 @@ export class Editor {
       }
       pick.appendChild(grid)
     }
+    // Open beside the anchor, clamped on-screen. The bottom-of-sidebar button
+    // used to open the picker upward from itself, which pushed a picker with
+    // a handful of custom layouts above the viewport (measured: top = -7px at
+    // a 600px-tall window). The height is read after appending so the clamp
+    // uses the real box; the stylesheet caps it to the viewport and scrolls.
     const r = anchor.getBoundingClientRect()
-    if (anchor.classList.contains('ed-add-slide')) {
-      // bottom-of-sidebar button: open upward from it
-      pick.style.left = `${Math.max(8, r.left)}px`
-      pick.style.bottom = `${window.innerHeight - r.top + 8}px`
-    } else {
-      // insert-gap or panel button: open beside the anchor, clamped on-screen
-      pick.style.left = `${Math.max(8, Math.min(r.right + 10, window.innerWidth - 440))}px`
-      pick.style.top = `${Math.max(8, Math.min(r.top - 40, window.innerHeight - 460))}px`
-    }
+    pick.style.left = `${Math.max(8, Math.min(r.right + 10, window.innerWidth - 440))}px`
     document.body.appendChild(pick)
+    pick.style.top = `${Math.max(8, Math.min(r.top - 40, window.innerHeight - pick.offsetHeight - 8))}px`
     const close = (ev: PointerEvent) => {
       if (!pick.contains(ev.target as Node)) {
         pick.remove()
@@ -2097,7 +2171,41 @@ export class Editor {
       this.presenting = false
       this.store.goTo(last)
       this.canvas.render()
-    }, { fullscreen })
+    }, { fullscreen, broadcast: this.presenterBroadcast() })
+  }
+
+  /**
+   * The show's broadcast surface, presenter side. The speaker view's Live
+   * toggle calls start(): make sure we are sharing (a proven writer), mint or
+   * reuse the audience ticket, and hand the session the show key plus the two
+   * projection functions — projectOp for every op it streams from now on,
+   * projectDoc for the audsnap it seals (and re-seals on checkpoint). The
+   * session does the rest; the show only sends verbs. Absent when there is no
+   * session at all (offline shell), so the toggle is inert rather than broken.
+   */
+  private presenterBroadcast(): import('../present').PresentBroadcast | undefined {
+    const session = this.session
+    if (!session) return undefined
+    return {
+      onShow: (fn) => session.onShow(fn),
+      presenter: {
+        start: async () => {
+          await this.goLive()
+          const ticket = await this.audienceTicket()
+          if (!ticket) throw new Error('only the deck owner can broadcast')
+          await session.startShow({
+            showKey: ticket.key,
+            projectOp,
+            // the PROJECTED document only — the session builds a fresh
+            // adopt-shaped state itself (a saved state's internals carry
+            // deleted slides' notes and the whole text history)
+            snapshot: () => ({ doc: projectDoc(this.store.doc, ticket).doc }),
+          })
+        },
+        stop: () => session.endShow(),
+        verbs: () => session.show,
+      },
+    }
   }
 
   // --- paste: external objects + cross-deck elements/slides ---------------------
@@ -3483,6 +3591,11 @@ function stripCollabSecrets(doc: import('../model').BentoDoc, opts: { keepRoom?:
   delete doc.collab.writerPriv // the muzzle — no write capability travels
   delete doc.collab.ownerPriv // v2: neither the owner key…
   delete doc.collab.invite //    …nor any invite (delegation) material
+  // …nor the audience ticket store: presenter-only. It holds the show key
+  // (worthless to a reader, who sees everything anyway) AND the audience
+  // invite's private half, which would let a reader mint audience tickets the
+  // presenter never issued. Stripped like the other private halves.
+  delete doc.collab.audience
 }
 
 /** Deep-clone an element with a fresh id (same-slide duplicates must not share ids). */

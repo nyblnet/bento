@@ -487,6 +487,25 @@ export interface BentoDoc {
     chartPalette?: string[]
     /** defaults for newly inserted tables; omitted decks keep the standard look */
     table?: Partial<TableStyle>
+    /** Code Palette (Tier-0). */
+    codePalette?: {
+      // comment
+      c?: string,
+      // string
+      s?: string,
+      // number
+      n?: string,
+      // keyword
+      k?: string,
+      // function calls
+      f?: string,
+      // punctutations
+      p?: string,
+      // diff: additions
+      a?: string,
+      // diff: deletions / removals
+      d?: string,
+    }
   }
   /** present-mode chrome; decks with built-in chrome can turn Reveal's off */
   present?: {
@@ -570,7 +589,7 @@ export interface BentoDoc {
     writerPub?: string
     writerPriv?: string
     /** 'reader' = this copy is a live viewer: receives updates, never sends. */
-    role?: 'writer' | 'reader'
+    role?: 'writer' | 'reader' | 'audience'
     /**
      * Fine-grained access (v1.0.3+, `v: 2`): per-person keys. The room id
      * commits to the OWNER's pubkey. A member copy carries an INVITE — an
@@ -585,11 +604,27 @@ export interface BentoDoc {
     invite?: {
       pub: string
       priv: string
-      role: 'writer' | 'commenter'
+      /** 'audience' (live broadcast) admits a receive-only socket for the
+       *  duration of a show; it travels only in audience copies, whose `key`
+       *  is the show key rather than the room key (see src/audience.ts). */
+      role: 'writer' | 'commenter' | 'audience'
       /** unix ms expiry; 0/absent = no expiry */
       exp?: number
       /** owner's signature over `inv.${pub}.${role}.${exp||0}` */
       sig: string
+    }
+    /**
+     * Live broadcast tickets (PRESENTER's copy only; additive, old shells
+     * preserve it). Minted once by "Save audience copy…" and reused for every
+     * show until "Issue new tickets" re-mints both halves, which kills every
+     * outstanding audience copy: `invite` is the owner-signed audience
+     * invite the relay admits on, `key` the per-show symmetric key the
+     * presenter double-encrypts under while live. Never in an audience copy
+     * (that copy carries the invite and has `key` AS its collab.key).
+     */
+    audience?: {
+      invite: { pub: string; priv: string; role: 'audience'; exp?: number; sig: string }
+      key: string
     }
   }
   /**

@@ -11,6 +11,19 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Live broadcast.** *Audience copy…* in the Share menu writes a hand-out
+  for a live show: whoever opens it lands straight in the presentation, and
+  while you are **Live** (a toggle in the speaker view, off every time you
+  present) their slide follows yours — transitions, morphs, black screen and
+  laser included — and the deck itself updates as you edit mid-talk. The copy
+  never carries your speaker notes or comments, in the file or on the wire.
+  **Lock** holds the audience on your slide; otherwise they can browse and
+  snap back. When you end the show the copy is a plain deck of what was
+  shown, and it receives nothing between shows: it holds a per-show key, not
+  the room key. *Issue new tickets…* makes every copy handed out so far stop
+  working. Built on the same end-to-end-encrypted collaboration room as
+  everything else — no second channel.
+
 ## [1.0.19] — 2026-09-04
 
 - **Bento Slides works on a phone.** Eight changes land together, because
