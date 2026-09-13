@@ -860,6 +860,22 @@ jobs:
         # and simply trusts more than it should.
         run: node scripts/test-relay-auth.ts
 
+      - name: client vouch rig — the other half of read-only
+        # Drives a REAL OnlineTransport (kernel's and dash's twin) through a
+        # fake socket in a signed room. Every copy holds the room key, so a
+        # reader can encrypt an op batch and the blind relay fans it out
+        # unstamped; the client's `vouched()` is the only thing between that
+        # frame and every live editor applying it. With `vouched` mutated to
+        # `return true`, every other rig in the tree stayed green — security
+        # found that by mutation, and this rig is the answer: unstamped ops and
+        # snapshots refused, stamped ones applied, presence unaffected, legacy
+        # r-rooms permissive. Bundled because the kernel transport uses
+        # parameter properties, which node's strip-only loader rejects.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-sync-vouch.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-sync-vouch.mjs"
+          node "$RUNNER_TEMP/test-sync-vouch.mjs"
+
       - name: dash validator rig
         # 109 checks over the shapes that read as DATA rather than as damage —
         # a column shorter than the sheet has rows, a dictionary index past the
