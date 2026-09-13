@@ -11,7 +11,8 @@ pre-1.0.
 
 ## [Unreleased]
 
-- **Live broadcast.** *Audience copy…* in the Share menu writes a hand-out
+- **Live broadcast.** Contributed by Niemes (#293), and shaped together with
+  the collaboration work below. *Audience copy…* in the Share menu writes a hand-out
   for a live show: whoever opens it lands straight in the presentation, and
   while you are **Live** (a toggle in the speaker view, off every time you
   present) their slide follows yours — transitions, morphs, black screen and
@@ -23,6 +24,28 @@ pre-1.0.
   the room key. *Issue new tickets…* makes every copy handed out so far stop
   working. Built on the same end-to-end-encrypted collaboration room as
   everything else — no second channel.
+- **A deck can shrink again.** Saving used to keep every image the file had
+  ever held: add pictures, delete every slide, save — and the "empty" deck was
+  still 20 MB, because deleting an element removed the reference and nothing
+  ever removed the bytes. A save now drops the assets nothing on any slide,
+  layout, font or code snippet refers to. Undo after a save still brings an
+  image back, and the next save keeps it.
+- **Code snippets take the deck's colours.** Rahul Ravikumar (#450) added an
+  optional code palette to the theme — one colour per kind of token (comments,
+  strings, numbers, keywords, calls, punctuation, diff added and removed) — so
+  a snippet can match the deck instead of the built-in scheme. A deck without
+  one renders exactly as before; the starter deck sets one.
+- **The layout picker stays on screen.** Johan Høgåsen-Hallesby (#425): with
+  a few custom layouts the picker opened above the top of the window and its
+  first row hid under the topbar. It now opens beside its button, keeps an
+  8px margin from every edge, and scrolls inside itself on a short window.
+- **A shared deck applies only changes the relay has verified came from a
+  writer.** The sync client no longer acts on a frame the relay did not vouch
+  for; nothing changes for anyone editing normally.
+- Groundwork with no visible change: the shared UI components every Bento app
+  will draw from (menu, side panel, dialog, tooltip), and — from Johan
+  Høgåsen-Hallesby (#423) — a build that runs its own release channel and
+  relay can now configure both without patching the kernel.
 
 ## [1.0.19] — 2026-09-04
 
