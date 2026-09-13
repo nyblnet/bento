@@ -525,7 +525,7 @@ export function sanitizeHtml(html: string): string {
         for (const attr of Array.from(elChild.attributes)) elChild.removeAttribute(attr.name)
         if (elChild.tagName === 'A') {
           if (isWebUrl(href)) elChild.setAttribute('href', href)
-          else { while (elChild.firstChild) node.insertBefore(elChild.firstChild, elChild); elChild.remove(); continue }
+          else { walk(elChild); while (elChild.firstChild) node.insertBefore(elChild.firstChild, elChild); elChild.remove(); continue }
         }
         walk(elChild)
       } else if (child.nodeType !== Node.TEXT_NODE) {

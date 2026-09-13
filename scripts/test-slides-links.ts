@@ -61,7 +61,7 @@ const read = (f: string) => readFileSync(join(root, f), 'utf8')
 const render = read('slides/src/render.ts')
 ok(/'H1', 'H2', 'A',/.test(render) && /elChild\.tagName === 'A'[\s\S]{0,300}isWebUrl\(href\)/.test(render),
   'render.ts sanitizeHtml: <a> is allowed, keeps href only when isWebUrl, and is unwrapped otherwise')
-ok(/if \(isWebUrl\(href\)\) elChild\.setAttribute\('href', href\)[\s\S]{0,80}else \{ while \(elChild\.firstChild\)/.test(render),
+ok(/if \(isWebUrl\(href\)\) elChild\.setAttribute\('href', href\)[\s\S]{0,80}else \{ walk\(elChild\); while \(elChild\.firstChild\)/.test(render),
   'render.ts: an anchor with a non-web href is unwrapped to its text, not kept without href')
 const present = read('slides/src/present.ts')
 ok(/window\.open\(url, '_blank', 'noopener,noreferrer'\)/.test(present), 'present.ts opens a NEW tab with noopener,noreferrer')
@@ -74,6 +74,8 @@ ok(/addEventListener\('auxclick'[\s\S]{0,300}ev\.preventDefault\(\)[\s\S]{0,200}
   'present.ts: a middle-click on an anchor goes through the same door (auxclick would otherwise bypass the offline gate and noreferrer)')
 ok(/link: \(v\) => \(isWebUrl\(v\) \? v : cssValue\(\)\(v\)\)/.test(read('slides/src/untrusted.ts')), 'untrusted.ts: the shape gate accepts a link that is a web URL or a slide id')
 ok(!/target="_blank"|rel="noopener"/.test(render), 'render.ts stores no target/rel — those are decided at click time, never in the document')
+ok(/querySelectorAll<HTMLAnchorElement>\('a\[href\]'\)\)\) a\.rel = 'noopener noreferrer'/.test(present),
+  'present.ts sets rel at MOUNT on show anchors — the context-menu and drag routes, which bypass the click handler, then send no referrer')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

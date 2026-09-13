@@ -118,6 +118,11 @@ export function startPresentation(
       slide.transition === 'morph' || morphNext ? 'none' : slide.transition
     if (!inLinearFlow(slide)) section.dataset.bentoState = '1' // dimmed in overview
     const surface = renderSlide(slide, doc, { hidePlaceholders: true, liveMedia: true })
+    // Web links: rel set AT MOUNT, in the show only, never stored — a click
+    // goes through openWeb, but the browser's own routes to an anchor (the
+    // context menu's "open in new tab", a drag) do not, and on a hosted deck
+    // they would otherwise send this page's location as the referrer.
+    for (const a of Array.from(surface.querySelectorAll<HTMLAnchorElement>('a[href]'))) a.rel = 'noopener noreferrer'
     // reveal slides start with only the default hover set visible
     if (slide.hover?.type === 'reveal') applyRevealSet(surface, slide.hover.default ?? null, slide.hover.default)
     section.appendChild(surface)
