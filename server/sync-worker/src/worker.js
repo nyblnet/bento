@@ -63,6 +63,21 @@ const MAX_BLOB = 8 * 1024 * 1024
 // but a trust-on-first-use token — the same unbounded-bill shape we closed for
 // frames. Counted in the DO, which is the only component that knows the room.
 const ROOM_BLOB_CAP = 256 * 1024 * 1024
+// Broadcast. GRACE: a presenter socket lost without `end` keeps the show
+// alive for one reconnect window. COUNT_TICK: the audience count reaches
+// writer sockets at most this often. SHOW_OPS_CAP: bytes of aud ops the relay
+// holds past the last checkpoint before asking the presenter for a new one;
+// at twice this, joiners are refused until a checkpoint arrives.
+// The relay's protocol version, on every `ready`. A READ-ONLY discriminator:
+// every other way to tell a deployed relay from the last one is a write (a
+// snapshot ahead of seq, to see `snap-ahead`) or needs an owner key (to be
+// challenged). A reader socket on any room can read this. Bump it when the
+// wire changes; 1 was the relay before it said so.
+//   2 — relay-auth stamps + possession proof (#452), broadcast verbs
+const RELAY_V = 2
+const GRACE_MS = 60_000
+const COUNT_TICK_MS = 5_000
+const SHOW_OPS_CAP = 256 * 1024
 const BKEY = (k) => `b:${k}`
 const OP_KEY = (seq) => `op:${String(seq).padStart(10, '0')}`
 
@@ -106,6 +121,7 @@ const rawFrameId = (raw) =>
 // echoed `g` on a signed frame it fanned out. A client refuses content-bearing
 // frames (op batches, whole-document fork snapshots) that carry neither, so
 // read-only holds for live peers too and not merely for the stored log.
+const ipvOk = (s) => /^[A-Za-z0-9_-]{80,200}$/.test(s)
 const b64uDec = (s) => {
   const b = atob(s.replace(/-/g, '+').replace(/_/g, '/'))
   const out = new Uint8Array(b.length)
@@ -360,7 +376,7 @@ export class Room {
       await this.state.storage.put(BKEY(bkey), size)
       await this.state.storage.put('blobBytes', used + size)
       // touch the expiry clock: blobs keep a room alive the same way ops do
-      await this.state.storage.setAlarm(Date.now() + IDLE_TTL_MS)
+      await this.schedule('idle', Date.now() + IDLE_TTL_MS)
       return new Response(JSON.stringify({ reserved: size }), { status: 200 })
     }
     if (req.headers.get('Upgrade') !== 'websocket') {
@@ -369,9 +385,20 @@ export class Room {
     const url = new URL(req.url)
     const tok = url.searchParams.get('tok') || ''
     if (!/^[A-Za-z0-9_-]{10,64}$/.test(tok)) return new Response('bad token', { status: 400 })
+    // AUDIENCE sockets never compare tokens. `?tok=` is a hash of the ROOM key,
+    // trust-on-first-use per room; an audience copy holds the SHOW key (its
+    // `collab.key` is Ke, not the room key) and derives a different value, so
+    // the compare would 403 it at the door. Its admission proof is the
+    // owner-signed `audience` invite on the chain below — strictly stronger
+    // than a token (signed, role-typed, expirable, revocable), and it keeps the
+    // relay blind: nothing about Ke, not even a hash of it, is ever presented.
+    const ivrEarly = url.searchParams.get('ivr') || ''
+    const isAudience = ivrEarly === 'audience'
     const saved = await this.state.storage.get('tok')
-    if (saved === undefined) await this.state.storage.put('tok', tok)
-    else if (saved !== tok) return new Response('forbidden', { status: 403 })
+    if (!isAudience) {
+      if (saved === undefined) await this.state.storage.put('tok', tok)
+      else if (saved !== tok) return new Response('forbidden', { status: 403 })
+    }
 
     // Signed rooms: the room name commits to a pubkey (v1.0.2: the shared
     // writer key; v1.0.3: the OWNER key). A writer socket presents ?w= (the key
@@ -383,7 +410,38 @@ export class Room {
     if ((await this.state.storage.get('name')) === undefined) await this.state.storage.put('name', name)
     const signed = name[0] === 'w'
     let sockW = null
-    if (signed) {
+    // An audience socket: `w` rooms only, admitted on the chain with role
+    // `audience`, RECEIVE-ONLY (every frame it sends is dropped), pinned with
+    // no writer key, and admitted only while a show is live.
+    let audienceIvp = null
+    if (isAudience) {
+      if (!signed) return new Response('forbidden', { status: 403 })
+      const w = url.searchParams.get('w') || ''
+      const o = url.searchParams.get('o') || ''
+      const ivp = url.searchParams.get('ivp') || ''
+      const ive = parseInt(url.searchParams.get('ive') || '0', 10) || 0
+      const ivs = url.searchParams.get('ivs') || ''
+      const dg = url.searchParams.get('dg') || ''
+      if (!/^[A-Za-z0-9_-]{80,200}$/.test(w)) return new Response('bad key', { status: 400 })
+      const rev = (await this.state.storage.get('rev')) || []
+      const ok = !!(o && ipvOk(ivp) && ivs && dg)
+        && (!ive || Date.now() < ive)
+        && !rev.includes(ivp)
+        && !rev.includes(w)
+        && 'w' + (await sha256b64u(b64uDec(o))) === name
+        && (await this.verifyWith(o, ivs, `inv.${ivp}.audience.${ive}`))
+        && (await this.verifyWith(ivp, dg, `dlg.${w}`))
+      if (!ok) return new Response('forbidden', { status: 403 })
+      if (!(await this.state.storage.get('show:live'))) {
+        // Not live: no socket is held waiting on the relay. The client shows
+        // "waiting for the presenter" and reconnects with backoff.
+        return this.refuseUpgrade(4002, 'not-live')
+      }
+      if (await this.state.storage.get('show:full')) {
+        return this.refuseUpgrade(4003, 'show-full')
+      }
+      audienceIvp = ivp
+    } else if (signed) {
       const w = url.searchParams.get('w') || ''
       if (w) {
         if (!/^[A-Za-z0-9_-]{80,200}$/.test(w)) return new Response('bad writer key', { status: 400 })
@@ -450,21 +508,76 @@ export class Room {
       nonce = b64uEnc(b)
       wantsTicket = url.searchParams.get('bt') === '1'
     }
+    // `sid` names the socket in storage — the presenter of a show is "the
+    // socket that sent `live`", and an attachment has no identity of its own.
+    const sidBytes = new Uint8Array(8)
+    crypto.getRandomValues(sidBytes)
+    const sid = b64uEnc(sidBytes)
     server.serializeAttachment({
-      count: 0, windowStart: Date.now(), signed, w: sockW,
+      count: 0, windowStart: Date.now(), signed, w: sockW, sid,
       nonce, bt: wantsTicket, proven: false,
+      audience: !!audienceIvp, ivp: audienceIvp,
     })
-    await this.replay(server, since, nonce)
-    await this.state.storage.setAlarm(Date.now() + IDLE_TTL_MS)
+    if (audienceIvp) {
+      await this.serveAudience(server)
+      await this.bumpCount()
+    } else {
+      await this.replay(server, since, nonce)
+    }
+    await this.schedule('idle', Date.now() + IDLE_TTL_MS)
     return new Response(null, { status: 101, webSocket: client })
+  }
+
+  /** Refuse a websocket upgrade with a close code the client can act on. The
+   *  pair is accepted and closed at once, so the client sees the CODE rather
+   *  than an HTTP error it would have to guess at. */
+  refuseUpgrade(code, reason) {
+    const pair = new WebSocketPair()
+    const [client, server] = Object.values(pair)
+    // Hibernation-accepted even though it closes at once: a plain accept() is
+    // the one call this file must never contain (it is how v0.9.7 broke every
+    // live room), and a reviewer grepping for it should find nothing.
+    this.state.acceptWebSocket(server)
+    try { server.close(code, reason) } catch { /* gone */ }
+    return new Response(null, { status: 101, webSocket: client })
+  }
+
+  /** What a joining audience socket receives: the show as the relay holds it.
+   *  Never the op log or the persisted snapshot — those are room-key
+   *  ciphertext it cannot read, and their count and timing are metadata about
+   *  the collaborators. The show state lives in DO STORAGE, not memory: the
+   *  Hibernation API evicts this object while sockets stay open, and an
+   *  in-memory show would vanish on the first eviction, mid-show, silently. */
+  async serveAudience(ws) {
+    try {
+      const snap = await this.state.storage.get('show:snap')
+      if (snap) ws.send(JSON.stringify({ ctl: 'audsnap', i: snap.i, d: snap.d }))
+      const ops = await this.state.storage.list({ prefix: 'show:op:' })
+      for (const [, f] of ops) ws.send(JSON.stringify({ s: 'aud', i: f.i, d: f.d }))
+      for (const ctl of ['nav', 'black']) {
+        const last = await this.state.storage.get(`show:${ctl}:aud`)
+        if (last) ws.send(JSON.stringify({ ctl, s: 'aud', i: last.i, d: last.d, g: last.g }))
+      }
+      ws.send(JSON.stringify({ ctl: 'ready', bc: 1, v: RELAY_V }))
+    } catch { /* socket died mid-serve */ }
   }
 
   // --- hibernation handlers (fire on wake; replace addEventListener) ---------
   async webSocketMessage(ws, data) {
     await this.onMessage(ws, data).catch(() => {})
   }
-  webSocketClose(ws) {
+  async webSocketClose(ws) {
     try { ws.close() } catch { /* already closed */ }
+    try {
+      const m = ws.deserializeAttachment() || {}
+      if (m.audience) await this.bumpCount()
+      // The presenter's socket went without `end`. One reconnect window of
+      // grace, then the show ends the same way `end` would. Only a WRITER's
+      // `live` cancels it — audience activity never extends a show.
+      if (m.sid && m.sid === (await this.state.storage.get('show:presenter'))) {
+        await this.schedule('grace', Date.now() + GRACE_MS)
+      }
+    } catch { /* nothing to clean up */ }
   }
   webSocketError() { /* the runtime drops the socket; nothing to clean up */ }
 
@@ -488,7 +601,9 @@ export class Room {
           ws.send(JSON.stringify({ q: parseInt(key.slice(3), 10), i: f.i, d: f.d }))
         }
       }
-      ws.send(JSON.stringify(nonce ? { ctl: 'ready', q: seq, c: nonce } : { ctl: 'ready', q: seq }))
+      // bc:1 — this relay speaks broadcast. A client that does not see it
+      // reports "relay does not support broadcast" and presents locally.
+      ws.send(JSON.stringify(nonce ? { ctl: 'ready', q: seq, c: nonce, bc: 1, v: RELAY_V } : { ctl: 'ready', q: seq, bc: 1, v: RELAY_V }))
     } catch {
       /* socket died mid-replay */
     }
@@ -526,6 +641,14 @@ export class Room {
     } catch {
       return
     }
+    // AUDIENCE SOCKETS ARE RECEIVE-ONLY. Not "may send presence but not ops" —
+    // nothing. The audience invite is owner-signed and on the same chain as a
+    // writer's, so any check phrased as "is this key in the chain" would let a
+    // ticket drive the show; the check is by ROLE, and the role sends nothing.
+    if (meta.audience) return
+
+    if (await this.onBroadcastFrame(ws, meta, f)) return
+
     // Possession proof (see the connect path for why a hash-match is not one).
     // A certified socket signs `prove.<nonce>.<name>` with the private half of
     // the key it presented; the name is in the text so the signature cannot be
@@ -569,7 +692,9 @@ export class Room {
       const noteW = JSON.stringify({ ctl: 'revoked', p: f.p, wt: fresh })
       for (const peer of this.state.getWebSockets()) {
         const m = peer.deserializeAttachment() || {}
-        if (m.w === f.p) {
+        if (m.w === f.p || (m.audience && m.ivp === f.p)) {
+          // "Issue new tickets" revokes the old audience invite: every socket
+          // admitted on it goes now, and the chain check refuses it hereafter
           try { peer.send(note) } catch { /* gone */ }
           try { peer.close(1008, 'revoked') } catch { /* gone */ }
           continue
@@ -596,10 +721,26 @@ export class Room {
     // the fork snapshot is ephemeral yet replaces a peer's whole document, so
     // it signs itself, and the echo below must never carry a `g` this relay
     // did not check — a stamp you don't verify is worse than no stamp.
+    // The audience stream — checked BEFORE the signature gate below, because
+    // that gate would drop a `p:1` frame without `g`, and `p:1` is ignored on
+    // this stream. A frame tagged s:'aud' is an op batch under the SHOW key:
+    // writer sockets only (a reader must not feed the audience — the socket's
+    // pinned key is the proof, as for laser), while live only, NEVER persisted
+    // whatever else it carries, routed to audience sockets only, and appended
+    // to the relay-held show state so a late joiner is served the same ops.
+    if (f.s === 'aud') {
+      if (!meta.w || !meta.signed || !(await this.state.storage.get('show:live'))) return
+      if (typeof f.i !== 'string' || typeof f.d !== 'string') return
+      await this.appendShowOp(ws, f)
+      this.fanTo('aud', JSON.stringify({ s: 'aud', i: f.i, d: f.d }), ws)
+      return
+    }
+
     const claimed = typeof f.g === 'string'
     if (meta.signed && (f.p === 1 || f.snap === 1 || claimed)) {
       if (!(await this.verifySig(f, ws))) return
     }
+
 
     const out = { i: f.i, d: f.d }
     if (meta.signed && claimed) out.g = f.g
@@ -667,17 +808,199 @@ export class Room {
       return // snapshots are storage-only, never fanned out
     }
 
-    const text = JSON.stringify(out)
-    for (const peer of this.state.getWebSockets()) {
-      if (peer === ws) continue
-      try {
-        peer.send(text)
-      } catch { /* runtime reaps dead sockets */ }
-    }
-    await this.state.storage.setAlarm(Date.now() + IDLE_TTL_MS)
+    // ROOM-stream fan-out: never to audience sockets. Presence in particular
+    // — 100 joiners on a full-mesh presence path is ~10,000 messages, and the
+    // audience gets none of it in either direction.
+    this.fanTo('room', JSON.stringify(out), ws)
+    await this.schedule('idle', Date.now() + IDLE_TTL_MS)
   }
 
+  /** Deliver `text` to every socket on `stream` except `from`. */
+  fanTo(stream, text, from = null) {
+    for (const peer of this.state.getWebSockets()) {
+      if (peer === from) continue
+      const m = peer.deserializeAttachment() || {}
+      if ((stream === 'aud') !== !!m.audience) continue
+      try { peer.send(text) } catch { /* runtime reaps dead sockets */ }
+    }
+  }
+
+  /** Writer sockets only — the presenter and co-presenters. */
+  fanToWriters(text) {
+    for (const peer of this.state.getWebSockets()) {
+      const m = peer.deserializeAttachment() || {}
+      if (!m.w) continue
+      try { peer.send(text) } catch { /* gone */ }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // BROADCAST — a show is a special case of collaboration, not a second
+  // transport. An audience member is a collaborator holding a TICKET (an
+  // owner-signed `audience` invite) whose `collab.key` is a per-show SHOW KEY,
+  // not the room key. While live the presenter sends each op batch and each
+  // control frame twice — room key for collaborators, show key tagged s:'aud'
+  // for the audience — and the relay routes by stream, verifies control frames
+  // by ROLE, holds the show state for late joiners, and forgets all of it at
+  // `end`. Design: handoffs/broadcast-design.md (private) → docs at release.
+  // ---------------------------------------------------------------------------
+
+  /** Returns true if `f` was a broadcast control frame (handled or dropped). */
+  async onBroadcastFrame(ws, meta, f) {
+    const ctl = f.ctl
+    if (ctl !== 'live' && ctl !== 'end' && ctl !== 'nav' && ctl !== 'black' && ctl !== 'laser' && ctl !== 'audsnap') return false
+    // Every broadcast verb is a WRITER's. Verified by role (the pinned `w` on
+    // this socket), never by chain membership — the audience invite is on the
+    // same chain, and membership would let a ticket drive.
+    if (!meta.w || !meta.signed) return true
+
+    if (ctl === 'live' || ctl === 'end') {
+      if (typeof f.g !== 'string' || !(await this.verifyWith(meta.w, f.g, ctl))) return true
+      if (ctl === 'live') {
+        await this.state.storage.put('show:live', 1)
+        await this.state.storage.put('show:presenter', meta.sid)
+        await this.unschedule('grace')
+        await this.schedule('count', Date.now() + COUNT_TICK_MS)
+      } else {
+        await this.endShow('end')
+      }
+      return true
+    }
+
+    if (ctl === 'audsnap') {
+      // The presenter's checkpoint: the whole document under Ke. Replaces the
+      // held snapshot, drops the aud ops it supersedes, resets the byte count,
+      // and reaches every audience socket so they converge on it.
+      if (typeof f.i !== 'string' || typeof f.d !== 'string') return true
+      if (!(await this.state.storage.get('show:live'))) return true
+      await this.state.storage.put('show:snap', { i: f.i, d: f.d })
+      const old = await this.state.storage.list({ prefix: 'show:op:' })
+      for (const k of old.keys()) await this.state.storage.delete(k)
+      await this.state.storage.put('show:bytes', 0)
+      await this.state.storage.put('show:opn', 0)
+      await this.state.storage.delete('show:full')
+      await this.state.storage.delete('show:ckpt-asked')
+      this.fanTo('aud', JSON.stringify({ ctl: 'audsnap', i: f.i, d: f.d }), ws)
+      return true
+    }
+
+    // nav / black / laser: encrypted control frames on a named stream. The
+    // relay never sees a slide id — it verifies, retains, routes.
+    const stream = f.s === 'aud' ? 'aud' : 'room'
+    if (typeof f.i !== 'string' || typeof f.d !== 'string') return true
+    if (stream === 'aud' && !(await this.state.storage.get('show:live'))) return true
+    if (ctl === 'laser') {
+      // Fire-and-forget from an already-authenticated writer socket: the
+      // socket binding is the proof, and 20 signatures a second buy nothing.
+      this.fanTo(stream, JSON.stringify({ ctl, s: stream, i: f.i, d: f.d }), ws)
+      return true
+    }
+    // nav and black are LATEST-STATE and replayed to later joiners — they
+    // outlive the socket that sent them, so the proof travels with the frame.
+    // The stream is inside the signed text so a room-stream ciphertext cannot
+    // be replayed as the audience's.
+    if (typeof f.g !== 'string' || !(await this.verifyWith(meta.w, f.g, `${ctl}.${stream}.${f.i}.${f.d}`))) return true
+    await this.state.storage.put(`show:${ctl}:${stream}`, { i: f.i, d: f.d, g: f.g })
+    this.fanTo(stream, JSON.stringify({ ctl, s: stream, i: f.i, d: f.d, g: f.g }), ws)
+    return true
+  }
+
+  /** Append an aud op to the held show state, and police its size. */
+  async appendShowOp(ws, f) {
+    const n = ((await this.state.storage.get('show:opn')) || 0) + 1
+    const bytes = ((await this.state.storage.get('show:bytes')) || 0) + f.i.length + f.d.length
+    await this.state.storage.put(`show:op:${String(n).padStart(8, '0')}`, { i: f.i, d: f.d })
+    await this.state.storage.put('show:opn', n)
+    await this.state.storage.put('show:bytes', bytes)
+    // Past the ceiling, ask the presenter to checkpoint (once per crossing).
+    // Past twice the ceiling with no checkpoint, stop admitting joiners
+    // rather than serve them an ever-growing, possibly incoherent state; the
+    // audience already present keeps streaming.
+    if (bytes > SHOW_OPS_CAP && !(await this.state.storage.get('show:ckpt-asked'))) {
+      await this.state.storage.put('show:ckpt-asked', 1)
+      try { ws.send(JSON.stringify({ ctl: 'audckpt' })) } catch { /* gone */ }
+    }
+    if (bytes > 2 * SHOW_OPS_CAP) await this.state.storage.put('show:full', 1)
+  }
+
+  /** The show is over — by `end`, or by the grace period running out. */
+  async endShow(why) {
+    for (const peer of this.state.getWebSockets()) {
+      const m = peer.deserializeAttachment() || {}
+      if (m.audience) { try { peer.close(4001, why) } catch { /* gone */ } }
+    }
+    const keys = [...(await this.state.storage.list({ prefix: 'show:' })).keys()]
+    for (const k of keys) await this.state.storage.delete(k)
+    await this.unschedule('grace')
+    await this.unschedule('count')
+  }
+
+  /** Something changed the audience size: make sure a count tick is pending.
+   *  Coarse by design — one message per tick, not one per join. */
+  async bumpCount() {
+    if (!(await this.state.storage.get('show:live'))) return
+    if ((await this.state.storage.get('al:count')) === undefined) {
+      await this.schedule('count', Date.now() + COUNT_TICK_MS)
+    }
+  }
+
+  /** The count tick: tell writer sockets how many are watching, only when it
+   *  changed, and only while live. */
+  async pushCount() {
+    if (!(await this.state.storage.get('show:live'))) return
+    let n = 0
+    for (const peer of this.state.getWebSockets()) {
+      const m = peer.deserializeAttachment() || {}
+      if (m.audience) n++
+    }
+    const last = await this.state.storage.get('show:count')
+    if (last !== n) {
+      await this.state.storage.put('show:count', n)
+      this.fanToWriters(JSON.stringify({ ctl: 'audcount', n }))
+    }
+    // keep ticking while live: joins and leaves re-arm, but a steady audience
+    // still wants the tick to exist so a missed bump cannot go stale forever
+    await this.schedule('count', Date.now() + COUNT_TICK_MS)
+  }
+
+  /**
+   * THE DURABLE OBJECT HAS ONE ALARM. Before broadcast, that alarm meant one
+   * thing — the 30-day idle wipe — and every `setAlarm` in this file re-armed
+   * it. A show needs two more timers (the presenter-loss grace period and the
+   * coarse audience-count tick), and arming either with a bare `setAlarm`
+   * would REPLACE the idle alarm; worse, when the grace alarm fired, `alarm()`
+   * would have run the wipe and evaporated the room mid-show. So every timer
+   * goes through here: each kind stores its own due time, the DO alarm is
+   * armed to the earliest, and `alarm()` runs whichever are due and re-arms.
+   */
+  async schedule(kind, at) {
+    await this.state.storage.put(`al:${kind}`, at)
+    await this.rearm()
+  }
+  async unschedule(kind) {
+    await this.state.storage.delete(`al:${kind}`)
+    await this.rearm()
+  }
+  async rearm() {
+    const due = [...(await this.state.storage.list({ prefix: 'al:' })).values()]
+    if (!due.length) { try { await this.state.storage.deleteAlarm() } catch { /* older runtime */ } ; return }
+    await this.state.storage.setAlarm(Math.min(...due))
+  }
   async alarm() {
+    const now = Date.now()
+    const all = await this.state.storage.list({ prefix: 'al:' })
+    for (const [k, at] of all) {
+      if (at > now) continue
+      await this.state.storage.delete(k)
+      const kind = k.slice(3)
+      if (kind === 'idle') { await this.onIdle(); return } // the room is gone; nothing else to run
+      if (kind === 'grace') await this.endShow('grace')
+      if (kind === 'count') await this.pushCount()
+    }
+    await this.rearm()
+  }
+
+  async onIdle() {
     // ~30 days idle: the room evaporates. Files reopen fine — the document
     // itself is the durable artifact; a fresh room re-forms on next join.
     //

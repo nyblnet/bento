@@ -847,6 +847,22 @@ jobs:
         # in people's files. This diffs only what goes on the wire.
         run: node scripts/test-relay-protocol.ts
 
+      - name: relay broadcast rig
+        # A show is a special case of collaboration: an audience member holds
+        # an owner-signed `audience` invite and a per-show key, and the relay
+        # routes by stream. What breaks silently if this regresses: an audience
+        # socket admitted on the room token (it holds the show key, not the
+        # room key, so the compare must be skipped for the role and only the
+        # role); an audience socket that can send anything (the invite is on the
+        # same chain as a writer's, so the check is by role); an aud frame that
+        # reaches the room stream or the room's op log (show-key ciphertext
+        # persisted forever, replayed to every future collaborator as noise); a
+        # late joiner served the room's op log; show state kept in memory,
+        # which hibernation evicts mid-show; and the presenter-loss grace timer
+        # firing the DO's single alarm as the 30-day room WIPE. Each is a
+        # mutation this rig turns red on.
+        run: node scripts/test-relay-broadcast.ts
+
       - name: relay authorization rig
         # Drives the real Room durable object with fake sockets and storage.
         # What it guards: the relay stamps a fanned-out frame with exactly what

@@ -6390,3 +6390,55 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
+
+## 2026-09-13 — Broadcast is a special case of collaboration: the relay half
+
+**Decision.** A live show is not a second transport. An audience member is a
+collaborator holding a TICKET — an owner-signed invite with role `audience`,
+on the same chain as "Invite to edit" — whose `collab.key` is a per-show SHOW
+KEY rather than the room key. The relay (`server/sync-worker/`) implements
+the show as five rules, each guarded by `scripts/test-relay-broadcast.ts`:
+
+1. **Admission is the invite, not the token.** `?tok=` is a hash of the room
+   key and an audience copy cannot derive it, so the token compare is skipped
+   for the `audience` role and only for it. `w` rooms only; only while live
+   (else close `4002 not-live`); refused on a revoked invite; refused `4003
+   show-full` when the held show has outgrown its cap.
+2. **Audience sockets are receive-only.** Every frame from one is dropped.
+   Control verbs verify by ROLE — the socket's pinned writer key — never by
+   chain membership, because the audience invite is on the same chain.
+3. **Two streams.** A frame tagged `s:'aud'` goes to audience sockets only,
+   is never persisted whatever else it carries, and comes only from writer
+   sockets while live. The room stream never reaches an audience socket —
+   including presence, in either direction. `nav`/`black` are signed with the
+   stream in the text and retained as latest state; `laser` is unsigned and
+   never retained.
+4. **The relay holds the show, in DO storage.** One presenter `audsnap` on
+   `live` and at checkpoints; aud ops since; nav/black. A late joiner is served
+   that and never the op log or the room's persisted snapshot. Storage, not
+   memory: the Hibernation API evicts the object mid-connection, and an
+   in-memory show would vanish silently. Past 256 KB of held ops the presenter
+   is asked to checkpoint once; past twice that, joiners are refused until it
+   does.
+5. **`end` is any writer's; grace is the only unsigned path.** Presenter
+   socket loss starts 60 s; a writer's `live` cancels it; audience activity
+   never extends it. When it fires the show ends and **the room survives**.
+
+**The Durable Object has one alarm, and it used to mean "wipe the room".**
+Every timer now goes through one multiplexer (`schedule`/`rearm`/`alarm`):
+each kind stores its due time, the DO alarm is armed to the earliest, and the
+handler runs whichever are due. Arming the grace timer with a bare `setAlarm`
+would have replaced the idle alarm and, on firing, run the wipe on a live
+room. The rig asserts the room survives a grace expiry and that the idle
+alarm still evaporates it.
+
+**`ready` carries `v` (relay protocol version, 2) and `bc:1`.** `v` is the
+one read-only way to tell a deployed relay from the last one; every other
+discriminator is a write or needs an owner key. Clients feature-detect
+broadcast on `bc`.
+
+Deploy: after #452's relay (deployed 2026-09-13 as `62a12ffa`, from
+`b1b4a67`), as its own deploy. Additive to every shipped client — none sends
+`ivr=audience` or `s:'aud'`, and `v`/`bc` on `ready` are ignored by clients
+that do not read them. The client half (slides) feature-detects and lands
+separately. Design note: private until the client ships, then promoted.

@@ -29,140 +29,35 @@
 // anything else. The client half (online.ts `vouched`) refuses content-bearing
 // frames that carry no stamp. This rig pins the relay half.
 //
-// It drives the real Durable Object class against fake storage/sockets, so the
+// It drives the real Durable Object class against fake storage/sockets (the
+// harness in scripts/lib/relay-harness.ts, shared with the broadcast rig), so the
 // assertions are about worker.js's actual control flow. Everything here fails
 // against the pre-fix relay except the cases marked as regression guards.
 
-// The DO returns a 101 for the WebSocket upgrade; undici's Response refuses any
-// status outside 200–599, so the rig supplies a shim before importing.
-class FakeResponse {
-  status: number
-  body: unknown
-  webSocket: unknown
-  headers: Map<string, string>
-  constructor(body: unknown, init: { status?: number; headers?: Record<string, string>; webSocket?: unknown } = {}) {
-    this.body = body
-    this.status = init.status ?? 200
-    this.webSocket = init.webSocket
-    this.headers = new Map(Object.entries(init.headers ?? {}))
-  }
-  async text() {
-    return typeof this.body === 'string' ? this.body : ''
-  }
-}
-;(globalThis as Record<string, unknown>).Response = FakeResponse
 
-type Sock = {
-  sent: string[]
-  closed: boolean
-  send(t: string): void
-  close(): void
-  serializeAttachment(a: unknown): void
-  deserializeAttachment(): Record<string, unknown> | null
-}
-
-function mkSocket(att: Record<string, unknown> | null = null): Sock {
-  let attachment = att
-  return {
-    sent: [],
-    closed: false,
-    send(t) { this.sent.push(t) },
-    close() { this.closed = true },
-    serializeAttachment(a) { attachment = JSON.parse(JSON.stringify(a)) },
-    deserializeAttachment() { return attachment },
-  }
-}
-
-let lastPair: { client: Sock; server: Sock } | null = null
-;(globalThis as Record<string, unknown>).WebSocketPair = function () {
-  const client = mkSocket()
-  const server = mkSocket()
-  lastPair = { client, server }
-  return { 0: client, 1: server }
-}
-
-function mkState() {
-  const store = new Map<string, unknown>()
-  const sockets: Sock[] = []
-  return {
-    store,
-    sockets,
-    storage: {
-      async get(k: string) { return store.get(k) },
-      async put(k: string, v: unknown) { store.set(k, v) },
-      async delete(k: string | string[]) {
-        for (const one of Array.isArray(k) ? k : [k]) store.delete(one)
-      },
-      async list({ start, end, prefix }: { start?: string; end?: string; prefix?: string } = {}) {
-        const out = new Map<string, unknown>()
-        for (const [k, v] of [...store.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-          if (prefix && !k.startsWith(prefix)) continue
-          if (start && k < start) continue
-          if (end && k >= end) continue
-          out.set(k, v)
-        }
-        return out
-      },
-      async deleteAll() { store.clear() },
-      async setAlarm() { /* expiry is not what this rig is about */ },
-    },
-    acceptWebSocket(ws: Sock) { sockets.push(ws) },
-    getWebSockets() { return sockets },
-    setWebSocketAutoResponse() { /* keepalive, not auth */ },
-  }
-}
-
-const req = (url: string, headers: Record<string, string> = {}) => ({
-  url,
-  method: 'GET',
-  headers: { get: (k: string) => headers[k.toLowerCase()] ?? null },
-})
-
-const { Room } = await import('../server/sync-worker/src/worker.js')
-
-// --- key material -----------------------------------------------------------
-const EC = { name: 'ECDSA', namedCurve: 'P-256' } as const
-const SIGN = { name: 'ECDSA', hash: 'SHA-256' } as const
-const b64u = {
-  enc(bytes: Uint8Array) {
-    let s = ''
-    for (const b of bytes) s += String.fromCharCode(b)
-    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  },
-}
-
-async function mintKeys() {
-  const kp = (await crypto.subtle.generateKey(EC, true, ['sign', 'verify'])) as CryptoKeyPair
-  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey))
-  const commit = new Uint8Array(await crypto.subtle.digest('SHA-256', raw as BufferSource))
-  return {
-    pub: b64u.enc(raw),
-    room: 'w' + b64u.enc(commit),
-    async sign(text: string) {
-      return b64u.enc(new Uint8Array(await crypto.subtle.sign(SIGN, kp.privateKey, new TextEncoder().encode(text))))
-    },
-  }
-}
+import {
+  mkState, mkSocket, Room, mintKeys, chainQuery, connect as hconnect, prove as hprove,
+  TOK, IV, CT, parse, ok, finish, b64u, type Sock,
+} from './lib/relay-harness.ts'
 
 const owner = await mintKeys()
 const stranger = await mintKeys() // a key the room does NOT commit to
-const TOK = 'tok0123456789abcd'
+void chainQuery
 
-let failures = 0
-let checks = 0
-function ok(cond: boolean, msg: string) {
-  checks++
-  if (!cond) {
-    failures++
-    console.error(`  ✗ ${msg}`)
-  }
-}
-
-/** a frame body the relay will never read — it only ever sees ciphertext */
-const IV = 'aXZpdmluaXY'
-const CT = 'Y2lwaGVydGV4dA'
-const parse = (s: string) => JSON.parse(s) as Record<string, unknown>
-
+// The harness's connect/prove take the room name; every room here is the owner's.
+const connect = (room: InstanceType<typeof Room>, query: string) => hconnect(room, owner.room, query)
+const prove = (
+  room: InstanceType<typeof Room>,
+  c: { server: Sock; ready?: Record<string, unknown> },
+  signer: { sign(text: string): Promise<string> },
+  opts: { wrongRoom?: boolean } = {},
+) => hprove(room, c, signer, opts.wrongRoom ? 'wSOMEOTHERROOM' : owner.room)
+const authz = async (room: InstanceType<typeof Room>, tok: string, put?: { size: number; bkey: string }) =>
+  (await room.fetch({
+    url: `https://do/authz?tok=${tok}` + (put ? `&size=${put.size}&bkey=${put.bkey}` : ''),
+    method: 'GET',
+    headers: { get: () => null },
+  })).status
 // ---------------------------------------------------------------------------
 // Fan-out authentication (hole 1)
 // ---------------------------------------------------------------------------
@@ -233,38 +128,6 @@ const parse = (s: string) => JSON.parse(s) as Record<string, unknown>
 // ---------------------------------------------------------------------------
 
 /** the call the blob route makes into the DO: reads omit size/bkey */
-const authz = async (room: InstanceType<typeof Room>, tok: string, put?: { size: number; bkey: string }) =>
-  (await room.fetch(req(
-    `https://do/authz?tok=${tok}` + (put ? `&size=${put.size}&bkey=${put.bkey}` : ''),
-  ))).status
-
-const connect = async (room: InstanceType<typeof Room>, query: string) => {
-  const res = await room.fetch(req(`https://relay/d/${owner.room}?tok=${TOK}${query}`, { upgrade: 'websocket' }))
-  const server = lastPair!.server
-  const ready = server.sent.map(parse).find((f) => f.ctl === 'ready')
-  return { status: res.status, server, ready }
-}
-
-
-/** Answer the relay's possession challenge the way a real writer does: sign
- *  `prove.<nonce>.<room>` with the private key, and read back the `wt` frame.
- *  Returns null when the relay hands out nothing — which is the assertion in
- *  half the checks below. */
-const prove = async (
-  room: InstanceType<typeof Room>,
-  c: { server: Sock; ready?: Record<string, unknown> },
-  signer: { sign(text: string): Promise<string> },
-  opts: { wrongRoom?: boolean } = {},
-) => {
-  const nonce = c.ready?.c
-  if (typeof nonce !== 'string') return null
-  const text = `prove.${nonce}.${opts.wrongRoom ? 'wSOMEOTHERROOM' : owner.room}`
-  const before = c.server.sent.length
-  await room.onMessage(c.server, JSON.stringify({ ctl: 'prove', g: await signer.sign(text) }))
-  const wtFrame = c.server.sent.slice(before).map(parse).find((f) => f.ctl === 'wt')
-  return (wtFrame?.wt as string | undefined) ?? null
-}
-
 // ---------------------------------------------------------------------------
 // The write ticket: hash-match certifies, only PROOF issues (review §2.1)
 // ---------------------------------------------------------------------------
@@ -406,5 +269,5 @@ const prove = async (
   ok((await state.storage.list({ start: 'op:', end: 'op;' })).size === 0, 'and the ops it covers are pruned')
 }
 
-console.log(failures === 0 ? `\nALL PASS (${checks} checks)` : `\n${failures} FAILURES of ${checks} checks`)
-process.exit(failures ? 1 : 0)
+
+finish('test-relay-auth')
