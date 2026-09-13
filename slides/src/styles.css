@@ -525,6 +525,9 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   text-decoration: line-through;
   opacity: 0.75;
 }
+/* An unnumbered slide is in the show but continues the previous page number:
+   the sidebar shows that number, dimmed, with a trailing dot as the marker. */
+.ed-thumb-num.ed-num-unnumbered { opacity: 0.6; font-style: italic; }
 
 .ed-stage .bento-el { cursor: grab; }
 .ed-stage .bento-el:active { cursor: grabbing; }

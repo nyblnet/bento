@@ -803,4 +803,7 @@ export const es: Catalog = {
   "The show has ended — this copy stays a working deck": "La sesión ha terminado — esta copia sigue siendo una presentación útil",
   "Your audience copy is no longer valid — ask the presenter for a new one": "Tu copia para el público ya no es válida — pide una nueva al presentador",
   "You left the show — reopen this file to rejoin": "Has salido de la sesión — vuelve a abrir este archivo para volver a unirte",
+  "Unnumbered": "Sin número",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Permanece en la presentación pero no ocupa número de página: el campo de página continúa el de la diapositiva anterior. Para una revelación construida en varios pasos con morph, o una tarjeta que no debe contar.",
+  "Unnumbered — in the show, continues the previous page number": "Sin número — en la presentación, continúa el número de página anterior",
 }

@@ -273,6 +273,20 @@ export class PropsPanel {
           if (v) this.store.slide.hidden = true
           else delete this.store.slide.hidden
         }, true)))
+      // The third answer to "does it take a number": stays in the walk, counts
+      // for nothing, and {{page}} on it continues the slide before. Builds
+      // (one element revealed per morph step) and interstitials.
+      this.row('Unnumbered', this.toggle(!!slide.unnumbered, (v) =>
+        this.edit(() => {
+          if (v) this.store.slide.unnumbered = true
+          else delete this.store.slide.unnumbered
+        }, true)))
+      if (slide.unnumbered) {
+        const hint = document.createElement('p')
+        hint.className = 'ed-hint'
+        hint.textContent = t('Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.')
+        this.host.appendChild(hint)
+      }
     }
     if (slide.transition === 'morph') {
       const hint = document.createElement('p')

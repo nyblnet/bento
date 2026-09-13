@@ -23,6 +23,14 @@ pre-1.0.
   the room key. *Issue new tickets…* makes every copy handed out so far stop
   working. Built on the same end-to-end-encrypted collaboration room as
   everything else — no second channel.
+- **A slide can stay in the show without taking a page number.** Toggle
+  *Unnumbered* in the Slide panel: the arrow keys reach the slide as usual,
+  but `{{page}}` on it continues the previous slide's number and the total
+  does not grow. Build a reveal as three morph steps and the footer reads 18
+  three times instead of 18, 19, 20 — or drop in a section card that should
+  not count. Asked for in discussion #282 by OuPDO, whose one-slide-per-step
+  decks already worked except for that number. Distinct from *Hide slide*,
+  which takes a slide out of the walk altogether.
 
 ## [1.0.19] — 2026-09-04
 

@@ -803,4 +803,7 @@ export const zhHans: Catalog = {
   "The show has ended — this copy stays a working deck": "演示已结束 — 此副本仍是可用的演示文稿",
   "Your audience copy is no longer valid — ask the presenter for a new one": "你的观众副本已失效 — 请向演讲者索取新的副本",
   "You left the show — reopen this file to rejoin": "你已退出演示 — 重新打开此文件即可重新加入",
+  "Unnumbered": "不编号",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "仍在放映中，但不占用页码 — 页码字段沿用上一张幻灯片的页码。适用于用多个变形步骤构成的逐步展示，或不应计数的卡片。",
+  "Unnumbered — in the show, continues the previous page number": "不编号 — 在放映中，沿用上一页的页码",
 }

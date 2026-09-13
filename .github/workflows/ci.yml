@@ -1288,6 +1288,13 @@ jobs:
         # image gone from a file with nothing on screen to say so.
         run: node scripts/test-slides-assets.ts
 
+      - name: Slides pagination rig
+        # Three ways a slide declines a page number (state, hidden, unnumbered)
+        # and only one of them stays in the walk; every surface — page fields,
+        # presenter counter, sidebar — asks the same predicate, and a build of
+        # morph steps reads "18, 18, 18" rather than "18, 19, 20" (#282).
+        run: node scripts/test-slides-pagination.ts
+
       - name: Audience projection rig
         # Live broadcast: the handout, the join snapshot and every streamed op
         # go through slides/src/audience.ts, which keeps back speaker notes
