@@ -360,9 +360,17 @@ export interface MediaElement extends ElementBase {
  * (render.ts:liveFrameAllowed); otherwise the view shows. Unknown `app`
  * values are RENDERED (their view), never rejected.
  */
-/** The one scheme test for an embed's `url`, shared by the paste gate
- *  (untrusted.ts) and the live-frame gate (render.ts) so they cannot drift. */
-export const isWebUrl = (v: string): boolean => /^https?:\/\//i.test(v)
+/**
+ * The one scheme test for anything that opens or loads a web page — an
+ * embed's `url` (the paste gate and the live-frame gate), an element `link`,
+ * a text `<a href>` — shared so no surface is looser than another. http and
+ * https only, bounded, no quote or angle bracket (attribute breakout); a URL
+ * that is merely well-formed but `javascript:`/`data:`/`file:` is not one.
+ */
+export const isWebUrl = (v: unknown): v is string =>
+  // (the quote characters are written as escapes: a bare quote inside a regex
+  // literal reads as an unterminated string to the source-shape rigs' masker)
+  typeof v === 'string' && v.length <= 2048 && /^https?:\/\/[^\s\x22\x27<>]+$/i.test(v)
 
 export interface EmbedElement extends ElementBase {
   type: 'embed'
@@ -1222,15 +1230,6 @@ export const paginates = (s: Slide, doc: BentoDoc): boolean =>
  * the audience into a slide that was hidden on purpose.
  */
 export const inLinearFlow = (s: Slide): boolean => !s.stateOf && !s.hidden
-
-/**
- * The one scheme test for anything that opens a web page — an element `link`,
- * a text `<a href>` — shared by the render, the shape gate and the editor so
- * no surface is looser than another. http and https only; a URL that is
- * merely well-formed but `javascript:`/`data:`/`file:` is not a link here.
- */
-export const isWebUrl = (v: unknown): v is string =>
-  typeof v === 'string' && v.length <= 2048 && /^https?:\/\/[^\s"'<>]+$/i.test(v)
 
 export const newDocId = (): string =>
   typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : uid('doc')
