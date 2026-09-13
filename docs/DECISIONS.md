@@ -6789,3 +6789,32 @@ while the carried element morphed, then revealed on `→`.
 live broadcast applies it — forward with the entrance, backward as a hide —
 and parks it when the nav names another slide, applying it after that slide
 enters. The speaker view shows `step/max` beside the slide number.
+## 2026-09 — UI primitives tier 3: the toggle switch (built ahead of a consumer)
+
+**Decision.** `kernel/src/ui/toggle.ts` + `toggle.css`, guarded by
+`scripts/test-ui-toggle.ts`. Kernel half only; same discipline as the others.
+
+**Not a consolidation** — the third of the three tier-3 primitives the
+maintainer chose to build ahead of a consumer. The four-way read found no shared
+on/off switch: slides' `input.ed-toggle` is a native checkbox, spaces'
+`.sp-toggle-body` is a disclosure block's collapsible body, type's `.t-toggles`
+is a segmented button group. So this is a new, minimal switch, to be revisited
+if no app adopts it.
+
+The one thing it gets right: it is a real `<button role="switch">` with
+`aria-checked`, so the platform gives it keyboard activation and a screen reader
+announces it as a switch and its state — a switch that is not mouse-only. `set()`
+updates state without firing `onChange` (a set is the app's doing, not the
+user's). The ON track is `--accent`, which several apps deliberately do NOT
+invert, so it is the one colour chain checked for "defines" but not "themes".
+
+**A guard improvement landed with it.** `scripts/lib/ui-theme-guard.ts` now
+follows one level of alias indirection: a token defined as `--x: var(--y)` is
+themed iff `--y` is themed. dash writes `--chrome-2: var(--hover)` and `--hover`
+is themed via `light-dark()`; without this the guard read `--chrome-2` as
+un-themed though it inverts at runtime. All five UI rigs re-run green against the
+updated guard (adding to the themed set can only relax, never regress).
+
+Pointers: `kernel/src/ui/toggle.{ts,css}`, `scripts/test-ui-toggle.ts` (61
+checks; role, click-toggle, aria, set-not-firing-onChange, destroy each
+mutation-caught).

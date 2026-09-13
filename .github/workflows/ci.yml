@@ -349,6 +349,18 @@ jobs:
         # clips it (hard-won detail 10). Behaviours mutation-caught; themed
         # through the shared guard.
         run: node scripts/test-ui-tooltip.ts
+      - name: Shared toggle primitive rig
+        # kernel/src/ui/toggle.ts — built ahead of a consumer (the three
+        # "toggle"-named classes across the apps are a native checkbox, a
+        # disclosure block and a button group; no shared switch). The checks pin
+        # the contract chosen: a real role="switch" with aria-checked, a click
+        # toggles and fires onChange, set() updates state WITHOUT firing
+        # onChange, and it is a <button> so the platform gives it keyboard
+        # activation. Behaviours mutation-caught; themed through the shared guard
+        # (whose alias-indirection fix — a token defined as var(--other) is
+        # themed iff --other is — landed here so dash's --chrome-2: var(--hover)
+        # resolves).
+        run: node scripts/test-ui-toggle.ts
       - name: Shared menu primitive rig
         # kernel/src/ui/menu.ts replaces four hand-rolled dropdowns, and what
         # differed between them was all INVISIBLE: three of the four apps
