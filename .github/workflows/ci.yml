@@ -402,6 +402,16 @@ jobs:
         # behaviour (refusal, aborting what is already in flight, cross-tab).
         run: node scripts/test-offline.ts
 
+      - name: Embed element rig
+        # The `embed` element (docs/DECISIONS.md 2026-08-19 shape): the static
+        # view always paints through the svg sanitiser; a live sandboxed frame
+        # exists only online with the offline switch off, and drops back to
+        # the view on error. Node half plus headless Chrome with a request log.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-embed.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-embed.mjs"
+          node --no-warnings "$RUNNER_TEMP/test-embed.mjs"
+
       - name: Untrusted-markup sanitizer rig
         # Every deck is untrusted input somebody may open, paste or receive over
         # collab, and script in that page owns the collab keys, the plaintext
