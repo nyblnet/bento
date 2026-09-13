@@ -814,4 +814,5 @@ export const ja: Catalog = {
   "The show has ended — this copy stays a working deck": "ショーは終了しました — このコピーは引き続きデッキとして使えます",
   "Your audience copy is no longer valid — ask the presenter for a new one": "この観客用コピーは無効になりました — 発表者に新しいものを依頼してください",
   "You left the show — reopen this file to rejoin": "ショーから退出しました — 再参加するにはこのファイルを開き直してください",
+  "While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.": "プレゼン中にフレームをクリックすると、その外側をクリックするまで矢印キーがフレームに取られます。このデッキを発表する人は全員、そのサイトからページを読み込みます。",
 }

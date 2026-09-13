@@ -814,4 +814,5 @@ export const de: Catalog = {
   "The show has ended — this copy stays a working deck": "Die Vorführung ist beendet — diese Kopie bleibt ein nutzbares Deck",
   "Your audience copy is no longer valid — ask the presenter for a new one": "Ihre Publikumskopie ist nicht mehr gültig — bitten Sie um eine neue",
   "You left the show — reopen this file to rejoin": "Sie haben die Vorführung verlassen — öffnen Sie die Datei erneut, um wieder beizutreten",
+  "While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.": "Beim Präsentieren behält ein angeklickter Rahmen die Pfeiltasten, bis Sie außerhalb klicken. Jede Person, die dieses Deck präsentiert, lädt die Seite von deren Website.",
 }

@@ -354,7 +354,7 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
         }
       }
 
-      // embed (Beta build) -------------------------------------------------
+      // embed -------------------------------------------------
       // The view is the tier that ALWAYS paints: offline, in thumbnails, in
       // print and in an upstream shell that has never heard of `app`. Without
       // it the element is a hole; pointing it at the network breaks the

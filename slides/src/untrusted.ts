@@ -312,7 +312,7 @@ const chartOption: Check = (v) => {
 }
 
 /**
- * Beta build, the `embed` element. `url` is what a live iframe LOADS, so it
+ * The `embed` element. `url` is what a live iframe LOADS, so it
  * is held to http(s) and nothing else: a `javascript:` or `data:` page in a
  * sandboxed frame cannot reach this document, but it would still be a page
  * of someone else's choosing running on the reader's screen. `view` is svg
@@ -326,7 +326,22 @@ const chartOption: Check = (v) => {
 // where it is a value and never re-parsed as markup (the mediaRef argument).
 const webUrl: Check = (v) =>
   typeof v === 'string' && v.length <= LIMITS.prose && isWebUrl(v) ? v : DROP
-const embedDoc: Check = (v) => (typeof v === 'string' ? cssValue()(v) : chartOption(v))
+// An embedded document is another deck's JSON, and a deck's envelope carries
+// its collaboration secrets: `collab` (room, read key, private halves, and the
+// saved sync state) and `docId`. Neither is content. Left in place they would
+// pass this gate, survive every save by additivity, and travel with every copy
+// and export — and the export-secrets rig reads the top-level block only. So
+// an object source leaves here without them, whatever put them there.
+const EMBED_ENVELOPE = ['collab', 'docId'] as const
+const embedDoc: Check = (v) => {
+  if (typeof v === 'string') return cssValue()(v)
+  const out = chartOption(v)
+  if (!isPlainObject(out)) return out
+  if (!EMBED_ENVELOPE.some((k) => k in out)) return out
+  const copy = { ...out }
+  for (const k of EMBED_ENVELOPE) delete copy[k]
+  return copy
+}
 
 // `el` is required: a connector end with no element to anchor to is dangling,
 // and editor.syncConnectors drops those anyway
@@ -412,7 +427,7 @@ const ELEMENT_CHECKS: Record<string, Check> = {
   source: shape(['tableId'], { tableId: cssValue() }, ['tableId']),
   columns: list(LIMITS.cols, shape(['w'], { w: num(0, 1e6) }, ['w'])),
   rows: tableRows, header: bool, style: tableStyle,
-  // embed (Beta build)
+  // embed
   app: cssValue(), view: str(LIMITS.markup), doc: embedDoc, url: webUrl, live: bool,
   type: oneOf(...Object.keys(MODEL_KEYS.element)),
 }
@@ -443,7 +458,7 @@ const ELEMENT_CHECKS: Record<string, Check> = {
  * throwing — losing a whole pasted element over a defaultable number is the
  * worse trade. `svg` is absent for a different reason: its content comes from
  * `markup` OR `asset` (2 of the 4780 elements in a real deck use the asset
- * form), and svgMarkup already falls back to ''. `embed` (Beta build) is
+ * form), and svgMarkup already falls back to ''. `embed` is
  * absent for the same reason: an empty or refused `view` paints a
  * placeholder, never throws.
  */

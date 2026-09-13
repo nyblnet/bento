@@ -23,6 +23,13 @@ pre-1.0.
   the room key. *Issue new tickets…* makes every copy handed out so far stop
   working. Built on the same end-to-end-encrypted collaboration room as
   everything else — no second channel.
+- **Embed element.** A slide can carry an embedded artifact in the shared
+  `bento/embed` shape: a static *view* that always paints, in any app and with
+  no extra code; an optional source document behind it; and, for a web page,
+  an opt-in live frame that loads only while online with offline mode off —
+  otherwise the captured view shows. Embedded documents are stripped of
+  envelope secrets at the shape gate, and a save keeps an embed's view and
+  source (the asset prune learned the new reference form).
 
 ## [1.0.19] — 2026-09-04
 

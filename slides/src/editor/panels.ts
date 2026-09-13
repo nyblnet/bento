@@ -1769,7 +1769,7 @@ export class PropsPanel {
   }
 
   /**
-   * Beta build: the `embed` element (model.ts EmbedElement). The view is the
+   * The `embed` element (model.ts EmbedElement). The view is the
    * tier that always paints; "Capture view" fills it from a picture the
    * author already has. It cannot be read off the live frame: the frame is
    * sandboxed without same-origin, so its pixels are not ours to take, and
@@ -1832,6 +1832,14 @@ export class PropsPanel {
     note.className = 'ed-hint'
     note.textContent = t('The live frame loads only while online. Offline mode and a missing network show the captured view instead.')
     this.host.appendChild(note)
+    // Two things a presenter finds out on stage otherwise: a focused frame
+    // keeps the arrow keys until they click outside it, and a live frame means
+    // every viewer who presents this deck requests the page from its author —
+    // the same trade a linked media src makes, said here so it is a choice.
+    const trade = document.createElement('p')
+    trade.className = 'ed-hint'
+    trade.textContent = t('While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.')
+    this.host.appendChild(trade)
   }
 
   private buildCodeProps(el: CodeElement) {

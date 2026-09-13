@@ -178,6 +178,18 @@ for (const f of privateFields) {
 ok(/delete doc\.collab\b(?!\.)/.test(stripper),
   'stripCollabSecrets drops the whole block by default — the room key is a capability too')
 
+// The other place a collab block can live: INSIDE an element. An embed's `doc`
+// is another deck's JSON, and a deck's envelope carries its secrets. Nothing
+// above walks elements, so this rig was blind to it; the shape gate is where
+// it is stripped, and this pins that the gate names both envelope keys.
+{
+  const gate = read('slides/src/untrusted.ts')
+  ok(/EMBED_ENVELOPE\s*=\s*\['collab',\s*'docId'\]/.test(gate),
+    'untrusted.ts strips an embedded document\'s envelope (collab, docId) at the shape gate')
+  ok(/const embedDoc[\s\S]{0,600}EMBED_ENVELOPE/.test(gate),
+    'and embedDoc is the check that does it (the behaviour is pinned by test-embed.ts)')
+}
+
 // --- 2. no export carries the session ---------------------------------------
 
 console.log('\nexports')

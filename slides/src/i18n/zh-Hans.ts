@@ -814,4 +814,5 @@ export const zhHans: Catalog = {
   "The show has ended — this copy stays a working deck": "演示已结束 — 此副本仍是可用的演示文稿",
   "Your audience copy is no longer valid — ask the presenter for a new one": "你的观众副本已失效 — 请向演讲者索取新的副本",
   "You left the show — reopen this file to rejoin": "你已退出演示 — 重新打开此文件即可重新加入",
+  "While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.": "演示时，点击过的框架会占用方向键，直到你在其外部点击。所有演示此文稿的人都会从该网站加载页面。",
 }

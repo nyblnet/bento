@@ -137,7 +137,7 @@ function svgMarkup(el: SvgElement, doc: BentoDoc): string {
   return (el.asset ? doc.assets?.[el.asset] : el.markup) ?? ''
 }
 
-// --- embed (Beta build) -----------------------------------------------------
+// --- embed -----------------------------------------------------
 
 /** The only url a live frame will load. Judged here as well as at the paste
  *  boundary, because a deck opened from disk never passes through untrusted.ts. */
@@ -150,7 +150,7 @@ function svgMarkup(el: SvgElement, doc: BentoDoc): string {
  * net.ts, the one place that knows it; a missing network is `navigator.onLine`.
  * Both fall back to `view`, which is what makes the deck presentable on
  * conference wifi and what keeps the switch honest. Pure, so the rig can
- * inspect the decision without a DOM (scripts/test-beta-embed.ts).
+ * inspect the decision without a DOM (scripts/test-embed.ts).
  */
 export function liveFrameAllowed(el: EmbedElement): boolean {
   if (el.live !== true || el.app !== 'web') return false
@@ -1251,7 +1251,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       break
     }
     case 'embed': {
-      // Beta build. The view ALWAYS paints, by the svg element's own two
+      // The view ALWAYS paints, by the svg element's own two
       // paths: an inert data-URI <img> for thumbnails, sanitizeSvg live. An
       // unknown `app` is rendered, not rejected: its view is still a picture.
       // The live frame is layered on top only when liveFrameAllowed says so,

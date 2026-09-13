@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// Beta build: the `embed` element.
+// The `embed` element.
 //
 //   slides/node_modules/.bin/esbuild scripts/test-embed.ts --bundle \
 //     --platform=node --format=esm --outfile="$TMPDIR/test-embed.mjs" \
@@ -122,6 +122,20 @@ ok(kept?.app === 'web' && kept?.view === VIEW && kept?.url === 'https://example.
 ok(kept?.doc === 'asset:src-1', 'a string doc (asset ref) survives')
 ok((sanitizeElement(embed({ doc: { series: [1, 2] } })) as Record<string, unknown> | null)?.doc !== undefined,
   'a plain-JSON doc survives')
+// A source document's envelope never crosses the gate: `collab` (room, read
+// key, private halves, saved sync state) and `docId` are another deck's
+// secrets and identity, not content. Latent until an intake fills `doc` from
+// a real deck — and unfixable afterwards, in a format with no server to
+// migrate the decks that already carry them.
+{
+  const src = { title: 'other deck', slides: [], docId: 'other-id',
+    collab: { room: 'w1', key: 'K', ownerPriv: 'P', writerPriv: 'P', invite: { pub: 'i', priv: 'P', role: 'writer', sig: 's' }, sync: { v: 2 } } }
+  const out = (sanitizeElement(embed({ doc: src })) as Record<string, unknown> | null)?.doc as Record<string, unknown> | undefined
+  ok(!!out && out.title === 'other deck', 'an embedded document keeps its content')
+  ok(!!out && !('collab' in out) && !('docId' in out), 'and leaves the gate without its collab block or docId')
+  ok(!JSON.stringify(out).includes('"P"'), 'no private half survives anywhere in it')
+  ok('collab' in src, 'the caller\'s object is untouched (the gate copies)')
+}
 ok((sanitizeElement(embed({ url: 'javascript:alert(1)' })) as Record<string, unknown> | null)?.url === undefined,
   'a javascript: url is dropped')
 ok((sanitizeElement(embed({ live: 'yes' })) as Record<string, unknown> | null)?.live === undefined,

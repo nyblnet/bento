@@ -814,4 +814,5 @@ export const zhHant: Catalog = {
   "The show has ended — this copy stays a working deck": "簡報已結束 — 此副本仍是可用的簡報",
   "Your audience copy is no longer valid — ask the presenter for a new one": "你的觀眾副本已失效 — 請向講者索取新的副本",
   "You left the show — reopen this file to rejoin": "你已退出簡報 — 重新開啟此檔案即可重新加入",
+  "While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.": "簡報時，點擊過的框架會佔用方向鍵，直到你在其外部點擊。所有簡報此文稿的人都會從該網站載入頁面。",
 }
