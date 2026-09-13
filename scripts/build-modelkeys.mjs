@@ -90,6 +90,7 @@ const ELEMENTS = {
   chart: 'ChartElement',
   table: 'TableElement',
   media: 'MediaElement',
+  embed: 'EmbedElement', // the embed element (model.ts EmbedElement)
 }
 
 const tables = {

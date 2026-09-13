@@ -342,8 +342,39 @@ export interface MediaElement extends ElementBase {
   controls?: boolean
 }
 
+/**
+ * An embedded artifact, built to the `bento/embed` shape
+ * (docs/DECISIONS.md, 2026-08-19) so it round-trips through upstream shells.
+ * Three tiers, and the ORDER is the design: `view` is a static render that
+ * ALWAYS paints, with no extra code, in any app; `doc` is the source, so the
+ * embed is not a screenshot; a live sandboxed iframe is OPT-IN per element.
+ *
+ * `app: 'web'` with a `url` is a live web surface on a slide. The
+ * frame is created only while online AND with the offline switch off
+ * (render.ts:liveFrameAllowed); otherwise the view shows. Unknown `app`
+ * values are RENDERED (their view), never rejected.
+ */
+/** The one scheme test for an embed's `url`, shared by the paste gate
+ *  (untrusted.ts) and the live-frame gate (render.ts) so they cannot drift. */
+export const isWebUrl = (v: string): boolean => /^https?:\/\//i.test(v)
+
+export interface EmbedElement extends ElementBase {
+  type: 'embed'
+  /** the app that made it: 'bento/dash', 'bento/type', … or 'web' for a page */
+  app: string
+  /** the static render: raw <svg> markup, or "asset:<key>" holding it */
+  view: string
+  /** the source, when there is one: pure JSON, or "asset:<key>" */
+  doc?: unknown
+  /** app 'web' only: the page the live frame loads (http(s) only) */
+  url?: string
+  /** opt in to a sandboxed live iframe over the view while online */
+  live?: boolean
+}
+
 export type SlideElement =
   | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement | CodeElement
+  | EmbedElement
 
 /**
  * A review comment thread. Editor-only metadata: never rendered while

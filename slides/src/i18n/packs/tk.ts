@@ -5,8 +5,9 @@
 // downloadable JSON. See docs/i18n-packs.md.
 //
 // Translator: Mekan Soltanov (github.com/msoltanov). Complete at 706/706;
-// the eight strings for unnumbered slides and reveal steps (2026-09-13)
-// are machine-drafted, awaiting the translator's review. Corrections go
+// the eight strings for unnumbered slides and reveal steps and the twelve
+// for the embed element (2026-09-13/14) are machine-drafted, awaiting the
+// translator's review. Corrections go
 // to the translator.
 //
 // Terminology follows the Latin-script conventions Turkmen speakers meet in
@@ -770,4 +771,16 @@ export const strings: Catalog = {
   "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Basylanda animasiýa: bu slaýdda n-nji → çenli gizlin (0 = slaýd bilen görkezilýär)",
   "hidden": "gizlin",
   "unnumbered": "belgisiz",
+  "Embed": "Goşundy",
+  "Web page": "Web sahypasy",
+  "No view yet. Capture a picture of the page so it shows offline.": "Entek görnüş ýok. Oflaýn görkezilmegi üçin sahypanyň suratyny alyň.",
+  "View embedded in the file": "Görnüş faýla goşulan",
+  "View is a link. It needs the network and shows nothing offline.": "Görnüş salgydyr. Oňa tor gerek we oflaýn hiç zat görkezmeýär.",
+  "Replace view…": "Görnüşi çalyşmak…",
+  "Capture view…": "Görnüşi almak…",
+  "Page URL": "Sahypa URL-i",
+  "The web page the live frame loads while online (http or https)": "Onlaýn wagtynda janly çarçuwanyň ýükleýän web sahypasy (http ýa-da https)",
+  "Load the page in a sandboxed frame while online. Offline, or with offline mode on, the captured view shows instead.": "Onlaýn wagtynda sahypany izolirlenen çarçuwada ýükläň. Oflaýn ýa-da oflaýn tertip açyk bolanda alnan görnüş görkezilýär.",
+  "The live frame loads only while online. Offline mode and a missing network show the captured view instead.": "Janly çarçuwa diňe onlaýn ýüklenýär. Oflaýn tertip we toruň ýoklugy alnan görnüşi görkezýär.",
+  "While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.": "Prezentasiýa wagtynda basylan çarçuwa daşyna basýançaňyz ok düwmelerini saklaýar. Bu topary görkezýän her kim sahypany onuň saýtyndan ýükleýär.",
 }

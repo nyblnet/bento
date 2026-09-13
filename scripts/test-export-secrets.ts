@@ -178,6 +178,51 @@ for (const f of privateFields) {
 ok(/delete doc\.collab\b(?!\.)/.test(stripper),
   'stripCollabSecrets drops the whole block by default — the room key is a capability too')
 
+// The other place a collab block can live: INSIDE an element. An embed's `doc`
+// is another deck's JSON, and a deck's envelope carries its secrets. Nothing
+// above walks elements, so this rig was blind to it. One rule at both
+// boundaries (slides/src/envelope.ts): the shape gate applies it to pasted
+// content on the way IN, stripCollabSecrets applies it to every copy on the
+// way OUT — and both are RUN here, not grepped, so killing the behaviour while
+// keeping the text goes red. (The gate itself needs a bundler to import; its
+// call into the shared rule is pinned by name, and test-embed.ts runs it.)
+{
+  const { stripEnvelope, stripEmbeddedEnvelopes, EMBED_ENVELOPE } = await import('../slides/src/envelope.ts')
+  const SECRETS = { ownerPriv: 'OWNER-PRIV', writerPriv: 'WRITER-PRIV', key: 'ROOM-KEY', room: 'ROOM-ID',
+    invite: { pub: 'i', priv: 'INVITE-PRIV', role: 'writer', sig: 's' }, sync: { v: 2 } }
+  const embedded = () => ({ title: 'inner deck', slides: [{ id: 'x' }], docId: 'INNER-DOCID', collab: JSON.parse(JSON.stringify(SECRETS)) })
+  const leaks = (o: unknown) => ['OWNER-PRIV', 'WRITER-PRIV', 'INVITE-PRIV', 'ROOM-KEY', 'ROOM-ID', 'INNER-DOCID']
+    .filter((needle) => JSON.stringify(o).includes(needle))
+
+  ok(EMBED_ENVELOPE.includes('collab') && EMBED_ENVELOPE.includes('docId'), 'the envelope is collab + docId')
+  const one = stripEnvelope(embedded())
+  ok(leaks(one).length === 0 && (one as { title?: string }).title === 'inner deck',
+    'stripEnvelope: content kept, all six secrets gone')
+  const plain = { title: 'no envelope' }
+  ok(stripEnvelope(plain) === plain, 'stripEnvelope: an object with no envelope is returned as-is')
+
+  const deck = {
+    format: 'bento/slides', version: 1, docId: 'outer', title: 'outer',
+    slides: [
+      { id: 's1', elements: [{ id: 'e1', type: 'embed', x: 0, y: 0, w: 1, h: 1, app: 'web', doc: embedded() }] },
+      { id: 's2', elements: [{ id: 'e2', type: 'embed', x: 0, y: 0, w: 1, h: 1, app: 'x', doc: 'asset:v' }] },
+    ],
+    layouts: [{ id: 'l1', elements: [{ id: 'e3', type: 'embed', x: 0, y: 0, w: 1, h: 1, app: 'x', doc: embedded() }] }],
+  }
+  const n = stripEmbeddedEnvelopes(deck as never)
+  ok(n === 2, `stripEmbeddedEnvelopes walks slides AND layouts (${n} stripped)`)
+  ok(leaks(deck).length === 0, 'end to end: a deck carrying an embedded envelope exports none of its six secrets')
+  ok((deck.slides[0].elements[0] as { doc: { title: string } }).doc.title === 'inner deck', 'and the embedded content survives')
+  ok(deck.slides[1].elements[0].doc === 'asset:v', 'an asset-ref source is untouched')
+
+  // both boundaries call the shared rule — the gate cannot be run here, so its
+  // call is pinned by name; the export strip is pinned by name AND run above
+  ok(/const embedDoc[^\n]*stripEnvelope\(/.test(read('slides/src/untrusted.ts')),
+    'the shape gate (embedDoc) strips through the same rule')
+  ok(/stripEmbeddedEnvelopes\(doc\)/.test(stripper) && stripper.indexOf('stripEmbeddedEnvelopes') < stripper.indexOf('if (!doc.collab)'),
+    'stripCollabSecrets walks embedded documents FIRST — before the early return for a copy with no collab of its own')
+}
+
 // --- 2. no export carries the session ---------------------------------------
 
 console.log('\nexports')

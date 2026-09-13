@@ -5,7 +5,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement } from '../model'
 import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
@@ -91,7 +91,27 @@ const ROW_TIPS: Record<string, string> = {
   'Fit': 'How the media fills its box — cover crops to fill, contain letterboxes',
   'URL': 'Link a hosted file instead of embedding — keeps the deck small',
   'Poster': 'Preview image shown before the video plays',
+  'Page URL': 'The web page the live frame loads while online (http or https)',
+  'Live': 'Load the page in a sandboxed frame while online. Offline, or with offline mode on, the captured view shows instead.',
   'State of': 'Makes this slide a hidden state of another — reached by clicked links, skipped by arrow keys',
+}
+
+/** An embed view from a raster: one <svg> around a data:image, sized to the
+ *  element so it fills the box the way `fit: cover` would. */
+function rasterView(dataUri: string, w: number, h: number): string {
+  const vw = Math.max(1, Math.round(w)), vh = Math.max(1, Math.round(h))
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}">`
+    + `<image href="${dataUri.replace(/"/g, '')}" width="${vw}" height="${vh}" preserveAspectRatio="xMidYMid slice"/></svg>`
+}
+
+/** internAsset for raw svg markup: identical markup reuses its key. Callers
+ *  run inside a store.commit for the same reason internAsset's do. */
+function internView(doc: BentoDoc, markup: string): string {
+  const assets = (doc.assets ??= {})
+  for (const k in assets) if (assets[k] === markup) return `asset:${k}`
+  const key = uid('a')
+  assets[key] = markup
+  return `asset:${key}`
 }
 
 /**
@@ -454,7 +474,7 @@ export class PropsPanel {
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
+    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video', embed: 'Embed' }[el.type]))
     this.opsRow([el])
 
     // Lead with the element's OWN controls — the reason it was selected —
@@ -466,6 +486,7 @@ export class PropsPanel {
     if (el.type === 'table') this.buildTableProps(el)
     if (el.type === 'media') this.buildMediaProps(el)
     if (el.type === 'code') this.buildCodeProps(el)
+    if (el.type === 'embed') this.buildEmbedProps(el)
 
     this.section(t('Position & size'))
     const geo = document.createElement('div')
@@ -1777,6 +1798,80 @@ export class PropsPanel {
         }, true))
       this.row('Poster', poster)
     }
+  }
+
+  /**
+   * The `embed` element (model.ts EmbedElement). The view is the
+   * tier that always paints; "Capture view" fills it from a picture the
+   * author already has. It cannot be read off the live frame: the frame is
+   * sandboxed without same-origin, so its pixels are not ours to take, and
+   * that boundary is the point of the sandbox. A screenshot file is.
+   */
+  private buildEmbedProps(el: EmbedElement) {
+    this.section(t('Web page'))
+
+    const status = document.createElement('p')
+    status.className = 'ed-hint'
+    const view = (el.view ?? '').trim()
+    if (!view) status.textContent = t('No view yet. Capture a picture of the page so it shows offline.')
+    else if (view.startsWith('<') || view.startsWith('asset:')) status.textContent = t('View embedded in the file')
+    else status.textContent = t('View is a link. It needs the network and shows nothing offline.')
+    this.host.appendChild(status)
+
+    const capture = document.createElement('button')
+    capture.className = 'ed-btn ed-btn-block'
+    capture.textContent = view ? t('Replace view…') : t('Capture view…')
+    capture.addEventListener('click', () => {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = 'image/svg+xml,image/png,image/jpeg,image/webp,image/gif'
+      input.addEventListener('change', () => {
+        const file = input.files?.[0]
+        if (!file) return
+        const reader = new FileReader()
+        const svg = file.type === 'image/svg+xml'
+        reader.onload = () => this.mutate(el.id, (e) => {
+          // an svg is the view as-is; a raster is wrapped so the view stays
+          // one svg the sanitizer knows how to read (a data:image href is
+          // on its allowlist). Interned, never inline: only doc.assets
+          // entries reach the live-collab blob offload.
+          const markup = svg ? String(reader.result) : rasterView(String(reader.result), e.w, e.h)
+          ;(e as EmbedElement).view = internView(this.store.doc, markup)
+        }, true)
+        if (svg) reader.readAsText(file); else reader.readAsDataURL(file)
+      })
+      input.click()
+    })
+    this.host.appendChild(capture)
+
+    // Labels stay RAW English: row() translates them and looks its tooltip
+    // up by the English label (see buildMediaProps).
+    const url = document.createElement('input')
+    url.type = 'text'
+    url.placeholder = 'https://'
+    url.value = el.url ?? ''
+    url.addEventListener('change', () =>
+      this.mutate(el.id, (e) => {
+        const m = e as EmbedElement
+        const v = url.value.trim()
+        if (v) m.url = v; else delete m.url
+      }, true))
+    this.row('Page URL', url)
+
+    this.row('Live', this.select(['off', 'on'], el.live ? 'on' : 'off', (v) =>
+      this.mutate(el.id, (e) => { (e as EmbedElement).live = v === 'on' || undefined }, true)))
+    const note = document.createElement('p')
+    note.className = 'ed-hint'
+    note.textContent = t('The live frame loads only while online. Offline mode and a missing network show the captured view instead.')
+    this.host.appendChild(note)
+    // Two things a presenter finds out on stage otherwise: a focused frame
+    // keeps the arrow keys until they click outside it, and a live frame means
+    // every viewer who presents this deck requests the page from its author —
+    // the same trade a linked media src makes, said here so it is a choice.
+    const trade = document.createElement('p')
+    trade.className = 'ed-hint'
+    trade.textContent = t('While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.')
+    this.host.appendChild(trade)
   }
 
   private buildCodeProps(el: CodeElement) {

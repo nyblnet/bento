@@ -21,6 +21,7 @@ export const MODEL_KEYS = {
       "chart": ["backdropFilter", "blend", "blur", "fx", "group", "groupId", "h", "id", "link", "morphId", "opacity", "option", "preset", "role", "rotation", "shadow", "showOnHover", "source", "themeRefs", "type", "w", "x", "y"],
       "table": ["backdropFilter", "blend", "blur", "columns", "fx", "group", "groupId", "h", "header", "id", "link", "morphId", "opacity", "role", "rotation", "rows", "shadow", "showOnHover", "style", "themeRefs", "type", "w", "x", "y"],
       "media": ["autoplay", "backdropFilter", "blend", "blur", "controls", "fit", "fx", "group", "groupId", "h", "id", "kind", "link", "loop", "morphId", "muted", "opacity", "poster", "radius", "role", "rotation", "shadow", "showOnHover", "src", "themeRefs", "type", "w", "x", "y"],
+      "embed": ["app", "backdropFilter", "blend", "blur", "doc", "fx", "group", "groupId", "h", "id", "link", "live", "morphId", "opacity", "role", "rotation", "shadow", "showOnHover", "themeRefs", "type", "url", "view", "w", "x", "y"],
     },
     "fx": ["ambient", "countUp", "enter", "enterDur", "ken", "loop", "order", "step"],
     "fxKen": ["dir", "duration", "scale"],
