@@ -739,9 +739,13 @@ export class Room {
       if (!meta.proven || !(await this.state.storage.get('show:live'))) return
       if (typeof f.i !== 'string' || typeof f.d !== 'string') return
       if (!(await this.appendShowOp(f))) {
-        // past the hard cap with no checkpoint: refuse, and say so to the
-        // sender — storage stops growing, and the presenter is told twice
-        // (audckpt earlier, this refusal now) rather than silently dropped
+        // Past the hard cap with no checkpoint: refuse, and say so to the
+        // sender. The refused frame is neither held NOR fanned to the live
+        // audience — held state and the live stream stay equal, so a late
+        // joiner never sees a different show from someone already watching.
+        // The consequence for the CLIENT: `show-full` means "checkpoint now
+        // and resend", not "one frame was dropped" — every aud op from here
+        // is invisible to everyone until a fresh audsnap arrives.
         return refuse(ws, 'show-full', { k: f.k })
       }
       this.fanTo('aud', JSON.stringify({ s: 'aud', i: f.i, d: f.d }), ws)
