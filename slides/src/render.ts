@@ -513,7 +513,9 @@ export function sanitizeHtml(html: string): string {
       if (child.nodeType === Node.ELEMENT_NODE) {
         const elChild = child as HTMLElement
         if (!ALLOWED_TAGS.has(elChild.tagName)) {
-          // unwrap unknown elements, keep their text
+          // unwrap unknown elements, keep their text — walking what they held
+          // first, so lifted children are held to the same rule as siblings
+          walk(elChild)
           while (elChild.firstChild) node.insertBefore(elChild.firstChild, elChild)
           elChild.remove()
           continue

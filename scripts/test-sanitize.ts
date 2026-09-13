@@ -299,7 +299,7 @@ const CHROME = [
  * it. Written without backticks or `${` so it can live in a template literal.
  */
 const probeSource = (renderPath: string, modelPath: string) => `
-import { renderSlide } from ${JSON.stringify(renderPath)}
+import { renderSlide, sanitizeHtml } from ${JSON.stringify(renderPath)}
 import { newDoc } from ${JSON.stringify(modelPath)}
 
 const O = location.origin
@@ -357,6 +357,25 @@ if (location.pathname === '/meta.html') {
     const based = draw('<div>x</div><base href="' + O + '/evil/"><svg><rect width="10" height="10"/></svg>')
     check('3 — no <base> survives the walk', based.querySelectorAll('base').length === 0)
     check('3 — relative urls still resolve against this document', document.baseURI === baseBefore)
+
+    // --- 3c. nested markup is walked like top-level markup -----------------
+    // An allowed tag inside a tag the walk does not know, at any depth, is
+    // held to the same rule as one at the top level. Control: the same child
+    // under an allowed parent.
+    const nested = sanitizeHtml(
+      '<section><b onclick="window.__pwn(41)">a</b></section>' +
+      '<foo><span style="position:fixed;inset:0">b</span></foo>' +
+      '<div><foo><bar><i onmouseover="window.__pwn(42)">c</i></bar></foo></div>' +
+      '<div><b onclick="window.__pwn(45)">e</b></div>')
+    const nbox = document.createElement('div'); nbox.innerHTML = nested
+    check('3c — nested markup is walked like top-level markup: no attribute survives at any depth',
+      !nbox.querySelector('[onclick],[onmouseover],[style]') && nbox.textContent === 'abce')
+    document.body.appendChild(nbox)
+    for (const el of Array.from(nbox.querySelectorAll('b, i, span'))) {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    }
+    check('3c — and clicking or hovering the lifted elements runs nothing', ![41, 42, 45].some((n) => pwned.includes(n)))
 
     // --- 4. network out of a self-contained file -------------------------------
     draw('<div>x</div><link rel="stylesheet" href="' + O + '/tracker.css">' +
