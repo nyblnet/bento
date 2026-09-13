@@ -741,4 +741,12 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "Открыт {name} — ⌘S сохранит копию",
   "⌘S asks where to save, then rewrites that file in place": "⌘S спросит, куда сохранить, а затем перезапишет этот файл на месте",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} — пустая копия Bento, а не сохранённая презентация. Откройте её отдельно, чтобы начать.",
+  "Unnumbered": "Без номера",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Остаётся в показе, но не занимает номер страницы — поле страницы продолжает номер предыдущего слайда. Для раскрытия, собранного из нескольких шагов морфинга, или карточки, которую не нужно считать.",
+  "Unnumbered — in the show, continues the previous page number": "Без номера — в показе, продолжает предыдущий номер страницы",
+  "Reveal step": "Шаг раскрытия",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Скрыт до этого нажатия → во время показа; ← снова скрывает. Задайте нескольким элементам один шаг, чтобы раскрыть их вместе.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Анимация по щелчку: скрыт до n-го → на этом слайде (0 = показывается вместе со слайдом)",
+  "hidden": "скрыт",
+  "unnumbered": "без номера",
 }

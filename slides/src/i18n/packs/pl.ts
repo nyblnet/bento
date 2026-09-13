@@ -740,4 +740,12 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "Otwarto {name} — ⌘S zapisze kopię",
   "⌘S asks where to save, then rewrites that file in place": "⌘S zapyta, gdzie zapisać, a następnie nadpisze ten plik w miejscu",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} to pusta kopia Bento, a nie zapisana prezentacja. Otwórz ją osobno, aby rozpocząć.",
+  "Unnumbered": "Bez numeru",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Pozostaje w pokazie, ale nie zajmuje numeru strony — pole strony kontynuuje numer poprzedniego slajdu. Do odsłaniania zbudowanego z kilku kroków morfowania lub karty, która nie powinna być liczona.",
+  "Unnumbered — in the show, continues the previous page number": "Bez numeru — w pokazie, kontynuuje poprzedni numer strony",
+  "Reveal step": "Krok odsłaniania",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Ukryty do tego naciśnięcia → podczas prezentacji; ← ukrywa go ponownie. Nadaj kilku elementom ten sam krok, aby odsłonić je razem.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Animuj po kliknięciu: ukryty do n-tego → na tym slajdzie (0 = widoczny wraz ze slajdem)",
+  "hidden": "ukryty",
+  "unnumbered": "bez numeru",
 }

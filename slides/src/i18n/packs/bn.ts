@@ -752,4 +752,12 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} খোলা হয়েছে — ⌘S একটি অনুলিপি সংরক্ষণ করবে",
   "⌘S asks where to save, then rewrites that file in place": "⌘S কোথায় সংরক্ষণ করবে জিজ্ঞাসা করে, তারপর সেই ফাইলটি জায়গাতেই পুনর্লিখন করে",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} সংরক্ষিত উপস্থাপনা নয়, Bento-র একটি খালি অনুলিপি। নতুন শুরু করতে এটি আলাদাভাবে খুলুন।",
+  "Unnumbered": "সংখ্যাহীন",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "শোতে থাকে কিন্তু পৃষ্ঠা নম্বর নেয় না — পৃষ্ঠা ক্ষেত্রটি আগের স্লাইডের নম্বর চালিয়ে যায়। কয়েকটি মর্ফ ধাপে তৈরি প্রকাশের জন্য, বা যে কার্ড গণনায় ধরা উচিত নয়।",
+  "Unnumbered — in the show, continues the previous page number": "সংখ্যাহীন — শোতে আছে, আগের পৃষ্ঠা নম্বর চালিয়ে যায়",
+  "Reveal step": "প্রকাশ ধাপ",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "উপস্থাপনার সময় → এর সেই চাপ পর্যন্ত লুকানো; ← আবার লুকিয়ে দেয়। একসাথে প্রকাশ করতে একাধিক উপাদানকে একই ধাপ দিন।",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "ক্লিকে অ্যানিমেট: এই স্লাইডে n-তম → পর্যন্ত লুকানো (0 = স্লাইডের সাথে দেখানো)",
+  "hidden": "লুকানো",
+  "unnumbered": "সংখ্যাহীন",
 }

@@ -743,4 +743,12 @@ export const strings: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} åpnet — ⌘S lagrer en kopi",
   "⌘S asks where to save, then rewrites that file in place": "⌘S spør hvor den skal lagres og skriver deretter over den filen direkte",
   "{name} is an empty copy of Bento, not a saved deck. Open it on its own to start one.": "{name} er en tom kopi av Bento, ikke en lagret presentasjon. Åpne den alene for å begynne en.",
+  "Unnumbered": "Unummerert",
+  "Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.": "Blir i visningen, men tar ikke sidetall — sidefeltet fortsetter det forrige lysbildets. For en avsløring bygget som flere morph-trinn, eller et kort som ikke skal telle.",
+  "Unnumbered — in the show, continues the previous page number": "Unummerert — i visningen, fortsetter forrige sidetall",
+  "Reveal step": "Avsløringstrinn",
+  "Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.": "Skjult til det trykket på → under presentasjonen; ← skjuler det igjen. Gi flere elementer samme trinn for å avsløre dem sammen.",
+  "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Animer ved klikk: skjult til det n-te → på dette lysbildet (0 = vises med lysbildet)",
+  "hidden": "skjult",
+  "unnumbered": "unummerert",
 }
