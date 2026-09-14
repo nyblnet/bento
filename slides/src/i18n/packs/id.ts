@@ -885,4 +885,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Nomor halaman, tanggal, waktu, judul, dan properti dokumen — diisi saat slide ditampilkan. Tanggal dan waktu dapat mengunci format: {{date:M/D/YY}}; edit polanya di teks.",
   "Text ▸ Field": "Teks ▸ Bidang",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Sisipkan nomor halaman, tanggal, waktu, judul, atau properti dokumen; tanggal dapat mengunci formatnya — {{date:M/D/YY}}",
+  "Keep aspect ratio": "Pertahankan rasio aspek",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Aktif: mengubah ukuran mempertahankan proporsi gambar (Shift membebaskannya untuk satu seretan). Nonaktif: lebar dan tinggi berubah terpisah dan gambar meregang",
 }

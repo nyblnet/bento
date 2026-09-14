@@ -891,4 +891,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "شمارهٔ صفحه، تاریخ، زمان، عنوان و ویژگی‌های سند — هنگام نمایش اسلاید جایگزین می‌شوند. تاریخ و زمان می‌توانند قالب را ثابت کنند: {{date:M/D/YY}}؛ الگو را در متن ویرایش کنید.",
   "Text ▸ Field": "متن ▸ فیلد",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "شمارهٔ صفحه، تاریخ، زمان، عنوان یا یک ویژگی سند را درج می‌کند؛ تاریخ می‌تواند قالب خود را ثابت کند — {{date:M/D/YY}}",
+  "Keep aspect ratio": "حفظ نسبت ابعاد",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "روشن: تغییر اندازه نسبت تصویر را حفظ می‌کند (Shift آن را برای یک کشیدن آزاد می‌کند). خاموش: عرض و ارتفاع مستقل تغییر می‌کنند و تصویر کشیده می‌شود",
 }

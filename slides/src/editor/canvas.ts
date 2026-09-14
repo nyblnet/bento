@@ -1110,16 +1110,21 @@ export class SlideCanvas {
         target.style.top = `${top}px`
       }
     }
-    const syncKeepRatio = (inputEvent: MouseEvent | undefined) => {
-      const want = !!inputEvent?.shiftKey
+    // Shift keeps the ratio — except for an image, whose own setting is the
+    // default and Shift is the one-drag exception either way: a locked image
+    // (keepAspectRatio absent/true) is freed by Shift, an unlocked one held.
+    const syncKeepRatio = (inputEvent: MouseEvent | undefined, target: HTMLElement) => {
+      const el = target.dataset.elId ? this.store.element(target.dataset.elId) : undefined
+      const locked = el?.type === 'image' && el.keepAspectRatio !== false
+      const want = inputEvent?.shiftKey ? !locked : locked
       if (mv.keepRatio !== want) mv.keepRatio = want
     }
     mv.on('resizeStart', (e) => {
-      syncKeepRatio(e.inputEvent as MouseEvent)
+      syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
       noteResizeStart(e.target as HTMLElement)
     })
     mv.on('resize', (e) => {
-      syncKeepRatio(e.inputEvent as MouseEvent)
+      syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
       applyResize(e.target as HTMLElement, e.width, e.height, e.drag.left, e.drag.top, e.inputEvent as MouseEvent)
     })
     mv.on('resizeGroupStart', (e) => e.events.forEach((ev) => noteResizeStart(ev.target as HTMLElement)))

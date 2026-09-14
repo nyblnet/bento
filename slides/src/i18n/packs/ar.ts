@@ -895,4 +895,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "رقم الصفحة والتاريخ والوقت والعنوان وخصائص المستند — تُحلّ عند عرض الشريحة. يمكن للتاريخ والوقت تثبيت تنسيق: {{date:M/D/YY}}؛ حرّر النمط في النص.",
   "Text ▸ Field": "نص ▸ حقل",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "يدرج رقم الصفحة أو التاريخ أو الوقت أو العنوان أو خاصية مستند؛ يمكن للتاريخ تثبيت تنسيقه — {{date:M/D/YY}}",
+  "Keep aspect ratio": "الحفاظ على نسبة الأبعاد",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "مفعّل: يحافظ تغيير الحجم على نسب الصورة (Shift يحرّرها لسحبة واحدة). معطّل: يتغير العرض والارتفاع باستقلال وتتمدد الصورة",
 }

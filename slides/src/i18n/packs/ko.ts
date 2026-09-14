@@ -879,4 +879,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "페이지 번호, 날짜, 시간, 제목, 문서 속성 — 슬라이드가 표시될 때 채워집니다. 날짜와 시간은 형식을 고정할 수 있습니다: {{date:M/D/YY}}; 패턴은 텍스트에서 편집합니다.",
   "Text ▸ Field": "텍스트 ▸ 필드",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "페이지 번호, 날짜, 시간, 제목 또는 문서 속성을 삽입합니다. 날짜는 형식을 고정할 수 있습니다 — {{date:M/D/YY}}",
+  "Keep aspect ratio": "가로세로 비율 유지",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "켜짐: 크기를 조절해도 이미지 비율이 유지됩니다 (Shift로 한 번의 드래그만 해제). 꺼짐: 너비와 높이가 따로 바뀌고 이미지가 늘어납니다",
 }

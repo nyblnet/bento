@@ -904,4 +904,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Numero ng pahina, petsa, oras, pamagat at mga property ng dokumento — nireresolba kapag ipinakita ang slide. Puwedeng itakda ng petsa at oras ang format: {{date:M/D/YY}}; i-edit ang pattern sa teksto.",
   "Text ▸ Field": "Teksto ▸ Field",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Ilagay ang numero ng pahina, petsa, oras, pamagat o property ng dokumento; puwedeng itakda ng petsa ang format nito — {{date:M/D/YY}}",
+  "Keep aspect ratio": "Panatilihin ang aspect ratio",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Naka-on: pinapanatili ng pag-resize ang proporsyon ng larawan (pinapalaya ito ng Shift sa isang drag). Naka-off: hiwalay na nagbabago ang lapad at taas at nababanat ang larawan",
 }

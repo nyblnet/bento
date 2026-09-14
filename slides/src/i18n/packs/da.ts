@@ -887,4 +887,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Sidetal, dato, klokkeslæt, titel og dokumentegenskaber — udfyldes når diasset vises. Dato og klokkeslæt kan låse et format: {{date:M/D/YY}}; rediger mønsteret i teksten.",
   "Text ▸ Field": "Tekst ▸ Felt",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Indsæt sidetal, dato, klokkeslæt, titel eller en dokumentegenskab; en dato kan låse sit format — {{date:M/D/YY}}",
+  "Keep aspect ratio": "Bevar størrelsesforhold",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Til: ændring af størrelse bevarer billedets proportioner (Skift frigiver dem for ét træk). Fra: bredde og højde ændres uafhængigt, og billedet strækkes",
 }

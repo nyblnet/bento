@@ -898,4 +898,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "পৃষ্ঠা নম্বর, তারিখ, সময়, শিরোনাম ও নথির বৈশিষ্ট্য — স্লাইড দেখানোর সময় নির্ধারিত হয়। তারিখ ও সময়ের বিন্যাস স্থির করা যায়: {{date:M/D/YY}}; প্যাটার্নটি লেখায় সম্পাদনা করুন।",
   "Text ▸ Field": "লেখা ▸ ফিল্ড",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "পৃষ্ঠা নম্বর, তারিখ, সময়, শিরোনাম বা নথির বৈশিষ্ট্য যোগ করুন; তারিখের বিন্যাস স্থির করা যায় — {{date:M/D/YY}}",
+  "Keep aspect ratio": "অনুপাত বজায় রাখুন",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "চালু: আকার বদলালে ছবির অনুপাত বজায় থাকে (Shift এক টানের জন্য মুক্ত করে)। বন্ধ: প্রস্থ ও উচ্চতা আলাদাভাবে বদলায় এবং ছবি টেনে বড় হয়",
 }

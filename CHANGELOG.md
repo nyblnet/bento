@@ -11,6 +11,17 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **An image can drop its aspect ratio, and the properties panel stays
+  where you left it.** Contributed by 1eevy (#372). Images gain a *Keep
+  aspect ratio* switch in the Fit & corners section, on by default: turn it
+  off and width and height resize independently (the image stretches to
+  fill); Shift is the one-drag exception in either direction, as it always
+  was. Turning it back on keeps the shape the image has at that moment. And
+  changing a control near the bottom of the properties panel no longer throws
+  the panel back to the top. The same PR proposed editable template pages
+  with locked furniture and a save-time asset compactor; the compactor's job
+  landed as #447/#476, and locked furniture is a design question for a
+  discussion rather than a change to how layouts work.
 - **A date can pin its format, and fields are one click away.** `{{date}}`
   and `{{time}}` have resolved in text since 0.9.12, but they followed the
   viewer's locale — an author could not say M/D/YY and have every viewer see

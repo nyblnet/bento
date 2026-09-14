@@ -873,4 +873,6 @@ export const pt: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Número da página, data, hora, título e propriedades do documento — resolvidos quando o diapositivo é mostrado. Data e hora podem fixar um formato: {{date:M/D/YY}}; edite o padrão no texto.",
   "Text ▸ Field": "Texto ▸ Campo",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Insere o número da página, a data, a hora, o título ou uma propriedade do documento; uma data pode fixar o seu formato — {{date:M/D/YY}}",
+  "Keep aspect ratio": "Manter proporções",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Ligado: redimensionar mantém as proporções da imagem (Shift liberta-as durante um arrasto). Desligado: largura e altura mudam separadamente e a imagem estica",
 }

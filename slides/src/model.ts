@@ -247,6 +247,11 @@ export interface ImageElement extends ElementBase {
   src: string
   fit: 'contain' | 'cover' | 'fill'
   radius: number
+  /** Absent or true: a resize keeps the image's proportions (Shift frees it
+   *  for one drag). false: width and height move independently — the frame
+   *  can be stretched, and Shift holds the ratio for one drag instead.
+   *  Re-locking keeps whatever shape the image has at that moment. */
+  keepAspectRatio?: boolean
 }
 
 export interface SvgElement extends ElementBase {

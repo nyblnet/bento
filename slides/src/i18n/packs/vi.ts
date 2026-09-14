@@ -885,4 +885,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Số trang, ngày, giờ, tiêu đề và thuộc tính tài liệu — được điền khi hiển thị trang chiếu. Ngày và giờ có thể cố định định dạng: {{date:M/D/YY}}; sửa mẫu ngay trong văn bản.",
   "Text ▸ Field": "Văn bản ▸ Trường",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Chèn số trang, ngày, giờ, tiêu đề hoặc thuộc tính tài liệu; ngày có thể cố định định dạng — {{date:M/D/YY}}",
+  "Keep aspect ratio": "Giữ tỷ lệ khung hình",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Bật: đổi kích thước giữ nguyên tỷ lệ ảnh (Shift bỏ giữ trong một lần kéo). Tắt: chiều rộng và chiều cao đổi độc lập và ảnh bị kéo giãn",
 }

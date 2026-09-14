@@ -5,7 +5,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, isWebUrl, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, isWebUrl, tableStyleFor, uid, type ChartElement, type ImageElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement } from '../model'
 import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
@@ -84,6 +84,7 @@ const ROW_TIPS: Record<string, string> = {
   'Start tip': 'Decoration at the line’s start — arrow, dot or bar',
   'End tip': 'Decoration at the line’s end — arrow, dot or bar',
   'Corner radius': 'How rounded the corners are, in pixels',
+  'Keep aspect ratio': 'On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches',
   'Type': 'Chart type — switching bar⇄pie animates the data across',
   'Legend': 'Show the series legend above the chart',
   'Second axis': 'Adds a right-hand value axis — assign series to it in the list below',
@@ -191,12 +192,18 @@ export class PropsPanel {
     }
     this.stale = false
     this.burst = false
+    // A doc edit rebuilds the same inspector in place: keep its scroll so a
+    // control near the bottom does not throw the panel back to the top on
+    // every change. A selection or slide switch (force) starts the new
+    // inspector at the top, which is where a different subject belongs.
+    const scrollTop = force ? 0 : this.host.scrollTop
     this.host.innerHTML = ''
     const els = this.store.selectedElements
     if (els.length === 0) this.buildSlidePanel()
     else if (els.length === 1) this.buildElementPanel(els[0])
     else this.buildMultiPanel(els)
     this.applyAccordion()
+    this.host.scrollTop = scrollTop
   }
 
   /** Collapsed by default until the user opens them (persisted per title). */
@@ -1781,6 +1788,17 @@ export class PropsPanel {
       this.mutate(el.id, (e) => { (e as any).fit = v }, true)))
     this.row('Corner radius', this.number((el as any).radius, 1, (v, fin) =>
       this.mutate(el.id, (e) => { (e as any).radius = Math.max(v, 0) }, fin)))
+    // Off = width and height resize independently. Unlocking also sets
+    // fit:'fill' so the stretch is what the reader sees — contain/cover would
+    // letterbox the distortion away. Re-locking deletes the field (absent =
+    // locked, the format's default) and keeps the CURRENT shape: the next
+    // resize starts from whatever ratio the frame has now.
+    this.row('Keep aspect ratio', this.toggle((el as ImageElement).keepAspectRatio !== false, (on) =>
+      this.mutate(el.id, (e) => {
+        if (e.type !== 'image') return
+        if (on) delete e.keepAspectRatio
+        else { e.keepAspectRatio = false; e.fit = 'fill' }
+      }, true)))
   }
 
   private buildMediaProps(el: MediaElement) {

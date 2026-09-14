@@ -875,4 +875,6 @@ export const zhHans: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "页码、日期、时间、标题和文档属性 — 在显示幻灯片时解析。日期和时间可固定格式：{{date:M/D/YY}}；在文本中编辑模式。",
   "Text ▸ Field": "文本 ▸ 字段",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "插入页码、日期、时间、标题或文档属性；日期可固定格式 — {{date:M/D/YY}}",
+  "Keep aspect ratio": "保持宽高比",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "开：调整大小时保持图片比例（按住 Shift 可临时解除一次拖动）。关：宽和高各自变化，图片会被拉伸",
 }

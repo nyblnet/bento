@@ -414,7 +414,7 @@ const ELEMENT_CHECKS: Record<string, Check> = {
   from: connectorEnd, to: connectorEnd,
   // image / svg / media
   src: mediaRef, poster: mediaRef, asset: cssValue(),
-  fit: oneOf('contain', 'cover', 'fill'),
+  fit: oneOf('contain', 'cover', 'fill'), keepAspectRatio: bool,
   markup: str(LIMITS.markup), css: str(LIMITS.css),
   kind: oneOf('video', 'audio'),
   autoplay: bool, loop: bool, muted: bool, controls: bool,

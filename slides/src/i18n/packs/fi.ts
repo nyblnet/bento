@@ -892,4 +892,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Sivunumero, päivämäärä, kellonaika, otsikko ja asiakirjan ominaisuudet — täytetään, kun dia näytetään. Päivämäärä ja kellonaika voivat lukita muodon: {{date:M/D/YY}}; muokkaa kaavaa tekstissä.",
   "Text ▸ Field": "Teksti ▸ Kenttä",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Lisää sivunumeron, päivämäärän, kellonajan, otsikon tai asiakirjan ominaisuuden; päivämäärä voi lukita muotonsa — {{date:M/D/YY}}",
+  "Keep aspect ratio": "Säilytä kuvasuhde",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Päällä: koon muutos säilyttää kuvan mittasuhteet (Vaihto vapauttaa ne yhden vedon ajaksi). Pois: leveys ja korkeus muuttuvat erikseen ja kuva venyy",
 }

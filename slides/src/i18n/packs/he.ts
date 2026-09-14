@@ -888,4 +888,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "מספר עמוד, תאריך, שעה, כותרת ומאפייני המסמך — נפתרים בעת הצגת השקופית. תאריך ושעה יכולים לקבע תבנית: {{date:M/D/YY}}; ערכו את התבנית בטקסט.",
   "Text ▸ Field": "טקסט ▸ שדה",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "הוספת מספר עמוד, תאריך, שעה, כותרת או מאפיין מסמך; תאריך יכול לקבע את התבנית שלו — {{date:M/D/YY}}",
+  "Keep aspect ratio": "שמירה על יחס גובה-רוחב",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "פעיל: שינוי גודל שומר על הפרופורציות של התמונה (Shift משחרר אותן לגרירה אחת). כבוי: רוחב וגובה משתנים בנפרד והתמונה נמתחת",
 }

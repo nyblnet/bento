@@ -912,4 +912,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Sahypa belgisi, sene, wagt, at we resminama häsiýetleri — slaýd görkezilende doldurylýar. Sene we wagt formaty berkidip bilýär: {{date:M/D/YY}}; nusgany tekstde üýtgediň.",
   "Text ▸ Field": "Tekst ▸ Meýdan",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Sahypa belgisini, senäni, wagty, ady ýa-da resminama häsiýetini goýýar; sene öz formatyny berkidip bilýär — {{date:M/D/YY}}",
+  "Keep aspect ratio": "Taraplaryň gatnaşygyny sakla",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Açyk: ölçeg üýtgedilende suratyň gatnaşygy saklanýar (Shift bir süýremek üçin boşadýar). Ýapyk: ini we beýikligi aýratyn üýtgeýär we surat çekilýär",
 }

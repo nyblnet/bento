@@ -887,4 +887,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Номер страницы, дата, время, название и свойства документа — подставляются при показе слайда. Дата и время могут закрепить формат: {{date:M/D/YY}}; шаблон правится в тексте.",
   "Text ▸ Field": "Текст ▸ Поле",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Вставляет номер страницы, дату, время, название или свойство документа; дата может закрепить свой формат — {{date:M/D/YY}}",
+  "Keep aspect ratio": "Сохранять пропорции",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Вкл.: изменение размера сохраняет пропорции изображения (Shift освобождает их на одно перетаскивание). Выкл.: ширина и высота меняются независимо, изображение растягивается",
 }

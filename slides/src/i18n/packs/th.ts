@@ -889,4 +889,6 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "หมายเลขหน้า วันที่ เวลา ชื่อเรื่อง และคุณสมบัติเอกสาร — เติมค่าเมื่อแสดงสไลด์ วันที่และเวลากำหนดรูปแบบตายตัวได้: {{date:M/D/YY}} แก้ไขรูปแบบในข้อความ",
   "Text ▸ Field": "ข้อความ ▸ ฟิลด์",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "แทรกหมายเลขหน้า วันที่ เวลา ชื่อเรื่อง หรือคุณสมบัติเอกสาร วันที่กำหนดรูปแบบตายตัวได้ — {{date:M/D/YY}}",
+  "Keep aspect ratio": "คงอัตราส่วนภาพ",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "เปิด: การปรับขนาดคงสัดส่วนของภาพ (กด Shift เพื่อปลดชั่วคราวหนึ่งครั้ง) ปิด: ความกว้างและความสูงเปลี่ยนแยกกัน ภาพจะถูกยืด",
 }

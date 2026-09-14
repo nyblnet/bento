@@ -875,4 +875,6 @@ export const ja: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "ページ番号、日付、時刻、タイトル、文書プロパティ — スライド表示時に解決されます。日付と時刻は書式を固定できます: {{date:M/D/YY}}。パターンはテキスト内で編集します。",
   "Text ▸ Field": "テキスト ▸ フィールド",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "ページ番号、日付、時刻、タイトル、文書プロパティを挿入します。日付は書式を固定できます — {{date:M/D/YY}}",
+  "Keep aspect ratio": "縦横比を保つ",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "オン: サイズ変更で画像の比率を保ちます（Shift で一回のドラッグだけ解除）。オフ: 幅と高さを別々に変えられ、画像は引き伸ばされます",
 }
