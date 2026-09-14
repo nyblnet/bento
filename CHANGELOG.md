@@ -11,6 +11,20 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A pasted photo no longer costs megabytes.** Insert or paste a picture
+  and it is stored at slide resolution — the long edge capped at 2560 px,
+  crisp on a 4K projector — and photos are re-encoded as JPEG, so a phone
+  photo adds a few hundred KB to the file instead of three or four MB.
+  Screenshots, logos, charts and anything with transparency are only
+  downscaled, never made lossy, so text in them stays sharp; SVG and GIF are
+  left alone; and when re-encoding would not save at least a fifth, the
+  original bytes are kept. When the saving is worth mentioning a toast says
+  so ("Photo stored at 2560 px — 3.8 MB → 410 KB"). The picture panel shows
+  what is stored and offers *Replace file (original size)…* for the times
+  you want every pixel; *Shrink photos on insert* in the About dialog turns
+  it off for this browser. Nothing in an existing deck changes until you
+  insert something new. The file itself is untouched: a picture is still a
+  picture.
 - **A date can pin its format, and fields are one click away.** `{{date}}`
   and `{{time}}` have resolved in text since 0.9.12, but they followed the
   viewer's locale — an author could not say M/D/YY and have every viewer see

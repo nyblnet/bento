@@ -875,4 +875,13 @@ export const ja: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "ページ番号、日付、時刻、タイトル、文書プロパティ — スライド表示時に解決されます。日付と時刻は書式を固定できます: {{date:M/D/YY}}。パターンはテキスト内で編集します。",
   "Text ▸ Field": "テキスト ▸ フィールド",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "ページ番号、日付、時刻、タイトル、文書プロパティを挿入します。日付は書式を固定できます — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "写真を {px} px で保存 — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "画像を {px} px で保存 — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "挿入時に写真を縮小（2560 px、スクリーンショットやロゴは鮮明なまま）",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "貼り付けたスマホ写真をフルサイズではなくスライド解像度で保存します。オフ: 画像はそのまま保存されます。",
+  "Picture": "画像",
+  "Embedded": "埋め込み",
+  "Linked": "リンク",
+  "No picture yet": "画像はまだありません",
+  "Replace file (original size)…": "ファイルを置き換え（元のサイズ）…",
 }

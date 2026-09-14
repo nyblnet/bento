@@ -888,4 +888,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "מספר עמוד, תאריך, שעה, כותרת ומאפייני המסמך — נפתרים בעת הצגת השקופית. תאריך ושעה יכולים לקבע תבנית: {{date:M/D/YY}}; ערכו את התבנית בטקסט.",
   "Text ▸ Field": "טקסט ▸ שדה",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "הוספת מספר עמוד, תאריך, שעה, כותרת או מאפיין מסמך; תאריך יכול לקבע את התבנית שלו — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "התמונה נשמרה ב-{px} פיקסלים — {before} ← {after}",
+  "Image stored at {px} px — {before} → {after}": "התמונה נשמרה ב-{px} פיקסלים — {before} ← {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "הקטנת תמונות בהוספה (2560 פיקסלים; צילומי מסך ולוגואים נשארים חדים)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "תמונה מהטלפון שהודבקה נשמרת ברזולוציית השקופית במקום בגודל מלא. כבוי: תמונות נשמרות בדיוק כפי שהגיעו.",
+  "Picture": "תמונה",
+  "Embedded": "מוטמעת",
+  "Linked": "מקושרת",
+  "No picture yet": "עדיין אין תמונה",
+  "Replace file (original size)…": "החלפת קובץ (גודל מקורי)…",
 }

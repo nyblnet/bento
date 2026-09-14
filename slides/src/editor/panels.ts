@@ -5,7 +5,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, isWebUrl, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, isWebUrl, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement, type ImageElement } from '../model'
 import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
@@ -15,6 +15,7 @@ import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../code'
 import { DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS, formatDate } from '../datefmt'
+import { shrinkImageFile, shrinkNote, fmtBytes } from './shrink'
 import { revealInOrder, revealTogether, removeReveal, type StepPatch } from './reveal'
 import { stepOf } from '../steps'
 import { ICONS } from '../icons'
@@ -1776,6 +1777,46 @@ export class PropsPanel {
   }
 
   private buildImageProps(el: SlideElement) {
+    this.section(t('Picture'))
+    const src = (el as ImageElement).src
+    // what is stored: size and pixels for an embed, the URL otherwise
+    const status = document.createElement('p')
+    status.className = 'ed-hint'
+    const resolved = src ? resolveAsset(this.store.doc, src) : ''
+    if (resolved.startsWith('data:')) {
+      const bytes = Math.floor(((resolved.length - resolved.indexOf(',') - 1) * 3) / 4)
+      status.textContent = t('Embedded') + ` · ${fmtBytes(bytes)}`
+      const probe = new Image()
+      probe.onload = () => { status.textContent = t('Embedded') + ` · ${fmtBytes(bytes)} · ${probe.naturalWidth}×${probe.naturalHeight}` }
+      probe.src = resolved
+    } else status.textContent = src ? t('Linked') + ` · ${src.slice(0, 60)}` : t('No picture yet')
+    this.host.appendChild(status)
+    // Replace: through the shrink path, or at original size (the one honest
+    // way to say "I want the full-resolution file in the deck").
+    const pick = (label: string, original: boolean) => {
+      const b = document.createElement('button')
+      b.className = 'ed-btn ed-btn-block'
+      b.textContent = label
+      b.addEventListener('click', () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*'
+        input.addEventListener('change', () => {
+          const file = input.files?.[0]
+          if (!file) return
+          void (original ? Promise.resolve(null) : shrinkImageFile(file)).then(async (r) => {
+            const dataUrl = r ? r.dataUrl : await new Promise<string>((resolve) => { const rd = new FileReader(); rd.onload = () => resolve(String(rd.result)); rd.readAsDataURL(file) })
+            const note = r && shrinkNote(r)
+            if (note) this.toast(note.photo ? t('Photo stored at {px} px — {before} → {after}', note.vars) : t('Image stored at {px} px — {before} → {after}', note.vars))
+            this.mutate(el.id, (e) => { (e as ImageElement).src = internAsset(this.store.doc, dataUrl) }, true)
+          })
+        })
+        input.click()
+      })
+      this.host.appendChild(b)
+    }
+    pick(t('Replace file…'), false)
+    pick(t('Replace file (original size)…'), true)
     this.section(t('Fit & corners'))
     this.row('Fit', this.select(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
       this.mutate(el.id, (e) => { (e as any).fit = v }, true)))

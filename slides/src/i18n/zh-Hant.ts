@@ -875,4 +875,13 @@ export const zhHant: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "頁碼、日期、時間、標題和文件屬性 — 在顯示投影片時解析。日期和時間可固定格式：{{date:M/D/YY}}；在文字中編輯樣式。",
   "Text ▸ Field": "文字 ▸ 欄位",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "插入頁碼、日期、時間、標題或文件屬性；日期可固定格式 — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "照片已以 {px} px 儲存 — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "圖片已以 {px} px 儲存 — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "插入時縮小照片（2560 px，截圖與標誌保持清晰）",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "貼上的手機照片以投影片解析度而非原始尺寸儲存。關閉：圖片按原樣儲存。",
+  "Picture": "圖片",
+  "Embedded": "已嵌入",
+  "Linked": "已連結",
+  "No picture yet": "還沒有圖片",
+  "Replace file (original size)…": "取代檔案（原始尺寸）…",
 }

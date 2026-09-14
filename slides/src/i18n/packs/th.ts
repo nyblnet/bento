@@ -889,4 +889,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "หมายเลขหน้า วันที่ เวลา ชื่อเรื่อง และคุณสมบัติเอกสาร — เติมค่าเมื่อแสดงสไลด์ วันที่และเวลากำหนดรูปแบบตายตัวได้: {{date:M/D/YY}} แก้ไขรูปแบบในข้อความ",
   "Text ▸ Field": "ข้อความ ▸ ฟิลด์",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "แทรกหมายเลขหน้า วันที่ เวลา ชื่อเรื่อง หรือคุณสมบัติเอกสาร วันที่กำหนดรูปแบบตายตัวได้ — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "เก็บภาพถ่ายที่ {px} px — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "เก็บรูปภาพที่ {px} px — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "ย่อภาพถ่ายเมื่อแทรก (2560 px ภาพหน้าจอและโลโก้ยังคมชัด)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "ภาพถ่ายจากโทรศัพท์ที่วางจะถูกเก็บที่ความละเอียดของสไลด์แทนขนาดเต็ม ปิด: เก็บรูปภาพตามที่ได้รับมาทุกประการ",
+  "Picture": "รูปภาพ",
+  "Embedded": "ฝังไว้",
+  "Linked": "ลิงก์",
+  "No picture yet": "ยังไม่มีรูปภาพ",
+  "Replace file (original size)…": "แทนที่ไฟล์ (ขนาดเดิม)…",
 }

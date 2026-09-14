@@ -886,4 +886,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Sayfa numarası, tarih, saat, başlık ve belge özellikleri — slayt gösterildiğinde çözümlenir. Tarih ve saat bir biçim sabitleyebilir: {{date:M/D/YY}}; deseni metinde düzenleyin.",
   "Text ▸ Field": "Metin ▸ Alan",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Sayfa numarası, tarih, saat, başlık veya bir belge özelliği ekler; tarih biçimini sabitleyebilir — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "Fotoğraf {px} px olarak kaydedildi — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "Görsel {px} px olarak kaydedildi — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "Eklerken fotoğrafları küçült (2560 px; ekran görüntüleri ve logolar keskin kalır)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "Yapıştırılan bir telefon fotoğrafı tam boyut yerine slayt çözünürlüğünde saklanır. Kapalı: görseller geldikleri gibi saklanır.",
+  "Picture": "Görsel",
+  "Embedded": "Gömülü",
+  "Linked": "Bağlantılı",
+  "No picture yet": "Henüz görsel yok",
+  "Replace file (original size)…": "Dosyayı değiştir (özgün boyut)…",
 }

@@ -1353,6 +1353,13 @@ jobs:
         # routes the argument. Bare {{date}} stays viewer-locale (#381).
         run: node scripts/test-slides-fields.ts
 
+      - name: Photos shrink at insert rig
+        # editor/shrink.ts decisions, DOM-free: photo vs graphic (lossy vs
+        # lossless), the ≥20% keep rule, the 2560 px cap, svg/gif untouched,
+        # every insert path routed, model.ts untouched. The encode itself is
+        # measured in Chrome (PR #).
+        run: node scripts/test-slides-shrink.ts
+
       - name: Web links and bullets rig
         # A link is one thing in four places — isWebUrl — and every surface
         # that lets a URL in or out asks it: the shape gate, the text

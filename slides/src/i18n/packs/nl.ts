@@ -883,4 +883,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Paginanummer, datum, tijd, titel en documenteigenschappen — ingevuld zodra de dia wordt getoond. Datum en tijd kunnen een notatie vastzetten: {{date:M/D/YY}}; bewerk het patroon in de tekst.",
   "Text ▸ Field": "Tekst ▸ Veld",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Voeg paginanummer, datum, tijd, titel of een documenteigenschap in; een datum kan zijn notatie vastzetten — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "Foto opgeslagen op {px} px — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "Afbeelding opgeslagen op {px} px — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "Foto's verkleinen bij invoegen (2560 px; schermafbeeldingen en logo's blijven scherp)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "Een geplakte telefoonfoto wordt opgeslagen op diaresolutie in plaats van op volle grootte. Uit: afbeeldingen worden precies zo opgeslagen als ze binnenkomen.",
+  "Picture": "Afbeelding",
+  "Embedded": "Ingesloten",
+  "Linked": "Gekoppeld",
+  "No picture yet": "Nog geen afbeelding",
+  "Replace file (original size)…": "Bestand vervangen (originele grootte)…",
 }

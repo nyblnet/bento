@@ -885,4 +885,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Nomor halaman, tanggal, waktu, judul, dan properti dokumen — diisi saat slide ditampilkan. Tanggal dan waktu dapat mengunci format: {{date:M/D/YY}}; edit polanya di teks.",
   "Text ▸ Field": "Teks ▸ Bidang",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Sisipkan nomor halaman, tanggal, waktu, judul, atau properti dokumen; tanggal dapat mengunci formatnya — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "Foto disimpan pada {px} px — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "Gambar disimpan pada {px} px — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "Perkecil foto saat disisipkan (2560 px; tangkapan layar dan logo tetap tajam)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "Foto ponsel yang ditempel disimpan pada resolusi slide, bukan ukuran penuh. Nonaktif: gambar disimpan persis seperti aslinya.",
+  "Picture": "Gambar",
+  "Embedded": "Tertanam",
+  "Linked": "Tertaut",
+  "No picture yet": "Belum ada gambar",
+  "Replace file (original size)…": "Ganti file (ukuran asli)…",
 }

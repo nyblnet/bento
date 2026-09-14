@@ -904,4 +904,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Numero ng pahina, petsa, oras, pamagat at mga property ng dokumento — nireresolba kapag ipinakita ang slide. Puwedeng itakda ng petsa at oras ang format: {{date:M/D/YY}}; i-edit ang pattern sa teksto.",
   "Text ▸ Field": "Teksto ▸ Field",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Ilagay ang numero ng pahina, petsa, oras, pamagat o property ng dokumento; puwedeng itakda ng petsa ang format nito — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "Naka-store ang larawan sa {px} px — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "Naka-store ang imahe sa {px} px — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "Paliitin ang mga larawan kapag inilagay (2560 px; nananatiling malinaw ang mga screenshot at logo)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "Ang na-paste na larawan mula sa telepono ay itinatago sa resolusyon ng slide sa halip na buong laki. Naka-off: itinatago ang mga larawan nang eksakto kung paano dumating.",
+  "Picture": "Larawan",
+  "Embedded": "Naka-embed",
+  "Linked": "Naka-link",
+  "No picture yet": "Wala pang larawan",
+  "Replace file (original size)…": "Palitan ang file (orihinal na laki)…",
 }

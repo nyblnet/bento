@@ -891,4 +891,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "شمارهٔ صفحه، تاریخ، زمان، عنوان و ویژگی‌های سند — هنگام نمایش اسلاید جایگزین می‌شوند. تاریخ و زمان می‌توانند قالب را ثابت کنند: {{date:M/D/YY}}؛ الگو را در متن ویرایش کنید.",
   "Text ▸ Field": "متن ▸ فیلد",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "شمارهٔ صفحه، تاریخ، زمان، عنوان یا یک ویژگی سند را درج می‌کند؛ تاریخ می‌تواند قالب خود را ثابت کند — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "عکس با {px} پیکسل ذخیره شد — {before} ← {after}",
+  "Image stored at {px} px — {before} → {after}": "تصویر با {px} پیکسل ذخیره شد — {before} ← {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "کوچک‌کردن عکس‌ها هنگام درج (۲۵۶۰ پیکسل؛ اسکرین‌شات‌ها و لوگوها واضح می‌مانند)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "عکس تلفن چسبانده‌شده به‌جای اندازهٔ کامل، با وضوح اسلاید ذخیره می‌شود. خاموش: تصاویر دقیقاً همان‌طور که می‌آیند ذخیره می‌شوند.",
+  "Picture": "تصویر",
+  "Embedded": "جاسازی‌شده",
+  "Linked": "پیوندشده",
+  "No picture yet": "هنوز تصویری نیست",
+  "Replace file (original size)…": "جایگزینی پرونده (اندازهٔ اصلی)…",
 }

@@ -895,4 +895,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "رقم الصفحة والتاريخ والوقت والعنوان وخصائص المستند — تُحلّ عند عرض الشريحة. يمكن للتاريخ والوقت تثبيت تنسيق: {{date:M/D/YY}}؛ حرّر النمط في النص.",
   "Text ▸ Field": "نص ▸ حقل",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "يدرج رقم الصفحة أو التاريخ أو الوقت أو العنوان أو خاصية مستند؛ يمكن للتاريخ تثبيت تنسيقه — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "حُفظت الصورة الفوتوغرافية بدقة {px} بكسل — {before} ← {after}",
+  "Image stored at {px} px — {before} → {after}": "حُفظت الصورة بدقة {px} بكسل — {before} ← {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "تصغير الصور عند الإدراج (2560 بكسل؛ تبقى لقطات الشاشة والشعارات حادة)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "تُحفظ صورة الهاتف الملصقة بدقة الشريحة بدلًا من الحجم الكامل. إيقاف: تُحفظ الصور كما هي تمامًا.",
+  "Picture": "صورة",
+  "Embedded": "مضمّنة",
+  "Linked": "مرتبطة",
+  "No picture yet": "لا توجد صورة بعد",
+  "Replace file (original size)…": "استبدال الملف (الحجم الأصلي)…",
 }

@@ -875,4 +875,13 @@ export const it: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Numero di pagina, data, ora, titolo e proprietà del documento — risolti quando la diapositiva viene mostrata. Data e ora possono fissare un formato: {{date:M/D/YY}}; modifica il modello nel testo.",
   "Text ▸ Field": "Testo ▸ Campo",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Inserisce numero di pagina, data, ora, titolo o una proprietà del documento; una data può fissare il proprio formato — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "Foto salvata a {px} px — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "Immagine salvata a {px} px — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "Riduci le foto all’inserimento (2560 px; screenshot e loghi restano nitidi)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "Una foto da telefono incollata viene salvata alla risoluzione della diapositiva invece che a dimensione piena. Disattivato: le immagini vengono salvate esattamente come arrivano.",
+  "Picture": "Immagine",
+  "Embedded": "Incorporata",
+  "Linked": "Collegata",
+  "No picture yet": "Nessuna immagine ancora",
+  "Replace file (original size)…": "Sostituisci file (dimensione originale)…",
 }

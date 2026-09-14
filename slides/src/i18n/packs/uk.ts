@@ -895,4 +895,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Номер сторінки, дата, час, назва та властивості документа — підставляються під час показу слайда. Дата й час можуть закріпити формат: {{date:M/D/YY}}; шаблон редагується в тексті.",
   "Text ▸ Field": "Текст ▸ Поле",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Вставляє номер сторінки, дату, час, назву або властивість документа; дата може закріпити свій формат — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "Фото збережено в {px} px — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "Зображення збережено в {px} px — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "Зменшувати фото під час вставлення (2560 px; знімки екрана й логотипи лишаються чіткими)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "Вставлене фото з телефона зберігається в роздільності слайда, а не в повному розмірі. Вимк.: зображення зберігаються точно такими, якими надійшли.",
+  "Picture": "Зображення",
+  "Embedded": "Вбудовано",
+  "Linked": "За посиланням",
+  "No picture yet": "Зображення ще немає",
+  "Replace file (original size)…": "Замінити файл (початковий розмір)…",
 }

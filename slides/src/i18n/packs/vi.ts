@@ -885,4 +885,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Số trang, ngày, giờ, tiêu đề và thuộc tính tài liệu — được điền khi hiển thị trang chiếu. Ngày và giờ có thể cố định định dạng: {{date:M/D/YY}}; sửa mẫu ngay trong văn bản.",
   "Text ▸ Field": "Văn bản ▸ Trường",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Chèn số trang, ngày, giờ, tiêu đề hoặc thuộc tính tài liệu; ngày có thể cố định định dạng — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "Ảnh chụp được lưu ở {px} px — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "Hình được lưu ở {px} px — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "Thu nhỏ ảnh khi chèn (2560 px; ảnh chụp màn hình và logo vẫn sắc nét)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "Ảnh điện thoại dán vào được lưu ở độ phân giải trang chiếu thay vì kích thước đầy đủ. Tắt: hình được lưu đúng như khi nhận.",
+  "Picture": "Hình",
+  "Embedded": "Đã nhúng",
+  "Linked": "Đã liên kết",
+  "No picture yet": "Chưa có hình",
+  "Replace file (original size)…": "Thay tệp (kích thước gốc)…",
 }

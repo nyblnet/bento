@@ -40,6 +40,7 @@ import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, mintRoomKey, onl
 import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { stripEmbeddedEnvelopes } from '../envelope'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
+import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, type ShrinkResult } from './shrink'
 
 const i18nT = t
 
@@ -2051,9 +2052,8 @@ export class Editor {
     input.addEventListener('change', () => {
       const file = input.files?.[0]
       if (!file) return
-      const reader = new FileReader()
-      reader.onload = () => {
-        const src = String(reader.result)
+      void this.shrinkForInsert(file).then((r) => {
+        const src = r.dataUrl
         const img = new Image()
         img.onload = () => {
           const { width: dw, height: dh } = this.store.doc.size
@@ -2063,10 +2063,24 @@ export class Editor {
           this.canvas.insert(defaultImage(src, { w, h, x: (dw - w) / 2, y: (dh - h) / 2 }))
         }
         img.src = src
-      }
-      reader.readAsDataURL(file)
+      })
     })
     input.click()
+  }
+
+  /** Every image insert goes through here (shrink.ts): the picture is capped
+   *  at 2560 px, photos re-encoded lossy, graphics kept lossless, the original
+   *  kept when nothing is gained — and the author is told only when the saving
+   *  is worth a line. `original` bypasses it (the panel's "original size"). */
+  async shrinkForInsert(file: Blob, original = false): Promise<ShrinkResult> {
+    if (original) {
+      const dataUrl = await new Promise<string>((resolve) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.readAsDataURL(file) })
+      return { dataUrl, width: 0, height: 0, before: file.size, after: file.size, kind: 'kept', reason: 'off' }
+    }
+    const r = await shrinkImageFile(file)
+    const note = shrinkNote(r)
+    if (note) this.toast(note.photo ? t('Photo stored at {px} px — {before} → {after}', note.vars) : t('Image stored at {px} px — {before} → {after}', note.vars))
+    return r
   }
 
   // --- insert media (video / audio) --------------------------------------------------
@@ -2286,9 +2300,8 @@ export class Editor {
   }
 
   private pasteImageFile(file: File) {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const src = String(reader.result)
+    void this.shrinkForInsert(file).then((r) => {
+      const src = r.dataUrl
       const place = (w: number, h: number) => {
         const { width, height } = this.store.doc.size
         const el = defaultImage(src, { x: Math.round((width - w) / 2), y: Math.round((height - h) / 2), w, h, fit: 'contain' })
@@ -2296,7 +2309,8 @@ export class Editor {
         // the same path as every other embed — otherwise it stays inline and
         // live collab can never send it.
         this.canvas.insert(el)
-        this.toast(t('Image pasted'))
+        // the shrink toast, when there is one, already says a picture landed
+        if (!shrinkNote(r)) this.toast(t('Image pasted'))
       }
       const img = new Image()
       img.onload = () => {
@@ -2305,8 +2319,7 @@ export class Editor {
       }
       img.onerror = () => place(400, 300)
       img.src = src
-    }
-    reader.readAsDataURL(file)
+    })
   }
 
   // --- brand palette → referenced literals ---------------------------------
@@ -3425,6 +3438,18 @@ export class Editor {
     autoCb.addEventListener('change', () => setAutoCheck(autoCb.checked))
     autoRow.append(autoCb, document.createTextNode(' ' + t('Check for updates automatically at launch')))
     box.appendChild(autoRow)
+
+    // photos shrink at insert (editor/shrink.ts) — an authoring preference for
+    // this browser, like the update check; never in the document
+    const shrinkRow = document.createElement('label')
+    shrinkRow.className = 'ed-about-auto'
+    const shrinkCb = document.createElement('input')
+    shrinkCb.type = 'checkbox'
+    shrinkCb.checked = shrinkEnabled()
+    shrinkCb.addEventListener('change', () => setShrinkEnabled(shrinkCb.checked))
+    shrinkRow.append(shrinkCb, document.createTextNode(' ' + t('Shrink photos on insert (2560 px, screenshots and logos stay sharp)')))
+    shrinkRow.title = t('A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.')
+    box.appendChild(shrinkRow)
 
     // the hard no-network switch: blocks update checks AND online
     // collaboration for this browser. Same-machine tab sync is not

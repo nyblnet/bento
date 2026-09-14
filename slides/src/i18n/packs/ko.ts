@@ -879,4 +879,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "페이지 번호, 날짜, 시간, 제목, 문서 속성 — 슬라이드가 표시될 때 채워집니다. 날짜와 시간은 형식을 고정할 수 있습니다: {{date:M/D/YY}}; 패턴은 텍스트에서 편집합니다.",
   "Text ▸ Field": "텍스트 ▸ 필드",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "페이지 번호, 날짜, 시간, 제목 또는 문서 속성을 삽입합니다. 날짜는 형식을 고정할 수 있습니다 — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "사진을 {px} px로 저장 — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "이미지를 {px} px로 저장 — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "삽입할 때 사진 줄이기 (2560 px, 스크린샷과 로고는 선명하게 유지)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "붙여넣은 휴대폰 사진을 원본 크기 대신 슬라이드 해상도로 저장합니다. 끄면 그림이 들어온 그대로 저장됩니다.",
+  "Picture": "그림",
+  "Embedded": "포함됨",
+  "Linked": "연결됨",
+  "No picture yet": "아직 그림 없음",
+  "Replace file (original size)…": "파일 바꾸기 (원본 크기)…",
 }

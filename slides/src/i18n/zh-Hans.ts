@@ -875,4 +875,13 @@ export const zhHans: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "页码、日期、时间、标题和文档属性 — 在显示幻灯片时解析。日期和时间可固定格式：{{date:M/D/YY}}；在文本中编辑模式。",
   "Text ▸ Field": "文本 ▸ 字段",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "插入页码、日期、时间、标题或文档属性；日期可固定格式 — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "照片已按 {px} px 存储 — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "图片已按 {px} px 存储 — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "插入时缩小照片（2560 px，截图和徽标保持清晰）",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "粘贴的手机照片按幻灯片分辨率而非原始尺寸存储。关闭：图片按原样存储。",
+  "Picture": "图片",
+  "Embedded": "已嵌入",
+  "Linked": "已链接",
+  "No picture yet": "还没有图片",
+  "Replace file (original size)…": "替换文件（原始尺寸）…",
 }

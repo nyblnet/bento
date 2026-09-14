@@ -892,4 +892,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Sivunumero, päivämäärä, kellonaika, otsikko ja asiakirjan ominaisuudet — täytetään, kun dia näytetään. Päivämäärä ja kellonaika voivat lukita muodon: {{date:M/D/YY}}; muokkaa kaavaa tekstissä.",
   "Text ▸ Field": "Teksti ▸ Kenttä",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Lisää sivunumeron, päivämäärän, kellonajan, otsikon tai asiakirjan ominaisuuden; päivämäärä voi lukita muotonsa — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "Valokuva tallennettu {px} px:nä — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "Kuva tallennettu {px} px:nä — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "Pienennä valokuvat lisättäessä (2560 px; kuvakaappaukset ja logot pysyvät terävinä)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "Liitetty puhelinkuva tallennetaan dian tarkkuudella täyden koon sijaan. Pois: kuvat tallennetaan täsmälleen sellaisina kuin ne tulevat.",
+  "Picture": "Kuva",
+  "Embedded": "Upotettu",
+  "Linked": "Linkitetty",
+  "No picture yet": "Ei vielä kuvaa",
+  "Replace file (original size)…": "Korvaa tiedosto (alkuperäinen koko)…",
 }

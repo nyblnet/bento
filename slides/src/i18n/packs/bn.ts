@@ -898,4 +898,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "পৃষ্ঠা নম্বর, তারিখ, সময়, শিরোনাম ও নথির বৈশিষ্ট্য — স্লাইড দেখানোর সময় নির্ধারিত হয়। তারিখ ও সময়ের বিন্যাস স্থির করা যায়: {{date:M/D/YY}}; প্যাটার্নটি লেখায় সম্পাদনা করুন।",
   "Text ▸ Field": "লেখা ▸ ফিল্ড",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "পৃষ্ঠা নম্বর, তারিখ, সময়, শিরোনাম বা নথির বৈশিষ্ট্য যোগ করুন; তারিখের বিন্যাস স্থির করা যায় — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "ছবি {px} px-এ সংরক্ষিত — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "চিত্র {px} px-এ সংরক্ষিত — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "যোগ করার সময় ছবি ছোট করুন (2560 px; স্ক্রিনশট ও লোগো স্পষ্ট থাকে)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "পেস্ট করা ফোনের ছবি পূর্ণ আকারের বদলে স্লাইডের রেজোলিউশনে সংরক্ষিত হয়। বন্ধ: ছবি যেমন আসে তেমনই সংরক্ষিত হয়।",
+  "Picture": "ছবি",
+  "Embedded": "এমবেড করা",
+  "Linked": "লিঙ্ক করা",
+  "No picture yet": "এখনও কোনো ছবি নেই",
+  "Replace file (original size)…": "ফাইল বদলান (মূল আকার)…",
 }

@@ -887,4 +887,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Sidetal, dato, klokkeslæt, titel og dokumentegenskaber — udfyldes når diasset vises. Dato og klokkeslæt kan låse et format: {{date:M/D/YY}}; rediger mønsteret i teksten.",
   "Text ▸ Field": "Tekst ▸ Felt",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Indsæt sidetal, dato, klokkeslæt, titel eller en dokumentegenskab; en dato kan låse sit format — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "Foto gemt i {px} px — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "Billede gemt i {px} px — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "Formindsk fotos ved indsættelse (2560 px; skærmbilleder og logoer forbliver skarpe)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "Et indsat telefonfoto gemmes i diasopløsning i stedet for fuld størrelse. Fra: billeder gemmes præcis som de kommer.",
+  "Picture": "Billede",
+  "Embedded": "Indlejret",
+  "Linked": "Linket",
+  "No picture yet": "Intet billede endnu",
+  "Replace file (original size)…": "Erstat fil (original størrelse)…",
 }

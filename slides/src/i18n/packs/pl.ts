@@ -886,4 +886,13 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Numer strony, data, godzina, tytuł i właściwości dokumentu — uzupełniane przy wyświetleniu slajdu. Data i godzina mogą mieć ustalony format: {{date:M/D/YY}}; wzorzec edytujesz w tekście.",
   "Text ▸ Field": "Tekst ▸ Pole",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Wstawia numer strony, datę, godzinę, tytuł lub właściwość dokumentu; data może mieć ustalony format — {{date:M/D/YY}}",
+  "Photo stored at {px} px — {before} → {after}": "Zdjęcie zapisane w {px} px — {before} → {after}",
+  "Image stored at {px} px — {before} → {after}": "Obraz zapisany w {px} px — {before} → {after}",
+  "Shrink photos on insert (2560 px, screenshots and logos stay sharp)": "Zmniejszaj zdjęcia przy wstawianiu (2560 px; zrzuty ekranu i logo pozostają ostre)",
+  "A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.": "Wklejone zdjęcie z telefonu jest zapisywane w rozdzielczości slajdu zamiast w pełnym rozmiarze. Wyłączone: obrazy są zapisywane dokładnie tak, jak przychodzą.",
+  "Picture": "Obraz",
+  "Embedded": "Osadzony",
+  "Linked": "Połączony",
+  "No picture yet": "Brak obrazu",
+  "Replace file (original size)…": "Zastąp plik (oryginalny rozmiar)…",
 }
