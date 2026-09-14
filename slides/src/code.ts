@@ -14,15 +14,15 @@
 // tweened on exit (present.ts cacheSlideSymbols/morphMathSymbols), which is
 // what makes a moved line travel.
 
-import { BentoDoc, CodeElement } from './model'
-import { HeckelDiff, type Match, type Insert, type Delete } from './diff'
+import type { BentoDoc, CodeElement } from './model.ts'
+import { HeckelDiff, type Match, type Insert, type Delete } from './diff.ts'
 
 /**
  * 8 Colors, not four hundred scopes — the zero-cost tier. When the
  * signed-extension tier lands, grammarAssetId/themeAssetId select real
  * TextMate rendering and this map becomes the fallback.
  */
-const DEFAULT_CODE_COLORS: Record<string, string> = {
+export const DEFAULT_CODE_COLORS: Record<string, string> = {
   c: '#6b7f8f', // comment
   s: '#c98a3e', // string
   n: '#b0688f', // number
@@ -33,6 +33,22 @@ const DEFAULT_CODE_COLORS: Record<string, string> = {
   d: '#c25a43', // diff: removed
   x: '',        // plain: inherit the element colour
 }
+
+/**
+ * The eight token scopes a deck's `theme.codePalette` can colour, in the
+ * order the Theme panel lists them — one source for the panel, the rig and
+ * the defaults above (keys must agree with the model's codePalette).
+ */
+export const CODE_SCOPES: ReadonlyArray<{ key: 'c' | 's' | 'n' | 'k' | 'f' | 'p' | 'a' | 'd'; label: string }> = [
+  { key: 'c', label: 'Comments' },
+  { key: 's', label: 'Strings' },
+  { key: 'n', label: 'Numbers' },
+  { key: 'k', label: 'Code keywords' },
+  { key: 'f', label: 'Calls' },
+  { key: 'p', label: 'Punctuation' },
+  { key: 'a', label: 'Diff: added' },
+  { key: 'd', label: 'Diff: removed' },
+]
 
 /**
  * Memoized per (morph group, content). The previous module-level singleton was

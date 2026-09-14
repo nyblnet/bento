@@ -1317,6 +1317,14 @@ jobs:
         # keeps its bytes; the live document is untouched; measured saving.
         run: node scripts/test-slides-fonts.ts
 
+      - name: Slides code colours rig
+        # theme.codePalette's editor: one row per token scope from one list
+        # (code.ts CODE_SCOPES), built-in colour shown when the deck has
+        # none, the field written only on a change; plain literals, not
+        # palette references. And accent 2–6 rows/swatches only for slots
+        # the deck carries (six identical peach swatches were not choices).
+        run: node scripts/test-code-palette.ts
+
       - name: Slides pagination rig
         # Three ways a slide declines a page number (state, hidden, unnumbered)
         # and only one of them stays in the walk; every surface — page fields,

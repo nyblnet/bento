@@ -9,10 +9,11 @@ import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morph
 import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
-import { PALETTE_SLOTS, paletteOf, refAt, setColor } from '../palette'
+import { PALETTE_SLOTS, paletteOf, refAt, setColor, slotIsSet } from '../palette'
 import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
+import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../code'
 import { ICONS } from '../icons'
 import { t } from '../i18n'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
@@ -2229,6 +2230,7 @@ export class PropsPanel {
     for (const slot of PALETTE_SLOTS) {
       const base = palette[slot]
       if (!base) continue // hlink/folHlink are usually unset — don't show empties
+      if (!slotIsSet(this.store.doc, slot)) continue // accent 2–6 unset: a copy of accent 1, not a choice
       const b = document.createElement('button')
       b.type = 'button'
       b.className = 'ed-swatch'
@@ -2261,12 +2263,41 @@ export class PropsPanel {
     slot('Background', () => theme.background, (v) => { this.store.doc.theme.background = v })
     slot('Text', () => theme.color, (v) => { this.store.doc.theme.color = v })
     slot('Accent', () => theme.accent, (v) => { this.store.doc.theme.accent = v })
+    // Accent 2–6 rows only for slots the deck carries (palette.ts slotIsSet):
+    // an unset one resolves to accent 1 and showed as a sixth identical swatch.
     for (const n of [2, 3, 4, 5, 6] as const) {
       const key = `accent${n}` as const
+      if (!slotIsSet(this.store.doc, key)) continue
       slot(t('Accent {n}', { n: String(n) }), () => paletteOf(this.store.doc)[key], (v) => {
         const t2 = this.store.doc.theme
         ;(t2.palette ??= {})[key] = v
       })
+    }
+    // Code colours: theme.codePalette (#450), one row per token scope. Plain
+    // literals, deliberately — the palette-swatch reference (themeRefs) is a
+    // per-element/per-slide path resolved through resolveRef, and codePalette
+    // is a doc-level map that code.ts reads as literals; wiring a second
+    // reference shape for eight keys would be a mechanism, not a row. A deck
+    // with no codePalette shows the built-in scheme as its starting values and
+    // the field is written only when a colour is changed, so a deck without
+    // one keeps rendering exactly as before.
+    const codeHead = document.createElement('p')
+    codeHead.className = 'ed-hint'
+    codeHead.textContent = t('Code colours — one per kind of token in code snippets.')
+    this.host.appendChild(codeHead)
+    for (const scope of CODE_SCOPES) {
+      slot(t(scope.label), () => this.store.doc.theme.codePalette?.[scope.key] ?? DEFAULT_CODE_COLORS[scope.key], (v) => {
+        const t2 = this.store.doc.theme
+        ;(t2.codePalette ??= {})[scope.key] = v
+      })
+    }
+    if (this.store.doc.theme.codePalette) {
+      const reset = document.createElement('button')
+      reset.className = 'ed-btn ed-btn-block'
+      reset.textContent = t('Use the built-in code colours')
+      reset.title = t('Removes the deck’s code palette; snippets render with the standard scheme again')
+      reset.addEventListener('click', () => this.edit(() => { delete this.store.doc.theme.codePalette }, true))
+      this.host.appendChild(reset)
     }
   }
 

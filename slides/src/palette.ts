@@ -173,6 +173,19 @@ export function paletteOf(doc: BentoDoc): Palette {
   }
 }
 
+/**
+ * Is this slot carried by the document, rather than filled in by `paletteOf`
+ * from accent 1? The editor shows a row/swatch for accent 2–6 only when the
+ * deck actually sets it (an imported or hand-authored palette): six identical
+ * peach swatches on a fresh deck were noise, not choices. The FORMAT keeps all
+ * six slots and `paletteOf` still resolves every reference; this is panel-only.
+ */
+export const OPTIONAL_ACCENTS = ['accent2', 'accent3', 'accent4', 'accent5', 'accent6'] as const
+export function slotIsSet(doc: BentoDoc, slot: keyof Palette): boolean {
+  if (slot === 'bg1' || slot === 'tx1' || slot === 'accent1') return true
+  return !!doc.theme.palette?.[slot as keyof NonNullable<BentoDoc['theme']['palette']>]
+}
+
 /** The literal a reference resolves to, or null when the slot is empty. */
 export function resolveRef(token: string, palette: Palette): string | null {
   const ref = parseThemeRef(token)

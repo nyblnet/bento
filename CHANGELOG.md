@@ -94,6 +94,15 @@ pre-1.0.
   will draw from (menu, side panel, dialog, tooltip), and — from Johan
   Høgåsen-Hallesby (#423) — a build that runs its own release channel and
   relay can now configure both without patching the kernel.
+- **Code colours have an editor.** The Theme section gains a *Code colours*
+  group — one colour per kind of token (comments, strings, numbers, keywords,
+  calls, punctuation, diff added and removed) — so the palette Rahul Ravikumar
+  added in #450 no longer needs a JSON round-trip to change. A deck without one
+  shows the built-in scheme and keeps rendering exactly as before until you
+  change a colour; a deck with one gets a button back to the built-in scheme.
+- **Empty accent slots stay out of the way.** Accent 2–6 rows and quick-pick
+  swatches appear only when the deck actually sets that slot; a fresh deck no
+  longer shows six identical copies of accent 1. The format keeps all six.
 
 ## [1.0.19] — 2026-09-04
 
