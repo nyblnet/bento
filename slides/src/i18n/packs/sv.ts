@@ -884,4 +884,10 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Sidnummer, datum, tid, titel och dokumentegenskaper — fylls i när bilden visas. Datum och tid kan låsa ett format: {{date:M/D/YY}}; redigera mönstret i texten.",
   "Text ▸ Field": "Text ▸ Fält",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Infoga sidnummer, datum, tid, titel eller en dokumentegenskap; ett datum kan låsa sitt format — {{date:M/D/YY}}",
+  "Crop": "Beskärning",
+  "Double-click the picture to move it inside its frame; scroll or pinch to zoom.": "Dubbelklicka på bilden för att flytta den inuti ramen; rulla eller nyp för att zooma.",
+  "✎ Edit crop on canvas": "✎ Redigera beskärning på arbetsytan",
+  "Reset crop": "Återställ beskärning",
+  "Show the whole picture again, the way Fit says": "Visa hela bilden igen, så som Anpassa anger",
+  "Crop — drag to move the picture inside its frame · scroll or pinch to zoom · Enter to keep · Esc to put it back": "Beskärning — dra för att flytta bilden inuti ramen · rulla eller nyp för att zooma · Enter behåller · Esc återställer",
 }

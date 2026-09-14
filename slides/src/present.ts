@@ -11,6 +11,7 @@ import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
+import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { ICONS } from './icons'
 import { t } from './i18n'
@@ -2348,6 +2349,22 @@ function runMorph(
       const inner = to.querySelector<HTMLElement>('.bento-text-inner')
       if (inner) {
         anim.fromTo(inner, { color: a.color }, { color: b.color, duration: MORPH_DURATION, ease: MORPH_EASE })
+      }
+    }
+    // A picture's crop (pan + zoom inside its frame) tweens numerically when
+    // BOTH sides carry one — the house style, same as the box above. When only
+    // one side has a crop there is no honest midpoint between "the whole
+    // cover-fitted picture as `fit` says" and a window into it, so the crop
+    // snaps with the slide and only the box morphs (crop.ts lerpCrop).
+    if (a.type === 'image' && b.type === 'image' && a.crop && b.crop && !isIdentityCrop(a.crop) && !isIdentityCrop(b.crop)) {
+      const img = to.querySelector<HTMLImageElement>('img')
+      if (img) {
+        const state = { p: 0 }
+        anim.to(state, {
+          p: 1, duration: MORPH_DURATION, ease: MORPH_EASE,
+          onUpdate() { img.style.cssText = cropImgStyle(lerpCrop(a.crop!, b.crop!, state.p)) },
+          onComplete() { img.style.cssText = cropImgStyle(b.crop!) },
+        })
       }
     }
   }

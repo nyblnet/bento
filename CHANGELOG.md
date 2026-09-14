@@ -11,6 +11,15 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A picture can be moved and zoomed inside its frame.** Double-click an
+  image and the frame becomes a window onto the whole picture: drag to choose
+  which part shows, scroll or pinch to zoom in, Enter to keep it, Esc to put
+  it back. The Crop section of the image panel has the zoom as a number and a
+  way back to the whole picture. The crop is one small optional field on the
+  image; a deck opened in an older version shows the cover-fitted picture,
+  never a blank frame. Canvas, thumbnails, the show, print and file-manager
+  previews all show the same crop, and a morph between two cropped copies of
+  a picture glides between them. Asked for in discussion #319 by morreau.
 - **A date can pin its format, and fields are one click away.** `{{date}}`
   and `{{time}}` have resolved in text since 0.9.12, but they followed the
   viewer's locale — an author could not say M/D/YY and have every viewer see

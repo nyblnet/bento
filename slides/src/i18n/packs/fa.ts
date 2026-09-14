@@ -891,4 +891,10 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "شمارهٔ صفحه، تاریخ، زمان، عنوان و ویژگی‌های سند — هنگام نمایش اسلاید جایگزین می‌شوند. تاریخ و زمان می‌توانند قالب را ثابت کنند: {{date:M/D/YY}}؛ الگو را در متن ویرایش کنید.",
   "Text ▸ Field": "متن ▸ فیلد",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "شمارهٔ صفحه، تاریخ، زمان، عنوان یا یک ویژگی سند را درج می‌کند؛ تاریخ می‌تواند قالب خود را ثابت کند — {{date:M/D/YY}}",
+  "Crop": "برش",
+  "Double-click the picture to move it inside its frame; scroll or pinch to zoom.": "برای جابه‌جایی تصویر داخل قابش روی آن دوبار کلیک کنید؛ برای بزرگ‌نمایی پیمایش یا پینچ کنید.",
+  "✎ Edit crop on canvas": "✎ ویرایش برش روی بوم",
+  "Reset crop": "بازنشانی برش",
+  "Show the whole picture again, the way Fit says": "نمایش دوبارهٔ کل تصویر، همان‌طور که «برازش» می‌گوید",
+  "Crop — drag to move the picture inside its frame · scroll or pinch to zoom · Enter to keep · Esc to put it back": "برش — بکشید تا تصویر داخل قاب جابه‌جا شود · پیمایش یا پینچ برای بزرگ‌نمایی · Enter نگه می‌دارد · Esc برمی‌گرداند",
 }

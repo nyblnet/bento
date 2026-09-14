@@ -875,4 +875,10 @@ export const zhHans: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "页码、日期、时间、标题和文档属性 — 在显示幻灯片时解析。日期和时间可固定格式：{{date:M/D/YY}}；在文本中编辑模式。",
   "Text ▸ Field": "文本 ▸ 字段",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "插入页码、日期、时间、标题或文档属性；日期可固定格式 — {{date:M/D/YY}}",
+  "Crop": "裁剪",
+  "Double-click the picture to move it inside its frame; scroll or pinch to zoom.": "双击图片可在框内移动它；滚动或捏合可缩放。",
+  "✎ Edit crop on canvas": "✎ 在画布上编辑裁剪",
+  "Reset crop": "重置裁剪",
+  "Show the whole picture again, the way Fit says": "按“适应”方式重新显示整张图片",
+  "Crop — drag to move the picture inside its frame · scroll or pinch to zoom · Enter to keep · Esc to put it back": "裁剪 — 拖动可在框内移动图片 · 滚动或捏合可缩放 · Enter 保留 · Esc 还原",
 }

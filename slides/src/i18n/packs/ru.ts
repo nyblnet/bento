@@ -887,4 +887,10 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Номер страницы, дата, время, название и свойства документа — подставляются при показе слайда. Дата и время могут закрепить формат: {{date:M/D/YY}}; шаблон правится в тексте.",
   "Text ▸ Field": "Текст ▸ Поле",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Вставляет номер страницы, дату, время, название или свойство документа; дата может закрепить свой формат — {{date:M/D/YY}}",
+  "Crop": "Кадрирование",
+  "Double-click the picture to move it inside its frame; scroll or pinch to zoom.": "Дважды щёлкните картинку, чтобы сдвинуть её внутри рамки; прокрутка или щипок — масштаб.",
+  "✎ Edit crop on canvas": "✎ Изменить кадрирование на холсте",
+  "Reset crop": "Сбросить кадрирование",
+  "Show the whole picture again, the way Fit says": "Снова показать всю картинку, как задано в «Подгонке»",
+  "Crop — drag to move the picture inside its frame · scroll or pinch to zoom · Enter to keep · Esc to put it back": "Кадрирование — тяните, чтобы сдвинуть картинку внутри рамки · прокрутка или щипок — масштаб · Enter сохраняет · Esc возвращает",
 }

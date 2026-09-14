@@ -1353,6 +1353,15 @@ jobs:
         # routes the argument. Bare {{date}} stays viewer-locale (#381).
         run: node scripts/test-slides-fields.ts
 
+      - name: Image crop rig
+        # crop.ts: {x, y, scale} → the one CSS mapping every surface uses;
+        # the frame can never show empty space; the shape gate admits the
+        # field and refuses wrong shapes; one image branch in render.ts;
+        # present tweens a crop only when both sides carry one (#319).
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-crop.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-crop.mjs"
+          node "$RUNNER_TEMP/test-slides-crop.mjs"
+
       - name: Web links and bullets rig
         # A link is one thing in four places — isWebUrl — and every surface
         # that lets a URL in or out asks it: the shape gate, the text

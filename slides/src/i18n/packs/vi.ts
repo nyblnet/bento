@@ -885,4 +885,10 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Số trang, ngày, giờ, tiêu đề và thuộc tính tài liệu — được điền khi hiển thị trang chiếu. Ngày và giờ có thể cố định định dạng: {{date:M/D/YY}}; sửa mẫu ngay trong văn bản.",
   "Text ▸ Field": "Văn bản ▸ Trường",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Chèn số trang, ngày, giờ, tiêu đề hoặc thuộc tính tài liệu; ngày có thể cố định định dạng — {{date:M/D/YY}}",
+  "Crop": "Cắt",
+  "Double-click the picture to move it inside its frame; scroll or pinch to zoom.": "Nhấp đúp vào hình để di chuyển nó bên trong khung; cuộn hoặc chụm để thu phóng.",
+  "✎ Edit crop on canvas": "✎ Sửa vùng cắt trên khung vẽ",
+  "Reset crop": "Đặt lại vùng cắt",
+  "Show the whole picture again, the way Fit says": "Hiện lại toàn bộ hình, theo cách Vừa khung quy định",
+  "Crop — drag to move the picture inside its frame · scroll or pinch to zoom · Enter to keep · Esc to put it back": "Cắt — kéo để di chuyển hình bên trong khung · cuộn hoặc chụm để thu phóng · Enter để giữ · Esc để trả lại",
 }

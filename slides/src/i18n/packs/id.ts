@@ -885,4 +885,10 @@ export const strings: Catalog = {
   "Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.": "Nomor halaman, tanggal, waktu, judul, dan properti dokumen — diisi saat slide ditampilkan. Tanggal dan waktu dapat mengunci format: {{date:M/D/YY}}; edit polanya di teks.",
   "Text ▸ Field": "Teks ▸ Bidang",
   "Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}": "Sisipkan nomor halaman, tanggal, waktu, judul, atau properti dokumen; tanggal dapat mengunci formatnya — {{date:M/D/YY}}",
+  "Crop": "Pangkas",
+  "Double-click the picture to move it inside its frame; scroll or pinch to zoom.": "Klik dua kali gambar untuk menggesernya di dalam bingkai; gulir atau cubit untuk memperbesar.",
+  "✎ Edit crop on canvas": "✎ Edit pangkasan di kanvas",
+  "Reset crop": "Atur ulang pangkasan",
+  "Show the whole picture again, the way Fit says": "Tampilkan lagi seluruh gambar, sesuai Sesuaikan",
+  "Crop — drag to move the picture inside its frame · scroll or pinch to zoom · Enter to keep · Esc to put it back": "Pangkas — seret untuk menggeser gambar di dalam bingkai · gulir atau cubit untuk memperbesar · Enter menyimpan · Esc mengembalikan",
 }
