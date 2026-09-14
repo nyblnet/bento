@@ -16,8 +16,8 @@
 // a count of six would pass if the wrong six survived.
 //
 // The prune is pure and runs in node, which is why this rig can exist. The
-// facade wiring (slides/src/save.ts) is one line per serializer and is checked
-// by reading the file, since exercising it needs a DOM.
+// facade wiring (slides/src/save.ts) is checked by reading the file, since
+// exercising it needs a DOM.
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -132,10 +132,16 @@ console.log('\nthe facade actually routes through the prune')
 {
   const here = dirname(fileURLToPath(import.meta.url))
   const facade = readFileSync(join(here, '../slides/src/save.ts'), 'utf8')
-  ok(/export function serializeAuto\([^)]*\)[^{]*\{[^}]*pruneUnusedAssets/.test(facade),
-    'serializeAuto is shadowed and calls pruneUnusedAssets')
-  ok(/export function serializeFile\([^)]*\)[^{]*\{[^}]*pruneUnusedAssets/.test(facade),
-    'serializeFile is shadowed and calls pruneUnusedAssets')
+  ok(/function prepareForSave[\s\S]*pruneUnusedAssets\(adoptBuiltinFonts\(doc\)\)/.test(facade),
+    'save preparation prunes assets and adopts fonts')
+  ok(/export function serializeAuto\([^)]*\)[\s\S]*prepareForSave\(doc\)/.test(facade),
+    'serializeAuto uses save preparation')
+  ok(/export function serializeFile\([^)]*\)[\s\S]*prepareForSave\(doc\)/.test(facade),
+    'serializeFile uses save preparation')
+  ok(/saveFile as kernelSaveFile/.test(facade),
+    'slides aliases the kernel saveFile')
+  ok(/export function saveFile\([^)]*\)[\s\S]*kernelSaveFile\(prepareForSave\(doc\), forcePicker\)/.test(facade),
+    'saveFile uses save preparation')
   ok(/export \* from '\.\.\/\.\.\/kernel\/src\/save\.ts'/.test(facade),
     'everything else still comes from the kernel')
 }

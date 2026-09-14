@@ -6925,3 +6925,17 @@ have caught this: not "did the attribute survive" but "did anything execute".
 correct options for its children: drop them with it, or sanitize them before
 lifting them. Lifting first is always wrong, whatever the loop looks like.
 And every attack case in a sanitizer rig gets a nested variant.
+
+## 2026-09-14 — Asset pruning must wrap the app's save entry point
+
+Issue #442's 1.1.0 follow-up exposed a facade trap. `slides/src/save.ts` had
+shadowed the kernel serializers, but its re-exported `saveFile` called the
+kernel's lexically-bound `serializeAuto`, so ordinary ⌘S bypassed slides'
+asset pruning. The result was a deck that still retained a deleted image's
+bytes until a different write path happened to serialize it.
+
+The decision is that every app-facing write entry point must hand the kernel a
+prepared document. Slides now shares `prepareForSave` across `saveFile`,
+`serializeAuto`, and `serializeFile`; the preparation remains copy-on-write so
+the live document keeps its assets for undo. `scripts/test-slides-assets.ts`
+checks the facade wiring as well as the pure reachability cases.
