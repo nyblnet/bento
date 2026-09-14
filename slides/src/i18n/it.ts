@@ -884,4 +884,6 @@ export const it: Catalog = {
   "Linked": "Collegata",
   "No picture yet": "Nessuna immagine ancora",
   "Replace file (original size)…": "Sostituisci file (dimensione originale)…",
+  "Keep aspect ratio": "Mantieni le proporzioni",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Attivo: il ridimensionamento conserva le proporzioni dell’immagine (Maiusc le libera per un trascinamento). Disattivo: larghezza e altezza cambiano separatamente e l’immagine si deforma",
 }

@@ -900,4 +900,6 @@ export const strings: Catalog = {
   "Linked": "پیوندشده",
   "No picture yet": "هنوز تصویری نیست",
   "Replace file (original size)…": "جایگزینی پرونده (اندازهٔ اصلی)…",
+  "Keep aspect ratio": "حفظ نسبت ابعاد",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "روشن: تغییر اندازه نسبت تصویر را حفظ می‌کند (Shift آن را برای یک کشیدن آزاد می‌کند). خاموش: عرض و ارتفاع مستقل تغییر می‌کنند و تصویر کشیده می‌شود",
 }

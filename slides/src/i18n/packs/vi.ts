@@ -894,4 +894,6 @@ export const strings: Catalog = {
   "Linked": "Đã liên kết",
   "No picture yet": "Chưa có hình",
   "Replace file (original size)…": "Thay tệp (kích thước gốc)…",
+  "Keep aspect ratio": "Giữ tỷ lệ khung hình",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Bật: đổi kích thước giữ nguyên tỷ lệ ảnh (Shift bỏ giữ trong một lần kéo). Tắt: chiều rộng và chiều cao đổi độc lập và ảnh bị kéo giãn",
 }

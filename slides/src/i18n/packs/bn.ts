@@ -907,4 +907,6 @@ export const strings: Catalog = {
   "Linked": "লিঙ্ক করা",
   "No picture yet": "এখনও কোনো ছবি নেই",
   "Replace file (original size)…": "ফাইল বদলান (মূল আকার)…",
+  "Keep aspect ratio": "অনুপাত বজায় রাখুন",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "চালু: আকার বদলালে ছবির অনুপাত বজায় থাকে (Shift এক টানের জন্য মুক্ত করে)। বন্ধ: প্রস্থ ও উচ্চতা আলাদাভাবে বদলায় এবং ছবি টেনে বড় হয়",
 }

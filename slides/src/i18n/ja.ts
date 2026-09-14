@@ -884,4 +884,6 @@ export const ja: Catalog = {
   "Linked": "リンク",
   "No picture yet": "画像はまだありません",
   "Replace file (original size)…": "ファイルを置き換え（元のサイズ）…",
+  "Keep aspect ratio": "縦横比を保つ",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "オン: サイズ変更で画像の比率を保ちます（Shift で一回のドラッグだけ解除）。オフ: 幅と高さを別々に変えられ、画像は引き伸ばされます",
 }

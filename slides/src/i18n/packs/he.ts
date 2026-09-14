@@ -897,4 +897,6 @@ export const strings: Catalog = {
   "Linked": "מקושרת",
   "No picture yet": "עדיין אין תמונה",
   "Replace file (original size)…": "החלפת קובץ (גודל מקורי)…",
+  "Keep aspect ratio": "שמירה על יחס גובה-רוחב",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "פעיל: שינוי גודל שומר על הפרופורציות של התמונה (Shift משחרר אותן לגרירה אחת). כבוי: רוחב וגובה משתנים בנפרד והתמונה נמתחת",
 }

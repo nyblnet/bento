@@ -888,4 +888,6 @@ export const strings: Catalog = {
   "Linked": "연결됨",
   "No picture yet": "아직 그림 없음",
   "Replace file (original size)…": "파일 바꾸기 (원본 크기)…",
+  "Keep aspect ratio": "가로세로 비율 유지",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "켜짐: 크기를 조절해도 이미지 비율이 유지됩니다 (Shift로 한 번의 드래그만 해제). 꺼짐: 너비와 높이가 따로 바뀌고 이미지가 늘어납니다",
 }

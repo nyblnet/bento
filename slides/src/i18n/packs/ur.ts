@@ -914,4 +914,6 @@ export const strings: Catalog = {
   "Linked": "لنک شدہ",
   "No picture yet": "ابھی کوئی تصویر نہیں",
   "Replace file (original size)…": "فائل بدلیں (اصل سائز)…",
+  "Keep aspect ratio": "پہلو تناسب برقرار رکھیں",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "آن: سائز بدلنے پر تصویر کا تناسب برقرار رہتا ہے (Shift ایک ڈریگ کے لیے آزاد کرتا ہے)۔ آف: چوڑائی اور اونچائی الگ الگ بدلتی ہیں اور تصویر کھنچ جاتی ہے",
 }

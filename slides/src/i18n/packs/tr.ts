@@ -895,4 +895,6 @@ export const strings: Catalog = {
   "Linked": "Bağlantılı",
   "No picture yet": "Henüz görsel yok",
   "Replace file (original size)…": "Dosyayı değiştir (özgün boyut)…",
+  "Keep aspect ratio": "En-boy oranını koru",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Açık: yeniden boyutlandırma görselin oranını korur (Shift bir sürükleme için serbest bırakır). Kapalı: genişlik ve yükseklik bağımsız değişir ve görsel esner",
 }

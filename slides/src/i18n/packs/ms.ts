@@ -897,4 +897,6 @@ export const strings: Catalog = {
   "Linked": "Terpaut",
   "No picture yet": "Belum ada gambar",
   "Replace file (original size)…": "Gantikan fail (saiz asal)…",
+  "Keep aspect ratio": "Kekalkan nisbah aspek",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Hidup: mengubah saiz mengekalkan kadaran imej (Shift membebaskannya untuk satu seretan). Mati: lebar dan tinggi berubah secara berasingan dan imej meregang",
 }

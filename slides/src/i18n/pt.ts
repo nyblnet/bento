@@ -882,4 +882,6 @@ export const pt: Catalog = {
   "Linked": "Ligada",
   "No picture yet": "Ainda sem imagem",
   "Replace file (original size)…": "Substituir ficheiro (tamanho original)…",
+  "Keep aspect ratio": "Manter proporções",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Ligado: redimensionar mantém as proporções da imagem (Shift liberta-as durante um arrasto). Desligado: largura e altura mudam separadamente e a imagem estica",
 }

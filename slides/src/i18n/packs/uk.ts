@@ -904,4 +904,6 @@ export const strings: Catalog = {
   "Linked": "За посиланням",
   "No picture yet": "Зображення ще немає",
   "Replace file (original size)…": "Замінити файл (початковий розмір)…",
+  "Keep aspect ratio": "Зберігати пропорції",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Увімк.: зміна розміру зберігає пропорції зображення (Shift звільняє їх на одне перетягування). Вимк.: ширина й висота змінюються незалежно, зображення розтягується",
 }

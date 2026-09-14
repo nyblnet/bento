@@ -884,4 +884,6 @@ export const de: Catalog = {
   "Linked": "Verknüpft",
   "No picture yet": "Noch kein Bild",
   "Replace file (original size)…": "Datei ersetzen (Originalgröße)…",
+  "Keep aspect ratio": "Seitenverhältnis beibehalten",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "An: Größenänderung behält die Proportionen des Bildes (Umschalt gibt sie für einen Zug frei). Aus: Breite und Höhe ändern sich unabhängig und das Bild wird gestreckt",
 }

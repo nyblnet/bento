@@ -913,4 +913,6 @@ export const strings: Catalog = {
   "Linked": "Naka-link",
   "No picture yet": "Wala pang larawan",
   "Replace file (original size)…": "Palitan ang file (orihinal na laki)…",
+  "Keep aspect ratio": "Panatilihin ang aspect ratio",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Naka-on: pinapanatili ng pag-resize ang proporsyon ng larawan (pinapalaya ito ng Shift sa isang drag). Naka-off: hiwalay na nagbabago ang lapad at taas at nababanat ang larawan",
 }

@@ -898,4 +898,6 @@ export const strings: Catalog = {
   "Linked": "ลิงก์",
   "No picture yet": "ยังไม่มีรูปภาพ",
   "Replace file (original size)…": "แทนที่ไฟล์ (ขนาดเดิม)…",
+  "Keep aspect ratio": "คงอัตราส่วนภาพ",
+  "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "เปิด: การปรับขนาดคงสัดส่วนของภาพ (กด Shift เพื่อปลดชั่วคราวหนึ่งครั้ง) ปิด: ความกว้างและความสูงเปลี่ยนแยกกัน ภาพจะถูกยืด",
 }
