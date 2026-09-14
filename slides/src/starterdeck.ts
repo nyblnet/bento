@@ -20,10 +20,9 @@ import {
   newDoc, uid, defaultText, defaultShape, defaultChart, defaultTable, defaultCode,
   type BentoDoc, type Slide, type SlideElement, type TextElement, type ShapeElement,
   type SvgElement, type TableElement,
-} from './model'
-import { FRAUNCES_900, INSTRUMENT_VAR } from './fontdata'
+} from './model.ts'
 
-/** Display face — embedded in the file (see fontdata.ts). */
+/** Display face — the shell's own (fonts.ts BUILTIN_FONTS), named by the deck, not embedded. */
 const DISPLAY = "'Fraunces', Georgia, serif"
 /** Text face — embedded variable sans. */
 const BODY = "'Instrument Sans', -apple-system, 'Segoe UI', Helvetica, sans-serif"
@@ -337,13 +336,13 @@ export function starterDoc(): BentoDoc {
     a: '#3f9142', // diff: added
     d: '#c25a43', // diff: removed
   }
+  // The two faces are the shell's own (fonts.ts BUILTIN_FONTS): named, not
+  // embedded — 86 KB that every saved deck used to carry twice.
   doc.fonts = [
-    { family: 'Fraunces', asset: 'font-fraunces-900', weight: '900' },
-    { family: 'Instrument Sans', asset: 'font-instrument', weight: '400 700' },
+    { family: 'Fraunces', asset: 'builtin:fraunces-900', weight: '900' },
+    { family: 'Instrument Sans', asset: 'builtin:instrument-sans', weight: '400 700' },
   ]
   doc.assets = {
-    'font-fraunces-900': FRAUNCES_900,
-    'font-instrument': INSTRUMENT_VAR,
     'dots-ink': DOTS_INK,
     'dots-paper': DOTS_PAPER,
     'aurora-amber': AURORA_PEACH,

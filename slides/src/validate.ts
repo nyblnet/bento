@@ -26,6 +26,7 @@ import type { BentoDoc, Slide, SlideElement, TextElement } from './model.ts'
 import { MODEL_KEYS } from './modelkeys.generated.ts'
 import { isRemoteUrl } from '../../kernel/src/net.ts'
 import { measureElements } from './measure.ts'
+import { BUILTIN_FONTS } from './fonts.ts'
 import { eachRef, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
 
 export type Severity = 'error' | 'warning' | 'info'
@@ -153,10 +154,19 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
     }
   }
   for (const f of doc.fonts ?? []) {
-    if (f.asset && !assets[f.asset]) {
-      add({ code: 'missing-asset', severity: 'error', path: `fonts.${f.family}`,
-        message: `Font "${f.family}" points at asset "${f.asset}", which is not in doc.assets — the face will not load and text falls back silently.` })
+    if (!f.asset || assets[f.asset]) continue
+    // A `builtin:` key names a face the shell carries (fonts.ts BUILTIN_FONTS)
+    // — a satisfied reference with no bytes in the file. Only an unknown
+    // built-in name is broken.
+    if (f.asset.startsWith('builtin:')) {
+      if (!(f.asset in BUILTIN_FONTS)) {
+        add({ code: 'missing-asset', severity: 'error', path: `fonts.${f.family}`,
+          message: `Font "${f.family}" names built-in face "${f.asset}", which this app does not carry (known: ${Object.keys(BUILTIN_FONTS).join(', ')}) — the face will not load and text falls back silently.` })
+      }
+      continue
     }
+    add({ code: 'missing-asset', severity: 'error', path: `fonts.${f.family}`,
+      message: `Font "${f.family}" points at asset "${f.asset}", which is not in doc.assets — the face will not load and text falls back silently.` })
   }
   // A live-shared deck carries the keys to its own room — that is how opening a
   // copy joins a session with no account and nothing to configure. The file IS
