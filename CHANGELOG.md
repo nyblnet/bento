@@ -35,6 +35,15 @@ pre-1.0.
   strings, numbers, keywords, calls, punctuation, diff added and removed) — so
   a snippet can match the deck instead of the built-in scheme. A deck without
   one renders exactly as before; the starter deck sets one.
+- **Code colours have an editor.** The Theme section gains a *Code colours*
+  group — one colour per kind of token (comments, strings, numbers, keywords,
+  calls, punctuation, diff added and removed) — so the palette Rahul Ravikumar
+  added in #450 no longer needs a JSON round-trip to change. A deck without one
+  shows the built-in scheme and keeps rendering exactly as before until you
+  change a colour; a deck with one gets a button back to the built-in scheme.
+- **Empty accent slots stay out of the way.** Accent 2–6 rows and quick-pick
+  swatches appear only when the deck actually sets that slot; a fresh deck no
+  longer shows six identical copies of accent 1. The format keeps all six.
 - **The layout picker stays on screen.** Johan Høgåsen-Hallesby (#425): with
   a few custom layouts the picker opened above the top of the window and its
   first row hid under the topbar. It now opens beside its button, keeps an
@@ -102,18 +111,9 @@ pre-1.0.
   writer.** The sync client no longer acts on a frame the relay did not vouch
   for; nothing changes for anyone editing normally.
 - Groundwork with no visible change: the shared UI components every Bento app
-  will draw from (menu, side panel, dialog, tooltip), and — from Johan
+  will draw from (menu, side panel, dialog, tooltip, toggle), and — from Johan
   Høgåsen-Hallesby (#423) — a build that runs its own release channel and
   relay can now configure both without patching the kernel.
-- **Code colours have an editor.** The Theme section gains a *Code colours*
-  group — one colour per kind of token (comments, strings, numbers, keywords,
-  calls, punctuation, diff added and removed) — so the palette Rahul Ravikumar
-  added in #450 no longer needs a JSON round-trip to change. A deck without one
-  shows the built-in scheme and keeps rendering exactly as before until you
-  change a colour; a deck with one gets a button back to the built-in scheme.
-- **Empty accent slots stay out of the way.** Accent 2–6 rows and quick-pick
-  swatches appear only when the deck actually sets that slot; a fresh deck no
-  longer shows six identical copies of accent 1. The format keeps all six.
 
 ## [1.0.19] — 2026-09-04
 
