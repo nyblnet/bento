@@ -45,25 +45,38 @@
 // genuinely AMBIGUOUS, refuse and report rather than pick. `XlsxFinding` is
 // deliberately the same shape as `ImportFinding` so one banner renders both.
 //
+// WHAT IS CARRIED BESIDES VALUES, because a file that says something dash can
+// hold and is not asked is a loss dash chose: data validation (`DataRule`),
+// defined names (`doc.names`), frozen panes (`sheet.frozen`), per-cell bold,
+// colour, background and borders (`APPEARANCE_FIELDS`), and an Excel table's
+// TOTALS ROW as the column property it already is in Microsoft's schema.
+//
 // WHAT IS DELIBERATELY NOT HERE, and why, so nobody thinks it was forgotten:
-// charts, images, pivot tables, conditional formatting, data validation,
-// comments, defined names, VBA. All of them survive as unread parts on import
-// (we drop them) and are not written on export. dash's own chart tiles are
-// derived from columns and would have to be REBUILT as DrawingML, which is a
-// larger module than this one for a feature whose data is exported anyway.
+// charts, images, pivot tables, conditional formatting, comments, VBA. All of
+// them survive as unread parts on import (we drop them) and are not written on
+// export. dash's own chart tiles are derived from columns and would have to be
+// REBUILT as DrawingML, which is a larger module than this one for a feature
+// whose data is exported anyway. Conditional formatting is the one of those
+// dash could hold today (condfmt.ts) and is left for the pass that also gives
+// the four unreachable rule kinds a dialog — half of it, imported into a UI
+// that cannot show or edit it, is a rule nobody can find.
 
 import {
   readZip, writeZip, ZipError, type ZipEntry,
 } from './zip.ts'
 import {
-  colToLetters, lettersToCol, parseRef, shiftRefsForInsert,
+  colToLetters, lettersToCol, mapNames, parseRef, shiftRefsForInsert,
 } from './a1.ts'
-import { translateCellFormula } from './cellformula.ts'
+import {
+  nameText, translateCellFormula, validateDefinedName, type NameProblem,
+} from './cellformula.ts'
 import { FUNCTIONS } from './formula.ts'
 import { readCell } from './store.ts'
 import type {
-  CellOverride, Column, ColumnData, ColumnType, DashDoc, TableSheet,
+  CellOverride, Column, ColumnData, ColumnType, DashDoc, DataRule, DefinedName,
+  TableSheet,
 } from './model.ts'
+import { columnRule, describeRule, refBox } from './datavalid.ts'
 
 // --- findings ---------------------------------------------------------------
 
@@ -79,6 +92,8 @@ export interface XlsxFinding {
     | 'coerce-failed' | 'no-header' | 'duplicate-header' | 'empty-header'
     | 'formula-not-live' | 'hidden-sheet' | 'sheet-skipped' | 'time-of-day'
     | 'leading-blanks' | 'formula-column' | 'chart-dropped' | 'renamed-sheet'
+    | 'data-validation' | 'defined-name' | 'header-row' | 'totals-row'
+    | 'cell-format'
   sheet?: string
   column?: string
   message: string
@@ -89,6 +104,13 @@ export interface XlsxImportResult {
   findings: XlsxFinding[]
   /** The workbook's own title, if `docProps/core.xml` carried one. */
   title?: string
+  /**
+   * The workbook's `<definedNames>`, as `doc.names`. Present only when the
+   * caller asked for them (`XlsxImportOpts.names`) — see the DEFINED NAMES
+   * section below for why the default is to leave them out rather than to
+   * return a table nobody installs.
+   */
+  names?: Record<string, DefinedName>
 }
 
 // --- a very small XML reader --------------------------------------------------
@@ -359,7 +381,69 @@ const formatHasTime = (code: string): boolean => /h|\[h\]/i.test(code.replace(/"
 interface Styles {
   /** cellXfs index → format code ('' = General). */
   xf: string[]
+  /** cellXfs index → how the cell is DRAWN, or undefined for plain. */
+  look: Array<CellLook | undefined>
 }
+
+/**
+ * The appearance half of a style, in dash's own vocabulary
+ * (`APPEARANCE_FIELDS`, model.ts) rather than Excel's.
+ *
+ * Finding 7 of the bounce test: every fixture bolded its header and its totals
+ * row and not one imported cell carried `bold`, even though dash has had
+ * per-cell bold, colour, background and borders since cellfmt.ts landed. The
+ * file said so and dash threw it away without a word, then made the person do
+ * it again by hand.
+ *
+ * WHAT IS NOT CARRIED, and why each is a drop rather than an approximation:
+ *
+ *   THEME AND INDEXED COLOURS. `<color theme="4" tint="0.4"/>` means "the
+ *   fourth colour of whatever theme this workbook is wearing, lightened" —
+ *   resolving it needs theme1.xml, the tint algebra, and the indexed palette,
+ *   and getting it approximately right paints someone's brand colour a
+ *   slightly different colour with no way to notice. Only an explicit
+ *   `rgb="FFRRGGBB"` is read.
+ *   PATTERN FILLS. dash's `bg` is one colour; a gray125 crosshatch is not one.
+ *   FONT FAMILY AND SIZE. dash has neither per cell.
+ *   PER-EDGE border colours and weights. dash carries which edges, one colour
+ *   and one style for the box, so a cell with a thick red top and a thin grey
+ *   bottom keeps its edges and loses the difference between them.
+ */
+interface CellLook {
+  bold?: true
+  italic?: true
+  underline?: true
+  color?: string
+  bg?: string
+  border?: string
+  borderColor?: string
+  borderStyle?: 'dashed' | 'dotted'
+}
+
+/** `FFCC0000` → `#cc0000`. ARGB, and the alpha is dropped: dash's colours are
+ *  `#rrggbb` and every Excel cell colour anybody writes is opaque. A theme or
+ *  indexed colour returns undefined — see the block above. */
+function rgbOf(el: { a: Attrs } | undefined): string | undefined {
+  if (!el) return undefined
+  const raw = attr(el.a, 'rgb')
+  if (!raw) return undefined
+  const hex = raw.length === 8 ? raw.slice(2) : raw.length === 6 ? raw : ''
+  return /^[0-9A-Fa-f]{6}$/.test(hex) ? `#${hex.toLowerCase()}` : undefined
+}
+
+/** `<b/>` is on, `<b val="0"/>` is off. The second spelling is what a style
+ *  that TURNS OFF an inherited bold looks like, and reading it as on is how a
+ *  whole sheet arrives bold. */
+const flagOn = (body: string, name: string): boolean => {
+  const el = element(body, name)
+  if (!el) return false
+  const v = attr(el.a, 'val')
+  return v !== '0' && v !== 'false' && v !== 'none'
+}
+
+const EDGES: Array<[string, 'top' | 'right' | 'bottom' | 'left']> = [
+  ['t', 'top'], ['r', 'right'], ['b', 'bottom'], ['l', 'left'],
+]
 
 function readStyles(xml: string): Styles {
   const codes = new Map<number, string>()
@@ -368,19 +452,75 @@ function readStyles(xml: string): Styles {
     const code = attr(nf.a, 'formatCode') ?? ''
     if (Number.isFinite(id)) codes.set(id, code)
   }
+
+  // The three appearance tables, each indexed by the id an `<xf>` carries.
+  // Scoped to their own block for the same reason cellXfs is below: `<font>`
+  // also appears inside `<dxfs>` (conditional formats), and mixing the two
+  // shifts every font id in the workbook.
+  const fonts: CellLook[] = []
+  const fontBlock = element(xml, 'fonts')
+  for (const f of elements(fontBlock ? fontBlock.body : '', 'font')) {
+    const look: CellLook = {}
+    if (flagOn(f.body, 'b')) look.bold = true
+    if (flagOn(f.body, 'i')) look.italic = true
+    if (flagOn(f.body, 'u')) look.underline = true
+    const color = rgbOf(element(f.body, 'color'))
+    if (color) look.color = color
+    fonts.push(look)
+  }
+
+  const fills: Array<string | undefined> = []
+  const fillBlock = element(xml, 'fills')
+  for (const f of elements(fillBlock ? fillBlock.body : '', 'fill')) {
+    const pf = element(f.body, 'patternFill')
+    // Only a SOLID fill is a background dash can hold; a pattern is a texture.
+    fills.push(pf && attr(pf.a, 'patternType') === 'solid'
+      ? rgbOf(element(pf.body, 'fgColor')) : undefined)
+  }
+
+  const borders: CellLook[] = []
+  const borderBlock = element(xml, 'borders')
+  for (const b of elements(borderBlock ? borderBlock.body : '', 'border')) {
+    let edges = ''
+    let color: string | undefined
+    let style: 'dashed' | 'dotted' | undefined
+    for (const [letter, tag] of EDGES) {
+      const e = element(b.body, tag)
+      const st = e ? attr(e.a, 'style') ?? '' : ''
+      if (!e || !st || st === 'none') continue
+      edges += letter
+      color = color ?? rgbOf(element(e.body, 'color'))
+      if (!style && /dash/i.test(st)) style = 'dashed'
+      if (!style && /dot|hair/i.test(st)) style = 'dotted'
+    }
+    const look: CellLook = {}
+    if (edges) look.border = edges
+    if (edges && color) look.borderColor = color
+    if (edges && style) look.borderStyle = style
+    borders.push(look)
+  }
+
   // ONLY the cellXfs block. `cellStyleXfs` has an identical `<xf>` shape and
   // comes FIRST in the file, so a scan for every `<xf>` in the document indexes
   // a cell's `s="12"` into the wrong table — the bug produces plausible formats
   // for the first few columns and nonsense after, which reads as random.
   const block = element(xml, 'cellXfs')
   const xf: string[] = []
+  const look: Array<CellLook | undefined> = []
   if (block) {
     for (const e of elements(block.body, 'xf')) {
       const id = Number(attr(e.a, 'numFmtId') ?? 0)
       xf.push(codes.get(id) ?? BUILTIN_CODE[id] ?? '')
+      const merged: CellLook = {
+        ...(fonts[Number(attr(e.a, 'fontId') ?? 0)] ?? {}),
+        ...(borders[Number(attr(e.a, 'borderId') ?? 0)] ?? {}),
+      }
+      const bg = fills[Number(attr(e.a, 'fillId') ?? 0)]
+      if (bg) merged.bg = bg
+      look.push(Object.keys(merged).length ? merged : undefined)
     }
   }
-  return { xf }
+  return { xf, look }
 }
 
 /** A stand-in code for the built-ins we classify by id. Only the letters
@@ -463,9 +603,11 @@ interface RawCell {
  */
 function readSheetCells(xml: string, shared: string[]): {
   cells: RawCell[]; merges: string[]; maxCol: number; widths: Map<number, number>
+  validations: RawValidation[]; pane: { rows: number; cols: number }
 } {
   const cells: RawCell[] = []
   const merges: string[] = []
+  const validations: RawValidation[] = []
   const widths = new Map<number, number>()
   let maxCol = -1
 
@@ -545,7 +687,277 @@ function readSheetCells(xml: string, shared: string[]): {
     const px = Math.round(w * 7 + 5)
     for (let i = min; i <= (Number.isFinite(max) ? max : min); i++) widths.set(i - 1, px)
   }
-  return { cells, merges, maxCol, widths }
+  for (const dv of elements(xml, 'dataValidation')) {
+    const sqref = attr(dv.a, 'sqref')
+    if (!sqref) continue
+    const f = (n: 'formula1' | 'formula2'): string | undefined => {
+      const el = element(dv.body, n)
+      return el ? unescapeXml(el.body) : undefined
+    }
+    validations.push({
+      sqref,
+      type: attr(dv.a, 'type') ?? 'none',
+      operator: attr(dv.a, 'operator') ?? 'between',
+      allowBlank: attr(dv.a, 'allowBlank') === '1',
+      // NOTE THE INVERSION, which is the single most-misread attribute in the
+      // whole schema: `showDropDown="1"` HIDES the in-cell dropdown. Excel's
+      // own UI checkbox is "In-cell dropdown" and the file stores its
+      // NEGATION, so a reader that takes the name at face value ships every
+      // list rule with its arrow switched the wrong way round.
+      hideDropdown: attr(dv.a, 'showDropDown') === '1',
+      errorStyle: attr(dv.a, 'errorStyle') ?? 'stop',
+      error: attr(dv.a, 'error'),
+      f1: f('formula1'),
+      f2: f('formula2'),
+    })
+  }
+  // FROZEN PANES. `state` matters: a SPLIT pane is a scroll position two panes
+  // share and dash has no such thing, while a FROZEN one is the header pinned
+  // where the reader can see it, which dash does have (`sheet.frozen`). Only
+  // the frozen kind is read; a split is a view the reader re-makes in a second.
+  let pane = { rows: 0, cols: 0 }
+  const pv = element(xml, 'pane')
+  if (pv) {
+    const st = attr(pv.a, 'state') ?? ''
+    if (st === 'frozen' || st === 'frozenSplit') {
+      const n = (k: string): number => {
+        const v = Number(attr(pv.a, k) ?? 0)
+        return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0
+      }
+      pane = { rows: n('ySplit'), cols: n('xSplit') }
+    }
+  }
+  return { cells, merges, maxCol, widths, validations, pane }
+}
+
+// --- data validation ----------------------------------------------------------
+//
+// Excel's `<dataValidation>` is dash's `DataRule` (model.ts, datavalid.ts) with
+// three differences that have to be handled rather than assumed away, because
+// each one is a silent wrong answer if it is not:
+//
+//   1. `showDropDown` is INVERTED (see above).
+//   2. `errorStyle` defaults to `stop`. dash's `on` defaults to `warn`, and
+//      that is not a translation bug — dash's reject is a keyboard-only
+//      refusal (datavalid.ts's header explains why a reject that runs on apply
+//      is a divergence under collaboration), so `stop` maps to `reject` and
+//      means slightly less than it did. It is still the closer of the two.
+//   3. A validation covers a RANGE. On a dataset that range has to become a
+//      COLUMN, because a dataset's rule lives on its column — so a rule over
+//      part of a column is WIDENED to the whole one, and that is reported.
+//      Widening is the safe direction here: it marks more cells than Excel
+//      circled, and marking never changes a value.
+//
+// An operator dash cannot express (`notBetween`, `equal`, `notEqual`) is
+// DROPPED with a finding rather than approximated. `greaterThan` and
+// `lessThan` are kept as inclusive bounds and reported, because off by one at
+// the boundary is a small, stated loss and losing the rule entirely is a
+// larger one.
+
+interface RawValidation {
+  sqref: string
+  type: string
+  operator: string
+  allowBlank: boolean
+  hideDropdown: boolean
+  errorStyle: string
+  error?: string
+  f1?: string
+  f2?: string
+}
+
+/** The inline list Excel writes: `"Open,Won,Lost"` — quoted, comma separated.
+ *  A RANGE reference (`$H$1:$H$5`) is a different feature dash has no answer
+ *  for; the caller reports it rather than importing an empty list. */
+function inlineList(f1: string | undefined): string[] | null {
+  if (!f1) return null
+  const s = f1.trim()
+  if (!(s.startsWith('"') && s.endsWith('"') && s.length >= 2)) return null
+  return s.slice(1, -1).split(',').map((x) => x.trim()).filter(Boolean)
+}
+
+/** A bound, as dash stores one. Dates arrive as serials and go in as ISO, so
+ *  the panel shows `2026-03-01` rather than `46082`. */
+function dvBound(raw: string | undefined, isDate: boolean, epoch1904: boolean): number | string | undefined {
+  if (raw === undefined) return undefined
+  const s = raw.trim().replace(/^=/, '')
+  if (s === '') return undefined
+  const n = Number(s)
+  if (!Number.isFinite(n)) return s          // DATE(2026,1,1) and friends: verbatim
+  if (!isDate) return n
+  return serialToIso(n, epoch1904) ?? n
+}
+
+/**
+ * One `<dataValidation>` as a dash rule, plus what could not be carried.
+ * `null` means nothing worth storing came out of it.
+ */
+function toDataRule(
+  v: RawValidation, epoch1904: boolean,
+): { rule: DataRule | null; lost?: string } {
+  const on = v.errorStyle === 'stop' ? 'reject' : 'warn'
+  const base = {
+    ...(v.allowBlank ? {} : { blank: false as const }),
+    on: on as 'reject' | 'warn',
+    ...(v.error ? { message: v.error } : {}),
+  }
+  if (v.type === 'list') {
+    const list = inlineList(v.f1)
+    if (!list?.length) {
+      return { rule: null, lost: `its list of values is a reference (${v.f1 ?? '—'}) rather than a written-out list, and dash stores the values themselves` }
+    }
+    return { rule: { kind: 'list', list, ...(v.hideDropdown ? { noDropdown: true } : {}), ...base } }
+  }
+  if (v.type === 'custom') {
+    return v.f1
+      ? { rule: { kind: 'formula', formula: v.f1, ...base } }
+      : { rule: null }
+  }
+  const kind = v.type === 'whole' || v.type === 'decimal' ? 'number'
+    : v.type === 'date' ? 'date'
+      : v.type === 'textLength' ? 'textLength' : null
+  if (!kind) return { rule: null }
+  const isDate = kind === 'date'
+  const a = dvBound(v.f1, isDate, epoch1904)
+  const b = dvBound(v.f2, isDate, epoch1904)
+  switch (v.operator) {
+    case 'between':
+      return { rule: { kind, ...(a !== undefined ? { min: a } : {}), ...(b !== undefined ? { max: b } : {}), ...base } }
+    case 'greaterThanOrEqual':
+      return { rule: { kind, ...(a !== undefined ? { min: a } : {}), ...base } }
+    case 'lessThanOrEqual':
+      return { rule: { kind, ...(a !== undefined ? { max: a } : {}), ...base } }
+    case 'greaterThan':
+      return {
+        rule: { kind, ...(a !== undefined ? { min: a } : {}), ...base },
+        lost: `its "greater than ${v.f1}" test became "${v.f1} or more" — dash's bounds are inclusive, so the boundary value itself is now allowed`,
+      }
+    case 'lessThan':
+      return {
+        rule: { kind, ...(a !== undefined ? { max: a } : {}), ...base },
+        lost: `its "less than ${v.f1}" test became "${v.f1} or less" — dash's bounds are inclusive, so the boundary value itself is now allowed`,
+      }
+    default:
+      return { rule: null, lost: `dash has no "${v.operator}" test` }
+  }
+}
+
+/** Column index → rule, from every `<dataValidation>` on the sheet. */
+function validationsByColumn(
+  raws: readonly RawValidation[], epoch1904: boolean, sheetName: string,
+  lastRow: number, findings: XlsxFinding[],
+): Map<number, DataRule> {
+  const out = new Map<number, DataRule>()
+  for (const v of raws) {
+    if (v.type === 'none' || v.type === '') continue
+    const { rule, lost } = toDataRule(v, epoch1904)
+    // `sqref` is SPACE SEPARATED and may name several ranges.
+    const refs = v.sqref.trim().split(/\s+/).filter(Boolean)
+    const boxes = refs.map((r) => refBox(r.replace(/\$/g, ''))).filter((b): b is NonNullable<typeof b> => !!b)
+    if (!boxes.length) continue
+    if (!rule) {
+      findings.push({
+        code: 'data-validation', sheet: sheetName,
+        message: `A data validation rule on ${v.sqref} of "${sheetName}" was not imported: ${lost ?? `dash has no equivalent of its "${v.type}" test`}. The cells keep their values; nothing on them is checked.`,
+      })
+      continue
+    }
+    let widened = false
+    for (const b of boxes) {
+      // Rows 2..lastRow is the whole data body. Anything narrower has to widen
+      // to the column, because a dataset's rule belongs to the column.
+      if (b.top > 1 || (lastRow > 1 && b.bottom < lastRow - 1)) widened = true
+      for (let ci = b.left; ci <= b.right; ci++) out.set(ci, rule)
+    }
+    if (widened || lost) {
+      const parts: string[] = []
+      if (widened) parts.push(`it covered ${v.sqref} and now applies to the whole column, because a dash dataset keeps its rules on the column that owns the type`)
+      if (lost) parts.push(lost)
+      findings.push({
+        code: 'data-validation', sheet: sheetName,
+        message: `A data validation rule on "${sheetName}" was imported with a change: ${parts.join('; ')}.`,
+      })
+    }
+  }
+  return out
+}
+
+// --- the Excel table (ListObject) --------------------------------------------
+//
+// AN xlsx TABLE IS A dash DATASET, and docs/dash-sheet-kinds.md worked the
+// mapping out before this code existed: an ordinary worksheet is cell-typed, a
+// `ListObject` is COLUMN-typed — named columns, a header row, a calculated
+// column, and a totals row driven by a PROPERTY (`totalsRowFunction="sum"`)
+// rather than by a formula somebody typed. That is dash's dataset described in
+// Microsoft's own schema, so `totals: {value:'sum'}` is a translation and not
+// a compromise.
+//
+// WHY IT IS THE CONSEQUENTIAL ONE. Without this, Excel's totals row imports as
+// an ordinary data row: sorting `pipeline.xlsx` by Value descending puts the
+// row labelled "Total", holding 869,050, at the TOP of the deals. It is also
+// caught by filters and counted by aggregates. A total that sorts into the
+// middle of the data is not a cosmetic loss — it is a wrong number in every
+// view built on the sheet.
+//
+// WHAT IS NOT TAKEN FROM THE TABLE. Its autofilter state (dash's filters are
+// the reader's, not the document's), its style name, and its calculated
+// columns: an Excel calculated column is written into every cell as an
+// ordinary formula, so it arrives through the ordinary formula path with the
+// ordinary liveness gate, which is where the judgement about what dash can
+// evaluate belongs.
+
+interface XlsxTable {
+  /** the whole table, header and totals included, 0-based sheet coordinates */
+  box: { top: number; left: number; bottom: number; right: number }
+  headerRows: number
+  totalsRows: number
+  /** column index (sheet coordinates) → what its totals cell says */
+  totals: Map<number, string>
+  /** column index → the label Excel put in the totals row ("Total") */
+  labels: Map<number, string>
+  name: string
+}
+
+/** Excel's totals functions, in dash's words. `countNums` is Excel's COUNT and
+ *  `count` is its COUNTA; dash has one count, so both land on it and the
+ *  difference (whether text counts) is stated nowhere because dash's count
+ *  already answers the question the column's type asks. */
+const TOTALS_FN: Record<string, 'sum' | 'avg' | 'count' | 'min' | 'max'> = {
+  sum: 'sum', average: 'avg', count: 'count', countNums: 'count', min: 'min', max: 'max',
+}
+
+function readTable(xml: string): XlsxTable | null {
+  const t = element(xml, 'table')
+  if (!t) return null
+  const ref = attr(t.a, 'ref')
+  const box = ref ? refBox(ref.replace(/\$/g, '')) : null
+  if (!box) return null
+  const num = (k: string, dflt: number): number => {
+    const v = Number(attr(t.a, k) ?? NaN)
+    return Number.isFinite(v) ? v : dflt
+  }
+  const totals = new Map<number, string>()
+  const labels = new Map<number, string>()
+  const block = element(t.body, 'tableColumns')
+  let i = 0
+  for (const c of elements(block ? block.body : t.body, 'tableColumn')) {
+    const fn = attr(c.a, 'totalsRowFunction')
+    const label = attr(c.a, 'totalsRowLabel')
+    if (fn && fn !== 'none') totals.set(box.left + i, fn)
+    if (label) labels.set(box.left + i, label)
+    i++
+  }
+  return {
+    box,
+    // `headerRowCount` defaults to 1 and `totalsRowCount` to 0 — the schema's
+    // defaults, and taking them the other way round either eats a row of data
+    // or leaves the total in it.
+    headerRows: num('headerRowCount', 1),
+    totalsRows: num('totalsRowCount', 0),
+    totals,
+    labels,
+    name: attr(t.a, 'displayName') ?? attr(t.a, 'name') ?? 'a table',
+  }
 }
 
 // --- typing a column ---------------------------------------------------------
@@ -689,16 +1101,183 @@ function coerceCell(
   }
 }
 
+// --- defined names --------------------------------------------------------
+//
+// `=SUM(RentCells)/B5`, where `RentCells` is a `<definedName>` in workbook.xml.
+//
+// WHY THIS SECTION EXISTS, AND IT IS NOT "names are nice to have". Before it,
+// a bare identifier was the ONE class of formula the liveness gate let through
+// by accident, and it is the class that loses data: dash imported
+// `SUM(RentCells)/B5` LIVE, the grid painted `#NAME?` in red, and the 0.61
+// Excel had computed — the number the cell was FOR — was gone. The gate
+// screened for a `!`, a `[` and unknown function names; a bare word is none of
+// the three. See `liveFormula` for the check that closes it.
+//
+// SO WHAT IS A NAME WORTH KEEPING. dash has `doc.names` now, so the answer is
+// no longer "nothing". A definition is imported when it is one of the three
+// things dash can hold:
+//
+//   a NUMBER      `0.2`             → `{ v: 0.2 }`
+//   a TEXT        `"North"`         → `{ v: 'North' }`
+//   a RANGE       `Summary!$B$2:$B$4` → `{ ref: … }`, row-shifted below
+//
+// and it is DROPPED, with a finding, when it is anything else: a formula
+// (`OFFSET(…)`), a multi-area reference, or a spelling dash cannot reach
+// (`TAX1` is a cell address, so a name spelled that way would sit in the file
+// and never once be consulted — `validateDefinedName` is the refusal).
+//
+// AN UNQUALIFIED REF IS DROPPED, which looks harsh and is not. dash's names
+// are workbook-scoped (model.ts), so `$B$2:$B$4` with no sheet on it means a
+// different range on every tab, and there is no sheet to row-shift it against
+// either. Excel does not write one; a hand-made file that does gets told.
+//
+// `_xlnm.*` (Print_Area, Print_Titles, _FilterDatabase) are VIEW state, not
+// names anybody writes in a formula, and are skipped in silence.
+
+/**
+ * How many cells of one sheet may carry imported appearance.
+ *
+ * A dash cell override is a sparse overlay entry keyed `<colId>:<rid>`, so it
+ * is the right shape for the ragged few per cent of a sheet that differ and
+ * the wrong shape for a workbook whose author selected every cell and pressed
+ * a colour. 20,000 entries is a few hundred KB of document for paint; past it
+ * the values still all arrive and the finding says the styling did not.
+ */
+const CELL_FORMAT_BUDGET = 20_000
+
+/** What the import decided about the workbook's names. */
+interface NameImport {
+  names: Record<string, DefinedName>
+  /**
+   * The spellings, lower-cased, that a live formula may mention: those whose
+   * SUBSTITUTION would itself survive the gate. `TaxRate` = 0.2 substitutes to
+   * `(0.2)` and dash evaluates it; `RentCells` substitutes to
+   * `Summary!$B$2:$B$4`, which is a cross-sheet reference dash's dataset kind
+   * cannot resolve — so a formula using it keeps its cached value, exactly as
+   * one calling `SUBTOTAL` does.
+   */
+  live: Set<string>
+}
+
+const NAME_REFUSED: Record<NameProblem, string> = {
+  empty: 'it has no name',
+  shape: 'its spelling is not one a formula can mention (letters, digits, "_" and "." only, starting with a letter)',
+  cellshaped: 'it is spelled like a cell address, so a formula would read the cell and never the name',
+  taken: 'another name is already spelled that way',
+}
+
+/** A single cell or range, sheet-qualified. Deliberately not multi-area:
+ *  `Sheet1!$A$1,Sheet1!$C$1` is two ranges and dash's `ref` is one. */
+const QUALIFIED_REF =
+  /^(?:'(?:[^']|'')+'|[A-Za-z_\\][A-Za-z0-9_.\\ ]*)!\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?$/
+const BARE_REF = /^\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?$/
+const NUM_LITERAL = /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/
+const STR_LITERAL = /^"(?:[^"]|"")*"$/
+
+/** The workbook's `<definedNames>`, as far as dash can carry them. */
+function readDefinedNames(wbXml: string, findings: XlsxFinding[]): NameImport {
+  const names: Record<string, DefinedName> = {}
+  const live = new Set<string>()
+  const block = element(wbXml, 'definedNames')
+  if (!block) return { names, live }
+
+  for (const d of elements(block.body, 'definedName')) {
+    const raw = (attr(d.a, 'name') ?? '').trim()
+    if (!raw || raw.toLowerCase().startsWith('_xlnm')) continue
+    const body = unescapeXml(d.body).trim().replace(/^=/, '').trim()
+    const drop = (why: string): void => {
+      findings.push({
+        code: 'defined-name',
+        message: `The name "${raw}" was not imported: ${why}. Any formula that used it keeps the value Excel last calculated, with the formula text beside it.`,
+      })
+    }
+    const problem = validateDefinedName(raw, names)
+    if (problem) { drop(NAME_REFUSED[problem]); continue }
+    if (!body) { drop('it defines nothing'); continue }
+
+    let def: DefinedName | undefined
+    if (NUM_LITERAL.test(body)) def = { v: Number(body) }
+    else if (STR_LITERAL.test(body)) def = { v: body.slice(1, -1).replace(/""/g, '"') }
+    else if (QUALIFIED_REF.test(body)) def = { ref: body }
+    else if (BARE_REF.test(body)) {
+      drop(`it points at ${body} without saying which sheet, and a dash name means one thing across the whole workbook`)
+      continue
+    } else {
+      drop(`it is defined as "${body}", which is not a number, a piece of text, or a single range`)
+      continue
+    }
+    names[raw] = def
+    const text = nameText(def)
+    if (text !== undefined && liveFormula(text).ok) live.add(raw.toLowerCase())
+  }
+  return { names, live }
+}
+
+/**
+ * Move every name's `ref` by the rows its sheet lost on the way in.
+ *
+ * A dataset's row 1 is the first DATA row: the header, and any blank
+ * letterhead rows above it, are not rows dash has. So `Summary!$B$2:$B$4`
+ * written against Excel's numbering points one row too low here, and pointing
+ * a name at the wrong rows is the same silent wrong number the formula shift
+ * exists to prevent — this is that shift, for the other kind of reference.
+ */
+function shiftNamesForImport(
+  names: Record<string, DefinedName>, drops: Map<string, number>,
+): void {
+  for (const [sheet, drop] of drops) {
+    if (drop <= 0) continue
+    for (const def of Object.values(names)) {
+      if (typeof def.ref !== 'string') continue
+      def.ref = shiftRefsForInsert(def.ref, 'row', 0, -drop, { on: sheet })
+    }
+  }
+}
+
+/**
+ * Put an import's names into a document — the caller's half of
+ * `XlsxImportOpts.names`, in one line, so no caller has to work out the
+ * collision rule for itself.
+ *
+ * A NAME ALREADY IN THE DOCUMENT WINS. Importing a second workbook must not
+ * silently repoint `TaxRate` at the new file's rate: every formula in the
+ * document that used it would change its answer, all at once, with nothing on
+ * screen having been edited. The skipped spellings come back so the caller can
+ * say so.
+ *
+ * Returns the names that were NOT installed because the document already had
+ * them; an empty array is the ordinary case.
+ */
+export function installNames(
+  doc: DashDoc, names: Record<string, DefinedName> | undefined,
+): string[] {
+  if (!names || !Object.keys(names).length) return []
+  const have = doc.names ?? {}
+  const taken = new Set(Object.keys(have).map((k) => k.toLowerCase()))
+  const skipped: string[] = []
+  const next: Record<string, DefinedName> = { ...have }
+  for (const [k, d] of Object.entries(names)) {
+    if (taken.has(k.toLowerCase())) { skipped.push(k); continue }
+    next[k] = d
+  }
+  doc.names = next
+  return skipped
+}
+
 // --- formulas ------------------------------------------------------------------
 
 const FN_SET = new Set(FUNCTIONS.map((f) => f.toUpperCase()))
 const CALL_RE = /([A-Za-z][A-Za-z0-9_.]*)\s*\(/g
 
+/** Words that are values in a formula, not names: nothing defines them and
+ *  nothing needs to. */
+const LITERAL_WORDS = new Set(['TRUE', 'FALSE'])
+
 /**
  * Can dash make this formula LIVE, or must it stay a number with the source
  * recorded beside it?
  *
- * Three ways it cannot, and the first is the dangerous one:
+ * Four ways it cannot, and the first is the dangerous one:
  *
  *   1. A SHEET QUALIFIER (`Sheet2!A1`, `'Q1 data'!B7`). a1.ts deliberately
  *      leaves the name before `!` alone — but the `A1` AFTER it is then read as
@@ -711,14 +1290,35 @@ const CALL_RE = /([A-Za-z][A-Za-z0-9_.]*)\s*\(/g
  *      the rest would evaluate to `#NAME?` — visible, not silent, but a grid
  *      full of `#NAME?` where numbers used to be is not an import, it is a
  *      demolition.
+ *   4. A BARE IDENTIFIER THAT RESOLVES TO NOTHING. `=SUM(RentCells)/B5` has no
+ *      `!`, no `[` and no unknown function in it, so for a long time it sailed
+ *      through all three checks above and landed LIVE — and `RentCells` is a
+ *      `<definedName>`, which dash did not import, so the cell that had held
+ *      Excel's 0.61 painted `#NAME?` in red. The message this module prints
+ *      elsewhere on the same screen promises the opposite in as many words:
+ *      *a live formula dash cannot evaluate would replace real numbers with
+ *      #NAME?*. That was the hole, and it was the only one that DESTROYED a
+ *      value rather than merely declining to compute one.
  *
- * In all three cases the cached VALUE is kept (so the sheet still reads
+ *      `known` closes it without the blunt answer of refusing every word.
+ *      Names now exist in dash (`doc.names`), so a word the workbook defines
+ *      AND the import carried — and whose substitution would itself pass this
+ *      gate — is allowed through; every other word fails, keeps the cached
+ *      value and takes a `formula-not-live` finding, exactly as `SUBTOTAL`
+ *      does. `mapNames` is the lexer rather than a regex of our own because it
+ *      already knows the four places a word is not a name: inside a string, in
+ *      front of a `(`, after a `!`, and where the word is really a cell
+ *      address (`B5`, `TAX1`).
+ *
+ * In all four cases the cached VALUE is kept (so the sheet still reads
  * correctly) and the formula text is preserved on the override under `xlsxF`,
  * which is an additive field: nothing in dash reads it yet, the format promises
  * it survives (PLATFORM §3), and the export half below writes it back out. That
  * is what makes xlsx → dash → xlsx not lose someone's model.
  */
-export function liveFormula(src: string): { ok: true } | { ok: false; why: string; fn?: string } {
+export function liveFormula(
+  src: string, known: ReadonlySet<string> = new Set(),
+): { ok: true } | { ok: false; why: string; fn?: string; name?: string } {
   // A quoted literal can contain anything; strip it before looking for `!`.
   const bare = src.replace(/"[^"]*"/g, '""')
   if (/'[^']*'\s*!/.test(bare) || /[A-Za-z0-9_.$]\s*!/.test(bare.replace(/#REF!/g, ''))) {
@@ -730,6 +1330,23 @@ export function liveFormula(src: string): { ok: true } | { ok: false; why: strin
   while ((m = CALL_RE.exec(bare))) {
     const fn = m[1].toUpperCase()
     if (!FN_SET.has(fn)) return { ok: false, why: `dash has no ${fn}() yet`, fn }
+  }
+  // The fourth check. `mapNames` offers exactly the words that are neither a
+  // reference, a call, nor part of somebody else's syntax; the walk is only
+  // reading, so every word goes back unchanged.
+  let unknown: string | undefined
+  mapNames(src, (w) => {
+    if (unknown === undefined && !LITERAL_WORDS.has(w.toUpperCase()) && !known.has(w.toLowerCase())) {
+      unknown = w
+    }
+    return w
+  })
+  if (unknown !== undefined) {
+    return {
+      ok: false,
+      why: `it uses the name ${unknown}, which this workbook defines somewhere dash could not follow`,
+      name: unknown,
+    }
   }
   return { ok: true }
 }
@@ -744,6 +1361,24 @@ export interface XlsxImportOpts {
   idPrefix?: string
   /** Override the header-row decision instead of letting it be inferred. */
   header?: boolean
+  /**
+   * WHICH row is the header, 0-based within the sheet's used range — the
+   * answer `header` cannot give, because "has one or hasn't" is not the
+   * question a report with a spanning title over its header row asks. Beats
+   * both `header` and the inference below. Data starts on the row after it.
+   */
+  headerRow?: number
+  /**
+   * THE CALLER PROMISES TO INSTALL `result.names` INTO `doc.names`.
+   *
+   * Names are opt-in rather than always-on because the liveness gate trusts
+   * them: with this set, `=B4*TaxRate` is imported LIVE, and if the name table
+   * never reaches the document that live formula paints `#NAME?` over the
+   * number Excel computed — the precise damage the gate exists to prevent. So
+   * the default is off and safe (every name-using formula keeps its cached
+   * value and says so), and a caller that wires the table up says so here.
+   */
+  names?: boolean
 }
 
 const blank = (s: string): boolean => s.trim() === ''
@@ -803,6 +1438,29 @@ export async function importXlsx(
   const epoch1904 = d1904 === '1' || d1904.toLowerCase() === 'true'
 
   const findings: XlsxFinding[] = []
+
+  // Names are read BEFORE the sheets, because the liveness gate needs to know
+  // which words a formula may mention; their refs are row-shifted AFTER, once
+  // every sheet has said how many rows it dropped on the way in.
+  const nameFindings: XlsxFinding[] = []
+  const nameImport = readDefinedNames(wbXml, nameFindings)
+  const carryNames = opts.names === true
+  if (carryNames) {
+    findings.push(...nameFindings)
+  } else {
+    const listed = Object.keys(nameImport.names)
+    const total = listed.length + nameFindings.length
+    if (total) {
+      findings.push({
+        code: 'defined-name',
+        message: `This workbook defines ${total} name${total === 1 ? '' : 's'}${listed.length ? ` (${listed.slice(0, 4).join(', ')}${listed.length > 4 ? ', …' : ''})` : ''}, which this import does not carry. A formula that used one shows the value Excel last calculated, with the formula text kept beside it.`,
+      })
+    }
+  }
+  const liveNames: ReadonlySet<string> = carryNames ? nameImport.live : new Set<string>()
+  /** sheet name → rows that exist in Excel and do not exist in dash. */
+  const drops = new Map<string, number>()
+
   if (epoch1904) {
     findings.push({
       code: 'date-system',
@@ -844,8 +1502,22 @@ export async function importXlsx(
     n++
     const id = `${prefix}-${n}`
     usedIds.add(id)
-    sheets.push(readOneSheet(xml, name, id, shared, styles, epoch1904, findings, opts))
+    // An Excel Table (`ListObject`) is reached through the WORKSHEET's own
+    // relationships, never by guessing `xl/tables/table1.xml`: a workbook with
+    // several tables numbers the parts in creation order, not sheet order.
+    const sheetRels = text(resolvePart(partPath, `_rels/${partPath.split('/').pop()}.rels`))
+    const tableXml: string[] = []
+    if (sheetRels) {
+      for (const rr of relTargets(sheetRels).values()) {
+        if (!rr.type.endsWith('/table')) continue
+        const tx = text(resolvePart(partPath, rr.target))
+        if (tx) tableXml.push(tx)
+      }
+    }
+    sheets.push(readOneSheet(xml, name, id, shared, styles, epoch1904, findings, opts,
+      { liveNames, drops, tables: tableXml }))
   }
+  if (carryNames) shiftNamesForImport(nameImport.names, drops)
 
   if (!sheets.length && !findings.some((f) => f.code === 'sheet-skipped')) {
     throw new ZipError('this workbook contains no worksheets')
@@ -853,7 +1525,12 @@ export async function importXlsx(
 
   const core = text('docProps/core.xml')
   const title = core ? element(core, 'title')?.body : undefined
-  return { sheets, findings: condense(findings), title: title ? unescapeXml(title) : undefined }
+  return {
+    sheets,
+    findings: condense(findings),
+    title: title ? unescapeXml(title) : undefined,
+    ...(carryNames && Object.keys(nameImport.names).length ? { names: nameImport.names } : {}),
+  }
 }
 
 /** How many of one KIND of finding, on one sheet, are worth listing before the
@@ -893,11 +1570,30 @@ function condense(findings: XlsxFinding[]): XlsxFinding[] {
   return out
 }
 
+/** What one sheet needs from the workbook around it, and what it reports back
+ *  to it. Bundled rather than added to an already long parameter list. */
+interface SheetCtx {
+  /** names a formula on this sheet may mention and still go live */
+  liveNames: ReadonlySet<string>
+  /** filled in: sheet name → rows Excel had that dash does not */
+  drops: Map<string, number>
+  /** the `xl/tables/*.xml` parts this worksheet relates to */
+  tables: string[]
+}
+
 function readOneSheet(
   xml: string, name: string, id: string, shared: string[], styles: Styles,
   epoch1904: boolean, findings: XlsxFinding[], opts: XlsxImportOpts,
+  ctx: SheetCtx,
 ): TableSheet {
-  const { cells, merges, maxCol, widths } = readSheetCells(xml, shared)
+  const { cells, merges, maxCol, widths, validations, pane } = readSheetCells(xml, shared)
+  const table = ctx.tables.length ? readTable(ctx.tables[0]) : null
+  if (ctx.tables.length > 1) {
+    findings.push({
+      code: 'totals-row', sheet: name,
+      message: `"${name}" carries ${ctx.tables.length} Excel tables. A dash sheet is ONE dataset, so the first was read as this sheet and the others arrived as ordinary rows beside it — including any totals rows they had.`,
+    })
+  }
 
   if (merges.length) {
     findings.push({
@@ -925,15 +1621,37 @@ function readOneSheet(
     ;(grid[r] ??= [])[c.col] = c
   }
 
-  const headerRow = grid[0] ?? []
-  const head = decideHeader(headerRow, grid, styles, opts.header)
+  // THE HEADER IS NOT ALWAYS ROW 1 — see `titleRowAbove`. An explicit
+  // instruction always wins; otherwise a spanning title over a full header row
+  // moves the header down one, and says so.
+  const told = opts.header !== undefined || opts.headerRow !== undefined
+  const title = told ? null : titleRowAbove(grid, merges, firstRow, styles)
+  // A table SAYS where its header is (`headerRowCount`), which beats inferring
+  // it — but only for the rows the table actually covers.
+  const tableHead = table && !told && !title && table.box.top === firstRow
+    ? table.headerRows : null
+  const head = opts.headerRow !== undefined
+    ? { start: Math.max(0, Math.floor(opts.headerRow)) + 1, sure: true }
+    : title
+      ? { start: 2, sure: true }
+      : tableHead !== null
+        ? { start: tableHead, sure: true }
+        : decideHeader(grid[0] ?? [], grid, styles, opts.header)
   const bodyStart = head.start
+  const headerRow = bodyStart > 0 ? (grid[bodyStart - 1] ?? []) : []
+  if (title) {
+    const at = firstRow + 2
+    findings.push({
+      code: 'header-row', sheet: name,
+      message: `Row ${firstRow + 1} of "${name}" is a title spanning ${title.merge} — one value across several columns, which is not a header. Its header is row ${at}, and that is the row the columns were named from; the title ("${title.text}") is not one of them and is not in the data either. If that is wrong, re-import saying the header is row ${firstRow + 1}.`,
+    })
+  }
   if (bodyStart === 0 && opts.header === undefined) {
     findings.push({
       code: 'no-header', sheet: name,
       message: `"${name}" does not appear to start with a header row (its first row holds values, not labels), so the columns are named by position. Rename them, or re-import telling dash there is a header.`,
     })
-  } else if (!head.sure && opts.header === undefined) {
+  } else if (!head.sure && !told) {
     // The undecidable case, and it costs a ROW OF DATA if we are wrong. Every
     // column of an all-text sheet looks exactly like its own heading, so there
     // is no evidence in the file and the honest thing is to say which way it
@@ -953,8 +1671,26 @@ function readOneSheet(
     })
   }
 
+  // THE TOTALS ROW LEAVES THE DATA. Only when the table's last row IS the
+  // sheet's last row: anything below it is somebody else's rows, and trimming
+  // then would delete them.
+  const totalsRows = table && table.totalsRows > 0 && table.box.bottom === lastRow
+    ? Math.min(table.totalsRows, Math.max(0, lastRow - firstRow + 1 - bodyStart))
+    : 0
+
   const dataRows = grid.slice(bodyStart)
-  const rowCount = Math.max(0, lastRow - firstRow + 1 - bodyStart)
+  const rowCount = Math.max(0, lastRow - firstRow + 1 - bodyStart - totalsRows)
+
+  // What Excel's row numbering has and dash's does not: the blank letterhead
+  // above the table, plus the header. Every reference written against this
+  // sheet — in a formula (below) or in a defined name (importXlsx) — moves by
+  // exactly this much.
+  ctx.drops.set(name, firstRow + bodyStart)
+
+  // Data validation, mapped to COLUMNS before the loop that builds them —
+  // `lastRow - firstRow` is the body's extent, which is what decides whether a
+  // rule covered the whole column or a slice of it.
+  const dvByCol = validationsByColumn(validations, epoch1904, name, lastRow - firstRow + 1, findings)
 
   const columns: Column[] = []
   const data: Record<string, ColumnData> = {}
@@ -965,6 +1701,9 @@ function readOneSheet(
   let notLive = 0
   let liveCount = 0
   const missingFns = new Set<string>()
+  const missingNames = new Set<string>()
+  let formatted = 0
+  let formatSkipped = 0
 
   for (let ci = 0; ci < width; ci++) {
     const rawName = bodyStart > 0 ? cellText(headerRow[ci], shared, styles, epoch1904) : ''
@@ -999,6 +1738,7 @@ function readOneSheet(
     let lostHere = 0
     for (let r = 0; r < rowCount; r++) {
       const cell = column[r]
+      const key = `${colId}:${r + 1}`
       const out = coerceCell(cell, plan, styles, epoch1904)
       if (out.lost) lostHere++
       if (out.leap1900) leapSeen = true
@@ -1007,6 +1747,19 @@ function readOneSheet(
       if (plan.type === 'date' && typeof out.v === 'string' && out.v.includes('T')) timeSeen = true
       values.push(out.v)
 
+      // APPEARANCE. Written through the same overlay as a hand correction and
+      // deliberately WITHOUT a value: every reader of the overlay asks
+      // `'v' in over` (grid.ts, preview.ts, steps.ts, the export below), so a
+      // bolded cell cannot move a total, a chart, a pivot or an export by one
+      // digit. cellfmt.ts's one line, honoured from the import side.
+      const look = cell ? styles.look[cell.s] : undefined
+      if (look) {
+        if (formatted < CELL_FORMAT_BUDGET) {
+          overrides[key] = { ...(overrides[key] ?? {}), ...look }
+          formatted++
+        } else formatSkipped++
+      }
+
       if (cell?.f !== undefined) {
         // LIVENESS IS DECIDED ON THE ORIGINAL TEXT, BEFORE ANY SHIFT, and the
         // order is not cosmetic. Shifting first ran `Sheet2!A1*3` through
@@ -1014,9 +1767,7 @@ function readOneSheet(
         // after it — off the top of the sheet, into `Sheet2!#REF!*3`. So the
         // very formula we were refusing to trust got corrupted on its way into
         // the field that exists to preserve it verbatim.
-        const rid = r + 1
-        const key = `${colId}:${rid}`
-        const live = liveFormula(cell.f)
+        const live = liveFormula(cell.f, ctx.liveNames)
         if (live.ok) {
           // Row references shift by exactly the rows we did not import: the
           // blank rows above the table plus the header.
@@ -1034,6 +1785,7 @@ function readOneSheet(
           overrides[key] = { ...(overrides[key] ?? {}), xlsxF: `=${cell.f}` }
           notLive++
           if ('fn' in live && live.fn) missingFns.add(live.fn)
+          if ('name' in live && live.name) missingNames.add(live.name)
         }
       }
     }
@@ -1052,6 +1804,7 @@ function readOneSheet(
       ...(plan.format ? { format: plan.format } : {}),
       ...(plan.failed || lostHere ? { failed: lostHere } : {}),
       ...(widths.has(ci) ? { w: widths.get(ci) } : {}),
+      ...(dvByCol.has(ci) ? { validate: dvByCol.get(ci) } : {}),
     })
     data[colId] = { enc: 'raw', v: values as Array<number | string | boolean | null> }
   }
@@ -1068,12 +1821,62 @@ function readOneSheet(
       message: `"${name}" has dates carrying a time of day; they were kept as full ISO date-times so the time is not thrown away.`,
     })
   }
+  if (formatSkipped) {
+    findings.push({
+      code: 'cell-format', sheet: name,
+      message: `${formatted} formatted cells in "${name}" kept their bold, colour, background and borders; ${formatSkipped} more did not. dash's per-cell appearance is a sparse overlay, and a workbook that styles every cell of a long sheet would put an entry in it for every one of them — which costs more in file size than the styling is worth. The values are all there; the paint is not.`,
+    })
+  }
   if (notLive) {
     const fns = [...missingFns].slice(0, 4).join(', ')
+    const nms = [...missingNames].slice(0, 4).join(', ')
+    const why = fns ? `dash has no ${fns} yet`
+      : nms ? `they use the name${missingNames.size === 1 ? '' : 's'} ${nms}, which dash could not follow`
+        : 'they point at other sheets or external data'
     findings.push({
       code: 'formula-not-live', sheet: name,
-      message: `${notLive} formula${notLive === 1 ? '' : 's'} in "${name}" could not be made live${fns ? ` (dash has no ${fns} yet)` : ' (they point at other sheets or external data)'}. The values Excel last calculated are shown, and the formula text is kept with each cell so nothing is lost — a live formula dash cannot evaluate would replace real numbers with #NAME?.`,
+      message: `${notLive} formula${notLive === 1 ? '' : 's'} in "${name}" could not be made live (${why}). The values Excel last calculated are shown, and the formula text is kept with each cell so nothing is lost — a live formula dash cannot evaluate would replace real numbers with #NAME?.`,
     })
+  }
+
+  // THE TOTALS ROW, as the column property it is in Excel's own schema.
+  const totals: NonNullable<TableSheet['totals']> = {}
+  const lostTotals: string[] = []
+  if (table && totalsRows) {
+    for (const [ci, fn] of table.totals) {
+      const col = columns[ci]
+      if (!col) continue
+      const dashFn = TOTALS_FN[fn]
+      if (dashFn) totals[col.id] = dashFn
+      // `custom`, `stdDev` and `var` have no dash total. Inventing the nearest
+      // one would print a number under a column that is not the number the
+      // author asked for, which is worse than an empty footer.
+      else lostTotals.push(`${col.name} (${fn})`)
+    }
+    const kept = Object.keys(totals).length
+    const label = [...table.labels.values()][0]
+    const parts = [
+      `${table.name}'s totals row left the data and became ${kept ? `${kept} column total${kept === 1 ? '' : 's'}` : 'nothing'}`,
+    ]
+    if (label) parts.push(`its "${label}" label is not carried — dash labels its own totals row`)
+    if (lostTotals.length) parts.push(`and dash has no total for ${lostTotals.join(', ')}, so ${lostTotals.length === 1 ? 'that column has' : 'those columns have'} none`)
+    findings.push({
+      code: 'totals-row', sheet: name,
+      message: `${parts.join('; ')}. A totals row imported as an ordinary row sorts into the middle of the data, is caught by filters and is counted by aggregates, which is why it is a property here instead.`,
+    })
+  }
+
+  // FROZEN PANES. Excel's `ySplit` counts SHEET rows and its first one is the
+  // header; a dash dataset pins its header on its own, and `frozen.rows`
+  // counts DATA rows. So the `ySplit="1"` every fixture carried maps to zero
+  // frozen rows and loses NOTHING — the reader still sees the header — while
+  // `ySplit="2"` over a one-row header is the one data row the author pinned.
+  // Clamped to leave a row and a column free, which is `freezeAt`'s rule and
+  // is what stops a grid that cannot scroll.
+  const dropRows = firstRow + bodyStart
+  const frozen = {
+    rows: Math.max(0, Math.min(pane.rows - dropRows, Math.max(0, rowCount - 1))),
+    cols: Math.max(0, Math.min(pane.cols, Math.max(0, columns.length - 1))),
   }
 
   return {
@@ -1081,6 +1884,8 @@ function readOneSheet(
     rids: rowCount ? [[1, rowCount]] : [],
     columns,
     data,
+    ...(Object.keys(totals).length ? { totals } : {}),
+    ...(frozen.rows || frozen.cols ? { frozen } : {}),
     ...(Object.keys(overrides).length ? { cells: overrides } : {}),
     steps: [{
       op: 'import',
@@ -1101,6 +1906,71 @@ function cellText(
   const k = kindOf(c, styles)
   if (k === 'date') return serialToIso(Number(c.v), epoch1904) ?? c.v
   return c.v
+}
+
+/**
+ * A spanning TITLE above the real header — and the repair for the worst import
+ * outcome in the 2026-08-18 bounce test.
+ *
+ * WHAT HAPPENED. `budget.xlsx` had "Jan 2026 budget" merged across A1:C1 and
+ * its real header ("Category / Budget / Actual") in row 2. Row 1 was taken as
+ * the header, so column A was called "Jan 2026 budget", B and C became
+ * "Column 2" and "Column 3", the real header became data row 1 — and because
+ * every numeric column now held one text value, EVERY COLUMN TYPED AS TEXT. A
+ * three-column budget arrived with no numbers in it, and dash said so three
+ * times (`merged-cells`, `empty-header`, `mixed-types`) without ever joining
+ * the three into the one sentence that would have helped.
+ *
+ * WHY THIS DETECTS AND ACTS RATHER THAN OFFERING. The evidence below is not a
+ * heuristic about what a header usually looks like; it is a PROOF that row 1
+ * is not one. A row holding a single value merged across the columns cannot be
+ * the header of those columns — there is one label for three of them — and the
+ * row under it names every column that has data. Nothing is discarded either
+ * way: taking row 1 costs a row of real data (the header becomes a row) and
+ * costs every numeric column its type, while taking row 2 costs the title,
+ * which is a caption and is named in the finding. So the honest thing is to do
+ * it and say it, loudly, with the row number to re-import against. Doing it
+ * SILENTLY is the one answer that is wrong — that is how the finding started.
+ *
+ * THE EVIDENCE, all four required:
+ *   1. a merged range on the first used row, spanning at least two columns;
+ *   2. that row holds exactly ONE value, and it is text (a title, not data);
+ *   3. the row below it has a text value in every column that has data;
+ *   4. there is more than one column, and there is a row below the header.
+ *
+ * (2) is what keeps this from stealing a header: the two-tier `Region | Q1 Q2`
+ * idiom merges B1:C1 over a row that is ALSO the header, and that row has
+ * three values, not one.
+ */
+function titleRowAbove(
+  grid: Array<Array<RawCell | undefined>>, merges: readonly string[],
+  firstRow: number, styles: Styles,
+): { merge: string; text: string } | null {
+  if (grid.length < 3) return null
+  const spanning = merges.find((m) => {
+    const box = refBox(m.replace(/\$/g, ''))
+    return !!box && box.top === firstRow && box.right > box.left
+  })
+  if (!spanning) return null
+
+  const top = grid[0] ?? []
+  const filled = [...top.entries()].filter(([, c]) => !!c) as Array<[number, RawCell]>
+  if (filled.length !== 1) return null
+  if (familyOf(kindOf(filled[0][1], styles)) !== 'text') return null
+
+  // Every column with data under the title has to be named by the row below
+  // it, or that row is not a header either and nothing here is safe.
+  const used = new Set<number>()
+  for (let r = 1; r < grid.length; r++) {
+    for (const [ci, c] of (grid[r] ?? []).entries()) if (c) used.add(ci)
+  }
+  if (used.size < 2) return null
+  const second = grid[1] ?? []
+  for (const ci of used) {
+    const c = second[ci]
+    if (!c || familyOf(kindOf(c, styles)) !== 'text') return null
+  }
+  return { merge: spanning, text: cellText(filled[0][1], [], styles, false) }
 }
 
 /**
@@ -1186,17 +2056,72 @@ function safeSheetName(name: string, taken: Set<string>): string {
   return s
 }
 
-/** The style table, built as we go: one xf per (format code, bold) pair. */
+/**
+ * The style table, built as we go: one xf per (format code, appearance) pair.
+ *
+ * IT CARRIES APPEARANCE BECAUSE THE IMPORT DOES. Bold, colour, background and
+ * borders now arrive from a workbook (see `CellLook`), and an exporter that
+ * dropped them would have turned one silent loss into a round trip that loses
+ * them on the way back out — the same finding, one door along. What dash holds
+ * per cell is what goes out; what dash does not hold (font family, size,
+ * per-edge weights) never came in.
+ */
+interface Paint {
+  bold?: boolean; italic?: boolean; underline?: boolean
+  color?: string; bg?: string
+  border?: string; borderColor?: string; borderStyle?: string
+}
+
+/** `#rrggbb` → Excel's opaque ARGB. Anything else is not a colour we wrote. */
+const argb = (c: unknown): string | undefined =>
+  (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c) ? `FF${c.slice(1).toUpperCase()}` : undefined)
+
+/** The appearance an override asks for, or undefined for a plain cell. */
+function paintOf(over: CellOverride | undefined): Paint | undefined {
+  if (!over) return undefined
+  const p: Paint = {}
+  if (over.bold === true) p.bold = true
+  if (over.italic === true) p.italic = true
+  if (over.underline === true) p.underline = true
+  const color = argb(over.color)
+  if (color) p.color = color
+  const bg = argb(over.bg)
+  if (bg) p.bg = bg
+  if (typeof over.border === 'string' && over.border) {
+    p.border = over.border
+    const bc = argb(over.borderColor)
+    if (bc) p.borderColor = bc
+    if (over.borderStyle === 'dashed' || over.borderStyle === 'dotted') p.borderStyle = over.borderStyle
+  }
+  return Object.keys(p).length ? p : undefined
+}
+
+const EDGE_TAG: Record<string, string> = { t: 'top', r: 'right', b: 'bottom', l: 'left' }
+
 class StyleBook {
   codes: string[] = []
-  xfs: Array<{ fmt: number; bold: boolean }> = [{ fmt: 0, bold: false }]
+  /** index 0 is the default font; every other entry is one an xf asked for. */
+  private fonts: Paint[] = [{}]
+  /** index 0 = none and index 1 = gray125 are REQUIRED by Excel; solid fills
+   *  start at 2. Getting this wrong is the repair dialog. */
+  private fills: Array<string | undefined> = [undefined, undefined]
+  private borders: Paint[] = [{}]
+  xfs: Array<{ fmt: number; font: number; fill: number; border: number }> =
+    [{ fmt: 0, font: 0, fill: 0, border: 0 }]
   private seen = new Map<string, number>()
+  private fontAt = new Map<string, number>()
+  private fillAt = new Map<string, number>()
+  private borderAt = new Map<string, number>()
 
-  constructor() { this.seen.set('|false', 0) }
+  constructor() { this.seen.set('|', 0) }
 
-  /** The cellXfs index for a format code (`''` = General) and weight. */
-  at(code: string, bold = false): number {
-    const key = `${code}|${bold}`
+  /** The cellXfs index for a format code (`''` = General) and an appearance. */
+  at(code: string, paint?: Paint): number {
+    const sig = paint
+      ? `${paint.bold ? 'b' : ''}${paint.italic ? 'i' : ''}${paint.underline ? 'u' : ''}` +
+        `|${paint.color ?? ''}|${paint.bg ?? ''}|${paint.border ?? ''}|${paint.borderColor ?? ''}|${paint.borderStyle ?? ''}`
+      : ''
+    const key = `${code}|${sig}`
     const hit = this.seen.get(key)
     if (hit !== undefined) return hit
     let fmt = 0
@@ -1204,8 +2129,46 @@ class StyleBook {
       const i = this.codes.indexOf(code)
       fmt = 164 + (i >= 0 ? i : this.codes.push(code) - 1)
     }
-    const at = this.xfs.push({ fmt, bold }) - 1
+    const at = this.xfs.push({
+      fmt,
+      font: this.font(paint),
+      fill: this.fill(paint),
+      border: this.border(paint),
+    }) - 1
     this.seen.set(key, at)
+    return at
+  }
+
+  private font(p?: Paint): number {
+    if (!p || (!p.bold && !p.italic && !p.underline && !p.color)) return 0
+    const key = `${p.bold ? 'b' : ''}${p.italic ? 'i' : ''}${p.underline ? 'u' : ''}|${p.color ?? ''}`
+    const hit = this.fontAt.get(key)
+    if (hit !== undefined) return hit
+    const at = this.fonts.push({
+      bold: p.bold, italic: p.italic, underline: p.underline, color: p.color,
+    }) - 1
+    this.fontAt.set(key, at)
+    return at
+  }
+
+  private fill(p?: Paint): number {
+    if (!p?.bg) return 0
+    const hit = this.fillAt.get(p.bg)
+    if (hit !== undefined) return hit
+    const at = this.fills.push(p.bg) - 1
+    this.fillAt.set(p.bg, at)
+    return at
+  }
+
+  private border(p?: Paint): number {
+    if (!p?.border) return 0
+    const key = `${p.border}|${p.borderColor ?? ''}|${p.borderStyle ?? ''}`
+    const hit = this.borderAt.get(key)
+    if (hit !== undefined) return hit
+    const at = this.borders.push({
+      border: p.border, borderColor: p.borderColor, borderStyle: p.borderStyle,
+    }) - 1
+    this.borderAt.set(key, at)
     return at
   }
 
@@ -1214,19 +2177,34 @@ class StyleBook {
       ? `<numFmts count="${this.codes.length}">${this.codes.map((c, i) =>
         `<numFmt numFmtId="${164 + i}" formatCode="${escapeXml(c)}"/>`).join('')}</numFmts>`
       : ''
+    const fonts = this.fonts.map((f) =>
+      `<font>${f.bold ? '<b/>' : ''}${f.italic ? '<i/>' : ''}${f.underline ? '<u/>' : ''}` +
+      `${f.color ? `<color rgb="${f.color}"/>` : ''}<sz val="11"/><name val="Calibri"/></font>`).join('')
+    const fills = this.fills.map((f, i) =>
+      `<fill><patternFill patternType="${i === 1 ? 'gray125' : f ? 'solid' : 'none'}">` +
+      `${f ? `<fgColor rgb="${f}"/><bgColor indexed="64"/>` : ''}</patternFill></fill>`).join('')
+    const borders = this.borders.map((b) => {
+      const style = b.borderStyle === 'dashed' ? 'dashed' : b.borderStyle === 'dotted' ? 'dotted' : 'thin'
+      const edge = (letter: string): string => {
+        const tag = EDGE_TAG[letter]
+        return (b.border ?? '').includes(letter)
+          ? `<${tag} style="${style}">${b.borderColor ? `<color rgb="${b.borderColor}"/>` : ''}</${tag}>`
+          : `<${tag}/>`
+      }
+      return `<border>${edge('l')}${edge('r')}${edge('t')}${edge('b')}<diagonal/></border>`
+    }).join('')
     // The counts and the two fills are not decoration. Excel requires at least
     // the `none` and `gray125` fills and a `cellStyleXfs` entry; a styles part
     // missing either is the single most common cause of the repair dialog.
     return `${DECL}<styleSheet xmlns="${MAIN_NS}">${numFmts}` +
-      '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>' +
-      '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
-      '<fills count="2"><fill><patternFill patternType="none"/></fill>' +
-      '<fill><patternFill patternType="gray125"/></fill></fills>' +
-      '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+      `<fonts count="${this.fonts.length}">${fonts}</fonts>` +
+      `<fills count="${this.fills.length}">${fills}</fills>` +
+      `<borders count="${this.borders.length}">${borders}</borders>` +
       '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
       `<cellXfs count="${this.xfs.length}">${this.xfs.map((x) =>
-        `<xf numFmtId="${x.fmt}" fontId="${x.bold ? 1 : 0}" fillId="0" borderId="0" xfId="0"` +
-        `${x.fmt ? ' applyNumberFormat="1"' : ''}${x.bold ? ' applyFont="1"' : ''}/>`).join('')}</cellXfs>` +
+        `<xf numFmtId="${x.fmt}" fontId="${x.font}" fillId="${x.fill}" borderId="${x.border}" xfId="0"` +
+        `${x.fmt ? ' applyNumberFormat="1"' : ''}${x.font ? ' applyFont="1"' : ''}` +
+        `${x.fill ? ' applyFill="1"' : ''}${x.border ? ' applyBorder="1"' : ''}/>`).join('')}</cellXfs>` +
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
       '<dxfs count="0"/></styleSheet>'
   }
@@ -1317,6 +2295,7 @@ export async function exportXlsx(
   }
 
   const sheetXml: string[] = []
+  const tableXml: Array<string | undefined> = []
   const names: string[] = []
 
   for (const sheet of tables) {
@@ -1328,7 +2307,9 @@ export async function exportXlsx(
       })
     }
     names.push(name)
-    sheetXml.push(writeSheet(sheet, styles, strings, opts, findings))
+    const written = writeSheet(sheet, styles, strings, opts, findings, sheetXml.length)
+    sheetXml.push(written.xml)
+    tableXml.push(written.table)
   }
 
   const parts: ZipEntry[] = []
@@ -1343,6 +2324,7 @@ export async function exportXlsx(
     '<Default Extension="xml" ContentType="application/xml"/>' +
     '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
     sheetXml.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') +
+    tableXml.map((t, i) => (t ? `<Override PartName="/xl/tables/table${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>` : '')).join('') +
     '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
     '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>' +
     '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
@@ -1378,6 +2360,15 @@ export async function exportXlsx(
     '</Relationships>')
 
   sheetXml.forEach((x, i) => add(`xl/worksheets/sheet${i + 1}.xml`, x))
+  // A table is reached through its WORKSHEET's relationships, so the rels part
+  // exists only for the sheets that have one.
+  tableXml.forEach((t, i) => {
+    if (!t) return
+    add(`xl/worksheets/_rels/sheet${i + 1}.xml.rels`,
+      `${DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      `<Relationship Id="rIdT" Type="${REL_NS}/table" Target="../tables/table${i + 1}.xml"/></Relationships>`)
+    add(`xl/tables/table${i + 1}.xml`, t)
+  })
   // styles LAST of the pair, because writing the sheets is what filled it in
   add('xl/styles.xml', styles.xml())
   add('xl/sharedStrings.xml', strings.xml())
@@ -1385,11 +2376,27 @@ export async function exportXlsx(
   return { bytes: await writeZip(parts, { at: opts.at, store: opts.store }), findings }
 }
 
-/** Rows of one sheet. */
+/**
+ * The sheet's frozen panes, read defensively — the same reading `readFrozen`
+ * (rowcol.ts) does, spelled again here rather than imported, because this
+ * module is the FILE layer and rowcol.ts is the editing layer. An additive
+ * field can hold anything an older or hand-edited build put there, and
+ * anything unreadable means "not frozen".
+ */
+function readFrozenPane(sheet: TableSheet): { rows: number; cols: number } {
+  const f = sheet.frozen
+  if (typeof f !== 'object' || f === null || Array.isArray(f)) return { rows: 0, cols: 0 }
+  const o = f as Record<string, unknown>
+  const num = (v: unknown): number =>
+    (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0)
+  return { rows: num(o.rows), cols: num(o.cols) }
+}
+
+/** Rows of one sheet, and the `ListObject` part that goes beside it. */
 function writeSheet(
   sheet: TableSheet, styles: StyleBook, strings: Strings,
-  opts: XlsxExportOpts, findings: XlsxFinding[],
-): string {
+  opts: XlsxExportOpts, findings: XlsxFinding[], index: number,
+): { xml: string; table?: string } {
   const cols = sheet.columns.filter((c) => !c.hidden)
   const rows = sheet.rids.reduce((n, [, c]) => n + c, 0)
   const computed = opts.computed?.[sheet.id]
@@ -1397,7 +2404,7 @@ function writeSheet(
   const rids: number[] = []
   for (const [start, count] of sheet.rids) for (let i = 0; i < count; i++) rids.push(start + i)
 
-  const headStyle = styles.at('', true)
+  const headStyle = styles.at('', { bold: true })
   const colStyle = cols.map((c) => styles.at(formatFor(c)))
 
   const out: string[] = []
@@ -1411,6 +2418,11 @@ function writeSheet(
       const rid = rids[r]
       const over = overrides[`${col.id}:${rid}`]
       const ref = `${colToLetters(i)}${r + 2}`
+      // A cell someone painted gets its own xf; every other cell in the column
+      // shares the column's one, so a sheet with three bolded cells has three
+      // extra styles rather than one per cell.
+      const paint = paintOf(over)
+      const style = paint ? styles.at(formatFor(col), paint) : colStyle[i]
 
       // A per-cell formula: dash's `f`, or the source an import could not make
       // live (`xlsxF`) — writing the latter back out is what closes the
@@ -1436,7 +2448,7 @@ function writeSheet(
         const cached = over && 'v' in over ? over.v : readCell(sheet.data[col.id], r)
         const cachedXml = cached === null || cached === undefined || cached === ''
           ? '' : cachedValue(cached, col.type)
-        cells.push(`<c r="${ref}" s="${colStyle[i]}"><f>${escapeXml(body)}</f>${cachedXml}</c>`)
+        cells.push(`<c r="${ref}" s="${style}"><f>${escapeXml(body)}</f>${cachedXml}</c>`)
         continue
       }
 
@@ -1444,7 +2456,7 @@ function writeSheet(
         : computed?.has(col.id) ? computed.get(col.id)![r]
           : col.formula ? undefined
             : readCell(sheet.data[col.id], r)
-      const cell = valueCell(ref, colStyle[i], v, col.type, strings)
+      const cell = valueCell(ref, style, v, col.type, strings)
       if (cell) cells.push(cell)
     }
     if (cells.length) out.push(`<row r="${r + 2}">${cells.join('')}</row>`)
@@ -1486,10 +2498,24 @@ function writeSheet(
         const n = typeof raw === 'number' ? raw : Number(raw)
         if (Number.isFinite(n) && raw !== null && raw !== '') nums.push(n)
       }
+      // MIN/MAX BY LOOP, never `Math.min(...nums)`: `nums` holds one entry per
+      // ROW, a spread is one argument per entry, and the engine throws
+      // `RangeError: Maximum call stack size exceeded` past ~125k of them
+      // (condfmt.ts:52). Exporting a large workbook is precisely when this
+      // fires, and the throw escapes the whole export rather than spoiling one
+      // total. Seeded at ±Infinity so an all-blank column still reduces to the
+      // non-finite value the `shown` line below already turns into 0.
+      const extreme = (want: 'MIN' | 'MAX'): number => {
+        let acc = want === 'MIN' ? Infinity : -Infinity
+        for (const n of nums) {
+          if (want === 'MIN' ? n < acc : n > acc) acc = n
+        }
+        return acc
+      }
       const value = fn === 'SUM' ? nums.reduce((a, b) => a + b, 0)
         : fn === 'AVERAGE' ? (nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0)
           : fn === 'COUNT' ? nums.length
-            : fn === 'MIN' ? Math.min(...nums) : Math.max(...nums)
+            : fn === 'MIN' ? extreme('MIN') : extreme('MAX')
       const shown = Number.isFinite(value) ? value : 0
       cells.push(`<c r="${ref}" s="${colStyle[i]}"><f>${fn}(${range})</f><v>${shown}</v></c>`)
     })
@@ -1500,13 +2526,176 @@ function writeSheet(
     ? `<col min="${i + 1}" max="${i + 1}" width="${Math.max(2, (c.w - 5) / 7).toFixed(2)}" customWidth="1"/>`
     : '').join('')
 
+  // DATA VALIDATION, out as well as in — which is the whole of what makes a
+  // round trip survive. `<dataValidations>` sits AFTER `<sheetData>` in the
+  // CT_Worksheet sequence; Excel refuses to open a file that puts it before,
+  // with the same "unreadable content" dialog it gives a truncated zip, so the
+  // ordering here is a hard requirement rather than tidiness.
+  const dv = writeValidations(cols, rows, sheet.name, findings)
+
+  // THE FROZEN PANE. The header is always pinned — that is what a dataset
+  // does, and every workbook this ever wrote said `ySplit="1"` — so what goes
+  // out is the header PLUS whatever rows the author froze, and `frozen.cols`
+  // as the column split. The `topLeftCell` has to agree with both splits or
+  // Excel opens the sheet scrolled somewhere nobody asked for.
+  const fz = readFrozenPane(sheet)
+  const ySplit = 1 + fz.rows
+  const pane = `<pane${fz.cols ? ` xSplit="${fz.cols}"` : ''} ySplit="${ySplit}"` +
+    ` topLeftCell="${colToLetters(fz.cols)}${ySplit + 1}"` +
+    ` activePane="${fz.cols ? 'bottomRight' : 'bottomLeft'}" state="frozen"/>`
+
   const lastRow = rows + (totalsXml ? 2 : 1)
-  return `${DECL}<worksheet xmlns="${MAIN_NS}">` +
-    `<dimension ref="A1:${colToLetters(Math.max(0, cols.length - 1))}${Math.max(1, lastRow)}"/>` +
-    '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
-    '<sheetFormatPr defaultRowHeight="15"/>' +
-    (widths ? `<cols>${widths}</cols>` : '') +
-    `<sheetData>${out.join('')}${totalsXml}</sheetData></worksheet>`
+
+  // THE TOTALS ROW GOES OUT AS A TABLE PROPERTY, not only as a row of SUM()s.
+  // Excel's totals row belongs to a `ListObject` — which is what a dash
+  // dataset IS (docs/dash-sheet-kinds.md) — and writing only the formulas
+  // means a re-import cannot tell the total from a deal, so the round trip
+  // comes home flatter than it left and the total sorts into the data.
+  const table = totalsXml ? tablePart(sheet, cols, rows, index, findings) : undefined
+
+  return {
+    xml: `${DECL}<worksheet xmlns="${MAIN_NS}" xmlns:r="${REL_NS}">` +
+      `<dimension ref="A1:${colToLetters(Math.max(0, cols.length - 1))}${Math.max(1, lastRow)}"/>` +
+      `<sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews>` +
+      '<sheetFormatPr defaultRowHeight="15"/>' +
+      (widths ? `<cols>${widths}</cols>` : '') +
+      `<sheetData>${out.join('')}${totalsXml}</sheetData>${dv}` +
+      (table ? '<tableParts count="1"><tablePart r:id="rIdT"/></tableParts>' : '') +
+      '</worksheet>',
+    ...(table ? { table } : {}),
+  }
+}
+
+const TOTALS_XLSX: Record<string, string> = {
+  sum: 'sum', avg: 'average', count: 'count', min: 'min', max: 'max',
+}
+
+/**
+ * The `<table>` part — one `ListObject` over the whole sheet, header and
+ * totals row included.
+ *
+ * EXCEL IS UNFORGIVING HERE and its complaint is the repair dialog, so the two
+ * rules that are actually enforced are checked rather than assumed: every
+ * `tableColumn name` must match its header cell EXACTLY, and the names must be
+ * non-empty and unique. dash column NAMES are display strings and carry no
+ * such promise (two columns may legitimately read "Value"), so a sheet that
+ * would break the rule gets no table part at all — the totals row still goes
+ * out as SUM() formulas, which is what shipped before this, and the finding
+ * says the property did not travel.
+ */
+function tablePart(
+  sheet: TableSheet, cols: readonly Column[], rows: number,
+  index: number, findings: XlsxFinding[],
+): string | undefined {
+  const names = cols.map((c) => c.name.trim())
+  const unique = new Set(names.map((n) => n.toLowerCase()))
+  if (names.some((n) => !n) || unique.size !== names.length) {
+    findings.push({
+      code: 'totals-row', sheet: sheet.name,
+      message: `The totals row of "${sheet.name}" was written as SUM() formulas rather than as an Excel table, because Excel requires a table's column headings to be present and all different and this sheet's are not. The numbers are the same; re-importing the file will read the total as an ordinary row.`,
+    })
+    return undefined
+  }
+  const columns = cols.map((c, i) => {
+    const spec = sheet.totals?.[c.id]
+    const fn = typeof spec === 'string' ? TOTALS_XLSX[spec] : undefined
+    return `<tableColumn id="${i + 1}" name="${escapeXml(names[i])}"` +
+      (i === 0 && !fn ? ' totalsRowLabel="Total"' : '') +
+      (fn ? ` totalsRowFunction="${fn}"` : '') + '/>'
+  }).join('')
+  const right = colToLetters(Math.max(0, cols.length - 1))
+  const id = `T${index + 1}`
+  return `${DECL}<table xmlns="${MAIN_NS}" id="${index + 1}" name="${id}" displayName="${id}"` +
+    ` ref="A1:${right}${rows + 2}" headerRowCount="1" totalsRowCount="1">` +
+    `<autoFilter ref="A1:${right}${rows + 1}"/>` +
+    `<tableColumns count="${cols.length}">${columns}</tableColumns>` +
+    `<tableStyleInfo name="TableStyleMedium2" showRowStripes="1"/></table>`
+}
+
+/**
+ * `<dataValidations>` for every column carrying a rule.
+ *
+ * The sqref is the column's DATA range — row 2 to row n+1, because dash's row
+ * 0 is Excel's row 2 — never the header and never the totals row. Putting the
+ * header inside the range is what makes Excel circle a heading as invalid data
+ * the first time somebody runs the command.
+ *
+ * `kind:'formula'` goes out as `type="custom"` with the expression this build
+ * never evaluated, verbatim: the `xlsxF` bargain, one level up. Whatever Excel
+ * meant by it, Excel gets back.
+ *
+ * The one rule that CANNOT go out is a list too long for Excel's 255-character
+ * `formula1`. Truncating it would export a rule that permits a subset of what
+ * the author allowed — a stricter rule than anyone wrote, which would start
+ * refusing real values on the other side. So it is dropped and named.
+ */
+function writeValidations(
+  cols: readonly Column[], rows: number, sheetName: string, findings: XlsxFinding[],
+): string {
+  if (!rows) return ''
+  const out: string[] = []
+  cols.forEach((col, i) => {
+    const rule = columnRule(col)
+    if (!rule) return
+    const sqref = `${colToLetters(i)}2:${colToLetters(i)}${rows + 1}`
+    const common = ` allowBlank="${rule.blank === false ? 0 : 1}"` +
+      ` errorStyle="${rule.on === 'reject' ? 'stop' : 'warning'}"` +
+      ` error="${escapeXml(rule.message ?? describeRule(rule))}"` +
+      ` errorTitle="${escapeXml(sheetName)}"`
+    if (rule.kind === 'list') {
+      const body = (rule.list ?? []).join(',')
+      // Excel's own limit, and it counts the quotes.
+      if (body.length + 2 > 255) {
+        findings.push({
+          code: 'data-validation', sheet: sheetName, column: col.name,
+          message: `"${col.name}" has a list rule with ${(rule.list ?? []).length} values, which is longer than the 255 characters Excel allows in a written-out list. It was not exported: a truncated list would have refused values the rule allows.`,
+        })
+        return
+      }
+      // `showDropDown` is the INVERSION noted on the import side: 1 HIDES it.
+      out.push(`<dataValidation type="list" sqref="${sqref}"${rule.noDropdown ? ' showDropDown="1"' : ''}${common}>` +
+        `<formula1>"${escapeXml(body)}"</formula1></dataValidation>`)
+      return
+    }
+    if (rule.kind === 'formula') {
+      if (!rule.formula) return
+      out.push(`<dataValidation type="custom" sqref="${sqref}"${common}>` +
+        `<formula1>${escapeXml(rule.formula.replace(/^=/, ''))}</formula1></dataValidation>`)
+      return
+    }
+    const type = rule.kind === 'number' ? 'decimal'
+      : rule.kind === 'date' ? 'date'
+        : rule.kind === 'textLength' ? 'textLength' : null
+    if (!type) return
+    const bound = (b: number | string | undefined): string | null => {
+      if (b === undefined) return null
+      if (rule.kind === 'date') {
+        const serial = typeof b === 'number' ? b : isoToSerial(String(b))
+        return serial === null ? null : String(serial)
+      }
+      const n = Number(b)
+      return Number.isFinite(n) ? String(n) : null
+    }
+    const lo = bound(rule.min)
+    const hi = bound(rule.max)
+    // An UNBOUNDED rule ("must be a number", no min or max) has no Excel
+    // spelling at all — every `decimal` validation carries an operator and at
+    // least one formula. It is dropped rather than invented, because inventing
+    // a bound is inventing a refusal.
+    if (lo === null && hi === null) {
+      findings.push({
+        code: 'data-validation', sheet: sheetName, column: col.name,
+        message: `"${col.name}" must be a ${rule.kind === 'date' ? 'date' : rule.kind === 'number' ? 'number' : 'text length'} with no upper or lower limit. Excel's data validation always compares against a value, so this rule has no equivalent there and was not exported.`,
+      })
+      return
+    }
+    const op = lo !== null && hi !== null ? 'between'
+      : lo !== null ? 'greaterThanOrEqual' : 'lessThanOrEqual'
+    const f1 = lo !== null ? lo : hi!
+    out.push(`<dataValidation type="${type}" operator="${op}" sqref="${sqref}"${common}>` +
+      `<formula1>${f1}</formula1>${op === 'between' ? `<formula2>${hi}</formula2>` : ''}</dataValidation>`)
+  })
+  return out.length ? `<dataValidations count="${out.length}">${out.join('')}</dataValidations>` : ''
 }
 
 /**

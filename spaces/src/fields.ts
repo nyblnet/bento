@@ -26,10 +26,43 @@
 //    is. Keeping it in step with `value` is this file's job.
 
 import type { SpacesDoc, Page, Block } from './model'
+// .ts extension: the model rig loads this file under node, whose resolver will
+// not follow an extensionless import. Vite is unaffected — the same fix main
+// already carries for i18n/packed.
+import { t } from './i18n.ts'
 
 /** What a field holds. Deliberately few: every one costs an editor and a
  *  permanent commitment, and a tracker needs exactly these. */
 export type FieldType = 'select' | 'person' | 'number' | 'date' | 'text' | 'labels'
+
+/**
+ * What each type is called to somebody choosing one. Keys are the model's
+ * words and never translated; the labels are English source strings that t()
+ * looks up at render time — never here, where they would freeze at import.
+ */
+/**
+ * What each type is called to somebody choosing one.
+ *
+ * A FUNCTION with literal t() calls, not a map of English read back through
+ * `t(MAP[key])`. The extractor sweeps LITERALS, so the map version compiled,
+ * ran, and put five of these six words in no catalog at all — measured: Select,
+ * Number, Date, Person and Labels were absent from packed.ts while eight locales
+ * reported 100%, because the packer counts what it swept. `t()` at call time,
+ * never in a module-level const, which would freeze at import.
+ */
+export function fieldTypeLabel(vt: FieldType): string {
+  switch (vt) {
+    case 'select': return t('Select')
+    case 'number': return t('Number')
+    case 'date': return t('Date')
+    case 'person': return t('Person')
+    case 'labels': return t('Labels')
+    default: return t('Text')
+  }
+}
+
+/** The types a new field can be, in the order the picker offers them. */
+export const FIELD_TYPES: FieldType[] = ['text', 'select', 'number', 'date', 'person', 'labels']
 
 export interface FieldOption {
   id: string
@@ -379,6 +412,74 @@ export function issuesOf(doc: SpacesDoc): IssueRow[] {
   return out
 }
 
+/**
+ * WHICH PAGES A VIEW IS ABOUT.
+ *
+ * A view used to mean one thing: every page carrying a `status`. That made the
+ * tracker work and made everything else impossible — a space could hold a
+ * backlog and never a reading list, because there was no way to say "the pages
+ * with an Author" or "the pages under Books".
+ *
+ * ABSENT MEANS ISSUES, and that is the compatibility rule rather than a
+ * default: every `view` block written before this existed carries no `source`
+ * and must keep showing the backlog forever. The editor DELETES the key rather
+ * than storing an empty object, so a view whose source was set and cleared is
+ * byte-identical to one that never had it.
+ *
+ * Two selectors, and deliberately only two. `has` is the one that pairs with a
+ * property somebody just invented — the vocabulary is flat and a page carries
+ * only the fields it uses, so "has an Author" IS "is a book". `under` is the
+ * one people reach for anyway, because nesting is how a space is already
+ * organised. A selector language grows without limit and can never shrink:
+ * every operator ships permanently into files on other people's disks.
+ */
+export interface ViewSource {
+  /** pages carrying this field */
+  has?: string
+  /** pages nested anywhere under this page */
+  under?: string
+}
+
+export const unknownSourceKeys = (src: unknown): string[] =>
+  !src || typeof src !== 'object' ? []
+    : Object.keys(src as Record<string, unknown>).filter((k) => k !== 'has' && k !== 'under')
+
+/** Is this page anywhere below `root`? Cycle-safe, like the tree walk. */
+function isUnder(doc: SpacesDoc, page: Page, root: string): boolean {
+  const seen = new Set<string>()
+  let cur: string | undefined = page.parent
+  while (cur && !seen.has(cur)) {
+    if (cur === root) return true
+    seen.add(cur)
+    cur = doc.pages.find((p) => p.id === cur)?.parent
+  }
+  return false
+}
+
+/**
+ * The rows a view holds.
+ *
+ * Derived every render from the pages themselves — never stored — for the same
+ * reason the board's order is `doc.pages`: a database that keeps its own copy
+ * of the rows is a database that disagrees with the document.
+ */
+export function viewRows(doc: SpacesDoc, source?: unknown): IssueRow[] {
+  const src = (source && typeof source === 'object' ? source : {}) as ViewSource
+  const has = typeof src.has === 'string' ? src.has : ''
+  const under = typeof src.under === 'string' ? src.under : ''
+  if (!has && !under) return issuesOf(doc)
+
+  const out: IssueRow[] = []
+  for (const page of doc.pages) {
+    if (page.archived) continue
+    if (under && !isUnder(doc, page, under)) continue
+    const values = valuesOf(page)
+    if (has && !values.has(has)) continue
+    out.push({ page, values })
+  }
+  return out
+}
+
 /** Where a dropped card lands: before a card, or after the last one. */
 export interface DropAim { before?: string; after?: string }
 
@@ -418,6 +519,44 @@ export const propBlockOf = (page: Page, key: string): Block | undefined =>
   page.blocks.find((b) => b.type === 'prop' && (b as { key?: unknown }).key === key)
 
 /** Build a prop block, with its readable form already in step. */
+/**
+ * The document's field vocabulary with one more field in it.
+ *
+ * SEEDS FROM THE DEFAULTS ON FIRST WRITE, and that is the whole reason this is
+ * a function rather than a push. `fieldsOf` falls back to DEFAULT_FIELDS only
+ * while `doc.fields` is absent or empty — so a document that has never declared
+ * a schema and then gains ONE field would, if the field were simply pushed into
+ * an empty array, lose Status, Priority, Assignee and Estimate in the same
+ * stroke. Every issue in the space would keep its `prop` blocks (they carry
+ * their own readable html) but the board grouping them by status would have no
+ * status field to group by.
+ *
+ * So the first custom field writes the defaults down beside itself, which is
+ * also the honest thing: once you have edited the schema it stops being
+ * implicit.
+ */
+export function withField(doc: SpacesDoc, spec: FieldSpec): FieldSpec[] {
+  const current = fieldsOf(doc)
+  if (current.some((f) => f.key === spec.key)) {
+    return current.map((f) => (f.key === spec.key ? spec : f))
+  }
+  return [...current, spec]
+}
+
+/**
+ * A key for a field somebody just named.
+ *
+ * Keys are what `prop` blocks store and what views group by, so they outlive
+ * every rename of the label and must never collide. Derived from the label,
+ * then suffixed until it is free.
+ */
+export function freeFieldKey(doc: SpacesDoc, label: string): string {
+  const base = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'field'
+  const taken = new Set(fieldsOf(doc).map((f) => f.key))
+  if (!taken.has(base)) return base
+  for (let n = 2; ; n++) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`
+}
+
 export function propBlock(f: FieldSpec, value: unknown, id: string): Block {
   return { id, type: 'prop', key: f.key, value, html: propHtml(f, value) } as Block
 }
@@ -450,4 +589,75 @@ export function columnMoves(cards: string[], moved: string, aim: DropAim): boole
   if (target < 0) return true
   const next = [...rest.slice(0, target), moved, ...rest.slice(target)]
   return next.join('\u001f') !== cards.join('\u001f')
+}
+
+/**
+ * Which direction a view is sorted in BY THIS FIELD, if it is.
+ *
+ * Reads the same `sort` the format already carries — there is no second place
+ * a table header's arrow could come from, and inventing one would let the arrow
+ * and the order disagree. `undefined` means this column is not the sort key;
+ * an entry with no `dir` is ascending, which is what absence has always meant.
+ */
+export const sortDirOf = (sort: unknown, key: string): 'asc' | 'desc' | undefined => {
+  const cur = (Array.isArray(sort) ? sort : [])[0] as ViewSort | undefined
+  if (!cur || String(cur.key ?? '') !== key) return undefined
+  return cur.dir === 'desc' ? 'desc' : 'asc'
+}
+
+/**
+ * The sort a CLICK ON A COLUMN HEADER produces: ascending → descending → none.
+ *
+ * The third state is the one that matters. A header that only flips between two
+ * directions can never give a hand-arranged board its order back, and "manual
+ * order" is not a sort called manual — it is the ABSENCE of the key. So this
+ * returns `undefined` there, and the caller deletes the key rather than storing
+ * an empty array: a view sorted and unsorted is byte-identical to one nobody
+ * ever touched.
+ */
+export function cycleSort(sort: unknown, key: string): ViewSort[] | undefined {
+  const dir = sortDirOf(sort, key)
+  if (dir === undefined) return [{ key }]
+  if (dir === 'asc') return [{ key, dir: 'desc' }]
+  return undefined
+}
+
+/**
+ * THE SHAPES A VIEW CAN TAKE, and the order the one button cycles them in.
+ *
+ * Written down ONCE. It used to live twice — a `NEXT` map in render.ts for the
+ * button's label and a `next` map in editor.ts for what the click stores — and
+ * the two drifted the way two copies of one fact always do. When the
+ * prototype-lookup bug below was found, the fix was applied to the editor's
+ * copy and not the renderer's, and the editor's comment then asserted the whole
+ * thing was safe while the label it named was still being rendered from the
+ * unguarded copy.
+ *
+ * `board` is the ABSENT key, never a stored 'board': a view cycled all the way
+ * round is byte-identical to one nobody ever touched, which is the rule filter
+ * and source already follow. `nextLayout` returns the word; the caller that
+ * WRITES is the one that turns 'board' back into a deletion.
+ */
+export const VIEW_LAYOUTS = ['board', 'list', 'table', 'gallery'] as const
+export type ViewLayout = (typeof VIEW_LAYOUTS)[number]
+
+/**
+ * The layout a view is ACTUALLY in, whatever its block claims.
+ *
+ * `Object.hasOwn`, never a truthiness test or a bare `in`: a view block is
+ * plain JSON in a file someone sent you, and `LAYOUT['toString']` on an object
+ * literal is a native function — truthy, and stringifying to
+ * `function toString() { [native code] }`, which is what the layout button
+ * rendered as its own label. A key from a NEWER build lands on `board` rather
+ * than nowhere, so the control is never a button that does nothing.
+ */
+export function layoutOf(raw: unknown): ViewLayout {
+  const s = String(raw ?? 'board')
+  return (VIEW_LAYOUTS as readonly string[]).includes(s) ? (s as ViewLayout) : 'board'
+}
+
+/** The next shape in the cycle: board → list → table → gallery → board. */
+export function nextLayout(raw: unknown): ViewLayout {
+  const here = layoutOf(raw)
+  return VIEW_LAYOUTS[(VIEW_LAYOUTS.indexOf(here) + 1) % VIEW_LAYOUTS.length]
 }

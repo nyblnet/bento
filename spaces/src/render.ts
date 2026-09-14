@@ -9,18 +9,20 @@
 // story, native ⌘F, print fidelity and lossless markdown export at once, from
 // one decision.
 
-import { type SpacesDoc, type Page, type Block, isRemote, tableOf, linkCard } from './model'
+import { type SpacesDoc, type Page, type Block, loadsRemotely, assetValue, tableOf, linkCard, coverSrc } from './model'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { tokenize } from './highlight'
 import { t, locale } from './i18n'
 import { TAG_OF, LIST_OF, SPEC, TONE, mediaPlayback } from './blocks'
 import {
-  fieldByKey, optionOf, issuesOf, headerLength, propBlockOf,
+  fieldByKey, fieldsOf, optionOf, viewRows, headerLength, propBlockOf,
   passesFilter, filterCount, unknownFilterKeys,
-  sortRows, unknownSortKeys, type ViewSort, type FieldSpec,
+  sortRows, unknownSortKeys, sortDirOf, layoutOf, nextLayout,
+  type ViewSort, type FieldSpec, type ViewLayout,
 } from './fields'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
+import { renderCanvasHead, placeCard } from './canvas.ts'
 
 export interface RenderOpts {
   /** editable per-block hosts (the editor); false for reader/print */
@@ -68,8 +70,14 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
   // line and usable by the lines BELOW it — the same direction a person reads
   // in, and the reason this needs no second pass and cannot cycle.
   const calc: CalcCtx = freshContext()
-  // stack of open containers, innermost last: [blockId, element]
-  const stack: Array<[string, HTMLElement]> = []
+  // stack of open containers, innermost last: [blockId, element, type]
+  //
+  // The TYPE is on the stack because a canvas's children are POSITIONED and
+  // nothing else's are. A block cannot know that on its own — `x` and `y` mean
+  // "where on the surface" only inside a surface — so the placement decision
+  // belongs here, where the open container is known, rather than to a test on
+  // the child that would also fire on a stray `x` anywhere else in a document.
+  const stack: Array<[string, HTMLElement, string]> = []
   let list: { el: HTMLElement; kind: 'ul' | 'ol'; under: string } | null = null
 
   const hostFor = (parent: string | undefined): HTMLElement | DocumentFragment => {
@@ -123,7 +131,14 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
 
     const node = renderBlock(b, doc, opts, calc)
     takeIn()
-    ;(kind && list ? list.el : host).appendChild(node)
+    const into = kind && list ? list.el : host
+    into.appendChild(node)
+    // A CARD IS PLACED AFTER IT IS APPENDED: its index among its siblings is
+    // the fallback position for a card that has never been dragged, and the
+    // index is a fact about the parent, not about the block.
+    if (stack.length && stack[stack.length - 1][0] === b.parent && stack[stack.length - 1][2] === 'canvas') {
+      placeCard(node, b)
+    }
 
     // A CONTAINER owns the blocks whose parent is its id. Which types those are
     // is registry data (blocks.ts `container`), not a name test here — the
@@ -135,7 +150,7 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
       body.className = `sp-${b.type}-body`
       if (container === 'fold' && !(opts.forceOpen || b.open)) body.hidden = true
       node.appendChild(body)
-      stack.push([b.id, body])
+      stack.push([b.id, body, b.type])
       list = null
     } else if (kind) {
       // A LIST ITEM OWNS ITS INDENTED CHILDREN.
@@ -150,7 +165,7 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
       // Not `container: true` in the registry: a list item does not take a body
       // div, it takes children directly, and the gutter/inline-host rules that
       // `container` implies are wrong for it.
-      stack.push([b.id, node])
+      stack.push([b.id, node, b.type])
     }
   })
   return frag
@@ -200,9 +215,9 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       // as `asset:`. Only hand- or agent-authored documents carry URLs, and for
       // those the reader gets a placeholder naming the host and a button. One
       // click, per image, informed — the model every mail client settled on.
-      if (isRemote(rawSrc) && !opts.allowRemote?.(rawSrc)) {
+      if (loadsRemotely(rawSrc, doc) && !opts.allowRemote?.(rawSrc)) {
         fig.appendChild(remotePlaceholder(rawSrc, b, opts,
-          t('Image from {host}', { host: remoteHost(rawSrc) }), t('Load this image')))
+          t('Image from {host}', { host: remoteHost(resolveSrc(rawSrc, doc)) }), t('Load this image')))
         if (b.caption) {
           const cap = document.createElement('figcaption')
           cap.innerHTML = sanitizeInline(String(b.caption))
@@ -286,7 +301,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       // <video> asks its host for byte ranges the moment the element is
       // parsed, so an autoplaying tracker is not even needed: opening the
       // space is the ping. Same rule, same host named, different words.
-      if (isRemote(rawSrc) && !opts.allowRemote?.(rawSrc)) {
+      if (loadsRemotely(rawSrc, doc) && !opts.allowRemote?.(rawSrc)) {
         const host = remoteHost(rawSrc)
         fig.appendChild(remotePlaceholder(rawSrc, b, opts,
           play.kind === 'audio' ? t('Audio from {host}', { host }) : t('Video from {host}', { host }),
@@ -335,7 +350,7 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
         const poster = String(b.poster ?? '')
         // a remote poster is the same tracking pixel as a remote image, so it
         // goes through the same consent
-        if (poster && !(isRemote(poster) && !opts.allowRemote?.(poster))) {
+        if (poster && !(loadsRemotely(poster, doc) && !opts.allowRemote?.(poster))) {
           const resolved = resolveSrc(poster, doc)
           if (resolved) v.poster = resolved
         }
@@ -387,10 +402,13 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
         card.classList.add('sp-dead')
       }
 
-      // THE THUMBNAIL IS LOCAL OR IT IS ABSENT. `linkCard` has already dropped
-      // a remote one — this cannot be re-tested here, because a check that can
-      // be forgotten in one of four surfaces is a check that will be.
-      if (c.image) {
+      // THE THUMBNAIL IS LOCAL OR IT IS ABSENT. `linkCard` drops one that was
+      // WRITTEN remote, and that is as far as it can see: it takes a block, not
+      // a document, so it cannot know what an `asset:` key resolves to. The
+      // asset table is exactly where a remote URL hid, so the resolved check has
+      // to happen at the one place that holds both the src and the document —
+      // here, which is also the only place that loads anything.
+      if (c.image && !loadsRemotely(c.image, doc)) {
         const img = document.createElement('img')
         img.src = resolveSrc(c.image, doc)
         img.alt = ''
@@ -494,6 +512,19 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       text.textContent = shownValue(f, value)
       val.appendChild(text)
       el.appendChild(val)
+      return el
+    }
+
+    case 'canvas': {
+      // The BODY is opened by renderBlocks (registry `container`), which is
+      // also what puts the cards in it — so this draws the chrome and nothing
+      // else. `cards` is only needed for the empty-state line, and counting
+      // here rather than after the fact keeps renderBlock a pure function of
+      // one block.
+      const cards = doc.pages
+        .find((p) => p.blocks.some((x) => x.id === b.id))?.blocks
+        .filter((x) => x.parent === b.id).length ?? 0
+      renderCanvasHead(el, b, opts.editable === true, cards)
       return el
     }
 
@@ -778,17 +809,10 @@ export function paintCode(code: HTMLElement, text: string, lang?: unknown): bool
   return changed
 }
 
+/** What this src loads. One implementation, in model.ts, beside the predicate
+ *  that decides whether loading it leaves the machine. */
 export function resolveSrc(src: string, doc: SpacesDoc): string {
-  // hasOwn, not a bare index: `assets['toString']` returns a FUNCTION, which is
-  // truthy, so the `?? ''` never fired and the stringified function was assigned
-  // to img.src. Same class as the icon lookup — an author-supplied key reaching
-  // a lookup table through the prototype chain.
-  if (src.startsWith('asset:')) {
-    const key = src.slice(6)
-    const table = doc.assets
-    return table && Object.hasOwn(table, key) ? table[key] : ''
-  }
-  return src
+  return assetValue(src, doc)
 }
 
 
@@ -865,7 +889,7 @@ function mediaStill(b: Block, doc: SpacesDoc, opts: RenderOpts, kind: 'video' | 
   const box = document.createElement('div')
   box.className = 'sp-media-still'
   const poster = String(b.poster ?? '')
-  if (poster && !(isRemote(poster) && !opts.allowRemote?.(poster))) {
+  if (poster && !(loadsRemotely(poster, doc) && !opts.allowRemote?.(poster))) {
     const resolved = resolveSrc(poster, doc)
     if (resolved) {
       const img = document.createElement('img')
@@ -955,6 +979,34 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   }
   if (width) inner.classList.add('sp-wide')
 
+  // THE COVER, above everything, and FULL-BLEED rather than inside the column.
+  // That is what makes it read as a cover instead of as the first image in the
+  // page: it belongs to the page, not to the prose, so it ignores the measure
+  // the way a book's jacket ignores the type area. It escapes the reading
+  // column's padding with negative margins off `--sp-pad-x/y`, which is why
+  // that padding is written as variables — a hard-coded -44px would be wrong on
+  // a phone, wrong in reading mode and wrong in print, all silently.
+  //
+  // `resolveSrc` is the same lookup an image block goes through, and `coverSrc`
+  // is what refuses a remote one — so a cover can never make opening a document
+  // a network request (PLATFORM §1).
+  const cover = resolveSrc(coverSrc(page), doc)
+  if (cover) {
+    art.classList.add('sp-has-cover')
+    const wrap = document.createElement('div')
+    wrap.className = 'sp-cover'
+    const img = document.createElement('img')
+    img.className = 'sp-cover-img'
+    img.src = cover
+    // DECORATIVE, deliberately. The page's own title is right underneath it and
+    // says the same thing; a screen reader announcing "cover image" before every
+    // title is noise, and there is nowhere to write alt text for it anyway.
+    img.alt = ''
+    img.setAttribute('aria-hidden', 'true')
+    wrap.appendChild(img)
+    art.appendChild(wrap)
+  }
+
   const h = document.createElement('h1')
   h.className = 'sp-title'
   h.dataset.pageTitle = page.id
@@ -978,6 +1030,49 @@ function shownValue(f: FieldSpec | undefined, value: unknown): string {
 }
 
 /**
+ * A stable hue for a page with no cover.
+ *
+ * FNV-1a over the id, which is the same cheap hash assets.ts falls back to:
+ * every reader of one file computes the same colour, and a page keeps its
+ * colour when it is renamed.
+ *
+ * A CURATED SET, not 360 free hues. Free hue was measured drawing 61 and 54 in
+ * the same grid — the same dirty chartreuse twice — and five cards as
+ * peach/pink/pink/lavender/lavender: two near-duplicate pairs out of five. It
+ * also lands on olive and mustard, which no amount of alpha rescues, and goes
+ * muddy in the dark theme. Eight stops spaced around the wheel and chosen to
+ * be distinguishable at 30% alpha on both grounds; neighbours in a grid differ
+ * because the stops differ, not because the hash happened to spread.
+ */
+const CARD_HUES = [210, 265, 320, 8, 32, 48, 152, 186]
+
+function hueOf(id: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
+  return CARD_HUES[h % CARD_HUES.length]
+}
+
+/**
+ * What a coverless card shows: the page's icon, else the first character of
+ * its title.
+ *
+ * The same rule `calloutMark` follows and for the same reasons — a name from
+ * the icon set is markup we wrote, anything else is TEXT out of a file someone
+ * sent you, and `Object.hasOwn` keeps `toString` from resolving to a function.
+ */
+function pageMark(host: HTMLElement, page: Page): void {
+  const icon = typeof page.icon === 'string' ? page.icon : ''
+  if (icon) {
+    if (Object.hasOwn(ICONS, icon)) { host.innerHTML = ICONS[icon as IconName]; host.classList.add('sp-gcard-ico') }
+    else host.textContent = icon
+    return
+  }
+  // [...str][0], not str[0]: an emoji or a CJK title is not one UTF-16 unit,
+  // and slicing one in half renders a replacement character.
+  host.textContent = [...(page.title || '?').trim()][0] ?? '?'
+}
+
+/**
  * A BOARD or a LIST of the issues in this space.
  *
  * Derived, never stored: the view holds a query, and the issues are wherever
@@ -991,7 +1086,7 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
   const field = fieldByKey(doc, groupKey)
   const filter = (b as { filter?: unknown }).filter
   const sort = (b as { sort?: unknown }).sort
-  const all = issuesOf(doc)
+  const all = viewRows(doc, (b as { source?: unknown }).source)
   const rows = sortRows(doc, all.filter((r) => passesFilter(doc, r.values, filter)), sort)
 
   const head = document.createElement('div')
@@ -1023,9 +1118,41 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // so a view block could hold `layout:'list'` that nothing in the app could
     // produce or undo. One button, because there are two of them and a menu to
     // choose between two things is a menu too many.
-    const asList = layout === 'list'
-    const layoutB = btn('viewLayout', asList ? t('List') : t('Board'),
-      asList ? t('Show as a board') : t('Show as a list'))
+    // THREE shapes now, so the button says what you are looking at and the
+    // click moves to the next one. A menu to choose between three is still a
+    // menu too many; a cycle is one control and one word.
+    // `layoutOf`, not a lookup in a local map: the cycle is ONE fact and it now
+    // lives in fields.ts, because it used to live here AND in editor.ts and the
+    // two drifted. A view block hand-authored with layout:"toString" — plain
+    // JSON, in a file someone sent you — made the truthiness test here pass on
+    // a native function, and the button's label rendered as
+    // `function toString() { [native code] }`. The editor's copy had been
+    // hardened and its comment said the label was safe; the label is rendered
+    // here, and this half had not been.
+    const here = layoutOf(layout)
+    const asList = here !== 'board'
+    // Three WHOLE sentences rather than one with the shape interpolated into
+    // it. "Show as a {what}" reads fine in English and breaks in half the
+    // catalogs, where the article and the adjective agree with the noun's
+    // gender — der Tafel / die Liste, un tableau / une liste. Two of these
+    // three keys already existed for the same reason.
+    // THE EXTRACTOR SWEEPS LITERALS. `t(WORD[here])` compiles, runs, and is
+    // never translated by anybody: no catalog ever learns the string exists,
+    // and the packer still reports 100% because it builds coverage from the
+    // keys it swept. Measured on main: "Board", "List" and "Show as a list"
+    // were present in de.ts and ABSENT from packed.ts — translations already
+    // written, dropped on the floor, while the button read English in all eight
+    // locales. So the words are chosen HERE, as literals the sweep can see;
+    // fields.ts answers "which shape is this" and "what comes next".
+    const LAYOUT_LABEL: Record<ViewLayout, string> = {
+      board: t('Board'), list: t('List'), table: t('Table'), gallery: t('Gallery'),
+    }
+    const NEXT_LABEL: Record<ViewLayout, string> = {
+      board: t('Show as a list'), list: t('Show as a table'),
+      table: t('Show as a gallery'), gallery: t('Show as a board'),
+    }
+    const layoutB = btn('viewLayout', LAYOUT_LABEL[here], NEXT_LABEL[here])
+    layoutB.dataset.next = nextLayout(here)
 
     // GROUP BY. Only fields with declared options: a board's columns ARE the
     // option list, so grouping by a free-text field would make one column per
@@ -1049,7 +1176,19 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
 
     // a LIST has no columns, so the field the columns would come from is not a
     // question it can be asked
-    head.append(layoutB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
+    // WHICH PAGES. Named after what it answers rather than "Source", because
+    // the question in the reader's head is "what is in this?" — and it says the
+    // answer, not the word, when there is one.
+    const src = (b as { source?: { has?: unknown; under?: unknown } }).source
+    const hasKey = typeof src?.has === 'string' ? src.has : ''
+    const underId = typeof src?.under === 'string' ? src.under : ''
+    const srcLabel = hasKey ? (fieldByKey(doc, hasKey)?.label ?? hasKey)
+      : underId ? (doc.pages.find((p) => p.id === underId)?.title || t('Untitled'))
+        : t('Issues')
+    const sourceB = btn('viewSource', `${t('Pages')} · ${srcLabel}`,
+      t('Choose which pages this view holds'), !!(hasKey || underId))
+
+    head.append(layoutB, sourceB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
   }
   host.appendChild(head)
 
@@ -1140,6 +1279,281 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     }
     if (meta.childElementCount) a.appendChild(meta)
     return a
+  }
+
+  // TABLE — the shape a base is usually looked at in, and the one this app did
+  // not have. Columns are the fields the ROWS ACTUALLY CARRY, in the schema's
+  // declared order: a table of books should not carry an Estimate column
+  // because the vocabulary happens to contain one, and a page that has a field
+  // the others lack should not be the reason everyone gets an empty column.
+  if (layout === 'table') {
+    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => rows.some((r) => r.values.has(k)))
+    const wrap = document.createElement('div')
+    // its own scroller: a wide table must not make the PAGE scroll sideways
+    wrap.className = 'sp-view-tablewrap'
+    const table = document.createElement('table')
+    table.className = 'sp-view-table'
+    const thead = document.createElement('thead')
+    const hr = document.createElement('tr')
+    const th0 = document.createElement('th')
+    th0.textContent = t('Page')
+    hr.appendChild(th0)
+    for (const k of keys) {
+      const th = document.createElement('th')
+      th.textContent = fieldByKey(doc, k)?.label ?? k
+      hr.appendChild(th)
+    }
+    thead.appendChild(hr)
+    table.appendChild(thead)
+    const tb = document.createElement('tbody')
+    for (const r of rows) {
+      const tr = document.createElement('tr')
+      const td0 = document.createElement('td')
+      // the page itself, reached the same way a card reaches it
+      const a = document.createElement('a')
+      a.className = 'sp-view-cellink'
+      a.href = `#p/${r.page.id}`
+      a.dataset.page = r.page.id
+      a.textContent = r.page.title || t('Untitled')
+      td0.appendChild(a)
+      tr.appendChild(td0)
+      for (const k of keys) {
+        const td = document.createElement('td')
+        const f = fieldByKey(doc, k)
+        const v = r.values.get(k)
+        // THROUGH THE OPTION, so a select shows its label and its colour rather
+        // than the id the model stores — the same thing propHtml does for the
+        // header strip, and for the same reason: the id is not for reading.
+        const opt = optionOf(f, v)
+        if (opt) {
+          const chip = document.createElement('span')
+          chip.className = 'sp-prop-chip'
+          const dot = document.createElement('span')
+          dot.className = 'sp-prop-dot'
+          if (opt.color) dot.style.background = opt.color
+          chip.append(dot, document.createTextNode(opt.label))
+          td.appendChild(chip)
+        } else if (v !== undefined && v !== null && String(v) !== '') {
+          td.textContent = String(v)
+        } else {
+          td.className = 'sp-view-empty'
+          td.textContent = '—'
+        }
+        tr.appendChild(td)
+      }
+      tb.appendChild(tr)
+    }
+    table.appendChild(tb)
+    wrap.appendChild(table)
+    host.appendChild(wrap)
+    return
+  }
+
+  // GALLERY — the shape that makes a reading list look like a reading list. A
+  // board answers "what state is this in" and a table answers "what does it
+  // say"; a gallery answers "which one is it", which for books, films, recipes
+  // and people is the question actually being asked, and is why the covers
+  // exist at all.
+  //
+  // A card without a cover is not a hole. It gets a tinted panel carrying the
+  // page's own icon (or its first letter), on a hue derived from the page id —
+  // so a gallery of pages nobody has given a picture to still reads as a set of
+  // distinct things rather than as a grid of grey rectangles.
+  if (layout === 'gallery') {
+    const grid = document.createElement('div')
+    grid.className = 'sp-gallery'
+    for (const r of rows) {
+      const cardEl = document.createElement('div')
+      cardEl.className = 'sp-gcard'
+      cardEl.dataset.issue = r.page.id
+
+      const shot = document.createElement('div')
+      shot.className = 'sp-gcard-shot'
+      const src = resolveSrc(coverSrc(r.page), doc)
+      if (src) {
+        const img = document.createElement('img')
+        img.src = src
+        img.alt = ''
+        img.setAttribute('aria-hidden', 'true')
+        // A gallery is many pictures at once — the one place in this app where
+        // decoding them all up front is a real cost, and the one place the
+        // browser can be told not to.
+        img.loading = 'lazy'
+        img.decoding = 'async'
+        shot.appendChild(img)
+      } else {
+        shot.classList.add('sp-gcard-bare')
+        // deterministic, so a page keeps its colour across reloads, readers and
+        // machines — the same reason ids are repaired from the id and never
+        // from Math.random
+        shot.style.setProperty('--h', String(hueOf(r.page.id)))
+        const mark = document.createElement('span')
+        mark.className = 'sp-gcard-mark'
+        pageMark(mark, r.page)
+        shot.appendChild(mark)
+      }
+      cardEl.appendChild(shot)
+
+      const body = document.createElement('div')
+      body.className = 'sp-gcard-body'
+      const t1 = document.createElement(opts.editable === false ? 'span' : 'a')
+      t1.className = 'sp-issue-title'
+      if (t1 instanceof HTMLAnchorElement) t1.href = `#p/${r.page.id}`
+      t1.textContent = r.page.title || t('Untitled')
+      body.appendChild(t1)
+
+      // EVERY field the page carries, not the tracker's four. A gallery of
+      // books whose cards showed Priority and Estimate and not the Author would
+      // be the board wearing a different shape.
+      const meta = document.createElement('span')
+      meta.className = 'sp-issue-meta'
+      for (const f of fieldsOf(doc)) {
+        const v = r.values.get(f.key)
+        if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) continue
+        const chip = document.createElement('span')
+        chip.className = 'sp-issue-chip'
+        const o = optionOf(f, v)
+        if (o?.color) {
+          const d = document.createElement('span')
+          d.className = 'sp-prop-dot'
+          d.style.background = o.color
+          chip.appendChild(d)
+        }
+        chip.append(document.createTextNode(shownValue(f, v)))
+        meta.appendChild(chip)
+      }
+      if (meta.childElementCount) body.appendChild(meta)
+      cardEl.appendChild(body)
+      grid.appendChild(cardEl)
+    }
+    host.appendChild(grid)
+    return
+  }
+
+  // TABLE — the shape a base is usually looked at in, and the one this app did
+  // not have. Columns are the fields the ROWS ACTUALLY CARRY, in the schema's
+  // declared order: a table of books should not carry an Estimate column
+  // because the vocabulary happens to contain one, and a page that has a field
+  // the others lack should not be the reason everyone gets an empty column.
+  if (layout === 'table') {
+    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => rows.some((r) => r.values.has(k)))
+    const wrap = document.createElement('div')
+    // its own scroller: a wide table must not make the PAGE scroll sideways
+    wrap.className = 'sp-view-tablewrap'
+    const table = document.createElement('table')
+    table.className = 'sp-view-table'
+    const thead = document.createElement('thead')
+    const hr = document.createElement('tr')
+    const th0 = document.createElement('th')
+    // THE PAGE COLUMN DOES NOT SORT, and it says so by being a plain heading
+    // rather than a dead button. A view's `sort` names a FIELD: sortRows looks
+    // each key up in the schema and skips what it cannot find, so ordering by
+    // title would need a second ordering mechanism living beside the first —
+    // and one order stored in two shapes is the thing that later disagrees with
+    // itself. A pseudo-key like `title` is worse still: every build that ships
+    // today would report it through unknownSortKeys as "newer than this build"
+    // and then not apply it. Better a column that plainly does not sort.
+    th0.textContent = t('Page')
+    hr.appendChild(th0)
+    for (const k of keys) {
+      const th = document.createElement('th')
+      const label = fieldByKey(doc, k)?.label ?? k
+      const dir = sortDirOf(sort, k)
+      // The state lives on the TH as aria-sort, the attribute a screen reader
+      // already announces; the arrow is what a sighted reader reads. Two
+      // renderings of ONE fact — the view's own `sort` — so there is no second
+      // place the arrow could come from and no way for it to disagree with the
+      // order the rows are actually in.
+      th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none')
+      // A READER GETS THE HEADING, not the control — the rule the card chip and
+      // every view button already follow: a printout and a locked space show
+      // the view, never the things that change it.
+      if (opts.editable) {
+        const sortB = document.createElement('button')
+        sortB.type = 'button'
+        sortB.className = 'sp-view-sort' + (dir ? ' sp-on' : '')
+        sortB.dataset.sortCol = k
+        sortB.title = t('Sort by {field}', { field: label })
+        sortB.setAttribute('aria-label', t('Sort by {field}', { field: label }))
+        const arrow = document.createElement('span')
+        arrow.className = 'sp-sortdir'
+        arrow.setAttribute('aria-hidden', 'true')
+        arrow.textContent = dir === 'asc' ? '\u2191' : dir === 'desc' ? '\u2193' : ''
+        sortB.append(document.createTextNode(label), arrow)
+        th.appendChild(sortB)
+      } else {
+        th.textContent = label
+      }
+      hr.appendChild(th)
+    }
+    thead.appendChild(hr)
+    table.appendChild(thead)
+
+    // What a cell SHOWS. THROUGH THE OPTION, so a select shows its label and
+    // its colour rather than the id the model stores — the same thing propHtml
+    // does for the header strip, and for the same reason: the id is not for
+    // reading. An unset value is an em dash, so an empty cell is still a place
+    // you can aim at.
+    const fill = (into: HTMLElement, f: FieldSpec | undefined, v: unknown): void => {
+      const opt = optionOf(f, v)
+      if (opt) {
+        const chip = document.createElement('span')
+        chip.className = 'sp-prop-chip'
+        const dot = document.createElement('span')
+        dot.className = 'sp-prop-dot'
+        if (opt.color) dot.style.background = opt.color
+        chip.append(dot, document.createTextNode(opt.label))
+        into.appendChild(chip)
+      } else if (v !== undefined && v !== null && String(v) !== '') {
+        into.appendChild(document.createTextNode(shownValue(f, v)))
+      } else {
+        into.classList.add('sp-view-empty')
+        into.appendChild(document.createTextNode('\u2014'))
+      }
+    }
+
+    const tb = document.createElement('tbody')
+    for (const r of rows) {
+      const tr = document.createElement('tr')
+      const td0 = document.createElement('td')
+      // the page itself, reached the same way a card reaches it
+      const a = document.createElement('a')
+      a.className = 'sp-view-cellink'
+      a.href = `#p/${r.page.id}`
+      a.dataset.page = r.page.id
+      a.textContent = r.page.title || t('Untitled')
+      td0.appendChild(a)
+      tr.appendChild(td0)
+      for (const k of keys) {
+        const td = document.createElement('td')
+        const f = fieldByKey(doc, k)
+        const v = r.values.get(k)
+        // A CELL IS A CONTROL where there is an editor — a real <button>, so it
+        // is in the tab order and answers Enter and Space without a key handler
+        // of its own. It is emitted even for a page carrying no such prop block:
+        // an empty cell is how the field gets ONTO that page, exactly as
+        // dropping a card into a column is.
+        if (opts.editable && f) {
+          const cell = document.createElement('button')
+          cell.type = 'button'
+          cell.className = 'sp-view-cell'
+          cell.dataset.cellPage = r.page.id
+          cell.dataset.cellField = k
+          cell.title = t('Change {field}', { field: f.label })
+          cell.setAttribute('aria-label', t('Change {field}', { field: f.label }))
+          fill(cell, f, v)
+          td.appendChild(cell)
+        } else {
+          fill(td, f, v)
+        }
+        tr.appendChild(td)
+      }
+      tb.appendChild(tr)
+    }
+    table.appendChild(tb)
+    wrap.appendChild(table)
+    host.appendChild(wrap)
+    return
   }
 
   if (layout === 'list') {

@@ -34,15 +34,6 @@ const TRANSIENT_SELECTOR = '[data-bento-transient]'
 
 let pristine: Document | null = null
 
-/** App-owned save-time preparation. The default is identity. Apps use this to
- * compact a serialization copy without teaching the kernel their document
- * shape or mutating the live Store. */
-let prepareDocument: (doc: KernelDoc) => KernelDoc = (doc) => doc
-
-export function registerSerializePrepare(fn: (doc: KernelDoc) => KernelDoc): void {
-  prepareDocument = fn
-}
-
 /** Call first thing at boot, before any DOM mutation. */
 export function capturePristine() {
   pristine = document.cloneNode(true) as Document
@@ -152,7 +143,7 @@ function serializeBody(shell: Document, body: string, doc: KernelDoc): string {
 // --- static first-page preview (file-manager thumbnails) ---------------------
 //
 // THE PROBLEM. A Bento file is one HTML document, and thumbnailers — iOS
-// Files, macOS QuickLook/Finder, the Bento Tray app — render HTML with
+// Files, macOS QuickLook/Finder, the bento/home app — render HTML with
 // JavaScript DISABLED (verified: `qlmanage -t` renders <noscript> content).
 // Until our runtime boots, every deck genuinely IS the same bytes plus the
 // boot splash, so every deck thumbnailed as the same dark box.
@@ -364,8 +355,7 @@ function writePreview(clone: Document, body: string, doc: KernelDoc): void {
  * PLAIN output — encryption-aware callers use serializeDocInto/serializeAuto.
  */
 export function serializeWith(shell: Document, doc: KernelDoc): string {
-  const prepared = prepareDocument(doc)
-  return serializeBody(shell, JSON.stringify(prepared), prepared)
+  return serializeBody(shell, JSON.stringify(doc), doc)
 }
 
 /** The full .bento.html file content with `doc` embedded (plain). */
@@ -485,11 +475,10 @@ export async function decryptEnvelope(env: EncEnvelope, password: string): Promi
  * saves and self-updates. Plain when no password is active.
  */
 export async function serializeDocInto(shell: Document, doc: KernelDoc): Promise<string> {
-  const prepared = prepareDocument(doc)
   const body = encPassword
-    ? await encryptBody(JSON.stringify(prepared), encPassword)
-    : JSON.stringify(prepared)
-  return serializeBody(shell, body, prepared)
+    ? await encryptBody(JSON.stringify(doc), encPassword)
+    : JSON.stringify(doc)
+  return serializeBody(shell, body, doc)
 }
 
 /** Encryption-aware serializeFile. */

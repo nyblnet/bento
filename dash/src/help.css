@@ -1,0 +1,135 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   The shortcut card. Same shape as the About dialog (scrim + card + one Close
+   at the bottom), because it is the same kind of thing and a second visual
+   language for a second overlay is how an app starts feeling assembled.
+
+   Vite concatenates every IMPORTED stylesheet into one <style> in head, which
+   is what postbuild-compress deflates — it takes the FIRST <style> in head and
+   would leave a second one as plaintext. So this file must be imported from
+   help.ts and never linked, and nothing in it may depend on landing after
+   styles.css in the cascade: order follows the module graph, not intent. Every
+   colour here is therefore a var(), which resolves where it is used. */
+
+.dx-help-back {
+  position: fixed;
+  inset: 0;
+  z-index: 10000; /* same tier as About: above .dx-pop (9999) */
+  background: var(--scrim);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 5vh 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.dx-help {
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-dialog);
+  padding: 20px 22px 18px;
+  width: min(860px, 100%);
+  margin-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.dx-help h2 {
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+/* COLUMNS, not a grid: the sections are of wildly different lengths (Selecting
+   is nine rows, Clipboard is three) and a two-track grid leaves one column
+   half empty. `break-inside: avoid` is what keeps a section whole — without it
+   a heading lands at the foot of a column with its first row in the next one. */
+.dx-help-cols {
+  columns: 2;
+  column-gap: 28px;
+}
+@media (max-width: 700px) {
+  .dx-help-cols { columns: 1; }
+}
+
+.dx-help-sec {
+  break-inside: avoid;
+  margin: 0 0 14px;
+}
+
+.dx-help-sec h3 {
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+
+/* Keys left, meaning right, and the meaning wraps under itself rather than
+   under the keys — a wrapped description that starts beneath a <kbd> reads as
+   a second shortcut. */
+.dx-help-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 0;
+  font-size: var(--fs-ui);
+  line-height: 1.45;
+}
+
+.dx-help-keys {
+  flex: 0 0 8.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.dx-help-what { flex: 1 1 auto; min-width: 0; }
+
+/* On a phone the fixed key column is a third of the width and every
+   description wraps three times. Measured at 375px: 8.5rem of chips against
+   200px of prose. */
+@media (max-width: 700px) {
+  .dx-help-keys { flex-basis: 6.5rem; }
+}
+
+.dx-help kbd {
+  font: inherit;
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--wash);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.dx-help-tips {
+  margin: 0;
+  padding-inline-start: 18px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  line-height: 1.55;
+}
+.dx-help-tips li { margin: 0 0 5px; }
+
+.dx-help-close {
+  display: block;
+  margin: 6px 0 0 auto;
+}
+
+/* The door in the top bar: a square ?, sized like the icon buttons beside it so
+   the bar's baseline does not move. It carries no <span> label, so the
+   responsive rules that collapse labels leave it alone at every width. */
+.dx-help-btn {
+  justify-content: center;
+  min-width: 28px;
+  padding: 5px 8px;
+  font-weight: 650;
+}

@@ -94,11 +94,17 @@ or detached checkout, for exactly that reason.
 ## 3. Known conflict magnets (pre-empt them)
 
 - **`CHANGELOG.md`** — every feature branch appends to `[Unreleased]`. Keep
-  entries as one self-contained block; when apps multiply, each app gets its
-  own changelog (`slides/CHANGELOG.md`, …).
+  entries as one self-contained block. Each app has its own changelog now
+  (`spaces/`, `dash/`, `type/`); the ROOT `CHANGELOG.md` is **bento/slides'**
+  and has not moved to `slides/CHANGELOG.md` yet. Never append another app's
+  changes to it — release notes ride inside the signed update manifest, so a
+  file describing a second app tells a user about changes their document did
+  not get.
 - **i18n catalogs** — append-only additions at the TOP of each catalog map;
-  never reorder or reformat existing entries. All 7 catalogs in the same PR
-  as the source string.
+  never reorder or reformat existing entries. Every catalogue in the same PR
+  as the source string — **the count is not written here**; it is `LOCALES` in
+  the app's `scripts/build-*-i18n.mjs`. This line said 7 while the apps packed
+  8. See hard rule 6 in `AGENTS.md`.
 - **`render.ts` / shared modules** — additive features must COMPOSE (blur +
   blend + backdrop all coexist; gradient + stroke coexist). When resolving a
   conflict between two features, the answer is almost always "keep both".

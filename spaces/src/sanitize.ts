@@ -29,7 +29,7 @@ const ALLOWED = new Set([
  * stripping every internal link — while on a static host it becomes
  * `https://…#p/abc` and passes. Measured. The bug would be invisible in the
  * environment an author develops in and total in the two environments the
- * format exists for (file://, and bento/tray on iOS).
+ * format exists for (file://, and bento/home on iOS).
  *
  * `#p/` is an intra-space page link. There is deliberately no second fragment
  * form: an undefined entry in this list is a one-way data hazard, because an

@@ -11,11 +11,24 @@
 
 .dxs-wrap { position: relative; display: inline-flex; align-items: stretch; }
 
+/* THE PAIR IS BOXED while the rest of the bar's buttons are ghosts, which is
+   exactly slides' arrangement (.ed-split / .ed-split-caret take
+   `1px solid var(--line)` on `var(--chrome)` while .ed-btn is transparent).
+   Save is the one control in the bar that has to be findable without being
+   read, and a filled box beside eleven ghosts is how it is. */
+.dxs-wrap > .dx-btn:first-child,
+.dxs-caret {
+  border-color: var(--line);
+  background: var(--chrome);
+}
+.dxs-wrap > .dx-btn:first-child:hover,
+.dxs-caret:hover { background: var(--chrome-2); }
+
 /* The caret sits FLUSH against the Save button so the pair reads as one
    control. It is its own button rather than a click zone inside Save, because a
    miss on a split control that saves is a save to the wrong file. */
 .dxs-caret {
-  padding: 4px 6px;
+  padding: 6px 7px;
   font-size: 11px;
   line-height: 1.4;
   border-left: 0;
@@ -63,7 +76,8 @@
   cursor: pointer;
 }
 .dxs-item:hover:not(:disabled) { background: var(--hover); }
-.dxs-item:disabled { opacity: 0.45; cursor: default; }
+/* 0.35 — slides' one figure for a dead control; see .dx-btn[disabled] */
+.dxs-item:disabled { opacity: 0.35; cursor: default; }
 .dxs-item small {
   display: block;
   color: var(--muted);

@@ -148,5 +148,19 @@ const toksOf = (states: State[] | undefined) =>
     inserts.every((v: string) => !/\S/.test(v)))
 }
 
+// 9. A WORD THAT CHANGES CLASS KEEPS ITS IDENTITY — `render(` is classed a
+//    call, `.then(render)` a plain reference. The tokenizer flips the class
+//    exactly when a refactor changes style, so keying identity on the class
+//    made the word die and respawn instead of travelling. The audience pairs
+//    tokens by their glyphs; the key buckets call/identifier together and
+//    rendering still colours by the true class.
+{
+  const states = new HeckelDiff(codeDoc(['render(deck)\nship()', 'queue(render)\nship()'])).computeDiffs('g')
+  const t0 = toksOf(states.get(0)), t1 = toksOf(states.get(1))
+  const a = t0.find((t: any) => t.content === 'render')
+  const b = t1.find((t: any) => t.content === 'render')
+  check('call -> plain reference keeps identity', !!a && !!b && a.morphId() === b.morphId())
+}
+
 console.log(FAILS.length ? `\n${FAILS.length} FAILED` : '\nall passed')
 process.exit(FAILS.length ? 1 : 0)

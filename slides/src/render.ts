@@ -4,11 +4,12 @@
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
 import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/net.ts'
-import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
-import { morphKey, paginates } from './model'
+import type { BentoDoc, EmbedElement, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
+import { morphKey, paginates, isWebUrl } from './model'
 import { chartSnapshotSvg } from './charts'
 import temml from 'temml'
 import { renderCodeInto } from './code'
+import { formatDate } from './datefmt'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -53,7 +54,9 @@ const escapeFieldText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&
  * Resolve dynamic field tokens in text: {{page}}, {{pages}}, {{title}},
  * {{date}}, {{time}}, plus the document-property fields {{author}}, {{company}},
  * {{subject}}, {{event}}. page/pages take an optional zero-pad width — {{page:2}}
- * → "06". The MODEL stores the raw token; only rendered output is resolved, so
+ * → "06"; date/time take an optional PATTERN — {{date:M/D/YY}} pins the shape
+ * for every viewer (datefmt.ts), bare {{date}} follows the viewer's locale.
+ * The MODEL stores the raw token; only rendered output is resolved, so
  * inserting/removing slides re-numbers everything and editing doc properties
  * updates every slide automatically. Groundwork for the wider office suite.
  */
@@ -65,8 +68,8 @@ export function resolveFields(html: string, ctx?: FieldContext): string {
       case 'page': return pad(ctx.page, arg)
       case 'pages': return pad(ctx.pages, arg)
       case 'title': return escapeFieldText(ctx.title)
-      case 'date': return escapeFieldText(ctx.date.toLocaleDateString())
-      case 'time': return escapeFieldText(ctx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      case 'date': return escapeFieldText(arg?.trim() ? formatDate(ctx.date, arg.trim()) : ctx.date.toLocaleDateString())
+      case 'time': return escapeFieldText(arg?.trim() ? formatDate(ctx.date, arg.trim()) : ctx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
       case 'author': return escapeFieldText(ctx.author)
       case 'company': return escapeFieldText(ctx.company)
       case 'subject': return escapeFieldText(ctx.subject)
@@ -135,6 +138,48 @@ export function stripRemoteRefs(node: HTMLElement): void {
 
 function svgMarkup(el: SvgElement, doc: BentoDoc): string {
   return (el.asset ? doc.assets?.[el.asset] : el.markup) ?? ''
+}
+
+// --- embed -----------------------------------------------------
+
+/** The only url a live frame will load. Judged here as well as at the paste
+ *  boundary, because a deck opened from disk never passes through untrusted.ts. */
+
+/**
+ * May this embed get a live iframe right now?
+ *
+ * Two different kinds of offline, one answer. Bento's offline switch is a
+ * privacy promise ("nothing leaves this computer") and is asked through
+ * net.ts, the one place that knows it; a missing network is `navigator.onLine`.
+ * Both fall back to `view`, which is what makes the deck presentable on
+ * conference wifi and what keeps the switch honest. Pure, so the rig can
+ * inspect the decision without a DOM (scripts/test-embed.ts).
+ */
+export function liveFrameAllowed(el: EmbedElement): boolean {
+  if (el.live !== true || el.app !== 'web') return false
+  const url = typeof el.url === 'string' ? el.url.trim() : ''
+  if (!isWebUrl(url) || remoteSrcBlocked(url)) return false
+  const nav = typeof navigator !== 'undefined' ? navigator : undefined
+  return !nav || nav.onLine !== false
+}
+
+/**
+ * The live frame. Sandboxed with NO `allow-same-origin` and no top
+ * navigation: every deck is untrusted input, and a page of someone else's
+ * choosing gets a screen, never this document. `error` swaps back to the
+ * view underneath; the view is never removed, so a frame that fails to paint
+ * still leaves a picture.
+ */
+function liveFrame(el: EmbedElement, opts: RenderOpts): HTMLIFrameElement {
+  const frame = document.createElement('iframe')
+  frame.setAttribute('sandbox', 'allow-scripts allow-forms')
+  frame.referrerPolicy = 'no-referrer'
+  frame.title = el.url ?? ''
+  frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:transparent'
+    + (opts.liveMedia ? '' : ';pointer-events:none') // inert on the canvas, same reason as media
+  frame.addEventListener('error', () => frame.remove(), { once: true })
+  frame.src = el.url!.trim()
+  return frame
 }
 
 /**
@@ -431,6 +476,22 @@ function tagSymbols(mathml: string): string {
     seen.set(txt, n + 1)
       ; (leaf as HTMLElement).dataset.sym = `${txt}#${n}`
   }
+  // Scaffolding gets its own key, on a SEPARATE attribute. A fraction bar and
+  // a radical are drawn by the mfrac/msqrt box itself, not by any token, so
+  // they carry no data-sym and used to be the one part of a formula that
+  // neither travelled nor faded — they were simply there from frame one while
+  // everything around them animated. They must never enter the symbol morph:
+  // transforming a container would move its children a second time, on top of
+  // their own travel. Keyed by tag occurrence so scaffolding that SURVIVES a
+  // step (the outer fraction of a rearranged equation) is recognised and left
+  // alone, while genuinely new scaffolding can be faded in.
+  const struct = new Map<string, number>()
+  for (const box of Array.from(tpl.content.querySelectorAll('mfrac, msqrt, mroot, menclose, mover, munder, munderover'))) {
+    const tag = box.tagName.toLowerCase()
+    const n = struct.get(tag) ?? 0
+    struct.set(tag, n + 1)
+      ; (box as HTMLElement).dataset.msx = `${tag}#${n}`
+  }
   return tpl.innerHTML
 }
 
@@ -467,7 +528,25 @@ export function resolveMath(html: string): string {
   return out.replace(/\\\$/g, '$') // the escape has done its job
 }
 
-const ALLOWED_TAGS = new Set(['B', 'I', 'U', 'BR', 'SPAN', 'DIV', 'P', 'STRONG', 'EM', 'S', 'CODE'])
+/**
+ * The rich-text vocabulary a text element (and a table cell) may use.
+ *
+ * Every tag here is ATTRIBUTE-FREE by construction — the sanitizer strips all
+ * attributes unconditionally, so a tag can only ever mean what its name means.
+ * That is why formatting is expressed as semantic tags rather than styled
+ * spans: a `<span style>` route would need the sanitizer to start reasoning
+ * about declarations, and this format's whole defence is that it does not.
+ *
+ * The block tags (UL/OL/LI, H1/H2) are newer than the inline ones. An older
+ * shell that has not heard of them UNWRAPS them and keeps the words, so a deck
+ * with lists opens everywhere — it simply loses the bullets until the reader
+ * updates. Sanitizing happens at RENDER time, so that degradation is visual
+ * only; the model keeps the markup unless that box is edited in the old shell.
+ */
+const ALLOWED_TAGS = new Set([
+  'B', 'I', 'U', 'BR', 'SPAN', 'DIV', 'P', 'STRONG', 'EM', 'S', 'CODE',
+  'UL', 'OL', 'LI', 'H1', 'H2', 'A',
+])
 
 /** Keep pasted/edited rich text down to a safe inline subset. */
 export function sanitizeHtml(html: string): string {
@@ -479,12 +558,22 @@ export function sanitizeHtml(html: string): string {
       if (child.nodeType === Node.ELEMENT_NODE) {
         const elChild = child as HTMLElement
         if (!ALLOWED_TAGS.has(elChild.tagName)) {
-          // unwrap unknown elements, keep their text
+          // unwrap unknown elements, keep their text — walking what they held
+          // first, so lifted children are held to the same rule as siblings
+          walk(elChild)
           while (elChild.firstChild) node.insertBefore(elChild.firstChild, elChild)
           elChild.remove()
           continue
         }
+        // No attribute survives — except an anchor's href when it is a web
+        // URL (isWebUrl: http/https only, so javascript:/data: never land in
+        // a document). target/rel are decided at click time, never stored.
+        const href = elChild.tagName === 'A' ? elChild.getAttribute('href') : null
         for (const attr of Array.from(elChild.attributes)) elChild.removeAttribute(attr.name)
+        if (elChild.tagName === 'A') {
+          if (isWebUrl(href)) elChild.setAttribute('href', href)
+          else { walk(elChild); while (elChild.firstChild) node.insertBefore(elChild.firstChild, elChild); elChild.remove(); continue }
+        }
         walk(elChild)
       } else if (child.nodeType !== Node.TEXT_NODE) {
         child.remove()
@@ -544,8 +633,13 @@ function stripAllTags(html: string): string {
  * `importNode(n, true)` copied them wholesale.
  */
 export const SVG_TAGS = new Set([
-  // structure. `style` stays: it cannot execute, and scopeCss (hard-won detail
-  // #7) is what keeps its rules from leaking into every other svg on the page.
+  // structure. `style` stays: it cannot execute, its text is run through
+  // sanitizeSvgCss, and sanitizeSvg SCOPES it to the element instance (hard-won
+  // detail #7) so its rules cannot leak into every other svg on the page.
+  // That scoping is passed IN — the sanitizer has no element to name on its
+  // own. An earlier version of this comment credited scopeCss directly, which
+  // was false: scopeCss's only caller took `el.css`, the model field, and the
+  // markup path below was never scoped at all.
   'svg', 'g', 'defs', 'symbol', 'use', 'switch', 'desc', 'title', 'metadata', 'style', 'view', 'a',
   // shapes and text
   'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
@@ -781,7 +875,13 @@ export function sanitizeSvgCss(css: string): string {
  * `id` is deliberately never stripped: svg gradients and markers resolve
  * through document-global `url(#…)`, so an id sweep blanks the artwork.
  */
-export function sanitizeSvg(markup: string): DocumentFragment {
+/**
+ * `scope` is REQUIRED, not optional. The bug this signature exists to prevent
+ * was precisely a markup path that never got scoped, so an optional parameter
+ * would leave the leak one omission away and make the unsafe call the shorter
+ * one. There is one caller; costing it a selector is free.
+ */
+export function sanitizeSvg(markup: string, scope: string): DocumentFragment {
   const out = document.createDocumentFragment()
   if (!markup) return out
   const parsed = new DOMParser().parseFromString(markup, 'text/html')
@@ -829,7 +929,10 @@ export function sanitizeSvg(markup: string): DocumentFragment {
         // html parser really does build here: inside foreign content the
         // tokenizer stays in the data state, so `<svg><style><img src=x
         // onerror=…></style>` parses that img as an ELEMENT, not as css text.
-        el.textContent = sanitizeSvgCss(el.textContent ?? '')
+        // Scoped as well as sanitized. An svg <style> applies DOCUMENT-WIDE, so
+        // one diagram's rules reach every other svg on the page — the exact
+        // hazard scopeCss exists for, which until now only `el.css` got.
+        el.textContent = scopeCss(sanitizeSvgCss(el.textContent ?? ''), scope)
         continue
       }
       walk(el)
@@ -962,11 +1065,6 @@ export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
 export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts = {}): HTMLElement {
   const node = document.createElement('div')
   node.className = `bento-el bento-el-${el.type}`
-  if (el.templateLocked) {
-    node.classList.add('bento-template-locked')
-    node.style.pointerEvents = 'none'
-    node.setAttribute('aria-hidden', 'true')
-  }
   node.dataset.elId = el.id
   node.dataset.flipId = morphKey(el)
   if (el.link) node.dataset.link = el.link
@@ -1008,6 +1106,11 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         if (ts.fill === 'none') inner.style.color = 'transparent'
       }
       inner.style.textAlign = el.align
+      // List markers need to know. `outside` hangs a marker at the box's start
+      // edge, which is only where it belongs when the line starts there too —
+      // centre or right the text and the markers stay pinned to the left,
+      // detached from the words they belong to (styles.css keys off this).
+      inner.dataset.align = el.align
       inner.style.lineHeight = String(el.lineHeight)
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
       inner.style.width = '100%'
@@ -1038,10 +1141,6 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       if (imgSrc) img.src = imgSrc
       else img.dataset.bentoOffline = '1'
       img.draggable = false
-      // Ratio locking controls resize geometry only. It must never switch the
-      // bitmap between contain/cover/fill, because doing so makes the visible
-      // image jump when the lock is toggled. Freeform image distortion is made
-      // persistent by setting fit='fill' when the lock is turned off.
       img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
       node.appendChild(img)
       break
@@ -1147,7 +1246,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       // whatever the deck carried in a <script> or an onload — see sanitizeSvg.
       // The <img> branch above is inert already (an image is script-disabled),
       // which is why only this path changes.
-      node.appendChild(sanitizeSvg(markup))
+      node.appendChild(sanitizeSvg(markup, `[data-el-id="${CSS.escape(el.id)}"]`))
       const svg = node.querySelector('svg')
       if (svg) {
         svg.style.width = '100%'
@@ -1164,10 +1263,61 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       }
       break
     }
+    case 'embed': {
+      // The view ALWAYS paints, by the svg element's own two
+      // paths: an inert data-URI <img> for thumbnails, sanitizeSvg live. An
+      // unknown `app` is rendered, not rejected: its view is still a picture.
+      // The live frame is layered on top only when liveFrameAllowed says so,
+      // and never in a thumbnail, which must not reach the network for a
+      // sidebar.
+      node.dataset.embed = '1'
+      node.style.overflow = 'hidden' // .bento-el is already positioned; the frame sits over the view
+      const markup = resolveAsset(doc, el.view ?? '')
+      let painted = false
+      if (markup) {
+        if (opts.svgAsImage) {
+          const img = document.createElement('img')
+          img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(markup)
+          img.draggable = false
+          img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block'
+          node.appendChild(img)
+          painted = true
+        } else {
+          node.appendChild(sanitizeSvg(markup, `[data-el-id="${CSS.escape(el.id)}"]`))
+          const svg = node.querySelector('svg')
+          if (svg) {
+            svg.style.width = '100%'
+            svg.style.height = '100%'
+            svg.style.display = 'block'
+            painted = true
+          }
+        }
+      }
+      if (!painted) {
+        // Never an empty box: a view that is missing or was refused still
+        // says what it is, and its source is still there to open elsewhere.
+        const ph = document.createElement('div')
+        ph.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#eef2f7;color:#93a2b6;font-size:14px'
+        ph.textContent = el.app === 'web' && el.url ? el.url : `⧉ ${el.app || 'embed'}`
+        node.appendChild(ph)
+      }
+      // ...and only on a LIVE surface (present mode passes liveMedia). The
+      // editor canvas re-renders on every edit; a frame there would navigate
+      // to the author's URL on each repaint, inert or not.
+      if (!opts.svgAsImage && opts.liveMedia && liveFrameAllowed(el)) node.appendChild(liveFrame(el, opts))
+      break
+    }
     case 'code': {
       node.style.display = 'flex'
       node.style.flexDirection = 'column'
       node.style.justifyContent = VALIGN[el.valign]
+      // Clip at the ELEMENT box — the size the author chose — and never at the
+      // <pre> (see below). Code sets `white-space: pre`, so a long line does
+      // not wrap and would otherwise run across the slide over whatever sits
+      // beside it; bounding it to its own box keeps the author's layout
+      // contract. The box is normally far larger than the lines inside it,
+      // which is exactly the room a morphing token needs.
+      node.style.overflow = 'hidden'
       const inner = document.createElement('pre')
       inner.className = 'bento-text-inner'
       inner.dir = 'auto'
@@ -1180,7 +1330,16 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.classList.add('bento-code')
       inner.style.whiteSpace = 'pre'
       inner.style.margin = '0'
-      inner.style.overflow = 'hidden'
+      // NOT overflow:hidden here. A <pre> is only as tall as its own lines,
+      // and a morphing token starts at its position on the OTHER slide —
+      // outside those bounds whenever the block gets shorter. Clipping at this
+      // level painted a travelling token 48px below the box and cut it away:
+      // it vanished for the first half of its journey and popped into view
+      // mid-flight, and only in the direction where the code got shorter,
+      // since the taller side had room for the same motion. That asymmetry is
+      // what made it read as a pairing bug rather than a painting one.
+      // Found in a screenshot — the DOM reported opacity 1, a correct 80px
+      // transform and a sensible rect, all true, all outside a clipping box.
       if (!renderCodeInto(inner, el, doc)) {
         // Fallback to unformatted text
         inner.innerText = el.content

@@ -355,7 +355,7 @@ asks where to put the file.
 
 Everything below needs the extension actually loaded — none of it is testable
 from a page, and permission-gated behaviour reports `denied` under automation
-(`working/home-design.md` §3.2, a trap that already produced two wrong
+(`working/design/home-design.md` §3.2, a trap that already produced two wrong
 conclusions).
 
 ~~1. Can an MV3 service worker `createWritable()` on a stored directory

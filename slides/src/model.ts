@@ -55,6 +55,16 @@ export interface ElementBase {
     enterDur?: number
     /** stagger step within the entrance sequence; equal values enter together */
     order?: number
+    /**
+     * Reveal step ("animate on click", discussion #282): 1 or more means the
+     * element is HIDDEN when the slide appears and revealed on the n-th → —
+     * running its `enter` then, or a plain fade when it has none; ← hides it
+     * again; → leaves the slide only once every step is shown. Arriving
+     * backward shows every step. Absent/0 = shown with the slide. Presentation
+     * state, not slides: one slide, one page number, one morph pairing. An
+     * older shell shows every element at once. Decisions in src/steps.ts.
+     */
+    step?: number
     /** animate numeric parts of the text from 0 to their final value */
     countUp?: boolean
     /** continuous ambient motion (slow zoom, for full-bleed photos) */
@@ -83,6 +93,12 @@ export interface ElementBase {
         }
   }
   /** while presenting, clicking this element jumps to the slide with this id */
+  /**
+   * Click target while presenting: a slide id (jump there — the state-slide
+   * idiom), or an http(s) URL (opens in a NEW tab, never navigating the deck
+   * away; `isWebUrl` is the whole scheme test, so `javascript:` and `data:`
+   * are not links). Discussion #373/#374. Editor clicks never follow it.
+   */
   link?: string
   /** semantic group tag — hover focus and multi-element behaviours target it */
   group?: string
@@ -105,8 +121,17 @@ export interface ElementBase {
    * those four are the conventions the built-in layouts use.
    */
   role?: string
-  /** Protected non-text furniture inherited from a template. */
-  templateLocked?: boolean
+  /**
+   * Where this element's colours came from, keyed by property path within the
+   * element — `fill`, `shadow.color`, `fillGradient.stops.0.color`.
+   *
+   * The literal ALWAYS stays in place; this records the palette slot it was
+   * derived from, so editing the palette can rewrite it. A reader that knows
+   * nothing about this field sees an ordinary deck of ordinary colours, which
+   * is exactly the point: it is additive, and property absence gains no new
+   * meaning. See `palette.ts`.
+   */
+  themeRefs?: Record<string, string>
 }
 
 export interface ShadowSpec {
@@ -222,9 +247,6 @@ export interface ImageElement extends ElementBase {
   src: string
   fit: 'contain' | 'cover' | 'fill'
   radius: number
-  /** Undefined/true keeps proportions; false applies to this image only.
-   *  Re-enabling locks the image at its CURRENT frame ratio. */
-  keepAspectRatio?: boolean
 }
 
 export interface SvgElement extends ElementBase {
@@ -326,8 +348,47 @@ export interface MediaElement extends ElementBase {
   controls?: boolean
 }
 
+/**
+ * An embedded artifact, built to the `bento/embed` shape
+ * (docs/DECISIONS.md, 2026-08-19) so it round-trips through upstream shells.
+ * Three tiers, and the ORDER is the design: `view` is a static render that
+ * ALWAYS paints, with no extra code, in any app; `doc` is the source, so the
+ * embed is not a screenshot; a live sandboxed iframe is OPT-IN per element.
+ *
+ * `app: 'web'` with a `url` is a live web surface on a slide. The
+ * frame is created only while online AND with the offline switch off
+ * (render.ts:liveFrameAllowed); otherwise the view shows. Unknown `app`
+ * values are RENDERED (their view), never rejected.
+ */
+/**
+ * The one scheme test for anything that opens or loads a web page — an
+ * embed's `url` (the paste gate and the live-frame gate), an element `link`,
+ * a text `<a href>` — shared so no surface is looser than another. http and
+ * https only, bounded, no quote or angle bracket (attribute breakout); a URL
+ * that is merely well-formed but `javascript:`/`data:`/`file:` is not one.
+ */
+export const isWebUrl = (v: unknown): v is string =>
+  // (the quote characters are written as escapes: a bare quote inside a regex
+  // literal reads as an unterminated string to the source-shape rigs' masker)
+  typeof v === 'string' && v.length <= 2048 && /^https?:\/\/[^\s\x22\x27<>]+$/i.test(v)
+
+export interface EmbedElement extends ElementBase {
+  type: 'embed'
+  /** the app that made it: 'bento/dash', 'bento/type', … or 'web' for a page */
+  app: string
+  /** the static render: raw <svg> markup, or "asset:<key>" holding it */
+  view: string
+  /** the source, when there is one: pure JSON, or "asset:<key>" */
+  doc?: unknown
+  /** app 'web' only: the page the live frame loads (http(s) only) */
+  url?: string
+  /** opt in to a sandboxed live iframe over the view while online */
+  live?: boolean
+}
+
 export type SlideElement =
   | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement | CodeElement
+  | EmbedElement
 
 /**
  * A review comment thread. Editor-only metadata: never rendered while
@@ -355,6 +416,9 @@ export interface Slide {
   transition: TransitionKind
   elements: SlideElement[]
   notes: string
+  /** palette references for the slide's own colours — `background`. See palette.ts. */
+  themeRefs?: Record<string, string>
+
   /** optional friendly name (link pickers, state badges) */
   name?: string
   /**
@@ -382,6 +446,18 @@ export interface Slide {
    */
   hidden?: boolean
   /**
+   * In the walk, but takes no page number. The arrow keys reach it like any
+   * slide; `{{page}}` on it shows the number of the slide before it, so it
+   * reads as a CONTINUATION of that page. For a build — three recommendations
+   * revealed one slide at a time with `morph` — the audience sees "18" three
+   * times instead of 18, 19, 20 (discussion #282); equally for an interstitial
+   * or a section card that should not count. Distinct from `hidden` (out of
+   * the walk) and from `stateOf` (a variant reached by link): this is the
+   * third answer to `paginates`, and the ONLY one that stays in `inLinearFlow`.
+   * Absent = counts, so every existing file is unchanged.
+   */
+  unnumbered?: boolean
+  /**
    * present-mode hover behaviour:
    * - focus-group: dim every element outside the hovered element's group
    * - reveal: show the showOnHover set matching the hovered group
@@ -390,10 +466,6 @@ export interface Slide {
   hover?: { type: 'focus-group' | 'reveal'; dim?: number; default?: string }
   /** review comment threads (editor-only; see Comment) */
   comments?: Comment[]
-  /** Template/layout lineage for an instantiated slide. */
-  templateId?: string
-  /** Temporary editor-only template draft marker. */
-  templateEditOf?: string
 }
 
 export interface BentoDoc {
@@ -426,10 +498,50 @@ export interface BentoDoc {
     color: string
     accent: string
     fontFamily: string
+    /**
+     * Heading face. Body text stays on `fontFamily`; this is the display face,
+     * mirroring OOXML's major/minor pair. Absent = headings use `fontFamily`.
+     */
+    headingFamily?: string
+    /**
+     * The document's named brand slots, mirroring OOXML's colour scheme so an
+     * importer maps 1:1. Elements point at these through `themeRefs`, and
+     * editing a slot re-derives every literal that references it.
+     *
+     * `background`, `color` and `accent` above REMAIN the canonical values for
+     * `bg1`, `tx1` and `accent1` — they are not superseded, so every existing
+     * reader keeps working and a document with no palette still resolves those
+     * three. `paletteOf()` is the only thing that should assemble this.
+     */
+    palette?: {
+      bg2?: string; tx2?: string
+      accent2?: string; accent3?: string; accent4?: string
+      accent5?: string; accent6?: string
+      hlink?: string; folHlink?: string
+    }
     /** ordered series colours for new charts; derived from accent when absent */
     chartPalette?: string[]
     /** defaults for newly inserted tables; omitted decks keep the standard look */
     table?: Partial<TableStyle>
+    /** Code Palette (Tier-0). */
+    codePalette?: {
+      // comment
+      c?: string,
+      // string
+      s?: string,
+      // number
+      n?: string,
+      // keyword
+      k?: string,
+      // function calls
+      f?: string,
+      // punctutations
+      p?: string,
+      // diff: additions
+      a?: string,
+      // diff: deletions / removals
+      d?: string,
+    }
   }
   /** present-mode chrome; decks with built-in chrome can turn Reveal's off */
   present?: {
@@ -474,6 +586,9 @@ export interface BentoDoc {
   /**
    * embedded fonts: each entry becomes an @font-face at boot, with the font
    * data living in assets (data: URI). Elements then use `family` normally.
+   * `asset` may instead name a face the shell carries (`builtin:…`, see
+   * fonts.ts BUILTIN_FONTS) — no bytes in the file; a shell that does not
+   * know the key renders the family with its fallback stack.
    */
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
   /**
@@ -513,7 +628,7 @@ export interface BentoDoc {
     writerPub?: string
     writerPriv?: string
     /** 'reader' = this copy is a live viewer: receives updates, never sends. */
-    role?: 'writer' | 'reader'
+    role?: 'writer' | 'reader' | 'audience'
     /**
      * Fine-grained access (v1.0.3+, `v: 2`): per-person keys. The room id
      * commits to the OWNER's pubkey. A member copy carries an INVITE — an
@@ -528,11 +643,27 @@ export interface BentoDoc {
     invite?: {
       pub: string
       priv: string
-      role: 'writer' | 'commenter'
+      /** 'audience' (live broadcast) admits a receive-only socket for the
+       *  duration of a show; it travels only in audience copies, whose `key`
+       *  is the show key rather than the room key (see src/audience.ts). */
+      role: 'writer' | 'commenter' | 'audience'
       /** unix ms expiry; 0/absent = no expiry */
       exp?: number
       /** owner's signature over `inv.${pub}.${role}.${exp||0}` */
       sig: string
+    }
+    /**
+     * Live broadcast tickets (PRESENTER's copy only; additive, old shells
+     * preserve it). Minted once by "Save audience copy…" and reused for every
+     * show until "Issue new tickets" re-mints both halves, which kills every
+     * outstanding audience copy: `invite` is the owner-signed audience
+     * invite the relay admits on, `key` the per-show symmetric key the
+     * presenter double-encrypts under while live. Never in an audience copy
+     * (that copy carries the invite and has `key` AS its collab.key).
+     */
+    audience?: {
+      invite: { pub: string; priv: string; role: 'audience'; exp?: number; sig: string }
+      key: string
     }
   }
   /**
@@ -1019,12 +1150,7 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
 /** A fresh slide from a layout — new slide id, element ids KEPT (lineage). */
 export function instantiateLayout(layout: Slide): Slide {
   const copy: Slide = JSON.parse(JSON.stringify(layout))
-  copy.elements = copy.elements.map((el) => {
-    if (el.type === 'text') { delete el.templateLocked; return el }
-    el.templateLocked = true
-    return el
-  })
-  return { ...copy, id: uid('slide'), name: undefined, stateOf: undefined, notes: '', templateId: layout.id }
+  return { ...copy, id: uid('slide'), name: undefined, stateOf: undefined, notes: '' }
 }
 
 const textHasContent = (e: SlideElement) =>
@@ -1091,11 +1217,12 @@ export function layoutElementIds(doc: BentoDoc): Set<string> {
  *
  * The single answer to that question — page fields, the presenter's counter,
  * the sidebar — so they cannot disagree about which slide is "4". Interactive
- * states never count; hidden slides count only when the deck opts into
+ * states never count; an `unnumbered` slide never counts (it continues the
+ * page before it); hidden slides count only when the deck opts into
  * office-suite numbering.
  */
 export const paginates = (s: Slide, doc: BentoDoc): boolean =>
-  !s.stateOf && (!s.hidden || !!doc.present?.numberHidden)
+  !s.stateOf && !s.unnumbered && (!s.hidden || !!doc.present?.numberHidden)
 
 /**
  * Is this slide part of the linear walk?

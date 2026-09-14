@@ -12,7 +12,12 @@
 
 import { registerI18n, locale } from '../../kernel/src/i18n.ts'
 import type { LocaleChoice } from '../../kernel/src/i18n.ts'
-import { PACKED, PACKED_LOCALES } from './i18n/packed'
+// EXPLICIT `.ts`, like every other import in this app's newer files. It was
+// extensionless, which node's strip-only TypeScript loader will not follow — so
+// any module that reached t() (and canvas.ts does) could not be handed to a
+// node rig at all, and scripts/test-spaces.mjs had to bundle it first. One
+// character buys a whole subtree of the app back for direct testing.
+import { PACKED, PACKED_LOCALES } from './i18n/packed.ts'
 
 /** Offered in the About picker, each labelled in its own language. */
 const CHOICES: LocaleChoice[] = [

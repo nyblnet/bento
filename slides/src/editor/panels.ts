@@ -5,13 +5,18 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, isWebUrl, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement } from '../model'
 import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
+import { PALETTE_SLOTS, paletteOf, refAt, setColor, slotIsSet } from '../palette'
 import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
+import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../code'
+import { DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS, formatDate } from '../datefmt'
+import { revealInOrder, revealTogether, removeReveal, type StepPatch } from './reveal'
+import { stepOf } from '../steps'
 import { ICONS } from '../icons'
 import { t } from '../i18n'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
@@ -47,6 +52,7 @@ const ROW_TIPS: Record<string, string> = {
   'Color': 'Colour with opacity — pick with the swatch, the % field is how opaque it is',
   'Enter': 'Entrance animation when the slide appears (plays on non-morph entries; equal order = together)',
   'Enter secs': 'How long the entrance takes, in seconds',
+  'Reveal step': 'Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)',
   'Count up': 'Numbers in this text count up from zero when the slide enters',
   'Ambient': 'Continuous motion while the slide is on screen — Ken Burns drift or zoom',
   'Zoom': 'Ken Burns direction — drift, settle out, or settle in',
@@ -62,6 +68,7 @@ const ROW_TIPS: Record<string, string> = {
   'Show on hover': 'Puts this element in a hover set — visible only while that set is active',
   'Group': 'Presentation group — with focus-group hover, the other groups dim',
   'Link to': 'Clicking this element during the show jumps to the chosen slide',
+  'Web link': 'Clicking this element during the show opens this web page in a new tab (https:// only)',
   'Font': 'Typeface for this text',
   'Size (pt)': 'Font size in points',
   'Weight': 'Font weight — 400 regular, 700 bold',
@@ -89,7 +96,27 @@ const ROW_TIPS: Record<string, string> = {
   'Fit': 'How the media fills its box — cover crops to fill, contain letterboxes',
   'URL': 'Link a hosted file instead of embedding — keeps the deck small',
   'Poster': 'Preview image shown before the video plays',
+  'Page URL': 'The web page the live frame loads while online (http or https)',
+  'Live': 'Load the page in a sandboxed frame while online. Offline, or with offline mode on, the captured view shows instead.',
   'State of': 'Makes this slide a hidden state of another — reached by clicked links, skipped by arrow keys',
+}
+
+/** An embed view from a raster: one <svg> around a data:image, sized to the
+ *  element so it fills the box the way `fit: cover` would. */
+function rasterView(dataUri: string, w: number, h: number): string {
+  const vw = Math.max(1, Math.round(w)), vh = Math.max(1, Math.round(h))
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}">`
+    + `<image href="${dataUri.replace(/"/g, '')}" width="${vw}" height="${vh}" preserveAspectRatio="xMidYMid slice"/></svg>`
+}
+
+/** internAsset for raw svg markup: identical markup reuses its key. Callers
+ *  run inside a store.commit for the same reason internAsset's do. */
+function internView(doc: BentoDoc, markup: string): string {
+  const assets = (doc.assets ??= {})
+  for (const k in assets) if (assets[k] === markup) return `asset:${k}`
+  const key = uid('a')
+  assets[key] = markup
+  return `asset:${key}`
 }
 
 /**
@@ -162,11 +189,6 @@ export class PropsPanel {
       this.stale = true // don't rip the field out from under the user; catch up on focusout
       return
     }
-    // A doc mutation rebuilds the same inspector in place. Preserve its scroll
-    // position so changing a control near the bottom does not jump the panel to
-    // the top. Selection/slide switches pass force=true and intentionally start
-    // the newly relevant inspector at the top.
-    const scrollTop = force ? 0 : this.host.scrollTop
     this.stale = false
     this.burst = false
     this.host.innerHTML = ''
@@ -175,7 +197,6 @@ export class PropsPanel {
     else if (els.length === 1) this.buildElementPanel(els[0])
     else this.buildMultiPanel(els)
     this.applyAccordion()
-    this.host.scrollTop = scrollTop
   }
 
   /** Collapsed by default until the user opens them (persisted per title). */
@@ -231,18 +252,6 @@ export class PropsPanel {
 
   private buildSlidePanel() {
     const slide = this.store.slide
-    if (slide.templateEditOf) {
-      this.section(t('Template editing'))
-      const hint = document.createElement('p'); hint.className = 'ed-hint'
-      hint.textContent = t('Edit every object here. Save the template when finished, or cancel to discard the draft.')
-      this.host.appendChild(hint)
-      const actions = document.createElement('div'); actions.className = 'ed-ops'
-      const save = document.createElement('button'); save.className = 'ed-btn ed-primary'; save.textContent = t('Save template')
-      save.addEventListener('click', () => document.dispatchEvent(new CustomEvent('bento:save-template-edit')))
-      const cancel = document.createElement('button'); cancel.className = 'ed-btn'; cancel.textContent = t('Cancel')
-      cancel.addEventListener('click', () => document.dispatchEvent(new CustomEvent('bento:cancel-template-edit')))
-      actions.append(save, cancel); this.host.appendChild(actions)
-    }
     this.section(t('Slide'))
     // deck-wide page size: presets + custom. Elements keep their absolute
     // positions — a size change reframes the canvas, it never rescales art.
@@ -274,7 +283,8 @@ export class PropsPanel {
       this.edit(() => { this.store.doc.size.height = Math.max(320, Math.min(4000, Math.round(v))) }, fin)))
     showCustomSize(presetKey === 'Custom…')
     this.row('Background', this.color(slide.background, (v, fin) =>
-      this.edit(() => { this.store.slide.background = v }, fin)))
+      this.edit(() => { this.store.slide.background = v }, fin),
+      { id: null, path: 'background' }))
     this.row('Transition', this.select(
       ['none', 'fade', 'slide', 'zoom', 'morph'],
       slide.transition,
@@ -289,6 +299,20 @@ export class PropsPanel {
           if (v) this.store.slide.hidden = true
           else delete this.store.slide.hidden
         }, true)))
+      // The third answer to "does it take a number": stays in the walk, counts
+      // for nothing, and {{page}} on it continues the slide before. Builds
+      // (one element revealed per morph step) and interstitials.
+      this.row('Unnumbered', this.toggle(!!slide.unnumbered, (v) =>
+        this.edit(() => {
+          if (v) this.store.slide.unnumbered = true
+          else delete this.store.slide.unnumbered
+        }, true)))
+      if (slide.unnumbered) {
+        const hint = document.createElement('p')
+        hint.className = 'ed-hint'
+        hint.textContent = t('Stays in the show but takes no page number — the page field continues the previous slide’s. For a reveal built as several morph steps, or a card that should not count.')
+        this.host.appendChild(hint)
+      }
     }
     if (slide.transition === 'morph') {
       const hint = document.createElement('p')
@@ -336,6 +360,7 @@ export class PropsPanel {
 
 
     // interactivity: naming, state-of, hover focus
+    this.buildThemeProps()
     this.section(t('Interactivity'))
     const name = document.createElement('input')
     name.type = 'text'
@@ -451,10 +476,12 @@ export class PropsPanel {
     this.opsRow(els)
     this.section(t('Arrange'))
     this.arrangeRows(els)
+    this.section(t('Presenting'))
+    this.revealRow(els)
   }
 
   private buildElementPanel(el: SlideElement) {
-    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video' }[el.type]))
+    this.section(t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video', embed: 'Embed' }[el.type]))
     this.opsRow([el])
 
     // Lead with the element's OWN controls — the reason it was selected —
@@ -466,6 +493,7 @@ export class PropsPanel {
     if (el.type === 'table') this.buildTableProps(el)
     if (el.type === 'media') this.buildMediaProps(el)
     if (el.type === 'code') this.buildCodeProps(el)
+    if (el.type === 'embed') this.buildEmbedProps(el)
 
     this.section(t('Position & size'))
     const geo = document.createElement('div')
@@ -480,24 +508,6 @@ export class PropsPanel {
         this.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1))),
     )
     this.host.appendChild(geo)
-    if (el.type === 'image') {
-      this.row('Keep aspect ratio', this.toggle(el.keepAspectRatio !== false, (on) =>
-        this.mutate(el.id, (e) => {
-          if (e.type !== 'image') return
-          // Re-enabling means "lock the shape as it is now". The current w/h
-          // already defines the new ratio, so do not move or resize the frame.
-          // Moveable reads that current ratio at the next resize start.
-          if (on) {
-            delete e.keepAspectRatio
-          } else {
-            e.keepAspectRatio = false
-            // From this point the image itself follows independent width and
-            // height changes. Keep fill after re-locking so toggling the lock
-            // never restores contain/cover or changes the visible shape.
-            e.fit = 'fill'
-          }
-        }, true)))
-    }
 
     this.row('Role', this.select(
       ['none', 'title', 'subtitle', 'body', 'kicker'],
@@ -696,7 +706,7 @@ export class PropsPanel {
     const setFx = (patch: Partial<NonNullable<SlideElement['fx']>>) =>
       this.mutate(el.id, (e) => {
         const fx = { ...(e.fx ?? {}), ...patch }
-        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop) delete e.fx
+        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop && !fx.step) delete e.fx
         else e.fx = fx
       }, true)
 
@@ -711,6 +721,19 @@ export class PropsPanel {
       this.row('Enter secs', this.number(
         el.fx.enterDur ?? (el.fx.enter.startsWith('slide-') ? 0.75 : 0.55), 0.05,
         (v, fin) => { if (fin) setFx({ enterDur: Math.max(v, 0.05) }) }))
+    }
+    // "Animate on click": hidden until the n-th → on this slide (0 = with the
+    // slide). The element's Enter plays when its step comes, or a plain fade.
+    // The verbs come first (one click, no number to think about); the number
+    // row underneath is the precise control, and the canvas badge cycles it.
+    this.revealRow([el])
+    this.row('Reveal step', this.number(el.fx?.step ?? 0, 1,
+      (v, fin) => { if (fin) setFx({ step: v >= 1 ? Math.floor(v) : undefined }) }))
+    if (el.fx?.step) {
+      const hint = document.createElement('p')
+      hint.className = 'ed-hint'
+      hint.textContent = t('Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.')
+      this.host.appendChild(hint)
     }
     this.row('Count up', this.select(
       ['off', 'on'], el.fx?.countUp ? 'on' : 'off',
@@ -827,12 +850,37 @@ export class PropsPanel {
       if (el.link === s.id) o.selected = true
       sel.appendChild(o)
     })
+    if (isWebUrl(el.link)) {
+      const web = document.createElement('option')
+      web.value = el.link
+      web.textContent = t('web page (below)')
+      web.selected = true
+      sel.appendChild(web)
+    }
     sel.addEventListener('change', () =>
       this.mutate(el.id, (e) => {
         if (sel.value) e.link = sel.value
         else delete e.link
       }, true))
     this.row('Link to', sel)
+    // Or a web page: opens in a new tab while presenting (discussion #373).
+    const url = document.createElement('input')
+    url.type = 'url'
+    url.placeholder = 'https://…'
+    url.value = isWebUrl(el.link) ? el.link : ''
+    url.addEventListener('change', () => {
+      const v = url.value.trim()
+      if (v && !isWebUrl(v)) {
+        this.toast(t('That doesn’t look like a web address — it should start with https://'))
+        url.value = isWebUrl(el.link) ? el.link : ''
+        return
+      }
+      this.mutate(el.id, (e) => {
+        if (v) e.link = v
+        else if (isWebUrl(e.link)) delete e.link
+      }, true)
+    })
+    this.row('Web link', url)
 
     // one-click interactivity: duplicate this slide as a hidden state
     // (element ids preserved ⇒ it morphs) and link this element to it
@@ -918,15 +966,22 @@ export class PropsPanel {
     this.store.goTo(insertAt)
   }
 
-  /** Human label for a slide in pickers. */
-  private slideLabel(s: { id: string; name?: string; stateOf?: string }, i: number): string {
-    const linear = this.store.doc.slides.slice(0, i + 1).filter((x) => !x.stateOf).length
+  /**
+   * Human label for a slide in pickers — the number the SIDEBAR shows, so an
+   * author who reads "4" there finds "slide 4" here. That is the page number
+   * (`paginates`), not the position: an unnumbered or hidden slide shows the
+   * number it continues, marked, so two entries can share a number without
+   * being confused for each other.
+   */
+  private slideLabel(s: { id: string; name?: string; stateOf?: string; hidden?: boolean; unnumbered?: boolean }, i: number): string {
+    const doc = this.store.doc
+    const pageAt = (idx: number) => doc.slides.slice(0, idx + 1).filter((x) => paginates(x, doc)).length
     if (s.stateOf) {
-      const p = this.store.doc.slides.findIndex((x) => x.id === s.stateOf)
-      const pn = this.store.doc.slides.slice(0, p + 1).filter((x) => !x.stateOf).length
-      return `state of ${pn}${s.name ? ` — ${s.name}` : ''}`
+      const p = doc.slides.findIndex((x) => x.id === s.stateOf)
+      return `state of ${pageAt(p)}${s.name ? ` — ${s.name}` : ''}`
     }
-    return `slide ${linear}${s.name ? ` — ${s.name}` : ''}`
+    const mark = s.hidden ? ` (${t('hidden')})` : s.unnumbered ? ` (${t('unnumbered')})` : ''
+    return `slide ${pageAt(i)}${mark}${s.name ? ` — ${s.name}` : ''}`
   }
 
   /**
@@ -956,6 +1011,39 @@ export class PropsPanel {
     this.host.appendChild(fit)
   }
 
+  /** "Insert field": drops a {{token}} at the end of the text (discussion
+   *  #381 — the tokens existed since 0.9.12 but nothing in the editor said
+   *  so). Date and time offer presets whose labels show TODAY in that shape,
+   *  so the choice is made by eye; the pattern is in the token for anyone who
+   *  wants to edit it. Appends rather than inserts at a caret: choosing from
+   *  the panel blurs the text box and commits the edit, so there is no caret
+   *  to honour — the token lands at the end, inside the last block, and the
+   *  author moves it like any other text. */
+  private buildFieldPicker(el: TextElement) {
+    const now = new Date()
+    const fmt = (token: string) => { const m = /^\{\{(?:date|time):(.*)\}\}$/.exec(token); return m ? formatDate(now, m[1]) : '' }
+    const pairs: Array<[string, string]> = [['', t('Insert field…')]]
+    for (const p of DATE_PRESETS) pairs.push([p.token, p.token === '{{date}}' ? t(p.label) : `${t('Date')} — ${fmt(p.token)}`])
+    for (const p of TIME_PRESETS) pairs.push([p.token, p.token === '{{time}}' ? t(p.label) : `${t('Time')} — ${fmt(p.token)}`])
+    for (const p of OTHER_FIELDS) pairs.push([p.token, t(p.label)])
+    const sel = this.labeledSelect(pairs, '', (token) => {
+      if (!token) return
+      this.mutate(el.id, (e) => {
+        const tx = e as TextElement
+        const html = tx.html ?? ''
+        // inside the last block if there is one, so the token joins the last
+        // line rather than starting a stray one after </p>
+        const m = /<\/(p|div|li)>\s*$/i.exec(html)
+        const at = m ? m.index : html.length
+        const sep = at > 0 && !/[\s>]$/.test(html.slice(0, at)) ? ' ' : ''
+        tx.html = html.slice(0, at) + sep + token + html.slice(at)
+      }, true)
+      sel.value = ''
+    })
+    sel.title = t('Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.')
+    this.row('Field', sel)
+  }
+
   private buildTextProps(el: TextElement) {
     this.section(t('Typography'))
     const hint = document.createElement('p')
@@ -963,6 +1051,7 @@ export class PropsPanel {
     hint.innerHTML = t('While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too. Escape with \\ or press ⌘Z right after to keep the literal characters.')
     this.host.appendChild(hint)
     this.buildFitHeight(el)
+    this.buildFieldPicker(el)
     this.row('Font', this.fontSelect(el))
     // Shown in POINTS (the unit office users know); the model stores slide-space
     // px. 1pt = 4/3 px at the slide's 96dpi space, so 32px = 24pt exactly.
@@ -991,7 +1080,8 @@ export class PropsPanel {
       }, true)))
     if (!tgrad) {
       this.row('Color', this.color(el.color, (v, fin) =>
-        this.mutate(el.id, (e) => { (e as TextElement).color = v }, fin)))
+        this.mutate(el.id, (e) => { (e as TextElement).color = v }, fin),
+        { id: el.id, path: 'color' }))
     } else {
       this.row('Grad. angle', this.number(tgrad.angle, 1, (v, fin) =>
         this.mutate(el.id, (e) => {
@@ -1162,7 +1252,8 @@ export class PropsPanel {
 
     if (!grad) {
       this.row('Fill', this.colorAlpha(el.fill, (v, fin) =>
-        this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin)))
+        this.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin),
+        { id: el.id, path: 'fill' }))
     } else {
       this.row('Grad. angle', this.number(grad.angle, 1, (v, fin) =>
         this.mutate(el.id, (e) => {
@@ -1778,6 +1869,80 @@ export class PropsPanel {
     }
   }
 
+  /**
+   * The `embed` element (model.ts EmbedElement). The view is the
+   * tier that always paints; "Capture view" fills it from a picture the
+   * author already has. It cannot be read off the live frame: the frame is
+   * sandboxed without same-origin, so its pixels are not ours to take, and
+   * that boundary is the point of the sandbox. A screenshot file is.
+   */
+  private buildEmbedProps(el: EmbedElement) {
+    this.section(t('Web page'))
+
+    const status = document.createElement('p')
+    status.className = 'ed-hint'
+    const view = (el.view ?? '').trim()
+    if (!view) status.textContent = t('No view yet. Capture a picture of the page so it shows offline.')
+    else if (view.startsWith('<') || view.startsWith('asset:')) status.textContent = t('View embedded in the file')
+    else status.textContent = t('View is a link. It needs the network and shows nothing offline.')
+    this.host.appendChild(status)
+
+    const capture = document.createElement('button')
+    capture.className = 'ed-btn ed-btn-block'
+    capture.textContent = view ? t('Replace view…') : t('Capture view…')
+    capture.addEventListener('click', () => {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = 'image/svg+xml,image/png,image/jpeg,image/webp,image/gif'
+      input.addEventListener('change', () => {
+        const file = input.files?.[0]
+        if (!file) return
+        const reader = new FileReader()
+        const svg = file.type === 'image/svg+xml'
+        reader.onload = () => this.mutate(el.id, (e) => {
+          // an svg is the view as-is; a raster is wrapped so the view stays
+          // one svg the sanitizer knows how to read (a data:image href is
+          // on its allowlist). Interned, never inline: only doc.assets
+          // entries reach the live-collab blob offload.
+          const markup = svg ? String(reader.result) : rasterView(String(reader.result), e.w, e.h)
+          ;(e as EmbedElement).view = internView(this.store.doc, markup)
+        }, true)
+        if (svg) reader.readAsText(file); else reader.readAsDataURL(file)
+      })
+      input.click()
+    })
+    this.host.appendChild(capture)
+
+    // Labels stay RAW English: row() translates them and looks its tooltip
+    // up by the English label (see buildMediaProps).
+    const url = document.createElement('input')
+    url.type = 'text'
+    url.placeholder = 'https://'
+    url.value = el.url ?? ''
+    url.addEventListener('change', () =>
+      this.mutate(el.id, (e) => {
+        const m = e as EmbedElement
+        const v = url.value.trim()
+        if (v) m.url = v; else delete m.url
+      }, true))
+    this.row('Page URL', url)
+
+    this.row('Live', this.select(['off', 'on'], el.live ? 'on' : 'off', (v) =>
+      this.mutate(el.id, (e) => { (e as EmbedElement).live = v === 'on' || undefined }, true)))
+    const note = document.createElement('p')
+    note.className = 'ed-hint'
+    note.textContent = t('The live frame loads only while online. Offline mode and a missing network show the captured view instead.')
+    this.host.appendChild(note)
+    // Two things a presenter finds out on stage otherwise: a focused frame
+    // keeps the arrow keys until they click outside it, and a live frame means
+    // every viewer who presents this deck requests the page from its author —
+    // the same trade a linked media src makes, said here so it is a choice.
+    const trade = document.createElement('p')
+    trade.className = 'ed-hint'
+    trade.textContent = t('While presenting, a clicked frame keeps the arrow keys until you click outside it. Everyone who presents this deck loads the page from its site.')
+    this.host.appendChild(trade)
+  }
+
   private buildCodeProps(el: CodeElement) {
     this.section(t('Source Code'))
     const status = document.createElement('p')
@@ -1859,11 +2024,11 @@ export class PropsPanel {
       textBtn('↔', 'Match widths — first selected sets the size (2+)', () => this.matchSize(els, 'w'), els.length >= 2),
       textBtn('↕', 'Match heights — first selected sets the size (2+)', () => this.matchSize(els, 'h'), els.length >= 2),
     ])
-    group(t('Order'), [
-      textBtn('⇈', t('Bring to front'), () => this.reorder(els, 'front')),
-      textBtn('↑', t('Bring forward one step'), () => this.step(els, +1)),
-      textBtn('↓', t('Send backward one step'), () => this.step(els, -1)),
-      textBtn('⇊', t('Send to back'), () => this.reorder(els, 'back')),
+    group('Order', [
+      textBtn('⇈', 'Bring to front', () => this.reorder(els, 'front')),
+      textBtn('↑', 'Bring forward one step', () => this.step(els, +1)),
+      textBtn('↓', 'Send backward one step', () => this.step(els, -1)),
+      textBtn('⇊', 'Send to back', () => this.reorder(els, 'back')),
     ])
 
     const grouped = els.some((e) => e.groupId)
@@ -1935,7 +2100,7 @@ export class PropsPanel {
 
   /** Move the selection one step up/down the paint order (adjacent swap). */
   private step(els: SlideElement[], dir: 1 | -1) {
-    const ids = new Set(els.filter((e) => !e.templateLocked).map((e) => e.id))
+    const ids = new Set(els.map((e) => e.id))
     this.store.commit(() => {
       const arr = this.store.slide.elements
       const idxs = arr.map((e, i) => (ids.has(e.id) ? i : -1)).filter((i) => i >= 0)
@@ -1952,6 +2117,58 @@ export class PropsPanel {
     if (els.length < 2) return
     const gid = `grp-${uid()}`
     this.edit(() => { for (const el of els) el.groupId = gid }, true)
+  }
+
+  // --- reveal verbs (editor/reveal.ts decides, this applies) ---------------
+
+  /** Number the selection in reading order: top-to-bottom, then left-to-right. */
+  revealInOrder(els: SlideElement[]) { this.applySteps(revealInOrder(this.store.slide.elements, els)) }
+
+  /** The whole selection on one step, after everything else on the slide. */
+  revealTogether(els: SlideElement[]) { this.applySteps(revealTogether(this.store.slide.elements, els)) }
+
+  /** Shown with the slide again. */
+  removeReveal(els: SlideElement[]) { this.applySteps(removeReveal(els)) }
+
+  private applySteps(patches: StepPatch[]) {
+    if (!patches.length) return
+    this.edit(() => {
+      for (const { id, step } of patches) {
+        const el = this.store.element(id)
+        if (!el) continue
+        const fx = { ...(el.fx ?? {}), step: step > 0 ? step : undefined }
+        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop && !fx.step) delete el.fx
+        else el.fx = fx
+      }
+    }, true)
+  }
+
+  /** The three reveal verbs as a captioned button row (multi panel + Presenting). */
+  private revealRow(els: SlideElement[]) {
+    const stepped = els.some((e) => stepOf(e) > 0)
+    const row = document.createElement('div')
+    row.className = 'ed-reveal-row'
+    const cap = document.createElement('span')
+    cap.className = 'ed-arrange-cap'
+    cap.textContent = t('Reveal')
+    row.appendChild(cap)
+    const btn = (label: string, title: string, run: () => void, enabled = true) => {
+      const b = document.createElement('button')
+      b.className = 'ed-btn'
+      b.textContent = label
+      b.title = title
+      b.disabled = !enabled
+      b.addEventListener('click', run)
+      row.appendChild(b)
+    }
+    btn(t('In order'), t('Hide until → is pressed, one after another in reading order — top to bottom, then left to right'), () => this.revealInOrder(els))
+    btn(t('Together'), t('Hide until → is pressed, all at once'), () => this.revealTogether(els))
+    btn(t('Remove'), t('Show with the slide again'), () => this.removeReveal(els), stepped)
+    this.host.appendChild(row)
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.textContent = t('Numbered badges on the canvas show the order; click one for the next step.')
+    this.host.appendChild(hint)
   }
 
   ungroup(els: SlideElement[]) {
@@ -1988,8 +2205,9 @@ export class PropsPanel {
     this.store.select([])
   }
 
-  private reorder(els: SlideElement[], where: 'front' | 'back') {
-    const ids = new Set(els.filter((e) => !e.templateLocked).map((e) => e.id))
+  /** Also driven by the canvas context menu (editor.ts). */
+  reorder(els: SlideElement[], where: 'front' | 'back') {
+    const ids = new Set(els.map((e) => e.id))
     this.store.commit(() => {
       const slide = this.store.slide
       const picked = slide.elements.filter((e) => ids.has(e.id))
@@ -2056,18 +2274,134 @@ export class PropsPanel {
     return input
   }
 
-  private color(value: string, onEdit: (v: string, final: boolean) => void): HTMLElement {
+  private color(
+    value: string,
+    onEdit: (v: string, final: boolean) => void,
+    /** when given, offer the deck's brand palette above the free picker.
+     *  `id: null` means the property belongs to the slide, not an element. */
+    ref?: { id: string | null; path: string },
+  ): HTMLElement {
     const input = document.createElement('input')
     input.type = 'color'
     input.value = /^#[0-9a-fA-F]{6}$/.test(value) ? value : parseColor(value).hex
     input.addEventListener('input', () => onEdit(input.value, false))
-    input.addEventListener('change', () => onEdit(input.value, true))
-    return input
+    // A colour chosen by hand must CLEAR any palette reference on this path.
+    // Without that, the next theme edit silently overwrites a colour somebody
+    // picked deliberately — which reads as the app changing their work.
+    input.addEventListener('change', () => {
+      onEdit(input.value, true)
+      if (ref) this.setRef(ref, input.value, null)
+    })
+    if (!ref) return input
+    const wrap = document.createElement('div')
+    wrap.className = 'ed-colorref'
+    wrap.appendChild(this.paletteSwatches(ref, input))
+    wrap.appendChild(input)
+    return wrap
+  }
+
+  /** Write a colour and its palette reference together, as one undoable edit. */
+  private setRef(ref: { id: string | null; path: string }, literal: string, token: string | null) {
+    this.edit(() => {
+      const holder = ref.id ? this.store.element(ref.id) : this.store.slide
+      if (holder) setColor(holder as never, ref.path, literal, token)
+    }, true)
+  }
+
+  /**
+   * The deck's brand colours as clickable swatches.
+   *
+   * Choosing one records WHERE the colour came from, so editing the theme later
+   * re-derives it — that is the whole difference between a deck that can be
+   * re-branded and one that has 400 hex literals in it.
+   */
+  private paletteSwatches(ref: { id: string | null; path: string }, input: HTMLInputElement): HTMLElement {
+    const row = document.createElement('div')
+    row.className = 'ed-swatches'
+    const palette = paletteOf(this.store.doc)
+    const holder = (ref.id ? this.store.element(ref.id) : this.store.slide) as never
+    const current = holder ? refAt(holder, ref.path) : undefined
+    for (const slot of PALETTE_SLOTS) {
+      const base = palette[slot]
+      if (!base) continue // hlink/folHlink are usually unset — don't show empties
+      if (!slotIsSet(this.store.doc, slot)) continue // accent 2–6 unset: a copy of accent 1, not a choice
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-swatch'
+      b.style.background = base
+      b.title = slot
+      if (current && current.split(' ')[0] === slot) b.classList.add('is-on')
+      b.addEventListener('click', () => {
+        input.value = /^#[0-9a-fA-F]{6}$/.test(base) ? base : parseColor(base).hex
+        this.setRef(ref, base, slot)
+      })
+      row.appendChild(b)
+    }
+    return row
+  }
+
+  /**
+   * Deck-wide brand colours. Editing one re-derives every colour in the deck
+   * that points at it (editor.syncThemeRefs), which is what makes a Bento deck
+   * re-brandable rather than a pile of literals.
+   */
+  private buildThemeProps() {
+    this.section(t('Theme'))
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.textContent = t('Deck-wide brand colours. Anything using a theme colour follows when you change it here.')
+    this.host.appendChild(hint)
+    const theme = this.store.doc.theme
+    const slot = (label: string, get: () => string, set: (v: string) => void) =>
+      this.row(label, this.color(get(), (v, fin) => this.edit(() => set(v), fin)))
+    slot('Background', () => theme.background, (v) => { this.store.doc.theme.background = v })
+    slot('Text', () => theme.color, (v) => { this.store.doc.theme.color = v })
+    slot('Accent', () => theme.accent, (v) => { this.store.doc.theme.accent = v })
+    // Accent 2–6 rows only for slots the deck carries (palette.ts slotIsSet):
+    // an unset one resolves to accent 1 and showed as a sixth identical swatch.
+    for (const n of [2, 3, 4, 5, 6] as const) {
+      const key = `accent${n}` as const
+      if (!slotIsSet(this.store.doc, key)) continue
+      slot(t('Accent {n}', { n: String(n) }), () => paletteOf(this.store.doc)[key], (v) => {
+        const t2 = this.store.doc.theme
+        ;(t2.palette ??= {})[key] = v
+      })
+    }
+    // Code colours: theme.codePalette (#450), one row per token scope. Plain
+    // literals, deliberately — the palette-swatch reference (themeRefs) is a
+    // per-element/per-slide path resolved through resolveRef, and codePalette
+    // is a doc-level map that code.ts reads as literals; wiring a second
+    // reference shape for eight keys would be a mechanism, not a row. A deck
+    // with no codePalette shows the built-in scheme as its starting values and
+    // the field is written only when a colour is changed, so a deck without
+    // one keeps rendering exactly as before.
+    const codeHead = document.createElement('p')
+    codeHead.className = 'ed-hint'
+    codeHead.textContent = t('Code colours — one per kind of token in code snippets.')
+    this.host.appendChild(codeHead)
+    for (const scope of CODE_SCOPES) {
+      slot(t(scope.label), () => this.store.doc.theme.codePalette?.[scope.key] ?? DEFAULT_CODE_COLORS[scope.key], (v) => {
+        const t2 = this.store.doc.theme
+        ;(t2.codePalette ??= {})[scope.key] = v
+      })
+    }
+    if (this.store.doc.theme.codePalette) {
+      const reset = document.createElement('button')
+      reset.className = 'ed-btn ed-btn-block'
+      reset.textContent = t('Use the built-in code colours')
+      reset.title = t('Removes the deck’s code palette; snippets render with the standard scheme again')
+      reset.addEventListener('click', () => this.edit(() => { delete this.store.doc.theme.codePalette }, true))
+      this.host.appendChild(reset)
+    }
   }
 
   /** Color swatch + opacity %. Native color inputs have no alpha channel, so
    *  the pair round-trips rgba()/#rrggbbaa strings losslessly. */
-  private colorAlpha(value: string, onEdit: (v: string, final: boolean) => void): HTMLElement {
+  private colorAlpha(
+    value: string,
+    onEdit: (v: string, final: boolean) => void,
+    ref?: { id: string | null; path: string },
+  ): HTMLElement {
     const wrap = document.createElement('div')
     wrap.className = 'ed-coloralpha'
     const parsed = parseColor(value)
@@ -2087,10 +2421,19 @@ export class PropsPanel {
       onEdit(combineColor(col.value, a), final)
     }
     col.addEventListener('input', () => emit(false))
-    col.addEventListener('change', () => emit(true))
+    // picking by hand clears the palette reference — see color() for why
+    col.addEventListener('change', () => {
+      emit(true)
+      if (ref) this.setRef(ref, combineColor(col.value, parseFloat(alpha.value) / 100 || 1), null)
+    })
     alpha.addEventListener('change', () => emit(true))
     wrap.append(col, alpha)
-    return wrap
+    if (!ref) return wrap
+    const outer = document.createElement('div')
+    outer.className = 'ed-colorref'
+    outer.appendChild(this.paletteSwatches(ref, col))
+    outer.appendChild(wrap)
+    return outer
   }
 
   /** Weight picker with the familiar named weights; stores the numeric value. */

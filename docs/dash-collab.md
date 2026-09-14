@@ -291,12 +291,91 @@ write into. Row inserts and deletes do not maintain it, so a sheet holding a
 packed column should not be edited structurally under collab. Pre-existing in
 the store; named here because collab makes it easier to hit.
 
-### 6.9 Canvas sheets sync only wholesale
+### 6.9 A spreadsheet cell is keyed by its ADDRESS, so nothing may move one
 
-`CanvasSheet.cells` has no patch op in `store.ts`, so nothing can express a
-canvas edit as an op. Canvas sheets travel in sheet inserts and snapshots only.
-The register scheme is reserved (`cell.<A1>` keys on the sheet node) so this is
-additive when the patches exist.
+`kind:'canvas'` cells are properties of the SHEET node keyed by A1 address
+(`g␟B7` content, `p␟B7` presentation, `w␟C` a width, `h␟4` a
+height), minted from `setCanvasCells` and `setCanvasSizes`. Per-cell LWW, and
+the two halves are independent — bolding a cell while someone else retypes it
+keeps both. `v` and `f` deliberately share ONE register: split, they would show
+a formula from one replica beside a cached number from another, which is a cell
+that existed nowhere.
+
+The address is the key because the FILE offers no cell identity. A dataset row
+carries a `rid` — minted at insert, never reused, IN the document — which is
+what makes `r␟s1␟7` mean the same row on two replicas that have never
+spoken. A spreadsheet cell carries only its address, so a minted id would have
+to be a stored address→id map: one entry per non-empty cell whether or not
+anyone ever edited it, riding in `collab.sync`, which is O(cells) against this
+engine's O(edits) invariant.
+
+The cost is stated rather than hidden. A patch that MOVES cells — a row or
+column insert, a cut-and-shift, none of which exist today — **cannot** be minted
+as cell ops over the addresses it lands on: two replicas shifting concurrently
+renumber each other's writes, and no register ordering repairs that. Such a
+patch must keep falling through to the snapshot fallback until there is an
+explicit shift op that transforms the key space, or a real per-sheet row/column
+order (at which point the keys become (rowId, colId) and stop being positions).
+`localOne`'s default arm sets `unsynced` for exactly this reason, and the rig
+pins it with a hypothetical `insertCanvasRows` that must mint ZERO ops.
+
+Rig: `scripts/test-dash-canvassync.ts` — the spreadsheet's own convergence rig,
+separate from `test-dash-sync.ts` on purpose, because this is a different
+convergence problem and not a wider one.
+
+### 6.9a A dataset override is TWO registers, for the same reason
+
+`kind:'table'` cell overrides split exactly as §6.9 splits spreadsheet cells:
+`o␟<col>` carries the override's CONTENT (`v`, `was`, `f`, `xlsxF`, `froze`,
+and the provenance `by`/`at`/`why`/`againstHash`) and `q␟<col>` carries its
+PRESENTATION (`format`, `note`, and model.ts's `APPEARANCE_FIELDS` — bold,
+italic, underline, wrap, align, colours, borders). Both hang off the ROW node,
+as before. `v` and `f` stay in one register together for §6.9's reason.
+
+`OvrOp` therefore carries `m: number[]` beside `keys` and `v`, with the same
+meaning `CvCellOp.m` has: the payload is the WHOLE override so a receiver in
+any state can apply the claim, and the mask says which halves the write claims.
+Bolding a cell while a collaborator retypes it keeps both; as one register it
+kept whichever landed second, with the two replicas' sync states in perfect
+agreement about the loss.
+
+**`SYNC_V` is 2.** A build that ignores `m` applies the whole payload, which
+converges with itself and DIVERGES against one that honours it (the bolder's
+op takes the retyper's stale value while the retyper's op drops the bold).
+`session.ts` already drops a frame whose `pv` does not match, so the version
+bump turns a silent divergence into two replicas that do not speak — the
+honest failure. Saved sync state from before it is discarded and the file
+rejoins as a fresh adopt, which is the rule §"state+wire are versioned"
+already states.
+
+Two holes closed while building it, both older than the split and both
+reachable with a single register:
+
+* **`reconcileParked` never weighed the ROW's rebirth.** `replayStashRow` has
+  always refused an entry a resurrection out-stamps; the other reader of the
+  same stash did not, so an override parked at a row's death came back on
+  whichever replica happened to hold the parked copy. Rig seed 520 of
+  `SEEDS=800 STEPS=300 ACTORS=4`. Fixed for override keys only — extending it
+  to `v␟col` diverged a value at `ACTORS=5` seed 226, and those paths are tuned
+  by five closed seeds.
+* **A rebirth did not sweep the overrides already in the document.**
+  `applyOvr`'s birth gate filtered ops arriving after a resurrection and
+  nothing touched the ones that had already landed, so an override written
+  between two concurrent resurrections survived on some replicas and not
+  others. `applyRins` now calls `supersedeRowOverrides`, the row-axis twin of
+  `resetColumnValues`. Pinned by a hand-built three-replica case in
+  `scripts/test-dash-cellfmt.ts`, verified to fail when only that call is
+  removed.
+
+Rig: `scripts/test-dash-cellfmt.ts` for the split and the two fixes;
+`scripts/test-dash-sync.ts` now races override CONTENT against override
+PRESENTATION in its random steps (it used to write `{note, bg}` every time, so
+the content half was never contended).
+
+**One open, PRE-EXISTING failure**, found by that richer generator and verified
+against the unmodified engine: `SEEDS=400 STEPS=300 ACTORS=5` seed 226 diverges
+on a cell VALUE. It is not in the override paths; the default configuration —
+what CI runs — is green.
 
 ### 6.10 `steps` is a whole-array register
 

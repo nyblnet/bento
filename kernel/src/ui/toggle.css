@@ -1,0 +1,60 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+
+   THE SHARED TOGGLE (switch) styles. Built ahead of a consumer (see toggle.ts);
+   minimal. Same two rules as the other primitives: values through `--bks-*`
+   chains onto the host's own tokens, never light-dark(), the shared theming
+   guard checks every colour chain resolves per app to a token it defines and
+   themes; structure and behaviour shared, only the look is the host's. */
+
+.bks {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: var(--bks-font-size, 12.5px);
+  color: var(--bks-ink, var(--ink-2, var(--ink, #1e2a3a)));
+}
+
+/* the track */
+.bks-switch {
+  flex: none;
+  position: relative;
+  width: 32px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--bks-border, var(--line, #e3e8ef));
+  border-radius: 999px;
+  background: var(--bks-off, var(--chrome-2, var(--chrome, #e3e8ef)));
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+/* the knob */
+.bks-switch::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  inset-inline-start: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bks-knob, var(--surface, var(--field, #fff)));
+  box-shadow: 0 1px 2px rgb(20 30 45 / 0.3);
+  transition: inset-inline-start 0.14s ease;
+}
+.bks-switch:focus-visible {
+  outline: 2px solid var(--bks-focus, var(--accent-ink, currentColor));
+  outline-offset: 2px;
+}
+
+/* ON: the track takes the accent, the knob slides to the far end. Logical
+   offset, so it slides the correct way under RTL. */
+.bks-on .bks-switch {
+  background: var(--bks-on, var(--accent, #5e7699));
+  border-color: var(--bks-on, var(--accent, #5e7699));
+}
+.bks-on .bks-switch::after {
+  inset-inline-start: 15px;
+}
+
+.bks-label { min-width: 0; }

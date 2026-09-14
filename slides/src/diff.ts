@@ -9,7 +9,7 @@
 // import type, deliberately: only type names are used, and the erased import
 // is what lets scripts/test-codediff.ts run this file under plain node
 // (extensionless runtime imports do not resolve there).
-import type { BentoDoc, Slide } from "./model"
+import type { BentoDoc, Slide } from "./model.ts"
 import { tokenize, type Tok } from "../../kernel/src/tokenize.ts"
 
 // The stable token that we can diff between slides.
@@ -47,9 +47,17 @@ export class Token {
   }
 
   key(): string {
+    // Calls and plain identifiers share an identity bucket. The tokenizer
+    // classes a word by its role — `render(` is a call, `.then(render)` a
+    // plain reference — so the SAME word flips class exactly when a refactor
+    // changes style (callback -> point-free -> await). Keying on the class
+    // made such a word die and respawn instead of travelling; the audience
+    // pairs tokens by their glyphs, not their colour, so identity does too.
+    // Rendering still uses the true class — a paired token recolours at rest.
+    const buckets = this.scopes.map((sc) => (sc === 'f' ? 'x' : sc))
     const json = {
       content: this.content,
-      scopes: this.scopes,
+      scopes: buckets,
       depth: this.depth()
     }
     return JSON.stringify(json)

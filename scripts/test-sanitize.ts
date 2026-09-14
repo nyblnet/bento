@@ -299,7 +299,7 @@ const CHROME = [
  * it. Written without backticks or `${` so it can live in a template literal.
  */
 const probeSource = (renderPath: string, modelPath: string) => `
-import { renderSlide } from ${JSON.stringify(renderPath)}
+import { renderSlide, sanitizeHtml } from ${JSON.stringify(renderPath)}
 import { newDoc } from ${JSON.stringify(modelPath)}
 
 const O = location.origin
@@ -316,6 +316,19 @@ function draw(markup: string, css?: string): HTMLElement {
   slide.elements = [{
     id: 'sv1', type: 'svg', x: 0, y: 0, w: 200, h: 200,
     rotation: 0, opacity: 1, markup, ...(css ? { css } : {}),
+  } as any]
+  const surface = renderSlide(slide, doc)
+  document.body.appendChild(surface)
+  return surface
+}
+
+/** The same path for an embed element's view. */
+function drawEmbed(view: string): HTMLElement {
+  const doc = newDoc()
+  const slide = doc.slides[0]
+  slide.elements = [{
+    id: 'em1', type: 'embed', x: 0, y: 0, w: 200, h: 200,
+    rotation: 0, opacity: 1, app: 'web', view,
   } as any]
   const surface = renderSlide(slide, doc)
   document.body.appendChild(surface)
@@ -357,6 +370,45 @@ if (location.pathname === '/meta.html') {
     const based = draw('<div>x</div><base href="' + O + '/evil/"><svg><rect width="10" height="10"/></svg>')
     check('3 — no <base> survives the walk', based.querySelectorAll('base').length === 0)
     check('3 — relative urls still resolve against this document', document.baseURI === baseBefore)
+
+    // --- 3b. links in text ---------------------------------------------------
+    // <a href> is allowed now (issue #421) — with a web URL only, and no
+    // other attribute. The three shapes that would matter: a javascript:
+    // href, an event handler on an allowed anchor, and a target that would
+    // let the page reach this window. All decided at click time in present.ts;
+    // none stored.
+    const linked = sanitizeHtml('<a href="https://bento.page/" onclick="window.__pwn(31)" target="_top" rel="opener">ok</a>' +
+      '<a href="javascript:window.__pwn(32)">bad</a><a href="data:text/html,x">bad2</a><a>plain</a>')
+    const box = document.createElement('div'); box.innerHTML = linked
+    const anchors = Array.from(box.querySelectorAll('a'))
+    check('3b — a web link keeps exactly its href and nothing else',
+      anchors.length === 1 && anchors[0].getAttribute('href') === 'https://bento.page/' && anchors[0].attributes.length === 1)
+    check('3b — javascript:/data:/attribute-less anchors are unwrapped to their text',
+      box.textContent === 'okbadbad2plain' && !linked.includes('javascript:') && !linked.includes('data:'))
+    // NOT clicked: a click on the surviving https anchor navigates the probe
+    // away and it reports nothing (the same trap the click loop below avoids).
+    // The handler cannot survive without the attribute, which is asserted.
+    check('3b — no handler attribute survives on the surviving anchor', !linked.includes('onclick') && !linked.includes('__pwn(31)'))
+
+    // --- 3c. nested markup is walked like top-level markup -----------------
+    // An allowed tag inside a tag the walk does not know, at any depth, is
+    // held to the same rule as one at the top level; a refused anchor's
+    // contents likewise. Control: the same child under an allowed parent.
+    const nested = sanitizeHtml(
+      '<section><b onclick="window.__pwn(41)">a</b></section>' +
+      '<foo><span style="position:fixed;inset:0">b</span></foo>' +
+      '<div><foo><bar><i onmouseover="window.__pwn(42)">c</i></bar></foo></div>' +
+      '<a href="javascript:window.__pwn(43)"><b onclick="window.__pwn(44)">d</b></a>' +
+      '<div><b onclick="window.__pwn(45)">e</b></div>')
+    const nbox = document.createElement('div'); nbox.innerHTML = nested
+    check('3c — nested markup is walked like top-level markup: no attribute survives at any depth',
+      !nbox.querySelector('[onclick],[onmouseover],[style]') && nbox.textContent === 'abcde')
+    document.body.appendChild(nbox)
+    for (const el of Array.from(nbox.querySelectorAll('b, i, span'))) {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    }
+    check('3c — and clicking or hovering the lifted elements runs nothing', ![41, 42, 44, 45].some((n) => pwned.includes(n)))
 
     // --- 4. network out of a self-contained file -------------------------------
     draw('<div>x</div><link rel="stylesheet" href="' + O + '/tracker.css">' +
@@ -478,12 +530,56 @@ if (location.pathname === '/meta.html') {
       !!art.querySelector('feColorMatrix')!.getAttribute('values'))
     check('viewBox and preserveAspectRatio survive the parser round-trip',
       art.querySelector('svg')!.getAttribute('viewBox') === '0 0 1280 720')
-    check('the svg <style> is kept — scopeCss is what stops it leaking',
-      (art.querySelector('style')?.textContent ?? '').includes('.dot{fill:url(#bp-ga-am)}'))
+    // The <style> INSIDE the markup is kept because removing it breaks real
+    // decks, and its content is filtered by sanitizeSvgCss. This check asserts
+    // only that the RULES SURVIVE — deliberately NOT whether they are scoped,
+    // because that is changing underneath it: on main the markup sheet is
+    // unscoped (scopeCss's one call site takes el.css, not the markup), and
+    // PR #402 scopes it. Claiming either state here would make this rig a
+    // hostage to that PR's merge order.
+    //
+    // Hence the whitespace squash, which is the whole reason this is not a plain
+    // includes(): scopeCss emits the scope, a space, the selector, then a space
+    // before the brace — so scoping rewrites '.dot{fill:...}' as
+    // '[data-el-id="..."] .dot {fill:...}' and a literal substring test fails on
+    // ONE INSERTED SPACE while the rules are perfectly intact. Measured both
+    // ways. The two checks below cover the scoping question properly, on el.css,
+    // which is the field scopeCss actually guards.
+    //
+    // NOTE, and this cost a build: everything here is inside probeSource's
+    // template literal. A backtick or a dollar-brace in a COMMENT is still code
+    // to the parser and ends the template early.
+    // NOTE the DOUBLED backslash: this line lives inside probeSource's template
+    // literal, where a single backslash-s is an escape that collapses to a bare
+    // 's' — the regex became /s+/g and stripped the letter s out of the markup
+    // (the element id 'sv1' came back as 'v1', which is how it was caught).
+    const squash = (css) => css.replace(/\\s+/g, '')
+    check('the svg <style> inside the markup is kept, with its rules intact',
+      squash(art.querySelector('style')?.textContent ?? '').includes(squash('.dot{fill:url(#bp-ga-am)}')))
+
+    const scoped = draw('<svg viewBox="0 0 20 20"><rect id="sc" width="10" height="10"/></svg>',
+      '.z{fill:red}@keyframes k{to{opacity:0}}')
+    const elSheet = scoped.querySelector('svg > style')?.textContent ?? ''
+    check('el.css IS scoped to the element — this is what keeps one diagram out of another',
+      elSheet.includes('[data-el-id="sv1"] .z') && elSheet.trim().indexOf('.z') !== 0)
+    check('and @keyframes stays top-level — a prefixed keyframes name resolves to nothing',
+      elSheet.includes('@keyframes k') && !elSheet.includes('[data-el-id="sv1"] @keyframes'))
 
     const sloppy = draw('<svg viewBox="0 0 20 20"><rect width="10" height="10"><circle cx="5" cy="5" r="2"/></svg>')
     check('an unclosed tag still draws — text/html, not the fatal xml parser',
       !!sloppy.querySelector('svg') && !!sloppy.querySelector('circle'))
+
+    // The embed element's view is the same kind of author markup
+    // and goes through the same walk. Its whole purpose is to carry markup
+    // someone else produced, which makes it the most attractive place in the
+    // format to hide a script. (No backticks in this comment: it lives inside
+    // probeSource's template literal.)
+    const embedded = drawEmbed('<svg viewBox="0 0 20 20"><rect id="ev" width="10" height="10"/>' +
+      '<scr' + 'ipt>window.__pwn(91)</scr' + 'ipt><rect onload="window.__pwn(92)" width="1" height="1"/>' +
+      '<image href="' + O + '/embed-view.png" width="1" height="1"/></svg>')
+    check('9 — an embed view drops its <script> and on* handler and keeps the picture',
+      embedded.querySelectorAll('script').length === 0 && !embedded.querySelector('[onload]') &&
+      !!embedded.querySelector('.bento-el-embed svg rect#ev'))
 
     // Give every payload its chance: insertion alone is not the only trigger.
     // Measured on the pre-sanitizer build, where the difference showed: a
@@ -617,6 +713,7 @@ async function runBrowserSection(chrome: string) {
     ok(!hits.includes('/xlink.svg'), '7 — nor an xlink:href <use> pointing out of the document')
     ok(hits.includes('/remote.png'), 'an <image href="http(s)://…"> still loads — that one is allowed on purpose')
     ok(hits.includes('/xlink-remote.png'), 'and so does the xlink:href spelling of it — the policy is not a ban on pictures')
+    ok(hits.includes('/embed-view.png'), '9 — an embed view is held to the svg policy, no stricter: its <image> loads too')
   } finally {
     server.close()
     fs.rmSync(tmp, { recursive: true, force: true })

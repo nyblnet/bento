@@ -38,13 +38,34 @@
 //     spaces, and the escape hatch for a column named like a cell;
 //   • a name followed by `(` — `LOG10(x)` is a call, and `LOG10` is otherwise
 //     a perfectly good cell address;
-//   • a name followed by `!` or `[` — `Sheet1!A1` and `Table1[Col]` qualify
-//     something, and `Sheet1`/`Table1` are both cell-shaped;
+//   • a name followed by `[` — `Table1[Col]` qualifies something, and `Table1`
+//     is itself cell-shaped;
 //   • anything over 3 letters or 7 digits. That is Excel's bound (XFD1048576),
 //     and here it is also what keeps `REVENUE2024` a column name instead of a
 //     cell address. `REV2024` is genuinely ambiguous and resolves as a CELL, as
 //     it does in every spreadsheet on earth — write `[REV2024]` to mean the
 //     column.
+//
+// A NAME BEFORE `!` IS A SHEET, AND THE REFERENCE AFTER IT IS ONE UNIT. This
+// file used to skip the name and then scan `A1` on its own, which meant
+// `Sheet1!A1` bound to the LOCAL A1: the qualifier was dropped and the formula
+// read a different sheet's cell than the one it named. That is the exact
+// failure this file exists to prevent, so a qualified reference is now scanned
+// whole and carries its sheet on the `Unit`. `'Q3 pipeline'!A1` is the quoted
+// form, for names that are not bare words; `''` inside the quotes is one quote.
+//
+// A DEFINED NAME IS THE THIRD KIND OF NAME, and the scanner now offers it up
+// rather than skipping it. `Sheet1!A1` is a sheet qualifier, `Table1[Col]` is a
+// structured reference, and a bare word that is neither — not cell-shaped, not
+// a call, not a qualifier — is what `TaxRate` looks like. `mapNames` walks with
+// the SAME rules the reference rewrites use, because a second walk would be a
+// second definition of what a word is, and the two would disagree about a
+// quoted string on some Tuesday. This file does not know what a name MEANS;
+// cellformula.ts owns the table and the substitution.
+//
+// AN ERROR LITERAL IS COPIED VERBATIM. `#REF!`, `#DIV/0!`, `#N/A` — the `REF`
+// in `#REF!` is a word followed by `!` and would otherwise read as a sheet
+// qualifier now that qualifiers are scanned.
 
 /** The one error this file can produce. Visible, never a silent fallback. */
 export const REF_ERR = '#REF!'
@@ -148,6 +169,41 @@ export function parseRange(s: string): RangeRef | null {
 
 export const formatRange = (r: RangeRef): string => `${formatRef(r.from)}:${formatRef(r.to)}`
 
+// --- Sheet qualifiers -------------------------------------------------------
+
+/** A bare sheet name: a word, and not itself a cell address. */
+const BARE_SHEET = /^[A-Za-z_][A-Za-z0-9_.]*$/
+
+/**
+ * A sheet name as a reference must write it.
+ *
+ * Quoted when it is not a bare word — and ALSO when it is cell-shaped, so a
+ * sheet somebody called `A1` reads as `'A1'!B2` and can never be mistaken for
+ * an address by the scanner that has to read it back.
+ */
+export function quoteSheet(name: string): string {
+  if (BARE_SHEET.test(name) && !parseRef(name)) return name
+  return `'${name.replace(/'/g, "''")}'`
+}
+
+/** `Sheet1!A1`, `'Q3 pipeline'!A1:B10`, or just `A1` when there is no sheet. */
+export const qualify = (sheet: string | undefined, ref: string): string =>
+  sheet === undefined ? ref : `${quoteSheet(sheet)}!${ref}`
+
+/** The inverse of `quoteSheet`, for the quoted form only. */
+const unquoteSheet = (text: string): string =>
+  text.startsWith("'") ? text.slice(1, -1).replace(/''/g, "'") : text
+
+/**
+ * Do two sheet names mean the same sheet? Case-insensitively, as Excel has it —
+ * `SUM(sheet1!A1)` typed in a hurry names `Sheet1`.
+ */
+export const sameSheet = (a: string | undefined, b: string | undefined): boolean =>
+  (a ?? '').toLowerCase() === (b ?? '').toLowerCase()
+
+/** Error literals — `#REF!`, `#DIV/0!`, `#N/A`. Never references, never touched. */
+const ERR_LITERAL = /^#[A-Za-z]+(?:\/[A-Za-z0-9]+)?[!?]?/
+
 /**
  * Every cell in the rectangle, in reading order (row-major), or `null` past
  * RANGE_CELL_MAX.
@@ -206,8 +262,15 @@ export function translateRef(ref: string, dRow: number, dCol: number): string {
 // build does not understand have to survive, and a parse→print round trip would
 // quietly normalise all of it away.
 
-interface Unit { from: CellRef; to?: CellRef }
+interface Unit {
+  from: CellRef
+  to?: CellRef
+  /** The sheet named before `!`, unquoted. Absent = this formula's own sheet. */
+  sheet?: string
+}
 type MapUnit = (u: Unit) => string
+/** A bare word that is not a reference, not a call and not a qualifier. */
+type MapName = (name: string) => string
 
 const isAlpha = (c: string): boolean => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
 const isDigit = (c: string): boolean => c >= '0' && c <= '9'
@@ -225,7 +288,95 @@ const isWord = (c: string): boolean => isAlpha(c) || isDigit(c) || c === '_' || 
 export function mapRefs(src: string, map: MapUnit): string { return rewrite(src, map) }
 export type { Unit as RefUnit }
 
-function rewrite(src: string, map: MapUnit): string {
+/**
+ * Walk `src` and hand every DEFINED-NAME candidate to `map`, splicing its
+ * return in place. References, calls, sheet qualifiers, quoted text, bracketed
+ * names and error literals are all left exactly as written.
+ *
+ * A word is offered only when nothing else claims it: `SUM` is followed by `(`,
+ * `Sheet1` by `!`, `Table1` by `[`, `B4` is cell-shaped, and the word AFTER a
+ * `!` belongs to the qualifier that could not be resolved — none of those are
+ * a defined name, and substituting into one corrupts the formula.
+ *
+ * `map` returning the word unchanged is how "there is no name by that spelling"
+ * is said; formula.ts then reports `#NAME?`, which is the honest answer and the
+ * one it already gives.
+ */
+export function mapNames(src: string, map: MapName): string {
+  return rewrite(src, null, map)
+}
+
+/** A sheet a source named, and the text that followed the `!`. */
+export interface SheetQualifier {
+  sheet: string
+  /** `A1` for `Jan!A1`, `Amount` for `Jan!Amount` — an address, or not one. */
+  after: string
+}
+
+/**
+ * Every sheet a source QUALIFIES, in the order it names them, without
+ * duplicates.
+ *
+ * The point is to be able to answer "this expression reaches another sheet"
+ * WITHOUT being the thing that resolves it. formula.ts's column language is
+ * defined over the columns of one sheet and has no concept of a workbook, so
+ * `Jan!A1` reaches its lexer as the bare word `Jan` and comes back
+ * `#NAME? unknown name "Jan"` — which is false twice over: the name is not
+ * unknown, it is a sheet, and the reason it cannot be used is a boundary rather
+ * than a typo. This is how the column path learns enough to say so.
+ *
+ * IT IS THE SAME SCANNER, deliberately. A second pass over the source looking
+ * for `!` would be a second definition of what a qualifier is, and the two
+ * would disagree the first time somebody wrote `="not a sheet!" & A1` — where
+ * the `!` is inside a string literal this walk already skips.
+ *
+ * Both qualifier shapes are reported: `Jan!A1`, where a reference follows, and
+ * `Jan!Amount`, where a COLUMN NAME follows. The second is the spelling a
+ * dataset author reaches for and the one a naive `!`-hunt would find while a
+ * reference-only walk would miss.
+ */
+export function sheetQualifiers(src: string): SheetQualifier[] {
+  // Free when there is no `!` at all, which is almost every expression ever
+  // evaluated — this runs in the recalculation hot path.
+  if (src.indexOf('!') < 0) return []
+  const seen = new Set<string>()
+  const out: SheetQualifier[] = []
+  rewrite(src, null, undefined, (sheet, after) => {
+    const k = sheet.toLowerCase()
+    if (seen.has(k)) return
+    seen.add(k)
+    out.push({ sheet, after })
+  })
+  return out
+}
+
+/**
+ * Is this a spelling a defined name may have?
+ *
+ * The fence is the same one the header draws around `REVENUE2024`: a name that
+ * is CELL-SHAPED is refused, because the scanner resolves `TAX1` as a cell
+ * before it ever reaches the name table, so a name spelled that way would be
+ * silently unreachable — a definition that exists and never applies is worse
+ * than a refusal. The body is formula.ts's identifier, so a name that parses
+ * here also lexes there.
+ */
+export const NAME_RE = /^[A-Za-z_][A-Za-z0-9_.]*$/
+export const isNameLike = (s: string): boolean =>
+  NAME_RE.test(s) && parseRef(s) === null
+
+/**
+ * `map` may be `null`: a walk that is only substituting NAMES must return every
+ * reference as the author wrote it, spacing and lower case included. Running
+ * them through a mapper that formats a parsed `CellRef` would silently
+ * canonicalise `a1 : b2` into `A1:B2` — correct, unasked for, and a diff in
+ * every formula a name touches.
+ */
+function rewrite(
+  src: string,
+  map: MapUnit | null,
+  mapName?: MapName,
+  onQualifier?: (sheet: string, after: string) => void,
+): string {
   const n = src.length
   const skipSpace = (j: number): number => {
     while (j < n && (src[j] === ' ' || src[j] === '\t' || src[j] === '\n' || src[j] === '\r')) j++
@@ -235,6 +386,53 @@ function rewrite(src: string, map: MapUnit): string {
   const word = (j: number): number => {
     while (j < n && (isWord(src[j]) || src[j] === '$')) j++
     return j
+  }
+
+  /**
+   * A reference or a range starting at `j`, and where it ends — or `null` if
+   * what is there is not one. The lookahead guards are the same three as
+   * below: a name followed by `(`, `!` or `[` qualifies something else.
+   */
+  const refAt = (j: number): { unit: Unit; end: number } | null => {
+    const e = word(j)
+    const from = parseRef(src.slice(j, e))
+    if (!from) return null
+    const k = skipSpace(e)
+    if (src[k] === '(' || src[k] === '!' || src[k] === '[') return null
+    // A range is ONE unit: deleting the rows under `A3:A5` has to collapse the
+    // whole thing to `#REF!`, which an endpoint on its own cannot know.
+    if (src[k] === ':') {
+      const m = skipSpace(k + 1)
+      const e2 = word(m)
+      const to = parseRef(src.slice(m, e2))
+      const after = skipSpace(e2)
+      if (to && src[after] !== '(' && src[after] !== '!' && src[after] !== '[') {
+        return { unit: { from, to }, end: e2 }
+      }
+    }
+    return { unit: { from }, end: e }
+  }
+
+  /** `'Q3 pipeline'` at `j` — the index after the closing quote, or -1. */
+  const quoted = (j: number): number => {
+    let p = j + 1
+    while (p < n) {
+      if (src[p] === "'") {
+        if (src[p + 1] === "'") { p += 2; continue }
+        return p + 1
+      }
+      p++
+    }
+    return -1
+  }
+
+  /** `<name>!<ref>` starting at the qualifier's end `q`, or null. */
+  const qualified = (name: string, at: number, q: number): { text: string; end: number } | null => {
+    const k = skipSpace(q)
+    if (src[k] !== '!') return null
+    const r = refAt(skipSpace(k + 1))
+    if (!r) return null
+    return { text: map ? map({ ...r.unit, sheet: name }) : src.slice(at, r.end), end: r.end }
   }
 
   let out = ''
@@ -257,6 +455,29 @@ function rewrite(src: string, map: MapUnit): string {
       out += src.slice(i, j)
       i = j
       continue
+    }
+
+    // `'Q3 pipeline'!A1` — the quoted sheet form. A stray quote that does not
+    // qualify a reference is copied like any other character.
+    if (c === "'") {
+      const q = quoted(i)
+      const name = q > 0 ? unquoteSheet(src.slice(i, q)) : ''
+      if (q > 0 && src[skipSpace(q)] === '!') {
+        onQualifier?.(name, src.slice(skipSpace(skipSpace(q) + 1), word(skipSpace(skipSpace(q) + 1))))
+      }
+      const hit = q > 0 ? qualified(name, i, q) : null
+      if (hit) { out += hit.text; i = hit.end; continue }
+      out += c
+      i++
+      continue
+    }
+
+    // `#REF!`, `#DIV/0!`, `#N/A` — an error a previous edit left behind. Copied
+    // verbatim, and consumed HERE so the `REF` of `#REF!` cannot be read as a
+    // sheet qualifier by the branch below.
+    if (c === '#') {
+      const m = ERR_LITERAL.exec(src.slice(i))
+      if (m) { out += m[0]; i += m[0].length; continue }
     }
 
     // [Bracketed name] — formula.ts's column escape, and the way to say "the
@@ -283,33 +504,48 @@ function rewrite(src: string, map: MapUnit): string {
       const j = word(i)
       const text = src.slice(i, j)
       const k = skipSpace(j)
-      // `(` = a call, `!` = a sheet qualifier, `[` = a structured reference.
-      // All three are followed by a name that is frequently cell-shaped
-      // (LOG10, Sheet1, Table1); translating one corrupts the formula.
-      if (src[k] === '(' || src[k] === '!' || src[k] === '[') {
+      // `!` = a sheet qualifier. The name AND the reference after it are one
+      // unit — dropping the name here is what made `Sheet1!A1` read the local
+      // A1. When what follows is not a reference, the name is left alone.
+      if (src[k] === '!') {
+        // WHOEVER IS WATCHING hears about the qualifier here, in BOTH of the
+        // branches below, because both are a formula naming another sheet:
+        // `Jan!A1` is one dash cannot mistake, and `Jan!Amount` — a sheet and a
+        // COLUMN, which is what a dataset author reaches for — is one it would
+        // otherwise pass on to formula.ts as the bare word `Jan`. See
+        // `sheetQualifiers`.
+        const hit = qualified(text, i, j)
+        if (hit) {
+          onQualifier?.(text, src.slice(skipSpace(k + 1), hit.end))
+          out += hit.text; i = hit.end; continue
+        }
+        // Not a reference after the `!`, so the whole thing is somebody else's
+        // syntax. The WORD AFTER IT is consumed here too, verbatim: leaving it
+        // to the loop would offer `Sheet1!Total` up as the defined name
+        // `Total`, and substituting a range into it would fabricate
+        // `Sheet1!A1:A5` — a reference to a sheet the author never named.
+        const after = skipSpace(k + 1)
+        const w = word(after)
+        // A word DID follow, so this is `Jan!Amount` — a sheet and a column
+        // name — and not `a ! b`, which is not this language's syntax at all
+        // and must not be reported as somebody reaching for another sheet.
+        if (w > after) onQualifier?.(text, src.slice(after, w))
+        out += src.slice(i, w)
+        i = w
+        continue
+      }
+      // `(` = a call, `[` = a structured reference. Both are followed by a
+      // name that is frequently cell-shaped (LOG10, Table1); translating one
+      // corrupts the formula.
+      if (src[k] === '(' || src[k] === '[') {
         out += text
         i = j
         continue
       }
-      const from = parseRef(text)
-      if (!from) { out += text; i = j; continue }
-
-      // A range is mapped as ONE unit: deleting the rows under `A3:A5` has to
-      // collapse the whole thing to `#REF!`, which an endpoint on its own
-      // cannot know.
-      if (src[k] === ':') {
-        const m = skipSpace(k + 1)
-        const e = word(m)
-        const to = parseRef(src.slice(m, e))
-        const after = skipSpace(e)
-        if (to && src[after] !== '(' && src[after] !== '!' && src[after] !== '[') {
-          out += map({ from, to })
-          i = e
-          continue
-        }
-      }
-      out += map({ from })
-      i = j
+      const r = refAt(i)
+      if (!r) { out += mapName ? mapName(text) : text; i = j; continue }
+      out += map ? map(r.unit) : src.slice(i, r.end)
+      i = r.end
       continue
     }
 
@@ -326,13 +562,17 @@ function rewrite(src: string, map: MapUnit): string {
  *
  * A range with an off-sheet corner becomes `#REF!` whole. `#REF!:B1` is not a
  * smaller range, it is not a range.
+ *
+ * A QUALIFIED reference moves like any other: copying `=Sheet1!A1` down a row
+ * gives `=Sheet1!A2`, because the formula moved and its reference is relative.
+ * The sheet is not what `$` pins — the row is.
  */
 export function rewriteFormulaRefs(src: string, dRow: number, dCol: number): string {
   return rewrite(src, (u) => {
     const a = shifted(u.from, dRow, dCol)
-    if (!u.to) return a
+    if (!u.to) return a === REF_ERR ? REF_ERR : qualify(u.sheet, a)
     const b = shifted(u.to, dRow, dCol)
-    return a === REF_ERR || b === REF_ERR ? REF_ERR : `${a}:${b}`
+    return a === REF_ERR || b === REF_ERR ? REF_ERR : qualify(u.sheet, `${a}:${b}`)
   })
 }
 
@@ -351,12 +591,29 @@ export function rewriteFormulaRefs(src: string, dRow: number, dCol: number): str
  * middle of `A1:A10` gives `A1:A7`, because the range still means "the numbers
  * under this heading" and the surviving ones are still there. It becomes
  * `#REF!` only when both ends are gone.
+ *
+ * A REFERENCE TO ANOTHER SHEET DOES NOT MOVE. `scope` says which sheet the edit
+ * happened on (`on`) and which sheet the formula lives on (`self`); a reference
+ * moves only when those name the same sheet as the reference does. With no
+ * scope the edit is taken to be on the formula's own sheet, which is what every
+ * caller meant before sheets could be named at all — so an unqualified
+ * reference moves and `Other!A5` stays exactly where it points. Moving it would
+ * repoint someone else's data at a hole in this sheet, which is the failure
+ * this whole file exists to prevent.
  */
+export interface ShiftScope {
+  /** the sheet the rows or columns were inserted into or removed from */
+  on?: string
+  /** the sheet whose formula is being rewritten — what an unqualified ref means */
+  self?: string
+}
+
 export function shiftRefsForInsert(
   src: string,
   axis: 'row' | 'col',
   at: number,
   count: number,
+  scope: ShiftScope = {},
 ): string {
   const val = (r: CellRef): number => (axis === 'row' ? r.row : r.col)
   const put = (r: CellRef, v: number): CellRef =>
@@ -371,9 +628,17 @@ export function shiftRefsForInsert(
     return v - gone
   }
 
+  // Whose sheet each side names. `undefined` on both is the ordinary case: one
+  // sheet, one edit, no qualifiers anywhere.
+  const edited = scope.on ?? scope.self
+
   return rewrite(src, (u) => {
+    if (!sameSheet(u.sheet ?? scope.self, edited)) {
+      // Another sheet's cells did not move, so neither does this reference.
+      return qualify(u.sheet, u.to ? `${formatRef(u.from)}:${formatRef(u.to)}` : formatRef(u.from))
+    }
     const a = moved(val(u.from))
-    if (!u.to) return a === null ? REF_ERR : formatRef(put(u.from, a))
+    if (!u.to) return a === null ? REF_ERR : qualify(u.sheet, formatRef(put(u.from, a)))
     const b = moved(val(u.to))
     if (a === null && b === null) return REF_ERR
     // One end survived, so the range clamps to the surviving side of the hole:
@@ -384,6 +649,6 @@ export function shiftRefsForInsert(
     const fa = a ?? (lowFirst ? at : at - 1)
     const fb = b ?? (lowFirst ? at - 1 : at)
     if (fa < 0 || fb < 0) return REF_ERR
-    return `${formatRef(put(u.from, fa))}:${formatRef(put(u.to, fb))}`
+    return qualify(u.sheet, `${formatRef(put(u.from, fa))}:${formatRef(put(u.to, fb))}`)
   })
 }

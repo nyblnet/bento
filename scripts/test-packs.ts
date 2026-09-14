@@ -238,6 +238,29 @@ ok(
   'and the forged strings never reached the file',
 )
 
+// --- 8. locale aliases reach the pack --------------------------------------
+// A pack's language code is what navigator.language is matched against, so a
+// pack filed under a code no browser reports can never be selected. Filipino
+// is filed as `fil` for that reason, with `tl` kept as an alias (ALIASES in
+// slides/src/packs.ts). Assert the alias resolves — and that it does NOT
+// appear as a second entry in the picker.
+console.log('\nlocale aliases')
+const i18n = await import('../kernel/src/i18n.ts')
+const filPack = { app: 'slides', version: '1.0.0', lang: 'fil', label: 'Filipino', strings: { Delete: 'Burahin' } }
+ok(packs.stageForFile(filPack), 'the fil pack registers')
+i18n.setLocale('fil')
+ok(i18n.t('Delete') === 'Burahin', 'fil resolves to the pack')
+i18n.setLocale('tl')
+ok(i18n.t('Delete') === 'Burahin', 'the legacy tl code resolves to the SAME pack')
+ok(
+  i18n.localeChoices().filter((c) => c.code === 'fil' || c.code === 'tl').length === 1,
+  'and the alias adds no duplicate picker entry',
+)
+packs.unstageFromFile('fil')
+i18n.setLocale('tl')
+ok(i18n.t('Delete') === 'Delete', 'removing the pack removes its alias too')
+i18n.setLocale('en')
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) {
   console.error(`${failures} FAILED`)

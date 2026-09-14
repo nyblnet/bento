@@ -2,14 +2,24 @@
    Copyright (c) 2026 The Bento authors
    Side panels — dash's half of the suite's shared chrome.
 
-   The geometry is slides' (slides/src/styles.css `.ed-sidebar` / `.ed-props` /
-   `.ed-section` / `.ed-row` / `.ed-resizer`), copied to the pixel: 11px
-   uppercase section headers at 0.07em, 12.5px rows with a 110px control, 8px
-   gaps, 6px control radii, a 5px resizer strip and a 16×44 chevron docked to
-   the screen edge when its panel is shut. The COLOURS come from dash's own
-   :root, so the panels sit against dash's grid rather than importing slides'
-   palette wholesale. Two apps that agree on spacing and differ on hue read as
-   one product; the reverse does not. */
+   THERE IS ONE PANEL. The sheet list left for the tab strip (tabs.ts) and took
+   the whole left panel with it; ~90 lines describing sheet cards, a left
+   border, a left drawer and a left-hand chevron outlived it here, styling
+   markup nothing emits any more. They are gone. MEASURED before removing them:
+   `.dp-sheet`, `.dp-icon`, `.dp-add` and `.dp-left` matched zero elements, and
+   `.dp-panel + .dp-resizer` — every left-hand chevron rule — matched zero,
+   because the only panel in the document is the one AFTER the strip.
+
+   The SPACING is slides' (slides/src/styles.css `.ed-props` / `.ed-section` /
+   `.ed-row` / `.ed-resizer`): 14px panel padding, 11px uppercase section
+   headers at 0.07em with 18px above and 8px below, 12.5px rows with a 110px
+   control, an 8px gutter, an 8px pitch, 6px control radii, a 5px resizer strip
+   and a 16×44 chevron docked to the screen edge when the panel is shut. The
+   ROW is dash's own, and the note at `.dp-panel` says why the reference is not
+   copied there. The COLOURS come from dash's own :root, so the panel sits
+   against dash's grid rather than importing slides' palette wholesale. Two apps
+   that agree on spacing and differ on hue read as one product; the reverse does
+   not. */
 
 /* ————— layout ————— */
 
@@ -59,23 +69,16 @@
     z-index: 40;
     box-shadow: var(--shadow-pop);
   }
-  #app .dp-left { left: 0; }
   #app .dp-right { right: 0; }
   /* a shut drawer casts no shadow, or the closed edge draws a grey smear */
   #app .dp-panel.dp-shut { box-shadow: none; }
 
-  /* Both chevrons DOCK now, open or shut. With the panels floating, the two
-     resizer strips are the only things left in flow, so they sit hard against
-     the screen edges — and a 16px chevron centred on a 5px rail then hung 5.5px
-     past the viewport. Measured: body.scrollWidth 396 against clientWidth 390,
-     a horizontal scrollbar for six pixels of decoration. These are the same
-     rules the shut state already used; the phone just always wants them. */
-  #app .dp-panel + .dp-resizer .dp-toggle {
-    left: 0;
-    transform: translateY(-50%);
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-  }
+  /* The chevron DOCKS now, open or shut. With the panel floating, the resizer
+     strip is the only thing left in flow, so it sits hard against the screen
+     edge — and a 16px chevron centred on a 5px rail then hung 5.5px past the
+     viewport. Measured: body.scrollWidth 396 against clientWidth 390, a
+     horizontal scrollbar for six pixels of decoration. These are the same rules
+     the shut state already used; the phone just always wants them. */
   #app .dp-resizer:has(+ .dp-panel) .dp-toggle {
     left: auto;
     right: 0;
@@ -83,11 +86,90 @@
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
   }
+
+  /* …AND THE CHEVRON HAS TO BE ON TOP OF THE DRAWER IT CLOSES.
+     Docking is only half the job. The resizer strips stay in flow at x=0 and
+     x=vw-5, but an OPEN drawer is `position: absolute; z-index: 40` over the
+     same pixels — so the pull tab was painted underneath the panel it opens
+     and closes. MEASURED at 375px with both drawers open:
+     elementFromPoint on each chevron's centre returned `.dp-panel`, not the
+     button — both toggles unreachable, the grid completely covered, and
+     nothing left to shut them with but the `[` and `]` keys, which is not a
+     thing a phone has. (At boot this never showed, because a phone boots with
+     both drawers shut and the chevrons sit over the grid.)
+
+     The strip rides above the drawer instead. The tab does NOT move between
+     states — only its arrow flips — so the control a reader just used to open
+     a drawer is still under their thumb to close it, rather than 200px away at
+     an edge that depends on a width they may have dragged. */
+  #app .dp-resizer { z-index: 45; }
+
+  /* and it sits in its own gutter rather than on top of the first 16px of the
+     panel: a tab overlapping a row's label reads as a rendering bug */
+  #app .dp-right:not(.dp-shut) { padding-right: 22px; }
 }
 
+/* ————— ONE GRID FOR THE WHOLE PANEL —————
+   Five sections were written at different times by different hands — Cell and
+   Appearance in cellprops.ts, Column, Sheet and Workbook here — and each was
+   correct on its own. Together they were not: a text field started at x=1276
+   and a checkbox at x=1373, a read-only value's left edge moved with the number
+   in it (1378.2 for "8", 1370 for "12"), and the row PITCH was 36px, 34.5px or
+   26px depending on which control the row happened to hold. Measured, all of
+   it, on the built shell at a 250px panel.
+
+   FOUR MEASUREMENTS ARE THE WHOLE FIX and they are declared once, below: the
+   control column (`--dp-ctl`, which is declared on the ROW rather than on the
+   panel, for the container-unit reason written at that rule), the label-to-
+   control gutter, the row floor and the vertical pitch. Every row is a
+   two-column grid on the same track sizes, so every label starts on one line
+   and every control starts on another — a checkbox, a select, a colour pair, a
+   button and a printed value all begin at the SAME x — every row is at least
+   --dp-row tall, and everything in a section leaves the same --dp-pitch under
+   itself, so the rhythm is the same whatever the row holds.
+
+   THEY ARE PROPERTIES, NOT LITERALS, so a section that needs a different
+   control width (the currency symbol, which is one glyph) narrows its own
+   control rather than opting out of the grid — and so the stacked layout below
+   can retune the whole panel by rewriting one of them.
+
+   FOUR OF THE FIVE NUMBERS ARE SLIDES' (`.ed-props` / `.ed-section` / `.ed-row`
+   in slides/src/styles.css), because where a measurement is arbitrary the suite
+   should pick the same arbitrary value twice: 14px panel padding, an 18/8
+   section, an 8px vertical pitch, an 8px gutter, a 110px control floor and a
+   6px control radius are all read off that file.
+
+   THE ROW HEIGHT IS THE ONE DELIBERATE DIVERGENCE, and it is a divergence from
+   a defect rather than from a decision. MEASURED, slides' own panel — the
+   reference — lays out rows of 22, 25, 26 and 27px with pitches of 30/33/34/35,
+   because `.ed-row` is a `justify-content: space-between` flex with no floor: a
+   checkbox row is 22px and drops its 16px box 91px to the right of every other
+   control, a select row is 27px, a text row 25px. So the thing to copy from
+   slides is its SPACING, not its row; copying the row would import the
+   raggedness this panel has been asked three times to be rid of. */
 .dp-panel {
+  --dp-gap: 8px;                /* label column to control column */
+  --dp-row: 26px;               /* the height every control shares */
+  --dp-pitch: 8px;              /* under every row, note, button and list */
+  --dp-radius: 6px;             /* every control corner, and every button's */
   width: var(--dp-w, 220px);
+  /* The row layout QUERIES THIS PANEL, never the viewport: the panel is dragged
+     between 200 and 440px by hand, so its width and the window's width are
+     unrelated numbers. Both panels are containers, so a row laid out in the
+     sheet list and a row laid out in the properties behave identically. */
+  container-type: inline-size;
   flex: none;
+  /* A FLEX ITEM FLOORS AT ITS MIN-CONTENT WIDTH UNLESS TOLD NOT TO, and this
+     one is dragged by hand, so that floor was silently overriding the reader.
+     MEASURED at a 1440px window: `--dp-w: 200px` laid out at 276.7px and
+     `--dp-w: 320px` at 303.8px — the panel was as wide as its longest label
+     wanted, not as wide as it had been dragged, and the number it stored in
+     localStorage described a width it had never taken. The stacked layout below
+     is the same bug's other half: its threshold is a CONTENT width, so whether
+     a row stacked depended on which section happened to be mounted rather than
+     on the panel's width. `.dp-shut` already carried this declaration for the
+     same reason, which is the whole of the argument for it living up here. */
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
@@ -95,12 +177,13 @@
   padding: 12px;
   transition: width 0.18s ease, padding 0.18s ease;
 }
-.dp-left { border-right: 1px solid var(--line); }
-.dp-right { border-left: 1px solid var(--line); padding: 14px; }
+.dp-right {
+  border-left: 1px solid var(--line);
+  padding: 14px;
+}
 
 .dp-panel.dp-shut {
   width: 0;
-  min-width: 0;             /* flex items floor at min-content without this */
   padding-left: 0;
   padding-right: 0;
   border-width: 0;
@@ -122,9 +205,7 @@
 body.dp-resizing .dp-resizer { background: rgb(247 166 0 / 0.45); }
 body.dp-resizing { cursor: col-resize; user-select: none; }
 /* against a shut panel the strip carries nothing but the reopen chevron */
-.dp-panel.dp-shut + .dp-resizer,
 .dp-resizer:has(+ .dp-panel.dp-shut) { cursor: default; }
-.dp-panel.dp-shut + .dp-resizer:hover,
 .dp-resizer:has(+ .dp-panel.dp-shut):hover { background: transparent; }
 
 .dp-toggle {
@@ -149,12 +230,6 @@ body.dp-resizing { cursor: col-resize; user-select: none; }
 }
 .dp-toggle:hover { color: var(--ink); border-color: var(--line-strong); }
 /* shut: the chevron pins fully on-screen, docked to the edge like a drawer pull */
-.dp-panel.dp-shut + .dp-resizer .dp-toggle {
-  left: 0;
-  transform: translateY(-50%);
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-}
 .dp-resizer:has(+ .dp-panel.dp-shut) .dp-toggle {
   left: auto;
   right: 0;
@@ -171,20 +246,42 @@ body.dp-resizing { cursor: col-resize; user-select: none; }
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--muted);
+  /* 18 above, 8 below — slides' `.ed-section` exactly — and the 18 is the WHOLE
+     gap, not a gap plus whatever the last thing in the section above happened
+     to carry. A row leaves 8px under itself, a note 8px, a block button 8px, so
+     the distance between two sections used to be 22, 24 or 26px depending on
+     which of those the section above ended with. The `:last-child` rule below
+     zeroes the trailing margin so one number decides it. */
   margin: 18px 0 8px;
 }
 .dp-section:first-child { margin-top: 2px; }
+.dp-section-body > :last-child { margin-bottom: 0; }
 
+/* ————— THE HEADER STARTS WHERE ITS ROWS START —————
+   The disclosure triangle needs 14px of room and it used to TAKE it from the
+   text: MEASURED, every section title began at the panel's content edge + 14px
+   while every label under it began at + 0. Seven headers, each one the only
+   thing in its part of the panel not on the label column, which is what
+   "section headers have no consistent relationship to the rows under them"
+   looks like from a screenshot.
+
+   So the padding is cancelled by an equal negative margin. The TEXT lands on
+   the label column; the triangle hangs back into the panel's own 14px of
+   padding, which is exactly the room it needs and room nothing else is using.
+   Logical properties throughout, because the chrome mirrors for an RTL viewer
+   (i18n applyDirection) and a hard `left` would put the triangle on top of the
+   first word. */
 .dp-sec-toggle {
   cursor: pointer;
   user-select: none;
   position: relative;
-  padding-left: 14px;
+  padding-inline-start: 14px;
+  margin-inline-start: -14px;
 }
 .dp-sec-toggle::before {
   content: '';
   position: absolute;
-  left: 1px;
+  inset-inline-start: 1px;
   top: 50%;
   width: 0;
   height: 0;
@@ -201,139 +298,250 @@ body.dp-resizing { cursor: col-resize; user-select: none; }
 
 /* ————— rows ————— */
 
+/* THE CONTROL COLUMN IS DECLARED ON THE ROW, NOT ON THE PANEL, and that is a
+   spec detail rather than a preference: a container query UNIT resolves against
+   the nearest ANCESTOR container, and an element is not its own ancestor. On
+   `.dp-panel` — the container itself — `44cqi` would silently resolve against
+   the small viewport instead, so a 440px panel and a 200px one would compute
+   the same control width on a laptop and different ones on a phone. On the row,
+   which is a descendant, it resolves against the panel that actually holds it.
+
+   WHY IT IS FLUID AT ALL. 110px is slides' width and it is the right width for
+   the 250px panel this ships at — the clamp floor keeps that case byte-identical.
+   But this panel is DRAGGABLE to 440px, and there a fixed 110px control left a
+   180px empty gutter between every label and its field: the column stopped
+   reading as a column and became two lists that happened to share a row. The
+   ceiling is 176px because past that a one-word field ("Auto", "none") is a
+   moat, and the label needs the rest. */
 .dp-row {
-  display: flex;
+  --dp-ctl: clamp(110px, 44cqi, 176px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--dp-ctl);
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+  column-gap: var(--dp-gap);
+  min-height: var(--dp-row);
+  margin-bottom: var(--dp-pitch);
   font-size: 12.5px;
   color: var(--ink);
 }
-.dp-row > span:first-child { flex: none; color: var(--muted); }
+/* The label column. It WRAPS rather than pushing the control out of line: with
+   the old `flex: none` a long label ("Frozen columns", "Thousands separator")
+   simply refused to shrink, and the control it belonged to slid off the panel's
+   right edge. A label on two lines is legible; a control that is half missing
+   is not. */
+.dp-row > :first-child {
+  min-width: 0;
+  /* --ink-2, the SUITE'S control-label ink (slides' .ed-row uses it for these
+     same words). --muted is the caption grey — a step too light for a word
+     naming a control somebody is about to act on, and it made every label in
+     the panel read as a footnote to its own field. */
+  color: var(--ink-2);
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+
+/* EVERY control fills the control column, and that is what makes the column a
+   column. Named by their own selectors rather than by `*` so that a wrapper a
+   section brings with it (the colour pair, the format preview) opts in
+   deliberately — those two set the same width in cellprops.css. */
 .dp-row input[type='text'],
 .dp-row input[type='number'],
 .dp-row select {
-  width: 110px;
+  width: 100%;
   min-width: 0;
+  /* one height for every control, so the row pitch does not depend on which
+     control the row happens to hold. MEASURED before: text 28.1px, select
+     26.5px, checkbox 18.1px — three rhythms in one panel. */
+  height: var(--dp-row);
   font: inherit;
   font-size: 12.5px;
-  padding: 4px 6px;
+  padding: 3px 6px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--dp-radius);
   background: var(--surface);
   color: var(--ink);
 }
 .dp-row input:focus,
-.dp-row select:focus { outline: none; border-color: var(--accent); }
+.dp-row select:focus { outline: none; border-color: var(--blue); }
 .dp-row .dp-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-.dp-row input[type='checkbox'] { width: auto; accent-color: var(--accent); margin: 0; }
-.dp-row-ro { cursor: default; }
-.dp-value { color: var(--ink); font-variant-numeric: tabular-nums; }
 
+/* ————— THE CHECKBOX IS A FIELD, LIKE EVERY OTHER CONTROL —————
+   A native checkbox is 13px of box in a 26px row, and it ended 97px short of
+   the line every other control in the panel ends on: a column of fields with
+   one speck floating in it. Both of the obvious repairs are worse. Pushing it
+   to the RIGHT edge (slides' `space-between`) buys the right edge by giving up
+   the left one, so the state indicator no longer starts where every value in
+   the panel starts. Leaving it small and starting it on the left — what this
+   file did until now — is the speck.
+
+   So it becomes a field: the same 26px box, the same border, the same radius,
+   the same two edges, with the state drawn as a 14px box INSIDE it on the
+   panel's content line. `row()` (panels.ts) already builds every row as a
+   `<label>`, so the whole field was a hit target the moment it had a size —
+   110px × 26px instead of 13 × 13, and no markup or script to add.
+
+   THE CHECKED STATE PAINTS IN --ink, NOT THE AMBER. Same argument tabs.css
+   makes for the active-tab rule: the brand amber is 2.02:1 on white, under the
+   3:1 that a non-text indicator has to hold, and it is the ONLY thing saying
+   whether this option is on. Ink is 14.51:1 light and 13.75:1 dark against the
+   field, so one mark carries it on both grounds. (The old rule set
+   `accent-color: var(--accent)`, i.e. it painted the state at 2.02:1.) */
+.dp-row input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: var(--dp-row);
+  margin: 0;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--dp-radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+/* the box itself — 14px, on the same content line as an input's first glyph */
+.dp-row input[type='checkbox']::before {
+  content: '';
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface);
+}
+.dp-row input[type='checkbox']:checked::before {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+/* the tick, knocked out of the filled box in the field's own surface colour */
+.dp-row input[type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  width: 4px;
+  height: 8px;
+  margin-top: -5px;
+  border: 2px solid var(--surface);
+  border-block-start: 0;
+  border-inline-start: 0;
+  transform: rotate(43deg);
+}
+.dp-row input[type='checkbox']:hover { border-color: var(--line-strong); }
+.dp-row input[type='checkbox']:focus-visible {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
+}
+
+.dp-row-ro { cursor: default; }
+/* Read-only values start on the control line too, and they OCCUPY the column
+   rather than shrinking to their own text: a value that is only as wide as the
+   number in it has no edges of its own, so a long one used to overflow past the
+   fields above it while a short one left the column looking empty. Right-
+   aligning them (the behaviour before that) made their LEFT edge a function of
+   how many digits the number had — "Rows 8" and "Rows 128" began at different
+   places on consecutive loads of the same panel.
+
+   No border and no fill, deliberately: this is a printed figure, not a field,
+   and it must not invite a click. The line-height matches an input's inner text
+   box so the figure sits on the same baseline as the values above it. */
+.dp-value {
+  min-width: 0;
+  /* The same BOX as a field, though it draws no border. In the two-column
+     layout this changes nothing — an 18px line centred in a 26px row is where
+     it already sat, and MEASURED the ink lands within 0.2px of the label's.
+     STACKED it is the whole fix: a stacked row is label + gap + control, so a
+     value that was 18px tall made every read-only row 8px shorter than every
+     row holding a field. Four Workbook rows and three others, out of step with
+     the panel for want of a height. */
+  min-height: var(--dp-row);
+  display: flex;
+  align-items: center;
+  line-height: 18px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* Notes, empty states and full-width buttons ride the same rhythm as the rows
+   they sit between — the note's old `-2px` top margin pulled it 2px into the
+   row above and made every section carrying one 2px shorter than every section
+   that did not. */
 .dp-note {
-  margin: -2px 0 8px;
+  margin: 0 0 var(--dp-pitch);
   font-size: 11.5px;
   line-height: 1.4;
   color: var(--muted);
 }
-.dp-empty { font-size: 12.5px; color: var(--muted); }
+.dp-empty { margin: 0 0 var(--dp-pitch); font-size: 12.5px; color: var(--muted); }
+
+/* ————— the narrow panel: ONE column, not a squeezed two —————
+   The panel is draggable down to 200px, where the two tracks leave the label
+   about 39px — three characters and an ellipsis. Below the threshold the row
+   stacks instead: the label on its own line, the control full width under it.
+   Still one grid, still one control width, still one rhythm; the axis changes,
+   nothing else does.
+
+   THE THRESHOLD IS A CONTENT-BOX WIDTH, and that is the whole trick to getting
+   the number right: an `inline-size` container queries its CONTENT box, not its
+   border box. The first attempt used 216 — the panel width minus its 28px of
+   padding — and then a phone drawer, which carries another 22px of padding to
+   clear the docked chevron, measured 200 and stacked at a width the desktop was
+   happily laying out in two columns. MEASURED both: desktop 250px panel = 222px
+   of content, phone 250px drawer = 200px.
+
+   So the number is what the LAYOUT needs: a control column of 110, a gap of 8,
+   and ~70px left for a label to still be a label — 188. Below it, stack. The
+   250px default clears it on both, and only a deliberate drag towards the 200px
+   minimum (172px of content) trips it. */
+@container (max-width: 187px) {
+  .dp-row { grid-template-columns: minmax(0, 1fr); row-gap: 3px; }
+}
+/* NOTHING ELSE BELONGS IN THAT BLOCK. It used to carry
+   `.dp-row input[type='checkbox'] { margin-bottom: 2px }`, and those two pixels
+   were a THIRD row height: MEASURED at a 200px panel, 36.6px for a read-only
+   row, 44.6px for a field row and 46.6px for a checkbox row, across six
+   different pitches. A rule that nudges one control is how a panel with one
+   grid still reads as three. The stacked row is label + row-gap + control and
+   every control is --dp-row tall, so the height is the same arithmetic for all
+   of them and no control gets to opt out of it. */
 
 /* ————— buttons ————— */
 
+/* A BUTTON IS A CONTROL AND TAKES A CONTROL'S HEIGHT. MEASURED at 30.1px
+   against a panel whose every other control is 26 — so "Add another rule",
+   "Clear filters and sorts" and each "show" button under Sheet stood 4px
+   prouder than the fields they sit among, and carried a 7px corner where every
+   field carries 6. Two sizes and two radii in one column is what the eye reads
+   as unfinished long before it can say why. The padding is what gives, not the
+   floor: `min-height` keeps a button that WRAPS to two lines from being
+   clipped. */
 .dp-btn {
   font: inherit;
   font-size: 12.5px;
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  padding: 5px 10px;
+  border-radius: var(--dp-radius);
+  min-height: var(--dp-row);
+  padding: 3px 10px;
   cursor: pointer;
   white-space: nowrap;
 }
 .dp-btn:hover { background: var(--hover); border-color: var(--muted); }
 .dp-btn[disabled] { opacity: 0.45; cursor: default; }
-.dp-block { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
-.dp-add {
-  width: 100%;
-  margin-top: 8px;
-  border: 1.5px dashed var(--line-strong);
-  color: var(--muted);
-  text-align: center;
-}
-.dp-add:hover { color: var(--ink); }
+.dp-block { display: block; width: 100%; text-align: left; margin-bottom: var(--dp-pitch); }
 
-/* ————— the sheet list ————— */
-
-.dp-sheet {
-  position: relative;
-  border: 2px solid var(--line);
-  border-radius: 8px;
-  padding: 7px 9px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  background: var(--surface);
-  user-select: none;
-}
-.dp-sheet:hover { border-color: var(--line-strong); }
-.dp-sheet.active { border-color: var(--accent); background: var(--accent-wash); }
-.dp-sheet-name {
-  font-size: 13px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  /* leave room for the hover tools, or a long name slides under the ✕ */
-  padding-right: 18px;
-}
-.dp-sheet-meta {
-  font-size: 11px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* MEASURED at 4.2:1 and fixed: --muted is sized for a white card, and on the
-   active card's warm wash it dropped under AA. The row count is the one thing
-   on that card a reader checks against the grid, so it takes full ink there —
-   the size difference still says it is a caption. */
-.dp-sheet.active .dp-sheet-meta { color: var(--ink); }
-
-/* a canvas sheet is really there and this build cannot open it — greyed, not
-   hidden, because a sheet that looks deleted is worse than one that looks inert */
-.dp-sheet-off { cursor: default; opacity: 0.55; }
-.dp-sheet-off:hover { border-color: var(--line); }
-
-.dp-sheet-tools {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  display: none;
-}
-.dp-sheet:hover .dp-sheet-tools { display: block; }
-.dp-icon {
-  padding: 0 5px;
-  line-height: 18px;
-  font-size: 11px;
-  color: var(--muted);
-  border-color: transparent;
-  /* the tools float OVER a sheet card, so the wash has to be the card's own
-     surface rather than a hard white that would punch a hole in a dark one */
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
-}
-.dp-icon:hover { color: var(--err-ink); border-color: var(--line-strong); background: var(--surface); }
-
-.dp-sheet-rename {
-  width: 100%;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 1px 4px;
-  border: 1px solid var(--accent);
-  border-radius: 5px;
-  background: var(--surface);
+/* A note that reports something the reader has already done and that is not
+   taking effect (a number pattern on a Text column). Louder than `.dp-note`'s
+   muted grey, which reads as chrome and is skipped, and quieter than an error,
+   which this is not: nothing was refused and nothing was lost. */
+.dp-note-warn {
   color: var(--ink);
+  border-left: 2px solid var(--warn-ink);
+  padding-left: 7px;
 }
-.dp-sheet-rename:focus { outline: none; }

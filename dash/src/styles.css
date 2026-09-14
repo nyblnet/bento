@@ -40,27 +40,83 @@
 :root {
   color-scheme: light dark;
 
-  /* ————— ground and chrome ————— */
+  /* ————— ground and chrome —————
+     THE LIGHT VALUES ARE bento/slides' VALUES, to the byte. slides
+     (slides/src/styles.css :root) is the shipped app and its palette is the
+     suite's; where dash had picked a neighbouring grey for the same job the
+     two apps drifted for no reason anybody could state, and a user moving
+     between them saw two different products. The DARK values are dash's own —
+     slides is `color-scheme: only light` and has none to copy.
+
+     The name on the left is dash's; slides' name for the same thing is given
+     in the comment, and is aliased at the foot of this block so a rule ported
+     from slides resolves without being rewritten. */
   --bg: light-dark(#ffffff, #0e1319);          /* the page, and the sheet itself */
-  --panel: light-dark(#f8fafc, #161c24);       /* chrome bands: top bar, status bar */
+  /* chrome bands: top bar, status bar. slides: --chrome */
+  --panel: light-dark(#f5f7fa, #161c24);
   /* Raised opaque surfaces — menus, dialogs, popovers, inputs, buttons, the
      side panels. On white it IS the page colour; on dark it has to lift off
      the page or a menu floating over the grid has no edge but its shadow, and
      shadows barely read on a dark ground. */
   --surface: light-dark(#ffffff, #1b222c);
-  --hover: light-dark(#f1f5f9, #26303d);       /* menu rows, buttons, list items */
+  /* menu rows, buttons, list items. slides: --chrome-2 */
+  --hover: light-dark(#eceff4, #26303d);
   /* A wash for hover states drawn OVER unknown content (a chart band, a table
      row that may already be tinted). Alpha, not a colour, for that reason. */
   --wash: light-dark(rgb(0 0 0 / 0.04), rgb(255 255 255 / 0.07));
   --line: light-dark(#e3e8ef, #1f2731);
   --line-strong: light-dark(#cbd5e1, #2f3a49);
   --ink: light-dark(#1e2a3a, #d6dee9);
-  --muted: light-dark(#64748b, #93a0b2);
+  /* Secondary ink — control labels, panel rows. slides: --ink-2. dash had no
+     such token and reached for --muted, which is a CAPTION grey and a step too
+     light for a word somebody is meant to act on. */
+  --ink-2: light-dark(#31445c, #b9c5d4);
+  /* MEASURED, and the reason this is slides' #5b6472 rather than the #64748b
+     dash had: --muted carries 11–11.5px captions, and at #64748b it was
+     4.34:1 on --hover and 4.22:1 on --accent-wash — under AA on the two
+     grounds a caption most often lands on. slides' grey is 5.19:1 and 5.30:1
+     on those same two, 5.57:1 on --panel, and it is the same hue family. */
+  --muted: light-dark(#5b6472, #93a0b2);
   --accent: #f7a600;
+  /* Ink for a word that MEANS amber — a partial total, a "＋ add" invitation —
+     where the amber itself is 2.02:1 on white and cannot be the text. slides:
+     --accent-ink. dash referenced this name in two rules and never declared
+     it, so both silently fell back and neither mark ever appeared; the dark
+     value is the amber ink --warn-ink already uses, so the app carries one
+     amber-on-dark and not two. MEASURED: 6.92:1 on white, 9.22:1 on the dark
+     header band. */
+  --accent-ink: light-dark(#7a5200, #f0b357);
   --slash: #ff9e8a;                            /* the wordmark's peach */
-  --scrim: light-dark(rgb(20 30 45 / 0.42), rgb(2 5 9 / 0.66));
-  --shadow-pop: light-dark(0 12px 32px rgb(15 23 42 / 0.16), 0 12px 32px rgb(0 0 0 / 0.55));
-  --shadow-dialog: light-dark(0 24px 64px rgb(15 23 42 / 0.34), 0 24px 64px rgb(0 0 0 / 0.7));
+  /* Focus, and the selection ring, are ONE colour — see the focus note below.
+     slides calls it --blue and uses it for the same job. */
+  --blue: var(--sel-ring);
+  /* slides' scrim and its two shadow tiers (popover, dialog), verbatim. */
+  --scrim: light-dark(rgb(15 23 36 / 0.38), rgb(2 5 9 / 0.66));
+  /* ————— THE SHADOWS HAVE TO BE BUILT THIS WAY, and it is not a style choice —————
+     `light-dark()` is a <color> function. A CUSTOM property holds any token
+     stream, so `--shadow-pop: light-dark(0 12px 32px …, …)` is a perfectly
+     legal declaration — and then `box-shadow: var(--shadow-pop)` substitutes a
+     colour function into a position that wants lengths, the declaration is
+     INVALID AT COMPUTED-VALUE TIME, and box-shadow falls back to its initial
+     `none`. Silently. MEASURED before this change, on the built shell:
+     `getComputedStyle(document.querySelector('.dx-about')).boxShadow` was
+     "none" — every menu, every popover, the save menu, the find bar, the help
+     card, the About dialog and the phone drawers had been drawing NO shadow at
+     all, on both grounds, for as long as the tokens have existed.
+
+     This is the same trap --bar-opacity fell into a few lines below, which is
+     why the note there says any non-colour theme-varying token needs another
+     shape. The shape is here: vary the COLOUR, which light-dark() can carry,
+     and keep the lengths outside it. A media query would also work but would
+     NOT follow the explicit light/dark override (that override flips
+     `color-scheme`, and only light-dark() reads it) — so a reader who picks
+     Light on a dark desktop would get light surfaces wearing dark-tuned
+     shadows. `scripts/test-dash-theme.ts` now fails on any light-dark() whose
+     light half is not a colour. */
+  --shadow-pop-color: light-dark(rgb(15 23 36 / 0.18), rgb(0 0 0 / 0.55));
+  --shadow-dialog-color: light-dark(rgb(15 23 36 / 0.3), rgb(0 0 0 / 0.7));
+  --shadow-pop: 0 12px 32px var(--shadow-pop-color);
+  --shadow-dialog: 0 18px 50px var(--shadow-dialog-color);
 
   /* ————— semantic ————— */
   --warn-bg: light-dark(#fffbeb, #221b0d);     /* the findings strip */
@@ -79,6 +135,14 @@
      data", and the two stopped being the same colour when selection went
      blue. */
   --accent-wash: light-dark(#fdf0d6, #38290c);
+  /* The bar under the ACTIVE worksheet tab — a non-text indicator, so it has a
+     3:1 floor to clear rather than a decorative one. MEASURED against the tab
+     it sits on: the brand amber is 9.25:1 on the dark sheet and 2.02:1 on the
+     white one, so the light ground takes the darker amber the warning ink
+     already uses (#b45309 — 5.02:1 on white) and the dark ground keeps the
+     brand colour. Same hue family either way, so the mark still reads as
+     dash's; this is the one place the accent has to give ground, because it is
+     the only thing on screen saying which sheet you are looking at. */
   /* NOT theme-varying, deliberately: the ink that goes over a cell the
      DOCUMENT has coloured. See the conditional-formatting section below. */
   --ink-on-fill: #1e2a3a;
@@ -137,6 +201,37 @@
      the page, the header band slightly above the lines. Ruling a dark sheet
      with a darker line would work, but every scrolled seam then disappears
      into the background the moment a shadow lands on it. */
+  /* ————— THE DESK: the ground a DATASET sits on —————
+     A dataset has exactly the rows it has, so its grid ends — and when the
+     ground under it was the same colour as its paper, "the table ended here"
+     and "the app stopped drawing" looked identical. At 1440x900 an eight-row
+     workbook filled the top 180px and left two thirds of the window blank
+     white, which is the single strongest unfinished signal the app had.
+
+     So the sheet is an OBJECT and this is what it lies on. It is NOT --panel:
+     the chrome bands (top bar, status bar) are furniture the object sits
+     between, and a desk the same colour as them would make the object float in
+     chrome rather than rest on a surface. ONE RULE decides both values — the
+     desk is one step further from the paper than the chrome band is, in
+     whichever direction "further" runs on that ground. MEASURED against --bg:
+     1.13:1 on the light sheet and 1.18:1 on the dark one, with --panel at
+     1.03:1 and 1.09:1 in between, so the three grounds are monotone on both.
+     The dark half is LIGHTER than the sheet and the light half is DARKER, the
+     same inversion --grid-line and --panel already make and for the same
+     reason: at #0e1319 there is no room left below the paper (a darker desk
+     came out at 1.04:1, invisible).
+
+     The SPREADSHEET kind never shows it. Its extent is a frontier rather than
+     a fact — it grows with the cursor and the window, and reports its size to
+     ARIA as unknown — so there is no edge to draw and a desk would claim a
+     bound the kind does not have. `.dg-canvas .dg-scroll` puts --bg back. That
+     the two kinds look different here is the product's argument made visible,
+     not an inconsistency.
+
+     Text on it: --muted is 5.28:1 (light) and 5.97:1 (dark), --ink 12.81:1 and
+     11.69:1 — the empty-state note is the only thing that ever lands here. */
+  --desk: light-dark(#eef1f6, #1b232d);
+
   --grid-line: light-dark(#edf0f4, #212a35);
   --grid-head: light-dark(#fbfcfd, #151c25); /* the header/gutter band */
   --grid-head-ink: light-dark(#4a5568, #a9b6c7);
@@ -163,6 +258,24 @@
   --fs-ui: 13px;         /* control and menu text */
   --fs-small: 11.5px;    /* captions, sub-labels, meta */
   --fs-micro: 11px;      /* section headers, badges */
+
+  /* ————— the suite's type face —————
+     slides' stack, verbatim (slides/src/styles.css html,body). It was already
+     the same faces on every platform either stack can reach — system-ui and
+     -apple-system both resolve to SF on macOS/iOS and to Segoe UI on Windows —
+     but "the same faces by coincidence" is not the same claim as "the same
+     stack", and only one of them survives somebody adding a font.
+     NAMED, because pivot.css already asks for `var(--ui, …)` and nothing
+     declared it: the pivot has been rendering off its own fallback rather
+     than off the app's font since it was written. */
+  --ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  /* ————— slides' names for things dash had already named —————
+     Aliases, not second definitions: a rule lifted out of slides/src/styles.css
+     resolves here unchanged, and there is still exactly one place each colour
+     is decided. */
+  --chrome: var(--panel);
+  --chrome-2: var(--hover);
 }
 
 /* THE EXPLICIT OVERRIDE IS NOT IN THIS FILE, and that is not an oversight.
@@ -187,7 +300,7 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font: 14px/1.45 var(--ui);
   -webkit-text-size-adjust: 100%;
 }
 
@@ -197,28 +310,62 @@ html, body {
 .dx-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--line-strong);
+  /* 10px / 8px 14px / 1px --line: slides' topbar metrics (its .ed-topbar), so
+     the two apps' bars are the same object at the same height. dash's bar had
+     been 1px shorter with 2px less gap and a --line-strong rule under it —
+     three small differences that read, side by side, as two products. The bar
+     keeps its --panel tint rather than slides' white: dash's DOCUMENT is the
+     white sheet directly below, and a white bar over a white sheet leaves the
+     seam doing work a 1px line cannot. */
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
   background: var(--panel);
   flex: 0 0 auto;
   min-width: 0;
-  /* the notch: the app positions its own chrome and never asks the browser to pad it */
-  padding-top: max(7px, env(safe-area-inset-top));
+  /* THE NOTCH, AND THE HOST THAT LIES ABOUT IT. viewport-fit=cover puts the
+     page under the rounded corners, the Dynamic Island and the home indicator,
+     so fixed chrome insets itself. dash asked for the TOP only, in `env()`
+     only — which meant two failures slides had already fixed:
+       · a landscape phone put the end buttons under the corner curve, because
+         nothing inset the left or right edge; and
+       · inside bento/tray's WKWebView `env(safe-area-inset-*)` reads 0px even
+         when the device genuinely has insets (measured in tray: native
+         62/0/34/0, CSS 0px), so the tray publishes the real numbers as
+         `--tray-safe-*` (tray/ios/EditorViewController.swift) — and dash, not
+         reading them, drew its toolbar under the island.
+     max() keeps the normal padding on every device reporting 0, and in a
+     browser the variables are undefined, resolve to 0px, and env() does the
+     work as normal. The BACKGROUND still bleeds to the edge; only the content
+     is inset. */
+  padding: max(8px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(14px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
+           8px max(14px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
 }
 .dx-mark {
   font-weight: 650;
   letter-spacing: -0.01em;
   white-space: nowrap;
   flex: 0 0 auto;
+  /* the mark and the wordmark are ONE control — both open About, and a gap
+     between them that is not clickable is a target with a hole in it */
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
+/* The glyph does NOT take the theme. It is a logo: four fixed fills, the same
+   in light and dark, the same as slides'. A mark that changes colour with the
+   interface is not a mark. */
+.dx-mark-svg { flex: 0 0 auto; display: block; }
+.dx-mark-t { white-space: nowrap; }
 .dx-slash { color: var(--slash); }
 .dx-title {
   font: inherit;
   font-weight: 600;
   border: 1px solid transparent;
-  border-radius: var(--radius);
-  padding: 4px 8px;
+  /* slides' .ed-title: 6px, 5px 8px, a --line hover edge and a --blue focus
+     edge. Same field, same app. */
+  border-radius: 6px;
+  padding: 5px 8px;
+  line-height: normal;   /* same reason as .dx-btn: match slides' 28.5px field */
   /* `flex: 0 1` and never `1 1`: the title is elastic, but it is not entitled
      to the slack — the buttons to its right are, and a growing title is what
      pushes them off the end. */
@@ -227,32 +374,87 @@ html, body {
   background: transparent;
   color: inherit;
 }
-.dx-title:hover { border-color: var(--line-strong); }
-.dx-title:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.dx-title:hover { border-color: var(--line); }
+.dx-title:focus { outline: none; border-color: var(--blue); background: var(--surface); }
 
 .dx-group { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 /* everything after the insert group is pushed to the far end */
 .dx-bar-end { margin-inline-start: auto; }
 
+/* slides' .ed-btn, adopted whole: 13px, 6px 9px, an 8px radius, --ink-2 for the
+   label, and a hover that FILLS rather than a border that darkens. dash's
+   button was 5px 10px on a 7px radius with a standing --line-strong box and a
+   0.5px press-shift — geometry nobody had a reason for, and a press animation
+   slides does not have and `prefers-reduced-motion` cannot switch off (that
+   media query kills transitions; a transform is not one).
+
+   The BOX comes back wherever a button stands on its own — see .dx-btn-boxed
+   below. In a toolbar, where a dozen of them sit in a row against a tinted
+   band, the boxes were the loudest thing on the screen. */
 .dx-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font: inherit;
   font-size: var(--fs-ui);
-  padding: 5px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: inherit;
+  /* `normal`, not the body's 1.45. slides' .ed-btn inherits a body with no
+     line-height at all, so its buttons are 30px and its bar 47px; dash's body
+     sets 1.45, which put 2.8px of leading inside every button and made the bar
+     49.8px — a toolbar two pixels taller than the other app's for no reason
+     anyone chose. MEASURED after: button 29.8px, bar 47px, both slides'. */
+  line-height: normal;
+  color: var(--ink-2);
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
   cursor: pointer;
   white-space: nowrap;
   flex: 0 0 auto;
 }
-.dx-btn:hover { background: var(--hover); border-color: var(--muted); }
-.dx-btn:active { transform: translateY(0.5px); }
-.dx-btn[disabled] { opacity: 0.45; cursor: default; }
-.dx-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dx-btn:hover { background: var(--hover); }
+.dx-btn:active { background: var(--line); }
+/* 0.35, which is slides' figure for a dead control (.ed-arrange-btn:disabled,
+   .sv-btn[disabled]). dash had 0.45 here, 0.45 in the save menu and 0.6 in the
+   tab menu — three answers to one question. */
+.dx-btn[disabled] { opacity: 0.35; cursor: default; }
+/* FOCUS IS BLUE, NOT AMBER, and this is the one measurement in the file that
+   was a straightforward failure. The brand amber is 2.02:1 on white and 1.88:1
+   on the top bar's own band — WCAG 2.2 SC 1.4.11 asks 3:1 of a focus
+   indicator, so the ring a keyboard user navigates by was the least visible
+   mark in the app. --blue (= --sel-ring) is 4.82:1 light and 4.66:1 dark, and
+   it is already what tabs.css and find.css focus with, so this also settles an
+   argument dash was having with itself. slides focuses with --blue too
+   (.ed-title:focus). */
+.dx-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* A button that is NOT in a row of its own kind — a dialog's actions, the
+   gate's way out, the chart head — keeps a rest-state box, because there is
+   nothing around it to say it is a control. Exactly slides' arrangement:
+   ghost in the chrome, `.ed-about .ed-btn:not(.ed-btn-primary)` outlined in
+   the dialog. */
+.dx-about-actions .dx-btn,
+.dx-about .dx-btn,
+.dx-help .dx-btn,
+.dx-ask-foot .dx-btn,
+.dx-gate .dx-btn,
+.dx-btn-boxed {
+  /* --line-strong, where slides writes --line. slides' dialog is white and a
+     #e3e8ef edge on it is a box; dash's dialog is --surface on BOTH grounds,
+     and on the dark one --line (#1f2731) against --surface (#1b222c) is not an
+     edge at all — MEASURED in the dark About: the "Check for updates" button
+     read as a line of loose text. --line-strong is the weight dash already
+     boxes .dp-btn with, and it is what .dx-btn itself used before it became a
+     ghost, so nothing here is heavier than it was. */
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+.dx-about-actions .dx-btn:hover,
+.dx-about .dx-btn:hover,
+.dx-help .dx-btn:hover,
+.dx-ask-foot .dx-btn:hover,
+.dx-gate .dx-btn:hover,
+.dx-btn-boxed:hover { background: var(--hover); }
 .dx-i { flex: 0 0 auto; }
 /* the caret on a dropdown trigger is a hint, not a peer of the icon */
 .dx-dd-trig > .dx-i:last-child { opacity: 0.5; margin-inline-start: -2px; }
@@ -286,6 +488,30 @@ html, body {
   pointer-events: none;
 }
 .dx-bar .dx-btn-save > .dx-dirty[hidden] { display: none; }
+
+/* The write-back tag: "Saved", for ~1.8s, under the Save button.
+   Same specificity ladder as the dot above, and for the same reason — the
+   narrow-window rule hides bare spans inside bar buttons, and this one has to
+   survive every width because it is the ONLY confirmation that the automatic
+   save landed. Absolutely positioned and pointer-transparent so it can never
+   shift the bar or eat the click on Save it is sitting under. */
+.dx-bar .dx-btn-save > .dx-wb {
+  display: block;
+  position: absolute;
+  top: calc(100% + 4px);
+  inset-inline-end: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+}
+.dx-bar .dx-btn-save > .dx-wb[hidden] { display: none; }
 
 /* ————— top-bar dropdowns —————
    One panel style, shared with .dx-pop and the save menu. */
@@ -350,35 +576,98 @@ html, body {
   background: none;
   box-shadow: none;
 }
-/* …and as a row they are ordinary bar buttons again, not menu rows */
+/* …and as a row they are ordinary bar buttons again, not menu rows: the same
+   ghost .dx-btn everything else in the bar is, so the only difference between
+   this row and the group beside it is what the buttons say. */
 .dx-insert-dd > .dx-menu > .dx-btn {
   width: auto;
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  padding: 5px 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 6px 9px;
 }
-.dx-insert-dd > .dx-menu > .dx-btn:hover { background: var(--hover); border-color: var(--muted); }
+.dx-insert-dd > .dx-menu > .dx-btn:hover { background: var(--hover); }
 .dx-insert-dd > .dx-menu .dx-i { color: inherit; }
 
-/* 1280, not slides' 1200. MEASURED: with every label showing, the insert group
-   ends at x=860 and the end group starts at x=1031 — 171px of slack in a
-   1440px window, so the fully-labelled bar needs ~1270px. A 1200px breakpoint
-   would have let the two groups collide for the 70px in between. Breakpoints
-   are measurements, not round numbers. */
-@media (max-width: 1280px) {
-  /* icons and tooltips take over. Save keeps its word: it is the control the
-     user names when it goes missing, and an unlabelled floppy is a guess. */
-  .dx-bar .dx-btn > span { display: none; }
-  .dx-bar .dx-btn-save > .dx-save-lab { display: inline; }
+/* The People chip is a CHIP, so it takes the bar's height, not its own.
+   sync.css re-lays it out for the bar but leaves the panel's `padding: 8px 10px`
+   standing, and 16px of vertical padding on the tallest thing in a flex row is
+   16px on the whole toolbar: MEASURED, .dx-bar was 62px tall against a 31px
+   button — the bar grew a row it never drew. Scoped through `#app` because
+   sync.css's own `.dx-bar .dx-people` rule is the same specificity and lives in
+   a different file, so which of them won would be decided by import order. */
+#app .dx-bar .dx-people { padding: 0; }
+
+/* …and the swatch for YOU is not news to you. sync.css says exactly that and
+   writes `.dx-bar .dx-people-me { display: none }` — then loses the duel to its
+   own `.dx-bar .dx-people-list li { display: flex }` two lines later, which is
+   more specific (0,2,1 beats 0,2,0). MEASURED: the li was 14px wide and painted
+   a green dot beside the grey "not sharing" one, so the bar reported a live
+   collaborator on a workbook that was not shared with anybody. Same failure
+   mode as the .dx-dirty note above: a rule that reads correctly and never
+   applies. */
+#app .dx-bar .dx-people-me { display: none; }
+
+/* ————— the ladder, and why each rung is where it is —————
+   RE-MEASURED. The old first rung was 1280, taken when the bar ended at About.
+   It has since gained the People chip (253px), the ? button (28px) and Save's
+   as-caret (24px), and nobody moved the number: MEASURED at 1920 with every
+   label showing, the bar's children come to 1527px + 24px of gaps + 24px of
+   padding = 1575px. Between 1281 and ~1389 that bar had nowhere left to go —
+   .dx-title bottoms out at its 60px min-width and everything else is
+   `flex: 0 0 auto` — so it OVERFLOWED: measured at 1300px, document.scrollWidth
+   was 1382 against a clientWidth of 1300, with About, ? and the version chip
+   hanging past the right edge. A control you have to scroll to reach is a
+   control that is missing, which is the one thing this whole section exists to
+   prevent.
+
+   RE-MEASURED AGAIN when the bar took slides' metrics (10px gaps, 14px side
+   padding, 6px 9px buttons): the bar's requirement moved by about +12px, so the
+   figures below each shift by that much and every rung still clears. MEASURED
+   after, at the tightest point of each rung — 1601px: no overflow, the title at
+   232.8px of its 240 basis; 1381px: no overflow, title 237.1px; 1041px: no
+   overflow, title 185.7px of its 200 basis; 900/375/320px: no overflow.
+   `document.scrollWidth === clientWidth` at every one of them.
+
+   One rung could not fix it honestly. Collapsing every label at 1575 would
+   leave a 1440px laptop — the commonest window this app will ever open in —
+   with a bar of nothing but icons. So the labels go in the order of how much
+   they are worth: first the ones whose icons are conventions everybody already
+   reads, then the ones that name features only dash has. */
+
+/* Rung 1 — the words a spreadsheet user does not need. Undo's arrow, About's
+   ⓘ and the database cylinder are learned glyphs; "Not sharing" is a state the
+   grey dot beside it already reports. MEASURED saving: 201px, so the bar now
+   needs ~1374px. Save keeps its word at every rung: it is the control the user
+   names when it goes missing, and an unlabelled floppy is a guess. */
+@media (max-width: 1600px) {
+  .dx-bar .dx-bar-end > .dx-btn > span,
+  .dx-bar .dx-data-dd > .dx-dd-trig > span { display: none; }
+  #app .dx-bar .dx-people-title { display: none; }
+}
+
+/* Rung 2 — Formula · Chart · 3D · Pivot · Dashboard · Story. These are the
+   labels worth keeping longest, because their icons are the ones nobody has
+   seen before; they hold on for 220px more than the rung above. MEASURED
+   saving: a further 289px, so the bar needs ~1085px and the title stops being
+   squeezed (at 1390 it had been crushed from 240px to its 60px floor — a
+   workbook name you cannot read is a name field that is not there). */
+@media (max-width: 1380px) {
+  .dx-bar .dx-insert-dd .dx-btn > span { display: none; }
   .dx-bar { gap: 6px; }
   .dx-btn { padding: 5px 8px; }
   .dx-title { flex: 0 1 200px; }
 }
 
-/* 900, and again it is a measurement: at 1041px the icon-only insert row still
-   left 214px of slack, so folding it there threw away a whole toolbar for
-   nothing. The row needs 827px; 900 keeps ~73px of margin over that. */
-@media (max-width: 900px) {
+/* 1040, and it used to be 900. The original note here rejected 1041 because
+   "the icon-only insert row still left 214px of slack" — and it was right at
+   the time. The People chip, ? and Save's caret have since eaten every pixel
+   of that slack: MEASURED with both rungs above applied, the icon-only bar now
+   needs 1037px to leave .dx-title its 200px. Below that the title is the only
+   elastic thing in the bar, so it alone paid, and at 901px it stood at 65px —
+   six characters of a workbook's name. The six insert icons are recoverable
+   from one ＋ menu; a name you cannot read is not recoverable from anywhere.
+   (No overflow either way — this rung buys legibility, not room.) */
+@media (max-width: 1040px) {
   /* below this the six icon buttons no longer clear the end group, so they
      become one ＋ menu. Their labels come back inside it. */
   .dx-insert-dd { display: block; position: relative; }
@@ -397,7 +686,7 @@ html, body {
   .dx-insert-dd.open > .dx-menu { display: flex; }
   .dx-insert-dd > .dx-menu > .dx-btn {
     width: 100%;
-    border: 0;
+    border-color: transparent;
     background: transparent;
     padding: 6px 9px;
   }
@@ -411,16 +700,33 @@ html, body {
 }
 
 @media (max-width: 760px) {
-  .dx-mark-b { display: none; } /* "/dash" — the peach slash IS the mark */
+  /* "bento" goes first; the glyph plus "/dash" still says which app this is,
+     and slides collapses its wordmark at the same width for the same reason. */
+  .dx-mark-b { display: none; }
 }
 
 @media (max-width: 700px) {
-  .dx-bar { gap: 4px; padding-left: 8px; padding-right: 8px; }
+  /* the full padding is restated, not just the sides: a bare `padding-left`
+     here would drop the safe-area max() above on the one class of device that
+     has a notch to clear. slides restates it at each rung for the same
+     reason. */
+  .dx-bar {
+    gap: 4px;
+    padding: max(8px, env(safe-area-inset-top), var(--tray-safe-top, 0px)) max(8px, env(safe-area-inset-right), var(--tray-safe-right, 0px))
+             8px max(8px, env(safe-area-inset-left), var(--tray-safe-left, 0px));
+  }
   /* HIG touch targets. A 30px icon button is a mis-tap on glass. */
   .dx-bar > .dx-group > .dx-btn,
   .dx-bar > .dx-group .dx-dd-trig,
   .dx-bar > .dx-insert-dd > .dx-dd-trig { min-height: 38px; justify-content: center; }
   .dx-bar .dx-btn:not(.dx-btn-save):not(.dxs-caret) { min-width: 38px; }
+  /* Save is nested in .dxs-wrap, so it is not a direct child of a .dx-group and
+     the min-height above never reached it: MEASURED at 375px, every icon button
+     was 38px tall and Save — the one control on this bar a phone user is most
+     likely to be aiming at — was 29px, sitting short in the row. It is exempt
+     from the min-WIDTH (it keeps its word instead), not from the target size. */
+  .dx-bar .dxs-wrap > .dx-btn,
+  .dx-bar .dxs-caret { min-height: 38px; }
   .dx-bar .dx-menu .dx-btn { min-width: 0; min-height: 0; } /* menu rows are text */
   /* the trigger carets are the first thing to go: at this width the panel that
      opens is explanation enough, and 15px each is a whole button's worth */
@@ -434,7 +740,20 @@ html, body {
    lives, is precisely what it was standing in front of. So the brand goes and
    the button stays. Everything else here is load-bearing. */
 @media (max-width: 380px) {
-  .dx-mark { display: none; }
+  /* The TEXT goes and the glyph STAYS. This rung used to drop the brand
+     entirely, when the brand was only text and 380px could not afford it; a
+     20px logo can be afforded, and it leaves the narrowest bar with an
+     identity and an About target instead of a blank corner. */
+  .dx-mark-t { display: none; }
+  /* …and the bar has since grown a ? button, which put it back over the edge:
+     MEASURED at 351px the bar came to 382px against a 351px viewport, with ?
+     hanging 31px past the right edge — Save and About still reachable, but the
+     body scrolling sideways, which is the thing this section exists to stop.
+     ? is what goes, because of everything in the bar it is the one control that
+     cannot do anything here: the panel it opens is a table of KEYBOARD
+     shortcuts, and this is a screen with no keyboard. Every other button does
+     the same job at 351px that it does at 1600. */
+  .dx-help-btn { display: none; }
 }
 
 /* ————— findings: what import refused to decide ————— */
@@ -527,14 +846,101 @@ html, body {
   .dx-body { flex-direction: column; }
   .dx-chart { flex: 0 0 45%; border-left: 0; border-top: 1px solid var(--line); }
 }
-.dg-scroll { position: absolute; inset: 0; overflow: auto; }
+/* ————— THE SHEET IS AN OBJECT ON A SURFACE —————
+   The scroller is the DESK; `.dg-table` is the thing lying on it. Everything
+   below is one idea: a dataset's extent is a FACT about the file, so it can be
+   drawn, and drawing it is what stops a short sheet from reading as a render
+   that gave up. Excel says the same thing with a ListObject's borders; Notion
+   and Airtable — both table-model, like the dataset kind — say it with a
+   bounded table on a plain ground.
+
+   WHAT WAS REJECTED, because each is the old lie in new paint:
+     • banding, or a lattice that fades out below the data. Any ruled or ruled-
+       ish treatment past the last row draws rows that are not there, which is
+       exactly what `frontierRow` and Grid.paintEmptyGrid were written to stop.
+       The desk must be PLAIN — flat colour, no gradient, no repeat.
+     • a card with a radius and a drop shadow. The corners would need
+       `overflow: hidden` on `.dg-table`, and that turns it into the nearest
+       scrollport, which is what `position: sticky` on the header and the
+       totals row resolves against — a rounded sheet is a sheet whose header
+       does not stick.
+     • filler rows past the data, which is the thing this whole area exists to
+       refuse. See the `frontierRow` note in grid.ts.
+
+   WHERE THE EDGES ARE, and why only two of them are drawn. A grid's origin is
+   its top-left corner, and the gutter and the heading strip are pinned there
+   the way they are in every spreadsheet ever shipped; there is no desk to the
+   left of column A or above row 1. The RIGHT and the BOTTOM are where a
+   dataset's extent is a claim, and those are the two edges it now draws. */
+.dg-scroll { position: absolute; inset: 0; overflow: auto; background: var(--desk); }
 /* 12.5px, not the 14px the rest of the UI runs at. A grid is read a hundred
    cells at a time and a spreadsheet's type is always a step smaller than its
    chrome's — Excel's default is 11pt against a 12pt UI, Sheets' 10pt against
    13px. At 14px in a 30px row the type filled the row and the grid read as
    prose; at 12.5 in a 20px row the figures have air on both sides, which is
    what makes a dense grid legible rather than merely small. */
-.dg-table { position: relative; min-width: max-content; font-size: 12.5px; }
+.dg-table {
+  position: relative;
+  /* SHRINK-WRAPPED, and this line is most of the fix. As a plain block the
+     table stretched to the window and its background bled to both edges, so
+     the columns stopped in the middle of a white field with no edge anywhere.
+     At max-content it ends where its last column ends and the desk begins. */
+  width: max-content;
+  min-width: max-content;
+  font-size: 12.5px;
+  /* the paper, stated: the scroller behind it is no longer the same colour */
+  background: var(--bg);
+  border-right: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+  /* Room under the object when it is TALLER than the window, so a full sheet
+     still ends on desk rather than against the status bar. */
+  margin-bottom: 28px;
+}
+/* THE SPREADSHEET KIND KEEPS ITS FULL BLEED, deliberately. See the --desk note
+   in the palette: an unbounded sheet has no extent to draw, and a border round
+   a frontier would be a bound the kind does not have. Ruling to the window edge
+   is honest here and is what Excel and Sheets do. */
+.dg-canvas .dg-scroll { background: var(--bg); }
+.dg-canvas .dg-table {
+  width: auto;
+  border-right: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
+/* ————— the empty states —————
+   Three screens that cannot explain themselves by showing their contents: a
+   dataset with no rows, a dataset with no columns, and a new spreadsheet. Each
+   says which kind it is and what the next gesture is (grid.ts `noteFor`).
+
+   Two placements, because the two kinds have different room. The dataset's
+   note is in FLOW under `.dg-table`, so it lands on the desk just below the
+   object — the desk says the table ended, the note says why there is so little
+   of it. The spreadsheet's FLOATS over the lattice near A1, because that kind
+   has no desk and its content box is a thousand rows tall; `pointer-events:
+   none` keeps it out of the way of the cells it is sitting on, which stay
+   clickable underneath it. */
+.dg-note {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 52ch;
+  padding: 20px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+}
+/* `display: flex` above out-ranks the user-agent `[hidden] { display: none }`,
+   so the attribute needs saying again here or a hidden note is a visible one. */
+.dg-note[hidden] { display: none; }
+.dg-note b { color: var(--ink); font-size: var(--fs-ui); font-weight: 600; }
+.dg-note-float {
+  position: absolute;
+  top: calc(var(--row-h) * 3);
+  left: 64px;
+  padding: 0;
+  pointer-events: none;
+}
 /* the sizer is the ONLY absolutely-positioned region: header and totals stay in
    flow so `position: sticky` resolves against the scroller */
 .dg-sizer { position: relative; }
@@ -553,6 +959,55 @@ html, body {
    as one more gridline. */
 .dg-head-row { top: 0; border-bottom: 2px solid var(--line-strong); }
 .dg-foot-row { bottom: 0; border-top: 2px solid var(--line-strong); font-weight: 600; }
+
+/* A TOTAL OVER A FILTERED SHEET SAYS SO. The number is now correct — it covers
+   the rows on screen — but "correct" is not the same as "unambiguous": £69,050
+   under a filtered table and £69,050 under a whole one are the same glyphs
+   answering different questions. The tint is the cheapest way to make the
+   footer and the status bar's "4 of 8 rows" visibly parts of one statement. */
+/* NOT .dg-filtered — that already means "this column carries a filter" on a
+   header. This means "this total covers part of the sheet", a different fact
+   about a different row. */
+.dg-foot-row .dg-cell.dg-part { color: var(--accent-ink, inherit); }
+.dg-foot-row .dg-gutter { color: var(--muted); font-weight: 400; cursor: default; }
+
+/* THE FOOTER CELL IS A CONTROL, and it has to look like one before it is
+   clicked — a total nobody knows they can click is the state this replaces.
+   The hover is the same `--hover` every other menu row in the app uses.
+
+   `.dg-tot-add` is the invitation under a numeric column with no total yet, and
+   it is REVEALED BY THE ROW rather than standing permanently. It used to sit at
+   0.55 opacity on every numeric column at once, and the claim in this comment
+   was that eight of them "do not read as data". Three of them read as TOTAL
+   TOTAL TOTAL — a chant across the bottom of the sheet, louder than the one
+   real total beside it, and competing with the numbers it is meant to help
+   somebody add.
+
+   Hovering ANY footer cell brings up every invitation in the row, so the whole
+   affordance is still discovered in one gesture rather than one column at a
+   time, and `:focus-within` does the same for a keyboard. At rest the footer
+   shows totals and nothing else. Opacity, never `display`, so nothing moves
+   when they appear. */
+.dg-foot-row .dg-cell.dg-tot { cursor: pointer; }
+.dg-foot-row .dg-cell.dg-tot:hover { background: var(--hover); }
+.dg-agg-add {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.dg-foot-row:hover .dg-agg-add,
+.dg-foot-row:focus-within .dg-agg-add { opacity: 0.55; }
+.dg-foot-row .dg-cell.dg-tot-add:hover .dg-agg-add,
+.dg-foot-row .dg-cell.dg-tot-add:focus-visible .dg-agg-add {
+  opacity: 1;
+  color: var(--accent-ink);
+}
+/* the app kills chrome motion globally; this fade is chrome */
+@media (prefers-reduced-motion: reduce) { .dg-agg-add { transition: none; } }
 
 /* BOTH AXES. The grid drew vertical rules only and separated rows with a zebra
    stripe — the arrangement of a web table, not of a spreadsheet, and the single
@@ -628,6 +1083,19 @@ html, body {
 .dx-gate h1 { font-size: 20px; margin: 0 0 8px; }
 .dx-gate p { color: var(--muted); margin: 0 0 14px; }
 .dx-gate .dx-btn { margin-right: 8px; }
+/* The two lines under the raw block. The WARNING is the one that has to carry:
+   it appears only when the block could not be parsed, so its keys are still in
+   the text on screen and on the clipboard. `--accent-ink` is the token the
+   theme rig guards; a bare colour here is how the filtered-footer tint shipped
+   drawing nothing for a week. */
+.dx-gate-warn {
+  color: var(--accent-ink);
+  background: var(--accent-wash);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.dx-gate-note { color: var(--muted); font-size: 13px; }
 .dx-gate code {
   display: block;
   background: var(--panel);
@@ -697,7 +1165,7 @@ html, body {
   align-self: center;
 }
 .dx-fx-input:hover { border-color: var(--line); }
-.dx-fx-input:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.dx-fx-input:focus { outline: none; border-color: var(--blue); background: var(--surface); }
 
 /* ————— status bar —————
    Excel's reads left: what you are looking at; right: what the selection adds
@@ -715,7 +1183,9 @@ html, body {
   flex: 0 0 auto;
   min-height: 26px;
   font-variant-numeric: tabular-nums;
-  padding-bottom: max(3px, env(safe-area-inset-bottom));
+  /* the home indicator, and the tray's own number for it — same reasoning as
+     the top bar's padding, and this is the bar the indicator actually lands on */
+  padding-bottom: max(3px, env(safe-area-inset-bottom), var(--tray-safe-bottom, 0px));
 }
 .dx-status-view { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dx-status-sum {
@@ -938,7 +1408,7 @@ html, body {
   padding: 4px 7px;
   color: var(--ink);
 }
-.dx-pop-in:focus { outline: none; border-color: var(--accent); }
+.dx-pop-in:focus { outline: none; border-color: var(--blue); }
 
 /* ————— selection outline and fill handle ————— */
 .dg-outline {
@@ -963,6 +1433,57 @@ html, body {
 /* the cursor cell no longer needs its own ring — the outline draws it */
 .dg-cell.dg-cursor { box-shadow: none; background: var(--bg) !important; }
 .dg-scroll:focus { outline: none; }
+/* …and neither does a FOCUSED cell, for the same reason: focus and the cursor
+   are the same cell by construction (see Grid.restoreFocus), so a focus ring on
+   top of the selection outline would draw the same rectangle twice, 2px apart.
+   The one case where they differ is the scroller holding focus because the
+   cursor is scrolled out of the window, and that has nothing on screen to ring. */
+.dg-cell:focus, .dg-cell:focus-visible { outline: none; }
+
+/* ————— the appender: the dataset's whole frontier —————
+   ONE row past the data, and it must not look like a row of data. The gutter
+   carries `+` where a row number would be and the cells are empty and muted;
+   the ruled lattice (painted by Grid.paintEmptyGrid) now stops immediately
+   below it, so what is under the sheet is plain background rather than a
+   picture of rows that do not exist. */
+.dg-add-row .dg-cell { color: var(--muted); cursor: cell; }
+.dg-add-gutter { font-weight: 700; }
+.dg-add-row:hover .dg-cell { background: var(--hover); }
+
+/* …and the same invitation past the last COLUMN, which the sheet had in one
+   direction only. Narrow (28px, against a column's 130) because it is a
+   control and not a column: at full width the eye reads it as an empty column
+   the sheet already has, which is the confusion the row appender's `+` gutter
+   exists to avoid. Muted until hovered, like its row counterpart. */
+.dg-add-col {
+  width: 28px;
+  flex: 0 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--grid-head);
+  user-select: none;
+}
+.dg-add-col:hover { background: var(--hover); color: var(--accent); }
+
+/* Text for assistive technology only. Not `display:none` and not
+   `visibility:hidden` — both remove the node from the accessibility tree, which
+   is the one place this text is FOR. */
+.dg-a11y {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* Frozen columns stay put while the rest scrolls under them, so they need an
    opaque background (the cells behind would show through) and an edge that
@@ -1043,7 +1564,95 @@ html, body {
 .dg-head-row .dg-corner { padding: 0; }
 .dx-pop-on { color: var(--accent); font-weight: 600; }
 
-/* The ruled empty space past the last row — see grid.ts paintEmptyGrid. The
-   inner table must fill the scroller for the lattice to reach the bottom when
-   there are only a few rows, which is exactly the case it exists for. */
-.dg-table { min-height: 100%; }
+/* THE SPREADSHEET KIND ONLY, and the scoping is the whole point.
+   `paintEmptyGrid` rules the space past the last row, and the inner table has
+   to fill the scroller for that lattice to reach the bottom — which is honest
+   on a CANVAS sheet, whose grid genuinely does not end.
+   It is a lie on a DATASET, and this rule outlived the behaviour it was written
+   for: the frontier work removed that lattice from the table kind precisely
+   because rows that are not there must not be drawn. Left unscoped, it also
+   defeats the shrink-wrap above — MEASURED at 1440x900 with the starter open,
+   `.dg-table` ran 521px past the last row, so the paper still bled to the
+   bottom of the window and the "bottom edge" landed at the foot of the
+   viewport rather than under the data. The horizontal half of the fix worked
+   and the vertical half was silently cancelled by a rule 700 lines away. */
+.dg-canvas .dg-table { min-height: 100%; }
+
+/* A COMMENT is not an app action. `--accent` already means "this application
+   did something here" — a filtered header, an fx chip, an override's bar — and
+   a comment means "a person said something here", which is a different claim
+   about the same cell. Declared here rather than in comments.css so the theme
+   owns both halves of the pair. */
+:root {
+  --cmt: light-dark(#7c5cff, #a48bff);
+  --cmt-wash: light-dark(#f2efff, #241f3d);
+}
+
+/* ————— the spreadsheet kind (grid.ts, `kind: 'canvas'`) —————
+   ONE HEADER LINE, not two. The dataset's header carries a name, a type
+   control, a filter caret and a sort mark, which is what forced it onto two
+   rows. A spreadsheet's column has none of those — it is not typed and cannot
+   be, because the type lives on the cell — so it carries the letter alone and
+   the row that would hold the name is not there to be empty. */
+.dg-canvas .dg-head-row { height: var(--row-h); }
+.dg-canvas .dg-head-row .dg-cell {
+  height: var(--row-h);
+  line-height: calc(var(--row-h) - 1px);
+  padding: 0;
+}
+.dg-ch {
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+  position: relative;
+  background: var(--grid-head);
+}
+.dg-ch .dg-letter {
+  display: block;
+  flex: 1 1 auto;
+  height: var(--row-h);
+  line-height: var(--row-h);
+  text-align: center;
+  border-radius: 0;
+  padding: 0;
+}
+/* THE SPACER for the columns scrolled off to the left. One element instead of
+   five hundred empty ones — the horizontal half of the virtualiser, which the
+   dataset path never needed because a dataset has as many columns as the file
+   has and this kind has 16,384. It always sits behind the sticky gutter, so it
+   carries no rule of its own; a border here would draw a line inside a cell. */
+.dg-pad {
+  border-right: 0;
+  border-bottom: 1px solid var(--grid-line);
+  padding: 0;
+}
+.dg-canvas .dg-head-row .dg-pad { border-bottom: 0; background: var(--grid-head); }
+
+/* ROW HEIGHT, dragged from the gutter's bottom edge — the counterpart to the
+   column grip, and the reason `CanvasSheet.rows` exists. Wider than it looks
+   (5px of grab for a 1px line) because a resize handle you have to hunt for is
+   a resize handle nobody finds.
+
+   WHOLLY INSIDE THE CELL, which is not a detail. `.dg-cell` is
+   `overflow: hidden`, so any part of a handle that hangs over the edge is
+   CLIPPED — it still measures in `getBoundingClientRect`, it still draws
+   nothing, and it does not hit-test. Straddling the boundary therefore makes
+   half the grab band dead while the handle looks symmetrical: measured on the
+   column grip, which sits at `right: -3px`, the outer 3px of a 7px handle
+   answer `elementFromPoint` with the CELL. A grip you have to aim at is worse
+   than a thinner one you can hit. */
+.dg-rgrip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 5px;
+  cursor: row-resize;
+  z-index: 4;
+}
+.dg-rgrip:hover { background: var(--accent); opacity: 0.5; }
+/* …and the same correction for the column grip, scoped to this kind. The
+   dataset header's grip shares a row with a filter caret and has been QA'd
+   against a real mouse where it stands; this one has the strip to itself. */
+.dg-canvas .dg-grip { right: 0; width: 6px; }
+.dg-canvas .dg-gutter { position: sticky; }

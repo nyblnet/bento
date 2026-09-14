@@ -16,8 +16,10 @@ import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
+import { paletteSignature, resolveThemeRefs } from '../palette'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
+import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
@@ -30,10 +32,13 @@ import { openSpeakerWindow, speakerIdleBody } from '../screens'
 import { borderPoint, boxCenter, lineEndpoints, setLineEndpoints, sideMidpoint } from './lineedit'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
+import { stepOf } from '../steps'
 import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, stageForFile, unstageFromFile } from '../packs'
 import { injectFonts } from '../fonts'
 import { appConfig } from '../../../kernel/src/app.ts'
-import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, mintRoomKey, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { projectDoc, projectOp, type AudienceTicket } from '../audience'
+import { stripEmbeddedEnvelopes } from '../envelope'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 
 const i18nT = t
@@ -49,6 +54,13 @@ const JUST_UPDATED_KEY = 'bento-just-updated'
 
 /** Show the language search once the available list outgrows a glance. */
 const SEARCH_FROM = 8
+
+/** How long a finger must rest before a press becomes a menu. 500ms is what
+ *  iOS itself uses for the callout, so it matches the muscle memory already on
+ *  the device. */
+const LONG_PRESS_MS = 500
+/** …and how far it may wander first. Past this it was a drag or a pan. */
+const LONG_PRESS_SLOP = 10
 
 const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; draw?: 'line' | 'path' | 'connector' | 'free' | 'poly'; tip: string }> = [
   { kind: 'rect', label: 'Rectangle', icon: ICONS.rect, tip: 'A rectangle — rounded corners, fills, gradients and shadows in the panel' },
@@ -82,8 +94,6 @@ export class Editor {
   private lastAutoCheck: import('../update').UpdateCheck | null = null
   /** side panel widths (px) — user-resizable, persisted per browser */
   private panelW = { left: 188, right: 236 }
-  private templateReturnSlideId: string | null = null
-  private templateManagerAbort: AbortController | null = null
 
   constructor(
     private root: HTMLElement,
@@ -102,13 +112,13 @@ export class Editor {
     })
     this.wireAutosave()
     this.wirePaste()
+    this.wireContextMenu()
     store.on('doc', () => this.syncLinkedCharts())
     store.on('doc', () => this.syncConnectors())
+    store.on('doc', () => this.syncThemeRefs())
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
-    document.addEventListener('bento:save-template-edit', () => this.finishTemplateEdit(true))
-    document.addEventListener('bento:cancel-template-edit', () => this.finishTemplateEdit(false))
     this.rebuildSidebar()
   }
 
@@ -334,6 +344,11 @@ export class Editor {
     insertD.append(
       btn(ICONS.plus, t('Insert'), () => insertD.classList.toggle('open'), t('Insert — text, shapes, images, media, tables, charts')),
       insertMenu)
+    // These two were the only dropdowns in the bar without an outside-press
+    // dismissal, and they are the two that exist ONLY on a phone — so the menus
+    // hardest to escape were the ones a thumb could not escape at all. Picking
+    // an item closes them; anything else left them standing over the canvas.
+    this.closeOnOutsidePress(insertD)
     const moreMenu = div('ed-menu')
     const moreD = div('ed-dropdown ed-phone-only')
     moreD.append(
@@ -344,10 +359,13 @@ export class Editor {
         moreD.classList.toggle('open')
       }, t('More actions')),
       moreMenu)
+    this.closeOnOutsidePress(moreD)
     const slidesB = btn(ICONS.panelLeft, t('Slides'), () => this.togglePanel('left'), t('Slides — show or hide the slide list'))
     slidesB.classList.add('ed-phone-only')
     const formatB = btn(ICONS.panelRight, t('Format'), () => this.togglePanel('right'), t('Format — show or hide the properties panel'))
     formatB.classList.add('ed-phone-only')
+    const phoneTools = div('ed-phone-tools')
+    phoneTools.append(slidesB, insertD, history)
 
     this.syncWindowTitle()
 
@@ -359,7 +377,7 @@ export class Editor {
       authored: new Map(), homeOf: new Map(),
     }
 
-    bar.append(logo, this.updatesB, title, this.fileChip, slidesB, insertD, history, insert, actions, moreD)
+    bar.append(logo, this.updatesB, title, this.fileChip, phoneTools, insert, actions, moreD)
 
     // main area
     const main = div('ed-main')
@@ -462,6 +480,18 @@ export class Editor {
       attributes: true, attributeFilter: ['style', 'hidden'],
     })
 
+    // On a narrow phone the bar scrolls sideways, which makes it a clipping
+    // container — so the menus hanging off ＋ and ⋯ are positioned against the
+    // VIEWPORT instead (styles.css). The one thing they cannot read from CSS is
+    // where the bar ends: its height moves with the safe-area insets, which
+    // differ per device and change when the phone rotates.
+    const publishBarBottom = () =>
+      this.root.style.setProperty('--ed-bar-bottom', `${Math.round(bar.getBoundingClientRect().bottom)}px`)
+    new ResizeObserver(publishBarBottom).observe(bar)
+    window.addEventListener('resize', publishBarBottom)
+    publishBarBottom()
+
+    this.wireDrawerDismiss()
     this.restorePanelWidths()
     this.canvas = new SlideCanvas(canvasWrap, this.store)
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
@@ -726,6 +756,59 @@ export class Editor {
     // the canvas wrap resizes; its ResizeObserver re-fits the stage
   }
 
+  /**
+   * Below 700px the two side panels stop being columns and become overlay
+   * DRAWERS (styles.css) — they cover the canvas rather than sitting beside it.
+   * That is the width at which "leave the panel open" stops being free.
+   */
+  private get panelsAreDrawers(): boolean {
+    // The 700px here is the SAME constant as fitTopbar()'s phone check and the
+    // `@media (max-width: 700px)` block that turns the panels into drawers —
+    // this asks the panel question, not the topbar one. #239 replaced the bar's
+    // width-breakpoint machinery (a matchMedia `phoneQuery`) with measuring, and
+    // that is why the old `phoneQuery?.matches ??` prefix that used to sit here
+    // no longer compiles. It was only ever a cache of this same comparison.
+    return window.innerWidth <= 700
+  }
+
+  /** Close a panel if it is open — idempotent, unlike togglePanel. */
+  private closePanel(side: 'left' | 'right') {
+    const el = side === 'left' ? this.sidebar : this.props
+    if (el.classList.contains('ed-collapsed')) return
+    el.classList.add('ed-collapsed')
+    this.updatePanelChevrons()
+  }
+
+  /** Dismiss an open dropdown when a press lands outside it — the behaviour the
+   *  bar's other menus already wire up one by one. */
+  private closeOnOutsidePress(wrap: HTMLElement) {
+    document.addEventListener('pointerdown', (ev) => {
+      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
+    })
+  }
+
+  /**
+   * Tapping away from a drawer dismisses it — the gesture every sheet on a
+   * phone answers to, and the only one available when the drawer covers the
+   * control that opened it.
+   *
+   * Two conditions keep it honest. It only runs while the panels ARE drawers:
+   * on a wide screen they are columns beside the canvas, where a click on the
+   * canvas is just a click on the canvas. And a press inside the topbar is
+   * exempt, because ☰ and Format must keep working as TOGGLES — closing on
+   * their pointerdown would let the click that follows reopen what it just
+   * closed, and the buttons would never shut anything.
+   */
+  private wireDrawerDismiss() {
+    document.addEventListener('pointerdown', (ev) => {
+      if (!this.panelsAreDrawers) return
+      const target = ev.target as Node
+      if (target instanceof Element && target.closest('.ed-topbar')) return
+      if (!this.sidebar.contains(target)) this.closePanel('left')
+      if (!this.props.contains(target)) this.closePanel('right')
+    }, true)
+  }
+
   // --- Save dropdown: copy / new deck / template -----------------------------
 
   private saveDropdown(): HTMLElement {
@@ -880,6 +963,72 @@ export class Editor {
     } catch {
       this.toast(t('Saving failed'))
     }
+  }
+
+  /**
+   * The audience TICKET for live broadcast — minted once per deck, reused for
+   * every show, replaced only by "Issue new tickets". An audience member is a
+   * collaborator whose `collab.key` is the SHOW key, not the room key: the
+   * presenter double-encrypts while live and the relay never persists that
+   * stream, so between shows the ticket decrypts nothing (docs/DECISIONS.md,
+   * the broadcast entry). Owner-only: the invite is owner-signed.
+   */
+  private async audienceTicket(): Promise<AudienceTicket | null> {
+    const c = this.store.doc.collab
+    if (!(c?.room && c.key && c.v === 2 && c.ownerPriv)) return null
+    if (c.audience) return c.audience
+    const invite = await mintInvite(c.ownerPriv, 'audience')
+    const ticket: AudienceTicket = { invite: { ...invite, role: 'audience' }, key: mintRoomKey() }
+    this.store.commit(() => { this.store.doc.collab!.audience = ticket })
+    return ticket
+  }
+
+  /** A live broadcast hand-out: opens straight into the show and follows the
+   *  presenter while they are live. Built by the audience PROJECTION
+   *  (src/audience.ts) — the same function that builds the join snapshot the
+   *  relay serves — so it never carries speaker notes, comments, the room key
+   *  or any private half; blobs are inlined because a show-key copy cannot
+   *  open room-key blobs. Between shows it is a plain, working deck. */
+  private async saveAudienceCopy() {
+    await this.goLive()
+    const ticket = await this.audienceTicket()
+    if (!ticket) {
+      this.toast(t('Only the deck owner can issue audience tickets'))
+      return
+    }
+    this.canvas.commitTextEdit()
+    const { doc: copy, missingAssets } = projectDoc(this.store.doc, ticket)
+    copy.docId = this.store.doc.docId // same document: the audience follows THIS deck
+    if (missingAssets.length) this.toast(t('Some offloaded images are not on this machine yet and will be missing from the copy'))
+    try {
+      // serializeAuto, like every other copy written for a person: an active
+      // password reaches the file. A viewer of an encrypted deck needs the
+      // password, which is what encrypting the deck meant.
+      const ok = await writeUpdatedFileAs(await serializeAuto(copy), copy, { suffix: 'audience', keepHandle: false })
+      if (ok) this.toast(t('Audience copy saved — it opens into the show and follows you while you are live'))
+    } catch {
+      this.toast(t('Saving failed'))
+    }
+  }
+
+  /** Re-mint the audience ticket. Every audience copy handed out so far is
+   *  dead from this moment — cryptographically (a new show key; nothing is
+   *  ever encrypted under the old one again) and at the door (the old invite
+   *  is revoked at the relay). A recurring class's handouts included: say so. */
+  private async issueNewTickets() {
+    const c = this.store.doc.collab
+    if (!(c?.v === 2 && c.ownerPriv && c.owner)) {
+      this.toast(t('Only the deck owner can issue audience tickets'))
+      return
+    }
+    const old = c.audience
+    if (!old) { this.toast(t('No audience tickets have been issued for this deck')); return }
+    if (!confirm(t('Issue new tickets? Every audience copy saved so far will stop working, including ones you handed out for a recurring session.'))) return
+    const tr = onlineTransport()
+    if (tr) await tr.revokeKey(old.invite.pub, c.owner, c.ownerPriv) // defence in depth behind the key change
+    this.store.commit(() => { delete this.store.doc.collab!.audience })
+    const fresh = await this.audienceTicket()
+    if (fresh) this.toast(t('New tickets issued — save a new audience copy to hand out'))
   }
 
   /** A live viewer: follows the shared session read-only. Keeps the room + read
@@ -1268,6 +1417,12 @@ export class Editor {
         t('A live viewer: follows every edit as it happens but can never change the deck — the relay enforces it.'))
       action(ICONS.slideshow, t('Present-only file…'), false, () => void this.savePresentationPackage(),
         t('A sealed hand-out that opens straight into the show — no editor, no live connection.'))
+      action(ICONS.broadcast, t('Audience copy…'), false, () => void this.saveAudienceCopy(),
+        t('A hand-out for a live show: opens into the presentation and follows your slides while you are live. Never carries your speaker notes or comments.'))
+      if (this.store.doc.collab?.audience) {
+        action(ICONS.broadcast, t('Issue new tickets…'), false, () => void this.issueNewTickets(),
+          t('Replaces the audience tickets: every audience copy saved so far stops working.'))
+      }
       action(ICONS.template, t('Template…'), false, () => void this.saveAsTemplate(),
         t('A reusable starter: everyone who opens it gets their own fresh, independent deck.'))
     } else {
@@ -1302,6 +1457,9 @@ export class Editor {
    *  "share" is one action for users — no separate start-a-session step. */
   private async goLive() {
     if (!this.session || offlineEnabled()) return
+    // An audience copy holds the SHOW key, not the room key, and must never
+    // mint or join a session of its own — its only path is the show (main.ts).
+    if (this.store.doc.collab?.role === 'audience') return
     this.session.enableSharing()
     await startSharing(this.session, this.store)
     this.wireOnlineStatus()
@@ -1565,6 +1723,13 @@ export class Editor {
       // glance, because a slide you forgot you hid is found mid-presentation.
       num.textContent = paginates(slide, this.store.doc) ? String(this.linearNumber(i)) : '—'
       num.title = t('Hidden — skipped while presenting and left out of PDF export')
+    } else if (slide.unnumbered) {
+      // In the walk but not counted: the audience's page field shows the
+      // previous slide's number on it, so that is what the sidebar shows too,
+      // dimmed, with the marker that says why it is not the next number.
+      num.textContent = `${this.linearNumber(i)}·`
+      num.classList.add('ed-num-unnumbered')
+      num.title = t('Unnumbered — in the show, continues the previous page number')
     } else {
       num.textContent = String(this.linearNumber(i))
     }
@@ -1582,7 +1747,14 @@ export class Editor {
       btn(ICONS.trash, '', (ev) => { ev.stopPropagation(); this.deleteSlide(i) }, t('Delete slide')),
     )
     item.append(num, surface, tools)
-    item.addEventListener('click', () => this.store.goTo(i))
+    item.addEventListener('click', () => {
+      this.store.goTo(i)
+      // On a phone the slide list is a drawer laid OVER the canvas, so picking
+      // a slide left the answer hidden behind the question — you had to find
+      // and press the ☰ toggle again to see the slide you just chose. On a wide
+      // screen the list is a column beside the canvas and rightly stays put.
+      if (this.panelsAreDrawers) this.closePanel('left')
+    })
     if (!isState) this.wireThumbDrag(item, i)
     return item
   }
@@ -1611,87 +1783,8 @@ export class Editor {
     add.classList.add('ed-add-slide')
     add.title = t('New slide from a layout')
     this.sidebar.appendChild(add)
-    const templates = btn(ICONS.template, t('Templates'), () => this.openTemplateManager(templates))
-    templates.classList.add('ed-add-slide', 'ed-template-button')
-    templates.title = t('Create, edit, duplicate, and delete template pages')
-    this.sidebar.appendChild(templates)
     this.sidebar.scrollTop = scroll
     this.highlightSidebar()
-  }
-
-  // --- template pages ---------------------------------------------------------
-
-  private openTemplateManager(anchor: HTMLElement) {
-    // Abort before removing the old node: a removed popover's document-level
-    // outside/Escape listeners must not survive and close a later instance.
-    this.templateManagerAbort?.abort()
-    document.querySelector('.ed-template-manager')?.remove()
-    const abort = new AbortController()
-    this.templateManagerAbort = abort
-    const pop = div('ed-layoutpick ed-template-manager')
-    const head = div('ed-template-manager-head')
-    const title = div('ed-layoutpick-title'); title.textContent = t('Template pages')
-    const close = document.createElement('button'); close.className = 'ed-template-close'; close.type = 'button'; close.textContent = '×'; close.title = t('Close')
-    head.append(title, close); pop.appendChild(head)
-    const cleanup = () => {
-      if (this.templateManagerAbort === abort) this.templateManagerAbort = null
-      abort.abort()
-      pop.remove()
-    }
-    const outside = (ev: PointerEvent) => { if (!pop.contains(ev.target as Node)) cleanup() }
-    const escape = (ev: KeyboardEvent) => { if (ev.key === 'Escape') cleanup() }
-    close.addEventListener('click', cleanup, { signal: abort.signal })
-    const hint = div('ed-hint'); hint.textContent = t('Non-text template objects become protected background furniture; template text boxes stay editable on normal slides.'); pop.appendChild(hint)
-    const actions = div('ed-ops')
-    const blank = btn(ICONS.plus, t('Blank template'), () => {
-      const name = window.prompt(t('Template name'), t('Blank template')); if (!name) return
-      const layout: Slide = { id: uid('layout'), name, background: this.store.slide.background, transition: 'fade', elements: [], notes: '' }
-      this.store.commit(() => { this.store.doc.layouts = [...(this.store.doc.layouts ?? []), layout] }, 'slides'); cleanup(); this.beginTemplateEdit(layout.id)
-    })
-    const fromSlide = btn(ICONS.copy, t('From current slide'), () => {
-      const name = window.prompt(t('Template name'), this.store.slide.name ?? t('My template')); if (!name) return
-      const layout = JSON.parse(JSON.stringify(this.store.slide)) as Slide
-      layout.id = uid('layout'); layout.name = name; layout.notes = ''; delete layout.stateOf; delete layout.hidden; delete layout.templateId; delete layout.templateEditOf
-      for (const el of layout.elements) delete el.templateLocked
-      this.store.commit(() => { this.store.doc.layouts = [...(this.store.doc.layouts ?? []), layout] }, 'slides'); cleanup(); this.beginTemplateEdit(layout.id)
-    })
-    actions.append(blank, fromSlide); pop.appendChild(actions)
-    const grid = div('ed-layoutpick-grid')
-    for (const layout of this.store.doc.layouts ?? []) {
-      const item = div('ed-layoutpick-item'); item.appendChild(renderThumbnail(layout, this.store.doc, 104))
-      const name = div('ed-layoutpick-name'); name.textContent = layout.name ?? t('Untitled'); item.appendChild(name)
-      const tools = div('ed-ops')
-      const edit = btn('', t('Edit'), (ev) => { ev.stopPropagation(); cleanup(); this.beginTemplateEdit(layout.id) })
-      const duplicate = btn('', t('Duplicate'), (ev) => { ev.stopPropagation(); const copy = JSON.parse(JSON.stringify(layout)) as Slide; copy.id = uid('layout'); copy.name = t('{name} copy', { name: layout.name ?? t('Template') }); this.store.commit(() => { this.store.doc.layouts = [...(this.store.doc.layouts ?? []), copy] }, 'slides'); cleanup(); this.openTemplateManager(anchor) })
-      const remove = btn('', t('Delete'), (ev) => { ev.stopPropagation(); if (!window.confirm(t('Delete this template?'))) return; this.store.commit(() => { this.store.doc.layouts = this.store.doc.layouts?.filter((x) => x.id !== layout.id); if (!this.store.doc.layouts?.length) delete this.store.doc.layouts }, 'slides'); cleanup(); this.openTemplateManager(anchor) })
-      tools.append(edit, duplicate, remove); item.appendChild(tools); grid.appendChild(item)
-    }
-    pop.appendChild(grid)
-    const r = anchor.getBoundingClientRect(); pop.style.left = `${Math.max(8, r.left)}px`; pop.style.bottom = `${window.innerHeight - r.top + 8}px`; document.body.appendChild(pop)
-    // Delay outside-click registration so the click that opened the manager
-    // cannot immediately close it. If it was closed in that turn, do nothing.
-    setTimeout(() => {
-      if (!abort.signal.aborted) document.addEventListener('pointerdown', outside, { capture: true, signal: abort.signal })
-    })
-    document.addEventListener('keydown', escape, { signal: abort.signal })
-  }
-
-  private beginTemplateEdit(layoutId: string) {
-    const layout = this.store.doc.layouts?.find((x) => x.id === layoutId); if (!layout) return
-    this.finishTemplateEdit(false); this.templateReturnSlideId = this.store.slide.id
-    const draft = JSON.parse(JSON.stringify(layout)) as Slide; draft.id = uid('slide'); draft.name = t('Template: {name}', { name: layout.name ?? t('Untitled') }); draft.templateEditOf = layoutId; draft.hidden = true; delete draft.templateId
-    for (const el of draft.elements) delete el.templateLocked
-    const at = this.store.currentIndex + 1; this.store.commit(() => this.store.doc.slides.splice(at, 0, draft), 'slides'); this.store.goTo(at)
-  }
-
-  private finishTemplateEdit(save: boolean) {
-    const draft = this.store.slide; if (!draft?.templateEditOf) return
-    const layoutId = draft.templateEditOf, returnId = this.templateReturnSlideId, index = this.store.currentIndex
-    this.store.commit(() => {
-      if (save) { const next = JSON.parse(JSON.stringify(draft)) as Slide; next.id = layoutId; next.notes = ''; next.name = this.store.doc.layouts?.find((x) => x.id === layoutId)?.name ?? next.name?.replace(/^Template: /, ''); delete next.hidden; delete next.stateOf; delete next.templateId; delete next.templateEditOf; for (const el of next.elements) delete el.templateLocked; const at = this.store.doc.layouts?.findIndex((x) => x.id === layoutId) ?? -1; if (at >= 0) this.store.doc.layouts![at] = next; else this.store.doc.layouts = [...(this.store.doc.layouts ?? []), next] }
-      this.store.doc.slides.splice(index, 1)
-    }, 'slides')
-    const returnIndex = Math.max(0, this.store.doc.slides.findIndex((x) => x.id === returnId)); this.store.goTo(returnIndex); this.templateReturnSlideId = null; if (save) this.toast(t('Template saved'))
   }
 
   // --- layouts ---------------------------------------------------------------
@@ -1747,17 +1840,15 @@ export class Editor {
       }
       pick.appendChild(grid)
     }
+    // Open beside the anchor, clamped on-screen. The bottom-of-sidebar button
+    // used to open the picker upward from itself, which pushed a picker with
+    // a handful of custom layouts above the viewport (measured: top = -7px at
+    // a 600px-tall window). The height is read after appending so the clamp
+    // uses the real box; the stylesheet caps it to the viewport and scrolls.
     const r = anchor.getBoundingClientRect()
-    if (anchor.classList.contains('ed-add-slide')) {
-      // bottom-of-sidebar button: open upward from it
-      pick.style.left = `${Math.max(8, r.left)}px`
-      pick.style.bottom = `${window.innerHeight - r.top + 8}px`
-    } else {
-      // insert-gap or panel button: open beside the anchor, clamped on-screen
-      pick.style.left = `${Math.max(8, Math.min(r.right + 10, window.innerWidth - 440))}px`
-      pick.style.top = `${Math.max(8, Math.min(r.top - 40, window.innerHeight - 460))}px`
-    }
+    pick.style.left = `${Math.max(8, Math.min(r.right + 10, window.innerWidth - 440))}px`
     document.body.appendChild(pick)
+    pick.style.top = `${Math.max(8, Math.min(r.top - 40, window.innerHeight - pick.offsetHeight - 8))}px`
     const close = (ev: PointerEvent) => {
       if (!pick.contains(ev.target as Node)) {
         pick.remove()
@@ -1782,10 +1873,7 @@ export class Editor {
     this.store.commit(() => {
       const s = this.store.slide
       s.elements = applyLayout(s, layout, known)
-      const layoutIds = new Set(layout.elements.map((el) => el.id))
-      for (const el of s.elements) { if (layoutIds.has(el.id) && el.type !== 'text') el.templateLocked = true; else delete el.templateLocked }
       s.background = layout.background
-      s.templateId = layout.id
     })
     this.store.select([])
   }
@@ -2092,7 +2180,41 @@ export class Editor {
       this.presenting = false
       this.store.goTo(last)
       this.canvas.render()
-    }, { fullscreen })
+    }, { fullscreen, broadcast: this.presenterBroadcast() })
+  }
+
+  /**
+   * The show's broadcast surface, presenter side. The speaker view's Live
+   * toggle calls start(): make sure we are sharing (a proven writer), mint or
+   * reuse the audience ticket, and hand the session the show key plus the two
+   * projection functions — projectOp for every op it streams from now on,
+   * projectDoc for the audsnap it seals (and re-seals on checkpoint). The
+   * session does the rest; the show only sends verbs. Absent when there is no
+   * session at all (offline shell), so the toggle is inert rather than broken.
+   */
+  private presenterBroadcast(): import('../present').PresentBroadcast | undefined {
+    const session = this.session
+    if (!session) return undefined
+    return {
+      onShow: (fn) => session.onShow(fn),
+      presenter: {
+        start: async () => {
+          await this.goLive()
+          const ticket = await this.audienceTicket()
+          if (!ticket) throw new Error('only the deck owner can broadcast')
+          await session.startShow({
+            showKey: ticket.key,
+            projectOp,
+            // the PROJECTED document only — the session builds a fresh
+            // adopt-shaped state itself (a saved state's internals carry
+            // deleted slides' notes and the whole text history)
+            snapshot: () => ({ doc: projectDoc(this.store.doc, ticket).doc }),
+          })
+        },
+        stop: () => session.endShow(),
+        verbs: () => session.show,
+      },
+    }
   }
 
   // --- paste: external objects + cross-deck elements/slides ---------------------
@@ -2117,40 +2239,50 @@ export class Editor {
         const file = imgItem.getAsFile()
         if (file) { ev.preventDefault(); this.pasteImageFile(file); return }
       }
-      const text = dt.getData('text/plain')
-      // 2) Bento elements / slides copied from this or another deck
-      const clip = parseClip(text)
-      if (clip?.kind === 'elements') {
-        ev.preventDefault()
-        let added: SlideElement[] = []
-        this.store.commit(() => { added = insertElements(clip, this.store.doc, this.store.slide) })
-        if (clip.fonts?.length) injectFonts(this.store.doc)
-        this.store.select(added.map((e) => e.id))
-        this.toast(added.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: added.length }))
-        return
-      }
-      if (clip?.kind === 'slides') {
-        ev.preventDefault()
-        const at = this.store.currentIndex + 1
-        let made: Slide[] = []
-        this.store.commit(() => { made = insertSlides(clip, this.store.doc, at) }, 'slides')
-        if (clip.fonts?.length) injectFonts(this.store.doc)
-        this.rebuildSidebar()
-        this.store.goTo(at)
-        this.toast(made.length === 1 ? t('Pasted 1 slide') : t('Pasted {n} slides', { n: made.length }))
-        return
-      }
-      // 3) plain text → a text element
-      if (text && text.trim()) {
-        ev.preventDefault()
-        const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
-        const { width } = this.store.doc.size
-        const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
-        this.store.commit(() => this.store.slide.elements.push(el))
-        this.store.select([el.id])
-        this.toast(t('Text pasted'))
-      }
+      if (this.pasteFromText(dt.getData('text/plain'))) ev.preventDefault()
     })
+  }
+
+  /**
+   * Paste from a plain-text payload: Bento elements, Bento slides, or ordinary
+   * text that becomes a text box. Returns whether anything was pasted.
+   *
+   * Split out of the paste EVENT so the context menu's Paste is the same code
+   * rather than a second, drifting copy — the menu has to fetch the clipboard
+   * itself (`readText`), because a click carries no clipboardData.
+   */
+  private pasteFromText(text: string): boolean {
+    // 2) Bento elements / slides copied from this or another deck
+    const clip = parseClip(text)
+    if (clip?.kind === 'elements') {
+      let added: SlideElement[] = []
+      this.store.commit(() => { added = insertElements(clip, this.store.doc, this.store.slide) })
+      if (clip.fonts?.length) injectFonts(this.store.doc)
+      this.store.select(added.map((e) => e.id))
+      this.toast(added.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: added.length }))
+      return true
+    }
+    if (clip?.kind === 'slides') {
+      const at = this.store.currentIndex + 1
+      let made: Slide[] = []
+      this.store.commit(() => { made = insertSlides(clip, this.store.doc, at) }, 'slides')
+      if (clip.fonts?.length) injectFonts(this.store.doc)
+      this.rebuildSidebar()
+      this.store.goTo(at)
+      this.toast(made.length === 1 ? t('Pasted 1 slide') : t('Pasted {n} slides', { n: made.length }))
+      return true
+    }
+    // 3) plain text → a text element
+    if (text && text.trim()) {
+      const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+      const { width } = this.store.doc.size
+      const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
+      this.store.commit(() => this.store.slide.elements.push(el))
+      this.store.select([el.id])
+      this.toast(t('Text pasted'))
+      return true
+    }
+    return false
   }
 
   private pasteImageFile(file: File) {
@@ -2175,6 +2307,29 @@ export class Editor {
       img.src = src
     }
     reader.readAsDataURL(file)
+  }
+
+  // --- brand palette → referenced literals ---------------------------------
+
+  private paletteSig = ''
+  /**
+   * Re-derive every colour that points at a palette slot, whenever the palette
+   * moves. Same shape as the table→chart binding below: guarded by a signature
+   * so it cannot loop, and DERIVE-NOT-COMMIT — the literals are a pure function
+   * of `doc.theme`, so each collaborating replica computes the same values
+   * without an operation crossing the wire.
+   *
+   * Runs across the whole document, not just the current slide: a palette edit
+   * changes slide 40 as much as slide 1, and nothing else will visit it.
+   */
+  private syncThemeRefs() {
+    const sig = paletteSignature(this.store.doc)
+    if (sig === this.paletteSig) return
+    this.paletteSig = sig
+    if (resolveThemeRefs(this.store.doc)) {
+      this.canvas.render()
+      this.scheduleThumbs()
+    }
   }
 
   // --- live table→chart binding -------------------------------------------------
@@ -2254,7 +2409,7 @@ export class Editor {
 
   private async runAutosave() {
     const doc = this.store.doc
-    if (doc.readonly || doc.slides.some((slide) => !!slide.templateEditOf)) return
+    if (doc.readonly) return
     // Never write an encrypted deck's plaintext to IndexedDB; its file
     // write-back below stays encrypted via serializeAuto.
     let snapshotted = false
@@ -2592,6 +2747,9 @@ export class Editor {
       [`${mod}C · ${mod}V`, t('Copy · paste — elements, or the whole slide when nothing is selected')],
       [`${mod}D`, t('Duplicate selection')],
       [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
+      [`${mod}B · ${mod}I · ${mod}U`, t('Bold · italic · underline while editing text')],
+      [t('Text ▸ Field'), t('Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}')],
+      ['[ · ]', t('Collapse · expand the side panels')],
       ['C', t('Comment mode')],
       ['?', t('This help')],
     ])
@@ -2599,6 +2757,8 @@ export class Editor {
       [t('Space-drag'), t('Pan the canvas, including past the edges of the slide')],
       [t('Middle-drag'), t('Pan as well, if your mouse has a middle button')],
       [`${mod}-${t('scroll')}`, t('Zoom in and out')],
+      [`${mod}+ · ${mod}− · ${mod}0`, t('Zoom in · out · fit the slide')],
+      ['← · →', t('Walk the slides when nothing is selected; nudge the selection otherwise')],
     ])
     section(colR, t('Lines & curves'), [
       [t('Shape ▾'), t('Draw a line, curved line or connector — then drag on the canvas')],
@@ -2620,7 +2780,10 @@ export class Editor {
       ['S', t('Speaker view — notes on a second screen if you have one')],
       ['L', t('Toggle laser pointer while presenting')],
       ['M', t('Reduce motion — pause animations (also honours your OS setting)')],
-      ['← · →', t('Previous · next slide')],
+      ['B', t('Black screen — and back')],
+      ['G', t('All slides in the speaker view — pick one to jump to')],
+      ['← · →', t('Previous · next slide, or the next reveal step on a slide that has them')],
+      [t('Right-click ▸ Reveal in order'), t('Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order')],
       ['Esc', t('End the show')],
     ])
     const tips = div('ed-help-sec')
@@ -2669,7 +2832,6 @@ export class Editor {
 
   async save(forcePicker: boolean) {
     this.canvas.commitTextEdit()
-    if (this.store.doc.slides.some((slide) => !!slide.templateEditOf)) { this.toast(t('Save or cancel template editing first')); return }
     // shared docs persist their CRDT state so the saved copy can rejoin
     // as a true fork later (offline edits merge both ways)
     this.session?.stampInto(this.store.doc)
@@ -2790,11 +2952,7 @@ export class Editor {
       if (ev.key === 'Delete' || ev.key === 'Backspace') {
         if (this.store.selection.length) {
           ev.preventDefault()
-          const ids = new Set(this.store.selection)
-          this.store.commit(() => {
-            this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
-          })
-          this.store.select([])
+          this.deleteSelection()
         }
         return
       }
@@ -2851,6 +3009,219 @@ export class Editor {
     const clones = els.map((el) => cloneElement(el))
     this.store.commit(() => this.store.slide.elements.push(...clones))
     this.store.select(clones.map((c) => c.id))
+  }
+
+  /** Remove the selected elements. Shared by ⌫ and the context menu. */
+  private deleteSelection() {
+    if (!this.store.selection.length) return
+    const ids = new Set(this.store.selection)
+    this.store.commit(() => {
+      this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
+    })
+    this.store.select([])
+  }
+
+  /** Put the selection (or, with nothing selected, the slide) on the system
+   *  clipboard as a Bento payload. Shared by ⌘C and the context menu. */
+  private copySelection() {
+    const text = this.store.selection.length
+      ? serializeElements(this.store.selectedElements, this.store.doc)
+      : serializeSlides([this.store.slide], this.store.doc)
+    void navigator.clipboard?.writeText?.(text).catch(() => {})
+  }
+
+  // --- context menu -------------------------------------------------------
+
+  /** The element id under a viewport point on the canvas, or null.
+   *  Walks the stack rather than taking the topmost node, because once
+   *  something is selected Moveable's control box covers it. */
+  private elementIdAtPoint(x: number, y: number): string | null {
+    for (const n of document.elementsFromPoint(x, y)) {
+      const el = n.closest<HTMLElement>('.bento-el')
+      if (el?.dataset.elId && el.closest('.ed-stage-scale')) return el.dataset.elId
+    }
+    return null
+  }
+
+  private wireContextMenu() {
+    // A right-click COMMITS a live text edit — the press blurs the caret —
+    // and it does so BEFORE `contextmenu` is dispatched, so asking the canvas
+    // then always hears "not editing". The press is the last honest moment.
+    // Geometry, not DOM containment: Moveable's control box sits ON TOP of the
+    // text being edited, so a press aimed squarely at the caret is delivered to
+    // a resize handle and `node.contains(target)` answers false.
+    let pressInsideEdit = false
+    document.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 2) return
+      const node = this.canvas.editingNode
+      if (!node) { pressInsideEdit = false; return }
+      const r = node.getBoundingClientRect()
+      pressInsideEdit =
+        ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom
+    }, true)
+
+    document.addEventListener('contextmenu', (ev) => {
+      const target = ev.target as HTMLElement | null
+      if (pressInsideEdit) return
+      if (this.openContextMenuAt(target, ev.clientX, ev.clientY)) ev.preventDefault()
+    })
+
+    this.wireLongPress()
+  }
+
+  /**
+   * Open the right menu for whatever is at (x, y), or return false to say "not
+   * mine" — which is how the browser's own menu survives wherever it is the
+   * better one: form fields, links, and text mid-edit, where the system
+   * carries spelling, dictation, look-up and a real paste.
+   *
+   * Shared by the right-click and the long press, so the two can never drift.
+   */
+  private openContextMenuAt(target: HTMLElement | null, x: number, y: number): boolean {
+    if (!target?.closest) return false
+    if (target.closest('input, textarea, a, [contenteditable="true"]')) return false
+    if (this.store.readOnly || this.presenting) return false
+
+    const thumb = target.closest<HTMLElement>('.ed-sidebar .ed-thumb')
+    if (thumb) {
+      openCtxMenu(x, y, this.slideMenuItems(Number(thumb.dataset.index), thumb))
+      return true
+    }
+    if (!target.closest('.ed-scroll')) return false // not the canvas — leave it alone
+    const id = this.elementIdAtPoint(x, y)
+    if (!id) {
+      openCtxMenu(x, y, this.canvasMenuItems())
+      return true
+    }
+    // Aiming outside the selection moves it there first — the rule every editor
+    // follows, and the only way the menu's verbs can be honest about what they
+    // will act on.
+    if (!this.store.selection.includes(id)) this.store.select([id])
+    openCtxMenu(x, y, this.elementMenuItems())
+    return true
+  }
+
+  /**
+   * Touch: a press held in place IS the right-click.
+   *
+   * It has to be recognised by hand. iOS fires no `contextmenu` event for an
+   * ordinary element — a long press there raises the system callout, not a
+   * menu — so without this the whole feature above is mouse-only, and a phone
+   * keeps having no way to reach Duplicate, Delete, Group or the z-order.
+   *
+   * Cancelled by movement (that press was a drag or a pan) and by an early
+   * lift (that was a tap). Both matter: this listener sits on the same surface
+   * Moveable drags elements on, and stealing a drag would be worse than having
+   * no menu at all.
+   */
+  private wireLongPress() {
+    // TOUCH events, not pointer events. A pointer handler runs for a mouse too
+    // and has to filter itself back out by pointerType; cancelling the touchend
+    // then stops the browser SYNTHESIZING the tap that ends the press, instead
+    // of racing it with a listener that swallows mouse events after the fact.
+    // Same reasoning as the tap-to-edit recogniser in canvas.ts.
+    let press: { x: number; y: number; target: HTMLElement; timer: number; opened: boolean } | null = null
+    const cancel = () => {
+      if (!press) return
+      clearTimeout(press.timer)
+      press = null
+    }
+    this.root.addEventListener('touchstart', (ev) => {
+      cancel()
+      // a second finger is a pinch or a two-finger pan, never a press
+      if (ev.touches.length !== 1) return
+      const t = ev.touches[0]
+      const target = ev.target as HTMLElement | null
+      if (!target) return
+      const x = t.clientX
+      const y = t.clientY
+      const p: NonNullable<typeof press> = {
+        x, y, target, opened: false,
+        timer: window.setTimeout(() => {
+          // The element under the finger can have changed while the finger was
+          // down (a remote edit, a re-render), so the target is re-read here.
+          const at = (document.elementFromPoint(x, y) as HTMLElement | null) ?? target
+          p.opened = this.openContextMenuAt(at, x, y)
+        }, LONG_PRESS_MS),
+      }
+      press = p
+    }, true)
+    this.root.addEventListener('touchmove', (ev) => {
+      const t = ev.touches[0]
+      if (press && t && Math.hypot(t.clientX - press.x, t.clientY - press.y) > LONG_PRESS_SLOP) cancel()
+    }, true)
+    // non-passive: this is the listener that has to be able to cancel
+    this.root.addEventListener('touchend', (ev) => {
+      const p = press
+      cancel()
+      // The lift would otherwise be replayed as a click ON the menu that just
+      // appeared under the finger, and the row beneath it would fire itself.
+      if (p?.opened && ev.cancelable) ev.preventDefault()
+    }, { passive: false })
+    this.root.addEventListener('touchcancel', cancel, true)
+  }
+
+  private elementMenuItems(): CtxItem[] {
+    const els = this.store.selectedElements
+    const one = els.length === 1 ? els[0] : null
+    const openable = !!one && (one.type === 'text' || one.type === 'table')
+    const grouped = els.some((e) => e.groupId)
+    return [
+      { label: t('Edit text'), disabled: !openable, run: () => one && this.canvas.editElement(one.id) },
+      'sep',
+      { label: t('Cut'), hint: '⌘X', run: () => { this.copySelection(); this.deleteSelection() } },
+      { label: t('Copy'), hint: '⌘C', run: () => this.copySelection() },
+      { label: t('Duplicate'), hint: '⌘D', run: () => this.duplicateSelection() },
+      'sep',
+      { label: t('Bring to front'), run: () => this.panel.reorder(els, 'front') },
+      { label: t('Send to back'), run: () => this.panel.reorder(els, 'back') },
+      'sep',
+      grouped
+        ? { label: t('Ungroup'), hint: '⇧⌘G', run: () => this.panel.ungroup(els) }
+        : { label: t('Group'), hint: '⌘G', disabled: els.length < 2, run: () => this.panel.group(els) },
+      'sep',
+      // Reveal (fx.step) from the menu — the one place a user who has never
+      // opened the Presenting section will find it. In order = reading order.
+      { label: t('Reveal in order'), run: () => this.panel.revealInOrder(els) },
+      { label: t('Reveal together'), run: () => this.panel.revealTogether(els) },
+      { label: t('Remove reveal'), disabled: !els.some((e) => stepOf(e) > 0), run: () => this.panel.removeReveal(els) },
+      'sep',
+      { label: t('Delete'), hint: '⌫', danger: true, run: () => this.deleteSelection() },
+    ]
+  }
+
+  /** The slide background: the verbs here act on the SLIDE, which is the thing
+   *  that was actually right-clicked. */
+  private canvasMenuItems(): CtxItem[] {
+    const i = this.store.currentIndex
+    return [
+      { label: t('Paste'), hint: '⌘V', run: () => void this.pasteFromClipboard() },
+      'sep',
+      { label: t('Duplicate slide'), run: () => this.duplicateSlide(i) },
+      { label: t('Delete slide'), danger: true, run: () => this.deleteSlide(i) },
+    ]
+  }
+
+  private slideMenuItems(i: number, thumb: HTMLElement): CtxItem[] {
+    return [
+      { label: t('New slide'), run: () => this.openLayoutPicker(thumb, { kind: 'insert', at: i + 1 }) },
+      { label: t('Duplicate slide'), run: () => this.duplicateSlide(i) },
+      'sep',
+      { label: t('Delete slide'), danger: true, run: () => this.deleteSlide(i) },
+    ]
+  }
+
+  /** Menu Paste. A click carries no clipboardData, so the text has to be
+   *  fetched — and asking can be refused (Safari prompts, Firefox has no
+   *  readText at all), which is a real answer and not an error to swallow. */
+  private async pasteFromClipboard() {
+    let text = ''
+    try {
+      text = (await navigator.clipboard?.readText?.()) ?? ''
+    } catch {
+      text = ''
+    }
+    if (!text || !this.pasteFromText(text)) this.toast(t('Nothing to paste — use ⌘V'))
   }
 
   // --- toast ------------------------------------------------------------------
@@ -3235,6 +3606,12 @@ function releaseNotes(notes: string): HTMLElement {
  * symmetric read key and the public keys, and lose only the private halves.
  */
 function stripCollabSecrets(doc: import('../model').BentoDoc, opts: { keepRoom?: boolean } = {}) {
+  // Embedded documents first, whether or not this copy keeps a session of
+  // its own: an embed's `doc` is another deck's JSON and carries that deck's
+  // envelope (collab + docId) if the file was authored with it in place. The
+  // shape gate strips it on the way IN for pasted content; this strips it on
+  // the way OUT for every copy — the same rule (envelope.ts).
+  stripEmbeddedEnvelopes(doc)
   if (!doc.collab) return
   if (!opts.keepRoom) {
     delete doc.collab
@@ -3243,6 +3620,11 @@ function stripCollabSecrets(doc: import('../model').BentoDoc, opts: { keepRoom?:
   delete doc.collab.writerPriv // the muzzle — no write capability travels
   delete doc.collab.ownerPriv // v2: neither the owner key…
   delete doc.collab.invite //    …nor any invite (delegation) material
+  // …nor the audience ticket store: presenter-only. It holds the show key
+  // (worthless to a reader, who sees everything anyway) AND the audience
+  // invite's private half, which would let a reader mint audience tickets the
+  // presenter never issued. Stripped like the other private halves.
+  delete doc.collab.audience
 }
 
 /** Deep-clone an element with a fresh id (same-slide duplicates must not share ids). */

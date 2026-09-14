@@ -22,9 +22,16 @@ names provisional.
 - `src/model.ts` — the `bento/slides` JSON document model. This is the format.
 - `src/starterdeck.ts` — the showcase starter deck (what a fresh build opens
   with): four 'sd-tile-*' elements morph through EVERY slide (the id-continuity
-  demo), one deliberate 'fade' beat exists because entrance staggers/count-ups
-  only run on non-morph entries, charts slide + hidden pie state demo the
-  bar⇄pie data morph, speaker notes double as the feature tour. Gotchas learned
+  demo) — only the title arrives by 'fade', so nothing interrupts that thread.
+  The stats beat used to fade too, on the belief that entrance staggers and
+  count-ups needed a non-morph arrival; that has been FALSE since #197 (runMorph
+  gives every unpartnered element its fx.enter, and runMorphArrivalCountUps
+  counts up anything not carried from the previous slide), and the fade was
+  costing the deck its best tile moment — the four scattered tiles collapsing
+  into the row of chips. Verified by measurement, not belief: on that morph
+  arrival all four tiles travel, 13 elements stagger in, and the count-up runs
+  0→100%. Charts slide + hidden pie state demo the bar⇄pie data morph, speaker
+  notes double as the feature tour. Gotchas learned
   building it: line shapes take their color from `fill` (not `stroke` — the
   stroke attr is what morphs tween), and the renderer draws lines horizontally
   across the element box (vertical lines = rotation), keep 96px side margins
@@ -34,7 +41,7 @@ names provisional.
   never contain `</script>`. File System Access API first, download fallback.
 - `src/preview.ts` + kernel `registerPreview` — **static first-page preview for
   file-manager thumbnails**. Thumbnailers (iOS Files, macOS QuickLook/Finder,
-  Bento Tray) render HTML with JS OFF, so every deck used to thumbnail as the
+  bento/home) render HTML with JS OFF, so every deck used to thumbnail as the
   same boot splash. Every save now writes a still render of page one into the
   shell as a plain `[data-bento-preview]` element, followed IMMEDIATELY by a
   parser-blocking `<script data-bento-preview>` that deletes both. The
@@ -523,12 +530,26 @@ names provisional.
   all (verified against pre-change code too) — resize behavior needs a
   real mouse. Present: real fullscreen via overlay.requestFullscreen at start +
   F toggle (denied requests degrade to tab-fill — that IS the testing/
-  sharing mode). Topbar is responsive by HIDING TEXT, never scrolling — and by
-  MEASURING, not width breakpoints (zoom/OS text scale/locale width made px
-  queries clip the bar): editor.ts fitTopbar() steps down tier classes while
-  the bar overflows (ed-bar-compact hides labels, ed-bar-tight the wordmark,
-  ed-bar-fold folds into menus via applyPhoneChrome), driven by a Resize- +
-  MutationObserver on the bar.
+  sharing mode). Topbar is responsive by HIDING TEXT rather than
+  scrolling — and by MEASURING, not width breakpoints (zoom/OS text scale/
+  locale width made px queries clip the bar): editor.ts fitTopbar() steps down
+  tier classes while the bar overflows (ed-bar-compact hides labels,
+  ed-bar-tight the wordmark, ed-bar-fold folds into menus via
+  applyPhoneChrome), driven by a Resize- + MutationObserver on the bar.
+  **Below the fold's floor it DOES scroll, and that is not a retreat from the
+  above.** Fully folded the bar still needs ~356px — six 44px touch targets,
+  the mark and the title — and an iPhone SE (or any iPhone with Display Zoom
+  on) is 320px. `.ed-root` is `overflow: hidden` so a wide bar can never become
+  document scroll, so the excess was simply CUT OFF: ⋯ — which on a phone
+  carries Redo, Comment, PDF, Share, Language, Help and the whole save-as list
+  — sat at x=356 on a 320px screen and could not be reached at all (measured,
+  not inferred). Hiding text is still the strategy and still does all the work;
+  scrolling is only the floor beneath it, for the widths where the fold has
+  already surrendered everything it has. Consequence to respect: a scroll
+  container clips BOTH axes (see hard-won detail 10), so the menus hanging off
+  ＋ and ⋯ are `position: fixed` and editor.ts publishes --ed-bar-bottom for
+  them, the one thing they cannot read from CSS because it moves with the
+  safe-area insets.
   Panel show/hide lives ON the resizer strips as chevron tabs (docked
   flush to the screen edge when collapsed); phones (<700px) boot with
   both panels collapsed (canvas-first; chevrons/[/] bring them back).

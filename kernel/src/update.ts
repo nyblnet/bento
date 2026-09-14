@@ -132,7 +132,9 @@ export async function verifySigned(raw: string, what = 'signed file'): Promise<u
     throw new Error(`the ${what} is malformed`)
 
   const key = await crypto.subtle.importKey(
-    'jwk', PUBLIC_KEY_JWK as JsonWebKey,
+    // A fork with its own release channel supplies its key via configureApp();
+    // the platform key below is the default so upstream builds are unchanged.
+    'jwk', (appConfig().publicKeyJwk ?? PUBLIC_KEY_JWK) as JsonWebKey,
     { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'],
   )
   const ok = await crypto.subtle.verify(

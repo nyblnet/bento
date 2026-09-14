@@ -154,13 +154,20 @@ const collabBlock = (() => {
   return src.slice(open, i + 1)
 })()
 
-const collabFields = [...collabBlock.matchAll(/^ {4}([A-Za-z_$][\w$]*)\??:/gm)].map((m) => m[1])
-// Private key material: anything ending in -Priv, plus the delegation keypair.
+const fieldDecls = [...collabBlock.matchAll(/^ {4}([A-Za-z_$][\w$]*)\??:/gm)]
+const collabFields = fieldDecls.map((m) => m[1])
+// Private key material: anything ending in -Priv, the delegation keypair, and
+// ANY field whose declared type carries a `priv` key inside it — the audience
+// ticket store (`audience: { invite: { priv … }, key }`) is an object, matched
+// neither -Priv nor 'invite', and rode into every keepRoom copy until security
+// found it (2026-09-13): a reader could mint audience tickets the presenter
+// never issued. Discovery by SHAPE so the next nested keypair is caught too.
 // `key` and `room` are the read capability — a copy that must follow the live
 // session keeps them, so they are only covered by the drop-the-block default.
-const privateFields = collabFields.filter((f) => /Priv$/.test(f) || f === 'invite')
+const typeOf = (i: number) => collabBlock.slice(fieldDecls[i].index!, fieldDecls[i + 1]?.index ?? collabBlock.length)
+const privateFields = collabFields.filter((f, i) => /Priv$/.test(f) || f === 'invite' || /\bpriv\??:/.test(typeOf(i)))
 
-ok(collabFields.includes('key') && privateFields.length >= 3,
+ok(collabFields.includes('key') && privateFields.length >= 4 && privateFields.includes('audience'),
   `model.ts declares ${collabFields.length} collab fields, ${privateFields.length} of them private (${privateFields.join(', ')})`)
 
 const stripper = body('stripCollabSecrets')
@@ -170,6 +177,51 @@ for (const f of privateFields) {
 }
 ok(/delete doc\.collab\b(?!\.)/.test(stripper),
   'stripCollabSecrets drops the whole block by default — the room key is a capability too')
+
+// The other place a collab block can live: INSIDE an element. An embed's `doc`
+// is another deck's JSON, and a deck's envelope carries its secrets. Nothing
+// above walks elements, so this rig was blind to it. One rule at both
+// boundaries (slides/src/envelope.ts): the shape gate applies it to pasted
+// content on the way IN, stripCollabSecrets applies it to every copy on the
+// way OUT — and both are RUN here, not grepped, so killing the behaviour while
+// keeping the text goes red. (The gate itself needs a bundler to import; its
+// call into the shared rule is pinned by name, and test-embed.ts runs it.)
+{
+  const { stripEnvelope, stripEmbeddedEnvelopes, EMBED_ENVELOPE } = await import('../slides/src/envelope.ts')
+  const SECRETS = { ownerPriv: 'OWNER-PRIV', writerPriv: 'WRITER-PRIV', key: 'ROOM-KEY', room: 'ROOM-ID',
+    invite: { pub: 'i', priv: 'INVITE-PRIV', role: 'writer', sig: 's' }, sync: { v: 2 } }
+  const embedded = () => ({ title: 'inner deck', slides: [{ id: 'x' }], docId: 'INNER-DOCID', collab: JSON.parse(JSON.stringify(SECRETS)) })
+  const leaks = (o: unknown) => ['OWNER-PRIV', 'WRITER-PRIV', 'INVITE-PRIV', 'ROOM-KEY', 'ROOM-ID', 'INNER-DOCID']
+    .filter((needle) => JSON.stringify(o).includes(needle))
+
+  ok(EMBED_ENVELOPE.includes('collab') && EMBED_ENVELOPE.includes('docId'), 'the envelope is collab + docId')
+  const one = stripEnvelope(embedded())
+  ok(leaks(one).length === 0 && (one as { title?: string }).title === 'inner deck',
+    'stripEnvelope: content kept, all six secrets gone')
+  const plain = { title: 'no envelope' }
+  ok(stripEnvelope(plain) === plain, 'stripEnvelope: an object with no envelope is returned as-is')
+
+  const deck = {
+    format: 'bento/slides', version: 1, docId: 'outer', title: 'outer',
+    slides: [
+      { id: 's1', elements: [{ id: 'e1', type: 'embed', x: 0, y: 0, w: 1, h: 1, app: 'web', doc: embedded() }] },
+      { id: 's2', elements: [{ id: 'e2', type: 'embed', x: 0, y: 0, w: 1, h: 1, app: 'x', doc: 'asset:v' }] },
+    ],
+    layouts: [{ id: 'l1', elements: [{ id: 'e3', type: 'embed', x: 0, y: 0, w: 1, h: 1, app: 'x', doc: embedded() }] }],
+  }
+  const n = stripEmbeddedEnvelopes(deck as never)
+  ok(n === 2, `stripEmbeddedEnvelopes walks slides AND layouts (${n} stripped)`)
+  ok(leaks(deck).length === 0, 'end to end: a deck carrying an embedded envelope exports none of its six secrets')
+  ok((deck.slides[0].elements[0] as { doc: { title: string } }).doc.title === 'inner deck', 'and the embedded content survives')
+  ok(deck.slides[1].elements[0].doc === 'asset:v', 'an asset-ref source is untouched')
+
+  // both boundaries call the shared rule — the gate cannot be run here, so its
+  // call is pinned by name; the export strip is pinned by name AND run above
+  ok(/const embedDoc[^\n]*stripEnvelope\(/.test(read('slides/src/untrusted.ts')),
+    'the shape gate (embedDoc) strips through the same rule')
+  ok(/stripEmbeddedEnvelopes\(doc\)/.test(stripper) && stripper.indexOf('stripEmbeddedEnvelopes') < stripper.indexOf('if (!doc.collab)'),
+    'stripCollabSecrets walks embedded documents FIRST — before the early return for a copy with no collab of its own')
+}
 
 // --- 2. no export carries the session ---------------------------------------
 
@@ -185,6 +237,35 @@ for (const name of EXPORTS) {
 
 ok(!/writeText\(JSON\.stringify\(this\.store\.doc\)/.test(body('copyDocJson')),
   'copyDocJson() copies a stripped CLONE, never the live document')
+
+// The audience copy (live broadcast) is the one export that does NOT go
+// through stripCollabSecrets: it is built by the audience PROJECTION, which
+// replaces the collab block outright (show key as collab.key, audience
+// invite, no private halves) and also strips speaker notes and comments — the
+// two fields no other export strips. It is invisible to the catch-all below
+// (projectDoc clones internally), so it is pinned here by shape AND by running
+// the projection on a deck that carries everything it must lose.
+{
+  const aud = body('saveAudienceCopy')
+  ok(/\bprojectDoc\(this\.store\.doc,/.test(aud), 'saveAudienceCopy() builds the copy with projectDoc(this.store.doc, …)')
+  ok(!/serializeAuto\(this\.store\.doc\)|writeUpdatedFileAs\([^)]*this\.store\.doc/.test(mask(aud)),
+    'saveAudienceCopy() never hands the LIVE document to the sink')
+  const { projectDoc, carriesHidden } = await import('../slides/src/audience.ts')
+  const ROOM = 'ROOM-KEY-MUST-NOT-TRAVEL', PRIV = 'OWNER-PRIV-MUST-NOT-TRAVEL', NOTE = 'NOTES-MUST-NOT-TRAVEL'
+  const deck = {
+    format: 'bento/slides', version: 1, docId: 'd', title: 't', size: { width: 1, height: 1 },
+    theme: { background: '#fff', color: '#000', accent: '#f00', fontFamily: 'x' },
+    slides: [{ id: 's', background: '#fff', transition: 'fade', elements: [], notes: NOTE,
+      comments: [{ id: 'c', author: 'a', text: NOTE, at: 'now' }] }],
+    collab: { room: 'w1', key: ROOM, on: true, v: 2, owner: 'O', ownerPriv: PRIV, writerPriv: PRIV,
+      invite: { pub: 'I', priv: PRIV, role: 'writer', sig: 'S' } },
+  }
+  const out = JSON.stringify(projectDoc(deck as never, { invite: { pub: 'A', priv: 'AP', role: 'audience', sig: 'S' }, key: 'SHOW' }).doc)
+  ok(!out.includes(ROOM), 'an audience copy carries no room key')
+  ok(!out.includes(PRIV), 'an audience copy carries no private half')
+  ok(!out.includes(NOTE), 'an audience copy carries no speaker notes and no comments')
+  ok(carriesHidden(JSON.parse(out)).length === 0, 'carriesHidden() agrees: nothing hidden travels')
+}
 
 // The catch-all: any method that clones the document and then hands it to an
 // outbound sink is an export, named in the list above or not. saveAsNewDeck is
@@ -218,8 +299,16 @@ console.log('\npasswords')
 // serializeFile has exactly one legitimate caller left in the app: the
 // documented window.bento.serialize() tooling hook, which is synchronous by
 // contract and never writes a file for a person.
+//
+// A CALL, not a definition: slides/src/save.ts shadows serializeFile with a
+// wrapper (it prunes unreferenced assets before handing off to the kernel —
+// #442), and `function serializeFile(` is that wrapper being declared, not
+// the plain serializer being reached for. The wrapper's own call goes to the
+// kernel under the alias `kernelSerializeFile`, which this pattern does not
+// match — so a NEW call to the plain path anywhere in these files still fails
+// here, which is the property this check exists for.
 const callers = ['slides/src/editor/editor.ts', 'slides/src/main.ts', 'slides/src/save.ts', 'slides/src/autosave.ts', 'slides/src/present.ts']
-  .filter((f) => /\bserializeFile\(/.test(mask(read(f))))
+  .filter((f) => /(?<!function )\bserializeFile\(/.test(mask(read(f))))
 ok(callers.length === 1 && callers[0] === 'slides/src/main.ts',
   `serializeFile() is called from ${callers.join(', ') || 'nowhere'} — and only there`)
 ok(/serialize:\s*\(\)\s*=>\s*\{[^}]*\bserializeFile\(store\.doc\)/.test(read('slides/src/main.ts')),
@@ -381,6 +470,81 @@ for (const app of SHARE_APPS) {
     `${app}: onShareCopy writes through serializeAuto — an active password reaches the shared copy`)
   ok(!/keepHandle:\s*true/.test(hook),
     `${app}: onShareCopy does not retain the file handle — the next ⌘S must not overwrite the copy with the full document`)
+}
+
+// --- the OTHER half of the round trip: pasting one back in -------------------
+//
+// Stripping `collab` out of "Copy document JSON" is right, and it changed what
+// the documented AI round trip does on the way BACK. Both directions were
+// wrong; the strip turned the first from rare into routine.
+//
+//   · a STRIPPED paste — now the ordinary case — carried no credentials, so
+//     replacing SILENTLY ENDED the live session. Measured before the fix:
+//     sharing on / room `w-abc` before, sharing off / room gone after, nothing
+//     on screen, peers still editing.
+//   · a paste carrying SOMEBODY ELSE'S credentials silently JOINED their room.
+//     Measured: `w-MINE` became `w-THEIRS`, the next edit went out under their
+//     key, and they hold the owner key that can revoke.
+//
+// The rule is the one this file's own fix draws: a saved FILE carrying its own
+// capability is the design, and pasted text is not a file. So the room belongs
+// to the open workbook and the paste replaces content only. A dropped or opened
+// workbook is unaffected and still adopts its own room.
+{
+  const about = readFileSync(new URL('../dash/src/about.ts', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+
+  ok(/const keep = \(store\.doc as \{ collab\?: unknown \}\)\.collab/.test(about),
+    'the paste path reads the OPEN workbook’s credentials')
+  ok(/collab: keep/.test(about),
+    'and carries them onto the pasted document, so a stripped paste cannot end the session ' +
+    'and a stranger’s paste cannot move it')
+  ok(/replaceWorkbook\(hooks, merged\)/.test(about),
+    'and it is the merged document that replaces, not the pasted one')
+
+  // NOT in replaceWorkbook itself: "Duplicate as new workbook" goes through it
+  // and mints fresh credentials deliberately. Folding the rule in there would
+  // make a fork keep its ancestor's room — the opposite of what it is for.
+  const dup = about.slice(about.indexOf('function replaceWorkbook'))
+  ok(!/collab: keep/.test(dup),
+    'and replaceWorkbook itself is untouched, so Duplicate-as-new-workbook still forks its identity')
+}
+
+// --- the OTHER button with that label -----------------------------------------
+//
+// dash has TWO "Copy document JSON" buttons. #338 fixed About's. This is the
+// one on the REFUSAL surface — the screen shown when a file cannot be parsed —
+// and it was missed by the fix and by this rig alike, because it copies the raw
+// embedded block rather than a stringified document, so a check looking for a
+// document reaching a clipboard cannot see it.
+//
+// It also PRINTS that block on screen, and an error screen is the thing people
+// screenshot and paste into a chat window. A file whose `format` string is not
+// `bento/dash` — a slides deck, a space — refuses here and is perfectly good
+// JSON with live keys in it. (A newer VERSION does not refuse: format
+// additivity means it opens. Checked rather than assumed.)
+//
+// Parse what parses, strip through the SAME `docForExport`, and when the block
+// is not JSON at all leave it alone and SAY so — recovering somebody's data
+// matters more than tidiness, and "Save an untouched copy" beside it is the
+// byte-exact route regardless.
+{
+  const main = readFileSync(new URL('../dash/src/main.ts', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+  const gate = main.slice(main.indexOf('function refuse('), main.indexOf('function refuse(') + 3000)
+
+  ok(/docForExport\(/.test(gate),
+    'the refusal screen strips through docForExport — the same stripper, not a second one')
+  ok(!/writeText\(raw\)/.test(gate),
+    'and the clipboard no longer gets the raw block with the keys still in it')
+  ok(/textContent = shown\./.test(gate),
+    'and the block PRINTED on screen is the stripped one too — an error screen gets screenshotted')
+  ok(/catch \{ return \{ text: raw, safe: false \} \}/.test(gate),
+    'an unparseable block still yields its raw text, because recovering the data is what this screen is for')
+  ok(/dx-gate-warn/.test(gate) && /take care where you paste this/.test(gate),
+    'and in that case it says the keys could not be removed, rather than leaving it to be discovered')
+  ok(/Save an untouched copy/.test(gate),
+    'with the byte-exact route still offered beside it, which is why stripping here costs nothing')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

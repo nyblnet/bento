@@ -156,5 +156,44 @@ H('a proposal is attributable');
      'altering a change after signing changes the digest');
 }
 
+H('a table is reviewed CELL BY CELL');
+{
+  // The whole reason a cell is a block. If a table were one block, changing one
+  // figure would report "the fees table changed" — which is the failure that
+  // makes line diffs useless on prose, and the limitation bento/slides
+  // documents for its own tables.
+  const c = (text: string, head?: boolean): Block =>
+    ({ id: 'c-' + text.replace(/\W/g, ''), kind: 'cell', text,
+       cell: { table: 'fees', cols: 2, ...(head ? { head: true } : {}) } } as Block);
+
+  const before = { docId: 'd', body: [
+    { id: 'p', kind: 'para', text: 'Fees:' } as Block,
+    c('Service', true), c('Rate', true),
+    c('Design'), c('£1,200'),
+    c('Build'), c('£1,050'),
+  ] };
+  const after = {
+    docId: 'd',
+    body: before.body.map(b => b.text === '£1,050' ? { ...b, text: '£1,300' } : b),
+  };
+
+  const set = redline(before, after, { author: 'counsel' });
+  ok(set.changes.length === 1, `one change, not a rewritten table (${set.changes.length})`);
+  const ch = set.changes[0] as { kind: string; blockId?: string };
+  ok(ch.kind === 'text', `and it is a text edit (${ch.kind})`);
+  ok(ch.blockId === 'c-1050', `anchored to the CELL that changed (${ch.blockId})`);
+  console.log(`      · ${describe(set.changes[0])}`);
+
+  const all = new Set(set.changes.map(x => x.id));
+  ok(same(apply(before, set, all), after), 'accepting it reproduces their table');
+  ok(same(apply(before, set, new Set()), before), 'rejecting it leaves yours');
+
+  // and a structural change is still structural
+  const rowAdded = { docId: 'd', body: [...after.body, c('Support'), c('£400')] };
+  const set2 = redline(after, rowAdded);
+  ok(set2.changes.length === 2 && set2.changes.every(x => x.kind === 'block-ins'),
+     `adding a row is two cell inserts (${set2.changes.map(x => x.kind).join(',')})`);
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures) process.exit(1);

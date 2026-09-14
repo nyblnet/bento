@@ -28,8 +28,25 @@
 
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { access } from 'node:fs/promises';
 
-const esbuild = await import('../../slides/node_modules/esbuild/lib/main.js');
+// esbuild is taken from whichever app workspace has it installed, NOT from a
+// hardcoded one. Pinning it to slides/ meant every rig using this hook failed
+// in a worktree where only another app's dependencies were installed — an
+// environment difference reported as a test failure, which is the most
+// expensive kind of false alarm: it looks exactly like a real regression.
+const CANDIDATES = ['slides', 'type', 'spaces', 'dash'];
+let esbuild;
+for (const app of CANDIDATES) {
+  const url = new URL(`../../${app}/node_modules/esbuild/lib/main.js`, import.meta.url);
+  try { await access(fileURLToPath(url)); esbuild = await import(url.href); break; } catch { /* next */ }
+}
+if (!esbuild) {
+  throw new Error(
+    `esbuild not found in any of: ${CANDIDATES.map(a => `${a}/node_modules`).join(', ')}. ` +
+    `Run \`npm install\` in one of those app directories.`,
+  );
+}
 
 export async function resolve(specifier, context, nextResolve) {
   try {

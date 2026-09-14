@@ -122,13 +122,21 @@
 .dx-bar .dx-people-title { font-size: var(--fs-small); color: var(--muted); white-space: nowrap; }
 /* and it collapses with everything else — see the topbar ladder in styles.css */
 @media (max-width: 1280px) { .dx-bar .dx-people-title { display: none; } }
-@media (max-width: 900px) { .dx-bar .dx-people-toggle { display: none; } }
+/* :not(.dx-live) — the off switch survives every width.
+   This hid the toggle outright to buy bar width, and it is the only control
+   that stops a running session: measured at 880px mid-session, "Stop sharing"
+   appeared nowhere in the document and the sole trace was an 8px dot. A
+   control that reports nothing may stand down; the off switch for something
+   already happening may not. */
+@media (max-width: 900px) { .dx-bar .dx-people-toggle:not(.dx-live) { display: none; } }
 /* On a phone the chip stands down UNLESS somebody else is actually here.
    Measured at 390px: the dot and its toggle cost 20px more than the bar had,
    and About went off the edge — a presence indicator must not push the
    controls off a screen it is reporting nothing on. Peer swatches still show,
    because at that point it is saying something. */
 @media (max-width: 700px) {
-  .dx-bar .dx-people:not(:has(.dx-people-list li:not(.dx-people-me))) { display: none; }
-  .dx-bar .dx-people-toggle { display: none; }
+  /* …unless it IS sharing, for the reason above: the chip may stand down when
+     it has nothing to report, and may not when it is the only way to stop. */
+  .dx-bar .dx-people:not(.dx-live):not(:has(.dx-people-list li:not(.dx-people-me))) { display: none; }
+  .dx-bar .dx-people-toggle:not(.dx-live) { display: none; }
 }

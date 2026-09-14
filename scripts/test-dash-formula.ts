@@ -168,5 +168,21 @@ const sheet = (cols: Array<{ id: string; name: string; formula?: string }>, data
     'a four-deep chain resolves to 3, and is not reported as a cycle')
 }
 
+
+// A doubled quote inside a string literal. This escape existed in the lexer
+// from the start and was UNREACHABLE — the loop condition excluded a quote, so
+// the branch handling a doubled one never ran. It failed SILENTLY: the string
+// evaluated to everything before the escape and the rest was discarded, so a
+// formula holding a quoted phrase lost its text from that point on.
+{
+  const q = String.fromCharCode(34)
+  const dq = q + q
+  ok(one(q + 'say ' + dq + 'hi' + dq + q) === 'say ' + q + 'hi' + q,
+    'a doubled quote inside a string is one quote — not a truncation point')
+  ok(one(q + 'ends with ' + dq + q) === 'ends with ' + q,
+    'including at the very end of the string, where the escape abuts the terminator')
+  ok(one(q + 'plain' + q) === 'plain', 'and an ordinary string is unaffected')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

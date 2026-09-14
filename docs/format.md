@@ -134,7 +134,9 @@ The element `type` discriminant is one of: `text`, `shape`, `image`, `svg`,
 
 ### `text`
 
-`type: "text"` — `html` (sanitized inline subset: `b/i/u/s/code/br/span`),
+`type: "text"` — `html` (sanitized subset: inline `b/i/u/s/code/br/span` plus
+blocks `p/div/h1/h2/ul/ol/li`; every tag is attribute-free, and a shell that
+predates a tag unwraps it and keeps the words),
 `fontSize`, `fontFamily`, `fontWeight`, `color`, `align` (`left|center|right`),
 `valign` (`top|middle|bottom`), `lineHeight`. Optional `letterSpacing` (px) and
 `placeholder` (a dimmed prompt shown while `html` is empty; hidden in

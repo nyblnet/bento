@@ -24,7 +24,10 @@
 
 import type { BentoDoc, Slide, SlideElement, TextElement } from './model.ts'
 import { MODEL_KEYS } from './modelkeys.generated.ts'
+import { isRemoteUrl } from '../../kernel/src/net.ts'
 import { measureElements } from './measure.ts'
+import { BUILTIN_FONTS } from './fonts.ts'
+import { eachRef, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
 
 export type Severity = 'error' | 'warning' | 'info'
 
@@ -151,10 +154,19 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
     }
   }
   for (const f of doc.fonts ?? []) {
-    if (f.asset && !assets[f.asset]) {
-      add({ code: 'missing-asset', severity: 'error', path: `fonts.${f.family}`,
-        message: `Font "${f.family}" points at asset "${f.asset}", which is not in doc.assets — the face will not load and text falls back silently.` })
+    if (!f.asset || assets[f.asset]) continue
+    // A `builtin:` key names a face the shell carries (fonts.ts BUILTIN_FONTS)
+    // — a satisfied reference with no bytes in the file. Only an unknown
+    // built-in name is broken.
+    if (f.asset.startsWith('builtin:')) {
+      if (!(f.asset in BUILTIN_FONTS)) {
+        add({ code: 'missing-asset', severity: 'error', path: `fonts.${f.family}`,
+          message: `Font "${f.family}" names built-in face "${f.asset}", which this app does not carry (known: ${Object.keys(BUILTIN_FONTS).join(', ')}) — the face will not load and text falls back silently.` })
+      }
+      continue
     }
+    add({ code: 'missing-asset', severity: 'error', path: `fonts.${f.family}`,
+      message: `Font "${f.family}" points at asset "${f.asset}", which is not in doc.assets — the face will not load and text falls back silently.` })
   }
   // A live-shared deck carries the keys to its own room — that is how opening a
   // copy joins a session with no account and nothing to configure. The file IS
@@ -188,6 +200,40 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
       message: `"${stack.split(',')[0].trim()}" is not in doc.fonts, so it renders only for viewers who happen to have it installed — everyone else silently gets the next family in the stack. Embed the woff2 in doc.assets and declare it in doc.fonts.` })
   }
   checkFamily(doc.theme?.fontFamily, { path: 'theme.fontFamily' })
+  checkFamily(doc.theme?.headingFamily, { path: 'theme.headingFamily' })
+
+  // ---- brand palette references --------------------------------------------
+  // A `themeRefs` entry says a colour came from a palette slot, so editing the
+  // palette rewrites it. Both failures here are silent: a ref nobody can
+  // resolve simply never updates, and a literal that disagrees with its ref is
+  // about to be overwritten by the next palette edit — which looks like the
+  // app changing a colour on its own.
+  {
+    const palette = paletteOf(doc)
+    eachRef(doc, ({ slide, element, path, token }) => {
+      const at = { slide: slide.id, ...(element ? { element: element.id } : {}) }
+      const parsed = parseThemeRef(token)
+      if (!parsed) {
+        add({ ...at, code: 'theme-ref-malformed', severity: 'warning', path: `themeRefs.${path}`,
+          message: `"${token}" is not a palette reference — expected a slot name, optionally with a shift like "accent1 -20%". The colour is left as it is and will not follow the palette.` })
+        return
+      }
+      if (!palette[parsed.slot]) {
+        add({ ...at, code: 'theme-ref-unknown-slot', severity: 'warning', path: `themeRefs.${path}`,
+          message: `Palette slot "${parsed.slot}" is empty, so this colour will not follow the palette. Set it in the theme, or drop the reference.` })
+        return
+      }
+      const want = resolveRef(token, palette)
+      const have = _readPath(element ?? slide, path)
+      if (typeof have !== 'string') {
+        add({ ...at, code: 'theme-ref-dangling', severity: 'warning', path: `themeRefs.${path}`,
+          message: `There is no colour at "${path}" for this reference to control — it does nothing. Remove it, or restore the property.` })
+      } else if (want && have.toLowerCase() !== want.toLowerCase()) {
+        add({ ...at, code: 'theme-ref-stale', severity: 'info', path,
+          message: `This colour is ${have} but its reference "${token}" resolves to ${want}, so the next palette change will replace it. If ${have} was deliberate, clear the reference.` })
+      }
+    })
+  }
 
   for (const slide of doc.slides) {
     const sid = slide.id
@@ -310,11 +356,34 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
             message: `Connector ${side} references element "${end.el}", which is not on this slide — that end is dropped and stops following.` })
         }
       }
-      for (const key of ['src', 'asset', 'poster'] as const) {
+      for (const key of ['src', 'asset', 'poster', 'view'] as const) {
         const ref = (el as any)[key]
         if (typeof ref === 'string' && ref.startsWith('asset:') && !assets[ref.slice(6)]) {
           add({ ...at, code: 'missing-asset', severity: 'error', path: key,
             message: `${key} references asset "${ref.slice(6)}", which is not in doc.assets — nothing renders.` })
+        }
+      }
+
+      // embed -------------------------------------------------
+      // The view is the tier that ALWAYS paints: offline, in thumbnails, in
+      // print and in an upstream shell that has never heard of `app`. Without
+      // it the element is a hole; pointing it at the network breaks the
+      // offline guarantee the whole shape exists to keep.
+      if (el.type === 'embed') {
+        const view = typeof el.view === 'string' ? el.view.trim() : ''
+        if (!view) {
+          add({ ...at, code: 'embed-missing-view', severity: 'error', path: 'view',
+            message: 'Embed has no view. It renders as an empty box offline, in thumbnails and in print. Set view to inline <svg> markup or an "asset:" key holding it.' })
+        } else if (!view.startsWith('<') && !view.startsWith('asset:') && isRemoteUrl(view)) {
+          // markup and asset refs are judged first: in a browser isRemoteUrl
+          // resolves any bare string against the page, and "<svg…" would
+          // come back as a relative http url
+          add({ ...at, code: 'embed-remote-view', severity: 'warning', path: 'view',
+            message: 'Embed view is a URL. It needs the network to show and paints nothing offline. Capture the view into doc.assets instead.' })
+        }
+        if (el.live && el.app === 'web' && !(typeof el.url === 'string' && /^https?:\/\//i.test(el.url))) {
+          add({ ...at, code: 'embed-live-no-url', severity: 'warning', path: 'url',
+            message: 'live is on but url is not an http(s) address. No frame is created, only the view shows.' })
         }
       }
 

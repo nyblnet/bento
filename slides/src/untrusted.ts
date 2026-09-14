@@ -39,7 +39,10 @@
 // untrusted intake — remote CRDT ops off the relay — can adopt the same
 // checks, key by key, through `checkElementProp`.
 
+import { stripEnvelope } from './envelope'
 import type { Slide, SlideElement } from './model'
+import { isWebUrl } from './model'
+import { parseThemeRef } from './palette.ts'
 import { MODEL_KEYS } from './modelkeys.generated'
 
 /** Reject. JSON has no `undefined`, so it can never collide with a real value. */
@@ -66,6 +69,8 @@ export const LIMITS = {
    *  render.ts:cssColor caps at 48 — it FALLS BACK past that, this DROPS, so a
    *  little more headroom here costs a degraded colour rather than a lost one. */
   color: 64,
+  /** palette references on one element — far above any real element */
+  themeRefs: 64,
   /** a CSS font stack names several families */
   fontStack: 300,
   /** placeholder prompts and comment prose */
@@ -244,6 +249,7 @@ const fx = shape(MODEL_KEYS.fx, {
   enter: oneOf('fade-up', 'fade', 'fade-down', 'slide-left', 'slide-right', 'slide-up', 'slide-down'),
   enterDur: num(0, 600),
   order: num(-1e4, 1e4),
+  step: num(0, 1e4),
   countUp: bool,
   ambient: oneOf('kenburns'),
   ken: shape(MODEL_KEYS.fxKen, {
@@ -307,6 +313,30 @@ const chartOption: Check = (v) => {
   return pure(v, LIMITS.optionDepth) ? v : DROP
 }
 
+/**
+ * The `embed` element. `url` is what a live iframe LOADS, so it
+ * is held to http(s) and nothing else: a `javascript:` or `data:` page in a
+ * sandboxed frame cannot reach this document, but it would still be a page
+ * of someone else's choosing running on the reader's screen. `view` is svg
+ * markup or an `asset:` ref and gets the svg element's own ceiling; what the
+ * renderer does with the markup is the renderer's business (sanitizeSvg).
+ * `doc` is the source: an asset ref, or the same bounded plain JSON a chart
+ * option is held to: a source is data, never code (docs/format.md).
+ */
+// Not held to CSS_BREAKOUT: a query string legitimately carries `;` and
+// quotes, and the one consumer assigns it as a DOM property (`iframe.src`),
+// where it is a value and never re-parsed as markup (the mediaRef argument).
+const webUrl: Check = (v) =>
+  typeof v === 'string' && v.length <= LIMITS.prose && isWebUrl(v) ? v : DROP
+// An embedded document is another deck's JSON, and a deck's envelope carries
+// its collaboration secrets: `collab` (room, read key, private halves, and the
+// saved sync state) and `docId`. Neither is content. Left in place they would
+// pass this gate, survive every save by additivity, and travel with every copy
+// and export — and the export-secrets rig reads the top-level block only. So
+// an object source leaves here without them, whatever put them there — by the
+// same rule the export strip applies on the way out (envelope.ts).
+const embedDoc: Check = (v) => (typeof v === 'string' ? cssValue()(v) : stripEnvelope(chartOption(v)))
+
 // `el` is required: a connector end with no element to anchor to is dangling,
 // and editor.syncConnectors drops those anyway
 const connectorEnd = shape(MODEL_KEYS.connectorEnd, {
@@ -322,10 +352,43 @@ const connectorEnd = shape(MODEL_KEYS.connectorEnd, {
  * were unknown; scripts/test-clipboard.ts asserts the coverage, so adding a
  * field to model.ts fails the rig until it is taught here too.
  */
+/**
+ * Palette references: a map of property PATH → palette token.
+ *
+ * Two reasons this cannot be waved through. The paths are WALKED by
+ * palette.ts to write a resolved colour, so a path segment of `__proto__` or
+ * `constructor` is reaching for the prototype chain — the writer refuses to
+ * create anything that is not already a string, which blocks it, but a paste
+ * boundary should not be relying on a downstream guard. And a token that does
+ * not parse is dead weight the validator will report forever, so it is dropped
+ * here rather than carried.
+ */
+const themeRefs: Check = (v) => {
+  if (!isPlainObject(v)) return DROP
+  const out: Record<string, string> = {}
+  let n = 0
+  for (const key of Object.keys(v)) {
+    if (++n > LIMITS.themeRefs) break
+    const token = v[key]
+    if (typeof token !== 'string' || token.length > LIMITS.scalar) continue
+    if (key.length > LIMITS.scalar) continue
+    // path segments: identifiers and array indices only
+    const segs = key.split('.')
+    if (!segs.length || !segs.every((sg) => /^[A-Za-z_$][A-Za-z0-9_$]*$|^\d+$/.test(sg))) continue
+    if (segs.some((sg) => sg === PROTO || sg === 'constructor' || sg === 'prototype')) continue
+    if (!parseThemeRef(token)) continue
+    out[key] = token
+  }
+  return Object.keys(out).length ? out : DROP
+}
+
 const ELEMENT_CHECKS: Record<string, Check> = {
+  themeRefs,
   // identity + geometry
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),
-  groupId: cssValue(), showOnHover: cssValue(), link: cssValue(),
+  groupId: cssValue(), showOnHover: cssValue(),
+  // a slide id, or an http(s) URL — the same test the renderer and the show apply
+  link: (v) => (isWebUrl(v) ? v : cssValue()(v)),
   x: num(-1e6, 1e6), y: num(-1e6, 1e6), w: num(0, 1e6), h: num(0, 1e6),
   rotation: num(-3600, 3600), opacity: num(0, 1),
   shadow: (v) => (Array.isArray(v) ? list(16, shadowSpec)(v) : shadowSpec(v)),
@@ -360,6 +423,8 @@ const ELEMENT_CHECKS: Record<string, Check> = {
   source: shape(['tableId'], { tableId: cssValue() }, ['tableId']),
   columns: list(LIMITS.cols, shape(['w'], { w: num(0, 1e6) }, ['w'])),
   rows: tableRows, header: bool, style: tableStyle,
+  // embed
+  app: cssValue(), view: str(LIMITS.markup), doc: embedDoc, url: webUrl, live: bool,
   type: oneOf(...Object.keys(MODEL_KEYS.element)),
 }
 
@@ -389,7 +454,9 @@ const ELEMENT_CHECKS: Record<string, Check> = {
  * throwing — losing a whole pasted element over a defaultable number is the
  * worse trade. `svg` is absent for a different reason: its content comes from
  * `markup` OR `asset` (2 of the 4780 elements in a real deck use the asset
- * form), and svgMarkup already falls back to ''.
+ * form), and svgMarkup already falls back to ''. `embed` is
+ * absent for the same reason: an empty or refused `view` paints a
+ * placeholder, never throws.
  */
 const REQUIRED_ELEMENT_KEYS: Record<string, readonly string[]> = {
   text: ['html'],
@@ -441,13 +508,14 @@ export function sanitizeElement(value: unknown): SlideElement | null {
   return out as unknown as SlideElement
 }
 
+
 const SLIDE_CHECKS: Record<string, Check> = {
-  id: cssValue(), name: str(LIMITS.prose), stateOf: cssValue(),
+  id: cssValue(), name: str(LIMITS.prose), stateOf: cssValue(), themeRefs,
   // background is a CSS `background` shorthand, so it gets the colour rule at
   // the shorthand's length — wide enough for a multi-stop linear-gradient(),
   // still no url() reaching for the network from a pasted slide
   background: color(LIMITS.scalar), notes: str(LIMITS.html),
-  hidden: bool,
+  hidden: bool, unnumbered: bool,
   transition: oneOf('none', 'fade', 'slide', 'zoom', 'morph'),
   hover: shape(['type', 'dim', 'default'], {
     type: oneOf('focus-group', 'reveal'), dim: num(0, 1), default: cssValue(),

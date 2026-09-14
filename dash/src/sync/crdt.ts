@@ -44,6 +44,70 @@
 //     `x`/`fill`. Cell overrides (the `cells` overlay) are a second key space
 //     on the same node, `o␟price`.
 //
+//   - A SPREADSHEET's cells are properties of the SHEET NODE, keyed by their A1
+//     ADDRESS: `s␟c1 ⟹ g␟B7` is the cell at B7, `p␟B7` its formatting, `w␟C`
+//     a column width, `h␟4` a row height. A `CanvasSheet` (kind:'canvas') has
+//     no rows and no columns to hang a node on — it is a sparse map — so the
+//     sheet is the only node there is, and the address is the only key the
+//     format offers.
+//
+//     WHY A POSITION KEY, when a position key is exactly what makes a row
+//     insert hard. The choice was made three times over and each answer says
+//     the same thing:
+//
+//       1. THE DOCUMENT SUPPLIES NO CELL IDENTITY. A dataset row carries a
+//          `rid` in the FILE — minted at insert, never reused — which is what
+//          lets `r␟s1␟7` mean the same row on two replicas that have never
+//          spoken. A spreadsheet cell carries nothing but its address. Any
+//          identity would have to be MINTED at adoption, and minted identically
+//          by every replica of the file, so it would be a function of the
+//          address anyway — plus a stored address↔identity map.
+//       2. THAT MAP WOULD BE O(CELLS). Invariant 2 above is that state is
+//          O(edits) and never O(rows); the map is one entry per NON-EMPTY cell
+//          whether anyone edited it or not, and it rides in the FILE
+//          (`collab.sync`). A 40k-cell invoice model would carry 40k identities
+//          to make a feature nobody has yet correct. The address is free: an
+//          untouched cell costs zero bytes here, exactly as an untouched row
+//          does.
+//       3. NOTHING MOVES A CELL TODAY. `store.ts` has exactly two spreadsheet
+//          patches — `setCanvasCells` and `setCanvasSizes` — and neither shifts
+//          an address. There is no insert-row, no insert-column, no cut-and-
+//          shift on this kind. A position key is only wrong once something
+//          moves, and identity bought before then is identity that has to be
+//          maintained through every read (`validate.ts`, `preview.ts`,
+//          `cellformula.ts` and the format itself all address by A1) for no
+//          convergence gained.
+//
+//     SO THE RULE FOR WHOEVER ADDS THE ROW INSERT, and it is the whole reason
+//     this paragraph is long: a patch that MOVES cells cannot be minted as
+//     `cvc` ops over the addresses it lands on. Two replicas inserting rows
+//     concurrently would each renumber the other's writes and no register
+//     ordering can repair it — the write and the shift are not the same kind
+//     of event. It needs either an explicit shift op that transforms the key
+//     space (and the registers with it, since a register keyed `g␟B7` is a
+//     claim about a POSITION), or a per-sheet row/column order of the kind the
+//     dataset kind has, at which point the cell keys become (rowId, colId) and
+//     stop being positions at all. Until one of those exists, an unhandled
+//     patch MUST keep falling through `localOne`'s default arm to the snapshot
+//     fallback: coarse and correct beats fine and wrong. The fallback is the
+//     safety net for this kind and must be narrowed, never removed.
+//
+//     TWO REGISTERS PER CELL, not one and not one per field. `v` (the value)
+//     and `f` (the formula that produced it) are one fact — splitting them
+//     merges a formula from one replica with a cached number from another and
+//     shows a cell that never existed anywhere — so they share a register with
+//     everything else the cell computes (`g␟`). Presentation (`format`,
+//     `color`, `bg`, `bold`, `align`, `note`) is independent of the value in
+//     both directions and gets its own (`p␟`), so bolding a cell while someone
+//     retypes it keeps both. That is the same split the dataset kind already
+//     makes between `v␟col` and `o␟col`, for the same reason.
+//
+//     Which registers a write CLAIMS is diffed against the pre-state at mint
+//     time (`localOne` runs before the store applies), because the patch always
+//     carries the whole cell — `cellprops.ts` writes `{...cell, bold:true}` —
+//     so the object alone cannot say what changed. The op carries the whole
+//     cell too, plus the claim mask, so a receiver in any state can apply it.
+//
 //   - Row ORDER is a FRACTIONAL INDEX over rids, and the trick that makes it
 //     affordable is that most rows never get one. rids are minted at insert
 //     and NEVER reused (rowcol.ts is emphatic about this), which is what makes
@@ -89,7 +153,8 @@
 // to.)
 
 import { applyPatch, readCell, type Patch } from '../store.ts'
-import type { CellOverride, Column, ColumnData, DashDoc, Sheet, TableSheet } from '../model.ts'
+import { APPEARANCE_FIELDS } from '../model.ts'
+import type { CanvasCell, CanvasSheet, CellOverride, Column, ColumnData, DashDoc, Sheet, TableSheet } from '../model.ts'
 
 /**
  * Sync format version — stamped into SyncStateJSON (`v`) and every wire frame
@@ -97,7 +162,7 @@ import type { CellOverride, Column, ColumnData, DashDoc, Sheet, TableSheet } fro
  * misread: the file still opens, it simply rejoins as a fresh adopt. Same rule
  * as slides' SYNC_V and model.ts's frozen-policy handling.
  */
-export const SYNC_V = 1
+export const SYNC_V = 2
 
 export const DOC_NODE = '@doc'
 
@@ -110,10 +175,144 @@ export const colNode = (sheet: string, col: string): string => `c${NS}${sheet}${
 export const rowNode = (sheet: string, rid: number): string => `r${NS}${sheet}${NS}${rid}`
 /** cell-value key on a row node */
 const vKey = (col: string): string => `v${NS}${col}`
-/** cell-override key on a row node */
+/* --- cell-override key space on a row node ---------------------------------
+ *
+ * TWO REGISTERS PER OVERRIDE, not one: `o␟<col>` is the override's CONTENT
+ * (the hand correction, its provenance, the per-cell formula) and `q␟<col>` is
+ * its PRESENTATION (bold, colours, borders, the display pattern).
+ *
+ * Exactly the split §6.9 of docs/dash-collab.md already made for the
+ * spreadsheet kind's `g␟B7` / `p␟B7`, and made for the same reason: bolding a
+ * cell while a collaborator retypes it must keep BOTH. As one register it kept
+ * whichever arrived second and silently discarded the other — invisible in the
+ * sync state, because the register would agree on both replicas.
+ *
+ * `v`/`was`/`f` deliberately stay in ONE register together (they are
+ * alternatives and a split would show a formula from one replica beside a
+ * cached number from another), and provenance rides with them because `by`,
+ * `at`, `why` and `againstHash` are statements ABOUT that value.
+ */
+/** cell-override CONTENT key on a row node */
 const oKey = (col: string): string => `o${NS}${col}`
+/** cell-override PRESENTATION key on a row node */
+const oPKey = (col: string): string => `q${NS}${col}`
 const isVKey = (k: string): boolean => k.charCodeAt(0) === 118 /* 'v' */ && k[1] === NS
+/** which half of an override this row-node key addresses: 1 content, 2 presentation */
+const oHalf = (k: string): 1 | 2 => (k.charCodeAt(0) === 113 /* 'q' */ ? 2 : 1)
 const keyCol = (k: string): string => k.slice(2)
+
+/* --- spreadsheet (kind:'canvas') key spaces, all on the SHEET node ---------
+ * `g␟B7` the cell's content, `p␟B7` its presentation, `w␟C` a column width,
+ * `h␟4` a row height. The separator is what keeps them out of the sheet's
+ * property namespace: U+001F cannot occur in a key `setSheetProps` can write. */
+const cvKey = (a1: string): string => `g${NS}${a1}`
+const cvPKey = (a1: string): string => `p${NS}${a1}`
+/** size key. `axis` is 'w' (column width, keyed by LETTER) or 'h' (row height,
+ *  keyed by the 1-based number) — the two halves of an A1 address, exactly as
+ *  `CanvasSheet.cols`/`rows` spell them. */
+const cvZKey = (axis: 'w' | 'h', k: string): string => `${axis}${NS}${k}`
+/** does this sheet-node register key address spreadsheet content? */
+const isCvKey = (k: string): boolean =>
+  k[1] === NS && (k[0] === 'g' || k[0] === 'p' || k[0] === 'w' || k[0] === 'h')
+const cvAddr = (k: string): string => k.slice(2)
+
+/**
+ * A cell's presentation fields.
+ *
+ * Everything NOT in this set is content — including keys a future build adds,
+ * which is the conservative direction: an unknown field lands in the register
+ * that already carries `v` and `f`, so at worst it is merged more coarsely than
+ * it could be, never incoherently.
+ */
+const CV_PRES = new Set<string>([...APPEARANCE_FIELDS, 'format', 'note'])
+
+/** stable text for one half of a cell — the comparison mint-time diffing needs */
+const cvGroupText = (cell: CanvasCell | null | undefined, pres: boolean): string => {
+  if (!cell) return ''
+  const keys = Object.keys(cell).filter((k) => CV_PRES.has(k) === pres && cell[k] !== undefined).sort()
+  return keys.map((k) => `${JSON.stringify(k)}:${JSON.stringify(cell[k])}`).join(',')
+}
+
+/** which registers a write to this cell claims: 1 = content, 2 = presentation */
+const cvMask = (prev: CanvasCell | undefined, next: CanvasCell | null): number =>
+  (cvGroupText(prev, false) === cvGroupText(next, false) ? 0 : 1) |
+  (cvGroupText(prev, true) === cvGroupText(next, true) ? 0 : 2)
+
+/**
+ * A dataset override's presentation fields — the `q␟<col>` half.
+ *
+ * LITERALLY `CV_PRES`, and that is the point rather than a shortcut: the two
+ * kinds carry the same appearance vocabulary (model.ts `APPEARANCE_FIELDS`),
+ * so the engine must split them the same way or bolding a cell would merge
+ * differently depending on which tab it was on — which is the class of drift
+ * this whole change exists to end. Aliased rather than inlined so the two
+ * readers below say which kind they are about.
+ *
+ * Anything NOT in this set is content, including keys a future build adds:
+ * conservative in the safe direction, since an unknown field is then merged
+ * more coarsely than it could be and never incoherently.
+ */
+const OV_PRES = CV_PRES
+
+/** stable text for one half of an override — the comparison mint-time diffing needs */
+const ovGroupText = (cell: CellOverride | null | undefined, pres: boolean): string => {
+  if (!cell) return ''
+  const keys = Object.keys(cell).filter((k) => OV_PRES.has(k) === pres && cell[k] !== undefined).sort()
+  return keys.map((k) => `${JSON.stringify(k)}:${JSON.stringify(cell[k])}`).join(',')
+}
+
+/** which registers a write to this override claims: 1 = content, 2 = presentation */
+const ovMask = (prev: CellOverride | undefined, next: CellOverride | null): number =>
+  (ovGroupText(prev, false) === ovGroupText(next, false) ? 0 : 1) |
+  (ovGroupText(prev, true) === ovGroupText(next, true) ? 0 : 2)
+
+/**
+ * The override a claim produces — cvMerge's twin, and deliberately identical
+ * in shape so the two kinds cannot acquire different merge semantics.
+ *
+ * An override left with nothing at all is REMOVED (`null`): the overlay is
+ * sparse and an empty `{}` entry is a hand correction that says nothing, which
+ * validate.ts would go on to report as an override nobody can see.
+ */
+const ovMerge = (
+  base: CellOverride | undefined, payload: CellOverride | null, mask: number,
+): CellOverride | null => {
+  const out: CellOverride = { ...(base ?? {}) }
+  for (const half of [false, true]) {
+    if (!(mask & (half ? 2 : 1))) continue
+    for (const k of Object.keys(out)) if (OV_PRES.has(k) === half) delete out[k]
+    for (const k of Object.keys(payload ?? {})) {
+      if (OV_PRES.has(k) !== half) continue
+      const v = (payload as CellOverride)[k]
+      if (v !== undefined) out[k] = v
+    }
+  }
+  return Object.keys(out).length ? out : null
+}
+
+/**
+ * The cell a claim produces: take the claimed halves from the payload, keep the
+ * rest of what is already there. A payload of `null` clears the halves it
+ * claims, and a cell left with nothing is REMOVED — a spreadsheet is sparse,
+ * and a cleared cell lingering as `{}` is neither sparse nor equal to the same
+ * sheet reached another way (store.ts is emphatic; test-dash-canvascells pins it).
+ */
+const cvMerge = (base: CanvasCell | undefined, payload: CanvasCell | null, mask: number): CanvasCell | null => {
+  const out: CanvasCell = { ...(base ?? {}) }
+  for (const half of [false, true]) {
+    if (!(mask & (half ? 2 : 1))) continue
+    for (const k of Object.keys(out)) if (CV_PRES.has(k) === half) delete out[k]
+    for (const [k, v] of Object.entries(payload ?? {})) {
+      if (CV_PRES.has(k) === half && v !== undefined) out[k] = v
+    }
+  }
+  return Object.keys(out).length ? out : null
+}
+
+const canvasOf = (doc: DashDoc, id: string): CanvasSheet | undefined => {
+  const s = doc.sheets.find((x) => x.id === id)
+  return s && s.kind === 'canvas' ? s : undefined
+}
 
 /** sheet id out of a sheet/column/row node id */
 const nodeSheet = (node: string): string => {
@@ -259,7 +458,50 @@ export interface CellOp extends OpBase { op: 'cell'; sh: string; col: string; ri
 
 /** cell OVERRIDES (the `cells` overlay), keys `<colId>:<rid>` exactly as the
  *  document stores them. `null` deletes (and is what survives JSON). */
-export interface OvrOp extends OpBase { op: 'ovr'; sh: string; keys: string[]; v: Array<CellOverride | null> }
+/**
+ * DATASET cell overrides, keyed `<colId>:<rid>` on the ROW node.
+ *
+ * `v[i]` is the WHOLE override as the writer left it (or `null` = removed) and
+ * `m[i]` is which halves of it this write CLAIMS — 1 content, 2 presentation,
+ * 3 both. The payload is whole so a receiver in any state can apply the claim;
+ * the mask is what stops a bold click from also re-asserting a hand correction
+ * the writer never touched. `CvCellOp` below carries the identical pair for the
+ * spreadsheet kind, and the two are meant to stay identical.
+ *
+ * `m` is REQUIRED rather than optional, and SYNC_V went to 2 with it: an old
+ * client would ignore the field and apply the whole payload, which converges
+ * with itself and diverges against a new one (its concurrent bold takes the
+ * new client's stale value while the new client's retype drops the bold).
+ * Version-gating the frame turns a silent divergence into two replicas that
+ * simply do not speak, which is the honest failure.
+ */
+export interface OvrOp extends OpBase {
+  op: 'ovr'; sh: string; keys: string[]; v: Array<CellOverride | null>; m: number[]
+}
+
+/**
+ * SPREADSHEET cells (`kind:'canvas'`), keyed by A1 address on the sheet node.
+ *
+ * `v[i]` is the WHOLE cell as the writer left it (or `null` = removed, the
+ * spelling that survives JSON), and `m[i]` is which halves of it this write
+ * CLAIMS — 1 content, 2 presentation, 3 both. The payload is whole so a
+ * receiver in any state can apply the claim; the mask is what stops a bold
+ * click from also re-asserting a value the writer never touched.
+ *
+ * Many addresses per op because a paste, a fill and a delete are each one edit
+ * to a reader and must be one undo step — the same rule `setCanvasCells` gives.
+ */
+export interface CvCellOp extends OpBase {
+  op: 'cvc'; sh: string; keys: string[]; v: Array<CanvasCell | null>; m: number[]
+}
+
+/** SPREADSHEET column widths and row heights. `keys` are already prefixed
+ *  `w<letter>` / `h<number>`, so one op carries both axes exactly as the patch
+ *  does. `null` removes the entry (and the container with the last of them —
+ *  applyPatch owns that rule, and it is why this is a separate op there). */
+export interface CvSizeOp extends OpBase {
+  op: 'cvz'; sh: string; keys: string[]; v: Array<number | null>
+}
 
 /**
  * Row insert. `ord[i]` is the row's fractional key, never a position:
@@ -309,7 +551,7 @@ export interface InsOp extends OpBase {
 export interface DelOp extends OpBase { op: 'del'; n: string }
 export interface OrdOp extends OpBase { op: 'ord'; n: string; ord: string }
 
-export type Op = SetOp | CellOp | OvrOp | RinsOp | RdelOp | InsOp | DelOp | OrdOp
+export type Op = SetOp | CellOp | OvrOp | CvCellOp | CvSizeOp | RinsOp | RdelOp | InsOp | DelOp | OrdOp
 
 // ---------------------------------------------------------------------------
 // serializable state
@@ -609,15 +851,70 @@ export class DashSync {
         break
       }
       case 'setOverrides': {
+        // Diffed against the PRE-state, for the reason `setCanvasCells` gives
+        // two arms down: the patch carries WHOLE overrides (cellfmt.ts writes
+        // `{...over, bold:true}`), so the object alone cannot say whether the
+        // correction moved, the formatting moved, or neither.
+        const sheet = tableOf(doc, p.sheet)
+        const keys: string[] = []
+        const vals: Array<CellOverride | null> = []
+        const masks: number[] = []
+        for (let i = 0; i < p.keys.length; i++) {
+          const k = p.keys[i]
+          const next = (p.v[i] ?? null) as CellOverride | null
+          const m = ovMask(sheet?.cells?.[k], next)
+          if (!m) continue // wrote what was already there: nothing to claim
+          keys.push(k)
+          vals.push(next)
+          masks.push(m)
+        }
+        if (!keys.length) break
         const o = push<OvrOp>({
-          ...this.stamp(), op: 'ovr', sh: p.sheet, keys: p.keys.slice(),
-          v: p.keys.map((_, i) => (p.v[i] ?? null) as CellOverride | null),
+          ...this.stamp(), op: 'ovr', sh: p.sheet, keys, v: clone(vals), m: masks,
         })
-        p.keys.forEach((k) => {
+        keys.forEach((k, i) => {
           const col = k.slice(0, k.indexOf(':'))
           const rid = Number(k.slice(k.indexOf(':') + 1))
-          this.setReg(rowNode(p.sheet, rid), oKey(col), [o.l, o.a])
+          const node = rowNode(p.sheet, rid)
+          if (masks[i] & 1) this.setReg(node, oKey(col), [o.l, o.a])
+          if (masks[i] & 2) this.setReg(node, oPKey(col), [o.l, o.a])
         })
+        break
+      }
+      case 'setCanvasCells': {
+        // Diffed against the PRE-state, which is the only place the claim can
+        // be computed: the patch carries whole cells (cellprops.ts writes
+        // `{...cell, bold:true}`), so the object alone cannot say whether the
+        // value moved, the formatting moved, or neither.
+        const sheet = canvasOf(doc, p.sheet)
+        const n = shNode(p.sheet)
+        const keys: string[] = []
+        const vals: Array<CanvasCell | null> = []
+        const masks: number[] = []
+        for (const [k, next] of Object.entries(p.cells)) {
+          const m = cvMask(sheet?.cells?.[k], next ?? null)
+          if (!m) continue // wrote what was already there: nothing to claim
+          keys.push(k)
+          vals.push(next ?? null)
+          masks.push(m)
+        }
+        if (!keys.length) break
+        const o = push<CvCellOp>({ ...this.stamp(), op: 'cvc', sh: p.sheet, keys, v: clone(vals), m: masks })
+        keys.forEach((k, i) => {
+          if (masks[i] & 1) this.setReg(n, cvKey(k), [o.l, o.a])
+          if (masks[i] & 2) this.setReg(n, cvPKey(k), [o.l, o.a])
+        })
+        break
+      }
+      case 'setCanvasSizes': {
+        const n = shNode(p.sheet)
+        const keys: string[] = []
+        const vals: Array<number | null> = []
+        for (const [k, v] of Object.entries(p.cols ?? {})) { keys.push(`w${k}`); vals.push(v ?? null) }
+        for (const [k, v] of Object.entries(p.rows ?? {})) { keys.push(`h${k}`); vals.push(v ?? null) }
+        if (!keys.length) break
+        const o = push<CvSizeOp>({ ...this.stamp(), op: 'cvz', sh: p.sheet, keys, v: vals.slice() })
+        keys.forEach((k) => this.setReg(n, cvZKey(k[0] as 'w' | 'h', k.slice(1)), [o.l, o.a]))
         break
       }
       case 'insertRows': {
@@ -880,6 +1177,8 @@ export class DashSync {
       case 'set': this.applySet(doc, op, res); break
       case 'cell': this.applyCell(doc, op, res); break
       case 'ovr': this.applyOvr(doc, op, res); break
+      case 'cvc': this.applyCvCell(doc, op, res); break
+      case 'cvz': this.applyCvSize(doc, op, res); break
       case 'rins': this.applyRins(doc, op, res); break
       case 'rdel': this.applyRdel(doc, op, res); break
       case 'ins': this.applyIns(doc, op, res); break
@@ -1114,34 +1413,127 @@ export class DashSync {
       const col = k.slice(0, k.indexOf(':'))
       const rid = Number(k.slice(k.indexOf(':') + 1))
       const node = rowNode(op.sh, rid)
-      const key = oKey(col)
-      if (older(op.l, op.a, this.reg(node, key))) continue
-      // Overrides are not carried by a row insert, but a row's DEATH takes
-      // them with it (killRowOverrides), so a rebirth does supersede an older
-      // one — no `rnamed` exception here, unlike cell values.
-      const birth = this.births[node]
-      if (birth && !newer(op.l, op.a, birth)) { this.setReg(node, key, [op.l, op.a]); continue }
-      if (this.dead(node)) {
+      // Per HALF, exactly as applyCvCell does: the content register and the
+      // presentation register race independently, so every gate below has to
+      // be asked twice and may answer differently for the two. `mask` collects
+      // the halves that survive all of them; the payload is whole, so a half
+      // that loses simply is not taken from it.
+      let mask = 0
+      const halves: Array<[1 | 2, string]> = [[1, oKey(col)], [2, oPKey(col)]]
+      let pended = false
+      for (const [half, key] of halves) {
+        if (!(op.m[i] & half)) continue
+        if (older(op.l, op.a, this.reg(node, key))) continue
+        // Overrides are not carried by a row insert, but a row's DEATH takes
+        // them with it (killRowOverrides), so a rebirth does supersede an older
+        // one — no `rnamed` exception here, unlike cell values.
+        const birth = this.births[node]
+        if (birth && !newer(op.l, op.a, birth)) { this.setReg(node, key, [op.l, op.a]); continue }
+        if (this.dead(node)) {
+          this.setReg(node, key, [op.l, op.a])
+          ;(this.stash[node] ??= {})[key] = { v: clone(op.v[i]), r: [op.l, op.a] }
+          continue
+        }
+        if (!sheet) { this.setReg(node, key, [op.l, op.a]); continue } // the sheet is gone
+        const cb = this.births[colNode(op.sh, col)]
+        if (cb && !newer(op.l, op.a, cb)) { this.setReg(node, key, [op.l, op.a]); continue } // superseded
+        if (this.dead(colNode(op.sh, col))) { // buried here — park it, see applyCell
+          this.setReg(node, key, [op.l, op.a])
+          if (!pended) {
+            this.pend(colNode(op.sh, col), { ...op, keys: [k], v: [op.v[i]], m: [op.m[i]] })
+            pended = true
+          }
+          continue
+        }
+        if (!rleHas(sheet.rids, rid)) {
+          // The row is not here yet: queue the WHOLE key (both claimed halves)
+          // once and leave every register alone, so the replay re-runs these
+          // same gates against the state the row's insert brings with it.
+          if (!pended) { this.pend(node, { ...op, keys: [k], v: [op.v[i]], m: [op.m[i]] }); pended = true }
+          mask = 0
+          break
+        }
         this.setReg(node, key, [op.l, op.a])
-        ;(this.stash[node] ??= {})[key] = { v: clone(op.v[i]), r: [op.l, op.a] }
-        continue
+        mask |= half
       }
-      if (!sheet) { this.setReg(node, key, [op.l, op.a]); continue } // the sheet is gone
-      const cb = this.births[colNode(op.sh, col)]
-      if (cb && !newer(op.l, op.a, cb)) { this.setReg(node, key, [op.l, op.a]); continue } // superseded
-      if (this.dead(colNode(op.sh, col))) { // buried here — park it, see applyCell
-        this.setReg(node, key, [op.l, op.a])
-        this.pend(colNode(op.sh, col), { ...op, keys: [k], v: [op.v[i]] })
-        continue
-      }
-      if (!rleHas(sheet.rids, rid)) { this.pend(node, { ...op, keys: [k], v: [op.v[i]] }); continue }
-      this.setReg(node, key, [op.l, op.a])
+      if (!mask || !sheet) continue
       keys.push(k)
-      vals.push(op.v[i])
+      vals.push(ovMerge(sheet.cells?.[k], op.v[i], mask))
     }
     if (!keys.length) return
     applyPatch(doc, { op: 'setOverrides', sheet: op.sh, keys, v: clone(vals), dropEmpty: true })
     res.changed = true
+  }
+
+  // --- spreadsheet cells ----------------------------------------------------
+
+  /**
+   * A spreadsheet write: per-(address, half) LWW on the sheet node.
+   *
+   * The gates are the ones every other value op uses, in the same order and
+   * for the same reasons. A sheet we have not seen yet means its insert is
+   * still in flight, so the op WAITS (applyIns/applyDel drain the queue); a
+   * sheet that is dead means every replica will agree it is gone, so the
+   * register advances — states must converge on a value nobody can see — and
+   * the value is dropped. Nothing is parked for a resurrection here: a sheet
+   * insert carries `cells` wholesale and out-stamps everything inside it
+   * (docs/dash-collab.md §6.3), so a stash entry could only fight its own
+   * payload.
+   */
+  private applyCvCell(doc: DashDoc, op: CvCellOp, res: ApplyResult): void {
+    const n = shNode(op.sh)
+    const sheet = canvasOf(doc, op.sh)
+    if (!sheet && !this.dead(n) && !doc.sheets.some((s) => s.id === op.sh)) { this.pend(n, op); return }
+    const birth = this.births[n]
+    const cells: Record<string, CanvasCell | null> = {}
+    let any = false
+    for (let i = 0; i < op.keys.length; i++) {
+      const a1 = op.keys[i]
+      let mask = 0
+      for (const half of [1, 2]) {
+        if (!(op.m[i] & half)) continue
+        const key = half === 1 ? cvKey(a1) : cvPKey(a1)
+        if (older(op.l, op.a, this.reg(n, key))) continue
+        this.setReg(n, key, [op.l, op.a])
+        // a sheet insert is a whole-node assignment, `cells` included
+        if (birth && !newer(op.l, op.a, birth)) continue
+        if (!sheet || this.dead(n)) continue
+        mask |= half
+      }
+      if (!mask) continue
+      cells[a1] = cvMerge(sheet!.cells?.[a1], op.v[i], mask)
+      any = true
+    }
+    if (!any) return
+    applyPatch(doc, { op: 'setCanvasCells', sheet: op.sh, cells: clone(cells) })
+    res.changed = true
+  }
+
+  private applyCvSize(doc: DashDoc, op: CvSizeOp, res: ApplyResult): void {
+    const n = shNode(op.sh)
+    const sheet = canvasOf(doc, op.sh)
+    if (!sheet && !this.dead(n) && !doc.sheets.some((s) => s.id === op.sh)) { this.pend(n, op); return }
+    const birth = this.births[n]
+    const cols: Record<string, number | null> = {}
+    const rows: Record<string, number | null> = {}
+    let any = false
+    for (let i = 0; i < op.keys.length; i++) {
+      const axis = op.keys[i][0] as 'w' | 'h'
+      const k = op.keys[i].slice(1)
+      if (older(op.l, op.a, this.reg(n, cvZKey(axis, k)))) continue
+      this.setReg(n, cvZKey(axis, k), [op.l, op.a])
+      if (birth && !newer(op.l, op.a, birth)) continue
+      if (!sheet || this.dead(n)) continue
+      ;(axis === 'w' ? cols : rows)[k] = op.v[i]
+      any = true
+    }
+    if (!any) return
+    applyPatch(doc, {
+      op: 'setCanvasSizes', sheet: op.sh,
+      ...(Object.keys(cols).length ? { cols } : {}), ...(Object.keys(rows).length ? { rows } : {}),
+    })
+    res.changed = true
+    res.structure = true // widths and heights are layout, not paint
   }
 
   // --- rows -----------------------------------------------------------------
@@ -1242,6 +1634,20 @@ export class DashSync {
       // A delete still out-stamps this insert. The key is recorded above
       // regardless, so ops waiting on this row can resolve now.
       if (!sheet || this.dead(node)) { this.drainPending(doc, node); continue }
+      // AN INSERT IS A WHOLE-ROW ASSIGNMENT, and until now it only said so to
+      // ops that arrived AFTER it. `applyOvr` has always refused an override
+      // older than the row's birth ("a row's DEATH takes its overrides with
+      // it, so a rebirth supersedes an older one") — but nothing swept the
+      // overrides ALREADY IN THE DOCUMENT when a rebirth landed on a replica
+      // that had applied them first. So the same override survived on whoever
+      // heard the write before the resurrection and vanished on everybody
+      // else: identical registers, identical births and tombs, one workbook
+      // with an extra hand correction. Found at ACTORS=4 once the rig started
+      // racing override CONTENT against override PRESENTATION (seed 520 of
+      // SEEDS=800 STEPS=300); it is not a fault of that split — the same hole
+      // is reachable with the single register, it simply needed an
+      // interleaving nobody had drawn yet.
+      this.supersedeRowOverrides(doc, sheet, op.sh, rid, stamp)
       if (rleHas(sheet.rids, rid)) {
         // ALREADY HERE — and the winning insert has just given the row a NEW
         // key, so the row has to MOVE to match it. Recording the key and
@@ -1306,6 +1712,45 @@ export class DashSync {
       }
       this.drainPending(doc, node)
     }
+  }
+
+  /**
+   * Drop the override halves a row's (re)birth out-stamps.
+   *
+   * The document-side twin of `applyOvr`'s birth gate, and it has to exist for
+   * the same reason `resetColumnValues` exists beside the column-birth gate: an
+   * assignment that only filters ops arriving later is not an assignment, it is
+   * a race the delivery order decides.
+   *
+   * Per HALF, because the two registers are independent — a presentation half
+   * written after the resurrection survives beside a content half written
+   * before it, and that is the correct answer rather than a nicety. A half with
+   * NO register at all is superseded too: its authority is nothing, and nothing
+   * does not out-stamp a birth.
+   */
+  private supersedeRowOverrides(
+    doc: DashDoc, sheet: TableSheet, sh: string, rid: number, birth: Reg,
+  ): void {
+    if (!sheet.cells) return
+    const node = rowNode(sh, rid)
+    const keys: string[] = []
+    const vals: Array<CellOverride | null> = []
+    for (const k of Object.keys(sheet.cells)) {
+      if (Number(k.slice(k.indexOf(':') + 1)) !== rid) continue
+      const col = k.slice(0, k.indexOf(':'))
+      let mask = 0
+      const rc = this.reg(node, oKey(col))
+      const rp = this.reg(node, oPKey(col))
+      if (!rc || !regNewer(rc, birth)) mask |= 1
+      if (!rp || !regNewer(rp, birth)) mask |= 2
+      if (!mask) continue
+      const next = ovMerge(sheet.cells[k], null, mask)
+      if (next === null && sheet.cells[k] === undefined) continue
+      keys.push(k)
+      vals.push(next)
+    }
+    if (!keys.length) return
+    applyPatch(doc, { op: 'setOverrides', sheet: sheet.id, keys, v: vals, dropEmpty: true })
   }
 
   private applyRdel(doc: DashDoc, op: RdelOp, res: ApplyResult): void {
@@ -1467,9 +1912,17 @@ export class DashSync {
       if (isVKey(k)) {
         if (sheet.data[col]) applyPatch(doc, { op: 'setCells', sheet: sh, col, rids: [rid], v: [clone(ent.v ?? null)] })
       } else {
+        // MERGED, not assigned: the entry is a whole override parked under ONE
+        // of its two register keys, so it may only put back its own half. The
+        // other half's entry (if its register also survived) replays beside it
+        // in this same loop and puts back the other. Assigning the whole thing
+        // would let a replayed presentation half resurrect a hand correction
+        // whose own register had already been superseded.
+        const okey = `${col}:${rid}`
         applyPatch(doc, {
-          op: 'setOverrides', sheet: sh, keys: [`${col}:${rid}`],
-          v: ['v' in ent ? clone(ent.v) as CellOverride : null], dropEmpty: true,
+          op: 'setOverrides', sheet: sh, keys: [okey],
+          v: [ovMerge(sheet.cells?.[okey], 'v' in ent ? clone(ent.v) as CellOverride : null, oHalf(k))],
+          dropEmpty: true,
         })
       }
     }
@@ -1538,6 +1991,7 @@ export class DashSync {
   private parkColumn(sheet: TableSheet, col: string): void {
     const key = vKey(col)
     const ok = oKey(col)
+    const okp = oPKey(col)
     const prefix = rowNode(sheet.id, 0).slice(0, -1) // `r␟<sheet>␟`
     const park = (node: string, k: string, v: unknown, r: Reg | undefined) => {
       if (!r) return
@@ -1556,7 +2010,14 @@ export class DashSync {
     for (const k of Object.keys(sheet.cells ?? {})) {
       if (k.slice(0, k.indexOf(':')) !== col) continue
       const rid = Number(k.slice(k.indexOf(':') + 1))
-      park(rowNode(sheet.id, rid), ok, sheet.cells![k], this.reg(rowNode(sheet.id, rid), ok))
+      const node = rowNode(sheet.id, rid)
+      // BOTH HALVES, each under its own register's authority. Parking the whole
+      // override under both keys is right rather than wasteful: the replay
+      // merges by half (`ovMerge`), so each entry contributes only its own
+      // side, and a content half that outlived its presentation half — or the
+      // reverse — comes back exactly as far as its register earned.
+      park(node, ok, sheet.cells![k], this.reg(node, ok))
+      park(node, okp, sheet.cells![k], this.reg(node, okp))
     }
   }
 
@@ -1721,6 +2182,10 @@ export class DashSync {
     if (!keys) return
     const st = (this.stash[id] ??= {})
     for (const [k, r] of Object.entries(keys)) {
+      // Spreadsheet cells are not node PROPERTIES: `node['g␟B7']` is not where
+      // the value lives, and replayStash would write that key onto the sheet
+      // object as junk. They travel in the sheet payload instead (§6.3).
+      if (isCvKey(k)) continue
       if (!(k in st) || cmpReg(st[k].r, r) !== 0) {
         st[k] = node[k] === undefined ? { r: clone(r) } : { v: clone(node[k]), r: clone(r) }
       }
@@ -1732,6 +2197,7 @@ export class DashSync {
     const st = this.stash[id]
     if (!st) return
     for (const [k, ent] of Object.entries(st)) {
+      if (isCvKey(k)) continue // not a property of the node — see stashNode
       const r = this.reg(id, k)
       if (!r || !regNewer(r, birth)) continue
       if (cmpReg(ent.r, r) !== 0) continue
@@ -1778,6 +2244,38 @@ export class DashSync {
         // resurrection) dropped the value here too — on every replica except
         // the second resurrector. Seeds 374 and 184.
         const auth = claims ? r : (r && regNewer(r, st[k].r) ? r : st[k].r)
+        // THE ROW'S OWN REBIRTH BEATS IT TOO, and this is the rule that was
+        // here in `replayStashRow` and missing here — the exact asymmetry that
+        // file keeps warning about, "the two readers of the stash disagree".
+        //
+        // An entry only reaches this reader when `replayStashRow` had to KEEP
+        // it (the column was buried at the moment the row came back), so it is
+        // the rebirth's loser arriving by the slower road. Without the check it
+        // was written back unconditionally: the replica that happened to hold a
+        // parked copy restored a hand correction that every replica reaching
+        // the same rebirth through `replayStashRow` had correctly dropped.
+        // Same registers, same births, same tombs, one workbook with an extra
+        // override — rig seed 520 at ACTORS=4 (a3 wrote an override at lamport
+        // 19, a2 deleted and resurrected the row at 20/21, and only a3's own
+        // parked copy came back).
+        //
+        // OVERRIDE KEYS ONLY, deliberately narrow. An insert never carries an
+        // override — `applyOvr` says so in its own words ("no `rnamed`
+        // exception here, unlike cell values") — so for `o␟col` / `q␟col` a
+        // rebirth is an unconditional supersede and this is simply the rule
+        // the other reader already applies.
+        //
+        // Cell VALUES are not touched, and that is measured rather than
+        // cautious: extending it to `v␟col` (where a payload CAN claim the
+        // column, so the question is genuinely about the claim) diverged a
+        // value at ACTORS=5 seed 226 — a number that survived on the replica
+        // holding the parked copy and not on the one that had it in the
+        // document. Those paths are tuned by five closed seeds; this hole was
+        // in the override half, and the fix belongs there.
+        const rb = this.births[node]
+        // `auth` may be undefined here (a key whose register never existed);
+        // nothing does not out-stamp a birth, so it is superseded too.
+        if (!isVKey(k) && rb && (!auth || !regNewer(auth, rb))) { delete st[k]; continue }
         // The column's own birth beats anything parked before it: a value a
         // row was holding for a column that has since been (re)created belongs
         // to the creation, not to the row.
@@ -1786,9 +2284,14 @@ export class DashSync {
           dbg(node, `settle parked ${k} := ${JSON.stringify(st[k].v)}`)
           if (isVKey(k)) applyPatch(doc, { op: 'setCells', sheet: sh, col, rids: [rid], v: [clone(st[k].v ?? null)] })
           else {
+            // Merged by half — replayStashRow's reasoning, and it has to be the
+            // same rule here or the two readers of the stash disagree again.
+            const okey = `${col}:${rid}`
             applyPatch(doc, {
-              op: 'setOverrides', sheet: sh, keys: [`${col}:${rid}`],
-              v: [st[k].v === undefined ? null : clone(st[k].v) as CellOverride], dropEmpty: true,
+              op: 'setOverrides', sheet: sh, keys: [okey],
+              v: [ovMerge(sheet.cells?.[okey],
+                st[k].v === undefined ? null : clone(st[k].v) as CellOverride, oHalf(k))],
+              dropEmpty: true,
             })
           }
         }
@@ -1913,6 +2416,11 @@ export class DashSync {
           if (b && !regNewer(rr, b)) continue // superseded by a whole-node assignment
         }
         if (node[0] === 'r') { this.mergeCellReg(doc, rdoc, rstate, node, key, rr); continue }
+        // A spreadsheet cell/size lives in the sheet's own sparse maps, not in
+        // a property of the sheet object — the generic write below would put
+        // `"g␟B7": …` at the top level of the sheet and every reader of the
+        // file would have to explain it.
+        if (node[0] === 's' && isCvKey(key)) { this.mergeCvReg(doc, rdoc, node, key); continue }
         if (node !== DOC_NODE && this.dead(node)) {
           const src = remoteNode(rdoc, node)
           const rstash = rstate.stash?.[node]?.[key]
@@ -1935,6 +2443,33 @@ export class DashSync {
     return res
   }
 
+  /**
+   * One spreadsheet register during a snapshot merge: the remote holds this
+   * half of the cell (or this width), so take its value out of the remote
+   * document's sparse map and write it into ours at the same address.
+   *
+   * Reads NOTHING that says which side is local — the value comes from
+   * whichever side's register won, which is what makes merge(A←B) and
+   * merge(B←A) land in the same place.
+   */
+  private mergeCvReg(doc: DashDoc, rdoc: DashDoc, node: string, key: string): void {
+    const sh = nodeSheet(node)
+    const sheet = canvasOf(doc, sh)
+    if (!sheet || this.dead(node)) return
+    const rsheet = canvasOf(rdoc, sh)
+    const addr = cvAddr(key)
+    if (key[0] === 'w' || key[0] === 'h') {
+      const v = (key[0] === 'w' ? rsheet?.cols : rsheet?.rows)?.[addr] ?? null
+      applyPatch(doc, {
+        op: 'setCanvasSizes', sheet: sh,
+        ...(key[0] === 'w' ? { cols: { [addr]: v } } : { rows: { [addr]: v } }),
+      })
+      return
+    }
+    const merged = cvMerge(sheet.cells?.[addr], rsheet?.cells?.[addr] ?? null, key[0] === 'g' ? 1 : 2)
+    applyPatch(doc, { op: 'setCanvasCells', sheet: sh, cells: { [addr]: clone(merged) } })
+  }
+
   /** one cell register during a snapshot merge: read the winner's value out of
    *  the remote's columnar arrays and write it into ours by rid */
   private mergeCellReg(doc: DashDoc, rdoc: DashDoc, rstate: SyncStateJSON, node: string, key: string, rr: Reg): void {
@@ -1954,9 +2489,15 @@ export class DashSync {
     if (isVKey(key)) {
       if (sheet.data[col]) applyPatch(doc, { op: 'setCells', sheet: sh, col, rids: [rid], v: [clone(value ?? null)] })
     } else {
+      // One HALF of the override, taken from whichever side's register won —
+      // which is what keeps merge(A←B) and merge(B←A) landing in the same
+      // place when the two sides won opposite halves of the same cell.
+      const okey = `${col}:${rid}`
       applyPatch(doc, {
-        op: 'setOverrides', sheet: sh, keys: [`${col}:${rid}`],
-        v: [value === undefined ? null : clone(value) as CellOverride], dropEmpty: true,
+        op: 'setOverrides', sheet: sh, keys: [okey],
+        v: [ovMerge(sheet.cells?.[okey],
+          value === undefined ? null : clone(value) as CellOverride, oHalf(key))],
+        dropEmpty: true,
       })
     }
   }
@@ -2284,6 +2825,17 @@ export function committable(doc: DashDoc, p: Patch): boolean {
       return true
     }
     case 'deleteRows': return !!table(p.sheet)
+    // The spreadsheet kind, and here the rule bites harder than elsewhere:
+    // `applyPatch`'s `canvas()` THROWS on a sheet that is gone (or that is a
+    // dataset), so an undo replaying a write into a sheet a collaborator
+    // deleted would not merely diverge, it would take the commit down. Reached
+    // through the same door as every other refusal: you cannot edit what is
+    // not there.
+    case 'setCanvasCells':
+    case 'setCanvasSizes': {
+      const s = doc.sheets.find((x) => x.id === p.sheet)
+      return !!s && s.kind === 'canvas'
+    }
     case 'addColumn': {
       const s = table(p.sheet)
       if (!s || s.columns.some((c) => c.id === p.column.id)) return false
@@ -2304,7 +2856,22 @@ export function committable(doc: DashDoc, p: Patch): boolean {
       const s = table(p.sheet)
       return !!s && p.order.length === s.columns.length && p.order.every((id) => s.columns.some((c) => c.id === id))
     }
-    case 'setSheetProps': return !!table(p.sheet)
+    // ANY KIND, matching `applyPatch`. This asked `table(p.sheet)` — the same
+    // narrowing store.ts had — so under a live session a rename of a
+    // spreadsheet or a pivot was FILTERED OUT of the commit as uncommittable
+    // and reported as `patch-refused`: the edit vanished locally as well as
+    // remotely, which is worse than the throw it was mirroring. The question
+    // this gate asks is "is the target still there?", and for a sheet-level op
+    // the target is a sheet.
+    case 'setSheetProps': return doc.sheets.some((s) => s.id === p.sheet)
+    // `applyPatch` REFUSES a `reorderSheets` that is not a permutation of the
+    // current list, and it is right to — an id left out would delete a sheet.
+    // But an undo replaying an order minted before a collaborator added or
+    // removed a sheet is exactly that, and a throw out of `commit` is worse
+    // than a lost undo step. Refused here, as `reorderColumns` already is.
+    case 'reorderSheets':
+      return p.order.length === doc.sheets.length &&
+        p.order.every((id) => doc.sheets.some((s) => s.id === id))
     default: return true
   }
 }

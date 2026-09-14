@@ -1,0 +1,147 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 The Bento authors
+ */
+/* --- print and PDF export -------------------------------------------------
+   The printout is a SECOND rendering of the view, mounted into #dx-print and
+   removed on `afterprint` (dash/src/print.ts explains why the grid itself
+   cannot be printed: it is windowed, so a @media print block over it prints
+   the ~40 rows that happen to be scrolled into view).
+
+   Nothing in here is themed. Paper is white, ink is black, and a workbook whose
+   theme is a dark one must not print as a slab of toner — the screen palette is
+   about a backlit surface and paper is not one. Cell colours the AUTHOR set
+   (conditional formats, spreadsheet cell fills) do print, through inline
+   styles, which is why print-color-adjust is forced below. */
+
+#dx-print { display: none; }
+
+@media print {
+  /* Every other top-level node goes: the app, the splash, an open dialog, a
+     toast, the findings banner. Named by exclusion rather than by a list, so a
+     surface added later cannot re-appear on somebody's paper. */
+  body > :not(#dx-print) { display: none !important; }
+
+  #dx-print {
+    display: block;
+    /* An author's colours are DATA — a red cell that prints white has lost the
+       thing the red was saying. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color: #000;
+    background: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  #dx-print * { box-sizing: border-box; }
+
+  /* One sheet, or one column block of one sheet. A block starts a page: a
+     continuation whose first rows share a page with the end of the previous
+     block is a page nobody can read a column heading off. */
+  .dxpr-sheet { break-after: page; page-break-after: always; }
+  .dxpr-sheet:last-child { break-after: auto; page-break-after: auto; }
+
+  .dxpr-cap {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 0 0 6px;
+    margin: 0 0 6px;
+    border-bottom: 1.5px solid #000;
+    /* The caption must never be orphaned from the table it names. */
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  /* THE PAGE HEADER, and it is a `thead` row so that it repeats. The `th` it
+     rides in must not look like a column heading: no grey fill, no cell
+     border, no padding of its own — the `.dxpr-cap` rule above owns the rule
+     line under it, exactly as it did when this was a `<div>`. */
+  .dxpr-caprow th {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-weight: 400;
+    text-align: left;
+  }
+  .dxpr-caprow .dxpr-cap { padding-top: 4px; }
+
+  .dxpr-name { font-weight: 700; font-size: 13px; }
+  /* THE GAP IS CLAIMED HERE, by the last thing on the left, rather than by the
+     first thing on the right. Two right-hand items each claiming
+     `margin-left:auto` would SPLIT the space between them, and a caption with
+     no view sentence (a spreadsheet sheet has none) would leave the date
+     stranded in the middle. One `margin-right:auto` holds for every
+     combination of the four. */
+  .dxpr-title { font-size: 11px; color: #444; margin-right: auto; }
+  .dxpr-view { font-size: 10px; color: #444; }
+  .dxpr-when { font-size: 10px; color: #444; white-space: nowrap; }
+
+  .dxpr-t {
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-variant-numeric: tabular-nums;
+  }
+  /* THE REPEATED HEADER. `table-header-group` is a thead's default, and it is
+     restated because it is the entire mechanism by which a column keeps its
+     name on page 40 — a stylesheet elsewhere that flips a thead to `block`
+     would silently take it away. */
+  .dxpr-t thead { display: table-header-group; }
+  .dxpr-t tr { break-inside: avoid; page-break-inside: avoid; }
+  .dxpr-t th,
+  .dxpr-t td {
+    border: 0.5px solid #999;
+    padding: 0 4px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-align: left;
+    font-weight: 400;
+    vertical-align: middle;
+  }
+  .dxpr-t th {
+    background: #eee;
+    font-weight: 600;
+    border-bottom: 1px solid #000;
+  }
+  .dxpr-g {
+    background: #f2f2f2;
+    color: #555;
+    text-align: center;
+    font-size: 0.85em;
+  }
+  /* The type chip and the fx mark, as the grid's header carries them: an empty
+     computed cell reads as "derived" rather than as "blank" only if something
+     on the page says the column is computed (preview.ts makes the same point). */
+  .dxpr-type {
+    float: right;
+    font-size: 0.8em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #555;
+    font-weight: 400;
+  }
+  .dxpr-fx { float: right; font-size: 0.8em; margin-right: 4px; color: #555; }
+  .dxpr-h { overflow: hidden; }
+
+  /* Totals are the LAST BODY ROW, never a tfoot — a footer group repeats on
+     every page and a mid-document "SUM" under a partial column is a total of
+     something nobody asked for. */
+  .dxpr-tot td { border-top: 1.5px solid #000; font-weight: 700; background: #f2f2f2; }
+  .dxpr-agg { font-weight: 400; font-size: 0.85em; color: #555; margin-right: 4px; }
+
+  .dxpr-err { color: #a11; }
+  /* A cell somebody left a note on. The note itself is not printed — it is a
+     conversation, not data — but a printout that hides that one exists is a
+     printout somebody signs off without seeing the caveat. */
+  .dxpr-note { color: #a11; font-size: 0.8em; vertical-align: super; }
+  .dxpr-empty { font-size: 12px; color: #444; padding: 8px 0; }
+}
+
+/* --- the dialog ------------------------------------------------------------
+   `.dx-ask` furniture (ask.css) with one addition: the selects have to look
+   like `.dx-ask-in`, which was written for inputs. Same box, same focus ring —
+   a second dialog style is a second thing to keep in step with the theme. */
+.dx-print-card select.dx-ask-in {
+  appearance: auto;
+  height: 32px;
+  cursor: pointer;
+}

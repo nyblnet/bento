@@ -268,6 +268,20 @@ export interface Page {
   parent?: string
   /** one emoji, never a URL — a URL would be a network dependency */
   icon?: string
+  /**
+   * A picture across the top of the page.
+   *
+   * `asset:<key>` or a `data:` URI, and NEVER a URL — for exactly the reason
+   * `icon` is not one. PLATFORM §1: opening a document must not touch the
+   * network, and a cover is the field most likely to tempt someone into a
+   * link, because that is how every hosted notes app does it. A file that
+   * arrives carrying a remote cover keeps the field (additivity) and renders
+   * NOTHING, which `coverSrc` is the single place that decides.
+   *
+   * Absent on every page written before this, so an older build renders the
+   * page it always did and round-trips the field untouched.
+   */
+  cover?: string
   /** flat, pre-order; nesting via Block.parent */
   blocks: Block[]
   /**
@@ -748,8 +762,69 @@ export function isRemote(src: string): boolean {
   return !src.startsWith('asset:') && !src.startsWith('data:')
 }
 
+/**
+ * The cover a page actually shows — '' when it has none, and '' when what it
+ * has would reach the network.
+ *
+ * ONE PLACE decides that, because the rule has to hold for the page, the
+ * gallery card, the asset sweep and anything added later. A remote cover is
+ * not repaired and not deleted: the field round-trips, and validate() says so
+ * out loud (agent.ts) rather than the picture silently not being there.
+ */
+export function coverSrc(page: Page): string {
+  const c = (page as { cover?: unknown }).cover
+  if (typeof c !== 'string' || !c) return ''
+  return isRemote(c) ? '' : c
+}
+
+/** Every asset key a PAGE references outside its blocks — today, its cover. */
+export function pageAssetKeys(page: Page): string[] {
+  const c = (page as { cover?: unknown }).cover
+  return typeof c === 'string' && c.startsWith('asset:') ? [c.slice(6)] : []
+}
+
+/**
+ * What an `asset:` src actually points at, or the src itself.
+ *
+ * hasOwn, not a bare index: `assets['toString']` returns a FUNCTION, which is
+ * truthy, so a `?? ''` never fires and the stringified function is what gets
+ * assigned. Same class as the icon lookup — an author-supplied key reaching a
+ * lookup table through the prototype chain.
+ */
+export function assetValue(src: string, doc: SpacesDoc): string {
+  if (!src.startsWith('asset:')) return src
+  const key = src.slice(6)
+  const table = doc.assets
+  return table && Object.hasOwn(table, key) ? String(table[key] ?? '') : ''
+}
+
+/**
+ * Does loading this src reach off the machine — after the asset table has had
+ * its say?
+ *
+ * `isRemote` answers about the string an author WROTE, and that was the whole
+ * test until now. It has a hole one indirection deep: `asset:k` is local by
+ * inspection, and `doc.assets.k` is whatever the file says it is. A document
+ * carrying
+ *
+ *     "assets": { "k": "http://tracker.example/p.png" }
+ *
+ * and an image `src: "asset:k"` fetched it on open — measured on a shipped
+ * build, with the request in the network log. The consent placeholder never
+ * appeared, because the gate had already decided the src was local.
+ *
+ * Nothing can be promised about what is INSIDE a file somebody mails you. What
+ * the app owes its reader is narrower and keepable: it makes no request on a
+ * document's behalf until the reader asks for it. That promise is only as good
+ * as the question this function answers, so it is asked about the URL that will
+ * actually be fetched rather than the one that was typed.
+ */
+export function loadsRemotely(src: string, doc: SpacesDoc): boolean {
+  return isRemote(assetValue(src, doc))
+}
+
 // ---- tables ----------------------------------------------------------------
-// A table is CONTENT (working/spaces-design.md §2.6): no formulas, no
+// A table is CONTENT (working/design/spaces-design.md §2.6): no formulas, no
 // recalculation, no cross-document references. The line the suite draws is
 // "would you print it → folio; does it recalculate → dash; does it link to
 // pages → spaces", and a table whose cells are inline html — so a cell can

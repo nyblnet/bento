@@ -1,0 +1,81 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+
+   THE SHARED MODAL DIALOG styles. See dialog.ts for why this exists and what
+   each app contributed. Sibling of menu.css and panel.css; the two rules from
+   those hold here too and are not restated in full:
+
+   1. VALUES ARE THE HOST APP'S — every colour through a `--bkd-*` chain onto
+      the app's own token; never light-dark(); the shared theming guard
+      (scripts/lib/ui-theme-guard.ts) checks every colour chain resolves, per
+      app, to a token that app defines and themes.
+   2. Structure and behaviour are shared; only the look is the host's. */
+
+.bkd-overlay {
+  /* A fixed scrim over the whole viewport. `position: fixed` at a z ABOVE the
+     topbar's ceiling is what lets the dialog escape every ancestor stacking
+     context (hard-won detail 9) and every ancestor clip (detail 10): a modal
+     rendered inside a panel or a bar would be trapped by it. */
+  position: fixed;
+  inset: 0;
+  z-index: var(--bkd-z, 1000);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bkd-scrim, rgb(20 30 45 / 0.44));
+  /* the scrim is the one deliberately theme-independent surface here: a dim
+     over the page reads the same in light and dark, so it is a literal, not a
+     token chain — and it is excluded from the guard's colour set for that. */
+  overflow: auto;
+}
+
+.bkd-card {
+  display: flex;
+  flex-direction: column;
+  max-width: min(560px, 100%);
+  max-height: calc(100vh - 48px);
+  /* the card scrolls its own overflow; a long changelog does not push the
+     actions row off the bottom of the viewport. */
+  overflow: auto;
+  padding: 20px 22px;
+  background: var(--bkd-bg, var(--surface, var(--chrome, #fff)));
+  color: var(--bkd-ink, var(--ink, #1e2a3a));
+  border: 1px solid var(--bkd-border, var(--line, #e3e8ef));
+  border-radius: var(--bkd-radius, var(--radius-lg, var(--radius, 12px)));
+  box-shadow: var(--bkd-shadow, 0 18px 60px rgb(20 30 45 / 0.30));
+}
+.bkd-card:focus { outline: none; } /* the card takes focus as a fallback; no ring on the box itself */
+
+.bkd-title {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--bkd-ink, var(--ink, #1e2a3a));
+}
+
+.bkd-body {
+  min-height: 0;
+  color: var(--bkd-body-ink, var(--ink-2, var(--ink, #1e2a3a)));
+}
+
+/* the actions row: pinned at the foot, buttons trailing — dash's actions()
+   pattern, made the shared shape. */
+.bkd-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+@media (max-width: 700px) {
+  /* on a phone the card is a bottom sheet — full width, docked low, the reach
+     the thumb has. spaces already does this for its own popovers (.sp-sheet). */
+  .bkd-overlay { padding: 0; align-items: flex-end; }
+  .bkd-card {
+    max-width: 100%;
+    width: 100%;
+    border-radius: var(--bkd-radius, 12px) var(--bkd-radius, 12px) 0 0;
+    max-height: 88vh;
+  }
+}
