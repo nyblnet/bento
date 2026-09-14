@@ -32,6 +32,7 @@ import { openSpeakerWindow, speakerIdleBody } from '../screens'
 import { borderPoint, boxCenter, lineEndpoints, setLineEndpoints, sideMidpoint } from './lineedit'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
+import { stepOf } from '../steps'
 import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, stageForFile, unstageFromFile } from '../packs'
 import { injectFonts } from '../fonts'
 import { appConfig } from '../../../kernel/src/app.ts'
@@ -2781,6 +2782,7 @@ export class Editor {
       ['B', t('Black screen — and back')],
       ['G', t('All slides in the speaker view — pick one to jump to')],
       ['← · →', t('Previous · next slide, or the next reveal step on a slide that has them')],
+      [t('Right-click ▸ Reveal in order'), t('Hide the selected elements until → is pressed, one after another in reading order — numbered badges on the canvas show the order')],
       ['Esc', t('End the show')],
     ])
     const tips = div('ed-help-sec')
@@ -3176,6 +3178,12 @@ export class Editor {
       grouped
         ? { label: t('Ungroup'), hint: '⇧⌘G', run: () => this.panel.ungroup(els) }
         : { label: t('Group'), hint: '⌘G', disabled: els.length < 2, run: () => this.panel.group(els) },
+      'sep',
+      // Reveal (fx.step) from the menu — the one place a user who has never
+      // opened the Presenting section will find it. In order = reading order.
+      { label: t('Reveal in order'), run: () => this.panel.revealInOrder(els) },
+      { label: t('Reveal together'), run: () => this.panel.revealTogether(els) },
+      { label: t('Remove reveal'), disabled: !els.some((e) => stepOf(e) > 0), run: () => this.panel.removeReveal(els) },
       'sep',
       { label: t('Delete'), hint: '⌫', danger: true, run: () => this.deleteSelection() },
     ]

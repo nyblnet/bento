@@ -1170,6 +1170,9 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   padding: 5px 0;
   justify-content: center;
 }
+/* reveal verbs: caption + three text buttons sharing the row */
+.ed-reveal-row { display: flex; align-items: center; gap: 4px; margin: 3px 0; }
+.ed-reveal-row .ed-btn { flex: 1; min-width: 0; padding: 5px 4px; justify-content: center; font-size: 11px; }
 .ed-arrange-cap {
   flex: none;
   width: 46px;
@@ -1274,6 +1277,29 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-comment-marker.fresh { animation: ed-cmt-pop 0.45s ease-out; }
 
 .ed-comment-layer { position: absolute; inset: 0; pointer-events: none; z-index: 12; }
+
+/* reveal-step badges (editor/stepbadges.ts): editor-only chrome beside the
+   rendered slide, never inside it */
+.ed-step-layer { position: absolute; inset: 0; pointer-events: none; z-index: 12; }
+.ed-step-badge {
+  position: absolute;
+  pointer-events: auto;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border: 2px solid var(--surface);
+  border-radius: 10px;
+  background: #1e2a3a;
+  color: #fff;
+  font: 700 10px/15px inherit;
+  font-family: inherit;
+  text-align: center;
+  box-sizing: border-box;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgb(15 23 36 / 0.3);
+}
+.ed-step-badge.sel { background: var(--accent); color: #3a2800; }
+.ed-step-badge:hover { transform: scale(1.15); }
 .ed-comment-marker {
   position: absolute;
   pointer-events: auto;

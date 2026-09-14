@@ -58,6 +58,17 @@ pre-1.0.
   the slide number, and an audience following a live broadcast follows the
   steps too. A deck opened in an older version shows every element at once.
   The other half of discussion #282, and the one its author wanted more.
+- **Reveals are one right-click away.** Select the elements, right-click,
+  *Reveal in order*: they are numbered top-to-bottom, then left-to-right, the
+  way a reader scans the slide — a bullet list builds down, a row of cards
+  builds across. *Reveal together* puts the selection on one step and
+  *Remove reveal* shows it with the slide again; the same three sit in the
+  panel's Presenting section, for one element or many. Every stepped element
+  wears a numbered badge on the canvas — click a badge to move that element
+  to the next step — and the badges are editor chrome only: thumbnails, the
+  show, print and file-manager previews never carry them. The `?` sheet names
+  the entry point. Measured on a fresh deck with no panel open: a reveal is
+  three clicks away (click, right-click, *Reveal in order*).
 - **Clickable links.** Give any element a *Web link* in the Presenting
   section, or type `[caption](https://…)` in a text box, and clicking it
   during the show opens the page in a new tab — never navigating the deck

@@ -14,6 +14,8 @@ import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../code'
+import { revealInOrder, revealTogether, removeReveal, type StepPatch } from './reveal'
+import { stepOf } from '../steps'
 import { ICONS } from '../icons'
 import { t } from '../i18n'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
@@ -473,6 +475,8 @@ export class PropsPanel {
     this.opsRow(els)
     this.section(t('Arrange'))
     this.arrangeRows(els)
+    this.section(t('Presenting'))
+    this.revealRow(els)
   }
 
   private buildElementPanel(el: SlideElement) {
@@ -719,6 +723,9 @@ export class PropsPanel {
     }
     // "Animate on click": hidden until the n-th → on this slide (0 = with the
     // slide). The element's Enter plays when its step comes, or a plain fade.
+    // The verbs come first (one click, no number to think about); the number
+    // row underneath is the precise control, and the canvas badge cycles it.
+    this.revealRow([el])
     this.row('Reveal step', this.number(el.fx?.step ?? 0, 1,
       (v, fin) => { if (fin) setFx({ step: v >= 1 ? Math.floor(v) : undefined }) }))
     if (el.fx?.step) {
@@ -2075,6 +2082,58 @@ export class PropsPanel {
     if (els.length < 2) return
     const gid = `grp-${uid()}`
     this.edit(() => { for (const el of els) el.groupId = gid }, true)
+  }
+
+  // --- reveal verbs (editor/reveal.ts decides, this applies) ---------------
+
+  /** Number the selection in reading order: top-to-bottom, then left-to-right. */
+  revealInOrder(els: SlideElement[]) { this.applySteps(revealInOrder(this.store.slide.elements, els)) }
+
+  /** The whole selection on one step, after everything else on the slide. */
+  revealTogether(els: SlideElement[]) { this.applySteps(revealTogether(this.store.slide.elements, els)) }
+
+  /** Shown with the slide again. */
+  removeReveal(els: SlideElement[]) { this.applySteps(removeReveal(els)) }
+
+  private applySteps(patches: StepPatch[]) {
+    if (!patches.length) return
+    this.edit(() => {
+      for (const { id, step } of patches) {
+        const el = this.store.element(id)
+        if (!el) continue
+        const fx = { ...(el.fx ?? {}), step: step > 0 ? step : undefined }
+        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop && !fx.step) delete el.fx
+        else el.fx = fx
+      }
+    }, true)
+  }
+
+  /** The three reveal verbs as a captioned button row (multi panel + Presenting). */
+  private revealRow(els: SlideElement[]) {
+    const stepped = els.some((e) => stepOf(e) > 0)
+    const row = document.createElement('div')
+    row.className = 'ed-reveal-row'
+    const cap = document.createElement('span')
+    cap.className = 'ed-arrange-cap'
+    cap.textContent = t('Reveal')
+    row.appendChild(cap)
+    const btn = (label: string, title: string, run: () => void, enabled = true) => {
+      const b = document.createElement('button')
+      b.className = 'ed-btn'
+      b.textContent = label
+      b.title = title
+      b.disabled = !enabled
+      b.addEventListener('click', run)
+      row.appendChild(b)
+    }
+    btn(t('In order'), t('Hide until → is pressed, one after another in reading order — top to bottom, then left to right'), () => this.revealInOrder(els))
+    btn(t('Together'), t('Hide until → is pressed, all at once'), () => this.revealTogether(els))
+    btn(t('Remove'), t('Show with the slide again'), () => this.removeReveal(els), stepped)
+    this.host.appendChild(row)
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.textContent = t('Numbered badges on the canvas show the order; click one for the next step.')
+    this.host.appendChild(hint)
   }
 
   ungroup(els: SlideElement[]) {

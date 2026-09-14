@@ -20,6 +20,7 @@ import { simplifyPoints } from './patheditor'
 const SVG_NS = 'http://www.w3.org/2000/svg'
 type DrawKind = 'line' | 'path' | 'connector' | 'free' | 'poly'
 import { CommentsUI } from './comments'
+import { StepBadges } from './stepbadges'
 import type { Peer } from '../sync/session'
 
 /** How far a finger may travel and still count as a tap rather than a drag.
@@ -69,6 +70,7 @@ export class SlideCanvas {
   private bezierEditor!: BezierEditor
   private drawOverlay: HTMLElement | null = null
   private comments!: CommentsUI
+  private stepBadges!: StepBadges
 
   constructor(
     private wrap: HTMLElement,
@@ -315,6 +317,7 @@ export class SlideCanvas {
     }) as EventListener)
 
     this.comments = new CommentsUI(store, this.stage, () => this.scale)
+    this.stepBadges = new StepBadges(store, this.stage, () => this.scale)
 
     // Alt/Option-click digs through overlapping elements: first click grabs
     // the topmost, each further alt-click steps one element deeper (wrapping).
@@ -519,6 +522,7 @@ export class SlideCanvas {
     this.moveable.updateRect()
     if (this.zoomLabel) this.zoomLabel.textContent = `${Math.round(this.scale * 100)}%`
     this.comments?.refresh()
+    this.stepBadges?.refresh()
     this.drawRemote()
   }
 
@@ -958,6 +962,7 @@ export class SlideCanvas {
     // otherwise shift-click resurrects targets from a previously shown slide.
     this.selecto.setSelectedTargets(targets)
     this.updateTableHandles()
+    this.stepBadges?.refresh()
   }
 
   // --- column resize handles (single selected table) --------------------------
