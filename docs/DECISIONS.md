@@ -6884,3 +6884,44 @@ toast. Measured: with the switch on, a click opens nothing.
 Also in the same change, unrelated to security: `* ` makes a bullet like `- `
 (#255), two or more leading spaces make an indented sub-bullet (#368), and the
 `?` overlay lists the shortcuts it had been missing (#269).
+
+## 2026-09-14 — The text sanitizer walks what it unwraps
+
+A hole in `sanitizeHtml` (`slides/src/render.ts`), the one sanitizer for
+every text element and table cell — run at render, on the canvas, and on
+every paste — was open in every shell since the function was written. Fixed
+in #467 (`95b6b97`), shipped in 1.1.0. Written down because the shape is
+general and a later sanitizer could repeat it.
+
+**What it did.** The walk iterated a SNAPSHOT of a node's children. On a tag
+not in the allowlist it unwrapped: lifted the children into the parent ahead
+of the cursor, removed the tag, and `continue`d. The lifted children were not
+in the snapshot, so the pass never visited them. Any allowed tag nested inside
+any unknown tag kept every attribute it arrived with —
+`<section><b onclick="…">`, `<foo><span style="position:fixed">`, at any
+depth — while the same markup under an allowed parent was cleaned. Measured
+in Chrome through the real text-element render path: a click and a hover on
+such text ran the handlers. A deck file or a Bento clipboard payload from
+someone else was enough; nothing looked wrong on screen.
+
+**Why the rig did not see it.** Every case in `test-sanitize` was flat. The
+sanitizer's own allowlist was right and every flat attack was refused, so the
+rig was green for the whole of its life. The shape nobody had tried was
+nesting an allowed tag inside a refused one.
+
+**The fix.** Walk first, then lift: `walk(elChild)` before the children are
+moved up, so a lifted child is held to the same rule as its siblings. Two
+lines, one at the general unwrap and one at the refused-anchor unwrap that
+#465 adds. `sanitizeSvg` was never affected — it REMOVES an unknown element
+whole rather than unwrapping it, which is the other correct answer.
+
+**The rig now.** One case renders five nested shapes plus the allowed-parent
+control through `renderSlide`, then clicks and hovers the lifted elements in
+Chrome. With the recursion removed it goes red three ways and the handlers
+run (`pwned 41,42`); with it, nothing runs. That is the assertion that would
+have caught this: not "did the attribute survive" but "did anything execute".
+
+**The rule this leaves.** A sanitizer that removes an element has exactly two
+correct options for its children: drop them with it, or sanitize them before
+lifting them. Lifting first is always wrong, whatever the loop looks like.
+And every attack case in a sanitizer rig gets a nested variant.

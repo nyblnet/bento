@@ -13,6 +13,16 @@ pre-1.0.
 
 ## [1.1.0] — 2026-09-14
 
+- **Security: update this file. Text in a deck could run code when clicked
+  or hovered.** Formatted text — a text box or a table cell — could carry
+  script inside an ordinary-looking tag that the checker skipped over, and it
+  ran when a reader clicked or moved the mouse across that text, in the editor
+  and in the show. A deck or a pasted clip from someone else was enough;
+  nothing looked wrong on screen. As with 1.0.16, anything running inside the
+  page inherits what the page holds — the live-session keys, the local
+  autosave copy, write access to the file where the browser grants it. Every
+  shell before 1.1.0 is affected. Text is now checked at every nesting depth
+  before it renders, and the check is proven by clicking, not by inspection.
 - **Live broadcast.** Contributed by Niemes (#293), and shaped together with
   the collaboration work below. *Audience copy…* in the Share menu writes a hand-out
   for a live show: whoever opens it lands straight in the presentation, and
