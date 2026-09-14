@@ -9,6 +9,7 @@ import { morphKey, paginates, isWebUrl } from './model'
 import { chartSnapshotSvg } from './charts'
 import temml from 'temml'
 import { renderCodeInto } from './code'
+import { formatDate } from './datefmt'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -53,7 +54,9 @@ const escapeFieldText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&
  * Resolve dynamic field tokens in text: {{page}}, {{pages}}, {{title}},
  * {{date}}, {{time}}, plus the document-property fields {{author}}, {{company}},
  * {{subject}}, {{event}}. page/pages take an optional zero-pad width — {{page:2}}
- * → "06". The MODEL stores the raw token; only rendered output is resolved, so
+ * → "06"; date/time take an optional PATTERN — {{date:M/D/YY}} pins the shape
+ * for every viewer (datefmt.ts), bare {{date}} follows the viewer's locale.
+ * The MODEL stores the raw token; only rendered output is resolved, so
  * inserting/removing slides re-numbers everything and editing doc properties
  * updates every slide automatically. Groundwork for the wider office suite.
  */
@@ -65,8 +68,8 @@ export function resolveFields(html: string, ctx?: FieldContext): string {
       case 'page': return pad(ctx.page, arg)
       case 'pages': return pad(ctx.pages, arg)
       case 'title': return escapeFieldText(ctx.title)
-      case 'date': return escapeFieldText(ctx.date.toLocaleDateString())
-      case 'time': return escapeFieldText(ctx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      case 'date': return escapeFieldText(arg?.trim() ? formatDate(ctx.date, arg.trim()) : ctx.date.toLocaleDateString())
+      case 'time': return escapeFieldText(arg?.trim() ? formatDate(ctx.date, arg.trim()) : ctx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
       case 'author': return escapeFieldText(ctx.author)
       case 'company': return escapeFieldText(ctx.company)
       case 'subject': return escapeFieldText(ctx.subject)

@@ -11,6 +11,17 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A date can pin its format, and fields are one click away.** `{{date}}`
+  and `{{time}}` have resolved in text since 0.9.12, but they followed the
+  viewer's locale — an author could not say M/D/YY and have every viewer see
+  it — and nothing in the editor said the tokens existed. Now
+  `{{date:M/D/YY}}`, `{{date:D MMMM YYYY}}`, `{{time:h:mm a}}` pin the
+  shape (`YYYY YY MMMM MMM MM M DD D HH H hh h mm ss A a`; a word in
+  `[brackets]` stays literal; month names still come in the viewer's
+  language), and the Text panel gains a *Field* picker that drops a page
+  number, date, time, title or document property into the text — the date
+  and time entries show today in each shape so the choice is made by eye.
+  Bare `{{date}}` is unchanged. Asked for in discussion #381 by Jef Ducon.
 ## [1.1.0] — 2026-09-14
 
 - **Security: update this file. Text in a deck could run code when clicked

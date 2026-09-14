@@ -14,6 +14,7 @@ import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../code'
+import { DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS, formatDate } from '../datefmt'
 import { revealInOrder, revealTogether, removeReveal, type StepPatch } from './reveal'
 import { stepOf } from '../steps'
 import { ICONS } from '../icons'
@@ -1010,6 +1011,39 @@ export class PropsPanel {
     this.host.appendChild(fit)
   }
 
+  /** "Insert field": drops a {{token}} at the end of the text (discussion
+   *  #381 — the tokens existed since 0.9.12 but nothing in the editor said
+   *  so). Date and time offer presets whose labels show TODAY in that shape,
+   *  so the choice is made by eye; the pattern is in the token for anyone who
+   *  wants to edit it. Appends rather than inserts at a caret: choosing from
+   *  the panel blurs the text box and commits the edit, so there is no caret
+   *  to honour — the token lands at the end, inside the last block, and the
+   *  author moves it like any other text. */
+  private buildFieldPicker(el: TextElement) {
+    const now = new Date()
+    const fmt = (token: string) => { const m = /^\{\{(?:date|time):(.*)\}\}$/.exec(token); return m ? formatDate(now, m[1]) : '' }
+    const pairs: Array<[string, string]> = [['', t('Insert field…')]]
+    for (const p of DATE_PRESETS) pairs.push([p.token, p.token === '{{date}}' ? t(p.label) : `${t('Date')} — ${fmt(p.token)}`])
+    for (const p of TIME_PRESETS) pairs.push([p.token, p.token === '{{time}}' ? t(p.label) : `${t('Time')} — ${fmt(p.token)}`])
+    for (const p of OTHER_FIELDS) pairs.push([p.token, t(p.label)])
+    const sel = this.labeledSelect(pairs, '', (token) => {
+      if (!token) return
+      this.mutate(el.id, (e) => {
+        const tx = e as TextElement
+        const html = tx.html ?? ''
+        // inside the last block if there is one, so the token joins the last
+        // line rather than starting a stray one after </p>
+        const m = /<\/(p|div|li)>\s*$/i.exec(html)
+        const at = m ? m.index : html.length
+        const sep = at > 0 && !/[\s>]$/.test(html.slice(0, at)) ? ' ' : ''
+        tx.html = html.slice(0, at) + sep + token + html.slice(at)
+      }, true)
+      sel.value = ''
+    })
+    sel.title = t('Page number, date, time, title and the document properties — resolved when the slide is shown. Date and time can pin a format: {{date:M/D/YY}}; edit the pattern in the text.')
+    this.row('Field', sel)
+  }
+
   private buildTextProps(el: TextElement) {
     this.section(t('Typography'))
     const hint = document.createElement('p')
@@ -1017,6 +1051,7 @@ export class PropsPanel {
     hint.innerHTML = t('While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too. Escape with \\ or press ⌘Z right after to keep the literal characters.')
     this.host.appendChild(hint)
     this.buildFitHeight(el)
+    this.buildFieldPicker(el)
     this.row('Font', this.fontSelect(el))
     // Shown in POINTS (the unit office users know); the model stores slide-space
     // px. 1pt = 4/3 px at the slide's 96dpi space, so 32px = 24pt exactly.

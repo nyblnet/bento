@@ -2748,6 +2748,7 @@ export class Editor {
       [`${mod}D`, t('Duplicate selection')],
       [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
       [`${mod}B · ${mod}I · ${mod}U`, t('Bold · italic · underline while editing text')],
+      [t('Text ▸ Field'), t('Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}')],
       ['[ · ]', t('Collapse · expand the side panels')],
       ['C', t('Comment mode')],
       ['?', t('This help')],
