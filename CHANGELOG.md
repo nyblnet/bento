@@ -11,6 +11,8 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-09-14
+
 - **Live broadcast.** Contributed by Niemes (#293), and shaped together with
   the collaboration work below. *Audience copy…* in the Share menu writes a hand-out
   for a live show: whoever opens it lands straight in the presentation, and
