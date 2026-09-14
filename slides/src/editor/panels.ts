@@ -5,7 +5,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, isWebUrl, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement, type ImageElement } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, isWebUrl, tableStyleFor, uid, type ChartElement, type ImageElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement } from '../model'
 import { CROP_MAX_SCALE, normalizeCrop } from '../crop'
 import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
@@ -16,6 +16,7 @@ import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../code'
 import { DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS, formatDate } from '../datefmt'
+import { shrinkImageFile, shrinkNote, fmtBytes } from './shrink'
 import { revealInOrder, revealTogether, removeReveal, type StepPatch } from './reveal'
 import { stepOf } from '../steps'
 import { ICONS } from '../icons'
@@ -85,6 +86,7 @@ const ROW_TIPS: Record<string, string> = {
   'Start tip': 'Decoration at the line’s start — arrow, dot or bar',
   'End tip': 'Decoration at the line’s end — arrow, dot or bar',
   'Corner radius': 'How rounded the corners are, in pixels',
+  'Keep aspect ratio': 'On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches',
   'Type': 'Chart type — switching bar⇄pie animates the data across',
   'Legend': 'Show the series legend above the chart',
   'Second axis': 'Adds a right-hand value axis — assign series to it in the list below',
@@ -192,12 +194,18 @@ export class PropsPanel {
     }
     this.stale = false
     this.burst = false
+    // A doc edit rebuilds the same inspector in place: keep its scroll so a
+    // control near the bottom does not throw the panel back to the top on
+    // every change. A selection or slide switch (force) starts the new
+    // inspector at the top, which is where a different subject belongs.
+    const scrollTop = force ? 0 : this.host.scrollTop
     this.host.innerHTML = ''
     const els = this.store.selectedElements
     if (els.length === 0) this.buildSlidePanel()
     else if (els.length === 1) this.buildElementPanel(els[0])
     else this.buildMultiPanel(els)
     this.applyAccordion()
+    this.host.scrollTop = scrollTop
   }
 
   /** Collapsed by default until the user opens them (persisted per title). */
@@ -1777,11 +1785,62 @@ export class PropsPanel {
   }
 
   private buildImageProps(el: SlideElement) {
+    this.section(t('Picture'))
+    const src = (el as ImageElement).src
+    // what is stored: size and pixels for an embed, the URL otherwise
+    const status = document.createElement('p')
+    status.className = 'ed-hint'
+    const resolved = src ? resolveAsset(this.store.doc, src) : ''
+    if (resolved.startsWith('data:')) {
+      const bytes = Math.floor(((resolved.length - resolved.indexOf(',') - 1) * 3) / 4)
+      status.textContent = t('Embedded') + ` · ${fmtBytes(bytes)}`
+      const probe = new Image()
+      probe.onload = () => { status.textContent = t('Embedded') + ` · ${fmtBytes(bytes)} · ${probe.naturalWidth}×${probe.naturalHeight}` }
+      probe.src = resolved
+    } else status.textContent = src ? t('Linked') + ` · ${src.slice(0, 60)}` : t('No picture yet')
+    this.host.appendChild(status)
+    // Replace: through the shrink path, or at original size (the one honest
+    // way to say "I want the full-resolution file in the deck").
+    const pick = (label: string, original: boolean) => {
+      const b = document.createElement('button')
+      b.className = 'ed-btn ed-btn-block'
+      b.textContent = label
+      b.addEventListener('click', () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*'
+        input.addEventListener('change', () => {
+          const file = input.files?.[0]
+          if (!file) return
+          void (original ? Promise.resolve(null) : shrinkImageFile(file)).then(async (r) => {
+            const dataUrl = r ? r.dataUrl : await new Promise<string>((resolve) => { const rd = new FileReader(); rd.onload = () => resolve(String(rd.result)); rd.readAsDataURL(file) })
+            const note = r && shrinkNote(r)
+            if (note) this.toast(note.photo ? t('Photo stored at {px} px — {before} → {after}', note.vars) : t('Image stored at {px} px — {before} → {after}', note.vars))
+            this.mutate(el.id, (e) => { (e as ImageElement).src = internAsset(this.store.doc, dataUrl) }, true)
+          })
+        })
+        input.click()
+      })
+      this.host.appendChild(b)
+    }
+    pick(t('Replace file…'), false)
+    pick(t('Replace file (original size)…'), true)
     this.section(t('Fit & corners'))
     this.row('Fit', this.select(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
       this.mutate(el.id, (e) => { (e as any).fit = v }, true)))
     this.row('Corner radius', this.number((el as any).radius, 1, (v, fin) =>
       this.mutate(el.id, (e) => { (e as any).radius = Math.max(v, 0) }, fin)))
+    // Off = width and height resize independently. Unlocking also sets
+    // fit:'fill' so the stretch is what the reader sees — contain/cover would
+    // letterbox the distortion away. Re-locking deletes the field (absent =
+    // locked, the format's default) and keeps the CURRENT shape: the next
+    // resize starts from whatever ratio the frame has now.
+    this.row('Keep aspect ratio', this.toggle((el as ImageElement).keepAspectRatio !== false, (on) =>
+      this.mutate(el.id, (e) => {
+        if (e.type !== 'image') return
+        if (on) delete e.keepAspectRatio
+        else { e.keepAspectRatio = false; e.fit = 'fill' }
+      }, true)))
     this.buildCropProps(el as ImageElement)
   }
 

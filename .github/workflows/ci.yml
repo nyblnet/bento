@@ -1361,6 +1361,18 @@ jobs:
         run: |
           slides/node_modules/.bin/esbuild scripts/test-slides-crop.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-crop.mjs"
           node "$RUNNER_TEMP/test-slides-crop.mjs"
+      - name: Photos shrink at insert rig
+        # editor/shrink.ts decisions, DOM-free: photo vs graphic (lossy vs
+        # lossless), the ≥20% keep rule, the 2560 px cap, svg/gif untouched,
+        # every insert path routed, model.ts untouched. The encode itself is
+        # measured in Chrome (PR #).
+        run: node scripts/test-slides-shrink.ts
+      - name: Image aspect-ratio lock rig
+        # keepAspectRatio (#372): absent = locked, so old files resize as
+        # before; Shift is the one-drag exception either way; re-locking
+        # deletes the field and keeps the current shape; unlocking sets
+        # fit:'fill'. Also holds the set-aside parts of #372 out of the tree.
+        run: node scripts/test-slides-aspect-lock.ts
 
       - name: Web links and bullets rig
         # A link is one thing in four places — isWebUrl — and every surface
