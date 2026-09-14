@@ -572,6 +572,9 @@ export interface BentoDoc {
   /**
    * embedded fonts: each entry becomes an @font-face at boot, with the font
    * data living in assets (data: URI). Elements then use `family` normally.
+   * `asset` may instead name a face the shell carries (`builtin:…`, see
+   * fonts.ts BUILTIN_FONTS) — no bytes in the file; a shell that does not
+   * know the key renders the family with its fallback stack.
    */
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
   /**

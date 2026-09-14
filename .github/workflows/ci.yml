@@ -349,6 +349,18 @@ jobs:
         # clips it (hard-won detail 10). Behaviours mutation-caught; themed
         # through the shared guard.
         run: node scripts/test-ui-tooltip.ts
+      - name: Shared toggle primitive rig
+        # kernel/src/ui/toggle.ts — built ahead of a consumer (the three
+        # "toggle"-named classes across the apps are a native checkbox, a
+        # disclosure block and a button group; no shared switch). The checks pin
+        # the contract chosen: a real role="switch" with aria-checked, a click
+        # toggles and fires onChange, set() updates state WITHOUT firing
+        # onChange, and it is a <button> so the platform gives it keyboard
+        # activation. Behaviours mutation-caught; themed through the shared guard
+        # (whose alias-indirection fix — a token defined as var(--other) is
+        # themed iff --other is — landed here so dash's --chrome-2: var(--hover)
+        # resolves).
+        run: node scripts/test-ui-toggle.ts
       - name: Shared menu primitive rig
         # kernel/src/ui/menu.ts replaces four hand-rolled dropdowns, and what
         # differed between them was all INVISIBLE: three of the four apps
@@ -1297,6 +1309,13 @@ jobs:
         # reference form, because dropping too much is the worse failure — an
         # image gone from a file with nothing on screen to say so.
         run: node scripts/test-slides-assets.ts
+
+      - name: Slides built-in fonts rig
+        # The shell carries two faces; a deck names them (builtin:…) instead
+        # of embedding 86 KB the file already has. At save a deck embedding
+        # byte-identical bytes is rewritten to name them; a different font
+        # keeps its bytes; the live document is untouched; measured saving.
+        run: node scripts/test-slides-fonts.ts
 
       - name: Slides pagination rig
         # Three ways a slide declines a page number (state, hidden, unnumbered)
