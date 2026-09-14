@@ -102,8 +102,11 @@ ok(sizeBefore - sizeAfter > 80_000, `a deck embedding both faces shrinks by ${si
 console.log('\nthe facade\n')
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const save = readFileSync(join(root, 'slides/src/save.ts'), 'utf8')
-ok(/kernelSerializeAuto\(pruneUnusedAssets\(adoptBuiltinFonts\(doc\)\)\)/.test(save) && /kernelSerializeFile\(pruneUnusedAssets\(adoptBuiltinFonts\(doc\)\)\)/.test(save),
-  'save.ts: both serializers adopt built-ins before pruning — every write from this app goes through it')
+ok(/function prepareForSave[\s\S]*pruneUnusedAssets\(adoptBuiltinFonts\(doc\)\)/.test(save) &&
+  /kernelSerializeAuto\(prepareForSave\(doc\)\)/.test(save) &&
+  /kernelSerializeFile\(prepareForSave\(doc\)\)/.test(save) &&
+  /kernelSaveFile\(prepareForSave\(doc\), forcePicker\)/.test(save),
+  'save.ts: save entry point and serializers share built-in-font adoption and asset pruning')
 ok(/resolveFontSrc\(doc, f\.asset\)/.test(readFileSync(join(root, 'slides/src/fonts.ts'), 'utf8')), 'injectFonts resolves through resolveFontSrc')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
