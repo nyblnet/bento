@@ -542,7 +542,7 @@ export function resolveMath(html: string): string {
  */
 const ALLOWED_TAGS = new Set([
   'B', 'I', 'U', 'BR', 'SPAN', 'DIV', 'P', 'STRONG', 'EM', 'S', 'CODE',
-  'UL', 'OL', 'LI', 'H1', 'H2',
+  'UL', 'OL', 'LI', 'H1', 'H2', 'A',
 ])
 
 /** Keep pasted/edited rich text down to a safe inline subset. */
@@ -562,7 +562,15 @@ export function sanitizeHtml(html: string): string {
           elChild.remove()
           continue
         }
+        // No attribute survives — except an anchor's href when it is a web
+        // URL (isWebUrl: http/https only, so javascript:/data: never land in
+        // a document). target/rel are decided at click time, never stored.
+        const href = elChild.tagName === 'A' ? elChild.getAttribute('href') : null
         for (const attr of Array.from(elChild.attributes)) elChild.removeAttribute(attr.name)
+        if (elChild.tagName === 'A') {
+          if (isWebUrl(href)) elChild.setAttribute('href', href)
+          else { walk(elChild); while (elChild.firstChild) node.insertBefore(elChild.firstChild, elChild); elChild.remove(); continue }
+        }
         walk(elChild)
       } else if (child.nodeType !== Node.TEXT_NODE) {
         child.remove()

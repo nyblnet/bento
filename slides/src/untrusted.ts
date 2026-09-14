@@ -386,7 +386,9 @@ const ELEMENT_CHECKS: Record<string, Check> = {
   themeRefs,
   // identity + geometry
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),
-  groupId: cssValue(), showOnHover: cssValue(), link: cssValue(),
+  groupId: cssValue(), showOnHover: cssValue(),
+  // a slide id, or an http(s) URL — the same test the renderer and the show apply
+  link: (v) => (isWebUrl(v) ? v : cssValue()(v)),
   x: num(-1e6, 1e6), y: num(-1e6, 1e6), w: num(0, 1e6), h: num(0, 1e6),
   rotation: num(-3600, 3600), opacity: num(0, 1),
   shadow: (v) => (Array.isArray(v) ? list(16, shadowSpec)(v) : shadowSpec(v)),

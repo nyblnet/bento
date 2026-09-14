@@ -5,7 +5,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, isWebUrl, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement } from '../model'
 import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
@@ -64,6 +64,7 @@ const ROW_TIPS: Record<string, string> = {
   'Show on hover': 'Puts this element in a hover set — visible only while that set is active',
   'Group': 'Presentation group — with focus-group hover, the other groups dim',
   'Link to': 'Clicking this element during the show jumps to the chosen slide',
+  'Web link': 'Clicking this element during the show opens this web page in a new tab (https:// only)',
   'Font': 'Typeface for this text',
   'Size (pt)': 'Font size in points',
   'Weight': 'Font weight — 400 regular, 700 bold',
@@ -840,12 +841,37 @@ export class PropsPanel {
       if (el.link === s.id) o.selected = true
       sel.appendChild(o)
     })
+    if (isWebUrl(el.link)) {
+      const web = document.createElement('option')
+      web.value = el.link
+      web.textContent = t('web page (below)')
+      web.selected = true
+      sel.appendChild(web)
+    }
     sel.addEventListener('change', () =>
       this.mutate(el.id, (e) => {
         if (sel.value) e.link = sel.value
         else delete e.link
       }, true))
     this.row('Link to', sel)
+    // Or a web page: opens in a new tab while presenting (discussion #373).
+    const url = document.createElement('input')
+    url.type = 'url'
+    url.placeholder = 'https://…'
+    url.value = isWebUrl(el.link) ? el.link : ''
+    url.addEventListener('change', () => {
+      const v = url.value.trim()
+      if (v && !isWebUrl(v)) {
+        this.toast(t('That doesn’t look like a web address — it should start with https://'))
+        url.value = isWebUrl(el.link) ? el.link : ''
+        return
+      }
+      this.mutate(el.id, (e) => {
+        if (v) e.link = v
+        else if (isWebUrl(e.link)) delete e.link
+      }, true)
+    })
+    this.row('Web link', url)
 
     // one-click interactivity: duplicate this slide as a hidden state
     // (element ids preserved ⇒ it morphs) and link this element to it

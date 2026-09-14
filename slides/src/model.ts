@@ -93,6 +93,12 @@ export interface ElementBase {
         }
   }
   /** while presenting, clicking this element jumps to the slide with this id */
+  /**
+   * Click target while presenting: a slide id (jump there — the state-slide
+   * idiom), or an http(s) URL (opens in a NEW tab, never navigating the deck
+   * away; `isWebUrl` is the whole scheme test, so `javascript:` and `data:`
+   * are not links). Discussion #373/#374. Editor clicks never follow it.
+   */
   link?: string
   /** semantic group tag — hover focus and multi-element behaviours target it */
   group?: string
@@ -354,9 +360,17 @@ export interface MediaElement extends ElementBase {
  * (render.ts:liveFrameAllowed); otherwise the view shows. Unknown `app`
  * values are RENDERED (their view), never rejected.
  */
-/** The one scheme test for an embed's `url`, shared by the paste gate
- *  (untrusted.ts) and the live-frame gate (render.ts) so they cannot drift. */
-export const isWebUrl = (v: string): boolean => /^https?:\/\//i.test(v)
+/**
+ * The one scheme test for anything that opens or loads a web page — an
+ * embed's `url` (the paste gate and the live-frame gate), an element `link`,
+ * a text `<a href>` — shared so no surface is looser than another. http and
+ * https only, bounded, no quote or angle bracket (attribute breakout); a URL
+ * that is merely well-formed but `javascript:`/`data:`/`file:` is not one.
+ */
+export const isWebUrl = (v: unknown): v is string =>
+  // (the quote characters are written as escapes: a bare quote inside a regex
+  // literal reads as an unterminated string to the source-shape rigs' masker)
+  typeof v === 'string' && v.length <= 2048 && /^https?:\/\/[^\s\x22\x27<>]+$/i.test(v)
 
 export interface EmbedElement extends ElementBase {
   type: 'embed'

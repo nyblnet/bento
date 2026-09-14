@@ -1331,6 +1331,14 @@ jobs:
         # step. Decisions in slides/src/steps.ts, DOM-free (#282, option 2).
         run: node scripts/test-slides-steps.ts
 
+      - name: Web links and bullets rig
+        # A link is one thing in four places — isWebUrl — and every surface
+        # that lets a URL in or out asks it: the shape gate, the text
+        # sanitizer, the markdown converters, and the show before it opens a
+        # NEW tab with noopener,noreferrer. javascript:/data: are text.
+        # Bullets from "- " and "* ", indented sub-bullets. (#421, #255, #368)
+        run: node scripts/test-slides-links.ts
+
       - name: Audience projection rig
         # Live broadcast: the handout, the join snapshot and every streamed op
         # go through slides/src/audience.ts, which keeps back speaker notes

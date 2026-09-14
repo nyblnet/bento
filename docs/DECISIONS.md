@@ -6851,3 +6851,36 @@ says plaintext, and a chat AI reads it); subsetting fonts to used glyphs
 `#bento-doc` (an old shell re-serialises from the doc alone and would drop
 them). The next lever is photos — there is no downscale or recompression at
 insert today — and that is format-neutral.
+## 2026-09-14 — Web links: one scheme test, a new tab, and never from the editor
+
+Issue #421 (discussions #373, #374). A deck can now link out: an element's
+`link` may be an http(s) URL as well as a slide id, and `[caption](https://…)`
+in a text box becomes an `<a href>`. The decisions, because each one is a
+place a later change could quietly loosen:
+
+**One scheme test, four callers.** `isWebUrl` in `model.ts` — http and https
+only, bounded length, no quote or angle bracket — is asked by the shape gate
+(an element `link` is a web URL or a slide id), the text sanitizer (an `<a>`
+keeps its href only when it passes, and is UNWRAPPED to its text otherwise —
+never kept href-less), the markdown converters, and the show before it opens
+anything. `javascript:` and `data:` are text everywhere. Measured in Chrome
+against the sanitizer: a web anchor keeps exactly its href and no other
+attribute; `javascript:`/`data:`/attribute-less anchors become plain text.
+
+**Always a new tab, never a navigation.** The file IS the presentation; a
+same-tab navigation would end the show and, on a `file://` deck, leave
+nothing to come back to. `window.open(url, '_blank', 'noopener,noreferrer')`
+— `noopener` so the page cannot reach this window, `noreferrer` so the deck's
+location is not sent. `target`/`rel` are decided at click time and never
+stored in the document, so no document can ask for `_top` or `opener`.
+
+**Never from the editor.** A click on a link in the canvas edits text; it
+does not follow the link. Links open only from the show.
+
+**The offline switch is honoured.** A viewer who asked for no network activity
+does not get a browser tab making a request on a click; the show says so in a
+toast. Measured: with the switch on, a click opens nothing.
+
+Also in the same change, unrelated to security: `* ` makes a bullet like `- `
+(#255), two or more leading spaces make an indented sub-bullet (#368), and the
+`?` overlay lists the shortcuts it had been missing (#269).

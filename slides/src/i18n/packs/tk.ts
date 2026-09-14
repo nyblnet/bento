@@ -5,6 +5,9 @@
 // downloadable JSON. See docs/i18n-packs.md.
 //
 // Translator: Mekan Soltanov (github.com/msoltanov). Complete at 706/706;
+// the eight strings for unnumbered slides and reveal steps and the sixteen
+// for web links, the help overlay and the code panel (2026-09-13) are
+// machine-drafted, awaiting the translator's review. Corrections go
 // the eight strings for unnumbered slides and reveal steps and the twelve
 // for the embed element (2026-09-13/14) are machine-drafted, awaiting the
 // translator's review. Corrections go
@@ -771,6 +774,22 @@ export const strings: Catalog = {
   "Animate on click: hidden until the n-th → on this slide (0 = shown with the slide)": "Basylanda animasiýa: bu slaýdda n-nji → çenli gizlin (0 = slaýd bilen görkezilýär)",
   "hidden": "gizlin",
   "unnumbered": "belgisiz",
+  "Web link": "Web salgysy",
+  "Clicking this element during the show opens this web page in a new tab (https:// only)": "Görkeziş wagtynda bu elemente basmak bu web sahypasyny täze goýmada açýar (diňe https://)",
+  "web page (below)": "web sahypasy (aşakda)",
+  "That doesn’t look like a web address — it should start with https://": "Bu web salgysyna meňzemeýär — https:// bilen başlamaly",
+  "Links are off in offline mode": "Oflaýn tertipde salgylar öçürilen",
+  "Bold · italic · underline while editing text": "Tekst redaktirlenende galyň · gyşyk · aşagy çyzykly",
+  "Collapse · expand the side panels": "Gapdal panelleri ýygnamak · ýaýmak",
+  "Zoom in · out · fit the slide": "Ulaltmak · kiçeltmek · slaýdy ýerleşdirmek",
+  "Walk the slides when nothing is selected; nudge the selection otherwise": "Hiç zat saýlanmadyk bolsa slaýdlaryň arasynda geçmek; bolmasa saýlanany süýşürmek",
+  "Black screen — and back": "Gara ekran — we yza",
+  "All slides in the speaker view — pick one to jump to": "Çykyş edýäniň görnüşinde ähli slaýdlar — birini saýlap geçiň",
+  "Previous · next slide, or the next reveal step on a slide that has them": "Öňki · indiki slaýd, ýa-da ädimli slaýdda indiki açyş ädimi",
+  "Add a code snippet": "Kod bölegini goşmak",
+  "Source Code": "Çeşme kody",
+  "Copies this deck as plain JSON — content only, no live-session keys. Edit it in another tool, then bring it back with Replace from JSON.": "Bu topary ýönekeý JSON görnüşinde göçürýär — diňe mazmun, janly sessiýa açarlary ýok. Başga gural bilen redaktirläp, «JSON-dan çalyşmak» arkaly yzyna getiriň.",
+  "Offline mode is on for this tab, but could not be saved — this browser is blocking site data, so it will not survive a reload": "Bu goýma üçin oflaýn tertip açyk, ýöne ýatda saklap bolmady — bu brauzer saýt maglumatlaryny böwetleýär, şonuň üçin täzeden ýüklenende saklanmaz",
   "Embed": "Goşundy",
   "Web page": "Web sahypasy",
   "No view yet. Capture a picture of the page so it shows offline.": "Entek görnüş ýok. Oflaýn görkezilmegi üçin sahypanyň suratyny alyň.",

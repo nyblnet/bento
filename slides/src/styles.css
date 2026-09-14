@@ -477,6 +477,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .bento-slide { position: relative; overflow: hidden; }
 
 .bento-el { position: absolute; contain: layout style; }
+/* A web link inside text: underlined in the author's colour, a pointer only
+   in the show (the editor treats it as text — canvas.ts swallows the click). */
+.bento-el a[href] { color: inherit; text-decoration: underline; text-underline-offset: 0.12em; }
+.bento-present-overlay .bento-el a[href] { cursor: pointer; }
 
 /* Formulas are left on the browser's own `math` family ON PURPOSE — naming a
    maths font here fixes nothing and has been reverted three times. The

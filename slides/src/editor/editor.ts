@@ -2746,6 +2746,8 @@ export class Editor {
       [`${mod}C · ${mod}V`, t('Copy · paste — elements, or the whole slide when nothing is selected')],
       [`${mod}D`, t('Duplicate selection')],
       [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
+      [`${mod}B · ${mod}I · ${mod}U`, t('Bold · italic · underline while editing text')],
+      ['[ · ]', t('Collapse · expand the side panels')],
       ['C', t('Comment mode')],
       ['?', t('This help')],
     ])
@@ -2753,6 +2755,8 @@ export class Editor {
       [t('Space-drag'), t('Pan the canvas, including past the edges of the slide')],
       [t('Middle-drag'), t('Pan as well, if your mouse has a middle button')],
       [`${mod}-${t('scroll')}`, t('Zoom in and out')],
+      [`${mod}+ · ${mod}− · ${mod}0`, t('Zoom in · out · fit the slide')],
+      ['← · →', t('Walk the slides when nothing is selected; nudge the selection otherwise')],
     ])
     section(colR, t('Lines & curves'), [
       [t('Shape ▾'), t('Draw a line, curved line or connector — then drag on the canvas')],
@@ -2774,7 +2778,9 @@ export class Editor {
       ['S', t('Speaker view — notes on a second screen if you have one')],
       ['L', t('Toggle laser pointer while presenting')],
       ['M', t('Reduce motion — pause animations (also honours your OS setting)')],
-      ['← · →', t('Previous · next slide')],
+      ['B', t('Black screen — and back')],
+      ['G', t('All slides in the speaker view — pick one to jump to')],
+      ['← · →', t('Previous · next slide, or the next reveal step on a slide that has them')],
       ['Esc', t('End the show')],
     ])
     const tips = div('ed-help-sec')

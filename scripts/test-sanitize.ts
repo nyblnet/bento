@@ -371,24 +371,44 @@ if (location.pathname === '/meta.html') {
     check('3 — no <base> survives the walk', based.querySelectorAll('base').length === 0)
     check('3 — relative urls still resolve against this document', document.baseURI === baseBefore)
 
+    // --- 3b. links in text ---------------------------------------------------
+    // <a href> is allowed now (issue #421) — with a web URL only, and no
+    // other attribute. The three shapes that would matter: a javascript:
+    // href, an event handler on an allowed anchor, and a target that would
+    // let the page reach this window. All decided at click time in present.ts;
+    // none stored.
+    const linked = sanitizeHtml('<a href="https://bento.page/" onclick="window.__pwn(31)" target="_top" rel="opener">ok</a>' +
+      '<a href="javascript:window.__pwn(32)">bad</a><a href="data:text/html,x">bad2</a><a>plain</a>')
+    const box = document.createElement('div'); box.innerHTML = linked
+    const anchors = Array.from(box.querySelectorAll('a'))
+    check('3b — a web link keeps exactly its href and nothing else',
+      anchors.length === 1 && anchors[0].getAttribute('href') === 'https://bento.page/' && anchors[0].attributes.length === 1)
+    check('3b — javascript:/data:/attribute-less anchors are unwrapped to their text',
+      box.textContent === 'okbadbad2plain' && !linked.includes('javascript:') && !linked.includes('data:'))
+    // NOT clicked: a click on the surviving https anchor navigates the probe
+    // away and it reports nothing (the same trap the click loop below avoids).
+    // The handler cannot survive without the attribute, which is asserted.
+    check('3b — no handler attribute survives on the surviving anchor', !linked.includes('onclick') && !linked.includes('__pwn(31)'))
+
     // --- 3c. nested markup is walked like top-level markup -----------------
     // An allowed tag inside a tag the walk does not know, at any depth, is
-    // held to the same rule as one at the top level. Control: the same child
-    // under an allowed parent.
+    // held to the same rule as one at the top level; a refused anchor's
+    // contents likewise. Control: the same child under an allowed parent.
     const nested = sanitizeHtml(
       '<section><b onclick="window.__pwn(41)">a</b></section>' +
       '<foo><span style="position:fixed;inset:0">b</span></foo>' +
       '<div><foo><bar><i onmouseover="window.__pwn(42)">c</i></bar></foo></div>' +
+      '<a href="javascript:window.__pwn(43)"><b onclick="window.__pwn(44)">d</b></a>' +
       '<div><b onclick="window.__pwn(45)">e</b></div>')
     const nbox = document.createElement('div'); nbox.innerHTML = nested
     check('3c — nested markup is walked like top-level markup: no attribute survives at any depth',
-      !nbox.querySelector('[onclick],[onmouseover],[style]') && nbox.textContent === 'abce')
+      !nbox.querySelector('[onclick],[onmouseover],[style]') && nbox.textContent === 'abcde')
     document.body.appendChild(nbox)
     for (const el of Array.from(nbox.querySelectorAll('b, i, span'))) {
       el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
     }
-    check('3c — and clicking or hovering the lifted elements runs nothing', ![41, 42, 45].some((n) => pwned.includes(n)))
+    check('3c — and clicking or hovering the lifted elements runs nothing', ![41, 42, 44, 45].some((n) => pwned.includes(n)))
 
     // --- 4. network out of a self-contained file -------------------------------
     draw('<div>x</div><link rel="stylesheet" href="' + O + '/tracker.css">' +
