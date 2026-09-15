@@ -202,6 +202,26 @@ console.log('\nround two: md, auto height, the report\n')
   ok(/note\(key, 'unknown key'\)/.test(gate) && /note\(key, `unknown key for a \$\{type\} element`\)/.test(gate) && /note\(key, 'invalid value'\)/.test(gate), 'unknown keys and invalid values are reported with a reason')
 }
 
+console.log('\nwhat the editor dereferences on first render\n')
+{
+  // parseDoc checks only format and a non-empty slides array; render.ts reads
+  // doc.size.width/height for every thumbnail and doc.theme.fontFamily for
+  // every text box, the About dialog reads doc.title. A compact deck that
+  // leaves them out (or writes null) must still arrive whole (found by the
+  // bento-check build: a doc without size threw in rebuildSidebar).
+  const dEq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+  const bare = expandDoc({ compact: true, slides: [{ elements: [{ type: 'text', x: 0, y: 0, w: 100, h: 20, html: 'x' }] }] }) as unknown as Obj
+  ok(dEq(bare.size, { width: 1280, height: 720 }), 'a compact deck without size gets the model default 1280×720')
+  ok(bare.format === 'bento/slides' && typeof bare.version === 'number' && typeof bare.title === 'string' && typeof (bare.theme as Obj).fontFamily === 'string', 'format, version, title and theme.fontFamily are present from newDoc()')
+  const nulls = expandDoc({ compact: true, size: null, theme: null, title: 7, format: 'nope', version: 'x', slides: [] }) as unknown as Obj
+  ok(dEq(nulls.size, { width: 1280, height: 720 }) && typeof (nulls.theme as Obj).fontFamily === 'string' && typeof nulls.title === 'string' && nulls.format === 'bento/slides' && nulls.version === 1, 'null or wrong-shaped size/theme/title/format/version are replaced by the defaults, not passed through')
+  const halfSize = expandDoc({ compact: true, size: { width: 1600 }, slides: [] }) as unknown as Obj
+  ok(dEq(halfSize.size, { width: 1280, height: 720 }), 'a size missing its height is replaced whole')
+  ok(dEq((expandDoc({ compact: true, size: { width: 1600, height: 900 }, slides: [] }) as unknown as Obj).size, { width: 1600, height: 900 }), 'a well-formed size is kept')
+  const nullFont = expandDoc({ compact: true, theme: { fontFamily: null, accent: '#123456' }, slides: [] }) as unknown as Obj
+  ok(typeof (nullFont.theme as Obj).fontFamily === 'string' && (nullFont.theme as Obj).accent === '#123456', 'a null theme slot falls back; a set one is kept')
+}
+
 console.log('\nthe numbers\n')
 const sj = JSON.stringify(starterDoc()), sc = compactJson(starterDoc())
 ok(sc.length / sj.length < 0.9, `the starter deck compacts to ${(sc.length / sj.length * 100).toFixed(1)}% of full (a designed deck overrides most defaults; measured 86.1%)`)
