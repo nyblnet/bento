@@ -6,6 +6,7 @@
 
 import type { Store } from '../store'
 import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, paginates, isWebUrl, tableStyleFor, uid, type ChartElement, type ImageElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind, type CodeElement, type BentoDoc, type EmbedElement } from '../model'
+import { CROP_MAX_SCALE, normalizeCrop } from '../crop'
 import { LANGS } from '../../../kernel/src/tokenize.ts'
 import { resolveAsset } from '../render'
 import { measureElement } from '../measure'
@@ -1840,6 +1841,42 @@ export class PropsPanel {
         if (on) delete e.keepAspectRatio
         else { e.keepAspectRatio = false; e.fit = 'fill' }
       }, true)))
+    this.buildCropProps(el as ImageElement)
+  }
+
+  /** Crop (discussion #319): which part of the picture the frame shows. The
+   *  numbers live in `crop` (model.ts ImageCrop); the canvas edits them by
+   *  gesture (double-click the picture), this block offers the zoom as a
+   *  number, the way in, and the way back to the whole picture. */
+  private buildCropProps(el: ImageElement) {
+    this.section(t('Crop'))
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.textContent = t('Double-click the picture to move it inside its frame; scroll or pinch to zoom.')
+    this.host.appendChild(hint)
+    const crop = normalizeCrop(el.crop)
+    this.row('Zoom', this.number(Math.round((crop?.scale ?? 1) * 10) / 10, 0.1, (v, fin) =>
+      this.mutate(el.id, (e) => {
+        const im = e as ImageElement
+        const scale = Math.min(CROP_MAX_SCALE, Math.max(1, Number.isFinite(v) ? v : 1))
+        const cur = normalizeCrop(im.crop) ?? { x: 0.5, y: 0.5, scale: 1 }
+        if (scale === 1 && cur.x === 0.5 && cur.y === 0.5) delete im.crop
+        else im.crop = { ...cur, scale }
+      }, fin)))
+    const edit = document.createElement('button')
+    edit.className = 'ed-btn ed-btn-block'
+    edit.textContent = t('✎ Edit crop on canvas')
+    edit.addEventListener('click', () =>
+      document.dispatchEvent(new CustomEvent('bento:edit-crop', { detail: { id: el.id } })))
+    this.host.appendChild(edit)
+    if (el.crop) {
+      const reset = document.createElement('button')
+      reset.className = 'ed-btn ed-btn-block'
+      reset.textContent = t('Reset crop')
+      reset.title = t('Show the whole picture again, the way Fit says')
+      reset.addEventListener('click', () => this.mutate(el.id, (e) => { delete (e as ImageElement).crop }, true))
+      this.host.appendChild(reset)
+    }
   }
 
   private buildMediaProps(el: MediaElement) {

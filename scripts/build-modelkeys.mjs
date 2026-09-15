@@ -109,6 +109,7 @@ const tables = {
   tableRow: uniq(keysOf('TableRow')),
   tableCell: uniq(keysOf('TableCell')),
   gradient: uniq(keysOf('GradientFill')),
+  imageCrop: uniq(keysOf('ImageCrop')),
 }
 
 const lit = (v, indent = '  ') =>
