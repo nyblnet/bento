@@ -908,4 +908,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "İki ucunda da başı olan dolu ok",
   "Curved connector": "Eğri bağlayıcı",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "İki öğe arasında eğri bir çizgi — uçlar yapışır ve yeniden yönlenir, uç eğriyi izler",
+  "Double-headed": "Çift başlı",
 }

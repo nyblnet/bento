@@ -920,4 +920,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "দুই প্রান্তেই মাথাসহ একটি ভরাট তীর",
   "Curved connector": "বাঁকা সংযোজক",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "দুটি উপাদানের মধ্যে একটি বাঁকা রেখা — প্রান্তগুলো আটকে যায় ও পুনর্বিন্যস্ত হয়, মাথাটি বাঁক অনুসরণ করে",
+  "Double-headed": "দুই মাথা",
 }

@@ -909,4 +909,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "En massiv pil med spids i begge ender",
   "Curved connector": "Buet forbinder",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "En buet linje mellem to elementer — enderne snapper på og flytter med, spidsen følger kurven",
+  "Double-headed": "To spidser",
 }

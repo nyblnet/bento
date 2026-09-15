@@ -897,4 +897,5 @@ export const fr: Catalog = {
   "A solid arrow with a head at both ends": "Une flèche pleine avec une pointe à chaque extrémité",
   "Curved connector": "Connecteur courbe",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Une ligne courbe entre deux éléments — les extrémités s’accrochent et se replacent, la pointe suit la courbe",
+  "Double-headed": "Deux pointes",
 }

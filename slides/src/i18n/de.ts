@@ -897,4 +897,5 @@ export const de: Catalog = {
   "A solid arrow with a head at both ends": "Ein massiver Pfeil mit einer Spitze an beiden Enden",
   "Curved connector": "Gebogener Verbinder",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Eine gebogene Linie zwischen zwei Elementen — die Enden rasten ein und folgen mit, die Spitze folgt der Kurve",
+  "Double-headed": "Zwei Spitzen",
 }

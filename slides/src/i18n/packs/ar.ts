@@ -917,4 +917,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "سهم مصمت برأس في كلا الطرفين",
   "Curved connector": "موصّل منحنٍ",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "خط منحنٍ بين عنصرين — يلتصق الطرفان ويعاد توجيههما، ويتبع الرأس المنحنى",
+  "Double-headed": "برأسين",
 }

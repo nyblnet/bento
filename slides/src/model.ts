@@ -190,8 +190,7 @@ export interface CodeElement extends ElementBase {
   themeName?: string
 }
 
-/** 'arrow2' (v1.1.1) is the block arrow with a head at both ends (#304). */
-export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'arrow2' | 'line' | 'path'
+export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'
 
 /** Linear gradient fill. Colors are any CSS color, including rgba(). */
 export interface GradientFill {
@@ -217,6 +216,12 @@ export interface ShapeElement extends ElementBase {
   strokeWidth: number
   /** corner radius, rect only */
   radius: number
+  /** arrow only (v1.1.1, #304): 2 = a head at both ends. Absent = one head.
+   *  A property, not a shape kind, on purpose: a shipped shell's renderer
+   *  switches on `shape` with no default and would throw on a kind it does
+   *  not know — an unknown property it simply ignores, so 1.1.0 draws the
+   *  single arrow instead of failing the slide. */
+  heads?: 2
   /** dash length in px; 0/undefined = solid stroke (legacy — see strokeStyle) */
   strokeDash?: number
   /** stroke pattern; wins over strokeDash when set */

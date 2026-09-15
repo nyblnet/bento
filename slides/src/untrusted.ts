@@ -405,7 +405,8 @@ const ELEMENT_CHECKS: Record<string, Check> = {
     width: num(0, 1e3), color: color(), fill: color(),
   }, ['width', 'color']),
   // shape
-  shape: oneOf('rect', 'ellipse', 'triangle', 'arrow', 'arrow2', 'line', 'path'),
+  shape: oneOf('rect', 'ellipse', 'triangle', 'arrow', 'line', 'path'),
+  heads: num(2, 2),
   fill: paint, fillGradient: gradient, stroke: paint,
   strokeWidth: num(0, 1e4), strokeDash: num(0, 1e4),
   strokeStyle: oneOf('solid', 'dashed', 'dotted'),

@@ -914,4 +914,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "Umpinainen nuoli, jossa kärki molemmissa päissä",
   "Curved connector": "Kaareva yhdysviiva",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Kaareva viiva kahden elementin välillä — päät tarttuvat ja reitittyvät uudelleen, kärki seuraa kaarta",
+  "Double-headed": "Kaksipäinen",
 }

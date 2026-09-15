@@ -934,4 +934,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "Iki ujunda-da ujy bolan doly ok",
   "Curved connector": "Egri birleşdiriji",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Iki elementiň arasyndaky egri çyzyk — uçlary ýapyşýar we täzeden ugrukdyrylýar, ujy egriniň yzyndan gidýär",
+  "Double-headed": "Iki uçly",
 }

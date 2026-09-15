@@ -46,6 +46,7 @@ ok(modelKinds.join() === TIP_KINDS.join(), `the model's LineEnding union is the 
 const gate = read('slides/src/untrusted.ts')
 ok(/lineStart: oneOf\(\.\.\.TIP_KINDS\), lineEnd: oneOf\(\.\.\.TIP_KINDS\)/.test(gate), 'the shape gate admits exactly the catalogue')
 const panels = read('slides/src/editor/panels.ts')
+const editor = read('slides/src/editor/editor.ts')
 ok(/TIPS\.map\(\(tip\) => \[tip\.kind, t\(tip\.label\)\]\)/.test(panels), 'the panel lists the catalogue — model words as values, translated labels for display')
 ok(/el\.shape === 'line' \|\| \(el\.shape === 'path' && !\/z\\s\*\$\/i\.test/.test(panels), 'tips are offered on lines and OPEN paths, never on a polygon')
 const render = read('slides/src/render.ts')
@@ -68,18 +69,65 @@ ok(close(tipInsetPx('triangle-open', 3), tipSpec('triangle-open')!.inset * 3), '
 ok(tipInsetPx(undefined, 3) === 0 && tipInsetPx('none', 3) === 0, 'no tip → no inset')
 
 console.log('\nthe double arrow\n')
-ok(/case 'arrow2': \{/.test(render), 'render.ts draws arrow2')
-ok(/'rect', 'ellipse', 'triangle', 'arrow', 'arrow2', 'line', 'path'/.test(gate), 'the gate admits arrow2')
-ok(/'arrow' \| 'arrow2'/.test(model), 'the model names arrow2')
+ok(/if \(el\.heads === 2\) \{/.test(render.slice(render.indexOf("case 'arrow': {"), render.indexOf("case 'line': {"))), 'render.ts draws the two-headed polygon inside the ARROW branch')
+ok(/heads: num\(2, 2\)/.test(gate), 'the gate admits heads: 2 on a shape')
+ok(/heads\?: 2/.test(model), 'the model has heads?: 2 on ShapeElement')
+ok(!/arrow2/.test(model) && !/arrow2/.test(gate) && !/'arrow2'/.test(render), 'no new shape kind anywhere — arrow2 is gone')
+const kinds = /export type ShapeKind = ([^\n]+)/.exec(model)![1]
+ok(kinds === "'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'", 'ShapeKind is exactly what 1.1.0 knows (no new kinds — a shipped shell throws on one)')
+ok(/kind: 'arrow', label: 'Double arrow', icon: ICONS\.arrow2, heads: 2/.test(editor) && /defaultShape\(item\.kind, item\.heads \? \{ heads: item\.heads \} : \{\}\)/.test(editor), 'the Shape menu makes a Double arrow as {shape: arrow, heads: 2}')
+ok(/this\.row\('Double-headed', this\.toggle\(el\.heads === 2/.test(panels) && /if \(on\) s\.heads = 2; else delete s\.heads/.test(panels), 'the panel toggle writes heads: 2 and deletes it when off')
 // mirror the polygon exactly as render.ts computes it
 const w = 300, h = 120
 const shaftH = h * 0.44, headW = Math.min(w * 0.3, h), y0 = (h - shaftH) / 2
 const pts = [[0, h / 2], [headW, 0], [headW, y0], [w - headW, y0], [w - headW, 0], [w, h / 2], [w - headW, h], [w - headW, y0 + shaftH], [headW, y0 + shaftH], [headW, h]]
 const mirrored = pts.map(([x, y]) => [w - x, h - y])
 const key = (p: number[][]) => p.map(([x, y]) => `${x.toFixed(3)},${y.toFixed(3)}`).sort().join(' ')
-ok(key(pts) === key(mirrored), 'arrow2 polygon is symmetric under a 180° turn about the box centre (a head at each end, same shape)')
+ok(key(pts) === key(mirrored), 'the two-headed polygon is symmetric under a 180° turn about the box centre (a head at each end, same shape)')
 ok(pts.filter(([x]) => x === 0).length === 1 && pts.filter(([x]) => x === w).length === 1, 'exactly one point on each end — the two tips')
-ok(/points/.test(render.slice(render.indexOf("case 'arrow2'"), render.indexOf("case 'line'"))) && !/marker/.test(render.slice(render.indexOf("case 'arrow2'"), render.indexOf("case 'line'"))), 'arrow2 is a plain polygon — morph treats it like rect ↔ arrow (box + fill tween, kind snaps)')
+
+console.log('\nwhat 1.1.0 does with a deck that uses this (frozen fixture)\n')
+// FROZEN from origin/main render.ts at 3a7eb8fb (the 1.1.0 renderer). Two
+// facts about that code decide what an old shell does with a new deck:
+//   (1) renderShape: `let node: SVGElement` then `switch (el.shape)` with
+//       these case labels and NO default — an unknown kind leaves `node`
+//       unassigned and `svg.appendChild(node)` throws a TypeError, which is
+//       why the double arrow is a PROPERTY on 'arrow', not a new kind;
+//   (2) markerRef: `if (kind === 'arrow') … else if (kind === 'dot') … else
+//       { rect x=3.2 width=1.6 … }` — the else branch is the BAR, so any tip
+//       kind 1.1.0 does not know is drawn as a bar, not as a plain end.
+const FROZEN_MAIN_SHA = '3a7eb8fb'
+const FROZEN_SWITCH_CASES = ['path', 'rect', 'ellipse', 'triangle', 'arrow', 'line'] // verbatim order of `case '…': {` in renderShape
+const FROZEN_MARKER_ELSE = `  } else {
+    tip = document.createElementNS(SVG_NS, 'rect')
+    tip.setAttribute('x', '3.2')
+    tip.setAttribute('y', '0.4')
+    tip.setAttribute('width', '1.6')
+    tip.setAttribute('height', '7.2')
+    marker.setAttribute('refX', '4')
+  }`
+// the fixture as behaviour: what 1.1.0's renderer does with a kind / a tip
+const frozenRenderShape = (shape: string): 'single-arrow' | 'other' | 'THROWS' => {
+  let node: string | undefined
+  switch (shape) {
+    case 'path': case 'rect': case 'ellipse': case 'triangle': case 'line': node = 'other'; break
+    case 'arrow': node = 'single-arrow'; break
+    // no default — exactly as at 3a7eb8fb
+  }
+  if (node === undefined) return 'THROWS' // svg.appendChild(undefined) → TypeError
+  return node
+}
+const frozenMarker = (kind: string): 'arrow' | 'dot' | 'bar' => (kind === 'arrow' ? 'arrow' : kind === 'dot' ? 'dot' : 'bar')
+ok(FROZEN_SWITCH_CASES.join() === 'path,rect,ellipse,triangle,arrow,line' && kinds.replace(/'| /g, '').split('|').every((k) => FROZEN_SWITCH_CASES.includes(k)), `every ShapeKind on this branch is a case 1.1.0's switch has (frozen at ${FROZEN_MAIN_SHA})`)
+ok(frozenRenderShape('arrow2') === 'THROWS', 'the fixture shows why: an unknown kind would throw in 1.1.0 (the bug the review caught)')
+ok(frozenRenderShape('arrow') === 'single-arrow', 'a deck with {shape: arrow, heads: 2} renders in 1.1.0 as a single arrow — a degrade, not a crash')
+ok(/rect'\)\n\s+tip\.setAttribute\('x', '3\.2'\)/.test(FROZEN_MARKER_ELSE), 'the frozen else-branch is the bar geometry')
+for (const s of TIPS) {
+  if (['none', 'arrow', 'dot', 'bar'].includes(s.kind)) continue
+  ok(frozenMarker(s.kind) === 'bar', `${s.kind}: 1.1.0 draws a BAR at that end (not a plain end) — no throw`)
+}
+ok(/in 1\.1\.0 and older the renderer matches only\n \* 'arrow' and 'dot' and draws a BAR/.test(read('slides/src/tips.ts')), 'tips.ts states the degrade')
+ok(/those shells draw a bar where a\n  new tip should be; a double arrow shows there as a single one/.test(read('CHANGELOG.md')), 'the changelog states the same degrade, no softer')
 
 console.log('\nend tangent\n')
 const up = parseBezier('M 0 0 C 30 0 100 -50 100 -100').nodes // last handle points straight up into the endpoint
@@ -150,7 +198,6 @@ ok(fn('setLineEndpoints') === `export function setLineEndpoints(el: ShapeElement
 ok(fn('borderPoint').includes('const s = Math.min(sx, sy)\n  return { x: cx + dx * s, y: cy + dy * s }'), 'borderPoint is the 1.0.2 text')
 // and the marker numbers an old deck was drawn with
 ok(/inset the endpoints so the tip's point lands on the box edge/.test(render) && /tipInsetPx\(el\.lineStart, lw\)/.test(render), 'a line insets by the catalogue — 2.6 for the original three (asserted above)')
-const editor = read('slides/src/editor/editor.ts')
 ok(/el\.shape !== 'line' && el\.shape !== 'path'/.test(editor) && /if \(isPath\) setPathEndpoints\(c, na, nb\)\n\s+else setLineEndpoints\(c, na, nb\)/.test(editor), 'syncConnectors routes lines through setLineEndpoints and paths through setPathEndpoints')
 const canvas = read('slides/src/editor/canvas.ts')
 ok(/kind === 'curve-connector'/.test(canvas) && /el\.lineEnd = 'arrow'\n\s+if \(fromA\) el\.from/.test(canvas), 'the Curved connector tool draws a path with a tip and anchors like Connector')

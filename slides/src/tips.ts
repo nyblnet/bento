@@ -16,6 +16,11 @@
  * original kinds keep their historic numbers (2.6 inset, refX inside the
  * head) so every existing deck renders byte-identically.
  *
+ * DEGRADE, stated plainly: in 1.1.0 and older the renderer matches only
+ * 'arrow' and 'dot' and draws a BAR for anything else — so a deck carrying
+ * one of the seven newer tips shows a bar at that end in those shells, not a
+ * plain end. Nothing throws; the deck opens.
+ *
  * Also here, because a curved connector needs it (#302): the END TANGENT of
  * a cubic path, so a tip on a curve points along the curve and the endpoint
  * is inset along it, not along the chord.

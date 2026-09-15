@@ -1334,6 +1334,11 @@ export class PropsPanel {
       this.row('End tip', this.labeledSelect(ENDINGS, el.lineEnd ?? 'none', (v) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).lineEnd = v === 'none' ? undefined : (v as LineEnding) }, true)))
     }
+    if (el.shape === 'arrow') {
+      // #304: a head at both ends is a property of the arrow, not a kind
+      this.row('Double-headed', this.toggle(el.heads === 2, (on) =>
+        this.mutate(el.id, (e) => { const s = e as ShapeElement; if (on) s.heads = 2; else delete s.heads }, true)))
+    }
     if (el.shape === 'rect') {
       this.row('Corner radius', this.number(el.radius, 1, (v, fin) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin)))

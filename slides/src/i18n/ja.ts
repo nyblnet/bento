@@ -897,4 +897,5 @@ export const ja: Catalog = {
   "A solid arrow with a head at both ends": "両端に矢じりのある塗りつぶし矢印",
   "Curved connector": "曲線コネクタ",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "2つの要素をつなぐ曲線 — 両端は要素に吸着して追従し、先端は曲線に沿います",
+  "Double-headed": "両端に矢じり",
 }

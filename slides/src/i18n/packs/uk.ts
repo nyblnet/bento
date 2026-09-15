@@ -917,4 +917,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "Суцільна стрілка з вістрям на обох кінцях",
   "Curved connector": "Вигнутий з’єднувач",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Вигнута лінія між двома елементами — кінці прилипають і перебудовуються, вістря йде вздовж кривої",
+  "Double-headed": "Два вістря",
 }

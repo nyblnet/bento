@@ -414,24 +414,24 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
       // right-pointing arrow: shaft + head, proportional to the box
       node = document.createElementNS(SVG_NS, 'polygon')
       const shaftH = h * 0.44
-      const headW = Math.min(w * 0.38, h)
       const y0 = (h - shaftH) / 2
+      if (el.heads === 2) {
+        // a head at BOTH ends (#304): the same head, mirrored, symmetric about
+        // the box centre. Still `shape: 'arrow'` — a shell that predates
+        // `heads` draws the single arrow. Morph: the polygon's points are not
+        // tweened (no shape geometry is); a one-head ↔ two-head morph tweens
+        // the box and fill and the point list snaps at the swap.
+        const headW = Math.min(w * 0.3, h)
+        node.setAttribute(
+          'points',
+          `0,${h / 2} ${headW},0 ${headW},${y0} ${w - headW},${y0} ${w - headW},0 ${w},${h / 2} ${w - headW},${h} ${w - headW},${y0 + shaftH} ${headW},${y0 + shaftH} ${headW},${h}`,
+        )
+        break
+      }
+      const headW = Math.min(w * 0.38, h)
       node.setAttribute(
         'points',
         `0,${y0} ${w - headW},${y0} ${w - headW},0 ${w},${h / 2} ${w - headW},${h} ${w - headW},${y0 + shaftH} 0,${y0 + shaftH}`,
-      )
-      break
-    }
-    case 'arrow2': {
-      // the same arrow with a head at BOTH ends (#304): shaft between two
-      // mirrored heads, symmetric about the box centre
-      node = document.createElementNS(SVG_NS, 'polygon')
-      const shaftH = h * 0.44
-      const headW = Math.min(w * 0.3, h)
-      const y0 = (h - shaftH) / 2
-      node.setAttribute(
-        'points',
-        `0,${h / 2} ${headW},0 ${headW},${y0} ${w - headW},${y0} ${w - headW},0 ${w},${h / 2} ${w - headW},${h} ${w - headW},${y0 + shaftH} ${headW},${y0 + shaftH} ${headW},${h}`,
       )
       break
     }

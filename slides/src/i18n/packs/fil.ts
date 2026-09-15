@@ -926,4 +926,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "Solidong arrow na may ulo sa magkabilang dulo",
   "Curved connector": "Kurbadong connector",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Kurbadong linya sa pagitan ng dalawang elemento — kumakapit at umaayos ang mga dulo, sumusunod sa kurba ang dulo",
+  "Double-headed": "Dalawang ulo",
 }

@@ -908,4 +908,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "Pełna strzałka z grotem na obu końcach",
   "Curved connector": "Łącznik krzywy",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Zakrzywiona linia między dwoma elementami — końce przyczepiają się i dopasowują, grot podąża za krzywą",
+  "Double-headed": "Dwa groty",
 }

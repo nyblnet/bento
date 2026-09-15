@@ -897,4 +897,5 @@ export const zhHant: Catalog = {
   "A solid arrow with a head at both ends": "兩端都有箭頭的實心箭頭",
   "Curved connector": "曲線連接線",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "兩個元素之間的曲線 — 兩端吸附並跟隨移動，箭頭沿曲線方向",
+  "Double-headed": "雙頭",
 }

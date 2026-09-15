@@ -901,4 +901,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "양 끝에 머리가 있는 실선 화살표",
   "Curved connector": "곡선 연결선",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "두 요소 사이의 곡선 — 양 끝이 붙어 따라 움직이고 화살촉은 곡선을 따릅니다",
+  "Double-headed": "양쪽 머리",
 }

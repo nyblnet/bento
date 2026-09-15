@@ -907,4 +907,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "Panah pejal dengan kepala di kedua ujung",
   "Curved connector": "Penghubung melengkung",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Garis lengkung di antara dua elemen — ujungnya menempel dan menyesuaikan, kepalanya mengikuti lengkungan",
+  "Double-headed": "Dua kepala",
 }

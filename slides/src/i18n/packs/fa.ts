@@ -913,4 +913,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "پیکانی توپر با سر در هر دو انتها",
   "Curved connector": "اتصال‌دهندهٔ منحنی",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "خطی منحنی بین دو عنصر — دو سر می‌چسبند و دوباره مسیر می‌گیرند، نوک در امتداد منحنی است",
+  "Double-headed": "دو سر",
 }

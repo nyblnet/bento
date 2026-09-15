@@ -917,4 +917,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "दोनों सिरों पर नोक वाला ठोस तीर",
   "Curved connector": "घुमावदार कनेक्टर",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "दो तत्वों के बीच घुमावदार रेखा — सिरे चिपकते और फिर से जुड़ते हैं, नोक वक्र के साथ चलती है",
+  "Double-headed": "दो नोक",
 }

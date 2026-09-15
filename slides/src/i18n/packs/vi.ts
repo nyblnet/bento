@@ -907,4 +907,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "Mũi tên đặc có đầu ở cả hai phía",
   "Curved connector": "Đường nối cong",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Đường cong giữa hai phần tử — hai đầu bám vào và tự chỉnh lại, đầu mũi tên đi theo đường cong",
+  "Double-headed": "Hai đầu",
 }

@@ -895,4 +895,5 @@ export const pt: Catalog = {
   "A solid arrow with a head at both ends": "Uma seta sólida com ponta em ambas as extremidades",
   "Curved connector": "Conector curvo",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Uma linha curva entre dois elementos — as extremidades encaixam e reposicionam-se, a ponta segue a curva",
+  "Double-headed": "Duas pontas",
 }

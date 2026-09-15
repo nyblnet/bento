@@ -911,4 +911,5 @@ export const strings: Catalog = {
   "A solid arrow with a head at both ends": "ลูกศรทึบที่มีหัวทั้งสองด้าน",
   "Curved connector": "เส้นเชื่อมโค้ง",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "เส้นโค้งระหว่างสององค์ประกอบ — ปลายเกาะติดและปรับตามเมื่อย้าย หัวลูกศรวิ่งตามเส้นโค้ง",
+  "Double-headed": "สองหัว",
 }

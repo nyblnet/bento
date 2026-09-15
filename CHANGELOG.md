@@ -21,8 +21,9 @@ pre-1.0.
   through. A *Double arrow* shape (#304): the solid arrow with a head at both
   ends; and a line has always taken an arrowhead at each end through its
   start and end tips. Sticking (#301) has been in since 1.0.2. Old decks are
-  untouched: the original tips keep their exact geometry, and an older shell
-  draws an unknown tip as a plain end.
+  untouched: the original tips keep their exact geometry. A deck that uses
+  the new tips opens in 1.1.0 and older, but those shells draw a bar where a
+  new tip should be; a double arrow shows there as a single one.
 - **A pasted photo no longer costs megabytes.** Insert or paste a picture
   and it is stored at slide resolution — the long edge capped at 2560 px,
   crisp on a 4K projector — and photos are re-encoded as JPEG, so a phone
