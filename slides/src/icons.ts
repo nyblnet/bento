@@ -30,6 +30,7 @@ export const ICONS = {
   presenter: svg('<rect x="3" y="4" width="18" height="14" rx="2"/><line x1="14" y1="4" x2="14" y2="18"/><line x1="16.5" y1="8" x2="18.5" y2="8"/><line x1="16.5" y1="11" x2="18.5" y2="11"/><line x1="16.5" y1="14" x2="18" y2="14"/><line x1="9" y1="21" x2="15" y2="21"/>'),
   curve: svg('<path d="M3 18 C 7 6, 17 6, 21 18"/>'),
   connector: svg('<circle cx="5" cy="19" r="2.4"/><circle cx="19" cy="5" r="2.4"/><path d="M7 17 L 17 7"/>'),
+  curveConnector: svg('<circle cx="5" cy="19" r="2.4"/><circle cx="19" cy="5" r="2.4"/><path d="M7 17 C 9 9, 11 7, 17 7"/>'),
   freeform: svg('<path d="M3 17 C 6 7, 9 21, 12 12 S 18 4, 21 9"/>'),
   polygon: svg('<polygon points="12 3 21 10 17 20 7 20 3 10"/>'),
   slideshow: svg('<rect x="3" y="4" width="18" height="12" rx="2"/><polygon points="10 7.5 15 10 10 12.5" fill="currentColor" stroke="none"/><line x1="12" y1="16" x2="12" y2="20"/><line x1="8" y1="20" x2="16" y2="20"/>'),
@@ -51,6 +52,7 @@ export const ICONS = {
   ellipse: svg('<ellipse cx="12" cy="12" rx="9" ry="7"/>'),
   triangle: svg('<path d="M12 4 21 20H3z"/>'),
   arrow: svg('<line x1="3" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/>'),
+  arrow2: svg('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/><polyline points="11 6 5 12 11 18"/>'),
   line: svg('<line x1="4" y1="19" x2="20" y2="5"/>'),
 } as const
 
