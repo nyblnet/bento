@@ -1,0 +1,552 @@
+{
+ "temml": "0.13.3",
+ "frozen": "2026-09-15",
+ "formulas": [
+  {
+   "src": "ax^2 + bx + c = 0",
+   "display": true,
+   "from": "corpus:starterdeck.ts",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]}]}"
+  },
+  {
+   "src": "\\left(x + \\frac{b}{2a}\\right)^2 = \\frac{b^2 - 4ac}{4a^2}",
+   "display": true,
+   "from": "corpus:starterdeck.ts",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"−\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"4\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"4\"}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}]}]}]}"
+  },
+  {
+   "src": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}",
+   "display": true,
+   "from": "corpus:starterdeck.ts",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"−\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"±\"}]},{\"tag\":\"msqrt\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"−\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"4\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]}]}]}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]}]}]}]}]}"
+  },
+  {
+   "src": "ax^2 + bx + c = 0",
+   "display": false,
+   "from": "corpus:starterdeck.ts",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]}]}"
+  },
+  {
+   "src": "\\left(x + \\frac{b}{2a}\\right)^2 = \\frac{b^2 - 4ac}{4a^2}",
+   "display": false,
+   "from": "corpus:starterdeck.ts",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"−\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"4\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"4\"}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}]}]}]}"
+  },
+  {
+   "src": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}",
+   "display": false,
+   "from": "corpus:starterdeck.ts",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"−\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"±\"}]},{\"tag\":\"msqrt\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"−\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"4\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]}]}]}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]}]}]}]}]}"
+  },
+  {
+   "src": "\\frac{a}{b}",
+   "display": true,
+   "from": "corpus:scripts/test-sanitize.ts",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "E=mc^2",
+   "display": false,
+   "from": "corpus:scripts/test-sanitize.ts",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"E\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"m\"}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}]}"
+  },
+  {
+   "src": "\\frac{a}{b}",
+   "display": false,
+   "from": "corpus:scripts/test-sanitize.ts",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "x = \\frac{…}",
+   "display": true,
+   "from": "corpus:slides/src/editor/canvas.ts",
+   "tree": null
+  },
+  {
+   "src": "x = \\frac{…}",
+   "display": false,
+   "from": "corpus:slides/src/editor/canvas.ts",
+   "tree": null
+  },
+  {
+   "src": "x^2 + y^2 = z^2",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"y\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"z\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}]}"
+  },
+  {
+   "src": "a_1 + a_2 + \\cdots + a_n",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⋯\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]}]}]}]}"
+  },
+  {
+   "src": "x_i^2",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"msubsup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}"
+  },
+  {
+   "src": "e^{i\\pi} + 1 = 0",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"e\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"π\"}]}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]}]}"
+  },
+  {
+   "src": "\\frac{a}{b}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "\\frac{1}{1+\\frac{1}{x}}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]}]}]}]}"
+  },
+  {
+   "src": "\\dfrac{a}{b}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "\\tfrac{a}{b}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "\\binom{n}{k}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"k\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "\\sqrt{2}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"msqrt\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}"
+  },
+  {
+   "src": "\\sqrt[3]{x^3+1}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mroot\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"3\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"3\"}]}]}]}"
+  },
+  {
+   "src": "\\sqrt{\\frac{a}{b}}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"msqrt\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}]}"
+  },
+  {
+   "src": "\\sum_{i=1}^{n} i",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"munderover\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"∑\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]}]}]}"
+  },
+  {
+   "src": "\\sum_{i=1}^{n} i",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msubsup\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"∑\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]}]}]}"
+  },
+  {
+   "src": "\\prod_{k=1}^n k",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"munderover\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"∏\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"k\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"k\"}]}]}]}"
+  },
+  {
+   "src": "\\int_a^b f(x)\\,dx",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msubsup\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"∫\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"d\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]}]}"
+  },
+  {
+   "src": "\\oint_C \\vec{F}\\cdot d\\vec{r}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"∮\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"C\"}]}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"F\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"→\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⋅\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"d\"}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"r\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"→\"}]}]}]}]}"
+  },
+  {
+   "src": "\\iint_D f\\,dA",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"∬\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"D\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"d\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]}]}]}"
+  },
+  {
+   "src": "\\lim_{x \\to \\infty} f(x)",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"munder\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"lim\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"→\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"∞\"}]}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"munder\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"lim\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"→\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"sin\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]}]}"
+  },
+  {
+   "src": "\\max_{a \\in A} f(a)",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"munder\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"max\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"∈\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "\\left( \\frac{a}{b} \\right)",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "\\left[ x \\right]",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"[\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"]\"}]}]}]}"
+  },
+  {
+   "src": "\\left\\{ x \\right\\}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"{\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"}\"}]}]}]}"
+  },
+  {
+   "src": "\\left| x \\right|",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"|\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"|\"}]}]}]}"
+  },
+  {
+   "src": "\\left\\| v \\right\\|",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"‖\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"v\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"‖\"}]}]}]}"
+  },
+  {
+   "src": "\\left\\langle a, b \\right\\rangle",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"⟨\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\",\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⟩\"}]}]}]}"
+  },
+  {
+   "src": "\\left\\lfloor x \\right\\rfloor",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"⌊\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⌋\"}]}]}]}"
+  },
+  {
+   "src": "\\left. \\frac{df}{dx} \\right|_{x=0}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"d\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"d\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"|\"}]}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]}]}]}"
+  },
+  {
+   "src": "\\bigl( x \\bigr)",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "\\Bigl[ x \\Bigr]",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"[\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"]\"}]}]}]}"
+  },
+  {
+   "src": "\\biggl\\{ x \\biggr\\}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"{\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"}\"}]}]}]}"
+  },
+  {
+   "src": "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mtable\",\"kids\":[{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]},{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"d\"}]}]}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "\\begin{bmatrix} 1 & 0 \\\\ 0 & 1 \\end{bmatrix}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"[\"}]},{\"tag\":\"mtable\",\"kids\":[{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]}]},{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"]\"}]}]}]}"
+  },
+  {
+   "src": "\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"|\"}]},{\"tag\":\"mtable\",\"kids\":[{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]},{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"d\"}]}]}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"|\"}]}]}]}"
+  },
+  {
+   "src": "\\begin{matrix} 1 & 2 \\\\ 3 & 4 \\end{matrix}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mtable\",\"kids\":[{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]},{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"3\"}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"4\"}]}]}]}]}]}"
+  },
+  {
+   "src": "f(x) = \\begin{cases} x & x \\ge 0 \\\\ -x & x < 0 \\end{cases}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"{\"}]},{\"tag\":\"mtable\",\"kids\":[{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"≥\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]}]}]},{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"−\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"<\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]}]}]}]},{\"tag\":\"mo\",\"kids\":[]}]}]}"
+  },
+  {
+   "src": "\\begin{aligned} a &= b + c \\\\ &= d \\end{aligned}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mtable\",\"kids\":[{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]}]}]}]},{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"d\"}]}]}]}]}]}]}"
+  },
+  {
+   "src": "\\hat{x}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"^\"}]}]}]}"
+  },
+  {
+   "src": "\\vec{v}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"v\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"→\"}]}]}]}"
+  },
+  {
+   "src": "\\bar{z}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"z\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"‾\"}]}]}]}"
+  },
+  {
+   "src": "\\tilde{a}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"~\"}]}]}]}"
+  },
+  {
+   "src": "\\dot{x} + \\ddot{x}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"˙\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"¨\"}]}]}]}]}"
+  },
+  {
+   "src": "\\overline{AB}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"menclose\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]}]}]}]}"
+  },
+  {
+   "src": "\\underline{x}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"menclose\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]}]}"
+  },
+  {
+   "src": "\\widehat{abc}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"^\"}]}]}]}"
+  },
+  {
+   "src": "\\overbrace{a+b+c}^{n}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⏞\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]}]}]}"
+  },
+  {
+   "src": "\\underbrace{x+y}_{2}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"munder\",\"kids\":[{\"tag\":\"munder\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"y\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⏟\"}]}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}"
+  },
+  {
+   "src": "\\overrightarrow{AB}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"→\"}]}]}]}"
+  },
+  {
+   "src": "\\mathbb{R}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"ℝ\"}]}]}"
+  },
+  {
+   "src": "\\mathbb{N} \\subset \\mathbb{Z} \\subset \\mathbb{Q}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"ℕ\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⊂\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"ℤ\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⊂\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"ℚ\"}]}]}]}"
+  },
+  {
+   "src": "\\mathcal{L}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"ℒ\"}]}]}"
+  },
+  {
+   "src": "\\mathfrak{g}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"𝔤\"}]}]}"
+  },
+  {
+   "src": "\\mathbf{x}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"𝐱\"}]}]}"
+  },
+  {
+   "src": "\\mathrm{d}x",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"d\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]}]}"
+  },
+  {
+   "src": "\\mathsf{A}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"𝖠\"}]}]}"
+  },
+  {
+   "src": "\\mathtt{code}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"𝚌\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"𝚘\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"𝚍\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"𝚎\"}]}]}]}"
+  },
+  {
+   "src": "\\text{if } x > 0",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mtext\",\"kids\":[{\"t\":\"if\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\">\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]}]}"
+  },
+  {
+   "src": "\\textcolor{red}{x}",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]}"
+  },
+  {
+   "src": "\\boxed{E = mc^2}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"E\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"m\"}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}]}"
+  },
+  {
+   "src": "\\operatorname{sinc}(x)",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"sinc\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "\\alpha + \\beta = \\gamma",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"α\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"β\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"γ\"}]}]}]}"
+  },
+  {
+   "src": "\\Delta x \\to 0",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"Δ\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"→\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]}]}"
+  },
+  {
+   "src": "\\forall \\epsilon > 0\\, \\exists \\delta",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"∀\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"ϵ\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\">\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"∃\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"δ\"}]}]}]}"
+  },
+  {
+   "src": "A \\cup B \\cap C",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"∪\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"∩\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"C\"}]}]}]}"
+  },
+  {
+   "src": "x \\in \\emptyset",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"∈\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"∅\"}]}]}]}"
+  },
+  {
+   "src": "a \\le b \\ne c \\ge d",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"≤\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"≠\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"≥\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"d\"}]}]}]}"
+  },
+  {
+   "src": "p \\Rightarrow q \\iff \\neg q \\Rightarrow \\neg p",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"p\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⇒\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"q\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⟺\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"¬\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"q\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⇒\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"¬\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"p\"}]}]}]}"
+  },
+  {
+   "src": "\\sin^2 \\theta + \\cos^2 \\theta = 1",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"sin\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"θ\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"cos\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"θ\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]}]}"
+  },
+  {
+   "src": "\\log_2 n",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"log\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]}]}]}"
+  },
+  {
+   "src": "\\ln x",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"ln\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]}]}"
+  },
+  {
+   "src": "f'(x)",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"′\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "f''(x)",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"′\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"′\"}]}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "a \\quad b \\qquad c",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]}]}]}"
+  },
+  {
+   "src": "a\\,b\\;c\\!d",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"d\"}]}]}]}"
+  },
+  {
+   "src": "x \\pm y \\mp z",
+   "display": false,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"±\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"y\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"∓\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"z\"}]}]}]}"
+  },
+  {
+   "src": "\\nabla \\cdot \\vec{E} = \\frac{\\rho}{\\varepsilon_0}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"∇\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⋅\"}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"E\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"→\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"ρ\"}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"ε\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]}]}]}]}]}"
+  },
+  {
+   "src": "\\partial_\\mu F^{\\mu\\nu} = J^\\nu",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"∂\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"μ\"}]}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"F\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"μ\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"ν\"}]}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"J\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"ν\"}]}]}]}]}"
+  },
+  {
+   "src": "P(A \\mid B) = \\frac{P(B \\mid A)\\,P(A)}{P(B)}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"P\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"|\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"P\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"|\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"P\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"P\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}]}]}"
+  },
+  {
+   "src": "\\sigma(z)_i = \\frac{e^{z_i}}{\\sum_{j=1}^K e^{z_j}}",
+   "display": true,
+   "from": "standard",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"σ\"}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"z\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"e\"}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"z\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]}]}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msubsup\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"∑\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"j\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"K\"}]}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"e\"}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"z\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"j\"}]}]}]}]}]}]}]}"
+  }
+ ]
+}

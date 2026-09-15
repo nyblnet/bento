@@ -1,0 +1,457 @@
+[
+ {
+  "src": "ax^2 + bx + c = 0",
+  "display": true,
+  "from": "corpus:starterdeck.ts"
+ },
+ {
+  "src": "\\left(x + \\frac{b}{2a}\\right)^2 = \\frac{b^2 - 4ac}{4a^2}",
+  "display": true,
+  "from": "corpus:starterdeck.ts"
+ },
+ {
+  "src": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}",
+  "display": true,
+  "from": "corpus:starterdeck.ts"
+ },
+ {
+  "src": "ax^2 + bx + c = 0",
+  "display": false,
+  "from": "corpus:starterdeck.ts"
+ },
+ {
+  "src": "\\left(x + \\frac{b}{2a}\\right)^2 = \\frac{b^2 - 4ac}{4a^2}",
+  "display": false,
+  "from": "corpus:starterdeck.ts"
+ },
+ {
+  "src": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}",
+  "display": false,
+  "from": "corpus:starterdeck.ts"
+ },
+ {
+  "src": "\\frac{a}{b}",
+  "display": true,
+  "from": "corpus:scripts/test-sanitize.ts"
+ },
+ {
+  "src": "E=mc^2",
+  "display": false,
+  "from": "corpus:scripts/test-sanitize.ts"
+ },
+ {
+  "src": "\\frac{a}{b}",
+  "display": false,
+  "from": "corpus:scripts/test-sanitize.ts"
+ },
+ {
+  "src": "x = \\frac{…}",
+  "display": true,
+  "from": "corpus:slides/src/editor/canvas.ts"
+ },
+ {
+  "src": "x = \\frac{…}",
+  "display": false,
+  "from": "corpus:slides/src/editor/canvas.ts"
+ },
+ {
+  "src": "x^2 + y^2 = z^2",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "a_1 + a_2 + \\cdots + a_n",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "x_i^2",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "e^{i\\pi} + 1 = 0",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\frac{a}{b}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\frac{1}{1+\\frac{1}{x}}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\dfrac{a}{b}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\tfrac{a}{b}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\binom{n}{k}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\sqrt{2}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\sqrt[3]{x^3+1}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\sqrt{\\frac{a}{b}}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\sum_{i=1}^{n} i",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\sum_{i=1}^{n} i",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\prod_{k=1}^n k",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\int_a^b f(x)\\,dx",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\oint_C \\vec{F}\\cdot d\\vec{r}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\iint_D f\\,dA",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\lim_{x \\to \\infty} f(x)",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\max_{a \\in A} f(a)",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\left( \\frac{a}{b} \\right)",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\left[ x \\right]",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\left\\{ x \\right\\}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\left| x \\right|",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\left\\| v \\right\\|",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\left\\langle a, b \\right\\rangle",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\left\\lfloor x \\right\\rfloor",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\left. \\frac{df}{dx} \\right|_{x=0}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\bigl( x \\bigr)",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\Bigl[ x \\Bigr]",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\biggl\\{ x \\biggr\\}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\begin{bmatrix} 1 & 0 \\\\ 0 & 1 \\end{bmatrix}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\begin{matrix} 1 & 2 \\\\ 3 & 4 \\end{matrix}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "f(x) = \\begin{cases} x & x \\ge 0 \\\\ -x & x < 0 \\end{cases}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\begin{aligned} a &= b + c \\\\ &= d \\end{aligned}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\hat{x}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\vec{v}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\bar{z}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\tilde{a}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\dot{x} + \\ddot{x}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\overline{AB}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\underline{x}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\widehat{abc}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\overbrace{a+b+c}^{n}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\underbrace{x+y}_{2}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\overrightarrow{AB}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\mathbb{R}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\mathbb{N} \\subset \\mathbb{Z} \\subset \\mathbb{Q}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\mathcal{L}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\mathfrak{g}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\mathbf{x}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\mathrm{d}x",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\mathsf{A}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\mathtt{code}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\text{if } x > 0",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\textcolor{red}{x}",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\boxed{E = mc^2}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\operatorname{sinc}(x)",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\alpha + \\beta = \\gamma",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\Delta x \\to 0",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\forall \\epsilon > 0\\, \\exists \\delta",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "A \\cup B \\cap C",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "x \\in \\emptyset",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "a \\le b \\ne c \\ge d",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "p \\Rightarrow q \\iff \\neg q \\Rightarrow \\neg p",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\sin^2 \\theta + \\cos^2 \\theta = 1",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\log_2 n",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\ln x",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "f'(x)",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "f''(x)",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "a \\quad b \\qquad c",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "a\\,b\\;c\\!d",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "x \\pm y \\mp z",
+  "display": false,
+  "from": "standard"
+ },
+ {
+  "src": "\\nabla \\cdot \\vec{E} = \\frac{\\rho}{\\varepsilon_0}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\partial_\\mu F^{\\mu\\nu} = J^\\nu",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "P(A \\mid B) = \\frac{P(B \\mid A)\\,P(A)}{P(B)}",
+  "display": true,
+  "from": "standard"
+ },
+ {
+  "src": "\\sigma(z)_i = \\frac{e^{z_i}}{\\sum_{j=1}^K e^{z_j}}",
+  "display": true,
+  "from": "standard"
+ }
+]

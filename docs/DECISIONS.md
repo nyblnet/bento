@@ -6981,4 +6981,69 @@ current release; a deck written by an older shell and read against a newer
 schema only ever gains optional keys, by additivity, so the unpinned form is
 correct for validation and the pinned twins exist for anyone who wants
 exactness.
+## 2026-09-15 — Maths: an in-house engine replaces Temml, and reads Typst
+
+Temml (64 KB compressed, ~10% of the shell) rendered `$…$` to MathML. It is
+gone; `slides/src/maths/` does the job — parse → one shared tree → MathML
+emitter, a LaTeX front end and a Typst front end over ONE symbol table
+(LaTeX name / Typst name / code point). Nothing in the file format changes:
+the document stores the source the author typed, as it always did.
+
+**Measured first, then built.** Every `$…$` in the starter deck, the gallery
+decks, the guestbook and every rig fixture: 6 distinct formulas — fractions,
+roots, scripts, `\left\right`, `\pm`. The gallery and guestbook decks carry
+no maths at all. So the engine's supported set is the obvious tier over that,
+not a cut of anything measured: fractions and roots, scripts and limits,
+`\left\right` and the `\big` family, matrices/cases/aligned, accents and
+braces, `\mathbb`/`\mathcal`/`\mathfrak` as Unicode code points (Chrome
+ignores `mathvariant`), `\text`, `\textcolor`, `\boxed`. Not covered:
+`\substack`, `\xrightarrow`, `\ce`, `\tag`, `\hline` — a formula using them
+renders as typed, exactly as any TeX Temml refused did.
+
+**Compared, in Chrome, 91 formulas** (the 11 from our corpus + 80 from the
+categories of Temml's supported-functions page): normalised MathML trees
+identical on 96.6%, rendered ink identical (<0.5% pixels) on 97.8%. Three
+rounds closed every divergence that was ours by adopting Temml's metric
+(`\mid`, `\!`, function application, upright Greek capitals, primes, `\iff`,
+`\boxed`, accent sizes, the 2 px on every matrix cell). What remains is
+Temml's: `\overline`/`\underline` via `menclose`, which Chrome does not draw
+— we draw the rule, a fix; and one extra `mrow` level with 0.0% pixel change.
+
+**`cases` and `aligned` centre their columns.** TeX left-aligns them; Temml
+does too — through a stylesheet Bento never loaded, so every deck to date
+rendered them centred. Measured `mtd` offsets: ours `[0, 20.2]`, Temml's
+`[10.1, 10.1]`. The maintainer looked at both on the demo deck and chose
+centred: it matches every existing deck, and it looks better. Recorded so
+nobody "fixes" it back to TeX.
+
+**Typst input, syntax A.** `$typst: a/b$` and `$$typst: …$$` — the marker is
+`typst:` immediately after the opening delimiter, case-sensitive, optional
+whitespace after the colon. Chosen over a per-document setting because it
+costs the format nothing (the marker is text), a mixed deck works formula by
+formula, and an older shell shows `$typst: a/b$` literally — degraded,
+legible, the same promise `$…$` already makes. A per-document default can be
+added later without contradicting this; the marker would still override it.
+Typst and LaTeX agree on the shared tree for 122/122 equivalence cases once
+Typst's paren groups (which script the whole group — a real semantic
+difference, not a bug) are folded.
+
+**Trust is structural.** Temml ran with `trust:false` so `\href` was inert.
+The emitter constructs every attribute itself; the one place author text
+reaches a `style` attribute — `\textcolor` — accepts only a CSS colour shape
+(hex, a name, `rgb()`/`hsl()` over numbers). The rig throws `\href`,
+`onload=`, `<script>` and a `url(` colour at it and asserts every emitted
+attribute is on the engine's own list.
+
+**The rig holds the comparison without Temml.** Temml's trees for the 91
+formulas were frozen the day it left (`scripts/maths-freeze-reference.ts` →
+`scripts/fixtures/maths-reference.json`, Temml 0.13.3). `scripts/
+test-maths-lite.ts` compares the engine's trees to them and requires ≥95%
+identical AND every mismatch to be on the explicit residual list — a printer
+change that moves a glyph fails CI, not a slide. Pixels stay out of CI: they
+were measured in the spike and there is no Temml left to draw the other side.
+
+**Numbers.** Engine 775 lines, 24 KB minified, 8.3 KB gzip. Shell on the day
+it shipped (#485, against main 131015e): 756,103 → 690,067 B compressed
+(−66,036 B, −8.7%). The spike that measured all of the above was PR #483
+(closed, three rounds).
 

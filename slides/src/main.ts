@@ -19,7 +19,7 @@ import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './u
 import { i18nApi, t, applyDirection } from './i18n'
 import { parseDoc, type BentoDoc, type TextElement } from './model'
 import { compactJson } from './compact'
-import { parseDocInputReport, fitAutoHeights, type LoadReport } from './compactload'
+import { parseDocInputReport, fitAutoHeights, restack, type LoadReport } from './compactload'
 import { validateDoc, type ValidateOpts } from './validate'
 import { buildSchema } from './schema'
 import { resolveThemeRefs } from './palette'
@@ -341,7 +341,7 @@ if (location.hash === '#present') {
       void document.fonts.ready.then(() => {
         if (store.doc !== parsed.doc) return // the deck moved on
         const n = fitAutoHeights(store.doc, { autoHeight: parsed.report.refit })
-        if (n) store.commit(() => {})
+        if (n) { restack(store.doc, { stacks: parsed.report.stacks }); store.commit(() => {}) }
       })
     }
     return parsed.report

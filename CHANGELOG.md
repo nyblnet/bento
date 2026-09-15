@@ -15,6 +15,18 @@ pre-1.0.
   links arrived, an address like `…/$a$b` had its two dollars read as a
   formula and the link broke; formulas are now looked for in the text only,
   never inside a tag.
+- **An agent can place a slide by layout and role.** In the compact form a
+  slide may say `"layout": "title-body"` and its elements carry a `role`
+  (`title`, `body`, `subtitle`, `kicker`, `quote`, `attribution`, `image`,
+  `card1`…) instead of coordinates and typography: the layout's frames and
+  type are used, the same way *Apply layout* fills a slide in the editor, and
+  slides born from the same layout still morph their chrome. Several `body`
+  paragraphs stack into the slot, each sized to its text; an element that
+  carries its own `x y w h` is placed as given. Four new built-in layouts —
+  *Three cards*, *Quote*, *Image left*, *Image right* — appear in the layout
+  picker for everyone, next to the five that were there. The file on disk is
+  unchanged: the layout is applied on load, and what is saved is the placed
+  slide.
 - **The format has a schema, and every file says where it is.** A JSON
   Schema for the bento/slides document is generated from the same tables the
   app uses to check what it loads, so it cannot describe a deck the app would
@@ -43,6 +55,20 @@ pre-1.0.
   scripts, `--fail-on warning` for a strict exit code. A document JSON works
   as input too, checked inside the built shell. The other half of the agent
   loop that `AGENTS.md` describes: write, check, fix, check again.
+- **Maths is Bento's own now, and it reads Typst.** Formulas in text used to
+  go through Temml, a 64 KB library that every saved deck carried. A small
+  engine of our own (slides/src/maths, about 8 KB) renders them instead, so
+  every file you save is about 78 KB smaller, and nothing in the file changes:
+  a formula is still the `$…$` source you typed. Measured against Temml on 91
+  formulas, from our own decks and from Temml's own list of supported
+  functions: 97.8% render pixel-identical, and the rest are places where
+  Temml drew nothing on Chrome — `\overline` and `\underline` now draw their
+  rule. New: Typst maths, asked for by thimotedupuch (#358) — write
+  `$typst: a/b$` (or `$$typst: …$$`) and the formula is read as Typst:
+  `sqrt(x)`, `sum_(i=1)^n`, `mat(a, b; c, d)`, `cases(…)`, `"if" x`. A plain
+  `$…$` is LaTeX as before. Not covered, for now: `\substack`, `\xrightarrow`,
+  chemistry (`\ce`), `\tag` and `\hline`; a formula using them shows as
+  typed, the way any TeX Temml refused always has.
 - **A deck can be written the short way.** An AI agent writing a deck used
   to spend most of its output on fields nobody chose — rotation 0, opacity 1,
   the font stack, weight 400, centre, middle, line height 1.25, on every
