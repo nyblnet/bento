@@ -945,4 +945,5 @@ export const strings: Catalog = {
   "Copy compact JSON (for agents)": "সংক্ষিপ্ত JSON কপি করুন (এজেন্টের জন্য)",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "সব ডিফল্ট বাদ দেওয়া একই ডেক — একটি AI এজেন্টের যেভাবে লেখা উচিত। “JSON থেকে প্রতিস্থাপন” এটি ফিরিয়ে নেয়; সংরক্ষিত ফাইল সবসময় পূর্ণ।",
   "Compact JSON copied": "সংক্ষিপ্ত JSON কপি হয়েছে",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "লোড হয়েছে: {dropped}টি ফিল্ড বাদ, {warnings}টি সতর্কতা — কনসোল দেখুন",
 }

@@ -942,4 +942,5 @@ export const strings: Catalog = {
   "Copy compact JSON (for agents)": "संक्षिप्त JSON कॉपी करें (एजेंट के लिए)",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "वही डेक, हर डिफ़ॉल्ट हटाकर — वह रूप जो एक AI एजेंट को लिखना चाहिए। “JSON से बदलें” इसे वापस लेता है; सहेजी गई फ़ाइल हमेशा पूरी होती है।",
   "Compact JSON copied": "संक्षिप्त JSON कॉपी हो गया",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "लोड हुआ: {dropped} फ़ील्ड हटाए गए, {warnings} चेतावनियाँ — कंसोल देखें",
 }

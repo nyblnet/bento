@@ -951,4 +951,5 @@ export const strings: Catalog = {
   "Copy compact JSON (for agents)": "Kopyahin ang compact na JSON (para sa mga agent)",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Ang parehong deck na wala ang lahat ng default — ang anyong dapat isulat ng isang AI agent. Tinatanggap ito ng “Palitan mula sa JSON”; ang na-save na file ay laging buo.",
   "Compact JSON copied": "Nakopya ang compact na JSON",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Na-load: {dropped} field ang inalis, {warnings} babala — tingnan ang console",
 }

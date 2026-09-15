@@ -935,4 +935,5 @@ export const strings: Catalog = {
   "Copy compact JSON (for agents)": "Salin JSON padat (untuk ejen)",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Dek yang sama tanpa semua nilai lalai — bentuk yang patut ditulis oleh ejen AI. “Ganti daripada JSON” menerimanya semula; fail yang disimpan sentiasa lengkap.",
   "Compact JSON copied": "JSON padat disalin",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Dimuatkan: {dropped} medan digugurkan, {warnings} amaran — lihat konsol",
 }

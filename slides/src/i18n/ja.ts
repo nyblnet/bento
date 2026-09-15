@@ -922,4 +922,5 @@ export const ja: Catalog = {
   "Copy compact JSON (for agents)": "コンパクトな JSON をコピー（エージェント向け）",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "既定値をすべて省いた同じデッキ。AI エージェントが書くべき形です。「JSON から置き換え」で戻せます。保存されるファイルは常に完全な形です。",
   "Compact JSON copied": "コンパクトな JSON をコピーしました",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "読み込み完了: {dropped} 個のフィールドを破棄、警告 {warnings} 件 — コンソールを確認",
 }

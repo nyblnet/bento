@@ -942,4 +942,5 @@ export const strings: Catalog = {
   "Copy compact JSON (for agents)": "Копіювати компактний JSON (для агентів)",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Та сама презентація без значень за замовчуванням — форма, яку має писати ШІ-агент. «Замінити з JSON» приймає її назад; збережений файл завжди повний.",
   "Compact JSON copied": "Компактний JSON скопійовано",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Завантажено: відкинуто полів: {dropped}, попереджень: {warnings} — див. консоль",
 }

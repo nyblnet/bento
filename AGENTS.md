@@ -111,13 +111,37 @@ re-run yields the same ids.
       { "type": "text", "x": 120, "y": 240, "w": 452, "h": 60, "html": "Revenue" } ] ] } ] }
 ```
 
+Two more things a compact text element may do. Leave `h` out (or write
+`"h": "auto"`) and the box is sized to its text on load, measured on the
+deck's real fonts — the same number *Fit height to text* would set; you
+cannot know how tall three lines of 24 pt are, the runtime can. Write `md`
+instead of `html` and it converts exactly as pasted markdown does: `**bold**`,
+`*italic*`, `` `code` ``, `~~strike~~`, `- bullets` (indent two spaces for a
+sub-bullet), `[caption](https://…)`; when both are present `html` wins.
+
 Load it with `window.bento.loadDoc(json)` or *Save ▾ Replace from JSON…*;
 `window.bento.compact()` (or *Save ▾ Copy compact JSON*) gives a deck back in
-this shape. A compact document passes the untrusted shape gate on the way in
-(unknown keys are dropped). The FILE is always saved full — the on-disk
-format is unchanged and every shipped shell reads it as before.
-`slides/src/compact.ts` is the whole mechanism; `scripts/test-slides-compact.ts`
-proves the round-trip on the starter deck and the gallery decks.
+this shape. A compact document passes the untrusted shape gate on the way in,
+and `loadDoc` RETURNS what happened:
+
+```js
+const r = window.bento.loadDoc(json)
+// r === false      → not a document at all (nothing changed)
+// r.dropped        → [{ path: '/slides/0/elements/2/fontSze', reason: 'unknown key for a text element' }, …]
+// r.expanded       → fields filled from the editor's defaults
+// r.fitted         → text boxes sized to their text
+// r.findings       → window.bento.validate() on the loaded deck (overflow, off-canvas, dead links …)
+```
+
+The loop is: load → read `dropped` and `findings` → fix the JSON → load
+again. A dropped key is one the format does not have (a typo, or a field that
+does not exist for that element type); an invalid value is the right key with
+the wrong type or range. The FILE is always saved full — the on-disk format is
+unchanged and every shipped shell reads it as before. `slides/src/compact.ts`
+and `compactload.ts` are the whole mechanism; `scripts/test-slides-compact.ts`
+proves the round-trip on the starter deck and the gallery decks, and
+`scripts/fixtures/agent-decks/` holds decks written this way that must load
+clean in CI — add yours there if you find a shape that does not.
 
 ## Commands
 

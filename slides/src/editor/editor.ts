@@ -41,7 +41,7 @@ import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, mintRoomKey, onl
 import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { stripEmbeddedEnvelopes } from '../envelope'
 import { compactJson } from '../compact'
-import { parseDocInput } from '../compactload'
+import { parseDocInputReport } from '../compactload'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, type ShrinkResult } from './shrink'
 
@@ -1139,13 +1139,21 @@ export class Editor {
       // either wipe the user's room credentials (paste of our own JSON) or
       // silently move the deck into a room that came from somewhere else.
       // Content is imported; identity and capability are not.
-      const next = parseDocInput(ta.value) // full or compact (src/compact.ts)
-      if (next) {
+      const parsed = parseDocInputReport(ta.value) // full or compact (src/compact.ts)
+      if (parsed) {
+        const next = parsed.doc
         const keep = this.store.doc.collab
         if (keep) next.collab = keep
         else delete next.collab
         this.store.replaceDoc(next)
-        this.toast(t('Document replaced — ⌘Z undoes'))
+        // the load report, summarised; the whole thing goes to the console
+        // where an agent driving the page (or a person) can read the paths
+        const r = parsed.report
+        const warnings = r.findings.counts.warning + r.findings.counts.error
+        if (r.dropped.length || warnings) {
+          console.info('[bento] load report', r)
+          this.toast(t('Loaded: {dropped} fields dropped, {warnings} warnings — see console', { dropped: String(r.dropped.length), warnings: String(warnings) }))
+        } else this.toast(t('Document replaced — ⌘Z undoes'))
         overlay.remove()
       } else {
         ta.style.borderColor = '#C0392B'

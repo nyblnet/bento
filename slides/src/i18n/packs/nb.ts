@@ -936,4 +936,5 @@ export const strings: Catalog = {
   "Copy compact JSON (for agents)": "Kopier kompakt JSON (for agenter)",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Samme kortstokk uten alle standardverdier — formen en KI-agent bør skrive. «Erstatt fra JSON» tar den tilbake; den lagrede filen er alltid fullstendig.",
   "Compact JSON copied": "Kompakt JSON kopiert",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Lastet: {dropped} felt forkastet, {warnings} advarsler — se konsollen",
 }
