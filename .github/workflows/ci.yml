@@ -1353,6 +1353,13 @@ jobs:
         # routes the argument. Bare {{date}} stays viewer-locale (#381).
         run: node scripts/test-slides-fields.ts
 
+      - name: Export slides as images rig
+        # exportimages.ts decisions (DOM-free): the page set is the print set
+        # (hidden/state out, deck order), names pad NN and use the kernel's
+        # own title sanitiser, JPEG matte/PNG none, 1x/2x integer sizes; and
+        # the editor half renders via renderSlide with no PREVIEW_BUDGET tier.
+        run: node scripts/test-slides-export-images.ts
+
       - name: Photos shrink at insert rig
         # editor/shrink.ts decisions, DOM-free: photo vs graphic (lossy vs
         # lossless), the ≥20% keep rule, the 2560 px cap, svg/gif untouched,
