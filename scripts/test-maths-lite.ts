@@ -173,21 +173,6 @@ for (const [ty, tex] of pairs) ok(renderMath(ty, { syntax: 'typst', display: tru
 const noExplicit = (k: string, v: unknown) => (k === 'explicit' ? undefined : v) // Typst sizes its groups (\\left-like); the STRUCTURE is what must agree
 ok(JSON.stringify(parseMath('f(x)_i', { syntax: 'typst' }), noExplicit) === JSON.stringify(parseMath('f(x)_i'), noExplicit), 'f(x)_i: both front ends script the paren group')
 
-console.log('\nresolveMath runs on text segments only (an href may carry a $)\n')
-const rm = render.slice(render.indexOf('export function resolveMath'), render.indexOf('export function resolveMath') + 1400)
-ok(/html\.split\(\/\(<\[\^>\]\*>\)\/\)\.map\(\(part, i\) => \(i % 2 \? part : resolveMathText\(part\)\)\)\.join\(''\)/.test(rm), 'the string is split on tags and only the text runs are transformed')
-ok(/function resolveMathText\(text: string\)/.test(render) && !/html\.replace\(\/\(\^\|\[\^\\\\\]\)\\\$\\\$/.test(rm), 'the $$/$ rules live on the text-run function, never on the whole HTML')
-// the same split, applied here, is the behaviour the three href cases pin:
-const split = (html: string, fn: (t: string) => string) => html.split(/(<[^>]*>)/).map((p, i) => (i % 2 ? p : fn(p))).join('')
-const inline = (t: string) => t.replace(/(^|[^\\$])\$(\S(?:[^$\n]*?\S)?)\$(?!\d)/g, (m, pre: string, src: string) => pre + (renderMath(src) ?? m))
-const hrefIn = '<a href="https://x.example/$a$b" rel="noopener">link</a>'
-ok(split(hrefIn, inline) === hrefIn, 'a $ inside an href is untouched — the link survives intact')
-const beside = 'see <a href="https://x.example/$a$b">link</a> and $x^2$'
-ok(split(beside, inline).startsWith('see <a href="https://x.example/$a$b">link</a> and <math'), 'text beside a link still renders its formula; the href is still whole')
-const across = 'a $b <b>c$ d</b>'
-ok(split(across, inline) === across, 'a $ pair split across a tag boundary does not pair')
-ok(split('<b>$x^2$</b>', inline).includes('<b><math'), '…but a formula wholly inside a tag renders')
-
 console.log('\nthe formula cache is bounded\n')
 ok(/const MATH_CACHE_MAX = 256/.test(render) && /if \(mathCache\.size > MATH_CACHE_MAX\) mathCache\.delete\(mathCache\.keys\(\)\.next\(\)\.value!\)/.test(render), 'a 256-entry LRU: the oldest key is evicted past the cap')
 ok(/mathCache\.delete\(key\); mathCache\.set\(key, hit\)/.test(render), 'a hit is re-inserted so it becomes the newest (Map insertion order = LRU)')

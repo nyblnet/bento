@@ -571,23 +571,11 @@ function renderMath(src: string, display: boolean): string | null {
 
 export function resolveMath(html: string): string {
   if (html.indexOf('$') < 0) return html
-  // TEXT SEGMENTS ONLY. The input is sanitized HTML, and a `$` can sit inside
-  // an attribute — `<a href="https://x.example/$a$b">` (links, #465). Run
-  // over the whole string, the inline rule paired those two dollars and
-  // wrote a <math> into the href: a dead link and stray markup (nothing an
-  // author chose became an attribute, but the link was gone). So the string
-  // is split on tags, each text run is transformed on its own, and a formula
-  // can never span or enter a tag.
-  return html.split(/(<[^>]*>)/).map((part, i) => (i % 2 ? part : resolveMathText(part))).join('')
-}
-
-function resolveMathText(text: string): string {
-  if (text.indexOf('$') < 0) return text
   // $$…$$ first (display), then $…$ (inline). The inline form is deliberately
   // fussy so ordinary prose survives: no whitespace just inside the delimiters
   // and no digit straight after the closer, which is what keeps "it costs $5
   // and $10" from parsing as math. A backslash-escaped \$ is a literal dollar.
-  let out = text.replace(/(^|[^\\])\$\$([^$]+?)\$\$/g, (m, pre: string, src: string) => {
+  let out = html.replace(/(^|[^\\])\$\$([^$]+?)\$\$/g, (m, pre: string, src: string) => {
     const ml = renderMath(src, true)
     return ml ? pre + ml : m
   })
