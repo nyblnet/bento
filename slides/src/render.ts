@@ -491,6 +491,10 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
  * The engine emits only attributes it constructs itself — no \href, no
  * handlers, no author-supplied style — so trust is not a setting here.
  */
+// A small LRU (Map keeps insertion order): a deck's formulas are few and
+// re-rendered often; an unbounded cache would grow with every keystroke
+// while a formula is being typed.
+const MATH_CACHE_MAX = 256
 const mathCache = new Map<string, string>()
 
 /** Undo the entity escaping sanitizeHtml applied, so `x &lt; y` reaches TeX as `x < y`. */
@@ -550,7 +554,7 @@ function tagSymbols(mathml: string): string {
 function renderMath(src: string, display: boolean): string | null {
   const key = (display ? 'D' : 'I') + src
   const hit = mathCache.get(key)
-  if (hit !== undefined) return hit || null
+  if (hit !== undefined) { mathCache.delete(key); mathCache.set(key, hit); return hit || null }
   let out: string | null = null
   try {
     const tex = decodeEntities(src)
@@ -561,16 +565,29 @@ function renderMath(src: string, display: boolean): string | null {
     out = null
   }
   mathCache.set(key, out ?? '')
+  if (mathCache.size > MATH_CACHE_MAX) mathCache.delete(mathCache.keys().next().value!)
   return out
 }
 
 export function resolveMath(html: string): string {
   if (html.indexOf('$') < 0) return html
+  // TEXT SEGMENTS ONLY. The input is sanitized HTML, and a `$` can sit inside
+  // an attribute — `<a href="https://x.example/$a$b">` (links, #465). Run
+  // over the whole string, the inline rule paired those two dollars and
+  // wrote a <math> into the href: a dead link and stray markup (nothing an
+  // author chose became an attribute, but the link was gone). So the string
+  // is split on tags, each text run is transformed on its own, and a formula
+  // can never span or enter a tag.
+  return html.split(/(<[^>]*>)/).map((part, i) => (i % 2 ? part : resolveMathText(part))).join('')
+}
+
+function resolveMathText(text: string): string {
+  if (text.indexOf('$') < 0) return text
   // $$…$$ first (display), then $…$ (inline). The inline form is deliberately
   // fussy so ordinary prose survives: no whitespace just inside the delimiters
   // and no digit straight after the closer, which is what keeps "it costs $5
   // and $10" from parsing as math. A backslash-escaped \$ is a literal dollar.
-  let out = html.replace(/(^|[^\\])\$\$([^$]+?)\$\$/g, (m, pre: string, src: string) => {
+  let out = text.replace(/(^|[^\\])\$\$([^$]+?)\$\$/g, (m, pre: string, src: string) => {
     const ml = renderMath(src, true)
     return ml ? pre + ml : m
   })

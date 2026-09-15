@@ -7,8 +7,8 @@
  * here — MathML Core does that part, which is the whole reason a maths engine
  * can be small.
  *
- * SPIKE code: parse → tree → print, no regex chains. See
- * working/team/handoffs/spike-maths-lite.md for what was measured.
+ * Parse → tree → print, no regex chains. What was measured to arrive here
+ * is in docs/DECISIONS.md (2026-09-15, maths).
  */
 
 export type MNode =

@@ -7001,8 +7001,8 @@ identical AND every mismatch to be on the explicit residual list — a printer
 change that moves a glyph fails CI, not a slide. Pixels stay out of CI: they
 were measured in the spike and there is no Temml left to draw the other side.
 
-**Numbers.** Engine 775 lines, 24 KB minified, 8.3 KB gzip. Shell: 756,103 →
-677,783 B compressed (−78,320 B, −10.4%). Spike branch `spike-maths-lite`,
-handoff `working/team/handoffs/spike-maths-lite.md` (rounds 1–3), demo deck
-`working/pr-test/maths-lite-demo.bento.html`.
+**Numbers.** Engine 775 lines, 24 KB minified, 8.3 KB gzip. Shell on the day
+it shipped (#485, against main 131015e): 756,103 → 690,067 B compressed
+(−66,036 B, −8.7%). The spike that measured all of the above was PR #483
+(closed, three rounds).
 

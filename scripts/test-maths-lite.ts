@@ -142,6 +142,28 @@ for (const src of ['\\href{javascript:alert(1)}{x}', 'x" onload="alert(1)', '<im
   ok(!/<script|onload|onerror|onclick|javascript:|url\(/i.test(out) && attrsOf(out).every((a) => ALLOWED.has(a)), `no author-controlled attribute or tag survives: ${JSON.stringify(src)} -> ${out ? out.slice(0, 60) + '…' : 'refused'}`)
 }
 ok(renderMath('\\textcolor{#ff0000}{x}')!.includes('style="color:#ff0000"') && renderMath('\\textcolor{rebeccapurple}{x}')!.includes('color:rebeccapurple'), '\\textcolor takes a hex or a named colour')
+// The style VALUE, not just the attribute name: every style="…" the emitter
+// can produce is one of its own constant forms, or `color:` + a value of the
+// colour shape isCssColor admits — one declaration, no `;`, no `(` outside
+// rgb/hsl. A loosened isCssColor that lets a `;` through goes red here.
+const STYLE_FORMS = [
+  /^margin-left:-?[\d.]+em;$/, /^math-depth:0$/,
+  /^padding-left:(0|1)em;padding-right:0em$/, /^padding-left:(0em|5\.9776pt);padding-right:(0em|5\.9776pt)$/,
+]
+const COLOR_SHAPE = /^(#[0-9a-f]{3,8}|[a-z]{3,20}|(rgba?|hsla?)\([\d.%,\s/]+\))$/i
+const styleOk = (v: string) => STYLE_FORMS.some((re) => re.test(v)) || v.split(';').every((d) => d === 'padding:3pt' || d === 'border:1px solid' || d.startsWith('background:linear-gradient(to top right,transparent 47%,currentColor 47%,currentColor 53%,transparent 53%)') || (d.startsWith('color:') && COLOR_SHAPE.test(d.slice(6))))
+const styleValues = (html: string) => [...html.matchAll(/\sstyle="([^"]*)"/g)].map((m) => m[1])
+const STYLE_PROBES = ['\\textcolor{red}{x}', '\\textcolor{#abc}{x}', '\\textcolor{rgb(1, 2, 3)}{x}', '\\boxed{\\textcolor{blue}{y}}', '\\cancel{x}', 'a\\!b', '\\hat{x}', '\\begin{cases} a & b \\\\ c & d \\end{cases}', '\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}', '\\begin{aligned} a &= b \\end{aligned}',
+  '\\textcolor{red;position:fixed}{x}', '\\textcolor{red;font-size:900px}{x}', '\\textcolor{red}{x};background:url(x)', '\\textcolor{expression(1)}{x}', '\\textcolor{var(--x)}{x}', '\\textcolor{rgb(1,2,3);color:red}{x}']
+for (const src of STYLE_PROBES) {
+  const out = renderMath(src) ?? ''
+  const vals = styleValues(out)
+  ok(vals.every(styleOk), `every style value is a known form or a bare colour: ${JSON.stringify(src)} → ${JSON.stringify(vals)}`)
+}
+ok(!(renderMath('\\textcolor{red;position:fixed}{x}') ?? '').includes('style='), 'a colour carrying a `;` declaration is dropped entirely — no style at all')
+ok(!(renderMath('\\textcolor{red;font-size:9px}{x}') ?? '').includes('font-size'), 'a `;`-declaration without url( is refused too')
+ok(renderMath('\\text{a"b}')!.includes('a&quot;b') && !/<mtext>[^<]*"/.test(renderMath('\\text{a"b}')!), 'a `"` in text is escaped to &quot; (no text may ever end an attribute)')
+ok(renderMath('"a<b>c"', { syntax: 'typst' })!.includes('&lt;b&gt;'), 'typst quoted text escapes too')
 
 console.log('\nTypst ≡ LaTeX on the shared tree\n')
 const pairs: Array<[string, string]> = [['a/b', '\\frac{a}{b}'], ['(a+b)/c', '\\frac{a+b}{c}'], ['sqrt(2)', '\\sqrt{2}'], ['root(3, x)', '\\sqrt[3]{x}'], ['x^(n+1)', 'x^{n+1}'], ['sum_(i=1)^n i', '\\sum_{i=1}^{n} i'], ['mat(a, b; c, d)', '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}'], ['cases(x & x >= 0, -x & x < 0)', '\\begin{cases} x & x \\ge 0 \\\\ -x & x < 0 \\end{cases}'], ['bb(R)', '\\mathbb{R}'], ['hat(x)', '\\hat{x}'], ['alpha + beta', '\\alpha + \\beta'], ['a <= b != c', 'a \\le b \\ne c'], ['"if" x', '\\text{if} x'], ['lim_(x -> oo) f', '\\lim_{x \\to \\infty} f']]
@@ -150,6 +172,25 @@ for (const [ty, tex] of pairs) ok(renderMath(ty, { syntax: 'typst', display: tru
 // ONE node too (as Temml prints it), so f(x)_i scripts the group in both.
 const noExplicit = (k: string, v: unknown) => (k === 'explicit' ? undefined : v) // Typst sizes its groups (\\left-like); the STRUCTURE is what must agree
 ok(JSON.stringify(parseMath('f(x)_i', { syntax: 'typst' }), noExplicit) === JSON.stringify(parseMath('f(x)_i'), noExplicit), 'f(x)_i: both front ends script the paren group')
+
+console.log('\nresolveMath runs on text segments only (an href may carry a $)\n')
+const rm = render.slice(render.indexOf('export function resolveMath'), render.indexOf('export function resolveMath') + 1400)
+ok(/html\.split\(\/\(<\[\^>\]\*>\)\/\)\.map\(\(part, i\) => \(i % 2 \? part : resolveMathText\(part\)\)\)\.join\(''\)/.test(rm), 'the string is split on tags and only the text runs are transformed')
+ok(/function resolveMathText\(text: string\)/.test(render) && !/html\.replace\(\/\(\^\|\[\^\\\\\]\)\\\$\\\$/.test(rm), 'the $$/$ rules live on the text-run function, never on the whole HTML')
+// the same split, applied here, is the behaviour the three href cases pin:
+const split = (html: string, fn: (t: string) => string) => html.split(/(<[^>]*>)/).map((p, i) => (i % 2 ? p : fn(p))).join('')
+const inline = (t: string) => t.replace(/(^|[^\\$])\$(\S(?:[^$\n]*?\S)?)\$(?!\d)/g, (m, pre: string, src: string) => pre + (renderMath(src) ?? m))
+const hrefIn = '<a href="https://x.example/$a$b" rel="noopener">link</a>'
+ok(split(hrefIn, inline) === hrefIn, 'a $ inside an href is untouched — the link survives intact')
+const beside = 'see <a href="https://x.example/$a$b">link</a> and $x^2$'
+ok(split(beside, inline).startsWith('see <a href="https://x.example/$a$b">link</a> and <math'), 'text beside a link still renders its formula; the href is still whole')
+const across = 'a $b <b>c$ d</b>'
+ok(split(across, inline) === across, 'a $ pair split across a tag boundary does not pair')
+ok(split('<b>$x^2$</b>', inline).includes('<b><math'), '…but a formula wholly inside a tag renders')
+
+console.log('\nthe formula cache is bounded\n')
+ok(/const MATH_CACHE_MAX = 256/.test(render) && /if \(mathCache\.size > MATH_CACHE_MAX\) mathCache\.delete\(mathCache\.keys\(\)\.next\(\)\.value!\)/.test(render), 'a 256-entry LRU: the oldest key is evicted past the cap')
+ok(/mathCache\.delete\(key\); mathCache\.set\(key, hit\)/.test(render), 'a hit is re-inserted so it becomes the newest (Map insertion order = LRU)')
 
 console.log('\nmorph: the engine gives the morph nothing new to handle\n')
 // present.ts pairs elements by data-flip-id and tweens the ELEMENT box; the
