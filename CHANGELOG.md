@@ -11,6 +11,10 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A web link whose address contains a dollar sign works again.** Since
+  links arrived, an address like `…/$a$b` had its two dollars read as a
+  formula and the link broke; formulas are now looked for in the text only,
+  never inside a tag.
 - **A Layers list.** The Slide panel now opens with *Layers*: every element
   on the slide, top of the stack first, with a glyph and a short label (the
   text's first words, or the kind). Click a row to select, shift-click to add,

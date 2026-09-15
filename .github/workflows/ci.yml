@@ -1353,6 +1353,12 @@ jobs:
         # routes the argument. Bare {{date}} stays viewer-locale (#381).
         run: node scripts/test-slides-fields.ts
 
+      - name: Maths in links rig
+        # resolveMath transforms text runs only: a `$` inside an href never
+        # pairs with one in the text, so a link whose address carries a
+        # dollar sign keeps its href (pre-existing since #465).
+        run: node scripts/test-slides-math-href.ts
+
       - name: Layers panel rig
         # editor/layerrows.ts, DOM-free: rows top-first, labels per type,
         # group indent, moveInPaintOrder == the Order buttons (front/back/±1,
