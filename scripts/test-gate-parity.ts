@@ -139,7 +139,19 @@ const slideCases: Array<[string, unknown]> = [
 for (const [n, s] of slideCases) add(`hostile/${n}`, s)
 
 // ---- compare -----------------------------------------------------------------
-const j = (v: unknown) => JSON.stringify(v === undefined ? null : v)
+// ONE deliberate difference from main, excluded here and asserted elsewhere:
+// main's build-modelkeys had no entry for the `code` element, so its gate kept
+// a code block but stripped every code-specific field (content, grammar,
+// theme) — an empty snippet. #488 adds the entry; test-slides-schema asserts a
+// code element's content survives the gate. Parity is asserted for everything
+// else, so a code element is dropped from both sides before comparing.
+const noCode = (v: unknown): unknown => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return v
+  const o = v as { elements?: unknown }
+  return Array.isArray(o.elements) ? { ...o, elements: o.elements.filter((e) => !(e && typeof e === 'object' && (e as { type?: unknown }).type === 'code')) } : v
+}
+const isCode = (e: unknown) => !!e && typeof e === 'object' && (e as { type?: unknown }).type === 'code'
+const j = (v: unknown) => JSON.stringify(v === undefined ? null : noCode(v))
 let same = 0, elementsCompared = 0
 for (const [name, slide] of slides) {
   const a = j(branchGate.sanitizeSlide(slide))
@@ -148,6 +160,7 @@ for (const [name, slide] of slides) {
   else ok(false, `slide ${name}: branch and main disagree\n    branch: ${a.slice(0, 300)}\n    main:   ${b.slice(0, 300)}`)
   const els = (slide as { elements?: unknown }).elements
   if (Array.isArray(els)) for (const e of els) {
+    if (isCode(e)) continue
     elementsCompared++
     const ea = j(branchGate.sanitizeElement(e)), eb = j(mainGate.sanitizeElement(e))
     if (ea !== eb) ok(false, `element in ${name}: branch and main disagree\n    branch: ${ea.slice(0, 300)}\n    main:   ${eb.slice(0, 300)}`)
@@ -165,6 +178,7 @@ for (const [name, slide] of slides) {
   else ok(false, `slide ${name}: with the collector ON the branch's document differs from main's`)
   const els = (slide as { elements?: unknown }).elements
   if (Array.isArray(els)) for (const e of els) {
+    if (isCode(e)) continue
     elementsOn++
     const on = withDropReport(() => branchGate.sanitizeElement(e)).result
     if (j(on) !== j(mainGate.sanitizeElement(e))) ok(false, `element in ${name}: with the collector ON the branch's element differs from main's`)

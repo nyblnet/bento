@@ -6939,3 +6939,46 @@ prepared document. Slides now shares `prepareForSave` across `saveFile`,
 `serializeAuto`, and `serializeFile`; the preparation remains copy-on-write so
 the live document keeps its assets for undo. `scripts/test-slides-assets.ts`
 checks the facade wiring as well as the pure reachability cases.
+
+## 2026-09-15 — The saved deck names its schema
+
+Every deck the app writes now opens with
+`"$schema": "https://bento.page/schema/slides.json"` — the first key of the
+JSON in `#bento-doc`. The schema itself is generated from the runtime's own
+validation tables (`slides/src/schema.ts` reads what `untrusted.ts` accepts
+and what `modelkeys.generated.ts` names; `scripts/build-schema.mjs` prints
+it; CI fails when `schema/slides.json` is stale), so it can never describe a
+deck the app would refuse. It is published at that URL with a version-pinned
+twin, returned by `window.bento.schema()` in a running file, listed in
+`https://bento.page/llms.txt`, and named in the Tooling comment.
+
+**Why a key in the file.** The shell is compressed, so a model that READS a
+`.bento.html` sees only the plaintext: the Tooling comment and the JSON. A
+pointer in the JSON is the one door that travels with the data — through a
+copy, a paste into a chat, a `Copy document JSON`. `window.bento.schema()`
+serves the other reader, an agent driving the browser.
+
+**Additive.** The key is written by `prepareForSave` at serialization only
+and stripped by `parseDoc` on load, so it exists in the bytes on disk and
+nowhere else: not in the live store, the CRDT, a recovery snapshot or a clip.
+The one condition `parseDoc` applies (`format` + a non-empty `slides`) is
+the same in the 1.1.0 release (03280f5) and on main, and neither looks at
+other top-level keys — an older shell keeps the key and writes it back
+unchanged; its `validate()` lists it as an unknown key, a warning. The rig
+holds a frozen copy of that condition. Nothing fetches the URL: the rig
+greps every carrier line for `fetch`/`import`/`href`/`src`, and the load was
+watched in Chrome — zero requests to bento.page.
+
+**Cost.** 50 bytes per saved file, plaintext. The schema machinery in the
+shell is +2,263 B compressed (measured: 756,103 → 758,366), which also
+covers a gap found on the way — the `code` element was missing from the
+model-keys map, so the paste gate dropped every code element and
+`validate()` knew none of its keys.
+
+**Not decided here.** Whether the schema URL should be versioned in the
+pointer itself (`slides-1.1.0.json`). The unpinned URL always describes the
+current release; a deck written by an older shell and read against a newer
+schema only ever gains optional keys, by additivity, so the unpinned form is
+correct for validation and the pinned twins exist for anyone who wants
+exactness.
+

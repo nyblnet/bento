@@ -195,6 +195,51 @@ node ../scripts/test-preview.ts     # first-page preview rig (encryption veto, o
 node ../scripts/shell-gate.mjs dist-single/Bento_Slides.bento.html   # splice conformance
 ```
 
+## Check your deck
+
+You wrote a deck; now look at it. `bento check` loads it in headless Chrome —
+the real shell, the real fonts — and tells you what the runtime would otherwise
+swallow, then hands you pictures:
+
+```sh
+node scripts/bento-check.mjs deck.bento.html                # findings, by slide, with element ids
+node scripts/bento-check.mjs doc.json --png out/            # a document JSON in the built shell, + one PNG per slide
+node scripts/bento-check.mjs doc.json --json --fail-on warning   # machine-readable, strict exit code
+```
+
+The loop: write the document JSON (compact where the shell accepts it) → `bento
+check --png` → read `findings` (`text-overflow` says how many px the box is
+short and on which element; `out-of-canvas`, dead links, effects that can
+never run, unknown keys the gate dropped) → look at `contact.png`, one image of
+every slide, or a single `page-NN.png` when a finding points at it → fix →
+run again. Exit 0 means no finding at or above `--fail-on` (default `error`).
+Needs Chrome (`BENTO_CHROME` to point at a binary) and the built shell
+(`cd slides && npm run build:single`, or `--shell path`).
+
+## The document schema
+
+The bento/slides format has a machine-readable schema, generated from the
+runtime's own validation tables (`slides/src/schema.ts` reads what
+`untrusted.ts` accepts; `scripts/build-schema.mjs` prints it; CI fails if
+`schema/slides.json` is stale). One source, reachable four ways:
+
+- **URL** — `https://bento.page/schema/slides.json`, with a version-pinned
+  twin at `schema/slides-<version>.json`. Put
+  `"$schema": "https://bento.page/schema/slides.json"` at the top of a deck
+  you write and any JSON-Schema-aware editor validates it; the runtime strips
+  the key on load and writes it back on save, so every saved deck carries it.
+- **In the file** — the Tooling comment at the top of every `.bento.html`
+  names the URL, and the saved JSON's first key is `$schema`.
+- **`window.bento.schema()`** — the same JSON, built at runtime, for an agent
+  driving the browser (the shell is compressed, so a text reader cannot see
+  the code; use the URL).
+- **`https://bento.page/llms.txt`** — the index: this guide, the schema, the
+  platform invariants, the app.
+
+Which door for which reader: a model that READS the file gets the Tooling
+comment, `$schema` and the URL; a model that DRIVES the app gets `schema()`,
+`validate()`, `measure()` and `loadDoc()`.
+
 ## Repo layout
 
 ```

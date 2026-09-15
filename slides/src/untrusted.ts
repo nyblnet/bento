@@ -48,7 +48,17 @@ import { TIP_KINDS } from './tips'
 
 /** Reject. JSON has no `undefined`, so it can never collide with a real value. */
 const DROP = undefined
-type Check = (v: unknown) => unknown
+/**
+ * A check carries a DESCRIPTION of what it accepts (a JSON Schema fragment) so
+ * the same table that gates a paste can be printed for agents — schema.ts
+ * builds `https://bento.page/schema/slides.json` and `window.bento.schema()`
+ * from these, and CI pins the checked-in file to them. The description is
+ * metadata on the function: attaching it changes nothing about what the
+ * check does, and a check with none is emitted as an untyped value.
+ */
+export type JsonSchema = Record<string, unknown>
+type Check = ((v: unknown) => unknown) & { schema?: JsonSchema }
+const tag = (fn: (v: unknown) => unknown, schema: JsonSchema): Check => Object.assign(fn, { schema })
 
 /**
  * The load report (compact input, round two). The gate drops silently by
@@ -157,18 +167,19 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /** Finite number, or a numeric string coerced to one. Out of range = DROP. */
-const num = (min: number, max: number): Check => (v) => {
+const num = (min: number, max: number): Check => tag((v) => {
   const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
   return typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max ? n : DROP
-}
-const bool: Check = (v) => (typeof v === 'boolean' ? v : DROP)
-const oneOf = (...allowed: string[]): Check => (v) =>
-  typeof v === 'string' && allowed.includes(v) ? v : DROP
+}, { type: 'number', minimum: min, maximum: max })
+const bool: Check = tag((v) => (typeof v === 'boolean' ? v : DROP), { type: 'boolean' })
+const oneOf = (...allowed: string[]): Check => tag((v) =>
+  typeof v === 'string' && allowed.includes(v) ? v : DROP, { type: 'string', enum: allowed })
 /** Free text that reaches the DOM as text, never as markup. */
-const str = (max: number): Check => (v) => (typeof v === 'string' && v.length <= max ? v : DROP)
+const str = (max: number): Check => tag((v) => (typeof v === 'string' && v.length <= max ? v : DROP), { type: 'string', maxLength: max })
 /** A value that ends up inside a CSS declaration or an HTML attribute. */
-const cssValue = (max = LIMITS.scalar): Check => (v) =>
-  typeof v === 'string' && v.length <= max && !CSS_BREAKOUT.test(v) ? v : DROP
+const cssValue = (max = LIMITS.scalar): Check => tag((v) =>
+  typeof v === 'string' && v.length <= max && !CSS_BREAKOUT.test(v) ? v : DROP,
+  { type: 'string', maxLength: max, pattern: '^[^"\'<>{};]*$' })
 /**
  * A COLOUR, judged by exactly the rule render.ts:cssColor applies when it
  * writes one into markup — same allowlist, same `url(`/`expression`/`@`/`\`
@@ -182,11 +193,11 @@ const cssValue = (max = LIMITS.scalar): Check => (v) =>
  */
 const COLOR_CHARS = /^[#a-zA-Z0-9(),.%\s/-]+$/
 const COLOR_TRICKS = /url\s*\(|expression|@|\\/i
-const color = (max = LIMITS.color): Check => (v) => {
+const color = (max = LIMITS.color): Check => tag((v) => {
   if (typeof v !== 'string') return DROP
   const s = v.trim()
   return s && s.length <= max && COLOR_CHARS.test(s) && !COLOR_TRICKS.test(s) ? v : DROP
-}
+}, { type: 'string', maxLength: max, description: 'CSS colour; no url()' })
 /**
  * An svg PAINT (`fill` / `stroke`): a colour, or a reference to a gradient or
  * filter defined inside this document's own markup. The quoted form is what
@@ -198,18 +209,21 @@ const color = (max = LIMITS.color): Check => (v) => {
  * asked for, and it is a colour rule that would otherwise wave it through.
  */
 const LOCAL_PAINT_REF = /^url\(\s*(?:"#[\w.:-]+"|'#[\w.:-]+'|#[\w.:-]+)\s*\)$/
-const paint: Check = (v) =>
-  typeof v === 'string' && v.length <= LIMITS.color && LOCAL_PAINT_REF.test(v.trim()) ? v : color()(v)
+const paint: Check = tag((v) =>
+  typeof v === 'string' && v.length <= LIMITS.color && LOCAL_PAINT_REF.test(v.trim()) ? v : color()(v),
+  { type: 'string', maxLength: LIMITS.color, description: 'CSS colour or url(#local-id)' })
 /**
  * A font stack, which legitimately quotes multi-word families ('Segoe UI').
  * Quotes are therefore allowed here — renderTableHtml escapes them, and
  * injectFonts passes the family through JSON.stringify — but a brace or a
  * semicolon still ends a declaration, so those are not.
  */
-const fontStack: Check = (v) =>
-  typeof v === 'string' && v.length <= LIMITS.fontStack && !/[<>{};]/.test(v) ? v : DROP
-const pathData: Check = (v) =>
-  typeof v === 'string' && v.length <= LIMITS.html && PATH_DATA.test(v) ? v : DROP
+const fontStack: Check = tag((v) =>
+  typeof v === 'string' && v.length <= LIMITS.fontStack && !/[<>{};]/.test(v) ? v : DROP,
+  { type: 'string', maxLength: LIMITS.fontStack })
+const pathData: Check = tag((v) =>
+  typeof v === 'string' && v.length <= LIMITS.html && PATH_DATA.test(v) ? v : DROP,
+  { type: 'string', maxLength: LIMITS.html, description: 'SVG path data' })
 /**
  * src / poster: a data: URI, an asset: key, a URL, or a relative path.
  *
@@ -223,11 +237,11 @@ const pathData: Check = (v) =>
  * this into an attribute breakout, so it must escape or re-check — noted here
  * because the safety lives at the call site, not in this value.
  */
-const mediaRef: Check = (v) => {
+const mediaRef: Check = tag((v) => {
   if (typeof v !== 'string' || v.length > LIMITS.asset) return DROP
   if (HAS_SCHEME.test(v)) return SAFE_SCHEME.test(v) ? v : DROP
   return CSS_BREAKOUT.test(v) ? DROP : v // a bare path still lands in an attribute
-}
+}, { type: 'string', maxLength: LIMITS.asset, description: 'data: URI, asset:<key> or URL' })
 
 /**
  * Rebuild an object from a key table, dropping every key and value it fails.
@@ -243,7 +257,7 @@ const mediaRef: Check = (v) => {
 function shape(
   keys: readonly string[], checks: Record<string, Check>, required: readonly string[] = [],
 ): Check {
-  return (v) => {
+  return tag((v) => {
     if (!isPlainObject(v)) return DROP
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(v)) {
@@ -255,7 +269,18 @@ function shape(
     const missing = required.filter((key) => out[key] === DROP)
     if (missing.length) { note(null, `missing required ${missing.join(', ')} — object dropped`); return DROP }
     return out
-  }
+  }, objectSchema(keys, checks, required))
+}
+
+/** The schema of a `shape`: exactly the keys it keeps, each as its check says. */
+export function objectSchema(
+  keys: readonly string[], checks: Record<string, Check>, required: readonly string[] = [],
+): JsonSchema {
+  const properties: Record<string, JsonSchema> = {}
+  for (const key of keys) if (checks[key]) properties[key] = checks[key].schema ?? {}
+  const out: JsonSchema = { type: 'object', properties, additionalProperties: false }
+  if (required.length) out.required = [...required]
+  return out
 }
 
 /**
@@ -263,7 +288,7 @@ function shape(
  * arrays are positional — a table's cells line up with its columns, a chart's
  * data with its labels — and silently closing a hole would misalign the rest.
  */
-const list = (max: number, item: Check): Check => (v) => {
+const list = (max: number, item: Check): Check => tag((v) => {
   if (!Array.isArray(v) || v.length > max) { note(null, Array.isArray(v) ? `more than ${max} entries` : 'not a list'); return DROP }
   const out: unknown[] = []
   for (let i = 0; i < v.length; i++) {
@@ -272,7 +297,7 @@ const list = (max: number, item: Check): Check => (v) => {
     out.push(val)
   }
   return out
-}
+}, { type: 'array', maxItems: max, items: item.schema ?? {} })
 
 const gradient = shape(MODEL_KEYS.gradient, {
   angle: num(-3600, 3600),
@@ -331,7 +356,7 @@ const tableRows = list(LIMITS.rows, shape(MODEL_KEYS.tableRow, {
  * chartSnapshotSvg already catches), because a half-pruned option is still an
  * attacker's shape, kept.
  */
-const chartOption: Check = (v) => {
+const chartOption: Check = tag((v) => {
   if (!isPlainObject(v)) return DROP
   let nodes = LIMITS.optionNodes
   const pure = (node: unknown, depth: number): boolean => {
@@ -351,7 +376,7 @@ const chartOption: Check = (v) => {
     )
   }
   return pure(v, LIMITS.optionDepth) ? v : DROP
-}
+}, { type: 'object', description: 'ECharts-shaped option, plain JSON' })
 
 /**
  * The `embed` element. `url` is what a live iframe LOADS, so it
@@ -366,8 +391,9 @@ const chartOption: Check = (v) => {
 // Not held to CSS_BREAKOUT: a query string legitimately carries `;` and
 // quotes, and the one consumer assigns it as a DOM property (`iframe.src`),
 // where it is a value and never re-parsed as markup (the mediaRef argument).
-const webUrl: Check = (v) =>
-  typeof v === 'string' && v.length <= LIMITS.prose && isWebUrl(v) ? v : DROP
+const webUrl: Check = tag((v) =>
+  typeof v === 'string' && v.length <= LIMITS.prose && isWebUrl(v) ? v : DROP,
+  { type: 'string', maxLength: LIMITS.prose, pattern: '^https?://' })
 // An embedded document is another deck's JSON, and a deck's envelope carries
 // its collaboration secrets: `collab` (room, read key, private halves, and the
 // saved sync state) and `docId`. Neither is content. Left in place they would
@@ -375,7 +401,8 @@ const webUrl: Check = (v) =>
 // and export — and the export-secrets rig reads the top-level block only. So
 // an object source leaves here without them, whatever put them there — by the
 // same rule the export strip applies on the way out (envelope.ts).
-const embedDoc: Check = (v) => (typeof v === 'string' ? cssValue()(v) : stripEnvelope(chartOption(v)))
+const embedDoc: Check = tag((v) => (typeof v === 'string' ? cssValue()(v) : stripEnvelope(chartOption(v))),
+  { anyOf: [{ type: 'string', maxLength: LIMITS.scalar }, { type: 'object' }] })
 
 // `el` is required: a connector end with no element to anchor to is dangling,
 // and editor.syncConnectors drops those anyway
@@ -403,7 +430,7 @@ const connectorEnd = shape(MODEL_KEYS.connectorEnd, {
  * not parse is dead weight the validator will report forever, so it is dropped
  * here rather than carried.
  */
-const themeRefs: Check = (v) => {
+const themeRefs: Check = tag((v) => {
   if (!isPlainObject(v)) return DROP
   const out: Record<string, string> = {}
   let n = 0
@@ -420,18 +447,18 @@ const themeRefs: Check = (v) => {
     out[key] = token
   }
   return Object.keys(out).length ? out : DROP
-}
+}, { type: 'object', additionalProperties: { type: 'string' }, maxProperties: LIMITS.themeRefs, description: 'property path → palette token' })
 
-const ELEMENT_CHECKS: Record<string, Check> = {
+export const ELEMENT_CHECKS: Record<string, Check> = {
   themeRefs,
   // identity + geometry
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),
   groupId: cssValue(), showOnHover: cssValue(),
   // a slide id, or an http(s) URL — the same test the renderer and the show apply
-  link: (v) => (isWebUrl(v) ? v : cssValue()(v)),
+  link: tag((v) => (isWebUrl(v) ? v : cssValue()(v)), { type: 'string', maxLength: LIMITS.prose, description: 'slide id or http(s) URL' }),
   x: num(-1e6, 1e6), y: num(-1e6, 1e6), w: num(0, 1e6), h: num(0, 1e6),
   rotation: num(-3600, 3600), opacity: num(0, 1),
-  shadow: (v) => (Array.isArray(v) ? list(16, shadowSpec)(v) : shadowSpec(v)),
+  shadow: tag((v) => (Array.isArray(v) ? list(16, shadowSpec)(v) : shadowSpec(v)), { anyOf: [shadowSpec.schema!, { type: 'array', maxItems: 16, items: shadowSpec.schema! }] }),
   blur: num(0, 1000), backdropFilter: num(0, 1000), blend: cssValue(64),
   fx,
   // text
@@ -452,7 +479,7 @@ const ELEMENT_CHECKS: Record<string, Check> = {
   // the tip list is tips.ts's — one catalogue for the gate, the panel and the renderer
   lineStart: oneOf(...TIP_KINDS), lineEnd: oneOf(...TIP_KINDS),
   radius: num(0, 1e5), d: pathData,
-  pathBox: (v) => (Array.isArray(v) && v.length === 4 ? list(4, num(-1e6, 1e6))(v) : DROP),
+  pathBox: tag((v) => (Array.isArray(v) && v.length === 4 ? list(4, num(-1e6, 1e6))(v) : DROP), { type: 'array', minItems: 4, maxItems: 4, items: { type: 'number' } }),
   from: connectorEnd, to: connectorEnd,
   // image / svg / media
   src: mediaRef, poster: mediaRef, asset: cssValue(),
@@ -468,6 +495,12 @@ const ELEMENT_CHECKS: Record<string, Check> = {
   rows: tableRows, header: bool, style: tableStyle,
   // embed
   app: cssValue(), view: str(LIMITS.markup), doc: embedDoc, url: webUrl, live: bool,
+  // code — the raw snippet is text (code.ts tokenizes it, never innerHTML);
+  // grammar/theme names and asset ids land in lookups, not markup. Not in
+  // REQUIRED_ELEMENT_KEYS: renderCodeInto returns false without content and
+  // the caller falls back to plain text — a degrade, not a throw.
+  content: str(LIMITS.html), grammarName: cssValue(64), themeName: cssValue(64),
+  grammarAssetId: cssValue(), themeAssetId: cssValue(),
   type: oneOf(...Object.keys(MODEL_KEYS.element)),
 }
 
@@ -555,7 +588,7 @@ export function sanitizeElement(value: unknown): SlideElement | null {
 }
 
 
-const SLIDE_CHECKS: Record<string, Check> = {
+export const SLIDE_CHECKS: Record<string, Check> = {
   id: cssValue(), name: str(LIMITS.prose), stateOf: cssValue(), themeRefs,
   // background is a CSS `background` shorthand, so it gets the colour rule at
   // the shorthand's length — wide enough for a multi-stop linear-gradient(),
@@ -575,9 +608,9 @@ const SLIDE_CHECKS: Record<string, Check> = {
   })),
   // elements are dropped INDIVIDUALLY: one hostile element must not cost the
   // author the rest of a legitimately copied slide
-  elements: (v) => (Array.isArray(v) && v.length <= LIMITS.elements
+  elements: tag((v) => (Array.isArray(v) && v.length <= LIMITS.elements
     ? v.map((el, i) => within(String(i), () => sanitizeElement(el))).filter((el): el is SlideElement => el !== null)
-    : DROP),
+    : DROP), { type: 'array', maxItems: LIMITS.elements, items: { $ref: '#/$defs/element' } }),
 }
 
 /**

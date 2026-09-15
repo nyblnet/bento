@@ -74,7 +74,13 @@ function nestedKeys(ownerName, path) {
     if (ts.isTypeLiteralNode(t)) return propsOf(t.members)
     if (ts.isUnionTypeNode(t)) return t.types.flatMap(collect)
     if (ts.isParenthesizedTypeNode(t)) return collect(t.type)
-    if (ts.isTypeReferenceNode(t)) return keysOf(t.typeName.getText(src))
+    if (ts.isTypeReferenceNode(t)) {
+      const name = t.typeName.getText(src)
+      // `Array<{…}>` / `Partial<X>` carry their shape in the type argument
+      if ((name === 'Array' || name === 'Partial') && t.typeArguments) return t.typeArguments.flatMap(collect)
+      return keysOf(name)
+    }
+    if (ts.isArrayTypeNode(t)) return collect(t.elementType)
     return []
   }
   return collect(node)
@@ -91,6 +97,7 @@ const ELEMENTS = {
   table: 'TableElement',
   media: 'MediaElement',
   embed: 'EmbedElement', // the embed element (model.ts EmbedElement)
+  code: 'CodeElement', // added with the schema: it was missing, so the gate dropped pasted code elements
 }
 
 const tables = {
@@ -110,6 +117,16 @@ const tables = {
   tableCell: uniq(keysOf('TableCell')),
   gradient: uniq(keysOf('GradientFill')),
   imageCrop: uniq(keysOf('ImageCrop')),
+  // the document's own nested objects — the schema (schema.ts) describes the
+  // top level from these, so a field added to the theme reaches the schema
+  // the same way a field added to an element does
+  size: uniq(nestedKeys('BentoDoc', ['size'])),
+  meta: uniq(nestedKeys('BentoDoc', ['meta'])),
+  theme: uniq(nestedKeys('BentoDoc', ['theme'])),
+  themePalette: uniq(nestedKeys('BentoDoc', ['theme', 'palette'])),
+  themeCodePalette: uniq(nestedKeys('BentoDoc', ['theme', 'codePalette'])),
+  present: uniq(nestedKeys('BentoDoc', ['present'])),
+  font: uniq(nestedKeys('BentoDoc', ['fonts'])),
 }
 
 const lit = (v, indent = '  ') =>

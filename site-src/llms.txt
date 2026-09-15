@@ -1,0 +1,15 @@
+# Bento
+
+> Bento is a self-contained office suite: one HTML file is the document, the viewer and the editor. Bento Slides is the presentation app. The document is plain JSON inside the file's `<script type="application/bento+json" id="bento-doc">` block; an AI agent edits that block in place, or hands the running app a JSON string. Every saved deck names its schema in a top-level `$schema` key.
+
+## Docs
+
+- [Agent authoring guide](https://bento.page/agents.md): how to write and edit a deck, with copy-paste snippets and the compact input form (omit defaults, they are filled on load)
+- [Document schema](https://bento.page/schema/slides.json): JSON Schema 2020-12 for the `#bento-doc` JSON, generated from the app's own validation tables; version-pinned copies live beside it (`slides-<version>.json`)
+- [Platform invariants](https://raw.githubusercontent.com/nyblnet/bento/main/docs/PLATFORM.md): what every Bento file promises (splice contract, additivity, identity)
+- [The app](https://bento.page/slides): opens with the starter deck; `window.bento` exposes `doc`, `serialize()`, `loadDoc(json)`, `validate()`, `measure()`, `schema()`, `comments()`
+
+## Optional
+
+- [Decision log](https://raw.githubusercontent.com/nyblnet/bento/main/docs/DECISIONS.md): why the format and the runtime are the way they are
+- [Source](https://github.com/nyblnet/bento)

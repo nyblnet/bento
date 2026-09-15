@@ -72,7 +72,34 @@ ok(/const link = target\.dataset\.link \?\? ''\s*if \(isWebUrl\(link\)\)/.test(p
 ok(/closest\('a\[href\]'\)\) ev\.preventDefault\(\)/.test(read('slides/src/editor/canvas.ts')), 'canvas.ts: a link click in the editor never navigates')
 ok(/addEventListener\('auxclick'[\s\S]{0,300}ev\.preventDefault\(\)[\s\S]{0,200}if \(isWebUrl\(href\)\) openWeb\(href\)/.test(present),
   'present.ts: a middle-click on an anchor goes through the same door (auxclick would otherwise bypass the offline gate and noreferrer)')
-ok(/link: \(v\) => \(isWebUrl\(v\) \? v : cssValue\(\)\(v\)\)/.test(read('slides/src/untrusted.ts')), 'untrusted.ts: the shape gate accepts a link that is a web URL or a slide id')
+// Behavioural, not a regex over the source: the gate is bundled (it is not
+// node-importable unbundled) and fed a web URL, a slide id and a javascript:
+// URL. #488 wrapped every check in schema metadata and the old source pin
+// broke while the behaviour did not — a pin on the source proves nothing.
+{
+  const { execFileSync } = await import('node:child_process')
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const dir = mkdtempSync(join(tmpdir(), 'links-gate-'))
+  const entry = join(dir, 'probe.ts')
+  writeFileSync(entry, `
+    import { sanitizeElement } from '${join(root, 'slides/src/untrusted.ts').replace(/\\/g, '/')}'
+    const el = (link: string) => ({ id: 'e', type: 'text', x: 0, y: 0, w: 10, h: 10, rotation: 0, opacity: 1, html: 'x', fontSize: 20, link })
+    const out = ['https://example.org/a', 's2', 'javascript:alert(1)', 'data:text/html,x'].map((l) => (sanitizeElement(el(l)) as { link?: string } | null)?.link ?? null)
+    console.log(JSON.stringify(out))
+  `)
+  const bundle = join(dir, 'probe.mjs')
+  execFileSync(join(root, 'slides/node_modules/.bin/esbuild'), [entry, '--bundle', '--platform=node', '--format=esm', '--log-level=error', `--outfile=${bundle}`])
+  const got = JSON.parse(execFileSync(process.execPath, [bundle], { encoding: 'utf8' }).trim()) as (string | null)[]
+  rmSync(dir, { recursive: true, force: true })
+  ok(got[0] === 'https://example.org/a', 'the gate keeps a web link')
+  ok(got[1] === 's2', 'the gate keeps a slide-id link')
+  // A non-web link is a slide id: the gate keeps the string, and present.ts
+  // only ever looks it up as a slide — javascript:/data: are never opened
+  // (asserted on the present side below). What matters here is that the gate
+  // does not turn them into web links.
+  ok(got[2] !== null && !isWebUrl(got[2]) && got[3] !== null && !isWebUrl(got[3]), 'the gate keeps javascript:/data: only as slide-id text, never as a web link')
+}
 ok(!/target="_blank"|rel="noopener"/.test(render), 'render.ts stores no target/rel — those are decided at click time, never in the document')
 ok(/querySelectorAll<HTMLAnchorElement>\('a\[href\]'\)\)\) a\.rel = 'noopener noreferrer'/.test(present),
   'present.ts sets rel at MOUNT on show anchors — the context-menu and drag routes, which bypass the click handler, then send no referrer')

@@ -21,6 +21,7 @@ import { parseDoc, type BentoDoc, type TextElement } from './model'
 import { compactJson } from './compact'
 import { parseDocInputReport, fitAutoHeights, restack, type LoadReport } from './compactload'
 import { validateDoc, type ValidateOpts } from './validate'
+import { buildSchema } from './schema'
 import { resolveThemeRefs } from './palette'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
 import { starterDoc } from './starterdeck'
@@ -406,6 +407,15 @@ if (location.hash === '#present') {
    * each item carries the slide, a typed anchor (element / point / slide),
    * author, text, replies and resolved state.
    */
+  /**
+   * The document schema (JSON Schema 2020-12), built from the gate's own
+   * tables — the same JSON as https://bento.page/schema/slides.json for
+   * this version. For an agent driving the browser; a text reader takes
+   * the URL from the Tooling comment or the deck's `$schema` key instead.
+   */
+  schema() {
+    return buildSchema(APP_VERSION)
+  },
   comments() {
     return store.doc.slides.flatMap((s, slideIndex) =>
       (s.comments ?? []).map((c) => ({

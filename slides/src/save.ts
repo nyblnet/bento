@@ -22,9 +22,11 @@ import {
 import type { BentoDoc } from './model'
 import { pruneUnusedAssets } from './assets'
 import { adoptBuiltinFonts } from './fonts'
+import { stampSchema } from './schema'
 
 function prepareForSave(doc: BentoDoc): BentoDoc {
-  return pruneUnusedAssets(adoptBuiltinFonts(doc))
+  // …and the written JSON opens with its `$schema` pointer (schema.ts).
+  return stampSchema(pruneUnusedAssets(adoptBuiltinFonts(doc)))
 }
 
 /** Encryption-aware serializer, with unreferenced assets pruned from the copy it writes. */
