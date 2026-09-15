@@ -28,6 +28,16 @@ import { ELEMENT_CHECKS, SLIDE_CHECKS, REQUIRED_KEYS, LIMITS, objectSchema, type
 
 export const SCHEMA_URL = 'https://bento.page/schema/slides.json'
 
+/**
+ * The saved JSON names its schema as its FIRST key, so a reader with only
+ * the file in hand knows the format (50 bytes). A new object — the live
+ * document is never touched — and parseDoc strips the key on load, so it
+ * exists only in the bytes on disk: not in the store, the CRDT, a recovery
+ * snapshot or a clip. Older shells keep the key and write it back; nothing
+ * anywhere fetches it.
+ */
+export const stampSchema = <T extends object>(doc: T): T & { $schema: string } => ({ $schema: SCHEMA_URL, ...doc })
+
 const str = (max: number, description?: string): JsonSchema =>
   description ? { type: 'string', maxLength: max, description } : { type: 'string', maxLength: max }
 const color = (description: string): JsonSchema => ({ type: 'string', maxLength: LIMITS.color, description })

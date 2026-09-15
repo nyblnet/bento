@@ -22,7 +22,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { buildSchema, SCHEMA_URL } from '../slides/src/schema.ts'
+import { buildSchema, SCHEMA_URL, stampSchema } from '../slides/src/schema.ts'
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { parseDoc, FORMAT } from '../slides/src/model.ts'
 import { MODEL_KEYS } from '../slides/src/modelkeys.generated.ts'
@@ -165,6 +165,19 @@ const frozenCondition = (doc: J) => !!(doc && doc.format === FORMAT && Array.isA
 const releaseSrc = 'if (doc && doc.format === FORMAT && Array.isArray(doc.slides) && doc.slides.length > 0) {'
 ok(frozenCondition(withSchema), '1.1.0 (03280f5) parseDoc accepts a deck carrying $schema (frozen condition)')
 ok(read('slides/src/model.ts').includes(releaseSrc), "main's parseDoc still applies exactly that condition (source check)")
+
+console.log('\nthe saved JSON opens with its pointer\n')
+{
+  const live = JSON.parse(JSON.stringify(starter))
+  const stamped = stampSchema(live)
+  ok(Object.keys(stamped)[0] === '$schema' && stamped.$schema === SCHEMA_URL, 'stampSchema puts $schema FIRST, with the published URL')
+  ok(!('$schema' in live), 'the input object is untouched (a new object, not a mutation)')
+  ok(JSON.stringify(stamped).startsWith('{"$schema":"https://bento.page/schema/slides.json",'), 'serialized, the file starts with the pointer (50 B)')
+  const again = parseDoc(JSON.stringify(stamped))
+  ok(!!again && !('$schema' in again), 'load → save → load: the live document never carries it')
+  const facade = read('slides/src/save.ts')
+  ok(/function prepareForSave[\s\S]*stampSchema\(pruneUnusedAssets\(adoptBuiltinFonts\(doc\)\)\)/.test(facade), 'prepareForSave stamps the pointer on every write path (⌘S, autosave, exports, serialize())')
+}
 
 console.log('\nno beacon\n')
 const carriers: string[] = []
