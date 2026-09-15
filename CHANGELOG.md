@@ -11,6 +11,16 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **`bento check`: an agent can look at what it wrote.** `node
+  scripts/bento-check.mjs deck.bento.html` loads the deck in headless Chrome
+  and prints what the editor would otherwise keep to itself — text that
+  overflows its box (and by how many pixels), elements off the canvas, dead
+  links, effects that can never run — by slide, with element ids; `--png out/`
+  adds one PNG per slide through the same render path as *Export slides as
+  images*, and a contact sheet of the whole deck in one picture; `--json` for
+  scripts, `--fail-on warning` for a strict exit code. A document JSON works
+  as input too, checked inside the built shell. The other half of the agent
+  loop that `AGENTS.md` describes: write, check, fix, check again.
 - **A Layers list.** The Slide panel now opens with *Layers*: every element
   on the slide, top of the stack first, with a glyph and a short label (the
   text's first words, or the kind). Click a row to select, shift-click to add,

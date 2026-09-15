@@ -452,6 +452,17 @@ jobs:
         # serializeAuto — so a NEW export path cannot reintroduce either.
         run: node scripts/test-export-secrets.ts
 
+      - name: bento check rig (browser)
+        # scripts/bento-check.mjs is the closing half of an agent's loop: load
+        # a deck in headless Chrome and report what validate() finds, with
+        # element ids and paths, plus one PNG per slide through #480's render
+        # path and a contact sheet. The rig drives it as a child process on
+        # the built shell: a deck with an overflowing box and an off-canvas
+        # rect names both; --json, --png, exit codes; a compact document is
+        # refused in plain words on a shell without compact input. Self-skips
+        # only OUTSIDE CI where Chrome or the shell is missing.
+        run: node scripts/test-bento-check.ts
+
       - name: Blob content-address rig
         # Encrypted assets are fetched by content address from a relay the
         # threat model treats as untrusted. Nothing verified that what came

@@ -102,6 +102,27 @@ node ../scripts/test-preview.ts     # first-page preview rig (encryption veto, o
 node ../scripts/shell-gate.mjs dist-single/Bento_Slides.bento.html   # splice conformance
 ```
 
+## Check your deck
+
+You wrote a deck; now look at it. `bento check` loads it in headless Chrome —
+the real shell, the real fonts — and tells you what the runtime would otherwise
+swallow, then hands you pictures:
+
+```sh
+node scripts/bento-check.mjs deck.bento.html                # findings, by slide, with element ids
+node scripts/bento-check.mjs doc.json --png out/            # a document JSON in the built shell, + one PNG per slide
+node scripts/bento-check.mjs doc.json --json --fail-on warning   # machine-readable, strict exit code
+```
+
+The loop: write the document JSON (compact where the shell accepts it) → `bento
+check --png` → read `findings` (`text-overflow` says how many px the box is
+short and on which element; `out-of-canvas`, dead links, effects that can
+never run, unknown keys the gate dropped) → look at `contact.png`, one image of
+every slide, or a single `page-NN.png` when a finding points at it → fix →
+run again. Exit 0 means no finding at or above `--fail-on` (default `error`).
+Needs Chrome (`BENTO_CHROME` to point at a binary) and the built shell
+(`cd slides && npm run build:single`, or `--shell path`).
+
 ## Repo layout
 
 ```
