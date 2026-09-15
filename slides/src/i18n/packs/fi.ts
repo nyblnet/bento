@@ -939,4 +939,5 @@ export const strings: Catalog = {
   "Copy compact JSON (for agents)": "Kopioi tiivis JSON (agenteille)",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Sama pakka ilman oletusarvoja — muoto, jonka tekoälyagentin tulisi kirjoittaa. ”Korvaa JSON:sta” ottaa sen vastaan; tallennettu tiedosto on aina täydellinen.",
   "Compact JSON copied": "Tiivis JSON kopioitu",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Ladattu: {dropped} kenttää hylätty, {warnings} varoitusta — katso konsoli",
 }

@@ -922,4 +922,5 @@ export const zhHans: Catalog = {
   "Copy compact JSON (for agents)": "复制精简 JSON（供智能体使用）",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "同一份文稿，省去所有默认值——AI 智能体应当书写的形式。“从 JSON 替换”可读回它；保存的文件始终是完整的。",
   "Compact JSON copied": "已复制精简 JSON",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "已加载：丢弃 {dropped} 个字段，{warnings} 条警告 — 见控制台",
 }

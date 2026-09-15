@@ -25,6 +25,19 @@ pre-1.0.
   the compact way. Asked for, with a working proof of concept, by
   benedictjohannes (#411, #422); the nested arrays and the flattening come
   from that proof.
+- **The short way, round two: text sizes itself, markdown is accepted, and
+  a load says what it dropped.** In a compact document a text element may
+  leave `h` out (or say `"auto"`): the box is sized to its text on load,
+  with the deck's real fonts — the same measurement as *Fit height to text*.
+  A text element may carry `md` instead of `html` and it converts exactly as
+  pasted markdown does (bold, italic, code, strike, bullets and sub-bullets,
+  links). And `window.bento.loadDoc` now returns a report: every key the
+  safety check discarded, with its path and the reason (`/slides/0/elements/2/fontSze:
+  unknown key`), how many fields were filled in, and `validate()`'s findings
+  — so an agent's loop is load, read, fix, load again, instead of guessing
+  why a field vanished. *Replace from JSON…* summarises the same report in a
+  toast and logs it. Three agent-written decks are checked in and load clean
+  in CI.
 - **A Layers list.** The Slide panel now opens with *Layers*: every element
   on the slide, top of the stack first, with a glyph and a short label (the
   text's first words, or the kind). Click a row to select, shift-click to add,

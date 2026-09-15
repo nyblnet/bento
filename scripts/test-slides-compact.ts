@@ -22,7 +22,8 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { compactDoc, expandDoc, isCompact, compactJson, COMPACT_FLAG } from '../slides/src/compact.ts'
+import { compactDoc, expandDoc, expandDocWithStats, provisionalHeight, isCompact, compactJson, COMPACT_FLAG } from '../slides/src/compact.ts'
+import { markdownToHtml } from '../slides/src/editor/markdown.ts'
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { defaultText, defaultShape, defaultTable, defaultCode, readableInk, FONT_STACK, newDoc, isLightBg, type BentoDoc, type TextElement, type ShapeElement, type TableElement } from '../slides/src/model.ts'
 
@@ -153,17 +154,53 @@ ok(((mc.slides as Obj[])[0].elements as Obj[]).every((e) => e.type !== 'text' ||
 
 console.log('\nthe gated loader and the surfaces\n')
 const loader = read('slides/src/compactload.ts')
-ok(/import \{ sanitizeSlide \} from '\.\/untrusted'/.test(loader) && /map\(sanitizeSlide\)/.test(loader) && /return parseDoc\(JSON\.stringify\(expanded\)\)/.test(loader), 'compactload.ts expands, runs sanitizeSlide on every slide, then parseDoc — the gate is the single point of validation')
-ok(/if \(!isCompact\(raw\)\) return parseDoc\(json\)/.test(loader), 'a full document takes the plain parseDoc path, as today')
+ok(/import \{ sanitizeSlide, withDropReport, withPathSegment[^}]*\} from '\.\/untrusted'/.test(loader) && /=> sanitizeSlide\(s\)/.test(loader) && /const doc = parseDoc\(JSON\.stringify\(ex\)\)/.test(loader), 'compactload.ts expands, runs sanitizeSlide on every slide (collecting drops), then parseDoc — the gate is the single point of validation')
+ok(/if \(!isCompact\(raw\)\) \{\s*const doc = parseDoc\(json\)/.test(loader), 'a full document takes the plain parseDoc path, as today')
 const main = read('slides/src/main.ts')
-ok(/const next = parseDocInput\(json\)/.test(main) && /compact: \(\) => compactJson\(store\.doc\)/.test(main), 'window.bento.loadDoc accepts compact input and window.bento.compact() emits it')
+ok(/const parsed = parseDocInputReport\(json\)/.test(main) && /return parsed\.report/.test(main) && /compact: \(\) => compactJson\(store\.doc\)/.test(main), 'window.bento.loadDoc accepts compact input and returns the load report; window.bento.compact() emits compact JSON')
 ok(/return serializeFile\(store\.doc\)/.test(main), 'window.bento.serialize() is unchanged — the file is full')
 const editor = read('slides/src/editor/editor.ts')
-ok(/const next = parseDocInput\(ta\.value\)/.test(editor), 'Replace from JSON… accepts compact input')
+ok(/const parsed = parseDocInputReport\(ta\.value\)/.test(editor) && /Loaded: \{dropped\} fields dropped, \{warnings\} warnings — see console/.test(editor), 'Replace from JSON… accepts compact input and summarises the report in a toast')
 ok(/t\('Copy compact JSON \(for agents\)'\)/.test(editor) && /this\.copyDocJson\(true\)/.test(editor) && /compact \? compactJson\(clone\)/.test(editor), 'the Save menu has Copy compact JSON, wired to compactJson')
 ok(!/compact/i.test(read('slides/src/save.ts')) && !/compactDoc|compactJson/.test(read('slides/src/model.ts')), 'save.ts and model.ts know nothing of compaction — the on-disk file cannot be compact')
 ok(!/compact/.test(read('slides/src/modelkeys.generated.ts')), 'no model key named compact — the flag is input, never stored')
 ok(/compact/.test(read('AGENTS.md')), 'AGENTS.md tells agents about the compact form')
+
+console.log('\nround two: md, auto height, the report\n')
+{
+  const mk = (el: Obj) => ({ compact: true, slides: [{ id: 's1', elements: [el] }] })
+  const one = (d: unknown) => (expandDoc(d).slides[0].elements[0] as unknown as Obj)
+  // md → the editor's paste conversion, byte for byte
+  const md = '**Bold** and *it*\n- one\n  - two'
+  ok(one(mk({ type: 'text', x: 0, y: 0, w: 400, h: 100, md })).html === markdownToHtml(md), 'md converts through markdownToHtml — the same html a paste produces')
+  ok(!('md' in one(mk({ type: 'text', x: 0, y: 0, w: 400, h: 100, md }))), 'md never reaches the document')
+  const both = one(mk({ type: 'text', x: 0, y: 0, w: 400, h: 100, md, html: '<b>kept</b>' }))
+  ok(both.html === '<b>kept</b>' && !('md' in both), 'html wins when both are present; md is dropped')
+  ok(one(mk({ type: 'shape', shape: 'rect', x: 0, y: 0, w: 10, h: 10, md })).md === md, 'md on a non-text element is left to the gate (which drops it as unknown)')
+  // h omitted / "auto" → a provisional one-line height, listed for the browser
+  const r1 = expandDocWithStats(mk({ type: 'text', x: 0, y: 0, w: 400, html: 'hi', fontSize: 30, lineHeight: 1.5 }))
+  const e1 = r1.doc.slides[0].elements[0] as unknown as Obj
+  ok(e1.h === provisionalHeight(30, 1.5) && e1.h === 45, `omitted h → provisional one line (${e1.h} = 30 × 1.5)`)
+  ok(r1.stats.autoHeight.length === 1 && r1.stats.autoHeight[0].id === e1.id && r1.stats.autoHeight[0].slide === 's1', 'the element is listed for fitting, by slide and id')
+  const r2 = expandDocWithStats(mk({ type: 'text', x: 0, y: 0, w: 400, h: 'auto', html: 'hi' }))
+  const e2 = r2.doc.slides[0].elements[0] as unknown as Obj
+  ok(typeof e2.h === 'number' && r2.stats.autoHeight.length === 1, 'h: "auto" is the same request as omitting h')
+  const r3 = expandDocWithStats(mk({ type: 'text', x: 0, y: 0, w: 400, h: 120, html: 'hi' }))
+  ok((r3.doc.slides[0].elements[0] as unknown as Obj).h === 120 && r3.stats.autoHeight.length === 0, 'a given h is kept and not listed')
+  const r4 = expandDocWithStats(mk({ type: 'table', x: 0, y: 0, w: 400, columns: [{ w: 1 }], rows: [{ cells: [{ html: 'a' }] }] }))
+  ok(r4.stats.autoHeight.length === 0, 'tables are never auto-fitted (their height follows their rows)')
+  // the stats
+  const r5 = expandDocWithStats({ compact: true, slides: [{ elements: [[{ type: 'text', x: 0, y: 0, w: 1, h: 1, html: 'a' }, { type: 'text', x: 0, y: 0, w: 1, h: 1, html: 'b' }]] }] })
+  ok(r5.stats.minted === 2 && r5.stats.expanded > 20 && r5.stats.fromMarkdown === 0, `stats: 2 ids minted, ${r5.stats.expanded} fields expanded, 0 from markdown`)
+  ok(expandDocWithStats({ format: 'x', slides: [] }).stats.expanded === 0, 'a full document reports nothing expanded')
+  // the report shape on the browser side, by source
+  ok(/export interface LoadReport/.test(loader) && /dropped: Dropped\[\]/.test(loader) && /expanded: number/.test(loader) && /findings: ValidateResult/.test(loader) && /refit: ExpandStats\['autoHeight'\]/.test(loader), 'LoadReport carries dropped, expanded, fitted, findings and refit')
+  ok(/fitAutoHeights\(doc, stats\)/.test(loader) && /measureElement\(tx, doc\)/.test(loader), 'compactload fits every provisional height with measureElement — the panel button\'s measurement')
+  ok(/document\.fonts\.ready\.then/.test(main) && /fitAutoHeights\(store\.doc, \{ autoHeight: parsed\.report\.refit \}\)/.test(main), 'loadDoc re-fits after document.fonts.ready when fonts were still loading')
+  const gate = read('slides/src/untrusted.ts')
+  ok(/export function withDropReport/.test(gate) && /if \(!collector\) return$/m.test(gate), 'the gate collects drops only under withDropReport — one null check otherwise')
+  ok(/note\(key, 'unknown key'\)/.test(gate) && /note\(key, `unknown key for a \$\{type\} element`\)/.test(gate) && /note\(key, 'invalid value'\)/.test(gate), 'unknown keys and invalid values are reported with a reason')
+}
 
 console.log('\nwhat the editor dereferences on first render\n')
 {

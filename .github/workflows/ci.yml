@@ -1360,6 +1360,15 @@ jobs:
         # the loader gates the expanded doc, the file on disk stays full.
         run: node scripts/test-slides-compact.ts
 
+      - name: Agent-deck corpus rig
+        # scripts/fixtures/agent-decks/*.json — compact decks written the way
+        # agents write them (md, omitted h, nested arrays) — load through the
+        # real loader with zero dropped keys and zero validate() errors; a
+        # deliberately wrong deck reports every drop at its path with a reason.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-agent-decks.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-agent-decks.mjs"
+          node "$RUNNER_TEMP/test-slides-agent-decks.mjs"
+
       - name: Layers panel rig
         # editor/layerrows.ts, DOM-free: rows top-first, labels per type,
         # group indent, moveInPaintOrder == the Order buttons (front/back/±1,
