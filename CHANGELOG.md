@@ -20,10 +20,11 @@ pre-1.0.
   named in the Tooling comment at the top of every deck. A deck that carries
   `"$schema"` at the top validates in any schema-aware editor; the app ignores
   the key. Runtime cost: about 2.6 KB in the shell.
-- **Pasting a code snippet works again.** The table the app uses to know an
-  element's fields had no entry for the code element, so a pasted code block
-  was silently dropped by the paste check and `validate()` did not know its
-  fields. Found while building the schema from that table; fixed.
+- **A pasted code snippet keeps its code.** The table the app uses to know
+  an element's fields had no entry for the code element, so a pasted or loaded
+  code block kept its box but lost its content, grammar and theme — an empty
+  snippet — and `validate()` did not know its fields. Found while building
+  the schema from that table; fixed.
 - **A saved deck names its schema.** The first key of the saved JSON is now
   `"$schema": "https://bento.page/schema/slides.json"` — 50 bytes, so a
   reader with only the file in hand knows the format. Older versions keep the
