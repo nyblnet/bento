@@ -17,8 +17,8 @@
  *                are variables
  */
 
-import { type MNode, type Font, row, mi, mn, mo, MathError } from './ast.ts'
-import { byTypst, FUNCTIONS, LIMIT_FUNCTIONS } from './symbols.ts'
+import { type MNode, type Font, row, mi, mn, mo, MathError, symNode } from './ast.ts'
+import { byTypst, byTex, FUNCTIONS, LIMIT_FUNCTIONS } from './symbols.ts'
 
 type Tok = { t: 'name' | 'num' | 'str' | 'op' | '(' | ')' | ',' | ';' | '^' | '_' | '/' ; v: string }
 
@@ -77,7 +77,7 @@ class Parser {
     for (;;) {
       if (this.is('^')) { this.next(); sup = strip(this.parseAtom()); continue }
       if (this.is('_')) { this.next(); sub = strip(this.parseAtom()); continue }
-      if (this.is('op', "'")) { let p = ''; while (this.is('op', "'")) { this.next(); p += '′' } sup = sup ? row([mo(p), sup]) : mo(p); continue }
+      if (this.is('op', "'")) { const ps: MNode[] = []; while (this.is('op', "'")) { this.next(); ps.push(mo('′', { pad: '0em' })) } const p = ps.length === 1 ? ps[0] : { k: 'row', c: ps } as MNode; sup = sup ? row([p, sup]) : p; continue }
       break
     }
     if (sub || sup) base = { k: 'scr', b: base, sub, sup, limits: limits || undefined }
@@ -93,13 +93,15 @@ class Parser {
         const inner = this.parseSeq((x) => x.t === ')')
         if (!this.is(')')) throw new MathError('missing )')
         this.next()
-        return { k: 'fence', l: '(', r: ')', c: inner }
+        // Typst sizes every matching pair to its content (its `lr` is
+        // automatic), so a visible group is a stretchy fence, like \left(
+        return { k: 'fence', l: '(', r: ')', c: inner, explicit: true }
       }
       case ')': throw new MathError('unexpected )')
       case ',': return mo(',')
       case ';': return mo(';')
       case '^': case '_': case '/': throw new MathError(`unexpected ${t.v}`)
-      case 'op': return mo(OPS[t.v] ?? t.v)
+      case 'op': return t.v === '<==>' ? symNode(byTex.get('iff')!) : t.v === '==>' ? symNode(byTex.get('implies')!) : mo(OPS[t.v] ?? t.v)
       case 'name': return this.name(t.v)
     }
   }
@@ -108,7 +110,7 @@ class Parser {
     if (this.is('(')) {
       if (v in FONTS) { return { k: 'style', c: this.args1(), font: FONTS[v] } }
       if (v in ACCENTS) { const [a, s, u] = ACCENTS[v]; return { k: 'accent', b: this.args1(), a, stretchy: s, under: u } }
-      if (v in FENCED) { const [l, r] = FENCED[v]; return { k: 'fence', l, r, c: this.args1() } }
+      if (v in FENCED) { const [l, r] = FENCED[v]; return { k: 'fence', l, r, c: this.args1(), explicit: true } }
       switch (v) {
         case 'sqrt': return { k: 'sqrt', b: this.args1() }
         case 'root': { const [i, b] = this.args(2); return { k: 'sqrt', b, i } }
@@ -127,7 +129,10 @@ class Parser {
       }
     }
     const sym = byTypst.get(v)
-    if (sym) return sym.cls === 'i' ? mi(sym.cp) : sym.cls === 'big' ? mo(sym.cp, { big: true }) : mo(sym.cp)
+    if (sym) return symNode(sym)
+    // Typst's spacing words
+    const SP: Record<string, number> = { thin: 0.1667, med: 0.2222, thick: 0.2778, quad: 1, wide: 2 }
+    if (v in SP) return { k: 'space', em: SP[v] }
     if (v === 'oo') return mi('∞')
     if (v === 'dif') return mi('d', { up: true })
     if (FUNCTIONS.includes(v) || LIMIT_FUNCTIONS.includes(v)) return mi(v, { fn: true })
@@ -174,7 +179,7 @@ class Parser {
 
 /** `(x)` used as a script/fraction part loses its parentheses, as in Typst. */
 function strip(n: MNode): MNode {
-  return n.k === 'fence' && n.l === '(' && n.r === ')' && !n.size ? n.c : n
+  return n.k === 'fence' && n.l === '(' && n.r === ')' && !n.size ? n.c : n // (explicit or not: a consumed group loses its parens)
 }
 
 export function parseTypst(src: string, display: boolean): MNode {

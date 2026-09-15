@@ -34,9 +34,13 @@ function print(n: MNode, font: Font | undefined): string {
       // (\sin x): function application + 3mu, the way Temml spells it too.
       const parts: string[] = []
       n.c.forEach((c, i) => {
-        parts.push(print(c, font))
+        // an operator straight after another operator (\nabla \cdot, - -) is
+        // prefix in TeX's eyes — no left spacing; Temml marks it, so do we
+        const prev = n.c[i - 1]
+        const afterOp = c.k === 'sym' && c.cls === 'o' && '+−±∓⋅×∗'.includes(c.t) && prev?.k === 'sym' && prev.cls === 'o' && '+−±∓⋅×∗=<>≤≥≠∇∈'.includes(prev.t)
+        parts.push(afterOp && c.k === 'sym' ? print({ ...c, prefix: true }, font) : print(c, font))
         const nxt = n.c[i + 1]
-        if (nxt && isFn(c) && !(nxt.k === 'sym' && nxt.cls === 'o' && nxt.t !== '(')) parts.push('<mo>\u2061</mo><mspace width="0.1667em"></mspace>')
+        if (nxt && isFn(c) && !(nxt.k === 'sym' && nxt.cls === 'o')) parts.push(nxt.k === 'fence' && !nxt.size ? '<mo>\u2061</mo>' : '<mo>\u2061</mo><mspace width="0.1667em"></mspace>')
       })
       return `<mrow>${parts.join('')}</mrow>`
     }
@@ -49,7 +53,9 @@ function print(n: MNode, font: Font | undefined): string {
         return font === 'rm' || n.up ? `<mi mathvariant="normal">${esc(t)}</mi>` : `<mi>${esc(t)}</mi>`
       }
       const attrs: string[] = []
-      if (n.t === '′' || n.t === '″') attrs.push(' lspace="0em" rspace="0em"')
+      if (n.pad !== undefined) attrs.push(` lspace="${n.pad}" rspace="${n.pad}"`)
+      if (n.prefix && !'([{)]}'.includes(n.t)) attrs.push(' form="prefix" stretchy="false"')
+      if (n.t === '|' && n.pad !== undefined) attrs.push(' stretchy="false"')
       // a bare "(" in the middle of a row would be inferred INFIX by MathML
       // Core and spaced like a binary operator; TeX treats it as an opening
       // fence. Temml spells this out per paren; so do we.
@@ -63,7 +69,7 @@ function print(n: MNode, font: Font | undefined): string {
     // MathML trims an mtext's edge whitespace; \text{if } keeps its space
     // only as a no-break space (Temml does the same)
     case 'text': return `<mtext>${esc(n.t).replace(/ /g, '\u00a0')}</mtext>`
-    case 'space': return `<mspace width="${n.em}em"></mspace>`
+    case 'space': return n.em < 0 ? `<mrow style="margin-left:${n.em}em;"></mrow>` : `<mspace width="${n.em}em"></mspace>`
     case 'frac': {
       const inner = `<mfrac${n.nobar ? ' linethickness="0"' : ''}>${print(n.n, font)}${print(n.d, font)}</mfrac>`
       return n.display === undefined ? inner : `<mstyle displaystyle="${n.display}">${inner}</mstyle>`
@@ -78,7 +84,7 @@ function print(n: MNode, font: Font | undefined): string {
       // \left…\right / \big: stretchy, said out loud. A plain paren group
       // (Typst's, or LaTeX's when it needs an mrow): the bare-paren spelling.
       const f = (d: string, close: boolean) => n.explicit || n.size
-        ? `<mo stretchy="true"${n.size ? ` minsize="${n.size}em" maxsize="${n.size}em"` : ''}>${esc(d)}</mo>`
+        ? `<mo fence="true" form="${close ? 'postfix' : 'prefix'}" stretchy="true"${n.size ? ` minsize="${n.size}em" maxsize="${n.size}em"` : ''}>${esc(d)}</mo>`
         : `<mo fence="true" form="${close ? 'postfix' : 'prefix'}" stretchy="false">${esc(d)}</mo>`
       return `<mrow>${f(n.l, false)}${print(n.c, font)}${f(n.r, true)}</mrow>`
     }
@@ -90,15 +96,25 @@ function print(n: MNode, font: Font | undefined): string {
       const ncol = Math.max(...n.rows.map((r) => r.length))
       // Temml's exact figure (an absolute 5.9776pt a side, not an em), so a
       // matrix on a slide keeps the width it has today
-      const pad = (i: number) => `padding-left:${i === 0 ? '0em' : '5.9776pt'};padding-right:${i === ncol - 1 ? '0em' : '5.9776pt'}`
-      const body = n.rows.map((r) => `<mtr>${r.map((c, i) => `<mtd style="text-align:${al(i)};${pad(i)}">${print(c, font)}</mtd>`).join('')}</mtr>`).join('')
-      const table = `<mtable>${body}</mtable>`
-      return n.l || n.r ? `<mrow><mo stretchy="true">${esc(n.l ?? '')}</mo>${table}<mo stretchy="true">${esc(n.r ?? '')}</mo></mrow>` : table
+      // cases: 1em before the condition column; aligned: none (the & carries
+      // the relation's own spacing); matrices: Temml's absolute 5.9776pt
+      const pad = (i: number) => cols === 'll' ? `padding-left:${i === 0 ? '0' : '1'}em;padding-right:0em`
+        : cols === 'rl' ? 'padding-left:0em;padding-right:0em'
+        : `padding-left:${i === 0 ? '0em' : '5.9776pt'};padding-right:${i === ncol - 1 ? '0em' : '5.9776pt'}`
+      // centred cells say nothing (the default); left/right say so the way
+      // Temml's tml-left/tml-right classes would with its stylesheet
+      const body = n.rows.map((r) => `<mtr>${r.map((c, i) => `<mtd style="${al(i) === 'center' ? '' : `text-align:${al(i)};`}${pad(i)}">${print(c, font)}</mtd>`).join('')}</mtr>`).join('')
+      // aligned/gather rows are display-style (Temml sets it on the table)
+      const table = `<mtable${cols === 'rl' ? ' displaystyle="true"' : ''}>${body}</mtable>`
+      return n.l || n.r ? `<mrow><mo fence="true" form="prefix" stretchy="true">${esc(n.l ?? '')}</mo>${table}<mo fence="true" form="postfix" stretchy="true">${esc(n.r ?? '')}</mo></mrow>` : table
     }
     case 'accent': {
       // math-depth:0 keeps the accent glyph at full size inside scripts — the
       // same spelling Temml uses, so a deck looks the way it does today
-      const acc = `<mo stretchy="${n.stretchy ? 'true' : 'false'}" style="math-depth:0">${esc(n.a)}</mo>`
+      // Temml keeps hats/bars/tildes at full size (math-depth:0) but lets the
+      // arrow accents shrink to script size — matched, so \vec looks as today
+      const full = n.stretchy || !/[→←]/.test(n.a)
+      const acc = `<mo stretchy="${n.stretchy ? 'true' : 'false'}"${full ? ' style="math-depth:0"' : ''}>${esc(n.a)}</mo>`
       // no accent="true": Chrome then draws the glyph as a plain over-script
       // at math-depth 0, which is how Temml's output (and so every deck today)
       // looks; with the attribute the hat sits higher and larger
@@ -108,7 +124,7 @@ function print(n: MNode, font: Font | undefined): string {
       const inner = print(n.c, n.font ?? font)
       const st: string[] = []
       if (n.color) st.push(`color:${n.color}`)
-      if (n.box) st.push('border:0.06em solid currentColor;padding:0.2em 0.3em')
+      if (n.box) st.push('padding:3pt;border:1px solid')
       if (n.cancel) st.push('background:linear-gradient(to top right,transparent 47%,currentColor 47%,currentColor 53%,transparent 53%)')
       return st.length ? `<mrow style="${st.join(';')}">${inner}</mrow>` : inner
     }

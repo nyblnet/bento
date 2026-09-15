@@ -37,15 +37,15 @@ export const SYMBOLS: Sym[] = [
   T('propto', 'prop', '∝'), T('ll', 'lt.double', '≪'), T('gg', 'gt.double', '≫'), T('prec', 'prec', '≺'), T('succ', 'succ', '≻'),
   T('subset', 'subset', '⊂'), T('supset', 'supset', '⊃'), T('subseteq', 'subset.eq', '⊆'), T('supseteq', 'supset.eq', '⊇'),
   T('in', 'in', '∈'), T('notin', 'in.not', '∉'), T('ni', 'in.rev', '∋'), T('parallel', 'parallel', '∥'), T('perp', 'perp', '⟂'),
-  T('mid', 'divides', '∣'), T('models', 'models', '⊧'), T('vdash', 'tack.r', '⊢'),
+  T('mid', 'divides', '|'), T('models', 'models', '⊧'), T('vdash', 'tack.r', '⊢'),
   // arrows
   T('to', 'arrow.r', '→'), T('rightarrow', 'arrow.r', '→'), T('leftarrow', 'arrow.l', '←'), T('leftrightarrow', 'arrow.l.r', '↔'),
   T('Rightarrow', 'arrow.r.double', '⇒'), T('Leftarrow', 'arrow.l.double', '⇐'), T('Leftrightarrow', 'arrow.l.r.double', '⇔'), T('iff', 'arrow.l.r.double.long', '⟺'),
   T('mapsto', 'arrow.r.bar', '↦'), T('longrightarrow', 'arrow.r.long', '⟶'), T('uparrow', 'arrow.t', '↑'), T('downarrow', 'arrow.b', '↓'),
   T('implies', 'arrow.r.double.long', '⟹'), T('hookrightarrow', 'arrow.r.hook', '↪'),
   // logic & sets
-  T('forall', 'forall', '∀'), T('exists', 'exists', '∃'), T('nexists', 'exists.not', '∄'), T('neg', 'not', '¬'), T('lnot', 'not', '¬'),
-  T('emptyset', 'emptyset', '∅', 'i'), T('varnothing', 'nothing', '∅', 'i'), T('infty', 'infinity', '∞', 'i'), T('partial', 'diff', '∂', 'i'), T('nabla', 'nabla', '∇', 'i'),
+  T('forall', 'forall', '∀', 'i'), T('exists', 'exists', '∃', 'i'), T('nexists', 'exists.not', '∄', 'i'), T('neg', 'not', '¬'), T('lnot', 'not', '¬'),
+  T('emptyset', 'emptyset', '∅', 'i'), T('varnothing', 'nothing', '∅', 'i'), T('infty', 'infinity', '∞', 'i'), T('partial', 'diff', '∂', 'i'), T('nabla', 'nabla', '∇'),
   T('angle', 'angle', '∠'), T('triangle', 'triangle', '△'), T('hbar', 'planck.reduce', 'ℏ', 'i'), T('ell', 'ell', 'ℓ', 'i'),
   T('Re', 'Re', 'ℜ', 'i'), T('Im', 'Im', 'ℑ', 'i'), T('aleph', 'aleph', 'ℵ', 'i'), T('wp', 'wp', '℘', 'i'),
   T('degree', 'degree', '°'), T('prime', 'prime', '′'), T('therefore', 'therefore', '∴'), T('because', 'because', '∵'),

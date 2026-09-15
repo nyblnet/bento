@@ -501,10 +501,13 @@ function tagSymbols(mathml: string): string {
   return tpl.innerHTML
 }
 
-// SPIKE (spike-maths-lite): Temml is replaced by the in-house engine. A
-// formula may name its syntax with a leading marker inside the delimiters —
-// `$typst: a/b$` — which is ONE of the two options the spike handoff puts to
-// the maintainer, not a decision; plain `$…$` stays LaTeX.
+// maths-lite (spike-maths-lite) replaces Temml. THE SYNTAX MARKER, decided:
+// `$typst: …$` (and `$$typst: …$$`) is Typst maths — `typst:` immediately
+// after the opening delimiter, optional whitespace after the colon, case-
+// sensitive; anything else is LaTeX exactly as today. Nothing in the file
+// format changes: the marker is part of the text the author typed.
+// `$temml: …$` is the spike's CONTROL for the demo shell only — it does not
+// ship (see the import above).
 function renderMath(src: string, display: boolean): string | null {
   const key = (display ? 'D' : 'I') + src
   const hit = mathCache.get(key)
@@ -512,11 +515,11 @@ function renderMath(src: string, display: boolean): string | null {
   let out: string | null = null
   try {
     const tex = decodeEntities(src)
-    const m = /^\s*(typst|latex|temml)\s*:\s*/i.exec(tex)
+    const m = /^(typst|temml):\s*/.exec(tex)
     const body = m ? tex.slice(m[0].length) : tex
-    const ml = m?.[1].toLowerCase() === 'temml'
+    const ml = m?.[1] === 'temml'
       ? temml.renderToString(body, { displayMode: display, throwOnError: true, trust: false })
-      : mathsLite(body, { display, syntax: m?.[1].toLowerCase() === 'typst' ? 'typst' : 'latex' })
+      : mathsLite(body, { display, syntax: m?.[1] === 'typst' ? 'typst' : 'latex' })
     out = ml ? tagSymbols(ml) : null // not valid maths — leave the author's text exactly as typed
   } catch {
     out = null

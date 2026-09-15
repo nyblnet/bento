@@ -8,7 +8,7 @@
  * contract Temml's throwOnError path has today.
  */
 
-import { type MNode, type Font, row, mi, mn, mo, MathError } from './ast.ts'
+import { type MNode, type Font, row, mi, mn, mo, MathError, symNode } from './ast.ts'
 import { byTex, FUNCTIONS, LIMIT_FUNCTIONS } from './symbols.ts'
 
 type Tok = { t: 'cmd' | 'ch' | '{' | '}' | '^' | '_' | '&' | '\\\\' | 'ws'; v: string }
@@ -88,7 +88,7 @@ class Parser {
       if (this.is('^')) { this.next(); if (sup) throw new MathError('double superscript'); sup = this.parseGroup(); continue }
       if (this.is('_')) { this.next(); if (sub) throw new MathError('double subscript'); sub = this.parseGroup(); continue }
       // primes are superscripts
-      if (this.is('ch', "'")) { let p = ''; while (this.is('ch', "'")) { this.next(); p += '′' } sup = sup ? row([mo(p), sup]) : mo(p); continue }
+      if (this.is('ch', "'")) { const ps: MNode[] = []; while (this.is('ch', "'")) { this.next(); ps.push(mo('′', { pad: '0em' })) } const p = ps.length === 1 ? ps[0] : { k: 'row', c: ps } as MNode; sup = sup ? row([p, sup]) : p; continue }
       break
     }
     if (sub || sup) base = { k: 'scr', b: base, sub, sup, limits: limits || undefined }
@@ -108,13 +108,30 @@ class Parser {
   }
   charAtom(v: string): MNode {
     if (/[0-9]/.test(v)) { let n = v; while (this.is('ch') && /[0-9.]/.test(this.peek()!.v)) n += this.next().v; return mn(n) }
+    // `(…)` / `[…]` with the closer in the same group is ONE node, the way Temml
+    // (and Typst) see it: a script after `)` then belongs to the group.
+    if (v === '(' || v === '[') {
+      const close = v === '(' ? ')' : ']'
+      let depth = 0, j = this.i, found = false
+      for (; j < this.toks.length; j++) {
+        const t = this.toks[j]
+        if (t.t === '}' || t.t === '&' || t.t === '\\\\' || (t.t === 'cmd' && (t.v === 'right' || t.v === 'end'))) break
+        if (t.t === 'ch' && t.v === v) depth++
+        else if (t.t === 'ch' && t.v === close) { if (depth === 0) { found = true; break } depth-- }
+      }
+      if (found) {
+        const c = this.parseRow((t) => t.t === 'ch' && t.v === close && this.i === j)
+        this.next()
+        return { k: 'fence', l: v, r: close, c }
+      }
+    }
     if (/[a-zA-Z]/.test(v)) return mi(v)
     if ('+-*/=<>,;:!?|.()[]'.includes(v)) return mo(v === '-' ? '−' : v === '*' ? '∗' : v)
     return mi(v)
   }
   command(name: string): MNode {
     const sym = byTex.get(name)
-    if (sym) return sym.cls === 'i' ? mi(sym.cp) : sym.cls === 'big' ? mo(sym.cp, { big: true }) : mo(sym.cp)
+    if (sym) return symNode(sym)
     if (FUNCTIONS.includes(name) || LIMIT_FUNCTIONS.includes(name)) return mi(name, { fn: true })
     if (name in SPACES) return { k: 'space', em: SPACES[name] }
     if (name in FONTS) return this.font(FONTS[name], name === 'operatorname')

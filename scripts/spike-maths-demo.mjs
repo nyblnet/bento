@@ -51,10 +51,11 @@ const slides = [
       text(64, 160, 1150, 300, [
         'Every slide shows the same formula three times: <b>LaTeX through maths-lite</b>, <b>Typst through maths-lite</b>, and <b>LaTeX through Temml</b> as the control — the raw source in small type under each.',
         '',
-        'Syntax markers in this deck (one of the two options the handoff proposes, not a decision):',
-        '&nbsp;&nbsp;<code>$…$</code> — LaTeX, the default, exactly as today',
-        '&nbsp;&nbsp;<code>$typst: …$</code> — Typst maths, a marker inside the delimiters',
-        '&nbsp;&nbsp;<code>$temml: …$</code> — the Temml control (spike only; not a proposal)',
+        'Syntax — <b>decided</b> (maintainer, 2026-09-15): the marker is <code>typst:</code> right after the opening delimiter, case-sensitive.',
+        // the dollars in this prose are escaped (\\$) so resolveMath leaves them
+        '&nbsp;&nbsp;<code>\\$…\\$</code> and <code>\\$\\$…\\$\\$</code> — LaTeX, exactly as today',
+        '&nbsp;&nbsp;<code>\\$typst: …\\$</code> and <code>\\$\\$typst: …\\$\\$</code> — Typst maths',
+        '&nbsp;&nbsp;<code>\\$temml: …\\$</code> — the Temml control, in this spike shell only; it does not ship',
         '',
         'The document keeps raw source; nothing in the format changed. Shell size without Temml: see the handoff.',
       ].join('<br>'), { fontSize: 20, lineHeight: 1.5, color: MIST }),
@@ -91,7 +92,7 @@ const slides = [
     ['', '\\mathbf{x} \\mathrm{d}x \\mathsf{A} \\mathtt{code}', 'bold(x) upright(d) x sans(A) mono(c o d e)'],
   ]),
   family('Text & colour', [
-    ['', '\\text{if } x > 0 \\text{ then } y', '"if" x > 0 "then" y'],
+    ['', '\\text{if } x > 0 \\text{ then } y', '"if " x > 0 " then " y'],
     ['', '\\textcolor{red}{x} + \\textcolor{#5b8def}{y}', null],
     ['', '\\boxed{E = mc^2}', null],
   ]),
@@ -104,11 +105,10 @@ const slides = [
     ['', 'P(A \\mid B) = \\frac{P(B \\mid A)\\,P(A)}{P(B)}', 'P(A divides B) = (P(B divides A) P(A))/(P(B))'],
     ['', '\\sigma(\\mathbf{z})_i = \\frac{e^{z_i}}{\\sum_{j=1}^{K} e^{z_j}}', 'sigma(bold(z))_i = e^(z_i)/(sum_(j=1)^K e^(z_j))'],
   ]),
-  family('Known divergences (from the comparison rig)', [
-    ['\\vec: Temml shrinks the arrow by CSS class; without its stylesheet neither does', '\\vec{v}', 'arrow(v)'],
-    ['\\underline: Temml emits menclose, which Chrome does not draw', '\\underline{x} + \\overline{AB}', 'underline(x) + overline(A B)'],
-    ['\\boxed and \\text spacing: different spellings', '\\boxed{E} + \\text{if } x', '"if" x'],
-    ['Typst groups: f(x)_i scripts the group, TeX scripts the paren', '\\sigma(z)_i', 'sigma(z)_i'],
+  family('What still differs after round 2 (3 kinds of 89; the rest match)', [
+    ["Temml's: \\underline / \\overline are menclose, which Chrome does not draw — maths-lite draws the rule", '\\underline{x} + \\overline{AB}', 'underline(x) + overline(A B)'],
+    ['Sub-pixel: matrix / cases / aligned rows sit a fraction of a pixel apart (size 0.0%; the same by eye)', '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}', 'mat(a, b; c, d)'],
+    ['Tree only: Temml nests (z) then msub; ours is msub of the group — pixels identical', '\\sigma(z)_i', 'sigma(z)_i'],
   ]),
 ]
 
