@@ -14,6 +14,7 @@ import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } fr
 import { execFormat, hideFormatBar, syncFormatBar } from './richtext'
 import { PathEditor } from './patheditor'
 import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors } from './lineedit'
+import { CropEditor } from './cropedit'
 import { BezierEditor, isCurve } from './beziereditor'
 import { simplifyPoints } from './patheditor'
 
@@ -67,6 +68,7 @@ export class SlideCanvas {
   private panning = false
   private pathEditor!: PathEditor
   private lineEditor!: LineEditor
+  private cropEditor!: CropEditor
   private bezierEditor!: BezierEditor
   private drawOverlay: HTMLElement | null = null
   private comments!: CommentsUI
@@ -310,8 +312,13 @@ export class SlideCanvas {
     this.pathEditor.setScaleGetter(() => this.scale)
     this.lineEditor = new LineEditor(this.scaleHost, store)
     this.lineEditor.setScaleGetter(() => this.scale)
+    this.cropEditor = new CropEditor(this.scaleHost, store, () => this.scale, () => this.syncTargets())
     this.bezierEditor = new BezierEditor(this.scaleHost, store)
     this.bezierEditor.setScaleGetter(() => this.scale)
+    document.addEventListener('bento:edit-crop', ((ev: CustomEvent) => {
+      const id = String(ev.detail?.id ?? '')
+      if (id) this.startCropEdit(id)
+    }) as EventListener)
     document.addEventListener('bento:edit-path', ((ev: CustomEvent) => {
       this.startPathEdit(ev.detail.id)
     }) as EventListener)
@@ -348,7 +355,10 @@ export class SlideCanvas {
       }
       if (textEl) { this.startTextEdit(textEl); return }
       const td = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-table td[data-c]')
-      if (td) this.editCellFromTd(td)
+      if (td) { this.editCellFromTd(td); return }
+      // a picture: double-click opens crop mode (pan + zoom inside the frame)
+      const pic = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-image')
+      if (pic?.dataset.elId) this.startCropEdit(pic.dataset.elId)
     })
 
     // Touch has no double-click. Selecto and Moveable preventDefault the touch
@@ -396,7 +406,7 @@ export class SlideCanvas {
       const start = tap
       tap = null
       if (!start || ev.touches.length || this.store.readOnly) return
-      if (this.editing || this.editingCell || this.isPathEditing) return
+      if (this.editing || this.editingCell || this.isPathEditing || this.isCropEditing) return
       const t = ev.changedTouches[0]
       if (!t) return
       if (Math.hypot(t.clientX - start.x, t.clientY - start.y) > TAP_SLOP) return
@@ -417,6 +427,10 @@ export class SlideCanvas {
         // so they can be hit-tested directly — but the control box is above
         // them, hence the whole stack rather than the topmost node.
         opened = this.editCellUnder(node, t.clientX, t.clientY)
+      } else if (node.classList.contains('bento-el-image')) {
+        // a picture opens crop mode: a finger pans, two fingers zoom
+        this.startCropEdit(id)
+        opened = true
       }
       // Cancel the tap we consumed. Without this the browser replays it as
       // mousedown → mouseup → click ~300ms later at the ORIGINAL screen point,
@@ -776,6 +790,23 @@ export class SlideCanvas {
     this.store.select([pick])
   }
 
+  // --- crop editing (pan + zoom a picture inside its frame) --------------------
+
+  get isCropEditing() { return this.cropEditor.active }
+
+  startCropEdit(elId: string) {
+    this.commitTextEdit()
+    this.store.select([elId])
+    this.cropEditor.start(elId)
+    this.syncTargets()
+  }
+
+  /** finish crop editing; commit=false puts back what was there on entry */
+  stopCropEdit(commit = true) {
+    if (commit) this.cropEditor.commit()
+    else this.cropEditor.cancel()
+  }
+
   // --- motion-path editing ----------------------------------------------------
 
   get isPathEditing() {
@@ -810,6 +841,7 @@ export class SlideCanvas {
     if (this.editing) { this.pendingRender = true; return }
     this.pendingRender = false
     if (this.pathEditor?.active) this.pathEditor.cancel() // doc changed under us
+    if (this.cropEditor?.active) this.cropEditor.cancel()
     const slide = this.store.slide
     const next = renderSlide(slide, this.store.doc)
     // hover-reveal slides: preview one set at a time; hidden sets are
@@ -934,7 +966,7 @@ export class SlideCanvas {
     // A single selected line/curve/connector is edited with endpoint handles
     // (LineEditor), not Moveable's box — grab an end and drag it.
     const sel = this.store.selectedElements
-    const one = sel.length === 1 && !this.editing && !this.pathEditor.active ? sel[0] : null
+    const one = sel.length === 1 && !this.editing && !this.pathEditor.active && !this.cropEditor?.active ? sel[0] : null
     // Curves get true bezier handles (BezierEditor); lines and straight polygons
     // keep endpoint/anchor handles (LineEditor).
     const curve = !!one && isCurve(one)
@@ -943,7 +975,7 @@ export class SlideCanvas {
     else if (lineLike) { this.lineEditor.attach(one!.id); this.bezierEditor.detach() }
     else { this.lineEditor.detach(); this.bezierEditor.detach() }
     const handled = curve || lineLike
-    const targets = this.editing || this.pathEditor?.active || handled ? [] : this.selectedNodes()
+    const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes()
     // snap against slide bounds/center and every non-selected element
     const others = this.surface
       ? [this.surface, ...Array.from(this.surface.querySelectorAll<HTMLElement>('.bento-el'))].filter(
@@ -1225,6 +1257,13 @@ export class SlideCanvas {
       }
       if (this.pathEditor?.active) {
         e.stop() // the path overlay owns the pointer while editing
+        return
+      }
+      if (this.cropEditor?.active) {
+        // a press on the grey surround ends the crop, like a click outside
+        // the frame does on the slide; nothing starts a marquee under it
+        this.cropEditor.commit()
+        e.stop()
         return
       }
       if (this.editing) {
