@@ -23,7 +23,7 @@
 
 import { parseDoc, type BentoDoc, type Slide, type TextElement } from './model'
 import { sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './untrusted'
-import { expandDocWithStats, isCompact, type ExpandStats } from './compact'
+import { expandDocWithStats, isCompact, STACK_GAP, type ExpandStats } from './compact'
 import { measureElement } from './measure'
 import { validateDoc, type ValidateResult } from './validate'
 
@@ -42,6 +42,10 @@ export interface LoadReport {
   /** the elements still to re-fit once document.fonts settles (heights were
    *  measured against fallback fonts); empty when fonts were ready */
   refit: ExpandStats['autoHeight']
+  /** slides placed by layout + role (compact.ts round three) */
+  laidOut: number
+  /** bodies stacked into one slot — restacked again after a fonts-ready re-fit */
+  stacks: ExpandStats['stacks']
 }
 
 /**
@@ -61,7 +65,7 @@ export function parseDocInputReport(json: string, fit = typeof document !== 'und
   if (!isCompact(raw)) {
     const doc = parseDoc(json)
     if (!doc) return null
-    return { doc, report: { ok: true, compact: false, dropped: [], expanded: 0, fitted: 0, findings: validateDoc(doc), refit: [] } }
+    return { doc, report: { ok: true, compact: false, dropped: [], expanded: 0, fitted: 0, findings: validateDoc(doc), refit: [], laidOut: 0, stacks: [] } }
   }
   const { doc: expanded, stats } = expandDocWithStats(raw)
   const ex = expanded as unknown as Record<string, unknown>
@@ -77,9 +81,13 @@ export function parseDocInputReport(json: string, fit = typeof document !== 'und
   let refit: ExpandStats['autoHeight'] = []
   if (fit && stats.autoHeight.length) {
     fitted = fitAutoHeights(doc, stats)
+    restack(doc, stats)
     if (document.fonts?.status === 'loading') refit = stats.autoHeight
   }
-  return { doc, report: { ok: true, compact: true, dropped, expanded: stats.expanded, fitted, findings: validateDoc(doc), refit } }
+  // a role the layout had no slot for is reported beside the gate's drops:
+  // same shape, same loop for the agent (path → reason)
+  const all = [...dropped, ...stats.notes.map((n) => ({ path: n.path, reason: n.reason } as Dropped))]
+  return { doc, report: { ok: true, compact: true, dropped: all, expanded: stats.expanded, fitted, findings: validateDoc(doc), refit, laidOut: stats.laidOut, stacks: stats.stacks } }
 }
 
 /**
@@ -100,3 +108,25 @@ export function fitAutoHeights(doc: BentoDoc, stats: Pick<ExpandStats, 'autoHeig
   }
   return n
 }
+
+/**
+ * Bodies stacked into one layout slot got an equal share of its height in
+ * compact.ts; now that each has its measured height, lay them top-to-bottom
+ * with STACK_GAP between. If they do not fit the slot they still stack (the
+ * validator's overflow finding says so) — never scaled or clipped here.
+ * Exported for the fonts-ready re-fit.
+ */
+export function restack(doc: BentoDoc, stats: Pick<ExpandStats, 'stacks'>): void {
+  for (const st of stats.stacks) {
+    const slide = doc.slides.find((s) => s.id === st.slide)
+    if (!slide) continue
+    let y = st.slot.y
+    for (const id of st.ids) {
+      const el = slide.elements.find((e) => e.id === id)
+      if (!el) continue
+      el.y = y
+      y += el.h + STACK_GAP
+    }
+  }
+}
+

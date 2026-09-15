@@ -1369,6 +1369,14 @@ jobs:
           slides/node_modules/.bin/esbuild scripts/test-slides-agent-decks.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-agent-decks.mjs"
           node "$RUNNER_TEMP/test-slides-agent-decks.mjs"
 
+      - name: Compact layouts and roles rig
+        # A compact slide names a layout and its elements carry roles: the
+        # layout's frames through model.ts applyLayout (the editor's own
+        # path), ids kept so same-layout slides morph, unknown roles fall
+        # back and are reported, explicit geometry wins, bodies stack, and
+        # AGENTS.md's layout table is checked against the code.
+        run: node scripts/test-slides-compact-layouts.ts
+
       - name: Gate parity rig (the load-report collector changes no decision)
         # main's untrusted.ts frozen from git at rig time and bundled beside
         # the branch's; every checked-in deck plus a hostile corpus goes

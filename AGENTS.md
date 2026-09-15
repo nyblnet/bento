@@ -119,6 +119,44 @@ instead of `html` and it converts exactly as pasted markdown does: `**bold**`,
 `*italic*`, `` `code` ``, `~~strike~~`, `- bullets` (indent two spaces for a
 sub-bullet), `[caption](https://…)`; when both are present `html` wins.
 
+You need not place anything. Give a slide a `layout` and its elements a
+`role`, leave out geometry and typography, and the layout's frames and type
+are used — the same matching the editor's *Apply layout* does, and slides born
+from the same layout share element ids, so their titles morph. An element that
+DOES carry `x y w h` is placed as given, on top. More `body` elements than the
+layout has body slots stack into the slot top-to-bottom, each sized to its
+text. A role the layout lacks falls back to the body slot and the load report
+says so (`dropped` carries a note with the path). An `image` role takes an
+image element and puts the picture in the slot.
+
+```json
+{ "compact": true, "slides": [
+  { "layout": "title-body", "elements": [
+    { "role": "title", "md": "Three things went right" },
+    { "role": "body", "md": "**Latency** fell 40%." },
+    { "role": "body", "md": "**Uptime** held at 99.97%." } ] },
+  { "layout": "image-right", "elements": [
+    { "role": "title", "md": "The tile" },
+    { "role": "body", "md": "It stays put." },
+    { "type": "image", "role": "image", "src": "data:image/png;base64,…" } ] } ] }
+```
+
+The built-in layouts and their roles (this list is generated from the code by
+`scripts/test-slides-compact-layouts.ts`, so it cannot drift):
+
+- `title` — title, subtitle
+- `title-content` — title, body (also answers to `title-body`)
+- `two-col` — title, body, left, right (also `two-column`; `left`/`right` are
+  the two body slots)
+- `section` — title, kicker
+- `three-cards` — title, card1, card2, card3 (also `cards`)
+- `quote` — quote, attribution
+- `image-left` — image, title, body
+- `image-right` — title, body, image
+
+A deck's own `layouts` (full Slide objects, the shape *Save slide as layout*
+writes) may be named the same way.
+
 Load it with `window.bento.loadDoc(json)` or *Save ▾ Replace from JSON…*;
 `window.bento.compact()` (or *Save ▾ Copy compact JSON*) gives a deck back in
 this shape. A compact document passes the untrusted shape gate on the way in,
@@ -130,6 +168,7 @@ const r = window.bento.loadDoc(json)
 // r.dropped        → [{ path: '/slides/0/elements/2/fontSze', reason: 'unknown key for a text element' }, …]
 // r.expanded       → fields filled from the editor's defaults
 // r.fitted         → text boxes sized to their text
+// r.laidOut        → slides placed by layout + role
 // r.findings       → window.bento.validate() on the loaded deck (overflow, off-canvas, dead links …)
 ```
 

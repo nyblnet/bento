@@ -1,0 +1,40 @@
+{
+  "compact": true,
+  "title": "Platform roadmap",
+  "slides": [
+    { "layout": "title", "elements": [
+      { "role": "title", "md": "Platform roadmap" },
+      { "role": "subtitle", "md": "What ships in Q4, and why" }
+    ] },
+    { "layout": "section", "elements": [
+      { "role": "kicker", "md": "PART 1" },
+      { "role": "title", "md": "Where we are" }
+    ] },
+    { "layout": "title-body", "elements": [
+      { "role": "title", "md": "Three things went right" },
+      { "role": "body", "md": "**Latency** fell 40% after the cache rewrite." },
+      { "role": "body", "md": "**Uptime** held at 99.97% through two migrations." },
+      { "role": "body", "md": "**Onboarding** dropped from six screens to two." }
+    ] },
+    { "layout": "two-column", "elements": [
+      { "role": "title", "md": "Before and after" },
+      { "role": "left", "md": "- six screens\n- two passwords\n- a PDF to print" },
+      { "role": "right", "md": "- two screens\n- one passkey\n- nothing to print" }
+    ] },
+    { "layout": "three-cards", "elements": [
+      { "role": "title", "md": "Q4 in three cards" },
+      { "role": "card1", "md": "**Sync**\n\nOffline edits merge without conflicts." },
+      { "role": "card2", "md": "**Broadcast**\n\nA deck follows its presenter live." },
+      { "role": "card3", "md": "**Agents**\n\nA deck can be written from a schema." }
+    ] },
+    { "layout": "quote", "elements": [
+      { "role": "quote", "md": "The file is the software." },
+      { "role": "attribution", "md": "README, line one" }
+    ] },
+    { "layout": "image-right", "elements": [
+      { "role": "title", "md": "The tile" },
+      { "role": "body", "md": "Four tiles morph through every slide of the starter deck; this one stays put." },
+      { "type": "image", "role": "image", "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23F7A600'/%3E%3C/svg%3E" }
+    ] }
+  ]
+}

@@ -42,6 +42,26 @@
  *     and indented sub-bullets, [caption](url)). When both are present `html`
  *     wins and `md` is dropped; `md` never reaches the document.
  *
+ * Round three — placement by layout and role, so an agent never writes a
+ * coordinate it did not choose:
+ *
+ *   - A compact slide may say `"layout": "<layout id>"` (a built-in, or one
+ *     of the compact document's own `layouts`). Its elements may then omit
+ *     geometry and typography and carry a `role` instead — `title`, `body`,
+ *     `subtitle`, `kicker`, `quote`, `attribution`, `image`, `card1`…: the
+ *     layout is instantiated the way the picker does it (element ids KEPT, so
+ *     slides born from the same layout still morph their chrome) and each
+ *     role'd element's content is laid onto the layout's slot with that role
+ *     through model.ts applyLayout — the same matching "Apply layout" in the
+ *     editor uses. An element WITH explicit `x y w h` is placed as given, on
+ *     top, role or not. A role the layout has no slot for falls back to the
+ *     body slot (or, with no body either, to the editor's default frame) and
+ *     the load report says so. `left`/`right` name the first and second
+ *     `body` slot of a two-column layout. More `body` elements than body slots
+ *     STACK into the slot top-to-bottom: an equal share of the slot's height
+ *     each here (pure); compactload.ts then measures each and restacks with a
+ *     gap so a title and three paragraphs lay out as a reader expects.
+ *
  * Defaults come from the SAME functions model.ts's editor paths use
  * (defaultText, defaultShape, …), never a second table — a second table is
  * what drifts. Where the editor derives a value from the deck (text colour
@@ -59,7 +79,7 @@ import { markdownToHtml } from './editor/markdown.ts'
 import {
   FORMAT, FORMAT_VERSION, FONT_STACK,
   defaultText, defaultShape, defaultImage, defaultChart, defaultCode, defaultTable, defaultMedia,
-  readableInk, isLightBg, newDoc,
+  readableInk, isLightBg, newDoc, builtinLayouts, applyLayout,
   type BentoDoc, type Slide, type SlideElement, type ShapeKind,
 } from './model.ts'
 
@@ -198,6 +218,111 @@ export interface ExpandStats {
   fromMarkdown: number
   /** text elements whose h is provisional — the browser measures these */
   autoHeight: Array<{ slide: string; id: string }>
+  /** slides laid out from a layout by role */
+  laidOut: number
+  /** role'd elements the layout had no slot for, and where they went */
+  notes: Array<{ path: string; reason: string }>
+  /** body elements stacked into one slot; compactload.ts restacks these by
+   *  measured height (ids in stacking order, the slot's frame) */
+  stacks: Array<{ slide: string; ids: string[]; slot: { x: number; y: number; w: number; h: number } }>
+}
+
+/** The gap between stacked body elements, in slide px. */
+export const STACK_GAP = 16
+
+/** A layout's role → slot map (first slot per role wins; `left`/`right` are
+ *  the first and second `body` slot). Exported for AGENTS.md's table rig. */
+export function layoutRoles(layout: Slide): Record<string, string> {
+  const roles: Record<string, string> = {}
+  const bodies: string[] = []
+  for (const el of layout.elements) {
+    if (!el.role) continue
+    if (!(el.role in roles)) roles[el.role] = el.id
+    if (el.role === 'body') bodies.push(el.id)
+  }
+  if (bodies.length >= 2) { roles.left = bodies[0]; roles.right = bodies[1] }
+  return roles
+}
+
+/** The compact `layout` name resolved to a layout for this deck: a built-in
+ *  (by id, with or without the `layout-` prefix) or one of the document's. */
+export function findLayout(name: string, doc: Obj): Slide | undefined {
+  const size = doc.size as { width: number; height: number } | undefined
+  const own = Array.isArray(doc.layouts) ? (doc.layouts as Slide[]) : []
+  const all = [...builtinLayouts(size), ...own]
+  const key = LAYOUT_ALIASES[name] ?? name
+  return all.find((l) => l.id === key) ?? all.find((l) => l.id === `layout-${key}`) ?? all.find((l) => l.name?.toLowerCase() === name.toLowerCase())
+}
+
+/** The names an agent says for a built-in, beside the ids themselves. */
+export const LAYOUT_ALIASES: Record<string, string> = {
+  'title-body': 'layout-title-content',
+  'two-column': 'layout-two-col',
+  'cards': 'layout-three-cards',
+}
+
+const hasFrame = (el: Obj) => ['x', 'y', 'w', 'h'].every((k) => typeof el[k] === 'number')
+
+/**
+ * Lay a compact slide's elements onto a layout. `els` are the expanded
+ * elements (full defaults, md converted); `raw` the author's originals, to
+ * know which carried a frame. Returns the slide's element list.
+ */
+function layOut(layout: Slide, els: Obj[], raw: Obj[], slideId: string, si: number, stats: ExpandStats): Obj[] {
+  const roles = layoutRoles(layout)
+  const donors: Obj[] = []
+  const extras: Obj[] = []
+  const bySlot = new Map<string, Obj[]>() // slot id → donors wanting it, in order
+  els.forEach((el, i) => {
+    const role = typeof el.role === 'string' ? el.role : ''
+    if (!role || hasFrame(raw[i])) { extras.push(el); return }
+    let slot = roles[role]
+    if (!slot) {
+      if (roles.body) {
+        slot = roles.body
+        stats.notes.push({ path: `/slides/${si}/elements/${i}/role`, reason: `no \`${role}\` slot in layout \`${layout.id}\`; placed as body` })
+      } else {
+        stats.notes.push({ path: `/slides/${si}/elements/${i}/role`, reason: `no \`${role}\` slot in layout \`${layout.id}\` and no body slot; placed at the default frame` })
+        extras.push(el); return
+      }
+    }
+    // the slot's own role is what applyLayout matches on
+    const slotEl = layout.elements.find((e) => e.id === slot)!
+    const d = { ...el, role: slotEl.role }
+    const list = bySlot.get(slot) ?? []
+    list.push(d); bySlot.set(slot, list)
+    donors.push(d)
+  })
+  // applyLayout consumes donors in document order, one per slot
+  const known = new Set(layout.elements.map((e) => e.id))
+  const slideForApply = { id: slideId, elements: donors as unknown as SlideElement[] } as unknown as Slide
+  const placed = applyLayout(slideForApply, layout, known) as unknown as Obj[]
+  // an image donor that applyLayout turned into the slot keeps the slot id;
+  // a text donor's content is now in the slot copy. Anything unconsumed of
+  // ours is a SECOND body for its slot → stack. (applyLayout appends
+  // unconsumed donors as extras; we take them back out.)
+  const donorIds = new Set(donors.map((d) => d.id))
+  const out: Obj[] = placed.filter((e) => !donorIds.has(e.id as string))
+  for (const [slot, list] of bySlot) {
+    if (list.length < 2) continue
+    const slotEl = out.find((e) => e.id === slot)
+    if (!slotEl || slotEl.type !== 'text') continue
+    const n = list.length
+    const frame = { x: slotEl.x as number, y: slotEl.y as number, w: slotEl.w as number, h: slotEl.h as number }
+    const share = Math.floor((frame.h - STACK_GAP * (n - 1)) / n)
+    const ids: string[] = []
+    list.forEach((d, k) => {
+      const id = k === 0 ? slot : `${slot}-${k + 1}`
+      const copy: Obj = { ...slotEl, id, y: frame.y + k * (share + STACK_GAP), h: Math.max(1, share), html: d.html }
+      if (k === 0) Object.assign(slotEl, copy)
+      else out.splice(out.indexOf(slotEl) + k, 0, copy)
+      ids.push(id)
+      stats.autoHeight.push({ slide: slideId, id })
+    })
+    stats.stacks.push({ slide: slideId, ids, slot: frame })
+  }
+  stats.laidOut++
+  return [...out, ...extras]
 }
 
 /**
@@ -217,7 +342,7 @@ export const provisionalHeight = (fontSize: number, lineHeight: number): number 
 
 /** expandDoc, and what it did. */
 export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: ExpandStats } {
-  const stats: ExpandStats = { expanded: 0, minted: 0, fromMarkdown: 0, autoHeight: [] }
+  const stats: ExpandStats = { expanded: 0, minted: 0, fromMarkdown: 0, autoHeight: [], laidOut: 0, notes: [], stacks: [] }
   if (!isCompact(input)) return { doc: input as BentoDoc, stats }
   const src = input as Obj
   const dd = docDefaults()
@@ -239,16 +364,22 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
   doc.slides = slidesIn.map((raw, si) => {
     const s0 = isObj(raw) ? raw : {}
     const sd = slideDefaults(doc)
-    const slide: Obj = { ...sd, ...s0 }
+    // a layout supplies the slide's background/transition unless the author set them
+    const layout = typeof s0.layout === 'string' ? findLayout(s0.layout, doc) : undefined
+    if (typeof s0.layout === 'string' && !layout) stats.notes.push({ path: `/slides/${si}/layout`, reason: `unknown layout \`${s0.layout}\`; elements placed as given` })
+    const slide: Obj = { ...sd, ...(layout ? { background: layout.background, transition: layout.transition } : {}), ...s0 }
+    delete slide.layout
     stats.expanded += Object.keys(sd).filter((k) => !(k in s0)).length
     if (typeof slide.id !== 'string' || !slide.id) slide.id = `s${si + 1}`
     const flat: Obj[] = []
     const walk = (v: unknown) => { if (Array.isArray(v)) v.forEach(walk); else if (isObj(v)) flat.push(v) }
     walk(s0.elements)
-    slide.elements = flat.map((el, i) => {
+    slide.elements = flat.map((el0, i) => {
+      // a role'd or text-bearing element with no `type` is a text box
+      const el: Obj = (!el0.type && (typeof el0.role === 'string' || typeof el0.md === 'string' || typeof el0.html === 'string')) ? { type: 'text', ...el0 } : el0
       const defaults = elementDefaults(el, slide, doc) ?? {}
       const out: Obj = { ...defaults, ...el }
-      stats.expanded += Object.keys(defaults).filter((k) => !(k in el)).length
+      stats.expanded += Object.keys(defaults).filter((k) => !(k in el)).length + (el === el0 ? 0 : 1)
       if (typeof out.id !== 'string' || !out.id) { out.id = mintId(slide, el, i); stats.minted++ }
       if (el.type === 'text') {
         // md → html by the editor's own paste conversion; html wins when both
@@ -264,6 +395,15 @@ export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: Expa
       }
       return out as unknown as SlideElement
     })
+    if (layout) {
+      const before = new Set(stats.autoHeight.filter((a) => a.slide === slide.id).map((a) => a.id))
+      const laid = layOut(layout, slide.elements as unknown as Obj[], flat, slide.id as string, si, stats)
+      // donors that became slot content no longer exist under their own id:
+      // their provisional heights are the slot's, not to be measured
+      const ids = new Set(laid.map((e) => e.id as string))
+      stats.autoHeight = stats.autoHeight.filter((a) => a.slide !== slide.id || !before.has(a.id) || ids.has(a.id))
+      slide.elements = laid as unknown as SlideElement[]
+    }
     return slide as unknown as Slide
   })
   return { doc: doc as unknown as BentoDoc, stats }

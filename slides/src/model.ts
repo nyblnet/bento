@@ -1091,6 +1091,13 @@ const bar = (id: string, frame: { x: number; y: number; w: number; h: number }):
   rotation: 0, opacity: 1, fill: '#F7A600', stroke: 'transparent', strokeWidth: 0, radius: 2,
 })
 
+/** A card backdrop: a soft panel grouped with the text that sits on it. */
+const card = (id: string, frame: { x: number; y: number; w: number; h: number }, role: string): ShapeElement => ({
+  id, type: 'shape', shape: 'rect', ...frame,
+  rotation: 0, opacity: 1, fill: '#F3F0EA', stroke: 'transparent', strokeWidth: 0, radius: 16,
+  groupId: `l3c-g${role.slice(-1)}`,
+})
+
 /**
  * The canvas the built-in layout geometry below is authored against.
  *
@@ -1171,6 +1178,53 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
           { fontSize: 18, fontWeight: 600, color: '#F7A600', letterSpacing: 3, valign: 'middle', role: 'kicker' }),
       ],
     },
+    // Four layouts an agent reaches for (compact input: `layout` + `role`,
+    // compact.ts). Roles are the slot names; the card backdrops share a
+    // groupId per card so a card moves as one in the editor.
+    {
+      id: 'layout-three-cards', name: 'Three cards', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('l3c-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        card('l3c-bg1', { x: 120, y: 220, w: 426, h: 560 }, 'card1'),
+        ph('l3c-card1', 'First card', { x: 152, y: 252, w: 362, h: 496 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'card1', groupId: 'l3c-g1' }),
+        card('l3c-bg2', { x: 587, y: 220, w: 426, h: 560 }, 'card2'),
+        ph('l3c-card2', 'Second card', { x: 619, y: 252, w: 362, h: 496 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'card2', groupId: 'l3c-g2' }),
+        card('l3c-bg3', { x: 1054, y: 220, w: 426, h: 560 }, 'card3'),
+        ph('l3c-card3', 'Third card', { x: 1086, y: 252, w: 362, h: 496 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'card3', groupId: 'l3c-g3' }),
+      ],
+    },
+    {
+      id: 'layout-quote', name: 'Quote', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        bar('lq-bar', { x: 160, y: 300, w: 8, h: 300 }),
+        ph('lq-quote', 'Click to add a quote', { x: 208, y: 300, w: 1232, h: 300 },
+          { fontSize: 48, fontWeight: 500, valign: 'middle', lineHeight: 1.3, role: 'quote' }),
+        ph('lq-attr', 'Who said it', { x: 208, y: 620, w: 1232, h: 44 },
+          { fontSize: 24, color: '#586A80', valign: 'middle', role: 'attribution' }),
+      ],
+    },
+    {
+      id: 'layout-image-left', name: 'Image left', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('lil-image', 'Add an image', { x: 120, y: 120, w: 640, h: 660 },
+          { fontSize: 24, color: '#8A98AB', align: 'center', valign: 'middle', role: 'image' }),
+        ph('lil-title', 'Click to add title', { x: 820, y: 120, w: 660, h: 120 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        ph('lil-body', 'Click to add content', { x: 820, y: 264, w: 660, h: 516 },
+          { fontSize: 24, color: '#586A80', valign: 'top', lineHeight: 1.5, role: 'body' }),
+      ],
+    },
+    {
+      id: 'layout-image-right', name: 'Image right', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('lir-title', 'Click to add title', { x: 120, y: 120, w: 660, h: 120 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        ph('lir-body', 'Click to add content', { x: 120, y: 264, w: 660, h: 516 },
+          { fontSize: 24, color: '#586A80', valign: 'top', lineHeight: 1.5, role: 'body' }),
+        ph('lir-image', 'Add an image', { x: 840, y: 120, w: 640, h: 660 },
+          { fontSize: 24, color: '#8A98AB', align: 'center', valign: 'middle', role: 'image' }),
+      ],
+    },
     { id: 'layout-blank', name: 'Blank', background: '#FFFFFF', transition: 'fade', notes: '', elements: [] },
   ]
   if (!size || (size.width === LAYOUT_BASE.width && size.height === LAYOUT_BASE.height)) return base
@@ -1207,12 +1261,17 @@ export function applyLayout(
 ): SlideElement[] {
   const donors = slide.elements
   const consumed = new Set<SlideElement>()
+  // An `image` slot is a text placeholder ("Add an image") that an IMAGE
+  // donor replaces outright — the picture takes the slot's frame and id, so
+  // slides from the same layout still morph their pictures.
+  const imageSlot = (lel: SlideElement) => lel.role === 'image' && lel.type === 'text'
   const findDonor = (lel: SlideElement): SlideElement | undefined => {
     const byId = donors.find((e) => !consumed.has(e) && e.id === lel.id)
     if (byId) return byId
     if (!lel.role) return undefined
     return donors.find(
-      (e) => !consumed.has(e) && e.role === lel.role && e.type === lel.type && textHasContent(e),
+      (e) => !consumed.has(e) && e.role === lel.role &&
+        ((e.type === lel.type && textHasContent(e)) || (imageSlot(lel) && e.type === 'image')),
     )
   }
   const out: SlideElement[] = layout.elements.map((lel) => {
@@ -1220,7 +1279,16 @@ export function applyLayout(
     const d = findDonor(lel)
     if (d) {
       consumed.add(d)
+      if (imageSlot(lel) && d.type === 'image') {
+        const pic = JSON.parse(JSON.stringify(d)) as SlideElement
+        return { ...pic, id: lel.id, x: lel.x, y: lel.y, w: lel.w, h: lel.h, rotation: lel.rotation, role: 'image' }
+      }
       if (copy.type === 'text' && d.type === 'text' && textHasContent(d)) copy.html = d.html
+      if (copy.type === 'image' && d.type === 'image') {
+        copy.src = d.src
+        if (d.fit) copy.fit = d.fit
+        if (d.crop) copy.crop = d.crop
+      }
       if (d.link) copy.link = d.link
     }
     return copy
