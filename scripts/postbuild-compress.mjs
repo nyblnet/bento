@@ -114,7 +114,15 @@ const titleFallback = flag('title', 'bento/slides')
 // found this: the shipped shell showed its splash and nothing else there).
 // The bundle is byte-identical either way; only the 1KB loader differs.
 const loaderMode = flag('loader', 'blob')
-if (loaderMode !== 'blob' && loaderMode !== 'inline') throw new Error(`--loader must be blob or inline, got ${loaderMode}`)
+if (!['blob', 'inline', 'inline-tt'].includes(loaderMode)) throw new Error(`--loader must be blob, inline or inline-tt, got ${loaderMode}`)
+// `inline-tt`: inline, and the source is assigned through a Trusted Types
+// policy named "bento" where the page enforces `require-trusted-types-for
+// 'script'` (assigning a plain string to script.textContent throws there;
+// the parser-inserted loader itself is exempt). `--diag` adds a visible
+// on-page diagnostic panel — environment facts before the boot, every error
+// after it — for a viewer where no console can be opened. Never on by default:
+// the loader ships in every file and diag text is bytes.
+const diag = process.argv.includes('--diag')
 
 const html = readFileSync(path, 'utf8')
 if (html.includes('id="bento-rt"')) {
@@ -277,8 +285,35 @@ const TOOLING_COMMENT = generator === 'bento-slides' ? SLIDES_TOOLING : GENERIC_
 //   2. the sweep — a file written before guard 1 existed already carries N
 //      plaintext copies of exactly this CSS; dropping them before injecting
 //      means such a file is CLEANED by its next save rather than doubled.
+const DIAG = `
+  var box = null
+  var say = function (t) {
+    if (!box) {
+      box = document.createElement('pre')
+      box.id = 'bento-diag'
+      box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:70vh;overflow:auto;margin:0;padding:12px 16px;background:#000;color:#7CFC00;font:15px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all;z-index:2147483647'
+      document.body.appendChild(box)
+    }
+    box.textContent += t + '\\n'
+  }
+  window.addEventListener('error', function (e) { say('window error: ' + e.message + ' @ ' + (e.filename || '?') + ':' + e.lineno) })
+  window.addEventListener('unhandledrejection', function (e) { var r = e.reason; say('unhandled rejection: ' + (r && r.stack ? String(r.stack).split('\\n').slice(0, 4).join(' | ') : String(r))) })
+  var probe = function (name, fn) { try { var v = fn(); say(name + ': ' + v) } catch (e) { say(name + ': THROWS ' + (e && e.name) + ' ' + (e && e.message)) } }
+  say('bento loader diag ' + new Date().toISOString())
+  probe('typeof DecompressionStream', function () { return typeof DecompressionStream })
+  probe('trustedTypes', function () { return !!window.trustedTypes + (window.trustedTypes ? ' (default policy ' + (window.trustedTypes.defaultPolicy ? 'set' : 'none') + ')' : '') })
+  probe('currentScript', function () { return document.currentScript ? 'parser' : 'no currentScript' })
+  probe('localStorage.length', function () { return localStorage.length })
+  probe('sessionStorage.length', function () { return sessionStorage.length })
+  probe('indexedDB', function () { return typeof indexedDB })
+  probe('location.origin', function () { return location.origin })
+  probe('framed (self !== top)', function () { return self !== top })
+  probe('userAgent', function () { return navigator.userAgent.slice(0, 40) })
+  probe('meta csp', function () { var m = document.querySelector('meta[http-equiv=Content-Security-Policy]'); return m ? m.content : 'no meta csp (a header CSP is invisible here)' })
+  document.addEventListener('securitypolicyviolation', function (e) { say('CSP violation: ' + e.violatedDirective + ' blocked ' + e.blockedURI + (e.sample ? ' sample ' + e.sample : '')) })
+`
 const loader = `
-(async () => {
+(async () => {${diag ? DIAG : ''}
   var fail = function (msg) {
     var d = document.createElement('div')
     d.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0D1B2E;color:#F2F0EA;font:16px/1.6 sans-serif;text-align:center;padding:40px;z-index:99999'
@@ -315,17 +350,50 @@ const loader = `
     st.textContent = css
     document.head.appendChild(st)
     var js = await inflate('bento-rt')
-    ${loaderMode === 'inline' ? `// inline module: allowed under CSP 'unsafe-inline', needs no blob: source.
+    ${loaderMode !== 'blob' ? `// inline module: allowed under CSP 'unsafe-inline', needs no blob: source.
     // Transient like the style above — a save must never write the inflated
     // bundle back as plaintext (serializeBody strips marked nodes).
     var sc = document.createElement('script')
     sc.type = 'module'
     sc.id = 'bento-rt-script'
     sc.setAttribute('data-bento-transient', '')
-    sc.textContent = js
-    document.body.appendChild(sc)` : `var url = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))
+    var src = js${loaderMode === 'inline-tt' ? `
+    // Trusted Types: where the page requires them for script sinks, a plain
+    // string assignment throws; a policy-made TrustedScript does not. A CSP
+    // that allowlists policy names refuses any other name — that refusal is
+    // itself the diagnosis, so it is reported rather than swallowed.
+    if (window.trustedTypes && window.trustedTypes.createPolicy) {
+      try {
+        var pol = window.trustedTypes.createPolicy('bento', { createScript: function (s) { return s } })
+        src = pol.createScript(js)${diag ? `
+        say('trustedTypes: policy "bento" created; assigning a TrustedScript')` : ''}
+      } catch (e) {${diag ? `
+        say('trustedTypes: createPolicy("bento") REFUSED: ' + (e && e.name) + ': ' + (e && e.message))` : ''}
+      }
+      // The app itself assigns innerHTML (the renderer, the sanitizer) and
+      // script.text (the save path writes #bento-doc back) from strings. Under
+      // enforced Trusted Types every one of those throws unless a DEFAULT
+      // policy exists — the browser routes plain-string sink assignments
+      // through it. A CSP that allowlists policy names must include "default"
+      // for this to be allowed; where it is refused, the refusal is reported.
+      if (!window.trustedTypes.defaultPolicy) {
+        try {
+          window.trustedTypes.createPolicy('default', { createHTML: function (s) { return s }, createScript: function (s) { return s }, createScriptURL: function (s) { return s } })${diag ? `
+          say('trustedTypes: DEFAULT policy created (string sinks pass through)')` : ''}
+        } catch (e) {${diag ? `
+          say('trustedTypes: createPolicy("default") REFUSED: ' + (e && e.name) + ': ' + (e && e.message))` : ''}
+        }
+      }
+    }` : ''}
+    try { sc.textContent = src } catch (e) {${diag ? `
+      say('script.textContent assignment threw: ' + (e && e.name) + ': ' + (e && e.message) + ' — trying script.text')` : ''}
+      sc.text = src
+    }
+    document.body.appendChild(sc)${diag ? `
+    say('module script appended (' + js.length + ' chars); waiting for the app to mount')` : ''}` : `var url = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))
     await import(url)`}
-  } catch (e) {
+  } catch (e) {${diag ? `
+    say('BOOT FAILED: ' + (e && e.name) + ': ' + (e && e.message) + (e && e.stack ? ' | ' + String(e.stack).split('\\n').slice(0, 3).join(' | ') : ''))` : ''}
     fail('This file could not start: ' + (e && e.message ? e.message : e))
   }
 })()
