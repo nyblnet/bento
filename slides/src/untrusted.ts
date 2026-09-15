@@ -75,11 +75,15 @@ const within = <T>(key: string, fn: () => T): T => {
 export const withPathSegment = <T>(key: string, fn: () => T): T => within(key, fn)
 /** Run `fn` collecting every drop the gate makes; returns the list. */
 export function withDropReport<T>(fn: () => T): { result: T; dropped: Dropped[] } {
-  const prev = collector
+  // Nesting: an inner report gets its own list and a fresh trail, and the
+  // outer one gets both of its back afterwards — so a gate call that itself
+  // asks for a report (none does today) cannot truncate the caller's paths.
+  const prevCollector = collector
+  const prevTrail = trail.splice(0)
   const dropped: Dropped[] = []
   collector = dropped
-  trail.length = 0
-  try { return { result: fn(), dropped } } finally { collector = prev }
+  try { return { result: fn(), dropped } }
+  finally { collector = prevCollector; trail.splice(0, trail.length, ...prevTrail) }
 }
 
 /**

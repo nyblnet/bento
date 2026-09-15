@@ -42,8 +42,10 @@ const esbuild = join(root, 'slides/node_modules/.bin/esbuild')
 const out = join(tmpdir(), `bento-gate-parity-${process.pid}`)
 
 // ---- main's gate, frozen at rig time --------------------------------------
-const mainSrc = execFileSync('git', ['show', 'origin/main:slides/src/untrusted.ts'], { cwd: root, encoding: 'utf8' })
-const mainSha = execFileSync('git', ['rev-parse', '--short', 'origin/main'], { cwd: root, encoding: 'utf8' }).trim()
+// GIT= lets a machine whose `git` on PATH is a shim point at a real binary
+const GIT = process.env.GIT ?? 'git'
+const mainSrc = execFileSync(GIT, ['show', 'origin/main:slides/src/untrusted.ts'], { cwd: root, encoding: 'utf8' })
+const mainSha = execFileSync(GIT, ['rev-parse', '--short', 'origin/main'], { cwd: root, encoding: 'utf8' }).trim()
 writeFileSync(mainCopy, mainSrc)
 const bundle = (entry: string, name: string) => {
   const file = join(out, name)
@@ -153,10 +155,32 @@ for (const [name, slide] of slides) {
 }
 ok(same === slides.length, `${same}/${slides.length} slide fixtures byte-identical through both gates (${elementsCompared} elements compared individually)`)
 ok(slides.length >= 45 && elementsCompared >= 250, `fixture count: ${slides.length} slides, ${elementsCompared} elements`)
-// and the collector really is off here: nothing was recorded
-const { withDropReport } = branchGate as unknown as { withDropReport: <T>(fn: () => T) => { result: T; dropped: unknown[] } }
-const rep = withDropReport(() => branchGate.sanitizeSlide(slideCases[0][1]))
-ok(rep.dropped.length > 20, `with the collector ON the same hostile slide reports ${rep.dropped.length} drops — the hook observes, it does not decide`)
+// ---- and with the collector ON: the report may differ, the DOCUMENT must not
+const { withDropReport } = branchGate as unknown as { withDropReport: <T>(fn: () => T) => { result: T; dropped: Array<{ path: string }> } }
+let sameOn = 0, elementsOn = 0, drops = 0
+for (const [name, slide] of slides) {
+  const { result, dropped } = withDropReport(() => branchGate.sanitizeSlide(slide))
+  drops += dropped.length
+  if (j(result) === j(mainGate.sanitizeSlide(slide))) sameOn++
+  else ok(false, `slide ${name}: with the collector ON the branch's document differs from main's`)
+  const els = (slide as { elements?: unknown }).elements
+  if (Array.isArray(els)) for (const e of els) {
+    elementsOn++
+    const on = withDropReport(() => branchGate.sanitizeElement(e)).result
+    if (j(on) !== j(mainGate.sanitizeElement(e))) ok(false, `element in ${name}: with the collector ON the branch's element differs from main's`)
+  }
+}
+ok(sameOn === slides.length, `collector ON: ${sameOn}/${slides.length} slide fixtures still byte-identical to main (${elementsOn} elements individually); ${drops} drops reported along the way`)
+ok(drops > 50, 'the report is not empty — the hook observed; it did not decide')
+// nesting: an inner report must not truncate the outer one's paths
+const nested = withDropReport(() => {
+  branchGate.sanitizeSlide({ id: 'outer', elements: [{ type: 'text', id: 'a', ...box, html: 'x', bogus: 1 }] })
+  const inner = withDropReport(() => branchGate.sanitizeSlide({ id: 'inner', elements: [{ type: 'text', id: 'b', ...box, html: 'x', bogus2: 1 }] }))
+  branchGate.sanitizeSlide({ id: 'outer2', elements: [{ type: 'text', id: 'c', ...box, html: 'x', bogus3: 1 }] })
+  return inner
+})
+ok(nested.result.dropped.length === 1 && nested.result.dropped[0].path === '/elements/0/bogus2', 'a nested report sees only its own drops with a fresh trail')
+ok(nested.dropped.length === 2 && nested.dropped.every((d) => /^\/elements\/0\/bogus3?$/.test(d.path)), `the outer report keeps its own two drops with intact paths after the inner one (${nested.dropped.map((d) => d.path).join(', ')})`)
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)
