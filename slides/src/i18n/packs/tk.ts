@@ -956,4 +956,7 @@ export const strings: Catalog = {
   "Curved connector": "Egri birleşdiriji",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Iki elementiň arasyndaky egri çyzyk — uçlary ýapyşýar we täzeden ugrukdyrylýar, ujy egriniň yzyndan gidýär",
   "Double-headed": "Iki uçly",
+  "Copy compact JSON (for agents)": "Ykjam JSON-y göçür (agentler üçin)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Ähli deslapky bahalary aýrylan şol bir toplum — AI agentiň ýazmaly görnüşi. «JSON-dan çalyş» ony yzyna alýar; ýatda saklanan faýl elmydama doly.",
+  "Compact JSON copied": "Ykjam JSON göçürildi",
 }

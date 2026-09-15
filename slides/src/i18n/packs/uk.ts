@@ -939,4 +939,7 @@ export const strings: Catalog = {
   "Curved connector": "Вигнутий з’єднувач",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Вигнута лінія між двома елементами — кінці прилипають і перебудовуються, вістря йде вздовж кривої",
   "Double-headed": "Два вістря",
+  "Copy compact JSON (for agents)": "Копіювати компактний JSON (для агентів)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Та сама презентація без значень за замовчуванням — форма, яку має писати ШІ-агент. «Замінити з JSON» приймає її назад; збережений файл завжди повний.",
+  "Compact JSON copied": "Компактний JSON скопійовано",
 }

@@ -942,4 +942,7 @@ export const strings: Catalog = {
   "Curved connector": "বাঁকা সংযোজক",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "দুটি উপাদানের মধ্যে একটি বাঁকা রেখা — প্রান্তগুলো আটকে যায় ও পুনর্বিন্যস্ত হয়, মাথাটি বাঁক অনুসরণ করে",
   "Double-headed": "দুই মাথা",
+  "Copy compact JSON (for agents)": "সংক্ষিপ্ত JSON কপি করুন (এজেন্টের জন্য)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "সব ডিফল্ট বাদ দেওয়া একই ডেক — একটি AI এজেন্টের যেভাবে লেখা উচিত। “JSON থেকে প্রতিস্থাপন” এটি ফিরিয়ে নেয়; সংরক্ষিত ফাইল সবসময় পূর্ণ।",
+  "Compact JSON copied": "সংক্ষিপ্ত JSON কপি হয়েছে",
 }

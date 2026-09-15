@@ -917,4 +917,7 @@ export const pt: Catalog = {
   "Curved connector": "Conector curvo",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Uma linha curva entre dois elementos — as extremidades encaixam e reposicionam-se, a ponta segue a curva",
   "Double-headed": "Duas pontas",
+  "Copy compact JSON (for agents)": "Copiar JSON compacto (para agentes)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "A mesma apresentação sem nenhum valor predefinido: a forma que um agente de IA deve escrever. «Substituir a partir de JSON» aceita-a; o ficheiro guardado é sempre completo.",
+  "Compact JSON copied": "JSON compacto copiado",
 }

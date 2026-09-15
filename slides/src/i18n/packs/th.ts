@@ -933,4 +933,7 @@ export const strings: Catalog = {
   "Curved connector": "เส้นเชื่อมโค้ง",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "เส้นโค้งระหว่างสององค์ประกอบ — ปลายเกาะติดและปรับตามเมื่อย้าย หัวลูกศรวิ่งตามเส้นโค้ง",
   "Double-headed": "สองหัว",
+  "Copy compact JSON (for agents)": "คัดลอก JSON แบบกระชับ (สำหรับเอเจนต์)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "เด็คเดียวกันโดยตัดค่าเริ่มต้นทั้งหมดออก คือรูปแบบที่เอเจนต์ AI ควรเขียน “แทนที่จาก JSON” รับกลับได้ ไฟล์ที่บันทึกจะสมบูรณ์เสมอ",
+  "Compact JSON copied": "คัดลอก JSON แบบกระชับแล้ว",
 }

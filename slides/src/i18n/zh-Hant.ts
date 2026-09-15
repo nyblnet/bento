@@ -919,4 +919,7 @@ export const zhHant: Catalog = {
   "Curved connector": "曲線連接線",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "兩個元素之間的曲線 — 兩端吸附並跟隨移動，箭頭沿曲線方向",
   "Double-headed": "雙頭",
+  "Copy compact JSON (for agents)": "複製精簡 JSON（供代理程式使用）",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "同一份文稿，省去所有預設值——AI 代理程式應當書寫的形式。「從 JSON 取代」可讀回它；儲存的檔案始終是完整的。",
+  "Compact JSON copied": "已複製精簡 JSON",
 }

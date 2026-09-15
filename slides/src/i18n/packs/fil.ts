@@ -948,4 +948,7 @@ export const strings: Catalog = {
   "Curved connector": "Kurbadong connector",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Kurbadong linya sa pagitan ng dalawang elemento — kumakapit at umaayos ang mga dulo, sumusunod sa kurba ang dulo",
   "Double-headed": "Dalawang ulo",
+  "Copy compact JSON (for agents)": "Kopyahin ang compact na JSON (para sa mga agent)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Ang parehong deck na wala ang lahat ng default — ang anyong dapat isulat ng isang AI agent. Tinatanggap ito ng “Palitan mula sa JSON”; ang na-save na file ay laging buo.",
+  "Compact JSON copied": "Nakopya ang compact na JSON",
 }

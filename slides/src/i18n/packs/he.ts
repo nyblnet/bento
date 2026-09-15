@@ -932,4 +932,7 @@ export const strings: Catalog = {
   "Curved connector": "מחבר מעוגל",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "קו מעוגל בין שני רכיבים — הקצוות נצמדים ומתעדכנים, והראש עוקב אחרי העקומה",
   "Double-headed": "שני ראשים",
+  "Copy compact JSON (for agents)": "העתקת JSON קומפקטי (לסוכנים)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "אותה מצגת בלי ברירות המחדל — הצורה שסוכן AI צריך לכתוב. «החלפה מ-JSON» מקבלת אותה; הקובץ השמור תמיד מלא.",
+  "Compact JSON copied": "JSON קומפקטי הועתק",
 }
