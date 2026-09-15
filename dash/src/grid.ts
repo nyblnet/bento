@@ -838,6 +838,49 @@ export class Grid {
     this.noteEl = this.host.querySelector('.dg-note')!
     this.descEl = this.host.querySelector('.dg-a11y')!
     this.scroller.addEventListener('scroll', () => this.paint(), { passive: true })
+    // A CLIPPED CELL HAD NO WAY TO BE READ. `.dg-cell` is
+    // `overflow:hidden; text-overflow:ellipsis`, so a value wider than its
+    // column ends in an ellipsis and the rest is simply gone. Measured on the
+    // starter workbook: a 36-character name in a 110px column overflows by
+    // 127px and carries no `title`, so the only way to recover it is to click
+    // the cell and read the formula bar — one click per cell, down a column you
+    // are trying to scan.
+    //
+    // ON HOVER, AND MEASURED, which is the whole reason this is a listener
+    // rather than an attribute in the paint. Whether a cell clips is a LAYOUT
+    // fact — it depends on the rendered glyphs, the column width and the font
+    // the reader actually got — and the paint builds an HTML string before any
+    // of that exists. Guessing from character count would be wrong in both
+    // directions: a tooltip on a value that fits is noise on every cell in the
+    // sheet, and none on a value that does not fit is the bug still there.
+    // `scrollWidth > clientWidth` is the browser answering the question after
+    // layout, and it costs nothing until a pointer is actually over a cell.
+    //
+    // THE TITLE IS REMOVED AGAIN when the cell stops clipping, and the reason
+    // is narrower than it first looks. Every paint rebuilds `.dg-sizer`'s
+    // innerHTML (see `paint`), so a repaint cannot leave a stale title — the
+    // node is gone. The live case is the COLUMN DRAG: `move` sets
+    // `style.width` on the existing cells on every mousemove and commits only
+    // on release, precisely so there is not one undo entry per pixel. So a cell
+    // hovered while narrow, then dragged wider, keeps a node that no longer
+    // clips — and without this branch it would keep offering a tooltip for text
+    // that is now fully visible.
+    this.gridEl.addEventListener('mouseover', (e) => {
+      const cell = (e.target as HTMLElement)?.closest?.('.dg-cell') as HTMLElement | null
+      if (!cell || !this.gridEl.contains(cell)) return
+      // Leave every deliberate tooltip alone — the header's column name, the
+      // `fx` badge's formula, a validation failure's reason, the resize grip.
+      // Those are set in the paint and say more than the cell's own text does.
+      if (cell.dataset.tip !== '1' && cell.title) return
+      const clipped = cell.scrollWidth > cell.clientWidth + 1
+      if (clipped) {
+        const full = cell.textContent ?? ''
+        if (full && cell.title !== full) { cell.title = full; cell.dataset.tip = '1' }
+      } else if (cell.dataset.tip === '1') {
+        cell.removeAttribute('title')
+        delete cell.dataset.tip
+      }
+    })
     // A WINDOW THAT CHANGES SIZE IS A DIFFERENT WINDOW, and until this the grid
     // only ever repainted on a scroll, an edit or a sheet switch. Two ways to
     // see it, and the second is why this is not a nicety:
