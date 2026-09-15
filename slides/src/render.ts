@@ -10,6 +10,7 @@ import { chartSnapshotSvg } from './charts'
 import temml from 'temml'
 import { renderCodeInto } from './code'
 import { formatDate } from './datefmt'
+import { cropImgStyle, isIdentityCrop } from './crop'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -1141,7 +1142,16 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       if (imgSrc) img.src = imgSrc
       else img.dataset.bentoOffline = '1'
       img.draggable = false
-      img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
+      if (el.crop && !isIdentityCrop(el.crop)) {
+        // A crop: the frame clips and carries the radius; the picture inside
+        // is enlarged and offset by the one mapping in crop.ts (canvas,
+        // thumbnails, present, print and the preview all come through here).
+        node.style.overflow = 'hidden'
+        node.style.borderRadius = `${el.radius}px`
+        img.style.cssText = cropImgStyle(el.crop)
+      } else {
+        img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
+      }
       node.appendChild(img)
       break
     }

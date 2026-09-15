@@ -16,7 +16,7 @@ export const MODEL_KEYS = {
     "element": {
       "text": ["align", "backdropFilter", "blend", "blur", "color", "colorGradient", "fontFamily", "fontSize", "fontWeight", "fx", "group", "groupId", "h", "html", "id", "letterSpacing", "lineHeight", "link", "morphId", "opacity", "placeholder", "role", "rotation", "shadow", "showOnHover", "textStroke", "themeRefs", "type", "valign", "w", "x", "y"],
       "shape": ["backdropFilter", "blend", "blur", "d", "fill", "fillGradient", "from", "fx", "group", "groupId", "h", "id", "lineEnd", "lineStart", "link", "morphId", "opacity", "pathBox", "radius", "role", "rotation", "shadow", "shape", "showOnHover", "stroke", "strokeDash", "strokeStyle", "strokeWidth", "themeRefs", "to", "type", "w", "x", "y"],
-      "image": ["backdropFilter", "blend", "blur", "fit", "fx", "group", "groupId", "h", "id", "keepAspectRatio", "link", "morphId", "opacity", "radius", "role", "rotation", "shadow", "showOnHover", "src", "themeRefs", "type", "w", "x", "y"],
+      "image": ["backdropFilter", "blend", "blur", "crop", "fit", "fx", "group", "groupId", "h", "id", "keepAspectRatio", "link", "morphId", "opacity", "radius", "role", "rotation", "shadow", "showOnHover", "src", "themeRefs", "type", "w", "x", "y"],
       "svg": ["asset", "backdropFilter", "blend", "blur", "css", "fx", "group", "groupId", "h", "id", "link", "markup", "morphId", "opacity", "role", "rotation", "shadow", "showOnHover", "themeRefs", "type", "w", "x", "y"],
       "chart": ["backdropFilter", "blend", "blur", "fx", "group", "groupId", "h", "id", "link", "morphId", "opacity", "option", "preset", "role", "rotation", "shadow", "showOnHover", "source", "themeRefs", "type", "w", "x", "y"],
       "table": ["backdropFilter", "blend", "blur", "columns", "fx", "group", "groupId", "h", "header", "id", "link", "morphId", "opacity", "role", "rotation", "rows", "shadow", "showOnHover", "style", "themeRefs", "type", "w", "x", "y"],
@@ -32,6 +32,7 @@ export const MODEL_KEYS = {
     "tableRow": ["cells"],
     "tableCell": ["align", "bg", "bold", "color", "html"],
     "gradient": ["angle", "stops"],
+    "imageCrop": ["scale", "x", "y"],
   } as const
 
 export type ElementKind = keyof typeof MODEL_KEYS.element

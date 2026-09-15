@@ -241,6 +241,21 @@ export interface ConnectorEnd {
   side?: 'auto' | 'top' | 'right' | 'bottom' | 'left'
 }
 
+/**
+ * Which part of a picture shows inside its frame (discussion #319). The frame
+ * is the element box; the picture is scaled to COVER it, then `scale` (≥ 1)
+ * enlarges it further and `x`/`y` (0..1) say which edge of the enlarged
+ * picture the frame is aligned to — 0 = left/top, 0.5 = centred, 1 =
+ * right/bottom. Absent = the element's `fit` alone, exactly as before, so a
+ * shell that predates this field shows the whole cover-fitted picture
+ * (centred) and never a blank frame. Rendered with plain CSS (crop.ts).
+ */
+export interface ImageCrop {
+  x: number
+  y: number
+  scale: number
+}
+
 export interface ImageElement extends ElementBase {
   type: 'image'
   /** data: URI, or "asset:<key>" referencing doc.assets */
@@ -252,6 +267,8 @@ export interface ImageElement extends ElementBase {
    *  can be stretched, and Shift holds the ratio for one drag instead.
    *  Re-locking keeps whatever shape the image has at that moment. */
   keepAspectRatio?: boolean
+  /** pan + zoom inside the frame; absent = `fit` alone (crop.ts) */
+  crop?: ImageCrop
 }
 
 export interface SvgElement extends ElementBase {

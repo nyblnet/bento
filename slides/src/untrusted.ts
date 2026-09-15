@@ -415,6 +415,7 @@ const ELEMENT_CHECKS: Record<string, Check> = {
   // image / svg / media
   src: mediaRef, poster: mediaRef, asset: cssValue(),
   fit: oneOf('contain', 'cover', 'fill'), keepAspectRatio: bool,
+  crop: shape(MODEL_KEYS.imageCrop, { x: num(0, 1), y: num(0, 1), scale: num(1, 64) }, ['x', 'y', 'scale']),
   markup: str(LIMITS.markup), css: str(LIMITS.css),
   kind: oneOf('video', 'audio'),
   autoplay: bool, loop: bool, muted: bool, controls: bool,

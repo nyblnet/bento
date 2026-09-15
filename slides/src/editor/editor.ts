@@ -2915,6 +2915,9 @@ export class Editor {
         return
       }
       if (inField) return
+      // Crop mode owns the keyboard: Enter/Esc are its (cropedit.ts), and a
+      // Delete meant for the picture being cropped must not remove it.
+      if (this.canvas.isCropEditing) return
 
       if (!mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey))) {
         ev.preventDefault()

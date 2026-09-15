@@ -18,7 +18,6 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { execFileSync } from 'node:child_process'
 import { classify, sampleGrid, fitEdge, worthIt, untouchable, MAX_EDGE, MIN_GAIN, GRAPHIC_COLOURS, GRAPHIC_FLAT, shrinkNote, fmtBytes } from '../slides/src/editor/shrink.ts'
 
 let failures = 0
@@ -107,9 +106,13 @@ ok(/setShrinkEnabled\(/.test(editor) && /shrinkEnabled\(\)/.test(editor), 'the A
 ok(/'bento-shrink-photos'/.test(read('slides/src/editor/shrink.ts')), "the preference is localStorage 'bento-shrink-photos'")
 
 console.log('\nthe format\n')
-let modelDiff = ''
-try { modelDiff = execFileSync('git', ['diff', 'origin/main', '--stat', '--', 'slides/src/model.ts'], { cwd: root, encoding: 'utf8' }) } catch { modelDiff = '' }
-ok(modelDiff.trim() === '', 'model.ts is untouched — a picture is still a data URI or an asset: key')
+// Not a diff against main: on main that reads as "no later PR may touch
+// model.ts". The claim is narrower — shrinking adds nothing to the format —
+// so the format is asked directly.
+const model = read('slides/src/model.ts')
+ok(!/shrink|shrunk|recompress/i.test(model), 'model.ts knows nothing of shrinking — a picture is still a data URI or an asset: key')
+const imageIface = model.slice(model.indexOf('export interface ImageElement'), model.indexOf('export interface ImageElement') + 1500)
+ok(/src: string/.test(imageIface), 'ImageElement.src is the same string it always was')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

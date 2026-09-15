@@ -20,6 +20,15 @@ pre-1.0.
   onto the order the four Order buttons (front, forward, backward, back) have
   moved elements through since 1.0, and a row dropped somewhere lands exactly
   where those buttons would put it. Asked for by Li Wei in discussion #371.
+- **A picture can be moved and zoomed inside its frame.** Double-click an
+  image and the frame becomes a window onto the whole picture: drag to choose
+  which part shows, scroll or pinch to zoom in, Enter to keep it, Esc to put
+  it back. The Crop section of the image panel has the zoom as a number and a
+  way back to the whole picture. The crop is one small optional field on the
+  image; a deck opened in an older version shows the cover-fitted picture,
+  never a blank frame. Canvas, thumbnails, the show, print and file-manager
+  previews all show the same crop, and a morph between two cropped copies of
+  a picture glides between them. Asked for in discussion #319 by morreau.
 - **A pasted photo no longer costs megabytes.** Insert or paste a picture
   and it is stored at slide resolution — the long edge capped at 2560 px,
   crisp on a 4K projector — and photos are re-encoded as JPEG, so a phone
