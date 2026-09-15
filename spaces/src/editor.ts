@@ -19,6 +19,7 @@ import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
 import { wireCanvas, placeNewCard } from './canvas.ts'
+import { enableTouchDrag } from './touch.ts'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
 import { FormatBar } from './formatbar'
@@ -534,6 +535,13 @@ export class Editor {
         this.props?.retarget()
       }, true)
     }
+
+    // A FINGER GETS THE DRAGS A MOUSE HAD. Blocks, page rows and issue cards
+    // are all `[draggable="true"]`, and HTML5 dnd never fires from a touch —
+    // so press-and-hold replays the same dnd events those handlers already
+    // listen for. One call, delegated at the root, so anything draggable this
+    // editor grows later is covered without a second edit. See touch.ts.
+    enableTouchDrag(this.root)
 
     this.paintTree()
     this.paintPage()

@@ -43,6 +43,7 @@
 import type { SpacesDoc, SpaceIndex } from './model.ts'
 import { ICONS } from './icons.ts'
 import { t } from './i18n.ts'
+import { enablePinchZoom } from './touch.ts'
 
 // ————— the graph itself ————————————————————————————————————————————————————
 
@@ -763,6 +764,23 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
     scale = next
     draw()
   }, { passive: false })
+
+  // ——— two fingers ———
+  //
+  // One finger already worked: the pointer path above is pointer events, and a
+  // touch drives those. ZOOM did not — it was `wheel` alone, and a phone has no
+  // wheel, so a crowded graph could be shoved around and never scaled. Fit was
+  // the only way to change magnification and it only ever gives you one.
+  //
+  // The second finger also has to CANCEL the one-finger drag it interrupts, or
+  // the pointer path keeps panning (or worse, keeps dragging a node) underneath
+  // the pinch and the two fight over the same picture.
+  canvas.addEventListener('touchstart', (e) => { if (e.touches.length > 1) drag = null }, { passive: true })
+  enablePinchZoom(canvas, {
+    get: () => ({ scale, panX, panY }),
+    set: (s, x, y) => { scale = s; panX = x; panY = y; draw() },
+    limits: [0.12, 5],
+  })
 
   fitBtn.addEventListener('click', () => { fit(); draw() })
   closeBtn.addEventListener('click', () => opts.close())
