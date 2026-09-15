@@ -942,4 +942,5 @@ export const strings: Catalog = {
   "Copy compact JSON (for agents)": "نسخ JSON مضغوط (للوكلاء)",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "العرض نفسه بدون أي قيمة افتراضية: الشكل الذي ينبغي لوكيل الذكاء الاصطناعي كتابته. «استبدال من JSON» يقبله؛ الملف المحفوظ كامل دائمًا.",
   "Compact JSON copied": "تم نسخ JSON المضغوط",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "تم التحميل: {dropped} حقول مهملة، {warnings} تحذيرات — راجع وحدة التحكم",
 }

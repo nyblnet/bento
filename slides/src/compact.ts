@@ -27,6 +27,21 @@
  *     slides still works when the author repeats an id on purpose, and a
  *     round-trip through the editor never changes an id it did not mint.
  *
+ * Round two, still compact-input only (the saved file is unchanged):
+ *
+ *   - A text element may OMIT `h`, or say `h: "auto"`: the box is sized to
+ *     its text — the same measurement the panel's "Fit height to text" makes,
+ *     on the deck's real fonts. An agent cannot know how tall three lines of
+ *     24 pt Inter at 800 px are; the runtime can. Measuring needs the DOM, so
+ *     this module (pure, node-importable) writes a PROVISIONAL one-line h and
+ *     lists the element in `autoHeight`; compactload.ts (browser) measures and
+ *     writes the real number before the document reaches the store.
+ *   - A text element may carry `md` instead of `html`: markdown, converted by
+ *     the SAME function the editor uses for pasted plain text
+ *     (editor/markdown.ts markdownToHtml — bold, italic, code, strike, bullets
+ *     and indented sub-bullets, [caption](url)). When both are present `html`
+ *     wins and `md` is dropped; `md` never reaches the document.
+ *
  * Defaults come from the SAME functions model.ts's editor paths use
  * (defaultText, defaultShape, …), never a second table — a second table is
  * what drifts. Where the editor derives a value from the deck (text colour
@@ -40,6 +55,7 @@
  * touches save, so no shipped shell ever meets a compact document.
  */
 
+import { markdownToHtml } from './editor/markdown.ts'
 import {
   FORMAT, FORMAT_VERSION, FONT_STACK,
   defaultText, defaultShape, defaultImage, defaultChart, defaultCode, defaultTable, defaultMedia,
@@ -171,6 +187,19 @@ const usableDocField = (k: string, v: unknown, dd: Obj): boolean =>
 /** Is this JSON a compact document? The flag decides; nothing is inferred. */
 export const isCompact = (doc: unknown): boolean => isObj(doc) && doc[COMPACT_FLAG] === true
 
+/** What expansion did, for the load report. `autoHeight` names the text
+ *  elements (slide id + element id) whose `h` is provisional. */
+export interface ExpandStats {
+  /** fields filled in from defaults (doc, slide and element level) */
+  expanded: number
+  /** ids minted for elements that had none */
+  minted: number
+  /** text elements converted from `md` */
+  fromMarkdown: number
+  /** text elements whose h is provisional — the browser measures these */
+  autoHeight: Array<{ slide: string; id: string }>
+}
+
 /**
  * Fill every omitted field, flatten nested element arrays, mint missing ids.
  * Pure; returns a new object. A document without the flag is returned as is
@@ -178,7 +207,18 @@ export const isCompact = (doc: unknown): boolean => isObj(doc) && doc[COMPACT_FL
  * `s${n}` (1-based); elements without one get `${slideId}-${type}-${index}`.
  */
 export function expandDoc(input: unknown): BentoDoc {
-  if (!isCompact(input)) return input as BentoDoc
+  return expandDocWithStats(input).doc
+}
+
+/** One line of the text at its font size — the provisional `h` for a text
+ *  element that asked to be fitted (compactload.ts replaces it). */
+export const provisionalHeight = (fontSize: number, lineHeight: number): number =>
+  Math.ceil(fontSize * lineHeight)
+
+/** expandDoc, and what it did. */
+export function expandDocWithStats(input: unknown): { doc: BentoDoc; stats: ExpandStats } {
+  const stats: ExpandStats = { expanded: 0, minted: 0, fromMarkdown: 0, autoHeight: [] }
+  if (!isCompact(input)) return { doc: input as BentoDoc, stats }
   const src = input as Obj
   const dd = docDefaults()
   const doc: Obj = { ...dd, ...src }
@@ -191,14 +231,16 @@ export function expandDoc(input: unknown): BentoDoc {
   // missing one is the default; so is one of the wrong shape (`size: null`,
   // `title: 3`): an author who wrote that meant "I don't care", not "break".
   for (const k of Object.keys(dd)) {
-    if (!(k in src) || !usableDocField(k, src[k], dd)) doc[k] = dd[k]
+    if (!(k in src) || !usableDocField(k, src[k], dd)) { doc[k] = dd[k]; stats.expanded++ }
   }
   doc.theme = { ...(dd.theme as Obj), ...(isObj(src.theme) ? src.theme : {}) }
-  for (const k of Object.keys(dd.theme as Obj)) if (typeof (doc.theme as Obj)[k] !== 'string') (doc.theme as Obj)[k] = (dd.theme as Obj)[k]
+  for (const k of Object.keys(dd.theme as Obj)) if (typeof (doc.theme as Obj)[k] !== 'string') { (doc.theme as Obj)[k] = (dd.theme as Obj)[k]; stats.expanded++ }
   const slidesIn = Array.isArray(src.slides) ? (src.slides as unknown[]) : []
   doc.slides = slidesIn.map((raw, si) => {
     const s0 = isObj(raw) ? raw : {}
-    const slide: Obj = { ...slideDefaults(doc), ...s0 }
+    const sd = slideDefaults(doc)
+    const slide: Obj = { ...sd, ...s0 }
+    stats.expanded += Object.keys(sd).filter((k) => !(k in s0)).length
     if (typeof slide.id !== 'string' || !slide.id) slide.id = `s${si + 1}`
     const flat: Obj[] = []
     const walk = (v: unknown) => { if (Array.isArray(v)) v.forEach(walk); else if (isObj(v)) flat.push(v) }
@@ -206,12 +248,25 @@ export function expandDoc(input: unknown): BentoDoc {
     slide.elements = flat.map((el, i) => {
       const defaults = elementDefaults(el, slide, doc) ?? {}
       const out: Obj = { ...defaults, ...el }
-      if (typeof out.id !== 'string' || !out.id) out.id = mintId(slide, el, i)
+      stats.expanded += Object.keys(defaults).filter((k) => !(k in el)).length
+      if (typeof out.id !== 'string' || !out.id) { out.id = mintId(slide, el, i); stats.minted++ }
+      if (el.type === 'text') {
+        // md → html by the editor's own paste conversion; html wins when both
+        if (typeof el.md === 'string') {
+          if (typeof el.html !== 'string') { out.html = markdownToHtml(el.md); stats.fromMarkdown++ }
+          delete out.md
+        }
+        // h omitted or "auto": provisional one line; the browser fits it
+        if (el.h === undefined || el.h === 'auto') {
+          out.h = provisionalHeight(Number(out.fontSize) || 24, Number(out.lineHeight) || 1.2)
+          stats.autoHeight.push({ slide: slide.id as string, id: out.id as string })
+        }
+      }
       return out as unknown as SlideElement
     })
     return slide as unknown as Slide
   })
-  return doc as unknown as BentoDoc
+  return { doc: doc as unknown as BentoDoc, stats }
 }
 
 /** The font stack expansion assumes for text — exported so the rig can state

@@ -920,4 +920,5 @@ export const pt: Catalog = {
   "Copy compact JSON (for agents)": "Copiar JSON compacto (para agentes)",
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "A mesma apresentação sem nenhum valor predefinido: a forma que um agente de IA deve escrever. «Substituir a partir de JSON» aceita-a; o ficheiro guardado é sempre completo.",
   "Compact JSON copied": "JSON compacto copiado",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Carregado: {dropped} campos descartados, {warnings} avisos — ver a consola",
 }

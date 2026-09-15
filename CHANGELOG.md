@@ -15,6 +15,34 @@ pre-1.0.
   links arrived, an address like `…/$a$b` had its two dollars read as a
   formula and the link broke; formulas are now looked for in the text only,
   never inside a tag.
+- **The format has a schema, and every file says where it is.** A JSON
+  Schema for the bento/slides document is generated from the same tables the
+  app uses to check what it loads, so it cannot describe a deck the app would
+  refuse. It is published at `https://bento.page/schema/slides.json` (and a
+  version-pinned copy beside it), returned by `window.bento.schema()` in a
+  running file, listed in `https://bento.page/llms.txt` for AI agents, and
+  named in the Tooling comment at the top of every deck. A deck that carries
+  `"$schema"` at the top validates in any schema-aware editor; the app ignores
+  the key. Runtime cost: about 2.6 KB in the shell.
+- **A pasted code snippet keeps its code.** The table the app uses to know
+  an element's fields had no entry for the code element, so a pasted or loaded
+  code block kept its box but lost its content, grammar and theme — an empty
+  snippet — and `validate()` did not know its fields. Found while building
+  the schema from that table; fixed.
+- **A saved deck names its schema.** The first key of the saved JSON is now
+  `"$schema": "https://bento.page/schema/slides.json"` — 50 bytes, so a
+  reader with only the file in hand knows the format. Older versions keep the
+  key and write it back unchanged; nothing fetches it.
+- **`bento check`: an agent can look at what it wrote.** `node
+  scripts/bento-check.mjs deck.bento.html` loads the deck in headless Chrome
+  and prints what the editor would otherwise keep to itself — text that
+  overflows its box (and by how many pixels), elements off the canvas, dead
+  links, effects that can never run — by slide, with element ids; `--png out/`
+  adds one PNG per slide through the same render path as *Export slides as
+  images*, and a contact sheet of the whole deck in one picture; `--json` for
+  scripts, `--fail-on warning` for a strict exit code. A document JSON works
+  as input too, checked inside the built shell. The other half of the agent
+  loop that `AGENTS.md` describes: write, check, fix, check again.
 - **A deck can be written the short way.** An AI agent writing a deck used
   to spend most of its output on fields nobody chose — rotation 0, opacity 1,
   the font stack, weight 400, centre, middle, line height 1.25, on every
@@ -29,6 +57,19 @@ pre-1.0.
   the compact way. Asked for, with a working proof of concept, by
   benedictjohannes (#411, #422); the nested arrays and the flattening come
   from that proof.
+- **The short way, round two: text sizes itself, markdown is accepted, and
+  a load says what it dropped.** In a compact document a text element may
+  leave `h` out (or say `"auto"`): the box is sized to its text on load,
+  with the deck's real fonts — the same measurement as *Fit height to text*.
+  A text element may carry `md` instead of `html` and it converts exactly as
+  pasted markdown does (bold, italic, code, strike, bullets and sub-bullets,
+  links). And `window.bento.loadDoc` now returns a report: every key the
+  safety check discarded, with its path and the reason (`/slides/0/elements/2/fontSze:
+  unknown key`), how many fields were filled in, and `validate()`'s findings
+  — so an agent's loop is load, read, fix, load again, instead of guessing
+  why a field vanished. *Replace from JSON…* summarises the same report in a
+  toast and logs it. Three agent-written decks are checked in and load clean
+  in CI.
 - **A Layers list.** The Slide panel now opens with *Layers*: every element
   on the slide, top of the stack first, with a glyph and a short label (the
   text's first words, or the kind). Click a row to select, shift-click to add,

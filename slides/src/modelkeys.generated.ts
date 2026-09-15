@@ -22,6 +22,7 @@ export const MODEL_KEYS = {
       "table": ["backdropFilter", "blend", "blur", "columns", "fx", "group", "groupId", "h", "header", "id", "link", "morphId", "opacity", "role", "rotation", "rows", "shadow", "showOnHover", "style", "themeRefs", "type", "w", "x", "y"],
       "media": ["autoplay", "backdropFilter", "blend", "blur", "controls", "fit", "fx", "group", "groupId", "h", "id", "kind", "link", "loop", "morphId", "muted", "opacity", "poster", "radius", "role", "rotation", "shadow", "showOnHover", "src", "themeRefs", "type", "w", "x", "y"],
       "embed": ["app", "backdropFilter", "blend", "blur", "doc", "fx", "group", "groupId", "h", "id", "link", "live", "morphId", "opacity", "role", "rotation", "shadow", "showOnHover", "themeRefs", "type", "url", "view", "w", "x", "y"],
+      "code": ["align", "backdropFilter", "blend", "blur", "color", "content", "fontFamily", "fontSize", "fx", "grammarAssetId", "grammarName", "group", "groupId", "h", "id", "lineHeight", "link", "morphId", "opacity", "role", "rotation", "shadow", "showOnHover", "themeAssetId", "themeName", "themeRefs", "type", "valign", "w", "x", "y"],
     },
     "fx": ["ambient", "countUp", "enter", "enterDur", "ken", "loop", "order", "step"],
     "fxKen": ["dir", "duration", "scale"],
@@ -33,6 +34,13 @@ export const MODEL_KEYS = {
     "tableCell": ["align", "bg", "bold", "color", "html"],
     "gradient": ["angle", "stops"],
     "imageCrop": ["scale", "x", "y"],
+    "size": ["height", "width"],
+    "meta": ["author", "company", "event", "keywords", "subject"],
+    "theme": ["accent", "background", "chartPalette", "codePalette", "color", "fontFamily", "headingFamily", "palette", "table"],
+    "themePalette": ["accent2", "accent3", "accent4", "accent5", "accent6", "bg2", "folHlink", "hlink", "tx2"],
+    "themeCodePalette": ["a", "c", "d", "f", "k", "n", "p", "s"],
+    "present": ["controls", "morphSeconds", "numberHidden", "progress", "slideNumber"],
+    "font": ["asset", "family", "style", "weight"],
   } as const
 
 export type ElementKind = keyof typeof MODEL_KEYS.element
