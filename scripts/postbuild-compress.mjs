@@ -106,6 +106,15 @@ const flag = (name, fallback) => {
 }
 const generator = flag('generator', 'bento-slides')
 const titleFallback = flag('title', 'bento/slides')
+// How the inflated runtime is started. `blob` (the shipped default): a module
+// import from a blob: URL. `inline`: an inline <script type="module"> whose
+// textContent is the inflated bundle — no blob: URL at all, so it runs where a
+// Content-Security-Policy allows 'unsafe-inline' but not blob: (SharePoint's
+// framed HTML viewer, which Teams uses to open attachments, is the case that
+// found this: the shipped shell showed its splash and nothing else there).
+// The bundle is byte-identical either way; only the 1KB loader differs.
+const loaderMode = flag('loader', 'blob')
+if (loaderMode !== 'blob' && loaderMode !== 'inline') throw new Error(`--loader must be blob or inline, got ${loaderMode}`)
 
 const html = readFileSync(path, 'utf8')
 if (html.includes('id="bento-rt"')) {
@@ -306,8 +315,16 @@ const loader = `
     st.textContent = css
     document.head.appendChild(st)
     var js = await inflate('bento-rt')
-    var url = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))
-    await import(url)
+    ${loaderMode === 'inline' ? `// inline module: allowed under CSP 'unsafe-inline', needs no blob: source.
+    // Transient like the style above — a save must never write the inflated
+    // bundle back as plaintext (serializeBody strips marked nodes).
+    var sc = document.createElement('script')
+    sc.type = 'module'
+    sc.id = 'bento-rt-script'
+    sc.setAttribute('data-bento-transient', '')
+    sc.textContent = js
+    document.body.appendChild(sc)` : `var url = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))
+    await import(url)`}
   } catch (e) {
     fail('This file could not start: ' + (e && e.message ? e.message : e))
   }
