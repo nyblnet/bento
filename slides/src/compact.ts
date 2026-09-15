@@ -158,6 +158,16 @@ export function compactDoc(full: BentoDoc): Obj {
 
 const mintId = (slide: Obj, el: Obj, i: number) => `${slide.id}-${el.type}-${i}`
 
+/** Is the author's doc-level value the shape the editor will dereference?
+ *  format/version must be ours; size a {width,height} of numbers; theme an
+ *  object; title a string. */
+const usableDocField = (k: string, v: unknown, dd: Obj): boolean =>
+  k === 'size' ? isObj(v) && typeof v.width === 'number' && typeof v.height === 'number' && v.width > 0 && v.height > 0
+  : k === 'theme' ? isObj(v)
+  : k === 'title' ? typeof v === 'string'
+  : k === 'format' || k === 'version' ? v === dd[k]
+  : true
+
 /** Is this JSON a compact document? The flag decides; nothing is inferred. */
 export const isCompact = (doc: unknown): boolean => isObj(doc) && doc[COMPACT_FLAG] === true
 
@@ -173,7 +183,18 @@ export function expandDoc(input: unknown): BentoDoc {
   const dd = docDefaults()
   const doc: Obj = { ...dd, ...src }
   delete doc[COMPACT_FLAG]
+  // The editor dereferences these unconditionally on first render — render.ts
+  // reads doc.size.width/height for every thumbnail (rebuildSidebar) and
+  // doc.theme.fontFamily for every text box; the About dialog reads
+  // doc.title — and parseDoc only checks format and a non-empty slides array,
+  // so a document without `size` passes it and throws in the sidebar. A
+  // missing one is the default; so is one of the wrong shape (`size: null`,
+  // `title: 3`): an author who wrote that meant "I don't care", not "break".
+  for (const k of Object.keys(dd)) {
+    if (!(k in src) || !usableDocField(k, src[k], dd)) doc[k] = dd[k]
+  }
   doc.theme = { ...(dd.theme as Obj), ...(isObj(src.theme) ? src.theme : {}) }
+  for (const k of Object.keys(dd.theme as Obj)) if (typeof (doc.theme as Obj)[k] !== 'string') (doc.theme as Obj)[k] = (dd.theme as Obj)[k]
   const slidesIn = Array.isArray(src.slides) ? (src.slides as unknown[]) : []
   doc.slides = slidesIn.map((raw, si) => {
     const s0 = isObj(raw) ? raw : {}
