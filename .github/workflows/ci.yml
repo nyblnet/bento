@@ -1339,6 +1339,12 @@ jobs:
         # step. Decisions in slides/src/steps.ts, DOM-free (#282, option 2).
         run: node scripts/test-slides-steps.ts
 
+      - name: maths-lite rig (SPIKE)
+        # In-house maths engine, spike-maths-lite: never-throws contract, the
+        # corpus + standard set parse, Typst ≡ LaTeX on the shared tree, the
+        # symbol table has no duplicates, styled letters are real code points.
+        run: node scripts/test-maths-lite.ts
+
       - name: Reveal authoring rig
         # Reading order (top-to-bottom, then left-to-right, rows by vertical
         # overlap) is deterministic; the verbs continue the slide's sequence;

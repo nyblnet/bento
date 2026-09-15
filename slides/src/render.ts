@@ -7,6 +7,11 @@ import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/
 import type { BentoDoc, EmbedElement, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey, paginates, isWebUrl } from './model'
 import { chartSnapshotSvg } from './charts'
+import { renderMath as mathsLite } from './maths/index.ts'
+// SPIKE CONTROL: Temml stays importable behind the `temml:` marker so a demo
+// deck can show both engines side by side. The size measurement in the
+// handoff is for the shell WITHOUT this import (delete this line and the
+// `temml` branch below to build that variant).
 import temml from 'temml'
 import { renderCodeInto } from './code'
 import { formatDate } from './datefmt'
@@ -496,17 +501,25 @@ function tagSymbols(mathml: string): string {
   return tpl.innerHTML
 }
 
+// SPIKE (spike-maths-lite): Temml is replaced by the in-house engine. A
+// formula may name its syntax with a leading marker inside the delimiters —
+// `$typst: a/b$` — which is ONE of the two options the spike handoff puts to
+// the maintainer, not a decision; plain `$…$` stays LaTeX.
 function renderMath(src: string, display: boolean): string | null {
   const key = (display ? 'D' : 'I') + src
   const hit = mathCache.get(key)
   if (hit !== undefined) return hit || null
   let out: string | null = null
   try {
-    out = tagSymbols(
-      temml.renderToString(decodeEntities(src), { displayMode: display, throwOnError: true, trust: false }),
-    )
+    const tex = decodeEntities(src)
+    const m = /^\s*(typst|latex|temml)\s*:\s*/i.exec(tex)
+    const body = m ? tex.slice(m[0].length) : tex
+    const ml = m?.[1].toLowerCase() === 'temml'
+      ? temml.renderToString(body, { displayMode: display, throwOnError: true, trust: false })
+      : mathsLite(body, { display, syntax: m?.[1].toLowerCase() === 'typst' ? 'typst' : 'latex' })
+    out = ml ? tagSymbols(ml) : null // not valid maths — leave the author's text exactly as typed
   } catch {
-    out = null // not valid TeX — leave the author's text exactly as typed
+    out = null
   }
   mathCache.set(key, out ?? '')
   return out
