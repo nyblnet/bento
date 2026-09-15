@@ -28,6 +28,43 @@ pre-1.0.
   `"$schema": "https://bento.page/schema/slides.json"` — 50 bytes, so a
   reader with only the file in hand knows the format. Older versions keep the
   key and write it back unchanged; nothing fetches it.
+- **`bento check`: an agent can look at what it wrote.** `node
+  scripts/bento-check.mjs deck.bento.html` loads the deck in headless Chrome
+  and prints what the editor would otherwise keep to itself — text that
+  overflows its box (and by how many pixels), elements off the canvas, dead
+  links, effects that can never run — by slide, with element ids; `--png out/`
+  adds one PNG per slide through the same render path as *Export slides as
+  images*, and a contact sheet of the whole deck in one picture; `--json` for
+  scripts, `--fail-on warning` for a strict exit code. A document JSON works
+  as input too, checked inside the built shell. The other half of the agent
+  loop that `AGENTS.md` describes: write, check, fix, check again.
+- **A deck can be written the short way.** An AI agent writing a deck used
+  to spend most of its output on fields nobody chose — rotation 0, opacity 1,
+  the font stack, weight 400, centre, middle, line height 1.25, on every
+  element. A document marked `"compact": true` may leave all of that out and
+  gets it back on load, filled from the same defaults the editor uses when
+  you insert an element; `elements` may nest arrays, and an element without
+  an id gets one minted from its slide and position, the same every time.
+  *Save ▾ Copy compact JSON (for agents)* and `window.bento.compact()` hand
+  a deck back in that shape; *Replace from JSON…* and `loadDoc` take it. The
+  saved file is unchanged — always full, so nothing older is affected.
+  Measured: 12–14% off a designed deck's JSON, about 3× off a deck written
+  the compact way. Asked for, with a working proof of concept, by
+  benedictjohannes (#411, #422); the nested arrays and the flattening come
+  from that proof.
+- **The short way, round two: text sizes itself, markdown is accepted, and
+  a load says what it dropped.** In a compact document a text element may
+  leave `h` out (or say `"auto"`): the box is sized to its text on load,
+  with the deck's real fonts — the same measurement as *Fit height to text*.
+  A text element may carry `md` instead of `html` and it converts exactly as
+  pasted markdown does (bold, italic, code, strike, bullets and sub-bullets,
+  links). And `window.bento.loadDoc` now returns a report: every key the
+  safety check discarded, with its path and the reason (`/slides/0/elements/2/fontSze:
+  unknown key`), how many fields were filled in, and `validate()`'s findings
+  — so an agent's loop is load, read, fix, load again, instead of guessing
+  why a field vanished. *Replace from JSON…* summarises the same report in a
+  toast and logs it. Three agent-written decks are checked in and load clean
+  in CI.
 - **A Layers list.** The Slide panel now opens with *Layers*: every element
   on the slide, top of the stack first, with a glyph and a short label (the
   text's first words, or the kind). Click a row to select, shift-click to add,
