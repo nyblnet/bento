@@ -1364,6 +1364,31 @@ jobs:
         # routes the argument. Bare {{date}} stays viewer-locale (#381).
         run: node scripts/test-slides-fields.ts
 
+      - name: Compact document rig
+        # The agent authoring form (#422): compactDoc/expandDoc are inverses
+        # on the starter deck, expansion equals the editor's insert helpers
+        # field for field, nested arrays flatten, ids mint deterministically,
+        # the loader gates the expanded doc, the file on disk stays full.
+        run: node scripts/test-slides-compact.ts
+
+      - name: Agent-deck corpus rig
+        # scripts/fixtures/agent-decks/*.json — compact decks written the way
+        # agents write them (md, omitted h, nested arrays) — load through the
+        # real loader with zero dropped keys and zero validate() errors; a
+        # deliberately wrong deck reports every drop at its path with a reason.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-agent-decks.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-agent-decks.mjs"
+          node "$RUNNER_TEMP/test-slides-agent-decks.mjs"
+
+      - name: Gate parity rig (the load-report collector changes no decision)
+        # main's untrusted.ts frozen from git at rig time and bundled beside
+        # the branch's; every checked-in deck plus a hostile corpus goes
+        # through both with the collector OFF and the outputs must be
+        # byte-identical. Security-reviewed hunk (#486).
+        run: |
+          git fetch --no-tags --depth=1 origin main
+          node scripts/test-gate-parity.ts
+
       - name: Layers panel rig
         # editor/layerrows.ts, DOM-free: rows top-first, labels per type,
         # group indent, moveInPaintOrder == the Order buttons (front/back/±1,

@@ -919,4 +919,8 @@ export const de: Catalog = {
   "Curved connector": "Gebogener Verbinder",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Eine gebogene Linie zwischen zwei Elementen — die Enden rasten ein und folgen mit, die Spitze folgt der Kurve",
   "Double-headed": "Zwei Spitzen",
+  "Copy compact JSON (for agents)": "Kompaktes JSON kopieren (für Agenten)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Dasselbe Deck ohne alle Standardwerte — die Form, die ein KI-Agent schreiben sollte. „Aus JSON ersetzen“ nimmt es zurück; die gespeicherte Datei ist immer vollständig.",
+  "Compact JSON copied": "Kompaktes JSON kopiert",
+  "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Geladen: {dropped} Felder verworfen, {warnings} Warnungen — siehe Konsole",
 }

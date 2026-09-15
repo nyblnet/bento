@@ -51,6 +51,42 @@ const DROP = undefined
 type Check = (v: unknown) => unknown
 
 /**
+ * The load report (compact input, round two). The gate drops silently by
+ * design — that is right for a hostile file and wrong for an agent that
+ * misspelled `fontSize`. `withDropReport` runs a gate call with a collector
+ * attached; every drop names a JSON-pointer-ish path and a one-line reason.
+ * Off by default: with no collector, `note()` is one null check and the path
+ * stack is never touched, so a paste or a remote op costs what it did.
+ */
+export interface Dropped { path: string; reason: string }
+let collector: Dropped[] | null = null
+const trail: string[] = []
+const note = (key: string | null, reason: string) => {
+  if (!collector) return
+  collector.push({ path: '/' + (key === null ? trail : [...trail, key]).join('/'), reason })
+}
+const within = <T>(key: string, fn: () => T): T => {
+  if (!collector) return fn()
+  trail.push(key)
+  try { return fn() } finally { trail.pop() }
+}
+/** Add a segment to the report path around `fn` — for a caller that walks a
+ *  list itself (compactload.ts adds /slides/<i>). No-op with no collector. */
+export const withPathSegment = <T>(key: string, fn: () => T): T => within(key, fn)
+/** Run `fn` collecting every drop the gate makes; returns the list. */
+export function withDropReport<T>(fn: () => T): { result: T; dropped: Dropped[] } {
+  // Nesting: an inner report gets its own list and a fresh trail, and the
+  // outer one gets both of its back afterwards — so a gate call that itself
+  // asks for a report (none does today) cannot truncate the caller's paths.
+  const prevCollector = collector
+  const prevTrail = trail.splice(0)
+  const dropped: Dropped[] = []
+  collector = dropped
+  try { return { result: fn(), dropped } }
+  finally { collector = prevCollector; trail.splice(0, trail.length, ...prevTrail) }
+}
+
+/**
  * Assigning `out['__proto__'] = x` on a plain object walks the setter and
  * changes the prototype — so this key is skipped everywhere a foreign object
  * is copied, including inside a chart option's free-form JSON.
@@ -211,11 +247,14 @@ function shape(
     if (!isPlainObject(v)) return DROP
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(v)) {
-      if (key === PROTO || !keys.includes(key)) continue
-      const val = checks[key]?.(v[key])
+      if (key === PROTO || !keys.includes(key)) { note(key, 'unknown key'); continue }
+      const val = within(key, () => checks[key]?.(v[key]))
       if (val !== DROP) out[key] = val
+      else note(key, 'invalid value')
     }
-    return required.every((key) => out[key] !== DROP) ? out : DROP
+    const missing = required.filter((key) => out[key] === DROP)
+    if (missing.length) { note(null, `missing required ${missing.join(', ')} — object dropped`); return DROP }
+    return out
   }
 }
 
@@ -225,11 +264,11 @@ function shape(
  * data with its labels — and silently closing a hole would misalign the rest.
  */
 const list = (max: number, item: Check): Check => (v) => {
-  if (!Array.isArray(v) || v.length > max) return DROP
+  if (!Array.isArray(v) || v.length > max) { note(null, Array.isArray(v) ? `more than ${max} entries` : 'not a list'); return DROP }
   const out: unknown[] = []
-  for (const entry of v) {
-    const val = item(entry)
-    if (val === DROP) return DROP
+  for (let i = 0; i < v.length; i++) {
+    const val = within(String(i), () => item(v[i]))
+    if (val === DROP) { note(String(i), 'invalid entry — the whole list is dropped'); return DROP }
     out.push(val)
   }
   return out
@@ -490,25 +529,28 @@ export function checkElementProp(
 
 /** Rebuild a foreign element, or null if it is not one. */
 export function sanitizeElement(value: unknown): SlideElement | null {
-  if (!isPlainObject(value)) return null
+  if (!isPlainObject(value)) { note(null, 'not an object — element dropped'); return null }
   const type = value.type
-  if (typeof type !== 'string') return null
+  if (typeof type !== 'string') { note('type', 'missing — element dropped'); return null }
   const known = (MODEL_KEYS.element as Record<string, readonly string[]>)[type]
-  if (!known) return null
+  if (!known) { note('type', `unknown element type "${type}" — element dropped`); return null }
   // Identity is not optional: ids anchor selection, morph, comments and the
   // CRDT node key, and a slide paste keeps them (only slide ids are reminted).
   const id = ELEMENT_CHECKS.id(value.id)
-  if (typeof id !== 'string' || !id) return null
+  if (typeof id !== 'string' || !id) { note('id', 'missing or invalid — element dropped'); return null }
   const out: Record<string, unknown> = { type, id }
   for (const key of Object.keys(value)) {
-    if (key === 'type' || key === 'id' || key === PROTO || !known.includes(key)) continue
-    const val = ELEMENT_CHECKS[key]?.(value[key])
+    if (key === 'type' || key === 'id') continue
+    if (key === PROTO || !known.includes(key)) { note(key, `unknown key for a ${type} element`); continue }
+    const val = within(key, () => ELEMENT_CHECKS[key]?.(value[key]))
     if (val !== DROP) out[key] = val
+    else note(key, 'invalid value')
   }
   // An element missing what its type needs is not a degraded element, it is one
   // the format cannot express — and the renderer throws on it (see above), which
   // takes the whole slide down, not just the paste.
-  if (!(REQUIRED_ELEMENT_KEYS[type] ?? []).every((key) => out[key] !== DROP)) return null
+  const missing = (REQUIRED_ELEMENT_KEYS[type] ?? []).filter((key) => out[key] === DROP)
+  if (missing.length) { note(null, `missing required ${missing.join(', ')} — element dropped`); return null }
   return out as unknown as SlideElement
 }
 
@@ -534,7 +576,7 @@ const SLIDE_CHECKS: Record<string, Check> = {
   // elements are dropped INDIVIDUALLY: one hostile element must not cost the
   // author the rest of a legitimately copied slide
   elements: (v) => (Array.isArray(v) && v.length <= LIMITS.elements
-    ? v.map(sanitizeElement).filter((el): el is SlideElement => el !== null)
+    ? v.map((el, i) => within(String(i), () => sanitizeElement(el))).filter((el): el is SlideElement => el !== null)
     : DROP),
 }
 
@@ -551,9 +593,9 @@ export const CHECKED_KEYS = {
 
 /** Rebuild a foreign slide, or null if it is not one. */
 export function sanitizeSlide(value: unknown): Slide | null {
-  if (!isPlainObject(value)) return null
+  if (!isPlainObject(value)) { note(null, 'not an object — slide dropped'); return null }
   const id = SLIDE_CHECKS.id(value.id)
-  if (typeof id !== 'string' || !id) return null
+  if (typeof id !== 'string' || !id) { note('id', 'missing or invalid — slide dropped'); return null }
   const out = shape(MODEL_KEYS.slide, SLIDE_CHECKS)(value) as Record<string, unknown>
   if (!Array.isArray(out.elements)) out.elements = []
   return out as unknown as Slide

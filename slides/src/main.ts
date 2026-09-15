@@ -18,6 +18,8 @@ import { buildSlidePreview } from './preview'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
 import { i18nApi, t, applyDirection } from './i18n'
 import { parseDoc, type BentoDoc, type TextElement } from './model'
+import { compactJson } from './compact'
+import { parseDocInputReport, fitAutoHeights, type LoadReport } from './compactload'
 import { validateDoc, type ValidateOpts } from './validate'
 import { resolveThemeRefs } from './palette'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
@@ -315,15 +317,40 @@ if (location.hash === '#present') {
   },
   /**
    * AI/tooling round-trip: replace the whole document from a JSON string
-   * (the contents of #bento-doc). Validates via parseDoc; returns false and
-   * changes nothing on invalid input. Undoable in the editor.
+   * (the contents of #bento-doc, or a COMPACT document — `"compact": true`
+   * with defaults omitted, nested element arrays and missing ids allowed; see
+   * src/compact.ts). Validates via parseDoc; returns false and changes
+   * nothing on invalid input. Undoable in the editor.
+   *
+   * On success returns the LOAD REPORT (truthy, so `if (loadDoc(j))` still
+   * reads as before): `{ ok: true, compact, dropped: [{path, reason}],
+   * expanded, fitted, findings, refit }` — what the gate discarded and why,
+   * how many fields the compact expansion filled, how many text boxes were
+   * fitted to their text, and validate()'s findings on the loaded document.
+   * An agent's loop: load → read dropped/findings → fix → load again.
    */
-  loadDoc(json: string): boolean {
-    const next = parseDoc(json)
-    if (!next) return false
-    store.replaceDoc(next)
-    return true
+  loadDoc(json: string): LoadReport | false {
+    const parsed = parseDocInputReport(json)
+    if (!parsed) return false
+    store.replaceDoc(parsed.doc)
+    // Heights measured while a deck font was still downloading are measured
+    // against the fallback face. Once the fonts settle, fit those boxes
+    // again as one undoable step — the report says which they were.
+    if (parsed.report.refit.length) {
+      void document.fonts.ready.then(() => {
+        if (store.doc !== parsed.doc) return // the deck moved on
+        const n = fitAutoHeights(store.doc, { autoHeight: parsed.report.refit })
+        if (n) store.commit(() => {})
+      })
+    }
+    return parsed.report
   },
+  /**
+   * The document as compact JSON: every field equal to what the editor would
+   * have inserted left out. The shape an agent should write; loadDoc and
+   * "Replace from JSON…" take it back. The FILE is always saved full.
+   */
+  compact: () => compactJson(store.doc),
   /**
    * Report what the runtime would otherwise swallow: unknown keys, text that
    * overflows its box, elements off the canvas, effects that can never run,

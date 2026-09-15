@@ -40,6 +40,8 @@ import { appConfig } from '../../../kernel/src/app.ts'
 import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, mintRoomKey, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
 import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { stripEmbeddedEnvelopes } from '../envelope'
+import { compactJson } from '../compact'
+import { parseDocInputReport } from '../compactload'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, type ShrinkResult } from './shrink'
 
@@ -899,6 +901,9 @@ export class Editor {
       item(ICONS.code, t('Copy document JSON'),
         t('Copies this deck as plain JSON — content only, no live-session keys. Edit it in another tool, then bring it back with Replace from JSON.'),
         () => void this.copyDocJson())
+      item(ICONS.code, t('Copy compact JSON (for agents)'),
+        t('The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.'),
+        () => void this.copyDocJson(true))
       item(ICONS.code, t('Replace from JSON…'),
         t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
         () => this.openReplaceJson())
@@ -1096,12 +1101,12 @@ export class Editor {
    * member revocation on top. Nothing about the round-trip needs a room, and
    * openReplaceJson keeps THIS document's, so dropping the block costs nothing.
    */
-  private async copyDocJson() {
+  private async copyDocJson(compact = false) {
     const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
     stripCollabSecrets(clone)
     try {
-      await navigator.clipboard.writeText(JSON.stringify(clone))
-      this.toast(t('Document JSON copied'))
+      await navigator.clipboard.writeText(compact ? compactJson(clone) : JSON.stringify(clone))
+      this.toast(compact ? t('Compact JSON copied') : t('Document JSON copied'))
     } catch {
       this.toast(t('Couldn’t access the clipboard'))
     }
@@ -1134,13 +1139,21 @@ export class Editor {
       // either wipe the user's room credentials (paste of our own JSON) or
       // silently move the deck into a room that came from somewhere else.
       // Content is imported; identity and capability are not.
-      const next = parseDoc(ta.value)
-      if (next) {
+      const parsed = parseDocInputReport(ta.value) // full or compact (src/compact.ts)
+      if (parsed) {
+        const next = parsed.doc
         const keep = this.store.doc.collab
         if (keep) next.collab = keep
         else delete next.collab
         this.store.replaceDoc(next)
-        this.toast(t('Document replaced — ⌘Z undoes'))
+        // the load report, summarised; the whole thing goes to the console
+        // where an agent driving the page (or a person) can read the paths
+        const r = parsed.report
+        const warnings = r.findings.counts.warning + r.findings.counts.error
+        if (r.dropped.length || warnings) {
+          console.info('[bento] load report', r)
+          this.toast(t('Loaded: {dropped} fields dropped, {warnings} warnings — see console', { dropped: String(r.dropped.length), warnings: String(warnings) }))
+        } else this.toast(t('Document replaced — ⌘Z undoes'))
         overlay.remove()
       } else {
         ta.style.borderColor = '#C0392B'
