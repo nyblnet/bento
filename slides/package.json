@@ -13,8 +13,7 @@
   "dependencies": {
     "moveable": "^0.53.0",
     "reveal.js": "^5.2.1",
-    "selecto": "^1.26.3",
-    "temml": "^0.13.3"
+    "selecto": "^1.26.3"
   },
   "devDependencies": {
     "@gfx/zopfli": "^1.0.15",

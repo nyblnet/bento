@@ -127,10 +127,20 @@ function print(n: MNode, font: Font | undefined): string {
     case 'style': {
       const inner = print(n.c, n.font ?? font)
       const st: string[] = []
-      if (n.color) st.push(`color:${n.color}`)
+      // A colour reaches a style attribute, so it is the ONE place author text
+      // could carry CSS. Only a colour shape passes: #hex, a colour word,
+      // rgb()/hsl() of digits. Anything else (a `;`, `url(`, an expression) is
+      // dropped and the text renders uncoloured rather than refused.
+      if (n.color && isCssColor(n.color)) st.push(`color:${n.color}`)
       if (n.box) st.push('padding:3pt;border:1px solid')
       if (n.cancel) st.push('background:linear-gradient(to top right,transparent 47%,currentColor 47%,currentColor 53%,transparent 53%)')
       return st.length ? `<mrow style="${st.join(';')}">${inner}</mrow>` : inner
     }
   }
 }
+
+/** A CSS colour and nothing else: hex, a name, or rgb()/rgba()/hsl()/hsla()
+ *  over numbers, percentages, commas, slashes and spaces. */
+export const isCssColor = (c: string): boolean =>
+  /^#[0-9a-f]{3,8}$/i.test(c) || /^[a-z]{3,20}$/i.test(c) || /^(rgba?|hsla?)\(\s*[\d.%,\s/]+\)$/i.test(c)
+

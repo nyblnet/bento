@@ -11,6 +11,20 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Maths is Bento's own now, and it reads Typst.** Formulas in text used to
+  go through Temml, a 64 KB library that every saved deck carried. A small
+  engine of our own (slides/src/maths, about 8 KB) renders them instead, so
+  every file you save is about 78 KB smaller, and nothing in the file changes:
+  a formula is still the `$…$` source you typed. Measured against Temml on 91
+  formulas, from our own decks and from Temml's own list of supported
+  functions: 97.8% render pixel-identical, and the rest are places where
+  Temml drew nothing on Chrome — `\overline` and `\underline` now draw their
+  rule. New: Typst maths, asked for by thimotedupuch (#358) — write
+  `$typst: a/b$` (or `$$typst: …$$`) and the formula is read as Typst:
+  `sqrt(x)`, `sum_(i=1)^n`, `mat(a, b; c, d)`, `cases(…)`, `"if" x`. A plain
+  `$…$` is LaTeX as before. Not covered, for now: `\substack`, `\xrightarrow`,
+  chemistry (`\ce`), `\tag` and `\hline`; a formula using them shows as
+  typed, the way any TeX Temml refused always has.
 - **A Layers list.** The Slide panel now opens with *Layers*: every element
   on the slide, top of the stack first, with a glyph and a short label (the
   text's first words, or the kind). Click a row to select, shift-click to add,

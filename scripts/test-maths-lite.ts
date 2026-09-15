@@ -1,23 +1,35 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
-// maths-lite (SPIKE): the engine's own contract, DOM-free.
+// Bento's maths engine (slides/src/maths): its contract, DOM-free.
 //
 //   node scripts/test-maths-lite.ts
 //
-// WHAT THIS PROVES. Every corpus formula (what our decks actually carry) and
-// every formula of the standard set parses; a refused formula returns null
-// rather than throwing (the never-throws contract render.ts relies on); the
-// Typst front end and the LaTeX front end agree on the shared tree for the
-// equivalence table (byte-identical apart from Typst's paren GROUPS, folded);
-// the symbol table has no duplicate LaTeX names; every styled letter is a
-// real Mathematical Alphanumeric code point (Chrome ignores mathvariant).
+// WHAT THIS PROVES. Every formula of the reference set (11 from our own decks
+// and rigs, 80 from the categories of Temml's supported-functions page)
+// parses; a refused formula returns null rather than throwing (the
+// never-throws contract render.ts relies on); the engine's NORMALISED MathML
+// tree matches the tree Temml produced for the same formula on >=95% of the
+// set -- Temml's trees were frozen into scripts/fixtures/maths-reference.json
+// on the day it left the shell (scripts/maths-freeze-reference.ts), and every
+// mismatch must be on the explicit residual list, so a printer change that
+// moves a glyph goes red here rather than on a slide; the Typst front end and
+// the LaTeX front end agree on the shared tree for the equivalence table;
+// the emitter constructs every attribute itself (no href, no handlers, no
+// author style -- the trust:false Temml ran with is structural here); the
+// symbol table has no duplicate LaTeX names; every styled letter is a real
+// Mathematical Alphanumeric code point (Chrome ignores mathvariant).
+//
+// Pixels stay out of CI: the spike measured 97.8% visually identical against
+// Temml in Chrome (docs/DECISIONS.md, 2026-09-15), and there is no Temml in
+// the tree any more to draw the other side.
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { renderMath, parseMath, isTypst, stripMarker } from '../slides/src/maths/index.ts'
 import { SYMBOLS, styledChar } from '../slides/src/maths/symbols.ts'
+import { treeKey } from './lib/mathml-tree.ts'
 
 let failures = 0
 let checks = 0
@@ -36,14 +48,30 @@ ok(renderMath('x = \\frac{…}') === null, 'the canvas placeholder hint (\\frac{
 ok(renderMath('a/b', { syntax: 'typst' }) !== null && renderMath('mat(1, 2; 3', { syntax: 'typst' }) === null, 'typst: valid renders, unterminated → null')
 ok(renderMath('') === null || renderMath('') === '<math xmlns="http://www.w3.org/1998/Math/MathML"><mrow></mrow></math>', 'empty input does not throw')
 
-console.log('\nthe corpus and the standard set\n')
-const corpusPath = join(process.env.CLAUDE_JOB_DIR ?? '', 'tmp/maths-corpus.json')
-let corpus: Array<{ src: string; display: boolean }> = []
-try { corpus = JSON.parse(readFileSync(corpusPath, 'utf8')).corpus } catch { /* built by spike-maths-corpus.mjs; the starter trio below stands in */ }
-const STARTER = ['ax^2 + bx + c = 0', '\\left(x + \\frac{b}{2a}\\right)^2 = \\frac{b^2 - 4ac}{4a^2}', 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}', 'E=mc^2']
-for (const f of STARTER) ok(renderMath(f, { display: true }) !== null, `starter deck: ${f}`)
-const real = corpus.filter((c) => !c.src.includes('…'))
-ok(real.every((c) => renderMath(c.src, { display: c.display }) !== null), `every corpus formula renders (${real.length} from the corpus file, or the starter trio when absent)`)
+console.log('\nthe reference set, against the frozen Temml trees\n')
+type Ref = { src: string; display: boolean; from: string; tree: string | null }
+const reference = JSON.parse(readFileSync(join(root, 'scripts/fixtures/maths-reference.json'), 'utf8')) as { temml: string; frozen: string; formulas: Ref[] }
+ok(reference.formulas.length === 91 && reference.temml === '0.13.3', `the reference is the spike's 91-formula set, frozen from Temml ${reference.temml} on ${reference.frozen}`)
+const corpus = reference.formulas.filter((f) => f.from.startsWith('corpus:') && !f.src.includes('…'))
+ok(corpus.length >= 9 && corpus.every((c) => renderMath(c.src, { display: c.display }) !== null), `every formula our decks and rigs carry renders (${corpus.length})`)
+// Known residuals -- each one a place where Temml's tree is NOT what we want:
+// menclose is blank on Chrome (we draw the rule), and one extra mrow level
+// with 0.0% pixel difference. Anything else that differs is a regression.
+const RESIDUAL = new Set(['\\overline{AB}', '\\underline{x}', '\\sigma(z)_i = \\frac{e^{z_i}}{\\sum_{j=1}^K e^{z_j}}'])
+let both = 0, same = 0
+const unexpected: string[] = []
+for (const f of reference.formulas) {
+  const lite = renderMath(f.src, { display: f.display })
+  const key = lite ? treeKey(lite) : null
+  if (!f.tree || !key) { if (!!f.tree !== !!key) unexpected.push(`${f.src} (temml ${!!f.tree}, ours ${!!key})`); continue }
+  both++
+  if (key === f.tree) same++
+  else if (!RESIDUAL.has(f.src)) unexpected.push(f.src)
+}
+ok(both === 89, '89 formulas render in both (the two refused are the canvas placeholder hint, refused by both)')
+ok(same / both >= 0.95, `>=95% identical normalised trees: ${same}/${both} = ${(100 * same / both).toFixed(1)}%`)
+ok(unexpected.length === 0, `every mismatch is a listed residual -- unexpected: ${unexpected.join(' · ') || 'none'}`)
+ok(both - same === RESIDUAL.size, `and every listed residual still differs (${both - same} of ${RESIDUAL.size}) -- remove one from the list when it is closed`)
 
 console.log('\nMathML shape\n')
 const q = renderMath('x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}', { display: true })!
@@ -102,8 +130,18 @@ ok(!isTypst(' typst: a/b') && !isTypst('Typst: a/b') && !isTypst('TYPST: a/b'), 
 ok(!isTypst('a typst: b') && !isTypst('\\frac{typst:}{b}'), 'not anywhere else in the formula')
 ok(stripMarker('typst:  a/b') === 'a/b' && stripMarker('\\frac{a}{b}') === '\\frac{a}{b}', 'stripMarker removes exactly the marker')
 const render = readFileSync(join(root, 'slides/src/render.ts'), 'utf8')
-ok(/const m = \/\^\(typst\|temml\):\\s\*\/\.exec\(tex\)/.test(render), 'render.ts applies the exact marker (case-sensitive, at the start)')
-ok(/import temml from 'temml'/.test(render), 'SPIKE SHELL ONLY: the temml control import is present here (must be removed for the ship variant)')
+ok(/const m = \/\^typst:\\s\*\/\.exec\(tex\)/.test(render), 'render.ts applies the exact marker (case-sensitive, at the start)')
+ok(!/temml/i.test(render.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')), 'render.ts imports nothing from temml -- the engine is ours')
+ok(!/"temml"/.test(readFileSync(join(root, 'slides/package.json'), 'utf8')), 'temml is not a dependency of slides any more')
+
+console.log('\ntrust: every attribute is ours\n')
+const attrsOf = (html: string) => [...html.matchAll(/\s([a-zA-Z-]+)="/g)].map((m) => m[1])
+const ALLOWED = new Set(['xmlns', 'display', 'mathvariant', 'stretchy', 'fence', 'form', 'lspace', 'rspace', 'style', 'linethickness', 'displaystyle', 'accent', 'width', 'minsize', 'maxsize', 'separator', 'symmetric', 'largeop', 'movablelimits', 'columnalign', 'rowspacing', 'columnspacing', 'scriptlevel', 'height', 'depth', 'voffset', 'mathcolor', 'mathbackground', 'columnlines', 'rowlines', 'frame', 'notation', 'accentunder'])
+for (const src of ['\\href{javascript:alert(1)}{x}', 'x" onload="alert(1)', '<img src=x onerror=alert(1)>', '\\text{<script>1</script>}', '\\textcolor{red;background:url(x)}{y}', '\\textcolor{url(javascript:1)}{y}', '\\mathrm{a} onclick=1']) {
+  const out = renderMath(src) ?? renderMath(src, { syntax: 'typst' }) ?? ''
+  ok(!/<script|onload|onerror|onclick|javascript:|url\(/i.test(out) && attrsOf(out).every((a) => ALLOWED.has(a)), `no author-controlled attribute or tag survives: ${JSON.stringify(src)} -> ${out ? out.slice(0, 60) + '…' : 'refused'}`)
+}
+ok(renderMath('\\textcolor{#ff0000}{x}')!.includes('style="color:#ff0000"') && renderMath('\\textcolor{rebeccapurple}{x}')!.includes('color:rebeccapurple'), '\\textcolor takes a hex or a named colour')
 
 console.log('\nTypst ≡ LaTeX on the shared tree\n')
 const pairs: Array<[string, string]> = [['a/b', '\\frac{a}{b}'], ['(a+b)/c', '\\frac{a+b}{c}'], ['sqrt(2)', '\\sqrt{2}'], ['root(3, x)', '\\sqrt[3]{x}'], ['x^(n+1)', 'x^{n+1}'], ['sum_(i=1)^n i', '\\sum_{i=1}^{n} i'], ['mat(a, b; c, d)', '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}'], ['cases(x & x >= 0, -x & x < 0)', '\\begin{cases} x & x \\ge 0 \\\\ -x & x < 0 \\end{cases}'], ['bb(R)', '\\mathbb{R}'], ['hat(x)', '\\hat{x}'], ['alpha + beta', '\\alpha + \\beta'], ['a <= b != c', 'a \\le b \\ne c'], ['"if" x', '\\text{if} x'], ['lim_(x -> oo) f', '\\lim_{x \\to \\infty} f']]
@@ -112,6 +150,17 @@ for (const [ty, tex] of pairs) ok(renderMath(ty, { syntax: 'typst', display: tru
 // ONE node too (as Temml prints it), so f(x)_i scripts the group in both.
 const noExplicit = (k: string, v: unknown) => (k === 'explicit' ? undefined : v) // Typst sizes its groups (\\left-like); the STRUCTURE is what must agree
 ok(JSON.stringify(parseMath('f(x)_i', { syntax: 'typst' }), noExplicit) === JSON.stringify(parseMath('f(x)_i'), noExplicit), 'f(x)_i: both front ends script the paren group')
+
+console.log('\nmorph: the engine gives the morph nothing new to handle\n')
+// present.ts pairs elements by data-flip-id and tweens the ELEMENT box; the
+// <math> inside rides along, exactly as Temml's did. DOM-free, that reduces
+// to: the same source renders to the same string on every call (the cache
+// key is display+source), so the paired elements carry identical MathML and
+// nothing about the engine can make a pair diverge. Measured live in Chrome
+// (PR body, "Morph"): both engines gave the same rects at every sample.
+ok(renderMath('\\frac{a}{b}') === renderMath('\\frac{a}{b}') && renderMath('\\frac{a}{b}', { display: true }) !== renderMath('\\frac{a}{b}'), 'same source → same string; display mode is part of the identity')
+ok(renderMath('a^2')!.startsWith('<math ') && renderMath('a^2 + b^2')!.startsWith('<math '), 'a changed formula is still a <math> — the box morphs, the content snaps')
+ok(!/\son[a-z]+=|\sid=|<script/i.test(renderMath('x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}')!), 'no ids or handlers that a flip pairing could collide on')
 
 console.log('\nthe symbol table\n')
 const texNames = SYMBOLS.map((s) => s.tex)
