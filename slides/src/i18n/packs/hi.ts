@@ -939,4 +939,7 @@ export const strings: Catalog = {
   "Curved connector": "घुमावदार कनेक्टर",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "दो तत्वों के बीच घुमावदार रेखा — सिरे चिपकते और फिर से जुड़ते हैं, नोक वक्र के साथ चलती है",
   "Double-headed": "दो नोक",
+  "Copy compact JSON (for agents)": "संक्षिप्त JSON कॉपी करें (एजेंट के लिए)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "वही डेक, हर डिफ़ॉल्ट हटाकर — वह रूप जो एक AI एजेंट को लिखना चाहिए। “JSON से बदलें” इसे वापस लेता है; सहेजी गई फ़ाइल हमेशा पूरी होती है।",
+  "Compact JSON copied": "संक्षिप्त JSON कॉपी हो गया",
 }

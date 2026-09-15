@@ -923,4 +923,7 @@ export const strings: Catalog = {
   "Curved connector": "곡선 연결선",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "두 요소 사이의 곡선 — 양 끝이 붙어 따라 움직이고 화살촉은 곡선을 따릅니다",
   "Double-headed": "양쪽 머리",
+  "Copy compact JSON (for agents)": "간결한 JSON 복사 (에이전트용)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "모든 기본값을 뺀 같은 덱 — AI 에이전트가 작성해야 할 형태입니다. “JSON에서 바꾸기”로 되돌릴 수 있으며, 저장되는 파일은 항상 완전한 형태입니다.",
+  "Compact JSON copied": "간결한 JSON을 복사했습니다",
 }

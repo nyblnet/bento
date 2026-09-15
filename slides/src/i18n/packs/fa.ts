@@ -935,4 +935,7 @@ export const strings: Catalog = {
   "Curved connector": "اتصال‌دهندهٔ منحنی",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "خطی منحنی بین دو عنصر — دو سر می‌چسبند و دوباره مسیر می‌گیرند، نوک در امتداد منحنی است",
   "Double-headed": "دو سر",
+  "Copy compact JSON (for agents)": "کپی JSON فشرده (برای عامل‌ها)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "همان دک بدون هیچ مقدار پیش‌فرض؛ شکلی که یک عامل هوش مصنوعی باید بنویسد. «جایگزینی از JSON» آن را می‌پذیرد؛ پروندهٔ ذخیره‌شده همیشه کامل است.",
+  "Compact JSON copied": "JSON فشرده کپی شد",
 }

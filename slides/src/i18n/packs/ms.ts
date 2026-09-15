@@ -932,4 +932,7 @@ export const strings: Catalog = {
   "Curved connector": "Penyambung melengkung",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Garis melengkung antara dua elemen — hujungnya melekat dan dilaraskan semula, hujung anak panah mengikut lengkung",
   "Double-headed": "Dua kepala",
+  "Copy compact JSON (for agents)": "Salin JSON padat (untuk ejen)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Dek yang sama tanpa semua nilai lalai — bentuk yang patut ditulis oleh ejen AI. “Ganti daripada JSON” menerimanya semula; fail yang disimpan sentiasa lengkap.",
+  "Compact JSON copied": "JSON padat disalin",
 }

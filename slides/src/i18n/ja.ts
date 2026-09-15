@@ -919,4 +919,7 @@ export const ja: Catalog = {
   "Curved connector": "曲線コネクタ",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "2つの要素をつなぐ曲線 — 両端は要素に吸着して追従し、先端は曲線に沿います",
   "Double-headed": "両端に矢じり",
+  "Copy compact JSON (for agents)": "コンパクトな JSON をコピー（エージェント向け）",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "既定値をすべて省いた同じデッキ。AI エージェントが書くべき形です。「JSON から置き換え」で戻せます。保存されるファイルは常に完全な形です。",
+  "Compact JSON copied": "コンパクトな JSON をコピーしました",
 }

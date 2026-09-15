@@ -929,4 +929,7 @@ export const strings: Catalog = {
   "Curved connector": "Đường nối cong",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Đường cong giữa hai phần tử — hai đầu bám vào và tự chỉnh lại, đầu mũi tên đi theo đường cong",
   "Double-headed": "Hai đầu",
+  "Copy compact JSON (for agents)": "Sao chép JSON gọn (cho tác tử)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Cùng bộ trang chiếu nhưng bỏ mọi giá trị mặc định: dạng mà một tác tử AI nên viết. “Thay thế từ JSON” nhận lại nó; tệp đã lưu luôn đầy đủ.",
+  "Compact JSON copied": "Đã sao chép JSON gọn",
 }
