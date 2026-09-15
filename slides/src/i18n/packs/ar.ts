@@ -939,4 +939,7 @@ export const strings: Catalog = {
   "Curved connector": "موصّل منحنٍ",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "خط منحنٍ بين عنصرين — يلتصق الطرفان ويعاد توجيههما، ويتبع الرأس المنحنى",
   "Double-headed": "برأسين",
+  "Copy compact JSON (for agents)": "نسخ JSON مضغوط (للوكلاء)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "العرض نفسه بدون أي قيمة افتراضية: الشكل الذي ينبغي لوكيل الذكاء الاصطناعي كتابته. «استبدال من JSON» يقبله؛ الملف المحفوظ كامل دائمًا.",
+  "Compact JSON copied": "تم نسخ JSON المضغوط",
 }

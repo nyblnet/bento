@@ -930,4 +930,7 @@ export const strings: Catalog = {
   "Curved connector": "Łącznik krzywy",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Zakrzywiona linia między dwoma elementami — końce przyczepiają się i dopasowują, grot podąża za krzywą",
   "Double-headed": "Dwa groty",
+  "Copy compact JSON (for agents)": "Kopiuj zwięzły JSON (dla agentów)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Ta sama prezentacja bez wartości domyślnych — postać, którą powinien pisać agent AI. „Zastąp z JSON” przyjmuje ją z powrotem; zapisany plik jest zawsze pełny.",
+  "Compact JSON copied": "Skopiowano zwięzły JSON",
 }

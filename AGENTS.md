@@ -89,6 +89,36 @@ are in `docs/DECISIONS.md` — don't reopen them.
 11. **Verify before claiming done**: typecheck, build, and exercise the change
     in a browser when it's user-visible. Report failures honestly.
 
+## Authoring a deck as an agent: the compact form
+
+The JSON in `#bento-doc` is the full document: every element carries every
+field, including a dozen defaults no author chose. Write the **compact** form
+instead — `"compact": true` at the top level, and leave out every field that
+equals what the editor would insert (rotation 0, opacity 1, the font stack,
+weight 400, centre/middle, line height 1.25, a shape's transparent stroke, a
+slide's theme background, `transition: "fade"` …). `x y w h` and the type's
+content (`html`, `shape`, `src`, `option`, `content`, `columns`/`rows`) are
+always written. Two conveniences: `elements` may nest arrays (a helper that
+returns a card as `[bg, title, body]` needs no spread), and `id` may be
+omitted — it is minted deterministically as `<slideId>-<type>-<index>`, so a
+re-run yields the same ids.
+
+```json
+{ "compact": true, "title": "Q3 review",
+  "slides": [ { "id": "s1", "elements": [
+    { "type": "text", "x": 96, "y": 80, "w": 1088, "h": 100, "html": "Q3 review", "fontSize": 48 },
+    [ { "type": "shape", "shape": "rect", "x": 96, "y": 220, "w": 500, "h": 300, "fill": "#F3F0EA" },
+      { "type": "text", "x": 120, "y": 240, "w": 452, "h": 60, "html": "Revenue" } ] ] } ] }
+```
+
+Load it with `window.bento.loadDoc(json)` or *Save ▾ Replace from JSON…*;
+`window.bento.compact()` (or *Save ▾ Copy compact JSON*) gives a deck back in
+this shape. A compact document passes the untrusted shape gate on the way in
+(unknown keys are dropped). The FILE is always saved full — the on-disk
+format is unchanged and every shipped shell reads it as before.
+`slides/src/compact.ts` is the whole mechanism; `scripts/test-slides-compact.ts`
+proves the round-trip on the starter deck and the gallery decks.
+
 ## Commands
 
 ```sh

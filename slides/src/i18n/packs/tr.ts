@@ -930,4 +930,7 @@ export const strings: Catalog = {
   "Curved connector": "Eğri bağlayıcı",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "İki öğe arasında eğri bir çizgi — uçlar yapışır ve yeniden yönlenir, uç eğriyi izler",
   "Double-headed": "Çift başlı",
+  "Copy compact JSON (for agents)": "Kompakt JSON'u kopyala (ajanlar için)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Tüm varsayılanlar çıkarılmış aynı deste — bir yapay zekâ ajanının yazması gereken biçim. “JSON'dan değiştir” geri alır; kaydedilen dosya her zaman tamdır.",
+  "Compact JSON copied": "Kompakt JSON kopyalandı",
 }

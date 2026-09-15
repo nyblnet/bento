@@ -18,6 +18,8 @@ import { buildSlidePreview } from './preview'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
 import { i18nApi, t, applyDirection } from './i18n'
 import { parseDoc, type BentoDoc, type TextElement } from './model'
+import { compactJson } from './compact'
+import { parseDocInput } from './compactload'
 import { validateDoc, type ValidateOpts } from './validate'
 import { resolveThemeRefs } from './palette'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
@@ -315,15 +317,23 @@ if (location.hash === '#present') {
   },
   /**
    * AI/tooling round-trip: replace the whole document from a JSON string
-   * (the contents of #bento-doc). Validates via parseDoc; returns false and
-   * changes nothing on invalid input. Undoable in the editor.
+   * (the contents of #bento-doc, or a COMPACT document — `"compact": true`
+   * with defaults omitted, nested element arrays and missing ids allowed; see
+   * src/compact.ts). Validates via parseDoc; returns false and changes
+   * nothing on invalid input. Undoable in the editor.
    */
   loadDoc(json: string): boolean {
-    const next = parseDoc(json)
+    const next = parseDocInput(json)
     if (!next) return false
     store.replaceDoc(next)
     return true
   },
+  /**
+   * The document as compact JSON: every field equal to what the editor would
+   * have inserted left out. The shape an agent should write; loadDoc and
+   * "Replace from JSON…" take it back. The FILE is always saved full.
+   */
+  compact: () => compactJson(store.doc),
   /**
    * Report what the runtime would otherwise swallow: unknown keys, text that
    * overflows its box, elements off the canvas, effects that can never run,

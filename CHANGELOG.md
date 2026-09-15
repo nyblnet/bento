@@ -11,6 +11,20 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A deck can be written the short way.** An AI agent writing a deck used
+  to spend most of its output on fields nobody chose — rotation 0, opacity 1,
+  the font stack, weight 400, centre, middle, line height 1.25, on every
+  element. A document marked `"compact": true` may leave all of that out and
+  gets it back on load, filled from the same defaults the editor uses when
+  you insert an element; `elements` may nest arrays, and an element without
+  an id gets one minted from its slide and position, the same every time.
+  *Save ▾ Copy compact JSON (for agents)* and `window.bento.compact()` hand
+  a deck back in that shape; *Replace from JSON…* and `loadDoc` take it. The
+  saved file is unchanged — always full, so nothing older is affected.
+  Measured: 12–14% off a designed deck's JSON, about 3× off a deck written
+  the compact way. Asked for, with a working proof of concept, by
+  benedictjohannes (#411, #422); the nested arrays and the flattening come
+  from that proof.
 - **A Layers list.** The Slide panel now opens with *Layers*: every element
   on the slide, top of the stack first, with a glyph and a short label (the
   text's first words, or the kind). Click a row to select, shift-click to add,

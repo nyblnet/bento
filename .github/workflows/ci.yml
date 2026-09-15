@@ -1353,6 +1353,13 @@ jobs:
         # routes the argument. Bare {{date}} stays viewer-locale (#381).
         run: node scripts/test-slides-fields.ts
 
+      - name: Compact document rig
+        # The agent authoring form (#422): compactDoc/expandDoc are inverses
+        # on the starter deck, expansion equals the editor's insert helpers
+        # field for field, nested arrays flatten, ids mint deterministically,
+        # the loader gates the expanded doc, the file on disk stays full.
+        run: node scripts/test-slides-compact.ts
+
       - name: Layers panel rig
         # editor/layerrows.ts, DOM-free: rows top-first, labels per type,
         # group indent, moveInPaintOrder == the Order buttons (front/back/±1,

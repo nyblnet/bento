@@ -936,4 +936,7 @@ export const strings: Catalog = {
   "Curved connector": "Kaareva yhdysviiva",
   "A curved line between two elements — the ends snap on and re-route, the tip follows the curve": "Kaareva viiva kahden elementin välillä — päät tarttuvat ja reitittyvät uudelleen, kärki seuraa kaarta",
   "Double-headed": "Kaksipäinen",
+  "Copy compact JSON (for agents)": "Kopioi tiivis JSON (agenteille)",
+  "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Sama pakka ilman oletusarvoja — muoto, jonka tekoälyagentin tulisi kirjoittaa. ”Korvaa JSON:sta” ottaa sen vastaan; tallennettu tiedosto on aina täydellinen.",
+  "Compact JSON copied": "Tiivis JSON kopioitu",
 }
