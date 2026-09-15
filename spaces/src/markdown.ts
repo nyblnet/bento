@@ -19,6 +19,7 @@
 import { type Block, type Page, uid, writeTable } from './model.ts'
 import { esc } from './sanitize.ts'
 import { keepClasses } from './marks.ts'
+import { parseEmbedLine, linkEmbeds } from './embed.ts'
 
 /** A tab indents four columns. Nothing here depends on the exact number; it
  *  only has to be the same everywhere so nesting is consistent. */
@@ -117,8 +118,13 @@ export function inlineHtml(src: string): string {
     return hold(ok)
   })
 
-  // ![[embed]] and [[wikilink|alias]] before ordinary links: an embed of a
-  // note is just a link to it, because there is no transclusion in the model
+  // ![[embed]] and [[wikilink|alias]] before ordinary links.
+  //
+  // AN INLINE EMBED IS A LINK, and that is now a statement about grammar
+  // rather than about the model: `embed` is a real block type (embed.ts), and
+  // parseNote below turns a `![[Note]]` that is a whole LINE into one. A block
+  // cannot live inside a sentence, so an `![[Note]]` with words either side of
+  // it stays what it can be here — a link to the note.
   s = s.replace(/!?\[\[([^\]]+)\]\]/g, (_m, inner: string) => {
     const [target, alias] = splitOnce(inner, '|')
     return hold(`<a href="${WIKI_SCHEME}${encodeURIComponent(target.trim())}">`) +
@@ -405,6 +411,25 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
       continue
     }
 
+    // A WHOLE LINE THAT IS AN EMBED BECOMES ONE. Strictly after `imageOf`,
+    // which owns the image-extension list: `![[diagram.png]]` is a picture and
+    // `![[Design notes]]` is a transclusion, and the two are told apart in
+    // exactly one place.
+    //
+    // The block leaves here with NO `page` — at parse time a wikilink names a
+    // file and no page exists yet — carrying the same `#w/` placeholder link
+    // every other block carries. planImport resolves it and embed.ts
+    // `linkEmbeds` reads the answer back off the html.
+    const emb = parseEmbedLine(body)
+    if (emb) {
+      para = null
+      add(mk('embed', {
+        html: `<a href="${WIKI_SCHEME}${encodeURIComponent(emb.target)}">${esc(emb.target)}</a>`,
+        ...(emb.anchor ? { anchor: emb.anchor } : {}),
+      }), ownerFor(indent))
+      continue
+    }
+
     // a plain line: a continuation of the block above, or a new paragraph.
     //
     // A SOFT LINE BREAK BECOMES <br> rather than a space. Notes are written
@@ -636,6 +661,13 @@ export function planImport(
       stats.dangling += r.dangling
     }
   }
+
+  // …and then the EMBEDS, which read their target back out of the html the
+  // sweep above just resolved. It has to be after, not folded into the loop:
+  // an embed's `page` is whatever `#p/<id>` the resolver decided on, and
+  // deciding it twice in two places is how the block and its own fallback link
+  // would come to point at different pages.
+  linkEmbeds(pages)
 
   // NO PAGE ARRIVES WITH ZERO BLOCKS.
   //

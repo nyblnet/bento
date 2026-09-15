@@ -77,6 +77,7 @@ unique ids the first time.
 | `divider` | — | `<hr>` |
 | `image` | `src` (see below), `alt`, `caption`, `width` (10–100 **%**), `w`/`h` (intrinsic px) | `<figure>` |
 | `pagelink` | `page` | a card linking to another page |
+| `embed` | `page`, `anchor`, `html` | a live view of another page, or one section of it — see **Embeds** |
 | `link` | `url`, `title`, `desc`, `site`, `icon`, `image`, `html` | a card linking OUT of the space — see **Link cards** |
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
 | `view` | `layout`, `groupBy`, `html` | a board or list of this space's issues |
@@ -107,6 +108,38 @@ Write `html` too: it is what a build that predates this type renders, exactly
 as it is for `prop`. A `javascript:` or `data:` url renders as a dead card that
 keeps its title rather than as a link — `validate()` reports both that and a
 remote `image`. Use `pagelink`, not this, for a page inside the space.
+
+### Embeds
+
+An `embed` block shows another page **live**. It stores a reference and never a
+copy: the source page is the truth, and editing it changes every embed of it.
+
+```jsonc
+{ "id": "b9", "type": "embed",
+  "page": "p-design",                  // the target page id, exactly as pagelink means it
+  "anchor": "Rollout",                 // OPTIONAL — one heading on that page, matched by NAME
+  "html": "<a href=\"#p/p-design\">Design notes</a>" }
+```
+
+Write `html` too, for the reason `link` and `prop` do: it is what a build that
+predates this type renders, so an older shell shows a link to the source page
+instead of a blank.
+
+`anchor` names an `h1`/`h2`/`h3` on the target, case- and
+whitespace-insensitively, and the section runs to the next heading of the same
+or higher rank — so an h2 takes its h3s with it. Leave it out for the whole
+page; **a name that matches nothing is reported by `validate()`, never quietly
+widened back to the whole page.**
+
+Two limits, both deliberate and both visible to the reader rather than silent:
+a page cannot embed itself or anything that leads back to it (the loop renders
+as a named placeholder), and an embed chain is followed at most **three** pages
+deep. `validate()` reports both, plus a target that is not a page.
+
+An embed produces a **backlink** on its target, exactly as a `pagelink` does —
+it is the strongest reference in the model, since the page it names is being
+shown somewhere else. In Markdown it is Obsidian's `![[Page]]` / `![[Page#Section]]`,
+in both directions: a vault's embeds import as embeds and export as themselves.
 
 ### Callouts
 
@@ -277,6 +310,7 @@ notifications, automation. The file is the team boundary and the capability.
 | a topic that belongs *under* another | `parent` on the page | the tree is the navigation |
 | a reference to another page | an inline `#p/` link | it produces a backlink on the target automatically, at no cost |
 | a list of sub-pages | one `pagelink` block each | a visible card beats a bare link for a hub page |
+| one page's material that belongs on another too | an `embed`, narrowed with `anchor` | the source stays the single copy — a pasted duplicate is what goes stale |
 | steps someone will tick off | `todo` | state lives in the document, so it survives sharing |
 | an aside, or detail most readers skip | `toggle` with its body as `parent` children | folds away, and always PRINTS expanded |
 | a warning the reader must not miss | `callout` with the `tone` that fits | it is boxed, named and legible in print and without colour vision — but three per page and none of them registers |
@@ -352,7 +386,9 @@ findings.filter(f => f.severity === 'error')
 Each finding is `{code, severity, message, fix, page?, block?, path?}`. It
 reports duplicate and missing ids, a page inside its own subtree (which is the
 one way a page becomes unreachable), parents naming nothing, `#p/` links and
-`pagelink` cards pointing at pages that do not exist, unknown block types, block
+`pagelink` cards and `embed` blocks pointing at pages that do not exist
+(`broken-embed`), embeds that loop back to their own page (`embed-cycle`) and
+embed anchors that name no heading (`no-section`), unknown block types, block
 markup inside inline `html` (and markup that is dropped whole), hrefs outside the
 allowlist, images with no `alt`, no size, a missing `asset:` or a remote `src`,
 a `home` naming nothing, pages with no blocks, and assets nothing references.
