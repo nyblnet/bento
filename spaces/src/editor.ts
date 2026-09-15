@@ -18,6 +18,7 @@ import * as collabUi from './collabui.ts'
 import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
+import { notesOnPage } from './footnotes.ts'
 import { wireCanvas, placeNewCard } from './canvas.ts'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
@@ -1172,10 +1173,36 @@ export class Editor {
     })
   }
 
+  /**
+   * Repaint if — and only if — this page's footnote NUMBERING has changed.
+   *
+   * DERIVE, DO NOT COMMIT: the same shape slides uses for linked charts and
+   * connectors. Nothing is written to the document here; the section at the
+   * foot of the page is a function of the references in the blocks, so the
+   * only thing that can be stale is the DOM. The signature is the ordered
+   * label list, which is exactly what the section and every marker are drawn
+   * from — so an unconditional repaint on blur would be a caret-losing
+   * flicker on every click, and no repaint at all would leave a note the
+   * author just referenced with nowhere to write it.
+   */
+  private syncFootnotes(): void {
+    const page = this.store.page
+    if (!page) return
+    const sig = notesOnPage(this.store.doc, page).order.join('\u001F')
+    if (sig === this.fnSig) return
+    this.fnSig = sig
+    this.paintPage()
+  }
+
+  private fnSig = ''
+
   // ---- the page -----------------------------------------------------------
   private paintPage(): void {
     const s = this.store
     const page = s.page
+    // the baseline `syncFootnotes` compares against — set here so switching
+    // pages can never leave the previous page's signature behind
+    this.fnSig = page ? notesOnPage(s.doc, page).order.join('\u001F') : ''
     // The bar holds a reference to the block host it is floating over, and this
     // is about to replace every one of them.
     this.format?.close()
@@ -2308,7 +2335,48 @@ export class Editor {
           const clean = canonicalize(b.html)
           if (clean !== b.html) { b.html = clean; host.innerHTML = clean }
         }
+        // A FOOTNOTE REFERENCE TYPED INTO THIS BLOCK CHANGES THE PAGE.
+        //
+        // The section at the foot is derived from every block's references, so
+        // adding or deleting a `[^1]` renumbers the notes and adds or removes a
+        // row. Repainting on `input` would do it a keystroke sooner and take
+        // the caret with it — half of `[^1` is not a reference, so every one of
+        // those keystrokes is a signature change. Blur is the first moment the
+        // caret is not the thing being protected.
+        this.syncFootnotes()
       })
+    }
+
+    // FOOTNOTE BODIES. `data-edit-note` and not `data-edit`: the generic
+    // handler above writes its host's html to a BLOCK, and a note is not one.
+    // The label is the key into doc.footnotes and it is derived from the text —
+    // so a note is created by the first keystroke into an empty slot and the
+    // slot itself came from a `[^label]` somebody typed.
+    if (!s.readOnly && !this.reading) {
+      for (const body of view.querySelectorAll<HTMLElement>('[data-edit-note]')) {
+        const label = body.dataset.editNote!
+        body.addEventListener('input', () => {
+          if (this.painting) return
+          s.runEdit(`fn:${label}`, () => {
+            const table = (s.doc.footnotes ??= {})
+            table[label] = body.innerHTML
+          })
+        })
+        body.addEventListener('blur', () => {
+          if (this.painting) return
+          s.endRun()
+          const table = s.doc.footnotes
+          if (!table || !Object.hasOwn(table, label)) return
+          const clean = canonicalize(table[label])
+          // AN EMPTIED NOTE IS DELETED, not stored as ''. An empty string is a
+          // note that exists and says nothing, which reads to validate() as a
+          // satisfied reference and prints as a blank numbered line; deleting
+          // the key puts the reference back to dangling, which is the truth and
+          // is what the author just did.
+          if (!clean.trim()) delete table[label]
+          else if (clean !== table[label]) { table[label] = clean; body.innerHTML = clean }
+        })
+      }
     }
 
     for (const box of view.querySelectorAll<HTMLInputElement>('.sp-check')) {
@@ -4583,12 +4651,18 @@ export class Editor {
     for (const page of plan.pages) {
       for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
     }
+    for (const [label, body] of Object.entries(plan.footnotes)) {
+      plan.footnotes[label] = sanitizeInline(body)
+    }
 
     // ONE step: pages, images and fonts land together or not at all.
     s.commit(() => {
       s.doc.pages.push(...plan.pages)
       if (Object.keys(plan.assets).length) Object.assign((s.doc.assets ??= {}), plan.assets)
       if (plan.fonts.length) (s.doc.fonts ??= []).push(...plan.fonts)
+      // ADDITIONS ONLY here (unlike the Markdown path, whose plan starts from
+      // this table): planGraft returns what the host does not already hold.
+      if (Object.keys(plan.footnotes).length) Object.assign((s.doc.footnotes ??= {}), plan.footnotes)
     })
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
@@ -4734,6 +4808,9 @@ export class Editor {
     const plan = planImport(files, {
       rootTitle: t('Imported notes'),
       resolveExisting: (target) => existing.get(target),
+      // so an imported `[^1]` that would land on a note this space already has
+      // is renamed, in the plan, along with the references to it
+      existingNotes: s.doc.footnotes,
     })
 
     // ---- images ------------------------------------------------------------
@@ -4795,6 +4872,11 @@ export class Editor {
     for (const page of plan.pages) {
       for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
     }
+    // A NOTE IS INLINE HTML OUT OF SOMEBODY ELSE'S FILE and goes through the
+    // same gate as a block's, in the same pass, for the same reason.
+    for (const [label, body] of Object.entries(plan.footnotes)) {
+      plan.footnotes[label] = sanitizeInline(body)
+    }
 
     // The import already lands under exactly one root (planImport wraps a mixed
     // selection); re-homing that root is the whole of "add these under this
@@ -4805,7 +4887,15 @@ export class Editor {
       for (const page of plan.pages) if (!page.parent || !arrived.has(page.parent)) page.parent = under
     }
 
-    s.commit(() => { s.doc.pages.push(...plan.pages) })
+    s.commit(() => {
+      s.doc.pages.push(...plan.pages)
+      // `plan.footnotes` STARTED from this document's own table and had the
+      // imported notes merged into it, renaming collisions — so it is assigned
+      // whole rather than spread over the existing one. Absent stays absent
+      // when nothing has footnotes, so importing plain notes does not add an
+      // empty key to the file.
+      if (Object.keys(plan.footnotes).length) s.doc.footnotes = plan.footnotes
+    })
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
     this.status(t('Imported'))

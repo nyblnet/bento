@@ -629,4 +629,7 @@ export const it: Catalog = {
   "Date": "Data",
   "Person": "Persona",
   "Labels": "Etichette",
+  "Footnotes": "Note a piè di pagina",
+  "Back to the text": "Torna al testo",
+  "Write the note": "Scrivi la nota",
 }

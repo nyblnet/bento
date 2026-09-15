@@ -629,4 +629,7 @@ export const fr: Catalog = {
   "Date": "Date",
   "Person": "Personne",
   "Labels": "Étiquettes",
+  "Footnotes": "Notes de bas de page",
+  "Back to the text": "Revenir au texte",
+  "Write the note": "Rédigez la note",
 }

@@ -2383,3 +2383,62 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-canvas-body { background: none; background-image: none; }
   .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }
+
+/* ---------------------------------------------------------------------------
+   FOOTNOTES (src/footnotes.ts)
+
+   The marker is a superscript number and the notes are a numbered list at the
+   foot of the page. Both are DERIVED — nothing here has a document field
+   behind it — so the styling only has to do two jobs: keep the marker from
+   disturbing the line it sits in, and keep the notes quieter than the prose
+   they belong to.
+   --------------------------------------------------------------------------- */
+/* THE MARKER MUST NOT CHANGE THE LINE HEIGHT. `vertical-align: super` on a
+   normal-size box grows the line box, and a paragraph with one footnote in it
+   then sits taller than the one above it — visible as a stutter down a page of
+   prose. `line-height: 0` on the raised box is what stops that. */
+.sp-fnref { font-size: 0.72em; line-height: 0; vertical-align: super; }
+.sp-fnref a {
+  color: var(--accent-ink); text-decoration: none; padding: 0 1px; border-radius: 3px;
+}
+.sp-fnref a:hover, .sp-fnref a:focus-visible { background: var(--chrome-2); }
+
+.sp-fnotes {
+  margin: 40px 0 0; padding-top: 14px; border-top: 1px solid var(--line);
+  font-size: 14px; color: var(--muted);
+}
+.sp-fnlist { margin: 0; padding-inline-start: 22px; }
+.sp-fnote { margin: 0 0 6px; }
+.sp-fnote::marker { color: var(--accent-ink); }
+.sp-fnbody { display: inline; }
+.sp-fnbody[data-ph]:empty::before {
+  content: attr(data-ph); color: var(--ph); pointer-events: none;
+}
+.sp-fnbody[contenteditable="true"]:focus {
+  outline: none; box-shadow: 0 0 0 2px var(--chrome-2); border-radius: 3px;
+}
+/* THE WAY BACK. Quiet until you want it — a column of arrows down the notes
+   reads as decoration, and the arrow is only ever wanted once you have
+   finished reading the note it belongs to. */
+.sp-fnback {
+  color: var(--ph); text-decoration: none; margin-inline-end: 6px; font-size: 12px;
+}
+.sp-fnote:hover .sp-fnback, .sp-fnback:focus-visible { color: var(--accent-ink); }
+
+@media print {
+  /* WHERE FOOTNOTES LAND ON PAPER: at the foot of the PAGE OF THE DOCUMENT,
+     not of the sheet. CSS `float: footnote` is the typographic answer and no
+     browser implements it (it is Paged Media, and print-to-PDF from Chrome,
+     Safari and Firefox all ignore it) — so a "real" footnote here would be one
+     that silently did not print, which is the single outcome this feature
+     cannot have. A page of a space is one flow under one heading and the
+     section already sits at the end of it: endnotes per page, which is what a
+     multi-page handout wants anyway. Kept whole across a sheet break, because
+     a note split down the middle is worse than one that starts lower. */
+  .sp-fnotes { break-inside: avoid; color: #000; border-top-color: #999; }
+  .sp-fnote { break-inside: avoid; }
+  /* the arrow is navigation, and paper has none */
+  .sp-fnback { display: none !important; }
+  /* an accent marker on a monochrome printer is a grey smudge at 7px */
+  .sp-fnref a { color: #000; background: none !important; }
+}

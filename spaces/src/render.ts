@@ -23,6 +23,7 @@ import {
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
 import { renderCanvasHead, placeCard } from './canvas.ts'
+import { markRefs, notesOnPage, noteOf, noteId, refId, type PageNotes } from './footnotes.ts'
 
 export interface RenderOpts {
   /** editable per-block hosts (the editor); false for reader/print */
@@ -50,6 +51,18 @@ export interface RenderOpts {
    * it would travel to the next person the file is mailed to.
    */
   allowRemote?: (src: string) => boolean
+  /**
+   * DERIVED, and set by `renderBlocks` for its own descent — never by a caller.
+   *
+   * Footnote numbering is a fact about a whole PAGE (order of appearance), and
+   * `renderBlock` draws one block, so the numbering has to arrive from above.
+   * It rides in the options rather than as a fifth parameter for the same
+   * reason `calc` does not: every intermediate would have to thread it.
+   */
+  footnotes?: PageNotes
+  /** the page whose numbering `footnotes` is — DOM ids are document-global and
+   *  print draws every page at once, so a label's ids are scoped by page */
+  footnoteScope?: string
 }
 
 // The tag and list maps come from the block registry (blocks.ts), so a new
@@ -66,6 +79,12 @@ export interface RenderOpts {
  */
 export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): DocumentFragment {
   const frag = document.createDocumentFragment()
+  // FOOTNOTE NUMBERING IS COMPUTED ONCE, HERE. It is order-of-appearance over
+  // the whole page, so no block can work it out on its own — and it is derived
+  // every paint rather than stored, so inserting a reference renumbers
+  // everything after it with nothing to keep in step (src/footnotes.ts).
+  const fnotes = notesOnPage(doc, page)
+  if (fnotes.order.length) opts = { ...opts, footnotes: fnotes, footnoteScope: page.id }
   // MAGIC NOTES' CONTEXT, accumulated as the pass goes. A name is defined by a
   // line and usable by the lines BELOW it — the same direction a person reads
   // in, and the reason this needs no second pass and cannot cycle.
@@ -644,7 +663,12 @@ function renderTable(b: Block, opts: RenderOpts): HTMLElement {
         // over the whole table. A cell says which block AND which cell it is.
         td.dataset.cell = b.id
       }
-      td.innerHTML = sanitizeInline(cell)
+      // the same either/or as inlineHost, for the same reason — a cell is an
+      // editable host too
+      const cleanCell = sanitizeInline(cell)
+      td.innerHTML = opts.editable || !opts.footnotes
+        ? cleanCell
+        : markRefs(cleanCell, opts.footnotes, opts.footnoteScope ?? '')
       tr.appendChild(td)
     })
     if (head) {
@@ -738,7 +762,17 @@ function inlineHost(b: Block, opts: RenderOpts): HTMLElement {
   // document's theme.dir — PLATFORM §8's two-layer rule
   inner.dir = 'auto'
   if (opts.editable) inner.contentEditable = 'true'
-  inner.innerHTML = sanitizeInline(b.html ?? '')
+  // MARKERS ARE DRAWN ONLY WHERE THEY CANNOT BE TYPED INTO. `host.innerHTML`
+  // is written straight to `Block.html` on every `input` event, so a `<sup>`
+  // injected into an editable host is one keystroke from being committed to the
+  // document — and the reference `[^1]` it replaced would be gone. While a
+  // block is editable the author sees and edits the token, exactly as they see
+  // and edit `budget * 0.3 =` (calc.ts). Reading view, print and the
+  // file-manager still are all `editable: false` and get the superscript.
+  const clean = sanitizeInline(b.html ?? '')
+  inner.innerHTML = opts.editable || !opts.footnotes
+    ? clean
+    : markRefs(clean, opts.footnotes, opts.footnoteScope ?? '')
   if (!b.html) inner.dataset.empty = '1'
   return inner
 }
@@ -1016,8 +1050,75 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   inner.appendChild(h)
 
   inner.appendChild(renderBlocks(page, doc, opts))
+  const feet = renderFootnotes(page, doc, opts)
+  if (feet) inner.appendChild(feet)
   art.appendChild(inner)
   return art
+}
+
+/**
+ * The notes at the foot of the page, or null when the page has none.
+ *
+ * DERIVED, LIKE THE NUMBERS. Nothing in the document says "put a footnote
+ * section here" — the section IS the page's references, in the order they
+ * appear, so deleting the last reference removes the section and no cleanup
+ * has to remember to.
+ *
+ * A REFERENCE WITH NO NOTE STILL GETS A ROW, and that is the whole authoring
+ * gesture: type `[^1]` in a sentence and an empty numbered slot appears down
+ * here to write the note into. It is also why a dangling reference cannot be
+ * silently lost — what validate() reports is the same thing the author is
+ * already looking at.
+ *
+ * In the editor the note body is an editable host; in reading view, print and
+ * the file-manager still it is inert. `data-edit-note`, deliberately NOT
+ * `data-edit`: that name means "this element's html IS a BLOCK's html", and the
+ * editor's generic input handler would write a note over a block.
+ */
+function renderFootnotes(page: Page, doc: SpacesDoc, opts: RenderOpts): HTMLElement | null {
+  const notes = notesOnPage(doc, page)
+  if (!notes.order.length) return null
+  const sec = document.createElement('section')
+  sec.className = 'sp-fnotes'
+  // A real landmark with a real name: on paper it is the block at the foot of
+  // the page, and to a screen reader it is the region the superscripts point at.
+  sec.setAttribute('aria-label', t('Footnotes'))
+
+  const ol = document.createElement('ol')
+  ol.className = 'sp-fnlist'
+  for (const label of notes.order) {
+    const li = document.createElement('li')
+    li.className = 'sp-fnote'
+    li.id = noteId(page.id, label)
+
+    // BACK TO THE SENTENCE. A footnote you cannot get back from costs the
+    // reader their place; in print the anchor is inert and harmless, so it is
+    // hidden by the stylesheet rather than conditioned on the surface here.
+    const back = document.createElement('a')
+    back.className = 'sp-fnback'
+    back.href = `#${refId(page.id, label)}`
+    back.textContent = '\u21A9'
+    back.setAttribute('aria-label', t('Back to the text'))
+    li.appendChild(back)
+
+    const body = document.createElement('span')
+    body.className = 'sp-fnbody'
+    body.dir = 'auto'
+    // The note came out of a file somebody mailed you, exactly like a block's
+    // html, and goes through the same allowlist.
+    body.innerHTML = sanitizeInline(noteOf(doc, label) ?? '')
+    if (opts.editable) {
+      body.contentEditable = 'true'
+      body.dataset.editNote = label
+      // `:empty::before`, the same idiom the canvas title uses — no companion
+      // `data-empty` flag to keep in step with what the author has typed
+      body.dataset.ph = t('Write the note')
+    }
+    li.appendChild(body)
+    ol.appendChild(li)
+  }
+  sec.appendChild(ol)
+  return sec
 }
 
 /** What a value reads as. Mirrors fields.ts propHtml, which writes the same
