@@ -19,6 +19,7 @@ import { shrinkImageFile, shrinkNote, fmtBytes } from './shrink'
 import { revealInOrder, revealTogether, removeReveal, type StepPatch } from './reveal'
 import { stepOf } from '../steps'
 import { ICONS } from '../icons'
+import { LayersUI } from './layers'
 import { t } from '../i18n'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
 
@@ -200,15 +201,26 @@ export class PropsPanel {
     const scrollTop = force ? 0 : this.host.scrollTop
     this.host.innerHTML = ''
     const els = this.store.selectedElements
-    if (els.length === 0) this.buildSlidePanel()
-    else if (els.length === 1) this.buildElementPanel(els[0])
-    else this.buildMultiPanel(els)
+    // Layers (editor/layers.ts): first thing on the Slide panel, last thing on
+    // an element's — see that file's header for the measurement behind it.
+    if (els.length === 0) { this.layers.mount(this.host); this.buildSlidePanel() }
+    else if (els.length === 1) { this.buildElementPanel(els[0]); this.layers.mount(this.host) }
+    else { this.buildMultiPanel(els); this.layers.mount(this.host) }
     this.applyAccordion()
     this.host.scrollTop = scrollTop
   }
 
   /** Collapsed by default until the user opens them (persisted per title). */
-  private static CLOSED_BY_DEFAULT = new Set(['Slideshow', 'Presenting', 'Interactivity', 'Layout', 'Advanced (JSON)'])
+  private static CLOSED_BY_DEFAULT = new Set(['Slideshow', 'Presenting', 'Interactivity', 'Layout', 'Advanced (JSON)', 'Layers'])
+
+  /** The layer list, one instance re-mounted on every rebuild (rows are
+   *  cheap; the node keeps focus and drag state across a doc edit). */
+  private layers = new LayersUI({
+    slide: () => this.store.slide,
+    selection: () => this.store.selection,
+    select: (ids) => this.store.select(ids),
+    setOrder: (elements) => this.store.commit(() => { this.store.slide.elements = elements }),
+  })
 
   /**
    * Retrofit the flat panel into an accordion: every .ed-section header

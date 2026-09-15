@@ -1353,6 +1353,13 @@ jobs:
         # routes the argument. Bare {{date}} stays viewer-locale (#381).
         run: node scripts/test-slides-fields.ts
 
+      - name: Layers panel rig
+        # editor/layerrows.ts, DOM-free: rows top-first, labels per type,
+        # group indent, moveInPaintOrder == the Order buttons (front/back/±1,
+        # a group moves as one, a no-op returns the same array), highlight
+        # follows the selection; render/present never see the list (#371).
+        run: node scripts/test-slides-layers.ts
+
       - name: Photos shrink at insert rig
         # editor/shrink.ts decisions, DOM-free: photo vs graphic (lossy vs
         # lossless), the ≥20% keep rule, the 2560 px cap, svg/gif untouched,

@@ -886,4 +886,8 @@ export const it: Catalog = {
   "Replace file (original size)…": "Sostituisci file (dimensione originale)…",
   "Keep aspect ratio": "Mantieni le proporzioni",
   "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Attivo: il ridimensionamento conserva le proporzioni dell’immagine (Maiusc le libera per un trascinamento). Disattivo: larghezza e altezza cambiano separatamente e l’immagine si deforma",
+  "Layers": "Livelli",
+  "Curve": "Curva",
+  "Element": "Elemento",
+  "Nothing on this slide yet.": "Ancora niente su questa diapositiva.",
 }

@@ -565,6 +565,29 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-section:first-child { margin-top: 2px; }
 
+/* layers list (editor/layers.ts): one compact row per element, top first */
+.ed-layers {
+  display: flex; flex-direction: column; gap: 1px; outline: none; margin-bottom: 6px;
+  /* a busy slide (the showcase title has 39 elements) must not push the Slide
+     controls a screen down: the list scrolls inside itself past ~12 rows */
+  max-height: 300px; overflow-y: auto;
+}
+.ed-layers:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: 6px; }
+.ed-layer {
+  display: flex; align-items: center; gap: 7px;
+  padding: 3px 6px; border-radius: 6px; font-size: 12px; line-height: 18px;
+  cursor: default; user-select: none; border: 1px solid transparent;
+}
+.ed-layer:hover { background: rgb(94 118 153 / 0.10); }
+.ed-layer.sel { background: rgb(94 118 153 / 0.18); border-color: rgb(94 118 153 / 0.35); }
+.ed-layer.grouped { padding-left: 20px; }
+.ed-layer.dragging { opacity: 0.4; }
+.ed-layer.drop-above { box-shadow: 0 -2px 0 0 var(--accent); }
+.ed-layer.drop-below { box-shadow: 0 2px 0 0 var(--accent); }
+.ed-layer-glyph { flex: none; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); font-size: 10px; font-weight: 700; }
+.ed-layer-glyph svg { width: 14px; height: 14px; }
+.ed-layer-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .ed-row {
   display: flex;
   align-items: center;

@@ -886,4 +886,8 @@ export const zhHant: Catalog = {
   "Replace file (original size)…": "取代檔案（原始尺寸）…",
   "Keep aspect ratio": "保持長寬比",
   "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "開：調整大小時保持圖片比例（按住 Shift 可暫時解除一次拖曳）。關：寬和高各自變化，圖片會被拉伸",
+  "Layers": "圖層",
+  "Curve": "曲線",
+  "Element": "元素",
+  "Nothing on this slide yet.": "這張投影片上還沒有內容。",
 }

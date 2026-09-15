@@ -899,4 +899,8 @@ export const strings: Catalog = {
   "Replace file (original size)…": "Gantikan fail (saiz asal)…",
   "Keep aspect ratio": "Kekalkan nisbah aspek",
   "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Hidup: mengubah saiz mengekalkan kadaran imej (Shift membebaskannya untuk satu seretan). Mati: lebar dan tinggi berubah secara berasingan dan imej meregang",
+  "Layers": "Lapisan",
+  "Curve": "Lengkung",
+  "Element": "Elemen",
+  "Nothing on this slide yet.": "Belum ada apa-apa pada slaid ini.",
 }

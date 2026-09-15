@@ -903,4 +903,8 @@ export const strings: Catalog = {
   "Replace file (original size)…": "Korvaa tiedosto (alkuperäinen koko)…",
   "Keep aspect ratio": "Säilytä kuvasuhde",
   "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Päällä: koon muutos säilyttää kuvan mittasuhteet (Vaihto vapauttaa ne yhden vedon ajaksi). Pois: leveys ja korkeus muuttuvat erikseen ja kuva venyy",
+  "Layers": "Tasot",
+  "Curve": "Käyrä",
+  "Element": "Elementti",
+  "Nothing on this slide yet.": "Tällä dialla ei ole vielä mitään.",
 }

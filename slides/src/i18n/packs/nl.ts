@@ -894,4 +894,8 @@ export const strings: Catalog = {
   "Replace file (original size)…": "Bestand vervangen (originele grootte)…",
   "Keep aspect ratio": "Verhouding behouden",
   "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Aan: bij het schalen blijven de verhoudingen van de afbeelding behouden (Shift geeft ze vrij voor één sleep). Uit: breedte en hoogte veranderen los van elkaar en de afbeelding rekt uit",
+  "Layers": "Lagen",
+  "Curve": "Kromme",
+  "Element": "Element",
+  "Nothing on this slide yet.": "Nog niets op deze dia.",
 }

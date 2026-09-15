@@ -923,4 +923,8 @@ export const strings: Catalog = {
   "Replace file (original size)…": "Faýly çalyş (asyl ölçegi)…",
   "Keep aspect ratio": "Taraplaryň gatnaşygyny sakla",
   "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "Açyk: ölçeg üýtgedilende suratyň gatnaşygy saklanýar (Shift bir süýremek üçin boşadýar). Ýapyk: ini we beýikligi aýratyn üýtgeýär we surat çekilýär",
+  "Layers": "Gatlaklar",
+  "Curve": "Egri",
+  "Element": "Element",
+  "Nothing on this slide yet.": "Bu slaýdda entek hiç zat ýok.",
 }

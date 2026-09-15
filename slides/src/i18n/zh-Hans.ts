@@ -886,4 +886,8 @@ export const zhHans: Catalog = {
   "Replace file (original size)…": "替换文件（原始尺寸）…",
   "Keep aspect ratio": "保持宽高比",
   "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "开：调整大小时保持图片比例（按住 Shift 可临时解除一次拖动）。关：宽和高各自变化，图片会被拉伸",
+  "Layers": "图层",
+  "Curve": "曲线",
+  "Element": "元素",
+  "Nothing on this slide yet.": "这张幻灯片上还没有内容。",
 }

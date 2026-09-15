@@ -906,4 +906,8 @@ export const strings: Catalog = {
   "Replace file (original size)…": "फ़ाइल बदलें (मूल आकार)…",
   "Keep aspect ratio": "अनुपात बनाए रखें",
   "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "चालू: आकार बदलने पर छवि का अनुपात बना रहता है (Shift एक खिंचाव के लिए मुक्त करता है)। बंद: चौड़ाई और ऊँचाई अलग-अलग बदलती हैं और छवि खिंचती है",
+  "Layers": "परतें",
+  "Curve": "वक्र",
+  "Element": "तत्व",
+  "Nothing on this slide yet.": "इस स्लाइड पर अभी कुछ नहीं है।",
 }

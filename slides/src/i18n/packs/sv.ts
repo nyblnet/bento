@@ -895,4 +895,8 @@ export const strings: Catalog = {
   "Replace file (original size)…": "Ersätt fil (originalstorlek)…",
   "Keep aspect ratio": "Behåll proportioner",
   "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "På: storleksändring behåller bildens proportioner (Skift frigör dem för ett drag). Av: bredd och höjd ändras oberoende och bilden töjs",
+  "Layers": "Lager",
+  "Curve": "Kurva",
+  "Element": "Element",
+  "Nothing on this slide yet.": "Inget på den här bilden ännu.",
 }

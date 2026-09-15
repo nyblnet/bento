@@ -900,4 +900,8 @@ export const strings: Catalog = {
   "Replace file (original size)…": "แทนที่ไฟล์ (ขนาดเดิม)…",
   "Keep aspect ratio": "คงอัตราส่วนภาพ",
   "On: a resize keeps the image’s proportions (Shift frees it for one drag). Off: width and height move independently and the image stretches": "เปิด: การปรับขนาดคงสัดส่วนของภาพ (กด Shift เพื่อปลดชั่วคราวหนึ่งครั้ง) ปิด: ความกว้างและความสูงเปลี่ยนแยกกัน ภาพจะถูกยืด",
+  "Layers": "เลเยอร์",
+  "Curve": "เส้นโค้ง",
+  "Element": "องค์ประกอบ",
+  "Nothing on this slide yet.": "ยังไม่มีอะไรบนสไลด์นี้",
 }
