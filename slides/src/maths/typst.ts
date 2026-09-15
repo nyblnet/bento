@@ -93,9 +93,12 @@ class Parser {
         const inner = this.parseSeq((x) => x.t === ')')
         if (!this.is(')')) throw new MathError('missing )')
         this.next()
-        // Typst sizes every matching pair to its content (its `lr` is
-        // automatic), so a visible group is a stretchy fence, like \left(
-        return { k: 'fence', l: '(', r: ')', c: inner, explicit: true }
+        // Typst sizes a matching pair to its content (its `lr` is automatic)
+        // — but a stretchy paren in Chrome is a different, wider-bearing
+        // glyph, so `f(x)` would gain gaps Typst never shows. Stretch only
+        // when the content is tall (a fraction, root, table, under/over
+        // limits); a plain group is the tight `(` the LaTeX path emits.
+        return { k: 'fence', l: '(', r: ')', c: inner, explicit: isTall(inner) || undefined }
       }
       case ')': throw new MathError('unexpected )')
       case ',': return mo(',')
@@ -110,7 +113,7 @@ class Parser {
     if (this.is('(')) {
       if (v in FONTS) { return { k: 'style', c: this.args1(), font: FONTS[v] } }
       if (v in ACCENTS) { const [a, s, u] = ACCENTS[v]; return { k: 'accent', b: this.args1(), a, stretchy: s, under: u } }
-      if (v in FENCED) { const [l, r] = FENCED[v]; return { k: 'fence', l, r, c: this.args1(), explicit: true } }
+      if (v in FENCED) { const [l, r] = FENCED[v]; const c = this.args1(); return { k: 'fence', l, r, c, explicit: isTall(c) || undefined } }
       switch (v) {
         case 'sqrt': return { k: 'sqrt', b: this.args1() }
         case 'root': { const [i, b] = this.args(2); return { k: 'sqrt', b, i } }
@@ -174,6 +177,19 @@ class Parser {
     while (!this.is(')')) { const t = this.next(); s += (t.t === 'str' ? t.v : t.v) + (this.is('name') || this.is('num') ? ' ' : '') }
     this.next()
     return s.trim()
+  }
+}
+
+/** Does this content need a delimiter taller than the line? */
+function isTall(n: MNode): boolean {
+  switch (n.k) {
+    case 'frac': case 'sqrt': case 'table': return true
+    case 'scr': return !!n.limits || isTall(n.b)
+    case 'fence': return !!n.explicit || isTall(n.c)
+    case 'row': return n.c.some(isTall)
+    case 'style': return isTall(n.c)
+    case 'accent': return isTall(n.b)
+    default: return false
   }
 }
 

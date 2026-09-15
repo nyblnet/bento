@@ -89,6 +89,12 @@ ok(renderMath('\\binom{n}{k}')!.includes('stretchy="true">(</mo><mfrac linethick
 ok(renderMath('\\int_0^1', { display: true })!.includes('<msubsup>'), 'integrals keep side limits in display mode')
 ok(renderMath('\\begin{pmatrix} a \\\\ b \\end{pmatrix}')!.includes('<mtd style="padding-left:0em;padding-right:0em">'), 'a centred cell says nothing about alignment (the 2 px that kept matrices off Temml)')
 
+console.log('\nround 3: Typst function application is tight (byte-identical to LaTeX)\n')
+for (const [ty, tex] of [['f(x) = cases(x & x >= 0, -x & x < 0)', 'f(x) = \\begin{cases} x & x \\ge 0 \\\\ -x & x < 0 \\end{cases}'], ['g(x, y)', 'g(x, y)'], ['sin(x)', '\\sin(x)'], ['f(x)_i', 'f(x)_i']] as const)
+  ok(renderMath(ty, { syntax: 'typst', display: true }) === renderMath(tex, { display: true }), `typst \`${ty}\` is byte-identical to latex \`${tex}\` — no gap around the group`)
+ok(renderMath('f(x)', { syntax: 'typst' })!.includes('<mo fence="true" form="prefix" stretchy="false">('), 'a plain Typst group is the tight, non-stretchy paren')
+ok(renderMath('(a/b)', { syntax: 'typst' })!.includes('<mo fence="true" form="prefix" stretchy="true">('), 'a group around a fraction stretches (Typst sizes to content)')
+
 console.log('\nthe syntax marker (decided: $typst: …$)\n')
 ok(isTypst('typst: a/b') && isTypst('typst:a/b'), 'typst: at the start, with or without a space')
 ok(!isTypst(' typst: a/b') && !isTypst('Typst: a/b') && !isTypst('TYPST: a/b'), 'not after whitespace, not another case')
