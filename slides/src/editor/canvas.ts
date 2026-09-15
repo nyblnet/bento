@@ -19,7 +19,7 @@ import { BezierEditor, isCurve } from './beziereditor'
 import { simplifyPoints } from './patheditor'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
-type DrawKind = 'line' | 'path' | 'connector' | 'free' | 'poly'
+type DrawKind = 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly'
 import { CommentsUI } from './comments'
 import { StepBadges } from './stepbadges'
 import type { Peer } from '../sync/session'
@@ -1693,7 +1693,7 @@ export class SlideCanvas {
     // visible anchor points on the element under the cursor (connector tool)
     const showAnchors = (p: Pt | null) => {
       dots.innerHTML = ''
-      if (kind !== 'connector' || !p) return
+      if ((kind !== 'connector' && kind !== 'curve-connector') || !p) return
       const id = this.elementAt(p, 12 * Math.max(k(), 1))
       if (!id) return
       for (const a of anchorsFor(id)) {
@@ -1708,7 +1708,7 @@ export class SlideCanvas {
       }
     }
     const snap = (p: Pt): { a: Snap; pt: Pt } => {
-      if (kind !== 'connector') return { a: null, pt: p }
+      if (kind !== 'connector' && kind !== 'curve-connector') return { a: null, pt: p }
       const id = this.elementAt(p, 12 * Math.max(k(), 1))
       if (!id) return { a: null, pt: p }
       let best: Snap = null
@@ -1788,7 +1788,7 @@ export class SlideCanvas {
         const p = toSlide(e)
         const sn = snap(p)
         showAnchors(p)
-        setPreview(kind === 'path' ? this.curveBowD(start, sn.pt) : `M ${start.x} ${start.y} L ${sn.pt.x} ${sn.pt.y}`)
+        setPreview(kind === 'path' || kind === 'curve-connector' ? this.curveBowD(start, sn.pt) : `M ${start.x} ${start.y} L ${sn.pt.x} ${sn.pt.y}`)
       }
       const up = (e: MouseEvent) => {
         window.removeEventListener('mousemove', move)
@@ -1840,15 +1840,22 @@ export class SlideCanvas {
     toA?: { el: string; side: 'auto' | 'top' | 'right' | 'bottom' | 'left' },
   ) {
     const ink = readableInk(this.store.slide.background)
-    if (kind === 'path') {
+    if (kind === 'path' || kind === 'curve-connector') {
       const el = defaultShape('path', { fill: 'transparent', stroke: ink, strokeWidth: 3 }) as ShapeElement
       const mx = (a.x + b.x) / 2
       const my = (a.y + b.y) / 2
       const dx = b.x - a.x
       const dy = b.y - a.y
       const len = Math.hypot(dx, dy) || 1
-      const off = len * 0.2
+      // a gentle default bow: the connector bends ~15%, a plain curve 20%
+      const off = len * (kind === 'curve-connector' ? 0.15 : 0.2)
       setPathAnchors(el, [a, { x: mx - (dy / len) * off, y: my + (dx / len) * off }, b])
+      if (kind === 'curve-connector') {
+        // #302: a curve that sticks like a Connector and carries a tip
+        el.lineEnd = 'arrow'
+        if (fromA) el.from = { el: fromA.el, side: fromA.side }
+        if (toA) el.to = { el: toA.el, side: toA.side }
+      }
       this.insert(el)
       return
     }

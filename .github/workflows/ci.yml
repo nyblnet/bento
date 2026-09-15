@@ -1359,6 +1359,22 @@ jobs:
         # a group moves as one, a no-op returns the same array), highlight
         # follows the selection; render/present never see the list (#371).
         run: node scripts/test-slides-layers.ts
+      - name: Export slides as images rig
+        # exportimages.ts decisions (DOM-free): the page set is the print set
+        # (hidden/state out, deck order), names pad NN and use the kernel's
+        # own title sanitiser, JPEG matte/PNG none, 1x/2x integer sizes; and
+        # the editor half renders via renderSlide with no PREVIEW_BUDGET tier.
+        run: node scripts/test-slides-export-images.ts
+      - name: Connectors rig
+        # #302/#303/#304: one tip catalogue (tips.ts) behind the model, the
+        # gate, the panel and the markers; per-tip insets (hollow tips stop the
+        # stroke at the head); the double arrow's polygon is symmetric; a
+        # curve's end tangent and the re-route that moves only its end points;
+        # the straight connector's 1.0.2 functions byte-identical.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-connectors.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-slides-connectors.mjs"
+          node --no-warnings "$RUNNER_TEMP/test-slides-connectors.mjs"
 
       - name: Image crop rig
         # crop.ts: {x, y, scale} → the one CSS mapping every surface uses;

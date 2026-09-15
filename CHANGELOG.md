@@ -20,6 +20,30 @@ pre-1.0.
   onto the order the four Order buttons (front, forward, backward, back) have
   moved elements through since 1.0, and a row dropped somewhere lands exactly
   where those buttons would put it. Asked for by Li Wei in discussion #371.
+- **Slides export as images.** Save ▾ *Export slides as images…* writes
+  this slide, or every slide in the show, as PNG or JPEG at 1× or 2× — one
+  file per page, named after the deck (`My_Deck-page-01.png`), hidden slides
+  and interactive states left out the way a PDF leaves them out. Chromium
+  asks for a folder and writes the pages into it; other browsers get one
+  download per page; Safari can export the current slide. The picture is the
+  deck's own render — its fonts, gradients and shapes — with charts and media
+  as stills and web-linked images blank, since a file cannot fetch. No ZIP,
+  no second renderer: about four kilobytes of runtime. Asked for by den-sv
+  (#243, #261); the shape follows lazyeo's #306, kept to the thin half —
+  the heavier converter belongs to bento/convert.
+- **Connectors for diagrams.** Three asks from xairy, in one go. A
+  *Curved connector* (#302): a curve that sticks to the elements at its ends
+  and re-routes when they move, like the straight Connector, and carries a
+  tip that points the way the curve arrives rather than along the chord; any
+  open curved line can take tips now. Seven more tip styles (#303): open
+  arrow, triangle, hollow triangle, diamond, hollow diamond, square, hollow
+  circle — a hollow head stops the line at its back edge, so nothing shows
+  through. A *Double arrow* shape (#304): the solid arrow with a head at both
+  ends; and a line has always taken an arrowhead at each end through its
+  start and end tips. Sticking (#301) has been in since 1.0.2. Old decks are
+  untouched: the original tips keep their exact geometry. A deck that uses
+  the new tips opens in 1.1.0 and older, but those shells draw a bar where a
+  new tip should be; a double arrow shows there as a single one.
 - **A picture can be moved and zoomed inside its frame.** Double-click an
   image and the frame becomes a window onto the whole picture: drag to choose
   which part shows, scroll or pinch to zoom in, Enter to keep it, Esc to put

@@ -44,6 +44,7 @@ import type { Slide, SlideElement } from './model'
 import { isWebUrl } from './model'
 import { parseThemeRef } from './palette.ts'
 import { MODEL_KEYS } from './modelkeys.generated'
+import { TIP_KINDS } from './tips'
 
 /** Reject. JSON has no `undefined`, so it can never collide with a real value. */
 const DROP = undefined
@@ -405,10 +406,12 @@ const ELEMENT_CHECKS: Record<string, Check> = {
   }, ['width', 'color']),
   // shape
   shape: oneOf('rect', 'ellipse', 'triangle', 'arrow', 'line', 'path'),
+  heads: num(2, 2),
   fill: paint, fillGradient: gradient, stroke: paint,
   strokeWidth: num(0, 1e4), strokeDash: num(0, 1e4),
   strokeStyle: oneOf('solid', 'dashed', 'dotted'),
-  lineStart: oneOf('none', 'arrow', 'dot', 'bar'), lineEnd: oneOf('none', 'arrow', 'dot', 'bar'),
+  // the tip list is tips.ts's — one catalogue for the gate, the panel and the renderer
+  lineStart: oneOf(...TIP_KINDS), lineEnd: oneOf(...TIP_KINDS),
   radius: num(0, 1e5), d: pathData,
   pathBox: (v) => (Array.isArray(v) && v.length === 4 ? list(4, num(-1e6, 1e6))(v) : DROP),
   from: connectorEnd, to: connectorEnd,

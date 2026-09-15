@@ -9,6 +9,7 @@ import { morphKey, paginates, isWebUrl } from './model'
 import { chartSnapshotSvg } from './charts'
 import temml from 'temml'
 import { renderCodeInto } from './code'
+import { tipSpec, tipInsetPx, shortenPathEnds } from './tips'
 import { formatDate } from './datefmt'
 import { cropImgStyle, isIdentityCrop } from './crop'
 
@@ -300,37 +301,46 @@ function dashArray(el: ShapeElement, w: number): string | undefined {
 
 let markSeq = 0
 
-/** A line-tip marker in <defs>; sized in strokeWidth units, colored like the line. */
+/** A line-tip marker in <defs>; sized in strokeWidth units, colored like the
+ *  line. Geometry comes from tips.ts — one catalogue for every tip. A hollow
+ *  tip is an outline in the line colour with an open interior. */
 function markerRef(svg: SVGSVGElement, kind: NonNullable<ShapeElement['lineStart']>, color: string, start: boolean): string | null {
-  if (kind === 'none') return null
+  const spec = tipSpec(kind)
+  if (!spec) return null
   const id = `bento-mark-${markSeq++}`
   const marker = document.createElementNS(SVG_NS, 'marker')
   marker.setAttribute('id', id)
   marker.setAttribute('viewBox', '0 0 8 8')
+  marker.setAttribute('refX', String(spec.refX))
   marker.setAttribute('refY', '4')
   marker.setAttribute('orient', start ? 'auto-start-reverse' : 'auto')
-  marker.setAttribute('markerWidth', '5.5')
-  marker.setAttribute('markerHeight', '5.5')
+  marker.setAttribute('markerWidth', String(spec.size))
+  marker.setAttribute('markerHeight', String(spec.size))
+  const g = spec.geom
   let tip: SVGElement
-  if (kind === 'arrow') {
+  if (g.tag === 'path') {
     tip = document.createElementNS(SVG_NS, 'path')
-    tip.setAttribute('d', 'M 0 0.4 L 7.6 4 L 0 7.6 Z')
-    marker.setAttribute('refX', '6.4')
-  } else if (kind === 'dot') {
+    tip.setAttribute('d', g.d)
+  } else if (g.tag === 'circle') {
     tip = document.createElementNS(SVG_NS, 'circle')
-    tip.setAttribute('cx', '4')
-    tip.setAttribute('cy', '4')
-    tip.setAttribute('r', '2.6')
-    marker.setAttribute('refX', '4')
+    tip.setAttribute('cx', String(g.cx))
+    tip.setAttribute('cy', String(g.cy))
+    tip.setAttribute('r', String(g.r))
   } else {
     tip = document.createElementNS(SVG_NS, 'rect')
-    tip.setAttribute('x', '3.2')
-    tip.setAttribute('y', '0.4')
-    tip.setAttribute('width', '1.6')
-    tip.setAttribute('height', '7.2')
-    marker.setAttribute('refX', '4')
+    tip.setAttribute('x', String(g.x))
+    tip.setAttribute('y', String(g.y))
+    tip.setAttribute('width', String(g.w))
+    tip.setAttribute('height', String(g.h))
   }
-  tip.setAttribute('fill', color)
+  if (spec.hollow) {
+    tip.setAttribute('fill', 'none')
+    tip.setAttribute('stroke', color)
+    tip.setAttribute('stroke-width', '1.1')
+    tip.setAttribute('stroke-linejoin', 'round')
+  } else {
+    tip.setAttribute('fill', color)
+  }
   marker.appendChild(tip)
   let defs = svg.querySelector('defs')
   if (!defs) {
@@ -356,7 +366,26 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
       // arbitrary vector data, stretched from its authored viewBox into the box
       if (el.pathBox) svg.setAttribute('viewBox', el.pathBox.join(' '))
       node = document.createElementNS(SVG_NS, 'path')
-      node.setAttribute('d', el.d ?? '')
+      let d = el.d ?? ''
+      // Tips on a curve (#302): SVG orients a marker along the path's own end
+      // tangent, so the head points the way the curve arrives. The endpoint is
+      // pulled back along that tangent by the tip's inset (tips.ts) so the
+      // point lands on the model's endpoint and a hollow head has no stroke
+      // inside it. Insets are in slide px; the path is in pathBox units, so
+      // divide by the box→slide scale (uniform for anything the editor draws —
+      // a connector is renormalised on every re-route).
+      if ((el.lineStart || el.lineEnd) && sw > 0 && !/z\s*$/i.test(d)) {
+        const [, , pw, ph] = el.pathBox ?? [0, 0, w, h]
+        const k = ((w / (pw || 1)) + (h / (ph || 1))) / 2 || 1
+        d = shortenPathEnds(d, tipInsetPx(el.lineStart, sw) / k, tipInsetPx(el.lineEnd, sw) / k)
+        const color = el.stroke && el.stroke !== 'transparent' ? el.stroke : el.fill
+        const mStart = el.lineStart ? markerRef(svg, el.lineStart, color, true) : null
+        const mEnd = el.lineEnd ? markerRef(svg, el.lineEnd, color, false) : null
+        if (mStart) node.setAttribute('marker-start', mStart)
+        if (mEnd) node.setAttribute('marker-end', mEnd)
+        if (tipSpec(el.lineStart)?.hollow || tipSpec(el.lineEnd)?.hollow) node.setAttribute('stroke-linecap', 'butt')
+      }
+      node.setAttribute('d', d)
       if (sw > 0) node.setAttribute('vector-effect', 'non-scaling-stroke')
       break
     }
@@ -386,8 +415,21 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
       // right-pointing arrow: shaft + head, proportional to the box
       node = document.createElementNS(SVG_NS, 'polygon')
       const shaftH = h * 0.44
-      const headW = Math.min(w * 0.38, h)
       const y0 = (h - shaftH) / 2
+      if (el.heads === 2) {
+        // a head at BOTH ends (#304): the same head, mirrored, symmetric about
+        // the box centre. Still `shape: 'arrow'` — a shell that predates
+        // `heads` draws the single arrow. Morph: the polygon's points are not
+        // tweened (no shape geometry is); a one-head ↔ two-head morph tweens
+        // the box and fill and the point list snaps at the swap.
+        const headW = Math.min(w * 0.3, h)
+        node.setAttribute(
+          'points',
+          `0,${h / 2} ${headW},0 ${headW},${y0} ${w - headW},${y0} ${w - headW},0 ${w},${h / 2} ${w - headW},${h} ${w - headW},${y0 + shaftH} ${headW},${y0 + shaftH} ${headW},${h}`,
+        )
+        break
+      }
+      const headW = Math.min(w * 0.38, h)
       node.setAttribute(
         'points',
         `0,${y0} ${w - headW},${y0} ${w - headW},0 ${w},${h / 2} ${w - headW},${h} ${w - headW},${y0 + shaftH} 0,${y0 + shaftH}`,
@@ -397,15 +439,16 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
     case 'line': {
       node = document.createElementNS(SVG_NS, 'line')
       const lw = Math.max(sw, 2)
-      // inset the endpoints so tip decorations sit inside the element box
-      const tipPad = (k?: string) => (k && k !== 'none' ? lw * 2.6 : 0)
-      node.setAttribute('x1', String(tipPad(el.lineStart)))
+      // inset the endpoints so the tip's point lands on the box edge (tips.ts:
+      // the three original kinds keep their 2.6 — every old deck unchanged)
+      node.setAttribute('x1', String(tipInsetPx(el.lineStart, lw)))
       node.setAttribute('y1', String(h / 2))
-      node.setAttribute('x2', String(w - tipPad(el.lineEnd)))
+      node.setAttribute('x2', String(w - tipInsetPx(el.lineEnd, lw)))
       node.setAttribute('y2', String(h / 2))
       node.setAttribute('stroke', el.fill)
       node.setAttribute('stroke-width', String(lw))
-      node.setAttribute('stroke-linecap', el.strokeStyle === 'dashed' ? 'butt' : 'round')
+      const hollow = tipSpec(el.lineStart)?.hollow || tipSpec(el.lineEnd)?.hollow
+      node.setAttribute('stroke-linecap', el.strokeStyle === 'dashed' || hollow ? 'butt' : 'round')
       const lineDash = dashArray(el, lw)
       if (lineDash) node.setAttribute('stroke-dasharray', lineDash)
       const mStart = el.lineStart ? markerRef(svg, el.lineStart, el.fill, true) : null
