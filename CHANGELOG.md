@@ -11,6 +11,19 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **The format has a schema, and every file says where it is.** A JSON
+  Schema for the bento/slides document is generated from the same tables the
+  app uses to check what it loads, so it cannot describe a deck the app would
+  refuse. It is published at `https://bento.page/schema/slides.json` (and a
+  version-pinned copy beside it), returned by `window.bento.schema()` in a
+  running file, listed in `https://bento.page/llms.txt` for AI agents, and
+  named in the Tooling comment at the top of every deck. A deck that carries
+  `"$schema"` at the top validates in any schema-aware editor; the app ignores
+  the key. Runtime cost: under 2 KB in the shell.
+- **A saved deck names its schema.** The first key of the saved JSON is now
+  `"$schema": "https://bento.page/schema/slides.json"` — 50 bytes, so a
+  reader with only the file in hand knows the format. Older versions keep the
+  key and write it back unchanged; nothing fetches it.
 - **A Layers list.** The Slide panel now opens with *Layers*: every element
   on the slide, top of the stack first, with a glyph and a short label (the
   text's first words, or the kind). Click a row to select, shift-click to add,

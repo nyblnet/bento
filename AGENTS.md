@@ -102,6 +102,30 @@ node ../scripts/test-preview.ts     # first-page preview rig (encryption veto, o
 node ../scripts/shell-gate.mjs dist-single/Bento_Slides.bento.html   # splice conformance
 ```
 
+## The document schema
+
+The bento/slides format has a machine-readable schema, generated from the
+runtime's own validation tables (`slides/src/schema.ts` reads what
+`untrusted.ts` accepts; `scripts/build-schema.mjs` prints it; CI fails if
+`schema/slides.json` is stale). One source, reachable four ways:
+
+- **URL** — `https://bento.page/schema/slides.json`, with a version-pinned
+  twin at `schema/slides-<version>.json`. Put
+  `"$schema": "https://bento.page/schema/slides.json"` at the top of a deck
+  you write and any JSON-Schema-aware editor validates it; the runtime strips
+  the key on load and writes it back on save, so every saved deck carries it.
+- **In the file** — the Tooling comment at the top of every `.bento.html`
+  names the URL, and the saved JSON's first key is `$schema`.
+- **`window.bento.schema()`** — the same JSON, built at runtime, for an agent
+  driving the browser (the shell is compressed, so a text reader cannot see
+  the code; use the URL).
+- **`https://bento.page/llms.txt`** — the index: this guide, the schema, the
+  platform invariants, the app.
+
+Which door for which reader: a model that READS the file gets the Tooling
+comment, `$schema` and the URL; a model that DRIVES the app gets `schema()`,
+`validate()`, `measure()` and `loadDoc()`.
+
 ## Repo layout
 
 ```

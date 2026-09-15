@@ -643,6 +643,22 @@ jobs:
         # configuration — so the generated file is committed and pinned here.
         run: node scripts/build-modelkeys.mjs --check
 
+      - name: Schema is current
+        # schema/slides.json is generated from the gate's tables
+        # (slides/src/schema.ts via scripts/build-schema.mjs) and published at
+        # bento.page/schema/slides.json; a stale file would describe a format
+        # the runtime does not accept, so the committed copy is pinned here.
+        run: node scripts/build-schema.mjs --check
+
+      - name: Document schema rig
+        # one source (file == buildSchema == window.bento.schema()); schema
+        # keys == gate keys per type; the starter deck validates and a typo
+        # does not; $schema is stripped on load and accepted by the 1.1.0 and
+        # main parseDoc (frozen); the URL is never fetched.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-schema.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-schema.mjs"
+          node "$RUNNER_TEMP/test-slides-schema.mjs"
+
       - name: Document validation rig
         # validate() is only useful if it is trusted: the rig proves the starter
         # deck and a realistic chart stay silent, and that a deliberately broken
