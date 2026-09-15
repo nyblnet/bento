@@ -80,6 +80,17 @@ pre-1.0.
   number, date, time, title or document property into the text — the date
   and time entries show today in each shape so the choice is made by eye.
   Bare `{{date}}` is unchanged. Asked for in discussion #381 by Jef Ducon.
+- **A plain Save drops unused images too.** 1.1.0 promised that a save
+  leaves out every image nothing in the deck refers to, and it did — on
+  every path except the one most people use. ⌘S and the Save button write
+  through a different route, and the clean-up never ran there, so a deleted
+  screenshot stayed in the file. It runs on every way of saving now.
+  Reported again, with a step-by-step, by charlycoste (#442, fixed in #476).
+- **Every language pack is complete.** The 22 downloadable packs had fallen
+  to 91% of the interface — the formatting bar, the context menu, the canvas
+  help, hidden slides, appearance, and the whole live-broadcast surface
+  showed in English. All 22 carry every string again.
+
 ## [1.1.0] — 2026-09-14
 
 - **Security: update this file. Text in a deck could run code when clicked
