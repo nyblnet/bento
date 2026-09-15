@@ -35,8 +35,15 @@
 import { mintInvite } from '../../kernel/src/sync/online.ts'
 import type { SpacesDoc } from './model.ts'
 
-/** A share export's filename suffix — also what the UI calls the copy. */
-export type ShareKind = 'invite' | 'viewonly'
+/**
+ * A share export's filename suffix — also what the UI calls the copy.
+ *
+ * `reading` is the SEALED one and is built in reading.ts, not here: it keeps no
+ * room, so it is not a question about which collaboration fields survive. It is
+ * named in this union because the three of them are one menu and one write
+ * path, and a fourth kind added elsewhere would type-check against neither.
+ */
+export type ShareKind = 'invite' | 'viewonly' | 'reading'
 
 /**
  * Take the live session out of a copy that is about to leave this machine.

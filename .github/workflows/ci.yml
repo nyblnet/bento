@@ -147,6 +147,24 @@ jobs:
             --outfile="$RUNNER_TEMP/test-spaces-invite.mjs"
           node "$RUNNER_TEMP/test-spaces-invite.mjs"
 
+      - name: Spaces reading-copy rig
+        # "Save a reading copy…" is the file you hand to somebody who will not
+        # edit it, and its whole value is in what the bytes do NOT contain — the
+        # copy opens, reads and prints identically whether or not it still
+        # carries the owner key to the live room and every comment left on the
+        # draft. So this asserts on the serialized document, not on "the strip
+        # function ran": no room, no read key, no owner/writer/invite private
+        # key anywhere in the text, and no comment thread, page-level, block-
+        # level or reply. It also pins format additivity — an unknown top-level
+        # field survives byte-identical, and exactly one key is added (the flag)
+        # and one removed (collab).
+        # (Bundled: the kernel transport reached through share.ts uses parameter
+        # properties, which node's strip-only TypeScript loader refuses.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-reading.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-reading.mjs"
+          node "$RUNNER_TEMP/test-spaces-reading.mjs"
+
       - name: Spaces undo rig
         # Every checkpoint used to stringify the WHOLE document: measured on a
         # 200-page, 2.5 MB handbook, fifty edits left an undo depth of NINE,
