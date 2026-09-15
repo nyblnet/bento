@@ -11,7 +11,7 @@
 // element and an overflowing text box names both; --json parses and carries
 // the same findings; --png writes one PNG per shown slide at the deck's pixel
 // size plus a contact sheet; exit codes follow --fail-on; a compact document
-// on a shell without compact input is refused with a plain message rather
+// loads, expands and reports what was filled and dropped (#484/#490) rather
 // than a stack trace. A browser rig: it needs Chrome and the built shell, and
 // SKIPS (with the reason printed) where either is missing locally — in CI
 // both exist and a skip is a failure.
@@ -132,13 +132,22 @@ const c = write('compact.json', { compact: true, format: 'bento/slides', version
 const r4 = run([c, '--json'])
 let j4: any = null
 try { j4 = JSON.parse(r4.out) } catch {}
-// On a shell WITH compact input (#484) this loads and expands; on one without,
-// it is refused in plain words before the editor can throw on a missing field.
-const compactShell = /window\.bento\.compact|compact:\s*\(\)|"compact"/.test(fs.readFileSync(shell, 'utf8')) && j4?.ok !== undefined && !j4?.fatal
-if (compactShell) {
-  ok(j4.ok === true && j4.slides === 1, 'a compact document loads and checks clean on a shell that accepts it')
-} else {
-  ok(r4.code === 2 && /compact/.test(j4?.fatal ?? ''), `a compact document is refused in plain words on a shell without compact input (exit ${r4.code}): ${String(j4?.fatal).slice(0, 80)}…`)
+// Since #484 every shell accepts compact input: the doc loads, expands, and
+// the report says how much was filled and that nothing was dropped. (The
+// earlier case pinned the pre-#484 world by sniffing the shell for a plaintext
+// marker — which the deflated shell never carries — and went stale the day
+// #484 landed. The plain-words refusal on an older shell stays in the CLI but
+// is not rigged: building a pre-#484 shell here is not cheap.)
+ok(r4.code === 0 && j4?.ok === true && j4.slides === 1, `a compact document loads and checks clean (exit ${r4.code})`)
+ok(typeof j4?.expanded === 'number' && j4.expanded > 0, `compact expansion filled fields (${j4?.expanded})`)
+ok(Array.isArray(j4?.dropped) && j4.dropped.length === 0, 'nothing was dropped by the gate')
+// the checked-in agent decks (#490) go through the same path
+const agentDir = path.join(root, 'scripts/fixtures/agent-decks')
+for (const f of fs.readdirSync(agentDir).filter((f) => f.endsWith('.json')).sort()) {
+  const r = run([path.join(agentDir, f), '--json'])
+  let j: any = null
+  try { j = JSON.parse(r.out) } catch {}
+  ok(r.code === 0 && j?.ok === true && j.dropped?.length === 0 && j.expanded > 0, `agent deck ${f}: loads, ${j?.expanded ?? '?'} fields filled, zero drops (exit ${r.code})`)
 }
 
 console.log('\nerrors are exits, not traces\n')
