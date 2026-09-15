@@ -1366,6 +1366,14 @@ jobs:
         # step. Decisions in slides/src/steps.ts, DOM-free (#282, option 2).
         run: node scripts/test-slides-steps.ts
 
+      - name: Maths engine rig
+        # slides/src/maths replaced Temml (2026-09-15): never-throws contract;
+        # the 91-formula reference set matches Temml's FROZEN trees on ≥95%
+        # (scripts/fixtures/maths-reference.json; every mismatch must be a
+        # listed residual); Typst ≡ LaTeX on the shared tree; every emitted
+        # attribute is the engine's own; the symbol table has no duplicates.
+        run: node scripts/test-maths-lite.ts
+
       - name: Reveal authoring rig
         # Reading order (top-to-bottom, then left-to-right, rows by vertical
         # overlap) is deterministic; the verbs continue the slide's sequence;
