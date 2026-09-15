@@ -6,7 +6,7 @@
 //   node scripts/compact-measure.mjs [deck.bento.html …]
 //
 // With no arguments: the starter deck (slides/src/starterdeck.ts) and the two
-// biggest gallery decks built into $TMP/decks by build-example-decks.mjs (or
+// biggest gallery decks built by build-example-decks.mjs into working/ (or
 // pass paths). For each: full bytes, compact bytes (slides/src/compact.ts
 // compactDoc, the same function "Copy compact JSON" uses), tokens at chars/4,
 // and which fields the stripping removed most bytes from. Assets and fonts
@@ -66,7 +66,7 @@ const readDeck = (file) => {
 
 export function defaultDecks() {
   const decks = [['starter deck', starterDoc()]]
-  const dir = process.env.DECKS_DIR ?? join(process.env.CLAUDE_JOB_DIR ?? '/tmp', 'tmp/decks')
+  const dir = process.env.DECKS_DIR ?? join(root, 'working') // build-example-decks.mjs's default output
   if (existsSync(dir)) {
     const files = readdirSync(dir).filter((f) => f.endsWith('.bento.html')).map((f) => [f, readDeck(join(dir, f))])
     files.sort((a, b) => b[1].slides.flatMap((s) => s.elements).length - a[1].slides.flatMap((s) => s.elements).length)
