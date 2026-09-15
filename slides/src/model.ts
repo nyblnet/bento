@@ -190,7 +190,8 @@ export interface CodeElement extends ElementBase {
   themeName?: string
 }
 
-export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'
+/** 'arrow2' (v1.1.1) is the block arrow with a head at both ends (#304). */
+export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'arrow2' | 'line' | 'path'
 
 /** Linear gradient fill. Colors are any CSS color, including rgba(). */
 export interface GradientFill {
@@ -200,8 +201,11 @@ export interface GradientFill {
   stops: Array<{ at: number; color: string }>
 }
 
-/** Decoration at a line's tip. Sized relative to the stroke width. */
-export type LineEnding = 'none' | 'arrow' | 'dot' | 'bar'
+/** Decoration at a line's tip. Sized relative to the stroke width. The
+ *  catalogue — geometry, insets, panel labels — is slides/src/tips.ts; the
+ *  seven kinds after `bar` arrived in 1.1.1 (#303) and are additive: an older
+ *  shell that does not know one draws that end plain. */
+export type LineEnding = 'none' | 'arrow' | 'dot' | 'bar' | 'arrow-open' | 'triangle' | 'triangle-open' | 'diamond' | 'diamond-open' | 'square' | 'circle-open'
 
 export interface ShapeElement extends ElementBase {
   type: 'shape'
@@ -217,7 +221,8 @@ export interface ShapeElement extends ElementBase {
   strokeDash?: number
   /** stroke pattern; wins over strokeDash when set */
   strokeStyle?: 'solid' | 'dashed' | 'dotted'
-  /** line shape only: tip decorations */
+  /** line and (v1.1.1, #302) open path shapes: tip decorations. On a path
+   *  the tip points along the curve's end tangent. */
   lineStart?: LineEnding
   lineEnd?: LineEnding
   /** path only: SVG path data in the coordinate space given by pathBox */

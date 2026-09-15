@@ -11,6 +11,18 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Connectors for diagrams.** Three asks from xairy, in one go. A
+  *Curved connector* (#302): a curve that sticks to the elements at its ends
+  and re-routes when they move, like the straight Connector, and carries a
+  tip that points the way the curve arrives rather than along the chord; any
+  open curved line can take tips now. Seven more tip styles (#303): open
+  arrow, triangle, hollow triangle, diamond, hollow diamond, square, hollow
+  circle — a hollow head stops the line at its back edge, so nothing shows
+  through. A *Double arrow* shape (#304): the solid arrow with a head at both
+  ends; and a line has always taken an arrowhead at each end through its
+  start and end tips. Sticking (#301) has been in since 1.0.2. Old decks are
+  untouched: the original tips keep their exact geometry, and an older shell
+  draws an unknown tip as a plain end.
 - **A pasted photo no longer costs megabytes.** Insert or paste a picture
   and it is stored at slide resolution — the long edge capped at 2560 px,
   crisp on a 4K projector — and photos are re-encoded as JPEG, so a phone

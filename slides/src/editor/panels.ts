@@ -14,6 +14,7 @@ import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
 import { FONT_CHOICES, firstFamily, injectFonts } from '../fonts'
 import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../code'
+import { TIPS } from '../tips'
 import { DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS, formatDate } from '../datefmt'
 import { shrinkImageFile, shrinkNote, fmtBytes } from './shrink'
 import { revealInOrder, revealTogether, removeReveal, type StepPatch } from './reveal'
@@ -1323,11 +1324,14 @@ export class PropsPanel {
         s.strokeStyle = v === 'solid' ? undefined : (v as 'dashed' | 'dotted')
         if (v === 'solid') delete s.strokeDash // clear the legacy dash too
       }, true)))
-    if (el.shape === 'line') {
-      const ENDINGS = ['none', 'arrow', 'dot', 'bar']
-      this.row('Start tip', this.select(ENDINGS, el.lineStart ?? 'none', (v) =>
+    // Tips: lines, and open paths (a curved line or connector, #302). The
+    // options are tips.ts's catalogue — display labels localized, values the
+    // model's words. A closed path (polygon) has no ends to tip.
+    if (el.shape === 'line' || (el.shape === 'path' && !/z\s*$/i.test(el.d ?? ''))) {
+      const ENDINGS: Array<[string, string]> = TIPS.map((tip) => [tip.kind, t(tip.label)])
+      this.row('Start tip', this.labeledSelect(ENDINGS, el.lineStart ?? 'none', (v) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).lineStart = v === 'none' ? undefined : (v as LineEnding) }, true)))
-      this.row('End tip', this.select(ENDINGS, el.lineEnd ?? 'none', (v) =>
+      this.row('End tip', this.labeledSelect(ENDINGS, el.lineEnd ?? 'none', (v) =>
         this.mutate(el.id, (e) => { (e as ShapeElement).lineEnd = v === 'none' ? undefined : (v as LineEnding) }, true)))
     }
     if (el.shape === 'rect') {

@@ -1353,6 +1353,17 @@ jobs:
         # routes the argument. Bare {{date}} stays viewer-locale (#381).
         run: node scripts/test-slides-fields.ts
 
+      - name: Connectors rig
+        # #302/#303/#304: one tip catalogue (tips.ts) behind the model, the
+        # gate, the panel and the markers; per-tip insets (hollow tips stop the
+        # stroke at the head); the double arrow's polygon is symmetric; a
+        # curve's end tangent and the re-route that moves only its end points;
+        # the straight connector's 1.0.2 functions byte-identical.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-connectors.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-slides-connectors.mjs"
+          node --no-warnings "$RUNNER_TEMP/test-slides-connectors.mjs"
+
       - name: Photos shrink at insert rig
         # editor/shrink.ts decisions, DOM-free: photo vs graphic (lossy vs
         # lossless), the ≥20% keep rule, the 2560 px cap, svg/gif untouched,

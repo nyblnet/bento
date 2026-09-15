@@ -29,7 +29,7 @@ import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
-import { borderPoint, boxCenter, lineEndpoints, setLineEndpoints, sideMidpoint } from './lineedit'
+import { borderPoint, boxCenter, lineEndpoints, pathEndpoints, setLineEndpoints, setPathEndpoints, sideMidpoint } from './lineedit'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
 import { stepOf } from '../steps'
@@ -63,14 +63,16 @@ const LONG_PRESS_MS = 500
 /** …and how far it may wander first. Past this it was a drag or a pan. */
 const LONG_PRESS_SLOP = 10
 
-const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; draw?: 'line' | 'path' | 'connector' | 'free' | 'poly'; tip: string }> = [
+const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; draw?: 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly'; tip: string }> = [
   { kind: 'rect', label: 'Rectangle', icon: ICONS.rect, tip: 'A rectangle — rounded corners, fills, gradients and shadows in the panel' },
   { kind: 'ellipse', label: 'Ellipse', icon: ICONS.ellipse, tip: 'An ellipse or circle' },
   { kind: 'triangle', label: 'Triangle', icon: ICONS.triangle, tip: 'A triangle' },
   { kind: 'arrow', label: 'Arrow', icon: ICONS.arrow, tip: 'A solid arrow shape' },
+  { kind: 'arrow2', label: 'Double arrow', icon: ICONS.arrow2, tip: 'A solid arrow with a head at both ends' },
   { kind: 'line', label: 'Line', icon: ICONS.line, draw: 'line', tip: 'Drag on the slide to draw a straight line — drag its endpoints to adjust' },
   { kind: 'path', label: 'Curved line', icon: ICONS.curve, draw: 'path', tip: 'Drag to draw a curve — then drag its points; double-click to add or remove one' },
   { kind: 'line', label: 'Connector', icon: ICONS.connector, draw: 'connector', tip: 'Drag between two elements — the ends snap on and re-route when they move' },
+  { kind: 'path', label: 'Curved connector', icon: ICONS.curveConnector, draw: 'curve-connector', tip: 'A curved line between two elements — the ends snap on and re-route, the tip follows the curve' },
   { kind: 'path', label: 'Freeform', icon: ICONS.freeform, draw: 'free', tip: 'Draw by hand — the stroke smooths into an editable curve' },
   { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly', tip: 'Click to place corners; click the first point (or double-click) to close the shape' },
 ]
@@ -2369,21 +2371,26 @@ export class Editor {
     if (changed) this.canvas.render()
   }
 
-  /** Re-route connectors (line shapes anchored to elements via from/to) when
-   *  anything on the slide moves. Derived, not committed — every replica computes
-   *  the same endpoints from the element boxes (mirrors syncLinkedCharts). */
+  /** Re-route connectors (line and open-path shapes anchored to elements via
+   *  from/to) when anything on the slide moves. Derived, not committed — every
+   *  replica computes the same endpoints from the element boxes (mirrors
+   *  syncLinkedCharts). A line moves its two endpoints; a curve (#302) moves
+   *  its first/last anchor and keeps every interior point (tips.movePathEnds). */
   private syncConnectors() {
     const slide = this.store.slide
     const byId = new Map(slide.elements.map((e) => [e.id, e]))
     let changed = false
     for (const el of slide.elements) {
-      if (el.type !== 'shape' || el.shape !== 'line') continue
+      if (el.type !== 'shape' || (el.shape !== 'line' && el.shape !== 'path')) continue
       const c = el as import('../model').ShapeElement
       if (!c.from && !c.to) continue
       if (c.from && !byId.has(c.from.el)) { delete c.from; changed = true }
       if (c.to && !byId.has(c.to.el)) { delete c.to; changed = true }
       if (!c.from && !c.to) continue
-      const [a, b] = lineEndpoints(c)
+      const isPath = c.shape === 'path'
+      const pathEnds = isPath ? pathEndpoints(c) : null
+      if (isPath && !pathEnds) continue
+      const [a, b] = isPath ? pathEnds! : lineEndpoints(c)
       const fromBox = c.from ? byId.get(c.from.el) : null
       const toBox = c.to ? byId.get(c.to.el) : null
       // explicit side → pin to that side's midpoint; 'auto' → nearest border
@@ -2392,7 +2399,8 @@ export class Editor {
       const na = fromBox ? end(fromBox, c.from?.side, toBox ? boxCenter(toBox) : b) : a
       const nb = toBox ? end(toBox, c.to?.side, fromBox ? boxCenter(fromBox) : a) : b
       if (Math.hypot(na.x - a.x, na.y - a.y) > 0.5 || Math.hypot(nb.x - b.x, nb.y - b.y) > 0.5) {
-        setLineEndpoints(c, na, nb)
+        if (isPath) setPathEndpoints(c, na, nb)
+        else setLineEndpoints(c, na, nb)
         changed = true
       }
     }
