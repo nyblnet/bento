@@ -90,7 +90,6 @@ function print(n: MNode, font: Font | undefined): string {
     }
     case 'table': {
       const cols = n.align ?? 'c'
-      const al = (i: number) => ({ l: 'left', r: 'right', c: 'center' } as Record<string, string>)[cols[Math.min(i, cols.length - 1)]] ?? 'center'
       // MathML Core has no columnspacing: the gap between columns is padding
       // on the cells (Temml does the same, 0.5em a side, none at the edges)
       const ncol = Math.max(...n.rows.map((r) => r.length))
@@ -103,7 +102,12 @@ function print(n: MNode, font: Font | undefined): string {
         : `padding-left:${i === 0 ? '0em' : '5.9776pt'};padding-right:${i === ncol - 1 ? '0em' : '5.9776pt'}`
       // centred cells say nothing (the default); left/right say so the way
       // Temml's tml-left/tml-right classes would with its stylesheet
-      const body = n.rows.map((r) => `<mtr>${r.map((c, i) => `<mtd style="${al(i) === 'center' ? '' : `text-align:${al(i)};`}${pad(i)}">${print(c, font)}</mtd>`).join('')}</mtr>`).join('')
+      // Every column is CENTRED — cases and aligned included. TeX would
+      // left/right-align them, and Temml asks for that through CSS classes;
+      // but Bento never loads Temml's stylesheet, so every deck today renders
+      // those columns centred, and the maintainer chose to keep that look
+      // (2026-09-15): nothing moves on update. `al` still decides the padding.
+      const body = n.rows.map((r) => `<mtr>${r.map((c, i) => `<mtd style="${pad(i)}">${print(c, font)}</mtd>`).join('')}</mtr>`).join('')
       // aligned/gather rows are display-style (Temml sets it on the table)
       const table = `<mtable${cols === 'rl' ? ' displaystyle="true"' : ''}>${body}</mtable>`
       return n.l || n.r ? `<mrow><mo fence="true" form="prefix" stretchy="true">${esc(n.l ?? '')}</mo>${table}<mo fence="true" form="postfix" stretchy="true">${esc(n.r ?? '')}</mo></mrow>` : table
