@@ -1390,12 +1390,15 @@ jobs:
 
       - name: Shell loader and carrier rig
         # base86 payloads (scripts/lib/b86.mjs) round-trip and can never
-        # contain </script, <!--, -->, ]]> or ${; the loader inserts the
-        # inline module FIRST and probes nothing (Teams' preview pane treats
-        # any reported CSP violation as fatal), falls to new Function then
-        # blob only on a refusal, installs Trusted Types policies lazily, and
+        # contain </script, <!--, -->, ]]> or ${; the loader inflates
+        # synchronously and runs the runtime as an inline classic script
+        # FIRST (mounted before DOMContentLoaded, as the uncompressed build
+        # is), probes and waits on nothing, falls to new Function then blob
+        # only on a refusal, installs Trusted Types policies lazily, and
         # records window.bento.loader. The gate goes red on a hand-edited
-        # payload. Needs slides/node_modules (esbuild is not used; zlib is).
+        # payload. The browser half drives headless Chrome with a real
+        # background tab: mounted before DCL hidden, splash gone within 50 ms
+        # of the mount there. Needs slides/node_modules and the built shell.
         run: node scripts/test-shell-loader.ts
 
       - name: Maths in links rig

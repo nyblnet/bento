@@ -13,9 +13,16 @@
 //   head chrome → NOTICE → tooling comment → #bento-doc (PLAINTEXT, always)
 //   → splash (paints while the payload parses) → payloads + 1KB loader last
 //
-// The loader inflates via the native DecompressionStream and boots the module
-// from a blob URL. Browsers without DecompressionStream (pre-2023 Safari) get
-// a plain-HTML message instead of a blank page.
+// The loader decodes and inflates SYNCHRONOUSLY (a ~2 KB JavaScript
+// inflater; see --inflate) and runs the runtime as an inline classic script,
+// inside its own parser-inserted script — so the editor is mounted before
+// DOMContentLoaded, exactly as the uncompressed build is, and no task, timer
+// or frame stands between the file and its app. A hidden document (a
+// background tab, a viewer rendering off-screen for a preview card)
+// throttles timers and delivers no frames; the earlier promise-based loader
+// mounted the app ~300 ms after `load` there and Teams' preview card
+// captured the splash by chance. Under a policy that refuses the inline
+// script it falls to new Function, then — the only promise — a blob import.
 //
 // COMPATIBILITY CONTRACT (老 updaters are frozen code — we conform to them):
 //   - #bento-doc stays plaintext with the same id.
@@ -174,12 +181,20 @@ const PAYLOAD_TYPE = `bento/deflate-${encoding}`
 // the same ids, and none is transient — a save keeps the runtime.
 const carrier = flag('carrier', 'script')
 if (!['script', 'template', 'textplain'].includes(carrier)) throw new Error(`--carrier must be script, template or textplain, got ${carrier}`)
-// How the payload is inflated. `native` (shipped): DecompressionStream only.
-// `auto`: DecompressionStream where present, else a plain-JavaScript RFC 1951
+// How the payload is inflated. `js` (shipped): a plain-JavaScript RFC 1951
 // decoder inlined into the loader (scripts/lib/inflate-raw.js, ~2 KB
-// minified). `js`: the JavaScript decoder always — for testing that path
-// on a host that has DecompressionStream.
-const inflateMode = flag('inflate', 'native')
+// minified) — SYNCHRONOUS, which is the point: the runtime is decoded,
+// inflated and evaluated inside the loader's own parser-inserted script,
+// so the editor is mounted before DOMContentLoaded and `load`, exactly as
+// the uncompressed build is, and no task, timer or frame stands between
+// the file and its app (a hidden document — a background tab, a viewer
+// rendering off-screen — throttles timers and never delivers frames; the
+// uncompressed build previewed in Teams' pane every time and the
+// compressed one by chance, until this). Costs 18 ms against
+// DecompressionStream's 6 on the runtime payload, visible; 99 against 18
+// hidden. `native`: DecompressionStream, promise-based — the mount then
+// lands in a later task, after `load`. `auto`: native where present.
+const inflateMode = flag('inflate', 'js')
 if (!['native', 'auto', 'js'].includes(inflateMode)) throw new Error(`--inflate must be native, auto or js, got ${inflateMode}`)
 const INFLATE_JS = inflateMode === 'native' ? '' : (() => {
   const { execFileSync } = createRequire(import.meta.url)('node:child_process')
@@ -382,7 +397,17 @@ const DIAG = `
   window.addEventListener('unhandledrejection', function (e) { var r = e.reason; say('unhandled rejection: ' + (r && r.stack ? String(r.stack).split('\\n').slice(0, 4).join(' | ') : String(r))) })
   var probe = function (name, fn) { try { var v = fn(); say(name + ': ' + v) } catch (e) { say(name + ': THROWS ' + (e && e.name) + ' ' + (e && e.message)) } }
   var st0 = document.getElementById('bento-diag-static'); if (st0) st0.remove()
-  say('LOADER RAN ' + ${JSON.stringify(encoding)}, true)
+  say('LOADER RAN ' + ${JSON.stringify(encoding)} + ' · ' + document.visibilityState + (document.hidden ? ' (hidden)' : ''), true)
+  // a running count of animation frames since loader start: a document that
+  // is never painted (a background tab, an off-screen render) delivers none
+  var rafN = 0, rafLine = document.createElement('div'), rafT0 = performance.now()
+  var rafShow = function () { rafLine.textContent = 'rAF callbacks since loader start: ' + rafN + ' · visibility ' + document.visibilityState + ' · hidden ' + document.hidden + ' · t=' + Math.round(performance.now() - rafT0) + ' ms' }
+  var rafTick = function () { rafN++; rafShow(); if (rafN < 600) requestAnimationFrame(rafTick) }
+  rafLine.style.cssText = 'font-size:40px;line-height:1.1;font-weight:700;color:#ffd166;margin-bottom:12px'
+  box.insertBefore(rafLine, rest)
+  requestAnimationFrame(rafTick); rafShow()
+  setInterval(rafShow, 500)
+  document.addEventListener('visibilitychange', function () { say('visibilitychange → ' + document.visibilityState + ' at t=' + Math.round(performance.now()) + ' ms') })
   var pl = function (id) {
     var el = document.getElementById(id); if (!el) return 'NOT FOUND'
     var t = (el.content ? el.content.textContent : el.textContent) || ''
@@ -427,7 +452,7 @@ const loader = `
     document.body.appendChild(d)
     var s = document.getElementById('bento-splash'); if (s) s.remove()
   }
-  if (typeof DecompressionStream === 'undefined'${inflateMode === 'native' ? '' : ' && false /* JS inflater below */'}) {
+  if (${inflateMode === 'js' ? "typeof Uint8Array === 'undefined' || typeof TextDecoder === 'undefined'" : inflateMode === 'native' ? "typeof DecompressionStream === 'undefined'" : 'false'}) {
     // The old text said "2023 or later" and then listed Chrome 80, which is
     // 2020 — a reader checking their version against it learns nothing. It also
     // never said what kind of file this is, and never mentioned that the data
@@ -437,14 +462,15 @@ const loader = `
     return
   }
   ${INFLATE_JS}${codec ? codec.LOADER_DECODER : ''}
-  var inflate = async function (id) {
+  var inflate = ${inflateMode === 'js' ? 'function' : 'async function'} (id) {
     var el = document.getElementById(id)
     var txt = (el.content ? el.content.textContent : el.textContent).trim()
     var bytes
     try { bytes = ${codec ? 'b86decode(txt)' : "Uint8Array.from(atob(txt), function (c) { return c.charCodeAt(0) })"} }
     catch (e) {${diag ? ` say('DECODE FAILED for #' + id + ': ' + (e && e.name) + ': ' + (e && e.message), true);` : ''} throw e }
     var text
-    if (${inflateMode === 'js' ? 'true' : inflateMode === 'auto' ? "typeof DecompressionStream === 'undefined'" : 'false'}) {
+    ${inflateMode === 'js' ? `text = new TextDecoder().decode(inflateRaw(bytes))${diag ? `
+    say('inflated #' + id + ' with the JavaScript decoder: ' + text.length + ' chars')` : ''}` : `if (${inflateMode === 'auto' ? "typeof DecompressionStream === 'undefined'" : 'false'}) {
       text = new TextDecoder().decode(inflateRaw(bytes))${diag ? `
       say('inflated #' + id + ' with the JavaScript decoder: ' + text.length + ' chars')` : ''}
     } else {
@@ -452,11 +478,11 @@ const loader = `
       var stream = new Blob([bytes]).stream().pipeThrough(ds)
       text = await new Response(stream).text()${diag ? `
       say('inflated #' + id + ' with DecompressionStream: ' + text.length + ' chars')` : ''}
-    }
+    }`}
     return text
   }
   try {
-    var css = await inflate('bento-rt-css')
+    var css = ${inflateMode === 'js' ? '' : 'await '}inflate('bento-rt-css')
     // drop stale plaintext copies (see TRANSIENT DOM above), then inject ours
     var old = document.querySelectorAll('style')
     for (var i = 0; i < old.length; i++) {
@@ -467,7 +493,7 @@ const loader = `
     st.setAttribute('data-bento-transient', '')
     st.textContent = css
     document.head.appendChild(st)
-    var js = await inflate('bento-rt')
+    var js = ${inflateMode === 'js' ? '' : 'await '}inflate('bento-rt')
     ${['cascade', 'cascade-eval-first', 'cascade-eager-tt'].includes(loaderMode) ? `var tried = [], path = null, tt = 'none'
     var installTT = function () {
       if (tt !== 'none' || !(window.trustedTypes && window.trustedTypes.createPolicy)) return
@@ -480,70 +506,66 @@ const loader = `
     // a sink refused a plain string: install the policies and let the caller retry once
     var needsTT = function (e) { return !!(e && /Trusted(Script|HTML)/.test(String(e.message))) && tt === 'none' }
     ${loaderMode === 'cascade-eager-tt' ? 'installTT()' : ''}
-    // one attempt: run fn, then watch for a violation or the app for a short
-    // window; a throw or a violation abandons it. Attributed by timing — the
-    // window is the attempt's own, and nothing else inserts script here.
-    var attempt = async function (name, fn) {
-      if (window.bento && window.bento.doc) return true
-      var why = null
-      // attributed by WHAT was blocked, not only by timing: the eval probe's
-      // own violation ('eval') arrives a task later and must not be read as
-      // the inline attempt failing
-      var onv = function (e) { if (e.blockedURI !== (name === 'blob' ? 'blob' : 'inline')) return; why = e.violatedDirective + ' blocked ' + e.blockedURI + (e.sample ? ' [' + String(e.sample).slice(0, 30) + ']' : '') }
-      document.addEventListener('securitypolicyviolation', onv)
-      try {
-        fn()
-        for (var i = 0; i < 12 && !why && !(window.bento && window.bento.doc); i++) await new Promise(function (r) { setTimeout(r, i < 4 ? 0 : 25) })
-      } catch (e) { why = (e && e.name) + ': ' + (e && e.message) }
-      document.removeEventListener('securitypolicyviolation', onv)
-      var okp = !why && !!(window.bento && window.bento.doc)
-      tried.push(name + (okp ? ': ok' : why ? ': ' + why : ': no app after the wait'))${diag ? `
-      say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)', true)` : ''}
-      if (okp) path = name
-      return okp
-    }
-    // synchronous: a throw or a success is known before the call returns
+    // Every step but the last is SYNCHRONOUS: an inline CLASSIC script
+    // inserted with appendChild executes during the insertion (a module
+    // script would be deferred to a later task — and in a hidden document
+    // that task may never come before whoever is looking has looked), so
+    // whether it ran is known when appendChild returns: the app is there,
+    // or the policy refused it (a hashing policy reports the refusal; the
+    // report arrives in a later task and is counted, but nothing waits for
+    // it). Then new Function, also synchronous. Only the blob import is a
+    // promise, and it is the last resort.
+    var mounted = function () { return !!(window.bento && window.bento.doc) }
     var runNow = function (name, fn) {
-      if (window.bento && window.bento.doc) return true
+      if (mounted()) return true
       try { fn() } catch (e) { tried.push(name + ': ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)', true)` : ''}; return false }
-      var okp = !!(window.bento && window.bento.doc)
-      tried.push(name + (okp ? ': ok' : ': ran, no app'))${diag ? `
+      var okp = mounted()
+      tried.push(name + (okp ? ': ok' : ': ran, no app (refused, or the app did not mount)'))${diag ? `
       say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)', true)` : ''}
       if (okp) path = name
       return okp
     }
     var viaInline = function () {
+      // classic, not module: the bundle has no top-level import/export/await,
+      // and a classic inline script runs inside appendChild
       var sc = document.createElement('script')
-      sc.type = 'module'
       sc.id = 'bento-rt-script'
       sc.setAttribute('data-bento-transient', '')
-      try { sc.textContent = js } catch (e) {
+      var src = "'use strict';" + js + "\\n//# sourceURL=bento-slides.js"
+      try { sc.textContent = src } catch (e) {
         if (!needsTT(e)) throw e
-        tried.push('inline sink: ' + (e && e.message)); installTT(); sc.textContent = js
+        tried.push('inline sink: ' + (e && e.message)); installTT(); sc.textContent = src
       }
       document.body.appendChild(sc)
+      // a refused script stays in the DOM as dead weight — and a save would
+      // strip it anyway (transient), but keep the document clean
+      if (!mounted()) sc.remove()
     }
     var viaFunction = function () {
-      // the bundle has no top-level import/export/await, so it is a classic
-      // function body; 'use strict' restores module semantics and the
-      // sourceURL names it in DevTools (stacks say bento-slides.js, not
-      // "anonymous")
+      // an indirect eval, ungoverned by script hashes and allowed by
+      // 'unsafe-eval'; 'use strict' restores module semantics and the
+      // sourceURL names it in DevTools (stacks say bento-slides.js)
       var run = function () { new Function("'use strict';" + js + "\\n//# sourceURL=bento-slides.js")() }
       try { run() } catch (e) { if (!needsTT(e)) throw e; tried.push('function sink: ' + (e && e.message)); installTT(); run() }
     }
-    ${loaderMode === 'cascade-eval-first' ? `var evalOk = false
-    try { new Function(''); evalOk = true } catch (e) {
-      // under Trusted Types, new Function is itself a sink: install and re-probe once
-      if (needsTT(e)) { tried.push('eval probe sink: ' + (e && e.message)); installTT(); try { new Function(''); evalOk = true } catch (e2) { e = e2 } }
-      if (!evalOk) { tried.push('eval probe: ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path eval probe → refused: ' + (e && e.message))` : ''} }
-    }
-    if (evalOk) runNow('function', viaFunction)
-    if (!path) await attempt('inline', viaInline)` : `await attempt('inline', viaInline)
+    ${loaderMode === 'cascade-eval-first' ? `runNow('function', viaFunction)
+    if (!path) runNow('inline', viaInline)` : `runNow('inline', viaInline)
     if (!path) runNow('function', viaFunction)`}
-    if (!path) await attempt('blob', function () {
-      var url = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))
-      import(url).catch(function (e) { throw e })
-    })
+    if (!path) {
+      // the one asynchronous step, and the last: a blob: module import
+      var why = null
+      var onv = function (e) { if (e.blockedURI === 'blob') why = e.violatedDirective + ' blocked blob' }
+      document.addEventListener('securitypolicyviolation', onv)
+      try {
+        var url = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))
+        await import(url)
+      } catch (e) { why = why || ((e && e.name) + ': ' + (e && e.message)) }
+      document.removeEventListener('securitypolicyviolation', onv)
+      var okb = !why && mounted()
+      tried.push('blob' + (okb ? ': ok' : why ? ': ' + why : ': imported, no app'))${diag ? `
+      say('loader path blob → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)', true)` : ''}
+      if (okb) path = 'blob'
+    }
     if (!path) throw new Error('every loader path was refused: ' + tried.join('; '))
     if (window.bento) window.bento.loader = { path: path, tried: tried, tt: tt, violations: violations }` : loaderMode !== 'blob' ? `// inline module: allowed under CSP 'unsafe-inline', needs no blob: source.
     // Transient like the style above — a save must never write the inflated

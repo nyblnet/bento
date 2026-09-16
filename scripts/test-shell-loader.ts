@@ -13,17 +13,26 @@
 // decoder agrees with the node one byte for byte. (2) A shell built from a
 // synthetic vite-shaped page carries bento/deflate-b86 blocks, passes the
 // splice gate, and the gate goes RED when a payload is hand-edited to contain
-// `-->`. (3) The loader probes nothing: no new Function('') probe, no
-// createPolicy outside the lazy install, the inline module first, the
-// fallbacks only after a violation; and it records window.bento.loader.
-// Teams' preview pane treats any reported CSP violation as fatal, so a loader
-// that probes is a loader that shows a blue splash there.
+// `-->`. (3) The loader probes nothing and WAITS on nothing: no new
+// Function('') probe, no createPolicy outside the lazy install; the runtime
+// is decoded and inflated synchronously and run as an inline CLASSIC script
+// (executed inside appendChild), then new Function, then — the only promise
+// — a blob import; no timer, frame or module-graph task stands between the
+// file and its app, so the editor is mounted before DOMContentLoaded, as the
+// uncompressed build is. (4) In a real browser, in a HIDDEN document (a
+// background tab; a viewer rendering off-screen for a preview card), the
+// shell mounts before DOMContentLoaded and the splash is gone within 50 ms
+// of the mount; visible, the brand hold ends within its cap. A hidden
+// document throttles timers and never delivers frames — a splash that
+// waited on its own fade stayed over the mounted editor for as long as
+// nobody looked. Needs the built shell and Chrome; self-skips without.
 
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import { deflateRawSync } from 'node:zlib'
 import { encode, decode, ALPHABET, BASE, FORBIDDEN, LOADER_DECODER } from './lib/b86.mjs'
@@ -100,12 +109,14 @@ const payload = m[2]
 ok(eq(decode(payload), new Uint8Array(deflateRawSync(Buffer.from('#app{color:red}'), { level: 9 }))), 'the css payload decodes to the deflated stylesheet (zlib level 9 under ZOPFLI=0)')
 ok(/data-len="\d+"/.test(m[1]) && Number(/data-len="(\d+)"/.exec(m[1])![1]) === payload.length, 'the block carries data-len equal to its text length')
 
-console.log('\nthe loader probes nothing\n')
+console.log('\nthe loader probes nothing and waits on nothing\n')
 const loader = /<script>\n\(async \(\) => \{([\s\S]*?)\n<\/script>\n\s*<\/body>/.exec(built)?.[1] ?? ''
 ok(loader.length > 0, 'the loader is the last script in the body')
 ok(!/new Function\(''\)/.test(loader), "no new Function('') eval probe")
 ok(/var installTT = function/.test(loader) && (loader.match(/createPolicy\(/g) ?? []).length === 2 && !/^\s*installTT\(\)/m.test(loader), 'createPolicy appears only inside the lazy install, never called at boot')
-ok(/await attempt\('inline', viaInline\)/.test(loader) && /if \(!path\) runNow\('function', viaFunction\)/.test(loader) && /if \(!path\) await attempt\('blob'/.test(loader), 'order: inline module, then new Function, then blob — each only after the previous was refused')
+ok(/runNow\('inline', viaInline\)/.test(loader) && /if \(!path\) runNow\('function', viaFunction\)/.test(loader) && /if \(!path\) \{[\s\S]{0,400}await import\(url\)/.test(loader), 'order: inline classic script, then new Function, then blob — each only after the previous was refused, synchronously')
+ok(!/sc\.type = 'module'/.test(loader) && /var inflate = function/.test(loader) && (loader.replace(/\/\/[^\n]*/g, "").match(/\bawait\b/g) ?? []).length === 1, 'the inline script is classic, the inflate is synchronous, and the only await is the blob import')
+ok(!/requestAnimationFrame|setTimeout|setInterval|fonts\.ready|DOMContentLoaded/.test(loader), 'no frame, timer, font or load wait anywhere in the loader')
 ok(/window\.bento\.loader = \{ path: path, tried: tried, tt: tt, violations: violations \}/.test(loader), 'window.bento.loader records path, tried, tt and the violation count')
 ok(/sourceURL=bento-slides\.js/.test(loader), 'the evaluated bundle is named bento-slides.js for DevTools')
 ok(/data-bento-transient/.test(loader) && /b86decode/.test(loader) && !/atob\(/.test(loader), 'the loader carries the base86 decoder, no atob, and marks what it injects transient')
@@ -159,6 +170,86 @@ ok(/Updates are not checked inside an embedded view/.test(editorSrc) && /checkB\
 ok(/sandboxed: sandboxed\(\),/.test(readFileSync(join(root, 'slides/src/main.ts'), 'utf8')), 'window.bento.sandboxed exposes the decision')
 const netSrc = readFileSync(netPath, 'utf8')
 ok((netSrc.match(/if \(sandboxed\(\)\) throw new SandboxedError/g) ?? []).length === 2, 'both primitives check sandboxed() first — the one place the app touches the network')
+
+console.log('\nin a hidden document, in a browser\n')
+const CHROME = [process.env.BENTO_CHROME, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser']
+  .find((p) => p && existsSync(p)) ?? (spawnSync('which', ['google-chrome']).status === 0 ? 'google-chrome' : undefined)
+const builtShell = join(root, 'slides/dist-single/Bento_Slides.bento.html')
+if (!CHROME || !existsSync(builtShell)) {
+  console.log(`  ⚠ SKIPPED — needs Chrome (BENTO_CHROME) and the built shell (${builtShell}); the loader-shape checks above still gate.`)
+} else {
+  await browserSection(CHROME, builtShell)
+}
+
+async function browserSection(chrome: string, shell: string) {
+  const html = readFileSync(shell, 'utf8')
+  // a recorder injected before any script of the page: when did the app
+  // appear (the assignment to window.bento), when did the splash leave, and
+  // was the app there at DOMContentLoaded
+  const recorder = `(() => { const r = { vis0: document.visibilityState, mountT: null, splashGoneT: null, dclMounted: null, dclT: null }; window.__rec = r
+    let b; Object.defineProperty(window, 'bento', { configurable: true, get() { return b }, set(v) { b = v; if (r.mountT === null && v && v.doc) r.mountT = performance.now() } })
+    document.addEventListener('DOMContentLoaded', () => { r.dclMounted = !!(b && b.doc); r.dclT = performance.now() })
+  })()`
+  const server = createServer((req, res) => { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(html) })
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+  const port = (server.address() as { port: number }).port
+  const profile = mkdtempSync(join(tmpdir(), 'bento-hidden-'))
+  const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps', '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'], { stdio: 'ignore' })
+  const kill = () => { try { child.kill('SIGKILL') } catch { /* gone */ } }
+  try {
+    const portFile = join(profile, 'DevToolsActivePort')
+    for (let i = 0; i < 100 && !existsSync(portFile); i++) await new Promise((r) => setTimeout(r, 100))
+    const cdpPort = readFileSync(portFile, 'utf8').split('\n')[0].trim()
+    const json = async (p: string, init?: RequestInit) => { const r = await fetch(`http://127.0.0.1:${cdpPort}${p}`, init); const txt = await r.text(); try { return JSON.parse(txt) } catch { return txt } }
+    const run = async (hidden: boolean) => {
+      const t = (await json('/json/new?about:blank', { method: 'PUT' })) as { id: string; webSocketDebuggerUrl: string }
+      let decoy: { id: string } | null = null
+      if (hidden) { decoy = (await json('/json/new?about:blank', { method: 'PUT' })) as { id: string }; await json(`/json/activate/${decoy.id}`); await new Promise((r) => setTimeout(r, 300)) }
+      const ws = new WebSocket(t.webSocketDebuggerUrl)
+      await new Promise<void>((res, rej) => { ws.addEventListener('open', () => res()); ws.addEventListener('error', () => rej(new Error('cdp socket'))) })
+      let id = 0; const pending = new Map<number, (m: { result?: { result?: { value?: unknown } } }) => void>()
+      ws.addEventListener('message', (ev) => { const m = JSON.parse(String(ev.data)); if (m.id && pending.has(m.id)) { pending.get(m.id)!(m); pending.delete(m.id) } })
+      const send = (method: string, params: Record<string, unknown> = {}) => new Promise<{ result?: { result?: { value?: unknown } } }>((res) => { const i = ++id; pending.set(i, res); ws.send(JSON.stringify({ id: i, method, params })) })
+      await send('Page.enable')
+      await send('Page.addScriptToEvaluateOnNewDocument', { source: recorder })
+      await send('Page.navigate', { url: `http://127.0.0.1:${port}/deck.html` })
+      const t0 = Date.now(); let rec: Record<string, unknown> | null = null
+      while (Date.now() - t0 < 15000) {
+        await new Promise((r) => setTimeout(r, 10))
+        // the splash's departure is sampled here (10 ms cadence) rather than by a
+        // MutationObserver in the page: observer callbacks are microtasks the
+        // parser delivers late, and a splash removed inside the same task as the
+        // mount was reported gone before it was seen
+        const v = (await send('Runtime.evaluate', { expression: 'JSON.stringify(Object.assign({}, window.__rec, { vis: document.visibilityState, now: performance.now(), splash: !!document.getElementById("bento-splash"), loader: window.bento && window.bento.loader }))', returnByValue: true })).result?.result?.value
+        if (typeof v !== 'string') continue
+        const cur = JSON.parse(v) as Record<string, unknown> & { splash: boolean; now: number; mountT: number | null }
+        if (cur.mountT !== null && !cur.splash && (rec === null || rec.splashGoneT === null)) cur.splashGoneT = cur.now
+        else if (rec && rec.splashGoneT !== null) cur.splashGoneT = rec.splashGoneT
+        rec = cur
+        if (rec.mountT !== null && rec.splashGoneT !== null && rec.dclMounted !== null) break
+      }
+      ws.close()
+      await json(`/json/close/${t.id}`); if (decoy) await json(`/json/close/${decoy.id}`)
+      return rec
+    }
+    const h = await run(true)
+    const hv = h as { vis0: string; mountT: number | null; splashGoneT: number | null; dclMounted: boolean | null; loader?: { path?: string; violations?: number } } | null
+    ok(hv?.vis0 === 'hidden', `the hidden run really was hidden from the first byte (visibilityState at start: ${hv?.vis0})`)
+    ok(hv?.mountT !== null && hv?.dclMounted === true, `hidden: the editor is mounted BEFORE DOMContentLoaded (mount at ${hv?.mountT?.toFixed(0)} ms; at DCL: ${hv?.dclMounted})`)
+    const gap = hv && hv.mountT !== null && hv.splashGoneT !== null ? hv.splashGoneT - hv.mountT : Infinity
+    ok(gap <= 50, `hidden: the splash is gone within 50 ms of the mount (${Number.isFinite(gap) ? gap.toFixed(0) + ' ms' : 'never within 15 s'})`)
+    ok(hv?.loader?.path === 'inline' && hv?.loader?.violations === 0, `hidden: loader path inline, zero violations (${JSON.stringify(hv?.loader)})`)
+    const v = await run(false)
+    const vv = v as { vis0: string; mountT: number | null; splashGoneT: number | null; dclMounted: boolean | null } | null
+    ok(vv?.vis0 === 'visible' && vv?.dclMounted === true, `visible: mounted before DOMContentLoaded too (mount at ${vv?.mountT?.toFixed(0)} ms)`)
+    const vgap = vv && vv.mountT !== null && vv.splashGoneT !== null ? vv.splashGoneT - vv.mountT : Infinity
+    ok(vgap <= 2000, `visible: the brand hold ends within its cap (splash gone ${Number.isFinite(vgap) ? vgap.toFixed(0) + ' ms' : 'never'} after mount; cap 800 ms hold + 550 ms fade)`)
+  } finally {
+    kill()
+    server.close()
+    rmSync(profile, { recursive: true, force: true })
+  }
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

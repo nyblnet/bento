@@ -22,6 +22,15 @@ pre-1.0.
   no update check at launch, no language-pack listing, no live-session
   socket; the About dialog says so. The deck itself opens, presents and
   saves.
+- **A deck opened in a background tab is ready when you switch to it.** The
+  compressed file used to finish starting in a later task and hold its
+  splash on a timer — in a tab that was not visible (or a viewer rendering
+  the file off-screen for a preview card) timers are throttled and frames
+  never come, so the editor sat behind the splash until the tab was looked
+  at. The runtime now unpacks and starts inside the file's own script,
+  before the page is even "loaded", and a hidden document drops the splash
+  the moment the editor exists; visible, the brand moment is held for at
+  most 0.8 s and never waits on its own fade.
 - **Every file is about 38 KB smaller.** The runtime's two compressed blocks
   used to be base64; they are now base86 — 86 printable characters chosen so
   the text can never close or comment out the block that carries it — which

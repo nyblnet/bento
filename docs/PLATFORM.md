@@ -22,9 +22,11 @@ Byte order of a shipped shell (postbuild-compress):
 Runtime JS/CSS ship deflated in `bento/deflate-b86` script blocks (base86:
 86 printable ASCII symbols chosen so a payload can never close or comment out
 its own block; 6.25% smaller than the `bento/deflate-b64` blocks of 1.1.0 and
-earlier, which every reader still accepts) with a ~1KB loader
-(DecompressionStream → an inline module script, then `new Function`, then a
-blob import — whichever the host's policy allows first, tried in that order).
+earlier, which every reader still accepts) with a ~3KB loader
+(a synchronous JavaScript inflate → an inline classic script, then `new
+Function`, then a blob import — whichever the host's policy allows first,
+tried in that order; the app is mounted before DOMContentLoaded, as in the
+uncompressed build, with no timer or frame on the way).
 
 ## 2. The splice contract (FROZEN)
 

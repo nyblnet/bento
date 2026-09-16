@@ -7184,6 +7184,55 @@ drawn from them:
 | b86 | 618,937 | 82 | 90 | 72 | 486 | 2 | 249 | 5,240 | 5,416 |
 | b80 | 636,621 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
+**The tell, and the mechanism.** Blue preview cards showed the splash with
+no mark, wordmark or bar — every one of those begins at opacity 0 and
+animates in — so the card was rendered by a document whose animations never
+advanced: a hidden document. Chrome measured in a background tab (CDP,
+Chromium 152): CSS animations hold their first frame, `requestAnimationFrame`
+never fires, `setTimeout(25)` fires after 675 ms, decoding runs 4–6× slower;
+`setTimeout(0)`, promises and an inserted script's execution are prompt.
+Against that, the two files that differed in Teams differed exactly here:
+the uncompressed build's runtime is a parser-inserted script, so its editor
+is mounted BEFORE DOMContentLoaded (measured: mounted at DCL, 105 ms hidden);
+the compressed shell's loader awaited `DecompressionStream` and then
+inserted a `type="module"` script — both land in later tasks — so `load`
+fired at 12 ms with nothing mounted and the editor arrived ~300 ms later
+hidden (A: 292–437 ms, B7-b86: 287–364 ms). A viewer that renders the
+document off-screen and captures it around `load` sees the splash from the
+compressed file and the editor from the uncompressed one, and the race
+between its capture and a throttled task is the nondeterminism observed.
+Then the splash: `main.ts` held it on a 1250 ms timer and removed it 550 ms
+after adding the fade class — two timers a hidden document throttles (splash
+gone at 2.4–2.9 s hidden against 1.8 s visible, for every build including
+the uncompressed one), so a deck opened in a background tab showed its splash
+until it was looked at.
+
+**Consequence: mounted before `load`, and the splash never waits.** The
+loader now decodes and inflates synchronously — the ~2 KB JavaScript
+inflater that was an opt-in flag, 18 ms on the runtime payload against
+`DecompressionStream`'s 6 (99 against 18 hidden) — and runs the runtime as
+an inline CLASSIC script, which executes inside `appendChild`; whether the
+policy took it is known when the call returns, so no wait, no violation
+listener on the critical path. Then `new Function`, also synchronous; the
+blob import is the one promise and the last resort. Measured: the compressed
+shell mounts at 123 ms visible / 138 ms hidden, before DOMContentLoaded in
+both, as the uncompressed build does; the old loader 109 / 287 ms, after
+`load`. The splash is removed at once when `document.hidden`, on a
+`visibilitychange` to hidden, or — visible — after a hold capped at 800 ms
+from navigation and a fade that ends by timer or `transitionend`, whichever
+first: gone 2 ms after the mount hidden, 1,241 ms after it visible. The rig
+drives headless Chrome with a real background tab (a decoy tab activated
+before navigation) and asserts both, plus that the built loader contains no
+`requestAnimationFrame`, `setTimeout`, `setInterval`, `fonts.ready` or
+`DOMContentLoaded` and exactly one `await`. The editor's own boot was
+audited for the same waits: `main.ts` reaches `new Editor` and
+`window.bento` synchronously from the doc; the constructor builds the whole
+UI synchronously; the canvas renders in its constructor and only its
+re-scale rides a `ResizeObserver`; `fitTopbar` measures synchronously once
+and re-measures on observers; the launch update check sits on a 1.5 s
+timer that is off the mount path; nothing awaits a frame or a font before
+the app exists.
+
 The experimental alphabets stay in `scripts/lib/b86.mjs` behind
 `--encoding` (`makeCodec` is build-side only; the shipped loader carries
 the b86 decoder alone, verified by grep on the built shell), and the
