@@ -11,6 +11,8 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-09-16
+
 - **One brand yellow.** Ten places in the editor chrome — the speaker view's
   timer, buttons and current thumbnail, the show's link, selection and
   progress colours, the follow chip, and the path editor's anchor dots —
