@@ -7071,15 +7071,14 @@ without `allow-same-origin`, `connect-src 'none'`. C works there because
 every script it has is parser-inserted and hashed; A fails on `blob:`; B
 fails because an inserted script is unhashed. Reproduced locally
 (`scripts/loader-csp-server.py --hash`) before anything was built on it.
-The preview pane allows inline insertion outright — and treats ANY reported
-CSP violation as fatal: A's refused blob, B3–B5's refused `createPolicy`,
-B6's refused eval probe each blanked it. Nothing local reproduces a host
-that kills a frame on a report; the last variable in the Teams table is the
-evidence.
+The preview column is recorded as observed but is NOT evidence — see
+"The preview pane is not deterministic" below; every decision here rests on
+the open pane, which answered the same way on every upload.
 
 **Consequence: no probing.** The loader does first the one thing refused
-nowhere — insert the inline module, exactly as B — and reaches for anything
-else only after a `securitypolicyviolation` attributed to that attempt
+nowhere — insert the inline module, exactly as B — a step that a hashing
+policy refuses with a report and nothing accepts silently, so the cascade
+never guesses; it reaches for anything else only after a `securitypolicyviolation` attributed to that attempt
 (matched by `blockedURI`, not by timing: the eval probe's own violation
 arrives a task later and was once read as the inline attempt failing):
 then `new Function("'use strict';" + js)()` — an indirect eval, ungoverned
@@ -7098,8 +7097,8 @@ enforced Trusted Types.
 **Cost.** Boot to editor mount in plain Chrome, twelve interleaved runs:
 1.1.0 loader median 404 ms, this loader 421 ms (b64) / 367 ms (b86). The
 inline-module path parses the bundle the same way the blob import did; the
-eval-first order was ~80 ms quicker and is the order the preview pane
-refuses (kept as `--loader cascade-eval-first` for the record).
+eval-first order was ~80 ms quicker but probes (kept as
+`--loader cascade-eval-first` for the record).
 
 **Encoding.** Every shell byte is paid per send, so the two payload blocks
 moved from base64 to base86: printable ASCII 0x21–0x7E minus `<` `>` `&`
@@ -7124,7 +7123,8 @@ payload found and inflated in Teams, so neither is needed there.
 
 **No request from an embedded view.** The open-pane diagnostic panel, read
 in Teams, ended with `connect-src` violations for the launch update check —
-harmless in the open pane, fatal in the preview pane. kernel `net.ts` now
+a request the policy forbids and the app has no business making from a
+frame that cannot store the answer. kernel `net.ts` now
 decides once at boot whether the document is an embedded view and `netFetch` /
 `netWebSocket` — the one place the app touches the network — refuse before
 any request. The decision needs ALL THREE signs — framed (`self !== top`),
@@ -7144,8 +7144,7 @@ reports its http origin in `location.origin` while `self.origin` is `null`
 (a `srcdoc` or `data:` frame says `null` in both — the B2 panel probed
 `location.origin` and printed `null`, so that is how the Teams pane loads
 the file). On `location.origin` the local sandboxed-iframe harness was not
-sandboxed at all and made the manifest request the preview pane treats as
-fatal; on `self.origin` it is, and a top-level file:// deck (Chromium:
+sandboxed at all and made the manifest request; on `self.origin` it is, and a top-level file:// deck (Chromium:
 `self.origin` `null`, `location.origin` `file://`) still is not, because
 it is not framed. The rig probes each
 sign alone and in pairs in child processes (the decision is cached per
@@ -7162,4 +7161,31 @@ stated in the changelog line. Previews are untouched:
 `preview.ts`, the remover and the gate's preview-carrying-shell invariant
 are not part of this change, and the thumbnailers that render the preview
 run no script at all.
+
+**The preview pane is not deterministic.** Eleven more files were built to
+bisect why the preview card stayed blue for base86 when it had rendered the
+editor for base64 (B7): base86 minus one candidate symbol at a time (`%`,
+`*`, `?`, `#`, `:`, `@`), minus `?` and `#`, and minus the six URL
+delimiters (`% : / ? # @`, 80 symbols, 7→9 groups). Round seven settled
+it: B11d (no `:`) and B11e (no `@`) rendered the editor on first upload and
+were blue on a second upload of the SAME bytes, and B7 — the editor
+yesterday — was blue today. The preview pane's outcome varies between
+uploads of identical bytes, so no conclusion about any character stands,
+including B10b's one-time success; the earlier reading of blank preview
+cards as "a reported violation is fatal" is withdrawn on the same ground.
+The open pane has been deterministic throughout: base86 + this cascade +
+`sandboxed()` open there every time. The counts below are kept as data —
+what each alphabet exposes in the real runtime payload — with no inference
+drawn from them:
+
+| payload | chars | `/*` | `*/` | `//` | `%xx` | `://` | `?x=` | `#`+alnum | `@`+alnum |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| b64 | 660,200 | 0 | 0 | 227 | 0 | 0 | 0 | 0 | 0 |
+| b86 | 618,937 | 82 | 90 | 72 | 486 | 2 | 249 | 5,240 | 5,416 |
+| b80 | 636,621 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+The experimental alphabets stay in `scripts/lib/b86.mjs` behind
+`--encoding` (`makeCodec` is build-side only; the shipped loader carries
+the b86 decoder alone, verified by grep on the built shell), and the
+diagnostic panel stays behind `--diag`. Default: b86, cascade, no panel.
 

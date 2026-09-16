@@ -12,9 +12,8 @@ pre-1.0.
 ## [Unreleased]
 
 - **A deck opens inside Teams and SharePoint again.** Their viewer refuses
-  the way 1.1.0's file started itself (a script loaded from a `blob:` URL),
-  and its preview pane goes blank at the first thing a policy refuses. The
-  file now starts the way nothing refuses: the runtime is inserted as an
+  the way 1.1.0's file started itself (a script loaded from a `blob:` URL).
+  The file now starts the way nothing refuses: the runtime is inserted as an
   inline script first, and only if a policy turns that down does it fall
   back to `new Function`, then to the blob import — measured in Teams with
   seven variants. Inside such a viewer the frame has no storage, so

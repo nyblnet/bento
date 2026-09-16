@@ -116,12 +116,13 @@ const titleFallback = flag('title', 'bento/slides')
 // The bundle is byte-identical either way; only the 1KB loader differs.
 const loaderMode = flag('loader', 'cascade')
 if (!['blob', 'inline', 'inline-tt', 'cascade', 'cascade-eval-first', 'cascade-eager-tt'].includes(loaderMode)) throw new Error(`--loader must be blob, inline, inline-tt, cascade, cascade-eval-first or cascade-eager-tt, got ${loaderMode}`)
-// NO PROBING. Teams has two panes with two policies: the preview pane allows
-// inline script insertion outright and treats ANY reported CSP violation as
-// fatal (a refused blob import, a refused createPolicy, a refused eval probe
-// — each one blued the preview); the open pane hashes the file's inline
-// scripts and allows eval. So `cascade` does the one thing that is refused
-// nowhere first — insert the inline module, exactly as the plain inline
+// NO PROBING. Teams' open pane hashes the file's inline scripts and allows
+// eval; a hashing policy refuses an inserted script WITH a report, and no
+// policy accepts one silently, so an inline insertion is the one first step
+// that never leaves the loader guessing. (Its preview pane was once read as
+// killing a frame on any reported violation; that reading did not survive
+// re-uploads of identical bytes — DECISIONS 2026-09-16.) So `cascade` does
+// the one thing that is refused nowhere first — insert the inline module, exactly as the plain inline
 // loader — and only on a violation attributed to that attempt falls to
 // new Function, then to the blob import. `cascade-eval-first` is the earlier
 // order, kept for the record.
@@ -129,8 +130,8 @@ if (!['blob', 'inline', 'inline-tt', 'cascade', 'cascade-eval-first', 'cascade-e
 // sink throws the TypeError that names TrustedScript/TrustedHTML are the
 // policies (bento + default) installed and that step retried once. An eager
 // createPolicy under a names-only allowlist raises CSP violations even when
-// caught, and a hosting pane that treats a violation as fatal (SharePoint's
-// preview, observed) then shows the splash and nothing else.
+// caught, and a violation nobody needed is a violation nobody has to
+// explain.
 // `cascade-eager-tt` keeps the eager install for comparison.
 // `cascade`: eval first. `new Function('')` throws AT ONCE under a policy
 // without 'unsafe-eval', so the probe is synchronous and costs nothing; where
@@ -157,9 +158,10 @@ const diag = process.argv.includes('--diag')
 // are unproducible by construction, 4 bytes → 5 chars, 6.25% smaller than
 // base64 (block type bento/deflate-b86). `b64`: base64, the pre-1.1.1 block
 // type bento/deflate-b64, kept for comparison; every reader handles both.
-// `b85np` / `b85ns` / `b80` (EXPERIMENT, never the default — see the
-// variants note in lib/b86.mjs): narrower alphabets for bisecting which
-// symbol the Teams preview pane objects to; block type bento/deflate-<name>.
+// The other names (EXPERIMENT, never the default — see the variants note
+// in lib/b86.mjs): narrower alphabets built for a Teams preview-pane
+// bisection that proved nondeterministic; block type bento/deflate-<name>,
+// which the gate does not accept, so they cannot reach a release.
 const encoding = flag('encoding', 'b86')
 if (!['b64', ...Object.keys(VARIANTS)].includes(encoding)) throw new Error(`--encoding must be b64, b86 or one of ${Object.keys(VARIANTS).join('|')}, got ${encoding}`)
 const codec = encoding === 'b64' ? null : VARIANTS[encoding]

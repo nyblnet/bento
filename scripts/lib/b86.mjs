@@ -113,16 +113,16 @@ export const LOADER_DECODER = `
 
 // ————— Experimental alphabets (Teams preview bisection, 2026-09-16) —————
 //
-// The preview pane previewed a base64 file and not a base86 one, so the
-// wider alphabet is being bisected by building files that drop candidate
-// symbols. NOT shipped: `--encoding b85np|b85ns|b80` in postbuild-compress
-// selects one; the default stays b86 until the maintainer's cards decide.
+// Built to bisect why Teams' preview card stayed blue for base86 files when
+// a base64 file had rendered; the bisection was overturned when the same
+// bytes previewed on one upload and not the next (DECISIONS, "The preview
+// pane is not deterministic"). No character conclusion stands. Kept
+// build-side only, behind `--encoding` in postbuild-compress: makeCodec is
+// never part of the shipped loader, which carries the b86 decoder alone.
 //
-//   b85np  b86 minus `%`   (85; 4→5, 85^5 = 4,437,053,125 > 2^32)
-//   b85ns  b86 minus `*`   (85; 4→5) — a JS-aware comment stripper eating
-//                           `/*…*/` runs is the leading suspicion
-//   b85nq / b85nh / b85nc / b85na  b86 minus `?` / `#` / `:` / `@` (85; 4→5)
-//   b84    b86 minus `?` and `#` (84 < 85 → 7→9 group; diagnostic only)
+//   b85np / b85ns / b85nq / b85nh / b85nc / b85na
+//          b86 minus `%` / `*` / `?` / `#` / `:` / `@` (85; 4→5)
+//   b84    b86 minus `?` and `#` (84 < 85 → 7→9 group)
 //   b80    b86 minus the RFC 3986 gen-delims `: / ? # @` and `%` (80;
 //          80^5 < 2^32 so the group is 7 bytes → 9 chars, 80^9 > 2^56,
 //          BigInt arithmetic: 6.32 bits per char, ×1.286)
@@ -258,12 +258,9 @@ export const VARIANTS = {
   b85np: makeCodec(without('%')),
   b85ns: makeCodec(without('*')),
   b80: makeCodec(without('%:/?#@')),
-  // round two (B11): b80 previewed, the 85s above did not — so the trigger is
-  // in { : / ? # @ }; `/` is a base64 character the previewing base64 file
-  // carries in bulk, leaving these
   b85nq: makeCodec(without('?')),
   b85nh: makeCodec(without('#')),
   b85nc: makeCodec(without(':')),
   b85na: makeCodec(without('@')),
-  b84: makeCodec(without('?#')), // 84 < 85 forces the 7→9 group: diagnostic only
+  b84: makeCodec(without('?#')), // 84 < 85 forces the 7→9 group
 }

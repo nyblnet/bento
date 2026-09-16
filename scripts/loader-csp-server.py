@@ -28,10 +28,10 @@ if '--no-eval-inline' in sys.argv:
     # and the cascade must take the inline path with no wait
     CSP = "script-src 'unsafe-inline' 'self'; default-src 'self' data: 'unsafe-inline'; img-src * data: blob:; media-src * data: blob:; font-src * data:; style-src 'unsafe-inline' 'self'"
 if '--preview' in sys.argv:
-    # Teams' PREVIEW pane as inferred: inline script allowed, no eval, no blob,
-    # a names-only trusted-types allowlist, sandboxed; and the pane treats any
-    # reported violation as fatal — which a header cannot simulate, so the
-    # local assertion is "zero violation events".
+    # A preview-like pane: inline script allowed, no eval, no blob, a
+    # names-only trusted-types allowlist, sandboxed. The local assertion is
+    # "zero violation events" — a loader that raises none has nothing for
+    # any host to object to.
     CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; "
            "font-src data: blob:; media-src data: blob:; connect-src 'none'; worker-src 'none'; sandbox allow-scripts; trusted-types somename")
 TT_NAMES_ONLY = None
