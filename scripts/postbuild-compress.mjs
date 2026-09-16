@@ -114,7 +114,14 @@ const titleFallback = flag('title', 'bento/slides')
 // found this: the shipped shell showed its splash and nothing else there).
 // The bundle is byte-identical either way; only the 1KB loader differs.
 const loaderMode = flag('loader', 'blob')
-if (!['blob', 'inline', 'inline-tt', 'cascade', 'cascade-inline-first'].includes(loaderMode)) throw new Error(`--loader must be blob, inline, inline-tt, cascade or cascade-inline-first, got ${loaderMode}`)
+if (!['blob', 'inline', 'inline-tt', 'cascade', 'cascade-inline-first', 'cascade-eager-tt'].includes(loaderMode)) throw new Error(`--loader must be blob, inline, inline-tt, cascade, cascade-inline-first or cascade-eager-tt, got ${loaderMode}`)
+// Trusted Types are LAZY in `cascade`: no createPolicy at boot. Only when a
+// sink throws the TypeError that names TrustedScript/TrustedHTML are the
+// policies (bento + default) installed and that step retried once. An eager
+// createPolicy under a names-only allowlist raises CSP violations even when
+// caught, and a hosting pane that treats a violation as fatal (SharePoint's
+// preview, observed) then shows the splash and nothing else.
+// `cascade-eager-tt` keeps the eager install for comparison.
 // `cascade`: eval first. `new Function('')` throws AT ONCE under a policy
 // without 'unsafe-eval', so the probe is synchronous and costs nothing; where
 // it passes, the bundle runs through new Function immediately — an indirect
@@ -403,13 +410,18 @@ const loader = `
     st.textContent = css
     document.head.appendChild(st)
     var js = await inflate('bento-rt')
-    ${loaderMode === 'cascade' || loaderMode === 'cascade-inline-first' ? `var tried = [], path = null
-    if (window.trustedTypes && window.trustedTypes.createPolicy) {
-      try { window.trustedTypes.createPolicy('bento', { createScript: function (s) { return s } }) } catch (e) {}
+    ${['cascade', 'cascade-inline-first', 'cascade-eager-tt'].includes(loaderMode) ? `var tried = [], path = null, tt = 'none'
+    var installTT = function () {
+      if (tt !== 'none' || !(window.trustedTypes && window.trustedTypes.createPolicy)) return
+      tt = 'installed'
+      try { window.trustedTypes.createPolicy('bento', { createScript: function (s) { return s } }) } catch (e) { tried.push('tt bento: ' + (e && e.message)) }
       if (!window.trustedTypes.defaultPolicy) {
-        try { window.trustedTypes.createPolicy('default', { createHTML: function (s) { return s }, createScript: function (s) { return s }, createScriptURL: function (s) { return s } }) } catch (e) {}
+        try { window.trustedTypes.createPolicy('default', { createHTML: function (s) { return s }, createScript: function (s) { return s }, createScriptURL: function (s) { return s } }) } catch (e) { tried.push('tt default: ' + (e && e.message)) }
       }
     }
+    // a sink refused a plain string: install the policies and let the caller retry once
+    var needsTT = function (e) { return !!(e && /Trusted(Script|HTML)/.test(String(e.message))) && tt === 'none' }
+    ${loaderMode === 'cascade-eager-tt' ? 'installTT()' : ''}
     // one attempt: run fn, then watch for a violation or the app for a short
     // window; a throw or a violation abandons it. Attributed by timing — the
     // window is the attempt's own, and nothing else inserts script here.
@@ -447,7 +459,10 @@ const loader = `
       sc.type = 'module'
       sc.id = 'bento-rt-script'
       sc.setAttribute('data-bento-transient', '')
-      sc.textContent = js
+      try { sc.textContent = js } catch (e) {
+        if (!needsTT(e)) throw e
+        tried.push('inline sink: ' + (e && e.message)); installTT(); sc.textContent = js
+      }
       document.body.appendChild(sc)
     }
     var viaFunction = function () {
@@ -457,8 +472,12 @@ const loader = `
       // "anonymous")
       new Function("'use strict';" + js + "\\n//# sourceURL=bento-slides.js")()
     }
-    ${loaderMode === 'cascade' ? `var evalOk = false
-    try { new Function(''); evalOk = true } catch (e) { tried.push('eval probe: ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path eval probe → refused: ' + (e && e.message))` : ''} }
+    ${loaderMode !== 'cascade-inline-first' ? `var evalOk = false
+    try { new Function(''); evalOk = true } catch (e) {
+      // under Trusted Types, new Function is itself a sink: install and re-probe once
+      if (needsTT(e)) { tried.push('eval probe sink: ' + (e && e.message)); installTT(); try { new Function(''); evalOk = true } catch (e2) { e = e2 } }
+      if (!evalOk) { tried.push('eval probe: ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path eval probe → refused: ' + (e && e.message))` : ''} }
+    }
     if (evalOk) runNow('function', viaFunction)
     if (!path) await attempt('inline', viaInline)` : `await attempt('inline', viaInline)
     if (!path) runNow('function', viaFunction)`}
@@ -467,7 +486,7 @@ const loader = `
       import(url).catch(function (e) { throw e })
     })
     if (!path) throw new Error('every loader path was refused: ' + tried.join('; '))
-    if (window.bento) window.bento.loader = { path: path, tried: tried }` : loaderMode !== 'blob' ? `// inline module: allowed under CSP 'unsafe-inline', needs no blob: source.
+    if (window.bento) window.bento.loader = { path: path, tried: tried, tt: tt }` : loaderMode !== 'blob' ? `// inline module: allowed under CSP 'unsafe-inline', needs no blob: source.
     // Transient like the style above — a save must never write the inflated
     // bundle back as plaintext (serializeBody strips marked nodes).
     var sc = document.createElement('script')

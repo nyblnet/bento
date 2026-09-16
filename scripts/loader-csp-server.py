@@ -27,6 +27,12 @@ if '--no-eval-inline' in sys.argv:
     # inline allowed, eval refused: the eval probe must throw synchronously
     # and the cascade must take the inline path with no wait
     CSP = "script-src 'unsafe-inline' 'self'; default-src 'self' data: 'unsafe-inline'; img-src * data: blob:; media-src * data: blob:; font-src * data:; style-src 'unsafe-inline' 'self'"
+TT_NAMES_ONLY = None
+if '--tt-names' in sys.argv:
+    # an allowlist WITHOUT require-trusted-types-for: sinks take strings, but
+    # createPolicy('x') for a name outside the list throws "Policy disallowed"
+    TT_NAMES_ONLY = sys.argv[sys.argv.index('--tt-names') + 1]
+    CSP += f"; trusted-types {TT_NAMES_ONLY}"
 if '--tt' in sys.argv:
     name = sys.argv[sys.argv.index('--tt') + 1]
     # `any` = require Trusted Types but allowlist no names (every policy
@@ -48,7 +54,8 @@ def hashed_policy(path):
         hashes.append(f"'sha256-{h}'")
     return ("default-src 'none'; script-src " + ' '.join(hashes) + " 'unsafe-inline' 'unsafe-eval'; "
             "style-src 'unsafe-inline'; img-src data: blob:; font-src data: blob:; media-src data: blob:; "
-            "connect-src 'none'; worker-src 'none'; sandbox allow-scripts")
+            "connect-src 'none'; worker-src 'none'; sandbox allow-scripts"
+            + (f"; trusted-types {TT_NAMES_ONLY}" if TT_NAMES_ONLY else ''))
 
 class H(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
