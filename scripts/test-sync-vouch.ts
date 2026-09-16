@@ -28,6 +28,40 @@
 // dash's deliberate twin — so this drives both, with the same frames.
 
 import { webcrypto } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
+
+// ——— SANDBOXED EMBED: the transport must not reconnect-flap (own process) ———
+// A sandboxed embed (Teams/SharePoint preview) refuses every socket at the net
+// chokepoint (kernel/src/net.ts sandboxed()). connect() must treat that
+// SandboxedError as TERMINAL — no retry — exactly as drop() treats close codes
+// 4001/1008. net.ts memoises the sandboxed() decision ONCE per process, so this
+// case cannot share a process with the connect-normally cases below: the rig
+// RE-SPAWNS ITSELF under sandboxed globals and reports what the transport did.
+if (process.env.BENTO_SYNC_SANDBOXED === '1') {
+  const g = globalThis as unknown as Record<string, unknown>
+  g.self = globalThis; g.top = {}                          // self !== top → framed
+  g.location = { origin: 'null' }                          // opaque origin
+  Object.defineProperty(globalThis, 'localStorage', {      // a storage read throws
+    configurable: true,
+    get() { const e = new Error('blocked') as Error & { name: string }; e.name = 'SecurityError'; throw e },
+  })
+  let built = 0
+  g.WebSocket = class { constructor() { built++ } close() {} addEventListener() {} removeEventListener() {} send() {} }
+  const { OnlineTransport } = await import('../kernel/src/sync/online.ts')
+  const raw = webcrypto.getRandomValues(new Uint8Array(32))
+  const kb = Buffer.from(raw).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  let connecting = 0
+  const tr = new OnlineTransport(
+    'wss://relay.test/d/rSANDBOXSANDBOXSANDBOXSANDBOXSANDBOXSANDBO', kb, 'doc-sbx',
+    () => {},
+    { onSnap() {}, getSnapshot: () => ({ doc: { docId: 'doc-sbx' }, state: { v: 2 } as never }), onOpen() {}, onReady: () => false },
+    undefined,
+  )
+  ;(tr as unknown as { onStatus: (s: string) => void }).onStatus = (s) => { if (s === 'connecting') connecting++ }
+  await new Promise((r) => setTimeout(r, 2600))  // past the 800ms + 1440ms backoff steps
+  console.log(JSON.stringify({ connecting, built }))
+  process.exit(0)  // a buggy retry timer would otherwise keep this child alive
+}
 
 // --- the world the transport expects ---------------------------------------
 // A WebSocket constructor the kernel's net chokepoint will `new`. Each instance
@@ -285,6 +319,24 @@ for (const [name, Transport] of [['kernel', KernelTransport], ['dash', DashTrans
   await new Promise((r) => setTimeout(r, 950))
   ok(FakeSocket.last === sock2, '4001 does NOT reconnect (the show is over)')
   tr.close()
+}
+
+// ——— a sandboxed embed opens no socket and does not reconnect-flap ———
+// Runs in its own process (the guard at the top of this file) because
+// net.ts memoises sandboxed() once per process. Without the terminal handling
+// in connect(), the bare catch retries and `connecting` climbs past 1.
+{
+  console.log('a sandboxed embed opens no socket and does not reconnect-flap…')
+  let out = ''
+  try {
+    out = execFileSync(process.execPath, [process.argv[1]], {
+      env: { ...process.env, BENTO_SYNC_SANDBOXED: '1' }, encoding: 'utf8', timeout: 15000,
+    })
+  } catch (e) { out = String((e as { stdout?: string }).stdout ?? '') }
+  const line = out.trim().split('\n').filter(Boolean).pop() ?? '{}'
+  const r = JSON.parse(line) as { connecting: number; built: number }
+  ok(r.built === 0, `no socket is constructed in a sandboxed embed — netWebSocket refuses first (built=${r.built})`)
+  ok(r.connecting === 1, `connect() runs once then stops — SandboxedError is terminal, no retry flap (connecting=${r.connecting}; a retry loop climbs past 1)`)
 }
 
 console.log(failures === 0 ? `\nALL PASS (${checks} checks)` : `\n${failures} FAILURES of ${checks} checks`)

@@ -16,7 +16,7 @@ import { lsGet, lsSet } from '../storage.ts'
 import { offlineEnabled } from '../update.ts'
 // Every request in the app goes through the one chokepoint (kernel/src/net.ts)
 // so the offline switch cannot be forgotten — see GHSA-5c3x-xqp6-g94r.
-import { netWebSocket } from '../net.ts'
+import { netWebSocket, SandboxedError } from '../net.ts'
 import { appConfig } from '../app.ts'
 
 /** the app's store, structurally — see session.ts HostStore */
@@ -403,7 +403,13 @@ export class OnlineTransport implements Transport {
     let ws: WebSocket
     try {
       ws = netWebSocket(`${this.url}&since=${this.lastSeq()}`)
-    } catch {
+    } catch (e) {
+      // A sandboxed embed (Teams/SharePoint preview) refuses every socket at
+      // the net chokepoint, permanently and identically — retrying would only
+      // flap 'connecting' forever. Treat it as TERMINAL, exactly as drop()
+      // treats close codes 4001/1008: stop, schedule no reconnect. (The offline
+      // switch is different — it can flip back off, so it stays retryable.)
+      if (e instanceof SandboxedError) { this.closed = true; this.setStatus('closed'); return }
       this.retry()
       return
     }
