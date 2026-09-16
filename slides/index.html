@@ -59,7 +59,13 @@
     <script type="application/bento+json" id="bento-doc"></script>
   </head>
   <body>
-    <!-- splash: pure CSS, paints before the bundle parses; main.ts dismisses it -->
+    <!-- splash: pure CSS, paints before the bundle parses; main.ts dismisses it.
+         Everything is at its RESTING state at frame zero — no entrance animation,
+         no opacity-in, no transform-in: a hidden document (Teams' preview pane,
+         a background tab, a thumbnailer) freezes CSS animations at frame 0 and
+         never fires rAF, and the old entrance keyframes left such a
+         card showing the empty gradient (measured). Only flourishes that START
+         from the visible state remain: the mark's float, its sheen, the bar's scan. -->
     <div id="bento-splash" aria-hidden="true">
       <div class="bs-mark"><i class="bs-a"></i><i class="bs-b"></i><i class="bs-c"></i></div>
       <div class="bs-word"><b>Bento</b>/Slides</div>
@@ -68,21 +74,20 @@
     <style>
 #bento-splash{position:fixed;inset:0;z-index:9999;display:grid;place-content:center;justify-items:center;gap:26px;background:radial-gradient(130% 90% at 50% 38%,#1c2c44 0%,#101c2c 58%,#0a1220 100%);pointer-events:none;transition:opacity .5s ease;animation:bsAuto .6s ease 9s both}
 #bento-splash.done{opacity:0}
-.bs-mark{position:relative;width:104px;height:104px;border-radius:24px;background:#16273e;box-shadow:0 0 56px rgba(255,238,214,.26),0 10px 34px rgba(0,0,0,.55);overflow:hidden;animation:bsIn .7s cubic-bezier(.22,1.4,.36,1) both,bsFloat 3.4s ease-in-out .9s infinite}
-.bs-mark i{position:absolute;border-radius:9px;opacity:0;animation:bsTile .55s cubic-bezier(.25,1.5,.45,1) both}
+#bento-splash[data-bento-still]{background:#0a1220;transition-duration:.35s}
+#bento-splash[data-bento-still]>:not([data-bento-still]){display:none}
+.bs-mark{position:relative;width:104px;height:104px;border-radius:24px;background:#16273e;box-shadow:0 0 56px rgba(255,238,214,.26),0 10px 34px rgba(0,0,0,.55);overflow:hidden;animation:bsFloat 3.4s ease-in-out .9s infinite}
+.bs-mark i{position:absolute;border-radius:9px}
 .bs-b{left:12px;top:12px;width:24px;height:80px;background:#5e7699;animation-delay:.18s}
 .bs-a{right:12px;top:12px;width:50px;height:37px;background:#ff9e8a;animation-delay:.3s}
 .bs-c{right:12px;bottom:12px;width:50px;height:37px;background:#f0ebe0;animation-delay:.42s}
 .bs-mark:after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.35) 50%,transparent 62%);transform:translateX(-130%);animation:bsSheen 1s ease 1.05s both}
-.bs-word{font:600 15px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e8edf4;letter-spacing:.42em;text-transform:uppercase;text-indent:.42em;animation:bsUp .6s ease .55s both}
+.bs-word{font:600 15px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e8edf4;letter-spacing:.42em;text-transform:uppercase;text-indent:.42em}
 .bs-word b{color:#ff9e8a;font-weight:800}
-.bs-bar{width:124px;height:2px;border-radius:1px;background:rgba(255,255,255,.13);overflow:hidden;animation:bsUp .5s ease .85s both}
+.bs-bar{width:124px;height:2px;border-radius:1px;background:rgba(255,255,255,.13);overflow:hidden}
 .bs-bar i{display:block;width:44%;height:100%;border-radius:1px;background:linear-gradient(90deg,#ff9e8a,#ffbca8);animation:bsScan 1.1s cubic-bezier(.45,0,.55,1) 1s infinite alternate}
-@keyframes bsIn{from{transform:scale(.55) rotate(-8deg);opacity:0}}
-@keyframes bsTile{from{transform:translateY(28px) scale(.6);opacity:0}to{transform:none;opacity:1}}
 @keyframes bsSheen{to{transform:translateX(130%)}}
 @keyframes bsFloat{50%{transform:translateY(-5px)}}
-@keyframes bsUp{from{opacity:0;transform:translateY(10px)}}
 @keyframes bsScan{from{transform:translateX(-30%)}to{transform:translateX(210%)}}
 @keyframes bsAuto{to{opacity:0;visibility:hidden}}
 @media (prefers-reduced-motion:reduce){#bento-splash,#bento-splash *,.bs-mark:after{animation-duration:.01ms;animation-delay:0ms;animation-iteration-count:1}}

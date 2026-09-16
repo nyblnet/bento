@@ -1427,6 +1427,16 @@ jobs:
         # AGENTS.md's layout table is checked against the code.
         run: node scripts/test-slides-compact-layouts.ts
 
+      - name: Still-splash rig (spike)
+        # The preview machinery is byte-identical to the base; still.ts reuses
+        # preview.ts's page-one render and hides its tags from the compressor;
+        # replace-never-append; the splash rests at frame zero; the loader's
+        # approximation paints synchronously.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-still-splash.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-still-splash.mjs"
+          git fetch --no-tags --depth=1 origin slides-loader-cascade || true
+          STILL_BASE=origin/slides-loader-cascade node "$RUNNER_TEMP/test-still-splash.mjs"
+
       - name: Gate parity rig (the load-report collector changes no decision)
         # main's untrusted.ts frozen from git at rig time and bundled beside
         # the branch's; every checked-in deck plus a hostile corpus goes
