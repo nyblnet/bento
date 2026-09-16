@@ -51,25 +51,42 @@ export class SandboxedError extends Error {
 }
 
 /**
- * Is this document an EMBEDDED VIEW — a sandboxed frame without
- * allow-same-origin, the way Microsoft Teams / SharePoint open an attachment?
- * Two signs, either is enough: an opaque origin (`location.origin === 'null'`),
- * or the first storage read throwing a SecurityError. Such a frame's policy
- * blocks every connection (`connect-src 'none'`) and, in the preview pane,
- * treats every reported violation as fatal — so nothing here may reach the
- * network at all: no launch update check, no language-pack listing, no relay
- * socket. Remote media in the document itself is loaded by the browser from a
- * src attribute and is not ours to gate (it is the reader's own document).
- * Decided once; a frame's sandboxing does not change while it lives.
+ * Is this document an EMBEDDED VIEW — the way Microsoft Teams / SharePoint
+ * open an attachment: a sandboxed frame without allow-same-origin, whose
+ * policy blocks every connection and whose preview pane treats a reported
+ * violation as fatal? ALL THREE signs are required, because each alone is
+ * something else:
+ *
+ *   · framed (`self !== top`; a cross-origin top throws on the read and
+ *     counts as framed) — a Teams pane is always a frame: the B2 diagnostic
+ *     panel, opened in Teams by the maintainer, printed `framed` alongside
+ *     origin 'null' and the storage SecurityError;
+ *   · an opaque origin (`location.origin === 'null'`) — BUT so are documents
+ *     nobody embedded: Firefox reports 'null' for a file:// deck (Chromium
+ *     152 reports 'file://', measured), and so do a WebView loaded from a
+ *     string with no base URL, a data: URL, and a top-level response under
+ *     CSP `sandbox`. On the origin alone those users would have lost updates
+ *     and collab;
+ *   · a storage read throwing SecurityError — BUT a normal tab with site
+ *     data blocked throws there too, top-level, with a real origin (the
+ *     offline-mode notes above treat that as survivable, and it is).
+ *
+ * A Teams pane is framed AND opaque AND storage-less; nothing else that
+ * opens a deck is all three. Decided once; a frame's sandboxing does not
+ * change while it lives. Inside one, no launch update check,
+ * no language-pack listing, no relay socket. Remote media in the document
+ * is loaded by the browser from a src attribute and is not ours to gate.
  */
 let sandboxFlag: boolean | null = null
 export const sandboxed = (): boolean => {
   if (sandboxFlag !== null) return sandboxFlag
+  let framed = false
+  try { framed = typeof self !== 'undefined' && typeof top !== 'undefined' && self !== top } catch { framed = true }
   let opaque = false
-  try { opaque = typeof location !== 'undefined' && location.origin === 'null' } catch { opaque = true }
+  try { opaque = typeof location !== 'undefined' && location.origin === 'null' } catch { opaque = false }
   let storageThrows = false
   try { void globalThis.localStorage } catch (e) { storageThrows = !!e && (e as { name?: string }).name === 'SecurityError' }
-  sandboxFlag = opaque || storageThrows
+  sandboxFlag = framed && opaque && storageThrows
   return sandboxFlag
 }
 

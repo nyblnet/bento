@@ -7125,10 +7125,24 @@ payload found and inflated in Teams, so neither is needed there.
 **No request from an embedded view.** The open-pane diagnostic panel, read
 in Teams, ended with `connect-src` violations for the launch update check —
 harmless in the open pane, fatal in the preview pane. kernel `net.ts` now
-decides once at boot whether the document is an embedded view (an opaque
-origin, or a storage read throwing `SecurityError`) and `netFetch` /
+decides once at boot whether the document is an embedded view and `netFetch` /
 `netWebSocket` — the one place the app touches the network — refuse before
-any request; the launch check, the relay join and the pack listing never
+any request. The decision needs ALL THREE signs — framed (`self !== top`),
+an opaque origin (`location.origin === 'null'`) and a storage read throwing
+`SecurityError` — because the first cut ("opaque, or storage throws") would
+have switched off updates and collab for people nobody embedded: Firefox
+reports origin `null` for a file:// deck (Chromium 152 reports `file://`,
+measured, so Chromium desktops were never at risk), and so do a data: URL, a
+WebView loaded from a string with no base URL, and a top-level response under
+CSP `sandbox`; a normal tab with site data blocked throws on the storage
+read. That the Teams pane is all three is measured, not assumed: the B2
+diagnostic panel, opened in Teams by the maintainer, printed `framed`
+alongside origin `null` and the storage `SecurityError`. The rig probes each
+sign alone and in pairs in child processes (the decision is cached per
+process) and asserts only the triple is sandboxed. The refusal is terminal —
+a frame's sandboxing does not change while it lives — so the transport must
+not retry a `SandboxedError` (kernel's change in `sync/online.ts`, on top of
+this one). With the fix: the launch check, the relay join and the pack listing never
 start, the About dialog says "Updates are not checked inside an embedded
 view", and `window.bento.sandboxed` exposes the decision. Measured: a plain
 tab makes exactly one manifest request at launch; the sandboxed frames make

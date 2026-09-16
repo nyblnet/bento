@@ -113,20 +113,42 @@ ok(!/<\/scr\x69pt>/.test(loader), 'no script-close inside the loader')
 rmSync(dir, { recursive: true, force: true })
 
 console.log('\nan embedded view makes no request\n')
-// kernel net.ts decides once: an opaque origin, or a storage read throwing
-// SecurityError, means a sandboxed frame — and then netFetch/netWebSocket
-// refuse before touching the network, so a frame whose policy is
+// kernel net.ts decides once: framed AND opaque origin AND a storage read
+// throwing SecurityError means a sandboxed frame (the Teams pane's B2 panel
+// printed all three) — and then netFetch/netWebSocket refuse before touching
+// the network, so a frame whose policy is
 // connect-src 'none' raises no violation after boot (Teams' preview pane
 // treats one as fatal). Behavioural, in child processes, because the
 // decision is cached per process.
 const netPath = join(root, 'kernel/src/net.ts')
 const probe = (setup: string) => execFileSync(process.execPath, ['--input-type=module', '-e', `${setup}\nconst m = await import(${JSON.stringify('file://' + netPath)}); const out = { sandboxed: m.sandboxed() }; try { await m.netFetch('https://example.invalid/x'); out.fetch = 'went out' } catch (e) { out.fetch = e.name } try { m.netWebSocket('wss://example.invalid/x'); out.ws = 'opened' } catch (e) { out.ws = e.name } console.log(JSON.stringify(out))`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-const plain = JSON.parse(probe('globalThis.location = { origin: "http://127.0.0.1:1" }; globalThis.WebSocket = class { constructor() {} addEventListener() {} }; globalThis.fetch = async () => { throw new TypeError("no network in this test") }'))
-ok(plain.sandboxed === false && plain.fetch === 'TypeError' && plain.ws === 'opened', `a plain document: not sandboxed, requests go out (${JSON.stringify(plain)})`)
-const opaque = JSON.parse(probe('globalThis.location = { origin: "null" }; globalThis.WebSocket = class { constructor() { throw new Error("must not be constructed") } }; globalThis.fetch = async () => { throw new Error("must not be called") }'))
-ok(opaque.sandboxed === true && opaque.fetch === 'SandboxedError' && opaque.ws === 'SandboxedError', `an opaque origin: sandboxed, fetch and WebSocket refused before the network (${JSON.stringify(opaque)})`)
-const blocked = JSON.parse(probe('globalThis.location = { origin: "http://127.0.0.1:1" }; Object.defineProperty(globalThis, "localStorage", { get() { const e = new Error("blocked"); e.name = "SecurityError"; throw e } }); globalThis.fetch = async () => { throw new Error("must not be called") }; globalThis.WebSocket = class { constructor() { throw new Error("no") } }'))
-ok(blocked.sandboxed === true && blocked.fetch === 'SandboxedError', `a storage read throwing SecurityError: sandboxed, refused (${JSON.stringify(blocked)})`)
+const SEC = 'Object.defineProperty(globalThis, "localStorage", { get() { const e = new Error("blocked"); e.name = "SecurityError"; throw e } });'
+const NONET = 'globalThis.fetch = async () => { throw new Error("must not be called") }; globalThis.WebSocket = class { constructor() { throw new Error("must not be constructed") } };'
+const NET = 'globalThis.fetch = async () => { throw new TypeError("no network in this test") }; globalThis.WebSocket = class { constructor() {} addEventListener() {} };'
+// (a) a file:// deck double-clicked on a desktop in Firefox (origin "null"; Chromium says "file://"), a data: URL
+//     page, a WebView loaded from a string: top-level, OPAQUE origin, storage works — must NOT be sandboxed
+const fileDeck = JSON.parse(probe(`globalThis.self = globalThis; globalThis.top = globalThis; globalThis.location = { origin: "null", protocol: "file:" }; globalThis.localStorage = { getItem() { return null }, setItem() {} }; ${NET}`))
+ok(fileDeck.sandboxed === false && fileDeck.fetch === 'TypeError' && fileDeck.ws === 'opened', `a file:// deck (top-level, origin "null", storage works): NOT sandboxed, requests go out (${JSON.stringify(fileDeck)})`)
+const dataUrl = JSON.parse(probe(`globalThis.self = globalThis; globalThis.top = globalThis; globalThis.location = { origin: "null", protocol: "data:" }; globalThis.localStorage = { getItem() { return null }, setItem() {} }; ${NET}`))
+ok(dataUrl.sandboxed === false && dataUrl.ws === 'opened', `a top-level opaque document with working storage (data: URL, WebView string load): NOT sandboxed (${JSON.stringify(dataUrl)})`)
+// (a') Chromium 152 top-level file:// — origin "file://", measured
+const chromeFile = JSON.parse(probe(`globalThis.self = globalThis; globalThis.top = globalThis; globalThis.location = { origin: "file://", protocol: "file:" }; globalThis.localStorage = { getItem() { return null }, setItem() {} }; ${NET}`))
+ok(chromeFile.sandboxed === false && chromeFile.ws === 'opened', `a Chromium file:// deck (origin "file://"): NOT sandboxed (${JSON.stringify(chromeFile)})`)
+// (b) top-level, real origin, storage throws (a private window): not sandboxed — the offline switch is that user's tool
+const privateWin = JSON.parse(probe(`globalThis.self = globalThis; globalThis.top = globalThis; globalThis.location = { origin: "https://example.test" }; ${SEC} ${NET}`))
+ok(privateWin.sandboxed === false && privateWin.fetch === 'TypeError', `a top-level document whose storage throws: NOT sandboxed (${JSON.stringify(privateWin)})`)
+// (c) framed + opaque + storage throws: the Teams pane — sandboxed, refused before the network
+const teams = JSON.parse(probe(`globalThis.self = globalThis; globalThis.top = {}; globalThis.location = { origin: "null" }; ${SEC} ${NONET}`))
+ok(teams.sandboxed === true && teams.fetch === 'SandboxedError' && teams.ws === 'SandboxedError', `framed + opaque + storage throws (a Teams pane): sandboxed, fetch and WebSocket refused before the network (${JSON.stringify(teams)})`)
+// (c') a cross-origin top throws on the read — counts as framed
+const xTop = JSON.parse(probe(`globalThis.self = globalThis; Object.defineProperty(globalThis, "top", { get() { throw new Error("cross-origin") } }); globalThis.location = { origin: "null" }; ${SEC} ${NONET}`))
+ok(xTop.sandboxed === true, `a cross-origin top (the read throws) counts as framed (${JSON.stringify(xTop)})`)
+// (d) framed with allow-same-origin: real origin, storage works — not sandboxed
+const framedSame = JSON.parse(probe(`globalThis.self = globalThis; globalThis.top = {}; globalThis.location = { origin: "https://example.test" }; globalThis.localStorage = { getItem() { return null }, setItem() {} }; ${NET}`))
+ok(framedSame.sandboxed === false && framedSame.fetch === 'TypeError', `framed with allow-same-origin: NOT sandboxed (${JSON.stringify(framedSame)})`)
+// two of three are not enough
+const twoOfThree = JSON.parse(probe(`globalThis.self = globalThis; globalThis.top = {}; globalThis.location = { origin: "null" }; globalThis.localStorage = { getItem() { return null }, setItem() {} }; ${NET}`))
+ok(twoOfThree.sandboxed === false, `framed + opaque but storage works: NOT sandboxed — all three signs are required (${JSON.stringify(twoOfThree)})`)
 const editorSrc = readFileSync(join(root, 'slides/src/editor/editor.ts'), 'utf8')
 ok(/autoCheckEnabled\(\) \|\| offlineEnabled\(\) \|\| sandboxed\(\)\) return/.test(editorSrc), 'the launch update check is skipped when sandboxed — one request otherwise, none inside an embedded view')
 ok(/private tryJoin\(\) \{[\s\S]{0,200}if \(sandboxed\(\)\) return/.test(editorSrc), 'the relay join is skipped when sandboxed (no socket, no retry loop)')
