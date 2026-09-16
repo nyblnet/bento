@@ -110,3 +110,150 @@ export const LOADER_DECODER = `
     }
     return out
   }`
+
+// ————— Experimental alphabets (Teams preview bisection, 2026-09-16) —————
+//
+// The preview pane previewed a base64 file and not a base86 one, so the
+// wider alphabet is being bisected by building files that drop candidate
+// symbols. NOT shipped: `--encoding b85np|b85ns|b80` in postbuild-compress
+// selects one; the default stays b86 until the maintainer's cards decide.
+//
+//   b85np  b86 minus `%`   (85; 4→5, 85^5 = 4,437,053,125 > 2^32)
+//   b85ns  b86 minus `*`   (85; 4→5) — a JS-aware comment stripper eating
+//                           `/*…*/` runs is the leading suspicion
+//   b80    b86 minus the RFC 3986 gen-delims `: / ? # @` and `%` (80;
+//          80^5 < 2^32 so the group is 7 bytes → 9 chars, 80^9 > 2^56,
+//          BigInt arithmetic: 6.32 bits per char, ×1.286)
+//
+// Tail rule generalised from Ascii85: n leftover bytes are zero-padded to a
+// full group, encoded, and the first m characters emitted, where m is the
+// least count such that max-symbol padding on decode still recovers the n
+// bytes: BASE^(C−m) ≤ 256^(B−n). Both sides compute the same table.
+
+const tailTable = (B, C, base) => {
+  const chars = new Array(B).fill(0)
+  for (let n = 1; n < B; n++) {
+    let m = C
+    while (m > 0 && Math.pow(base, C - (m - 1)) <= Math.pow(256, B - n)) m--
+    chars[n] = m
+  }
+  return chars // chars[n] = characters emitted for n leftover bytes
+}
+
+export function makeCodec(alphabet) {
+  const base = alphabet.length
+  const big = Math.pow(base, 5) <= 4294967296
+  const [B, C] = big ? [7, 9] : [4, 5]
+  if (big && Math.pow(base, 9) <= Math.pow(2, 56)) throw new Error(`alphabet of ${base} symbols cannot carry 7 bytes in 9 chars`)
+  const tail = tailTable(B, C, base)
+  const value = new Int16Array(128).fill(-1)
+  for (let i = 0; i < base; i++) value[alphabet.charCodeAt(i)] = i
+  const val = (c) => { const v = value[c]; if (v < 0) throw new Error(`base${base}: bad character ${JSON.stringify(String.fromCharCode(c))}`); return v }
+  const groupEnc = (bytes, i, count) => {
+    let v = 0n
+    for (let k = 0; k < B; k++) v = v * 256n + BigInt(k < count ? bytes[i + k] : 0)
+    const out = new Array(C)
+    const bb = BigInt(base)
+    for (let k = C - 1; k >= 0; k--) { out[k] = alphabet[Number(v % bb)]; v /= bb }
+    return out
+  }
+  const groupDec = (text, i, count, into, o) => {
+    let v = 0n
+    const bb = BigInt(base)
+    for (let k = 0; k < C; k++) v = v * bb + BigInt(k < count ? val(text.charCodeAt(i + k)) : base - 1)
+    const bytes = new Array(B)
+    for (let k = B - 1; k >= 0; k--) { bytes[k] = Number(v & 255n); v >>= 8n }
+    return bytes
+  }
+  const encode = (bytes) => {
+    if (!big) { // same arithmetic as the shipped b86, parameterised by base
+      const out = []; const n = bytes.length; let i = 0
+      for (; i + 4 <= n; i += 4) {
+        let v = ((bytes[i] << 24) >>> 0) + (bytes[i + 1] << 16) + (bytes[i + 2] << 8) + bytes[i + 3]
+        const c = new Array(5)
+        for (let k = 4; k >= 0; k--) { c[k] = alphabet[v % base]; v = Math.floor(v / base) }
+        out.push(c[0], c[1], c[2], c[3], c[4])
+      }
+      const rest = n - i
+      if (rest) { let v = 0; for (let k = 0; k < 4; k++) v = v * 256 + (k < rest ? bytes[i + k] : 0); const c = new Array(5); for (let k = 4; k >= 0; k--) { c[k] = alphabet[v % base]; v = Math.floor(v / base) }; out.push(...c.slice(0, tail[rest])) }
+      return out.join('')
+    }
+    const out = []; const n = bytes.length; let i = 0
+    for (; i + B <= n; i += B) out.push(...groupEnc(bytes, i, B))
+    const rest = n - i
+    if (rest) out.push(...groupEnc(bytes, i, rest).slice(0, tail[rest]))
+    return out.join('')
+  }
+  const decode = (text) => {
+    const len = text.length
+    const full = Math.floor(len / C)
+    const rest = len - full * C
+    const restBytes = rest ? tail.indexOf(rest) : 0
+    if (rest && restBytes < 1) throw new Error(`base${base}: a trailing run of ${rest} characters encodes nothing`)
+    const out = new Uint8Array(full * B + restBytes)
+    let o = 0; let i = 0
+    if (!big) {
+      for (; i + 5 <= len; i += 5) {
+        const v = (((val(text.charCodeAt(i)) * base + val(text.charCodeAt(i + 1))) * base + val(text.charCodeAt(i + 2))) * base + val(text.charCodeAt(i + 3))) * base + val(text.charCodeAt(i + 4))
+        out[o++] = (v / 16777216) & 255; out[o++] = (v >>> 16) & 255; out[o++] = (v >>> 8) & 255; out[o++] = v & 255
+      }
+      if (rest) { let v = 0; for (let k = 0; k < 5; k++) v = v * base + (k < rest ? val(text.charCodeAt(i + k)) : base - 1); const bytes = [(v / 16777216) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255]; for (let k = 0; k < restBytes; k++) out[o++] = bytes[k] }
+      return out
+    }
+    for (; i + C <= len; i += C) { const b = groupDec(text, i, C); for (let k = 0; k < B; k++) out[o++] = b[k] }
+    if (rest) { const b = groupDec(text, i, rest); for (let k = 0; k < restBytes; k++) out[o++] = b[k] }
+    return out
+  }
+  // the decoder as it ships inside the loader for this alphabet
+  const loaderDecoder = !big ? `
+  var B86 = ${JSON.stringify(alphabet)}
+  var b86v = new Int16Array(128); for (var q = 0; q < 128; q++) b86v[q] = -1
+  for (var q = 0; q < ${base}; q++) b86v[B86.charCodeAt(q)] = q
+  var b86tail = ${JSON.stringify(tail)}
+  var b86decode = function (t) {
+    var n = t.length, full = (n / 5) | 0, rest = n - full * 5, restBytes = rest ? b86tail.indexOf(rest) : 0
+    if (rest && restBytes < 1) throw new Error('base${base}: bad tail length ' + rest)
+    var out = new Uint8Array(full * 4 + restBytes), o = 0, i = 0, v
+    var c = function (j) { var x = t.charCodeAt(j), y = x < 128 ? b86v[x] : -1; if (y < 0) throw new Error('base${base}: bad character code ' + x + ' at index ' + j); return y }
+    for (; i + 5 <= n; i += 5) {
+      v = (((c(i) * ${base} + c(i + 1)) * ${base} + c(i + 2)) * ${base} + c(i + 3)) * ${base} + c(i + 4)
+      out[o++] = (v / 16777216) & 255; out[o++] = (v >>> 16) & 255; out[o++] = (v >>> 8) & 255; out[o++] = v & 255
+    }
+    if (rest) {
+      v = 0
+      for (var k = 0; k < 5; k++) v = v * ${base} + (k < rest ? c(i + k) : ${base - 1})
+      var tl = [(v / 16777216) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255]
+      for (var k2 = 0; k2 < restBytes; k2++) out[o++] = tl[k2]
+    }
+    return out
+  }` : `
+  var B86 = ${JSON.stringify(alphabet)}
+  var b86v = new Int16Array(128); for (var q = 0; q < 128; q++) b86v[q] = -1
+  for (var q = 0; q < ${base}; q++) b86v[B86.charCodeAt(q)] = q
+  var b86tail = ${JSON.stringify(tail)}
+  var b86decode = function (t) {
+    var n = t.length, full = (n / ${C}) | 0, rest = n - full * ${C}, restBytes = rest ? b86tail.indexOf(rest) : 0
+    if (rest && restBytes < 1) throw new Error('base${base}: bad tail length ' + rest)
+    var out = new Uint8Array(full * ${B} + restBytes), o = 0, i = 0, bb = BigInt(${base})
+    var c = function (j) { var x = t.charCodeAt(j), y = x < 128 ? b86v[x] : -1; if (y < 0) throw new Error('base${base}: bad character code ' + x + ' at index ' + j); return y }
+    var grp = function (at, count, take) {
+      var v = 0n
+      for (var k = 0; k < ${C}; k++) v = v * bb + BigInt(k < count ? c(at + k) : ${base - 1})
+      var bytes = new Array(${B})
+      for (var k2 = ${B - 1}; k2 >= 0; k2--) { bytes[k2] = Number(v & 255n); v >>= 8n }
+      for (var k3 = 0; k3 < take; k3++) out[o++] = bytes[k3]
+    }
+    for (; i + ${C} <= n; i += ${C}) grp(i, ${C}, ${B})
+    if (rest) grp(i, rest, restBytes)
+    return out
+  }`
+  return { ALPHABET: alphabet, BASE: base, GROUP: [B, C], encode, decode, LOADER_DECODER: loaderDecoder }
+}
+
+const without = (drop) => ALPHABET.split('').filter((ch) => !drop.includes(ch)).join('')
+export const VARIANTS = {
+  b86: { ALPHABET, BASE, GROUP: [4, 5], encode, decode, LOADER_DECODER },
+  b85np: makeCodec(without('%')),
+  b85ns: makeCodec(without('*')),
+  b80: makeCodec(without('%:/?#@')),
+}

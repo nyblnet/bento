@@ -28,7 +28,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
-import { encode as b86encode, LOADER_DECODER as B86_DECODER, FORBIDDEN, ALPHABET } from './lib/b86.mjs'
+import { FORBIDDEN, VARIANTS } from './lib/b86.mjs'
 
 /**
  * ZOPFLI, not zlib.
@@ -157,9 +157,13 @@ const diag = process.argv.includes('--diag')
 // are unproducible by construction, 4 bytes → 5 chars, 6.25% smaller than
 // base64 (block type bento/deflate-b86). `b64`: base64, the pre-1.1.1 block
 // type bento/deflate-b64, kept for comparison; every reader handles both.
+// `b85np` / `b85ns` / `b80` (EXPERIMENT, never the default — see the
+// variants note in lib/b86.mjs): narrower alphabets for bisecting which
+// symbol the Teams preview pane objects to; block type bento/deflate-<name>.
 const encoding = flag('encoding', 'b86')
-if (!['b64', 'b86'].includes(encoding)) throw new Error(`--encoding must be b64 or b86, got ${encoding}`)
-const PAYLOAD_TYPE = encoding === 'b86' ? 'bento/deflate-b86' : 'bento/deflate-b64'
+if (!['b64', ...Object.keys(VARIANTS)].includes(encoding)) throw new Error(`--encoding must be b64, b86 or one of ${Object.keys(VARIANTS).join('|')}, got ${encoding}`)
+const codec = encoding === 'b64' ? null : VARIANTS[encoding]
+const PAYLOAD_TYPE = `bento/deflate-${encoding}`
 // How the two deflated payloads are CARRIED in the file. `script` (shipped):
 // <script type="bento/deflate-b64">. `template`: <template data-bento-payload>
 // (its content is inert DOM, not a script, so a viewer that strips non-JS
@@ -237,7 +241,7 @@ const css = styleM[1]
 
 const pack = async (s) => {
   const packed = await deflate(Buffer.from(s, 'utf8'))
-  const text = encoding === 'b86' ? b86encode(new Uint8Array(packed)) : packed.toString('base64')
+  const text = codec ? codec.encode(new Uint8Array(packed)) : packed.toString('base64')
   for (const f of FORBIDDEN) if (text.includes(f)) throw new Error(`payload text contains ${JSON.stringify(f)} — the carrier alphabet is not safe`)
   return text
 }
@@ -354,21 +358,29 @@ const TOOLING_COMMENT = generator === 'bento-slides' ? SLIDES_TOOLING : GENERIC_
 //      means such a file is CLEANED by its next save rather than doubled.
 const DIAG = `
   var box = null
-  var say = function (t) {
+  var say = function (t, b) {
     if (!box) {
       box = document.createElement('pre')
       box.id = 'bento-diag'
       box.setAttribute('data-bento-transient', '') // never saved into the file
       box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:70vh;overflow:auto;margin:0;padding:12px 16px;background:#000;color:#7CFC00;font:15px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all;z-index:2147483647'
       document.body.appendChild(box)
+      // the first three lines are the instrument a preview CARD can show:
+      // large type, so a thumbnail-sized render of the pane still reads
+      big = document.createElement('div')
+      big.style.cssText = 'font-size:52px;line-height:1.1;font-weight:700;color:#fff;margin-bottom:12px'
+      box.appendChild(big)
+      rest = document.createElement('div')
+      box.appendChild(rest)
     }
-    box.textContent += t + '\\n'
+    if (b && bigLines < 3) { bigLines++; big.textContent += t + '\\n' } else rest.textContent += t + '\\n'
   }
+  var big = null, rest = null, bigLines = 0
   window.addEventListener('error', function (e) { say('window error: ' + e.message + ' @ ' + (e.filename || '?') + ':' + e.lineno) })
   window.addEventListener('unhandledrejection', function (e) { var r = e.reason; say('unhandled rejection: ' + (r && r.stack ? String(r.stack).split('\\n').slice(0, 4).join(' | ') : String(r))) })
   var probe = function (name, fn) { try { var v = fn(); say(name + ': ' + v) } catch (e) { say(name + ': THROWS ' + (e && e.name) + ' ' + (e && e.message)) } }
   var st0 = document.getElementById('bento-diag-static'); if (st0) st0.remove()
-  say('bento loader diag ' + new Date().toISOString() + ' — the loader ran (the static "loader did not run" line was removed by its first statement)')
+  say('LOADER RAN ' + ${JSON.stringify(encoding)}, true)
   var pl = function (id) {
     var el = document.getElementById(id); if (!el) return 'NOT FOUND'
     var t = (el.content ? el.content.textContent : el.textContent) || ''
@@ -376,13 +388,16 @@ const DIAG = `
     var line = 'found <' + el.tagName.toLowerCase() + (el.type ? ' type=' + el.type : '') + '> text length ' + t.length + (expect ? ' (built as ' + expect + (String(t.length) === expect ? ', same' : ', DIFFERS by ' + (t.length - Number(expect))) + ')' : '')
     var raw = t.trim()
     if (raw.length !== t.length) line += '; trimmed ' + (t.length - raw.length) + ' whitespace chars'
-    var alpha = (el.type === 'bento/deflate-b86') ? ${JSON.stringify(ALPHABET)} : 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
+    var alpha = (el.type === ${JSON.stringify(PAYLOAD_TYPE)} && ${JSON.stringify(!!codec)}) ? ${JSON.stringify(codec ? codec.ALPHABET : '')} : 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
     for (var i = 0; i < raw.length; i++) {
       if (alpha.indexOf(raw.charAt(i)) < 0) { line += '; FIRST BAD CHAR at index ' + i + ': code ' + raw.charCodeAt(i) + ' ' + JSON.stringify(raw.charAt(i)) + ' around ' + JSON.stringify(raw.slice(Math.max(0, i - 8), i + 9)); return line }
     }
     return line + '; every char in the alphabet'
   }
-  say('payload js (#bento-rt): ' + pl('bento-rt'))
+  var pljs = pl('bento-rt')
+  say(/every char in the alphabet/.test(pljs) ? 'JS PAYLOAD INTACT' + (/DIFFERS/.test(pljs) ? ' but LENGTH DIFFERS' : '') : /NOT FOUND/.test(pljs) ? 'JS PAYLOAD NOT FOUND' : 'JS PAYLOAD CORRUPT: ' + pljs.replace(/^.*FIRST BAD CHAR/, 'bad char'), true)
+  say('bento loader diag ' + new Date().toISOString() + ' — the loader ran (the static "loader did not run" line was removed by its first statement)')
+  say('payload js (#bento-rt): ' + pljs)
   say('payload css (#bento-rt-css): ' + pl('bento-rt-css'))
   probe('typeof DecompressionStream', function () { return typeof DecompressionStream })
   probe('document.scripts', function () { var t = []; for (var i = 0; i < document.scripts.length; i++) t.push(document.scripts[i].type || '(no type)'); return document.scripts.length + ' [' + t.join(', ') + ']' })
@@ -392,6 +407,8 @@ const DIAG = `
   probe('sessionStorage.length', function () { return sessionStorage.length })
   probe('indexedDB', function () { return typeof indexedDB })
   probe('location.origin', function () { return location.origin })
+  probe('self.origin (the document origin)', function () { return self.origin })
+  probe('location.href', function () { return String(location.href).slice(0, 80) })
   probe('framed (self !== top)', function () { return self !== top })
   probe('userAgent', function () { return navigator.userAgent.slice(0, 40) })
   probe('meta csp', function () { var m = document.querySelector('meta[http-equiv=Content-Security-Policy]'); return m ? m.content : 'no meta csp (a header CSP is invisible here)' })
@@ -417,13 +434,13 @@ const loader = `
     fail('<b>This is a bento/dash spreadsheet.</b><br>Opening it needs a browser released in 2023 or later \\u2014 Safari 16.4+, Firefox 113+, or a current Chrome or Edge.<br><br>Nothing is lost: your data is stored as plain readable JSON inside this same file. Open it in a newer browser, or open it in a text editor and look for the block marked "bento-doc".')
     return
   }
-  ${INFLATE_JS}${encoding === 'b86' ? B86_DECODER : ''}
+  ${INFLATE_JS}${codec ? codec.LOADER_DECODER : ''}
   var inflate = async function (id) {
     var el = document.getElementById(id)
     var txt = (el.content ? el.content.textContent : el.textContent).trim()
     var bytes
-    try { bytes = ${encoding === 'b86' ? 'b86decode(txt)' : "Uint8Array.from(atob(txt), function (c) { return c.charCodeAt(0) })"} }
-    catch (e) {${diag ? ` say('DECODE FAILED for #' + id + ': ' + (e && e.name) + ': ' + (e && e.message));` : ''} throw e }
+    try { bytes = ${codec ? 'b86decode(txt)' : "Uint8Array.from(atob(txt), function (c) { return c.charCodeAt(0) })"} }
+    catch (e) {${diag ? ` say('DECODE FAILED for #' + id + ': ' + (e && e.name) + ': ' + (e && e.message), true);` : ''} throw e }
     var text
     if (${inflateMode === 'js' ? 'true' : inflateMode === 'auto' ? "typeof DecompressionStream === 'undefined'" : 'false'}) {
       text = new TextDecoder().decode(inflateRaw(bytes))${diag ? `
@@ -479,17 +496,17 @@ const loader = `
       document.removeEventListener('securitypolicyviolation', onv)
       var okp = !why && !!(window.bento && window.bento.doc)
       tried.push(name + (okp ? ': ok' : why ? ': ' + why : ': no app after the wait'))${diag ? `
-      say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)')` : ''}
+      say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)', true)` : ''}
       if (okp) path = name
       return okp
     }
     // synchronous: a throw or a success is known before the call returns
     var runNow = function (name, fn) {
       if (window.bento && window.bento.doc) return true
-      try { fn() } catch (e) { tried.push(name + ': ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)')` : ''}; return false }
+      try { fn() } catch (e) { tried.push(name + ': ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)', true)` : ''}; return false }
       var okp = !!(window.bento && window.bento.doc)
       tried.push(name + (okp ? ': ok' : ': ran, no app'))${diag ? `
-      say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)')` : ''}
+      say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)', true)` : ''}
       if (okp) path = name
       return okp
     }
@@ -569,7 +586,7 @@ const loader = `
     say('module script appended (' + js.length + ' chars); waiting for the app to mount')` : ''}` : `var url = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))
     await import(url)`}
   } catch (e) {${diag ? `
-    say('BOOT FAILED: ' + (e && e.name) + ': ' + (e && e.message) + (e && e.stack ? ' | ' + String(e.stack).split('\\n').slice(0, 3).join(' | ') : ''))` : ''}
+    say('BOOT FAILED: ' + (e && e.name) + ': ' + (e && e.message) + (e && e.stack ? ' | ' + String(e.stack).split('\\n').slice(0, 3).join(' | ') : ''), true)` : ''}
     fail('This file could not start: ' + (e && e.message ? e.message : e))
   }
 })()
