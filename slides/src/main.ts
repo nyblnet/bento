@@ -271,10 +271,12 @@ if (location.hash === '#present') {
 {
   const splash = document.getElementById('bento-splash')
   if (splash) {
-    const wait = Math.max(0, 1250 - performance.now())
+    // A splash carrying page one (still.ts) is content, not a brand moment:
+    // it hides the instant the editor is on screen.
+    const wait = splash.hasAttribute('data-bento-still') ? 0 : Math.max(0, 1250 - performance.now())
     setTimeout(() => {
       splash.classList.add('done')
-      setTimeout(() => splash.remove(), 550)
+      setTimeout(() => splash.remove(), splash.hasAttribute('data-bento-still') ? 400 : 550)
     }, wait)
   }
 }

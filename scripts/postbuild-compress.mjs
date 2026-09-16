@@ -180,6 +180,57 @@ if (!['script', 'template', 'textplain'].includes(carrier)) throw new Error(`--c
 // minified). `js`: the JavaScript decoder always — for testing that path
 // on a host that has DecompressionStream.
 const inflateMode = flag('inflate', 'native')
+// --still approx: (spike-still-splash, option B) before inflating, the loader
+// paints a cheap text-and-colour approximation of page one from the plaintext
+// #bento-doc into the splash — near-zero bytes, no thumbnailer impact (the
+// loader is script; thumbnailers run none). Skipped when the splash already
+// carries a still (option A, written at save time) and for bento/enc bodies.
+const stillMode = flag('still', 'none')
+const STILL_APPROX = `
+  try {
+    var sp0 = document.getElementById('bento-splash'), dn0 = document.getElementById('bento-doc')
+    if (sp0 && dn0 && !sp0.hasAttribute('data-bento-still')) {
+      var d0 = JSON.parse(dn0.textContent)
+      if (d0 && d0.format === 'bento/slides' && d0.slides && d0.slides.length) {
+        var col = function (v, f) { return (typeof v === 'string' && /^(#[0-9a-fA-F]{3,8}|rgba?\\([\\d.,\\s%]+\\)|hsla?\\([\\d.,\\s%]+\\)|[a-zA-Z]{3,20})$/.test(v)) ? v : f }
+        var num = function (v, f) { return typeof v === 'number' && isFinite(v) ? v : f }
+        var fam = function (v, f) { return (typeof v === 'string' && /^[\\w\\s,'"-]{1,120}$/.test(v)) ? v : f }
+        var sl0 = null
+        for (var k0 = 0; k0 < d0.slides.length; k0++) { var c0 = d0.slides[k0]; if (c0 && !c0.stateOf && !c0.hidden) { sl0 = c0; break } }
+        sl0 = sl0 || d0.slides[0]
+        var W0 = num(d0.size && d0.size.width, 1280), H0 = num(d0.size && d0.size.height, 720), th0 = d0.theme || {}
+        var accent0 = col(th0.accent, '#f7a600')
+        var bg0 = col(sl0.background, null) || col(th0.background, null) || '#0D1B2E'
+        var box0 = document.createElement('div'); box0.setAttribute('data-bento-still', '1')
+        box0.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;overflow:hidden;background:' + bg0
+        var fit0 = document.createElement('div')
+        fit0.style.cssText = 'position:absolute;left:50%;top:50%;width:' + W0 + 'px;height:' + H0 + 'px;overflow:hidden;background:' + bg0 + ';font-family:' + fam(th0.fontFamily, 'sans-serif') + ';transform:translate(-50%,-50%) scale(calc(min(100vw,' + ((W0 / H0) * 100).toFixed(4) + 'vh) / ' + W0 + 'px))'
+        var els0 = sl0.elements || []
+        for (var i0 = 0; i0 < els0.length; i0++) {
+          var e0 = els0[i0]; if (!e0 || typeof e0 !== 'object') continue
+          var n0 = document.createElement('div')
+          var st0 = 'position:absolute;left:' + num(e0.x, 0) + 'px;top:' + num(e0.y, 0) + 'px;width:' + num(e0.w, 10) + 'px;height:' + num(e0.h, 10) + 'px;box-sizing:border-box;opacity:' + num(e0.opacity, 1) + ';transform:rotate(' + num(e0.rotation, 0) + 'deg);overflow:hidden;'
+          if (e0.type === 'text' || e0.type === 'code') {
+            var t0 = String(e0.html || e0.content || '').replace(/<br\\s*\\/?>|<\\/(p|div|li|h[1-6])>/gi, '\\n').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+            st0 += 'display:flex;flex-direction:column;justify-content:' + (e0.valign === 'middle' ? 'center' : e0.valign === 'bottom' ? 'flex-end' : 'flex-start') + ';text-align:' + (e0.align === 'center' || e0.align === 'right' ? e0.align : 'left') + ';font-size:' + num(e0.fontSize, 24) + 'px;font-weight:' + num(e0.fontWeight, 400) + ';line-height:' + num(e0.lineHeight, 1.25) + ';color:' + col(e0.color, col(th0.color, '#111')) + ';white-space:pre-wrap;'
+            if (e0.fontFamily) st0 += 'font-family:' + fam(e0.fontFamily, 'inherit') + ';'
+            n0.appendChild(document.createTextNode(t0))
+          } else if (e0.type === 'shape' && (e0.shape === 'rect' || e0.shape === 'ellipse')) {
+            st0 += 'background:' + col(e0.fill, 'transparent') + ';border-radius:' + (e0.shape === 'ellipse' ? '50%' : num(e0.radius, 0) + 'px') + ';'
+          } else if (e0.type === 'image' || e0.type === 'media' || e0.type === 'svg' || e0.type === 'chart' || e0.type === 'table' || e0.type === 'embed') {
+            st0 += 'background:linear-gradient(135deg,' + accent0 + '2E,' + accent0 + '12);border-radius:' + num(e0.radius, 0) + 'px;'
+          } else continue
+          n0.style.cssText = st0
+          fit0.appendChild(n0)
+        }
+        box0.appendChild(fit0)
+        sp0.appendChild(box0)
+        sp0.setAttribute('data-bento-still', '1')
+        try { performance.mark('bento-still-approx') } catch (e) {}
+      }
+    }
+  } catch (e) {}
+`
 if (!['native', 'auto', 'js'].includes(inflateMode)) throw new Error(`--inflate must be native, auto or js, got ${inflateMode}`)
 const INFLATE_JS = inflateMode === 'native' ? '' : (() => {
   const { execFileSync } = createRequire(import.meta.url)('node:child_process')
@@ -417,7 +468,7 @@ const DIAG = `
   document.addEventListener('securitypolicyviolation', function (e) { say('CSP violation: ' + e.violatedDirective + ' blocked ' + e.blockedURI + (e.sample ? ' sample ' + e.sample : '')) })
 `
 const loader = `
-(async () => {${diag ? DIAG : ''}
+(async () => {${diag ? DIAG : ''}${stillMode === 'approx' ? STILL_APPROX : ''}${process.argv.includes('--halt') ? '\n  return /* --halt: spike measurement build, stops after the splash */' : ''}
   var violations = 0
   document.addEventListener('securitypolicyviolation', function () { violations++ })
   var fail = function (msg) {
@@ -626,7 +677,7 @@ const out = `<!DOCTYPE html>
 // sanity: script-close count must equal script tag count (splice invariant)
 const closes = out.split('</scr' + 'ipt>').length - 1
 const opens = (out.match(/<script[\s>]/g) ?? []).length
-if (closes !== opens) throw new Error(`script tag imbalance: ${opens} opens, ${closes} closes`)
+if (closes !== opens) { if (process.env.BENTO_DUMP) writeFileSync(process.env.BENTO_DUMP, out); throw new Error(`script tag imbalance: ${opens} opens, ${closes} closes`) }
 
 writeFileSync(path, out)
 const kb = (n) => `${Math.round(n / 1024)}KB`
