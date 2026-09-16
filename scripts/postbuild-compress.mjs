@@ -28,7 +28,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
-import { encode as b86encode, LOADER_DECODER as B86_DECODER, FORBIDDEN } from './lib/b86.mjs'
+import { encode as b86encode, LOADER_DECODER as B86_DECODER, FORBIDDEN, ALPHABET } from './lib/b86.mjs'
 
 /**
  * ZOPFLI, not zlib.
@@ -369,7 +369,19 @@ const DIAG = `
   var probe = function (name, fn) { try { var v = fn(); say(name + ': ' + v) } catch (e) { say(name + ': THROWS ' + (e && e.name) + ' ' + (e && e.message)) } }
   var st0 = document.getElementById('bento-diag-static'); if (st0) st0.remove()
   say('bento loader diag ' + new Date().toISOString() + ' — the loader ran (the static "loader did not run" line was removed by its first statement)')
-  var pl = function (id) { var el = document.getElementById(id); if (!el) return 'NOT FOUND'; var t = (el.content ? el.content.textContent : el.textContent) || ''; return 'found <' + el.tagName.toLowerCase() + (el.type ? ' type=' + el.type : '') + '> text length ' + t.length }
+  var pl = function (id) {
+    var el = document.getElementById(id); if (!el) return 'NOT FOUND'
+    var t = (el.content ? el.content.textContent : el.textContent) || ''
+    var expect = el.getAttribute('data-len')
+    var line = 'found <' + el.tagName.toLowerCase() + (el.type ? ' type=' + el.type : '') + '> text length ' + t.length + (expect ? ' (built as ' + expect + (String(t.length) === expect ? ', same' : ', DIFFERS by ' + (t.length - Number(expect))) + ')' : '')
+    var raw = t.trim()
+    if (raw.length !== t.length) line += '; trimmed ' + (t.length - raw.length) + ' whitespace chars'
+    var alpha = (el.type === 'bento/deflate-b86') ? ${JSON.stringify(ALPHABET)} : 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
+    for (var i = 0; i < raw.length; i++) {
+      if (alpha.indexOf(raw.charAt(i)) < 0) { line += '; FIRST BAD CHAR at index ' + i + ': code ' + raw.charCodeAt(i) + ' ' + JSON.stringify(raw.charAt(i)) + ' around ' + JSON.stringify(raw.slice(Math.max(0, i - 8), i + 9)); return line }
+    }
+    return line + '; every char in the alphabet'
+  }
   say('payload js (#bento-rt): ' + pl('bento-rt'))
   say('payload css (#bento-rt-css): ' + pl('bento-rt-css'))
   probe('typeof DecompressionStream', function () { return typeof DecompressionStream })
@@ -409,7 +421,9 @@ const loader = `
   var inflate = async function (id) {
     var el = document.getElementById(id)
     var txt = (el.content ? el.content.textContent : el.textContent).trim()
-    var bytes = ${encoding === 'b86' ? 'b86decode(txt)' : "Uint8Array.from(atob(txt), function (c) { return c.charCodeAt(0) })"}
+    var bytes
+    try { bytes = ${encoding === 'b86' ? 'b86decode(txt)' : "Uint8Array.from(atob(txt), function (c) { return c.charCodeAt(0) })"} }
+    catch (e) {${diag ? ` say('DECODE FAILED for #' + id + ': ' + (e && e.name) + ': ' + (e && e.message));` : ''} throw e }
     var text
     if (${inflateMode === 'js' ? 'true' : inflateMode === 'auto' ? "typeof DecompressionStream === 'undefined'" : 'false'}) {
       text = new TextDecoder().decode(inflateRaw(bytes))${diag ? `
@@ -583,8 +597,8 @@ const out = `<!DOCTYPE html>
     <div id="app"></div>
     ${carrier === 'template' ? `<template id="bento-rt-css" data-bento-payload="css">${cssB64}</template>
     <template id="bento-rt" data-bento-payload="js">${jsB64}</template>` : carrier === 'textplain' ? `<script id="bento-rt-css" type="text/plain" data-bento-payload="css" data-bento-encoding="${encoding}">${cssB64}</script>
-    <script id="bento-rt" type="text/plain" data-bento-payload="js">${jsB64}</script>` : `<script id="bento-rt-css" type="${PAYLOAD_TYPE}">${cssB64}</script>
-    <script id="bento-rt" type="${PAYLOAD_TYPE}">${jsB64}</script>`}
+    <script id="bento-rt" type="text/plain" data-bento-payload="js">${jsB64}</script>` : `<script id="bento-rt-css" type="${PAYLOAD_TYPE}" data-len="${cssB64.length}">${cssB64}</script>
+    <script id="bento-rt" type="${PAYLOAD_TYPE}" data-len="${jsB64.length}">${jsB64}</script>`}
     <script>${loader}</script>
   </body>
 </html>
