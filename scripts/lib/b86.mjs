@@ -10,11 +10,12 @@
 // so the text is also safe inside an attribute or a JS string. Space is not
 // in the alphabet, so a run of payload never wraps or tokenises.
 //
-// Groups: 4 bytes → 5 chars (86^5 = 4,704,270,176 > 2^32): 6.43 bits per
+// Groups: 4 bytes → 5 chars (86^5 = 4,704,270,176 > 2^32): 6.4 bits per
 // character, so a payload costs ×1.25 against base64's ×1.333 — 6.25%
-// smaller. A 7-byte → 9-char group (86^9 > 2^56) would reach 6.22 bits per
-// character, another 2.8%, at the cost of 56-bit arithmetic in the decoder;
-// measured and declined in postbuild-compress (see the DECISIONS entry).
+// smaller. The limit for 86 symbols is log2(86) = 6.43 bits per character,
+// so 4→5 is within 0.4% of it; a 7-byte → 9-char group would be WORSE
+// (6.22 bits per character) — larger groups buy nothing here, and 32-bit
+// arithmetic is all the decoder needs.
 //
 // Tail: the last partial group of n bytes (1–3) is padded with zero bytes,
 // encoded, and n+1 characters are emitted; a decoder pads the missing
@@ -95,13 +96,15 @@ export const LOADER_DECODER = `
   var b86decode = function (t) {
     var n = t.length, full = (n / 5) | 0, rest = n - full * 5
     var out = new Uint8Array(full * 4 + (rest ? rest - 1 : 0)), o = 0, i = 0, v
+    // a character outside the alphabet is an error, never a guess
+    var c = function (j) { var x = t.charCodeAt(j), y = x < 128 ? b86v[x] : -1; if (y < 0) throw new Error('base86: bad character code ' + x + ' at index ' + j); return y }
     for (; i + 5 <= n; i += 5) {
-      v = (((b86v[t.charCodeAt(i)] * 86 + b86v[t.charCodeAt(i + 1)]) * 86 + b86v[t.charCodeAt(i + 2)]) * 86 + b86v[t.charCodeAt(i + 3)]) * 86 + b86v[t.charCodeAt(i + 4)]
+      v = (((c(i) * 86 + c(i + 1)) * 86 + c(i + 2)) * 86 + c(i + 3)) * 86 + c(i + 4)
       out[o++] = (v / 16777216) & 255; out[o++] = (v >>> 16) & 255; out[o++] = (v >>> 8) & 255; out[o++] = v & 255
     }
     if (rest) {
       v = 0
-      for (var k = 0; k < 5; k++) v = v * 86 + (k < rest ? b86v[t.charCodeAt(i + k)] : 85)
+      for (var k = 0; k < 5; k++) v = v * 86 + (k < rest ? c(i + k) : 85)
       var tail = [(v / 16777216) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255]
       for (var k2 = 0; k2 < rest - 1; k2++) out[o++] = tail[k2]
     }
