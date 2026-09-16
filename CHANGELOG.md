@@ -18,8 +18,11 @@ pre-1.0.
   inline script first, and only if a policy turns that down does it fall
   back to `new Function`, then to the blob import — measured in Teams with
   seven variants. Inside such a viewer the frame has no storage, so
-  autosave and preferences do not persist there, and its policy blocks the
-  update check; the deck itself opens, presents and saves.
+  autosave and preferences do not persist there, and its policy blocks every
+  connection — so inside an embedded view the app makes no request at all:
+  no update check at launch, no language-pack listing, no live-session
+  socket; the About dialog says so. The deck itself opens, presents and
+  saves.
 - **Every file is about 38 KB smaller.** The runtime's two compressed blocks
   used to be base64; they are now base86 — 86 printable characters chosen so
   the text can never close or comment out the block that carries it — which

@@ -923,4 +923,5 @@ export const it: Catalog = {
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "La stessa presentazione senza alcun valore predefinito: la forma che un agente IA dovrebbe scrivere. «Sostituisci da JSON» la riprende; il file salvato è sempre completo.",
   "Compact JSON copied": "JSON compatto copiato",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Caricato: {dropped} campi scartati, {warnings} avvisi — vedi la console",
+  "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "In una vista incorporata gli aggiornamenti non vengono controllati — apri il file in una scheda del browser per controllare.",
 }

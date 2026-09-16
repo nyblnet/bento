@@ -923,4 +923,5 @@ export const ja: Catalog = {
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "既定値をすべて省いた同じデッキ。AI エージェントが書くべき形です。「JSON から置き換え」で戻せます。保存されるファイルは常に完全な形です。",
   "Compact JSON copied": "コンパクトな JSON をコピーしました",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "読み込み完了: {dropped} 個のフィールドを破棄、警告 {warnings} 件 — コンソールを確認",
+  "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "埋め込み表示ではアップデートを確認しません — 確認するにはファイルをブラウザーのタブで開いてください。",
 }

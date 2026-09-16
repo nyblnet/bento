@@ -934,4 +934,5 @@ export const strings: Catalog = {
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Tüm varsayılanlar çıkarılmış aynı deste — bir yapay zekâ ajanının yazması gereken biçim. “JSON'dan değiştir” geri alır; kaydedilen dosya her zaman tamdır.",
   "Compact JSON copied": "Kompakt JSON kopyalandı",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Yüklendi: {dropped} alan atıldı, {warnings} uyarı — konsola bakın",
+  "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Gömülü görünümde güncellemeler denetlenmez — denetlemek için dosyayı bir tarayıcı sekmesinde açın.",
 }

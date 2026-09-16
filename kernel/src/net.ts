@@ -42,6 +42,37 @@ export class OfflineError extends Error {
   }
 }
 
+/** Thrown by netFetch/netWebSocket inside an embedded view (see sandboxed). */
+export class SandboxedError extends Error {
+  constructor(what = 'the network') {
+    super(`This file is open inside an embedded view — not reaching ${what}.`)
+    this.name = 'SandboxedError'
+  }
+}
+
+/**
+ * Is this document an EMBEDDED VIEW — a sandboxed frame without
+ * allow-same-origin, the way Microsoft Teams / SharePoint open an attachment?
+ * Two signs, either is enough: an opaque origin (`location.origin === 'null'`),
+ * or the first storage read throwing a SecurityError. Such a frame's policy
+ * blocks every connection (`connect-src 'none'`) and, in the preview pane,
+ * treats every reported violation as fatal — so nothing here may reach the
+ * network at all: no launch update check, no language-pack listing, no relay
+ * socket. Remote media in the document itself is loaded by the browser from a
+ * src attribute and is not ours to gate (it is the reader's own document).
+ * Decided once; a frame's sandboxing does not change while it lives.
+ */
+let sandboxFlag: boolean | null = null
+export const sandboxed = (): boolean => {
+  if (sandboxFlag !== null) return sandboxFlag
+  let opaque = false
+  try { opaque = typeof location !== 'undefined' && location.origin === 'null' } catch { opaque = true }
+  let storageThrows = false
+  try { void globalThis.localStorage } catch (e) { storageThrows = !!e && (e as { name?: string }).name === 'SecurityError' }
+  sandboxFlag = opaque || storageThrows
+  return sandboxFlag
+}
+
 /**
  * Set for THIS session once anyone flips the switch, so the guarantee holds
  * even where the preference cannot be stored. Storage-blocked contexts are
@@ -120,6 +151,7 @@ export function startNetGuard(): void {
 
 /** fetch(), refused when offline and abortable the moment the switch flips. */
 export async function netFetch(input: string | URL, init: RequestInit = {}): Promise<Response> {
+  if (sandboxed()) throw new SandboxedError(String(input))
   if (offlineEnabled()) throw new OfflineError(String(input))
   const ac = new AbortController()
   inFlight.add(ac)
@@ -137,6 +169,7 @@ export async function netFetch(input: string | URL, init: RequestInit = {}): Pro
 
 /** new WebSocket(), refused when offline and closed the moment the switch flips. */
 export function netWebSocket(url: string): WebSocket {
+  if (sandboxed()) throw new SandboxedError(url)
   if (offlineEnabled()) throw new OfflineError(url)
   const ws = new WebSocket(url)
   sockets.add(ws)

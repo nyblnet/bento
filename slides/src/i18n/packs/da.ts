@@ -935,4 +935,5 @@ export const strings: Catalog = {
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Samme dæk uden alle standardværdier — den form en AI-agent bør skrive. »Erstat fra JSON« tager den tilbage; den gemte fil er altid fuldstændig.",
   "Compact JSON copied": "Kompakt JSON kopieret",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Indlæst: {dropped} felter udeladt, {warnings} advarsler — se konsollen",
+  "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Opdateringer tjekkes ikke i en indlejret visning — åbn filen i en browserfane for at tjekke.",
 }

@@ -7122,9 +7122,19 @@ as opt-in flags (`--carrier`, `--inflate`), built because the delivery of
 the payload was once the hypothesis; the diagnostic panel showed the
 payload found and inflated in Teams, so neither is needed there.
 
-**Stated to users.** Inside such a frame storage throws, so autosave and
-preferences do not persist, and `connect-src 'none'` silences the update
-check — both survivable, both in the changelog line. Previews are untouched:
+**No request from an embedded view.** The open-pane diagnostic panel, read
+in Teams, ended with `connect-src` violations for the launch update check —
+harmless in the open pane, fatal in the preview pane. kernel `net.ts` now
+decides once at boot whether the document is an embedded view (an opaque
+origin, or a storage read throwing `SecurityError`) and `netFetch` /
+`netWebSocket` — the one place the app touches the network — refuse before
+any request; the launch check, the relay join and the pack listing never
+start, the About dialog says "Updates are not checked inside an embedded
+view", and `window.bento.sandboxed` exposes the decision. Measured: a plain
+tab makes exactly one manifest request at launch; the sandboxed frames make
+none and raise no violation after boot over five seconds. Storage still does
+not persist there — autosave and preferences are per visit — and that is
+stated in the changelog line. Previews are untouched:
 `preview.ts`, the remover and the gate's preview-carrying-shell invariant
 are not part of this change, and the thumbnailers that render the preview
 run no script at all.

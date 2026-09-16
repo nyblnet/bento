@@ -952,4 +952,5 @@ export const strings: Catalog = {
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Ang parehong deck na wala ang lahat ng default — ang anyong dapat isulat ng isang AI agent. Tinatanggap ito ng “Palitan mula sa JSON”; ang na-save na file ay laging buo.",
   "Compact JSON copied": "Nakopya ang compact na JSON",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Na-load: {dropped} field ang inalis, {warnings} babala — tingnan ang console",
+  "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Hindi sinusuri ang mga update sa loob ng naka-embed na view — buksan ang file sa isang tab ng browser para suriin.",
 }

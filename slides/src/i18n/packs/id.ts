@@ -933,4 +933,5 @@ export const strings: Catalog = {
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Dek yang sama tanpa semua nilai bawaan — bentuk yang seharusnya ditulis agen AI. “Ganti dari JSON” menerimanya kembali; berkas yang disimpan selalu lengkap.",
   "Compact JSON copied": "JSON ringkas disalin",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Dimuat: {dropped} bidang dibuang, {warnings} peringatan — lihat konsol",
+  "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Pembaruan tidak diperiksa di dalam tampilan tersemat — buka berkas di tab browser untuk memeriksa.",
 }

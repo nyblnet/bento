@@ -112,5 +112,28 @@ ok(/data-bento-transient/.test(loader) && /b86decode/.test(loader) && !/atob\(/.
 ok(!/<\/scr\x69pt>/.test(loader), 'no script-close inside the loader')
 rmSync(dir, { recursive: true, force: true })
 
+console.log('\nan embedded view makes no request\n')
+// kernel net.ts decides once: an opaque origin, or a storage read throwing
+// SecurityError, means a sandboxed frame — and then netFetch/netWebSocket
+// refuse before touching the network, so a frame whose policy is
+// connect-src 'none' raises no violation after boot (Teams' preview pane
+// treats one as fatal). Behavioural, in child processes, because the
+// decision is cached per process.
+const netPath = join(root, 'kernel/src/net.ts')
+const probe = (setup: string) => execFileSync(process.execPath, ['--input-type=module', '-e', `${setup}\nconst m = await import(${JSON.stringify('file://' + netPath)}); const out = { sandboxed: m.sandboxed() }; try { await m.netFetch('https://example.invalid/x'); out.fetch = 'went out' } catch (e) { out.fetch = e.name } try { m.netWebSocket('wss://example.invalid/x'); out.ws = 'opened' } catch (e) { out.ws = e.name } console.log(JSON.stringify(out))`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+const plain = JSON.parse(probe('globalThis.location = { origin: "http://127.0.0.1:1" }; globalThis.WebSocket = class { constructor() {} addEventListener() {} }; globalThis.fetch = async () => { throw new TypeError("no network in this test") }'))
+ok(plain.sandboxed === false && plain.fetch === 'TypeError' && plain.ws === 'opened', `a plain document: not sandboxed, requests go out (${JSON.stringify(plain)})`)
+const opaque = JSON.parse(probe('globalThis.location = { origin: "null" }; globalThis.WebSocket = class { constructor() { throw new Error("must not be constructed") } }; globalThis.fetch = async () => { throw new Error("must not be called") }'))
+ok(opaque.sandboxed === true && opaque.fetch === 'SandboxedError' && opaque.ws === 'SandboxedError', `an opaque origin: sandboxed, fetch and WebSocket refused before the network (${JSON.stringify(opaque)})`)
+const blocked = JSON.parse(probe('globalThis.location = { origin: "http://127.0.0.1:1" }; Object.defineProperty(globalThis, "localStorage", { get() { const e = new Error("blocked"); e.name = "SecurityError"; throw e } }); globalThis.fetch = async () => { throw new Error("must not be called") }; globalThis.WebSocket = class { constructor() { throw new Error("no") } }'))
+ok(blocked.sandboxed === true && blocked.fetch === 'SandboxedError', `a storage read throwing SecurityError: sandboxed, refused (${JSON.stringify(blocked)})`)
+const editorSrc = readFileSync(join(root, 'slides/src/editor/editor.ts'), 'utf8')
+ok(/autoCheckEnabled\(\) \|\| offlineEnabled\(\) \|\| sandboxed\(\)\) return/.test(editorSrc), 'the launch update check is skipped when sandboxed — one request otherwise, none inside an embedded view')
+ok(/private tryJoin\(\) \{[\s\S]{0,200}if \(sandboxed\(\)\) return/.test(editorSrc), 'the relay join is skipped when sandboxed (no socket, no retry loop)')
+ok(/Updates are not checked inside an embedded view/.test(editorSrc) && /checkB\.disabled = sandboxed\(\)/.test(editorSrc), 'the About dialog says so and disables the manual check')
+ok(/sandboxed: sandboxed\(\),/.test(readFileSync(join(root, 'slides/src/main.ts'), 'utf8')), 'window.bento.sandboxed exposes the decision')
+const netSrc = readFileSync(netPath, 'utf8')
+ok((netSrc.match(/if \(sandboxed\(\)\) throw new SandboxedError/g) ?? []).length === 2, 'both primitives check sandboxed() first — the one place the app touches the network')
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

@@ -933,4 +933,5 @@ export const strings: Catalog = {
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "Cùng bộ trang chiếu nhưng bỏ mọi giá trị mặc định: dạng mà một tác tử AI nên viết. “Thay thế từ JSON” nhận lại nó; tệp đã lưu luôn đầy đủ.",
   "Compact JSON copied": "Đã sao chép JSON gọn",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Đã tải: bỏ {dropped} trường, {warnings} cảnh báo — xem console",
+  "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Không kiểm tra cập nhật trong chế độ xem nhúng — mở tệp trong một thẻ trình duyệt để kiểm tra.",
 }

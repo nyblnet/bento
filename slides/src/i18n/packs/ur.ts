@@ -953,4 +953,5 @@ export const strings: Catalog = {
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "وہی ڈیک، ہر ڈیفالٹ ہٹا کر — وہ شکل جو ایک AI ایجنٹ کو لکھنی چاہیے۔ “JSON سے بدلیں” اسے واپس لیتا ہے؛ محفوظ شدہ فائل ہمیشہ مکمل ہوتی ہے۔",
   "Compact JSON copied": "کمپیکٹ JSON کاپی ہو گیا",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "لوڈ ہو گیا: {dropped} فیلڈز ہٹائے گئے، {warnings} انتباہات — کنسول دیکھیں",
+  "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "ایمبیڈڈ منظر میں اپ ڈیٹس کی جانچ نہیں ہوتی — جانچ کے لیے فائل کو براؤزر ٹیب میں کھولیں۔",
 }

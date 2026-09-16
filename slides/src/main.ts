@@ -15,7 +15,7 @@ import {
 } from './save'
 import { maybeShowReturnGate } from './editor/returngate'
 import { buildSlidePreview } from './preview'
-import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
+import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate, sandboxed } from './update'
 import { i18nApi, t, applyDirection } from './i18n'
 import { parseDoc, type BentoDoc, type TextElement } from './model'
 import { compactJson } from './compact'
@@ -389,6 +389,10 @@ if (location.hash === '#present') {
    * returns the updated file's html (this doc inside the new shell);
    * apply() downloads it. check(url) accepts an override for testing.
    */
+  /** true inside an embedded view (a sandboxed frame — Teams, SharePoint):
+   *  no update check, no network at all from the app; storage does not
+   *  persist. Decided once at boot by kernel net.ts sandboxed(). */
+  sandboxed: sandboxed(),
   updates: {
     version: APP_VERSION,
     check: (url?: string) => checkForUpdates(url),

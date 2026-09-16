@@ -927,4 +927,5 @@ export const strings: Catalog = {
   "The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.": "모든 기본값을 뺀 같은 덱 — AI 에이전트가 작성해야 할 형태입니다. “JSON에서 바꾸기”로 되돌릴 수 있으며, 저장되는 파일은 항상 완전한 형태입니다.",
   "Compact JSON copied": "간결한 JSON을 복사했습니다",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "불러옴: 필드 {dropped}개 삭제됨, 경고 {warnings}건 — 콘솔 참조",
+  "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "임베디드 보기에서는 업데이트를 확인하지 않습니다 — 확인하려면 파일을 브라우저 탭에서 여세요.",
 }

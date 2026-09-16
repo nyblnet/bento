@@ -41,7 +41,7 @@ export const APP_VERSION: string = typeof __APP_VERSION__ !== 'undefined' ? __AP
  * Re-exported here because this has been update.ts's public surface since
  * 0.9.x and shipped code imports it from here.
  */
-export { offlineEnabled, setOffline, OfflineError, startNetGuard } from './net.ts'
+export { offlineEnabled, setOffline, OfflineError, startNetGuard, sandboxed, SandboxedError } from './net.ts'
 
 export const autoCheckEnabled = (): boolean => lsGet('bento-auto-check') !== 'off'
 export const setAutoCheck = (on: boolean): void => {

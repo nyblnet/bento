@@ -13,7 +13,7 @@ import {
   type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
 import type { InPlaceOutcome } from '../update'
-import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, setAutoCheck, setOffline } from '../update'
+import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, sandboxed, setAutoCheck, setOffline } from '../update'
 import { CHART_PRESETS } from '../charts'
 import { renderSlide, renderThumbnail } from '../render'
 import { openExportImagesDialog } from './exportimages'
@@ -167,6 +167,8 @@ export class Editor {
   /** Connect to the relay if the current doc is live AND share-eligible. */
   private tryJoin() {
     if (!this.session) return
+    // an embedded view blocks every connection: no relay socket, no retry loop
+    if (sandboxed()) return
     if (sharingOn(this.store) && this.session.shareEligible() && !onlineTransport()) {
       joinFromDoc(this.session, this.store)
       this.wireOnlineStatus()
@@ -306,7 +308,9 @@ export class Editor {
     this.updatesB = btn(ICONS.sync, '', () => this.openAbout(true), t('Check for updates'))
     this.updatesB.style.display = 'none'
     setTimeout(async () => {
-      if (!autoCheckEnabled() || offlineEnabled()) return
+      // an embedded view (Teams, SharePoint) blocks every connection and its
+      // preview pane treats a reported refusal as fatal: no request at all
+      if (!autoCheckEnabled() || offlineEnabled() || sandboxed()) return
       const r = await checkForUpdates()
       this.lastAutoCheck = r
       if (r.status === 'update') {
@@ -3307,7 +3311,9 @@ export class Editor {
 
     const status = div('ed-about-status')
     status.textContent =
-      this.lastAutoCheck?.status === 'current'
+      sandboxed()
+        ? t('Updates are not checked inside an embedded view — open the file in a browser tab to check.')
+        : this.lastAutoCheck?.status === 'current'
         ? t("Checked automatically at launch — you're on the latest version (v{v}).", { v: APP_VERSION })
         : this.lastAutoCheck?.status === 'error'
           ? t("Launch check couldn't reach the release server ({m}). Check manually below.", { m: this.lastAutoCheck.message })
@@ -3317,6 +3323,7 @@ export class Editor {
     const checkB = document.createElement('button')
     checkB.className = 'ed-btn'
     checkB.textContent = t('Check for updates')
+    checkB.disabled = sandboxed() // nothing to check from inside an embedded view
     checkB.addEventListener('click', async () => {
       checkB.disabled = true
       status.textContent = t('Checking…')
