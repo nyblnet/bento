@@ -874,11 +874,11 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   --r-background-color: #000;
   --r-main-color: #fff;
   --r-main-font-size: 32px;
-  --r-link-color: #f7a600;
+  --r-link-color: var(--accent);
   --r-link-color-hover: #ffc23e;
-  --r-selection-background-color: #f7a600;
+  --r-selection-background-color: var(--accent);
   --r-controls-color: rgb(255 255 255 / 0.6);
-  --r-progress-color: #f7a600;
+  --r-progress-color: var(--accent);
   --r-overlay-element-bg-color: 255, 255, 255;
   --r-overlay-element-fg-color: 0, 0, 0;
 }
@@ -985,7 +985,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .bento-present-overlay .bento-el[data-link] { cursor: pointer; }
 .bento-present-overlay .bento-el[data-link]:hover {
-  outline: 2.5px solid var(--bento-accent, #f7a600);
+  outline: 2.5px solid var(--bento-accent, var(--accent));
   outline-offset: 3px;
   border-radius: 999px;
 }
@@ -1615,7 +1615,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-.sv-timer:hover { color: #f7a600; }
+.sv-timer:hover { color: var(--accent); }
 .sv-clock { font-size: 15px; color: #9fb0c3; }
 .sv-count { font-size: 15px; color: #9fb0c3; font-variant-numeric: tabular-nums; }
 .sv-ctrls { margin-left: auto; display: flex; align-items: center; gap: 6px; }
@@ -1635,7 +1635,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .sv-btn:hover:not([disabled]) { background: #2a323c; color: #fff; }
 .sv-btn[disabled] { opacity: 0.35; cursor: default; }
-.sv-btn.active { background: #f7a600; border-color: #f7a600; color: #14181d; }
+.sv-btn.active { background: var(--accent); border-color: var(--accent); color: #14181d; }
 .sv-main { display: flex; gap: 22px; padding: 14px 22px; align-items: flex-start; flex: 1; min-height: 0; }
 .sv-frame {
   position: relative;
@@ -1696,7 +1696,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   overflow: hidden;
 }
 .sv-thumb:hover { border-color: #4a5a72; }
-.sv-thumb.current { border-color: #f7a600; }
+.sv-thumb.current { border-color: var(--accent); }
 .sv-thumb .sv-frame { box-shadow: none; border-radius: 0; }
 .sv-thumb-n {
   position: absolute;
@@ -1712,7 +1712,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   line-height: 1.4;
   text-align: center;
 }
-.sv-thumb.current .sv-thumb-n { background: #f7a600; color: #14181d; }
+.sv-thumb.current .sv-thumb-n { background: var(--accent); color: #14181d; }
 .sv-grid {
   position: fixed;
   inset: 0;
@@ -1781,7 +1781,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   opacity: 0.85;
 }
 .bento-follow-chip:hover { opacity: 1; }
-.bento-follow-chip.following { border-color: var(--bento-accent, #f7a600); }
+.bento-follow-chip.following { border-color: var(--bento-accent, var(--accent)); }
 .bento-follow-chip[disabled] { cursor: default; opacity: 0.7; }
 /* Status card: waiting for the presenter / the show has ended / ticket dead. */
 .bento-show-card {

@@ -11,6 +11,13 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **One brand yellow.** Ten places in the editor chrome — the speaker view's
+  timer, buttons and current thumbnail, the show's link, selection and
+  progress colours, the follow chip, and the path editor's anchor dots —
+  carried their own copy of the accent instead of reading the chrome's
+  `--accent` token. They read the token now; nothing looks different. The
+  slide-list highlight already did. The deck's own `theme.accent` is a
+  separate thing and stays separate: chrome does not recolour per deck.
 - **A deck opens inside Teams and SharePoint again.** Their viewer refuses
   the way 1.1.0's file started itself (a script loaded from a `blob:` URL).
   The file now starts the way nothing refuses: the runtime is inserted as an
