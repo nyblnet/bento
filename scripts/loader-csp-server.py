@@ -27,6 +27,13 @@ if '--no-eval-inline' in sys.argv:
     # inline allowed, eval refused: the eval probe must throw synchronously
     # and the cascade must take the inline path with no wait
     CSP = "script-src 'unsafe-inline' 'self'; default-src 'self' data: 'unsafe-inline'; img-src * data: blob:; media-src * data: blob:; font-src * data:; style-src 'unsafe-inline' 'self'"
+if '--preview' in sys.argv:
+    # Teams' PREVIEW pane as inferred: inline script allowed, no eval, no blob,
+    # a names-only trusted-types allowlist, sandboxed; and the pane treats any
+    # reported violation as fatal — which a header cannot simulate, so the
+    # local assertion is "zero violation events".
+    CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; "
+           "font-src data: blob:; media-src data: blob:; connect-src 'none'; worker-src 'none'; sandbox allow-scripts; trusted-types somename")
 TT_NAMES_ONLY = None
 if '--tt-names' in sys.argv:
     # an allowlist WITHOUT require-trusted-types-for: sinks take strings, but

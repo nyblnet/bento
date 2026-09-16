@@ -114,7 +114,16 @@ const titleFallback = flag('title', 'bento/slides')
 // found this: the shipped shell showed its splash and nothing else there).
 // The bundle is byte-identical either way; only the 1KB loader differs.
 const loaderMode = flag('loader', 'blob')
-if (!['blob', 'inline', 'inline-tt', 'cascade', 'cascade-inline-first', 'cascade-eager-tt'].includes(loaderMode)) throw new Error(`--loader must be blob, inline, inline-tt, cascade, cascade-inline-first or cascade-eager-tt, got ${loaderMode}`)
+if (!['blob', 'inline', 'inline-tt', 'cascade', 'cascade-eval-first', 'cascade-eager-tt'].includes(loaderMode)) throw new Error(`--loader must be blob, inline, inline-tt, cascade, cascade-eval-first or cascade-eager-tt, got ${loaderMode}`)
+// NO PROBING. Teams has two panes with two policies: the preview pane allows
+// inline script insertion outright and treats ANY reported CSP violation as
+// fatal (a refused blob import, a refused createPolicy, a refused eval probe
+// — each one blued the preview); the open pane hashes the file's inline
+// scripts and allows eval. So `cascade` does the one thing that is refused
+// nowhere first — insert the inline module, exactly as the plain inline
+// loader — and only on a violation attributed to that attempt falls to
+// new Function, then to the blob import. `cascade-eval-first` is the earlier
+// order, kept for the record.
 // Trusted Types are LAZY in `cascade`: no createPolicy at boot. Only when a
 // sink throws the TypeError that names TrustedScript/TrustedHTML are the
 // policies (bento + default) installed and that step retried once. An eager
@@ -364,6 +373,8 @@ const DIAG = `
 `
 const loader = `
 (async () => {${diag ? DIAG : ''}
+  var violations = 0
+  document.addEventListener('securitypolicyviolation', function () { violations++ })
   var fail = function (msg) {
     var d = document.createElement('div')
     d.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0D1B2E;color:#F2F0EA;font:16px/1.6 sans-serif;text-align:center;padding:40px;z-index:99999'
@@ -410,7 +421,7 @@ const loader = `
     st.textContent = css
     document.head.appendChild(st)
     var js = await inflate('bento-rt')
-    ${['cascade', 'cascade-inline-first', 'cascade-eager-tt'].includes(loaderMode) ? `var tried = [], path = null, tt = 'none'
+    ${['cascade', 'cascade-eval-first', 'cascade-eager-tt'].includes(loaderMode) ? `var tried = [], path = null, tt = 'none'
     var installTT = function () {
       if (tt !== 'none' || !(window.trustedTypes && window.trustedTypes.createPolicy)) return
       tt = 'installed'
@@ -470,9 +481,10 @@ const loader = `
       // function body; 'use strict' restores module semantics and the
       // sourceURL names it in DevTools (stacks say bento-slides.js, not
       // "anonymous")
-      new Function("'use strict';" + js + "\\n//# sourceURL=bento-slides.js")()
+      var run = function () { new Function("'use strict';" + js + "\\n//# sourceURL=bento-slides.js")() }
+      try { run() } catch (e) { if (!needsTT(e)) throw e; tried.push('function sink: ' + (e && e.message)); installTT(); run() }
     }
-    ${loaderMode !== 'cascade-inline-first' ? `var evalOk = false
+    ${loaderMode === 'cascade-eval-first' ? `var evalOk = false
     try { new Function(''); evalOk = true } catch (e) {
       // under Trusted Types, new Function is itself a sink: install and re-probe once
       if (needsTT(e)) { tried.push('eval probe sink: ' + (e && e.message)); installTT(); try { new Function(''); evalOk = true } catch (e2) { e = e2 } }
@@ -486,7 +498,7 @@ const loader = `
       import(url).catch(function (e) { throw e })
     })
     if (!path) throw new Error('every loader path was refused: ' + tried.join('; '))
-    if (window.bento) window.bento.loader = { path: path, tried: tried, tt: tt }` : loaderMode !== 'blob' ? `// inline module: allowed under CSP 'unsafe-inline', needs no blob: source.
+    if (window.bento) window.bento.loader = { path: path, tried: tried, tt: tt, violations: violations }` : loaderMode !== 'blob' ? `// inline module: allowed under CSP 'unsafe-inline', needs no blob: source.
     // Transient like the style above — a save must never write the inflated
     // bundle back as plaintext (serializeBody strips marked nodes).
     var sc = document.createElement('script')
