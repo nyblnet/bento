@@ -106,7 +106,7 @@ if (doGallery) {
 const shellFile = join(site, 'releases/slides/Bento_Slides.bento.html')
 if (existsSync(shellFile)) {
   const appHash = (file) => {
-    const blocks = [...readFileSync(file, 'utf8').matchAll(/type="bento\/deflate-b64"[^>]*>([A-Za-z0-9+/=]+)</g)].map((m) => m[1])
+    const blocks = [...readFileSync(file, 'utf8').matchAll(/type="bento\/deflate-b(?:64|86)"[^>]*>([^<]+)</g)].map((m) => m[1])
     return blocks.length ? createHash('sha256').update(blocks.join('')).digest('hex') : null
   }
   const shellHash = appHash(shellFile)

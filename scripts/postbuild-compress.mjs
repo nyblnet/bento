@@ -28,6 +28,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
+import { encode as b86encode, LOADER_DECODER as B86_DECODER, FORBIDDEN } from './lib/b86.mjs'
 
 /**
  * ZOPFLI, not zlib.
@@ -106,14 +107,14 @@ const flag = (name, fallback) => {
 }
 const generator = flag('generator', 'bento-slides')
 const titleFallback = flag('title', 'bento/slides')
-// How the inflated runtime is started. `blob` (the shipped default): a module
-// import from a blob: URL. `inline`: an inline <script type="module"> whose
+// How the inflated runtime is started. `cascade` (the default since 1.1.1):
+// see below. `blob` (the 1.1.0 loader): a module import from a blob: URL. `inline`: an inline <script type="module"> whose
 // textContent is the inflated bundle — no blob: URL at all, so it runs where a
 // Content-Security-Policy allows 'unsafe-inline' but not blob: (SharePoint's
 // framed HTML viewer, which Teams uses to open attachments, is the case that
 // found this: the shipped shell showed its splash and nothing else there).
 // The bundle is byte-identical either way; only the 1KB loader differs.
-const loaderMode = flag('loader', 'blob')
+const loaderMode = flag('loader', 'cascade')
 if (!['blob', 'inline', 'inline-tt', 'cascade', 'cascade-eval-first', 'cascade-eager-tt'].includes(loaderMode)) throw new Error(`--loader must be blob, inline, inline-tt, cascade, cascade-eval-first or cascade-eager-tt, got ${loaderMode}`)
 // NO PROBING. Teams has two panes with two policies: the preview pane allows
 // inline script insertion outright and treats ANY reported CSP violation as
@@ -151,6 +152,14 @@ if (!['blob', 'inline', 'inline-tt', 'cascade', 'cascade-eval-first', 'cascade-e
 // after it — for a viewer where no console can be opened. Never on by default:
 // the loader ships in every file and diag text is bytes.
 const diag = process.argv.includes('--diag')
+// The payload carrier alphabet. `b86` (default): scripts/lib/b86.mjs — 86
+// printable ASCII symbols chosen so `</script`, `<!--`, `-->`, `]]>` and `${`
+// are unproducible by construction, 4 bytes → 5 chars, 6.25% smaller than
+// base64 (block type bento/deflate-b86). `b64`: base64, the pre-1.1.1 block
+// type bento/deflate-b64, kept for comparison; every reader handles both.
+const encoding = flag('encoding', 'b86')
+if (!['b64', 'b86'].includes(encoding)) throw new Error(`--encoding must be b64 or b86, got ${encoding}`)
+const PAYLOAD_TYPE = encoding === 'b86' ? 'bento/deflate-b86' : 'bento/deflate-b64'
 // How the two deflated payloads are CARRIED in the file. `script` (shipped):
 // <script type="bento/deflate-b64">. `template`: <template data-bento-payload>
 // (its content is inert DOM, not a script, so a viewer that strips non-JS
@@ -226,9 +235,14 @@ if (!styleM) throw new Error('app stylesheet not found')
 const js = mod[1]
 const css = styleM[1]
 
-const b64 = async (s) => (await deflate(Buffer.from(s, 'utf8'))).toString('base64')
-const jsB64 = await b64(js)
-const cssB64 = await b64(css)
+const pack = async (s) => {
+  const packed = await deflate(Buffer.from(s, 'utf8'))
+  const text = encoding === 'b86' ? b86encode(new Uint8Array(packed)) : packed.toString('base64')
+  for (const f of FORBIDDEN) if (text.includes(f)) throw new Error(`payload text contains ${JSON.stringify(f)} — the carrier alphabet is not safe`)
+  return text
+}
+const jsB64 = await pack(js)
+const cssB64 = await pack(css)
 
 // --- other parts ------------------------------------------------------------
 const notice = html.match(/<!--\s*NOTICE[\s\S]*?-->/)?.[0] ?? ''
@@ -391,11 +405,11 @@ const loader = `
     fail('<b>This is a bento/dash spreadsheet.</b><br>Opening it needs a browser released in 2023 or later \\u2014 Safari 16.4+, Firefox 113+, or a current Chrome or Edge.<br><br>Nothing is lost: your data is stored as plain readable JSON inside this same file. Open it in a newer browser, or open it in a text editor and look for the block marked "bento-doc".')
     return
   }
-  ${INFLATE_JS}
+  ${INFLATE_JS}${encoding === 'b86' ? B86_DECODER : ''}
   var inflate = async function (id) {
     var el = document.getElementById(id)
-    var b64 = (el.content ? el.content.textContent : el.textContent).trim()
-    var bytes = Uint8Array.from(atob(b64), function (c) { return c.charCodeAt(0) })
+    var txt = (el.content ? el.content.textContent : el.textContent).trim()
+    var bytes = ${encoding === 'b86' ? 'b86decode(txt)' : "Uint8Array.from(atob(txt), function (c) { return c.charCodeAt(0) })"}
     var text
     if (${inflateMode === 'js' ? 'true' : inflateMode === 'auto' ? "typeof DecompressionStream === 'undefined'" : 'false'}) {
       text = new TextDecoder().decode(inflateRaw(bytes))${diag ? `
@@ -568,9 +582,9 @@ const out = `<!DOCTYPE html>
     <pre id="bento-diag-static" style="position:fixed;left:0;right:0;bottom:0;margin:0;padding:12px 16px;background:#000;color:#ff5555;font:15px/1.45 ui-monospace,Menlo,monospace;z-index:2147483647">loader did not run — this line is static markup; the loader's first statement removes it</pre>` : ''}
     <div id="app"></div>
     ${carrier === 'template' ? `<template id="bento-rt-css" data-bento-payload="css">${cssB64}</template>
-    <template id="bento-rt" data-bento-payload="js">${jsB64}</template>` : carrier === 'textplain' ? `<script id="bento-rt-css" type="text/plain" data-bento-payload="css">${cssB64}</script>
-    <script id="bento-rt" type="text/plain" data-bento-payload="js">${jsB64}</script>` : `<script id="bento-rt-css" type="bento/deflate-b64">${cssB64}</script>
-    <script id="bento-rt" type="bento/deflate-b64">${jsB64}</script>`}
+    <template id="bento-rt" data-bento-payload="js">${jsB64}</template>` : carrier === 'textplain' ? `<script id="bento-rt-css" type="text/plain" data-bento-payload="css" data-bento-encoding="${encoding}">${cssB64}</script>
+    <script id="bento-rt" type="text/plain" data-bento-payload="js">${jsB64}</script>` : `<script id="bento-rt-css" type="${PAYLOAD_TYPE}">${cssB64}</script>
+    <script id="bento-rt" type="${PAYLOAD_TYPE}">${jsB64}</script>`}
     <script>${loader}</script>
   </body>
 </html>
@@ -583,4 +597,4 @@ if (closes !== opens) throw new Error(`script tag imbalance: ${opens} opens, ${c
 
 writeFileSync(path, out)
 const kb = (n) => `${Math.round(n / 1024)}KB`
-console.log(`compressed shell: ${kb(html.length)} → ${kb(out.length)} (js ${kb(js.length)}→${kb(jsB64.length)}, css ${kb(css.length)}→${kb(cssB64.length)})`)
+console.log(`compressed shell: ${kb(html.length)} → ${kb(out.length)} (js ${kb(js.length)}→${kb(jsB64.length)}, css ${kb(css.length)}→${kb(cssB64.length)}, ${encoding})`)
