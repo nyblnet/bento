@@ -90,7 +90,7 @@ ok((built.match(/type="bento\/deflate-b86"/g) ?? []).length === 2, 'two bento/de
 ok(!/type="bento\/deflate-b64"/.test(built), 'no base64 block')
 const gate = (file: string) => { try { execFileSync(process.execPath, [join(root, 'scripts/shell-gate.mjs'), file], { encoding: 'utf8', stdio: 'pipe' }); return 'ok' } catch (e) { return String((e as { stderr?: string }).stderr ?? e) } }
 ok(gate(shellPath) === 'ok', 'the splice gate passes')
-const m = /(<script id="bento-rt-css" type="bento\/deflate-b86">)([^<]*)(<\/script>)/.exec(built)!
+const m = /(<script id="bento-rt-css" type="bento\/deflate-b86"[^>]*>)([^<]*)(<\/script>)/.exec(built)!
 const badPath = join(dir, 'bad.html')
 writeFileSync(badPath, built.slice(0, m.index + m[1].length) + m[2].slice(0, 20) + '-->' + m[2].slice(23) + built.slice(m.index + m[1].length + m[2].length))
 const g = gate(badPath)
@@ -98,6 +98,7 @@ ok(g !== 'ok' && /must not be able to end its own block/.test(g), 'the gate goes
 // the payload really is the deflated module
 const payload = m[2]
 ok(eq(decode(payload), new Uint8Array(deflateRawSync(Buffer.from('#app{color:red}'), { level: 9 }))), 'the css payload decodes to the deflated stylesheet (zlib level 9 under ZOPFLI=0)')
+ok(/data-len="\d+"/.test(m[1]) && Number(/data-len="(\d+)"/.exec(m[1])![1]) === payload.length, 'the block carries data-len equal to its text length')
 
 console.log('\nthe loader probes nothing\n')
 const loader = /<script>\n\(async \(\) => \{([\s\S]*?)\n<\/script>\n\s*<\/body>/.exec(built)?.[1] ?? ''
