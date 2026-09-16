@@ -92,7 +92,12 @@ matters. Neither needs the signing key.
 1. Bump **that app's** `package.json` version — `slides/package.json`,
    `spaces/package.json` or `dash/package.json` (it becomes `APP_VERSION` in
    the shell and the manifest version — single source of truth). Apps version
-   independently.
+   independently. **Bumping the version stales `schema/*.json`** — the
+   generated schema carries the version — so run `node scripts/build-schema.mjs`
+   and commit `schema/slides.json` plus the new `schema/slides-<version>.json`
+   in the same PR, or CI's "Schema is current" step goes red. Earlier
+   `slides-<version>.json` copies stay: they are the pinned URLs old files may
+   point at.
 2. Land it and tag. `main` is branch-protected and requires a pull request, so
    the bump CANNOT be committed directly — open a small PR for it, merge, then
    tag the merge commit.
