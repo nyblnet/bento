@@ -19,8 +19,12 @@ dependency to the core document lifecycle is off-platform.
 
 Byte order of a shipped shell (postbuild-compress):
 `chrome → NOTICE → tooling comment → plaintext #bento-doc → splash → compressed payloads`.
-Runtime JS/CSS ship deflated in `bento/deflate-b64` script blocks with a ~1KB
-loader (DecompressionStream → blob import).
+Runtime JS/CSS ship deflated in `bento/deflate-b86` script blocks (base86:
+86 printable ASCII symbols chosen so a payload can never close or comment out
+its own block; 6.25% smaller than the `bento/deflate-b64` blocks of 1.1.0 and
+earlier, which every reader still accepts) with a ~1KB loader
+(DecompressionStream → an inline module script, then `new Function`, then a
+blob import — whichever the host's policy allows first, tried in that order).
 
 ## 2. The splice contract (FROZEN)
 
