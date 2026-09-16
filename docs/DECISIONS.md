@@ -7047,3 +7047,85 @@ it shipped (#485, against main 131015e): 756,103 → 690,067 B compressed
 (−66,036 B, −8.7%). The spike that measured all of the above was PR #483
 (closed, three rounds).
 
+## 2026-09-16 — The shell starts the way nothing refuses, and carries its runtime in base86
+
+A .bento.html attached in Microsoft Teams stopped opening once the shell was
+compressed (1.0.x). The maintainer tested seven loader variants in Teams,
+each with a marker on the first slide, and the results decided the loader:
+
+| variant | open pane | preview pane |
+| --- | --- | --- |
+| A — 1.1.0 shell, module import from a `blob:` URL | blank | blank |
+| B — the runtime inserted as an inline module script | splash only | works |
+| B2 — B plus an on-page diagnostic panel | splash only | works |
+| B3 — B plus `trustedTypes.createPolicy` at boot | splash only | blank |
+| B4 — inline first, then `new Function`, then blob; eager policies | works | blank |
+| B5 — `new Function('')` probe first, then inline; eager policies | works | blank |
+| B6 — B5 with the policies made lazy | works | blank |
+| C — the uncompressed build, every script parser-inserted | works | works |
+
+**Two panes, two policies.** The open pane sends a header policy that allows
+the file's own inline scripts by sha256 hash plus `'unsafe-eval'` (hashes
+present, so `'unsafe-inline'` is ignored per spec), no `blob:`, a sandbox
+without `allow-same-origin`, `connect-src 'none'`. C works there because
+every script it has is parser-inserted and hashed; A fails on `blob:`; B
+fails because an inserted script is unhashed. Reproduced locally
+(`scripts/loader-csp-server.py --hash`) before anything was built on it.
+The preview pane allows inline insertion outright — and treats ANY reported
+CSP violation as fatal: A's refused blob, B3–B5's refused `createPolicy`,
+B6's refused eval probe each blanked it. Nothing local reproduces a host
+that kills a frame on a report; the last variable in the Teams table is the
+evidence.
+
+**Consequence: no probing.** The loader does first the one thing refused
+nowhere — insert the inline module, exactly as B — and reaches for anything
+else only after a `securitypolicyviolation` attributed to that attempt
+(matched by `blockedURI`, not by timing: the eval probe's own violation
+arrives a task later and was once read as the inline attempt failing):
+then `new Function("'use strict';" + js)()` — an indirect eval, ungoverned
+by script hashes and allowed by `'unsafe-eval'`; the bundle has no top-level
+`import`, `export` or `await`, so it is a classic function body, and a
+`//# sourceURL=bento-slides.js` names it in DevTools — then the blob import.
+Trusted Types policies (`bento` for the script sink, `default` because the
+renderer and the save path assign `innerHTML` and `script.text` from strings)
+are created only after a sink throws the TypeError that names them, and that
+step is retried once. The loader counts violations from its first statement
+and records `{ path, tried, tt, violations }` on `window.bento.loader`.
+Measured under five local policies: zero violations wherever inline is
+allowed; path `function` under the open-pane policy; the lazy install under
+enforced Trusted Types.
+
+**Cost.** Boot to editor mount in plain Chrome, twelve interleaved runs:
+1.1.0 loader median 404 ms, this loader 421 ms (b64) / 367 ms (b86). The
+inline-module path parses the bundle the same way the blob import did; the
+eval-first order was ~80 ms quicker and is the order the preview pane
+refuses (kept as `--loader cascade-eval-first` for the record).
+
+**Encoding.** Every shell byte is paid per send, so the two payload blocks
+moved from base64 to base86: printable ASCII 0x21–0x7E minus `<` `>` `&`
+`"` `'` `\` `-` `{` — 86 symbols, so `</script`, `<!--`, `-->`, `]]>` and
+`${` are unproducible by construction (asserted by the gate on every payload
+and by a 10,000-buffer rig). Four bytes in five characters: 6.4 bits per
+character against base64's 6, a payload ×1.25 instead of ×1.333 — 6.25%
+smaller; the theoretical limit for 86 symbols is 6.43 bits, so 4→5 is within
+0.4% of it and a 7→9 group (6.22 bits/char) would be WORSE, not better —
+larger groups buy nothing here. Block type `bento/deflate-b86`; the gate,
+the site scripts and the loader read both types. Measured on the release
+shell: 699,847 → 661,768 B (−38,079, −5.4% of the file; the payloads
+themselves −6.25%). The in-page decoder — a 128-entry lookup and 32-bit
+groups — takes 11 ms on the runtime payload against 47 ms for
+`Uint8Array.from(atob(...))`, so the smaller file also boots sooner.
+
+**Set aside, measured.** Alternative carriers (`<template>`, `text/plain`)
+and a plain-JavaScript inflater for hosts without DecompressionStream stay
+as opt-in flags (`--carrier`, `--inflate`), built because the delivery of
+the payload was once the hypothesis; the diagnostic panel showed the
+payload found and inflated in Teams, so neither is needed there.
+
+**Stated to users.** Inside such a frame storage throws, so autosave and
+preferences do not persist, and `connect-src 'none'` silences the update
+check — both survivable, both in the changelog line. Previews are untouched:
+`preview.ts`, the remover and the gate's preview-carrying-shell invariant
+are not part of this change, and the thumbnailers that render the preview
+run no script at all.
+

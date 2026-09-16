@@ -11,6 +11,22 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A deck opens inside Teams and SharePoint again.** Their viewer refuses
+  the way 1.1.0's file started itself (a script loaded from a `blob:` URL),
+  and its preview pane goes blank at the first thing a policy refuses. The
+  file now starts the way nothing refuses: the runtime is inserted as an
+  inline script first, and only if a policy turns that down does it fall
+  back to `new Function`, then to the blob import — measured in Teams with
+  seven variants. Inside such a viewer the frame has no storage, so
+  autosave and preferences do not persist there, and its policy blocks the
+  update check; the deck itself opens, presents and saves.
+- **Every file is about 38 KB smaller.** The runtime's two compressed blocks
+  used to be base64; they are now base86 — 86 printable characters chosen so
+  the text can never close or comment out the block that carries it — which
+  is 6.25% denser (4 bytes in 5 characters instead of 3 in 4). Measured on
+  the release shell: 699,847 → 661,768 bytes. Older versions keep opening
+  their own files; this one still reads theirs. The new decoder is also
+  quicker than the old `atob` path (11 ms against 47 for the runtime).
 - **A web link whose address contains a dollar sign works again.** Since
   links arrived, an address like `…/$a$b` had its two dollars read as a
   formula and the link broke; formulas are now looked for in the text only,

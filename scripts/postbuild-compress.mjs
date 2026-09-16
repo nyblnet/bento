@@ -28,6 +28,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
+import { encode as b86encode, LOADER_DECODER as B86_DECODER, FORBIDDEN, ALPHABET } from './lib/b86.mjs'
 
 /**
  * ZOPFLI, not zlib.
@@ -106,6 +107,84 @@ const flag = (name, fallback) => {
 }
 const generator = flag('generator', 'bento-slides')
 const titleFallback = flag('title', 'bento/slides')
+// How the inflated runtime is started. `cascade` (the default since 1.1.1):
+// see below. `blob` (the 1.1.0 loader): a module import from a blob: URL. `inline`: an inline <script type="module"> whose
+// textContent is the inflated bundle — no blob: URL at all, so it runs where a
+// Content-Security-Policy allows 'unsafe-inline' but not blob: (SharePoint's
+// framed HTML viewer, which Teams uses to open attachments, is the case that
+// found this: the shipped shell showed its splash and nothing else there).
+// The bundle is byte-identical either way; only the 1KB loader differs.
+const loaderMode = flag('loader', 'cascade')
+if (!['blob', 'inline', 'inline-tt', 'cascade', 'cascade-eval-first', 'cascade-eager-tt'].includes(loaderMode)) throw new Error(`--loader must be blob, inline, inline-tt, cascade, cascade-eval-first or cascade-eager-tt, got ${loaderMode}`)
+// NO PROBING. Teams has two panes with two policies: the preview pane allows
+// inline script insertion outright and treats ANY reported CSP violation as
+// fatal (a refused blob import, a refused createPolicy, a refused eval probe
+// — each one blued the preview); the open pane hashes the file's inline
+// scripts and allows eval. So `cascade` does the one thing that is refused
+// nowhere first — insert the inline module, exactly as the plain inline
+// loader — and only on a violation attributed to that attempt falls to
+// new Function, then to the blob import. `cascade-eval-first` is the earlier
+// order, kept for the record.
+// Trusted Types are LAZY in `cascade`: no createPolicy at boot. Only when a
+// sink throws the TypeError that names TrustedScript/TrustedHTML are the
+// policies (bento + default) installed and that step retried once. An eager
+// createPolicy under a names-only allowlist raises CSP violations even when
+// caught, and a hosting pane that treats a violation as fatal (SharePoint's
+// preview, observed) then shows the splash and nothing else.
+// `cascade-eager-tt` keeps the eager install for comparison.
+// `cascade`: eval first. `new Function('')` throws AT ONCE under a policy
+// without 'unsafe-eval', so the probe is synchronous and costs nothing; where
+// it passes, the bundle runs through new Function immediately — an indirect
+// eval, which a script-hash policy does not govern. Otherwise (2) an inline
+// <script type="module"> (Trusted Types policies installed first where
+// trustedTypes exists), abandoned on a synchronous throw or a
+// securitypolicyviolation in a short window, then (3) the blob import. The
+// path taken is recorded on window.bento.loader. This is the shape
+// SharePoint's viewer needs: it hashes the file's own inline scripts and
+// allows exactly those, so an inserted script is refused (unhashed) while
+// eval is allowed. `cascade-inline-first` is the earlier order (inline,
+// function, blob) — a build-time switch only, no runtime cost.
+// `inline-tt`: inline, and the source is assigned through a Trusted Types
+// policy named "bento" where the page enforces `require-trusted-types-for
+// 'script'` (assigning a plain string to script.textContent throws there;
+// the parser-inserted loader itself is exempt). `--diag` adds a visible
+// on-page diagnostic panel — environment facts before the boot, every error
+// after it — for a viewer where no console can be opened. Never on by default:
+// the loader ships in every file and diag text is bytes.
+const diag = process.argv.includes('--diag')
+// The payload carrier alphabet. `b86` (default): scripts/lib/b86.mjs — 86
+// printable ASCII symbols chosen so `</script`, `<!--`, `-->`, `]]>` and `${`
+// are unproducible by construction, 4 bytes → 5 chars, 6.25% smaller than
+// base64 (block type bento/deflate-b86). `b64`: base64, the pre-1.1.1 block
+// type bento/deflate-b64, kept for comparison; every reader handles both.
+const encoding = flag('encoding', 'b86')
+if (!['b64', 'b86'].includes(encoding)) throw new Error(`--encoding must be b64 or b86, got ${encoding}`)
+const PAYLOAD_TYPE = encoding === 'b86' ? 'bento/deflate-b86' : 'bento/deflate-b64'
+// How the two deflated payloads are CARRIED in the file. `script` (shipped):
+// <script type="bento/deflate-b64">. `template`: <template data-bento-payload>
+// (its content is inert DOM, not a script, so a viewer that strips non-JS
+// scripts leaves it alone). `textplain`: <script type="text/plain">. base64
+// cannot contain "</" so no carrier can close itself early. All three keep
+// the same ids, and none is transient — a save keeps the runtime.
+const carrier = flag('carrier', 'script')
+if (!['script', 'template', 'textplain'].includes(carrier)) throw new Error(`--carrier must be script, template or textplain, got ${carrier}`)
+// How the payload is inflated. `native` (shipped): DecompressionStream only.
+// `auto`: DecompressionStream where present, else a plain-JavaScript RFC 1951
+// decoder inlined into the loader (scripts/lib/inflate-raw.js, ~2 KB
+// minified). `js`: the JavaScript decoder always — for testing that path
+// on a host that has DecompressionStream.
+const inflateMode = flag('inflate', 'native')
+if (!['native', 'auto', 'js'].includes(inflateMode)) throw new Error(`--inflate must be native, auto or js, got ${inflateMode}`)
+const INFLATE_JS = inflateMode === 'native' ? '' : (() => {
+  const { execFileSync } = createRequire(import.meta.url)('node:child_process')
+  const src = readFileSync(new URL('./lib/inflate-raw.js', import.meta.url), 'utf8').replace(/^export function/m, 'function')
+  const esbuild = join(process.cwd(), 'node_modules/.bin/esbuild')
+  const min = execFileSync(esbuild, ['--minify', '--format=esm', '--target=es2017'], { input: src + '\nexport { inflateRaw }', encoding: 'utf8' })
+  // esbuild renames the function; the export clause says what it became
+  const m = /export\s*\{\s*(\w+)(?:\s+as\s+inflateRaw)?\s*\};?\s*$/.exec(min)
+  if (!m) throw new Error('inflater: export clause not found after minify')
+  return min.slice(0, m.index) + (m[1] === 'inflateRaw' ? '' : `var inflateRaw=${m[1]};`)
+})()
 
 const html = readFileSync(path, 'utf8')
 if (html.includes('id="bento-rt"')) {
@@ -156,9 +235,14 @@ if (!styleM) throw new Error('app stylesheet not found')
 const js = mod[1]
 const css = styleM[1]
 
-const b64 = async (s) => (await deflate(Buffer.from(s, 'utf8'))).toString('base64')
-const jsB64 = await b64(js)
-const cssB64 = await b64(css)
+const pack = async (s) => {
+  const packed = await deflate(Buffer.from(s, 'utf8'))
+  const text = encoding === 'b86' ? b86encode(new Uint8Array(packed)) : packed.toString('base64')
+  for (const f of FORBIDDEN) if (text.includes(f)) throw new Error(`payload text contains ${JSON.stringify(f)} — the carrier alphabet is not safe`)
+  return text
+}
+const jsB64 = await pack(js)
+const cssB64 = await pack(css)
 
 // --- other parts ------------------------------------------------------------
 const notice = html.match(/<!--\s*NOTICE[\s\S]*?-->/)?.[0] ?? ''
@@ -268,8 +352,55 @@ const TOOLING_COMMENT = generator === 'bento-slides' ? SLIDES_TOOLING : GENERIC_
 //   2. the sweep — a file written before guard 1 existed already carries N
 //      plaintext copies of exactly this CSS; dropping them before injecting
 //      means such a file is CLEANED by its next save rather than doubled.
+const DIAG = `
+  var box = null
+  var say = function (t) {
+    if (!box) {
+      box = document.createElement('pre')
+      box.id = 'bento-diag'
+      box.setAttribute('data-bento-transient', '') // never saved into the file
+      box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:70vh;overflow:auto;margin:0;padding:12px 16px;background:#000;color:#7CFC00;font:15px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all;z-index:2147483647'
+      document.body.appendChild(box)
+    }
+    box.textContent += t + '\\n'
+  }
+  window.addEventListener('error', function (e) { say('window error: ' + e.message + ' @ ' + (e.filename || '?') + ':' + e.lineno) })
+  window.addEventListener('unhandledrejection', function (e) { var r = e.reason; say('unhandled rejection: ' + (r && r.stack ? String(r.stack).split('\\n').slice(0, 4).join(' | ') : String(r))) })
+  var probe = function (name, fn) { try { var v = fn(); say(name + ': ' + v) } catch (e) { say(name + ': THROWS ' + (e && e.name) + ' ' + (e && e.message)) } }
+  var st0 = document.getElementById('bento-diag-static'); if (st0) st0.remove()
+  say('bento loader diag ' + new Date().toISOString() + ' — the loader ran (the static "loader did not run" line was removed by its first statement)')
+  var pl = function (id) {
+    var el = document.getElementById(id); if (!el) return 'NOT FOUND'
+    var t = (el.content ? el.content.textContent : el.textContent) || ''
+    var expect = el.getAttribute('data-len')
+    var line = 'found <' + el.tagName.toLowerCase() + (el.type ? ' type=' + el.type : '') + '> text length ' + t.length + (expect ? ' (built as ' + expect + (String(t.length) === expect ? ', same' : ', DIFFERS by ' + (t.length - Number(expect))) + ')' : '')
+    var raw = t.trim()
+    if (raw.length !== t.length) line += '; trimmed ' + (t.length - raw.length) + ' whitespace chars'
+    var alpha = (el.type === 'bento/deflate-b86') ? ${JSON.stringify(ALPHABET)} : 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
+    for (var i = 0; i < raw.length; i++) {
+      if (alpha.indexOf(raw.charAt(i)) < 0) { line += '; FIRST BAD CHAR at index ' + i + ': code ' + raw.charCodeAt(i) + ' ' + JSON.stringify(raw.charAt(i)) + ' around ' + JSON.stringify(raw.slice(Math.max(0, i - 8), i + 9)); return line }
+    }
+    return line + '; every char in the alphabet'
+  }
+  say('payload js (#bento-rt): ' + pl('bento-rt'))
+  say('payload css (#bento-rt-css): ' + pl('bento-rt-css'))
+  probe('typeof DecompressionStream', function () { return typeof DecompressionStream })
+  probe('document.scripts', function () { var t = []; for (var i = 0; i < document.scripts.length; i++) t.push(document.scripts[i].type || '(no type)'); return document.scripts.length + ' [' + t.join(', ') + ']' })
+  probe('trustedTypes', function () { return !!window.trustedTypes + (window.trustedTypes ? ' (default policy ' + (window.trustedTypes.defaultPolicy ? 'set' : 'none') + ')' : '') })
+  probe('currentScript', function () { return document.currentScript ? 'parser' : 'no currentScript' })
+  probe('localStorage.length', function () { return localStorage.length })
+  probe('sessionStorage.length', function () { return sessionStorage.length })
+  probe('indexedDB', function () { return typeof indexedDB })
+  probe('location.origin', function () { return location.origin })
+  probe('framed (self !== top)', function () { return self !== top })
+  probe('userAgent', function () { return navigator.userAgent.slice(0, 40) })
+  probe('meta csp', function () { var m = document.querySelector('meta[http-equiv=Content-Security-Policy]'); return m ? m.content : 'no meta csp (a header CSP is invisible here)' })
+  document.addEventListener('securitypolicyviolation', function (e) { say('CSP violation: ' + e.violatedDirective + ' blocked ' + e.blockedURI + (e.sample ? ' sample ' + e.sample : '')) })
+`
 const loader = `
-(async () => {
+(async () => {${diag ? DIAG : ''}
+  var violations = 0
+  document.addEventListener('securitypolicyviolation', function () { violations++ })
   var fail = function (msg) {
     var d = document.createElement('div')
     d.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0D1B2E;color:#F2F0EA;font:16px/1.6 sans-serif;text-align:center;padding:40px;z-index:99999'
@@ -277,7 +408,7 @@ const loader = `
     document.body.appendChild(d)
     var s = document.getElementById('bento-splash'); if (s) s.remove()
   }
-  if (typeof DecompressionStream === 'undefined') {
+  if (typeof DecompressionStream === 'undefined'${inflateMode === 'native' ? '' : ' && false /* JS inflater below */'}) {
     // The old text said "2023 or later" and then listed Chrome 80, which is
     // 2020 — a reader checking their version against it learns nothing. It also
     // never said what kind of file this is, and never mentioned that the data
@@ -286,12 +417,24 @@ const loader = `
     fail('<b>This is a bento/dash spreadsheet.</b><br>Opening it needs a browser released in 2023 or later \\u2014 Safari 16.4+, Firefox 113+, or a current Chrome or Edge.<br><br>Nothing is lost: your data is stored as plain readable JSON inside this same file. Open it in a newer browser, or open it in a text editor and look for the block marked "bento-doc".')
     return
   }
+  ${INFLATE_JS}${encoding === 'b86' ? B86_DECODER : ''}
   var inflate = async function (id) {
-    var b64 = document.getElementById(id).textContent.trim()
-    var bytes = Uint8Array.from(atob(b64), function (c) { return c.charCodeAt(0) })
-    var ds = new DecompressionStream('deflate-raw')
-    var stream = new Blob([bytes]).stream().pipeThrough(ds)
-    return await new Response(stream).text()
+    var el = document.getElementById(id)
+    var txt = (el.content ? el.content.textContent : el.textContent).trim()
+    var bytes
+    try { bytes = ${encoding === 'b86' ? 'b86decode(txt)' : "Uint8Array.from(atob(txt), function (c) { return c.charCodeAt(0) })"} }
+    catch (e) {${diag ? ` say('DECODE FAILED for #' + id + ': ' + (e && e.name) + ': ' + (e && e.message));` : ''} throw e }
+    var text
+    if (${inflateMode === 'js' ? 'true' : inflateMode === 'auto' ? "typeof DecompressionStream === 'undefined'" : 'false'}) {
+      text = new TextDecoder().decode(inflateRaw(bytes))${diag ? `
+      say('inflated #' + id + ' with the JavaScript decoder: ' + text.length + ' chars')` : ''}
+    } else {
+      var ds = new DecompressionStream('deflate-raw')
+      var stream = new Blob([bytes]).stream().pipeThrough(ds)
+      text = await new Response(stream).text()${diag ? `
+      say('inflated #' + id + ' with DecompressionStream: ' + text.length + ' chars')` : ''}
+    }
+    return text
   }
   try {
     var css = await inflate('bento-rt-css')
@@ -306,9 +449,127 @@ const loader = `
     st.textContent = css
     document.head.appendChild(st)
     var js = await inflate('bento-rt')
-    var url = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))
-    await import(url)
-  } catch (e) {
+    ${['cascade', 'cascade-eval-first', 'cascade-eager-tt'].includes(loaderMode) ? `var tried = [], path = null, tt = 'none'
+    var installTT = function () {
+      if (tt !== 'none' || !(window.trustedTypes && window.trustedTypes.createPolicy)) return
+      tt = 'installed'
+      try { window.trustedTypes.createPolicy('bento', { createScript: function (s) { return s } }) } catch (e) { tried.push('tt bento: ' + (e && e.message)) }
+      if (!window.trustedTypes.defaultPolicy) {
+        try { window.trustedTypes.createPolicy('default', { createHTML: function (s) { return s }, createScript: function (s) { return s }, createScriptURL: function (s) { return s } }) } catch (e) { tried.push('tt default: ' + (e && e.message)) }
+      }
+    }
+    // a sink refused a plain string: install the policies and let the caller retry once
+    var needsTT = function (e) { return !!(e && /Trusted(Script|HTML)/.test(String(e.message))) && tt === 'none' }
+    ${loaderMode === 'cascade-eager-tt' ? 'installTT()' : ''}
+    // one attempt: run fn, then watch for a violation or the app for a short
+    // window; a throw or a violation abandons it. Attributed by timing — the
+    // window is the attempt's own, and nothing else inserts script here.
+    var attempt = async function (name, fn) {
+      if (window.bento && window.bento.doc) return true
+      var why = null
+      // attributed by WHAT was blocked, not only by timing: the eval probe's
+      // own violation ('eval') arrives a task later and must not be read as
+      // the inline attempt failing
+      var onv = function (e) { if (e.blockedURI !== (name === 'blob' ? 'blob' : 'inline')) return; why = e.violatedDirective + ' blocked ' + e.blockedURI + (e.sample ? ' [' + String(e.sample).slice(0, 30) + ']' : '') }
+      document.addEventListener('securitypolicyviolation', onv)
+      try {
+        fn()
+        for (var i = 0; i < 12 && !why && !(window.bento && window.bento.doc); i++) await new Promise(function (r) { setTimeout(r, i < 4 ? 0 : 25) })
+      } catch (e) { why = (e && e.name) + ': ' + (e && e.message) }
+      document.removeEventListener('securitypolicyviolation', onv)
+      var okp = !why && !!(window.bento && window.bento.doc)
+      tried.push(name + (okp ? ': ok' : why ? ': ' + why : ': no app after the wait'))${diag ? `
+      say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)')` : ''}
+      if (okp) path = name
+      return okp
+    }
+    // synchronous: a throw or a success is known before the call returns
+    var runNow = function (name, fn) {
+      if (window.bento && window.bento.doc) return true
+      try { fn() } catch (e) { tried.push(name + ': ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)')` : ''}; return false }
+      var okp = !!(window.bento && window.bento.doc)
+      tried.push(name + (okp ? ': ok' : ': ran, no app'))${diag ? `
+      say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)')` : ''}
+      if (okp) path = name
+      return okp
+    }
+    var viaInline = function () {
+      var sc = document.createElement('script')
+      sc.type = 'module'
+      sc.id = 'bento-rt-script'
+      sc.setAttribute('data-bento-transient', '')
+      try { sc.textContent = js } catch (e) {
+        if (!needsTT(e)) throw e
+        tried.push('inline sink: ' + (e && e.message)); installTT(); sc.textContent = js
+      }
+      document.body.appendChild(sc)
+    }
+    var viaFunction = function () {
+      // the bundle has no top-level import/export/await, so it is a classic
+      // function body; 'use strict' restores module semantics and the
+      // sourceURL names it in DevTools (stacks say bento-slides.js, not
+      // "anonymous")
+      var run = function () { new Function("'use strict';" + js + "\\n//# sourceURL=bento-slides.js")() }
+      try { run() } catch (e) { if (!needsTT(e)) throw e; tried.push('function sink: ' + (e && e.message)); installTT(); run() }
+    }
+    ${loaderMode === 'cascade-eval-first' ? `var evalOk = false
+    try { new Function(''); evalOk = true } catch (e) {
+      // under Trusted Types, new Function is itself a sink: install and re-probe once
+      if (needsTT(e)) { tried.push('eval probe sink: ' + (e && e.message)); installTT(); try { new Function(''); evalOk = true } catch (e2) { e = e2 } }
+      if (!evalOk) { tried.push('eval probe: ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path eval probe → refused: ' + (e && e.message))` : ''} }
+    }
+    if (evalOk) runNow('function', viaFunction)
+    if (!path) await attempt('inline', viaInline)` : `await attempt('inline', viaInline)
+    if (!path) runNow('function', viaFunction)`}
+    if (!path) await attempt('blob', function () {
+      var url = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))
+      import(url).catch(function (e) { throw e })
+    })
+    if (!path) throw new Error('every loader path was refused: ' + tried.join('; '))
+    if (window.bento) window.bento.loader = { path: path, tried: tried, tt: tt, violations: violations }` : loaderMode !== 'blob' ? `// inline module: allowed under CSP 'unsafe-inline', needs no blob: source.
+    // Transient like the style above — a save must never write the inflated
+    // bundle back as plaintext (serializeBody strips marked nodes).
+    var sc = document.createElement('script')
+    sc.type = 'module'
+    sc.id = 'bento-rt-script'
+    sc.setAttribute('data-bento-transient', '')
+    var src = js${loaderMode === 'inline-tt' ? `
+    // Trusted Types: where the page requires them for script sinks, a plain
+    // string assignment throws; a policy-made TrustedScript does not. A CSP
+    // that allowlists policy names refuses any other name — that refusal is
+    // itself the diagnosis, so it is reported rather than swallowed.
+    if (window.trustedTypes && window.trustedTypes.createPolicy) {
+      try {
+        var pol = window.trustedTypes.createPolicy('bento', { createScript: function (s) { return s } })
+        src = pol.createScript(js)${diag ? `
+        say('trustedTypes: policy "bento" created; assigning a TrustedScript')` : ''}
+      } catch (e) {${diag ? `
+        say('trustedTypes: createPolicy("bento") REFUSED: ' + (e && e.name) + ': ' + (e && e.message))` : ''}
+      }
+      // The app itself assigns innerHTML (the renderer, the sanitizer) and
+      // script.text (the save path writes #bento-doc back) from strings. Under
+      // enforced Trusted Types every one of those throws unless a DEFAULT
+      // policy exists — the browser routes plain-string sink assignments
+      // through it. A CSP that allowlists policy names must include "default"
+      // for this to be allowed; where it is refused, the refusal is reported.
+      if (!window.trustedTypes.defaultPolicy) {
+        try {
+          window.trustedTypes.createPolicy('default', { createHTML: function (s) { return s }, createScript: function (s) { return s }, createScriptURL: function (s) { return s } })${diag ? `
+          say('trustedTypes: DEFAULT policy created (string sinks pass through)')` : ''}
+        } catch (e) {${diag ? `
+          say('trustedTypes: createPolicy("default") REFUSED: ' + (e && e.name) + ': ' + (e && e.message))` : ''}
+        }
+      }
+    }` : ''}
+    try { sc.textContent = src } catch (e) {${diag ? `
+      say('script.textContent assignment threw: ' + (e && e.name) + ': ' + (e && e.message) + ' — trying script.text')` : ''}
+      sc.text = src
+    }
+    document.body.appendChild(sc)${diag ? `
+    say('module script appended (' + js.length + ' chars); waiting for the app to mount')` : ''}` : `var url = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))
+    await import(url)`}
+  } catch (e) {${diag ? `
+    say('BOOT FAILED: ' + (e && e.name) + ': ' + (e && e.message) + (e && e.stack ? ' | ' + String(e.stack).split('\\n').slice(0, 3).join(' | ') : ''))` : ''}
     fail('This file could not start: ' + (e && e.message ? e.message : e))
   }
 })()
@@ -331,10 +592,13 @@ const out = `<!DOCTYPE html>
     <style>${splashCss}</style>
   </head>
   <body>
-    ${splashDiv}
+    ${splashDiv}${diag ? `
+    <pre id="bento-diag-static" style="position:fixed;left:0;right:0;bottom:0;margin:0;padding:12px 16px;background:#000;color:#ff5555;font:15px/1.45 ui-monospace,Menlo,monospace;z-index:2147483647">loader did not run — this line is static markup; the loader's first statement removes it</pre>` : ''}
     <div id="app"></div>
-    <script id="bento-rt-css" type="bento/deflate-b64">${cssB64}</script>
-    <script id="bento-rt" type="bento/deflate-b64">${jsB64}</script>
+    ${carrier === 'template' ? `<template id="bento-rt-css" data-bento-payload="css">${cssB64}</template>
+    <template id="bento-rt" data-bento-payload="js">${jsB64}</template>` : carrier === 'textplain' ? `<script id="bento-rt-css" type="text/plain" data-bento-payload="css" data-bento-encoding="${encoding}">${cssB64}</script>
+    <script id="bento-rt" type="text/plain" data-bento-payload="js">${jsB64}</script>` : `<script id="bento-rt-css" type="${PAYLOAD_TYPE}" data-len="${cssB64.length}">${cssB64}</script>
+    <script id="bento-rt" type="${PAYLOAD_TYPE}" data-len="${jsB64.length}">${jsB64}</script>`}
     <script>${loader}</script>
   </body>
 </html>
@@ -347,4 +611,4 @@ if (closes !== opens) throw new Error(`script tag imbalance: ${opens} opens, ${c
 
 writeFileSync(path, out)
 const kb = (n) => `${Math.round(n / 1024)}KB`
-console.log(`compressed shell: ${kb(html.length)} → ${kb(out.length)} (js ${kb(js.length)}→${kb(jsB64.length)}, css ${kb(css.length)}→${kb(cssB64.length)})`)
+console.log(`compressed shell: ${kb(html.length)} → ${kb(out.length)} (js ${kb(js.length)}→${kb(jsB64.length)}, css ${kb(css.length)}→${kb(cssB64.length)}, ${encoding})`)
