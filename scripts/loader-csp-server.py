@@ -23,6 +23,10 @@
 import http.server, sys, os, re, hashlib, base64
 
 CSP = "script-src 'unsafe-inline' 'self'; default-src 'self' data: 'unsafe-inline'; img-src * data: blob:; media-src * data: blob:; font-src * data:; style-src 'unsafe-inline' 'self'"
+if '--no-eval-inline' in sys.argv:
+    # inline allowed, eval refused: the eval probe must throw synchronously
+    # and the cascade must take the inline path with no wait
+    CSP = "script-src 'unsafe-inline' 'self'; default-src 'self' data: 'unsafe-inline'; img-src * data: blob:; media-src * data: blob:; font-src * data:; style-src 'unsafe-inline' 'self'"
 if '--tt' in sys.argv:
     name = sys.argv[sys.argv.index('--tt') + 1]
     # `any` = require Trusted Types but allowlist no names (every policy

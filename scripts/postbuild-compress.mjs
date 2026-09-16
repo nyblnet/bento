@@ -114,16 +114,19 @@ const titleFallback = flag('title', 'bento/slides')
 // found this: the shipped shell showed its splash and nothing else there).
 // The bundle is byte-identical either way; only the 1KB loader differs.
 const loaderMode = flag('loader', 'blob')
-if (!['blob', 'inline', 'inline-tt', 'cascade'].includes(loaderMode)) throw new Error(`--loader must be blob, inline, inline-tt or cascade, got ${loaderMode}`)
-// `cascade`: try, in order, (1) an inline <script type="module"> (with the
-// Trusted Types policies installed first where trustedTypes exists), (2)
-// `new Function(js)()` — an indirect eval, which a script-hash policy does not
-// govern and 'unsafe-eval' allows, (3) the blob import. Each attempt is
-// abandoned on a synchronous throw or a securitypolicyviolation attributed to
-// it; the path taken is recorded on window.bento.loader. This is the shape
+if (!['blob', 'inline', 'inline-tt', 'cascade', 'cascade-inline-first'].includes(loaderMode)) throw new Error(`--loader must be blob, inline, inline-tt, cascade or cascade-inline-first, got ${loaderMode}`)
+// `cascade`: eval first. `new Function('')` throws AT ONCE under a policy
+// without 'unsafe-eval', so the probe is synchronous and costs nothing; where
+// it passes, the bundle runs through new Function immediately — an indirect
+// eval, which a script-hash policy does not govern. Otherwise (2) an inline
+// <script type="module"> (Trusted Types policies installed first where
+// trustedTypes exists), abandoned on a synchronous throw or a
+// securitypolicyviolation in a short window, then (3) the blob import. The
+// path taken is recorded on window.bento.loader. This is the shape
 // SharePoint's viewer needs: it hashes the file's own inline scripts and
 // allows exactly those, so an inserted script is refused (unhashed) while
-// eval is allowed.
+// eval is allowed. `cascade-inline-first` is the earlier order (inline,
+// function, blob) — a build-time switch only, no runtime cost.
 // `inline-tt`: inline, and the source is assigned through a Trusted Types
 // policy named "bento" where the page enforces `require-trusted-types-for
 // 'script'` (assigning a plain string to script.textContent throws there;
@@ -400,7 +403,7 @@ const loader = `
     st.textContent = css
     document.head.appendChild(st)
     var js = await inflate('bento-rt')
-    ${loaderMode === 'cascade' ? `var tried = [], path = null
+    ${loaderMode === 'cascade' || loaderMode === 'cascade-inline-first' ? `var tried = [], path = null
     if (window.trustedTypes && window.trustedTypes.createPolicy) {
       try { window.trustedTypes.createPolicy('bento', { createScript: function (s) { return s } }) } catch (e) {}
       if (!window.trustedTypes.defaultPolicy) {
@@ -413,7 +416,10 @@ const loader = `
     var attempt = async function (name, fn) {
       if (window.bento && window.bento.doc) return true
       var why = null
-      var onv = function (e) { why = e.violatedDirective + ' blocked ' + e.blockedURI + (e.sample ? ' [' + String(e.sample).slice(0, 30) + ']' : '') }
+      // attributed by WHAT was blocked, not only by timing: the eval probe's
+      // own violation ('eval') arrives a task later and must not be read as
+      // the inline attempt failing
+      var onv = function (e) { if (e.blockedURI !== (name === 'blob' ? 'blob' : 'inline')) return; why = e.violatedDirective + ' blocked ' + e.blockedURI + (e.sample ? ' [' + String(e.sample).slice(0, 30) + ']' : '') }
       document.addEventListener('securitypolicyviolation', onv)
       try {
         fn()
@@ -426,19 +432,36 @@ const loader = `
       if (okp) path = name
       return okp
     }
-    await attempt('inline', function () {
+    // synchronous: a throw or a success is known before the call returns
+    var runNow = function (name, fn) {
+      if (window.bento && window.bento.doc) return true
+      try { fn() } catch (e) { tried.push(name + ': ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)')` : ''}; return false }
+      var okp = !!(window.bento && window.bento.doc)
+      tried.push(name + (okp ? ': ok' : ': ran, no app'))${diag ? `
+      say('loader path ' + name + ' → ' + tried[tried.length - 1] + ' (t=' + Math.round(performance.now()) + ' ms since navigation)')` : ''}
+      if (okp) path = name
+      return okp
+    }
+    var viaInline = function () {
       var sc = document.createElement('script')
       sc.type = 'module'
       sc.id = 'bento-rt-script'
       sc.setAttribute('data-bento-transient', '')
       sc.textContent = js
       document.body.appendChild(sc)
-    })
-    if (!path) await attempt('function', function () {
+    }
+    var viaFunction = function () {
       // the bundle has no top-level import/export/await, so it is a classic
-      // function body; 'use strict' restores module semantics
-      new Function("'use strict';" + js)()
-    })
+      // function body; 'use strict' restores module semantics and the
+      // sourceURL names it in DevTools (stacks say bento-slides.js, not
+      // "anonymous")
+      new Function("'use strict';" + js + "\\n//# sourceURL=bento-slides.js")()
+    }
+    ${loaderMode === 'cascade' ? `var evalOk = false
+    try { new Function(''); evalOk = true } catch (e) { tried.push('eval probe: ' + (e && e.name) + ': ' + (e && e.message))${diag ? `; say('loader path eval probe → refused: ' + (e && e.message))` : ''} }
+    if (evalOk) runNow('function', viaFunction)
+    if (!path) await attempt('inline', viaInline)` : `await attempt('inline', viaInline)
+    if (!path) runNow('function', viaFunction)`}
     if (!path) await attempt('blob', function () {
       var url = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))
       import(url).catch(function (e) { throw e })
