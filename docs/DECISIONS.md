@@ -7128,8 +7128,8 @@ harmless in the open pane, fatal in the preview pane. kernel `net.ts` now
 decides once at boot whether the document is an embedded view and `netFetch` /
 `netWebSocket` — the one place the app touches the network — refuse before
 any request. The decision needs ALL THREE signs — framed (`self !== top`),
-an opaque origin (`location.origin === 'null'`) and a storage read throwing
-`SecurityError` — because the first cut ("opaque, or storage throws") would
+an opaque DOCUMENT origin (`self.origin === 'null'`) and a storage read
+throwing `SecurityError` — because the first cut ("opaque, or storage throws") would
 have switched off updates and collab for people nobody embedded: Firefox
 reports origin `null` for a file:// deck (Chromium 152 reports `file://`,
 measured, so Chromium desktops were never at risk), and so do a data: URL, a
@@ -7137,7 +7137,17 @@ WebView loaded from a string with no base URL, and a top-level response under
 CSP `sandbox`; a normal tab with site data blocked throws on the storage
 read. That the Teams pane is all three is measured, not assumed: the B2
 diagnostic panel, opened in Teams by the maintainer, printed `framed`
-alongside origin `null` and the storage `SecurityError`. The rig probes each
+alongside origin `null` and the storage `SecurityError`. The origin sign
+reads `self.origin`, the document's origin, not `location.origin`, which is
+the URL's: measured in Chromium 152, a sandboxed frame loaded by `src`
+reports its http origin in `location.origin` while `self.origin` is `null`
+(a `srcdoc` or `data:` frame says `null` in both — the B2 panel probed
+`location.origin` and printed `null`, so that is how the Teams pane loads
+the file). On `location.origin` the local sandboxed-iframe harness was not
+sandboxed at all and made the manifest request the preview pane treats as
+fatal; on `self.origin` it is, and a top-level file:// deck (Chromium:
+`self.origin` `null`, `location.origin` `file://`) still is not, because
+it is not framed. The rig probes each
 sign alone and in pairs in child processes (the decision is cached per
 process) and asserts only the triple is sandboxed. The refusal is terminal —
 a frame's sandboxing does not change while it lives — so the transport must

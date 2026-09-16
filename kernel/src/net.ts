@@ -61,12 +61,16 @@ export class SandboxedError extends Error {
  *     counts as framed) — a Teams pane is always a frame: the B2 diagnostic
  *     panel, opened in Teams by the maintainer, printed `framed` alongside
  *     origin 'null' and the storage SecurityError;
- *   · an opaque origin (`location.origin === 'null'`) — BUT so are documents
- *     nobody embedded: Firefox reports 'null' for a file:// deck (Chromium
- *     152 reports 'file://', measured), and so do a WebView loaded from a
- *     string with no base URL, a data: URL, and a top-level response under
- *     CSP `sandbox`. On the origin alone those users would have lost updates
- *     and collab;
+ *   · an opaque DOCUMENT origin (`self.origin === 'null'`; `location.origin`
+ *     is the URL's origin, a different thing — measured in Chromium 152, a
+ *     sandboxed frame loaded by src reports its http origin there while
+ *     self.origin is 'null'; the B2 panel in Teams printed location.origin
+ *     'null', so that pane loads the file as srcdoc or a data: URL, where
+ *     both agree) — BUT so are documents nobody embedded: Chromium 152
+ *     reports self.origin 'null' for a top-level file:// deck (location
+ *     origin 'file://'), and so do a data: URL, a WebView loaded from a
+ *     string with no base URL, and a top-level response under CSP `sandbox`.
+ *     On the origin alone those users would have lost updates and collab;
  *   · a storage read throwing SecurityError — BUT a normal tab with site
  *     data blocked throws there too, top-level, with a real origin (the
  *     offline-mode notes above treat that as survivable, and it is).
@@ -83,7 +87,10 @@ export const sandboxed = (): boolean => {
   let framed = false
   try { framed = typeof self !== 'undefined' && typeof top !== 'undefined' && self !== top } catch { framed = true }
   let opaque = false
-  try { opaque = typeof location !== 'undefined' && location.origin === 'null' } catch { opaque = false }
+  try {
+    const o = typeof self !== 'undefined' && typeof (self as { origin?: unknown }).origin === 'string' ? (self as { origin: string }).origin : location.origin
+    opaque = o === 'null'
+  } catch { opaque = false }
   let storageThrows = false
   try { void globalThis.localStorage } catch (e) { storageThrows = !!e && (e as { name?: string }).name === 'SecurityError' }
   sandboxFlag = framed && opaque && storageThrows
