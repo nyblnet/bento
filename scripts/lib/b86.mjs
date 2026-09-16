@@ -121,6 +121,8 @@ export const LOADER_DECODER = `
 //   b85np  b86 minus `%`   (85; 4→5, 85^5 = 4,437,053,125 > 2^32)
 //   b85ns  b86 minus `*`   (85; 4→5) — a JS-aware comment stripper eating
 //                           `/*…*/` runs is the leading suspicion
+//   b85nq / b85nh / b85nc / b85na  b86 minus `?` / `#` / `:` / `@` (85; 4→5)
+//   b84    b86 minus `?` and `#` (84 < 85 → 7→9 group; diagnostic only)
 //   b80    b86 minus the RFC 3986 gen-delims `: / ? # @` and `%` (80;
 //          80^5 < 2^32 so the group is 7 bytes → 9 chars, 80^9 > 2^56,
 //          BigInt arithmetic: 6.32 bits per char, ×1.286)
@@ -256,4 +258,12 @@ export const VARIANTS = {
   b85np: makeCodec(without('%')),
   b85ns: makeCodec(without('*')),
   b80: makeCodec(without('%:/?#@')),
+  // round two (B11): b80 previewed, the 85s above did not — so the trigger is
+  // in { : / ? # @ }; `/` is a base64 character the previewing base64 file
+  // carries in bulk, leaving these
+  b85nq: makeCodec(without('?')),
+  b85nh: makeCodec(without('#')),
+  b85nc: makeCodec(without(':')),
+  b85na: makeCodec(without('@')),
+  b84: makeCodec(without('?#')), // 84 < 85 forces the 7→9 group: diagnostic only
 }
