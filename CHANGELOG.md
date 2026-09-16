@@ -13,13 +13,6 @@ pre-1.0.
 
 ## [1.2.0] — 2026-09-16
 
-- **One brand yellow.** Ten places in the editor chrome — the speaker view's
-  timer, buttons and current thumbnail, the show's link, selection and
-  progress colours, the follow chip, and the path editor's anchor dots —
-  carried their own copy of the accent instead of reading the chrome's
-  `--accent` token. They read the token now; nothing looks different. The
-  slide-list highlight already did. The deck's own `theme.accent` is a
-  separate thing and stays separate: chrome does not recolour per deck.
 - **A deck opens inside Teams and SharePoint again.** Their viewer refuses
   the way 1.1.0's file started itself (a script loaded from a `blob:` URL).
   The file now starts the way nothing refuses: the runtime is inserted as an
@@ -31,66 +24,6 @@ pre-1.0.
   no update check at launch, no language-pack listing, no live-session
   socket; the About dialog says so. The deck itself opens, presents and
   saves.
-- **A deck opened in a background tab is ready when you switch to it.** The
-  compressed file used to finish starting in a later task and hold its
-  splash on a timer — in a tab that was not visible (or a viewer rendering
-  the file off-screen for a preview card) timers are throttled and frames
-  never come, so the editor sat behind the splash until the tab was looked
-  at. The runtime now unpacks and starts inside the file's own script,
-  before the page is even "loaded", and a hidden document drops the splash
-  the moment the editor exists; visible, the brand moment is held for at
-  most 0.8 s and never waits on its own fade.
-- **Every file is about 38 KB smaller.** The runtime's two compressed blocks
-  used to be base64; they are now base86 — 86 printable characters chosen so
-  the text can never close or comment out the block that carries it — which
-  is 6.25% denser (4 bytes in 5 characters instead of 3 in 4). Measured on
-  the release shell: 699,847 → 661,768 bytes. Older versions keep opening
-  their own files; this one still reads theirs. The new decoder is also
-  quicker than the old `atob` path (11 ms against 47 for the runtime).
-- **A web link whose address contains a dollar sign works again.** Since
-  links arrived, an address like `…/$a$b` had its two dollars read as a
-  formula and the link broke; formulas are now looked for in the text only,
-  never inside a tag.
-- **An agent can place a slide by layout and role.** In the compact form a
-  slide may say `"layout": "title-body"` and its elements carry a `role`
-  (`title`, `body`, `subtitle`, `kicker`, `quote`, `attribution`, `image`,
-  `card1`…) instead of coordinates and typography: the layout's frames and
-  type are used, the same way *Apply layout* fills a slide in the editor, and
-  slides born from the same layout still morph their chrome. Several `body`
-  paragraphs stack into the slot, each sized to its text; an element that
-  carries its own `x y w h` is placed as given. Four new built-in layouts —
-  *Three cards*, *Quote*, *Image left*, *Image right* — appear in the layout
-  picker for everyone, next to the five that were there. The file on disk is
-  unchanged: the layout is applied on load, and what is saved is the placed
-  slide.
-- **The format has a schema, and every file says where it is.** A JSON
-  Schema for the bento/slides document is generated from the same tables the
-  app uses to check what it loads, so it cannot describe a deck the app would
-  refuse. It is published at `https://bento.page/schema/slides.json` (and a
-  version-pinned copy beside it), returned by `window.bento.schema()` in a
-  running file, listed in `https://bento.page/llms.txt` for AI agents, and
-  named in the Tooling comment at the top of every deck. A deck that carries
-  `"$schema"` at the top validates in any schema-aware editor; the app ignores
-  the key. Runtime cost: about 2.6 KB in the shell.
-- **A pasted code snippet keeps its code.** The table the app uses to know
-  an element's fields had no entry for the code element, so a pasted or loaded
-  code block kept its box but lost its content, grammar and theme — an empty
-  snippet — and `validate()` did not know its fields. Found while building
-  the schema from that table; fixed.
-- **A saved deck names its schema.** The first key of the saved JSON is now
-  `"$schema": "https://bento.page/schema/slides.json"` — 50 bytes, so a
-  reader with only the file in hand knows the format. Older versions keep the
-  key and write it back unchanged; nothing fetches it.
-- **`bento check`: an agent can look at what it wrote.** `node
-  scripts/bento-check.mjs deck.bento.html` loads the deck in headless Chrome
-  and prints what the editor would otherwise keep to itself — text that
-  overflows its box (and by how many pixels), elements off the canvas, dead
-  links, effects that can never run — by slide, with element ids; `--png out/`
-  adds one PNG per slide through the same render path as *Export slides as
-  images*, and a contact sheet of the whole deck in one picture; `--json` for
-  scripts, `--fail-on warning` for a strict exit code. A document JSON works
-  as input too, checked inside the built shell. The other half of the agent
-  loop that `AGENTS.md` describes: write, check, fix, check again.
 - **Maths is Bento's own now, and it reads Typst.** Formulas in text used to
   go through Temml, a 64 KB library that every saved deck carried. A small
   engine of our own (slides/src/maths, about 8 KB) renders them instead, so
@@ -105,6 +38,26 @@ pre-1.0.
   `$…$` is LaTeX as before. Not covered, for now: `\substack`, `\xrightarrow`,
   chemistry (`\ce`), `\tag` and `\hline`; a formula using them shows as
   typed, the way any TeX Temml refused always has.
+- **Slides export as images.** Save ▾ *Export slides as images…* writes
+  this slide, or every slide in the show, as PNG or JPEG at 1× or 2× — one
+  file per page, named after the deck (`My_Deck-page-01.png`), hidden slides
+  and interactive states left out the way a PDF leaves them out. Chromium
+  asks for a folder and writes the pages into it; other browsers get one
+  download per page; Safari can export the current slide. The picture is the
+  deck's own render — its fonts, gradients and shapes — with charts and media
+  as stills and web-linked images blank, since a file cannot fetch. No ZIP,
+  no second renderer: about four kilobytes of runtime. Asked for by den-sv
+  (#243, #261); the shape follows lazyeo's #306, kept to the thin half —
+  the heavier converter belongs to bento/convert.
+- **A Layers list.** The Slide panel now opens with *Layers*: every element
+  on the slide, top of the stack first, with a glyph and a short label (the
+  text's first words, or the kind). Click a row to select, shift-click to add,
+  drag a row to move it up or down the stack, or use ⌘↑ and ⌘↓ with the list
+  focused. With an element selected the same list closes its panel, so the
+  highlighted row is never far. Nothing new in the file: the list is a view
+  onto the order the four Order buttons (front, forward, backward, back) have
+  moved elements through since 1.0, and a row dropped somewhere lands exactly
+  where those buttons would put it. Asked for by Li Wei in discussion #371.
 - **A deck can be written the short way.** An AI agent writing a deck used
   to spend most of its output on fields nobody chose — rotation 0, opacity 1,
   the font stack, weight 400, centre, middle, line height 1.25, on every
@@ -132,26 +85,41 @@ pre-1.0.
   why a field vanished. *Replace from JSON…* summarises the same report in a
   toast and logs it. Three agent-written decks are checked in and load clean
   in CI.
-- **A Layers list.** The Slide panel now opens with *Layers*: every element
-  on the slide, top of the stack first, with a glyph and a short label (the
-  text's first words, or the kind). Click a row to select, shift-click to add,
-  drag a row to move it up or down the stack, or use ⌘↑ and ⌘↓ with the list
-  focused. With an element selected the same list closes its panel, so the
-  highlighted row is never far. Nothing new in the file: the list is a view
-  onto the order the four Order buttons (front, forward, backward, back) have
-  moved elements through since 1.0, and a row dropped somewhere lands exactly
-  where those buttons would put it. Asked for by Li Wei in discussion #371.
-- **Slides export as images.** Save ▾ *Export slides as images…* writes
-  this slide, or every slide in the show, as PNG or JPEG at 1× or 2× — one
-  file per page, named after the deck (`My_Deck-page-01.png`), hidden slides
-  and interactive states left out the way a PDF leaves them out. Chromium
-  asks for a folder and writes the pages into it; other browsers get one
-  download per page; Safari can export the current slide. The picture is the
-  deck's own render — its fonts, gradients and shapes — with charts and media
-  as stills and web-linked images blank, since a file cannot fetch. No ZIP,
-  no second renderer: about four kilobytes of runtime. Asked for by den-sv
-  (#243, #261); the shape follows lazyeo's #306, kept to the thin half —
-  the heavier converter belongs to bento/convert.
+- **An agent can place a slide by layout and role.** In the compact form a
+  slide may say `"layout": "title-body"` and its elements carry a `role`
+  (`title`, `body`, `subtitle`, `kicker`, `quote`, `attribution`, `image`,
+  `card1`…) instead of coordinates and typography: the layout's frames and
+  type are used, the same way *Apply layout* fills a slide in the editor, and
+  slides born from the same layout still morph their chrome. Several `body`
+  paragraphs stack into the slot, each sized to its text; an element that
+  carries its own `x y w h` is placed as given. Four new built-in layouts —
+  *Three cards*, *Quote*, *Image left*, *Image right* — appear in the layout
+  picker for everyone, next to the five that were there. The file on disk is
+  unchanged: the layout is applied on load, and what is saved is the placed
+  slide.
+- **`bento check`: an agent can look at what it wrote.** `node
+  scripts/bento-check.mjs deck.bento.html` loads the deck in headless Chrome
+  and prints what the editor would otherwise keep to itself — text that
+  overflows its box (and by how many pixels), elements off the canvas, dead
+  links, effects that can never run — by slide, with element ids; `--png out/`
+  adds one PNG per slide through the same render path as *Export slides as
+  images*, and a contact sheet of the whole deck in one picture; `--json` for
+  scripts, `--fail-on warning` for a strict exit code. A document JSON works
+  as input too, checked inside the built shell. The other half of the agent
+  loop that `AGENTS.md` describes: write, check, fix, check again.
+- **The format has a schema, and every file says where it is.** A JSON
+  Schema for the bento/slides document is generated from the same tables the
+  app uses to check what it loads, so it cannot describe a deck the app would
+  refuse. It is published at `https://bento.page/schema/slides.json` (and a
+  version-pinned copy beside it), returned by `window.bento.schema()` in a
+  running file, listed in `https://bento.page/llms.txt` for AI agents, and
+  named in the Tooling comment at the top of every deck. A deck that carries
+  `"$schema"` at the top validates in any schema-aware editor; the app ignores
+  the key. Runtime cost: about 2.6 KB in the shell.
+- **A saved deck names its schema.** The first key of the saved JSON is now
+  `"$schema": "https://bento.page/schema/slides.json"` — 50 bytes, so a
+  reader with only the file in hand knows the format. Older versions keep the
+  key and write it back unchanged; nothing fetches it.
 - **Connectors for diagrams.** Three asks from xairy, in one go. A
   *Curved connector* (#302): a curve that sticks to the elements at its ends
   and re-routes when they move, like the straight Connector, and carries a
@@ -210,6 +178,31 @@ pre-1.0.
   number, date, time, title or document property into the text — the date
   and time entries show today in each shape so the choice is made by eye.
   Bare `{{date}}` is unchanged. Asked for in discussion #381 by Jef Ducon.
+- **Every file is about 38 KB smaller.** The runtime's two compressed blocks
+  used to be base64; they are now base86 — 86 printable characters chosen so
+  the text can never close or comment out the block that carries it — which
+  is 6.25% denser (4 bytes in 5 characters instead of 3 in 4). Measured on
+  the release shell: 699,847 → 661,768 bytes. Older versions keep opening
+  their own files; this one still reads theirs. The new decoder is also
+  quicker than the old `atob` path (11 ms against 47 for the runtime).
+- **A deck opened in a background tab is ready when you switch to it.** The
+  compressed file used to finish starting in a later task and hold its
+  splash on a timer — in a tab that was not visible (or a viewer rendering
+  the file off-screen for a preview card) timers are throttled and frames
+  never come, so the editor sat behind the splash until the tab was looked
+  at. The runtime now unpacks and starts inside the file's own script,
+  before the page is even "loaded", and a hidden document drops the splash
+  the moment the editor exists; visible, the brand moment is held for at
+  most 0.8 s and never waits on its own fade.
+- **A web link whose address contains a dollar sign works again.** Since
+  links arrived, an address like `…/$a$b` had its two dollars read as a
+  formula and the link broke; formulas are now looked for in the text only,
+  never inside a tag.
+- **A pasted code snippet keeps its code.** The table the app uses to know
+  an element's fields had no entry for the code element, so a pasted or loaded
+  code block kept its box but lost its content, grammar and theme — an empty
+  snippet — and `validate()` did not know its fields. Found while building
+  the schema from that table; fixed.
 - **A plain Save drops unused images too.** 1.1.0 promised that a save
   leaves out every image nothing in the deck refers to, and it did — on
   every path except the one most people use. ⌘S and the Save button write
@@ -220,6 +213,13 @@ pre-1.0.
   to 91% of the interface — the formatting bar, the context menu, the canvas
   help, hidden slides, appearance, and the whole live-broadcast surface
   showed in English. All 22 carry every string again.
+- **One brand yellow.** Ten places in the editor chrome — the speaker view's
+  timer, buttons and current thumbnail, the show's link, selection and
+  progress colours, the follow chip, and the path editor's anchor dots —
+  carried their own copy of the accent instead of reading the chrome's
+  `--accent` token. They read the token now; nothing looks different. The
+  slide-list highlight already did. The deck's own `theme.accent` is a
+  separate thing and stays separate: chrome does not recolour per deck.
 
 ## [1.1.0] — 2026-09-14
 
