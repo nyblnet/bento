@@ -940,4 +940,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "JSON فشرده کپی شد",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "بارگذاری شد: {dropped} فیلد حذف شد، {warnings} هشدار — کنسول را ببینید",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "در نمای جاسازی‌شده به‌روزرسانی‌ها بررسی نمی‌شوند — برای بررسی، پرونده را در یک زبانهٔ مرورگر باز کنید.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "این دک برای اشتراک زنده یک‌تکه بیش از حد بزرگ است. تغییرات شما در نسخه‌تان ذخیره شده، اما کسی که اکنون بپیوندد ممکن است کل دک را دریافت نکند.",
+  "1 picture is still uploading; it will follow.": "۱ تصویر هنوز در حال بارگذاری است؛ بعداً می‌رسد.",
+  "{n} pictures are still uploading; they will follow.": "{n} تصویر هنوز در حال بارگذاری است؛ بعداً می‌رسند.",
+  "1 picture still uploading…": "۱ تصویر در حال بارگذاری…",
+  "{n} pictures still uploading…": "{n} تصویر در حال بارگذاری…",
 }

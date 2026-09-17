@@ -944,4 +944,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "تم نسخ JSON المضغوط",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "تم التحميل: {dropped} حقول مهملة، {warnings} تحذيرات — راجع وحدة التحكم",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "لا يتم التحقق من التحديثات داخل عرض مضمّن — افتح الملف في علامة تبويب المتصفح للتحقق.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "هذا العرض كبير جدًا لمشاركته مباشرةً دفعة واحدة. تغييراتك محفوظة في نسختك، لكن من ينضم الآن قد لا يستلم العرض كاملًا.",
+  "1 picture is still uploading; it will follow.": "لا تزال صورة واحدة قيد الرفع؛ ستصل لاحقًا.",
+  "{n} pictures are still uploading; they will follow.": "لا تزال {n} صور قيد الرفع؛ ستصل لاحقًا.",
+  "1 picture still uploading…": "صورة واحدة قيد الرفع…",
+  "{n} pictures still uploading…": "{n} صور قيد الرفع…",
 }

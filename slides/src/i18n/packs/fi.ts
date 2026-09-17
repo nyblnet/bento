@@ -941,4 +941,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "Tiivis JSON kopioitu",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Ladattu: {dropped} kenttää hylätty, {warnings} varoitusta — katso konsoli",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Päivityksiä ei tarkisteta upotetussa näkymässä — avaa tiedosto selaimen välilehdessä tarkistaaksesi.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Tämä pakka on liian suuri jaettavaksi suorana yhtenä kappaleena. Muutoksesi on tallennettu kopioosi, mutta nyt liittyvä ei ehkä saa koko pakkaa.",
+  "1 picture is still uploading; it will follow.": "1 kuva latautuu vielä; se seuraa perässä.",
+  "{n} pictures are still uploading; they will follow.": "{n} kuvaa latautuu vielä; ne seuraavat perässä.",
+  "1 picture still uploading…": "1 kuva latautuu…",
+  "{n} pictures still uploading…": "{n} kuvaa latautuu…",
 }

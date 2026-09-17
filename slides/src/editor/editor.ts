@@ -95,6 +95,8 @@ export class Editor {
   private avatarsBox!: HTMLElement
   private shareB!: HTMLElement
   private shareWrap!: HTMLElement
+  /** the popover's "pictures still uploading" poll — runs only while it is open */
+  private uploadPoll: number | null = null
   private session: import('../sync/session').SyncSession | null = null
   private updateFound: string | null = null
   private lastAutoCheck: import('../update').UpdateCheck | null = null
@@ -153,7 +155,13 @@ export class Editor {
     // the relay refused something (too big, room full, throttled) — the user
     // needs to know, because for the permanent codes their change stays in
     // this copy and never reaches anyone else
-    session.onNotice((n) => this.toast(syncNoticeText(n)))
+    session.onNotice((n) => {
+      let text = syncNoticeText(n)
+      // pictures still uploading are informational here (see syncNoticeText)
+      const pending = n.snapshot ? session.pendingBlobUploads() : 0
+      if (pending > 0) text += ' ' + (pending === 1 ? t('1 picture is still uploading; it will follow.') : t('{n} pictures are still uploading; they will follow.', { n: pending }))
+      this.toast(text)
+    })
     this.canvas.onTextEditChange = (elId) => session.setEditing(elId)
     this.store.on('current', () => this.canvas.setRemotePeers(session.peers()))
     // a document that carries collab config joins its relay session — at
@@ -1417,6 +1425,22 @@ export class Editor {
     const tr = onlineTransport()
     const on = sharingOn(this.store) && !!tr
     const status = note('', 'ed-share-status')
+    // pictures still uploading (inline assets over the blob threshold with no
+    // ref yet): polled once a second ONLY while the popover is open — the
+    // interval stops itself the moment the wrap is closed. Hidden at 0.
+    if (this.uploadPoll !== null) { clearInterval(this.uploadPoll); this.uploadPoll = null }
+    if (on && this.session) {
+      const uploading = note('', 'ed-share-uploading')
+      uploading.hidden = true
+      const tick = () => {
+        if (!this.shareWrap.classList.contains('open')) { if (this.uploadPoll !== null) clearInterval(this.uploadPoll); this.uploadPoll = null; return }
+        const k = this.session?.pendingBlobUploads() ?? 0
+        uploading.hidden = k === 0
+        uploading.textContent = k === 1 ? t('1 picture still uploading…') : t('{n} pictures still uploading…', { n: k })
+      }
+      tick()
+      this.uploadPoll = window.setInterval(tick, 1000)
+    }
     if (on) {
       const n = (this.session?.peers().length ?? 0) + 1
       status.textContent = tr!.status === 'open'
@@ -3619,6 +3643,13 @@ function languageInstallError(code: import('../packs').PackError): string {
 function syncNoticeText(n: import('../sync/session').SyncNotice): string {
   switch (n.code) {
     case 'too-large':
+      // A refused whole-deck SNAPSHOT is not a change and not an image: after
+      // #509 the snapshot carries no inline pictures, so this means the deck's
+      // own text/tables/small assets exceed the relay's frame ceiling. Say so —
+      // "that change" would blame an edit that is fine. The count of pictures
+      // still uploading is informational (the transient offload window), not
+      // the cause.
+      if (n.snapshot) return t('This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.')
       return n.media
         ? t('That image is too large to share live (about 1 MB max). It’s saved in your copy, but collaborators won’t see it.')
         : t('That change is too large to share live (about 1 MB max). It’s saved in your copy, but collaborators won’t see it.')

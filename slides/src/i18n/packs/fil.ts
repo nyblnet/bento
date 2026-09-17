@@ -953,4 +953,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "Nakopya ang compact na JSON",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Na-load: {dropped} field ang inalis, {warnings} babala — tingnan ang console",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Hindi sinusuri ang mga update sa loob ng naka-embed na view — buksan ang file sa isang tab ng browser para suriin.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Masyadong malaki ang deck na ito para i-share nang live nang buo. Naka-save ang mga pagbabago mo sa kopya mo, pero baka hindi matanggap ng sasali ngayon ang buong deck.",
+  "1 picture is still uploading; it will follow.": "1 larawan ang ina-upload pa; susunod ito.",
+  "{n} pictures are still uploading; they will follow.": "{n} larawan ang ina-upload pa; susunod ang mga ito.",
+  "1 picture still uploading…": "1 larawan ina-upload…",
+  "{n} pictures still uploading…": "{n} larawan ina-upload…",
 }
