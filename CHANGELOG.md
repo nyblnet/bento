@@ -11,6 +11,12 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Pasting into a table cell lands once.** Edit a cell, leave it unchanged,
+  edit it again — each visit quietly added another set of keystroke and paste
+  handlers to the same cell, so a later paste landed once per visit (four
+  visits, four copies; the same could happen to a text box). Each edit now
+  takes its handlers with it when it ends. Found by the maintainer, copying
+  an asset code between cells.
 ## [1.2.0] — 2026-09-16
 
 - **A deck opens inside Teams and SharePoint again.** Their viewer refuses
