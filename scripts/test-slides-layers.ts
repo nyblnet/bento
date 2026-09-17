@@ -13,12 +13,16 @@
 // the panel's reorder('front'|'back')/step(±1) semantics (copied here as the
 // reference — the same splice the Arrange kit does), a grouped element moves
 // with its group, a no-op returns the same array; highlight follows the
-// selection and lights a whole group; and the list never reaches render.ts.
+// selection and lights a whole group; the list never reaches render.ts; the
+// row SIGNATURE ignores everything a drag changes (a move or resize is
+// 'same'; a content edit is 'labels'; reorder, add, remove or regroup is
+// 'rows'); the section is mounted FIRST whatever is selected (one home) and
+// the panel hands the same header/list nodes back on every rebuild.
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { excerpt, labelFor, layerRows, moveInPaintOrder, highlighted } from '../slides/src/editor/layerrows.ts'
+import { excerpt, labelFor, layerRows, moveInPaintOrder, highlighted, rowSignature, signatureDiff } from '../slides/src/editor/layerrows.ts'
 
 let failures = 0
 let checks = 0
@@ -98,11 +102,43 @@ ok([...highlighted(grows, ['a'])].join() === 'a', 'a selected element lights its
 ok([...highlighted(grows, ['g1'])].sort().join() === 'g1,g2', 'selecting one member lights the whole group (the canvas selects groups)')
 ok(highlighted(grows, []).size === 0, 'nothing selected, nothing lit')
 
+console.log('\nsignature — what a drag must not touch\n')
+{
+  const mk = (els: E[]) => ({ elements: els as never })
+  const base = [el('a', 'text', { html: 'Hello' }), el('b'), el('c', 'text', { html: 'World', groupId: 'g' })]
+  const sig0 = rowSignature(mk(base))
+  const moved = base.map((e) => ({ ...e, x: 999, y: -5, w: 1, h: 1, rotation: 45, opacity: 0.2, fill: '#000' }))
+  ok(signatureDiff(sig0, rowSignature(mk(moved))) === 'same', 'moving, resizing, rotating, recolouring every element: same signature')
+  const relabel = base.map((e) => (e.id === 'a' ? { ...e, html: 'Hello there' } : e))
+  ok(signatureDiff(sig0, rowSignature(mk(relabel))) === 'labels', 'editing a text box\'s content: labels only')
+  ok(signatureDiff(sig0, rowSignature(mk([base[1], base[0], base[2]]))) === 'rows', 'reordering: rows')
+  ok(signatureDiff(sig0, rowSignature(mk([...base, el('d')]))) === 'rows', 'adding an element: rows')
+  ok(signatureDiff(sig0, rowSignature(mk(base.slice(0, 2)))) === 'rows', 'removing an element: rows')
+  ok(signatureDiff(sig0, rowSignature(mk(base.map((e) => (e.id === 'b' ? { ...e, groupId: 'g' } : e))))) === 'rows', 'regrouping: rows')
+  ok(signatureDiff(null, sig0) === 'rows', 'no rows yet: build them')
+  ok(signatureDiff(sig0, rowSignature(mk(base))) === 'same', 'the same document twice: same')
+}
+
 console.log('\neditor-only\n')
 ok(!/ed-layer|layers\.ts|LayersUI/.test(read('slides/src/render.ts')) && !/ed-layer|LayersUI/.test(read('slides/src/present.ts')), 'render.ts and present.ts know nothing of the list — thumbnails, the show, print and preview cannot carry it')
 const panels = read('slides/src/editor/panels.ts')
-ok(/this\.layers\.mount\(this\.host\); this\.buildSlidePanel\(\)/.test(panels), 'Slide panel: the list comes FIRST')
-ok(/this\.buildElementPanel\(els\[0\]\); this\.layers\.mount\(this\.host\)/.test(panels), 'element panel: the list comes LAST')
+{
+  // one home: mounted once, before any of the three builders, whatever is selected
+  const rebuild = panels.slice(panels.indexOf('private rebuild(force = false)'), panels.indexOf('private static CLOSED_BY_DEFAULT'))
+  const mountAt = rebuild.indexOf('this.layers.mount(this.host)')
+  ok(mountAt >= 0 && rebuild.indexOf('this.buildSlidePanel()') > mountAt && rebuild.indexOf('this.buildElementPanel(') > mountAt && rebuild.indexOf('this.buildMultiPanel(') > mountAt,
+    'the list is mounted FIRST, before the Slide, element and multi builders alike — one home')
+  ok((rebuild.match(/this\.layers\.mount\(/g) ?? []).length === 1, 'and only once per rebuild')
+  ok(/this\.layers\.detach\(\)\s*\n\s*this\.host\.innerHTML = ''/.test(rebuild), 'the list is told before the host is cleared, so its scroll survives')
+  ok(/this\.applyAccordion\(\)\s*\n\s*this\.layers\.restoreScroll\(\)/.test(rebuild), 'and put back AFTER the accordion has moved the list into its body (moving a node resets its scroll)')
+  const ui = read('slides/src/editor/layers.ts')
+  ok(/private header: HTMLElement/.test(ui) && /into\.appendChild\(this\.header\)\s*\n\s*into\.appendChild\(this\.list\)/.test(ui), 'mount re-appends the SAME header and list nodes (no new h3 per rebuild)')
+  ok(/const diff = signatureDiff\(this\.sig, next\)[\s\S]*if \(diff === 'same'\) \{ this\.highlight\(\); return \}/.test(ui), 'refresh compares the signature first and only re-highlights when nothing a row says changed')
+  ok(/if \(diff === 'labels'\)[\s\S]*label\.textContent = r\.label/.test(ui), 'a labels-only change patches text in place')
+  ok(!/store\.on\(/.test(ui) && !/'selection'/.test(ui), 'the list has no store subscription of its own — the panel drives it, and selection never rebuilds rows')
+  const acc = panels.slice(panels.indexOf('private applyAccordion()'), panels.indexOf('// --- builders'))
+  ok(/if \(h\.dataset\.acc\) continue/.test(acc) && /h\.nextElementSibling/.test(acc), 'the accordion attaches one click handler per header for its lifetime and finds the body live (the Layers h3 outlives rebuilds)')
+}
 ok(/setOrder: \(elements\) => this\.store\.commit\(/.test(panels), 'a move is one store.commit — one undo step, no new field')
 ok(/'Layers'\]\)/.test(panels.slice(panels.indexOf('CLOSED_BY_DEFAULT ='), panels.indexOf('CLOSED_BY_DEFAULT =') + 200)), 'closed by default (opened state persists per title like the other sections)')
 const layers = read('slides/src/editor/layers.ts') + read('slides/src/editor/layerrows.ts')

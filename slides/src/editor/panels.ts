@@ -201,22 +201,27 @@ export class PropsPanel {
     // every change. A selection or slide switch (force) starts the new
     // inspector at the top, which is where a different subject belongs.
     const scrollTop = force ? 0 : this.host.scrollTop
+    this.layers.detach()
     this.host.innerHTML = ''
     const els = this.store.selectedElements
-    // Layers (editor/layers.ts): first thing on the Slide panel, last thing on
-    // an element's — see that file's header for the measurement behind it.
-    if (els.length === 0) { this.layers.mount(this.host); this.buildSlidePanel() }
-    else if (els.length === 1) { this.buildElementPanel(els[0]); this.layers.mount(this.host) }
-    else { this.buildMultiPanel(els); this.layers.mount(this.host) }
+    // Layers (editor/layers.ts): FIRST, whatever is selected — one home. It
+    // used to sit first on the Slide panel and last on an element's, so every
+    // canvas click hopped it from top to bottom (see layerrows.ts's header).
+    this.layers.mount(this.host)
+    if (els.length === 0) this.buildSlidePanel()
+    else if (els.length === 1) this.buildElementPanel(els[0])
+    else this.buildMultiPanel(els)
     this.applyAccordion()
+    this.layers.restoreScroll()
     this.host.scrollTop = scrollTop
   }
 
   /** Collapsed by default until the user opens them (persisted per title). */
   private static CLOSED_BY_DEFAULT = new Set(['Slideshow', 'Presenting', 'Interactivity', 'Layout', 'Advanced (JSON)', 'Layers'])
 
-  /** The layer list, one instance re-mounted on every rebuild (rows are
-   *  cheap; the node keeps focus and drag state across a doc edit). */
+  /** The layer list: one instance, the SAME header and list nodes re-appended
+   *  on every rebuild (a drag emits a doc event per frame; the rows are only
+   *  rebuilt when what they say changed — layers.ts refresh). */
   private layers = new LayersUI({
     slide: () => this.store.slide,
     selection: () => this.store.selection,
@@ -247,15 +252,21 @@ export class PropsPanel {
       h.after(body)
       const isOpen = openState[key] ?? !PropsPanel.CLOSED_BY_DEFAULT.has(key)
       h.classList.add('ed-sec-toggle')
-      if (!isOpen) {
-        h.classList.add('closed')
-        body.style.display = 'none'
-      }
+      h.classList.toggle('closed', !isOpen)
+      if (!isOpen) body.style.display = 'none'
+      // A header can outlive a rebuild (the Layers h3 is one node for the
+      // panel's life), so the click handler is attached once and reads its
+      // body from the DOM each time rather than closing over one that a later
+      // rebuild threw away.
+      if (h.dataset.acc) continue
+      h.dataset.acc = '1'
       h.addEventListener('click', () => {
         const nowClosed = h.classList.toggle('closed')
-        body.style.display = nowClosed ? 'none' : ''
-        openState[key] = !nowClosed
-        lsSet('bento-panel-open', JSON.stringify(openState))
+        const live = h.nextElementSibling as HTMLElement | null
+        if (live?.classList.contains('ed-section-body')) live.style.display = nowClosed ? 'none' : ''
+        const state = lsJson<Record<string, boolean>>('bento-panel-open', {})
+        state[key] = !nowClosed
+        lsSet('bento-panel-open', JSON.stringify(state))
       })
     }
   }

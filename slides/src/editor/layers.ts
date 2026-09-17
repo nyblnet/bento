@@ -7,8 +7,8 @@
 import type { Slide, SlideElement } from '../model'
 import { ICONS } from '../icons'
 import { t } from '../i18n'
-import { layerRows, moveInPaintOrder, highlighted, type LayerRow } from './layerrows'
-export { excerpt, labelFor, layerRows, moveInPaintOrder, highlighted, type LayerRow } from './layerrows'
+import { layerRows, moveInPaintOrder, highlighted, rowSignature, signatureDiff, type LayerRow } from './layerrows'
+export { excerpt, labelFor, layerRows, moveInPaintOrder, highlighted, rowSignature, signatureDiff, type LayerRow } from './layerrows'
 
 /** The store surface the list needs — narrow so the rig never needs one. */
 export interface LayersHost {
@@ -26,7 +26,13 @@ const GLYPH: Partial<Record<SlideElement['type'], string>> = {
 
 export class LayersUI {
   private list: HTMLElement
+  private header: HTMLElement
   private dragId: string | null = null
+  /** what the rows on screen were built from — see layerrows.ts rowSignature */
+  private sig: ReturnType<typeof rowSignature> | null = null
+  /** the list's own scroll, carried across a panel rebuild (a detached node
+   *  forgets its scroll position; the panel clears its host on every edit) */
+  private savedScroll = 0
 
   constructor(private host: LayersHost) {
     this.list = document.createElement('div')
@@ -34,19 +40,75 @@ export class LayersUI {
     this.list.tabIndex = 0
     this.list.setAttribute('role', 'listbox')
     this.list.addEventListener('keydown', (ev) => this.onKey(ev))
+    // ONE header node for the life of the panel, like the list: the accordion
+    // retrofit keys its open state and its click handler off this element.
+    this.header = document.createElement('h3')
+    this.header.className = 'ed-section'
+    this.header.textContent = t('Layers')
   }
 
-  /** Append the section (header + list) to a panel host. */
+  /** Called by the panel before it clears its host, so the list's own scroll
+   *  survives the re-append. */
+  detach() {
+    if (this.list.isConnected) this.savedScroll = this.list.scrollTop
+  }
+
+  /** Append the section (header + list) to a panel host. The same two nodes
+   *  every time — rows are only rebuilt when they changed (refresh). */
   mount(into: HTMLElement) {
-    const h = document.createElement('h3')
-    h.className = 'ed-section'
-    h.textContent = t('Layers')
-    into.appendChild(h)
+    this.header.textContent = t('Layers')
+    into.appendChild(this.header)
     into.appendChild(this.list)
     this.refresh()
   }
 
+  /** After the panel's accordion has wrapped the list (moving a node into
+   *  the section body resets its scroll), put the list's scroll back. */
+  restoreScroll() {
+    if (this.savedScroll && this.list.isConnected) this.list.scrollTop = this.savedScroll
+  }
+
+  /** Bring the rows up to date, touching as little as the change needs:
+   *  nothing for a move/resize, label text for a content edit, the rows for
+   *  an order or membership change; the highlight always, in place. */
   refresh() {
+    const next = rowSignature(this.host.slide(), t)
+    const diff = signatureDiff(this.sig, next)
+    this.sig = next
+    if (diff === 'same') { this.highlight(); return }
+    if (diff === 'labels') {
+      for (const r of layerRows(this.host.slide(), t)) {
+        const node = this.rowNode(r.id)
+        const label = node?.querySelector<HTMLElement>('.ed-layer-label')
+        if (node && label && label.textContent !== r.label) { label.textContent = r.label; node.title = r.label }
+      }
+      this.highlight()
+      return
+    }
+    this.rebuildRows()
+  }
+
+  private rowNode(id: string): HTMLElement | null {
+    for (const n of this.list.children) if ((n as HTMLElement).dataset.id === id) return n as HTMLElement
+    return null
+  }
+
+  /** Selection changed: classes only, no DOM churn. */
+  private highlight() {
+    const rows = layerRows(this.host.slide(), t)
+    const lit = highlighted(rows, this.host.selection())
+    for (const n of this.list.children) {
+      const row = n as HTMLElement
+      if (!row.dataset.id) continue
+      const on = lit.has(row.dataset.id)
+      row.classList.toggle('sel', on)
+      row.setAttribute('aria-selected', on ? 'true' : 'false')
+    }
+  }
+
+  private rebuildRows() {
+    const scroll = this.list.scrollTop
+    const had = document.activeElement === this.list
     this.list.innerHTML = ''
     const rows = layerRows(this.host.slide(), t)
     const lit = highlighted(rows, this.host.selection())
@@ -97,6 +159,8 @@ export class LayersUI {
       })
       this.list.appendChild(row)
     }
+    this.list.scrollTop = scroll
+    if (had) this.list.focus({ preventScroll: true })
   }
 
   private dropAbove(ev: DragEvent, row: HTMLElement): boolean {

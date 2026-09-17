@@ -11,6 +11,13 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **The Layers list stays put.** It sat at the top of the panel with nothing
+  selected and at the bottom once something was, so every click on the canvas
+  moved it; and it rebuilt itself on every frame of a drag, so it flickered
+  and lost its scroll while you moved things. It has one home now, first in
+  the panel whatever is selected, and it only redraws when the order, the
+  members or a label actually change — a move, a resize or a click never
+  touches it. Reported by the maintainer.
 ## [1.2.0] — 2026-09-16
 
 - **A deck opens inside Teams and SharePoint again.** Their viewer refuses

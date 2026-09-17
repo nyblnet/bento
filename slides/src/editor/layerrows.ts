@@ -10,15 +10,24 @@
  * somewhere ends up exactly where the Order buttons would have put it
  * (moveInPaintOrder below is the same splice as repeated steps).
  *
- * WHERE IT LIVES (measured, Chrome 1565 px wide, starter deck, panel
- * viewport 740 px): the Slide panel with nothing selected is 1192 px of
- * content; a selected text element's panel is 2219 px. So the list sits at
- * the TOP of the Slide panel — nothing selected is when a reader asks "what
- * is on this slide?" — and closes the element panel as its LAST section,
- * where it is one End-key from anywhere rather than lost between Typography
- * and Presenting; closed by default, open state shared under one title. The
- * list caps itself at ~12 rows and scrolls inside (the showcase title slide
- * has 39 elements: uncapped it pushed the Slide controls ~975 px down).
+ * WHERE IT LIVES: FIRST in the properties panel, whatever is selected. The
+ * #481 measurement (Chrome 1565 px wide, starter deck, panel viewport 740 px:
+ * the Slide panel is 1192 px of content, a selected text element's 2219 px)
+ * argued for putting it first on the Slide panel and LAST on an element's, so
+ * it was reachable in both — but a section that moves is worse than one that
+ * is far: every click on the canvas hopped it from the top of the panel to
+ * the bottom, and a user who opened it expected it where they left it. One
+ * home now: structure first, then the properties of the selection; closed by
+ * default, open state shared under one title. The list caps itself at ~12
+ * rows and scrolls inside (the showcase title slide has 39 elements: uncapped
+ * it pushed the Slide controls ~975 px down).
+ *
+ * WHAT REBUILDS IT: only a change in what the rows SAY. A drag emits a doc
+ * event per frame, and none of them changes a row (position and size are not
+ * in the list), so the list compares a signature of (ids in paint order,
+ * labels, groups) and does nothing when it is unchanged, patches label text
+ * when only labels changed, and rebuilds rows only on an order or membership
+ * change. Selection toggles highlight classes in place.
  *
  * This file is the DOM-free half (rows, labels, the move), imported plain by
  * scripts/test-slides-layers.ts; layers.ts is the DOM.
@@ -106,3 +115,20 @@ export function highlighted(rows: readonly LayerRow[], selection: readonly strin
   return new Set(rows.filter((r) => sel.has(r.id) || (r.groupId && groups.has(r.groupId))).map((r) => r.id))
 }
 
+/** What the rows depend on, as one comparable string — ids in paint order,
+ *  labels and groups. Position, size, colour and every other property are
+ *  deliberately absent: a drag frame must not touch the list. */
+export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): { order: string; labels: string } {
+  const rows = layerRows(slide, tr)
+  return {
+    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}`).join('\u001e'),
+    labels: rows.map((r) => r.label).join('\u001e'),
+  }
+}
+
+/** How much of the list a change touches. */
+export function signatureDiff(a: ReturnType<typeof rowSignature> | null, b: ReturnType<typeof rowSignature>): 'same' | 'labels' | 'rows' {
+  if (!a) return 'rows'
+  if (a.order !== b.order) return 'rows'
+  return a.labels === b.labels ? 'same' : 'labels'
+}
