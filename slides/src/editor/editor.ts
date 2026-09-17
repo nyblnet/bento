@@ -43,7 +43,10 @@ import { stripEmbeddedEnvelopes } from '../envelope'
 import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
-import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, type ShrinkResult } from './shrink'
+import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
+import { dryRun, applyCompress, type DryRun } from './compressdeck'
+import { createDialog } from '../../../kernel/src/ui/dialog.ts'
+import '../../../kernel/src/ui/dialog.css'
 
 const i18nT = t
 
@@ -3491,6 +3494,20 @@ export class Editor {
     shrinkRow.title = t('A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.')
     box.appendChild(shrinkRow)
 
+    // the explicit pass over pictures already in the deck (editor/compressdeck.ts):
+    // dry run → the real numbers in a confirmation → one undo step
+    const compressRow = document.createElement('div')
+    compressRow.className = 'ed-about-auto'
+    const compressBtn = document.createElement('button')
+    compressBtn.className = 'ed-btn'
+    compressBtn.textContent = t('Compress pictures in this deck…')
+    compressBtn.title = t('Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.')
+    const compressNote = document.createElement('span')
+    compressNote.className = 'ed-hint'
+    compressBtn.addEventListener('click', () => { void this.compressDeckPictures(compressBtn, compressNote, overlay) })
+    compressRow.append(compressBtn, compressNote)
+    box.appendChild(compressRow)
+
     // the hard no-network switch: blocks update checks AND online
     // collaboration for this browser. Same-machine tab sync is not
     // networking and stays on.
@@ -3575,6 +3592,51 @@ export class Editor {
     document.addEventListener('keydown', onKey, true)
     document.body.appendChild(overlay)
     if (runCheck || this.updateFound) checkB.click()
+  }
+
+  /** About ▸ Compress pictures in this deck…: every picture runs through the
+   *  insert-time shrink rules; the confirmation states the measured total; one
+   *  store commit applies it. Nothing is written until Compress is clicked. */
+  private async compressDeckPictures(btn: HTMLButtonElement, note: HTMLElement, aboutOverlay: HTMLElement) {
+    if (this.store.readOnly) return
+    btn.disabled = true
+    const doc = this.store.doc
+    let run: DryRun
+    try {
+      run = await dryRun(doc, (done, total) => { note.textContent = t('{done} of {total}…', { done: String(done), total: String(total) }) })
+    } finally {
+      btn.disabled = false
+      note.textContent = ''
+    }
+    if (!run.shrunk.length) {
+      this.toast(run.examined ? t('Every picture is already as small as it gets') : t('This deck has no pictures to compress'))
+      return
+    }
+    const n = run.shrunk.length
+    const pct = Math.round((1 - run.after / run.before) * 100)
+    const body = document.createElement('div')
+    const sum = document.createElement('p')
+    sum.textContent = t('{n} pictures · {before} → {after} (−{pct}%)', { n: String(n), before: fmtBytes(run.before), after: fmtBytes(run.after), pct: String(pct) })
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.textContent = t('Graphics and logos stay lossless; photos are re-encoded at up to 2560 px. ⌘Z undoes it until you save.')
+    body.append(sum, hint)
+    const cancel = document.createElement('button')
+    cancel.className = 'ed-btn'
+    cancel.textContent = t('Cancel')
+    const go = document.createElement('button')
+    go.className = 'ed-btn ed-primary'
+    go.textContent = t('Compress')
+    const dlg = createDialog({ title: t('Compress pictures in this deck'), content: body, actions: [cancel, go] })
+    cancel.addEventListener('click', () => dlg.close())
+    go.addEventListener('click', () => {
+      dlg.close()
+      let applied = 0
+      this.store.commit(() => { applied = applyCompress(this.store.doc, run) })
+      aboutOverlay.remove()
+      this.toast(t('{n} pictures compressed — {before} → {after}', { n: String(applied), before: fmtBytes(run.before), after: fmtBytes(run.after) }))
+    })
+    dlg.open()
   }
 
   toast(message: string) {

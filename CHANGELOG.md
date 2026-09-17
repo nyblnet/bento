@@ -11,6 +11,14 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Compress the pictures already in a deck.** 1.2.0 shrinks a photo as you
+  insert it; a deck made before that still carries its photos at full size.
+  About ▸ *Compress pictures in this deck…* runs every picture through the
+  same rules — 2560 px at most, photos re-encoded, screenshots and logos left
+  lossless — shows the measured total first ("3 pictures · 71.5 MB → 1.6 MB")
+  and applies it as one undoable step. A picture that is already a JPEG or
+  WebP within the cap is left alone, so running it twice changes nothing.
+  In a live session the new bytes are shared like any other change.
 ## [1.2.1] — 2026-09-17
 
 - **Pasting into a table cell lands once.** Edit a cell, leave it unchanged,
