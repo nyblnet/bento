@@ -46,6 +46,12 @@ export class SlideCanvas {
   private pinching = false
   private zoomLabel: HTMLElement | null = null
   private editing: HTMLElement | null = null
+  /** The listeners of the CURRENT inline edit (text box or table cell), so
+   *  they die with it. Without this a node that was edited, committed with
+   *  no change (no re-render, same node) and edited again carried one more
+   *  keydown/input/paste listener each time — Tab through a table's cells,
+   *  then paste into one, and the paste landed N times over. */
+  private editListeners: AbortController | null = null
   /** Slide identity captured when an inline edit begins. Element ids may be
    *  shared across duplicated slides, so resolving through store.slide at
    *  commit time can write into the wrong slide after navigation or a remote
@@ -1413,6 +1419,9 @@ export class SlideCanvas {
       this.editingShowedRaw = true
     }
     this.editing = node
+    this.editListeners?.abort()
+    this.editListeners = new AbortController()
+    const signal = this.editListeners.signal
     this.editingSlideId = this.store.slide.id
     node.classList.add('bento-editing')
     inner.contentEditable = 'true'
@@ -1444,20 +1453,20 @@ export class SlideCanvas {
           execFormat(cmd)
         }
       }
-    })
+    }, { signal })
     // markdown affordances: **bold** / *italic* / `code` / ~~strike~~ / "- "
     // collapse as you type (⌘Z reverts, backslash escapes); pasted plain
     // text converts the same patterns
     inner.addEventListener('input', () => {
       if (!autoformatAtCaret()) clearAutoformat()
-    })
+    }, { signal })
     inner.addEventListener('paste', (ev) => {
       const text = ev.clipboardData?.getData('text/plain')
       if (!text) return
       ev.preventDefault()
       document.execCommand('insertHTML', false, sanitizeHtml(markdownToHtml(text)))
-    })
-    inner.addEventListener('blur', () => this.commitTextEdit(), { once: true })
+    }, { signal })
+    inner.addEventListener('blur', () => this.commitTextEdit(), { once: true, signal })
   }
 
   /** collaborator presence: notified when text editing starts/stops */
@@ -1472,6 +1481,8 @@ export class SlideCanvas {
     if (!node) return
     if (this.editingCell) { this.commitCellEdit(node); return }
     const slideId = this.editingSlideId
+    this.editListeners?.abort()
+    this.editListeners = null
     this.editing = null
     this.editingSlideId = null
     this.onTextEditChange?.(undefined)
@@ -1541,6 +1552,9 @@ export class SlideCanvas {
     const inner = td.querySelector<HTMLElement>('.bento-cell-inner')
     if (!node || !inner) return
     this.editing = node
+    this.editListeners?.abort()
+    this.editListeners = new AbortController()
+    const signal = this.editListeners.signal
     this.editingSlideId = this.store.slide.id
     this.editingCell = { r, c }
     node.classList.add('bento-editing')
@@ -1561,21 +1575,23 @@ export class SlideCanvas {
         const cmd = { b: 'bold', i: 'italic', u: 'underline' }[ev.key.toLowerCase()]
         if (cmd) { ev.preventDefault(); execFormat(cmd) }
       }
-    })
-    inner.addEventListener('input', () => { if (!autoformatAtCaret()) clearAutoformat() })
+    }, { signal })
+    inner.addEventListener('input', () => { if (!autoformatAtCaret()) clearAutoformat() }, { signal })
     inner.addEventListener('paste', (ev) => {
       const text = ev.clipboardData?.getData('text/plain')
       if (!text) return
       ev.preventDefault()
       document.execCommand('insertHTML', false, sanitizeHtml(markdownToHtml(text)))
-    })
-    inner.addEventListener('blur', () => this.commitTextEdit(), { once: true })
+    }, { signal })
+    inner.addEventListener('blur', () => this.commitTextEdit(), { once: true, signal })
   }
 
   private commitCellEdit(node: HTMLElement) {
     const cell = this.editingCell!
     const id = node.dataset.elId
     const slideId = this.editingSlideId
+    this.editListeners?.abort()
+    this.editListeners = null
     this.editing = null
     this.editingSlideId = null
     this.editingCell = null
