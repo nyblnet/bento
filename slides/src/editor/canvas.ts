@@ -11,6 +11,8 @@ import { t } from '../i18n'
 import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type SlideElement, type TableElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
+import { bulletsToLists } from './bullets'
+import { clipboardToHtml } from './paste'
 import { execFormat, hideFormatBar, syncFormatBar } from './richtext'
 import { PathEditor } from './patheditor'
 import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors } from './lineedit'
@@ -1452,6 +1454,10 @@ export class SlideCanvas {
       if (!autoformatAtCaret()) clearAutoformat()
     })
     inner.addEventListener('paste', (ev) => {
+      // formatting travels: the clipboard's html flavour, through the one
+      // sanitizer (editor/paste.ts); plain text keeps its markdown conversion
+      const rich = clipboardToHtml(ev.clipboardData)
+      if (rich) { ev.preventDefault(); document.execCommand('insertHTML', false, rich); return }
       const text = ev.clipboardData?.getData('text/plain')
       if (!text) return
       ev.preventDefault()
@@ -1483,7 +1489,10 @@ export class SlideCanvas {
     // For code, we care about the raw innerText
     const text = inner.innerText
     // drop the zero-width caret spacers autoformat leaves behind
-    const html = sanitizeHtml(inner.innerHTML.replace(/\u200B/g, '').replace(/\\([*_~`-])/g, '$1'))
+    // typed "- " bullets are glyphs while you type (markdown.ts says why);
+    // once the edit ends they become real list items, so a long bullet wraps
+    // under its text rather than under the glyph (#502, editor/bullets.ts)
+    const html = bulletsToLists(sanitizeHtml(inner.innerHTML.replace(/\u200B/g, '').replace(/\\([*_~`-])/g, '$1')))
     const grownH = Math.max(parseFloat(node.style.height) || 0, inner.scrollHeight)
     const el = this.store.doc.slides
       .find((slide) => slide.id === slideId)
@@ -1564,6 +1573,10 @@ export class SlideCanvas {
     })
     inner.addEventListener('input', () => { if (!autoformatAtCaret()) clearAutoformat() })
     inner.addEventListener('paste', (ev) => {
+      // formatting travels: the clipboard's html flavour, through the one
+      // sanitizer (editor/paste.ts); plain text keeps its markdown conversion
+      const rich = clipboardToHtml(ev.clipboardData)
+      if (rich) { ev.preventDefault(); document.execCommand('insertHTML', false, rich); return }
       const text = ev.clipboardData?.getData('text/plain')
       if (!text) return
       ev.preventDefault()

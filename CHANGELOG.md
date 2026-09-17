@@ -11,6 +11,18 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Pasting keeps the formatting.** Copy bold, italic or a list from one text
+  box and paste it into another, or into a table cell, and it arrives as it
+  was — the paste used to read only the plain-text copy and rebuild from
+  that. What arrives goes through the same checker as every other piece of
+  text: no styles, no scripts, no handlers, a link only if it is a web
+  address. Plain text pasted from elsewhere still converts its markdown.
+  Reported by Hermholtz (#503).
+- **A long bullet wraps under its text.** Typing `- ` makes a bullet as you
+  type; when you finish editing, those lines become a real list, so a bullet
+  that runs onto a second line indents that line under the first word, not
+  under the dot — and an indented `- ` nests. Lists you made from the
+  formatting bar are untouched. Reported by Hermholtz (#502).
 - **A typed bullet keeps its space.** Typing `- ` made the bullet, but the
   next letter landed right against it — the space after the glyph was a
   plain space at the end of the line, which the browser treats as nothing and

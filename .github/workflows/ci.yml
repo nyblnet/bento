@@ -1388,6 +1388,13 @@ jobs:
         # routes the argument. Bare {{date}} stays viewer-locale (#381).
         run: node scripts/test-slides-fields.ts
 
+      - name: Typed bullets become lists rig
+        # editor/bullets.ts bulletsToLists: glyph lines become real <ul><li>
+        # at commit (hanging indent), nesting by indent, untouched otherwise,
+        # idempotent; both paste handlers read the clipboard through
+        # editor/paste.ts (the html flavour, sanitized) -- #502, #503.
+        run: node scripts/test-slides-bullets.ts
+
       - name: Shell loader and carrier rig
         # base86 payloads (scripts/lib/b86.mjs) round-trip and can never
         # contain </script, <!--, -->, ]]> or ${; the loader inflates

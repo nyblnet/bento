@@ -298,9 +298,10 @@ const CHROME = [
  * render.ts, so this is the shipping code path and not a re-implementation of
  * it. Written without backticks or `${` so it can live in a template literal.
  */
-const probeSource = (renderPath: string, modelPath: string) => `
+const probeSource = (renderPath: string, modelPath: string, pastePath: string) => `
 import { renderSlide, sanitizeHtml } from ${JSON.stringify(renderPath)}
 import { newDoc } from ${JSON.stringify(modelPath)}
+import { clipboardToHtml } from ${JSON.stringify(pastePath)}
 
 const O = location.origin
 const pwned: number[] = []
@@ -409,6 +410,55 @@ if (location.pathname === '/meta.html') {
       el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
     }
     check('3c — and clicking or hovering the lifted elements runs nothing', ![41, 42, 44, 45].some((n) => pwned.includes(n)))
+
+    // --- 3d. the clipboard's html flavour, pasted into a live text box --------
+    // Discussion #503: a paste now prefers text/html. It goes through the SAME
+    // sanitizer (editor/paste.ts clipboardToHtml), so the hostile corpus above,
+    // arriving as a ClipboardEvent into a contentEditable box, comes out with
+    // no handler, no script, no style, and nothing runs when the pasted nodes
+    // are clicked or hovered. Chrome's copy quirks are handled first: meta and
+    // style elements go, and a <b style="font-weight:normal"> (Chrome's way
+    // of saying NOT bold inside a bold run) is unwrapped rather than becoming
+    // a real <b> once its attribute is stripped.
+    const box3d = document.createElement('div')
+    box3d.contentEditable = 'true'
+    document.body.appendChild(box3d)
+    box3d.focus()
+    const hostile = '<meta charset="utf-8"><style>b{color:red}</style>' +
+      '<b onclick="window.__pwn(51)" style="font-weight:700">bold</b> ' +
+      '<b style="font-weight:normal">notbold</b> ' +
+      '<i onmouseover="window.__pwn(52)">it</i>' +
+      '<script>window.__pwn(53)</scr' + 'ipt>' +
+      '<a href="javascript:window.__pwn(54)">j</a><a href="https://bento.page/" target="_top" onclick="window.__pwn(55)">ok</a>' +
+      '<section><u onclick="window.__pwn(56)">deep</u></section>' +
+      '<img src=x onerror="window.__pwn(57)">' +
+      '<span style="position:fixed;inset:0;background:url(' + O + '/beacon.png)">s</span>' +
+      '<ul><li>one</li><li>two</li></ul>'
+    const dt3d = new DataTransfer()
+    dt3d.setData('text/html', hostile)
+    dt3d.setData('text/plain', 'plain fallback')
+    const inserted = clipboardToHtml(dt3d)
+    document.execCommand('insertHTML', false, inserted)
+    const kept = box3d.innerHTML
+    check('3d — the html flavour is used (bold, italic, underline and the list survive the paste)',
+      /<b>bold<\\/b>/.test(kept) && /<i>it<\\/i>/.test(kept) && /<u>deep<\\/u>/.test(kept) && /<ul><li>one<\\/li><li>two<\\/li><\\/ul>/.test(kept))
+    check('3d — Chrome\\'s "not bold" <b> is unwrapped, not promoted to bold', !/<b>notbold<\\/b>/.test(kept) && /notbold/.test(kept))
+    check('3d — no handler, script, style, img or meta survives the paste',
+      !box3d.querySelector('[onclick],[onmouseover],[onerror],[style],script,img,meta,style,link') && !kept.includes('__pwn') && !kept.includes('javascript:'))
+    const a3d = Array.from(box3d.querySelectorAll('a'))
+    check('3d — only the web link keeps its href, with no other attribute',
+      a3d.length === 1 && a3d[0].getAttribute('href') === 'https://bento.page/' && a3d[0].attributes.length === 1)
+    for (const el of Array.from(box3d.querySelectorAll('b, i, u, span, li'))) {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    }
+    check('3d — clicking or hovering the pasted nodes runs nothing', ![51, 52, 53, 54, 55, 56, 57].some((n) => pwned.includes(n)))
+    const dtPlain = new DataTransfer()
+    dtPlain.setData('text/plain', 'just text')
+    check('3d — a clipboard with no html flavour hands over to the plain path', clipboardToHtml(dtPlain) === '')
+    const dtEmpty = new DataTransfer()
+    dtEmpty.setData('text/html', '<meta charset="utf-8"><style>x{}</style><script>window.__pwn(58)</scr' + 'ipt>')
+    check('3d — html that is nothing but junk hands over to the plain path too', clipboardToHtml(dtEmpty) === '' && !pwned.includes(58))
 
     // --- 4. network out of a self-contained file -------------------------------
     draw('<div>x</div><link rel="stylesheet" href="' + O + '/tracker.css">' +
@@ -625,7 +675,7 @@ if (location.pathname === '/meta.html') {
 async function runBrowserSection(chrome: string) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-sanitize-'))
   const entry = path.join(tmp, 'probe.ts')
-  fs.writeFileSync(entry, probeSource(repoFile('slides/src/render.ts'), repoFile('slides/src/model.ts')))
+  fs.writeFileSync(entry, probeSource(repoFile('slides/src/render.ts'), repoFile('slides/src/model.ts'), repoFile('slides/src/editor/paste.ts')))
   execFileSync(repoFile('slides/node_modules/.bin/esbuild'), [
     entry, '--bundle', '--format=esm', '--outfile=' + path.join(tmp, 'probe.js'),
   ], { stdio: 'pipe' })
