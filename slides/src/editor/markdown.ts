@@ -67,13 +67,15 @@ export function autoformatAtCaret(): boolean {
   const upto = node.data.slice(0, off)
 
   // "- " or "* " at line start → bullet glyph (contentEditable renders the
-  // trailing space as NBSP, so match both; keep NBSP so the glyph's gap can't
-  // collapse). Indented by two or more spaces → a hollow sub-bullet, the
+  // trailing space as NBSP, so match both). The glyph is followed by an NBSP:
+  // a plain space at the end of a text node is a collapsed trailing space that
+  // the next typed character simply replaces — "•x", no gap (discussion
+  // #501; measured: "- " then "x" gave U+2022 U+0078). Indented by two or more spaces → a hollow sub-bullet, the
   // indent kept (discussions #255, #368).
   const bullet = upto.match(/(?:^|\n)([  ]{2,})?[-*][  ]$/)
   if (bullet && off >= 2 && isLineStart(node, off - 2 - (bullet[1]?.length ?? 0))) {
     const source = node.data.slice(off - 2, off)
-    node.replaceData(off - 2, 2, bullet[1] ? '◦ ' : '• ')
+    node.replaceData(off - 2, 2, bullet[1] ? '◦ ' : '• ')
     placeCaret(node, off)
     lastFormat = { kind: 'bullet', node, offset: off - 2, source }
     return true
@@ -160,8 +162,8 @@ export function markdownToHtml(text: string): string {
     .map((line) => {
       // "- " / "* " → bullet; indented two+ spaces → sub-bullet, indent kept as
       // NBSPs so it survives HTML whitespace collapsing
-      let s = escapeHtml(line).replace(/^( {2,})[-*] /, (_, sp: string) => '\u00a0'.repeat(sp.length) + '◦ ')
-        .replace(/^( ?)[-*] /, '$1• ')
+      let s = escapeHtml(line).replace(/^( {2,})[-*] /, (_, sp: string) => '\u00a0'.repeat(sp.length) + '◦ ')
+        .replace(/^( ?)[-*] /, '$1• ')
       s = s.replace(/\[([^\[\]]+)\]\((https?:\/\/[^\s()]+)\)/gi, (m, cap: string, href: string) =>
         isWebUrl(href) ? `<a href="${href.replaceAll('"', '&quot;')}">${cap}</a>` : m)
       s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')

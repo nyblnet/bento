@@ -11,6 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A typed bullet keeps its space.** Typing `- ` made the bullet, but the
+  next letter landed right against it — the space after the glyph was a
+  plain space at the end of the line, which the browser treats as nothing and
+  the next keystroke replaced. It is a non-breaking space now, for top-level
+  and indented bullets alike, typed or pasted. Reported by Hermholtz (#501).
 ## [1.2.0] — 2026-09-16
 
 - **A deck opens inside Teams and SharePoint again.** Their viewer refuses

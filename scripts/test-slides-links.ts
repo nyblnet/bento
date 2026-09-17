@@ -39,10 +39,20 @@ ok(!isWebUrl('https://' + 'a'.repeat(2100)), 'length is bounded')
 ok(!isWebUrl(42) && !isWebUrl(null), 'non-strings are not links')
 
 console.log('\nmarkdownToHtml — bullets\n')
-ok(markdownToHtml('- one\n- two') === '• one<br>• two', '"- " makes a bullet')
-ok(markdownToHtml('* one\n* two') === '• one<br>• two', '"* " makes a bullet too (#255)')
-ok(markdownToHtml('- top\n  - sub\n    * subsub') === '• top<br>  ◦ sub<br>    ◦ subsub',
+// The glyph is followed by an NBSP (U+00A0), never a plain space: at the end
+// of a text node a plain space is a collapsed trailing space that the next
+// typed character replaces — "- " then "x" gave "•x" (discussion #501).
+const NB = '\u00a0'
+ok(markdownToHtml('- one\n- two') === `•${NB}one<br>•${NB}two`, '"- " makes a bullet, glyph + NBSP')
+ok(markdownToHtml('* one\n* two') === `•${NB}one<br>•${NB}two`, '"* " makes a bullet too (#255)')
+ok(markdownToHtml('- top\n  - sub\n    * subsub') === `•${NB}top<br>${NB}${NB}◦${NB}sub<br>${NB}${NB}${NB}${NB}◦${NB}subsub`,
   'two or more leading spaces make an indented sub-bullet, indent kept as NBSPs (#368)')
+{
+  const src = readFileSync(new URL('../slides/src/editor/markdown.ts', import.meta.url), 'utf8')
+  const typed = /bullet\[1\] \? '◦(.)' : '•(.)'/.exec(src)
+  ok(!!typed && typed[1] === NB && typed[2] === NB, 'typing "- " inserts the glyph + NBSP too (the autoformat literal, #501)')
+  ok(!/[•◦] '/.test(src.replace(/\/\/[^\n]*/g, '')), 'no glyph is followed by a plain space anywhere in the converter')
+}
 ok(markdownToHtml('\\- not a bullet') === '- not a bullet' && markdownToHtml('\\* not a bullet') === '* not a bullet', 'escaped markers stay literal')
 ok(markdownToHtml('2 * 3 = 6') === '2 * 3 = 6', 'a * mid-line is arithmetic, not a bullet')
 ok(markdownToHtml('*em*') === '<i>em</i>', '*italic* still works — a bullet needs the trailing space at line start')
