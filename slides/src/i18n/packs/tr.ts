@@ -935,4 +935,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "Kompakt JSON kopyalandı",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Yüklendi: {dropped} alan atıldı, {warnings} uyarı — konsola bakın",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Gömülü görünümde güncellemeler denetlenmez — denetlemek için dosyayı bir tarayıcı sekmesinde açın.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Bu deste tek parça halinde canlı paylaşılamayacak kadar büyük. Değişiklikleriniz kopyanızda kayıtlı, ancak şimdi katılan biri destenin tamamını alamayabilir.",
+  "1 picture is still uploading; it will follow.": "1 resim hâlâ yükleniyor; ardından gelecek.",
+  "{n} pictures are still uploading; they will follow.": "{n} resim hâlâ yükleniyor; ardından gelecek.",
+  "1 picture still uploading…": "1 resim yükleniyor…",
+  "{n} pictures still uploading…": "{n} resim yükleniyor…",
 }

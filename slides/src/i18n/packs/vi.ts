@@ -934,4 +934,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "Đã sao chép JSON gọn",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Đã tải: bỏ {dropped} trường, {warnings} cảnh báo — xem console",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Không kiểm tra cập nhật trong chế độ xem nhúng — mở tệp trong một thẻ trình duyệt để kiểm tra.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Bộ trang chiếu này quá lớn để chia sẻ trực tiếp trong một lần. Thay đổi của bạn đã được lưu trong bản sao của bạn, nhưng người tham gia lúc này có thể không nhận được toàn bộ.",
+  "1 picture is still uploading; it will follow.": "1 hình vẫn đang tải lên; sẽ đến sau.",
+  "{n} pictures are still uploading; they will follow.": "{n} hình vẫn đang tải lên; sẽ đến sau.",
+  "1 picture still uploading…": "1 hình đang tải lên…",
+  "{n} pictures still uploading…": "{n} hình đang tải lên…",
 }

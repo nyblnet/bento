@@ -944,4 +944,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "Компактний JSON скопійовано",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Завантажено: відкинуто полів: {dropped}, попереджень: {warnings} — див. консоль",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "У вбудованому поданні оновлення не перевіряються — відкрийте файл у вкладці браузера, щоб перевірити.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Ця презентація завелика, щоб поділитися нею наживо цілком. Ваші зміни збережено у вашій копії, але той, хто приєднається зараз, може не отримати всю презентацію.",
+  "1 picture is still uploading; it will follow.": "1 зображення ще завантажується; воно надійде пізніше.",
+  "{n} pictures are still uploading; they will follow.": "{n} зображень ще завантажуються; вони надійдуть пізніше.",
+  "1 picture still uploading…": "1 зображення завантажується…",
+  "{n} pictures still uploading…": "{n} зображень завантажуються…",
 }

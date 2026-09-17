@@ -961,4 +961,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "Ykjam JSON göçürildi",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Ýüklendi: {dropped} meýdan taşlandy, {warnings} duýduryş — konsola serediň",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Gurnalan görnüşde täzelenmeler barlanmaýar — barlamak üçin faýly brauzer goýmasynda açyň.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Bu toplum bir bölek görnüşinde göni paýlaşmak üçin gaty uly. Üýtgeşmeleriňiz nusgaňyzda saklandy, ýöne häzir goşulýan toplumy dolulygyna alyp bilmez.",
+  "1 picture is still uploading; it will follow.": "1 surat henizem ýüklenýär; soňra geler.",
+  "{n} pictures are still uploading; they will follow.": "{n} surat henizem ýüklenýär; soňra geler.",
+  "1 picture still uploading…": "1 surat ýüklenýär…",
+  "{n} pictures still uploading…": "{n} surat ýüklenýär…",
 }

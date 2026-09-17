@@ -932,4 +932,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "Compacte JSON gekopieerd",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Geladen: {dropped} velden weggelaten, {warnings} waarschuwingen — zie de console",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "In een ingesloten weergave wordt niet op updates gecontroleerd — open het bestand in een browsertabblad om te controleren.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Dit deck is te groot om in één keer live te delen. Je wijzigingen zijn opgeslagen in je kopie, maar wie nu meedoet krijgt misschien niet het hele deck.",
+  "1 picture is still uploading; it will follow.": "1 afbeelding wordt nog geüpload; die volgt.",
+  "{n} pictures are still uploading; they will follow.": "{n} afbeeldingen worden nog geüpload; die volgen.",
+  "1 picture still uploading…": "1 afbeelding wordt geüpload…",
+  "{n} pictures still uploading…": "{n} afbeeldingen worden geüpload…",
 }

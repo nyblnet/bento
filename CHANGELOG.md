@@ -11,6 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **When a deck is too large to share live, the message says so.** A refused
+  whole-deck checkpoint used to read as "that change is too large (about 1 MB
+  max)", blaming an edit that was fine. It now says the deck is too large to
+  share in one piece, and the Share panel shows how many pictures are still
+  uploading while a live session catches up.
 - **A deck full of photos can be shared live again.** A deck whose pictures
   were each under the sharing limit but together came to more than about a
   megabyte could not be shared at all — the copy a joining collaborator

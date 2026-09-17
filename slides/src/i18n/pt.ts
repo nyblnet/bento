@@ -922,4 +922,9 @@ export const pt: Catalog = {
   "Compact JSON copied": "JSON compacto copiado",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Carregado: {dropped} campos descartados, {warnings} avisos — ver a consola",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Numa vista incorporada as atualizações não são verificadas — abra o ficheiro num separador do navegador para verificar.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Esta apresentação é demasiado grande para ser partilhada ao vivo de uma só vez. As tuas alterações estão guardadas na tua cópia, mas quem entrar agora pode não a receber inteira.",
+  "1 picture is still uploading; it will follow.": "1 imagem ainda está a ser enviada; chegará a seguir.",
+  "{n} pictures are still uploading; they will follow.": "{n} imagens ainda estão a ser enviadas; chegarão a seguir.",
+  "1 picture still uploading…": "1 imagem a enviar…",
+  "{n} pictures still uploading…": "{n} imagens a enviar…",
 }

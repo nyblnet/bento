@@ -937,4 +937,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "JSON קומפקטי הועתק",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "נטען: {dropped} שדות הושמטו, {warnings} אזהרות — ראו את הקונסולה",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "בתצוגה מוטמעת לא נבדקים עדכונים — פתחו את הקובץ בלשונית דפדפן כדי לבדוק.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "המצגת גדולה מדי לשיתוף חי בבת אחת. השינויים שלכם שמורים בעותק שלכם, אבל מי שמצטרף עכשיו עלול לא לקבל את כל המצגת.",
+  "1 picture is still uploading; it will follow.": "תמונה אחת עדיין מועלית; היא תגיע.",
+  "{n} pictures are still uploading; they will follow.": "{n} תמונות עדיין מועלות; הן יגיעו.",
+  "1 picture still uploading…": "תמונה אחת מועלית…",
+  "{n} pictures still uploading…": "{n} תמונות מועלות…",
 }

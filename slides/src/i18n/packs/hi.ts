@@ -944,4 +944,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "संक्षिप्त JSON कॉपी हो गया",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "लोड हुआ: {dropped} फ़ील्ड हटाए गए, {warnings} चेतावनियाँ — कंसोल देखें",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "एम्बेडेड दृश्य में अपडेट की जाँच नहीं होती — जाँचने के लिए फ़ाइल को ब्राउज़र टैब में खोलें।",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "यह डेक एक बार में लाइव साझा करने के लिए बहुत बड़ा है। आपके बदलाव आपकी प्रति में सहेजे हैं, पर अभी जुड़ने वाले को पूरा डेक नहीं मिल सकता।",
+  "1 picture is still uploading; it will follow.": "1 चित्र अभी अपलोड हो रहा है; वह बाद में आएगा।",
+  "{n} pictures are still uploading; they will follow.": "{n} चित्र अभी अपलोड हो रहे हैं; वे बाद में आएँगे।",
+  "1 picture still uploading…": "1 चित्र अपलोड हो रहा है…",
+  "{n} pictures still uploading…": "{n} चित्र अपलोड हो रहे हैं…",
 }
