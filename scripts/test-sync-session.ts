@@ -265,6 +265,45 @@ H('an emptied document heals with a paragraph, not a slide');
     'and it is an empty paragraph — somewhere to put the caret');
 }
 
+H('a photo-heavy deck snapshot fits under the relay frame ceiling (assets travel as blobs)');
+{
+  // A snapshot that inlined the whole asset table blew past the relay ceiling
+  // and was refused 'too-large' — on a deck where no single photo is over the
+  // per-image limit. snapshot() must apply diffDoc's rule: drop inline assets
+  // over BLOB_INLINE_MAX (they go as blobs), keep the blob refs.
+  const MAX_FRAME = 1_900_000;       // server/sync-worker/src/worker.js
+  const BLOB_INLINE_MAX = 64 * 1024; // kernel/src/sync/crdt.ts
+  // The relay measures the WIRE frame, not the doc JSON: online.ts seals the
+  // payload as base64(iv ‖ AES-GCM(JSON)), which is ~4/3 the JSON size — the
+  // reason a 1.57 MB deck (under MAX_FRAME as JSON) produced a ~2.1 MB frame
+  // and was refused. Model that expansion so the ceiling comparison is real.
+  const frameBytes = (jsonLen: number) => Math.ceil((jsonLen + 12 + 16) / 3) * 4; // 12B iv + 16B GCM tag
+  const doc = newDoc();
+  doc.docId = `rig-photo-${Math.random().toString(36).slice(2, 8)}`;
+  const hero = 'data:image/jpeg;base64,' + 'A'.repeat(1_500_000); // one photo, over MAX_FRAME on its own
+  const small = 'data:image/png;base64,' + 'B'.repeat(1000);      // under BLOB_INLINE_MAX, stays inline
+  (doc as unknown as { assets: Record<string, string> }).assets = { hero, small };
+  // offload has already run: the big asset carries a blob reference — what makes
+  // dropping its inline bytes safe (the receiver rebuilds it from the blob).
+  (doc as unknown as { blobs: Record<string, unknown> }).blobs =
+    { hero: { key: 'k-hero', mime: 'image/jpeg', size: 1_100_000 } };
+  const store = new Store(doc);
+  const s = new SyncSession(store);
+  const rawFrame = frameBytes(JSON.stringify(store.doc).length);
+  const snap = s.snapshot();
+  const leanFrame = frameBytes(JSON.stringify(snap.doc).length);
+  ok(rawFrame > MAX_FRAME, `negative control: the FULL doc's frame is over the ceiling (${rawFrame} B > ${MAX_FRAME})`);
+  ok(leanFrame < MAX_FRAME, `the stripped snapshot's frame fits under MAX_FRAME (${leanFrame} B)`);
+  const snapAssets = (snap.doc as unknown as { assets?: Record<string, string> }).assets ?? {};
+  ok(!('hero' in snapAssets), 'the large inline asset is dropped from the snapshot (it travels as a blob)');
+  ok(snapAssets.small === small, 'a small inline asset is kept inline');
+  const snapBlobs = (snap.doc as unknown as { blobs?: Record<string, { key: string }> }).blobs ?? {};
+  ok(snapBlobs.hero?.key === 'k-hero', 'the blob reference is kept, so the receiver materialises it via resolveBlobs');
+  ok((store.doc as unknown as { assets: Record<string, string> }).assets.hero === hero,
+    'the local store keeps the full asset — only the snapshot copy is stripped');
+  s.stop?.();
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 // BroadcastChannel and the heartbeat keep node's event loop alive
 process.exit(failures ? 1 : 0);

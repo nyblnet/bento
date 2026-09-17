@@ -603,7 +603,7 @@ export class SyncSession {
       this.broadcast({
         t: 'snap',
         a: this.actor,
-        doc: JSON.parse(JSON.stringify(this.store.doc)) as SyncDoc,
+        doc: this.snapshotDoc(),
         state: JSON.parse(JSON.stringify(this.state.toJSON())),
       })
     } catch (e2) {
@@ -908,11 +908,31 @@ export class SyncSession {
 
   // --- snapshots (online catch-up + file-fork merge) ------------------------
 
+  /**
+   * A doc clone SAFE to put in a relay snapshot frame. Inline assets larger than
+   * BLOB_INLINE_MAX are DROPPED — exactly as crdt.ts diffDoc keeps them out of
+   * ops — because they travel as blobs (offloadAssets) and the receiver
+   * materialises them with resolveBlobs. Without this, a photo-heavy deck's
+   * snapshot inlines the whole asset table and the frame text (after JSON +
+   * AES-GCM + base64) exceeds the relay's MAX_FRAME, so the relay refuses it
+   * 'too-large'; since a snapshot is never acked no op matches the refusal and
+   * the editor showed the wrong per-change limit. `blobs` is left intact so the
+   * references survive. See docs/DECISIONS.md and docs/blob-offload.md.
+   */
+  private snapshotDoc(): SyncDoc {
+    const doc = JSON.parse(JSON.stringify(this.store.doc)) as SyncDoc
+    const assets = doc.assets
+    if (assets)
+      for (const [k, v] of Object.entries(assets))
+        if (typeof v === 'string' && v.length > BLOB_INLINE_MAX) delete assets[k]
+    return doc
+  }
+
   /** current (doc, sync-state) pair for an encrypted relay snapshot */
   snapshot(): { doc: SyncDoc; state: SyncStateJSON } {
     this.flush()
     return {
-      doc: JSON.parse(JSON.stringify(this.store.doc)) as SyncDoc,
+      doc: this.snapshotDoc(),
       state: JSON.parse(JSON.stringify(this.state.toJSON())),
     }
   }

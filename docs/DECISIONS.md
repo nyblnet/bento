@@ -7279,3 +7279,37 @@ generation (that would break the same-block RGA merge). Its gate is the full
 convergence rig, `scripts/test-sync`. Where it is wanted: bento/spaces per-block
 text under Markdown storage (working/design/spaces-pages.md follow-ups).
 
+## 2026-09-17 — A relay snapshot obeys the blob-offload rule: large inline assets are stripped
+
+`crdt.ts` diffDoc keeps inline assets over `BLOB_INLINE_MAX` (64 KB) out of ops
+— they travel as blobs (`offloadAssets`) and the receiver rebuilds them with
+`resolveBlobs`. The relay SNAPSHOT paths did not: `session.snapshot()`,
+`recoverFromDiffFailure`, and the fork snapshot in `hello()` all serialised the
+FULL `store.doc` with every inline asset. On a photo-heavy deck that inlines the
+whole asset table, and the wire frame — `base64(iv ‖ AES-GCM(JSON))`, ~4/3 the
+JSON — exceeds the relay's `MAX_FRAME` (1,900,000). Measured on the maintainer's
+real deck: 1.57 MB doc (1.43 MB inline photos, none over the per-image limit) →
+~2.1 MB frame → relay refuses `too-large`. Because a snapshot is never acked, no
+op matched the refusal (`matchRefused` → null → `refused('too-large', null)` →
+notice `ops:0`), so the editor showed the per-CHANGE wording with a per-image
+limit — wrong for a whole-deck snapshot.
+
+Fix: snapshots apply diffDoc's rule via `SyncSession.snapshotDoc()` — drop
+`assets.<k>` whose inline value is over `BLOB_INLINE_MAX`, keep `blobs` intact;
+the receiver materialises them with `resolveBlobs` exactly as it does for ops.
+`offloadAssets` already runs on every flush (and `snapshot()` flushes first), so
+the blob refs exist by the time a snapshot is uploaded on a shared deck. Residual,
+stated: a large asset whose offload has not yet completed (or a relay with no
+blob store — `unsupported`) has no ref, so the receiver shows it blank until the
+ref syncs — identical to the existing op path, and self-healing. Rig:
+`scripts/test-sync-session.ts` asserts the stripped snapshot frame is under
+`MAX_FRAME` while the full-doc frame is over (negative control), the blob ref
+survives, and the local store keeps the full asset.
+
+Message: after this fix a snapshot is essentially never refused for assets. If a
+snapshot is still refused `too-large` (many sub-64 KB assets, or huge text), the
+transport surfaces `refused('too-large', null)` → the session emits a notice with
+`ops: 0` and no `media` flag — the signal the editor can use to say "the whole
+deck is too large to share" rather than "that change is too large". (Wording is
+the slides zone's.)
+
