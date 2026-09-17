@@ -59,7 +59,10 @@ ok(/'Keep aspect ratio': '/.test(panels), 'the row has a tooltip')
 console.log('\nthe panel keeps its scroll\n')
 const rebuild = panels.slice(panels.indexOf('private rebuild(force = false)'), panels.indexOf('CLOSED_BY_DEFAULT'))
 ok(/const scrollTop = force \? 0 : this\.host\.scrollTop/.test(rebuild), 'a doc edit remembers the scroll; a selection/slide switch (force) starts at the top')
-ok(/this\.applyAccordion\(\)\s*\n\s*this\.host\.scrollTop = scrollTop/.test(rebuild), 'the scroll is restored after the accordion runs (which can change the height)')
+// The Layers list restores its OWN scroll between the two (#507) — a
+// different value; the panel's must still be the last thing set.
+ok(/this\.applyAccordion\(\)\s*\n(?:\s*this\.layers\.restoreScroll\(\)\s*\n)?\s*this\.host\.scrollTop = scrollTop/.test(rebuild), 'the panel scroll is restored after the accordion runs (which can change the height)')
+ok(!/this\.host\.scrollTop = scrollTop[\s\S]*this\.applyAccordion\(\)/.test(rebuild), 'and never before it')
 
 console.log('\nwhat was set aside stays out\n')
 for (const f of ['slides/src/model.ts', 'slides/src/render.ts', 'slides/src/editor/canvas.ts', 'slides/src/editor/editor.ts', 'slides/src/editor/panels.ts', 'slides/src/main.ts', 'kernel/src/save.ts', 'slides/src/styles.css']) {
