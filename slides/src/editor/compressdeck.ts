@@ -25,6 +25,7 @@
 
 import type { BentoDoc, SlideElement } from '../model.ts'
 import { shrinkImageFile, untouchable, type ShrinkResult } from './shrink.ts'
+import { dataUriToBytes } from '../../../kernel/src/sync/blobs.ts'
 
 /** One picture that might shrink: an asset-table entry, or an inline data URI on an image element. */
 export type Candidate =
@@ -92,8 +93,12 @@ export async function dryRun(doc: BentoDoc, onProgress?: (done: number, total: n
   for (let i = 0; i < plan.length; i++) {
     const c = plan[i]
     onProgress?.(i, plan.length)
-    let blob: Blob
-    try { blob = await (await fetch(c.dataUrl)).blob() } catch { continue }
+    // Decoded by hand, never fetch(): a data: URL never reaches the network,
+    // but the rule that only kernel/src/net.ts touches a network primitive is
+    // by construction and the offline rig holds every file to it.
+    const parsed = dataUriToBytes(c.dataUrl)
+    if (!parsed) continue
+    const blob = new Blob([parsed.bytes as BlobPart], { type: parsed.mime })
     const result = await shrinkImageFile(blob, { force: true, skipLossyAtCap: true })
     if (result.reason === 'shrunk') {
       shrunk.push({ candidate: c, result })
