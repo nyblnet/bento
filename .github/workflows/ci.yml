@@ -1394,6 +1394,12 @@ jobs:
         # idempotent; both paste handlers read the clipboard through
         # editor/paste.ts (the html flavour, sanitized) -- #502, #503.
         run: node scripts/test-slides-bullets.ts
+      - name: Inline-edit listeners rig
+        # Every keydown/input/paste/blur listener a text-box or cell edit
+        # attaches carries that edit's AbortSignal, and both commits abort it —
+        # a node re-edited without a re-render used to stack listeners and
+        # paste N times.
+        run: node scripts/test-slides-edit-listeners.ts
 
       - name: Shell loader and carrier rig
         # base86 payloads (scripts/lib/b86.mjs) round-trip and can never

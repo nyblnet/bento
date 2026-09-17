@@ -409,17 +409,29 @@ export interface SyncStateJSON {
    * history only ever grows. An emptied paragraph still carries everything ever
    * typed into it.
    *
-   * bento/slides stamps it: slide text is titles and bullets. bento/spaces
-   * does NOT — a space is typed prose, which is the whole app, and the state
-   * would outweigh the document many times over inside the plaintext
-   * #bento-doc block, re-serialized on every save and re-parsed on every open.
+   * EVERY shipping app stamps it — the default, via `stampInto` → `toJSON()`.
+   * bento/slides and bento/spaces both do (spaces' `SyncSession` extends the
+   * kernel one and does not override the stamp), and the differ runs with
+   * `text: true` (session.ts). The `text: false` option below OMITS the history
+   * and was meant for a future size optimisation — a space is typed prose, so
+   * its token history would outweigh its own document many times over inside
+   * the plaintext #bento-doc block. But NO shipping path uses it, only the sync
+   * rigs, because it is NOT SAFE YET:
    *
-   * ABSENT MEANS BLOCK-LEVEL MERGING, not breakage: `fromJSON` restores a
-   * state with no token history, the differ falls back to a whole-value `set`
-   * for that node's text, and the merge resolves last-writer-wins per block
-   * instead of per character. A LIVE session is unaffected — both replicas hold
-   * the tokens in memory for as long as they are connected; what degrades is
-   * two offline forks reunited later, editing the SAME paragraph.
+   * ABSENT TOKEN HISTORY LOSES DATA ON A SNAPSHOT REUNION — and not only in the
+   * same paragraph, the way this comment once claimed. A txt edit advances the
+   * node's text GENERATION but NOT its `html` LWW register; a `text: false`
+   * stamp drops the generation, so the only stamped carrier of that edit is
+   * gone, and `mergeSnapshot` — the path a mailed-back copy reunites by — never
+   * copies the edited value from the peer's document. Two offline forks that
+   * edited DIFFERENT blocks lose one edit, silently (measured; convergence
+   * still holds, which is exactly why it is silent — docs/DECISIONS.md
+   * 2026-09-17). A LIVE op-replay session is unaffected: a `set`/`txt` op both
+   * carries the value and stamps its register, so the loss is specific to a
+   * lean stamp reunited by snapshot. `toJSON` therefore REFUSES `text: false`
+   * without an explicit acknowledgement (see there). Making it safe — a stamped
+   * carrier that survives dropping the generation — is a separate kernel change
+   * gated on scripts/test-sync.
    *
    * Garbage-collecting the tombstones instead (what Yjs does by default) needs
    * to know every replica has seen the delete. A file that people mail to each
@@ -513,11 +525,25 @@ export class SyncEngine {
    * scripts/test-sync-equiv.ts compares these bytes against the engine as
    * shipped.
    *
+   * `text: false` is REFUSED without `unsafeOmitTextHistory: true`. Omitting the
+   * history silently loses edits to different blocks on a snapshot reunion (the
+   * note on SyncStateJSON.txt has the mechanism); no shipping stamp path may use
+   * it, so a lean stamp must be an explicit, acknowledged act — the rigs that
+   * measure the lean shape pass the flag. This is the wall that stops a future
+   * size optimisation from wiring `stampInto` to a silent data loss.
+   *
    * KEY ORDER IS PART OF THE FORMAT. `txt` is emitted in its original position
    * rather than appended, so a state WITH text is byte-identical whichever
    * call site produced it.
    */
-  toJSON(opts: { text?: boolean } = {}): SyncStateJSON {
+  toJSON(opts: { text?: boolean; unsafeOmitTextHistory?: boolean } = {}): SyncStateJSON {
+    if (opts.text === false && !opts.unsafeOmitTextHistory)
+      throw new Error(
+        'SyncState.toJSON({ text: false }) omits per-node token history, which silently LOSES ' +
+        'edits to different blocks when a copy is reunited by snapshot (mergeSnapshot) — see the ' +
+        'SyncStateJSON.txt note and docs/DECISIONS.md 2026-09-17. No shipping stamp path may use ' +
+        'it; a rig that intends the lean shape passes { text: false, unsafeOmitTextHistory: true }.',
+      )
     return {
       v: SYNC_V,
       lamport: this.lamport,

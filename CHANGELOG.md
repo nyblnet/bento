@@ -28,6 +28,12 @@ pre-1.0.
   plain space at the end of the line, which the browser treats as nothing and
   the next keystroke replaced. It is a non-breaking space now, for top-level
   and indented bullets alike, typed or pasted. Reported by Hermholtz (#501).
+- **Pasting into a table cell lands once.** Edit a cell, leave it unchanged,
+  edit it again — each visit quietly added another set of keystroke and paste
+  handlers to the same cell, so a later paste landed once per visit (four
+  visits, four copies; the same could happen to a text box). Each edit now
+  takes its handlers with it when it ends. Found by the maintainer, copying
+  an asset code between cells.
 ## [1.2.0] — 2026-09-16
 
 - **A deck opens inside Teams and SharePoint again.** Their viewer refuses
