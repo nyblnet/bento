@@ -1489,6 +1489,13 @@ jobs:
         # every insert path routed, model.ts untouched. The encode itself is
         # measured in Chrome (PR #).
         run: node scripts/test-slides-shrink.ts
+
+      - name: Compress pictures in this deck rig
+        # editor/compressdeck.ts planning half, DOM-free: image elements only,
+        # an asset once however many elements share it, SVG/GIF/media/fonts
+        # never; applyCompress writes in place and drops the replaced asset's
+        # blob reference; the editor dry-runs first and commits once.
+        run: node scripts/test-slides-compress-deck.ts
       - name: Image aspect-ratio lock rig
         # keepAspectRatio (#372): absent = locked, so old files resize as
         # before; Shift is the one-drag exception either way; re-locking
