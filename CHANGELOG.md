@@ -11,6 +11,13 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A deck full of photos can be shared live again.** A deck whose pictures
+  were each under the sharing limit but together came to more than about a
+  megabyte could not be shared at all — the copy a joining collaborator
+  receives was sent as one oversize frame the relay refused. Each picture
+  already travelled separately when it changed; that copy now does the same,
+  so the deck shares no matter how many photos it holds.
+
 ## [1.2.1] — 2026-09-17
 
 - **Pasting into a table cell lands once.** Edit a cell, leave it unchanged,
