@@ -924,4 +924,9 @@ export const zhHans: Catalog = {
   "Compact JSON copied": "已复制精简 JSON",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "已加载：丢弃 {dropped} 个字段，{warnings} 条警告 — 见控制台",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "在嵌入视图中不检查更新 — 请在浏览器标签页中打开文件以检查。",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "这份文稿太大，无法一次性实时共享。你的更改已保存在你的副本中，但现在加入的协作者可能收不到完整文稿。",
+  "1 picture is still uploading; it will follow.": "还有 1 张图片正在上传；稍后送达。",
+  "{n} pictures are still uploading; they will follow.": "还有 {n} 张图片正在上传；稍后送达。",
+  "1 picture still uploading…": "1 张图片上传中…",
+  "{n} pictures still uploading…": "{n} 张图片上传中…",
 }

@@ -933,4 +933,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "Kompakt JSON kopierad",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Inläst: {dropped} fält bortfiltrerade, {warnings} varningar — se konsolen",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Uppdateringar kontrolleras inte i en inbäddad vy — öppna filen i en webbläsarflik för att kontrollera.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Den här presentationen är för stor för att delas live i ett stycke. Dina ändringar är sparade i din kopia, men den som ansluter nu får kanske inte hela presentationen.",
+  "1 picture is still uploading; it will follow.": "1 bild laddas fortfarande upp; den kommer.",
+  "{n} pictures are still uploading; they will follow.": "{n} bilder laddas fortfarande upp; de kommer.",
+  "1 picture still uploading…": "1 bild laddas upp…",
+  "{n} pictures still uploading…": "{n} bilder laddas upp…",
 }

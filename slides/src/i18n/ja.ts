@@ -924,4 +924,9 @@ export const ja: Catalog = {
   "Compact JSON copied": "コンパクトな JSON をコピーしました",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "読み込み完了: {dropped} 個のフィールドを破棄、警告 {warnings} 件 — コンソールを確認",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "埋め込み表示ではアップデートを確認しません — 確認するにはファイルをブラウザーのタブで開いてください。",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "このデッキは大きすぎて一度にライブ共有できません。変更はあなたのコピーに保存されていますが、いま参加した人はデッキ全体を受け取れない可能性があります。",
+  "1 picture is still uploading; it will follow.": "画像1枚がまだアップロード中です。あとで届きます。",
+  "{n} pictures are still uploading; they will follow.": "画像{n}枚がまだアップロード中です。あとで届きます。",
+  "1 picture still uploading…": "画像1枚をアップロード中…",
+  "{n} pictures still uploading…": "画像{n}枚をアップロード中…",
 }

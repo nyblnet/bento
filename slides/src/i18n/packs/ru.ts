@@ -936,4 +936,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "Компактный JSON скопирован",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Загружено: отброшено полей: {dropped}, предупреждений: {warnings} — см. консоль",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Во встроенном представлении обновления не проверяются — откройте файл во вкладке браузера, чтобы проверить.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Эта презентация слишком велика, чтобы поделиться ею вживую целиком. Ваши изменения сохранены в вашей копии, но тот, кто присоединится сейчас, может не получить всю презентацию.",
+  "1 picture is still uploading; it will follow.": "1 изображение ещё загружается; оно придёт позже.",
+  "{n} pictures are still uploading; they will follow.": "{n} изображений ещё загружаются; они придут позже.",
+  "1 picture still uploading…": "1 изображение загружается…",
+  "{n} pictures still uploading…": "{n} изображений загружаются…",
 }

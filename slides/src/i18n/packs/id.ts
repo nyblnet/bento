@@ -934,4 +934,9 @@ export const strings: Catalog = {
   "Compact JSON copied": "JSON ringkas disalin",
   "Loaded: {dropped} fields dropped, {warnings} warnings — see console": "Dimuat: {dropped} bidang dibuang, {warnings} peringatan — lihat konsol",
   "Updates are not checked inside an embedded view — open the file in a browser tab to check.": "Pembaruan tidak diperiksa di dalam tampilan tersemat — buka berkas di tab browser untuk memeriksa.",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Dek ini terlalu besar untuk dibagikan langsung sekaligus. Perubahan Anda tersimpan di salinan Anda, tetapi yang bergabung sekarang mungkin tidak menerima seluruh dek.",
+  "1 picture is still uploading; it will follow.": "1 gambar masih diunggah; akan menyusul.",
+  "{n} pictures are still uploading; they will follow.": "{n} gambar masih diunggah; akan menyusul.",
+  "1 picture still uploading…": "1 gambar diunggah…",
+  "{n} pictures still uploading…": "{n} gambar diunggah…",
 }

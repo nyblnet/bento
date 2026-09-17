@@ -1414,6 +1414,12 @@ jobs:
         # paste N times.
         run: node scripts/test-slides-edit-listeners.ts
 
+      - name: Live-session notice wording rig
+        # A refused whole-deck snapshot (SyncNotice.snapshot, #509) is worded as
+        # the deck, never as a change or an image; the Share popover polls
+        # pendingBlobUploads() only while open; strings in every core catalog.
+        run: node scripts/test-slides-sync-notice.ts
+
       - name: Shell loader and carrier rig
         # base86 payloads (scripts/lib/b86.mjs) round-trip and can never
         # contain </script, <!--, -->, ]]> or ${; the loader inflates
