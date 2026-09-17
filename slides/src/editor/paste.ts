@@ -20,6 +20,14 @@
  * and style elements removed, a `<b>`/`<strong>` whose inline style says
  * `font-weight: normal` (or ≤ 400) unwrapped. Spans survive the sanitizer as
  * bare `<span>`s, which render as nothing.
+ *
+ * Everything above happens in a document of its own, made by DOMParser and
+ * never attached to the page: untrusted nodes are parsed, tidied and
+ * serialised there, and only the resulting STRING reaches sanitizeHtml. A
+ * node adopted into the live document starts loading what it names (img,
+ * source, poster, input type=image) and fires its load and error handlers
+ * before any sanitizer has run — measured — so nothing here is ever created
+ * in or appended to `document`.
  */
 
 import { sanitizeHtml } from '../render'
@@ -28,15 +36,12 @@ import { sanitizeHtml } from '../render'
  *  should run instead (no html flavour, or nothing left after cleaning). */
 export function clipboardToHtml(dt: DataTransfer | null | undefined): string {
   const html = dt?.getData('text/html')
-  if (!html || typeof document === 'undefined') return ''
-  const tpl = document.createElement('template')
-  tpl.innerHTML = html
-  const root = tpl.content
-  // a full document on the clipboard: keep the body's children only
-  const body = root.querySelector('body')
-  const scope: ParentNode = body ?? root
-  for (const junk of Array.from(scope.querySelectorAll('meta, style, script, title, link, head'))) junk.remove()
-  for (const b of Array.from(scope.querySelectorAll('b, strong'))) {
+  if (!html || typeof DOMParser === 'undefined') return ''
+  // an inert document: no loads, no scripts, no handlers ever fire in it
+  const inert = new DOMParser().parseFromString(html, 'text/html')
+  const body = inert.body
+  for (const junk of Array.from(body.querySelectorAll('meta, style, script, title, link, head'))) junk.remove()
+  for (const b of Array.from(body.querySelectorAll('b, strong'))) {
     const w = (b as HTMLElement).style.fontWeight.trim().toLowerCase()
     const light = w === 'normal' || w === 'lighter' || (/^\d+$/.test(w) && Number(w) <= 400)
     if (light) {
@@ -46,11 +51,9 @@ export function clipboardToHtml(dt: DataTransfer | null | undefined): string {
       b.remove()
     }
   }
-  const box = document.createElement('div')
-  for (const child of Array.from(scope.childNodes)) box.appendChild(child.cloneNode(true))
-  const clean = sanitizeHtml(box.innerHTML)
-  // nothing but whitespace/empty tags → let the plain path decide
-  const probe = document.createElement('div')
-  probe.innerHTML = clean
-  return probe.textContent?.trim() || probe.querySelector('br, li') ? clean : ''
+  const clean = sanitizeHtml(body.innerHTML)
+  // nothing but whitespace/empty tags → let the plain path decide. Checked
+  // in an inert document too: the cleaned string is parsed back there.
+  const check = new DOMParser().parseFromString(clean, 'text/html').body
+  return check.textContent?.trim() || check.querySelector('br, li') ? clean : ''
 }

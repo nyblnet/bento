@@ -67,6 +67,9 @@ ok(/bulletsToLists\(sanitizeHtml\(/.test(textCommit), 'commitTextEdit converts t
 ok(!/bulletsToLists/.test(cellCommit), 'commitCellEdit does not (no list styling in a cell)')
 ok(/clipboardToHtml\(ev\.clipboardData\)/.test(canvas) && (canvas.match(/clipboardToHtml\(ev\.clipboardData\)/g) ?? []).length === 2, 'both paste handlers read the clipboard through editor/paste.ts')
 ok(!/getData\('text\/html'\)/.test(canvas), 'nothing in canvas.ts reads text/html directly — only the sanitized helper does')
+const paste = readFileSync(join(root, 'slides/src/editor/paste.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+ok(/new DOMParser\(\)\.parseFromString\(/.test(paste), 'paste.ts parses the clipboard html in a document of its own (DOMParser)')
+ok(!/document\.createElement|document\.body|appendChild|cloneNode|innerHTML\s*=/.test(paste), 'and never creates, appends or clones into the live document — a node adopted there starts loading what it names before any sanitizer runs')
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)
