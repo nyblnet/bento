@@ -257,8 +257,9 @@ export class OnlineTransport implements Transport {
       /** replay done: (actor,seq) pairs the room holds; return true to upload a snapshot */
       onReady: (seen: Set<string>, seq: number) => boolean
       /** the relay refused a frame; `ops` are the ones it will never accept
-       *  (null when the refusal couldn't be pinned to a frame we sent) */
-      onRefused?: (code: RefusalCode, ops: Op[] | null) => void
+       *  (null when the refusal couldn't be pinned to a frame we sent). `opts.snapshot`
+       *  = the refused frame was a whole-deck snapshot (no op of ours matched it). */
+      onRefused?: (code: RefusalCode, ops: Op[] | null, opts?: { snapshot?: boolean }) => void
       // ——— broadcast reception (audience side, and the presenter's own
       // checkpoint/count signals). All optional: a session with no show wires
       // none of them and nothing below fires. ———
@@ -518,7 +519,10 @@ export class OnlineTransport implements Transport {
     const culprit = this.matchRefused(env)
     if (culprit) this.awaitingAck = this.awaitingAck.filter((o) => o !== culprit)
     console.warn(`[bento-sync] relay refused a frame (${env.code})`, env)
-    this.hooks.onRefused?.(env.code, culprit?.ops ?? null)
+    // No matched op for a whole-frame refusal = the frame was a snapshot (ops
+    // are tracked and matched by id; snapshots are never acked). Lets the editor
+    // word it "the deck is too large" rather than "that change is too large".
+    this.hooks.onRefused?.(env.code, culprit?.ops ?? null, culprit ? undefined : { snapshot: true })
   }
 
   /**
@@ -969,11 +973,11 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
       getSnapshot: () => session.snapshot(),
       onOpen: () => session.hello(),
       onReady: (seen) => session.onRelayReady(seen),
-      onRefused: (code, ops) => {
+      onRefused: (code, ops, opts) => {
         // show-full is a broadcast refusal: it means "checkpoint now", handled
         // by the show path, not the collab resend log.
         if ((code as string) === 'show-full') { session.showCheckpoint(); return }
-        session.refused(code, ops)
+        session.refused(code, ops, opts)
       },
       onShowOps: (ops) => session.applyShowOps(ops),
       onShowSnap: (doc, state) => session.applyShowSnap(doc, state),

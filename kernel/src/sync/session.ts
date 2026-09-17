@@ -268,6 +268,10 @@ export interface SyncNotice {
   ops: number
   /** the abandoned ops carried embedded media — lets the UI say "that image" */
   media?: boolean
+  /** the refused frame was a whole-deck SNAPSHOT, not a single change (the relay
+   *  could not attribute it to any op of ours). Lets the UI say "this deck is too
+   *  large to share" rather than "that change is too large". `ops` is 0 here. */
+  snapshot?: boolean
 }
 
 /** Same-machine transport: every open tab/window of this document. */
@@ -892,7 +896,7 @@ export class SyncSession {
    * ONLY the exact ops the refused frame carried — never a range, never the
    * rest of the log, and never anything when the frame couldn't be identified.
    */
-  refused(code: RefusalCode, ops: Op[] | null) {
+  refused(code: RefusalCode, ops: Op[] | null, opts?: { snapshot?: boolean }) {
     const doomed = ops ?? []
     if (doomed.length) {
       const keys = new Set(doomed.map((o) => `${o.a}:${o.s}`))
@@ -903,6 +907,7 @@ export class SyncSession {
       permanent: code !== 'rate-limited',
       ops: doomed.length,
       ...(this.host.carriesMedia(doomed) ? { media: true } : {}),
+      ...(opts?.snapshot ? { snapshot: true } : {}),
     })
   }
 
@@ -935,6 +940,20 @@ export class SyncSession {
       doc: this.snapshotDoc(),
       state: JSON.parse(JSON.stringify(this.state.toJSON())),
     }
+  }
+
+  /** How many inline assets are still awaiting blob offload — over
+   *  BLOB_INLINE_MAX and without a published `blobs` reference yet. While this is
+   *  > 0 a joining collaborator may see those pictures blank until the reference
+   *  syncs, so the editor can surface "N pictures still uploading". Cheap: one
+   *  pass over the asset table. */
+  pendingBlobUploads(): number {
+    const doc = this.store.doc
+    const assets = doc.assets ?? {}
+    let n = 0
+    for (const [k, v] of Object.entries(assets))
+      if (typeof v === 'string' && v.length > BLOB_INLINE_MAX && !doc.blobs?.[k]) n++
+    return n
   }
 
   /** merge a remote snapshot (relay replay for far-behind joiners) */

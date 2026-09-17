@@ -301,6 +301,21 @@ H('a photo-heavy deck snapshot fits under the relay frame ceiling (assets travel
   ok(snapBlobs.hero?.key === 'k-hero', 'the blob reference is kept, so the receiver materialises it via resolveBlobs');
   ok((store.doc as unknown as { assets: Record<string, string> }).assets.hero === hero,
     'the local store keeps the full asset — only the snapshot copy is stripped');
+
+  // pending-upload count: what the editor shows as "N pictures still uploading"
+  ok(s.pendingBlobUploads() === 0, 'no pending uploads when every large asset already has a blob ref');
+  (store.doc as unknown as { assets: Record<string, string> }).assets.hero2 =
+    'data:image/jpeg;base64,' + 'C'.repeat(200_000); // large, no ref yet
+  ok(s.pendingBlobUploads() === 1, 'a large asset without a blob ref counts as pending');
+
+  // the snapshot discriminator: a refused snapshot carries snapshot:true, ops:0,
+  // so the editor words it "the deck is too large" not "that change is too large"
+  let last: { code: string; ops: number; permanent: boolean; snapshot?: boolean } | null = null;
+  const un = s.onNotice((n) => { last = n as never; });
+  s.refused('too-large', null, { snapshot: true });
+  ok(last?.snapshot === true && last?.ops === 0 && last?.permanent === true,
+    'a snapshot refusal emits { snapshot:true, ops:0, permanent:true }');
+  un();
   s.stop?.();
 }
 
