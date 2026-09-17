@@ -31,7 +31,7 @@
 // what source shows. The encryption itself is pinned by scripts/test-preview.ts
 // and the splice contract by scripts/shell-gate.mjs.
 
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -545,6 +545,46 @@ for (const app of SHARE_APPS) {
     'and in that case it says the keys could not be removed, rather than leaving it to be discovered')
   ok(/Save an untouched copy/.test(gate),
     'with the byte-exact route still offered beside it, which is why stripping here costs nothing')
+}
+
+// --- the assistant: the page has no place to put a key -----------------------
+//
+// The Assistant drawer (slides/src/editor/assistant/) sends chat turns to a
+// model endpoint — through the bento/home EXTENSION, which holds the endpoint
+// and the key. The page never does. That is the whole reason it is
+// extension-only (transport.ts's header): a key in the page is a key in the
+// document, the clipboard payload, the sync stream and every saved copy, and
+// each of those would need a stripper and a rig. Instead this asserts the
+// absence: no field for it in the format, no request primitive in the
+// module, no header that carries one, no storage write that could hold one.
+{
+  console.log('\nthe assistant holds no key')
+  const dir = new URL('../slides/src/editor/assistant/', import.meta.url)
+  const files = readdirSync(dir).filter((f) => f.endsWith('.ts'))
+  ok(files.length >= 3 && files.includes('transport.ts'),
+    `slides/src/editor/assistant/ has ${files.length} modules (${files.join(', ')})`)
+  const src = Object.fromEntries(files.map((f) => [f, readFileSync(new URL(f, dir), 'utf8')]))
+  const code = (f: string) => src[f].replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+  for (const f of files) {
+    const c = code(f)
+    ok(!/\bfetch\(|new WebSocket\(|netFetch|netWebSocket|XMLHttpRequest|EventSource/.test(c),
+      `${f} makes no request of its own — the extension makes it`)
+    ok(!/api[_-]?key|Authorization|x-goog|anthropic-version|Bearer|sk-[A-Za-z0-9]/i.test(c),
+      `${f} names no credential header or key shape`)
+    const writes = [...c.matchAll(/lsSet(?:Json)?\(\s*'([^']+)'/g)].map((m) => m[1])
+    ok(writes.every((k) => !/key|token|secret|endpoint|url|model/i.test(k)),
+      `${f} writes ${writes.length ? writes.join(', ') : 'nothing'} to storage — no key, endpoint or model`)
+    ok(!/localStorage|sessionStorage|indexedDB|document\.cookie/.test(c),
+      `${f} touches no storage primitive directly`)
+  }
+  const model = readFileSync(new URL('../slides/src/model.ts', import.meta.url), 'utf8')
+  ok(!/assistant|apiKey|api_key|\bllm\b|apiUrl|apiBase/i.test(model.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')),
+    'model.ts has no field an assistant key, endpoint or model could live in — the format has no place for one')
+  const tr = code('transport.ts')
+  ok(/host: string/.test(tr) && /model: string/.test(tr) && !/key\??: string/.test(tr),
+    'the bridge description carries host and model, never a key field')
+  ok(/assistant\.settings\.open/.test(tr),
+    'settings live behind the extension — the page can only ask for its options page')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

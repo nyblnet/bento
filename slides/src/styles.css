@@ -2835,3 +2835,52 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 }
 .ed-swatch:hover { transform: scale(1.15); }
 .ed-swatch.is-on { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+
+/* ————— Assistant drawer (editor/assistant/panel.ts) — foot of the props
+   panel, sticky so it stays in reach while the inspector scrolls; the panel
+   re-appends the same node after every rebuild ————— */
+.ed-assist {
+  position: sticky;
+  bottom: -14px;
+  margin: 14px -14px -14px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.ed-assist-head {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 8px 14px; border: 0; background: none;
+  color: var(--ink); font: inherit; font-size: 11px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+}
+.ed-assist-chev { transition: transform .15s; color: var(--muted); }
+.ed-assist.open .ed-assist-chev { transform: rotate(180deg); }
+.ed-assist-body { display: none; padding: 0 14px 12px; }
+.ed-assist.open .ed-assist-body { display: flex; flex-direction: column; gap: 8px; }
+.ed-assist-status { color: var(--muted); line-height: 1.4; }
+.ed-assist-status a { color: var(--ink); }
+.ed-assist-route { color: var(--ink-2); }
+.ed-assist-log { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.ed-assist-log:empty { display: none; }
+.ed-assist-msg { padding: 6px 8px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; line-height: 1.4; }
+.ed-assist-user { background: var(--chrome-2); align-self: flex-end; max-width: 92%; }
+.ed-assist-assistant { background: var(--field); }
+.ed-assist-live { opacity: .8; }
+.ed-assist-live:empty::after { content: '…'; }
+.ed-assist-err { color: #C0392B; background: rgba(192, 57, 43, .08); }
+.ed-assist-info { color: var(--muted); }
+.ed-assist-card { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.ed-assist-card-h { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+.ed-assist-undo { padding: 2px 8px; font-size: 11px; }
+.ed-assist-card-sum { color: var(--muted); margin-top: 4px; }
+.ed-assist-card-list { margin: 4px 0 0; padding-inline-start: 16px; color: var(--muted); font-size: 11px; }
+.ed-assist-input { width: 100%; resize: vertical; min-height: 40px; font: inherit; font-size: 12px;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); }
+.ed-assist-input:disabled { opacity: .5; }
+.ed-assist-acts { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.ed-assist-scope { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.ed-assist-scope-b { border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; padding: 3px 8px; cursor: pointer; }
+.ed-assist-scope-b.on { background: var(--chrome-2); color: var(--ink); }
+.ed-assist-send { padding: 4px 12px; }
+.ed-assist-stop { background: #C0392B; border-color: #C0392B; }

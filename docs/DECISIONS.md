@@ -7279,3 +7279,66 @@ generation (that would break the same-block RGA merge). Its gate is the full
 convergence rig, `scripts/test-sync`. Where it is wanted: bento/spaces per-block
 text under Markdown storage (working/design/spaces-pages.md follow-ups).
 
+## 2026-09-18 — An assistant that edits the deck through the user's own endpoint, and only through the extension
+
+The maintainer asked for a chat that updates a bento/slides deck against an
+LLM endpoint of the user's choosing (OpenAI-compatible, Anthropic, and Gemini
+by name — AI Studio keys are free and easy to get). Built in
+`slides/src/editor/assistant/` as a drawer at the foot of the properties
+panel; the decision that shaped it is WHERE THE KEY LIVES.
+
+**Extension-only.** The endpoint, the model and the API key are held by the
+bento/home browser extension (home/webext) and the request is made there. The
+page never sees a key and has no field to put one in — not in the document,
+not in localStorage, not in a module variable. Without the extension the
+drawer shows one sentence ("The assistant needs the bento/home extension
+(Chrome or Edge).") with a link, and sends nothing. There is no in-page
+fallback with a key in it.
+
+Why: a `.bento.html` is a document. It gets mailed, saved as copies, shared
+live, pasted as JSON into chats, snapshotted by autosave. A key held by the
+page is a key one stripper away from every one of those, and each would need
+a rig and a security review to keep it out (the room-key exports needed
+exactly that — see 2026-09-13 in scripts/test-export-secrets.ts). An
+extension has real storage the page cannot read and already has a bridge into
+every file:// deck it hosts. So instead of proving the key is stripped from
+N paths, `scripts/test-export-secrets.ts` asserts the absence: no request
+primitive, no credential header, no storage write and no model field in the
+assistant modules — "the page has no place to put a key". The
+first design (direct provider calls from the page as a fallback when the
+extension is absent) was built as far as the shapers and then cut for this
+reason; the shapers went to home-webext as a handoff.
+
+**The bridge contract** lives as TypeScript types plus a header comment in
+`slides/src/editor/assistant/transport.ts`, on the SAME `window.postMessage`
+envelope the save bridge uses (`__bento_tray__`, `dir: req|res`, plus a new
+`dir: evt` for streaming). Ops: `assistant.describe` → `{host, model,
+configured}` (the endpoint's HOST, never a URL with a path or a key);
+`assistant.check`; `assistant.send {messages}` → `res {ok}` then
+`evt assistant.chunk|done|error`; `assistant.abort {req}`;
+`assistant.settings.open`. Capability = `'assistant'` in
+`window.__bentoHost.ops`. home-webext implements the other side; the slides
+side is complete and rigged against a postMessage double
+(`scripts/test-slides-assistant.ts`).
+
+**What travels.** The deck goes out in the COMPACT form (the agent shape,
+`slides/src/compact.ts`, AGENTS.md) with `collab`, `docId` and `modified` stripped and every data:
+asset replaced by a `@@bento-asset-n@@` token; the reply (a compact slide for
+"This slide" scope, a compact deck for "Whole deck") is merged with the live
+document — tokens restored, the slide's id forced back, any collab/docId the
+model wrote ignored — and loaded through `parseDocInputReport`, the SAME
+untrusted gate pasted JSON meets, into ONE `store.replaceDoc` (undoable). The
+result card reports the gate's drops and only the validator findings the edit
+INTRODUCED (a deck's pre-existing warnings are not the reply's fault). A
+reply without JSON is an answer, shown in the chat. Offline mode disables the
+drawer (nothing leaves the machine, extension or not).
+
+Measured in headless Chrome against the built shell with a fake bridge: a
+canned slide edit streamed in three chunks, applied in ~210 ms, the canvas
+text updated, one unknown key dropped and reported at its path, Undo restored
+the slide byte-for-byte; an error event surfaced as a message with the deck
+unchanged; Stop posted `assistant.abort` naming the request; "not configured"
+showed the Settings… line and opened the options page; the fake extension's
+key string appeared in neither the page HTML, the serialized file,
+localStorage, sessionStorage nor any window global. Without the extension:
+the sentence, inputs disabled, zero frames posted. Shell +9.2 KB compressed.

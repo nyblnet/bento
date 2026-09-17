@@ -11,6 +11,19 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **An Assistant drawer that edits the deck.** At the foot of the properties
+  panel: ask for a change in words — "make the title shorter", "add a closing
+  slide" — and the open slide (or the whole deck) is sent to a model and its
+  reply applied as one undoable step, with a card saying what was applied,
+  what the gate dropped and what the validator flagged, and Undo. Plain
+  answers stay in the chat. The request goes out through the **bento/home
+  extension**, which holds the endpoint, the model and the API key; the page
+  never does — a `.bento.html` is a document people mail and share, and a
+  key in it would be a key in every copy. Without the extension the drawer
+  says so and links to it. OpenAI-compatible, Anthropic and Gemini endpoints
+  are the extension's to speak; the deck travels compact (the agent form),
+  with the room's keys and embedded images left out of the prompt.
+
 ## [1.2.1] — 2026-09-17
 
 - **Pasting into a table cell lands once.** Edit a cell, leave it unchanged,

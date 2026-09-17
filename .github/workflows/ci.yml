@@ -1426,6 +1426,16 @@ jobs:
         # the loader gates the expanded doc, the file on disk stays full.
         run: node scripts/test-slides-compact.ts
 
+      - name: Assistant rig
+        # The Assistant drawer (slides/src/editor/assistant/): the deck leaves
+        # the page compact with collab/docId stripped and assets tokenised, a
+        # reply's JSON is found and merged back with the other slides
+        # byte-identical, and the extension bridge client (describe / check /
+        # streamed send / refusal / error / abort / foreign-source frames)
+        # against a postMessage double. Extension-only by decision: the page
+        # has no place to put a key — test-export-secrets.ts asserts that.
+        run: node scripts/test-slides-assistant.ts
+
       - name: Agent-deck corpus rig
         # scripts/fixtures/agent-decks/*.json — compact decks written the way
         # agents write them (md, omitted h, nested arrays) — load through the

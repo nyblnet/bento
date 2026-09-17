@@ -20,6 +20,7 @@ import { openExportImagesDialog } from './exportimages'
 import { paletteSignature, resolveThemeRefs } from '../palette'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
+import { AssistantPanel } from './assistant/panel'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
@@ -83,6 +84,7 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
 export class Editor {
   private canvas!: SlideCanvas
   private panel!: PropsPanel
+  private assistant!: AssistantPanel
   private sidebar!: HTMLElement
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
@@ -507,6 +509,11 @@ export class Editor {
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
+    // the Assistant drawer: extension-only (assistant/transport.ts says why);
+    // the panel re-appends it after every rebuild
+    this.assistant = new AssistantPanel({ store: this.store, toast: (m) => this.toast(m) })
+    this.panel.footer = this.assistant.root
+    this.props.appendChild(this.assistant.root)
 
     if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
   }
