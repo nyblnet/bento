@@ -7238,3 +7238,44 @@ The experimental alphabets stay in `scripts/lib/b86.mjs` behind
 the b86 decoder alone, verified by grep on the built shell), and the
 diagnostic panel stays behind `--diag`. Default: b86, cascade, no panel.
 
+## 2026-09-17 — A lean (`text: false`) sync stamp loses different-block edits on a snapshot reunion; guarded, not yet fixed
+
+`SyncState.toJSON({ text: false })` omits the per-node token history (the RGA
+`txt` generations) to shrink a saved file — meant for bento/spaces, whose typed
+prose would make that history dwarf its own document. Finding, measured with the
+kernel engine alone (spaces' convergence rig, reproduced in a throwaway): a lean
+stamp **silently loses an edit to a DIFFERENT block** when a mailed-back copy is
+reunited by `mergeSnapshot`.
+
+Mechanism: a `txt` edit advances the node's text GENERATION (`txt[el].sd`) but
+NOT its `html` LWW register (`regs[el+' html']`). A `text: false` stamp drops the
+generation, so the only stamped carrier of that edit is gone; `mergeSnapshot`
+compares registers, sees the html register unchanged, and keeps the base value.
+Two forks that edited *different* blocks lose one edit — and it is silent because
+the documents still CONVERGE. A live op-replay session is unaffected: a `set`/`txt`
+op both carries the value and stamps its register. The loss is specific to a lean
+stamp reunited by snapshot — which is exactly the rejoin path a lean stamp
+requires (a re-seeded generation would split-brain against a peer still holding
+the original, so op-resume is unsafe; see scripts/test-sync-shape.ts).
+
+Status: LATENT, not live. No shipping path stamps lean. Every app stamps the full
+history via `stampInto` → `toJSON()` default (`text: true`), the differ runs
+`text: true` (session.ts), and bento/spaces' `SyncSession` extends the kernel one
+without overriding the stamp. The prior crdt.ts comment claiming "bento/spaces
+does NOT stamp text history" and "ABSENT MEANS BLOCK-LEVEL MERGING, not breakage …
+the SAME paragraph" was stale AND wrong on the safety promise; corrected.
+
+Done now (this change): the crdt.ts comment states reality; `toJSON` REFUSES
+`text: false` without `unsafeOmitTextHistory: true`, so a future size optimisation
+that wires `stampInto` lean hits a wall instead of a silent loss (the rigs pass
+the flag); scripts/test-sync-shape.ts pins the different-block loss as a NEGATIVE
+CONTROL (assert the loss, invert it when the engine is fixed) alongside a full
+snapshot of the same edit that is kept — proving the loss is the missing history,
+not the merge.
+
+Deferred: making lean safe is a separate kernel change — a stamped html-register
+carrier that survives dropping the generation, WITHOUT out-ranking a concurrent
+generation (that would break the same-block RGA merge). Its gate is the full
+convergence rig, `scripts/test-sync`. Where it is wanted: bento/spaces per-block
+text under Markdown storage (working/design/spaces-pages.md follow-ups).
+

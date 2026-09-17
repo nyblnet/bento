@@ -18,6 +18,29 @@ pre-1.0.
   the panel whatever is selected, and it only redraws when the order, the
   members or a label actually change — a move, a resize or a click never
   touches it. Reported by the maintainer.
+- **Pasting keeps the formatting.** Copy bold, italic or a list from one text
+  box and paste it into another, or into a table cell, and it arrives as it
+  was — the paste used to read only the plain-text copy and rebuild from
+  that. What arrives goes through the same checker as every other piece of
+  text: no styles, no scripts, no handlers, a link only if it is a web
+  address. Plain text pasted from elsewhere still converts its markdown.
+  Reported by Hermholtz (#503).
+- **A long bullet wraps under its text.** Typing `- ` makes a bullet as you
+  type; when you finish editing, those lines become a real list, so a bullet
+  that runs onto a second line indents that line under the first word, not
+  under the dot — and an indented `- ` nests. Lists you made from the
+  formatting bar are untouched. Reported by Hermholtz (#502).
+- **A typed bullet keeps its space.** Typing `- ` made the bullet, but the
+  next letter landed right against it — the space after the glyph was a
+  plain space at the end of the line, which the browser treats as nothing and
+  the next keystroke replaced. It is a non-breaking space now, for top-level
+  and indented bullets alike, typed or pasted. Reported by Hermholtz (#501).
+- **Pasting into a table cell lands once.** Edit a cell, leave it unchanged,
+  edit it again — each visit quietly added another set of keystroke and paste
+  handlers to the same cell, so a later paste landed once per visit (four
+  visits, four copies; the same could happen to a text box). Each edit now
+  takes its handlers with it when it ends. Found by the maintainer, copying
+  an asset code between cells.
 ## [1.2.0] — 2026-09-16
 
 - **A deck opens inside Teams and SharePoint again.** Their viewer refuses

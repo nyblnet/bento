@@ -72,7 +72,7 @@ const a = one.doc.slides[0], b = one.doc.slides[1]
 const ref = findLayout('title-body', { size: { width: 1280, height: 720 } })!
 ok(els(a).map((e) => e.id).join() === ref.elements.map((e) => e.id).join(), 'the slide has exactly the layout\'s elements, in order, with the layout\'s ids')
 ok(frame(text(a, 'ltc-title')) === frame(text(ref, 'ltc-title')) && frame(text(a, 'ltc-body')) === frame(text(ref, 'ltc-body')), 'title and body sit exactly on the layout\'s frames')
-ok(text(a, 'ltc-title')!.html === 'Hi' && /• a<br>• b|<li>a/.test(text(a, 'ltc-body')!.html), 'content applied: the title, and the markdown body as the editor converts it')
+ok(text(a, 'ltc-title')!.html === 'Hi' && /•\u00a0a<br>•\u00a0b|<li>a/.test(text(a, 'ltc-body')!.html), 'content applied: the title, and the markdown body as the editor converts it')
 ok(text(a, 'ltc-title')!.fontSize === text(ref, 'ltc-title')!.fontSize && text(a, 'ltc-title')!.fontWeight === 700, 'typography is the layout\'s (44→scaled, weight 700), not the compact default')
 ok(els(a).every((e) => !(e.placeholder && !(e.html as string))), 'no leftover placeholder prompt: every text slot was filled')
 ok(text(b, 'ltc-title')!.id === text(a, 'ltc-title')!.id, 'two slides from the same layout share element ids — their titles morph')

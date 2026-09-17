@@ -298,9 +298,10 @@ const CHROME = [
  * render.ts, so this is the shipping code path and not a re-implementation of
  * it. Written without backticks or `${` so it can live in a template literal.
  */
-const probeSource = (renderPath: string, modelPath: string) => `
+const probeSource = (renderPath: string, modelPath: string, pastePath: string) => `
 import { renderSlide, sanitizeHtml } from ${JSON.stringify(renderPath)}
 import { newDoc } from ${JSON.stringify(modelPath)}
+import { clipboardToHtml } from ${JSON.stringify(pastePath)}
 
 const O = location.origin
 const pwned: number[] = []
@@ -409,6 +410,72 @@ if (location.pathname === '/meta.html') {
       el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
     }
     check('3c — and clicking or hovering the lifted elements runs nothing', ![41, 42, 44, 45].some((n) => pwned.includes(n)))
+
+    // --- 3d. the clipboard's html flavour, pasted into a live text box --------
+    // Discussion #503: a paste now prefers text/html. It goes through the SAME
+    // sanitizer (editor/paste.ts clipboardToHtml), so the hostile corpus above,
+    // arriving as a ClipboardEvent into a contentEditable box, comes out with
+    // no handler, no script, no style, and nothing runs when the pasted nodes
+    // are clicked or hovered. Chrome's copy quirks are handled first: meta and
+    // style elements go, and a <b style="font-weight:normal"> (Chrome's way
+    // of saying NOT bold inside a bold run) is unwrapped rather than becoming
+    // a real <b> once its attribute is stripped.
+    const box3d = document.createElement('div')
+    box3d.contentEditable = 'true'
+    document.body.appendChild(box3d)
+    box3d.focus()
+    const hostile = '<meta charset="utf-8"><style>b{color:red}</style>' +
+      '<b onclick="window.__pwn(51)" style="font-weight:700">bold</b> ' +
+      '<b style="font-weight:normal">notbold</b> ' +
+      '<i onmouseover="window.__pwn(52)">it</i>' +
+      '<script>window.__pwn(53)</scr' + 'ipt>' +
+      '<a href="javascript:window.__pwn(54)">j</a><a href="https://bento.page/" target="_top" onclick="window.__pwn(55)">ok</a>' +
+      '<section><u onclick="window.__pwn(56)">deep</u></section>' +
+      '<img src=x onerror="window.__pwn(57)">' +
+      '<span style="position:fixed;inset:0;background:url(' + O + '/beacon.png)">s</span>' +
+      // every shape a browser starts LOADING the moment a node joins a live
+      // document, each pointing at this rig's own server, with the handlers
+      // such a load would fire — the paste helper must let none of them run
+      // or fetch, because nothing it touches may ever join the live document
+      '<img src="' + O + '/paste-img.gif" onload="window.__pwn(61)">' +
+      '<img srcset="' + O + '/paste-srcset.gif 1x" src="' + O + '/paste-src2.gif">' +
+      '<picture><source srcset="' + O + '/paste-source.gif"><img src="' + O + '/paste-pic.gif"></picture>' +
+      '<video poster="' + O + '/paste-poster.gif" src="' + O + '/paste-video.mp4" onerror="window.__pwn(62)"></video>' +
+      '<audio src="' + O + '/paste-audio.mp3" onerror="window.__pwn(63)"></audio>' +
+      '<input type="image" src="' + O + '/paste-input.gif" onload="window.__pwn(64)">' +
+      '<noscript><img src="' + O + '/paste-noscript.gif"></noscript>' +
+      '<iframe src="' + O + '/paste-frame.html"></iframe>' +
+      '<object data="' + O + '/paste-object.svg"></object>' +
+      '<ul><li>one</li><li>two</li></ul>'
+    const dt3d = new DataTransfer()
+    dt3d.setData('text/html', hostile)
+    dt3d.setData('text/plain', 'plain fallback')
+    const inserted = clipboardToHtml(dt3d)
+    document.execCommand('insertHTML', false, inserted)
+    const kept = box3d.innerHTML
+    check('3d — the html flavour is used (bold, italic, underline and the list survive the paste)',
+      /<b>bold<\\/b>/.test(kept) && /<i>it<\\/i>/.test(kept) && /<u>deep<\\/u>/.test(kept) && /<ul><li>one<\\/li><li>two<\\/li><\\/ul>/.test(kept))
+    check('3d — Chrome\\'s "not bold" <b> is unwrapped, not promoted to bold', !/<b>notbold<\\/b>/.test(kept) && /notbold/.test(kept))
+    check('3d — no handler, script, style, img or meta survives the paste',
+      !box3d.querySelector('[onclick],[onmouseover],[onerror],[style],script,img,meta,style,link') && !kept.includes('__pwn') && !kept.includes('javascript:'))
+    const a3d = Array.from(box3d.querySelectorAll('a'))
+    check('3d — only the web link keeps its href, with no other attribute',
+      a3d.length === 1 && a3d[0].getAttribute('href') === 'https://bento.page/' && a3d[0].attributes.length === 1)
+    for (const el of Array.from(box3d.querySelectorAll('b, i, u, span, li'))) {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    }
+    check('3d — clicking or hovering the pasted nodes runs nothing', ![51, 52, 53, 54, 55, 56, 57].some((n) => pwned.includes(n)))
+    check('3d — no media element of any kind survives the paste', !box3d.querySelector('img,picture,source,video,audio,input,noscript,iframe,object'))
+    // the load handlers fire asynchronously: asserted again after the settle
+    // at the end (see "3d — the paste started no load" below), and the
+    // server's hit list is checked on the node side
+    const dtPlain = new DataTransfer()
+    dtPlain.setData('text/plain', 'just text')
+    check('3d — a clipboard with no html flavour hands over to the plain path', clipboardToHtml(dtPlain) === '')
+    const dtEmpty = new DataTransfer()
+    dtEmpty.setData('text/html', '<meta charset="utf-8"><style>x{}</style><script>window.__pwn(58)</scr' + 'ipt>')
+    check('3d — html that is nothing but junk hands over to the plain path too', clipboardToHtml(dtEmpty) === '' && !pwned.includes(58))
 
     // --- 4. network out of a self-contained file -------------------------------
     draw('<div>x</div><link rel="stylesheet" href="' + O + '/tracker.css">' +
@@ -609,7 +676,11 @@ if (location.pathname === '/meta.html') {
     check('the probe ran to the end (it threw: ' + String(err) + ')', false)
   }
 
-  setTimeout(() => {
+  setTimeout(async () => {
+    // a fence: one request of our own, answered in order after any load the
+    // paste might have started, so the node side's hit list is complete
+    try { await fetch(O + '/paste-fence', { cache: 'no-store' }) } catch {}
+    check('3d — after the settle, no load or error handler from the paste ran', ![61, 62, 63, 64].some((n) => pwned.includes(n)))
     check('nothing executed: ' + (pwned.length ? pwned.join(',') : 'clean'), pwned.length === 0)
     const pre = document.createElement('pre')
     pre.id = 'bento-results'
@@ -625,7 +696,7 @@ if (location.pathname === '/meta.html') {
 async function runBrowserSection(chrome: string) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-sanitize-'))
   const entry = path.join(tmp, 'probe.ts')
-  fs.writeFileSync(entry, probeSource(repoFile('slides/src/render.ts'), repoFile('slides/src/model.ts')))
+  fs.writeFileSync(entry, probeSource(repoFile('slides/src/render.ts'), repoFile('slides/src/model.ts'), repoFile('slides/src/editor/paste.ts')))
   execFileSync(repoFile('slides/node_modules/.bin/esbuild'), [
     entry, '--bundle', '--format=esm', '--outfile=' + path.join(tmp, 'probe.js'),
   ], { stdio: 'pipe' })
@@ -711,6 +782,9 @@ async function runBrowserSection(chrome: string) {
     ok(!hits.includes('/desc-img.png') && !hits.includes('/title-img.png'),
       '8 — nothing inside <desc> or <title> fetches either')
     ok(!hits.includes('/xlink.svg'), '7 — nor an xlink:href <use> pointing out of the document')
+    ok(hits.includes('/paste-fence'), '3d — the fence request arrived (the hit list is complete)')
+    const pasteLoads = hits.filter((h) => h.startsWith('/paste-') && h !== '/paste-fence')
+    ok(pasteLoads.length === 0, '3d — the paste helper started no load: img, srcset, picture/source, video poster/src, audio, input type=image, noscript img, iframe, object' + (pasteLoads.length ? ' — FETCHED ' + pasteLoads.join(' ') : ''))
     ok(hits.includes('/remote.png'), 'an <image href="http(s)://…"> still loads — that one is allowed on purpose')
     ok(hits.includes('/xlink-remote.png'), 'and so does the xlink:href spelling of it — the policy is not a ban on pictures')
     ok(hits.includes('/embed-view.png'), '9 — an embed view is held to the svg policy, no stricter: its <image> loads too')
