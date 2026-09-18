@@ -20,7 +20,8 @@ import { validateDoc, type Finding } from '../../validate'
 import { lsGet, lsSet } from '../../../../kernel/src/storage.ts'
 import { offlineEnabled } from '../../../../kernel/src/net.ts'
 import { ExtensionTransport, extensionPresent, type AssistantDescription, type AssistantTransport } from './transport'
-import { buildMessages, mergeReply, parseReply, type AssistantScope, type Turn } from './prompt'
+import { buildMessages, cleanDoc, mergeReply, parseReply, type AssistantScope, type Turn } from './prompt'
+import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
 /** Where "get the extension" points. The app has no store link yet — the
  *  repository directory is the honest address until a listing exists. */
@@ -49,6 +50,7 @@ export class AssistantPanel {
   private status = el('div', 'ed-assist-status')
   private log = el('div', 'ed-assist-log')
   private input = document.createElement('textarea')
+  private notice = el('div', 'ed-assist-notice')
   private sendB = document.createElement('button')
   private scopeSlide = document.createElement('button')
   private scopeDeck = document.createElement('button')
@@ -97,7 +99,7 @@ export class AssistantPanel {
     const acts = el('div', 'ed-assist-acts')
     acts.append(scope, this.sendB)
 
-    this.body.append(this.status, this.log, this.input, acts)
+    this.body.append(this.status, this.log, this.input, this.notice, acts)
     this.root.append(head, this.body)
     this.setScope('slide')
     this.setOpen(lsGet('bento-assist-open') === 'on', false)
@@ -114,12 +116,14 @@ export class AssistantPanel {
     this.scope = s
     this.scopeSlide.classList.toggle('on', s === 'slide')
     this.scopeDeck.classList.toggle('on', s === 'deck')
+    this.refreshNotice()
   }
 
   /** The sentence at the top: the route, or why there is none. */
   private refreshStatus() {
     const s = this.status
     s.innerHTML = ''
+    this.refreshNotice()
     const usable = this.transport && !offlineEnabled()
     this.input.disabled = !usable
     this.sendB.disabled = !usable
@@ -151,6 +155,15 @@ export class AssistantPanel {
     }
     const route = d ? `${t('via {host}', { host: this.transport.name })} · ${d.host || '—'} · ${d.model || '—'}` : t('via {host}', { host: this.transport.name })
     s.append(el('span', 'ed-assist-route', route + ' '), settings)
+  }
+
+  /** One line under the input saying what leaves the page (prompt.ts elideDoc). */
+  private refreshNotice() {
+    if (!this.transport) { this.notice.textContent = ''; return }
+    const host = this.described?.host || this.transport.name
+    this.notice.textContent = this.scope === 'slide'
+      ? t("Sends this slide's text and notes to {host}; comments stay here.", { host })
+      : t("Sends the deck's text and notes to {host}; comments stay here.", { host })
   }
 
   private async describe() {
@@ -231,6 +244,9 @@ export class AssistantPanel {
     const parsed = json ? parseDocInputReport(json) : null
     if (!parsed) { this.note(t('The reply was not a deck edit I could apply.'), 'err'); return }
     const next = parsed.doc
+    // the model's markup is cleaned ONCE, here, the way pasted markup is at
+    // commit — the gate above is a shape gate (prompt.ts cleanDoc says why)
+    cleanDoc(next, { html: sanitizeHtml, svg: sanitizeSvgMarkup, svgCss: sanitizeSvgCss })
     // the card reports what the EDIT introduced: a deck that already had
     // fourteen off-canvas warnings should not list them under every reply
     const had = new Set(validateDoc(this.store.doc).findings.map(findingKey))

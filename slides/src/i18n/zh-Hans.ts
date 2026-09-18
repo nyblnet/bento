@@ -946,4 +946,6 @@ export const zhHans: Catalog = {
   "Undo": "撤销",
   "{dropped} fields dropped, {warnings} warnings": "丢弃了 {dropped} 个字段，{warnings} 条警告",
   "Deck updated by the assistant — ⌘Z undoes": "助手已更新演示文稿 — ⌘Z 可撤销",
+  "Sends this slide's text and notes to {host}; comments stay here.": "将此幻灯片的文本和备注发送到 {host}；评论留在本地。",
+  "Sends the deck's text and notes to {host}; comments stay here.": "将演示文稿的文本和备注发送到 {host}；评论留在本地。",
 }

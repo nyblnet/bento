@@ -946,4 +946,6 @@ export const de: Catalog = {
   "Undo": "Rückgängig",
   "{dropped} fields dropped, {warnings} warnings": "{dropped} Felder verworfen, {warnings} Warnungen",
   "Deck updated by the assistant — ⌘Z undoes": "Deck vom Assistenten aktualisiert — ⌘Z macht es rückgängig",
+  "Sends this slide's text and notes to {host}; comments stay here.": "Sendet Text und Notizen dieser Folie an {host}; Kommentare bleiben hier.",
+  "Sends the deck's text and notes to {host}; comments stay here.": "Sendet Text und Notizen des Decks an {host}; Kommentare bleiben hier.",
 }

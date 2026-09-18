@@ -960,4 +960,6 @@ export const strings: Catalog = {
   "Undo": "เลิกทำ",
   "{dropped} fields dropped, {warnings} warnings": "ตัดฟิลด์ทิ้ง {dropped} รายการ, คำเตือน {warnings} รายการ",
   "Deck updated by the assistant — ⌘Z undoes": "ผู้ช่วยอัปเดตสไลด์เด็คแล้ว — ⌘Z เพื่อเลิกทำ",
+  "Sends this slide's text and notes to {host}; comments stay here.": "ส่งข้อความและโน้ตของสไลด์นี้ไปยัง {host}; ความคิดเห็นอยู่ที่นี่",
+  "Sends the deck's text and notes to {host}; comments stay here.": "ส่งข้อความและโน้ตของสไลด์เด็คไปยัง {host}; ความคิดเห็นอยู่ที่นี่",
 }

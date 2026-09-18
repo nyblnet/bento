@@ -7341,4 +7341,33 @@ unchanged; Stop posted `assistant.abort` naming the request; "not configured"
 showed the Settings… line and opened the options page; the fake extension's
 key string appeared in neither the page HTML, the serialized file,
 localStorage, sessionStorage nor any window global. Without the extension:
-the sentence, inputs disabled, zero frames posted. Shell +9.2 KB compressed.
+the sentence, inputs disabled, zero frames posted. Shell +10 KB compressed.
+
+**Four conditions from the security review, each a rig case
+(`scripts/test-slides-assistant.ts`):** (A) `describe()` bounds `host` to a
+hostname shape and `model` to an id shape, else '' — the route line is the
+one text the page keeps from the bridge, and a hostile bridge must not make
+the page HOLD a key by smuggling it there. (B) A deck reply's duplicate slide
+ids, and duplicate element ids within a slide, are re-minted the way the
+compact loader mints missing ones (`s<n>`, `<slideId>-<type>-<index>`, never
+colliding with an id that appears later) — links, states and morphs target by
+id and the CRDT keys slides by id, so a poisoned reply could split replicas;
+element ids repeated ACROSS slides are the morph idiom and stay; slide scope
+just forces its one id. (C) The untrusted gate is a SHAPE gate: after it the
+document still carried `<img onerror>`/`<b onclick>` in text html, `<script>`
+in svg markup and `link:"javascript:…"` — nothing runs here (the renderer
+sanitizes at draw time), but the FILE would carry the payload to whoever it
+is shared with, and pre-1.1.0 shells drew svg through an unwrap hole. So
+apply() cleans once, on the way into the document, the way pasted markup is
+cleaned at commit: `sanitizeHtml` over text and table-cell html,
+`sanitizeSvgMarkup` (new: the same walk, styles sanitized but NOT scoped —
+`scopeCss` is not idempotent and the renderer scopes at draw time) over svg
+markup and svg assets, `sanitizeSvgCss` over an svg element's `css`, and a
+`link` kept only if it is a web URL or an id-shaped string. Measured in
+headless Chrome on the exact apply chain with those payloads: the gate let
+them through, the clean removed all six, nothing ran. (D) `blobs` (offloaded
+asset keys + bytes) joins the private keys. Content policy: speaker `notes`
+go to the model (the author's intent for the slide); review `comments` do not
+(reviewers' names and words addressed to the author) and are put back from
+the live document on apply; the drawer says so in one line under its input —
+"Sends this slide's text and notes to <host>; comments stay here."

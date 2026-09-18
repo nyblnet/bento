@@ -944,4 +944,6 @@ export const pt: Catalog = {
   "Undo": "Anular",
   "{dropped} fields dropped, {warnings} warnings": "{dropped} campos descartados, {warnings} avisos",
   "Deck updated by the assistant — ⌘Z undoes": "Deck atualizado pelo assistente — ⌘Z anula",
+  "Sends this slide's text and notes to {host}; comments stay here.": "Envia o texto e as notas deste slide para {host}; os comentários ficam aqui.",
+  "Sends the deck's text and notes to {host}; comments stay here.": "Envia o texto e as notas do deck para {host}; os comentários ficam aqui.",
 }

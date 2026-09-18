@@ -963,4 +963,6 @@ export const strings: Catalog = {
   "Undo": "Kumoa",
   "{dropped} fields dropped, {warnings} warnings": "{dropped} kenttää hylätty, {warnings} varoitusta",
   "Deck updated by the assistant — ⌘Z undoes": "Avustaja päivitti esityksen — ⌘Z kumoaa",
+  "Sends this slide's text and notes to {host}; comments stay here.": "Lähettää tämän dian tekstin ja muistiinpanot osoitteeseen {host}; kommentit jäävät tänne.",
+  "Sends the deck's text and notes to {host}; comments stay here.": "Lähettää esityksen tekstin ja muistiinpanot osoitteeseen {host}; kommentit jäävät tänne.",
 }

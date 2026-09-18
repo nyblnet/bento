@@ -966,4 +966,6 @@ export const strings: Catalog = {
   "Undo": "تراجع",
   "{dropped} fields dropped, {warnings} warnings": "تم إهمال {dropped} حقول، {warnings} تحذيرات",
   "Deck updated by the assistant — ⌘Z undoes": "حدّث المساعد العرض — ⌘Z للتراجع",
+  "Sends this slide's text and notes to {host}; comments stay here.": "يرسل نص هذه الشريحة وملاحظاتها إلى {host}؛ تبقى التعليقات هنا.",
+  "Sends the deck's text and notes to {host}; comments stay here.": "يرسل نص العرض وملاحظاته إلى {host}؛ تبقى التعليقات هنا.",
 }

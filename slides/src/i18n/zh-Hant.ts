@@ -946,4 +946,6 @@ export const zhHant: Catalog = {
   "Undo": "復原",
   "{dropped} fields dropped, {warnings} warnings": "捨棄了 {dropped} 個欄位，{warnings} 則警告",
   "Deck updated by the assistant — ⌘Z undoes": "助理已更新簡報 — ⌘Z 可復原",
+  "Sends this slide's text and notes to {host}; comments stay here.": "將此投影片的文字與備註傳送到 {host}；註解留在本機。",
+  "Sends the deck's text and notes to {host}; comments stay here.": "將簡報的文字與備註傳送到 {host}；註解留在本機。",
 }

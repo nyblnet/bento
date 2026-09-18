@@ -946,4 +946,6 @@ export const ja: Catalog = {
   "Undo": "元に戻す",
   "{dropped} fields dropped, {warnings} warnings": "{dropped} 個のフィールドを破棄、{warnings} 件の警告",
   "Deck updated by the assistant — ⌘Z undoes": "アシスタントがデッキを更新しました — ⌘Z で元に戻せます",
+  "Sends this slide's text and notes to {host}; comments stay here.": "このスライドのテキストとノートを {host} に送ります。コメントはここに残ります。",
+  "Sends the deck's text and notes to {host}; comments stay here.": "デッキのテキストとノートを {host} に送ります。コメントはここに残ります。",
 }

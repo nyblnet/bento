@@ -2878,6 +2878,8 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-assist-input { width: 100%; resize: vertical; min-height: 40px; font: inherit; font-size: 12px;
   padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); }
 .ed-assist-input:disabled { opacity: .5; }
+.ed-assist-notice { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.ed-assist-notice:empty { display: none; }
 .ed-assist-acts { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .ed-assist-scope { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .ed-assist-scope-b { border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; padding: 3px 8px; cursor: pointer; }

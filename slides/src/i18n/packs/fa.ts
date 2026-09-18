@@ -962,4 +962,6 @@ export const strings: Catalog = {
   "Undo": "واگرد",
   "{dropped} fields dropped, {warnings} warnings": "{dropped} فیلد حذف شد، {warnings} هشدار",
   "Deck updated by the assistant — ⌘Z undoes": "دستیار ارائه را به‌روز کرد — ⌘Z واگرد می‌کند",
+  "Sends this slide's text and notes to {host}; comments stay here.": "متن و یادداشت‌های این اسلاید را به {host} می‌فرستد؛ نظرها همین‌جا می‌مانند.",
+  "Sends the deck's text and notes to {host}; comments stay here.": "متن و یادداشت‌های ارائه را به {host} می‌فرستد؛ نظرها همین‌جا می‌مانند.",
 }

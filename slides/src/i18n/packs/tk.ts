@@ -983,4 +983,6 @@ export const strings: Catalog = {
   "Undo": "Yza gaýtar",
   "{dropped} fields dropped, {warnings} warnings": "{dropped} meýdan aýryldy, {warnings} duýduryş",
   "Deck updated by the assistant — ⌘Z undoes": "Kömekçi prezentasiýany täzeledi — ⌘Z yza gaýtarýar",
+  "Sends this slide's text and notes to {host}; comments stay here.": "Bu slaýdyň tekstini we bellikleri {host} salgysyna iberýär; teswirler şu ýerde galýar.",
+  "Sends the deck's text and notes to {host}; comments stay here.": "Prezentasiýanyň tekstini we bellikleri {host} salgysyna iberýär; teswirler şu ýerde galýar.",
 }

@@ -946,4 +946,6 @@ export const es: Catalog = {
   "Undo": "Deshacer",
   "{dropped} fields dropped, {warnings} warnings": "{dropped} campos descartados, {warnings} avisos",
   "Deck updated by the assistant — ⌘Z undoes": "Mazo actualizado por el asistente — ⌘Z lo deshace",
+  "Sends this slide's text and notes to {host}; comments stay here.": "Envía el texto y las notas de esta diapositiva a {host}; los comentarios se quedan aquí.",
+  "Sends the deck's text and notes to {host}; comments stay here.": "Envía el texto y las notas del mazo a {host}; los comentarios se quedan aquí.",
 }

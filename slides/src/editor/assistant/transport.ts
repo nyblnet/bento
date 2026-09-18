@@ -95,6 +95,16 @@ export interface AssistantTransport {
   openSettings(): Promise<void>
 }
 
+/**
+ * What `describe` may hand the page: a hostname and a model id, by SHAPE.
+ * A hostile bridge could otherwise make the page HOLD a key by smuggling it
+ * through `host` — the one field the drawer displays and the only text the
+ * page ever keeps from the extension. Anything else becomes ''.
+ */
+export const HOST_RE = /^[a-z0-9.-]{1,253}$/i
+export const MODEL_RE = /^[A-Za-z0-9._:/-]{1,120}$/
+const boundTo = (v: unknown, re: RegExp): string => (typeof v === 'string' && re.test(v) ? v : '')
+
 /** The envelope key page-bridge.js / relay.js already use. */
 export const CH = '__bento_tray__'
 export const REQ_TIMEOUT = 5000
@@ -163,8 +173,8 @@ export class ExtensionTransport implements AssistantTransport {
     const r = await this.request('assistant.describe')
     if (r.ok !== true) throw new Error(String(r.reason ?? 'bridge fault'))
     return {
-      host: typeof r.host === 'string' ? r.host : '',
-      model: typeof r.model === 'string' ? r.model : '',
+      host: boundTo(r.host, HOST_RE),
+      model: boundTo(r.model, MODEL_RE),
       configured: r.configured === true,
     }
   }

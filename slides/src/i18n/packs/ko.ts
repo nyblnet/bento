@@ -950,4 +950,6 @@ export const strings: Catalog = {
   "Undo": "실행 취소",
   "{dropped} fields dropped, {warnings} warnings": "{dropped}개 필드 제거, {warnings}개 경고",
   "Deck updated by the assistant — ⌘Z undoes": "어시스턴트가 덱을 업데이트했습니다 — ⌘Z로 취소",
+  "Sends this slide's text and notes to {host}; comments stay here.": "이 슬라이드의 텍스트와 노트를 {host}(으)로 보냅니다. 댓글은 여기에 남습니다.",
+  "Sends the deck's text and notes to {host}; comments stay here.": "덱의 텍스트와 노트를 {host}(으)로 보냅니다. 댓글은 여기에 남습니다.",
 }

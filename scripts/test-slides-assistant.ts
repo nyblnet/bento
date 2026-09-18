@@ -15,12 +15,30 @@
 // send, a mid-stream error, an abort (which posts assistant.abort), a silent
 // bridge (timeout), frames from another source ignored — and the presence
 // test that decides whether the drawer exists at all.
+//
+// Security review (four conditions, each a case below): (A) describe() bounds
+// host and model to a hostname / id SHAPE so a hostile bridge cannot make the
+// page hold a key by smuggling it through the one field the drawer displays;
+// (B) a deck reply's duplicate slide ids and duplicate element ids within a
+// slide are re-minted (link/state/morph targeting and the CRDT key by id — a
+// poisoned reply could split replicas); (C) the gate is a shape gate, so
+// apply() cleans text/table html with sanitizeHtml, svg markup with
+// sanitizeSvgMarkup and drops a `link` that is neither a web URL nor an id —
+// measured in headless Chrome on the exact apply chain with the exact
+// payloads, because the sanitizers need a DOM; (D) `blobs` and `comments`
+// never leave the page.
 
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { compactDoc, expandDoc } from '../slides/src/compact.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
 import { buildMessages, elideDoc, mergeReply, parseReply, SYSTEM_PROMPT } from '../slides/src/editor/assistant/prompt.ts'
-import { CH, ExtensionTransport, extensionPresent, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
+import { CH, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
+import { dedupeIds, cleanDoc, ID_RE } from '../slides/src/editor/assistant/prompt.ts'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 let failures = 0
 let checks = 0
@@ -41,6 +59,9 @@ const PRIV = 'OWNERPRIV-77aa-must-never-leave'
 const PIXELS = 'data:image/png;base64,' + 'A'.repeat(600)
 doc.slides[1].elements.push({ id: 'photo', type: 'image', x: 100, y: 100, w: 300, h: 200, src: PIXELS } as never)
 ;(doc as Obj).assets = { pic: PIXELS }
+;(doc as Obj).blobs = { b1: { key: 'BLOBKEY-must-never-leave', bytes: PIXELS } }
+doc.slides[0].notes = 'Open with the number'
+doc.slides[0].comments = [{ id: 'c1', author: 'Reviewer Name', at: 1, text: 'private remark', replies: [], resolved: false }] as never
 
 console.log('\nprompt.ts — what leaves the page')
 {
@@ -51,6 +72,9 @@ console.log('\nprompt.ts — what leaves the page')
   ok(!text.includes(PIXELS) && text.includes('@@bento-asset-0@@'), 'an embedded image is a token, not 600 bytes of base64')
   ok(e.assets.length === 1 && e.assets[0] === PIXELS, 'the same bytes in two places are one token')
   ok(e.doc.compact === true, 'the document goes out in the compact form')
+  ok(!('blobs' in e.doc), 'D — the blob store (offloaded asset keys + bytes) is not in the prompt')
+  ok((e.doc.slides as Obj[]).every((s) => !('comments' in s)) && (e.doc.slides as Obj[])[0].notes === doc.slides[0].notes,
+    'D — comments (reviewer names) stay out; speaker notes go')
 
   const { messages, elided } = buildMessages(doc, 'slide', 1, [], 'Make the title bolder')
   const all = messages.map((m) => m.content).join('\n')
@@ -113,6 +137,43 @@ console.log('\nprompt.ts — merging a reply')
   ok((dm.slides as Obj[]).length === doc.slides.length + 1 && dm.compact === true && !('collab' in dm), 'a deck reply is the whole deck, flagged compact, collab dropped')
   ok(JSON.stringify(dm).includes(PIXELS), 'tokens restored across the whole deck')
   ok(mergeReply(doc, 'deck', 0, { title: 'x' }, elided) === null, 'a deck reply without slides is refused')
+  ok((dm.slides as Obj[])[0].comments !== undefined && JSON.stringify((dm.slides as Obj[])[0].comments).includes('Reviewer Name'),
+    'D — on apply the live document\'s comments come back onto the slides that still exist')
+  ok(!JSON.stringify(dm).includes('BLOBKEY'), 'D — and a deck reply cannot carry blobs')
+
+  // B — duplicate ids in a deck reply
+  const dup = { compact: true, slides: [
+    { id: 'dup', elements: [{ id: 'e', type: 'text', x: 0, y: 0, w: 10, h: 10, html: 'a' }, { id: 'e', type: 'text', x: 0, y: 0, w: 10, h: 10, html: 'b' }, [{ id: 'e', type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1 }]] },
+    { id: 'dup', elements: [{ id: 'e', type: 'text', x: 0, y: 0, w: 10, h: 10, html: 'c' }] },
+    { id: 'dup', elements: [] },
+    { id: 's3', elements: [] },
+  ] }
+  const fixed = dedupeIds(JSON.parse(JSON.stringify(dup)))
+  ok(fixed === 4, `B — four repeats re-minted (2 slides + 2 elements), got ${fixed}`)
+  const dd = JSON.parse(mergeReply(doc, 'deck', 0, dup, elided)!) as Obj
+  const ids = (dd.slides as Obj[]).map((s) => s.id)
+  ok(new Set(ids).size === ids.length && ids[0] === 'dup' && ids[1] === 's2' && ids[2] === 's3-2' && ids[3] === 's3',
+    `B — slide ids unique after merge: ${ids.join(' ')} (first keeps its id; repeats mint s<n>, suffixed past a taken one)`)
+  const e0 = ((dd.slides as Obj[])[0].elements as unknown[]).flat() as Obj[]
+  ok(new Set(e0.map((e) => e.id)).size === 3 && e0[0].id === 'e' && e0[1].id === 'dup-text-1' && e0[2].id === 'dup-shape-2',
+    `B — element ids unique within the slide: ${e0.map((e) => e.id).join(' ')}`)
+  ok(((dd.slides as Obj[])[1].elements as Obj[])[0].id === 'e', 'B — the same element id on ANOTHER slide stays (the morph idiom)')
+  ok(dedupeIds({ slides: [{ id: 'a', elements: [{ id: 'x' }] }, { id: 'b', elements: [{ id: 'x' }] }] }) === 0, 'B — a clean deck is untouched')
+  const single = JSON.parse(mergeReply(doc, 'slide', 1, { id: 'whatever', elements: [{ id: 'q', type: 'text', x: 0, y: 0, w: 1, h: 1, html: 'x' }, { id: 'q', type: 'text', x: 0, y: 0, w: 1, h: 1, html: 'y' }] }, elided)!) as Obj
+  ok((single.slides as Obj[])[1].id === doc.slides[1].id, 'B — slide scope is unchanged: the id is forced (its elements pass through as before)')
+}
+
+console.log('\nprompt.ts — link shapes (C, the pure half)')
+{
+  ok(ID_RE.test('sd-intro') && ID_RE.test('s1') && ID_RE.test('a.b:c/d-e_f'), 'an id-shaped link is accepted')
+  ok(!ID_RE.test('bad id!') && !ID_RE.test('') && !ID_RE.test('x'.repeat(121)) && !ID_RE.test('javascript:alert(1)'), 'spaces, empty, over-long and a scheme are not ids')
+  const d = starterDoc()
+  const mk = (link: unknown) => ({ id: 'l', type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1, rotation: 0, opacity: 1, link }) as never
+  d.slides[0].elements = [mk('javascript:alert(1)'), mk('https://bento.page/'), mk('sd-intro'), mk('bad id!'), mk('data:text/html,x'), mk(' https://x/')]
+  const n = cleanDoc(d, { html: (h) => h, svg: (m) => m, svgCss: (c) => c })
+  const links = d.slides[0].elements.map((e) => (e as Obj).link)
+  ok(n === 4 && links[0] === undefined && links[1] === 'https://bento.page/' && links[2] === 'sd-intro' && links[3] === undefined && links[4] === undefined && links[5] === undefined,
+    `C — javascript:, data:, a malformed id and a padded URL are dropped; a web URL and an id stay (${JSON.stringify(links)})`)
 }
 
 // --- transport.ts against a bridge double ------------------------------------------
@@ -150,6 +211,19 @@ await (async () => {
   ok(w.sent[0][CH] === true && w.sent[0].dir === 'req' && w.sent[0].op === 'assistant.describe' && String(w.sent[0].id).startsWith('asst-'), 'the request rides the tray envelope with an asst- id')
   const c = await tr.check()
   ok(c.ok === false && c.reason === 'HTTP 401', 'check: the reason comes back verbatim')
+
+  // A — a hostile bridge smuggling a key through host/model
+  const KEY = 'sk-live-0123456789abcdef'
+  w.handler = (f) => { if (f.op === 'assistant.describe') w.res(f.id, { ok: true, host: `api.example.test?key=${KEY}`, model: `m ${KEY}`, configured: true }) }
+  const hostile = await tr.describe()
+  ok(hostile.host === '' && hostile.model === '' && !JSON.stringify(hostile).includes(KEY), 'A — host and model outside their shapes become empty; the key never lands in the page')
+  w.handler = (f) => { if (f.op === 'assistant.describe') w.res(f.id, { ok: true, host: 'localhost', model: 'gemini-2.5-flash', configured: true }) }
+  const plain = await tr.describe()
+  ok(plain.host === 'localhost' && plain.model === 'gemini-2.5-flash', 'A — a bare hostname and a real model id pass')
+  ok(HOST_RE.test('generativelanguage.googleapis.com') && HOST_RE.test('api.openai.com') && !HOST_RE.test('localhost:11434') && !HOST_RE.test('x'.repeat(254)) && !HOST_RE.test('a/b'),
+    'A — host shape: letters, digits, dots, dashes, ≤253 (a port is not a hostname — describe sends the host)')
+  ok(MODEL_RE.test('claude-sonnet-4-5') && MODEL_RE.test('models/gemini-2.5-flash') && MODEL_RE.test('org:ft:gpt-4o-mini:abc') && !MODEL_RE.test('m k') && !MODEL_RE.test('') && !MODEL_RE.test('x'.repeat(121)),
+    'A — model shape: [A-Za-z0-9._:/-]{1,120}')
   await tr.openSettings()
   ok(w.sent.some((f) => f.op === 'assistant.settings.open'), 'openSettings asks the extension for its options page')
 
@@ -218,6 +292,87 @@ console.log('\ntransport.ts — is the extension here?')
   ok(extensionPresent(win(undefined)) === false, 'no host at all → absent')
   ok(extensionPresent(win({ ops: 'assistant' })) === false, 'a malformed ops → absent')
   void g
+}
+
+// --- C, measured: the apply chain in a browser ----------------------------------
+//
+// sanitizeHtml and sanitizeSvgMarkup parse with the DOM, so the exact payloads
+// from the review run through the exact chain apply() runs — mergeReply →
+// parseDocInputReport → cleanDoc — in headless Chrome, and the DOCUMENT that
+// would be stored is what is asserted, not the render.
+const CHROME = [
+  process.env.BENTO_CHROME,
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser',
+].find((p): p is string => !!p && fs.existsSync(p))
+  ?? (spawnSync('which', ['google-chrome']).status === 0 ? 'google-chrome' : undefined)
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const probeSource = `
+import { sanitizeHtml, sanitizeSvgMarkup, sanitizeSvgCss } from ${JSON.stringify(path.join(repoRoot, 'slides/src/render.ts'))}
+import { parseDocInputReport } from ${JSON.stringify(path.join(repoRoot, 'slides/src/compactload.ts'))}
+import { starterDoc } from ${JSON.stringify(path.join(repoRoot, 'slides/src/starterdeck.ts'))}
+import { buildMessages, mergeReply, cleanDoc } from ${JSON.stringify(path.join(repoRoot, 'slides/src/editor/assistant/prompt.ts'))}
+const results = []
+const check = (name, pass) => results.push([name, pass])
+try {
+  const doc = starterDoc()
+  const { elided } = buildMessages(doc, 'deck', 0, [], 'x')
+  const IMG = '<p>hi <img src=x onerror="window.__pwn=1"> <b onclick="window.__pwn=2">bold</b> <a href="javascript:window.__pwn=3">l</a></p>'
+  const reply = { compact: true, assets: { art: '<svg viewBox="0 0 10 10"><rect width="5" height="5" onload="window.__pwn=7"/></svg>' }, slides: [{ id: 'p1', elements: [
+    { id: 't', type: 'text', x: 0, y: 0, w: 100, h: 40, html: IMG },
+    { id: 'tb', type: 'table', x: 0, y: 50, w: 100, h: 40, columns: [{ w: 1 }, { w: 1 }], rows: [{ cells: [{ html: IMG }, { html: 'ok' }] }] },
+    { id: 'sv', type: 'svg', x: 0, y: 100, w: 100, h: 100, markup: '<svg viewBox="0 0 10 10"><script>window.__pwn=4</script><rect width="5" height="5" onclick="window.__pwn=5"/><style>.r{fill:red}</style></svg>', css: '@import url(https://evil.example/x.css); .r{fill:blue}' },
+    { id: 'sa', type: 'svg', x: 0, y: 100, w: 100, h: 100, asset: 'art' },
+    { id: 'r1', type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1, link: 'javascript:window.__pwn=6' },
+    { id: 'r2', type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1, link: 'https://bento.page/' },
+    { id: 'r3', type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1, link: 'p1' },
+  ] }] }
+  const json = mergeReply(doc, 'deck', 0, reply, elided)
+  const parsed = parseDocInputReport(json)
+  const next = parsed.doc
+  const before = JSON.stringify(next)
+  check('C — the shape gate let the payloads through (the condition is real)', /onerror|onclick|<script|javascript:/.test(before))
+  const n = cleanDoc(next, { html: sanitizeHtml, svg: sanitizeSvgMarkup, svgCss: sanitizeSvgCss })
+  const els = Object.fromEntries(next.slides[0].elements.map((e) => [e.id, e]))
+  const after = JSON.stringify(next)
+  check('C — cleanDoc changed the six tainted values: text, cell, markup, css, link, asset (' + n + ')', n === 6)
+  check('C — text html: no <img onerror>, no on* handler, no javascript: href', !/onerror|onclick|javascript:|<img/i.test(els.t.html) && /bold/.test(els.t.html))
+  check('C — table cell html cleaned the same way', !/onerror|onclick|javascript:/i.test(els.tb.rows[0].cells[0].html) && els.tb.rows[0].cells[1].html === 'ok')
+  check('C — svg markup: <script> and onclick gone, <rect> and its <style> kept UNSCOPED', !/<script|onclick/i.test(els.sv.markup) && /<rect/.test(els.sv.markup) && /\\.r\\{fill:red\\}/.test(els.sv.markup) && !/data-el-id/.test(els.sv.markup))
+  check('C — svg css: @import refused, the rule kept', !/evil\\.example/.test(els.sv.css) && /fill:blue/.test(els.sv.css))
+  check('C — an svg ASSET a reply hands back is walked too', !/onload/i.test(next.assets.art) && /<rect/.test(next.assets.art))
+  check('C — link: javascript: dropped, web URL and slide id kept', els.r1.link === undefined && els.r2.link === 'https://bento.page/' && els.r3.link === 'p1')
+  check('C — nothing executable is left anywhere in the document to be stored', !/onerror|onclick|onload|<script|javascript:|evil\\.example/i.test(after))
+  check('C — nothing ran while cleaning', window.__pwn === undefined)
+} catch (e) { check('probe threw: ' + (e && e.message), false) }
+document.body.insertAdjacentText('beforeend', 'BENTO-RESULTS:' + btoa(unescape(encodeURIComponent(JSON.stringify(results)))) + ':END')
+`
+
+console.log('\nthe apply chain, in a browser (C)')
+if (!CHROME) {
+  console.log('  ⚠ SKIPPED — no Chrome found. Set BENTO_CHROME to a binary to run this section.')
+} else {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-assistant-'))
+  try {
+    fs.writeFileSync(path.join(tmp, 'probe.ts'), probeSource)
+    execFileSync(path.join(repoRoot, 'slides/node_modules/.bin/esbuild'), [path.join(tmp, 'probe.ts'), '--bundle', '--format=iife', '--outfile=' + path.join(tmp, 'probe.js')], { stdio: 'pipe' })
+    // a classic script from file:// (a module would be blocked by CORS there); written by concatenation, never a literal script-close
+    fs.writeFileSync(path.join(tmp, 'probe.html'), '<!doctype html><meta charset="utf-8"><body><scr' + 'ipt src="probe.js"></scr' + 'ipt></body>')
+    const dom = await new Promise<string>((resolve) => {
+      const child = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--allow-file-access-from-files', '--user-data-dir=' + path.join(tmp, 'profile'), '--virtual-time-budget=4000', '--dump-dom', 'file://' + path.join(tmp, 'probe.html')], { stdio: ['ignore', 'pipe', 'ignore'] })
+      let out = ''
+      child.stdout.on('data', (b: Buffer) => { out += b.toString('utf8') })
+      const done = setTimeout(() => child.kill('SIGKILL'), 45_000)
+      child.on('close', () => { clearTimeout(done); resolve(out) })
+    })
+    const blob = /BENTO-RESULTS:([A-Za-z0-9+/=]+):END/.exec(dom)
+    if (!blob) ok(false, 'the browser probe reported results (it did not)')
+    else for (const [name, pass] of JSON.parse(Buffer.from(blob[1], 'base64').toString('utf8')) as Array<[string, boolean]>) ok(pass, name)
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
