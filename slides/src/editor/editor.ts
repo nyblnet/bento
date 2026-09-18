@@ -122,6 +122,7 @@ export class Editor {
     store.on('doc', () => this.syncLinkedCharts())
     store.on('doc', () => this.syncConnectors())
     store.on('doc', () => this.syncThemeRefs())
+    store.on('doc', () => this.syncFonts())
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
@@ -2371,6 +2372,13 @@ export class Editor {
       this.canvas.render()
       this.scheduleThumbs()
     }
+  }
+
+  /**
+   * Re-inject custom font bundles when applicable.
+   */
+  private syncFonts() {
+    if (this.store.doc.fonts?.length) injectFonts(this.store.doc)
   }
 
   // --- live table→chart binding -------------------------------------------------
