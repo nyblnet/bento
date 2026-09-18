@@ -540,7 +540,7 @@
     "message": "روی این دستگاه آماده است."
   },
   "asstBuiltinDownload": {
-    "message": "مدل هنوز روی این دستگاه نیست. Chrome در نخستین استفاده آن را دانلود می‌کند که ممکن است کمی طول بکشد."
+    "message": "مدل هنوز روی این دستگاه نیست. در تنظیمات افزونهٔ bento/home «دانلود مدل» را بزنید."
   },
   "asstBuiltinUnsupported": {
     "message": "این Chrome مدل داخلی ندارد. در تنظیمات افزونه ارائه‌دهندهٔ دیگری انتخاب کنید."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "الآن نه"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome در حال دانلود مدل است. پس از پایان دوباره امتحان کنید."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "دانلود مدل"
+  },
+  "asstBuiltinProgress": {
+    "message": "در حال دانلود مدل… ‎$1٪"
+  },
+  "asstBuiltinRequirements": {
+    "message": "حدود ۲ تا ۴ گیگابایت. Chrome به حدود ۲۲ گیگابایت فضای خالی روی دیسک و شبکه‌ای بدون محدودیت داده نیاز دارد؛ در غیر این صورت مدل را در دسترس نمی‌داند."
   }
 }

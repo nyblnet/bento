@@ -573,7 +573,7 @@
     "message": "Pronto neste dispositivo."
   },
   "asstBuiltinDownload": {
-    "message": "O modelo ainda não está neste dispositivo. O Chrome o baixa no primeiro uso, o que pode demorar um pouco."
+    "message": "O modelo ainda não está neste dispositivo. Pressione “Baixar modelo” nas configurações da extensão bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "Este Chrome não tem modelo integrado. Escolha outro provedor nas configurações da extensão."
@@ -613,5 +613,17 @@
   },
   "consentDeny": {
     "message": "Agora não"
+  },
+  "asstBuiltinDownloading": {
+    "message": "O Chrome está baixando o modelo. Tente de novo quando terminar."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Baixar modelo"
+  },
+  "asstBuiltinProgress": {
+    "message": "Baixando o modelo… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Cerca de 2–4 GB. O Chrome precisa de uns 22 GB livres no disco e de uma rede sem limite de dados; caso contrário, informa que o modelo está indisponível."
   }
 }

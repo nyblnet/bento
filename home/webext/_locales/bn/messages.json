@@ -540,7 +540,7 @@
     "message": "এই ডিভাইসে প্রস্তুত।"
   },
   "asstBuiltinDownload": {
-    "message": "মডেলটি এখনও এই ডিভাইসে নেই। Chrome প্রথম ব্যবহারে এটি ডাউনলোড করে, যাতে কিছুটা সময় লাগতে পারে।"
+    "message": "মডেলটি এখনও এই ডিভাইসে নেই। bento/home এক্সটেনশনের সেটিংসে “মডেল ডাউনলোড করুন” চাপুন।"
   },
   "asstBuiltinUnsupported": {
     "message": "এই Chrome-এ কোনো অন্তর্নির্মিত মডেল নেই। এক্সটেনশনের সেটিংসে অন্য প্রদানকারী বেছে নিন।"
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "এখন নয়"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome মডেলটি ডাউনলোড করছে। শেষ হলে আবার চেষ্টা করুন।"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "মডেল ডাউনলোড করুন"
+  },
+  "asstBuiltinProgress": {
+    "message": "মডেল ডাউনলোড হচ্ছে… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "প্রায় ২–৪ GB। Chrome-এর ডিস্কে প্রায় ২২ GB খালি জায়গা ও ডেটা-সীমাহীন নেটওয়ার্ক দরকার, নইলে মডেলটিকে অনুপলব্ধ বলে জানায়।"
   }
 }

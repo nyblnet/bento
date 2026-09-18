@@ -540,7 +540,7 @@
     "message": "Handa na sa device na ito."
   },
   "asstBuiltinDownload": {
-    "message": "Wala pa ang modelo sa device na ito. Ida-download ito ng Chrome sa unang paggamit, na maaaring magtagal."
+    "message": "Wala pa ang modelo sa device na ito. Pindutin ang “I-download ang modelo” sa mga setting ng extension na bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "Walang built-in na modelo ang Chrome na ito. Pumili ng ibang provider sa mga setting ng extension."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "Hindi ngayon"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Dina-download ng Chrome ang modelo. Subukan muli kapag tapos na."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "I-download ang modelo"
+  },
+  "asstBuiltinProgress": {
+    "message": "Dina-download ang modelo… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Humigit-kumulang 2–4 GB. Kailangan ng Chrome ng mga 22 GB na libreng espasyo sa disk at network na walang limitasyon sa data; kung hindi, iuulat nitong hindi available ang modelo."
   }
 }

@@ -249,6 +249,21 @@ const openaiSse = 'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\ndata: {"ch
   ok(frames.length === 1 && frames[0].kind === 'assistant.chunk', 'run: after an abort nothing more is emitted — no done, no error')
 }
 {
+  // 'downloadable' is not "no model": only LanguageModel.create() starts
+  // Chrome's download, and Settings has the button for it — so check and
+  // send must point there, with a code the page can key on, and never say
+  // "no built-in model" on a Chrome that has one.
+  const LMstate = (a: string) => ({ availability: async () => a, create: async () => { throw new Error('must not be called from a turn') } })
+  for (const [a, code, reason] of [['downloadable', 'model-download', 'asstBuiltinDownload'], ['downloading', 'model-downloading', 'asstBuiltinDownloading'], ['unavailable', 'model-unavailable', 'asstBuiltinUnsupported']] as const) {
+    const c = await asst.check({ provider: 'builtin' } as any, { t, LanguageModel: LMstate(a) })
+    ok(c.ok === false && c.code === code && c.reason === reason, `check (built-in, ${a}): code ${code} + the matching words`)
+    const frames: any[] = []
+    await asst.run({ provider: 'builtin' } as any, [{ role: 'user', content: 'hi' }], (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { t, LanguageModel: LMstate(a) })
+    ok(frames.length === 1 && frames[0].kind === 'assistant.error' && frames[0].code === code && frames[0].reason === reason, `send (built-in, ${a}): one error frame with the same code`)
+  }
+  ok(/LanguageModel\.create\(\{\s*monitor/.test(read('src/home.js')) && /downloadprogress/.test(read('src/home.js')), 'Settings starts the download with create({monitor}) and shows progress')
+}
+{
   // The built-in model: both stream shapes Chrome has shipped.
   const session = (chunks: string[]) => ({
     promptStreaming: () => ({ [Symbol.asyncIterator]: async function* () { for (const c of chunks) yield c } }),

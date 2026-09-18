@@ -540,7 +540,7 @@
     "message": "Sedia pada peranti ini."
   },
   "asstBuiltinDownload": {
-    "message": "Model belum ada pada peranti ini. Chrome memuat turunnya pada penggunaan pertama, dan itu mungkin mengambil masa."
+    "message": "Model belum ada pada peranti ini. Tekan “Muat turun model” dalam tetapan sambungan bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "Chrome ini tiada model terbina dalam. Pilih pembekal lain dalam tetapan sambungan."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "Bukan sekarang"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome sedang memuat turun model. Cuba lagi apabila selesai."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Muat turun model"
+  },
+  "asstBuiltinProgress": {
+    "message": "Memuat turun model… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Kira-kira 2–4 GB. Chrome memerlukan lebih kurang 22 GB ruang kosong pada cakera dan rangkaian tanpa had data; jika tidak, model dilaporkan tidak tersedia."
   }
 }

@@ -540,7 +540,7 @@
     "message": "Sẵn sàng trên thiết bị này."
   },
   "asstBuiltinDownload": {
-    "message": "Mô hình chưa có trên thiết bị này. Chrome sẽ tải về khi dùng lần đầu, việc này có thể mất một lúc."
+    "message": "Mô hình chưa có trên thiết bị này. Hãy nhấn “Tải mô hình” trong cài đặt của tiện ích bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "Chrome này không có mô hình tích hợp. Hãy chọn nhà cung cấp khác trong cài đặt của tiện ích."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "Để sau"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome đang tải mô hình. Hãy thử lại khi tải xong."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Tải mô hình"
+  },
+  "asstBuiltinProgress": {
+    "message": "Đang tải mô hình… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Khoảng 2–4 GB. Chrome cần khoảng 22 GB dung lượng trống trên ổ đĩa và mạng không giới hạn dữ liệu; nếu không, mô hình được báo là không khả dụng."
   }
 }

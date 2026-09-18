@@ -540,7 +540,7 @@
     "message": "מוכן במכשיר הזה."
   },
   "asstBuiltinDownload": {
-    "message": "המודל עדיין לא במכשיר הזה. Chrome מוריד אותו בשימוש הראשון, וזה עשוי לקחת זמן."
+    "message": "המודל עדיין לא במכשיר הזה. לחצו על „הורדת המודל” בהגדרות התוסף bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "ב־Chrome הזה אין מודל מובנה. בחרו ספק אחר בהגדרות התוסף."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "לא עכשיו"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome מוריד את המודל. נסו שוב כשההורדה תסתיים."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "הורדת המודל"
+  },
+  "asstBuiltinProgress": {
+    "message": "מוריד את המודל… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "כ־2–4 GB. ‏Chrome צריך כ־22 GB פנויים בדיסק ורשת ללא הגבלת נתונים, אחרת הוא מדווח שהמודל אינו זמין."
   }
 }

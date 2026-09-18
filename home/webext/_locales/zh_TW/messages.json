@@ -573,7 +573,7 @@
     "message": "已在這部裝置上就緒。"
   },
   "asstBuiltinDownload": {
-    "message": "模型尚未在這部裝置上。Chrome 會在第一次使用時下載，可能需要一些時間。"
+    "message": "模型尚未在這部裝置上。請在 bento/home 擴充功能的設定中按「下載模型」。"
   },
   "asstBuiltinUnsupported": {
     "message": "這個 Chrome 沒有內建模型。請在擴充功能的設定中選擇其他提供者。"
@@ -613,5 +613,17 @@
   },
   "consentDeny": {
     "message": "暫不"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome 正在下載模型。完成後請再試一次。"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "下載模型"
+  },
+  "asstBuiltinProgress": {
+    "message": "正在下載模型…… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "約 2–4 GB。Chrome 需要磁碟約 22 GB 可用空間以及非計量網路，否則會回報模型無法使用。"
   }
 }

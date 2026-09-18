@@ -540,7 +540,7 @@
     "message": "Klar på denne enhed."
   },
   "asstBuiltinDownload": {
-    "message": "Modellen er ikke på denne enhed endnu. Chrome henter den ved første brug, hvilket kan tage lidt tid."
+    "message": "Modellen er ikke på denne enhed endnu. Tryk på “Hent model” i indstillingerne for udvidelsen bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "Denne Chrome har ingen indbygget model. Vælg en anden udbyder i udvidelsens indstillinger."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "Ikke nu"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome henter modellen. Prøv igen, når den er færdig."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Hent model"
+  },
+  "asstBuiltinProgress": {
+    "message": "Henter modellen… $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Cirka 2–4 GB. Chrome kræver omkring 22 GB ledig plads på disken og et netværk uden dataloft, ellers melder den modellen som utilgængelig."
   }
 }

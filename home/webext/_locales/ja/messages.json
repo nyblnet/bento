@@ -573,7 +573,7 @@
     "message": "このデバイスで使用できます。"
   },
   "asstBuiltinDownload": {
-    "message": "モデルはまだこのデバイスにありません。初回使用時に Chrome がダウンロードします。しばらくかかることがあります。"
+    "message": "モデルはまだこのデバイスにありません。拡張機能 bento/home の設定で「モデルをダウンロード」を押してください。"
   },
   "asstBuiltinUnsupported": {
     "message": "この Chrome には内蔵モデルがありません。拡張機能の設定で別のプロバイダーを選んでください。"
@@ -613,5 +613,17 @@
   },
   "consentDeny": {
     "message": "今はしない"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome がモデルをダウンロード中です。完了してからもう一度お試しください。"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "モデルをダウンロード"
+  },
+  "asstBuiltinProgress": {
+    "message": "モデルをダウンロード中… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "約 2〜4 GB です。Chrome にはディスクの空き容量が約 22 GB と、従量制でないネットワークが必要です。満たさない場合、モデルは利用不可と報告されます。"
   }
 }

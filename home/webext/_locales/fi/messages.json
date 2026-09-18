@@ -540,7 +540,7 @@
     "message": "Valmis tällä laitteella."
   },
   "asstBuiltinDownload": {
-    "message": "Malli ei ole vielä tällä laitteella. Chrome lataa sen ensimmäisellä käyttökerralla, mikä voi kestää hetken."
+    "message": "Malli ei ole vielä tällä laitteella. Paina ”Lataa malli” bento/home-laajennuksen asetuksissa."
   },
   "asstBuiltinUnsupported": {
     "message": "Tässä Chromessa ei ole sisäänrakennettua mallia. Valitse toinen palveluntarjoaja laajennuksen asetuksista."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "Ei nyt"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome lataa mallia. Yritä uudelleen, kun lataus on valmis."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Lataa malli"
+  },
+  "asstBuiltinProgress": {
+    "message": "Ladataan mallia… $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Noin 2–4 Gt. Chrome tarvitsee noin 22 Gt vapaata levytilaa ja verkon, jossa ei ole datarajaa; muuten se ilmoittaa, ettei malli ole saatavilla."
   }
 }

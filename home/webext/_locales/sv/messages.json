@@ -540,7 +540,7 @@
     "message": "Redo på den här enheten."
   },
   "asstBuiltinDownload": {
-    "message": "Modellen finns inte på den här enheten ännu. Chrome hämtar den vid första användningen, vilket kan ta en stund."
+    "message": "Modellen finns inte på den här enheten ännu. Tryck på ”Hämta modell” i inställningarna för tillägget bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "Den här Chrome har ingen inbyggd modell. Välj en annan leverantör i tilläggets inställningar."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "Inte nu"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome hämtar modellen. Försök igen när den är klar."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Hämta modell"
+  },
+  "asstBuiltinProgress": {
+    "message": "Hämtar modellen… $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Cirka 2–4 GB. Chrome behöver ungefär 22 GB ledigt på disken och ett nätverk utan datatak, annars rapporterar den modellen som otillgänglig."
   }
 }

@@ -126,12 +126,24 @@ function unreachable(cfg, env) {
   return env.t('asstUnreachable', hostPortOf(cfg) || cfg.provider)
 }
 
+/**
+ * Why the built-in model cannot answer right now, as a code the page keys on
+ * and words for the person. 'downloadable' is NOT "no model": nothing starts
+ * Chrome's download except `LanguageModel.create()`, which Settings offers as
+ * a button — so the words send them there rather than to another provider.
+ */
+export function builtinProblem(a, t) {
+  if (a === 'downloadable') return { code: 'model-download', reason: t('asstBuiltinDownload') }
+  if (a === 'downloading') return { code: 'model-downloading', reason: t('asstBuiltinDownloading') }
+  return { code: 'model-unavailable', reason: t('asstBuiltinUnsupported') }
+}
+
 /** `assistant.check`: one cheap round trip. */
 export async function check(cfg, env) {
   if (cfg.provider === 'builtin') {
     const a = await builtinAvailability(env.LanguageModel)
     if (a === 'available') return { ok: true }
-    return { ok: false, reason: env.t(a === 'unsupported' || a === 'unavailable' ? 'asstBuiltinUnsupported' : 'asstBuiltinDownload') }
+    return { ok: false, ...builtinProblem(a, env.t) }
   }
   if (!httpConfigured(cfg)) return { ok: false, reason: env.t('asstNotConfigured') }
   const req = shapeCheck(cfg)
@@ -154,7 +166,12 @@ export async function check(cfg, env) {
  */
 async function runBuiltin(messages, onChunk, signal, env) {
   const LM = env.LanguageModel
-  if ((await builtinAvailability(LM)) !== 'available') throw new Error(env.t('asstBuiltinUnsupported'))
+  const a = await builtinAvailability(LM)
+  if (a !== 'available') {
+    const p = builtinProblem(a, env.t)
+    const e = new Error(p.reason); e.code = p.code
+    throw e
+  }
   const last = messages[messages.length - 1]
   const history = messages.slice(0, -1)
   const session = await LM.create({ initialPrompts: history, signal })
@@ -201,7 +218,7 @@ export async function run(cfg, messages, emit, signal, env) {
     if (!signal.aborted) emit('assistant.done', { text })
   } catch (e) {
     if (signal.aborted || e?.name === 'AbortError') return
-    emit('assistant.error', { reason: String(e?.message || e) })
+    emit('assistant.error', { reason: String(e?.message || e), ...(e?.code ? { code: e.code } : {}) })
   }
 }
 

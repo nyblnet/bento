@@ -540,7 +540,7 @@
     "message": "اس آلے پر تیار ہے۔"
   },
   "asstBuiltinDownload": {
-    "message": "ماڈل ابھی اس آلے پر نہیں ہے۔ Chrome پہلے استعمال پر اسے ڈاؤن لوڈ کرتا ہے، جس میں کچھ وقت لگ سکتا ہے۔"
+    "message": "ماڈل ابھی اس آلے پر نہیں ہے۔ bento/home ایکسٹینشن کی ترتیبات میں ”ماڈل ڈاؤن لوڈ کریں“ دبائیں۔"
   },
   "asstBuiltinUnsupported": {
     "message": "اس Chrome میں بلٹ اِن ماڈل نہیں ہے۔ ایکسٹینشن کی ترتیبات میں کوئی اور فراہم کنندہ منتخب کریں۔"
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "ابھی نہیں"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome ماڈل ڈاؤن لوڈ کر رہا ہے۔ مکمل ہونے پر دوبارہ کوشش کریں۔"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "ماڈل ڈاؤن لوڈ کریں"
+  },
+  "asstBuiltinProgress": {
+    "message": "ماڈل ڈاؤن لوڈ ہو رہا ہے… $1٪"
+  },
+  "asstBuiltinRequirements": {
+    "message": "تقریباً 2–4 GB۔ Chrome کو ڈسک پر تقریباً 22 GB خالی جگہ اور بغیر ڈیٹا حد والا نیٹ ورک چاہیے، ورنہ وہ ماڈل کو دستیاب نہیں بتاتا۔"
   }
 }

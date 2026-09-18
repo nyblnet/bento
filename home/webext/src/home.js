@@ -1451,11 +1451,50 @@ async function assistantSettings(section) {
     provider: provider.value, baseUrl: baseUrl.value, model: model.value, key: key.value,
   }, hasBuiltin)
 
+  // The built-in model: what Chrome says about it, and the one action that
+  // moves it along. `availability()` reports 'downloadable' until something
+  // calls `LanguageModel.create()` — nothing else starts the download, and a
+  // click on an extension page is the gesture it wants. Progress comes from
+  // the monitor; 'unavailable' is usually disk (~22 GB free) or a metered
+  // network, which the hint says.
+  const download = document.createElement('button')
+  download.className = 'btn'
+  download.textContent = t('asstBuiltinDownloadBtn')
+  download.hidden = true
+  actions.insertBefore(download, status)
+  const requirements = document.createElement('small')
+  requirements.className = 'dim'
+  requirements.textContent = t('asstBuiltinRequirements')
+  requirements.hidden = true
+  form.appendChild(requirements)
+
   const showBuiltinState = async () => {
     const a = await builtinAvailability(globalThis.LanguageModel)
+    download.hidden = !(a === 'downloadable' || a === 'downloading')
+    requirements.hidden = a === 'available'
     status.textContent = a === 'available' ? t('asstBuiltinReady')
-      : a === 'downloadable' || a === 'downloading' ? t('asstBuiltinDownload')
+      : a === 'downloadable' ? t('asstBuiltinDownload')
+      : a === 'downloading' ? t('asstBuiltinDownloading')
       : t('asstBuiltinUnsupported')
+  }
+  download.onclick = async () => {
+    download.disabled = true
+    status.textContent = t('asstBuiltinProgress', 0)
+    try {
+      const session = await globalThis.LanguageModel.create({
+        monitor(m) {
+          m.addEventListener('downloadprogress', (e) => {
+            status.textContent = t('asstBuiltinProgress', Math.round((e.loaded ?? 0) * 100))
+          })
+        },
+      })
+      session.destroy?.()
+    } catch (e) {
+      status.textContent = e?.message || String(e)
+    } finally {
+      download.disabled = false
+      await showBuiltinState()
+    }
   }
 
   const fill = () => {
@@ -1463,6 +1502,7 @@ async function assistantSettings(section) {
     const c = perProvider[p] ?? normalizeConfig({ provider: p }, hasBuiltin)
     const http = p !== 'builtin'
     baseRow.hidden = modelRow.hidden = keyRow.hidden = !http
+    download.hidden = requirements.hidden = true
     baseUrl.value = http ? c.baseUrl : ''
     baseUrl.placeholder = PROVIDER_DEFAULTS[p]?.baseUrl ?? ''
     model.value = http ? c.model : ''

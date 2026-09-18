@@ -540,7 +540,7 @@
     "message": "Klaar op dit apparaat."
   },
   "asstBuiltinDownload": {
-    "message": "Het model staat nog niet op dit apparaat. Chrome downloadt het bij het eerste gebruik, wat even kan duren."
+    "message": "Het model staat nog niet op dit apparaat. Druk op “Model downloaden” in de instellingen van de extensie bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "Deze Chrome heeft geen ingebouwd model. Kies een andere aanbieder in de instellingen van de extensie."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "Niet nu"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome downloadt het model. Probeer het opnieuw als het klaar is."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Model downloaden"
+  },
+  "asstBuiltinProgress": {
+    "message": "Model wordt gedownload… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Ongeveer 2–4 GB. Chrome heeft zo’n 22 GB vrije schijfruimte en een netwerk zonder datalimiet nodig, anders meldt het dat het model niet beschikbaar is."
   }
 }

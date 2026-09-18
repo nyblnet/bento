@@ -573,7 +573,7 @@
     "message": "Prêt sur cet appareil."
   },
   "asstBuiltinDownload": {
-    "message": "Le modèle n’est pas encore sur cet appareil. Chrome le télécharge à la première utilisation, ce qui peut prendre un moment."
+    "message": "Le modèle n’est pas encore sur cet appareil. Appuyez sur « Télécharger le modèle » dans les réglages de l’extension bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "Ce Chrome n’a pas de modèle intégré. Choisissez un autre fournisseur dans les réglages de l’extension."
@@ -613,5 +613,17 @@
   },
   "consentDeny": {
     "message": "Pas maintenant"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome télécharge le modèle. Réessayez quand ce sera terminé."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Télécharger le modèle"
+  },
+  "asstBuiltinProgress": {
+    "message": "Téléchargement du modèle… $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Environ 2 à 4 Go. Chrome a besoin d’environ 22 Go libres sur le disque et d’un réseau non limité, sinon il signale le modèle comme indisponible."
   }
 }

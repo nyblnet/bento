@@ -540,7 +540,7 @@
     "message": "Gotowy na tym urządzeniu."
   },
   "asstBuiltinDownload": {
-    "message": "Modelu nie ma jeszcze na tym urządzeniu. Chrome pobierze go przy pierwszym użyciu, co może chwilę potrwać."
+    "message": "Modelu nie ma jeszcze na tym urządzeniu. Naciśnij „Pobierz model” w ustawieniach rozszerzenia bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "Ten Chrome nie ma wbudowanego modelu. Wybierz innego dostawcę w ustawieniach rozszerzenia."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "Nie teraz"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome pobiera model. Spróbuj ponownie, gdy pobieranie się zakończy."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Pobierz model"
+  },
+  "asstBuiltinProgress": {
+    "message": "Pobieranie modelu… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Około 2–4 GB. Chrome potrzebuje około 22 GB wolnego miejsca na dysku i sieci bez limitu danych; w przeciwnym razie zgłasza, że model jest niedostępny."
   }
 }

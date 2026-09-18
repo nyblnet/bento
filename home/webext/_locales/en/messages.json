@@ -616,8 +616,8 @@
     "description": "Assistant settings: the Chrome built-in model is available."
   },
   "asstBuiltinDownload": {
-    "message": "The model is not on this device yet. Chrome downloads it on first use, which can take a while.",
-    "description": "Assistant settings / reason: the Chrome built-in model needs downloading."
+    "message": "The model is not on this device yet. Press “Download model” in the bento/home extension’s settings.",
+    "description": "Assistant settings / reason: the Chrome built-in model needs downloading, and only that button starts it. Keep the button name matching asstBuiltinDownloadBtn."
   },
   "asstBuiltinUnsupported": {
     "message": "This Chrome has no built-in model. Choose another provider in the extension's settings.",
@@ -670,5 +670,21 @@
   "consentDeny": {
     "message": "Not now",
     "description": "Permission window: the button that refuses access."
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome is downloading the model. Try again when it has finished.",
+    "description": "Assistant settings / reason: the Chrome built-in model is downloading."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Download model",
+    "description": "Assistant settings: button that starts the Chrome built-in model download."
+  },
+  "asstBuiltinProgress": {
+    "message": "Downloading the model… $1%",
+    "description": "Assistant settings: download progress. $1 is a whole number."
+  },
+  "asstBuiltinRequirements": {
+    "message": "About 2–4 GB. Chrome needs roughly 22 GB free on the disk and a network that is not metered, or it reports the model as unavailable.",
+    "description": "Assistant settings: hint under the built-in provider. REVIEW: the numbers are Chrome's requirements, keep them."
   }
 }

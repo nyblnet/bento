@@ -540,7 +540,7 @@
     "message": "جاهز على هذا الجهاز."
   },
   "asstBuiltinDownload": {
-    "message": "النموذج ليس على هذا الجهاز بعد. يحمّله Chrome عند أول استخدام، وقد يستغرق ذلك بعض الوقت."
+    "message": "النموذج ليس على هذا الجهاز بعد. اضغط «تنزيل النموذج» في إعدادات امتداد bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "لا يوجد نموذج مدمج في Chrome هذا. اختر مزوّدًا آخر في إعدادات الامتداد."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "ليس الآن"
+  },
+  "asstBuiltinDownloading": {
+    "message": "يحمّل Chrome النموذج. حاول مجددًا عند اكتماله."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "تنزيل النموذج"
+  },
+  "asstBuiltinProgress": {
+    "message": "جارٍ تنزيل النموذج… $1٪"
+  },
+  "asstBuiltinRequirements": {
+    "message": "نحو 2–4 غيغابايت. يحتاج Chrome إلى نحو 22 غيغابايت خالية على القرص وشبكة غير محدودة البيانات، وإلا أبلغ أن النموذج غير متاح."
   }
 }

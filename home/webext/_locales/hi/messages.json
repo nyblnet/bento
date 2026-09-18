@@ -540,7 +540,7 @@
     "message": "इस डिवाइस पर तैयार है।"
   },
   "asstBuiltinDownload": {
-    "message": "मॉडल अभी इस डिवाइस पर नहीं है। Chrome इसे पहले उपयोग पर डाउनलोड करता है, जिसमें कुछ समय लग सकता है।"
+    "message": "मॉडल अभी इस डिवाइस पर नहीं है। bento/home एक्सटेंशन की सेटिंग में “मॉडल डाउनलोड करें” दबाएँ।"
   },
   "asstBuiltinUnsupported": {
     "message": "इस Chrome में अंतर्निहित मॉडल नहीं है। एक्सटेंशन की सेटिंग में कोई और प्रदाता चुनें।"
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "अभी नहीं"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome मॉडल डाउनलोड कर रहा है। पूरा होने पर दोबारा कोशिश करें।"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "मॉडल डाउनलोड करें"
+  },
+  "asstBuiltinProgress": {
+    "message": "मॉडल डाउनलोड हो रहा है… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "लगभग 2–4 GB। Chrome को डिस्क पर लगभग 22 GB खाली जगह और बिना डेटा-सीमा वाला नेटवर्क चाहिए, वरना वह मॉडल को अनुपलब्ध बताता है।"
   }
 }

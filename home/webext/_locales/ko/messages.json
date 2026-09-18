@@ -540,7 +540,7 @@
     "message": "이 기기에서 사용할 수 있습니다."
   },
   "asstBuiltinDownload": {
-    "message": "모델이 아직 이 기기에 없습니다. 처음 사용할 때 Chrome이 다운로드하며, 시간이 좀 걸릴 수 있습니다."
+    "message": "모델이 아직 이 기기에 없습니다. bento/home 확장 프로그램 설정에서 “모델 다운로드”를 누르세요."
   },
   "asstBuiltinUnsupported": {
     "message": "이 Chrome에는 내장 모델이 없습니다. 확장 프로그램 설정에서 다른 제공자를 선택하세요."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "나중에"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome이 모델을 다운로드하는 중입니다. 완료된 뒤 다시 시도하세요."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "모델 다운로드"
+  },
+  "asstBuiltinProgress": {
+    "message": "모델 다운로드 중… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "약 2~4GB입니다. Chrome은 디스크 여유 공간 약 22GB와 데이터 제한이 없는 네트워크가 필요하며, 그렇지 않으면 모델을 사용할 수 없다고 보고합니다."
   }
 }

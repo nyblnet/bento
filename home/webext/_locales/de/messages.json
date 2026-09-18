@@ -573,7 +573,7 @@
     "message": "Auf diesem Gerät bereit."
   },
   "asstBuiltinDownload": {
-    "message": "Das Modell ist noch nicht auf diesem Gerät. Chrome lädt es beim ersten Gebrauch herunter, was eine Weile dauern kann."
+    "message": "Das Modell ist noch nicht auf diesem Gerät. Drücken Sie „Modell herunterladen“ in den Einstellungen der Erweiterung bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "Dieses Chrome hat kein eingebautes Modell. Wählen Sie in den Einstellungen der Erweiterung einen anderen Anbieter."
@@ -613,5 +613,17 @@
   },
   "consentDeny": {
     "message": "Jetzt nicht"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome lädt das Modell herunter. Versuchen Sie es erneut, wenn der Download abgeschlossen ist."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Modell herunterladen"
+  },
+  "asstBuiltinProgress": {
+    "message": "Modell wird heruntergeladen … $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Etwa 2–4 GB. Chrome braucht rund 22 GB freien Speicherplatz und ein nicht getaktetes Netzwerk, sonst meldet es das Modell als nicht verfügbar."
   }
 }

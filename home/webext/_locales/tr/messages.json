@@ -540,7 +540,7 @@
     "message": "Bu cihazda hazır."
   },
   "asstBuiltinDownload": {
-    "message": "Model henüz bu cihazda değil. Chrome ilk kullanımda indirir; bu biraz sürebilir."
+    "message": "Model henüz bu cihazda değil. bento/home uzantısının ayarlarında “Modeli indir”e basın."
   },
   "asstBuiltinUnsupported": {
     "message": "Bu Chrome’da yerleşik model yok. Uzantının ayarlarından başka bir sağlayıcı seçin."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "Şimdi değil"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome modeli indiriyor. Bittiğinde yeniden deneyin."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Modeli indir"
+  },
+  "asstBuiltinProgress": {
+    "message": "Model indiriliyor… %$1"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Yaklaşık 2–4 GB. Chrome’un diskte yaklaşık 22 GB boş alana ve kotasız bir ağa ihtiyacı vardır; aksi hâlde modeli kullanılamaz olarak bildirir."
   }
 }

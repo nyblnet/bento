@@ -540,7 +540,7 @@
     "message": "Siap di perangkat ini."
   },
   "asstBuiltinDownload": {
-    "message": "Model belum ada di perangkat ini. Chrome mengunduhnya saat pertama kali dipakai, dan itu bisa memakan waktu."
+    "message": "Model belum ada di perangkat ini. Tekan “Unduh model” di setelan ekstensi bento/home."
   },
   "asstBuiltinUnsupported": {
     "message": "Chrome ini tidak memiliki model bawaan. Pilih penyedia lain di setelan ekstensi."
@@ -580,5 +580,17 @@
   },
   "consentDeny": {
     "message": "Jangan sekarang"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome sedang mengunduh model. Coba lagi setelah selesai."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Unduh model"
+  },
+  "asstBuiltinProgress": {
+    "message": "Mengunduh model… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Sekitar 2–4 GB. Chrome memerlukan kira-kira 22 GB ruang kosong di disk dan jaringan tanpa kuota terbatas; jika tidak, model dilaporkan tidak tersedia."
   }
 }
