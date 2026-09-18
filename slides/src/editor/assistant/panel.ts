@@ -19,11 +19,16 @@ import { parseDocInputReport, fitAutoHeights, restack } from '../../compactload'
 import { validateDoc, type Finding } from '../../validate'
 import { lsGet, lsSet } from '../../../../kernel/src/storage.ts'
 import { offlineEnabled } from '../../../../kernel/src/net.ts'
-import { ExtensionTransport, extensionPresent, type AssistantDescription, type AssistantTransport } from './transport'
+import { ExtensionTransport, extensionPresent, type AssistantDescription, type AssistantModel, type AssistantTransport } from './transport'
 
 /** Display names for on-device model ids; anything else shows as its id. */
 export const MODEL_NAMES: Record<string, string> = { 'gemini-nano': 'Gemini Nano' }
 export const modelDisplay = (id: string): string => MODEL_NAMES[id] ?? id
+/** provider ids → the names people know them by; unknown ids as-is */
+const PROVIDER_NAMES: Record<string, string> = { builtin: 'Chrome', gemini: 'Gemini', anthropic: 'Anthropic', openai: 'OpenAI' }
+export const providerDisplay = (id: string): string => PROVIDER_NAMES[id] ?? id
+/** 200000 → "200k", 1048576 → "1M" */
+export const windowDisplay = (n: number): string => n >= 1_000_000 ? `${Math.round(n / 100_000) / 10}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
 import { applyOps, buildMessages, cleanDoc, mergeReply, parseReply, responseSchema, RETRY_NUDGE, type AssistantScope, type Turn } from './prompt'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
@@ -64,6 +69,8 @@ export class AssistantPanel {
   private present: () => boolean
   private running: AbortController | null = null
   private described: AssistantDescription | null = null
+  /** the routes the extension offered (assistant.models); a picker when > 1 */
+  private routes: AssistantModel[] = []
   /** the extension is asking the user (check code 'consent-pending'): one re-check is armed */
   private consentPending = false
   private recheckArmed = false
@@ -167,8 +174,44 @@ export class AssistantPanel {
       return
     }
     const where = d?.local ? `${t('on this device')} · ${modelDisplay(d.model)}` : d ? `${d.host || '—'} · ${d.model || '—'}` : ''
+    if (this.routes.length > 1) {
+      // several routes: the model is a picker; the extension keeps the
+      // keys and the choice, the page only says which
+      s.append(el('span', 'ed-assist-route', `${t('via {host}', { host: this.transport.name })} · `), this.buildPicker(), el('span', '', ' '), settings)
+      return
+    }
     const route = where ? `${t('via {host}', { host: this.transport.name })} · ${where}` : t('via {host}', { host: this.transport.name })
     s.append(el('span', 'ed-assist-route', route + ' '), settings)
+  }
+
+  /** The route picker: one option per model, grouped by provider, the
+   *  window beside it when known. Choosing one is assistant.select, then
+   *  a fresh describe + check. */
+  private buildPicker(): HTMLSelectElement {
+    const sel = document.createElement('select')
+    sel.className = 'ed-assist-model'
+    sel.title = t('Model')
+    const groups = new Map<string, HTMLOptGroupElement>()
+    const d = this.described
+    for (const r of this.routes) {
+      let g = groups.get(r.provider)
+      if (!g) { g = document.createElement('optgroup'); g.label = providerDisplay(r.provider); groups.set(r.provider, g); sel.appendChild(g) }
+      const o = document.createElement('option')
+      o.value = `${r.provider}\u001f${r.model}`
+      const name = r.local ? modelDisplay(r.model) : r.model
+      o.textContent = r.contextTokens ? `${name} · ${windowDisplay(r.contextTokens)}` : name
+      if (r.current || (d && d.model === r.model && ((r.local && d.local) || (!r.local && d.host === r.host)))) o.selected = true
+      g.appendChild(o)
+    }
+    sel.addEventListener('change', () => {
+      const [provider, model] = sel.value.split('\u001f')
+      sel.disabled = true
+      void this.transport?.select(provider, model).then(async (r) => {
+        if (!r.ok) this.note(t('The request failed: {reason}', { reason: r.reason }), 'err')
+        await this.describe()
+      })
+    })
+    return sel
   }
 
   /** One line under the input saying what leaves the page (prompt.ts elideDoc). */
@@ -184,11 +227,14 @@ export class AssistantPanel {
     if (!this.transport) return
     try {
       this.described = await this.transport.describe()
+      this.routes = await this.transport.models()
     } catch (e) {
       this.described = { host: '', model: '', configured: false }
+      this.routes = []
       this.note(t('The extension did not answer: {reason}', { reason: (e as Error).message }), 'err')
     }
     this.refreshStatus()
+    this.refreshNotice()
     if (this.described.configured) await this.check()
   }
 

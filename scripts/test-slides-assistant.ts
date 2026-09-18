@@ -438,6 +438,29 @@ await (async () => {
   const pend = await tr.check()
   ok(pend.ok === false && pend.code === 'consent-pending' && pend.reason === 'Asking you first', 'check: the consent-pending code rides beside the reason')
   {
+    // assistant.models: read by SHAPE — a hostile bridge cannot put a label, a key or a URL in the picker
+    w.handler = (f) => { if (f.op === 'assistant.models') w.res(f.id, { ok: true, models: [
+      { provider: 'builtin', model: 'gemini-nano', local: true, contextTokens: 6144, current: true },
+      { provider: 'gemini', model: 'gemini-3.8-flash', host: 'generativelanguage.googleapis.com', contextTokens: 1_000_000, label: 'sk-SECRET' },
+      { provider: 'openai', model: 'gpt-5.6-luna', host: 'https://api.openai.com/v1?key=X' },
+      { provider: 'Bad Provider', model: 'm' }, { provider: 'x', model: 'has space' }, 'junk', null, { provider: 'anthropic' },
+    ] }) }
+    const ms = await tr.models()
+    ok(ms.length === 3, `models: 3 well-formed routes of 8 (${ms.length})`)
+    ok(ms[0].provider === 'builtin' && ms[0].local === true && ms[0].contextTokens === 6144 && ms[0].current === true && ms[0].host === undefined, 'models: the on-device route with its window and current flag')
+    ok(ms[1].host === 'generativelanguage.googleapis.com' && ms[1].contextTokens === 1_000_000 && !('label' in ms[1]), 'models: a hostname and window pass; an extra label does not')
+    ok(ms[2].host === undefined && !JSON.stringify(ms).includes('key=X') && !JSON.stringify(ms).includes('SECRET'), 'models: a host that is not a bare hostname is dropped — nothing key-shaped reaches the page')
+    w.handler = (f) => { if (f.op === 'assistant.models') w.res(f.id, { ok: false, reason: 'unknown op' }) }
+    ok((await tr.models()).length === 0, 'models: an older extension without the op → no routes, no picker')
+    w.handler = (f) => { if (f.op === 'assistant.models') w.res(f.id, { ok: true, models: Array.from({ length: 500 }, (_, i) => ({ provider: 'openai', model: `m${i}` })) }) }
+    ok((await tr.models()).length === 200, 'models: at most 200 routes are read')
+    let picked: Obj | null = null
+    w.handler = (f) => { if (f.op === 'assistant.select') { picked = f.payload as Obj; w.res(f.id, { ok: true }) } }
+    ok((await tr.select('gemini', 'gemini-3.8-flash')).ok === true && picked?.provider === 'gemini' && picked?.model === 'gemini-3.8-flash', 'select: posts provider + model')
+    picked = null
+    ok((await tr.select('Bad Provider', 'm')).ok === false && picked === null, 'select: a malformed route never leaves the page')
+  }
+  {
     let seen: Obj | null = null
     w.handler = (f) => { if (f.op === 'assistant.send') { seen = f.payload as Obj; w.res(f.id, { ok: true }); w.evt(f.id, 'assistant.done', { text: '{}' }) } }
     await tr.send([{ role: 'user', content: 'x' }], () => {}, new AbortController().signal, { schema: WORDS_SCHEMA })
@@ -564,7 +587,7 @@ const tick = (ms = 30) => new Promise((r) => setTimeout(r, ms))
 ;(async () => {
 const TAINT = /onerror|onclick|onload|<script|javascript:|evil\\.example/i
 const fakeStore = (doc) => ({ doc, currentIndex: 0, readOnly: false, replaced: 0, replaceDoc(next) { this.doc = next; this.replaced++ }, goTo() {}, undo() {}, commit() {} })
-const fakeTransport = (over = {}) => ({ name: 'fake', checks: 0, describe: async () => ({ host: 'h.example', model: 'm', configured: true }), check: async function () { this.checks++; return { ok: true } }, send: async () => 'ok', openSettings: async () => {}, ...over })
+const fakeTransport = (over = {}) => ({ name: 'fake', checks: 0, describe: async () => ({ host: 'h.example', model: 'm', configured: true }), check: async function () { this.checks++; return { ok: true } }, models: async () => [], select: async () => ({ ok: true }), send: async () => 'ok', openSettings: async () => {}, ...over })
 try {
   const doc = starterDoc()
   const { elided } = buildMessages(doc, 'deck', 0, [], 'x')
@@ -625,6 +648,36 @@ try {
     const status = panel.root.querySelector('.ed-assist-status').textContent
     check('local: the route line reads "on this device · Gemini Nano" (id → display name), no host: ' + status, /on this device · Gemini Nano/.test(status) && !/h\\.example/.test(status))
     check('local: the notice names the on-device model, not a host', /to the on-device model;/.test(panel.root.querySelector('.ed-assist-notice').textContent))
+    check('one route: no picker', !panel.root.querySelector('.ed-assist-model'))
+  }
+  {
+    // several routes: a picker in the status line; choosing one is select → describe again
+    const store = fakeStore(starterDoc())
+    let current = { provider: 'builtin', model: 'gemini-nano' }
+    const selected = []
+    const tr = fakeTransport({
+      describe: async () => current.provider === 'builtin' ? { host: '', model: 'gemini-nano', configured: true, local: true, contextTokens: 6144 } : { host: 'generativelanguage.googleapis.com', model: current.model, configured: true, contextTokens: 1000000 },
+      models: async () => [
+        { provider: 'builtin', model: 'gemini-nano', local: true, contextTokens: 6144, current: current.provider === 'builtin' },
+        { provider: 'gemini', model: 'gemini-3.8-flash', host: 'generativelanguage.googleapis.com', contextTokens: 1000000, current: current.provider === 'gemini' },
+        { provider: 'gemini', model: 'gemini-3.8-pro', host: 'generativelanguage.googleapis.com', contextTokens: 1000000 },
+      ],
+      select: async (provider, model) => { selected.push([provider, model]); current = { provider, model }; return { ok: true } },
+    })
+    const panel = new AssistantPanel({ store, transport: tr })
+    document.body.appendChild(panel.root)
+    panel.setOpen(true, false); await tick(60)
+    const sel = panel.root.querySelector('.ed-assist-model')
+    check('several routes: a picker with one optgroup per provider and the window beside each model', !!sel && sel.querySelectorAll('optgroup').length === 2 && sel.options.length === 3 && /Gemini Nano · 6k/.test(sel.options[0].textContent) && /gemini-3\.8-flash · 1M/.test(sel.options[1].textContent))
+    check('several routes: the current route is selected', sel.selectedIndex === 0)
+    check('several routes: the notice says the on-device model', /to the on-device model/.test(panel.root.querySelector('.ed-assist-notice').textContent))
+    sel.selectedIndex = 1
+    sel.dispatchEvent(new Event('change'))
+    await tick(60)
+    const sel2 = panel.root.querySelector('.ed-assist-model')
+    check('choosing: assistant.select with provider + model, then describe again → the picker shows the new route as current', selected.length === 1 && selected[0][0] === 'gemini' && selected[0][1] === 'gemini-3.8-flash' && sel2 && sel2.selectedIndex === 1)
+    check('choosing: the notice now names the host', /generativelanguage\.googleapis\.com/.test(panel.root.querySelector('.ed-assist-notice').textContent))
+    check('choosing: the check ran again for the new route', tr.checks >= 2)
     const tr2 = fakeTransport({ describe: async () => ({ host: '', model: 'some-new-id', configured: true, local: true }) })
     const panel2 = new AssistantPanel({ store, transport: tr2 }); document.body.appendChild(panel2.root); panel2.setOpen(true, false); await tick(60)
     check('local: an unknown id displays as-is', /on this device · some-new-id/.test(panel2.root.querySelector('.ed-assist-status').textContent))

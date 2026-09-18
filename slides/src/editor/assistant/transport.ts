@@ -51,6 +51,20 @@
 //                        the outline does, a refusal with the numbers when
 //                        nothing does. Absent = the page assumes a window by
 //                        `local` (small on-device, large hosted).
+//   assistant.models     payload {}                → res { ok:true, models: [{ provider, model, host?, local?, contextTokens?, current? }] }
+//                        every model the extension could route to RIGHT NOW:
+//                        for each provider that has what it needs (a key, or
+//                        the on-device model present), its configured model
+//                        and its cached listing. The page renders a picker
+//                        from it — by SHAPE (provider/model ids, hostname,
+//                        window), never a label the bridge chose — and shows
+//                        nothing when there is one choice. Optional op: an
+//                        older extension answers ok:false and the picker
+//                        does not exist.
+//   assistant.select     payload { provider, model } → res { ok:true } | { ok:false, reason }
+//                        make that the active route (persisted by the
+//                        extension in its own storage — the page holds
+//                        nothing). The page re-describes and re-checks after.
 //   assistant.check      payload {}                → res { ok:true } | { ok:false, reason, code? }
 //                        one cheap round-trip to the endpoint (a model list or
 //                        an empty completion) so the panel can say "reachable"
@@ -111,6 +125,16 @@ export interface AssistantDescription {
 
 export type CheckResult = { ok: true } | { ok: false; reason: string; code?: string }
 
+/** One route the extension can take, as the picker shows it. */
+export interface AssistantModel {
+  provider: string
+  model: string
+  host?: string
+  local?: boolean
+  contextTokens?: number
+  current?: boolean
+}
+
 /** Per-turn options for send. `schema` = a JSON Schema the reply must fit. */
 export interface SendOpts { schema?: Record<string, unknown> }
 
@@ -133,6 +157,10 @@ export interface AssistantTransport {
   readonly name: string
   describe(): Promise<AssistantDescription>
   check(): Promise<CheckResult>
+  /** every route available now; [] when the extension has no such op */
+  models(): Promise<AssistantModel[]>
+  /** make one of them the active route */
+  select(provider: string, model: string): Promise<CheckResult>
   /**
    * One chat turn. `onChunk` receives reply deltas as they stream; the
    * promise resolves with the whole reply text, rejects with an Error whose
@@ -151,6 +179,9 @@ export interface AssistantTransport {
  */
 export const HOST_RE = /^[a-z0-9.-]{1,253}$/i
 export const MODEL_RE = /^[A-Za-z0-9._:/-]{1,120}$/
+export const PROVIDER_RE = /^[a-z][a-z0-9-]{0,39}$/
+/** at most this many routes are read from a models listing */
+export const MODELS_MAX = 200
 const boundTo = (v: unknown, re: RegExp): string => (typeof v === 'string' && re.test(v) ? v : '')
 /** A window size the page will believe: a whole number of tokens from 1k to 10M. */
 export const CONTEXT_MIN = 1000
@@ -232,6 +263,35 @@ export class ExtensionTransport implements AssistantTransport {
       ...(r.local === true ? { local: true } : {}),
       ...(boundWindow(r.contextTokens) !== undefined ? { contextTokens: boundWindow(r.contextTokens) } : {}),
     }
+  }
+
+  async models(): Promise<AssistantModel[]> {
+    const r = await this.request('assistant.models')
+    if (r.ok !== true || !Array.isArray(r.models)) return []
+    const out: AssistantModel[] = []
+    for (const m of (r.models as unknown[]).slice(0, MODELS_MAX)) {
+      if (!m || typeof m !== 'object') continue
+      const o = m as Record<string, unknown>
+      const provider = boundTo(o.provider, PROVIDER_RE)
+      const model = boundTo(o.model, MODEL_RE)
+      if (!provider || !model) continue
+      const host = boundTo(o.host, HOST_RE)
+      const win = boundWindow(o.contextTokens)
+      out.push({
+        provider, model,
+        ...(host ? { host } : {}),
+        ...(o.local === true ? { local: true } : {}),
+        ...(win !== undefined ? { contextTokens: win } : {}),
+        ...(o.current === true ? { current: true } : {}),
+      })
+    }
+    return out
+  }
+
+  async select(provider: string, model: string): Promise<CheckResult> {
+    if (!PROVIDER_RE.test(provider) || !MODEL_RE.test(model)) return { ok: false, reason: 'bad route' }
+    const r = await this.request('assistant.select', { provider, model })
+    return r.ok === true ? { ok: true } : { ok: false, reason: String(r.reason ?? 'refused') }
   }
 
   async check(): Promise<CheckResult> {

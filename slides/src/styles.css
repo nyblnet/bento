@@ -2869,6 +2869,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-assist-live { opacity: .8; }
 .ed-assist-live:empty::after { content: '…'; }
 .ed-assist-wait { opacity: .55; font-style: italic; animation: ed-assist-pulse 1.4s ease-in-out infinite; }
+.ed-assist-model { font: inherit; font-size: 12px; max-width: 100%; padding: 1px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); }
 .ed-assist-wait::after { content: ' ●'; animation: ed-assist-dots 1.2s steps(3, end) infinite; }
 @keyframes ed-assist-pulse { 0%, 100% { opacity: .55; } 50% { opacity: .9; } }
 @keyframes ed-assist-dots { 0% { content: ' ●'; } 33% { content: ' ● ●'; } 66% { content: ' ● ● ●'; } }
