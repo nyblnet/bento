@@ -32,7 +32,7 @@
 // fake fetch and a fake storage. background.js supplies the real ones.
 
 import { DEFAULTS, describeHost, hostPortOf, shapeRequest, shapeCheck, shapeModels, parseModels, contextOf, curateModels, errorFrom, streamReply, iterateBody, originOf } from './providers.js'
-import { validMaterial, buildMessages, responseSchema, parseReply, isPatch, RETRY_NUDGE, ASSUMED_WINDOW_LOCAL, ASSUMED_WINDOW_HOSTED } from './prompt.js'
+import { validMaterial, buildMessages, responseSchema, parseReply, isPatch, RETRY_NUDGE, ASSUMED_WINDOW_LOCAL, ASSUMED_WINDOW_HOSTED, correctionPrompt, CORRECTIONS, VERIFY_PROMPT, verifyUser, parseVerify, verifyCorrection } from './prompt.js'
 
 /** `chrome.storage.local` keys. */
 export const CONFIG_KEY = 'assistant'
@@ -505,6 +505,18 @@ export function validTurn(payload) {
   return { request, history, focus }
 }
 
+/** The page's dry-run answer, bounded: op names as strings, an outline as text; null when it is not one. */
+export function validCheck(payload) {
+  if (!payload || typeof payload !== 'object') return null
+  const names = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 500) : [])
+  return {
+    applied: names(payload.applied),
+    skipped: names(payload.skipped),
+    structural: payload.structural === true,
+    ...(typeof payload.outline === 'string' && payload.outline ? { outline: payload.outline } : {}),
+  }
+}
+
 /** The input window a turn is sized to: what describe would report, else the assumption by kind. */
 export async function windowFor(cfg, env) {
   if (cfg.contextTokens) return cfg.contextTokens
@@ -539,28 +551,68 @@ export async function runTurn(cfg, turn, io, emit, signal, env) {
       if (!signal.aborted) emit('assistant.done', { mode: 'ask', text })
       return
     }
-    let text = await complete(cfg, built.messages, () => {}, signal, env, schema)
-    env.log?.('[bento/home assistant] reply', cfg.provider, cfg.model, text)
-    // An object with none of the op keys — `{}` from a model that hollowed
-    // the schema, or an unrelated object — is not a patch; it is shown as
-    // what the model said, never applied as nothing.
-    let parsed = parseReply(text)
-    if (parsed.kind === 'json' && !isPatch(parsed.value)) parsed = { kind: 'text', text: text.trim() }
+    const log = (...a) => env.log?.('[bento/home assistant]', ...a)
+    /** One model call for a patch: the reply parsed, hollow objects counted as prose. */
+    const askPatch = async (messages) => {
+      const text = await complete(cfg, messages, () => {}, signal, env, schema)
+      log('reply', cfg.provider, cfg.model, text)
+      const parsed = parseReply(text)
+      return parsed.kind === 'json' && !isPatch(parsed.value) ? { kind: 'text', text: text.trim(), raw: text } : { ...parsed, raw: text }
+    }
+    let parsed = await askPatch(built.messages)
     if (parsed.kind === 'text' && !signal.aborted) {
-      const again = [...built.messages, { role: 'assistant', content: text }, { role: 'user', content: RETRY_NUDGE }]
-      text = await complete(cfg, again, () => {}, signal, env, schema)
-      env.log?.('[bento/home assistant] reply after nudge', cfg.provider, cfg.model, text)
-      parsed = parseReply(text)
-      if (parsed.kind === 'json' && !isPatch(parsed.value)) parsed = { kind: 'text', text: text.trim() }
+      parsed = await askPatch([...built.messages, { role: 'assistant', content: parsed.raw }, { role: 'user', content: RETRY_NUDGE }])
     }
     if (signal.aborted) return
     const outlineOnly = built.focus === 'none' ? env.t('asstOutlineOnly') : ''
-    if (parsed.kind === 'json') {
-      const note = [outlineOnly, parsed.note].filter(Boolean).join(' ')
-      emit('assistant.done', { mode: 'edit', ops: parsed.value, note, focus: built.focus })
-    } else {
+    if (parsed.kind !== 'json') {
       emit('assistant.done', { mode: 'edit', text: parsed.text, ...(outlineOnly ? { note: outlineOnly } : {}) })
+      return
     }
+
+    // THE CLOSED LOOP. The page dry-runs the patch and says what it refused
+    // — "edit sd-title" when the model wrote a bare id — and the model gets
+    // its own patch back with the refusals and the outline, once or twice.
+    // The patch committed is the one that applied most with nothing refused.
+    const hosted = cfg.provider !== 'builtin'
+    let budget = hosted ? CORRECTIONS.hosted : CORRECTIONS.builtin
+    let best = { ops: parsed.value, result: await io.check?.(parsed.value) }
+    const unhappy = (r) => !!r && (r.skipped.length > 0 || r.applied.length === 0)
+    const better = (a, b) => (!a.result ? false : !b.result ? true
+      : (a.result.skipped.length === 0) !== (b.result.skipped.length === 0) ? a.result.skipped.length === 0
+      : a.result.applied.length > b.result.applied.length)
+    let last = best
+    let thread = [...built.messages]
+    while (unhappy(last.result) && budget > 0 && !signal.aborted) {
+      budget--
+      log('dry run refused', last.result.skipped, 'applied', last.result.applied, '— correcting')
+      thread = [...thread, { role: 'assistant', content: JSON.stringify(last.ops) }, { role: 'user', content: correctionPrompt(last.result.skipped, last.result.applied, material.addressed) }]
+      const again = await askPatch(thread)
+      if (again.kind !== 'json') break
+      last = { ops: again.value, result: await io.check?.(again.value) }
+      if (better(last, best)) best = last
+    }
+    if (signal.aborted) return
+
+    // VERIFY, hosted only: one short call reads the outline after the patch
+    // against the request; its line is the note the drawer shows, and a
+    // MISSING answer buys one more correction.
+    let note = ''
+    if (hosted && best.result?.outline) {
+      const v = await complete(cfg, [{ role: 'system', content: VERIFY_PROMPT }, { role: 'user', content: verifyUser(turn.request, best.result.outline) }], () => {}, signal, env, undefined)
+      log('verify', v)
+      const verdict = parseVerify(v)
+      note = verdict.line
+      if (!verdict.ok && !signal.aborted) {
+        const again = await askPatch([...thread, { role: 'assistant', content: JSON.stringify(best.ops) }, { role: 'user', content: verifyCorrection(verdict.line) }])
+        if (again.kind === 'json') {
+          const fixed = { ops: again.value, result: await io.check?.(again.value) }
+          if (fixed.result && fixed.result.skipped.length === 0 && fixed.result.applied.length > 0) best = fixed
+        }
+      }
+    }
+    if (signal.aborted) return
+    emit('assistant.done', { mode: 'edit', ops: best.ops, note: [outlineOnly, note || parsed.note].filter(Boolean).join(' '), focus: built.focus })
   } catch (e) {
     if (signal.aborted || e?.name === 'AbortError') return
     emit('assistant.error', { reason: String(e?.message || e), ...(e?.code ? { code: e.code } : {}) })

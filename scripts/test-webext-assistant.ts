@@ -900,7 +900,7 @@ console.log('\n— runTurn: material in, prose or an ops patch out')
     const logged: any[] = []
     await asst.runTurn(cfgOpenai, turnOf('make the title bolder'), { document: async () => MATERIAL }, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { ...envWith(['{}', '{"foo":1}'], seen), log: (...a: any[]) => logged.push(a) })
     ok(seen.length === 2 && frames.at(-1).mode === 'edit' && frames.at(-1).text === '{"foo":1}' && !('ops' in frames.at(-1)), 'runTurn edit: "{}" and an object with no op key are not patches — one nudge, then the raw reply as text')
-    ok(logged.length === 2 && logged[0][3] === '{}' && logged[1][3] === '{"foo":1}', 'runTurn: the raw reply is logged (console, never stored)')
+    ok(logged.length === 2 && logged[0][4] === '{}' && logged[1][4] === '{"foo":1}', 'runTurn: the raw reply is logged (console, never stored)')
     ok(prompt.isPatch({ edits: [] }) && prompt.isPatch({ set: [] }) && !prompt.isPatch({}) && !prompt.isPatch({ foo: 1 }) && !prompt.isPatch([]), 'isPatch: one of the twelve op keys makes a patch')
   }
   // prose twice → text
@@ -962,9 +962,13 @@ console.log('\n— the turn over the port: consent first, then the deck is asked
   await settle()
   ok(!port.out.some((m: any) => m.kind === 'assistant.done'), 'an answer with another id is ignored')
   port.send({ op: 'assistant.document', id: 'asst-t1', payload: MATERIAL })
+  await until(() => port.out.some((m: any) => m.kind === 'assistant.check'))
+  const chk = port.out.find((m: any) => m.kind === 'assistant.check')
+  ok(!!chk && Array.isArray(chk.ops.edits) && chk.id === 'asst-t1', 'the material answered → the model → the patch goes back to the page as a dry run (assistant.check)')
+  port.send({ op: 'assistant.check', id: 'asst-t1', payload: { applied: ['edit 1/t1'], skipped: [], structural: false, outline: 'after' } })
   await until(() => port.out.some((m: any) => m.kind === 'assistant.done'))
   const done = port.out.find((m: any) => m.kind === 'assistant.done')
-  ok(done.mode === 'edit' && done.ops && Array.isArray(done.ops.edits), 'the material answered → the turn runs → done carries the ops patch')
+  ok(done.mode === 'edit' && done.ops && Array.isArray(done.ops.edits), 'the dry run answered clean → done carries the ops patch')
   ;(globalThis as any).fetch = fetchOk
 }
 {
@@ -985,6 +989,80 @@ console.log('\n— the turn over the port: consent first, then the deck is asked
   r.ports[0].reply({ dir: 'evt', id: 'asst-r1', kind: 'assistant.done', mode: 'edit', ops: { edits: [] }, note: 'n', focus: 'slide' })
   const d = r.posted.at(-1)
   ok(d.kind === 'assistant.done' && d.mode === 'edit' && d.ops.edits.length === 0 && d.note === 'n' && d.focus === 'slide', 'relay: done forwards mode/ops/note/focus')
+}
+
+console.log('\n— the closed loop: dry run, correction, verify')
+{
+  const turnOf = (request: string) => asst.validTurn({ request, history: [], focus: { index: 0, selection: [] } })!
+  const openaiOf = (text: string) => `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`
+  const run = async (cfg: any, replies: string[], checks: any[], opts: { log?: any[] } = {}) => {
+    const seen: any[] = []
+    const frames: any[] = []
+    const checked: any[] = []
+    const io = {
+      document: async () => MATERIAL,
+      check: async (ops: any) => { checked.push(ops); return checks.shift() ?? { applied: [], skipped: [], structural: false } },
+    }
+    const env = { t, models: async () => undefined, log: (...a: any[]) => opts.log?.push(a), fetch: async (_u: string, init: any) => { seen.push(JSON.parse(init.body)); return { ok: true, status: 200, body: sseBody(openaiOf(replies.shift() ?? '')) } } }
+    await asst.runTurn(cfg, turnOf('change the title'), io, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, env)
+    return { seen, frames, checked, done: frames.find((f) => f.kind === 'assistant.done') }
+  }
+  const BAD = '{"edits":[{"id":"sd-title","text":"New"}]}'
+  const GOOD = '{"edits":[{"id":"1/sd-title","text":"New"}]}'
+  const local = asst.normalizeConfig({ provider: 'openai', baseUrl: 'http://localhost:11434/v1', model: 'm' }, false)
+  {
+    // hosted: bad address → one correction → clean → verify OK → note
+    const log: any[] = []
+    const r = await run(cfgOpenai, [BAD, GOOD, 'OK: changed the title on slide 1'], [
+      { applied: [], skipped: ['edit sd-title'], structural: false, outline: 'after1' },
+      { applied: ['edit 1/sd-title'], skipped: [], structural: false, outline: 'after2' },
+    ], { log })
+    ok(r.checked.length === 2 && r.seen.length === 3, 'a refused patch gets exactly one correction, then the verify call')
+    const corr = r.seen[1].messages
+    ok(corr.at(-2).content === BAD && /refused these: edit sd-title/.test(corr.at(-1).content) && /<slide number>\/<element id>/.test(corr.at(-1).content) && corr.at(-1).content.includes(MATERIAL.addressed), 'the correction turn carries the model\'s patch, the refusals, the address rule and the outline again')
+    ok(JSON.stringify(r.done.ops) === GOOD && r.done.mode === 'edit', 'the corrected patch is the one committed')
+    const ver = r.seen[2].messages
+    ok(ver[0].content === prompt.VERIFY_PROMPT && ver[1].content.includes('Request: change the title') && ver[1].content.includes('after2') && !('response_format' in r.seen[2]), 'verify: one short unconstrained call with the request and the outline after')
+    ok(r.done.note === 'changed the title on slide 1', 'the verify line is the note the drawer shows')
+    ok(log.some((a) => a[1] === 'dry run refused') && log.some((a) => a[1] === 'verify'), 'the loop is logged under the same tag')
+  }
+  {
+    // hosted: verify says MISSING → one more correction, adopted when clean
+    const r = await run(cfgOpenai, [GOOD, 'MISSING: the subtitle was not changed', '{"edits":[{"id":"1/sd-title","text":"New"},{"id":"1/sd-sub","text":"Also"}]}'], [
+      { applied: ['edit 1/sd-title'], skipped: [], structural: false, outline: 'after' },
+      { applied: ['edit 1/sd-title', 'edit 1/sd-sub'], skipped: [], structural: false, outline: 'after2' },
+    ])
+    ok(r.seen.length === 3 && /did not satisfy the request: the subtitle was not changed/.test(r.seen[2].messages.at(-1).content), 'a MISSING verdict buys one more correction with the model\'s own finding')
+    ok(r.done.ops.edits.length === 2 && r.done.note === 'the subtitle was not changed', 'the clean second patch is committed; the note is the verdict line')
+  }
+  {
+    // hosted: two corrections at most; the best patch wins, not the last
+    const r = await run(cfgOpenai, [BAD, BAD, BAD, 'OK: done'], [
+      { applied: [], skipped: ['edit sd-title'], structural: false, outline: 'a' },
+      { applied: ['edit 1/x'], skipped: ['edit sd-title'], structural: false, outline: 'b' },
+      { applied: [], skipped: ['edit sd-title'], structural: false, outline: 'c' },
+    ])
+    ok(r.checked.length === 3 && r.seen.length === 4, 'hosted: at most two corrections')
+    ok(r.done.ops && r.done.note === 'done', 'then done with the best of the three')
+  }
+  {
+    // the built-in model: one correction, no verify
+    const LM = (replies: string[]) => ({ availability: async () => 'available', create: async () => ({ promptStreaming: () => ({ [Symbol.asyncIterator]: async function* () { yield replies.shift() ?? '' } }), destroy() {} }) })
+    const replies = [BAD, BAD, GOOD]
+    const frames: any[] = []
+    let n = 0
+    await asst.runTurn({ provider: 'builtin' } as any, turnOf('change the title'), { document: async () => MATERIAL, check: async () => { n++; return { applied: [], skipped: ['edit sd-title'], structural: false, outline: 'x' } } }, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { t, LanguageModel: LM(replies), builtinTokens: async () => 100000 })
+    ok(n === 2 && replies.length === 1 && frames.at(-1).kind === 'assistant.done' && frames.at(-1).note === '', 'built-in: one correction, no verify call, done with what there is')
+  }
+  {
+    // an older page with no dry run: straight through
+    const frames: any[] = []
+    const seen: any[] = []
+    await asst.runTurn(local, turnOf('change the title'), { document: async () => MATERIAL }, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { t, models: async () => undefined, fetch: async (_u: string, init: any) => { seen.push(1); return { ok: true, status: 200, body: sseBody(openaiOf(GOOD)) } } })
+    ok(seen.length === 1 && JSON.stringify(frames.at(-1).ops) === GOOD, 'no check() from the page → no loop, no verify, the first patch is committed')
+  }
+  ok(prompt.parseVerify('OK: changed the title').ok && prompt.parseVerify('MISSING: the subtitle').ok === false && prompt.parseVerify('yes').ok && prompt.parseVerify('No — nothing changed').ok === false && prompt.parseVerify('Changed the title.').line === 'Changed the title.', 'parseVerify: OK/yes vs MISSING/no, the rest of the line as the note')
+  ok(asst.validCheck({ applied: ['a', 5], skipped: 'x', outline: 'o' })!.applied.length === 1 && asst.validCheck({ applied: [], skipped: [] })!.skipped.length === 0 && asst.validCheck('nope') === null, 'validCheck: bounded shape')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

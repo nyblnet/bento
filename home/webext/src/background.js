@@ -36,7 +36,7 @@ import { learnPrefix } from './db.js'
 import { t, initI18n } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
 import {
-  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, validSchema, validTurn, activeConfig,
+  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, validSchema, validTurn, validCheck, activeConfig,
   modelsKey, builtinContext, models as listRoutes, select as selectRoute, runTurn,
   describe as describeAssistant, check as checkAssistant, run as runAssistant,
 } from './assistant.js'
@@ -446,14 +446,22 @@ export function serveAssistantPort(port) {
   const docKey = docKeyOf(port.sender)
   let ac = null
   let alive = true
-  // The page's answer to `assistant.document`, when a turn is waiting for it.
-  let awaitingDocument = null
+  // The page's answers the turn is waiting for, by op: `assistant.document`
+  // (the material) and `assistant.check` (a dry run of a patch).
+  const awaiting = new Map()
   const post = (m) => { if (alive) { try { port.postMessage(m) } catch { alive = false } } }
-  port.onDisconnect.addListener(() => { alive = false; ac?.abort(); awaitingDocument?.(null) })
+  port.onDisconnect.addListener(() => { alive = false; ac?.abort(); for (const r of awaiting.values()) r(null); awaiting.clear() })
+  /** Ask the page over this port and wait for its answer to the same op and turn id. */
+  const askPage = (kind, extra, timeoutMs = 15000) => new Promise((resolve) => {
+    awaiting.set(kind, resolve)
+    post({ dir: 'evt', id: ac?.id, kind, ...extra })
+    setTimeout(() => { if (awaiting.get(kind) === resolve) { awaiting.delete(kind); resolve(null) } }, timeoutMs)
+  })
   port.onMessage.addListener((m) => {
     if (m?.op === 'assistant.abort') { ac?.abort(); return }
-    if (m?.op === 'assistant.document') {
-      if (awaitingDocument && typeof m.id === 'string' && ac?.id === m.id) { const r = awaitingDocument; awaitingDocument = null; r(m.payload) }
+    if (m?.op === 'assistant.document' || m?.op === 'assistant.check') {
+      const r = awaiting.get(m.op)
+      if (r && typeof m.id === 'string' && ac?.id === m.id) { awaiting.delete(m.op); r(m.payload) }
       return
     }
     if (m?.op !== 'assistant.send' && m?.op !== 'assistant.turn') return
@@ -484,11 +492,8 @@ export function serveAssistantPort(port) {
       if (!isTurn) return runAssistant(cfg, messages, emit, ac.signal, env, schema)
       // The turn: the deck is pulled from the page only now, over this port.
       const io = {
-        document: () => new Promise((resolve) => {
-          awaitingDocument = resolve
-          emit('assistant.document', {})
-          setTimeout(() => { if (awaitingDocument === resolve) { awaitingDocument = null; resolve(null) } }, 15000)
-        }),
+        document: () => askPage('assistant.document', {}),
+        check: async (ops) => validCheck(await askPage('assistant.check', { ops })),
       }
       await runTurn(cfg, turn, io, emit, ac.signal, env)
     })()

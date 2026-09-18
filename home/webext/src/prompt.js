@@ -90,6 +90,36 @@ Change only what the request asks. Leave everything else out. If it cannot be do
  *  back. Short on purpose — it has to fit an on-device model too. */
 export const QUESTION_PROMPT = `You are the assistant inside Bento Slides, a presentation editor. The user shows you an outline of their slides (the words on each slide and the speaker notes) and asks about it. Answer in plain text: clear and short, no JSON, no code. If they ask for a change rather than a question, describe what you would change and say they can ask for it as an instruction.`
 
+/**
+ * The correction turn when the page's dry run refused part of a patch: the
+ * refused op names, the address rule again, and the outline again — a model
+ * that misread "sd-title" as an address gets the page's own words back.
+ */
+export const correctionPrompt = (skipped, applied, addressed) => {
+  const refused = skipped.length ? `The document refused these: ${skipped.join(', ')}.` : 'The patch changed nothing.'
+  const kept = applied.length ? ` It applied: ${applied.join(', ')}.` : ''
+  return `${refused}${kept} Addresses look like <slide number>/<element id> — copy them exactly as the outline shows, in the "id" field. Reply with a corrected JSON object only. Here is the outline again:\n${addressed}`
+}
+
+/** How many correction turns a model gets after a refused patch. */
+export const CORRECTIONS = { builtin: 1, hosted: 2 }
+
+/** The verify call (hosted only): one line back, prefixed so it can be read. */
+export const VERIFY_PROMPT = 'You check whether an edit to a slide deck did what was asked. Reply with ONE line and nothing else: "OK: " followed by what changed in a few words, or "MISSING: " followed by what the request asked for that is still not done.'
+export const verifyUser = (request, outlineAfter) => `Request: ${request}\n\nOutline after the change:\n${outlineAfter}\n\nDid the change satisfy the request?`
+
+/** Read the verify line: { ok, line } — an unprefixed answer counts as ok with its text. */
+export function parseVerify(text) {
+  const line = String(text ?? '').trim().split('\n')[0].trim()
+  const m = /^(ok|missing|yes|no)\s*[:.\-—]?\s*(.*)$/i.exec(line)
+  if (!m) return { ok: true, line }
+  const word = m[1].toLowerCase()
+  return { ok: word === 'ok' || word === 'yes', line: m[2].trim() || line }
+}
+
+/** After a failed verify: the model's own finding, and another patch. */
+export const verifyCorrection = (missing) => `The change did not satisfy the request: ${missing}. Reply with a corrected JSON object only, addressing elements exactly as the outline shows.`
+
 /** The one follow-up when an edit comes back as prose: sent once, as the
  *  next user turn, before the reply is shown as text. */
 export const RETRY_NUDGE = 'Reply with only the JSON object described — no explanation, no prose.'
