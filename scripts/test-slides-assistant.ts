@@ -843,7 +843,8 @@ if (!CHROME) {
     if (!blob) ok(false, 'the browser probe reported results (it did not)')
     else for (const [name, pass] of JSON.parse(Buffer.from(blob[1], 'base64').toString('utf8')) as Array<[string, boolean]>) ok(pass, name)
   } finally {
-    fs.rmSync(tmp, { recursive: true, force: true })
+    // Chrome may still be flushing its profile: retry, and never let cleanup fail the run
+    try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) } catch { /* a stray temp dir is not a finding */ }
   }
 }
 
