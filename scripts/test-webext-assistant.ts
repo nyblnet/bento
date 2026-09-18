@@ -126,6 +126,16 @@ console.log('\n— providers: listings, windows and the default by rule')
   ok(familyContext('claude-sonnet-5') === 200000 && familyContext('gpt-4.1-mini') === 1047576 && familyContext('gpt-5-mini') === 400000 && familyContext('o3') === 200000 && familyContext('llama3.2') === 128000, 'familyContext: the documented windows by id, 128k for the unknown')
   ok(contextOf('gemini-2.5-flash', ge) === 1048576 && contextOf('claude-sonnet-5', an) === 200000, 'contextOf: the listing when it says, the family when it does not')
   for (const p of ['openai', 'anthropic', 'gemini'] as const) ok(pickDefault(p, [{ id: DEFAULTS[p].model, created: 1 }]) === DEFAULTS[p].model, `DEFAULTS.${p} is itself a mid-tier pick by the rule`)
+  ok(DEFAULTS.openai.model === 'gpt-5.6-luna' && DEFAULTS.anthropic.model === 'claude-sonnet-5' && DEFAULTS.gemini.model === 'gemini-3.8-flash', 'DEFAULTS are the ids the maintainer named (pre-listing stopgap)')
+  const { modelVersion } = providers
+  ok(modelVersion('gpt-5.6-luna') === 5.6 && modelVersion('gemini-3.8-flash') === 3.8 && modelVersion('claude-sonnet-4-5') === 4.5 && modelVersion('gpt-4o-mini') === 4 && modelVersion('o3-mini') === 3 && modelVersion('nano') === 0, 'modelVersion: the number anywhere in the id, as a float')
+  // The maintainer's synthetic listing: the newest mid tier wins in every family.
+  const today = (ids: string[]) => ids.map((id) => ({ id, created: 1 }))
+  ok(pickDefault('openai', today(['gpt-5', 'gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5-mini'])) === 'gpt-5.6-luna', 'pickDefault openai: gpt-5.6-luna (mid tier of the 5.6 line) over gpt-5, gpt-5-mini and sol')
+  ok(pickDefault('openai', today(['gpt-5', 'gpt-5.6-sol'])) === 'gpt-5.6-sol', 'pickDefault openai: with only sol listed, the newer full model still beats the old one')
+  ok(pickDefault('gemini', today(['gemini-3-flash', 'gemini-3.8-flash', 'gemini-3.8-pro']).map(({ id }) => ({ id }))) === 'gemini-3.8-flash', 'pickDefault gemini: 3.8 flash above 3 flash and 3.8 pro')
+  ok(pickDefault('anthropic', today(['claude-sonnet-5', 'claude-opus-5', 'claude-sonnet-4-5'])) === 'claude-sonnet-5', 'pickDefault anthropic: sonnet 5 above sonnet 4.5 and opus 5')
+  ok(familyContext('gpt-5.6-luna') === 400000 && familyContext('gemini-3.8-flash') === 1048576 && familyContext('claude-opus-5') === 200000, 'familyContext covers the 5.6 / 3.8 / 5 lines')
 }
 console.log('\n— providers: deltas and errors')
 ok(deltaFrom('openai', '{"choices":[{"delta":{"content":"He"}}]}') === 'He', 'openai delta')

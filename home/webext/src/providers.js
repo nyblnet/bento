@@ -31,10 +31,15 @@ const trimSlash = (s) => String(s || '').replace(/\/+$/, '')
  * have to be right on the day the key is typed. Mid tier on purpose: cheap
  * and fast is the right default for editing slides; the big one is a pick.
  */
+//
+// The ids are as the maintainer named them (2026-09): OpenAI's 5.6 line ships
+// two tiers, "luna" and "sol"; luna is taken as the mid tier here. Neither
+// spelling has been checked against a live listing — that is exactly the
+// case the rule exists for: once Check runs, the listing wins.
 export const DEFAULTS = Object.freeze({
-  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-5-mini' },
+  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.6-luna' },
   anthropic: { baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-5' },
-  gemini: { baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-3-flash' },
+  gemini: { baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-3.8-flash' },
 })
 
 /** The input window assumed when nothing — listing, family, the user — says otherwise. */
@@ -96,15 +101,26 @@ export function parseModels(provider, json) {
  */
 export function familyContext(id) {
   const m = String(id || '').toLowerCase()
-  if (/^claude-/.test(m)) return 200000
+  if (/^claude-/.test(m)) return 200000            // every Claude line to date, the 5 family included
   if (/^gpt-4\.1/.test(m)) return 1047576
-  if (/^gpt-5/.test(m)) return 400000
+  if (/^gpt-5/.test(m)) return 400000              // gpt-5 as documented; gpt-5.6 luna/sol until the vendor says otherwise
   if (/^gpt-4o|^gpt-4-turbo|^chatgpt-4o/.test(m)) return 128000
   if (/^gpt-4/.test(m)) return 8192
   if (/^gpt-3\.5/.test(m)) return 16385
   if (/^o[134](-|$)/.test(m)) return 200000
-  if (/^gemini-/.test(m)) return 1048576
+  if (/^gemini-/.test(m)) return 1048576           // 2.x, 3.x and 3.8 alike
   return FALLBACK_CONTEXT
+}
+
+/**
+ * The version number in a model id, wherever it sits: `gpt-5.6-luna` → 5.6,
+ * `gemini-3.8-flash` → 3.8, `claude-sonnet-4-5` → 4.5 (Anthropic writes the
+ * point as a dash), `gpt-4o-mini` → 4, `o3-mini` → 3. 0 when there is none.
+ */
+export function modelVersion(id) {
+  const m = /(\d+)(?:[.-](\d+))?/.exec(String(id || '').replace(/^[a-z]+-/, ''))
+  if (!m) return 0
+  return parseFloat(m[2] ? `${m[1]}.${m[2]}` : m[1])
 }
 
 /** What is known about one model's window: the listing first, then the family. */
@@ -116,17 +132,18 @@ export function contextOf(id, models) {
 /**
  * The recommended model out of a listing, by RULE: general-purpose chat
  * models only (no audio/image/embedding/realtime/dated snapshots), the
- * vendor's mid tier first — mini over nano and the full model, sonnet over
- * haiku over opus, flash over flash-lite and pro — and the newest of those.
- * "Newest" is `created` where the listing has it and the version number in
- * the id where it does not. Null when nothing qualifies.
+ * vendor's mid tier first — mini (and 5.6's "luna") over nano and the full
+ * model ("sol"), sonnet over haiku over opus, flash over flash-lite and pro —
+ * then the highest VERSION in the id (5.6 above 5, 3.8 above 3, 4-5 read as
+ * 4.5), then `created` where the listing has it. Null when nothing qualifies.
  */
 export function pickDefault(provider, models) {
   const rules = {
     openai: {
       family: /^gpt-\d/,
       exclude: /audio|realtime|search|transcribe|tts|image|embedding|instruct|codex|chat-latest|-\d{4}-\d{2}-\d{2}$|-\d{4}$/,
-      tier: (id) => /-mini(-|$)/.test(id) ? 2 : /-nano(-|$)/.test(id) ? 1 : 0,
+      // luna/sol are tiers of the 5.6 line, not versions: luna sits with mini.
+      tier: (id) => /-(mini|luna)(-|$)/.test(id) ? 2 : /-nano(-|$)/.test(id) ? 1 : 0,
     },
     anthropic: {
       family: /^claude-/,
@@ -140,11 +157,10 @@ export function pickDefault(provider, models) {
     },
   }[provider]
   if (!rules) return null
-  const version = (id) => parseFloat((/(\d+(?:\.\d+)?)/.exec(id.replace(/^[a-z]+-/, '')) || [])[1] || '0')
   const ok = (models || []).filter((m) => rules.family.test(m.id) && !rules.exclude.test(m.id))
   ok.sort((a, b) => rules.tier(b.id) - rules.tier(a.id)
+    || modelVersion(b.id) - modelVersion(a.id)
     || (b.created ?? 0) - (a.created ?? 0)
-    || version(b.id) - version(a.id)
     || a.id.localeCompare(b.id))
   return ok[0]?.id ?? null
 }
