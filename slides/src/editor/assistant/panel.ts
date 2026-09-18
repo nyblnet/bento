@@ -517,7 +517,14 @@ export class AssistantPanel {
     // compact doc, then the same road as pasted JSON
     if (!elided) { this.note(t('The reply changed nothing I could apply.'), 'err'); return }
     const r = applyOps((elided as Elided).doc, result.ops)
-    if (!r.applied.length) { this.note(t('The reply changed nothing I could apply.'), 'err'); return }
+    if (!r.applied.length) {
+      // say WHAT came back and was refused — the address that did not
+      // resolve, or the keys the reply used — so a wrong shape is visible
+      // instead of a bare refusal
+      const why = r.skipped.length ? r.skipped.slice(0, 6).join(', ') : Object.keys(result.ops).slice(0, 6).join(', ')
+      this.note(t('The reply changed nothing I could apply.') + (why ? ` (${why})` : ''), 'err')
+      return
+    }
     if (r.skipped.length) this.note(t('{n} changes named something that is not there and were skipped.', { n: String(r.skipped.length) }), 'info')
     this.apply(index, r.doc, elided as Elided, r.applied)
   }
