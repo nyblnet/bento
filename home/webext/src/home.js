@@ -244,6 +244,9 @@ const ago = (ms) => {
 // documents are drawn within it. Two different words on purpose — they were
 // briefly the same one, and "view" then meant two things one line apart.
 const state = { docs: [], folder: null, q: '', sort: 'recent', view: 'docs', layout: 'icons' }
+// Readable from the page's console (`__bentoHome.folder`), for a question
+// like "why is the grid drawn this way" without a reload-and-watch.
+globalThis.__bentoHome = state
 
 /**
  * Settings is a VIEW here, not a separate page.
