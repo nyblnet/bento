@@ -592,5 +592,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Cirka 2–4 GB. Chrome kræver omkring 22 GB ledig plads på disken og et netværk uden dataloft, ellers melder den modellen som utilgængelig."
+  },
+  "asstContext": {
+    "message": "Kontekstvindue (tokens)"
+  },
+  "asstContextHint": {
+    "message": "Lad stå tomt for at bruge det, udbyderen oplyser. Udfyld det for en selvhostet server, hvis grænse kun du kender."
+  },
+  "asstContextKnown": {
+    "message": "Kontekstvindue: $1 tokens"
   }
 }

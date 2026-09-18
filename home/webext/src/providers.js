@@ -23,11 +23,131 @@
 
 const trimSlash = (s) => String(s || '').replace(/\/+$/, '')
 
+/**
+ * The value BEFORE the first successful model listing, and nothing more: a
+ * hard-coded model name goes stale in a season. Once a key is entered the
+ * provider's own list is fetched and `pickDefault` chooses by RULE — the
+ * newest general-purpose chat model at the vendor's mid tier — so these only
+ * have to be right on the day the key is typed. Mid tier on purpose: cheap
+ * and fast is the right default for editing slides; the big one is a pick.
+ */
 export const DEFAULTS = Object.freeze({
-  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-  anthropic: { baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-5' },
-  gemini: { baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-2.5-flash' },
+  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-5-mini' },
+  anthropic: { baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-5' },
+  gemini: { baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-3-flash' },
 })
+
+/** The input window assumed when nothing — listing, family, the user — says otherwise. */
+export const FALLBACK_CONTEXT = 128000
+
+/** The model-list request, keyed like `shapeCheck`. All three vendors have one. */
+export function shapeModels(cfg) {
+  const base = baseOf(cfg)
+  switch (cfg.provider) {
+    case 'openai':
+      return { method: 'GET', url: `${base}/models`, headers: cfg.key ? { authorization: `Bearer ${cfg.key}` } : {} }
+    case 'anthropic':
+      return { method: 'GET', url: `${base}/v1/models?limit=1000`, headers: { 'x-api-key': cfg.key || '', 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } }
+    case 'gemini':
+      return { method: 'GET', url: `${base}/v1beta/models?pageSize=1000`, headers: { 'x-goog-api-key': cfg.key || '' } }
+    default:
+      throw new Error(`unknown provider: ${cfg.provider}`)
+  }
+}
+
+/**
+ * One shape out of three listings: `{ id, created?, contextTokens? }`.
+ * OpenAI and Anthropic say when a model was made and nothing about its
+ * window; Gemini says the window (`inputTokenLimit`) and nothing about when.
+ * Gemini's ids arrive as `models/gemini-…`; the prefix is not part of the id
+ * the request URL takes.
+ */
+export function parseModels(provider, json) {
+  const rows = provider === 'gemini' ? json?.models : json?.data
+  if (!Array.isArray(rows)) return []
+  const out = []
+  for (const r of rows) {
+    if (!r || typeof r !== 'object') continue
+    if (provider === 'gemini') {
+      if (typeof r.name !== 'string') continue
+      const methods = Array.isArray(r.supportedGenerationMethods) ? r.supportedGenerationMethods : []
+      if (methods.length && !methods.includes('generateContent')) continue
+      const m = { id: r.name.replace(/^models\//, '') }
+      if (Number.isFinite(r.inputTokenLimit)) m.contextTokens = r.inputTokenLimit
+      out.push(m)
+    } else {
+      if (typeof r.id !== 'string') continue
+      const m = { id: r.id }
+      const created = provider === 'anthropic' ? Date.parse(r.created_at) / 1000 : r.created
+      if (Number.isFinite(created)) m.created = created
+      out.push(m)
+    }
+  }
+  return out
+}
+
+/**
+ * The input window a model FAMILY is documented with, by id, for the two
+ * vendors whose listings do not say. A gateway serving `gpt-4o` is still
+ * serving a 128k model, so this is keyed on the id and not on the host.
+ * Anything unrecognised gets FALLBACK_CONTEXT; the settings field overrides
+ * all of it, which is the answer for a self-hosted server only its owner
+ * knows the number for.
+ */
+export function familyContext(id) {
+  const m = String(id || '').toLowerCase()
+  if (/^claude-/.test(m)) return 200000
+  if (/^gpt-4\.1/.test(m)) return 1047576
+  if (/^gpt-5/.test(m)) return 400000
+  if (/^gpt-4o|^gpt-4-turbo|^chatgpt-4o/.test(m)) return 128000
+  if (/^gpt-4/.test(m)) return 8192
+  if (/^gpt-3\.5/.test(m)) return 16385
+  if (/^o[134](-|$)/.test(m)) return 200000
+  if (/^gemini-/.test(m)) return 1048576
+  return FALLBACK_CONTEXT
+}
+
+/** What is known about one model's window: the listing first, then the family. */
+export function contextOf(id, models) {
+  const hit = models?.find((m) => m.id === id)
+  return Number.isFinite(hit?.contextTokens) ? hit.contextTokens : familyContext(id)
+}
+
+/**
+ * The recommended model out of a listing, by RULE: general-purpose chat
+ * models only (no audio/image/embedding/realtime/dated snapshots), the
+ * vendor's mid tier first — mini over nano and the full model, sonnet over
+ * haiku over opus, flash over flash-lite and pro — and the newest of those.
+ * "Newest" is `created` where the listing has it and the version number in
+ * the id where it does not. Null when nothing qualifies.
+ */
+export function pickDefault(provider, models) {
+  const rules = {
+    openai: {
+      family: /^gpt-\d/,
+      exclude: /audio|realtime|search|transcribe|tts|image|embedding|instruct|codex|chat-latest|-\d{4}-\d{2}-\d{2}$|-\d{4}$/,
+      tier: (id) => /-mini(-|$)/.test(id) ? 2 : /-nano(-|$)/.test(id) ? 1 : 0,
+    },
+    anthropic: {
+      family: /^claude-/,
+      exclude: /-\d{8}$/,
+      tier: (id) => /sonnet/.test(id) ? 2 : /haiku/.test(id) ? 1 : 0,
+    },
+    gemini: {
+      family: /^gemini-\d/,
+      exclude: /preview|exp|image|tts|live|audio|embedding|thinking|-8b|learnlm|robotics|computer-use|-\d{3}$/,
+      tier: (id) => /flash-lite/.test(id) ? 1 : /flash/.test(id) ? 2 : 0,
+    },
+  }[provider]
+  if (!rules) return null
+  const version = (id) => parseFloat((/(\d+(?:\.\d+)?)/.exec(id.replace(/^[a-z]+-/, '')) || [])[1] || '0')
+  const ok = (models || []).filter((m) => rules.family.test(m.id) && !rules.exclude.test(m.id))
+  ok.sort((a, b) => rules.tier(b.id) - rules.tier(a.id)
+    || (b.created ?? 0) - (a.created ?? 0)
+    || version(b.id) - version(a.id)
+    || a.id.localeCompare(b.id))
+  return ok[0]?.id ?? null
+}
 
 export const PROVIDERS = Object.freeze(['openai', 'anthropic', 'gemini'])
 

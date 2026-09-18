@@ -686,5 +686,17 @@
   "asstBuiltinRequirements": {
     "message": "About 2–4 GB. Chrome needs roughly 22 GB free on the disk and a network that is not metered, or it reports the model as unavailable.",
     "description": "Assistant settings: hint under the built-in provider. REVIEW: the numbers are Chrome's requirements, keep them."
+  },
+  "asstContext": {
+    "message": "Context window (tokens)",
+    "description": "Assistant settings: label of the optional input-window field."
+  },
+  "asstContextHint": {
+    "message": "Leave empty to use what the provider reports. Fill it in for a self-hosted server whose limit only you know.",
+    "description": "Assistant settings: hint under the context-window field."
+  },
+  "asstContextKnown": {
+    "message": "Context window: $1 tokens",
+    "description": "Assistant settings: the known input window of the chosen model. $1 is a formatted number."
   }
 }

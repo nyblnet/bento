@@ -625,5 +625,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "約 2〜4 GB です。Chrome にはディスクの空き容量が約 22 GB と、従量制でないネットワークが必要です。満たさない場合、モデルは利用不可と報告されます。"
+  },
+  "asstContext": {
+    "message": "コンテキストウィンドウ（トークン）"
+  },
+  "asstContextHint": {
+    "message": "空欄にするとプロバイダーの申告値を使います。上限をあなただけが知っている自前のサーバーの場合に入力してください。"
+  },
+  "asstContextKnown": {
+    "message": "コンテキストウィンドウ: $1 トークン"
   }
 }

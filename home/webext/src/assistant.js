@@ -31,11 +31,15 @@
 // argument so scripts/test-webext-assistant.ts can drive the real code with a
 // fake fetch and a fake storage. background.js supplies the real ones.
 
-import { DEFAULTS, describeHost, hostPortOf, shapeRequest, shapeCheck, errorFrom, streamReply, iterateBody, originOf } from './providers.js'
+import { DEFAULTS, describeHost, hostPortOf, shapeRequest, shapeCheck, shapeModels, parseModels, contextOf, errorFrom, streamReply, iterateBody, originOf } from './providers.js'
 
 /** `chrome.storage.local` keys. */
 export const CONFIG_KEY = 'assistant'
 export const ALLOWED_KEY = 'assistantAllowed'
+/** Model listings, by `modelsKey(cfg)`: `{ at, models }`. Refreshed on Check and Save. */
+export const MODELS_KEY = 'assistantModels'
+/** The built-in model's input quota, once read: `{ at, tokens }`. */
+export const BUILTIN_KEY = 'assistantBuiltin'
 
 /** Providers in the order Settings offers them; the built-in model first when present. */
 export const PROVIDERS = Object.freeze(['builtin', 'gemini', 'anthropic', 'openai'])
@@ -83,11 +87,62 @@ export function normalizeConfig(raw, hasBuiltin) {
   const known = PROVIDERS.includes(c.provider) && (c.provider !== 'builtin' || hasBuiltin)
   const provider = known ? c.provider : (hasBuiltin ? 'builtin' : 'gemini')
   const d = DEFAULTS[provider]
-  return {
+  const out = {
     provider,
     baseUrl: typeof c.baseUrl === 'string' && c.baseUrl.trim() ? c.baseUrl.trim() : (d?.baseUrl ?? ''),
     model: typeof c.model === 'string' && c.model.trim() ? c.model.trim() : (d?.model ?? ''),
     key: typeof c.key === 'string' ? c.key.trim() : '',
+  }
+  // The person's own number for the input window, overriding everything the
+  // extension could find out — the answer for a self-hosted server. Absent
+  // unless it is a whole number in the range the page accepts.
+  const ct = Number(c.contextTokens)
+  if (Number.isInteger(ct) && ct >= 1000 && ct <= 10_000_000) out.contextTokens = ct
+  return out
+}
+
+/** Where a listing is cached: the provider and the endpoint, never the key. */
+export const modelsKey = (cfg) => `${cfg.provider}|${cfg.baseUrl || ''}`
+
+/** Fetch and parse the provider's model list. Throws with a provider-shaped reason. */
+export async function listModels(cfg, env) {
+  const req = shapeModels(cfg)
+  let r
+  try {
+    r = await env.fetch(req.url, { method: req.method, headers: req.headers })
+  } catch {
+    throw new Error(env.t('asstUnreachable', hostPortOf(cfg) || cfg.provider))
+  }
+  if (!r.ok) throw new Error(errorFrom(cfg.provider, r.status, await r.text().catch(() => '')))
+  return parseModels(cfg.provider, await r.json())
+}
+
+/**
+ * The input window to report: the person's override, else the cached
+ * listing, else the family table. `models` is the cached list for this
+ * provider+endpoint (or nothing).
+ */
+export function contextTokensOf(cfg, models) {
+  if (cfg.contextTokens) return cfg.contextTokens
+  return contextOf(cfg.model, models)
+}
+
+/**
+ * The built-in model's input window. `inputQuota` lives on a SESSION, so one
+ * is created and destroyed to read it — cheap once the model is on disk, and
+ * cached by the caller. Null when the model cannot answer yet.
+ */
+export async function builtinContext(LanguageModel) {
+  if ((await builtinAvailability(LanguageModel)) !== 'available') return null
+  let session
+  try {
+    session = await LanguageModel.create()
+    const q = session?.inputQuota
+    return Number.isFinite(q) && q > 0 ? Math.floor(q) : null
+  } catch {
+    return null
+  } finally {
+    try { session?.destroy?.() } catch { /* already gone */ }
   }
 }
 
@@ -116,9 +171,14 @@ export async function builtinAvailability(LanguageModel) {
 export async function describe(cfg, env) {
   if (cfg.provider === 'builtin') {
     const a = await builtinAvailability(env.LanguageModel)
-    return { ok: true, host: '', model: 'gemini-nano', local: true, configured: a === 'available' }
+    const tokens = cfg.contextTokens || (a === 'available' ? await env.builtinTokens?.() : null)
+    return {
+      ok: true, host: '', model: 'gemini-nano', local: true, configured: a === 'available',
+      ...(tokens ? { contextTokens: tokens } : {}),
+    }
   }
-  return { ok: true, host: describeHost(cfg), model: cfg.model, configured: httpConfigured(cfg) }
+  const tokens = contextTokensOf(cfg, await env.models?.(cfg))
+  return { ok: true, host: describeHost(cfg), model: cfg.model, configured: httpConfigured(cfg), ...(tokens ? { contextTokens: tokens } : {}) }
 }
 
 /** A network failure, in words that name the host and nothing else. */

@@ -592,5 +592,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Kira-kira 2–4 GB. Chrome memerlukan lebih kurang 22 GB ruang kosong pada cakera dan rangkaian tanpa had data; jika tidak, model dilaporkan tidak tersedia."
+  },
+  "asstContext": {
+    "message": "Tetingkap konteks (token)"
+  },
+  "asstContextHint": {
+    "message": "Biarkan kosong untuk menggunakan nilai yang dilaporkan pembekal. Isi untuk pelayan hos sendiri yang hadnya hanya anda tahu."
+  },
+  "asstContextKnown": {
+    "message": "Tetingkap konteks: $1 token"
   }
 }

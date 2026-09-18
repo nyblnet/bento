@@ -625,5 +625,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Circa 2–4 GB. Chrome ha bisogno di circa 22 GB liberi sul disco e di una rete non a consumo, altrimenti segnala il modello come non disponibile."
+  },
+  "asstContext": {
+    "message": "Finestra di contesto (token)"
+  },
+  "asstContextHint": {
+    "message": "Lascia vuoto per usare quanto riporta il fornitore. Compilalo per un server self-hosted di cui solo tu conosci il limite."
+  },
+  "asstContextKnown": {
+    "message": "Finestra di contesto: $1 token"
   }
 }

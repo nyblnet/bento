@@ -625,5 +625,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Unos 2–4 GB. Chrome necesita unos 22 GB libres en el disco y una red sin límite de datos; si no, informa de que el modelo no está disponible."
+  },
+  "asstContext": {
+    "message": "Ventana de contexto (tokens)"
+  },
+  "asstContextHint": {
+    "message": "Déjalo vacío para usar lo que indica el proveedor. Rellénalo para un servidor propio cuyo límite solo tú conoces."
+  },
+  "asstContextKnown": {
+    "message": "Ventana de contexto: $1 tokens"
   }
 }

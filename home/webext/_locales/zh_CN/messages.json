@@ -625,5 +625,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "约 2–4 GB。Chrome 需要磁盘约 22 GB 可用空间以及非按流量计费的网络，否则会报告模型不可用。"
+  },
+  "asstContext": {
+    "message": "上下文窗口（token）"
+  },
+  "asstContextHint": {
+    "message": "留空则使用提供方报告的值。自建服务器的上限只有您知道时，请填写。"
+  },
+  "asstContextKnown": {
+    "message": "上下文窗口：$1 个 token"
   }
 }

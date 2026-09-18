@@ -625,5 +625,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Etwa 2–4 GB. Chrome braucht rund 22 GB freien Speicherplatz und ein nicht getaktetes Netzwerk, sonst meldet es das Modell als nicht verfügbar."
+  },
+  "asstContext": {
+    "message": "Kontextfenster (Tokens)"
+  },
+  "asstContextHint": {
+    "message": "Leer lassen, um den vom Anbieter gemeldeten Wert zu verwenden. Ausfüllen für einen selbst gehosteten Server, dessen Grenze nur Sie kennen."
+  },
+  "asstContextKnown": {
+    "message": "Kontextfenster: $1 Tokens"
   }
 }

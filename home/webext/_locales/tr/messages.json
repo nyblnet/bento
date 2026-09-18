@@ -592,5 +592,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Yaklaşık 2–4 GB. Chrome’un diskte yaklaşık 22 GB boş alana ve kotasız bir ağa ihtiyacı vardır; aksi hâlde modeli kullanılamaz olarak bildirir."
+  },
+  "asstContext": {
+    "message": "Bağlam penceresi (token)"
+  },
+  "asstContextHint": {
+    "message": "Sağlayıcının bildirdiği değeri kullanmak için boş bırakın. Sınırını yalnızca sizin bildiğiniz kendi sunucunuz için doldurun."
+  },
+  "asstContextKnown": {
+    "message": "Bağlam penceresi: $1 token"
   }
 }

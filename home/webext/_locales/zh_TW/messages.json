@@ -625,5 +625,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "約 2–4 GB。Chrome 需要磁碟約 22 GB 可用空間以及非計量網路，否則會回報模型無法使用。"
+  },
+  "asstContext": {
+    "message": "上下文視窗（token）"
+  },
+  "asstContextHint": {
+    "message": "留空則使用提供者回報的值。自建伺服器的上限只有您知道時，請填寫。"
+  },
+  "asstContextKnown": {
+    "message": "上下文視窗：$1 個 token"
   }
 }

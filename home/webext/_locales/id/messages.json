@@ -592,5 +592,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Sekitar 2–4 GB. Chrome memerlukan kira-kira 22 GB ruang kosong di disk dan jaringan tanpa kuota terbatas; jika tidak, model dilaporkan tidak tersedia."
+  },
+  "asstContext": {
+    "message": "Jendela konteks (token)"
+  },
+  "asstContextHint": {
+    "message": "Kosongkan untuk memakai nilai yang dilaporkan penyedia. Isi untuk server yang Anda hosting sendiri dan hanya Anda yang tahu batasnya."
+  },
+  "asstContextKnown": {
+    "message": "Jendela konteks: $1 token"
   }
 }

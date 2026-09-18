@@ -592,5 +592,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Humigit-kumulang 2–4 GB. Kailangan ng Chrome ng mga 22 GB na libreng espasyo sa disk at network na walang limitasyon sa data; kung hindi, iuulat nitong hindi available ang modelo."
+  },
+  "asstContext": {
+    "message": "Context window (mga token)"
+  },
+  "asstContextHint": {
+    "message": "Iwanang blangko para gamitin ang iniuulat ng provider. Punan ito para sa sariling server na ikaw lang ang nakakaalam ng limitasyon."
+  },
+  "asstContextKnown": {
+    "message": "Context window: $1 token"
   }
 }

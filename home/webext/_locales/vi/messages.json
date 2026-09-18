@@ -592,5 +592,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Khoảng 2–4 GB. Chrome cần khoảng 22 GB dung lượng trống trên ổ đĩa và mạng không giới hạn dữ liệu; nếu không, mô hình được báo là không khả dụng."
+  },
+  "asstContext": {
+    "message": "Cửa sổ ngữ cảnh (token)"
+  },
+  "asstContextHint": {
+    "message": "Để trống để dùng giá trị nhà cung cấp báo. Điền vào cho máy chủ tự vận hành mà chỉ bạn biết giới hạn."
+  },
+  "asstContextKnown": {
+    "message": "Cửa sổ ngữ cảnh: $1 token"
   }
 }

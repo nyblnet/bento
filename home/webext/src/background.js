@@ -36,7 +36,8 @@ import { learnPrefix } from './db.js'
 import { t, initI18n } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
 import {
-  CONFIG_KEY, ALLOWED_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, normalizeConfig,
+  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, normalizeConfig,
+  modelsKey, builtinContext,
   describe as describeAssistant, check as checkAssistant, run as runAssistant,
 } from './assistant.js'
 
@@ -296,7 +297,22 @@ async function assistantEnv() {
   // reasons are shown to the user by the page, so they honour the choice too.
   if (!i18nReady) i18nReady = initI18n().catch(() => {})
   await i18nReady
-  return { fetch: globalThis.fetch.bind(globalThis), LanguageModel: globalThis.LanguageModel, t }
+  return {
+    fetch: globalThis.fetch.bind(globalThis),
+    LanguageModel: globalThis.LanguageModel,
+    t,
+    // The listing Settings cached for this provider+endpoint, for the window.
+    models: async (cfg) => (await storageGet(MODELS_KEY))?.[modelsKey(cfg)]?.models,
+    // The built-in model's quota: read once, kept — a session is created to
+    // read it, and the number does not change under a downloaded model.
+    builtinTokens: async () => {
+      const kept = await storageGet(BUILTIN_KEY)
+      if (kept?.tokens) return kept.tokens
+      const tokens = await builtinContext(globalThis.LanguageModel)
+      if (tokens) await chrome.storage.local.set({ [BUILTIN_KEY]: { at: Date.now(), tokens } })
+      return tokens
+    },
+  }
 }
 
 /**

@@ -625,5 +625,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Environ 2 à 4 Go. Chrome a besoin d’environ 22 Go libres sur le disque et d’un réseau non limité, sinon il signale le modèle comme indisponible."
+  },
+  "asstContext": {
+    "message": "Fenêtre de contexte (jetons)"
+  },
+  "asstContextHint": {
+    "message": "Laissez vide pour utiliser la valeur indiquée par le fournisseur. Renseignez-la pour un serveur auto-hébergé dont vous seul connaissez la limite."
+  },
+  "asstContextKnown": {
+    "message": "Fenêtre de contexte : $1 jetons"
   }
 }

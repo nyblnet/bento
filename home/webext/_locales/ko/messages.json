@@ -592,5 +592,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "약 2~4GB입니다. Chrome은 디스크 여유 공간 약 22GB와 데이터 제한이 없는 네트워크가 필요하며, 그렇지 않으면 모델을 사용할 수 없다고 보고합니다."
+  },
+  "asstContext": {
+    "message": "컨텍스트 윈도(토큰)"
+  },
+  "asstContextHint": {
+    "message": "비워 두면 제공자가 보고하는 값을 씁니다. 한도를 본인만 아는 자체 호스팅 서버라면 입력하세요."
+  },
+  "asstContextKnown": {
+    "message": "컨텍스트 윈도: $1 토큰"
   }
 }

@@ -592,5 +592,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Około 2–4 GB. Chrome potrzebuje około 22 GB wolnego miejsca na dysku i sieci bez limitu danych; w przeciwnym razie zgłasza, że model jest niedostępny."
+  },
+  "asstContext": {
+    "message": "Okno kontekstu (tokeny)"
+  },
+  "asstContextHint": {
+    "message": "Zostaw puste, aby użyć wartości podanej przez dostawcę. Wypełnij dla własnego serwera, którego limit znasz tylko Ty."
+  },
+  "asstContextKnown": {
+    "message": "Okno kontekstu: $1 tokenów"
   }
 }

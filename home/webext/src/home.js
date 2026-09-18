@@ -18,10 +18,10 @@ import { prefixFor } from './route.js'
 import { learnPrefix, GRANT, get, put } from './db.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
 import {
-  CONFIG_KEY, ALLOWED_KEY, PROVIDERS, normalizeConfig, builtinAvailability,
-  check as checkAssistant, permissionOriginOf,
+  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PROVIDERS, normalizeConfig, builtinAvailability,
+  check as checkAssistant, permissionOriginOf, listModels, modelsKey, contextTokensOf, builtinContext,
 } from './assistant.js'
-import { DEFAULTS as PROVIDER_DEFAULTS } from './providers.js'
+import { DEFAULTS as PROVIDER_DEFAULTS, pickDefault } from './providers.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
   from './i18n.js'
 
@@ -1422,11 +1422,29 @@ async function assistantSettings(section) {
   baseUrl.autocomplete = 'off'
   const baseRow = field(t('asstBaseUrl'), baseUrl)
 
+  // The model: free text, with the provider's own list as suggestions once a
+  // key has been checked — so an id the list does not carry still works, and
+  // the default is chosen by RULE from the list (providers.js pickDefault)
+  // rather than by a name that is stale in a season.
   const model = document.createElement('input')
   model.type = 'text'
   model.spellcheck = false
   model.autocomplete = 'off'
+  const modelList = document.createElement('datalist')
+  modelList.id = 'asst-models'
+  model.setAttribute('list', modelList.id)
   const modelRow = field(t('asstModel'), model)
+  modelRow.appendChild(modelList)
+  const modelNote = modelRow.appendChild(document.createElement('small'))
+
+  // The input window in tokens: what the page sizes every turn to. Shown
+  // from the listing or the family table; typed here to override both,
+  // which is the answer for a self-hosted server only its owner knows.
+  const ctx = document.createElement('input')
+  ctx.type = 'text'
+  ctx.inputMode = 'numeric'
+  ctx.autocomplete = 'off'
+  const ctxRow = field(t('asstContext'), ctx, t('asstContextHint'))
 
   const key = document.createElement('input')
   key.type = 'password'
@@ -1449,7 +1467,39 @@ async function assistantSettings(section) {
 
   const current = () => normalizeConfig({
     provider: provider.value, baseUrl: baseUrl.value, model: model.value, key: key.value,
+    contextTokens: ctx.value.replace(/[^0-9]/g, ''),
   }, hasBuiltin)
+
+  const cachedModels = async (c) => (await chrome.storage.local.get(MODELS_KEY))?.[MODELS_KEY]?.[modelsKey(c)]?.models
+
+  /** The suggestions and the window note, from what is cached for this provider+endpoint. */
+  const showModels = async (c = current()) => {
+    const models = (await cachedModels(c)) || []
+    modelList.replaceChildren(...models.map((m) => Object.assign(document.createElement('option'), { value: m.id })))
+    const tokens = contextTokensOf(c, models)
+    ctx.placeholder = tokens ? String(tokens) : ''
+    modelNote.textContent = c.model && tokens ? t('asstContextKnown', tokens.toLocaleString()) : ''
+  }
+
+  /**
+   * Fetch the provider's list, cache it, and — when the model is still the
+   * hard-coded starting value or not in the list — move to the rule's pick.
+   * A model the person typed themselves is left alone.
+   */
+  const refreshModels = async (c) => {
+    if (c.provider === 'builtin') return
+    const models = await listModels(c, { fetch: fetch.bind(globalThis), t })
+    const all = (await chrome.storage.local.get(MODELS_KEY))?.[MODELS_KEY] || {}
+    all[modelsKey(c)] = { at: Date.now(), models }
+    await chrome.storage.local.set({ [MODELS_KEY]: all })
+    const pick = pickDefault(c.provider, models)
+    const listed = models.some((m) => m.id === c.model)
+    if (pick && (c.model === PROVIDER_DEFAULTS[c.provider]?.model || !listed) && pick !== c.model) {
+      model.value = pick
+      perProvider[c.provider] = current()
+    }
+    await showModels(current())
+  }
 
   // The built-in model: what Chrome says about it, and the one action that
   // moves it along. `availability()` reports 'downloadable' until something
@@ -1476,6 +1526,20 @@ async function assistantSettings(section) {
       : a === 'downloadable' ? t('asstBuiltinDownload')
       : a === 'downloading' ? t('asstBuiltinDownloading')
       : t('asstBuiltinUnsupported')
+    modelList.replaceChildren()
+    modelNote.textContent = ''
+    if (a !== 'available') { ctx.placeholder = ''; return }
+    // The quota lives on a session; read once and kept (background.js does
+    // the same for describe).
+    let kept = (await chrome.storage.local.get(BUILTIN_KEY))?.[BUILTIN_KEY]?.tokens
+    if (!kept) {
+      kept = await builtinContext(globalThis.LanguageModel)
+      if (kept) await chrome.storage.local.set({ [BUILTIN_KEY]: { at: Date.now(), tokens: kept } })
+    }
+    ctx.placeholder = kept ? String(kept) : ''
+    // The model row is hidden for the built-in provider, so its window goes
+    // on the status line instead.
+    if (kept) status.textContent += ` ${t('asstContextKnown', kept.toLocaleString())}`
   }
   download.onclick = async () => {
     download.disabled = true
@@ -1509,13 +1573,17 @@ async function assistantSettings(section) {
     model.placeholder = PROVIDER_DEFAULTS[p]?.model ?? ''
     key.value = http ? c.key : ''
     keyHint.textContent = p === 'openai' ? t('asstKeyOptional') : ''
+    ctx.value = c.contextTokens ? String(c.contextTokens) : ''
+    ctxRow.hidden = false
     status.textContent = ''
-    if (!http) void showBuiltinState()
+    if (http) void showModels(c)
+    else void showBuiltinState()
   }
   provider.addEventListener('change', fill)
-  for (const input of [baseUrl, model, key]) {
+  for (const input of [baseUrl, model, key, ctx]) {
     input.addEventListener('input', () => { perProvider[provider.value] = current() })
   }
+  model.addEventListener('change', () => { void showModels() })
   fill()
 
   /**
@@ -1543,6 +1611,8 @@ async function assistantSettings(section) {
     const granted = await askSiteAccess(c)
     toast(t('asstSaved'))
     status.textContent = granted ? '' : t('asstAccessDeclined')
+    // The list is worth having for the window even if Check is never pressed.
+    try { await refreshModels(c) } catch { /* Check reports it, with the reason */ }
   }
 
   probe.onclick = async () => {
@@ -1550,7 +1620,10 @@ async function assistantSettings(section) {
     probe.disabled = true
     status.textContent = t('asstChecking')
     try {
-      const r = await checkAssistant(c, { fetch: fetch.bind(globalThis), LanguageModel: globalThis.LanguageModel, t })
+      // The listing first: it is the cheaper call, it feeds the picker and the
+      // window, and a bad key fails here with the same words it would below.
+      if (c.provider !== 'builtin') await refreshModels(c)
+      const r = await checkAssistant(current(), { fetch: fetch.bind(globalThis), LanguageModel: globalThis.LanguageModel, t })
       status.textContent = r.ok
         ? (c.provider === 'builtin' ? t('asstBuiltinReady') : t('asstReachable', hostOf(c)))
         : r.reason

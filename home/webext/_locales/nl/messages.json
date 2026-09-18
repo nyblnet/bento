@@ -592,5 +592,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Ongeveer 2–4 GB. Chrome heeft zo’n 22 GB vrije schijfruimte en een netwerk zonder datalimiet nodig, anders meldt het dat het model niet beschikbaar is."
+  },
+  "asstContext": {
+    "message": "Contextvenster (tokens)"
+  },
+  "asstContextHint": {
+    "message": "Laat leeg om te gebruiken wat de aanbieder meldt. Vul het in voor een zelf gehoste server waarvan alleen u de limiet kent."
+  },
+  "asstContextKnown": {
+    "message": "Contextvenster: $1 tokens"
   }
 }

@@ -108,6 +108,25 @@ const msgs = [
   ok(JSON.parse(shapeCheck({ provider: 'anthropic', model: 'm', key: 'K' }).body!).max_tokens === 1, 'check: anthropic sends a 1-token message')
 }
 
+console.log('\n— providers: listings, windows and the default by rule')
+{
+  const { shapeModels, parseModels, familyContext, contextOf, pickDefault, DEFAULTS } = providers
+  ok(shapeModels({ provider: 'openai', baseUrl: 'https://x/v1', key: 'K' }).url === 'https://x/v1/models', 'models: openai GET /models')
+  ok(shapeModels({ provider: 'anthropic', key: 'K' }).headers['anthropic-version'] === '2023-06-01', 'models: anthropic listing carries the version header')
+  ok(shapeModels({ provider: 'gemini', key: 'K' }).url.includes('/v1beta/models'), 'models: gemini GET /v1beta/models')
+  const oa = parseModels('openai', { data: [{ id: 'gpt-4o-mini', created: 1 }, { id: 'gpt-5-mini', created: 5 }, { id: 'gpt-5', created: 5 }, { id: 'gpt-5-nano', created: 6 }, { id: 'gpt-5-mini-2026-01-01', created: 9 }, { id: 'gpt-4o-audio-preview', created: 9 }, { id: 'o3-mini', created: 8 }, { bogus: true }] })
+  ok(oa.length === 7 && oa[0].created === 1, 'parseModels: openai rows → {id, created}; junk dropped')
+  ok(pickDefault('openai', oa) === 'gpt-5-mini', 'pickDefault openai: newest mini, not nano, not a dated snapshot, not audio')
+  const an = parseModels('anthropic', { data: [{ id: 'claude-opus-5', created_at: '2026-05-01T00:00:00Z' }, { id: 'claude-sonnet-4-5', created_at: '2025-09-29T00:00:00Z' }, { id: 'claude-sonnet-5', created_at: '2026-04-01T00:00:00Z' }, { id: 'claude-haiku-4-5', created_at: '2026-04-02T00:00:00Z' }] })
+  ok(pickDefault('anthropic', an) === 'claude-sonnet-5', 'pickDefault anthropic: newest sonnet over a newer opus')
+  const ge = parseModels('gemini', { models: [{ name: 'models/gemini-2.5-flash', inputTokenLimit: 1048576, supportedGenerationMethods: ['generateContent'] }, { name: 'models/gemini-3-pro', supportedGenerationMethods: ['generateContent'] }, { name: 'models/gemini-3-flash', supportedGenerationMethods: ['generateContent'] }, { name: 'models/gemini-3-flash-lite', supportedGenerationMethods: ['generateContent'] }, { name: 'models/gemini-3-flash-preview', supportedGenerationMethods: ['generateContent'] }, { name: 'models/embedding-001', supportedGenerationMethods: ['embedContent'] }] })
+  ok(ge.length === 5 && ge[0].id === 'gemini-2.5-flash' && ge[0].contextTokens === 1048576, 'parseModels: gemini strips models/, keeps inputTokenLimit, drops non-chat')
+  ok(pickDefault('gemini', ge) === 'gemini-3-flash', 'pickDefault gemini: highest version flash, not lite/pro/preview')
+  ok(pickDefault('openai', []) === null && pickDefault('nope', oa) === null, 'pickDefault: nothing qualifies → null')
+  ok(familyContext('claude-sonnet-5') === 200000 && familyContext('gpt-4.1-mini') === 1047576 && familyContext('gpt-5-mini') === 400000 && familyContext('o3') === 200000 && familyContext('llama3.2') === 128000, 'familyContext: the documented windows by id, 128k for the unknown')
+  ok(contextOf('gemini-2.5-flash', ge) === 1048576 && contextOf('claude-sonnet-5', an) === 200000, 'contextOf: the listing when it says, the family when it does not')
+  for (const p of ['openai', 'anthropic', 'gemini'] as const) ok(pickDefault(p, [{ id: DEFAULTS[p].model, created: 1 }]) === DEFAULTS[p].model, `DEFAULTS.${p} is itself a mid-tier pick by the rule`)
+}
 console.log('\n— providers: deltas and errors')
 ok(deltaFrom('openai', '{"choices":[{"delta":{"content":"He"}}]}') === 'He', 'openai delta')
 ok(deltaFrom('openai', '{"choices":[{"delta":{"role":"assistant"}}]}') === '', 'openai role frame → empty')
@@ -152,6 +171,31 @@ const TENANT = 'tenant-4711'
 const cfgOpenai = asst.normalizeConfig({ provider: 'openai', baseUrl: `https://gw.example/${TENANT}/v1`, model: 'm', key: KEY }, false)
 
 {
+  const c = asst.normalizeConfig({ provider: 'openai', model: 'm', contextTokens: 200000 }, false)
+  ok(c.contextTokens === 200000, 'normalizeConfig: a whole number in range is kept as the override')
+  ok(asst.normalizeConfig({ provider: 'openai', model: 'm', contextTokens: '200000' }, false).contextTokens === 200000, 'normalizeConfig: the settings field\'s string becomes the NUMBER the page requires')
+  for (const bad of [999, 10_000_001, 1.5, NaN, undefined, '', 'lots'] as const) {
+    ok(!('contextTokens' in asst.normalizeConfig({ provider: 'openai', model: 'm', contextTokens: bad as any }, false)), `normalizeConfig: ${JSON.stringify(bad)} is not an override`)
+  }
+  ok(asst.contextTokensOf(c, [{ id: 'm', contextTokens: 8000 }]) === 200000, 'contextTokensOf: the override beats the listing')
+  ok(asst.contextTokensOf(asst.normalizeConfig({ provider: 'openai', model: 'm' }, false), [{ id: 'm', contextTokens: 8000 }]) === 8000, 'contextTokensOf: the listing beats the family')
+  const d = await asst.describe(asst.normalizeConfig({ provider: 'gemini', model: 'gemini-2.5-flash', key: 'K' }, false), { t, models: async () => [{ id: 'gemini-2.5-flash', contextTokens: 1048576 }] })
+  ok(d.contextTokens === 1048576, 'describe: reports the cached listing\'s window')
+  const b = await asst.describe({ provider: 'builtin' } as any, { t, LanguageModel: { availability: async () => 'available' }, builtinTokens: async () => 6144 })
+  ok(b.contextTokens === 6144 && b.local === true, 'describe: the built-in model reports its inputQuota')
+  const nb = await asst.describe({ provider: 'builtin' } as any, { t, LanguageModel: { availability: async () => 'downloadable' }, builtinTokens: async () => 6144 })
+  ok(!('contextTokens' in nb), 'describe: no quota claimed while the model cannot answer')
+  const q = await asst.builtinContext({ availability: async () => 'available', create: async () => ({ inputQuota: 6144.7, destroy() {} }) })
+  ok(q === 6144, 'builtinContext: reads a session\'s inputQuota and destroys the session')
+  const listed = await asst.listModels(asst.normalizeConfig({ provider: 'anthropic', model: 'm', key: 'K' }, false), { t, fetch: async () => ({ ok: true, json: async () => ({ data: [{ id: 'claude-sonnet-5', created_at: '2026-04-01T00:00:00Z' }] }) }) })
+  ok(listed.length === 1 && listed[0].id === 'claude-sonnet-5', 'listModels: fetches and parses')
+  let threw = ''
+  await asst.listModels(cfgOpenai, { t, fetch: async () => ({ ok: false, status: 401, text: async () => '{"error":{"message":"bad key"}}' }) }).catch((e: Error) => { threw = e.message })
+  ok(threw === 'HTTP 401: bad key', 'listModels: a refused listing is the provider\'s message, nothing else')
+}
+
+
+{
   ok(asst.docKeyOf({ url: 'file:///Users/x/Decks/Q3.bento.html#s2?x=1', frameId: 0 }) === 'file:///Users/x/Decks/Q3.bento.html', 'docKeyOf: the file, without hash or query')
   ok(asst.docKeyOf({ url: 'file:///Users/x/Decks/Q3.bento.html', frameId: 3 }) === null, 'docKeyOf: a sub-frame is not a document')
   ok(asst.docKeyOf({ url: 'https://bento.page/slides/', frameId: 0 }) === null, 'docKeyOf: only file: documents (the content script matches no other)')
@@ -180,7 +224,8 @@ const cfgOpenai = asst.normalizeConfig({ provider: 'openai', baseUrl: `https://g
   ok(d.ok === true && d.host === 'gw.example' && d.model === 'm' && d.configured === true, 'describe: host, model, configured')
   const s = JSON.stringify(d)
   ok(!s.includes(KEY) && !s.includes(TENANT), 'describe: neither the key nor the base URL path leaks')
-  ok(Object.keys(d).sort().join() === 'configured,host,model,ok', 'describe: exactly the contract\'s fields')
+  ok(Object.keys(d).sort().join() === 'configured,contextTokens,host,model,ok', 'describe: exactly the contract\'s fields')
+  ok(d.contextTokens === 128000, 'describe: an unknown model id on an OpenAI-compatible endpoint reports the documented 128k fallback')
   ok(/^[A-Za-z0-9._:/-]{1,120}$/.test(d.model) && /^[A-Za-z0-9.-]+(:\d+)?$/.test(d.host), 'describe: host and model fit the shapes the page bounds them to')
   const b = await asst.describe({ provider: 'builtin' } as any, { t, LanguageModel: { availability: async () => 'available' } })
   ok(b.host === '' && b.model === 'gemini-nano' && b.local === true && b.configured === true,
@@ -527,7 +572,7 @@ store[asst.CONFIG_KEY] = { provider: 'openai', baseUrl: `https://gw.example/${TE
 {
   // sendMessage ops
   const d = await bg.assistantOp('assistant.describe', FILE)
-  ok(d.ok === true && d.host === 'gw.example' && Object.keys(d).sort().join() === 'configured,host,model,ok', 'assistant.describe over sendMessage: the bounded shape')
+  ok(d.ok === true && d.host === 'gw.example' && Object.keys(d).sort().join() === 'configured,contextTokens,host,model,ok', 'assistant.describe over sendMessage: the bounded shape')
   const s = await bg.assistantOp('assistant.settings.open', FILE)
   ok(s.ok === true && optionsOpened === 1, 'assistant.settings.open opens the options page')
   const c = await bg.assistantOp('assistant.check', FILE)

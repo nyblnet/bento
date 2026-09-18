@@ -592,5 +592,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Cirka 2–4 GB. Chrome behöver ungefär 22 GB ledigt på disken och ett nätverk utan datatak, annars rapporterar den modellen som otillgänglig."
+  },
+  "asstContext": {
+    "message": "Kontextfönster (tokens)"
+  },
+  "asstContextHint": {
+    "message": "Lämna tomt för att använda vad leverantören rapporterar. Fyll i för en egen server vars gräns bara du känner till."
+  },
+  "asstContextKnown": {
+    "message": "Kontextfönster: $1 tokens"
   }
 }

@@ -592,5 +592,14 @@
   },
   "asstBuiltinRequirements": {
     "message": "Noin 2–4 Gt. Chrome tarvitsee noin 22 Gt vapaata levytilaa ja verkon, jossa ei ole datarajaa; muuten se ilmoittaa, ettei malli ole saatavilla."
+  },
+  "asstContext": {
+    "message": "Kontekstin ikkuna (tokeneita)"
+  },
+  "asstContextHint": {
+    "message": "Jätä tyhjäksi, niin käytetään palveluntarjoajan ilmoittamaa arvoa. Täytä itse ylläpidetylle palvelimelle, jonka rajan vain sinä tiedät."
+  },
+  "asstContextKnown": {
+    "message": "Kontekstin ikkuna: $1 tokenia"
   }
 }
