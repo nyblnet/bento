@@ -33,9 +33,22 @@
 // outline is what a question needs from any provider; the JSON is what an
 // edit needs. `isQuestion` decides from the request's wording; a question's
 // reply is never applied, whatever shape it comes back in.
+//
+// A THIRD, FOR SMALL MODELS: WORDS. On an on-device model (describe
+// `local`) an edit cannot send the JSON either — the starter deck's slide 1
+// alone is 3.5k tokens, and the reply would be as long again. So an edit
+// there sends the same outline with each text's id in [brackets] and asks
+// for a PATCH: {"edits":[{"id","text"}]}. Tiny in, tiny out, and the part
+// of editing a small model is actually good at (wording, titles, shortening,
+// translating). Anything else — layout, colours, pictures, charts, slides —
+// the prompt tells it to decline in prose and point at a hosted provider.
+// The patch is applied to the elided compact doc (`applyWordEdits`: the
+// element's `md` is set, its `html` dropped, so the loader re-renders it
+// through the markdown path) and then takes the SAME road as a JSON reply:
+// mergeReply → the gate → cleanDoc → one undoable swap.
 
 import { isWebUrl, type BentoDoc } from '../../model.ts'
-import { compactDoc, COMPACT_FLAG } from '../../compact.ts'
+import { compactDoc, COMPACT_FLAG, mintId } from '../../compact.ts'
 import type { AssistantMessage } from './transport.ts'
 
 export type AssistantScope = 'slide' | 'deck'
@@ -54,6 +67,10 @@ How to answer:
 - Keep everything you were not asked to change exactly as it is. Change only what the request needs.
 - To answer a question or when no change is right, reply in plain text with no JSON object.
 - Never include "collab", "docId" or "modified".`
+
+/** The system prompt for a WORDS edit (small models): an outline with ids
+ *  goes out, a patch of new texts comes back. */
+export const WORDS_PROMPT = `You are the editing assistant inside Bento Slides, a presentation editor. The user shows you an outline of their slides. Each piece of text starts with its id in [square brackets]. To change wording, reply with ONE JSON object and nothing else: {"edits":[{"id":"<the id>","text":"<the new text>"}]} — one entry per text you change, holding the complete new text of that item (markdown allowed: **bold**, *italic*, a blank line between paragraphs), the id copied exactly as shown. Change only what the request asks; leave every other text out of the list. You can only change words. If the request needs anything else — layout, position, colours, sizes, pictures, charts, adding or removing slides — reply in plain text that this needs a hosted provider (set in the extension settings) and do not write JSON.`
 
 /** The system prompt for a QUESTION turn: an outline goes out, prose comes
  *  back. Short on purpose — it has to fit an on-device model too. */
@@ -142,10 +159,15 @@ export function isQuestion(request: string): boolean {
 }
 
 const TEXT_MAX = 400
-/** The words in a piece of html or markdown: tags gone, whitespace folded. */
-const words = (s: unknown): string => typeof s === 'string'
-  ? s.replace(/<br\s*\/?>|<\/(?:p|div|li|h\d|tr)>/gi, ' ').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim().slice(0, TEXT_MAX)
+/** The words in a piece of html or markdown: tags gone, whitespace folded.
+ *  `full` keeps the whole text (an edit needs it; a question needs a taste). */
+const words = (s: unknown, full = false): string => typeof s === 'string'
+  ? s.replace(/<br\s*\/?>|<\/(?:p|div|li|h\d|tr)>/gi, ' ').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim().slice(0, full ? Infinity : TEXT_MAX)
   : ''
+
+/** The id a compact element answers to: its own, or the one the loader will
+ *  mint for it (compactDoc strips ids that equal the minted form). */
+const elId = (slide: Obj, el: Obj, i: number): string => typeof el.id === 'string' && el.id ? el.id : mintId(slide, el, i)
 
 /**
  * One slide as a text outline: its number and id, then every piece of text
@@ -153,15 +175,17 @@ const words = (s: unknown): string => typeof s === 'string'
  * numbers), then the notes. Geometry, colours, assets and svg markup are
  * not words and stay out — this is what a question about CONTENT needs.
  */
-export function outlineSlide(slide: Obj, n: number): string {
+export function outlineSlide(slide: Obj, n: number, ids = false): string {
   const lines: string[] = [`Slide ${n}${slide.id ? ` (id "${String(slide.id)}")` : ''}${slide.stateOf ? ` — a hidden state of slide id "${String(slide.stateOf)}"` : ''}${slide.layout ? ` [layout ${String(slide.layout)}]` : ''}:`]
+  let i = 0
   const visit = (v: unknown) => {
     if (Array.isArray(v)) { for (const x of v) visit(x); return }
     if (!isObj(v)) return
     const type = String(v.type ?? '')
+    const idx = i++
     if (type === 'text') {
-      const w = words(v.md ?? v.html)
-      if (w) lines.push(`  - ${v.role ? `${String(v.role)}: ` : ''}${w}`)
+      const w = words(v.md ?? v.html, ids)
+      if (w) lines.push(`  - ${ids ? `[${n}/${elId(slide, v, idx)}] ` : ''}${v.role ? `${String(v.role)}: ` : ''}${w}`)
     } else if (type === 'table') {
       const rows = Array.isArray(v.rows) ? v.rows as Obj[] : []
       const out = rows.map((r) => (Array.isArray(r.cells) ? r.cells as Obj[] : []).map((c) => words(c.html)).join(' | ')).filter(Boolean)
@@ -184,10 +208,53 @@ export function outlineSlide(slide: Obj, n: number): string {
 }
 
 /** The whole deck as an outline: title, then every slide (hidden states included, marked). */
-export function outlineDeck(compact: Obj): string {
+export function outlineDeck(compact: Obj, ids = false): string {
   const slides = (compact.slides ?? []) as Obj[]
   const head = `Deck${compact.title ? ` "${String(compact.title)}"` : ''}, ${slides.length} slides.`
-  return [head, ...slides.map((s, i) => outlineSlide(s, i + 1))].join('\n')
+  return [head, ...slides.map((s, i) => outlineSlide(s, i + 1, ids))].join('\n')
+}
+
+const TEXT_EDIT_MAX = 20000
+/**
+ * Apply a WORDS patch to the elided compact doc: each edit names a text
+ * element as the outline showed it — `<slide number>/<element id>`, because
+ * element ids REPEAT across slides (the morph idiom: the kicker on every
+ * slide is `sd-kicker`) and a bare id would land on the wrong slide — and
+ * gives its whole new text. The element gets `md` and loses `html`, so the
+ * loader renders it through the markdown path (compact.ts), the same one an
+ * agent's compact file takes. A bare id is accepted when exactly one slide
+ * has it. Unknown targets, non-text elements and non-string texts are
+ * skipped and named. Returns the patched doc (a deep copy) and what happened.
+ */
+export function applyWordEdits(compact: Obj, edits: unknown): { doc: Obj; applied: string[]; skipped: string[] } {
+  const doc = JSON.parse(JSON.stringify(compact)) as Obj
+  const applied: string[] = []
+  const skipped: string[] = []
+  const list = Array.isArray(edits) ? edits : []
+  const targets = new Map<string, Obj>()
+  const bare = new Map<string, Obj[]>()
+  ;((doc.slides ?? []) as Obj[]).forEach((slide, si) => {
+    let i = 0
+    const visit = (v: unknown) => {
+      if (Array.isArray(v)) { for (const x of v) visit(x); return }
+      if (!isObj(v)) return
+      const idx = i++
+      if (v.type !== 'text') return
+      const id = elId(slide, v, idx)
+      targets.set(`${si + 1}/${id}`, v)
+      bare.set(id, [...(bare.get(id) ?? []), v])
+    }
+    visit(slide.elements)
+  })
+  for (const e of list) {
+    if (!isObj(e) || typeof e.id !== 'string' || typeof e.text !== 'string') { skipped.push(isObj(e) && typeof e.id === 'string' ? e.id : '?'); continue }
+    const el = targets.get(e.id) ?? (bare.get(e.id)?.length === 1 ? bare.get(e.id)![0] : undefined)
+    if (!el) { skipped.push(e.id); continue }
+    el.md = e.text.slice(0, TEXT_EDIT_MAX)
+    delete el.html
+    applied.push(e.id)
+  }
+  return { doc, applied, skipped }
 }
 
 /** Roughly how many model tokens a text costs: chars/4, the usual estimate
@@ -201,30 +268,36 @@ export const approxTokens = (text: string): number => Math.ceil(text.length / 4)
  *  large" after the wait. */
 export const LOCAL_TOKEN_BUDGET = 2800
 
-export interface BuiltMessages { messages: AssistantMessage[]; elided: Elided; question: boolean; contextTokens: number }
+/** What a turn is: a question (outline out, prose back), a words edit
+ *  (outline with ids out, a text patch back — small models), or a JSON edit. */
+export type TurnMode = 'ask' | 'words' | 'json'
 
-/** The messages for one turn. `currentIndex` picks the slide for scope 'slide'. */
-export function buildMessages(doc: BentoDoc, scope: AssistantScope, currentIndex: number, history: Turn[], request: string): BuiltMessages {
+export interface BuiltMessages { messages: AssistantMessage[]; elided: Elided; mode: TurnMode; question: boolean; contextTokens: number }
+
+/** The messages for one turn. `currentIndex` picks the slide for scope
+ *  'slide'; `local` (an on-device model) makes an edit a WORDS turn. */
+export function buildMessages(doc: BentoDoc, scope: AssistantScope, currentIndex: number, history: Turn[], request: string, opts: { local?: boolean } = {}): BuiltMessages {
   const elided = elideDoc(doc)
   const slides = (elided.doc.slides ?? []) as Obj[]
-  const question = isQuestion(request)
-  const messages: AssistantMessage[] = [{ role: 'system', content: question ? QUESTION_PROMPT : SYSTEM_PROMPT }]
+  const mode: TurnMode = isQuestion(request) ? 'ask' : opts.local ? 'words' : 'json'
+  const messages: AssistantMessage[] = [{ role: 'system', content: mode === 'ask' ? QUESTION_PROMPT : mode === 'words' ? WORDS_PROMPT : SYSTEM_PROMPT }]
   for (const turn of history.slice(-MAX_HISTORY)) messages.push({ role: turn.role, content: turn.text })
   const slide = slides[currentIndex]
   let context: string
-  if (question) {
+  if (mode !== 'json') {
+    const ids = mode === 'words'
     context = scope === 'slide' && slide
-      ? `Scope: slide ${currentIndex + 1} of ${slides.length}.\n${outlineSlide(slide, currentIndex + 1)}`
-      : `Scope: the whole deck (slide ${currentIndex + 1} is open).\n${outlineDeck(elided.doc)}`
+      ? `Scope: slide ${currentIndex + 1} of ${slides.length}.\n${outlineSlide(slide, currentIndex + 1, ids)}`
+      : `Scope: the whole deck (slide ${currentIndex + 1} is open).\n${outlineDeck(elided.doc, ids)}`
   } else {
     context = scope === 'slide' && slide
       ? `Scope: slide (slide ${currentIndex + 1} of ${slides.length}, id "${String(slide.id ?? '')}").\nThe deck's size is ${JSON.stringify((elided.doc.size ?? { width: 1280, height: 720 }))}${elided.doc.theme ? ` and its theme is ${JSON.stringify(elided.doc.theme)}` : ''}.\nThe slide:\n${JSON.stringify(slide)}`
       : `Scope: deck (${slides.length} slides; slide ${currentIndex + 1} is open).\nThe deck:\n${JSON.stringify(elided.doc)}`
   }
-  // a question reads the outline first and the question last (the thing to
-  // do is the freshest text); an edit leads with the instruction
-  messages.push({ role: 'user', content: question ? `${context}\n\n${request.trim()}` : `${request.trim()}\n\n${context}` })
-  return { messages, elided, question, contextTokens: approxTokens(messages[0].content + context) }
+  // an outline turn reads the outline first and the request last (the thing
+  // to do is the freshest text); a JSON edit leads with the instruction
+  messages.push({ role: 'user', content: mode !== 'json' ? `${context}\n\n${request.trim()}` : `${request.trim()}\n\n${context}` })
+  return { messages, elided, mode, question: mode === 'ask', contextTokens: approxTokens(messages[0].content + context) }
 }
 
 /** What a reply turned out to be. */

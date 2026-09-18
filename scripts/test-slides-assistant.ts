@@ -42,7 +42,7 @@
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { compactDoc, expandDoc } from '../slides/src/compact.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
-import { approxTokens, buildMessages, elideDoc, isQuestion, LOCAL_TOKEN_BUDGET, mergeReply, outlineDeck, parseReply, QUESTION_PROMPT, SYSTEM_PROMPT } from '../slides/src/editor/assistant/prompt.ts'
+import { applyWordEdits, approxTokens, buildMessages, elideDoc, isQuestion, LOCAL_TOKEN_BUDGET, mergeReply, outlineDeck, parseReply, QUESTION_PROMPT, SYSTEM_PROMPT, WORDS_PROMPT } from '../slides/src/editor/assistant/prompt.ts'
 import { CH, CODE_RE, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
 import { dedupeIds, cleanDoc, ID_RE } from '../slides/src/editor/assistant/prompt.ts'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
@@ -135,6 +135,51 @@ console.log('\nprompt.ts — a question turn')
   const oneText = one.messages.at(-1)!.content
   ok(oneText.includes('Scope: slide 3 of') && oneText.includes('Slide 3 (id "') && !oneText.includes('Slide 4 (id "'), 'slide scope outlines just the open slide')
   ok(outlineDeck({ title: 'T', slides: [{ id: 'a', elements: [{ type: 'text', html: '<p>Hello&nbsp;<b>world</b></p>' }, { type: 'table', rows: [{ cells: [{ html: 'a' }, { html: 'b' }] }] }] }] }).includes('- Hello world') , 'html is reduced to its words')
+}
+
+// On an on-device model an EDIT is a WORDS turn: the outline with ids goes
+// out, a {"edits":[{id,text}]} patch comes back and is applied to the
+// elided compact doc, which then takes the same road as a JSON reply.
+console.log('\nprompt.ts — a words turn (on-device model)')
+{
+  const starter = starterDoc()
+  const w = buildMessages(starter, 'slide', 0, [], 'Change the title to something more creative', { local: true })
+  ok(w.mode === 'words' && !w.question && w.messages[0].content === WORDS_PROMPT, 'an edit on a local model is a words turn with the words prompt')
+  const wt = w.messages.at(-1)!.content
+  ok(!wt.includes('"elements"'), 'no JSON goes out')
+  const idRe = /^  - \[1\/([^\]]+)\] /m
+  const m = idRe.exec(wt)
+  ok(!!m, 'each text carries <slide number>/<id> in brackets')
+  const compact = compactDoc(starter)
+  const s0 = (compact.slides as Obj[])[0]
+  const firstText = (s0.elements as Obj[]).findIndex((e) => e.type === 'text')
+  const bareId = String((s0.elements as Obj[])[firstText].id ?? `${s0.id}-text-${firstText}`)
+  const expectId = `1/${bareId}`
+  ok(m?.[1] === bareId, `the id is the one the loader answers to (${m?.[1]}) — own id, or the minted <slide>-text-<index>`)
+  ok(starter.slides.filter((s) => s.elements.some((e) => e.id === bareId)).length > 1, 'that id repeats across slides (the morph idiom) — which is why the slide number is part of the address')
+  ok(w.contextTokens <= LOCAL_TOKEN_BUDGET, `slide 1 of the starter deck fits the budget as words (${w.contextTokens} ≤ ${LOCAL_TOKEN_BUDGET}) where its JSON did not`)
+  ok(buildMessages(starter, 'slide', 0, [], 'Change the title', { local: false }).mode === 'json', 'a hosted model keeps the JSON path')
+  ok(buildMessages(starter, 'deck', 0, [], 'Summarise it', { local: true }).mode === 'ask', 'a question on a local model is still a question')
+
+  // apply: the patch names a real text, an unknown id and a non-text
+  const { elided } = w
+  const patched = applyWordEdits(elided.doc, [{ id: expectId, text: 'A **bolder** title' }, { id: 'no-such-element', text: 'x' }, { id: 12, text: 'y' }, { id: expectId }])
+  ok(patched.applied.length === 1 && patched.applied[0] === expectId, 'the real text is applied')
+  ok(applyWordEdits(elided.doc, [{ id: bareId, text: 'x' }]).skipped.length === 1, 'a bare id that lives on several slides is refused, not guessed')
+  const onlyOnce = (compact.slides as Obj[]).flatMap((s) => (s.elements as Obj[]).filter((e) => e.type === 'text' && typeof e.id === 'string').map((e) => e.id as string)).find((id, _, all) => all.filter((y) => y === id).length === 1)
+  ok(!!onlyOnce && applyWordEdits(elided.doc, [{ id: onlyOnce, text: 'x' }]).applied.length === 1, `a bare id that lives on one slide is accepted (${onlyOnce})`)
+  ok(patched.skipped.length === 3, 'unknown id, non-string id and missing text are skipped (3)')
+  const pel = ((patched.doc.slides as Obj[])[0].elements as Obj[])[firstText]
+  ok(pel.md === 'A **bolder** title' && !('html' in pel), 'the element gets md and loses html')
+  ok(JSON.stringify(elided.doc) !== JSON.stringify(patched.doc) && ((elided.doc.slides as Obj[])[0].elements as Obj[])[firstText].md === undefined, 'the elided doc itself is untouched (a copy was patched)')
+  const merged = mergeReply(starter, 'slide', 0, (patched.doc.slides as Obj[])[0], elided)
+  ok(!!merged, 'the patched slide merges like a JSON reply')
+  const full = expandDoc(JSON.parse(merged!))
+  const fel = full.slides[0].elements.find((e) => e.id === bareId) as { html?: string } | undefined
+  ok(!!fel && /<(b|strong)>bolder<\/(b|strong)>/.test(fel.html ?? '') && /A .*title/.test(fel.html ?? ''), `the loader renders the markdown (${fel?.html})`)
+  ok(full.slides.length === starter.slides.length && full.slides[1].id === starter.slides[1].id, 'the other slides ride along untouched')
+  const none = applyWordEdits(elided.doc, 'not a list')
+  ok(none.applied.length === 0 && none.skipped.length === 0, 'a reply without a list applies nothing')
 }
 
 console.log('\nprompt.ts — reading a reply')
@@ -457,7 +502,7 @@ try {
     panel.setOpen(true, false); await tick(60)
     const status = panel.root.querySelector('.ed-assist-status').textContent
     check('local: the route line reads "on this device · Gemini Nano" (id → display name), no host: ' + status, /on this device · Gemini Nano/.test(status) && !/h\\.example/.test(status))
-    check('local: the notice names the device, not a host', /to on this device;/.test(panel.root.querySelector('.ed-assist-notice').textContent))
+    check('local: the notice names the on-device model, not a host', /to the on-device model;/.test(panel.root.querySelector('.ed-assist-notice').textContent))
     const tr2 = fakeTransport({ describe: async () => ({ host: '', model: 'some-new-id', configured: true, local: true }) })
     const panel2 = new AssistantPanel({ store, transport: tr2 }); document.body.appendChild(panel2.root); panel2.setOpen(true, false); await tick(60)
     check('local: an unknown id displays as-is', /on this device · some-new-id/.test(panel2.root.querySelector('.ed-assist-status').textContent))

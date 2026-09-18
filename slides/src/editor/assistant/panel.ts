@@ -24,7 +24,7 @@ import { ExtensionTransport, extensionPresent, type AssistantDescription, type A
 /** Display names for on-device model ids; anything else shows as its id. */
 export const MODEL_NAMES: Record<string, string> = { 'gemini-nano': 'Gemini Nano' }
 export const modelDisplay = (id: string): string => MODEL_NAMES[id] ?? id
-import { buildMessages, cleanDoc, LOCAL_TOKEN_BUDGET, mergeReply, parseReply, type AssistantScope, type Turn } from './prompt'
+import { applyWordEdits, buildMessages, cleanDoc, LOCAL_TOKEN_BUDGET, mergeReply, parseReply, type AssistantScope, type Turn } from './prompt'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
 /** Where "get the extension" points. The app has no store link yet — the
@@ -174,7 +174,7 @@ export class AssistantPanel {
   /** One line under the input saying what leaves the page (prompt.ts elideDoc). */
   private refreshNotice() {
     if (!this.transport) { this.notice.textContent = ''; return }
-    const host = this.described?.local ? t('on this device') : (this.described?.host || this.transport.name)
+    const host = this.described?.local ? t('the on-device model') : (this.described?.host || this.transport.name)
     this.notice.textContent = this.scope === 'slide'
       ? t("Sends this slide's text and notes to {host}; comments stay here.", { host })
       : t("Sends the deck's text and notes to {host}; comments stay here.", { host })
@@ -245,22 +245,26 @@ export class AssistantPanel {
     const doc = this.store.doc
     const index = this.store.currentIndex
     const scope = this.scope
-    const { messages, elided, question, contextTokens } = buildMessages(doc, scope, index, this.history.slice(0, -1), request)
+    const local = !!this.described?.local
+    const { messages, elided, mode, contextTokens } = buildMessages(doc, scope, index, this.history.slice(0, -1), request, { local })
     // an on-device model has a small window: refuse here, with the reason,
     // rather than after the wait with the provider's "too large". Questions
     // go out as an outline and nearly always fit; an edit sends the JSON.
-    if (this.described?.local && contextTokens > LOCAL_TOKEN_BUDGET) {
+    if (local && contextTokens > LOCAL_TOKEN_BUDGET) {
       this.note(scope === 'deck'
         ? t('The whole deck is too large for the on-device model ({tokens} tokens). Ask a question about it, switch to "This slide", or choose a hosted provider in the extension settings.', { tokens: String(contextTokens) })
         : t('This slide is too large for the on-device model ({tokens} tokens). Ask a question about it, or choose a hosted provider in the extension settings.', { tokens: String(contextTokens) }), 'err')
       return
     }
     this.setRunning(true)
-    const live = this.note('', 'assistant')
-    live.classList.add('ed-assist-live')
+    // the live bubble says the model is working until the first token —
+    // an on-device model can take seconds to load before it says anything
+    const live = this.note(local ? t('Working on it… the on-device model is loading.') : t('Working on it…'), 'assistant')
+    live.classList.add('ed-assist-live', 'ed-assist-wait')
     let text = ''
     try {
       text = await this.transport.send(messages, (chunk) => {
+        if (live.classList.contains('ed-assist-wait')) { live.classList.remove('ed-assist-wait'); live.textContent = '' }
         live.textContent += chunk
         this.log.scrollTop = this.log.scrollHeight
       }, this.running!.signal)
@@ -275,16 +279,26 @@ export class AssistantPanel {
     }
     this.setRunning(false)
     // a question's reply is prose whatever shape it took — never applied
-    const reply = question ? { kind: 'text' as const, text: text.trim() } : parseReply(text)
+    const reply = mode === 'ask' ? { kind: 'text' as const, text: text.trim() } : parseReply(text)
     if (reply.kind === 'text') {
       live.textContent = reply.text
-      live.classList.remove('ed-assist-live')
+      live.classList.remove('ed-assist-live', 'ed-assist-wait')
       this.history.push({ role: 'assistant', text: reply.text })
       return
     }
     live.remove()
     if (reply.note) this.note(reply.note, 'assistant')
     this.history.push({ role: 'assistant', text: reply.note || t('(edited the deck)') })
+    if (mode === 'words') {
+      // a text patch: applied to the elided compact doc, then the same road
+      const r = applyWordEdits(elided.doc, reply.value.edits)
+      if (!r.applied.length) { this.note(t('The reply named no text on the slides — nothing was changed.'), 'err'); return }
+      if (r.skipped.length) this.note(t('{n} edits named text that is not there and were skipped.', { n: String(r.skipped.length) }), 'info')
+      const slides = (r.doc.slides ?? []) as Record<string, unknown>[]
+      if (scope === 'slide' && slides[index]) this.apply('slide', index, slides[index], elided)
+      else this.apply('deck', index, r.doc, elided)
+      return
+    }
     this.apply(scope, index, reply.value, elided)
   }
 
