@@ -195,6 +195,12 @@ export function buildMessages(material, history, request, window) {
   return { messages, mode: 'edit', focus: focusSent, contextTokens: approxTokens(OPS_PROMPT + context), window, fits }
 }
 
+/** The keys an ops patch may carry; an object with none of them is not a patch. */
+export const OP_KEYS = ['edits', 'notes', 'cells', 'chart', 'style', 'add', 'remove', 'move', 'set', 'insert', 'delete', 'slide']
+
+/** Is a parsed object an ops patch at all — at least one op key present? */
+export const isPatch = (value) => isObj(value) && OP_KEYS.some((k) => k in value)
+
 /**
  * Find the one JSON object in a reply. A fenced block wins; otherwise the
  * outermost {…} that parses. Anything else is plain text. A note is whatever

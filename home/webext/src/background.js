@@ -301,6 +301,8 @@ async function assistantEnv() {
     fetch: globalThis.fetch.bind(globalThis),
     LanguageModel: globalThis.LanguageModel,
     t,
+    // The raw reply, in the service-worker inspector only — never stored.
+    log: (...a) => console.info(...a),
     // The listing Settings cached for this provider+endpoint, for the window.
     models: async (cfg) => (await storageGet(MODELS_KEY))?.[modelsKey(cfg)]?.models,
     // The built-in model's quota: read once, kept — a session is created to

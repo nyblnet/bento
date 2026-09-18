@@ -32,7 +32,7 @@
 // fake fetch and a fake storage. background.js supplies the real ones.
 
 import { DEFAULTS, describeHost, hostPortOf, shapeRequest, shapeCheck, shapeModels, parseModels, contextOf, curateModels, errorFrom, streamReply, iterateBody, originOf } from './providers.js'
-import { validMaterial, buildMessages, responseSchema, parseReply, RETRY_NUDGE, ASSUMED_WINDOW_LOCAL, ASSUMED_WINDOW_HOSTED } from './prompt.js'
+import { validMaterial, buildMessages, responseSchema, parseReply, isPatch, RETRY_NUDGE, ASSUMED_WINDOW_LOCAL, ASSUMED_WINDOW_HOSTED } from './prompt.js'
 
 /** `chrome.storage.local` keys. */
 export const CONFIG_KEY = 'assistant'
@@ -540,11 +540,18 @@ export async function runTurn(cfg, turn, io, emit, signal, env) {
       return
     }
     let text = await complete(cfg, built.messages, () => {}, signal, env, schema)
+    env.log?.('[bento/home assistant] reply', cfg.provider, cfg.model, text)
+    // An object with none of the op keys — `{}` from a model that hollowed
+    // the schema, or an unrelated object — is not a patch; it is shown as
+    // what the model said, never applied as nothing.
     let parsed = parseReply(text)
+    if (parsed.kind === 'json' && !isPatch(parsed.value)) parsed = { kind: 'text', text: text.trim() }
     if (parsed.kind === 'text' && !signal.aborted) {
       const again = [...built.messages, { role: 'assistant', content: text }, { role: 'user', content: RETRY_NUDGE }]
       text = await complete(cfg, again, () => {}, signal, env, schema)
+      env.log?.('[bento/home assistant] reply after nudge', cfg.provider, cfg.model, text)
       parsed = parseReply(text)
+      if (parsed.kind === 'json' && !isPatch(parsed.value)) parsed = { kind: 'text', text: text.trim() }
     }
     if (signal.aborted) return
     const outlineOnly = built.focus === 'none' ? env.t('asstOutlineOnly') : ''

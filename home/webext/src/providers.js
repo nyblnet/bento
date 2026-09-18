@@ -223,6 +223,10 @@ export const PROVIDERS = Object.freeze(['openai', 'anthropic', 'gemini'])
 
 const baseOf = (cfg) => trimSlash(cfg.baseUrl || DEFAULTS[cfg.provider].baseUrl)
 
+/** Does a JSON Schema describe an object with at least one named property? */
+export const hasProperties = (schema) => !!schema && typeof schema === 'object'
+  && !!schema.properties && typeof schema.properties === 'object' && Object.keys(schema.properties).length > 0
+
 /**
  * What the page may be told: the HOSTNAME the request goes to, never more.
  * Not host:port — the page bounds this to a hostname shape (transport.ts
@@ -295,7 +299,12 @@ export function shapeRequest(cfg, messages, opts = {}) {
         body: JSON.stringify({
           ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
           contents: turns.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-          ...(schema ? { generationConfig: { responseMimeType: 'application/json', responseSchema: schema } } : {}),
+          // Gemini's schema dialect wants an OBJECT to have properties; the
+          // loose "any object" schema has none, and Gemini answers it with an
+          // empty object rather than a 400 (measured, 3.5-flash-lite). So a
+          // property-less schema asks for JSON by mime type only — the prompt
+          // carries the shape — and a real schema goes through.
+          ...(schema ? { generationConfig: { responseMimeType: 'application/json', ...(hasProperties(schema) ? { responseSchema: schema } : {}) } } : {}),
         }),
       }
     default:

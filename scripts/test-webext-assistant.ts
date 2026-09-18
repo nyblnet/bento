@@ -608,6 +608,10 @@ const EDITS = { type: 'object', properties: { edits: { type: 'array', items: { t
   ok(!('response_format' in JSON.parse(shapeRequest({ provider: 'openai', model: 'm', key: 'K' }, [...msgs]).body)), 'openai: no schema, no response_format')
   const ge = JSON.parse(shapeRequest({ provider: 'gemini', model: 'g', key: 'K' }, [...msgs], { schema: EDITS }).body)
   ok(ge.generationConfig?.responseMimeType === 'application/json' && JSON.stringify(ge.generationConfig.responseSchema) === JSON.stringify(EDITS), 'gemini: schema rides as generationConfig.responseSchema with the JSON mime type')
+  const loose = JSON.parse(shapeRequest({ provider: 'gemini', model: 'g', key: 'K' }, [...msgs], { schema: { type: 'object' } }).body)
+  ok(loose.generationConfig?.responseMimeType === 'application/json' && !('responseSchema' in loose.generationConfig), 'gemini: the loose property-less schema asks for JSON by mime type only (Gemini hollows an OBJECT with no properties)')
+  const oaLoose = JSON.parse(shapeRequest({ provider: 'openai', model: 'm', key: 'K' }, [...msgs], { schema: { type: 'object' } }).body)
+  ok(!!oaLoose.response_format, 'openai: the loose schema still goes through as response_format')
   ok(!('generationConfig' in JSON.parse(shapeRequest({ provider: 'gemini', model: 'g', key: 'K' }, [...msgs]).body)), 'gemini: no schema, no generationConfig')
   const an = JSON.parse(shapeRequest({ provider: 'anthropic', model: 'm', key: 'K' }, [...msgs], { schema: EDITS }).body)
   ok(!JSON.stringify(an).includes('"edits"'), 'anthropic: no constrained mode without tools — the schema stays out of the request, the prompt carries it')
@@ -888,6 +892,16 @@ console.log('\n— runTurn: material in, prose or an ops patch out')
     await asst.runTurn(cfgOpenai, turnOf('make the title bolder'), { document: async () => MATERIAL }, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, envWith(['I would make it bold.', 'Ok {"style":[{"id":"1/t1","weight":"bold"}]}'], seen))
     ok(seen.length === 2 && seen[1].messages.at(-1).content === prompt.RETRY_NUDGE && seen[1].messages.at(-2).content === 'I would make it bold.', 'runTurn edit: a prose reply gets exactly one nudge, with the prose as the assistant turn')
     ok(frames.at(-1).mode === 'edit' && frames.at(-1).ops.style && frames.at(-1).note === 'Ok', 'runTurn edit: the nudged reply\'s patch, its note kept')
+  }
+  // a hollow object is not a patch: nudged once, then shown as what the model said
+  {
+    const frames: any[] = []
+    const seen: any[] = []
+    const logged: any[] = []
+    await asst.runTurn(cfgOpenai, turnOf('make the title bolder'), { document: async () => MATERIAL }, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { ...envWith(['{}', '{"foo":1}'], seen), log: (...a: any[]) => logged.push(a) })
+    ok(seen.length === 2 && frames.at(-1).mode === 'edit' && frames.at(-1).text === '{"foo":1}' && !('ops' in frames.at(-1)), 'runTurn edit: "{}" and an object with no op key are not patches — one nudge, then the raw reply as text')
+    ok(logged.length === 2 && logged[0][3] === '{}' && logged[1][3] === '{"foo":1}', 'runTurn: the raw reply is logged (console, never stored)')
+    ok(prompt.isPatch({ edits: [] }) && prompt.isPatch({ set: [] }) && !prompt.isPatch({}) && !prompt.isPatch({ foo: 1 }) && !prompt.isPatch([]), 'isPatch: one of the twelve op keys makes a patch')
   }
   // prose twice → text
   {
