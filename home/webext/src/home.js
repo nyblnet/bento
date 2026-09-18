@@ -20,6 +20,7 @@ import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAuto
 import {
   CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PROVIDERS, normalizeConfig, builtinAvailability,
   check as checkAssistant, permissionOriginOf, listModels, modelsKey, contextTokensOf, builtinContext,
+  activeConfig, providerConfig, withProvider,
 } from './assistant.js'
 import { DEFAULTS as PROVIDER_DEFAULTS, pickDefault } from './providers.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
@@ -1381,10 +1382,11 @@ const providerLabel = (p) => p === 'builtin' ? t('asstProvBuiltin')
 async function assistantSettings(section) {
   const hasBuiltin = typeof globalThis.LanguageModel !== 'undefined'
   const stored = (await chrome.storage.local.get(CONFIG_KEY))?.[CONFIG_KEY]
-  const cfg = normalizeConfig(stored, hasBuiltin)
-  // What was typed for each provider survives switching between them, so
-  // trying the built-in model does not cost a pasted key.
-  const perProvider = { [cfg.provider]: { ...cfg } }
+  const cfg = activeConfig(stored, hasBuiltin)
+  // What was typed for each provider survives switching between them — in
+  // the store, so the page's picker (assistant.select) and this form agree.
+  const perProvider = {}
+  for (const p of PROVIDERS) perProvider[p] = providerConfig(stored, p, hasBuiltin)
 
   const form = document.createElement('div')
   form.className = 'form'
@@ -1563,7 +1565,7 @@ async function assistantSettings(section) {
 
   const fill = () => {
     const p = provider.value
-    const c = perProvider[p] ?? normalizeConfig({ provider: p }, hasBuiltin)
+    const c = perProvider[p]
     const http = p !== 'builtin'
     baseRow.hidden = modelRow.hidden = keyRow.hidden = !http
     download.hidden = requirements.hidden = true
@@ -1606,7 +1608,11 @@ async function assistantSettings(section) {
   save.onclick = async () => {
     const c = current()
     try {
-      await chrome.storage.local.set({ [CONFIG_KEY]: c })
+      // Every provider's fields are kept; this one becomes active.
+      const raw = (await chrome.storage.local.get(CONFIG_KEY))?.[CONFIG_KEY]
+      let next = withProvider(raw, c)
+      for (const p of PROVIDERS) if (p !== c.provider && perProvider[p]) next = withProvider(next, perProvider[p], false)
+      await chrome.storage.local.set({ [CONFIG_KEY]: next })
     } catch (e) { toast(e.message); return }
     const granted = await askSiteAccess(c)
     toast(t('asstSaved'))

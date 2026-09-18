@@ -226,7 +226,8 @@ const cfgOpenai = asst.normalizeConfig({ provider: 'openai', baseUrl: `https://g
   ok(asst.normalizeConfig({ provider: 'openai' }, false).baseUrl === 'https://api.openai.com/v1', 'normalizeConfig: vendor defaults fill in')
   ok(asst.normalizeConfig({ provider: 'nope', key: 'k' }, false).provider === 'gemini', 'normalizeConfig: an unknown provider falls back')
   ok(asst.normalizeConfig({ provider: 'builtin' }, false).provider === 'gemini', 'normalizeConfig: a saved built-in choice on a Chrome without one falls back too')
-  ok(asst.httpConfigured(asst.normalizeConfig({ provider: 'openai', model: 'm' }, false)), 'httpConfigured: openai needs no key (local servers)')
+  ok(!asst.httpConfigured(asst.normalizeConfig({ provider: 'openai', model: 'm' }, false)), 'httpConfigured: openai at api.openai.com needs a key')
+  ok(asst.httpConfigured(asst.normalizeConfig({ provider: 'openai', model: 'm', baseUrl: 'http://localhost:11434/v1' }, false)), 'httpConfigured: an OpenAI-compatible server elsewhere needs none (Ollama, LM Studio)')
   ok(!asst.httpConfigured(asst.normalizeConfig({ provider: 'gemini', model: 'm' }, false)), 'httpConfigured: gemini needs a key')
 }
 {
@@ -691,6 +692,64 @@ const EDITS = { type: 'object', properties: { edits: { type: 'array', items: { t
   await until(() => port3.out.some((m: any) => m.kind === 'assistant.done'))
   ok(bodies.length === 3 && !('response_format' in bodies[2]) && port3.out.at(-1)?.kind === 'assistant.done', 'port: a malformed schema is dropped and the turn still runs as prose')
   ;(globalThis as any).fetch = fetchOk
+}
+
+console.log('\n— assistant.models / assistant.select: the page\'s picker')
+{
+  const LMon = { availability: async () => 'available' }
+  const LMdl = { availability: async () => 'downloadable' }
+  const noList = { t, LanguageModel: LMon, builtinTokens: async () => 6144, models: async () => undefined }
+  // the store: old flat shape reads as the active provider's entry
+  const st = asst.storedProviders({ provider: 'gemini', model: 'g', key: 'K' })
+  ok(st.active === 'gemini' && st.providers.gemini.key === 'K', 'storedProviders: the first release\'s flat config migrates in place')
+  ok(asst.activeConfig({ active: 'openai', providers: { openai: { model: 'm' }, gemini: { key: 'K' } } }, false).provider === 'openai', 'activeConfig: the active provider\'s fields')
+  ok(asst.activeConfig({ active: 'builtin', providers: { gemini: { key: 'K' } } }, false).provider === 'gemini', 'activeConfig: an unusable active provider falls to the default, with THAT provider\'s fields')
+  ok(asst.providerConfig({ active: 'gemini', providers: { gemini: { key: 'K' }, anthropic: { key: 'A', model: 'x' } } }, 'anthropic', false).key === 'A', 'providerConfig: another provider\'s fields, without making it active')
+
+  // a fresh install with only the built-in model: one entry, so the page shows no picker
+  const fresh = await asst.models(undefined, noList)
+  ok(fresh.length === 1 && fresh[0].provider === 'builtin' && fresh[0].model === 'gemini-nano' && fresh[0].local === true && fresh[0].current === true && fresh[0].contextTokens === 6144, 'models: fresh install with the built-in model → exactly one entry, current')
+  ok(!('host' in fresh[0]), 'models: the built-in entry carries no host')
+  ok((await asst.models(undefined, { ...noList, LanguageModel: LMdl })).length === 0, 'models: a downloadable built-in model is not a route the page can take')
+
+  // with a Gemini key: built-in + the configured model + its cached listing
+  const raw = { active: 'gemini', providers: { gemini: { key: 'K', model: 'gemini-3.8-flash' } } }
+  const listing = [{ id: 'gemini-3.8-flash', contextTokens: 1048576 }, { id: 'gemini-3.8-pro', contextTokens: 1048576 }, { id: 'bad id!' }]
+  let fetched = 0
+  const withList = { ...noList, models: async (c: any) => (c.provider === 'gemini' ? listing : undefined), fetch: async () => { fetched++; throw new Error('must not fetch') } }
+  const m = await asst.models(raw, withList)
+  ok(m.map((x) => `${x.provider}:${x.model}`).join() === 'builtin:gemini-nano,gemini:gemini-3.8-flash,gemini:gemini-3.8-pro', 'models: providers in settings order, the configured model first in its provider, the listing after, ids outside MODEL_RE dropped')
+  ok(m[1].current === true && !('current' in m[0]) && !('current' in m[2]), 'models: current marks the active route only')
+  ok(m[1].host === 'generativelanguage.googleapis.com' && m[1].contextTokens === 1048576 && m[2].contextTokens === 1048576, 'models: host as describe reports it, window per the same resolution')
+  ok(fetched === 0, 'models: never fetches — it runs on every describe')
+  const unkeyed = await asst.models({ active: 'gemini', providers: { gemini: { model: 'g' }, anthropic: {} } }, noList)
+  ok(unkeyed.length === 1 && unkeyed[0].provider === 'builtin', 'models: a provider without its key is not offered')
+  ok((await asst.models({ active: 'openai', providers: { openai: { model: 'local-llama', baseUrl: 'http://localhost:11434/v1' } } }, { ...noList, LanguageModel: undefined })).length === 1, 'models: a local OpenAI-compatible endpoint needs no key and is offered')
+  const many = { active: 'openai', providers: { openai: { model: 'a', key: 'K' } } }
+  const big = await asst.models(many, { ...noList, LanguageModel: undefined, models: async () => Array.from({ length: 500 }, (_, i) => ({ id: `m${i}` })) })
+  ok(big.length === asst.MODELS_MAX, 'models: capped at what the page reads')
+
+  // select
+  const sel = await asst.select(raw, { provider: 'gemini', model: 'gemini-3.8-pro' }, withList)
+  ok(sel.ok === true && sel.store.active === 'gemini' && sel.store.providers.gemini.model === 'gemini-3.8-pro' && sel.store.providers.gemini.key === 'K', 'select: persists the model for that provider, keeps its key, changes nothing else')
+  ok((await asst.select(raw, { provider: 'gemini', model: 'not-listed-but-fine' }, withList)).ok === true, 'select: a model outside the listing is allowed (the free-text field allows it)')
+  ok((await asst.select(raw, { provider: 'anthropic', model: 'claude-sonnet-5' }, withList)).ok === false, 'select: an unconfigured provider → ok:false')
+  ok((await asst.select(raw, { provider: 'evil', model: 'x' }, withList)).ok === false && (await asst.select(raw, { provider: 'gemini', model: 'has space' }, withList)).ok === false, 'select: provider outside the enum or a model outside MODEL_RE → ok:false')
+  const b = await asst.select(raw, { provider: 'builtin', model: 'gemini-nano' }, withList)
+  ok(b.ok === true && b.store.active === 'builtin' && b.store.providers.gemini.key === 'K', 'select: the built-in model becomes active; the Gemini key is untouched')
+  ok((await asst.select(raw, { provider: 'builtin', model: 'gemini-nano' }, { ...withList, LanguageModel: LMdl })).ok === false, 'select: a built-in model that cannot answer is refused')
+
+  // through the worker, and across a restart: the store is the only state
+  store[asst.CONFIG_KEY] = raw
+  const r = await bg.assistantOp('assistant.select', FILE, { provider: 'gemini', model: 'gemini-3.8-pro' })
+  ok(r.ok === true && (store[asst.CONFIG_KEY] as any).providers.gemini.model === 'gemini-3.8-pro', 'assistant.select over sendMessage persists to chrome.storage.local')
+  const fresh2 = await import('../home/webext/src/background.js?restart=1')
+  const d = await fresh2.assistantOp('assistant.describe', FILE)
+  ok(d.model === 'gemini-3.8-pro', 'a fresh worker (module re-import) describes the selected model — nothing lived in memory')
+  const listed = await bg.assistantOp('assistant.models', FILE)
+  ok(listed.ok === true && Array.isArray(listed.models) && listed.models.some((x: any) => x.provider === 'gemini' && x.model === 'gemini-3.8-pro' && x.current === true), 'assistant.models over sendMessage: the selected route is current')
+  const bad = await bg.assistantOp('assistant.select', FILE, { provider: 'anthropic', model: 'claude-sonnet-5' })
+  ok(bad.ok === false && (store[asst.CONFIG_KEY] as any).active === 'gemini', 'assistant.select refused leaves the store as it was')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

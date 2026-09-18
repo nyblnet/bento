@@ -36,8 +36,8 @@ import { learnPrefix } from './db.js'
 import { t, initI18n } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
 import {
-  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, validSchema, normalizeConfig,
-  modelsKey, builtinContext,
+  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, validSchema, activeConfig,
+  modelsKey, builtinContext, models as listRoutes, select as selectRoute,
   describe as describeAssistant, check as checkAssistant, run as runAssistant,
 } from './assistant.js'
 
@@ -284,7 +284,7 @@ const storageGet = async (key) => (await chrome.storage.local.get(key))?.[key]
 
 /** The saved configuration, defaults filled; the built-in model is the default when Chrome has one. */
 export async function loadAssistantConfig() {
-  return normalizeConfig(await storageGet(CONFIG_KEY), typeof globalThis.LanguageModel !== 'undefined')
+  return activeConfig(await storageGet(CONFIG_KEY), typeof globalThis.LanguageModel !== 'undefined')
 }
 
 /** Documents that have been allowed, keyed by `docKeyOf`. */
@@ -397,10 +397,17 @@ export async function recordConsent(sender, msg) {
 }
 
 /** `assistant.describe` / `assistant.check` / `assistant.settings.open`, over sendMessage. */
-export async function assistantOp(op, sender) {
+export async function assistantOp(op, sender, payload) {
   const env = await assistantEnv()
   const cfg = await loadAssistantConfig()
   if (op === 'assistant.describe') return describeAssistant(cfg, env)
+  if (op === 'assistant.models') return { ok: true, models: await listRoutes(await storageGet(CONFIG_KEY), env) }
+  if (op === 'assistant.select') {
+    const r = await selectRoute(await storageGet(CONFIG_KEY), payload, env)
+    if (!r.ok) return r
+    await chrome.storage.local.set({ [CONFIG_KEY]: r.store })
+    return { ok: true }
+  }
   if (op === 'assistant.settings.open') {
     await chrome.runtime.openOptionsPage()
     return { ok: true }
@@ -481,7 +488,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
       : msg?.op === 'assistant.consent' ? recordConsent(sender, msg)
-      : typeof msg?.op === 'string' && msg.op.startsWith('assistant.') ? assistantOp(msg.op, sender)
+      : typeof msg?.op === 'string' && msg.op.startsWith('assistant.') ? assistantOp(msg.op, sender, msg.payload)
       : Promise.resolve({ ok: false, reason: 'unknown op' })
     run.then((r) => {
       sendResponse(r)

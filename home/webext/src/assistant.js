@@ -51,6 +51,7 @@ export const PORT = 'bento-assistant'
 export const ID_PREFIX = 'asst-'
 
 const ROLES = new Set(['system', 'user', 'assistant'])
+const trimSlash = (s) => String(s || '').replace(/\/+$/, '')
 
 /**
  * The document a request comes from, as the browser reports it — or null when
@@ -119,6 +120,115 @@ export function normalizeConfig(raw, hasBuiltin) {
   return out
 }
 
+/**
+ * The stored shape: `{ active, providers: { [provider]: { baseUrl, model,
+ * key, contextTokens } } }` — every provider keeps what was typed for it, so
+ * switching (in Settings or from the page's picker) costs no pasted key.
+ * The first release stored one flat `{ provider, … }`; that reads as the
+ * active provider's entry.
+ */
+export function storedProviders(raw) {
+  const c = raw && typeof raw === 'object' ? raw : {}
+  if (c.providers && typeof c.providers === 'object') {
+    return { active: typeof c.active === 'string' ? c.active : '', providers: { ...c.providers } }
+  }
+  if (typeof c.provider === 'string') {
+    const { provider, ...rest } = c
+    return { active: provider, providers: { [provider]: rest } }
+  }
+  return { active: '', providers: {} }
+}
+
+/** The active provider's configuration, defaults filled. */
+export function activeConfig(raw, hasBuiltin) {
+  const st = storedProviders(raw)
+  const cfg = normalizeConfig({ provider: st.active, ...(st.providers[st.active] || {}) }, hasBuiltin)
+  // `active` may name nothing usable (or nothing at all): normalizeConfig
+  // chose the default provider — read THAT provider's stored fields.
+  if (cfg.provider !== st.active) return normalizeConfig({ provider: cfg.provider, ...(st.providers[cfg.provider] || {}) }, hasBuiltin)
+  return cfg
+}
+
+/** A provider's configuration out of the store, defaults filled, whether or not it is active. */
+export function providerConfig(raw, provider, hasBuiltin) {
+  const st = storedProviders(raw)
+  return normalizeConfig({ provider, ...(st.providers[provider] || {}) }, hasBuiltin)
+}
+
+/** The store with one provider's fields replaced (and made active when `activate`). */
+export function withProvider(raw, cfg, activate = true) {
+  const st = storedProviders(raw)
+  const { provider, ...fields } = cfg
+  st.providers[provider] = fields
+  if (activate) st.active = provider
+  return st
+}
+
+/** The model ids the page accepts (transport.ts MODEL_RE). */
+export const MODEL_RE = /^[A-Za-z0-9._:/-]{1,120}$/
+
+/** The most entries `assistant.models` returns; the page reads no more. */
+export const MODELS_MAX = 200
+
+/**
+ * `assistant.models`: every route that could be taken RIGHT NOW — each
+ * provider that has what it needs, its configured model first and then its
+ * cached listing (never fetched here: this runs on every describe). The
+ * built-in model is listed only when it can answer; the page cannot start
+ * a download. Ordered as Settings orders providers.
+ */
+export async function models(raw, env) {
+  const hasBuiltin = typeof env.LanguageModel !== 'undefined'
+  const active = activeConfig(raw, hasBuiltin)
+  const out = []
+  for (const provider of PROVIDERS) {
+    const cfg = providerConfig(raw, provider, hasBuiltin)
+    if (provider === 'builtin') {
+      if ((await builtinAvailability(env.LanguageModel)) !== 'available') continue
+      const tokens = cfg.contextTokens || await env.builtinTokens?.()
+      out.push({ provider, model: 'gemini-nano', local: true, ...(tokens ? { contextTokens: tokens } : {}), ...(active.provider === 'builtin' ? { current: true } : {}) })
+      continue
+    }
+    if (!httpConfigured(cfg)) continue
+    const host = describeHost(cfg)
+    const listed = (await env.models?.(cfg)) || []
+    const ids = [cfg.model, ...listed.map((m) => m.id).filter((id) => id !== cfg.model)]
+    for (const id of ids) {
+      if (out.length >= MODELS_MAX) break
+      if (!MODEL_RE.test(id)) continue
+      const tokens = contextTokensOf({ ...cfg, model: id, contextTokens: id === cfg.model ? cfg.contextTokens : undefined }, listed)
+      out.push({
+        provider, model: id, host,
+        ...(tokens ? { contextTokens: tokens } : {}),
+        ...(active.provider === provider && active.model === id ? { current: true } : {}),
+      })
+    }
+  }
+  return out.slice(0, MODELS_MAX)
+}
+
+/**
+ * `assistant.select`: make a provider+model the active route. Persists that
+ * and nothing else — no key changes, no fetch. A model outside the listing
+ * is allowed (the free-text field allows it) as long as the provider is
+ * configured. Returns the new store, or a reason.
+ */
+export async function select(raw, payload, env) {
+  const provider = payload?.provider
+  const model = payload?.model
+  if (!PROVIDERS.includes(provider)) return { ok: false, reason: 'unknown provider' }
+  if (typeof model !== 'string' || !MODEL_RE.test(model)) return { ok: false, reason: 'bad model id' }
+  const hasBuiltin = typeof env.LanguageModel !== 'undefined'
+  if (provider === 'builtin') {
+    if (!hasBuiltin || (await builtinAvailability(env.LanguageModel)) !== 'available') return { ok: false, reason: env.t('asstBuiltinUnsupported') }
+    if (model !== 'gemini-nano') return { ok: false, reason: 'bad model id' }
+    return { ok: true, store: withProvider(raw, providerConfig(raw, 'builtin', hasBuiltin)) }
+  }
+  const cfg = { ...providerConfig(raw, provider, hasBuiltin), model }
+  if (!httpConfigured(cfg)) return { ok: false, reason: env.t('asstNotConfigured') }
+  return { ok: true, store: withProvider(raw, cfg) }
+}
+
 /** Where a listing is cached: the provider and the endpoint, never the key. */
 export const modelsKey = (cfg) => `${cfg.provider}|${cfg.baseUrl || ''}`
 
@@ -168,8 +278,11 @@ export async function builtinContext(LanguageModel) {
 export function httpConfigured(cfg) {
   if (cfg.provider === 'builtin') return false
   if (!cfg.model) return false
-  // A local OpenAI-compatible server needs no key; the hosted vendors do.
-  return cfg.provider === 'openai' ? true : !!cfg.key
+  // The hosted vendors need a key. An OpenAI-compatible server at some other
+  // address (Ollama, LM Studio, a gateway) may not — but api.openai.com
+  // itself does, so "no key" only counts once the base URL has been changed.
+  if (cfg.key) return true
+  return cfg.provider === 'openai' && trimSlash(cfg.baseUrl) !== DEFAULTS.openai.baseUrl
 }
 
 /** What the built-in model can do right now, in the Prompt API's own words. */
