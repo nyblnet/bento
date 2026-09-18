@@ -526,5 +526,8 @@
   },
   "placeTried": {
     "message": "Procurou “$1” em $2 lugares do disco — não está lá."
+  },
+  "recentTitle": {
+    "message": "Editados recentemente"
   }
 }

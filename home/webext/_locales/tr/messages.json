@@ -493,5 +493,8 @@
   },
   "placeTried": {
     "message": "“$1” diskte $2 yerde arandı — orada değil."
+  },
+  "recentTitle": {
+    "message": "Son düzenlenenler"
   }
 }

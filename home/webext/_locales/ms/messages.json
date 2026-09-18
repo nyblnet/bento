@@ -493,5 +493,8 @@
   },
   "placeTried": {
     "message": "Mencari “$1” di $2 tempat pada cakera — tiada di sana."
+  },
+  "recentTitle": {
+    "message": "Baru disunting"
   }
 }

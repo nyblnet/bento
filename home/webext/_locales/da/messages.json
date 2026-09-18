@@ -493,5 +493,8 @@
   },
   "placeTried": {
     "message": "Ledte efter “$1” $2 steder på disken — ikke der."
+  },
+  "recentTitle": {
+    "message": "Senest redigeret"
   }
 }

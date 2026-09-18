@@ -493,5 +493,8 @@
   },
   "placeTried": {
     "message": "Szukano „$1” w $2 miejscach na dysku — nie ma go tam."
+  },
+  "recentTitle": {
+    "message": "Ostatnio edytowane"
   }
 }

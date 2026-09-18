@@ -557,7 +557,38 @@ function renderGrid() {
     return
   }
 
-  for (const d of docs) {
+  // RECENTLY EDITED, above everything: the handful of documents touched
+  // last, however the rest is sorted. Only on the unfiltered "All documents"
+  // view — a folder or a search is already an answer to "which ones", and a
+  // strip of the same cards twice would be noise there.
+  if (state.folder === null && !state.q && docs.length > RECENT_MAX) {
+    const recent = [...docs].filter((d) => d.modified > 0).sort((a, b) => b.modified - a.modified).slice(0, RECENT_MAX)
+    if (recent.length >= 2) {
+      const strip = document.createElement('section')
+      strip.className = 'recent'
+      const h = document.createElement('h2')
+      h.textContent = t('recentTitle')
+      strip.appendChild(h)
+      const row = document.createElement('div')
+      row.className = `grid${state.layout === 'list' ? ' as-list' : ''}`
+      for (const d of recent) row.appendChild(makeCard(d))
+      strip.appendChild(row)
+      const all = document.createElement('h2')
+      all.className = 'recent-all'
+      all.textContent = t('navAll')
+      grid.before(strip, all)
+    }
+  }
+
+  for (const d of docs) grid.appendChild(makeCard(d))
+}
+
+/** How many documents the recently-edited strip shows. */
+const RECENT_MAX = 6
+
+/** One document card; every grid builds its cards here. */
+function makeCard(d) {
+  {
     const card = document.createElement('button')
     card.className = 'card'
     // TWO different absences looked identical, and one of them is not a
@@ -596,8 +627,8 @@ function renderGrid() {
       if (!d.path) { void explainUnplaced(d); return }
       openDoc(d)
     })
-    grid.appendChild(card)
     void decorate(card, d)
+    return card
   }
 }
 

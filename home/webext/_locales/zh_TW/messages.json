@@ -526,5 +526,8 @@
   },
   "placeTried": {
     "message": "已在磁碟上 $2 個位置尋找「$1」，未找到。"
+  },
+  "recentTitle": {
+    "message": "最近編輯"
   }
 }

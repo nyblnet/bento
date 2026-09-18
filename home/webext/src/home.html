@@ -193,6 +193,11 @@
      document keeps its picture, which is the point of icons-vs-list rather
      than pictures-vs-none. */
   .grid.as-list { grid-template-columns: 1fr; gap: 5px }
+  /* The recently-edited strip: a heading, a row of cards, then the full grid under its own heading. */
+  .recent { margin-bottom: 22px }
+  .recent h2, .recent-all { font-size: 13px; font-weight: 600; color: var(--dim); letter-spacing: .02em;
+    text-transform: uppercase; margin: 0 0 10px }
+  .recent-all { margin-top: 4px }
   .as-list .card { flex-direction: row; align-items: center; gap: 12px;
     padding: 6px 10px; border-radius: 9px }
   .as-list .card:hover { transform: none; box-shadow: var(--lift) }

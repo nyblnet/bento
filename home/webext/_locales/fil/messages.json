@@ -493,5 +493,8 @@
   },
   "placeTried": {
     "message": "Hinanap ang “$1” sa $2 lugar sa disk — wala roon."
+  },
+  "recentTitle": {
+    "message": "Kamakailang na-edit"
   }
 }

@@ -493,5 +493,8 @@
   },
   "placeTried": {
     "message": "Kansiota ”$1” etsittiin $2 paikasta levyltä — ei siellä."
+  },
+  "recentTitle": {
+    "message": "Viimeksi muokatut"
   }
 }

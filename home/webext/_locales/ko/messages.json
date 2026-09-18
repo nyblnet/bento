@@ -493,5 +493,8 @@
   },
   "placeTried": {
     "message": "디스크의 $2곳에서 “$1”을(를) 찾았지만 없었습니다."
+  },
+  "recentTitle": {
+    "message": "최근 편집"
   }
 }

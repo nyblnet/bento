@@ -554,5 +554,9 @@
   "placeTried": {
     "message": "Looked for “$1” in $2 places on disk — not there.",
     "description": "Unplaced-folder banner: the disk probe ran and found nothing. $1 folder name, $2 a count."
+  },
+  "recentTitle": {
+    "message": "Recently edited",
+    "description": "Heading of the strip of most recently modified documents above the full grid."
   }
 }
