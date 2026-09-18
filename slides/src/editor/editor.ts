@@ -20,6 +20,7 @@ import { openExportImagesDialog } from './exportimages'
 import { paletteSignature, resolveThemeRefs } from '../palette'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
+import { AssistantPanel } from './assistant/panel'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
@@ -83,6 +84,44 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
 export class Editor {
   private canvas!: SlideCanvas
   private panel!: PropsPanel
+  private assistant!: AssistantPanel
+  private propsTabs!: HTMLElement
+  private propsBody!: HTMLElement
+  private assistDock!: HTMLElement
+  private propsTab: 'props' | 'assist' = 'props'
+
+  /** The right sidebar's two tabs. The choice is remembered. */
+  private buildPropsTabs() {
+    const mk = (id: 'props' | 'assist', label: string) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-props-tab'
+      b.dataset.tab = id
+      b.textContent = label
+      b.addEventListener('click', () => this.showPropsTab(id))
+      return b
+    }
+    this.propsTabs.append(mk('props', t('Properties')), mk('assist', t('Assistant')))
+    const saved = lsGet('bento-props-tab')
+    this.showPropsTab(saved === 'assist' ? 'assist' : 'props', false)
+    // popping the assistant out empties its tab: fall back to the inspector
+    this.assistant.onFloatChange = (floating) => {
+      this.props.classList.toggle('ed-assist-out', floating)
+      if (floating && this.propsTab === 'assist') this.showPropsTab('props', false)
+    }
+  }
+
+  showPropsTab(id: 'props' | 'assist', persist = true) {
+    if (id === 'assist' && this.assistant.floating) { this.assistant.focusInput(); return }
+    this.propsTab = id
+    this.props.classList.toggle('ed-tab-assist', id === 'assist')
+    for (const b of this.propsTabs.querySelectorAll<HTMLElement>('.ed-props-tab')) b.classList.toggle('on', b.dataset.tab === id)
+    if (persist) lsSet('bento-props-tab', id)
+    if (id === 'assist') {
+      if (this.props.classList.contains('ed-collapsed')) this.togglePanel('right')
+      this.assistant.activate()
+    }
+  }
   private sidebar!: HTMLElement
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
@@ -434,6 +473,13 @@ export class Editor {
       if (zb) corner.appendChild(zb)
     })
     this.props = div('ed-props')
+    // the right sidebar is two tabs: the inspector (PropsPanel's host, which
+    // scrolls) and the Assistant (a full-height dock: the conversation gets
+    // the whole column, not one accordion section of it)
+    this.propsTabs = div('ed-props-tabs')
+    this.propsBody = div('ed-props-body')
+    this.assistDock = div('ed-assist-dock')
+    this.props.append(this.propsTabs, this.propsBody, this.assistDock)
     main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
@@ -506,7 +552,12 @@ export class Editor {
     this.canvas = new SlideCanvas(canvasWrap, this.store)
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
-    this.panel = new PropsPanel(this.props, this.store)
+    this.panel = new PropsPanel(this.propsBody, this.store)
+    // the Assistant: extension-only (assistant/transport.ts says why). It
+    // lives in the dock tab, or popped out as a floating window (its own
+    // choice, remembered); the tab strip switches between inspector and it
+    this.assistant = new AssistantPanel({ store: this.store, toast: (m) => this.toast(m), dock: this.assistDock })
+    this.buildPropsTabs()
 
     if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
   }
@@ -2986,6 +3037,11 @@ export class Editor {
         return
       }
       if (mod && ev.key.toLowerCase() === 'c') {
+        // A text selection outside the canvas (the assistant transcript, a
+        // panel label) is the browser's copy — not a Bento payload of the
+        // slide behind it
+        const sel = document.getSelection()
+        if (sel && !sel.isCollapsed && sel.anchorNode && !(sel.anchorNode.parentElement ?? sel.anchorNode as Element | null)?.closest?.('.ed-stage-scale')) return
         // Copy to BOTH the in-app clipboard (fast, same session) and the system
         // clipboard as a Bento payload (works across decks/tabs). Elements when
         // any are selected; otherwise the current slide.

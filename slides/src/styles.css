@@ -549,11 +549,26 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-props {
   width: var(--panew, 236px);
   flex: none;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--surface);
   border-inline-start: 1px solid var(--line);
-  padding: 14px;
 }
+/* the inspector scrolls; the tab strip and the assistant dock do not */
+.ed-props-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; padding: 14px; }
+.ed-assist-dock { display: none; flex: 1 1 auto; min-height: 0; flex-direction: column; }
+.ed-props.ed-tab-assist .ed-props-body { display: none; }
+.ed-props.ed-tab-assist .ed-assist-dock { display: flex; }
+.ed-props-tabs { display: flex; flex: none; border-bottom: 1px solid var(--line); background: var(--chrome); }
+.ed-props-tab {
+  flex: 1; padding: 8px 6px; border: 0; border-bottom: 2px solid transparent; background: none;
+  color: var(--muted); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+}
+.ed-props-tab.on { color: var(--ink); border-bottom-color: var(--accent, #F7A600); }
+.ed-props-tab:hover { color: var(--ink); }
+/* popped out: the tab stays, but reads as a way back to the window */
+.ed-props.ed-assist-out .ed-props-tab[data-tab='assist'] { opacity: .6; }
 
 .ed-section {
   font-size: 11px;
@@ -2406,10 +2421,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 
 
 /* right panel: no horizontal scrollbar, ever */
-.ed-props {
-  overflow-x: hidden;
-  scrollbar-gutter: stable;
-}
+.ed-props { overflow: hidden; }
 .ed-props .ed-row { flex-wrap: wrap; }
 .ed-props input[type='number'] { min-width: 0; }
 .ed-props select { max-width: 100%; min-width: 0; }
@@ -2835,3 +2847,100 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 }
 .ed-swatch:hover { transform: scale(1.15); }
 .ed-swatch.is-on { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+
+/* ————— Assistant drawer (editor/assistant/panel.ts) — foot of the props
+   panel, sticky so it stays in reach while the inspector scrolls; the panel
+   re-appends the same node after every rebuild ————— */
+.ed-assist {
+  position: sticky;
+  bottom: -14px;
+  margin: 14px -14px -14px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+/* docked in its tab, or floating: the whole column is the panel — the log
+   takes what is left, the input sits at the bottom */
+.ed-assist-docked {
+  position: static; margin: 0; border-top: 0;
+  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; height: 100%;
+}
+.ed-assist-docked .ed-assist-head { flex: none; cursor: default; }
+.ed-assist-docked .ed-assist-chev { display: none; }
+.ed-assist-docked .ed-assist-body { flex: 1 1 auto; min-height: 0; }
+.ed-assist-docked.open .ed-assist-body { display: flex; }
+.ed-assist-docked .ed-assist-log { flex: 1 1 auto; max-height: none; min-height: 60px; }
+.ed-assist-docked .ed-assist-log:empty { display: block; flex: 1 1 auto; }
+.ed-assist-docked .ed-assist-status, .ed-assist-docked .ed-assist-notice, .ed-assist-docked .ed-assist-acts, .ed-assist-docked .ed-assist-input { flex: none; }
+.ed-assist-docked .ed-assist-input { resize: vertical; max-height: 60vh; }
+.ed-assist-pop { margin-left: auto; margin-right: 6px; padding: 0 5px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; display: none; }
+.ed-assist-docked .ed-assist-pop { display: inline-block; }
+.ed-assist-pop:hover { color: var(--ink); }
+@media (max-width: 699px) { .ed-assist-pop { display: none !important; } }
+/* the floating window */
+.ed-assist-float {
+  position: fixed; z-index: 60; display: flex; flex-direction: column;
+  min-width: 280px; min-height: 240px; resize: both; overflow: hidden;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .28);
+}
+.ed-assist-float .ed-assist { height: 100%; }
+.ed-assist-float .ed-assist-head { border-bottom: 1px solid var(--line); background: var(--chrome); border-radius: 10px 10px 0 0; }
+.ed-assist-head {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 8px 14px; border: 0; background: none;
+  color: var(--ink); font: inherit; font-size: 11px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+}
+.ed-assist-chev { transition: transform .15s; color: var(--muted); }
+.ed-assist.open .ed-assist-chev { transform: rotate(180deg); }
+.ed-assist-body { display: none; padding: 0 14px 12px; }
+.ed-assist.open .ed-assist-body { display: flex; flex-direction: column; gap: 8px; }
+.ed-assist-status { color: var(--muted); line-height: 1.4; }
+.ed-assist-status a { color: var(--ink); }
+.ed-assist-route { color: var(--ink-2); }
+.ed-assist-log { max-height: min(46vh, 520px); overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
+.ed-assist-log:empty { display: none; }
+/* the chrome is user-select:none; a conversation is text people copy from */
+.ed-assist-log, .ed-assist-log * { -webkit-user-select: text; user-select: text; cursor: text; }
+.ed-assist-log button, .ed-assist-log a { -webkit-user-select: none; user-select: none; cursor: pointer; }
+.ed-assist-msg { position: relative; padding: 7px 10px; border-radius: 10px; white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+.ed-assist-user { background: color-mix(in srgb, var(--accent, #F7A600) 14%, var(--chrome-2)); align-self: flex-end; max-width: 88%; border-bottom-right-radius: 3px; }
+.ed-assist-assistant { background: var(--field); border: 1px solid var(--line); align-self: flex-start; max-width: 96%; border-bottom-left-radius: 3px; }
+.ed-assist-prose { white-space: normal; }
+.ed-assist-prose p { margin: 0 0 .5em; }
+.ed-assist-prose p:last-child { margin-bottom: 0; }
+.ed-assist-prose ul, .ed-assist-prose ol { margin: .2em 0 .5em; padding-left: 1.3em; }
+.ed-assist-prose li { margin: .15em 0; }
+.ed-assist-prose code { font-size: .92em; background: var(--chrome-2); padding: 0 3px; border-radius: 3px; }
+.ed-assist-copy { position: absolute; top: 4px; right: 4px; padding: 0 5px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; opacity: 0; transition: opacity .12s; }
+.ed-assist-assistant:hover .ed-assist-copy, .ed-assist-copy:focus { opacity: 1; }
+.ed-assist-copy:hover { background: var(--chrome-2); color: var(--ink); }
+.ed-assist-clear { float: right; padding: 0 6px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.ed-assist-clear:hover { color: var(--ink); text-decoration: underline; }
+.ed-assist-clear[hidden] { display: none; }
+.ed-assist-live { opacity: .8; }
+.ed-assist-live:empty::after { content: '…'; }
+.ed-assist-wait { opacity: .55; font-style: italic; animation: ed-assist-pulse 1.4s ease-in-out infinite; }
+.ed-assist-model { font: inherit; font-size: 12px; max-width: 100%; padding: 1px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); }
+.ed-assist-wait::after { content: ' ●'; animation: ed-assist-dots 1.2s steps(3, end) infinite; }
+@keyframes ed-assist-pulse { 0%, 100% { opacity: .55; } 50% { opacity: .9; } }
+@keyframes ed-assist-dots { 0% { content: ' ●'; } 33% { content: ' ● ●'; } 66% { content: ' ● ● ●'; } }
+.ed-assist-err { color: #C0392B; background: rgba(192, 57, 43, .08); }
+.ed-assist-info { color: var(--muted); }
+.ed-assist-card { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.ed-assist-card-h { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+.ed-assist-undo { padding: 2px 8px; font-size: 11px; }
+.ed-assist-card-remote { margin-top: 4px; color: #B4530A; font-size: 11px; word-break: break-all; }
+.ed-assist-card-sum { color: var(--muted); margin-top: 4px; }
+.ed-assist-card-list { margin: 4px 0 0; padding-inline-start: 16px; color: var(--muted); font-size: 11px; }
+.ed-assist-input { width: 100%; resize: none; overflow-y: auto; min-height: 40px; font: inherit; font-size: 12px;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); }
+.ed-assist-input:disabled { opacity: .5; }
+.ed-assist-notice { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.ed-assist-notice:empty { display: none; }
+.ed-assist-acts { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.ed-assist-hint { color: var(--muted); font-size: 11px; }
+.ed-assist-send { padding: 4px 12px; }
+.ed-assist-stop { background: #C0392B; border-color: #C0392B; }
