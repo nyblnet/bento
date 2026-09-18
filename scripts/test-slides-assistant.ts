@@ -667,6 +667,24 @@ try {
     check('E — nothing ran', window.__pwn === undefined)
   }
 
+  // F — capabilities are the user's: live never lands; a remote URL a patch introduces is named on the card
+  {
+    const doc3 = starterDoc()
+    const store = fakeStore(doc3)
+    const panel = new AssistantPanel({ store, transport: fakeTransport() })
+    document.body.appendChild(panel.root)
+    const { elided: el3 } = buildMessages(doc3, { index: 0, selection: [] }, [], 'x')
+    const r3 = applyOps(el3.doc, { insert: [{ slide: 1, type: 'image', x: 0, y: 0, w: 10, h: 10, src: 'https://tracker.example/p.gif?u=1' }, { slide: 1, type: 'embed', x: 0, y: 0, w: 10, h: 10, url: 'https://example.org/x', live: true }], set: [{ id: '1/' + doc3.slides[0].elements[0].id, live: true, fill: '#abc' }] })
+    check('F — live is a locked field: neither the inserted embed nor the set element carries it', r3.doc.slides[0].elements.every((e) => !('live' in e)) && r3.applied.some((a) => a.startsWith('set ')))
+    panel.apply(0, r3.doc, el3, r3.applied)
+    const remote = panel.root.querySelector('.ed-assist-card-remote')
+    check('F — the card names the hosts the patch made the deck load from: ' + (remote && remote.textContent), !!remote && /tracker\\.example\\/p\\.gif/.test(remote.textContent) && /example\\.org\\/x/.test(remote.textContent) && !/u=1/.test(remote.textContent))
+    const r4 = applyOps(el3.doc, { set: [{ id: '1/' + doc3.slides[0].elements[0].id, fill: '#abc' }] })
+    panel.apply(0, r4.doc, el3, r4.applied)
+    const cards = panel.root.querySelectorAll('.ed-assist-card')
+    check('F — a patch that adds no remote URL gets no such line', cards.length === 2 && !cards[1].querySelector('.ed-assist-card-remote'))
+  }
+
   // contract: local model display; consent-pending → waiting + one re-check on focus; consent-denied → refusal card
   {
     const store = fakeStore(starterDoc())

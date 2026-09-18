@@ -943,6 +943,7 @@ export const pt: Catalog = {
   "Working on it… the on-device model is loading.": "Um momento… o modelo no dispositivo está carregando.",
   "Working on it…": "Um momento…",
   "The reply changed nothing I could apply.": "A resposta não alterou nada que eu pudesse aplicar.",
+  "Loads from the web: {hosts}": "Carrega da web: {hosts}",
   "the selected element": "o elemento selecionado",
   "the {n} selected elements": "os {n} elementos selecionados",
   "this slide": "este slide",

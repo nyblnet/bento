@@ -30,6 +30,7 @@ export const providerDisplay = (id: string): string => PROVIDER_NAMES[id] ?? id
 /** 200000 → "200k", 1048576 → "1M" */
 export const windowDisplay = (n: number): string => n >= 1_000_000 ? `${Math.round(n / 100_000) / 10}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
 import { applyOps, buildMessages, cleanDoc, mergeReply, parseReply, responseSchema, RETRY_NUDGE, type Turn } from './prompt'
+import { remoteUrls } from './ops'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
 /**
@@ -575,6 +576,11 @@ export class AssistantPanel {
     // the card reports what the EDIT introduced: a deck that already had
     // fourteen off-canvas warnings should not list them under every reply
     const had = new Set(validateDoc(this.store.doc).findings.map(findingKey))
+    // the fetches this patch introduced: every remote URL in the new
+    // document that the old one did not have (F: the user sees the request
+    // the deck will make at render, the model cannot add one silently)
+    const before = remoteUrls(this.store.doc)
+    const introduced = [...remoteUrls(next)].filter((u) => !before.has(u))
     // identity and capability are the live document's, never the reply's —
     // the same rule "Replace from JSON…" applies (editor.ts)
     const keep = this.store.doc.collab
@@ -602,6 +608,10 @@ export class AssistantPanel {
     undo.addEventListener('click', () => { this.store.undo(); undo.disabled = true })
     head.appendChild(undo)
     card.appendChild(head)
+    if (introduced.length) {
+      const line = el('div', 'ed-assist-card-remote', t('Loads from the web: {hosts}', { hosts: introduced.slice(0, 6).join(', ') + (introduced.length > 6 ? '…' : '') }))
+      card.appendChild(line)
+    }
     if (r.dropped.length || warnings) {
       card.appendChild(el('div', 'ed-assist-card-sum',
         t('{dropped} fields dropped, {warnings} warnings', { dropped: String(r.dropped.length), warnings: String(warnings) })))

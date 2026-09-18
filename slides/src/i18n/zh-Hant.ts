@@ -945,6 +945,7 @@ export const zhHant: Catalog = {
   "Working on it… the on-device model is loading.": "處理中… 正在載入裝置上的模型。",
   "Working on it…": "處理中…",
   "The reply changed nothing I could apply.": "回覆中沒有可以套用的變更。",
+  "Loads from the web: {hosts}": "從網路載入：{hosts}",
   "the selected element": "選取的元素",
   "the {n} selected elements": "選取的 {n} 個元素",
   "this slide": "此投影片",

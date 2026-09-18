@@ -945,6 +945,7 @@ export const de: Catalog = {
   "Working on it… the on-device model is loading.": "Einen Moment… das Modell auf diesem Gerät wird geladen.",
   "Working on it…": "Einen Moment…",
   "The reply changed nothing I could apply.": "Die Antwort enthielt nichts, was ich anwenden konnte.",
+  "Loads from the web: {hosts}": "Lädt aus dem Web: {hosts}",
   "the selected element": "das ausgewählte Element",
   "the {n} selected elements": "die {n} ausgewählten Elemente",
   "this slide": "diese Folie",

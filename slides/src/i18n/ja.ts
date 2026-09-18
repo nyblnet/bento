@@ -945,6 +945,7 @@ export const ja: Catalog = {
   "Working on it… the on-device model is loading.": "処理中… デバイス上のモデルを読み込んでいます。",
   "Working on it…": "処理中…",
   "The reply changed nothing I could apply.": "返答には適用できる変更がありませんでした。",
+  "Loads from the web: {hosts}": "ウェブから読み込み: {hosts}",
   "the selected element": "選択中の要素",
   "the {n} selected elements": "選択中の {n} 個の要素",
   "this slide": "このスライド",

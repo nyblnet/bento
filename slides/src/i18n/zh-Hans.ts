@@ -945,6 +945,7 @@ export const zhHans: Catalog = {
   "Working on it… the on-device model is loading.": "处理中… 正在加载设备上的模型。",
   "Working on it…": "处理中…",
   "The reply changed nothing I could apply.": "回复中没有可以应用的更改。",
+  "Loads from the web: {hosts}": "从网络加载：{hosts}",
   "the selected element": "选中的元素",
   "the {n} selected elements": "选中的 {n} 个元素",
   "this slide": "此幻灯片",

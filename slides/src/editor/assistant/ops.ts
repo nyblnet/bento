@@ -66,9 +66,22 @@ const SIZE_STEP = 1.25
 
 /** The reply's shape, for providers that constrain output. Kept to
  *  type/properties/items/required/enum — the subset every dialect takes. */
-/** fields a set/insert may never write: identity, and the keys the loader
- *  and the gate own */
-const LOCKED_FIELDS = new Set(['id', 'type', 'comments', 'collab', 'docId', 'blobs', '__proto__', 'constructor', 'prototype'])
+/** fields a set/insert may never write: identity, the keys the loader and
+ *  the gate own, and `live` — an embed's live iframe is the USER's opt-in
+ *  (model.ts), a capability, not content; the model edits content. */
+const LOCKED_FIELDS = new Set(['id', 'type', 'comments', 'collab', 'docId', 'blobs', 'live', '__proto__', 'constructor', 'prototype'])
+
+/** Every http(s) origin+path a document refers to (src, url, poster —
+ *  any string field), so the result card can name the fetches a patch
+ *  introduced: a remote picture is a request the deck will make at render,
+ *  and a poisoned model could add a tracking pixel silently. */
+export function remoteUrls(v: unknown, out = new Set<string>()): Set<string> {
+  if (typeof v === 'string') {
+    if (/^https?:\/\//i.test(v) && v.length < 2048) { try { const u = new URL(v); out.add(u.host + (u.pathname === '/' ? '' : u.pathname)) } catch { /* not a URL */ } }
+  } else if (Array.isArray(v)) { for (const x of v) remoteUrls(x, out) }
+  else if (isObj(v)) { for (const x of Object.values(v)) remoteUrls(x, out) }
+  return out
+}
 const SLIDE_FIELDS = new Set(['background', 'transition', 'layout', 'hidden', 'notes', 'hover'])
 export const INSERT_MAX = 40      // elements one reply may insert
 export const SET_MAX = 200        // set ops one reply may carry
