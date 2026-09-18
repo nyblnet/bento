@@ -517,5 +517,8 @@
   },
   "surveyOnlySeen": {
     "message": "這種方式只能找到在此瀏覽器中開啟過的文件。"
+  },
+  "placingFolder": {
+    "message": "正在磁碟上尋找「$1」……"
   }
 }

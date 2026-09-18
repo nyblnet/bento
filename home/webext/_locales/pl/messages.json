@@ -484,5 +484,8 @@
   },
   "surveyOnlySeen": {
     "message": "W ten sposób znajdziesz tylko dokumenty otwarte w tej przeglądarce."
+  },
+  "placingFolder": {
+    "message": "Szukanie „$1” na dysku…"
   }
 }

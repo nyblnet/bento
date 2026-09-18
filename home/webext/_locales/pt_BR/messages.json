@@ -517,5 +517,8 @@
   },
   "surveyOnlySeen": {
     "message": "Só é possível encontrar assim os documentos abertos neste navegador."
+  },
+  "placingFolder": {
+    "message": "Procurando “$1” no disco…"
   }
 }

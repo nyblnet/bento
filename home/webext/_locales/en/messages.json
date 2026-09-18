@@ -542,5 +542,9 @@
   },
   "surveyOnlySeen": {
     "message": "Only documents opened in this browser can be found this way."
+  },
+  "placingFolder": {
+    "message": "Looking for “$1” on disk…",
+    "description": "Toast while the extension probes the disk for where a granted folder lives. $1 is the folder name."
   }
 }

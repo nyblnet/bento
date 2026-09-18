@@ -484,5 +484,8 @@
   },
   "surveyOnlySeen": {
     "message": "Bare dokumenter som er åpnet i denne nettleseren kan finnes slik."
+  },
+  "placingFolder": {
+    "message": "Leter etter «$1» på disken …"
   }
 }

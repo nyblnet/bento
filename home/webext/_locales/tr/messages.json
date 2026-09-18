@@ -484,5 +484,8 @@
   },
   "surveyOnlySeen": {
     "message": "Bu yolla yalnızca bu tarayıcıda açılmış belgeler bulunabilir."
+  },
+  "placingFolder": {
+    "message": "“$1” diskte aranıyor…"
   }
 }

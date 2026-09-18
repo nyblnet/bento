@@ -517,5 +517,8 @@
   },
   "surveyOnlySeen": {
     "message": "Così si trovano solo i documenti aperti in questo browser."
+  },
+  "placingFolder": {
+    "message": "Ricerca di «$1» sul disco…"
   }
 }

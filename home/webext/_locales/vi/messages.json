@@ -484,5 +484,8 @@
   },
   "surveyOnlySeen": {
     "message": "Cách này chỉ tìm được tài liệu đã mở trong trình duyệt này."
+  },
+  "placingFolder": {
+    "message": "Đang tìm “$1” trên ổ đĩa…"
   }
 }

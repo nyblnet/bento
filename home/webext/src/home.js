@@ -15,7 +15,8 @@
 import { getGrants, putGrants, status } from './status.js'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
 import { prefixFor } from './route.js'
-import { learnPrefix, GRANT, get, put } from './db.js'
+import { learnPrefix, prefixes, GRANT, get, put } from './db.js'
+import { placeFolder } from './place.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
   from './i18n.js'
@@ -46,9 +47,47 @@ import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n 
  * `dir.resolve()` agree with the path's own tail. A path that cannot be proven
  * to be inside a granted folder teaches nothing.
  */
+/**
+ * Place every unplaced grant by PROBING THE DISK (place.js): the folder's
+ * name under each likely parent, the bytes of one of its documents compared
+ * at that path, the grant asked to confirm. No permission prompt, no
+ * history, nothing from the person — which is why it runs on its own when
+ * the library loads, and first when they press "Find my folders". A folder
+ * it cannot place is simply left for the history survey and the Finder
+ * route; a folder it can is openable before they have wondered why not.
+ *
+ * Once per folder per page load: the fetches are cheap but not free, and a
+ * folder that is not where the guesses look will not be there a second later.
+ */
+const placed = new Set()
+async function placeFolders({ force = false } = {}) {
+  if (state.fileAccess === false) return 0
+  let learned = 0
+  const known = await prefixes()
+  const grants = await getGrants()
+  for (const dir of grants) {
+    if (known[dir.name] || (!force && placed.has(dir.name))) continue
+    placed.add(dir.name)
+    if (await dir.queryPermission({ mode: 'readwrite' }) !== 'granted') continue
+    // the shallowest document in the grant is the cheapest fingerprint
+    const probe = state.docs.filter((d) => d.folder === dir.name).sort((a, b) => a.rel.length - b.rel.length)[0]
+    if (!probe) continue
+    try {
+      const prefix = await placeFolder(dir, probe, known, { fetch: (u) => fetch(u), prefixFor })
+      if (prefix) { await learnPrefix(dir.name, prefix); known[dir.name] = prefix; learned++ }
+    } catch { /* a guess that cannot be made is not an error */ }
+  }
+  return learned
+}
+
 async function locateFolders() {
+  // The disk first: it needs nothing from the person. History only for what
+  // is still unplaced after that.
+  const fromDisk = await placeFolders({ force: true })
+  await load()
+  if (!state.docs.some((d) => !d.path)) return { learned: fromDisk, declined: false }
   const granted = await chrome.permissions.request({ permissions: ['history'] })
-  if (!granted) return { learned: 0, declined: true }
+  if (!granted) return { learned: fromDisk, declined: fromDisk === 0 }
 
   let learned = 0
   try {
@@ -77,7 +116,7 @@ async function locateFolders() {
     // answered would be taking more than was asked for.
     await chrome.permissions.remove({ permissions: ['history'] }).catch(() => {})
   }
-  return { learned, declined: false }
+  return { learned: learned + fromDisk, declined: false }
 }
 
 /**
@@ -267,6 +306,13 @@ async function load() {
   }))
   renderSidebar()
   renderGrid()
+  // A folder nobody has opened a document from yet: try to place it now,
+  // quietly, and redraw when that works — the cards go from "cannot open"
+  // to open, with nothing asked.
+  if (state.docs.some((d) => !d.path) && await placeFolders()) {
+    await load()
+    await renderNotice()
+  }
 }
 
 // ------------------------------------------------------------------ sidebar
@@ -512,8 +558,10 @@ function renderGrid() {
     // while a document with no path cannot be opened at all. Both used to be a
     // pale card with a grey glyph, so five perfectly good documents read as
     // broken. The states now say which they are, in words.
+    // Not DISABLED: a dead card explains nothing. A click on one says why it
+    // cannot open, tries to place the folder there and then, and points at
+    // the two routes that always work.
     if (!d.path) {
-      card.disabled = true
       card.classList.add('unplaced')
       card.title = t('cardUnplacedTip', d.folder)
     }
@@ -537,10 +585,57 @@ function renderGrid() {
 
     card.addEventListener('click', (ev) => {
       if (ev.target.closest('.more')) { ev.stopPropagation(); openMenu(d, ev); return }
+      if (!d.path) { void explainUnplaced(d); return }
       openDoc(d)
     })
     grid.appendChild(card)
     void decorate(card, d)
+  }
+}
+
+/** A still card from a document's first slide (library.js cardFrom): no scripts, no markup from the file. */
+function titleCard(card) {
+  const el = document.createElement('span')
+  el.className = 'tcard'
+  if (card.bg) el.style.background = card.bg
+  if (card.ink) el.style.color = card.ink
+  const bar = document.createElement('i')
+  if (card.accent) bar.style.background = card.accent
+  el.appendChild(bar)
+  const lines = [...card.lines].sort((a, b) => (b.size || 0) - (a.size || 0))
+  const head = card.lines.find((l) => l.role === 'title') ?? lines[0]
+  if (head) {
+    const h = document.createElement('b')
+    h.textContent = head.text
+    el.appendChild(h)
+  }
+  for (const l of card.lines.filter((x) => x !== head).slice(0, 2)) {
+    const p = document.createElement('span')
+    p.textContent = l.text
+    el.appendChild(p)
+  }
+  return el
+}
+
+/**
+ * A click on a document whose folder has no known place: try the disk once
+ * more, right now, and open it if that works; otherwise say what would.
+ */
+let explaining = false
+async function explainUnplaced(d) {
+  if (explaining) return
+  explaining = true
+  toast(t('placingFolder', d.folder))
+  try {
+    if (await placeFolders({ force: true })) {
+      await load()
+      await renderNotice()
+      const fresh = state.docs.find((x) => x.folder === d.folder && x.rel.join('/') === d.rel.join('/'))
+      if (fresh?.path) { openDoc(fresh); return }
+    }
+    toast(t('cardUnplacedTip', d.folder))
+  } finally {
+    explaining = false
   }
 }
 
@@ -573,10 +668,11 @@ async function decorate(card, d) {
       return
     }
     if (!meta.preview) {
-      // Not a failure, and it should not look like one. A shell has its
-      // page-one render written in on the FIRST SAVE, so a document that has
-      // never been saved — including every one `+ New document` creates — has
-      // nothing to show yet, and says so instead of sitting there blank.
+      // No page-one render (that is written in on the FIRST SAVE) — so a
+      // card is drawn from the document's own first slide: its background,
+      // its words, its theme. Only a document we cannot read at all is left
+      // to say so in words.
+      if (meta.card) { shot.replaceChildren(titleCard(meta.card)); return }
       if (d.path) shot.innerHTML = `<span class="label">${t('notSavedYet')}</span>`
       return
     }

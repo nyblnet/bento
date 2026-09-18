@@ -484,5 +484,8 @@
   },
   "surveyOnlySeen": {
     "message": "Ang mga dokumentong binuksan sa browser na ito lang ang makikita sa paraang ito."
+  },
+  "placingFolder": {
+    "message": "Hinahanap ang “$1” sa disk…"
   }
 }

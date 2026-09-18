@@ -484,5 +484,8 @@
   },
   "surveyOnlySeen": {
     "message": "Näin löytyvät vain tässä selaimessa avatut asiakirjat."
+  },
+  "placingFolder": {
+    "message": "Etsitään kansiota ”$1” levyltä…"
   }
 }

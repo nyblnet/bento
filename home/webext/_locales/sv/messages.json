@@ -484,5 +484,8 @@
   },
   "surveyOnlySeen": {
     "message": "Bara dokument som öppnats i den här webbläsaren kan hittas så här."
+  },
+  "placingFolder": {
+    "message": "Letar efter ”$1” på disken…"
   }
 }

@@ -484,5 +484,8 @@
   },
   "surveyOnlySeen": {
     "message": "Cara ini hanya menemui dokumen yang pernah dibuka dalam pelayar ini."
+  },
+  "placingFolder": {
+    "message": "Mencari “$1” pada cakera…"
   }
 }

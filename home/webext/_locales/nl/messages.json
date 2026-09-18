@@ -484,5 +484,8 @@
   },
   "surveyOnlySeen": {
     "message": "Zo worden alleen documenten gevonden die in deze browser zijn geopend."
+  },
+  "placingFolder": {
+    "message": "Zoeken naar “$1” op de schijf…"
   }
 }

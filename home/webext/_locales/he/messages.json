@@ -484,5 +484,8 @@
   },
   "surveyOnlySeen": {
     "message": "כך אפשר למצוא רק מסמכים שנפתחו בדפדפן הזה."
+  },
+  "placingFolder": {
+    "message": "מחפש את „$1” בדיסק…"
   }
 }

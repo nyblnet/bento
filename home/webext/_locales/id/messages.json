@@ -484,5 +484,8 @@
   },
   "surveyOnlySeen": {
     "message": "Cara ini hanya menemukan dokumen yang pernah dibuka di peramban ini."
+  },
+  "placingFolder": {
+    "message": "Mencari “$1” di disk…"
   }
 }

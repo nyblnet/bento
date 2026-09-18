@@ -13,6 +13,9 @@
   "optional_permissions": [
     "history"
   ],
+  "host_permissions": [
+    "file:///*"
+  ],
   "options_page": "src/home.html#settings",
   "background": {
     "service_worker": "src/background.js",
