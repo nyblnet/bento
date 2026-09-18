@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "تمام ماڈل دکھائیں، صرف چیٹ والے نہیں"
+  },
+  "asstOtherModelRow": {
+    "message": "دیگر…"
+  },
+  "asstOtherModel": {
+    "message": "ماڈل ID، بالکل ویسے جیسے فراہم کنندہ اسے نام دیتا ہے"
+  },
+  "asstBadModel": {
+    "message": "یہ ماڈل ID نہیں ہے: صرف حروف، ہندسے اور . _ : / -"
   }
 }

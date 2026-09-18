@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "Yalnızca sohbet için olanları değil, tüm modelleri göster"
+  },
+  "asstOtherModelRow": {
+    "message": "Diğer…"
+  },
+  "asstOtherModel": {
+    "message": "Model kimliği, sağlayıcının adlandırdığı şekliyle"
+  },
+  "asstBadModel": {
+    "message": "Bu bir model kimliği değil: yalnızca harf, rakam ve . _ : / -"
   }
 }

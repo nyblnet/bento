@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "Hiện tất cả mô hình, không chỉ những mô hình dành cho trò chuyện"
+  },
+  "asstOtherModelRow": {
+    "message": "Khác…"
+  },
+  "asstOtherModel": {
+    "message": "ID mô hình, đúng như nhà cung cấp đặt tên"
+  },
+  "asstBadModel": {
+    "message": "Đó không phải ID mô hình: chỉ gồm chữ cái, chữ số và . _ : / -"
   }
 }

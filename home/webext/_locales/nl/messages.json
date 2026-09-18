@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "Alle modellen tonen, niet alleen die voor chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Anders…"
+  },
+  "asstOtherModel": {
+    "message": "Model-id, precies zoals de aanbieder het noemt"
+  },
+  "asstBadModel": {
+    "message": "Dat is geen model-id: alleen letters, cijfers en . _ : / -"
   }
 }

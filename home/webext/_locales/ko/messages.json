@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "채팅용만이 아니라 모든 모델 표시"
+  },
+  "asstOtherModelRow": {
+    "message": "기타…"
+  },
+  "asstOtherModel": {
+    "message": "제공자가 이름 붙인 그대로의 모델 ID"
+  },
+  "asstBadModel": {
+    "message": "모델 ID가 아닙니다. 영문자, 숫자, . _ : / - 만 쓸 수 있습니다."
   }
 }

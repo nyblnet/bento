@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "הצגת כל המודלים, לא רק אלה לצ'אט"
+  },
+  "asstOtherModelRow": {
+    "message": "אחר…"
+  },
+  "asstOtherModel": {
+    "message": "מזהה המודל, בדיוק כפי שהספק קורא לו"
+  },
+  "asstBadModel": {
+    "message": "זה לא מזהה מודל: רק אותיות, ספרות ו־. _ : / -"
   }
 }

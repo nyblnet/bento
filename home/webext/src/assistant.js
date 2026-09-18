@@ -244,6 +244,35 @@ export async function select(raw, payload, env) {
   return { ok: true, store: withProvider(raw, cfg) }
 }
 
+/** A token count the way a picker shows it beside a model: 1M, 200k, 6k. */
+export function shortTokens(n) {
+  if (!Number.isFinite(n) || n <= 0) return ''
+  if (n >= 1_000_000) return `${Math.round(n / 100_000) / 10}M`
+  return `${Math.round(n / 1000)}k`
+}
+
+/**
+ * The rows of the Settings model picker for one provider: the configured
+ * model, the pinned picks, then the curated (or full) listing — each with
+ * its window as a label — and whether the configured model came from the
+ * listing at all (when not, the picker shows it as its own row anyway: an
+ * id the person typed is still the model).
+ */
+export function pickerRows(cfg, listing) {
+  const rows = []
+  const seen = new Set()
+  const add = (id) => {
+    if (!id || seen.has(id) || !MODEL_RE.test(id)) return
+    seen.add(id)
+    const tokens = contextTokensOf({ ...cfg, model: id, contextTokens: id === cfg.model ? cfg.contextTokens : undefined }, listing)
+    rows.push({ id, label: tokens ? `${id} · ${shortTokens(tokens)}` : id })
+  }
+  add(cfg.model)
+  for (const id of cfg.pinned || []) add(id)
+  for (const m of curateModels(cfg.provider, listing || [], { all: cfg.showAll })) add(m.id)
+  return rows
+}
+
 /** Where a listing is cached: the provider and the endpoint, never the key. */
 export const modelsKey = (cfg) => `${cfg.provider}|${cfg.baseUrl || ''}`
 

@@ -20,9 +20,9 @@ import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAuto
 import {
   CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PROVIDERS, normalizeConfig, builtinAvailability,
   check as checkAssistant, permissionOriginOf, listModels, modelsKey, contextTokensOf, builtinContext,
-  activeConfig, providerConfig, withProvider,
+  activeConfig, providerConfig, withProvider, pickerRows, MODEL_RE,
 } from './assistant.js'
-import { DEFAULTS as PROVIDER_DEFAULTS, pickDefault, curateModels } from './providers.js'
+import { DEFAULTS as PROVIDER_DEFAULTS, pickDefault } from './providers.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
   from './i18n.js'
 
@@ -1424,20 +1424,38 @@ async function assistantSettings(section) {
   baseUrl.autocomplete = 'off'
   const baseRow = field(t('asstBaseUrl'), baseUrl)
 
-  // The model: free text, with the provider's own list as suggestions once a
-  // key has been checked — so an id the list does not carry still works, and
-  // the default is chosen by RULE from the list (providers.js pickDefault)
-  // rather than by a name that is stale in a season.
-  const model = document.createElement('input')
-  model.type = 'text'
-  model.spellcheck = false
-  model.autocomplete = 'off'
-  const modelList = document.createElement('datalist')
-  modelList.id = 'asst-models'
-  model.setAttribute('list', modelList.id)
+  // The model: a PICKER over the curated listing (assistant.js pickerRows —
+  // the same rows the page's own picker gets), with an "Other…" row that
+  // reveals a free-text field for an id the listing does not carry. It was a
+  // <datalist>, which is autocomplete, not a picker: with an id typed it
+  // suggested only the ids starting with it, and the other ten were invisible
+  // until the field was cleared. Before the first listing the picker holds
+  // the default and Other…; the default is chosen by RULE from the list
+  // (providers.js pickDefault) rather than by a name that is stale in a
+  // season.
+  const OTHER = '\u0000other'
+  const model = document.createElement('select')
   const modelRow = field(t('asstModel'), model)
-  modelRow.appendChild(modelList)
+  const other = document.createElement('input')
+  other.type = 'text'
+  other.spellcheck = false
+  other.autocomplete = 'off'
+  other.placeholder = t('asstOtherModel')
+  other.hidden = true
+  modelRow.appendChild(other)
   const modelNote = modelRow.appendChild(document.createElement('small'))
+  /** The id the two controls currently mean. */
+  const modelId = () => (model.value === OTHER ? other.value.trim() : model.value)
+  /** Fill the picker for a configuration and select its model (as Other… when unlisted). */
+  const fillPicker = (c, listing) => {
+    const rows = pickerRows(c, listing)
+    model.replaceChildren(
+      ...rows.map((r) => Object.assign(document.createElement('option'), { value: r.id, textContent: r.label })),
+      Object.assign(document.createElement('option'), { value: OTHER, textContent: t('asstOtherModelRow') }),
+    )
+    if (c.model && rows.some((r) => r.id === c.model)) { model.value = c.model; other.hidden = true; other.value = '' }
+    else { model.value = OTHER; other.hidden = false; other.value = c.model || '' }
+  }
 
   // The input window in tokens: what the page sizes every turn to. Shown
   // from the listing or the family table; typed here to override both,
@@ -1478,7 +1496,7 @@ async function assistantSettings(section) {
   form.appendChild(actions)
 
   const current = () => normalizeConfig({
-    provider: provider.value, baseUrl: baseUrl.value, model: model.value, key: key.value,
+    provider: provider.value, baseUrl: baseUrl.value, model: modelId(), key: key.value,
     contextTokens: ctx.value.replace(/[^0-9]/g, ''),
     showAll: showAll.checked, pinned: perProvider[provider.value]?.pinned,
   }, hasBuiltin)
@@ -1488,9 +1506,7 @@ async function assistantSettings(section) {
   /** The suggestions and the window note, from what is cached for this provider+endpoint. */
   const showModels = async (c = current()) => {
     const models = (await cachedModels(c)) || []
-    const shown = curateModels(c.provider, models, { all: c.showAll })
-    const ids = [...(c.pinned || []), ...shown.map((m) => m.id).filter((id) => !(c.pinned || []).includes(id))]
-    modelList.replaceChildren(...ids.map((id) => Object.assign(document.createElement('option'), { value: id })))
+    fillPicker(c, models)
     const tokens = contextTokensOf(c, models)
     ctx.placeholder = tokens ? String(tokens) : ''
     modelNote.textContent = c.model && tokens ? t('asstContextKnown', tokens.toLocaleString()) : ''
@@ -1510,10 +1526,9 @@ async function assistantSettings(section) {
     const pick = pickDefault(c.provider, models)
     const listed = models.some((m) => m.id === c.model)
     if (pick && (c.model === PROVIDER_DEFAULTS[c.provider]?.model || !listed) && pick !== c.model) {
-      model.value = pick
-      perProvider[c.provider] = current()
+      perProvider[c.provider] = { ...c, model: pick }
     }
-    await showModels(current())
+    await showModels(perProvider[c.provider] ?? current())
   }
 
   // The built-in model: what Chrome says about it, and the one action that
@@ -1541,7 +1556,6 @@ async function assistantSettings(section) {
       : a === 'downloadable' ? t('asstBuiltinDownload')
       : a === 'downloading' ? t('asstBuiltinDownloading')
       : t('asstBuiltinUnsupported')
-    modelList.replaceChildren()
     modelNote.textContent = ''
     if (a !== 'available') { ctx.placeholder = ''; return }
     // The quota lives on a session; read once and kept (background.js does
@@ -1584,8 +1598,7 @@ async function assistantSettings(section) {
     download.hidden = requirements.hidden = true
     baseUrl.value = http ? c.baseUrl : ''
     baseUrl.placeholder = PROVIDER_DEFAULTS[p]?.baseUrl ?? ''
-    model.value = http ? c.model : ''
-    model.placeholder = PROVIDER_DEFAULTS[p]?.model ?? ''
+    if (http) fillPicker(c, [])
     key.value = http ? c.key : ''
     keyHint.textContent = p === 'openai' ? t('asstKeyOptional') : ''
     ctx.value = c.contextTokens ? String(c.contextTokens) : ''
@@ -1597,11 +1610,17 @@ async function assistantSettings(section) {
     else void showBuiltinState()
   }
   provider.addEventListener('change', fill)
-  for (const input of [baseUrl, model, key, ctx]) {
+  for (const input of [baseUrl, other, key, ctx]) {
     input.addEventListener('input', () => { perProvider[provider.value] = current() })
   }
   showAll.addEventListener('change', () => { perProvider[provider.value] = current(); void showModels() })
-  model.addEventListener('change', () => { void showModels() })
+  model.addEventListener('change', () => {
+    other.hidden = model.value !== OTHER
+    if (model.value === OTHER) { other.focus(); return }
+    perProvider[provider.value] = current()
+    void showModels()
+  })
+  other.addEventListener('change', () => { void showModels() })
   fill()
 
   /**
@@ -1623,6 +1642,7 @@ async function assistantSettings(section) {
   // status line these write is the thing the person is waiting to read.
   save.onclick = async () => {
     const c = current()
+    if (c.provider !== 'builtin' && !MODEL_RE.test(c.model)) { status.textContent = t('asstBadModel'); other.focus(); return }
     try {
       // Every provider's fields are kept; this one becomes active.
       const raw = (await chrome.storage.local.get(CONFIG_KEY))?.[CONFIG_KEY]

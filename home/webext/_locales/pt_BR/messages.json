@@ -637,5 +637,14 @@
   },
   "asstShowAll": {
     "message": "Mostrar todos os modelos, não só os de chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Outro…"
+  },
+  "asstOtherModel": {
+    "message": "ID do modelo, exatamente como o provedor o nomeia"
+  },
+  "asstBadModel": {
+    "message": "Isso não é um ID de modelo: só letras, dígitos e . _ : / -"
   }
 }

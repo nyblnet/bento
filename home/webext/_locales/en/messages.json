@@ -702,5 +702,17 @@
   "asstShowAll": {
     "message": "Show all models, not just the ones for chat",
     "description": "Assistant settings: checkbox that turns off the chat-only model filter for the chosen provider."
+  },
+  "asstOtherModelRow": {
+    "message": "Other…",
+    "description": "Assistant settings: the last row of the model picker, which reveals a text field for an unlisted model id."
+  },
+  "asstOtherModel": {
+    "message": "Model id, exactly as the provider names it",
+    "description": "Assistant settings: placeholder of the free-text model field."
+  },
+  "asstBadModel": {
+    "message": "That is not a model id: letters, digits and . _ : / - only.",
+    "description": "Assistant settings: shown when the typed model id has characters a model id cannot have."
   }
 }

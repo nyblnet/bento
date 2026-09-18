@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "إظهار كل النماذج، لا نماذج المحادثة فقط"
+  },
+  "asstOtherModelRow": {
+    "message": "أخرى…"
+  },
+  "asstOtherModel": {
+    "message": "معرّف النموذج كما يسمّيه المزوّد تمامًا"
+  },
+  "asstBadModel": {
+    "message": "هذا ليس معرّف نموذج: أحرف وأرقام و . _ : / - فقط."
   }
 }

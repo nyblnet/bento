@@ -637,5 +637,14 @@
   },
   "asstShowAll": {
     "message": "Afficher tous les modèles, pas seulement ceux pour le chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Autre…"
+  },
+  "asstOtherModel": {
+    "message": "Identifiant du modèle, exactement comme le fournisseur le nomme"
+  },
+  "asstBadModel": {
+    "message": "Ce n’est pas un identifiant de modèle : lettres, chiffres et . _ : / - uniquement."
   }
 }

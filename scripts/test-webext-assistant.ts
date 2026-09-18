@@ -804,5 +804,27 @@ console.log('\n— curation: what the picker shows')
   ok(asst.normalizeConfig({ provider: 'gemini', pinned: Array.from({ length: 20 }, (_, i) => `m${i}`).concat(['bad id']) }, false).pinned!.length === asst.PINNED_MAX, 'normalizeConfig: pinned is bounded and shaped')
 }
 
+console.log('\n— the Settings model picker')
+{
+  const { parseModels } = providers
+  const g = (name: string) => ({ name: `models/${name}`, supportedGenerationMethods: ['generateContent'], inputTokenLimit: 1048576 })
+  const listing = parseModels('gemini', { models: [g('gemini-3.8-flash'), g('gemini-3.8-pro'), g('gemini-3.8-flash-lite'), g('gemini-3-flash'), g('gemini-2.5-flash-preview-tts'), g('gemini-embedding-001')] })
+  const cfg = asst.normalizeConfig({ provider: 'gemini', key: 'K', model: 'gemini-3.8-flash', pinned: ['gemini-3-flash'] }, false)
+  const rows = asst.pickerRows(cfg, listing)
+  ok(rows.map((r) => r.id).join() === 'gemini-3.8-flash,gemini-3-flash,gemini-3.8-pro,gemini-3.8-flash-lite', 'pickerRows: configured first, pinned next, then the curated cut — tts and embeddings absent')
+  ok(rows[0].label === 'gemini-3.8-flash · 1M', 'pickerRows: the window beside each id, the way the page shows it')
+  ok(asst.shortTokens(1048576) === '1M' && asst.shortTokens(200000) === '200k' && asst.shortTokens(6144) === '6k' && asst.shortTokens(400000) === '400k', 'shortTokens: 1M / 200k / 6k / 400k')
+  const typed = asst.pickerRows(asst.normalizeConfig({ provider: 'gemini', key: 'K', model: 'my-tuned-model' }, false), listing)
+  ok(typed[0].id === 'my-tuned-model' && typed.length === 5, 'pickerRows: an unlisted (typed) model is still a row, first')
+  const fresh = asst.pickerRows(asst.normalizeConfig({ provider: 'gemini', key: 'K' }, false), [])
+  ok(fresh.length === 1 && fresh[0].id === providers.DEFAULTS.gemini.model, 'pickerRows: before the first listing, just the default (the form adds Other…)')
+  const all = asst.pickerRows(asst.normalizeConfig({ provider: 'gemini', key: 'K', model: 'gemini-3.8-flash', showAll: true }, false), listing)
+  ok(all.length === listing.length, 'pickerRows: show-all refills with the whole listing')
+  const home = read('src/home.js')
+  ok(!/createElement\('datalist'\)/.test(home), 'Settings: the datalist is gone')
+  ok(/const model = document\.createElement\('select'\)/.test(home) && /asstOtherModelRow/.test(home) && /other\.hidden = model\.value !== OTHER/.test(home), 'Settings: the model is a <select> whose Other… row reveals the free-text field')
+  ok(/MODEL_RE\.test\(c\.model\)/.test(home), 'Settings: an Other… id is validated by MODEL_RE before it is saved')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

@@ -637,5 +637,14 @@
   },
   "asstShowAll": {
     "message": "顯示所有模型，而不只是適合聊天的"
+  },
+  "asstOtherModelRow": {
+    "message": "其他……"
+  },
+  "asstOtherModel": {
+    "message": "模型 ID，與提供者的命名完全一致"
+  },
+  "asstBadModel": {
+    "message": "這不是模型 ID：只能包含字母、數字和 . _ : / -"
   }
 }

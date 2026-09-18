@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "Näytä kaikki mallit, ei vain keskusteluun tarkoitetut"
+  },
+  "asstOtherModelRow": {
+    "message": "Muu…"
+  },
+  "asstOtherModel": {
+    "message": "Mallin tunnus täsmälleen palveluntarjoajan nimeämänä"
+  },
+  "asstBadModel": {
+    "message": "Tuo ei ole mallin tunnus: vain kirjaimia, numeroita ja . _ : / -"
   }
 }

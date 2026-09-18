@@ -637,5 +637,14 @@
   },
   "asstShowAll": {
     "message": "チャット用だけでなく、すべてのモデルを表示"
+  },
+  "asstOtherModelRow": {
+    "message": "その他…"
+  },
+  "asstOtherModel": {
+    "message": "プロバイダーが命名しているとおりのモデル ID"
+  },
+  "asstBadModel": {
+    "message": "モデル ID ではありません。使えるのは英数字と . _ : / - だけです。"
   }
 }

@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "Pokaż wszystkie modele, nie tylko te do czatu"
+  },
+  "asstOtherModelRow": {
+    "message": "Inny…"
+  },
+  "asstOtherModel": {
+    "message": "Identyfikator modelu dokładnie taki, jak nazywa go dostawca"
+  },
+  "asstBadModel": {
+    "message": "To nie jest identyfikator modelu: tylko litery, cyfry i . _ : / -"
   }
 }

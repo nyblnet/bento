@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "Vis alle modeller, ikke bare de for chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Annen …"
+  },
+  "asstOtherModel": {
+    "message": "Modell-ID, nøyaktig slik leverandøren kaller den"
+  },
+  "asstBadModel": {
+    "message": "Det er ikke en modell-ID: bare bokstaver, sifre og . _ : / -"
   }
 }

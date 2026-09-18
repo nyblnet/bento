@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "Tampilkan semua model, bukan hanya yang untuk obrolan"
+  },
+  "asstOtherModelRow": {
+    "message": "Lainnya…"
+  },
+  "asstOtherModel": {
+    "message": "ID model, persis seperti yang dinamai penyedia"
+  },
+  "asstBadModel": {
+    "message": "Itu bukan ID model: hanya huruf, angka, dan . _ : / -"
   }
 }

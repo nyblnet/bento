@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "Ipakita ang lahat ng modelo, hindi lang ang para sa chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Iba pa…"
+  },
+  "asstOtherModel": {
+    "message": "Model id, eksakto kung paano ito pinangalanan ng provider"
+  },
+  "asstBadModel": {
+    "message": "Hindi iyan model id: mga letra, numero at . _ : / - lang."
   }
 }

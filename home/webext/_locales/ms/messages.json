@@ -604,5 +604,14 @@
   },
   "asstShowAll": {
     "message": "Tunjukkan semua model, bukan hanya yang untuk sembang"
+  },
+  "asstOtherModelRow": {
+    "message": "Lain-lain…"
+  },
+  "asstOtherModel": {
+    "message": "ID model, tepat seperti yang dinamakan pembekal"
+  },
+  "asstBadModel": {
+    "message": "Itu bukan ID model: hanya huruf, digit dan . _ : / -"
   }
 }
