@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "संदर्भ विंडो: $1 टोकन"
+  },
+  "asstShowAll": {
+    "message": "सभी मॉडल दिखाएँ, केवल चैट वाले नहीं"
   }
 }

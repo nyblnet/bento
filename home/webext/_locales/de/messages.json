@@ -634,5 +634,8 @@
   },
   "asstContextKnown": {
     "message": "Kontextfenster: $1 Tokens"
+  },
+  "asstShowAll": {
+    "message": "Alle Modelle anzeigen, nicht nur die für Chat"
   }
 }

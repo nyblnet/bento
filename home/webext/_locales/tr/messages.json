@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "Bağlam penceresi: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Yalnızca sohbet için olanları değil, tüm modelleri göster"
   }
 }

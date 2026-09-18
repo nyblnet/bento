@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "Kontextfönster: $1 tokens"
+  },
+  "asstShowAll": {
+    "message": "Visa alla modeller, inte bara de för chatt"
   }
 }

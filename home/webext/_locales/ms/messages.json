@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "Tetingkap konteks: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Tunjukkan semua model, bukan hanya yang untuk sembang"
   }
 }

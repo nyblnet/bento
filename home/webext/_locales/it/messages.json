@@ -634,5 +634,8 @@
   },
   "asstContextKnown": {
     "message": "Finestra di contesto: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Mostra tutti i modelli, non solo quelli per la chat"
   }
 }

@@ -634,5 +634,8 @@
   },
   "asstContextKnown": {
     "message": "Fenêtre de contexte : $1 jetons"
+  },
+  "asstShowAll": {
+    "message": "Afficher tous les modèles, pas seulement ceux pour le chat"
   }
 }

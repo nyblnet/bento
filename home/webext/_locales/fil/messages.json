@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "Context window: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Ipakita ang lahat ng modelo, hindi lang ang para sa chat"
   }
 }

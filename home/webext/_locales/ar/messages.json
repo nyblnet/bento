@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "نافذة السياق: $1 رمز"
+  },
+  "asstShowAll": {
+    "message": "إظهار كل النماذج، لا نماذج المحادثة فقط"
   }
 }

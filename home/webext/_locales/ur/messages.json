@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "سیاق ونڈو: $1 ٹوکن"
+  },
+  "asstShowAll": {
+    "message": "تمام ماڈل دکھائیں، صرف چیٹ والے نہیں"
   }
 }

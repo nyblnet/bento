@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "Okno kontekstu: $1 tokenów"
+  },
+  "asstShowAll": {
+    "message": "Pokaż wszystkie modele, nie tylko te do czatu"
   }
 }

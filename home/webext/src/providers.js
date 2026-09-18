@@ -129,6 +129,60 @@ export function contextOf(id, models) {
   return Number.isFinite(hit?.contextTokens) ? hit.contextTokens : familyContext(id)
 }
 
+/** What a provider's listing is cut down to for a picker; the configured model is added on top. */
+export const CURATED_MAX = 12
+
+const CHAT = {
+  openai: {
+    keep: /^(gpt-|o\d|chatgpt-)/,
+    drop: /embedding|whisper|tts|dall-e|realtime|audio|transcribe|moderation|babbage|davinci|instruct|search|image|codex|computer-use/,
+  },
+  anthropic: { keep: /^claude-/, drop: /$^/ },
+  gemini: {
+    keep: /^gemini-/,
+    drop: /tts|image|embedding|audio|live|veo|imagen|aqa|learnlm|robotics|computer-use|native-audio|dialog/,
+  },
+}
+const DATED = /-(\d{4}-\d{2}-\d{2}|\d{8}|\d{3,4})$/
+const TRIAL = /-(preview|exp)(-|$)/
+
+/**
+ * The entries of a listing that can answer a chat turn with text — by name,
+ * since none of the APIs classifies further than Gemini's generation
+ * methods — with dated snapshots folded into their undated alias and
+ * preview/experimental builds kept only when nothing else is left.
+ */
+export function chatModels(provider, models) {
+  const rule = CHAT[provider]
+  if (!rule) return []
+  const all = (models || []).filter((m) => m && typeof m.id === 'string' && rule.keep.test(m.id) && !rule.drop.test(m.id))
+  const ids = new Set(all.map((m) => m.id))
+  const undated = all.filter((m) => !(DATED.test(m.id) && ids.has(m.id.replace(DATED, ''))))
+  const stable = undated.filter((m) => !TRIAL.test(m.id))
+  return stable.length ? stable : undated
+}
+
+/** The tier a picker sorts within a version: mid (flash/mini/sonnet/luna) first, then full (pro/opus/sol), then small (lite/nano). */
+const tierOf = (id) => /flash-lite|-nano(-|$)|-lite(-|$)/.test(id) ? 0
+  : /flash|-mini(-|$)|sonnet|-luna(-|$)/.test(id) ? 2
+  : /haiku/.test(id) ? 0
+  : 1
+
+/**
+ * A listing as a picker should show it: chat models only, newest version
+ * first, mid tier before full before small within a version, and no more
+ * than CURATED_MAX — unless `all`, which keeps everything the listing said
+ * (still chat-sorted, uncapped) for the person who wants an exotic one.
+ */
+export function curateModels(provider, models, { all = false } = {}) {
+  const pool = all ? (models || []).filter((m) => m && typeof m.id === 'string') : chatModels(provider, models)
+  const sorted = [...pool].sort((a, b) => modelVersion(b.id) - modelVersion(a.id)
+    || tierOf(b.id) - tierOf(a.id)
+    || (b.created ?? 0) - (a.created ?? 0)
+    || a.id.localeCompare(b.id))
+  return all ? sorted : sorted.slice(0, CURATED_MAX)
+}
+
 /**
  * The recommended model out of a listing, by RULE: general-purpose chat
  * models only (no audio/image/embedding/realtime/dated snapshots), the

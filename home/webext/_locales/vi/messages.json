@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "Cửa sổ ngữ cảnh: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Hiện tất cả mô hình, không chỉ những mô hình dành cho trò chuyện"
   }
 }

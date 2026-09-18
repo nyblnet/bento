@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "Jendela konteks: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Tampilkan semua model, bukan hanya yang untuk obrolan"
   }
 }

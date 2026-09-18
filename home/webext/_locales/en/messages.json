@@ -698,5 +698,9 @@
   "asstContextKnown": {
     "message": "Context window: $1 tokens",
     "description": "Assistant settings: the known input window of the chosen model. $1 is a formatted number."
+  },
+  "asstShowAll": {
+    "message": "Show all models, not just the ones for chat",
+    "description": "Assistant settings: checkbox that turns off the chat-only model filter for the chosen provider."
   }
 }

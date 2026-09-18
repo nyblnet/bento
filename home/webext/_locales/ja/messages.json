@@ -634,5 +634,8 @@
   },
   "asstContextKnown": {
     "message": "コンテキストウィンドウ: $1 トークン"
+  },
+  "asstShowAll": {
+    "message": "チャット用だけでなく、すべてのモデルを表示"
   }
 }

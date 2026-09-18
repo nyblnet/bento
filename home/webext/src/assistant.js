@@ -31,7 +31,7 @@
 // argument so scripts/test-webext-assistant.ts can drive the real code with a
 // fake fetch and a fake storage. background.js supplies the real ones.
 
-import { DEFAULTS, describeHost, hostPortOf, shapeRequest, shapeCheck, shapeModels, parseModels, contextOf, errorFrom, streamReply, iterateBody, originOf } from './providers.js'
+import { DEFAULTS, describeHost, hostPortOf, shapeRequest, shapeCheck, shapeModels, parseModels, contextOf, curateModels, errorFrom, streamReply, iterateBody, originOf } from './providers.js'
 
 /** `chrome.storage.local` keys. */
 export const CONFIG_KEY = 'assistant'
@@ -117,8 +117,15 @@ export function normalizeConfig(raw, hasBuiltin) {
   // unless it is a whole number in the range the page accepts.
   const ct = Number(c.contextTokens)
   if (Number.isInteger(ct) && ct >= 1000 && ct <= 10_000_000) out.contextTokens = ct
+  // Picker preferences, per provider: the full listing instead of the
+  // curated one, and the models actually chosen from the page (newest first).
+  if (c.showAll === true) out.showAll = true
+  if (Array.isArray(c.pinned)) out.pinned = c.pinned.filter((id) => typeof id === 'string' && MODEL_RE.test(id)).slice(0, 8)
   return out
 }
+
+/** How many picked models a provider remembers at the top of its group. */
+export const PINNED_MAX = 8
 
 /**
  * The stored shape: `{ active, providers: { [provider]: { baseUrl, model,
@@ -192,7 +199,13 @@ export async function models(raw, env) {
     if (!httpConfigured(cfg)) continue
     const host = describeHost(cfg)
     const listed = (await env.models?.(cfg)) || []
-    const ids = [cfg.model, ...listed.map((m) => m.id).filter((id) => id !== cfg.model)]
+    // The configured model, then what the person picked before, then the
+    // curated listing (or all of it, when Settings says so) — deduplicated.
+    const ids = []
+    const add = (id) => { if (!ids.includes(id)) ids.push(id) }
+    add(cfg.model)
+    for (const id of cfg.pinned || []) add(id)
+    for (const m of curateModels(provider, listed, { all: cfg.showAll })) add(m.id)
     for (const id of ids) {
       if (out.length >= MODELS_MAX) break
       if (!MODEL_RE.test(id)) continue
@@ -226,6 +239,8 @@ export async function select(raw, payload, env) {
   }
   const cfg = { ...providerConfig(raw, provider, hasBuiltin), model }
   if (!httpConfigured(cfg)) return { ok: false, reason: env.t('asstNotConfigured') }
+  // A model chosen from the page floats to the top of its group next time.
+  cfg.pinned = [model, ...(cfg.pinned || []).filter((id) => id !== model)].slice(0, PINNED_MAX)
   return { ok: true, store: withProvider(raw, cfg) }
 }
 

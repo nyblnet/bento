@@ -634,5 +634,8 @@
   },
   "asstContextKnown": {
     "message": "上下文視窗：$1 個 token"
+  },
+  "asstShowAll": {
+    "message": "顯示所有模型，而不只是適合聊天的"
   }
 }

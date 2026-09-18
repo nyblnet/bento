@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "컨텍스트 윈도: $1 토큰"
+  },
+  "asstShowAll": {
+    "message": "채팅용만이 아니라 모든 모델 표시"
   }
 }

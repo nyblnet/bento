@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "Kontekstin ikkuna: $1 tokenia"
+  },
+  "asstShowAll": {
+    "message": "Näytä kaikki mallit, ei vain keskusteluun tarkoitetut"
   }
 }

@@ -634,5 +634,8 @@
   },
   "asstContextKnown": {
     "message": "Janela de contexto: $1 tokens"
+  },
+  "asstShowAll": {
+    "message": "Mostrar todos os modelos, não só os de chat"
   }
 }

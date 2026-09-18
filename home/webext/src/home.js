@@ -22,7 +22,7 @@ import {
   check as checkAssistant, permissionOriginOf, listModels, modelsKey, contextTokensOf, builtinContext,
   activeConfig, providerConfig, withProvider,
 } from './assistant.js'
-import { DEFAULTS as PROVIDER_DEFAULTS, pickDefault } from './providers.js'
+import { DEFAULTS as PROVIDER_DEFAULTS, pickDefault, curateModels } from './providers.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
   from './i18n.js'
 
@@ -1448,6 +1448,16 @@ async function assistantSettings(section) {
   ctx.autocomplete = 'off'
   const ctxRow = field(t('asstContext'), ctx, t('asstContextHint'))
 
+  // The listing is long and most of it is not for chat (TTS, embeddings,
+  // video…); both this form and the page's picker show the curated cut
+  // (providers.js curateModels) unless this is on for the provider.
+  const showAllRow = document.createElement('label')
+  showAllRow.className = 'check'
+  const showAll = document.createElement('input')
+  showAll.type = 'checkbox'
+  showAllRow.append(showAll, document.createTextNode(` ${t('asstShowAll')}`))
+  form.appendChild(showAllRow)
+
   const key = document.createElement('input')
   key.type = 'password'
   key.autocomplete = 'off'
@@ -1470,6 +1480,7 @@ async function assistantSettings(section) {
   const current = () => normalizeConfig({
     provider: provider.value, baseUrl: baseUrl.value, model: model.value, key: key.value,
     contextTokens: ctx.value.replace(/[^0-9]/g, ''),
+    showAll: showAll.checked, pinned: perProvider[provider.value]?.pinned,
   }, hasBuiltin)
 
   const cachedModels = async (c) => (await chrome.storage.local.get(MODELS_KEY))?.[MODELS_KEY]?.[modelsKey(c)]?.models
@@ -1477,7 +1488,9 @@ async function assistantSettings(section) {
   /** The suggestions and the window note, from what is cached for this provider+endpoint. */
   const showModels = async (c = current()) => {
     const models = (await cachedModels(c)) || []
-    modelList.replaceChildren(...models.map((m) => Object.assign(document.createElement('option'), { value: m.id })))
+    const shown = curateModels(c.provider, models, { all: c.showAll })
+    const ids = [...(c.pinned || []), ...shown.map((m) => m.id).filter((id) => !(c.pinned || []).includes(id))]
+    modelList.replaceChildren(...ids.map((id) => Object.assign(document.createElement('option'), { value: id })))
     const tokens = contextTokensOf(c, models)
     ctx.placeholder = tokens ? String(tokens) : ''
     modelNote.textContent = c.model && tokens ? t('asstContextKnown', tokens.toLocaleString()) : ''
@@ -1577,6 +1590,8 @@ async function assistantSettings(section) {
     keyHint.textContent = p === 'openai' ? t('asstKeyOptional') : ''
     ctx.value = c.contextTokens ? String(c.contextTokens) : ''
     ctxRow.hidden = false
+    showAll.checked = !!c.showAll
+    showAllRow.hidden = !http
     status.textContent = ''
     if (http) void showModels(c)
     else void showBuiltinState()
@@ -1585,6 +1600,7 @@ async function assistantSettings(section) {
   for (const input of [baseUrl, model, key, ctx]) {
     input.addEventListener('input', () => { perProvider[provider.value] = current() })
   }
+  showAll.addEventListener('change', () => { perProvider[provider.value] = current(); void showModels() })
   model.addEventListener('change', () => { void showModels() })
   fill()
 

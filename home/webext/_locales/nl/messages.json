@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "Contextvenster: $1 tokens"
+  },
+  "asstShowAll": {
+    "message": "Alle modellen tonen, niet alleen die voor chat"
   }
 }

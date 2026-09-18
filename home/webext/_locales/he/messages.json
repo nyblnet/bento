@@ -601,5 +601,8 @@
   },
   "asstContextKnown": {
     "message": "חלון הקשר: $1 טוקנים"
+  },
+  "asstShowAll": {
+    "message": "הצגת כל המודלים, לא רק אלה לצ'אט"
   }
 }

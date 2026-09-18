@@ -725,9 +725,9 @@ console.log('\n— assistant.models / assistant.select: the page\'s picker')
   const unkeyed = await asst.models({ active: 'gemini', providers: { gemini: { model: 'g' }, anthropic: {} } }, noList)
   ok(unkeyed.length === 1 && unkeyed[0].provider === 'builtin', 'models: a provider without its key is not offered')
   ok((await asst.models({ active: 'openai', providers: { openai: { model: 'local-llama', baseUrl: 'http://localhost:11434/v1' } } }, { ...noList, LanguageModel: undefined })).length === 1, 'models: a local OpenAI-compatible endpoint needs no key and is offered')
-  const many = { active: 'openai', providers: { openai: { model: 'a', key: 'K' } } }
+  const many = { active: 'openai', providers: { openai: { model: 'gpt-5.6-luna', key: 'K', showAll: true } } }
   const big = await asst.models(many, { ...noList, LanguageModel: undefined, models: async () => Array.from({ length: 500 }, (_, i) => ({ id: `m${i}` })) })
-  ok(big.length === asst.MODELS_MAX, 'models: capped at what the page reads')
+  ok(big.length === asst.MODELS_MAX, 'models: even with show-all on, capped at what the page reads')
 
   // select
   const sel = await asst.select(raw, { provider: 'gemini', model: 'gemini-3.8-pro' }, withList)
@@ -750,6 +750,58 @@ console.log('\n— assistant.models / assistant.select: the page\'s picker')
   ok(listed.ok === true && Array.isArray(listed.models) && listed.models.some((x: any) => x.provider === 'gemini' && x.model === 'gemini-3.8-pro' && x.current === true), 'assistant.models over sendMessage: the selected route is current')
   const bad = await bg.assistantOp('assistant.select', FILE, { provider: 'anthropic', model: 'claude-sonnet-5' })
   ok(bad.ok === false && (store[asst.CONFIG_KEY] as any).active === 'gemini', 'assistant.select refused leaves the store as it was')
+}
+
+console.log('\n— curation: what the picker shows')
+{
+  const { chatModels, curateModels, CURATED_MAX, parseModels } = providers
+  // a Gemini listing the way the API returns it: 40 entries, most of them not for chat
+  const g = (name: string, extra: any = {}) => ({ name: `models/${name}`, supportedGenerationMethods: ['generateContent'], inputTokenLimit: 1048576, ...extra })
+  const raw = { models: [
+    g('gemini-3.8-flash'), g('gemini-3.8-pro'), g('gemini-3.8-flash-lite'), g('gemini-3.8-flash-preview'), g('gemini-3.8-flash-001'),
+    g('gemini-3-flash'), g('gemini-3-pro'), g('gemini-3-pro-preview'), g('gemini-3-flash-lite'),
+    g('gemini-2.5-flash'), g('gemini-2.5-pro'), g('gemini-2.5-flash-lite'), g('gemini-2.5-flash-preview-05-20'), g('gemini-2.5-pro-exp'),
+    g('gemini-2.0-flash'), g('gemini-2.0-flash-001'), g('gemini-2.0-flash-lite'), g('gemini-2.0-pro-exp'), g('gemini-2.0-flash-exp'),
+    g('gemini-1.5-flash'), g('gemini-1.5-pro'), g('gemini-1.5-flash-8b'), g('gemini-1.5-flash-001'), g('gemini-1.5-pro-002'),
+    g('gemini-2.5-flash-preview-tts'), g('gemini-2.5-pro-preview-tts'), g('gemini-2.0-flash-preview-image-generation'),
+    g('gemini-2.5-flash-native-audio'), g('gemini-2.5-flash-live'), g('gemini-live-2.5-flash'),
+    g('gemini-embedding-001', { supportedGenerationMethods: ['embedContent'] }), g('text-embedding-004', { supportedGenerationMethods: ['embedContent'] }),
+    g('veo-3.0-generate', { supportedGenerationMethods: ['predictLongRunning'] }), g('imagen-4.0-generate', { supportedGenerationMethods: ['predict'] }),
+    g('aqa'), g('learnlm-2.0-flash'), g('gemini-robotics-er'), g('gemini-2.5-computer-use'),
+    g('gemini-3.8-flash-image'), g('gemma-3-27b-it'),
+  ] }
+  const parsed = parseModels('gemini', raw)
+  ok(parsed.length === 36, `parseModels keeps generateContent entries (${parsed.length} of 40)`)
+  const chat = chatModels('gemini', parsed)
+  const ids = chat.map((m) => m.id)
+  ok(!ids.some((id) => /tts|image|embedding|audio|live|veo|imagen|aqa|learnlm|robotics|computer-use|gemma/.test(id)), 'chatModels gemini: no tts/image/embedding/audio/live/veo/imagen/aqa/learnlm/robotics')
+  ok(!ids.includes('gemini-3.8-flash-001') && !ids.includes('gemini-1.5-pro-002') && !ids.includes('gemini-2.0-flash-001'), 'chatModels: dated snapshots fold into their undated alias')
+  ok(!ids.some((id) => /preview|exp/.test(id)), 'chatModels: preview/exp dropped while stable builds exist')
+  const cur = curateModels('gemini', parsed)
+  ok(cur.length <= CURATED_MAX && cur.length >= 10, `curateModels: ≤${CURATED_MAX} (${cur.length})`)
+  ok(cur[0].id === 'gemini-3.8-flash' && cur[1].id === 'gemini-3.8-pro' && cur[2].id === 'gemini-3.8-flash-lite', 'curateModels: newest version first; flash, then pro, then lite within it')
+  ok(cur.map((m) => providers.modelVersion(m.id)).every((v, i, a) => i === 0 || v <= a[i - 1]), 'curateModels: versions descend through the list')
+  const all = curateModels('gemini', parsed, { all: true })
+  ok(all.length === parsed.length, 'curateModels all: the full listing, uncapped')
+  ok(curateModels('gemini', [{ id: 'gemini-9-flash-preview' }, { id: 'gemini-9-pro-exp' }]).length === 2, 'curateModels: preview/exp stay when nothing else exists')
+  const oa = curateModels('openai', parseModels('openai', { data: [
+    { id: 'gpt-5.6-luna', created: 9 }, { id: 'gpt-5.6-sol', created: 9 }, { id: 'gpt-5-mini', created: 5 }, { id: 'gpt-5-nano', created: 5 }, { id: 'gpt-5', created: 5 },
+    { id: 'gpt-4o-mini-2024-07-18', created: 1 }, { id: 'gpt-4o-mini', created: 1 }, { id: 'text-embedding-3-small', created: 1 }, { id: 'whisper-1', created: 1 },
+    { id: 'gpt-4o-realtime-preview', created: 1 }, { id: 'dall-e-3', created: 1 }, { id: 'o3-mini', created: 4 }, { id: 'tts-1', created: 1 }, { id: 'omni-moderation-latest', created: 1 },
+  ] }))
+  ok(oa.map((m) => m.id).join() === 'gpt-5.6-luna,gpt-5.6-sol,gpt-5-mini,gpt-5,gpt-5-nano,gpt-4o-mini,o3-mini', 'curateModels openai: chat families only, newest first, luna before sol, mini before full before nano')
+
+  // through assistant.models: pinned first after the configured model, show-all honoured
+  const cfgRaw = { active: 'gemini', providers: { gemini: { key: 'K', model: 'gemini-3.8-flash', pinned: ['gemini-2.5-pro', 'gemini-3-pro'] } } }
+  const env = { t, LanguageModel: undefined, models: async () => parsed }
+  const list = (await asst.models(cfgRaw, env)).map((m) => m.model)
+  ok(list.slice(0, 3).join() === 'gemini-3.8-flash,gemini-2.5-pro,gemini-3-pro', 'models: the configured model, then the pinned picks, then the curated cut')
+  ok(list.length <= CURATED_MAX + 2 && !list.includes('gemini-2.5-flash-preview-tts'), 'models: the rest is the curated listing')
+  const allRaw = { active: 'gemini', providers: { gemini: { key: 'K', model: 'gemini-3.8-flash', showAll: true } } }
+  ok((await asst.models(allRaw, env)).length === parsed.length, 'models: "show all" for the provider → the full listing')
+  const picked = await asst.select(cfgRaw, { provider: 'gemini', model: 'gemini-1.5-pro' }, env)
+  ok(picked.ok === true && picked.store.providers.gemini.pinned.join() === 'gemini-1.5-pro,gemini-2.5-pro,gemini-3-pro', 'select: the chosen model is pinned first for next time')
+  ok(asst.normalizeConfig({ provider: 'gemini', pinned: Array.from({ length: 20 }, (_, i) => `m${i}`).concat(['bad id']) }, false).pinned!.length === asst.PINNED_MAX, 'normalizeConfig: pinned is bounded and shaped')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
