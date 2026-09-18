@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "이 방법으로는 이 브라우저에서 연 문서만 찾을 수 있습니다."
+  },
+  "setAsstTitle": {
+    "message": "어시스턴트"
+  },
+  "setAsstSub": {
+    "message": "문서에 관한 채팅이 전송되는 곳입니다. 키는 이 확장 프로그램 안에만 있고, 문서는 답변만 볼 수 있습니다."
+  },
+  "asstProvider": {
+    "message": "제공자"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome 내장 모델(Gemini Nano) — 이 기기에서"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini(AI Studio 키)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic(Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI 호환(OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "기본 URL"
+  },
+  "asstModel": {
+    "message": "모델"
+  },
+  "asstKey": {
+    "message": "API 키"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama나 LM Studio 같은 로컬 서버에서는 선택 사항입니다."
+  },
+  "asstSave": {
+    "message": "저장"
+  },
+  "asstSaved": {
+    "message": "어시스턴트 설정을 저장했습니다"
+  },
+  "asstAccessDeclined": {
+    "message": "사이트 접근이 거부되었습니다. 요청은 그래도 전송되며, 서버가 브라우저 확장 프로그램을 허용하면(CORS) 동작합니다."
+  },
+  "asstCheck": {
+    "message": "연결 확인"
+  },
+  "asstChecking": {
+    "message": "확인 중…"
+  },
+  "asstReachable": {
+    "message": "연결됨 — $1이(가) 응답했습니다."
+  },
+  "asstBuiltinReady": {
+    "message": "이 기기에서 사용할 수 있습니다."
+  },
+  "asstBuiltinDownload": {
+    "message": "모델이 아직 이 기기에 없습니다. 처음 사용할 때 Chrome이 다운로드하며, 시간이 좀 걸릴 수 있습니다."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "이 Chrome에는 내장 모델이 없습니다. 확장 프로그램 설정에서 다른 제공자를 선택하세요."
+  },
+  "asstOnDevice": {
+    "message": "이 기기"
+  },
+  "asstNotConfigured": {
+    "message": "어시스턴트가 아직 설정되지 않았습니다 — bento/home 확장 프로그램의 설정을 여세요."
+  },
+  "asstUnreachable": {
+    "message": "$1에 연결할 수 없습니다. 서버가 실행 중이고, 브라우저 확장 프로그램의 요청을 허용하나요(CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "허용을 기다리는 중 — 확인 창에 답한 뒤 다시 시도하세요."
+  },
+  "asstDenied": {
+    "message": "이 문서는 어시스턴트를 사용할 수 없습니다."
+  },
+  "asstAllowedTitle": {
+    "message": "어시스턴트 사용이 허용된 문서"
+  },
+  "asstAllowedSub": {
+    "message": "각 문서는 첫 요청 전에 한 번 묻습니다. 제거하면 다시 묻습니다."
+  },
+  "consentTitle": {
+    "message": "이 문서가 어시스턴트를 사용하도록 허용할까요?"
+  },
+  "consentLead": {
+    "message": "허용하면 $1($2)에 텍스트를 보내고 답변을 읽을 수 있습니다. 키는 문서에 절대 공유되지 않습니다."
+  },
+  "consentRemember": {
+    "message": "이 파일에 대해 기억합니다. 나중에 확장 프로그램 설정에서 바꿀 수 있습니다."
+  },
+  "consentAllow": {
+    "message": "허용"
+  },
+  "consentDeny": {
+    "message": "나중에"
   }
 }

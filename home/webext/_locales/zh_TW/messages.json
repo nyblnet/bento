@@ -517,5 +517,101 @@
   },
   "surveyOnlySeen": {
     "message": "這種方式只能找到在此瀏覽器中開啟過的文件。"
+  },
+  "setAsstTitle": {
+    "message": "助理"
+  },
+  "setAsstSub": {
+    "message": "關於文件的對話會送到哪裡。金鑰只保存在此擴充功能中，文件只看得到回覆。"
+  },
+  "asstProvider": {
+    "message": "提供者"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome 內建模型（Gemini Nano）— 在這部裝置上"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini（AI Studio 金鑰）"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic（Claude）"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI 相容（OpenAI、OpenRouter、Ollama、LM Studio……）"
+  },
+  "asstBaseUrl": {
+    "message": "基礎 URL"
+  },
+  "asstModel": {
+    "message": "模型"
+  },
+  "asstKey": {
+    "message": "API 金鑰"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama 或 LM Studio 等本機伺服器可不填。"
+  },
+  "asstSave": {
+    "message": "儲存"
+  },
+  "asstSaved": {
+    "message": "已儲存助理設定"
+  },
+  "asstAccessDeclined": {
+    "message": "網站存取已遭拒絕。要求仍會送出，並在伺服器允許瀏覽器擴充功能（CORS）時正常運作。"
+  },
+  "asstCheck": {
+    "message": "檢查連線"
+  },
+  "asstChecking": {
+    "message": "檢查中……"
+  },
+  "asstReachable": {
+    "message": "可連線 — $1 已回應。"
+  },
+  "asstBuiltinReady": {
+    "message": "已在這部裝置上就緒。"
+  },
+  "asstBuiltinDownload": {
+    "message": "模型尚未在這部裝置上。Chrome 會在第一次使用時下載，可能需要一些時間。"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "這個 Chrome 沒有內建模型。請在擴充功能的設定中選擇其他提供者。"
+  },
+  "asstOnDevice": {
+    "message": "這部裝置"
+  },
+  "asstNotConfigured": {
+    "message": "助理尚未設定 — 請開啟 bento/home 擴充功能的設定。"
+  },
+  "asstUnreachable": {
+    "message": "無法連線至 $1。伺服器是否正在執行？是否允許來自瀏覽器擴充功能的要求（CORS）？"
+  },
+  "asstWaitConsent": {
+    "message": "正在等待您的許可 — 請回應提示，然後再試一次。"
+  },
+  "asstDenied": {
+    "message": "這份文件不允許使用助理。"
+  },
+  "asstAllowedTitle": {
+    "message": "允許使用助理的文件"
+  },
+  "asstAllowedSub": {
+    "message": "每份文件在第一次要求前會詢問一次。移除後會再次詢問。"
+  },
+  "consentTitle": {
+    "message": "允許這份文件使用您的助理嗎？"
+  },
+  "consentLead": {
+    "message": "它將能夠傳送文字至 $1（$2）並讀取回覆。您的金鑰絕不會與它共用。"
+  },
+  "consentRemember": {
+    "message": "將為這個檔案記住此選擇。之後可以在擴充功能的設定中變更。"
+  },
+  "consentAllow": {
+    "message": "允許"
+  },
+  "consentDeny": {
+    "message": "暫不"
   }
 }

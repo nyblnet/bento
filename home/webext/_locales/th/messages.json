@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "วิธีนี้พบเฉพาะเอกสารที่เคยเปิดในเบราว์เซอร์นี้เท่านั้น"
+  },
+  "setAsstTitle": {
+    "message": "ผู้ช่วย"
+  },
+  "setAsstSub": {
+    "message": "ที่ที่การสนทนาเกี่ยวกับเอกสารถูกส่งไป คีย์จะอยู่ในส่วนขยายนี้เท่านั้น — เอกสารเห็นเพียงคำตอบ"
+  },
+  "asstProvider": {
+    "message": "ผู้ให้บริการ"
+  },
+  "asstProvBuiltin": {
+    "message": "โมเดลในตัวของ Chrome (Gemini Nano) — บนอุปกรณ์นี้"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (คีย์ AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "เข้ากันได้กับ OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL พื้นฐาน"
+  },
+  "asstModel": {
+    "message": "โมเดล"
+  },
+  "asstKey": {
+    "message": "คีย์ API"
+  },
+  "asstKeyOptional": {
+    "message": "ไม่บังคับสำหรับเซิร์ฟเวอร์ในเครื่อง เช่น Ollama หรือ LM Studio"
+  },
+  "asstSave": {
+    "message": "บันทึก"
+  },
+  "asstSaved": {
+    "message": "บันทึกการตั้งค่าผู้ช่วยแล้ว"
+  },
+  "asstAccessDeclined": {
+    "message": "การเข้าถึงเว็บไซต์ถูกปฏิเสธ คำขอยังคงถูกส่ง และใช้งานได้เมื่อเซิร์ฟเวอร์อนุญาตส่วนขยายของเบราว์เซอร์ (CORS)"
+  },
+  "asstCheck": {
+    "message": "ตรวจสอบการเชื่อมต่อ"
+  },
+  "asstChecking": {
+    "message": "กำลังตรวจสอบ…"
+  },
+  "asstReachable": {
+    "message": "เข้าถึงได้ — $1 ตอบกลับแล้ว"
+  },
+  "asstBuiltinReady": {
+    "message": "พร้อมใช้งานบนอุปกรณ์นี้"
+  },
+  "asstBuiltinDownload": {
+    "message": "โมเดลยังไม่อยู่บนอุปกรณ์นี้ Chrome จะดาวน์โหลดเมื่อใช้ครั้งแรก ซึ่งอาจใช้เวลาสักครู่"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Chrome นี้ไม่มีโมเดลในตัว โปรดเลือกผู้ให้บริการอื่นในการตั้งค่าของส่วนขยาย"
+  },
+  "asstOnDevice": {
+    "message": "อุปกรณ์นี้"
+  },
+  "asstNotConfigured": {
+    "message": "ยังไม่ได้ตั้งค่าผู้ช่วย — เปิดการตั้งค่าของส่วนขยาย bento/home"
+  },
+  "asstUnreachable": {
+    "message": "ไม่สามารถเข้าถึง $1 เซิร์ฟเวอร์ทำงานอยู่หรือไม่ และอนุญาตคำขอจากส่วนขยายของเบราว์เซอร์ (CORS) หรือไม่"
+  },
+  "asstWaitConsent": {
+    "message": "กำลังรอการอนุญาตจากคุณ — ตอบข้อความแจ้ง แล้วลองอีกครั้ง"
+  },
+  "asstDenied": {
+    "message": "เอกสารนี้ไม่ได้รับอนุญาตให้ใช้ผู้ช่วย"
+  },
+  "asstAllowedTitle": {
+    "message": "เอกสารที่ได้รับอนุญาตให้ใช้ผู้ช่วย"
+  },
+  "asstAllowedSub": {
+    "message": "เอกสารแต่ละฉบับจะถามหนึ่งครั้งก่อนคำขอแรก นำออกเพื่อให้ถามอีกครั้ง"
+  },
+  "consentTitle": {
+    "message": "อนุญาตให้เอกสารนี้ใช้ผู้ช่วยของคุณหรือไม่"
+  },
+  "consentLead": {
+    "message": "เอกสารจะสามารถส่งข้อความไปยัง $1 ($2) และอ่านคำตอบได้ คีย์ของคุณจะไม่ถูกแบ่งปันให้เอกสารเลย"
+  },
+  "consentRemember": {
+    "message": "จดจำไว้สำหรับไฟล์นี้ คุณเปลี่ยนได้ภายหลังในการตั้งค่าของส่วนขยาย"
+  },
+  "consentAllow": {
+    "message": "อนุญาต"
+  },
+  "consentDeny": {
+    "message": "ไว้ทีหลัง"
   }
 }

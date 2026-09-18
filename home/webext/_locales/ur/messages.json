@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "اس طریقے سے صرف وہی دستاویزات ملتی ہیں جو اس براؤزر میں کھولی گئی ہوں۔"
+  },
+  "setAsstTitle": {
+    "message": "معاون"
+  },
+  "setAsstSub": {
+    "message": "کسی دستاویز کے بارے میں چیٹ کہاں بھیجی جاتی ہے۔ کلید اسی ایکسٹینشن میں رہتی ہے — دستاویز کو صرف جواب نظر آتا ہے۔"
+  },
+  "asstProvider": {
+    "message": "فراہم کنندہ"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome کا بلٹ اِن ماڈل (Gemini Nano) — اسی آلے پر"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio کلید)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI سے مطابقت رکھنے والا (OpenAI، OpenRouter، Ollama، LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "بنیادی URL"
+  },
+  "asstModel": {
+    "message": "ماڈل"
+  },
+  "asstKey": {
+    "message": "API کلید"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama یا LM Studio جیسے مقامی سرور کے لیے اختیاری۔"
+  },
+  "asstSave": {
+    "message": "محفوظ کریں"
+  },
+  "asstSaved": {
+    "message": "معاون کی ترتیبات محفوظ ہو گئیں"
+  },
+  "asstAccessDeclined": {
+    "message": "سائٹ تک رسائی مسترد کر دی گئی۔ درخواستیں پھر بھی بھیجی جاتی ہیں، اور اُس وقت کام کرتی ہیں جب سرور براؤزر ایکسٹینشنز کی اجازت دے (CORS)۔"
+  },
+  "asstCheck": {
+    "message": "کنکشن جانچیں"
+  },
+  "asstChecking": {
+    "message": "جانچ ہو رہی ہے…"
+  },
+  "asstReachable": {
+    "message": "قابلِ رسائی — $1 نے جواب دیا۔"
+  },
+  "asstBuiltinReady": {
+    "message": "اس آلے پر تیار ہے۔"
+  },
+  "asstBuiltinDownload": {
+    "message": "ماڈل ابھی اس آلے پر نہیں ہے۔ Chrome پہلے استعمال پر اسے ڈاؤن لوڈ کرتا ہے، جس میں کچھ وقت لگ سکتا ہے۔"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "اس Chrome میں بلٹ اِن ماڈل نہیں ہے۔ ایکسٹینشن کی ترتیبات میں کوئی اور فراہم کنندہ منتخب کریں۔"
+  },
+  "asstOnDevice": {
+    "message": "یہ آلہ"
+  },
+  "asstNotConfigured": {
+    "message": "معاون ابھی ترتیب نہیں دیا گیا — bento/home ایکسٹینشن کی ترتیبات کھولیں۔"
+  },
+  "asstUnreachable": {
+    "message": "$1 تک رسائی نہیں ہو سکی۔ کیا سرور چل رہا ہے، اور کیا وہ براؤزر ایکسٹینشنز کی درخواستوں کی اجازت دیتا ہے (CORS)؟"
+  },
+  "asstWaitConsent": {
+    "message": "آپ کی اجازت کا انتظار ہے — پرامپٹ کا جواب دیں، پھر دوبارہ کوشش کریں۔"
+  },
+  "asstDenied": {
+    "message": "اس دستاویز کو معاون استعمال کرنے کی اجازت نہیں ہے۔"
+  },
+  "asstAllowedTitle": {
+    "message": "معاون استعمال کرنے کی اجازت والی دستاویزات"
+  },
+  "asstAllowedSub": {
+    "message": "ہر دستاویز اپنی پہلی درخواست سے پہلے ایک بار پوچھتی ہے۔ دوبارہ پوچھے جانے کے لیے کسی ایک کو ہٹائیں۔"
+  },
+  "consentTitle": {
+    "message": "اس دستاویز کو آپ کا معاون استعمال کرنے کی اجازت دیں؟"
+  },
+  "consentLead": {
+    "message": "یہ $1 ($2) کو متن بھیج سکے گی اور جوابات پڑھ سکے گی۔ آپ کی کلید اس کے ساتھ کبھی شیئر نہیں کی جاتی۔"
+  },
+  "consentRemember": {
+    "message": "اس فائل کے لیے یاد رکھا جائے گا۔ آپ اسے بعد میں ایکسٹینشن کی ترتیبات میں بدل سکتے ہیں۔"
+  },
+  "consentAllow": {
+    "message": "اجازت دیں"
+  },
+  "consentDeny": {
+    "message": "ابھی نہیں"
   }
 }

@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "لا يمكن العثور بهذه الطريقة إلا على المستندات التي فُتحت في هذا المتصفح."
+  },
+  "setAsstTitle": {
+    "message": "المساعد"
+  },
+  "setAsstSub": {
+    "message": "إلى أين تُرسَل المحادثة حول مستند. يبقى المفتاح في هذا الامتداد — لا يرى المستند سوى الرد."
+  },
+  "asstProvider": {
+    "message": "المزوّد"
+  },
+  "asstProvBuiltin": {
+    "message": "نموذج Chrome المدمج (Gemini Nano) — على هذا الجهاز"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (مفتاح AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "متوافق مع OpenAI (OpenAI وOpenRouter وOllama وLM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "عنوان URL الأساسي"
+  },
+  "asstModel": {
+    "message": "النموذج"
+  },
+  "asstKey": {
+    "message": "مفتاح API"
+  },
+  "asstKeyOptional": {
+    "message": "اختياري لخادم محلي مثل Ollama أو LM Studio."
+  },
+  "asstSave": {
+    "message": "حفظ"
+  },
+  "asstSaved": {
+    "message": "حُفظت إعدادات المساعد"
+  },
+  "asstAccessDeclined": {
+    "message": "رُفض الوصول إلى الموقع. تُرسَل الطلبات مع ذلك، وتعمل عندما يسمح الخادم بامتدادات المتصفح (CORS)."
+  },
+  "asstCheck": {
+    "message": "التحقق من الاتصال"
+  },
+  "asstChecking": {
+    "message": "جارٍ التحقق…"
+  },
+  "asstReachable": {
+    "message": "يمكن الوصول — أجاب $1."
+  },
+  "asstBuiltinReady": {
+    "message": "جاهز على هذا الجهاز."
+  },
+  "asstBuiltinDownload": {
+    "message": "النموذج ليس على هذا الجهاز بعد. يحمّله Chrome عند أول استخدام، وقد يستغرق ذلك بعض الوقت."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "لا يوجد نموذج مدمج في Chrome هذا. اختر مزوّدًا آخر في إعدادات الامتداد."
+  },
+  "asstOnDevice": {
+    "message": "هذا الجهاز"
+  },
+  "asstNotConfigured": {
+    "message": "لم يُعدّ المساعد بعد — افتح إعدادات امتداد bento/home."
+  },
+  "asstUnreachable": {
+    "message": "تعذّر الوصول إلى $1. هل الخادم يعمل، وهل يسمح بالطلبات من امتدادات المتصفح (CORS)؟"
+  },
+  "asstWaitConsent": {
+    "message": "بانتظار إذنك — أجب عن السؤال ثم حاول مجددًا."
+  },
+  "asstDenied": {
+    "message": "لا يُسمح لهذا المستند باستخدام المساعد."
+  },
+  "asstAllowedTitle": {
+    "message": "المستندات المسموح لها باستخدام المساعد"
+  },
+  "asstAllowedSub": {
+    "message": "يسأل كل مستند مرة واحدة قبل طلبه الأول. أزل مستندًا ليُسأل من جديد."
+  },
+  "consentTitle": {
+    "message": "السماح لهذا المستند باستخدام مساعدك؟"
+  },
+  "consentLead": {
+    "message": "سيتمكن من إرسال نص إلى $1 ($2) وقراءة الردود. لا يُشارَك مفتاحك معه أبدًا."
+  },
+  "consentRemember": {
+    "message": "سيُتذكَّر لهذا الملف. يمكنك تغيير ذلك لاحقًا في إعدادات الامتداد."
+  },
+  "consentAllow": {
+    "message": "السماح"
+  },
+  "consentDeny": {
+    "message": "ليس الآن"
   }
 }

@@ -33,8 +33,12 @@
 import { setLapsedBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
 import { checkForUpdate } from './update.js'
 import { learnPrefix } from './db.js'
-import { t } from './i18n.js'
+import { t, initI18n } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
+import {
+  CONFIG_KEY, ALLOWED_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, normalizeConfig,
+  describe as describeAssistant, check as checkAssistant, run as runAssistant,
+} from './assistant.js'
 
 // Re-exported: these moved to route.js so the PAGES can place a path too,
 // but they are still part of this module's tested surface.
@@ -268,6 +272,180 @@ export async function write(sender, text, deps) {
   }
 }
 
+// ---------------------------------------------------------------- assistant
+//
+// The chat's extension half. Rules and rationale in assistant.js; this is the
+// wiring: storage, the per-document consent prompt, and the port a streaming
+// turn rides on. Everything below reads WHICH document from the sender the
+// browser stamped, never from the payload.
+
+const storageGet = async (key) => (await chrome.storage.local.get(key))?.[key]
+
+/** The saved configuration, defaults filled; the built-in model is the default when Chrome has one. */
+export async function loadAssistantConfig() {
+  return normalizeConfig(await storageGet(CONFIG_KEY), typeof globalThis.LanguageModel !== 'undefined')
+}
+
+/** Documents that have been allowed, keyed by `docKeyOf`. */
+const allowedDocs = async () => (await storageGet(ALLOWED_KEY)) || {}
+
+let i18nReady = null
+/** The environment assistant.js runs against: the real fetch, the real Prompt API, translated reasons. */
+async function assistantEnv() {
+  // The worker's `t` follows the browser's language unless a choice was saved;
+  // reasons are shown to the user by the page, so they honour the choice too.
+  if (!i18nReady) i18nReady = initI18n().catch(() => {})
+  await i18nReady
+  return { fetch: globalThis.fetch.bind(globalThis), LanguageModel: globalThis.LanguageModel, t }
+}
+
+/**
+ * The consent prompt: one small window per document that asks, answered by a
+ * message from that window (src/consent.js). The window itself keeps a port
+ * open with a heartbeat so this worker is not evicted while the user reads.
+ *
+ * In memory only, on purpose: an eviction mid-prompt loses the request that
+ * was waiting, and NOTHING else — the answer is persisted from the consent
+ * page's message on its own, so the next request from that document simply
+ * goes through. Failing towards "ask again" is the right direction here.
+ */
+const consentPending = new Map() // docKey → { nonce, promise, resolve }
+
+function askConsent(docKey, host, model) {
+  const open = consentPending.get(docKey)
+  if (open) return open.promise
+  const nonce = crypto.randomUUID()
+  let resolve
+  const promise = new Promise((r) => { resolve = r })
+  consentPending.set(docKey, { nonce, promise, resolve })
+  const url = new URL(chrome.runtime.getURL('src/consent.html'))
+  url.searchParams.set('doc', docKey)
+  url.searchParams.set('host', host)
+  url.searchParams.set('model', model)
+  url.searchParams.set('nonce', nonce)
+  chrome.windows.create({ url: url.href, type: 'popup', width: 480, height: 340, focused: true })
+    .catch(() => { consentPending.delete(docKey); resolve(false) })
+  return promise
+}
+
+/**
+ * Has this document been allowed — asking if not. `waitMs` bounds the wait for
+ * callers that must answer inside the page's request timeout (`check`); a
+ * streaming turn has already been accepted and can wait for the person.
+ */
+async function ensureConsent(docKey, host, model, waitMs = 0) {
+  const allowed = await allowedDocs()
+  if (allowed[docKey]) return true
+  const answer = askConsent(docKey, host, model)
+  if (!waitMs) return answer
+  return Promise.race([answer, new Promise((r) => setTimeout(() => r(null), waitMs))])
+}
+
+/**
+ * The consent window's heartbeat port. Its messages keep this worker alive
+ * while the person reads; its disconnect is the window closing without an
+ * answer, which is a "not now" — otherwise the request would wait forever
+ * and every later ask would join it.
+ */
+export function watchConsentWindow(port) {
+  if (!isConsentPage(port.sender)) { port.disconnect(); return }
+  const nonce = port.name.slice('bento-consent:'.length)
+  port.onMessage.addListener(() => { /* the heartbeat; receiving it is the point */ })
+  port.onDisconnect.addListener(() => {
+    for (const [docKey, open] of consentPending) {
+      if (open.nonce === nonce) { consentPending.delete(docKey); open.resolve(false) }
+    }
+  })
+}
+
+/** The consent page answered. Only that page may say so. */
+function isConsentPage(sender) {
+  return sender?.id === chrome.runtime.id
+    && typeof sender.url === 'string'
+    && sender.url.startsWith(chrome.runtime.getURL('src/consent.html'))
+}
+
+export async function recordConsent(sender, msg) {
+  if (!isConsentPage(sender)) return { ok: false, reason: 'not the consent page' }
+  const docKey = typeof msg.doc === 'string' ? msg.doc : ''
+  const allow = msg.allow === true
+  if (allow && docKey) {
+    const allowed = await allowedDocs()
+    allowed[docKey] = { host: String(msg.host ?? ''), at: Date.now() }
+    await chrome.storage.local.set({ [ALLOWED_KEY]: allowed })
+  }
+  const open = consentPending.get(docKey)
+  if (open && open.nonce === msg.nonce) { consentPending.delete(docKey); open.resolve(allow) }
+  return { ok: true }
+}
+
+/** `assistant.describe` / `assistant.check` / `assistant.settings.open`, over sendMessage. */
+export async function assistantOp(op, sender) {
+  const env = await assistantEnv()
+  const cfg = await loadAssistantConfig()
+  if (op === 'assistant.describe') return describeAssistant(cfg, env)
+  if (op === 'assistant.settings.open') {
+    await chrome.runtime.openOptionsPage()
+    return { ok: true }
+  }
+  if (op === 'assistant.check') {
+    const docKey = docKeyOf(sender)
+    if (!docKey) return { ok: false, reason: 'not a document' }
+    const d = await describeAssistant(cfg, env)
+    if (!d.configured) return { ok: false, reason: t('asstNotConfigured') }
+    // The page gives this 5s; a person reading a prompt takes longer. Ask,
+    // wait a little, and if the answer is still pending say so — the next
+    // check after they answer goes straight through.
+    const allowed = await ensureConsent(docKey, d.host, d.model, 3500)
+    if (allowed === null) return { ok: false, reason: t('asstWaitConsent') }
+    if (!allowed) return { ok: false, reason: t('asstDenied') }
+    return checkAssistant(cfg, env)
+  }
+  return { ok: false, reason: 'unknown op' }
+}
+
+/**
+ * A streaming turn. One port per turn, opened by relay.js for the page:
+ * `res` and then `evt` frames flow back over it, an abort arrives on it, and
+ * the tab closing disconnects it — which is what binds a request to the tab
+ * that made it. Nothing here can reach a stream another tab started.
+ *
+ * Every message on the port also resets the worker's idle timer, which a
+ * long reply read through fetch alone would not.
+ */
+export function serveAssistantPort(port) {
+  const docKey = docKeyOf(port.sender)
+  let ac = null
+  let alive = true
+  const post = (m) => { if (alive) { try { port.postMessage(m) } catch { alive = false } } }
+  port.onDisconnect.addListener(() => { alive = false; ac?.abort() })
+  port.onMessage.addListener((m) => {
+    if (m?.op === 'assistant.abort') { ac?.abort(); return }
+    if (m?.op !== 'assistant.send') return
+    const id = m.id
+    const respond = (result) => post({ dir: 'res', id, result })
+    if (typeof id !== 'string' || !id.startsWith(ID_PREFIX)) return respond({ ok: false, reason: 'bad id' })
+    if (!docKey) return respond({ ok: false, reason: 'not a document' })
+    if (ac) return respond({ ok: false, reason: 'busy' })
+    const messages = validMessages(m.payload)
+    if (!messages) return respond({ ok: false, reason: 'bad request' })
+    ac = new AbortController()
+    void (async () => {
+      const env = await assistantEnv()
+      const cfg = await loadAssistantConfig()
+      const d = await describeAssistant(cfg, env)
+      if (!d.configured) return respond({ ok: false, reason: t('asstNotConfigured') })
+      // Accepted. Consent may take as long as the person needs: the page's
+      // request timeout covers only this reply, not the stream.
+      respond({ ok: true })
+      const emit = (kind, extra) => post({ dir: 'evt', id, kind, ...extra })
+      if (!(await ensureConsent(docKey, d.host, d.model))) return emit('assistant.error', { reason: t('asstDenied') })
+      if (ac.signal.aborted) return
+      await runAssistant(cfg, messages, emit, ac.signal, env)
+    })()
+  })
+}
+
 // `chrome` is absent when this module is loaded by the test rig, which imports
 // the logic above and never needs the listener.
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
@@ -281,6 +459,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'claim' ? claim(sender)
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
+      : msg?.op === 'assistant.consent' ? recordConsent(sender, msg)
+      : typeof msg?.op === 'string' && msg.op.startsWith('assistant.') ? assistantOp(msg.op, sender)
       : Promise.resolve({ ok: false, reason: 'unknown op' })
     run.then((r) => {
       sendResponse(r)
@@ -291,6 +471,11 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       void reportLapsed()
     }, (e) => sendResponse({ ok: false, reason: String(e?.message || e) }))
     return true // async response
+  })
+
+  chrome.runtime.onConnect.addListener((port) => {
+    if (port.name === PORT) serveAssistantPort(port)
+    else if (port.name.startsWith('bento-consent:')) watchConsentWindow(port)
   })
 
   // The worker restarts constantly; the badge has to survive that, and startup

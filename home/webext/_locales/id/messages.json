@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "Cara ini hanya menemukan dokumen yang pernah dibuka di peramban ini."
+  },
+  "setAsstTitle": {
+    "message": "Asisten"
+  },
+  "setAsstSub": {
+    "message": "Ke mana obrolan tentang dokumen dikirim. Kuncinya tetap di ekstensi ini — dokumen hanya pernah melihat balasannya."
+  },
+  "asstProvider": {
+    "message": "Penyedia"
+  },
+  "asstProvBuiltin": {
+    "message": "Model bawaan Chrome (Gemini Nano) — di perangkat ini"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (kunci AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Kompatibel OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL dasar"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "Kunci API"
+  },
+  "asstKeyOptional": {
+    "message": "Opsional untuk server lokal seperti Ollama atau LM Studio."
+  },
+  "asstSave": {
+    "message": "Simpan"
+  },
+  "asstSaved": {
+    "message": "Setelan asisten disimpan"
+  },
+  "asstAccessDeclined": {
+    "message": "Akses situs ditolak. Permintaan tetap dikirim, dan berfungsi bila server mengizinkan ekstensi peramban (CORS)."
+  },
+  "asstCheck": {
+    "message": "Periksa koneksi"
+  },
+  "asstChecking": {
+    "message": "Memeriksa…"
+  },
+  "asstReachable": {
+    "message": "Terjangkau — $1 menjawab."
+  },
+  "asstBuiltinReady": {
+    "message": "Siap di perangkat ini."
+  },
+  "asstBuiltinDownload": {
+    "message": "Model belum ada di perangkat ini. Chrome mengunduhnya saat pertama kali dipakai, dan itu bisa memakan waktu."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Chrome ini tidak memiliki model bawaan. Pilih penyedia lain di setelan ekstensi."
+  },
+  "asstOnDevice": {
+    "message": "perangkat ini"
+  },
+  "asstNotConfigured": {
+    "message": "Asisten belum disiapkan — buka setelan ekstensi bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Tidak dapat menjangkau $1. Apakah server berjalan, dan apakah server mengizinkan permintaan dari ekstensi peramban (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Menunggu izin Anda — jawab pertanyaannya, lalu coba lagi."
+  },
+  "asstDenied": {
+    "message": "Dokumen ini tidak diizinkan memakai asisten."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumen yang diizinkan memakai asisten"
+  },
+  "asstAllowedSub": {
+    "message": "Setiap dokumen bertanya sekali sebelum permintaan pertamanya. Hapus salah satu agar ditanya lagi."
+  },
+  "consentTitle": {
+    "message": "Izinkan dokumen ini memakai asisten Anda?"
+  },
+  "consentLead": {
+    "message": "Dokumen ini akan dapat mengirim teks ke $1 ($2) dan membaca balasannya. Kunci Anda tidak pernah dibagikan kepadanya."
+  },
+  "consentRemember": {
+    "message": "Diingat untuk berkas ini. Anda dapat mengubahnya nanti di setelan ekstensi."
+  },
+  "consentAllow": {
+    "message": "Izinkan"
+  },
+  "consentDeny": {
+    "message": "Jangan sekarang"
   }
 }

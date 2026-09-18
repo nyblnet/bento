@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "W ten sposób znajdziesz tylko dokumenty otwarte w tej przeglądarce."
+  },
+  "setAsstTitle": {
+    "message": "Asystent"
+  },
+  "setAsstSub": {
+    "message": "Dokąd trafia rozmowa o dokumencie. Klucz zostaje w tym rozszerzeniu — dokument widzi tylko odpowiedź."
+  },
+  "asstProvider": {
+    "message": "Dostawca"
+  },
+  "asstProvBuiltin": {
+    "message": "Wbudowany model Chrome (Gemini Nano) — na tym urządzeniu"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (klucz AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Zgodny z OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Bazowy adres URL"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "Klucz API"
+  },
+  "asstKeyOptional": {
+    "message": "Opcjonalny dla lokalnego serwera, np. Ollama lub LM Studio."
+  },
+  "asstSave": {
+    "message": "Zapisz"
+  },
+  "asstSaved": {
+    "message": "Ustawienia asystenta zapisane"
+  },
+  "asstAccessDeclined": {
+    "message": "Odmówiono dostępu do witryny. Żądania i tak są wysyłane i działają, gdy serwer dopuszcza rozszerzenia przeglądarki (CORS)."
+  },
+  "asstCheck": {
+    "message": "Sprawdź połączenie"
+  },
+  "asstChecking": {
+    "message": "Sprawdzanie…"
+  },
+  "asstReachable": {
+    "message": "Osiągalny — $1 odpowiedział."
+  },
+  "asstBuiltinReady": {
+    "message": "Gotowy na tym urządzeniu."
+  },
+  "asstBuiltinDownload": {
+    "message": "Modelu nie ma jeszcze na tym urządzeniu. Chrome pobierze go przy pierwszym użyciu, co może chwilę potrwać."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Ten Chrome nie ma wbudowanego modelu. Wybierz innego dostawcę w ustawieniach rozszerzenia."
+  },
+  "asstOnDevice": {
+    "message": "to urządzenie"
+  },
+  "asstNotConfigured": {
+    "message": "Asystent nie jest jeszcze skonfigurowany — otwórz ustawienia rozszerzenia bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Nie udało się połączyć z $1. Czy serwer działa i dopuszcza żądania z rozszerzeń przeglądarki (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Oczekiwanie na Twoją zgodę — odpowiedz na pytanie i spróbuj ponownie."
+  },
+  "asstDenied": {
+    "message": "Ten dokument nie ma zgody na korzystanie z asystenta."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumenty z dostępem do asystenta"
+  },
+  "asstAllowedSub": {
+    "message": "Każdy dokument pyta raz, przed pierwszym żądaniem. Usuń któryś, aby zapytał ponownie."
+  },
+  "consentTitle": {
+    "message": "Zezwolić temu dokumentowi na korzystanie z Twojego asystenta?"
+  },
+  "consentLead": {
+    "message": "Będzie mógł wysyłać tekst do $1 ($2) i czytać odpowiedzi. Twój klucz nigdy nie jest mu udostępniany."
+  },
+  "consentRemember": {
+    "message": "Zapamiętane dla tego pliku. Możesz to zmienić później w ustawieniach rozszerzenia."
+  },
+  "consentAllow": {
+    "message": "Zezwól"
+  },
+  "consentDeny": {
+    "message": "Nie teraz"
   }
 }

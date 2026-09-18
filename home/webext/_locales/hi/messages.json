@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "इस तरह केवल वही दस्तावेज़ मिलते हैं जो इस ब्राउज़र में खोले गए हों।"
+  },
+  "setAsstTitle": {
+    "message": "सहायक"
+  },
+  "setAsstSub": {
+    "message": "किसी दस्तावेज़ के बारे में चैट कहाँ भेजी जाती है। कुंजी इसी एक्सटेंशन में रहती है — दस्तावेज़ को केवल जवाब दिखता है।"
+  },
+  "asstProvider": {
+    "message": "प्रदाता"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome का अंतर्निहित मॉडल (Gemini Nano) — इसी डिवाइस पर"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio कुंजी)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-संगत (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "आधार URL"
+  },
+  "asstModel": {
+    "message": "मॉडल"
+  },
+  "asstKey": {
+    "message": "API कुंजी"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama या LM Studio जैसे स्थानीय सर्वर के लिए वैकल्पिक।"
+  },
+  "asstSave": {
+    "message": "सहेजें"
+  },
+  "asstSaved": {
+    "message": "सहायक की सेटिंग सहेजी गईं"
+  },
+  "asstAccessDeclined": {
+    "message": "साइट पहुँच अस्वीकार की गई। अनुरोध फिर भी भेजे जाते हैं, और तब काम करते हैं जब सर्वर ब्राउज़र एक्सटेंशन की अनुमति देता है (CORS)।"
+  },
+  "asstCheck": {
+    "message": "कनेक्शन जाँचें"
+  },
+  "asstChecking": {
+    "message": "जाँच हो रही है…"
+  },
+  "asstReachable": {
+    "message": "पहुँच में है — $1 ने जवाब दिया।"
+  },
+  "asstBuiltinReady": {
+    "message": "इस डिवाइस पर तैयार है।"
+  },
+  "asstBuiltinDownload": {
+    "message": "मॉडल अभी इस डिवाइस पर नहीं है। Chrome इसे पहले उपयोग पर डाउनलोड करता है, जिसमें कुछ समय लग सकता है।"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "इस Chrome में अंतर्निहित मॉडल नहीं है। एक्सटेंशन की सेटिंग में कोई और प्रदाता चुनें।"
+  },
+  "asstOnDevice": {
+    "message": "यह डिवाइस"
+  },
+  "asstNotConfigured": {
+    "message": "सहायक अभी सेट नहीं हुआ है — bento/home एक्सटेंशन की सेटिंग खोलें।"
+  },
+  "asstUnreachable": {
+    "message": "$1 तक नहीं पहुँचा जा सका। क्या सर्वर चल रहा है, और क्या वह ब्राउज़र एक्सटेंशन के अनुरोधों की अनुमति देता है (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "आपकी अनुमति की प्रतीक्षा है — संकेत का जवाब दें, फिर दोबारा कोशिश करें।"
+  },
+  "asstDenied": {
+    "message": "इस दस्तावेज़ को सहायक इस्तेमाल करने की अनुमति नहीं है।"
+  },
+  "asstAllowedTitle": {
+    "message": "सहायक इस्तेमाल करने की अनुमति वाले दस्तावेज़"
+  },
+  "asstAllowedSub": {
+    "message": "हर दस्तावेज़ अपने पहले अनुरोध से पहले एक बार पूछता है। दोबारा पूछे जाने के लिए किसी को हटाएँ।"
+  },
+  "consentTitle": {
+    "message": "इस दस्तावेज़ को आपका सहायक इस्तेमाल करने दें?"
+  },
+  "consentLead": {
+    "message": "यह $1 ($2) को टेक्स्ट भेज सकेगा और जवाब पढ़ सकेगा। आपकी कुंजी इसके साथ कभी साझा नहीं की जाती।"
+  },
+  "consentRemember": {
+    "message": "इस फ़ाइल के लिए याद रखा जाएगा। आप इसे बाद में एक्सटेंशन की सेटिंग में बदल सकते हैं।"
+  },
+  "consentAllow": {
+    "message": "अनुमति दें"
+  },
+  "consentDeny": {
+    "message": "अभी नहीं"
   }
 }

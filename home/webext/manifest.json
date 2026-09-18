@@ -13,6 +13,10 @@
   "optional_permissions": [
     "history"
   ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
   "options_page": "src/home.html#settings",
   "background": {
     "service_worker": "src/background.js",

@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "Bu yolla yalnızca bu tarayıcıda açılmış belgeler bulunabilir."
+  },
+  "setAsstTitle": {
+    "message": "Asistan"
+  },
+  "setAsstSub": {
+    "message": "Bir belge hakkındaki sohbetin gönderildiği yer. Anahtar bu uzantıda kalır; belge yalnızca yanıtı görür."
+  },
+  "asstProvider": {
+    "message": "Sağlayıcı"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome’un yerleşik modeli (Gemini Nano) — bu cihazda"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio anahtarı)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI uyumlu (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Temel URL"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "API anahtarı"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama veya LM Studio gibi yerel bir sunucu için isteğe bağlıdır."
+  },
+  "asstSave": {
+    "message": "Kaydet"
+  },
+  "asstSaved": {
+    "message": "Asistan ayarları kaydedildi"
+  },
+  "asstAccessDeclined": {
+    "message": "Site erişimi reddedildi. İstekler yine de gönderilir ve sunucu tarayıcı uzantılarına izin veriyorsa (CORS) çalışır."
+  },
+  "asstCheck": {
+    "message": "Bağlantıyı denetle"
+  },
+  "asstChecking": {
+    "message": "Denetleniyor…"
+  },
+  "asstReachable": {
+    "message": "Ulaşılabilir — $1 yanıt verdi."
+  },
+  "asstBuiltinReady": {
+    "message": "Bu cihazda hazır."
+  },
+  "asstBuiltinDownload": {
+    "message": "Model henüz bu cihazda değil. Chrome ilk kullanımda indirir; bu biraz sürebilir."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Bu Chrome’da yerleşik model yok. Uzantının ayarlarından başka bir sağlayıcı seçin."
+  },
+  "asstOnDevice": {
+    "message": "bu cihaz"
+  },
+  "asstNotConfigured": {
+    "message": "Asistan henüz kurulmadı — bento/home uzantısının ayarlarını açın."
+  },
+  "asstUnreachable": {
+    "message": "$1 sunucusuna ulaşılamadı. Sunucu çalışıyor mu ve tarayıcı uzantılarından gelen isteklere izin veriyor mu (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "İzniniz bekleniyor — soruyu yanıtlayın, sonra yeniden deneyin."
+  },
+  "asstDenied": {
+    "message": "Bu belgenin asistanı kullanmasına izin verilmiyor."
+  },
+  "asstAllowedTitle": {
+    "message": "Asistanı kullanmasına izin verilen belgeler"
+  },
+  "asstAllowedSub": {
+    "message": "Her belge ilk isteğinden önce bir kez sorar. Yeniden sorulması için birini kaldırın."
+  },
+  "consentTitle": {
+    "message": "Bu belgenin asistanınızı kullanmasına izin verilsin mi?"
+  },
+  "consentLead": {
+    "message": "$1 ($2) adresine metin gönderebilecek ve yanıtları okuyabilecek. Anahtarınız onunla asla paylaşılmaz."
+  },
+  "consentRemember": {
+    "message": "Bu dosya için hatırlanacak. Bunu daha sonra uzantının ayarlarından değiştirebilirsiniz."
+  },
+  "consentAllow": {
+    "message": "İzin ver"
+  },
+  "consentDeny": {
+    "message": "Şimdi değil"
   }
 }

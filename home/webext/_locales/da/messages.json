@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "Kun dokumenter, der er åbnet i denne browser, kan findes sådan."
+  },
+  "setAsstTitle": {
+    "message": "Assistent"
+  },
+  "setAsstSub": {
+    "message": "Hvor en chat om et dokument sendes hen. Nøglen bliver i denne udvidelse — et dokument ser kun nogensinde svaret."
+  },
+  "asstProvider": {
+    "message": "Udbyder"
+  },
+  "asstProvBuiltin": {
+    "message": "Chromes indbyggede model (Gemini Nano) — på denne enhed"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio-nøgle)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-kompatibel (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Basis-URL"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "API-nøgle"
+  },
+  "asstKeyOptional": {
+    "message": "Valgfri for en lokal server som Ollama eller LM Studio."
+  },
+  "asstSave": {
+    "message": "Gem"
+  },
+  "asstSaved": {
+    "message": "Assistentindstillinger gemt"
+  },
+  "asstAccessDeclined": {
+    "message": "Adgang til webstedet blev afvist. Forespørgsler sendes stadig, og virker når serveren tillader browserudvidelser (CORS)."
+  },
+  "asstCheck": {
+    "message": "Tjek forbindelse"
+  },
+  "asstChecking": {
+    "message": "Tjekker…"
+  },
+  "asstReachable": {
+    "message": "Kan nås — $1 svarede."
+  },
+  "asstBuiltinReady": {
+    "message": "Klar på denne enhed."
+  },
+  "asstBuiltinDownload": {
+    "message": "Modellen er ikke på denne enhed endnu. Chrome henter den ved første brug, hvilket kan tage lidt tid."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Denne Chrome har ingen indbygget model. Vælg en anden udbyder i udvidelsens indstillinger."
+  },
+  "asstOnDevice": {
+    "message": "denne enhed"
+  },
+  "asstNotConfigured": {
+    "message": "Assistenten er ikke sat op endnu — åbn indstillingerne for udvidelsen bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Kunne ikke nå $1. Kører serveren, og tillader den forespørgsler fra browserudvidelser (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Venter på din tilladelse — svar på spørgsmålet, og prøv igen."
+  },
+  "asstDenied": {
+    "message": "Dette dokument må ikke bruge assistenten."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumenter, der må bruge assistenten"
+  },
+  "asstAllowedSub": {
+    "message": "Hvert dokument spørger én gang før sin første forespørgsel. Fjern et for at blive spurgt igen."
+  },
+  "consentTitle": {
+    "message": "Skal dette dokument have lov til at bruge din assistent?"
+  },
+  "consentLead": {
+    "message": "Det vil kunne sende tekst til $1 ($2) og læse svarene. Din nøgle deles aldrig med det."
+  },
+  "consentRemember": {
+    "message": "Husket for denne fil. Du kan ændre det senere i udvidelsens indstillinger."
+  },
+  "consentAllow": {
+    "message": "Tillad"
+  },
+  "consentDeny": {
+    "message": "Ikke nu"
   }
 }

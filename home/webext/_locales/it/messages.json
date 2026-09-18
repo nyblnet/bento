@@ -517,5 +517,101 @@
   },
   "surveyOnlySeen": {
     "message": "Così si trovano solo i documenti aperti in questo browser."
+  },
+  "setAsstTitle": {
+    "message": "Assistente"
+  },
+  "setAsstSub": {
+    "message": "Dove viene inviata una chat su un documento. La chiave resta in questa estensione: un documento vede solo la risposta."
+  },
+  "asstProvider": {
+    "message": "Fornitore"
+  },
+  "asstProvBuiltin": {
+    "message": "Modello integrato di Chrome (Gemini Nano), su questo dispositivo"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (chiave AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Compatibile OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL di base"
+  },
+  "asstModel": {
+    "message": "Modello"
+  },
+  "asstKey": {
+    "message": "Chiave API"
+  },
+  "asstKeyOptional": {
+    "message": "Facoltativa per un server locale come Ollama o LM Studio."
+  },
+  "asstSave": {
+    "message": "Salva"
+  },
+  "asstSaved": {
+    "message": "Impostazioni dell’assistente salvate"
+  },
+  "asstAccessDeclined": {
+    "message": "L’accesso al sito è stato rifiutato. Le richieste vengono comunque inviate e funzionano se il server accetta le estensioni del browser (CORS)."
+  },
+  "asstCheck": {
+    "message": "Verifica connessione"
+  },
+  "asstChecking": {
+    "message": "Verifica in corso…"
+  },
+  "asstReachable": {
+    "message": "Raggiungibile: $1 ha risposto."
+  },
+  "asstBuiltinReady": {
+    "message": "Pronto su questo dispositivo."
+  },
+  "asstBuiltinDownload": {
+    "message": "Il modello non è ancora su questo dispositivo. Chrome lo scarica al primo uso, e può volerci un po’."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Questo Chrome non ha un modello integrato. Scegli un altro fornitore nelle impostazioni dell’estensione."
+  },
+  "asstOnDevice": {
+    "message": "questo dispositivo"
+  },
+  "asstNotConfigured": {
+    "message": "L’assistente non è ancora configurato: apri le impostazioni dell’estensione bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Impossibile raggiungere $1. Il server è in esecuzione e accetta richieste dalle estensioni del browser (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "In attesa del tuo permesso: rispondi alla richiesta e riprova."
+  },
+  "asstDenied": {
+    "message": "Questo documento non è autorizzato a usare l’assistente."
+  },
+  "asstAllowedTitle": {
+    "message": "Documenti autorizzati a usare l’assistente"
+  },
+  "asstAllowedSub": {
+    "message": "Ogni documento chiede una volta, prima della sua prima richiesta. Rimuovine uno perché chieda di nuovo."
+  },
+  "consentTitle": {
+    "message": "Consentire a questo documento di usare il tuo assistente?"
+  },
+  "consentLead": {
+    "message": "Potrà inviare testo a $1 ($2) e leggere le risposte. La tua chiave non gli viene mai comunicata."
+  },
+  "consentRemember": {
+    "message": "Ricordato per questo file. Puoi cambiarlo più tardi nelle impostazioni dell’estensione."
+  },
+  "consentAllow": {
+    "message": "Consenti"
+  },
+  "consentDeny": {
+    "message": "Non ora"
   }
 }

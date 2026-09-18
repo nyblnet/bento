@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "כך אפשר למצוא רק מסמכים שנפתחו בדפדפן הזה."
+  },
+  "setAsstTitle": {
+    "message": "עוזר"
+  },
+  "setAsstSub": {
+    "message": "לאן נשלחת שיחה על מסמך. המפתח נשאר בתוסף הזה — מסמך רואה רק את התשובה."
+  },
+  "asstProvider": {
+    "message": "ספק"
+  },
+  "asstProvBuiltin": {
+    "message": "המודל המובנה של Chrome ‏(Gemini Nano) — במכשיר הזה"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (מפתח AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "תואם OpenAI ‏(OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "כתובת URL בסיסית"
+  },
+  "asstModel": {
+    "message": "מודל"
+  },
+  "asstKey": {
+    "message": "מפתח API"
+  },
+  "asstKeyOptional": {
+    "message": "אופציונלי לשרת מקומי כמו Ollama או LM Studio."
+  },
+  "asstSave": {
+    "message": "שמירה"
+  },
+  "asstSaved": {
+    "message": "הגדרות העוזר נשמרו"
+  },
+  "asstAccessDeclined": {
+    "message": "הגישה לאתר נדחתה. הבקשות נשלחות בכל זאת, ופועלות כשהשרת מאפשר תוספי דפדפן (CORS)."
+  },
+  "asstCheck": {
+    "message": "בדיקת חיבור"
+  },
+  "asstChecking": {
+    "message": "בודק…"
+  },
+  "asstReachable": {
+    "message": "נגיש — $1 ענה."
+  },
+  "asstBuiltinReady": {
+    "message": "מוכן במכשיר הזה."
+  },
+  "asstBuiltinDownload": {
+    "message": "המודל עדיין לא במכשיר הזה. Chrome מוריד אותו בשימוש הראשון, וזה עשוי לקחת זמן."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "ב־Chrome הזה אין מודל מובנה. בחרו ספק אחר בהגדרות התוסף."
+  },
+  "asstOnDevice": {
+    "message": "המכשיר הזה"
+  },
+  "asstNotConfigured": {
+    "message": "העוזר עדיין לא הוגדר — פתחו את הגדרות התוסף bento/home."
+  },
+  "asstUnreachable": {
+    "message": "לא ניתן להגיע אל $1. האם השרת פועל, והאם הוא מאפשר בקשות מתוספי דפדפן (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "ממתין לאישורכם — ענו לשאלה ונסו שוב."
+  },
+  "asstDenied": {
+    "message": "למסמך הזה אין הרשאה להשתמש בעוזר."
+  },
+  "asstAllowedTitle": {
+    "message": "מסמכים שמורשים להשתמש בעוזר"
+  },
+  "asstAllowedSub": {
+    "message": "כל מסמך שואל פעם אחת לפני הבקשה הראשונה שלו. הסירו מסמך כדי שישאל שוב."
+  },
+  "consentTitle": {
+    "message": "לאפשר למסמך הזה להשתמש בעוזר שלכם?"
+  },
+  "consentLead": {
+    "message": "הוא יוכל לשלוח טקסט אל $1 ‏($2) ולקרוא את התשובות. המפתח שלכם לעולם לא משותף איתו."
+  },
+  "consentRemember": {
+    "message": "ייזכר עבור הקובץ הזה. אפשר לשנות זאת מאוחר יותר בהגדרות התוסף."
+  },
+  "consentAllow": {
+    "message": "אישור"
+  },
+  "consentDeny": {
+    "message": "לא עכשיו"
   }
 }

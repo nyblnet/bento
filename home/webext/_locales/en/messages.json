@@ -542,5 +542,133 @@
   },
   "surveyOnlySeen": {
     "message": "Only documents opened in this browser can be found this way."
+  },
+  "setAsstTitle": {
+    "message": "Assistant",
+    "description": "Settings section title: the AI chat that bento/slides offers about a deck."
+  },
+  "setAsstSub": {
+    "message": "Where a chat about a document is sent. The key stays in this extension — a document only ever sees the reply.",
+    "description": "Settings: the assistant section's explanation. REVIEW: 'key' is an API key."
+  },
+  "asstProvider": {
+    "message": "Provider",
+    "description": "Assistant settings: label of the provider dropdown."
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome built-in model (Gemini Nano) — on this device",
+    "description": "Provider option: Chrome's own on-device model. Keep the product names."
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio key)",
+    "description": "Provider option. Keep the product names."
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)",
+    "description": "Provider option. Keep the product names."
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-compatible (OpenAI, OpenRouter, Ollama, LM Studio…)",
+    "description": "Provider option: any server speaking the OpenAI API. Keep the product names."
+  },
+  "asstBaseUrl": {
+    "message": "Base URL",
+    "description": "Assistant settings: label of the endpoint address field."
+  },
+  "asstModel": {
+    "message": "Model",
+    "description": "Assistant settings: label of the model id field."
+  },
+  "asstKey": {
+    "message": "API key",
+    "description": "Assistant settings: label of the key field."
+  },
+  "asstKeyOptional": {
+    "message": "Optional for a local server such as Ollama or LM Studio.",
+    "description": "Hint under the API key field when the OpenAI-compatible provider is chosen."
+  },
+  "asstSave": {
+    "message": "Save",
+    "description": "Assistant settings: the save button."
+  },
+  "asstSaved": {
+    "message": "Assistant settings saved",
+    "description": "Toast after saving the assistant settings."
+  },
+  "asstAccessDeclined": {
+    "message": "Site access was declined. Requests are still made, and work when the server allows browser extensions (CORS).",
+    "description": "Assistant settings: shown after Save when the user refused the browser's site-access prompt. REVIEW: CORS is a technical term, keep it."
+  },
+  "asstCheck": {
+    "message": "Check connection",
+    "description": "Assistant settings: button that makes one test request."
+  },
+  "asstChecking": {
+    "message": "Checking…",
+    "description": "Assistant settings: status while the test request runs."
+  },
+  "asstReachable": {
+    "message": "Reachable — $1 answered.",
+    "description": "Assistant settings: the test request succeeded. $1 is the server's hostname."
+  },
+  "asstBuiltinReady": {
+    "message": "Ready on this device.",
+    "description": "Assistant settings: the Chrome built-in model is available."
+  },
+  "asstBuiltinDownload": {
+    "message": "The model is not on this device yet. Chrome downloads it on first use, which can take a while.",
+    "description": "Assistant settings / reason: the Chrome built-in model needs downloading."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "This Chrome has no built-in model. Choose another provider in the extension's settings.",
+    "description": "Assistant settings / reason: Chrome's built-in model is unavailable here."
+  },
+  "asstOnDevice": {
+    "message": "this device",
+    "description": "Shown by the document as the assistant's location when the Chrome built-in model is used, in place of a server hostname."
+  },
+  "asstNotConfigured": {
+    "message": "The assistant is not set up yet — open the bento/home extension's settings.",
+    "description": "Reason returned to a document when no provider, model or key is configured."
+  },
+  "asstUnreachable": {
+    "message": "Could not reach $1. Is the server running, and does it allow requests from browser extensions (CORS)?",
+    "description": "Reason when the request never got a response. $1 is the hostname. REVIEW: CORS is a technical term, keep it."
+  },
+  "asstWaitConsent": {
+    "message": "Waiting for your permission — answer the prompt, then try again.",
+    "description": "Reason returned to a document while its permission window is still open."
+  },
+  "asstDenied": {
+    "message": "This document is not allowed to use the assistant.",
+    "description": "Reason returned to a document whose permission was refused."
+  },
+  "asstAllowedTitle": {
+    "message": "Documents allowed to use the assistant",
+    "description": "Assistant settings: heading of the list of allowed files."
+  },
+  "asstAllowedSub": {
+    "message": "Each document asks once before its first request. Remove one to be asked again.",
+    "description": "Assistant settings: explanation under the allowed-documents list."
+  },
+  "consentTitle": {
+    "message": "Allow this document to use your assistant?",
+    "description": "Title of the permission window a document triggers on its first assistant request. REVIEW: this is a security prompt."
+  },
+  "consentLead": {
+    "message": "It will be able to send text to $1 ($2) and read the replies. Your key is never shared with it.",
+    "description": "Permission window body. $1 is the server hostname or 'this device', $2 the model name. REVIEW: this is a security prompt."
+  },
+  "consentRemember": {
+    "message": "Remembered for this file. You can change it later in the extension's settings.",
+    "description": "Permission window: note that the answer is stored per file."
+  },
+  "consentAllow": {
+    "message": "Allow",
+    "description": "Permission window: the button that grants access."
+  },
+  "consentDeny": {
+    "message": "Not now",
+    "description": "Permission window: the button that refuses access."
   }
 }

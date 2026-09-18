@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "Bara dokument som öppnats i den här webbläsaren kan hittas så här."
+  },
+  "setAsstTitle": {
+    "message": "Assistent"
+  },
+  "setAsstSub": {
+    "message": "Vart en chatt om ett dokument skickas. Nyckeln stannar i det här tillägget — ett dokument ser bara någonsin svaret."
+  },
+  "asstProvider": {
+    "message": "Leverantör"
+  },
+  "asstProvBuiltin": {
+    "message": "Chromes inbyggda modell (Gemini Nano) — på den här enheten"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio-nyckel)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-kompatibel (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Bas-URL"
+  },
+  "asstModel": {
+    "message": "Modell"
+  },
+  "asstKey": {
+    "message": "API-nyckel"
+  },
+  "asstKeyOptional": {
+    "message": "Valfri för en lokal server som Ollama eller LM Studio."
+  },
+  "asstSave": {
+    "message": "Spara"
+  },
+  "asstSaved": {
+    "message": "Assistentinställningar sparade"
+  },
+  "asstAccessDeclined": {
+    "message": "Åtkomst till webbplatsen nekades. Förfrågningar görs ändå, och fungerar när servern tillåter webbläsartillägg (CORS)."
+  },
+  "asstCheck": {
+    "message": "Kontrollera anslutning"
+  },
+  "asstChecking": {
+    "message": "Kontrollerar…"
+  },
+  "asstReachable": {
+    "message": "Nåbar — $1 svarade."
+  },
+  "asstBuiltinReady": {
+    "message": "Redo på den här enheten."
+  },
+  "asstBuiltinDownload": {
+    "message": "Modellen finns inte på den här enheten ännu. Chrome hämtar den vid första användningen, vilket kan ta en stund."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Den här Chrome har ingen inbyggd modell. Välj en annan leverantör i tilläggets inställningar."
+  },
+  "asstOnDevice": {
+    "message": "den här enheten"
+  },
+  "asstNotConfigured": {
+    "message": "Assistenten är inte inställd ännu — öppna inställningarna för tillägget bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Kunde inte nå $1. Körs servern, och tillåter den förfrågningar från webbläsartillägg (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Väntar på ditt tillstånd — svara på frågan och försök igen."
+  },
+  "asstDenied": {
+    "message": "Det här dokumentet får inte använda assistenten."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokument som får använda assistenten"
+  },
+  "asstAllowedSub": {
+    "message": "Varje dokument frågar en gång före sin första förfrågan. Ta bort ett för att bli tillfrågad igen."
+  },
+  "consentTitle": {
+    "message": "Tillåta att det här dokumentet använder din assistent?"
+  },
+  "consentLead": {
+    "message": "Det kommer att kunna skicka text till $1 ($2) och läsa svaren. Din nyckel delas aldrig med det."
+  },
+  "consentRemember": {
+    "message": "Sparat för den här filen. Du kan ändra det senare i tilläggets inställningar."
+  },
+  "consentAllow": {
+    "message": "Tillåt"
+  },
+  "consentDeny": {
+    "message": "Inte nu"
   }
 }

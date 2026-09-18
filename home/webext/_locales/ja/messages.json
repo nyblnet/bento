@@ -517,5 +517,101 @@
   },
   "surveyOnlySeen": {
     "message": "この方法で見つかるのは、このブラウザーで開いたドキュメントだけです。"
+  },
+  "setAsstTitle": {
+    "message": "アシスタント"
+  },
+  "setAsstSub": {
+    "message": "ドキュメントについてのチャットの送り先です。キーはこの拡張機能の中に留まり、ドキュメントには返答しか見えません。"
+  },
+  "asstProvider": {
+    "message": "プロバイダー"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome 内蔵モデル（Gemini Nano）— このデバイス上"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini（AI Studio のキー）"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic（Claude）"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI 互換（OpenAI、OpenRouter、Ollama、LM Studio…）"
+  },
+  "asstBaseUrl": {
+    "message": "ベース URL"
+  },
+  "asstModel": {
+    "message": "モデル"
+  },
+  "asstKey": {
+    "message": "API キー"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama や LM Studio などのローカルサーバーでは省略できます。"
+  },
+  "asstSave": {
+    "message": "保存"
+  },
+  "asstSaved": {
+    "message": "アシスタントの設定を保存しました"
+  },
+  "asstAccessDeclined": {
+    "message": "サイトへのアクセスが拒否されました。リクエストはそれでも送られ、サーバーがブラウザー拡張機能を許可していれば（CORS）動作します。"
+  },
+  "asstCheck": {
+    "message": "接続を確認"
+  },
+  "asstChecking": {
+    "message": "確認中…"
+  },
+  "asstReachable": {
+    "message": "到達できました — $1 が応答しました。"
+  },
+  "asstBuiltinReady": {
+    "message": "このデバイスで使用できます。"
+  },
+  "asstBuiltinDownload": {
+    "message": "モデルはまだこのデバイスにありません。初回使用時に Chrome がダウンロードします。しばらくかかることがあります。"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "この Chrome には内蔵モデルがありません。拡張機能の設定で別のプロバイダーを選んでください。"
+  },
+  "asstOnDevice": {
+    "message": "このデバイス"
+  },
+  "asstNotConfigured": {
+    "message": "アシスタントはまだ設定されていません — 拡張機能 bento/home の設定を開いてください。"
+  },
+  "asstUnreachable": {
+    "message": "$1 に到達できません。サーバーは起動していますか？ また、ブラウザー拡張機能からのリクエストを許可していますか（CORS）？"
+  },
+  "asstWaitConsent": {
+    "message": "許可をお待ちしています — 確認に答えてから、もう一度お試しください。"
+  },
+  "asstDenied": {
+    "message": "このドキュメントにはアシスタントの使用が許可されていません。"
+  },
+  "asstAllowedTitle": {
+    "message": "アシスタントの使用を許可したドキュメント"
+  },
+  "asstAllowedSub": {
+    "message": "各ドキュメントは最初のリクエストの前に一度だけ尋ねます。削除すると、次回また尋ねられます。"
+  },
+  "consentTitle": {
+    "message": "このドキュメントにアシスタントの使用を許可しますか？"
+  },
+  "consentLead": {
+    "message": "許可すると $1（$2）へテキストを送り、返答を読めるようになります。キーがドキュメントに渡ることはありません。"
+  },
+  "consentRemember": {
+    "message": "このファイルについて記憶されます。あとから拡張機能の設定で変更できます。"
+  },
+  "consentAllow": {
+    "message": "許可"
+  },
+  "consentDeny": {
+    "message": "今はしない"
   }
 }

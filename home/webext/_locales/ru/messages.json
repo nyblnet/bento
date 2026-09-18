@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "Так находятся только документы, открытые в этом браузере."
+  },
+  "setAsstTitle": {
+    "message": "Ассистент"
+  },
+  "setAsstSub": {
+    "message": "Куда отправляется чат о документе. Ключ остаётся в этом расширении — документ видит только ответ."
+  },
+  "asstProvider": {
+    "message": "Провайдер"
+  },
+  "asstProvBuiltin": {
+    "message": "Встроенная модель Chrome (Gemini Nano) — на этом устройстве"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (ключ AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Совместимый с OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Базовый URL"
+  },
+  "asstModel": {
+    "message": "Модель"
+  },
+  "asstKey": {
+    "message": "Ключ API"
+  },
+  "asstKeyOptional": {
+    "message": "Необязателен для локального сервера, например Ollama или LM Studio."
+  },
+  "asstSave": {
+    "message": "Сохранить"
+  },
+  "asstSaved": {
+    "message": "Настройки ассистента сохранены"
+  },
+  "asstAccessDeclined": {
+    "message": "В доступе к сайту отказано. Запросы всё равно отправляются и работают, если сервер допускает расширения браузера (CORS)."
+  },
+  "asstCheck": {
+    "message": "Проверить соединение"
+  },
+  "asstChecking": {
+    "message": "Проверка…"
+  },
+  "asstReachable": {
+    "message": "Доступен — $1 ответил."
+  },
+  "asstBuiltinReady": {
+    "message": "Готов на этом устройстве."
+  },
+  "asstBuiltinDownload": {
+    "message": "Модели на этом устройстве пока нет. Chrome загрузит её при первом использовании, это может занять некоторое время."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "В этом Chrome нет встроенной модели. Выберите другого провайдера в настройках расширения."
+  },
+  "asstOnDevice": {
+    "message": "это устройство"
+  },
+  "asstNotConfigured": {
+    "message": "Ассистент ещё не настроен — откройте настройки расширения bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Не удалось связаться с $1. Запущен ли сервер и допускает ли он запросы от расширений браузера (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Ожидание вашего разрешения — ответьте на запрос и попробуйте снова."
+  },
+  "asstDenied": {
+    "message": "Этому документу не разрешено использовать ассистента."
+  },
+  "asstAllowedTitle": {
+    "message": "Документы, которым разрешено использовать ассистента"
+  },
+  "asstAllowedSub": {
+    "message": "Каждый документ спрашивает один раз перед первым запросом. Удалите документ, чтобы он спросил снова."
+  },
+  "consentTitle": {
+    "message": "Разрешить этому документу использовать вашего ассистента?"
+  },
+  "consentLead": {
+    "message": "Он сможет отправлять текст на $1 ($2) и читать ответы. Ваш ключ ему никогда не передаётся."
+  },
+  "consentRemember": {
+    "message": "Запомнено для этого файла. Изменить это можно позже в настройках расширения."
+  },
+  "consentAllow": {
+    "message": "Разрешить"
+  },
+  "consentDeny": {
+    "message": "Не сейчас"
   }
 }

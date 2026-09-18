@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "এভাবে কেবল এই ব্রাউজারে খোলা নথিই পাওয়া যায়।"
+  },
+  "setAsstTitle": {
+    "message": "সহকারী"
+  },
+  "setAsstSub": {
+    "message": "একটি নথি নিয়ে চ্যাট কোথায় পাঠানো হয়। কী এই এক্সটেনশনেই থাকে — নথি শুধু উত্তরটাই দেখে।"
+  },
+  "asstProvider": {
+    "message": "প্রদানকারী"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome-এর অন্তর্নির্মিত মডেল (Gemini Nano) — এই ডিভাইসে"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio কী)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-সামঞ্জস্যপূর্ণ (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "বেস URL"
+  },
+  "asstModel": {
+    "message": "মডেল"
+  },
+  "asstKey": {
+    "message": "API কী"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama বা LM Studio-র মতো স্থানীয় সার্ভারের জন্য ঐচ্ছিক।"
+  },
+  "asstSave": {
+    "message": "সংরক্ষণ করুন"
+  },
+  "asstSaved": {
+    "message": "সহকারীর সেটিংস সংরক্ষিত হয়েছে"
+  },
+  "asstAccessDeclined": {
+    "message": "সাইটে প্রবেশাধিকার প্রত্যাখ্যান করা হয়েছে। অনুরোধ তবুও পাঠানো হয়, এবং সার্ভার ব্রাউজার এক্সটেনশন অনুমোদন করলে (CORS) কাজ করে।"
+  },
+  "asstCheck": {
+    "message": "সংযোগ পরীক্ষা করুন"
+  },
+  "asstChecking": {
+    "message": "পরীক্ষা করা হচ্ছে…"
+  },
+  "asstReachable": {
+    "message": "পৌঁছানো গেছে — $1 উত্তর দিয়েছে।"
+  },
+  "asstBuiltinReady": {
+    "message": "এই ডিভাইসে প্রস্তুত।"
+  },
+  "asstBuiltinDownload": {
+    "message": "মডেলটি এখনও এই ডিভাইসে নেই। Chrome প্রথম ব্যবহারে এটি ডাউনলোড করে, যাতে কিছুটা সময় লাগতে পারে।"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "এই Chrome-এ কোনো অন্তর্নির্মিত মডেল নেই। এক্সটেনশনের সেটিংসে অন্য প্রদানকারী বেছে নিন।"
+  },
+  "asstOnDevice": {
+    "message": "এই ডিভাইস"
+  },
+  "asstNotConfigured": {
+    "message": "সহকারী এখনও সেট আপ করা হয়নি — bento/home এক্সটেনশনের সেটিংস খুলুন।"
+  },
+  "asstUnreachable": {
+    "message": "$1-এ পৌঁছানো যায়নি। সার্ভার কি চালু আছে, আর সেটি কি ব্রাউজার এক্সটেনশনের অনুরোধ অনুমোদন করে (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "আপনার অনুমতির অপেক্ষায় — প্রম্পটের উত্তর দিন, তারপর আবার চেষ্টা করুন।"
+  },
+  "asstDenied": {
+    "message": "এই নথিকে সহকারী ব্যবহারের অনুমতি নেই।"
+  },
+  "asstAllowedTitle": {
+    "message": "সহকারী ব্যবহারের অনুমতিপ্রাপ্ত নথি"
+  },
+  "asstAllowedSub": {
+    "message": "প্রতিটি নথি তার প্রথম অনুরোধের আগে একবার জিজ্ঞেস করে। আবার জিজ্ঞাসার জন্য একটি সরান।"
+  },
+  "consentTitle": {
+    "message": "এই নথিকে আপনার সহকারী ব্যবহার করতে দেবেন?"
+  },
+  "consentLead": {
+    "message": "এটি $1 ($2)-এ টেক্সট পাঠাতে ও উত্তর পড়তে পারবে। আপনার কী এর সঙ্গে কখনও ভাগ করা হয় না।"
+  },
+  "consentRemember": {
+    "message": "এই ফাইলের জন্য মনে রাখা হবে। পরে এক্সটেনশনের সেটিংসে এটি বদলাতে পারবেন।"
+  },
+  "consentAllow": {
+    "message": "অনুমতি দিন"
+  },
+  "consentDeny": {
+    "message": "এখন নয়"
   }
 }

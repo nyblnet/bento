@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "Zo worden alleen documenten gevonden die in deze browser zijn geopend."
+  },
+  "setAsstTitle": {
+    "message": "Assistent"
+  },
+  "setAsstSub": {
+    "message": "Waar een chat over een document naartoe gaat. De sleutel blijft in deze extensie — een document ziet alleen ooit het antwoord."
+  },
+  "asstProvider": {
+    "message": "Aanbieder"
+  },
+  "asstProvBuiltin": {
+    "message": "Ingebouwd Chrome-model (Gemini Nano) — op dit apparaat"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio-sleutel)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-compatibel (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Basis-URL"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "API-sleutel"
+  },
+  "asstKeyOptional": {
+    "message": "Optioneel voor een lokale server zoals Ollama of LM Studio."
+  },
+  "asstSave": {
+    "message": "Opslaan"
+  },
+  "asstSaved": {
+    "message": "Assistentinstellingen opgeslagen"
+  },
+  "asstAccessDeclined": {
+    "message": "Sitetoegang is geweigerd. Verzoeken worden toch gedaan, en werken als de server browserextensies toestaat (CORS)."
+  },
+  "asstCheck": {
+    "message": "Verbinding controleren"
+  },
+  "asstChecking": {
+    "message": "Controleren…"
+  },
+  "asstReachable": {
+    "message": "Bereikbaar — $1 heeft geantwoord."
+  },
+  "asstBuiltinReady": {
+    "message": "Klaar op dit apparaat."
+  },
+  "asstBuiltinDownload": {
+    "message": "Het model staat nog niet op dit apparaat. Chrome downloadt het bij het eerste gebruik, wat even kan duren."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Deze Chrome heeft geen ingebouwd model. Kies een andere aanbieder in de instellingen van de extensie."
+  },
+  "asstOnDevice": {
+    "message": "dit apparaat"
+  },
+  "asstNotConfigured": {
+    "message": "De assistent is nog niet ingesteld — open de instellingen van de extensie bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Kan $1 niet bereiken. Draait de server, en staat die verzoeken van browserextensies toe (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Wachten op uw toestemming — beantwoord de vraag en probeer het opnieuw."
+  },
+  "asstDenied": {
+    "message": "Dit document mag de assistent niet gebruiken."
+  },
+  "asstAllowedTitle": {
+    "message": "Documenten die de assistent mogen gebruiken"
+  },
+  "asstAllowedSub": {
+    "message": "Elk document vraagt één keer, vóór zijn eerste verzoek. Verwijder er een om opnieuw gevraagd te worden."
+  },
+  "consentTitle": {
+    "message": "Dit document uw assistent laten gebruiken?"
+  },
+  "consentLead": {
+    "message": "Het kan dan tekst naar $1 ($2) sturen en de antwoorden lezen. Uw sleutel wordt er nooit mee gedeeld."
+  },
+  "consentRemember": {
+    "message": "Onthouden voor dit bestand. U kunt dit later wijzigen in de instellingen van de extensie."
+  },
+  "consentAllow": {
+    "message": "Toestaan"
+  },
+  "consentDeny": {
+    "message": "Niet nu"
   }
 }

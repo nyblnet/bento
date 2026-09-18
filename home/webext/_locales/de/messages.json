@@ -517,5 +517,101 @@
   },
   "surveyOnlySeen": {
     "message": "So lassen sich nur Dokumente finden, die in diesem Browser geöffnet wurden."
+  },
+  "setAsstTitle": {
+    "message": "Assistent"
+  },
+  "setAsstSub": {
+    "message": "Wohin ein Chat über ein Dokument geschickt wird. Der Schlüssel bleibt in dieser Erweiterung — ein Dokument sieht immer nur die Antwort."
+  },
+  "asstProvider": {
+    "message": "Anbieter"
+  },
+  "asstProvBuiltin": {
+    "message": "In Chrome eingebautes Modell (Gemini Nano) — auf diesem Gerät"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI-Studio-Schlüssel)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-kompatibel (OpenAI, OpenRouter, Ollama, LM Studio …)"
+  },
+  "asstBaseUrl": {
+    "message": "Basis-URL"
+  },
+  "asstModel": {
+    "message": "Modell"
+  },
+  "asstKey": {
+    "message": "API-Schlüssel"
+  },
+  "asstKeyOptional": {
+    "message": "Optional für einen lokalen Server wie Ollama oder LM Studio."
+  },
+  "asstSave": {
+    "message": "Speichern"
+  },
+  "asstSaved": {
+    "message": "Assistent-Einstellungen gespeichert"
+  },
+  "asstAccessDeclined": {
+    "message": "Der Website-Zugriff wurde abgelehnt. Anfragen werden trotzdem gestellt und funktionieren, wenn der Server Browser-Erweiterungen erlaubt (CORS)."
+  },
+  "asstCheck": {
+    "message": "Verbindung prüfen"
+  },
+  "asstChecking": {
+    "message": "Wird geprüft …"
+  },
+  "asstReachable": {
+    "message": "Erreichbar — $1 hat geantwortet."
+  },
+  "asstBuiltinReady": {
+    "message": "Auf diesem Gerät bereit."
+  },
+  "asstBuiltinDownload": {
+    "message": "Das Modell ist noch nicht auf diesem Gerät. Chrome lädt es beim ersten Gebrauch herunter, was eine Weile dauern kann."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Dieses Chrome hat kein eingebautes Modell. Wählen Sie in den Einstellungen der Erweiterung einen anderen Anbieter."
+  },
+  "asstOnDevice": {
+    "message": "dieses Gerät"
+  },
+  "asstNotConfigured": {
+    "message": "Der Assistent ist noch nicht eingerichtet — öffnen Sie die Einstellungen der Erweiterung bento/home."
+  },
+  "asstUnreachable": {
+    "message": "$1 ist nicht erreichbar. Läuft der Server, und erlaubt er Anfragen von Browser-Erweiterungen (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Warten auf Ihre Erlaubnis — beantworten Sie die Nachfrage und versuchen Sie es dann erneut."
+  },
+  "asstDenied": {
+    "message": "Dieses Dokument darf den Assistenten nicht verwenden."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumente, die den Assistenten verwenden dürfen"
+  },
+  "asstAllowedSub": {
+    "message": "Jedes Dokument fragt einmal vor seiner ersten Anfrage. Entfernen Sie eines, um erneut gefragt zu werden."
+  },
+  "consentTitle": {
+    "message": "Darf dieses Dokument Ihren Assistenten verwenden?"
+  },
+  "consentLead": {
+    "message": "Es kann dann Text an $1 ($2) senden und die Antworten lesen. Ihr Schlüssel wird nie mit ihm geteilt."
+  },
+  "consentRemember": {
+    "message": "Für diese Datei gemerkt. Sie können das später in den Einstellungen der Erweiterung ändern."
+  },
+  "consentAllow": {
+    "message": "Erlauben"
+  },
+  "consentDeny": {
+    "message": "Jetzt nicht"
   }
 }

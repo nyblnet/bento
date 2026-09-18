@@ -484,5 +484,101 @@
   },
   "surveyOnlySeen": {
     "message": "Cara ini hanya menemui dokumen yang pernah dibuka dalam pelayar ini."
+  },
+  "setAsstTitle": {
+    "message": "Pembantu"
+  },
+  "setAsstSub": {
+    "message": "Ke mana sembang tentang dokumen dihantar. Kunci kekal dalam sambungan ini — dokumen hanya pernah melihat balasannya."
+  },
+  "asstProvider": {
+    "message": "Pembekal"
+  },
+  "asstProvBuiltin": {
+    "message": "Model terbina dalam Chrome (Gemini Nano) — pada peranti ini"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (kunci AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Serasi OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL asas"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "Kunci API"
+  },
+  "asstKeyOptional": {
+    "message": "Pilihan untuk pelayan setempat seperti Ollama atau LM Studio."
+  },
+  "asstSave": {
+    "message": "Simpan"
+  },
+  "asstSaved": {
+    "message": "Tetapan pembantu disimpan"
+  },
+  "asstAccessDeclined": {
+    "message": "Akses tapak ditolak. Permintaan tetap dibuat, dan berfungsi apabila pelayan membenarkan sambungan pelayar (CORS)."
+  },
+  "asstCheck": {
+    "message": "Semak sambungan"
+  },
+  "asstChecking": {
+    "message": "Menyemak…"
+  },
+  "asstReachable": {
+    "message": "Boleh dicapai — $1 menjawab."
+  },
+  "asstBuiltinReady": {
+    "message": "Sedia pada peranti ini."
+  },
+  "asstBuiltinDownload": {
+    "message": "Model belum ada pada peranti ini. Chrome memuat turunnya pada penggunaan pertama, dan itu mungkin mengambil masa."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Chrome ini tiada model terbina dalam. Pilih pembekal lain dalam tetapan sambungan."
+  },
+  "asstOnDevice": {
+    "message": "peranti ini"
+  },
+  "asstNotConfigured": {
+    "message": "Pembantu belum disediakan — buka tetapan sambungan bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Tidak dapat mencapai $1. Adakah pelayan sedang berjalan, dan adakah ia membenarkan permintaan daripada sambungan pelayar (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Menunggu kebenaran anda — jawab gesaan itu, kemudian cuba lagi."
+  },
+  "asstDenied": {
+    "message": "Dokumen ini tidak dibenarkan menggunakan pembantu."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumen yang dibenarkan menggunakan pembantu"
+  },
+  "asstAllowedSub": {
+    "message": "Setiap dokumen bertanya sekali sebelum permintaan pertamanya. Buang satu untuk ditanya semula."
+  },
+  "consentTitle": {
+    "message": "Benarkan dokumen ini menggunakan pembantu anda?"
+  },
+  "consentLead": {
+    "message": "Ia akan dapat menghantar teks ke $1 ($2) dan membaca balasannya. Kunci anda tidak pernah dikongsi dengannya."
+  },
+  "consentRemember": {
+    "message": "Diingati untuk fail ini. Anda boleh mengubahnya kemudian dalam tetapan sambungan."
+  },
+  "consentAllow": {
+    "message": "Benarkan"
+  },
+  "consentDeny": {
+    "message": "Bukan sekarang"
   }
 }

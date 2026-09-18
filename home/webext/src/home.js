@@ -17,6 +17,11 @@ import { listDocuments, describe, newDocument, duplicate, rename, APPS } from '.
 import { prefixFor } from './route.js'
 import { learnPrefix, GRANT, get, put } from './db.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
+import {
+  CONFIG_KEY, ALLOWED_KEY, PROVIDERS, normalizeConfig, builtinAvailability,
+  check as checkAssistant, permissionOriginOf,
+} from './assistant.js'
+import { DEFAULTS as PROVIDER_DEFAULTS } from './providers.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
   from './i18n.js'
 
@@ -1191,6 +1196,11 @@ async function renderSettings() {
   trow.appendChild(tsel)
   theme.appendChild(trow)
 
+  // --- the assistant: where a chat about a deck goes, and which decks may ask
+  const asst = section(t('setAsstTitle'), t('setAsstSub'))
+  asst.id = 'assistant'
+  await assistantSettings(asst)
+
   // --- the permission nothing can request
   const access = section(t('setAccessTitle'), t('setAccessSub'))
   const row = document.createElement('div')
@@ -1350,3 +1360,206 @@ routeHash()
 // A hash change while the page is already open (Chrome reuses an existing
 // options tab rather than opening a second one) must still move the view.
 addEventListener('hashchange', routeHash)
+
+// ---------------------------------------------------------------- assistant
+//
+// The endpoint, the model and the key — the three things a document must
+// never hold (assistant.js). They live in `chrome.storage.local`, which no
+// page can read, and this is the only place they are typed.
+//
+// Provider order is the maintainer's: the Chrome built-in model first, because
+// it is zero setup, local and offline, and the default whenever this Chrome
+// has it; then Gemini (a free key), Anthropic, and anything OpenAI-shaped —
+// which is also every local server. The base URL is editable for all of
+// them: proxies and gateways exist.
+
+const providerLabel = (p) => p === 'builtin' ? t('asstProvBuiltin')
+  : p === 'gemini' ? t('asstProvGemini')
+  : p === 'anthropic' ? t('asstProvAnthropic')
+  : t('asstProvOpenai')
+
+async function assistantSettings(section) {
+  const hasBuiltin = typeof globalThis.LanguageModel !== 'undefined'
+  const stored = (await chrome.storage.local.get(CONFIG_KEY))?.[CONFIG_KEY]
+  const cfg = normalizeConfig(stored, hasBuiltin)
+  // What was typed for each provider survives switching between them, so
+  // trying the built-in model does not cost a pasted key.
+  const perProvider = { [cfg.provider]: { ...cfg } }
+
+  const form = document.createElement('div')
+  form.className = 'form'
+  section.appendChild(form)
+
+  const field = (label, control, hint) => {
+    const row = document.createElement('label')
+    row.className = 'field'
+    const l = document.createElement('span')
+    l.textContent = label
+    row.append(l, control)
+    if (hint) {
+      const h = document.createElement('small')
+      h.textContent = hint
+      row.appendChild(h)
+    }
+    form.appendChild(row)
+    return row
+  }
+
+  const provider = document.createElement('select')
+  for (const p of PROVIDERS) {
+    if (p === 'builtin' && !hasBuiltin) continue
+    const o = document.createElement('option')
+    o.value = p
+    o.textContent = providerLabel(p)
+    provider.appendChild(o)
+  }
+  provider.value = cfg.provider
+  field(t('asstProvider'), provider)
+
+  const baseUrl = document.createElement('input')
+  baseUrl.type = 'text'
+  baseUrl.spellcheck = false
+  baseUrl.autocomplete = 'off'
+  const baseRow = field(t('asstBaseUrl'), baseUrl)
+
+  const model = document.createElement('input')
+  model.type = 'text'
+  model.spellcheck = false
+  model.autocomplete = 'off'
+  const modelRow = field(t('asstModel'), model)
+
+  const key = document.createElement('input')
+  key.type = 'password'
+  key.autocomplete = 'off'
+  const keyRow = field(t('asstKey'), key)
+  const keyHint = keyRow.appendChild(document.createElement('small'))
+
+  const actions = document.createElement('div')
+  actions.className = 'actions'
+  const save = document.createElement('button')
+  save.className = 'btn primary'
+  save.textContent = t('asstSave')
+  const probe = document.createElement('button')
+  probe.className = 'btn'
+  probe.textContent = t('asstCheck')
+  const status = document.createElement('span')
+  status.className = 'note'
+  actions.append(save, probe, status)
+  form.appendChild(actions)
+
+  const current = () => normalizeConfig({
+    provider: provider.value, baseUrl: baseUrl.value, model: model.value, key: key.value,
+  }, hasBuiltin)
+
+  const showBuiltinState = async () => {
+    const a = await builtinAvailability(globalThis.LanguageModel)
+    status.textContent = a === 'available' ? t('asstBuiltinReady')
+      : a === 'downloadable' || a === 'downloading' ? t('asstBuiltinDownload')
+      : t('asstBuiltinUnsupported')
+  }
+
+  const fill = () => {
+    const p = provider.value
+    const c = perProvider[p] ?? normalizeConfig({ provider: p }, hasBuiltin)
+    const http = p !== 'builtin'
+    baseRow.hidden = modelRow.hidden = keyRow.hidden = !http
+    baseUrl.value = http ? c.baseUrl : ''
+    baseUrl.placeholder = PROVIDER_DEFAULTS[p]?.baseUrl ?? ''
+    model.value = http ? c.model : ''
+    model.placeholder = PROVIDER_DEFAULTS[p]?.model ?? ''
+    key.value = http ? c.key : ''
+    keyHint.textContent = p === 'openai' ? t('asstKeyOptional') : ''
+    status.textContent = ''
+    if (!http) void showBuiltinState()
+  }
+  provider.addEventListener('change', fill)
+  for (const input of [baseUrl, model, key]) {
+    input.addEventListener('input', () => { perProvider[provider.value] = current() })
+  }
+  fill()
+
+  /**
+   * Site access for the endpoint's origin, asked on Save — a click, which is
+   * the gesture `permissions.request` needs. With it the request is exempt
+   * from CORS; without it the request is still made, and works wherever the
+   * server allows browser extensions (the hosted vendors do; Ollama does by
+   * default; LM Studio has a switch). Declining is therefore not an error.
+   */
+  const askSiteAccess = async (c) => {
+    const origin = permissionOriginOf(c)
+    if (!origin || !chrome.permissions?.request) return true
+    try {
+      return await chrome.permissions.request({ origins: [`${origin}/*`] })
+    } catch { return false }
+  }
+
+  // Neither goes through `act`: that re-renders the whole view, and the
+  // status line these write is the thing the person is waiting to read.
+  save.onclick = async () => {
+    const c = current()
+    try {
+      await chrome.storage.local.set({ [CONFIG_KEY]: c })
+    } catch (e) { toast(e.message); return }
+    const granted = await askSiteAccess(c)
+    toast(t('asstSaved'))
+    status.textContent = granted ? '' : t('asstAccessDeclined')
+  }
+
+  probe.onclick = async () => {
+    const c = current()
+    probe.disabled = true
+    status.textContent = t('asstChecking')
+    try {
+      const r = await checkAssistant(c, { fetch: fetch.bind(globalThis), LanguageModel: globalThis.LanguageModel, t })
+      status.textContent = r.ok
+        ? (c.provider === 'builtin' ? t('asstBuiltinReady') : t('asstReachable', hostOf(c)))
+        : r.reason
+    } catch (e) {
+      status.textContent = e.message
+    } finally {
+      probe.disabled = false
+    }
+  }
+
+  // --- the documents that have been allowed to ask
+  const allowed = (await chrome.storage.local.get(ALLOWED_KEY))?.[ALLOWED_KEY] || {}
+  const list = document.createElement('div')
+  list.className = 'allowed'
+  const h = document.createElement('h3')
+  h.textContent = t('asstAllowedTitle')
+  const sub = document.createElement('p')
+  sub.className = 'sub'
+  sub.textContent = t('asstAllowedSub')
+  list.append(h, sub)
+  const keys = Object.keys(allowed).sort()
+  if (!keys.length) {
+    const p = document.createElement('p')
+    p.className = 'dim'
+    p.textContent = t('noneYet')
+    list.appendChild(p)
+  }
+  for (const docKey of keys) {
+    let path = docKey
+    try { path = decodeURIComponent(new URL(docKey).pathname) } catch { /* shown as stored */ }
+    const row = document.createElement('div')
+    row.className = 'row'
+    row.innerHTML = `<b>${esc(path.split('/').filter(Boolean).pop() || path)}</b>`
+      + `<span class="note path">${esc(path)}</span>`
+    const drop = document.createElement('button')
+    drop.className = 'btn'
+    drop.textContent = t('remove')
+    drop.onclick = () => act(async () => {
+      const now = (await chrome.storage.local.get(ALLOWED_KEY))?.[ALLOWED_KEY] || {}
+      delete now[docKey]
+      await chrome.storage.local.set({ [ALLOWED_KEY]: now })
+    })
+    row.appendChild(drop)
+    list.appendChild(row)
+  }
+  section.appendChild(list)
+}
+
+/** The host a configuration talks to, for the status line — never the URL. */
+function hostOf(c) {
+  try { return new URL(c.baseUrl).host } catch { return c.provider }
+}
