@@ -26,13 +26,24 @@
 // sanitizeSvgMarkup and drops a `link` that is neither a web URL nor an id —
 // measured in headless Chrome on the exact apply chain with the exact
 // payloads, because the sanitizers need a DOM; (D) `blobs` and `comments`
-// never leave the page.
+// never leave the page; (E) the CALL SITE is pinned: the browser section
+// drives the real AssistantPanel.apply with a fake store and the hostile
+// reply, and a source assertion holds the cleanDoc line inside apply( —
+// removing that one call turns 4 of the 103 checks red (measured: the two
+// source pins and the two stored-document assertions — 99/103), where a rig
+// that called cleanDoc itself stayed green.
+//
+// Contract additions (agreed with home-webext): describe `local: true` (an
+// on-device model → "on this device · <display name>"), check `code:
+// 'consent-pending'` (waiting text, ONE re-check on focus/visibility), error
+// `code: 'consent-denied'` (a plain refusal card, deck unchanged). Keyed on
+// the codes, never the text.
 
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { compactDoc, expandDoc } from '../slides/src/compact.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
 import { buildMessages, elideDoc, mergeReply, parseReply, SYSTEM_PROMPT } from '../slides/src/editor/assistant/prompt.ts'
-import { CH, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
+import { CH, CODE_RE, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
 import { dedupeIds, cleanDoc, ID_RE } from '../slides/src/editor/assistant/prompt.ts'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -224,6 +235,19 @@ await (async () => {
     'A — host shape: letters, digits, dots, dashes, ≤253 (a port is not a hostname — describe sends the host)')
   ok(MODEL_RE.test('claude-sonnet-4-5') && MODEL_RE.test('models/gemini-2.5-flash') && MODEL_RE.test('org:ft:gpt-4o-mini:abc') && !MODEL_RE.test('m k') && !MODEL_RE.test('') && !MODEL_RE.test('x'.repeat(121)),
     'A — model shape: [A-Za-z0-9._:/-]{1,120}')
+
+  // contract additions: local, consent codes
+  w.handler = (f) => { if (f.op === 'assistant.describe') w.res(f.id, { ok: true, host: '', model: 'gemini-nano', configured: true, local: true }) }
+  const loc = await tr.describe()
+  ok(loc.local === true && loc.host === '' && loc.model === 'gemini-nano', 'describe: local:true with an empty host and the model id')
+  w.handler = (f) => { if (f.op === 'assistant.describe') w.res(f.id, { ok: true, host: 'h.example', model: 'm', configured: true, local: 'yes' }) }
+  ok((await tr.describe()).local === undefined, 'describe: local is a boolean or absent — a truthy string is not local')
+  w.handler = (f) => { if (f.op === 'assistant.check') w.res(f.id, { ok: false, reason: 'Asking you first', code: 'consent-pending' }) }
+  const pend = await tr.check()
+  ok(pend.ok === false && pend.code === 'consent-pending' && pend.reason === 'Asking you first', 'check: the consent-pending code rides beside the reason')
+  w.handler = (f) => { if (f.op === 'assistant.check') w.res(f.id, { ok: false, reason: 'x', code: 'Not A Code!' }) }
+  ok((await tr.check() as { code?: string }).code === undefined, 'check: a code outside its shape is dropped (the page keys on codes)')
+  ok(CODE_RE.test('consent-pending') && CODE_RE.test('consent-denied') && !CODE_RE.test('') && !CODE_RE.test('x'.repeat(41)), 'code shape: [a-z][a-z0-9-]{0,39}')
   await tr.openSettings()
   ok(w.sent.some((f) => f.op === 'assistant.settings.open'), 'openSettings asks the extension for its options page')
 
@@ -261,6 +285,13 @@ await (async () => {
   w.evt(sendId, 'assistant.error', { reason: 'HTTP 500' })
   ok(await p3.then(() => 'resolved', (e: Error) => e.message) === 'HTTP 500', 'an error event rejects with its reason')
 
+  w.handler = (f) => { if (f.op === 'assistant.send') { sendId = f.id; w.res(f.id, { ok: true }) } }
+  const p5 = tr.send(msgs, () => {}, new AbortController().signal)
+  await tick()
+  w.evt(sendId, 'assistant.error', { reason: 'The user said no', code: 'consent-denied' })
+  const e5 = await p5.then(() => null, (e: Error & { code?: string }) => e)
+  ok(!!e5 && e5.code === 'consent-denied' && e5.message === 'The user said no', 'send: an error event carries its code on the rejection')
+
   // abort
   const ac = new AbortController()
   w.handler = (f) => { if (f.op === 'assistant.send') { sendId = f.id; w.res(f.id, { ok: true }) } }
@@ -294,6 +325,17 @@ console.log('\ntransport.ts — is the extension here?')
   void g
 }
 
+console.log('\npanel.ts — the call site (E, the source half)')
+{
+  const panel = fs.readFileSync(new URL('../slides/src/editor/assistant/panel.ts', import.meta.url), 'utf8')
+  const applyAt = panel.indexOf('private apply(')
+  const applyBody = panel.slice(applyAt, panel.indexOf('\n  }\n', applyAt))
+  ok(applyAt > 0 && applyBody.includes('cleanDoc(next, { html: sanitizeHtml, svg: sanitizeSvgMarkup, svgCss: sanitizeSvgCss })'),
+    'E — apply( cleans the parsed document with the real sanitizers, that exact line')
+  ok(applyBody.indexOf('cleanDoc(next') > 0 && applyBody.indexOf('cleanDoc(next') < applyBody.indexOf('this.store.replaceDoc(next)'), 'E — and cleans BEFORE the document is stored')
+  ok(/consent-denied/.test(panel) && /consent-pending/.test(panel) && !/said no|Asking you/.test(panel), 'the panel keys on the codes, never on reason text')
+}
+
 // --- C, measured: the apply chain in a browser ----------------------------------
 //
 // sanitizeHtml and sanitizeSvgMarkup parse with the DOM, so the exact payloads
@@ -314,8 +356,14 @@ import { sanitizeHtml, sanitizeSvgMarkup, sanitizeSvgCss } from ${JSON.stringify
 import { parseDocInputReport } from ${JSON.stringify(path.join(repoRoot, 'slides/src/compactload.ts'))}
 import { starterDoc } from ${JSON.stringify(path.join(repoRoot, 'slides/src/starterdeck.ts'))}
 import { buildMessages, mergeReply, cleanDoc } from ${JSON.stringify(path.join(repoRoot, 'slides/src/editor/assistant/prompt.ts'))}
+import { AssistantPanel } from ${JSON.stringify(path.join(repoRoot, 'slides/src/editor/assistant/panel.ts'))}
 const results = []
 const check = (name, pass) => results.push([name, pass])
+const tick = (ms = 30) => new Promise((r) => setTimeout(r, ms))
+;(async () => {
+const TAINT = /onerror|onclick|onload|<script|javascript:|evil\\.example/i
+const fakeStore = (doc) => ({ doc, currentIndex: 0, readOnly: false, replaced: 0, replaceDoc(next) { this.doc = next; this.replaced++ }, goTo() {}, undo() {}, commit() {} })
+const fakeTransport = (over = {}) => ({ name: 'fake', checks: 0, describe: async () => ({ host: 'h.example', model: 'm', configured: true }), check: async function () { this.checks++; return { ok: true } }, send: async () => 'ok', openSettings: async () => {}, ...over })
 try {
   const doc = starterDoc()
   const { elided } = buildMessages(doc, 'deck', 0, [], 'x')
@@ -346,8 +394,75 @@ try {
   check('C — link: javascript: dropped, web URL and slide id kept', els.r1.link === undefined && els.r2.link === 'https://bento.page/' && els.r3.link === 'p1')
   check('C — nothing executable is left anywhere in the document to be stored', !/onerror|onclick|onload|<script|javascript:|evil\\.example/i.test(after))
   check('C — nothing ran while cleaning', window.__pwn === undefined)
-} catch (e) { check('probe threw: ' + (e && e.message), false) }
-document.body.insertAdjacentText('beforeend', 'BENTO-RESULTS:' + btoa(unescape(encodeURIComponent(JSON.stringify(results)))) + ':END')
+
+  // E — the REAL apply: the same hostile reply through AssistantPanel.apply with a fake store
+  {
+    const doc2 = starterDoc()
+    const store = fakeStore(doc2)
+    const panel = new AssistantPanel({ store, transport: fakeTransport() })
+    document.body.appendChild(panel.root)
+    const { elided: el2 } = buildMessages(doc2, 'deck', 0, [], 'x')
+    panel.apply('deck', 0, JSON.parse(JSON.stringify(reply)), el2)
+    const stored = JSON.stringify(store.doc)
+    const s0 = store.doc.slides[0]
+    check('E — the real apply() stored ONE document (replaceDoc once)', store.replaced === 1 && store.doc !== doc2)
+    check('E — and the stored document is clean: no handler, script, javascript: link or @import anywhere', !TAINT.test(stored))
+    const e2 = Object.fromEntries(s0.elements.map((e) => [e.id, e]))
+    check('E — text, cell, svg markup, css, asset cleaned and the javascript: link dropped through the real path',
+      /bold/.test(e2.t.html) && !/onerror/.test(e2.t.html) && /<rect/.test(e2.sv.markup) && /fill:blue/.test(e2.sv.css) && /<rect/.test(store.doc.assets.art) && e2.r1.link === undefined && e2.r2.link === 'https://bento.page/')
+    check('E — the result card is there with Undo', !!panel.root.querySelector('.ed-assist-card .ed-assist-undo'))
+    check('E — nothing ran', window.__pwn === undefined)
+  }
+
+  // contract: local model display; consent-pending → waiting + one re-check on focus; consent-denied → refusal card
+  {
+    const store = fakeStore(starterDoc())
+    const tr = fakeTransport({ describe: async () => ({ host: '', model: 'gemini-nano', configured: true, local: true }) })
+    const panel = new AssistantPanel({ store, transport: tr })
+    document.body.appendChild(panel.root)
+    panel.setOpen(true, false); await tick(60)
+    const status = panel.root.querySelector('.ed-assist-status').textContent
+    check('local: the route line reads "on this device · Gemini Nano" (id → display name), no host: ' + status, /on this device · Gemini Nano/.test(status) && !/h\\.example/.test(status))
+    check('local: the notice names the device, not a host', /to on this device;/.test(panel.root.querySelector('.ed-assist-notice').textContent))
+    const tr2 = fakeTransport({ describe: async () => ({ host: '', model: 'some-new-id', configured: true, local: true }) })
+    const panel2 = new AssistantPanel({ store, transport: tr2 }); document.body.appendChild(panel2.root); panel2.setOpen(true, false); await tick(60)
+    check('local: an unknown id displays as-is', /on this device · some-new-id/.test(panel2.root.querySelector('.ed-assist-status').textContent))
+  }
+  {
+    const store = fakeStore(starterDoc())
+    let pending = true
+    const tr = fakeTransport({ check: async function () { this.checks++; return pending ? { ok: false, reason: 'Asking', code: 'consent-pending' } : { ok: true } } })
+    const panel = new AssistantPanel({ store, transport: tr })
+    document.body.appendChild(panel.root)
+    panel.setOpen(true, false); await tick(60)
+    const st = () => panel.root.querySelector('.ed-assist-status').textContent
+    check('consent-pending: the waiting text shows and the input is disabled: ' + st(), /Waiting for your permission on this device/.test(st()) && panel.root.querySelector('.ed-assist-input').disabled && tr.checks === 1)
+    check('consent-pending: the reason text is not what is shown', !/Asking/.test(st()))
+    window.dispatchEvent(new Event('focus')); await tick(60)
+    check('consent-pending: focus re-ran check once, still pending → still waiting', tr.checks === 2 && /Waiting/.test(st()))
+    pending = false
+    window.dispatchEvent(new Event('focus')); await tick(60)
+    check('consent-pending: the next return re-checks once more, ok → the route line, input enabled', tr.checks === 3 && /via fake · h\\.example · m/.test(st()) && !panel.root.querySelector('.ed-assist-input').disabled)
+    window.dispatchEvent(new Event('focus')); document.dispatchEvent(new Event('visibilitychange')); await tick(60)
+    check('consent-pending: once resolved, focus/visibility no longer re-check', tr.checks === 3)
+  }
+  {
+    const store = fakeStore(starterDoc())
+    const before = JSON.stringify(store.doc)
+    const tr = fakeTransport({ send: async () => { const e = new Error('The user said no'); e.code = 'consent-denied'; throw e } })
+    const panel = new AssistantPanel({ store, transport: tr })
+    document.body.appendChild(panel.root)
+    panel.setOpen(true, false); await tick(60)
+    panel.root.querySelector('.ed-assist-input').value = 'do it'
+    await panel.submit(); await tick(30)
+    const card = panel.root.querySelector('.ed-assist-refused')
+    check('consent-denied: a plain refusal card with the localized text, keyed on the code', !!card && /Permission was refused on this device/.test(card.textContent) && !/said no/.test(panel.root.textContent))
+    check('consent-denied: the deck is unchanged', store.replaced === 0 && JSON.stringify(store.doc) === before)
+    check('consent-denied: the drawer is usable again', !panel.root.querySelector('.ed-assist-input').disabled && panel.root.querySelector('.ed-assist-send').textContent === 'Send')
+  }
+} catch (e) { check('probe threw: ' + (e && e.message) + ' ' + (e && e.stack || '').slice(0, 300), false) }
+window.__results = 'BENTO-RESULTS:' + btoa(unescape(encodeURIComponent(JSON.stringify(results)))) + ':END'
+})()
 `
 
 console.log('\nthe apply chain, in a browser (C)')
@@ -360,13 +475,32 @@ if (!CHROME) {
     execFileSync(path.join(repoRoot, 'slides/node_modules/.bin/esbuild'), [path.join(tmp, 'probe.ts'), '--bundle', '--format=iife', '--outfile=' + path.join(tmp, 'probe.js')], { stdio: 'pipe' })
     // a classic script from file:// (a module would be blocked by CORS there); written by concatenation, never a literal script-close
     fs.writeFileSync(path.join(tmp, 'probe.html'), '<!doctype html><meta charset="utf-8"><body><scr' + 'ipt src="probe.js"></scr' + 'ipt></body>')
-    const dom = await new Promise<string>((resolve) => {
-      const child = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--allow-file-access-from-files', '--user-data-dir=' + path.join(tmp, 'profile'), '--virtual-time-budget=4000', '--dump-dom', 'file://' + path.join(tmp, 'probe.html')], { stdio: ['ignore', 'pipe', 'ignore'] })
-      let out = ''
-      child.stdout.on('data', (b: Buffer) => { out += b.toString('utf8') })
-      const done = setTimeout(() => child.kill('SIGKILL'), 45_000)
-      child.on('close', () => { clearTimeout(done); resolve(out) })
-    })
+    // Driven over CDP rather than --dump-dom: the probe awaits (a re-check on
+    // focus, a refused send), and the new headless fires dump-dom at load.
+    const port = 9700 + Math.floor(Math.random() * 200)
+    const child = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--allow-file-access-from-files', '--user-data-dir=' + path.join(tmp, 'profile'), `--remote-debugging-port=${port}`, 'about:blank'], { stdio: 'ignore' })
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+    let wsUrl = ''
+    for (let i = 0; i < 80 && !wsUrl; i++) {
+      try { const r = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent('file://' + path.join(tmp, 'probe.html'))}`, { method: 'PUT' }); if (r.ok) wsUrl = (await r.json() as { webSocketDebuggerUrl: string }).webSocketDebuggerUrl } catch { /* not up yet */ }
+      if (!wsUrl) await sleep(250)
+    }
+    let dom = ''
+    if (wsUrl) {
+      const ws = new WebSocket(wsUrl)
+      await new Promise((r) => ws.addEventListener('open', r, { once: true }))
+      let id = 0
+      const pending = new Map<number, (v: { result?: { value?: unknown } }) => void>()
+      ws.addEventListener('message', (e) => { const m = JSON.parse(String(e.data)); if (m.id && pending.has(m.id)) { pending.get(m.id)!(m.result ?? {}); pending.delete(m.id) } })
+      const evaluate = (expression: string) => new Promise<unknown>((resolve) => { const i = ++id; pending.set(i, (r) => resolve(r.result?.value)); ws.send(JSON.stringify({ id: i, method: 'Runtime.evaluate', params: { expression, returnByValue: true } })) })
+      for (let i = 0; i < 100; i++) {
+        const v = await evaluate('window.__results || ""')
+        if (typeof v === 'string' && v) { dom = v; break }
+        await sleep(200)
+      }
+      ws.close()
+    }
+    child.kill('SIGKILL')
     const blob = /BENTO-RESULTS:([A-Za-z0-9+/=]+):END/.exec(dom)
     if (!blob) ok(false, 'the browser probe reported results (it did not)')
     else for (const [name, pass] of JSON.parse(Buffer.from(blob[1], 'base64').toString('utf8')) as Array<[string, boolean]>) ok(pass, name)

@@ -948,4 +948,7 @@ export const zhHans: Catalog = {
   "Deck updated by the assistant — ⌘Z undoes": "助手已更新演示文稿 — ⌘Z 可撤销",
   "Sends this slide's text and notes to {host}; comments stay here.": "将此幻灯片的文本和备注发送到 {host}；评论留在本地。",
   "Sends the deck's text and notes to {host}; comments stay here.": "将演示文稿的文本和备注发送到 {host}；评论留在本地。",
+  "on this device": "在此设备上",
+  "Waiting for your permission on this device…": "正在等待您在此设备上授权…",
+  "Permission was refused on this device — nothing was changed.": "在此设备上被拒绝授权 — 未作任何更改。",
 }

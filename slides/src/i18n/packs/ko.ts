@@ -952,4 +952,7 @@ export const strings: Catalog = {
   "Deck updated by the assistant — ⌘Z undoes": "어시스턴트가 덱을 업데이트했습니다 — ⌘Z로 취소",
   "Sends this slide's text and notes to {host}; comments stay here.": "이 슬라이드의 텍스트와 노트를 {host}(으)로 보냅니다. 댓글은 여기에 남습니다.",
   "Sends the deck's text and notes to {host}; comments stay here.": "덱의 텍스트와 노트를 {host}(으)로 보냅니다. 댓글은 여기에 남습니다.",
+  "on this device": "이 기기에서",
+  "Waiting for your permission on this device…": "이 기기에서 권한을 기다리는 중…",
+  "Permission was refused on this device — nothing was changed.": "이 기기에서 권한이 거부되었습니다 — 변경된 것이 없습니다.",
 }

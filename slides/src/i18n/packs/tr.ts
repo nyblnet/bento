@@ -959,4 +959,7 @@ export const strings: Catalog = {
   "Deck updated by the assistant — ⌘Z undoes": "Sunum asistan tarafından güncellendi — ⌘Z geri alır",
   "Sends this slide's text and notes to {host}; comments stay here.": "Bu slaytın metnini ve notlarını {host} adresine gönderir; yorumlar burada kalır.",
   "Sends the deck's text and notes to {host}; comments stay here.": "Sunumun metnini ve notlarını {host} adresine gönderir; yorumlar burada kalır.",
+  "on this device": "bu cihazda",
+  "Waiting for your permission on this device…": "Bu cihazda izniniz bekleniyor…",
+  "Permission was refused on this device — nothing was changed.": "Bu cihazda izin reddedildi — hiçbir şey değişmedi.",
 }

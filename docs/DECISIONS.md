@@ -7371,3 +7371,20 @@ go to the model (the author's intent for the slide); review `comments` do not
 (reviewers' names and words addressed to the author) and are put back from
 the live document on apply; the drawer says so in one line under its input —
 "Sends this slide's text and notes to <host>; comments stay here."
+(E) The call site is pinned, not just the function: the browser section drives
+the REAL `AssistantPanel.apply` with a fake store and the hostile reply and
+asserts the stored document is clean, and a source assertion holds the
+`cleanDoc(next, …)` line inside `apply(` before `replaceDoc`. Measured: with
+that one line removed the rig goes 99/103 (four red); a rig that called
+`cleanDoc` itself had stayed green.
+
+**Contract additions agreed with home-webext (their #513):** `describe` may
+say `local: true` (an on-device model — host '', the page renders "on this
+device · <display name>" from a small id→name map, `gemini-nano` → "Gemini
+Nano", unknown ids as-is); `check` may fail with `code: 'consent-pending'`
+(the extension is asking the user) → the drawer shows the waiting text and
+re-runs `check` ONCE when the document regains focus or visibility; an
+`assistant.error` may carry `code: 'consent-denied'` → a plain refusal card,
+deck unchanged. The page keys on the CODES (shape `[a-z][a-z0-9-]{0,39}`),
+never on the reason text. All three rigged with fake transports in the
+browser section.

@@ -20,6 +20,10 @@ import { validateDoc, type Finding } from '../../validate'
 import { lsGet, lsSet } from '../../../../kernel/src/storage.ts'
 import { offlineEnabled } from '../../../../kernel/src/net.ts'
 import { ExtensionTransport, extensionPresent, type AssistantDescription, type AssistantTransport } from './transport'
+
+/** Display names for on-device model ids; anything else shows as its id. */
+export const MODEL_NAMES: Record<string, string> = { 'gemini-nano': 'Gemini Nano' }
+export const modelDisplay = (id: string): string => MODEL_NAMES[id] ?? id
 import { buildMessages, cleanDoc, mergeReply, parseReply, type AssistantScope, type Turn } from './prompt'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
@@ -60,6 +64,9 @@ export class AssistantPanel {
   private present: () => boolean
   private running: AbortController | null = null
   private described: AssistantDescription | null = null
+  /** the extension is asking the user (check code 'consent-pending'): one re-check is armed */
+  private consentPending = false
+  private recheckArmed = false
   private store: Store
   private toast: (m: string) => void
 
@@ -153,14 +160,21 @@ export class AssistantPanel {
       this.sendB.disabled = true
       return
     }
-    const route = d ? `${t('via {host}', { host: this.transport.name })} · ${d.host || '—'} · ${d.model || '—'}` : t('via {host}', { host: this.transport.name })
+    if (this.consentPending) {
+      s.append(el('span', 'ed-assist-waiting', t('Waiting for your permission on this device…') + ' '), settings)
+      this.input.disabled = true
+      this.sendB.disabled = true
+      return
+    }
+    const where = d?.local ? `${t('on this device')} · ${modelDisplay(d.model)}` : d ? `${d.host || '—'} · ${d.model || '—'}` : ''
+    const route = where ? `${t('via {host}', { host: this.transport.name })} · ${where}` : t('via {host}', { host: this.transport.name })
     s.append(el('span', 'ed-assist-route', route + ' '), settings)
   }
 
   /** One line under the input saying what leaves the page (prompt.ts elideDoc). */
   private refreshNotice() {
     if (!this.transport) { this.notice.textContent = ''; return }
-    const host = this.described?.host || this.transport.name
+    const host = this.described?.local ? t('on this device') : (this.described?.host || this.transport.name)
     this.notice.textContent = this.scope === 'slide'
       ? t("Sends this slide's text and notes to {host}; comments stay here.", { host })
       : t("Sends the deck's text and notes to {host}; comments stay here.", { host })
@@ -175,6 +189,32 @@ export class AssistantPanel {
       this.note(t('The extension did not answer: {reason}', { reason: (e as Error).message }), 'err')
     }
     this.refreshStatus()
+    if (this.described.configured) await this.check()
+  }
+
+  /**
+   * One cheap round-trip before a real turn. Keyed on the CODE: 'consent-pending'
+   * means the extension is asking the user (an on-device model's prompt), so
+   * the drawer waits and re-checks ONCE when the document comes back —
+   * focus or visibility, whichever fires first — rather than polling.
+   */
+  private async check(): Promise<void> {
+    if (!this.transport) return
+    const r = await this.transport.check()
+    this.consentPending = !r.ok && r.code === 'consent-pending'
+    if (!r.ok && !this.consentPending) this.note(t('The request failed: {reason}', { reason: r.reason }), 'err')
+    this.refreshStatus()
+    if (this.consentPending && !this.recheckArmed) {
+      this.recheckArmed = true
+      const once = () => {
+        window.removeEventListener('focus', once)
+        document.removeEventListener('visibilitychange', once)
+        this.recheckArmed = false
+        if (this.consentPending) void this.check()
+      }
+      window.addEventListener('focus', once)
+      document.addEventListener('visibilitychange', once)
+    }
   }
 
   /** A line in the log. */
@@ -219,6 +259,7 @@ export class AssistantPanel {
       live.remove()
       const err = e as Error
       if (err.name === 'AbortError') this.note(t('Stopped.'), 'info')
+      else if ((err as { code?: string }).code === 'consent-denied') this.refusal()
       else this.note(t('The request failed: {reason}', { reason: err.message }), 'err')
       this.setRunning(false)
       return
@@ -235,6 +276,14 @@ export class AssistantPanel {
     if (reply.note) this.note(reply.note, 'assistant')
     this.history.push({ role: 'assistant', text: reply.note || t('(edited the deck)') })
     this.apply(scope, index, reply.value, elided)
+  }
+
+  /** The user declined the on-device model: a plain card, nothing changed. */
+  private refusal() {
+    const card = el('div', 'ed-assist-card ed-assist-refused')
+    card.appendChild(el('div', 'ed-assist-card-h', t('Permission was refused on this device — nothing was changed.')))
+    this.log.appendChild(card)
+    this.log.scrollTop = this.log.scrollHeight
   }
 
   /** The reply's JSON → one undoable document swap, and a card saying what happened. */

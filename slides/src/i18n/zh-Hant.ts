@@ -948,4 +948,7 @@ export const zhHant: Catalog = {
   "Deck updated by the assistant — ⌘Z undoes": "助理已更新簡報 — ⌘Z 可復原",
   "Sends this slide's text and notes to {host}; comments stay here.": "將此投影片的文字與備註傳送到 {host}；註解留在本機。",
   "Sends the deck's text and notes to {host}; comments stay here.": "將簡報的文字與備註傳送到 {host}；註解留在本機。",
+  "on this device": "在此裝置上",
+  "Waiting for your permission on this device…": "正在等待您在此裝置上授權…",
+  "Permission was refused on this device — nothing was changed.": "在此裝置上被拒絕授權 — 未作任何變更。",
 }

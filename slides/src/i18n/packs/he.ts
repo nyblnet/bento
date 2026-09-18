@@ -961,4 +961,7 @@ export const strings: Catalog = {
   "Deck updated by the assistant — ⌘Z undoes": "העוזר עדכן את המצגת — ⌘Z מבטל",
   "Sends this slide's text and notes to {host}; comments stay here.": "שולח את הטקסט וההערות של שקופית זו אל {host}; התגובות נשארות כאן.",
   "Sends the deck's text and notes to {host}; comments stay here.": "שולח את הטקסט וההערות של המצגת אל {host}; התגובות נשארות כאן.",
+  "on this device": "במכשיר זה",
+  "Waiting for your permission on this device…": "ממתין לאישורך במכשיר זה…",
+  "Permission was refused on this device — nothing was changed.": "האישור נדחה במכשיר זה — שום דבר לא השתנה.",
 }

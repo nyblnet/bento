@@ -961,4 +961,7 @@ export const strings: Catalog = {
   "Deck updated by the assistant — ⌘Z undoes": "Dek dikemas kini oleh pembantu — ⌘Z membuat asal",
   "Sends this slide's text and notes to {host}; comments stay here.": "Menghantar teks dan nota slaid ini ke {host}; komen kekal di sini.",
   "Sends the deck's text and notes to {host}; comments stay here.": "Menghantar teks dan nota dek ke {host}; komen kekal di sini.",
+  "on this device": "pada peranti ini",
+  "Waiting for your permission on this device…": "Menunggu kebenaran anda pada peranti ini…",
+  "Permission was refused on this device — nothing was changed.": "Kebenaran ditolak pada peranti ini — tiada yang diubah.",
 }

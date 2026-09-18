@@ -948,4 +948,7 @@ export const es: Catalog = {
   "Deck updated by the assistant — ⌘Z undoes": "Mazo actualizado por el asistente — ⌘Z lo deshace",
   "Sends this slide's text and notes to {host}; comments stay here.": "Envía el texto y las notas de esta diapositiva a {host}; los comentarios se quedan aquí.",
   "Sends the deck's text and notes to {host}; comments stay here.": "Envía el texto y las notas del mazo a {host}; los comentarios se quedan aquí.",
+  "on this device": "en este dispositivo",
+  "Waiting for your permission on this device…": "Esperando tu permiso en este dispositivo…",
+  "Permission was refused on this device — nothing was changed.": "Se denegó el permiso en este dispositivo — no se cambió nada.",
 }

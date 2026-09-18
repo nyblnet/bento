@@ -948,4 +948,7 @@ export const ja: Catalog = {
   "Deck updated by the assistant — ⌘Z undoes": "アシスタントがデッキを更新しました — ⌘Z で元に戻せます",
   "Sends this slide's text and notes to {host}; comments stay here.": "このスライドのテキストとノートを {host} に送ります。コメントはここに残ります。",
   "Sends the deck's text and notes to {host}; comments stay here.": "デッキのテキストとノートを {host} に送ります。コメントはここに残ります。",
+  "on this device": "このデバイス上",
+  "Waiting for your permission on this device…": "このデバイスでの許可を待っています…",
+  "Permission was refused on this device — nothing was changed.": "このデバイスで許可が拒否されました — 何も変更されていません。",
 }

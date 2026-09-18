@@ -34,16 +34,24 @@
 //
 // Ops:
 //
-//   assistant.describe   payload {}                → res { ok:true, host, model, configured }
+//   assistant.describe   payload {}                → res { ok:true, host, model, configured, local? }
 //                        host = the endpoint's hostname (never the key, never
 //                        the full URL with a query), model = the configured
 //                        model id, configured = whether a request could be
 //                        made right now. ok:false { reason } only on a bridge
-//                        fault.
-//   assistant.check      payload {}                → res { ok:true } | { ok:false, reason }
+//                        fault. `local: true` = an on-device model (the
+//                        browser's own, e.g. `gemini-nano`): host is '' and
+//                        the page renders "on this device · <display name>"
+//                        itself, from a small id→name map (unknown ids as-is).
+//   assistant.check      payload {}                → res { ok:true } | { ok:false, reason, code? }
 //                        one cheap round-trip to the endpoint (a model list or
 //                        an empty completion) so the panel can say "reachable"
-//                        before a real turn.
+//                        before a real turn. `code: 'consent-pending'` = the
+//                        extension is asking the user (a local model's
+//                        download/consent prompt): the drawer shows waiting
+//                        text and re-runs check ONCE when the document regains
+//                        focus or visibility. The page keys on CODES, never on
+//                        the reason text.
 //   assistant.send       payload { messages: [{ role:'system'|'user'|'assistant', content }] }
 //                        → res { ok:true }           the request was accepted and is streaming
 //                        | res { ok:false, reason }   refused (not configured, offline, bad key …)
@@ -51,7 +59,9 @@
 //                        evt { kind:'assistant.chunk', text }        one delta of reply text
 //                        and exactly one of
 //                        evt { kind:'assistant.done', text }         the WHOLE reply text
-//                        evt { kind:'assistant.error', reason }      the request failed mid-way
+//                        evt { kind:'assistant.error', reason, code? }  the request failed mid-way;
+//                        `code: 'consent-denied'` = the user refused the
+//                        on-device model → a plain refusal card, deck unchanged.
 //   assistant.abort      payload { req: <id of the send> } → res { ok:true }
 //                        stop streaming that request; the extension may still
 //                        emit a final evt for it, which the page ignores.
@@ -76,9 +86,25 @@ export interface AssistantDescription {
   model: string
   /** could a request be made right now? */
   configured: boolean
+  /** an on-device model: no host to name, the page says "on this device" */
+  local?: boolean
 }
 
-export type CheckResult = { ok: true } | { ok: false; reason: string }
+export type CheckResult = { ok: true } | { ok: false; reason: string; code?: string }
+
+/** A failed send. `code` is the machine-readable reason, when the bridge gave one. */
+export class AssistantError extends Error {
+  code?: string
+  constructor(message: string, code?: string) {
+    super(message)
+    this.name = 'AssistantError'
+    if (code) this.code = code
+  }
+}
+
+/** Machine codes the extension may attach: short, lower-case, dashed. */
+export const CODE_RE = /^[a-z][a-z0-9-]{0,39}$/
+export const codeOf = (v: unknown): string | undefined => (typeof v === 'string' && CODE_RE.test(v) ? v : undefined)
 
 export interface AssistantTransport {
   /** what the panel names as the route, e.g. 'bento/home extension' */
@@ -176,12 +202,15 @@ export class ExtensionTransport implements AssistantTransport {
       host: boundTo(r.host, HOST_RE),
       model: boundTo(r.model, MODEL_RE),
       configured: r.configured === true,
+      ...(r.local === true ? { local: true } : {}),
     }
   }
 
   async check(): Promise<CheckResult> {
     const r = await this.request('assistant.check')
-    return r.ok === true ? { ok: true } : { ok: false, reason: String(r.reason ?? 'unknown') }
+    if (r.ok === true) return { ok: true }
+    const code = codeOf(r.code)
+    return { ok: false, reason: String(r.reason ?? 'unknown'), ...(code ? { code } : {}) }
   }
 
   send(messages: AssistantMessage[], onChunk: (text: string) => void, signal: AbortSignal): Promise<string> {
@@ -211,7 +240,7 @@ export class ExtensionTransport implements AssistantTransport {
         } else if (f.kind === 'assistant.done') {
           finish(() => resolve(typeof f.text === 'string' && f.text ? f.text : text))
         } else if (f.kind === 'assistant.error') {
-          finish(() => reject(new Error(String(f.reason ?? 'request failed'))))
+          finish(() => reject(new AssistantError(String(f.reason ?? 'request failed'), codeOf(f.code))))
         }
       })
       void this.request('assistant.send', { messages }, id).then((r) => {
