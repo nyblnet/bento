@@ -966,6 +966,13 @@ jobs:
         # and simply trusts more than it should.
         run: node scripts/test-relay-auth.ts
 
+      - name: publish account gate — the release account is checked before the site goes live
+        # publish-site.mjs mirrored and pushed the site and THEN failed to
+        # create the GitHub release, three releases running, because gh was
+        # the work profile (a job/temp worktree). The gate runs before rsync;
+        # this rig pins the rule and the order.
+        run: node scripts/test-publish-account.ts
+
       - name: client vouch rig — the other half of read-only
         # Drives a REAL OnlineTransport (kernel's and dash's twin) through a
         # fake socket in a signed room. Every copy holds the room key, so a

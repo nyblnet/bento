@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url'
 import { gatePackIndex } from './sign-packs.mjs'
 import { walk, plannedDeletions, groupDeletions, supersededPacks } from './site-inventory.mjs'
 import { APPS, RELEASE_MARKER, tagFor } from './apps.mjs'
+import { accountMayRelease, activeAccount, mismatchMessage, ownerOfRemote } from './gh-account.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const site = join(root, 'site')
@@ -315,6 +316,28 @@ if (!existsSync(join(site, 'guestbook.bento.html'))) {
   } else {
     console.log(`• deletion gate: ${published.length} published file(s), none would be removed ✓`)
   }
+}
+
+// ---- the gh account, BEFORE anything is published ------------------------
+//
+// Publishing has two halves — mirror the site, then create the GitHub
+// release — and the second needs gh to be the repo owner's account. Three
+// releases running it was not (a job/temp worktree, where the shell's chpwd
+// hook selects the work profile), and the failure came AFTER the site was
+// live. So: which account is gh, and may it release here? Checked here, with
+// nothing mirrored yet; the message names the command to run from ~/devel.
+// scripts/gh-account.mjs holds the rule; scripts/test-publish-account.ts the
+// cases. --dry skips it (a dry run publishes nothing either way); every real
+// publish runs it, because every real publish ends in the release step.
+if (!dry) {
+  const owner = ownerOfRemote((() => { try { return capture('git', ['-C', root, 'remote', 'get-url', 'origin']) } catch { return '' } })())
+  const status = (() => { try { return capture('gh', ['auth', 'status'], { stdio: ['ignore', 'pipe', 'pipe'] }) } catch (e) { return String(e?.stdout ?? '') + String(e?.stderr ?? '') } })()
+  const account = activeAccount(status)
+  const allowed = (process.env.BENTO_RELEASE_ACCOUNTS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  if (!owner) console.warn('⚠ could not read the repo owner from origin — skipping the gh account check')
+  else if (!accountMayRelease(account, owner, allowed)) {
+    die(mismatchMessage({ account, owner, repoRoot: root.startsWith(process.env.HOME ?? '') ? root : '~/devel/bento', cmd: `node scripts/publish-site.mjs ${args.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}` }))
+  } else console.log(`• gh account: ${account} ✓ (may release on ${owner})`)
 }
 
 if (dry) rsyncFlags.push('-n', '-v', '--itemize-changes')
