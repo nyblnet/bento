@@ -32,6 +32,37 @@ export const windowDisplay = (n: number): string => n >= 1_000_000 ? `${Math.rou
 import { applyOps, buildMessages, cleanDoc, mergeReply, parseReply, responseSchema, RETRY_NUDGE, type AssistantScope, type Turn } from './prompt'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
+/**
+ * A reply's markdown as html for the transcript: paragraphs on blank lines,
+ * "- " / "* " / "1. " lines as lists, **bold**, *italic*, `code`. Escaped
+ * FIRST — a model's prose can carry markup — and sanitized again after, the
+ * same gate as every model string. The editor's markdown.ts converts for
+ * contentEditable (<br>, bullet glyphs); a transcript wants real blocks.
+ */
+export function proseHtml(text: string): string {
+  const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const inline = (t: string) => esc(t)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
+  const out: string[] = []
+  for (const block of text.replace(/\r\n?/g, '\n').trim().split(/\n{2,}/)) {
+    const lines = block.split('\n')
+    const bullet = lines.every((l) => /^\s*[-*•]\s+/.test(l))
+    const numbered = !bullet && lines.every((l) => /^\s*\d+[.)]\s+/.test(l))
+    if (bullet || numbered) {
+      const tag = bullet ? 'ul' : 'ol'
+      out.push(`<${tag}>${lines.map((l) => `<li>${inline(l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, ''))}</li>`).join('')}</${tag}>`)
+    } else if (/^#{1,6}\s/.test(lines[0])) {
+      out.push(`<p><strong>${inline(lines[0].replace(/^#{1,6}\s+/, ''))}</strong></p>`)
+      if (lines.length > 1) out.push(`<p>${lines.slice(1).map(inline).join('<br>')}</p>`)
+    } else {
+      out.push(`<p>${lines.map(inline).join('<br>')}</p>`)
+    }
+  }
+  return out.join('')
+}
+
 /** Where "get the extension" points. The app has no store link yet — the
  *  repository directory is the honest address until a listing exists. */
 export const EXTENSION_URL = 'https://github.com/nyblnet/bento/tree/main/home/webext'
@@ -59,6 +90,7 @@ export class AssistantPanel {
   private status = el('div', 'ed-assist-status')
   private log = el('div', 'ed-assist-log')
   private input = document.createElement('textarea')
+  private clearB = document.createElement('button')
   private notice = el('div', 'ed-assist-notice')
   private sendB = document.createElement('button')
   private scopeSlide = document.createElement('button')
@@ -110,8 +142,17 @@ export class AssistantPanel {
     this.sendB.className = 'ed-btn ed-btn-primary ed-assist-send'
     this.sendB.textContent = t('Send')
     this.sendB.addEventListener('click', () => { if (this.running) this.stop(); else void this.submit() })
+    // the box grows with what is typed, up to six lines
+    this.input.addEventListener('input', () => this.fitInput())
     const acts = el('div', 'ed-assist-acts')
     acts.append(scope, this.sendB)
+    // clear: the transcript and the history the next turn would carry
+    this.clearB.type = 'button'
+    this.clearB.className = 'ed-assist-clear'
+    this.clearB.textContent = t('Clear')
+    this.clearB.title = t('Clear the conversation')
+    this.clearB.addEventListener('click', () => this.clear())
+    this.clearB.hidden = true
 
     this.body.append(this.status, this.log, this.input, this.notice, acts)
     this.root.append(head, this.body)
@@ -137,6 +178,7 @@ export class AssistantPanel {
   private refreshStatus() {
     const s = this.status
     s.innerHTML = ''
+    s.appendChild(this.clearB)
     this.refreshNotice()
     const usable = this.transport && !offlineEnabled()
     this.input.disabled = !usable
@@ -268,7 +310,44 @@ export class AssistantPanel {
     const n = el('div', `ed-assist-msg ed-assist-${kind}`, text)
     this.log.appendChild(n)
     this.log.scrollTop = this.log.scrollHeight
+    this.clearB.hidden = false
     return n
+  }
+
+  /**
+   * A finished assistant reply: rendered from its markdown (bold, lists,
+   * paragraphs — models write it whether asked or not) through the same
+   * sanitizer every model string passes, plus a Copy button for the raw
+   * text. Streaming stays plain text; this runs once at the end.
+   */
+  private finishReply(live: HTMLElement, text: string) {
+    live.classList.remove('ed-assist-live', 'ed-assist-wait')
+    live.textContent = ''
+    const body = el('div', 'ed-assist-prose')
+    body.innerHTML = sanitizeHtml(proseHtml(text))
+    const copy = document.createElement('button')
+    copy.type = 'button'
+    copy.className = 'ed-assist-copy'
+    copy.title = t('Copy')
+    copy.textContent = '⧉'
+    copy.addEventListener('click', () => {
+      void navigator.clipboard?.writeText(text).then(() => { copy.textContent = '✓'; setTimeout(() => { copy.textContent = '⧉' }, 1200) })
+    })
+    live.append(body, copy)
+  }
+
+  private fitInput() {
+    this.input.style.height = 'auto'
+    const line = 20
+    this.input.style.height = `${Math.min(Math.max(this.input.scrollHeight, line * 2), line * 6 + 12)}px`
+  }
+
+  /** Forget the conversation: the log and the turns the next request would carry. */
+  clear() {
+    this.log.replaceChildren()
+    this.history = []
+    this.clearB.hidden = true
+    this.input.focus()
   }
 
   stop() {
@@ -286,6 +365,7 @@ export class AssistantPanel {
     const request = this.input.value.trim()
     if (!request || this.running || !this.transport || offlineEnabled()) return
     this.input.value = ''
+    this.fitInput()
     this.note(request, 'user')
     this.history.push({ role: 'user', text: request })
     const doc = this.store.doc
@@ -339,8 +419,7 @@ export class AssistantPanel {
     // a question's reply is prose whatever shape it took — never applied
     const reply = mode === 'ask' ? { kind: 'text' as const, text: text.trim() } : parseReply(text)
     if (reply.kind === 'text') {
-      live.textContent = reply.text
-      live.classList.remove('ed-assist-live', 'ed-assist-wait')
+      this.finishReply(live, reply.text)
       this.history.push({ role: 'assistant', text: reply.text })
       return
     }

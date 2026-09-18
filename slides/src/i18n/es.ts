@@ -945,6 +945,8 @@ export const es: Catalog = {
   "Working on it… the on-device model is loading.": "Un momento… se está cargando el modelo en el dispositivo.",
   "Working on it…": "Un momento…",
   "The reply changed nothing I could apply.": "La respuesta no cambió nada que pudiera aplicar.",
+  "Clear": "Borrar",
+  "Clear the conversation": "Borrar la conversación",
   "{n} changes named something that is not there and were skipped.": "{n} cambios nombraban algo que no existe y se omitieron.",
   "The whole deck is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, switch to \"This slide\", or choose a model with a larger window in the extension settings.": "El mazo entero es demasiado grande para este modelo ({tokens} tokens; su ventana es de {window}). Haz una pregunta sobre él, cambia a «Esta diapositiva» o elige un modelo con una ventana mayor en los ajustes de la extensión.",
   "This slide is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, or choose a model with a larger window in the extension settings.": "Esta diapositiva es demasiado grande para este modelo ({tokens} tokens; su ventana es de {window}). Haz una pregunta sobre ella o elige un modelo con una ventana mayor en los ajustes de la extensión.",

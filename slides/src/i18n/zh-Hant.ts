@@ -945,6 +945,8 @@ export const zhHant: Catalog = {
   "Working on it… the on-device model is loading.": "處理中… 正在載入裝置上的模型。",
   "Working on it…": "處理中…",
   "The reply changed nothing I could apply.": "回覆中沒有可以套用的變更。",
+  "Clear": "清除",
+  "Clear the conversation": "清除對話",
   "{n} changes named something that is not there and were skipped.": "{n} 處變更指向不存在的內容，已略過。",
   "The whole deck is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, switch to \"This slide\", or choose a model with a larger window in the extension settings.": "整個簡報對此模型來說太大了（{tokens} 個 token，其上下文視窗為 {window}）。可以就其內容提問、切換到「此投影片」，或在擴充功能設定中選擇視窗更大的模型。",
   "This slide is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, or choose a model with a larger window in the extension settings.": "此投影片對此模型來說太大了（{tokens} 個 token，其上下文視窗為 {window}）。可以就其內容提問，或在擴充功能設定中選擇視窗更大的模型。",

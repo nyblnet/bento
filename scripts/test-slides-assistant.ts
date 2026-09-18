@@ -735,6 +735,22 @@ try {
     panel2.root.querySelector('.ed-assist-input').value = 'How many slides are there?'
     await panel2.submit(); await tick(30)
     check('retry: a question answered in prose is NOT nudged, and carries no schema', sends2.length === 1 && sends2[0] && sends2[0].schema === undefined)
+    // the finished reply is rendered from markdown through the sanitizer; the raw text is what Copy gives and what history carries
+    const prose = panel2.root.querySelector('.ed-assist-assistant .ed-assist-prose')
+    check('reply: rendered as prose (a <p>), not a pre-wrap blob', !!prose && prose.innerHTML.includes('<p>Your deck has seven slides.') && prose.querySelector('p') !== null)
+    check('reply: a copy button sits on the bubble', !!panel2.root.querySelector('.ed-assist-assistant .ed-assist-copy'))
+    const sends3 = []
+    const tr3 = fakeTransport({ send: async () => { sends3.push(1); return ['**Bold** and a list:', '', '- one <img src=x onerror="window.__pwn3=1">', '- two'].join(String.fromCharCode(10)) } })
+    const panel3 = new AssistantPanel({ store, transport: tr3 })
+    document.body.appendChild(panel3.root)
+    panel3.setOpen(true, false); await tick(60)
+    panel3.root.querySelector('.ed-assist-input').value = 'What is in it?'
+    await panel3.submit(); await tick(30)
+    const p3 = panel3.root.querySelector('.ed-assist-assistant .ed-assist-prose')
+    check('reply: bold and bullets render; markup inside the model prose is sanitized (' + (p3 && p3.innerHTML.slice(0, 80)) + ')', !!p3 && (p3.querySelector('b, strong') || {}).textContent === 'Bold' && p3.querySelectorAll('li').length === 2 && !p3.querySelector('img, [onerror]') && p3.textContent.includes('<img') && window.__pwn3 === undefined)
+    check('clear: the Clear button shows once there is a transcript', !panel3.root.querySelector('.ed-assist-clear').hidden)
+    panel3.clear()
+    check('clear: empties the log and hides itself', panel3.root.querySelector('.ed-assist-log').children.length === 0 && panel3.root.querySelector('.ed-assist-clear').hidden)
   }
 } catch (e) { check('probe threw: ' + (e && e.message) + ' ' + (e && e.stack || '').slice(0, 300), false) }
 window.__results = 'BENTO-RESULTS:' + btoa(unescape(encodeURIComponent(JSON.stringify(results)))) + ':END'

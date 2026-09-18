@@ -945,6 +945,8 @@ export const zhHans: Catalog = {
   "Working on it… the on-device model is loading.": "处理中… 正在加载设备上的模型。",
   "Working on it…": "处理中…",
   "The reply changed nothing I could apply.": "回复中没有可以应用的更改。",
+  "Clear": "清空",
+  "Clear the conversation": "清空对话",
   "{n} changes named something that is not there and were skipped.": "{n} 处更改指向不存在的内容，已跳过。",
   "The whole deck is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, switch to \"This slide\", or choose a model with a larger window in the extension settings.": "整个演示文稿对此模型来说太大了（{tokens} 个 token，其上下文窗口为 {window}）。可以就其内容提问、切换到“此幻灯片”，或在扩展设置中选择窗口更大的模型。",
   "This slide is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, or choose a model with a larger window in the extension settings.": "此幻灯片对此模型来说太大了（{tokens} 个 token，其上下文窗口为 {window}）。可以就其内容提问，或在扩展设置中选择窗口更大的模型。",

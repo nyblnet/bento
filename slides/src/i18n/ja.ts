@@ -945,6 +945,8 @@ export const ja: Catalog = {
   "Working on it… the on-device model is loading.": "処理中… デバイス上のモデルを読み込んでいます。",
   "Working on it…": "処理中…",
   "The reply changed nothing I could apply.": "返答には適用できる変更がありませんでした。",
+  "Clear": "クリア",
+  "Clear the conversation": "会話をクリア",
   "{n} changes named something that is not there and were skipped.": "{n} 件の変更は存在しないものを指定していたためスキップされました。",
   "The whole deck is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, switch to \"This slide\", or choose a model with a larger window in the extension settings.": "デッキ全体はこのモデルには大きすぎます（{tokens} トークン。ウィンドウは {window}）。内容について質問するか、「このスライド」に切り替えるか、拡張機能の設定でより大きなウィンドウのモデルを選んでください。",
   "This slide is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, or choose a model with a larger window in the extension settings.": "このスライドはこのモデルには大きすぎます（{tokens} トークン。ウィンドウは {window}）。内容について質問するか、拡張機能の設定でより大きなウィンドウのモデルを選んでください。",

@@ -2861,11 +2861,26 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-assist-status { color: var(--muted); line-height: 1.4; }
 .ed-assist-status a { color: var(--ink); }
 .ed-assist-route { color: var(--ink-2); }
-.ed-assist-log { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.ed-assist-log { max-height: min(46vh, 520px); overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
 .ed-assist-log:empty { display: none; }
-.ed-assist-msg { padding: 6px 8px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; line-height: 1.4; }
-.ed-assist-user { background: var(--chrome-2); align-self: flex-end; max-width: 92%; }
-.ed-assist-assistant { background: var(--field); }
+/* the chrome is user-select:none; a conversation is text people copy from */
+.ed-assist-log, .ed-assist-log * { -webkit-user-select: text; user-select: text; cursor: text; }
+.ed-assist-log button, .ed-assist-log a { -webkit-user-select: none; user-select: none; cursor: pointer; }
+.ed-assist-msg { position: relative; padding: 7px 10px; border-radius: 10px; white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+.ed-assist-user { background: color-mix(in srgb, var(--accent, #F7A600) 14%, var(--chrome-2)); align-self: flex-end; max-width: 88%; border-bottom-right-radius: 3px; }
+.ed-assist-assistant { background: var(--field); border: 1px solid var(--line); align-self: flex-start; max-width: 96%; border-bottom-left-radius: 3px; }
+.ed-assist-prose { white-space: normal; }
+.ed-assist-prose p { margin: 0 0 .5em; }
+.ed-assist-prose p:last-child { margin-bottom: 0; }
+.ed-assist-prose ul, .ed-assist-prose ol { margin: .2em 0 .5em; padding-left: 1.3em; }
+.ed-assist-prose li { margin: .15em 0; }
+.ed-assist-prose code { font-size: .92em; background: var(--chrome-2); padding: 0 3px; border-radius: 3px; }
+.ed-assist-copy { position: absolute; top: 4px; right: 4px; padding: 0 5px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; opacity: 0; transition: opacity .12s; }
+.ed-assist-assistant:hover .ed-assist-copy, .ed-assist-copy:focus { opacity: 1; }
+.ed-assist-copy:hover { background: var(--chrome-2); color: var(--ink); }
+.ed-assist-clear { float: right; padding: 0 6px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.ed-assist-clear:hover { color: var(--ink); text-decoration: underline; }
+.ed-assist-clear[hidden] { display: none; }
 .ed-assist-live { opacity: .8; }
 .ed-assist-live:empty::after { content: '…'; }
 .ed-assist-wait { opacity: .55; font-style: italic; animation: ed-assist-pulse 1.4s ease-in-out infinite; }
@@ -2880,7 +2895,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-assist-undo { padding: 2px 8px; font-size: 11px; }
 .ed-assist-card-sum { color: var(--muted); margin-top: 4px; }
 .ed-assist-card-list { margin: 4px 0 0; padding-inline-start: 16px; color: var(--muted); font-size: 11px; }
-.ed-assist-input { width: 100%; resize: vertical; min-height: 40px; font: inherit; font-size: 12px;
+.ed-assist-input { width: 100%; resize: none; overflow-y: auto; min-height: 40px; font: inherit; font-size: 12px;
   padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); }
 .ed-assist-input:disabled { opacity: .5; }
 .ed-assist-notice { color: var(--muted); font-size: 11px; line-height: 1.35; }
