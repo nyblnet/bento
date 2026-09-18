@@ -561,6 +561,7 @@ function renderGrid() {
   // last, however the rest is sorted. Only on the unfiltered "All documents"
   // view — a folder or a search is already an answer to "which ones", and a
   // strip of the same cards twice would be noise there.
+  console.info('[bento/home] grid:', { folder: state.folder, q: state.q, docs: docs.length, layout: state.layout })
   if (state.folder === null && !state.q && docs.length > RECENT_MAX) {
     const recent = [...docs].filter((d) => d.modified > 0).sort((a, b) => b.modified - a.modified).slice(0, RECENT_MAX)
     if (recent.length >= 2) {
