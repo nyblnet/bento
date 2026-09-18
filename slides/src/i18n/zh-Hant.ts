@@ -942,6 +942,7 @@ export const zhHant: Catalog = {
   "The reply was not a deck edit I could apply.": "回覆不是可以套用的簡報編輯。",
   "Working on it…": "處理中…",
   "The reply changed nothing I could apply.": "回覆中沒有可以套用的變更。",
+  "Not reachable: {reason}": "無法連線：{reason}",
   "Loads from the web: {hosts}": "從網路載入：{hosts}",
   "Applied: {what}": "已套用：{what}",
   "Applied {n} changes": "已套用 {n} 處變更",

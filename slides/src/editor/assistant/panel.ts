@@ -134,6 +134,7 @@ export class AssistantPanel {
   /** the extension is asking the user (check code 'consent-pending'): one re-check is armed */
   private consentPending = false
   private consentReason = ''
+  private checkFailed = ''
   private recheckArmed = false
   private store: Store
   private toast: (m: string) => void
@@ -316,6 +317,10 @@ export class AssistantPanel {
       this.sendB.disabled = true
       return
     }
+    if (this.checkFailed) {
+      s.append(el('span', 'ed-assist-checkfail', t('Not reachable: {reason}', { reason: this.checkFailed }) + ' '), settings)
+      return
+    }
     if (this.consentPending) {
       s.append(el('span', 'ed-assist-waiting', this.consentReason + ' '), settings)
       this.input.disabled = true
@@ -393,7 +398,10 @@ export class AssistantPanel {
     const r = await this.transport.check()
     this.consentPending = !r.ok && r.code === 'consent-pending'
     this.consentReason = !r.ok ? r.reason : ''
-    if (!r.ok && !this.consentPending) this.note(t('The request failed: {reason}', { reason: r.reason }), 'err')
+    // a route that does not answer is a state of the status line, not a
+    // chat message: describe runs on every open, tab, focus and route
+    // change, and each failure was a fresh red bubble
+    this.checkFailed = !r.ok && !this.consentPending ? r.reason : ''
     this.refreshStatus()
     if (this.consentPending && !this.recheckArmed) {
       this.recheckArmed = true
@@ -501,7 +509,17 @@ export class AssistantPanel {
     const check = (ops: Record<string, unknown>) => {
       if (!elided) return { applied: [], skipped: [], structural: false }
       const r = applyOps((elided as Elided).doc, ops, { slide: index })
-      return { applied: r.applied, skipped: r.skipped, structural: r.structural, outline: outlineDeck(r.doc, true) }
+      // what the change would BREAK — the validator's fresh findings on the
+      // patched deck (a title that overflows its box, an element off the
+      // slide) — so the harness can ask the model to fix it before it lands
+      let warnings: string[] = []
+      const json = mergeReply(this.store.doc, r.doc, elided as Elided)
+      const parsed = json ? parseDocInputReport(json) : null
+      if (parsed) {
+        const had = new Set(validateDoc(this.store.doc).findings.map(findingKey))
+        warnings = parsed.report.findings.findings.filter((f) => f.severity !== 'info' && !had.has(findingKey(f))).map((f) => f.message).slice(0, 12)
+      }
+      return { applied: r.applied, skipped: r.skipped, structural: r.structural, outline: outlineDeck(r.doc, true), warnings }
     }
     let result
     try {

@@ -96,10 +96,14 @@
 //                        and only the page can say which address did not resolve:
 //                        evt { kind:'assistant.check', id, ops }
 //                        → req { op:'assistant.check', id, payload: { applied: string[], skipped: string[], structural: boolean,
-//                                                                    outline?: string } }
+//                                                                    outline?: string, warnings?: string[] } }
 //                        a DRY RUN of ops.ts applyOps on the material's document: what would
-//                        land, what would be refused (named as the drawer names them), and
-//                        the addressed outline as it would read after — nothing is committed.
+//                        land, what would be refused (named as the drawer names them), the
+//                        addressed outline as it would read after, and `warnings` — what the
+//                        change would BREAK, in the validator's words ("Text needs 457px but
+//                        the box is 372px tall — it overflows by 85px…"), fresh ones only —
+//                        so a harness can have the model fix it before it lands. Nothing is
+//                        committed.
 //                        The extension may check as often as it likes; the turn commits only
 //                        on `done`.
 //                        (material.ts: the plain outline, the addressed

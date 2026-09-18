@@ -760,6 +760,16 @@ try {
     const st = () => panel.root.querySelector('.ed-assist-status').textContent
     check('consent-pending: the waiting line is the extension reason (it localizes) and the input is disabled: ' + st(), /Asking/.test(st()) && panel.root.querySelector('.ed-assist-input').disabled && tr.checks === 1)
     check('consent-pending: the behaviour is keyed on the code, the text is only shown', panel.root.querySelector('.ed-assist-waiting') !== null)
+    {
+      // a check that fails is a state of the status line, not a chat bubble per describe
+      const store = fakeStore(starterDoc())
+      const trF = fakeTransport({ check: async function () { this.checks++; return { ok: false, reason: 'HTTP 401' } } })
+      const panelF = new AssistantPanel({ store, transport: trF })
+      document.body.appendChild(panelF.root)
+      panelF.setOpen(true, false); await tick(60)
+      panelF.activate(); await tick(60)
+      check('check failed: shown once in the status line with the reason, no error bubbles (' + trF.checks + ' checks)', /Not reachable: HTTP 401/.test(panelF.root.querySelector('.ed-assist-status').textContent) && panelF.root.querySelectorAll('.ed-assist-err').length === 0 && trF.checks >= 2)
+    }
     window.dispatchEvent(new Event('focus')); await tick(60)
     check('consent-pending: focus re-ran check once, still pending → still waiting', tr.checks === 2 && /Asking/.test(st()))
     pending = false
@@ -811,6 +821,15 @@ try {
       panel3.root.querySelector('.ed-assist-input').value = 'try'
       await panel3.submit(); await tick(30)
       check('dry run: reports what would land and what would be refused, with the outline after — and commits nothing', !!dry && dry.applied.length === 1 && dry.applied[0] === 'edit sd-title' && dry.skipped[0] === 'edit nope' && /\\[1\\/sd-title\\] .*X/.test(dry.outline) && store3.replaced === 0)
+      check('dry run: carries the validator fresh findings for the patched deck (none for a one-word title)', Array.isArray(dry.warnings) && dry.warnings.length === 0)
+      let dry2 = null
+      const tr5 = fakeTransport({ turn: async (request, history, focus, material, onChunk, signal, checkFn) => { material(); dry2 = checkFn({ edits: [{ id: 'sd-title', text: Array.from({ length: 14 }, () => 'A very long line of title text that will not fit').join(String.fromCharCode(10)) }] }); return { mode: 'edit', text: 'declined' } } })
+      const panel5 = new AssistantPanel({ store: fakeStore(starterDoc()), transport: tr5 })
+      document.body.appendChild(panel5.root)
+      panel5.setOpen(true, false); await tick(60)
+      panel5.root.querySelector('.ed-assist-input').value = 'try'
+      await panel5.submit(); await tick(30)
+      check('dry run: a title that would overflow its box comes back as a warning the harness can act on: ' + (dry2 && dry2.warnings[0]), !!dry2 && dry2.applied.length === 1 && dry2.warnings.length >= 1 && /overflow|tall|needs/i.test(dry2.warnings[0]))
       const store4 = fakeStore(starterDoc())
       let got = null
       const tr4 = fakeTransport({ turn: async (request, history, focus, material) => { got = [material(3).focus, material(99).focus, material().focus]; return { mode: 'ask', text: 'ok' } } })

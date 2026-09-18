@@ -942,6 +942,7 @@ export const de: Catalog = {
   "The reply was not a deck edit I could apply.": "Die Antwort war keine Deck-Änderung, die ich anwenden konnte.",
   "Working on it…": "Einen Moment…",
   "The reply changed nothing I could apply.": "Die Antwort enthielt nichts, was ich anwenden konnte.",
+  "Not reachable: {reason}": "Nicht erreichbar: {reason}",
   "Loads from the web: {hosts}": "Lädt aus dem Web: {hosts}",
   "Applied: {what}": "Angewendet: {what}",
   "Applied {n} changes": "{n} Änderungen angewendet",

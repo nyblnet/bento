@@ -3037,6 +3037,11 @@ export class Editor {
         return
       }
       if (mod && ev.key.toLowerCase() === 'c') {
+        // A text selection outside the canvas (the assistant transcript, a
+        // panel label) is the browser's copy — not a Bento payload of the
+        // slide behind it
+        const sel = document.getSelection()
+        if (sel && !sel.isCollapsed && sel.anchorNode && !(sel.anchorNode.parentElement ?? sel.anchorNode as Element | null)?.closest?.('.ed-stage-scale')) return
         // Copy to BOTH the in-app clipboard (fast, same session) and the system
         // clipboard as a Bento payload (works across decks/tabs). Elements when
         // any are selected; otherwise the current slide.

@@ -942,6 +942,7 @@ export const ja: Catalog = {
   "The reply was not a deck edit I could apply.": "返答は適用できるデッキの編集ではありませんでした。",
   "Working on it…": "処理中…",
   "The reply changed nothing I could apply.": "返答には適用できる変更がありませんでした。",
+  "Not reachable: {reason}": "接続できません: {reason}",
   "Loads from the web: {hosts}": "ウェブから読み込み: {hosts}",
   "Applied: {what}": "適用しました: {what}",
   "Applied {n} changes": "{n} 件の変更を適用しました",

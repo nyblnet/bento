@@ -942,6 +942,7 @@ export const zhHans: Catalog = {
   "The reply was not a deck edit I could apply.": "回复不是可以应用的演示文稿编辑。",
   "Working on it…": "处理中…",
   "The reply changed nothing I could apply.": "回复中没有可以应用的更改。",
+  "Not reachable: {reason}": "无法访问：{reason}",
   "Loads from the web: {hosts}": "从网络加载：{hosts}",
   "Applied: {what}": "已应用：{what}",
   "Applied {n} changes": "已应用 {n} 处更改",
