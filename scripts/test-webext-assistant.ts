@@ -438,7 +438,7 @@ const CH = '__bento_tray__'
   ok(manifest.content_scripts.every((cs: any) => cs.matches.every((m: string) => m.startsWith('file:///'))), 'and only on file: documents')
   ok(/ev\.source !== window/.test(read('src/relay.js')), 'relay.js checks the frame\'s source is its own window')
   ok(/'assistant'/.test(read('src/page-bridge.js')), 'page-bridge.js announces the capability')
-  ok(Array.isArray(manifest.optional_host_permissions) && !manifest.host_permissions, 'site access is optional and asked per origin, never declared up front')
+  ok(Array.isArray(manifest.optional_host_permissions) && (manifest.host_permissions ?? []).every((h: string) => h.startsWith('file://')), 'site access on the WEB is optional and asked per origin, never declared up front (file:// is the extension\'s own business)')
 }
 
 // ---------------------------------------------------------------------------
