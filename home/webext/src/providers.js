@@ -33,8 +33,18 @@ export const PROVIDERS = Object.freeze(['openai', 'anthropic', 'gemini'])
 
 const baseOf = (cfg) => trimSlash(cfg.baseUrl || DEFAULTS[cfg.provider].baseUrl)
 
-/** What the page may be told: the host the request goes to, never more. */
+/**
+ * What the page may be told: the HOSTNAME the request goes to, never more.
+ * Not host:port — the page bounds this to a hostname shape (transport.ts
+ * HOST_RE) and blanks anything else, so `localhost:11434` would show as "—".
+ * The port is shown where it is useful, in the settings page's own status.
+ */
 export function describeHost(cfg) {
+  try { return new URL(shapeRequest(cfg, [{ role: 'user', content: '' }]).url).hostname } catch { return '' }
+}
+
+/** Host and port, for messages a person reads (the settings status line, an unreachable error). */
+export function hostPortOf(cfg) {
   try { return new URL(shapeRequest(cfg, [{ role: 'user', content: '' }]).url).host } catch { return '' }
 }
 

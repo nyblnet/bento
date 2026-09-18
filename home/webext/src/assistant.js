@@ -31,7 +31,7 @@
 // argument so scripts/test-webext-assistant.ts can drive the real code with a
 // fake fetch and a fake storage. background.js supplies the real ones.
 
-import { DEFAULTS, describeHost, shapeRequest, shapeCheck, errorFrom, streamReply, iterateBody, originOf } from './providers.js'
+import { DEFAULTS, describeHost, hostPortOf, shapeRequest, shapeCheck, errorFrom, streamReply, iterateBody, originOf } from './providers.js'
 
 /** `chrome.storage.local` keys. */
 export const CONFIG_KEY = 'assistant'
@@ -123,7 +123,7 @@ export async function describe(cfg, env) {
 
 /** A network failure, in words that name the host and nothing else. */
 function unreachable(cfg, env) {
-  return env.t('asstUnreachable', describeHost(cfg) || cfg.provider)
+  return env.t('asstUnreachable', hostPortOf(cfg) || cfg.provider)
 }
 
 /** `assistant.check`: one cheap round trip. */

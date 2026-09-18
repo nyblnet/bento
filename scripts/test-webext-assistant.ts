@@ -80,7 +80,8 @@ const msgs = [
   ok(r.headers.authorization === 'Bearer K', 'openai: bearer header')
   const b = JSON.parse(r.body)
   ok(b.stream === true && b.messages.length === 4 && b.messages[0].role === 'system', 'openai: system stays a message, stream on')
-  ok(describeHost({ provider: 'openai', baseUrl: 'http://localhost:11434/v1', model: 'm', key: 'K' }) === 'localhost:11434', 'describeHost: host and port only')
+  ok(describeHost({ provider: 'openai', baseUrl: 'http://localhost:11434/v1', model: 'm', key: 'K' }) === 'localhost', 'describeHost: hostname only — the page blanks a host:port (HOST_RE)')
+  ok(providers.hostPortOf({ provider: 'openai', baseUrl: 'http://localhost:11434/v1', model: 'm', key: 'K' }) === 'localhost:11434', 'hostPortOf: host and port, for words a person reads')
   const local = shapeRequest({ provider: 'openai', baseUrl: 'http://localhost:11434/v1', model: 'm', key: '' }, [...msgs])
   ok(!('authorization' in local.headers), 'openai: no key → no bearer header (a local server would refuse an empty one)')
 }
@@ -200,6 +201,9 @@ const cfgOpenai = asst.normalizeConfig({ provider: 'openai', baseUrl: `https://g
   ok(calls[0].init.headers.authorization === `Bearer ${KEY}`, 'check: the key went in the header of the real request')
   const down = await asst.check(cfgOpenai, { t, fetch: async () => { throw new TypeError('Failed to fetch') } })
   ok(down.ok === false && down.reason === 'asstUnreachable|gw.example', 'check: a network failure names the host only')
+  const local = asst.normalizeConfig({ provider: 'openai', baseUrl: 'http://127.0.0.1:8765/v1', model: 'm' }, false)
+  ok((await asst.describe(local, { t })).host === '127.0.0.1', 'describe: a port-bearing endpoint is reported as its hostname')
+  ok((await asst.check(local, { t, fetch: async () => { throw new TypeError('x') } })).reason === 'asstUnreachable|127.0.0.1:8765', 'but the unreachable reason keeps the port, which is what the person needs')
   const unset = await asst.check(asst.normalizeConfig({ provider: 'gemini', model: 'g' }, false), { t, fetch: fetch401 })
   ok(unset.ok === false && unset.reason === 'asstNotConfigured' && calls.length === 1, 'check: unconfigured → no request at all')
 }
