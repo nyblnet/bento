@@ -120,6 +120,30 @@ export function parseVerify(text) {
 /** After a failed verify: the model's own finding, and another patch. */
 export const verifyCorrection = (missing) => `The change did not satisfy the request: ${missing}. Reply with a corrected JSON object only, addressing elements exactly as the outline shows.`
 
+/**
+ * THE AGENT LOOP (hosted models with function calling). Instead of one shot
+ * the model gets three tools and reads, patches, reads back and fixes:
+ *   outline()      the addressed outline of the whole deck
+ *   slide(n)       one slide in full, its elements addressed n/<id>
+ *   patch(json)    a DRY RUN of a patch on the page — what applied, what was
+ *                  refused, the outline after; nothing is committed
+ * The last CLEAN patch (nothing refused, something applied) is what the
+ * turn commits. The patch travels as a JSON string, not an object: an
+ * OBJECT parameter with no properties is hollowed by one dialect.
+ */
+export const AGENT_TOOLS = [
+  { name: 'outline', description: 'The addressed outline of the whole deck: every slide numbered, every text, table cell and chart with its address <slide number>/<element id>.', parameters: { type: 'object', properties: { reason: { type: 'string', description: 'why (optional)' } } } },
+  { name: 'slide', description: 'One slide in full as compact JSON, its elements addressed as <n>/<id>. Use it to see geometry, colours and fields before a precise change.', parameters: { type: 'object', properties: { n: { type: 'integer', description: 'the slide number as the outline shows it (1-based)' } }, required: ['n'] } },
+  { name: 'patch', description: 'Try a patch on the deck. Returns what applied, what was refused (with the reason), and the outline after. Nothing is saved until the turn ends; the LAST clean patch is the one kept, so send the complete patch each time.', parameters: { type: 'object', properties: { json: { type: 'string', description: 'the patch as ONE JSON object, serialized — the same shape as a reply' } }, required: ['json'] } },
+]
+
+/** How many tool calls one agent turn may make. */
+export const AGENT_MAX_CALLS = 8
+
+export const AGENT_PROMPT = `${OPS_PROMPT}
+
+You also have tools. Call outline() to read the whole deck, slide(n) to read one slide in full, and patch(json) to try a patch — its result tells you what applied and what was refused, and shows the outline after. Read what the request needs, call patch with the complete JSON object, fix and call patch again if anything was refused or the outline after is not what was asked. When the change is right, reply with ONE plain line saying what changed (no JSON in that final line).`
+
 /** The one follow-up when an edit comes back as prose: sent once, as the
  *  next user turn, before the reply is shown as text. */
 export const RETRY_NUDGE = 'Reply with only the JSON object described — no explanation, no prose.'

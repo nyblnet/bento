@@ -864,9 +864,12 @@ console.log('\n— runTurn: material in, prose or an ops patch out')
 {
   const turnOf = (request: string, history: any[] = []) => asst.validTurn({ request, history, focus: { index: 1, selection: [] } })!
   const openaiOf = (text: string) => `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`
+  // A server WITHOUT function calling: a tools request gets the 400 that
+  // sends the turn down the one-shot path — which is what these cases pin.
+  const NO_TOOLS = { ok: false, status: 400, text: async () => '{"error":{"message":"tools are not supported by this model"}}' }
   const envWith = (replies: string[], seen: any[] = []) => ({
     t, models: async () => undefined,
-    fetch: async (_u: string, init: any) => { seen.push(JSON.parse(init.body)); return { ok: true, status: 200, body: sseBody(openaiOf(replies.shift() ?? '')) } },
+    fetch: async (_u: string, init: any) => { const b = JSON.parse(init.body); if (b.tools) return NO_TOOLS; seen.push(b); return { ok: true, status: 200, body: sseBody(openaiOf(replies.shift() ?? '')) } },
   })
   ok(asst.validTurn({ request: ' hi ', history: [{ role: 'tool', text: 'x' }, { role: 'user', text: 'y' }], focus: { index: -1, selection: ['a', 5] } })!.history.length === 1, 'validTurn: bounds roles, index and selection')
   ok(asst.validTurn({}) === null && asst.validTurn({ request: '' }) === null, 'validTurn: no request → null')
@@ -941,7 +944,9 @@ console.log('\n— runTurn: material in, prose or an ops patch out')
 
 console.log('\n— the turn over the port: consent first, then the deck is asked for')
 {
-  ;(globalThis as any).fetch = async () => ({ ok: true, status: 200, body: sseBody('data: {"choices":[{"delta":{"content":"{\\"edits\\":[]}"}}]}\n\ndata: [DONE]\n\n') })
+  ;(globalThis as any).fetch = async (_u: string, init: any) => JSON.parse(init.body).tools
+    ? { ok: false, status: 400, text: async () => '{"error":{"message":"tools not supported"}}' }
+    : { ok: true, status: 200, body: sseBody('data: {"choices":[{"delta":{"content":"{\\"edits\\":[]}"}}]}\n\ndata: [DONE]\n\n') }
   store[asst.CONFIG_KEY] = { provider: 'openai', baseUrl: `https://gw.example/${TENANT}/v1`, model: 'm', key: KEY }
   store[asst.ALLOWED_KEY] = {}
   const NEW = { url: 'file:///Users/x/Decks/Turn.bento.html', frameId: 0, id: 'ext-id' }
@@ -1003,7 +1008,7 @@ console.log('\n— the closed loop: dry run, correction, verify')
       document: async () => MATERIAL,
       check: async (ops: any) => { checked.push(ops); return checks.shift() ?? { applied: [], skipped: [], structural: false } },
     }
-    const env = { t, models: async () => undefined, log: (...a: any[]) => opts.log?.push(a), fetch: async (_u: string, init: any) => { seen.push(JSON.parse(init.body)); return { ok: true, status: 200, body: sseBody(openaiOf(replies.shift() ?? '')) } } }
+    const env = { t, models: async () => undefined, log: (...a: any[]) => opts.log?.push(a), fetch: async (_u: string, init: any) => { const b = JSON.parse(init.body); if (b.tools) return { ok: false, status: 400, text: async () => '{"error":{"message":"tools not supported"}}' }; seen.push(b); return { ok: true, status: 200, body: sseBody(openaiOf(replies.shift() ?? '')) } } }
     await asst.runTurn(cfg, turnOf('change the title'), io, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, env)
     return { seen, frames, checked, done: frames.find((f) => f.kind === 'assistant.done') }
   }
@@ -1063,6 +1068,98 @@ console.log('\n— the closed loop: dry run, correction, verify')
   }
   ok(prompt.parseVerify('OK: changed the title').ok && prompt.parseVerify('MISSING: the subtitle').ok === false && prompt.parseVerify('yes').ok && prompt.parseVerify('No — nothing changed').ok === false && prompt.parseVerify('Changed the title.').line === 'Changed the title.', 'parseVerify: OK/yes vs MISSING/no, the rest of the line as the note')
   ok(asst.validCheck({ applied: ['a', 5], skipped: 'x', outline: 'o' })!.applied.length === 1 && asst.validCheck({ applied: [], skipped: [] })!.skipped.length === 0 && asst.validCheck('nope') === null, 'validCheck: bounded shape')
+}
+
+console.log('\n— the agent loop: tools for hosted models')
+{
+  const { shapeToolRequest, parseToolReply } = providers
+  const thread = [
+    { role: 'system', content: 'SYS' }, { role: 'user', content: 'hi' },
+    { role: 'assistant', content: 'reading', calls: [{ id: 'c1', name: 'outline', args: {} }] },
+    { role: 'tool', id: 'c1', name: 'outline', content: 'OUT' },
+  ]
+  const oa = JSON.parse(shapeToolRequest({ provider: 'openai', model: 'm', key: 'K' }, thread, prompt.AGENT_TOOLS).body)
+  ok(oa.tools.length === 3 && oa.tools[2].function.name === 'patch' && oa.messages[0].role === 'system' && oa.messages[2].tool_calls[0].function.arguments === '{}' && oa.messages[3].role === 'tool' && oa.messages[3].tool_call_id === 'c1' && !('stream' in oa), 'openai tools: functions, assistant tool_calls, tool results by id, non-streaming')
+  const an = JSON.parse(shapeToolRequest({ provider: 'anthropic', model: 'm', key: 'K' }, thread, prompt.AGENT_TOOLS).body)
+  ok(an.system === 'SYS' && an.tools[0].input_schema && an.messages[1].content[1].type === 'tool_use' && an.messages[2].content[0].type === 'tool_result' && an.messages[2].content[0].tool_use_id === 'c1', 'anthropic tools: input_schema, tool_use blocks, tool_result in a user turn')
+  const ge = JSON.parse(shapeToolRequest({ provider: 'gemini', model: 'g', key: 'K' }, thread, prompt.AGENT_TOOLS).body)
+  ok(ge.tools[0].functionDeclarations.length === 3 && ge.contents[1].role === 'model' && ge.contents[1].parts[1].functionCall.name === 'outline' && ge.contents[2].parts[0].functionResponse.name === 'outline', 'gemini tools: functionDeclarations, functionCall parts, functionResponse parts')
+  ok(shapeToolRequest({ provider: 'gemini', model: 'g', key: 'K' }, thread, prompt.AGENT_TOOLS).url.endsWith(':generateContent'), 'gemini tools: the non-streaming endpoint')
+  ok(prompt.AGENT_TOOLS.every((tl: any) => Object.keys(tl.parameters.properties).length > 0), 'every tool parameter object has properties (Gemini hollows empty ones)')
+  const p1 = parseToolReply('openai', { choices: [{ message: { content: null, tool_calls: [{ id: 'x', function: { name: 'patch', arguments: '{"json":"{}"}' } }] } }] })
+  ok(p1.calls[0].name === 'patch' && p1.calls[0].args.json === '{}' && p1.text === '', 'parseToolReply openai')
+  const p2 = parseToolReply('anthropic', { content: [{ type: 'text', text: 'ok' }, { type: 'tool_use', id: 'y', name: 'slide', input: { n: 2 } }] })
+  ok(p2.text === 'ok' && p2.calls[0].args.n === 2 && p2.calls[0].id === 'y', 'parseToolReply anthropic')
+  const p3 = parseToolReply('gemini', { candidates: [{ content: { parts: [{ functionCall: { name: 'outline', args: {} } }] } }] })
+  ok(p3.calls[0].name === 'outline' && p3.calls[0].id === 'call-1', 'parseToolReply gemini (ids minted)')
+  ok(parseToolReply('openai', { choices: [{ message: { content: 'done' } }] }).calls.length === 0, 'parseToolReply: a text reply has no calls')
+
+  // a scripted model: read the outline, read slide 2, patch wrong, fix, finish
+  const turnOf = (request: string) => asst.validTurn({ request, history: [], focus: { index: 0, selection: [] } })!
+  const BADP = '{"edits":[{"id":"t2","text":"Short"}]}'
+  const GOODP = '{"edits":[{"id":"2/t2","text":"Short"}]}'
+  const script = (steps: any[]) => async (_u: string, init: any) => {
+    const b = JSON.parse(init.body)
+    if (!b.tools) return { ok: true, status: 200, body: sseBody('data: [DONE]\n\n') }
+    const st = steps.shift() ?? { text: 'done' }
+    const msg = st.calls ? { content: st.text ?? null, tool_calls: st.calls.map((c: any, i: number) => ({ id: `c${i}`, function: { name: c.name, arguments: JSON.stringify(c.args) } })) } : { content: st.text }
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: msg }] }) }
+  }
+  {
+    const frames: any[] = []
+    const asked: any[] = []
+    const checked: any[] = []
+    const log: any[] = []
+    const io = {
+      document: async (o: any) => { asked.push(o); return { ...MATERIAL, focus: { kind: 'slide', label: `slide ${o?.slide}`, json: `{"id":"s${o?.slide}"}` } } },
+      check: async (ops: any) => { checked.push(ops); return ops.edits[0].id.includes('/') ? { applied: ['edit 2/t2'], skipped: [], structural: false, outline: 'after' } : { applied: [], skipped: ['edit t2'], structural: false, outline: 'same' } },
+    }
+    const fetchS = script([
+      { calls: [{ name: 'outline', args: {} }] },
+      { calls: [{ name: 'slide', args: { n: 2 } }] },
+      { calls: [{ name: 'patch', args: { json: BADP } }] },
+      { calls: [{ name: 'patch', args: { json: GOODP } }] },
+      { text: 'Shortened the title on slide 2.' },
+    ])
+    await asst.runTurn(cfgOpenai, turnOf('make every title shorter'), io, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { t, models: async () => undefined, fetch: fetchS, log: (...a: any[]) => log.push(a) })
+    ok(asked.length === 2 && asked[1]?.slide === 2, 'agent: slide(2) asks the page for that slide\'s focus (the first ask is the turn\'s own document)')
+    ok(checked.length === 2 && frames.at(-1).kind === 'assistant.done' && JSON.stringify(frames.at(-1).ops) === GOODP, 'agent: both patches were dry-run; the last CLEAN one is committed')
+    ok(frames.at(-1).note === 'Shortened the title on slide 2.' && frames.at(-1).mode === 'edit', 'agent: the model\'s closing line is the note')
+    ok(log.filter((a) => a[1] === 'agent step').length === 5 && log.some((a) => a[1] === 'agent done'), 'agent: every step is logged')
+  }
+  {
+    // the call cap: a model that keeps reading is cut off and asked to finish
+    const frames: any[] = []
+    let asks = 0
+    const io = { document: async () => MATERIAL, check: async () => ({ applied: [], skipped: [], structural: false }) }
+    const steps: any[] = Array.from({ length: 20 }, () => ({ calls: [{ name: 'outline', args: {} }] }))
+    steps.push({ text: 'gave up' })
+    const fetchC = async (u: string, init: any) => { asks++; return script(steps)(u, init) }
+    await asst.runTurn(cfgOpenai, turnOf('restructure the deck'), io, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { t, models: async () => undefined, fetch: fetchC })
+    ok(asks <= prompt.AGENT_MAX_CALLS + 2 && frames.at(-1).kind === 'assistant.done', `agent: stops at the call cap (${asks} requests for a cap of ${prompt.AGENT_MAX_CALLS})`)
+    ok(!('ops' in frames.at(-1)) && frames.at(-1).mode === 'edit', 'agent: no clean patch → done as text, nothing committed')
+  }
+  {
+    // a partial patch is better than none when nothing was clean
+    const frames: any[] = []
+    const io = { document: async () => MATERIAL, check: async () => ({ applied: ['edit 1/t1'], skipped: ['edit nope'], structural: false }) }
+    await asst.runTurn(cfgOpenai, turnOf('fix it'), io, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { t, models: async () => undefined, fetch: script([{ calls: [{ name: 'patch', args: { json: '{"edits":[{"id":"1/t1","text":"x"},{"id":"nope","text":"y"}]}' } }] }, { text: 'partly' }]) })
+    ok(frames.at(-1).ops?.edits?.length === 2 && frames.at(-1).note === 'partly', 'agent: with no clean patch, the partial one that applied something is committed')
+  }
+  {
+    // a server that rejects tools falls back to one shot (the loop-1 path)
+    const frames: any[] = []
+    let oneShot = 0
+    const io = { document: async () => MATERIAL, check: async () => ({ applied: ['edit 1/t1'], skipped: [], structural: false, outline: 'after' }) }
+    const fetchF = async (_u: string, init: any) => {
+      const b = JSON.parse(init.body)
+      if (b.tools) return { ok: false, status: 400, text: async () => '{"error":{"message":"This model does not support tools"}}' }
+      oneShot++
+      return { ok: true, status: 200, body: sseBody(`data: ${JSON.stringify({ choices: [{ delta: { content: oneShot === 1 ? '{"edits":[{"id":"1/t1","text":"x"}]}' : 'OK: changed it' } }] })}\n\ndata: [DONE]\n\n`) }
+    }
+    await asst.runTurn(cfgOpenai, turnOf('fix it'), io, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { t, models: async () => undefined, fetch: fetchF })
+    ok(oneShot === 2 && frames.at(-1).ops && frames.at(-1).note === 'changed it', 'agent: a 400 naming tools → the one-shot path with its loop and verify')
+  }
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

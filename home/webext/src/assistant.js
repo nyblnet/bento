@@ -31,8 +31,8 @@
 // argument so scripts/test-webext-assistant.ts can drive the real code with a
 // fake fetch and a fake storage. background.js supplies the real ones.
 
-import { DEFAULTS, describeHost, hostPortOf, shapeRequest, shapeCheck, shapeModels, parseModels, contextOf, curateModels, errorFrom, streamReply, iterateBody, originOf } from './providers.js'
-import { validMaterial, buildMessages, responseSchema, parseReply, isPatch, RETRY_NUDGE, ASSUMED_WINDOW_LOCAL, ASSUMED_WINDOW_HOSTED, correctionPrompt, CORRECTIONS, VERIFY_PROMPT, verifyUser, parseVerify, verifyCorrection } from './prompt.js'
+import { DEFAULTS, describeHost, hostPortOf, shapeRequest, shapeCheck, shapeModels, parseModels, contextOf, curateModels, errorFrom, streamReply, iterateBody, originOf, shapeToolRequest, parseToolReply } from './providers.js'
+import { validMaterial, buildMessages, responseSchema, parseReply, isPatch, RETRY_NUDGE, ASSUMED_WINDOW_LOCAL, ASSUMED_WINDOW_HOSTED, correctionPrompt, CORRECTIONS, VERIFY_PROMPT, verifyUser, parseVerify, verifyCorrection, AGENT_TOOLS, AGENT_MAX_CALLS, AGENT_PROMPT } from './prompt.js'
 
 /** `chrome.storage.local` keys. */
 export const CONFIG_KEY = 'assistant'
@@ -552,6 +552,20 @@ export async function runTurn(cfg, turn, io, emit, signal, env) {
       return
     }
     const log = (...a) => env.log?.('[bento/home assistant]', ...a)
+    // Hosted models with function calling get the agent loop — reading more
+    // than the open slide is what "make every title shorter" needs. A server
+    // that rejects tools (a local OpenAI-compatible one) falls back to the
+    // one-shot path below; the built-in model always takes it.
+    if (cfg.provider !== 'builtin' && io.check) {
+      const agent = await runAgent(cfg, turn, material, built, io, signal, env, log)
+      if (signal.aborted) return
+      if (agent) {
+        const outlineOnlyNote = built.focus === 'none' ? env.t('asstOutlineOnly') : ''
+        if (agent.ops) emit('assistant.done', { mode: 'edit', ops: agent.ops, note: [outlineOnlyNote, agent.note].filter(Boolean).join(' '), focus: built.focus })
+        else emit('assistant.done', { mode: 'edit', text: agent.note || '', ...(outlineOnlyNote ? { note: outlineOnlyNote } : {}) })
+        return
+      }
+    }
     /** One model call for a patch: the reply parsed, hollow objects counted as prose. */
     const askPatch = async (messages) => {
       const text = await complete(cfg, messages, () => {}, signal, env, schema)
@@ -617,6 +631,79 @@ export async function runTurn(cfg, turn, io, emit, signal, env) {
     if (signal.aborted || e?.name === 'AbortError') return
     emit('assistant.error', { reason: String(e?.message || e), ...(e?.code ? { code: e.code } : {}) })
   }
+}
+
+/**
+ * The agent loop: the model reads (outline, slide) and tries patches (a dry
+ * run on the page) until it is satisfied or the call budget is spent. Returns
+ * { ops, note } — the last clean patch and the model's closing line — or
+ * { note } when no patch was clean, or null when the server does not do
+ * tools (the caller falls back to one shot).
+ */
+export async function runAgent(cfg, turn, material, built, io, signal, env, log) {
+  const thread = [{ role: 'system', content: AGENT_PROMPT }]
+  for (const m of built.messages) if (m.role !== 'system') thread.push({ role: m.role, content: m.content })
+  const step = async () => {
+    const req = shapeToolRequest(cfg, thread, AGENT_TOOLS)
+    let r
+    try {
+      r = await env.fetch(req.url, { method: 'POST', headers: req.headers, body: req.body, signal })
+    } catch (e) {
+      if (e?.name === 'AbortError') throw e
+      throw new Error(env.t('asstUnreachable', hostPortOf(cfg) || cfg.provider))
+    }
+    if (!r.ok) {
+      const body = await r.text().catch(() => '')
+      // No function calling here: say so with null and let one shot run.
+      if (r.status === 400 && /tool|function/i.test(body)) return null
+      throw new Error(errorFrom(cfg.provider, r.status, body))
+    }
+    return parseToolReply(cfg.provider, await r.json())
+  }
+  let calls = 0
+  let clean = null
+  let fallback = null
+  let note = ''
+  while (!signal.aborted) {
+    const reply = await step()
+    if (reply === null) { log('agent: no tools here, one shot instead'); return null }
+    log('agent step', reply.calls.map((c) => c.name).join(',') || 'text', reply.text)
+    if (!reply.calls.length) { note = reply.text.trim(); break }
+    thread.push({ role: 'assistant', content: reply.text, calls: reply.calls })
+    for (const c of reply.calls) {
+      calls++
+      let result
+      if (calls > AGENT_MAX_CALLS) {
+        result = 'Call budget spent. Reply now with one line saying what changed.'
+      } else if (c.name === 'outline') {
+        result = material.addressed
+      } else if (c.name === 'slide') {
+        const n = Number(c.args?.n)
+        const m = Number.isInteger(n) && n >= 1 ? validMaterial(await io.document({ slide: n })) : null
+        result = m?.focus?.json ?? `No slide ${c.args?.n}.`
+      } else if (c.name === 'patch') {
+        const parsed = parseReply(typeof c.args?.json === 'string' ? c.args.json : JSON.stringify(c.args?.json ?? c.args ?? {}))
+        if (parsed.kind !== 'json' || !isPatch(parsed.value)) {
+          result = 'Not a patch: send ONE JSON object with the operation keys described.'
+        } else {
+          const check = await io.check(parsed.value)
+          if (!check) result = 'The document did not answer.'
+          else {
+            const ok = check.skipped.length === 0 && check.applied.length > 0
+            if (ok) clean = parsed.value
+            else if (check.applied.length > 0 && !clean) fallback = parsed.value
+            result = JSON.stringify({ applied: check.applied, refused: check.skipped, ...(check.outline ? { outlineAfter: check.outline } : {}) })
+          }
+        }
+      } else {
+        result = `Unknown tool ${c.name}.`
+      }
+      thread.push({ role: 'tool', id: c.id, name: c.name, content: result })
+    }
+    if (calls > AGENT_MAX_CALLS + reply.calls.length) break
+  }
+  log('agent done', clean ? 'clean patch' : fallback ? 'partial patch' : 'no patch', note)
+  return { ops: clean ?? fallback ?? undefined, note }
 }
 
 /** The origin Settings asks site access for, or null for the built-in model. */

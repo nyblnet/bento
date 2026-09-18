@@ -446,3 +446,114 @@ export async function* iterateBody(body) {
     reader.releaseLock()
   }
 }
+
+// ---------------------------------------------------------------- tool calls
+//
+// The agent loop (assistant.js runAgent) speaks ONE neutral thread and the
+// three vendors' function-calling dialects are shaped here, non-streaming:
+//
+//   { role:'system'|'user', content }
+//   { role:'assistant', content?, calls?: [{ id, name, args }] }
+//   { role:'tool', id, name, content }            the result of one call
+//
+// A tool is { name, description, parameters } with a JSON-Schema object of
+// named string/integer properties — kept to what every dialect takes, and
+// never an OBJECT with no properties (Gemini hollows those).
+
+/** The non-streaming request for one agent step with tools. */
+export function shapeToolRequest(cfg, thread, tools) {
+  const base = baseOf(cfg)
+  const system = thread.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n')
+  const turns = thread.filter((m) => m.role !== 'system')
+  switch (cfg.provider) {
+    case 'openai': {
+      const messages = []
+      for (const m of turns) {
+        if (m.role === 'tool') messages.push({ role: 'tool', tool_call_id: m.id, content: m.content })
+        else if (m.role === 'assistant' && m.calls?.length) {
+          messages.push({ role: 'assistant', content: m.content || null, tool_calls: m.calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.args ?? {}) } })) })
+        } else messages.push({ role: m.role, content: m.content })
+      }
+      if (system) messages.unshift({ role: 'system', content: system })
+      return {
+        url: `${base}/chat/completions`,
+        headers: { 'content-type': 'application/json', ...(cfg.key ? { authorization: `Bearer ${cfg.key}` } : {}) },
+        body: JSON.stringify({ model: cfg.model, messages, tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })), tool_choice: 'auto' }),
+      }
+    }
+    case 'anthropic': {
+      const messages = []
+      for (const m of turns) {
+        if (m.role === 'tool') {
+          const block = { type: 'tool_result', tool_use_id: m.id, content: m.content }
+          const prev = messages[messages.length - 1]
+          if (prev?.role === 'user' && Array.isArray(prev.content)) prev.content.push(block)
+          else messages.push({ role: 'user', content: [block] })
+        } else if (m.role === 'assistant' && m.calls?.length) {
+          messages.push({ role: 'assistant', content: [...(m.content ? [{ type: 'text', text: m.content }] : []), ...m.calls.map((c) => ({ type: 'tool_use', id: c.id, name: c.name, input: c.args ?? {} }))] })
+        } else messages.push({ role: m.role, content: m.content })
+      }
+      return {
+        url: `${base}/v1/messages`,
+        headers: { 'content-type': 'application/json', 'x-api-key': cfg.key || '', 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: cfg.model, max_tokens: 16384, ...(system ? { system } : {}), messages, tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })) }),
+      }
+    }
+    case 'gemini': {
+      const contents = []
+      for (const m of turns) {
+        if (m.role === 'tool') {
+          const part = { functionResponse: { name: m.name, response: { result: m.content } } }
+          const prev = contents[contents.length - 1]
+          if (prev?.role === 'user' && prev.parts.some((p) => p.functionResponse)) prev.parts.push(part)
+          else contents.push({ role: 'user', parts: [part] })
+        } else if (m.role === 'assistant' && m.calls?.length) {
+          contents.push({ role: 'model', parts: [...(m.content ? [{ text: m.content }] : []), ...m.calls.map((c) => ({ functionCall: { name: c.name, args: c.args ?? {} } }))] })
+        } else contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })
+      }
+      return {
+        url: `${base}/v1beta/models/${encodeURIComponent(cfg.model)}:generateContent`,
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg.key || '' },
+        body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents, tools: [{ functionDeclarations: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })) }] }),
+      }
+    }
+    default:
+      throw new Error(`unknown provider: ${cfg.provider}`)
+  }
+}
+
+/** One agent step's reply: the text and the calls it asked for, in the neutral shape. */
+export function parseToolReply(provider, json) {
+  const out = { text: '', calls: [] }
+  if (!json || typeof json !== 'object') return out
+  let n = 0
+  const mint = () => `call-${++n}`
+  switch (provider) {
+    case 'openai': {
+      const msg = json.choices?.[0]?.message
+      if (typeof msg?.content === 'string') out.text = msg.content
+      for (const c of Array.isArray(msg?.tool_calls) ? msg.tool_calls : []) {
+        let args = {}
+        try { args = JSON.parse(c.function?.arguments || '{}') } catch { args = {} }
+        out.calls.push({ id: typeof c.id === 'string' ? c.id : mint(), name: String(c.function?.name ?? ''), args: args && typeof args === 'object' ? args : {} })
+      }
+      return out
+    }
+    case 'anthropic': {
+      for (const b of Array.isArray(json.content) ? json.content : []) {
+        if (b?.type === 'text' && typeof b.text === 'string') out.text += b.text
+        else if (b?.type === 'tool_use') out.calls.push({ id: typeof b.id === 'string' ? b.id : mint(), name: String(b.name ?? ''), args: b.input && typeof b.input === 'object' ? b.input : {} })
+      }
+      return out
+    }
+    case 'gemini': {
+      for (const p of json.candidates?.[0]?.content?.parts ?? []) {
+        if (typeof p?.text === 'string') out.text += p.text
+        else if (p?.functionCall) out.calls.push({ id: mint(), name: String(p.functionCall.name ?? ''), args: p.functionCall.args && typeof p.functionCall.args === 'object' ? p.functionCall.args : {} })
+      }
+      return out
+    }
+    default:
+      return out
+  }
+}
