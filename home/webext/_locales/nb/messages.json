@@ -487,5 +487,11 @@
   },
   "placingFolder": {
     "message": "Leter etter «$1» på disken …"
+  },
+  "placeNoDisk": {
+    "message": "Chrome lot ikke utvidelsen lese «$1» fra disken for å finne den (file://-lister avvist)."
+  },
+  "placeTried": {
+    "message": "Lette etter «$1» på $2 steder på disken — ikke der."
   }
 }

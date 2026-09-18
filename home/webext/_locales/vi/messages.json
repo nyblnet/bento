@@ -487,5 +487,11 @@
   },
   "placingFolder": {
     "message": "Đang tìm “$1” trên ổ đĩa…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome không cho tiện ích đọc “$1” từ ổ đĩa để tìm nó (danh sách file:// bị từ chối)."
+  },
+  "placeTried": {
+    "message": "Đã tìm “$1” ở $2 nơi trên ổ đĩa — không có."
   }
 }

@@ -487,5 +487,11 @@
   },
   "placingFolder": {
     "message": "Szukanie „$1” na dysku…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome nie pozwolił rozszerzeniu odczytać „$1” z dysku, aby go znaleźć (listy file:// odrzucone)."
+  },
+  "placeTried": {
+    "message": "Szukano „$1” w $2 miejscach na dysku — nie ma go tam."
   }
 }

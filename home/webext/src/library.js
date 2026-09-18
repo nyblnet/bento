@@ -150,7 +150,9 @@ export async function listDocuments(deps = {}) {
 
 /** Cache key. Includes size and mtime so an edited document re-reads itself,
  *  and nothing has to be invalidated by hand. */
-const keyFor = (doc, file) => `${doc.folder}/${doc.rel.join('/')}:${file.size}:${file.lastModified}`
+// `v2`: the meta gained `card` (the drawn title card); an entry cached before
+// that would be served without one forever, since the file has not changed.
+const keyFor = (doc, file) => `v2:${doc.folder}/${doc.rel.join('/')}:${file.size}:${file.lastModified}`
 
 /**
  * What a document is called, and what its first page looks like.

@@ -546,5 +546,13 @@
   "placingFolder": {
     "message": "Looking for “$1” on disk…",
     "description": "Toast while the extension probes the disk for where a granted folder lives. $1 is the folder name."
+  },
+  "placeNoDisk": {
+    "message": "Chrome would not let the extension read “$1” from disk to find it (file:// listings refused).",
+    "description": "Unplaced-folder banner: the disk probe could not read any file:// listing. $1 is the folder name."
+  },
+  "placeTried": {
+    "message": "Looked for “$1” in $2 places on disk — not there.",
+    "description": "Unplaced-folder banner: the disk probe ran and found nothing. $1 folder name, $2 a count."
   }
 }

@@ -487,5 +487,11 @@
   },
   "placingFolder": {
     "message": "Zoeken naar “$1” op de schijf…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome liet de extensie “$1” niet van de schijf lezen om hem te vinden (file://-lijsten geweigerd)."
+  },
+  "placeTried": {
+    "message": "Gezocht naar “$1” op $2 plekken op de schijf — niet daar."
   }
 }

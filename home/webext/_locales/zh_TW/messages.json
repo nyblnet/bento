@@ -520,5 +520,11 @@
   },
   "placingFolder": {
     "message": "正在磁碟上尋找「$1」……"
+  },
+  "placeNoDisk": {
+    "message": "Chrome 不允許擴充功能從磁碟讀取以尋找「$1」（file:// 目錄清單被拒絕）。"
+  },
+  "placeTried": {
+    "message": "已在磁碟上 $2 個位置尋找「$1」，未找到。"
   }
 }

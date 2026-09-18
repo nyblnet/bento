@@ -487,5 +487,11 @@
   },
   "placingFolder": {
     "message": "디스크에서 “$1” 찾는 중…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome이 “$1”을(를) 찾기 위해 확장 프로그램이 디스크를 읽는 것을 허용하지 않았습니다(file:// 목록 거부됨)."
+  },
+  "placeTried": {
+    "message": "디스크의 $2곳에서 “$1”을(를) 찾았지만 없었습니다."
   }
 }

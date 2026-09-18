@@ -487,5 +487,11 @@
   },
   "placingFolder": {
     "message": "Etsitään kansiota ”$1” levyltä…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome ei antanut laajennuksen lukea kansiota ”$1” levyltä sen löytämiseksi (file://-listaukset evätty)."
+  },
+  "placeTried": {
+    "message": "Kansiota ”$1” etsittiin $2 paikasta levyltä — ei siellä."
   }
 }

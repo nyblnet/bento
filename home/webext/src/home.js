@@ -60,6 +60,8 @@ import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n 
  * folder that is not where the guesses look will not be there a second later.
  */
 const placed = new Set()
+/** The last attempt per folder, for the banner: { probes, found, first } */
+const placement = new Map()
 async function placeFolders({ force = false } = {}) {
   if (state.fileAccess === false) { console.info('[bento/home] placing: file-URL access is off, nothing to probe with'); return 0 }
   let learned = 0
@@ -79,6 +81,7 @@ async function placeFolders({ force = false } = {}) {
       const deps = { fetch: async (u) => { const r = await fetch(u); tried.push(`${r.ok ? 'ok ' : 'no '}${u}`); return r }, prefixFor }
       const prefix = await placeFolder(dir, probe, known, deps).catch((e) => { tried.push(`threw ${e?.message || e}`); return null })
       console.info(`[bento/home] placing "${dir.name}":`, prefix ?? 'not found', `(${tried.length} probes)`, tried.slice(0, 12))
+      placement.set(dir.name, { probes: tried.length, found: !!prefix, first: tried[0] ?? '' })
       if (prefix) { await learnPrefix(dir.name, prefix); known[dir.name] = prefix; learned++ }
     } catch { /* a guess that cannot be made is not an error */ }
   }
@@ -811,6 +814,19 @@ async function renderNotice() {
     const el = document.createElement('div')
     el.className = 'notice'
     el.innerHTML = t('noticeUnplaced', esc(unplaced.join(', ')))
+    // What the disk probe did, in words, so "nothing happens" has a reason:
+    // how many places were tried, or that the disk refused to answer at all.
+    for (const name of unplaced) {
+      const p = placement.get(name)
+      if (!p) continue
+      const line = document.createElement('p')
+      line.className = 'sub'
+      line.style.margin = '6px 0 0'
+      line.textContent = p.probes === 0 || /^no file:\/\/\/(Users|home|C:)/.test(p.first) && p.probes <= 4
+        ? t('placeNoDisk', name)
+        : t('placeTried', name, p.probes)
+      el.appendChild(line)
+    }
     const go = document.createElement('button')
     go.className = 'btn primary'
     go.style.marginTop = '9px'

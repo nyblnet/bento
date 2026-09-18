@@ -487,5 +487,11 @@
   },
   "placingFolder": {
     "message": "Mencari “$1” pada cakera…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome tidak membenarkan sambungan membaca “$1” daripada cakera untuk mencarinya (senarai file:// ditolak)."
+  },
+  "placeTried": {
+    "message": "Mencari “$1” di $2 tempat pada cakera — tiada di sana."
   }
 }

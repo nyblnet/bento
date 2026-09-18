@@ -520,5 +520,11 @@
   },
   "placingFolder": {
     "message": "Suche „$1“ auf der Festplatte …"
+  },
+  "placeNoDisk": {
+    "message": "Chrome ließ die Erweiterung „$1“ nicht von der Festplatte lesen, um den Ordner zu finden (file://-Verzeichnisse verweigert)."
+  },
+  "placeTried": {
+    "message": "„$1“ an $2 Orten auf der Festplatte gesucht — nicht dort."
   }
 }

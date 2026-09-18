@@ -520,5 +520,11 @@
   },
   "placingFolder": {
     "message": "正在磁盘上查找“$1”……"
+  },
+  "placeNoDisk": {
+    "message": "Chrome 不允许扩展程序从磁盘读取以查找“$1”（file:// 目录列表被拒绝）。"
+  },
+  "placeTried": {
+    "message": "已在磁盘上 $2 个位置查找“$1”，未找到。"
   }
 }

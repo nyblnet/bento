@@ -520,5 +520,11 @@
   },
   "placingFolder": {
     "message": "Procurando “$1” no disco…"
+  },
+  "placeNoDisk": {
+    "message": "O Chrome não deixou a extensão ler “$1” do disco para encontrá-la (listagens file:// recusadas)."
+  },
+  "placeTried": {
+    "message": "Procurou “$1” em $2 lugares do disco — não está lá."
   }
 }

@@ -487,5 +487,11 @@
   },
   "placingFolder": {
     "message": "Mencari “$1” di disk…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome tidak mengizinkan ekstensi membaca “$1” dari disk untuk menemukannya (daftar file:// ditolak)."
+  },
+  "placeTried": {
+    "message": "Mencari “$1” di $2 tempat di disk — tidak ada."
   }
 }

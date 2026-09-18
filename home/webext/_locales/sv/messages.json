@@ -487,5 +487,11 @@
   },
   "placingFolder": {
     "message": "Letar efter ”$1” på disken…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome lät inte tillägget läsa ”$1” från disken för att hitta den (file://-listor nekades)."
+  },
+  "placeTried": {
+    "message": "Letade efter ”$1” på $2 platser på disken — inte där."
   }
 }

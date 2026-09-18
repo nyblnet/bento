@@ -487,5 +487,11 @@
   },
   "placingFolder": {
     "message": "“$1” diskte aranıyor…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome, uzantının “$1” klasörünü bulmak için diskten okumasına izin vermedi (file:// listeleri reddedildi)."
+  },
+  "placeTried": {
+    "message": "“$1” diskte $2 yerde arandı — orada değil."
   }
 }

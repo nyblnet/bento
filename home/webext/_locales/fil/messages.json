@@ -487,5 +487,11 @@
   },
   "placingFolder": {
     "message": "Hinahanap ang “$1” sa disk…"
+  },
+  "placeNoDisk": {
+    "message": "Hindi pinayagan ng Chrome ang extension na basahin ang “$1” mula sa disk para hanapin ito (tinanggihan ang mga file:// listing)."
+  },
+  "placeTried": {
+    "message": "Hinanap ang “$1” sa $2 lugar sa disk — wala roon."
   }
 }
