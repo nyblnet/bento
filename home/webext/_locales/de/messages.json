@@ -646,5 +646,14 @@
   },
   "asstBadModel": {
     "message": "Das ist keine Modell-ID: nur Buchstaben, Ziffern und . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Das Deck ist zu groß für dieses Modell: Die Anfrage braucht etwa $1 Tokens, das Modell nimmt $2. Wählen Sie ein Modell mit größerem Fenster oder kürzen Sie das Deck."
+  },
+  "asstOutlineOnly": {
+    "message": "Nur die Gliederung passte in das Fenster dieses Modells; der ausgewählte Inhalt wurde nicht vollständig gesendet."
+  },
+  "asstNoDocument": {
+    "message": "Das Dokument hat seinen Inhalt nicht übergeben."
   }
 }

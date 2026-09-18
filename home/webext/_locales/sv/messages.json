@@ -613,5 +613,14 @@
   },
   "asstBadModel": {
     "message": "Det är inte ett modell-id: bara bokstäver, siffror och . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Presentationen är för stor för den här modellen: förfrågan behöver ungefär $1 tokens och modellen tar $2. Välj en modell med större fönster, eller korta ner presentationen."
+  },
+  "asstOutlineOnly": {
+    "message": "Bara dispositionen fick plats i den här modellens fönster; det valda innehållet skickades inte i sin helhet."
+  },
+  "asstNoDocument": {
+    "message": "Dokumentet lämnade inte över sitt innehåll."
   }
 }

@@ -714,5 +714,17 @@
   "asstBadModel": {
     "message": "That is not a model id: letters, digits and . _ : / - only.",
     "description": "Assistant settings: shown when the typed model id has characters a model id cannot have."
+  },
+  "asstWindow": {
+    "message": "The deck is too large for this model: the request needs about $1 tokens and the model takes $2. Choose a model with a larger window, or shorten the deck.",
+    "description": "Reason returned to a document when even the outline does not fit the model's input window. $1 and $2 are formatted numbers."
+  },
+  "asstOutlineOnly": {
+    "message": "Only the outline fit this model's window; the selected content was not sent in full.",
+    "description": "Note on an edit reply when the model's window was too small for the selection or slide JSON."
+  },
+  "asstNoDocument": {
+    "message": "The document did not hand over its content.",
+    "description": "Reason returned when the page did not answer the extension's request for the deck material."
   }
 }

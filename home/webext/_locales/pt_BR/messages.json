@@ -646,5 +646,14 @@
   },
   "asstBadModel": {
     "message": "Isso não é um ID de modelo: só letras, dígitos e . _ : / -"
+  },
+  "asstWindow": {
+    "message": "A apresentação é grande demais para este modelo: a solicitação precisa de cerca de $1 tokens e o modelo aceita $2. Escolha um modelo com janela maior ou encurte a apresentação."
+  },
+  "asstOutlineOnly": {
+    "message": "Só o esboço coube na janela deste modelo; o conteúdo selecionado não foi enviado por inteiro."
+  },
+  "asstNoDocument": {
+    "message": "O documento não entregou seu conteúdo."
   }
 }

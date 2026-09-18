@@ -36,8 +36,8 @@ import { learnPrefix } from './db.js'
 import { t, initI18n } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
 import {
-  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, validSchema, activeConfig,
-  modelsKey, builtinContext, models as listRoutes, select as selectRoute,
+  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, validSchema, validTurn, activeConfig,
+  modelsKey, builtinContext, models as listRoutes, select as selectRoute, runTurn,
   describe as describeAssistant, check as checkAssistant, run as runAssistant,
 } from './assistant.js'
 
@@ -444,32 +444,51 @@ export function serveAssistantPort(port) {
   const docKey = docKeyOf(port.sender)
   let ac = null
   let alive = true
+  // The page's answer to `assistant.document`, when a turn is waiting for it.
+  let awaitingDocument = null
   const post = (m) => { if (alive) { try { port.postMessage(m) } catch { alive = false } } }
-  port.onDisconnect.addListener(() => { alive = false; ac?.abort() })
+  port.onDisconnect.addListener(() => { alive = false; ac?.abort(); awaitingDocument?.(null) })
   port.onMessage.addListener((m) => {
     if (m?.op === 'assistant.abort') { ac?.abort(); return }
-    if (m?.op !== 'assistant.send') return
+    if (m?.op === 'assistant.document') {
+      if (awaitingDocument && typeof m.id === 'string' && ac?.id === m.id) { const r = awaitingDocument; awaitingDocument = null; r(m.payload) }
+      return
+    }
+    if (m?.op !== 'assistant.send' && m?.op !== 'assistant.turn') return
     const id = m.id
     const respond = (result) => post({ dir: 'res', id, result })
     if (typeof id !== 'string' || !id.startsWith(ID_PREFIX)) return respond({ ok: false, reason: 'bad id' })
     if (!docKey) return respond({ ok: false, reason: 'not a document' })
     if (ac) return respond({ ok: false, reason: 'busy' })
-    const messages = validMessages(m.payload)
-    if (!messages) return respond({ ok: false, reason: 'bad request' })
-    const schema = validSchema(m.payload)
+    const isTurn = m.op === 'assistant.turn'
+    const messages = isTurn ? null : validMessages(m.payload)
+    const turn = isTurn ? validTurn(m.payload) : null
+    if (!messages && !turn) return respond({ ok: false, reason: 'bad request' })
+    const schema = isTurn ? undefined : validSchema(m.payload)
     ac = new AbortController()
+    ac.id = id
     void (async () => {
       const env = await assistantEnv()
       const cfg = await loadAssistantConfig()
       const d = await describeAssistant(cfg, env)
       if (!d.configured) return respond({ ok: false, reason: t('asstNotConfigured') })
       // Accepted. Consent may take as long as the person needs: the page's
-      // request timeout covers only this reply, not the stream.
+      // request timeout covers only this reply, not the stream. Nothing of
+      // the document is asked for until the answer is yes.
       respond({ ok: true })
       const emit = (kind, extra) => post({ dir: 'evt', id, kind, ...extra })
       if (!(await ensureConsent(docKey, d.host, d.model))) return emit('assistant.error', { code: 'consent-denied', reason: t('asstDenied') })
       if (ac.signal.aborted) return
-      await runAssistant(cfg, messages, emit, ac.signal, env, schema)
+      if (!isTurn) return runAssistant(cfg, messages, emit, ac.signal, env, schema)
+      // The turn: the deck is pulled from the page only now, over this port.
+      const io = {
+        document: () => new Promise((resolve) => {
+          awaitingDocument = resolve
+          emit('assistant.document', {})
+          setTimeout(() => { if (awaitingDocument === resolve) { awaitingDocument = null; resolve(null) } }, 15000)
+        }),
+      }
+      await runTurn(cfg, turn, io, emit, ac.signal, env)
     })()
   })
 }

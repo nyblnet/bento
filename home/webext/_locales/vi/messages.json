@@ -613,5 +613,14 @@
   },
   "asstBadModel": {
     "message": "Đó không phải ID mô hình: chỉ gồm chữ cái, chữ số và . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Bộ trình chiếu quá lớn cho mô hình này: yêu cầu cần khoảng $1 token và mô hình nhận $2. Hãy chọn mô hình có cửa sổ lớn hơn, hoặc rút ngắn bộ trình chiếu."
+  },
+  "asstOutlineOnly": {
+    "message": "Chỉ dàn ý vừa với cửa sổ của mô hình này; nội dung đã chọn không được gửi đầy đủ."
+  },
+  "asstNoDocument": {
+    "message": "Tài liệu không chuyển giao nội dung của nó."
   }
 }

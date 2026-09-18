@@ -613,5 +613,14 @@
   },
   "asstBadModel": {
     "message": "Bu bir model kimliği değil: yalnızca harf, rakam ve . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Sunum bu model için çok büyük: istek yaklaşık $1 token gerektiriyor, model $2 alıyor. Daha geniş pencereli bir model seçin ya da sunumu kısaltın."
+  },
+  "asstOutlineOnly": {
+    "message": "Bu modelin penceresine yalnızca ana hat sığdı; seçili içerik tam olarak gönderilmedi."
+  },
+  "asstNoDocument": {
+    "message": "Belge içeriğini teslim etmedi."
   }
 }

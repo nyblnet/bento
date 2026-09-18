@@ -646,5 +646,14 @@
   },
   "asstBadModel": {
     "message": "Ce n’est pas un identifiant de modèle : lettres, chiffres et . _ : / - uniquement."
+  },
+  "asstWindow": {
+    "message": "Le deck est trop volumineux pour ce modèle : la requête demande environ $1 jetons et le modèle en accepte $2. Choisissez un modèle à fenêtre plus large, ou raccourcissez le deck."
+  },
+  "asstOutlineOnly": {
+    "message": "Seul le plan tenait dans la fenêtre de ce modèle ; le contenu sélectionné n’a pas été envoyé en entier."
+  },
+  "asstNoDocument": {
+    "message": "Le document n’a pas transmis son contenu."
   }
 }

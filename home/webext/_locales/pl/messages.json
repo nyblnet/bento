@@ -613,5 +613,14 @@
   },
   "asstBadModel": {
     "message": "To nie jest identyfikator modelu: tylko litery, cyfry i . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Prezentacja jest za duża dla tego modelu: żądanie potrzebuje około $1 tokenów, a model przyjmuje $2. Wybierz model z większym oknem lub skróć prezentację."
+  },
+  "asstOutlineOnly": {
+    "message": "W oknie tego modelu zmieścił się tylko konspekt; zaznaczona treść nie została wysłana w całości."
+  },
+  "asstNoDocument": {
+    "message": "Dokument nie przekazał swojej treści."
   }
 }

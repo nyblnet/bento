@@ -646,5 +646,14 @@
   },
   "asstBadModel": {
     "message": "這不是模型 ID：只能包含字母、數字和 . _ : / -"
+  },
+  "asstWindow": {
+    "message": "這份簡報對這個模型來說太大：要求約需 $1 個 token，而模型只接受 $2。請選擇視窗更大的模型，或縮短簡報。"
+  },
+  "asstOutlineOnly": {
+    "message": "這個模型的視窗只容得下大綱；所選內容沒有完整送出。"
+  },
+  "asstNoDocument": {
+    "message": "文件沒有交出其內容。"
   }
 }

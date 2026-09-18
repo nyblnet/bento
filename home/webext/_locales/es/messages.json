@@ -646,5 +646,14 @@
   },
   "asstBadModel": {
     "message": "Eso no es un ID de modelo: solo letras, dígitos y . _ : / -"
+  },
+  "asstWindow": {
+    "message": "La presentación es demasiado grande para este modelo: la solicitud necesita unos $1 tokens y el modelo admite $2. Elige un modelo con una ventana mayor o acorta la presentación."
+  },
+  "asstOutlineOnly": {
+    "message": "Solo el esquema cupo en la ventana de este modelo; el contenido seleccionado no se envió completo."
+  },
+  "asstNoDocument": {
+    "message": "El documento no entregó su contenido."
   }
 }

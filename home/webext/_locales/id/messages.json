@@ -613,5 +613,14 @@
   },
   "asstBadModel": {
     "message": "Itu bukan ID model: hanya huruf, angka, dan . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Presentasi terlalu besar untuk model ini: permintaan membutuhkan sekitar $1 token dan model menerima $2. Pilih model dengan jendela lebih besar, atau perpendek presentasi."
+  },
+  "asstOutlineOnly": {
+    "message": "Hanya kerangka yang muat di jendela model ini; konten yang dipilih tidak dikirim seluruhnya."
+  },
+  "asstNoDocument": {
+    "message": "Dokumen tidak menyerahkan isinya."
   }
 }

@@ -613,5 +613,14 @@
   },
   "asstBadModel": {
     "message": "Det er ikke et model-id: kun bogstaver, tal og . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Præsentationen er for stor til denne model: forespørgslen kræver omkring $1 tokens, og modellen tager $2. Vælg en model med et større vindue, eller gør præsentationen kortere."
+  },
+  "asstOutlineOnly": {
+    "message": "Kun disponeringen passede i denne models vindue; det valgte indhold blev ikke sendt i sin helhed."
+  },
+  "asstNoDocument": {
+    "message": "Dokumentet afleverede ikke sit indhold."
   }
 }

@@ -32,6 +32,7 @@
 // fake fetch and a fake storage. background.js supplies the real ones.
 
 import { DEFAULTS, describeHost, hostPortOf, shapeRequest, shapeCheck, shapeModels, parseModels, contextOf, curateModels, errorFrom, streamReply, iterateBody, originOf } from './providers.js'
+import { validMaterial, buildMessages, responseSchema, parseReply, RETRY_NUDGE, ASSUMED_WINDOW_LOCAL, ASSUMED_WINDOW_HOSTED } from './prompt.js'
 
 /** `chrome.storage.local` keys. */
 export const CONFIG_KEY = 'assistant'
@@ -475,6 +476,84 @@ export async function run(cfg, messages, emit, signal, env, schema) {
       ? await runBuiltin(messages, onChunk, signal, env, schema)
       : await runHttp(cfg, messages, onChunk, signal, env, schema)
     if (!signal.aborted) emit('assistant.done', { text })
+  } catch (e) {
+    if (signal.aborted || e?.name === 'AbortError') return
+    emit('assistant.error', { reason: String(e?.message || e), ...(e?.code ? { code: e.code } : {}) })
+  }
+}
+
+/** One completion, streamed: the text, or a throw with the provider's reason (and a code when there is one). */
+async function complete(cfg, messages, onChunk, signal, env, schema) {
+  return cfg.provider === 'builtin'
+    ? runBuiltin(messages, onChunk, signal, env, schema)
+    : runHttp(cfg, messages, onChunk, signal, env, schema)
+}
+
+/** A well-formed `assistant.turn` payload, or null. */
+export function validTurn(payload) {
+  if (!payload || typeof payload !== 'object') return null
+  const request = typeof payload.request === 'string' ? payload.request.trim() : ''
+  if (!request || request.length > 20000) return null
+  const history = Array.isArray(payload.history)
+    ? payload.history.filter((t) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.text === 'string').map((t) => ({ role: t.role, text: t.text })).slice(-16)
+    : []
+  const f = payload.focus && typeof payload.focus === 'object' ? payload.focus : {}
+  const focus = {
+    index: Number.isInteger(f.index) && f.index >= 0 ? f.index : 0,
+    selection: Array.isArray(f.selection) ? f.selection.filter((x) => typeof x === 'string').slice(0, 200) : [],
+  }
+  return { request, history, focus }
+}
+
+/** The input window a turn is sized to: what describe would report, else the assumption by kind. */
+export async function windowFor(cfg, env) {
+  if (cfg.contextTokens) return cfg.contextTokens
+  if (cfg.provider === 'builtin') return (await env.builtinTokens?.()) || ASSUMED_WINDOW_LOCAL
+  return contextTokensOf(cfg, await env.models?.(cfg)) || ASSUMED_WINDOW_HOSTED
+}
+
+/**
+ * `assistant.turn`, once accepted and consented: ask the page for the
+ * material, size it to the model, run the turn, and hand back prose or an
+ * ops patch. `io.document()` resolves with the page's answer to
+ * `assistant.document`; `emit` sends evt frames. Exactly one of done /
+ * error, or nothing after an abort.
+ *
+ * An EDIT that comes back as prose gets ONE nudge (RETRY_NUDGE) as a
+ * follow-up turn before it is handed over as text — a small model that was
+ * shown the schema in prose sometimes needs telling twice.
+ */
+export async function runTurn(cfg, turn, io, emit, signal, env) {
+  try {
+    const window = await windowFor(cfg, env)
+    const material = validMaterial(await io.document())
+    if (signal.aborted) return
+    if (!material) return emit('assistant.error', { code: 'document', reason: env.t('asstNoDocument') })
+    const built = buildMessages(material, turn.history, turn.request, window)
+    if (!built.fits) {
+      return emit('assistant.error', { code: 'window', reason: env.t('asstWindow', built.contextTokens.toLocaleString(), window.toLocaleString()) })
+    }
+    const schema = responseSchema(built.mode, built.focus)
+    if (built.mode === 'ask') {
+      const text = await complete(cfg, built.messages, (t) => { if (!signal.aborted) emit('assistant.chunk', { text: t }) }, signal, env, undefined)
+      if (!signal.aborted) emit('assistant.done', { mode: 'ask', text })
+      return
+    }
+    let text = await complete(cfg, built.messages, () => {}, signal, env, schema)
+    let parsed = parseReply(text)
+    if (parsed.kind === 'text' && !signal.aborted) {
+      const again = [...built.messages, { role: 'assistant', content: text }, { role: 'user', content: RETRY_NUDGE }]
+      text = await complete(cfg, again, () => {}, signal, env, schema)
+      parsed = parseReply(text)
+    }
+    if (signal.aborted) return
+    const outlineOnly = built.focus === 'none' ? env.t('asstOutlineOnly') : ''
+    if (parsed.kind === 'json') {
+      const note = [outlineOnly, parsed.note].filter(Boolean).join(' ')
+      emit('assistant.done', { mode: 'edit', ops: parsed.value, note, focus: built.focus })
+    } else {
+      emit('assistant.done', { mode: 'edit', text: parsed.text, ...(outlineOnly ? { note: outlineOnly } : {}) })
+    }
   } catch (e) {
     if (signal.aborted || e?.name === 'AbortError') return
     emit('assistant.error', { reason: String(e?.message || e), ...(e?.code ? { code: e.code } : {}) })

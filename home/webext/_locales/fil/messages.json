@@ -613,5 +613,14 @@
   },
   "asstBadModel": {
     "message": "Hindi iyan model id: mga letra, numero at . _ : / - lang."
+  },
+  "asstWindow": {
+    "message": "Masyadong malaki ang deck para sa modelong ito: kailangan ng request ng humigit-kumulang $1 token at $2 lang ang kaya ng modelo. Pumili ng modelong mas malaki ang window, o paikliin ang deck."
+  },
+  "asstOutlineOnly": {
+    "message": "Ang outline lang ang kumasya sa window ng modelong ito; hindi buong naipadala ang piniling nilalaman."
+  },
+  "asstNoDocument": {
+    "message": "Hindi ibinigay ng dokumento ang nilalaman nito."
   }
 }

@@ -54,7 +54,10 @@ function streamTurn(d) {
       post({ dir: 'res', id: d.id, result: m.result })
       if (!m.result?.ok) { streams.delete(d.id); port.disconnect() }
     } else if (m.dir === 'evt') {
-      post({ dir: 'evt', id: d.id, kind: m.kind, text: m.text, reason: m.reason, code: m.code })
+      // `assistant.document` asks the page for the deck; `done` carries
+      // prose or an ops patch (`mode`, `ops`, `note`, `focus`) — forwarded as
+      // named fields, never the whole frame.
+      post({ dir: 'evt', id: d.id, kind: m.kind, text: m.text, reason: m.reason, code: m.code, mode: m.mode, ops: m.ops, note: m.note, focus: m.focus })
       if (m.kind === 'assistant.done' || m.kind === 'assistant.error') { streams.delete(d.id); port.disconnect() }
     }
   })
@@ -65,7 +68,7 @@ function streamTurn(d) {
     if (!answered) post({ dir: 'res', id: d.id, result: { ok: false, reason: 'disconnected' } })
     else post({ dir: 'evt', id: d.id, kind: 'assistant.error', reason: 'disconnected' })
   })
-  port.postMessage({ op: 'assistant.send', id: d.id, payload: d.payload })
+  port.postMessage({ op: d.op, id: d.id, payload: d.payload })
 }
 
 /**
@@ -103,7 +106,15 @@ window.addEventListener('message', async (ev) => {
     // The page mints these ids with a prefix of its own; anything else is not
     // the page's assistant client and gets nothing.
     if (typeof d.id !== 'string' || !d.id.startsWith(ASSISTANT_ID)) return
-    if (d.op === 'assistant.send') return streamTurn(d)
+    if (d.op === 'assistant.send' || d.op === 'assistant.turn') return streamTurn(d)
+    if (d.op === 'assistant.document') {
+      // The page's answer to the extension's ask, for a turn this tab is
+      // streaming: onto that turn's port, never onto sendMessage.
+      const port = streams.get(d.id)
+      if (port) { try { port.postMessage({ op: 'assistant.document', id: d.id, payload: d.payload }) } catch { /* closed */ } }
+      post({ dir: 'res', id: d.id, result: { ok: !!port } })
+      return
+    }
     if (d.op === 'assistant.abort') {
       // Only a turn THIS tab started has a port here to post on.
       const port = streams.get(d.payload?.req)

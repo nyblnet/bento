@@ -613,5 +613,14 @@
   },
   "asstBadModel": {
     "message": "Dat is geen model-id: alleen letters, cijfers en . _ : / -"
+  },
+  "asstWindow": {
+    "message": "De presentatie is te groot voor dit model: het verzoek heeft ongeveer $1 tokens nodig en het model neemt er $2. Kies een model met een groter venster of kort de presentatie in."
+  },
+  "asstOutlineOnly": {
+    "message": "Alleen de outline paste in het venster van dit model; de geselecteerde inhoud is niet volledig verstuurd."
+  },
+  "asstNoDocument": {
+    "message": "Het document heeft zijn inhoud niet overhandigd."
   }
 }

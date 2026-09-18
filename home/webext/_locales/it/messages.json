@@ -646,5 +646,14 @@
   },
   "asstBadModel": {
     "message": "Non è un ID di modello: solo lettere, cifre e . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Il deck è troppo grande per questo modello: la richiesta richiede circa $1 token e il modello ne accetta $2. Scegli un modello con una finestra più ampia o accorcia il deck."
+  },
+  "asstOutlineOnly": {
+    "message": "Nella finestra di questo modello è entrata solo la struttura; il contenuto selezionato non è stato inviato per intero."
+  },
+  "asstNoDocument": {
+    "message": "Il documento non ha consegnato il suo contenuto."
   }
 }

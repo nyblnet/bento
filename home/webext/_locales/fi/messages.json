@@ -613,5 +613,14 @@
   },
   "asstBadModel": {
     "message": "Tuo ei ole mallin tunnus: vain kirjaimia, numeroita ja . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Esitys on liian suuri tälle mallille: pyyntö tarvitsee noin $1 tokenia ja malli ottaa $2. Valitse malli, jolla on suurempi ikkuna, tai lyhennä esitystä."
+  },
+  "asstOutlineOnly": {
+    "message": "Vain jäsennys mahtui tämän mallin ikkunaan; valittua sisältöä ei lähetetty kokonaan."
+  },
+  "asstNoDocument": {
+    "message": "Asiakirja ei luovuttanut sisältöään."
   }
 }

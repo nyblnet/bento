@@ -646,5 +646,14 @@
   },
   "asstBadModel": {
     "message": "这不是模型 ID：只能包含字母、数字和 . _ : / -"
+  },
+  "asstWindow": {
+    "message": "此演示文稿对这个模型来说太大：请求约需 $1 个 token，而模型只接受 $2。请选择窗口更大的模型，或缩短演示文稿。"
+  },
+  "asstOutlineOnly": {
+    "message": "这个模型的窗口只容得下大纲；所选内容没有完整发送。"
+  },
+  "asstNoDocument": {
+    "message": "文档没有交出其内容。"
   }
 }

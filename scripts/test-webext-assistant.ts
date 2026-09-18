@@ -826,5 +826,152 @@ console.log('\n— the Settings model picker')
   ok(/MODEL_RE\.test\(c\.model\)/.test(home), 'Settings: an Other… id is validated by MODEL_RE before it is saved')
 }
 
+console.log('\n— prompt.js: the turn from the page\'s material')
+const prompt = await import('../home/webext/src/prompt.js')
+const MATERIAL = {
+  outline: 'Deck "Q3", 2 slides.\nSlide 1:\n  - title: Hello\nSlide 2:\n  - body: World',
+  addressed: 'Deck "Q3", 2 slides.\nSlide 1 (id "s1"):\n  - [1/t1] title: Hello\nSlide 2 (id "s2"):\n  - [2/t2] body: World',
+  open: 2, size: { width: 1280, height: 720 },
+  focus: { kind: 'slide', label: 'slide 2 (id "s2") in full, its elements addressed as 2/<id>', json: '{"id":"s2","elements":[{"id":"t2","type":"text","html":"World"}]}' },
+  theme: '{"accent":"#f80"}',
+}
+{
+  ok(prompt.isQuestion('What is slide 2 about?') && prompt.isQuestion('summarise the deck') && !prompt.isQuestion('make the title bolder'), 'isQuestion: a trailing ? or an asking opener')
+  const m = prompt.validMaterial(MATERIAL)!
+  ok(m.open === 2 && m.focus?.kind === 'slide' && m.theme === MATERIAL.theme, 'validMaterial: the page\'s shape, bounded')
+  ok(prompt.validMaterial({ outline: 5 }) === null && prompt.validMaterial('x') === null && prompt.validMaterial({ outline: 'x', focus: { kind: 'weird', json: '{}' } })!.focus === null, 'validMaterial: not material → null; an odd focus → none')
+  const ask = prompt.buildMessages(m, [{ role: 'user', text: 'hi' }, { role: 'assistant', text: 'yo' }], 'What is slide 2 about?', 128000)
+  ok(ask.mode === 'ask' && ask.focus === 'none' && ask.fits && ask.messages[0].content === prompt.QUESTION_PROMPT && ask.messages.length === 4, 'buildMessages ask: the question prompt, the history, the plain outline')
+  ok(ask.messages[3].content.startsWith('Deck outline (slide 2 is open):\nDeck "Q3"') && ask.messages[3].content.endsWith('What is slide 2 about?'), 'buildMessages ask: outline first, request last')
+  const edit = prompt.buildMessages(m, [], 'make the title bolder', 128000)
+  ok(edit.mode === 'edit' && edit.focus === 'slide' && edit.fits && edit.messages[0].content === prompt.OPS_PROMPT, 'buildMessages edit: the ops prompt, the addressed outline, the focus')
+  const u = edit.messages[1].content
+  ok(u.includes('[1/t1]') && u.includes('Focus — slide 2 (id "s2") in full') && u.includes('; the deck\'s theme is {"accent":"#f80"}:\n{"id":"s2"') && u.endsWith('make the title bolder'), 'buildMessages edit: addressed outline, focus label + theme + json, request last')
+  const small = prompt.buildMessages(m, [{ role: 'user', text: 'a' }, { role: 'assistant', text: 'b' }, { role: 'user', text: 'c' }, { role: 'assistant', text: 'd' }], 'make the title bolder', 2130)
+  ok(small.mode === 'edit' && small.focus === 'none' && small.fits && !small.messages.some((x: any) => x.content.includes('Focus —')) && small.messages.length === 1 + prompt.WORDS_HISTORY + 1, 'buildMessages edit, small window: the focus is dropped, history cut to WORDS_HISTORY, still fits')
+  const none = prompt.buildMessages(m, [], 'make the title bolder', 1000)
+  ok(none.fits === false && none.contextTokens > 0 && none.window === 1000, 'buildMessages edit, tiny window: fits:false with the numbers')
+  ok(prompt.responseSchema('ask') === undefined && prompt.responseSchema('edit', 'none') === prompt.OPS_SCHEMA && prompt.responseSchema('edit', 'slide') === prompt.OBJECT_SCHEMA, 'responseSchema: none / strict / loose by mode and focus')
+  ok(prompt.parseReply('Sure:\n```json\n{"edits":[{"id":"1/t1","text":"Hi"}]}\n```').kind === 'json' && (prompt.parseReply('Sure:\n```json\n{"edits":[]}\n```') as any).note === 'Sure:', 'parseReply: a fenced object, with the note before it')
+  ok((prompt.parseReply('Here {"edits":[]} done') as any).value.edits.length === 0 && prompt.parseReply('just words').kind === 'text' && prompt.parseReply('{not json}').kind === 'text', 'parseReply: bare braces; prose stays prose')
+}
+
+console.log('\n— runTurn: material in, prose or an ops patch out')
+{
+  const turnOf = (request: string, history: any[] = []) => asst.validTurn({ request, history, focus: { index: 1, selection: [] } })!
+  const openaiOf = (text: string) => `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`
+  const envWith = (replies: string[], seen: any[] = []) => ({
+    t, models: async () => undefined,
+    fetch: async (_u: string, init: any) => { seen.push(JSON.parse(init.body)); return { ok: true, status: 200, body: sseBody(openaiOf(replies.shift() ?? '')) } },
+  })
+  ok(asst.validTurn({ request: ' hi ', history: [{ role: 'tool', text: 'x' }, { role: 'user', text: 'y' }], focus: { index: -1, selection: ['a', 5] } })!.history.length === 1, 'validTurn: bounds roles, index and selection')
+  ok(asst.validTurn({}) === null && asst.validTurn({ request: '' }) === null, 'validTurn: no request → null')
+  // a question streams prose
+  {
+    const frames: any[] = []
+    const io = { document: async () => MATERIAL }
+    await asst.runTurn(cfgOpenai, turnOf('What is slide 2 about?'), io, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, envWith(['It is about the world.']))
+    ok(frames.some((f) => f.kind === 'assistant.chunk') && frames.at(-1).kind === 'assistant.done' && frames.at(-1).mode === 'ask' && frames.at(-1).text === 'It is about the world.', 'runTurn ask: chunks stream, done carries mode ask + text')
+  }
+  // an edit returns the parsed ops patch, constrained
+  {
+    const frames: any[] = []
+    const seen: any[] = []
+    await asst.runTurn(cfgOpenai, turnOf('make the title bolder'), { document: async () => MATERIAL }, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, envWith(['{"style":[{"id":"1/t1","weight":"bold"}]}'], seen))
+    ok(frames.length === 1 && frames[0].kind === 'assistant.done' && frames[0].mode === 'edit' && frames[0].ops.style[0].weight === 'bold' && frames[0].focus === 'slide' && frames[0].note === '', 'runTurn edit: no chunks, done carries the ops object + focus')
+    ok(seen[0].response_format?.json_schema?.schema === prompt.OBJECT_SCHEMA || JSON.stringify(seen[0].response_format?.json_schema?.schema) === '{"type":"object"}', 'runTurn edit with focus: the loose schema constrains the reply')
+  }
+  // prose back → one nudge → ops
+  {
+    const frames: any[] = []
+    const seen: any[] = []
+    await asst.runTurn(cfgOpenai, turnOf('make the title bolder'), { document: async () => MATERIAL }, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, envWith(['I would make it bold.', 'Ok {"style":[{"id":"1/t1","weight":"bold"}]}'], seen))
+    ok(seen.length === 2 && seen[1].messages.at(-1).content === prompt.RETRY_NUDGE && seen[1].messages.at(-2).content === 'I would make it bold.', 'runTurn edit: a prose reply gets exactly one nudge, with the prose as the assistant turn')
+    ok(frames.at(-1).mode === 'edit' && frames.at(-1).ops.style && frames.at(-1).note === 'Ok', 'runTurn edit: the nudged reply\'s patch, its note kept')
+  }
+  // prose twice → text
+  {
+    const frames: any[] = []
+    await asst.runTurn(cfgOpenai, turnOf('make the title bolder'), { document: async () => MATERIAL }, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, envWith(['No.', 'Still no.']))
+    ok(frames.at(-1).kind === 'assistant.done' && frames.at(-1).mode === 'edit' && frames.at(-1).text === 'Still no.' && !('ops' in frames.at(-1)), 'runTurn edit: prose after the nudge is handed over as text')
+  }
+  // a small window: outline only, strict schema, a note in our words
+  {
+    const frames: any[] = []
+    const seen: any[] = []
+    const small = { ...asst.normalizeConfig({ provider: 'openai', baseUrl: 'http://localhost:11434/v1', model: 'tiny', contextTokens: 2130 }, false) }
+    await asst.runTurn(small, turnOf('make the title bolder'), { document: async () => MATERIAL }, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, envWith(['{"edits":[{"id":"1/t1","text":"HELLO"}]}'], seen))
+    ok(frames.at(-1).focus === 'none' && frames.at(-1).note === 'asstOutlineOnly' && JSON.stringify(seen[0].response_format.json_schema.schema) === JSON.stringify(prompt.OPS_SCHEMA), 'runTurn edit, small window: focus none, the strict schema, a note saying only the outline fit')
+  }
+  // nothing fits → error with the numbers
+  {
+    const frames: any[] = []
+    const tiny = asst.normalizeConfig({ provider: 'openai', baseUrl: 'http://localhost:11434/v1', model: 'tiny', contextTokens: 1000 }, false)
+    let fetched = 0
+    await asst.runTurn(tiny, turnOf('make the title bolder'), { document: async () => MATERIAL }, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { t, fetch: async () => { fetched++; throw new Error('no') }, models: async () => undefined })
+    ok(frames.length === 1 && frames[0].kind === 'assistant.error' && frames[0].code === 'window' && /^asstWindow\|[\d,.]+\|1,000$/.test(frames[0].reason) && fetched === 0, 'runTurn: nothing fits → error code window with the numbers, no request made')
+  }
+  // no material → error; abort mid-way → silence
+  {
+    const frames: any[] = []
+    await asst.runTurn(cfgOpenai, turnOf('hi'), { document: async () => null }, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, envWith([]))
+    ok(frames.length === 1 && frames[0].kind === 'assistant.error' && frames[0].code === 'document', 'runTurn: the page not answering with material → error code document')
+    const ac = new AbortController()
+    const f2: any[] = []
+    await asst.runTurn(cfgOpenai, turnOf('hi'), { document: async () => { ac.abort(); return MATERIAL } }, (k: string, x: any) => f2.push({ kind: k, ...x }), ac.signal, envWith(['x']))
+    ok(f2.length === 0, 'runTurn: aborted while the page answered → nothing emitted')
+  }
+  // the window resolution
+  ok(await asst.windowFor(cfgOpenai, { models: async () => undefined }) === 128000 && await asst.windowFor({ provider: 'builtin' } as any, { builtinTokens: async () => 6144 }) === 6144 && await asst.windowFor({ provider: 'builtin' } as any, { builtinTokens: async () => null }) === prompt.ASSUMED_WINDOW_LOCAL, 'windowFor: the family, the quota, the assumption')
+}
+
+console.log('\n— the turn over the port: consent first, then the deck is asked for')
+{
+  ;(globalThis as any).fetch = async () => ({ ok: true, status: 200, body: sseBody('data: {"choices":[{"delta":{"content":"{\\"edits\\":[]}"}}]}\n\ndata: [DONE]\n\n') })
+  store[asst.CONFIG_KEY] = { provider: 'openai', baseUrl: `https://gw.example/${TENANT}/v1`, model: 'm', key: KEY }
+  store[asst.ALLOWED_KEY] = {}
+  const NEW = { url: 'file:///Users/x/Decks/Turn.bento.html', frameId: 0, id: 'ext-id' }
+  const port = fakePort(NEW)
+  bg.serveAssistantPort(port)
+  const before = windowsOpened.length
+  port.send({ op: 'assistant.turn', id: 'asst-t1', payload: { request: 'make it bold', history: [], focus: { index: 0, selection: [] } } })
+  await until(() => windowsOpened.length > before)
+  ok(port.out.length === 1 && port.out[0].result.ok === true && !port.out.some((m: any) => m.kind === 'assistant.document'), 'turn from a new file: accepted, consent asked, and the deck NOT asked for yet')
+  // a document answer before consent is ignored
+  port.send({ op: 'assistant.document', id: 'asst-t1', payload: MATERIAL })
+  await settle()
+  ok(!port.out.some((m: any) => m.kind === 'assistant.done'), 'a document pushed before consent goes nowhere')
+  await bg.recordConsent(CONSENT_PAGE, { op: 'assistant.consent', nonce: consentNonce(windowsOpened.at(-1)!), doc: NEW.url, allow: true })
+  await until(() => port.out.some((m: any) => m.kind === 'assistant.document'))
+  ok(port.out.some((m: any) => m.kind === 'assistant.document' && m.id === 'asst-t1'), 'after Allow the extension asks the page for the material, with the turn\'s id')
+  port.send({ op: 'assistant.document', id: 'asst-OTHER', payload: MATERIAL })
+  await settle()
+  ok(!port.out.some((m: any) => m.kind === 'assistant.done'), 'an answer with another id is ignored')
+  port.send({ op: 'assistant.document', id: 'asst-t1', payload: MATERIAL })
+  await until(() => port.out.some((m: any) => m.kind === 'assistant.done'))
+  const done = port.out.find((m: any) => m.kind === 'assistant.done')
+  ok(done.mode === 'edit' && done.ops && Array.isArray(done.ops.edits), 'the material answered → the turn runs → done carries the ops patch')
+  ;(globalThis as any).fetch = fetchOk
+}
+{
+  // relay: the document ask reaches the page as an evt; the page's answer rides the turn's port
+  const r = loadRelay()
+  r.deliver({ [CH]: true, dir: 'req', id: 'asst-r1', op: 'assistant.turn', payload: { request: 'x', history: [], focus: { index: 0, selection: [] } } })
+  await settle()
+  ok(r.ports[0].out[0].op === 'assistant.turn', 'relay: a turn opens a port and posts assistant.turn on it')
+  r.ports[0].reply({ dir: 'res', id: 'asst-r1', result: { ok: true } })
+  r.ports[0].reply({ dir: 'evt', id: 'asst-r1', kind: 'assistant.document' })
+  ok(r.posted.at(-1).dir === 'evt' && r.posted.at(-1).kind === 'assistant.document' && r.posted.at(-1).id === 'asst-r1', 'relay: the document ask reaches the page as an evt frame')
+  r.deliver({ [CH]: true, dir: 'req', id: 'asst-r1', op: 'assistant.document', payload: { outline: 'o' } })
+  await settle()
+  ok(r.ports[0].out.at(-1).op === 'assistant.document' && r.ports[0].out.at(-1).payload.outline === 'o' && r.sent.length === 0, 'relay: the page\'s answer goes onto that turn\'s port, never onto sendMessage')
+  r.deliver({ [CH]: true, dir: 'req', id: 'asst-NOPE', op: 'assistant.document', payload: { outline: 'o' } })
+  await settle()
+  ok(r.posted.at(-1).dir === 'res' && r.posted.at(-1).result.ok === false, 'relay: a document for a turn this tab is not streaming is refused')
+  r.ports[0].reply({ dir: 'evt', id: 'asst-r1', kind: 'assistant.done', mode: 'edit', ops: { edits: [] }, note: 'n', focus: 'slide' })
+  const d = r.posted.at(-1)
+  ok(d.kind === 'assistant.done' && d.mode === 'edit' && d.ops.edits.length === 0 && d.note === 'n' && d.focus === 'slide', 'relay: done forwards mode/ops/note/focus')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)
