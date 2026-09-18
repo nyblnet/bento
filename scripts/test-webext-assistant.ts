@@ -180,8 +180,11 @@ const cfgOpenai = asst.normalizeConfig({ provider: 'openai', baseUrl: `https://g
   const s = JSON.stringify(d)
   ok(!s.includes(KEY) && !s.includes(TENANT), 'describe: neither the key nor the base URL path leaks')
   ok(Object.keys(d).sort().join() === 'configured,host,model,ok', 'describe: exactly the contract\'s fields')
+  ok(/^[A-Za-z0-9._:/-]{1,120}$/.test(d.model) && /^[A-Za-z0-9.-]+(:\d+)?$/.test(d.host), 'describe: host and model fit the shapes the page bounds them to')
   const b = await asst.describe({ provider: 'builtin' } as any, { t, LanguageModel: { availability: async () => 'available' } })
-  ok(b.host === 'asstOnDevice' && b.configured === true, 'describe: the built-in model is "this device", configured when available')
+  ok(b.host === '' && b.model === 'gemini-nano' && b.local === true && b.configured === true,
+    'describe: the built-in model is host "" + local:true + an id-shaped model — no prose the page would blank')
+  ok(!('local' in d), 'describe: an HTTP provider carries no local flag')
   const nb = await asst.describe({ provider: 'builtin' } as any, { t, LanguageModel: undefined })
   ok(nb.configured === false, 'describe: built-in without the Prompt API is not configured')
 }
@@ -333,6 +336,11 @@ const CH = '__bento_tray__'
   ok(r.posted.filter((m) => m.dir === 'res' && m.id.startsWith('asst-') && m.id !== 'asst-7').length === 2, 'both aborts are answered ok, as the contract says')
   p.reply({ dir: 'evt', id: 'asst-7', kind: 'assistant.done', text: 'Hello' })
   ok(p.disconnected, 'done closes the port')
+  const r2 = loadRelay()
+  r2.deliver({ [CH]: true, dir: 'req', id: 'asst-20', op: 'assistant.send', payload: { messages: [{ role: 'user', content: 'hi' }] } })
+  await settle()
+  r2.ports[0].reply({ dir: 'evt', id: 'asst-20', kind: 'assistant.error', code: 'consent-denied', reason: 'no' })
+  ok(r2.posted.at(-1)?.code === 'consent-denied', 'the machine code on an error event is forwarded')
 }
 {
   const r = loadRelay()
@@ -351,7 +359,7 @@ const CH = '__bento_tray__'
 }
 {
   const manifest = JSON.parse(read('manifest.json'))
-  ok(manifest.content_scripts.every((cs: any) => !cs.all_frames), 'content scripts run in the top frame only (all_frames unset)')
+  ok(manifest.content_scripts.every((cs: any) => cs.all_frames === false), 'content scripts state all_frames: false explicitly — the default, but a future edit cannot flip it silently')
   ok(manifest.content_scripts.every((cs: any) => cs.matches.every((m: string) => m.startsWith('file:///'))), 'and only on file: documents')
   ok(/ev\.source !== window/.test(read('src/relay.js')), 'relay.js checks the frame\'s source is its own window')
   ok(/'assistant'/.test(read('src/page-bridge.js')), 'page-bridge.js announces the capability')
@@ -437,7 +445,8 @@ store[asst.CONFIG_KEY] = { provider: 'openai', baseUrl: `https://gw.example/${TE
   ok(windowsOpened.length === 2 && new URL(windowsOpened[1]).searchParams.get('doc') === OTHER.url, 'a different file gets its own prompt')
   await bg.recordConsent(CONSENT_PAGE, { op: 'assistant.consent', nonce: consentNonce(windowsOpened[1]), doc: OTHER.url, allow: false })
   await until(() => port.out.length > 1)
-  ok(port.out.at(-1)?.kind === 'assistant.error' && port.out.at(-1)?.reason === 'asstDenied', 'Not now → one error frame naming the refusal')
+  ok(port.out.at(-1)?.kind === 'assistant.error' && port.out.at(-1)?.reason === 'asstDenied' && port.out.at(-1)?.code === 'consent-denied',
+    'Not now → one error frame naming the refusal, with the machine code the page keys on')
   ok(!(store[asst.ALLOWED_KEY] as any)[OTHER.url], 'and the refusal is not recorded as consent')
 }
 {
@@ -507,7 +516,7 @@ store[asst.CONFIG_KEY] = { provider: 'openai', baseUrl: `https://gw.example/${TE
   store[asst.ALLOWED_KEY] = {}
   const before = windowsOpened.length
   const pending = await bg.assistantOp('assistant.check', FILE)
-  ok(pending.ok === false && pending.reason === 'asstWaitConsent' && windowsOpened.length === before + 1,
+  ok(pending.ok === false && pending.code === 'consent-pending' && pending.reason === 'asstWaitConsent' && windowsOpened.length === before + 1,
     'assistant.check from a file not yet allowed opens the prompt and answers inside the page\'s timeout')
   await bg.recordConsent(CONSENT_PAGE, { op: 'assistant.consent', nonce: consentNonce(windowsOpened.at(-1)!), doc: FILE.url, allow: false })
   const u = await bg.assistantOp('assistant.check', { url: 'https://x/', frameId: 0 })

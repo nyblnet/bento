@@ -320,7 +320,8 @@ function askConsent(docKey, host, model) {
   consentPending.set(docKey, { nonce, promise, resolve })
   const url = new URL(chrome.runtime.getURL('src/consent.html'))
   url.searchParams.set('doc', docKey)
-  url.searchParams.set('host', host)
+  // The built-in model has no host; the window says "this device" instead.
+  url.searchParams.set('host', host || t('asstOnDevice'))
   url.searchParams.set('model', model)
   url.searchParams.set('nonce', nonce)
   chrome.windows.create({ url: url.href, type: 'popup', width: 480, height: 340, focused: true })
@@ -396,9 +397,12 @@ export async function assistantOp(op, sender) {
     // The page gives this 5s; a person reading a prompt takes longer. Ask,
     // wait a little, and if the answer is still pending say so — the next
     // check after they answer goes straight through.
+    // Machine codes beside the words: the page keys on `code` (re-runs the
+    // check when the document regains focus; shows a refusal card), never
+    // on localized text.
     const allowed = await ensureConsent(docKey, d.host, d.model, 3500)
-    if (allowed === null) return { ok: false, reason: t('asstWaitConsent') }
-    if (!allowed) return { ok: false, reason: t('asstDenied') }
+    if (allowed === null) return { ok: false, code: 'consent-pending', reason: t('asstWaitConsent') }
+    if (!allowed) return { ok: false, code: 'consent-denied', reason: t('asstDenied') }
     return checkAssistant(cfg, env)
   }
   return { ok: false, reason: 'unknown op' }
@@ -439,7 +443,7 @@ export function serveAssistantPort(port) {
       // request timeout covers only this reply, not the stream.
       respond({ ok: true })
       const emit = (kind, extra) => post({ dir: 'evt', id, kind, ...extra })
-      if (!(await ensureConsent(docKey, d.host, d.model))) return emit('assistant.error', { reason: t('asstDenied') })
+      if (!(await ensureConsent(docKey, d.host, d.model))) return emit('assistant.error', { code: 'consent-denied', reason: t('asstDenied') })
       if (ac.signal.aborted) return
       await runAssistant(cfg, messages, emit, ac.signal, env)
     })()

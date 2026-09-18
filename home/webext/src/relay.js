@@ -54,7 +54,7 @@ function streamTurn(d) {
       post({ dir: 'res', id: d.id, result: m.result })
       if (!m.result?.ok) { streams.delete(d.id); port.disconnect() }
     } else if (m.dir === 'evt') {
-      post({ dir: 'evt', id: d.id, kind: m.kind, text: m.text, reason: m.reason })
+      post({ dir: 'evt', id: d.id, kind: m.kind, text: m.text, reason: m.reason, code: m.code })
       if (m.kind === 'assistant.done' || m.kind === 'assistant.error') { streams.delete(d.id); port.disconnect() }
     }
   })

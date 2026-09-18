@@ -27,6 +27,7 @@
       "matches": [
         "file:///*.bento.html"
       ],
+      "all_frames": false,
       "js": [
         "src/page-bridge.js"
       ],
@@ -37,6 +38,7 @@
       "matches": [
         "file:///*.bento.html"
       ],
+      "all_frames": false,
       "js": [
         "src/relay.js"
       ],

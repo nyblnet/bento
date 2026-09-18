@@ -107,13 +107,16 @@ export async function builtinAvailability(LanguageModel) {
 
 /**
  * `assistant.describe`: the host and the model, and whether a request could
- * be made now. The host is a hostname — `describeHost` — and for the built-in
- * model a word for "this device"; there is no endpoint to name.
+ * be made now. NEVER prose: the page bounds `host` to a hostname shape and
+ * `model` to an id shape and blanks anything else, so a hostile bridge cannot
+ * smuggle a key into the page through them. The built-in model has no
+ * endpoint: `host` is empty, `local: true` says why, and the page renders
+ * "on this device" in its own language.
  */
 export async function describe(cfg, env) {
   if (cfg.provider === 'builtin') {
     const a = await builtinAvailability(env.LanguageModel)
-    return { ok: true, host: env.t('asstOnDevice'), model: 'Gemini Nano', configured: a === 'available' }
+    return { ok: true, host: '', model: 'gemini-nano', local: true, configured: a === 'available' }
   }
   return { ok: true, host: describeHost(cfg), model: cfg.model, configured: httpConfigured(cfg) }
 }
