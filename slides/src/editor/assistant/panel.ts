@@ -516,7 +516,7 @@ export class AssistantPanel {
     // the ops patch (ops.ts): untrusted, applied to a copy of the elided
     // compact doc, then the same road as pasted JSON
     if (!elided) { this.note(t('The reply changed nothing I could apply.'), 'err'); return }
-    const r = applyOps((elided as Elided).doc, result.ops)
+    const r = applyOps((elided as Elided).doc, result.ops, { slide: index })
     if (!r.applied.length) {
       // say WHAT came back and was refused — the address that did not
       // resolve, or the keys the reply used — so a wrong shape is visible

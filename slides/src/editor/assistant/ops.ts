@@ -97,7 +97,12 @@ export interface OpsResult { doc: Obj; applied: string[]; skipped: string[]; str
  * Apply an ops reply to the elided compact doc (a deep copy is patched).
  * `applied`/`skipped` name every op for the panel's card.
  */
-export function applyOps(compact: Obj, ops: unknown): OpsResult {
+/** `focus` = the open slide (0-based): a BARE element id — the model copied
+ *  the id out of the focus JSON instead of the address — resolves there
+ *  first, then anywhere it is unique. Measured: gemini-3.5-flash-lite wrote
+ *  `sd-title` for a slide whose focus JSON said `"id":"sd-title"`, and
+ *  sd-title lives on every slide (the morph idiom). */
+export function applyOps(compact: Obj, ops: unknown, focus: { slide?: number } = {}): OpsResult {
   const doc = JSON.parse(JSON.stringify(compact)) as Obj
   const applied: string[] = []
   const skipped: string[] = []
@@ -120,9 +125,11 @@ export function applyOps(compact: Obj, ops: unknown): OpsResult {
     }
     visit(slide.elements)
   })
+  const onFocus = (id: string): Obj | undefined => typeof focus.slide === 'number' ? byAddr.get(`${focus.slide + 1}/${id}`) : undefined
+  const resolve = (id: unknown): Obj | undefined => !str(id) ? undefined
+    : byAddr.get(id) ?? onFocus(id) ?? (bare.get(id)?.length === 1 ? bare.get(id)![0] : undefined)
   const find = (id: unknown, type: string): Obj | null => {
-    if (!str(id)) return null
-    const el = byAddr.get(id) ?? (bare.get(id)?.length === 1 ? bare.get(id)![0] : undefined)
+    const el = resolve(id)
     return el && el.type === type ? el : null
   }
   const slideAt = (n: unknown): Obj | null => int(n) && n >= 1 && n <= slides.length ? slides[n - 1] : null
@@ -187,7 +194,7 @@ export function applyOps(compact: Obj, ops: unknown): OpsResult {
   let sets = 0
   for (const e of list('set')) {
     if (!isObj(e) || !str(e.id)) { skipped.push('set ?'); continue }
-    const el = str(e.id) ? (byAddr.get(e.id) ?? (bare.get(e.id)?.length === 1 ? bare.get(e.id)![0] : undefined)) : undefined
+    const el = resolve(e.id)
     if (!el) { skipped.push(`set ${e.id}`); continue }
     if (sets++ >= SET_MAX) { skipped.push(`set ${e.id} (limit)`); continue }
     let did = 0
@@ -216,7 +223,7 @@ export function applyOps(compact: Obj, ops: unknown): OpsResult {
     applied.push(`insert ${e.type} on ${e.slide}`)
   }
   for (const id of list('delete')) {
-    const el = str(id) ? (byAddr.get(id) ?? (bare.get(id)?.length === 1 ? bare.get(id)![0] : undefined)) : undefined
+    const el = resolve(id)
     const home = el ? slides.find((s) => flat(s.elements).includes(el)) : undefined
     if (!el || !home) { skipped.push(`delete ${str(id) ? id : '?'}`); continue }
     home.elements = prune(home.elements, el)

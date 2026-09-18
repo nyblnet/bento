@@ -225,8 +225,10 @@ export function material(doc: BentoDoc, focus: Focus): { material: Material; eli
     const els = flatElements(slide)
     const picked = focus.selection.length ? els.filter((e, i) => focus.selection.includes(elId(slide, e, i))) : []
     f = picked.length
-      ? { kind: 'elements', label: `the ${picked.length === 1 ? 'selected element' : `${picked.length} selected elements`} on slide ${n} (address each as ${n}/<id>)`, json: JSON.stringify(picked.map((e) => ({ id: elId(slide, e, els.indexOf(e)), ...e }))) }
-      : { kind: 'slide', label: `slide ${n} (id "${String(slide.id ?? '')}"), its elements addressed as ${n}/<id>`, json: JSON.stringify({ ...slide, elements: els.map((e, i) => ({ id: elId(slide, e, i), ...e })) }) }
+      // every element's `id` in the focus JSON IS its address: a model
+      // copies what it sees, and `sd-title` alone lives on every slide
+      ? { kind: 'elements', label: `the ${picked.length === 1 ? 'selected element' : `${picked.length} selected elements`} on slide ${n} (each "id" is its address)`, json: JSON.stringify(picked.map((e) => ({ ...e, id: `${n}/${elId(slide, e, els.indexOf(e))}` }))) }
+      : { kind: 'slide', label: `slide ${n} (id "${String(slide.id ?? '')}"); each element's "id" is its address`, json: JSON.stringify({ ...slide, elements: els.map((e, i) => ({ ...e, id: `${n}/${elId(slide, e, i)}` })) }) }
   }
   return {
     material: {
