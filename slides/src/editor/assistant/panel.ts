@@ -29,7 +29,7 @@ const PROVIDER_NAMES: Record<string, string> = { builtin: 'Chrome', gemini: 'Gem
 export const providerDisplay = (id: string): string => PROVIDER_NAMES[id] ?? id
 /** 200000 → "200k", 1048576 → "1M" */
 export const windowDisplay = (n: number): string => n >= 1_000_000 ? `${Math.round(n / 100_000) / 10}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
-import { applyOps, cleanDoc, material, mergeReply, type Elided, type Turn } from './material'
+import { applyOps, cleanDoc, material, mergeReply, outlineDeck, type Elided, type Turn } from './material'
 import { remoteUrls } from './ops'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
@@ -489,9 +489,16 @@ export class AssistantPanel {
     // from the live document; the elision map stays here for the apply
     let elided: Elided | null = null
     const supply = () => { const m = material(this.store.doc, this.focus()); elided = m.elided; return m.material as unknown as Record<string, unknown> }
+    // the dry run the extension may ask for: what a candidate patch would
+    // do, and the addressed outline after it — nothing committed
+    const check = (ops: Record<string, unknown>) => {
+      if (!elided) return { applied: [], skipped: [], structural: false }
+      const r = applyOps((elided as Elided).doc, ops, { slide: index })
+      return { applied: r.applied, skipped: r.skipped, structural: r.structural, outline: outlineDeck(r.doc, true) }
+    }
     let result
     try {
-      result = await this.transport.turn(request, this.history.slice(0, -1), this.focus(), supply, onChunk, this.running!.signal)
+      result = await this.transport.turn(request, this.history.slice(0, -1), this.focus(), supply, onChunk, this.running!.signal, check)
     } catch (e) {
       live.remove()
       const err = e as Error & { code?: string }

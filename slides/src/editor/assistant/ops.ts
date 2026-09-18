@@ -138,7 +138,7 @@ export function applyOps(compact: Obj, ops: unknown, focus: { slide?: number } =
   for (const e of list('edits')) {
     const el = isObj(e) ? find(e.id, 'text') : null
     if (!el || !isObj(e) || !str(e.text)) { skipped.push(`edit ${isObj(e) && str(e.id) ? e.id : '?'}`); continue }
-    el.md = e.text.slice(0, TEXT_EDIT_MAX); delete el.html
+    el.md = mdText(e.text); delete el.html
     applied.push(`edit ${e.id}`)
   }
   for (const n of list('notes')) {
@@ -329,5 +329,15 @@ const freshSlideId = (slides: Obj[]): string => {
   taken.add(id)
   return id
 }
+
+/** An edit's text is markdown, but a model that saw `Code<br>is the<br>canvas`
+ *  in the focus html writes it back that way (measured: gemini-3.5-flash-
+ *  lite) and the loader would show the tags. A <br> is a line break; a
+ *  <p>…</p> pair is a paragraph; any other tag is text (escaped by the
+ *  markdown path). */
+const mdText = (t: string): string => t.slice(0, TEXT_EDIT_MAX)
+  .replace(/<br\s*\/?>/gi, '\n')
+  .replace(/\s*<\/p>\s*<p[^>]*>\s*/gi, '\n\n')
+  .replace(/^\s*<p[^>]*>|<\/p>\s*$/gi, '')
 
 const escapeHtml = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

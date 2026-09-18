@@ -88,6 +88,17 @@
 //                        evt { kind:'assistant.document', id }
 //                        and the page answers on the same id:
 //                        req { op:'assistant.document', id, payload: <Material> }
+//                        The extension may then CHECK a patch before it commits to it —
+//                        the closed loop: a model's first patch is often almost right,
+//                        and only the page can say which address did not resolve:
+//                        evt { kind:'assistant.check', id, ops }
+//                        → req { op:'assistant.check', id, payload: { applied: string[], skipped: string[], structural: boolean,
+//                                                                    outline?: string } }
+//                        a DRY RUN of ops.ts applyOps on the material's document: what would
+//                        land, what would be refused (named as the drawer names them), and
+//                        the addressed outline as it would read after — nothing is committed.
+//                        The extension may check as often as it likes; the turn commits only
+//                        on `done`.
 //                        (material.ts: the plain outline, the addressed
 //                        outline, the focus in full — every shape at once;
 //                        the extension picks by the model it holds. The
@@ -179,7 +190,7 @@ export interface AssistantTransport {
    * Error whose `name` is 'AbortError' when `signal` fired, or an
    * AssistantError (with `code`) otherwise.
    */
-  turn(request: string, history: Turn[], focus: { index: number; selection: string[] }, material: () => Record<string, unknown>, onChunk: (text: string) => void, signal: AbortSignal): Promise<TurnResult>
+  turn(request: string, history: Turn[], focus: { index: number; selection: string[] }, material: () => Record<string, unknown>, onChunk: (text: string) => void, signal: AbortSignal, check?: (ops: Record<string, unknown>) => Record<string, unknown>): Promise<TurnResult>
   /** ask the host to show where the endpoint and key are configured */
   openSettings(): Promise<void>
 }
@@ -314,7 +325,7 @@ export class ExtensionTransport implements AssistantTransport {
     return { ok: false, reason: String(r.reason ?? 'unknown'), ...(code ? { code } : {}) }
   }
 
-  turn(request: string, history: Turn[], focus: { index: number; selection: string[] }, material: () => Record<string, unknown>, onChunk: (text: string) => void, signal: AbortSignal): Promise<TurnResult> {
+  turn(request: string, history: Turn[], focus: { index: number; selection: string[] }, material: () => Record<string, unknown>, onChunk: (text: string) => void, signal: AbortSignal, check?: (ops: Record<string, unknown>) => Record<string, unknown>): Promise<TurnResult> {
     this.listen()
     const id = mintId()
     return new Promise<TurnResult>((resolve, reject) => {
@@ -339,6 +350,12 @@ export class ExtensionTransport implements AssistantTransport {
           // the extension asks for the deck (consent holds): answer on the
           // same id. The material is built NOW, from the live document.
           void this.request('assistant.document', material(), id)
+        } else if (f.kind === 'assistant.check') {
+          // a dry run of a candidate patch, answered on the same id; a
+          // frame without an object, or a page without a checker, answers
+          // an empty result so the extension is never left waiting
+          const ops = f.ops && typeof f.ops === 'object' && !Array.isArray(f.ops) ? f.ops as Record<string, unknown> : {}
+          void this.request('assistant.check', check ? check(ops) : { applied: [], skipped: [], structural: false }, id)
         } else if (f.kind === 'assistant.chunk') {
           const t = typeof f.text === 'string' ? f.text : ''
           if (t) { text += t; onChunk(t) }

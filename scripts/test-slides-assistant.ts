@@ -220,6 +220,12 @@ console.log('\nops.ts — the ops patch')
   const sl = r.doc.slides as Obj[]
   const el = (si: number, id: string) => (sl[si].elements as Obj[]).find((e) => e.id === id)!
   ok(r.applied.includes('edit 1/t') && el(0, 't').md === 'Title **A2**' && !('html' in el(0, 't')), 'edit: addressed text gets md')
+  const brs = applyOps(fixture(), { edits: [{ id: '1/t', text: 'Code<br>is the<br/>canvas.' }, { id: '4/only', text: '<p>One</p><p>Two <b>x</b></p>' }] })
+  const bel = (si: number, id: string) => ((brs.doc.slides as Obj[])[si].elements as Obj[]).find((e) => e.id === id)!
+  ok(bel(0, 't').md === 'Code\nis the\ncanvas.' && bel(3, 'only').md === 'One\n\nTwo <b>x</b>', 'edit: a <br> the model typed is a line break, <p> pairs are paragraphs, other tags stay text')
+  const bfull = expandDoc(brs.doc)
+  const bh = (bfull.slides[0].elements.find((e) => e.id === 't') as { html: string }).html
+  ok(/Code<br>is the<br>canvas\./.test(bh) && !/&lt;br/.test(bh), `and it renders as line breaks, not as the text "<br>" (${bh})`)
   ok(r.applied.includes('edit only') && el(3, 'only').md === 'Unique2' && r.skipped.includes('edit k'), 'edit: a bare id on one slide works, on two is skipped')
   ok(sl[1].notes === 'new notes' && r.skipped.includes('notes 9'), 'notes: set on slide 2; slide 9 skipped')
   ok(((el(1, 'tbl').rows as Obj[])[1].cells as Obj[])[1].html === '12 &lt;b&gt;' && r.skipped.includes('cell 2/tbl r5c1'), 'cells: r2c2 set with the text escaped; an out-of-range row skipped')
@@ -472,6 +478,30 @@ await (async () => {
     const hq = seenReqs.find((f) => f.id === hid)!
     ok(((hq.payload as Obj).history as Obj[]).length === 8 && ((hq.payload as Obj).history as Obj[])[0].text === 't4', 'the history sent is capped at the last 8 turns')
     acH.abort(); await ph.catch(() => {})
+  }
+
+  // the closed loop: evt assistant.check { ops } → the page answers a dry run on the same id
+  {
+    const seen: Obj[] = []
+    w.handler = (f) => { if (f.op === 'assistant.turn') { turnId = f.id; w.res(f.id, { ok: true }) } if (f.op === 'assistant.check') { seen.push(f as Obj); w.res(f.id, { ok: true }) } }
+    const checker = (ops: Obj) => ({ applied: Object.keys(ops).map((k) => `${k} ok`), skipped: ['set nope'], structural: false, outline: 'AFTER' })
+    const pc = tr.turn('x', [], { index: 0, selection: [] }, mat, () => {}, new AbortController().signal, checker)
+    await tick()
+    w.evt(turnId, 'assistant.check', { ops: { edits: [] } })
+    await tick()
+    ok(seen.length === 1 && seen[0].id === turnId && JSON.stringify(seen[0].payload) === '{"applied":["edits ok"],"skipped":["set nope"],"structural":false,"outline":"AFTER"}', 'check: the page answers the dry run on the same id, nothing committed')
+    w.evt(turnId, 'assistant.check', { ops: 'junk' })
+    await tick()
+    ok(seen.length === 2 && JSON.stringify((seen[1].payload as Obj).applied) === '[]', 'check: a frame without an object gets an empty result (the extension is never left waiting)')
+    w.evt(turnId, 'assistant.done', { mode: 'edit', text: 'fine' })
+    await pc
+    const pn = tr.turn('x', [], { index: 0, selection: [] }, mat, () => {}, new AbortController().signal)
+    await tick()
+    w.evt(turnId, 'assistant.check', { ops: { edits: [] } })
+    await tick()
+    ok(seen.length === 3 && JSON.stringify((seen[2].payload as Obj).skipped) === '[]', 'check: a page without a checker still answers, empty')
+    w.evt(turnId, 'assistant.done', { mode: 'ask', text: 'ok' })
+    await pn
   }
 
   // done with ops = an edit
@@ -756,6 +786,18 @@ try {
     check('turn: the panel sends the request, the (empty) history and the focus, and supplies the material on demand', turns.length === 1 && turns[0].request === 'update the title to something creative' && turns[0].history.length === 0 && turns[0].focus.index === 0 && typeof turns[0].m.addressed === 'string' && turns[0].m.focus && turns[0].m.focus.kind === 'slide')
     check('turn: the ops reply is applied through the real apply (replaceDoc once) and the note shown', store.replaced === 1 && /Only the outline fit/.test(panel.root.textContent) && /new/.test(store.doc.slides[0].elements.find((e) => e.id === firstText).html))
     check('turn: the card names the op', /Applied: edit 1\\//.test(panel.root.querySelector('.ed-assist-card-h').textContent))
+    {
+      // the panel's dry run: a candidate patch through applyOps on the material's document, nothing committed
+      const store3 = fakeStore(starterDoc())
+      let dry = null
+      const tr3 = fakeTransport({ turn: async (request, history, focus, material, onChunk, signal, checkFn) => { material(); dry = checkFn({ edits: [{ id: 'sd-title', text: 'X' }, { id: 'nope', text: 'Y' }] }); return { mode: 'edit', text: 'declined' } } })
+      const panel3 = new AssistantPanel({ store: store3, transport: tr3 })
+      document.body.appendChild(panel3.root)
+      panel3.setOpen(true, false); await tick(60)
+      panel3.root.querySelector('.ed-assist-input').value = 'try'
+      await panel3.submit(); await tick(30)
+      check('dry run: reports what would land and what would be refused, with the outline after — and commits nothing', !!dry && dry.applied.length === 1 && dry.applied[0] === 'edit sd-title' && dry.skipped[0] === 'edit nope' && /\\[1\\/sd-title\\] .*X/.test(dry.outline) && store3.replaced === 0)
+    }
     const store2 = fakeStore(starterDoc())
     const tr1 = fakeTransport({ turn: async () => ({ mode: 'edit', text: 'Still just prose, sorry.' }) })
     const panel1 = new AssistantPanel({ store: store2, transport: tr1 })
