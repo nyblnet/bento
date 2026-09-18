@@ -24,7 +24,7 @@ import { ExtensionTransport, extensionPresent, type AssistantDescription, type A
 /** Display names for on-device model ids; anything else shows as its id. */
 export const MODEL_NAMES: Record<string, string> = { 'gemini-nano': 'Gemini Nano' }
 export const modelDisplay = (id: string): string => MODEL_NAMES[id] ?? id
-import { applyWordEdits, buildMessages, cleanDoc, LOCAL_TOKEN_BUDGET, mergeReply, parseReply, type AssistantScope, type Turn } from './prompt'
+import { applyWordEdits, buildMessages, cleanDoc, mergeReply, parseReply, type AssistantScope, type Turn } from './prompt'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
 /** Where "get the extension" points. The app has no store link yet — the
@@ -246,14 +246,14 @@ export class AssistantPanel {
     const index = this.store.currentIndex
     const scope = this.scope
     const local = !!this.described?.local
-    const { messages, elided, mode, contextTokens } = buildMessages(doc, scope, index, this.history.slice(0, -1), request, { local })
-    // an on-device model has a small window: refuse here, with the reason,
-    // rather than after the wait with the provider's "too large". Questions
-    // go out as an outline and nearly always fit; an edit sends the JSON.
-    if (local && contextTokens > LOCAL_TOKEN_BUDGET) {
+    const { messages, elided, mode, contextTokens, window, fits } = buildMessages(doc, scope, index, this.history.slice(0, -1), request, { local, contextTokens: this.described?.contextTokens })
+    // the turn was sized to the model's window (prompt.ts): refuse here,
+    // with the numbers, rather than after the wait with the provider's
+    // "too large"
+    if (!fits) {
       this.note(scope === 'deck'
-        ? t('The whole deck is too large for the on-device model ({tokens} tokens). Ask a question about it, switch to "This slide", or choose a hosted provider in the extension settings.', { tokens: String(contextTokens) })
-        : t('This slide is too large for the on-device model ({tokens} tokens). Ask a question about it, or choose a hosted provider in the extension settings.', { tokens: String(contextTokens) }), 'err')
+        ? t('The whole deck is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, switch to "This slide", or choose a model with a larger window in the extension settings.', { tokens: String(contextTokens), window: String(window) })
+        : t('This slide is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, or choose a model with a larger window in the extension settings.', { tokens: String(contextTokens), window: String(window) }), 'err')
       return
     }
     this.setRunning(true)

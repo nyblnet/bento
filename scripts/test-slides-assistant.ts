@@ -42,8 +42,8 @@
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { compactDoc, expandDoc } from '../slides/src/compact.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
-import { applyWordEdits, approxTokens, buildMessages, elideDoc, isQuestion, LOCAL_TOKEN_BUDGET, mergeReply, outlineDeck, parseReply, QUESTION_PROMPT, SYSTEM_PROMPT, WORDS_PROMPT } from '../slides/src/editor/assistant/prompt.ts'
-import { CH, CODE_RE, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
+import { applyWordEdits, approxTokens, ASSUMED_WINDOW_HOSTED, ASSUMED_WINDOW_LOCAL, buildMessages, elideDoc, isQuestion, mergeReply, outlineDeck, parseReply, QUESTION_PROMPT, SYSTEM_PROMPT, WORDS_PROMPT } from '../slides/src/editor/assistant/prompt.ts'
+import { CH, CODE_RE, CONTEXT_MAX, CONTEXT_MIN, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
 import { dedupeIds, cleanDoc, ID_RE } from '../slides/src/editor/assistant/prompt.ts'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -90,6 +90,7 @@ console.log('\nprompt.ts — what leaves the page')
   const { messages, elided } = buildMessages(doc, 'slide', 1, [], 'Make the title bolder')
   const all = messages.map((m) => m.content).join('\n')
   ok(messages[0].role === 'system' && messages[0].content === SYSTEM_PROMPT, 'the first message is the system prompt')
+  ok(CONTEXT_MIN === 1000 && CONTEXT_MAX === 10_000_000, 'the window bound the page believes: 1k–10M')
   ok(!all.includes(SECRET) && !all.includes(PRIV) && !all.includes(PIXELS), 'no key, private key or asset bytes in any message')
   ok(all.includes('Scope: slide (slide 2 of') && all.includes(`id "${doc.slides[1].id}"`), 'slide scope names the open slide')
   ok(!all.includes(`"id":"${doc.slides[0].id}"`), 'slide scope does not carry the other slides')
@@ -128,8 +129,9 @@ console.log('\nprompt.ts — a question turn')
   const asJson = buildMessages(starter, 'deck', 2, [], 'Add a closing slide')
   const jsonTokens = approxTokens(asJson.messages.at(-1)!.content)
   ok(asked.contextTokens < jsonTokens / 4, `the outline is under a quarter of the JSON (${asked.contextTokens} vs ${jsonTokens} tokens)`)
-  ok(asked.contextTokens <= LOCAL_TOKEN_BUDGET, `the starter deck's outline fits the on-device budget (${asked.contextTokens} ≤ ${LOCAL_TOKEN_BUDGET})`)
-  ok(asJson.contextTokens > LOCAL_TOKEN_BUDGET, `the starter deck's JSON does not (${asJson.contextTokens}) — the panel refuses it before sending on a local model`)
+  const askedLocal = buildMessages(starter, 'deck', 2, [], 'Summarise this deck', { local: true })
+  ok(askedLocal.fits && askedLocal.window === ASSUMED_WINDOW_LOCAL, `the starter deck's outline fits the assumed on-device window (${askedLocal.contextTokens} in ${ASSUMED_WINDOW_LOCAL})`)
+  ok(asJson.mode === 'json' && asJson.fits && asJson.window === ASSUMED_WINDOW_HOSTED, `a hosted model with no stated window is assumed large: the JSON goes (${asJson.contextTokens} in ${ASSUMED_WINDOW_HOSTED})`)
   ok(asked.messages.at(-1)!.content.trimEnd().endsWith('Summarise this deck'), 'a question turn ends with the question')
   const one = buildMessages(starter, 'slide', 2, [], 'What is this slide about?')
   const oneText = one.messages.at(-1)!.content
@@ -157,7 +159,7 @@ console.log('\nprompt.ts — a words turn (on-device model)')
   const expectId = `1/${bareId}`
   ok(m?.[1] === bareId, `the id is the one the loader answers to (${m?.[1]}) — own id, or the minted <slide>-text-<index>`)
   ok(starter.slides.filter((s) => s.elements.some((e) => e.id === bareId)).length > 1, 'that id repeats across slides (the morph idiom) — which is why the slide number is part of the address')
-  ok(w.contextTokens <= LOCAL_TOKEN_BUDGET, `slide 1 of the starter deck fits the budget as words (${w.contextTokens} ≤ ${LOCAL_TOKEN_BUDGET}) where its JSON did not`)
+  ok(w.fits && w.jsonTokens * 2 > w.window && w.contextTokens < w.window, `slide 1 of the starter deck fits the on-device window as words (${w.contextTokens}) where its JSON (${w.jsonTokens}, ×2 for the reply) did not`)
   ok(buildMessages(starter, 'slide', 0, [], 'Change the title', { local: false }).mode === 'json', 'a hosted model keeps the JSON path')
   ok(buildMessages(starter, 'deck', 0, [], 'Summarise it', { local: true }).mode === 'ask', 'a question on a local model is still a question')
 
@@ -180,6 +182,29 @@ console.log('\nprompt.ts — a words turn (on-device model)')
   ok(full.slides.length === starter.slides.length && full.slides[1].id === starter.slides[1].id, 'the other slides ride along untouched')
   const none = applyWordEdits(elided.doc, 'not a list')
   ok(none.applied.length === 0 && none.skipped.length === 0, 'a reply without a list applies nothing')
+}
+
+// The WINDOW decides the shape, for every provider: the same edit goes as
+// JSON, as words, or is refused, purely by the contextTokens describe gave.
+console.log('\nprompt.ts — the window decides the shape')
+{
+  const starter = starterDoc()
+  const req = 'Change the title to something more creative'
+  const big = buildMessages(starter, 'deck', 0, [], req, { contextTokens: 1_000_000 })
+  ok(big.mode === 'json' && big.fits && big.window === 1_000_000, `a 1M window takes the whole deck as JSON (${big.jsonTokens} tokens)`)
+  const mid = buildMessages(starter, 'deck', 0, [], req, { contextTokens: 32_000 })
+  ok(mid.mode === 'words' && mid.fits, `a 32k window cannot hold the deck's JSON twice over (${mid.jsonTokens}×2) → words (${mid.contextTokens})`)
+  const midSlide = buildMessages(starter, 'slide', 0, [], req, { contextTokens: 32_000 })
+  ok(midSlide.mode === 'json' && midSlide.fits, 'but the same 32k window takes one slide as JSON')
+  const tiny = buildMessages(starter, 'deck', 0, [], req, { contextTokens: 2000 })
+  ok(tiny.mode === 'words' && !tiny.fits, `a 2k window fits nothing for the whole deck → refused with the numbers (${tiny.contextTokens} in 2000)`)
+  const tinyAsk = buildMessages(starter, 'slide', 0, [], 'What is this slide about?', { contextTokens: 2000 })
+  ok(tinyAsk.mode === 'ask' && tinyAsk.fits, 'a 2k window still answers a question about one slide')
+  const stated = buildMessages(starter, 'slide', 0, [], req, { local: true, contextTokens: 200_000 })
+  ok(stated.mode === 'json' && stated.window === 200_000, 'a stated window beats the local assumption (a big local model gets JSON)')
+  const hist = Array.from({ length: 8 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: 'x'.repeat(4000) }))
+  const crowded = buildMessages(starter, 'slide', 0, hist, req, { contextTokens: 12_000 })
+  ok(crowded.mode !== 'json' && buildMessages(starter, 'slide', 0, [], req, { contextTokens: 12_000 }).mode === 'json', 'history counts against the window: 8k tokens of turns push a 12k window off the JSON path (slide 1 alone fits it)')
 }
 
 console.log('\nprompt.ts — reading a reply')
@@ -321,6 +346,10 @@ await (async () => {
   ok(loc.local === true && loc.host === '' && loc.model === 'gemini-nano', 'describe: local:true with an empty host and the model id')
   w.handler = (f) => { if (f.op === 'assistant.describe') w.res(f.id, { ok: true, host: 'h.example', model: 'm', configured: true, local: 'yes' }) }
   ok((await tr.describe()).local === undefined, 'describe: local is a boolean or absent — a truthy string is not local')
+  for (const [v, want, why] of [[200000, 200000, 'a whole number in range'], [6144, 6144, 'the Prompt API quota'], ['200000', undefined, 'a string'], [999, undefined, 'under 1k'], [10_000_001, undefined, 'over 10M'], [1.5e5 + 0.5, undefined, 'not an integer'], [NaN, undefined, 'NaN']] as const) {
+    w.handler = (f) => { if (f.op === 'assistant.describe') w.res(f.id, { ok: true, host: 'h.example', model: 'm', configured: true, contextTokens: v }) }
+    ok((await tr.describe()).contextTokens === want, `describe: contextTokens ${why} → ${want === undefined ? 'absent' : want}`)
+  }
   w.handler = (f) => { if (f.op === 'assistant.check') w.res(f.id, { ok: false, reason: 'Asking you first', code: 'consent-pending' }) }
   const pend = await tr.check()
   ok(pend.ok === false && pend.code === 'consent-pending' && pend.reason === 'Asking you first', 'check: the consent-pending code rides beside the reason')

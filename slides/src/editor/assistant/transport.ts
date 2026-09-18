@@ -34,7 +34,7 @@
 //
 // Ops:
 //
-//   assistant.describe   payload {}                → res { ok:true, host, model, configured, local? }
+//   assistant.describe   payload {}                → res { ok:true, host, model, configured, local?, contextTokens? }
 //                        host = the endpoint's hostname (never the key, never
 //                        the full URL with a query), model = the configured
 //                        model id, configured = whether a request could be
@@ -43,6 +43,14 @@
 //                        browser's own, e.g. `gemini-nano`): host is '' and
 //                        the page renders "on this device · <display name>"
 //                        itself, from a small id→name map (unknown ids as-is).
+//                        `contextTokens` = the model's input window in tokens
+//                        when the extension knows it (the provider's model
+//                        listing, the Prompt API's inputQuota, or the user's
+//                        own number in settings); the page sizes each turn to
+//                        it — JSON edit when it fits, a words patch when only
+//                        the outline does, a refusal with the numbers when
+//                        nothing does. Absent = the page assumes a window by
+//                        `local` (small on-device, large hosted).
 //   assistant.check      payload {}                → res { ok:true } | { ok:false, reason, code? }
 //                        one cheap round-trip to the endpoint (a model list or
 //                        an empty completion) so the panel can say "reachable"
@@ -88,6 +96,8 @@ export interface AssistantDescription {
   configured: boolean
   /** an on-device model: no host to name, the page says "on this device" */
   local?: boolean
+  /** the model's input window in tokens, when known (bounded 1k–10M) */
+  contextTokens?: number
 }
 
 export type CheckResult = { ok: true } | { ok: false; reason: string; code?: string }
@@ -130,6 +140,11 @@ export interface AssistantTransport {
 export const HOST_RE = /^[a-z0-9.-]{1,253}$/i
 export const MODEL_RE = /^[A-Za-z0-9._:/-]{1,120}$/
 const boundTo = (v: unknown, re: RegExp): string => (typeof v === 'string' && re.test(v) ? v : '')
+/** A window size the page will believe: a whole number of tokens from 1k to 10M. */
+export const CONTEXT_MIN = 1000
+export const CONTEXT_MAX = 10_000_000
+const boundWindow = (v: unknown): number | undefined =>
+  typeof v === 'number' && Number.isInteger(v) && v >= CONTEXT_MIN && v <= CONTEXT_MAX ? v : undefined
 
 /** The envelope key page-bridge.js / relay.js already use. */
 export const CH = '__bento_tray__'
@@ -203,6 +218,7 @@ export class ExtensionTransport implements AssistantTransport {
       model: boundTo(r.model, MODEL_RE),
       configured: r.configured === true,
       ...(r.local === true ? { local: true } : {}),
+      ...(boundWindow(r.contextTokens) !== undefined ? { contextTokens: boundWindow(r.contextTokens) } : {}),
     }
   }
 

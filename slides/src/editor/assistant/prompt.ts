@@ -261,43 +261,88 @@ export function applyWordEdits(compact: Obj, edits: unknown): { doc: Obj; applie
  *  for English and JSON. Only used to refuse early, never to bill. */
 export const approxTokens = (text: string): number => Math.ceil(text.length / 4)
 
-/** A conservative window for an on-device model (Chrome's Gemini Nano
- *  reports ~6k tokens of input quota; the reply shares it, and an edit's
- *  reply is as long as its input). A context past this is refused BEFORE it
- *  is sent, with a note that says why, instead of the provider's "too
- *  large" after the wait. */
-export const LOCAL_TOKEN_BUDGET = 2800
+/**
+ * THE WINDOW DECIDES THE SHAPE OF A TURN. Every model has an input window;
+ * the extension reports it in describe (`contextTokens`) when it knows it —
+ * the provider's model listing, the Prompt API's inputQuota, or a number the
+ * user typed — and the page assumes one otherwise: small for an on-device
+ * model, large for a hosted one (the frontier models are 200k–1M and a
+ * self-hosted llama is usually 8k–128k; the extension should say). A JSON
+ * edit needs room for the context AND a reply as long again; a words edit
+ * or a question needs the outline and a short reply. So an edit is sent as
+ * JSON when that fits, as a words patch when only the outline does, and
+ * refused with both numbers when nothing does — the same rule for every
+ * provider, and the reason Nano and a 1M-window model use one code path.
+ */
+export const ASSUMED_WINDOW_LOCAL = 6144
+export const ASSUMED_WINDOW_HOSTED = 128_000
+/** tokens kept for the system prompt's slack, the history and the reply */
+const REPLY_ROOM_JSON = 1.0   // a JSON reply is as long as its input
+const REPLY_ROOM_TEXT = 1500  // a prose answer or a words patch
 
 /** What a turn is: a question (outline out, prose back), a words edit
- *  (outline with ids out, a text patch back — small models), or a JSON edit. */
+ *  (outline with ids out, a text patch back), or a JSON edit. */
 export type TurnMode = 'ask' | 'words' | 'json'
 
-export interface BuiltMessages { messages: AssistantMessage[]; elided: Elided; mode: TurnMode; question: boolean; contextTokens: number }
+export interface BuiltMessages {
+  messages: AssistantMessage[]
+  elided: Elided
+  mode: TurnMode
+  question: boolean
+  /** tokens this turn sends (system prompt + context), estimated */
+  contextTokens: number
+  /** the window the turn was sized to */
+  window: number
+  /** false = nothing fits: the panel refuses with the numbers */
+  fits: boolean
+  /** the JSON form's cost, for the note when it was too big */
+  jsonTokens: number
+}
+
+export interface BuildOpts { local?: boolean; contextTokens?: number }
+
+const fitsJson = (tokens: number, window: number, history: number) => tokens * (1 + REPLY_ROOM_JSON) + history <= window
+const fitsText = (tokens: number, window: number, history: number) => tokens + REPLY_ROOM_TEXT + history <= window
 
 /** The messages for one turn. `currentIndex` picks the slide for scope
- *  'slide'; `local` (an on-device model) makes an edit a WORDS turn. */
-export function buildMessages(doc: BentoDoc, scope: AssistantScope, currentIndex: number, history: Turn[], request: string, opts: { local?: boolean } = {}): BuiltMessages {
+ *  'slide'; `opts` says what the model is (window, on-device). */
+export function buildMessages(doc: BentoDoc, scope: AssistantScope, currentIndex: number, history: Turn[], request: string, opts: BuildOpts = {}): BuiltMessages {
   const elided = elideDoc(doc)
   const slides = (elided.doc.slides ?? []) as Obj[]
-  const mode: TurnMode = isQuestion(request) ? 'ask' : opts.local ? 'words' : 'json'
-  const messages: AssistantMessage[] = [{ role: 'system', content: mode === 'ask' ? QUESTION_PROMPT : mode === 'words' ? WORDS_PROMPT : SYSTEM_PROMPT }]
-  for (const turn of history.slice(-MAX_HISTORY)) messages.push({ role: turn.role, content: turn.text })
+  const window = opts.contextTokens ?? (opts.local ? ASSUMED_WINDOW_LOCAL : ASSUMED_WINDOW_HOSTED)
+  const turns = history.slice(-MAX_HISTORY)
+  const historyTokens = approxTokens(turns.map((t) => t.text).join('\n'))
   const slide = slides[currentIndex]
+  const jsonContext = scope === 'slide' && slide
+    ? `Scope: slide (slide ${currentIndex + 1} of ${slides.length}, id "${String(slide.id ?? '')}").\nThe deck's size is ${JSON.stringify((elided.doc.size ?? { width: 1280, height: 720 }))}${elided.doc.theme ? ` and its theme is ${JSON.stringify(elided.doc.theme)}` : ''}.\nThe slide:\n${JSON.stringify(slide)}`
+    : `Scope: deck (${slides.length} slides; slide ${currentIndex + 1} is open).\nThe deck:\n${JSON.stringify(elided.doc)}`
+  const outline = (ids: boolean) => scope === 'slide' && slide
+    ? `Scope: slide ${currentIndex + 1} of ${slides.length}.\n${outlineSlide(slide, currentIndex + 1, ids)}`
+    : `Scope: the whole deck (slide ${currentIndex + 1} is open).\n${outlineDeck(elided.doc, ids)}`
+  const jsonTokens = approxTokens(SYSTEM_PROMPT + jsonContext)
+
+  let mode: TurnMode
   let context: string
-  if (mode !== 'json') {
-    const ids = mode === 'words'
-    context = scope === 'slide' && slide
-      ? `Scope: slide ${currentIndex + 1} of ${slides.length}.\n${outlineSlide(slide, currentIndex + 1, ids)}`
-      : `Scope: the whole deck (slide ${currentIndex + 1} is open).\n${outlineDeck(elided.doc, ids)}`
+  let fits = true
+  if (isQuestion(request)) {
+    mode = 'ask'
+    context = outline(false)
+    fits = fitsText(approxTokens(QUESTION_PROMPT + context), window, historyTokens)
+  } else if (fitsJson(jsonTokens, window, historyTokens)) {
+    mode = 'json'
+    context = jsonContext
   } else {
-    context = scope === 'slide' && slide
-      ? `Scope: slide (slide ${currentIndex + 1} of ${slides.length}, id "${String(slide.id ?? '')}").\nThe deck's size is ${JSON.stringify((elided.doc.size ?? { width: 1280, height: 720 }))}${elided.doc.theme ? ` and its theme is ${JSON.stringify(elided.doc.theme)}` : ''}.\nThe slide:\n${JSON.stringify(slide)}`
-      : `Scope: deck (${slides.length} slides; slide ${currentIndex + 1} is open).\nThe deck:\n${JSON.stringify(elided.doc)}`
+    mode = 'words'
+    context = outline(true)
+    fits = fitsText(approxTokens(WORDS_PROMPT + context), window, historyTokens)
   }
+  const system = mode === 'ask' ? QUESTION_PROMPT : mode === 'words' ? WORDS_PROMPT : SYSTEM_PROMPT
+  const messages: AssistantMessage[] = [{ role: 'system', content: system }]
+  for (const turn of turns) messages.push({ role: turn.role, content: turn.text })
   // an outline turn reads the outline first and the request last (the thing
   // to do is the freshest text); a JSON edit leads with the instruction
   messages.push({ role: 'user', content: mode !== 'json' ? `${context}\n\n${request.trim()}` : `${request.trim()}\n\n${context}` })
-  return { messages, elided, mode, question: mode === 'ask', contextTokens: approxTokens(messages[0].content + context) }
+  return { messages, elided, mode, question: mode === 'ask', contextTokens: approxTokens(system + context), window, fits, jsonTokens }
 }
 
 /** What a reply turned out to be. */
