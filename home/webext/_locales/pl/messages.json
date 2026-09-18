@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "Dokument nie przekazał swojej treści."
+  },
+  "asstSendsNotice": {
+    "message": "Wysyła konspekt prezentacji i $1 do $2; komentarze zostają tutaj."
+  },
+  "asstOnDeviceModel": {
+    "message": "model na tym urządzeniu"
+  },
+  "asstFocusGeneric": {
+    "message": "zaznaczone elementy lub otwarty slajd"
   }
 }

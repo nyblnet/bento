@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "নথিটি তার বিষয়বস্তু হস্তান্তর করেনি।"
+  },
+  "asstSendsNotice": {
+    "message": "ডেকের রূপরেখা ও $1 $2-এ পাঠায়; মন্তব্য এখানেই থাকে।"
+  },
+  "asstOnDeviceModel": {
+    "message": "এই ডিভাইসের মডেল"
+  },
+  "asstFocusGeneric": {
+    "message": "নির্বাচিত উপাদান বা খোলা স্লাইড"
   }
 }

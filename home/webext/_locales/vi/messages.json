@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "Tài liệu không chuyển giao nội dung của nó."
+  },
+  "asstSendsNotice": {
+    "message": "Gửi dàn ý bộ trình chiếu và $1 đến $2; bình luận ở lại đây."
+  },
+  "asstOnDeviceModel": {
+    "message": "mô hình trên thiết bị này"
+  },
+  "asstFocusGeneric": {
+    "message": "các phần tử đã chọn hoặc trang chiếu đang mở"
   }
 }

@@ -588,10 +588,10 @@
     "message": "無法連線至 $1。伺服器是否正在執行？是否允許來自瀏覽器擴充功能的要求（CORS）？"
   },
   "asstWaitConsent": {
-    "message": "正在等待您的許可 — 請回應提示，然後再試一次。"
+    "message": "正在等待您在此裝置上授權…"
   },
   "asstDenied": {
-    "message": "這份文件不允許使用助理。"
+    "message": "在此裝置上被拒絕授權 — 未作任何變更。"
   },
   "asstAllowedTitle": {
     "message": "允許使用助理的文件"
@@ -648,12 +648,21 @@
     "message": "這不是模型 ID：只能包含字母、數字和 . _ : / -"
   },
   "asstWindow": {
-    "message": "這份簡報對這個模型來說太大：要求約需 $1 個 token，而模型只接受 $2。請選擇視窗更大的模型，或縮短簡報。"
+    "message": "僅簡報大綱就已超出此模型的視窗（$1 個 token，視窗為 $2）。請在擴充功能設定中選擇視窗更大的模型。"
   },
   "asstOutlineOnly": {
-    "message": "這個模型的視窗只容得下大綱；所選內容沒有完整送出。"
+    "message": "此模型的視窗只容得下大綱，因此它可以修改文字、備註和投影片，但不能修改位置或樣式。"
   },
   "asstNoDocument": {
     "message": "文件沒有交出其內容。"
+  },
+  "asstSendsNotice": {
+    "message": "將簡報大綱和$1傳送到 $2；註解留在本機。"
+  },
+  "asstOnDeviceModel": {
+    "message": "裝置上的模型"
+  },
+  "asstFocusGeneric": {
+    "message": "所選元素或目前開啟的投影片"
   }
 }

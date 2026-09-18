@@ -636,11 +636,11 @@
     "description": "Reason when the request never got a response. $1 is the hostname. REVIEW: CORS is a technical term, keep it."
   },
   "asstWaitConsent": {
-    "message": "Waiting for your permission — answer the prompt, then try again.",
+    "message": "Waiting for your permission on this device…",
     "description": "Reason returned to a document while its permission window is still open."
   },
   "asstDenied": {
-    "message": "This document is not allowed to use the assistant.",
+    "message": "Permission was refused on this device — nothing was changed.",
     "description": "Reason returned to a document whose permission was refused."
   },
   "asstAllowedTitle": {
@@ -716,15 +716,27 @@
     "description": "Assistant settings: shown when the typed model id has characters a model id cannot have."
   },
   "asstWindow": {
-    "message": "The deck is too large for this model: the request needs about $1 tokens and the model takes $2. Choose a model with a larger window, or shorten the deck.",
+    "message": "The deck outline alone is too large for this model ($1 tokens; its window is $2). Choose a model with a larger window in the extension settings.",
     "description": "Reason returned to a document when even the outline does not fit the model's input window. $1 and $2 are formatted numbers."
   },
   "asstOutlineOnly": {
-    "message": "Only the outline fit this model's window; the selected content was not sent in full.",
+    "message": "Only the outline fits this model’s window, so it can change words, notes and slides but not positions or styling.",
     "description": "Note on an edit reply when the model's window was too small for the selection or slide JSON."
   },
   "asstNoDocument": {
     "message": "The document did not hand over its content.",
     "description": "Reason returned when the page did not answer the extension's request for the deck material."
+  },
+  "asstSendsNotice": {
+    "message": "Sends the deck's outline and $1 to $2; comments stay here.",
+    "description": "Settings, assistant card: what leaves the machine. $1 is asstFocusGeneric, $2 the host or asstOnDeviceModel. REVIEW: a privacy statement."
+  },
+  "asstOnDeviceModel": {
+    "message": "the on-device model",
+    "description": "Settings: stands in for the host in asstSendsNotice when the Chrome built-in model is chosen."
+  },
+  "asstFocusGeneric": {
+    "message": "the selected elements or the open slide",
+    "description": "Settings: the $1 of asstSendsNotice."
   }
 }

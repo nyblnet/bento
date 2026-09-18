@@ -588,10 +588,10 @@
     "message": "Impossible de joindre $1. Le serveur est-il lancé, et accepte-t-il les requêtes des extensions de navigateur (CORS) ?"
   },
   "asstWaitConsent": {
-    "message": "En attente de votre autorisation — répondez à la demande, puis réessayez."
+    "message": "En attente de votre autorisation sur cet appareil…"
   },
   "asstDenied": {
-    "message": "Ce document n’est pas autorisé à utiliser l’assistant."
+    "message": "L’autorisation a été refusée sur cet appareil — rien n’a été modifié."
   },
   "asstAllowedTitle": {
     "message": "Documents autorisés à utiliser l’assistant"
@@ -648,12 +648,21 @@
     "message": "Ce n’est pas un identifiant de modèle : lettres, chiffres et . _ : / - uniquement."
   },
   "asstWindow": {
-    "message": "Le deck est trop volumineux pour ce modèle : la requête demande environ $1 jetons et le modèle en accepte $2. Choisissez un modèle à fenêtre plus large, ou raccourcissez le deck."
+    "message": "Le plan du deck à lui seul est trop volumineux pour ce modèle ($1 jetons ; sa fenêtre est de $2). Choisissez un modèle à fenêtre plus grande dans les réglages de l’extension."
   },
   "asstOutlineOnly": {
-    "message": "Seul le plan tenait dans la fenêtre de ce modèle ; le contenu sélectionné n’a pas été envoyé en entier."
+    "message": "Seul le plan tient dans la fenêtre de ce modèle : il peut changer les mots, les notes et les diapositives, mais pas les positions ni le style."
   },
   "asstNoDocument": {
     "message": "Le document n’a pas transmis son contenu."
+  },
+  "asstSendsNotice": {
+    "message": "Envoie le plan du deck et $1 à $2 ; les commentaires restent ici."
+  },
+  "asstOnDeviceModel": {
+    "message": "le modèle sur l’appareil"
+  },
+  "asstFocusGeneric": {
+    "message": "les éléments sélectionnés ou la diapositive ouverte"
   }
 }

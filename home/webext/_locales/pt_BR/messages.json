@@ -588,10 +588,10 @@
     "message": "Não foi possível alcançar $1. O servidor está em execução e aceita solicitações de extensões do navegador (CORS)?"
   },
   "asstWaitConsent": {
-    "message": "Aguardando sua permissão: responda ao pedido e tente de novo."
+    "message": "A aguardar a sua permissão neste dispositivo…"
   },
   "asstDenied": {
-    "message": "Este documento não tem permissão para usar o assistente."
+    "message": "A permissão foi recusada neste dispositivo — nada foi alterado."
   },
   "asstAllowedTitle": {
     "message": "Documentos com permissão para usar o assistente"
@@ -648,12 +648,21 @@
     "message": "Isso não é um ID de modelo: só letras, dígitos e . _ : / -"
   },
   "asstWindow": {
-    "message": "A apresentação é grande demais para este modelo: a solicitação precisa de cerca de $1 tokens e o modelo aceita $2. Escolha um modelo com janela maior ou encurte a apresentação."
+    "message": "Só o esboço do deck já é grande demais para este modelo ($1 tokens; a janela dele é de $2). Escolha um modelo com janela maior nas configurações da extensão."
   },
   "asstOutlineOnly": {
-    "message": "Só o esboço coube na janela deste modelo; o conteúdo selecionado não foi enviado por inteiro."
+    "message": "Só o esboço cabe na janela deste modelo, então ele pode mudar palavras, notas e slides, mas não posições ou estilos."
   },
   "asstNoDocument": {
     "message": "O documento não entregou seu conteúdo."
+  },
+  "asstSendsNotice": {
+    "message": "Envia o esboço do deck e $1 para $2; os comentários ficam aqui."
+  },
+  "asstOnDeviceModel": {
+    "message": "o modelo no dispositivo"
+  },
+  "asstFocusGeneric": {
+    "message": "os elementos selecionados ou o slide aberto"
   }
 }

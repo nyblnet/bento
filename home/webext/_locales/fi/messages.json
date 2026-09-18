@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "Asiakirja ei luovuttanut sisältöään."
+  },
+  "asstSendsNotice": {
+    "message": "Lähettää esityksen jäsennyksen ja $1 kohteeseen $2; kommentit jäävät tänne."
+  },
+  "asstOnDeviceModel": {
+    "message": "tämän laitteen malli"
+  },
+  "asstFocusGeneric": {
+    "message": "valitut elementit tai avoinna oleva dia"
   }
 }

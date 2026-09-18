@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "המסמך לא מסר את התוכן שלו."
+  },
+  "asstSendsNotice": {
+    "message": "שולח את המתווה של המצגת ואת $1 אל $2; ההערות נשארות כאן."
+  },
+  "asstOnDeviceModel": {
+    "message": "המודל במכשיר הזה"
+  },
+  "asstFocusGeneric": {
+    "message": "האלמנטים שנבחרו או השקופית הפתוחה"
   }
 }

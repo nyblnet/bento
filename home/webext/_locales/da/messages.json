@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "Dokumentet afleverede ikke sit indhold."
+  },
+  "asstSendsNotice": {
+    "message": "Sender præsentationens disposition og $1 til $2; kommentarer bliver her."
+  },
+  "asstOnDeviceModel": {
+    "message": "modellen på denne enhed"
+  },
+  "asstFocusGeneric": {
+    "message": "de valgte elementer eller den åbne slide"
   }
 }

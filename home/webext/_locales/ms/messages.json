@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "Dokumen tidak menyerahkan kandungannya."
+  },
+  "asstSendsNotice": {
+    "message": "Menghantar rangka pembentangan dan $1 ke $2; komen kekal di sini."
+  },
+  "asstOnDeviceModel": {
+    "message": "model pada peranti ini"
+  },
+  "asstFocusGeneric": {
+    "message": "elemen yang dipilih atau slaid yang terbuka"
   }
 }

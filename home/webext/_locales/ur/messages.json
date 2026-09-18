@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "دستاویز نے اپنا مواد حوالے نہیں کیا۔"
+  },
+  "asstSendsNotice": {
+    "message": "ڈیک کا خاکہ اور $1 $2 کو بھیجتا ہے؛ تبصرے یہیں رہتے ہیں۔"
+  },
+  "asstOnDeviceModel": {
+    "message": "اس آلے پر موجود ماڈل"
+  },
+  "asstFocusGeneric": {
+    "message": "منتخب عناصر یا کھلی سلائیڈ"
   }
 }

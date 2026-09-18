@@ -1482,6 +1482,17 @@ async function assistantSettings(section) {
   const keyRow = field(t('asstKey'), key)
   const keyHint = keyRow.appendChild(document.createElement('small'))
 
+  // What leaves this computer, in the drawer's own words (moved here from
+  // the page when the assistant's weight did): the outline and the focus go
+  // to the host, comments never do.
+  const notice = document.createElement('p')
+  notice.className = 'sub notice'
+  form.appendChild(notice)
+  const showNotice = (c) => {
+    const where = c.provider === 'builtin' ? t('asstOnDeviceModel') : (hostOf(c) || c.provider)
+    notice.textContent = t('asstSendsNotice', t('asstFocusGeneric'), where)
+  }
+
   const actions = document.createElement('div')
   actions.className = 'actions'
   const save = document.createElement('button')
@@ -1605,6 +1616,7 @@ async function assistantSettings(section) {
     ctxRow.hidden = false
     showAll.checked = !!c.showAll
     showAllRow.hidden = !http
+    showNotice(c)
     status.textContent = ''
     if (http) void showModels(c)
     else void showBuiltinState()
@@ -1613,6 +1625,7 @@ async function assistantSettings(section) {
   for (const input of [baseUrl, other, key, ctx]) {
     input.addEventListener('input', () => { perProvider[provider.value] = current() })
   }
+  baseUrl.addEventListener('change', () => showNotice(current()))
   showAll.addEventListener('change', () => { perProvider[provider.value] = current(); void showModels() })
   model.addEventListener('change', () => {
     other.hidden = model.value !== OTHER

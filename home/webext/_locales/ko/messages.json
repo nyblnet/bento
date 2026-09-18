@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "문서가 내용을 넘겨주지 않았습니다."
+  },
+  "asstSendsNotice": {
+    "message": "덱의 개요와 $1을(를) $2(으)로 보냅니다. 댓글은 여기 남습니다."
+  },
+  "asstOnDeviceModel": {
+    "message": "이 기기의 모델"
+  },
+  "asstFocusGeneric": {
+    "message": "선택한 요소 또는 열려 있는 슬라이드"
   }
 }

@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "Belge içeriğini teslim etmedi."
+  },
+  "asstSendsNotice": {
+    "message": "Sunumun ana hattını ve $1 $2 adresine gönderir; yorumlar burada kalır."
+  },
+  "asstOnDeviceModel": {
+    "message": "bu cihazdaki model"
+  },
+  "asstFocusGeneric": {
+    "message": "seçili öğeleri veya açık slaydı"
   }
 }

@@ -588,10 +588,10 @@
     "message": "无法连接 $1。服务器是否正在运行？是否允许来自浏览器扩展程序的请求（CORS）？"
   },
   "asstWaitConsent": {
-    "message": "正在等待您的许可 — 请回应提示，然后重试。"
+    "message": "正在等待您在此设备上授权…"
   },
   "asstDenied": {
-    "message": "此文档不允许使用助手。"
+    "message": "在此设备上被拒绝授权 — 未作任何更改。"
   },
   "asstAllowedTitle": {
     "message": "允许使用助手的文档"
@@ -648,12 +648,21 @@
     "message": "这不是模型 ID：只能包含字母、数字和 . _ : / -"
   },
   "asstWindow": {
-    "message": "此演示文稿对这个模型来说太大：请求约需 $1 个 token，而模型只接受 $2。请选择窗口更大的模型，或缩短演示文稿。"
+    "message": "仅演示文稿大纲就已超出此模型的窗口（$1 个 token，窗口为 $2）。请在扩展设置中选择窗口更大的模型。"
   },
   "asstOutlineOnly": {
-    "message": "这个模型的窗口只容得下大纲；所选内容没有完整发送。"
+    "message": "此模型的窗口只容得下大纲，因此它可以修改文字、备注和幻灯片，但不能修改位置或样式。"
   },
   "asstNoDocument": {
     "message": "文档没有交出其内容。"
+  },
+  "asstSendsNotice": {
+    "message": "将演示文稿大纲和$1发送到 $2；评论留在本地。"
+  },
+  "asstOnDeviceModel": {
+    "message": "设备上的模型"
+  },
+  "asstFocusGeneric": {
+    "message": "所选元素或当前打开的幻灯片"
   }
 }

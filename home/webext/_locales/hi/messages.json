@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "दस्तावेज़ ने अपनी सामग्री नहीं सौंपी।"
+  },
+  "asstSendsNotice": {
+    "message": "डेक की रूपरेखा और $1 को $2 पर भेजता है; टिप्पणियाँ यहीं रहती हैं।"
+  },
+  "asstOnDeviceModel": {
+    "message": "इस डिवाइस का मॉडल"
+  },
+  "asstFocusGeneric": {
+    "message": "चयनित तत्व या खुली स्लाइड"
   }
 }

@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "لم يسلّم المستند محتواه."
+  },
+  "asstSendsNotice": {
+    "message": "يرسل مخطط العرض و$1 إلى $2؛ تبقى التعليقات هنا."
+  },
+  "asstOnDeviceModel": {
+    "message": "النموذج على هذا الجهاز"
+  },
+  "asstFocusGeneric": {
+    "message": "العناصر المحددة أو الشريحة المفتوحة"
   }
 }

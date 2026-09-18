@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "Het document heeft zijn inhoud niet overhandigd."
+  },
+  "asstSendsNotice": {
+    "message": "Stuurt de outline van de presentatie en $1 naar $2; opmerkingen blijven hier."
+  },
+  "asstOnDeviceModel": {
+    "message": "het model op dit apparaat"
+  },
+  "asstFocusGeneric": {
+    "message": "de geselecteerde elementen of de geopende dia"
   }
 }

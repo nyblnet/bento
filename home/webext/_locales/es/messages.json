@@ -588,10 +588,10 @@
     "message": "No se pudo conectar con $1. ¿Está en marcha el servidor y admite solicitudes de extensiones del navegador (CORS)?"
   },
   "asstWaitConsent": {
-    "message": "Esperando tu permiso: responde a la pregunta y vuelve a intentarlo."
+    "message": "Esperando tu permiso en este dispositivo…"
   },
   "asstDenied": {
-    "message": "Este documento no tiene permiso para usar el asistente."
+    "message": "Se denegó el permiso en este dispositivo — no se cambió nada."
   },
   "asstAllowedTitle": {
     "message": "Documentos con permiso para usar el asistente"
@@ -648,12 +648,21 @@
     "message": "Eso no es un ID de modelo: solo letras, dígitos y . _ : / -"
   },
   "asstWindow": {
-    "message": "La presentación es demasiado grande para este modelo: la solicitud necesita unos $1 tokens y el modelo admite $2. Elige un modelo con una ventana mayor o acorta la presentación."
+    "message": "Solo el esquema del mazo ya es demasiado grande para este modelo ($1 tokens; su ventana es de $2). Elige un modelo con una ventana mayor en los ajustes de la extensión."
   },
   "asstOutlineOnly": {
-    "message": "Solo el esquema cupo en la ventana de este modelo; el contenido seleccionado no se envió completo."
+    "message": "Solo el esquema cabe en la ventana de este modelo, así que puede cambiar palabras, notas y diapositivas, pero no posiciones ni estilos."
   },
   "asstNoDocument": {
     "message": "El documento no entregó su contenido."
+  },
+  "asstSendsNotice": {
+    "message": "Envía el esquema del mazo y $1 a $2; los comentarios se quedan aquí."
+  },
+  "asstOnDeviceModel": {
+    "message": "el modelo en el dispositivo"
+  },
+  "asstFocusGeneric": {
+    "message": "los elementos seleccionados o la diapositiva abierta"
   }
 }

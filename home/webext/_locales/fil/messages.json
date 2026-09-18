@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "Hindi ibinigay ng dokumento ang nilalaman nito."
+  },
+  "asstSendsNotice": {
+    "message": "Ipinapadala ang outline ng deck at $1 sa $2; nananatili rito ang mga komento."
+  },
+  "asstOnDeviceModel": {
+    "message": "ang modelong nasa device"
+  },
+  "asstFocusGeneric": {
+    "message": "ang mga piniling elemento o ang bukas na slide"
   }
 }

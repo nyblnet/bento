@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "Dokumentet lämnade inte över sitt innehåll."
+  },
+  "asstSendsNotice": {
+    "message": "Skickar presentationens disposition och $1 till $2; kommentarer stannar här."
+  },
+  "asstOnDeviceModel": {
+    "message": "modellen på den här enheten"
+  },
+  "asstFocusGeneric": {
+    "message": "de valda elementen eller den öppna bilden"
   }
 }

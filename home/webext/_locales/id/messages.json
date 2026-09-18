@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "Dokumen tidak menyerahkan isinya."
+  },
+  "asstSendsNotice": {
+    "message": "Mengirim kerangka presentasi dan $1 ke $2; komentar tetap di sini."
+  },
+  "asstOnDeviceModel": {
+    "message": "model di perangkat ini"
+  },
+  "asstFocusGeneric": {
+    "message": "elemen yang dipilih atau slide yang terbuka"
   }
 }

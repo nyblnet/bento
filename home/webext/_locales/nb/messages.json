@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "Dokumentet leverte ikke innholdet sitt."
+  },
+  "asstSendsNotice": {
+    "message": "Sender presentasjonens disposisjon og $1 til $2; kommentarer blir her."
+  },
+  "asstOnDeviceModel": {
+    "message": "modellen på denne enheten"
+  },
+  "asstFocusGeneric": {
+    "message": "de valgte elementene eller det åpne lysbildet"
   }
 }

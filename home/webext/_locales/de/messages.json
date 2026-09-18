@@ -588,10 +588,10 @@
     "message": "$1 ist nicht erreichbar. Läuft der Server, und erlaubt er Anfragen von Browser-Erweiterungen (CORS)?"
   },
   "asstWaitConsent": {
-    "message": "Warten auf Ihre Erlaubnis — beantworten Sie die Nachfrage und versuchen Sie es dann erneut."
+    "message": "Warte auf Ihre Erlaubnis auf diesem Gerät…"
   },
   "asstDenied": {
-    "message": "Dieses Dokument darf den Assistenten nicht verwenden."
+    "message": "Die Erlaubnis wurde auf diesem Gerät verweigert — nichts wurde geändert."
   },
   "asstAllowedTitle": {
     "message": "Dokumente, die den Assistenten verwenden dürfen"
@@ -648,12 +648,21 @@
     "message": "Das ist keine Modell-ID: nur Buchstaben, Ziffern und . _ : / -"
   },
   "asstWindow": {
-    "message": "Das Deck ist zu groß für dieses Modell: Die Anfrage braucht etwa $1 Tokens, das Modell nimmt $2. Wählen Sie ein Modell mit größerem Fenster oder kürzen Sie das Deck."
+    "message": "Schon die Gliederung des Decks ist zu groß für dieses Modell ($1 Tokens; sein Fenster fasst $2). Wählen Sie in den Erweiterungseinstellungen ein Modell mit größerem Fenster."
   },
   "asstOutlineOnly": {
-    "message": "Nur die Gliederung passte in das Fenster dieses Modells; der ausgewählte Inhalt wurde nicht vollständig gesendet."
+    "message": "Nur die Gliederung passt in das Fenster dieses Modells; es kann Wörter, Notizen und Folien ändern, aber keine Positionen oder Gestaltung."
   },
   "asstNoDocument": {
     "message": "Das Dokument hat seinen Inhalt nicht übergeben."
+  },
+  "asstSendsNotice": {
+    "message": "Sendet die Gliederung des Decks und $1 an $2; Kommentare bleiben hier."
+  },
+  "asstOnDeviceModel": {
+    "message": "das Modell auf diesem Gerät"
+  },
+  "asstFocusGeneric": {
+    "message": "die ausgewählten Elemente oder die geöffnete Folie"
   }
 }

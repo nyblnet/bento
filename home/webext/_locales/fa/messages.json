@@ -622,5 +622,14 @@
   },
   "asstNoDocument": {
     "message": "سند محتوای خود را تحویل نداد."
+  },
+  "asstSendsNotice": {
+    "message": "طرح کلی ارائه و $1 را به $2 می‌فرستد؛ نظرها همین‌جا می‌مانند."
+  },
+  "asstOnDeviceModel": {
+    "message": "مدل روی این دستگاه"
+  },
+  "asstFocusGeneric": {
+    "message": "عنصرهای انتخاب‌شده یا اسلاید باز"
   }
 }
