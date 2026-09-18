@@ -24,7 +24,7 @@ import { ExtensionTransport, extensionPresent, type AssistantDescription, type A
 /** Display names for on-device model ids; anything else shows as its id. */
 export const MODEL_NAMES: Record<string, string> = { 'gemini-nano': 'Gemini Nano' }
 export const modelDisplay = (id: string): string => MODEL_NAMES[id] ?? id
-import { applyWordEdits, buildMessages, cleanDoc, mergeReply, parseReply, responseSchema, RETRY_NUDGE, type AssistantScope, type Turn } from './prompt'
+import { applyOps, buildMessages, cleanDoc, mergeReply, parseReply, responseSchema, RETRY_NUDGE, type AssistantScope, type Turn } from './prompt'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
 /** Where "get the extension" points. The app has no store link yet — the
@@ -302,12 +302,14 @@ export class AssistantPanel {
     if (reply.note) this.note(reply.note, 'assistant')
     this.history.push({ role: 'assistant', text: reply.note || t('(edited the deck)') })
     if (mode === 'words') {
-      // a text patch: applied to the elided compact doc, then the same road
-      const r = applyWordEdits(elided.doc, reply.value.edits)
-      if (!r.applied.length) { this.note(t('The reply named no text on the slides — nothing was changed.'), 'err'); return }
-      if (r.skipped.length) this.note(t('{n} edits named text that is not there and were skipped.', { n: String(r.skipped.length) }), 'info')
+      // an ops patch (ops.ts): applied to a copy of the elided compact doc,
+      // then the same road as a JSON reply. Structure (add/remove/move)
+      // needs the deck merge even in slide scope.
+      const r = applyOps(elided.doc, reply.value)
+      if (!r.applied.length) { this.note(t('The reply changed nothing I could apply.'), 'err'); return }
+      if (r.skipped.length) this.note(t('{n} changes named something that is not there and were skipped.', { n: String(r.skipped.length) }), 'info')
       const slides = (r.doc.slides ?? []) as Record<string, unknown>[]
-      if (scope === 'slide' && slides[index]) this.apply('slide', index, slides[index], elided)
+      if (scope === 'slide' && !r.structural && slides[index]) this.apply('slide', index, slides[index], elided)
       else this.apply('deck', index, r.doc, elided)
       return
     }

@@ -34,22 +34,26 @@
 // edit needs. `isQuestion` decides from the request's wording; a question's
 // reply is never applied, whatever shape it comes back in.
 //
-// A THIRD, FOR SMALL MODELS: WORDS. On an on-device model (describe
-// `local`) an edit cannot send the JSON either — the starter deck's slide 1
-// alone is 3.5k tokens, and the reply would be as long again. So an edit
-// there sends the same outline with each text's id in [brackets] and asks
-// for a PATCH: {"edits":[{"id","text"}]}. Tiny in, tiny out, and the part
-// of editing a small model is actually good at (wording, titles, shortening,
-// translating). Anything else — layout, colours, pictures, charts, slides —
-// the prompt tells it to decline in prose and point at a hosted provider.
-// The patch is applied to the elided compact doc (`applyWordEdits`: the
-// element's `md` is set, its `html` dropped, so the loader re-renders it
-// through the markdown path) and then takes the SAME road as a JSON reply:
-// mergeReply → the gate → cleanDoc → one undoable swap.
+// A THIRD, FOR SMALL WINDOWS: WORDS (an ops patch). When the JSON does not
+// fit the model's window twice over — the starter deck's slide 1 alone is
+// 3.5k tokens, and a JSON reply is as long as its input — an edit sends the
+// same outline with each text ADDRESSED as <slide number>/<element id> and
+// asks for a PATCH of operations (ops.ts: wording, notes, table cells,
+// chart numbers, enum style verbs, add a slide from a layout, remove,
+// move). Tiny in, tiny out, and only the part of editing a small model is
+// good at: words and choices. Anything else — positions, colours, pictures,
+// shapes — the prompt tells it to decline in prose and point at a hosted
+// provider. The patch is applied to a copy of the elided compact doc
+// (`applyOps`: a text gets `md` and loses `html`, so the loader re-renders
+// it through the markdown path; a new slide is layout + roles, no
+// geometry) and then takes the SAME road as a JSON reply: mergeReply →
+// the gate → cleanDoc → one undoable swap.
 
 import { isWebUrl, type BentoDoc } from '../../model.ts'
-import { compactDoc, COMPACT_FLAG, mintId } from '../../compact.ts'
+import { compactDoc, COMPACT_FLAG } from '../../compact.ts'
 import type { AssistantMessage } from './transport.ts'
+import { applyOps, elId, OPS_PROMPT, OPS_SCHEMA } from './ops.ts'
+export { applyOps, OPS_PROMPT, OPS_SCHEMA } from './ops.ts'
 
 export type AssistantScope = 'slide' | 'deck'
 
@@ -68,9 +72,8 @@ How to answer:
 - To answer a question or when no change is right, reply in plain text with no JSON object.
 - Never include "collab", "docId" or "modified".`
 
-/** The system prompt for a WORDS edit (small models): an outline with ids
- *  goes out, a patch of new texts comes back. */
-export const WORDS_PROMPT = `You are the editing assistant inside Bento Slides, a presentation editor. The user shows you an outline of their slides. Each piece of text starts with its id in [square brackets]. To change wording, reply with ONE JSON object and nothing else: {"edits":[{"id":"<the id>","text":"<the new text>"}]} — one entry per text you change, holding the complete new text of that item (markdown allowed: **bold**, *italic*, a blank line between paragraphs), the id copied exactly as shown. Change only what the request asks; leave every other text out of the list. You can only change words. If the request needs anything else — layout, position, colours, sizes, pictures, charts, adding or removing slides — reply in plain text that this needs a hosted provider (set in the extension settings) and do not write JSON.`
+/** The system prompt for a WORDS (ops) edit: ops.ts owns it. */
+export const WORDS_PROMPT = OPS_PROMPT
 
 /** The system prompt for a QUESTION turn: an outline goes out, prose comes
  *  back. Short on purpose — it has to fit an on-device model too. */
@@ -165,9 +168,6 @@ const words = (s: unknown, full = false): string => typeof s === 'string'
   ? s.replace(/<br\s*\/?>|<\/(?:p|div|li|h\d|tr)>/gi, ' ').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim().slice(0, full ? Infinity : TEXT_MAX)
   : ''
 
-/** The id a compact element answers to: its own, or the one the loader will
- *  mint for it (compactDoc strips ids that equal the minted form). */
-const elId = (slide: Obj, el: Obj, i: number): string => typeof el.id === 'string' && el.id ? el.id : mintId(slide, el, i)
 
 /**
  * One slide as a text outline: its number and id, then every piece of text
@@ -188,13 +188,18 @@ export function outlineSlide(slide: Obj, n: number, ids = false): string {
       if (w) lines.push(`  - ${ids ? `[${n}/${elId(slide, v, idx)}] ` : ''}${v.role ? `${String(v.role)}: ` : ''}${w}`)
     } else if (type === 'table') {
       const rows = Array.isArray(v.rows) ? v.rows as Obj[] : []
-      const out = rows.map((r) => (Array.isArray(r.cells) ? r.cells as Obj[] : []).map((c) => words(c.html)).join(' | ')).filter(Boolean)
-      if (out.length) lines.push(`  - table: ${out.join(' / ').slice(0, TEXT_MAX * 2)}`)
+      // addressed: every cell as r<row>c<col> so a cell op can name it;
+      // unaddressed: the rows joined, a taste for a question
+      const out = ids
+        ? rows.map((r, ri) => (Array.isArray(r.cells) ? r.cells as Obj[] : []).map((c, ci) => `r${ri + 1}c${ci + 1}: ${words(c.html, true)}`).join(' | '))
+        : rows.map((r) => (Array.isArray(r.cells) ? r.cells as Obj[] : []).map((c) => words(c.html)).join(' | ')).filter(Boolean)
+      if (out.length) lines.push(`  - ${ids ? `[${n}/${elId(slide, v, idx)}] ` : ''}table: ${ids ? out.join(' / ') : out.join(' / ').slice(0, TEXT_MAX * 2)}`)
     } else if (type === 'chart') {
       const opt = isObj(v.option) ? v.option : {}
-      const series = Array.isArray(opt.series) ? (opt.series as Obj[]).map((x) => `${String(x.name ?? x.type ?? 'series')}${Array.isArray(x.data) ? ` [${(x.data as unknown[]).slice(0, 12).map((d) => isObj(d) ? `${String(d.name ?? '')}=${String(d.value ?? '')}` : String(d)).join(', ')}]` : ''}`) : []
-      const cats = isObj(opt.xAxis) && Array.isArray(opt.xAxis.data) ? ` over ${(opt.xAxis.data as unknown[]).slice(0, 12).map(String).join(', ')}` : ''
-      lines.push(`  - chart${series.length ? `: ${series.join('; ')}` : ''}${cats}`)
+      const take = ids ? 500 : 12
+      const series = Array.isArray(opt.series) ? (opt.series as Obj[]).map((x) => `${String(x.name ?? x.type ?? 'series')}${Array.isArray(x.data) ? ` [${(x.data as unknown[]).slice(0, take).map((d) => isObj(d) ? `${String(d.name ?? '')}=${String(d.value ?? '')}` : String(d)).join(', ')}]` : ''}`) : []
+      const cats = isObj(opt.xAxis) && Array.isArray(opt.xAxis.data) ? ` over ${(opt.xAxis.data as unknown[]).slice(0, take).map(String).join(', ')}` : ''
+      lines.push(`  - ${ids ? `[${n}/${elId(slide, v, idx)}] ` : ''}chart${series.length ? `: ${series.join('; ')}` : ''}${cats}`)
     } else if (type === 'image' || type === 'media') {
       lines.push(`  - ${type}${typeof v.alt === 'string' && v.alt ? `: ${words(v.alt)}` : ''}`)
     } else if (type === 'shape') {
@@ -214,47 +219,17 @@ export function outlineDeck(compact: Obj, ids = false): string {
   return [head, ...slides.map((s, i) => outlineSlide(s, i + 1, ids))].join('\n')
 }
 
-const TEXT_EDIT_MAX = 20000
 /**
- * Apply a WORDS patch to the elided compact doc: each edit names a text
- * element as the outline showed it — `<slide number>/<element id>`, because
- * element ids REPEAT across slides (the morph idiom: the kicker on every
- * slide is `sd-kicker`) and a bare id would land on the wrong slide — and
- * gives its whole new text. The element gets `md` and loses `html`, so the
- * loader renders it through the markdown path (compact.ts), the same one an
- * agent's compact file takes. A bare id is accepted when exactly one slide
- * has it. Unknown targets, non-text elements and non-string texts are
- * skipped and named. Returns the patched doc (a deep copy) and what happened.
+ * The wording half of an ops patch on its own (ops.ts applyOps does the
+ * rest): each edit names a text element as the outline showed it —
+ * `<slide number>/<element id>`, because element ids REPEAT across slides
+ * (the morph idiom: the kicker on every slide is `sd-kicker`) and a bare
+ * id would land on the wrong slide. Returns the ids as given.
  */
 export function applyWordEdits(compact: Obj, edits: unknown): { doc: Obj; applied: string[]; skipped: string[] } {
-  const doc = JSON.parse(JSON.stringify(compact)) as Obj
-  const applied: string[] = []
-  const skipped: string[] = []
-  const list = Array.isArray(edits) ? edits : []
-  const targets = new Map<string, Obj>()
-  const bare = new Map<string, Obj[]>()
-  ;((doc.slides ?? []) as Obj[]).forEach((slide, si) => {
-    let i = 0
-    const visit = (v: unknown) => {
-      if (Array.isArray(v)) { for (const x of v) visit(x); return }
-      if (!isObj(v)) return
-      const idx = i++
-      if (v.type !== 'text') return
-      const id = elId(slide, v, idx)
-      targets.set(`${si + 1}/${id}`, v)
-      bare.set(id, [...(bare.get(id) ?? []), v])
-    }
-    visit(slide.elements)
-  })
-  for (const e of list) {
-    if (!isObj(e) || typeof e.id !== 'string' || typeof e.text !== 'string') { skipped.push(isObj(e) && typeof e.id === 'string' ? e.id : '?'); continue }
-    const el = targets.get(e.id) ?? (bare.get(e.id)?.length === 1 ? bare.get(e.id)![0] : undefined)
-    if (!el) { skipped.push(e.id); continue }
-    el.md = e.text.slice(0, TEXT_EDIT_MAX)
-    delete el.html
-    applied.push(e.id)
-  }
-  return { doc, applied, skipped }
+  const r = applyOps(compact, { edits })
+  const strip = (s: string) => s.replace(/^edit /, '')
+  return { doc: r.doc, applied: r.applied.map(strip), skipped: r.skipped.map(strip) }
 }
 
 /** Roughly how many model tokens a text costs: chars/4, the usual estimate
@@ -287,21 +262,12 @@ export type TurnMode = 'ask' | 'words' | 'json'
 /**
  * The reply's shape, for providers that can constrain output (the Prompt
  * API's responseConstraint, Gemini's responseSchema, OpenAI's json_schema):
- * a words patch is a fixed shape; a JSON edit is "an object" (the compact
- * form is too free to schema — the gate does that). A question has none.
- * Asked in prose alone, a small model answered a words edit with a summary
- * of the slide (measured on Gemini Nano); constrained, it cannot.
+ * a words patch is the ops shape (ops.ts); a JSON edit is "an object" (the
+ * compact form is too free to schema — the gate does that). A question has
+ * none. Asked in prose alone, a small model answered a words edit with a
+ * summary of the slide (measured on Gemini Nano); constrained, it cannot.
  */
-export const WORDS_SCHEMA: Record<string, unknown> = {
-  type: 'object',
-  properties: {
-    edits: {
-      type: 'array',
-      items: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' } }, required: ['id', 'text'] },
-    },
-  },
-  required: ['edits'],
-}
+export const WORDS_SCHEMA: Record<string, unknown> = OPS_SCHEMA
 export const OBJECT_SCHEMA: Record<string, unknown> = { type: 'object' }
 export const responseSchema = (mode: TurnMode): Record<string, unknown> | undefined =>
   mode === 'words' ? WORDS_SCHEMA : mode === 'json' ? OBJECT_SCHEMA : undefined

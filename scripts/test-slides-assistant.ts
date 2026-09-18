@@ -44,6 +44,7 @@ import { compactDoc, expandDoc } from '../slides/src/compact.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
 import { applyWordEdits, approxTokens, ASSUMED_WINDOW_HOSTED, ASSUMED_WINDOW_LOCAL, buildMessages, elideDoc, isQuestion, mergeReply, outlineDeck, parseReply, QUESTION_PROMPT, responseSchema, SYSTEM_PROMPT, WORDS_HISTORY, WORDS_PROMPT, WORDS_SCHEMA } from '../slides/src/editor/assistant/prompt.ts'
 import { CH, CODE_RE, CONTEXT_MAX, CONTEXT_MIN, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
+import { ADD_MAX, applyOps, OPS_PROMPT, OPS_SCHEMA } from '../slides/src/editor/assistant/ops.ts'
 import { dedupeIds, cleanDoc, ID_RE } from '../slides/src/editor/assistant/prompt.ts'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -182,6 +183,83 @@ console.log('\nprompt.ts — a words turn (on-device model)')
   ok(full.slides.length === starter.slides.length && full.slides[1].id === starter.slides[1].id, 'the other slides ride along untouched')
   const none = applyWordEdits(elided.doc, 'not a list')
   ok(none.applied.length === 0 && none.skipped.length === 0, 'a reply without a list applies nothing')
+}
+
+// The ops patch (ops.ts): everything a small model can do beyond wording —
+// notes, table cells, chart numbers, enum style verbs, a slide from a
+// layout, remove, move — applied to the compact doc and loaded through
+// expandDoc like any agent file. Built on a fixture with a table, a chart
+// and repeated ids so the addressing is exercised.
+console.log('\nops.ts — the ops patch')
+{
+  const fixture = (): Obj => ({
+    compact: true, title: 'Ops', slides: [
+      { id: 'a', elements: [{ id: 'k', type: 'text', html: 'Kicker' }, { id: 't', type: 'text', html: 'Title A', fontSize: 40 }] },
+      { id: 'b', notes: 'old notes', elements: [{ id: 'k', type: 'text', html: 'Kicker' }, { id: 'tbl', type: 'table', header: true, columns: [1, 1], rows: [{ cells: [{ html: 'Q' }, { html: 'Sales' }] }, { cells: [{ html: 'Q1' }, { html: '10' }] }] }] },
+      { id: 'c', elements: [{ id: 'ch', type: 'chart', option: { xAxis: { data: ['Q1', 'Q2'] }, series: [{ name: 'Sales', type: 'bar', data: [1, 2] }, { name: 'Cost', type: 'bar', data: [3, 4] }] } }, { id: 'pie', type: 'chart', option: { series: [{ type: 'pie', data: [{ name: 'x', value: 1 }, { name: 'y', value: 2 }] }] } }] },
+      { id: 'd', elements: [{ id: 'only', type: 'text', html: 'Unique' }] },
+    ],
+  })
+  // a window too small even for the outline: the mode is still words (the panel refuses on `fits`), and the outline is what we inspect
+  const outlineB = buildMessages(expandDoc(fixture()), 'slide', 1, [], 'Change it', { contextTokens: 100 })
+  const ob = outlineB.messages.at(-1)!.content
+  ok(outlineB.mode === 'words' && /\[2\/tbl\] table: r1c1: Q \| r1c2: Sales \/ r2c1: Q1 \| r2c2: 10/.test(ob), 'the addressed outline lists a table cell by cell as r<row>c<col>')
+  const outlineC = buildMessages(expandDoc(fixture()), 'slide', 2, [], 'Change it', { contextTokens: 100 }).messages.at(-1)!.content
+  ok(/\[3\/ch\] chart: Sales \[1, 2\]; Cost \[3, 4\] over Q1, Q2/.test(outlineC), 'and a chart by its series, numbers and categories')
+  ok(outlineB.messages[0].content === OPS_PROMPT && /"notes"/.test(OPS_PROMPT) && /"add"/.test(OPS_PROMPT) && /"move"/.test(OPS_PROMPT), 'a words turn carries the ops prompt')
+  ok(approxTokens(OPS_PROMPT) < 700, `the ops prompt is short enough for a small window (${approxTokens(OPS_PROMPT)} tokens)`)
+  ok(Object.keys(OPS_SCHEMA.properties as Obj).join(',') === 'edits,notes,cells,chart,style,add,remove,move', 'the schema names the eight ops')
+
+  const r = applyOps(fixture(), {
+    edits: [{ id: '1/t', text: 'Title **A2**' }, { id: 'only', text: 'Unique2' }, { id: 'k', text: 'ambiguous' }],
+    notes: [{ slide: 2, text: 'new notes' }, { slide: 9, text: 'x' }],
+    cells: [{ id: '2/tbl', row: 2, col: 2, text: '12 <b>' }, { id: '2/tbl', row: 5, col: 1, text: 'x' }],
+    chart: [{ id: '3/ch', series: [{ name: 'Cost', data: [5, 6, 'z'] }], categories: ['Q3', 'Q4'] }, { id: '3/pie', series: [{ name: 'pie', data: [7, 8] }] }, { id: '1/t', series: [] }],
+    style: [{ id: '1/t', size: 'bigger', weight: 'bold', align: 'center' }, { id: '1/k', size: 'smaller' }, { id: '1/k', size: 'huge' }],
+  })
+  const sl = r.doc.slides as Obj[]
+  const el = (si: number, id: string) => (sl[si].elements as Obj[]).find((e) => e.id === id)!
+  ok(r.applied.includes('edit 1/t') && el(0, 't').md === 'Title **A2**' && !('html' in el(0, 't')), 'edit: addressed text gets md')
+  ok(r.applied.includes('edit only') && el(3, 'only').md === 'Unique2' && r.skipped.includes('edit k'), 'edit: a bare id on one slide works, on two is skipped')
+  ok(sl[1].notes === 'new notes' && r.skipped.includes('notes 9'), 'notes: set on slide 2; slide 9 skipped')
+  ok(((el(1, 'tbl').rows as Obj[])[1].cells as Obj[])[1].html === '12 &lt;b&gt;' && r.skipped.includes('cell 2/tbl r5c1'), 'cells: r2c2 set with the text escaped; an out-of-range row skipped')
+  const ch = el(2, 'ch').option as Obj
+  ok(JSON.stringify((ch.series as Obj[])[1].data) === '[5,6,0]' && JSON.stringify((ch.series as Obj[])[0].data) === '[1,2]' && JSON.stringify((ch.xAxis as Obj).data) === '["Q3","Q4"]', 'chart: the named series replaced (non-numbers → 0), the other kept, categories set')
+  const pie = el(2, 'pie').option as Obj
+  ok(JSON.stringify((pie.series as Obj[])[0].data) === '[{"name":"x","value":7},{"name":"y","value":8}]', 'chart: a pie keeps its slice names, numbers land by position')
+  ok(r.skipped.includes('chart 1/t'), 'chart: a text target is skipped')
+  ok(el(0, 't').fontSize === 50 && el(0, 't').fontWeight === 700 && el(0, 't').align === 'center', 'style: bigger ×1.25 from 40 → 50, bold, center')
+  ok(el(0, 'k').fontSize === 26 && r.skipped.includes('style 1/k'), 'style: smaller from the 32 default → 26; an unknown verb alone is skipped')
+  ok(!r.structural && (r.doc.slides as Obj[]).length === 4, 'content ops alone are not structural')
+  const full = expandDoc(r.doc)
+  ok(/<(b|strong)>A2<\/(b|strong)>/.test((full.slides[0].elements.find((e) => e.id === 't') as { html?: string }).html ?? ''), 'the patched doc loads: markdown rendered')
+
+  const st = applyOps(fixture(), {
+    add: [{ after: 1, layout: 'title-content', title: 'New', body: 'Some body', notes: 'n' }, { after: 0, layout: 'section', title: 'Start', kicker: 'PART 1' }, { after: 4, layout: 'two-col', title: 'T', left: 'L', right: 'R' }, { after: 2, layout: 'nope', title: 'x' }, { after: 99, layout: 'title' }],
+    remove: [3, 42],
+    move: [{ slide: 4, to: 1 }, { slide: 1, to: 1 }],
+  })
+  const ids = (st.doc.slides as Obj[]).map((x) => String(x.id ?? '?'))
+  ok(st.structural, 'add/remove/move are structural')
+  ok(r.applied.length > 0 && st.applied.includes('add title-content after 1') && st.applied.includes('add section after 0') && st.applied.includes('remove 3') && st.applied.includes('move 4→1'), 'the ops are named for the card')
+  ok(st.skipped.includes('add nope') && st.skipped.includes('add title') && st.skipped.includes('remove 42') && st.skipped.includes('move 1→1'), 'unknown layout, after past the end, removing a slide that is not there, moving onto itself: skipped')
+  // original: a b c d. adds attach to their ORIGINAL anchor: section at the
+  // start, title-content after a, two-col after d. remove c. move d before a
+  // (the move takes only d; the slide added after d stays where d was).
+  const newIds = ids.filter((x) => x.startsWith('s-'))
+  ok(newIds.length === 3 && new Set(newIds).size === 3 && ids.length === 6, `three new slides with fresh distinct ids (${newIds.join(', ')}), one removed → 6`)
+  ok(ids.join(' ') === `${newIds[0]} d a ${newIds[1]} b ${newIds[2]}`, `order: [section] d a [title-content] b [two-col], c gone → ${ids.join(' ')}`)
+  const fullSt = expandDoc(st.doc)
+  const added = fullSt.slides[3]
+  const title = added.elements.find((e) => (e as { role?: string }).role === 'title') as { html?: string; x?: number; w?: number } | undefined
+  ok(!!title && /New/.test(title.html ?? '') && typeof title.x === 'number' && (title.w ?? 0) > 100, 'a slide added from a layout loads with its text placed by role (geometry from the layout)')
+  ok(fullSt.slides[3].notes === 'n', 'and its notes')
+  const twoCol = fullSt.slides[5].elements.filter((e) => /^(L|R)$|<p>(L|R)<\/p>/.test((e as { html?: string }).html ?? ''))
+  ok(twoCol.length === 2 && (twoCol[0] as { x: number }).x !== (twoCol[1] as { x: number }).x, 'two-col: left and right land in different columns')
+  const many = applyOps(fixture(), { add: Array.from({ length: ADD_MAX + 3 }, () => ({ after: 0, layout: 'blank' })) })
+  ok((many.doc.slides as Obj[]).length === 4 + ADD_MAX && many.skipped.length === 3, `at most ${ADD_MAX} slides per reply`)
+  const nothing = applyOps(fixture(), { bogus: [1], edits: 'x' })
+  ok(nothing.applied.length === 0 && !nothing.structural && JSON.stringify(nothing.doc) === JSON.stringify(fixture()), 'unknown keys and non-list values change nothing')
 }
 
 // The WINDOW decides the shape, for every provider: the same edit goes as
@@ -594,7 +672,7 @@ try {
     panel.root.querySelector('.ed-assist-input').value = 'update the title to something creative'
     await panel.submit(); await tick(30)
     check('retry: an edit answered in prose is sent once more with the nudge as the next user turn (' + sends.length + ' sends)', sends.length === 2 && sends[1].messages.at(-1).role === 'user' && /only the JSON object/.test(sends[1].messages.at(-1).content) && sends[1].messages.at(-2).role === 'assistant' && /introduces Bento/.test(sends[1].messages.at(-2).content))
-    check('retry: both sends carry the words schema', !!sends[0].opts && sends[0].opts.schema && Array.isArray(sends[0].opts.schema.required) && sends[0].opts.schema.required[0] === 'edits' && sends[1].opts.schema === sends[0].opts.schema)
+    check('retry: both sends carry the ops schema', !!sends[0].opts && sends[0].opts.schema && sends[0].opts.schema.properties && sends[0].opts.schema.properties.edits && sends[0].opts.schema.properties.add && sends[1].opts.schema === sends[0].opts.schema)
     check('retry: prose again is shown as the answer, the deck unchanged', /Still just prose/.test(panel.root.textContent) && store.replaced === 0)
     const sends2 = []
     const tr2 = fakeTransport({ describe: async () => ({ host: 'h.example', model: 'm', configured: true }), send: async (messages, onChunk, signal, opts) => { sends2.push(opts); return 'Your deck has seven slides.' } })
