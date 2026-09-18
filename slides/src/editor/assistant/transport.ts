@@ -60,7 +60,16 @@
 //                        text and re-runs check ONCE when the document regains
 //                        focus or visibility. The page keys on CODES, never on
 //                        the reason text.
-//   assistant.send       payload { messages: [{ role:'system'|'user'|'assistant', content }] }
+//   assistant.send       payload { messages: [{ role:'system'|'user'|'assistant', content }], schema? }
+//                        `schema` = a JSON Schema for the reply when the page
+//                        needs an object back (an edit). The extension passes
+//                        it to providers that constrain output — the Prompt
+//                        API's responseConstraint, Gemini's responseSchema,
+//                        OpenAI's response_format json_schema — and ignores it
+//                        for the rest (the system prompt asks for the shape
+//                        too). A small model asked for JSON in prose answers
+//                        in prose; constrained, it cannot. The page still
+//                        parses and gates the reply exactly as before.
 //                        → res { ok:true }           the request was accepted and is streaming
 //                        | res { ok:false, reason }   refused (not configured, offline, bad key …)
 //                        then, for an accepted request, zero or more
@@ -102,6 +111,9 @@ export interface AssistantDescription {
 
 export type CheckResult = { ok: true } | { ok: false; reason: string; code?: string }
 
+/** Per-turn options for send. `schema` = a JSON Schema the reply must fit. */
+export interface SendOpts { schema?: Record<string, unknown> }
+
 /** A failed send. `code` is the machine-readable reason, when the bridge gave one. */
 export class AssistantError extends Error {
   code?: string
@@ -126,7 +138,7 @@ export interface AssistantTransport {
    * promise resolves with the whole reply text, rejects with an Error whose
    * `name` is 'AbortError' when `signal` fired, or with the reason otherwise.
    */
-  send(messages: AssistantMessage[], onChunk: (text: string) => void, signal: AbortSignal): Promise<string>
+  send(messages: AssistantMessage[], onChunk: (text: string) => void, signal: AbortSignal, opts?: SendOpts): Promise<string>
   /** ask the host to show where the endpoint and key are configured */
   openSettings(): Promise<void>
 }
@@ -229,7 +241,7 @@ export class ExtensionTransport implements AssistantTransport {
     return { ok: false, reason: String(r.reason ?? 'unknown'), ...(code ? { code } : {}) }
   }
 
-  send(messages: AssistantMessage[], onChunk: (text: string) => void, signal: AbortSignal): Promise<string> {
+  send(messages: AssistantMessage[], onChunk: (text: string) => void, signal: AbortSignal, opts: SendOpts = {}): Promise<string> {
     this.listen()
     const id = mintId()
     return new Promise<string>((resolve, reject) => {
@@ -259,7 +271,7 @@ export class ExtensionTransport implements AssistantTransport {
           finish(() => reject(new AssistantError(String(f.reason ?? 'request failed'), codeOf(f.code))))
         }
       })
-      void this.request('assistant.send', { messages }, id).then((r) => {
+      void this.request('assistant.send', opts.schema ? { messages, schema: opts.schema } : { messages }, id).then((r) => {
         if (r.ok !== true) finish(() => reject(new Error(String(r.reason ?? 'refused'))))
       })
     })

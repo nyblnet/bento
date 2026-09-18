@@ -24,7 +24,7 @@ import { ExtensionTransport, extensionPresent, type AssistantDescription, type A
 /** Display names for on-device model ids; anything else shows as its id. */
 export const MODEL_NAMES: Record<string, string> = { 'gemini-nano': 'Gemini Nano' }
 export const modelDisplay = (id: string): string => MODEL_NAMES[id] ?? id
-import { applyWordEdits, buildMessages, cleanDoc, mergeReply, parseReply, type AssistantScope, type Turn } from './prompt'
+import { applyWordEdits, buildMessages, cleanDoc, mergeReply, parseReply, responseSchema, RETRY_NUDGE, type AssistantScope, type Turn } from './prompt'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
 /** Where "get the extension" points. The app has no store link yet — the
@@ -262,12 +262,24 @@ export class AssistantPanel {
     const live = this.note(local ? t('Working on it… the on-device model is loading.') : t('Working on it…'), 'assistant')
     live.classList.add('ed-assist-live', 'ed-assist-wait')
     let text = ''
+    const schema = responseSchema(mode)
+    const onChunk = (chunk: string) => {
+      if (live.classList.contains('ed-assist-wait')) { live.classList.remove('ed-assist-wait'); live.textContent = '' }
+      live.textContent += chunk
+      this.log.scrollTop = this.log.scrollHeight
+    }
     try {
-      text = await this.transport.send(messages, (chunk) => {
-        if (live.classList.contains('ed-assist-wait')) { live.classList.remove('ed-assist-wait'); live.textContent = '' }
-        live.textContent += chunk
-        this.log.scrollTop = this.log.scrollHeight
-      }, this.running!.signal)
+      text = await this.transport.send(messages, onChunk, this.running!.signal, { schema })
+      // an edit that came back as prose gets ONE nudge (a small model that
+      // ignored the shape usually takes it the second time); prose again is
+      // shown as the answer — that is the "this needs a hosted model" reply
+      if (mode !== 'ask' && !text.includes('{')) {
+        const again = [...messages, { role: 'assistant' as const, content: text }, { role: 'user' as const, content: RETRY_NUDGE }]
+        live.textContent = ''
+        live.classList.add('ed-assist-wait')
+        live.textContent = t('Working on it…')
+        text = await this.transport.send(again, onChunk, this.running!.signal, { schema })
+      }
     } catch (e) {
       live.remove()
       const err = e as Error

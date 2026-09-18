@@ -42,7 +42,7 @@
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { compactDoc, expandDoc } from '../slides/src/compact.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
-import { applyWordEdits, approxTokens, ASSUMED_WINDOW_HOSTED, ASSUMED_WINDOW_LOCAL, buildMessages, elideDoc, isQuestion, mergeReply, outlineDeck, parseReply, QUESTION_PROMPT, SYSTEM_PROMPT, WORDS_PROMPT } from '../slides/src/editor/assistant/prompt.ts'
+import { applyWordEdits, approxTokens, ASSUMED_WINDOW_HOSTED, ASSUMED_WINDOW_LOCAL, buildMessages, elideDoc, isQuestion, mergeReply, outlineDeck, parseReply, QUESTION_PROMPT, responseSchema, SYSTEM_PROMPT, WORDS_HISTORY, WORDS_PROMPT, WORDS_SCHEMA } from '../slides/src/editor/assistant/prompt.ts'
 import { CH, CODE_RE, CONTEXT_MAX, CONTEXT_MIN, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
 import { dedupeIds, cleanDoc, ID_RE } from '../slides/src/editor/assistant/prompt.ts'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
@@ -204,6 +204,12 @@ console.log('\nprompt.ts — the window decides the shape')
   ok(stated.mode === 'json' && stated.window === 200_000, 'a stated window beats the local assumption (a big local model gets JSON)')
   const hist = Array.from({ length: 8 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: 'x'.repeat(4000) }))
   const crowded = buildMessages(starter, 'slide', 0, hist, req, { contextTokens: 12_000 })
+  ok(responseSchema('words') === WORDS_SCHEMA && (responseSchema('json') as Obj).type === 'object' && responseSchema('ask') === undefined, 'a response schema for a words patch and a JSON edit; none for a question')
+  ok(Array.isArray((WORDS_SCHEMA.properties as Obj).edits && ((WORDS_SCHEMA.properties as Obj).edits as Obj).items && (((WORDS_SCHEMA.properties as Obj).edits as Obj).items as Obj).required) && JSON.stringify((((WORDS_SCHEMA.properties as Obj).edits as Obj).items as Obj).required) === '["id","text"]', 'the words schema requires id and text on every edit')
+  const chatty = Array.from({ length: 6 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: `turn ${i}` }))
+  const wHist = buildMessages(starter, 'slide', 0, chatty, req, { contextTokens: 2000 })
+  ok(wHist.mode === 'words' && wHist.messages.length === 1 + WORDS_HISTORY + 1 && wHist.messages[1].content === 'turn 4', `a words turn keeps only the last ${WORDS_HISTORY} history turns (a small model primed by its own summary summarises again)`)
+  ok(buildMessages(starter, 'slide', 0, chatty, req, { contextTokens: 200_000 }).messages.length === 1 + 6 + 1, 'a JSON turn keeps the full history')
   ok(crowded.mode !== 'json' && buildMessages(starter, 'slide', 0, [], req, { contextTokens: 12_000 }).mode === 'json', 'history counts against the window: 8k tokens of turns push a 12k window off the JSON path (slide 1 alone fits it)')
 }
 
@@ -353,6 +359,15 @@ await (async () => {
   w.handler = (f) => { if (f.op === 'assistant.check') w.res(f.id, { ok: false, reason: 'Asking you first', code: 'consent-pending' }) }
   const pend = await tr.check()
   ok(pend.ok === false && pend.code === 'consent-pending' && pend.reason === 'Asking you first', 'check: the consent-pending code rides beside the reason')
+  {
+    let seen: Obj | null = null
+    w.handler = (f) => { if (f.op === 'assistant.send') { seen = f.payload as Obj; w.res(f.id, { ok: true }); w.evt(f.id, 'assistant.done', { text: '{}' }) } }
+    await tr.send([{ role: 'user', content: 'x' }], () => {}, new AbortController().signal, { schema: WORDS_SCHEMA })
+    ok(!!seen && seen.schema === WORDS_SCHEMA, 'send: the schema rides in the payload when given')
+    seen = null
+    await tr.send([{ role: 'user', content: 'x' }], () => {}, new AbortController().signal)
+    ok(!!seen && !('schema' in seen), 'send: no schema key when none was given (old extensions see the old payload)')
+  }
   w.handler = (f) => { if (f.op === 'assistant.check') w.res(f.id, { ok: false, reason: 'x', code: 'Not A Code!' }) }
   ok((await tr.check() as { code?: string }).code === undefined, 'check: a code outside its shape is dropped (the page keys on codes)')
   ok(CODE_RE.test('consent-pending') && CODE_RE.test('consent-denied') && !CODE_RE.test('') && !CODE_RE.test('x'.repeat(41)), 'code shape: [a-z][a-z0-9-]{0,39}')
@@ -366,7 +381,7 @@ await (async () => {
   const chunks: string[] = []
   const p = tr.send(msgs, (t) => chunks.push(t), new AbortController().signal)
   await tick()
-  ok(sendId !== '' && (w.sent.find((f) => f.op === 'assistant.send')!.payload as Obj).messages === msgs, 'send posts the messages as the payload')
+  ok(sendId !== '' && (w.sent.find((f) => f.id === sendId)!.payload as Obj).messages === msgs, 'send posts the messages as the payload')
   w.evt(sendId, 'assistant.chunk', { text: 'Hel' })
   w.evt(sendId, 'assistant.chunk', { text: 'lo' })
   w.evt('some-other-id', 'assistant.chunk', { text: 'NOISE' })
@@ -567,6 +582,28 @@ try {
     check('consent-denied: a plain refusal card with the localized text, keyed on the code', !!card && /Permission was refused on this device/.test(card.textContent) && !/said no/.test(panel.root.textContent))
     check('consent-denied: the deck is unchanged', store.replaced === 0 && JSON.stringify(store.doc) === before)
     check('consent-denied: the drawer is usable again', !panel.root.querySelector('.ed-assist-input').disabled && panel.root.querySelector('.ed-assist-send').textContent === 'Send')
+  }
+  {
+    // an edit that comes back as prose is nudged ONCE; the second reply is the answer
+    const store = fakeStore(starterDoc())
+    const sends = []
+    const tr = fakeTransport({ describe: async () => ({ host: '', model: 'gemini-nano', configured: true, local: true }), send: async (messages, onChunk, signal, opts) => { sends.push({ messages, opts }); return sends.length === 1 ? 'The slide introduces Bento Slides and its tiles.' : 'Still just prose, sorry.' } })
+    const panel = new AssistantPanel({ store, transport: tr })
+    document.body.appendChild(panel.root)
+    panel.setOpen(true, false); await tick(60)
+    panel.root.querySelector('.ed-assist-input').value = 'update the title to something creative'
+    await panel.submit(); await tick(30)
+    check('retry: an edit answered in prose is sent once more with the nudge as the next user turn (' + sends.length + ' sends)', sends.length === 2 && sends[1].messages.at(-1).role === 'user' && /only the JSON object/.test(sends[1].messages.at(-1).content) && sends[1].messages.at(-2).role === 'assistant' && /introduces Bento/.test(sends[1].messages.at(-2).content))
+    check('retry: both sends carry the words schema', !!sends[0].opts && sends[0].opts.schema && Array.isArray(sends[0].opts.schema.required) && sends[0].opts.schema.required[0] === 'edits' && sends[1].opts.schema === sends[0].opts.schema)
+    check('retry: prose again is shown as the answer, the deck unchanged', /Still just prose/.test(panel.root.textContent) && store.replaced === 0)
+    const sends2 = []
+    const tr2 = fakeTransport({ describe: async () => ({ host: 'h.example', model: 'm', configured: true }), send: async (messages, onChunk, signal, opts) => { sends2.push(opts); return 'Your deck has seven slides.' } })
+    const panel2 = new AssistantPanel({ store, transport: tr2 })
+    document.body.appendChild(panel2.root)
+    panel2.setOpen(true, false); await tick(60)
+    panel2.root.querySelector('.ed-assist-input').value = 'How many slides are there?'
+    await panel2.submit(); await tick(30)
+    check('retry: a question answered in prose is NOT nudged, and carries no schema', sends2.length === 1 && sends2[0] && sends2[0].schema === undefined)
   }
 } catch (e) { check('probe threw: ' + (e && e.message) + ' ' + (e && e.stack || '').slice(0, 300), false) }
 window.__results = 'BENTO-RESULTS:' + btoa(unescape(encodeURIComponent(JSON.stringify(results)))) + ':END'

@@ -284,6 +284,36 @@ const REPLY_ROOM_TEXT = 1500  // a prose answer or a words patch
  *  (outline with ids out, a text patch back), or a JSON edit. */
 export type TurnMode = 'ask' | 'words' | 'json'
 
+/**
+ * The reply's shape, for providers that can constrain output (the Prompt
+ * API's responseConstraint, Gemini's responseSchema, OpenAI's json_schema):
+ * a words patch is a fixed shape; a JSON edit is "an object" (the compact
+ * form is too free to schema — the gate does that). A question has none.
+ * Asked in prose alone, a small model answered a words edit with a summary
+ * of the slide (measured on Gemini Nano); constrained, it cannot.
+ */
+export const WORDS_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    edits: {
+      type: 'array',
+      items: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' } }, required: ['id', 'text'] },
+    },
+  },
+  required: ['edits'],
+}
+export const OBJECT_SCHEMA: Record<string, unknown> = { type: 'object' }
+export const responseSchema = (mode: TurnMode): Record<string, unknown> | undefined =>
+  mode === 'words' ? WORDS_SCHEMA : mode === 'json' ? OBJECT_SCHEMA : undefined
+
+/** A words turn keeps only the last exchange: a small model primed by a
+ *  paragraph of its own summary answers with another one. */
+export const WORDS_HISTORY = 2
+
+/** The one follow-up when an edit comes back as prose: sent once, as the
+ *  next user turn, before the reply is shown as text. */
+export const RETRY_NUDGE = 'Reply with only the JSON object described — no explanation, no prose.'
+
 export interface BuiltMessages {
   messages: AssistantMessage[]
   elided: Elided
@@ -338,7 +368,7 @@ export function buildMessages(doc: BentoDoc, scope: AssistantScope, currentIndex
   }
   const system = mode === 'ask' ? QUESTION_PROMPT : mode === 'words' ? WORDS_PROMPT : SYSTEM_PROMPT
   const messages: AssistantMessage[] = [{ role: 'system', content: system }]
-  for (const turn of turns) messages.push({ role: turn.role, content: turn.text })
+  for (const turn of (mode === 'words' ? turns.slice(-WORDS_HISTORY) : turns)) messages.push({ role: turn.role, content: turn.text })
   // an outline turn reads the outline first and the request last (the thing
   // to do is the freshest text); a JSON edit leads with the instruction
   messages.push({ role: 'user', content: mode !== 'json' ? `${context}\n\n${request.trim()}` : `${request.trim()}\n\n${context}` })
