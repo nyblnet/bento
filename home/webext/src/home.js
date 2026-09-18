@@ -61,7 +61,7 @@ import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n 
  */
 const placed = new Set()
 async function placeFolders({ force = false } = {}) {
-  if (state.fileAccess === false) return 0
+  if (state.fileAccess === false) { console.info('[bento/home] placing: file-URL access is off, nothing to probe with'); return 0 }
   let learned = 0
   const known = await prefixes()
   const grants = await getGrants()
@@ -73,7 +73,12 @@ async function placeFolders({ force = false } = {}) {
     const probe = state.docs.filter((d) => d.folder === dir.name).sort((a, b) => a.rel.length - b.rel.length)[0]
     if (!probe) continue
     try {
-      const prefix = await placeFolder(dir, probe, known, { fetch: (u) => fetch(u), prefixFor })
+      // Said in the page's console: placement is silent by design, and the
+      // one question when it does nothing is whether the disk answered at all.
+      const tried = []
+      const deps = { fetch: async (u) => { const r = await fetch(u); tried.push(`${r.ok ? 'ok ' : 'no '}${u}`); return r }, prefixFor }
+      const prefix = await placeFolder(dir, probe, known, deps).catch((e) => { tried.push(`threw ${e?.message || e}`); return null })
+      console.info(`[bento/home] placing "${dir.name}":`, prefix ?? 'not found', `(${tried.length} probes)`, tried.slice(0, 12))
       if (prefix) { await learnPrefix(dir.name, prefix); known[dir.name] = prefix; learned++ }
     } catch { /* a guess that cannot be made is not an error */ }
   }
