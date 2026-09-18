@@ -85,6 +85,43 @@ export class Editor {
   private canvas!: SlideCanvas
   private panel!: PropsPanel
   private assistant!: AssistantPanel
+  private propsTabs!: HTMLElement
+  private propsBody!: HTMLElement
+  private assistDock!: HTMLElement
+  private propsTab: 'props' | 'assist' = 'props'
+
+  /** The right sidebar's two tabs. The choice is remembered. */
+  private buildPropsTabs() {
+    const mk = (id: 'props' | 'assist', label: string) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-props-tab'
+      b.dataset.tab = id
+      b.textContent = label
+      b.addEventListener('click', () => this.showPropsTab(id))
+      return b
+    }
+    this.propsTabs.append(mk('props', t('Properties')), mk('assist', t('Assistant')))
+    const saved = lsGet('bento-props-tab')
+    this.showPropsTab(saved === 'assist' ? 'assist' : 'props', false)
+    // popping the assistant out empties its tab: fall back to the inspector
+    this.assistant.onFloatChange = (floating) => {
+      this.props.classList.toggle('ed-assist-out', floating)
+      if (floating && this.propsTab === 'assist') this.showPropsTab('props', false)
+    }
+  }
+
+  showPropsTab(id: 'props' | 'assist', persist = true) {
+    if (id === 'assist' && this.assistant.floating) { this.assistant.focusInput(); return }
+    this.propsTab = id
+    this.props.classList.toggle('ed-tab-assist', id === 'assist')
+    for (const b of this.propsTabs.querySelectorAll<HTMLElement>('.ed-props-tab')) b.classList.toggle('on', b.dataset.tab === id)
+    if (persist) lsSet('bento-props-tab', id)
+    if (id === 'assist') {
+      if (this.props.classList.contains('ed-collapsed')) this.togglePanel('right')
+      this.assistant.activate()
+    }
+  }
   private sidebar!: HTMLElement
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
@@ -436,6 +473,13 @@ export class Editor {
       if (zb) corner.appendChild(zb)
     })
     this.props = div('ed-props')
+    // the right sidebar is two tabs: the inspector (PropsPanel's host, which
+    // scrolls) and the Assistant (a full-height dock: the conversation gets
+    // the whole column, not one accordion section of it)
+    this.propsTabs = div('ed-props-tabs')
+    this.propsBody = div('ed-props-body')
+    this.assistDock = div('ed-assist-dock')
+    this.props.append(this.propsTabs, this.propsBody, this.assistDock)
     main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
@@ -508,12 +552,12 @@ export class Editor {
     this.canvas = new SlideCanvas(canvasWrap, this.store)
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
-    this.panel = new PropsPanel(this.props, this.store)
-    // the Assistant drawer: extension-only (assistant/transport.ts says why);
-    // the panel re-appends it after every rebuild
-    this.assistant = new AssistantPanel({ store: this.store, toast: (m) => this.toast(m) })
-    this.panel.footer = this.assistant.root
-    this.props.appendChild(this.assistant.root)
+    this.panel = new PropsPanel(this.propsBody, this.store)
+    // the Assistant: extension-only (assistant/transport.ts says why). It
+    // lives in the dock tab, or popped out as a floating window (its own
+    // choice, remembered); the tab strip switches between inspector and it
+    this.assistant = new AssistantPanel({ store: this.store, toast: (m) => this.toast(m), dock: this.assistDock })
+    this.buildPropsTabs()
 
     if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
   }

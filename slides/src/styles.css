@@ -549,11 +549,26 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-props {
   width: var(--panew, 236px);
   flex: none;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--surface);
   border-inline-start: 1px solid var(--line);
-  padding: 14px;
 }
+/* the inspector scrolls; the tab strip and the assistant dock do not */
+.ed-props-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; padding: 14px; }
+.ed-assist-dock { display: none; flex: 1 1 auto; min-height: 0; flex-direction: column; }
+.ed-props.ed-tab-assist .ed-props-body { display: none; }
+.ed-props.ed-tab-assist .ed-assist-dock { display: flex; }
+.ed-props-tabs { display: flex; flex: none; border-bottom: 1px solid var(--line); background: var(--chrome); }
+.ed-props-tab {
+  flex: 1; padding: 8px 6px; border: 0; border-bottom: 2px solid transparent; background: none;
+  color: var(--muted); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+}
+.ed-props-tab.on { color: var(--ink); border-bottom-color: var(--accent, #F7A600); }
+.ed-props-tab:hover { color: var(--ink); }
+/* popped out: the tab stays, but reads as a way back to the window */
+.ed-props.ed-assist-out .ed-props-tab[data-tab='assist'] { opacity: .6; }
 
 .ed-section {
   font-size: 11px;
@@ -2406,10 +2421,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 
 
 /* right panel: no horizontal scrollbar, ever */
-.ed-props {
-  overflow-x: hidden;
-  scrollbar-gutter: stable;
-}
+.ed-props { overflow: hidden; }
 .ed-props .ed-row { flex-wrap: wrap; }
 .ed-props input[type='number'] { min-width: 0; }
 .ed-props select { max-width: 100%; min-width: 0; }
@@ -2848,6 +2860,33 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   border-top: 1px solid var(--line);
   font-size: 12px;
 }
+/* docked in its tab, or floating: the whole column is the panel — the log
+   takes what is left, the input sits at the bottom */
+.ed-assist-docked {
+  position: static; margin: 0; border-top: 0;
+  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; height: 100%;
+}
+.ed-assist-docked .ed-assist-head { flex: none; cursor: default; }
+.ed-assist-docked .ed-assist-chev { display: none; }
+.ed-assist-docked .ed-assist-body { flex: 1 1 auto; min-height: 0; }
+.ed-assist-docked.open .ed-assist-body { display: flex; }
+.ed-assist-docked .ed-assist-log { flex: 1 1 auto; max-height: none; min-height: 60px; }
+.ed-assist-docked .ed-assist-log:empty { display: block; flex: 1 1 auto; }
+.ed-assist-docked .ed-assist-status, .ed-assist-docked .ed-assist-notice, .ed-assist-docked .ed-assist-acts, .ed-assist-docked .ed-assist-input { flex: none; }
+.ed-assist-docked .ed-assist-input { resize: vertical; max-height: 60vh; }
+.ed-assist-pop { margin-left: auto; margin-right: 6px; padding: 0 5px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; display: none; }
+.ed-assist-docked .ed-assist-pop { display: inline-block; }
+.ed-assist-pop:hover { color: var(--ink); }
+@media (max-width: 699px) { .ed-assist-pop { display: none !important; } }
+/* the floating window */
+.ed-assist-float {
+  position: fixed; z-index: 60; display: flex; flex-direction: column;
+  min-width: 280px; min-height: 240px; resize: both; overflow: hidden;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .28);
+}
+.ed-assist-float .ed-assist { height: 100%; }
+.ed-assist-float .ed-assist-head { border-bottom: 1px solid var(--line); background: var(--chrome); border-radius: 10px 10px 0 0; }
 .ed-assist-head {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; padding: 8px 14px; border: 0; background: none;

@@ -63,6 +63,28 @@ export function proseHtml(text: string): string {
   return out.join('')
 }
 
+/** The floating window's last rectangle (viewport px), clamped on read so a
+ *  window saved on a big display still lands on screen on a small one. */
+const FLOAT_KEY = 'bento-assist-rect'
+function readRect(): { x: number; y: number; w: number; h: number } {
+  // default: beside the right sidebar, not over it — the point of popping out
+  // is the deck AND the inspector beside the chat
+  const side = document.querySelector<HTMLElement>('.ed-props:not(.ed-collapsed)')?.offsetWidth ?? 0
+  let r = { x: Math.max(0, window.innerWidth - side - 360 - 24), y: 80, w: 360, h: Math.min(560, window.innerHeight - 120) }
+  try {
+    const v = JSON.parse(lsGet(FLOAT_KEY) || 'null') as Partial<typeof r> | null
+    if (v && [v.x, v.y, v.w, v.h].every((n) => typeof n === 'number' && Number.isFinite(n))) r = v as typeof r
+  } catch { /* keep the default */ }
+  r.w = Math.min(Math.max(r.w, 280), window.innerWidth)
+  r.h = Math.min(Math.max(r.h, 240), window.innerHeight)
+  r.x = Math.min(Math.max(r.x, 0), window.innerWidth - 120)
+  r.y = Math.min(Math.max(r.y, 0), window.innerHeight - 40)
+  return r
+}
+function saveRect(win: HTMLElement) {
+  lsSet(FLOAT_KEY, JSON.stringify({ x: win.offsetLeft, y: win.offsetTop, w: win.offsetWidth, h: win.offsetHeight }))
+}
+
 /** Where "get the extension" points. The app has no store link yet — the
  *  repository directory is the honest address until a listing exists. */
 export const EXTENSION_URL = 'https://github.com/nyblnet/bento/tree/main/home/webext'
@@ -77,6 +99,8 @@ const el = (tag: string, cls: string, text?: string) => {
 const findingKey = (f: Finding) => `${f.code}|${f.slide ?? ''}|${f.element ?? ''}|${f.message}`
 
 export interface AssistantPanelOpts {
+  /** the sidebar tab the panel fills; without it the panel is a standalone drawer (tests) */
+  dock?: HTMLElement
   store: Store
   /** injectable for the rig; production omits it and the window decides */
   transport?: AssistantTransport | null
@@ -91,6 +115,13 @@ export class AssistantPanel {
   private log = el('div', 'ed-assist-log')
   private input = document.createElement('textarea')
   private clearB = document.createElement('button')
+  private dock: HTMLElement | null = null
+  /** the floating window when popped out (the same body, re-parented) */
+  private float: HTMLElement | null = null
+  private floatB = document.createElement('button')
+  /** the editor listens: a popped-out assistant empties its tab */
+  onFloatChange: ((floating: boolean) => void) | null = null
+  get floating(): boolean { return this.float !== null }
   private notice = el('div', 'ed-assist-notice')
   private sendB = document.createElement('button')
   private scopeSlide = document.createElement('button')
@@ -114,7 +145,84 @@ export class AssistantPanel {
     this.toast = opts.toast ?? (() => {})
     this.present = opts.present ?? (() => extensionPresent())
     this.transport = opts.transport === undefined ? (this.present() ? new ExtensionTransport() : null) : opts.transport
+    this.dock = opts.dock ?? null
     this.build()
+    if (this.dock) {
+      // docked: no accordion — the tab IS the open state, the column is the height
+      this.root.classList.add('ed-assist-docked')
+      this.dock.appendChild(this.root)
+      this.setOpen(true, false)
+      if (lsGet('bento-assist-float') === 'on') this.popOut(false)
+    }
+  }
+
+  /** The tab was shown: make sure the route is fresh and the input has focus. */
+  activate() {
+    if (!this.root.classList.contains('open')) this.setOpen(true, false)
+    else void this.describe()
+    this.focusInput()
+  }
+
+  focusInput() { this.input.focus() }
+
+  /**
+   * Pop out: the panel becomes a floating window over the canvas —
+   * draggable by its header, resizable by its corner (CSS resize), size and
+   * position remembered — so the deck and the chat sit side by side without
+   * narrowing the inspector. The same node moves; nothing about the
+   * conversation changes. Dock it back with the same button.
+   */
+  popOut(persist = true) {
+    if (this.float || !this.dock) return
+    const win = el('div', 'ed-assist-float')
+    const pos = readRect()
+    win.style.left = `${pos.x}px`
+    win.style.top = `${pos.y}px`
+    win.style.width = `${pos.w}px`
+    win.style.height = `${pos.h}px`
+    win.appendChild(this.root)
+    document.body.appendChild(win)
+    this.float = win
+    this.floatB.textContent = '⇲'
+    this.floatB.title = t('Dock to the sidebar')
+    // drag by the header; clamp so the title bar always stays on screen
+    let drag: { dx: number; dy: number } | null = null
+    const head = this.root.querySelector<HTMLElement>('.ed-assist-head')!
+    head.style.cursor = 'move'
+    head.addEventListener('mousedown', (ev) => {
+      if ((ev.target as HTMLElement).closest('button:not(.ed-assist-head)')) return
+      drag = { dx: ev.clientX - win.offsetLeft, dy: ev.clientY - win.offsetTop }
+      ev.preventDefault()
+    })
+    const move = (ev: MouseEvent) => {
+      if (!drag) return
+      const x = Math.min(Math.max(ev.clientX - drag.dx, 0), window.innerWidth - 120)
+      const y = Math.min(Math.max(ev.clientY - drag.dy, 0), window.innerHeight - 40)
+      win.style.left = `${x}px`; win.style.top = `${y}px`
+    }
+    const up = () => { if (drag) { drag = null; saveRect(win) } }
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', up)
+    const ro = new ResizeObserver(() => saveRect(win))
+    ro.observe(win)
+    this.floatCleanup = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); ro.disconnect(); head.style.cursor = '' }
+    if (persist) lsSet('bento-assist-float', 'on')
+    this.onFloatChange?.(true)
+    this.fitInput()
+  }
+
+  private floatCleanup: (() => void) | null = null
+
+  dockBack() {
+    if (!this.float || !this.dock) return
+    this.floatCleanup?.(); this.floatCleanup = null
+    this.dock.appendChild(this.root)
+    this.float.remove()
+    this.float = null
+    this.floatB.textContent = '⇱'
+    this.floatB.title = t('Pop out')
+    lsSet('bento-assist-float', 'off')
+    this.onFloatChange?.(false)
   }
 
   private build() {
@@ -122,7 +230,14 @@ export class AssistantPanel {
     head.className = 'ed-assist-head'
     head.type = 'button'
     head.append(el('span', 'ed-assist-title', t('Assistant')), el('span', 'ed-assist-chev', '▾'))
-    head.addEventListener('click', () => this.setOpen(!this.root.classList.contains('open')))
+    head.addEventListener('click', () => { if (!this.dock) this.setOpen(!this.root.classList.contains('open')) })
+    // pop out / dock back (docked panels only; a drawer has nowhere to go)
+    this.floatB.type = 'button'
+    this.floatB.className = 'ed-assist-pop'
+    this.floatB.textContent = '⇱'
+    this.floatB.title = t('Pop out')
+    this.floatB.addEventListener('click', (ev) => { ev.stopPropagation(); if (this.float) this.dockBack(); else this.popOut() })
+    head.appendChild(this.floatB)
 
     const scope = el('div', 'ed-assist-scope')
     for (const [b, s, label] of [[this.scopeSlide, 'slide', t('This slide')], [this.scopeDeck, 'deck', t('Whole deck')]] as const) {
@@ -142,8 +257,16 @@ export class AssistantPanel {
     this.sendB.className = 'ed-btn ed-btn-primary ed-assist-send'
     this.sendB.textContent = t('Send')
     this.sendB.addEventListener('click', () => { if (this.running) this.stop(); else void this.submit() })
-    // the box grows with what is typed, up to six lines
+    // the box grows with what is typed, up to six lines — unless the user
+    // dragged its handle, then that height is theirs (remembered)
     this.input.addEventListener('input', () => this.fitInput())
+    const savedH = Number(lsGet('bento-assist-input-h'))
+    if (savedH >= 40) { this.input.style.height = `${savedH}px`; this.inputSized = true }
+    this.input.addEventListener('mousedown', () => { this.inputH0 = this.input.offsetHeight })
+    this.input.addEventListener('mouseup', () => {
+      if (this.inputH0 !== null && this.input.offsetHeight !== this.inputH0) { this.inputSized = true; lsSet('bento-assist-input-h', String(this.input.offsetHeight)) }
+      this.inputH0 = null
+    })
     const acts = el('div', 'ed-assist-acts')
     acts.append(scope, this.sendB)
     // clear: the transcript and the history the next turn would carry
@@ -336,7 +459,10 @@ export class AssistantPanel {
     live.append(body, copy)
   }
 
+  private inputSized = false
+  private inputH0: number | null = null
   private fitInput() {
+    if (this.inputSized) return
     this.input.style.height = 'auto'
     const line = 20
     this.input.style.height = `${Math.min(Math.max(this.input.scrollHeight, line * 2), line * 6 + 12)}px`

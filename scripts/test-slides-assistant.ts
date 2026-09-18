@@ -752,6 +752,21 @@ try {
     panel3.clear()
     check('clear: empties the log and hides itself', panel3.root.querySelector('.ed-assist-log').children.length === 0 && panel3.root.querySelector('.ed-assist-clear').hidden)
   }
+  {
+    // docked in a sidebar tab: always open, fills the dock; pop out → a floating window over the body, dock back → the same node returns
+    const store = fakeStore(starterDoc())
+    const dock = document.createElement('div'); dock.className = 'ed-assist-dock'; dock.style.height = '400px'; document.body.appendChild(dock)
+    const events = []
+    const panel = new AssistantPanel({ store, transport: fakeTransport(), dock })
+    panel.onFloatChange = (f) => events.push(f)
+    check('docked: the panel is in the dock, open, marked docked', dock.contains(panel.root) && panel.root.classList.contains('open') && panel.root.classList.contains('ed-assist-docked') && !panel.floating)
+    panel.popOut()
+    const win = document.querySelector('.ed-assist-float')
+    check('pop out: a floating window on the body holds the same node; the dock is empty; the editor was told', !!win && win.contains(panel.root) && dock.children.length === 0 && panel.floating && events.join() === 'true' && localStorage.getItem('bento-assist-float') === 'on')
+    check('pop out: the window has a size and a position on screen', win.offsetWidth >= 280 && win.offsetHeight >= 240 && win.offsetLeft >= 0 && win.offsetTop >= 0)
+    panel.dockBack()
+    check('dock back: the node is in the dock again, the window gone, remembered off', dock.contains(panel.root) && !document.querySelector('.ed-assist-float') && !panel.floating && events.join() === 'true,false' && localStorage.getItem('bento-assist-float') === 'off')
+  }
 } catch (e) { check('probe threw: ' + (e && e.message) + ' ' + (e && e.stack || '').slice(0, 300), false) }
 window.__results = 'BENTO-RESULTS:' + btoa(unescape(encodeURIComponent(JSON.stringify(results)))) + ':END'
 })()
