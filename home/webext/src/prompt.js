@@ -95,10 +95,20 @@ export const QUESTION_PROMPT = `You are the assistant inside Bento Slides, a pre
  * refused op names, the address rule again, and the outline again — a model
  * that misread "sd-title" as an address gets the page's own words back.
  */
-export const correctionPrompt = (skipped, applied, addressed) => {
-  const refused = skipped.length ? `The document refused these: ${skipped.join(', ')}.` : 'The patch changed nothing.'
+export const correctionPrompt = (skipped, applied, addressed, warnings = []) => {
+  const refused = skipped.length ? `The document refused these: ${skipped.join(', ')}.` : applied.length ? '' : 'The patch changed nothing.'
   const kept = applied.length ? ` It applied: ${applied.join(', ')}.` : ''
-  return `${refused}${kept} Addresses look like <slide number>/<element id> — copy them exactly as the outline shows, in the "id" field. Reply with a corrected JSON object only. Here is the outline again:\n${addressed}`
+  const broke = warnings.length ? ` The change would break these: ${warnings.join('; ')} — fix it: a shorter text, a smaller fontSize via "set", or a taller box via "set" h.` : ''
+  const rule = skipped.length || !applied.length ? ' Addresses look like <slide number>/<element id> — copy them exactly as the outline shows, in the "id" field.' : ''
+  return `${refused}${kept}${broke}${rule} Reply with a corrected JSON object only. Here is the outline again:\n${addressed}`
+}
+
+/** A closing line or verify line that merely repeats the request is no note. */
+export const echoesRequest = (line, request) => {
+  const norm = (x) => String(x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  const a = norm(line)
+  const b = norm(request)
+  return !!a && !!b && (a === b || a.startsWith(b) || b.startsWith(a))
 }
 
 /** How many correction turns a model gets after a refused patch. */
@@ -134,7 +144,7 @@ export const verifyCorrection = (missing) => `The change did not satisfy the req
 export const AGENT_TOOLS = [
   { name: 'outline', description: 'The addressed outline of the whole deck: every slide numbered, every text, table cell and chart with its address <slide number>/<element id>.', parameters: { type: 'object', properties: { reason: { type: 'string', description: 'why (optional)' } } } },
   { name: 'slide', description: 'One slide in full as compact JSON, its elements addressed as <n>/<id>. Use it to see geometry, colours and fields before a precise change.', parameters: { type: 'object', properties: { n: { type: 'integer', description: 'the slide number as the outline shows it (1-based)' } }, required: ['n'] } },
-  { name: 'patch', description: 'Try a patch on the deck. Returns what applied, what was refused (with the reason), and the outline after. Nothing is saved until the turn ends; the LAST clean patch is the one kept, so send the complete patch each time.', parameters: { type: 'object', properties: { json: { type: 'string', description: 'the patch as ONE JSON object, serialized — the same shape as a reply' } }, required: ['json'] } },
+  { name: 'patch', description: 'Try a patch on the deck. Returns what applied, what was refused (with the reason), warnings (text that would overflow its box, and the like — fix them: a shorter text, a smaller fontSize via set, or a taller box via set h), and the outline after. Nothing is saved until the turn ends; the LAST patch with nothing refused and no warnings is the one kept, so send the complete patch each time.', parameters: { type: 'object', properties: { json: { type: 'string', description: 'the patch as ONE JSON object, serialized — the same shape as a reply' } }, required: ['json'] } },
 ]
 
 /** How many tool calls one agent turn may make. */

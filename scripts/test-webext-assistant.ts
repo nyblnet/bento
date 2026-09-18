@@ -990,7 +990,15 @@ console.log('\n— the turn over the port: consent first, then the deck is asked
   ok(r.ports[0].out.at(-1).op === 'assistant.document' && r.ports[0].out.at(-1).payload.outline === 'o' && r.sent.length === 0, 'relay: the page\'s answer goes onto that turn\'s port, never onto sendMessage')
   r.deliver({ [CH]: true, dir: 'req', id: 'asst-NOPE', op: 'assistant.document', payload: { outline: 'o' } })
   await settle()
-  ok(r.posted.at(-1).dir === 'res' && r.posted.at(-1).result.ok === false, 'relay: a document for a turn this tab is not streaming is refused')
+  ok(r.sent.at(-1)?.op === 'assistant.document' && r.ports[0].out.filter((m: any) => m.op === 'assistant.document').length === 1, 'relay: a document for a turn this tab is not streaming is not put on any port (it falls through to the worker, which refuses it)')
+  // the page's own reachability probe shares the name assistant.check with the dry-run answer: told apart by id
+  r.deliver({ [CH]: true, dir: 'req', id: 'asst-probe', op: 'assistant.check', payload: {} })
+  await settle()
+  ok(r.sent.at(-1)?.op === 'assistant.check' && r.posted.at(-1).dir === 'res' && r.posted.at(-1).id === 'asst-probe' && r.posted.at(-1).result.ok === true && !r.ports[0].out.some((m: any) => m.op === 'assistant.check'),
+    'relay: assistant.check with a fresh id is the probe → sendMessage, answered with the worker\'s reply (was ok:false with no reason)')
+  r.deliver({ [CH]: true, dir: 'req', id: 'asst-r1', op: 'assistant.check', payload: { applied: [], skipped: [], warnings: ['w'] } })
+  await settle()
+  ok(r.ports[0].out.at(-1).op === 'assistant.check' && r.ports[0].out.at(-1).payload.warnings[0] === 'w', 'relay: assistant.check with the turn\'s id is the dry-run answer → the port')
   r.ports[0].reply({ dir: 'evt', id: 'asst-r1', kind: 'assistant.done', mode: 'edit', ops: { edits: [] }, note: 'n', focus: 'slide' })
   const d = r.posted.at(-1)
   ok(d.kind === 'assistant.done' && d.mode === 'edit' && d.ops.edits.length === 0 && d.note === 'n' && d.focus === 'slide', 'relay: done forwards mode/ops/note/focus')
@@ -1030,6 +1038,21 @@ console.log('\n— the closed loop: dry run, correction, verify')
     ok(ver[0].content === prompt.VERIFY_PROMPT && ver[1].content.includes('Request: change the title') && ver[1].content.includes('after2') && !('response_format' in r.seen[2]), 'verify: one short unconstrained call with the request and the outline after')
     ok(r.done.note === 'changed the title on slide 1', 'the verify line is the note the drawer shows')
     ok(log.some((a) => a[1] === 'dry run refused') && log.some((a) => a[1] === 'verify'), 'the loop is logged under the same tag')
+  }
+  {
+    // a warning from the validator is as binding as a refusal: one correction with the fix instruction
+    const r = await run(cfgOpenai, [GOOD, '{"edits":[{"id":"1/sd-title","text":"Short"}]}', 'OK: shortened'], [
+      { applied: ['edit 1/sd-title'], skipped: [], warnings: ['Text needs 457px but the box is 372px tall — it overflows by 85px'], structural: false, outline: 'a' },
+      { applied: ['edit 1/sd-title'], skipped: [], warnings: [], structural: false, outline: 'b' },
+    ])
+    ok(r.checked.length === 2 && /would break these: Text needs 457px/.test(r.seen[1].messages.at(-1).content) && /smaller fontSize via "set"|taller box/.test(r.seen[1].messages.at(-1).content) && !/refused these/.test(r.seen[1].messages.at(-1).content), 'a patch whose dry run returns a warning gets one correction, with the fix instruction and no talk of refusals')
+    ok(r.done.ops.edits[0].text === 'Short' && r.done.note === 'shortened', 'the patch with no refusals AND no warnings is the one committed')
+  }
+  {
+    // an echoed request is not a note
+    const r = await run(cfgOpenai, [GOOD, 'OK: change the title to something creative'], [{ applied: ['edit 1/sd-title'], skipped: [], structural: false, outline: 'a' }])
+    ok(r.done.note === '', 'a verify line that repeats the request is dropped')
+    ok(prompt.echoesRequest('Change the title to something creative.', 'change the title to something creative') && !prompt.echoesRequest('Changed the title on slide 1', 'change the title to something creative'), 'echoesRequest: same words modulo case and punctuation, not a real note')
   }
   {
     // hosted: verify says MISSING → one more correction, adopted when clean
@@ -1126,6 +1149,18 @@ console.log('\n— the agent loop: tools for hosted models')
     ok(checked.length === 2 && frames.at(-1).kind === 'assistant.done' && JSON.stringify(frames.at(-1).ops) === GOODP, 'agent: both patches were dry-run; the last CLEAN one is committed')
     ok(frames.at(-1).note === 'Shortened the title on slide 2.' && frames.at(-1).mode === 'edit', 'agent: the model\'s closing line is the note')
     ok(log.filter((a) => a[1] === 'agent step').length === 5 && log.some((a) => a[1] === 'agent done'), 'agent: every step is logged')
+  }
+  {
+    // a warning makes a patch not clean; the tool result carries it with the fix
+    const frames: any[] = []
+    const results: any[] = []
+    let n = 0
+    const io = { document: async () => MATERIAL, check: async () => (++n === 1 ? { applied: ['edit 1/t1'], skipped: [], warnings: ['overflows by 85px'], structural: false } : { applied: ['edit 1/t1'], skipped: [], warnings: [], structural: false }) }
+    const steps = [{ calls: [{ name: 'patch', args: { json: '{"edits":[{"id":"1/t1","text":"long"}]}' } }] }, { calls: [{ name: 'patch', args: { json: '{"edits":[{"id":"1/t1","text":"short"}]}' } }] }, { text: 'done' }]
+    const fetchW2 = async (u: string, init: any) => { const b = JSON.parse(init.body); const last = b.messages?.at(-1); if (last?.role === 'tool') results.push(JSON.parse(last.content)); return script(steps)(u, init) }
+    await asst.runTurn(cfgOpenai, turnOf('fix it'), io, (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { t, models: async () => undefined, fetch: fetchW2 })
+    ok(results[0]?.warnings?.[0] === 'overflows by 85px' && /shorter text|smaller fontSize|taller box/.test(results[0].fix), 'agent: the patch tool returns warnings with the fix instruction')
+    ok(frames.at(-1).ops.edits[0].text === 'short', 'agent: the patch with no warnings is the one committed, not the earlier one that applied')
   }
   {
     // the call cap: a model that keeps reading is cut off and asked to finish

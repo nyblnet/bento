@@ -32,7 +32,7 @@
 // fake fetch and a fake storage. background.js supplies the real ones.
 
 import { DEFAULTS, describeHost, hostPortOf, shapeRequest, shapeCheck, shapeModels, parseModels, contextOf, curateModels, errorFrom, streamReply, iterateBody, originOf, shapeToolRequest, parseToolReply } from './providers.js'
-import { validMaterial, buildMessages, responseSchema, parseReply, isPatch, RETRY_NUDGE, ASSUMED_WINDOW_LOCAL, ASSUMED_WINDOW_HOSTED, correctionPrompt, CORRECTIONS, VERIFY_PROMPT, verifyUser, parseVerify, verifyCorrection, AGENT_TOOLS, AGENT_MAX_CALLS, AGENT_PROMPT } from './prompt.js'
+import { validMaterial, buildMessages, responseSchema, parseReply, isPatch, RETRY_NUDGE, ASSUMED_WINDOW_LOCAL, ASSUMED_WINDOW_HOSTED, correctionPrompt, CORRECTIONS, VERIFY_PROMPT, verifyUser, parseVerify, verifyCorrection, echoesRequest, AGENT_TOOLS, AGENT_MAX_CALLS, AGENT_PROMPT } from './prompt.js'
 
 /** `chrome.storage.local` keys. */
 export const CONFIG_KEY = 'assistant'
@@ -512,6 +512,9 @@ export function validCheck(payload) {
   return {
     applied: names(payload.applied),
     skipped: names(payload.skipped),
+    // the validator's fresh findings for the patched deck — an overflowing
+    // text box, say — in its own words; as binding as a refusal
+    warnings: names(payload.warnings),
     structural: payload.structural === true,
     ...(typeof payload.outline === 'string' && payload.outline ? { outline: payload.outline } : {}),
   }
@@ -590,20 +593,24 @@ export async function runTurn(cfg, turn, io, emit, signal, env) {
     // The patch committed is the one that applied most with nothing refused.
     const hosted = cfg.provider !== 'builtin'
     let budget = hosted ? CORRECTIONS.hosted : CORRECTIONS.builtin
-    let best = { ops: parsed.value, result: await io.check?.(parsed.value) }
-    const unhappy = (r) => !!r && (r.skipped.length > 0 || r.applied.length === 0)
+    // every dry-run answer is bounded here too, whatever the caller passed
+    const dryRun = async (ops) => (io.check ? validCheck(await io.check(ops)) : null)
+    let best = { ops: parsed.value, result: await dryRun(parsed.value) }
+    const faults = (r) => r.skipped.length + r.warnings.length
+    const unhappy = (r) => !!r && (faults(r) > 0 || r.applied.length === 0)
     const better = (a, b) => (!a.result ? false : !b.result ? true
-      : (a.result.skipped.length === 0) !== (b.result.skipped.length === 0) ? a.result.skipped.length === 0
+      : (faults(a.result) === 0) !== (faults(b.result) === 0) ? faults(a.result) === 0
+      : faults(a.result) !== faults(b.result) ? faults(a.result) < faults(b.result)
       : a.result.applied.length > b.result.applied.length)
     let last = best
     let thread = [...built.messages]
     while (unhappy(last.result) && budget > 0 && !signal.aborted) {
       budget--
-      log('dry run refused', last.result.skipped, 'applied', last.result.applied, '— correcting')
-      thread = [...thread, { role: 'assistant', content: JSON.stringify(last.ops) }, { role: 'user', content: correctionPrompt(last.result.skipped, last.result.applied, material.addressed) }]
+      log('dry run refused', last.result.skipped, 'warnings', last.result.warnings, 'applied', last.result.applied, '— correcting')
+      thread = [...thread, { role: 'assistant', content: JSON.stringify(last.ops) }, { role: 'user', content: correctionPrompt(last.result.skipped, last.result.applied, material.addressed, last.result.warnings) }]
       const again = await askPatch(thread)
       if (again.kind !== 'json') break
-      last = { ops: again.value, result: await io.check?.(again.value) }
+      last = { ops: again.value, result: await dryRun(again.value) }
       if (better(last, best)) best = last
     }
     if (signal.aborted) return
@@ -616,17 +623,19 @@ export async function runTurn(cfg, turn, io, emit, signal, env) {
       const v = await complete(cfg, [{ role: 'system', content: VERIFY_PROMPT }, { role: 'user', content: verifyUser(turn.request, best.result.outline) }], () => {}, signal, env, undefined)
       log('verify', v)
       const verdict = parseVerify(v)
-      note = verdict.line
+      // a verify line that only repeats the request says nothing
+      note = echoesRequest(verdict.line, turn.request) ? '' : verdict.line
       if (!verdict.ok && !signal.aborted) {
         const again = await askPatch([...thread, { role: 'assistant', content: JSON.stringify(best.ops) }, { role: 'user', content: verifyCorrection(verdict.line) }])
         if (again.kind === 'json') {
-          const fixed = { ops: again.value, result: await io.check?.(again.value) }
-          if (fixed.result && fixed.result.skipped.length === 0 && fixed.result.applied.length > 0) best = fixed
+          const fixed = { ops: again.value, result: await dryRun(again.value) }
+          if (fixed.result && faults(fixed.result) === 0 && fixed.result.applied.length > 0) best = fixed
         }
       }
     }
     if (signal.aborted) return
-    emit('assistant.done', { mode: 'edit', ops: best.ops, note: [outlineOnly, note || parsed.note].filter(Boolean).join(' '), focus: built.focus })
+    const lead = parsed.note && !echoesRequest(parsed.note, turn.request) ? parsed.note : ''
+    emit('assistant.done', { mode: 'edit', ops: best.ops, note: [outlineOnly, note || lead].filter(Boolean).join(' '), focus: built.focus })
   } catch (e) {
     if (signal.aborted || e?.name === 'AbortError') return
     emit('assistant.error', { reason: String(e?.message || e), ...(e?.code ? { code: e.code } : {}) })
@@ -668,7 +677,7 @@ export async function runAgent(cfg, turn, material, built, io, signal, env, log)
     const reply = await step()
     if (reply === null) { log('agent: no tools here, one shot instead'); return null }
     log('agent step', reply.calls.map((c) => c.name).join(',') || 'text', reply.text)
-    if (!reply.calls.length) { note = reply.text.trim(); break }
+    if (!reply.calls.length) { note = echoesRequest(reply.text, turn.request) ? '' : reply.text.trim(); break }
     thread.push({ role: 'assistant', content: reply.text, calls: reply.calls })
     for (const c of reply.calls) {
       calls++
@@ -686,13 +695,17 @@ export async function runAgent(cfg, turn, material, built, io, signal, env, log)
         if (parsed.kind !== 'json' || !isPatch(parsed.value)) {
           result = 'Not a patch: send ONE JSON object with the operation keys described.'
         } else {
-          const check = await io.check(parsed.value)
+          const check = validCheck(await io.check(parsed.value))
           if (!check) result = 'The document did not answer.'
           else {
-            const ok = check.skipped.length === 0 && check.applied.length > 0
+            const ok = check.skipped.length === 0 && check.warnings.length === 0 && check.applied.length > 0
             if (ok) clean = parsed.value
             else if (check.applied.length > 0 && !clean) fallback = parsed.value
-            result = JSON.stringify({ applied: check.applied, refused: check.skipped, ...(check.outline ? { outlineAfter: check.outline } : {}) })
+            result = JSON.stringify({
+              applied: check.applied, refused: check.skipped, warnings: check.warnings,
+              ...(check.warnings.length ? { fix: 'the change would break these — a shorter text, a smaller fontSize via set, or a taller box via set h — and call patch again' } : {}),
+              ...(check.outline ? { outlineAfter: check.outline } : {}),
+            })
           }
         }
       } else {

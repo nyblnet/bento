@@ -107,13 +107,16 @@ window.addEventListener('message', async (ev) => {
     // the page's assistant client and gets nothing.
     if (typeof d.id !== 'string' || !d.id.startsWith(ASSISTANT_ID)) return
     if (d.op === 'assistant.send' || d.op === 'assistant.turn') return streamTurn(d)
-    if (d.op === 'assistant.document' || d.op === 'assistant.check') {
+    if ((d.op === 'assistant.document' || d.op === 'assistant.check') && streams.has(d.id)) {
       // The page's answer to the extension's ask (the material, or a dry
-      // run of a patch), for a turn this tab is streaming: onto that turn's
-      // port, never onto sendMessage.
+      // run of a patch) — recognised by the TURN's id, since `assistant.check`
+      // is also the name of the page's own reachability probe: that one
+      // carries a fresh id and falls through to sendMessage below. (Routing
+      // every assistant.check here answered the probe ok:false with no
+      // reason.)
       const port = streams.get(d.id)
-      if (port) { try { port.postMessage({ op: d.op, id: d.id, payload: d.payload }) } catch { /* closed */ } }
-      post({ dir: 'res', id: d.id, result: { ok: !!port } })
+      try { port.postMessage({ op: d.op, id: d.id, payload: d.payload }) } catch { /* closed */ }
+      post({ dir: 'res', id: d.id, result: { ok: true } })
       return
     }
     if (d.op === 'assistant.abort') {
