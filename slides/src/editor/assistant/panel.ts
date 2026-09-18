@@ -488,7 +488,14 @@ export class AssistantPanel {
     // the material is built when the extension asks for it (after consent),
     // from the live document; the elision map stays here for the apply
     let elided: Elided | null = null
-    const supply = () => { const m = material(this.store.doc, this.focus()); elided = m.elided; return m.material as unknown as Record<string, unknown> }
+    // `slide` = an agent loop's slide(n) tool: that slide as the focus
+    // instead of the user's selection; the elision map is the same document
+    const supply = (slide?: number) => {
+      const n = this.store.doc.slides.length
+      const f = slide && slide <= n ? { index: slide - 1, selection: [] } : this.focus()
+      const m = material(this.store.doc, f); elided = m.elided
+      return m.material as unknown as Record<string, unknown>
+    }
     // the dry run the extension may ask for: what a candidate patch would
     // do, and the addressed outline after it — nothing committed
     const check = (ops: Record<string, unknown>) => {

@@ -462,6 +462,20 @@ await (async () => {
   await tick()
   const dq = seenReqs.find((f) => f.op === 'assistant.document')!
   ok(!!dq && dq.id === turnId && (dq.payload as Obj).addressed === 'A' && (dq.payload as Obj).outline === 'O', 'asked, the page answers assistant.document on the same id with the material')
+  {
+    const asked: unknown[] = []
+    let sid = ''
+    const matS = (slide?: number) => { asked.push(slide); return { outline: 'O', addressed: 'A', open: slide ?? 1, size: { width: 1280, height: 720 }, focus: null } }
+    const keep = w.handler
+    w.handler = (f) => { if (f.op === 'assistant.turn') { sid = f.id; w.res(f.id, { ok: true }) } if (f.op === 'assistant.document') w.res(f.id, { ok: true }) }
+    const ps = tr.turn('x', [], { index: 0, selection: [] }, matS, () => {}, new AbortController().signal)
+    await tick()
+    w.evt(sid, 'assistant.document', { slide: 3 }); w.evt(sid, 'assistant.document', {}); w.evt(sid, 'assistant.document', { slide: 0 }); w.evt(sid, 'assistant.document', { slide: '2' })
+    await tick()
+    ok(JSON.stringify(asked) === '[3,null,null,null]', 'document with slide:n asks the material for THAT slide (the slide(n) tool); absent, 0 or a string = the user\'s focus')
+    w.evt(sid, 'assistant.done', { mode: 'ask', text: 'ok' }); await ps
+    w.handler = keep
+  }
   w.evt(turnId, 'assistant.chunk', { text: 'Hel' })
   w.evt(turnId, 'assistant.chunk', { text: 'lo' })
   w.evt('some-other-id', 'assistant.chunk', { text: 'NOISE' })
@@ -797,6 +811,15 @@ try {
       panel3.root.querySelector('.ed-assist-input').value = 'try'
       await panel3.submit(); await tick(30)
       check('dry run: reports what would land and what would be refused, with the outline after — and commits nothing', !!dry && dry.applied.length === 1 && dry.applied[0] === 'edit sd-title' && dry.skipped[0] === 'edit nope' && /\\[1\\/sd-title\\] .*X/.test(dry.outline) && store3.replaced === 0)
+      const store4 = fakeStore(starterDoc())
+      let got = null
+      const tr4 = fakeTransport({ turn: async (request, history, focus, material) => { got = [material(3).focus, material(99).focus, material().focus]; return { mode: 'ask', text: 'ok' } } })
+      const panel4 = new AssistantPanel({ store: store4, transport: tr4 })
+      document.body.appendChild(panel4.root)
+      panel4.setOpen(true, false); await tick(60)
+      panel4.root.querySelector('.ed-assist-input').value = 'what is on slide 3?'
+      await panel4.submit(); await tick(30)
+      check('slide(n): the panel supplies slide 3 as the focus on request; past the end or absent = the open slide', !!got && got[0].kind === 'slide' && /slide 3 \\(/.test(got[0].label) && /slide 1 \\(/.test(got[1].label) && /slide 1 \\(/.test(got[2].label))
     }
     const store2 = fakeStore(starterDoc())
     const tr1 = fakeTransport({ turn: async () => ({ mode: 'edit', text: 'Still just prose, sorry.' }) })

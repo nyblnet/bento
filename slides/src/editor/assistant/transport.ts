@@ -85,9 +85,12 @@
 //                                                     of the document leaves before it holds)
 //                        | res { ok:false, reason, code? }   refused (not configured, offline, denied …)
 //                        then the extension ASKS for the material:
-//                        evt { kind:'assistant.document', id }
+//                        evt { kind:'assistant.document', id, slide? }
 //                        and the page answers on the same id:
 //                        req { op:'assistant.document', id, payload: <Material> }
+//                        `slide` (1-based) asks for the material with THAT slide as the
+//                        focus (its elements in full) instead of the user's selection —
+//                        the `slide(n)` tool of an agent loop; absent = the user's focus.
 //                        The extension may then CHECK a patch before it commits to it —
 //                        the closed loop: a model's first patch is often almost right,
 //                        and only the page can say which address did not resolve:
@@ -190,7 +193,7 @@ export interface AssistantTransport {
    * Error whose `name` is 'AbortError' when `signal` fired, or an
    * AssistantError (with `code`) otherwise.
    */
-  turn(request: string, history: Turn[], focus: { index: number; selection: string[] }, material: () => Record<string, unknown>, onChunk: (text: string) => void, signal: AbortSignal, check?: (ops: Record<string, unknown>) => Record<string, unknown>): Promise<TurnResult>
+  turn(request: string, history: Turn[], focus: { index: number; selection: string[] }, material: (slide?: number) => Record<string, unknown>, onChunk: (text: string) => void, signal: AbortSignal, check?: (ops: Record<string, unknown>) => Record<string, unknown>): Promise<TurnResult>
   /** ask the host to show where the endpoint and key are configured */
   openSettings(): Promise<void>
 }
@@ -325,7 +328,7 @@ export class ExtensionTransport implements AssistantTransport {
     return { ok: false, reason: String(r.reason ?? 'unknown'), ...(code ? { code } : {}) }
   }
 
-  turn(request: string, history: Turn[], focus: { index: number; selection: string[] }, material: () => Record<string, unknown>, onChunk: (text: string) => void, signal: AbortSignal, check?: (ops: Record<string, unknown>) => Record<string, unknown>): Promise<TurnResult> {
+  turn(request: string, history: Turn[], focus: { index: number; selection: string[] }, material: (slide?: number) => Record<string, unknown>, onChunk: (text: string) => void, signal: AbortSignal, check?: (ops: Record<string, unknown>) => Record<string, unknown>): Promise<TurnResult> {
     this.listen()
     const id = mintId()
     return new Promise<TurnResult>((resolve, reject) => {
@@ -349,7 +352,8 @@ export class ExtensionTransport implements AssistantTransport {
         if (f.kind === 'assistant.document') {
           // the extension asks for the deck (consent holds): answer on the
           // same id. The material is built NOW, from the live document.
-          void this.request('assistant.document', material(), id)
+          const slide = typeof f.slide === 'number' && Number.isInteger(f.slide) && f.slide >= 1 ? f.slide : undefined
+          void this.request('assistant.document', material(slide), id)
         } else if (f.kind === 'assistant.check') {
           // a dry run of a candidate patch, answered on the same id; a
           // frame without an object, or a page without a checker, answers
