@@ -42,9 +42,9 @@
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { compactDoc, expandDoc } from '../slides/src/compact.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
-import { applyWordEdits, approxTokens, ASSUMED_WINDOW_HOSTED, ASSUMED_WINDOW_LOCAL, buildMessages, elideDoc, isQuestion, mergeReply, outlineDeck, parseReply, QUESTION_PROMPT, responseSchema, SYSTEM_PROMPT, WORDS_HISTORY, WORDS_PROMPT, WORDS_SCHEMA } from '../slides/src/editor/assistant/prompt.ts'
+import { applyWordEdits, approxTokens, ASSUMED_WINDOW_LOCAL, buildMessages, EDIT_PROMPT, elideDoc, isQuestion, mergeReply, OBJECT_SCHEMA, outlineDeck, parseReply, QUESTION_PROMPT, responseSchema, WORDS_HISTORY } from '../slides/src/editor/assistant/prompt.ts'
 import { CH, CODE_RE, CONTEXT_MAX, CONTEXT_MIN, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
-import { ADD_MAX, applyOps, OPS_PROMPT, OPS_SCHEMA } from '../slides/src/editor/assistant/ops.ts'
+import { ADD_MAX, applyOps, INSERT_MAX, OPS_PROMPT, OPS_SCHEMA } from '../slides/src/editor/assistant/ops.ts'
 import { dedupeIds, cleanDoc, ID_RE } from '../slides/src/editor/assistant/prompt.ts'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -88,27 +88,36 @@ console.log('\nprompt.ts — what leaves the page')
   ok((e.doc.slides as Obj[]).every((s) => !('comments' in s)) && (e.doc.slides as Obj[])[0].notes === doc.slides[0].notes,
     'D — comments (reviewer names) stay out; speaker notes go')
 
-  const { messages, elided } = buildMessages(doc, 'slide', 1, [], 'Make the title bolder')
+  // an EDIT turn: the addressed outline of the whole deck + the focus (the open slide) in full
+  const { messages, elided, focus } = buildMessages(doc, { index: 1, selection: [] }, [], 'Make the title bolder')
   const all = messages.map((m) => m.content).join('\n')
-  ok(messages[0].role === 'system' && messages[0].content === SYSTEM_PROMPT, 'the first message is the system prompt')
+  ok(messages[0].role === 'system' && messages[0].content === EDIT_PROMPT, 'the first message is the edit prompt')
   ok(CONTEXT_MIN === 1000 && CONTEXT_MAX === 10_000_000, 'the window bound the page believes: 1k–10M')
   ok(!all.includes(SECRET) && !all.includes(PRIV) && !all.includes(PIXELS), 'no key, private key or asset bytes in any message')
-  ok(all.includes('Scope: slide (slide 2 of') && all.includes(`id "${doc.slides[1].id}"`), 'slide scope names the open slide')
-  ok(!all.includes(`"id":"${doc.slides[0].id}"`), 'slide scope does not carry the other slides')
+  ok(all.includes('Deck outline, addressed (slide 2 is open') && doc.slides.every((s) => all.includes(`(id "${s.id}")`)), 'the outline names every slide, and which is open')
+  ok(focus === 'slide' && all.includes(`Focus — slide 2 (id "${doc.slides[1].id}") in full`) && all.includes('"elements":['), 'the focus is the open slide, as compact JSON')
+  ok(!all.includes(`"id":"${doc.slides[0].id}"`), 'the other slides go as outline only, never as JSON')
   ok(elided.assets.length === 1, 'the elision map rides along for the apply')
 
-  const deck = buildMessages(doc, 'deck', 0, [{ role: 'user', text: 'earlier' }, { role: 'assistant', text: 'reply' }], 'Add a closing slide')
-  const dtext = deck.messages.map((m) => m.content).join('\n')
-  ok(dtext.includes('Scope: deck (') && doc.slides.every((s) => dtext.includes(`"id":"${s.id}"`)), 'deck scope carries every slide')
-  ok(deck.messages.length === 4 && deck.messages[1].content === 'earlier' && deck.messages[2].role === 'assistant', 'history turns sit between system and the request')
+  // with a selection the focus is the selected elements
+  const selId = doc.slides[1].elements[0].id
+  const sel = buildMessages(doc, { index: 1, selection: [selId, 'no-such-id'] }, [], 'Make this bigger')
+  const st = sel.messages.at(-1)!.content
+  ok(sel.focus === 'elements' && st.includes('Focus — the selected element on slide 2') && st.includes(`"id":"${selId}"`) && !st.includes('Focus — slide 2'), 'a selected element is the focus, addressed 2/<id>; ids that are not on the slide are ignored')
+  const sel2 = buildMessages(doc, { index: 1, selection: doc.slides[1].elements.slice(0, 2).map((x) => x.id) }, [], 'Align these')
+  ok(sel2.focus === 'elements' && sel2.messages.at(-1)!.content.includes('the 2 selected elements on slide 2'), 'two selected elements: both go')
+
+  const withHist = buildMessages(doc, { index: 0, selection: [] }, [{ role: 'user', text: 'earlier' }, { role: 'assistant', text: 'reply' }], 'Add a closing slide')
+  ok(withHist.messages.length === 4 && withHist.messages[1].content === 'earlier' && withHist.messages[2].role === 'assistant', 'history turns sit between system and the request')
   const long = Array.from({ length: 20 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: `t${i}` }))
-  ok(buildMessages(doc, 'deck', 0, long, 'x').messages.length === 1 + 8 + 1, 'history is capped at the last 8 turns')
-  ok(!deck.question && !buildMessages(doc, 'slide', 1, [], 'Make the title bolder').question, 'an instruction is an edit turn')
+  ok(buildMessages(doc, { index: 0, selection: [] }, long, 'x').messages.length === 1 + 8 + 1, 'history is capped at the last 8 turns')
+  ok(!withHist.question && withHist.mode === 'edit', 'an instruction is an edit turn')
+  ok(withHist.messages.at(-1)!.content.trimEnd().endsWith('Add a closing slide'), 'the request comes last')
 }
 
-// A question sends an OUTLINE (words + notes), never the JSON, and asks for
-// prose — measured against the starter deck, the deck a fresh build opens
-// with, because the on-device model's window is what made this matter.
+// A question sends the plain OUTLINE (words + notes), never JSON, and asks
+// for prose — measured against the starter deck, the deck a fresh build
+// opens with, because the on-device model's window is what made this matter.
 console.log('\nprompt.ts — a question turn')
 {
   for (const q of ['Summarise this deck', 'summarize the deck in three bullets', 'What is slide 4 about?', 'Is the tone consistent', 'How many slides mention revenue?', 'Give me feedback on the opening', 'Can you explain the charts slide', 'tell me what changed', 'Which slide should I cut?', 'Any suggestions for the closing slide', 'review the notes for typos'])
@@ -117,9 +126,9 @@ console.log('\nprompt.ts — a question turn')
     ok(!isQuestion(e), `edit: ${e}`)
 
   const starter = starterDoc()
-  const asked = buildMessages(starter, 'deck', 2, [], 'Summarise this deck')
+  const asked = buildMessages(starter, { index: 2, selection: [] }, [], 'Summarise this deck')
   const askedText = asked.messages.map((m) => m.content).join('\n')
-  ok(asked.question && asked.messages[0].content === QUESTION_PROMPT, 'a question turn uses the question prompt')
+  ok(asked.question && asked.mode === 'ask' && asked.focus === 'none' && asked.messages[0].content === QUESTION_PROMPT, 'a question turn uses the question prompt and carries no focus')
   ok(!askedText.includes('"elements"') && !askedText.includes('"compact"'), 'no JSON goes out on a question')
   ok(askedText.includes('Slide 1 (id "') && askedText.includes(`Slide ${starter.slides.length} (id "`), 'the outline numbers every slide')
   const firstWords = String((starter.slides[0].elements.find((e) => e.type === 'text') as { html?: string } | undefined)?.html ?? '').replace(/<[^>]*>/g, '').trim().split(/\s+/).slice(0, 3).join(' ')
@@ -127,29 +136,23 @@ console.log('\nprompt.ts — a question turn')
   ok(/notes: /.test(askedText), 'and the speaker notes')
   ok(/- chart: /.test(askedText), 'a chart is outlined as its series and numbers')
   ok(!/"x":|"fontSize"|"fill":/.test(askedText), 'geometry and styling stay out of an outline')
-  const asJson = buildMessages(starter, 'deck', 2, [], 'Add a closing slide')
-  const jsonTokens = approxTokens(asJson.messages.at(-1)!.content)
-  ok(asked.contextTokens < jsonTokens / 4, `the outline is under a quarter of the JSON (${asked.contextTokens} vs ${jsonTokens} tokens)`)
-  const askedLocal = buildMessages(starter, 'deck', 2, [], 'Summarise this deck', { local: true })
+  ok(!/\[\d+\//.test(askedText), 'a question outline carries no addresses')
+  const deckJson = approxTokens(JSON.stringify(compactDoc(starter)))
+  ok(asked.contextTokens < deckJson / 4, `the outline is under a quarter of the deck's JSON (${asked.contextTokens} vs ${deckJson} tokens) — the JSON never goes out`)
+  const askedLocal = buildMessages(starter, { index: 2, selection: [] }, [], 'Summarise this deck', { local: true })
   ok(askedLocal.fits && askedLocal.window === ASSUMED_WINDOW_LOCAL, `the starter deck's outline fits the assumed on-device window (${askedLocal.contextTokens} in ${ASSUMED_WINDOW_LOCAL})`)
-  ok(asJson.mode === 'json' && asJson.fits && asJson.window === ASSUMED_WINDOW_HOSTED, `a hosted model with no stated window is assumed large: the JSON goes (${asJson.contextTokens} in ${ASSUMED_WINDOW_HOSTED})`)
   ok(asked.messages.at(-1)!.content.trimEnd().endsWith('Summarise this deck'), 'a question turn ends with the question')
-  const one = buildMessages(starter, 'slide', 2, [], 'What is this slide about?')
-  const oneText = one.messages.at(-1)!.content
-  ok(oneText.includes('Scope: slide 3 of') && oneText.includes('Slide 3 (id "') && !oneText.includes('Slide 4 (id "'), 'slide scope outlines just the open slide')
   ok(outlineDeck({ title: 'T', slides: [{ id: 'a', elements: [{ type: 'text', html: '<p>Hello&nbsp;<b>world</b></p>' }, { type: 'table', rows: [{ cells: [{ html: 'a' }, { html: 'b' }] }] }] }] }).includes('- Hello world') , 'html is reduced to its words')
 }
 
-// On an on-device model an EDIT is a WORDS turn: the outline with ids goes
-// out, a {"edits":[{id,text}]} patch comes back and is applied to the
-// elided compact doc, which then takes the same road as a JSON reply.
-console.log('\nprompt.ts — a words turn (on-device model)')
+// The addressed outline: every text as <slide number>/<id>, the id being
+// the one the loader answers to — and ids REPEAT across slides (the morph
+// idiom), which is why the slide number is part of the address.
+console.log('\nprompt.ts — the addressed outline')
 {
   const starter = starterDoc()
-  const w = buildMessages(starter, 'slide', 0, [], 'Change the title to something more creative', { local: true })
-  ok(w.mode === 'words' && !w.question && w.messages[0].content === WORDS_PROMPT, 'an edit on a local model is a words turn with the words prompt')
+  const w = buildMessages(starter, { index: 0, selection: [] }, [], 'Change the title to something more creative', { local: true })
   const wt = w.messages.at(-1)!.content
-  ok(!wt.includes('"elements"'), 'no JSON goes out')
   const idRe = /^  - \[1\/([^\]]+)\] /m
   const m = idRe.exec(wt)
   ok(!!m, 'each text carries <slide number>/<id> in brackets')
@@ -160,11 +163,12 @@ console.log('\nprompt.ts — a words turn (on-device model)')
   const expectId = `1/${bareId}`
   ok(m?.[1] === bareId, `the id is the one the loader answers to (${m?.[1]}) — own id, or the minted <slide>-text-<index>`)
   ok(starter.slides.filter((s) => s.elements.some((e) => e.id === bareId)).length > 1, 'that id repeats across slides (the morph idiom) — which is why the slide number is part of the address')
-  ok(w.fits && w.jsonTokens * 2 > w.window && w.contextTokens < w.window, `slide 1 of the starter deck fits the on-device window as words (${w.contextTokens}) where its JSON (${w.jsonTokens}, ×2 for the reply) did not`)
-  ok(buildMessages(starter, 'slide', 0, [], 'Change the title', { local: false }).mode === 'json', 'a hosted model keeps the JSON path')
-  ok(buildMessages(starter, 'deck', 0, [], 'Summarise it', { local: true }).mode === 'ask', 'a question on a local model is still a question')
+  ok(w.mode === 'edit' && w.fits && w.focus === 'none', `on the assumed on-device window slide 1's JSON does not fit beside the outline: outline only (${w.contextTokens} tokens)`)
+  ok(!wt.includes('Focus —') && !wt.includes('"elements":['), 'and no JSON went')
+  const hosted = buildMessages(starter, { index: 0, selection: [] }, [], 'Change the title', { local: false })
+  ok(hosted.focus === 'slide' && hosted.messages.at(-1)!.content.includes('Focus — slide 1'), 'a hosted model gets the focus in full')
 
-  // apply: the patch names a real text, an unknown id and a non-text
+  // the wording half of the patch, applied and loaded
   const { elided } = w
   const patched = applyWordEdits(elided.doc, [{ id: expectId, text: 'A **bolder** title' }, { id: 'no-such-element', text: 'x' }, { id: 12, text: 'y' }, { id: expectId }])
   ok(patched.applied.length === 1 && patched.applied[0] === expectId, 'the real text is applied')
@@ -175,8 +179,8 @@ console.log('\nprompt.ts — a words turn (on-device model)')
   const pel = ((patched.doc.slides as Obj[])[0].elements as Obj[])[firstText]
   ok(pel.md === 'A **bolder** title' && !('html' in pel), 'the element gets md and loses html')
   ok(JSON.stringify(elided.doc) !== JSON.stringify(patched.doc) && ((elided.doc.slides as Obj[])[0].elements as Obj[])[firstText].md === undefined, 'the elided doc itself is untouched (a copy was patched)')
-  const merged = mergeReply(starter, 'slide', 0, (patched.doc.slides as Obj[])[0], elided)
-  ok(!!merged, 'the patched slide merges like a JSON reply')
+  const merged = mergeReply(starter, patched.doc, elided)
+  ok(!!merged, 'the patched deck merges')
   const full = expandDoc(JSON.parse(merged!))
   const fel = full.slides[0].elements.find((e) => e.id === bareId) as { html?: string } | undefined
   ok(!!fel && /<(b|strong)>bolder<\/(b|strong)>/.test(fel.html ?? '') && /A .*title/.test(fel.html ?? ''), `the loader renders the markdown (${fel?.html})`)
@@ -200,15 +204,12 @@ console.log('\nops.ts — the ops patch')
       { id: 'd', elements: [{ id: 'only', type: 'text', html: 'Unique' }] },
     ],
   })
-  // a window too small even for the outline: the mode is still words (the panel refuses on `fits`), and the outline is what we inspect
-  const outlineB = buildMessages(expandDoc(fixture()), 'slide', 1, [], 'Change it', { contextTokens: 100 })
+  const outlineB = buildMessages(expandDoc(fixture()), { index: 1, selection: [] }, [], 'Change it')
   const ob = outlineB.messages.at(-1)!.content
-  ok(outlineB.mode === 'words' && /\[2\/tbl\] table: r1c1: Q \| r1c2: Sales \/ r2c1: Q1 \| r2c2: 10/.test(ob), 'the addressed outline lists a table cell by cell as r<row>c<col>')
-  const outlineC = buildMessages(expandDoc(fixture()), 'slide', 2, [], 'Change it', { contextTokens: 100 }).messages.at(-1)!.content
-  ok(/\[3\/ch\] chart: Sales \[1, 2\]; Cost \[3, 4\] over Q1, Q2/.test(outlineC), 'and a chart by its series, numbers and categories')
-  ok(outlineB.messages[0].content === OPS_PROMPT && /"notes"/.test(OPS_PROMPT) && /"add"/.test(OPS_PROMPT) && /"move"/.test(OPS_PROMPT), 'a words turn carries the ops prompt')
-  ok(approxTokens(OPS_PROMPT) < 700, `the ops prompt is short enough for a small window (${approxTokens(OPS_PROMPT)} tokens)`)
-  ok(Object.keys(OPS_SCHEMA.properties as Obj).join(',') === 'edits,notes,cells,chart,style,add,remove,move', 'the schema names the eight ops')
+  ok(outlineB.mode === 'edit' && /\[2\/tbl\] table: r1c1: Q \| r1c2: Sales \/ r2c1: Q1 \| r2c2: 10/.test(ob), 'the addressed outline lists a table cell by cell as r<row>c<col>')
+  ok(/\[3\/ch\] chart: Sales \[1, 2\]; Cost \[3, 4\] over Q1, Q2/.test(ob), 'and a chart by its series, numbers and categories')
+  ok(outlineB.messages[0].content === OPS_PROMPT && /"notes"/.test(OPS_PROMPT) && /"add"/.test(OPS_PROMPT) && /"move"/.test(OPS_PROMPT) && /"set"/.test(OPS_PROMPT) && /"insert"/.test(OPS_PROMPT), 'an edit turn carries the ops prompt, words verbs and precise verbs alike')
+  ok(approxTokens(OPS_PROMPT) < 1000, `the ops prompt leaves room in a small window (${approxTokens(OPS_PROMPT)} tokens)`)
 
   const r = applyOps(fixture(), {
     edits: [{ id: '1/t', text: 'Title **A2**' }, { id: 'only', text: 'Unique2' }, { id: 'k', text: 'ambiguous' }],
@@ -260,87 +261,107 @@ console.log('\nops.ts — the ops patch')
   ok((many.doc.slides as Obj[]).length === 4 + ADD_MAX && many.skipped.length === 3, `at most ${ADD_MAX} slides per reply`)
   const nothing = applyOps(fixture(), { bogus: [1], edits: 'x' })
   ok(nothing.applied.length === 0 && !nothing.structural && JSON.stringify(nothing.doc) === JSON.stringify(fixture()), 'unknown keys and non-list values change nothing')
+
+  // the precise verbs: set / insert / delete / slide, and a designed add
+  const pr = applyOps(fixture(), {
+    set: [{ id: '1/t', x: 200, fill: '#123456', fontSize: 18, md: 'Set **here**', id2: 'ignored', type: 'image', collab: { key: 'X' }, __proto__: { pwn: 1 }, fontWeight: null }, { id: '2/tbl', columns: [2, 1] }, { id: 'k', x: 1 }, { id: 'nope', x: 1 }, { id: '1/k' }],
+    insert: [{ slide: 1, type: 'shape', shape: 'ellipse', x: 100, y: 100, w: 50, h: 50, fill: 'red', id: 'forced', docId: 'z' }, { slide: 1, x: 1 }, { slide: 9, type: 'text' }],
+    delete: ['4/only', '1/nope', 'k'],
+    slide: [{ slide: 3, background: '#000', transition: 'morph', hidden: true, notes: 'n3', id: 'renamed', elements: [], layout: 7 }, { slide: 42, background: '#fff' }, { slide: 1 }],
+    add: [{ after: 4, layout: 'blank', elements: [{ type: 'text', x: 96, y: 96, w: 500, h: 80, html: 'Designed', id: 'keep-me', collab: 1 }, 'junk', { x: 1 }] }],
+  })
+  const ps = pr.doc.slides as Obj[]
+  const pt = (ps[0].elements as Obj[]).find((e) => e.id === 't')!
+  ok(pr.applied.includes('set 1/t') && pt.x === 200 && pt.fill === '#123456' && pt.fontSize === 18 && pt.md === 'Set **here**' && !('html' in pt), 'set: fields merge onto the addressed element; md replaces html')
+  ok(pt.type === 'text' && pt.id === 't' && !('collab' in pt) && !('id2' in pt) === false && !('pwn' in pt) && !Object.prototype.hasOwnProperty.call(pt, '__proto__'), 'set: id, type, collab and __proto__ never land (an unknown field like id2 does — the gate judges it)')
+  ok(!('fontWeight' in pt), 'set: null deletes a field')
+  ok(JSON.stringify((ps[1].elements as Obj[]).find((e) => e.id === 'tbl')!.columns) === '[2,1]', 'set: works on any element type (a table\'s columns)')
+  ok(pr.skipped.includes('set k') && pr.skipped.includes('set nope') && pr.skipped.includes('set 1/k'), 'set: ambiguous, unknown, and nothing-to-set are skipped')
+  const ins = (ps[0].elements as Obj[]).find((e) => e.type === 'shape')!
+  ok(pr.applied.includes('insert shape on 1') && ins.shape === 'ellipse' && ins.fill === 'red' && typeof ins.id === 'string' && ins.id !== 'forced' && !('docId' in ins) && !('slide' in ins), 'insert: the element lands on the slide with a fresh id; a supplied id and docId are dropped')
+  ok(pr.skipped.includes('insert ?') && pr.skipped.includes('insert text'), 'insert: no type, or a slide that is not there → skipped')
+  ok(pr.applied.includes('delete 4/only') && (ps[3].elements as Obj[]).length === 0 && pr.skipped.includes('delete 1/nope') && pr.skipped.includes('delete k'), 'delete: removes the addressed element; unknown and ambiguous skipped')
+  ok(pr.applied.includes('slide 3') && ps[2].background === '#000' && ps[2].transition === 'morph' && ps[2].hidden === true && ps[2].notes === 'n3' && ps[2].id === 'c' && Array.isArray(ps[2].elements) && (ps[2].elements as Obj[]).length === 2 && !('layout' in ps[2]), 'slide: whitelisted fields only — id, elements and a non-string layout never land')
+  ok(pr.skipped.includes('slide 42') && pr.skipped.includes('slide 1'), 'slide: out of range, or nothing to set → skipped')
+  const designed = ps[ps.length - 1]
+  ok(pr.applied.includes('add blank after 4') && (designed.elements as Obj[]).length === 1 && (designed.elements as Obj[])[0].html === 'Designed' && (designed.elements as Obj[])[0].id === 'keep-me' && !('collab' in (designed.elements as Obj[])[0]), 'add with elements: a designed slide carries its full elements (junk and typeless dropped, collab stripped, the id kept for the loader to check)')
+  const pfull = expandDoc(pr.doc)
+  ok(pfull.slides.length === 5 && (pfull.slides[0].elements.find((e) => e.id === 't') as { x: number }).x === 200 && pfull.slides[4].elements.some((e) => (e as Obj).html === 'Designed'), 'the precisely patched deck loads')
+  const lim = applyOps(fixture(), { insert: Array.from({ length: INSERT_MAX + 2 }, () => ({ slide: 1, type: 'text', html: 'x' })) })
+  ok(lim.applied.length === INSERT_MAX && lim.skipped.length === 2, `at most ${INSERT_MAX} inserts per reply`)
 }
 
-// The WINDOW decides the shape, for every provider: the same edit goes as
-// JSON, as words, or is refused, purely by the contextTokens describe gave.
-console.log('\nprompt.ts — the window decides the shape')
+
+// The WINDOW decides how much goes, for every provider: outline + focus,
+// outline only, or a refusal — purely by the contextTokens describe gave.
+console.log('\nprompt.ts — the window decides how much goes')
 {
   const starter = starterDoc()
   const req = 'Change the title to something more creative'
-  const big = buildMessages(starter, 'deck', 0, [], req, { contextTokens: 1_000_000 })
-  ok(big.mode === 'json' && big.fits && big.window === 1_000_000, `a 1M window takes the whole deck as JSON (${big.jsonTokens} tokens)`)
-  const mid = buildMessages(starter, 'deck', 0, [], req, { contextTokens: 32_000 })
-  ok(mid.mode === 'words' && mid.fits, `a 32k window cannot hold the deck's JSON twice over (${mid.jsonTokens}×2) → words (${mid.contextTokens})`)
-  const midSlide = buildMessages(starter, 'slide', 0, [], req, { contextTokens: 32_000 })
-  ok(midSlide.mode === 'json' && midSlide.fits, 'but the same 32k window takes one slide as JSON')
-  const tiny = buildMessages(starter, 'deck', 0, [], req, { contextTokens: 2000 })
-  ok(tiny.mode === 'words' && !tiny.fits, `a 2k window fits nothing for the whole deck → refused with the numbers (${tiny.contextTokens} in 2000)`)
-  const tinyAsk = buildMessages(starter, 'slide', 0, [], 'What is this slide about?', { contextTokens: 2000 })
-  ok(tinyAsk.mode === 'ask' && tinyAsk.fits, 'a 2k window still answers a question about one slide')
-  const stated = buildMessages(starter, 'slide', 0, [], req, { local: true, contextTokens: 200_000 })
-  ok(stated.mode === 'json' && stated.window === 200_000, 'a stated window beats the local assumption (a big local model gets JSON)')
-  const hist = Array.from({ length: 8 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: 'x'.repeat(4000) }))
-  const crowded = buildMessages(starter, 'slide', 0, hist, req, { contextTokens: 12_000 })
-  ok(responseSchema('words') === WORDS_SCHEMA && (responseSchema('json') as Obj).type === 'object' && responseSchema('ask') === undefined, 'a response schema for a words patch and a JSON edit; none for a question')
-  ok(Array.isArray((WORDS_SCHEMA.properties as Obj).edits && ((WORDS_SCHEMA.properties as Obj).edits as Obj).items && (((WORDS_SCHEMA.properties as Obj).edits as Obj).items as Obj).required) && JSON.stringify((((WORDS_SCHEMA.properties as Obj).edits as Obj).items as Obj).required) === '["id","text"]', 'the words schema requires id and text on every edit')
+  const big = buildMessages(starter, { index: 0, selection: [] }, [], req, { contextTokens: 1_000_000 })
+  ok(big.mode === 'edit' && big.focus === 'slide' && big.fits && big.window === 1_000_000, `a 1M window takes the outline and the focus slide (${big.contextTokens} tokens)`)
+  ok(!big.messages.at(-1)!.content.includes(`"id":"${starter.slides[5].id}"`), 'and never the other slides\' JSON — the deck is not re-emitted at any window')
+  const mid = buildMessages(starter, { index: 0, selection: [] }, [], req, { contextTokens: 12_000 })
+  ok(mid.focus === 'slide' && mid.fits, 'a 12k window still takes slide 1 in full beside the outline')
+  const small = buildMessages(starter, { index: 0, selection: [] }, [], req, { contextTokens: 6000 })
+  ok(small.focus === 'none' && small.fits && small.mode === 'edit', `a 6k window drops the focus and sends the outline alone (${small.contextTokens})`)
+  const tiny = buildMessages(starter, { index: 0, selection: [] }, [], req, { contextTokens: 2000 })
+  ok(tiny.mode === 'edit' && !tiny.fits, `a 2k window fits not even the outline → refused with the numbers (${tiny.contextTokens} in 2000)`)
+  const tinyAsk = buildMessages(starter, { index: 0, selection: [] }, [], 'What is this slide about?', { contextTokens: 2000 })
+  ok(tinyAsk.mode === 'ask' && !tinyAsk.fits, 'a question needs the outline too: the same 2k window refuses it')
+  const stated = buildMessages(starter, { index: 0, selection: [] }, [], req, { local: true, contextTokens: 200_000 })
+  ok(stated.focus === 'slide' && stated.window === 200_000, 'a stated window beats the local assumption (a big local model gets the focus)')
+  const one = buildMessages(starter, { index: 0, selection: [starter.slides[0].elements[0].id] }, [], req, { local: true })
+  ok(one.focus === 'elements', 'one selected element fits the on-device window where the whole slide did not')
+  ok(responseSchema('edit', 'none') === OPS_SCHEMA && responseSchema('edit', 'slide') === OBJECT_SCHEMA && responseSchema('edit', 'elements') === OBJECT_SCHEMA && responseSchema('ask') === undefined, 'schema: strict words-and-choices when no focus went, loose object when it did, none for a question')
+  ok(Object.keys(OPS_SCHEMA.properties as Obj).join(',') === 'edits,notes,cells,chart,style,add,remove,move' && JSON.stringify((((OPS_SCHEMA.properties as Obj).edits as Obj).items as Obj).required) === '["id","text"]', 'the strict schema names the eight words-and-choices ops; set/insert are not in it')
   const chatty = Array.from({ length: 6 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: `turn ${i}` }))
-  const wHist = buildMessages(starter, 'slide', 0, chatty, req, { contextTokens: 2000 })
-  ok(wHist.mode === 'words' && wHist.messages.length === 1 + WORDS_HISTORY + 1 && wHist.messages[1].content === 'turn 4', `a words turn keeps only the last ${WORDS_HISTORY} history turns (a small model primed by its own summary summarises again)`)
-  ok(buildMessages(starter, 'slide', 0, chatty, req, { contextTokens: 200_000 }).messages.length === 1 + 6 + 1, 'a JSON turn keeps the full history')
-  ok(crowded.mode !== 'json' && buildMessages(starter, 'slide', 0, [], req, { contextTokens: 12_000 }).mode === 'json', 'history counts against the window: 8k tokens of turns push a 12k window off the JSON path (slide 1 alone fits it)')
+  const wHist = buildMessages(starter, { index: 0, selection: [] }, chatty, req, { contextTokens: 6000 })
+  ok(wHist.focus === 'none' && wHist.messages.length === 1 + WORDS_HISTORY + 1 && wHist.messages[1].content === 'turn 4', `an outline-only turn keeps only the last ${WORDS_HISTORY} history turns (a small model primed by its own summary summarises again)`)
+  ok(buildMessages(starter, { index: 0, selection: [] }, chatty, req, { contextTokens: 200_000 }).messages.length === 1 + 6 + 1, 'a focus turn keeps the full history')
+  const hist = Array.from({ length: 8 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: 'x'.repeat(4000) }))
+  const crowded = buildMessages(starter, { index: 0, selection: [] }, hist, req, { contextTokens: 16_000 })
+  ok(crowded.focus === 'none' && buildMessages(starter, { index: 0, selection: [] }, [], req, { contextTokens: 16_000 }).focus === 'slide', 'history counts against the window: 8k tokens of turns push a 16k window off the focus (slide 1 alone fits it)')
 }
 
 console.log('\nprompt.ts — reading a reply')
 {
-  const fenced = parseReply('Here you go.\n```json\n{"id":"s1","elements":[]}\n```\nDone.')
-  ok(fenced.kind === 'json' && fenced.note === 'Here you go.' && (fenced.value as Obj).id === 's1', 'a fenced block is the JSON; the text before it is the note')
-  const bare = parseReply('Sure — {"id":"s1","elements":[{"type":"text","html":"hi"}]}')
+  const fenced = parseReply('Here you go.\n```json\n{"edits":[]}\n```\nDone.')
+  ok(fenced.kind === 'json' && fenced.note === 'Here you go.' && Array.isArray((fenced.value as Obj).edits), 'a fenced block is the JSON; the text before it is the note')
+  const bare = parseReply('Sure — {"notes":[{"slide":1,"text":"hi"}]}')
   ok(bare.kind === 'json' && bare.note === 'Sure —', 'a bare object with a note before it')
   const plain = parseReply('Your deck has 7 slides and a closing slide would help.')
   ok(plain.kind === 'text' && plain.text.startsWith('Your deck'), 'no object → plain text')
-  const broken = parseReply('{"id": "s1", "elements": [')
+  const broken = parseReply('{"edits": [')
   ok(broken.kind === 'text', 'broken JSON is text, not a crash')
   const arr = parseReply('[1,2,3]')
   ok(arr.kind === 'text', 'an array is not a deck edit')
 }
 
-console.log('\nprompt.ts — merging a reply')
+console.log('\nprompt.ts — merging the patched deck')
 {
   const base = compactDoc(doc)
-  const { elided } = buildMessages(doc, 'slide', 1, [], 'x')
-  const slideIn = JSON.parse(JSON.stringify(((elided.doc.slides as Obj[])[1])))
-  slideIn.id = 'renamed-by-the-model'
-  ;(slideIn.elements as Obj[]).push({ type: 'text', x: 96, y: 600, w: 400, h: 60, html: 'Added' })
-  const merged = mergeReply(doc, 'slide', 1, { ...slideIn, collab: { key: 'FAKE' }, docId: 'nope' }, elided)
-  ok(!!merged, 'a slide reply merges')
+  const { elided } = buildMessages(doc, { index: 1, selection: [] }, [], 'x')
+  // a patch that touched slide 2 and added a slide, plus everything a model must not be able to smuggle
+  const r = applyOps(elided.doc, { insert: [{ slide: 2, type: 'text', x: 96, y: 600, w: 400, h: 60, html: 'Added' }], add: [{ after: doc.slides.length, layout: 'blank', title: 'x' }] })
+  const merged = mergeReply(doc, { ...r.doc, collab: { key: 'FAKE' }, docId: 'nope', blobs: { z: 1 } }, elided)
+  ok(!!merged, 'the patched deck merges')
   const m = JSON.parse(merged!) as Obj
   const slides = m.slides as Obj[]
-  ok(slides[1].id === doc.slides[1].id, 'the slide keeps ITS id whatever the reply said')
-  ok(!('collab' in m) && m.docId === 'doc-1234-5678', 'collab the model wrote is dropped; docId is the live document\'s')
+  ok(!('collab' in m) && m.docId === 'doc-1234-5678' && !('blobs' in m), 'collab and blobs the model wrote are dropped; docId is the live document\'s')
   ok(JSON.stringify(slides[1]).includes(PIXELS) && !JSON.stringify(m).includes('@@bento-asset'), 'the asset token is restored to the bytes')
-  ok(canon(slides[0]) === canon((base.slides as Obj[])[0]) && canon(slides[2]) === canon((base.slides as Obj[])[2]), 'the other slides are byte-identical to the live compact form')
-  ok((slides[1].elements as Obj[]).length === ((base.slides as Obj[])[1].elements as Obj[]).length + 1, 'the added element is there')
+  ok(canon(slides[0]) === canon((base.slides as Obj[])[0]) && canon(slides[2]) === canon((base.slides as Obj[])[2]), 'untouched slides are byte-identical to the live compact form')
+  ok((slides[1].elements as Obj[]).length === ((base.slides as Obj[])[1].elements as Obj[]).length + 1, 'the inserted element is there')
+  ok(slides.length === doc.slides.length + 1 && m.compact === true, 'the added slide is there; the deck is flagged compact')
   const full = expandDoc(m as never)
-  ok(full.slides.length === doc.slides.length && full.slides[1].elements.some((e) => (e as Obj).html === 'Added'), 'the merged compact doc expands to a full deck with the edit')
+  ok(full.slides.length === doc.slides.length + 1 && full.slides[1].elements.some((e) => (e as Obj).html === 'Added'), 'the merged compact doc expands to a full deck with the edit')
   ok(canon(full.slides[0]) === canon(doc.slides[0]), 'and an untouched slide expands to exactly what it was')
-
-  ok(mergeReply(doc, 'slide', 1, { title: 'no elements here' }, elided) === null, 'a slide reply without elements is refused')
-  ok(mergeReply(doc, 'slide', 99, slideIn, elided) === null, 'an index past the deck is refused')
-  const wrapped = mergeReply(doc, 'slide', 1, { slide: slideIn }, elided)
-  ok(!!wrapped && (JSON.parse(wrapped).slides as Obj[])[1].id === doc.slides[1].id, 'a reply wrapped as {slide} is accepted too')
-
-  const deckIn = JSON.parse(JSON.stringify(elided.doc)) as Obj
-  ;(deckIn.slides as Obj[]).push({ id: 'closing', elements: [{ type: 'text', x: 96, y: 300, w: 1088, h: 100, html: 'Thanks' }] })
-  const dm = JSON.parse(mergeReply(doc, 'deck', 0, { ...deckIn, collab: { key: 'FAKE' } }, elided)!) as Obj
-  ok((dm.slides as Obj[]).length === doc.slides.length + 1 && dm.compact === true && !('collab' in dm), 'a deck reply is the whole deck, flagged compact, collab dropped')
-  ok(JSON.stringify(dm).includes(PIXELS), 'tokens restored across the whole deck')
-  ok(mergeReply(doc, 'deck', 0, { title: 'x' }, elided) === null, 'a deck reply without slides is refused')
-  ok((dm.slides as Obj[])[0].comments !== undefined && JSON.stringify((dm.slides as Obj[])[0].comments).includes('Reviewer Name'),
+  ok(mergeReply(doc, { title: 'x' }, elided) === null, 'a value without slides is refused')
+  ok(slides[0].comments !== undefined && JSON.stringify(slides[0].comments).includes('Reviewer Name'),
     'D — on apply the live document\'s comments come back onto the slides that still exist')
-  ok(!JSON.stringify(dm).includes('BLOBKEY'), 'D — and a deck reply cannot carry blobs')
+  ok(!JSON.stringify(m).includes('BLOBKEY'), 'D — and the merged deck cannot carry blobs')
 
-  // B — duplicate ids in a deck reply
+  // B — duplicate ids in a patched deck (a reply's add could name an existing slide)
   const dup = { compact: true, slides: [
     { id: 'dup', elements: [{ id: 'e', type: 'text', x: 0, y: 0, w: 10, h: 10, html: 'a' }, { id: 'e', type: 'text', x: 0, y: 0, w: 10, h: 10, html: 'b' }, [{ id: 'e', type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1 }]] },
     { id: 'dup', elements: [{ id: 'e', type: 'text', x: 0, y: 0, w: 10, h: 10, html: 'c' }] },
@@ -349,7 +370,7 @@ console.log('\nprompt.ts — merging a reply')
   ] }
   const fixed = dedupeIds(JSON.parse(JSON.stringify(dup)))
   ok(fixed === 4, `B — four repeats re-minted (2 slides + 2 elements), got ${fixed}`)
-  const dd = JSON.parse(mergeReply(doc, 'deck', 0, dup, elided)!) as Obj
+  const dd = JSON.parse(mergeReply(doc, dup, elided)!) as Obj
   const ids = (dd.slides as Obj[]).map((s) => s.id)
   ok(new Set(ids).size === ids.length && ids[0] === 'dup' && ids[1] === 's2' && ids[2] === 's3-2' && ids[3] === 's3',
     `B — slide ids unique after merge: ${ids.join(' ')} (first keeps its id; repeats mint s<n>, suffixed past a taken one)`)
@@ -358,8 +379,6 @@ console.log('\nprompt.ts — merging a reply')
     `B — element ids unique within the slide: ${e0.map((e) => e.id).join(' ')}`)
   ok(((dd.slides as Obj[])[1].elements as Obj[])[0].id === 'e', 'B — the same element id on ANOTHER slide stays (the morph idiom)')
   ok(dedupeIds({ slides: [{ id: 'a', elements: [{ id: 'x' }] }, { id: 'b', elements: [{ id: 'x' }] }] }) === 0, 'B — a clean deck is untouched')
-  const single = JSON.parse(mergeReply(doc, 'slide', 1, { id: 'whatever', elements: [{ id: 'q', type: 'text', x: 0, y: 0, w: 1, h: 1, html: 'x' }, { id: 'q', type: 'text', x: 0, y: 0, w: 1, h: 1, html: 'y' }] }, elided)!) as Obj
-  ok((single.slides as Obj[])[1].id === doc.slides[1].id, 'B — slide scope is unchanged: the id is forced (its elements pass through as before)')
 }
 
 console.log('\nprompt.ts — link shapes (C, the pure half)')
@@ -463,8 +482,8 @@ await (async () => {
   {
     let seen: Obj | null = null
     w.handler = (f) => { if (f.op === 'assistant.send') { seen = f.payload as Obj; w.res(f.id, { ok: true }); w.evt(f.id, 'assistant.done', { text: '{}' }) } }
-    await tr.send([{ role: 'user', content: 'x' }], () => {}, new AbortController().signal, { schema: WORDS_SCHEMA })
-    ok(!!seen && seen.schema === WORDS_SCHEMA, 'send: the schema rides in the payload when given')
+    await tr.send([{ role: 'user', content: 'x' }], () => {}, new AbortController().signal, { schema: OPS_SCHEMA })
+    ok(!!seen && seen.schema === OPS_SCHEMA, 'send: the schema rides in the payload when given')
     seen = null
     await tr.send([{ role: 'user', content: 'x' }], () => {}, new AbortController().signal)
     ok(!!seen && !('schema' in seen), 'send: no schema key when none was given (old extensions see the old payload)')
@@ -579,43 +598,52 @@ const probeSource = `
 import { sanitizeHtml, sanitizeSvgMarkup, sanitizeSvgCss } from ${JSON.stringify(path.join(repoRoot, 'slides/src/render.ts'))}
 import { parseDocInputReport } from ${JSON.stringify(path.join(repoRoot, 'slides/src/compactload.ts'))}
 import { starterDoc } from ${JSON.stringify(path.join(repoRoot, 'slides/src/starterdeck.ts'))}
-import { buildMessages, mergeReply, cleanDoc } from ${JSON.stringify(path.join(repoRoot, 'slides/src/editor/assistant/prompt.ts'))}
+import { applyOps, buildMessages, mergeReply, cleanDoc } from ${JSON.stringify(path.join(repoRoot, 'slides/src/editor/assistant/prompt.ts'))}
 import { AssistantPanel } from ${JSON.stringify(path.join(repoRoot, 'slides/src/editor/assistant/panel.ts'))}
 const results = []
 const check = (name, pass) => results.push([name, pass])
 const tick = (ms = 30) => new Promise((r) => setTimeout(r, ms))
 ;(async () => {
 const TAINT = /onerror|onclick|onload|<script|javascript:|evil\\.example/i
-const fakeStore = (doc) => ({ doc, currentIndex: 0, readOnly: false, replaced: 0, replaceDoc(next) { this.doc = next; this.replaced++ }, goTo() {}, undo() {}, commit() {} })
+const fakeStore = (doc) => ({ doc, currentIndex: 0, selection: [], readOnly: false, replaced: 0, replaceDoc(next) { this.doc = next; this.replaced++ }, goTo() {}, undo() {}, commit() {}, on() { return () => {} } })
 const fakeTransport = (over = {}) => ({ name: 'fake', checks: 0, describe: async () => ({ host: 'h.example', model: 'm', configured: true }), check: async function () { this.checks++; return { ok: true } }, models: async () => [], select: async () => ({ ok: true }), send: async () => 'ok', openSettings: async () => {}, ...over })
 try {
   const doc = starterDoc()
-  const { elided } = buildMessages(doc, 'deck', 0, [], 'x')
+  const { elided } = buildMessages(doc, { index: 0, selection: [] }, [], 'x')
   const IMG = '<p>hi <img src=x onerror="window.__pwn=1"> <b onclick="window.__pwn=2">bold</b> <a href="javascript:window.__pwn=3">l</a></p>'
-  const reply = { compact: true, assets: { art: '<svg viewBox="0 0 10 10"><rect width="5" height="5" onload="window.__pwn=7"/></svg>' }, slides: [{ id: 'p1', elements: [
-    { id: 't', type: 'text', x: 0, y: 0, w: 100, h: 40, html: IMG },
-    { id: 'tb', type: 'table', x: 0, y: 50, w: 100, h: 40, columns: [{ w: 1 }, { w: 1 }], rows: [{ cells: [{ html: IMG }, { html: 'ok' }] }] },
-    { id: 'sv', type: 'svg', x: 0, y: 100, w: 100, h: 100, markup: '<svg viewBox="0 0 10 10"><script>window.__pwn=4</script><rect width="5" height="5" onclick="window.__pwn=5"/><style>.r{fill:red}</style></svg>', css: '@import url(https://evil.example/x.css); .r{fill:blue}' },
-    { id: 'sa', type: 'svg', x: 0, y: 100, w: 100, h: 100, asset: 'art' },
-    { id: 'r1', type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1, link: 'javascript:window.__pwn=6' },
-    { id: 'r2', type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1, link: 'https://bento.page/' },
-    { id: 'r3', type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1, link: 'p1' },
-  ] }] }
-  const json = mergeReply(doc, 'deck', 0, reply, elided)
+  // the hostile reply is an OPS patch now — the only shape a reply has: an
+  // existing text SET to tainted html, tainted elements inserted, and an
+  // asset the model tries to smuggle at the top level
+  const firstText = doc.slides[0].elements.find((e) => e.type === 'text').id
+  const ops = {
+    set: [{ id: '1/' + firstText, html: IMG }],
+    insert: [
+      { slide: 1, type: 'table', x: 0, y: 50, w: 100, h: 40, columns: [{ w: 1 }, { w: 1 }], rows: [{ cells: [{ html: IMG }, { html: 'ok' }] }] },
+      { slide: 1, type: 'svg', x: 0, y: 100, w: 100, h: 100, markup: '<svg viewBox="0 0 10 10"><script>window.__pwn=4</script><rect width="5" height="5" onclick="window.__pwn=5"/><style>.r{fill:red}</style></svg>', css: '@import url(https://evil.example/x.css); .r{fill:blue}' },
+      { slide: 1, type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1, link: 'javascript:window.__pwn=6' },
+      { slide: 1, type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1, link: 'https://bento.page/' },
+      { slide: 1, type: 'shape', shape: 'rect', x: 0, y: 0, w: 1, h: 1, link: doc.slides[0].id },
+    ],
+  }
+  const patched = applyOps(elided.doc, ops)
+  const reply = { ...patched.doc, assets: { art: '<svg viewBox="0 0 10 10"><rect width="5" height="5" onload="window.__pwn=7"/></svg>' } }
+  const json = mergeReply(doc, reply, elided)
   const parsed = parseDocInputReport(json)
   const next = parsed.doc
   const before = JSON.stringify(next)
   check('C — the shape gate let the payloads through (the condition is real)', /onerror|onclick|<script|javascript:/.test(before))
   const n = cleanDoc(next, { html: sanitizeHtml, svg: sanitizeSvgMarkup, svgCss: sanitizeSvgCss })
-  const els = Object.fromEntries(next.slides[0].elements.map((e) => [e.id, e]))
+  const s0e = next.slides[0].elements
+  const byType = (t) => s0e.filter((e) => e.type === t)
+  const els = { t: s0e.find((e) => e.id === firstText), tb: byType('table').at(-1), sv: byType('svg').at(-1), r1: byType('shape').at(-3), r2: byType('shape').at(-2), r3: byType('shape').at(-1) }
   const after = JSON.stringify(next)
   check('C — cleanDoc changed the six tainted values: text, cell, markup, css, link, asset (' + n + ')', n === 6)
   check('C — text html: no <img onerror>, no on* handler, no javascript: href', !/onerror|onclick|javascript:|<img/i.test(els.t.html) && /bold/.test(els.t.html))
   check('C — table cell html cleaned the same way', !/onerror|onclick|javascript:/i.test(els.tb.rows[0].cells[0].html) && els.tb.rows[0].cells[1].html === 'ok')
   check('C — svg markup: <script> and onclick gone, <rect> and its <style> kept UNSCOPED', !/<script|onclick/i.test(els.sv.markup) && /<rect/.test(els.sv.markup) && /\\.r\\{fill:red\\}/.test(els.sv.markup) && !/data-el-id/.test(els.sv.markup))
   check('C — svg css: @import refused, the rule kept', !/evil\\.example/.test(els.sv.css) && /fill:blue/.test(els.sv.css))
-  check('C — an svg ASSET a reply hands back is walked too', !/onload/i.test(next.assets.art) && /<rect/.test(next.assets.art))
-  check('C — link: javascript: dropped, web URL and slide id kept', els.r1.link === undefined && els.r2.link === 'https://bento.page/' && els.r3.link === 'p1')
+  check('C — an asset smuggled at the top level of a patched deck is walked too', !/onload/i.test(next.assets.art) && /<rect/.test(next.assets.art))
+  check('C — link: javascript: dropped, web URL and slide id kept', els.r1.link === undefined && els.r2.link === 'https://bento.page/' && els.r3.link === doc.slides[0].id)
   check('C — nothing executable is left anywhere in the document to be stored', !/onerror|onclick|onload|<script|javascript:|evil\\.example/i.test(after))
   check('C — nothing ran while cleaning', window.__pwn === undefined)
 
@@ -625,13 +653,14 @@ try {
     const store = fakeStore(doc2)
     const panel = new AssistantPanel({ store, transport: fakeTransport() })
     document.body.appendChild(panel.root)
-    const { elided: el2 } = buildMessages(doc2, 'deck', 0, [], 'x')
-    panel.apply('deck', 0, JSON.parse(JSON.stringify(reply)), el2)
+    const { elided: el2 } = buildMessages(doc2, { index: 0, selection: [] }, [], 'x')
+    panel.apply(0, { ...applyOps(el2.doc, ops).doc, assets: reply.assets }, el2, ['set 1/' + firstText])
     const stored = JSON.stringify(store.doc)
     const s0 = store.doc.slides[0]
     check('E — the real apply() stored ONE document (replaceDoc once)', store.replaced === 1 && store.doc !== doc2)
     check('E — and the stored document is clean: no handler, script, javascript: link or @import anywhere', !TAINT.test(stored))
-    const e2 = Object.fromEntries(s0.elements.map((e) => [e.id, e]))
+    const bt = (t) => s0.elements.filter((e) => e.type === t)
+    const e2 = { t: s0.elements.find((e) => e.id === firstText), sv: bt('svg').at(-1), r1: bt('shape').at(-3), r2: bt('shape').at(-2) }
     check('E — text, cell, svg markup, css, asset cleaned and the javascript: link dropped through the real path',
       /bold/.test(e2.t.html) && !/onerror/.test(e2.t.html) && /<rect/.test(e2.sv.markup) && /fill:blue/.test(e2.sv.css) && /<rect/.test(store.doc.assets.art) && e2.r1.link === undefined && e2.r2.link === 'https://bento.page/')
     check('E — the result card is there with Undo', !!panel.root.querySelector('.ed-assist-card .ed-assist-undo'))

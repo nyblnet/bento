@@ -1,34 +1,43 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// The OPS patch: what a small model can do to a deck without ever seeing
-// its JSON. A words turn (prompt.ts) sends the outline with addresses —
-// `<slide number>/<element id>` — and takes back ONE object whose keys are
-// operations. Every op is "words and choices": the model writes text, names
-// a slide number, picks from an enum. Geometry, colours, pictures and
-// markup stay out, because a model with a few thousand tokens of window
-// cannot do those reliably and the layouts already do them well.
+// The OPS patch: how the model writes to a deck. An edit turn (prompt.ts)
+// sends the addressed outline — `<slide number>/<element id>` on every text,
+// table and chart — plus the focus in full, and takes back ONE object whose
+// keys are operations. The deck is read whole and written surgically; it is
+// never handed back (a re-emitted deck is the wrong shape: as long as the
+// input, and every slide at risk of a careless rewrite).
 //
+// Words and choices — what any model, down to a few-thousand-token
+// on-device one, does reliably:
 //   edits      [{id, text}]                    the wording of a text element
 //   notes      [{slide, text}]                 speaker notes
 //   cells      [{id, row, col, text}]          one table cell (1-based)
 //   chart      [{id, series:[{name, data}], categories?}]   a chart's numbers
 //   style      [{id, size?, weight?, align?}]  enum verbs: bigger/smaller,
 //                                              bold/normal, left/center/right
-//   add        [{after, layout, title?, subtitle?, kicker?, body?, left?,
-//                right?, quote?, attribution?, card1?, card2?, card3?, notes?}]
-//              a new slide from a built-in layout — the roles place the text
+//   add        [{after, layout, title?, …, notes?, elements?}]
+//              a new slide from a built-in layout — the roles place the text;
+//              `elements` (full compact elements) for a designed slide
 //   remove     [slide]
 //   move       [{slide, to}]                   put slide N where slide M is
+// Precise — for a model that was shown the focus JSON:
+//   set        [{id, …fields}]                 merge fields onto an element
+//                                              (geometry, colours, fonts, src…;
+//                                              never id or type)
+//   insert     [{slide, type, …fields}]        a new element with geometry
+//   delete     ["n/id"]                        remove elements
+//   slide      [{slide, background?, transition?, layout?, hidden?}]
 //
 // Numbers are the outline's numbers (1-based over the compact slide list,
 // hidden states included). Content ops are applied first, by those numbers;
 // then structure — add, remove, move — on the ORIGINAL slide objects, so
 // "add after 3, remove 5, move 7 to 2" in one reply means what it read as.
 // The result is a patched COPY of the elided compact doc, which then takes
-// the same road as a JSON reply: mergeReply → the gate → cleanDoc → one
-// undoable swap. Everything unknown, malformed or out of range is skipped
-// and named, never fatal.
+// the same road as pasted JSON: mergeReply → the gate → cleanDoc → one
+// undoable swap — so a `set` of arbitrary fields is exactly as trusted as
+// a field in a pasted file, no more. Everything unknown, malformed or out
+// of range is skipped and named, never fatal.
 
 import { mintId } from '../../compact.ts'
 
@@ -57,6 +66,16 @@ const SIZE_STEP = 1.25
 
 /** The reply's shape, for providers that constrain output. Kept to
  *  type/properties/items/required/enum — the subset every dialect takes. */
+/** fields a set/insert may never write: identity, and the keys the loader
+ *  and the gate own */
+const LOCKED_FIELDS = new Set(['id', 'type', 'comments', 'collab', 'docId', 'blobs', '__proto__', 'constructor', 'prototype'])
+const SLIDE_FIELDS = new Set(['background', 'transition', 'layout', 'hidden', 'notes', 'hover'])
+export const INSERT_MAX = 40      // elements one reply may insert
+export const SET_MAX = 200        // set ops one reply may carry
+
+/** The strict schema: the words-and-choices verbs only — what a turn that
+ *  carried no focus JSON (a small window) is asked for. Kept to type/
+ *  properties/items/required/enum, the subset every dialect takes. */
 export const OPS_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
@@ -73,15 +92,18 @@ export const OPS_SCHEMA: Record<string, unknown> = {
 
 /** The system prompt for an ops turn. Short: it has to fit a small window
  *  beside the outline, and a small model follows a short list better. */
-export const OPS_PROMPT = `You are the editing assistant inside Bento Slides, a presentation editor. The user shows you an outline of their slides: each slide is numbered, each text starts with its address in [square brackets], tables list their cells as r<row>c<col>, charts list their series and numbers. Reply with ONE JSON object and nothing else, using only the keys you need:
+export const OPS_PROMPT = `You are the editing assistant inside Bento Slides, a presentation editor. The user shows you an outline of their whole deck — each slide numbered, each text with its address in [square brackets], tables listing cells as r<row>c<col>, charts their series and numbers — and, when there is room, the FOCUS in full: the selected elements or the open slide as compact JSON (fields: x y w h in slide pixels, fill, stroke, strokeWidth, radius, fontSize, fontWeight, color, align, valign, fontFamily, lineHeight, html/md, src, shape, option). Requests about "this" mean the focus. Reply with ONE JSON object and nothing else, using only the keys you need:
 - "edits": [{"id","text"}] — a text's complete new wording (markdown allowed: **bold**, *italic*, a blank line between paragraphs). The id copied exactly as shown.
 - "notes": [{"slide","text"}] — a slide's speaker notes.
 - "cells": [{"id","row","col","text"}] — one table cell.
 - "chart": [{"id","series":[{"name","data":[numbers]}],"categories":[...]}] — a chart's numbers.
 - "style": [{"id","size":"bigger"|"smaller","weight":"bold"|"normal","align":"left"|"center"|"right"}] — a text's look.
-- "add": [{"after": slide number (0 = at the start), "layout": "title"|"title-content"|"two-col"|"section"|"three-cards"|"quote", "title","subtitle","kicker","body","left","right","quote","attribution","card1","card2","card3","notes"}] — a new slide; give only the texts the layout uses.
+- "add": [{"after": slide number (0 = at the start), "layout": "title"|"title-content"|"two-col"|"section"|"three-cards"|"quote"|"blank", "title","subtitle","kicker","body","left","right","quote","attribution","card1","card2","card3","notes", "elements": [full elements, only for a slide you design yourself]}] — a new slide.
 - "remove": [slide numbers]. "move": [{"slide","to"}] — put a slide where another is.
-Change only what the request asks. Leave everything else out. If the request needs something not in this list — positions, colours, pictures, shapes — reply in plain text that this needs a hosted provider (set in the extension settings) and do not write JSON.`
+- "set": [{"id", ...fields}] — change an element precisely: only the fields you change, values in the compact form shown in the focus; never id or type.
+- "insert": [{"slide", "type": "text"|"shape"|"image"|"table"|"chart", ...fields with x y w h}] — a new element (the slide is 1280×720 unless the size says otherwise; keep 96px side margins).
+- "delete": ["n/id"] — remove elements. "slide": [{"slide","background","transition","layout","hidden"}] — a slide's own fields.
+Change only what the request asks. Leave everything else out. If it cannot be done with these operations, say so in plain text and do not write JSON.`
 
 export interface OpsResult { doc: Obj; applied: string[]; skipped: string[]; structural: boolean }
 
@@ -175,6 +197,59 @@ export function applyOps(compact: Obj, ops: unknown): OpsResult {
     if (did) applied.push(`style ${s.id}`); else skipped.push(`style ${s.id}`)
   }
 
+  // ---- precise verbs: set / insert / delete / slide
+  let sets = 0
+  for (const e of list('set')) {
+    if (!isObj(e) || !str(e.id)) { skipped.push('set ?'); continue }
+    const el = str(e.id) ? (byAddr.get(e.id) ?? (bare.get(e.id)?.length === 1 ? bare.get(e.id)![0] : undefined)) : undefined
+    if (!el) { skipped.push(`set ${e.id}`); continue }
+    if (sets++ >= SET_MAX) { skipped.push(`set ${e.id} (limit)`); continue }
+    let did = 0
+    for (const [k, v] of Object.entries(e)) {
+      if (k === 'id' || LOCKED_FIELDS.has(k)) continue
+      if (v === null) { delete el[k]; did++; continue }
+      el[k] = v; did++
+      // a text set by html or md is one or the other, never a stale pair
+      if (k === 'md') delete el.html
+      else if (k === 'html') delete el.md
+    }
+    if (did) applied.push(`set ${e.id}`); else skipped.push(`set ${e.id}`)
+  }
+  let inserted = 0
+  for (const e of list('insert')) {
+    const s = isObj(e) ? slideAt(e.slide) : null
+    if (!s || !isObj(e) || !str(e.type) || !e.type) { skipped.push(`insert ${isObj(e) ? String(e.type ?? '?') : '?'}`); continue }
+    if (inserted >= INSERT_MAX) { skipped.push(`insert ${e.type} (limit)`); continue }
+    const el: Obj = {}
+    for (const [k, v] of Object.entries(e)) { if (k !== 'slide' && !LOCKED_FIELDS.has(k) && v !== null) el[k] = v }
+    el.type = e.type
+    el.id = freshElementId(s, e.type)
+    if (!Array.isArray(s.elements)) s.elements = []
+    ;(s.elements as unknown[]).push(el)
+    inserted++
+    applied.push(`insert ${e.type} on ${e.slide}`)
+  }
+  for (const id of list('delete')) {
+    const el = str(id) ? (byAddr.get(id) ?? (bare.get(id)?.length === 1 ? bare.get(id)![0] : undefined)) : undefined
+    const home = el ? slides.find((s) => flat(s.elements).includes(el)) : undefined
+    if (!el || !home) { skipped.push(`delete ${str(id) ? id : '?'}`); continue }
+    home.elements = prune(home.elements, el)
+    applied.push(`delete ${id}`)
+  }
+  for (const e of list('slide')) {
+    const s = isObj(e) ? slideAt(e.slide) : null
+    if (!s || !isObj(e)) { skipped.push(`slide ${isObj(e) ? String(e.slide) : '?'}`); continue }
+    let did = 0
+    for (const [k, v] of Object.entries(e)) {
+      if (k === 'slide' || !SLIDE_FIELDS.has(k)) continue
+      if (v === null) { delete s[k]; did++; continue }
+      if (k === 'hidden' && typeof v !== 'boolean') continue
+      if (k !== 'hidden' && !str(v)) continue
+      s[k] = k === 'notes' ? (v as string).slice(0, TEXT_EDIT_MAX) : v; did++
+    }
+    if (did) applied.push(`slide ${e.slide}`); else skipped.push(`slide ${e.slide}`)
+  }
+
   // ---- structure, on the original slide objects
   let structural = false
   const removeSet = new Set<Obj>()
@@ -198,6 +273,16 @@ export function applyOps(compact: Obj, ops: unknown): OpsResult {
     // an id of its own: an unnamed slide would be minted `s<index>` on
     // load, which can collide with a slide already called that and re-key
     // it (dedupeIds) — links and states would then point elsewhere
+    // a designed slide: full elements ride along (the loader mints their
+    // ids; the gate checks their shape). Locked keys never do.
+    if (Array.isArray(a.elements)) {
+      for (const e of (a.elements as unknown[]).slice(0, INSERT_MAX)) {
+        if (!isObj(e) || !str(e.type)) continue
+        const el: Obj = {}
+        for (const [k, v] of Object.entries(e)) { if (!LOCKED_FIELDS.has(k) || k === 'type' || k === 'id') el[k] = v }
+        elements.push(el)
+      }
+    }
     const slide: Obj = { id: freshSlideId(slides), layout: a.layout, elements }
     if (str(a.notes) && a.notes.trim()) slide.notes = a.notes.slice(0, TEXT_EDIT_MAX)
     inserts.set(anchor, [...(inserts.get(anchor) ?? []), slide])
@@ -226,6 +311,19 @@ export function applyOps(compact: Obj, ops: unknown): OpsResult {
     doc.slides = out
   }
   return { doc, applied, skipped, structural }
+}
+
+/** every element on a slide, flat; and the list with one element removed,
+ *  nesting kept */
+const flat = (v: unknown): Obj[] => Array.isArray(v) ? v.flatMap(flat) : isObj(v) ? [v] : []
+const prune = (v: unknown, el: Obj): unknown => Array.isArray(v) ? v.filter((x) => x !== el).map((x) => prune(x, el)) : v
+
+const freshElementId = (slide: Obj, type: string): string => {
+  const taken = new Set(flat(slide.elements).map((e) => String(e.id ?? '')))
+  const stamp = Date.now().toString(36)
+  let id = `${type}-${stamp}`
+  for (let n = 2; taken.has(id); n++) id = `${type}-${stamp}-${n}`
+  return id
 }
 
 const takenIds = new WeakMap<Obj[], Set<string>>()

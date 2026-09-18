@@ -29,7 +29,7 @@ const PROVIDER_NAMES: Record<string, string> = { builtin: 'Chrome', gemini: 'Gem
 export const providerDisplay = (id: string): string => PROVIDER_NAMES[id] ?? id
 /** 200000 → "200k", 1048576 → "1M" */
 export const windowDisplay = (n: number): string => n >= 1_000_000 ? `${Math.round(n / 100_000) / 10}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
-import { applyOps, buildMessages, cleanDoc, mergeReply, parseReply, responseSchema, RETRY_NUDGE, type AssistantScope, type Turn } from './prompt'
+import { applyOps, buildMessages, cleanDoc, mergeReply, parseReply, responseSchema, RETRY_NUDGE, type Turn } from './prompt'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
 /**
@@ -124,9 +124,6 @@ export class AssistantPanel {
   get floating(): boolean { return this.float !== null }
   private notice = el('div', 'ed-assist-notice')
   private sendB = document.createElement('button')
-  private scopeSlide = document.createElement('button')
-  private scopeDeck = document.createElement('button')
-  private scope: AssistantScope = 'slide'
   private history: Turn[] = []
   private transport: AssistantTransport | null
   private present: () => boolean
@@ -239,14 +236,11 @@ export class AssistantPanel {
     this.floatB.addEventListener('click', (ev) => { ev.stopPropagation(); if (this.float) this.dockBack(); else this.popOut() })
     head.appendChild(this.floatB)
 
-    const scope = el('div', 'ed-assist-scope')
-    for (const [b, s, label] of [[this.scopeSlide, 'slide', t('This slide')], [this.scopeDeck, 'deck', t('Whole deck')]] as const) {
-      b.type = 'button'
-      b.className = 'ed-assist-scope-b'
-      b.textContent = label
-      b.addEventListener('click', () => this.setScope(s))
-      scope.appendChild(b)
-    }
+    // the scope is the selection (prompt.ts says why there is no switch);
+    // the notice under the input says what will go, and follows it
+    this.store.on('selection', () => this.refreshNotice())
+    this.store.on('current', () => this.refreshNotice())
+    this.store.on('doc', () => this.refreshNotice())
     this.input.className = 'ed-assist-input'
     this.input.rows = 2
     this.input.placeholder = t('Ask for a change…')
@@ -268,7 +262,7 @@ export class AssistantPanel {
       this.inputH0 = null
     })
     const acts = el('div', 'ed-assist-acts')
-    acts.append(scope, this.sendB)
+    acts.append(el('span', 'ed-assist-hint', t('Enter to send · Shift+Enter for a new line')), this.sendB)
     // clear: the transcript and the history the next turn would carry
     this.clearB.type = 'button'
     this.clearB.className = 'ed-assist-clear'
@@ -279,7 +273,6 @@ export class AssistantPanel {
 
     this.body.append(this.status, this.log, this.input, this.notice, acts)
     this.root.append(head, this.body)
-    this.setScope('slide')
     this.setOpen(lsGet('bento-assist-open') === 'on', false)
     this.refreshStatus()
   }
@@ -288,13 +281,6 @@ export class AssistantPanel {
     this.root.classList.toggle('open', open)
     if (persist) lsSet('bento-assist-open', open ? 'on' : 'off')
     if (open) void this.describe()
-  }
-
-  private setScope(s: AssistantScope) {
-    this.scope = s
-    this.scopeSlide.classList.toggle('on', s === 'slide')
-    this.scopeDeck.classList.toggle('on', s === 'deck')
-    this.refreshNotice()
   }
 
   /** The sentence at the top: the route, or why there is none. */
@@ -379,13 +365,19 @@ export class AssistantPanel {
     return sel
   }
 
-  /** One line under the input saying what leaves the page (prompt.ts elideDoc). */
+  /** Where the user is: the open slide and the selected element ids. */
+  private focus() {
+    return { index: this.store.currentIndex, selection: this.store.selection }
+  }
+
+  /** One line under the input saying what leaves the page (prompt.ts):
+   *  the deck's outline plus the focus — the selection, or the open slide. */
   private refreshNotice() {
     if (!this.transport) { this.notice.textContent = ''; return }
     const host = this.described?.local ? t('the on-device model') : (this.described?.host || this.transport.name)
-    this.notice.textContent = this.scope === 'slide'
-      ? t("Sends this slide's text and notes to {host}; comments stay here.", { host })
-      : t("Sends the deck's text and notes to {host}; comments stay here.", { host })
+    const n = this.store.selection.length
+    const focus = n === 1 ? t('the selected element') : n > 1 ? t('the {n} selected elements', { n: String(n) }) : t('this slide')
+    this.notice.textContent = t("Sends the deck's outline and {focus} to {host}; comments stay here.", { focus, host })
   }
 
   private async describe() {
@@ -496,17 +488,19 @@ export class AssistantPanel {
     this.history.push({ role: 'user', text: request })
     const doc = this.store.doc
     const index = this.store.currentIndex
-    const scope = this.scope
     const local = !!this.described?.local
-    const { messages, elided, mode, contextTokens, window, fits } = buildMessages(doc, scope, index, this.history.slice(0, -1), request, { local, contextTokens: this.described?.contextTokens })
+    const { messages, elided, mode, focus, contextTokens, window, fits } = buildMessages(doc, this.focus(), this.history.slice(0, -1), request, { local, contextTokens: this.described?.contextTokens })
     // the turn was sized to the model's window (prompt.ts): refuse here,
     // with the numbers, rather than after the wait with the provider's
     // "too large"
     if (!fits) {
-      this.note(scope === 'deck'
-        ? t('The whole deck is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, switch to "This slide", or choose a model with a larger window in the extension settings.', { tokens: String(contextTokens), window: String(window) })
-        : t('This slide is too large for this model ({tokens} tokens; its window is {window}). Ask a question about it, or choose a model with a larger window in the extension settings.', { tokens: String(contextTokens), window: String(window) }), 'err')
+      this.note(t('The deck outline alone is too large for this model ({tokens} tokens; its window is {window}). Choose a model with a larger window in the extension settings.', { tokens: String(contextTokens), window: String(window) }), 'err')
       return
+    }
+    if (mode === 'edit' && focus === 'none') {
+      // the focus did not fit: the model gets the outline only, so it can
+      // change words and structure but not geometry or styling
+      this.note(t('Only the outline fits this model\u2019s window, so it can change words, notes and slides but not positions or styling.'), 'info')
     }
     this.setRunning(true)
     // the live bubble says the model is working until the first token —
@@ -514,7 +508,7 @@ export class AssistantPanel {
     const live = this.note(local ? t('Working on it… the on-device model is loading.') : t('Working on it…'), 'assistant')
     live.classList.add('ed-assist-live', 'ed-assist-wait')
     let text = ''
-    const schema = responseSchema(mode)
+    const schema = responseSchema(mode, focus)
     const onChunk = (chunk: string) => {
       if (live.classList.contains('ed-assist-wait')) { live.classList.remove('ed-assist-wait'); live.textContent = '' }
       live.textContent += chunk
@@ -552,19 +546,12 @@ export class AssistantPanel {
     live.remove()
     if (reply.note) this.note(reply.note, 'assistant')
     this.history.push({ role: 'assistant', text: reply.note || t('(edited the deck)') })
-    if (mode === 'words') {
-      // an ops patch (ops.ts): applied to a copy of the elided compact doc,
-      // then the same road as a JSON reply. Structure (add/remove/move)
-      // needs the deck merge even in slide scope.
-      const r = applyOps(elided.doc, reply.value)
-      if (!r.applied.length) { this.note(t('The reply changed nothing I could apply.'), 'err'); return }
-      if (r.skipped.length) this.note(t('{n} changes named something that is not there and were skipped.', { n: String(r.skipped.length) }), 'info')
-      const slides = (r.doc.slides ?? []) as Record<string, unknown>[]
-      if (scope === 'slide' && !r.structural && slides[index]) this.apply('slide', index, slides[index], elided)
-      else this.apply('deck', index, r.doc, elided)
-      return
-    }
-    this.apply(scope, index, reply.value, elided)
+    // the ops patch (ops.ts): applied to a copy of the elided compact doc,
+    // then the same road as pasted JSON
+    const r = applyOps(elided.doc, reply.value)
+    if (!r.applied.length) { this.note(t('The reply changed nothing I could apply.'), 'err'); return }
+    if (r.skipped.length) this.note(t('{n} changes named something that is not there and were skipped.', { n: String(r.skipped.length) }), 'info')
+    this.apply(index, r.doc, elided, r.applied)
   }
 
   /** The user declined the on-device model: a plain card, nothing changed. */
@@ -575,10 +562,10 @@ export class AssistantPanel {
     this.log.scrollTop = this.log.scrollHeight
   }
 
-  /** The reply's JSON → one undoable document swap, and a card saying what happened. */
-  private apply(scope: AssistantScope, index: number, value: Record<string, unknown>, elided: ReturnType<typeof buildMessages>['elided']) {
+  /** The patched deck → one undoable document swap, and a card saying what happened. */
+  private apply(index: number, value: Record<string, unknown>, elided: ReturnType<typeof buildMessages>['elided'], ops: string[] = []) {
     if (this.store.readOnly) { this.note(t('This deck is read-only here — nothing was changed.'), 'err'); return }
-    const json = mergeReply(this.store.doc, scope, index, value, elided)
+    const json = mergeReply(this.store.doc, value, elided)
     const parsed = json ? parseDocInputReport(json) : null
     if (!parsed) { this.note(t('The reply was not a deck edit I could apply.'), 'err'); return }
     const next = parsed.doc
@@ -594,7 +581,7 @@ export class AssistantPanel {
     if (keep) next.collab = keep
     else delete next.collab
     this.store.replaceDoc(next)
-    if (scope === 'slide' && index < next.slides.length) this.store.goTo(index)
+    if (index < next.slides.length) this.store.goTo(index)
     if (parsed.report.refit.length) {
       void document.fonts?.ready.then(() => {
         if (this.store.doc !== next) return
@@ -607,7 +594,7 @@ export class AssistantPanel {
     const warnings = fresh.length
     const card = el('div', 'ed-assist-card')
     const head = el('div', 'ed-assist-card-h',
-      scope === 'slide' ? t('Applied to this slide') : t('Applied to the deck'))
+      ops.length === 1 ? t('Applied: {what}', { what: ops[0] }) : t('Applied {n} changes', { n: String(ops.length) }))
     const undo = document.createElement('button')
     undo.type = 'button'
     undo.className = 'ed-btn ed-assist-undo'

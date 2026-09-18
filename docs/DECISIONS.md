@@ -7388,3 +7388,53 @@ re-runs `check` ONCE when the document regains focus or visibility; an
 deck unchanged. The page keys on the CODES (shape `[a-z][a-z0-9-]{0,39}`),
 never on the reason text. All three rigged with fake transports in the
 browser section.
+
+## 2026-09-18 — The assistant reads the deck whole and writes it surgically; the model never hands the deck back
+
+**Decision.** An edit turn sends the ADDRESSED OUTLINE of the whole deck
+(every text, table cell and chart with its `<slide number>/<element id>`, the
+notes; a few KB) plus the FOCUS in full — the selected elements' compact
+JSON, or the open slide's when nothing is selected — and takes back an OPS
+PATCH (`slides/src/editor/assistant/ops.ts`): targeted operations addressed by
+slide number and element id, applied to a copy of the elided compact doc,
+which then takes the same road as pasted JSON (mergeReply → the gate →
+cleanDoc → one undoable swap). There is no "this slide / whole deck" switch:
+the selection is the scope. The model is never asked to re-emit the
+document, at any window size.
+
+**Why.** The first shape asked a model for the whole compact deck (or the
+whole slide) back. That is the wrong shape on three counts, and the
+maintainer named it: the reply is as long as the input (22k tokens each way
+on the starter deck), every slide the model touches is at risk of a careless
+rewrite while it fixes one, and a small window (Gemini Nano, a self-hosted
+llama) could not take it at all. Gemini in Slides and Claude with a file do
+what this does: read everything, cheaply, and write with targeted edits.
+
+**The vocabulary.** Words and choices, which any model down to a few
+thousand tokens does reliably: `edits` (wording), `notes`, `cells`
+(`r<row>c<col>`), `chart` (a series' numbers, categories), `style` (three
+enums: bigger/smaller, bold/normal, left/center/right), `add` (a slide from a
+built-in layout, text placed by role; optional full `elements` for a designed
+slide), `remove`, `move`. Precise, for a model that was shown the focus JSON:
+`set` (merge fields onto an element — geometry, colours, fonts, src; never
+`id`/`type`/a private key), `insert` (a new element with geometry, fresh id),
+`delete`, `slide` (whitelisted slide fields). Content ops apply first by the
+outline's numbers, then structure on the original slide objects, so one
+reply can say "add after 3, remove 5, move 7 to 2". A `set` of an arbitrary
+field is exactly as trusted as that field in a pasted file: the gate and
+cleanDoc run after, unchanged, and security probed every verb.
+
+**The window still decides how much goes.** Outline + focus + room for the
+reply must fit `describe.contextTokens` (or the assumption: 6k on-device,
+128k hosted). When the focus does not fit, only the outline goes and the
+strict words-and-choices schema is sent (constrained output — a small model
+asked in prose answers in prose); when it does, the loose "an object" schema.
+When even the outline does not fit, the turn is refused with the numbers.
+Measured on the starter deck: a hosted model gets outline + the open slide;
+the assumed on-device window gets the outline alone for slide 1 (3.5k tokens
+of JSON) but the focus for a single selected element.
+
+**Rejected.** Inferring a scope from the request's wording (still a switch,
+just a hidden one). A third sidebar for the assistant (three columns on a
+13" laptop). Keeping whole-deck JSON as a "power" mode for big windows — the
+patch does everything it did, without the rewrite risk.
