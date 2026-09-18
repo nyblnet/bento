@@ -36,7 +36,7 @@ import { learnPrefix } from './db.js'
 import { t, initI18n } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
 import {
-  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, normalizeConfig,
+  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, validSchema, normalizeConfig,
   modelsKey, builtinContext,
   describe as describeAssistant, check as checkAssistant, run as runAssistant,
 } from './assistant.js'
@@ -449,6 +449,7 @@ export function serveAssistantPort(port) {
     if (ac) return respond({ ok: false, reason: 'busy' })
     const messages = validMessages(m.payload)
     if (!messages) return respond({ ok: false, reason: 'bad request' })
+    const schema = validSchema(m.payload)
     ac = new AbortController()
     void (async () => {
       const env = await assistantEnv()
@@ -461,7 +462,7 @@ export function serveAssistantPort(port) {
       const emit = (kind, extra) => post({ dir: 'evt', id, kind, ...extra })
       if (!(await ensureConsent(docKey, d.host, d.model))) return emit('assistant.error', { code: 'consent-denied', reason: t('asstDenied') })
       if (ac.signal.aborted) return
-      await runAssistant(cfg, messages, emit, ac.signal, env)
+      await runAssistant(cfg, messages, emit, ac.signal, env, schema)
     })()
   })
 }

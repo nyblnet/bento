@@ -599,5 +599,99 @@ store[asst.CONFIG_KEY] = { provider: 'openai', baseUrl: `https://gw.example/${TE
   ok(unknown.ok === false, 'an unknown assistant op is refused')
 }
 
+console.log('\n— providers: a reply schema, per provider')
+const EDITS = { type: 'object', properties: { edits: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' } }, required: ['id', 'text'] } } }, required: ['edits'] }
+{
+  const oa = JSON.parse(shapeRequest({ provider: 'openai', model: 'm', key: 'K' }, [...msgs], { schema: EDITS }).body)
+  ok(oa.response_format?.type === 'json_schema' && oa.response_format.json_schema.name === 'reply' && JSON.stringify(oa.response_format.json_schema.schema) === JSON.stringify(EDITS), 'openai: schema rides as response_format.json_schema, verbatim')
+  ok(!('response_format' in JSON.parse(shapeRequest({ provider: 'openai', model: 'm', key: 'K' }, [...msgs]).body)), 'openai: no schema, no response_format')
+  const ge = JSON.parse(shapeRequest({ provider: 'gemini', model: 'g', key: 'K' }, [...msgs], { schema: EDITS }).body)
+  ok(ge.generationConfig?.responseMimeType === 'application/json' && JSON.stringify(ge.generationConfig.responseSchema) === JSON.stringify(EDITS), 'gemini: schema rides as generationConfig.responseSchema with the JSON mime type')
+  ok(!('generationConfig' in JSON.parse(shapeRequest({ provider: 'gemini', model: 'g', key: 'K' }, [...msgs]).body)), 'gemini: no schema, no generationConfig')
+  const an = JSON.parse(shapeRequest({ provider: 'anthropic', model: 'm', key: 'K' }, [...msgs], { schema: EDITS }).body)
+  ok(!JSON.stringify(an).includes('"edits"'), 'anthropic: no constrained mode without tools — the schema stays out of the request, the prompt carries it')
+}
+{
+  ok(JSON.stringify(asst.validSchema({ schema: EDITS })) === JSON.stringify(EDITS), 'validSchema: the page\'s edits shape passes, as data')
+  ok(JSON.stringify(asst.validSchema({ schema: { type: 'object' } })) === '{"type":"object"}', 'validSchema: the page\'s bare object shape passes')
+  for (const [label, bad] of [['absent', {}], ['a string', { schema: '{"type":"object"}' }], ['an array', { schema: [] }], ['null', { schema: null }]] as const) {
+    ok(asst.validSchema(bad as any) === undefined, `validSchema: ${label} → no schema, the turn runs as prose`)
+  }
+  ok(asst.validSchema({ schema: { type: 'object', description: 'x'.repeat(asst.SCHEMA_BUDGET) } }) === undefined, 'validSchema: over the byte budget → dropped')
+  const proto = JSON.parse('{"type":"object","__proto__":{"polluted":true}}')
+  const cleaned = asst.validSchema({ schema: proto })!
+  ok(cleaned && !('polluted' in cleaned) && Object.getPrototypeOf(cleaned) === Object.prototype, 'validSchema: re-read through JSON, nothing but plain data survives')
+}
+{
+  // the OpenAI-compatible server that does not know response_format: one retry without
+  const bodies: any[] = []
+  const frames: any[] = []
+  await asst.run(cfgOpenai, [{ role: 'user', content: 'hi' }], (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, {
+    t, fetch: async (_u: string, init: any) => {
+      const b = JSON.parse(init.body); bodies.push(b)
+      if (b.response_format) return { ok: false, status: 400, text: async () => '{"error":{"message":"response_format is not supported"}}' }
+      return { ok: true, status: 200, body: sseBody(openaiSse) }
+    },
+  }, EDITS)
+  ok(bodies.length === 2 && !!bodies[0].response_format && !bodies[1].response_format && frames.at(-1)?.kind === 'assistant.done', 'run (openai): a 400 about response_format → once more without it, and the turn completes')
+  const other: any[] = []
+  const f2: any[] = []
+  await asst.run(cfgOpenai, [{ role: 'user', content: 'hi' }], (k: string, x: any) => f2.push({ kind: k, ...x }), new AbortController().signal, {
+    t, fetch: async (_u: string, init: any) => { other.push(1); return { ok: false, status: 400, text: async () => '{"error":{"message":"context length exceeded"}}' } },
+  }, EDITS)
+  ok(other.length === 1 && f2[0]?.kind === 'assistant.error' && f2[0].reason === 'HTTP 400: context length exceeded', 'run (openai): any other 400 is reported once, not retried')
+}
+{
+  // the built-in model: responseConstraint when Chrome takes it, plain when it throws on the option
+  const make = (acceptsConstraint: boolean) => {
+    const opts: any[] = []
+    const LM = {
+      availability: async () => 'available',
+      create: async () => ({
+        promptStreaming: (_t: string, o: any) => {
+          opts.push(o)
+          if (o.responseConstraint && !acceptsConstraint) throw new TypeError('responseConstraint is not a known option')
+          return { [Symbol.asyncIterator]: async function* () { yield '{"edits":[]}' } }
+        },
+        destroy() {},
+      }),
+    }
+    return { LM, opts }
+  }
+  for (const accepts of [true, false]) {
+    const { LM, opts } = make(accepts)
+    const frames: any[] = []
+    await asst.run({ provider: 'builtin' } as any, [{ role: 'user', content: 'hi' }], (k: string, x: any) => frames.push({ kind: k, ...x }), new AbortController().signal, { t, LanguageModel: LM }, EDITS)
+    ok(opts[0].responseConstraint === EDITS && frames.at(-1)?.kind === 'assistant.done' && frames.at(-1).text === '{"edits":[]}',
+      accepts ? 'run (built-in): the schema goes to promptStreaming as responseConstraint' : 'run (built-in): a Chrome that rejects the option gets one plain retry')
+    ok(opts.length === (accepts ? 1 : 2) && (accepts || !('responseConstraint' in opts[1])), accepts ? 'run (built-in): and only once' : 'run (built-in): the retry carries no constraint')
+  }
+  const { LM, opts } = make(true)
+  await asst.run({ provider: 'builtin' } as any, [{ role: 'user', content: 'hi' }], () => {}, new AbortController().signal, { t, LanguageModel: LM })
+  ok(!('responseConstraint' in opts[0]), 'run (built-in): no schema, no constraint')
+}
+{
+  // through the port: the schema in the frame reaches the provider's body; a malformed one is dropped, not fatal
+  const bodies: any[] = []
+  ;(globalThis as any).fetch = async (_u: string, init: any) => { bodies.push(JSON.parse(init.body)); return { ok: true, status: 200, body: sseBody(openaiSse) } }
+  store[asst.ALLOWED_KEY] = { [FILE.url]: { at: 1 } }
+  const port = fakePort(FILE)
+  bg.serveAssistantPort(port)
+  port.send({ op: 'assistant.send', id: 'asst-s1', payload: { messages: [{ role: 'user', content: 'hi' }], schema: EDITS } })
+  await until(() => port.out.some((m: any) => m.kind === 'assistant.done'))
+  ok(JSON.stringify(bodies[0]?.response_format?.json_schema?.schema) === JSON.stringify(EDITS), 'port: a send frame with schema reaches the provider body in the right field')
+  const port2 = fakePort(FILE)
+  bg.serveAssistantPort(port2)
+  port2.send({ op: 'assistant.send', id: 'asst-s2', payload: { messages: [{ role: 'user', content: 'hi' }] } })
+  await until(() => port2.out.some((m: any) => m.kind === 'assistant.done'))
+  ok(bodies.length === 2 && !('response_format' in bodies[1]), 'port: one without has no such field')
+  const port3 = fakePort(FILE)
+  bg.serveAssistantPort(port3)
+  port3.send({ op: 'assistant.send', id: 'asst-s3', payload: { messages: [{ role: 'user', content: 'hi' }], schema: 'not an object' } })
+  await until(() => port3.out.some((m: any) => m.kind === 'assistant.done'))
+  ok(bodies.length === 3 && !('response_format' in bodies[2]) && port3.out.at(-1)?.kind === 'assistant.done', 'port: a malformed schema is dropped and the turn still runs as prose')
+  ;(globalThis as any).fetch = fetchOk
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

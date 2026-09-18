@@ -79,6 +79,24 @@ export function validMessages(payload) {
   return out
 }
 
+/** The largest reply schema accepted from the page, in JSON bytes. */
+export const SCHEMA_BUDGET = 8192
+
+/**
+ * The reply schema in an `assistant.send` payload, or undefined. Data, not
+ * code: a plain JSON object under the budget, re-read through JSON so no
+ * prototype or function rides along; anything else is dropped and the turn
+ * proceeds as prose.
+ */
+export function validSchema(payload) {
+  const s = payload?.schema
+  if (!s || typeof s !== 'object' || Array.isArray(s)) return undefined
+  let text
+  try { text = JSON.stringify(s) } catch { return undefined }
+  if (typeof text !== 'string' || text.length > SCHEMA_BUDGET || text[0] !== '{') return undefined
+  return JSON.parse(text)
+}
+
 /** The stored configuration with defaults filled in; `provider` decides which. */
 export function normalizeConfig(raw, hasBuiltin) {
   const c = raw && typeof raw === 'object' ? raw : {}
@@ -224,7 +242,7 @@ export async function check(cfg, env) {
  * delta-per-chunk across versions, so both shapes are accepted: a chunk that
  * repeats everything so far is the cumulative form.
  */
-async function runBuiltin(messages, onChunk, signal, env) {
+async function runBuiltin(messages, onChunk, signal, env, schema) {
   const LM = env.LanguageModel
   const a = await builtinAvailability(LM)
   if (a !== 'available') {
@@ -236,12 +254,24 @@ async function runBuiltin(messages, onChunk, signal, env) {
   const history = messages.slice(0, -1)
   const session = await LM.create({ initialPrompts: history, signal })
   let text = ''
-  try {
-    const stream = session.promptStreaming(last.content, { signal })
-    for await (const chunk of stream) {
+  const read = async (opts) => {
+    for await (const chunk of session.promptStreaming(last.content, opts)) {
       const s = String(chunk)
       const delta = text && s.startsWith(text) ? s.slice(text.length) : s
       if (delta) { text += delta; onChunk(delta) }
+    }
+  }
+  try {
+    // `responseConstraint` (Chrome 137+) makes the model answer in the shape
+    // — Nano ignores a prose "answer in JSON". An older Chrome throws on the
+    // option before any chunk arrives; then the turn runs unconstrained.
+    if (schema) {
+      try { await read({ signal, responseConstraint: schema }) } catch (e) {
+        if (signal.aborted || text) throw e
+        await read({ signal })
+      }
+    } else {
+      await read({ signal })
     }
   } finally {
     try { session.destroy?.() } catch { /* already gone */ }
@@ -249,17 +279,29 @@ async function runBuiltin(messages, onChunk, signal, env) {
   return text
 }
 
-async function runHttp(cfg, messages, onChunk, signal, env) {
+async function runHttp(cfg, messages, onChunk, signal, env, schema) {
   if (!httpConfigured(cfg)) throw new Error(env.t('asstNotConfigured'))
-  const req = shapeRequest(cfg, messages)
-  let r
-  try {
-    r = await env.fetch(req.url, { method: 'POST', headers: req.headers, body: req.body, signal })
-  } catch (e) {
-    if (e?.name === 'AbortError') throw e
-    throw new Error(unreachable(cfg, env))
+  const post = async (opts) => {
+    const req = shapeRequest(cfg, messages, opts)
+    try {
+      return await env.fetch(req.url, { method: 'POST', headers: req.headers, body: req.body, signal })
+    } catch (e) {
+      if (e?.name === 'AbortError') throw e
+      throw new Error(unreachable(cfg, env))
+    }
   }
-  if (!r.ok) throw new Error(errorFrom(cfg.provider, r.status, await r.text().catch(() => '')))
+  let r = await post({ schema })
+  if (!r.ok) {
+    let body = await r.text().catch(() => '')
+    // An OpenAI-compatible server that does not know `response_format` says
+    // so with a 400; the turn is worth more than the constraint, so once
+    // more without it. Only that: any other refusal is reported as is.
+    if (schema && cfg.provider === 'openai' && r.status === 400 && /response_format|json_schema/i.test(body)) {
+      r = await post({})
+      if (!r.ok) body = await r.text().catch(() => '')
+    }
+    if (!r.ok) throw new Error(errorFrom(cfg.provider, r.status, body))
+  }
   if (!r.body) throw new Error(errorFrom(cfg.provider, r.status, ''))
   return streamReply(cfg.provider, iterateBody(r.body), onChunk)
 }
@@ -269,12 +311,12 @@ async function runHttp(cfg, messages, onChunk, signal, env) {
  * exactly one of `assistant.done` / `assistant.error` — or nothing at all
  * after an abort, which the page has already stopped listening for.
  */
-export async function run(cfg, messages, emit, signal, env) {
+export async function run(cfg, messages, emit, signal, env, schema) {
   try {
     const onChunk = (t) => { if (!signal.aborted) emit('assistant.chunk', { text: t }) }
     const text = cfg.provider === 'builtin'
-      ? await runBuiltin(messages, onChunk, signal, env)
-      : await runHttp(cfg, messages, onChunk, signal, env)
+      ? await runBuiltin(messages, onChunk, signal, env, schema)
+      : await runHttp(cfg, messages, onChunk, signal, env, schema)
     if (!signal.aborted) emit('assistant.done', { text })
   } catch (e) {
     if (signal.aborted || e?.name === 'AbortError') return

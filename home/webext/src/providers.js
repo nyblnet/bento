@@ -189,11 +189,19 @@ export function originOf(cfg) {
   try { return new URL(baseOf(cfg)).origin } catch { return null }
 }
 
-/** Build the streaming request for one chat turn. */
-export function shapeRequest(cfg, messages) {
+/**
+ * Build the streaming request for one chat turn. `opts.schema` is a JSON
+ * Schema the reply must fit (the page sends one when it wants a structured
+ * edit, nothing when it wants prose): OpenAI-shaped servers take it as
+ * `response_format`, Gemini as `generationConfig.responseSchema`, Anthropic
+ * has no constrained mode without tools and is left to the prompt. The
+ * schema is DATA — passed through as JSON, never interpreted here.
+ */
+export function shapeRequest(cfg, messages, opts = {}) {
   const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n')
   const turns = messages.filter((m) => m.role !== 'system')
   const base = baseOf(cfg)
+  const schema = opts.schema
   switch (cfg.provider) {
     case 'openai':
       return {
@@ -204,7 +212,10 @@ export function shapeRequest(cfg, messages) {
           // bearer would be refused by some of them.
           ...(cfg.key ? { authorization: `Bearer ${cfg.key}` } : {}),
         },
-        body: JSON.stringify({ model: cfg.model, stream: true, messages }),
+        body: JSON.stringify({
+          model: cfg.model, stream: true, messages,
+          ...(schema ? { response_format: { type: 'json_schema', json_schema: { name: 'reply', schema } } } : {}),
+        }),
       }
     case 'anthropic':
       return {
@@ -230,6 +241,7 @@ export function shapeRequest(cfg, messages) {
         body: JSON.stringify({
           ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
           contents: turns.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+          ...(schema ? { generationConfig: { responseMimeType: 'application/json', responseSchema: schema } } : {}),
         }),
       }
     default:
