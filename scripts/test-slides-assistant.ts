@@ -42,7 +42,7 @@
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { compactDoc, expandDoc } from '../slides/src/compact.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
-import { buildMessages, elideDoc, mergeReply, parseReply, SYSTEM_PROMPT } from '../slides/src/editor/assistant/prompt.ts'
+import { approxTokens, buildMessages, elideDoc, isQuestion, LOCAL_TOKEN_BUDGET, mergeReply, outlineDeck, parseReply, QUESTION_PROMPT, SYSTEM_PROMPT } from '../slides/src/editor/assistant/prompt.ts'
 import { CH, CODE_RE, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
 import { dedupeIds, cleanDoc, ID_RE } from '../slides/src/editor/assistant/prompt.ts'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
@@ -101,6 +101,40 @@ console.log('\nprompt.ts — what leaves the page')
   ok(deck.messages.length === 4 && deck.messages[1].content === 'earlier' && deck.messages[2].role === 'assistant', 'history turns sit between system and the request')
   const long = Array.from({ length: 20 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: `t${i}` }))
   ok(buildMessages(doc, 'deck', 0, long, 'x').messages.length === 1 + 8 + 1, 'history is capped at the last 8 turns')
+  ok(!deck.question && !buildMessages(doc, 'slide', 1, [], 'Make the title bolder').question, 'an instruction is an edit turn')
+}
+
+// A question sends an OUTLINE (words + notes), never the JSON, and asks for
+// prose — measured against the starter deck, the deck a fresh build opens
+// with, because the on-device model's window is what made this matter.
+console.log('\nprompt.ts — a question turn')
+{
+  for (const q of ['Summarise this deck', 'summarize the deck in three bullets', 'What is slide 4 about?', 'Is the tone consistent', 'How many slides mention revenue?', 'Give me feedback on the opening', 'Can you explain the charts slide', 'tell me what changed', 'Which slide should I cut?', 'Any suggestions for the closing slide', 'review the notes for typos'])
+    ok(isQuestion(q), `question: ${q}`)
+  for (const e of ['Make the title bolder', 'Add a closing slide that thanks the audience', 'Change slide 3 to a two-column layout', 'Translate the deck to French', 'Shorten every title', 'Replace the pie with a bar chart', 'Delete the last slide', 'Fix the typos on this slide'])
+    ok(!isQuestion(e), `edit: ${e}`)
+
+  const starter = starterDoc()
+  const asked = buildMessages(starter, 'deck', 2, [], 'Summarise this deck')
+  const askedText = asked.messages.map((m) => m.content).join('\n')
+  ok(asked.question && asked.messages[0].content === QUESTION_PROMPT, 'a question turn uses the question prompt')
+  ok(!askedText.includes('"elements"') && !askedText.includes('"compact"'), 'no JSON goes out on a question')
+  ok(askedText.includes('Slide 1 (id "') && askedText.includes(`Slide ${starter.slides.length} (id "`), 'the outline numbers every slide')
+  const firstWords = String((starter.slides[0].elements.find((e) => e.type === 'text') as { html?: string } | undefined)?.html ?? '').replace(/<[^>]*>/g, '').trim().split(/\s+/).slice(0, 3).join(' ')
+  ok(firstWords.length > 0 && askedText.includes(firstWords), `the outline carries the words on the slides ("${firstWords}…")`)
+  ok(/notes: /.test(askedText), 'and the speaker notes')
+  ok(/- chart: /.test(askedText), 'a chart is outlined as its series and numbers')
+  ok(!/"x":|"fontSize"|"fill":/.test(askedText), 'geometry and styling stay out of an outline')
+  const asJson = buildMessages(starter, 'deck', 2, [], 'Add a closing slide')
+  const jsonTokens = approxTokens(asJson.messages.at(-1)!.content)
+  ok(asked.contextTokens < jsonTokens / 4, `the outline is under a quarter of the JSON (${asked.contextTokens} vs ${jsonTokens} tokens)`)
+  ok(asked.contextTokens <= LOCAL_TOKEN_BUDGET, `the starter deck's outline fits the on-device budget (${asked.contextTokens} ≤ ${LOCAL_TOKEN_BUDGET})`)
+  ok(asJson.contextTokens > LOCAL_TOKEN_BUDGET, `the starter deck's JSON does not (${asJson.contextTokens}) — the panel refuses it before sending on a local model`)
+  ok(asked.messages.at(-1)!.content.trimEnd().endsWith('Summarise this deck'), 'a question turn ends with the question')
+  const one = buildMessages(starter, 'slide', 2, [], 'What is this slide about?')
+  const oneText = one.messages.at(-1)!.content
+  ok(oneText.includes('Scope: slide 3 of') && oneText.includes('Slide 3 (id "') && !oneText.includes('Slide 4 (id "'), 'slide scope outlines just the open slide')
+  ok(outlineDeck({ title: 'T', slides: [{ id: 'a', elements: [{ type: 'text', html: '<p>Hello&nbsp;<b>world</b></p>' }, { type: 'table', rows: [{ cells: [{ html: 'a' }, { html: 'b' }] }] }] }] }).includes('- Hello world') , 'html is reduced to its words')
 }
 
 console.log('\nprompt.ts — reading a reply')

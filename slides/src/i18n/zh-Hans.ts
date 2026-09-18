@@ -941,6 +941,8 @@ export const zhHans: Catalog = {
   "(edited the deck)": "（编辑了演示文稿）",
   "This deck is read-only here — nothing was changed.": "此演示文稿在此处为只读 — 未作任何更改。",
   "The reply was not a deck edit I could apply.": "回复不是可以应用的演示文稿编辑。",
+  "The whole deck is too large for the on-device model ({tokens} tokens). Ask a question about it, switch to \"This slide\", or choose a hosted provider in the extension settings.": "整个演示文稿对设备上的模型来说太大了（{tokens} 个 token）。可以就其内容提问、切换到“此幻灯片”，或在扩展设置中选择托管服务商。",
+  "This slide is too large for the on-device model ({tokens} tokens). Ask a question about it, or choose a hosted provider in the extension settings.": "此幻灯片对设备上的模型来说太大了（{tokens} 个 token）。可以就其内容提问，或在扩展设置中选择托管服务商。",
   "Applied to this slide": "已应用到此幻灯片",
   "Applied to the deck": "已应用到演示文稿",
   "Undo": "撤销",

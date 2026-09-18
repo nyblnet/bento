@@ -941,6 +941,8 @@ export const ja: Catalog = {
   "(edited the deck)": "（デッキを編集しました）",
   "This deck is read-only here — nothing was changed.": "このデッキはここでは読み取り専用です — 何も変更されていません。",
   "The reply was not a deck edit I could apply.": "返答は適用できるデッキの編集ではありませんでした。",
+  "The whole deck is too large for the on-device model ({tokens} tokens). Ask a question about it, switch to \"This slide\", or choose a hosted provider in the extension settings.": "デッキ全体はデバイス上のモデルには大きすぎます（{tokens} トークン）。内容について質問するか、「このスライド」に切り替えるか、拡張機能の設定でホスト型プロバイダーを選んでください。",
+  "This slide is too large for the on-device model ({tokens} tokens). Ask a question about it, or choose a hosted provider in the extension settings.": "このスライドはデバイス上のモデルには大きすぎます（{tokens} トークン）。内容について質問するか、拡張機能の設定でホスト型プロバイダーを選んでください。",
   "Applied to this slide": "このスライドに適用しました",
   "Applied to the deck": "デッキに適用しました",
   "Undo": "元に戻す",

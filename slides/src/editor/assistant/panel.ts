@@ -24,7 +24,7 @@ import { ExtensionTransport, extensionPresent, type AssistantDescription, type A
 /** Display names for on-device model ids; anything else shows as its id. */
 export const MODEL_NAMES: Record<string, string> = { 'gemini-nano': 'Gemini Nano' }
 export const modelDisplay = (id: string): string => MODEL_NAMES[id] ?? id
-import { buildMessages, cleanDoc, mergeReply, parseReply, type AssistantScope, type Turn } from './prompt'
+import { buildMessages, cleanDoc, LOCAL_TOKEN_BUDGET, mergeReply, parseReply, type AssistantScope, type Turn } from './prompt'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
 /** Where "get the extension" points. The app has no store link yet — the
@@ -245,7 +245,16 @@ export class AssistantPanel {
     const doc = this.store.doc
     const index = this.store.currentIndex
     const scope = this.scope
-    const { messages, elided } = buildMessages(doc, scope, index, this.history.slice(0, -1), request)
+    const { messages, elided, question, contextTokens } = buildMessages(doc, scope, index, this.history.slice(0, -1), request)
+    // an on-device model has a small window: refuse here, with the reason,
+    // rather than after the wait with the provider's "too large". Questions
+    // go out as an outline and nearly always fit; an edit sends the JSON.
+    if (this.described?.local && contextTokens > LOCAL_TOKEN_BUDGET) {
+      this.note(scope === 'deck'
+        ? t('The whole deck is too large for the on-device model ({tokens} tokens). Ask a question about it, switch to "This slide", or choose a hosted provider in the extension settings.', { tokens: String(contextTokens) })
+        : t('This slide is too large for the on-device model ({tokens} tokens). Ask a question about it, or choose a hosted provider in the extension settings.', { tokens: String(contextTokens) }), 'err')
+      return
+    }
     this.setRunning(true)
     const live = this.note('', 'assistant')
     live.classList.add('ed-assist-live')
@@ -265,7 +274,8 @@ export class AssistantPanel {
       return
     }
     this.setRunning(false)
-    const reply = parseReply(text)
+    // a question's reply is prose whatever shape it took — never applied
+    const reply = question ? { kind: 'text' as const, text: text.trim() } : parseReply(text)
     if (reply.kind === 'text') {
       live.textContent = reply.text
       live.classList.remove('ed-assist-live')

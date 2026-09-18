@@ -939,6 +939,8 @@ export const pt: Catalog = {
   "(edited the deck)": "(editou o deck)",
   "This deck is read-only here — nothing was changed.": "Este deck é só de leitura aqui — nada foi alterado.",
   "The reply was not a deck edit I could apply.": "A resposta não era uma edição do deck que eu pudesse aplicar.",
+  "The whole deck is too large for the on-device model ({tokens} tokens). Ask a question about it, switch to \"This slide\", or choose a hosted provider in the extension settings.": "O deck inteiro é grande demais para o modelo no dispositivo ({tokens} tokens). Faça uma pergunta sobre ele, mude para «Este slide» ou escolha um provedor hospedado nas configurações da extensão.",
+  "This slide is too large for the on-device model ({tokens} tokens). Ask a question about it, or choose a hosted provider in the extension settings.": "Este slide é grande demais para o modelo no dispositivo ({tokens} tokens). Faça uma pergunta sobre ele ou escolha um provedor hospedado nas configurações da extensão.",
   "Applied to this slide": "Aplicado a este slide",
   "Applied to the deck": "Aplicado ao deck",
   "Undo": "Anular",

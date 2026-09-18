@@ -941,6 +941,8 @@ export const de: Catalog = {
   "(edited the deck)": "(hat das Deck bearbeitet)",
   "This deck is read-only here — nothing was changed.": "Dieses Deck ist hier schreibgeschützt — nichts wurde geändert.",
   "The reply was not a deck edit I could apply.": "Die Antwort war keine Deck-Änderung, die ich anwenden konnte.",
+  "The whole deck is too large for the on-device model ({tokens} tokens). Ask a question about it, switch to \"This slide\", or choose a hosted provider in the extension settings.": "Das ganze Deck ist zu groß für das Modell auf diesem Gerät ({tokens} Tokens). Stellen Sie eine Frage dazu, wechseln Sie zu „Diese Folie“ oder wählen Sie in den Erweiterungseinstellungen einen gehosteten Anbieter.",
+  "This slide is too large for the on-device model ({tokens} tokens). Ask a question about it, or choose a hosted provider in the extension settings.": "Diese Folie ist zu groß für das Modell auf diesem Gerät ({tokens} Tokens). Stellen Sie eine Frage dazu oder wählen Sie in den Erweiterungseinstellungen einen gehosteten Anbieter.",
   "Applied to this slide": "Auf diese Folie angewendet",
   "Applied to the deck": "Auf das Deck angewendet",
   "Undo": "Rückgängig",

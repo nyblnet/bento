@@ -941,6 +941,8 @@ export const es: Catalog = {
   "(edited the deck)": "(editó el mazo)",
   "This deck is read-only here — nothing was changed.": "Este mazo es de solo lectura aquí — no se cambió nada.",
   "The reply was not a deck edit I could apply.": "La respuesta no era una edición del mazo que pudiera aplicar.",
+  "The whole deck is too large for the on-device model ({tokens} tokens). Ask a question about it, switch to \"This slide\", or choose a hosted provider in the extension settings.": "El mazo entero es demasiado grande para el modelo en el dispositivo ({tokens} tokens). Haz una pregunta sobre él, cambia a «Esta diapositiva» o elige un proveedor alojado en los ajustes de la extensión.",
+  "This slide is too large for the on-device model ({tokens} tokens). Ask a question about it, or choose a hosted provider in the extension settings.": "Esta diapositiva es demasiado grande para el modelo en el dispositivo ({tokens} tokens). Haz una pregunta sobre ella o elige un proveedor alojado en los ajustes de la extensión.",
   "Applied to this slide": "Aplicado a esta diapositiva",
   "Applied to the deck": "Aplicado al mazo",
   "Undo": "Deshacer",

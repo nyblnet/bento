@@ -21,6 +21,18 @@
 //   - anything the model invents at those slots: a reply's collab/docId are
 //     ignored, a token it did not receive stays a string (the gate then
 //     treats it as a broken src, which is what it is).
+//
+// TWO KINDS OF TURN. An EDIT sends the JSON and expects JSON back. A QUESTION
+// ("summarise this deck", "what is slide 4 about?") sends a text OUTLINE of
+// the same scope — slide numbers, the words on each slide, the notes — and
+// asks for prose. Measured on the starter deck: the compact deck is 88 KB
+// (~22k tokens), its outline under 5 KB. Chrome's on-device model has a
+// window of a few thousand tokens, so before this every deck-scope question
+// on it failed as "too large", and the slide-scope ones came back as the
+// slide's JSON echoed — a small model answers in the shape it was shown. The
+// outline is what a question needs from any provider; the JSON is what an
+// edit needs. `isQuestion` decides from the request's wording; a question's
+// reply is never applied, whatever shape it comes back in.
 
 import { isWebUrl, type BentoDoc } from '../../model.ts'
 import { compactDoc, COMPACT_FLAG } from '../../compact.ts'
@@ -42,6 +54,10 @@ How to answer:
 - Keep everything you were not asked to change exactly as it is. Change only what the request needs.
 - To answer a question or when no change is right, reply in plain text with no JSON object.
 - Never include "collab", "docId" or "modified".`
+
+/** The system prompt for a QUESTION turn: an outline goes out, prose comes
+ *  back. Short on purpose — it has to fit an on-device model too. */
+export const QUESTION_PROMPT = `You are the assistant inside Bento Slides, a presentation editor. The user shows you an outline of their slides (the words on each slide and the speaker notes) and asks about it. Answer in plain text: clear and short, no JSON, no code. If they ask for a change rather than a question, describe what you would change and say they can ask for it as an instruction.`
 
 const ASSET_TOKEN = /^@@bento-asset-(\d+)@@$/
 
@@ -109,18 +125,106 @@ export const ID_RE = /^[A-Za-z0-9._:/-]{1,120}$/
 
 const MAX_HISTORY = 8
 
+/**
+ * Does the request ask ABOUT the deck rather than for a change to it? A
+ * trailing question mark, or an opening that asks — summarise, explain,
+ * what, why, how, which, describe, review, list, suggest, tell me… A wrong
+ * guess costs little either way: a question sent as an edit gets prose back
+ * (the edit prompt allows prose), an edit sent as a question gets prose
+ * describing the change instead of the change — the reply says so and the
+ * user rephrases as an instruction ("change…", "make…", "add…").
+ */
+const QUESTION_RE = /^(?:(?:please|can|could|would)\s+(?:you\s+)?)?(?:summari[sz]e|sum up|explain|describe|review|critique|assess|evaluate|check|proofread|list|count|compare|what|what's|whats|why|how|which|who|where|when|is|are|does|do|did|tell me|give me (?:a |an |some |your )?(?:summary|overview|feedback|thoughts|opinion|ideas?|suggestions?)|suggest|recommend|any (?:ideas|thoughts|suggestions)|thoughts on|feedback on)\b/i
+export function isQuestion(request: string): boolean {
+  const r = request.trim()
+  if (/\?\s*$/.test(r)) return true
+  return QUESTION_RE.test(r)
+}
+
+const TEXT_MAX = 400
+/** The words in a piece of html or markdown: tags gone, whitespace folded. */
+const words = (s: unknown): string => typeof s === 'string'
+  ? s.replace(/<br\s*\/?>|<\/(?:p|div|li|h\d|tr)>/gi, ' ').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim().slice(0, TEXT_MAX)
+  : ''
+
+/**
+ * One slide as a text outline: its number and id, then every piece of text
+ * on it in element order (table cells joined, chart series with their
+ * numbers), then the notes. Geometry, colours, assets and svg markup are
+ * not words and stay out — this is what a question about CONTENT needs.
+ */
+export function outlineSlide(slide: Obj, n: number): string {
+  const lines: string[] = [`Slide ${n}${slide.id ? ` (id "${String(slide.id)}")` : ''}${slide.stateOf ? ` — a hidden state of slide id "${String(slide.stateOf)}"` : ''}${slide.layout ? ` [layout ${String(slide.layout)}]` : ''}:`]
+  const visit = (v: unknown) => {
+    if (Array.isArray(v)) { for (const x of v) visit(x); return }
+    if (!isObj(v)) return
+    const type = String(v.type ?? '')
+    if (type === 'text') {
+      const w = words(v.md ?? v.html)
+      if (w) lines.push(`  - ${v.role ? `${String(v.role)}: ` : ''}${w}`)
+    } else if (type === 'table') {
+      const rows = Array.isArray(v.rows) ? v.rows as Obj[] : []
+      const out = rows.map((r) => (Array.isArray(r.cells) ? r.cells as Obj[] : []).map((c) => words(c.html)).join(' | ')).filter(Boolean)
+      if (out.length) lines.push(`  - table: ${out.join(' / ').slice(0, TEXT_MAX * 2)}`)
+    } else if (type === 'chart') {
+      const opt = isObj(v.option) ? v.option : {}
+      const series = Array.isArray(opt.series) ? (opt.series as Obj[]).map((x) => `${String(x.name ?? x.type ?? 'series')}${Array.isArray(x.data) ? ` [${(x.data as unknown[]).slice(0, 12).map((d) => isObj(d) ? `${String(d.name ?? '')}=${String(d.value ?? '')}` : String(d)).join(', ')}]` : ''}`) : []
+      const cats = isObj(opt.xAxis) && Array.isArray(opt.xAxis.data) ? ` over ${(opt.xAxis.data as unknown[]).slice(0, 12).map(String).join(', ')}` : ''
+      lines.push(`  - chart${series.length ? `: ${series.join('; ')}` : ''}${cats}`)
+    } else if (type === 'image' || type === 'media') {
+      lines.push(`  - ${type}${typeof v.alt === 'string' && v.alt ? `: ${words(v.alt)}` : ''}`)
+    } else if (type === 'shape') {
+      const w = words(v.html)
+      if (w) lines.push(`  - ${w}`)
+    }
+  }
+  visit(slide.elements)
+  if (typeof slide.notes === 'string' && slide.notes.trim()) lines.push(`  notes: ${words(slide.notes)}`)
+  return lines.join('\n')
+}
+
+/** The whole deck as an outline: title, then every slide (hidden states included, marked). */
+export function outlineDeck(compact: Obj): string {
+  const slides = (compact.slides ?? []) as Obj[]
+  const head = `Deck${compact.title ? ` "${String(compact.title)}"` : ''}, ${slides.length} slides.`
+  return [head, ...slides.map((s, i) => outlineSlide(s, i + 1))].join('\n')
+}
+
+/** Roughly how many model tokens a text costs: chars/4, the usual estimate
+ *  for English and JSON. Only used to refuse early, never to bill. */
+export const approxTokens = (text: string): number => Math.ceil(text.length / 4)
+
+/** A conservative window for an on-device model (Chrome's Gemini Nano
+ *  reports ~6k tokens of input quota; the reply shares it, and an edit's
+ *  reply is as long as its input). A context past this is refused BEFORE it
+ *  is sent, with a note that says why, instead of the provider's "too
+ *  large" after the wait. */
+export const LOCAL_TOKEN_BUDGET = 2800
+
+export interface BuiltMessages { messages: AssistantMessage[]; elided: Elided; question: boolean; contextTokens: number }
+
 /** The messages for one turn. `currentIndex` picks the slide for scope 'slide'. */
-export function buildMessages(doc: BentoDoc, scope: AssistantScope, currentIndex: number, history: Turn[], request: string): { messages: AssistantMessage[]; elided: Elided } {
+export function buildMessages(doc: BentoDoc, scope: AssistantScope, currentIndex: number, history: Turn[], request: string): BuiltMessages {
   const elided = elideDoc(doc)
   const slides = (elided.doc.slides ?? []) as Obj[]
-  const messages: AssistantMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }]
+  const question = isQuestion(request)
+  const messages: AssistantMessage[] = [{ role: 'system', content: question ? QUESTION_PROMPT : SYSTEM_PROMPT }]
   for (const turn of history.slice(-MAX_HISTORY)) messages.push({ role: turn.role, content: turn.text })
   const slide = slides[currentIndex]
-  const context = scope === 'slide' && slide
-    ? `Scope: slide (slide ${currentIndex + 1} of ${slides.length}, id "${String(slide.id ?? '')}").\nThe deck's size is ${JSON.stringify((elided.doc.size ?? { width: 1280, height: 720 }))}${elided.doc.theme ? ` and its theme is ${JSON.stringify(elided.doc.theme)}` : ''}.\nThe slide:\n${JSON.stringify(slide)}`
-    : `Scope: deck (${slides.length} slides; slide ${currentIndex + 1} is open).\nThe deck:\n${JSON.stringify(elided.doc)}`
-  messages.push({ role: 'user', content: `${request.trim()}\n\n${context}` })
-  return { messages, elided }
+  let context: string
+  if (question) {
+    context = scope === 'slide' && slide
+      ? `Scope: slide ${currentIndex + 1} of ${slides.length}.\n${outlineSlide(slide, currentIndex + 1)}`
+      : `Scope: the whole deck (slide ${currentIndex + 1} is open).\n${outlineDeck(elided.doc)}`
+  } else {
+    context = scope === 'slide' && slide
+      ? `Scope: slide (slide ${currentIndex + 1} of ${slides.length}, id "${String(slide.id ?? '')}").\nThe deck's size is ${JSON.stringify((elided.doc.size ?? { width: 1280, height: 720 }))}${elided.doc.theme ? ` and its theme is ${JSON.stringify(elided.doc.theme)}` : ''}.\nThe slide:\n${JSON.stringify(slide)}`
+      : `Scope: deck (${slides.length} slides; slide ${currentIndex + 1} is open).\nThe deck:\n${JSON.stringify(elided.doc)}`
+  }
+  // a question reads the outline first and the question last (the thing to
+  // do is the freshest text); an edit leads with the instruction
+  messages.push({ role: 'user', content: question ? `${context}\n\n${request.trim()}` : `${request.trim()}\n\n${context}` })
+  return { messages, elided, question, contextTokens: approxTokens(messages[0].content + context) }
 }
 
 /** What a reply turned out to be. */

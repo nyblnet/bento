@@ -941,6 +941,8 @@ export const zhHant: Catalog = {
   "(edited the deck)": "（編輯了簡報）",
   "This deck is read-only here — nothing was changed.": "此簡報在此為唯讀 — 未作任何變更。",
   "The reply was not a deck edit I could apply.": "回覆不是可以套用的簡報編輯。",
+  "The whole deck is too large for the on-device model ({tokens} tokens). Ask a question about it, switch to \"This slide\", or choose a hosted provider in the extension settings.": "整個簡報對裝置上的模型來說太大了（{tokens} 個 token）。可以就其內容提問、切換到「此投影片」，或在擴充功能設定中選擇託管服務商。",
+  "This slide is too large for the on-device model ({tokens} tokens). Ask a question about it, or choose a hosted provider in the extension settings.": "此投影片對裝置上的模型來說太大了（{tokens} 個 token）。可以就其內容提問，或在擴充功能設定中選擇託管服務商。",
   "Applied to this slide": "已套用至此投影片",
   "Applied to the deck": "已套用至簡報",
   "Undo": "復原",
