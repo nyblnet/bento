@@ -7438,3 +7438,29 @@ of JSON) but the focus for a single selected element.
 just a hidden one). A third sidebar for the assistant (three columns on a
 13" laptop). Keeping whole-deck JSON as a "power" mode for big windows — the
 patch does everything it did, without the rewrite risk.
+
+**Where model knowledge lives (2026-09-18, after measuring).** The first
+cut of this shape put the prompts, the token budgets, the window
+assumptions, the per-mode schemas, the question detector and a
+model-family limit table in `slides/src/editor/assistant/prompt.ts` — 497
+lines, and measured by building both sides, +25,294 B on a 666,953 B shell
+(+3.8%) that ships in every saved file. That is the wrong home twice over:
+model knowledge goes stale monthly (a new vendor tier, a new window, a new
+constrained-output dialect) while the file format does not, and the
+extension updates itself while a saved deck's shell is frozen until the
+next signed release. So the split is now: the PAGE holds FORMAT knowledge
+only — `material.ts` (elide, the addressed outline, the focus, merge,
+dedupe, clean) and `ops.ts` (what a verb means for the document) — and
+hands the extension the MATERIAL for a turn in every shape at once (plain
+outline, addressed outline, focus JSON); the EXTENSION holds the model
+knowledge — is it a question, what the window takes, the prompts, the
+schema, the prose→JSON nudge, the per-provider request — and returns prose
+or an ops patch, which the page validates and applies exactly as before.
+The bridge is `assistant.turn` → (consent) → `assistant.document` →
+chunk/done/error; nothing of the document leaves before consent holds.
+Explanatory sentences ("what is sent, what is not") moved from the drawer
+to the extension's settings card, where the key lives and where 30
+locales are maintained; the drawer keeps labels. Measured after the move:
++18,239 B (+2.7%); the remaining page half is the drawer UI (the picker,
+the pop-out window, the transcript renderer), the transport's shape
+guards, and the format code — see the PR body for the per-module numbers.

@@ -38,6 +38,12 @@
 // undoable swap — so a `set` of arbitrary fields is exactly as trusted as
 // a field in a pasted file, no more. Everything unknown, malformed or out
 // of range is skipped and named, never fatal.
+//
+// The PROMPT that teaches a model these verbs and the JSON SCHEMA that
+// constrains its output are the extension's (home/webext/src/assistant.js):
+// model knowledge, kept beside the model. This file is the format's side:
+// what a verb MEANS for the document. The two are kept in step by hand and
+// by the rig's fixture replies.
 
 import { mintId } from '../../compact.ts'
 
@@ -58,9 +64,6 @@ export const LAYOUTS = ['title', 'title-content', 'two-col', 'section', 'three-c
 /** the add op's text fields → the layout roles that place them */
 const ADD_ROLES: Record<string, string> = { title: 'title', subtitle: 'subtitle', kicker: 'kicker', body: 'body', left: 'left', right: 'right', quote: 'quote', attribution: 'attribution', card1: 'card1', card2: 'card2', card3: 'card3' }
 
-const SIZE = ['bigger', 'smaller'] as const
-const WEIGHT = ['bold', 'normal'] as const
-const ALIGN = ['left', 'center', 'right'] as const
 export const DEFAULT_FONT_SIZE = 32   // model.ts defaultText — compact omits it when default
 const SIZE_STEP = 1.25
 
@@ -85,38 +88,6 @@ export function remoteUrls(v: unknown, out = new Set<string>()): Set<string> {
 const SLIDE_FIELDS = new Set(['background', 'transition', 'layout', 'hidden', 'notes', 'hover'])
 export const INSERT_MAX = 40      // elements one reply may insert
 export const SET_MAX = 200        // set ops one reply may carry
-
-/** The strict schema: the words-and-choices verbs only — what a turn that
- *  carried no focus JSON (a small window) is asked for. Kept to type/
- *  properties/items/required/enum, the subset every dialect takes. */
-export const OPS_SCHEMA: Record<string, unknown> = {
-  type: 'object',
-  properties: {
-    edits: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' } }, required: ['id', 'text'] } },
-    notes: { type: 'array', items: { type: 'object', properties: { slide: { type: 'integer' }, text: { type: 'string' } }, required: ['slide', 'text'] } },
-    cells: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, row: { type: 'integer' }, col: { type: 'integer' }, text: { type: 'string' } }, required: ['id', 'row', 'col', 'text'] } },
-    chart: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, series: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, data: { type: 'array', items: { type: 'number' } } }, required: ['name', 'data'] } }, categories: { type: 'array', items: { type: 'string' } } }, required: ['id'] } },
-    style: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, size: { type: 'string', enum: [...SIZE] }, weight: { type: 'string', enum: [...WEIGHT] }, align: { type: 'string', enum: [...ALIGN] } }, required: ['id'] } },
-    add: { type: 'array', items: { type: 'object', properties: { after: { type: 'integer' }, layout: { type: 'string', enum: [...LAYOUTS] }, title: { type: 'string' }, subtitle: { type: 'string' }, kicker: { type: 'string' }, body: { type: 'string' }, left: { type: 'string' }, right: { type: 'string' }, quote: { type: 'string' }, attribution: { type: 'string' }, card1: { type: 'string' }, card2: { type: 'string' }, card3: { type: 'string' }, notes: { type: 'string' } }, required: ['after', 'layout'] } },
-    remove: { type: 'array', items: { type: 'integer' } },
-    move: { type: 'array', items: { type: 'object', properties: { slide: { type: 'integer' }, to: { type: 'integer' } }, required: ['slide', 'to'] } },
-  },
-}
-
-/** The system prompt for an ops turn. Short: it has to fit a small window
- *  beside the outline, and a small model follows a short list better. */
-export const OPS_PROMPT = `You are the editing assistant inside Bento Slides, a presentation editor. The user shows you an outline of their whole deck — each slide numbered, each text with its address in [square brackets], tables listing cells as r<row>c<col>, charts their series and numbers — and, when there is room, the FOCUS in full: the selected elements or the open slide as compact JSON (fields: x y w h in slide pixels, fill, stroke, strokeWidth, radius, fontSize, fontWeight, color, align, valign, fontFamily, lineHeight, html/md, src, shape, option). Requests about "this" mean the focus. Reply with ONE JSON object and nothing else, using only the keys you need:
-- "edits": [{"id","text"}] — a text's complete new wording (markdown allowed: **bold**, *italic*, a blank line between paragraphs). The id copied exactly as shown.
-- "notes": [{"slide","text"}] — a slide's speaker notes.
-- "cells": [{"id","row","col","text"}] — one table cell.
-- "chart": [{"id","series":[{"name","data":[numbers]}],"categories":[...]}] — a chart's numbers.
-- "style": [{"id","size":"bigger"|"smaller","weight":"bold"|"normal","align":"left"|"center"|"right"}] — a text's look.
-- "add": [{"after": slide number (0 = at the start), "layout": "title"|"title-content"|"two-col"|"section"|"three-cards"|"quote"|"blank", "title","subtitle","kicker","body","left","right","quote","attribution","card1","card2","card3","notes", "elements": [full elements, only for a slide you design yourself]}] — a new slide.
-- "remove": [slide numbers]. "move": [{"slide","to"}] — put a slide where another is.
-- "set": [{"id", ...fields}] — change an element precisely: only the fields you change, values in the compact form shown in the focus; never id or type.
-- "insert": [{"slide", "type": "text"|"shape"|"image"|"table"|"chart", ...fields with x y w h}] — a new element (the slide is 1280×720 unless the size says otherwise; keep 96px side margins).
-- "delete": ["n/id"] — remove elements. "slide": [{"slide","background","transition","layout","hidden"}] — a slide's own fields.
-Change only what the request asks. Leave everything else out. If it cannot be done with these operations, say so in plain text and do not write JSON.`
 
 export interface OpsResult { doc: Obj; applied: string[]; skipped: string[]; structural: boolean }
 

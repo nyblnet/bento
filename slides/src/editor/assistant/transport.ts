@@ -74,26 +74,37 @@
 //                        text and re-runs check ONCE when the document regains
 //                        focus or visibility. The page keys on CODES, never on
 //                        the reason text.
-//   assistant.send       payload { messages: [{ role:'system'|'user'|'assistant', content }], schema? }
-//                        `schema` = a JSON Schema for the reply when the page
-//                        needs an object back (an edit). The extension passes
-//                        it to providers that constrain output — the Prompt
-//                        API's responseConstraint, Gemini's responseSchema,
-//                        OpenAI's response_format json_schema — and ignores it
-//                        for the rest (the system prompt asks for the shape
-//                        too). A small model asked for JSON in prose answers
-//                        in prose; constrained, it cannot. The page still
-//                        parses and gates the reply exactly as before.
-//                        → res { ok:true }           the request was accepted and is streaming
-//                        | res { ok:false, reason }   refused (not configured, offline, bad key …)
-//                        then, for an accepted request, zero or more
-//                        evt { kind:'assistant.chunk', text }        one delta of reply text
+//   assistant.turn       payload { request, history: [{ role:'user'|'assistant', text }] (≤8), focus: { index, selection } }
+//                        one conversation turn. The EXTENSION owns the model
+//                        knowledge — is it a question or an edit, what the
+//                        model's window takes, the prompts, the schema, the
+//                        nudge when a small model answers in prose — and the
+//                        page owns the document. So the page sends only the
+//                        request and where the user is, and:
+//                        → res { ok:true }           accepted (consent is asked FIRST — nothing
+//                                                     of the document leaves before it holds)
+//                        | res { ok:false, reason, code? }   refused (not configured, offline, denied …)
+//                        then the extension ASKS for the material:
+//                        evt { kind:'assistant.document', id }
+//                        and the page answers on the same id:
+//                        req { op:'assistant.document', id, payload: <Material> }
+//                        (material.ts: the plain outline, the addressed
+//                        outline, the focus in full — every shape at once;
+//                        the extension picks by the model it holds. The
+//                        elision map never leaves the page.) Then zero or more
+//                        evt { kind:'assistant.chunk', text }        a prose delta (question turns)
 //                        and exactly one of
-//                        evt { kind:'assistant.done', text }         the WHOLE reply text
-//                        evt { kind:'assistant.error', reason, code? }  the request failed mid-way;
-//                        `code: 'consent-denied'` = the user refused the
-//                        on-device model → a plain refusal card, deck unchanged.
-//   assistant.abort      payload { req: <id of the send> } → res { ok:true }
+//                        evt { kind:'assistant.done', mode:'ask', text }
+//                        evt { kind:'assistant.done', mode:'edit', ops, note?, focus:'elements'|'slide'|'none' }
+//                                                     `ops` = the JSON object the model returned, UNTRUSTED —
+//                                                     the page applies it through ops.ts and the gate;
+//                                                     `note` = a sentence to show (e.g. only the outline fit)
+//                        evt { kind:'assistant.done', mode:'edit', text }   the model answered in prose
+//                        evt { kind:'assistant.error', reason, code? }  the turn failed; the page shows
+//                                                     `reason` verbatim (the extension localizes) and keys
+//                                                     behaviour on `code`: 'consent-denied' (deck unchanged),
+//                                                     'window' (nothing fit), 'model-download' …
+//   assistant.abort      payload { req: <id of the turn> } → res { ok:true }
 //                        stop streaming that request; the extension may still
 //                        emit a final evt for it, which the page ignores.
 //   assistant.settings.open  payload {}            → res { ok:true }
@@ -104,12 +115,14 @@
 // ({ ok:false, reason:'timeout' }); a stream has no timeout of its own — the
 // user has Stop.
 
-export type AssistantRole = 'system' | 'user' | 'assistant'
+/** A conversation turn as the page keeps it: text only. */
+export interface Turn { role: 'user' | 'assistant'; text: string }
 
-export interface AssistantMessage {
-  role: AssistantRole
-  content: string
-}
+/** What a turn resolved to. `ops` is untrusted data for ops.ts. */
+export type TurnResult =
+  | { mode: 'ask'; text: string }
+  | { mode: 'edit'; text: string }
+  | { mode: 'edit'; ops: Record<string, unknown>; note?: string; focus: 'elements' | 'slide' | 'none' }
 
 export interface AssistantDescription {
   /** what the page may show: the endpoint's hostname and the model id */
@@ -135,8 +148,6 @@ export interface AssistantModel {
   current?: boolean
 }
 
-/** Per-turn options for send. `schema` = a JSON Schema the reply must fit. */
-export interface SendOpts { schema?: Record<string, unknown> }
 
 /** A failed send. `code` is the machine-readable reason, when the bridge gave one. */
 export class AssistantError extends Error {
@@ -162,11 +173,13 @@ export interface AssistantTransport {
   /** make one of them the active route */
   select(provider: string, model: string): Promise<CheckResult>
   /**
-   * One chat turn. `onChunk` receives reply deltas as they stream; the
-   * promise resolves with the whole reply text, rejects with an Error whose
-   * `name` is 'AbortError' when `signal` fired, or with the reason otherwise.
+   * One conversation turn. `material` is called when the extension asks for
+   * the document (after consent); `onChunk` receives prose deltas as they
+   * stream; the promise resolves with the turn's result, rejects with an
+   * Error whose `name` is 'AbortError' when `signal` fired, or an
+   * AssistantError (with `code`) otherwise.
    */
-  send(messages: AssistantMessage[], onChunk: (text: string) => void, signal: AbortSignal, opts?: SendOpts): Promise<string>
+  turn(request: string, history: Turn[], focus: { index: number; selection: string[] }, material: () => Record<string, unknown>, onChunk: (text: string) => void, signal: AbortSignal): Promise<TurnResult>
   /** ask the host to show where the endpoint and key are configured */
   openSettings(): Promise<void>
 }
@@ -301,10 +314,10 @@ export class ExtensionTransport implements AssistantTransport {
     return { ok: false, reason: String(r.reason ?? 'unknown'), ...(code ? { code } : {}) }
   }
 
-  send(messages: AssistantMessage[], onChunk: (text: string) => void, signal: AbortSignal, opts: SendOpts = {}): Promise<string> {
+  turn(request: string, history: Turn[], focus: { index: number; selection: string[] }, material: () => Record<string, unknown>, onChunk: (text: string) => void, signal: AbortSignal): Promise<TurnResult> {
     this.listen()
     const id = mintId()
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<TurnResult>((resolve, reject) => {
       let text = ''
       let settled = false
       const finish = (fn: () => void) => {
@@ -322,17 +335,27 @@ export class ExtensionTransport implements AssistantTransport {
       if (signal.aborted) { onAbort(); return }
       signal.addEventListener('abort', onAbort, { once: true })
       this.streams.set(id, (f) => {
-        if (f.kind === 'assistant.chunk') {
+        if (f.kind === 'assistant.document') {
+          // the extension asks for the deck (consent holds): answer on the
+          // same id. The material is built NOW, from the live document.
+          void this.request('assistant.document', material(), id)
+        } else if (f.kind === 'assistant.chunk') {
           const t = typeof f.text === 'string' ? f.text : ''
           if (t) { text += t; onChunk(t) }
         } else if (f.kind === 'assistant.done') {
-          finish(() => resolve(typeof f.text === 'string' && f.text ? f.text : text))
+          const whole = typeof f.text === 'string' && f.text ? f.text : text
+          if (f.mode === 'edit' && f.ops && typeof f.ops === 'object' && !Array.isArray(f.ops)) {
+            const fs = f.focus === 'elements' || f.focus === 'slide' ? f.focus : 'none'
+            finish(() => resolve({ mode: 'edit', ops: f.ops as Record<string, unknown>, focus: fs, ...(typeof f.note === 'string' && f.note ? { note: f.note } : {}) }))
+          } else {
+            finish(() => resolve(f.mode === 'edit' ? { mode: 'edit', text: whole } : { mode: 'ask', text: whole }))
+          }
         } else if (f.kind === 'assistant.error') {
           finish(() => reject(new AssistantError(String(f.reason ?? 'request failed'), codeOf(f.code))))
         }
       })
-      void this.request('assistant.send', opts.schema ? { messages, schema: opts.schema } : { messages }, id).then((r) => {
-        if (r.ok !== true) finish(() => reject(new Error(String(r.reason ?? 'refused'))))
+      void this.request('assistant.turn', { request, history: history.slice(-8).map((t) => ({ role: t.role, text: t.text })), focus }, id).then((r) => {
+        if (r.ok !== true) finish(() => reject(new AssistantError(String(r.reason ?? 'refused'), codeOf(r.code))))
       })
     })
   }

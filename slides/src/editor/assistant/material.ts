@@ -1,59 +1,53 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// What the assistant is told, and how its reply becomes a document. Pure —
-// no DOM, no transport — so scripts/test-slides-assistant.ts drives it in
-// node; the panel (panel.ts) does the wiring.
+// What the page knows about a deck FOR a model, and how a model's patch
+// becomes a document. Pure — no DOM, no transport — so
+// scripts/test-slides-assistant.ts drives it in node; the panel (panel.ts)
+// does the wiring.
 //
-// The deck goes out in its COMPACT form (src/compact.ts — the shape AGENTS.md
-// teaches every agent) and the reply comes back in it too, then takes the
-// same road pasted JSON takes: parseDocInputReport → the untrusted gate → one
-// store.replaceDoc, undoable as one step. Nothing the model says reaches the
-// renderer without passing the gate.
+// WHERE KNOWLEDGE LIVES. This module holds FORMAT knowledge: the compact
+// form (src/compact.ts — the shape AGENTS.md teaches every agent), how to
+// elide it, how to address every text, table and chart as
+// `<slide number>/<element id>`, how to write an outline of it, and how a
+// patch is merged and cleaned. It holds NO model knowledge: no prompts, no
+// token budgets, no window sizes, no schema, no turn shapes. Those live in
+// the extension (home/webext/src/assistant.js), which holds the key and
+// the model and is the only party that knows what the model can take.
+// The page hands the extension the MATERIAL for a turn (`material()`) —
+// the plain outline, the addressed outline, and the focus in full — and
+// the extension decides what to send, builds the prompt, calls the model
+// and returns either prose or an ops patch (ops.ts). Measured reason: the
+// first split put 25 KB of prompts, budgets and a model-family table in a
+// 660 KB shell that ships in every saved file; the extension updates
+// itself and its model knowledge goes stale monthly, the file format does
+// not.
 //
 // Three things never leave the page:
 //   - `collab` (room keys) and `docId`: identity and capability are not
-//     content. Stripped from the prompt, carried over from the live document
-//     on apply — the same rule "Replace from JSON…" applies.
+//     content. Stripped from the material, carried over from the live
+//     document on apply — the same rule "Replace from JSON…" applies.
 //   - inline assets (data: URIs, `assets`, `fonts`): elided to a short token
-//     the reply can echo back, restored on apply. A 4 MB photo is not
+//     the patch can echo back, restored on apply. A 4 MB photo is not
 //     something to spend tokens on, and a model cannot edit pixels anyway.
-//   - anything the model invents at those slots: a reply's collab/docId are
+//   - anything the model invents at those slots: a patch's collab/docId are
 //     ignored, a token it did not receive stays a string (the gate then
 //     treats it as a broken src, which is what it is).
 //
-// TWO KINDS OF TURN. A QUESTION ("summarise this deck", "what is slide 4
-// about?") sends a text OUTLINE of the deck — slide numbers, the words on
-// each slide, the notes — and asks for prose; its reply is never applied,
-// whatever shape it comes back in. An EDIT sends the ADDRESSED outline
-// (every text, table cell and chart with its <slide>/<id>) plus the FOCUS
-// in full — the selected elements' compact JSON, or the open slide's — and
-// asks for an OPS PATCH (ops.ts): targeted operations, applied to a copy of
-// the elided compact doc, which then takes the same road as pasted JSON:
-// mergeReply → the gate → cleanDoc → one undoable swap. The deck is read
-// whole and written surgically; the model never hands it back. Measured on
-// the starter deck: the compact deck is 88 KB (~22k tokens), its outline
-// under 5 KB, one slide 3–11 KB — and the window rule (below) decides how
-// much of that a given model gets.
+// The patch is the ONLY way a model writes: applied to a copy of the elided
+// compact doc (ops.ts applyOps), then mergeReply → parseDocInputReport (the
+// gate) → cleanDoc → one store.replaceDoc, undoable as one step. The model
+// is never asked to hand the deck back (docs/DECISIONS.md, 2026-09-18).
 
 import { isWebUrl, type BentoDoc } from '../../model.ts'
 import { compactDoc, COMPACT_FLAG } from '../../compact.ts'
-import type { AssistantMessage } from './transport.ts'
-import { applyOps, elId, OPS_PROMPT, OPS_SCHEMA } from './ops.ts'
-export { applyOps, elId, OPS_PROMPT, OPS_SCHEMA } from './ops.ts'
+import { elId } from './ops.ts'
+export { applyOps, elId } from './ops.ts'
 
 /** A conversation turn as the panel keeps it: text only. A reply that edited
- *  the deck is remembered as its note, never as its JSON — the current deck is
- *  sent fresh every turn, so the old JSON would only cost tokens. */
+ *  the deck is remembered as its note, never as its patch — the material is
+ *  sent fresh every turn. */
 export interface Turn { role: 'user' | 'assistant'; text: string }
-
-/** The system prompt for an EDIT turn: ops.ts owns it (outline + focus in,
- *  an ops patch out). */
-export const EDIT_PROMPT = OPS_PROMPT
-
-/** The system prompt for a QUESTION turn: an outline goes out, prose comes
- *  back. Short on purpose — it has to fit an on-device model too. */
-export const QUESTION_PROMPT = `You are the assistant inside Bento Slides, a presentation editor. The user shows you an outline of their slides (the words on each slide and the speaker notes) and asks about it. Answer in plain text: clear and short, no JSON, no code. If they ask for a change rather than a question, describe what you would change and say they can ask for it as an instruction.`
 
 const ASSET_TOKEN = /^@@bento-asset-(\d+)@@$/
 
@@ -119,24 +113,6 @@ export function elideDoc(doc: BentoDoc): Elided {
 /** The shape of a slide/element id, and of a `link` that names one. */
 export const ID_RE = /^[A-Za-z0-9._:/-]{1,120}$/
 
-const MAX_HISTORY = 8
-
-/**
- * Does the request ask ABOUT the deck rather than for a change to it? A
- * trailing question mark, or an opening that asks — summarise, explain,
- * what, why, how, which, describe, review, list, suggest, tell me… A wrong
- * guess costs little either way: a question sent as an edit gets prose back
- * (the edit prompt allows prose), an edit sent as a question gets prose
- * describing the change instead of the change — the reply says so and the
- * user rephrases as an instruction ("change…", "make…", "add…").
- */
-const QUESTION_RE = /^(?:(?:please|can|could|would)\s+(?:you\s+)?)?(?:summari[sz]e|sum up|explain|describe|review|critique|assess|evaluate|check|proofread|list|count|compare|what|what's|whats|why|how|which|who|where|when|is|are|does|do|did|tell me|give me (?:a |an |some |your )?(?:summary|overview|feedback|thoughts|opinion|ideas?|suggestions?)|suggest|recommend|any (?:ideas|thoughts|suggestions)|thoughts on|feedback on)\b/i
-export function isQuestion(request: string): boolean {
-  const r = request.trim()
-  if (/\?\s*$/.test(r)) return true
-  return QUESTION_RE.test(r)
-}
-
 const TEXT_MAX = 400
 /** The words in a piece of html or markdown: tags gone, whitespace folded.
  *  `full` keeps the whole text (an edit needs it; a question needs a taste). */
@@ -195,149 +171,55 @@ export function outlineDeck(compact: Obj, ids = false): string {
   return [head, ...slides.map((s, i) => outlineSlide(s, i + 1, ids))].join('\n')
 }
 
-/**
- * The wording half of an ops patch on its own (ops.ts applyOps does the
- * rest): each edit names a text element as the outline showed it —
- * `<slide number>/<element id>`, because element ids REPEAT across slides
- * (the morph idiom: the kicker on every slide is `sd-kicker`) and a bare
- * id would land on the wrong slide. Returns the ids as given.
- */
-export function applyWordEdits(compact: Obj, edits: unknown): { doc: Obj; applied: string[]; skipped: string[] } {
-  const r = applyOps(compact, { edits })
-  const strip = (s: string) => s.replace(/^edit /, '')
-  return { doc: r.doc, applied: r.applied.map(strip), skipped: r.skipped.map(strip) }
-}
-
-/** Roughly how many model tokens a text costs: chars/4, the usual estimate
- *  for English and JSON. Only used to refuse early, never to bill. */
-export const approxTokens = (text: string): number => Math.ceil(text.length / 4)
-
-/**
- * ONE SHAPE OF EDIT TURN, THE WAY THE BIG ASSISTANTS DO IT. The model reads
- * the whole deck cheaply — the addressed OUTLINE (every slide's words,
- * notes, table cells, chart numbers, a few KB) — plus the FOCUS in full:
- * the selected elements' compact JSON, or the current slide's when nothing
- * is selected. It answers with an OPS PATCH (ops.ts): targeted operations
- * addressed by slide number and element id. The document is read whole and
- * written surgically; it is never handed back. That is the shape Gemini in
- * Slides and Claude with a file use, and it is why there is no "this slide
- * / whole deck" switch: the selection is the scope, and a model that can
- * see the outline can act on any slide the request names.
- *
- * THE WINDOW STILL DECIDES HOW MUCH GOES. Every model has an input window;
- * the extension reports it (describe.contextTokens) or the page assumes one
- * (small on-device, large hosted). Outline + focus + room for the reply must
- * fit; when the focus does not, only the outline goes (words-and-choices
- * ops still work — that is what Gemini Nano gets on a busy slide); when
- * even the outline does not, the turn is refused with the numbers. A
- * question sends the plain outline and takes prose.
- */
-export const ASSUMED_WINDOW_LOCAL = 6144
-export const ASSUMED_WINDOW_HOSTED = 128_000
-/** tokens kept for the reply: a prose answer, or a patch (which can carry
- *  the focus back changed — hence the focus's own size on top) */
-const REPLY_ROOM = 1500
-
-/** What a turn is: a question (outline out, prose back) or an edit (outline
- *  + focus out, an ops patch back). */
-export type TurnMode = 'ask' | 'edit'
-
-/** What the turn sent as focus: the selected elements, the current slide,
- *  or nothing beyond the outline (the window was too small for it). */
-export type FocusSent = 'elements' | 'slide' | 'none'
-
-/**
- * The reply's shape, for providers that constrain output (the Prompt API's
- * responseConstraint, Gemini's responseSchema, OpenAI's json_schema). A turn
- * that carried no focus JSON is a small-window turn: the strict words-and-
- * choices schema (ops.ts OPS_SCHEMA) — a small model asked in prose answers
- * in prose (measured on Gemini Nano); constrained, it cannot. A turn with
- * focus may also `set`/`insert` free properties, which a strict schema
- * would forbid, so it takes the loose "an object". A question has none.
- */
-export const OBJECT_SCHEMA: Record<string, unknown> = { type: 'object' }
-export const responseSchema = (mode: TurnMode, focus: FocusSent = 'none'): Record<string, unknown> | undefined =>
-  mode === 'ask' ? undefined : focus === 'none' ? OPS_SCHEMA : OBJECT_SCHEMA
-
-/** A small-window edit keeps only the last exchange: a small model primed
- *  by a paragraph of its own summary answers with another one. */
-export const WORDS_HISTORY = 2
-
-/** The one follow-up when an edit comes back as prose: sent once, as the
- *  next user turn, before the reply is shown as text. */
-export const RETRY_NUDGE = 'Reply with only the JSON object described — no explanation, no prose.'
-
 /** Where the user is: the open slide, and what is selected on it. */
 export interface Focus { index: number; selection: string[] }
 
-export interface BuiltMessages {
-  messages: AssistantMessage[]
-  elided: Elided
-  mode: TurnMode
-  question: boolean
-  /** what went as focus */
-  focus: FocusSent
-  /** tokens this turn sends (system prompt + context), estimated */
-  contextTokens: number
-  /** the window the turn was sized to */
-  window: number
-  /** false = nothing fits: the panel refuses with the numbers */
-  fits: boolean
+/** What the extension gets for one turn. Everything a turn could need, in
+ *  every shape, so the extension can pick by the model it holds: the plain
+ *  outline (a question), the addressed outline (an edit), the focus in
+ *  full (the selected elements or the open slide, as compact JSON with
+ *  every element's address). The elision map stays on the page. */
+export interface Material {
+  /** the plain outline of the whole deck: words and notes */
+  outline: string
+  /** the same with every text, table and chart addressed <slide>/<id> */
+  addressed: string
+  /** the open slide, 1-based */
+  open: number
+  /** the deck's page size */
+  size: { width: number; height: number }
+  /** the focus: the selected elements or the open slide; null on an empty deck */
+  focus: { kind: 'elements' | 'slide'; label: string; json: string } | null
+  /** the theme, when the deck has one, as JSON */
+  theme?: string
 }
 
-export interface BuildOpts { local?: boolean; contextTokens?: number }
-
-/** The messages for one turn. `focus` is where the user is; `opts` what
- *  the model is (window, on-device). */
-export function buildMessages(doc: BentoDoc, focus: Focus, history: Turn[], request: string, opts: BuildOpts = {}): BuiltMessages {
+/** The material for one turn, and the elision map for the apply. */
+export function material(doc: BentoDoc, focus: Focus): { material: Material; elided: Elided } {
   const elided = elideDoc(doc)
   const slides = (elided.doc.slides ?? []) as Obj[]
-  const window = opts.contextTokens ?? (opts.local ? ASSUMED_WINDOW_LOCAL : ASSUMED_WINDOW_HOSTED)
-  const turns = history.slice(-MAX_HISTORY)
-  const tokensOf = (ts: Turn[]) => approxTokens(ts.map((t) => t.text).join('\n'))
   const n = focus.index + 1
   const slide = slides[focus.index]
-
-  if (isQuestion(request)) {
-    const context = `Deck outline (slide ${n} is open):\n${outlineDeck(elided.doc, false)}`
-    const contextTokens = approxTokens(QUESTION_PROMPT + context)
-    const messages: AssistantMessage[] = [{ role: 'system', content: QUESTION_PROMPT }]
-    for (const turn of turns) messages.push({ role: turn.role, content: turn.text })
-    messages.push({ role: 'user', content: `${context}\n\n${request.trim()}` })
-    return { messages, elided, mode: 'ask', question: true, focus: 'none', contextTokens, window, fits: contextTokens + REPLY_ROOM + tokensOf(turns) <= window }
-  }
-
-  // the focus: selected elements (by id, on the open slide), else the slide
-  const outline = `Deck outline, addressed (slide ${n} is open; the deck's size is ${JSON.stringify(elided.doc.size ?? { width: 1280, height: 720 })}):\n${outlineDeck(elided.doc, true)}`
-  let focusSent: FocusSent = 'none'
-  let focusText = ''
+  const size = (elided.doc.size ?? { width: 1280, height: 720 }) as { width: number; height: number }
+  let f: Material['focus'] = null
   if (slide) {
     const els = flatElements(slide)
     const picked = focus.selection.length ? els.filter((e, i) => focus.selection.includes(elId(slide, e, i))) : []
-    if (picked.length) {
-      focusSent = 'elements'
-      focusText = `Focus — the ${picked.length === 1 ? 'selected element' : `${picked.length} selected elements`} on slide ${n} (address each as ${n}/<id>), in full:\n${JSON.stringify(picked.map((e) => ({ id: elId(slide, e, els.indexOf(e)), ...e })))}`
-    } else {
-      focusSent = 'slide'
-      focusText = `Focus — slide ${n} (id "${String(slide.id ?? '')}") in full, its elements addressed as ${n}/<id>${elided.doc.theme ? `; the deck's theme is ${JSON.stringify(elided.doc.theme)}` : ''}:\n${JSON.stringify({ ...slide, elements: els.map((e, i) => ({ id: elId(slide, e, i), ...e })) })}`
-    }
+    f = picked.length
+      ? { kind: 'elements', label: `the ${picked.length === 1 ? 'selected element' : `${picked.length} selected elements`} on slide ${n} (address each as ${n}/<id>)`, json: JSON.stringify(picked.map((e) => ({ id: elId(slide, e, els.indexOf(e)), ...e }))) }
+      : { kind: 'slide', label: `slide ${n} (id "${String(slide.id ?? '')}"), its elements addressed as ${n}/<id>`, json: JSON.stringify({ ...slide, elements: els.map((e, i) => ({ id: elId(slide, e, i), ...e })) }) }
   }
-  const base = approxTokens(EDIT_PROMPT + outline)
-  const focusTokens = approxTokens(focusText)
-  let fits = true
-  let history2 = turns
-  // outline + focus + a reply that may carry the focus back changed
-  if (base + focusTokens * 2 + REPLY_ROOM + tokensOf(turns) > window) {
-    focusSent = 'none'; focusText = ''
-    history2 = turns.slice(-WORDS_HISTORY)
-    fits = base + REPLY_ROOM + tokensOf(history2) <= window
+  return {
+    material: {
+      outline: outlineDeck(elided.doc, false),
+      addressed: outlineDeck(elided.doc, true),
+      open: n,
+      size,
+      focus: f,
+      ...(elided.doc.theme ? { theme: JSON.stringify(elided.doc.theme) } : {}),
+    },
+    elided,
   }
-  const context = focusText ? `${outline}\n\n${focusText}` : outline
-  const messages: AssistantMessage[] = [{ role: 'system', content: EDIT_PROMPT }]
-  for (const turn of history2) messages.push({ role: turn.role, content: turn.text })
-  // the outline first, the request last: the thing to do is the freshest text
-  messages.push({ role: 'user', content: `${context}\n\n${request.trim()}` })
-  return { messages, elided, mode: 'edit', question: false, focus: focusSent, contextTokens: approxTokens(EDIT_PROMPT + context), window, fits }
 }
 
 /** A compact slide's elements, flat (authoring may nest arrays). */
@@ -346,35 +228,6 @@ export function flatElements(slide: Obj): Obj[] {
   const visit = (v: unknown) => { if (Array.isArray(v)) { for (const x of v) visit(x) } else if (isObj(v)) out.push(v) }
   visit(slide.elements)
   return out
-}
-
-/** What a reply turned out to be. */
-export type ParsedReply =
-  | { kind: 'text'; text: string }
-  | { kind: 'json'; note: string; value: Obj }
-
-/**
- * Find the one JSON object in a reply. A fenced block wins; otherwise the
- * outermost {…} that parses. Anything else is plain text. A note is whatever
- * text stood before the object.
- */
-export function parseReply(text: string): ParsedReply {
-  const fence = /```(?:json)?\s*\n([\s\S]*?)\n\s*```/i.exec(text)
-  if (fence) {
-    try {
-      const v = JSON.parse(fence[1])
-      if (isObj(v)) return { kind: 'json', note: text.slice(0, fence.index).trim(), value: v }
-    } catch { /* fall through to the brace scan */ }
-  }
-  const a = text.indexOf('{')
-  const b = text.lastIndexOf('}')
-  if (a >= 0 && b > a) {
-    try {
-      const v = JSON.parse(text.slice(a, b + 1))
-      if (isObj(v)) return { kind: 'json', note: text.slice(0, a).trim(), value: v }
-    } catch { /* not JSON after all */ }
-  }
-  return { kind: 'text', text: text.trim() }
 }
 
 /**

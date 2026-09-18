@@ -5,7 +5,7 @@
 //
 //   node scripts/test-slides-assistant.ts
 //
-// WHAT THIS PROVES. prompt.ts: the deck leaves the page compact, with the
+// WHAT THIS PROVES. material.ts: the deck leaves the page compact, with the
 // room's keys and the docId stripped and every embedded asset replaced by a
 // token; a reply's JSON (fenced, bare-with-a-note, or none) is found; and
 // merging a slide reply keeps every other slide byte-identical, forces the
@@ -42,10 +42,10 @@
 import { starterDoc } from '../slides/src/starterdeck.ts'
 import { compactDoc, expandDoc } from '../slides/src/compact.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
-import { applyWordEdits, approxTokens, ASSUMED_WINDOW_LOCAL, buildMessages, EDIT_PROMPT, elideDoc, isQuestion, mergeReply, OBJECT_SCHEMA, outlineDeck, parseReply, QUESTION_PROMPT, responseSchema, WORDS_HISTORY } from '../slides/src/editor/assistant/prompt.ts'
-import { CH, CODE_RE, CONTEXT_MAX, CONTEXT_MIN, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, type AssistantMessage } from '../slides/src/editor/assistant/transport.ts'
-import { ADD_MAX, applyOps, INSERT_MAX, OPS_PROMPT, OPS_SCHEMA } from '../slides/src/editor/assistant/ops.ts'
-import { dedupeIds, cleanDoc, ID_RE } from '../slides/src/editor/assistant/prompt.ts'
+import { elideDoc, material, mergeReply, outlineDeck } from '../slides/src/editor/assistant/material.ts'
+import { CH, CODE_RE, CONTEXT_MAX, CONTEXT_MIN, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT } from '../slides/src/editor/assistant/transport.ts'
+import { ADD_MAX, applyOps, INSERT_MAX } from '../slides/src/editor/assistant/ops.ts'
+import { dedupeIds, cleanDoc, ID_RE } from '../slides/src/editor/assistant/material.ts'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -60,6 +60,7 @@ function ok(cond: boolean, msg: string) {
   else console.log(`  ok    ${msg}`)
 }
 type Obj = Record<string, unknown>
+const applyWordEdits = (compact: Obj, edits: unknown) => { const r = applyOps(compact, { edits }); const strip = (x: string) => x.replace(/^edit /, ''); return { doc: r.doc, applied: r.applied.map(strip), skipped: r.skipped.map(strip) } }
 const canon = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x)) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, (x as Obj)[k]])) : x)
 
 // --- a deck with everything that must not leave --------------------------------
@@ -75,101 +76,78 @@ doc.slides[1].elements.push({ id: 'photo', type: 'image', x: 100, y: 100, w: 300
 doc.slides[0].notes = 'Open with the number'
 doc.slides[0].comments = [{ id: 'c1', author: 'Reviewer Name', at: 1, text: 'private remark', replies: [], resolved: false }] as never
 
-console.log('\nprompt.ts — what leaves the page')
+console.log('\nmaterial.ts — what leaves the page')
 {
   const e = elideDoc(doc)
   const text = JSON.stringify(e.doc)
-  ok(!text.includes(SECRET) && !text.includes(PRIV), 'the room key and the owner private key are not in the prompt document')
+  ok(!text.includes(SECRET) && !text.includes(PRIV), 'the room key and the owner private key are not in the elided document')
   ok(!('collab' in e.doc) && !('docId' in e.doc) && !('modified' in e.doc), 'collab, docId and modified are stripped')
   ok(!text.includes(PIXELS) && text.includes('@@bento-asset-0@@'), 'an embedded image is a token, not 600 bytes of base64')
   ok(e.assets.length === 1 && e.assets[0] === PIXELS, 'the same bytes in two places are one token')
   ok(e.doc.compact === true, 'the document goes out in the compact form')
-  ok(!('blobs' in e.doc), 'D — the blob store (offloaded asset keys + bytes) is not in the prompt')
+  ok(!('blobs' in e.doc), 'D — the blob store (offloaded asset keys + bytes) is not in the material')
   ok((e.doc.slides as Obj[]).every((s) => !('comments' in s)) && (e.doc.slides as Obj[])[0].notes === doc.slides[0].notes,
     'D — comments (reviewer names) stay out; speaker notes go')
 
-  // an EDIT turn: the addressed outline of the whole deck + the focus (the open slide) in full
-  const { messages, elided, focus } = buildMessages(doc, { index: 1, selection: [] }, [], 'Make the title bolder')
-  const all = messages.map((m) => m.content).join('\n')
-  ok(messages[0].role === 'system' && messages[0].content === EDIT_PROMPT, 'the first message is the edit prompt')
+  // the MATERIAL for a turn: every shape at once, the extension picks
+  const { material: m, elided } = material(doc, { index: 1, selection: [] })
+  const all = JSON.stringify(m)
+  ok(!all.includes(SECRET) && !all.includes(PRIV) && !all.includes(PIXELS), 'no key, private key or asset bytes in any shape of the material')
   ok(CONTEXT_MIN === 1000 && CONTEXT_MAX === 10_000_000, 'the window bound the page believes: 1k–10M')
-  ok(!all.includes(SECRET) && !all.includes(PRIV) && !all.includes(PIXELS), 'no key, private key or asset bytes in any message')
-  ok(all.includes('Deck outline, addressed (slide 2 is open') && doc.slides.every((s) => all.includes(`(id "${s.id}")`)), 'the outline names every slide, and which is open')
-  ok(focus === 'slide' && all.includes(`Focus — slide 2 (id "${doc.slides[1].id}") in full`) && all.includes('"elements":['), 'the focus is the open slide, as compact JSON')
-  ok(!all.includes(`"id":"${doc.slides[0].id}"`), 'the other slides go as outline only, never as JSON')
-  ok(elided.assets.length === 1, 'the elision map rides along for the apply')
+  ok(m.open === 2 && m.size.width === 1280 && m.size.height === 720, 'the open slide (1-based) and the deck size')
+  ok(doc.slides.every((s) => m.outline.includes(`(id "${s.id}")`)) && doc.slides.every((s) => m.addressed.includes(`(id "${s.id}")`)), 'both outlines name every slide')
+  ok(!/\[\d+\//.test(m.outline) && /^  - \[2\//m.test(m.addressed), 'the plain outline has no addresses; the addressed one has them')
+  ok(!!m.focus && m.focus.kind === 'slide' && m.focus.label.startsWith(`slide 2 (id "${doc.slides[1].id}")`) && m.focus.json.includes('"elements":['), 'the focus is the open slide, as compact JSON')
+  ok(!m.focus!.json.includes(`"id":"${doc.slides[0].id}"`) && !m.addressed.includes('"elements"'), 'the other slides go as outline only, never as JSON')
+  ok(elided.assets.length === 1, 'the elision map stays on the page for the apply')
+  ok(!('elided' in m) && !all.includes('"assets":["data:'), 'and is not part of the material')
 
   // with a selection the focus is the selected elements
   const selId = doc.slides[1].elements[0].id
-  const sel = buildMessages(doc, { index: 1, selection: [selId, 'no-such-id'] }, [], 'Make this bigger')
-  const st = sel.messages.at(-1)!.content
-  ok(sel.focus === 'elements' && st.includes('Focus — the selected element on slide 2') && st.includes(`"id":"${selId}"`) && !st.includes('Focus — slide 2'), 'a selected element is the focus, addressed 2/<id>; ids that are not on the slide are ignored')
-  const sel2 = buildMessages(doc, { index: 1, selection: doc.slides[1].elements.slice(0, 2).map((x) => x.id) }, [], 'Align these')
-  ok(sel2.focus === 'elements' && sel2.messages.at(-1)!.content.includes('the 2 selected elements on slide 2'), 'two selected elements: both go')
-
-  const withHist = buildMessages(doc, { index: 0, selection: [] }, [{ role: 'user', text: 'earlier' }, { role: 'assistant', text: 'reply' }], 'Add a closing slide')
-  ok(withHist.messages.length === 4 && withHist.messages[1].content === 'earlier' && withHist.messages[2].role === 'assistant', 'history turns sit between system and the request')
-  const long = Array.from({ length: 20 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: `t${i}` }))
-  ok(buildMessages(doc, { index: 0, selection: [] }, long, 'x').messages.length === 1 + 8 + 1, 'history is capped at the last 8 turns')
-  ok(!withHist.question && withHist.mode === 'edit', 'an instruction is an edit turn')
-  ok(withHist.messages.at(-1)!.content.trimEnd().endsWith('Add a closing slide'), 'the request comes last')
+  const sel = material(doc, { index: 1, selection: [selId, 'no-such-id'] }).material
+  ok(!!sel.focus && sel.focus.kind === 'elements' && sel.focus.label.startsWith('the selected element on slide 2') && sel.focus.json.includes(`"id":"${selId}"`), 'a selected element is the focus, addressed 2/<id>; ids that are not on the slide are ignored')
+  const sel2 = material(doc, { index: 1, selection: doc.slides[1].elements.slice(0, 2).map((x) => x.id) }).material
+  ok(!!sel2.focus && sel2.focus.kind === 'elements' && sel2.focus.label.startsWith('the 2 selected elements on slide 2'), 'two selected elements: both go')
+  ok(material({ ...doc, slides: [] } as never, { index: 0, selection: [] }).material.focus === null, 'an empty deck has no focus')
+  const themed = material({ ...doc, theme: { ...(doc as Obj).theme as Obj, accent: '#123456' } } as never, { index: 0, selection: [] }).material
+  ok(typeof themed.theme === 'string' && themed.theme.includes('#123456'), 'the theme rides as JSON when the deck has one (non-default slots only — compact strips the defaults)')
 }
 
-// A question sends the plain OUTLINE (words + notes), never JSON, and asks
-// for prose — measured against the starter deck, the deck a fresh build
-// opens with, because the on-device model's window is what made this matter.
-console.log('\nprompt.ts — a question turn')
+// The outlines — measured against the starter deck, the deck a fresh build
+// opens with, because a small window is what made this matter.
+console.log('\nmaterial.ts — the outlines')
 {
-  for (const q of ['Summarise this deck', 'summarize the deck in three bullets', 'What is slide 4 about?', 'Is the tone consistent', 'How many slides mention revenue?', 'Give me feedback on the opening', 'Can you explain the charts slide', 'tell me what changed', 'Which slide should I cut?', 'Any suggestions for the closing slide', 'review the notes for typos'])
-    ok(isQuestion(q), `question: ${q}`)
-  for (const e of ['Make the title bolder', 'Add a closing slide that thanks the audience', 'Change slide 3 to a two-column layout', 'Translate the deck to French', 'Shorten every title', 'Replace the pie with a bar chart', 'Delete the last slide', 'Fix the typos on this slide'])
-    ok(!isQuestion(e), `edit: ${e}`)
-
   const starter = starterDoc()
-  const asked = buildMessages(starter, { index: 2, selection: [] }, [], 'Summarise this deck')
-  const askedText = asked.messages.map((m) => m.content).join('\n')
-  ok(asked.question && asked.mode === 'ask' && asked.focus === 'none' && asked.messages[0].content === QUESTION_PROMPT, 'a question turn uses the question prompt and carries no focus')
-  ok(!askedText.includes('"elements"') && !askedText.includes('"compact"'), 'no JSON goes out on a question')
+  const { material: m } = material(starter, { index: 2, selection: [] })
+  const askedText = m.outline
+  ok(!askedText.includes('"elements"') && !askedText.includes('"compact"'), 'no JSON in an outline')
   ok(askedText.includes('Slide 1 (id "') && askedText.includes(`Slide ${starter.slides.length} (id "`), 'the outline numbers every slide')
   const firstWords = String((starter.slides[0].elements.find((e) => e.type === 'text') as { html?: string } | undefined)?.html ?? '').replace(/<[^>]*>/g, '').trim().split(/\s+/).slice(0, 3).join(' ')
   ok(firstWords.length > 0 && askedText.includes(firstWords), `the outline carries the words on the slides ("${firstWords}…")`)
   ok(/notes: /.test(askedText), 'and the speaker notes')
   ok(/- chart: /.test(askedText), 'a chart is outlined as its series and numbers')
   ok(!/"x":|"fontSize"|"fill":/.test(askedText), 'geometry and styling stay out of an outline')
-  ok(!/\[\d+\//.test(askedText), 'a question outline carries no addresses')
-  const deckJson = approxTokens(JSON.stringify(compactDoc(starter)))
-  ok(asked.contextTokens < deckJson / 4, `the outline is under a quarter of the deck's JSON (${asked.contextTokens} vs ${deckJson} tokens) — the JSON never goes out`)
-  const askedLocal = buildMessages(starter, { index: 2, selection: [] }, [], 'Summarise this deck', { local: true })
-  ok(askedLocal.fits && askedLocal.window === ASSUMED_WINDOW_LOCAL, `the starter deck's outline fits the assumed on-device window (${askedLocal.contextTokens} in ${ASSUMED_WINDOW_LOCAL})`)
-  ok(asked.messages.at(-1)!.content.trimEnd().endsWith('Summarise this deck'), 'a question turn ends with the question')
+  const deckJson = JSON.stringify(compactDoc(starter)).length
+  ok(m.outline.length < deckJson / 4 && m.addressed.length < deckJson / 4, `an outline is under a quarter of the deck's JSON (${m.outline.length} / ${m.addressed.length} vs ${deckJson} chars) — the JSON never goes out`)
   ok(outlineDeck({ title: 'T', slides: [{ id: 'a', elements: [{ type: 'text', html: '<p>Hello&nbsp;<b>world</b></p>' }, { type: 'table', rows: [{ cells: [{ html: 'a' }, { html: 'b' }] }] }] }] }).includes('- Hello world') , 'html is reduced to its words')
-}
 
-// The addressed outline: every text as <slide number>/<id>, the id being
-// the one the loader answers to — and ids REPEAT across slides (the morph
-// idiom), which is why the slide number is part of the address.
-console.log('\nprompt.ts — the addressed outline')
-{
-  const starter = starterDoc()
-  const w = buildMessages(starter, { index: 0, selection: [] }, [], 'Change the title to something more creative', { local: true })
-  const wt = w.messages.at(-1)!.content
+  // addressed: every text as <slide number>/<id>, the id being the one the
+  // loader answers to — and ids REPEAT across slides (the morph idiom),
+  // which is why the slide number is part of the address
+  const wt = material(starter, { index: 0, selection: [] }).material.addressed
   const idRe = /^  - \[1\/([^\]]+)\] /m
-  const m = idRe.exec(wt)
-  ok(!!m, 'each text carries <slide number>/<id> in brackets')
+  const mm = idRe.exec(wt)
+  ok(!!mm, 'each text carries <slide number>/<id> in brackets')
   const compact = compactDoc(starter)
   const s0 = (compact.slides as Obj[])[0]
   const firstText = (s0.elements as Obj[]).findIndex((e) => e.type === 'text')
   const bareId = String((s0.elements as Obj[])[firstText].id ?? `${s0.id}-text-${firstText}`)
   const expectId = `1/${bareId}`
-  ok(m?.[1] === bareId, `the id is the one the loader answers to (${m?.[1]}) — own id, or the minted <slide>-text-<index>`)
+  ok(mm?.[1] === bareId, `the id is the one the loader answers to (${mm?.[1]}) — own id, or the minted <slide>-text-<index>`)
   ok(starter.slides.filter((s) => s.elements.some((e) => e.id === bareId)).length > 1, 'that id repeats across slides (the morph idiom) — which is why the slide number is part of the address')
-  ok(w.mode === 'edit' && w.fits && w.focus === 'none', `on the assumed on-device window slide 1's JSON does not fit beside the outline: outline only (${w.contextTokens} tokens)`)
-  ok(!wt.includes('Focus —') && !wt.includes('"elements":['), 'and no JSON went')
-  const hosted = buildMessages(starter, { index: 0, selection: [] }, [], 'Change the title', { local: false })
-  ok(hosted.focus === 'slide' && hosted.messages.at(-1)!.content.includes('Focus — slide 1'), 'a hosted model gets the focus in full')
 
   // the wording half of the patch, applied and loaded
-  const { elided } = w
+  const { elided } = material(starter, { index: 0, selection: [] })
   const patched = applyWordEdits(elided.doc, [{ id: expectId, text: 'A **bolder** title' }, { id: 'no-such-element', text: 'x' }, { id: 12, text: 'y' }, { id: expectId }])
   ok(patched.applied.length === 1 && patched.applied[0] === expectId, 'the real text is applied')
   ok(applyWordEdits(elided.doc, [{ id: bareId, text: 'x' }]).skipped.length === 1, 'a bare id that lives on several slides is refused, not guessed')
@@ -204,12 +182,9 @@ console.log('\nops.ts — the ops patch')
       { id: 'd', elements: [{ id: 'only', type: 'text', html: 'Unique' }] },
     ],
   })
-  const outlineB = buildMessages(expandDoc(fixture()), { index: 1, selection: [] }, [], 'Change it')
-  const ob = outlineB.messages.at(-1)!.content
-  ok(outlineB.mode === 'edit' && /\[2\/tbl\] table: r1c1: Q \| r1c2: Sales \/ r2c1: Q1 \| r2c2: 10/.test(ob), 'the addressed outline lists a table cell by cell as r<row>c<col>')
+  const ob = material(expandDoc(fixture()), { index: 1, selection: [] }).material.addressed
+  ok(/\[2\/tbl\] table: r1c1: Q \| r1c2: Sales \/ r2c1: Q1 \| r2c2: 10/.test(ob), 'the addressed outline lists a table cell by cell as r<row>c<col>')
   ok(/\[3\/ch\] chart: Sales \[1, 2\]; Cost \[3, 4\] over Q1, Q2/.test(ob), 'and a chart by its series, numbers and categories')
-  ok(outlineB.messages[0].content === OPS_PROMPT && /"notes"/.test(OPS_PROMPT) && /"add"/.test(OPS_PROMPT) && /"move"/.test(OPS_PROMPT) && /"set"/.test(OPS_PROMPT) && /"insert"/.test(OPS_PROMPT), 'an edit turn carries the ops prompt, words verbs and precise verbs alike')
-  ok(approxTokens(OPS_PROMPT) < 1000, `the ops prompt leaves room in a small window (${approxTokens(OPS_PROMPT)} tokens)`)
 
   const r = applyOps(fixture(), {
     edits: [{ id: '1/t', text: 'Title **A2**' }, { id: 'only', text: 'Unique2' }, { id: 'k', text: 'ambiguous' }],
@@ -292,56 +267,10 @@ console.log('\nops.ts — the ops patch')
 }
 
 
-// The WINDOW decides how much goes, for every provider: outline + focus,
-// outline only, or a refusal — purely by the contextTokens describe gave.
-console.log('\nprompt.ts — the window decides how much goes')
-{
-  const starter = starterDoc()
-  const req = 'Change the title to something more creative'
-  const big = buildMessages(starter, { index: 0, selection: [] }, [], req, { contextTokens: 1_000_000 })
-  ok(big.mode === 'edit' && big.focus === 'slide' && big.fits && big.window === 1_000_000, `a 1M window takes the outline and the focus slide (${big.contextTokens} tokens)`)
-  ok(!big.messages.at(-1)!.content.includes(`"id":"${starter.slides[5].id}"`), 'and never the other slides\' JSON — the deck is not re-emitted at any window')
-  const mid = buildMessages(starter, { index: 0, selection: [] }, [], req, { contextTokens: 12_000 })
-  ok(mid.focus === 'slide' && mid.fits, 'a 12k window still takes slide 1 in full beside the outline')
-  const small = buildMessages(starter, { index: 0, selection: [] }, [], req, { contextTokens: 6000 })
-  ok(small.focus === 'none' && small.fits && small.mode === 'edit', `a 6k window drops the focus and sends the outline alone (${small.contextTokens})`)
-  const tiny = buildMessages(starter, { index: 0, selection: [] }, [], req, { contextTokens: 2000 })
-  ok(tiny.mode === 'edit' && !tiny.fits, `a 2k window fits not even the outline → refused with the numbers (${tiny.contextTokens} in 2000)`)
-  const tinyAsk = buildMessages(starter, { index: 0, selection: [] }, [], 'What is this slide about?', { contextTokens: 2000 })
-  ok(tinyAsk.mode === 'ask' && !tinyAsk.fits, 'a question needs the outline too: the same 2k window refuses it')
-  const stated = buildMessages(starter, { index: 0, selection: [] }, [], req, { local: true, contextTokens: 200_000 })
-  ok(stated.focus === 'slide' && stated.window === 200_000, 'a stated window beats the local assumption (a big local model gets the focus)')
-  const one = buildMessages(starter, { index: 0, selection: [starter.slides[0].elements[0].id] }, [], req, { local: true })
-  ok(one.focus === 'elements', 'one selected element fits the on-device window where the whole slide did not')
-  ok(responseSchema('edit', 'none') === OPS_SCHEMA && responseSchema('edit', 'slide') === OBJECT_SCHEMA && responseSchema('edit', 'elements') === OBJECT_SCHEMA && responseSchema('ask') === undefined, 'schema: strict words-and-choices when no focus went, loose object when it did, none for a question')
-  ok(Object.keys(OPS_SCHEMA.properties as Obj).join(',') === 'edits,notes,cells,chart,style,add,remove,move' && JSON.stringify((((OPS_SCHEMA.properties as Obj).edits as Obj).items as Obj).required) === '["id","text"]', 'the strict schema names the eight words-and-choices ops; set/insert are not in it')
-  const chatty = Array.from({ length: 6 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: `turn ${i}` }))
-  const wHist = buildMessages(starter, { index: 0, selection: [] }, chatty, req, { contextTokens: 6000 })
-  ok(wHist.focus === 'none' && wHist.messages.length === 1 + WORDS_HISTORY + 1 && wHist.messages[1].content === 'turn 4', `an outline-only turn keeps only the last ${WORDS_HISTORY} history turns (a small model primed by its own summary summarises again)`)
-  ok(buildMessages(starter, { index: 0, selection: [] }, chatty, req, { contextTokens: 200_000 }).messages.length === 1 + 6 + 1, 'a focus turn keeps the full history')
-  const hist = Array.from({ length: 8 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: 'x'.repeat(4000) }))
-  const crowded = buildMessages(starter, { index: 0, selection: [] }, hist, req, { contextTokens: 16_000 })
-  ok(crowded.focus === 'none' && buildMessages(starter, { index: 0, selection: [] }, [], req, { contextTokens: 16_000 }).focus === 'slide', 'history counts against the window: 8k tokens of turns push a 16k window off the focus (slide 1 alone fits it)')
-}
-
-console.log('\nprompt.ts — reading a reply')
-{
-  const fenced = parseReply('Here you go.\n```json\n{"edits":[]}\n```\nDone.')
-  ok(fenced.kind === 'json' && fenced.note === 'Here you go.' && Array.isArray((fenced.value as Obj).edits), 'a fenced block is the JSON; the text before it is the note')
-  const bare = parseReply('Sure — {"notes":[{"slide":1,"text":"hi"}]}')
-  ok(bare.kind === 'json' && bare.note === 'Sure —', 'a bare object with a note before it')
-  const plain = parseReply('Your deck has 7 slides and a closing slide would help.')
-  ok(plain.kind === 'text' && plain.text.startsWith('Your deck'), 'no object → plain text')
-  const broken = parseReply('{"edits": [')
-  ok(broken.kind === 'text', 'broken JSON is text, not a crash')
-  const arr = parseReply('[1,2,3]')
-  ok(arr.kind === 'text', 'an array is not a deck edit')
-}
-
-console.log('\nprompt.ts — merging the patched deck')
+console.log('\nmaterial.ts — merging the patched deck')
 {
   const base = compactDoc(doc)
-  const { elided } = buildMessages(doc, { index: 1, selection: [] }, [], 'x')
+  const { elided } = material(doc, { index: 1, selection: [] })
   // a patch that touched slide 2 and added a slide, plus everything a model must not be able to smuggle
   const r = applyOps(elided.doc, { insert: [{ slide: 2, type: 'text', x: 96, y: 600, w: 400, h: 60, html: 'Added' }], add: [{ after: doc.slides.length, layout: 'blank', title: 'x' }] })
   const merged = mergeReply(doc, { ...r.doc, collab: { key: 'FAKE' }, docId: 'nope', blobs: { z: 1 } }, elided)
@@ -381,7 +310,7 @@ console.log('\nprompt.ts — merging the patched deck')
   ok(dedupeIds({ slides: [{ id: 'a', elements: [{ id: 'x' }] }, { id: 'b', elements: [{ id: 'x' }] }] }) === 0, 'B — a clean deck is untouched')
 }
 
-console.log('\nprompt.ts — link shapes (C, the pure half)')
+console.log('\nmaterial.ts — link shapes (C, the pure half)')
 {
   ok(ID_RE.test('sd-intro') && ID_RE.test('s1') && ID_RE.test('a.b:c/d-e_f'), 'an id-shaped link is accepted')
   ok(!ID_RE.test('bad id!') && !ID_RE.test('') && !ID_RE.test('x'.repeat(121)) && !ID_RE.test('javascript:alert(1)'), 'spaces, empty, over-long and a scheme are not ids')
@@ -479,74 +408,101 @@ await (async () => {
     picked = null
     ok((await tr.select('Bad Provider', 'm')).ok === false && picked === null, 'select: a malformed route never leaves the page')
   }
-  {
-    let seen: Obj | null = null
-    w.handler = (f) => { if (f.op === 'assistant.send') { seen = f.payload as Obj; w.res(f.id, { ok: true }); w.evt(f.id, 'assistant.done', { text: '{}' }) } }
-    await tr.send([{ role: 'user', content: 'x' }], () => {}, new AbortController().signal, { schema: OPS_SCHEMA })
-    ok(!!seen && seen.schema === OPS_SCHEMA, 'send: the schema rides in the payload when given')
-    seen = null
-    await tr.send([{ role: 'user', content: 'x' }], () => {}, new AbortController().signal)
-    ok(!!seen && !('schema' in seen), 'send: no schema key when none was given (old extensions see the old payload)')
-  }
   w.handler = (f) => { if (f.op === 'assistant.check') w.res(f.id, { ok: false, reason: 'x', code: 'Not A Code!' }) }
   ok((await tr.check() as { code?: string }).code === undefined, 'check: a code outside its shape is dropped (the page keys on codes)')
   ok(CODE_RE.test('consent-pending') && CODE_RE.test('consent-denied') && !CODE_RE.test('') && !CODE_RE.test('x'.repeat(41)), 'code shape: [a-z][a-z0-9-]{0,39}')
   await tr.openSettings()
   ok(w.sent.some((f) => f.op === 'assistant.settings.open'), 'openSettings asks the extension for its options page')
 
-  // a streamed send
-  const msgs: AssistantMessage[] = [{ role: 'system', content: 's' }, { role: 'user', content: 'u' }]
-  let sendId = ''
-  w.handler = (f) => { if (f.op === 'assistant.send') { sendId = f.id; w.res(f.id, { ok: true }) } }
+  // a turn: the page sends the request and where the user is; the extension asks for the material after consent; prose streams; done resolves
+  const mat = () => ({ outline: 'O', addressed: 'A', open: 1, size: { width: 1280, height: 720 }, focus: null })
+  let turnId = ''
+  const seenReqs: Obj[] = []
+  w.handler = (f) => {
+    if (f.op === 'assistant.turn') { turnId = f.id; seenReqs.push(f as Obj); w.res(f.id, { ok: true }) }
+    if (f.op === 'assistant.document') { seenReqs.push(f as Obj); w.res(f.id, { ok: true }) }
+  }
   const chunks: string[] = []
-  const p = tr.send(msgs, (t) => chunks.push(t), new AbortController().signal)
+  const p = tr.turn('Summarise', [{ role: 'user', text: 'earlier' }, { role: 'assistant', text: 'reply' }], { index: 0, selection: ['a'] }, mat, (t) => chunks.push(t), new AbortController().signal)
   await tick()
-  ok(sendId !== '' && (w.sent.find((f) => f.id === sendId)!.payload as Obj).messages === msgs, 'send posts the messages as the payload')
-  w.evt(sendId, 'assistant.chunk', { text: 'Hel' })
-  w.evt(sendId, 'assistant.chunk', { text: 'lo' })
+  const tq = seenReqs.find((f) => f.op === 'assistant.turn')!
+  ok(turnId !== '' && (tq.payload as Obj).request === 'Summarise' && JSON.stringify((tq.payload as Obj).history) === '[{"role":"user","text":"earlier"},{"role":"assistant","text":"reply"}]' && JSON.stringify((tq.payload as Obj).focus) === '{"index":0,"selection":["a"]}', 'turn posts the request, the history (role+text only) and the focus — no document')
+  ok(!seenReqs.some((f) => f.op === 'assistant.document'), 'the document is NOT sent until the extension asks (consent first)')
+  w.evt(turnId, 'assistant.document', {})
+  await tick()
+  const dq = seenReqs.find((f) => f.op === 'assistant.document')!
+  ok(!!dq && dq.id === turnId && (dq.payload as Obj).addressed === 'A' && (dq.payload as Obj).outline === 'O', 'asked, the page answers assistant.document on the same id with the material')
+  w.evt(turnId, 'assistant.chunk', { text: 'Hel' })
+  w.evt(turnId, 'assistant.chunk', { text: 'lo' })
   w.evt('some-other-id', 'assistant.chunk', { text: 'NOISE' })
-  w.evt(sendId, 'assistant.done', { text: 'Hello' })
-  ok(await p === 'Hello' && chunks.join('') === 'Hello', 'chunks stream in order and done resolves the whole text')
+  w.evt(turnId, 'assistant.done', { mode: 'ask', text: 'Hello' })
+  const r1 = await p
+  ok(r1.mode === 'ask' && 'text' in r1 && r1.text === 'Hello' && chunks.join('') === 'Hello', 'chunks stream in order; done resolves the prose')
   ok(!chunks.includes('NOISE'), 'a frame for another id is ignored')
+  {
+    const acH = new AbortController()
+    let hid = ''
+    w.handler = (f) => { if (f.op === 'assistant.turn') { hid = f.id; seenReqs.push(f as Obj); w.res(f.id, { ok: true }) } }
+    const ph = tr.turn('x', Array.from({ length: 12 }, (_, i) => ({ role: 'user' as const, text: `t${i}` })), { index: 0, selection: [] }, mat, () => {}, acH.signal)
+    await tick()
+    const hq = seenReqs.find((f) => f.id === hid)!
+    ok(((hq.payload as Obj).history as Obj[]).length === 8 && ((hq.payload as Obj).history as Obj[])[0].text === 't4', 'the history sent is capped at the last 8 turns')
+    acH.abort(); await ph.catch(() => {})
+  }
 
-  // done with no text = the chunks
-  w.handler = (f) => { if (f.op === 'assistant.send') { sendId = f.id; w.res(f.id, { ok: true }) } }
-  const p2 = tr.send(msgs, () => {}, new AbortController().signal)
+  // done with ops = an edit
+  w.handler = (f) => { if (f.op === 'assistant.turn') { turnId = f.id; w.res(f.id, { ok: true }) } }
+  const p2 = tr.turn('Change it', [], { index: 0, selection: [] }, mat, () => {}, new AbortController().signal)
   await tick()
-  w.evt(sendId, 'assistant.chunk', { text: 'ab' }); w.evt(sendId, 'assistant.done', {})
-  ok(await p2 === 'ab', 'done without text resolves the accumulated chunks')
+  w.evt(turnId, 'assistant.done', { mode: 'edit', ops: { edits: [{ id: '1/t', text: 'x' }] }, note: 'only the outline fit', focus: 'none' })
+  const r2 = await p2
+  ok(r2.mode === 'edit' && 'ops' in r2 && JSON.stringify(r2.ops) === '{"edits":[{"id":"1/t","text":"x"}]}' && r2.note === 'only the outline fit' && r2.focus === 'none', 'done with ops resolves the untrusted patch, the note and what focus went')
+  w.handler = (f) => { if (f.op === 'assistant.turn') { turnId = f.id; w.res(f.id, { ok: true }) } }
+  const p2b = tr.turn('Change it', [], { index: 0, selection: [] }, mat, () => {}, new AbortController().signal)
+  await tick()
+  w.evt(turnId, 'assistant.done', { mode: 'edit', ops: [1, 2], focus: 'weird' })
+  const r2b = await p2b
+  ok(r2b.mode === 'edit' && 'text' in r2b, 'done with ops that is not an object resolves as prose (empty), never as a patch')
+  w.handler = (f) => { if (f.op === 'assistant.turn') { turnId = f.id; w.res(f.id, { ok: true }) } }
+  const p2c = tr.turn('Change it', [], { index: 0, selection: [] }, mat, () => {}, new AbortController().signal)
+  await tick()
+  w.evt(turnId, 'assistant.done', { mode: 'edit', text: 'I cannot do that with these operations.' })
+  const r2c = await p2c
+  ok(r2c.mode === 'edit' && 'text' in r2c && r2c.text.startsWith('I cannot'), 'done with text on an edit = the model declined in prose')
 
   // refused
-  w.handler = (f) => { if (f.op === 'assistant.send') w.res(f.id, { ok: false, reason: 'not configured' }) }
-  ok(await tr.send(msgs, () => {}, new AbortController().signal).then(() => 'resolved', (e: Error) => e.message) === 'not configured', 'a refused send rejects with the reason')
+  w.handler = (f) => { if (f.op === 'assistant.turn') w.res(f.id, { ok: false, reason: 'not configured', code: 'not-configured' }) }
+  const e1 = await tr.turn('x', [], { index: 0, selection: [] }, mat, () => {}, new AbortController().signal).then(() => null, (e: Error & { code?: string }) => e)
+  ok(!!e1 && e1.message === 'not configured' && e1.code === 'not-configured', 'a refused turn rejects with the reason and its code')
 
   // mid-stream error
-  w.handler = (f) => { if (f.op === 'assistant.send') { sendId = f.id; w.res(f.id, { ok: true }) } }
-  const p3 = tr.send(msgs, () => {}, new AbortController().signal)
+  w.handler = (f) => { if (f.op === 'assistant.turn') { turnId = f.id; w.res(f.id, { ok: true }) } }
+  const p3 = tr.turn('x', [], { index: 0, selection: [] }, mat, () => {}, new AbortController().signal)
   await tick()
-  w.evt(sendId, 'assistant.chunk', { text: 'part' })
-  w.evt(sendId, 'assistant.error', { reason: 'HTTP 500' })
+  w.evt(turnId, 'assistant.chunk', { text: 'part' })
+  w.evt(turnId, 'assistant.error', { reason: 'HTTP 500' })
   ok(await p3.then(() => 'resolved', (e: Error) => e.message) === 'HTTP 500', 'an error event rejects with its reason')
 
-  w.handler = (f) => { if (f.op === 'assistant.send') { sendId = f.id; w.res(f.id, { ok: true }) } }
-  const p5 = tr.send(msgs, () => {}, new AbortController().signal)
+  w.handler = (f) => { if (f.op === 'assistant.turn') { turnId = f.id; w.res(f.id, { ok: true }) } }
+  const p5 = tr.turn('x', [], { index: 0, selection: [] }, mat, () => {}, new AbortController().signal)
   await tick()
-  w.evt(sendId, 'assistant.error', { reason: 'The user said no', code: 'consent-denied' })
+  w.evt(turnId, 'assistant.error', { reason: 'The user said no', code: 'consent-denied' })
   const e5 = await p5.then(() => null, (e: Error & { code?: string }) => e)
-  ok(!!e5 && e5.code === 'consent-denied' && e5.message === 'The user said no', 'send: an error event carries its code on the rejection')
+  ok(!!e5 && e5.code === 'consent-denied' && e5.message === 'The user said no', 'an error event carries its code on the rejection')
 
   // abort
   const ac = new AbortController()
-  w.handler = (f) => { if (f.op === 'assistant.send') { sendId = f.id; w.res(f.id, { ok: true }) } }
-  const p4 = tr.send(msgs, () => {}, ac.signal)
+  w.handler = (f) => { if (f.op === 'assistant.turn') { turnId = f.id; w.res(f.id, { ok: true }) } }
+  const p4 = tr.turn('x', [], { index: 0, selection: [] }, mat, () => {}, ac.signal)
   await tick()
   ac.abort()
   const r4 = await p4.then(() => 'resolved', (e: Error) => e.name)
   ok(r4 === 'AbortError', 'abort rejects with AbortError')
-  const ab = w.sent.find((f) => f.op === 'assistant.abort')
-  ok(!!ab && (ab.payload as Obj).req === sendId, 'and posts assistant.abort naming the send')
-  w.evt(sendId, 'assistant.done', { text: 'late' })
+  const ab = [...w.sent].reverse().find((f) => f.op === 'assistant.abort')
+  ok(!!ab && (ab.payload as Obj).req === turnId, 'and posts assistant.abort naming the turn')
+  w.evt(turnId, 'assistant.done', { mode: 'ask', text: 'late' })
   ok(true, 'a late frame after abort is harmless')
+
 
   // frames from another window are ignored
   w.handler = (f) => { if (f.op === 'assistant.describe') w.reply({ [CH]: true, dir: 'res', id: f.id, result: { ok: true, host: 'evil', model: 'x', configured: true } }, { not: 'me' }) }
@@ -571,7 +527,7 @@ console.log('\ntransport.ts — is the extension here?')
 console.log('\npanel.ts — the call site (E, the source half)')
 {
   const panel = fs.readFileSync(new URL('../slides/src/editor/assistant/panel.ts', import.meta.url), 'utf8')
-  const applyAt = panel.indexOf('private apply(')
+  const applyAt = panel.indexOf('  apply(index')
   const applyBody = panel.slice(applyAt, panel.indexOf('\n  }\n', applyAt))
   ok(applyAt > 0 && applyBody.includes('cleanDoc(next, { html: sanitizeHtml, svg: sanitizeSvgMarkup, svgCss: sanitizeSvgCss })'),
     'E — apply( cleans the parsed document with the real sanitizers, that exact line')
@@ -598,7 +554,7 @@ const probeSource = `
 import { sanitizeHtml, sanitizeSvgMarkup, sanitizeSvgCss } from ${JSON.stringify(path.join(repoRoot, 'slides/src/render.ts'))}
 import { parseDocInputReport } from ${JSON.stringify(path.join(repoRoot, 'slides/src/compactload.ts'))}
 import { starterDoc } from ${JSON.stringify(path.join(repoRoot, 'slides/src/starterdeck.ts'))}
-import { applyOps, buildMessages, mergeReply, cleanDoc } from ${JSON.stringify(path.join(repoRoot, 'slides/src/editor/assistant/prompt.ts'))}
+import { applyOps, material, mergeReply, cleanDoc } from ${JSON.stringify(path.join(repoRoot, 'slides/src/editor/assistant/material.ts'))}
 import { AssistantPanel } from ${JSON.stringify(path.join(repoRoot, 'slides/src/editor/assistant/panel.ts'))}
 const results = []
 const check = (name, pass) => results.push([name, pass])
@@ -606,10 +562,10 @@ const tick = (ms = 30) => new Promise((r) => setTimeout(r, ms))
 ;(async () => {
 const TAINT = /onerror|onclick|onload|<script|javascript:|evil\\.example/i
 const fakeStore = (doc) => ({ doc, currentIndex: 0, selection: [], readOnly: false, replaced: 0, replaceDoc(next) { this.doc = next; this.replaced++ }, goTo() {}, undo() {}, commit() {}, on() { return () => {} } })
-const fakeTransport = (over = {}) => ({ name: 'fake', checks: 0, describe: async () => ({ host: 'h.example', model: 'm', configured: true }), check: async function () { this.checks++; return { ok: true } }, models: async () => [], select: async () => ({ ok: true }), send: async () => 'ok', openSettings: async () => {}, ...over })
+const fakeTransport = (over = {}) => ({ name: 'fake', checks: 0, describe: async () => ({ host: 'h.example', model: 'm', configured: true }), check: async function () { this.checks++; return { ok: true } }, models: async () => [], select: async () => ({ ok: true }), turn: async () => ({ mode: 'ask', text: 'ok' }), openSettings: async () => {}, ...over })
 try {
   const doc = starterDoc()
-  const { elided } = buildMessages(doc, { index: 0, selection: [] }, [], 'x')
+  const { elided } = material(doc, { index: 0, selection: [] })
   const IMG = '<p>hi <img src=x onerror="window.__pwn=1"> <b onclick="window.__pwn=2">bold</b> <a href="javascript:window.__pwn=3">l</a></p>'
   // the hostile reply is an OPS patch now — the only shape a reply has: an
   // existing text SET to tainted html, tainted elements inserted, and an
@@ -653,7 +609,7 @@ try {
     const store = fakeStore(doc2)
     const panel = new AssistantPanel({ store, transport: fakeTransport() })
     document.body.appendChild(panel.root)
-    const { elided: el2 } = buildMessages(doc2, { index: 0, selection: [] }, [], 'x')
+    const { elided: el2 } = material(doc2, { index: 0, selection: [] })
     panel.apply(0, { ...applyOps(el2.doc, ops).doc, assets: reply.assets }, el2, ['set 1/' + firstText])
     const stored = JSON.stringify(store.doc)
     const s0 = store.doc.slides[0]
@@ -673,7 +629,7 @@ try {
     const store = fakeStore(doc3)
     const panel = new AssistantPanel({ store, transport: fakeTransport() })
     document.body.appendChild(panel.root)
-    const { elided: el3 } = buildMessages(doc3, { index: 0, selection: [] }, [], 'x')
+    const { elided: el3 } = material(doc3, { index: 0, selection: [] })
     const r3 = applyOps(el3.doc, { insert: [{ slide: 1, type: 'image', x: 0, y: 0, w: 10, h: 10, src: 'https://tracker.example/p.gif?u=1' }, { slide: 1, type: 'embed', x: 0, y: 0, w: 10, h: 10, url: 'https://example.org/x', live: true }], set: [{ id: '1/' + doc3.slides[0].elements[0].id, live: true, fill: '#abc' }] })
     check('F — live is a locked field: neither the inserted embed nor the set element carries it', r3.doc.slides[0].elements.every((e) => !('live' in e)) && r3.applied.some((a) => a.startsWith('set ')))
     panel.apply(0, r3.doc, el3, r3.applied)
@@ -694,7 +650,6 @@ try {
     panel.setOpen(true, false); await tick(60)
     const status = panel.root.querySelector('.ed-assist-status').textContent
     check('local: the route line reads "on this device · Gemini Nano" (id → display name), no host: ' + status, /on this device · Gemini Nano/.test(status) && !/h\\.example/.test(status))
-    check('local: the notice names the on-device model, not a host', /to the on-device model;/.test(panel.root.querySelector('.ed-assist-notice').textContent))
     check('one route: no picker', !panel.root.querySelector('.ed-assist-model'))
   }
   {
@@ -717,13 +672,11 @@ try {
     const sel = panel.root.querySelector('.ed-assist-model')
     check('several routes: a picker with one optgroup per provider and the window beside each model', !!sel && sel.querySelectorAll('optgroup').length === 2 && sel.options.length === 3 && /Gemini Nano · 6k/.test(sel.options[0].textContent) && /gemini-3\.8-flash · 1M/.test(sel.options[1].textContent))
     check('several routes: the current route is selected', sel.selectedIndex === 0)
-    check('several routes: the notice says the on-device model', /to the on-device model/.test(panel.root.querySelector('.ed-assist-notice').textContent))
     sel.selectedIndex = 1
     sel.dispatchEvent(new Event('change'))
     await tick(60)
     const sel2 = panel.root.querySelector('.ed-assist-model')
     check('choosing: assistant.select with provider + model, then describe again → the picker shows the new route as current', selected.length === 1 && selected[0][0] === 'gemini' && selected[0][1] === 'gemini-3.8-flash' && sel2 && sel2.selectedIndex === 1)
-    check('choosing: the notice now names the host', /generativelanguage\.googleapis\.com/.test(panel.root.querySelector('.ed-assist-notice').textContent))
     check('choosing: the check ran again for the new route', tr.checks >= 2)
     const tr2 = fakeTransport({ describe: async () => ({ host: '', model: 'some-new-id', configured: true, local: true }) })
     const panel2 = new AssistantPanel({ store, transport: tr2 }); document.body.appendChild(panel2.root); panel2.setOpen(true, false); await tick(60)
@@ -737,10 +690,10 @@ try {
     document.body.appendChild(panel.root)
     panel.setOpen(true, false); await tick(60)
     const st = () => panel.root.querySelector('.ed-assist-status').textContent
-    check('consent-pending: the waiting text shows and the input is disabled: ' + st(), /Waiting for your permission on this device/.test(st()) && panel.root.querySelector('.ed-assist-input').disabled && tr.checks === 1)
-    check('consent-pending: the reason text is not what is shown', !/Asking/.test(st()))
+    check('consent-pending: the waiting line is the extension reason (it localizes) and the input is disabled: ' + st(), /Asking/.test(st()) && panel.root.querySelector('.ed-assist-input').disabled && tr.checks === 1)
+    check('consent-pending: the behaviour is keyed on the code, the text is only shown', panel.root.querySelector('.ed-assist-waiting') !== null)
     window.dispatchEvent(new Event('focus')); await tick(60)
-    check('consent-pending: focus re-ran check once, still pending → still waiting', tr.checks === 2 && /Waiting/.test(st()))
+    check('consent-pending: focus re-ran check once, still pending → still waiting', tr.checks === 2 && /Asking/.test(st()))
     pending = false
     window.dispatchEvent(new Event('focus')); await tick(60)
     check('consent-pending: the next return re-checks once more, ok → the route line, input enabled', tr.checks === 3 && /via fake · h\\.example · m/.test(st()) && !panel.root.querySelector('.ed-assist-input').disabled)
@@ -750,44 +703,55 @@ try {
   {
     const store = fakeStore(starterDoc())
     const before = JSON.stringify(store.doc)
-    const tr = fakeTransport({ send: async () => { const e = new Error('The user said no'); e.code = 'consent-denied'; throw e } })
+    const tr = fakeTransport({ turn: async () => { const e = new Error('Permission was refused on this device — nothing was changed.'); e.code = 'consent-denied'; throw e } })
     const panel = new AssistantPanel({ store, transport: tr })
     document.body.appendChild(panel.root)
     panel.setOpen(true, false); await tick(60)
     panel.root.querySelector('.ed-assist-input').value = 'do it'
     await panel.submit(); await tick(30)
     const card = panel.root.querySelector('.ed-assist-refused')
-    check('consent-denied: a plain refusal card with the localized text, keyed on the code', !!card && /Permission was refused on this device/.test(card.textContent) && !/said no/.test(panel.root.textContent))
+    check('consent-denied: a plain refusal line in the extension words (it localizes), styled by the CODE not as a failure', !!card && /Permission was refused on this device/.test(card.textContent) && !card.classList.contains('ed-assist-err'))
     check('consent-denied: the deck is unchanged', store.replaced === 0 && JSON.stringify(store.doc) === before)
     check('consent-denied: the drawer is usable again', !panel.root.querySelector('.ed-assist-input').disabled && panel.root.querySelector('.ed-assist-send').textContent === 'Send')
   }
   {
-    // an edit that comes back as prose is nudged ONCE; the second reply is the answer
+    // the turn through the panel: the extension asks for the material (the page supplies it from the live document), an ops reply is applied, a note is shown
     const store = fakeStore(starterDoc())
-    const sends = []
-    const tr = fakeTransport({ describe: async () => ({ host: '', model: 'gemini-nano', configured: true, local: true }), send: async (messages, onChunk, signal, opts) => { sends.push({ messages, opts }); return sends.length === 1 ? 'The slide introduces Bento Slides and its tiles.' : 'Still just prose, sorry.' } })
+    const turns = []
+    const firstText = store.doc.slides[0].elements.find((e) => e.type === 'text').id
+    const tr = fakeTransport({ describe: async () => ({ host: '', model: 'gemini-nano', configured: true, local: true }), turn: async (request, history, focus, material, onChunk, signal) => {
+      const m = material()
+      turns.push({ request, history, focus, m })
+      return { mode: 'edit', ops: { edits: [{ id: '1/' + firstText, text: 'A **new** title' }] }, note: 'Only the outline fit this model', focus: 'none' }
+    } })
     const panel = new AssistantPanel({ store, transport: tr })
     document.body.appendChild(panel.root)
     panel.setOpen(true, false); await tick(60)
     panel.root.querySelector('.ed-assist-input').value = 'update the title to something creative'
     await panel.submit(); await tick(30)
-    check('retry: an edit answered in prose is sent once more with the nudge as the next user turn (' + sends.length + ' sends)', sends.length === 2 && sends[1].messages.at(-1).role === 'user' && /only the JSON object/.test(sends[1].messages.at(-1).content) && sends[1].messages.at(-2).role === 'assistant' && /introduces Bento/.test(sends[1].messages.at(-2).content))
-    check('retry: both sends carry the ops schema', !!sends[0].opts && sends[0].opts.schema && sends[0].opts.schema.properties && sends[0].opts.schema.properties.edits && sends[0].opts.schema.properties.add && sends[1].opts.schema === sends[0].opts.schema)
-    check('retry: prose again is shown as the answer, the deck unchanged', /Still just prose/.test(panel.root.textContent) && store.replaced === 0)
-    const sends2 = []
-    const tr2 = fakeTransport({ describe: async () => ({ host: 'h.example', model: 'm', configured: true }), send: async (messages, onChunk, signal, opts) => { sends2.push(opts); return 'Your deck has seven slides.' } })
+    check('turn: the panel sends the request, the (empty) history and the focus, and supplies the material on demand', turns.length === 1 && turns[0].request === 'update the title to something creative' && turns[0].history.length === 0 && turns[0].focus.index === 0 && typeof turns[0].m.addressed === 'string' && turns[0].m.focus && turns[0].m.focus.kind === 'slide')
+    check('turn: the ops reply is applied through the real apply (replaceDoc once) and the note shown', store.replaced === 1 && /Only the outline fit/.test(panel.root.textContent) && /new/.test(store.doc.slides[0].elements.find((e) => e.id === firstText).html))
+    check('turn: the card names the op', /Applied: edit 1\\//.test(panel.root.querySelector('.ed-assist-card-h').textContent))
+    const store2 = fakeStore(starterDoc())
+    const tr1 = fakeTransport({ turn: async () => ({ mode: 'edit', text: 'Still just prose, sorry.' }) })
+    const panel1 = new AssistantPanel({ store: store2, transport: tr1 })
+    document.body.appendChild(panel1.root)
+    panel1.setOpen(true, false); await tick(60)
+    panel1.root.querySelector('.ed-assist-input').value = 'make it purple'
+    await panel1.submit(); await tick(30)
+    check('turn: an edit the model declined in prose is shown as the answer, the deck unchanged', /Still just prose/.test(panel1.root.textContent) && store2.replaced === 0)
+    const tr2 = fakeTransport({ describe: async () => ({ host: 'h.example', model: 'm', configured: true }), turn: async () => ({ mode: 'ask', text: 'Your deck has seven slides.' }) })
     const panel2 = new AssistantPanel({ store, transport: tr2 })
     document.body.appendChild(panel2.root)
     panel2.setOpen(true, false); await tick(60)
     panel2.root.querySelector('.ed-assist-input').value = 'How many slides are there?'
     await panel2.submit(); await tick(30)
-    check('retry: a question answered in prose is NOT nudged, and carries no schema', sends2.length === 1 && sends2[0] && sends2[0].schema === undefined)
     // the finished reply is rendered from markdown through the sanitizer; the raw text is what Copy gives and what history carries
     const prose = panel2.root.querySelector('.ed-assist-assistant .ed-assist-prose')
     check('reply: rendered as prose (a <p>), not a pre-wrap blob', !!prose && prose.innerHTML.includes('<p>Your deck has seven slides.') && prose.querySelector('p') !== null)
     check('reply: a copy button sits on the bubble', !!panel2.root.querySelector('.ed-assist-assistant .ed-assist-copy'))
     const sends3 = []
-    const tr3 = fakeTransport({ send: async () => { sends3.push(1); return ['**Bold** and a list:', '', '- one <img src=x onerror="window.__pwn3=1">', '- two'].join(String.fromCharCode(10)) } })
+    const tr3 = fakeTransport({ turn: async () => { sends3.push(1); return { mode: 'ask', text: ['**Bold** and a list:', '', '- one <img src=x onerror="window.__pwn3=1">', '- two'].join(String.fromCharCode(10)) } } })
     const panel3 = new AssistantPanel({ store, transport: tr3 })
     document.body.appendChild(panel3.root)
     panel3.setOpen(true, false); await tick(60)

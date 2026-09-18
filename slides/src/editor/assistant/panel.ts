@@ -29,7 +29,7 @@ const PROVIDER_NAMES: Record<string, string> = { builtin: 'Chrome', gemini: 'Gem
 export const providerDisplay = (id: string): string => PROVIDER_NAMES[id] ?? id
 /** 200000 → "200k", 1048576 → "1M" */
 export const windowDisplay = (n: number): string => n >= 1_000_000 ? `${Math.round(n / 100_000) / 10}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
-import { applyOps, buildMessages, cleanDoc, mergeReply, parseReply, responseSchema, RETRY_NUDGE, type Turn } from './prompt'
+import { applyOps, cleanDoc, material, mergeReply, type Elided, type Turn } from './material'
 import { remoteUrls } from './ops'
 import { sanitizeHtml, sanitizeSvgCss, sanitizeSvgMarkup } from '../../render'
 
@@ -123,7 +123,6 @@ export class AssistantPanel {
   /** the editor listens: a popped-out assistant empties its tab */
   onFloatChange: ((floating: boolean) => void) | null = null
   get floating(): boolean { return this.float !== null }
-  private notice = el('div', 'ed-assist-notice')
   private sendB = document.createElement('button')
   private history: Turn[] = []
   private transport: AssistantTransport | null
@@ -134,6 +133,7 @@ export class AssistantPanel {
   private routes: AssistantModel[] = []
   /** the extension is asking the user (check code 'consent-pending'): one re-check is armed */
   private consentPending = false
+  private consentReason = ''
   private recheckArmed = false
   private store: Store
   private toast: (m: string) => void
@@ -237,11 +237,9 @@ export class AssistantPanel {
     this.floatB.addEventListener('click', (ev) => { ev.stopPropagation(); if (this.float) this.dockBack(); else this.popOut() })
     head.appendChild(this.floatB)
 
-    // the scope is the selection (prompt.ts says why there is no switch);
-    // the notice under the input says what will go, and follows it
-    this.store.on('selection', () => this.refreshNotice())
-    this.store.on('current', () => this.refreshNotice())
-    this.store.on('doc', () => this.refreshNotice())
+    // the scope is the selection (material.ts says why there is no switch);
+    // what leaves the page is explained where the key lives — the
+    // extension's settings card — not repeated under every input
     this.input.className = 'ed-assist-input'
     this.input.rows = 2
     this.input.placeholder = t('Ask for a change…')
@@ -263,7 +261,7 @@ export class AssistantPanel {
       this.inputH0 = null
     })
     const acts = el('div', 'ed-assist-acts')
-    acts.append(el('span', 'ed-assist-hint', t('Enter to send · Shift+Enter for a new line')), this.sendB)
+    acts.append(el('span', ''), this.sendB)
     // clear: the transcript and the history the next turn would carry
     this.clearB.type = 'button'
     this.clearB.className = 'ed-assist-clear'
@@ -272,7 +270,7 @@ export class AssistantPanel {
     this.clearB.addEventListener('click', () => this.clear())
     this.clearB.hidden = true
 
-    this.body.append(this.status, this.log, this.input, this.notice, acts)
+    this.body.append(this.status, this.log, this.input, acts)
     this.root.append(head, this.body)
     this.setOpen(lsGet('bento-assist-open') === 'on', false)
     this.refreshStatus()
@@ -289,7 +287,6 @@ export class AssistantPanel {
     const s = this.status
     s.innerHTML = ''
     s.appendChild(this.clearB)
-    this.refreshNotice()
     const usable = this.transport && !offlineEnabled()
     this.input.disabled = !usable
     this.sendB.disabled = !usable
@@ -320,7 +317,7 @@ export class AssistantPanel {
       return
     }
     if (this.consentPending) {
-      s.append(el('span', 'ed-assist-waiting', t('Waiting for your permission on this device…') + ' '), settings)
+      s.append(el('span', 'ed-assist-waiting', this.consentReason + ' '), settings)
       this.input.disabled = true
       this.sendB.disabled = true
       return
@@ -371,16 +368,6 @@ export class AssistantPanel {
     return { index: this.store.currentIndex, selection: this.store.selection }
   }
 
-  /** One line under the input saying what leaves the page (prompt.ts):
-   *  the deck's outline plus the focus — the selection, or the open slide. */
-  private refreshNotice() {
-    if (!this.transport) { this.notice.textContent = ''; return }
-    const host = this.described?.local ? t('the on-device model') : (this.described?.host || this.transport.name)
-    const n = this.store.selection.length
-    const focus = n === 1 ? t('the selected element') : n > 1 ? t('the {n} selected elements', { n: String(n) }) : t('this slide')
-    this.notice.textContent = t("Sends the deck's outline and {focus} to {host}; comments stay here.", { focus, host })
-  }
-
   private async describe() {
     if (!this.transport) return
     try {
@@ -392,7 +379,6 @@ export class AssistantPanel {
       this.note(t('The extension did not answer: {reason}', { reason: (e as Error).message }), 'err')
     }
     this.refreshStatus()
-    this.refreshNotice()
     if (this.described.configured) await this.check()
   }
 
@@ -406,6 +392,7 @@ export class AssistantPanel {
     if (!this.transport) return
     const r = await this.transport.check()
     this.consentPending = !r.ok && r.code === 'consent-pending'
+    this.consentReason = !r.ok ? r.reason : ''
     if (!r.ok && !this.consentPending) this.note(t('The request failed: {reason}', { reason: r.reason }), 'err')
     this.refreshStatus()
     if (this.consentPending && !this.recheckArmed) {
@@ -487,84 +474,56 @@ export class AssistantPanel {
     this.fitInput()
     this.note(request, 'user')
     this.history.push({ role: 'user', text: request })
-    const doc = this.store.doc
     const index = this.store.currentIndex
-    const local = !!this.described?.local
-    const { messages, elided, mode, focus, contextTokens, window, fits } = buildMessages(doc, this.focus(), this.history.slice(0, -1), request, { local, contextTokens: this.described?.contextTokens })
-    // the turn was sized to the model's window (prompt.ts): refuse here,
-    // with the numbers, rather than after the wait with the provider's
-    // "too large"
-    if (!fits) {
-      this.note(t('The deck outline alone is too large for this model ({tokens} tokens; its window is {window}). Choose a model with a larger window in the extension settings.', { tokens: String(contextTokens), window: String(window) }), 'err')
-      return
-    }
-    if (mode === 'edit' && focus === 'none') {
-      // the focus did not fit: the model gets the outline only, so it can
-      // change words and structure but not geometry or styling
-      this.note(t('Only the outline fits this model\u2019s window, so it can change words, notes and slides but not positions or styling.'), 'info')
-    }
     this.setRunning(true)
     // the live bubble says the model is working until the first token —
     // an on-device model can take seconds to load before it says anything
-    const live = this.note(local ? t('Working on it… the on-device model is loading.') : t('Working on it…'), 'assistant')
+    const live = this.note(t('Working on it…'), 'assistant')
     live.classList.add('ed-assist-live', 'ed-assist-wait')
-    let text = ''
-    const schema = responseSchema(mode, focus)
     const onChunk = (chunk: string) => {
       if (live.classList.contains('ed-assist-wait')) { live.classList.remove('ed-assist-wait'); live.textContent = '' }
       live.textContent += chunk
       this.log.scrollTop = this.log.scrollHeight
     }
+    // the material is built when the extension asks for it (after consent),
+    // from the live document; the elision map stays here for the apply
+    let elided: Elided | null = null
+    const supply = () => { const m = material(this.store.doc, this.focus()); elided = m.elided; return m.material as unknown as Record<string, unknown> }
+    let result
     try {
-      text = await this.transport.send(messages, onChunk, this.running!.signal, { schema })
-      // an edit that came back as prose gets ONE nudge (a small model that
-      // ignored the shape usually takes it the second time); prose again is
-      // shown as the answer — that is the "this needs a hosted model" reply
-      if (mode !== 'ask' && !text.includes('{')) {
-        const again = [...messages, { role: 'assistant' as const, content: text }, { role: 'user' as const, content: RETRY_NUDGE }]
-        live.textContent = ''
-        live.classList.add('ed-assist-wait')
-        live.textContent = t('Working on it…')
-        text = await this.transport.send(again, onChunk, this.running!.signal, { schema })
-      }
+      result = await this.transport.turn(request, this.history.slice(0, -1), this.focus(), supply, onChunk, this.running!.signal)
     } catch (e) {
       live.remove()
-      const err = e as Error
+      const err = e as Error & { code?: string }
       if (err.name === 'AbortError') this.note(t('Stopped.'), 'info')
-      else if ((err as { code?: string }).code === 'consent-denied') this.refusal()
+      // the extension's reason, in its words (it localizes); the CODE
+      // decides the styling — a refusal is a plain card, not a failure
+      else if (err.code === 'consent-denied') this.note(err.message, 'info').classList.add('ed-assist-refused')
       else this.note(t('The request failed: {reason}', { reason: err.message }), 'err')
       this.setRunning(false)
       return
     }
     this.setRunning(false)
-    // a question's reply is prose whatever shape it took — never applied
-    const reply = mode === 'ask' ? { kind: 'text' as const, text: text.trim() } : parseReply(text)
-    if (reply.kind === 'text') {
-      this.finishReply(live, reply.text)
-      this.history.push({ role: 'assistant', text: reply.text })
+    if ('text' in result) {
+      // prose: an answer, or an edit the model declined in words — shown, never applied
+      this.finishReply(live, result.text.trim())
+      this.history.push({ role: 'assistant', text: result.text.trim() })
       return
     }
     live.remove()
-    if (reply.note) this.note(reply.note, 'assistant')
-    this.history.push({ role: 'assistant', text: reply.note || t('(edited the deck)') })
-    // the ops patch (ops.ts): applied to a copy of the elided compact doc,
-    // then the same road as pasted JSON
-    const r = applyOps(elided.doc, reply.value)
+    if (result.note) this.note(result.note, 'info')
+    this.history.push({ role: 'assistant', text: t('(edited the deck)') })
+    // the ops patch (ops.ts): untrusted, applied to a copy of the elided
+    // compact doc, then the same road as pasted JSON
+    if (!elided) { this.note(t('The reply changed nothing I could apply.'), 'err'); return }
+    const r = applyOps((elided as Elided).doc, result.ops)
     if (!r.applied.length) { this.note(t('The reply changed nothing I could apply.'), 'err'); return }
     if (r.skipped.length) this.note(t('{n} changes named something that is not there and were skipped.', { n: String(r.skipped.length) }), 'info')
-    this.apply(index, r.doc, elided, r.applied)
-  }
-
-  /** The user declined the on-device model: a plain card, nothing changed. */
-  private refusal() {
-    const card = el('div', 'ed-assist-card ed-assist-refused')
-    card.appendChild(el('div', 'ed-assist-card-h', t('Permission was refused on this device — nothing was changed.')))
-    this.log.appendChild(card)
-    this.log.scrollTop = this.log.scrollHeight
+    this.apply(index, r.doc, elided as Elided, r.applied)
   }
 
   /** The patched deck → one undoable document swap, and a card saying what happened. */
-  private apply(index: number, value: Record<string, unknown>, elided: ReturnType<typeof buildMessages>['elided'], ops: string[] = []) {
+  apply(index: number, value: Record<string, unknown>, elided: Elided, ops: string[] = []) {
     if (this.store.readOnly) { this.note(t('This deck is read-only here — nothing was changed.'), 'err'); return }
     const json = mergeReply(this.store.doc, value, elided)
     const parsed = json ? parseDocInputReport(json) : null
