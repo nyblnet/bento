@@ -70,9 +70,11 @@ const SIZE_STEP = 1.25
 /** The reply's shape, for providers that constrain output. Kept to
  *  type/properties/items/required/enum — the subset every dialect takes. */
 /** fields a set/insert may never write: identity, the keys the loader and
- *  the gate own, and `live` — an embed's live iframe is the USER's opt-in
- *  (model.ts), a capability, not content; the model edits content. */
-const LOCKED_FIELDS = new Set(['id', 'type', 'comments', 'collab', 'docId', 'blobs', 'live', '__proto__', 'constructor', 'prototype'])
+ *  the gate own, `live` — an embed's live iframe is the USER's opt-in
+ *  (model.ts), a capability, not content; the model edits content — and
+ *  an embed's `doc`/`view`: an embedded document is not this surface's to
+ *  write (material.ts holds them back from the model and restores them). */
+const LOCKED_FIELDS = new Set(['id', 'type', 'comments', 'collab', 'docId', 'blobs', 'live', 'doc', 'view', '__proto__', 'constructor', 'prototype'])
 
 /** Every http(s) origin+path a document refers to (src, url, poster —
  *  any string field), so the result card can name the fetches a patch

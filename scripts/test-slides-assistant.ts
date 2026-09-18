@@ -109,6 +109,26 @@ console.log('\nmaterial.ts — what leaves the page')
   const sel2 = material(doc, { index: 1, selection: doc.slides[1].elements.slice(0, 2).map((x) => x.id) }).material
   ok(!!sel2.focus && sel2.focus.kind === 'elements' && sel2.focus.label.startsWith('the 2 selected elements on slide 2'), 'two selected elements: both go')
   ok(material({ ...doc, slides: [] } as never, { index: 0, selection: [] }).material.focus === null, 'an empty deck has no focus')
+
+  // G — an embed carries a whole other document: its envelope must not leave, and must come back intact
+  {
+    const INNERKEY = 'INNERKEY-must-never-leave'; const INNERID = 'INNER-ID-9999'
+    const d2 = starterDoc() as BentoDoc & Obj
+    const emb = { id: 'emb', type: 'embed', app: 'bento/dash', x: 0, y: 0, w: 300, h: 200, rotation: 0, opacity: 1, view: '<svg viewBox="0 0 10 10"><rect width="9" height="9"/></svg>', doc: { format: 'bento/dash', docId: INNERID, collab: { key: INNERKEY }, cells: [[1, 2]] } }
+    d2.slides[0].elements.push(emb as never)
+    const whole = material(d2, { index: 0, selection: [] })
+    const sel = material(d2, { index: 0, selection: ['emb'] })
+    const shapes = JSON.stringify(whole.material) + JSON.stringify(sel.material)
+    ok(!shapes.includes(INNERKEY) && !shapes.includes(INNERID) && !shapes.includes('<rect width="9"'), 'G — an embed\'s document and render are in no shape of the material (slide focus, element focus, outlines)')
+    ok(sel.material.focus!.json.includes('"type":"embed"') && sel.material.focus!.json.includes('"app":"bento/dash"'), 'G — the embed itself is still there for the model to see (type, app, frame)')
+    ok(whole.elided.embeds.size === 1 && (whole.elided.embeds.get(`${d2.slides[0].id}\u001femb`)!.doc as Obj).docId === INNERID, 'G — the page holds them back in the elision map')
+    const r = applyOps(whole.elided.doc, { set: [{ id: '1/emb', x: 50, doc: { docId: 'FORGED', collab: { key: 'FORGED' } }, view: '<svg onload="1"/>' }], insert: [{ slide: 1, type: 'embed', app: 'web', x: 0, y: 0, w: 1, h: 1, doc: { collab: { key: 'FORGED2' } }, view: '<svg/>' }] })
+    const merged = JSON.parse(mergeReply(d2, r.doc, whole.elided)!) as Obj
+    const back = ((merged.slides as Obj[])[0].elements as Obj[]).find((e) => e.id === 'emb')!
+    ok(back.x === 50 && (back.doc as Obj).docId === INNERID && ((back.doc as Obj).collab as Obj).key === INNERKEY && String(back.view).includes('<rect width="9"'), 'G — on apply the embed gets its own document and render back, unchanged; the set of x landed')
+    const inserted = ((merged.slides as Obj[])[0].elements as Obj[]).find((e) => e.type === 'embed' && e.id !== 'emb')!
+    ok(!!inserted && !('doc' in inserted) && !('view' in inserted) && !JSON.stringify(merged).includes('FORGED'), 'G — a set or insert can write neither doc nor view: nothing forged lands anywhere')
+  }
   const themed = material({ ...doc, theme: { ...(doc as Obj).theme as Obj, accent: '#123456' } } as never, { index: 0, selection: [] }).material
   ok(typeof themed.theme === 'string' && themed.theme.includes('#123456'), 'the theme rides as JSON when the deck has one (non-default slots only — compact strips the defaults)')
 }

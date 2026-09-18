@@ -51,7 +51,14 @@ export interface Turn { role: 'user' | 'assistant'; text: string }
 
 const ASSET_TOKEN = /^@@bento-asset-(\d+)@@$/
 
-export interface Elided { doc: Record<string, unknown>; assets: string[] }
+export interface Elided {
+  doc: Record<string, unknown>
+  assets: string[]
+  /** an embed's `doc` (an embedded document, envelope and all) and `view`
+   *  (its render), keyed slide-id U+001F element-id — held back from the
+   *  model, put back on apply (G) */
+  embeds: Map<string, { doc?: unknown; view?: unknown }>
+}
 
 type Obj = Record<string, unknown>
 const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v)
@@ -105,9 +112,21 @@ const PRIVATE_KEYS = ['collab', 'docId', 'modified', '$schema', 'blobs']
 export function elideDoc(doc: BentoDoc): Elided {
   const c = compactDoc(doc)
   for (const k of PRIVATE_KEYS) delete c[k]
-  for (const s of (c.slides ?? []) as Obj[]) delete s.comments
+  const embeds: Elided['embeds'] = new Map()
+  for (const s of (c.slides ?? []) as Obj[]) {
+    delete s.comments
+    // G: an embed carries a whole other document — its own collab keys and
+    // docId inside `doc` — and a bulky render in `view`. The model cannot
+    // edit an embedded document through this surface, so neither goes;
+    // both come back from here on apply (mergeReply).
+    flatElements(s).forEach((e, i) => {
+      if (e.type !== 'embed') return
+      embeds.set(`${String(s.id)}\u001f${elId(s, e, i)}`, { doc: e.doc, view: e.view })
+      delete e.doc; delete e.view
+    })
+  }
   const assets: string[] = []
-  return { doc: elideWalk(c, assets) as Obj, assets }
+  return { doc: elideWalk(c, assets) as Obj, assets, embeds }
 }
 
 /** The shape of a slide/element id, and of a `link` that names one. */
@@ -335,6 +354,17 @@ export function cleanDoc(doc: BentoDoc, san: Sanitizers): number {
 export function mergeReply(doc: BentoDoc, value: Obj, elided: Elided): string | null {
   if (!Array.isArray(value.slides)) return null
   const next: Obj = { ...(restoreWalk(value, elided.assets) as Obj), [COMPACT_FLAG]: true }
+  // G: an embed's document and render come back from the send-time map,
+  // never from the reply (a patch cannot carry, forge or alter them)
+  for (const s of (next.slides ?? []) as Obj[]) {
+    if (!isObj(s)) continue
+    flatElements(s).forEach((e, i) => {
+      if (e.type !== 'embed') return
+      const kept = elided.embeds.get(`${String(s.id)}\u001f${elId(s, e, i)}`)
+      delete e.doc; delete e.view
+      if (kept) { if (kept.doc !== undefined) e.doc = kept.doc; if (kept.view !== undefined) e.view = kept.view }
+    })
+  }
   dedupeIds(next)
   // comments never went out, so a reply cannot carry them back: the live
   // document's threads stay on the slides that still exist
