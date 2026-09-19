@@ -11,6 +11,16 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A document in Downloads or Documents remembers where it lives.** Chrome
+  will not let any app hold a standing grant to those folders, so a deck kept
+  there used to show the full save dialog on every reopen. Bento now remembers
+  the file itself: the first ⌘S after you reopen asks once — Chrome offers
+  "Allow on every visit" — and after that it saves silently in place, like a
+  deck that never left. Move or delete the file and it simply asks again. This
+  is for a deck opened from a real web address or through the iOS, Android or
+  browser-extension apps; a deck opened straight from disk keeps asking each
+  time, by the same rule that isolates local files from each other.
+
 ## [1.2.3] — 2026-09-19
 
 - **Select several slides in the sidebar and move them together.** ⌘/Ctrl-click
