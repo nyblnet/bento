@@ -22,20 +22,25 @@ import { appConfig } from '../../kernel/src/app.ts'
 import { addPack, removePack, type LanguagePack } from '../../kernel/src/i18n.ts'
 import { readShellBlocks, type ShellBlock } from '../../kernel/src/save.ts'
 import { fetchPinned, verifySigned } from '../../kernel/src/update.ts'
-import { netFetch } from '../../kernel/src/net.ts'
+import { netFetch, sharedStorageOrigin } from '../../kernel/src/net.ts'
 // Extension-explicit like the kernel imports above, so this module also loads
 // under plain node — scripts/test-packs.ts exercises the real thing.
 import { PACKED } from './i18n/packed.ts'
 import { lsGet } from '../../kernel/src/storage.ts'
+
+const DEFAULT_CHANNEL = 'https://bento.page/releases/slides'
 
 /**
  * Where the release channel publishes the pack index and the packs.
  * Dev override: localStorage 'bento-packs-url' — the same convention the
  * updater uses for 'bento-update-url', so a local channel can be pointed at
  * without a rebuild. (A URL, not pack data: nothing durable lives here.)
+ * The override reads from the host: it is honoured only where storage is
+ * this document's own (kernel net.ts sharedStorageOrigin), never where every
+ * local document shares one.
  */
 const channel = (): string =>
-  lsGet('bento-packs-url') ?? 'https://bento.page/releases/slides'
+  (sharedStorageOrigin() ? null : lsGet('bento-packs-url')) ?? DEFAULT_CHANNEL
 
 export interface PackListing {
   lang: string

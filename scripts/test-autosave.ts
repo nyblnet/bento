@@ -124,5 +124,35 @@ await addVersion({ docId: 'deck-uuid-1', title: 'v3', json: '{}' } as any)
 const after = await listVersions('deck-uuid-1')
 ok(after.length === 4, `adding one version gives 4, not 7 — the legacy rows were not copied twice (got ${after.length})`)
 
+// ---- a snapshot is CONTENT ONLY — it never carries doc.collab --------------
+// Every autosave writes to IndexedDB, whose origin is shared across all local
+// documents, so a snapshot must not carry the live-room secrets in doc.collab.
+// Restore takes collab from the file that is open, not the snapshot, so content
+// recovery is unaffected.
+{
+  const secretDoc = {
+    docId: 'deck-collab', title: 'Shared deck',
+    slides: [{ id: 's1', elements: [{ id: 'e1', html: 'CONTENT-STAYS' }] }],
+    collab: {
+      room: 'wROOMROOMROOM', key: 'READCAP-b64', on: true, v: 2, owner: 'OWNERPUB', role: 'writer',
+      ownerPriv: 'OWNERPRIV-pkcs8', writerPriv: 'WRITERPRIV-pkcs8',
+      invite: { pub: 'IPUB', priv: 'INVITEPRIV-pkcs8', role: 'writer', sig: 's', key: 'SHOWKEY-b64' },
+      audience: 'AUDTICKET',
+    },
+  } as any
+  await putRecovery(secretDoc)
+  const snap = (await getRecovery('deck-collab'))!
+  const parsed = JSON.parse(snap.json)
+  ok(!('collab' in parsed), 'a recovery snapshot drops doc.collab entirely')
+  for (const s of ['READCAP', 'OWNERPRIV', 'WRITERPRIV', 'INVITEPRIV', 'SHOWKEY', 'AUDTICKET', 'wROOMROOMROOM'])
+    ok(!snap.json.includes(s), `no ${s} (key/priv/invite/room) in the recovery snapshot`)
+  ok(snap.json.includes('CONTENT-STAYS'), 'but the document content is kept — recovery still restores it')
+
+  await addVersion(secretDoc)
+  const v = (await listVersions('deck-collab'))[0]
+  ok(!('collab' in JSON.parse(v.json)), 'a version snapshot drops collab too')
+  ok(!v.json.includes('OWNERPRIV') && v.json.includes('CONTENT-STAYS'), 'version keeps content, not secrets')
+}
+
 console.log(`\n[${APP}] ${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

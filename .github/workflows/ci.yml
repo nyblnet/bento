@@ -421,6 +421,12 @@ jobs:
         # behaviour (refusal, aborting what is already in flight, cross-tab).
         run: node scripts/test-offline.ts
 
+      - name: Origin-trust rig
+        # The release-manifest / sync / pack URL dev overrides live in
+        # localStorage, which is shared across all file:// documents — so they
+        # are honoured only from a real, isolated origin (sharedStorageOrigin).
+        run: node scripts/test-origin-overrides.ts
+
       - name: Embed element rig
         # The `embed` element (docs/DECISIONS.md 2026-08-19 shape): the static
         # view always paints through the svg sanitiser; a live sandboxed frame
@@ -973,6 +979,13 @@ jobs:
         # and simply trusts more than it should.
         run: node scripts/test-relay-auth.ts
 
+      - name: publish account gate — the release account is checked before the site goes live
+        # publish-site.mjs mirrored and pushed the site and THEN failed to
+        # create the GitHub release, three releases running, because gh was
+        # the work profile (a job/temp worktree). The gate runs before rsync;
+        # this rig pins the rule and the order.
+        run: node scripts/test-publish-account.ts
+
       - name: client vouch rig — the other half of read-only
         # Drives a REAL OnlineTransport (kernel's and dash's twin) through a
         # fake socket in a signed room. Every copy holds the room key, so a
@@ -1408,6 +1421,12 @@ jobs:
         # paste N times.
         run: node scripts/test-slides-edit-listeners.ts
 
+      - name: Live-session notice wording rig
+        # A refused whole-deck snapshot (SyncNotice.snapshot, #509) is worded as
+        # the deck, never as a change or an image; the Share popover polls
+        # pendingBlobUploads() only while open; strings in every core catalog.
+        run: node scripts/test-slides-sync-notice.ts
+
       - name: Shell loader and carrier rig
         # base86 payloads (scripts/lib/b86.mjs) round-trip and can never
         # contain </script, <!--, -->, ]]> or ${; the loader inflates
@@ -1496,6 +1515,13 @@ jobs:
         # every insert path routed, model.ts untouched. The encode itself is
         # measured in Chrome (PR #).
         run: node scripts/test-slides-shrink.ts
+
+      - name: Compress pictures in this deck rig
+        # editor/compressdeck.ts planning half, DOM-free: image elements only,
+        # an asset once however many elements share it, SVG/GIF/media/fonts
+        # never; applyCompress writes in place and drops the replaced asset's
+        # blob reference; the editor dry-runs first and commits once.
+        run: node scripts/test-slides-compress-deck.ts
       - name: Image aspect-ratio lock rig
         # keepAspectRatio (#372): absent = locked, so old files resize as
         # before; Shift is the one-drag exception either way; re-locking
