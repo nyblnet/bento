@@ -601,5 +601,11 @@
   },
   "setFilesSub": {
     "message": "Dokumente außerhalb jedes hinzugefügten Ordners, die für sich direkt speichern — einmal gewählt oder in die Bibliothek gezogen."
+  },
+  "dropNoHandle": {
+    "message": "„$1“: Der Browser hat für diesen Drop kein Datei-Handle übergeben."
+  },
+  "dropNotBento": {
+    "message": "„$1“ ist kein Bento-Dokument (.bento.html) — nicht hinzugefügt."
   }
 }

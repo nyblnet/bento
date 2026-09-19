@@ -568,5 +568,11 @@
   },
   "setFilesSub": {
     "message": "Eklenen klasörlerin dışındaki, kendi başına yerinde kaydedilen belgeler — bir kez seçilmiş ya da kitaplığa bırakılmış."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: tarayıcı bu bırakma için dosya tutamacı vermedi."
+  },
+  "dropNotBento": {
+    "message": "“$1” bir Bento belgesi değil (.bento.html) — eklenmedi."
   }
 }

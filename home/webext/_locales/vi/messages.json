@@ -568,5 +568,11 @@
   },
   "setFilesSub": {
     "message": "Tài liệu nằm ngoài mọi thư mục đã thêm nhưng tự lưu tại chỗ — được chọn một lần, hoặc kéo thả vào thư viện."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: trình duyệt không cung cấp handle tệp cho thao tác thả này."
+  },
+  "dropNotBento": {
+    "message": "“$1” không phải tài liệu Bento (.bento.html) — không thêm."
   }
 }

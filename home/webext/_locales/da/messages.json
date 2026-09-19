@@ -568,5 +568,11 @@
   },
   "setFilesSub": {
     "message": "Dokumenter uden for enhver tilføjet mappe, der selv gemmer på stedet — valgt én gang, eller trukket ind i biblioteket."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: browseren gav intet fil-handle for dette drop."
+  },
+  "dropNotBento": {
+    "message": "“$1” er ikke et Bento-dokument (.bento.html) — ikke tilføjet."
   }
 }

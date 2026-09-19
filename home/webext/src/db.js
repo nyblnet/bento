@@ -54,6 +54,10 @@ export const open = () => new Promise((res, rej) => {
   }
   r.onsuccess = () => res(r.result)
   r.onerror = () => rej(r.error)
+  // A version bump waits for every older connection to close; without this
+  // an upgrade blocked by another open page hangs every store call forever,
+  // and the symptom is "nothing happened".
+  r.onblocked = () => rej(new Error('bento/home storage is open in another tab at an older version — close other bento/home pages and try again'))
 })
 
 export const get = async (store, key) => {

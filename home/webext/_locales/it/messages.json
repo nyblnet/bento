@@ -601,5 +601,11 @@
   },
   "setFilesSub": {
     "message": "Documenti fuori da ogni cartella aggiunta che si salvano sul posto da soli: scelti una volta, o trascinati nella libreria."
+  },
+  "dropNoHandle": {
+    "message": "«$1»: il browser non ha fornito alcun handle di file per questo trascinamento."
+  },
+  "dropNotBento": {
+    "message": "«$1» non è un documento Bento (.bento.html): non aggiunto."
   }
 }

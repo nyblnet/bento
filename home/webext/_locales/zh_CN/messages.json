@@ -601,5 +601,11 @@
   },
   "setFilesSub": {
     "message": "不在任何已添加文件夹中、但可自行就地保存的文档——选择过一次，或拖放到资料库中。"
+  },
+  "dropNoHandle": {
+    "message": "“$1”：浏览器没有为此次拖放提供文件句柄。"
+  },
+  "dropNotBento": {
+    "message": "“$1”不是 Bento 文档（.bento.html）——未添加。"
   }
 }

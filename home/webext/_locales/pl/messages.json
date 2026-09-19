@@ -568,5 +568,11 @@
   },
   "setFilesSub": {
     "message": "Dokumenty spoza dodanych folderów, które same zapisują się w miejscu — wybrane raz lub upuszczone w bibliotece."
+  },
+  "dropNoHandle": {
+    "message": "„$1”: przeglądarka nie przekazała uchwytu pliku dla tego upuszczenia."
+  },
+  "dropNotBento": {
+    "message": "„$1” nie jest dokumentem Bento (.bento.html) — nie dodano."
   }
 }

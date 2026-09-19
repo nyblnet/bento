@@ -601,5 +601,11 @@
   },
   "setFilesSub": {
     "message": "Documentos fora de qualquer pasta adicionada que salvam no lugar por conta própria — escolhidos uma vez, ou arrastados para a biblioteca."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: o navegador não entregou nenhum handle de arquivo para este arraste."
+  },
+  "dropNotBento": {
+    "message": "“$1” não é um documento Bento (.bento.html) — não adicionado."
   }
 }

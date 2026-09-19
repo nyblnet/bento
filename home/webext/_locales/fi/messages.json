@@ -568,5 +568,11 @@
   },
   "setFilesSub": {
     "message": "Lisättyjen kansioiden ulkopuoliset asiakirjat, jotka tallentuvat paikalleen itsestään — kerran valitut tai kirjastoon pudotetut."
+  },
+  "dropNoHandle": {
+    "message": "”$1”: selain ei antanut tiedostokahvaa tälle pudotukselle."
+  },
+  "dropNotBento": {
+    "message": "”$1” ei ole Bento-asiakirja (.bento.html) — ei lisätty."
   }
 }

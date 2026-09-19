@@ -601,5 +601,11 @@
   },
   "setFilesSub": {
     "message": "Documents hors de tout dossier ajouté qui s’enregistrent sur place par eux-mêmes — choisis une fois, ou déposés dans la bibliothèque."
+  },
+  "dropNoHandle": {
+    "message": "« $1 » : le navigateur n’a fourni aucun handle de fichier pour ce dépôt."
+  },
+  "dropNotBento": {
+    "message": "« $1 » n’est pas un document Bento (.bento.html) — non ajouté."
   }
 }

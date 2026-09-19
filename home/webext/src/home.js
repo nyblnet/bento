@@ -1221,25 +1221,34 @@ async function dropToGrant(ev) {
   ev.preventDefault()
   let folders = 0
   let files = 0
-  for (const item of items) {
+  // Every way a drop can come to nothing is said, in the console and the
+  // toast — "nothing happened" is the one outcome that must not be silent.
+  const say = (why) => { console.info('[bento/home] drop:', why); toast(why) }
+  // handles must be taken from the items SYNCHRONOUSLY in the drop event —
+  // after an await the DataTransfer is empty (measured in Chrome)
+  const pending = items.map((item) => ({ name: item.getAsFile?.()?.name ?? '', handle: item.getAsFileSystemHandle?.() ?? null }))
+  for (const { name, handle: p } of pending) {
     let handle = null
-    try { handle = await item.getAsFileSystemHandle?.() } catch { handle = null }
-    if (!handle) continue
+    try { handle = await p } catch (e) { say(`${name}: ${e?.message || e}`); continue }
+    if (!handle) { say(t('dropNoHandle', name)); continue }
     try {
       if (handle.kind === 'directory') {
         await adoptGrant(handle)
         folders++
       } else if (/\.bento\.html$/i.test(handle.name)) {
-        if (await handle.requestPermission({ mode: 'readwrite' }) !== 'granted') continue
+        if (await handle.requestPermission({ mode: 'readwrite' }) !== 'granted') { say(t('fgDenied')); continue }
         // its path, when a scanned file of that name is the same bytes
         let path = null
         for (const d of await scannedDocs()) {
           if (d.name === handle.name && await handleIsPath(handle, d.path)) { path = d.path; break }
         }
         await addFileGrant(handle, path)
+        console.info('[bento/home] drop: file grant', handle.name, path ?? '(path unknown)')
         files++
+      } else {
+        say(t('dropNotBento', handle.name))
       }
-    } catch (e) { toast(e.message) }
+    } catch (e) { say(`${handle.name}: ${e?.message || e}`) }
   }
   if (folders || files) {
     toast(t('droppedGranted', folders, files))

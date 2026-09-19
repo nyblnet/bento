@@ -568,5 +568,11 @@
   },
   "setFilesSub": {
     "message": "Dokumenter utenfor enhver lagt-til mappe som lagrer på stedet på egen hånd — valgt én gang, eller sluppet i biblioteket."
+  },
+  "dropNoHandle": {
+    "message": "«$1»: nettleseren ga ikke noe filhåndtak for dette slippet."
+  },
+  "dropNotBento": {
+    "message": "«$1» er ikke et Bento-dokument (.bento.html) — ikke lagt til."
   }
 }

@@ -654,5 +654,13 @@
   "setFilesSub": {
     "message": "Documents outside any added folder that save in place on their own — picked once, or dropped onto the library.",
     "description": "Settings section explanation."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: the browser handed over no file handle for this drop.",
+    "description": "Toast when a dropped item yields no file handle. $1 file name."
+  },
+  "dropNotBento": {
+    "message": "“$1” is not a Bento document (.bento.html) — not added.",
+    "description": "Toast when a dropped file is not a .bento.html. $1 file name."
   }
 }

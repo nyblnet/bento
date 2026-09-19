@@ -568,5 +568,11 @@
   },
   "setFilesSub": {
     "message": "Documenten buiten elke toegevoegde map die zelf ter plekke opslaan — één keer gekozen, of in de bibliotheek gesleept."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: de browser gaf geen bestandshandle voor deze drop."
+  },
+  "dropNotBento": {
+    "message": "“$1” is geen Bento-document (.bento.html) — niet toegevoegd."
   }
 }

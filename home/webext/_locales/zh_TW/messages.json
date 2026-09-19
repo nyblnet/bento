@@ -601,5 +601,11 @@
   },
   "setFilesSub": {
     "message": "不在任何已加入資料夾中、但可自行就地儲存的文件——選擇過一次，或拖放到資料庫中。"
+  },
+  "dropNoHandle": {
+    "message": "「$1」：瀏覽器沒有為這次拖放提供檔案控制代碼。"
+  },
+  "dropNotBento": {
+    "message": "「$1」不是 Bento 文件（.bento.html）——未加入。"
   }
 }

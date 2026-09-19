@@ -568,5 +568,11 @@
   },
   "setFilesSub": {
     "message": "Dokumen di luar mana-mana folder yang ditambah yang menyimpan di tempat dengan sendirinya — dipilih sekali, atau dijatuhkan ke perpustakaan."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: pelayar tidak memberikan pemegang fail untuk lepasan ini."
+  },
+  "dropNotBento": {
+    "message": "“$1” bukan dokumen Bento (.bento.html) — tidak ditambah."
   }
 }

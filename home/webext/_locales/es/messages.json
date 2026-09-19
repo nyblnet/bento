@@ -601,5 +601,11 @@
   },
   "setFilesSub": {
     "message": "Documentos fuera de cualquier carpeta añadida que se guardan en el sitio por sí solos: elegidos una vez, o arrastrados a la biblioteca."
+  },
+  "dropNoHandle": {
+    "message": "«$1»: el navegador no entregó ningún identificador de archivo para esta acción."
+  },
+  "dropNotBento": {
+    "message": "«$1» no es un documento Bento (.bento.html): no se añadió."
   }
 }

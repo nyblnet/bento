@@ -568,5 +568,11 @@
   },
   "setFilesSub": {
     "message": "Dokument utanför varje tillagd mapp som sparar på plats på egen hand — valda en gång, eller släppta i biblioteket."
+  },
+  "dropNoHandle": {
+    "message": "”$1”: webbläsaren lämnade inget fil-handle för den här släppningen."
+  },
+  "dropNotBento": {
+    "message": "”$1” är inte ett Bento-dokument (.bento.html) — inte tillagt."
   }
 }

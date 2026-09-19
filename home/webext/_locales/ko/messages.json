@@ -568,5 +568,11 @@
   },
   "setFilesSub": {
     "message": "추가된 폴더 밖에 있지만 스스로 제자리에 저장되는 문서. 한 번 선택했거나 라이브러리에 끌어다 놓은 것."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: 이 드롭에 대해 브라우저가 파일 핸들을 넘겨주지 않았습니다."
+  },
+  "dropNotBento": {
+    "message": "“$1”은(는) Bento 문서(.bento.html)가 아니라 추가하지 않았습니다."
   }
 }
