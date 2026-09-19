@@ -119,3 +119,18 @@ export async function learnPrefix(folderName, absolutePrefix) {
 }
 
 export const prefixes = async () => (await get(GRANT, 'prefixes')) || {}
+
+/**
+ * Documents OPENED in this browser, by absolute path, newest first — every
+ * deck whose bridge said hello. A document dragged into the browser from a
+ * folder the scan does not cover is still a document the person has, and
+ * the library lists it from here: openable by URL, granted or not.
+ */
+export const RECENT_MAX = 60
+export const recentOpened = async () => (await get(GRANT, 'recent')) || {}
+export async function noteOpened(path) {
+  const all = await recentOpened()
+  all[path] = Date.now()
+  const keep = Object.entries(all).sort((a, b) => b[1] - a[1]).slice(0, RECENT_MAX)
+  await put(GRANT, 'recent', Object.fromEntries(keep))
+}

@@ -15,7 +15,7 @@
 import { getGrants, putGrants, status } from './status.js'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
 import { prefixFor } from './route.js'
-import { learnPrefix, prefixes, GRANT, get, put } from './db.js'
+import { learnPrefix, prefixes, recentOpened, GRANT, get, put } from './db.js'
 import { placeFolder, scanDisk, fileUrl } from './place.js'
 import { listFileGrants, addFileGrant, dropFileGrant, handleIsPath } from './filegrant.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
@@ -373,9 +373,17 @@ async function load() {
     if (learned) docs = await listDocuments()
   }
   // Granted documents first; a found one that is the same file (by path) is
-  // the granted one and is not listed twice.
+  // the granted one and is not listed twice. Then the documents OPENED in
+  // this browser that neither covers — dragged in from anywhere.
   const have = new Set(docs.map((d) => d.path).filter(Boolean))
   const extra = onDisk.filter((f) => !have.has(f.path))
+  for (const f of extra) have.add(f.path)
+  for (const [path, at] of Object.entries(await recentOpened().catch(() => ({})))) {
+    if (have.has(path) || !/\.bento\.html$/i.test(path)) continue
+    const name = path.split('/').pop()
+    const dir = path.slice(0, path.lastIndexOf('/'))
+    extra.push({ name, named: true, base: name.replace(/\.bento\.html$/i, ''), folder: dir.split('/').filter(Boolean).pop() ?? dir, rel: [name], path, handle: diskHandle(path, name), parent: null, scanned: true, dir, openedAt: at })
+  }
   // Read mtimes once, here, rather than per render: sorting needs them and the
   // grid is re-rendered on every keystroke of the search box.
   state.docs = await Promise.all([

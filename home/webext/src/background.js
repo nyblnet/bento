@@ -32,7 +32,7 @@
 // popup disagree about the same folders.
 import { setLapsedBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
 import { checkForUpdate } from './update.js'
-import { learnPrefix } from './db.js'
+import { learnPrefix, noteOpened } from './db.js'
 import { t } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
 import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads } from './filegrant.js'
@@ -376,6 +376,9 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     // and writes nothing. Opening a document is the moment to learn its folder
     // — waiting for a save meant a fresh install listed documents it could not
     // open.
+    // Every opened document is remembered by path (db.js noteOpened) so the
+    // library lists it whether or not any grant or scan covers it.
+    if (msg?.op === 'hello') { const p = pathFromSender(sender); if (p) void noteOpened(p).catch(() => {}) }
     const run = msg?.op === 'hello' ? claim(sender)
       : msg?.op === 'claim' ? claimOrOffer(sender, msg.payload)
       : msg?.op === 'filegrant.answered' ? Promise.resolve(offerAnswered(sender, msg))
