@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "Hindi Bento na dokumento (.bento.html) ang “$1” — hindi idinagdag."
+  },
+  "setDownloadsTitle": {
+    "message": "Mga download"
+  },
+  "setDownloadsSub": {
+    "message": "Ang mga dokumento sa folder ng Mga download ay maaaring mag-save sa lugar sa pamamagitan ng mga download ng Chrome — maliban kung nakatakda ang Chrome na magtanong kung saan ise-save ang bawat file, na ginagawang dialog ang bawat pag-save."
+  },
+  "setDownloadsOff": {
+    "message": "Nagtanong ang Chrome kung saan ise-save — naka-off ang pag-save sa Mga download hanggang magbago ang setting na iyon"
+  },
+  "setDownloadsRetry": {
+    "message": "Subukan muli"
   }
 }

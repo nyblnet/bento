@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "”$1” är inte ett Bento-dokument (.bento.html) — inte tillagt."
+  },
+  "setDownloadsTitle": {
+    "message": "Hämtningar"
+  },
+  "setDownloadsSub": {
+    "message": "Dokument i mappen Hämtningar kan sparas på plats via Chromes hämtningar — om inte Chrome är inställt på att fråga var varje fil ska sparas, vilket gör varje sparning till en dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome frågade var det skulle sparas — sparning i Hämtningar är av tills den inställningen ändras"
+  },
+  "setDownloadsRetry": {
+    "message": "Försök igen"
   }
 }

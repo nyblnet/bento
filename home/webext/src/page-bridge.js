@@ -184,6 +184,17 @@
           const blob = chunks.length === 1 && chunks[0] instanceof Blob ? chunks[0] : new Blob(chunks)
           const text = await blob.text()
           const res = await ask(op, { text, ...extra })
+          if (!res?.ok && res?.retry === 'native' && native) {
+            // The extension's door shut mid-save (Chrome prompted for a
+            // download). Finish THIS save the way the browser would with no
+            // extension — its own picker — rather than lose the bytes.
+            console.info('[bento/home]', op, 'fell back to the browser picker:', res.reason)
+            const h = await native(forNative({ suggestedName: name }))
+            const w = await h.createWritable()
+            await w.write(blob)
+            await w.close()
+            return
+          }
           if (!res?.ok) throw new DOMException(res?.reason || 'write failed', 'NotAllowedError')
           console.info('[bento/home]', op, res.name ?? name, `(${res.bytes} bytes${res.via ? `, via ${res.via}` : ''})`)
         },

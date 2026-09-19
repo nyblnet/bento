@@ -607,5 +607,17 @@
   },
   "dropNotBento": {
     "message": "« $1 » n’est pas un document Bento (.bento.html) — non ajouté."
+  },
+  "setDownloadsTitle": {
+    "message": "Téléchargements"
+  },
+  "setDownloadsSub": {
+    "message": "Les documents du dossier Téléchargements peuvent s’enregistrer sur place via les téléchargements de Chrome — sauf si Chrome est réglé pour demander où enregistrer chaque fichier, ce qui transforme chaque enregistrement en dialogue."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome a demandé où enregistrer — l’enregistrement dans Téléchargements est désactivé tant que ce réglage ne change pas"
+  },
+  "setDownloadsRetry": {
+    "message": "Réessayer"
   }
 }

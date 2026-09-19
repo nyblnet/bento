@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "“$1” bukan dokumen Bento (.bento.html) — tidak ditambahkan."
+  },
+  "setDownloadsTitle": {
+    "message": "Unduhan"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumen di folder Unduhan dapat tersimpan di tempat melalui unduhan Chrome — kecuali Chrome disetel untuk menanyakan lokasi setiap berkas, yang mengubah setiap penyimpanan menjadi dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome menanyakan lokasi penyimpanan — menyimpan ke Unduhan dimatikan sampai setelan itu berubah"
+  },
+  "setDownloadsRetry": {
+    "message": "Coba lagi"
   }
 }

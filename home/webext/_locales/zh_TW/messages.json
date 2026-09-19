@@ -607,5 +607,17 @@
   },
   "dropNotBento": {
     "message": "「$1」不是 Bento 文件（.bento.html）——未加入。"
+  },
+  "setDownloadsTitle": {
+    "message": "下載"
+  },
+  "setDownloadsSub": {
+    "message": "「下載」資料夾中的文件可以透過 Chrome 的下載功能就地儲存——除非 Chrome 被設定為每次下載都詢問儲存位置，那樣每次儲存都會跳出對話框。"
+  },
+  "setDownloadsOff": {
+    "message": "Chrome 詢問了儲存位置——在該設定變更之前，儲存到「下載」已關閉"
+  },
+  "setDownloadsRetry": {
+    "message": "重試"
   }
 }

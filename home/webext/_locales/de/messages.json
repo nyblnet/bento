@@ -607,5 +607,17 @@
   },
   "dropNotBento": {
     "message": "„$1“ ist kein Bento-Dokument (.bento.html) — nicht hinzugefügt."
+  },
+  "setDownloadsTitle": {
+    "message": "Downloads"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumente im Downloads-Ordner können über Chromes Downloads direkt speichern — außer Chrome ist so eingestellt, dass es bei jeder Datei nach dem Speicherort fragt; dann wird jedes Speichern zu einem Dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome hat nach dem Speicherort gefragt — Speichern in Downloads ist aus, bis sich diese Einstellung ändert"
+  },
+  "setDownloadsRetry": {
+    "message": "Erneut versuchen"
   }
 }

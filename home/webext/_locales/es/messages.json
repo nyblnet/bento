@@ -607,5 +607,17 @@
   },
   "dropNotBento": {
     "message": "«$1» no es un documento Bento (.bento.html): no se añadió."
+  },
+  "setDownloadsTitle": {
+    "message": "Descargas"
+  },
+  "setDownloadsSub": {
+    "message": "Los documentos de la carpeta Descargas pueden guardarse en el sitio a través de las descargas de Chrome, salvo que Chrome esté configurado para preguntar dónde guardar cada archivo, lo que convierte cada guardado en un diálogo."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome preguntó dónde guardar: guardar en Descargas está desactivado hasta que cambie ese ajuste"
+  },
+  "setDownloadsRetry": {
+    "message": "Reintentar"
   }
 }

@@ -607,5 +607,17 @@
   },
   "dropNotBento": {
     "message": "«$1» non è un documento Bento (.bento.html): non aggiunto."
+  },
+  "setDownloadsTitle": {
+    "message": "Download"
+  },
+  "setDownloadsSub": {
+    "message": "I documenti nella cartella Download possono salvarsi sul posto tramite i download di Chrome — a meno che Chrome non sia impostato per chiedere dove salvare ogni file, il che trasforma ogni salvataggio in una finestra."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome ha chiesto dove salvare: il salvataggio in Download è disattivato finché quell’impostazione non cambia"
+  },
+  "setDownloadsRetry": {
+    "message": "Riprova"
   }
 }

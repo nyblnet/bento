@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "“$1”은(는) Bento 문서(.bento.html)가 아니라 추가하지 않았습니다."
+  },
+  "setDownloadsTitle": {
+    "message": "다운로드"
+  },
+  "setDownloadsSub": {
+    "message": "다운로드 폴더의 문서는 Chrome의 다운로드를 통해 제자리에 저장할 수 있습니다. 단, Chrome이 파일마다 저장 위치를 묻도록 설정되어 있으면 저장할 때마다 대화상자가 뜹니다."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome이 저장 위치를 물었습니다. 그 설정이 바뀔 때까지 다운로드 폴더 저장은 꺼져 있습니다"
+  },
+  "setDownloadsRetry": {
+    "message": "다시 시도"
   }
 }

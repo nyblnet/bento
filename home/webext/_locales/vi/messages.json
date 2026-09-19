@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "“$1” không phải tài liệu Bento (.bento.html) — không thêm."
+  },
+  "setDownloadsTitle": {
+    "message": "Tải xuống"
+  },
+  "setDownloadsSub": {
+    "message": "Tài liệu trong thư mục Tải xuống có thể lưu tại chỗ qua cơ chế tải xuống của Chrome — trừ khi Chrome được đặt hỏi vị trí lưu từng tệp, khi đó mỗi lần lưu là một hộp thoại."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome đã hỏi vị trí lưu — lưu vào Tải xuống bị tắt cho đến khi cài đặt đó thay đổi"
+  },
+  "setDownloadsRetry": {
+    "message": "Thử lại"
   }
 }

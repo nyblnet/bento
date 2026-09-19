@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "«$1» er ikke et Bento-dokument (.bento.html) — ikke lagt til."
+  },
+  "setDownloadsTitle": {
+    "message": "Nedlastinger"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumenter i Nedlastinger-mappen kan lagres på stedet via Chromes nedlastinger — med mindre Chrome er satt til å spørre hvor hver fil skal lagres, som gjør hver lagring til en dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome spurte hvor det skulle lagres — lagring i Nedlastinger er av til den innstillingen endres"
+  },
+  "setDownloadsRetry": {
+    "message": "Prøv igjen"
   }
 }

@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "„$1” nie jest dokumentem Bento (.bento.html) — nie dodano."
+  },
+  "setDownloadsTitle": {
+    "message": "Pobrane"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumenty w folderze Pobrane mogą zapisywać się w miejscu przez pobieranie Chrome — chyba że Chrome jest ustawiony, aby pytać, gdzie zapisać każdy plik, co zamienia każdy zapis w okno dialogowe."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome zapytał, gdzie zapisać — zapis w Pobranych jest wyłączony, dopóki to ustawienie się nie zmieni"
+  },
+  "setDownloadsRetry": {
+    "message": "Spróbuj ponownie"
   }
 }

@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "“$1” bir Bento belgesi değil (.bento.html) — eklenmedi."
+  },
+  "setDownloadsTitle": {
+    "message": "İndirilenler"
+  },
+  "setDownloadsSub": {
+    "message": "İndirilenler klasöründeki belgeler Chrome’un indirmeleri üzerinden yerinde kaydedilebilir — Chrome her dosya için nereye kaydedileceğini soracak şekilde ayarlanmadıysa; o zaman her kayıt bir iletişim kutusuna dönüşür."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome nereye kaydedileceğini sordu — bu ayar değişene kadar İndirilenler’e kaydetme kapalı"
+  },
+  "setDownloadsRetry": {
+    "message": "Yeniden dene"
   }
 }

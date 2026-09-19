@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "“$1” is geen Bento-document (.bento.html) — niet toegevoegd."
+  },
+  "setDownloadsTitle": {
+    "message": "Downloads"
+  },
+  "setDownloadsSub": {
+    "message": "Documenten in de map Downloads kunnen ter plekke opslaan via de downloads van Chrome — tenzij Chrome is ingesteld om bij elk bestand te vragen waar het moet worden opgeslagen, waardoor elke keer opslaan een venster wordt."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome vroeg waar op te slaan — opslaan in Downloads staat uit tot die instelling verandert"
+  },
+  "setDownloadsRetry": {
+    "message": "Opnieuw proberen"
   }
 }

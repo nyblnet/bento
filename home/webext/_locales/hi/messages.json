@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "“$1” Bento दस्तावेज़ (.bento.html) नहीं है — जोड़ा नहीं गया।"
+  },
+  "setDownloadsTitle": {
+    "message": "डाउनलोड"
+  },
+  "setDownloadsSub": {
+    "message": "डाउनलोड फ़ोल्डर के दस्तावेज़ Chrome के डाउनलोड के ज़रिए उसी जगह सहेज सकते हैं — जब तक Chrome हर फ़ाइल के लिए सहेजने की जगह पूछने पर सेट न हो, जिससे हर सहेजना एक डायलॉग बन जाता है।"
+  },
+  "setDownloadsOff": {
+    "message": "Chrome ने पूछा कहाँ सहेजें — वह सेटिंग बदलने तक डाउनलोड में सहेजना बंद है"
+  },
+  "setDownloadsRetry": {
+    "message": "फिर कोशिश करें"
   }
 }

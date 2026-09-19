@@ -17,7 +17,7 @@ import { listDocuments, describe, newDocument, duplicate, rename, APPS } from '.
 import { prefixFor } from './route.js'
 import { learnPrefix, prefixes, recentOpened, GRANT, get, put } from './db.js'
 import { placeFolder, scanDisk, fileUrl } from './place.js'
-import { listFileGrants, addFileGrant, dropFileGrant, handleIsPath } from './filegrant.js'
+import { listFileGrants, addFileGrant, dropFileGrant, handleIsPath, downloadsUnusable, setDownloadsUnusable } from './filegrant.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
   from './i18n.js'
@@ -1503,6 +1503,22 @@ async function renderSettings() {
   make.title = t('bentoFolderTip')
   make.onclick = () => createBentoFolder()
   folders.appendChild(make)
+
+  // --- the Downloads door, when this Chrome shut it by prompting
+  if (await downloadsUnusable().catch(() => false)) {
+    const dl = section(t('setDownloadsTitle'), t('setDownloadsSub'))
+    const row = document.createElement('div')
+    row.className = 'row'
+    row.innerHTML = `<span class="dot bad"></span><b>${esc(t('setDownloadsOff'))}</b>`
+      + `<span class="note"><a href="#" id="dlSettings">chrome://settings/downloads</a></span>`
+    row.querySelector('#dlSettings').onclick = (ev) => { ev.preventDefault(); chrome.tabs.create({ url: 'chrome://settings/downloads' }) }
+    const again = document.createElement('button')
+    again.className = 'btn'
+    again.textContent = t('setDownloadsRetry')
+    again.onclick = () => act(async () => { await setDownloadsUnusable(false) })
+    row.appendChild(again)
+    dl.appendChild(row)
+  }
 
   // --- files saving in place on their own (filegrant.js)
   const fileGrants = await listFileGrants().catch(() => [])

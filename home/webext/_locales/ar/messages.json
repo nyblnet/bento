@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "”$1“ ليس مستند Bento ‏(.bento.html) — لم يُضف."
+  },
+  "setDownloadsTitle": {
+    "message": "التنزيلات"
+  },
+  "setDownloadsSub": {
+    "message": "يمكن للمستندات في مجلد التنزيلات أن تُحفظ في مكانها عبر تنزيلات Chrome — إلا إذا كان Chrome مضبوطًا ليسأل عن مكان حفظ كل ملف، مما يحوّل كل حفظ إلى مربع حوار."
+  },
+  "setDownloadsOff": {
+    "message": "سأل Chrome عن مكان الحفظ — الحفظ في التنزيلات متوقف حتى يتغير ذلك الإعداد"
+  },
+  "setDownloadsRetry": {
+    "message": "حاول مجددًا"
   }
 }

@@ -192,5 +192,22 @@ console.log('\n— the page side: waiting on the offer')
   ok(/listFileGrants\(\)/.test(home) && /dropFileGrant\(g\.key\)/.test(home), 'Settings lists file grants with Remove')
 }
 
+console.log('\n— a Chrome that asks where to save every download')
+{
+  // the downloads API "completes" with USER_CANCELED when Chrome prompted and the person cancelled
+  const w = world({ '/Users/andy/Downloads/P.bento.html': 'P' })
+  w.deps.downloads.download = async (o: any) => { const id = 99; w.downloaded.push(o); return id }
+  w.deps.downloads.search = async (q: any) => (q.id === 99 ? [{ id: 99, state: 'interrupted', error: 'USER_CANCELED', filename: '/Users/andy/Downloads/P.bento.html' }] : [{ filename: '/Users/andy/Downloads/x.txt' }])
+  const deps = { readGrants: async () => [], filegrant: w.deps }
+  const first = await bg.write(FILE('/Users/andy/Downloads/P.bento.html'), 'X', deps)
+  ok(!first.ok && first.retry === 'native' && /asks where to save/.test(first.reason), 'a prompted download: the page is told to finish this save with the browser\'s own picker')
+  ok(w.kv.downloadsUnusable === true, 'and the Downloads door is switched off for this Chrome')
+  const next = await bg.claim(FILE('/Users/andy/Downloads/P.bento.html'), deps)
+  ok(!next.ok && next.via !== 'downloads', 'the next claim no longer takes the Downloads door (the offer follows in the worker)')
+  await fg.setDownloadsUnusable(false, w.deps)
+  ok((await bg.claim(FILE('/Users/andy/Downloads/P.bento.html'), deps)).via === 'downloads', 'Settings "Try again" reopens it')
+  ok(/retry === 'native'/.test(read('src/page-bridge.js')) && /native\(forNative\(\{ suggestedName: name \}\)\)/.test(read('src/page-bridge.js')), 'page-bridge finishes such a save through the native picker instead of throwing the bytes away')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

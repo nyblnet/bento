@@ -35,7 +35,7 @@ import { checkForUpdate } from './update.js'
 import { learnPrefix, noteOpened } from './db.js'
 import { t } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
-import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads } from './filegrant.js'
+import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads, downloadsUnusable, setDownloadsUnusable } from './filegrant.js'
 
 // Re-exported: these moved to route.js so the PAGES can place a path too,
 // but they are still part of this module's tested surface.
@@ -265,7 +265,10 @@ export async function resolveAny(sender, deps = {}) {
   // save falls to the picker, never to an exception
   const fg = await (deps.resolveFileGrant ?? resolveFileGrant)(path, deps.filegrant).catch(() => ({ ok: false, reason: 'none' }))
   if (fg.ok) return { ok: true, name: path.split('/').pop(), handle: fg.handle, key: fg.key, via: 'file' }
-  const dir = await (deps.downloadsDir ?? downloadsDir)(deps.filegrant).catch(() => null)
+  // the Downloads door, unless this Chrome prompts for every download (then
+  // it was switched off the first time it prompted; Settings says so)
+  const unusable = await (deps.downloadsUnusable ?? downloadsUnusable)(deps.filegrant).catch(() => false)
+  const dir = unusable ? null : await (deps.downloadsDir ?? downloadsDir)(deps.filegrant).catch(() => null)
   const rel = downloadsRelative(path, dir)
   if (rel) return { ok: true, name: path.split('/').pop(), rel, via: 'downloads' }
   return { ok: false, reason: fg.reason === 'lapsed' ? 'file grant needs renewing' : r.reason, path }
@@ -292,6 +295,13 @@ export async function write(sender, text, deps = {}) {
   } catch (e) {
     // a file grant whose file is gone is no grant: forget it
     if (r.via === 'file' && e?.name === 'NotFoundError') await (deps.dropFileGrant ?? dropFileGrant)(r.key, deps.filegrant).catch(() => {})
+    // Chrome prompted for the download: this door is shut for good in this
+    // Chrome, THIS save finishes through the browser's own picker (the page
+    // is told to), and the next one is offered a file grant instead.
+    if (r.via === 'downloads' && e?.name === 'DownloadsPrompted') {
+      await (deps.setDownloadsUnusable ?? setDownloadsUnusable)(true, deps.filegrant).catch(() => {})
+      return { ok: false, reason: 'Chrome asks where to save each download', retry: 'native' }
+    }
     return { ok: false, reason: `${e.name}: ${e.message}` }
   }
 }

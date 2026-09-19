@@ -607,5 +607,17 @@
   },
   "dropNotBento": {
     "message": "「$1」は Bento ドキュメント（.bento.html）ではないため追加しませんでした。"
+  },
+  "setDownloadsTitle": {
+    "message": "ダウンロード"
+  },
+  "setDownloadsSub": {
+    "message": "ダウンロードフォルダーのドキュメントは Chrome のダウンロード機能を通じてその場に保存できます。ただし Chrome が「ダウンロード前に各ファイルの保存場所を確認する」設定になっていると、保存のたびにダイアログになります。"
+  },
+  "setDownloadsOff": {
+    "message": "Chrome が保存場所を尋ねたため、その設定が変わるまでダウンロードフォルダーへの保存はオフです"
+  },
+  "setDownloadsRetry": {
+    "message": "もう一度試す"
   }
 }

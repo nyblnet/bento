@@ -607,5 +607,17 @@
   },
   "dropNotBento": {
     "message": "“$1”不是 Bento 文档（.bento.html）——未添加。"
+  },
+  "setDownloadsTitle": {
+    "message": "下载"
+  },
+  "setDownloadsSub": {
+    "message": "“下载”文件夹中的文档可以通过 Chrome 的下载功能原地保存——除非 Chrome 被设置为每次下载都询问保存位置，那样每次保存都会弹出对话框。"
+  },
+  "setDownloadsOff": {
+    "message": "Chrome 询问了保存位置——在该设置更改之前，保存到“下载”已关闭"
+  },
+  "setDownloadsRetry": {
+    "message": "重试"
   }
 }

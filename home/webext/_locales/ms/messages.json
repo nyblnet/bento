@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "“$1” bukan dokumen Bento (.bento.html) — tidak ditambah."
+  },
+  "setDownloadsTitle": {
+    "message": "Muat turun"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumen dalam folder Muat turun boleh disimpan di tempat melalui muat turun Chrome — melainkan Chrome ditetapkan untuk bertanya di mana untuk menyimpan setiap fail, yang menjadikan setiap simpanan satu dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome bertanya di mana untuk menyimpan — menyimpan ke Muat turun dimatikan sehingga tetapan itu berubah"
+  },
+  "setDownloadsRetry": {
+    "message": "Cuba lagi"
   }
 }

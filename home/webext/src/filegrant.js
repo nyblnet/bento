@@ -184,6 +184,10 @@ function waitForDownload(id, deps) {
   })
 }
 
+/** Is the Downloads door switched off for this Chrome (it prompted once)? */
+export const downloadsUnusable = async (deps = defaultDeps()) => !!(await deps.storage?.get('downloadsUnusable'))?.downloadsUnusable
+export const setDownloadsUnusable = (v, deps = defaultDeps()) => deps.storage?.set({ downloadsUnusable: !!v })
+
 /** Write text to a path under Downloads through the downloads API. Bytes written, or a throw. */
 export async function writeViaDownloads(rel, text, deps = defaultDeps()) {
   if (!deps.downloads) throw new Error('downloads unavailable')
@@ -198,7 +202,14 @@ export async function writeViaDownloads(rel, text, deps = defaultDeps()) {
     const id = await deps.downloads.download({ url, filename: rel, conflictAction: 'overwrite', saveAs: false })
     const item = await waitForDownload(id, deps)
     try { await deps.downloads.erase({ id }) } catch { /* history only */ }
-    if (!item || item.state !== 'complete') throw new Error(item?.error ? `download ${item.error}` : 'download did not complete')
+    if (!item || item.state !== 'complete') {
+      const e = new Error(item?.error ? `download ${item.error}` : 'download did not complete')
+      // USER_CANCELED here means Chrome PROMPTED — "Ask where to save each
+      // file" is on, and the downloads API honours it even with saveAs:false
+      // (measured). This door cannot be silent in that Chrome.
+      if (item?.error === 'USER_CANCELED') e.name = 'DownloadsPrompted'
+      throw e
+    }
     return bytes.length
   } finally {
     if (ui) { try { await ui({ enabled: true }) } catch { /* fine */ } }

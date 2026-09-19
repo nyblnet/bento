@@ -662,5 +662,21 @@
   "dropNotBento": {
     "message": "“$1” is not a Bento document (.bento.html) — not added.",
     "description": "Toast when a dropped file is not a .bento.html. $1 file name."
+  },
+  "setDownloadsTitle": {
+    "message": "Downloads",
+    "description": "Settings section title: the Downloads door."
+  },
+  "setDownloadsSub": {
+    "message": "Documents in your Downloads folder can save in place through Chrome's downloads — unless Chrome is set to ask where to save each file, which turns every save into a dialog.",
+    "description": "Settings: explanation of the Downloads door and the Chrome setting that breaks it."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome asked where to save — saving into Downloads is off until that setting changes",
+    "description": "Settings row: the Downloads door was switched off because Chrome prompted."
+  },
+  "setDownloadsRetry": {
+    "message": "Try again",
+    "description": "Settings: re-enable the Downloads door after changing the Chrome setting."
   }
 }

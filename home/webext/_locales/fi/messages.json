@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "”$1” ei ole Bento-asiakirja (.bento.html) — ei lisätty."
+  },
+  "setDownloadsTitle": {
+    "message": "Lataukset"
+  },
+  "setDownloadsSub": {
+    "message": "Lataukset-kansion asiakirjat voivat tallentua paikalleen Chromen latausten kautta — paitsi jos Chrome on asetettu kysymään jokaisen tiedoston tallennuspaikkaa, jolloin jokainen tallennus on valintaikkuna."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome kysyi tallennuspaikkaa — tallennus Lataukset-kansioon on pois päältä, kunnes tuo asetus muuttuu"
+  },
+  "setDownloadsRetry": {
+    "message": "Yritä uudelleen"
   }
 }

@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "“$1” er ikke et Bento-dokument (.bento.html) — ikke tilføjet."
+  },
+  "setDownloadsTitle": {
+    "message": "Overførsler"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumenter i mappen Overførsler kan gemme på stedet via Chromes overførsler — medmindre Chrome er sat til at spørge, hvor hver fil skal gemmes, hvilket gør hver gemning til en dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome spurgte, hvor der skulle gemmes — gemning i Overførsler er slået fra, indtil den indstilling ændres"
+  },
+  "setDownloadsRetry": {
+    "message": "Prøv igen"
   }
 }

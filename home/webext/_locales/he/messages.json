@@ -574,5 +574,17 @@
   },
   "dropNotBento": {
     "message": "„$1” אינו מסמך Bento ‏(.bento.html) — לא נוסף."
+  },
+  "setDownloadsTitle": {
+    "message": "הורדות"
+  },
+  "setDownloadsSub": {
+    "message": "מסמכים בתיקיית ההורדות יכולים להישמר במקום דרך ההורדות של Chrome — אלא אם Chrome מוגדר לשאול היכן לשמור כל קובץ, מה שהופך כל שמירה לתיבת דו־שיח."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome שאל היכן לשמור — השמירה להורדות כבויה עד שההגדרה הזו תשתנה"
+  },
+  "setDownloadsRetry": {
+    "message": "לנסות שוב"
   }
 }
