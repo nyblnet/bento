@@ -189,7 +189,7 @@
     "message": "Chọn thư mục chứa tài liệu của bạn"
   },
   "setupStep1Note": {
-    "message": "Một thư mục rộng thường là đủ — nó bao trùm mọi thứ bên trong. Chrome sẽ không trao chính thư mục nhà hay Library: hãy chọn Documents, Desktop, hoặc thư mục chứa tài liệu của bạn."
+    "message": "Một thư mục rộng thường là đủ — nó bao trùm mọi thứ bên trong."
   },
   "setupStep2": {
     "message": "Bật quyền truy cập tệp cục bộ"
@@ -631,89 +631,5 @@
   },
   "asstFocusGeneric": {
     "message": "các phần tử đã chọn hoặc trang chiếu đang mở"
-  },
-  "placingFolder": {
-    "message": "Đang tìm “$1” trên ổ đĩa…"
-  },
-  "placeNoDisk": {
-    "message": "Chrome không cho tiện ích đọc “$1” từ ổ đĩa để tìm nó (danh sách file:// bị từ chối)."
-  },
-  "placeTried": {
-    "message": "Đã tìm “$1” ở $2 nơi trên ổ đĩa — không có."
-  },
-  "recentTitle": {
-    "message": "Mới chỉnh sửa"
-  },
-  "badgeNotAdded": {
-    "message": "chưa thêm"
-  },
-  "badgeNotAddedTip": {
-    "message": "Tìm thấy trên ổ đĩa. Mở được, nhưng khi lưu sẽ hỏi lưu ở đâu — thêm thư mục của nó để lưu tại chỗ."
-  },
-  "folderFoundTip": {
-    "message": "Tìm thấy trên ổ đĩa, chưa thêm: tài liệu mở được, nhưng lưu sẽ hỏi ở đâu."
-  },
-  "menuAddFolder": {
-    "message": "Thêm thư mục của nó để lưu tại chỗ…"
-  },
-  "pickThisFolder": {
-    "message": "Trong hộp chọn, hãy chọn thư mục “$1” — Chrome phải thấy bạn chọn nó."
-  },
-  "pickedWrongFolder": {
-    "message": "“$1” không phải thư mục chứa tài liệu này (“$2”). Hãy thử lại và chọn thư mục đó."
-  },
-  "folderAlreadyAdded": {
-    "message": "“$1” đã được thêm."
-  },
-  "bentoFolderBtn": {
-    "message": "Tạo thư mục Bento…"
-  },
-  "bentoFolderHow": {
-    "message": "Trong hộp thoại, tạo thư mục mới tên “Bento” trong Documents rồi chọn nó."
-  },
-  "bentoFolderMade": {
-    "message": "“$1” là thư mục Bento của bạn — tài liệu mới vào đó và lưu tại chỗ."
-  },
-  "bentoFolderTip": {
-    "message": "Một thư mục trong Documents lưu tại chỗ và nhận tài liệu mới. Chrome không cấp chính Documents."
-  },
-  "defaultFolder": {
-    "message": "tài liệu mới vào đây"
-  },
-  "fgTitle": {
-    "message": "Lưu “$1” tại chỗ từ nay về sau?"
-  },
-  "fgTitleLapsed": {
-    "message": "Kết nối lại “$1”?"
-  },
-  "fgLead": {
-    "message": "bento/home giữ quyền cho riêng tệp này, nên mỗi lần lưu sẽ ghi thẳng vào nó. Hãy chọn đúng tệp đó trong hộp thoại tiếp theo."
-  },
-  "fgLeadLapsed": {
-    "message": "bento/home đã có tệp này; trình duyệt muốn bạn xác nhận lại."
-  },
-  "fgChoose": {
-    "message": "Chọn tệp…"
-  },
-  "fgReconnect": {
-    "message": "Kết nối lại"
-  },
-  "fgOnce": {
-    "message": "Chỉ lần này"
-  },
-  "fgNotSame": {
-    "message": "Đó không phải tệp đã yêu cầu (“$1”). Hãy chọn tệp đó, hoặc đóng cửa sổ này."
-  },
-  "fgDenied": {
-    "message": "Quyền không được cấp."
-  },
-  "droppedGranted": {
-    "message": "Đã thêm: $1 thư mục, $2 tệp."
-  },
-  "setFilesTitle": {
-    "message": "Tệp"
-  },
-  "setFilesSub": {
-    "message": "Tài liệu nằm ngoài mọi thư mục đã thêm nhưng tự lưu tại chỗ — được chọn một lần, hoặc kéo thả vào thư viện."
   }
 }

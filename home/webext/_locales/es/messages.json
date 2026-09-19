@@ -199,7 +199,7 @@
     "message": "Elige la carpeta donde viven tus documentos"
   },
   "setupStep1Note": {
-    "message": "Suele bastar una carpeta amplia: cubre todo lo que contiene. Chrome no entrega la carpeta personal en sí ni Library: elige Documentos, Escritorio o la carpeta donde están tus documentos."
+    "message": "Una carpeta amplia suele bastar — cubre todo lo que hay dentro."
   },
   "setupStep2": {
     "message": "Activa el acceso a archivos locales",
@@ -664,89 +664,5 @@
   },
   "asstFocusGeneric": {
     "message": "los elementos seleccionados o la diapositiva abierta"
-  },
-  "placingFolder": {
-    "message": "Buscando «$1» en el disco…"
-  },
-  "placeNoDisk": {
-    "message": "Chrome no dejó que la extensión leyera «$1» del disco para encontrarla (listados file:// rechazados)."
-  },
-  "placeTried": {
-    "message": "Se buscó «$1» en $2 lugares del disco: no está ahí."
-  },
-  "recentTitle": {
-    "message": "Editados recientemente"
-  },
-  "badgeNotAdded": {
-    "message": "no añadida"
-  },
-  "badgeNotAddedTip": {
-    "message": "Encontrado en el disco. Se abre, pero al guardar preguntará dónde: añade su carpeta para guardar en el sitio."
-  },
-  "folderFoundTip": {
-    "message": "Encontrada en el disco, no añadida: sus documentos se abren, pero guardar pregunta dónde."
-  },
-  "menuAddFolder": {
-    "message": "Añadir su carpeta para guardar en el sitio…"
-  },
-  "pickThisFolder": {
-    "message": "En el selector, elige la carpeta «$1»: Chrome tiene que ver que la eliges."
-  },
-  "pickedWrongFolder": {
-    "message": "«$1» no es la carpeta de este documento («$2»). Inténtalo de nuevo y elige esa."
-  },
-  "folderAlreadyAdded": {
-    "message": "«$1» ya está añadida."
-  },
-  "bentoFolderBtn": {
-    "message": "Crear una carpeta Bento…"
-  },
-  "bentoFolderHow": {
-    "message": "En el diálogo, crea una carpeta nueva llamada «Bento» dentro de Documentos y elígela."
-  },
-  "bentoFolderMade": {
-    "message": "«$1» es tu carpeta Bento: los documentos nuevos van ahí y se guardan en el sitio."
-  },
-  "bentoFolderTip": {
-    "message": "Una carpeta dentro de Documentos que guarda en el sitio y recibe los documentos nuevos. Chrome no concede Documentos en sí."
-  },
-  "defaultFolder": {
-    "message": "los documentos nuevos van aquí"
-  },
-  "fgTitle": {
-    "message": "¿Guardar «$1» en el sitio a partir de ahora?"
-  },
-  "fgTitleLapsed": {
-    "message": "¿Reconectar «$1»?"
-  },
-  "fgLead": {
-    "message": "bento/home conserva el permiso para este único archivo, así que cada guardado escribe directamente en él. Elige el mismo archivo en el siguiente diálogo."
-  },
-  "fgLeadLapsed": {
-    "message": "bento/home ya tiene este archivo; el navegador quiere que lo confirmes otra vez."
-  },
-  "fgChoose": {
-    "message": "Elegir el archivo…"
-  },
-  "fgReconnect": {
-    "message": "Reconectar"
-  },
-  "fgOnce": {
-    "message": "Solo esta vez"
-  },
-  "fgNotSame": {
-    "message": "Ese no es el archivo que lo pidió («$1»). Elige ese, o cierra esta ventana."
-  },
-  "fgDenied": {
-    "message": "No se concedió el permiso."
-  },
-  "droppedGranted": {
-    "message": "Añadidos: $1 carpetas, $2 archivos."
-  },
-  "setFilesTitle": {
-    "message": "Archivos"
-  },
-  "setFilesSub": {
-    "message": "Documentos fuera de cualquier carpeta añadida que se guardan en el sitio por sí solos: elegidos una vez, o arrastrados a la biblioteca."
   }
 }

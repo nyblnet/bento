@@ -189,7 +189,7 @@
     "message": "Kies de map waar je documenten staan"
   },
   "setupStep1Note": {
-    "message": "Eén brede map is meestal genoeg — die dekt alles erin. Chrome geeft je thuismap zelf of Library niet vrij: kies Documenten, Bureaublad of de map waar je documenten staan."
+    "message": "Eén ruime map is meestal genoeg — die dekt alles wat erin zit."
   },
   "setupStep2": {
     "message": "Zet toegang tot lokale bestanden aan"
@@ -631,89 +631,5 @@
   },
   "asstFocusGeneric": {
     "message": "de geselecteerde elementen of de geopende dia"
-  },
-  "placingFolder": {
-    "message": "Zoeken naar “$1” op de schijf…"
-  },
-  "placeNoDisk": {
-    "message": "Chrome liet de extensie “$1” niet van de schijf lezen om hem te vinden (file://-lijsten geweigerd)."
-  },
-  "placeTried": {
-    "message": "Gezocht naar “$1” op $2 plekken op de schijf — niet daar."
-  },
-  "recentTitle": {
-    "message": "Onlangs bewerkt"
-  },
-  "badgeNotAdded": {
-    "message": "niet toegevoegd"
-  },
-  "badgeNotAddedTip": {
-    "message": "Gevonden op de schijf. Opent wel, maar opslaan vraagt waar — voeg de map toe om ter plekke op te slaan."
-  },
-  "folderFoundTip": {
-    "message": "Gevonden op de schijf, niet toegevoegd: de documenten openen, maar opslaan vraagt waar."
-  },
-  "menuAddFolder": {
-    "message": "Map toevoegen om ter plekke op te slaan…"
-  },
-  "pickThisFolder": {
-    "message": "Kies in de kiezer de map “$1” — Chrome moet zien dat u die kiest."
-  },
-  "pickedWrongFolder": {
-    "message": "“$1” is niet de map van dit document (“$2”). Probeer opnieuw en kies die."
-  },
-  "folderAlreadyAdded": {
-    "message": "“$1” is al toegevoegd."
-  },
-  "bentoFolderBtn": {
-    "message": "Een Bento-map maken…"
-  },
-  "bentoFolderHow": {
-    "message": "Maak in het venster een nieuwe map met de naam “Bento” in Documenten en kies die."
-  },
-  "bentoFolderMade": {
-    "message": "“$1” is uw Bento-map — nieuwe documenten komen daar en worden ter plekke opgeslagen."
-  },
-  "bentoFolderTip": {
-    "message": "Een map in Documenten die ter plekke opslaat en nieuwe documenten ontvangt. Documenten zelf geeft Chrome niet vrij."
-  },
-  "defaultFolder": {
-    "message": "nieuwe documenten komen hier"
-  },
-  "fgTitle": {
-    "message": "“$1” voortaan ter plekke opslaan?"
-  },
-  "fgTitleLapsed": {
-    "message": "“$1” opnieuw verbinden?"
-  },
-  "fgLead": {
-    "message": "bento/home houdt de toestemming voor dit ene bestand, zodat elke keer opslaan er direct in schrijft. Kies hetzelfde bestand in het volgende venster."
-  },
-  "fgLeadLapsed": {
-    "message": "bento/home heeft dit bestand al; de browser wil dat u het opnieuw bevestigt."
-  },
-  "fgChoose": {
-    "message": "Bestand kiezen…"
-  },
-  "fgReconnect": {
-    "message": "Opnieuw verbinden"
-  },
-  "fgOnce": {
-    "message": "Alleen deze keer"
-  },
-  "fgNotSame": {
-    "message": "Dat is niet het bestand dat vroeg (“$1”). Kies dat, of sluit dit venster."
-  },
-  "fgDenied": {
-    "message": "Toestemming is niet verleend."
-  },
-  "droppedGranted": {
-    "message": "Toegevoegd: $1 mappen, $2 bestanden."
-  },
-  "setFilesTitle": {
-    "message": "Bestanden"
-  },
-  "setFilesSub": {
-    "message": "Documenten buiten elke toegevoegde map die zelf ter plekke opslaan — één keer gekozen, of in de bibliotheek gesleept."
   }
 }

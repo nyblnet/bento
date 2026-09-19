@@ -29,17 +29,16 @@
   const pending = new Map()
 
   /** One round trip to the isolated world, which relays to the extension. */
-  const ask = (op, payload, timeoutMs = 5000) =>
+  const ask = (op, payload) =>
     new Promise((resolve) => {
       const id = `${Date.now()}-${seq++}`
       pending.set(id, resolve)
       window.postMessage({ [CH]: true, dir: 'req', id, op, payload }, '*')
       // A host that never answers must not hang a save forever — the caller
-      // falls back to the native picker instead. (A claim that is waiting on
-      // the extension's own window gets as long as a dialog takes.)
+      // falls back to the native picker instead.
       setTimeout(() => {
         if (pending.delete(id)) resolve({ ok: false, reason: 'timeout' })
-      }, timeoutMs)
+      }, 5000)
     })
 
   window.addEventListener('message', (ev) => {
@@ -185,7 +184,7 @@
           const text = await blob.text()
           const res = await ask(op, { text, ...extra })
           if (!res?.ok) throw new DOMException(res?.reason || 'write failed', 'NotAllowedError')
-          console.info('[bento/home]', op, res.name ?? name, `(${res.bytes} bytes${res.via ? `, via ${res.via}` : ''})`)
+          console.info('[bento/home]', op, res.name ?? name, `(${res.bytes} bytes)`)
         },
       }
     },
@@ -215,11 +214,7 @@
     // browser stamps and this page cannot forge. A local HTML file is untrusted
     // content, and one that could name its own target could name someone else's
     // deck in the granted folder.
-    let claim = await ask('claim')
-    // Nothing covers this file yet and the extension is asking the person,
-    // in its own window, whether it may from now on. Wait for that answer
-    // the way a native picker is waited for; a decline lands in the picker.
-    if (claim?.reason === 'setup' && claim.token) claim = await ask('claim', { token: claim.token }, 120000)
+    const claim = await ask('claim')
     if (!claim?.ok) {
       // Say WHY. Falling through to the native picker is the safe outcome, but
       // an unexplained dialog is indistinguishable from the extension not being

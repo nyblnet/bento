@@ -150,9 +150,7 @@ export async function listDocuments(deps = {}) {
 
 /** Cache key. Includes size and mtime so an edited document re-reads itself,
  *  and nothing has to be invalidated by hand. */
-// `v2`: the meta gained `card` (the drawn title card); an entry cached before
-// that would be served without one forever, since the file has not changed.
-const keyFor = (doc, file) => `v2:${doc.folder}/${doc.rel.join('/')}:${file.size}:${file.lastModified}`
+const keyFor = (doc, file) => `${doc.folder}/${doc.rel.join('/')}:${file.size}:${file.lastModified}`
 
 /**
  * What a document is called, and what its first page looks like.
@@ -206,15 +204,8 @@ export async function describe(doc, deps = {}) {
     text = extractText(whole)
   }
 
-  // A shell that has never been saved has no preview render, and so did
-  // every fixture on the maintainer's screen: 28 identical grey cards. The
-  // document itself is right there, though — so a still card is drawn from
-  // its first slide: background, a few lines of its words, the theme's ink.
-  const card = !encrypted && !preview ? cardFrom(await file.text()) : null
-
   const meta = {
     title: title ? title.replace(/\\(.)/g, '$1') : doc.base,
-    card,
     app,
     // What the document SAYS, so search can find a deck by a phrase on a slide
     // rather than only by what somebody happened to call the file. Free in I/O:
@@ -228,49 +219,6 @@ export async function describe(doc, deps = {}) {
   // Best effort: a cache that cannot be written costs a re-read, nothing more.
   try { await cachePut(key, meta) } catch { /* quota, private mode */ }
   return meta
-}
-
-/**
- * A title card out of the document block, for a card with no preview: the
- * first (non-state) slide's background, the theme's text colour and accent,
- * and the first few pieces of text on that slide, tags stripped. Null when
- * the block is not a deck we can read — a card without a picture is still a
- * card. Read from the JSON, not from any markup the file carries.
- */
-export function cardFrom(whole) {
-  try {
-    const i = whole.indexOf(MARKER)
-    if (i === -1) return null
-    const open = whole.indexOf('>', i)
-    const close = whole.indexOf('</script', open)
-    if (open === -1 || close === -1) return null
-    const doc = JSON.parse(whole.slice(open + 1, close))
-    const slides = Array.isArray(doc?.slides) ? doc.slides : []
-    const first = slides.find((sl) => sl && typeof sl === 'object' && !sl.stateOf) ?? slides[0]
-    if (!first) return null
-    const colour = (v, fallback) => (typeof v === 'string' && /^(#[0-9a-f]{3,8}|rgba?\(|hsla?\(|[a-z]{3,20}$)/i.test(v.trim()) ? v.trim() : fallback)
-    const theme = doc.theme && typeof doc.theme === 'object' ? doc.theme : {}
-    const lines = []
-    const strip = (h) => String(h).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim()
-    const visit = (v) => {
-      if (lines.length >= 4) return
-      if (Array.isArray(v)) { for (const x of v) visit(x); return }
-      if (!v || typeof v !== 'object') return
-      if (v.type === 'text' && !v.placeholder) {
-        const w = strip(v.md ?? v.html ?? '')
-        if (w) lines.push({ text: w.slice(0, 120), role: typeof v.role === 'string' ? v.role : '', size: typeof v.fontSize === 'number' ? v.fontSize : 0 })
-      }
-    }
-    visit(first.elements)
-    // Absent colours are left null: the card falls back to the UI palette
-    // (ui.css), never to a literal of its own.
-    return {
-      bg: colour(first.background, colour(theme.background, null)),
-      ink: colour(theme.color, null),
-      accent: colour(theme.accent, null),
-      lines,
-    }
-  } catch { return null }
 }
 
 /** How much extracted prose to keep per document. Enough for any phrase

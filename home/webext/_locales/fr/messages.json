@@ -199,7 +199,7 @@
     "message": "Choisissez le dossier où vivent vos documents"
   },
   "setupStep1Note": {
-    "message": "Un dossier large suffit en général : il couvre tout ce qu’il contient. Chrome refuse le dossier personnel lui-même et Library : choisissez Documents, Bureau ou le dossier où vivent vos documents."
+    "message": "Un dossier large suffit en général — il couvre tout ce qu’il contient."
   },
   "setupStep2": {
     "message": "Activez l’accès aux fichiers locaux",
@@ -664,89 +664,5 @@
   },
   "asstFocusGeneric": {
     "message": "les éléments sélectionnés ou la diapositive ouverte"
-  },
-  "placingFolder": {
-    "message": "Recherche de « $1 » sur le disque…"
-  },
-  "placeNoDisk": {
-    "message": "Chrome n’a pas laissé l’extension lire « $1 » sur le disque pour le retrouver (listes file:// refusées)."
-  },
-  "placeTried": {
-    "message": "« $1 » cherché à $2 endroits sur le disque — pas là."
-  },
-  "recentTitle": {
-    "message": "Modifiés récemment"
-  },
-  "badgeNotAdded": {
-    "message": "non ajouté"
-  },
-  "badgeNotAddedTip": {
-    "message": "Trouvé sur le disque. Il s’ouvre, mais l’enregistrement demandera où — ajoutez son dossier pour enregistrer sur place."
-  },
-  "folderFoundTip": {
-    "message": "Trouvé sur le disque, non ajouté : ses documents s’ouvrent, mais l’enregistrement demande où."
-  },
-  "menuAddFolder": {
-    "message": "Ajouter son dossier pour enregistrer sur place…"
-  },
-  "pickThisFolder": {
-    "message": "Dans le sélecteur, choisissez le dossier « $1 » — Chrome doit vous voir le choisir."
-  },
-  "pickedWrongFolder": {
-    "message": "« $1 » n’est pas le dossier de ce document (« $2 »). Réessayez et choisissez celui-là."
-  },
-  "folderAlreadyAdded": {
-    "message": "« $1 » est déjà ajouté."
-  },
-  "bentoFolderBtn": {
-    "message": "Créer un dossier Bento…"
-  },
-  "bentoFolderHow": {
-    "message": "Dans le dialogue, créez un nouveau dossier nommé « Bento » dans Documents et choisissez-le."
-  },
-  "bentoFolderMade": {
-    "message": "« $1 » est votre dossier Bento : les nouveaux documents y vont et s’enregistrent sur place."
-  },
-  "bentoFolderTip": {
-    "message": "Un dossier dans Documents qui enregistre sur place et reçoit les nouveaux documents. Chrome n’accorde pas Documents lui-même."
-  },
-  "defaultFolder": {
-    "message": "les nouveaux documents vont ici"
-  },
-  "fgTitle": {
-    "message": "Enregistrer « $1 » sur place désormais ?"
-  },
-  "fgTitleLapsed": {
-    "message": "Reconnecter « $1 » ?"
-  },
-  "fgLead": {
-    "message": "bento/home garde l’autorisation pour ce seul fichier : chaque enregistrement y écrit directement. Choisissez le même fichier dans le prochain dialogue."
-  },
-  "fgLeadLapsed": {
-    "message": "bento/home a déjà ce fichier ; le navigateur vous demande de le confirmer à nouveau."
-  },
-  "fgChoose": {
-    "message": "Choisir le fichier…"
-  },
-  "fgReconnect": {
-    "message": "Reconnecter"
-  },
-  "fgOnce": {
-    "message": "Juste cette fois"
-  },
-  "fgNotSame": {
-    "message": "Ce n’est pas le fichier qui a demandé (« $1 »). Choisissez celui-là, ou fermez cette fenêtre."
-  },
-  "fgDenied": {
-    "message": "L’autorisation n’a pas été accordée."
-  },
-  "droppedGranted": {
-    "message": "Ajoutés : $1 dossiers, $2 fichiers."
-  },
-  "setFilesTitle": {
-    "message": "Fichiers"
-  },
-  "setFilesSub": {
-    "message": "Documents hors de tout dossier ajouté qui s’enregistrent sur place par eux-mêmes — choisis une fois, ou déposés dans la bibliothèque."
   }
 }

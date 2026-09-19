@@ -189,7 +189,7 @@
     "message": "문서가 있는 폴더를 선택하세요"
   },
   "setupStep1Note": {
-    "message": "보통 넓은 폴더 하나면 충분합니다. 그 안의 모든 것이 포함됩니다. 홈 폴더 자체나 Library는 Chrome이 넘겨주지 않으니 문서, 데스크탑, 또는 문서가 들어 있는 폴더를 고르세요."
+    "message": "넓은 폴더 하나면 대개 충분합니다 — 그 안의 모든 것이 포함됩니다."
   },
   "setupStep2": {
     "message": "로컬 파일 접근을 켜세요"
@@ -631,89 +631,5 @@
   },
   "asstFocusGeneric": {
     "message": "선택한 요소 또는 열려 있는 슬라이드"
-  },
-  "placingFolder": {
-    "message": "디스크에서 “$1” 찾는 중…"
-  },
-  "placeNoDisk": {
-    "message": "Chrome이 “$1”을(를) 찾기 위해 확장 프로그램이 디스크를 읽는 것을 허용하지 않았습니다(file:// 목록 거부됨)."
-  },
-  "placeTried": {
-    "message": "디스크의 $2곳에서 “$1”을(를) 찾았지만 없었습니다."
-  },
-  "recentTitle": {
-    "message": "최근 편집"
-  },
-  "badgeNotAdded": {
-    "message": "추가되지 않음"
-  },
-  "badgeNotAddedTip": {
-    "message": "디스크에서 찾았습니다. 열리지만 저장할 때 위치를 묻습니다. 제자리에 저장하려면 폴더를 추가하세요."
-  },
-  "folderFoundTip": {
-    "message": "디스크에서 찾았지만 추가되지 않은 폴더: 문서는 열리지만 저장할 때 위치를 묻습니다."
-  },
-  "menuAddFolder": {
-    "message": "제자리에 저장하도록 폴더 추가…"
-  },
-  "pickThisFolder": {
-    "message": "선택 창에서 “$1” 폴더를 고르세요. Chrome이 직접 고르는 것을 확인해야 합니다."
-  },
-  "pickedWrongFolder": {
-    "message": "“$1”은(는) 이 문서의 폴더(“$2”)가 아닙니다. 다시 시도해 그 폴더를 고르세요."
-  },
-  "folderAlreadyAdded": {
-    "message": "“$1”은(는) 이미 추가되어 있습니다."
-  },
-  "bentoFolderBtn": {
-    "message": "Bento 폴더 만들기…"
-  },
-  "bentoFolderHow": {
-    "message": "대화상자에서 문서 안에 “Bento”라는 새 폴더를 만들고 그것을 선택하세요."
-  },
-  "bentoFolderMade": {
-    "message": "“$1”이(가) Bento 폴더입니다. 새 문서는 거기에 만들어지고 제자리에 저장됩니다."
-  },
-  "bentoFolderTip": {
-    "message": "문서 안에 있는 폴더로, 제자리에 저장하고 새 문서를 받습니다. 문서 폴더 자체는 Chrome이 넘겨주지 않습니다."
-  },
-  "defaultFolder": {
-    "message": "새 문서는 여기에 만들어집니다"
-  },
-  "fgTitle": {
-    "message": "이제부터 “$1”을(를) 제자리에 저장할까요?"
-  },
-  "fgTitleLapsed": {
-    "message": "“$1”을(를) 다시 연결할까요?"
-  },
-  "fgLead": {
-    "message": "bento/home이 이 파일 하나에 대한 권한을 보관하므로 이후 저장은 곧바로 이 파일에 쓰입니다. 다음 대화상자에서 같은 파일을 고르세요."
-  },
-  "fgLeadLapsed": {
-    "message": "bento/home에 이 파일이 이미 있습니다. 브라우저가 다시 확인을 요청합니다."
-  },
-  "fgChoose": {
-    "message": "파일 선택…"
-  },
-  "fgReconnect": {
-    "message": "다시 연결"
-  },
-  "fgOnce": {
-    "message": "이번만"
-  },
-  "fgNotSame": {
-    "message": "요청한 파일(“$1”)이 아닙니다. 그 파일을 고르거나 이 창을 닫으세요."
-  },
-  "fgDenied": {
-    "message": "권한이 허용되지 않았습니다."
-  },
-  "droppedGranted": {
-    "message": "추가됨: 폴더 $1개, 파일 $2개."
-  },
-  "setFilesTitle": {
-    "message": "파일"
-  },
-  "setFilesSub": {
-    "message": "추가된 폴더 밖에 있지만 스스로 제자리에 저장되는 문서. 한 번 선택했거나 라이브러리에 끌어다 놓은 것."
   }
 }

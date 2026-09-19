@@ -8,9 +8,7 @@
     "contextMenus",
     "notifications",
     "sidePanel",
-    "storage",
-    "downloads",
-    "downloads.ui"
+    "storage"
   ],
   "optional_permissions": [
     "history"
@@ -18,9 +16,6 @@
   "optional_host_permissions": [
     "http://*/*",
     "https://*/*"
-  ],
-  "host_permissions": [
-    "file:///*"
   ],
   "options_page": "src/home.html#settings",
   "background": {
