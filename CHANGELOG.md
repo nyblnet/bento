@@ -11,6 +11,13 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A document in Downloads or Documents remembers where it lives.** Chrome
+  will not let any app hold a standing grant to those folders, so a deck kept
+  there used to show the full save dialog on every reopen. Bento now remembers
+  the file itself: the first ⌘S after you reopen asks once — Chrome offers
+  "Allow on every visit" — and after that it saves silently in place, like a
+  deck that never left. Move or delete the file and it simply asks again.
+
 ## [1.2.1] — 2026-09-17
 
 - **Pasting into a table cell lands once.** Edit a cell, leave it unchanged,
