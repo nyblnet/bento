@@ -460,8 +460,23 @@ export async function* iterateBody(body) {
 // named string/integer properties — kept to what every dialect takes, and
 // never an OBJECT with no properties (Gemini hollows those).
 
-/** The non-streaming request for one agent step with tools. */
-export function shapeToolRequest(cfg, thread, tools) {
+/**
+ * Does this route have the provider's own web search, and how? Gemini and
+ * Anthropic take a server-side tool beside our functions; OpenAI's chat
+ * endpoint only searches on its `-search-preview` models (the Responses API
+ * is another dialect, not spoken here) — Settings says which applies.
+ */
+export function nativeSearch(cfg) {
+  switch (cfg.provider) {
+    case 'gemini': return 'google'
+    case 'anthropic': return 'anthropic'
+    case 'openai': return /search-preview/.test(cfg.model || '') ? 'openai' : null
+    default: return null
+  }
+}
+
+/** The non-streaming request for one agent step with tools. `opts.search` adds the provider's own web search. */
+export function shapeToolRequest(cfg, thread, tools, opts = {}) {
   const base = baseOf(cfg)
   const system = thread.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n')
   const turns = thread.filter((m) => m.role !== 'system')
@@ -478,7 +493,10 @@ export function shapeToolRequest(cfg, thread, tools) {
       return {
         url: `${base}/chat/completions`,
         headers: { 'content-type': 'application/json', ...(cfg.key ? { authorization: `Bearer ${cfg.key}` } : {}) },
-        body: JSON.stringify({ model: cfg.model, messages, tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })), tool_choice: 'auto' }),
+        body: JSON.stringify({
+          model: cfg.model, messages, tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })), tool_choice: 'auto',
+          ...(opts.search && nativeSearch(cfg) === 'openai' ? { web_search_options: {} } : {}),
+        }),
       }
     }
     case 'anthropic': {
@@ -489,6 +507,9 @@ export function shapeToolRequest(cfg, thread, tools) {
           const prev = messages[messages.length - 1]
           if (prev?.role === 'user' && Array.isArray(prev.content)) prev.content.push(block)
           else messages.push({ role: 'user', content: [block] })
+        } else if (m.role === 'assistant' && m.raw) {
+          // a reply that carried server-tool blocks (web search) goes back verbatim
+          messages.push({ role: 'assistant', content: m.raw })
         } else if (m.role === 'assistant' && m.calls?.length) {
           messages.push({ role: 'assistant', content: [...(m.content ? [{ type: 'text', text: m.content }] : []), ...m.calls.map((c) => ({ type: 'tool_use', id: c.id, name: c.name, input: c.args ?? {} }))] })
         } else messages.push({ role: m.role, content: m.content })
@@ -496,7 +517,13 @@ export function shapeToolRequest(cfg, thread, tools) {
       return {
         url: `${base}/v1/messages`,
         headers: { 'content-type': 'application/json', 'x-api-key': cfg.key || '', 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-        body: JSON.stringify({ model: cfg.model, max_tokens: 16384, ...(system ? { system } : {}), messages, tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })) }),
+        body: JSON.stringify({
+          model: cfg.model, max_tokens: 16384, ...(system ? { system } : {}), messages,
+          tools: [
+            ...tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })),
+            ...(opts.search ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] : []),
+          ],
+        }),
       }
     }
     case 'gemini': {
@@ -514,7 +541,13 @@ export function shapeToolRequest(cfg, thread, tools) {
       return {
         url: `${base}/v1beta/models/${encodeURIComponent(cfg.model)}:generateContent`,
         headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg.key || '' },
-        body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents, tools: [{ functionDeclarations: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })) }] }),
+        body: JSON.stringify({
+          ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents,
+          tools: [
+            { functionDeclarations: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })) },
+            ...(opts.search ? [{ google_search: {} }] : []),
+          ],
+        }),
       }
     }
     default:
@@ -522,16 +555,18 @@ export function shapeToolRequest(cfg, thread, tools) {
   }
 }
 
-/** One agent step's reply: the text and the calls it asked for, in the neutral shape. */
+/** One agent step's reply: the text, the calls it asked for, and any web sources it cited — in the neutral shape. */
 export function parseToolReply(provider, json) {
-  const out = { text: '', calls: [] }
+  const out = { text: '', calls: [], sources: [] }
   if (!json || typeof json !== 'object') return out
+  const cite = (title, url) => { if (typeof url === 'string' && /^https?:\/\//.test(url)) out.sources.push({ title: typeof title === 'string' ? title : '', url }) }
   let n = 0
   const mint = () => `call-${++n}`
   switch (provider) {
     case 'openai': {
       const msg = json.choices?.[0]?.message
       if (typeof msg?.content === 'string') out.text = msg.content
+      for (const a of Array.isArray(msg?.annotations) ? msg.annotations : []) if (a?.type === 'url_citation') cite(a.url_citation?.title, a.url_citation?.url)
       for (const c of Array.isArray(msg?.tool_calls) ? msg.tool_calls : []) {
         let args = {}
         try { args = JSON.parse(c.function?.arguments || '{}') } catch { args = {} }
@@ -540,10 +575,16 @@ export function parseToolReply(provider, json) {
       return out
     }
     case 'anthropic': {
-      for (const b of Array.isArray(json.content) ? json.content : []) {
-        if (b?.type === 'text' && typeof b.text === 'string') out.text += b.text
-        else if (b?.type === 'tool_use') out.calls.push({ id: typeof b.id === 'string' ? b.id : mint(), name: String(b.name ?? ''), args: b.input && typeof b.input === 'object' ? b.input : {} })
+      const blocks = Array.isArray(json.content) ? json.content : []
+      for (const b of blocks) {
+        if (b?.type === 'text' && typeof b.text === 'string') {
+          out.text += b.text
+          for (const c of Array.isArray(b.citations) ? b.citations : []) cite(c?.title, c?.url)
+        } else if (b?.type === 'tool_use') out.calls.push({ id: typeof b.id === 'string' ? b.id : mint(), name: String(b.name ?? ''), args: b.input && typeof b.input === 'object' ? b.input : {} })
+        else if (b?.type === 'web_search_tool_result') for (const r of Array.isArray(b.content) ? b.content : []) if (r?.type === 'web_search_result') cite(r.title, r.url)
       }
+      // server-tool blocks must go back to the model verbatim on the next step
+      if (blocks.some((b) => b?.type === 'server_tool_use' || b?.type === 'web_search_tool_result')) out.raw = blocks
       return out
     }
     case 'gemini': {
@@ -551,6 +592,7 @@ export function parseToolReply(provider, json) {
         if (typeof p?.text === 'string') out.text += p.text
         else if (p?.functionCall) out.calls.push({ id: mint(), name: String(p.functionCall.name ?? ''), args: p.functionCall.args && typeof p.functionCall.args === 'object' ? p.functionCall.args : {} })
       }
+      for (const ch of json.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []) cite(ch?.web?.title, ch?.web?.uri)
       return out
     }
     default:

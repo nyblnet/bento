@@ -664,5 +664,38 @@
   },
   "asstFocusGeneric": {
     "message": "所选元素或当前打开的幻灯片"
+  },
+  "asstSearch": {
+    "message": "允许模型搜索网页"
+  },
+  "asstSearchNative": {
+    "message": "此路由有自己的网页搜索（$1）；额外发出的只有搜索词。"
+  },
+  "asstSearchNone": {
+    "message": "此模型没有自己的网页搜索——请在下方设置搜索端点。"
+  },
+  "asstRead": {
+    "message": "读取网页"
+  },
+  "asstReadOn": {
+    "message": "允许读取网页……"
+  },
+  "asstReadOff": {
+    "message": "停止读取网页"
+  },
+  "asstReadOnNote": {
+    "message": "助手可以读取它找到的页面（作为文本，绝不作为指令）。"
+  },
+  "asstReadOffNote": {
+    "message": "已关闭。助手无法读取网页；点击此处会向浏览器询问一次。"
+  },
+  "asstSearchEndpoint": {
+    "message": "搜索端点"
+  },
+  "asstSearchEndpointHint": {
+    "message": "一个 SearXNG 实例，或 https://api.search.brave.com/ 配合下方密钥。仅在模型没有自己的搜索时使用。"
+  },
+  "asstSearchKey": {
+    "message": "搜索密钥"
   }
 }

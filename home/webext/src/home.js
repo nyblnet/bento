@@ -22,7 +22,7 @@ import {
   check as checkAssistant, permissionOriginOf, listModels, modelsKey, contextTokensOf, builtinContext,
   activeConfig, providerConfig, withProvider, pickerRows, MODEL_RE,
 } from './assistant.js'
-import { DEFAULTS as PROVIDER_DEFAULTS, pickDefault } from './providers.js'
+import { DEFAULTS as PROVIDER_DEFAULTS, pickDefault, nativeSearch } from './providers.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
   from './i18n.js'
 
@@ -1503,6 +1503,56 @@ async function assistantSettings(section) {
   showAllRow.append(showAll, document.createTextNode(` ${t('asstShowAll')}`))
   form.appendChild(showAllRow)
 
+  // THE WEB. Three switches, each honest about what it is: the provider's
+  // own search (a toggle, on by default for hosted routes — the deck already
+  // goes to that provider, the query is the only new thing that leaves, and
+  // the note says whether this route HAS one); reading pages, which is a
+  // browser permission and needs a click here (a service worker cannot ask);
+  // and a search endpoint for routes with no search of their own.
+  const searchRow = document.createElement('label')
+  searchRow.className = 'check'
+  const search = document.createElement('input')
+  search.type = 'checkbox'
+  const searchNote = document.createElement('small')
+  searchRow.append(search, document.createTextNode(` ${t('asstSearch')}`), searchNote)
+  form.appendChild(searchRow)
+
+  const readRow = document.createElement('div')
+  readRow.className = 'field'
+  const readLabel = document.createElement('span')
+  readLabel.textContent = t('asstRead')
+  const readBtn = document.createElement('button')
+  readBtn.className = 'btn'
+  const readState = document.createElement('small')
+  readRow.append(readLabel, readBtn, readState)
+  form.appendChild(readRow)
+  const WEB_ORIGINS = ['https://*/*', 'http://*/*']
+  const showRead = async () => {
+    let has = false
+    try { has = await chrome.permissions.contains({ origins: WEB_ORIGINS }) } catch { has = false }
+    readBtn.textContent = has ? t('asstReadOff') : t('asstReadOn')
+    readState.textContent = has ? t('asstReadOnNote') : t('asstReadOffNote')
+    readBtn.dataset.has = String(has)
+  }
+  readBtn.onclick = async () => {
+    try {
+      if (readBtn.dataset.has === 'true') await chrome.permissions.remove({ origins: WEB_ORIGINS })
+      else await chrome.permissions.request({ origins: WEB_ORIGINS })
+    } catch (e) { toast(e.message) }
+    await showRead()
+  }
+
+  const endpoint = document.createElement('input')
+  endpoint.type = 'text'
+  endpoint.spellcheck = false
+  endpoint.autocomplete = 'off'
+  endpoint.placeholder = 'https://searx.example/  ·  https://api.search.brave.com/'
+  const endpointRow = field(t('asstSearchEndpoint'), endpoint, t('asstSearchEndpointHint'))
+  const searchKey = document.createElement('input')
+  searchKey.type = 'password'
+  searchKey.autocomplete = 'off'
+  const searchKeyRow = field(t('asstSearchKey'), searchKey)
+
   const key = document.createElement('input')
   key.type = 'password'
   key.autocomplete = 'off'
@@ -1537,6 +1587,7 @@ async function assistantSettings(section) {
     provider: provider.value, baseUrl: baseUrl.value, model: modelId(), key: key.value,
     contextTokens: ctx.value.replace(/[^0-9]/g, ''),
     showAll: showAll.checked, pinned: perProvider[provider.value]?.pinned,
+    search: search.checked, searchEndpoint: endpoint.value, searchKey: searchKey.value,
   }, hasBuiltin)
 
   const cachedModels = async (c) => (await chrome.storage.local.get(MODELS_KEY))?.[MODELS_KEY]?.[modelsKey(c)]?.models
@@ -1643,15 +1694,27 @@ async function assistantSettings(section) {
     ctxRow.hidden = false
     showAll.checked = !!c.showAll
     showAllRow.hidden = !http
+    // the web rows: no tools for the built-in model at all
+    searchRow.hidden = readRow.hidden = endpointRow.hidden = searchKeyRow.hidden = !http
+    if (http) {
+      search.checked = !!c.search
+      const native = nativeSearch(c)
+      searchNote.textContent = native ? t('asstSearchNative', hostOf(c)) : t('asstSearchNone')
+      endpoint.value = c.searchEndpoint ?? ''
+      searchKey.value = c.searchKey ?? ''
+      void showRead()
+    }
     showNotice(c)
     status.textContent = ''
     if (http) void showModels(c)
     else void showBuiltinState()
   }
   provider.addEventListener('change', fill)
-  for (const input of [baseUrl, other, key, ctx]) {
+  for (const input of [baseUrl, other, key, ctx, endpoint, searchKey]) {
     input.addEventListener('input', () => { perProvider[provider.value] = current() })
   }
+  search.addEventListener('change', () => { perProvider[provider.value] = current() })
+  model.addEventListener('change', () => { const c = current(); const native = nativeSearch(c); searchNote.textContent = native ? t('asstSearchNative', hostOf(c)) : t('asstSearchNone') })
   baseUrl.addEventListener('change', () => showNotice(current()))
   showAll.addEventListener('change', () => { perProvider[provider.value] = current(); void showModels() })
   model.addEventListener('change', () => {

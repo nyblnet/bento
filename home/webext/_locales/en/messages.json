@@ -738,5 +738,49 @@
   "asstFocusGeneric": {
     "message": "the selected elements or the open slide",
     "description": "Settings: the $1 of asstSendsNotice."
+  },
+  "asstSearch": {
+    "message": "Let the model search the web",
+    "description": "Assistant settings: toggle for the provider's own web search."
+  },
+  "asstSearchNative": {
+    "message": "This route has its own web search ($1); the query is the only new thing that leaves.",
+    "description": "Note under the toggle when the route has native search. $1 host."
+  },
+  "asstSearchNone": {
+    "message": "This model has no web search of its own — set a search endpoint below to give it one.",
+    "description": "Note under the toggle when the route has no native search."
+  },
+  "asstRead": {
+    "message": "Reading web pages",
+    "description": "Assistant settings: label of the read-web-pages row."
+  },
+  "asstReadOn": {
+    "message": "Allow reading web pages…",
+    "description": "Button: request the browser permission to read web pages."
+  },
+  "asstReadOff": {
+    "message": "Stop reading web pages",
+    "description": "Button: give the permission back."
+  },
+  "asstReadOnNote": {
+    "message": "The assistant can read pages it finds (as text, never as instructions).",
+    "description": "Note when reading pages is allowed."
+  },
+  "asstReadOffNote": {
+    "message": "Off. The assistant cannot read web pages; a click here asks the browser once.",
+    "description": "Note when reading pages is not allowed."
+  },
+  "asstSearchEndpoint": {
+    "message": "Search endpoint",
+    "description": "Assistant settings: label of the search endpoint field."
+  },
+  "asstSearchEndpointHint": {
+    "message": "A SearXNG instance, or https://api.search.brave.com/ with its key below. Used only when the model has no search of its own.",
+    "description": "Hint under the search endpoint field. Keep the product names."
+  },
+  "asstSearchKey": {
+    "message": "Search key",
+    "description": "Assistant settings: label of the search API key field."
   }
 }

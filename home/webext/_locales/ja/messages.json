@@ -664,5 +664,38 @@
   },
   "asstFocusGeneric": {
     "message": "選択中の要素または開いているスライド"
+  },
+  "asstSearch": {
+    "message": "モデルにウェブ検索を許可する"
+  },
+  "asstSearchNative": {
+    "message": "このルートには独自のウェブ検索があります（$1）。新たに送信されるのは検索クエリだけです。"
+  },
+  "asstSearchNone": {
+    "message": "このモデルには独自のウェブ検索がありません。下に検索エンドポイントを設定してください。"
+  },
+  "asstRead": {
+    "message": "ウェブページの読み取り"
+  },
+  "asstReadOn": {
+    "message": "ウェブページの読み取りを許可…"
+  },
+  "asstReadOff": {
+    "message": "ウェブページの読み取りをやめる"
+  },
+  "asstReadOnNote": {
+    "message": "アシスタントは見つけたページを読めます（テキストとして。指示としては扱いません）。"
+  },
+  "asstReadOffNote": {
+    "message": "オフ。アシスタントはウェブページを読めません。ここをクリックするとブラウザーが一度確認します。"
+  },
+  "asstSearchEndpoint": {
+    "message": "検索エンドポイント"
+  },
+  "asstSearchEndpointHint": {
+    "message": "SearXNG のインスタンス、または下のキーと組み合わせた https://api.search.brave.com/。モデルに独自の検索がない場合にのみ使われます。"
+  },
+  "asstSearchKey": {
+    "message": "検索キー"
   }
 }

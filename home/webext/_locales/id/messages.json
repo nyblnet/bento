@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "elemen yang dipilih atau slide yang terbuka"
+  },
+  "asstSearch": {
+    "message": "Izinkan model mencari di web"
+  },
+  "asstSearchNative": {
+    "message": "Rute ini punya pencarian web sendiri ($1); kueri adalah satu-satunya hal baru yang keluar."
+  },
+  "asstSearchNone": {
+    "message": "Model ini tidak punya pencarian web sendiri — tetapkan endpoint pencarian di bawah."
+  },
+  "asstRead": {
+    "message": "Membaca halaman web"
+  },
+  "asstReadOn": {
+    "message": "Izinkan membaca halaman web…"
+  },
+  "asstReadOff": {
+    "message": "Berhenti membaca halaman web"
+  },
+  "asstReadOnNote": {
+    "message": "Asisten dapat membaca halaman yang ditemukannya (sebagai teks, tidak pernah sebagai instruksi)."
+  },
+  "asstReadOffNote": {
+    "message": "Nonaktif. Asisten tidak dapat membaca halaman web; klik di sini meminta peramban sekali."
+  },
+  "asstSearchEndpoint": {
+    "message": "Endpoint pencarian"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Instans SearXNG, atau https://api.search.brave.com/ dengan kuncinya di bawah. Hanya dipakai bila model tidak punya pencarian sendiri."
+  },
+  "asstSearchKey": {
+    "message": "Kunci pencarian"
   }
 }

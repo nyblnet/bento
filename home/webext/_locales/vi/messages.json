@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "các phần tử đã chọn hoặc trang chiếu đang mở"
+  },
+  "asstSearch": {
+    "message": "Cho phép mô hình tìm kiếm trên web"
+  },
+  "asstSearchNative": {
+    "message": "Tuyến này có tìm kiếm web riêng ($1); truy vấn là thứ mới duy nhất được gửi đi."
+  },
+  "asstSearchNone": {
+    "message": "Mô hình này không có tìm kiếm web riêng — hãy đặt điểm tìm kiếm bên dưới."
+  },
+  "asstRead": {
+    "message": "Đọc trang web"
+  },
+  "asstReadOn": {
+    "message": "Cho phép đọc trang web…"
+  },
+  "asstReadOff": {
+    "message": "Ngừng đọc trang web"
+  },
+  "asstReadOnNote": {
+    "message": "Trợ lý có thể đọc các trang nó tìm thấy (dưới dạng văn bản, không bao giờ là chỉ dẫn)."
+  },
+  "asstReadOffNote": {
+    "message": "Tắt. Trợ lý không thể đọc trang web; nhấp vào đây sẽ hỏi trình duyệt một lần."
+  },
+  "asstSearchEndpoint": {
+    "message": "Điểm tìm kiếm"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Một phiên bản SearXNG, hoặc https://api.search.brave.com/ với khóa bên dưới. Chỉ dùng khi mô hình không có tìm kiếm riêng."
+  },
+  "asstSearchKey": {
+    "message": "Khóa tìm kiếm"
   }
 }

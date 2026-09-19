@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "de valgte elementer eller den åbne slide"
+  },
+  "asstSearch": {
+    "message": "Lad modellen søge på nettet"
+  },
+  "asstSearchNative": {
+    "message": "Denne rute har sin egen websøgning ($1); forespørgslen er det eneste nye, der forlader maskinen."
+  },
+  "asstSearchNone": {
+    "message": "Denne model har ingen egen websøgning — angiv et søgeendepunkt nedenfor."
+  },
+  "asstRead": {
+    "message": "Læsning af websider"
+  },
+  "asstReadOn": {
+    "message": "Tillad læsning af websider…"
+  },
+  "asstReadOff": {
+    "message": "Stop med at læse websider"
+  },
+  "asstReadOnNote": {
+    "message": "Assistenten kan læse de sider, den finder (som tekst, aldrig som instruktioner)."
+  },
+  "asstReadOffNote": {
+    "message": "Slået fra. Assistenten kan ikke læse websider; et klik her spørger browseren én gang."
+  },
+  "asstSearchEndpoint": {
+    "message": "Søgeendepunkt"
+  },
+  "asstSearchEndpointHint": {
+    "message": "En SearXNG-instans eller https://api.search.brave.com/ med nøglen nedenfor. Bruges kun, når modellen ikke har sin egen søgning."
+  },
+  "asstSearchKey": {
+    "message": "Søgenøgle"
   }
 }

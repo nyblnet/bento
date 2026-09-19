@@ -664,5 +664,38 @@
   },
   "asstFocusGeneric": {
     "message": "gli elementi selezionati o la diapositiva aperta"
+  },
+  "asstSearch": {
+    "message": "Lascia che il modello cerchi sul web"
+  },
+  "asstSearchNative": {
+    "message": "Questa rotta ha una ricerca web propria ($1); la query è l’unica cosa nuova che esce."
+  },
+  "asstSearchNone": {
+    "message": "Questo modello non ha una ricerca web propria: indica un endpoint di ricerca qui sotto."
+  },
+  "asstRead": {
+    "message": "Lettura di pagine web"
+  },
+  "asstReadOn": {
+    "message": "Consenti la lettura di pagine web…"
+  },
+  "asstReadOff": {
+    "message": "Smetti di leggere pagine web"
+  },
+  "asstReadOnNote": {
+    "message": "L’assistente può leggere le pagine che trova (come testo, mai come istruzioni)."
+  },
+  "asstReadOffNote": {
+    "message": "Spento. L’assistente non può leggere pagine web; un clic qui lo chiede al browser una volta."
+  },
+  "asstSearchEndpoint": {
+    "message": "Endpoint di ricerca"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Un’istanza SearXNG, o https://api.search.brave.com/ con la sua chiave qui sotto. Usato solo quando il modello non ha una ricerca propria."
+  },
+  "asstSearchKey": {
+    "message": "Chiave di ricerca"
   }
 }

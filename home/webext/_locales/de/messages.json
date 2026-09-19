@@ -664,5 +664,38 @@
   },
   "asstFocusGeneric": {
     "message": "die ausgewählten Elemente oder die geöffnete Folie"
+  },
+  "asstSearch": {
+    "message": "Das Modell im Web suchen lassen"
+  },
+  "asstSearchNative": {
+    "message": "Diese Route hat eine eigene Websuche ($1); nur die Suchanfrage verlässt zusätzlich den Rechner."
+  },
+  "asstSearchNone": {
+    "message": "Dieses Modell hat keine eigene Websuche — geben Sie unten einen Such-Endpunkt an."
+  },
+  "asstRead": {
+    "message": "Webseiten lesen"
+  },
+  "asstReadOn": {
+    "message": "Lesen von Webseiten erlauben …"
+  },
+  "asstReadOff": {
+    "message": "Webseiten nicht mehr lesen"
+  },
+  "asstReadOnNote": {
+    "message": "Der Assistent kann gefundene Seiten lesen (als Text, nie als Anweisungen)."
+  },
+  "asstReadOffNote": {
+    "message": "Aus. Der Assistent kann keine Webseiten lesen; ein Klick hier fragt den Browser einmal."
+  },
+  "asstSearchEndpoint": {
+    "message": "Such-Endpunkt"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Eine SearXNG-Instanz oder https://api.search.brave.com/ mit dem Schlüssel darunter. Nur genutzt, wenn das Modell keine eigene Suche hat."
+  },
+  "asstSearchKey": {
+    "message": "Such-Schlüssel"
   }
 }

@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "zaznaczone elementy lub otwarty slajd"
+  },
+  "asstSearch": {
+    "message": "Pozwól modelowi szukać w sieci"
+  },
+  "asstSearchNative": {
+    "message": "Ta trasa ma własne wyszukiwanie ($1); zapytanie to jedyna nowa rzecz, która wychodzi."
+  },
+  "asstSearchNone": {
+    "message": "Ten model nie ma własnego wyszukiwania — podaj punkt wyszukiwania poniżej."
+  },
+  "asstRead": {
+    "message": "Czytanie stron WWW"
+  },
+  "asstReadOn": {
+    "message": "Zezwól na czytanie stron WWW…"
+  },
+  "asstReadOff": {
+    "message": "Przestań czytać strony WWW"
+  },
+  "asstReadOnNote": {
+    "message": "Asystent może czytać znalezione strony (jako tekst, nigdy jako instrukcje)."
+  },
+  "asstReadOffNote": {
+    "message": "Wyłączone. Asystent nie może czytać stron WWW; kliknięcie tutaj pyta przeglądarkę raz."
+  },
+  "asstSearchEndpoint": {
+    "message": "Punkt wyszukiwania"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Instancja SearXNG lub https://api.search.brave.com/ z kluczem poniżej. Używane tylko, gdy model nie ma własnego wyszukiwania."
+  },
+  "asstSearchKey": {
+    "message": "Klucz wyszukiwania"
   }
 }

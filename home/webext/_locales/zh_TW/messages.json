@@ -664,5 +664,38 @@
   },
   "asstFocusGeneric": {
     "message": "所選元素或目前開啟的投影片"
+  },
+  "asstSearch": {
+    "message": "允許模型搜尋網頁"
+  },
+  "asstSearchNative": {
+    "message": "此路由有自己的網頁搜尋（$1）；額外送出的只有搜尋詞。"
+  },
+  "asstSearchNone": {
+    "message": "此模型沒有自己的網頁搜尋——請在下方設定搜尋端點。"
+  },
+  "asstRead": {
+    "message": "讀取網頁"
+  },
+  "asstReadOn": {
+    "message": "允許讀取網頁……"
+  },
+  "asstReadOff": {
+    "message": "停止讀取網頁"
+  },
+  "asstReadOnNote": {
+    "message": "助理可以讀取它找到的頁面（作為文字，絕不作為指令）。"
+  },
+  "asstReadOffNote": {
+    "message": "已關閉。助理無法讀取網頁；點擊此處會向瀏覽器詢問一次。"
+  },
+  "asstSearchEndpoint": {
+    "message": "搜尋端點"
+  },
+  "asstSearchEndpointHint": {
+    "message": "一個 SearXNG 執行個體，或 https://api.search.brave.com/ 配合下方金鑰。僅在模型沒有自己的搜尋時使用。"
+  },
+  "asstSearchKey": {
+    "message": "搜尋金鑰"
   }
 }

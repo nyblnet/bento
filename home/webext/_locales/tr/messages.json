@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "seçili öğeleri veya açık slaydı"
+  },
+  "asstSearch": {
+    "message": "Modelin webde aramasına izin ver"
+  },
+  "asstSearchNative": {
+    "message": "Bu rotanın kendi web araması var ($1); ayrılan tek yeni şey sorgudur."
+  },
+  "asstSearchNone": {
+    "message": "Bu modelin kendi web araması yok — aşağıda bir arama uç noktası belirleyin."
+  },
+  "asstRead": {
+    "message": "Web sayfalarını okuma"
+  },
+  "asstReadOn": {
+    "message": "Web sayfalarını okumaya izin ver…"
+  },
+  "asstReadOff": {
+    "message": "Web sayfalarını okumayı bırak"
+  },
+  "asstReadOnNote": {
+    "message": "Asistan bulduğu sayfaları okuyabilir (metin olarak, asla talimat olarak değil)."
+  },
+  "asstReadOffNote": {
+    "message": "Kapalı. Asistan web sayfalarını okuyamaz; buraya bir tıklama tarayıcıya bir kez sorar."
+  },
+  "asstSearchEndpoint": {
+    "message": "Arama uç noktası"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Bir SearXNG örneği ya da aşağıdaki anahtarıyla https://api.search.brave.com/. Yalnızca modelin kendi araması yoksa kullanılır."
+  },
+  "asstSearchKey": {
+    "message": "Arama anahtarı"
   }
 }

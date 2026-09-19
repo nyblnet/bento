@@ -57,7 +57,7 @@ function streamTurn(d) {
       // `assistant.document` asks the page for the deck; `done` carries
       // prose or an ops patch (`mode`, `ops`, `note`, `focus`) — forwarded as
       // named fields, never the whole frame.
-      post({ dir: 'evt', id: d.id, kind: m.kind, text: m.text, reason: m.reason, code: m.code, mode: m.mode, ops: m.ops, note: m.note, focus: m.focus })
+      post({ dir: 'evt', id: d.id, kind: m.kind, text: m.text, reason: m.reason, code: m.code, mode: m.mode, ops: m.ops, note: m.note, focus: m.focus, sources: m.sources })
       if (m.kind === 'assistant.done' || m.kind === 'assistant.error') { streams.delete(d.id); port.disconnect() }
     }
   })

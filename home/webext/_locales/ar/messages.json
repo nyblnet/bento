@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "العناصر المحددة أو الشريحة المفتوحة"
+  },
+  "asstSearch": {
+    "message": "السماح للنموذج بالبحث في الويب"
+  },
+  "asstSearchNative": {
+    "message": "لهذا المسار بحث ويب خاص به ($1)؛ الاستعلام هو الشيء الجديد الوحيد الذي يخرج."
+  },
+  "asstSearchNone": {
+    "message": "ليس لهذا النموذج بحث ويب خاص به — حدّد نقطة بحث أدناه."
+  },
+  "asstRead": {
+    "message": "قراءة صفحات الويب"
+  },
+  "asstReadOn": {
+    "message": "السماح بقراءة صفحات الويب…"
+  },
+  "asstReadOff": {
+    "message": "إيقاف قراءة صفحات الويب"
+  },
+  "asstReadOnNote": {
+    "message": "يستطيع المساعد قراءة الصفحات التي يجدها (كنص، وليس كتعليمات أبدًا)."
+  },
+  "asstReadOffNote": {
+    "message": "متوقف. لا يستطيع المساعد قراءة صفحات الويب؛ نقرة هنا تسأل المتصفح مرة واحدة."
+  },
+  "asstSearchEndpoint": {
+    "message": "نقطة البحث"
+  },
+  "asstSearchEndpointHint": {
+    "message": "نسخة SearXNG، أو https://api.search.brave.com/ مع مفتاحها أدناه. تُستخدم فقط عندما لا يملك النموذج بحثًا خاصًا."
+  },
+  "asstSearchKey": {
+    "message": "مفتاح البحث"
   }
 }

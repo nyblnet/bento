@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "चयनित तत्व या खुली स्लाइड"
+  },
+  "asstSearch": {
+    "message": "मॉडल को वेब पर खोजने दें"
+  },
+  "asstSearchNative": {
+    "message": "इस रूट की अपनी वेब खोज है ($1); केवल प्रश्न ही नई चीज़ है जो बाहर जाती है।"
+  },
+  "asstSearchNone": {
+    "message": "इस मॉडल की अपनी वेब खोज नहीं है — नीचे एक खोज एंडपॉइंट सेट करें।"
+  },
+  "asstRead": {
+    "message": "वेब पेज पढ़ना"
+  },
+  "asstReadOn": {
+    "message": "वेब पेज पढ़ने की अनुमति दें…"
+  },
+  "asstReadOff": {
+    "message": "वेब पेज पढ़ना बंद करें"
+  },
+  "asstReadOnNote": {
+    "message": "सहायक मिले पेज पढ़ सकता है (टेक्स्ट के रूप में, निर्देशों के रूप में कभी नहीं)।"
+  },
+  "asstReadOffNote": {
+    "message": "बंद। सहायक वेब पेज नहीं पढ़ सकता; यहाँ एक क्लिक ब्राउज़र से एक बार पूछता है।"
+  },
+  "asstSearchEndpoint": {
+    "message": "खोज एंडपॉइंट"
+  },
+  "asstSearchEndpointHint": {
+    "message": "एक SearXNG इंस्टेंस, या नीचे की कुंजी के साथ https://api.search.brave.com/। केवल तब उपयोग होता है जब मॉडल की अपनी खोज न हो।"
+  },
+  "asstSearchKey": {
+    "message": "खोज कुंजी"
   }
 }

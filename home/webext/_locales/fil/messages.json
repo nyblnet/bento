@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "ang mga piniling elemento o ang bukas na slide"
+  },
+  "asstSearch": {
+    "message": "Hayaang maghanap ang modelo sa web"
+  },
+  "asstSearchNative": {
+    "message": "May sariling web search ang rutang ito ($1); ang query lang ang bagong lumalabas."
+  },
+  "asstSearchNone": {
+    "message": "Walang sariling web search ang modelong ito — magtakda ng search endpoint sa ibaba."
+  },
+  "asstRead": {
+    "message": "Pagbabasa ng mga web page"
+  },
+  "asstReadOn": {
+    "message": "Payagan ang pagbabasa ng mga web page…"
+  },
+  "asstReadOff": {
+    "message": "Itigil ang pagbabasa ng mga web page"
+  },
+  "asstReadOnNote": {
+    "message": "Nababasa ng assistant ang mga page na nahahanap nito (bilang teksto, hindi kailanman bilang mga tagubilin)."
+  },
+  "asstReadOffNote": {
+    "message": "Naka-off. Hindi makababasa ng mga web page ang assistant; isang click dito ang magtatanong sa browser nang isang beses."
+  },
+  "asstSearchEndpoint": {
+    "message": "Search endpoint"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Isang SearXNG instance, o https://api.search.brave.com/ na may key nito sa ibaba. Ginagamit lang kapag walang sariling search ang modelo."
+  },
+  "asstSearchKey": {
+    "message": "Search key"
   }
 }

@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "de valda elementen eller den öppna bilden"
+  },
+  "asstSearch": {
+    "message": "Låt modellen söka på webben"
+  },
+  "asstSearchNative": {
+    "message": "Den här rutten har egen webbsökning ($1); frågan är det enda nya som lämnar datorn."
+  },
+  "asstSearchNone": {
+    "message": "Den här modellen har ingen egen webbsökning — ange en sökslutpunkt nedan."
+  },
+  "asstRead": {
+    "message": "Läsning av webbsidor"
+  },
+  "asstReadOn": {
+    "message": "Tillåt läsning av webbsidor…"
+  },
+  "asstReadOff": {
+    "message": "Sluta läsa webbsidor"
+  },
+  "asstReadOnNote": {
+    "message": "Assistenten kan läsa sidor den hittar (som text, aldrig som instruktioner)."
+  },
+  "asstReadOffNote": {
+    "message": "Av. Assistenten kan inte läsa webbsidor; ett klick här frågar webbläsaren en gång."
+  },
+  "asstSearchEndpoint": {
+    "message": "Sökslutpunkt"
+  },
+  "asstSearchEndpointHint": {
+    "message": "En SearXNG-instans eller https://api.search.brave.com/ med nyckeln nedan. Används bara när modellen saknar egen sökning."
+  },
+  "asstSearchKey": {
+    "message": "Söknyckel"
   }
 }

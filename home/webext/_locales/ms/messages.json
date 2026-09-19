@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "elemen yang dipilih atau slaid yang terbuka"
+  },
+  "asstSearch": {
+    "message": "Benarkan model mencari di web"
+  },
+  "asstSearchNative": {
+    "message": "Laluan ini ada carian web sendiri ($1); pertanyaan ialah satu-satunya perkara baharu yang keluar."
+  },
+  "asstSearchNone": {
+    "message": "Model ini tiada carian web sendiri — tetapkan titik akhir carian di bawah."
+  },
+  "asstRead": {
+    "message": "Membaca halaman web"
+  },
+  "asstReadOn": {
+    "message": "Benarkan membaca halaman web…"
+  },
+  "asstReadOff": {
+    "message": "Berhenti membaca halaman web"
+  },
+  "asstReadOnNote": {
+    "message": "Pembantu boleh membaca halaman yang ditemuinya (sebagai teks, bukan sebagai arahan)."
+  },
+  "asstReadOffNote": {
+    "message": "Dimatikan. Pembantu tidak boleh membaca halaman web; satu klik di sini bertanya kepada pelayar sekali."
+  },
+  "asstSearchEndpoint": {
+    "message": "Titik akhir carian"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Contoh SearXNG, atau https://api.search.brave.com/ dengan kuncinya di bawah. Digunakan hanya apabila model tiada carian sendiri."
+  },
+  "asstSearchKey": {
+    "message": "Kunci carian"
   }
 }

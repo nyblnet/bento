@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "valitut elementit tai avoinna oleva dia"
+  },
+  "asstSearch": {
+    "message": "Anna mallin hakea verkosta"
+  },
+  "asstSearchNative": {
+    "message": "Tällä reitillä on oma verkkohaku ($1); hakukysely on ainoa uusi asia, joka lähtee."
+  },
+  "asstSearchNone": {
+    "message": "Tällä mallilla ei ole omaa verkkohakua — määritä hakupäätepiste alla."
+  },
+  "asstRead": {
+    "message": "Verkkosivujen lukeminen"
+  },
+  "asstReadOn": {
+    "message": "Salli verkkosivujen lukeminen…"
+  },
+  "asstReadOff": {
+    "message": "Lopeta verkkosivujen lukeminen"
+  },
+  "asstReadOnNote": {
+    "message": "Avustaja voi lukea löytämiään sivuja (tekstinä, ei koskaan ohjeina)."
+  },
+  "asstReadOffNote": {
+    "message": "Pois. Avustaja ei voi lukea verkkosivuja; napsautus tässä kysyy selaimelta kerran."
+  },
+  "asstSearchEndpoint": {
+    "message": "Hakupäätepiste"
+  },
+  "asstSearchEndpointHint": {
+    "message": "SearXNG-instanssi tai https://api.search.brave.com/ ja sen avain alla. Käytetään vain, kun mallilla ei ole omaa hakua."
+  },
+  "asstSearchKey": {
+    "message": "Hakuavain"
   }
 }

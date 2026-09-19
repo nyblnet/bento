@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "האלמנטים שנבחרו או השקופית הפתוחה"
+  },
+  "asstSearch": {
+    "message": "לאפשר למודל לחפש באינטרנט"
+  },
+  "asstSearchNative": {
+    "message": "לנתיב הזה יש חיפוש אינטרנט משלו ($1); השאילתה היא הדבר החדש היחיד שיוצא."
+  },
+  "asstSearchNone": {
+    "message": "למודל הזה אין חיפוש אינטרנט משלו — הגדירו נקודת חיפוש למטה."
+  },
+  "asstRead": {
+    "message": "קריאת דפי אינטרנט"
+  },
+  "asstReadOn": {
+    "message": "לאפשר קריאת דפי אינטרנט…"
+  },
+  "asstReadOff": {
+    "message": "להפסיק לקרוא דפי אינטרנט"
+  },
+  "asstReadOnNote": {
+    "message": "העוזר יכול לקרוא דפים שהוא מוצא (כטקסט, לעולם לא כהוראות)."
+  },
+  "asstReadOffNote": {
+    "message": "כבוי. העוזר אינו יכול לקרוא דפי אינטרנט; לחיצה כאן שואלת את הדפדפן פעם אחת."
+  },
+  "asstSearchEndpoint": {
+    "message": "נקודת חיפוש"
+  },
+  "asstSearchEndpointHint": {
+    "message": "מופע SearXNG, או https://api.search.brave.com/ עם המפתח שלו למטה. בשימוש רק כשלמודל אין חיפוש משלו."
+  },
+  "asstSearchKey": {
+    "message": "מפתח חיפוש"
   }
 }

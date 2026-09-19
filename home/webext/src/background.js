@@ -300,6 +300,7 @@ async function assistantEnv() {
   return {
     fetch: globalThis.fetch.bind(globalThis),
     LanguageModel: globalThis.LanguageModel,
+    permissions: chrome.permissions,
     t,
     // The raw reply, in the service-worker inspector only — never stored.
     log: (...a) => console.info(...a),

@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "منتخب عناصر یا کھلی سلائیڈ"
+  },
+  "asstSearch": {
+    "message": "ماڈل کو ویب پر تلاش کرنے دیں"
+  },
+  "asstSearchNative": {
+    "message": "اس راستے کی اپنی ویب تلاش ہے ($1)؛ صرف سوال ہی نئی چیز ہے جو باہر جاتی ہے۔"
+  },
+  "asstSearchNone": {
+    "message": "اس ماڈل کی اپنی ویب تلاش نہیں — نیچے ایک تلاش اینڈپوائنٹ سیٹ کریں۔"
+  },
+  "asstRead": {
+    "message": "ویب صفحات پڑھنا"
+  },
+  "asstReadOn": {
+    "message": "ویب صفحات پڑھنے کی اجازت دیں…"
+  },
+  "asstReadOff": {
+    "message": "ویب صفحات پڑھنا بند کریں"
+  },
+  "asstReadOnNote": {
+    "message": "معاون ملنے والے صفحات پڑھ سکتا ہے (متن کے طور پر، ہدایات کے طور پر کبھی نہیں)۔"
+  },
+  "asstReadOffNote": {
+    "message": "بند۔ معاون ویب صفحات نہیں پڑھ سکتا؛ یہاں ایک کلک براؤزر سے ایک بار پوچھتا ہے۔"
+  },
+  "asstSearchEndpoint": {
+    "message": "تلاش اینڈپوائنٹ"
+  },
+  "asstSearchEndpointHint": {
+    "message": "ایک SearXNG انسٹینس، یا نیچے کی کلید کے ساتھ https://api.search.brave.com/۔ صرف تب استعمال ہوتا ہے جب ماڈل کی اپنی تلاش نہ ہو۔"
+  },
+  "asstSearchKey": {
+    "message": "تلاش کی کلید"
   }
 }

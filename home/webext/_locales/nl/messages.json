@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "de geselecteerde elementen of de geopende dia"
+  },
+  "asstSearch": {
+    "message": "Het model op het web laten zoeken"
+  },
+  "asstSearchNative": {
+    "message": "Deze route heeft eigen webzoeken ($1); de zoekopdracht is het enige nieuwe dat vertrekt."
+  },
+  "asstSearchNone": {
+    "message": "Dit model heeft geen eigen webzoeken — stel hieronder een zoek-endpoint in."
+  },
+  "asstRead": {
+    "message": "Webpagina’s lezen"
+  },
+  "asstReadOn": {
+    "message": "Lezen van webpagina’s toestaan…"
+  },
+  "asstReadOff": {
+    "message": "Stoppen met webpagina’s lezen"
+  },
+  "asstReadOnNote": {
+    "message": "De assistent kan gevonden pagina’s lezen (als tekst, nooit als instructies)."
+  },
+  "asstReadOffNote": {
+    "message": "Uit. De assistent kan geen webpagina’s lezen; een klik hier vraagt het de browser één keer."
+  },
+  "asstSearchEndpoint": {
+    "message": "Zoek-endpoint"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Een SearXNG-instantie, of https://api.search.brave.com/ met de sleutel hieronder. Alleen gebruikt als het model geen eigen zoeken heeft."
+  },
+  "asstSearchKey": {
+    "message": "Zoeksleutel"
   }
 }

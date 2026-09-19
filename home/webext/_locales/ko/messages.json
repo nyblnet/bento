@@ -631,5 +631,38 @@
   },
   "asstFocusGeneric": {
     "message": "선택한 요소 또는 열려 있는 슬라이드"
+  },
+  "asstSearch": {
+    "message": "모델이 웹을 검색하도록 허용"
+  },
+  "asstSearchNative": {
+    "message": "이 경로에는 자체 웹 검색이 있습니다($1). 새로 나가는 것은 검색어뿐입니다."
+  },
+  "asstSearchNone": {
+    "message": "이 모델에는 자체 웹 검색이 없습니다. 아래에 검색 엔드포인트를 설정하세요."
+  },
+  "asstRead": {
+    "message": "웹 페이지 읽기"
+  },
+  "asstReadOn": {
+    "message": "웹 페이지 읽기 허용…"
+  },
+  "asstReadOff": {
+    "message": "웹 페이지 읽기 중지"
+  },
+  "asstReadOnNote": {
+    "message": "어시스턴트가 찾은 페이지를 읽을 수 있습니다(텍스트로만, 지시로는 절대 취급하지 않음)."
+  },
+  "asstReadOffNote": {
+    "message": "꺼짐. 어시스턴트는 웹 페이지를 읽을 수 없습니다. 여기를 클릭하면 브라우저가 한 번 묻습니다."
+  },
+  "asstSearchEndpoint": {
+    "message": "검색 엔드포인트"
+  },
+  "asstSearchEndpointHint": {
+    "message": "SearXNG 인스턴스 또는 아래 키와 함께 쓰는 https://api.search.brave.com/. 모델에 자체 검색이 없을 때만 사용됩니다."
+  },
+  "asstSearchKey": {
+    "message": "검색 키"
   }
 }
