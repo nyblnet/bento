@@ -12,7 +12,7 @@
 // as if that settled it.
 //
 // THE OTHER DOOR. It does not tell us — but an extension with file-URL
-// access can READ `file://` URLs, so it can ASK: "is /Users/andy/Desktop/
+// access can READ `file://` URLs, so it can ASK: "is /Users/you/Desktop/
 // teams-test/S1.bento.html the same bytes as the S1.bento.html in this
 // grant?" A guess that is wrong 404s; a guess that is right is then proven
 // the way every path is proven here (`prefixFor`: the route resolves inside

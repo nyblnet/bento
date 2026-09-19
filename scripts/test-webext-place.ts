@@ -76,15 +76,15 @@ function grant(name: string, docs: Record<string, string>) {
 
 console.log('\n— listing and fingerprints')
 {
-  const d = disk({ '/Users/andy/Desktop/x.txt': 'x', '/Users/andy/Decks/a.bento.html': 'A' })
+  const d = disk({ '/Users/you/Desktop/x.txt': 'x', '/Users/you/Decks/a.bento.html': 'A' })
   const users = await place.listDir('/Users', { fetch: d.fetch })
-  ok(users.length === 1 && users[0].name === 'andy' && users[0].dir, 'listDir: Chrome\'s addRow() listing → names and kinds')
+  ok(users.length === 1 && users[0].name === 'you' && users[0].dir, 'listDir: Chrome\'s addRow() listing → names and kinds')
   ok((await place.listDir('/nowhere', { fetch: d.fetch })).length === 0, 'listDir: a refused fetch is an empty listing, not an error')
   const file = { size: 1, arrayBuffer: async () => new TextEncoder().encode('A').buffer }
-  ok(await place.sameFile('/Users/andy/Decks/a.bento.html', file, { fetch: d.fetch }), 'sameFile: the same bytes at the path')
-  ok(!(await place.sameFile('/Users/andy/Desktop/x.txt', file, { fetch: d.fetch })), 'sameFile: same size, different bytes → no')
-  ok(!(await place.sameFile('/Users/andy/Decks/missing.bento.html', file, { fetch: d.fetch })), 'sameFile: nothing there → no')
-  ok(place.fileUrl('/Users/andy/My Decks/Q3 #1.bento.html') === 'file:///Users/andy/My%20Decks/Q3%20%231.bento.html', 'fileUrl: segments encoded')
+  ok(await place.sameFile('/Users/you/Decks/a.bento.html', file, { fetch: d.fetch }), 'sameFile: the same bytes at the path')
+  ok(!(await place.sameFile('/Users/you/Desktop/x.txt', file, { fetch: d.fetch })), 'sameFile: same size, different bytes → no')
+  ok(!(await place.sameFile('/Users/you/Decks/missing.bento.html', file, { fetch: d.fetch })), 'sameFile: nothing there → no')
+  ok(place.fileUrl('/Users/you/My Decks/Q3 #1.bento.html') === 'file:///Users/you/My%20Decks/Q3%20%231.bento.html', 'fileUrl: segments encoded')
 }
 
 console.log('\n— placing a grant')
@@ -92,25 +92,25 @@ console.log('\n— placing a grant')
   const g = grant('teams-test', { 'S1.bento.html': 'DECK-S1', 'sub/B9.bento.html': 'DECK-B9' })
   // the real folder on the Desktop; a same-named folder with other bytes in Documents; a copy of S1 elsewhere
   const d = disk({
-    '/Users/andy/Desktop/teams-test/S1.bento.html': 'OTHER',
-    '/Users/andy/Documents/teams-test/S1.bento.html': 'DECK-S1',
-    '/Users/andy/Documents/teams-test/sub/B9.bento.html': 'DECK-B9',
-    '/Users/andy/Downloads/copies/S1.bento.html': 'DECK-S1',
+    '/Users/you/Desktop/teams-test/S1.bento.html': 'OTHER',
+    '/Users/you/Documents/teams-test/S1.bento.html': 'DECK-S1',
+    '/Users/you/Documents/teams-test/sub/B9.bento.html': 'DECK-B9',
+    '/Users/you/Downloads/copies/S1.bento.html': 'DECK-S1',
     '/Users/shared-user/Desktop/x': 'x',
   })
   const prefix = await place.placeFolder(g.dir, g.probe('S1.bento.html'), {}, { fetch: d.fetch, prefixFor: g.prefixFor })
-  ok(prefix === '/Users/andy/Documents/teams-test', `placeFolder: found in Documents from nothing but the /Users listing (${prefix})`)
-  ok(d.fetched.some((p) => p === '/Users/andy/Desktop/teams-test/S1.bento.html'), 'the same-named folder with other bytes (Desktop, tried first) was rejected')
+  ok(prefix === '/Users/you/Documents/teams-test', `placeFolder: found in Documents from nothing but the /Users listing (${prefix})`)
+  ok(d.fetched.some((p) => p === '/Users/you/Desktop/teams-test/S1.bento.html'), 'the same-named folder with other bytes (Desktop, tried first) was rejected')
   ok(!d.fetched.some((p) => p.includes('/copies/')), 'a copy elsewhere is never a candidate: only the folder\'s own name is looked for')
   ok(d.fetched.length < place.MAX_CANDIDATES, `bounded: ${d.fetched.length} fetches`)
   // a probe deeper in the tree proves the same prefix
   const viaSub = await place.placeFolder(g.dir, g.probe('sub/B9.bento.html'), {}, { fetch: d.fetch, prefixFor: g.prefixFor })
-  ok(viaSub === '/Users/andy/Documents/teams-test', 'placeFolder: a nested document as the fingerprint lands on the same prefix')
+  ok(viaSub === '/Users/you/Documents/teams-test', 'placeFolder: a nested document as the fingerprint lands on the same prefix')
 }
 {
   // the grant must agree: same bytes at the path, but prefixFor says no → not recorded
   const g = grant('Decks', { 'a.bento.html': 'A' })
-  const d = disk({ '/Users/andy/Decks/a.bento.html': 'A' })
+  const d = disk({ '/Users/you/Decks/a.bento.html': 'A' })
   const prefix = await place.placeFolder(g.dir, g.probe('a.bento.html'), {}, { fetch: d.fetch, prefixFor: async () => null })
   ok(prefix === null, 'placeFolder: matching bytes are not enough — the grant has to resolve the path')
 }
@@ -125,8 +125,8 @@ console.log('\n— placing a grant')
   ok((await place.placeFolder(g.dir, { rel: [], handle: null }, {}, { fetch: d.fetch, prefixFor: g.prefixFor })) === null, 'placeFolder: no probe document → null')
 }
 {
-  const dirs = await place.candidateDirs('X', { A: '/Users/andy/Documents/A' }, { fetch: async () => ({ ok: false }) })
-  ok(dirs[0] === '/Users/andy/Documents/X' && dirs.includes('/Users/andy/Desktop/X') && dirs.includes('/Users/andy/X'), 'candidateDirs: beside the known folder first, then the usual places in that home')
+  const dirs = await place.candidateDirs('X', { A: '/Users/you/Documents/A' }, { fetch: async () => ({ ok: false }) })
+  ok(dirs[0] === '/Users/you/Documents/X' && dirs.includes('/Users/you/Desktop/X') && dirs.includes('/Users/you/X'), 'candidateDirs: beside the known folder first, then the usual places in that home')
   ok(new Set(dirs).size === dirs.length && dirs.length <= place.MAX_CANDIDATES, 'candidateDirs: unique and bounded')
 }
 
@@ -157,24 +157,24 @@ console.log('\n— the title card from a document with no preview')
 console.log('\n— the scan: documents found without a grant')
 {
   const d = disk({
-    '/Users/andy/Documents/Decks/Q3.bento.html': 'A',
-    '/Users/andy/Documents/Decks/old/Q2.bento.html': 'B',
-    '/Users/andy/Documents/notes.txt': 'n',
-    '/Users/andy/Documents/node_modules/x/y.bento.html': 'skip',
-    '/Users/andy/Desktop/teams-test/S1.bento.html': 'C',
-    '/Users/andy/Downloads/Untitled.bento.html': 'D',
-    '/Users/andy/Library/Mobile Documents/com~apple~CloudDocs/Work/W.bento.html': 'E',
-    '/Users/andy/Movies/x.bento.html': 'not scanned',
+    '/Users/you/Documents/Decks/Q3.bento.html': 'A',
+    '/Users/you/Documents/Decks/old/Q2.bento.html': 'B',
+    '/Users/you/Documents/notes.txt': 'n',
+    '/Users/you/Documents/node_modules/x/y.bento.html': 'skip',
+    '/Users/you/Desktop/teams-test/S1.bento.html': 'C',
+    '/Users/you/Downloads/Untitled.bento.html': 'D',
+    '/Users/you/Library/Mobile Documents/com~apple~CloudDocs/Work/W.bento.html': 'E',
+    '/Users/you/Movies/x.bento.html': 'not scanned',
     '/Users/Shared/y.bento.html': 'not a home',
   })
   const found = await place.scanDisk({ fetch: d.fetch })
   const paths = found.map((f) => f.path).sort()
   ok(paths.join('|') === [
-    '/Users/andy/Desktop/teams-test/S1.bento.html',
-    '/Users/andy/Documents/Decks/Q3.bento.html',
-    '/Users/andy/Documents/Decks/old/Q2.bento.html',
-    '/Users/andy/Downloads/Untitled.bento.html',
-    '/Users/andy/Library/Mobile Documents/com~apple~CloudDocs/Work/W.bento.html',
+    '/Users/you/Desktop/teams-test/S1.bento.html',
+    '/Users/you/Documents/Decks/Q3.bento.html',
+    '/Users/you/Documents/Decks/old/Q2.bento.html',
+    '/Users/you/Downloads/Untitled.bento.html',
+    '/Users/you/Library/Mobile Documents/com~apple~CloudDocs/Work/W.bento.html',
   ].join('|'), `scanDisk: every .bento.html under Documents/Desktop/Downloads/iCloud, nested, nothing else (${found.length})`)
   ok(!paths.some((p) => p.includes('node_modules') || p.includes('/Movies/') || p.startsWith('/Users/Shared')), 'scanDisk: noisy trees, other folders and non-home users are skipped')
   ok(found[0].name.endsWith('.bento.html') && found.every((f) => f.dir && !f.dir.endsWith('/')), 'scanDisk: name and directory for each')
@@ -192,23 +192,23 @@ console.log('\n— Windows and Linux homes')
 {
   // Windows: a drive-letter home, Documents moved into OneDrive, listings under C:/Users
   const d = disk({
-    '/C:/Users/Andy/OneDrive/Documents/Decks/Q3.bento.html': 'A',
-    '/C:/Users/Andy/Desktop/D.bento.html': 'B',
+    '/C:/Users/you/OneDrive/Documents/Decks/Q3.bento.html': 'A',
+    '/C:/Users/you/Desktop/D.bento.html': 'B',
     '/C:/Users/Public/x.bento.html': 'no',
     '/C:/Windows/System32/y.bento.html': 'no',
   })
   const found = (await place.scanDisk({ fetch: d.fetch })).map((f) => f.path).sort()
-  ok(found.join('|') === '/C:/Users/Andy/Desktop/D.bento.html|/C:/Users/Andy/OneDrive/Documents/Decks/Q3.bento.html', 'Windows: C:/Users/<name> homes, OneDrive known-folder move, Public and Windows skipped')
-  ok(place.fileUrl('/C:/Users/Andy/Desktop/D.bento.html') === 'file:///C:/Users/Andy/Desktop/D.bento.html', 'Windows: the drive letter survives in the file URL')
+  ok(found.join('|') === '/C:/Users/you/Desktop/D.bento.html|/C:/Users/you/OneDrive/Documents/Decks/Q3.bento.html', 'Windows: C:/Users/<name> homes, OneDrive known-folder move, Public and Windows skipped')
+  ok(place.fileUrl('/C:/Users/you/Desktop/D.bento.html') === 'file:///C:/Users/you/Desktop/D.bento.html', 'Windows: the drive letter survives in the file URL')
   // Linux: localized XDG names from user-dirs.dirs, a /home listing
   const l = disk({
-    '/home/anna/.config/user-dirs.dirs': 'XDG_DESKTOP_DIR="$HOME/Schreibtisch"\nXDG_DOWNLOAD_DIR="$HOME/Downloads"\nXDG_DOCUMENTS_DIR="$HOME/Dokumente"\nXDG_MUSIC_DIR="$HOME/Musik"\n',
-    '/home/anna/Dokumente/Vortrag.bento.html': 'A',
-    '/home/anna/Schreibtisch/S.bento.html': 'B',
-    '/home/anna/Musik/m.bento.html': 'no',
+    '/home/you/.config/user-dirs.dirs': 'XDG_DESKTOP_DIR="$HOME/Schreibtisch"\nXDG_DOWNLOAD_DIR="$HOME/Downloads"\nXDG_DOCUMENTS_DIR="$HOME/Dokumente"\nXDG_MUSIC_DIR="$HOME/Musik"\n',
+    '/home/you/Dokumente/Vortrag.bento.html': 'A',
+    '/home/you/Schreibtisch/S.bento.html': 'B',
+    '/home/you/Musik/m.bento.html': 'no',
   })
   const lf = (await place.scanDisk({ fetch: l.fetch })).map((f) => f.path).sort()
-  ok(lf.join('|') === '/home/anna/Dokumente/Vortrag.bento.html|/home/anna/Schreibtisch/S.bento.html', 'Linux: the XDG names the home declares (Dokumente, Schreibtisch), music not scanned')
+  ok(lf.join('|') === '/home/you/Dokumente/Vortrag.bento.html|/home/you/Schreibtisch/S.bento.html', 'Linux: the XDG names the home declares (Dokumente, Schreibtisch), music not scanned')
   ok(place.xdgDirs('XDG_DOCUMENTS_DIR="/mnt/data/docs"\nXDG_DESKTOP_DIR="$HOME/Desktop/"', '/home/u').join('|') === '/mnt/data/docs|/home/u/Desktop', 'xdgDirs: absolute paths kept, $HOME expanded, trailing slash dropped')
 }
 
@@ -221,15 +221,15 @@ console.log('\n— an empty grant (the Bento folder) is placed through a marker'
     name: 'Bento',
     // writing the marker into the grant makes it appear on the fake disk at the real path
     getFileHandle: async (name: string) => ({
-      createWritable: async () => ({ write: async (b: Uint8Array) => { files[`/Users/andy/Documents/Bento/${name}`] = String.fromCharCode(...b) }, close: async () => {} }),
-      getFile: async () => { const body = files[`/Users/andy/Documents/Bento/${name}`]; const b = new TextEncoder().encode(body); return { size: b.length, arrayBuffer: async () => b.buffer } },
+      createWritable: async () => ({ write: async (b: Uint8Array) => { files[`/Users/you/Documents/Bento/${name}`] = String.fromCharCode(...b) }, close: async () => {} }),
+      getFile: async () => { const body = files[`/Users/you/Documents/Bento/${name}`]; const b = new TextEncoder().encode(body); return { size: b.length, arrayBuffer: async () => b.buffer } },
     }),
-    removeEntry: async (name: string) => { removed = name; delete files[`/Users/andy/Documents/Bento/${name}`] },
+    removeEntry: async (name: string) => { removed = name; delete files[`/Users/you/Documents/Bento/${name}`] },
   }
   ;(globalThis as any).crypto ??= { getRandomValues: (a: Uint8Array) => { for (let i = 0; i < a.length; i++) a[i] = (i * 37) % 251; return a } }
-  const prefixFor = async (_d: any, path: string) => (path.startsWith('/Users/andy/Documents/Bento/') ? '/Users/andy/Documents/Bento' : null)
+  const prefixFor = async (_d: any, path: string) => (path.startsWith('/Users/you/Documents/Bento/') ? '/Users/you/Documents/Bento' : null)
   const prefix = await place.placeFolder(dir, null, {}, { fetch: d.fetch, prefixFor })
-  ok(prefix === '/Users/andy/Documents/Bento', 'placeFolder: no document to fingerprint → a marker file is written, found, and the folder placed')
+  ok(prefix === '/Users/you/Documents/Bento', 'placeFolder: no document to fingerprint → a marker file is written, found, and the folder placed')
   ok(removed !== null && String(removed).startsWith('.bento-place-') && Object.keys(files).length === 0, 'the marker is removed afterwards, whatever happened')
   const home = readFileSync(join(SRC, 'src/home.js'), 'utf8')
   ok(/createBentoFolder/.test(home) && /defaultFolder/.test(home) && /startIn: 'documents'/.test(home), 'home.js offers the Bento folder, remembers it as the default for new documents, and opens the picker in Documents')
@@ -238,18 +238,18 @@ console.log('\n— an empty grant (the Bento folder) is placed through a marker'
 console.log('\n— folders the OS keeps from the browser')
 {
   // Documents named by the home listing but refused when listed itself; Desktop readable; Downloads empty but readable
-  const files = { '/Users/andy/Desktop/x.bento.html': 'x', '/Users/andy/Documents/hidden.bento.html': 'h' }
+  const files = { '/Users/you/Desktop/x.bento.html': 'x', '/Users/you/Documents/hidden.bento.html': 'h' }
   const d = disk(files)
   const inner = d.fetch
   const fetch = async (url: string) => {
-    if (/\/Users\/andy\/Documents\//.test(url)) return { ok: false }
-    if (url === 'file:///Users/andy/Downloads/') return { ok: true, text: async () => '' }
-    if (url === 'file:///Users/andy/') return { ok: true, text: async () => ['Desktop', 'Documents', 'Downloads'].map((n) => `<script>addRow("${n}","${n}",1,0,"0",0,"");</script>`).join('') }
+    if (/\/Users\/you\/Documents\//.test(url)) return { ok: false }
+    if (url === 'file:///Users/you/Downloads/') return { ok: true, text: async () => '' }
+    if (url === 'file:///Users/you/') return { ok: true, text: async () => ['Desktop', 'Documents', 'Downloads'].map((n) => `<script>addRow("${n}","${n}",1,0,"0",0,"");</script>`).join('') }
     return inner(url)
   }
   const blocked = await place.blockedFolders({ fetch })
-  ok(blocked.join() === '/Users/andy/Documents', `blockedFolders: a folder the home names but refuses to list, and only that (${blocked.join()})`)
-  ok(!blocked.includes('/Users/andy/Downloads'), 'an EMPTY folder that lists fine is not "blocked"')
+  ok(blocked.join() === '/Users/you/Documents', `blockedFolders: a folder the home names but refuses to list, and only that (${blocked.join()})`)
+  ok(!blocked.includes('/Users/you/Downloads'), 'an EMPTY folder that lists fine is not "blocked"')
   const home = readFileSync(join(SRC, 'src/home.js'), 'utf8')
   ok(/noticeOsBlocked/.test(home) && /openedAt/.test(home), 'the library says which folders the OS refuses, and lists opened documents')
 }
