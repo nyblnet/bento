@@ -824,6 +824,11 @@ try {
     check('turn: the panel sends the request, the (empty) history and the focus, and supplies the material on demand', turns.length === 1 && turns[0].request === 'update the title to something creative' && turns[0].history.length === 0 && turns[0].focus.index === 0 && typeof turns[0].m.addressed === 'string' && turns[0].m.focus && turns[0].m.focus.kind === 'slide')
     check('turn: the ops reply is applied through the real apply (replaceDoc once) and the note shown', store.replaced === 1 && /Only the outline fit/.test(panel.root.textContent) && /new/.test(store.doc.slides[0].elements.find((e) => e.id === firstText).html))
     check('turn: the card names the op', /Applied: edit 1\\//.test(panel.root.querySelector('.ed-assist-card-h').textContent))
+    // the next turn knows what the last one did
+    panel.root.querySelector('.ed-assist-input').value = 'what did you change?'
+    await panel.submit(); await tick(30)
+    const hist = turns[1] && turns[1].history
+    check('turn: the applied patch is in the history the next turn carries (the note, the op names, the ops)', !!hist && hist.length === 2 && hist[1].role === 'assistant' && /applied: edit 1\\//.test(hist[1].text) && /"edits"/.test(hist[1].text) && /A \\*\\*new\\*\\* title/.test(hist[1].text))
     {
       // the panel's dry run: a candidate patch through applyOps on the material's document, nothing committed
       const store3 = fakeStore(starterDoc())
