@@ -317,7 +317,8 @@ async function scannedDocs({ fresh = false } = {}) {
   if (state.fileAccess === false) return []
   if (scanned && !fresh) return scanned
   let found = []
-  try { found = await scanDisk({ fetch: (u) => fetch(u) }) } catch { found = [] }
+  try { found = await scanDisk({ fetch: (u) => fetch(u) }) } catch (e) { console.info('[bento/home] scan failed:', e?.message || e); found = [] }
+  console.info(`[bento/home] scan: ${found.length} documents under the usual places`)
   // the worker reads this to tell two same-named files apart when a file grant is used
   chrome.storage.local.set({ lastScan: found.map((f) => f.path).slice(0, 2000) }).catch(() => {})
   scanned = found.map((f) => ({
@@ -387,9 +388,24 @@ async function load() {
     extra.push({ name, named: true, base: name.replace(/\.bento\.html$/i, ''), folder: dir.split('/').filter(Boolean).pop() ?? dir, rel: [name], path, handle: diskHandle(path, name), parent: null, scanned: true, dir, openedAt: at })
   }
   // A found document with a FILE grant of its own is added, not "not added":
-  // the badge and the menu follow the grant, whichever way it was made.
-  const fileGranted = new Set((await listFileGrants().catch(() => [])).map((g) => g.path).filter(Boolean))
+  // the badge and the menu follow the grant, whichever way it was made. And
+  // a file grant the scan never saw (a folder it cannot read — macOS asks
+  // the browser for Documents access separately — or deeper than it walks)
+  // is listed FROM the grant: the handle reads its title and card, the path
+  // opens it.
+  const grants = await listFileGrants().catch(() => [])
+  const fileGranted = new Set(grants.map((g) => g.path).filter(Boolean))
   for (const d of extra) if (fileGranted.has(d.path)) d.granted = true
+  for (const g of grants) {
+    if (g.path && have.has(g.path)) continue
+    const dir = g.path ? g.path.slice(0, g.path.lastIndexOf('/')) : ''
+    extra.push({
+      name: g.name, named: /\.bento\.html$/i.test(g.name), base: g.name.replace(/\.bento\.html$/i, '').replace(/\.html?$/i, ''),
+      folder: dir ? (dir.split('/').filter(Boolean).pop() ?? dir) : t('setFilesTitle'), rel: [g.name], path: g.path ?? null,
+      handle: g.handle, parent: null, scanned: true, granted: true, dir,
+    })
+    if (g.path) have.add(g.path)
+  }
   // Read mtimes once, here, rather than per render: sorting needs them and the
   // grid is re-rendered on every keystroke of the search box.
   state.docs = await Promise.all([
