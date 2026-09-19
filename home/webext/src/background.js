@@ -398,6 +398,23 @@ export async function recordConsent(sender, msg) {
   return { ok: true }
 }
 
+/**
+ * The options page at a section. `openOptionsPage()` cannot carry a hash,
+ * and opening the library four times should not leave four copies of it —
+ * so an open library tab is focused and sent to the hash; otherwise one is
+ * created at it.
+ */
+export async function openSettings(hash) {
+  const base = chrome.runtime.getURL('src/home.html')
+  const [open] = await chrome.tabs.query({ url: `${base}*` }).catch(() => [])
+  if (open) {
+    await chrome.tabs.update(open.id, { active: true, url: `${base}${hash}` })
+    await chrome.windows.update(open.windowId, { focused: true }).catch(() => {})
+  } else {
+    await chrome.tabs.create({ url: `${base}${hash}` })
+  }
+}
+
 /** `assistant.describe` / `assistant.check` / `assistant.settings.open`, over sendMessage. */
 export async function assistantOp(op, sender, payload) {
   const env = await assistantEnv()
@@ -411,7 +428,7 @@ export async function assistantOp(op, sender, payload) {
     return { ok: true }
   }
   if (op === 'assistant.settings.open') {
-    await chrome.runtime.openOptionsPage()
+    await openSettings(payload?.section === 'assistant' ? '#assistant' : '#settings')
     return { ok: true }
   }
   if (op === 'assistant.check') {

@@ -229,7 +229,7 @@ const VIEW_HASH = { docs: '', settings: '#settings', help: '#help' }
 
 function show(view) {
   state.view = view
-  const want = VIEW_HASH[view] ?? ''
+  const want = view === 'settings' && location.hash === '#assistant' ? '#assistant' : (VIEW_HASH[view] ?? '')
   if (location.hash !== want) {
     try { history.replaceState(null, '', want || location.pathname) } catch { /* not fatal */ }
   }
@@ -1346,9 +1346,30 @@ paintLayout()
 // of documents ignores the question. Applied twice on purpose — once before the
 // documents load so the right screen paints immediately, once after, because
 // `load()` finishes by showing the grid.
+/**
+ * `#assistant` is the Settings view scrolled to the Assistant card with the
+ * Model control focused — what the document's "Settings…" link asks for
+ * (assistant.settings.open { section:'assistant' }). The card renders
+ * asynchronously (renderSettings awaits storage), so the scroll waits for
+ * the element rather than for a frame.
+ */
+const revealSection = async (id) => {
+  for (let i = 0; i < 40; i++) {
+    const el = document.getElementById(id)
+    if (el) {
+      el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      el.querySelector('select, input')?.focus({ preventScroll: true })
+      return true
+    }
+    await new Promise((r) => setTimeout(r, 50))
+  }
+  return false
+}
+
 const routeHash = () => {
-  const view = { '#welcome': 'help', '#help': 'help', '#settings': 'settings' }[location.hash]
+  const view = { '#welcome': 'help', '#help': 'help', '#settings': 'settings', '#assistant': 'settings' }[location.hash]
   if (view) show(view)
+  if (location.hash === '#assistant') void revealSection('assistant')
   return !!view
 }
 

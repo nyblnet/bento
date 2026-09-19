@@ -48,6 +48,9 @@ const store: Record<string, unknown> = {}
 const windowsOpened: string[] = []
 let optionsOpened = 0
 const EXT = 'chrome-extension://ext-id/'
+const created: string[] = []
+const updated: any[] = []
+const tabsOpen: any[] = []
 ;(globalThis as any).chrome = {
   runtime: {
     id: 'ext-id',
@@ -55,13 +58,18 @@ const EXT = 'chrome-extension://ext-id/'
     openOptionsPage: async () => { optionsOpened++ },
     getManifest: () => ({ version: '0.0.0' }),
   },
+  tabs: {
+    query: async (q: any) => tabsOpen.filter((t) => typeof q.url !== 'string' || t.url.startsWith(q.url.replace(/\*$/, ''))),
+    create: async (o: any) => { created.push(o.url) },
+    update: async (id: number, o: any) => { updated.push([id, o]) },
+  },
   storage: {
     local: {
       get: async (k: string) => ({ [k]: store[k] }),
       set: async (o: Record<string, unknown>) => { Object.assign(store, o) },
     },
   },
-  windows: { create: async (o: { url: string }) => { windowsOpened.push(o.url) } },
+  windows: { create: async (o: { url: string }) => { windowsOpened.push(o.url) }, update: async () => {} },
 }
 
 const providers = await import('../home/webext/src/providers.js')
@@ -584,8 +592,15 @@ store[asst.CONFIG_KEY] = { provider: 'openai', baseUrl: `https://gw.example/${TE
   // sendMessage ops
   const d = await bg.assistantOp('assistant.describe', FILE)
   ok(d.ok === true && d.host === 'gw.example' && Object.keys(d).sort().join() === 'configured,contextTokens,host,model,ok', 'assistant.describe over sendMessage: the bounded shape')
-  const s = await bg.assistantOp('assistant.settings.open', FILE)
-  ok(s.ok === true && optionsOpened === 1, 'assistant.settings.open opens the options page')
+  const s = await bg.assistantOp('assistant.settings.open', FILE, { section: 'assistant' })
+  ok(s.ok === true && created.at(-1) === `${EXT}src/home.html#assistant`, 'assistant.settings.open { section:"assistant" } opens the library at #assistant')
+  const s2 = await bg.assistantOp('assistant.settings.open', FILE, {})
+  ok(s2.ok === true && created.at(-1) === `${EXT}src/home.html#settings`, 'and without a section, at #settings (older pages)')
+  tabsOpen.push({ id: 7, windowId: 1, url: `${EXT}src/home.html` })
+  await bg.assistantOp('assistant.settings.open', FILE, { section: 'assistant' })
+  ok(updated.at(-1)?.[0] === 7 && updated.at(-1)?.[1].url === `${EXT}src/home.html#assistant` && updated.at(-1)?.[1].active === true, 'an open library tab is focused and sent to the hash, not duplicated')
+  const home = read('src/home.js')
+  ok(/'#assistant': 'settings'/.test(home) && /scrollIntoView/.test(home) && /revealSection\('assistant'\)/.test(home), 'the page routes #assistant to Settings and scrolls the Assistant card into view, focusing its control')
   const c = await bg.assistantOp('assistant.check', FILE)
   ok(c.ok === true, 'assistant.check from an allowed file makes the probe')
   store[asst.ALLOWED_KEY] = {}
