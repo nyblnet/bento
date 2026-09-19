@@ -379,6 +379,11 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: sidebar multi-select — a block move keeps order and carries states
+        # Discussion #514. The unit is a parent with its states; the old
+        # single-index splice left states behind, which this rig shows.
+        run: node scripts/test-slides-multiselect.ts
+
       - name: presence toasts — said once per real arrival and departure
         # A hidden tab's heartbeat arrives once a minute, the room drops the
         # peer and the next beat brings them back: "left" / "joined" every

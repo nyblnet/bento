@@ -11,6 +11,15 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Select several slides in the sidebar and move them together.** ⌘/Ctrl-click
+  adds a slide to the selection, ⇧-click selects a range from the current one,
+  and dragging any selected slide moves the whole selection as a block, in its
+  order, as one undoable step; Delete removes the selection with the usual
+  warning about states and links. A slide's interactive states now travel with
+  it when it is dragged — before this a moved slide left its states behind,
+  nested under whatever slide was now before them. Asked for in discussion
+  #514.
+
 ## [1.2.2] — 2026-09-19
 
 - **A deck full of photos can be shared live again.** A deck whose pictures

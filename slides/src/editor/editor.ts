@@ -44,6 +44,7 @@ import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
+import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
 import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
@@ -87,6 +88,10 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
 export class Editor {
   private canvas!: SlideCanvas
   private panel!: PropsPanel
+  /** Sidebar multi-selection: PARENT indices (slidesel.ts). The current slide
+   *  is the anchor and the canvas slide; this set is what a drag moves and
+   *  Delete removes. Empty = just the current slide, as before. */
+  private thumbSel: number[] = []
   private sidebar!: HTMLElement
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
@@ -113,7 +118,9 @@ export class Editor {
   ) {
     this.build()
     this.wireKeyboard()
-    store.on('slides', () => this.rebuildSidebar())
+    // a slide-list change makes the sidebar selection's indices stale: drop it
+    // (a drag re-selects the moved block by id right after its commit)
+    store.on('slides', () => { this.thumbSel = []; this.rebuildSidebar() })
     store.on('current', () => this.highlightSidebar())
     store.on('doc', () => this.scheduleThumbs())
     store.on('dirty', () => {
@@ -1789,10 +1796,17 @@ export class Editor {
     const tools = div('ed-thumb-tools')
     tools.append(
       btn(ICONS.copy, '', (ev) => { ev.stopPropagation(); this.duplicateSlide(i) }, t('Duplicate slide')),
-      btn(ICONS.trash, '', (ev) => { ev.stopPropagation(); this.deleteSlide(i) }, t('Delete slide')),
+      btn(ICONS.trash, '', (ev) => { ev.stopPropagation(); this.deleteSlides(this.thumbTargets(i)) }, t('Delete slide')),
     )
     item.append(num, surface, tools)
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (ev) => {
+      // Shift = a range from the current slide; Cmd/Ctrl = toggle this one;
+      // plain = this one alone (as always). The canvas stays on the current
+      // slide for the modified clicks — it is the anchor, not a target.
+      const mod = ev.metaKey || ev.ctrlKey
+      if (ev.shiftKey && !isState) { this.setThumbSel(selRange(this.store.doc.slides, this.store.currentIndex, i)); return }
+      if (mod && !isState) { this.setThumbSel(selToggle(this.store.doc.slides, this.thumbSel.length ? this.thumbSel : [this.store.currentIndex], i)); return }
+      this.setThumbSel([])
       this.store.goTo(i)
       // On a phone the slide list is a drawer laid OVER the canvas, so picking
       // a slide left the answer hidden behind the question — you had to find
@@ -1936,19 +1950,39 @@ export class Editor {
     return gap
   }
 
+  /** The multi-selection, normalised to parents; the sidebar repaints. */
+  private setThumbSel(sel: number[]) {
+    this.thumbSel = selParents(this.store.doc.slides, sel)
+    this.highlightSidebar()
+  }
+
+  /** What a sidebar action acts on: the selection when the thumb is in it,
+   *  else that thumb alone. */
+  private thumbTargets(index: number): number[] {
+    const inSel = this.thumbSel.includes(index)
+    return inSel ? this.thumbSel : [index]
+  }
+
   private wireThumbDrag(item: HTMLElement, index: number) {
     // Select on press, before the browser starts native dragging. Waiting for
     // click/dragstart leaves Moveable's previous canvas target live while the
-    // pointer crosses the workspace.
+    // pointer crosses the workspace. A modified press (Shift/Cmd/Ctrl) is a
+    // selection gesture handled on click; a press on a thumb that is already
+    // in the selection keeps the selection (so it can be dragged as a block).
     item.addEventListener('mousedown', (ev) => {
       if (ev.button !== 0 || (ev.target instanceof Element && ev.target.closest('.ed-thumb-tools'))) return
       ev.stopPropagation() // keep the canvas Moveable gesture controller out
-      this.store.goTo(index)
+      if (ev.shiftKey || ev.metaKey || ev.ctrlKey) return
+      if (!this.thumbSel.includes(index)) { this.setThumbSel([]); this.store.goTo(index) }
     })
     item.addEventListener('dragstart', (ev) => {
-      ev.dataTransfer!.setData('text/bento-slide', String(index))
+      // the payload is every parent index that moves — the selection when
+      // this thumb is part of it, else this one; states follow their parent
+      ev.dataTransfer!.setData('text/bento-slide', JSON.stringify(this.thumbTargets(index)))
       ev.dataTransfer!.effectAllowed = 'move'
+      item.classList.add('dragging')
     })
+    item.addEventListener('dragend', () => item.classList.remove('dragging'))
     item.addEventListener('dragover', (ev) => {
       ev.preventDefault()
       item.classList.add('drop')
@@ -1957,20 +1991,38 @@ export class Editor {
     item.addEventListener('drop', (ev) => {
       ev.preventDefault()
       item.classList.remove('drop')
-      const from = parseInt(ev.dataTransfer!.getData('text/bento-slide'))
-      if (Number.isNaN(from) || from === index) return
-      this.store.commit(() => {
-        const [moved] = this.store.doc.slides.splice(from, 1)
-        this.store.doc.slides.splice(index, 0, moved)
-      }, 'slides')
+      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), index)
     })
+  }
+
+  /** Move the dragged units (a JSON list of parent indices, or one index
+   *  from an older payload) as a block to sit where `index` is; one commit. */
+  private dropSlides(payload: string, index: number) {
+    let from: number[]
+    try { const v = JSON.parse(payload); from = Array.isArray(v) ? v.map(Number) : [Number(v)] } catch { from = [parseInt(payload)] }
+    from = from.filter((n) => Number.isInteger(n) && n >= 0)
+    if (!from.length) return
+    const before = this.store.doc.slides
+    const after = moveBlock(before, from, index)
+    if (after === before) return
+    const currentId = before[this.store.currentIndex]?.id
+    const movedIds = expand(before, from).map((i) => before[i].id)
+    this.store.commit(() => { this.store.doc.slides = after }, 'slides')
+    // the selection follows the slides, by id; the canvas stays on its slide
+    const at = after.findIndex((s) => s.id === currentId)
+    if (at >= 0 && at !== this.store.currentIndex) this.store.goTo(at)
+    this.setThumbSel(after.map((s, i) => (movedIds.includes(s.id) ? i : -1)).filter((i) => i >= 0))
   }
 
   private highlightSidebar() {
     let active: HTMLElement | undefined
+    // the selection paints parents AND their states (they move together)
+    const selected = new Set(expand(this.store.doc.slides, this.thumbSel))
     this.sidebar.querySelectorAll<HTMLElement>('.ed-thumb').forEach((n) => {
-      const isActive = Number(n.dataset.index) === this.store.currentIndex
+      const idx = Number(n.dataset.index)
+      const isActive = idx === this.store.currentIndex
       n.classList.toggle('active', isActive)
+      n.classList.toggle('selected', selected.has(idx))
       if (isActive) active = n
     })
     active?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
@@ -2012,6 +2064,27 @@ export class Editor {
       this.store.doc.slides.splice(i + 1, 0, clone)
     }, 'slides')
     this.store.goTo(i + 1)
+  }
+
+  /** Delete several units at once — the sidebar's multi-selection — with
+   *  the same cascade and confirm as one slide (states go with parents,
+   *  links into the doomed are cleared, a linear slide must survive). */
+  private deleteSlides(indices: number[]) {
+    if (indices.length === 1) return this.deleteSlide(indices[0])
+    const plan = deletePlan(this.store.doc.slides, indices)
+    if (!plan.survives) return this.toast(t('A deck needs at least one slide'))
+    const n = selParents(this.store.doc.slides, indices).length
+    const parts = [
+      plan.states ? `${plan.states} interactive state${plan.states > 1 ? 's' : ''} will be deleted with them` : '',
+      plan.links ? `${plan.links} element link${plan.links > 1 ? 's' : ''} will be cleared` : '',
+    ].filter(Boolean).join('; ')
+    if (!window.confirm(parts ? t('Delete {n} slides? {parts}.', { n: String(n), parts }) : t('Delete {n} slides?', { n: String(n) }))) return
+    const doomed = plan.doomed
+    this.store.commit(() => {
+      this.store.doc.slides = this.store.doc.slides.filter((s) => !doomed.has(s.id))
+      for (const s of this.store.doc.slides) for (const el of s.elements) if (el.link && doomed.has(el.link)) delete el.link
+    }, 'slides')
+    this.setThumbSel([])
   }
 
   private deleteSlide(i: number) {
@@ -2828,6 +2901,7 @@ export class Editor {
       [`${mod}-${t('scroll')}`, t('Zoom in and out')],
       [`${mod}+ · ${mod}− · ${mod}0`, t('Zoom in · out · fit the slide')],
       ['← · →', t('Walk the slides when nothing is selected; nudge the selection otherwise')],
+      [`${mod}-${t('click')} · ⇧-${t('click')}`, t('Select several slides in the sidebar; drag any of them to move them all, Delete removes them')],
     ])
     section(colR, t('Lines & curves'), [
       [t('Shape ▾'), t('Draw a line, curved line or connector — then drag on the canvas')],
@@ -3025,6 +3099,10 @@ export class Editor {
         if (this.store.selection.length) {
           ev.preventDefault()
           this.deleteSelection()
+        } else if (this.thumbSel.length > 1 && !inField) {
+          // a sidebar multi-selection and nothing on the canvas: Delete means the slides
+          ev.preventDefault()
+          this.deleteSlides(this.thumbSel)
         }
         return
       }
@@ -3058,6 +3136,7 @@ export class Editor {
         return
       }
       if (ev.key === 'Escape') {
+        if (this.thumbSel.length) this.setThumbSel([])
         if (this.canvas.isDrawing) this.canvas.cancelDraw()
         else if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
         else this.store.select([])

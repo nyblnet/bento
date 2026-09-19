@@ -308,6 +308,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-thumb:hover { border-color: #c9d2de; }
 .ed-thumb.active { border-color: var(--accent); }
+/* in the multi-selection: a tint and the accent ring; the active one keeps its ring */
+.ed-thumb.selected { border-color: var(--accent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.ed-thumb.selected::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--accent) 12%, transparent); pointer-events: none; }
+.ed-thumb.dragging { opacity: .5; }
 .ed-thumb.drop { border-color: var(--blue); }
 .ed-thumb-num {
   position: absolute;
