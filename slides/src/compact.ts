@@ -192,7 +192,7 @@ export function compactDoc(full: BentoDoc): Obj {
   return out
 }
 
-const mintId = (slide: Obj, el: Obj, i: number) => `${slide.id}-${el.type}-${i}`
+export const mintId = (slide: Obj, el: Obj, i: number) => `${slide.id}-${el.type}-${i}`
 
 /** Is the author's doc-level value the shape the editor will dereference?
  *  format/version must be ours; size a {width,height} of numbers; theme an
