@@ -641,9 +641,6 @@
   "badgeNotSavingTip": {
     "message": "このドキュメントはまだその場に保存できません。bento/home パネルを開いて設定してください。"
   },
-  "navRecent": {
-    "message": "最近"
-  },
   "noticeOsBlocked": {
     "message": "macOS がブラウザーの $1 へのアクセスを止めているため、許可するまでそこにあるドキュメントは一覧に出ません。システム設定 → プライバシーとセキュリティ → ファイルとフォルダ → Google Chrome で許可してください。"
   },

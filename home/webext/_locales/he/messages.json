@@ -608,9 +608,6 @@
   "badgeNotSavingTip": {
     "message": "המסמך הזה עדיין לא יכול להישמר במקום — פתחו את חלונית bento/home כדי לתקן זאת."
   },
-  "navRecent": {
-    "message": "אחרונים"
-  },
   "noticeOsBlocked": {
     "message": "macOS מונע מהדפדפן גישה ל־$1, ולכן מסמכים שם לא מוצגים עד שתאשרו: הגדרות המערכת → פרטיות ואבטחה → קבצים ותיקיות → Google Chrome."
   },

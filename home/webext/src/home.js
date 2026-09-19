@@ -246,8 +246,6 @@ const ago = (ms) => {
 // documents are drawn within it. Two different words on purpose — they were
 // briefly the same one, and "view" then meant two things one line apart.
 const state = { docs: [], folder: null, q: '', sort: 'recent', view: 'docs', layout: 'icons' }
-/** `state.folder` for the Recent view: not a folder name, so no folder can collide with it. */
-const RECENT = Symbol('recent')
 // Readable from the page's console (`__bentoHome.folder`), for a question
 // like "why is the grid drawn this way" without a reload-and-watch.
 globalThis.__bentoHome = state
@@ -292,7 +290,6 @@ function show(view) {
   $('settings').setAttribute('aria-current', String(view === 'settings'))
   $('help').setAttribute('aria-current', String(view === 'help'))
   $('navAll').setAttribute('aria-current', String(docs && state.folder === null))
-  $('navRecent').setAttribute('aria-current', String(docs && state.folder === RECENT))
   if (docs) { renderSidebar(); renderGrid() }
   else if (view === 'settings') renderSettings()
   else renderHelp()
@@ -441,9 +438,6 @@ function renderSidebar() {
 
   $('nAll').textContent = state.docs.length || ''
   $('navAll').setAttribute('aria-current', String(state.folder === null))
-  const nRecent = Math.min(RECENT_MAX, state.docs.filter((d) => (d.openedAt || 0) > 0 || (d.modified || 0) > 0).length)
-  $('nRecent').textContent = nRecent || ''
-  $('navRecent').setAttribute('aria-current', String(state.folder === RECENT))
 
   const host = $('folders')
   host.innerHTML = ''
@@ -461,17 +455,11 @@ function renderSidebar() {
 }
 
 $('navAll').addEventListener('click', () => { state.folder = null; show('docs') })
-$('navRecent').addEventListener('click', () => { state.folder = RECENT; show('docs') })
 
 // --------------------------------------------------------------------- grid
 function visible() {
   const q = state.q.trim().toLowerCase()
-  // Recent is ONE list: the documents touched last, opened or edited,
-  // whichever was later — the sidebar entry is the only place it lives.
-  const recency = (d) => Math.max(d.openedAt || 0, d.modified || 0)
-  let docs = state.folder === RECENT
-    ? state.docs.filter((d) => recency(d) > 0)
-    : state.docs.filter((d) => state.folder === null || d.folder === state.folder)
+  let docs = state.docs.filter((d) => state.folder === null || d.folder === state.folder)
   if (q) {
     // Match the TITLE once it is known, and the file name always — a document
     // whose thumbnail has not loaded yet is still findable by what it is called
@@ -483,7 +471,6 @@ function visible() {
       || d.base.toLowerCase().includes(q) || d.folder.toLowerCase().includes(q)
       || (d.text ?? '').toLowerCase().includes(q))
   }
-  if (state.folder === RECENT) return docs.sort((a, b) => recency(b) - recency(a)).slice(0, RECENT_MAX)
   const by = {
     recent: (a, b) => b.modified - a.modified,
     name: (a, b) => (a.title ?? a.base).localeCompare(b.title ?? b.base),
@@ -670,7 +657,7 @@ function renderGrid() {
   const grid = $('grid')
   if (state.layout === 'list') grid.classList.add('as-list')
   const docs = visible()
-  $('heading').textContent = state.folder === RECENT ? t('navRecent') : (state.folder ?? t('navAll'))
+  $('heading').textContent = state.folder ?? t('navAll')
 
   if (!docs.length) {
     // Three different emptinesses, and telling them apart is the whole job of
@@ -690,9 +677,6 @@ function renderGrid() {
 
   for (const d of docs) grid.appendChild(makeCard(d))
 }
-
-/** How many documents the Recent view shows. */
-const RECENT_MAX = 30
 
 /** One document card; every grid builds its cards here. */
 function makeCard(d) {
@@ -1790,7 +1774,7 @@ document.addEventListener('visibilitychange', () => {
     await load()
     await renderNotice()
     const after = state.docs.filter((d) => d.path).length
-    if (after > before) toast(`${typeof state.folder === 'string' ? state.folder : 'Your documents'} — unlocked`)
+    if (after > before) toast(`${state.folder ?? 'Your documents'} — unlocked`)
   })()
 })
 

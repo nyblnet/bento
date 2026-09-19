@@ -608,9 +608,6 @@
   "badgeNotSavingTip": {
     "message": "Hindi pa makakapag-save sa lugar ang dokumentong ito — buksan ang bento/home panel para ayusin iyon."
   },
-  "navRecent": {
-    "message": "Kamakailan"
-  },
   "noticeOsBlocked": {
     "message": "Hinaharangan ng macOS ang browser sa $1, kaya hindi nakalista ang mga dokumento roon hangga’t hindi mo pinapayagan: System Settings → Privacy & Security → Files and Folders → Google Chrome."
   },

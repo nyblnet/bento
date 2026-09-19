@@ -641,9 +641,6 @@
   "badgeNotSavingTip": {
     "message": "此文件尚不能就地儲存——開啟 bento/home 面板來解決。"
   },
-  "navRecent": {
-    "message": "最近"
-  },
   "noticeOsBlocked": {
     "message": "macOS 阻止了瀏覽器存取 $1，在您允許之前那裡的文件不會列出：系統設定 → 隱私權與安全性 → 檔案與檔案夾 → Google Chrome。"
   },

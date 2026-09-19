@@ -641,9 +641,6 @@
   "badgeNotSavingTip": {
     "message": "Este documento ainda não pode salvar no lugar — abra o painel do bento/home para resolver."
   },
-  "navRecent": {
-    "message": "Recentes"
-  },
   "noticeOsBlocked": {
     "message": "O macOS está impedindo o navegador de acessar $1, então os documentos de lá não aparecem até você permitir: Ajustes do Sistema → Privacidade e Segurança → Arquivos e Pastas → Google Chrome."
   },

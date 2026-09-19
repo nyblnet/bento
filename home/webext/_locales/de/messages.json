@@ -641,9 +641,6 @@
   "badgeNotSavingTip": {
     "message": "Dieses Dokument kann noch nicht direkt speichern — öffnen Sie das bento/home-Panel, um das zu ändern."
   },
-  "navRecent": {
-    "message": "Zuletzt geöffnet"
-  },
   "noticeOsBlocked": {
     "message": "macOS hält den Browser von $1 fern, daher werden Dokumente dort erst aufgeführt, wenn Sie es erlauben: Systemeinstellungen → Datenschutz & Sicherheit → Dateien und Ordner → Google Chrome."
   },

@@ -608,9 +608,6 @@
   "badgeNotSavingTip": {
     "message": "Dokumen ini belum bisa menyimpan di tempat — buka panel bento/home untuk memperbaikinya."
   },
-  "navRecent": {
-    "message": "Terbaru"
-  },
   "noticeOsBlocked": {
     "message": "macOS menghalangi peramban mengakses $1, jadi dokumen di sana tidak ditampilkan sampai Anda mengizinkannya: System Settings → Privacy & Security → Files and Folders → Google Chrome."
   },

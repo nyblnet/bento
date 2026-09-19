@@ -608,9 +608,6 @@
   "badgeNotSavingTip": {
     "message": "Dit document kan nog niet ter plekke opslaan — open het bento/home-paneel om dat te regelen."
   },
-  "navRecent": {
-    "message": "Recent"
-  },
   "noticeOsBlocked": {
     "message": "macOS houdt de browser uit $1, dus documenten daar worden pas getoond als u het toestaat: Systeeminstellingen → Privacy en beveiliging → Bestanden en mappen → Google Chrome."
   },

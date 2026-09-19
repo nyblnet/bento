@@ -608,9 +608,6 @@
   "badgeNotSavingTip": {
     "message": "Tämä asiakirja ei vielä tallennu paikalleen — avaa bento/home-paneeli korjataksesi sen."
   },
-  "navRecent": {
-    "message": "Viimeisimmät"
-  },
   "noticeOsBlocked": {
     "message": "macOS estää selaimelta pääsyn kansioon $1, joten sen asiakirjat eivät näy ennen kuin sallit sen: Järjestelmäasetukset → Tietosuoja ja suojaus → Tiedostot ja kansiot → Google Chrome."
   },

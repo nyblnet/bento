@@ -608,9 +608,6 @@
   "badgeNotSavingTip": {
     "message": "यह दस्तावेज़ अभी उसी जगह सहेज नहीं सकता — इसे ठीक करने के लिए bento/home पैनल खोलें।"
   },
-  "navRecent": {
-    "message": "हाल के"
-  },
   "noticeOsBlocked": {
     "message": "macOS ब्राउज़र को $1 से दूर रख रहा है, इसलिए वहाँ के दस्तावेज़ तब तक सूचीबद्ध नहीं होते जब तक आप अनुमति न दें: System Settings → Privacy & Security → Files and Folders → Google Chrome."
   },

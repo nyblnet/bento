@@ -251,7 +251,7 @@ console.log('\n— folders the OS keeps from the browser')
   ok(blocked.join() === '/Users/andy/Documents', `blockedFolders: a folder the home names but refuses to list, and only that (${blocked.join()})`)
   ok(!blocked.includes('/Users/andy/Downloads'), 'an EMPTY folder that lists fine is not "blocked"')
   const home = readFileSync(join(SRC, 'src/home.js'), 'utf8')
-  ok(/noticeOsBlocked/.test(home) && /navRecent/.test(home) && /openedAt/.test(home), 'the library says which folders the OS refuses, and has a Recent view of opened documents')
+  ok(/noticeOsBlocked/.test(home) && /openedAt/.test(home), 'the library says which folders the OS refuses, and lists opened documents')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

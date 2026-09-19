@@ -608,9 +608,6 @@
   "badgeNotSavingTip": {
     "message": "Dette dokument kan endnu ikke gemme på stedet — åbn bento/home-panelet for at ordne det."
   },
-  "navRecent": {
-    "message": "Seneste"
-  },
   "noticeOsBlocked": {
     "message": "macOS holder browseren ude af $1, så dokumenter der vises ikke, før du tillader det: Systemindstillinger → Anonymitet og sikkerhed → Filer og mapper → Google Chrome."
   },

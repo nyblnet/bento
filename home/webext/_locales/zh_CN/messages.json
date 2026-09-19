@@ -641,9 +641,6 @@
   "badgeNotSavingTip": {
     "message": "此文档尚不能原地保存——打开 bento/home 面板来解决。"
   },
-  "navRecent": {
-    "message": "最近"
-  },
   "noticeOsBlocked": {
     "message": "macOS 阻止了浏览器访问 $1，在您允许之前那里的文档不会列出：系统设置 → 隐私与安全性 → 文件和文件夹 → Google Chrome。"
   },

@@ -608,9 +608,6 @@
   "badgeNotSavingTip": {
     "message": "এই নথি এখনও জায়গায় সংরক্ষণ করতে পারে না — ঠিক করতে bento/home প্যানেল খুলুন।"
   },
-  "navRecent": {
-    "message": "সাম্প্রতিক"
-  },
   "noticeOsBlocked": {
     "message": "macOS ব্রাউজারকে $1 থেকে দূরে রাখছে, তাই আপনি অনুমতি না দেওয়া পর্যন্ত সেখানকার নথি তালিকাভুক্ত হয় না: System Settings → Privacy & Security → Files and Folders → Google Chrome."
   },

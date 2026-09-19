@@ -707,10 +707,6 @@
     "message": "This document cannot save in place yet — open the bento/home panel to fix that.",
     "description": "Toolbar icon tooltip on a tab whose document cannot save in place."
   },
-  "navRecent": {
-    "message": "Recent",
-    "description": "Sidebar: documents opened in this browser, newest first."
-  },
   "noticeOsBlocked": {
     "message": "macOS is keeping the browser out of $1, so documents there are not listed until you allow it: System Settings → Privacy & Security → Files and Folders → Google Chrome.",
     "description": "Notice when macOS refuses the browser a folder. $1 is the folder names. REVIEW: the System Settings path must match the OS's own labels."
