@@ -48,12 +48,13 @@
   /* segmented icons/list control */
   .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
     flex: none }
-  /* The two glyphs are different characters at different natural heights
-   * (▦ sits high, ☰ low); a fixed box with the glyph centred in it, rather
-   * than text baselines, is what lines them up. */
+  /* Two drawn icons of one geometry, not two text glyphs: ▦ and ☰ are
+   * different characters whose ink sits at different heights in every font,
+   * so no box could line them up. */
   .seg button { border: 0; background: var(--panel); color: var(--dim); font: inherit;
     font-size: 14px; line-height: 1; width: 34px; height: 30px; padding: 0; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center }
+  .seg svg { display: block }
   .seg button + button { border-inline-start: 1px solid var(--line) }
   .seg button:hover { background: var(--hover); color: var(--ink) }
   .seg button[aria-pressed="true"] { background: var(--hover); color: var(--ink) }
@@ -287,12 +288,12 @@
     <b>bento<i>/</i>home</b>
   </button>
 
-  <button class="navitem" id="navAll" aria-current="true">
-    <span class="dot"></span> <span data-i18n="navAll"></span> <span class="n" id="nAll"></span>
-  </button>
   <!-- Documents opened in this browser, newest first — wherever they live. -->
   <button class="navitem" id="navRecent" aria-current="false">
     <span class="dot"></span> <span data-i18n="navRecent"></span> <span class="n" id="nRecent"></span>
+  </button>
+  <button class="navitem" id="navAll" aria-current="true">
+    <span class="dot"></span> <span data-i18n="navAll"></span> <span class="n" id="nAll"></span>
   </button>
 
   <div class="seclabel" data-i18n="navFolders"></div>
@@ -322,8 +323,8 @@
          with text: at 30 locales a two-word label is two more strings to get
          right in each, and the glyphs are the convention people already read. -->
     <div class="seg" id="layout" role="group" data-i18n-title="viewLayout">
-      <button data-layout="icons" data-i18n-title="viewIcons" aria-pressed="true">▦</button>
-      <button data-layout="list" data-i18n-title="viewList" aria-pressed="false">☰</button>
+      <button data-layout="icons" data-i18n-title="viewIcons" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor"/><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor"/><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor"/><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor"/></svg></button>
+      <button data-layout="list" data-i18n-title="viewList" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1" y="2" width="12" height="2" rx="1" fill="currentColor"/><rect x="1" y="6" width="12" height="2" rx="1" fill="currentColor"/><rect x="1" y="10" width="12" height="2" rx="1" fill="currentColor"/></svg></button>
     </div>
     <span class="grow"></span>
     <button class="btn primary" id="new" data-i18n="newDocument"></button>
