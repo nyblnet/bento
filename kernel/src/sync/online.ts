@@ -16,7 +16,7 @@ import { lsGet, lsSet } from '../storage.ts'
 import { offlineEnabled } from '../update.ts'
 // Every request in the app goes through the one chokepoint (kernel/src/net.ts)
 // so the offline switch cannot be forgotten — see GHSA-5c3x-xqp6-g94r.
-import { netWebSocket, SandboxedError } from '../net.ts'
+import { netWebSocket, SandboxedError, sharedStorageOrigin } from '../net.ts'
 import { appConfig } from '../app.ts'
 
 /** the app's store, structurally — see session.ts HostStore */
@@ -168,7 +168,11 @@ export function syncHost(): string {
   let configured: string | undefined
   try { configured = appConfig().syncHost } catch { /* not configured: platform default */ }
   try {
-    return lsGet('bento-sync-url') || configured || DEFAULT_SYNC_HOST
+    // The localStorage dev override is honoured only from a real, isolated
+    // origin: on file:// (shared storage) a malicious local deck could plant it
+    // and steer this deck's collab at a hostile relay.
+    const devOverride = sharedStorageOrigin() ? '' : lsGet('bento-sync-url')
+    return devOverride || configured || DEFAULT_SYNC_HOST
   } catch {
     return configured || DEFAULT_SYNC_HOST
   }

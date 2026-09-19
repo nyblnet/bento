@@ -414,6 +414,12 @@ jobs:
         # behaviour (refusal, aborting what is already in flight, cross-tab).
         run: node scripts/test-offline.ts
 
+      - name: Origin-trust rig
+        # The release-manifest / sync / pack URL dev overrides live in
+        # localStorage, which is shared across all file:// documents — so they
+        # are honoured only from a real, isolated origin (sharedStorageOrigin).
+        run: node scripts/test-origin-overrides.ts
+
       - name: Embed element rig
         # The `embed` element (docs/DECISIONS.md 2026-08-19 shape): the static
         # view always paints through the svg sanitiser; a live sandboxed frame
