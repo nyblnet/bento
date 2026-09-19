@@ -386,6 +386,10 @@ async function load() {
     const dir = path.slice(0, path.lastIndexOf('/'))
     extra.push({ name, named: true, base: name.replace(/\.bento\.html$/i, ''), folder: dir.split('/').filter(Boolean).pop() ?? dir, rel: [name], path, handle: diskHandle(path, name), parent: null, scanned: true, dir, openedAt: at })
   }
+  // A found document with a FILE grant of its own is added, not "not added":
+  // the badge and the menu follow the grant, whichever way it was made.
+  const fileGranted = new Set((await listFileGrants().catch(() => [])).map((g) => g.path).filter(Boolean))
+  for (const d of extra) if (fileGranted.has(d.path)) d.granted = true
   // Read mtimes once, here, rather than per render: sorting needs them and the
   // grid is re-rendered on every keystroke of the search box.
   state.docs = await Promise.all([
@@ -417,7 +421,7 @@ function renderSidebar() {
 
   const host = $('folders')
   host.innerHTML = ''
-  const grantedFolders = new Set(state.docs.filter((d) => !d.scanned).map((d) => d.folder))
+  const grantedFolders = new Set(state.docs.filter((d) => !d.scanned || d.granted).map((d) => d.folder))
   for (const [folder, n] of byFolder) {
     const b = document.createElement('button')
     b.className = 'navitem'
@@ -716,7 +720,7 @@ function makeCard(d) {
       `<span>${esc(d.folder)} · ${esc(ago(d.modified))}</span>` +
       `</span><span class="more" title="More">⋯</span></span>`
     if (!d.named) badge(card, '.html', t('badgeRenamed'))
-    if (d.scanned) badge(card, t('badgeNotAdded'), t('badgeNotAddedTip'))
+    if (d.scanned && !d.granted) badge(card, t('badgeNotAdded'), t('badgeNotAddedTip'))
 
     card.addEventListener('click', (ev) => {
       if (ev.target.closest('.more')) { ev.stopPropagation(); openMenu(d, ev); return }
@@ -881,7 +885,7 @@ function openMenu(d, ev) {
   }
 
   if (d.path) item(t('menuOpen'), () => openDoc(d))
-  if (d.scanned) item(t('menuAddFolder'), () => addFolderFor(d))
+  if (d.scanned && !d.granted) item(t('menuAddFolder'), () => addFolderFor(d))
   if (!d.scanned) item(t('menuDuplicate'), async () => {
     const made = await duplicate(d)
     toast(t('duplicatedAs', made.base))
