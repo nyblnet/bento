@@ -171,6 +171,10 @@ export interface PresenceInfo {
   pub?: string
   /** capability of this copy, derived locally from its collab material */
   role?: 'owner' | 'editor' | 'viewer'
+  /** the tab is backgrounded (document.hidden) — the UI can dim the avatar
+   *  instead of treating a throttled beat as a departure. Presence only; never
+   *  in the document. Absent = present/unknown. */
+  away?: boolean
 }
 
 export interface Peer extends PresenceInfo {
@@ -310,7 +314,16 @@ function tabActor(): string {
 
 const DIFF_DEBOUNCE_MS = 90
 const HEARTBEAT_MS = 5000
-const PEER_TTL_MS = 13000
+// The TTL must clear the worst LEGITIMATE beat interval, not a multiple of the
+// ideal one. A browser throttles a backgrounded tab's timers hard — Chrome to
+// about once a MINUTE after a few minutes hidden, Safari sooner — so a
+// collaborator whose tab is in the background still beats, just every ~60 s. At
+// 13 s (2.6× the 5 s ideal) the sweep dropped them between throttled beats and
+// the next beat re-added them: everyone saw that person leave and rejoin once a
+// minute. 75 s clears the 60 s throttle with margin. A real departure is still
+// gone within 75 s (and instantly on `bye`); backgrounded peers also send
+// `away` so the UI can dim rather than wait.
+const PEER_TTL_MS = 75000
 
 export class SyncSession {
   readonly actor: string
@@ -343,6 +356,13 @@ export class SyncSession {
     store.on('doc', () => this.onLocalChange())
     for (const ev of host.presenceEvents) store.on(ev, () => this.pushPresence())
     window.addEventListener('beforeunload', () => this.broadcast({ t: 'bye', a: this.actor }))
+    // A backgrounded tab's heartbeat is throttled to ~once a minute, so beat the
+    // instant it changes visibility: on return the peer refreshes before the TTL
+    // could sweep it, and on leaving it carries `away` so peers dim promptly.
+    // visibilitychange fires unthrottled in both directions.
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => this.pushPresence())
+    }
   }
 
   // --- lifecycle -----------------------------------------------------------
@@ -738,6 +758,7 @@ export class SyncSession {
       ...(this.editingEl ? { editing: this.editingEl } : {}),
       ...(pub ? { pub } : {}),
       ...(role ? { role } : {}),
+      ...(typeof document !== 'undefined' && document.hidden ? { away: true } : {}),
     }
   }
 
