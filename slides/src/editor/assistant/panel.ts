@@ -275,6 +275,7 @@ export class AssistantPanel {
     this.clearB.title = t('Clear the conversation')
     this.clearB.addEventListener('click', () => this.clear())
     this.clearB.hidden = true
+    head.insertBefore(this.clearB, this.floatB)
 
     this.body.append(this.status, this.log, this.input, acts)
     this.root.append(head, this.body)
@@ -293,7 +294,6 @@ export class AssistantPanel {
     const s = this.status
     s.innerHTML = ''
     s.hidden = false
-    s.appendChild(this.clearB)
     const usable = this.transport && !offlineEnabled()
     this.input.disabled = !usable
     this.sendB.disabled = !usable
@@ -312,7 +312,9 @@ export class AssistantPanel {
     const settings = document.createElement('a')
     settings.href = '#'
     settings.className = 'ed-assist-settings'
-    settings.textContent = t('Settings…')
+    settings.textContent = '⚙'
+    settings.title = t('Settings…')
+    settings.setAttribute('aria-label', t('Settings…'))
     settings.addEventListener('click', (ev) => { ev.preventDefault(); void this.transport?.openSettings('assistant') })
     if (d && !d.configured) {
       s.append(el('span', '', t('The extension has no assistant endpoint yet.') + ' '), settings)
@@ -338,9 +340,8 @@ export class AssistantPanel {
     else this.routeBox.append(el('span', 'ed-assist-route', where, ), settings)
     if (d?.local) this.routeBox.title = t('on this device')
     else if (d?.host) this.routeBox.title = `${this.transport.name} · ${d.host}`
-    // nothing to say above the transcript → no empty strip (the Clear link moves into the header row's space)
-    const said = [...s.childNodes].filter((n) => n !== this.clearB).map((n) => n.textContent ?? '').join('').trim()
-    s.hidden = !said && this.clearB.hidden
+    // nothing to say above the transcript → no empty strip
+    s.hidden = !s.textContent?.trim()
   }
 
   /**

@@ -2917,7 +2917,8 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-assist-copy { position: absolute; top: 4px; right: 4px; padding: 0 5px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; opacity: 0; transition: opacity .12s; }
 .ed-assist-assistant:hover .ed-assist-copy, .ed-assist-copy:focus { opacity: 1; }
 .ed-assist-copy:hover { background: var(--chrome-2); color: var(--ink); }
-.ed-assist-clear { float: right; padding: 0 6px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.ed-assist-clear { margin-left: auto; padding: 0 6px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; cursor: pointer; }
+.ed-assist-clear + .ed-assist-pop { margin-left: 0; }
 .ed-assist-clear:hover { color: var(--ink); text-decoration: underline; }
 .ed-assist-clear[hidden] { display: none; }
 .ed-assist-live { opacity: .8; }
@@ -2941,9 +2942,11 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-assist-notice { color: var(--muted); font-size: 11px; line-height: 1.35; }
 .ed-assist-notice:empty { display: none; }
 .ed-assist-acts { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.ed-assist-routebox { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto; font-size: 11px; color: var(--muted); }
+.ed-assist-routebox { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1 1 auto; font-size: 11px; color: var(--muted); }
 .ed-assist-routebox .ed-assist-route { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ed-assist-routebox .ed-assist-settings { flex: none; }
+.ed-assist-routebox .ed-assist-model { flex: 1 1 auto; min-width: 0; max-width: 100%; }
+.ed-assist-routebox .ed-assist-settings { flex: none; font-size: 14px; line-height: 1; text-decoration: none; color: var(--muted); padding: 0 2px; }
+.ed-assist-routebox .ed-assist-settings:hover { color: var(--ink); }
 .ed-assist-status[hidden] { display: none; }
 /* the empty state: no extension */
 .ed-assist-install { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: var(--ink); }
