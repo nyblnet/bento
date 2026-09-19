@@ -35,7 +35,8 @@ const SKIP_USERS = new Set(['Shared', 'Guest', 'Public', 'Default', 'Default Use
 /** How many candidate directories one placement may try. */
 export const MAX_CANDIDATES = 240
 
-const enc = (p) => p.split('/').map(encodeURIComponent).join('/')
+// A drive letter's colon must stay a colon: `file:///C%3A/` is not a drive.
+const enc = (p) => p.split('/').map((seg) => encodeURIComponent(seg).replace(/^([A-Za-z])%3A$/, '$1:')).join('/')
 export const fileUrl = (path) => `file://${enc(path)}`
 
 /**
@@ -131,8 +132,36 @@ export async function placeFolder(dir, probe, knownPrefixes, deps) {
 // grant then means one more thing, not the first thing: that documents in
 // that folder save back in place without a prompt.
 
-/** Where documents live, under a home. Depth-limited, the noisy trees skipped. */
-export const SCAN_ROOTS = ['Documents', 'Desktop', 'Downloads', 'Library/Mobile Documents/com~apple~CloudDocs', 'Library/CloudStorage']
+/**
+ * Where documents live, under a home. The same three folders on every
+ * platform (Chrome blocks the same three as wholes everywhere), plus the
+ * places a platform moves them to: iCloud Drive and cloud mounts on macOS,
+ * OneDrive's "known folder move" on Windows — where Documents and Desktop
+ * live under OneDrive — and on Linux whatever `~/.config/user-dirs.dirs`
+ * calls them, since a German desktop has "Dokumente", not "Documents".
+ */
+export const SCAN_ROOTS = ['Documents', 'Desktop', 'Downloads', 'Library/Mobile Documents/com~apple~CloudDocs', 'Library/CloudStorage', 'OneDrive', 'OneDrive/Documents', 'OneDrive/Desktop']
+
+/** The XDG user directories a Linux home declares, as paths under it. */
+export function xdgDirs(text, home) {
+  const out = []
+  for (const m of String(text || '').matchAll(/^\s*XDG_(DOCUMENTS|DESKTOP|DOWNLOAD)_DIR\s*=\s*"([^"]*)"/gm)) {
+    let v = m[2].replace(/^\$HOME\/?/, '').replace(/\/+$/, '')
+    if (v.startsWith('/')) out.push(v)           // an absolute path elsewhere
+    else if (v) out.push(`${home}/${v}`)
+  }
+  return out
+}
+
+/** The roots to scan under one home: the usual names, plus what the platform says. */
+export async function scanRootsFor(home, deps) {
+  const roots = SCAN_ROOTS.map((r) => `${home}/${r}`)
+  try {
+    const r = await deps.fetch(fileUrl(`${home}/.config/user-dirs.dirs`))
+    if (r.ok) for (const d of xdgDirs(await r.text(), home)) if (!roots.includes(d)) roots.push(d)
+  } catch { /* not a Linux home, or no such file */ }
+  return roots
+}
 export const SCAN_DEPTH = 4
 export const SCAN_MAX = 2000
 const SKIP_DIRS = /^(node_modules|\.git|\.svn|\.hg|Library|Applications|\.Trash|\.cache|dist|build|target|__pycache__|venv|\.venv)$/i
@@ -164,7 +193,11 @@ export async function scanDisk(deps, roots = null) {
       else if (/\.bento\.html$/i.test(e.name)) out.push({ path: `${dir}/${e.name}`, name: e.name, dir })
     }
   }
-  const bases = roots ?? (await homeDirs(deps)).flatMap((h) => SCAN_ROOTS.map((r) => `${h}/${r}`))
+  let bases = roots
+  if (!bases) {
+    bases = []
+    for (const h of await homeDirs(deps)) bases.push(...await scanRootsFor(h, deps))
+  }
   for (const b of bases) await walk(b, 0)
   return out
 }

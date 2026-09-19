@@ -178,7 +178,7 @@ console.log('\n— the scan: documents found without a grant')
   ].join('|'), `scanDisk: every .bento.html under Documents/Desktop/Downloads/iCloud, nested, nothing else (${found.length})`)
   ok(!paths.some((p) => p.includes('node_modules') || p.includes('/Movies/') || p.startsWith('/Users/Shared')), 'scanDisk: noisy trees, other folders and non-home users are skipped')
   ok(found[0].name.endsWith('.bento.html') && found.every((f) => f.dir && !f.dir.endsWith('/')), 'scanDisk: name and directory for each')
-  ok(!d.fetched.some((p) => !p.endsWith('/')), 'scanDisk: listings only — no document bytes are read')
+  ok(!d.fetched.some((p) => p.endsWith('.bento.html')), 'scanDisk: listings only — no document bytes are read')
   const none = await place.scanDisk({ fetch: async () => ({ ok: false }) })
   ok(none.length === 0, 'scanDisk: a disk that answers nothing → nothing, no throw')
   const deep = disk(Object.fromEntries(Array.from({ length: 3 }, (_, i) => [`/Users/u/Documents/${'d/'.repeat(place.SCAN_DEPTH + 2)}f${i}.bento.html`, 'x'])))
@@ -186,6 +186,30 @@ console.log('\n— the scan: documents found without a grant')
   const home = readFileSync(join(SRC, 'src/home.js'), 'utf8')
   ok(/scannedDocs\(/.test(home) && /scanned: true/.test(home) && /addFolderFor/.test(home), 'home.js lists found documents beside granted ones and offers the grant per folder')
   ok(/prefixFor\(dir, d\.path\)/.test(home), 'a grant made for a found document is checked against that document\'s path before it is kept')
+}
+
+console.log('\n— Windows and Linux homes')
+{
+  // Windows: a drive-letter home, Documents moved into OneDrive, listings under C:/Users
+  const d = disk({
+    '/C:/Users/Andy/OneDrive/Documents/Decks/Q3.bento.html': 'A',
+    '/C:/Users/Andy/Desktop/D.bento.html': 'B',
+    '/C:/Users/Public/x.bento.html': 'no',
+    '/C:/Windows/System32/y.bento.html': 'no',
+  })
+  const found = (await place.scanDisk({ fetch: d.fetch })).map((f) => f.path).sort()
+  ok(found.join('|') === '/C:/Users/Andy/Desktop/D.bento.html|/C:/Users/Andy/OneDrive/Documents/Decks/Q3.bento.html', 'Windows: C:/Users/<name> homes, OneDrive known-folder move, Public and Windows skipped')
+  ok(place.fileUrl('/C:/Users/Andy/Desktop/D.bento.html') === 'file:///C:/Users/Andy/Desktop/D.bento.html', 'Windows: the drive letter survives in the file URL')
+  // Linux: localized XDG names from user-dirs.dirs, a /home listing
+  const l = disk({
+    '/home/anna/.config/user-dirs.dirs': 'XDG_DESKTOP_DIR="$HOME/Schreibtisch"\nXDG_DOWNLOAD_DIR="$HOME/Downloads"\nXDG_DOCUMENTS_DIR="$HOME/Dokumente"\nXDG_MUSIC_DIR="$HOME/Musik"\n',
+    '/home/anna/Dokumente/Vortrag.bento.html': 'A',
+    '/home/anna/Schreibtisch/S.bento.html': 'B',
+    '/home/anna/Musik/m.bento.html': 'no',
+  })
+  const lf = (await place.scanDisk({ fetch: l.fetch })).map((f) => f.path).sort()
+  ok(lf.join('|') === '/home/anna/Dokumente/Vortrag.bento.html|/home/anna/Schreibtisch/S.bento.html', 'Linux: the XDG names the home declares (Dokumente, Schreibtisch), music not scanned')
+  ok(place.xdgDirs('XDG_DOCUMENTS_DIR="/mnt/data/docs"\nXDG_DESKTOP_DIR="$HOME/Desktop/"', '/home/u').join('|') === '/mnt/data/docs|/home/u/Desktop', 'xdgDirs: absolute paths kept, $HOME expanded, trailing slash dropped')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
