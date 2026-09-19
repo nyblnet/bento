@@ -532,5 +532,41 @@
   },
   "defaultFolder": {
     "message": "nye dokumenter havner her"
+  },
+  "fgTitle": {
+    "message": "Gem “$1” på stedet fra nu af?"
+  },
+  "fgTitleLapsed": {
+    "message": "Forbind “$1” igen?"
+  },
+  "fgLead": {
+    "message": "bento/home beholder tilladelsen til netop denne fil, så hver gemning skriver direkte til den. Vælg den samme fil i næste dialog."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home har allerede denne fil; browseren vil have dig til at bekræfte den igen."
+  },
+  "fgChoose": {
+    "message": "Vælg filen…"
+  },
+  "fgReconnect": {
+    "message": "Forbind igen"
+  },
+  "fgOnce": {
+    "message": "Kun denne gang"
+  },
+  "fgNotSame": {
+    "message": "Det er ikke den fil, der spurgte (“$1”). Vælg den, eller luk dette vindue."
+  },
+  "fgDenied": {
+    "message": "Tilladelsen blev ikke givet."
+  },
+  "droppedGranted": {
+    "message": "Tilføjet: $1 mapper, $2 filer."
+  },
+  "setFilesTitle": {
+    "message": "Filer"
+  },
+  "setFilesSub": {
+    "message": "Dokumenter uden for enhver tilføjet mappe, der selv gemmer på stedet — valgt én gang, eller trukket ind i biblioteket."
   }
 }

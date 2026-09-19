@@ -565,5 +565,41 @@
   },
   "defaultFolder": {
     "message": "les nouveaux documents vont ici"
+  },
+  "fgTitle": {
+    "message": "Enregistrer « $1 » sur place désormais ?"
+  },
+  "fgTitleLapsed": {
+    "message": "Reconnecter « $1 » ?"
+  },
+  "fgLead": {
+    "message": "bento/home garde l’autorisation pour ce seul fichier : chaque enregistrement y écrit directement. Choisissez le même fichier dans le prochain dialogue."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home a déjà ce fichier ; le navigateur vous demande de le confirmer à nouveau."
+  },
+  "fgChoose": {
+    "message": "Choisir le fichier…"
+  },
+  "fgReconnect": {
+    "message": "Reconnecter"
+  },
+  "fgOnce": {
+    "message": "Juste cette fois"
+  },
+  "fgNotSame": {
+    "message": "Ce n’est pas le fichier qui a demandé (« $1 »). Choisissez celui-là, ou fermez cette fenêtre."
+  },
+  "fgDenied": {
+    "message": "L’autorisation n’a pas été accordée."
+  },
+  "droppedGranted": {
+    "message": "Ajoutés : $1 dossiers, $2 fichiers."
+  },
+  "setFilesTitle": {
+    "message": "Fichiers"
+  },
+  "setFilesSub": {
+    "message": "Documents hors de tout dossier ajouté qui s’enregistrent sur place par eux-mêmes — choisis une fois, ou déposés dans la bibliothèque."
   }
 }

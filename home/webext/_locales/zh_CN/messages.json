@@ -565,5 +565,41 @@
   },
   "defaultFolder": {
     "message": "新文档放在这里"
+  },
+  "fgTitle": {
+    "message": "从现在起就地保存“$1”？"
+  },
+  "fgTitleLapsed": {
+    "message": "重新连接“$1”？"
+  },
+  "fgLead": {
+    "message": "bento/home 只保留这一个文件的权限，此后每次保存都直接写回该文件。请在接下来的对话框中选择同一个文件。"
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home 已经有这个文件；浏览器需要您再次确认。"
+  },
+  "fgChoose": {
+    "message": "选择文件……"
+  },
+  "fgReconnect": {
+    "message": "重新连接"
+  },
+  "fgOnce": {
+    "message": "仅此一次"
+  },
+  "fgNotSame": {
+    "message": "那不是发出请求的文件（“$1”）。请选择那个文件，或关闭此窗口。"
+  },
+  "fgDenied": {
+    "message": "未授予权限。"
+  },
+  "droppedGranted": {
+    "message": "已添加：$1 个文件夹，$2 个文件。"
+  },
+  "setFilesTitle": {
+    "message": "文件"
+  },
+  "setFilesSub": {
+    "message": "不在任何已添加文件夹中、但可自行就地保存的文档——选择过一次，或拖放到资料库中。"
   }
 }

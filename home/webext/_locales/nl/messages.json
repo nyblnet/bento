@@ -532,5 +532,41 @@
   },
   "defaultFolder": {
     "message": "nieuwe documenten komen hier"
+  },
+  "fgTitle": {
+    "message": "“$1” voortaan ter plekke opslaan?"
+  },
+  "fgTitleLapsed": {
+    "message": "“$1” opnieuw verbinden?"
+  },
+  "fgLead": {
+    "message": "bento/home houdt de toestemming voor dit ene bestand, zodat elke keer opslaan er direct in schrijft. Kies hetzelfde bestand in het volgende venster."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home heeft dit bestand al; de browser wil dat u het opnieuw bevestigt."
+  },
+  "fgChoose": {
+    "message": "Bestand kiezen…"
+  },
+  "fgReconnect": {
+    "message": "Opnieuw verbinden"
+  },
+  "fgOnce": {
+    "message": "Alleen deze keer"
+  },
+  "fgNotSame": {
+    "message": "Dat is niet het bestand dat vroeg (“$1”). Kies dat, of sluit dit venster."
+  },
+  "fgDenied": {
+    "message": "Toestemming is niet verleend."
+  },
+  "droppedGranted": {
+    "message": "Toegevoegd: $1 mappen, $2 bestanden."
+  },
+  "setFilesTitle": {
+    "message": "Bestanden"
+  },
+  "setFilesSub": {
+    "message": "Documenten buiten elke toegevoegde map die zelf ter plekke opslaan — één keer gekozen, of in de bibliotheek gesleept."
   }
 }

@@ -532,5 +532,41 @@
   },
   "defaultFolder": {
     "message": "uudet asiakirjat tulevat tänne"
+  },
+  "fgTitle": {
+    "message": "Tallennetaanko ”$1” tästä lähtien paikalleen?"
+  },
+  "fgTitleLapsed": {
+    "message": "Yhdistetäänkö ”$1” uudelleen?"
+  },
+  "fgLead": {
+    "message": "bento/home säilyttää luvan juuri tälle tiedostolle, joten jokainen tallennus kirjoittaa suoraan siihen. Valitse sama tiedosto seuraavassa ikkunassa."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home tuntee tämän tiedoston jo; selain haluaa, että vahvistat sen uudelleen."
+  },
+  "fgChoose": {
+    "message": "Valitse tiedosto…"
+  },
+  "fgReconnect": {
+    "message": "Yhdistä uudelleen"
+  },
+  "fgOnce": {
+    "message": "Vain tämän kerran"
+  },
+  "fgNotSame": {
+    "message": "Tuo ei ole tiedosto, joka kysyi (”$1”). Valitse se, tai sulje tämä ikkuna."
+  },
+  "fgDenied": {
+    "message": "Lupaa ei annettu."
+  },
+  "droppedGranted": {
+    "message": "Lisätty: $1 kansiota, $2 tiedostoa."
+  },
+  "setFilesTitle": {
+    "message": "Tiedostot"
+  },
+  "setFilesSub": {
+    "message": "Lisättyjen kansioiden ulkopuoliset asiakirjat, jotka tallentuvat paikalleen itsestään — kerran valitut tai kirjastoon pudotetut."
   }
 }

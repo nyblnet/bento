@@ -565,5 +565,41 @@
   },
   "defaultFolder": {
     "message": "新しいドキュメントはここに入ります"
+  },
+  "fgTitle": {
+    "message": "今後「$1」をその場に保存しますか？"
+  },
+  "fgTitleLapsed": {
+    "message": "「$1」を再接続しますか？"
+  },
+  "fgLead": {
+    "message": "bento/home はこのファイル一つの許可を保持するので、以降の保存は直接このファイルに書き込まれます。次のダイアログで同じファイルを選んでください。"
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home はこのファイルをすでに知っています。ブラウザーが再確認を求めています。"
+  },
+  "fgChoose": {
+    "message": "ファイルを選択…"
+  },
+  "fgReconnect": {
+    "message": "再接続"
+  },
+  "fgOnce": {
+    "message": "今回だけ"
+  },
+  "fgNotSame": {
+    "message": "それは要求したファイル（「$1」）ではありません。そのファイルを選ぶか、このウィンドウを閉じてください。"
+  },
+  "fgDenied": {
+    "message": "許可されませんでした。"
+  },
+  "droppedGranted": {
+    "message": "追加しました: フォルダー $1、ファイル $2。"
+  },
+  "setFilesTitle": {
+    "message": "ファイル"
+  },
+  "setFilesSub": {
+    "message": "追加したどのフォルダーにも属さないが、単独でその場に保存されるドキュメント。一度選んだもの、またはライブラリにドロップしたもの。"
   }
 }

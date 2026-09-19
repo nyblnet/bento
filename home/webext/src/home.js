@@ -17,6 +17,7 @@ import { listDocuments, describe, newDocument, duplicate, rename, APPS } from '.
 import { prefixFor } from './route.js'
 import { learnPrefix, prefixes, GRANT, get, put } from './db.js'
 import { placeFolder, scanDisk, fileUrl } from './place.js'
+import { listFileGrants, addFileGrant, dropFileGrant, handleIsPath } from './filegrant.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
   from './i18n.js'
@@ -1205,6 +1206,56 @@ async function createBentoFolder() {
   return dir
 }
 
+/**
+ * DROP TO GRANT. A file or folder dragged from the Finder onto the library
+ * yields a real handle with no dialog at all (`getAsFileSystemHandle`) —
+ * the cheapest grant there is. A folder becomes a folder grant; a document
+ * becomes a FILE grant, kept in the extension's own storage, and matched to
+ * its path when the scan knows a same-named file with the same bytes. Chrome's
+ * blocklist still applies to what is dropped: Documents itself cannot be
+ * dropped, a folder inside it can.
+ */
+async function dropToGrant(ev) {
+  const items = [...(ev.dataTransfer?.items ?? [])].filter((i) => i.kind === 'file')
+  if (!items.length) return
+  ev.preventDefault()
+  let folders = 0
+  let files = 0
+  for (const item of items) {
+    let handle = null
+    try { handle = await item.getAsFileSystemHandle?.() } catch { handle = null }
+    if (!handle) continue
+    try {
+      if (handle.kind === 'directory') {
+        await adoptGrant(handle)
+        folders++
+      } else if (/\.bento\.html$/i.test(handle.name)) {
+        if (await handle.requestPermission({ mode: 'readwrite' }) !== 'granted') continue
+        // its path, when a scanned file of that name is the same bytes
+        let path = null
+        for (const d of await scannedDocs()) {
+          if (d.name === handle.name && await handleIsPath(handle, d.path)) { path = d.path; break }
+        }
+        await addFileGrant(handle, path)
+        files++
+      }
+    } catch (e) { toast(e.message) }
+  }
+  if (folders || files) {
+    toast(t('droppedGranted', folders, files))
+    await load()
+    await renderNotice()
+  }
+}
+{
+  const scroll = document.querySelector('.scroll')
+  scroll.addEventListener('dragover', (ev) => {
+    if ([...(ev.dataTransfer?.items ?? [])].some((i) => i.kind === 'file')) { ev.preventDefault(); scroll.classList.add('dropping') }
+  })
+  scroll.addEventListener('dragleave', () => scroll.classList.remove('dropping'))
+  scroll.addEventListener('drop', (ev) => { scroll.classList.remove('dropping'); void dropToGrant(ev) })
+}
+
 /** The grant new documents go to: the one chosen as default, else the first. */
 async function defaultGrant(grants) {
   const name = await get(GRANT, 'defaultFolder')
@@ -1431,6 +1482,34 @@ async function renderSettings() {
   make.title = t('bentoFolderTip')
   make.onclick = () => createBentoFolder()
   folders.appendChild(make)
+
+  // --- files saving in place on their own (filegrant.js)
+  const fileGrants = await listFileGrants().catch(() => [])
+  if (fileGrants.length) {
+    const filesSec = section(t('setFilesTitle'), t('setFilesSub'))
+    for (const g of fileGrants) {
+      let perm = 'denied'
+      try { perm = await g.handle.queryPermission({ mode: 'readwrite' }) } catch { /* gone */ }
+      const granted = perm === 'granted'
+      const row = document.createElement('div')
+      row.className = 'row'
+      row.innerHTML = `<span class="dot ${granted ? 'ok' : 'bad'}"></span><b>${esc(g.name)}</b>`
+        + `<span class="note path">${esc(g.path ?? '')}${g.path ? ' · ' : ''}${granted ? t('savesInPlace') : t('needsReconnecting')}</span>`
+      if (!granted) {
+        const renew = document.createElement('button')
+        renew.className = 'btn'
+        renew.textContent = t('reconnect')
+        renew.onclick = () => act(async () => { await g.handle.requestPermission({ mode: 'readwrite' }) })
+        row.appendChild(renew)
+      }
+      const drop = document.createElement('button')
+      drop.className = 'btn'
+      drop.textContent = t('remove')
+      drop.onclick = () => act(async () => { await dropFileGrant(g.key) })
+      row.appendChild(drop)
+      filesSec.appendChild(row)
+    }
+  }
 
   // --- the language, which Chrome will not let you change on macOS
   //

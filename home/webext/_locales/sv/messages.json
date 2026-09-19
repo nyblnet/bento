@@ -532,5 +532,41 @@
   },
   "defaultFolder": {
     "message": "nya dokument hamnar här"
+  },
+  "fgTitle": {
+    "message": "Spara ”$1” på plats från och med nu?"
+  },
+  "fgTitleLapsed": {
+    "message": "Återanslut ”$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home behåller tillståndet för just den här filen, så varje sparning skriver direkt till den. Välj samma fil i nästa dialog."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home har redan den här filen; webbläsaren vill att du bekräftar den igen."
+  },
+  "fgChoose": {
+    "message": "Välj filen…"
+  },
+  "fgReconnect": {
+    "message": "Återanslut"
+  },
+  "fgOnce": {
+    "message": "Bara den här gången"
+  },
+  "fgNotSame": {
+    "message": "Det är inte filen som frågade (”$1”). Välj den, eller stäng det här fönstret."
+  },
+  "fgDenied": {
+    "message": "Tillståndet gavs inte."
+  },
+  "droppedGranted": {
+    "message": "Tillagt: $1 mappar, $2 filer."
+  },
+  "setFilesTitle": {
+    "message": "Filer"
+  },
+  "setFilesSub": {
+    "message": "Dokument utanför varje tillagd mapp som sparar på plats på egen hand — valda en gång, eller släppta i biblioteket."
   }
 }

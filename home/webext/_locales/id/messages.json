@@ -532,5 +532,41 @@
   },
   "defaultFolder": {
     "message": "dokumen baru masuk ke sini"
+  },
+  "fgTitle": {
+    "message": "Simpan “$1” di tempat mulai sekarang?"
+  },
+  "fgTitleLapsed": {
+    "message": "Hubungkan kembali “$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home menyimpan izin hanya untuk berkas ini, sehingga setiap penyimpanan menulis langsung ke sana. Pilih berkas yang sama di dialog berikutnya."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home sudah memiliki berkas ini; peramban ingin Anda mengonfirmasinya lagi."
+  },
+  "fgChoose": {
+    "message": "Pilih berkas…"
+  },
+  "fgReconnect": {
+    "message": "Hubungkan kembali"
+  },
+  "fgOnce": {
+    "message": "Hanya kali ini"
+  },
+  "fgNotSame": {
+    "message": "Itu bukan berkas yang meminta (“$1”). Pilih yang itu, atau tutup jendela ini."
+  },
+  "fgDenied": {
+    "message": "Izin tidak diberikan."
+  },
+  "droppedGranted": {
+    "message": "Ditambahkan: $1 folder, $2 berkas."
+  },
+  "setFilesTitle": {
+    "message": "Berkas"
+  },
+  "setFilesSub": {
+    "message": "Dokumen di luar folder mana pun yang ditambahkan, yang tersimpan di tempat dengan sendirinya — dipilih sekali, atau dijatuhkan ke pustaka."
   }
 }

@@ -8,7 +8,9 @@
     "contextMenus",
     "notifications",
     "sidePanel",
-    "storage"
+    "storage",
+    "downloads",
+    "downloads.ui"
   ],
   "optional_permissions": [
     "history"

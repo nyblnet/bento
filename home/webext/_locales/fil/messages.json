@@ -532,5 +532,41 @@
   },
   "defaultFolder": {
     "message": "dito pumupunta ang mga bagong dokumento"
+  },
+  "fgTitle": {
+    "message": "I-save ang “$1” sa lugar mula ngayon?"
+  },
+  "fgTitleLapsed": {
+    "message": "Ikonekta muli ang “$1”?"
+  },
+  "fgLead": {
+    "message": "Pinananatili ng bento/home ang pahintulot para sa isang file na ito, kaya bawat pag-save ay direktang sumusulat dito. Piliin ang parehong file sa susunod na dialog."
+  },
+  "fgLeadLapsed": {
+    "message": "Nasa bento/home na ang file na ito; gusto ng browser na kumpirmahin mo itong muli."
+  },
+  "fgChoose": {
+    "message": "Piliin ang file…"
+  },
+  "fgReconnect": {
+    "message": "Ikonekta muli"
+  },
+  "fgOnce": {
+    "message": "Ngayon lang"
+  },
+  "fgNotSame": {
+    "message": "Hindi iyan ang file na humiling (“$1”). Piliin iyon, o isara ang window na ito."
+  },
+  "fgDenied": {
+    "message": "Hindi ibinigay ang pahintulot."
+  },
+  "droppedGranted": {
+    "message": "Naidagdag: $1 folder, $2 file."
+  },
+  "setFilesTitle": {
+    "message": "Mga file"
+  },
+  "setFilesSub": {
+    "message": "Mga dokumentong nasa labas ng anumang idinagdag na folder na kusang nagse-save sa lugar — napili nang isang beses, o inihulog sa library."
   }
 }

@@ -565,5 +565,41 @@
   },
   "defaultFolder": {
     "message": "新文件放在這裡"
+  },
+  "fgTitle": {
+    "message": "從現在起就地儲存「$1」？"
+  },
+  "fgTitleLapsed": {
+    "message": "重新連線「$1」？"
+  },
+  "fgLead": {
+    "message": "bento/home 只保留這一個檔案的權限，此後每次儲存都直接寫回該檔案。請在接下來的對話框中選擇同一個檔案。"
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home 已經有這個檔案；瀏覽器需要您再次確認。"
+  },
+  "fgChoose": {
+    "message": "選擇檔案……"
+  },
+  "fgReconnect": {
+    "message": "重新連線"
+  },
+  "fgOnce": {
+    "message": "僅此一次"
+  },
+  "fgNotSame": {
+    "message": "那不是提出要求的檔案（「$1」）。請選擇那個檔案，或關閉此視窗。"
+  },
+  "fgDenied": {
+    "message": "未授予權限。"
+  },
+  "droppedGranted": {
+    "message": "已加入：$1 個資料夾，$2 個檔案。"
+  },
+  "setFilesTitle": {
+    "message": "檔案"
+  },
+  "setFilesSub": {
+    "message": "不在任何已加入資料夾中、但可自行就地儲存的文件——選擇過一次，或拖放到資料庫中。"
   }
 }

@@ -532,5 +532,41 @@
   },
   "defaultFolder": {
     "message": "yeni belgeler buraya gelir"
+  },
+  "fgTitle": {
+    "message": "“$1” bundan sonra yerinde kaydedilsin mi?"
+  },
+  "fgTitleLapsed": {
+    "message": "“$1” yeniden bağlansın mı?"
+  },
+  "fgLead": {
+    "message": "bento/home yalnızca bu dosya için izni saklar; böylece her kayıt doğrudan ona yazılır. Sonraki iletişim kutusunda aynı dosyayı seçin."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home bu dosyaya zaten sahip; tarayıcı yeniden onaylamanızı istiyor."
+  },
+  "fgChoose": {
+    "message": "Dosyayı seç…"
+  },
+  "fgReconnect": {
+    "message": "Yeniden bağla"
+  },
+  "fgOnce": {
+    "message": "Yalnızca bu seferlik"
+  },
+  "fgNotSame": {
+    "message": "Bu, soran dosya değil (“$1”). Onu seçin ya da bu pencereyi kapatın."
+  },
+  "fgDenied": {
+    "message": "İzin verilmedi."
+  },
+  "droppedGranted": {
+    "message": "Eklendi: $1 klasör, $2 dosya."
+  },
+  "setFilesTitle": {
+    "message": "Dosyalar"
+  },
+  "setFilesSub": {
+    "message": "Eklenen klasörlerin dışındaki, kendi başına yerinde kaydedilen belgeler — bir kez seçilmiş ya da kitaplığa bırakılmış."
   }
 }

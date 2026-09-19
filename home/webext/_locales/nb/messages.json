@@ -532,5 +532,41 @@
   },
   "defaultFolder": {
     "message": "nye dokumenter havner her"
+  },
+  "fgTitle": {
+    "message": "Lagre «$1» på stedet fra nå av?"
+  },
+  "fgTitleLapsed": {
+    "message": "Koble til «$1» igjen?"
+  },
+  "fgLead": {
+    "message": "bento/home beholder tillatelsen for akkurat denne filen, så hver lagring skriver rett til den. Velg den samme filen i neste dialog."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home har allerede denne filen; nettleseren vil at du bekrefter den igjen."
+  },
+  "fgChoose": {
+    "message": "Velg filen …"
+  },
+  "fgReconnect": {
+    "message": "Koble til igjen"
+  },
+  "fgOnce": {
+    "message": "Bare denne gangen"
+  },
+  "fgNotSame": {
+    "message": "Det er ikke filen som spurte («$1»). Velg den, eller lukk dette vinduet."
+  },
+  "fgDenied": {
+    "message": "Tillatelsen ble ikke gitt."
+  },
+  "droppedGranted": {
+    "message": "Lagt til: $1 mapper, $2 filer."
+  },
+  "setFilesTitle": {
+    "message": "Filer"
+  },
+  "setFilesSub": {
+    "message": "Dokumenter utenfor enhver lagt-til mappe som lagrer på stedet på egen hånd — valgt én gang, eller sluppet i biblioteket."
   }
 }

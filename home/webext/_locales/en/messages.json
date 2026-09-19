@@ -606,5 +606,53 @@
   "defaultFolder": {
     "message": "new documents go here",
     "description": "Settings folder row: marks the folder new documents are created in."
+  },
+  "fgTitle": {
+    "message": "Save “$1” in place from now on?",
+    "description": "Offer window title. $1 file name."
+  },
+  "fgTitleLapsed": {
+    "message": "Reconnect “$1”?",
+    "description": "Offer window title when the extension already holds the file but its permission lapsed. $1 file name."
+  },
+  "fgLead": {
+    "message": "bento/home keeps permission for this one file, so every save writes straight back to it. Pick the same file in the next dialog.",
+    "description": "Offer window body."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home already has this file; the browser wants you to confirm it again.",
+    "description": "Offer window body when reconnecting."
+  },
+  "fgChoose": {
+    "message": "Choose the file…",
+    "description": "Offer window: opens the OS file picker."
+  },
+  "fgReconnect": {
+    "message": "Reconnect",
+    "description": "Offer window: renews a lapsed permission."
+  },
+  "fgOnce": {
+    "message": "Just this once",
+    "description": "Offer window: decline; the document's own Save dialog follows."
+  },
+  "fgNotSame": {
+    "message": "That is not the file that asked (“$1”). Pick that one, or close this window.",
+    "description": "Offer window: the picked file is not the one that asked. $1 expected file name."
+  },
+  "fgDenied": {
+    "message": "Permission was not granted.",
+    "description": "Offer window: the permission prompt was refused."
+  },
+  "droppedGranted": {
+    "message": "Added: $1 folders, $2 files.",
+    "description": "Toast after files/folders were dropped onto the library. $1 folders, $2 files (numbers)."
+  },
+  "setFilesTitle": {
+    "message": "Files",
+    "description": "Settings section: per-file grants."
+  },
+  "setFilesSub": {
+    "message": "Documents outside any added folder that save in place on their own — picked once, or dropped onto the library.",
+    "description": "Settings section explanation."
   }
 }

@@ -532,5 +532,41 @@
   },
   "defaultFolder": {
     "message": "tài liệu mới vào đây"
+  },
+  "fgTitle": {
+    "message": "Lưu “$1” tại chỗ từ nay về sau?"
+  },
+  "fgTitleLapsed": {
+    "message": "Kết nối lại “$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home giữ quyền cho riêng tệp này, nên mỗi lần lưu sẽ ghi thẳng vào nó. Hãy chọn đúng tệp đó trong hộp thoại tiếp theo."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home đã có tệp này; trình duyệt muốn bạn xác nhận lại."
+  },
+  "fgChoose": {
+    "message": "Chọn tệp…"
+  },
+  "fgReconnect": {
+    "message": "Kết nối lại"
+  },
+  "fgOnce": {
+    "message": "Chỉ lần này"
+  },
+  "fgNotSame": {
+    "message": "Đó không phải tệp đã yêu cầu (“$1”). Hãy chọn tệp đó, hoặc đóng cửa sổ này."
+  },
+  "fgDenied": {
+    "message": "Quyền không được cấp."
+  },
+  "droppedGranted": {
+    "message": "Đã thêm: $1 thư mục, $2 tệp."
+  },
+  "setFilesTitle": {
+    "message": "Tệp"
+  },
+  "setFilesSub": {
+    "message": "Tài liệu nằm ngoài mọi thư mục đã thêm nhưng tự lưu tại chỗ — được chọn một lần, hoặc kéo thả vào thư viện."
   }
 }

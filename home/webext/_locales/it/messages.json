@@ -565,5 +565,41 @@
   },
   "defaultFolder": {
     "message": "i nuovi documenti vanno qui"
+  },
+  "fgTitle": {
+    "message": "Salvare «$1» sul posto d’ora in poi?"
+  },
+  "fgTitleLapsed": {
+    "message": "Ricollegare «$1»?"
+  },
+  "fgLead": {
+    "message": "bento/home conserva il permesso per questo solo file, così ogni salvataggio scrive direttamente lì. Scegli lo stesso file nella prossima finestra."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home ha già questo file; il browser vuole che lo confermi di nuovo."
+  },
+  "fgChoose": {
+    "message": "Scegli il file…"
+  },
+  "fgReconnect": {
+    "message": "Ricollega"
+  },
+  "fgOnce": {
+    "message": "Solo questa volta"
+  },
+  "fgNotSame": {
+    "message": "Non è il file che ha chiesto («$1»). Scegli quello, o chiudi questa finestra."
+  },
+  "fgDenied": {
+    "message": "Il permesso non è stato concesso."
+  },
+  "droppedGranted": {
+    "message": "Aggiunti: $1 cartelle, $2 file."
+  },
+  "setFilesTitle": {
+    "message": "File"
+  },
+  "setFilesSub": {
+    "message": "Documenti fuori da ogni cartella aggiunta che si salvano sul posto da soli: scelti una volta, o trascinati nella libreria."
   }
 }

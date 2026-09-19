@@ -565,5 +565,41 @@
   },
   "defaultFolder": {
     "message": "neue Dokumente kommen hierher"
+  },
+  "fgTitle": {
+    "message": "„$1“ ab jetzt direkt speichern?"
+  },
+  "fgTitleLapsed": {
+    "message": "„$1“ wieder verbinden?"
+  },
+  "fgLead": {
+    "message": "bento/home behält die Berechtigung für genau diese Datei, sodass jedes Speichern direkt hineinschreibt. Wählen Sie im nächsten Dialog dieselbe Datei."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home hat diese Datei bereits; der Browser möchte, dass Sie sie erneut bestätigen."
+  },
+  "fgChoose": {
+    "message": "Datei wählen …"
+  },
+  "fgReconnect": {
+    "message": "Wieder verbinden"
+  },
+  "fgOnce": {
+    "message": "Nur dieses Mal"
+  },
+  "fgNotSame": {
+    "message": "Das ist nicht die Datei, die gefragt hat („$1“). Wählen Sie diese, oder schließen Sie das Fenster."
+  },
+  "fgDenied": {
+    "message": "Die Berechtigung wurde nicht erteilt."
+  },
+  "droppedGranted": {
+    "message": "Hinzugefügt: $1 Ordner, $2 Dateien."
+  },
+  "setFilesTitle": {
+    "message": "Dateien"
+  },
+  "setFilesSub": {
+    "message": "Dokumente außerhalb jedes hinzugefügten Ordners, die für sich direkt speichern — einmal gewählt oder in die Bibliothek gezogen."
   }
 }

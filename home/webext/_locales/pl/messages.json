@@ -532,5 +532,41 @@
   },
   "defaultFolder": {
     "message": "nowe dokumenty trafiają tutaj"
+  },
+  "fgTitle": {
+    "message": "Zapisywać „$1” w miejscu od teraz?"
+  },
+  "fgTitleLapsed": {
+    "message": "Połączyć ponownie „$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home zachowuje uprawnienie do tego jednego pliku, więc każdy zapis trafia prosto do niego. W następnym oknie wybierz ten sam plik."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home ma już ten plik; przeglądarka chce, abyś potwierdził go ponownie."
+  },
+  "fgChoose": {
+    "message": "Wybierz plik…"
+  },
+  "fgReconnect": {
+    "message": "Połącz ponownie"
+  },
+  "fgOnce": {
+    "message": "Tylko tym razem"
+  },
+  "fgNotSame": {
+    "message": "To nie jest plik, który pytał („$1”). Wybierz tamten albo zamknij to okno."
+  },
+  "fgDenied": {
+    "message": "Uprawnienie nie zostało przyznane."
+  },
+  "droppedGranted": {
+    "message": "Dodano: $1 folderów, $2 plików."
+  },
+  "setFilesTitle": {
+    "message": "Pliki"
+  },
+  "setFilesSub": {
+    "message": "Dokumenty spoza dodanych folderów, które same zapisują się w miejscu — wybrane raz lub upuszczone w bibliotece."
   }
 }

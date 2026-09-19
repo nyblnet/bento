@@ -532,5 +532,41 @@
   },
   "defaultFolder": {
     "message": "dokumen baharu masuk ke sini"
+  },
+  "fgTitle": {
+    "message": "Simpan “$1” di tempat mulai sekarang?"
+  },
+  "fgTitleLapsed": {
+    "message": "Sambung semula “$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home menyimpan kebenaran untuk fail ini sahaja, jadi setiap simpanan menulis terus kepadanya. Pilih fail yang sama dalam dialog seterusnya."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home sudah ada fail ini; pelayar mahu anda mengesahkannya sekali lagi."
+  },
+  "fgChoose": {
+    "message": "Pilih fail…"
+  },
+  "fgReconnect": {
+    "message": "Sambung semula"
+  },
+  "fgOnce": {
+    "message": "Sekali ini sahaja"
+  },
+  "fgNotSame": {
+    "message": "Itu bukan fail yang bertanya (“$1”). Pilih yang itu, atau tutup tetingkap ini."
+  },
+  "fgDenied": {
+    "message": "Kebenaran tidak diberikan."
+  },
+  "droppedGranted": {
+    "message": "Ditambah: $1 folder, $2 fail."
+  },
+  "setFilesTitle": {
+    "message": "Fail"
+  },
+  "setFilesSub": {
+    "message": "Dokumen di luar mana-mana folder yang ditambah yang menyimpan di tempat dengan sendirinya — dipilih sekali, atau dijatuhkan ke perpustakaan."
   }
 }

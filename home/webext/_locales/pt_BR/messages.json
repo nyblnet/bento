@@ -565,5 +565,41 @@
   },
   "defaultFolder": {
     "message": "novos documentos vão aqui"
+  },
+  "fgTitle": {
+    "message": "Salvar “$1” no lugar de agora em diante?"
+  },
+  "fgTitleLapsed": {
+    "message": "Reconectar “$1”?"
+  },
+  "fgLead": {
+    "message": "O bento/home guarda a permissão só para este arquivo, então cada salvamento escreve direto nele. Escolha o mesmo arquivo na próxima janela."
+  },
+  "fgLeadLapsed": {
+    "message": "O bento/home já tem este arquivo; o navegador quer que você o confirme de novo."
+  },
+  "fgChoose": {
+    "message": "Escolher o arquivo…"
+  },
+  "fgReconnect": {
+    "message": "Reconectar"
+  },
+  "fgOnce": {
+    "message": "Só desta vez"
+  },
+  "fgNotSame": {
+    "message": "Esse não é o arquivo que pediu (“$1”). Escolha esse, ou feche esta janela."
+  },
+  "fgDenied": {
+    "message": "A permissão não foi concedida."
+  },
+  "droppedGranted": {
+    "message": "Adicionados: $1 pastas, $2 arquivos."
+  },
+  "setFilesTitle": {
+    "message": "Arquivos"
+  },
+  "setFilesSub": {
+    "message": "Documentos fora de qualquer pasta adicionada que salvam no lugar por conta própria — escolhidos uma vez, ou arrastados para a biblioteca."
   }
 }
