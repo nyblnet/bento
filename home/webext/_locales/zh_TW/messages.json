@@ -529,5 +529,26 @@
   },
   "recentTitle": {
     "message": "最近編輯"
+  },
+  "badgeNotAdded": {
+    "message": "未加入"
+  },
+  "badgeNotAddedTip": {
+    "message": "在磁碟上找到。可以開啟，但儲存時會詢問位置——加入其所在資料夾即可就地儲存。"
+  },
+  "folderFoundTip": {
+    "message": "在磁碟上找到但未加入：其中的文件可以開啟，但儲存時會詢問位置。"
+  },
+  "menuAddFolder": {
+    "message": "加入其所在資料夾以便就地儲存……"
+  },
+  "pickThisFolder": {
+    "message": "請在選擇器中選擇資料夾「$1」——Chrome 必須看到您親自選擇。"
+  },
+  "pickedWrongFolder": {
+    "message": "「$1」不是此文件所在的資料夾（「$2」）。請再試一次並選擇那個資料夾。"
+  },
+  "folderAlreadyAdded": {
+    "message": "「$1」已加入。"
   }
 }

@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "Nylig redigert"
+  },
+  "badgeNotAdded": {
+    "message": "ikke lagt til"
+  },
+  "badgeNotAddedTip": {
+    "message": "Funnet på disken. Den åpnes, men lagring spør hvor — legg til mappen for å lagre på stedet."
+  },
+  "folderFoundTip": {
+    "message": "Funnet på disken, ikke lagt til: dokumentene åpnes, men lagring spør hvor."
+  },
+  "menuAddFolder": {
+    "message": "Legg til mappen for å lagre på stedet …"
+  },
+  "pickThisFolder": {
+    "message": "Velg mappen «$1» i velgeren — Chrome må se at du velger den."
+  },
+  "pickedWrongFolder": {
+    "message": "«$1» er ikke mappen dette dokumentet ligger i («$2»). Prøv igjen og velg den."
+  },
+  "folderAlreadyAdded": {
+    "message": "«$1» er allerede lagt til."
   }
 }

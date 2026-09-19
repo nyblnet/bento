@@ -558,5 +558,33 @@
   "recentTitle": {
     "message": "Recently edited",
     "description": "Heading of the strip of most recently modified documents above the full grid."
+  },
+  "badgeNotAdded": {
+    "message": "not added",
+    "description": "Badge on a document found on disk whose folder has no grant."
+  },
+  "badgeNotAddedTip": {
+    "message": "Found on disk. It opens, but saving will ask where — add its folder to save in place.",
+    "description": "Tooltip of that badge."
+  },
+  "folderFoundTip": {
+    "message": "Found on disk, not added: its documents open, but saving asks where.",
+    "description": "Sidebar tooltip on a folder found on disk without a grant."
+  },
+  "menuAddFolder": {
+    "message": "Add its folder to save in place…",
+    "description": "Card menu: grant the folder a found document sits in."
+  },
+  "pickThisFolder": {
+    "message": "In the picker, choose the folder “$1” — Chrome has to see you pick it.",
+    "description": "Toast before the folder picker opens. $1 is the folder name."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” is not the folder this document is in (“$2”). Try again and pick that one.",
+    "description": "Toast when the picked folder does not contain the document. $1 picked, $2 expected."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” is already added.",
+    "description": "Toast when the picked folder is already granted. $1 is the folder name."
   }
 }

@@ -154,5 +154,39 @@ console.log('\n— the title card from a document with no preview')
   ok(!/card\.disabled = true/.test(home), 'an unplaced card is no longer disabled — it explains and retries')
 }
 
+console.log('\n— the scan: documents found without a grant')
+{
+  const d = disk({
+    '/Users/andy/Documents/Decks/Q3.bento.html': 'A',
+    '/Users/andy/Documents/Decks/old/Q2.bento.html': 'B',
+    '/Users/andy/Documents/notes.txt': 'n',
+    '/Users/andy/Documents/node_modules/x/y.bento.html': 'skip',
+    '/Users/andy/Desktop/teams-test/S1.bento.html': 'C',
+    '/Users/andy/Downloads/Untitled.bento.html': 'D',
+    '/Users/andy/Library/Mobile Documents/com~apple~CloudDocs/Work/W.bento.html': 'E',
+    '/Users/andy/Movies/x.bento.html': 'not scanned',
+    '/Users/Shared/y.bento.html': 'not a home',
+  })
+  const found = await place.scanDisk({ fetch: d.fetch })
+  const paths = found.map((f) => f.path).sort()
+  ok(paths.join('|') === [
+    '/Users/andy/Desktop/teams-test/S1.bento.html',
+    '/Users/andy/Documents/Decks/Q3.bento.html',
+    '/Users/andy/Documents/Decks/old/Q2.bento.html',
+    '/Users/andy/Downloads/Untitled.bento.html',
+    '/Users/andy/Library/Mobile Documents/com~apple~CloudDocs/Work/W.bento.html',
+  ].join('|'), `scanDisk: every .bento.html under Documents/Desktop/Downloads/iCloud, nested, nothing else (${found.length})`)
+  ok(!paths.some((p) => p.includes('node_modules') || p.includes('/Movies/') || p.startsWith('/Users/Shared')), 'scanDisk: noisy trees, other folders and non-home users are skipped')
+  ok(found[0].name.endsWith('.bento.html') && found.every((f) => f.dir && !f.dir.endsWith('/')), 'scanDisk: name and directory for each')
+  ok(!d.fetched.some((p) => !p.endsWith('/')), 'scanDisk: listings only — no document bytes are read')
+  const none = await place.scanDisk({ fetch: async () => ({ ok: false }) })
+  ok(none.length === 0, 'scanDisk: a disk that answers nothing → nothing, no throw')
+  const deep = disk(Object.fromEntries(Array.from({ length: 3 }, (_, i) => [`/Users/u/Documents/${'d/'.repeat(place.SCAN_DEPTH + 2)}f${i}.bento.html`, 'x'])))
+  ok((await place.scanDisk({ fetch: deep.fetch })).length === 0, 'scanDisk: depth-limited')
+  const home = readFileSync(join(SRC, 'src/home.js'), 'utf8')
+  ok(/scannedDocs\(/.test(home) && /scanned: true/.test(home) && /addFolderFor/.test(home), 'home.js lists found documents beside granted ones and offers the grant per folder')
+  ok(/prefixFor\(dir, d\.path\)/.test(home), 'a grant made for a found document is checked against that document\'s path before it is kept')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

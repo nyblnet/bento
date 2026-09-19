@@ -16,7 +16,7 @@ import { getGrants, putGrants, status } from './status.js'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
 import { prefixFor } from './route.js'
 import { learnPrefix, prefixes, GRANT, get, put } from './db.js'
-import { placeFolder } from './place.js'
+import { placeFolder, scanDisk, fileUrl } from './place.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
   from './i18n.js'
@@ -91,6 +91,7 @@ async function placeFolders({ force = false } = {}) {
 async function locateFolders() {
   // The disk first: it needs nothing from the person. History only for what
   // is still unplaced after that.
+  scanned = null
   const fromDisk = await placeFolders({ force: true })
   await load()
   if (!state.docs.some((d) => !d.path)) return { learned: fromDisk, declined: false }
@@ -302,19 +303,88 @@ function toast(text) {
 }
 
 // ------------------------------------------------------------------ loading
+/**
+ * Documents found on disk WITHOUT a grant (place.js scanDisk): Chrome will
+ * not grant Documents, Desktop or Downloads as a whole, but it will let the
+ * extension read them, so the library lists what is there and opens it by
+ * URL. A grant is what makes a document save in place; until its folder has
+ * one, the card says so and offers it. Scanned once per page load; "Find my
+ * folders" scans again.
+ */
+let scanned = null
+async function scannedDocs({ fresh = false } = {}) {
+  if (state.fileAccess === false) return []
+  if (scanned && !fresh) return scanned
+  let found = []
+  try { found = await scanDisk({ fetch: (u) => fetch(u) }) } catch { found = [] }
+  scanned = found.map((f) => ({
+    name: f.name, named: true, base: f.name.replace(/\.bento\.html$/i, ''),
+    folder: f.dir.split('/').filter(Boolean).pop() ?? f.dir, rel: [f.name], path: f.path,
+    handle: diskHandle(f.path, f.name), parent: null, scanned: true, dir: f.dir,
+  }))
+  return scanned
+}
+
+/** A handle-shaped reader over file:// for a document the extension has no grant for. */
+function diskHandle(path, name) {
+  return {
+    name,
+    kind: 'file',
+    async getFile() {
+      const r = await fetch(fileUrl(path))
+      if (!r.ok) throw new Error(`cannot read ${name}`)
+      const blob = await r.blob()
+      const lm = Date.parse(r.headers.get('last-modified') ?? '') || 0
+      return new File([blob], name, { lastModified: lm, type: 'text/html' })
+    },
+  }
+}
+
+/** The mtime of a document on disk from one byte of it: file:// answers a Range with Last-Modified. */
+async function diskModified(path) {
+  try {
+    const r = await fetch(fileUrl(path), { headers: { range: 'bytes=0-0' } })
+    return Date.parse(r.headers.get('last-modified') ?? '') || 0
+  } catch { return 0 }
+}
+
 async function load() {
   const s = await status()
   state.grants = s.folders.length
   state.fileAccess = s.files
   state.selfManaged = await isSelfManaged()
-  const docs = await listDocuments()
+  let docs = await listDocuments()
+  const onDisk = await scannedDocs()
+  // A scan can PLACE a granted folder outright: a found path that ends in
+  // `<folder>/<route>` of an unplaced document, proven by the grant, is its
+  // prefix — no guessing needed. Then the list is taken again, placed.
+  if (onDisk.length && docs.some((d) => !d.path)) {
+    const grants = await getGrants()
+    let learned = false
+    for (const d of docs.filter((x) => !x.path)) {
+      const suffix = `/${d.folder}/${d.rel.join('/')}`
+      const hit = onDisk.find((f) => f.path.endsWith(suffix))
+      const dir = hit && grants.find((g) => g.name === d.folder)
+      if (!dir) continue
+      const prefix = await prefixFor(dir, hit.path).catch(() => null)
+      if (prefix) { await learnPrefix(d.folder, prefix); learned = true }
+    }
+    if (learned) docs = await listDocuments()
+  }
+  // Granted documents first; a found one that is the same file (by path) is
+  // the granted one and is not listed twice.
+  const have = new Set(docs.map((d) => d.path).filter(Boolean))
+  const extra = onDisk.filter((f) => !have.has(f.path))
   // Read mtimes once, here, rather than per render: sorting needs them and the
   // grid is re-rendered on every keystroke of the search box.
-  state.docs = await Promise.all(docs.map(async (d) => {
-    let modified = 0
-    try { modified = (await d.handle.getFile()).lastModified } catch { /* vanished mid-list */ }
-    return { ...d, modified }
-  }))
+  state.docs = await Promise.all([
+    ...docs.map(async (d) => {
+      let modified = 0
+      try { modified = (await d.handle.getFile()).lastModified } catch { /* vanished mid-list */ }
+      return { ...d, modified }
+    }),
+    ...extra.map(async (d) => ({ ...d, modified: await diskModified(d.path) })),
+  ])
   renderSidebar()
   renderGrid()
   // A folder nobody has opened a document from yet: try to place it now,
@@ -336,9 +406,12 @@ function renderSidebar() {
 
   const host = $('folders')
   host.innerHTML = ''
+  const grantedFolders = new Set(state.docs.filter((d) => !d.scanned).map((d) => d.folder))
   for (const [folder, n] of byFolder) {
     const b = document.createElement('button')
     b.className = 'navitem'
+    // Found on disk but not added: a hollow dot, and the reason on hover.
+    if (!grantedFolders.has(folder)) { b.classList.add('found'); b.title = t('folderFoundTip') }
     b.setAttribute('aria-current', String(state.folder === folder))
     b.innerHTML = `<span class="dot"></span> ${esc(folder)} <span class="n">${n}</span>`
     b.addEventListener('click', () => { state.folder = folder; show('docs') })
@@ -625,6 +698,7 @@ function makeCard(d) {
       `<span>${esc(d.folder)} · ${esc(ago(d.modified))}</span>` +
       `</span><span class="more" title="More">⋯</span></span>`
     if (!d.named) badge(card, '.html', t('badgeRenamed'))
+    if (d.scanned) badge(card, t('badgeNotAdded'), t('badgeNotAddedTip'))
 
     card.addEventListener('click', (ev) => {
       if (ev.target.closest('.more')) { ev.stopPropagation(); openMenu(d, ev); return }
@@ -634,6 +708,30 @@ function makeCard(d) {
     void decorate(card, d)
     return card
   }
+}
+
+/**
+ * Grant the folder a found document sits in, so it saves in place. The
+ * picker has to be worked by the person (Chrome insists), but it opens in
+ * Documents and the toast names the folder to pick; the grant is then
+ * checked against THIS document's path and placed at once — no probing.
+ */
+async function addFolderFor(d) {
+  toast(t('pickThisFolder', d.folder))
+  let dir
+  try {
+    dir = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' })
+  } catch (e) { if (e?.name !== 'AbortError') toast(e.message); return }
+  const prefix = await prefixFor(dir, d.path).catch(() => null)
+  if (!prefix) { toast(t('pickedWrongFolder', dir.name, d.folder)); return }
+  const dirs = await getGrants()
+  for (const existing of dirs) if (await existing.isSameEntry(dir)) { toast(t('folderAlreadyAdded', dir.name)); return }
+  await putGrants([...dirs, dir])
+  await learnPrefix(dir.name, prefix)
+  scanned = null
+  await load()
+  await renderNotice()
+  toast(t('surveyAdded', dir.name))
 }
 
 /** A still card from a document's first slide (library.js cardFrom): no scripts, no markup from the file. */
@@ -765,12 +863,13 @@ function openMenu(d, ev) {
   }
 
   if (d.path) item(t('menuOpen'), () => openDoc(d))
-  item(t('menuDuplicate'), async () => {
+  if (d.scanned) item(t('menuAddFolder'), () => addFolderFor(d))
+  if (!d.scanned) item(t('menuDuplicate'), async () => {
     const made = await duplicate(d)
     toast(t('duplicatedAs', made.base))
     await load()
   })
-  item(t('menuRename'), async () => {
+  if (!d.scanned) item(t('menuRename'), async () => {
     const next = prompt(t('renamePrompt'), d.title ?? d.base)
     if (next == null) return
     const made = await rename(d, next)

@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "Son düzenlenenler"
+  },
+  "badgeNotAdded": {
+    "message": "eklenmedi"
+  },
+  "badgeNotAddedTip": {
+    "message": "Diskte bulundu. Açılır, ancak kaydederken yer sorulur — yerinde kaydetmek için klasörünü ekleyin."
+  },
+  "folderFoundTip": {
+    "message": "Diskte bulundu, eklenmedi: belgeleri açılır, ancak kaydetme yer sorar."
+  },
+  "menuAddFolder": {
+    "message": "Yerinde kaydetmek için klasörünü ekle…"
+  },
+  "pickThisFolder": {
+    "message": "Seçicide “$1” klasörünü seçin — Chrome sizin seçtiğinizi görmeli."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1”, bu belgenin klasörü değil (“$2”). Yeniden deneyip onu seçin."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” zaten eklendi."
   }
 }

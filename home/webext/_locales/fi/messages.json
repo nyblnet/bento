@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "Viimeksi muokatut"
+  },
+  "badgeNotAdded": {
+    "message": "ei lisätty"
+  },
+  "badgeNotAddedTip": {
+    "message": "Löytyi levyltä. Avautuu, mutta tallennus kysyy minne — lisää kansio, niin tallennus tapahtuu paikalleen."
+  },
+  "folderFoundTip": {
+    "message": "Löytyi levyltä, ei lisätty: sen asiakirjat avautuvat, mutta tallennus kysyy minne."
+  },
+  "menuAddFolder": {
+    "message": "Lisää kansio, jotta tallennus tapahtuu paikalleen…"
+  },
+  "pickThisFolder": {
+    "message": "Valitse valitsimessa kansio ”$1” — Chromen on nähtävä sinun valitsevan sen."
+  },
+  "pickedWrongFolder": {
+    "message": "”$1” ei ole tämän asiakirjan kansio (”$2”). Yritä uudelleen ja valitse se."
+  },
+  "folderAlreadyAdded": {
+    "message": "”$1” on jo lisätty."
   }
 }

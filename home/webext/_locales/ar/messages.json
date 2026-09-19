@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "عُدّلت مؤخرًا"
+  },
+  "badgeNotAdded": {
+    "message": "غير مضاف"
+  },
+  "badgeNotAddedTip": {
+    "message": "عُثر عليه على القرص. يفتح، لكن الحفظ سيسأل عن المكان — أضف مجلده ليُحفظ في مكانه."
+  },
+  "folderFoundTip": {
+    "message": "عُثر عليه على القرص ولم يُضف: تفتح مستنداته، لكن الحفظ يسأل عن المكان."
+  },
+  "menuAddFolder": {
+    "message": "إضافة مجلده ليُحفظ في مكانه…"
+  },
+  "pickThisFolder": {
+    "message": "في المحدِّد اختر المجلد ”$1“ — يجب أن يراك Chrome تختاره."
+  },
+  "pickedWrongFolder": {
+    "message": "”$1“ ليس مجلد هذا المستند (”$2“). حاول مجددًا واختر ذاك."
+  },
+  "folderAlreadyAdded": {
+    "message": "”$1“ مضاف بالفعل."
   }
 }

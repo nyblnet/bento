@@ -529,5 +529,26 @@
   },
   "recentTitle": {
     "message": "Zuletzt bearbeitet"
+  },
+  "badgeNotAdded": {
+    "message": "nicht hinzugefügt"
+  },
+  "badgeNotAddedTip": {
+    "message": "Auf der Festplatte gefunden. Öffnet sich, aber beim Speichern wird nach dem Ort gefragt — fügen Sie den Ordner hinzu, um direkt zu speichern."
+  },
+  "folderFoundTip": {
+    "message": "Auf der Festplatte gefunden, nicht hinzugefügt: Dokumente öffnen sich, aber Speichern fragt nach dem Ort."
+  },
+  "menuAddFolder": {
+    "message": "Ordner hinzufügen, um direkt zu speichern …"
+  },
+  "pickThisFolder": {
+    "message": "Wählen Sie im Dialog den Ordner „$1“ — Chrome muss sehen, dass Sie ihn wählen."
+  },
+  "pickedWrongFolder": {
+    "message": "„$1“ ist nicht der Ordner dieses Dokuments („$2“). Versuchen Sie es erneut und wählen Sie diesen."
+  },
+  "folderAlreadyAdded": {
+    "message": "„$1“ ist bereits hinzugefügt."
   }
 }

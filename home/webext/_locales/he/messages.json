@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "נערכו לאחרונה"
+  },
+  "badgeNotAdded": {
+    "message": "לא נוספה"
+  },
+  "badgeNotAddedTip": {
+    "message": "נמצא בדיסק. נפתח, אבל שמירה תשאל לאן — הוסיפו את התיקייה שלו כדי לשמור במקום."
+  },
+  "folderFoundTip": {
+    "message": "נמצאה בדיסק, לא נוספה: המסמכים שלה נפתחים, אבל שמירה שואלת לאן."
+  },
+  "menuAddFolder": {
+    "message": "הוספת התיקייה שלו כדי לשמור במקום…"
+  },
+  "pickThisFolder": {
+    "message": "בבוחר, בחרו את התיקייה „$1” — Chrome חייב לראות אתכם בוחרים אותה."
+  },
+  "pickedWrongFolder": {
+    "message": "„$1” אינה התיקייה של המסמך הזה („$2”). נסו שוב ובחרו אותה."
+  },
+  "folderAlreadyAdded": {
+    "message": "„$1” כבר נוספה."
   }
 }

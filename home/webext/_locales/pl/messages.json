@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "Ostatnio edytowane"
+  },
+  "badgeNotAdded": {
+    "message": "niedodany"
+  },
+  "badgeNotAddedTip": {
+    "message": "Znaleziony na dysku. Otwiera się, ale zapis zapyta gdzie — dodaj jego folder, aby zapisywać w miejscu."
+  },
+  "folderFoundTip": {
+    "message": "Znaleziony na dysku, niedodany: dokumenty się otwierają, ale zapis pyta gdzie."
+  },
+  "menuAddFolder": {
+    "message": "Dodaj jego folder, aby zapisywać w miejscu…"
+  },
+  "pickThisFolder": {
+    "message": "W oknie wyboru wskaż folder „$1” — Chrome musi widzieć, że go wybierasz."
+  },
+  "pickedWrongFolder": {
+    "message": "„$1” to nie folder tego dokumentu („$2”). Spróbuj ponownie i wybierz tamten."
+  },
+  "folderAlreadyAdded": {
+    "message": "„$1” jest już dodany."
   }
 }

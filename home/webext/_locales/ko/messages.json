@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "최근 편집"
+  },
+  "badgeNotAdded": {
+    "message": "추가되지 않음"
+  },
+  "badgeNotAddedTip": {
+    "message": "디스크에서 찾았습니다. 열리지만 저장할 때 위치를 묻습니다. 제자리에 저장하려면 폴더를 추가하세요."
+  },
+  "folderFoundTip": {
+    "message": "디스크에서 찾았지만 추가되지 않은 폴더: 문서는 열리지만 저장할 때 위치를 묻습니다."
+  },
+  "menuAddFolder": {
+    "message": "제자리에 저장하도록 폴더 추가…"
+  },
+  "pickThisFolder": {
+    "message": "선택 창에서 “$1” 폴더를 고르세요. Chrome이 직접 고르는 것을 확인해야 합니다."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1”은(는) 이 문서의 폴더(“$2”)가 아닙니다. 다시 시도해 그 폴더를 고르세요."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1”은(는) 이미 추가되어 있습니다."
   }
 }

@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "Kamakailang na-edit"
+  },
+  "badgeNotAdded": {
+    "message": "hindi pa naidagdag"
+  },
+  "badgeNotAddedTip": {
+    "message": "Natagpuan sa disk. Bumubukas, pero magtatanong kung saan kapag nag-save — idagdag ang folder nito para ma-save sa lugar."
+  },
+  "folderFoundTip": {
+    "message": "Natagpuan sa disk, hindi pa naidagdag: bumubukas ang mga dokumento nito, pero nagtatanong ang pag-save kung saan."
+  },
+  "menuAddFolder": {
+    "message": "Idagdag ang folder nito para ma-save sa lugar…"
+  },
+  "pickThisFolder": {
+    "message": "Sa picker, piliin ang folder na “$1” — kailangang makita ng Chrome na ikaw ang pumili."
+  },
+  "pickedWrongFolder": {
+    "message": "Hindi “$1” ang folder ng dokumentong ito (“$2”). Subukan muli at piliin iyon."
+  },
+  "folderAlreadyAdded": {
+    "message": "Naidagdag na ang “$1”."
   }
 }

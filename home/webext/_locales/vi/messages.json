@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "Mới chỉnh sửa"
+  },
+  "badgeNotAdded": {
+    "message": "chưa thêm"
+  },
+  "badgeNotAddedTip": {
+    "message": "Tìm thấy trên ổ đĩa. Mở được, nhưng khi lưu sẽ hỏi lưu ở đâu — thêm thư mục của nó để lưu tại chỗ."
+  },
+  "folderFoundTip": {
+    "message": "Tìm thấy trên ổ đĩa, chưa thêm: tài liệu mở được, nhưng lưu sẽ hỏi ở đâu."
+  },
+  "menuAddFolder": {
+    "message": "Thêm thư mục của nó để lưu tại chỗ…"
+  },
+  "pickThisFolder": {
+    "message": "Trong hộp chọn, hãy chọn thư mục “$1” — Chrome phải thấy bạn chọn nó."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” không phải thư mục chứa tài liệu này (“$2”). Hãy thử lại và chọn thư mục đó."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” đã được thêm."
   }
 }

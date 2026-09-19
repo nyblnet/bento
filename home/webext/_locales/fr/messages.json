@@ -529,5 +529,26 @@
   },
   "recentTitle": {
     "message": "Modifiés récemment"
+  },
+  "badgeNotAdded": {
+    "message": "non ajouté"
+  },
+  "badgeNotAddedTip": {
+    "message": "Trouvé sur le disque. Il s’ouvre, mais l’enregistrement demandera où — ajoutez son dossier pour enregistrer sur place."
+  },
+  "folderFoundTip": {
+    "message": "Trouvé sur le disque, non ajouté : ses documents s’ouvrent, mais l’enregistrement demande où."
+  },
+  "menuAddFolder": {
+    "message": "Ajouter son dossier pour enregistrer sur place…"
+  },
+  "pickThisFolder": {
+    "message": "Dans le sélecteur, choisissez le dossier « $1 » — Chrome doit vous voir le choisir."
+  },
+  "pickedWrongFolder": {
+    "message": "« $1 » n’est pas le dossier de ce document (« $2 »). Réessayez et choisissez celui-là."
+  },
+  "folderAlreadyAdded": {
+    "message": "« $1 » est déjà ajouté."
   }
 }

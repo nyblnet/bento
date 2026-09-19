@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "Senast redigerade"
+  },
+  "badgeNotAdded": {
+    "message": "inte tillagd"
+  },
+  "badgeNotAddedTip": {
+    "message": "Hittad på disken. Den öppnas, men sparning frågar var — lägg till mappen för att spara på plats."
+  },
+  "folderFoundTip": {
+    "message": "Hittad på disken, inte tillagd: dokumenten öppnas, men sparning frågar var."
+  },
+  "menuAddFolder": {
+    "message": "Lägg till dess mapp för att spara på plats…"
+  },
+  "pickThisFolder": {
+    "message": "Välj mappen ”$1” i väljaren — Chrome måste se dig välja den."
+  },
+  "pickedWrongFolder": {
+    "message": "”$1” är inte mappen det här dokumentet ligger i (”$2”). Försök igen och välj den."
+  },
+  "folderAlreadyAdded": {
+    "message": "”$1” är redan tillagd."
   }
 }

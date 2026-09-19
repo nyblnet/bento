@@ -529,5 +529,26 @@
   },
   "recentTitle": {
     "message": "Editados recientemente"
+  },
+  "badgeNotAdded": {
+    "message": "no añadida"
+  },
+  "badgeNotAddedTip": {
+    "message": "Encontrado en el disco. Se abre, pero al guardar preguntará dónde: añade su carpeta para guardar en el sitio."
+  },
+  "folderFoundTip": {
+    "message": "Encontrada en el disco, no añadida: sus documentos se abren, pero guardar pregunta dónde."
+  },
+  "menuAddFolder": {
+    "message": "Añadir su carpeta para guardar en el sitio…"
+  },
+  "pickThisFolder": {
+    "message": "En el selector, elige la carpeta «$1»: Chrome tiene que ver que la eliges."
+  },
+  "pickedWrongFolder": {
+    "message": "«$1» no es la carpeta de este documento («$2»). Inténtalo de nuevo y elige esa."
+  },
+  "folderAlreadyAdded": {
+    "message": "«$1» ya está añadida."
   }
 }

@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "Senest redigeret"
+  },
+  "badgeNotAdded": {
+    "message": "ikke tilføjet"
+  },
+  "badgeNotAddedTip": {
+    "message": "Fundet på disken. Den åbner, men gemning spørger hvor — tilføj mappen for at gemme på stedet."
+  },
+  "folderFoundTip": {
+    "message": "Fundet på disken, ikke tilføjet: dens dokumenter åbner, men gemning spørger hvor."
+  },
+  "menuAddFolder": {
+    "message": "Tilføj dens mappe for at gemme på stedet…"
+  },
+  "pickThisFolder": {
+    "message": "Vælg mappen “$1” i vælgeren — Chrome skal se dig vælge den."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” er ikke mappen, dette dokument ligger i (“$2”). Prøv igen og vælg den."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” er allerede tilføjet."
   }
 }

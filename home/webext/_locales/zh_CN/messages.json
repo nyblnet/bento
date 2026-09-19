@@ -529,5 +529,26 @@
   },
   "recentTitle": {
     "message": "最近编辑"
+  },
+  "badgeNotAdded": {
+    "message": "未添加"
+  },
+  "badgeNotAddedTip": {
+    "message": "在磁盘上找到。可以打开，但保存时会询问位置——添加其所在文件夹即可原地保存。"
+  },
+  "folderFoundTip": {
+    "message": "在磁盘上找到但未添加：其中的文档可以打开，但保存时会询问位置。"
+  },
+  "menuAddFolder": {
+    "message": "添加其所在文件夹以便原地保存……"
+  },
+  "pickThisFolder": {
+    "message": "请在选择器中选择文件夹“$1”——Chrome 必须看到您亲自选择。"
+  },
+  "pickedWrongFolder": {
+    "message": "“$1”不是此文档所在的文件夹（“$2”）。请重试并选择那个文件夹。"
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1”已添加。"
   }
 }

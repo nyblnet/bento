@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "Baru disunting"
+  },
+  "badgeNotAdded": {
+    "message": "belum ditambah"
+  },
+  "badgeNotAddedTip": {
+    "message": "Ditemui pada cakera. Boleh dibuka, tetapi semasa menyimpan akan ditanya ke mana — tambah foldernya untuk menyimpan di tempat."
+  },
+  "folderFoundTip": {
+    "message": "Ditemui pada cakera, belum ditambah: dokumennya boleh dibuka, tetapi menyimpan bertanya ke mana."
+  },
+  "menuAddFolder": {
+    "message": "Tambah foldernya untuk menyimpan di tempat…"
+  },
+  "pickThisFolder": {
+    "message": "Dalam pemilih, pilih folder “$1” — Chrome mesti melihat anda memilihnya."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” bukan folder dokumen ini (“$2”). Cuba lagi dan pilih yang itu."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” sudah ditambah."
   }
 }

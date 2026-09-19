@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "Baru diedit"
+  },
+  "badgeNotAdded": {
+    "message": "belum ditambahkan"
+  },
+  "badgeNotAddedTip": {
+    "message": "Ditemukan di disk. Bisa dibuka, tetapi saat menyimpan akan ditanya ke mana — tambahkan foldernya agar tersimpan di tempat."
+  },
+  "folderFoundTip": {
+    "message": "Ditemukan di disk, belum ditambahkan: dokumennya bisa dibuka, tetapi menyimpan menanyakan ke mana."
+  },
+  "menuAddFolder": {
+    "message": "Tambahkan foldernya agar tersimpan di tempat…"
+  },
+  "pickThisFolder": {
+    "message": "Di pemilih, pilih folder “$1” — Chrome harus melihat Anda memilihnya."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” bukan folder dokumen ini (“$2”). Coba lagi dan pilih yang itu."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” sudah ditambahkan."
   }
 }

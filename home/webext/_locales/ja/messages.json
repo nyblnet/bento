@@ -529,5 +529,26 @@
   },
   "recentTitle": {
     "message": "最近編集したもの"
+  },
+  "badgeNotAdded": {
+    "message": "未追加"
+  },
+  "badgeNotAddedTip": {
+    "message": "ディスク上で見つかりました。開けますが、保存時に保存先を尋ねられます。その場で保存するにはフォルダーを追加してください。"
+  },
+  "folderFoundTip": {
+    "message": "ディスク上で見つかった未追加のフォルダーです。中のドキュメントは開けますが、保存時に保存先を尋ねられます。"
+  },
+  "menuAddFolder": {
+    "message": "その場で保存するためにフォルダーを追加…"
+  },
+  "pickThisFolder": {
+    "message": "ダイアログでフォルダー「$1」を選んでください。Chrome はあなたが選ぶのを見届ける必要があります。"
+  },
+  "pickedWrongFolder": {
+    "message": "「$1」はこのドキュメントのフォルダー（「$2」）ではありません。もう一度、そのフォルダーを選んでください。"
+  },
+  "folderAlreadyAdded": {
+    "message": "「$1」はすでに追加されています。"
   }
 }

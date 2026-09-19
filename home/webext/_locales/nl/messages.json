@@ -496,5 +496,26 @@
   },
   "recentTitle": {
     "message": "Onlangs bewerkt"
+  },
+  "badgeNotAdded": {
+    "message": "niet toegevoegd"
+  },
+  "badgeNotAddedTip": {
+    "message": "Gevonden op de schijf. Opent wel, maar opslaan vraagt waar — voeg de map toe om ter plekke op te slaan."
+  },
+  "folderFoundTip": {
+    "message": "Gevonden op de schijf, niet toegevoegd: de documenten openen, maar opslaan vraagt waar."
+  },
+  "menuAddFolder": {
+    "message": "Map toevoegen om ter plekke op te slaan…"
+  },
+  "pickThisFolder": {
+    "message": "Kies in de kiezer de map “$1” — Chrome moet zien dat u die kiest."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” is niet de map van dit document (“$2”). Probeer opnieuw en kies die."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” is al toegevoegd."
   }
 }

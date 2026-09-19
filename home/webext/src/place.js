@@ -119,3 +119,52 @@ export async function placeFolder(dir, probe, knownPrefixes, deps) {
   }
   return null
 }
+
+// ---------------------------------------------------------------- the scan
+//
+// WHY A GRANT IS NOT THE ONLY WAY IN. Chrome will not hand a web page or an
+// extension the home folder, Desktop, Documents or Downloads as a whole —
+// only folders inside them. That makes "add a folder" a poor first door: the
+// three places documents actually live are the three it refuses. But the
+// extension can READ file:// (once file-URL access is on), so it can find
+// every .bento.html under those places by itself and open each by URL. A
+// grant then means one more thing, not the first thing: that documents in
+// that folder save back in place without a prompt.
+
+/** Where documents live, under a home. Depth-limited, the noisy trees skipped. */
+export const SCAN_ROOTS = ['Documents', 'Desktop', 'Downloads', 'Library/Mobile Documents/com~apple~CloudDocs', 'Library/CloudStorage']
+export const SCAN_DEPTH = 4
+export const SCAN_MAX = 2000
+const SKIP_DIRS = /^(node_modules|\.git|\.svn|\.hg|Library|Applications|\.Trash|\.cache|dist|build|target|__pycache__|venv|\.venv)$/i
+
+/** The home directories Chrome's listings will name. */
+export async function homeDirs(deps) {
+  const homes = []
+  for (const root of HOME_ROOTS) {
+    for (const e of await listDir(root, deps)) if (e.dir && !SKIP_USERS.has(e.name) && !e.name.startsWith('.')) homes.push(`${root}/${e.name}`)
+  }
+  return homes
+}
+
+/**
+ * Every Bento document under the usual places, as `{ path, name, dir }`.
+ * Listing only — nothing is read — so a large Documents costs a few hundred
+ * directory fetches at most and no bytes.
+ */
+export async function scanDisk(deps, roots = null) {
+  const out = []
+  const seen = new Set()
+  const walk = async (dir, depth) => {
+    if (out.length >= SCAN_MAX || depth > SCAN_DEPTH || seen.has(dir)) return
+    seen.add(dir)
+    const entries = await listDir(dir, deps)
+    for (const e of entries) {
+      if (out.length >= SCAN_MAX) return
+      if (e.dir) { if (!e.name.startsWith('.') && !SKIP_DIRS.test(e.name)) await walk(`${dir}/${e.name}`, depth + 1) }
+      else if (/\.bento\.html$/i.test(e.name)) out.push({ path: `${dir}/${e.name}`, name: e.name, dir })
+    }
+  }
+  const bases = roots ?? (await homeDirs(deps)).flatMap((h) => SCAN_ROOTS.map((r) => `${h}/${r}`))
+  for (const b of bases) await walk(b, 0)
+  return out
+}
