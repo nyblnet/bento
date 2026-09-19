@@ -207,7 +207,7 @@
     "message": "Choose the folder your documents live in"
   },
   "setupStep1Note": {
-    "message": "One broad folder is usually enough — it covers everything inside it."
+    "message": "One broad folder is usually enough — it covers everything inside it. Chrome will not hand over your home folder itself, or Library: choose Documents, Desktop, or the folder your documents live in."
   },
   "setupStep2": {
     "message": "Turn on local file access",

@@ -199,7 +199,7 @@
     "message": "Choisissez le dossier où vivent vos documents"
   },
   "setupStep1Note": {
-    "message": "Un dossier large suffit en général — il couvre tout ce qu’il contient."
+    "message": "Un dossier large suffit en général : il couvre tout ce qu’il contient. Chrome refuse le dossier personnel lui-même et Library : choisissez Documents, Bureau ou le dossier où vivent vos documents."
   },
   "setupStep2": {
     "message": "Activez l’accès aux fichiers locaux",

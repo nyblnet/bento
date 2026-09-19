@@ -189,7 +189,7 @@
     "message": "Wybierz folder, w którym trzymasz dokumenty"
   },
   "setupStep1Note": {
-    "message": "Zwykle wystarczy jeden szeroki folder — obejmuje wszystko, co jest w środku."
+    "message": "Zwykle wystarczy jeden szeroki folder — obejmuje wszystko w środku. Chrome nie udostępni samego folderu domowego ani Library: wybierz Dokumenty, Biurko lub folder, w którym leżą Twoje dokumenty."
   },
   "setupStep2": {
     "message": "Włącz dostęp do plików lokalnych"

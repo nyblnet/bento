@@ -189,7 +189,7 @@
     "message": "Valitse kansio, jossa asiakirjasi ovat"
   },
   "setupStep1Note": {
-    "message": "Yksi laaja kansio riittää yleensä — se kattaa kaiken sen sisällä."
+    "message": "Yksi laaja kansio riittää yleensä — se kattaa kaiken sisällään. Chrome ei luovuta itse kotikansiota eikä Library-kansiota: valitse Dokumentit, Työpöytä tai kansio, jossa asiakirjasi ovat."
   },
   "setupStep2": {
     "message": "Ota paikallisten tiedostojen käyttö käyttöön"

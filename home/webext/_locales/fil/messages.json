@@ -189,7 +189,7 @@
     "message": "Piliin ang folder kung saan naroon ang mga dokumento mo"
   },
   "setupStep1Note": {
-    "message": "Kadalasan ay sapat na ang isang malawak na folder — saklaw nito ang lahat ng nasa loob."
+    "message": "Karaniwang sapat na ang isang malawak na folder — sakop nito ang lahat ng nasa loob. Hindi ibibigay ng Chrome ang home folder mismo o ang Library: piliin ang Documents, Desktop, o ang folder kung nasaan ang iyong mga dokumento."
   },
   "setupStep2": {
     "message": "I-on ang access sa lokal na file"

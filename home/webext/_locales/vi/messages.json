@@ -189,7 +189,7 @@
     "message": "Chọn thư mục chứa tài liệu của bạn"
   },
   "setupStep1Note": {
-    "message": "Một thư mục rộng thường là đủ — nó bao trùm mọi thứ bên trong."
+    "message": "Một thư mục rộng thường là đủ — nó bao trùm mọi thứ bên trong. Chrome sẽ không trao chính thư mục nhà hay Library: hãy chọn Documents, Desktop, hoặc thư mục chứa tài liệu của bạn."
   },
   "setupStep2": {
     "message": "Bật quyền truy cập tệp cục bộ"

@@ -199,7 +199,7 @@
     "message": "Escolha a pasta onde seus documentos ficam"
   },
   "setupStep1Note": {
-    "message": "Uma pasta ampla costuma bastar — cobre tudo que está dentro."
+    "message": "Uma pasta ampla costuma bastar — ela cobre tudo dentro dela. O Chrome não entrega a pasta pessoal em si nem a Library: escolha Documentos, Mesa ou a pasta onde seus documentos estão."
   },
   "setupStep2": {
     "message": "Ligue o acesso a arquivos locais",

@@ -1049,7 +1049,11 @@ addEventListener('keydown', (e) => {
 
 $('addFolder').addEventListener('click', async () => {
   try {
-    const dir = await window.showDirectoryPicker({ mode: 'readwrite' })
+    // Chrome refuses the home folder itself (and Library, and a few system
+    // paths) with its own "contains system files" dialog, and there is no way
+    // around it from here — so the picker opens in Documents, the folder it
+    // will accept, and the set-up note says which to pick.
+    const dir = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' })
     await dir.requestPermission({ mode: 'readwrite' })
     const dirs = await getGrants()
     for (const existing of dirs) if (await existing.isSameEntry(dir)) return

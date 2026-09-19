@@ -199,7 +199,7 @@
     "message": "Scegli la cartella dove vivono i tuoi documenti"
   },
   "setupStep1Note": {
-    "message": "Di solito basta una cartella ampia — copre tutto ciò che contiene."
+    "message": "Di solito basta una cartella ampia: copre tutto ciò che contiene. Chrome non concede la cartella home stessa né Library: scegli Documenti, Scrivania o la cartella in cui stanno i tuoi documenti."
   },
   "setupStep2": {
     "message": "Attiva l’accesso ai file locali",

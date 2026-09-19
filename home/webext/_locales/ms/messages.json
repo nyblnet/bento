@@ -189,7 +189,7 @@
     "message": "Pilih folder tempat dokumen anda berada"
   },
   "setupStep1Note": {
-    "message": "Satu folder luas biasanya memadai — ia merangkumi segala-galanya di dalamnya."
+    "message": "Satu folder yang luas biasanya mencukupi — ia meliputi semua di dalamnya. Chrome tidak akan menyerahkan folder rumah itu sendiri atau Library: pilih Dokumen, Desktop, atau folder tempat dokumen anda berada."
   },
   "setupStep2": {
     "message": "Hidupkan akses fail setempat"

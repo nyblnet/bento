@@ -189,7 +189,7 @@
     "message": "Belgelerinizin bulunduğu klasörü seçin"
   },
   "setupStep1Note": {
-    "message": "Genelde geniş tek bir klasör yeter — içindeki her şeyi kapsar."
+    "message": "Genellikle geniş bir klasör yeter — içindeki her şeyi kapsar. Chrome ana klasörünüzün kendisini veya Library’yi vermez: Belgeler’i, Masaüstü’nü ya da belgelerinizin bulunduğu klasörü seçin."
   },
   "setupStep2": {
     "message": "Yerel dosya erişimini açın"

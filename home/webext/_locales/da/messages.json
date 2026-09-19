@@ -189,7 +189,7 @@
     "message": "Vælg den mappe, dine dokumenter ligger i"
   },
   "setupStep1Note": {
-    "message": "Én bred mappe er som regel nok — den dækker alt indeni."
+    "message": "Én bred mappe er som regel nok — den dækker alt i den. Chrome udleverer ikke selve hjemmemappen eller Library: vælg Dokumenter, Skrivebord eller den mappe, dine dokumenter ligger i."
   },
   "setupStep2": {
     "message": "Slå adgang til lokale filer til"

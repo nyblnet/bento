@@ -189,7 +189,7 @@
     "message": "Kies de map waar je documenten staan"
   },
   "setupStep1Note": {
-    "message": "Eén ruime map is meestal genoeg — die dekt alles wat erin zit."
+    "message": "Eén brede map is meestal genoeg — die dekt alles erin. Chrome geeft je thuismap zelf of Library niet vrij: kies Documenten, Bureaublad of de map waar je documenten staan."
   },
   "setupStep2": {
     "message": "Zet toegang tot lokale bestanden aan"

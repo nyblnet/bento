@@ -189,7 +189,7 @@
     "message": "Välj mappen där dina dokument ligger"
   },
   "setupStep1Note": {
-    "message": "En bred mapp räcker oftast — den täcker allt som finns i den."
+    "message": "En bred mapp räcker oftast — den täcker allt i den. Chrome lämnar inte ut själva hemmappen eller Library: välj Dokument, Skrivbord eller mappen där dina dokument ligger."
   },
   "setupStep2": {
     "message": "Slå på åtkomst till lokala filer"

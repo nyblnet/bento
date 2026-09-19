@@ -199,7 +199,7 @@
     "message": "Wählen Sie den Ordner, in dem Ihre Dokumente liegen"
   },
   "setupStep1Note": {
-    "message": "Ein großzügiger Ordner genügt meist — er deckt alles darin ab."
+    "message": "Ein breiter Ordner reicht meist — er deckt alles darin ab. Den Home-Ordner selbst oder Library gibt Chrome nicht frei: Wählen Sie Dokumente, Schreibtisch oder den Ordner, in dem Ihre Dokumente liegen."
   },
   "setupStep2": {
     "message": "Zugriff auf lokale Dateien einschalten",

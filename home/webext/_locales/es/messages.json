@@ -199,7 +199,7 @@
     "message": "Elige la carpeta donde viven tus documentos"
   },
   "setupStep1Note": {
-    "message": "Una carpeta amplia suele bastar — cubre todo lo que hay dentro."
+    "message": "Suele bastar una carpeta amplia: cubre todo lo que contiene. Chrome no entrega la carpeta personal en sí ni Library: elige Documentos, Escritorio o la carpeta donde están tus documentos."
   },
   "setupStep2": {
     "message": "Activa el acceso a archivos locales",
