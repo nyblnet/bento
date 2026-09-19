@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "”$1“ پہلے سے شامل ہے۔"
+  },
+  "bentoFolderBtn": {
+    "message": "ایک Bento فولڈر بنائیں…"
+  },
+  "bentoFolderHow": {
+    "message": "ڈائیلاگ میں Documents کے اندر ”Bento“ نام کا نیا فولڈر بنائیں اور اسے چنیں۔"
+  },
+  "bentoFolderMade": {
+    "message": "”$1“ آپ کا Bento فولڈر ہے — نئی دستاویزات وہاں جاتی ہیں اور اسی جگہ محفوظ ہوتی ہیں۔"
+  },
+  "bentoFolderTip": {
+    "message": "Documents کے اندر ایک فولڈر جو اسی جگہ محفوظ کرتا ہے اور نئی دستاویزات لیتا ہے۔ Chrome خود Documents نہیں دے گا۔"
+  },
+  "defaultFolder": {
+    "message": "نئی دستاویزات یہاں آتی ہیں"
   }
 }

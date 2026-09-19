@@ -71,9 +71,9 @@ async function placeFolders({ force = false } = {}) {
     if (known[dir.name] || (!force && placed.has(dir.name))) continue
     placed.add(dir.name)
     if (await dir.queryPermission({ mode: 'readwrite' }) !== 'granted') continue
-    // the shallowest document in the grant is the cheapest fingerprint
-    const probe = state.docs.filter((d) => d.folder === dir.name).sort((a, b) => a.rel.length - b.rel.length)[0]
-    if (!probe) continue
+    // the shallowest document in the grant is the cheapest fingerprint; an
+    // empty grant gets a temporary marker instead (place.js)
+    const probe = state.docs.filter((d) => d.folder === dir.name && !d.scanned).sort((a, b) => a.rel.length - b.rel.length)[0] ?? null
     try {
       // Said in the page's console: placement is silent by design, and the
       // one question when it does nothing is whether the disk answered at all.
@@ -558,10 +558,17 @@ function firstRun() {
     steps.appendChild(s)
   }
 
-  const pick = document.createElement('button')
-  pick.className = 'btn primary'
-  pick.textContent = t('chooseFolder')
-  pick.onclick = () => $('addFolder').click()
+  const pick = document.createElement('span')
+  pick.className = 'btns'
+  const make = document.createElement('button')
+  make.className = 'btn primary'
+  make.textContent = t('bentoFolderBtn')
+  make.onclick = () => createBentoFolder()
+  const choose = document.createElement('button')
+  choose.className = 'btn'
+  choose.textContent = t('chooseFolder')
+  choose.onclick = () => $('addFolder').click()
+  pick.append(make, choose)
   step(1, !!state.grants, t('setupStep1'), t('setupStep1Note'), pick)
   // The survey belongs HERE most of all. On a fresh install the answer to "which
   // folder?" is knowable — the browser has the paths — and asking somebody to
@@ -1146,23 +1153,63 @@ addEventListener('keydown', (e) => {
   }
 })
 
+/**
+ * Keep a grant the person just made: stored, placed straight away (an empty
+ * folder is placed through a marker file — place.js), and — when asked —
+ * made the folder new documents go to.
+ */
+async function adoptGrant(dir, { asDefault = false } = {}) {
+  await dir.requestPermission({ mode: 'readwrite' })
+  const dirs = await getGrants()
+  let already = false
+  for (const existing of dirs) if (await existing.isSameEntry(dir)) already = true
+  if (!already) await putGrants([...dirs, dir])
+  if (asDefault) await put(GRANT, 'defaultFolder', dir.name)
+  scanned = null
+  await load()
+  await placeFolders({ force: true })
+  await load()
+  await renderNotice()
+}
+
 $('addFolder').addEventListener('click', async () => {
   try {
-    // Chrome refuses the home folder itself (and Library, and a few system
-    // paths) with its own "contains system files" dialog, and there is no way
-    // around it from here — so the picker opens in Documents, the folder it
-    // will accept, and the set-up note says which to pick.
+    // Chrome refuses the home folder itself, Desktop, Documents and Downloads
+    // as wholes with its own "contains system files" dialog, and there is no
+    // way around it from here — so the picker opens in Documents, where the
+    // folder it WILL accept is one level down, and the set-up note says so.
     const dir = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' })
-    await dir.requestPermission({ mode: 'readwrite' })
-    const dirs = await getGrants()
-    for (const existing of dirs) if (await existing.isSameEntry(dir)) return
-    await putGrants([...dirs, dir])
-    await load()
-    await renderNotice()
+    await adoptGrant(dir)
   } catch (e) {
     if (e?.name !== 'AbortError') toast(e.message)
   }
 })
+
+/**
+ * THE BENTO FOLDER. Most people save into Documents or Downloads and never
+ * make a folder — and those are the two Chrome will not grant. So the
+ * extension offers to make one: the picker opens in Documents with the
+ * instruction to create "Bento" and choose it (the dialog's own New Folder
+ * button; the extension cannot write into Documents itself), the grant is
+ * kept as the DEFAULT for new documents, and it is placed at once. A
+ * document made from bento/home then lives somewhere that never prompts.
+ */
+async function createBentoFolder() {
+  toast(t('bentoFolderHow'))
+  let dir
+  try {
+    dir = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' })
+  } catch (e) { if (e?.name !== 'AbortError') toast(e.message); return null }
+  await adoptGrant(dir, { asDefault: true })
+  toast(t('bentoFolderMade', dir.name))
+  return dir
+}
+
+/** The grant new documents go to: the one chosen as default, else the first. */
+async function defaultGrant(grants) {
+  const name = await get(GRANT, 'defaultFolder')
+  return grants.find((g) => g.name === name) ?? grants[0]
+}
 
 /**
  * Which Bento to make.
@@ -1179,8 +1226,8 @@ $('new').addEventListener('click', async (ev) => {
   // A new document appearing in a folder you are not looking at is a small
   // mystery, and mysteries are what a file manager exists to prevent.
   const target = state.folder
-    ? grants.find((g) => g.name === state.folder) ?? grants[0]
-    : grants[0]
+    ? grants.find((g) => g.name === state.folder) ?? await defaultGrant(grants)
+    : await defaultGrant(grants)
 
   closeMenu()
   const m = document.createElement('div')
@@ -1336,6 +1383,7 @@ async function renderSettings() {
 
   // --- folders
   const folders = section(t('navFolders'), t('setFoldersSub'))
+  const defaultName = await get(GRANT, 'defaultFolder')
   if (!dirs.length) {
     const p = document.createElement('p')
     p.className = 'dim'
@@ -1347,7 +1395,7 @@ async function renderSettings() {
     const row = document.createElement('div')
     row.className = 'row'
     row.innerHTML = `<span class="dot ${granted ? 'ok' : 'bad'}"></span><b>${esc(dir.name)}</b>`
-      + `<span class="note">${granted ? t('savesInPlace') : t('needsReconnecting')}</span>`
+      + `<span class="note">${granted ? t('savesInPlace') : t('needsReconnecting')}${dir.name === defaultName ? ` · ${t('defaultFolder')}` : ''}</span>`
     if (!granted) {
       const renew = document.createElement('button')
       renew.className = 'btn'
@@ -1376,6 +1424,13 @@ async function renderSettings() {
   add.textContent = t('addFolder')
   add.onclick = () => $('addFolder').click()
   folders.appendChild(add)
+  const make = document.createElement('button')
+  make.className = 'btn'
+  make.style.marginInlineStart = '8px'
+  make.textContent = t('bentoFolderBtn')
+  make.title = t('bentoFolderTip')
+  make.onclick = () => createBentoFolder()
+  folders.appendChild(make)
 
   // --- the language, which Chrome will not let you change on macOS
   //

@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "“$1” zaten eklendi."
+  },
+  "bentoFolderBtn": {
+    "message": "Bir Bento klasörü oluştur…"
+  },
+  "bentoFolderHow": {
+    "message": "İletişim kutusunda Belgeler içinde “Bento” adlı yeni bir klasör oluşturun ve onu seçin."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” Bento klasörünüz — yeni belgeler oraya gider ve yerinde kaydedilir."
+  },
+  "bentoFolderTip": {
+    "message": "Belgeler içinde yerinde kaydeden ve yeni belgeleri alan bir klasör. Chrome Belgeler’in kendisini vermez."
+  },
+  "defaultFolder": {
+    "message": "yeni belgeler buraya gelir"
   }
 }

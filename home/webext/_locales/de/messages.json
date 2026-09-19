@@ -550,5 +550,20 @@
   },
   "folderAlreadyAdded": {
     "message": "„$1“ ist bereits hinzugefügt."
+  },
+  "bentoFolderBtn": {
+    "message": "Bento-Ordner anlegen …"
+  },
+  "bentoFolderHow": {
+    "message": "Legen Sie im Dialog in „Dokumente“ einen neuen Ordner namens „Bento“ an und wählen Sie ihn."
+  },
+  "bentoFolderMade": {
+    "message": "„$1“ ist Ihr Bento-Ordner — neue Dokumente landen dort und speichern direkt."
+  },
+  "bentoFolderTip": {
+    "message": "Ein Ordner in „Dokumente“, der direkt speichert und neue Dokumente aufnimmt. „Dokumente“ selbst gibt Chrome nicht frei."
+  },
+  "defaultFolder": {
+    "message": "neue Dokumente kommen hierher"
   }
 }

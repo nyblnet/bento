@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "”$1” on jo lisätty."
+  },
+  "bentoFolderBtn": {
+    "message": "Luo Bento-kansio…"
+  },
+  "bentoFolderHow": {
+    "message": "Luo valintaikkunassa Dokumentit-kansioon uusi kansio nimeltä ”Bento” ja valitse se."
+  },
+  "bentoFolderMade": {
+    "message": "”$1” on Bento-kansiosi — uudet asiakirjat menevät sinne ja tallentuvat paikalleen."
+  },
+  "bentoFolderTip": {
+    "message": "Dokumentit-kansion sisällä oleva kansio, joka tallentaa paikalleen ja ottaa uudet asiakirjat vastaan. Itse Dokumentit-kansiota Chrome ei luovuta."
+  },
+  "defaultFolder": {
+    "message": "uudet asiakirjat tulevat tänne"
   }
 }

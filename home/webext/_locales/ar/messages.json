@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "”$1“ مضاف بالفعل."
+  },
+  "bentoFolderBtn": {
+    "message": "إنشاء مجلد Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "في مربع الحوار أنشئ مجلدًا جديدًا باسم ”Bento“ داخل المستندات واختره."
+  },
+  "bentoFolderMade": {
+    "message": "”$1“ هو مجلد Bento الخاص بك — تذهب المستندات الجديدة إليه وتُحفظ في مكانها."
+  },
+  "bentoFolderTip": {
+    "message": "مجلد داخل المستندات يحفظ في مكانه ويستقبل المستندات الجديدة. لن يمنح Chrome مجلد المستندات نفسه."
+  },
+  "defaultFolder": {
+    "message": "المستندات الجديدة تأتي هنا"
   }
 }

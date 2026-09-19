@@ -212,5 +212,28 @@ console.log('\n— Windows and Linux homes')
   ok(place.xdgDirs('XDG_DOCUMENTS_DIR="/mnt/data/docs"\nXDG_DESKTOP_DIR="$HOME/Desktop/"', '/home/u').join('|') === '/mnt/data/docs|/home/u/Desktop', 'xdgDirs: absolute paths kept, $HOME expanded, trailing slash dropped')
 }
 
+console.log('\n— an empty grant (the Bento folder) is placed through a marker')
+{
+  const files: Record<string, string> = {}
+  const d = disk(files)
+  let removed: string | null = null
+  const dir: any = {
+    name: 'Bento',
+    // writing the marker into the grant makes it appear on the fake disk at the real path
+    getFileHandle: async (name: string) => ({
+      createWritable: async () => ({ write: async (b: Uint8Array) => { files[`/Users/andy/Documents/Bento/${name}`] = String.fromCharCode(...b) }, close: async () => {} }),
+      getFile: async () => { const body = files[`/Users/andy/Documents/Bento/${name}`]; const b = new TextEncoder().encode(body); return { size: b.length, arrayBuffer: async () => b.buffer } },
+    }),
+    removeEntry: async (name: string) => { removed = name; delete files[`/Users/andy/Documents/Bento/${name}`] },
+  }
+  ;(globalThis as any).crypto ??= { getRandomValues: (a: Uint8Array) => { for (let i = 0; i < a.length; i++) a[i] = (i * 37) % 251; return a } }
+  const prefixFor = async (_d: any, path: string) => (path.startsWith('/Users/andy/Documents/Bento/') ? '/Users/andy/Documents/Bento' : null)
+  const prefix = await place.placeFolder(dir, null, {}, { fetch: d.fetch, prefixFor })
+  ok(prefix === '/Users/andy/Documents/Bento', 'placeFolder: no document to fingerprint → a marker file is written, found, and the folder placed')
+  ok(removed !== null && String(removed).startsWith('.bento-place-') && Object.keys(files).length === 0, 'the marker is removed afterwards, whatever happened')
+  const home = readFileSync(join(SRC, 'src/home.js'), 'utf8')
+  ok(/createBentoFolder/.test(home) && /defaultFolder/.test(home) && /startIn: 'documents'/.test(home), 'home.js offers the Bento folder, remembers it as the default for new documents, and opens the picker in Documents')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

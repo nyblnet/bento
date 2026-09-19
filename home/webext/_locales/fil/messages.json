@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "Naidagdag na ang “$1”."
+  },
+  "bentoFolderBtn": {
+    "message": "Gumawa ng Bento folder…"
+  },
+  "bentoFolderHow": {
+    "message": "Sa dialog, gumawa ng bagong folder na “Bento” sa loob ng Documents at piliin ito."
+  },
+  "bentoFolderMade": {
+    "message": "Ang “$1” ang iyong Bento folder — dito pupunta ang mga bagong dokumento at mase-save sa lugar."
+  },
+  "bentoFolderTip": {
+    "message": "Folder sa loob ng Documents na nagse-save sa lugar at tumatanggap ng mga bagong dokumento. Hindi ibibigay ng Chrome ang Documents mismo."
+  },
+  "defaultFolder": {
+    "message": "dito pumupunta ang mga bagong dokumento"
   }
 }

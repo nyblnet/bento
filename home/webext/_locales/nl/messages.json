@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "“$1” is al toegevoegd."
+  },
+  "bentoFolderBtn": {
+    "message": "Een Bento-map maken…"
+  },
+  "bentoFolderHow": {
+    "message": "Maak in het venster een nieuwe map met de naam “Bento” in Documenten en kies die."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” is uw Bento-map — nieuwe documenten komen daar en worden ter plekke opgeslagen."
+  },
+  "bentoFolderTip": {
+    "message": "Een map in Documenten die ter plekke opslaat en nieuwe documenten ontvangt. Documenten zelf geeft Chrome niet vrij."
+  },
+  "defaultFolder": {
+    "message": "nieuwe documenten komen hier"
   }
 }

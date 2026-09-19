@@ -550,5 +550,20 @@
   },
   "folderAlreadyAdded": {
     "message": "“$1” já foi adicionada."
+  },
+  "bentoFolderBtn": {
+    "message": "Criar uma pasta Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "Na janela, crie uma nova pasta chamada “Bento” dentro de Documentos e escolha-a."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” é sua pasta Bento — novos documentos vão para lá e salvam no lugar."
+  },
+  "bentoFolderTip": {
+    "message": "Uma pasta dentro de Documentos que salva no lugar e recebe os novos documentos. O Chrome não concede a própria Documentos."
+  },
+  "defaultFolder": {
+    "message": "novos documentos vão aqui"
   }
 }

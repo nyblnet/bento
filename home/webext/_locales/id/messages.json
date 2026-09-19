@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "“$1” sudah ditambahkan."
+  },
+  "bentoFolderBtn": {
+    "message": "Buat folder Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "Di dialog, buat folder baru bernama “Bento” di dalam Dokumen dan pilih folder itu."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” adalah folder Bento Anda — dokumen baru masuk ke sana dan tersimpan di tempat."
+  },
+  "bentoFolderTip": {
+    "message": "Folder di dalam Dokumen yang menyimpan di tempat dan menerima dokumen baru. Chrome tidak akan memberikan Dokumen itu sendiri."
+  },
+  "defaultFolder": {
+    "message": "dokumen baru masuk ke sini"
   }
 }

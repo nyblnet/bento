@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "„$1” כבר נוספה."
+  },
+  "bentoFolderBtn": {
+    "message": "יצירת תיקיית Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "בתיבת הדו־שיח צרו תיקייה חדשה בשם „Bento” בתוך מסמכים ובחרו אותה."
+  },
+  "bentoFolderMade": {
+    "message": "„$1” היא תיקיית ה־Bento שלכם — מסמכים חדשים הולכים לשם ונשמרים במקום."
+  },
+  "bentoFolderTip": {
+    "message": "תיקייה בתוך מסמכים ששומרת במקום ומקבלת מסמכים חדשים. Chrome לא ימסור את תיקיית מסמכים עצמה."
+  },
+  "defaultFolder": {
+    "message": "מסמכים חדשים מגיעים לכאן"
   }
 }

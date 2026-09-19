@@ -550,5 +550,20 @@
   },
   "folderAlreadyAdded": {
     "message": "「$1」はすでに追加されています。"
+  },
+  "bentoFolderBtn": {
+    "message": "Bento フォルダーを作成…"
+  },
+  "bentoFolderHow": {
+    "message": "ダイアログで「書類」の中に「Bento」という新しいフォルダーを作り、それを選んでください。"
+  },
+  "bentoFolderMade": {
+    "message": "「$1」があなたの Bento フォルダーです。新しいドキュメントはそこに作られ、その場に保存されます。"
+  },
+  "bentoFolderTip": {
+    "message": "「書類」の中のフォルダーで、その場に保存し、新しいドキュメントの置き場になります。「書類」そのものは Chrome が渡してくれません。"
+  },
+  "defaultFolder": {
+    "message": "新しいドキュメントはここに入ります"
   }
 }

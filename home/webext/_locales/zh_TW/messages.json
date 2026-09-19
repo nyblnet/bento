@@ -550,5 +550,20 @@
   },
   "folderAlreadyAdded": {
     "message": "「$1」已加入。"
+  },
+  "bentoFolderBtn": {
+    "message": "建立 Bento 資料夾……"
+  },
+  "bentoFolderHow": {
+    "message": "請在對話框中於「文件」內新增一個名為「Bento」的資料夾並選擇它。"
+  },
+  "bentoFolderMade": {
+    "message": "「$1」是您的 Bento 資料夾——新文件會放在這裡並就地儲存。"
+  },
+  "bentoFolderTip": {
+    "message": "「文件」內的一個資料夾，可就地儲存並接收新文件。Chrome 不會交出「文件」本身。"
+  },
+  "defaultFolder": {
+    "message": "新文件放在這裡"
   }
 }

@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "“$1” đã được thêm."
+  },
+  "bentoFolderBtn": {
+    "message": "Tạo thư mục Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "Trong hộp thoại, tạo thư mục mới tên “Bento” trong Documents rồi chọn nó."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” là thư mục Bento của bạn — tài liệu mới vào đó và lưu tại chỗ."
+  },
+  "bentoFolderTip": {
+    "message": "Một thư mục trong Documents lưu tại chỗ và nhận tài liệu mới. Chrome không cấp chính Documents."
+  },
+  "defaultFolder": {
+    "message": "tài liệu mới vào đây"
   }
 }

@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "«$1» از قبل افزوده شده است."
+  },
+  "bentoFolderBtn": {
+    "message": "ساخت پوشهٔ Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "در پنجره، پوشه‌ای جدید به نام «Bento» درون Documents بسازید و آن را انتخاب کنید."
+  },
+  "bentoFolderMade": {
+    "message": "«$1» پوشهٔ Bento شماست — سندهای جدید به آنجا می‌روند و در جای خود ذخیره می‌شوند."
+  },
+  "bentoFolderTip": {
+    "message": "پوشه‌ای درون Documents که در جای خود ذخیره می‌کند و سندهای جدید را می‌گیرد. Chrome خودِ Documents را واگذار نمی‌کند."
+  },
+  "defaultFolder": {
+    "message": "سندهای جدید به اینجا می‌آیند"
   }
 }

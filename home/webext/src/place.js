@@ -107,18 +107,37 @@ export async function candidateDirs(folderName, knownPrefixes, deps) {
  * as listDocuments describes it — used as the fingerprint.
  */
 export async function placeFolder(dir, probe, knownPrefixes, deps) {
-  if (!probe?.handle || !Array.isArray(probe.rel) || !probe.rel.length) return null
-  const file = await probe.handle.getFile()
-  if (!file.size) return null
-  const tail = probe.rel.join('/')
-  for (const cand of await candidateDirs(dir.name, knownPrefixes, deps)) {
-    const path = `${cand}/${tail}`
-    if (!(await sameFile(path, file, deps))) continue
-    // the same bytes at that path — now the grant itself has to agree
-    const prefix = await deps.prefixFor(dir, path)
-    if (prefix) return prefix
+  // An EMPTY grant — the Bento folder a person just made — has nothing to
+  // fingerprint. So it gets one: a marker file of random bytes written into
+  // the grant, looked for, and removed again whatever happened.
+  let marker = null
+  if (!probe?.handle) {
+    if (typeof dir.getFileHandle !== 'function') return null
+    marker = `.bento-place-${Math.random().toString(36).slice(2)}`
+    try {
+      const h = await dir.getFileHandle(marker, { create: true })
+      const w = await h.createWritable()
+      await w.write(crypto.getRandomValues(new Uint8Array(64)))
+      await w.close()
+      probe = { rel: [marker], handle: h }
+    } catch { return null }
   }
-  return null
+  try {
+    if (!probe?.handle || !Array.isArray(probe.rel) || !probe.rel.length) return null
+    const file = await probe.handle.getFile()
+    if (!file.size) return null
+    const tail = probe.rel.join('/')
+    for (const cand of await candidateDirs(dir.name, knownPrefixes, deps)) {
+      const path = `${cand}/${tail}`
+      if (!(await sameFile(path, file, deps))) continue
+      // the same bytes at that path — now the grant itself has to agree
+      const prefix = await deps.prefixFor(dir, path)
+      if (prefix) return prefix
+    }
+    return null
+  } finally {
+    if (marker) { try { await dir.removeEntry(marker) } catch { /* best effort */ } }
+  }
 }
 
 // ---------------------------------------------------------------- the scan

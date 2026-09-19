@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "“$1” er allerede tilføjet."
+  },
+  "bentoFolderBtn": {
+    "message": "Opret en Bento-mappe…"
+  },
+  "bentoFolderHow": {
+    "message": "Opret i dialogen en ny mappe kaldet “Bento” i Dokumenter, og vælg den."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” er din Bento-mappe — nye dokumenter havner der og gemmes på stedet."
+  },
+  "bentoFolderTip": {
+    "message": "En mappe i Dokumenter, der gemmer på stedet og modtager nye dokumenter. Chrome giver ikke selve Dokumenter."
+  },
+  "defaultFolder": {
+    "message": "nye dokumenter havner her"
   }
 }

@@ -550,5 +550,20 @@
   },
   "folderAlreadyAdded": {
     "message": "«$1» è già aggiunta."
+  },
+  "bentoFolderBtn": {
+    "message": "Crea una cartella Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "Nella finestra, crea una nuova cartella chiamata «Bento» dentro Documenti e scegli quella."
+  },
+  "bentoFolderMade": {
+    "message": "«$1» è la tua cartella Bento: i nuovi documenti vanno lì e si salvano sul posto."
+  },
+  "bentoFolderTip": {
+    "message": "Una cartella dentro Documenti che salva sul posto e accoglie i nuovi documenti. Chrome non concede Documenti in sé."
+  },
+  "defaultFolder": {
+    "message": "i nuovi documenti vanno qui"
   }
 }

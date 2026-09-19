@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "“$1”은(는) 이미 추가되어 있습니다."
+  },
+  "bentoFolderBtn": {
+    "message": "Bento 폴더 만들기…"
+  },
+  "bentoFolderHow": {
+    "message": "대화상자에서 문서 안에 “Bento”라는 새 폴더를 만들고 그것을 선택하세요."
+  },
+  "bentoFolderMade": {
+    "message": "“$1”이(가) Bento 폴더입니다. 새 문서는 거기에 만들어지고 제자리에 저장됩니다."
+  },
+  "bentoFolderTip": {
+    "message": "문서 안에 있는 폴더로, 제자리에 저장하고 새 문서를 받습니다. 문서 폴더 자체는 Chrome이 넘겨주지 않습니다."
+  },
+  "defaultFolder": {
+    "message": "새 문서는 여기에 만들어집니다"
   }
 }

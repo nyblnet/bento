@@ -586,5 +586,25 @@
   "folderAlreadyAdded": {
     "message": "“$1” is already added.",
     "description": "Toast when the picked folder is already granted. $1 is the folder name."
+  },
+  "bentoFolderBtn": {
+    "message": "Create a Bento folder…",
+    "description": "Button: make and grant a Bento folder in Documents."
+  },
+  "bentoFolderHow": {
+    "message": "In the dialog, make a new folder called “Bento” inside Documents and choose it.",
+    "description": "Toast before the folder picker opens for the Bento folder. Keep the folder name “Bento”."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” is your Bento folder — new documents go there and save in place.",
+    "description": "Toast after the Bento folder is granted. $1 is the folder name."
+  },
+  "bentoFolderTip": {
+    "message": "A folder inside Documents that saves in place and takes new documents. Chrome will not grant Documents itself.",
+    "description": "Tooltip of the Create-a-Bento-folder button."
+  },
+  "defaultFolder": {
+    "message": "new documents go here",
+    "description": "Settings folder row: marks the folder new documents are created in."
   }
 }

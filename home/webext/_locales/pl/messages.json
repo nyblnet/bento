@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "„$1” jest już dodany."
+  },
+  "bentoFolderBtn": {
+    "message": "Utwórz folder Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "W oknie utwórz w Dokumentach nowy folder o nazwie „Bento” i wybierz go."
+  },
+  "bentoFolderMade": {
+    "message": "„$1” to Twój folder Bento — nowe dokumenty trafiają tam i zapisują się w miejscu."
+  },
+  "bentoFolderTip": {
+    "message": "Folder w Dokumentach, który zapisuje w miejscu i przyjmuje nowe dokumenty. Samych Dokumentów Chrome nie udostępni."
+  },
+  "defaultFolder": {
+    "message": "nowe dokumenty trafiają tutaj"
   }
 }

@@ -517,5 +517,20 @@
   },
   "folderAlreadyAdded": {
     "message": "“$1” ইতিমধ্যে যোগ করা আছে।"
+  },
+  "bentoFolderBtn": {
+    "message": "একটি Bento ফোল্ডার তৈরি করুন…"
+  },
+  "bentoFolderHow": {
+    "message": "ডায়ালগে Documents-এর ভেতরে “Bento” নামে একটি নতুন ফোল্ডার তৈরি করে সেটি বেছে নিন।"
+  },
+  "bentoFolderMade": {
+    "message": "“$1” আপনার Bento ফোল্ডার — নতুন নথি সেখানে যায় এবং জায়গায় সংরক্ষিত হয়।"
+  },
+  "bentoFolderTip": {
+    "message": "Documents-এর ভেতরের একটি ফোল্ডার যা জায়গায় সংরক্ষণ করে ও নতুন নথি নেয়। Chrome খোদ Documents দেবে না।"
+  },
+  "defaultFolder": {
+    "message": "নতুন নথি এখানে আসে"
   }
 }
