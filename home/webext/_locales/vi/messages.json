@@ -610,5 +610,14 @@
   },
   "badgeNotSavingTip": {
     "message": "Tài liệu này chưa thể lưu tại chỗ — mở bảng bento/home để khắc phục."
+  },
+  "navRecent": {
+    "message": "Gần đây"
+  },
+  "noticeOsBlocked": {
+    "message": "macOS đang chặn trình duyệt truy cập $1, nên tài liệu ở đó không được liệt kê cho đến khi bạn cho phép: System Settings → Privacy & Security → Files and Folders → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "System Settings → Privacy & Security → Files and Folders"
   }
 }

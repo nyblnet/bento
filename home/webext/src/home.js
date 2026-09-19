@@ -16,7 +16,7 @@ import { getGrants, putGrants, status } from './status.js'
 import { listDocuments, describe, newDocument, duplicate, rename, APPS } from './library.js'
 import { prefixFor } from './route.js'
 import { learnPrefix, prefixes, recentOpened, GRANT, get, put } from './db.js'
-import { placeFolder, scanDisk, fileUrl } from './place.js'
+import { placeFolder, scanDisk, fileUrl, blockedFolders } from './place.js'
 import { listFileGrants, addFileGrant, dropFileGrant, handleIsPath, downloadsUnusable, setDownloadsUnusable } from './filegrant.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
@@ -246,6 +246,8 @@ const ago = (ms) => {
 // documents are drawn within it. Two different words on purpose — they were
 // briefly the same one, and "view" then meant two things one line apart.
 const state = { docs: [], folder: null, q: '', sort: 'recent', view: 'docs', layout: 'icons' }
+/** `state.folder` for the Recent view: not a folder name, so no folder can collide with it. */
+const RECENT = Symbol('recent')
 // Readable from the page's console (`__bentoHome.folder`), for a question
 // like "why is the grid drawn this way" without a reload-and-watch.
 globalThis.__bentoHome = state
@@ -290,6 +292,7 @@ function show(view) {
   $('settings').setAttribute('aria-current', String(view === 'settings'))
   $('help').setAttribute('aria-current', String(view === 'help'))
   $('navAll').setAttribute('aria-current', String(docs && state.folder === null))
+  $('navRecent').setAttribute('aria-current', String(docs && state.folder === RECENT))
   if (docs) { renderSidebar(); renderGrid() }
   else if (view === 'settings') renderSettings()
   else renderHelp()
@@ -319,6 +322,9 @@ async function scannedDocs({ fresh = false } = {}) {
   let found = []
   try { found = await scanDisk({ fetch: (u) => fetch(u) }) } catch (e) { console.info('[bento/home] scan failed:', e?.message || e); found = [] }
   console.info(`[bento/home] scan: ${found.length} documents under the usual places`)
+  // the folders the OS keeps from the browser, for the notice
+  try { state.blocked = await blockedFolders({ fetch: (u) => fetch(u) }) } catch { state.blocked = [] }
+  if (state.blocked.length) console.info('[bento/home] the OS refuses the browser these folders:', state.blocked)
   // the worker reads this to tell two same-named files apart when a file grant is used
   chrome.storage.local.set({ lastScan: found.map((f) => f.path).slice(0, 2000) }).catch(() => {})
   scanned = found.map((f) => ({
@@ -381,7 +387,8 @@ async function load() {
   const have = new Set(docs.map((d) => d.path).filter(Boolean))
   const extra = onDisk.filter((f) => !have.has(f.path))
   for (const f of extra) have.add(f.path)
-  for (const [path, at] of Object.entries(await recentOpened().catch(() => ({})))) {
+  const opened = await recentOpened().catch(() => ({}))
+  for (const [path, at] of Object.entries(opened)) {
     if (have.has(path) || !/\.bento\.html$/i.test(path)) continue
     const name = path.split('/').pop()
     const dir = path.slice(0, path.lastIndexOf('/'))
@@ -412,9 +419,9 @@ async function load() {
     ...docs.map(async (d) => {
       let modified = 0
       try { modified = (await d.handle.getFile()).lastModified } catch { /* vanished mid-list */ }
-      return { ...d, modified }
+      return { ...d, modified, openedAt: d.path ? opened[d.path] ?? 0 : 0 }
     }),
-    ...extra.map(async (d) => ({ ...d, modified: await diskModified(d.path) })),
+    ...extra.map(async (d) => ({ ...d, modified: d.path ? await diskModified(d.path) : 0, openedAt: d.openedAt ?? (d.path ? opened[d.path] ?? 0 : 0) })),
   ])
   renderSidebar()
   renderGrid()
@@ -434,6 +441,9 @@ function renderSidebar() {
 
   $('nAll').textContent = state.docs.length || ''
   $('navAll').setAttribute('aria-current', String(state.folder === null))
+  const nRecent = state.docs.filter((d) => d.openedAt > 0).length
+  $('nRecent').textContent = nRecent || ''
+  $('navRecent').setAttribute('aria-current', String(state.folder === RECENT))
 
   const host = $('folders')
   host.innerHTML = ''
@@ -451,11 +461,14 @@ function renderSidebar() {
 }
 
 $('navAll').addEventListener('click', () => { state.folder = null; show('docs') })
+$('navRecent').addEventListener('click', () => { state.folder = RECENT; show('docs') })
 
 // --------------------------------------------------------------------- grid
 function visible() {
   const q = state.q.trim().toLowerCase()
-  let docs = state.docs.filter((d) => state.folder === null || d.folder === state.folder)
+  let docs = state.folder === RECENT
+    ? state.docs.filter((d) => d.openedAt > 0)
+    : state.docs.filter((d) => state.folder === null || d.folder === state.folder)
   if (q) {
     // Match the TITLE once it is known, and the file name always — a document
     // whose thumbnail has not loaded yet is still findable by what it is called
@@ -467,6 +480,7 @@ function visible() {
       || d.base.toLowerCase().includes(q) || d.folder.toLowerCase().includes(q)
       || (d.text ?? '').toLowerCase().includes(q))
   }
+  if (state.folder === RECENT) return docs.sort((a, b) => b.openedAt - a.openedAt)
   const by = {
     recent: (a, b) => b.modified - a.modified,
     name: (a, b) => (a.title ?? a.base).localeCompare(b.title ?? b.base),
@@ -653,7 +667,7 @@ function renderGrid() {
   const grid = $('grid')
   if (state.layout === 'list') grid.classList.add('as-list')
   const docs = visible()
-  $('heading').textContent = state.folder ?? t('navAll')
+  $('heading').textContent = state.folder === RECENT ? t('navRecent') : (state.folder ?? t('navAll'))
 
   if (!docs.length) {
     // Three different emptinesses, and telling them apart is the whole job of
@@ -675,7 +689,7 @@ function renderGrid() {
   // last, however the rest is sorted. Only on the unfiltered "All documents"
   // view — a folder or a search is already an answer to "which ones", and a
   // strip of the same cards twice would be noise there.
-  console.info('[bento/home] grid:', { folder: state.folder, q: state.q, docs: docs.length, layout: state.layout })
+  console.info('[bento/home] grid:', { folder: state.folder === RECENT ? 'recent' : state.folder, q: state.q, docs: docs.length, layout: state.layout })
   if (state.folder === null && !state.q && docs.length > RECENT_MAX) {
     const recent = [...docs].filter((d) => d.modified > 0).sort((a, b) => b.modified - a.modified).slice(0, RECENT_MAX)
     if (recent.length >= 2) {
@@ -978,6 +992,12 @@ async function renderNotice() {
   const lapsed = s.folders.filter((f) => f.permission !== 'granted')
   if (lapsed.length) {
     say('bad', t('noticeLapsed', lapsed.length))
+  }
+  // macOS keeps Documents/Desktop/Downloads from the browser until the person
+  // allows it in System Settings; the browser cannot ask again itself.
+  if (state.blocked?.length) {
+    const names = state.blocked.map((p) => p.split('/').pop()).join(', ')
+    say('meh', `${t('noticeOsBlocked', esc(names))}<br><code>${t('noticeOsBlockedPath')}</code>`)
   }
   // The one that unlocks opening. Said here in full, because the page has room
   // for the reason and the popup does not.
@@ -1791,7 +1811,7 @@ document.addEventListener('visibilitychange', () => {
     await load()
     await renderNotice()
     const after = state.docs.filter((d) => d.path).length
-    if (after > before) toast(`${state.folder ?? 'Your documents'} — unlocked`)
+    if (after > before) toast(`${typeof state.folder === 'string' ? state.folder : 'Your documents'} — unlocked`)
   })()
 })
 

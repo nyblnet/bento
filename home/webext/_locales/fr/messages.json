@@ -643,5 +643,14 @@
   },
   "badgeNotSavingTip": {
     "message": "Ce document ne peut pas encore s’enregistrer sur place — ouvrez le panneau bento/home pour y remédier."
+  },
+  "navRecent": {
+    "message": "Récents"
+  },
+  "noticeOsBlocked": {
+    "message": "macOS empêche le navigateur d’accéder à $1 ; les documents qui s’y trouvent ne seront listés qu’après votre autorisation : Réglages Système → Confidentialité et sécurité → Fichiers et dossiers → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "Réglages Système → Confidentialité et sécurité → Fichiers et dossiers"
   }
 }

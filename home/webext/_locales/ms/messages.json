@@ -610,5 +610,14 @@
   },
   "badgeNotSavingTip": {
     "message": "Dokumen ini belum boleh menyimpan di tempat — buka panel bento/home untuk membetulkannya."
+  },
+  "navRecent": {
+    "message": "Terkini"
+  },
+  "noticeOsBlocked": {
+    "message": "macOS menghalang pelayar daripada $1, jadi dokumen di sana tidak disenaraikan sehingga anda membenarkannya: System Settings → Privacy & Security → Files and Folders → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "System Settings → Privacy & Security → Files and Folders"
   }
 }

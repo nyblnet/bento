@@ -235,5 +235,24 @@ console.log('\n— an empty grant (the Bento folder) is placed through a marker'
   ok(/createBentoFolder/.test(home) && /defaultFolder/.test(home) && /startIn: 'documents'/.test(home), 'home.js offers the Bento folder, remembers it as the default for new documents, and opens the picker in Documents')
 }
 
+console.log('\n— folders the OS keeps from the browser')
+{
+  // Documents named by the home listing but refused when listed itself; Desktop readable; Downloads empty but readable
+  const files = { '/Users/andy/Desktop/x.bento.html': 'x', '/Users/andy/Documents/hidden.bento.html': 'h' }
+  const d = disk(files)
+  const inner = d.fetch
+  const fetch = async (url: string) => {
+    if (/\/Users\/andy\/Documents\//.test(url)) return { ok: false }
+    if (url === 'file:///Users/andy/Downloads/') return { ok: true, text: async () => '' }
+    if (url === 'file:///Users/andy/') return { ok: true, text: async () => ['Desktop', 'Documents', 'Downloads'].map((n) => `<script>addRow("${n}","${n}",1,0,"0",0,"");</script>`).join('') }
+    return inner(url)
+  }
+  const blocked = await place.blockedFolders({ fetch })
+  ok(blocked.join() === '/Users/andy/Documents', `blockedFolders: a folder the home names but refuses to list, and only that (${blocked.join()})`)
+  ok(!blocked.includes('/Users/andy/Downloads'), 'an EMPTY folder that lists fine is not "blocked"')
+  const home = readFileSync(join(SRC, 'src/home.js'), 'utf8')
+  ok(/noticeOsBlocked/.test(home) && /navRecent/.test(home) && /openedAt/.test(home), 'the library says which folders the OS refuses, and has a Recent view of opened documents')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

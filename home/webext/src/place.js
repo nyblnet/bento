@@ -220,3 +220,30 @@ export async function scanDisk(deps, roots = null) {
   for (const b of bases) await walk(b, 0)
   return out
 }
+
+/**
+ * The usual folders macOS keeps from the browser. Chrome reads a folder in
+ * its own process, and macOS gates Documents, Desktop and Downloads behind
+ * "Google Chrome would like to access files in your Documents folder" — a
+ * prompt macOS shows once, at first access; refused once, it never asks
+ * again and the listing simply comes back empty. Detected here: a folder
+ * the home's listing NAMES but that cannot itself be listed. Nothing can
+ * make the OS ask again from inside the browser; the answer is the switch
+ * in System Settings, and the library says exactly where it is.
+ */
+export async function blockedFolders(deps) {
+  const out = []
+  for (const home of await homeDirs(deps)) {
+    const names = new Set((await listDir(home, deps)).filter((e) => e.dir).map((e) => e.name))
+    for (const sub of ['Documents', 'Desktop', 'Downloads']) {
+      if (!names.has(sub)) continue
+      const entries = await listDir(`${home}/${sub}`, deps)
+      // an empty folder lists as an empty page, not as a refusal — the fetch
+      // itself says which: refused is `ok:false`
+      let refused = false
+      try { const r = await deps.fetch(fileUrl(`${home}/${sub}/`)); refused = !r.ok } catch { refused = true }
+      if (refused && entries.length === 0) out.push(`${home}/${sub}`)
+    }
+  }
+  return out
+}

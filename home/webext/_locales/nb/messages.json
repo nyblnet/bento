@@ -610,5 +610,14 @@
   },
   "badgeNotSavingTip": {
     "message": "Dette dokumentet kan ikke lagre på stedet ennå — åpne bento/home-panelet for å ordne det."
+  },
+  "navRecent": {
+    "message": "Nylige"
+  },
+  "noticeOsBlocked": {
+    "message": "macOS holder nettleseren ute av $1, så dokumenter der vises ikke før du tillater det: Systeminnstillinger → Personvern og sikkerhet → Filer og mapper → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "Systeminnstillinger → Personvern og sikkerhet → Filer og mapper"
   }
 }

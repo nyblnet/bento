@@ -610,5 +610,14 @@
   },
   "badgeNotSavingTip": {
     "message": "Bu belge henüz yerinde kaydedemiyor — düzeltmek için bento/home panelini açın."
+  },
+  "navRecent": {
+    "message": "Son açılanlar"
+  },
+  "noticeOsBlocked": {
+    "message": "macOS tarayıcıyı $1 dışında tutuyor; izin verene kadar oradaki belgeler listelenmez: Sistem Ayarları → Gizlilik ve Güvenlik → Dosyalar ve Klasörler → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "Sistem Ayarları → Gizlilik ve Güvenlik → Dosyalar ve Klasörler"
   }
 }

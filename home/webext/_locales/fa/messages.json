@@ -610,5 +610,14 @@
   },
   "badgeNotSavingTip": {
     "message": "این سند هنوز نمی‌تواند در جای خود ذخیره شود — برای رفع آن پنل bento/home را باز کنید."
+  },
+  "navRecent": {
+    "message": "اخیر"
+  },
+  "noticeOsBlocked": {
+    "message": "macOS مرورگر را از $1 دور نگه می‌دارد، بنابراین سندهای آنجا تا زمانی که اجازه ندهید فهرست نمی‌شوند: System Settings → Privacy & Security → Files and Folders → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "System Settings → Privacy & Security → Files and Folders"
   }
 }

@@ -610,5 +610,14 @@
   },
   "badgeNotSavingTip": {
     "message": "이 문서는 아직 제자리에 저장할 수 없습니다. bento/home 패널을 열어 해결하세요."
+  },
+  "navRecent": {
+    "message": "최근"
+  },
+  "noticeOsBlocked": {
+    "message": "macOS가 브라우저의 $1 접근을 막고 있어, 허용할 때까지 그곳의 문서는 나열되지 않습니다: 시스템 설정 → 개인정보 보호 및 보안 → 파일 및 폴더 → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "시스템 설정 → 개인정보 보호 및 보안 → 파일 및 폴더"
   }
 }

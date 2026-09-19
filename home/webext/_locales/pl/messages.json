@@ -610,5 +610,14 @@
   },
   "badgeNotSavingTip": {
     "message": "Ten dokument nie może jeszcze zapisywać w miejscu — otwórz panel bento/home, aby to naprawić."
+  },
+  "navRecent": {
+    "message": "Ostatnie"
+  },
+  "noticeOsBlocked": {
+    "message": "macOS nie wpuszcza przeglądarki do $1, więc dokumenty stamtąd nie są wyświetlane, dopóki na to nie zezwolisz: Ustawienia systemowe → Prywatność i ochrona → Pliki i foldery → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "Ustawienia systemowe → Prywatność i ochrona → Pliki i foldery"
   }
 }
