@@ -188,7 +188,11 @@ matters. Neither needs the signing key.
    after. So: `cd ~/devel/bento` (or any checkout under `~/devel`) and run
    the publish from there, pointing `BENTO_SITE_DIR` at the site repo. A
    collaborator with release rights who is not the owner can be allowed with
-   `BENTO_RELEASE_ACCOUNTS=name1,name2`.
+   `BENTO_RELEASE_ACCOUNTS=name1,name2`. The repo owner is read from the
+   `origin` remote — of the checkout, or of the main gitdir when the checkout
+   is a worktree (a detached release worktree included). A checkout with no
+   remote at all is **refused**, not skipped; `BENTO_RELEASE_OWNER=<owner>`
+   is the way out for a copied tree.
 
    This mirrors the assembled `site/` tree into `../bento-site` (or
    `$BENTO_SITE_DIR`) and pushes it. **`site/` is fully generated — never edit
