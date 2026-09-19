@@ -40,6 +40,7 @@ import {
   modelsKey, builtinContext, models as listRoutes, select as selectRoute, runTurn,
   describe as describeAssistant, check as checkAssistant, run as runAssistant,
 } from './assistant.js'
+import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads } from './filegrant.js'
 
 // Re-exported: these moved to route.js so the PAGES can place a path too,
 // but they are still part of this module's tested surface.
@@ -254,21 +255,48 @@ export async function backup(sender, text, name, deps) {
 }
 
 /** Can this sender's file be written in place? Resolves; writes nothing. */
-export async function claim(sender, deps) {
+/**
+ * Where a save for this sender goes, in order: a FOLDER grant (resolve), a
+ * FILE grant for that one document, the DOWNLOADS folder through the
+ * downloads API. Each is checked from scratch on every message; nothing is
+ * carried. `via` says which, for the page's console and the badge.
+ */
+export async function resolveAny(sender, deps = {}) {
   const r = await resolve(sender, deps)
-  return r.ok ? { ok: true, name: r.name } : { ok: false, reason: r.reason }
+  if (r.ok) return { ...r, via: 'folder' }
+  const path = pathFromSender(sender)
+  if (!path) return r
+  // each further door fails soft: no store, no downloads API, no answer — the
+  // save falls to the picker, never to an exception
+  const fg = await (deps.resolveFileGrant ?? resolveFileGrant)(path, deps.filegrant).catch(() => ({ ok: false, reason: 'none' }))
+  if (fg.ok) return { ok: true, name: path.split('/').pop(), handle: fg.handle, key: fg.key, via: 'file' }
+  const dir = await (deps.downloadsDir ?? downloadsDir)(deps.filegrant).catch(() => null)
+  const rel = downloadsRelative(path, dir)
+  if (rel) return { ok: true, name: path.split('/').pop(), rel, via: 'downloads' }
+  return { ok: false, reason: fg.reason === 'lapsed' ? 'file grant needs renewing' : r.reason, path }
+}
+
+export async function claim(sender, deps) {
+  const r = await resolveAny(sender, deps)
+  return r.ok ? { ok: true, name: r.name, via: r.via } : { ok: false, reason: r.reason }
 }
 
 /** Write the sender's own file. Re-resolves, so no state is carried. */
-export async function write(sender, text, deps) {
-  const r = await resolve(sender, deps)
+export async function write(sender, text, deps = {}) {
+  const r = await resolveAny(sender, deps)
   if (!r.ok) return { ok: false, reason: r.reason }
   try {
+    if (r.via === 'downloads') {
+      const bytes = await (deps.writeViaDownloads ?? writeViaDownloads)(r.rel, text, deps.filegrant)
+      return { ok: true, bytes, via: r.via }
+    }
     const w = await r.handle.createWritable()
     await w.write(text)
     await w.close()
-    return { ok: true, bytes: text.length }
+    return { ok: true, bytes: text.length, via: r.via }
   } catch (e) {
+    // a file grant whose file is gone is no grant: forget it
+    if (r.via === 'file' && e?.name === 'NotFoundError') await (deps.dropFileGrant ?? dropFileGrant)(r.key, deps.filegrant).catch(() => {})
     return { ok: false, reason: `${e.name}: ${e.message}` }
   }
 }
@@ -500,6 +528,77 @@ export function serveAssistantPort(port) {
   })
 }
 
+// ---------------------------------------------------------------- the offer
+//
+// A ⌘S that nothing covers is the moment to ask, once: the page's `claim`
+// gets { ok:false, reason:'setup', token } while a small window
+// (src/filegrant.html) asks the person to pick the file; the page then waits
+// on `claim { token }` as long as the window is open. In memory only, like
+// the assistant's consent: an eviction loses one pending save (the page falls
+// to its picker), and the window's own storing survives regardless.
+const offers = new Map() // token → { path, resolve, promise }
+
+async function offerFileGrant(path, lapsed) {
+  const open = [...offers.values()].find((o) => o.path === path)
+  if (open) return open
+  const token = crypto.randomUUID()
+  let resolve
+  const promise = new Promise((r) => { resolve = r })
+  const entry = { path, resolve, promise, token }
+  offers.set(token, entry)
+  const url = new URL(chrome.runtime.getURL('src/filegrant.html'))
+  url.searchParams.set('path', path)
+  url.searchParams.set('token', token)
+  if (lapsed) url.searchParams.set('lapsed', '1')
+  chrome.windows.create({ url: url.href, type: 'popup', width: 480, height: 320, focused: true })
+    .catch(() => { offers.delete(token); resolve(false) })
+  return entry
+}
+
+/** `claim` with the offer: what the page's first phase gets. */
+export async function claimOrOffer(sender, payload, deps) {
+  // second phase: the page waiting on a window it was told about
+  if (typeof payload?.token === 'string') {
+    const o = offers.get(payload.token)
+    if (!o) return { ok: false, reason: 'no such offer' }
+    const chosen = await o.promise
+    if (!chosen) return { ok: false, reason: 'declined' }
+    const r = await resolveAny(sender, deps)
+    return r.ok ? { ok: true, name: r.name, via: r.via } : { ok: false, reason: r.reason }
+  }
+  const r = await resolveAny(sender, deps)
+  if (r.ok) return { ok: true, name: r.name, via: r.via }
+  const path = pathFromSender(sender)
+  if (!path || !(await isFileAccessOn())) return { ok: false, reason: r.reason }
+  if (await declined(path)) return { ok: false, reason: r.reason }
+  const o = await offerFileGrant(path, r.reason === 'file grant needs renewing')
+  return { ok: false, reason: 'setup', token: o.token }
+}
+
+const isFileAccessOn = () => new Promise((res) => {
+  try { chrome.extension.isAllowedFileSchemeAccess((v) => res(!!v)) } catch { res(false) }
+})
+
+/** The offer window's port: its disconnect is the window closing without an answer. */
+function watchOfferWindow(port) {
+  const ours = port.sender?.id === chrome.runtime.id && typeof port.sender.url === 'string' && port.sender.url.startsWith(chrome.runtime.getURL('src/filegrant.html'))
+  if (!ours) { port.disconnect(); return }
+  const token = port.name.slice('filegrant:'.length)
+  port.onDisconnect.addListener(() => {
+    const o = offers.get(token)
+    if (o) { offers.delete(token); o.resolve(false) }
+  })
+}
+
+/** The window answered (it stored the grant itself, or recorded the decline). */
+function offerAnswered(sender, msg) {
+  const ours = sender?.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL('src/filegrant.html'))
+  if (!ours) return { ok: false, reason: 'not the offer window' }
+  const o = offers.get(msg.token)
+  if (o) { offers.delete(msg.token); o.resolve(msg.chosen === true) }
+  return { ok: true }
+}
+
 // `chrome` is absent when this module is loaded by the test rig, which imports
 // the logic above and never needs the listener.
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
@@ -510,7 +609,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     // — waiting for a save meant a fresh install listed documents it could not
     // open.
     const run = msg?.op === 'hello' ? claim(sender)
-      : msg?.op === 'claim' ? claim(sender)
+      : msg?.op === 'claim' ? claimOrOffer(sender, msg.payload)
+      : msg?.op === 'filegrant.answered' ? Promise.resolve(offerAnswered(sender, msg))
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
       : msg?.op === 'assistant.consent' ? recordConsent(sender, msg)
@@ -530,6 +630,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name === PORT) serveAssistantPort(port)
     else if (port.name.startsWith('bento-consent:')) watchConsentWindow(port)
+    else if (port.name.startsWith('filegrant:')) watchOfferWindow(port)
   })
 
   // The worker restarts constantly; the badge has to survive that, and startup

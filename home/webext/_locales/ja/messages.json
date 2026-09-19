@@ -199,7 +199,7 @@
     "message": "ドキュメントを置いているフォルダを選ぶ"
   },
   "setupStep1Note": {
-    "message": "通常は広めのフォルダを 1 つで十分です — 中身すべてが対象になります。"
+    "message": "広めのフォルダーが一つあれば通常十分です。その中のすべてが対象になります。ホームフォルダー自体や Library は Chrome が渡してくれません。書類、デスクトップ、またはドキュメントのあるフォルダーを選んでください。"
   },
   "setupStep2": {
     "message": "ローカルファイルへのアクセスをオンにする",
@@ -664,5 +664,89 @@
   },
   "asstFocusGeneric": {
     "message": "選択中の要素または開いているスライド"
+  },
+  "placingFolder": {
+    "message": "ディスク上で「$1」を探しています…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome は「$1」を探すために拡張機能がディスクを読むことを許可しませんでした（file:// の一覧が拒否されました）。"
+  },
+  "placeTried": {
+    "message": "ディスク上の $2 か所で「$1」を探しましたが、見つかりませんでした。"
+  },
+  "recentTitle": {
+    "message": "最近編集したもの"
+  },
+  "badgeNotAdded": {
+    "message": "未追加"
+  },
+  "badgeNotAddedTip": {
+    "message": "ディスク上で見つかりました。開けますが、保存時に保存先を尋ねられます。その場で保存するにはフォルダーを追加してください。"
+  },
+  "folderFoundTip": {
+    "message": "ディスク上で見つかった未追加のフォルダーです。中のドキュメントは開けますが、保存時に保存先を尋ねられます。"
+  },
+  "menuAddFolder": {
+    "message": "その場で保存するためにフォルダーを追加…"
+  },
+  "pickThisFolder": {
+    "message": "ダイアログでフォルダー「$1」を選んでください。Chrome はあなたが選ぶのを見届ける必要があります。"
+  },
+  "pickedWrongFolder": {
+    "message": "「$1」はこのドキュメントのフォルダー（「$2」）ではありません。もう一度、そのフォルダーを選んでください。"
+  },
+  "folderAlreadyAdded": {
+    "message": "「$1」はすでに追加されています。"
+  },
+  "bentoFolderBtn": {
+    "message": "Bento フォルダーを作成…"
+  },
+  "bentoFolderHow": {
+    "message": "ダイアログで「書類」の中に「Bento」という新しいフォルダーを作り、それを選んでください。"
+  },
+  "bentoFolderMade": {
+    "message": "「$1」があなたの Bento フォルダーです。新しいドキュメントはそこに作られ、その場に保存されます。"
+  },
+  "bentoFolderTip": {
+    "message": "「書類」の中のフォルダーで、その場に保存し、新しいドキュメントの置き場になります。「書類」そのものは Chrome が渡してくれません。"
+  },
+  "defaultFolder": {
+    "message": "新しいドキュメントはここに入ります"
+  },
+  "fgTitle": {
+    "message": "今後「$1」をその場に保存しますか？"
+  },
+  "fgTitleLapsed": {
+    "message": "「$1」を再接続しますか？"
+  },
+  "fgLead": {
+    "message": "bento/home はこのファイル一つの許可を保持するので、以降の保存は直接このファイルに書き込まれます。次のダイアログで同じファイルを選んでください。"
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home はこのファイルをすでに知っています。ブラウザーが再確認を求めています。"
+  },
+  "fgChoose": {
+    "message": "ファイルを選択…"
+  },
+  "fgReconnect": {
+    "message": "再接続"
+  },
+  "fgOnce": {
+    "message": "今回だけ"
+  },
+  "fgNotSame": {
+    "message": "それは要求したファイル（「$1」）ではありません。そのファイルを選ぶか、このウィンドウを閉じてください。"
+  },
+  "fgDenied": {
+    "message": "許可されませんでした。"
+  },
+  "droppedGranted": {
+    "message": "追加しました: フォルダー $1、ファイル $2。"
+  },
+  "setFilesTitle": {
+    "message": "ファイル"
+  },
+  "setFilesSub": {
+    "message": "追加したどのフォルダーにも属さないが、単独でその場に保存されるドキュメント。一度選んだもの、またはライブラリにドロップしたもの。"
   }
 }

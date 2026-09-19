@@ -199,7 +199,7 @@
     "message": "选择存放文档的文件夹"
   },
   "setupStep1Note": {
-    "message": "通常选一个大一些的文件夹就够了 — 它涵盖其中的全部内容。"
+    "message": "通常一个较大的文件夹就够了——它涵盖其中的一切。Chrome 不会交出主文件夹本身或 Library：请选择“文稿”“桌面”或存放文档的文件夹。"
   },
   "setupStep2": {
     "message": "开启本地文件访问",
@@ -664,5 +664,89 @@
   },
   "asstFocusGeneric": {
     "message": "所选元素或当前打开的幻灯片"
+  },
+  "placingFolder": {
+    "message": "正在磁盘上查找“$1”……"
+  },
+  "placeNoDisk": {
+    "message": "Chrome 不允许扩展程序从磁盘读取以查找“$1”（file:// 目录列表被拒绝）。"
+  },
+  "placeTried": {
+    "message": "已在磁盘上 $2 个位置查找“$1”，未找到。"
+  },
+  "recentTitle": {
+    "message": "最近编辑"
+  },
+  "badgeNotAdded": {
+    "message": "未添加"
+  },
+  "badgeNotAddedTip": {
+    "message": "在磁盘上找到。可以打开，但保存时会询问位置——添加其所在文件夹即可原地保存。"
+  },
+  "folderFoundTip": {
+    "message": "在磁盘上找到但未添加：其中的文档可以打开，但保存时会询问位置。"
+  },
+  "menuAddFolder": {
+    "message": "添加其所在文件夹以便原地保存……"
+  },
+  "pickThisFolder": {
+    "message": "请在选择器中选择文件夹“$1”——Chrome 必须看到您亲自选择。"
+  },
+  "pickedWrongFolder": {
+    "message": "“$1”不是此文档所在的文件夹（“$2”）。请重试并选择那个文件夹。"
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1”已添加。"
+  },
+  "bentoFolderBtn": {
+    "message": "创建 Bento 文件夹……"
+  },
+  "bentoFolderHow": {
+    "message": "请在对话框中于“文稿”内新建一个名为“Bento”的文件夹并选择它。"
+  },
+  "bentoFolderMade": {
+    "message": "“$1”是您的 Bento 文件夹——新文档会放在这里并原地保存。"
+  },
+  "bentoFolderTip": {
+    "message": "“文稿”内的一个文件夹，可原地保存并接收新文档。Chrome 不会交出“文稿”本身。"
+  },
+  "defaultFolder": {
+    "message": "新文档放在这里"
+  },
+  "fgTitle": {
+    "message": "从现在起就地保存“$1”？"
+  },
+  "fgTitleLapsed": {
+    "message": "重新连接“$1”？"
+  },
+  "fgLead": {
+    "message": "bento/home 只保留这一个文件的权限，此后每次保存都直接写回该文件。请在接下来的对话框中选择同一个文件。"
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home 已经有这个文件；浏览器需要您再次确认。"
+  },
+  "fgChoose": {
+    "message": "选择文件……"
+  },
+  "fgReconnect": {
+    "message": "重新连接"
+  },
+  "fgOnce": {
+    "message": "仅此一次"
+  },
+  "fgNotSame": {
+    "message": "那不是发出请求的文件（“$1”）。请选择那个文件，或关闭此窗口。"
+  },
+  "fgDenied": {
+    "message": "未授予权限。"
+  },
+  "droppedGranted": {
+    "message": "已添加：$1 个文件夹，$2 个文件。"
+  },
+  "setFilesTitle": {
+    "message": "文件"
+  },
+  "setFilesSub": {
+    "message": "不在任何已添加文件夹中、但可自行就地保存的文档——选择过一次，或拖放到资料库中。"
   }
 }

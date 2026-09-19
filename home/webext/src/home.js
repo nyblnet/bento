@@ -1374,10 +1374,16 @@ addEventListener('hashchange', routeHash)
 // which is also every local server. The base URL is editable for all of
 // them: proxies and gateways exist.
 
-const providerLabel = (p) => p === 'builtin' ? t('asstProvBuiltin')
-  : p === 'gemini' ? t('asstProvGemini')
-  : p === 'anthropic' ? t('asstProvAnthropic')
-  : t('asstProvOpenai')
+// A function DECLARATION, not a const: this section sits after the module's
+// top-level `await load()`, and the Settings view can render before
+// evaluation reaches here — a const would be in its temporal dead zone
+// ("Cannot access 'providerLabel' before initialization", measured).
+function providerLabel(p) {
+  return p === 'builtin' ? t('asstProvBuiltin')
+    : p === 'gemini' ? t('asstProvGemini')
+    : p === 'anthropic' ? t('asstProvAnthropic')
+    : t('asstProvOpenai')
+}
 
 async function assistantSettings(section) {
   const hasBuiltin = typeof globalThis.LanguageModel !== 'undefined'

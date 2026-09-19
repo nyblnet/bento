@@ -400,6 +400,14 @@ export async function check(cfg, env) {
  * delta-per-chunk across versions, so both shapes are accepted: a chunk that
  * repeats everything so far is the cumulative form.
  */
+/** The languages the built-in model attests output for today; the viewer's own when it is one. */
+const BUILTIN_LANGS = ['en', 'es', 'ja', 'de', 'fr']
+function builtinLanguage() {
+  const nav = typeof navigator !== 'undefined' ? String(navigator.language || 'en') : 'en'
+  const base = nav.split('-')[0].toLowerCase()
+  return BUILTIN_LANGS.includes(base) ? base : 'en'
+}
+
 async function runBuiltin(messages, onChunk, signal, env, schema) {
   const LM = env.LanguageModel
   const a = await builtinAvailability(LM)
@@ -410,7 +418,9 @@ async function runBuiltin(messages, onChunk, signal, env, schema) {
   }
   const last = messages[messages.length - 1]
   const history = messages.slice(0, -1)
-  const session = await LM.create({ initialPrompts: history, signal })
+  // Chrome asks for the output language up front ("No output language was
+  // specified…" otherwise); the viewer's, when the model has it, else English.
+  const session = await LM.create({ initialPrompts: history, signal, expectedOutputs: [{ type: 'text', languages: [builtinLanguage()] }] })
   let text = ''
   const read = async (opts) => {
     for await (const chunk of session.promptStreaming(last.content, opts)) {
