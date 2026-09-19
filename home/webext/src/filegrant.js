@@ -91,6 +91,29 @@ export async function handleIsPath(handle, path, deps = defaultDeps()) {
   } catch { return false }
 }
 
+/** The picked file's mtime equals the mtime at the path (to the second — file:// rounds); true when either is unknown. */
+export async function sameMtime(handle, path, deps = defaultDeps()) {
+  try {
+    const r = await deps.fetch(fileUrl(path), { headers: { range: 'bytes=0-0' } })
+    const disk = Date.parse(r.headers?.get?.('last-modified') ?? '')
+    const mine = (await handle.getFile()).lastModified
+    if (!disk || !mine) return true
+    return Math.abs(disk - mine) < 2000
+  } catch { return true }
+}
+
+/**
+ * Take a handle the person just picked FOR a known path: proven by bytes and
+ * mtime, permission asked inside the caller's gesture, then stored bound to
+ * that path. Returns null (with a reason) when it is not that file.
+ */
+export async function grantPickedFile(handle, path, deps = defaultDeps()) {
+  if (await handle.requestPermission({ mode: 'readwrite' }) !== 'granted') return { ok: false, reason: 'denied' }
+  if (!(await handleIsPath(handle, path, deps)) || !(await sameMtime(handle, path, deps))) return { ok: false, reason: 'not-same' }
+  const key = await addFileGrant(handle, path, deps)
+  return { ok: true, key }
+}
+
 /**
  * The file grant that serves a path, proven: name equal, permission granted,
  * bytes equal. `{ ok:true, handle, key }`, or `{ ok:false, reason:

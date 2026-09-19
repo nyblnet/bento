@@ -625,5 +625,23 @@
   },
   "addFiles": {
     "message": "Añadir archivos…"
+  },
+  "tdGrant": {
+    "message": "Guardar aquí sin preguntar…"
+  },
+  "tdViaFolder": {
+    "message": "guarda en el sitio: su carpeta está añadida"
+  },
+  "tdViaFile": {
+    "message": "guarda en el sitio: este archivo está añadido"
+  },
+  "tdViaDownloads": {
+    "message": "guarda en el sitio: está en Descargas"
+  },
+  "tdNotYet": {
+    "message": "pregunta dónde guardar, cada vez"
+  },
+  "badgeNotSavingTip": {
+    "message": "Este documento aún no puede guardar en el sitio: abre el panel de bento/home para arreglarlo."
   }
 }

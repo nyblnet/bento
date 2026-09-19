@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "Tilføj filer…"
+  },
+  "tdGrant": {
+    "message": "Gem her uden at spørge…"
+  },
+  "tdViaFolder": {
+    "message": "gemmer på stedet — mappen er tilføjet"
+  },
+  "tdViaFile": {
+    "message": "gemmer på stedet — denne fil er tilføjet"
+  },
+  "tdViaDownloads": {
+    "message": "gemmer på stedet — ligger i Overførsler"
+  },
+  "tdNotYet": {
+    "message": "spørger hvor der skal gemmes, hver gang"
+  },
+  "badgeNotSavingTip": {
+    "message": "Dette dokument kan endnu ikke gemme på stedet — åbn bento/home-panelet for at ordne det."
   }
 }

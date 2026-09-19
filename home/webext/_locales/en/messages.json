@@ -686,5 +686,29 @@
   "addFiles": {
     "message": "Add files…",
     "description": "Settings: opens a multi-select file picker to grant several documents at once."
+  },
+  "tdGrant": {
+    "message": "Save here without asking…",
+    "description": "Side panel: button that grants the active tab's document so it saves in place."
+  },
+  "tdViaFolder": {
+    "message": "saves in place — its folder is added",
+    "description": "Side panel: the active document saves in place through a folder grant."
+  },
+  "tdViaFile": {
+    "message": "saves in place — this file is added",
+    "description": "Side panel: the active document saves in place through its own file grant."
+  },
+  "tdViaDownloads": {
+    "message": "saves in place — it is in Downloads",
+    "description": "Side panel: the active document saves in place because it is in Downloads."
+  },
+  "tdNotYet": {
+    "message": "asks where to save, every time",
+    "description": "Side panel: the active document has no grant."
+  },
+  "badgeNotSavingTip": {
+    "message": "This document cannot save in place yet — open the bento/home panel to fix that.",
+    "description": "Toolbar icon tooltip on a tab whose document cannot save in place."
   }
 }

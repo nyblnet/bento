@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "파일 추가…"
+  },
+  "tdGrant": {
+    "message": "묻지 않고 여기에 저장…"
+  },
+  "tdViaFolder": {
+    "message": "제자리에 저장됨 — 폴더가 추가되어 있음"
+  },
+  "tdViaFile": {
+    "message": "제자리에 저장됨 — 이 파일이 추가되어 있음"
+  },
+  "tdViaDownloads": {
+    "message": "제자리에 저장됨 — 다운로드 폴더에 있음"
+  },
+  "tdNotYet": {
+    "message": "저장할 때마다 위치를 묻습니다"
+  },
+  "badgeNotSavingTip": {
+    "message": "이 문서는 아직 제자리에 저장할 수 없습니다. bento/home 패널을 열어 해결하세요."
   }
 }

@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "Lägg till filer…"
+  },
+  "tdGrant": {
+    "message": "Spara här utan att fråga…"
+  },
+  "tdViaFolder": {
+    "message": "sparar på plats — mappen är tillagd"
+  },
+  "tdViaFile": {
+    "message": "sparar på plats — den här filen är tillagd"
+  },
+  "tdViaDownloads": {
+    "message": "sparar på plats — ligger i Hämtningar"
+  },
+  "tdNotYet": {
+    "message": "frågar var det ska sparas, varje gång"
+  },
+  "badgeNotSavingTip": {
+    "message": "Det här dokumentet kan inte spara på plats ännu — öppna bento/home-panelen för att ordna det."
   }
 }

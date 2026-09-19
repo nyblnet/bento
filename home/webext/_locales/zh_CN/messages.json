@@ -625,5 +625,23 @@
   },
   "addFiles": {
     "message": "添加文件……"
+  },
+  "tdGrant": {
+    "message": "在此保存且不再询问……"
+  },
+  "tdViaFolder": {
+    "message": "原地保存——其文件夹已添加"
+  },
+  "tdViaFile": {
+    "message": "原地保存——此文件已添加"
+  },
+  "tdViaDownloads": {
+    "message": "原地保存——位于“下载”中"
+  },
+  "tdNotYet": {
+    "message": "每次保存都会询问位置"
+  },
+  "badgeNotSavingTip": {
+    "message": "此文档尚不能原地保存——打开 bento/home 面板来解决。"
   }
 }

@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "Thêm tệp…"
+  },
+  "tdGrant": {
+    "message": "Lưu ở đây mà không hỏi…"
+  },
+  "tdViaFolder": {
+    "message": "lưu tại chỗ — thư mục đã được thêm"
+  },
+  "tdViaFile": {
+    "message": "lưu tại chỗ — tệp này đã được thêm"
+  },
+  "tdViaDownloads": {
+    "message": "lưu tại chỗ — nó nằm trong Tải xuống"
+  },
+  "tdNotYet": {
+    "message": "hỏi vị trí lưu mỗi lần"
+  },
+  "badgeNotSavingTip": {
+    "message": "Tài liệu này chưa thể lưu tại chỗ — mở bảng bento/home để khắc phục."
   }
 }

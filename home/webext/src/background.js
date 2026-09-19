@@ -30,7 +30,7 @@
 // The ONLY import here. status.js owns what the UI is told, and the badge is
 // UI — duplicating the "is anything lapsed?" rule would let the icon and the
 // popup disagree about the same folders.
-import { setLapsedBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
+import { setLapsedBadge, setTabBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
 import { checkForUpdate } from './update.js'
 import { learnPrefix, noteOpened } from './db.js'
 import { t } from './i18n.js'
@@ -347,6 +347,30 @@ async function offerFileGrant(path, lapsed) {
   return entry
 }
 
+/**
+ * How a document at this url would save — for the extension's OWN pages
+ * (the side panel showing the active tab's state). Only they may name a url:
+ * a content script's answer comes from its browser-stamped sender.
+ */
+async function saveStatus(sender, url) {
+  const ours = sender?.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''))
+  if (!ours || typeof url !== 'string') return { ok: false, reason: 'not an extension page' }
+  const r = await resolveAny({ url, frameId: 0 })
+  return r.ok ? { ok: true, via: r.via, name: r.name } : { ok: false, reason: r.reason, path: pathFromSender({ url, frameId: 0 }) }
+}
+
+/**
+ * A badge on the toolbar icon FOR THIS TAB when the document in it cannot
+ * save in place yet — the cue that the side panel has a button for that.
+ * Per tab, so it says nothing about other documents.
+ */
+async function badgeTab(tabId, sender) {
+  if (tabId == null) return
+  let covered = false
+  try { covered = (await resolveAny(sender)).ok } catch { covered = false }
+  await setTabBadge(tabId, !covered)
+}
+
 /** `claim` with the offer: what the page's first phase gets. */
 export async function claimOrOffer(sender, payload, deps) {
   // second phase: the page waiting on a window it was told about
@@ -402,10 +426,12 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     // open.
     // Every opened document is remembered by path (db.js noteOpened) so the
     // library lists it whether or not any grant or scan covers it.
-    if (msg?.op === 'hello') { const p = pathFromSender(sender); if (p) void noteOpened(p).catch(() => {}) }
+    if (msg?.op === 'hello') { const p = pathFromSender(sender); if (p) { void noteOpened(p).catch(() => {}); void badgeTab(sender.tab?.id, sender) } }
     const run = msg?.op === 'hello' ? claim(sender)
       : msg?.op === 'claim' ? claimOrOffer(sender, msg.payload)
       : msg?.op === 'filegrant.answered' ? Promise.resolve(offerAnswered(sender, msg))
+      : msg?.op === 'save.status' ? saveStatus(sender, msg.url)
+      : msg?.op === 'save.rebadge' ? (async () => { const tabs = await chrome.tabs.query({ url: 'file:///*.bento.html' }).catch(() => []); for (const tb of tabs) await badgeTab(tb.id, { url: tb.url, frameId: 0, tab: tb }); return { ok: true } })()
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
       : Promise.resolve({ ok: false, reason: 'unknown op' })

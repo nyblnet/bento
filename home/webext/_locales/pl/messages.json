@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "Dodaj pliki…"
+  },
+  "tdGrant": {
+    "message": "Zapisuj tutaj bez pytania…"
+  },
+  "tdViaFolder": {
+    "message": "zapisuje w miejscu — folder jest dodany"
+  },
+  "tdViaFile": {
+    "message": "zapisuje w miejscu — ten plik jest dodany"
+  },
+  "tdViaDownloads": {
+    "message": "zapisuje w miejscu — jest w Pobranych"
+  },
+  "tdNotYet": {
+    "message": "pyta, gdzie zapisać, za każdym razem"
+  },
+  "badgeNotSavingTip": {
+    "message": "Ten dokument nie może jeszcze zapisywać w miejscu — otwórz panel bento/home, aby to naprawić."
   }
 }

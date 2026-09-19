@@ -625,5 +625,23 @@
   },
   "addFiles": {
     "message": "ファイルを追加…"
+  },
+  "tdGrant": {
+    "message": "確認なしでここに保存…"
+  },
+  "tdViaFolder": {
+    "message": "その場に保存されます（フォルダー追加済み）"
+  },
+  "tdViaFile": {
+    "message": "その場に保存されます（このファイル追加済み）"
+  },
+  "tdViaDownloads": {
+    "message": "その場に保存されます（ダウンロード内）"
+  },
+  "tdNotYet": {
+    "message": "保存のたびに保存先を尋ねます"
+  },
+  "badgeNotSavingTip": {
+    "message": "このドキュメントはまだその場に保存できません。bento/home パネルを開いて設定してください。"
   }
 }

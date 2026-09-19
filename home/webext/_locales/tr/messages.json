@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "Dosya ekle…"
+  },
+  "tdGrant": {
+    "message": "Buraya sormadan kaydet…"
+  },
+  "tdViaFolder": {
+    "message": "yerinde kaydeder — klasörü eklendi"
+  },
+  "tdViaFile": {
+    "message": "yerinde kaydeder — bu dosya eklendi"
+  },
+  "tdViaDownloads": {
+    "message": "yerinde kaydeder — İndirilenler’de"
+  },
+  "tdNotYet": {
+    "message": "her seferinde nereye kaydedileceğini sorar"
+  },
+  "badgeNotSavingTip": {
+    "message": "Bu belge henüz yerinde kaydedemiyor — düzeltmek için bento/home panelini açın."
   }
 }

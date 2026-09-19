@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "Lisää tiedostoja…"
+  },
+  "tdGrant": {
+    "message": "Tallenna tähän kysymättä…"
+  },
+  "tdViaFolder": {
+    "message": "tallentuu paikalleen — kansio on lisätty"
+  },
+  "tdViaFile": {
+    "message": "tallentuu paikalleen — tämä tiedosto on lisätty"
+  },
+  "tdViaDownloads": {
+    "message": "tallentuu paikalleen — on Lataukset-kansiossa"
+  },
+  "tdNotYet": {
+    "message": "kysyy tallennuspaikkaa joka kerta"
+  },
+  "badgeNotSavingTip": {
+    "message": "Tämä asiakirja ei vielä tallennu paikalleen — avaa bento/home-paneeli korjataksesi sen."
   }
 }

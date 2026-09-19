@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "Bestanden toevoegen…"
+  },
+  "tdGrant": {
+    "message": "Hier opslaan zonder vragen…"
+  },
+  "tdViaFolder": {
+    "message": "slaat ter plekke op — de map is toegevoegd"
+  },
+  "tdViaFile": {
+    "message": "slaat ter plekke op — dit bestand is toegevoegd"
+  },
+  "tdViaDownloads": {
+    "message": "slaat ter plekke op — staat in Downloads"
+  },
+  "tdNotYet": {
+    "message": "vraagt elke keer waar op te slaan"
+  },
+  "badgeNotSavingTip": {
+    "message": "Dit document kan nog niet ter plekke opslaan — open het bento/home-paneel om dat te regelen."
   }
 }

@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "הוספת קבצים…"
+  },
+  "tdGrant": {
+    "message": "לשמור כאן בלי לשאול…"
+  },
+  "tdViaFolder": {
+    "message": "נשמר במקום — התיקייה שלו נוספה"
+  },
+  "tdViaFile": {
+    "message": "נשמר במקום — הקובץ הזה נוסף"
+  },
+  "tdViaDownloads": {
+    "message": "נשמר במקום — הוא בהורדות"
+  },
+  "tdNotYet": {
+    "message": "שואל היכן לשמור, בכל פעם"
+  },
+  "badgeNotSavingTip": {
+    "message": "המסמך הזה עדיין לא יכול להישמר במקום — פתחו את חלונית bento/home כדי לתקן זאת."
   }
 }

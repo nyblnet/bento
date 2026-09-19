@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "Tambah fail…"
+  },
+  "tdGrant": {
+    "message": "Simpan di sini tanpa bertanya…"
+  },
+  "tdViaFolder": {
+    "message": "disimpan di tempat — foldernya telah ditambah"
+  },
+  "tdViaFile": {
+    "message": "disimpan di tempat — fail ini telah ditambah"
+  },
+  "tdViaDownloads": {
+    "message": "disimpan di tempat — berada dalam Muat turun"
+  },
+  "tdNotYet": {
+    "message": "sentiasa bertanya di mana untuk menyimpan"
+  },
+  "badgeNotSavingTip": {
+    "message": "Dokumen ini belum boleh menyimpan di tempat — buka panel bento/home untuk membetulkannya."
   }
 }

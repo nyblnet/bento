@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "إضافة ملفات…"
+  },
+  "tdGrant": {
+    "message": "الحفظ هنا دون سؤال…"
+  },
+  "tdViaFolder": {
+    "message": "يُحفظ في مكانه — مجلده مضاف"
+  },
+  "tdViaFile": {
+    "message": "يُحفظ في مكانه — هذا الملف مضاف"
+  },
+  "tdViaDownloads": {
+    "message": "يُحفظ في مكانه — إنه في التنزيلات"
+  },
+  "tdNotYet": {
+    "message": "يسأل عن مكان الحفظ في كل مرة"
+  },
+  "badgeNotSavingTip": {
+    "message": "لا يستطيع هذا المستند الحفظ في مكانه بعد — افتح لوحة bento/home لإصلاح ذلك."
   }
 }

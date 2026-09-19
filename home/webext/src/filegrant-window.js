@@ -12,7 +12,7 @@
 // origin, which every local document shares.
 
 import { t, localize, initI18n } from './i18n.js'
-import { addFileGrant, handleIsPath, decline, listFileGrants } from './filegrant.js'
+import { grantPickedFile, handleIsPath, decline, listFileGrants } from './filegrant.js'
 
 const q = new URLSearchParams(location.search)
 const path = q.get('path') ?? ''
@@ -34,17 +34,6 @@ const status = document.getElementById('status')
 // A port whose disconnect is this window closing unanswered: the worker then
 // resolves the waiting save as declined instead of holding it for two minutes.
 try { chrome.runtime.connect({ name: `filegrant:${token}` }) } catch { /* fine */ }
-
-/** The picked file's mtime equals the mtime at the path (to the second — file:// rounds). */
-async function sameMtime(handle, path) {
-  try {
-    const r = await fetch(`file://${path.split('/').map(encodeURIComponent).join('/')}`, { headers: { range: 'bytes=0-0' } })
-    const disk = Date.parse(r.headers.get('last-modified') ?? '')
-    const mine = (await handle.getFile()).lastModified
-    if (!disk || !mine) return true // no mtime to compare: the bytes were the proof
-    return Math.abs(disk - mine) < 2000
-  } catch { return true }
-}
 
 const answer = async (chosen) => {
   try { await chrome.runtime.sendMessage({ op: 'filegrant.answered', token, chosen }) } catch { /* worker gone */ }
@@ -69,13 +58,11 @@ choose.onclick = async () => {
     }
     const [handle] = await window.showOpenFilePicker({ startIn, multiple: false, types: [{ description: 'Bento', accept: { 'text/html': ['.html'] } }] })
     if (!handle) { choose.disabled = false; return }
-    if (await handle.requestPermission({ mode: 'readwrite' }) !== 'granted') { status.textContent = t('fgDenied'); choose.disabled = false; return }
-    // THE PROOF: the picked file must be the bytes at the path that asked —
-    // and, because a byte-identical copy elsewhere would pass that, its
-    // modification time must match the file at that path too (a Range fetch
-    // answers with Last-Modified). A twin then fails here and is refused.
-    if (!(await handleIsPath(handle, path)) || !(await sameMtime(handle, path))) { status.textContent = t('fgNotSame', name); choose.disabled = false; return }
-    await addFileGrant(handle, path)
+    // THE PROOF (filegrant.js grantPickedFile): the picked file must be the
+    // bytes at the path that asked, and its mtime too — a byte-identical
+    // copy elsewhere is refused rather than made this file's grant.
+    const r = await grantPickedFile(handle, path)
+    if (!r.ok) { status.textContent = r.reason === 'denied' ? t('fgDenied') : t('fgNotSame', name); choose.disabled = false; return }
     await answer(true)
   } catch (e) {
     if (e?.name !== 'AbortError') status.textContent = e?.message || String(e)

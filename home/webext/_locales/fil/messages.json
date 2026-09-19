@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "Magdagdag ng mga file…"
+  },
+  "tdGrant": {
+    "message": "I-save dito nang hindi nagtatanong…"
+  },
+  "tdViaFolder": {
+    "message": "nagse-save sa lugar — naidagdag ang folder nito"
+  },
+  "tdViaFile": {
+    "message": "nagse-save sa lugar — naidagdag ang file na ito"
+  },
+  "tdViaDownloads": {
+    "message": "nagse-save sa lugar — nasa Mga download ito"
+  },
+  "tdNotYet": {
+    "message": "nagtatanong kung saan ise-save, sa bawat pagkakataon"
+  },
+  "badgeNotSavingTip": {
+    "message": "Hindi pa makakapag-save sa lugar ang dokumentong ito — buksan ang bento/home panel para ayusin iyon."
   }
 }

@@ -625,5 +625,23 @@
   },
   "addFiles": {
     "message": "Dateien hinzufügen …"
+  },
+  "tdGrant": {
+    "message": "Hier ohne Nachfrage speichern …"
+  },
+  "tdViaFolder": {
+    "message": "speichert direkt — sein Ordner ist hinzugefügt"
+  },
+  "tdViaFile": {
+    "message": "speichert direkt — diese Datei ist hinzugefügt"
+  },
+  "tdViaDownloads": {
+    "message": "speichert direkt — liegt in Downloads"
+  },
+  "tdNotYet": {
+    "message": "fragt bei jedem Speichern nach dem Ort"
+  },
+  "badgeNotSavingTip": {
+    "message": "Dieses Dokument kann noch nicht direkt speichern — öffnen Sie das bento/home-Panel, um das zu ändern."
   }
 }

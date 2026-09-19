@@ -625,5 +625,23 @@
   },
   "addFiles": {
     "message": "Adicionar arquivos…"
+  },
+  "tdGrant": {
+    "message": "Salvar aqui sem perguntar…"
+  },
+  "tdViaFolder": {
+    "message": "salva no lugar — a pasta está adicionada"
+  },
+  "tdViaFile": {
+    "message": "salva no lugar — este arquivo está adicionado"
+  },
+  "tdViaDownloads": {
+    "message": "salva no lugar — está em Downloads"
+  },
+  "tdNotYet": {
+    "message": "pergunta onde salvar, toda vez"
+  },
+  "badgeNotSavingTip": {
+    "message": "Este documento ainda não pode salvar no lugar — abra o painel do bento/home para resolver."
   }
 }

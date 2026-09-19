@@ -625,5 +625,23 @@
   },
   "addFiles": {
     "message": "Aggiungi file…"
+  },
+  "tdGrant": {
+    "message": "Salva qui senza chiedere…"
+  },
+  "tdViaFolder": {
+    "message": "salva sul posto: la sua cartella è aggiunta"
+  },
+  "tdViaFile": {
+    "message": "salva sul posto: questo file è aggiunto"
+  },
+  "tdViaDownloads": {
+    "message": "salva sul posto: è in Download"
+  },
+  "tdNotYet": {
+    "message": "chiede dove salvare, ogni volta"
+  },
+  "badgeNotSavingTip": {
+    "message": "Questo documento non può ancora salvare sul posto: apri il pannello bento/home per rimediare."
   }
 }

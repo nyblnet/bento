@@ -592,5 +592,23 @@
   },
   "addFiles": {
     "message": "Legg til filer …"
+  },
+  "tdGrant": {
+    "message": "Lagre her uten å spørre …"
+  },
+  "tdViaFolder": {
+    "message": "lagrer på stedet — mappen er lagt til"
+  },
+  "tdViaFile": {
+    "message": "lagrer på stedet — denne filen er lagt til"
+  },
+  "tdViaDownloads": {
+    "message": "lagrer på stedet — ligger i Nedlastinger"
+  },
+  "tdNotYet": {
+    "message": "spør hvor det skal lagres, hver gang"
+  },
+  "badgeNotSavingTip": {
+    "message": "Dette dokumentet kan ikke lagre på stedet ennå — åpne bento/home-panelet for å ordne det."
   }
 }

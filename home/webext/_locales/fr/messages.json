@@ -625,5 +625,23 @@
   },
   "addFiles": {
     "message": "Ajouter des fichiers…"
+  },
+  "tdGrant": {
+    "message": "Enregistrer ici sans demander…"
+  },
+  "tdViaFolder": {
+    "message": "s’enregistre sur place — son dossier est ajouté"
+  },
+  "tdViaFile": {
+    "message": "s’enregistre sur place — ce fichier est ajouté"
+  },
+  "tdViaDownloads": {
+    "message": "s’enregistre sur place — il est dans Téléchargements"
+  },
+  "tdNotYet": {
+    "message": "demande où enregistrer, à chaque fois"
+  },
+  "badgeNotSavingTip": {
+    "message": "Ce document ne peut pas encore s’enregistrer sur place — ouvrez le panneau bento/home pour y remédier."
   }
 }

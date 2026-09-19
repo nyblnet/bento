@@ -625,5 +625,23 @@
   },
   "addFiles": {
     "message": "加入檔案……"
+  },
+  "tdGrant": {
+    "message": "在此儲存且不再詢問……"
+  },
+  "tdViaFolder": {
+    "message": "就地儲存——其資料夾已加入"
+  },
+  "tdViaFile": {
+    "message": "就地儲存——此檔案已加入"
+  },
+  "tdViaDownloads": {
+    "message": "就地儲存——位於「下載」中"
+  },
+  "tdNotYet": {
+    "message": "每次儲存都會詢問位置"
+  },
+  "badgeNotSavingTip": {
+    "message": "此文件尚不能就地儲存——開啟 bento/home 面板來解決。"
   }
 }
