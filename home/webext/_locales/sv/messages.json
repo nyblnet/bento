@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "Försök igen"
+  },
+  "dropTwins": {
+    "message": "”$1”: $2 filer på disken har exakt dessa bytes — tillagd, men kan inte spara på plats förrän de skiljer sig."
+  },
+  "addFiles": {
+    "message": "Lägg till filer…"
   }
 }

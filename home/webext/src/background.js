@@ -35,7 +35,20 @@ import { checkForUpdate } from './update.js'
 import { learnPrefix, noteOpened } from './db.js'
 import { t } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
-import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads, downloadsUnusable, setDownloadsUnusable } from './filegrant.js'
+import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads, downloadsUnusable, setDownloadsUnusable, defaultDeps as defaultFileGrantDeps } from './filegrant.js'
+import { recentOpened } from './db.js'
+
+/** Same-named files the extension knows at OTHER paths: opened documents and the library's last scan. */
+async function knownTwins(path) {
+  const name = path.split('/').pop()
+  const out = new Set()
+  try { for (const p of Object.keys(await recentOpened())) if (p !== path && p.split('/').pop() === name) out.add(p) } catch { /* none */ }
+  try {
+    const scanned = (await chrome.storage.local.get('lastScan'))?.lastScan
+    if (Array.isArray(scanned)) for (const p of scanned) if (p !== path && p.split('/').pop() === name) out.add(p)
+  } catch { /* none */ }
+  return [...out]
+}
 
 // Re-exported: these moved to route.js so the PAGES can place a path too,
 // but they are still part of this module's tested surface.
@@ -263,7 +276,8 @@ export async function resolveAny(sender, deps = {}) {
   if (!path) return r
   // each further door fails soft: no store, no downloads API, no answer — the
   // save falls to the picker, never to an exception
-  const fg = await (deps.resolveFileGrant ?? resolveFileGrant)(path, deps.filegrant).catch(() => ({ ok: false, reason: 'none' }))
+  const fgDeps = deps.filegrant ?? { ...defaultFileGrantDeps(), otherCopies: (p) => knownTwins(p) }
+  const fg = await (deps.resolveFileGrant ?? resolveFileGrant)(path, fgDeps).catch(() => ({ ok: false, reason: 'none' }))
   if (fg.ok) return { ok: true, name: path.split('/').pop(), handle: fg.handle, key: fg.key, via: 'file' }
   // the Downloads door, unless this Chrome prompts for every download (then
   // it was switched off the first time it prompted; Settings says so)

@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "다시 시도"
+  },
+  "dropTwins": {
+    "message": "“$1”: 디스크의 $2개 파일이 정확히 같은 바이트입니다. 추가는 됐지만 서로 달라질 때까지 제자리에 저장할 수 없습니다."
+  },
+  "addFiles": {
+    "message": "파일 추가…"
   }
 }

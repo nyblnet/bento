@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "Subukan muli"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 file sa disk ang may eksaktong ganitong bytes — naidagdag, pero hindi makakapag-save sa lugar hangga’t hindi sila nagkakaiba."
+  },
+  "addFiles": {
+    "message": "Magdagdag ng mga file…"
   }
 }

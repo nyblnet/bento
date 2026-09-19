@@ -678,5 +678,13 @@
   "setDownloadsRetry": {
     "message": "Try again",
     "description": "Settings: re-enable the Downloads door after changing the Chrome setting."
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 files on disk have exactly these bytes — added, but it cannot save in place until they differ.",
+    "description": "Toast when a dropped file has byte-identical twins on disk. $1 file name, $2 count."
+  },
+  "addFiles": {
+    "message": "Add files…",
+    "description": "Settings: opens a multi-select file picker to grant several documents at once."
   }
 }

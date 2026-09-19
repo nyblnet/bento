@@ -619,5 +619,11 @@
   },
   "setDownloadsRetry": {
     "message": "Réessayer"
+  },
+  "dropTwins": {
+    "message": "« $1 » : $2 fichiers sur le disque ont exactement ces octets — ajouté, mais l’enregistrement sur place attendra qu’ils diffèrent."
+  },
+  "addFiles": {
+    "message": "Ajouter des fichiers…"
   }
 }

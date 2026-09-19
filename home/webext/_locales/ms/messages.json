@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "Cuba lagi"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 fail pada cakera mempunyai bait yang sama persis — ditambah, tetapi tidak boleh menyimpan di tempat sehingga ia berbeza."
+  },
+  "addFiles": {
+    "message": "Tambah fail…"
   }
 }

@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "Coba lagi"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 berkas di disk memiliki byte yang persis sama — ditambahkan, tetapi tidak bisa menyimpan di tempat sampai keduanya berbeda."
+  },
+  "addFiles": {
+    "message": "Tambahkan berkas…"
   }
 }

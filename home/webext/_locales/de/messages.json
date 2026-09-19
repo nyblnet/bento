@@ -619,5 +619,11 @@
   },
   "setDownloadsRetry": {
     "message": "Erneut versuchen"
+  },
+  "dropTwins": {
+    "message": "„$1“: $2 Dateien auf der Festplatte haben genau diese Bytes — hinzugefügt, aber direkt speichern geht erst, wenn sie sich unterscheiden."
+  },
+  "addFiles": {
+    "message": "Dateien hinzufügen …"
   }
 }

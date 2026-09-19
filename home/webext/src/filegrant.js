@@ -102,15 +102,32 @@ export async function resolveFileGrant(path, deps = defaultDeps()) {
   if (!name) return { ok: false, reason: 'none' }
   let lapsed = false
   const grants = await listFileGrants(deps)
-  // a grant recorded for exactly this path first, then any of the same name
-  const ordered = [...grants.filter((g) => g.path === path), ...grants.filter((g) => g.path !== path && g.name === name)]
-  for (const g of ordered) {
+  // A grant BOUND to a path serves that path and no other: two byte-identical
+  // copies of a deck in two folders must never serve each other's saves (the
+  // write would land in the other copy). An unbound grant — a drop whose path
+  // the scan could not settle — is bound here on first use, and only when
+  // the bytes say it is THIS file; `otherCopies` (paths of same-named files
+  // elsewhere, from the scan) lets the caller refuse when a twin exists.
+  const bound = grants.filter((g) => g.path === path)
+  const unbound = grants.filter((g) => !g.path && g.name === name)
+  for (const g of bound) {
+    let perm = 'denied'
+    try { perm = await g.handle.queryPermission({ mode: 'readwrite' }) } catch { continue }
+    if (perm !== 'granted') { lapsed = true; continue }
+    if (!(await handleIsPath(g.handle, path, deps))) continue // the file at that path changed under it: not this grant any more
+    return { ok: true, handle: g.handle, key: g.key }
+  }
+  for (const g of unbound) {
     let perm = 'denied'
     try { perm = await g.handle.queryPermission({ mode: 'readwrite' }) } catch { continue }
     if (perm !== 'granted') { lapsed = true; continue }
     if (!(await handleIsPath(g.handle, path, deps))) continue
-    // learn the path on a name-keyed record so the next lookup is direct
-    if (g.path !== path) await deps.put(g.key, { ...g, key: undefined, path }).catch(() => {})
+    // a twin with the same bytes elsewhere makes this ambiguous: refuse rather than guess
+    const twins = deps.otherCopies ? await deps.otherCopies(path) : []
+    let ambiguous = false
+    for (const twin of twins) if (await handleIsPath(g.handle, twin, deps)) { ambiguous = true; break }
+    if (ambiguous) continue
+    await deps.put(g.key, { name: g.name, handle: g.handle, path, at: g.at }).catch(() => {})
     return { ok: true, handle: g.handle, key: g.key }
   }
   return { ok: false, reason: lapsed ? 'lapsed' : 'none' }

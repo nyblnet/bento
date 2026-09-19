@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "Prøv igjen"
+  },
+  "dropTwins": {
+    "message": "«$1»: $2 filer på disken har nøyaktig disse bytene — lagt til, men kan ikke lagre på stedet før de er forskjellige."
+  },
+  "addFiles": {
+    "message": "Legg til filer …"
   }
 }

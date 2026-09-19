@@ -619,5 +619,11 @@
   },
   "setDownloadsRetry": {
     "message": "重试"
+  },
+  "dropTwins": {
+    "message": "“$1”：磁盘上有 $2 个文件的字节完全相同——已添加，但在它们产生差异之前无法原地保存。"
+  },
+  "addFiles": {
+    "message": "添加文件……"
   }
 }

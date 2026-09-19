@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "Prøv igen"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 filer på disken har præcis disse bytes — tilføjet, men kan ikke gemme på stedet, før de adskiller sig."
+  },
+  "addFiles": {
+    "message": "Tilføj filer…"
   }
 }

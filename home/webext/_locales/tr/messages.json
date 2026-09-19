@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "Yeniden dene"
+  },
+  "dropTwins": {
+    "message": "“$1”: diskte $2 dosya tam olarak bu baytlara sahip — eklendi, ancak birbirinden ayrılana kadar yerinde kaydedemez."
+  },
+  "addFiles": {
+    "message": "Dosya ekle…"
   }
 }

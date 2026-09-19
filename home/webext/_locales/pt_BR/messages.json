@@ -619,5 +619,11 @@
   },
   "setDownloadsRetry": {
     "message": "Tentar de novo"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 arquivos no disco têm exatamente estes bytes — adicionado, mas não pode salvar no lugar até que difiram."
+  },
+  "addFiles": {
+    "message": "Adicionar arquivos…"
   }
 }

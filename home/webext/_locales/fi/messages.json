@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "Yritä uudelleen"
+  },
+  "dropTwins": {
+    "message": "”$1”: $2 tiedostolla levyllä on täsmälleen nämä tavut — lisätty, mutta paikalleen tallennus onnistuu vasta kun ne eroavat."
+  },
+  "addFiles": {
+    "message": "Lisää tiedostoja…"
   }
 }

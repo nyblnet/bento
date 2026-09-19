@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "Opnieuw proberen"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 bestanden op de schijf hebben precies deze bytes — toegevoegd, maar ter plekke opslaan kan pas als ze verschillen."
+  },
+  "addFiles": {
+    "message": "Bestanden toevoegen…"
   }
 }

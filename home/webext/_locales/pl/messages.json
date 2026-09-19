@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "Spróbuj ponownie"
+  },
+  "dropTwins": {
+    "message": "„$1”: $2 plików na dysku ma dokładnie te bajty — dodano, ale nie zapisze w miejscu, dopóki się nie rozjadą."
+  },
+  "addFiles": {
+    "message": "Dodaj pliki…"
   }
 }

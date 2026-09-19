@@ -318,6 +318,8 @@ async function scannedDocs({ fresh = false } = {}) {
   if (scanned && !fresh) return scanned
   let found = []
   try { found = await scanDisk({ fetch: (u) => fetch(u) }) } catch { found = [] }
+  // the worker reads this to tell two same-named files apart when a file grant is used
+  chrome.storage.local.set({ lastScan: found.map((f) => f.path).slice(0, 2000) }).catch(() => {})
   scanned = found.map((f) => ({
     name: f.name, named: true, base: f.name.replace(/\.bento\.html$/i, ''),
     folder: f.dir.split('/').filter(Boolean).pop() ?? f.dir, rel: [f.name], path: f.path,
@@ -1246,10 +1248,15 @@ async function dropToGrant(ev) {
       } else if (/\.bento\.html$/i.test(handle.name)) {
         if (await handle.requestPermission({ mode: 'readwrite' }) !== 'granted') { say(t('fgDenied')); continue }
         // its path, when a scanned file of that name is the same bytes
-        let path = null
+        // bound to a path only when exactly ONE same-named file on disk has
+        // these bytes; a twin leaves it unbound (and unusable until the
+        // twins differ), never guessed
+        const matches = []
         for (const d of await scannedDocs()) {
-          if (d.name === handle.name && await handleIsPath(handle, d.path)) { path = d.path; break }
+          if (d.name === handle.name && await handleIsPath(handle, d.path)) matches.push(d.path)
         }
+        const path = matches.length === 1 ? matches[0] : null
+        if (matches.length > 1) say(t('dropTwins', handle.name, matches.length))
         await addFileGrant(handle, path)
         console.info('[bento/home] drop: file grant', handle.name, path ?? '(path unknown)')
         files++
@@ -1522,8 +1529,37 @@ async function renderSettings() {
 
   // --- files saving in place on their own (filegrant.js)
   const fileGrants = await listFileGrants().catch(() => [])
-  if (fileGrants.length) {
+  {
     const filesSec = section(t('setFilesTitle'), t('setFilesSub'))
+    // Many at once: one OS dialog, every deck in Documents selected, done —
+    // the cheapest form of "once per file" Chrome allows.
+    const addFiles = document.createElement('button')
+    addFiles.className = 'btn'
+    addFiles.textContent = t('addFiles')
+    addFiles.onclick = async () => {
+      let handles = []
+      try {
+        handles = await window.showOpenFilePicker({ multiple: true, startIn: 'documents', types: [{ description: 'Bento', accept: { 'text/html': ['.html'] } }] })
+      } catch (e) { if (e?.name !== 'AbortError') toast(e.message); return }
+      let n = 0
+      for (const h of handles) {
+        if (!/\.bento\.html$/i.test(h.name)) { toast(t('dropNotBento', h.name)); continue }
+        if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') continue
+        const matches = []
+        for (const d of await scannedDocs()) if (d.name === h.name && await handleIsPath(h, d.path)) matches.push(d.path)
+        if (matches.length > 1) toast(t('dropTwins', h.name, matches.length))
+        await addFileGrant(h, matches.length === 1 ? matches[0] : null)
+        n++
+      }
+      if (n) { toast(t('droppedGranted', 0, n)); await load(); await renderSettings() }
+    }
+    filesSec.appendChild(addFiles)
+    if (!fileGrants.length) {
+      const p = document.createElement('p')
+      p.className = 'dim'
+      p.textContent = t('noneYet')
+      filesSec.appendChild(p)
+    }
     for (const g of fileGrants) {
       let perm = 'denied'
       try { perm = await g.handle.queryPermission({ mode: 'readwrite' }) } catch { /* gone */ }

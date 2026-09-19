@@ -586,5 +586,11 @@
   },
   "setDownloadsRetry": {
     "message": "Thử lại"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 tệp trên ổ đĩa có đúng những byte này — đã thêm, nhưng không thể lưu tại chỗ cho đến khi chúng khác nhau."
+  },
+  "addFiles": {
+    "message": "Thêm tệp…"
   }
 }

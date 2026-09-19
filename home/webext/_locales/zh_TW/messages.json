@@ -619,5 +619,11 @@
   },
   "setDownloadsRetry": {
     "message": "重試"
+  },
+  "dropTwins": {
+    "message": "「$1」：磁碟上有 $2 個檔案的位元組完全相同——已加入，但在它們產生差異之前無法就地儲存。"
+  },
+  "addFiles": {
+    "message": "加入檔案……"
   }
 }
