@@ -609,6 +609,15 @@ jobs:
         # every host silently loses the distinction.
         run: node scripts/test-savepurpose.ts
 
+      - name: Remember-the-file-handle rig
+        # A deck in ~/Documents or ~/Downloads can never be covered by a
+        # directory grant (Chrome's blocklist), so it re-ran the save picker on
+        # every reopen. The FILE handle is remembered (IndexedDB by docId) and
+        # reconnected with a permission prompt inside the save gesture. Guards:
+        # name-match, denied/NotFound -> picker + drop, only a real handle (never
+        # a host polyfill), reconnect BEFORE serialize so activation stays fresh.
+        run: node scripts/test-file-handle.ts
+
       - name: Guarded storage rig
         # localStorage's absence is hostile: reading the PROPERTY throws, so
         # `if (localStorage)` is itself the crash and one bare read at module

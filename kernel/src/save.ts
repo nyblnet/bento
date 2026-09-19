@@ -641,11 +641,104 @@ export function downloadFile(html: string, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
+// --- remembering the file handle across reopens -----------------------------
+//
+// Chrome's File System Access blocklist refuses ~/Documents, ~/Downloads, the
+// Desktop and the home folder as DIRECTORY grants, so a deck sitting directly in
+// one of them can never be covered by a bento/home folder grant and re-ran the
+// full save picker on every reopen. FILE handles are not blocked and are
+// structured-cloneable, so we remember the one a save produced (IndexedDB, keyed
+// by docId) and, on the first ⌘S after a reopen, re-request readwrite permission
+// INSIDE the save gesture — Chrome 122+ shows a small "Allow on every visit"
+// prompt instead of a picker. Only a real FileSystemFileHandle is stored: a host
+// polyfill (home/ios, home/webext) hands back its own handle, which is not one
+// and stays on the bridge path untouched.
+
+const HANDLE_DB = 'bento-handles'
+const HANDLE_STORE = 'handles'
+
+function handleDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(HANDLE_DB, 1)
+    req.onupgradeneeded = () => { req.result.createObjectStore(HANDLE_STORE) }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+async function idbHandle(op: 'get' | 'put' | 'delete', docId: string, val?: unknown): Promise<unknown> {
+  const db = await handleDb()
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(HANDLE_STORE, op === 'get' ? 'readonly' : 'readwrite')
+      const store = tx.objectStore(HANDLE_STORE)
+      const r = op === 'get' ? store.get(docId) : op === 'put' ? store.put(val, docId) : store.delete(docId)
+      r.onsuccess = () => resolve(op === 'get' ? r.result : undefined)
+      r.onerror = () => reject(r.error)
+    })
+  } finally { db.close() }
+}
+
+/** A FileSystemFileHandle with the permission methods (not in every lib.dom). */
+type PermHandle = FsFileHandle & {
+  queryPermission(d: { mode: 'readwrite' }): Promise<PermissionState>
+  requestPermission(d: { mode: 'readwrite' }): Promise<PermissionState>
+}
+const isRealHandle = (h: unknown): h is PermHandle =>
+  typeof FileSystemFileHandle !== 'undefined' && h instanceof FileSystemFileHandle
+
+/** Remember the handle a save produced so the next reopen can reconnect it.
+ *  Only ever reached from saveFile — a readonly player never saves, so its
+ *  handle is never stored — and only a real handle, never a host polyfill. */
+async function persistHandle(doc: KernelDoc, handle: FsFileHandle): Promise<void> {
+  if (!doc.docId || !isRealHandle(handle)) return
+  try { await idbHandle('put', doc.docId, handle) } catch { /* best effort — a lost handle just means tomorrow's picker */ }
+}
+
+/**
+ * First ⌘S after a reopen: if we remember a handle for this docId, re-acquire
+ * permission inside the save gesture instead of showing the picker. Returns the
+ * handle when permission is granted, else null (the caller falls back to the
+ * picker). Exported for the rig.
+ *
+ * MUST run before the expensive serializeAuto so the user activation the save
+ * gesture carries is still fresh when requestPermission() prompts (Chrome keeps
+ * transient activation ~5 s across awaits; a ~1 s serialize would risk it).
+ */
+export async function reconnectHandle(doc: KernelDoc): Promise<FsFileHandle | null> {
+  if (!doc.docId) return null
+  let stored: unknown
+  try { stored = await idbHandle('get', doc.docId) } catch { return null }
+  if (!isRealHandle(stored)) return null // absent, or a host polyfill handle
+  // the remembered handle must be the file on screen: docId + name. isSameEntry
+  // needs a second handle we do not have on a bare file:// reopen, so the name
+  // check is the guard.
+  const onScreen = openedFileName()
+  if (onScreen && stored.name !== onScreen) return null // mismatch → picker, entry kept
+  try {
+    let perm = await stored.queryPermission({ mode: 'readwrite' })
+    if (perm !== 'granted') perm = await stored.requestPermission({ mode: 'readwrite' })
+    if (perm === 'granted') return stored
+    void idbHandle('delete', doc.docId) // denied → forget it, use the picker
+    return null
+  } catch { // NotFoundError (file moved/deleted) or any handle failure
+    void idbHandle('delete', doc.docId)
+    return null
+  }
+}
+
 /**
  * Save the document. Chrome/Edge: File System Access API (picker on first
- * save, silent rewrite after). Firefox/Safari: download a copy.
+ * save, silent rewrite after — and, since a remembered handle can reconnect,
+ * one permission prompt rather than a picker on the first save after a reopen).
+ * Firefox/Safari: download a copy.
  */
 export async function saveFile(doc: KernelDoc, forcePicker = false): Promise<SaveResult> {
+  // Reconnect a remembered handle BEFORE serializing: requestPermission() has to
+  // fire inside the fresh save gesture, and serializeAuto can take ~a second.
+  if (hasFsAccess() && !forcePicker && !fileHandle) {
+    const re = await reconnectHandle(doc)
+    if (re) fileHandle = re
+  }
   const html = await serializeAuto(doc)
   if (hasFsAccess()) {
     if (forcePicker || !fileHandle) {
@@ -655,9 +748,13 @@ export async function saveFile(doc: KernelDoc, forcePicker = false): Promise<Sav
       if (!handle) return 'cancelled'
       fileHandle = handle
       await writeHandle(handle, html)
+      void persistHandle(doc, handle)
       return 'saved-as'
     }
     await writeHandle(fileHandle, html)
+    // idempotent, and the one place the ADOPTED-handle path (a dropped file) is
+    // remembered too — it only matters once you have actually saved to it.
+    void persistHandle(doc, fileHandle)
     return 'saved'
   }
   downloadFile(html, suggestedFileName(doc))
