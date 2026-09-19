@@ -28,7 +28,7 @@ ok(ownerOfRemote('https://gitlab.com/x/y') === null && ownerOfRemote('') === nul
 
 console.log('\nactiveAccount')
 const NEW = `github.com
-  ✓ Logged in to github.com account work-andy (keyring)
+  ✓ Logged in to github.com account work-account (keyring)
   - Active account: false
   - Git operations protocol: https
   ✓ Logged in to github.com account nyblnet (keyring)
@@ -41,21 +41,21 @@ const OLD = `github.com
 ok(activeAccount(OLD) === 'nyblnet', 'the older single-account format')
 ok(activeAccount('You are not logged into any GitHub hosts. Run gh auth login to authenticate.') === null && activeAccount('') === null, 'not logged in → null')
 const WORK = `github.com
-  ✓ Logged in to github.com account work-andy (keyring)
+  ✓ Logged in to github.com account work-account (keyring)
   - Active account: true`
-ok(activeAccount(WORK) === 'work-andy', 'the work profile reads as the work account')
+ok(activeAccount(WORK) === 'work-account', 'the work profile reads as the work account')
 
 console.log('\naccountMayRelease')
 ok(accountMayRelease('nyblnet', 'nyblnet') === true && accountMayRelease('NyblNet', 'nyblnet') === true, 'the owner may, case-insensitively')
-ok(accountMayRelease('work-andy', 'nyblnet') === false, 'a mismatched owner is REFUSED (the three failed releases)')
+ok(accountMayRelease('work-account', 'nyblnet') === false, 'a mismatched owner is REFUSED (the three failed releases)')
 ok(accountMayRelease(null, 'nyblnet') === false && accountMayRelease('nyblnet', null) === false, 'nobody may; no owner, nobody may')
 ok(accountMayRelease('helper', 'nyblnet', ['Helper']) === true && accountMayRelease('other', 'nyblnet', ['helper']) === false, 'a listed collaborator may (BENTO_RELEASE_ACCOUNTS), an unlisted one may not')
 
 console.log('\nmismatchMessage')
-const msg = mismatchMessage({ account: 'work-andy', owner: 'nyblnet', repoRoot: '/Users/andy/devel/bento', cmd: 'node scripts/publish-site.mjs "release v1.2.3"' })
-ok(/authenticated as work-andy/.test(msg) && /needs nyblnet/.test(msg), 'names what gh is and what it must be')
+const msg = mismatchMessage({ account: 'work-account', owner: 'nyblnet', repoRoot: '/Users/you/devel/bento', cmd: 'node scripts/publish-site.mjs "release v1.2.3"' })
+ok(/authenticated as work-account/.test(msg) && /needs nyblnet/.test(msg), 'names what gh is and what it must be')
 ok(/Nothing was published/.test(msg), 'says nothing was published')
-ok(/cd \/Users\/andy\/devel\/bento && node scripts\/publish-site\.mjs "release v1\.2\.3"/.test(msg), 'gives the exact command from the repo root')
+ok(/cd \/Users\/you\/devel\/bento && node scripts\/publish-site\.mjs "release v1\.2\.3"/.test(msg), 'gives the exact command from the repo root')
 ok(/gh auth switch --user nyblnet/.test(msg), 'and the switch alternative')
 
 console.log('\npublish-site.mjs — the gate sits before the mirror')

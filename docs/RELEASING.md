@@ -179,7 +179,7 @@ matters. Neither needs the signing key.
 
    **Build anywhere; publish from a path under `~/devel`.** The shell picks
    the `gh` profile by directory (a chpwd hook), and a job or temp worktree
-   — `~/.claude-andy/jobs/…/tmp`, `/tmp/rel` — maps to the WORK profile,
+   — `/tmp/rel`, a tool’s scratch directory — maps to the WORK profile,
    which cannot create a release on this repo. `publish-site.mjs` checks the
    active `gh` account against the repo owner **before it mirrors anything**
    and, on a mismatch, prints the exact command to run from `~/devel/bento`

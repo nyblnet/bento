@@ -8,7 +8,7 @@
 //
 // WHY THIS EXISTS. Three releases running, publish-site.mjs mirrored and
 // pushed the site and THEN `gh release create` failed: the release worktree
-// lived under ~/.claude-andy/jobs/…/tmp, where the shell's chpwd hook selects
+// lived under a temp directory outside ~/devel, where the shell's chpwd hook selects
 // the WORK gh profile — a different account, no scope for this repo — and
 // gh's config follows the environment the script was launched from, not the
 // repo it is pointed at. Each time the lead created the release by hand from

@@ -207,13 +207,12 @@ if (havePython) {
   console.log('  SKIP  python3 is not on this machine — the ZIP64 archives need a second implementation to build')
 }
 
-// ---------------------------------------------------- REAL .xlsx off this disk
+// ---------------------------------------------------- REAL .xlsx FIXTURES (BENTO_XLSX_FIXTURES)
 {
-  const candidates = [
-    '/Users/andy/Documents/Digitalise Growth-Initiatives-Cost-Model.xlsx',
-    '/Users/andy/Downloads/Digital_Sonar_Resource_Validation_v5.xlsx',
-    '/Users/andy/devel/sxadc/raw_categories.xlsx',
-  ].filter((p) => existsSync(p))
+  // Optional real workbooks, named by BENTO_XLSX_FIXTURES (path-list, ':'
+  // separated). Never a path baked into the source: the rig must read only
+  // what is checked in or what the operator points it at.
+  const candidates = (process.env.BENTO_XLSX_FIXTURES ?? '').split(':').map((p) => p.trim()).filter((p) => p && existsSync(p))
 
   if (!candidates.length) {
     console.log('  SKIP  no real .xlsx on this machine to read')
