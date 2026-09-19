@@ -7350,3 +7350,189 @@ boot-time trust decision is taken from one. Still open, for the follow-up:
 the `bento-member-<docId>` device signing key and plaintext auto-save content
 (a per-file key in `#bento-doc`); and #519's persistent file-handle grant,
 which for the same reason is safe only under a real origin.
+
+## 2026-09-18 — An assistant that edits the deck through the user's own endpoint, and only through the extension
+
+The maintainer asked for a chat that updates a bento/slides deck against an
+LLM endpoint of the user's choosing (OpenAI-compatible, Anthropic, and Gemini
+by name — AI Studio keys are free and easy to get). Built in
+`slides/src/editor/assistant/` as a drawer at the foot of the properties
+panel; the decision that shaped it is WHERE THE KEY LIVES.
+
+**Extension-only.** The endpoint, the model and the API key are held by the
+bento/home browser extension (home/webext) and the request is made there. The
+page never sees a key and has no field to put one in — not in the document,
+not in localStorage, not in a module variable. Without the extension the
+drawer shows one sentence ("The assistant needs the bento/home extension
+(Chrome or Edge).") with a link, and sends nothing. There is no in-page
+fallback with a key in it.
+
+Why: a `.bento.html` is a document. It gets mailed, saved as copies, shared
+live, pasted as JSON into chats, snapshotted by autosave. A key held by the
+page is a key one stripper away from every one of those, and each would need
+a rig and a security review to keep it out (the room-key exports needed
+exactly that — see 2026-09-13 in scripts/test-export-secrets.ts). An
+extension has real storage the page cannot read and already has a bridge into
+every file:// deck it hosts. So instead of proving the key is stripped from
+N paths, `scripts/test-export-secrets.ts` asserts the absence: no request
+primitive, no credential header, no storage write and no model field in the
+assistant modules — "the page has no place to put a key". The
+first design (direct provider calls from the page as a fallback when the
+extension is absent) was built as far as the shapers and then cut for this
+reason; the shapers went to home-webext as a handoff.
+
+**The bridge contract** lives as TypeScript types plus a header comment in
+`slides/src/editor/assistant/transport.ts`, on the SAME `window.postMessage`
+envelope the save bridge uses (`__bento_tray__`, `dir: req|res`, plus a new
+`dir: evt` for streaming). Ops: `assistant.describe` → `{host, model,
+configured}` (the endpoint's HOST, never a URL with a path or a key);
+`assistant.check`; `assistant.send {messages}` → `res {ok}` then
+`evt assistant.chunk|done|error`; `assistant.abort {req}`;
+`assistant.settings.open`. Capability = `'assistant'` in
+`window.__bentoHost.ops`. home-webext implements the other side; the slides
+side is complete and rigged against a postMessage double
+(`scripts/test-slides-assistant.ts`).
+
+**What travels.** The deck goes out in the COMPACT form (the agent shape,
+`slides/src/compact.ts`, AGENTS.md) with `collab`, `docId` and `modified` stripped and every data:
+asset replaced by a `@@bento-asset-n@@` token; the reply (a compact slide for
+"This slide" scope, a compact deck for "Whole deck") is merged with the live
+document — tokens restored, the slide's id forced back, any collab/docId the
+model wrote ignored — and loaded through `parseDocInputReport`, the SAME
+untrusted gate pasted JSON meets, into ONE `store.replaceDoc` (undoable). The
+result card reports the gate's drops and only the validator findings the edit
+INTRODUCED (a deck's pre-existing warnings are not the reply's fault). A
+reply without JSON is an answer, shown in the chat. Offline mode disables the
+drawer (nothing leaves the machine, extension or not).
+
+Measured in headless Chrome against the built shell with a fake bridge: a
+canned slide edit streamed in three chunks, applied in ~210 ms, the canvas
+text updated, one unknown key dropped and reported at its path, Undo restored
+the slide byte-for-byte; an error event surfaced as a message with the deck
+unchanged; Stop posted `assistant.abort` naming the request; "not configured"
+showed the Settings… line and opened the options page; the fake extension's
+key string appeared in neither the page HTML, the serialized file,
+localStorage, sessionStorage nor any window global. Without the extension:
+the sentence, inputs disabled, zero frames posted. Shell +10 KB compressed.
+
+**Four conditions from the security review, each a rig case
+(`scripts/test-slides-assistant.ts`):** (A) `describe()` bounds `host` to a
+hostname shape and `model` to an id shape, else '' — the route line is the
+one text the page keeps from the bridge, and a hostile bridge must not make
+the page HOLD a key by smuggling it there. (B) A deck reply's duplicate slide
+ids, and duplicate element ids within a slide, are re-minted the way the
+compact loader mints missing ones (`s<n>`, `<slideId>-<type>-<index>`, never
+colliding with an id that appears later) — links, states and morphs target by
+id and the CRDT keys slides by id, so a poisoned reply could split replicas;
+element ids repeated ACROSS slides are the morph idiom and stay; slide scope
+just forces its one id. (C) The untrusted gate is a SHAPE gate: after it the
+document still carried `<img onerror>`/`<b onclick>` in text html, `<script>`
+in svg markup and `link:"javascript:…"` — nothing runs here (the renderer
+sanitizes at draw time), but the FILE would carry the payload to whoever it
+is shared with, and pre-1.1.0 shells drew svg through an unwrap hole. So
+apply() cleans once, on the way into the document, the way pasted markup is
+cleaned at commit: `sanitizeHtml` over text and table-cell html,
+`sanitizeSvgMarkup` (new: the same walk, styles sanitized but NOT scoped —
+`scopeCss` is not idempotent and the renderer scopes at draw time) over svg
+markup and svg assets, `sanitizeSvgCss` over an svg element's `css`, and a
+`link` kept only if it is a web URL or an id-shaped string. Measured in
+headless Chrome on the exact apply chain with those payloads: the gate let
+them through, the clean removed all six, nothing ran. (D) `blobs` (offloaded
+asset keys + bytes) joins the private keys. Content policy: speaker `notes`
+go to the model (the author's intent for the slide); review `comments` do not
+(reviewers' names and words addressed to the author) and are put back from
+the live document on apply; the drawer says so in one line under its input —
+"Sends this slide's text and notes to <host>; comments stay here."
+(E) The call site is pinned, not just the function: the browser section drives
+the REAL `AssistantPanel.apply` with a fake store and the hostile reply and
+asserts the stored document is clean, and a source assertion holds the
+`cleanDoc(next, …)` line inside `apply(` before `replaceDoc`. Measured: with
+that one line removed the rig goes 99/103 (four red); a rig that called
+`cleanDoc` itself had stayed green.
+
+**Contract additions agreed with home-webext (their #513):** `describe` may
+say `local: true` (an on-device model — host '', the page renders "on this
+device · <display name>" from a small id→name map, `gemini-nano` → "Gemini
+Nano", unknown ids as-is); `check` may fail with `code: 'consent-pending'`
+(the extension is asking the user) → the drawer shows the waiting text and
+re-runs `check` ONCE when the document regains focus or visibility; an
+`assistant.error` may carry `code: 'consent-denied'` → a plain refusal card,
+deck unchanged. The page keys on the CODES (shape `[a-z][a-z0-9-]{0,39}`),
+never on the reason text. All three rigged with fake transports in the
+browser section.
+
+## 2026-09-18 — The assistant reads the deck whole and writes it surgically; the model never hands the deck back
+
+**Decision.** An edit turn sends the ADDRESSED OUTLINE of the whole deck
+(every text, table cell and chart with its `<slide number>/<element id>`, the
+notes; a few KB) plus the FOCUS in full — the selected elements' compact
+JSON, or the open slide's when nothing is selected — and takes back an OPS
+PATCH (`slides/src/editor/assistant/ops.ts`): targeted operations addressed by
+slide number and element id, applied to a copy of the elided compact doc,
+which then takes the same road as pasted JSON (mergeReply → the gate →
+cleanDoc → one undoable swap). There is no "this slide / whole deck" switch:
+the selection is the scope. The model is never asked to re-emit the
+document, at any window size.
+
+**Why.** The first shape asked a model for the whole compact deck (or the
+whole slide) back. That is the wrong shape on three counts, and the
+maintainer named it: the reply is as long as the input (22k tokens each way
+on the starter deck), every slide the model touches is at risk of a careless
+rewrite while it fixes one, and a small window (Gemini Nano, a self-hosted
+llama) could not take it at all. Gemini in Slides and Claude with a file do
+what this does: read everything, cheaply, and write with targeted edits.
+
+**The vocabulary.** Words and choices, which any model down to a few
+thousand tokens does reliably: `edits` (wording), `notes`, `cells`
+(`r<row>c<col>`), `chart` (a series' numbers, categories), `style` (three
+enums: bigger/smaller, bold/normal, left/center/right), `add` (a slide from a
+built-in layout, text placed by role; optional full `elements` for a designed
+slide), `remove`, `move`. Precise, for a model that was shown the focus JSON:
+`set` (merge fields onto an element — geometry, colours, fonts, src; never
+`id`/`type`/a private key), `insert` (a new element with geometry, fresh id),
+`delete`, `slide` (whitelisted slide fields). Content ops apply first by the
+outline's numbers, then structure on the original slide objects, so one
+reply can say "add after 3, remove 5, move 7 to 2". A `set` of an arbitrary
+field is exactly as trusted as that field in a pasted file: the gate and
+cleanDoc run after, unchanged, and security probed every verb.
+
+**The window still decides how much goes.** Outline + focus + room for the
+reply must fit `describe.contextTokens` (or the assumption: 6k on-device,
+128k hosted). When the focus does not fit, only the outline goes and the
+strict words-and-choices schema is sent (constrained output — a small model
+asked in prose answers in prose); when it does, the loose "an object" schema.
+When even the outline does not fit, the turn is refused with the numbers.
+Measured on the starter deck: a hosted model gets outline + the open slide;
+the assumed on-device window gets the outline alone for slide 1 (3.5k tokens
+of JSON) but the focus for a single selected element.
+
+**Rejected.** Inferring a scope from the request's wording (still a switch,
+just a hidden one). A third sidebar for the assistant (three columns on a
+13" laptop). Keeping whole-deck JSON as a "power" mode for big windows — the
+patch does everything it did, without the rewrite risk.
+
+**Where model knowledge lives (2026-09-18, after measuring).** The first
+cut of this shape put the prompts, the token budgets, the window
+assumptions, the per-mode schemas, the question detector and a
+model-family limit table in `slides/src/editor/assistant/prompt.ts` — 497
+lines, and measured by building both sides, +25,294 B on a 666,953 B shell
+(+3.8%) that ships in every saved file. That is the wrong home twice over:
+model knowledge goes stale monthly (a new vendor tier, a new window, a new
+constrained-output dialect) while the file format does not, and the
+extension updates itself while a saved deck's shell is frozen until the
+next signed release. So the split is now: the PAGE holds FORMAT knowledge
+only — `material.ts` (elide, the addressed outline, the focus, merge,
+dedupe, clean) and `ops.ts` (what a verb means for the document) — and
+hands the extension the MATERIAL for a turn in every shape at once (plain
+outline, addressed outline, focus JSON); the EXTENSION holds the model
+knowledge — is it a question, what the window takes, the prompts, the
+schema, the prose→JSON nudge, the per-provider request — and returns prose
+or an ops patch, which the page validates and applies exactly as before.
+The bridge is `assistant.turn` → (consent) → `assistant.document` →
+chunk/done/error; nothing of the document leaves before consent holds.
+Explanatory sentences ("what is sent, what is not") moved from the drawer
+to the extension's settings card, where the key lives and where 30
+locales are maintained; the drawer keeps labels. Measured after the move:
++18,239 B (+2.7%); the remaining page half is the drawer UI (the picker,
+the pop-out window, the transcript renderer), the transport's shape
+guards, and the format code — see the PR body for the per-module numbers.

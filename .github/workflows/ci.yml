@@ -390,6 +390,12 @@ jobs:
         # minute for everyone else. The grace and the quiet window are what
         # keep that silent; this rig runs them on a manual clock.
         run: node scripts/test-slides-presence-toasts.ts
+      - name: extension hints — said where the extension would change something, once
+        # In-place save, in-place update with a backup, the on-device model:
+        # each mentioned at the moment its absence is felt (a picker save, an
+        # update that needs a picker, the Assistant's empty state), on file://
+        # in Chrome/Edge without the host, once, and remembered when dismissed.
+        run: node scripts/test-slides-exthint.ts
 
       - name: Media autoplay rig
         # An author set a clip's Autoplay to Off and it played anyway, every
@@ -1456,6 +1462,16 @@ jobs:
         # field for field, nested arrays flatten, ids mint deterministically,
         # the loader gates the expanded doc, the file on disk stays full.
         run: node scripts/test-slides-compact.ts
+
+      - name: Assistant rig
+        # The Assistant drawer (slides/src/editor/assistant/): the deck leaves
+        # the page compact with collab/docId stripped and assets tokenised, a
+        # reply's JSON is found and merged back with the other slides
+        # byte-identical, and the extension bridge client (describe / check /
+        # streamed send / refusal / error / abort / foreign-source frames)
+        # against a postMessage double. Extension-only by decision: the page
+        # has no place to put a key — test-export-secrets.ts asserts that.
+        run: node scripts/test-slides-assistant.ts
 
       - name: Agent-deck corpus rig
         # scripts/fixtures/agent-decks/*.json — compact decks written the way

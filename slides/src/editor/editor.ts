@@ -20,6 +20,7 @@ import { openExportImagesDialog } from './exportimages'
 import { paletteSignature, resolveThemeRefs } from '../palette'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
+import { AssistantPanel } from './assistant/panel'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
@@ -49,6 +50,7 @@ import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
+import { extensionHint } from './exthint'
 
 const i18nT = t
 
@@ -92,6 +94,44 @@ export class Editor {
    *  is the anchor and the canvas slide; this set is what a drag moves and
    *  Delete removes. Empty = just the current slide, as before. */
   private thumbSel: number[] = []
+  private assistant!: AssistantPanel
+  private propsTabs!: HTMLElement
+  private propsBody!: HTMLElement
+  private assistDock!: HTMLElement
+  private propsTab: 'props' | 'assist' = 'props'
+
+  /** The right sidebar's two tabs. The choice is remembered. */
+  private buildPropsTabs() {
+    const mk = (id: 'props' | 'assist', label: string) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-props-tab'
+      b.dataset.tab = id
+      b.textContent = label
+      b.addEventListener('click', () => this.showPropsTab(id))
+      return b
+    }
+    this.propsTabs.append(mk('props', t('Properties')), mk('assist', t('Assistant')))
+    const saved = lsGet('bento-props-tab')
+    this.showPropsTab(saved === 'assist' ? 'assist' : 'props', false)
+    // popping the assistant out empties its tab: fall back to the inspector
+    this.assistant.onFloatChange = (floating) => {
+      this.props.classList.toggle('ed-assist-out', floating)
+      if (floating && this.propsTab === 'assist') this.showPropsTab('props', false)
+    }
+  }
+
+  showPropsTab(id: 'props' | 'assist', persist = true) {
+    if (id === 'assist' && this.assistant.floating) { this.assistant.focusInput(); return }
+    this.propsTab = id
+    this.props.classList.toggle('ed-tab-assist', id === 'assist')
+    for (const b of this.propsTabs.querySelectorAll<HTMLElement>('.ed-props-tab')) b.classList.toggle('on', b.dataset.tab === id)
+    if (persist) lsSet('bento-props-tab', id)
+    if (id === 'assist') {
+      if (this.props.classList.contains('ed-collapsed')) this.togglePanel('right')
+      this.assistant.activate()
+    }
+  }
   private sidebar!: HTMLElement
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
@@ -447,6 +487,13 @@ export class Editor {
       if (zb) corner.appendChild(zb)
     })
     this.props = div('ed-props')
+    // the right sidebar is two tabs: the inspector (PropsPanel's host, which
+    // scrolls) and the Assistant (a full-height dock: the conversation gets
+    // the whole column, not one accordion section of it)
+    this.propsTabs = div('ed-props-tabs')
+    this.propsBody = div('ed-props-body')
+    this.assistDock = div('ed-assist-dock')
+    this.props.append(this.propsTabs, this.propsBody, this.assistDock)
     main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
@@ -519,7 +566,12 @@ export class Editor {
     this.canvas = new SlideCanvas(canvasWrap, this.store)
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
-    this.panel = new PropsPanel(this.props, this.store)
+    this.panel = new PropsPanel(this.propsBody, this.store)
+    // the Assistant: extension-only (assistant/transport.ts says why). It
+    // lives in the dock tab, or popped out as a floating window (its own
+    // choice, remembered); the tab strip switches between inspector and it
+    this.assistant = new AssistantPanel({ store: this.store, toast: (m) => this.toast(m), dock: this.assistDock })
+    this.buildPropsTabs()
 
     if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
   }
@@ -2771,6 +2823,16 @@ export class Editor {
     return true
   }
 
+  /** One bar, once per kind, dismissable and remembered (exthint.ts). */
+  private extensionHintBar(kind: 'save' | 'update') {
+    if (document.querySelector('.ed-recover.ed-exthint-bar')) return
+    const bar = div('ed-recover ed-exthint-bar')
+    const line = extensionHint(kind, t, () => bar.remove())
+    if (!line) return
+    bar.appendChild(line)
+    document.body.appendChild(bar)
+  }
+
   private noticeIfCannotWriteInPlace() {
     if (canWriteInPlace()) return
     if (lsGet(SAVE_NOTICE_KEY) === 'seen') return
@@ -3003,6 +3065,9 @@ export class Editor {
       this.toast(result === 'downloaded'
         ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
         : t('Saved'))
+      // the save needed a picker for a file the user already had open: the
+      // moment the extension's in-place write is felt missing (exthint.ts)
+      if (result === 'saved-as' && !forcePicker) this.extensionHintBar('save')
     } catch (err) {
       console.error(err)
       this.toast(t('Save failed — see console'))
@@ -3082,6 +3147,11 @@ export class Editor {
         return
       }
       if (mod && ev.key.toLowerCase() === 'c') {
+        // A text selection outside the canvas (the assistant transcript, a
+        // panel label) is the browser's copy — not a Bento payload of the
+        // slide behind it
+        const sel = document.getSelection()
+        if (sel && !sel.isCollapsed && sel.anchorNode && !(sel.anchorNode.parentElement ?? sel.anchorNode as Element | null)?.closest?.('.ed-stage-scale')) return
         // Copy to BOTH the in-app clipboard (fast, same session) and the system
         // clipboard as a Bento payload (works across decks/tabs). Elements when
         // any are selected; otherwise the current slide.
@@ -3529,6 +3599,8 @@ export class Editor {
           } catch (err: any) { fail(err) }
         })
         actions.appendChild(inPlaceB)
+        // an update that would need a picker: say what the extension makes of it
+        if (!canUpdateInPlace()) { const hint = extensionHint('update', t); if (hint) actions.insertAdjacentElement('afterend', hint) }
 
         const getB = document.createElement('button')
         getB.className = 'ed-btn'

@@ -214,7 +214,14 @@ export class PropsPanel {
     this.applyAccordion()
     this.layers.restoreScroll()
     this.host.scrollTop = scrollTop
+    // the Assistant drawer (editor/assistant/panel.ts): the SAME node, after
+    // the accordion so no section header swallows it as its body, and after
+    // the scroll restore (appending below the fold moves nothing)
+    if (this.footer) this.host.appendChild(this.footer)
   }
+
+  /** A node that lives at the foot of the panel across rebuilds. */
+  footer: HTMLElement | null = null
 
   /** Collapsed by default until the user opens them (persisted per title). */
   private static CLOSED_BY_DEFAULT = new Set(['Slideshow', 'Presenting', 'Interactivity', 'Layout', 'Advanced (JSON)', 'Layers'])

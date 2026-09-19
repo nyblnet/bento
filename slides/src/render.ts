@@ -952,6 +952,23 @@ export function sanitizeSvgCss(css: string): string {
  * one. There is one caller; costing it a selector is free.
  */
 export function sanitizeSvg(markup: string, scope: string): DocumentFragment {
+  return sanitizeSvgWith(markup, (css) => scopeCss(sanitizeSvgCss(css), scope))
+}
+
+/**
+ * The same walk, for MARKUP THAT GOES BACK INTO THE DOCUMENT rather than onto
+ * the page: the assistant's apply step (editor/assistant/panel.ts) cleans an
+ * svg element's `content` before it is stored. Styles are sanitized but NOT
+ * scoped — the renderer scopes at draw time, and scopeCss is not idempotent
+ * (`[id] [id] .p` would no longer match), so stored markup must stay unscoped.
+ */
+export function sanitizeSvgMarkup(markup: string): string {
+  const host = document.createElement('div')
+  host.appendChild(sanitizeSvgWith(markup, sanitizeSvgCss))
+  return host.innerHTML
+}
+
+function sanitizeSvgWith(markup: string, style: (css: string) => string): DocumentFragment {
   const out = document.createDocumentFragment()
   if (!markup) return out
   const parsed = new DOMParser().parseFromString(markup, 'text/html')
@@ -1002,7 +1019,7 @@ export function sanitizeSvg(markup: string, scope: string): DocumentFragment {
         // Scoped as well as sanitized. An svg <style> applies DOCUMENT-WIDE, so
         // one diagram's rules reach every other svg on the page — the exact
         // hazard scopeCss exists for, which until now only `el.css` got.
-        el.textContent = scopeCss(sanitizeSvgCss(el.textContent ?? ''), scope)
+        el.textContent = style(el.textContent ?? '')
         continue
       }
       walk(el)
