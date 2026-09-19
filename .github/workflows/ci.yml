@@ -379,6 +379,13 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: presence toasts — said once per real arrival and departure
+        # A hidden tab's heartbeat arrives once a minute, the room drops the
+        # peer and the next beat brings them back: "left" / "joined" every
+        # minute for everyone else. The grace and the quiet window are what
+        # keep that silent; this rig runs them on a manual clock.
+        run: node scripts/test-slides-presence-toasts.ts
+
       - name: Media autoplay rig
         # An author set a clip's Autoplay to Off and it played anyway, every
         # show, since media shipped in v0.9.16. render.ts wrote
