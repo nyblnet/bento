@@ -177,6 +177,19 @@ matters. Neither needs the signing key.
    BENTO_SITE_DIR=~/devel/bento-site node scripts/publish-site.mjs "release vX.Y.Z"
    ```
 
+   **Build anywhere; publish from a path under `~/devel`.** The shell picks
+   the `gh` profile by directory (a chpwd hook), and a job or temp worktree
+   — `~/.claude-andy/jobs/…/tmp`, `/tmp/rel` — maps to the WORK profile,
+   which cannot create a release on this repo. `publish-site.mjs` checks the
+   active `gh` account against the repo owner **before it mirrors anything**
+   and, on a mismatch, prints the exact command to run from `~/devel/bento`
+   and exits non-zero. Three releases were created by hand before this check
+   existed because the site went live first and the release step failed
+   after. So: `cd ~/devel/bento` (or any checkout under `~/devel`) and run
+   the publish from there, pointing `BENTO_SITE_DIR` at the site repo. A
+   collaborator with release rights who is not the owner can be allowed with
+   `BENTO_RELEASE_ACCOUNTS=name1,name2`.
+
    This mirrors the assembled `site/` tree into `../bento-site` (or
    `$BENTO_SITE_DIR`) and pushes it. **`site/` is fully generated — never edit
    it by hand.** The authored sources are tracked in *this* repo and assembled
@@ -217,9 +230,10 @@ matters. Neither needs the signing key.
    an existing release is left alone and only a missing asset is uploaded, so
    re-running publish is safe.
 
-   It is deliberately **not** best-effort. If `gh` is unauthenticated, or the
-   asset is missing afterwards, publish exits non-zero and tells you the exact
-   command to run. This used to be a manual step, and it was silently missed
+   It is deliberately **not** best-effort. The account is checked before the
+   mirror (step 5); if `gh` is unauthenticated or the wrong account, nothing
+   is published; if the asset is missing afterwards, publish exits non-zero
+   and tells you the exact command to run. This used to be a manual step, and it was silently missed
    for v1.0.10 — the site was live and self-updating while the repo showed no
    release at all. Documentation didn't prevent that, so the check now does.
 7. **Verify against the LIVE channel, not the local build.** These are the

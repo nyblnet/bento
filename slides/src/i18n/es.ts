@@ -934,4 +934,9 @@ export const es: Catalog = {
   "Compress": "Comprimir",
   "Compress pictures in this deck": "Comprimir las imágenes de esta presentación",
   "{n} pictures compressed — {before} → {after}": "{n} imágenes comprimidas — {before} → {after}",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Esta presentación es demasiado grande para compartirla en vivo de una pieza. Tus cambios están guardados en tu copia, pero quien se una ahora puede no recibirla completa.",
+  "1 picture is still uploading; it will follow.": "1 imagen todavía se está subiendo; llegará después.",
+  "{n} pictures are still uploading; they will follow.": "{n} imágenes todavía se están subiendo; llegarán después.",
+  "1 picture still uploading…": "1 imagen subiéndose…",
+  "{n} pictures still uploading…": "{n} imágenes subiéndose…",
 }

@@ -948,4 +948,9 @@ export const strings: Catalog = {
   "Compress": "บีบอัด",
   "Compress pictures in this deck": "บีบอัดรูปภาพในเด็คนี้",
   "{n} pictures compressed — {before} → {after}": "บีบอัดแล้ว {n} รูป — {before} → {after}",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "เด็คนี้ใหญ่เกินกว่าจะแชร์สดในคราวเดียว การเปลี่ยนแปลงของคุณบันทึกไว้ในสำเนาของคุณแล้ว แต่ผู้ที่เข้าร่วมตอนนี้อาจได้รับเด็คไม่ครบ",
+  "1 picture is still uploading; it will follow.": "รูปภาพ 1 รูปยังอัปโหลดอยู่ จะตามมาภายหลัง",
+  "{n} pictures are still uploading; they will follow.": "รูปภาพ {n} รูปยังอัปโหลดอยู่ จะตามมาภายหลัง",
+  "1 picture still uploading…": "กำลังอัปโหลดรูปภาพ 1 รูป…",
+  "{n} pictures still uploading…": "กำลังอัปโหลดรูปภาพ {n} รูป…",
 }

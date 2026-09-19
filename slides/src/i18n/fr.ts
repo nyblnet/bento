@@ -934,4 +934,9 @@ export const fr: Catalog = {
   "Compress": "Compresser",
   "Compress pictures in this deck": "Compresser les images de cette présentation",
   "{n} pictures compressed — {before} → {after}": "{n} images compressées — {before} → {after}",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Cette présentation est trop volumineuse pour être partagée en direct d’un seul tenant. Vos modifications sont enregistrées dans votre copie, mais un collaborateur qui rejoint maintenant peut ne pas la recevoir en entier.",
+  "1 picture is still uploading; it will follow.": "1 image est encore en cours d’envoi ; elle suivra.",
+  "{n} pictures are still uploading; they will follow.": "{n} images sont encore en cours d’envoi ; elles suivront.",
+  "1 picture still uploading…": "1 image en cours d’envoi…",
+  "{n} pictures still uploading…": "{n} images en cours d’envoi…",
 }

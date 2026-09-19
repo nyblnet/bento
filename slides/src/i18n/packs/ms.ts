@@ -947,4 +947,9 @@ export const strings: Catalog = {
   "Compress": "Mampatkan",
   "Compress pictures in this deck": "Mampatkan gambar dalam dek ini",
   "{n} pictures compressed — {before} → {after}": "{n} gambar dimampatkan — {before} → {after}",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Dek ini terlalu besar untuk dikongsi secara langsung sekali gus. Perubahan anda disimpan dalam salinan anda, tetapi yang menyertai sekarang mungkin tidak menerima keseluruhan dek.",
+  "1 picture is still uploading; it will follow.": "1 gambar masih dimuat naik; ia akan menyusul.",
+  "{n} pictures are still uploading; they will follow.": "{n} gambar masih dimuat naik; ia akan menyusul.",
+  "1 picture still uploading…": "1 gambar dimuat naik…",
+  "{n} pictures still uploading…": "{n} gambar dimuat naik…",
 }

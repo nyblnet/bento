@@ -19,6 +19,18 @@ pre-1.0.
   and applies it as one undoable step. A picture that is already a JPEG or
   WebP within the cap is left alone, so running it twice changes nothing.
   In a live session the new bytes are shared like any other change.
+- **When a deck is too large to share live, the message says so.** A refused
+  whole-deck checkpoint used to read as "that change is too large (about 1 MB
+  max)", blaming an edit that was fine. It now says the deck is too large to
+  share in one piece, and the Share panel shows how many pictures are still
+  uploading while a live session catches up.
+- **A deck full of photos can be shared live again.** A deck whose pictures
+  were each under the sharing limit but together came to more than about a
+  megabyte could not be shared at all — the copy a joining collaborator
+  receives was sent as one oversize frame the relay refused. Each picture
+  already travelled separately when it changed; that copy now does the same,
+  so the deck shares no matter how many photos it holds.
+
 ## [1.2.1] — 2026-09-17
 
 - **Pasting into a table cell lands once.** Edit a cell, leave it unchanged,

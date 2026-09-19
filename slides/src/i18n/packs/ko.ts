@@ -938,4 +938,9 @@ export const strings: Catalog = {
   "Compress": "압축",
   "Compress pictures in this deck": "이 덱의 그림 압축",
   "{n} pictures compressed — {before} → {after}": "그림 {n}개 압축됨 — {before} → {after}",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "이 덱은 한 번에 실시간 공유하기에 너무 큽니다. 변경 사항은 내 사본에 저장되지만, 지금 참여하는 사람은 덱 전체를 받지 못할 수 있습니다.",
+  "1 picture is still uploading; it will follow.": "그림 1개가 아직 업로드 중입니다. 곧 도착합니다.",
+  "{n} pictures are still uploading; they will follow.": "그림 {n}개가 아직 업로드 중입니다. 곧 도착합니다.",
+  "1 picture still uploading…": "그림 1개 업로드 중…",
+  "{n} pictures still uploading…": "그림 {n}개 업로드 중…",
 }

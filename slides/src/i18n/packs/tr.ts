@@ -945,4 +945,9 @@ export const strings: Catalog = {
   "Compress": "Sıkıştır",
   "Compress pictures in this deck": "Bu destedeki resimleri sıkıştır",
   "{n} pictures compressed — {before} → {after}": "{n} resim sıkıştırıldı — {before} → {after}",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Bu deste tek parça halinde canlı paylaşılamayacak kadar büyük. Değişiklikleriniz kopyanızda kayıtlı, ancak şimdi katılan biri destenin tamamını alamayabilir.",
+  "1 picture is still uploading; it will follow.": "1 resim hâlâ yükleniyor; ardından gelecek.",
+  "{n} pictures are still uploading; they will follow.": "{n} resim hâlâ yükleniyor; ardından gelecek.",
+  "1 picture still uploading…": "1 resim yükleniyor…",
+  "{n} pictures still uploading…": "{n} resim yükleniyor…",
 }

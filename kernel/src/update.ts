@@ -26,7 +26,7 @@ import {
   hasFileHandle, writeUpdatedFile, writeUpdatedFileAs, writeBackupBeside, hostCan,
 } from './save.ts'
 import { lsDel, lsGet, lsSet } from './storage.ts'
-import { netFetch } from './net.ts'
+import { netFetch, sharedStorageOrigin } from './net.ts'
 
 declare const __APP_VERSION__: string
 
@@ -205,7 +205,13 @@ async function verifyManifest(raw: string): Promise<ReleaseInfo> {
 
 /** Ask the release origin for the latest version. */
 export async function checkForUpdates(manifestUrl?: string): Promise<UpdateCheck> {
-  const url = manifestUrl ?? lsGet('bento-update-url') ?? updateManifestUrl()
+  // The localStorage dev override is honoured only from a real, isolated origin.
+  // On file:// (and opaque origins) storage is shared with every other local
+  // document, so a malicious deck could plant an override that steers this deck's
+  // update check at a hostile server (signatures still block RCE; this stops the
+  // downgrade/DoS/steer). Dev works from localhost or a real origin.
+  const devOverride = sharedStorageOrigin() ? null : lsGet('bento-update-url')
+  const url = manifestUrl ?? devOverride ?? updateManifestUrl()
   try {
     const res = await netFetch(url, { cache: 'no-store' })
     if (!res.ok) throw new Error(`release server answered ${res.status}`)

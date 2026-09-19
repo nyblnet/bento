@@ -971,4 +971,9 @@ export const strings: Catalog = {
   "Compress": "Gysmak",
   "Compress pictures in this deck": "Bu toplumdaky suratlary gysmak",
   "{n} pictures compressed — {before} → {after}": "{n} surat gysyldy — {before} → {after}",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "Bu toplum bir bölek görnüşinde göni paýlaşmak üçin gaty uly. Üýtgeşmeleriňiz nusgaňyzda saklandy, ýöne häzir goşulýan toplumy dolulygyna alyp bilmez.",
+  "1 picture is still uploading; it will follow.": "1 surat henizem ýüklenýär; soňra geler.",
+  "{n} pictures are still uploading; they will follow.": "{n} surat henizem ýüklenýär; soňra geler.",
+  "1 picture still uploading…": "1 surat ýüklenýär…",
+  "{n} pictures still uploading…": "{n} surat ýüklenýär…",
 }

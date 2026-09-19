@@ -934,4 +934,9 @@ export const zhHant: Catalog = {
   "Compress": "壓縮",
   "Compress pictures in this deck": "壓縮此文稿中的圖片",
   "{n} pictures compressed — {before} → {after}": "已壓縮 {n} 張圖片 — {before} → {after}",
+  "This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.": "這份文稿太大，無法一次即時共享。你的變更已儲存在你的副本中，但現在加入的協作者可能收不到完整文稿。",
+  "1 picture is still uploading; it will follow.": "還有 1 張圖片正在上傳；稍後送達。",
+  "{n} pictures are still uploading; they will follow.": "還有 {n} 張圖片正在上傳；稍後送達。",
+  "1 picture still uploading…": "1 張圖片上傳中…",
+  "{n} pictures still uploading…": "{n} 張圖片上傳中…",
 }
