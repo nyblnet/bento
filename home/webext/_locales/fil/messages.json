@@ -189,7 +189,7 @@
     "message": "Piliin ang folder kung saan naroon ang mga dokumento mo"
   },
   "setupStep1Note": {
-    "message": "Kadalasan ay sapat na ang isang malawak na folder — saklaw nito ang lahat ng nasa loob."
+    "message": "Karaniwang sapat na ang isang malawak na folder — sakop nito ang lahat ng nasa loob. Hindi ibibigay ng Chrome ang home folder mismo o ang Library: piliin ang Documents, Desktop, o ang folder kung nasaan ang iyong mga dokumento."
   },
   "setupStep2": {
     "message": "I-on ang access sa lokal na file"
@@ -484,5 +484,131 @@
   },
   "surveyOnlySeen": {
     "message": "Ang mga dokumentong binuksan sa browser na ito lang ang makikita sa paraang ito."
+  },
+  "placingFolder": {
+    "message": "Hinahanap ang “$1” sa disk…"
+  },
+  "placeNoDisk": {
+    "message": "Hindi pinayagan ng Chrome ang extension na basahin ang “$1” mula sa disk para hanapin ito (tinanggihan ang mga file:// listing)."
+  },
+  "placeTried": {
+    "message": "Hinanap ang “$1” sa $2 lugar sa disk — wala roon."
+  },
+  "recentTitle": {
+    "message": "Kamakailang na-edit"
+  },
+  "badgeNotAdded": {
+    "message": "hindi pa naidagdag"
+  },
+  "badgeNotAddedTip": {
+    "message": "Natagpuan sa disk. Bumubukas, pero magtatanong kung saan kapag nag-save — idagdag ang folder nito para ma-save sa lugar."
+  },
+  "folderFoundTip": {
+    "message": "Natagpuan sa disk, hindi pa naidagdag: bumubukas ang mga dokumento nito, pero nagtatanong ang pag-save kung saan."
+  },
+  "menuAddFolder": {
+    "message": "Idagdag ang folder nito para ma-save sa lugar…"
+  },
+  "pickThisFolder": {
+    "message": "Sa picker, piliin ang folder na “$1” — kailangang makita ng Chrome na ikaw ang pumili."
+  },
+  "pickedWrongFolder": {
+    "message": "Hindi “$1” ang folder ng dokumentong ito (“$2”). Subukan muli at piliin iyon."
+  },
+  "folderAlreadyAdded": {
+    "message": "Naidagdag na ang “$1”."
+  },
+  "bentoFolderBtn": {
+    "message": "Gumawa ng Bento folder…"
+  },
+  "bentoFolderHow": {
+    "message": "Sa dialog, gumawa ng bagong folder na “Bento” sa loob ng Documents at piliin ito."
+  },
+  "bentoFolderMade": {
+    "message": "Ang “$1” ang iyong Bento folder — dito pupunta ang mga bagong dokumento at mase-save sa lugar."
+  },
+  "bentoFolderTip": {
+    "message": "Folder sa loob ng Documents na nagse-save sa lugar at tumatanggap ng mga bagong dokumento. Hindi ibibigay ng Chrome ang Documents mismo."
+  },
+  "defaultFolder": {
+    "message": "dito pumupunta ang mga bagong dokumento"
+  },
+  "fgTitle": {
+    "message": "I-save ang “$1” sa lugar mula ngayon?"
+  },
+  "fgTitleLapsed": {
+    "message": "Ikonekta muli ang “$1”?"
+  },
+  "fgLead": {
+    "message": "Pinananatili ng bento/home ang pahintulot para sa isang file na ito, kaya bawat pag-save ay direktang sumusulat dito. Piliin ang parehong file sa susunod na dialog."
+  },
+  "fgLeadLapsed": {
+    "message": "Nasa bento/home na ang file na ito; gusto ng browser na kumpirmahin mo itong muli."
+  },
+  "fgChoose": {
+    "message": "Piliin ang file…"
+  },
+  "fgReconnect": {
+    "message": "Ikonekta muli"
+  },
+  "fgOnce": {
+    "message": "Ngayon lang"
+  },
+  "fgNotSame": {
+    "message": "Hindi iyan ang file na humiling (“$1”). Piliin iyon, o isara ang window na ito."
+  },
+  "fgDenied": {
+    "message": "Hindi ibinigay ang pahintulot."
+  },
+  "droppedGranted": {
+    "message": "Naidagdag: $1 folder, $2 file."
+  },
+  "setFilesTitle": {
+    "message": "Mga file"
+  },
+  "setFilesSub": {
+    "message": "Mga dokumentong nasa labas ng anumang idinagdag na folder na kusang nagse-save sa lugar — napili nang isang beses, o inihulog sa library."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: walang ibinigay na file handle ang browser para sa drop na ito."
+  },
+  "dropNotBento": {
+    "message": "Hindi Bento na dokumento (.bento.html) ang “$1” — hindi idinagdag."
+  },
+  "setDownloadsTitle": {
+    "message": "Mga download"
+  },
+  "setDownloadsSub": {
+    "message": "Ang mga dokumento sa folder ng Mga download ay maaaring mag-save sa lugar sa pamamagitan ng mga download ng Chrome — maliban kung nakatakda ang Chrome na magtanong kung saan ise-save ang bawat file, na ginagawang dialog ang bawat pag-save."
+  },
+  "setDownloadsOff": {
+    "message": "Nagtanong ang Chrome kung saan ise-save — naka-off ang pag-save sa Mga download hanggang magbago ang setting na iyon"
+  },
+  "setDownloadsRetry": {
+    "message": "Subukan muli"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 file sa disk ang may eksaktong ganitong bytes — naidagdag, pero hindi makakapag-save sa lugar hangga’t hindi sila nagkakaiba."
+  },
+  "addFiles": {
+    "message": "Magdagdag ng mga file…"
+  },
+  "tdGrant": {
+    "message": "I-save dito nang hindi nagtatanong…"
+  },
+  "tdViaFolder": {
+    "message": "nagse-save sa lugar — naidagdag ang folder nito"
+  },
+  "tdViaFile": {
+    "message": "nagse-save sa lugar — naidagdag ang file na ito"
+  },
+  "tdViaDownloads": {
+    "message": "nagse-save sa lugar — nasa Mga download ito"
+  },
+  "tdNotYet": {
+    "message": "nagtatanong kung saan ise-save, sa bawat pagkakataon"
+  },
+  "badgeNotSavingTip": {
+    "message": "Hindi pa makakapag-save sa lugar ang dokumentong ito — buksan ang bento/home panel para ayusin iyon."
   }
 }

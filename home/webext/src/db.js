@@ -32,9 +32,14 @@
 // clickable.
 
 const DB = 'bento-tray'
-const VERSION = 2
+const VERSION = 3
 export const GRANT = 'grant'
 export const CACHE = 'cache'
+/** Per-FILE grants (filegrant.js): a real FileSystemFileHandle for one
+ *  document outside every granted folder, held here — the extension's own
+ *  origin — because a file:// page must never keep one (every local deck
+ *  shares that origin's storage). v3. */
+export const FILEGRANT = 'filegrant'
 
 export const open = () => new Promise((res, rej) => {
   const r = indexedDB.open(DB, VERSION)
@@ -44,10 +49,15 @@ export const open = () => new Promise((res, rej) => {
     // path from a v1 install is explicit rather than incidental.
     if (!d.objectStoreNames.contains(GRANT)) d.createObjectStore(GRANT)
     if (!d.objectStoreNames.contains(CACHE)) d.createObjectStore(CACHE)
+    if (!d.objectStoreNames.contains(FILEGRANT)) d.createObjectStore(FILEGRANT)
     void ev
   }
   r.onsuccess = () => res(r.result)
   r.onerror = () => rej(r.error)
+  // A version bump waits for every older connection to close; without this
+  // an upgrade blocked by another open page hangs every store call forever,
+  // and the symptom is "nothing happened".
+  r.onblocked = () => rej(new Error('bento/home storage is open in another tab at an older version — close other bento/home pages and try again'))
 })
 
 export const get = async (store, key) => {
@@ -56,6 +66,28 @@ export const get = async (store, key) => {
     const q = d.transaction(store, 'readonly').objectStore(store).get(key)
     q.onsuccess = () => res(q.result ?? null)
     q.onerror = () => rej(q.error)
+  })
+}
+
+/** Every record in a store, as [key, value] pairs. */
+export const all = async (store) => {
+  const d = await open()
+  return new Promise((res, rej) => {
+    const os = d.transaction(store, 'readonly').objectStore(store)
+    const keys = os.getAllKeys()
+    const vals = os.getAll()
+    vals.onsuccess = () => res(keys.result.map((k, i) => [k, vals.result[i]]))
+    vals.onerror = () => rej(vals.error)
+  })
+}
+
+export const del = async (store, key) => {
+  const d = await open()
+  return new Promise((res, rej) => {
+    const t = d.transaction(store, 'readwrite')
+    t.objectStore(store).delete(key)
+    t.oncomplete = res
+    t.onerror = () => rej(t.error)
   })
 }
 
@@ -87,3 +119,18 @@ export async function learnPrefix(folderName, absolutePrefix) {
 }
 
 export const prefixes = async () => (await get(GRANT, 'prefixes')) || {}
+
+/**
+ * Documents OPENED in this browser, by absolute path, newest first — every
+ * deck whose bridge said hello. A document dragged into the browser from a
+ * folder the scan does not cover is still a document the person has, and
+ * the library lists it from here: openable by URL, granted or not.
+ */
+export const RECENT_MAX = 60
+export const recentOpened = async () => (await get(GRANT, 'recent')) || {}
+export async function noteOpened(path) {
+  const all = await recentOpened()
+  all[path] = Date.now()
+  const keep = Object.entries(all).sort((a, b) => b[1] - a[1]).slice(0, RECENT_MAX)
+  await put(GRANT, 'recent', Object.fromEntries(keep))
+}

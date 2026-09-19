@@ -593,6 +593,22 @@ jobs:
         # request. Every failure mode here is silent by nature.
         run: node scripts/test-webext-update.ts
 
+      - name: WebExtension placement rig
+        # A granted folder has no path; the library can only open a document
+        # by its file:// URL. Placement GUESSES paths and PROVES one by bytes
+        # and by the grant itself — the property that matters is that a wrong
+        # guess (same name, other bytes; same bytes, a copy elsewhere) is never
+        # recorded. Also the title card drawn for a document with no preview.
+        run: node scripts/test-webext-place.ts
+
+      - name: WebExtension file-grant rig
+        # Saving in place for a document outside every granted folder: a
+        # per-file handle the extension holds, the downloads API for Downloads,
+        # the one-time offer. Each must write only the sender's own file, use a
+        # handle only when proven to be that file (name and bytes), and fail to
+        # the browser's own picker — never to nothing.
+        run: node scripts/test-webext-filegrant.ts
+
       - name: WebExtension localisation rig
         # Every failure mode of a message catalogue is silent: a key the code
         # uses but English lacks renders as the key name, a locale missing a key

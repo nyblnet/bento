@@ -189,7 +189,7 @@
     "message": "Pilih folder tempat dokumen anda berada"
   },
   "setupStep1Note": {
-    "message": "Satu folder luas biasanya memadai — ia merangkumi segala-galanya di dalamnya."
+    "message": "Satu folder yang luas biasanya mencukupi — ia meliputi semua di dalamnya. Chrome tidak akan menyerahkan folder rumah itu sendiri atau Library: pilih Dokumen, Desktop, atau folder tempat dokumen anda berada."
   },
   "setupStep2": {
     "message": "Hidupkan akses fail setempat"
@@ -484,5 +484,131 @@
   },
   "surveyOnlySeen": {
     "message": "Cara ini hanya menemui dokumen yang pernah dibuka dalam pelayar ini."
+  },
+  "placingFolder": {
+    "message": "Mencari “$1” pada cakera…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome tidak membenarkan sambungan membaca “$1” daripada cakera untuk mencarinya (senarai file:// ditolak)."
+  },
+  "placeTried": {
+    "message": "Mencari “$1” di $2 tempat pada cakera — tiada di sana."
+  },
+  "recentTitle": {
+    "message": "Baru disunting"
+  },
+  "badgeNotAdded": {
+    "message": "belum ditambah"
+  },
+  "badgeNotAddedTip": {
+    "message": "Ditemui pada cakera. Boleh dibuka, tetapi semasa menyimpan akan ditanya ke mana — tambah foldernya untuk menyimpan di tempat."
+  },
+  "folderFoundTip": {
+    "message": "Ditemui pada cakera, belum ditambah: dokumennya boleh dibuka, tetapi menyimpan bertanya ke mana."
+  },
+  "menuAddFolder": {
+    "message": "Tambah foldernya untuk menyimpan di tempat…"
+  },
+  "pickThisFolder": {
+    "message": "Dalam pemilih, pilih folder “$1” — Chrome mesti melihat anda memilihnya."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” bukan folder dokumen ini (“$2”). Cuba lagi dan pilih yang itu."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” sudah ditambah."
+  },
+  "bentoFolderBtn": {
+    "message": "Cipta folder Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "Dalam dialog, cipta folder baharu bernama “Bento” dalam Dokumen dan pilihnya."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” ialah folder Bento anda — dokumen baharu masuk ke sana dan disimpan di tempat."
+  },
+  "bentoFolderTip": {
+    "message": "Folder dalam Dokumen yang menyimpan di tempat dan menerima dokumen baharu. Chrome tidak akan memberikan Dokumen itu sendiri."
+  },
+  "defaultFolder": {
+    "message": "dokumen baharu masuk ke sini"
+  },
+  "fgTitle": {
+    "message": "Simpan “$1” di tempat mulai sekarang?"
+  },
+  "fgTitleLapsed": {
+    "message": "Sambung semula “$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home menyimpan kebenaran untuk fail ini sahaja, jadi setiap simpanan menulis terus kepadanya. Pilih fail yang sama dalam dialog seterusnya."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home sudah ada fail ini; pelayar mahu anda mengesahkannya sekali lagi."
+  },
+  "fgChoose": {
+    "message": "Pilih fail…"
+  },
+  "fgReconnect": {
+    "message": "Sambung semula"
+  },
+  "fgOnce": {
+    "message": "Sekali ini sahaja"
+  },
+  "fgNotSame": {
+    "message": "Itu bukan fail yang bertanya (“$1”). Pilih yang itu, atau tutup tetingkap ini."
+  },
+  "fgDenied": {
+    "message": "Kebenaran tidak diberikan."
+  },
+  "droppedGranted": {
+    "message": "Ditambah: $1 folder, $2 fail."
+  },
+  "setFilesTitle": {
+    "message": "Fail"
+  },
+  "setFilesSub": {
+    "message": "Dokumen di luar mana-mana folder yang ditambah yang menyimpan di tempat dengan sendirinya — dipilih sekali, atau dijatuhkan ke perpustakaan."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: pelayar tidak memberikan pemegang fail untuk lepasan ini."
+  },
+  "dropNotBento": {
+    "message": "“$1” bukan dokumen Bento (.bento.html) — tidak ditambah."
+  },
+  "setDownloadsTitle": {
+    "message": "Muat turun"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumen dalam folder Muat turun boleh disimpan di tempat melalui muat turun Chrome — melainkan Chrome ditetapkan untuk bertanya di mana untuk menyimpan setiap fail, yang menjadikan setiap simpanan satu dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome bertanya di mana untuk menyimpan — menyimpan ke Muat turun dimatikan sehingga tetapan itu berubah"
+  },
+  "setDownloadsRetry": {
+    "message": "Cuba lagi"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 fail pada cakera mempunyai bait yang sama persis — ditambah, tetapi tidak boleh menyimpan di tempat sehingga ia berbeza."
+  },
+  "addFiles": {
+    "message": "Tambah fail…"
+  },
+  "tdGrant": {
+    "message": "Simpan di sini tanpa bertanya…"
+  },
+  "tdViaFolder": {
+    "message": "disimpan di tempat — foldernya telah ditambah"
+  },
+  "tdViaFile": {
+    "message": "disimpan di tempat — fail ini telah ditambah"
+  },
+  "tdViaDownloads": {
+    "message": "disimpan di tempat — berada dalam Muat turun"
+  },
+  "tdNotYet": {
+    "message": "sentiasa bertanya di mana untuk menyimpan"
+  },
+  "badgeNotSavingTip": {
+    "message": "Dokumen ini belum boleh menyimpan di tempat — buka panel bento/home untuk membetulkannya."
   }
 }

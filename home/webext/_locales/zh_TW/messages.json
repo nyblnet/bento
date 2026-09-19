@@ -199,7 +199,7 @@
     "message": "選擇存放文件的資料夾"
   },
   "setupStep1Note": {
-    "message": "通常选一個大一些的資料夾就夠了 — 它涵蓋其中的全部內容。"
+    "message": "通常一個較大的資料夾就夠了——它涵蓋其中的一切。Chrome 不會交出個人資料夾本身或 Library：請選擇「文件」「桌面」或存放文件的資料夾。"
   },
   "setupStep2": {
     "message": "開啟本地檔案访問",
@@ -517,5 +517,131 @@
   },
   "surveyOnlySeen": {
     "message": "這種方式只能找到在此瀏覽器中開啟過的文件。"
+  },
+  "placingFolder": {
+    "message": "正在磁碟上尋找「$1」……"
+  },
+  "placeNoDisk": {
+    "message": "Chrome 不允許擴充功能從磁碟讀取以尋找「$1」（file:// 目錄清單被拒絕）。"
+  },
+  "placeTried": {
+    "message": "已在磁碟上 $2 個位置尋找「$1」，未找到。"
+  },
+  "recentTitle": {
+    "message": "最近編輯"
+  },
+  "badgeNotAdded": {
+    "message": "未加入"
+  },
+  "badgeNotAddedTip": {
+    "message": "在磁碟上找到。可以開啟，但儲存時會詢問位置——加入其所在資料夾即可就地儲存。"
+  },
+  "folderFoundTip": {
+    "message": "在磁碟上找到但未加入：其中的文件可以開啟，但儲存時會詢問位置。"
+  },
+  "menuAddFolder": {
+    "message": "加入其所在資料夾以便就地儲存……"
+  },
+  "pickThisFolder": {
+    "message": "請在選擇器中選擇資料夾「$1」——Chrome 必須看到您親自選擇。"
+  },
+  "pickedWrongFolder": {
+    "message": "「$1」不是此文件所在的資料夾（「$2」）。請再試一次並選擇那個資料夾。"
+  },
+  "folderAlreadyAdded": {
+    "message": "「$1」已加入。"
+  },
+  "bentoFolderBtn": {
+    "message": "建立 Bento 資料夾……"
+  },
+  "bentoFolderHow": {
+    "message": "請在對話框中於「文件」內新增一個名為「Bento」的資料夾並選擇它。"
+  },
+  "bentoFolderMade": {
+    "message": "「$1」是您的 Bento 資料夾——新文件會放在這裡並就地儲存。"
+  },
+  "bentoFolderTip": {
+    "message": "「文件」內的一個資料夾，可就地儲存並接收新文件。Chrome 不會交出「文件」本身。"
+  },
+  "defaultFolder": {
+    "message": "新文件放在這裡"
+  },
+  "fgTitle": {
+    "message": "從現在起就地儲存「$1」？"
+  },
+  "fgTitleLapsed": {
+    "message": "重新連線「$1」？"
+  },
+  "fgLead": {
+    "message": "bento/home 只保留這一個檔案的權限，此後每次儲存都直接寫回該檔案。請在接下來的對話框中選擇同一個檔案。"
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home 已經有這個檔案；瀏覽器需要您再次確認。"
+  },
+  "fgChoose": {
+    "message": "選擇檔案……"
+  },
+  "fgReconnect": {
+    "message": "重新連線"
+  },
+  "fgOnce": {
+    "message": "僅此一次"
+  },
+  "fgNotSame": {
+    "message": "那不是提出要求的檔案（「$1」）。請選擇那個檔案，或關閉此視窗。"
+  },
+  "fgDenied": {
+    "message": "未授予權限。"
+  },
+  "droppedGranted": {
+    "message": "已加入：$1 個資料夾，$2 個檔案。"
+  },
+  "setFilesTitle": {
+    "message": "檔案"
+  },
+  "setFilesSub": {
+    "message": "不在任何已加入資料夾中、但可自行就地儲存的文件——選擇過一次，或拖放到資料庫中。"
+  },
+  "dropNoHandle": {
+    "message": "「$1」：瀏覽器沒有為這次拖放提供檔案控制代碼。"
+  },
+  "dropNotBento": {
+    "message": "「$1」不是 Bento 文件（.bento.html）——未加入。"
+  },
+  "setDownloadsTitle": {
+    "message": "下載"
+  },
+  "setDownloadsSub": {
+    "message": "「下載」資料夾中的文件可以透過 Chrome 的下載功能就地儲存——除非 Chrome 被設定為每次下載都詢問儲存位置，那樣每次儲存都會跳出對話框。"
+  },
+  "setDownloadsOff": {
+    "message": "Chrome 詢問了儲存位置——在該設定變更之前，儲存到「下載」已關閉"
+  },
+  "setDownloadsRetry": {
+    "message": "重試"
+  },
+  "dropTwins": {
+    "message": "「$1」：磁碟上有 $2 個檔案的位元組完全相同——已加入，但在它們產生差異之前無法就地儲存。"
+  },
+  "addFiles": {
+    "message": "加入檔案……"
+  },
+  "tdGrant": {
+    "message": "在此儲存且不再詢問……"
+  },
+  "tdViaFolder": {
+    "message": "就地儲存——其資料夾已加入"
+  },
+  "tdViaFile": {
+    "message": "就地儲存——此檔案已加入"
+  },
+  "tdViaDownloads": {
+    "message": "就地儲存——位於「下載」中"
+  },
+  "tdNotYet": {
+    "message": "每次儲存都會詢問位置"
+  },
+  "badgeNotSavingTip": {
+    "message": "此文件尚不能就地儲存——開啟 bento/home 面板來解決。"
   }
 }

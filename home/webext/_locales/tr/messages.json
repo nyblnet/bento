@@ -189,7 +189,7 @@
     "message": "Belgelerinizin bulunduğu klasörü seçin"
   },
   "setupStep1Note": {
-    "message": "Genelde geniş tek bir klasör yeter — içindeki her şeyi kapsar."
+    "message": "Genellikle geniş bir klasör yeter — içindeki her şeyi kapsar. Chrome ana klasörünüzün kendisini veya Library’yi vermez: Belgeler’i, Masaüstü’nü ya da belgelerinizin bulunduğu klasörü seçin."
   },
   "setupStep2": {
     "message": "Yerel dosya erişimini açın"
@@ -484,5 +484,131 @@
   },
   "surveyOnlySeen": {
     "message": "Bu yolla yalnızca bu tarayıcıda açılmış belgeler bulunabilir."
+  },
+  "placingFolder": {
+    "message": "“$1” diskte aranıyor…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome, uzantının “$1” klasörünü bulmak için diskten okumasına izin vermedi (file:// listeleri reddedildi)."
+  },
+  "placeTried": {
+    "message": "“$1” diskte $2 yerde arandı — orada değil."
+  },
+  "recentTitle": {
+    "message": "Son düzenlenenler"
+  },
+  "badgeNotAdded": {
+    "message": "eklenmedi"
+  },
+  "badgeNotAddedTip": {
+    "message": "Diskte bulundu. Açılır, ancak kaydederken yer sorulur — yerinde kaydetmek için klasörünü ekleyin."
+  },
+  "folderFoundTip": {
+    "message": "Diskte bulundu, eklenmedi: belgeleri açılır, ancak kaydetme yer sorar."
+  },
+  "menuAddFolder": {
+    "message": "Yerinde kaydetmek için klasörünü ekle…"
+  },
+  "pickThisFolder": {
+    "message": "Seçicide “$1” klasörünü seçin — Chrome sizin seçtiğinizi görmeli."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1”, bu belgenin klasörü değil (“$2”). Yeniden deneyip onu seçin."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” zaten eklendi."
+  },
+  "bentoFolderBtn": {
+    "message": "Bir Bento klasörü oluştur…"
+  },
+  "bentoFolderHow": {
+    "message": "İletişim kutusunda Belgeler içinde “Bento” adlı yeni bir klasör oluşturun ve onu seçin."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” Bento klasörünüz — yeni belgeler oraya gider ve yerinde kaydedilir."
+  },
+  "bentoFolderTip": {
+    "message": "Belgeler içinde yerinde kaydeden ve yeni belgeleri alan bir klasör. Chrome Belgeler’in kendisini vermez."
+  },
+  "defaultFolder": {
+    "message": "yeni belgeler buraya gelir"
+  },
+  "fgTitle": {
+    "message": "“$1” bundan sonra yerinde kaydedilsin mi?"
+  },
+  "fgTitleLapsed": {
+    "message": "“$1” yeniden bağlansın mı?"
+  },
+  "fgLead": {
+    "message": "bento/home yalnızca bu dosya için izni saklar; böylece her kayıt doğrudan ona yazılır. Sonraki iletişim kutusunda aynı dosyayı seçin."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home bu dosyaya zaten sahip; tarayıcı yeniden onaylamanızı istiyor."
+  },
+  "fgChoose": {
+    "message": "Dosyayı seç…"
+  },
+  "fgReconnect": {
+    "message": "Yeniden bağla"
+  },
+  "fgOnce": {
+    "message": "Yalnızca bu seferlik"
+  },
+  "fgNotSame": {
+    "message": "Bu, soran dosya değil (“$1”). Onu seçin ya da bu pencereyi kapatın."
+  },
+  "fgDenied": {
+    "message": "İzin verilmedi."
+  },
+  "droppedGranted": {
+    "message": "Eklendi: $1 klasör, $2 dosya."
+  },
+  "setFilesTitle": {
+    "message": "Dosyalar"
+  },
+  "setFilesSub": {
+    "message": "Eklenen klasörlerin dışındaki, kendi başına yerinde kaydedilen belgeler — bir kez seçilmiş ya da kitaplığa bırakılmış."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: tarayıcı bu bırakma için dosya tutamacı vermedi."
+  },
+  "dropNotBento": {
+    "message": "“$1” bir Bento belgesi değil (.bento.html) — eklenmedi."
+  },
+  "setDownloadsTitle": {
+    "message": "İndirilenler"
+  },
+  "setDownloadsSub": {
+    "message": "İndirilenler klasöründeki belgeler Chrome’un indirmeleri üzerinden yerinde kaydedilebilir — Chrome her dosya için nereye kaydedileceğini soracak şekilde ayarlanmadıysa; o zaman her kayıt bir iletişim kutusuna dönüşür."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome nereye kaydedileceğini sordu — bu ayar değişene kadar İndirilenler’e kaydetme kapalı"
+  },
+  "setDownloadsRetry": {
+    "message": "Yeniden dene"
+  },
+  "dropTwins": {
+    "message": "“$1”: diskte $2 dosya tam olarak bu baytlara sahip — eklendi, ancak birbirinden ayrılana kadar yerinde kaydedemez."
+  },
+  "addFiles": {
+    "message": "Dosya ekle…"
+  },
+  "tdGrant": {
+    "message": "Buraya sormadan kaydet…"
+  },
+  "tdViaFolder": {
+    "message": "yerinde kaydeder — klasörü eklendi"
+  },
+  "tdViaFile": {
+    "message": "yerinde kaydeder — bu dosya eklendi"
+  },
+  "tdViaDownloads": {
+    "message": "yerinde kaydeder — İndirilenler’de"
+  },
+  "tdNotYet": {
+    "message": "her seferinde nereye kaydedileceğini sorar"
+  },
+  "badgeNotSavingTip": {
+    "message": "Bu belge henüz yerinde kaydedemiyor — düzeltmek için bento/home panelini açın."
   }
 }

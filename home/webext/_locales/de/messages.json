@@ -199,7 +199,7 @@
     "message": "Wählen Sie den Ordner, in dem Ihre Dokumente liegen"
   },
   "setupStep1Note": {
-    "message": "Ein großzügiger Ordner genügt meist — er deckt alles darin ab."
+    "message": "Ein breiter Ordner reicht meist — er deckt alles darin ab. Den Home-Ordner selbst oder Library gibt Chrome nicht frei: Wählen Sie Dokumente, Schreibtisch oder den Ordner, in dem Ihre Dokumente liegen."
   },
   "setupStep2": {
     "message": "Zugriff auf lokale Dateien einschalten",
@@ -517,5 +517,131 @@
   },
   "surveyOnlySeen": {
     "message": "So lassen sich nur Dokumente finden, die in diesem Browser geöffnet wurden."
+  },
+  "placingFolder": {
+    "message": "Suche „$1“ auf der Festplatte …"
+  },
+  "placeNoDisk": {
+    "message": "Chrome ließ die Erweiterung „$1“ nicht von der Festplatte lesen, um den Ordner zu finden (file://-Verzeichnisse verweigert)."
+  },
+  "placeTried": {
+    "message": "„$1“ an $2 Orten auf der Festplatte gesucht — nicht dort."
+  },
+  "recentTitle": {
+    "message": "Zuletzt bearbeitet"
+  },
+  "badgeNotAdded": {
+    "message": "nicht hinzugefügt"
+  },
+  "badgeNotAddedTip": {
+    "message": "Auf der Festplatte gefunden. Öffnet sich, aber beim Speichern wird nach dem Ort gefragt — fügen Sie den Ordner hinzu, um direkt zu speichern."
+  },
+  "folderFoundTip": {
+    "message": "Auf der Festplatte gefunden, nicht hinzugefügt: Dokumente öffnen sich, aber Speichern fragt nach dem Ort."
+  },
+  "menuAddFolder": {
+    "message": "Ordner hinzufügen, um direkt zu speichern …"
+  },
+  "pickThisFolder": {
+    "message": "Wählen Sie im Dialog den Ordner „$1“ — Chrome muss sehen, dass Sie ihn wählen."
+  },
+  "pickedWrongFolder": {
+    "message": "„$1“ ist nicht der Ordner dieses Dokuments („$2“). Versuchen Sie es erneut und wählen Sie diesen."
+  },
+  "folderAlreadyAdded": {
+    "message": "„$1“ ist bereits hinzugefügt."
+  },
+  "bentoFolderBtn": {
+    "message": "Bento-Ordner anlegen …"
+  },
+  "bentoFolderHow": {
+    "message": "Legen Sie im Dialog in „Dokumente“ einen neuen Ordner namens „Bento“ an und wählen Sie ihn."
+  },
+  "bentoFolderMade": {
+    "message": "„$1“ ist Ihr Bento-Ordner — neue Dokumente landen dort und speichern direkt."
+  },
+  "bentoFolderTip": {
+    "message": "Ein Ordner in „Dokumente“, der direkt speichert und neue Dokumente aufnimmt. „Dokumente“ selbst gibt Chrome nicht frei."
+  },
+  "defaultFolder": {
+    "message": "neue Dokumente kommen hierher"
+  },
+  "fgTitle": {
+    "message": "„$1“ ab jetzt direkt speichern?"
+  },
+  "fgTitleLapsed": {
+    "message": "„$1“ wieder verbinden?"
+  },
+  "fgLead": {
+    "message": "bento/home behält die Berechtigung für genau diese Datei, sodass jedes Speichern direkt hineinschreibt. Wählen Sie im nächsten Dialog dieselbe Datei."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home hat diese Datei bereits; der Browser möchte, dass Sie sie erneut bestätigen."
+  },
+  "fgChoose": {
+    "message": "Datei wählen …"
+  },
+  "fgReconnect": {
+    "message": "Wieder verbinden"
+  },
+  "fgOnce": {
+    "message": "Nur dieses Mal"
+  },
+  "fgNotSame": {
+    "message": "Das ist nicht die Datei, die gefragt hat („$1“). Wählen Sie diese, oder schließen Sie das Fenster."
+  },
+  "fgDenied": {
+    "message": "Die Berechtigung wurde nicht erteilt."
+  },
+  "droppedGranted": {
+    "message": "Hinzugefügt: $1 Ordner, $2 Dateien."
+  },
+  "setFilesTitle": {
+    "message": "Dateien"
+  },
+  "setFilesSub": {
+    "message": "Dokumente außerhalb jedes hinzugefügten Ordners, die für sich direkt speichern — einmal gewählt oder in die Bibliothek gezogen."
+  },
+  "dropNoHandle": {
+    "message": "„$1“: Der Browser hat für diesen Drop kein Datei-Handle übergeben."
+  },
+  "dropNotBento": {
+    "message": "„$1“ ist kein Bento-Dokument (.bento.html) — nicht hinzugefügt."
+  },
+  "setDownloadsTitle": {
+    "message": "Downloads"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumente im Downloads-Ordner können über Chromes Downloads direkt speichern — außer Chrome ist so eingestellt, dass es bei jeder Datei nach dem Speicherort fragt; dann wird jedes Speichern zu einem Dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome hat nach dem Speicherort gefragt — Speichern in Downloads ist aus, bis sich diese Einstellung ändert"
+  },
+  "setDownloadsRetry": {
+    "message": "Erneut versuchen"
+  },
+  "dropTwins": {
+    "message": "„$1“: $2 Dateien auf der Festplatte haben genau diese Bytes — hinzugefügt, aber direkt speichern geht erst, wenn sie sich unterscheiden."
+  },
+  "addFiles": {
+    "message": "Dateien hinzufügen …"
+  },
+  "tdGrant": {
+    "message": "Hier ohne Nachfrage speichern …"
+  },
+  "tdViaFolder": {
+    "message": "speichert direkt — sein Ordner ist hinzugefügt"
+  },
+  "tdViaFile": {
+    "message": "speichert direkt — diese Datei ist hinzugefügt"
+  },
+  "tdViaDownloads": {
+    "message": "speichert direkt — liegt in Downloads"
+  },
+  "tdNotYet": {
+    "message": "fragt bei jedem Speichern nach dem Ort"
+  },
+  "badgeNotSavingTip": {
+    "message": "Dieses Dokument kann noch nicht direkt speichern — öffnen Sie das bento/home-Panel, um das zu ändern."
   }
 }

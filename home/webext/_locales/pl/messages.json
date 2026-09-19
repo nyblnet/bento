@@ -189,7 +189,7 @@
     "message": "Wybierz folder, w którym trzymasz dokumenty"
   },
   "setupStep1Note": {
-    "message": "Zwykle wystarczy jeden szeroki folder — obejmuje wszystko, co jest w środku."
+    "message": "Zwykle wystarczy jeden szeroki folder — obejmuje wszystko w środku. Chrome nie udostępni samego folderu domowego ani Library: wybierz Dokumenty, Biurko lub folder, w którym leżą Twoje dokumenty."
   },
   "setupStep2": {
     "message": "Włącz dostęp do plików lokalnych"
@@ -484,5 +484,131 @@
   },
   "surveyOnlySeen": {
     "message": "W ten sposób znajdziesz tylko dokumenty otwarte w tej przeglądarce."
+  },
+  "placingFolder": {
+    "message": "Szukanie „$1” na dysku…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome nie pozwolił rozszerzeniu odczytać „$1” z dysku, aby go znaleźć (listy file:// odrzucone)."
+  },
+  "placeTried": {
+    "message": "Szukano „$1” w $2 miejscach na dysku — nie ma go tam."
+  },
+  "recentTitle": {
+    "message": "Ostatnio edytowane"
+  },
+  "badgeNotAdded": {
+    "message": "niedodany"
+  },
+  "badgeNotAddedTip": {
+    "message": "Znaleziony na dysku. Otwiera się, ale zapis zapyta gdzie — dodaj jego folder, aby zapisywać w miejscu."
+  },
+  "folderFoundTip": {
+    "message": "Znaleziony na dysku, niedodany: dokumenty się otwierają, ale zapis pyta gdzie."
+  },
+  "menuAddFolder": {
+    "message": "Dodaj jego folder, aby zapisywać w miejscu…"
+  },
+  "pickThisFolder": {
+    "message": "W oknie wyboru wskaż folder „$1” — Chrome musi widzieć, że go wybierasz."
+  },
+  "pickedWrongFolder": {
+    "message": "„$1” to nie folder tego dokumentu („$2”). Spróbuj ponownie i wybierz tamten."
+  },
+  "folderAlreadyAdded": {
+    "message": "„$1” jest już dodany."
+  },
+  "bentoFolderBtn": {
+    "message": "Utwórz folder Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "W oknie utwórz w Dokumentach nowy folder o nazwie „Bento” i wybierz go."
+  },
+  "bentoFolderMade": {
+    "message": "„$1” to Twój folder Bento — nowe dokumenty trafiają tam i zapisują się w miejscu."
+  },
+  "bentoFolderTip": {
+    "message": "Folder w Dokumentach, który zapisuje w miejscu i przyjmuje nowe dokumenty. Samych Dokumentów Chrome nie udostępni."
+  },
+  "defaultFolder": {
+    "message": "nowe dokumenty trafiają tutaj"
+  },
+  "fgTitle": {
+    "message": "Zapisywać „$1” w miejscu od teraz?"
+  },
+  "fgTitleLapsed": {
+    "message": "Połączyć ponownie „$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home zachowuje uprawnienie do tego jednego pliku, więc każdy zapis trafia prosto do niego. W następnym oknie wybierz ten sam plik."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home ma już ten plik; przeglądarka chce, abyś potwierdził go ponownie."
+  },
+  "fgChoose": {
+    "message": "Wybierz plik…"
+  },
+  "fgReconnect": {
+    "message": "Połącz ponownie"
+  },
+  "fgOnce": {
+    "message": "Tylko tym razem"
+  },
+  "fgNotSame": {
+    "message": "To nie jest plik, który pytał („$1”). Wybierz tamten albo zamknij to okno."
+  },
+  "fgDenied": {
+    "message": "Uprawnienie nie zostało przyznane."
+  },
+  "droppedGranted": {
+    "message": "Dodano: $1 folderów, $2 plików."
+  },
+  "setFilesTitle": {
+    "message": "Pliki"
+  },
+  "setFilesSub": {
+    "message": "Dokumenty spoza dodanych folderów, które same zapisują się w miejscu — wybrane raz lub upuszczone w bibliotece."
+  },
+  "dropNoHandle": {
+    "message": "„$1”: przeglądarka nie przekazała uchwytu pliku dla tego upuszczenia."
+  },
+  "dropNotBento": {
+    "message": "„$1” nie jest dokumentem Bento (.bento.html) — nie dodano."
+  },
+  "setDownloadsTitle": {
+    "message": "Pobrane"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumenty w folderze Pobrane mogą zapisywać się w miejscu przez pobieranie Chrome — chyba że Chrome jest ustawiony, aby pytać, gdzie zapisać każdy plik, co zamienia każdy zapis w okno dialogowe."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome zapytał, gdzie zapisać — zapis w Pobranych jest wyłączony, dopóki to ustawienie się nie zmieni"
+  },
+  "setDownloadsRetry": {
+    "message": "Spróbuj ponownie"
+  },
+  "dropTwins": {
+    "message": "„$1”: $2 plików na dysku ma dokładnie te bajty — dodano, ale nie zapisze w miejscu, dopóki się nie rozjadą."
+  },
+  "addFiles": {
+    "message": "Dodaj pliki…"
+  },
+  "tdGrant": {
+    "message": "Zapisuj tutaj bez pytania…"
+  },
+  "tdViaFolder": {
+    "message": "zapisuje w miejscu — folder jest dodany"
+  },
+  "tdViaFile": {
+    "message": "zapisuje w miejscu — ten plik jest dodany"
+  },
+  "tdViaDownloads": {
+    "message": "zapisuje w miejscu — jest w Pobranych"
+  },
+  "tdNotYet": {
+    "message": "pyta, gdzie zapisać, za każdym razem"
+  },
+  "badgeNotSavingTip": {
+    "message": "Ten dokument nie może jeszcze zapisywać w miejscu — otwórz panel bento/home, aby to naprawić."
   }
 }
