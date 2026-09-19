@@ -108,9 +108,18 @@ export async function sameMtime(handle, path, deps = defaultDeps()) {
  * that path. Returns null (with a reason) when it is not that file.
  */
 export async function grantPickedFile(handle, path, deps = defaultDeps()) {
-  if (await handle.requestPermission({ mode: 'readwrite' }) !== 'granted') return { ok: false, reason: 'denied' }
-  if (!(await handleIsPath(handle, path, deps)) || !(await sameMtime(handle, path, deps))) return { ok: false, reason: 'not-same' }
+  const log = (...a) => console.info('[bento/home] grant:', ...a)
+  const perm = await handle.requestPermission({ mode: 'readwrite' })
+  log('permission', perm, 'for', handle.name)
+  if (perm !== 'granted') return { ok: false, reason: 'denied' }
+  const bytes = await handleIsPath(handle, path, deps)
+  log('bytes match', bytes, path)
+  if (!bytes) return { ok: false, reason: 'not-same' }
+  const mtime = await sameMtime(handle, path, deps)
+  log('mtime match', mtime)
+  if (!mtime) return { ok: false, reason: 'not-same' }
   const key = await addFileGrant(handle, path, deps)
+  log('stored as', key)
   return { ok: true, key }
 }
 

@@ -310,6 +310,7 @@ $('tdGrant').addEventListener('click', async () => {
   btn.disabled = true
   try {
     const startIn = /\/Downloads\//.test(tdPath) ? 'downloads' : /\/Desktop\//.test(tdPath) ? 'desktop' : 'documents'
+    $('tdState').textContent = '…'
     const [handle] = await window.showOpenFilePicker({ startIn, multiple: false, types: [{ description: 'Bento', accept: { 'text/html': ['.html'] } }] })
     if (!handle) return
     const r = await grantPickedFile(handle, tdPath)
@@ -317,7 +318,8 @@ $('tdGrant').addEventListener('click', async () => {
     try { await chrome.runtime.sendMessage({ op: 'save.rebadge' }) } catch { /* fine */ }
     await renderThisDoc()
   } catch (e) {
-    if (e?.name !== 'AbortError') $('tdState').textContent = e?.message || String(e)
+    console.info('[bento/home] grant failed:', e)
+    if (e?.name !== 'AbortError') $('tdState').textContent = `${e?.name ?? 'Error'}: ${e?.message || String(e)}`
   } finally {
     btn.disabled = false
   }
