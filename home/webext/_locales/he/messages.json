@@ -189,7 +189,7 @@
     "message": "בחרו את התיקייה שבה נמצאים המסמכים שלכם"
   },
   "setupStep1Note": {
-    "message": "תיקייה רחבה אחת מספיקה בדרך כלל — היא מכסה את כל מה שבתוכה."
+    "message": "בדרך כלל מספיקה תיקייה רחבה אחת — היא מכסה את כל מה שבתוכה. Chrome לא ימסור את תיקיית הבית עצמה או את Library: בחרו מסמכים, שולחן עבודה או את התיקייה שבה המסמכים שלכם נמצאים."
   },
   "setupStep2": {
     "message": "הפעילו גישה לקבצים מקומיים"
@@ -484,5 +484,236 @@
   },
   "surveyOnlySeen": {
     "message": "כך אפשר למצוא רק מסמכים שנפתחו בדפדפן הזה."
+  },
+  "setAsstTitle": {
+    "message": "עוזר"
+  },
+  "setAsstSub": {
+    "message": "לאן נשלחת שיחה על מסמך. המפתח נשאר בתוסף הזה — מסמך רואה רק את התשובה."
+  },
+  "asstProvider": {
+    "message": "ספק"
+  },
+  "asstProvBuiltin": {
+    "message": "המודל המובנה של Chrome ‏(Gemini Nano) — במכשיר הזה"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (מפתח AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "תואם OpenAI ‏(OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "כתובת URL בסיסית"
+  },
+  "asstModel": {
+    "message": "מודל"
+  },
+  "asstKey": {
+    "message": "מפתח API"
+  },
+  "asstKeyOptional": {
+    "message": "אופציונלי לשרת מקומי כמו Ollama או LM Studio."
+  },
+  "asstSave": {
+    "message": "שמירה"
+  },
+  "asstSaved": {
+    "message": "הגדרות העוזר נשמרו"
+  },
+  "asstAccessDeclined": {
+    "message": "הגישה לאתר נדחתה. הבקשות נשלחות בכל זאת, ופועלות כשהשרת מאפשר תוספי דפדפן (CORS)."
+  },
+  "asstCheck": {
+    "message": "בדיקת חיבור"
+  },
+  "asstChecking": {
+    "message": "בודק…"
+  },
+  "asstReachable": {
+    "message": "נגיש — $1 ענה."
+  },
+  "asstBuiltinReady": {
+    "message": "מוכן במכשיר הזה."
+  },
+  "asstBuiltinDownload": {
+    "message": "המודל עדיין לא במכשיר הזה. לחצו על „הורדת המודל” בהגדרות התוסף bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "ב־Chrome הזה אין מודל מובנה. בחרו ספק אחר בהגדרות התוסף."
+  },
+  "asstOnDevice": {
+    "message": "המכשיר הזה"
+  },
+  "asstNotConfigured": {
+    "message": "העוזר עדיין לא הוגדר — פתחו את הגדרות התוסף bento/home."
+  },
+  "asstUnreachable": {
+    "message": "לא ניתן להגיע אל $1. האם השרת פועל, והאם הוא מאפשר בקשות מתוספי דפדפן (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "ממתין לאישורכם — ענו לשאלה ונסו שוב."
+  },
+  "asstDenied": {
+    "message": "למסמך הזה אין הרשאה להשתמש בעוזר."
+  },
+  "asstAllowedTitle": {
+    "message": "מסמכים שמורשים להשתמש בעוזר"
+  },
+  "asstAllowedSub": {
+    "message": "כל מסמך שואל פעם אחת לפני הבקשה הראשונה שלו. הסירו מסמך כדי שישאל שוב."
+  },
+  "consentTitle": {
+    "message": "לאפשר למסמך הזה להשתמש בעוזר שלכם?"
+  },
+  "consentLead": {
+    "message": "הוא יוכל לשלוח טקסט אל $1 ‏($2) ולקרוא את התשובות. המפתח שלכם לעולם לא משותף איתו."
+  },
+  "consentRemember": {
+    "message": "ייזכר עבור הקובץ הזה. אפשר לשנות זאת מאוחר יותר בהגדרות התוסף."
+  },
+  "consentAllow": {
+    "message": "אישור"
+  },
+  "consentDeny": {
+    "message": "לא עכשיו"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome מוריד את המודל. נסו שוב כשההורדה תסתיים."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "הורדת המודל"
+  },
+  "asstBuiltinProgress": {
+    "message": "מוריד את המודל… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "כ־2–4 GB. ‏Chrome צריך כ־22 GB פנויים בדיסק ורשת ללא הגבלת נתונים, אחרת הוא מדווח שהמודל אינו זמין."
+  },
+  "asstContext": {
+    "message": "חלון הקשר (טוקנים)"
+  },
+  "asstContextHint": {
+    "message": "השאירו ריק כדי להשתמש במה שהספק מדווח. מלאו עבור שרת שאתם מארחים בעצמכם ורק אתם יודעים את הגבול שלו."
+  },
+  "asstContextKnown": {
+    "message": "חלון הקשר: $1 טוקנים"
+  },
+  "asstShowAll": {
+    "message": "הצגת כל המודלים, לא רק אלה לצ'אט"
+  },
+  "asstOtherModelRow": {
+    "message": "אחר…"
+  },
+  "asstOtherModel": {
+    "message": "מזהה המודל, בדיוק כפי שהספק קורא לו"
+  },
+  "asstBadModel": {
+    "message": "זה לא מזהה מודל: רק אותיות, ספרות ו־. _ : / -"
+  },
+  "asstWindow": {
+    "message": "המצגת גדולה מדי למודל הזה: הבקשה צריכה כ־$1 טוקנים והמודל מקבל $2. בחרו מודל עם חלון גדול יותר, או קצרו את המצגת."
+  },
+  "asstOutlineOnly": {
+    "message": "רק המתווה נכנס לחלון של המודל הזה; התוכן שנבחר לא נשלח במלואו."
+  },
+  "asstNoDocument": {
+    "message": "המסמך לא מסר את התוכן שלו."
+  },
+  "asstSendsNotice": {
+    "message": "שולח את המתווה של המצגת ואת $1 אל $2; ההערות נשארות כאן."
+  },
+  "asstOnDeviceModel": {
+    "message": "המודל במכשיר הזה"
+  },
+  "asstFocusGeneric": {
+    "message": "האלמנטים שנבחרו או השקופית הפתוחה"
+  },
+  "placingFolder": {
+    "message": "מחפש את „$1” בדיסק…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome לא אפשר לתוסף לקרוא את „$1” מהדיסק כדי למצוא אותו (רשימות file:// נדחו)."
+  },
+  "placeTried": {
+    "message": "חיפשנו את „$1” ב־$2 מקומות בדיסק — לא שם."
+  },
+  "recentTitle": {
+    "message": "נערכו לאחרונה"
+  },
+  "badgeNotAdded": {
+    "message": "לא נוספה"
+  },
+  "badgeNotAddedTip": {
+    "message": "נמצא בדיסק. נפתח, אבל שמירה תשאל לאן — הוסיפו את התיקייה שלו כדי לשמור במקום."
+  },
+  "folderFoundTip": {
+    "message": "נמצאה בדיסק, לא נוספה: המסמכים שלה נפתחים, אבל שמירה שואלת לאן."
+  },
+  "menuAddFolder": {
+    "message": "הוספת התיקייה שלו כדי לשמור במקום…"
+  },
+  "pickThisFolder": {
+    "message": "בבוחר, בחרו את התיקייה „$1” — Chrome חייב לראות אתכם בוחרים אותה."
+  },
+  "pickedWrongFolder": {
+    "message": "„$1” אינה התיקייה של המסמך הזה („$2”). נסו שוב ובחרו אותה."
+  },
+  "folderAlreadyAdded": {
+    "message": "„$1” כבר נוספה."
+  },
+  "bentoFolderBtn": {
+    "message": "יצירת תיקיית Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "בתיבת הדו־שיח צרו תיקייה חדשה בשם „Bento” בתוך מסמכים ובחרו אותה."
+  },
+  "bentoFolderMade": {
+    "message": "„$1” היא תיקיית ה־Bento שלכם — מסמכים חדשים הולכים לשם ונשמרים במקום."
+  },
+  "bentoFolderTip": {
+    "message": "תיקייה בתוך מסמכים ששומרת במקום ומקבלת מסמכים חדשים. Chrome לא ימסור את תיקיית מסמכים עצמה."
+  },
+  "defaultFolder": {
+    "message": "מסמכים חדשים מגיעים לכאן"
+  },
+  "fgTitle": {
+    "message": "לשמור את „$1” במקום מעכשיו?"
+  },
+  "fgTitleLapsed": {
+    "message": "לחבר מחדש את „$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home שומר הרשאה לקובץ הזה בלבד, כך שכל שמירה כותבת ישירות אליו. בחרו את אותו קובץ בתיבת הדו־שיח הבאה."
+  },
+  "fgLeadLapsed": {
+    "message": "ל־bento/home כבר יש את הקובץ הזה; הדפדפן מבקש שתאשרו אותו שוב."
+  },
+  "fgChoose": {
+    "message": "בחירת הקובץ…"
+  },
+  "fgReconnect": {
+    "message": "חיבור מחדש"
+  },
+  "fgOnce": {
+    "message": "רק הפעם"
+  },
+  "fgNotSame": {
+    "message": "זה לא הקובץ שביקש („$1”). בחרו אותו, או סגרו את החלון."
+  },
+  "fgDenied": {
+    "message": "ההרשאה לא ניתנה."
+  },
+  "droppedGranted": {
+    "message": "נוספו: $1 תיקיות, $2 קבצים."
+  },
+  "setFilesTitle": {
+    "message": "קבצים"
+  },
+  "setFilesSub": {
+    "message": "מסמכים מחוץ לכל תיקייה שנוספה שנשמרים במקום בעצמם — נבחרו פעם אחת, או נגררו לספרייה."
   }
 }

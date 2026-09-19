@@ -199,7 +199,7 @@
     "message": "选择存放文档的文件夹"
   },
   "setupStep1Note": {
-    "message": "通常选一个大一些的文件夹就够了 — 它涵盖其中的全部内容。"
+    "message": "通常一个较大的文件夹就够了——它涵盖其中的一切。Chrome 不会交出主文件夹本身或 Library：请选择“文稿”“桌面”或存放文档的文件夹。"
   },
   "setupStep2": {
     "message": "开启本地文件访问",
@@ -517,5 +517,236 @@
   },
   "surveyOnlySeen": {
     "message": "这种方式只能找到在此浏览器中打开过的文档。"
+  },
+  "setAsstTitle": {
+    "message": "助手"
+  },
+  "setAsstSub": {
+    "message": "关于文档的对话发送到哪里。密钥只保存在此扩展程序中，文档只能看到回复。"
+  },
+  "asstProvider": {
+    "message": "提供方"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome 内置模型（Gemini Nano）— 在本设备上"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini（AI Studio 密钥）"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic（Claude）"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI 兼容（OpenAI、OpenRouter、Ollama、LM Studio……）"
+  },
+  "asstBaseUrl": {
+    "message": "基础 URL"
+  },
+  "asstModel": {
+    "message": "模型"
+  },
+  "asstKey": {
+    "message": "API 密钥"
+  },
+  "asstKeyOptional": {
+    "message": "对 Ollama 或 LM Studio 等本地服务器可不填。"
+  },
+  "asstSave": {
+    "message": "保存"
+  },
+  "asstSaved": {
+    "message": "助手设置已保存"
+  },
+  "asstAccessDeclined": {
+    "message": "网站访问已被拒绝。请求仍会发送，并在服务器允许浏览器扩展程序（CORS）时正常工作。"
+  },
+  "asstCheck": {
+    "message": "检查连接"
+  },
+  "asstChecking": {
+    "message": "正在检查……"
+  },
+  "asstReachable": {
+    "message": "可以访问 — $1 已响应。"
+  },
+  "asstBuiltinReady": {
+    "message": "已在本设备上就绪。"
+  },
+  "asstBuiltinDownload": {
+    "message": "模型尚未在本设备上。请在 bento/home 扩展程序的设置中按“下载模型”。"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "此 Chrome 没有内置模型。请在扩展程序设置中选择其他提供方。"
+  },
+  "asstOnDevice": {
+    "message": "本设备"
+  },
+  "asstNotConfigured": {
+    "message": "助手尚未设置 — 请打开 bento/home 扩展程序的设置。"
+  },
+  "asstUnreachable": {
+    "message": "无法连接 $1。服务器是否正在运行？是否允许来自浏览器扩展程序的请求（CORS）？"
+  },
+  "asstWaitConsent": {
+    "message": "正在等待您在此设备上授权…"
+  },
+  "asstDenied": {
+    "message": "在此设备上被拒绝授权 — 未作任何更改。"
+  },
+  "asstAllowedTitle": {
+    "message": "允许使用助手的文档"
+  },
+  "asstAllowedSub": {
+    "message": "每个文档在首次请求前询问一次。移除后会再次询问。"
+  },
+  "consentTitle": {
+    "message": "允许此文档使用您的助手吗？"
+  },
+  "consentLead": {
+    "message": "它将能够向 $1（$2）发送文本并读取回复。您的密钥绝不会与它共享。"
+  },
+  "consentRemember": {
+    "message": "将为此文件记住此选择。您之后可以在扩展程序设置中更改。"
+  },
+  "consentAllow": {
+    "message": "允许"
+  },
+  "consentDeny": {
+    "message": "暂不"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome 正在下载模型。完成后请重试。"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "下载模型"
+  },
+  "asstBuiltinProgress": {
+    "message": "正在下载模型…… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "约 2–4 GB。Chrome 需要磁盘约 22 GB 可用空间以及非按流量计费的网络，否则会报告模型不可用。"
+  },
+  "asstContext": {
+    "message": "上下文窗口（token）"
+  },
+  "asstContextHint": {
+    "message": "留空则使用提供方报告的值。自建服务器的上限只有您知道时，请填写。"
+  },
+  "asstContextKnown": {
+    "message": "上下文窗口：$1 个 token"
+  },
+  "asstShowAll": {
+    "message": "显示所有模型，而不只是适合聊天的"
+  },
+  "asstOtherModelRow": {
+    "message": "其他……"
+  },
+  "asstOtherModel": {
+    "message": "模型 ID，与提供方的命名完全一致"
+  },
+  "asstBadModel": {
+    "message": "这不是模型 ID：只能包含字母、数字和 . _ : / -"
+  },
+  "asstWindow": {
+    "message": "仅演示文稿大纲就已超出此模型的窗口（$1 个 token，窗口为 $2）。请在扩展设置中选择窗口更大的模型。"
+  },
+  "asstOutlineOnly": {
+    "message": "此模型的窗口只容得下大纲，因此它可以修改文字、备注和幻灯片，但不能修改位置或样式。"
+  },
+  "asstNoDocument": {
+    "message": "文档没有交出其内容。"
+  },
+  "asstSendsNotice": {
+    "message": "将演示文稿大纲和$1发送到 $2；评论留在本地。"
+  },
+  "asstOnDeviceModel": {
+    "message": "设备上的模型"
+  },
+  "asstFocusGeneric": {
+    "message": "所选元素或当前打开的幻灯片"
+  },
+  "placingFolder": {
+    "message": "正在磁盘上查找“$1”……"
+  },
+  "placeNoDisk": {
+    "message": "Chrome 不允许扩展程序从磁盘读取以查找“$1”（file:// 目录列表被拒绝）。"
+  },
+  "placeTried": {
+    "message": "已在磁盘上 $2 个位置查找“$1”，未找到。"
+  },
+  "recentTitle": {
+    "message": "最近编辑"
+  },
+  "badgeNotAdded": {
+    "message": "未添加"
+  },
+  "badgeNotAddedTip": {
+    "message": "在磁盘上找到。可以打开，但保存时会询问位置——添加其所在文件夹即可原地保存。"
+  },
+  "folderFoundTip": {
+    "message": "在磁盘上找到但未添加：其中的文档可以打开，但保存时会询问位置。"
+  },
+  "menuAddFolder": {
+    "message": "添加其所在文件夹以便原地保存……"
+  },
+  "pickThisFolder": {
+    "message": "请在选择器中选择文件夹“$1”——Chrome 必须看到您亲自选择。"
+  },
+  "pickedWrongFolder": {
+    "message": "“$1”不是此文档所在的文件夹（“$2”）。请重试并选择那个文件夹。"
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1”已添加。"
+  },
+  "bentoFolderBtn": {
+    "message": "创建 Bento 文件夹……"
+  },
+  "bentoFolderHow": {
+    "message": "请在对话框中于“文稿”内新建一个名为“Bento”的文件夹并选择它。"
+  },
+  "bentoFolderMade": {
+    "message": "“$1”是您的 Bento 文件夹——新文档会放在这里并原地保存。"
+  },
+  "bentoFolderTip": {
+    "message": "“文稿”内的一个文件夹，可原地保存并接收新文档。Chrome 不会交出“文稿”本身。"
+  },
+  "defaultFolder": {
+    "message": "新文档放在这里"
+  },
+  "fgTitle": {
+    "message": "从现在起就地保存“$1”？"
+  },
+  "fgTitleLapsed": {
+    "message": "重新连接“$1”？"
+  },
+  "fgLead": {
+    "message": "bento/home 只保留这一个文件的权限，此后每次保存都直接写回该文件。请在接下来的对话框中选择同一个文件。"
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home 已经有这个文件；浏览器需要您再次确认。"
+  },
+  "fgChoose": {
+    "message": "选择文件……"
+  },
+  "fgReconnect": {
+    "message": "重新连接"
+  },
+  "fgOnce": {
+    "message": "仅此一次"
+  },
+  "fgNotSame": {
+    "message": "那不是发出请求的文件（“$1”）。请选择那个文件，或关闭此窗口。"
+  },
+  "fgDenied": {
+    "message": "未授予权限。"
+  },
+  "droppedGranted": {
+    "message": "已添加：$1 个文件夹，$2 个文件。"
+  },
+  "setFilesTitle": {
+    "message": "文件"
+  },
+  "setFilesSub": {
+    "message": "不在任何已添加文件夹中、但可自行就地保存的文档——选择过一次，或拖放到资料库中。"
   }
 }

@@ -189,7 +189,7 @@
     "message": "Belgelerinizin bulunduğu klasörü seçin"
   },
   "setupStep1Note": {
-    "message": "Genelde geniş tek bir klasör yeter — içindeki her şeyi kapsar."
+    "message": "Genellikle geniş bir klasör yeter — içindeki her şeyi kapsar. Chrome ana klasörünüzün kendisini veya Library’yi vermez: Belgeler’i, Masaüstü’nü ya da belgelerinizin bulunduğu klasörü seçin."
   },
   "setupStep2": {
     "message": "Yerel dosya erişimini açın"
@@ -484,5 +484,236 @@
   },
   "surveyOnlySeen": {
     "message": "Bu yolla yalnızca bu tarayıcıda açılmış belgeler bulunabilir."
+  },
+  "setAsstTitle": {
+    "message": "Asistan"
+  },
+  "setAsstSub": {
+    "message": "Bir belge hakkındaki sohbetin gönderildiği yer. Anahtar bu uzantıda kalır; belge yalnızca yanıtı görür."
+  },
+  "asstProvider": {
+    "message": "Sağlayıcı"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome’un yerleşik modeli (Gemini Nano) — bu cihazda"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio anahtarı)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI uyumlu (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Temel URL"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "API anahtarı"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama veya LM Studio gibi yerel bir sunucu için isteğe bağlıdır."
+  },
+  "asstSave": {
+    "message": "Kaydet"
+  },
+  "asstSaved": {
+    "message": "Asistan ayarları kaydedildi"
+  },
+  "asstAccessDeclined": {
+    "message": "Site erişimi reddedildi. İstekler yine de gönderilir ve sunucu tarayıcı uzantılarına izin veriyorsa (CORS) çalışır."
+  },
+  "asstCheck": {
+    "message": "Bağlantıyı denetle"
+  },
+  "asstChecking": {
+    "message": "Denetleniyor…"
+  },
+  "asstReachable": {
+    "message": "Ulaşılabilir — $1 yanıt verdi."
+  },
+  "asstBuiltinReady": {
+    "message": "Bu cihazda hazır."
+  },
+  "asstBuiltinDownload": {
+    "message": "Model henüz bu cihazda değil. bento/home uzantısının ayarlarında “Modeli indir”e basın."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Bu Chrome’da yerleşik model yok. Uzantının ayarlarından başka bir sağlayıcı seçin."
+  },
+  "asstOnDevice": {
+    "message": "bu cihaz"
+  },
+  "asstNotConfigured": {
+    "message": "Asistan henüz kurulmadı — bento/home uzantısının ayarlarını açın."
+  },
+  "asstUnreachable": {
+    "message": "$1 sunucusuna ulaşılamadı. Sunucu çalışıyor mu ve tarayıcı uzantılarından gelen isteklere izin veriyor mu (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "İzniniz bekleniyor — soruyu yanıtlayın, sonra yeniden deneyin."
+  },
+  "asstDenied": {
+    "message": "Bu belgenin asistanı kullanmasına izin verilmiyor."
+  },
+  "asstAllowedTitle": {
+    "message": "Asistanı kullanmasına izin verilen belgeler"
+  },
+  "asstAllowedSub": {
+    "message": "Her belge ilk isteğinden önce bir kez sorar. Yeniden sorulması için birini kaldırın."
+  },
+  "consentTitle": {
+    "message": "Bu belgenin asistanınızı kullanmasına izin verilsin mi?"
+  },
+  "consentLead": {
+    "message": "$1 ($2) adresine metin gönderebilecek ve yanıtları okuyabilecek. Anahtarınız onunla asla paylaşılmaz."
+  },
+  "consentRemember": {
+    "message": "Bu dosya için hatırlanacak. Bunu daha sonra uzantının ayarlarından değiştirebilirsiniz."
+  },
+  "consentAllow": {
+    "message": "İzin ver"
+  },
+  "consentDeny": {
+    "message": "Şimdi değil"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome modeli indiriyor. Bittiğinde yeniden deneyin."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Modeli indir"
+  },
+  "asstBuiltinProgress": {
+    "message": "Model indiriliyor… %$1"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Yaklaşık 2–4 GB. Chrome’un diskte yaklaşık 22 GB boş alana ve kotasız bir ağa ihtiyacı vardır; aksi hâlde modeli kullanılamaz olarak bildirir."
+  },
+  "asstContext": {
+    "message": "Bağlam penceresi (token)"
+  },
+  "asstContextHint": {
+    "message": "Sağlayıcının bildirdiği değeri kullanmak için boş bırakın. Sınırını yalnızca sizin bildiğiniz kendi sunucunuz için doldurun."
+  },
+  "asstContextKnown": {
+    "message": "Bağlam penceresi: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Yalnızca sohbet için olanları değil, tüm modelleri göster"
+  },
+  "asstOtherModelRow": {
+    "message": "Diğer…"
+  },
+  "asstOtherModel": {
+    "message": "Model kimliği, sağlayıcının adlandırdığı şekliyle"
+  },
+  "asstBadModel": {
+    "message": "Bu bir model kimliği değil: yalnızca harf, rakam ve . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Sunum bu model için çok büyük: istek yaklaşık $1 token gerektiriyor, model $2 alıyor. Daha geniş pencereli bir model seçin ya da sunumu kısaltın."
+  },
+  "asstOutlineOnly": {
+    "message": "Bu modelin penceresine yalnızca ana hat sığdı; seçili içerik tam olarak gönderilmedi."
+  },
+  "asstNoDocument": {
+    "message": "Belge içeriğini teslim etmedi."
+  },
+  "asstSendsNotice": {
+    "message": "Sunumun ana hattını ve $1 $2 adresine gönderir; yorumlar burada kalır."
+  },
+  "asstOnDeviceModel": {
+    "message": "bu cihazdaki model"
+  },
+  "asstFocusGeneric": {
+    "message": "seçili öğeleri veya açık slaydı"
+  },
+  "placingFolder": {
+    "message": "“$1” diskte aranıyor…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome, uzantının “$1” klasörünü bulmak için diskten okumasına izin vermedi (file:// listeleri reddedildi)."
+  },
+  "placeTried": {
+    "message": "“$1” diskte $2 yerde arandı — orada değil."
+  },
+  "recentTitle": {
+    "message": "Son düzenlenenler"
+  },
+  "badgeNotAdded": {
+    "message": "eklenmedi"
+  },
+  "badgeNotAddedTip": {
+    "message": "Diskte bulundu. Açılır, ancak kaydederken yer sorulur — yerinde kaydetmek için klasörünü ekleyin."
+  },
+  "folderFoundTip": {
+    "message": "Diskte bulundu, eklenmedi: belgeleri açılır, ancak kaydetme yer sorar."
+  },
+  "menuAddFolder": {
+    "message": "Yerinde kaydetmek için klasörünü ekle…"
+  },
+  "pickThisFolder": {
+    "message": "Seçicide “$1” klasörünü seçin — Chrome sizin seçtiğinizi görmeli."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1”, bu belgenin klasörü değil (“$2”). Yeniden deneyip onu seçin."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” zaten eklendi."
+  },
+  "bentoFolderBtn": {
+    "message": "Bir Bento klasörü oluştur…"
+  },
+  "bentoFolderHow": {
+    "message": "İletişim kutusunda Belgeler içinde “Bento” adlı yeni bir klasör oluşturun ve onu seçin."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” Bento klasörünüz — yeni belgeler oraya gider ve yerinde kaydedilir."
+  },
+  "bentoFolderTip": {
+    "message": "Belgeler içinde yerinde kaydeden ve yeni belgeleri alan bir klasör. Chrome Belgeler’in kendisini vermez."
+  },
+  "defaultFolder": {
+    "message": "yeni belgeler buraya gelir"
+  },
+  "fgTitle": {
+    "message": "“$1” bundan sonra yerinde kaydedilsin mi?"
+  },
+  "fgTitleLapsed": {
+    "message": "“$1” yeniden bağlansın mı?"
+  },
+  "fgLead": {
+    "message": "bento/home yalnızca bu dosya için izni saklar; böylece her kayıt doğrudan ona yazılır. Sonraki iletişim kutusunda aynı dosyayı seçin."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home bu dosyaya zaten sahip; tarayıcı yeniden onaylamanızı istiyor."
+  },
+  "fgChoose": {
+    "message": "Dosyayı seç…"
+  },
+  "fgReconnect": {
+    "message": "Yeniden bağla"
+  },
+  "fgOnce": {
+    "message": "Yalnızca bu seferlik"
+  },
+  "fgNotSame": {
+    "message": "Bu, soran dosya değil (“$1”). Onu seçin ya da bu pencereyi kapatın."
+  },
+  "fgDenied": {
+    "message": "İzin verilmedi."
+  },
+  "droppedGranted": {
+    "message": "Eklendi: $1 klasör, $2 dosya."
+  },
+  "setFilesTitle": {
+    "message": "Dosyalar"
+  },
+  "setFilesSub": {
+    "message": "Eklenen klasörlerin dışındaki, kendi başına yerinde kaydedilen belgeler — bir kez seçilmiş ya da kitaplığa bırakılmış."
   }
 }

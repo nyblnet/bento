@@ -189,7 +189,7 @@
     "message": "Vælg den mappe, dine dokumenter ligger i"
   },
   "setupStep1Note": {
-    "message": "Én bred mappe er som regel nok — den dækker alt indeni."
+    "message": "Én bred mappe er som regel nok — den dækker alt i den. Chrome udleverer ikke selve hjemmemappen eller Library: vælg Dokumenter, Skrivebord eller den mappe, dine dokumenter ligger i."
   },
   "setupStep2": {
     "message": "Slå adgang til lokale filer til"
@@ -484,5 +484,236 @@
   },
   "surveyOnlySeen": {
     "message": "Kun dokumenter, der er åbnet i denne browser, kan findes sådan."
+  },
+  "setAsstTitle": {
+    "message": "Assistent"
+  },
+  "setAsstSub": {
+    "message": "Hvor en chat om et dokument sendes hen. Nøglen bliver i denne udvidelse — et dokument ser kun nogensinde svaret."
+  },
+  "asstProvider": {
+    "message": "Udbyder"
+  },
+  "asstProvBuiltin": {
+    "message": "Chromes indbyggede model (Gemini Nano) — på denne enhed"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio-nøgle)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-kompatibel (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Basis-URL"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "API-nøgle"
+  },
+  "asstKeyOptional": {
+    "message": "Valgfri for en lokal server som Ollama eller LM Studio."
+  },
+  "asstSave": {
+    "message": "Gem"
+  },
+  "asstSaved": {
+    "message": "Assistentindstillinger gemt"
+  },
+  "asstAccessDeclined": {
+    "message": "Adgang til webstedet blev afvist. Forespørgsler sendes stadig, og virker når serveren tillader browserudvidelser (CORS)."
+  },
+  "asstCheck": {
+    "message": "Tjek forbindelse"
+  },
+  "asstChecking": {
+    "message": "Tjekker…"
+  },
+  "asstReachable": {
+    "message": "Kan nås — $1 svarede."
+  },
+  "asstBuiltinReady": {
+    "message": "Klar på denne enhed."
+  },
+  "asstBuiltinDownload": {
+    "message": "Modellen er ikke på denne enhed endnu. Tryk på “Hent model” i indstillingerne for udvidelsen bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Denne Chrome har ingen indbygget model. Vælg en anden udbyder i udvidelsens indstillinger."
+  },
+  "asstOnDevice": {
+    "message": "denne enhed"
+  },
+  "asstNotConfigured": {
+    "message": "Assistenten er ikke sat op endnu — åbn indstillingerne for udvidelsen bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Kunne ikke nå $1. Kører serveren, og tillader den forespørgsler fra browserudvidelser (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Venter på din tilladelse — svar på spørgsmålet, og prøv igen."
+  },
+  "asstDenied": {
+    "message": "Dette dokument må ikke bruge assistenten."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumenter, der må bruge assistenten"
+  },
+  "asstAllowedSub": {
+    "message": "Hvert dokument spørger én gang før sin første forespørgsel. Fjern et for at blive spurgt igen."
+  },
+  "consentTitle": {
+    "message": "Skal dette dokument have lov til at bruge din assistent?"
+  },
+  "consentLead": {
+    "message": "Det vil kunne sende tekst til $1 ($2) og læse svarene. Din nøgle deles aldrig med det."
+  },
+  "consentRemember": {
+    "message": "Husket for denne fil. Du kan ændre det senere i udvidelsens indstillinger."
+  },
+  "consentAllow": {
+    "message": "Tillad"
+  },
+  "consentDeny": {
+    "message": "Ikke nu"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome henter modellen. Prøv igen, når den er færdig."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Hent model"
+  },
+  "asstBuiltinProgress": {
+    "message": "Henter modellen… $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Cirka 2–4 GB. Chrome kræver omkring 22 GB ledig plads på disken og et netværk uden dataloft, ellers melder den modellen som utilgængelig."
+  },
+  "asstContext": {
+    "message": "Kontekstvindue (tokens)"
+  },
+  "asstContextHint": {
+    "message": "Lad stå tomt for at bruge det, udbyderen oplyser. Udfyld det for en selvhostet server, hvis grænse kun du kender."
+  },
+  "asstContextKnown": {
+    "message": "Kontekstvindue: $1 tokens"
+  },
+  "asstShowAll": {
+    "message": "Vis alle modeller, ikke kun dem til chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Andet…"
+  },
+  "asstOtherModel": {
+    "message": "Model-id, præcis som udbyderen kalder den"
+  },
+  "asstBadModel": {
+    "message": "Det er ikke et model-id: kun bogstaver, tal og . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Præsentationen er for stor til denne model: forespørgslen kræver omkring $1 tokens, og modellen tager $2. Vælg en model med et større vindue, eller gør præsentationen kortere."
+  },
+  "asstOutlineOnly": {
+    "message": "Kun disponeringen passede i denne models vindue; det valgte indhold blev ikke sendt i sin helhed."
+  },
+  "asstNoDocument": {
+    "message": "Dokumentet afleverede ikke sit indhold."
+  },
+  "asstSendsNotice": {
+    "message": "Sender præsentationens disposition og $1 til $2; kommentarer bliver her."
+  },
+  "asstOnDeviceModel": {
+    "message": "modellen på denne enhed"
+  },
+  "asstFocusGeneric": {
+    "message": "de valgte elementer eller den åbne slide"
+  },
+  "placingFolder": {
+    "message": "Leder efter “$1” på disken…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome lod ikke udvidelsen læse “$1” fra disken for at finde den (file://-lister afvist)."
+  },
+  "placeTried": {
+    "message": "Ledte efter “$1” $2 steder på disken — ikke der."
+  },
+  "recentTitle": {
+    "message": "Senest redigeret"
+  },
+  "badgeNotAdded": {
+    "message": "ikke tilføjet"
+  },
+  "badgeNotAddedTip": {
+    "message": "Fundet på disken. Den åbner, men gemning spørger hvor — tilføj mappen for at gemme på stedet."
+  },
+  "folderFoundTip": {
+    "message": "Fundet på disken, ikke tilføjet: dens dokumenter åbner, men gemning spørger hvor."
+  },
+  "menuAddFolder": {
+    "message": "Tilføj dens mappe for at gemme på stedet…"
+  },
+  "pickThisFolder": {
+    "message": "Vælg mappen “$1” i vælgeren — Chrome skal se dig vælge den."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” er ikke mappen, dette dokument ligger i (“$2”). Prøv igen og vælg den."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” er allerede tilføjet."
+  },
+  "bentoFolderBtn": {
+    "message": "Opret en Bento-mappe…"
+  },
+  "bentoFolderHow": {
+    "message": "Opret i dialogen en ny mappe kaldet “Bento” i Dokumenter, og vælg den."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” er din Bento-mappe — nye dokumenter havner der og gemmes på stedet."
+  },
+  "bentoFolderTip": {
+    "message": "En mappe i Dokumenter, der gemmer på stedet og modtager nye dokumenter. Chrome giver ikke selve Dokumenter."
+  },
+  "defaultFolder": {
+    "message": "nye dokumenter havner her"
+  },
+  "fgTitle": {
+    "message": "Gem “$1” på stedet fra nu af?"
+  },
+  "fgTitleLapsed": {
+    "message": "Forbind “$1” igen?"
+  },
+  "fgLead": {
+    "message": "bento/home beholder tilladelsen til netop denne fil, så hver gemning skriver direkte til den. Vælg den samme fil i næste dialog."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home har allerede denne fil; browseren vil have dig til at bekræfte den igen."
+  },
+  "fgChoose": {
+    "message": "Vælg filen…"
+  },
+  "fgReconnect": {
+    "message": "Forbind igen"
+  },
+  "fgOnce": {
+    "message": "Kun denne gang"
+  },
+  "fgNotSame": {
+    "message": "Det er ikke den fil, der spurgte (“$1”). Vælg den, eller luk dette vindue."
+  },
+  "fgDenied": {
+    "message": "Tilladelsen blev ikke givet."
+  },
+  "droppedGranted": {
+    "message": "Tilføjet: $1 mapper, $2 filer."
+  },
+  "setFilesTitle": {
+    "message": "Filer"
+  },
+  "setFilesSub": {
+    "message": "Dokumenter uden for enhver tilføjet mappe, der selv gemmer på stedet — valgt én gang, eller trukket ind i biblioteket."
   }
 }

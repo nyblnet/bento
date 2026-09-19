@@ -33,8 +33,14 @@
 import { setLapsedBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
 import { checkForUpdate } from './update.js'
 import { learnPrefix } from './db.js'
-import { t } from './i18n.js'
+import { t, initI18n } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
+import {
+  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, validSchema, validTurn, validCheck, activeConfig,
+  modelsKey, builtinContext, models as listRoutes, select as selectRoute, runTurn,
+  describe as describeAssistant, check as checkAssistant, run as runAssistant,
+} from './assistant.js'
+import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads } from './filegrant.js'
 
 // Re-exported: these moved to route.js so the PAGES can place a path too,
 // but they are still part of this module's tested surface.
@@ -249,23 +255,348 @@ export async function backup(sender, text, name, deps) {
 }
 
 /** Can this sender's file be written in place? Resolves; writes nothing. */
-export async function claim(sender, deps) {
+/**
+ * Where a save for this sender goes, in order: a FOLDER grant (resolve), a
+ * FILE grant for that one document, the DOWNLOADS folder through the
+ * downloads API. Each is checked from scratch on every message; nothing is
+ * carried. `via` says which, for the page's console and the badge.
+ */
+export async function resolveAny(sender, deps = {}) {
   const r = await resolve(sender, deps)
-  return r.ok ? { ok: true, name: r.name } : { ok: false, reason: r.reason }
+  if (r.ok) return { ...r, via: 'folder' }
+  const path = pathFromSender(sender)
+  if (!path) return r
+  // each further door fails soft: no store, no downloads API, no answer — the
+  // save falls to the picker, never to an exception
+  const fg = await (deps.resolveFileGrant ?? resolveFileGrant)(path, deps.filegrant).catch(() => ({ ok: false, reason: 'none' }))
+  if (fg.ok) return { ok: true, name: path.split('/').pop(), handle: fg.handle, key: fg.key, via: 'file' }
+  const dir = await (deps.downloadsDir ?? downloadsDir)(deps.filegrant).catch(() => null)
+  const rel = downloadsRelative(path, dir)
+  if (rel) return { ok: true, name: path.split('/').pop(), rel, via: 'downloads' }
+  return { ok: false, reason: fg.reason === 'lapsed' ? 'file grant needs renewing' : r.reason, path }
+}
+
+export async function claim(sender, deps) {
+  const r = await resolveAny(sender, deps)
+  return r.ok ? { ok: true, name: r.name, via: r.via } : { ok: false, reason: r.reason }
 }
 
 /** Write the sender's own file. Re-resolves, so no state is carried. */
-export async function write(sender, text, deps) {
-  const r = await resolve(sender, deps)
+export async function write(sender, text, deps = {}) {
+  const r = await resolveAny(sender, deps)
   if (!r.ok) return { ok: false, reason: r.reason }
   try {
+    if (r.via === 'downloads') {
+      const bytes = await (deps.writeViaDownloads ?? writeViaDownloads)(r.rel, text, deps.filegrant)
+      return { ok: true, bytes, via: r.via }
+    }
     const w = await r.handle.createWritable()
     await w.write(text)
     await w.close()
-    return { ok: true, bytes: text.length }
+    return { ok: true, bytes: text.length, via: r.via }
   } catch (e) {
+    // a file grant whose file is gone is no grant: forget it
+    if (r.via === 'file' && e?.name === 'NotFoundError') await (deps.dropFileGrant ?? dropFileGrant)(r.key, deps.filegrant).catch(() => {})
     return { ok: false, reason: `${e.name}: ${e.message}` }
   }
+}
+
+// ---------------------------------------------------------------- assistant
+//
+// The chat's extension half. Rules and rationale in assistant.js; this is the
+// wiring: storage, the per-document consent prompt, and the port a streaming
+// turn rides on. Everything below reads WHICH document from the sender the
+// browser stamped, never from the payload.
+
+const storageGet = async (key) => (await chrome.storage.local.get(key))?.[key]
+
+/** The saved configuration, defaults filled; the built-in model is the default when Chrome has one. */
+export async function loadAssistantConfig() {
+  return activeConfig(await storageGet(CONFIG_KEY), typeof globalThis.LanguageModel !== 'undefined')
+}
+
+/** Documents that have been allowed, keyed by `docKeyOf`. */
+const allowedDocs = async () => (await storageGet(ALLOWED_KEY)) || {}
+
+let i18nReady = null
+/** The environment assistant.js runs against: the real fetch, the real Prompt API, translated reasons. */
+async function assistantEnv() {
+  // The worker's `t` follows the browser's language unless a choice was saved;
+  // reasons are shown to the user by the page, so they honour the choice too.
+  if (!i18nReady) i18nReady = initI18n().catch(() => {})
+  await i18nReady
+  return {
+    fetch: globalThis.fetch.bind(globalThis),
+    LanguageModel: globalThis.LanguageModel,
+    t,
+    // The raw reply, in the service-worker inspector only — never stored.
+    log: (...a) => console.info(...a),
+    // The listing Settings cached for this provider+endpoint, for the window.
+    models: async (cfg) => (await storageGet(MODELS_KEY))?.[modelsKey(cfg)]?.models,
+    // The built-in model's quota: read once, kept — a session is created to
+    // read it, and the number does not change under a downloaded model.
+    builtinTokens: async () => {
+      const kept = await storageGet(BUILTIN_KEY)
+      if (kept?.tokens) return kept.tokens
+      const tokens = await builtinContext(globalThis.LanguageModel)
+      if (tokens) await chrome.storage.local.set({ [BUILTIN_KEY]: { at: Date.now(), tokens } })
+      return tokens
+    },
+  }
+}
+
+/**
+ * The consent prompt: one small window per document that asks, answered by a
+ * message from that window (src/consent.js). The window itself keeps a port
+ * open with a heartbeat so this worker is not evicted while the user reads.
+ *
+ * In memory only, on purpose: an eviction mid-prompt loses the request that
+ * was waiting, and NOTHING else — the answer is persisted from the consent
+ * page's message on its own, so the next request from that document simply
+ * goes through. Failing towards "ask again" is the right direction here.
+ */
+const consentPending = new Map() // docKey → { nonce, promise, resolve }
+
+function askConsent(docKey, host, model) {
+  const open = consentPending.get(docKey)
+  if (open) return open.promise
+  const nonce = crypto.randomUUID()
+  let resolve
+  const promise = new Promise((r) => { resolve = r })
+  consentPending.set(docKey, { nonce, promise, resolve })
+  const url = new URL(chrome.runtime.getURL('src/consent.html'))
+  url.searchParams.set('doc', docKey)
+  // The built-in model has no host; the window says "this device" instead.
+  url.searchParams.set('host', host || t('asstOnDevice'))
+  url.searchParams.set('model', model)
+  url.searchParams.set('nonce', nonce)
+  chrome.windows.create({ url: url.href, type: 'popup', width: 480, height: 340, focused: true })
+    .catch(() => { consentPending.delete(docKey); resolve(false) })
+  return promise
+}
+
+/**
+ * Has this document been allowed — asking if not. `waitMs` bounds the wait for
+ * callers that must answer inside the page's request timeout (`check`); a
+ * streaming turn has already been accepted and can wait for the person.
+ */
+async function ensureConsent(docKey, host, model, waitMs = 0) {
+  const allowed = await allowedDocs()
+  if (allowed[docKey]) return true
+  const answer = askConsent(docKey, host, model)
+  if (!waitMs) return answer
+  return Promise.race([answer, new Promise((r) => setTimeout(() => r(null), waitMs))])
+}
+
+/**
+ * The consent window's heartbeat port. Its messages keep this worker alive
+ * while the person reads; its disconnect is the window closing without an
+ * answer, which is a "not now" — otherwise the request would wait forever
+ * and every later ask would join it.
+ */
+export function watchConsentWindow(port) {
+  if (!isConsentPage(port.sender)) { port.disconnect(); return }
+  const nonce = port.name.slice('bento-consent:'.length)
+  port.onMessage.addListener(() => { /* the heartbeat; receiving it is the point */ })
+  port.onDisconnect.addListener(() => {
+    for (const [docKey, open] of consentPending) {
+      if (open.nonce === nonce) { consentPending.delete(docKey); open.resolve(false) }
+    }
+  })
+}
+
+/** The consent page answered. Only that page may say so. */
+function isConsentPage(sender) {
+  return sender?.id === chrome.runtime.id
+    && typeof sender.url === 'string'
+    && sender.url.startsWith(chrome.runtime.getURL('src/consent.html'))
+}
+
+export async function recordConsent(sender, msg) {
+  if (!isConsentPage(sender)) return { ok: false, reason: 'not the consent page' }
+  const docKey = typeof msg.doc === 'string' ? msg.doc : ''
+  const allow = msg.allow === true
+  if (allow && docKey) {
+    const allowed = await allowedDocs()
+    allowed[docKey] = { host: String(msg.host ?? ''), at: Date.now() }
+    await chrome.storage.local.set({ [ALLOWED_KEY]: allowed })
+  }
+  const open = consentPending.get(docKey)
+  if (open && open.nonce === msg.nonce) { consentPending.delete(docKey); open.resolve(allow) }
+  return { ok: true }
+}
+
+/** `assistant.describe` / `assistant.check` / `assistant.settings.open`, over sendMessage. */
+export async function assistantOp(op, sender, payload) {
+  const env = await assistantEnv()
+  const cfg = await loadAssistantConfig()
+  if (op === 'assistant.describe') return describeAssistant(cfg, env)
+  if (op === 'assistant.models') return { ok: true, models: await listRoutes(await storageGet(CONFIG_KEY), env) }
+  if (op === 'assistant.select') {
+    const r = await selectRoute(await storageGet(CONFIG_KEY), payload, env)
+    if (!r.ok) return r
+    await chrome.storage.local.set({ [CONFIG_KEY]: r.store })
+    return { ok: true }
+  }
+  if (op === 'assistant.settings.open') {
+    await chrome.runtime.openOptionsPage()
+    return { ok: true }
+  }
+  if (op === 'assistant.check') {
+    const docKey = docKeyOf(sender)
+    if (!docKey) return { ok: false, reason: 'not a document' }
+    const d = await describeAssistant(cfg, env)
+    if (!d.configured) return { ok: false, reason: t('asstNotConfigured') }
+    // The page gives this 5s; a person reading a prompt takes longer. Ask,
+    // wait a little, and if the answer is still pending say so — the next
+    // check after they answer goes straight through.
+    // Machine codes beside the words: the page keys on `code` (re-runs the
+    // check when the document regains focus; shows a refusal card), never
+    // on localized text.
+    const allowed = await ensureConsent(docKey, d.host, d.model, 3500)
+    if (allowed === null) return { ok: false, code: 'consent-pending', reason: t('asstWaitConsent') }
+    if (!allowed) return { ok: false, code: 'consent-denied', reason: t('asstDenied') }
+    return checkAssistant(cfg, env)
+  }
+  return { ok: false, reason: 'unknown op' }
+}
+
+/**
+ * A streaming turn. One port per turn, opened by relay.js for the page:
+ * `res` and then `evt` frames flow back over it, an abort arrives on it, and
+ * the tab closing disconnects it — which is what binds a request to the tab
+ * that made it. Nothing here can reach a stream another tab started.
+ *
+ * Every message on the port also resets the worker's idle timer, which a
+ * long reply read through fetch alone would not.
+ */
+export function serveAssistantPort(port) {
+  const docKey = docKeyOf(port.sender)
+  let ac = null
+  let alive = true
+  // The page's answers the turn is waiting for, by op: `assistant.document`
+  // (the material) and `assistant.check` (a dry run of a patch).
+  const awaiting = new Map()
+  const post = (m) => { if (alive) { try { port.postMessage(m) } catch { alive = false } } }
+  port.onDisconnect.addListener(() => { alive = false; ac?.abort(); for (const r of awaiting.values()) r(null); awaiting.clear() })
+  /** Ask the page over this port and wait for its answer to the same op and turn id. */
+  const askPage = (kind, extra, timeoutMs = 15000) => new Promise((resolve) => {
+    awaiting.set(kind, resolve)
+    post({ dir: 'evt', id: ac?.id, kind, ...extra })
+    setTimeout(() => { if (awaiting.get(kind) === resolve) { awaiting.delete(kind); resolve(null) } }, timeoutMs)
+  })
+  port.onMessage.addListener((m) => {
+    if (m?.op === 'assistant.abort') { ac?.abort(); return }
+    if (m?.op === 'assistant.document' || m?.op === 'assistant.check') {
+      const r = awaiting.get(m.op)
+      if (r && typeof m.id === 'string' && ac?.id === m.id) { awaiting.delete(m.op); r(m.payload) }
+      return
+    }
+    if (m?.op !== 'assistant.send' && m?.op !== 'assistant.turn') return
+    const id = m.id
+    const respond = (result) => post({ dir: 'res', id, result })
+    if (typeof id !== 'string' || !id.startsWith(ID_PREFIX)) return respond({ ok: false, reason: 'bad id' })
+    if (!docKey) return respond({ ok: false, reason: 'not a document' })
+    if (ac) return respond({ ok: false, reason: 'busy' })
+    const isTurn = m.op === 'assistant.turn'
+    const messages = isTurn ? null : validMessages(m.payload)
+    const turn = isTurn ? validTurn(m.payload) : null
+    if (!messages && !turn) return respond({ ok: false, reason: 'bad request' })
+    const schema = isTurn ? undefined : validSchema(m.payload)
+    ac = new AbortController()
+    ac.id = id
+    void (async () => {
+      const env = await assistantEnv()
+      const cfg = await loadAssistantConfig()
+      const d = await describeAssistant(cfg, env)
+      if (!d.configured) return respond({ ok: false, reason: t('asstNotConfigured') })
+      // Accepted. Consent may take as long as the person needs: the page's
+      // request timeout covers only this reply, not the stream. Nothing of
+      // the document is asked for until the answer is yes.
+      respond({ ok: true })
+      const emit = (kind, extra) => post({ dir: 'evt', id, kind, ...extra })
+      if (!(await ensureConsent(docKey, d.host, d.model))) return emit('assistant.error', { code: 'consent-denied', reason: t('asstDenied') })
+      if (ac.signal.aborted) return
+      if (!isTurn) return runAssistant(cfg, messages, emit, ac.signal, env, schema)
+      // The turn: the deck is pulled from the page only now, over this port.
+      const io = {
+        document: () => askPage('assistant.document', {}),
+        check: async (ops) => validCheck(await askPage('assistant.check', { ops })),
+      }
+      await runTurn(cfg, turn, io, emit, ac.signal, env)
+    })()
+  })
+}
+
+// ---------------------------------------------------------------- the offer
+//
+// A ⌘S that nothing covers is the moment to ask, once: the page's `claim`
+// gets { ok:false, reason:'setup', token } while a small window
+// (src/filegrant.html) asks the person to pick the file; the page then waits
+// on `claim { token }` as long as the window is open. In memory only, like
+// the assistant's consent: an eviction loses one pending save (the page falls
+// to its picker), and the window's own storing survives regardless.
+const offers = new Map() // token → { path, resolve, promise }
+
+async function offerFileGrant(path, lapsed) {
+  const open = [...offers.values()].find((o) => o.path === path)
+  if (open) return open
+  const token = crypto.randomUUID()
+  let resolve
+  const promise = new Promise((r) => { resolve = r })
+  const entry = { path, resolve, promise, token }
+  offers.set(token, entry)
+  const url = new URL(chrome.runtime.getURL('src/filegrant.html'))
+  url.searchParams.set('path', path)
+  url.searchParams.set('token', token)
+  if (lapsed) url.searchParams.set('lapsed', '1')
+  chrome.windows.create({ url: url.href, type: 'popup', width: 480, height: 320, focused: true })
+    .catch(() => { offers.delete(token); resolve(false) })
+  return entry
+}
+
+/** `claim` with the offer: what the page's first phase gets. */
+export async function claimOrOffer(sender, payload, deps) {
+  // second phase: the page waiting on a window it was told about
+  if (typeof payload?.token === 'string') {
+    const o = offers.get(payload.token)
+    if (!o) return { ok: false, reason: 'no such offer' }
+    const chosen = await o.promise
+    if (!chosen) return { ok: false, reason: 'declined' }
+    const r = await resolveAny(sender, deps)
+    return r.ok ? { ok: true, name: r.name, via: r.via } : { ok: false, reason: r.reason }
+  }
+  const r = await resolveAny(sender, deps)
+  if (r.ok) return { ok: true, name: r.name, via: r.via }
+  const path = pathFromSender(sender)
+  if (!path || !(await isFileAccessOn())) return { ok: false, reason: r.reason }
+  if (await declined(path)) return { ok: false, reason: r.reason }
+  const o = await offerFileGrant(path, r.reason === 'file grant needs renewing')
+  return { ok: false, reason: 'setup', token: o.token }
+}
+
+const isFileAccessOn = () => new Promise((res) => {
+  try { chrome.extension.isAllowedFileSchemeAccess((v) => res(!!v)) } catch { res(false) }
+})
+
+/** The offer window's port: its disconnect is the window closing without an answer. */
+function watchOfferWindow(port) {
+  const ours = port.sender?.id === chrome.runtime.id && typeof port.sender.url === 'string' && port.sender.url.startsWith(chrome.runtime.getURL('src/filegrant.html'))
+  if (!ours) { port.disconnect(); return }
+  const token = port.name.slice('filegrant:'.length)
+  port.onDisconnect.addListener(() => {
+    const o = offers.get(token)
+    if (o) { offers.delete(token); o.resolve(false) }
+  })
+}
+
+/** The window answered (it stored the grant itself, or recorded the decline). */
+function offerAnswered(sender, msg) {
+  const ours = sender?.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL('src/filegrant.html'))
+  if (!ours) return { ok: false, reason: 'not the offer window' }
+  const o = offers.get(msg.token)
+  if (o) { offers.delete(msg.token); o.resolve(msg.chosen === true) }
+  return { ok: true }
 }
 
 // `chrome` is absent when this module is loaded by the test rig, which imports
@@ -278,9 +609,12 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     // — waiting for a save meant a fresh install listed documents it could not
     // open.
     const run = msg?.op === 'hello' ? claim(sender)
-      : msg?.op === 'claim' ? claim(sender)
+      : msg?.op === 'claim' ? claimOrOffer(sender, msg.payload)
+      : msg?.op === 'filegrant.answered' ? Promise.resolve(offerAnswered(sender, msg))
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
+      : msg?.op === 'assistant.consent' ? recordConsent(sender, msg)
+      : typeof msg?.op === 'string' && msg.op.startsWith('assistant.') ? assistantOp(msg.op, sender, msg.payload)
       : Promise.resolve({ ok: false, reason: 'unknown op' })
     run.then((r) => {
       sendResponse(r)
@@ -291,6 +625,12 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       void reportLapsed()
     }, (e) => sendResponse({ ok: false, reason: String(e?.message || e) }))
     return true // async response
+  })
+
+  chrome.runtime.onConnect.addListener((port) => {
+    if (port.name === PORT) serveAssistantPort(port)
+    else if (port.name.startsWith('bento-consent:')) watchConsentWindow(port)
+    else if (port.name.startsWith('filegrant:')) watchOfferWindow(port)
   })
 
   // The worker restarts constantly; the badge has to survive that, and startup

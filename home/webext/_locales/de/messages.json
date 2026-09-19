@@ -199,7 +199,7 @@
     "message": "Wählen Sie den Ordner, in dem Ihre Dokumente liegen"
   },
   "setupStep1Note": {
-    "message": "Ein großzügiger Ordner genügt meist — er deckt alles darin ab."
+    "message": "Ein breiter Ordner reicht meist — er deckt alles darin ab. Den Home-Ordner selbst oder Library gibt Chrome nicht frei: Wählen Sie Dokumente, Schreibtisch oder den Ordner, in dem Ihre Dokumente liegen."
   },
   "setupStep2": {
     "message": "Zugriff auf lokale Dateien einschalten",
@@ -517,5 +517,236 @@
   },
   "surveyOnlySeen": {
     "message": "So lassen sich nur Dokumente finden, die in diesem Browser geöffnet wurden."
+  },
+  "setAsstTitle": {
+    "message": "Assistent"
+  },
+  "setAsstSub": {
+    "message": "Wohin ein Chat über ein Dokument geschickt wird. Der Schlüssel bleibt in dieser Erweiterung — ein Dokument sieht immer nur die Antwort."
+  },
+  "asstProvider": {
+    "message": "Anbieter"
+  },
+  "asstProvBuiltin": {
+    "message": "In Chrome eingebautes Modell (Gemini Nano) — auf diesem Gerät"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI-Studio-Schlüssel)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-kompatibel (OpenAI, OpenRouter, Ollama, LM Studio …)"
+  },
+  "asstBaseUrl": {
+    "message": "Basis-URL"
+  },
+  "asstModel": {
+    "message": "Modell"
+  },
+  "asstKey": {
+    "message": "API-Schlüssel"
+  },
+  "asstKeyOptional": {
+    "message": "Optional für einen lokalen Server wie Ollama oder LM Studio."
+  },
+  "asstSave": {
+    "message": "Speichern"
+  },
+  "asstSaved": {
+    "message": "Assistent-Einstellungen gespeichert"
+  },
+  "asstAccessDeclined": {
+    "message": "Der Website-Zugriff wurde abgelehnt. Anfragen werden trotzdem gestellt und funktionieren, wenn der Server Browser-Erweiterungen erlaubt (CORS)."
+  },
+  "asstCheck": {
+    "message": "Verbindung prüfen"
+  },
+  "asstChecking": {
+    "message": "Wird geprüft …"
+  },
+  "asstReachable": {
+    "message": "Erreichbar — $1 hat geantwortet."
+  },
+  "asstBuiltinReady": {
+    "message": "Auf diesem Gerät bereit."
+  },
+  "asstBuiltinDownload": {
+    "message": "Das Modell ist noch nicht auf diesem Gerät. Drücken Sie „Modell herunterladen“ in den Einstellungen der Erweiterung bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Dieses Chrome hat kein eingebautes Modell. Wählen Sie in den Einstellungen der Erweiterung einen anderen Anbieter."
+  },
+  "asstOnDevice": {
+    "message": "dieses Gerät"
+  },
+  "asstNotConfigured": {
+    "message": "Der Assistent ist noch nicht eingerichtet — öffnen Sie die Einstellungen der Erweiterung bento/home."
+  },
+  "asstUnreachable": {
+    "message": "$1 ist nicht erreichbar. Läuft der Server, und erlaubt er Anfragen von Browser-Erweiterungen (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Warte auf Ihre Erlaubnis auf diesem Gerät…"
+  },
+  "asstDenied": {
+    "message": "Die Erlaubnis wurde auf diesem Gerät verweigert — nichts wurde geändert."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumente, die den Assistenten verwenden dürfen"
+  },
+  "asstAllowedSub": {
+    "message": "Jedes Dokument fragt einmal vor seiner ersten Anfrage. Entfernen Sie eines, um erneut gefragt zu werden."
+  },
+  "consentTitle": {
+    "message": "Darf dieses Dokument Ihren Assistenten verwenden?"
+  },
+  "consentLead": {
+    "message": "Es kann dann Text an $1 ($2) senden und die Antworten lesen. Ihr Schlüssel wird nie mit ihm geteilt."
+  },
+  "consentRemember": {
+    "message": "Für diese Datei gemerkt. Sie können das später in den Einstellungen der Erweiterung ändern."
+  },
+  "consentAllow": {
+    "message": "Erlauben"
+  },
+  "consentDeny": {
+    "message": "Jetzt nicht"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome lädt das Modell herunter. Versuchen Sie es erneut, wenn der Download abgeschlossen ist."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Modell herunterladen"
+  },
+  "asstBuiltinProgress": {
+    "message": "Modell wird heruntergeladen … $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Etwa 2–4 GB. Chrome braucht rund 22 GB freien Speicherplatz und ein nicht getaktetes Netzwerk, sonst meldet es das Modell als nicht verfügbar."
+  },
+  "asstContext": {
+    "message": "Kontextfenster (Tokens)"
+  },
+  "asstContextHint": {
+    "message": "Leer lassen, um den vom Anbieter gemeldeten Wert zu verwenden. Ausfüllen für einen selbst gehosteten Server, dessen Grenze nur Sie kennen."
+  },
+  "asstContextKnown": {
+    "message": "Kontextfenster: $1 Tokens"
+  },
+  "asstShowAll": {
+    "message": "Alle Modelle anzeigen, nicht nur die für Chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Andere …"
+  },
+  "asstOtherModel": {
+    "message": "Modell-ID, genau wie der Anbieter sie nennt"
+  },
+  "asstBadModel": {
+    "message": "Das ist keine Modell-ID: nur Buchstaben, Ziffern und . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Schon die Gliederung des Decks ist zu groß für dieses Modell ($1 Tokens; sein Fenster fasst $2). Wählen Sie in den Erweiterungseinstellungen ein Modell mit größerem Fenster."
+  },
+  "asstOutlineOnly": {
+    "message": "Nur die Gliederung passt in das Fenster dieses Modells; es kann Wörter, Notizen und Folien ändern, aber keine Positionen oder Gestaltung."
+  },
+  "asstNoDocument": {
+    "message": "Das Dokument hat seinen Inhalt nicht übergeben."
+  },
+  "asstSendsNotice": {
+    "message": "Sendet die Gliederung des Decks und $1 an $2; Kommentare bleiben hier."
+  },
+  "asstOnDeviceModel": {
+    "message": "das Modell auf diesem Gerät"
+  },
+  "asstFocusGeneric": {
+    "message": "die ausgewählten Elemente oder die geöffnete Folie"
+  },
+  "placingFolder": {
+    "message": "Suche „$1“ auf der Festplatte …"
+  },
+  "placeNoDisk": {
+    "message": "Chrome ließ die Erweiterung „$1“ nicht von der Festplatte lesen, um den Ordner zu finden (file://-Verzeichnisse verweigert)."
+  },
+  "placeTried": {
+    "message": "„$1“ an $2 Orten auf der Festplatte gesucht — nicht dort."
+  },
+  "recentTitle": {
+    "message": "Zuletzt bearbeitet"
+  },
+  "badgeNotAdded": {
+    "message": "nicht hinzugefügt"
+  },
+  "badgeNotAddedTip": {
+    "message": "Auf der Festplatte gefunden. Öffnet sich, aber beim Speichern wird nach dem Ort gefragt — fügen Sie den Ordner hinzu, um direkt zu speichern."
+  },
+  "folderFoundTip": {
+    "message": "Auf der Festplatte gefunden, nicht hinzugefügt: Dokumente öffnen sich, aber Speichern fragt nach dem Ort."
+  },
+  "menuAddFolder": {
+    "message": "Ordner hinzufügen, um direkt zu speichern …"
+  },
+  "pickThisFolder": {
+    "message": "Wählen Sie im Dialog den Ordner „$1“ — Chrome muss sehen, dass Sie ihn wählen."
+  },
+  "pickedWrongFolder": {
+    "message": "„$1“ ist nicht der Ordner dieses Dokuments („$2“). Versuchen Sie es erneut und wählen Sie diesen."
+  },
+  "folderAlreadyAdded": {
+    "message": "„$1“ ist bereits hinzugefügt."
+  },
+  "bentoFolderBtn": {
+    "message": "Bento-Ordner anlegen …"
+  },
+  "bentoFolderHow": {
+    "message": "Legen Sie im Dialog in „Dokumente“ einen neuen Ordner namens „Bento“ an und wählen Sie ihn."
+  },
+  "bentoFolderMade": {
+    "message": "„$1“ ist Ihr Bento-Ordner — neue Dokumente landen dort und speichern direkt."
+  },
+  "bentoFolderTip": {
+    "message": "Ein Ordner in „Dokumente“, der direkt speichert und neue Dokumente aufnimmt. „Dokumente“ selbst gibt Chrome nicht frei."
+  },
+  "defaultFolder": {
+    "message": "neue Dokumente kommen hierher"
+  },
+  "fgTitle": {
+    "message": "„$1“ ab jetzt direkt speichern?"
+  },
+  "fgTitleLapsed": {
+    "message": "„$1“ wieder verbinden?"
+  },
+  "fgLead": {
+    "message": "bento/home behält die Berechtigung für genau diese Datei, sodass jedes Speichern direkt hineinschreibt. Wählen Sie im nächsten Dialog dieselbe Datei."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home hat diese Datei bereits; der Browser möchte, dass Sie sie erneut bestätigen."
+  },
+  "fgChoose": {
+    "message": "Datei wählen …"
+  },
+  "fgReconnect": {
+    "message": "Wieder verbinden"
+  },
+  "fgOnce": {
+    "message": "Nur dieses Mal"
+  },
+  "fgNotSame": {
+    "message": "Das ist nicht die Datei, die gefragt hat („$1“). Wählen Sie diese, oder schließen Sie das Fenster."
+  },
+  "fgDenied": {
+    "message": "Die Berechtigung wurde nicht erteilt."
+  },
+  "droppedGranted": {
+    "message": "Hinzugefügt: $1 Ordner, $2 Dateien."
+  },
+  "setFilesTitle": {
+    "message": "Dateien"
+  },
+  "setFilesSub": {
+    "message": "Dokumente außerhalb jedes hinzugefügten Ordners, die für sich direkt speichern — einmal gewählt oder in die Bibliothek gezogen."
   }
 }

@@ -199,7 +199,7 @@
     "message": "Elige la carpeta donde viven tus documentos"
   },
   "setupStep1Note": {
-    "message": "Una carpeta amplia suele bastar — cubre todo lo que hay dentro."
+    "message": "Suele bastar una carpeta amplia: cubre todo lo que contiene. Chrome no entrega la carpeta personal en sí ni Library: elige Documentos, Escritorio o la carpeta donde están tus documentos."
   },
   "setupStep2": {
     "message": "Activa el acceso a archivos locales",
@@ -517,5 +517,236 @@
   },
   "surveyOnlySeen": {
     "message": "Así solo se encuentran los documentos abiertos en este navegador."
+  },
+  "setAsstTitle": {
+    "message": "Asistente"
+  },
+  "setAsstSub": {
+    "message": "Adónde se envía una conversación sobre un documento. La clave se queda en esta extensión: un documento solo ve la respuesta."
+  },
+  "asstProvider": {
+    "message": "Proveedor"
+  },
+  "asstProvBuiltin": {
+    "message": "Modelo integrado de Chrome (Gemini Nano), en este dispositivo"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (clave de AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Compatible con OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL base"
+  },
+  "asstModel": {
+    "message": "Modelo"
+  },
+  "asstKey": {
+    "message": "Clave de API"
+  },
+  "asstKeyOptional": {
+    "message": "Opcional para un servidor local como Ollama o LM Studio."
+  },
+  "asstSave": {
+    "message": "Guardar"
+  },
+  "asstSaved": {
+    "message": "Ajustes del asistente guardados"
+  },
+  "asstAccessDeclined": {
+    "message": "Se rechazó el acceso al sitio. Las solicitudes se envían igualmente, y funcionan cuando el servidor admite extensiones del navegador (CORS)."
+  },
+  "asstCheck": {
+    "message": "Comprobar conexión"
+  },
+  "asstChecking": {
+    "message": "Comprobando…"
+  },
+  "asstReachable": {
+    "message": "Accesible: $1 respondió."
+  },
+  "asstBuiltinReady": {
+    "message": "Listo en este dispositivo."
+  },
+  "asstBuiltinDownload": {
+    "message": "El modelo aún no está en este dispositivo. Pulsa «Descargar modelo» en los ajustes de la extensión bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Este Chrome no tiene modelo integrado. Elige otro proveedor en los ajustes de la extensión."
+  },
+  "asstOnDevice": {
+    "message": "este dispositivo"
+  },
+  "asstNotConfigured": {
+    "message": "El asistente aún no está configurado: abre los ajustes de la extensión bento/home."
+  },
+  "asstUnreachable": {
+    "message": "No se pudo conectar con $1. ¿Está en marcha el servidor y admite solicitudes de extensiones del navegador (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Esperando tu permiso en este dispositivo…"
+  },
+  "asstDenied": {
+    "message": "Se denegó el permiso en este dispositivo — no se cambió nada."
+  },
+  "asstAllowedTitle": {
+    "message": "Documentos con permiso para usar el asistente"
+  },
+  "asstAllowedSub": {
+    "message": "Cada documento pregunta una vez antes de su primera solicitud. Quita uno para que vuelva a preguntar."
+  },
+  "consentTitle": {
+    "message": "¿Permitir que este documento use tu asistente?"
+  },
+  "consentLead": {
+    "message": "Podrá enviar texto a $1 ($2) y leer las respuestas. Tu clave nunca se comparte con él."
+  },
+  "consentRemember": {
+    "message": "Se recordará para este archivo. Puedes cambiarlo más tarde en los ajustes de la extensión."
+  },
+  "consentAllow": {
+    "message": "Permitir"
+  },
+  "consentDeny": {
+    "message": "Ahora no"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome está descargando el modelo. Vuelve a intentarlo cuando termine."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Descargar modelo"
+  },
+  "asstBuiltinProgress": {
+    "message": "Descargando el modelo… $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Unos 2–4 GB. Chrome necesita unos 22 GB libres en el disco y una red sin límite de datos; si no, informa de que el modelo no está disponible."
+  },
+  "asstContext": {
+    "message": "Ventana de contexto (tokens)"
+  },
+  "asstContextHint": {
+    "message": "Déjalo vacío para usar lo que indica el proveedor. Rellénalo para un servidor propio cuyo límite solo tú conoces."
+  },
+  "asstContextKnown": {
+    "message": "Ventana de contexto: $1 tokens"
+  },
+  "asstShowAll": {
+    "message": "Mostrar todos los modelos, no solo los de chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Otro…"
+  },
+  "asstOtherModel": {
+    "message": "ID del modelo, exactamente como lo nombra el proveedor"
+  },
+  "asstBadModel": {
+    "message": "Eso no es un ID de modelo: solo letras, dígitos y . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Solo el esquema del mazo ya es demasiado grande para este modelo ($1 tokens; su ventana es de $2). Elige un modelo con una ventana mayor en los ajustes de la extensión."
+  },
+  "asstOutlineOnly": {
+    "message": "Solo el esquema cabe en la ventana de este modelo, así que puede cambiar palabras, notas y diapositivas, pero no posiciones ni estilos."
+  },
+  "asstNoDocument": {
+    "message": "El documento no entregó su contenido."
+  },
+  "asstSendsNotice": {
+    "message": "Envía el esquema del mazo y $1 a $2; los comentarios se quedan aquí."
+  },
+  "asstOnDeviceModel": {
+    "message": "el modelo en el dispositivo"
+  },
+  "asstFocusGeneric": {
+    "message": "los elementos seleccionados o la diapositiva abierta"
+  },
+  "placingFolder": {
+    "message": "Buscando «$1» en el disco…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome no dejó que la extensión leyera «$1» del disco para encontrarla (listados file:// rechazados)."
+  },
+  "placeTried": {
+    "message": "Se buscó «$1» en $2 lugares del disco: no está ahí."
+  },
+  "recentTitle": {
+    "message": "Editados recientemente"
+  },
+  "badgeNotAdded": {
+    "message": "no añadida"
+  },
+  "badgeNotAddedTip": {
+    "message": "Encontrado en el disco. Se abre, pero al guardar preguntará dónde: añade su carpeta para guardar en el sitio."
+  },
+  "folderFoundTip": {
+    "message": "Encontrada en el disco, no añadida: sus documentos se abren, pero guardar pregunta dónde."
+  },
+  "menuAddFolder": {
+    "message": "Añadir su carpeta para guardar en el sitio…"
+  },
+  "pickThisFolder": {
+    "message": "En el selector, elige la carpeta «$1»: Chrome tiene que ver que la eliges."
+  },
+  "pickedWrongFolder": {
+    "message": "«$1» no es la carpeta de este documento («$2»). Inténtalo de nuevo y elige esa."
+  },
+  "folderAlreadyAdded": {
+    "message": "«$1» ya está añadida."
+  },
+  "bentoFolderBtn": {
+    "message": "Crear una carpeta Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "En el diálogo, crea una carpeta nueva llamada «Bento» dentro de Documentos y elígela."
+  },
+  "bentoFolderMade": {
+    "message": "«$1» es tu carpeta Bento: los documentos nuevos van ahí y se guardan en el sitio."
+  },
+  "bentoFolderTip": {
+    "message": "Una carpeta dentro de Documentos que guarda en el sitio y recibe los documentos nuevos. Chrome no concede Documentos en sí."
+  },
+  "defaultFolder": {
+    "message": "los documentos nuevos van aquí"
+  },
+  "fgTitle": {
+    "message": "¿Guardar «$1» en el sitio a partir de ahora?"
+  },
+  "fgTitleLapsed": {
+    "message": "¿Reconectar «$1»?"
+  },
+  "fgLead": {
+    "message": "bento/home conserva el permiso para este único archivo, así que cada guardado escribe directamente en él. Elige el mismo archivo en el siguiente diálogo."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home ya tiene este archivo; el navegador quiere que lo confirmes otra vez."
+  },
+  "fgChoose": {
+    "message": "Elegir el archivo…"
+  },
+  "fgReconnect": {
+    "message": "Reconectar"
+  },
+  "fgOnce": {
+    "message": "Solo esta vez"
+  },
+  "fgNotSame": {
+    "message": "Ese no es el archivo que lo pidió («$1»). Elige ese, o cierra esta ventana."
+  },
+  "fgDenied": {
+    "message": "No se concedió el permiso."
+  },
+  "droppedGranted": {
+    "message": "Añadidos: $1 carpetas, $2 archivos."
+  },
+  "setFilesTitle": {
+    "message": "Archivos"
+  },
+  "setFilesSub": {
+    "message": "Documentos fuera de cualquier carpeta añadida que se guardan en el sitio por sí solos: elegidos una vez, o arrastrados a la biblioteca."
   }
 }

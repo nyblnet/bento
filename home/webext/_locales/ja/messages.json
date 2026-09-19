@@ -199,7 +199,7 @@
     "message": "ドキュメントを置いているフォルダを選ぶ"
   },
   "setupStep1Note": {
-    "message": "通常は広めのフォルダを 1 つで十分です — 中身すべてが対象になります。"
+    "message": "広めのフォルダーが一つあれば通常十分です。その中のすべてが対象になります。ホームフォルダー自体や Library は Chrome が渡してくれません。書類、デスクトップ、またはドキュメントのあるフォルダーを選んでください。"
   },
   "setupStep2": {
     "message": "ローカルファイルへのアクセスをオンにする",
@@ -517,5 +517,236 @@
   },
   "surveyOnlySeen": {
     "message": "この方法で見つかるのは、このブラウザーで開いたドキュメントだけです。"
+  },
+  "setAsstTitle": {
+    "message": "アシスタント"
+  },
+  "setAsstSub": {
+    "message": "ドキュメントについてのチャットの送り先です。キーはこの拡張機能の中に留まり、ドキュメントには返答しか見えません。"
+  },
+  "asstProvider": {
+    "message": "プロバイダー"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome 内蔵モデル（Gemini Nano）— このデバイス上"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini（AI Studio のキー）"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic（Claude）"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI 互換（OpenAI、OpenRouter、Ollama、LM Studio…）"
+  },
+  "asstBaseUrl": {
+    "message": "ベース URL"
+  },
+  "asstModel": {
+    "message": "モデル"
+  },
+  "asstKey": {
+    "message": "API キー"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama や LM Studio などのローカルサーバーでは省略できます。"
+  },
+  "asstSave": {
+    "message": "保存"
+  },
+  "asstSaved": {
+    "message": "アシスタントの設定を保存しました"
+  },
+  "asstAccessDeclined": {
+    "message": "サイトへのアクセスが拒否されました。リクエストはそれでも送られ、サーバーがブラウザー拡張機能を許可していれば（CORS）動作します。"
+  },
+  "asstCheck": {
+    "message": "接続を確認"
+  },
+  "asstChecking": {
+    "message": "確認中…"
+  },
+  "asstReachable": {
+    "message": "到達できました — $1 が応答しました。"
+  },
+  "asstBuiltinReady": {
+    "message": "このデバイスで使用できます。"
+  },
+  "asstBuiltinDownload": {
+    "message": "モデルはまだこのデバイスにありません。拡張機能 bento/home の設定で「モデルをダウンロード」を押してください。"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "この Chrome には内蔵モデルがありません。拡張機能の設定で別のプロバイダーを選んでください。"
+  },
+  "asstOnDevice": {
+    "message": "このデバイス"
+  },
+  "asstNotConfigured": {
+    "message": "アシスタントはまだ設定されていません — 拡張機能 bento/home の設定を開いてください。"
+  },
+  "asstUnreachable": {
+    "message": "$1 に到達できません。サーバーは起動していますか？ また、ブラウザー拡張機能からのリクエストを許可していますか（CORS）？"
+  },
+  "asstWaitConsent": {
+    "message": "このデバイスでの許可を待っています…"
+  },
+  "asstDenied": {
+    "message": "このデバイスで許可が拒否されました — 何も変更されていません。"
+  },
+  "asstAllowedTitle": {
+    "message": "アシスタントの使用を許可したドキュメント"
+  },
+  "asstAllowedSub": {
+    "message": "各ドキュメントは最初のリクエストの前に一度だけ尋ねます。削除すると、次回また尋ねられます。"
+  },
+  "consentTitle": {
+    "message": "このドキュメントにアシスタントの使用を許可しますか？"
+  },
+  "consentLead": {
+    "message": "許可すると $1（$2）へテキストを送り、返答を読めるようになります。キーがドキュメントに渡ることはありません。"
+  },
+  "consentRemember": {
+    "message": "このファイルについて記憶されます。あとから拡張機能の設定で変更できます。"
+  },
+  "consentAllow": {
+    "message": "許可"
+  },
+  "consentDeny": {
+    "message": "今はしない"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome がモデルをダウンロード中です。完了してからもう一度お試しください。"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "モデルをダウンロード"
+  },
+  "asstBuiltinProgress": {
+    "message": "モデルをダウンロード中… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "約 2〜4 GB です。Chrome にはディスクの空き容量が約 22 GB と、従量制でないネットワークが必要です。満たさない場合、モデルは利用不可と報告されます。"
+  },
+  "asstContext": {
+    "message": "コンテキストウィンドウ（トークン）"
+  },
+  "asstContextHint": {
+    "message": "空欄にするとプロバイダーの申告値を使います。上限をあなただけが知っている自前のサーバーの場合に入力してください。"
+  },
+  "asstContextKnown": {
+    "message": "コンテキストウィンドウ: $1 トークン"
+  },
+  "asstShowAll": {
+    "message": "チャット用だけでなく、すべてのモデルを表示"
+  },
+  "asstOtherModelRow": {
+    "message": "その他…"
+  },
+  "asstOtherModel": {
+    "message": "プロバイダーが命名しているとおりのモデル ID"
+  },
+  "asstBadModel": {
+    "message": "モデル ID ではありません。使えるのは英数字と . _ : / - だけです。"
+  },
+  "asstWindow": {
+    "message": "デッキのアウトラインだけでもこのモデルには大きすぎます（$1 トークン。ウィンドウは $2）。拡張機能の設定でより大きなウィンドウのモデルを選んでください。"
+  },
+  "asstOutlineOnly": {
+    "message": "このモデルのウィンドウにはアウトラインしか収まらないため、語句・ノート・スライドは変更できますが、位置やスタイルは変更できません。"
+  },
+  "asstNoDocument": {
+    "message": "ドキュメントが内容を渡しませんでした。"
+  },
+  "asstSendsNotice": {
+    "message": "デッキのアウトラインと$1を $2 に送ります。コメントはここに残ります。"
+  },
+  "asstOnDeviceModel": {
+    "message": "デバイス上のモデル"
+  },
+  "asstFocusGeneric": {
+    "message": "選択中の要素または開いているスライド"
+  },
+  "placingFolder": {
+    "message": "ディスク上で「$1」を探しています…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome は「$1」を探すために拡張機能がディスクを読むことを許可しませんでした（file:// の一覧が拒否されました）。"
+  },
+  "placeTried": {
+    "message": "ディスク上の $2 か所で「$1」を探しましたが、見つかりませんでした。"
+  },
+  "recentTitle": {
+    "message": "最近編集したもの"
+  },
+  "badgeNotAdded": {
+    "message": "未追加"
+  },
+  "badgeNotAddedTip": {
+    "message": "ディスク上で見つかりました。開けますが、保存時に保存先を尋ねられます。その場で保存するにはフォルダーを追加してください。"
+  },
+  "folderFoundTip": {
+    "message": "ディスク上で見つかった未追加のフォルダーです。中のドキュメントは開けますが、保存時に保存先を尋ねられます。"
+  },
+  "menuAddFolder": {
+    "message": "その場で保存するためにフォルダーを追加…"
+  },
+  "pickThisFolder": {
+    "message": "ダイアログでフォルダー「$1」を選んでください。Chrome はあなたが選ぶのを見届ける必要があります。"
+  },
+  "pickedWrongFolder": {
+    "message": "「$1」はこのドキュメントのフォルダー（「$2」）ではありません。もう一度、そのフォルダーを選んでください。"
+  },
+  "folderAlreadyAdded": {
+    "message": "「$1」はすでに追加されています。"
+  },
+  "bentoFolderBtn": {
+    "message": "Bento フォルダーを作成…"
+  },
+  "bentoFolderHow": {
+    "message": "ダイアログで「書類」の中に「Bento」という新しいフォルダーを作り、それを選んでください。"
+  },
+  "bentoFolderMade": {
+    "message": "「$1」があなたの Bento フォルダーです。新しいドキュメントはそこに作られ、その場に保存されます。"
+  },
+  "bentoFolderTip": {
+    "message": "「書類」の中のフォルダーで、その場に保存し、新しいドキュメントの置き場になります。「書類」そのものは Chrome が渡してくれません。"
+  },
+  "defaultFolder": {
+    "message": "新しいドキュメントはここに入ります"
+  },
+  "fgTitle": {
+    "message": "今後「$1」をその場に保存しますか？"
+  },
+  "fgTitleLapsed": {
+    "message": "「$1」を再接続しますか？"
+  },
+  "fgLead": {
+    "message": "bento/home はこのファイル一つの許可を保持するので、以降の保存は直接このファイルに書き込まれます。次のダイアログで同じファイルを選んでください。"
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home はこのファイルをすでに知っています。ブラウザーが再確認を求めています。"
+  },
+  "fgChoose": {
+    "message": "ファイルを選択…"
+  },
+  "fgReconnect": {
+    "message": "再接続"
+  },
+  "fgOnce": {
+    "message": "今回だけ"
+  },
+  "fgNotSame": {
+    "message": "それは要求したファイル（「$1」）ではありません。そのファイルを選ぶか、このウィンドウを閉じてください。"
+  },
+  "fgDenied": {
+    "message": "許可されませんでした。"
+  },
+  "droppedGranted": {
+    "message": "追加しました: フォルダー $1、ファイル $2。"
+  },
+  "setFilesTitle": {
+    "message": "ファイル"
+  },
+  "setFilesSub": {
+    "message": "追加したどのフォルダーにも属さないが、単独でその場に保存されるドキュメント。一度選んだもの、またはライブラリにドロップしたもの。"
   }
 }

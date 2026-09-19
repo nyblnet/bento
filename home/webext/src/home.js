@@ -17,6 +17,12 @@ import { listDocuments, describe, newDocument, duplicate, rename, APPS } from '.
 import { prefixFor } from './route.js'
 import { learnPrefix, GRANT, get, put } from './db.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
+import {
+  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PROVIDERS, normalizeConfig, builtinAvailability,
+  check as checkAssistant, permissionOriginOf, listModels, modelsKey, contextTokensOf, builtinContext,
+  activeConfig, providerConfig, withProvider, pickerRows, MODEL_RE,
+} from './assistant.js'
+import { DEFAULTS as PROVIDER_DEFAULTS, pickDefault } from './providers.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
   from './i18n.js'
 
@@ -1191,6 +1197,11 @@ async function renderSettings() {
   trow.appendChild(tsel)
   theme.appendChild(trow)
 
+  // --- the assistant: where a chat about a deck goes, and which decks may ask
+  const asst = section(t('setAsstTitle'), t('setAsstSub'))
+  asst.id = 'assistant'
+  await assistantSettings(asst)
+
   // --- the permission nothing can request
   const access = section(t('setAccessTitle'), t('setAccessSub'))
   const row = document.createElement('div')
@@ -1350,3 +1361,379 @@ routeHash()
 // A hash change while the page is already open (Chrome reuses an existing
 // options tab rather than opening a second one) must still move the view.
 addEventListener('hashchange', routeHash)
+
+// ---------------------------------------------------------------- assistant
+//
+// The endpoint, the model and the key — the three things a document must
+// never hold (assistant.js). They live in `chrome.storage.local`, which no
+// page can read, and this is the only place they are typed.
+//
+// Provider order is the maintainer's: the Chrome built-in model first, because
+// it is zero setup, local and offline, and the default whenever this Chrome
+// has it; then Gemini (a free key), Anthropic, and anything OpenAI-shaped —
+// which is also every local server. The base URL is editable for all of
+// them: proxies and gateways exist.
+
+// A function DECLARATION, not a const: this section sits after the module's
+// top-level `await load()`, and the Settings view can render before
+// evaluation reaches here — a const would be in its temporal dead zone
+// ("Cannot access 'providerLabel' before initialization", measured).
+function providerLabel(p) {
+  return p === 'builtin' ? t('asstProvBuiltin')
+    : p === 'gemini' ? t('asstProvGemini')
+    : p === 'anthropic' ? t('asstProvAnthropic')
+    : t('asstProvOpenai')
+}
+
+async function assistantSettings(section) {
+  const hasBuiltin = typeof globalThis.LanguageModel !== 'undefined'
+  const stored = (await chrome.storage.local.get(CONFIG_KEY))?.[CONFIG_KEY]
+  const cfg = activeConfig(stored, hasBuiltin)
+  // What was typed for each provider survives switching between them — in
+  // the store, so the page's picker (assistant.select) and this form agree.
+  const perProvider = {}
+  for (const p of PROVIDERS) perProvider[p] = providerConfig(stored, p, hasBuiltin)
+
+  const form = document.createElement('div')
+  form.className = 'form'
+  section.appendChild(form)
+
+  const field = (label, control, hint) => {
+    const row = document.createElement('label')
+    row.className = 'field'
+    const l = document.createElement('span')
+    l.textContent = label
+    row.append(l, control)
+    if (hint) {
+      const h = document.createElement('small')
+      h.textContent = hint
+      row.appendChild(h)
+    }
+    form.appendChild(row)
+    return row
+  }
+
+  const provider = document.createElement('select')
+  for (const p of PROVIDERS) {
+    if (p === 'builtin' && !hasBuiltin) continue
+    const o = document.createElement('option')
+    o.value = p
+    o.textContent = providerLabel(p)
+    provider.appendChild(o)
+  }
+  provider.value = cfg.provider
+  field(t('asstProvider'), provider)
+
+  const baseUrl = document.createElement('input')
+  baseUrl.type = 'text'
+  baseUrl.spellcheck = false
+  baseUrl.autocomplete = 'off'
+  const baseRow = field(t('asstBaseUrl'), baseUrl)
+
+  // The model: a PICKER over the curated listing (assistant.js pickerRows —
+  // the same rows the page's own picker gets), with an "Other…" row that
+  // reveals a free-text field for an id the listing does not carry. It was a
+  // <datalist>, which is autocomplete, not a picker: with an id typed it
+  // suggested only the ids starting with it, and the other ten were invisible
+  // until the field was cleared. Before the first listing the picker holds
+  // the default and Other…; the default is chosen by RULE from the list
+  // (providers.js pickDefault) rather than by a name that is stale in a
+  // season.
+  const OTHER = '\u0000other'
+  const model = document.createElement('select')
+  const modelRow = field(t('asstModel'), model)
+  const other = document.createElement('input')
+  other.type = 'text'
+  other.spellcheck = false
+  other.autocomplete = 'off'
+  other.placeholder = t('asstOtherModel')
+  other.hidden = true
+  modelRow.appendChild(other)
+  const modelNote = modelRow.appendChild(document.createElement('small'))
+  /** The id the two controls currently mean. */
+  const modelId = () => (model.value === OTHER ? other.value.trim() : model.value)
+  /** Fill the picker for a configuration and select its model (as Other… when unlisted). */
+  const fillPicker = (c, listing) => {
+    const rows = pickerRows(c, listing)
+    model.replaceChildren(
+      ...rows.map((r) => Object.assign(document.createElement('option'), { value: r.id, textContent: r.label })),
+      Object.assign(document.createElement('option'), { value: OTHER, textContent: t('asstOtherModelRow') }),
+    )
+    if (c.model && rows.some((r) => r.id === c.model)) { model.value = c.model; other.hidden = true; other.value = '' }
+    else { model.value = OTHER; other.hidden = false; other.value = c.model || '' }
+  }
+
+  // The input window in tokens: what the page sizes every turn to. Shown
+  // from the listing or the family table; typed here to override both,
+  // which is the answer for a self-hosted server only its owner knows.
+  const ctx = document.createElement('input')
+  ctx.type = 'text'
+  ctx.inputMode = 'numeric'
+  ctx.autocomplete = 'off'
+  const ctxRow = field(t('asstContext'), ctx, t('asstContextHint'))
+
+  // The listing is long and most of it is not for chat (TTS, embeddings,
+  // video…); both this form and the page's picker show the curated cut
+  // (providers.js curateModels) unless this is on for the provider.
+  const showAllRow = document.createElement('label')
+  showAllRow.className = 'check'
+  const showAll = document.createElement('input')
+  showAll.type = 'checkbox'
+  showAllRow.append(showAll, document.createTextNode(` ${t('asstShowAll')}`))
+  form.appendChild(showAllRow)
+
+  const key = document.createElement('input')
+  key.type = 'password'
+  key.autocomplete = 'off'
+  const keyRow = field(t('asstKey'), key)
+  const keyHint = keyRow.appendChild(document.createElement('small'))
+
+  // What leaves this computer, in the drawer's own words (moved here from
+  // the page when the assistant's weight did): the outline and the focus go
+  // to the host, comments never do.
+  const notice = document.createElement('p')
+  notice.className = 'sub notice'
+  form.appendChild(notice)
+  const showNotice = (c) => {
+    const where = c.provider === 'builtin' ? t('asstOnDeviceModel') : (hostOf(c) || c.provider)
+    notice.textContent = t('asstSendsNotice', t('asstFocusGeneric'), where)
+  }
+
+  const actions = document.createElement('div')
+  actions.className = 'actions'
+  const save = document.createElement('button')
+  save.className = 'btn primary'
+  save.textContent = t('asstSave')
+  const probe = document.createElement('button')
+  probe.className = 'btn'
+  probe.textContent = t('asstCheck')
+  const status = document.createElement('span')
+  status.className = 'note'
+  actions.append(save, probe, status)
+  form.appendChild(actions)
+
+  const current = () => normalizeConfig({
+    provider: provider.value, baseUrl: baseUrl.value, model: modelId(), key: key.value,
+    contextTokens: ctx.value.replace(/[^0-9]/g, ''),
+    showAll: showAll.checked, pinned: perProvider[provider.value]?.pinned,
+  }, hasBuiltin)
+
+  const cachedModels = async (c) => (await chrome.storage.local.get(MODELS_KEY))?.[MODELS_KEY]?.[modelsKey(c)]?.models
+
+  /** The suggestions and the window note, from what is cached for this provider+endpoint. */
+  const showModels = async (c = current()) => {
+    const models = (await cachedModels(c)) || []
+    fillPicker(c, models)
+    const tokens = contextTokensOf(c, models)
+    ctx.placeholder = tokens ? String(tokens) : ''
+    modelNote.textContent = c.model && tokens ? t('asstContextKnown', tokens.toLocaleString()) : ''
+  }
+
+  /**
+   * Fetch the provider's list, cache it, and — when the model is still the
+   * hard-coded starting value or not in the list — move to the rule's pick.
+   * A model the person typed themselves is left alone.
+   */
+  const refreshModels = async (c) => {
+    if (c.provider === 'builtin') return
+    const models = await listModels(c, { fetch: fetch.bind(globalThis), t })
+    const all = (await chrome.storage.local.get(MODELS_KEY))?.[MODELS_KEY] || {}
+    all[modelsKey(c)] = { at: Date.now(), models }
+    await chrome.storage.local.set({ [MODELS_KEY]: all })
+    const pick = pickDefault(c.provider, models)
+    const listed = models.some((m) => m.id === c.model)
+    if (pick && (c.model === PROVIDER_DEFAULTS[c.provider]?.model || !listed) && pick !== c.model) {
+      perProvider[c.provider] = { ...c, model: pick }
+    }
+    await showModels(perProvider[c.provider] ?? current())
+  }
+
+  // The built-in model: what Chrome says about it, and the one action that
+  // moves it along. `availability()` reports 'downloadable' until something
+  // calls `LanguageModel.create()` — nothing else starts the download, and a
+  // click on an extension page is the gesture it wants. Progress comes from
+  // the monitor; 'unavailable' is usually disk (~22 GB free) or a metered
+  // network, which the hint says.
+  const download = document.createElement('button')
+  download.className = 'btn'
+  download.textContent = t('asstBuiltinDownloadBtn')
+  download.hidden = true
+  actions.insertBefore(download, status)
+  const requirements = document.createElement('small')
+  requirements.className = 'dim'
+  requirements.textContent = t('asstBuiltinRequirements')
+  requirements.hidden = true
+  form.appendChild(requirements)
+
+  const showBuiltinState = async () => {
+    const a = await builtinAvailability(globalThis.LanguageModel)
+    download.hidden = !(a === 'downloadable' || a === 'downloading')
+    requirements.hidden = a === 'available'
+    status.textContent = a === 'available' ? t('asstBuiltinReady')
+      : a === 'downloadable' ? t('asstBuiltinDownload')
+      : a === 'downloading' ? t('asstBuiltinDownloading')
+      : t('asstBuiltinUnsupported')
+    modelNote.textContent = ''
+    if (a !== 'available') { ctx.placeholder = ''; return }
+    // The quota lives on a session; read once and kept (background.js does
+    // the same for describe).
+    let kept = (await chrome.storage.local.get(BUILTIN_KEY))?.[BUILTIN_KEY]?.tokens
+    if (!kept) {
+      kept = await builtinContext(globalThis.LanguageModel)
+      if (kept) await chrome.storage.local.set({ [BUILTIN_KEY]: { at: Date.now(), tokens: kept } })
+    }
+    ctx.placeholder = kept ? String(kept) : ''
+    // The model row is hidden for the built-in provider, so its window goes
+    // on the status line instead.
+    if (kept) status.textContent += ` ${t('asstContextKnown', kept.toLocaleString())}`
+  }
+  download.onclick = async () => {
+    download.disabled = true
+    status.textContent = t('asstBuiltinProgress', 0)
+    try {
+      const session = await globalThis.LanguageModel.create({
+        monitor(m) {
+          m.addEventListener('downloadprogress', (e) => {
+            status.textContent = t('asstBuiltinProgress', Math.round((e.loaded ?? 0) * 100))
+          })
+        },
+      })
+      session.destroy?.()
+    } catch (e) {
+      status.textContent = e?.message || String(e)
+    } finally {
+      download.disabled = false
+      await showBuiltinState()
+    }
+  }
+
+  const fill = () => {
+    const p = provider.value
+    const c = perProvider[p]
+    const http = p !== 'builtin'
+    baseRow.hidden = modelRow.hidden = keyRow.hidden = !http
+    download.hidden = requirements.hidden = true
+    baseUrl.value = http ? c.baseUrl : ''
+    baseUrl.placeholder = PROVIDER_DEFAULTS[p]?.baseUrl ?? ''
+    if (http) fillPicker(c, [])
+    key.value = http ? c.key : ''
+    keyHint.textContent = p === 'openai' ? t('asstKeyOptional') : ''
+    ctx.value = c.contextTokens ? String(c.contextTokens) : ''
+    ctxRow.hidden = false
+    showAll.checked = !!c.showAll
+    showAllRow.hidden = !http
+    showNotice(c)
+    status.textContent = ''
+    if (http) void showModels(c)
+    else void showBuiltinState()
+  }
+  provider.addEventListener('change', fill)
+  for (const input of [baseUrl, other, key, ctx]) {
+    input.addEventListener('input', () => { perProvider[provider.value] = current() })
+  }
+  baseUrl.addEventListener('change', () => showNotice(current()))
+  showAll.addEventListener('change', () => { perProvider[provider.value] = current(); void showModels() })
+  model.addEventListener('change', () => {
+    other.hidden = model.value !== OTHER
+    if (model.value === OTHER) { other.focus(); return }
+    perProvider[provider.value] = current()
+    void showModels()
+  })
+  other.addEventListener('change', () => { void showModels() })
+  fill()
+
+  /**
+   * Site access for the endpoint's origin, asked on Save — a click, which is
+   * the gesture `permissions.request` needs. With it the request is exempt
+   * from CORS; without it the request is still made, and works wherever the
+   * server allows browser extensions (the hosted vendors do; Ollama does by
+   * default; LM Studio has a switch). Declining is therefore not an error.
+   */
+  const askSiteAccess = async (c) => {
+    const origin = permissionOriginOf(c)
+    if (!origin || !chrome.permissions?.request) return true
+    try {
+      return await chrome.permissions.request({ origins: [`${origin}/*`] })
+    } catch { return false }
+  }
+
+  // Neither goes through `act`: that re-renders the whole view, and the
+  // status line these write is the thing the person is waiting to read.
+  save.onclick = async () => {
+    const c = current()
+    if (c.provider !== 'builtin' && !MODEL_RE.test(c.model)) { status.textContent = t('asstBadModel'); other.focus(); return }
+    try {
+      // Every provider's fields are kept; this one becomes active.
+      const raw = (await chrome.storage.local.get(CONFIG_KEY))?.[CONFIG_KEY]
+      let next = withProvider(raw, c)
+      for (const p of PROVIDERS) if (p !== c.provider && perProvider[p]) next = withProvider(next, perProvider[p], false)
+      await chrome.storage.local.set({ [CONFIG_KEY]: next })
+    } catch (e) { toast(e.message); return }
+    const granted = await askSiteAccess(c)
+    toast(t('asstSaved'))
+    status.textContent = granted ? '' : t('asstAccessDeclined')
+    // The list is worth having for the window even if Check is never pressed.
+    try { await refreshModels(c) } catch { /* Check reports it, with the reason */ }
+  }
+
+  probe.onclick = async () => {
+    const c = current()
+    probe.disabled = true
+    status.textContent = t('asstChecking')
+    try {
+      // The listing first: it is the cheaper call, it feeds the picker and the
+      // window, and a bad key fails here with the same words it would below.
+      if (c.provider !== 'builtin') await refreshModels(c)
+      const r = await checkAssistant(current(), { fetch: fetch.bind(globalThis), LanguageModel: globalThis.LanguageModel, t })
+      status.textContent = r.ok
+        ? (c.provider === 'builtin' ? t('asstBuiltinReady') : t('asstReachable', hostOf(c)))
+        : r.reason
+    } catch (e) {
+      status.textContent = e.message
+    } finally {
+      probe.disabled = false
+    }
+  }
+
+  // --- the documents that have been allowed to ask
+  const allowed = (await chrome.storage.local.get(ALLOWED_KEY))?.[ALLOWED_KEY] || {}
+  const list = document.createElement('div')
+  list.className = 'allowed'
+  const h = document.createElement('h3')
+  h.textContent = t('asstAllowedTitle')
+  const sub = document.createElement('p')
+  sub.className = 'sub'
+  sub.textContent = t('asstAllowedSub')
+  list.append(h, sub)
+  const keys = Object.keys(allowed).sort()
+  if (!keys.length) {
+    const p = document.createElement('p')
+    p.className = 'dim'
+    p.textContent = t('noneYet')
+    list.appendChild(p)
+  }
+  for (const docKey of keys) {
+    let path = docKey
+    try { path = decodeURIComponent(new URL(docKey).pathname) } catch { /* shown as stored */ }
+    const row = document.createElement('div')
+    row.className = 'row'
+    row.innerHTML = `<b>${esc(path.split('/').filter(Boolean).pop() || path)}</b>`
+      + `<span class="note path">${esc(path)}</span>`
+    const drop = document.createElement('button')
+    drop.className = 'btn'
+    drop.textContent = t('remove')
+    drop.onclick = () => act(async () => {
+      const now = (await chrome.storage.local.get(ALLOWED_KEY))?.[ALLOWED_KEY] || {}
+      delete now[docKey]
+      await chrome.storage.local.set({ [ALLOWED_KEY]: now })
+    })
+    row.appendChild(drop)
+    list.appendChild(row)
+  }
+  section.appendChild(list)
+}
+
+/** The host a configuration talks to, for the status line — never the URL. */
+function hostOf(c) {
+  try { return new URL(c.baseUrl).host } catch { return c.provider }
+}

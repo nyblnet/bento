@@ -189,7 +189,7 @@
     "message": "Piliin ang folder kung saan naroon ang mga dokumento mo"
   },
   "setupStep1Note": {
-    "message": "Kadalasan ay sapat na ang isang malawak na folder — saklaw nito ang lahat ng nasa loob."
+    "message": "Karaniwang sapat na ang isang malawak na folder — sakop nito ang lahat ng nasa loob. Hindi ibibigay ng Chrome ang home folder mismo o ang Library: piliin ang Documents, Desktop, o ang folder kung nasaan ang iyong mga dokumento."
   },
   "setupStep2": {
     "message": "I-on ang access sa lokal na file"
@@ -484,5 +484,236 @@
   },
   "surveyOnlySeen": {
     "message": "Ang mga dokumentong binuksan sa browser na ito lang ang makikita sa paraang ito."
+  },
+  "setAsstTitle": {
+    "message": "Assistant"
+  },
+  "setAsstSub": {
+    "message": "Kung saan ipinapadala ang chat tungkol sa isang dokumento. Nananatili ang key sa extension na ito — ang dokumento ay nakakakita lamang ng sagot."
+  },
+  "asstProvider": {
+    "message": "Provider"
+  },
+  "asstProvBuiltin": {
+    "message": "Built-in na modelo ng Chrome (Gemini Nano) — sa device na ito"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio key)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-compatible (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Base URL"
+  },
+  "asstModel": {
+    "message": "Modelo"
+  },
+  "asstKey": {
+    "message": "API key"
+  },
+  "asstKeyOptional": {
+    "message": "Opsyonal para sa lokal na server gaya ng Ollama o LM Studio."
+  },
+  "asstSave": {
+    "message": "I-save"
+  },
+  "asstSaved": {
+    "message": "Na-save ang mga setting ng assistant"
+  },
+  "asstAccessDeclined": {
+    "message": "Tinanggihan ang access sa site. Ipinapadala pa rin ang mga request, at gumagana kapag pinapayagan ng server ang mga browser extension (CORS)."
+  },
+  "asstCheck": {
+    "message": "Suriin ang koneksyon"
+  },
+  "asstChecking": {
+    "message": "Sinusuri…"
+  },
+  "asstReachable": {
+    "message": "Naaabot — sumagot ang $1."
+  },
+  "asstBuiltinReady": {
+    "message": "Handa na sa device na ito."
+  },
+  "asstBuiltinDownload": {
+    "message": "Wala pa ang modelo sa device na ito. Pindutin ang “I-download ang modelo” sa mga setting ng extension na bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Walang built-in na modelo ang Chrome na ito. Pumili ng ibang provider sa mga setting ng extension."
+  },
+  "asstOnDevice": {
+    "message": "device na ito"
+  },
+  "asstNotConfigured": {
+    "message": "Hindi pa naka-set up ang assistant — buksan ang mga setting ng extension na bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Hindi maabot ang $1. Tumatakbo ba ang server, at pinapayagan ba nito ang mga request mula sa mga browser extension (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Hinihintay ang iyong pahintulot — sagutin ang prompt, saka subukan muli."
+  },
+  "asstDenied": {
+    "message": "Hindi pinapayagan ang dokumentong ito na gumamit ng assistant."
+  },
+  "asstAllowedTitle": {
+    "message": "Mga dokumentong pinapayagang gumamit ng assistant"
+  },
+  "asstAllowedSub": {
+    "message": "Bawat dokumento ay nagtatanong nang isang beses bago ang una nitong request. Alisin ang isa para tanungin muli."
+  },
+  "consentTitle": {
+    "message": "Payagan ang dokumentong ito na gamitin ang iyong assistant?"
+  },
+  "consentLead": {
+    "message": "Makakapagpadala ito ng teksto sa $1 ($2) at makakabasa ng mga sagot. Hindi kailanman ibinabahagi rito ang iyong key."
+  },
+  "consentRemember": {
+    "message": "Naaalala para sa file na ito. Maaari mo itong baguhin mamaya sa mga setting ng extension."
+  },
+  "consentAllow": {
+    "message": "Payagan"
+  },
+  "consentDeny": {
+    "message": "Hindi ngayon"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Dina-download ng Chrome ang modelo. Subukan muli kapag tapos na."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "I-download ang modelo"
+  },
+  "asstBuiltinProgress": {
+    "message": "Dina-download ang modelo… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Humigit-kumulang 2–4 GB. Kailangan ng Chrome ng mga 22 GB na libreng espasyo sa disk at network na walang limitasyon sa data; kung hindi, iuulat nitong hindi available ang modelo."
+  },
+  "asstContext": {
+    "message": "Context window (mga token)"
+  },
+  "asstContextHint": {
+    "message": "Iwanang blangko para gamitin ang iniuulat ng provider. Punan ito para sa sariling server na ikaw lang ang nakakaalam ng limitasyon."
+  },
+  "asstContextKnown": {
+    "message": "Context window: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Ipakita ang lahat ng modelo, hindi lang ang para sa chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Iba pa…"
+  },
+  "asstOtherModel": {
+    "message": "Model id, eksakto kung paano ito pinangalanan ng provider"
+  },
+  "asstBadModel": {
+    "message": "Hindi iyan model id: mga letra, numero at . _ : / - lang."
+  },
+  "asstWindow": {
+    "message": "Masyadong malaki ang deck para sa modelong ito: kailangan ng request ng humigit-kumulang $1 token at $2 lang ang kaya ng modelo. Pumili ng modelong mas malaki ang window, o paikliin ang deck."
+  },
+  "asstOutlineOnly": {
+    "message": "Ang outline lang ang kumasya sa window ng modelong ito; hindi buong naipadala ang piniling nilalaman."
+  },
+  "asstNoDocument": {
+    "message": "Hindi ibinigay ng dokumento ang nilalaman nito."
+  },
+  "asstSendsNotice": {
+    "message": "Ipinapadala ang outline ng deck at $1 sa $2; nananatili rito ang mga komento."
+  },
+  "asstOnDeviceModel": {
+    "message": "ang modelong nasa device"
+  },
+  "asstFocusGeneric": {
+    "message": "ang mga piniling elemento o ang bukas na slide"
+  },
+  "placingFolder": {
+    "message": "Hinahanap ang “$1” sa disk…"
+  },
+  "placeNoDisk": {
+    "message": "Hindi pinayagan ng Chrome ang extension na basahin ang “$1” mula sa disk para hanapin ito (tinanggihan ang mga file:// listing)."
+  },
+  "placeTried": {
+    "message": "Hinanap ang “$1” sa $2 lugar sa disk — wala roon."
+  },
+  "recentTitle": {
+    "message": "Kamakailang na-edit"
+  },
+  "badgeNotAdded": {
+    "message": "hindi pa naidagdag"
+  },
+  "badgeNotAddedTip": {
+    "message": "Natagpuan sa disk. Bumubukas, pero magtatanong kung saan kapag nag-save — idagdag ang folder nito para ma-save sa lugar."
+  },
+  "folderFoundTip": {
+    "message": "Natagpuan sa disk, hindi pa naidagdag: bumubukas ang mga dokumento nito, pero nagtatanong ang pag-save kung saan."
+  },
+  "menuAddFolder": {
+    "message": "Idagdag ang folder nito para ma-save sa lugar…"
+  },
+  "pickThisFolder": {
+    "message": "Sa picker, piliin ang folder na “$1” — kailangang makita ng Chrome na ikaw ang pumili."
+  },
+  "pickedWrongFolder": {
+    "message": "Hindi “$1” ang folder ng dokumentong ito (“$2”). Subukan muli at piliin iyon."
+  },
+  "folderAlreadyAdded": {
+    "message": "Naidagdag na ang “$1”."
+  },
+  "bentoFolderBtn": {
+    "message": "Gumawa ng Bento folder…"
+  },
+  "bentoFolderHow": {
+    "message": "Sa dialog, gumawa ng bagong folder na “Bento” sa loob ng Documents at piliin ito."
+  },
+  "bentoFolderMade": {
+    "message": "Ang “$1” ang iyong Bento folder — dito pupunta ang mga bagong dokumento at mase-save sa lugar."
+  },
+  "bentoFolderTip": {
+    "message": "Folder sa loob ng Documents na nagse-save sa lugar at tumatanggap ng mga bagong dokumento. Hindi ibibigay ng Chrome ang Documents mismo."
+  },
+  "defaultFolder": {
+    "message": "dito pumupunta ang mga bagong dokumento"
+  },
+  "fgTitle": {
+    "message": "I-save ang “$1” sa lugar mula ngayon?"
+  },
+  "fgTitleLapsed": {
+    "message": "Ikonekta muli ang “$1”?"
+  },
+  "fgLead": {
+    "message": "Pinananatili ng bento/home ang pahintulot para sa isang file na ito, kaya bawat pag-save ay direktang sumusulat dito. Piliin ang parehong file sa susunod na dialog."
+  },
+  "fgLeadLapsed": {
+    "message": "Nasa bento/home na ang file na ito; gusto ng browser na kumpirmahin mo itong muli."
+  },
+  "fgChoose": {
+    "message": "Piliin ang file…"
+  },
+  "fgReconnect": {
+    "message": "Ikonekta muli"
+  },
+  "fgOnce": {
+    "message": "Ngayon lang"
+  },
+  "fgNotSame": {
+    "message": "Hindi iyan ang file na humiling (“$1”). Piliin iyon, o isara ang window na ito."
+  },
+  "fgDenied": {
+    "message": "Hindi ibinigay ang pahintulot."
+  },
+  "droppedGranted": {
+    "message": "Naidagdag: $1 folder, $2 file."
+  },
+  "setFilesTitle": {
+    "message": "Mga file"
+  },
+  "setFilesSub": {
+    "message": "Mga dokumentong nasa labas ng anumang idinagdag na folder na kusang nagse-save sa lugar — napili nang isang beses, o inihulog sa library."
   }
 }

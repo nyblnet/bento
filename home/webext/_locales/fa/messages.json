@@ -189,7 +189,7 @@
     "message": "پوشه‌ای را که سندهایتان در آن است انتخاب کنید"
   },
   "setupStep1Note": {
-    "message": "معمولاً یک پوشهٔ فراگیر کافی است — هرچه درونش باشد را می‌پوشاند."
+    "message": "معمولاً یک پوشهٔ گسترده کافی است — هرچه درونش باشد را پوشش می‌دهد. Chrome خودِ پوشهٔ خانه یا Library را واگذار نمی‌کند: Documents، Desktop یا پوشه‌ای را که سندهایتان در آن است انتخاب کنید."
   },
   "setupStep2": {
     "message": "دسترسی به فایل‌های محلی را روشن کنید"
@@ -484,5 +484,236 @@
   },
   "surveyOnlySeen": {
     "message": "با این روش تنها سندهایی پیدا می‌شوند که در این مرورگر باز شده‌اند."
+  },
+  "setAsstTitle": {
+    "message": "دستیار"
+  },
+  "setAsstSub": {
+    "message": "جایی که گفت‌وگو دربارهٔ یک سند به آن فرستاده می‌شود. کلید در همین افزونه می‌ماند — سند فقط پاسخ را می‌بیند."
+  },
+  "asstProvider": {
+    "message": "ارائه‌دهنده"
+  },
+  "asstProvBuiltin": {
+    "message": "مدل داخلی Chrome ‏(Gemini Nano) — روی همین دستگاه"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (کلید AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "سازگار با OpenAI ‏(OpenAI، OpenRouter، Ollama، LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "نشانی پایه"
+  },
+  "asstModel": {
+    "message": "مدل"
+  },
+  "asstKey": {
+    "message": "کلید API"
+  },
+  "asstKeyOptional": {
+    "message": "برای سرور محلی مانند Ollama یا LM Studio اختیاری است."
+  },
+  "asstSave": {
+    "message": "ذخیره"
+  },
+  "asstSaved": {
+    "message": "تنظیمات دستیار ذخیره شد"
+  },
+  "asstAccessDeclined": {
+    "message": "دسترسی به سایت رد شد. درخواست‌ها با این حال فرستاده می‌شوند و وقتی سرور افزونه‌های مرورگر را مجاز بداند (CORS) کار می‌کنند."
+  },
+  "asstCheck": {
+    "message": "بررسی اتصال"
+  },
+  "asstChecking": {
+    "message": "در حال بررسی…"
+  },
+  "asstReachable": {
+    "message": "در دسترس — $1 پاسخ داد."
+  },
+  "asstBuiltinReady": {
+    "message": "روی این دستگاه آماده است."
+  },
+  "asstBuiltinDownload": {
+    "message": "مدل هنوز روی این دستگاه نیست. در تنظیمات افزونهٔ bento/home «دانلود مدل» را بزنید."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "این Chrome مدل داخلی ندارد. در تنظیمات افزونه ارائه‌دهندهٔ دیگری انتخاب کنید."
+  },
+  "asstOnDevice": {
+    "message": "این دستگاه"
+  },
+  "asstNotConfigured": {
+    "message": "دستیار هنوز راه‌اندازی نشده — تنظیمات افزونهٔ bento/home را باز کنید."
+  },
+  "asstUnreachable": {
+    "message": "دسترسی به $1 ممکن نشد. آیا سرور در حال اجراست و درخواست‌های افزونه‌های مرورگر را مجاز می‌داند (CORS)؟"
+  },
+  "asstWaitConsent": {
+    "message": "در انتظار اجازهٔ شما — به پرسش پاسخ دهید و دوباره امتحان کنید."
+  },
+  "asstDenied": {
+    "message": "این سند اجازهٔ استفاده از دستیار را ندارد."
+  },
+  "asstAllowedTitle": {
+    "message": "سندهای مجاز به استفاده از دستیار"
+  },
+  "asstAllowedSub": {
+    "message": "هر سند پیش از نخستین درخواستش یک بار می‌پرسد. یکی را حذف کنید تا دوباره پرسیده شود."
+  },
+  "consentTitle": {
+    "message": "به این سند اجازه داده شود از دستیار شما استفاده کند؟"
+  },
+  "consentLead": {
+    "message": "می‌تواند متن به $1 ‏($2) بفرستد و پاسخ‌ها را بخواند. کلید شما هرگز با آن به اشتراک گذاشته نمی‌شود."
+  },
+  "consentRemember": {
+    "message": "برای این پرونده به خاطر سپرده می‌شود. بعداً می‌توانید آن را در تنظیمات افزونه تغییر دهید."
+  },
+  "consentAllow": {
+    "message": "اجازه"
+  },
+  "consentDeny": {
+    "message": "الآن نه"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome در حال دانلود مدل است. پس از پایان دوباره امتحان کنید."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "دانلود مدل"
+  },
+  "asstBuiltinProgress": {
+    "message": "در حال دانلود مدل… ‎$1٪"
+  },
+  "asstBuiltinRequirements": {
+    "message": "حدود ۲ تا ۴ گیگابایت. Chrome به حدود ۲۲ گیگابایت فضای خالی روی دیسک و شبکه‌ای بدون محدودیت داده نیاز دارد؛ در غیر این صورت مدل را در دسترس نمی‌داند."
+  },
+  "asstContext": {
+    "message": "پنجرهٔ زمینه (توکن)"
+  },
+  "asstContextHint": {
+    "message": "برای استفاده از مقداری که ارائه‌دهنده گزارش می‌دهد خالی بگذارید. برای سرور خودمیزبان که فقط شما حدش را می‌دانید پر کنید."
+  },
+  "asstContextKnown": {
+    "message": "پنجرهٔ زمینه: $1 توکن"
+  },
+  "asstShowAll": {
+    "message": "نمایش همهٔ مدل‌ها، نه فقط مدل‌های گفت‌وگو"
+  },
+  "asstOtherModelRow": {
+    "message": "دیگر…"
+  },
+  "asstOtherModel": {
+    "message": "شناسهٔ مدل، دقیقاً همان‌طور که ارائه‌دهنده نام‌گذاری می‌کند"
+  },
+  "asstBadModel": {
+    "message": "این شناسهٔ مدل نیست: فقط حروف، ارقام و . _ : / -"
+  },
+  "asstWindow": {
+    "message": "این ارائه برای این مدل بیش از حد بزرگ است: درخواست حدود $1 توکن نیاز دارد و مدل $2 می‌پذیرد. مدلی با پنجرهٔ بزرگ‌تر انتخاب کنید یا ارائه را کوتاه کنید."
+  },
+  "asstOutlineOnly": {
+    "message": "فقط طرح کلی در پنجرهٔ این مدل جا شد؛ محتوای انتخاب‌شده به‌طور کامل فرستاده نشد."
+  },
+  "asstNoDocument": {
+    "message": "سند محتوای خود را تحویل نداد."
+  },
+  "asstSendsNotice": {
+    "message": "طرح کلی ارائه و $1 را به $2 می‌فرستد؛ نظرها همین‌جا می‌مانند."
+  },
+  "asstOnDeviceModel": {
+    "message": "مدل روی این دستگاه"
+  },
+  "asstFocusGeneric": {
+    "message": "عنصرهای انتخاب‌شده یا اسلاید باز"
+  },
+  "placingFolder": {
+    "message": "در حال جست‌وجوی «$1» روی دیسک…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome اجازه نداد افزونه «$1» را از دیسک بخواند تا آن را پیدا کند (فهرست‌های file:// رد شد)."
+  },
+  "placeTried": {
+    "message": "«$1» در $2 جای دیسک جست‌وجو شد — آنجا نیست."
+  },
+  "recentTitle": {
+    "message": "اخیراً ویرایش‌شده"
+  },
+  "badgeNotAdded": {
+    "message": "افزوده نشده"
+  },
+  "badgeNotAddedTip": {
+    "message": "روی دیسک پیدا شد. باز می‌شود، اما هنگام ذخیره می‌پرسد کجا — پوشه‌اش را بیفزایید تا در جای خود ذخیره شود."
+  },
+  "folderFoundTip": {
+    "message": "روی دیسک پیدا شد، افزوده نشده: سندهایش باز می‌شوند، اما ذخیره می‌پرسد کجا."
+  },
+  "menuAddFolder": {
+    "message": "افزودن پوشه‌اش برای ذخیره در جای خود…"
+  },
+  "pickThisFolder": {
+    "message": "در انتخابگر پوشهٔ «$1» را انتخاب کنید — Chrome باید ببیند که شما آن را انتخاب می‌کنید."
+  },
+  "pickedWrongFolder": {
+    "message": "«$1» پوشهٔ این سند نیست («$2»). دوباره امتحان کنید و همان را انتخاب کنید."
+  },
+  "folderAlreadyAdded": {
+    "message": "«$1» از قبل افزوده شده است."
+  },
+  "bentoFolderBtn": {
+    "message": "ساخت پوشهٔ Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "در پنجره، پوشه‌ای جدید به نام «Bento» درون Documents بسازید و آن را انتخاب کنید."
+  },
+  "bentoFolderMade": {
+    "message": "«$1» پوشهٔ Bento شماست — سندهای جدید به آنجا می‌روند و در جای خود ذخیره می‌شوند."
+  },
+  "bentoFolderTip": {
+    "message": "پوشه‌ای درون Documents که در جای خود ذخیره می‌کند و سندهای جدید را می‌گیرد. Chrome خودِ Documents را واگذار نمی‌کند."
+  },
+  "defaultFolder": {
+    "message": "سندهای جدید به اینجا می‌آیند"
+  },
+  "fgTitle": {
+    "message": "از این پس «$1» در جای خود ذخیره شود؟"
+  },
+  "fgTitleLapsed": {
+    "message": "«$1» دوباره متصل شود؟"
+  },
+  "fgLead": {
+    "message": "bento/home اجازه را فقط برای همین یک پرونده نگه می‌دارد، پس هر ذخیره مستقیم در آن نوشته می‌شود. در پنجرهٔ بعدی همان پرونده را انتخاب کنید."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home این پرونده را از قبل دارد؛ مرورگر می‌خواهد دوباره تأییدش کنید."
+  },
+  "fgChoose": {
+    "message": "انتخاب پرونده…"
+  },
+  "fgReconnect": {
+    "message": "اتصال دوباره"
+  },
+  "fgOnce": {
+    "message": "فقط همین بار"
+  },
+  "fgNotSame": {
+    "message": "این آن پرونده‌ای نیست که درخواست داد («$1»). آن را انتخاب کنید یا این پنجره را ببندید."
+  },
+  "fgDenied": {
+    "message": "اجازه داده نشد."
+  },
+  "droppedGranted": {
+    "message": "افزوده شد: $1 پوشه، $2 پرونده."
+  },
+  "setFilesTitle": {
+    "message": "پرونده‌ها"
+  },
+  "setFilesSub": {
+    "message": "سندهای بیرون از هر پوشهٔ افزوده‌شده که خودشان در جای خود ذخیره می‌شوند — یک بار انتخاب‌شده یا به کتابخانه کشیده‌شده."
   }
 }

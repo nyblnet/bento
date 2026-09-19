@@ -189,7 +189,7 @@
     "message": "Pilih folder tempat dokumen anda berada"
   },
   "setupStep1Note": {
-    "message": "Satu folder luas biasanya memadai — ia merangkumi segala-galanya di dalamnya."
+    "message": "Satu folder yang luas biasanya mencukupi — ia meliputi semua di dalamnya. Chrome tidak akan menyerahkan folder rumah itu sendiri atau Library: pilih Dokumen, Desktop, atau folder tempat dokumen anda berada."
   },
   "setupStep2": {
     "message": "Hidupkan akses fail setempat"
@@ -484,5 +484,236 @@
   },
   "surveyOnlySeen": {
     "message": "Cara ini hanya menemui dokumen yang pernah dibuka dalam pelayar ini."
+  },
+  "setAsstTitle": {
+    "message": "Pembantu"
+  },
+  "setAsstSub": {
+    "message": "Ke mana sembang tentang dokumen dihantar. Kunci kekal dalam sambungan ini — dokumen hanya pernah melihat balasannya."
+  },
+  "asstProvider": {
+    "message": "Pembekal"
+  },
+  "asstProvBuiltin": {
+    "message": "Model terbina dalam Chrome (Gemini Nano) — pada peranti ini"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (kunci AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Serasi OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL asas"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "Kunci API"
+  },
+  "asstKeyOptional": {
+    "message": "Pilihan untuk pelayan setempat seperti Ollama atau LM Studio."
+  },
+  "asstSave": {
+    "message": "Simpan"
+  },
+  "asstSaved": {
+    "message": "Tetapan pembantu disimpan"
+  },
+  "asstAccessDeclined": {
+    "message": "Akses tapak ditolak. Permintaan tetap dibuat, dan berfungsi apabila pelayan membenarkan sambungan pelayar (CORS)."
+  },
+  "asstCheck": {
+    "message": "Semak sambungan"
+  },
+  "asstChecking": {
+    "message": "Menyemak…"
+  },
+  "asstReachable": {
+    "message": "Boleh dicapai — $1 menjawab."
+  },
+  "asstBuiltinReady": {
+    "message": "Sedia pada peranti ini."
+  },
+  "asstBuiltinDownload": {
+    "message": "Model belum ada pada peranti ini. Tekan “Muat turun model” dalam tetapan sambungan bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Chrome ini tiada model terbina dalam. Pilih pembekal lain dalam tetapan sambungan."
+  },
+  "asstOnDevice": {
+    "message": "peranti ini"
+  },
+  "asstNotConfigured": {
+    "message": "Pembantu belum disediakan — buka tetapan sambungan bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Tidak dapat mencapai $1. Adakah pelayan sedang berjalan, dan adakah ia membenarkan permintaan daripada sambungan pelayar (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Menunggu kebenaran anda — jawab gesaan itu, kemudian cuba lagi."
+  },
+  "asstDenied": {
+    "message": "Dokumen ini tidak dibenarkan menggunakan pembantu."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumen yang dibenarkan menggunakan pembantu"
+  },
+  "asstAllowedSub": {
+    "message": "Setiap dokumen bertanya sekali sebelum permintaan pertamanya. Buang satu untuk ditanya semula."
+  },
+  "consentTitle": {
+    "message": "Benarkan dokumen ini menggunakan pembantu anda?"
+  },
+  "consentLead": {
+    "message": "Ia akan dapat menghantar teks ke $1 ($2) dan membaca balasannya. Kunci anda tidak pernah dikongsi dengannya."
+  },
+  "consentRemember": {
+    "message": "Diingati untuk fail ini. Anda boleh mengubahnya kemudian dalam tetapan sambungan."
+  },
+  "consentAllow": {
+    "message": "Benarkan"
+  },
+  "consentDeny": {
+    "message": "Bukan sekarang"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome sedang memuat turun model. Cuba lagi apabila selesai."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Muat turun model"
+  },
+  "asstBuiltinProgress": {
+    "message": "Memuat turun model… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Kira-kira 2–4 GB. Chrome memerlukan lebih kurang 22 GB ruang kosong pada cakera dan rangkaian tanpa had data; jika tidak, model dilaporkan tidak tersedia."
+  },
+  "asstContext": {
+    "message": "Tetingkap konteks (token)"
+  },
+  "asstContextHint": {
+    "message": "Biarkan kosong untuk menggunakan nilai yang dilaporkan pembekal. Isi untuk pelayan hos sendiri yang hadnya hanya anda tahu."
+  },
+  "asstContextKnown": {
+    "message": "Tetingkap konteks: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Tunjukkan semua model, bukan hanya yang untuk sembang"
+  },
+  "asstOtherModelRow": {
+    "message": "Lain-lain…"
+  },
+  "asstOtherModel": {
+    "message": "ID model, tepat seperti yang dinamakan pembekal"
+  },
+  "asstBadModel": {
+    "message": "Itu bukan ID model: hanya huruf, digit dan . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Pembentangan terlalu besar untuk model ini: permintaan memerlukan kira-kira $1 token dan model menerima $2. Pilih model dengan tetingkap lebih besar, atau pendekkan pembentangan."
+  },
+  "asstOutlineOnly": {
+    "message": "Hanya rangka yang muat dalam tetingkap model ini; kandungan yang dipilih tidak dihantar sepenuhnya."
+  },
+  "asstNoDocument": {
+    "message": "Dokumen tidak menyerahkan kandungannya."
+  },
+  "asstSendsNotice": {
+    "message": "Menghantar rangka pembentangan dan $1 ke $2; komen kekal di sini."
+  },
+  "asstOnDeviceModel": {
+    "message": "model pada peranti ini"
+  },
+  "asstFocusGeneric": {
+    "message": "elemen yang dipilih atau slaid yang terbuka"
+  },
+  "placingFolder": {
+    "message": "Mencari “$1” pada cakera…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome tidak membenarkan sambungan membaca “$1” daripada cakera untuk mencarinya (senarai file:// ditolak)."
+  },
+  "placeTried": {
+    "message": "Mencari “$1” di $2 tempat pada cakera — tiada di sana."
+  },
+  "recentTitle": {
+    "message": "Baru disunting"
+  },
+  "badgeNotAdded": {
+    "message": "belum ditambah"
+  },
+  "badgeNotAddedTip": {
+    "message": "Ditemui pada cakera. Boleh dibuka, tetapi semasa menyimpan akan ditanya ke mana — tambah foldernya untuk menyimpan di tempat."
+  },
+  "folderFoundTip": {
+    "message": "Ditemui pada cakera, belum ditambah: dokumennya boleh dibuka, tetapi menyimpan bertanya ke mana."
+  },
+  "menuAddFolder": {
+    "message": "Tambah foldernya untuk menyimpan di tempat…"
+  },
+  "pickThisFolder": {
+    "message": "Dalam pemilih, pilih folder “$1” — Chrome mesti melihat anda memilihnya."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” bukan folder dokumen ini (“$2”). Cuba lagi dan pilih yang itu."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” sudah ditambah."
+  },
+  "bentoFolderBtn": {
+    "message": "Cipta folder Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "Dalam dialog, cipta folder baharu bernama “Bento” dalam Dokumen dan pilihnya."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” ialah folder Bento anda — dokumen baharu masuk ke sana dan disimpan di tempat."
+  },
+  "bentoFolderTip": {
+    "message": "Folder dalam Dokumen yang menyimpan di tempat dan menerima dokumen baharu. Chrome tidak akan memberikan Dokumen itu sendiri."
+  },
+  "defaultFolder": {
+    "message": "dokumen baharu masuk ke sini"
+  },
+  "fgTitle": {
+    "message": "Simpan “$1” di tempat mulai sekarang?"
+  },
+  "fgTitleLapsed": {
+    "message": "Sambung semula “$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home menyimpan kebenaran untuk fail ini sahaja, jadi setiap simpanan menulis terus kepadanya. Pilih fail yang sama dalam dialog seterusnya."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home sudah ada fail ini; pelayar mahu anda mengesahkannya sekali lagi."
+  },
+  "fgChoose": {
+    "message": "Pilih fail…"
+  },
+  "fgReconnect": {
+    "message": "Sambung semula"
+  },
+  "fgOnce": {
+    "message": "Sekali ini sahaja"
+  },
+  "fgNotSame": {
+    "message": "Itu bukan fail yang bertanya (“$1”). Pilih yang itu, atau tutup tetingkap ini."
+  },
+  "fgDenied": {
+    "message": "Kebenaran tidak diberikan."
+  },
+  "droppedGranted": {
+    "message": "Ditambah: $1 folder, $2 fail."
+  },
+  "setFilesTitle": {
+    "message": "Fail"
+  },
+  "setFilesSub": {
+    "message": "Dokumen di luar mana-mana folder yang ditambah yang menyimpan di tempat dengan sendirinya — dipilih sekali, atau dijatuhkan ke perpustakaan."
   }
 }

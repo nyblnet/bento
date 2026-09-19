@@ -189,7 +189,7 @@
     "message": "문서가 있는 폴더를 선택하세요"
   },
   "setupStep1Note": {
-    "message": "넓은 폴더 하나면 대개 충분합니다 — 그 안의 모든 것이 포함됩니다."
+    "message": "보통 넓은 폴더 하나면 충분합니다. 그 안의 모든 것이 포함됩니다. 홈 폴더 자체나 Library는 Chrome이 넘겨주지 않으니 문서, 데스크탑, 또는 문서가 들어 있는 폴더를 고르세요."
   },
   "setupStep2": {
     "message": "로컬 파일 접근을 켜세요"
@@ -484,5 +484,236 @@
   },
   "surveyOnlySeen": {
     "message": "이 방법으로는 이 브라우저에서 연 문서만 찾을 수 있습니다."
+  },
+  "setAsstTitle": {
+    "message": "어시스턴트"
+  },
+  "setAsstSub": {
+    "message": "문서에 관한 채팅이 전송되는 곳입니다. 키는 이 확장 프로그램 안에만 있고, 문서는 답변만 볼 수 있습니다."
+  },
+  "asstProvider": {
+    "message": "제공자"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome 내장 모델(Gemini Nano) — 이 기기에서"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini(AI Studio 키)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic(Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI 호환(OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "기본 URL"
+  },
+  "asstModel": {
+    "message": "모델"
+  },
+  "asstKey": {
+    "message": "API 키"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama나 LM Studio 같은 로컬 서버에서는 선택 사항입니다."
+  },
+  "asstSave": {
+    "message": "저장"
+  },
+  "asstSaved": {
+    "message": "어시스턴트 설정을 저장했습니다"
+  },
+  "asstAccessDeclined": {
+    "message": "사이트 접근이 거부되었습니다. 요청은 그래도 전송되며, 서버가 브라우저 확장 프로그램을 허용하면(CORS) 동작합니다."
+  },
+  "asstCheck": {
+    "message": "연결 확인"
+  },
+  "asstChecking": {
+    "message": "확인 중…"
+  },
+  "asstReachable": {
+    "message": "연결됨 — $1이(가) 응답했습니다."
+  },
+  "asstBuiltinReady": {
+    "message": "이 기기에서 사용할 수 있습니다."
+  },
+  "asstBuiltinDownload": {
+    "message": "모델이 아직 이 기기에 없습니다. bento/home 확장 프로그램 설정에서 “모델 다운로드”를 누르세요."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "이 Chrome에는 내장 모델이 없습니다. 확장 프로그램 설정에서 다른 제공자를 선택하세요."
+  },
+  "asstOnDevice": {
+    "message": "이 기기"
+  },
+  "asstNotConfigured": {
+    "message": "어시스턴트가 아직 설정되지 않았습니다 — bento/home 확장 프로그램의 설정을 여세요."
+  },
+  "asstUnreachable": {
+    "message": "$1에 연결할 수 없습니다. 서버가 실행 중이고, 브라우저 확장 프로그램의 요청을 허용하나요(CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "허용을 기다리는 중 — 확인 창에 답한 뒤 다시 시도하세요."
+  },
+  "asstDenied": {
+    "message": "이 문서는 어시스턴트를 사용할 수 없습니다."
+  },
+  "asstAllowedTitle": {
+    "message": "어시스턴트 사용이 허용된 문서"
+  },
+  "asstAllowedSub": {
+    "message": "각 문서는 첫 요청 전에 한 번 묻습니다. 제거하면 다시 묻습니다."
+  },
+  "consentTitle": {
+    "message": "이 문서가 어시스턴트를 사용하도록 허용할까요?"
+  },
+  "consentLead": {
+    "message": "허용하면 $1($2)에 텍스트를 보내고 답변을 읽을 수 있습니다. 키는 문서에 절대 공유되지 않습니다."
+  },
+  "consentRemember": {
+    "message": "이 파일에 대해 기억합니다. 나중에 확장 프로그램 설정에서 바꿀 수 있습니다."
+  },
+  "consentAllow": {
+    "message": "허용"
+  },
+  "consentDeny": {
+    "message": "나중에"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome이 모델을 다운로드하는 중입니다. 완료된 뒤 다시 시도하세요."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "모델 다운로드"
+  },
+  "asstBuiltinProgress": {
+    "message": "모델 다운로드 중… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "약 2~4GB입니다. Chrome은 디스크 여유 공간 약 22GB와 데이터 제한이 없는 네트워크가 필요하며, 그렇지 않으면 모델을 사용할 수 없다고 보고합니다."
+  },
+  "asstContext": {
+    "message": "컨텍스트 윈도(토큰)"
+  },
+  "asstContextHint": {
+    "message": "비워 두면 제공자가 보고하는 값을 씁니다. 한도를 본인만 아는 자체 호스팅 서버라면 입력하세요."
+  },
+  "asstContextKnown": {
+    "message": "컨텍스트 윈도: $1 토큰"
+  },
+  "asstShowAll": {
+    "message": "채팅용만이 아니라 모든 모델 표시"
+  },
+  "asstOtherModelRow": {
+    "message": "기타…"
+  },
+  "asstOtherModel": {
+    "message": "제공자가 이름 붙인 그대로의 모델 ID"
+  },
+  "asstBadModel": {
+    "message": "모델 ID가 아닙니다. 영문자, 숫자, . _ : / - 만 쓸 수 있습니다."
+  },
+  "asstWindow": {
+    "message": "이 덱은 이 모델에 너무 큽니다. 요청에는 약 $1 토큰이 필요한데 모델은 $2까지 받습니다. 윈도가 더 큰 모델을 고르거나 덱을 줄이세요."
+  },
+  "asstOutlineOnly": {
+    "message": "이 모델의 윈도에는 개요만 들어갔습니다. 선택한 내용은 전부 전송되지 않았습니다."
+  },
+  "asstNoDocument": {
+    "message": "문서가 내용을 넘겨주지 않았습니다."
+  },
+  "asstSendsNotice": {
+    "message": "덱의 개요와 $1을(를) $2(으)로 보냅니다. 댓글은 여기 남습니다."
+  },
+  "asstOnDeviceModel": {
+    "message": "이 기기의 모델"
+  },
+  "asstFocusGeneric": {
+    "message": "선택한 요소 또는 열려 있는 슬라이드"
+  },
+  "placingFolder": {
+    "message": "디스크에서 “$1” 찾는 중…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome이 “$1”을(를) 찾기 위해 확장 프로그램이 디스크를 읽는 것을 허용하지 않았습니다(file:// 목록 거부됨)."
+  },
+  "placeTried": {
+    "message": "디스크의 $2곳에서 “$1”을(를) 찾았지만 없었습니다."
+  },
+  "recentTitle": {
+    "message": "최근 편집"
+  },
+  "badgeNotAdded": {
+    "message": "추가되지 않음"
+  },
+  "badgeNotAddedTip": {
+    "message": "디스크에서 찾았습니다. 열리지만 저장할 때 위치를 묻습니다. 제자리에 저장하려면 폴더를 추가하세요."
+  },
+  "folderFoundTip": {
+    "message": "디스크에서 찾았지만 추가되지 않은 폴더: 문서는 열리지만 저장할 때 위치를 묻습니다."
+  },
+  "menuAddFolder": {
+    "message": "제자리에 저장하도록 폴더 추가…"
+  },
+  "pickThisFolder": {
+    "message": "선택 창에서 “$1” 폴더를 고르세요. Chrome이 직접 고르는 것을 확인해야 합니다."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1”은(는) 이 문서의 폴더(“$2”)가 아닙니다. 다시 시도해 그 폴더를 고르세요."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1”은(는) 이미 추가되어 있습니다."
+  },
+  "bentoFolderBtn": {
+    "message": "Bento 폴더 만들기…"
+  },
+  "bentoFolderHow": {
+    "message": "대화상자에서 문서 안에 “Bento”라는 새 폴더를 만들고 그것을 선택하세요."
+  },
+  "bentoFolderMade": {
+    "message": "“$1”이(가) Bento 폴더입니다. 새 문서는 거기에 만들어지고 제자리에 저장됩니다."
+  },
+  "bentoFolderTip": {
+    "message": "문서 안에 있는 폴더로, 제자리에 저장하고 새 문서를 받습니다. 문서 폴더 자체는 Chrome이 넘겨주지 않습니다."
+  },
+  "defaultFolder": {
+    "message": "새 문서는 여기에 만들어집니다"
+  },
+  "fgTitle": {
+    "message": "이제부터 “$1”을(를) 제자리에 저장할까요?"
+  },
+  "fgTitleLapsed": {
+    "message": "“$1”을(를) 다시 연결할까요?"
+  },
+  "fgLead": {
+    "message": "bento/home이 이 파일 하나에 대한 권한을 보관하므로 이후 저장은 곧바로 이 파일에 쓰입니다. 다음 대화상자에서 같은 파일을 고르세요."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home에 이 파일이 이미 있습니다. 브라우저가 다시 확인을 요청합니다."
+  },
+  "fgChoose": {
+    "message": "파일 선택…"
+  },
+  "fgReconnect": {
+    "message": "다시 연결"
+  },
+  "fgOnce": {
+    "message": "이번만"
+  },
+  "fgNotSame": {
+    "message": "요청한 파일(“$1”)이 아닙니다. 그 파일을 고르거나 이 창을 닫으세요."
+  },
+  "fgDenied": {
+    "message": "권한이 허용되지 않았습니다."
+  },
+  "droppedGranted": {
+    "message": "추가됨: 폴더 $1개, 파일 $2개."
+  },
+  "setFilesTitle": {
+    "message": "파일"
+  },
+  "setFilesSub": {
+    "message": "추가된 폴더 밖에 있지만 스스로 제자리에 저장되는 문서. 한 번 선택했거나 라이브러리에 끌어다 놓은 것."
   }
 }

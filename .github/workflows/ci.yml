@@ -601,6 +601,14 @@ jobs:
         # only to someone who reads that language.
         run: node scripts/test-webext-i18n.ts
 
+      - name: WebExtension assistant rig
+        # The Assistant is extension-only: the page holds no key, so what the
+        # extension ACCEPTS decides the feature. A frame from an iframe on a
+        # slide, a page the user never allowed, an abort naming another tab's
+        # turn, a describe or an error that echoes the key or the endpoint —
+        # every one of those is silent in a browser and loud here.
+        run: node scripts/test-webext-assistant.ts
+
       - name: Save-intent rig
         # A host polyfilling showSaveFilePicker sees only the options bag, and
         # must tell "overwrite the open document" from "make a second file" from

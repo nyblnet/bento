@@ -189,7 +189,7 @@
     "message": "وہ فولڈر منتخب کریں جس میں آپ کی دستاویزات رہتی ہیں"
   },
   "setupStep1Note": {
-    "message": "عام طور پر ایک بڑا فولڈر کافی ہے — اُس کے اندر کی ہر چیز اِس میں آ جاتی ہے۔"
+    "message": "عموماً ایک وسیع فولڈر کافی ہے — یہ اندر کی ہر چیز کو شامل کرتا ہے۔ Chrome خود ہوم فولڈر یا Library نہیں دے گا: Documents، Desktop یا وہ فولڈر چنیں جہاں آپ کی دستاویزات رکھی ہیں۔"
   },
   "setupStep2": {
     "message": "مقامی فائل رسائی آن کریں"
@@ -484,5 +484,236 @@
   },
   "surveyOnlySeen": {
     "message": "اس طریقے سے صرف وہی دستاویزات ملتی ہیں جو اس براؤزر میں کھولی گئی ہوں۔"
+  },
+  "setAsstTitle": {
+    "message": "معاون"
+  },
+  "setAsstSub": {
+    "message": "کسی دستاویز کے بارے میں چیٹ کہاں بھیجی جاتی ہے۔ کلید اسی ایکسٹینشن میں رہتی ہے — دستاویز کو صرف جواب نظر آتا ہے۔"
+  },
+  "asstProvider": {
+    "message": "فراہم کنندہ"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome کا بلٹ اِن ماڈل (Gemini Nano) — اسی آلے پر"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio کلید)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI سے مطابقت رکھنے والا (OpenAI، OpenRouter، Ollama، LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "بنیادی URL"
+  },
+  "asstModel": {
+    "message": "ماڈل"
+  },
+  "asstKey": {
+    "message": "API کلید"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama یا LM Studio جیسے مقامی سرور کے لیے اختیاری۔"
+  },
+  "asstSave": {
+    "message": "محفوظ کریں"
+  },
+  "asstSaved": {
+    "message": "معاون کی ترتیبات محفوظ ہو گئیں"
+  },
+  "asstAccessDeclined": {
+    "message": "سائٹ تک رسائی مسترد کر دی گئی۔ درخواستیں پھر بھی بھیجی جاتی ہیں، اور اُس وقت کام کرتی ہیں جب سرور براؤزر ایکسٹینشنز کی اجازت دے (CORS)۔"
+  },
+  "asstCheck": {
+    "message": "کنکشن جانچیں"
+  },
+  "asstChecking": {
+    "message": "جانچ ہو رہی ہے…"
+  },
+  "asstReachable": {
+    "message": "قابلِ رسائی — $1 نے جواب دیا۔"
+  },
+  "asstBuiltinReady": {
+    "message": "اس آلے پر تیار ہے۔"
+  },
+  "asstBuiltinDownload": {
+    "message": "ماڈل ابھی اس آلے پر نہیں ہے۔ bento/home ایکسٹینشن کی ترتیبات میں ”ماڈل ڈاؤن لوڈ کریں“ دبائیں۔"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "اس Chrome میں بلٹ اِن ماڈل نہیں ہے۔ ایکسٹینشن کی ترتیبات میں کوئی اور فراہم کنندہ منتخب کریں۔"
+  },
+  "asstOnDevice": {
+    "message": "یہ آلہ"
+  },
+  "asstNotConfigured": {
+    "message": "معاون ابھی ترتیب نہیں دیا گیا — bento/home ایکسٹینشن کی ترتیبات کھولیں۔"
+  },
+  "asstUnreachable": {
+    "message": "$1 تک رسائی نہیں ہو سکی۔ کیا سرور چل رہا ہے، اور کیا وہ براؤزر ایکسٹینشنز کی درخواستوں کی اجازت دیتا ہے (CORS)؟"
+  },
+  "asstWaitConsent": {
+    "message": "آپ کی اجازت کا انتظار ہے — پرامپٹ کا جواب دیں، پھر دوبارہ کوشش کریں۔"
+  },
+  "asstDenied": {
+    "message": "اس دستاویز کو معاون استعمال کرنے کی اجازت نہیں ہے۔"
+  },
+  "asstAllowedTitle": {
+    "message": "معاون استعمال کرنے کی اجازت والی دستاویزات"
+  },
+  "asstAllowedSub": {
+    "message": "ہر دستاویز اپنی پہلی درخواست سے پہلے ایک بار پوچھتی ہے۔ دوبارہ پوچھے جانے کے لیے کسی ایک کو ہٹائیں۔"
+  },
+  "consentTitle": {
+    "message": "اس دستاویز کو آپ کا معاون استعمال کرنے کی اجازت دیں؟"
+  },
+  "consentLead": {
+    "message": "یہ $1 ($2) کو متن بھیج سکے گی اور جوابات پڑھ سکے گی۔ آپ کی کلید اس کے ساتھ کبھی شیئر نہیں کی جاتی۔"
+  },
+  "consentRemember": {
+    "message": "اس فائل کے لیے یاد رکھا جائے گا۔ آپ اسے بعد میں ایکسٹینشن کی ترتیبات میں بدل سکتے ہیں۔"
+  },
+  "consentAllow": {
+    "message": "اجازت دیں"
+  },
+  "consentDeny": {
+    "message": "ابھی نہیں"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome ماڈل ڈاؤن لوڈ کر رہا ہے۔ مکمل ہونے پر دوبارہ کوشش کریں۔"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "ماڈل ڈاؤن لوڈ کریں"
+  },
+  "asstBuiltinProgress": {
+    "message": "ماڈل ڈاؤن لوڈ ہو رہا ہے… $1٪"
+  },
+  "asstBuiltinRequirements": {
+    "message": "تقریباً 2–4 GB۔ Chrome کو ڈسک پر تقریباً 22 GB خالی جگہ اور بغیر ڈیٹا حد والا نیٹ ورک چاہیے، ورنہ وہ ماڈل کو دستیاب نہیں بتاتا۔"
+  },
+  "asstContext": {
+    "message": "سیاق ونڈو (ٹوکن)"
+  },
+  "asstContextHint": {
+    "message": "فراہم کنندہ کی بتائی قدر استعمال کرنے کے لیے خالی چھوڑیں۔ ایسے خود میزبان سرور کے لیے بھریں جس کی حد صرف آپ جانتے ہیں۔"
+  },
+  "asstContextKnown": {
+    "message": "سیاق ونڈو: $1 ٹوکن"
+  },
+  "asstShowAll": {
+    "message": "تمام ماڈل دکھائیں، صرف چیٹ والے نہیں"
+  },
+  "asstOtherModelRow": {
+    "message": "دیگر…"
+  },
+  "asstOtherModel": {
+    "message": "ماڈل ID، بالکل ویسے جیسے فراہم کنندہ اسے نام دیتا ہے"
+  },
+  "asstBadModel": {
+    "message": "یہ ماڈل ID نہیں ہے: صرف حروف، ہندسے اور . _ : / -"
+  },
+  "asstWindow": {
+    "message": "یہ ڈیک اس ماڈل کے لیے بہت بڑا ہے: درخواست کو تقریباً $1 ٹوکن درکار ہیں اور ماڈل $2 لیتا ہے۔ بڑی ونڈو والا ماڈل چنیں، یا ڈیک مختصر کریں۔"
+  },
+  "asstOutlineOnly": {
+    "message": "اس ماڈل کی ونڈو میں صرف خاکہ سما سکا؛ منتخب مواد پورا نہیں بھیجا گیا۔"
+  },
+  "asstNoDocument": {
+    "message": "دستاویز نے اپنا مواد حوالے نہیں کیا۔"
+  },
+  "asstSendsNotice": {
+    "message": "ڈیک کا خاکہ اور $1 $2 کو بھیجتا ہے؛ تبصرے یہیں رہتے ہیں۔"
+  },
+  "asstOnDeviceModel": {
+    "message": "اس آلے پر موجود ماڈل"
+  },
+  "asstFocusGeneric": {
+    "message": "منتخب عناصر یا کھلی سلائیڈ"
+  },
+  "placingFolder": {
+    "message": "ڈسک پر ”$1“ تلاش کی جا رہی ہے…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome نے ایکسٹینشن کو ”$1“ تلاش کرنے کے لیے ڈسک سے پڑھنے نہیں دیا (file:// فہرستیں مسترد)۔"
+  },
+  "placeTried": {
+    "message": "ڈسک پر $2 جگہوں پر ”$1“ تلاش کیا — وہاں نہیں ہے۔"
+  },
+  "recentTitle": {
+    "message": "حال ہی میں ترمیم شدہ"
+  },
+  "badgeNotAdded": {
+    "message": "شامل نہیں"
+  },
+  "badgeNotAddedTip": {
+    "message": "ڈسک پر ملا۔ کھلتا ہے، مگر محفوظ کرتے وقت پوچھے گا کہاں — اسی جگہ محفوظ کرنے کے لیے اس کا فولڈر شامل کریں۔"
+  },
+  "folderFoundTip": {
+    "message": "ڈسک پر ملا، شامل نہیں: اس کی دستاویزات کھلتی ہیں، مگر محفوظ کرنا پوچھتا ہے کہاں۔"
+  },
+  "menuAddFolder": {
+    "message": "اسی جگہ محفوظ کرنے کے لیے اس کا فولڈر شامل کریں…"
+  },
+  "pickThisFolder": {
+    "message": "منتخب کنندہ میں فولڈر ”$1“ چنیں — Chrome کو آپ کو اسے چنتے دیکھنا ہوگا۔"
+  },
+  "pickedWrongFolder": {
+    "message": "”$1“ اس دستاویز کا فولڈر نہیں ہے (”$2“)۔ دوبارہ کوشش کریں اور وہی چنیں۔"
+  },
+  "folderAlreadyAdded": {
+    "message": "”$1“ پہلے سے شامل ہے۔"
+  },
+  "bentoFolderBtn": {
+    "message": "ایک Bento فولڈر بنائیں…"
+  },
+  "bentoFolderHow": {
+    "message": "ڈائیلاگ میں Documents کے اندر ”Bento“ نام کا نیا فولڈر بنائیں اور اسے چنیں۔"
+  },
+  "bentoFolderMade": {
+    "message": "”$1“ آپ کا Bento فولڈر ہے — نئی دستاویزات وہاں جاتی ہیں اور اسی جگہ محفوظ ہوتی ہیں۔"
+  },
+  "bentoFolderTip": {
+    "message": "Documents کے اندر ایک فولڈر جو اسی جگہ محفوظ کرتا ہے اور نئی دستاویزات لیتا ہے۔ Chrome خود Documents نہیں دے گا۔"
+  },
+  "defaultFolder": {
+    "message": "نئی دستاویزات یہاں آتی ہیں"
+  },
+  "fgTitle": {
+    "message": "اب سے ”$1“ اسی جگہ محفوظ کریں؟"
+  },
+  "fgTitleLapsed": {
+    "message": "”$1“ دوبارہ جوڑیں؟"
+  },
+  "fgLead": {
+    "message": "bento/home صرف اسی ایک فائل کی اجازت رکھتا ہے، اس لیے ہر محفوظ کرنا براہِ راست اسی میں لکھتا ہے۔ اگلے ڈائیلاگ میں وہی فائل چنیں۔"
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home کے پاس یہ فائل پہلے سے ہے؛ براؤزر چاہتا ہے کہ آپ اس کی دوبارہ تصدیق کریں۔"
+  },
+  "fgChoose": {
+    "message": "فائل چنیں…"
+  },
+  "fgReconnect": {
+    "message": "دوبارہ جوڑیں"
+  },
+  "fgOnce": {
+    "message": "صرف اس بار"
+  },
+  "fgNotSame": {
+    "message": "یہ وہ فائل نہیں جس نے پوچھا تھا (”$1“)۔ وہی چنیں، یا یہ ونڈو بند کریں۔"
+  },
+  "fgDenied": {
+    "message": "اجازت نہیں دی گئی۔"
+  },
+  "droppedGranted": {
+    "message": "شامل ہوئے: $1 فولڈر، $2 فائلیں۔"
+  },
+  "setFilesTitle": {
+    "message": "فائلیں"
+  },
+  "setFilesSub": {
+    "message": "کسی بھی شامل کردہ فولڈر سے باہر کی دستاویزات جو خود اسی جگہ محفوظ ہوتی ہیں — ایک بار چنی گئیں، یا لائبریری میں گھسیٹ کر چھوڑی گئیں۔"
   }
 }

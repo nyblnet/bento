@@ -207,7 +207,7 @@
     "message": "Choose the folder your documents live in"
   },
   "setupStep1Note": {
-    "message": "One broad folder is usually enough — it covers everything inside it."
+    "message": "One broad folder is usually enough — it covers everything inside it. Chrome will not hand over your home folder itself, or Library: choose Documents, Desktop, or the folder your documents live in."
   },
   "setupStep2": {
     "message": "Turn on local file access",
@@ -542,5 +542,313 @@
   },
   "surveyOnlySeen": {
     "message": "Only documents opened in this browser can be found this way."
+  },
+  "setAsstTitle": {
+    "message": "Assistant",
+    "description": "Settings section title: the AI chat that bento/slides offers about a deck."
+  },
+  "setAsstSub": {
+    "message": "Where a chat about a document is sent. The key stays in this extension — a document only ever sees the reply.",
+    "description": "Settings: the assistant section's explanation. REVIEW: 'key' is an API key."
+  },
+  "asstProvider": {
+    "message": "Provider",
+    "description": "Assistant settings: label of the provider dropdown."
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome built-in model (Gemini Nano) — on this device",
+    "description": "Provider option: Chrome's own on-device model. Keep the product names."
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio key)",
+    "description": "Provider option. Keep the product names."
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)",
+    "description": "Provider option. Keep the product names."
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-compatible (OpenAI, OpenRouter, Ollama, LM Studio…)",
+    "description": "Provider option: any server speaking the OpenAI API. Keep the product names."
+  },
+  "asstBaseUrl": {
+    "message": "Base URL",
+    "description": "Assistant settings: label of the endpoint address field."
+  },
+  "asstModel": {
+    "message": "Model",
+    "description": "Assistant settings: label of the model id field."
+  },
+  "asstKey": {
+    "message": "API key",
+    "description": "Assistant settings: label of the key field."
+  },
+  "asstKeyOptional": {
+    "message": "Optional for a local server such as Ollama or LM Studio.",
+    "description": "Hint under the API key field when the OpenAI-compatible provider is chosen."
+  },
+  "asstSave": {
+    "message": "Save",
+    "description": "Assistant settings: the save button."
+  },
+  "asstSaved": {
+    "message": "Assistant settings saved",
+    "description": "Toast after saving the assistant settings."
+  },
+  "asstAccessDeclined": {
+    "message": "Site access was declined. Requests are still made, and work when the server allows browser extensions (CORS).",
+    "description": "Assistant settings: shown after Save when the user refused the browser's site-access prompt. REVIEW: CORS is a technical term, keep it."
+  },
+  "asstCheck": {
+    "message": "Check connection",
+    "description": "Assistant settings: button that makes one test request."
+  },
+  "asstChecking": {
+    "message": "Checking…",
+    "description": "Assistant settings: status while the test request runs."
+  },
+  "asstReachable": {
+    "message": "Reachable — $1 answered.",
+    "description": "Assistant settings: the test request succeeded. $1 is the server's hostname."
+  },
+  "asstBuiltinReady": {
+    "message": "Ready on this device.",
+    "description": "Assistant settings: the Chrome built-in model is available."
+  },
+  "asstBuiltinDownload": {
+    "message": "The model is not on this device yet. Press “Download model” in the bento/home extension’s settings.",
+    "description": "Assistant settings / reason: the Chrome built-in model needs downloading, and only that button starts it. Keep the button name matching asstBuiltinDownloadBtn."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "This Chrome has no built-in model. Choose another provider in the extension's settings.",
+    "description": "Assistant settings / reason: Chrome's built-in model is unavailable here."
+  },
+  "asstOnDevice": {
+    "message": "this device",
+    "description": "Shown by the document as the assistant's location when the Chrome built-in model is used, in place of a server hostname."
+  },
+  "asstNotConfigured": {
+    "message": "The assistant is not set up yet — open the bento/home extension's settings.",
+    "description": "Reason returned to a document when no provider, model or key is configured."
+  },
+  "asstUnreachable": {
+    "message": "Could not reach $1. Is the server running, and does it allow requests from browser extensions (CORS)?",
+    "description": "Reason when the request never got a response. $1 is the hostname. REVIEW: CORS is a technical term, keep it."
+  },
+  "asstWaitConsent": {
+    "message": "Waiting for your permission on this device…",
+    "description": "Reason returned to a document while its permission window is still open."
+  },
+  "asstDenied": {
+    "message": "Permission was refused on this device — nothing was changed.",
+    "description": "Reason returned to a document whose permission was refused."
+  },
+  "asstAllowedTitle": {
+    "message": "Documents allowed to use the assistant",
+    "description": "Assistant settings: heading of the list of allowed files."
+  },
+  "asstAllowedSub": {
+    "message": "Each document asks once before its first request. Remove one to be asked again.",
+    "description": "Assistant settings: explanation under the allowed-documents list."
+  },
+  "consentTitle": {
+    "message": "Allow this document to use your assistant?",
+    "description": "Title of the permission window a document triggers on its first assistant request. REVIEW: this is a security prompt."
+  },
+  "consentLead": {
+    "message": "It will be able to send text to $1 ($2) and read the replies. Your key is never shared with it.",
+    "description": "Permission window body. $1 is the server hostname or 'this device', $2 the model name. REVIEW: this is a security prompt."
+  },
+  "consentRemember": {
+    "message": "Remembered for this file. You can change it later in the extension's settings.",
+    "description": "Permission window: note that the answer is stored per file."
+  },
+  "consentAllow": {
+    "message": "Allow",
+    "description": "Permission window: the button that grants access."
+  },
+  "consentDeny": {
+    "message": "Not now",
+    "description": "Permission window: the button that refuses access."
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome is downloading the model. Try again when it has finished.",
+    "description": "Assistant settings / reason: the Chrome built-in model is downloading."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Download model",
+    "description": "Assistant settings: button that starts the Chrome built-in model download."
+  },
+  "asstBuiltinProgress": {
+    "message": "Downloading the model… $1%",
+    "description": "Assistant settings: download progress. $1 is a whole number."
+  },
+  "asstBuiltinRequirements": {
+    "message": "About 2–4 GB. Chrome needs roughly 22 GB free on the disk and a network that is not metered, or it reports the model as unavailable.",
+    "description": "Assistant settings: hint under the built-in provider. REVIEW: the numbers are Chrome's requirements, keep them."
+  },
+  "asstContext": {
+    "message": "Context window (tokens)",
+    "description": "Assistant settings: label of the optional input-window field."
+  },
+  "asstContextHint": {
+    "message": "Leave empty to use what the provider reports. Fill it in for a self-hosted server whose limit only you know.",
+    "description": "Assistant settings: hint under the context-window field."
+  },
+  "asstContextKnown": {
+    "message": "Context window: $1 tokens",
+    "description": "Assistant settings: the known input window of the chosen model. $1 is a formatted number."
+  },
+  "asstShowAll": {
+    "message": "Show all models, not just the ones for chat",
+    "description": "Assistant settings: checkbox that turns off the chat-only model filter for the chosen provider."
+  },
+  "asstOtherModelRow": {
+    "message": "Other…",
+    "description": "Assistant settings: the last row of the model picker, which reveals a text field for an unlisted model id."
+  },
+  "asstOtherModel": {
+    "message": "Model id, exactly as the provider names it",
+    "description": "Assistant settings: placeholder of the free-text model field."
+  },
+  "asstBadModel": {
+    "message": "That is not a model id: letters, digits and . _ : / - only.",
+    "description": "Assistant settings: shown when the typed model id has characters a model id cannot have."
+  },
+  "asstWindow": {
+    "message": "The deck outline alone is too large for this model ($1 tokens; its window is $2). Choose a model with a larger window in the extension settings.",
+    "description": "Reason returned to a document when even the outline does not fit the model's input window. $1 and $2 are formatted numbers."
+  },
+  "asstOutlineOnly": {
+    "message": "Only the outline fits this model’s window, so it can change words, notes and slides but not positions or styling.",
+    "description": "Note on an edit reply when the model's window was too small for the selection or slide JSON."
+  },
+  "asstNoDocument": {
+    "message": "The document did not hand over its content.",
+    "description": "Reason returned when the page did not answer the extension's request for the deck material."
+  },
+  "asstSendsNotice": {
+    "message": "Sends the deck's outline and $1 to $2; comments stay here.",
+    "description": "Settings, assistant card: what leaves the machine. $1 is asstFocusGeneric, $2 the host or asstOnDeviceModel. REVIEW: a privacy statement."
+  },
+  "asstOnDeviceModel": {
+    "message": "the on-device model",
+    "description": "Settings: stands in for the host in asstSendsNotice when the Chrome built-in model is chosen."
+  },
+  "asstFocusGeneric": {
+    "message": "the selected elements or the open slide",
+    "description": "Settings: the $1 of asstSendsNotice."
+  },
+  "placingFolder": {
+    "message": "Looking for “$1” on disk…",
+    "description": "Toast while the extension probes the disk for where a granted folder lives. $1 is the folder name."
+  },
+  "placeNoDisk": {
+    "message": "Chrome would not let the extension read “$1” from disk to find it (file:// listings refused).",
+    "description": "Unplaced-folder banner: the disk probe could not read any file:// listing. $1 is the folder name."
+  },
+  "placeTried": {
+    "message": "Looked for “$1” in $2 places on disk — not there.",
+    "description": "Unplaced-folder banner: the disk probe ran and found nothing. $1 folder name, $2 a count."
+  },
+  "recentTitle": {
+    "message": "Recently edited",
+    "description": "Heading of the strip of most recently modified documents above the full grid."
+  },
+  "badgeNotAdded": {
+    "message": "not added",
+    "description": "Badge on a document found on disk whose folder has no grant."
+  },
+  "badgeNotAddedTip": {
+    "message": "Found on disk. It opens, but saving will ask where — add its folder to save in place.",
+    "description": "Tooltip of that badge."
+  },
+  "folderFoundTip": {
+    "message": "Found on disk, not added: its documents open, but saving asks where.",
+    "description": "Sidebar tooltip on a folder found on disk without a grant."
+  },
+  "menuAddFolder": {
+    "message": "Add its folder to save in place…",
+    "description": "Card menu: grant the folder a found document sits in."
+  },
+  "pickThisFolder": {
+    "message": "In the picker, choose the folder “$1” — Chrome has to see you pick it.",
+    "description": "Toast before the folder picker opens. $1 is the folder name."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” is not the folder this document is in (“$2”). Try again and pick that one.",
+    "description": "Toast when the picked folder does not contain the document. $1 picked, $2 expected."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” is already added.",
+    "description": "Toast when the picked folder is already granted. $1 is the folder name."
+  },
+  "bentoFolderBtn": {
+    "message": "Create a Bento folder…",
+    "description": "Button: make and grant a Bento folder in Documents."
+  },
+  "bentoFolderHow": {
+    "message": "In the dialog, make a new folder called “Bento” inside Documents and choose it.",
+    "description": "Toast before the folder picker opens for the Bento folder. Keep the folder name “Bento”."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” is your Bento folder — new documents go there and save in place.",
+    "description": "Toast after the Bento folder is granted. $1 is the folder name."
+  },
+  "bentoFolderTip": {
+    "message": "A folder inside Documents that saves in place and takes new documents. Chrome will not grant Documents itself.",
+    "description": "Tooltip of the Create-a-Bento-folder button."
+  },
+  "defaultFolder": {
+    "message": "new documents go here",
+    "description": "Settings folder row: marks the folder new documents are created in."
+  },
+  "fgTitle": {
+    "message": "Save “$1” in place from now on?",
+    "description": "Offer window title. $1 file name."
+  },
+  "fgTitleLapsed": {
+    "message": "Reconnect “$1”?",
+    "description": "Offer window title when the extension already holds the file but its permission lapsed. $1 file name."
+  },
+  "fgLead": {
+    "message": "bento/home keeps permission for this one file, so every save writes straight back to it. Pick the same file in the next dialog.",
+    "description": "Offer window body."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home already has this file; the browser wants you to confirm it again.",
+    "description": "Offer window body when reconnecting."
+  },
+  "fgChoose": {
+    "message": "Choose the file…",
+    "description": "Offer window: opens the OS file picker."
+  },
+  "fgReconnect": {
+    "message": "Reconnect",
+    "description": "Offer window: renews a lapsed permission."
+  },
+  "fgOnce": {
+    "message": "Just this once",
+    "description": "Offer window: decline; the document's own Save dialog follows."
+  },
+  "fgNotSame": {
+    "message": "That is not the file that asked (“$1”). Pick that one, or close this window.",
+    "description": "Offer window: the picked file is not the one that asked. $1 expected file name."
+  },
+  "fgDenied": {
+    "message": "Permission was not granted.",
+    "description": "Offer window: the permission prompt was refused."
+  },
+  "droppedGranted": {
+    "message": "Added: $1 folders, $2 files.",
+    "description": "Toast after files/folders were dropped onto the library. $1 folders, $2 files (numbers)."
+  },
+  "setFilesTitle": {
+    "message": "Files",
+    "description": "Settings section: per-file grants."
+  },
+  "setFilesSub": {
+    "message": "Documents outside any added folder that save in place on their own — picked once, or dropped onto the library.",
+    "description": "Settings section explanation."
   }
 }
