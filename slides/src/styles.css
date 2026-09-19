@@ -2941,6 +2941,17 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-assist-notice { color: var(--muted); font-size: 11px; line-height: 1.35; }
 .ed-assist-notice:empty { display: none; }
 .ed-assist-acts { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.ed-assist-routebox { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto; font-size: 11px; color: var(--muted); }
+.ed-assist-routebox .ed-assist-route { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-assist-routebox .ed-assist-settings { flex: none; }
+.ed-assist-status[hidden] { display: none; }
+/* the empty state: no extension */
+.ed-assist-install { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: var(--ink); }
+.ed-assist-install-h { font-weight: 700; font-size: 13px; }
+.ed-assist-install p { margin: 0; line-height: 1.45; color: var(--ink-2); }
+.ed-assist-install-b { align-self: flex-start; text-decoration: none; }
+.ed-assist-install-after { font-size: 11px; color: var(--muted); }
+.ed-assist-install-reload { border: 0; background: none; color: var(--ink); font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; padding: 0; }
 .ed-assist-hint { color: var(--muted); font-size: 11px; }
 .ed-assist-send { padding: 4px 12px; }
 .ed-assist-stop { background: #C0392B; border-color: #C0392B; }

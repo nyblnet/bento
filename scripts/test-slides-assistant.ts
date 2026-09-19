@@ -441,8 +441,11 @@ await (async () => {
   w.handler = (f) => { if (f.op === 'assistant.check') w.res(f.id, { ok: false, reason: 'x', code: 'Not A Code!' }) }
   ok((await tr.check() as { code?: string }).code === undefined, 'check: a code outside its shape is dropped (the page keys on codes)')
   ok(CODE_RE.test('consent-pending') && CODE_RE.test('consent-denied') && !CODE_RE.test('') && !CODE_RE.test('x'.repeat(41)), 'code shape: [a-z][a-z0-9-]{0,39}')
+  await tr.openSettings('assistant')
+  const so = w.sent.find((f) => f.op === 'assistant.settings.open')
+  ok(!!so && (so.payload as Obj).section === 'assistant', 'openSettings asks the extension for its options page AT the assistant section')
   await tr.openSettings()
-  ok(w.sent.some((f) => f.op === 'assistant.settings.open'), 'openSettings asks the extension for its options page')
+  ok(w.sent.filter((f) => f.op === 'assistant.settings.open').length === 2 && !('section' in (w.sent.filter((f) => f.op === 'assistant.settings.open')[1].payload as Obj)), 'without a section the payload is empty (older extensions)')
 
   // a turn: the page sends the request and where the user is; the extension asks for the material after consent; prose streams; done resolves
   const mat = () => ({ outline: 'O', addressed: 'A', open: 1, size: { width: 1280, height: 720 }, focus: null })
@@ -709,6 +712,15 @@ try {
     check('F — a patch that adds no remote URL gets no such line', cards.length === 2 && !cards[1].querySelector('.ed-assist-card-remote'))
   }
 
+  {
+    // no extension: an empty-state card with the one button, and a reload hint
+    const panel = new AssistantPanel({ store: fakeStore(starterDoc()), transport: null })
+    document.body.appendChild(panel.root)
+    panel.setOpen(true, false); await tick(30)
+    const card = panel.root.querySelector('.ed-assist-install')
+    check('no extension: the install card, with a heading, the reason, a primary button and a reload hint', !!card && /Chat with your deck/.test(card.textContent) && /never carries a key/.test(card.textContent) && !!card.querySelector('.ed-assist-install-b') && /Reload/.test(card.textContent))
+    check('no extension: the composer is disabled, no route box content', panel.root.querySelector('.ed-assist-input').disabled && panel.root.querySelector('.ed-assist-routebox').children.length === 0)
+  }
   // contract: local model display; consent-pending → waiting + one re-check on focus; consent-denied → refusal card
   {
     const store = fakeStore(starterDoc())
@@ -716,9 +728,10 @@ try {
     const panel = new AssistantPanel({ store, transport: tr })
     document.body.appendChild(panel.root)
     panel.setOpen(true, false); await tick(60)
-    const status = panel.root.querySelector('.ed-assist-status').textContent
-    check('local: the route line reads "on this device · Gemini Nano" (id → display name), no host: ' + status, /on this device · Gemini Nano/.test(status) && !/h\\.example/.test(status))
-    check('one route: no picker', !panel.root.querySelector('.ed-assist-model'))
+    const route = panel.root.querySelector('.ed-assist-routebox')
+    check('local: the route sits at the BOTTOM by the composer and reads "Gemini Nano" (id → display name), no host: ' + route.textContent, /Gemini Nano/.test(route.textContent) && !/h\\.example/.test(route.textContent) && route.closest('.ed-assist-acts') !== null && /on this device/.test(route.title))
+    check('one route: no picker; Settings… beside the name', !panel.root.querySelector('.ed-assist-model') && !!route.querySelector('.ed-assist-settings'))
+    check('nothing to say above the transcript: the status strip is hidden', panel.root.querySelector('.ed-assist-status').hidden === true)
   }
   {
     // several routes: a picker in the status line; choosing one is select → describe again
@@ -738,6 +751,7 @@ try {
     document.body.appendChild(panel.root)
     panel.setOpen(true, false); await tick(60)
     const sel = panel.root.querySelector('.ed-assist-model')
+    check('several routes: the picker sits in the composer row, not the status line', !!sel && sel.closest('.ed-assist-acts') !== null && !sel.closest('.ed-assist-status'))
     check('several routes: a picker with one optgroup per provider and the window beside each model', !!sel && sel.querySelectorAll('optgroup').length === 2 && sel.options.length === 3 && /Gemini Nano · 6k/.test(sel.options[0].textContent) && /gemini-3\.8-flash · 1M/.test(sel.options[1].textContent))
     check('several routes: the current route is selected', sel.selectedIndex === 0)
     sel.selectedIndex = 1
@@ -748,7 +762,7 @@ try {
     check('choosing: the check ran again for the new route', tr.checks >= 2)
     const tr2 = fakeTransport({ describe: async () => ({ host: '', model: 'some-new-id', configured: true, local: true }) })
     const panel2 = new AssistantPanel({ store, transport: tr2 }); document.body.appendChild(panel2.root); panel2.setOpen(true, false); await tick(60)
-    check('local: an unknown id displays as-is', /on this device · some-new-id/.test(panel2.root.querySelector('.ed-assist-status').textContent))
+    check('local: an unknown id displays as-is', /some-new-id/.test(panel2.root.querySelector('.ed-assist-routebox').textContent))
   }
   {
     const store = fakeStore(starterDoc())
@@ -774,7 +788,7 @@ try {
     check('consent-pending: focus re-ran check once, still pending → still waiting', tr.checks === 2 && /Asking/.test(st()))
     pending = false
     window.dispatchEvent(new Event('focus')); await tick(60)
-    check('consent-pending: the next return re-checks once more, ok → the route line, input enabled', tr.checks === 3 && /via fake · h\\.example · m/.test(st()) && !panel.root.querySelector('.ed-assist-input').disabled)
+    check('consent-pending: the next return re-checks once more, ok → the route line, input enabled', tr.checks === 3 && !/Asking/.test(st()) && panel.root.querySelector('.ed-assist-routebox .ed-assist-route').textContent === 'm' && !panel.root.querySelector('.ed-assist-input').disabled)
     window.dispatchEvent(new Event('focus')); document.dispatchEvent(new Event('visibilitychange')); await tick(60)
     check('consent-pending: once resolved, focus/visibility no longer re-check', tr.checks === 3)
   }

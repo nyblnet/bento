@@ -125,9 +125,11 @@
 //   assistant.abort      payload { req: <id of the turn> } → res { ok:true }
 //                        stop streaming that request; the extension may still
 //                        emit a final evt for it, which the page ignores.
-//   assistant.settings.open  payload {}            → res { ok:true }
-//                        open the extension's options page (endpoint / model /
-//                        key live there and only there).
+//   assistant.settings.open  payload { section? }  → res { ok:true }
+//                        open the extension's options page AT that section
+//                        ('assistant': the Assistant card, scrolled into view,
+//                        the active provider's card open) — endpoint / model /
+//                        key live there and only there.
 //
 // A `res` that does not arrive within REQ_TIMEOUT ms is a bridge fault
 // ({ ok:false, reason:'timeout' }); a stream has no timeout of its own — the
@@ -199,7 +201,7 @@ export interface AssistantTransport {
    */
   turn(request: string, history: Turn[], focus: { index: number; selection: string[] }, material: (slide?: number) => Record<string, unknown>, onChunk: (text: string) => void, signal: AbortSignal, check?: (ops: Record<string, unknown>) => Record<string, unknown>): Promise<TurnResult>
   /** ask the host to show where the endpoint and key are configured */
-  openSettings(): Promise<void>
+  openSettings(section?: string): Promise<void>
 }
 
 /**
@@ -385,7 +387,7 @@ export class ExtensionTransport implements AssistantTransport {
     })
   }
 
-  async openSettings(): Promise<void> {
-    await this.request('assistant.settings.open')
+  async openSettings(section?: string): Promise<void> {
+    await this.request('assistant.settings.open', section ? { section } : {})
   }
 }

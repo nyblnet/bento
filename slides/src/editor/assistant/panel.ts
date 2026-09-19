@@ -113,6 +113,8 @@ export class AssistantPanel {
   readonly root = el('section', 'ed-assist')
   private body = el('div', 'ed-assist-body')
   private status = el('div', 'ed-assist-status')
+  /** the bottom-left of the composer: the model picker, or the route as text */
+  private routeBox = el('div', 'ed-assist-routebox')
   private log = el('div', 'ed-assist-log')
   private input = document.createElement('textarea')
   private clearB = document.createElement('button')
@@ -261,8 +263,11 @@ export class AssistantPanel {
       if (this.inputH0 !== null && this.input.offsetHeight !== this.inputH0) { this.inputSized = true; lsSet('bento-assist-input-h', String(this.input.offsetHeight)) }
       this.inputH0 = null
     })
+    // the bottom row, the way every chat does it: the model on the left of
+    // the composer, Send on the right. The status line above keeps only what
+    // is NOT a choice — a refusal, a wait, a failed check.
     const acts = el('div', 'ed-assist-acts')
-    acts.append(el('span', ''), this.sendB)
+    acts.append(this.routeBox, this.sendB)
     // clear: the transcript and the history the next turn would carry
     this.clearB.type = 'button'
     this.clearB.className = 'ed-assist-clear'
@@ -287,18 +292,16 @@ export class AssistantPanel {
   private refreshStatus() {
     const s = this.status
     s.innerHTML = ''
+    s.hidden = false
     s.appendChild(this.clearB)
     const usable = this.transport && !offlineEnabled()
     this.input.disabled = !usable
     this.sendB.disabled = !usable
+    this.routeBox.replaceChildren()
     if (!this.transport) {
-      s.append(el('span', '', t('The assistant needs the bento/home extension (Chrome or Edge).') + ' '))
-      const a = document.createElement('a')
-      a.href = EXTENSION_URL
-      a.target = '_blank'
-      a.rel = 'noopener'
-      a.textContent = t('Get the extension')
-      s.appendChild(a)
+      // no host: an empty state that says what the assistant is, what it
+      // needs and what to do — a card, not a sentence in a status line
+      s.appendChild(this.installCard())
       return
     }
     if (offlineEnabled()) {
@@ -310,7 +313,7 @@ export class AssistantPanel {
     settings.href = '#'
     settings.className = 'ed-assist-settings'
     settings.textContent = t('Settings…')
-    settings.addEventListener('click', (ev) => { ev.preventDefault(); void this.transport?.openSettings() })
+    settings.addEventListener('click', (ev) => { ev.preventDefault(); void this.transport?.openSettings('assistant') })
     if (d && !d.configured) {
       s.append(el('span', '', t('The extension has no assistant endpoint yet.') + ' '), settings)
       this.input.disabled = true
@@ -327,15 +330,45 @@ export class AssistantPanel {
       this.sendB.disabled = true
       return
     }
-    const where = d?.local ? `${t('on this device')} · ${modelDisplay(d.model)}` : d ? `${d.host || '—'} · ${d.model || '—'}` : ''
-    if (this.routes.length > 1) {
-      // several routes: the model is a picker; the extension keeps the
-      // keys and the choice, the page only says which
-      s.append(el('span', 'ed-assist-route', `${t('via {host}', { host: this.transport.name })} · `), this.buildPicker(), el('span', '', ' '), settings)
-      return
-    }
-    const route = where ? `${t('via {host}', { host: this.transport.name })} · ${where}` : t('via {host}', { host: this.transport.name })
-    s.append(el('span', 'ed-assist-route', route + ' '), settings)
+    // the route lives at the bottom, by the composer: a picker when there
+    // are several, the model's name when there is one; Settings… beside it.
+    // The extension keeps the keys and the choice, the page only says which.
+    const where = d?.local ? modelDisplay(d.model) : d ? (d.model || d.host || '—') : ''
+    if (this.routes.length > 1) this.routeBox.append(this.buildPicker(), settings)
+    else this.routeBox.append(el('span', 'ed-assist-route', where, ), settings)
+    if (d?.local) this.routeBox.title = t('on this device')
+    else if (d?.host) this.routeBox.title = `${this.transport.name} · ${d.host}`
+    // nothing to say above the transcript → no empty strip (the Clear link moves into the header row's space)
+    const said = [...s.childNodes].filter((n) => n !== this.clearB).map((n) => n.textContent ?? '').join('').trim()
+    s.hidden = !said && this.clearB.hidden
+  }
+
+  /**
+   * The empty state without the extension: what this is, why it needs the
+   * extension (the key never lives in a document), the one button, and
+   * what to do after installing (a page is injected at load — reload).
+   */
+  private installCard(): HTMLElement {
+    const card = el('div', 'ed-assist-install')
+    card.appendChild(el('div', 'ed-assist-install-h', t('Chat with your deck')))
+    card.appendChild(el('p', '', t('Ask for a summary, a rewrite, a new slide, a fix. Your words and the deck\u2019s text go to a model you choose \u2014 Chrome\u2019s on-device model, Gemini, Anthropic, OpenAI or your own server \u2014 and the change lands as one undoable step.')))
+    card.appendChild(el('p', '', t('It needs the bento/home extension for Chrome or Edge: the extension holds the API key and talks to the model, so a document never carries a key.')))
+    // a real button (the status line's anchor colour would swallow a
+    // primary button's text) that opens the listing in a new tab
+    const a = document.createElement('button')
+    a.type = 'button'
+    a.className = 'ed-btn ed-btn-primary ed-assist-install-b'
+    a.textContent = t('Get the extension')
+    a.addEventListener('click', () => window.open(EXTENSION_URL, '_blank', 'noopener'))
+    const after = el('p', 'ed-assist-install-after', t('Installed it? Reload this page.') + ' ')
+    const reload = document.createElement('button')
+    reload.type = 'button'
+    reload.className = 'ed-assist-install-reload'
+    reload.textContent = t('Reload')
+    reload.addEventListener('click', () => location.reload())
+    after.appendChild(reload)
+    card.append(a, after)
+    return card
   }
 
   /** The route picker: one option per model, grouped by provider, the
