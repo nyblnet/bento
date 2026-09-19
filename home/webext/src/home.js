@@ -1248,12 +1248,16 @@ async function dropToGrant(ev) {
   }
 }
 {
+  // The WHOLE page, not just the grid: a drop that misses the grid would
+  // otherwise be the browser's default — navigating this tab to the file —
+  // which looks like the grant was taken when nothing happened.
   const scroll = document.querySelector('.scroll')
-  scroll.addEventListener('dragover', (ev) => {
-    if ([...(ev.dataTransfer?.items ?? [])].some((i) => i.kind === 'file')) { ev.preventDefault(); scroll.classList.add('dropping') }
+  const hasFiles = (ev) => [...(ev.dataTransfer?.items ?? [])].some((i) => i.kind === 'file')
+  document.addEventListener('dragover', (ev) => {
+    if (hasFiles(ev)) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'link'; scroll.classList.add('dropping') }
   })
-  scroll.addEventListener('dragleave', () => scroll.classList.remove('dropping'))
-  scroll.addEventListener('drop', (ev) => { scroll.classList.remove('dropping'); void dropToGrant(ev) })
+  document.addEventListener('dragleave', (ev) => { if (!ev.relatedTarget) scroll.classList.remove('dropping') })
+  document.addEventListener('drop', (ev) => { scroll.classList.remove('dropping'); if (hasFiles(ev)) { ev.preventDefault(); void dropToGrant(ev) } })
 }
 
 /** The grant new documents go to: the one chosen as default, else the first. */
