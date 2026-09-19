@@ -48,8 +48,12 @@
   /* segmented icons/list control */
   .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
     flex: none }
+  /* The two glyphs are different characters at different natural heights
+   * (▦ sits high, ☰ low); a fixed box with the glyph centred in it, rather
+   * than text baselines, is what lines them up. */
   .seg button { border: 0; background: var(--panel); color: var(--dim); font: inherit;
-    font-size: 13px; line-height: 1; padding: 6px 9px; cursor: pointer }
+    font-size: 14px; line-height: 1; width: 34px; height: 30px; padding: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center }
   .seg button + button { border-inline-start: 1px solid var(--line) }
   .seg button:hover { background: var(--hover); color: var(--ink) }
   .seg button[aria-pressed="true"] { background: var(--hover); color: var(--ink) }

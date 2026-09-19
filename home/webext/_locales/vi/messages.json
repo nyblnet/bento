@@ -494,9 +494,6 @@
   "placeTried": {
     "message": "Đã tìm “$1” ở $2 nơi trên ổ đĩa — không có."
   },
-  "recentTitle": {
-    "message": "Mới chỉnh sửa"
-  },
   "badgeNotAdded": {
     "message": "chưa thêm"
   },

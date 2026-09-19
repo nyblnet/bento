@@ -494,9 +494,6 @@
   "placeTried": {
     "message": "חיפשנו את „$1” ב־$2 מקומות בדיסק — לא שם."
   },
-  "recentTitle": {
-    "message": "נערכו לאחרונה"
-  },
   "badgeNotAdded": {
     "message": "לא נוספה"
   },

@@ -527,9 +527,6 @@
   "placeTried": {
     "message": "已在磁盘上 $2 个位置查找“$1”，未找到。"
   },
-  "recentTitle": {
-    "message": "最近编辑"
-  },
   "badgeNotAdded": {
     "message": "未添加"
   },

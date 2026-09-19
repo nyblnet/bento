@@ -494,9 +494,6 @@
   "placeTried": {
     "message": "«$1» در $2 جای دیسک جست‌وجو شد — آنجا نیست."
   },
-  "recentTitle": {
-    "message": "اخیراً ویرایش‌شده"
-  },
   "badgeNotAdded": {
     "message": "افزوده نشده"
   },

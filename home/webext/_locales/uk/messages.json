@@ -494,9 +494,6 @@
   "placeTried": {
     "message": "Шукали «$1» у $2 місцях на диску — там її немає."
   },
-  "recentTitle": {
-    "message": "Нещодавно змінені"
-  },
   "badgeNotAdded": {
     "message": "не додана"
   },

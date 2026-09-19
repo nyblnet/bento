@@ -494,9 +494,6 @@
   "placeTried": {
     "message": "Mencari “$1” di $2 tempat di disk — tidak ada."
   },
-  "recentTitle": {
-    "message": "Baru diedit"
-  },
   "badgeNotAdded": {
     "message": "belum ditambahkan"
   },

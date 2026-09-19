@@ -441,7 +441,7 @@ function renderSidebar() {
 
   $('nAll').textContent = state.docs.length || ''
   $('navAll').setAttribute('aria-current', String(state.folder === null))
-  const nRecent = state.docs.filter((d) => d.openedAt > 0).length
+  const nRecent = Math.min(RECENT_MAX, state.docs.filter((d) => (d.openedAt || 0) > 0 || (d.modified || 0) > 0).length)
   $('nRecent').textContent = nRecent || ''
   $('navRecent').setAttribute('aria-current', String(state.folder === RECENT))
 
@@ -466,8 +466,11 @@ $('navRecent').addEventListener('click', () => { state.folder = RECENT; show('do
 // --------------------------------------------------------------------- grid
 function visible() {
   const q = state.q.trim().toLowerCase()
+  // Recent is ONE list: the documents touched last, opened or edited,
+  // whichever was later — the sidebar entry is the only place it lives.
+  const recency = (d) => Math.max(d.openedAt || 0, d.modified || 0)
   let docs = state.folder === RECENT
-    ? state.docs.filter((d) => d.openedAt > 0)
+    ? state.docs.filter((d) => recency(d) > 0)
     : state.docs.filter((d) => state.folder === null || d.folder === state.folder)
   if (q) {
     // Match the TITLE once it is known, and the file name always — a document
@@ -480,7 +483,7 @@ function visible() {
       || d.base.toLowerCase().includes(q) || d.folder.toLowerCase().includes(q)
       || (d.text ?? '').toLowerCase().includes(q))
   }
-  if (state.folder === RECENT) return docs.sort((a, b) => b.openedAt - a.openedAt)
+  if (state.folder === RECENT) return docs.sort((a, b) => recency(b) - recency(a)).slice(0, RECENT_MAX)
   const by = {
     recent: (a, b) => b.modified - a.modified,
     name: (a, b) => (a.title ?? a.base).localeCompare(b.title ?? b.base),
@@ -685,35 +688,11 @@ function renderGrid() {
     return
   }
 
-  // RECENTLY EDITED, above everything: the handful of documents touched
-  // last, however the rest is sorted. Only on the unfiltered "All documents"
-  // view — a folder or a search is already an answer to "which ones", and a
-  // strip of the same cards twice would be noise there.
-  console.info('[bento/home] grid:', { folder: state.folder === RECENT ? 'recent' : state.folder, q: state.q, docs: docs.length, layout: state.layout })
-  if (state.folder === null && !state.q && docs.length > RECENT_MAX) {
-    const recent = [...docs].filter((d) => d.modified > 0).sort((a, b) => b.modified - a.modified).slice(0, RECENT_MAX)
-    if (recent.length >= 2) {
-      const strip = document.createElement('section')
-      strip.className = 'recent'
-      const h = document.createElement('h2')
-      h.textContent = t('recentTitle')
-      strip.appendChild(h)
-      const row = document.createElement('div')
-      row.className = `grid${state.layout === 'list' ? ' as-list' : ''}`
-      for (const d of recent) row.appendChild(makeCard(d))
-      strip.appendChild(row)
-      const all = document.createElement('h2')
-      all.className = 'recent-all'
-      all.textContent = t('navAll')
-      grid.before(strip, all)
-    }
-  }
-
   for (const d of docs) grid.appendChild(makeCard(d))
 }
 
-/** How many documents the recently-edited strip shows. */
-const RECENT_MAX = 6
+/** How many documents the Recent view shows. */
+const RECENT_MAX = 30
 
 /** One document card; every grid builds its cards here. */
 function makeCard(d) {

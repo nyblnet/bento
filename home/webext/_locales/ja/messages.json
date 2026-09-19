@@ -527,9 +527,6 @@
   "placeTried": {
     "message": "ディスク上の $2 か所で「$1」を探しましたが、見つかりませんでした。"
   },
-  "recentTitle": {
-    "message": "最近編集したもの"
-  },
   "badgeNotAdded": {
     "message": "未追加"
   },

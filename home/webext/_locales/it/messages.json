@@ -527,9 +527,6 @@
   "placeTried": {
     "message": "Cercato «$1» in $2 posizioni sul disco: non è lì."
   },
-  "recentTitle": {
-    "message": "Modificati di recente"
-  },
   "badgeNotAdded": {
     "message": "non aggiunta"
   },

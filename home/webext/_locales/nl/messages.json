@@ -494,9 +494,6 @@
   "placeTried": {
     "message": "Gezocht naar “$1” op $2 plekken op de schijf — niet daar."
   },
-  "recentTitle": {
-    "message": "Onlangs bewerkt"
-  },
   "badgeNotAdded": {
     "message": "niet toegevoegd"
   },

@@ -527,9 +527,6 @@
   "placeTried": {
     "message": "„$1“ an $2 Orten auf der Festplatte gesucht — nicht dort."
   },
-  "recentTitle": {
-    "message": "Zuletzt bearbeitet"
-  },
   "badgeNotAdded": {
     "message": "nicht hinzugefügt"
   },

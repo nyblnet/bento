@@ -494,9 +494,6 @@
   "placeTried": {
     "message": "Искали «$1» в $2 местах на диске — там её нет."
   },
-  "recentTitle": {
-    "message": "Недавно изменённые"
-  },
   "badgeNotAdded": {
     "message": "не добавлена"
   },

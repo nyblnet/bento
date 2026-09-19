@@ -494,9 +494,6 @@
   "placeTried": {
     "message": "ค้นหา “$1” ใน $2 ตำแหน่งบนดิสก์แล้ว — ไม่พบ"
   },
-  "recentTitle": {
-    "message": "แก้ไขล่าสุด"
-  },
   "badgeNotAdded": {
     "message": "ยังไม่ได้เพิ่ม"
   },

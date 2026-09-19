@@ -494,9 +494,6 @@
   "placeTried": {
     "message": "डिस्क पर $2 जगहों में “$1” खोजा — वहाँ नहीं है।"
   },
-  "recentTitle": {
-    "message": "हाल ही में संपादित"
-  },
   "badgeNotAdded": {
     "message": "जोड़ा नहीं गया"
   },

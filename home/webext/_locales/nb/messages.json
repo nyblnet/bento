@@ -494,9 +494,6 @@
   "placeTried": {
     "message": "Lette etter «$1» på $2 steder på disken — ikke der."
   },
-  "recentTitle": {
-    "message": "Nylig redigert"
-  },
   "badgeNotAdded": {
     "message": "ikke lagt til"
   },

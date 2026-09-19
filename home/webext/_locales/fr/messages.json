@@ -527,9 +527,6 @@
   "placeTried": {
     "message": "« $1 » cherché à $2 endroits sur le disque — pas là."
   },
-  "recentTitle": {
-    "message": "Modifiés récemment"
-  },
   "badgeNotAdded": {
     "message": "non ajouté"
   },

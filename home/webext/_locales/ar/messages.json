@@ -494,9 +494,6 @@
   "placeTried": {
     "message": "بُحث عن ”$1“ في $2 موضعًا على القرص — ليس هناك."
   },
-  "recentTitle": {
-    "message": "عُدّلت مؤخرًا"
-  },
   "badgeNotAdded": {
     "message": "غير مضاف"
   },
