@@ -13,6 +13,21 @@ pre-1.0.
 
 ## [1.2.2] — 2026-09-19
 
+- **Security: update this file. Another local file could read this deck's
+  collaboration keys, and steer where it looks for updates.** On a desktop
+  browser, a deck opened straight from disk (a `file://` page) shares one
+  storage area with every other local Bento file the user opens — a quirk of
+  how browsers treat local files. A malicious `.bento.html` opened from disk
+  could read the auto-save store and lift a shared deck's room keys (read and
+  write access to that live session), and could plant the address this app
+  checks for updates, sync, and language packs so the next deck contacted a
+  server of its choosing (signed-update verification still blocked any
+  unsigned build). Auto-save now stores document content only — never the
+  collaboration keys — and those addresses are honoured only from a real web
+  origin, never a local file. **The iOS and Android apps were never affected**
+  — each document already runs in its own isolated origin. Affects desktop
+  browsers opening a local file, with or without the extension.
+
 - **A deck full of photos can be shared live again.** A deck whose pictures
   were each under the sharing limit but together came to more than about a
   megabyte could not be shared at all — the copy a joining collaborator

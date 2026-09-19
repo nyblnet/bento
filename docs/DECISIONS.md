@@ -7313,3 +7313,40 @@ transport surfaces `refused('too-large', null)` → the session emits a notice w
 deck is too large to share" rather than "that change is too large". (Wording is
 the slides zone's.)
 
+
+## 2026-09-19 — file:// is one shared origin; keep secrets and trust out of it
+
+Chrome (and other browsers) give EVERY `file://` document one shared,
+enumerable storage origin: `localStorage`, IndexedDB and the rest are common
+to every local `.bento.html` the user opens. Measured with two decks in
+different folders — deck B read deck A's IndexedDB and localStorage.
+Consequences and the rule they leave:
+
+- **Auto-save leaked collaboration secrets.** `putRecovery`/`addVersion`
+  wrote `JSON.stringify(doc)`, and `doc.collab` carries the room read key,
+  `ownerPriv`, `writerPriv` and the audience show key. Any local file read the
+  auto-save store and lifted them — silent read+write to those live rooms,
+  plus every auto-saved deck's plaintext. Fixed: snapshots are content-only
+  (`collab` dropped before the write); restore re-attaches `collab` from the
+  file being restored into, so recovery is unchanged. Encrypted decks were
+  already skipped.
+- **Boot-read URL overrides were forgeable.** `bento-update-url`,
+  `bento-sync-url`, `bento-packs-url` are dev overrides read at startup; a
+  malicious local file could plant one and steer the next deck to a hostile
+  server. `sharedStorageOrigin()` now gates all three — honoured only from a
+  real web origin (https, or http on localhost), never `file://` or an opaque
+  origin, fail-safe to "shared" when the origin can't be determined. The
+  auto-save strip and the update/sync gate shipped in #520; the pack-URL
+  override gate in #523.
+- **The native hosts were never exposed.** iOS serves each document from
+  `bento-tray://<hash-of-path>/` and Android from
+  `https://<hash-of-uri>.bento-tray.invalid/` — a per-document origin, so
+  cross-deck reads are impossible there. The webext does NOT change this: it
+  supplies a directory handle but the deck still opens as a `file://` page.
+
+The rule: on `file://` there is no origin identity to bind a capability to.
+Nothing secret goes into a `file://`-reachable store unstripped, and no
+boot-time trust decision is taken from one. Still open, for the follow-up:
+the `bento-member-<docId>` device signing key and plaintext auto-save content
+(a per-file key in `#bento-doc`); and #519's persistent file-handle grant,
+which for the same reason is safe only under a real origin.
