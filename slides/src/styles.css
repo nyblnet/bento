@@ -2949,6 +2949,11 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-assist-routebox .ed-assist-settings:hover { color: var(--ink); }
 .ed-assist-status[hidden] { display: none; }
 /* the empty state: no extension */
+.ed-exthint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; line-height: 1.45; color: var(--ink); }
+.ed-exthint-text { flex: 1 1 260px; }
+.ed-exthint-get, .ed-exthint-not { flex: none; }
+.ed-recover.ed-exthint-bar { max-width: 640px; }
+.ed-about-actions + .ed-exthint { margin: 6px 0 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); font-size: 11px; }
 .ed-assist-install { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: var(--ink); }
 .ed-assist-install-h { font-weight: 700; font-size: 13px; }
 .ed-assist-install p { margin: 0; line-height: 1.45; color: var(--ink-2); }

@@ -86,9 +86,8 @@ function saveRect(win: HTMLElement) {
   lsSet(FLOAT_KEY, JSON.stringify({ x: win.offsetLeft, y: win.offsetTop, w: win.offsetWidth, h: win.offsetHeight }))
 }
 
-/** Where "get the extension" points. The app has no store link yet — the
- *  repository directory is the honest address until a listing exists. */
-export const EXTENSION_URL = 'https://github.com/nyblnet/bento/tree/main/home/webext'
+import { EXTENSION_URL } from '../exthint'
+export { EXTENSION_URL }
 
 const el = (tag: string, cls: string, text?: string) => {
   const n = document.createElement(tag)
@@ -351,9 +350,9 @@ export class AssistantPanel {
    */
   private installCard(): HTMLElement {
     const card = el('div', 'ed-assist-install')
-    card.appendChild(el('div', 'ed-assist-install-h', t('Chat with your deck')))
-    card.appendChild(el('p', '', t('Ask for a summary, a rewrite, a new slide, a fix. Your words and the deck\u2019s text go to a model you choose \u2014 Chrome\u2019s on-device model, Gemini, Anthropic, OpenAI or your own server \u2014 and the change lands as one undoable step.')))
-    card.appendChild(el('p', '', t('It needs the bento/home extension for Chrome or Edge: the extension holds the API key and talks to the model, so a document never carries a key.')))
+    card.appendChild(el('div', 'ed-assist-install-h', t('Chat with your deck — on your device')))
+    card.appendChild(el('p', '', t('Ask for a summary, a rewrite, a new slide, a fix. By default it runs on Chrome’s built-in model: nothing leaves your computer, no account, no key. Or pick Gemini, Anthropic, OpenAI or your own server. Every change lands as one undoable step.')))
+    card.appendChild(el('p', '', t('It needs the bento/home extension for Chrome or Edge — the same extension that lets this deck save and update itself in place. Keys stay in the extension; a document never carries one.')))
     // a real button (the status line's anchor colour would swallow a
     // primary button's text) that opens the listing in a new tab
     const a = document.createElement('button')

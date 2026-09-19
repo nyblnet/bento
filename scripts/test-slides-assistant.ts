@@ -718,7 +718,7 @@ try {
     document.body.appendChild(panel.root)
     panel.setOpen(true, false); await tick(30)
     const card = panel.root.querySelector('.ed-assist-install')
-    check('no extension: the install card, with a heading, the reason, a primary button and a reload hint', !!card && /Chat with your deck/.test(card.textContent) && /never carries a key/.test(card.textContent) && !!card.querySelector('.ed-assist-install-b') && /Reload/.test(card.textContent))
+    check('no extension: the install card — local-first heading, the in-place reason, a primary button and a reload hint', !!card && /Chat with your deck — on your device/.test(card.textContent) && /nothing leaves your computer/.test(card.textContent) && /save and update itself in place/.test(card.textContent) && /never carries one/.test(card.textContent) && !!card.querySelector('.ed-assist-install-b') && /Reload/.test(card.textContent))
     check('no extension: the composer is disabled, no route box content', panel.root.querySelector('.ed-assist-input').disabled && panel.root.querySelector('.ed-assist-routebox').children.length === 0)
   }
   // contract: local model display; consent-pending → waiting + one re-check on focus; consent-denied → refusal card

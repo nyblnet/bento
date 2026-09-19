@@ -45,6 +45,7 @@ import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, type ShrinkResult } from './shrink'
+import { extensionHint } from './exthint'
 
 const i18nT = t
 
@@ -2727,6 +2728,16 @@ export class Editor {
     return true
   }
 
+  /** One bar, once per kind, dismissable and remembered (exthint.ts). */
+  private extensionHintBar(kind: 'save' | 'update') {
+    if (document.querySelector('.ed-recover.ed-exthint-bar')) return
+    const bar = div('ed-recover ed-exthint-bar')
+    const line = extensionHint(kind, t, () => bar.remove())
+    if (!line) return
+    bar.appendChild(line)
+    document.body.appendChild(bar)
+  }
+
   private noticeIfCannotWriteInPlace() {
     if (canWriteInPlace()) return
     if (lsGet(SAVE_NOTICE_KEY) === 'seen') return
@@ -2958,6 +2969,9 @@ export class Editor {
       this.toast(result === 'downloaded'
         ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
         : t('Saved'))
+      // the save needed a picker for a file the user already had open: the
+      // moment the extension's in-place write is felt missing (exthint.ts)
+      if (result === 'saved-as' && !forcePicker) this.extensionHintBar('save')
     } catch (err) {
       console.error(err)
       this.toast(t('Save failed — see console'))
@@ -3484,6 +3498,8 @@ export class Editor {
           } catch (err: any) { fail(err) }
         })
         actions.appendChild(inPlaceB)
+        // an update that would need a picker: say what the extension makes of it
+        if (!canUpdateInPlace()) { const hint = extensionHint('update', t); if (hint) actions.insertAdjacentElement('afterend', hint) }
 
         const getB = document.createElement('button')
         getB.className = 'ed-btn'

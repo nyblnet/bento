@@ -379,6 +379,13 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: extension hints — said where the extension would change something, once
+        # In-place save, in-place update with a backup, the on-device model:
+        # each mentioned at the moment its absence is felt (a picker save, an
+        # update that needs a picker, the Assistant's empty state), on file://
+        # in Chrome/Edge without the host, once, and remembered when dismissed.
+        run: node scripts/test-slides-exthint.ts
+
       - name: Media autoplay rig
         # An author set a clip's Autoplay to Off and it played anyway, every
         # show, since media shipped in v0.9.16. render.ts wrote
