@@ -112,8 +112,14 @@
 //                        elision map never leaves the page.) Then zero or more
 //                        evt { kind:'assistant.chunk', text }        a prose delta (question turns)
 //                        and exactly one of
-//                        evt { kind:'assistant.done', mode:'ask', text }
-//                        evt { kind:'assistant.done', mode:'edit', ops, note?, focus:'elements'|'slide'|'none' }
+//                        evt { kind:'assistant.done', mode:'ask', text, sources? }
+//                        evt { kind:'assistant.done', mode:'edit', ops, note?, focus:'elements'|'slide'|'none', sources? }
+//                                                     `sources` = what the model read on the web for this
+//                                                     turn (a provider's search grounding, or the fetch
+//                                                     tool): [{ title, url }], read by SHAPE — an http(s)
+//                                                     url ≤ 2048, a title ≤ 200 chars, at most 20 — and
+//                                                     shown as a "Sources" line so a number on a slide can
+//                                                     be traced. Never applied to the document.
 //                                                     `ops` = the JSON object the model returned, UNTRUSTED —
 //                                                     the page applies it through ops.ts and the gate;
 //                                                     `note` = a sentence to show (e.g. only the outline fit)
@@ -138,11 +144,31 @@
 /** A conversation turn as the page keeps it: text only. */
 export interface Turn { role: 'user' | 'assistant'; text: string }
 
+/** A page the model read for this turn. */
+export interface Source { title: string; url: string }
+
 /** What a turn resolved to. `ops` is untrusted data for ops.ts. */
 export type TurnResult =
-  | { mode: 'ask'; text: string }
-  | { mode: 'edit'; text: string }
-  | { mode: 'edit'; ops: Record<string, unknown>; note?: string; focus: 'elements' | 'slide' | 'none' }
+  | { mode: 'ask'; text: string; sources?: Source[] }
+  | { mode: 'edit'; text: string; sources?: Source[] }
+  | { mode: 'edit'; ops: Record<string, unknown>; note?: string; focus: 'elements' | 'slide' | 'none'; sources?: Source[] }
+
+export const SOURCES_MAX = 20
+/** the sources on a done frame, by shape; [] when none pass */
+export function boundSources(v: unknown): Source[] {
+  if (!Array.isArray(v)) return []
+  const out: Source[] = []
+  for (const s of v.slice(0, SOURCES_MAX)) {
+    if (!s || typeof s !== 'object') continue
+    const o = s as Record<string, unknown>
+    const url = typeof o.url === 'string' && o.url.length <= 2048 && /^https?:\/\/[^\s"'<>]+$/i.test(o.url) ? o.url : null
+    if (!url) continue
+    let title = typeof o.title === 'string' ? o.title.trim().slice(0, 200) : ''
+    if (!title) { try { title = new URL(url).host } catch { title = url } }
+    out.push({ title, url })
+  }
+  return out
+}
 
 export interface AssistantDescription {
   /** what the page may show: the endpoint's hostname and the model id */
@@ -371,11 +397,13 @@ export class ExtensionTransport implements AssistantTransport {
           if (t) { text += t; onChunk(t) }
         } else if (f.kind === 'assistant.done') {
           const whole = typeof f.text === 'string' && f.text ? f.text : text
+          const sources = boundSources(f.sources)
+          const src = sources.length ? { sources } : {}
           if (f.mode === 'edit' && f.ops && typeof f.ops === 'object' && !Array.isArray(f.ops)) {
             const fs = f.focus === 'elements' || f.focus === 'slide' ? f.focus : 'none'
-            finish(() => resolve({ mode: 'edit', ops: f.ops as Record<string, unknown>, focus: fs, ...(typeof f.note === 'string' && f.note ? { note: f.note } : {}) }))
+            finish(() => resolve({ mode: 'edit', ops: f.ops as Record<string, unknown>, focus: fs, ...(typeof f.note === 'string' && f.note ? { note: f.note } : {}), ...src }))
           } else {
-            finish(() => resolve(f.mode === 'edit' ? { mode: 'edit', text: whole } : { mode: 'ask', text: whole }))
+            finish(() => resolve(f.mode === 'edit' ? { mode: 'edit', text: whole, ...src } : { mode: 'ask', text: whole, ...src }))
           }
         } else if (f.kind === 'assistant.error') {
           finish(() => reject(new AssistantError(String(f.reason ?? 'request failed'), codeOf(f.code))))

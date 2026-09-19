@@ -2934,6 +2934,8 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-assist-card-h { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
 .ed-assist-undo { padding: 2px 8px; font-size: 11px; }
 .ed-assist-card-remote { margin-top: 4px; color: #B4530A; font-size: 11px; word-break: break-all; }
+.ed-assist-sources { margin-top: 6px; font-size: 11px; color: var(--muted); white-space: normal; }
+.ed-assist-sources a { color: var(--ink-2); }
 .ed-assist-card-sum { color: var(--muted); margin-top: 4px; }
 .ed-assist-card-list { margin: 4px 0 0; padding-inline-start: 16px; color: var(--muted); font-size: 11px; }
 .ed-assist-input { width: 100%; resize: none; overflow-y: auto; min-height: 40px; font: inherit; font-size: 12px;

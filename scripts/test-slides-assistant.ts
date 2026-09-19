@@ -43,7 +43,7 @@ import { starterDoc } from '../slides/src/starterdeck.ts'
 import { compactDoc, expandDoc } from '../slides/src/compact.ts'
 import type { BentoDoc } from '../slides/src/model.ts'
 import { elideDoc, material, mergeReply, outlineDeck } from '../slides/src/editor/assistant/material.ts'
-import { CH, CODE_RE, CONTEXT_MAX, CONTEXT_MIN, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT } from '../slides/src/editor/assistant/transport.ts'
+import { boundSources, CH, CODE_RE, CONTEXT_MAX, CONTEXT_MIN, ExtensionTransport, extensionPresent, HOST_RE, MODEL_RE, REQ_TIMEOUT, SOURCES_MAX } from '../slides/src/editor/assistant/transport.ts'
 import { ADD_MAX, applyOps, INSERT_MAX } from '../slides/src/editor/assistant/ops.ts'
 import { dedupeIds, cleanDoc, ID_RE } from '../slides/src/editor/assistant/material.ts'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
@@ -540,6 +540,18 @@ await (async () => {
   w.evt(turnId, 'assistant.done', { mode: 'edit', text: 'I cannot do that with these operations.' })
   const r2c = await p2c
   ok(r2c.mode === 'edit' && 'text' in r2c && r2c.text.startsWith('I cannot'), 'done with text on an edit = the model declined in prose')
+  {
+    // sources on done: read by shape
+    const s = boundSources([{ title: 'IEA EV Outlook', url: 'https://www.iea.org/reports/ev' }, { url: 'https://example.org/x' }, { title: 'bad', url: 'javascript:alert(1)' }, { title: 'x'.repeat(300), url: 'https://a.example/' }, 'junk', { title: 't', url: 'https://a b/' }])
+    ok(s.length === 3 && s[0].title === 'IEA EV Outlook' && s[1].title === 'example.org' && s[2].title.length === 200, 'sources: http(s) only, a missing title becomes the host, a long one is cut, junk dropped')
+    ok(boundSources(Array.from({ length: 40 }, (_, i) => ({ url: `https://s${i}.example/` }))).length === SOURCES_MAX, `at most ${SOURCES_MAX}`)
+    w.handler = (f) => { if (f.op === 'assistant.turn') { turnId = f.id; w.res(f.id, { ok: true }) } }
+    const ps = tr.turn('x', [], { index: 0, selection: [] }, mat, () => {}, new AbortController().signal)
+    await tick()
+    w.evt(turnId, 'assistant.done', { mode: 'ask', text: 'EV sales grew 35%.', sources: [{ title: 'IEA', url: 'https://www.iea.org/' }, { url: 'ftp://nope' }] })
+    const rs = await ps
+    ok('sources' in rs && rs.sources!.length === 1 && rs.sources![0].url === 'https://www.iea.org/', 'done carries the bounded sources')
+  }
 
   // refused
   w.handler = (f) => { if (f.op === 'assistant.turn') w.res(f.id, { ok: false, reason: 'not configured', code: 'not-configured' }) }
@@ -877,6 +889,25 @@ try {
     const prose = panel2.root.querySelector('.ed-assist-assistant .ed-assist-prose')
     check('reply: rendered as prose (a <p>), not a pre-wrap blob', !!prose && prose.innerHTML.includes('<p>Your deck has seven slides.') && prose.querySelector('p') !== null)
     check('reply: a copy button sits on the bubble', !!panel2.root.querySelector('.ed-assist-assistant .ed-assist-copy'))
+    {
+      // a Sources line under a prose answer and on an applied card
+      const storeS = fakeStore(starterDoc())
+      let n = 0
+      const trS = fakeTransport({ turn: async (request, history, focus, material) => (material(), ++n === 1
+        ? { mode: 'ask', text: 'EV sales grew 35% in 2025.', sources: [{ title: 'IEA Global EV Outlook', url: 'https://www.iea.org/reports/global-ev-outlook-2026' }] }
+        : { mode: 'edit', ops: { notes: [{ slide: 1, text: 'EV sales grew 35%.' }] }, focus: 'slide', sources: [{ title: 'IEA', url: 'https://www.iea.org/' }] }) })
+      const panelS = new AssistantPanel({ store: storeS, transport: trS })
+      document.body.appendChild(panelS.root)
+      panelS.setOpen(true, false); await tick(60)
+      panelS.root.querySelector('.ed-assist-input').value = 'How did EV sales do?'
+      await panelS.submit(); await tick(30)
+      const src1 = panelS.root.querySelector('.ed-assist-assistant .ed-assist-sources a')
+      check('sources: a prose answer carries a Sources line with the link', !!src1 && src1.textContent === 'IEA Global EV Outlook' && src1.href.startsWith('https://www.iea.org/') && src1.rel.includes('noopener'))
+      panelS.root.querySelector('.ed-assist-input').value = 'put that in the notes'
+      await panelS.submit(); await tick(30)
+      const src2 = panelS.root.querySelector('.ed-assist-card .ed-assist-sources a')
+      check('sources: an applied card carries its Sources line; the deck got the note, not the source (' + [!!src2, src2 && src2.textContent, storeS.replaced, storeS.doc.slides[0].notes].join(' | ') + ')', !!src2 && src2.textContent === 'IEA' && storeS.replaced === 1 && /EV sales grew/.test(storeS.doc.slides[0].notes) && !JSON.stringify(storeS.doc).includes('iea.org'))
+    }
     const sends3 = []
     const tr3 = fakeTransport({ turn: async () => { sends3.push(1); return { mode: 'ask', text: ['**Bold** and a list:', '', '- one <img src=x onerror="window.__pwn3=1">', '- two'].join(String.fromCharCode(10)) } } })
     const panel3 = new AssistantPanel({ store, transport: tr3 })

@@ -19,7 +19,7 @@ import { parseDocInputReport, fitAutoHeights, restack } from '../../compactload'
 import { validateDoc, type Finding } from '../../validate'
 import { lsGet, lsSet } from '../../../../kernel/src/storage.ts'
 import { offlineEnabled } from '../../../../kernel/src/net.ts'
-import { ExtensionTransport, extensionPresent, type AssistantDescription, type AssistantModel, type AssistantTransport } from './transport'
+import { ExtensionTransport, extensionPresent, type AssistantDescription, type AssistantModel, type AssistantTransport, type Source } from './transport'
 
 /** Display names for on-device model ids; anything else shows as its id. */
 export const MODEL_NAMES: Record<string, string> = { 'gemini-nano': 'Gemini Nano' }
@@ -572,7 +572,8 @@ export class AssistantPanel {
     if ('text' in result) {
       // prose: an answer, or an edit the model declined in words — shown, never applied
       this.finishReply(live, result.text.trim())
-      this.history.push({ role: 'assistant', text: result.text.trim() })
+      if (result.sources?.length) live.appendChild(this.sourcesLine(result.sources))
+      this.history.push({ role: 'assistant', text: result.text.trim() + (result.sources?.length ? `\n[sources: ${result.sources.map((s) => s.url).join(' ')}]` : '') })
       return
     }
     live.remove()
@@ -596,11 +597,24 @@ export class AssistantPanel {
       return
     }
     if (r.skipped.length) this.note(t('{n} changes named something that is not there and were skipped.', { n: String(r.skipped.length) }), 'info')
-    this.apply(index, r.doc, elided as Elided, r.applied)
+    this.apply(index, r.doc, elided as Elided, r.applied, result.sources)
+  }
+
+  /** "Sources: a, b, c" — the pages the model read for this turn, as links. */
+  private sourcesLine(sources: Source[]): HTMLElement {
+    const line = el('div', 'ed-assist-sources', t('Sources') + ': ')
+    sources.forEach((s, i) => {
+      if (i) line.appendChild(document.createTextNode(', '))
+      const a = document.createElement('a')
+      a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer'
+      a.textContent = s.title; a.title = s.url
+      line.appendChild(a)
+    })
+    return line
   }
 
   /** The patched deck → one undoable document swap, and a card saying what happened. */
-  apply(index: number, value: Record<string, unknown>, elided: Elided, ops: string[] = []) {
+  apply(index: number, value: Record<string, unknown>, elided: Elided, ops: string[] = [], sources: Source[] = []) {
     if (this.store.readOnly) { this.note(t('This deck is read-only here — nothing was changed.'), 'err'); return }
     const json = mergeReply(this.store.doc, value, elided)
     const parsed = json ? parseDocInputReport(json) : null
@@ -644,6 +658,7 @@ export class AssistantPanel {
     undo.addEventListener('click', () => { this.store.undo(); undo.disabled = true })
     head.appendChild(undo)
     card.appendChild(head)
+    if (sources.length) card.appendChild(this.sourcesLine(sources))
     if (introduced.length) {
       const line = el('div', 'ed-assist-card-remote', t('Loads from the web: {hosts}', { hosts: introduced.slice(0, 6).join(', ') + (introduced.length > 6 ? '…' : '') }))
       card.appendChild(line)

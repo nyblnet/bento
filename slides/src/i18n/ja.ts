@@ -940,6 +940,7 @@ export const ja: Catalog = {
   "The reply was not a deck edit I could apply.": "返答は適用できるデッキの編集ではありませんでした。",
   "Working on it…": "処理中…",
   "The reply changed nothing I could apply.": "返答には適用できる変更がありませんでした。",
+  "Sources": "出典",
   "Chat with your deck — on your device": "デッキとチャット — デバイス上で",
   "Ask for a summary, a rewrite, a new slide, a fix. By default it runs on Chrome’s built-in model: nothing leaves your computer, no account, no key. Or pick Gemini, Anthropic, OpenAI or your own server. Every change lands as one undoable step.": "要約、書き直し、新しいスライド、修正を頼めます。既定では Chrome 内蔵モデルで動作し、何もコンピューターの外に出ません。アカウントもキーも不要です。Gemini、Anthropic、OpenAI、または自分のサーバーも選べます。変更は元に戻せる一手順として反映されます。",
   "It needs the bento/home extension for Chrome or Edge — the same extension that lets this deck save and update itself in place. Keys stay in the extension; a document never carries one.": "Chrome または Edge 用の bento/home 拡張機能が必要です。このデッキをその場で保存・更新できるようにするのと同じ拡張機能です。キーは拡張機能に留まり、ドキュメントにキーが含まれることはありません。",

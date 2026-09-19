@@ -940,6 +940,7 @@ export const fr: Catalog = {
   "The reply was not a deck edit I could apply.": "La réponse n’était pas une modification que je pouvais appliquer.",
   "Working on it…": "Un instant…",
   "The reply changed nothing I could apply.": "La réponse n’a rien modifié que je puisse appliquer.",
+  "Sources": "Sources",
   "Chat with your deck — on your device": "Discuter avec votre deck — sur votre appareil",
   "Ask for a summary, a rewrite, a new slide, a fix. By default it runs on Chrome’s built-in model: nothing leaves your computer, no account, no key. Or pick Gemini, Anthropic, OpenAI or your own server. Every change lands as one undoable step.": "Demandez un résumé, une reformulation, une nouvelle diapositive, une correction. Par défaut, cela tourne sur le modèle intégré de Chrome : rien ne quitte votre ordinateur, pas de compte, pas de clé. Ou choisissez Gemini, Anthropic, OpenAI ou votre propre serveur. Chaque modification arrive en une seule étape annulable.",
   "It needs the bento/home extension for Chrome or Edge — the same extension that lets this deck save and update itself in place. Keys stay in the extension; a document never carries one.": "Il faut l’extension bento/home pour Chrome ou Edge — celle-là même qui permet à ce deck de s’enregistrer et de se mettre à jour sur place. Les clés restent dans l’extension ; un document n’en porte jamais.",

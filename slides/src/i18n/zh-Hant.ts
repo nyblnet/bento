@@ -940,6 +940,7 @@ export const zhHant: Catalog = {
   "The reply was not a deck edit I could apply.": "回覆不是可以套用的簡報編輯。",
   "Working on it…": "處理中…",
   "The reply changed nothing I could apply.": "回覆中沒有可以套用的變更。",
+  "Sources": "來源",
   "Chat with your deck — on your device": "與簡報對話 — 在你的裝置上",
   "Ask for a summary, a rewrite, a new slide, a fix. By default it runs on Chrome’s built-in model: nothing leaves your computer, no account, no key. Or pick Gemini, Anthropic, OpenAI or your own server. Every change lands as one undoable step.": "可以請求摘要、改寫、新投影片或修正。預設使用 Chrome 內建模型：一切留在你的電腦上，無需帳號和金鑰。也可選擇 Gemini、Anthropic、OpenAI 或你自己的伺服器。每項變更以一步可復原的方式生效。",
   "It needs the bento/home extension for Chrome or Edge — the same extension that lets this deck save and update itself in place. Keys stay in the extension; a document never carries one.": "需要適用於 Chrome 或 Edge 的 bento/home 擴充功能——正是它讓這份簡報能夠就地儲存和更新。金鑰留在擴充功能中，文件永遠不會包含金鑰。",
