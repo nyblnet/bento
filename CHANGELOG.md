@@ -11,6 +11,8 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.2.3] — 2026-09-19
+
 - **Select several slides in the sidebar and move them together.** ⌘/Ctrl-click
   adds a slide to the selection, ⇧-click selects a range from the current one,
   and dragging any selected slide moves the whole selection as a block, in its
