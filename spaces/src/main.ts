@@ -4,6 +4,7 @@
 // capture the pristine document BEFORE any DOM mutation — the captured copy is
 // what gets re-serialized on save.
 
+import { SaveQueue } from '../../kernel/src/savequeue.ts'
 import './styles.css'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
 import { startTheme } from '../../kernel/src/theme.ts'
@@ -198,6 +199,7 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   document.getElementById('bento-splash')?.remove()
 
   const store = new Store(doc)
+  const saves = new SaveQueue({ getDocument: () => store.doc, getRevision: () => store.revision })
   // `doc.readonly` was declared in the format and read by NOTHING: a space
   // saved as a reading copy opened fully editable, so the one property the
   // sender chose was the one the file did not keep. It is not a security
@@ -311,23 +313,24 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   let lastVersionAt = 0
 
   async function doSave(): Promise<void> {
-    store.endRun()
+    if (store.readOnly) return
     editor.status(t('Saving…'))
-    const res = await saveFile(store.doc)
+    const saved = await saves.run(() => store.endRun(), snapshot => saveFile(snapshot))
+    if (!saved) return
+    const res = saved.value
     if (res === 'saved' || res === 'saved-as' || res === 'downloaded') {
       // the document is on disk now — the dot goes out
-      store.dirty = false
-      editor.syncDirty()
+      if (saved.isCurrent()) { store.dirty = false; editor.syncDirty() }
     }
     if (res === 'saved' || res === 'saved-as' || res === 'downloaded') {
       // A SAVE IS THE MOMENT WORTH KEEPING. The throttle below catches long
       // editing runs, but the point somebody chose to write the file is the
       // point they would most want back, so it is never throttled away.
       // Encrypted spaces keep nothing here, for the reason putRecovery does not.
-      if (!isEncryptionActive()) { void addVersion(store.doc); lastVersionAt = Date.now() }
+      if (!isEncryptionActive()) { void addVersion(saved.doc); lastVersionAt = Date.now() }
     }
-    if (res === 'saved') {
-      void clearRecovery(store.doc.docId)
+    if (res === 'saved' && saved.isCurrent()) {
+      void clearRecovery(saved.doc.docId)
       // "Saved" is doing real work here: on a browser without file-system
       // access this was a NEW download, and saying so is the difference
       // between understanding that and losing track of which copy is current

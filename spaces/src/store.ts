@@ -62,6 +62,8 @@ export class Store {
    * is "the file IS the document" is the one thing it should say.
    */
   dirty = false
+  /** Every mutation, even within a typing run or while already dirty. */
+  revision = 0
 
   private undoStack: Entry[] = []
   private redoStack: Entry[] = []
@@ -84,6 +86,7 @@ export class Store {
   }
 
   emit(ev: Event): void {
+    if (ev === 'doc') this.revision++
     for (const fn of this.listeners.get(ev) ?? []) fn()
   }
 
@@ -177,6 +180,7 @@ export class Store {
 
   /** Model changed without a new undo entry (mid-run). */
   touch(): void {
+    this.revision++
     // A typing run deliberately does NOT emit 'doc' per keystroke — that is the
     // whole point of the run. But the FIRST keystroke changes something the
     // reader can see: the file now differs from the disk. Announce that once,
@@ -199,6 +203,8 @@ export class Store {
    * a colleague's keystroke must move the dot without claiming to be yours.
    */
   setDirty(v: boolean): void {
+    // Remote apply calls this even when the dirty flag is already set.
+    if (v) this.revision++
     if (this.dirty === v) return
     this.dirty = v
     // NOT 'doc'. The editor reads 'doc' as "you edited something" and paints
