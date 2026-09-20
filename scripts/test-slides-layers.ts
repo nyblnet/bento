@@ -140,7 +140,9 @@ const panels = read('slides/src/editor/panels.ts')
   ok(/if \(h\.dataset\.acc\) continue/.test(acc) && /h\.nextElementSibling/.test(acc), 'the accordion attaches one click handler per header for its lifetime and finds the body live (the Layers h3 outlives rebuilds)')
 }
 ok(/setOrder: \(elements\) => this\.store\.commit\(/.test(panels), 'a move is one store.commit — one undo step, no new field')
-ok(/'Layers'\]\)/.test(panels.slice(panels.indexOf('CLOSED_BY_DEFAULT ='), panels.indexOf('CLOSED_BY_DEFAULT =') + 200)), 'closed by default (opened state persists per title like the other sections)')
+// Membership is the contract; Layers need not be the last collapsed section.
+const closedDefaults = /CLOSED_BY_DEFAULT\s*=\s*new Set\(\[([^\]]*)\]\)/.exec(panels)?.[1] ?? ''
+ok(/(?:^|,)\s*'Layers'\s*(?:,|$)/.test(closedDefaults), 'closed by default (opened state persists per title like the other sections)')
 const layers = read('slides/src/editor/layers.ts') + read('slides/src/editor/layerrows.ts')
 ok(!/zIndex|z-index/.test(layers.replace(/^\s*(\/\/|\*).*$/gm, '')), 'no z-index in the code (comments aside) — the order IS the array')
 
