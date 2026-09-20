@@ -147,7 +147,11 @@ for (const f of fs.readdirSync(agentDir).filter((f) => f.endsWith('.json')).sort
   const r = run([path.join(agentDir, f), '--json'])
   let j: any = null
   try { j = JSON.parse(r.out) } catch {}
-  ok(r.code === 0 && j?.ok === true && j.dropped?.length === 0 && j.expanded > 0, `agent deck ${f}: loads, ${j?.expanded ?? '?'} fields filled, zero drops (exit ${r.code})`)
+  const loaded = r.code === 0 && j?.ok === true && j.dropped?.length === 0 && j.expanded > 0
+  // Preserve the child diagnostic: without it a browser/CLI failure looked
+  // like a compact expansion regression with '?' fields and no explanation.
+  if (!loaded) console.error(`agent deck ${f} failed:\nstdout:\n${r.out}\nstderr:\n${r.err}`)
+  ok(loaded, `agent deck ${f}: loads, ${j?.expanded ?? '?'} fields filled, zero drops (exit ${r.code})`)
 }
 
 console.log('\nerrors are exits, not traces\n')
