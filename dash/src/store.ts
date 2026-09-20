@@ -996,7 +996,11 @@ export class Store {
     return () => set.delete(fn)
   }
 
+  /** Advances for local and remote document changes, not view changes. */
+  revision = 0
+
   private emit(ev: StoreEvent): void {
+    if (ev === 'doc') this.revision++
     for (const fn of this.listeners.get(ev) ?? []) fn()
   }
 
@@ -1214,6 +1218,7 @@ export class Store {
 
   /** Model changed without a new undo entry (mid-run). */
   touch(): void {
+    this.revision++
     this.doc.modified = new Date().toISOString()
   }
 

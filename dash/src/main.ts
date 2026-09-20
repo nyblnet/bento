@@ -20,6 +20,7 @@
 // apart HERE, where the DOM is still visible, or an oversized workbook opens
 // as the starter and saves over itself.
 
+import { saveQueue } from './savequeue.ts'
 import './styles.css'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
 import {
@@ -299,6 +300,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   dismissSplash()
 
   const store = new Store(doc)
+  const saves = saveQueue(store)
   if (frozen) store.readOnly = true
   // A template mints a fresh docId on open; a read-only copy locks the store
   // (and with it the title field, which reads store.readOnly below).
@@ -1281,9 +1283,11 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   const writeBack = new FileWriteBack()
   let wbTag: HTMLElement | null = null
   async function runWriteBack(): Promise<void> {
-    const { notice } = await writeBack.run(store.doc, store.readOnly)
-    if (!notice) return
-    if (notice.say === 'failed') {
+    const saved = await saves.run(() => {}, snapshot => writeBack.run(snapshot, store.readOnly))
+    if (!saved || saved.doc.docId !== store.doc.docId) return
+    const { notice, outcome } = saved.value
+    if (outcome.kind === 'skipped') return
+    if (notice?.say === 'failed') {
       // INTERRUPTS, unlike a success. The file on disk is now older than the
       // screen and the author has no other way to find that out — the unsaved
       // dot cannot distinguish "not written yet" from "cannot be written".
@@ -1294,12 +1298,13 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
         .replace('{why}', notice.why))
       return
     }
+    if (outcome.kind !== 'wrote' || !saved.isCurrent()) return
     // The bytes are on disk. Clearing the dot here is the whole point: it is
     // the same claim ⌘S makes, and it is now true without one.
     dirty = false
     dirtyEl.hidden = true
     dirtyEl.title = ''
-    if (notice.say === 'recovered') toast(t('Saved to the file — automatic saving is working again.'))
+    if (notice?.say === 'recovered') toast(t('Saved to the file — automatic saving is working again.'))
     wbTag ??= app.querySelector<HTMLElement>('.dx-wb')
     if (!wbTag) return
     wbTag.textContent = t('Saved')
@@ -1988,24 +1993,24 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // app the user is not looking at the console of. A revoked permission, a
     // deleted file and a full disk all arrive this way.
     let r: Awaited<ReturnType<typeof saveFile>>
+    let current = false
     try {
-      r = await saveFile(store.doc)
+      const saved = await saves.run(() => {}, async snapshot => {
+        const result = await saveFile(snapshot)
+        // Adopt only the bytes actually written, before the next queued write.
+        // A download leaves the open file stale.
+        if (result === 'saved' || result === 'saved-as') writeBack.adopt(snapshot)
+        return result
+      })
+      if (!saved) return
+      r = saved.value
+      current = saved.isCurrent()
     } catch (err) {
       toast(t('Save failed — {why}').replace('{why}', err instanceof Error ? err.message : String(err)))
       return
     }
     if (r === 'cancelled') return          // they closed the picker; they know
-    dirty = false
-    dirtyEl.hidden = true
-    dirtyEl.title = ''
-    // These bytes ARE the file now, so write-back must not immediately rewrite
-    // them — and a manual save that succeeded through the same handle clears
-    // any standing "automatic saving failed" warning, which would otherwise sit
-    // there contradicting the toast that is about to appear. Not for a
-    // DOWNLOAD: that wrote a copy to Downloads and left the open file stale, so
-    // adopting it would tell the next cycle the file is current when it is the
-    // one thing that is not.
-    if (r !== 'downloaded') writeBack.adopt(store.doc)
+    if (current) { dirty = false; dirtyEl.hidden = true; dirtyEl.title = '' }
     const name = currentFileName()
     if (r === 'downloaded') {
       toast(t('This browser cannot write files in place, so a copy was saved to your Downloads. The file open here is unchanged.'))

@@ -50,6 +50,8 @@
 // the store when a file arrives carrying `readonly`. A tier you can mint and
 // nobody honours is worse than no tier at all.
 
+import { copy } from '../../kernel/src/documentvalue.ts'
+import { saveQueue } from './savequeue.ts'
 import './saveui.css'
 import {
   saveFile, serializeAuto, writeUpdatedFileAs, canWriteInPlace, adoptFileHandle,
@@ -226,7 +228,9 @@ export function installSaveMenu(host: SaveMenuHost): void {
     item(t('Save a copy…'), t('A second file you carry on working in — same workbook, same identity.'),
       async () => {
         if (!confirmBudget(store.doc)) return
-        const r = await saveFile(store.doc, true)
+        const saved = await saveQueue(store).run(() => {}, snapshot => saveFile(snapshot, true))
+        if (!saved) return
+        const r = saved.value
         if (r !== 'cancelled') toast(t('Copy saved'))
       })
 
@@ -239,23 +243,18 @@ export function installSaveMenu(host: SaveMenuHost): void {
         // `template: true`, so forking a template gave you another template —
         // a file that re-mints its identity on every open, which is the exact
         // opposite of "a separate workbook".
-        const next = duplicateWorkbook(store.doc, newDocId())
-        store.replaceDoc(next)
-        const r = await saveFile(store.doc, true)
-        if (r === 'cancelled') {
-          // THE FORK IS ALREADY IN MEMORY and the picker was closed, so the
-          // held handle still points at the ANCESTOR — a file this document is
-          // no longer a version of. ⌘S would overwrite it; automatic write-back
-          // (writeback.ts) would do the same thing 2.5s later with no gesture at
-          // all, which is how the original quietly becomes the fork. Releasing
-          // puts both back on the picker, which is merely inconvenient.
-          //
-          // The `null` cast is the same KERNEL GAP dropopen.ts names: nothing
-          // needed to RELEASE a handle until a document could stop belonging to
-          // its file, `adoptFileHandle` types its argument non-null, and the
-          // implementation is a bare assignment. The fix is a
-          // `releaseFileHandle()` beside it in kernel/src/save.ts.
+        const saved = await saveQueue(store).run(() => {}, async snapshot => {
+          const next = duplicateWorkbook(snapshot, newDocId())
+          // Release the ancestor handle before switching identity, including
+          // the failure path. Earlier writes have finished before we get here.
           adoptFileHandle(null as never)
+          store.replaceDoc(next)
+          return saveFile(copy(next), true)
+        })
+        if (!saved) return
+        const r = saved.value
+        if (r === 'cancelled') {
+          // The ancestor handle was released before switching documents.
           toast(t('This is now a new workbook — save it under a new name'))
         } else {
           toast(t('Saved as a new workbook'))

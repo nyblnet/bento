@@ -8,6 +8,12 @@ The format (`bento/dash`, version `1`) is additive and stable — every version
 below opens files from every earlier version, and unknown fields are preserved.
 There is no server, so a break here would be permanent.
 
+## [Unreleased] — revision-aware saves
+
+- Serialize saves through the shared kernel coordinator. A completed write only
+  acknowledges its captured revision; newer local and remote edits stay unsaved.
+- Add app revision and packaged-browser regressions to CI.
+
 ## [0.3.0] — unreleased
 
 The release that came out of watching somebody use 0.2.0.
