@@ -14,6 +14,18 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-09-20 — slides review preview uses existing UI homes
+
+The review preview keeps save state in the existing Save control/menu, not a
+second floating Save button. Recent changes lives beside Version history;
+file-size inspection beside picture compression in About; text/notes editing
+in the notes panel. Command search is an optional shortcut, not a Tools hub.
+The general authoring validator stays available to tooling, but its rule-based
+findings are not surfaced as presentation defects: deliberate bleed, cropping,
+and off-canvas decoration can be the intended design. Standard dropdowns adopt
+the existing kernel menu primitive; slide-specific actions stay app-side per
+PLATFORM §9. Scope and test routes: `docs/slides-review-testing.md`.
+
 ## 2026-09-20 — shared save coordination and document differences
 
 Move immutable JSON snapshots, serialized revision-aware saves, and conditional

@@ -11,6 +11,22 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Safer undo during collaboration.** Ordinary Undo reverses local field changes
+  while preserving newer collaborator values. Save → Recent changes lets an
+  editor explicitly revert a selected local or remote change, with confirmation.
+  History retains changed values instead of serializing every asset per edit.
+- **Save completion tracks the revision written.** Manual saves and autosaves are
+  serialized; edits made during a write stay marked unsaved. Status inside the
+  existing Save menu distinguishes browser recovery from a saved file.
+- **Easier navigation.** ⌘/Ctrl+K searches commands, slide content, and
+  notes. File-size inspection lives beside picture compression in About; a text/notes
+  editor lives in the notes panel and works on phones. Standard menus use the shared
+  kernel menu primitive, and slide thumbnails gain keyboard navigation;
+  advanced theme settings start collapsed.
+- **Less rendering work.** Offscreen thumbnails render on demand, unchanged
+  thumbnails and canvases retain their DOM, and the splash disappears when the
+  editor is ready.
+
 ## [1.2.3] — 2026-09-19
 
 - **Select several slides in the sidebar and move them together.** ⌘/Ctrl-click

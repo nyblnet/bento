@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 import { inLinearFlow } from './model'
+import { changes, copy, reverse, type Change } from './history'
 import type { BentoDoc, Slide, SlideElement } from './model'
 
 export type StoreEvent =
@@ -19,11 +20,16 @@ export type ViewSnapshot = {
 }
 
 type HistoryEntry = {
-  doc: string
+  delta: Change[]
   view: ViewSnapshot
+  replacement?: BentoDoc
+  bytes: number
 }
 
+export type RecentChange = { id: number; at: number; local: boolean; delta: Change[]; bytes: number }
+
 const MAX_UNDO = 100
+const HISTORY_BUDGET = 32 * 1024 * 1024
 
 /** Central state: document, current slide, selection, undo/redo, dirty flag. */
 export class Store {
@@ -33,6 +39,13 @@ export class Store {
   dirty = false
   /** editor-only: which showOnHover set the canvas previews (never saved) */
   hoverPreview: string | null = null
+
+  revision = 0
+  recentChanges: RecentChange[] = []
+  private changeSequence = 0
+  private localPending = false
+  private baseline: BentoDoc
+  private activeEntry: HistoryEntry | null = null
 
   private undoStack: HistoryEntry[] = []
   private redoStack: HistoryEntry[] = []
@@ -45,6 +58,7 @@ export class Store {
 
   constructor(doc: BentoDoc) {
     this.doc = doc
+    this.baseline = copy(doc)
   }
 
   on(event: StoreEvent, fn: Listener): () => void {
@@ -54,7 +68,14 @@ export class Store {
   }
 
   emit(event: StoreEvent) {
+    if (event === 'doc') {
+      this.revision++
+      if (this.baseline.docId !== this.doc.docId) this.recentChanges = []
+      else if (!this.localPending) this.logChange(changes(this.baseline, this.doc), false)
+      this.localPending = false
+    }
     this.listeners.get(event)?.forEach((fn) => fn())
+    if (event === 'doc') this.baseline = copy(this.doc)
   }
 
   get slide(): Slide {
@@ -76,8 +97,15 @@ export class Store {
    * ⌘Z restores the previous document wholesale.
    */
   replaceDoc(next: BentoDoc) {
+    if (this.readOnly) return
     this.checkpoint()
+    const previous = copy(this.doc)
     this.doc = next
+    if (previous.docId !== next.docId) {
+      this.activeEntry!.replacement = previous
+      this.activeEntry!.bytes = JSON.stringify(previous).length
+    }
+    this.recordChange()
     this.currentIndex = 0
     this.selection = []
     this.setDirty(true)
@@ -89,12 +117,62 @@ export class Store {
 
   // --- history ------------------------------------------------------------
 
-  /** Snapshot current doc state onto the undo stack. Call BEFORE a mutation. */
+  /** Start a local gesture. History holds changed fields, never serialized decks. */
   checkpoint() {
-    this.undoStack.push({ doc: JSON.stringify(this.doc), view: this.captureView() })
-    if (this.undoStack.length > MAX_UNDO) this.undoStack.shift()
+    if (this.readOnly) return
+    if (this.activeEntry && !this.activeEntry.delta.length && !this.activeEntry.replacement) {
+      this.undoStack = this.undoStack.filter(entry => entry !== this.activeEntry)
+    }
+    this.baseline = copy(this.doc)
+    this.activeEntry = { delta: [], view: this.captureView(), bytes: 0 }
+    this.undoStack.push(this.activeEntry)
     this.redoStack.length = 0
+    this.trimHistory()
   }
+
+  private recordChange() {
+    if (!this.activeEntry) {
+      this.activeEntry = { delta: [], view: this.captureView(), bytes: 0 }
+      this.undoStack.push(this.activeEntry)
+      this.redoStack.length = 0
+    }
+    const delta = changes(this.baseline, this.doc)
+    this.localPending = true
+    this.logChange(delta, true)
+    this.activeEntry.delta.push(...delta)
+    this.activeEntry.bytes += JSON.stringify(delta).length
+    this.baseline = copy(this.doc)
+    this.trimHistory()
+  }
+
+  private logChange(delta: Change[], local: boolean) {
+    if (!delta.length) return
+    this.recentChanges.push({ id: ++this.changeSequence, at: Date.now(), local, delta, bytes: JSON.stringify(delta).length })
+    let bytes = this.recentChanges.reduce((n, x) => n + x.bytes, 0)
+    while (this.recentChanges.length > 100 || (bytes > HISTORY_BUDGET && this.recentChanges.length > 1)) {
+      bytes -= this.recentChanges.shift()!.bytes
+    }
+  }
+
+  /** An explicit user-selected revert may override later values on its fields. */
+  revertChange(id: number) {
+    const entry = this.recentChanges.find(x => x.id === id)
+    if (!entry || this.readOnly) return
+    const next = copy(this.doc)
+    reverse(next, entry.delta, true)
+    if (!next.slides.length) return
+    this.commit(() => { this.doc = next }, 'slides')
+  }
+
+  private trimHistory() {
+    let size = this.undoStack.reduce((n, e) => n + e.bytes, 0)
+    // Keep a single oversized edit reversible; evict older history first.
+    while (this.undoStack.length > MAX_UNDO || (size > HISTORY_BUDGET && this.undoStack.length > 1)) {
+      size -= this.undoStack.shift()!.bytes
+    }
+  }
+
+  get historyBytes() { return [...this.undoStack, ...this.redoStack].reduce((n, e) => n + e.bytes, 0) }
 
   /** checkpoint() + mutate + notify, in one call. */
   commit(mutate: () => void, event: StoreEvent = 'doc') {
@@ -153,6 +231,7 @@ export class Store {
 
   /** Mark dirty and notify after an in-place mutation (no checkpoint). */
   touch(event: StoreEvent = 'doc') {
+    this.recordChange()
     this.doc.modified = new Date().toISOString()
     this.setDirty(true)
     this.emit('doc')
@@ -163,12 +242,32 @@ export class Store {
   redo() { this.restore(this.redoStack, this.undoStack) }
 
   private restore(from: HistoryEntry[], to: HistoryEntry[]) {
-    const entry = from.pop()
+    if (this.readOnly) return
+    this.activeEntry = null
+    let entry = from.pop()
+    while (entry && !entry.replacement && !entry.delta.length) entry = from.pop()
     if (!entry) return
     const before = this.captureView()
-    to.push({ doc: JSON.stringify(this.doc), view: before })
-    this.doc = JSON.parse(entry.doc)
+    let inverse: HistoryEntry
+    if (entry.replacement) {
+      inverse = { delta: [], view: before, replacement: copy(this.doc), bytes: JSON.stringify(this.doc).length }
+      this.doc = copy(entry.replacement)
+    } else {
+      const delta = reverse(this.doc, entry.delta)
+      inverse = { delta, view: before, bytes: JSON.stringify(delta).length }
+    }
+    // Undoing an insertion must not leave a presentation with no slide.
+    if (!this.doc.slides.length) {
+      if (inverse.replacement) this.doc = inverse.replacement
+      else reverse(this.doc, inverse.delta)
+      return
+    }
+    if (!inverse.replacement && !inverse.delta.length) return
+    to.push(inverse)
+    this.localPending = true
+    this.logChange(changes(this.baseline, this.doc), true)
     this.reconcileView(before, entry.view)
+    this.doc.modified = new Date().toISOString()
     this.setDirty(true)
     this.emit('doc')
     this.emit('slides')
