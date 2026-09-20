@@ -269,7 +269,9 @@ closeAll()
     'and the reader who came looking for a copy is told where it went')
   const menu = src('saveui.ts')
   ok(/import \{ duplicateWorkbook \} from '\.\/about\.ts'/.test(menu)
-    && /duplicateWorkbook\(store\.doc, newDocId\(\)\)/.test(menu),
+    // The caller may pass the live document or a queued snapshot. The shared
+    // fork function is the contract; queued copy/fork behavior is browser-tested.
+    && /duplicateWorkbook\(\s*[\w.]+\s*,\s*newDocId\(\)\s*\)/.test(menu),
     'the fork has ONE implementation — the tested one in about.ts — and the menu calls it')
 }
 
