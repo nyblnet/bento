@@ -19,8 +19,7 @@ const roundtrip = join(output, 'roundtrip.bento.html')
   const p=await c.newPage();p.on('dialog',d=>d.accept());const errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(10000);
   await p.goto(deck);
   await p.waitForFunction(()=>window.bento?.doc);
-  await p.waitForTimeout(400);
-  assert.equal(await p.locator('#bento-splash').count(),0);
+  await p.locator('#bento-splash').waitFor({state:'detached', timeout:2500});
   await p.screenshot({path:join(output, 'desktop.jpg'),type:'jpeg',quality:65});
   // Existing Save menu owns history; existing About owns asset size/compression.
   await p.getByRole('button',{name:'Save as… — copy, new deck, password',exact:true}).click();

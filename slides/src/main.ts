@@ -264,8 +264,20 @@ if (location.hash === '#present') {
   editor.present(true)
 }
 
-// The editor is ready. Pristine capture has already preserved the splash for
-// saved files; dismiss this instance without an artificial minimum delay.
+// Dismiss the boot splash (inline in index.html so it paints before this
+// bundle parses). The pristine capture ran before this, so saved files keep
+// the splash for their own next boot. Visible, it is held briefly so the
+// assemble animation reads as a brand moment instead of a flicker — but
+// the hold is a capped timer that a visibility change cuts short, and
+// removal never waits on an animation or transition: a HIDDEN document
+// (a background tab; a viewer rendering the file off-screen for a preview
+// card) freezes CSS animations at their first frame, delivers no frames,
+// and throttles timers to a wakeup a second or none at all — so a splash
+// that waited for its own fade to end stayed over the mounted editor for
+// as long as nobody looked, and Teams' preview card showed the splash with
+// the mark still at opacity 0 (measured: identical bytes previewed on one
+// upload and not the next, the race being the pane's capture against a
+// throttled timer). Hidden, the splash goes the moment the editor exists.
 dismissSplash()
 
 
@@ -433,8 +445,32 @@ dismissSplash()
 
 } // editorMode
 
+/**
+ * Remove the boot splash: at once when the document is hidden, else after a
+ * capped hold that a visibilitychange cuts short. The fade is a CSS
+ * transition; removal follows it by a timer OR transitionend, whichever
+ * comes first, and never depends on either alone.
+ */
 function dismissSplash() {
-  // The editor is ready. A splash is a loading indicator, so it cannot hold up
-  // an already usable file or a background thumbnail capture.
-  document.getElementById('bento-splash')?.remove()
+  const splash = document.getElementById('bento-splash')
+  if (!splash) return
+  let gone = false
+  const remove = () => {
+    if (gone) return
+    gone = true
+    document.removeEventListener('visibilitychange', onVisibility)
+    splash.remove()
+  }
+  const fade = () => {
+    if (gone) return
+    if (document.hidden) { remove(); return }
+    splash.classList.add('done')
+    splash.addEventListener('transitionend', remove, { once: true })
+    setTimeout(remove, 550)
+  }
+  const onVisibility = () => { if (document.hidden) remove() }
+  document.addEventListener('visibilitychange', onVisibility)
+  if (document.hidden) { remove(); return }
+  // the brand hold, at most: 800 ms after navigation, visible only
+  setTimeout(fade, Math.max(0, 800 - performance.now()))
 }

@@ -24,8 +24,8 @@ pre-1.0.
   kernel menu primitive, and slide thumbnails gain keyboard navigation;
   advanced theme settings start collapsed.
 - **Less rendering work.** Offscreen thumbnails render on demand, unchanged
-  thumbnails and canvases retain their DOM, and the splash disappears when the
-  editor is ready.
+  thumbnails and canvases retain their DOM; the splash keeps a short visible
+  brand hold and disappears immediately for hidden documents.
 
 ## [1.2.3] — 2026-09-19
 

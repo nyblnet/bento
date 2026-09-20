@@ -17,6 +17,8 @@ Build with `npm run build:single --prefix slides`, then open
   persist and one Undo reverses the batch. Modified text becomes plain text.
 - About → File size shows document/asset estimates beside picture compression;
   it excludes the embedded editor, encryption and final HTML compression.
+- The splash keeps its short visible brand hold (at most 800 ms plus the fade)
+  and disappears immediately when the document is hidden.
 - Save, Shape, Media, Language and Slideshow menus support arrows/Home/End/Escape.
 - On a narrow viewport, More actions holds Recent changes; Format opens notes.
 - Large-deck thumbnails render on demand; unchanged canvas content keeps its DOM.
