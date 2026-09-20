@@ -12,6 +12,12 @@ The format (`bento/spaces`, version `1`) is additive and stable — every versio
 below opens files from every earlier version, and unknown fields are preserved.
 Versions follow `0.MINOR.PATCH` while pre-1.0.
 
+## [Unreleased] — revision-aware saves
+
+- Serialize saves through the shared kernel coordinator. A completed write only
+  acknowledges its captured revision; newer local and remote edits stay unsaved.
+- Add app revision and packaged-browser regressions to CI.
+
 ## [Unreleased]
 
 - **The whole gallery card is the target, and a long title stops inflating its
