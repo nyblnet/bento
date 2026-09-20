@@ -99,6 +99,14 @@ jobs:
         # Cross-shape reversal and immutable, ordered saves preserve later edits.
         run: node scripts/test-kernel-document-state.ts
 
+      - name: Slides conditional history
+        # Undo preserves newer collaborator edits; structural and asset-budget regressions.
+        run: node scripts/test-slides-history.ts
+
+      - name: Slides save queue adapter
+        # Ordered snapshots acknowledge only the current document revision.
+        run: node scripts/test-slides-savequeue.ts
+
       - name: Typecheck kernel (standalone)
         # Apps also typecheck kernel transitively through their imports; this
         # catches kernel-only errors under the kernel's own flags.
@@ -1867,3 +1875,27 @@ jobs:
         # which paints "Edited" and would credit a colleague's typing to you.
         # The last section is two real sessions over a real BroadcastChannel.
         run: node --no-warnings scripts/test-sync-spaces-session.ts
+
+  slides-review-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone documents
+        run: |
+          npm ci --prefix slides
+          npm run build:single --prefix slides
+      - name: Exercise the packaged documents in Chromium
+        # Real UI and serialization, offline; delayed mock writes expose save races.
+        run: |
+          node scripts/test-slides-review-browser.mjs
+          node scripts/test-slides-save-browser.mjs

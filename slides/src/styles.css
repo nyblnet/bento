@@ -274,7 +274,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
    their menus too — ⋯ came up with the entire language list already unrolled
    inside it. Every .ed-menu is appended straight onto its own .ed-dropdown, so
    scoping to `>` is exact. */
-.ed-dropdown.open > .ed-menu { display: flex; }
+.ed-dropdown:is(.open, .bkm-open) > .ed-menu { display: flex; }
 .ed-menu .ed-btn { justify-content: flex-start; width: 100%; }
 
 /* ————— main layout ————— */
@@ -658,6 +658,8 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   padding: 8px 10px;
 }
 .ed-hint code { font-size: 10.5px; word-break: break-all; }
+/* Compression progress has no visible badge while idle. */
+.ed-about-auto > .ed-hint:empty { display: none; }
 .ed-morph-warn { color: #C0392B; background: rgba(192, 57, 43, 0.08); }
 
 .ed-btn-update {
@@ -2345,7 +2347,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
      already pins these menus to the end of the screen rather than to their
      trigger. The only thing they still need from the layout is where the bar
      ends, which editor.ts publishes as --ed-bar-bottom. */
-  .ed-topbar .ed-dropdown.open > .ed-menu {
+  .ed-topbar .ed-dropdown:is(.open, .bkm-open) > .ed-menu {
     position: fixed;
     top: calc(var(--ed-bar-bottom, 56px) + 4px);
     inset-inline-end: max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px));
@@ -2839,3 +2841,25 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 }
 .ed-swatch:hover { transform: scale(1.15); }
 .ed-swatch.is-on { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* Document actions reuse the app's buttons and the shared modal primitive. */
+.bkd-card.ed-document-dialog { width: min(680px, calc(100vw - 24px)); max-width: 100%; overflow: hidden; }
+.ed-document-dialog .bkd-body { overflow: auto; flex: 1 1 auto; }
+.ed-document-dialog .bkd-title, .ed-document-dialog .bkd-actions { flex-shrink: 0; }
+.ed-document-dialog input[type=search], .ed-document-dialog select, .ed-document-dialog textarea {
+  box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--field); color: var(--ink); font: inherit;
+}
+.ed-document-dialog label { display: block; margin: 16px 0; color: var(--ink-2); }
+.ed-document-dialog textarea { display: block; resize: vertical; margin-top: 6px; min-height: 80px; }
+.ed-command-dialog .bkd-body { display: flex; flex-direction: column; overflow: hidden; }
+.ed-command-results { overflow: auto; margin-top: 8px; }
+.ed-command-results h3 { font-size: 11px; font-weight: 600; color: var(--muted); margin: 14px 8px 6px; }
+.ed-command-row { display: block; width: 100%; text-align: start; padding: 9px 10px; white-space: normal; }
+.ed-command-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.ed-change-card { border-bottom: 1px solid var(--line); padding: 16px 0; overflow-wrap: anywhere; }
+.ed-save-info { max-width: 300px; padding: 8px 10px; color: var(--muted); font-size: 11px; }
+.ed-thumb:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+@media (max-width: 700px) {
+  .ed-document-dialog { max-height: calc(100dvh - 24px); }
+}

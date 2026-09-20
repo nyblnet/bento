@@ -4,6 +4,12 @@
 // shortcuts, save & present wiring.
 
 import type { Store } from '../store'
+import { SaveQueue } from './savequeue'
+import { createMenu, closeAllMenus, type Menu, type MenuOpts } from '../../../kernel/src/ui/menu'
+import '../../../kernel/src/ui/menu.css'
+import { DocumentActions } from './documentactions'
+import { renderState } from './renderstate'
+import { equal } from '../history'
 import {
   FORMAT_VERSION,
   MEDIA_EMBED_BUDGET,
@@ -86,6 +92,10 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
 ]
 
 export class Editor {
+  private documentActions: DocumentActions
+  private menus: Menu[] = []
+  private savedAt = 0
+  private saves: SaveQueue
   private canvas!: SlideCanvas
   private panel!: PropsPanel
   /** Sidebar multi-selection: PARENT indices (slidesel.ts). The current slide
@@ -99,6 +109,9 @@ export class Editor {
   /** Name of a deck opened by DROP when no writable handle came with it. */
   private openedAs?: string
   private thumbTimer = 0
+  private thumbObserver?: IntersectionObserver
+  private thumbStates = new WeakMap<HTMLElement, unknown>()
+  private visibleThumbs = new Set<HTMLElement>()
   private presenting = false
   private updatesB!: HTMLElement
   private avatarsBox!: HTMLElement
@@ -116,6 +129,22 @@ export class Editor {
     private root: HTMLElement,
     private store: Store,
   ) {
+    this.saves = new SaveQueue(store)
+    this.documentActions = new DocumentActions(store, () => [
+      { label: t('Save'), run: () => void this.save(false) },
+      { label: t('New slide'), run: () => this.openLayoutPicker(this.root) },
+      { label: t('Slideshow'), run: () => this.present(false, true) },
+      { label: t('Version history…'), run: () => void this.openVersionHistory() },
+      { label: t('Start from scratch…'), run: () => this.startFromScratch() },
+      { label: t('Export PDF (print)'), run: () => this.exportPdf() },
+      { label: t('Compress pictures in this deck…'), run: () => {
+        const b = document.createElement('button'), note = document.createElement('span')
+        void this.compressDeckPictures(b, note, document.createElement('div')).catch(err => {
+          console.error(err)
+          this.toast(t('Picture compression failed. Please try again.'))
+        })
+      } },
+    ], () => this.canvas.commitTextEdit())
     this.build()
     this.wireKeyboard()
     // a slide-list change makes the sidebar selection's indices stale: drop it
@@ -125,6 +154,7 @@ export class Editor {
     store.on('doc', () => this.scheduleThumbs())
     store.on('dirty', () => {
       this.dirtyDot.classList.toggle('on', store.dirty)
+      this.refreshSaveStatus()
     })
     window.addEventListener('beforeunload', (ev) => {
       if (store.dirty) ev.preventDefault()
@@ -246,7 +276,18 @@ export class Editor {
 
   // --- DOM ----------------------------------------------------------------
 
+  /** Bind slide-specific rows to the shared menu's lifecycle and keyboard behavior. */
+  private dropdown(icon: string, label: string, tip: string, opts: MenuOpts = {}): Menu {
+    const menu = createMenu(label, tip, { ...opts, className: 'ed-dropdown' + (opts.className ? ' ' + opts.className : ''), menuClass: opts.menuClass ?? 'ed-menu' })
+    menu.trigger.classList.add('ed-btn')
+    menu.trigger.insertAdjacentHTML('afterbegin', icon)
+    this.menus.push(menu)
+    return menu
+  }
+
   private build() {
+    for (const menu of this.menus) menu.destroy()
+    this.menus = []
     this.root.innerHTML = ''
     this.root.className = 'ed-root'
 
@@ -408,7 +449,8 @@ export class Editor {
     const canvasWrap = div('ed-canvas-wrap')
     // presenting lives in ONE split pill beside the zoom control: the main
     // half starts the fullscreen show; its menu holds tab-fill and speaker view.
-    const pill = div('ed-dropdown ed-present-pill')
+    const presentMenu = this.dropdown('<span class="ed-caret">▴</span>', '', t('More ways to present'), { className: 'ed-present-pill' })
+    const pill = presentMenu.root
     const showB = btn(ICONS.slideshow, t('Slideshow'), () => this.present(false, true),
       t('Start the slideshow fullscreen — F toggles fullscreen, S opens speaker view, Esc ends'))
     showB.classList.add('ed-pill-main')
@@ -423,20 +465,14 @@ export class Editor {
       if ((e as AnimationEvent).animationName !== 'ed-runner-fade') return
       pill.classList.remove('ed-hint-pulse')
     })
-    const caret = btn('<span class="ed-caret">▴</span>', '', () => pill.classList.toggle('open'),
-      t('More ways to present'))
-    caret.classList.add('ed-pill-caret')
-    const pmenu = div('ed-menu')
+    presentMenu.trigger.classList.add('ed-pill-caret')
     const pItem = (icon: string, label: string, title: string, onClick: () => void) => {
-      const b = btn(icon, label, () => { pill.classList.remove('open'); onClick() }, title)
-      pmenu.appendChild(b)
+      const row = presentMenu.item(label, onClick, { icon })
+      row.title = title
     }
     pItem(ICONS.window, t('Present in this tab'), t('Fills this tab instead of going fullscreen — handy for testing or sharing a window'), () => this.present(false, false))
     pItem(ICONS.presenter, t('Open speaker view'), t('Notes, controls and slide thumbnails in a separate window — drag it to a second screen. On macOS, open it before going fullscreen.'), () => this.openSpeakerView())
-    pill.append(showB, caret, pmenu)
-    document.addEventListener('pointerdown', (ev) => {
-      if (!pill.contains(ev.target as Node)) pill.classList.remove('open')
-    })
+    pill.prepend(showB)
     // shared bottom-right cluster: [Slideshow pill] [zoom pill] — the canvas
     // appends its zoombar to canvasWrap; we adopt it into the cluster below.
     const corner = div('ed-corner-br')
@@ -519,7 +555,7 @@ export class Editor {
     this.canvas = new SlideCanvas(canvasWrap, this.store)
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
-    this.panel = new PropsPanel(this.props, this.store)
+    this.panel = new PropsPanel(this.props, this.store, () => this.documentActions.outline())
 
     if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
   }
@@ -747,7 +783,7 @@ export class Editor {
     // Re-fitting starts by unfolding, which reparents buttons and would slam
     // shut a dropdown the user is reading. Skip while one is open; the next
     // resize or content change runs this again.
-    if (bar.querySelector('.ed-dropdown.open')) return
+    if (bar.querySelector('.ed-dropdown.open, .bkm-open')) return
     // scrollWidth counts content that sticks out of the padding box even with
     // overflow visible, so "scrollWidth > clientWidth" IS the clipped-buttons
     // condition (ed-root clips whatever leaks). The 1px slack absorbs
@@ -835,22 +871,12 @@ export class Editor {
   // --- Save dropdown: copy / new deck / template -----------------------------
 
   private saveDropdown(): HTMLElement {
-    const wrap = div('ed-dropdown')
-    const menu = div('ed-menu ed-save-menu')
-    const trigger = btn('<span class="ed-caret">▾</span>', '', () => {
-      wrap.classList.toggle('open')
-      if (wrap.classList.contains('open')) rebuild()
-    }, t('Save as… — copy, new deck, password'))
-    trigger.classList.add('ed-split-caret')
-    const rebuild = () => {
-      menu.textContent = ''
-      this.buildSaveAsItems(menu, () => wrap.classList.remove('open'))
-    }
-    wrap.append(trigger, menu)
-    document.addEventListener('pointerdown', (ev) => {
-      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
+    const menu = this.dropdown('<span class="ed-caret">▾</span>', '', t('Save as… — copy, new deck, password'), {
+      menuClass: 'ed-menu ed-save-menu', alignEnd: true,
+      fill: (into, close) => this.buildSaveAsItems(into, close),
     })
-    return wrap
+    menu.trigger.classList.add('ed-split-caret')
+    return menu.root
   }
 
   /**
@@ -872,7 +898,8 @@ export class Editor {
     }
     const item = (icon: string, label: string, title: string, onClick: () => void) => {
       const b = document.createElement('button')
-      b.className = 'ed-btn'
+      b.className = 'ed-btn bkm-item'
+      b.setAttribute('role', 'menuitem')
       if (icon) b.innerHTML = icon
       b.appendChild(Object.assign(document.createElement('span'), { textContent: label }))
       b.title = title
@@ -882,6 +909,11 @@ export class Editor {
       })
       into.appendChild(tag(b))
     }
+    const status = tag(div('ed-save-info'))
+    status.setAttribute('role', 'status')
+    status.textContent = this.saveStatusText()
+    status.hidden = !status.textContent
+    into.appendChild(status)
     {
       // FILE operations only — everything that goes to OTHER PEOPLE lives in
       // the Share panel (one mental model: Save = for me, Share = for others).
@@ -915,6 +947,7 @@ export class Editor {
       item(ICONS.history, t('Version history…'),
         t('Restore an earlier auto-saved version of this deck (kept locally in this browser).'),
         () => void this.openVersionHistory())
+      item(ICONS.history, t('Recent changes'), t('Changes are kept only for this session.'), () => this.documentActions.history())
       item(ICONS.code, t('Copy document JSON'),
         t('Copies this deck as plain JSON — content only, no live-session keys. Edit it in another tool, then bring it back with Replace from JSON.'),
         () => void this.copyDocJson())
@@ -1268,7 +1301,7 @@ export class Editor {
       if (ok) this.toast(t('Template saved — every open of it starts a fresh deck'))
     } catch (err) {
       console.error(err)
-      this.toast(t('Save failed — see console'))
+      this.toast(t('Save failed. Try Save a copy to choose another location.'))
     }
   }
 
@@ -1703,57 +1736,30 @@ export class Editor {
 
   /** Globe → locale picker. UI language follows the VIEWER, never the file. */
   private languageDropdown(): HTMLElement {
-    const wrap = div('ed-dropdown')
-    const trigger = btn(ICONS.globe, '', () => wrap.classList.toggle('open'), t('Language'))
-    const menu = div('ed-menu ed-lang-menu')
-    // localeChoices(), NOT the frozen LOCALE_CHOICES const: installing a pack
-    // appends a language at runtime, and a static list could never show it.
+    const menu = this.dropdown(ICONS.globe, '', t('Language'), { menuClass: 'ed-menu ed-lang-menu', alignEnd: true })
     for (const c of localeChoices()) {
-      const b = btn('', c.label, () => {
-        wrap.classList.remove('open')
+      menu.item(c.label, () => {
         setLocale(c.code)
-        // switching to (or away from) Arabic/Hebrew/… turns the chrome around
         applyDirection()
         this.build()
         this.rebuildSidebar()
-      })
-      if (c.code === locale()) b.classList.add('ed-lang-on')
-      menu.appendChild(b)
+      }, { selected: c.code === locale() })
     }
-    menu.appendChild(div('ed-menu-sep'))
-    menu.appendChild(btn('', t('Manage languages…'), () => {
-      wrap.classList.remove('open')
-      void this.openLanguages()
-    }))
-    // end-anchored so the menu never overflows the window edge — as a class,
-    // not inline left/right, so it follows the chrome's direction (.ed-lang-menu
-    // in styles.css, alongside the Save menu's identical rule)
-    wrap.append(trigger, menu)
-    document.addEventListener('pointerdown', (ev) => {
-      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
-    return wrap
+    menu.separator()
+    menu.item(t('Manage languages…'), () => void this.openLanguages())
+    return menu.root
   }
 
   private shapeDropdown(): HTMLElement {
-    const wrap = div('ed-dropdown')
-    const trigger = btn(ICONS.shapes, t('Shape'), () => wrap.classList.toggle('open'))
-    const menu = div('ed-menu')
+    const menu = this.dropdown(ICONS.shapes, t('Shape'), t('Shape'))
     for (const item of SHAPE_MENU) {
-      const b = btn(item.icon, t(item.label), () => {
-        wrap.classList.remove('open')
-        // line / curve / connector arm a draw tool — drag on the canvas to draw
-        // (or click to drop a default); other shapes insert straight away.
+      const row = menu.item(t(item.label), () => {
         if (item.draw) { this.canvas.armDraw(item.draw); return }
         this.canvas.insert(defaultShape(item.kind, item.heads ? { heads: item.heads } : {}))
-      }, t(item.tip))
-      menu.appendChild(b)
+      }, { icon: item.icon })
+      row.title = t(item.tip)
     }
-    wrap.append(trigger, menu)
-    document.addEventListener('pointerdown', (ev) => {
-      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
-    return wrap
+    return menu.root
   }
 
   // --- sidebar -----------------------------------------------------------------
@@ -1787,7 +1793,21 @@ export class Editor {
     }
     // thumb width tracks the (resizable) sidebar; states render smaller
     const base = Math.max(96, this.panelW.left - 52)
-    const surface = renderThumbnail(slide, this.store.doc, isState ? Math.round(base * 0.84) : base)
+    const width = isState ? Math.round(base * 0.84) : base
+    const surface = div('bento-thumb-surface')
+    surface.style.width = `${width}px`
+    surface.style.height = `${width * this.store.doc.size.height / this.store.doc.size.width}px`
+    item.tabIndex = i === this.store.currentIndex ? 0 : -1
+    item.setAttribute('role', 'option')
+    item.setAttribute('aria-label', `${i + 1}. ${slide.name || slide.elements.filter(e => e.type === 'text').map(e => e.html.replace(/<[^>]*>/g, ' ')).join(' ').slice(0, 100) || t('Untitled')}`)
+    item.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); item.click() }
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+        ev.preventDefault(); ev.stopPropagation()
+        this.store.goTo(i + (ev.key === 'ArrowDown' ? 1 : -1))
+        this.sidebar.querySelector<HTMLElement>(`[data-index="${this.store.currentIndex}"]`)?.focus()
+      }
+    })
     if (slide.comments?.some((c) => !c.resolved)) {
       const badge = div('ed-thumb-cmt')
       badge.title = `${slide.comments.filter((c) => !c.resolved).length} open comment(s)`
@@ -1827,6 +1847,18 @@ export class Editor {
     // States sit in doc order right after their parent and render nested —
     // smaller, indented, dimmed — so the structure reads at a glance.
     const scroll = this.sidebar.scrollTop
+    this.thumbObserver?.disconnect()
+    this.visibleThumbs.clear()
+    this.thumbObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const item = entry.target as HTMLElement
+        if (entry.isIntersecting) { this.visibleThumbs.add(item); this.paintThumb(item) }
+        else this.visibleThumbs.delete(item)
+      }
+    }, { root: this.sidebar, rootMargin: '250px' })
+    this.sidebar.setAttribute('role', 'listbox')
+    this.sidebar.setAttribute('aria-label', t('Slides'))
+    this.sidebar.setAttribute('aria-multiselectable', 'true')
     this.sidebar.innerHTML = ''
     const slides = this.store.doc.slides
     slides.forEach((slide, i) => {
@@ -1836,6 +1868,7 @@ export class Editor {
       if (slide.stateOf) item.classList.add('ed-thumb-state')
       if (slide.hidden) item.classList.add('ed-thumb-hidden')
       this.sidebar.appendChild(item)
+      this.thumbObserver?.observe(item)
     })
     this.sidebar.appendChild(this.insertGap(slides.length))
     const add = btn(ICONS.plus, t('New slide'), () => this.openLayoutPicker(add))
@@ -2022,10 +2055,23 @@ export class Editor {
       const idx = Number(n.dataset.index)
       const isActive = idx === this.store.currentIndex
       n.classList.toggle('active', isActive)
+      n.tabIndex = isActive ? 0 : -1
+      n.setAttribute('aria-selected', String(isActive || selected.has(idx)))
       n.classList.toggle('selected', selected.has(idx))
       if (isActive) active = n
     })
     active?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }
+
+  private paintThumb(item: HTMLElement) {
+    const slide = this.store.doc.slides[Number(item.dataset.index)]
+    if (!slide) return
+    const base = Math.max(96, this.panelW.left - 52)
+    const width = slide.stateOf ? Math.round(base * 0.84) : base
+    const state = { width, content: renderState(this.store.doc, slide) }
+    if (equal(this.thumbStates.get(item), state)) return
+    item.querySelector('.bento-thumb-surface')?.replaceWith(renderThumbnail(slide, this.store.doc, width))
+    this.thumbStates.set(item, state)
   }
 
   private scheduleThumbs() {
@@ -2033,12 +2079,10 @@ export class Editor {
     this.thumbTimer = window.setTimeout(() => {
       const thumbs = this.sidebar.querySelectorAll<HTMLElement>('.ed-thumb')
       if (thumbs.length !== this.store.doc.slides.length) return this.rebuildSidebar()
-      const base = Math.max(96, this.panelW.left - 52)
       thumbs.forEach((item) => {
         const slide = this.store.doc.slides[Number(item.dataset.index)]
         if (!slide) return
-        const w = slide.stateOf ? Math.round(base * 0.84) : base
-        item.querySelector('.bento-thumb-surface')?.replaceWith(renderThumbnail(slide, this.store.doc, w))
+        if (this.visibleThumbs.has(item)) this.paintThumb(item)
         // comment badge tracks doc-level changes too (comments emit 'doc')
         const open = slide.comments?.some((c) => !c.resolved)
         const badge = item.querySelector('.ed-thumb-cmt')
@@ -2211,21 +2255,11 @@ export class Editor {
   /** Media insert menu: a file (embeds) or a link (stays a URL — keeps the
    *  deck small; good for big clips that shouldn't ride inside the file). */
   private mediaDropdown(): HTMLElement {
-    const wrap = div('ed-dropdown')
-    const trigger = btn(ICONS.media, t('Media'), () => wrap.classList.toggle('open'),
-      t('Add video or audio — from a file (embeds it) or a link (stays a URL)'))
-    const menu = div('ed-menu')
-    const item = (label: string, onClick: () => void) => {
-      menu.appendChild(btn(ICONS.media, t(label), () => { wrap.classList.remove('open'); onClick() }))
-    }
-    item('Video or audio file…', () => this.pickMedia())
-    item('Video from a link…', () => this.promptMediaUrl('video'))
-    item('Audio from a link…', () => this.promptMediaUrl('audio'))
-    wrap.append(trigger, menu)
-    document.addEventListener('pointerdown', (ev) => {
-      if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
-    return wrap
+    const menu = this.dropdown(ICONS.media, t('Media'), t('Add video or audio — from a file (embeds it) or a link (stays a URL)'))
+    menu.item(t('Video or audio file…'), () => this.pickMedia(), { icon: ICONS.media })
+    menu.item(t('Video from a link…'), () => this.promptMediaUrl('video'), { icon: ICONS.media })
+    menu.item(t('Audio from a link…'), () => this.promptMediaUrl('audio'), { icon: ICONS.media })
+    return menu.root
   }
 
   /** Insert a media element that REFERENCES a URL (not embedded). */
@@ -2550,41 +2584,51 @@ export class Editor {
   }
 
   private async runAutosave() {
-    const doc = this.store.doc
-    if (doc.readonly) return
-    // Never write an encrypted deck's plaintext to IndexedDB; its file
-    // write-back below stays encrypted via serializeAuto.
-    let snapshotted = false
-    if (!isEncryptionActive()) {
-      // only true if it REALLY stored — see putRecovery; no IndexedDB (Safari
-      // private browsing, some file:// contexts) must not read as "backed up"
-      snapshotted = await putRecovery(doc)
-      if (Date.now() - this.lastVersionAt > 120_000) { this.lastVersionAt = Date.now(); await addVersion(doc) }
-    }
-    // Silent file write-back once we hold a writable handle (Chrome/Edge).
-    if (hasFileHandle()) {
-      try {
-        this.session?.stampInto(doc)
-        await writeUpdatedFile(await serializeAuto(doc))
+    if (this.store.doc.readonly) return
+    await this.saves.run(() => this.session?.stampInto(this.store.doc), async (doc) => {
+      let snapshotted = false
+      if (!isEncryptionActive()) {
+        snapshotted = await putRecovery(doc)
+        if (Date.now() - this.lastVersionAt > 120_000) {
+          this.lastVersionAt = Date.now()
+          await addVersion(doc)
+        }
+      }
+      if (hasFileHandle()) {
+        try {
+          await writeUpdatedFile(await serializeAuto(doc))
+          return { written: true, snapshotted }
+        } catch { /* recovery is a backstop, never a successful file save */ }
+      }
+      return { written: false, snapshotted }
+    }).then((saved) => {
+      if (!saved || !saved.isCurrent()) return
+      if (saved.value.written) {
+        this.savedAt = Date.now()
         this.store.setDirty(false)
-        markFileSaved() // the packs went out with those bytes too
+        this.refreshSaveStatus()
+        markFileSaved()
         this.flashSaved()
-        return
-      } catch { /* keep dirty; the IndexedDB snapshot is the backstop */ }
-    }
-    // No handle (Safari/Firefox/iOS) or the write failed: the file on disk is
-    // STALE and the deck stays dirty — saying "Saved" here would be a lie. But
-    // the snapshot means the work is not lost, and that was previously
-    // invisible: nothing was shown at all, so the only signal was an amber dot
-    // that never cleared. Say what is actually true.
-    //
-    // Deliberately silent for an ENCRYPTED deck: those are never snapshotted to
-    // IndexedDB (plaintext-to-disk), so on a browser that cannot write back
-    // there is no backstop, and claiming one would be the worst kind of wrong.
-    if (snapshotted) {
-      this.lastBackupAt = Date.now()
-      this.flashSaved(t('Backed up in this browser'))
-      this.refreshDirtyHint()
+      } else if (saved.value.snapshotted) {
+        this.lastBackupAt = Date.now()
+        this.refreshSaveStatus()
+        this.flashSaved(t('Backed up in this browser'))
+        this.refreshDirtyHint()
+      }
+    }).catch((err) => console.error('Autosave failed', err))
+  }
+
+  private saveStatusText(): string {
+    const when = (time: number) => new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    return this.store.dirty
+      ? (this.lastBackupAt ? `${t('Backed up in this browser')} · ${when(this.lastBackupAt)} · ${t('Unsaved changes')}` : t('Unsaved changes'))
+      : this.savedAt ? `${t('Saved to file')} · ${when(this.savedAt)}` : ''
+  }
+
+  private refreshSaveStatus() {
+    for (const status of this.root.querySelectorAll<HTMLElement>('.ed-save-info')) {
+      status.textContent = this.saveStatusText()
+      status.hidden = !status.textContent
     }
   }
 
@@ -2885,6 +2929,7 @@ export class Editor {
     }
     section(colL, t('Editing'), [
       [`${mod}S`, t('Save')],
+      [`${mod}K`, t('Search commands and slides')],
       [`${mod}Z · ${mod}⇧Z`, t('Undo · redo')],
       [`${mod}C · ${mod}V`, t('Copy · paste — elements, or the whole slide when nothing is selected')],
       [`${mod}D`, t('Duplicate selection')],
@@ -2977,11 +3022,20 @@ export class Editor {
     this.canvas.commitTextEdit()
     // shared docs persist their CRDT state so the saved copy can rejoin
     // as a true fork later (offline edits merge both ways)
-    this.session?.stampInto(this.store.doc)
     try {
-      const result = await saveFile(this.store.doc, forcePicker)
-      if (result === 'cancelled') return
+      const saved = await this.saves.run(
+        () => this.session?.stampInto(this.store.doc),
+        (doc) => saveFile(doc, forcePicker),
+      )
+      if (!saved || saved.value === 'cancelled') return
+      const result = saved.value
+      if (!saved.isCurrent()) {
+        this.scheduleAutosave()
+        return
+      }
+      this.savedAt = Date.now()
       this.store.setDirty(false)
+      this.refreshSaveStatus()
       // the file name is knowable from here on — put it in the tab and the chip
       this.syncWindowTitle()
       // staged language packs are in the bytes now — stop calling them pending
@@ -3005,7 +3059,7 @@ export class Editor {
         : t('Saved'))
     } catch (err) {
       console.error(err)
-      this.toast(t('Save failed — see console'))
+      this.toast(t('Save failed. Try Save a copy to choose another location.'))
     }
   }
 
@@ -3013,8 +3067,10 @@ export class Editor {
 
   private wireKeyboard() {
     document.addEventListener('keydown', (ev) => {
-      if (this.presenting) return
+      if (ev.defaultPrevented || this.presenting || (ev.target instanceof Element && ev.target.closest('[role="dialog"], dialog, .ed-about-overlay'))) return
+      if (this.root.querySelector('.bkm-open') && ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Escape'].includes(ev.key)) return
       const mod = ev.metaKey || ev.ctrlKey
+      if (mod && ev.key.toLowerCase() === 'k') { ev.preventDefault(); closeAllMenus(); this.documentActions.search(); return }
       const inField =
         ev.target instanceof Element &&
         ev.target.closest('input, textarea, select, [contenteditable="true"]') != null
@@ -3603,7 +3659,8 @@ export class Editor {
     const compressNote = document.createElement('span')
     compressNote.className = 'ed-hint'
     compressBtn.addEventListener('click', () => { void this.compressDeckPictures(compressBtn, compressNote, overlay) })
-    compressRow.append(compressBtn, compressNote)
+    const sizeBtn = btn('', t('File size'), () => { close(); this.documentActions.size() })
+    compressRow.append(compressBtn, sizeBtn, compressNote)
     box.appendChild(compressRow)
 
     // the hard no-network switch: blocks update checks AND online
@@ -3881,6 +3938,7 @@ function btn(
   b.className = 'ed-btn'
   b.innerHTML = label ? `${icon}<span>${label}</span>` : icon
   if (title) b.title = title
+  if (title || label) b.setAttribute('aria-label', title || label)
   b.addEventListener('click', onClick)
   return b
 }

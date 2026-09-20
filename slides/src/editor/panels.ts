@@ -143,6 +143,7 @@ export class PropsPanel {
   constructor(
     private host: HTMLElement,
     private store: Store,
+    private editTextAndNotes?: () => void,
   ) {
     // Selection/slide switches always rebuild — the user acted outside the
     // panel, so whatever input was focused is obsolete. Doc mutations respect
@@ -217,7 +218,7 @@ export class PropsPanel {
   }
 
   /** Collapsed by default until the user opens them (persisted per title). */
-  private static CLOSED_BY_DEFAULT = new Set(['Slideshow', 'Presenting', 'Interactivity', 'Layout', 'Advanced (JSON)', 'Layers'])
+  private static CLOSED_BY_DEFAULT = new Set(['Slideshow', 'Presenting', 'Interactivity', 'Layout', 'Advanced (JSON)', 'Layers', 'Theme', 'Code colours'])
 
   /** The layer list: one instance, the SAME header and list nodes re-appended
    *  on every rebuild (a drag emits a doc event per frame; the rows are only
@@ -250,7 +251,7 @@ export class PropsPanel {
         n = next
       }
       h.after(body)
-      const isOpen = openState[key] ?? !PropsPanel.CLOSED_BY_DEFAULT.has(key)
+      const isOpen = openState[key] ?? !([...PropsPanel.CLOSED_BY_DEFAULT].some(label => t(label) === key))
       h.classList.add('ed-sec-toggle')
       h.classList.toggle('closed', !isOpen)
       if (!isOpen) body.style.display = 'none'
@@ -500,6 +501,14 @@ export class PropsPanel {
     notes.title = t('Shown in the speaker view (Slideshow menu, or S while presenting).') +
       (isMacOS() ? ' ' + t('On macOS, open the speaker view before going fullscreen.') : '')
     this.host.appendChild(notes)
+    if (this.editTextAndNotes) {
+      const edit = document.createElement('button')
+      edit.type = 'button'
+      edit.className = 'ed-btn'
+      edit.textContent = t('Edit text and notes')
+      edit.addEventListener('click', this.editTextAndNotes)
+      this.host.appendChild(edit)
+    }
   }
 
   private buildMultiPanel(els: SlideElement[]) {
@@ -2503,6 +2512,7 @@ export class PropsPanel {
     // with no codePalette shows the built-in scheme as its starting values and
     // the field is written only when a colour is changed, so a deck without
     // one keeps rendering exactly as before.
+    this.section(t('Code colours'))
     const codeHead = document.createElement('p')
     codeHead.className = 'ed-hint'
     codeHead.textContent = t('Code colours — one per kind of token in code snippets.')

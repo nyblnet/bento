@@ -7,6 +7,8 @@
 import Moveable from 'moveable'
 import Selecto from 'selecto'
 import type { Store } from '../store'
+import { equal } from '../history'
+import { renderState } from './renderstate'
 import { t } from '../i18n'
 import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type SlideElement, type TableElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
@@ -33,6 +35,7 @@ const TAP_SLOP = 10
 const TAP_HOLD_MS = 700
 
 export class SlideCanvas {
+  private lastRenderState: unknown
   private stage: HTMLElement
   private scaleHost: HTMLElement
   private scroller: HTMLElement
@@ -451,7 +454,7 @@ export class SlideCanvas {
     new ResizeObserver(() => this.relayout()).observe(wrap)
 
     store.on('current', () => this.render())
-    store.on('doc', () => this.render())
+    store.on('doc', () => this.render(false))
     store.on('selection', () => this.syncTargets())
 
     this.render()
@@ -836,7 +839,7 @@ export class SlideCanvas {
     }
   }
 
-  render() {
+  render(force = true) {
     // A slide switch is a hard boundary for an inline edit. Commit against
     // the slide where editing began (or discard if that slide was remotely
     // deleted) before replacing the canvas DOM.
@@ -848,6 +851,9 @@ export class SlideCanvas {
     // remote ops coalesces into a single repaint then.
     if (this.editing) { this.pendingRender = true; return }
     this.pendingRender = false
+    const state = { content: renderState(this.store.doc, this.store.slide), hover: this.store.hoverPreview }
+    if (!force && equal(state, this.lastRenderState)) { this.drawRemote(); return }
+    this.lastRenderState = state
     if (this.pathEditor?.active) this.pathEditor.cancel() // doc changed under us
     if (this.cropEditor?.active) this.cropEditor.cancel()
     const slide = this.store.slide
