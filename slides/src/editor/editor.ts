@@ -136,6 +136,7 @@ export class Editor {
     store.on('doc', () => this.syncConnectors())
     store.on('doc', () => this.syncThemeRefs())
     store.on('doc', () => this.syncFonts())
+    this.syncFonts()
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
@@ -2395,7 +2396,6 @@ export class Editor {
     if (clip?.kind === 'elements') {
       let added: SlideElement[] = []
       this.store.commit(() => { added = insertElements(clip, this.store.doc, this.store.slide) })
-      if (clip.fonts?.length) injectFonts(this.store.doc)
       this.store.select(added.map((e) => e.id))
       this.toast(added.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: added.length }))
       return true
@@ -2404,7 +2404,6 @@ export class Editor {
       const at = this.store.currentIndex + 1
       let made: Slide[] = []
       this.store.commit(() => { made = insertSlides(clip, this.store.doc, at) }, 'slides')
-      if (clip.fonts?.length) injectFonts(this.store.doc)
       this.rebuildSidebar()
       this.store.goTo(at)
       this.toast(made.length === 1 ? t('Pasted 1 slide') : t('Pasted {n} slides', { n: made.length }))
@@ -2473,7 +2472,7 @@ export class Editor {
    * Re-inject custom font bundles when applicable.
    */
   private syncFonts() {
-    if (this.store.doc.fonts?.length) injectFonts(this.store.doc)
+    injectFonts(this.store.doc)
   }
 
   // --- live table→chart binding -------------------------------------------------

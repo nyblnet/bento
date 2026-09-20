@@ -11,6 +11,10 @@ pre-1.0.
 
 ## [Unreleased]
 
+- Refresh embedded fonts after JSON replacement, removal and undo/redo. Extend
+  #516 without rewriting the font stylesheet for unrelated edits; cover import,
+  font removal, asset replacement and undo/redo in packaged Chromium tests.
+
 ## [1.2.3] — 2026-09-19
 
 - **Select several slides in the sidebar and move them together.** ⌘/Ctrl-click
