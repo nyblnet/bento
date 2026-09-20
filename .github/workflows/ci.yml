@@ -95,6 +95,10 @@ jobs:
         working-directory: slides
         run: node_modules/.bin/tsc -b
 
+      - name: Spaces save revisions
+        # Typing runs and remote changes invalidate in-flight saves even while dirty.
+        run: node scripts/test-spaces-save-revisions.ts
+
       - name: Typecheck kernel (standalone)
         # Apps also typecheck kernel transitively through their imports; this
         # catches kernel-only errors under the kernel's own flags.
@@ -1966,3 +1970,26 @@ jobs:
         # unknown-role copy arriving in a running editor (dropped, loadDoc) gets
         # no write actions and is locked; owner and writer copies keep theirs.
         run: node scripts/test-slides-audience-gate-browser.mjs
+
+  spaces-save-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone documents
+        run: |
+          npm ci --prefix spaces
+          npm run build:single --prefix spaces
+      - name: Exercise the packaged documents in Chromium
+        # Real UI and serialization, offline; delayed mock writes expose save races.
+        run: |
+          node scripts/test-spaces-save-browser.mjs
