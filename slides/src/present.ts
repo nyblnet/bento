@@ -1007,7 +1007,7 @@ export function startPresentation(
           navBtn('grid', '▦', t('All slides (G)')) +
           navBtn('reduce', '⏸', t('Reduce motion (M)')) +
           navBtn('live', ICONS.broadcast, t('Go live — audience copies follow your slides')) +
-          navBtn('lock', '🔒', t('Lock keeps the audience on your slide. It does not hide the rest of the deck, which they already have.')) +
+          navBtn('lock', ICONS.lock, t('Lock keeps the audience on your slide. It does not hide the rest of the deck, which they already have.')) +
         `</div>` +
         `<span class="sv-bcast" hidden title="${t('N viewers')}"></span>` +
       `</div>` +
