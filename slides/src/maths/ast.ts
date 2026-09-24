@@ -23,15 +23,23 @@ export type MNode =
   | { k: 'scr'; b: MNode; sub?: MNode; sup?: MNode; limits?: boolean }
   /** \left … \right and \big fences — l/r may be '' for \left. */
   | { k: 'fence'; l: string; r: string; c: MNode; /** minsize multiplier for \big family */ size?: number; /** \left…\right: say stretchy out loud (plain parens stretch by the operator dictionary anyway) */ explicit?: boolean }
-  | { k: 'table'; rows: MNode[][]; l?: string; r?: string; /** column aligns, e.g. 'rl' for align */ align?: string; /** row lines */ lines?: boolean }
-  | { k: 'accent'; b: MNode; a: string; under?: boolean; stretchy?: boolean }
+  | { k: 'table'; rows: MNode[][]; l?: string; r?: string; /** the environment's spacing family, e.g. 'rl' for align */ align?: string; /** row lines */ lines?: boolean; /** per-column alignment, one of l/c/r per column (the last repeats); absent = centred */ cols?: string; /** dcases, darray: cells in display style */ display?: boolean }
+  | { k: 'accent'; b: MNode; a: string; under?: boolean; stretchy?: boolean; /** \varinjlim and family: scripts go under/over in display mode */ lim?: boolean }
+  /** \smash, \hphantom/\vphantom, \llap/\rlap/\clap: a box whose ink or
+   *  extent is taken away in one dimension (mpadded, as Temml spells it) */
+  | { k: 'pad'; c: MNode; phantom?: boolean; w0?: boolean; h0?: boolean; d0?: boolean; lap?: 'l' | 'r' | 'c' }
+  /** \sideset / \prescript: scripts on both sides (mmultiscripts) */
+  | { k: 'multi'; b: MNode; presub?: MNode; presup?: MNode; sub?: MNode; sup?: MNode }
+  /** a command maths-lite does not know, shown as its own name in place so
+   *  the rest of the formula still renders (render.ts asks for this) */
+  | { k: 'unknown'; t: string }
   /** \xrightarrow[under]{over} and family: a stretchy arrow with labels
    *  (printed the way Temml spells it — the labels padded, a 3.5em minimum) */
   | { k: 'xarrow'; a: string; over?: MNode; under?: MNode }
   /** font/colour/box wrapper */
-  | { k: 'style'; c: MNode; font?: Font; color?: string; box?: boolean; /** \cancel */ cancel?: boolean }
+  | { k: 'style'; c: MNode; font?: Font; color?: string; box?: boolean; /** \cancel (up), \bcancel (down), \xcancel (both), \sout (across) */ cancel?: true | 'down' | 'x' | 'h'; /** \large and family: em */ size?: number; /** \pmb, physics' bold nabla */ bold?: boolean; /** \colorbox */ bg?: string; /** \fcolorbox frame colour */ frame?: string }
 
-export type Font = 'bb' | 'cal' | 'frak' | 'bf' | 'it' | 'sf' | 'tt' | 'rm' | 'scr'
+export type Font = 'bb' | 'cal' | 'frak' | 'bf' | 'it' | 'sf' | 'tt' | 'rm' | 'scr' | 'sfit' | 'bfit'
 
 export const row = (c: MNode[]): MNode => (c.length === 1 ? c[0] : { k: 'row', c })
 export const mi = (t: string, extra?: Partial<Extract<MNode, { k: 'sym' }>>): MNode => ({ k: 'sym', cls: 'i', t, ...extra })

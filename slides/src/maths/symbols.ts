@@ -72,14 +72,102 @@ export const SYMBOLS: Sym[] = [
   T('lbrace', 'brace.l', '{'), T('rbrace', 'brace.r', '}'), T('{', 'brace.l', '{'), T('}', 'brace.r', '}'), T('backslash', 'backslash', '\\'),
 ]
 
+// The rest of TeX's symbol vocabulary, as Temml 0.13.3 spells it (#551):
+// "name glyph name glyph …", one string per class — a row here is a name and
+// a code point, nothing more, so a string costs a fraction of a T() call.
+// Generated from Temml's own output and gated tree-for-tree against it by
+// scripts/test-maths-coverage.ts; no Typst names (Typst has its own table).
+const PACKED: Record<SymClass, string> = {
+  i:
+  "AE Æ Angstrom Å Bbbk 𝕜 Bot ⫫ Complex ℂ Coppa Ϙ DH Ð DJ Đ Diamond ◊ Earth ⊕ Finv Ⅎ Game ⅁ Koppa Ϟ " +
+  "L Ł N ℕ NG Ŋ O Ø OE Œ P ¶ QED ∎ R ℝ Reals ℝ S § Sampi Ϡ Stigma Ϛ TH Þ Z ℤ ae æ alef ℵ alefsym ℵ " +
+  "astrosun ☉ ballotx ✗ beth ℶ bigstar ★ blacklozenge ⧫ blacktriangle ▲ blacktriangledown ▼ cent ¢ " +
+  "circledR ® circledS Ⓢ clubs ♣ clubsuit ♣ cnums ℂ complement ∁ coppa ϙ copyright © dag † daleth ℸ " +
+  "ddag ‡ dh ð diagdown ╲ diagup ╱ diameter ⌀ diamonds ♢ diamondsuit ♢ digamma ϝ dj đ empty ∅ eth ð " +
+  "euro € exist ∃ female ♀ flat ♭ gimel ℷ hearts ♡ heartsuit ♡ hslash ℏ image ℑ imath ı infin ∞ jmath ȷ " +
+  "koppa ϟ l Ł leftmoon ☾ lightning ↯ lozenge ◊ lq ‘ male ♂ maltese ✠ mathsterling £ measuredangle ∡ " +
+  "mho ℧ natnums ℕ natural ♮ ng ŋ o ø oc ! oe œ omicron ο permil ‰ pounds £ real ℜ reals ℝ rightmoon ☽ " +
+  "sampi ϡ sect § sharp ♯ shift ↕ shneg ↑ shpos ↓ smiley ☺ spades ♠ spadesuit ♠ sphericalangle ∢ ss ß " +
+  "stigma ϛ sun ☼ thetasym ϑ triangledown ▽ var δ varDelta 𝛥 varGamma 𝛤 varLambda 𝛬 varOmega 𝛺 " +
+  "varPhi 𝛷 varPi 𝛱 varPsi 𝛹 varSigma 𝛴 varTheta 𝛩 varUpsilon 𝛶 varXi 𝛯 varclubsuit ♧ varcoppa ϙ " +
+  "vardiamondsuit ♦ varheartsuit ♥ variation δ varkappa ϰ varpi ϖ varrho ϱ varsigma ς varspadesuit ♤ " +
+  "varvdots ⋮ weierp ℘ wn ? yen ¥ ",
+  o:
+  "And & Bumpeq ≎ Cap ⋒ Coloneqq ⩴ Cup ⋓ Dagger ‡ Darr ⇓ Doteq ≑ Downarrow ⇓ Harr ⇔ Join ⋈ Larr ⇐ " +
+  "Lleftarrow ⇚ Longleftarrow ⟸ Longleftrightarrow ⟺ Longrightarrow ⟹ Lrarr ⇔ Lsh ↰ Nand ⊼ Nor ⊽ " +
+  "Otimes ⨷ Perp ⫫ Rarr ⇒ Rrightarrow ⇛ Rsh ↱ Sqcap ⩎ Sqcup ⩏ Subset ⋐ Supset ⋑ Uarr ⇑ Uparrow ⇑ " +
+  "Updownarrow ⇕ VDash ⊫ Vdash ⊩ Vee ⩔ Vvdash ⊪ Wedge ⩓ Xor ⊻ amalg ⨿ approxeq ≊ arceq ≘ asymp ≍ " +
+  "backcong ≌ backepsilon ∍ backsim ∽ backsimeq ⋍ barcap ⩃ barcup ⩂ barvee ⊽ barwedge ⊼ between ≬ " +
+  "bigcirc ◯ bigtriangledown ▽ bigtriangleup △ blackhourglass ⧗ blacktriangleleft ◀ " +
+  "blacktriangleright ▶ bowtie ⋈ boxast ⧆ boxbox ⧈ boxcircle ⧇ boxdot ⊡ boxminus ⊟ boxplus ⊞ boxslash ⧄ " +
+  "boxtimes ⊠ bull ∙ bumpeq ≏ capbarcup ⩈ capdot ⩀ capovercup ⩇ circeq ≗ circlearrowleft ↺ " +
+  "circlearrowright ↻ circledast ⊛ circledcirc ⊚ circleddash ⊝ circledequal ⊜ circledparallel ⦷ " +
+  "circledvert ⦶ circlehbar ⦵ closedvarcap ⩍ closedvarcup ⩌ coloncolon ∷ coloncolonequals ⩴ coloneqq ≔ " +
+  "colonequals ≔ concavediamond ⟡ concavediamondtickleft ⟢ concavediamondtickright ⟣ cupovercap ⩆ " +
+  "curlyeqprec ⋞ curlyeqsucc ⋟ curlyvee ⋎ curlywedge ⋏ curvearrowleft ↶ curvearrowright ↷ dArr ⇓ darr ↓ " +
+  "dashleftarrow ⇠ dashrightarrow ⇢ dashv ⊣ dblcolon ∷ divideontimes ⋇ doteq ≐ doteqdot ≑ dotminus ∸ " +
+  "dotplus ∔ doublebarvee ⩢ doublebarwedge ⩞ doublecap ⋒ doublecup ⋓ downdownarrows ⇊ downharpoonleft ⇃ " +
+  "downharpoonright ⇂ eqcirc ≖ eqcolon ∹ eqdef ≝ eqeq ⩵ eqeqeq ⩶ eqqcolon ≕ eqsim ≂ eqslantgtr ⪖ " +
+  "eqslantless ⪕ equal = equalscolon ≕ fallingdotseq ≒ frown ⌢ fullouterjoin ⟗ geqq ≧ ggg ⋙ gggtr ⋙ " +
+  "gnapprox ⪊ gneqq ≩ gnsim ⋧ gt > gtrapprox ⪆ gtrdot ⋗ gtreqless ⋛ gtreqqless ⪌ gtrless ≷ gvertneqq ≩︀ " +
+  "hArr ⇔ harr ↔ hookleftarrow ↩ hourglass ⧖ iddots ⋰ imageof ⊷ intercal ⊺ interleave ⫴ invlazys ∾ " +
+  "isin ∈ lAngle ⟪ lArr ⇐ lBrace ⦃ lang ⟨ larr ← leadsto ⇝ leftarrowtail ↢ leftharpoondown ↽ " +
+  "leftharpoonup ↼ leftleftarrows ⇇ leftouterjoin ⟕ leftrightarrows ⇆ leftrightharpoons ⇋ " +
+  "leftrightsquigarrow ↭ leftthreetimes ⋋ leqq ≦ lessapprox ⪅ lessdot ⋖ lesseqgtr ⋚ lesseqqgtr ⪋ " +
+  "lessgtr ≶ lgroup ⟮ lhd ⊲ llangle ⦉ llbracket ⟦ llcorner ⌞ lll ⋘ llless ⋘ llparenthesis ⦇ " +
+  "lmoustache ⎰ lnapprox ⪉ lneqq ≨ lnsim ⋦ longleftarrow ⟵ longleftrightarrow ⟷ longmapsto ⟼ " +
+  "looparrowleft ↫ looparrowright ↬ lozengeminus ⟠ lparen ( lrArr ⇔ lrarr ↔ lrcorner ⌟ lt < ltimes ⋉ " +
+  "lvertneqq ≨︀ mapsfrom ↤ mathellipsis … measeq ≞ minuscolon ∹ minusdot ⨪ minusfdots ⨫ minusrdots ⨬ " +
+  "multimap ⊸ nLeftarrow ⇍ nLeftrightarrow ⇎ nRightarrow ⇏ nVDash ⊯ nVdash ⊮ nearrow ↗ ngeqq ≱ " +
+  "ngeqslant ≱ nleftarrow ↚ nleftrightarrow ↮ nleqq ≰ nleqslant ≰ nprec ⊀ npreceq ⋠ nrightarrow ↛ " +
+  "nsubset ⊄ nsubseteqq ⊈ nsucc ⊁ nsucceq ⋡ nsupset ⊅ nsupseteqq ⊉ ntriangleleft ⋪ ntrianglelefteq ⋬ " +
+  "ntriangleright ⋫ ntrianglerighteq ⋭ nvDash ⊭ nvdash ⊬ nwarrow ↖ obar ⌽ obslash ⦸ odiv ⨸ odot ⊙ " +
+  "ogreaterthan ⧁ olessthan ⧀ ominus ⊖ operp ⦹ origof ⊶ oslash ⊘ otimeshat ⨶ owns ∋ pitchfork ⋔ " +
+  "plusmn ± precapprox ⪷ preccurlyeq ≼ preceq ⪯ precnapprox ⪹ precneqq ⪵ precnsim ⋨ precsim ≾ questeq ≟ " +
+  "rAngle ⟫ rArr ⇒ rBrace ⦄ rang ⟩ rarr → restriction ↾ rgroup ⟯ rhd ⊳ rightarrowtail ↣ " +
+  "rightharpoondown ⇁ rightharpoonup ⇀ rightleftarrows ⇄ rightleftharpoons ⇌ rightouterjoin ⟖ " +
+  "rightrightarrows ⇉ rightsquigarrow ⇝ rightthreetimes ⋌ risingdotseq ≓ rmoustache ⎱ rparen ) " +
+  "rrangle ⦊ rrbracket ⟧ rrparenthesis ⦈ rtimes ⋊ sdot ⋅ searrow ↘ shuffle ⧢ smallfrown ⌢ smallint ∫ " +
+  "smallsmile ⌣ smashtimes ⨳ smile ⌣ sqcap ⊓ sqcup ⊔ sqsubset ⊏ sqsubseteq ⊑ sqsupset ⊐ sqsupseteq ⊒ " +
+  "sslash ⫽ stareq ≛ strictfi ⥼ strictif ⥽ sub ⊂ sube ⊆ subseteqq ⫅ subsetneqq ⫋ succapprox ⪸ " +
+  "succcurlyeq ≽ succeq ⪰ succnapprox ⪺ succneqq ⪶ succnsim ⋩ succsim ≿ supe ⊇ supseteqq ⫆ supsetneqq ⫌ " +
+  "swarrow ↙ thickapprox ≈ thicksim ∼ threedotcolon ⫶ triangleleft ◃ trianglelefteq ⊴ triangleminus ⨺ " +
+  "triangleplus ⨹ triangleq ≜ triangleright ▹ trianglerighteq ⊵ triangletimes ⨻ twocaps ⩋ twocups ⩊ " +
+  "twoheadleftarrow ↞ twoheadrightarrow ↠ typecolon ⦂ uArr ⇑ uarr ↑ ulcorner ⌜ unlhd ⊴ unrhd ⊵ " +
+  "updownarrow ↕ upharpoonleft ↿ upharpoonright ↾ uplus ⊎ upuparrows ⇈ urcorner ⌝ vDash ⊨ varpropto ∝ " +
+  "varsubsetneqq ⫋︀ varsupsetneqq ⫌︀ vartriangle △ vartriangleleft ⊲ vartriangleright ⊳ veebar ⊻ " +
+  "veedot ⟇ veedoublebar ⩣ veeeq ≚ veeonvee ⩖ wedgebar ⩟ wedgedot ⟑ wedgedoublebar ⩠ wedgeonwedge ⩕ " +
+  "wedgeq ≙ whitesquaretickleft ⟤ whitesquaretickright ⟥ wr ≀ ",
+  big:
+  "bigcupdot ⨃ bigcupplus ⨄ bigdoublevee ⨇ bigdoublewedge ⨈ bigodot ⨀ bigsqcap ⨅ bigsqcup ⨆ bigtimes ⨉ " +
+  "biguplus ⨄ fint ⨏ iiiint ⨌ intBar ⨎ intbar ⨍ intcap ⨙ intclockwise ∱ intcup ⨚ intlarhk ⨗ intop ∫ " +
+  "intx ⨘ oiiint ∰ oiint ∯ pointint ⨕ rppolint ⨒ scpolint ⨓ sqint ⨖ varointclockwise ∲ ",
+}
+// the few Temml writes with its own spacing or size, by hand: primes, dots,
+// the short relations, ⅋ — the operator dictionary spaces them close enough
+PACKED.o += 'cdotp · ldotp . centerdot ⋅ DOTSB ⋯ DOTSI ⋯ DOTSX … dotsx … dprime ″ trprime ‴ qprime ⁗ backprime ‵ backdprime ‶ backtrprime ‷ ' +
+  'impliedby ⟸ invamp ⅋ parr ⅋ upand ⅋ with & leftmodels ⫣ multimapboth ⧟ multimapinv ⟜ notni ∌ nshortmid ∤ nshortparallel ∦ shortmid ∣ shortparallel ∥ smallsetminus ∖ '
+PACKED.i += 'ordinarycolon : rq ’ '
+for (const cls of ['i', 'o', 'big'] as SymClass[]) {
+  const f = PACKED[cls].trim().split(' ')
+  for (let k = 0; k < f.length; k += 2) SYMBOLS.push(T(f[k], '', f[k + 1], cls))
+}
+
 /** The upright function names: \sin → <mi>sin</mi>. Typst spells them the same. */
-export const FUNCTIONS = ['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'arcsin', 'arccos', 'arctan', 'sinh', 'cosh', 'tanh', 'log', 'ln', 'lg', 'exp', 'det', 'dim', 'ker', 'deg', 'gcd', 'hom', 'arg', 'Pr']
+export const FUNCTIONS = ['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'arcsin', 'arccos', 'arctan', 'sinh', 'cosh', 'tanh', 'log', 'ln', 'lg', 'exp', 'det', 'dim', 'ker', 'deg', 'gcd', 'hom', 'arg', 'Pr',
+  // the rest of Temml's list (#551), and the physics package's
+  'coth', 'sgn', 'arcctg', 'arctg', 'cosec', 'cotg', 'ctg', 'cth', 'tg', 'th', 'sh', 'ch', 'erf', 'rank', 'Tr', 'tr', 'Res', 'lcm']
 /** Function names whose scripts sit under/over in display mode. */
-export const LIMIT_FUNCTIONS = ['lim', 'max', 'min', 'sup', 'inf', 'limsup', 'liminf']
+export const LIMIT_FUNCTIONS = ['lim', 'max', 'min', 'sup', 'inf', 'limsup', 'liminf', 'argmax', 'argmin', 'injlim', 'projlim', 'plim']
+/** Names printed differently from how they are typed: \argmax is "arg max". */
+export const FN_TEXT: Record<string, string> = { argmax: 'arg max', argmin: 'arg min', injlim: 'inj lim', projlim: 'proj lim', limsup: 'lim sup', liminf: 'lim inf' }
 
 export const byTex = new Map(SYMBOLS.map((s) => [s.tex, s]))
+/** a glyph typed directly (∈) → the first row that draws it, for its class */
+export const byGlyph = new Map<string, Sym>()
+for (const s of SYMBOLS) if (!byGlyph.has(s.cp)) byGlyph.set(s.cp, s)
 export const byTypst = new Map<string, Sym>()
-for (const s of SYMBOLS) if (!byTypst.has(s.typst)) byTypst.set(s.typst, s)
+for (const s of SYMBOLS) if (s.typst && !byTypst.has(s.typst)) byTypst.set(s.typst, s)
 
 // --- Mathematical Alphanumeric code points -----------------------------------
 // Chrome ignores mathvariant on <mi>, so \mathbb{R} must BE the code point ℝ.
@@ -94,6 +182,8 @@ const RANGES: Record<string, [number, number, number] | null> = {
   scr: [0x1d49c, 0x1d4b6, 0],
   frak: [0x1d504, 0x1d51e, 0],
   sf: [0x1d5a0, 0x1d5ba, 0x1d7e2],
+  sfit: [0x1d608, 0x1d622, 0],
+  bfit: [0x1d468, 0x1d482, 0],
   tt: [0x1d670, 0x1d68a, 0x1d7f6],
   rm: null,
 }

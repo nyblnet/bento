@@ -55,12 +55,17 @@ function print(n: MNode, font: Font | undefined): string {
       const attrs: string[] = []
       if (n.pad !== undefined) attrs.push(` lspace="${n.pad}" rspace="${n.rpad ?? n.pad}"`)
       if (n.prefix && !'([{)]}'.includes(n.t)) attrs.push(' form="prefix" stretchy="false"')
-      if (n.t === '|' && n.pad !== undefined && !n.stretchy) attrs.push(' stretchy="false"')
+      // a bare | or ‖ never grows (#551): beside a cases block the first bar
+      // of |x| stretched to the block's height. Temml draws a typed | as an
+      // ordinary symbol and \lvert as a non-stretchy fence — same result
+      if ((n.t === '|' || n.t === '‖') && !n.stretchy) attrs.push(' stretchy="false"')
       // a bare "(" in the middle of a row would be inferred INFIX by MathML
       // Core and spaced like a binary operator; TeX treats it as an opening
       // fence. Temml spells this out per paren; so do we.
-      if (!n.stretchy && '([{'.includes(n.t)) attrs.push(' fence="true" form="prefix" stretchy="false"')
-      else if (!n.stretchy && ')]}'.includes(n.t)) attrs.push(' fence="true" form="postfix" stretchy="false"')
+      // (⟨ ⌊ ⌈ too, #551: an unpaired \langle beside a tall fraction grew to
+      // the whole row's height — Temml says stretchy="false" for these)
+      if (!n.stretchy && '([{⟨⌊⌈'.includes(n.t)) attrs.push(' fence="true" form="prefix" stretchy="false"')
+      else if (!n.stretchy && ')]}⟩⌋⌉'.includes(n.t)) attrs.push(' fence="true" form="postfix" stretchy="false"')
       if (n.stretchy) attrs.push(' stretchy="true"')
       if (n.size) attrs.push(` minsize="${n.size}em" maxsize="${n.size}em"`)
       if (n.big) attrs.push(' largeop="true"')
@@ -100,22 +105,35 @@ function print(n: MNode, font: Font | undefined): string {
       const pad = (i: number) => cols === 'll' ? `padding-left:${i === 0 ? '0' : '1'}em;padding-right:0em`
         : cols === 'rl' || cols === 's' || cols === 'd' ? 'padding-left:0em;padding-right:0em'
         : `padding-left:${i === 0 ? '0em' : '5.9776pt'};padding-right:${i === ncol - 1 ? '0em' : '5.9776pt'}`
-      // centred cells say nothing (the default); left/right say so the way
-      // Temml's tml-left/tml-right classes would with its stylesheet
-      // Every column is CENTRED — cases and aligned included. TeX would
-      // left/right-align them, and Temml asks for that through CSS classes;
-      // but Bento never loads Temml's stylesheet, so every deck today renders
-      // those columns centred, and the maintainer chose to keep that look
-      // (2026-09-15): nothing moves on update. `al` still decides the padding.
-      const body = n.rows.map((r) => `<mtr>${r.map((c, i) => `<mtd style="${pad(i)}">${print(c, font)}</mtd>`).join('')}</mtr>`).join('')
+      // Column alignment, the way TeX sets it (#551): aligned is right then
+      // left so the relations line up, cases and rcases are left, a starred
+      // matrix or an array says per column. Temml asks for the same through
+      // its tml-left/tml-right classes, but Bento never loaded Temml's
+      // stylesheet, so until #551 every column rendered centred — the
+      // 2026-09-15 choice to keep that look was reversed by the maintainer
+      // (docs/DECISIONS.md, 2026-09-24): an `&=` that does not line up is a
+      // bug to the person who typed it. Centred cells say nothing.
+      // HOW, measured in Chrome 153: an mtd ignores text-align:left/right/
+      // center/end (every one lays out at the start edge) and honours only
+      // the -webkit- keywords — Chrome's own UA sheet centres cells with
+      // -webkit-center. So the style says -webkit-left/right, and the MathML
+      // columnalign attribute says it for engines that read that instead.
+      const colOf = (i: number) => (n.cols ? n.cols[Math.min(i, n.cols.length - 1)] : 'c')
+      const cell = (i: number) => { const c = colOf(i); return c === 'l' || c === 'r' ? ` columnalign="${c === 'l' ? 'left' : 'right'}" style="text-align:-webkit-${c === 'l' ? 'left' : 'right'};` : ' style="' }
+      const body = n.rows.map((r) => `<mtr>${r.map((c, i) => `<mtd${cell(i)}${pad(i)}">${print(c, font)}</mtd>`).join('')}</mtr>`).join('')
       // aligned/gather rows are display-style (Temml sets it on the table)
-      const table = `<mtable${cols === 'rl' || cols === 'd' ? ' displaystyle="true"' : ''}>${body}</mtable>`
+      const table = `<mtable${cols === 'rl' || cols === 'd' || n.display ? ' displaystyle="true"' : ''}>${body}</mtable>`
       return n.l || n.r ? `<mrow><mo fence="true" form="prefix" stretchy="true">${esc(n.l ?? '')}</mo>${table}<mo fence="true" form="postfix" stretchy="true">${esc(n.r ?? '')}</mo></mrow>` : table
     }
     case 'xarrow': {
       // Temml's spelling, so a deck keeps its look: the arrow stretches under
       // a label padded 0.4286em a side, over a 3.5em minimum, a thick space
       // either side of the whole
+      // KNOWN LIMIT (#551, measured in Chrome 153, macOS, every maths font):
+      // Chrome stretches ← ⇐ ⇒ ⇔ ↤ ↩ ↪ and the harpoons to the label, but
+      // not → ↦ ↔ ⇌ ↠ = — whatever the form, font or script element. A
+      // mirrored stretched ← loses its head, and a harpoon pair misaligns,
+      // so those arrows stay glyph-sized under a long label (as in Temml).
       const lab = (x: MNode, under: boolean) => `<${under ? 'munder' : 'mover'}><mrow><mspace width="0.4286em"></mspace>${print(x, font)}<mspace width="0.4286em"></mspace></mrow><mspace width="3.5em"></mspace></${under ? 'munder' : 'mover'}>`
       const arrow = `<mo stretchy="true" lspace="0em" rspace="0em">${esc(n.a)}</mo>`
       const body = n.over && n.under ? `<munderover>${arrow}${lab(n.under, true)}${lab(n.over, false)}</munderover>`
@@ -145,8 +163,30 @@ function print(n: MNode, font: Font | undefined): string {
       // dropped and the text renders uncoloured rather than refused.
       if (n.color && isCssColor(n.color)) st.push(`color:${n.color}`)
       if (n.box) st.push('padding:3pt;border:1px solid')
-      if (n.cancel) st.push('background:linear-gradient(to top right,transparent 47%,currentColor 47%,currentColor 53%,transparent 53%)')
+      const line = (dir: string) => `linear-gradient(${dir},transparent 47%,currentColor 47%,currentColor 53%,transparent 53%)`
+      if (n.cancel) st.push(`background:${n.cancel === 'down' ? line('to bottom right') : n.cancel === 'x' ? line('to top right') + ',' + line('to bottom right') : n.cancel === 'h' ? line('to bottom') : line('to top right')}`)
+      if (n.size) st.push(`font-size:${n.size}em`)
+      if (n.bold) st.push('font-weight:bold')
+      if (n.bg && isCssColor(n.bg)) st.push(`background-color:${n.bg};padding:0.3em`)
+      if (n.frame && isCssColor(n.frame)) st.push(`border:0.0667em solid ${n.frame}`)
       return st.length ? `<mrow style="${st.join(';')}">${inner}</mrow>` : inner
+    }
+    case 'pad': {
+      // Temml's spelling (mpadded; mphantom for the phantoms). The laps take
+      // no width and shift their content with a transform, the one way to
+      // say "-100% of my own width" in MathML Core (lspace="-1width" is not)
+      const inner = n.phantom ? `<mphantom>${print(n.c, font)}</mphantom>` : print(n.c, font)
+      if (n.lap) return `<mpadded width="0px">${n.lap === 'r' ? inner : `<mrow style="transform:translateX(${n.lap === 'l' ? '-100%' : '-50%'})">${inner}</mrow>`}</mpadded>`
+      return `<mpadded${n.w0 ? ' width="0px"' : ''}${n.h0 ? ' height="0px"' : ''}${n.d0 ? ' depth="0px"' : ''}>${inner}</mpadded>`
+    }
+    case 'multi': {
+      const x = (m?: MNode) => (m ? print(m, font) : '<none></none>')
+      return `<mmultiscripts>${print(n.b, font)}${x(n.sub)}${x(n.sup)}<mprescripts></mprescripts>${x(n.presub)}${x(n.presup)}</mmultiscripts>`
+    }
+    case 'unknown': {
+      // the command's own name, in a warning colour: the audience sees the
+      // formula with one word they can read, not a wall of raw LaTeX
+      return `<mtext mathcolor="#D14343" class="bento-math-unknown">${esc(n.t)}</mtext>`
     }
   }
 }

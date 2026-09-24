@@ -11,6 +11,35 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Maths covers the rest of LaTeX, and lines up.** After the fix for #540,
+  a check against the old engine's whole vocabulary found about a hundred
+  more commonly typed commands that still showed as raw text: long and
+  vertical arrows (`\Longrightarrow`, `\Uparrow`, `\rightleftharpoons`),
+  `\odot`, `\preceq`, `\triangleq`, `\varpi`, `\imath`, `\oiint`, `\coth`,
+  `\argmax`, card suits, `\pounds` and many more. Every one renders now, along
+  with `\hphantom`, `\smash`, `\llap`, `\sideset`, starred matrices,
+  `rcases`/`dcases`, `\fbox`, `\colorbox`, `\bcancel`, `\large`/`\small`,
+  `\bold`, `\Bbb` and `\textsc`, symbols typed directly (`∈`, `≤`), and
+  line breaks written straight into a display formula (`a = b \\ c = d`,
+  which chat assistants produce), now stacked on separate lines.
+  - **`aligned` now aligns.** The equals signs in an `aligned` block line up
+    and `cases` columns sit to the left, the way TeX sets them. Until now
+    every column was centred. Decks that use `aligned` or `cases` will look
+    different after updating.
+  - **One unknown command no longer loses the formula.** The rest renders
+    and the unknown command shows as its own name in red, so an audience sees
+    the maths, not a line of raw LaTeX. In the editor the formula still gets
+    the "Not rendered" hint naming the command.
+  - **Your own macros:** `\newcommand`, `\renewcommand`, `\def` and
+    `\DeclareMathOperator` work inside the formula that defines them.
+  - **Physics and chemistry:** the physics package (`\dv`, `\pdv`, `\abs`,
+    `\norm`, `\bra`, `\ket`, `\qty`, `\grad` and the rest) and mhchem's
+    `\ce{…}` and `\pu{…}` (formulas, charges, states, hydrates, reaction arrows
+    with labels, units).
+  - Known limit: in Chrome, `\xrightarrow` and a few other arrows keep their
+    natural length under a long label instead of stretching to it, as they
+    always have in Bento.
+
 - **Formulas that stayed as raw text now render.** 1.2.0 replaced the maths
   engine with a smaller one of our own, and a whole set of everyday LaTeX fell
   back to raw text: `\frac12`, `\over` and `\choose`, `\pmod`, `\middle|`,

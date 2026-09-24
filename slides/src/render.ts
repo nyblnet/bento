@@ -565,7 +565,8 @@ function renderMath(src: string, display: boolean): string | null {
   try {
     const tex = decodeEntities(src)
     const m = /^typst:\s*/.exec(tex)
-    const ml = mathsLite(m ? tex.slice(m[0].length) : tex, { display, syntax: m ? 'typst' : 'latex' })
+    // lenient (#551): an unknown command shows as its name, the rest renders
+    const ml = mathsLite(m ? tex.slice(m[0].length) : tex, { display, syntax: m ? 'typst' : 'latex', lenient: true })
     out = ml ? tagSymbols(ml) : null // not valid maths — leave the author's text exactly as typed
   } catch {
     out = null

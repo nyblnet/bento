@@ -30,9 +30,11 @@
  * HINTS (editor only). When `hint` is passed, a formula-shaped run that did
  * NOT render is wrapped in a span the editor styles with a dotted underline
  * and a title naming why — the first unknown command, or "no spaces just
- * inside the $ signs". Thumbnails, present, print and the file-manager
- * preview never pass it, and nothing here reaches the document: the model
- * keeps the author's text.
+ * inside the $ signs". Since #551 slides render leniently, so a formula with
+ * an unknown command DOES render, that command drawn as its name; the hint
+ * then wraps the rendered formula instead. Thumbnails, present, print and
+ * the file-manager preview never pass it, and nothing here reaches the
+ * document: the model keeps the author's text.
  */
 
 export type RenderFn = (src: string, display: boolean) => string | null
@@ -132,6 +134,12 @@ function resolveRun(text: string, render: RenderFn, hold: (s: string) => string,
   // when it looks mathematical.
   const rule = (display: boolean, sure: boolean) => (m: string, pre: string, src: string) => {
     const ml = render(src, display)
+    // rendered, but with a command the engine did not know drawn as its name
+    // (#551): the audience sees the formula; the editor still says why
+    if (ml && hint && ml.includes('bento-math-unknown')) {
+      const why = hint(src, display)
+      return pre + hold(why ? `<span class="bento-math-miss" title="${esc(why)}">${ml}</span>` : ml)
+    }
     if (ml) return pre + hold(ml)
     const raw = m.slice(pre.length)
     return pre + (hint && (sure || MATHY.test(src)) ? mark(raw, hint(src, display)) : raw)

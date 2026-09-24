@@ -142,9 +142,13 @@ ok(renderMath('\\nabla \\cdot v')!.includes('<mo>∇</mo><mo form="prefix" stret
 ok(renderMath('a + \\cdots + b')!.includes('<mo>+</mo><mo>⋯</mo><mo>+</mo>'), '…but not after dots: + ⋯ + keeps its spacing')
 ok(renderMath('\\sigma(z)_i')!.includes('<msub><mrow><mo fence="true" form="prefix" stretchy="false">(</mo><mi>z</mi><mo fence="true" form="postfix" stretchy="false">)</mo></mrow><mi>i</mi></msub>'), 'a paren group is one node: the script attaches to the group, as Temml and Typst do')
 ok(renderMath('\\left( x \\right)')!.includes('<mo fence="true" form="prefix" stretchy="true">(</mo>'), '\\left( says fence/form as well as stretchy')
-ok(renderMath('\\begin{cases} a & b \\\\ c & d \\end{cases}')!.includes('<mtd style="padding-left:1em;padding-right:0em">'), "cases: 1em before the condition column, columns CENTRED (Temml-in-Bento look, the maintainer's choice)")
-ok(renderMath('\\begin{aligned} a &= b \\end{aligned}')!.includes('<mtable displaystyle="true">') && renderMath('\\begin{aligned} a &= b \\end{aligned}')!.includes('<mtd style="padding-left:0em;padding-right:0em">'), 'aligned: display style, no column padding, columns centred')
-ok(!/text-align|columnalign/.test(renderMath('\\begin{cases} a & b \\end{cases}')!), 'no cell says an alignment — centred is the default, as Temml renders in Bento today')
+// Column alignment is TeX's since #551 (the maintainer reversed the
+// 2026-09-15 centred look, docs/DECISIONS.md 2026-09-24): an `&=` lines up.
+// (the -webkit- keyword is the one Chrome's mtd honours — measured: plain
+// left/right/center all lay out at the start edge; columnalign for the rest)
+ok(renderMath('\\begin{cases} a & b \\\\ c & d \\end{cases}')!.includes('<mtd columnalign="left" style="text-align:-webkit-left;padding-left:1em;padding-right:0em">'), 'cases: 1em before the condition column, every column left-aligned')
+ok(renderMath('\\begin{aligned} a &= b \\end{aligned}')!.includes('<mtable displaystyle="true">') && renderMath('\\begin{aligned} a &= b \\end{aligned}')!.includes('<mtd columnalign="right" style="text-align:-webkit-right;padding-left:0em;padding-right:0em"><mi>a</mi></mtd><mtd columnalign="left" style="text-align:-webkit-left;padding-left:0em;padding-right:0em">'), 'aligned: display style, no column padding, right|left so the relations line up')
+ok(!/text-align|columnalign/.test(renderMath('\\begin{pmatrix} 1 & 2 \\end{pmatrix}')!) && renderMath('\\begin{pmatrix*}[r] 1 & -2 \\end{pmatrix*}')!.includes('text-align:-webkit-right'), 'a matrix stays centred; a starred matrix takes its [r]')
 ok(renderMath('\\vec{v}')!.includes('<mo stretchy="false">→</mo>') && renderMath('\\hat{x}')!.includes('style="math-depth:0"'), "\\vec shrinks to script size, \\hat stays full — Temml's look")
 ok(renderMath('\\overrightarrow{AB}')!.includes('stretchy="true" style="math-depth:0"'), 'a stretchy arrow accent stays full size')
 ok(renderMath('\\overline{AB}')!.includes('<mover><mrow><mi>A</mi><mi>B</mi></mrow><mo stretchy="true" style="math-depth:0">‾</mo></mover>'), "\\overline draws a stretchy rule (Temml's menclose is blank on Chrome — kept ours)")
@@ -181,14 +185,26 @@ ok(renderMath('\\textcolor{#ff0000}{x}')!.includes('style="color:#ff0000"') && r
 // colour shape isCssColor admits — one declaration, no `;`, no `(` outside
 // rgb/hsl. A loosened isCssColor that lets a `;` through goes red here.
 const STYLE_FORMS = [
-  /^margin-left:-?[\d.]+em;$/, /^math-depth:0$/,
-  /^padding-left:(0|1)em;padding-right:0em$/, /^padding-left:(0em|5\.9776pt);padding-right:(0em|5\.9776pt)$/,
+  /^margin-left:-?[\d.]+em;$/, /^math-depth:0$/, /^transform:translateX\(-(100|50)%\)$/,
+  /^(text-align:-webkit-(left|right);)?padding-left:(0|1)em;padding-right:0em$/, /^(text-align:-webkit-(left|right);)?padding-left:(0em|5\.9776pt);padding-right:(0em|5\.9776pt)$/,
 ]
 const COLOR_SHAPE = /^(#[0-9a-f]{3,8}|[a-z]{3,20}|(rgba?|hsla?)\([\d.%,\s/]+\))$/i
-const styleOk = (v: string) => STYLE_FORMS.some((re) => re.test(v)) || v.split(';').every((d) => d === 'padding:3pt' || d === 'border:1px solid' || d.startsWith('background:linear-gradient(to top right,transparent 47%,currentColor 47%,currentColor 53%,transparent 53%)') || (d.startsWith('color:') && COLOR_SHAPE.test(d.slice(6))))
+// the constant declarations the style node can emit (#551 added the cancel
+// variants, sizes, bold, and the \colorbox/\fcolorbox colours — whose VALUE
+// is author text and must pass the same colour shape as \textcolor's)
+const GRAD = /^linear-gradient\(to (top right|bottom right|bottom),transparent 47%,currentColor 47%,currentColor 53%,transparent 53%\)$/
+const declOk = (d: string) => d === 'padding:3pt' || d === 'border:1px solid' || d === 'font-weight:bold' || d === 'padding:0.3em' || /^font-size:[\d.]+em$/.test(d)
+  || (d.startsWith('background:') && d.slice(11).split(/,(?=linear)/).every((g) => GRAD.test(g)))
+  || (d.startsWith('color:') && COLOR_SHAPE.test(d.slice(6))) || (d.startsWith('background-color:') && COLOR_SHAPE.test(d.slice(17)))
+  || (d.startsWith('border:0.0667em solid ') && COLOR_SHAPE.test(d.slice(22)))
+const styleOk = (v: string) => STYLE_FORMS.some((re) => re.test(v)) || v.split(';').every(declOk)
 const styleValues = (html: string) => [...html.matchAll(/\sstyle="([^"]*)"/g)].map((m) => m[1])
 const STYLE_PROBES = ['\\textcolor{red}{x}', '\\textcolor{#abc}{x}', '\\textcolor{rgb(1, 2, 3)}{x}', '\\boxed{\\textcolor{blue}{y}}', '\\cancel{x}', 'a\\!b', '\\hat{x}', '\\begin{cases} a & b \\\\ c & d \\end{cases}', '\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}', '\\begin{aligned} a &= b \\end{aligned}',
-  '\\textcolor{red;position:fixed}{x}', '\\textcolor{red;font-size:900px}{x}', '\\textcolor{red}{x};background:url(x)', '\\textcolor{expression(1)}{x}', '\\textcolor{var(--x)}{x}', '\\textcolor{rgb(1,2,3);color:red}{x}']
+  '\\textcolor{red;position:fixed}{x}', '\\textcolor{red;font-size:900px}{x}', '\\textcolor{red}{x};background:url(x)', '\\textcolor{expression(1)}{x}', '\\textcolor{var(--x)}{x}', '\\textcolor{rgb(1,2,3);color:red}{x}',
+  // #551: every new style the engine can write, and the two new places an
+  // author's colour reaches a style attribute, attacked the same way
+  '\\bcancel{x}', '\\xcancel{x}', '\\sout{x}', '\\large x', '\\pmb{x}', '\\llap{x}', '\\clap{x}', '\\colorbox{yellow}{x}', '\\fcolorbox{red}{#ff0}{x}', 'A \\xrightarrow{f} B', '\\overrightarrow{AB}',
+  '\\colorbox{red;position:fixed}{x}', '\\colorbox{url(x)}{x}', '\\fcolorbox{red;top:0}{blue}{x}', '\\fcolorbox{red}{blue;left:0}{x}', '\\colorbox{var(--x)}{x}']
 for (const src of STYLE_PROBES) {
   const out = renderMath(src) ?? ''
   const vals = styleValues(out)
@@ -225,7 +241,8 @@ ok(!/\son[a-z]+=|\sid=|<script/i.test(renderMath('x = \\frac{-b \\pm \\sqrt{b^2 
 console.log('\nthe symbol table\n')
 const texNames = SYMBOLS.map((s) => s.tex)
 ok(new Set(texNames).size === texNames.length, `no duplicate LaTeX names (${texNames.length} rows)`)
-ok(SYMBOLS.every((s) => [...s.cp].length >= 1 && s.typst.length > 0), 'every row has a glyph and a Typst name')
+const firstUnnamed = SYMBOLS.findIndex((s) => !s.typst)
+ok(SYMBOLS.every((s) => [...s.cp].length >= 1) && firstUnnamed > 150 && SYMBOLS.slice(0, firstUnnamed).every((s) => s.typst.length > 0), 'every row has a glyph; every hand-written row has a Typst name (only the packed Temml rows, #551, go without)')
 ok(styledChar('R', 'bb') === 'ℝ' && styledChar('a', 'bb') === '𝕒' && styledChar('7', 'bb') === '𝟟', 'styledChar: holes patched, lowercase and digits from the block')
 ok(styledChar('x', 'rm') === 'x' && styledChar('!', 'bf') === '!', 'rm and non-letters pass through')
 

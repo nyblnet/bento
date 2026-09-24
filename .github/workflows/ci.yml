@@ -1456,6 +1456,13 @@ jobs:
         # line breaks and nothing else; the editor-only "Not rendered" hint;
         # paste and commit keep a formula's backslashes. Real engine, DOM-free.
         run: node scripts/test-slides-math-delims.ts
+      - name: Maths coverage rig
+        # #551: maths-lite against Temml's WHOLE vocabulary (1,237 commands and
+        # environments, frozen offline): no covered command may fall back to
+        # raw text, the rendering and tree-identical counts may not drop below
+        # the recorded floor, and every commonly typed formula renders. The
+        # check a fixed sample could not make, which is how #540 slipped by.
+        run: node scripts/test-maths-coverage.ts
       - name: Compact document rig
         # The agent authoring form (#422): compactDoc/expandDoc are inverses
         # on the starter deck, expansion equals the editor's insert helpers

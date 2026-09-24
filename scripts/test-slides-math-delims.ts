@@ -98,6 +98,17 @@ ok(hinted('<a href="$\\foo$">x</a>') === '<a href="$\\foo$">x</a>', 'no hint ins
 ok(hinted('\\(\\foo "x"\\)').includes('>\\(\\foo "x"\\)</span>') && !/title="[^"]*"x"/.test(hinted('\\(\\foo "x"\\)')), 'the title is escaped')
 ok(hinted('$$\\foo$$ then $x$') === `<span class="bento-math-miss" title="Not rendered: \\foo">$$\\foo$$</span> then ${inline('x')}`, 'a marked miss is closed off: its dollars never pair with a later one')
 
+console.log('\npartial rendering: one unknown command no longer loses the formula (#551)\n')
+// what slides render with: lenient — the unknown command drawn as its name
+const lenient = (src: string, display: boolean) => renderMath(src, { display, lenient: true })
+const partial = resolveMathHtml('$\\int_0^1 f \\foo x$', lenient)
+ok(maths(partial) === 1 && partial.includes('<msubsup>') && partial.includes('class="bento-math-unknown">\\foo</mtext>'), 'the formula renders; \\foo is drawn in place as its own name (present, print, thumbnails)')
+ok(!partial.includes('bento-math-miss'), 'without the editor hint nothing wraps it')
+const partialHinted = resolveMathHtml('$\\int_0^1 f \\foo x$', lenient, hint)
+ok(partialHinted.startsWith('<span class="bento-math-miss" title="Not rendered: \\foo"><math') && maths(partialHinted) === 1, 'in the editor the rendered formula still wears the hint, naming the command')
+ok(resolveMathHtml('$\\frac{a}{b$', lenient) === '$\\frac{a}{b$', 'malformed input (an unclosed brace) still stays as typed')
+ok(resolveMathHtml('$x^2$', lenient, hint) === inline('x^2'), 'a formula with nothing unknown is not marked')
+
 console.log('\npaste and commit keep backslashes in formulas\n')
 ok(stripMarkerEscapes('\\*not bold\\*') === '*not bold*', 'outside a formula a markdown escape still drops its backslash')
 ok(stripMarkerEscapes('$\\text{a\\_b}$ and \\_') === '$\\text{a\\_b}$ and _', 'inside $…$ the \\_ is LaTeX and keeps it')
