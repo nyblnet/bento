@@ -21,11 +21,10 @@
 //      the commands and formulas people actually type (the #551 gaps page);
 //      every one must render, whatever the totals say.
 //
-// Not everything in Temml's vocabulary is meant to be here: \ref/\eqref point
-// at labels a slide does not have, \href/\url/\includegraphics/\htmlClass are
-// markup a sanitized text box never carries, and a few TeX primitives
-// (\expandafter, \futurelet) are programming, not maths. Those stay listed by
-// `--list` and never enter the floor.
+// Since #551 every one of the 1,237 renders. A few render as their nearest
+// sensible meaning rather than Temml's: \ref/\eqref as plain text (a slide
+// has no labels to point at), the TeX primitives (\expandafter, \relax) as
+// nothing. `--list` prints whatever falls back if that ever changes.
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'

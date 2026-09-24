@@ -7384,9 +7384,11 @@ that the rendering and tree-identical counts stay at or above the recorded
 floor (raised with `--update`), and that every formula in
 `scripts/fixtures/maths-common.json` (the commonly typed tier) renders. A
 fixed sample of 91 could not see what was not in it — that is how #540 got
-through. At this entry: 1,219/1,237 render, 1,107 tree-identical; left out
-on purpose: `CD` diagrams, `\longdiv`, `\angl`, `\reflectbox`, the coherence
-symbols, `\futurelet`.
+through. At this entry: all 1,237 render, 1,122 tree-identical or
+deliberately drawn — including amscd's `CD` diagrams (a small parser for
+`@>a>b>`, `@VaVbV`, `@=`, `@|`, `@.`), `\longdiv`, `\angl`, `\reflectbox`,
+the coherence relations and mhchem's drawn bonds. Engine 20.8 KB compressed
+against Temml's 59.2 KB measured the same way (esbuild minify + deflate).
 
 **Macros and the two packages.** `\newcommand`/`\renewcommand`/
 `\providecommand`/`\def`/`\let`/`\DeclareMathOperator` work within ONE

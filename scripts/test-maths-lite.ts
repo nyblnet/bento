@@ -107,6 +107,13 @@ ok(renderMath('12')!.includes('<mn>12</mn>'), '…while 12 in a row stays the nu
 ok(renderMath('{a+1 \\over b}')!.includes('<mfrac><mrow><mi>a</mi><mo>+</mo><mn>1</mn></mrow><mi>b</mi></mfrac>'), '\\over splits the whole group')
 ok(renderMath('n \\choose k')!.includes('stretchy="true">(</mo><mfrac linethickness="0">'), '\\choose is a binomial')
 ok(renderMath('A \\xleftarrow[u]{o} B')!.includes('<munderover><mo stretchy="true" lspace="0em" rspace="0em">←</mo>'), '\\xleftarrow[under]{over} labels both sides (← stretches natively)')
+// the last of Temml's vocabulary (#551)
+const cd = renderMath('\\begin{CD} A @>f>> B \\\\ @VgVV @VVhV \\\\ C @>>k> D \\end{CD}', { display: true })!
+ok(cd.startsWith('<math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mtable displaystyle="true"><mtr>') && (cd.match(/aria-label="→"/g) ?? []).length === 2 && (cd.match(/>↓<\/mo>/g) ?? []).length === 2, 'CD: object rows interleave objects and drawn → arrows; the arrow row puts ↓ under each object')
+ok(/<mi>A<\/mi><\/mtd><mtd[^>]*>.*<\/mtd><mtd[^>]*><mi>B<\/mi>/.test(cd) && /↓<\/mo>.*<\/mtd><mtd[^>]*><mrow><\/mrow><\/mtd><mtd/.test(cd), 'CD: A → B across; the vertical row leaves the arrow column empty')
+ok(renderMath('a\\kern3pt b') === renderMath('a\\kern{3pt} b') && renderMath('a\\mskip4mu b') === renderMath('a\\mskip{4mu} b'), 'an unbraced dimension is read whole, as TeX does (\\kern3pt, \\mskip4mu)')
+ok(!/<mi>m<\/mi><mi>u<\/mi>/.test(renderMath('\\vb{a} \\cp \\vb{b}')!) && !/<mi>m<\/mi><mi>u<\/mi>/.test(renderMath('\\curl f')!), '\\cp and \\curl leave no stray "mu"')
+ok(renderMath('7\\longdiv{364}')!.includes('<mo stretchy="true">)</mo><mrow style="border-top:0.065em solid;padding-top:0.1em">'), '\\longdiv: a stretchy ) and a rule over the dividend')
 // #551: Chrome will not stretch → (measured): it is drawn, sized by a table
 // column as wide as its wider label, announced as → to assistive tech
 const xr = renderMath('A \\xrightarrow[u]{\\text{over}} B')!
@@ -209,6 +216,10 @@ const STYLE_FORMS = [
   // the drawn arrows (#551): constant boxes, no author text reaches them
   /^padding:0$/, /^padding:0;position:relative;min-width:3\.5em;height:0\.6em$/, /^position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible$/,
   /^position:relative;padding-(top|bottom):0\.5em$/, /^position:absolute;left:0;(top|bottom):0;width:100%;height:0\.45em$/,
+  // the last of Temml's vocabulary: mhchem's drawn bonds, raised pieces,
+  // \angl / \longdiv rules, \reflectbox
+  /^background:currentColor$/, /^padding-top:[\d.]+em$/,
+  /^border-top:0\.065em solid;border-right:0\.065em solid;padding:0\.1em 0\.12em 0 0\.1em$/, /^border-top:0\.065em solid;padding-top:0\.1em$/, /^transform:scaleX\(-1\)$/,
   /^(text-align:-webkit-(left|right);)?padding-left:(0|1)em;padding-right:0em$/, /^(text-align:-webkit-(left|right);)?padding-left:(0em|5\.9776pt);padding-right:(0em|5\.9776pt)$/,
 ]
 const COLOR_SHAPE = /^(#[0-9a-f]{3,8}|[a-z]{3,20}|(rgba?|hsla?)\([\d.%,\s/]+\))$/i
@@ -227,6 +238,7 @@ const STYLE_PROBES = ['\\textcolor{red}{x}', '\\textcolor{#abc}{x}', '\\textcolo
   // #551: every new style the engine can write, and the two new places an
   // author's colour reaches a style attribute, attacked the same way
   '\\bcancel{x}', '\\xcancel{x}', '\\sout{x}', '\\large x', '\\pmb{x}', '\\llap{x}', '\\clap{x}', '\\colorbox{yellow}{x}', '\\fcolorbox{red}{#ff0}{x}', 'A \\xrightarrow{f} B', '\\overrightarrow{AB}',
+  '\\angl{n}', '7\\longdiv{364}', '\\reflectbox{x}', 'C\\tripleDashBetweenDoubleLine C', '\\begin{CD} A @>f>> B \\end{CD}',
   '\\colorbox{red;position:fixed}{x}', '\\colorbox{url(x)}{x}', '\\fcolorbox{red;top:0}{blue}{x}', '\\fcolorbox{red}{blue;left:0}{x}', '\\colorbox{var(--x)}{x}']
 for (const src of STYLE_PROBES) {
   const out = renderMath(src) ?? ''

@@ -35,7 +35,11 @@ pre-1.0.
   - **Physics and chemistry:** the physics package (`\dv`, `\pdv`, `\abs`,
     `\norm`, `\bra`, `\ket`, `\qty`, `\grad` and the rest) and mhchem's
     `\ce{…}` and `\pu{…}` (formulas, charges, states, hydrates, reaction arrows
-    with labels, units).
+    with labels, units, dashed bonds).
+  - **Commutative diagrams** (`\begin{CD} A @>f>> B … \end{CD}`), long
+    division (`\longdiv`), the actuarial angle (`\angl`) and `\reflectbox`.
+    Together with the above, every command and environment the pre-1.2.0
+    engine knew now renders.
   - **Labelled arrows stretch to their label.** In Chrome, `\xrightarrow`,
     `\xleftrightarrow`, `\xmapsto`, `\xlongequal`, the equilibrium arrows and
     `\overrightarrow` used to keep their natural length under a long label or

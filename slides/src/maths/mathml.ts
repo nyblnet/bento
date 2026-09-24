@@ -222,6 +222,9 @@ function print(n: MNode, font: Font | undefined): string {
       if (n.bold) st.push('font-weight:bold')
       if (n.bg && isCssColor(n.bg)) st.push(`background-color:${n.bg};padding:0.3em`)
       if (n.frame && isCssColor(n.frame)) st.push(`border:0.0667em solid ${n.frame}`)
+      if (n.rule === 'angl') st.push('border-top:0.065em solid;border-right:0.065em solid;padding:0.1em 0.12em 0 0.1em')
+      if (n.rule === 'top') st.push('border-top:0.065em solid;padding-top:0.1em')
+      if (n.mirror) st.push('transform:scaleX(-1)')
       return st.length ? `<mrow style="${st.join(';')}">${inner}</mrow>` : inner
     }
     case 'pad': {
@@ -235,6 +238,24 @@ function print(n: MNode, font: Font | undefined): string {
     case 'multi': {
       const x = (m?: MNode) => (m ? print(m, font) : '<none></none>')
       return `<mmultiscripts>${print(n.b, font)}${x(n.sub)}${x(n.sup)}<mprescripts></mprescripts>${x(n.presub)}${x(n.presup)}</mmultiscripts>`
+    }
+    case 'bond': {
+      // Temml's construction, in the text colour instead of black (a bond
+      // must read on a dark slide): 0.06em rules, dashes 0.15em apart 0.1111em,
+      // raised with voffset, stacked by zero-width overlays
+      const dash = (w: number) => `<mspace width="${w}em" height="0.06em" style="background:currentColor"></mspace>`
+      const gap = (w: number) => `<mspace width="${w}em"></mspace>`
+      const tri = `<mrow>${dash(0.15)}${gap(0.1111)}${dash(0.15)}${gap(0.1111)}${dash(0.15)}</mrow>`
+      const line = dash(0.672)
+      const up = (x: string, v: number) => `<mpadded voffset="${v}em" style="padding-top:${v}em">${x}</mpadded>`
+      const over = (x: string) => `<mpadded width="0px">${x}</mpadded>`
+      const body: Record<string, string> = {
+        uniDash: line, triDash: tri, tripleDash: up(tri, 0.25),
+        tripleDashOverLine: over(up(line, 0.125)) + up(tri, 0.34),
+        tripleDashOverDoubleLine: over(`<mrow>${over(up(tri, 0.48))}${up(line, 0.27)}</mrow>`) + up(line, 0.05),
+        tripleDashBetweenDoubleLine: over(`<mrow>${over(up(line, 0.48))}${up(tri, 0.27)}</mrow>`) + up(line, 0.05),
+      }
+      return n.kind === 'uniDash' || n.kind === 'triDash' ? body[n.kind] : `<mrow>${gap(0.075)}${body[n.kind]}${gap(0.075)}</mrow>`
     }
     case 'unknown': {
       // the command's own name, in a warning colour: the audience sees the

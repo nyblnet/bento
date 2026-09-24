@@ -37,7 +37,9 @@ export type MNode =
    *  (printed the way Temml spells it — the labels padded, a 3.5em minimum) */
   | { k: 'xarrow'; a: string; over?: MNode; under?: MNode }
   /** font/colour/box wrapper */
-  | { k: 'style'; c: MNode; font?: Font; color?: string; box?: boolean; /** \cancel (up), \bcancel (down), \xcancel (both), \sout (across) */ cancel?: true | 'down' | 'x' | 'h'; /** \large and family: em */ size?: number; /** \pmb, physics' bold nabla */ bold?: boolean; /** \colorbox */ bg?: string; /** \fcolorbox frame colour */ frame?: string }
+  | { k: 'style'; c: MNode; font?: Font; color?: string; box?: boolean; /** \cancel (up), \bcancel (down), \xcancel (both), \sout (across) */ cancel?: true | 'down' | 'x' | 'h'; /** \large and family: em */ size?: number; /** \pmb, physics' bold nabla */ bold?: boolean; /** \colorbox */ bg?: string; /** \fcolorbox frame colour */ frame?: string; /** \angl: rules above and to the right; \longdiv: a rule above */ rule?: 'angl' | 'top'; /** \reflectbox */ mirror?: boolean }
+  /** mhchem's dashed bonds (\uniDash, \triDash, \tripleDash…): drawn rules */
+  | { k: 'bond'; kind: string }
 
 export type Font = 'bb' | 'cal' | 'frak' | 'bf' | 'it' | 'sf' | 'tt' | 'rm' | 'scr' | 'sfit' | 'bfit'
 

@@ -1002,6 +1002,45 @@
   },
   {
    "src": "\\renewcommand{\\vec}[1]{\\mathbf{#1}} \\vec{v}"
+  },
+  {
+   "src": "\\begin{CD} A @>f>> B \\\\ @VgVV @VVhV \\\\ C @>>k> D \\end{CD}",
+   "display": true
+  },
+  {
+   "src": "\\begin{CD} A @<\\alpha<< B @= C \\\\ @AAA @| @VV\\beta V \\\\ D @. E @>>> F \\end{CD}",
+   "display": true
+  },
+  {
+   "src": "\\begin{CD} 0 @>>> \\ker f @>>> M @>f>> N @>>> 0 \\end{CD}",
+   "display": true
+  },
+  {
+   "src": "a_{\\angl{n}} \\quad \\ddot{a}_{\\angln}"
+  },
+  {
+   "src": "7\\longdiv{364}"
+  },
+  {
+   "src": "\\reflectbox{mirror}"
+  },
+  {
+   "src": "A \\coh B \\quad A \\incoh B \\quad A \\scoh B \\quad A \\sincoh B"
+  },
+  {
+   "src": "\\Delta H^{\\standardstate}"
+  },
+  {
+   "src": "\\mathrm{C}\\uniDash\\mathrm{C} \\; \\mathrm{C}\\tripleDashOverDoubleLine\\mathrm{C}"
+  },
+  {
+   "src": "\\vb{a} \\cp \\vb{b} = a\\kern3pt b\\mskip4mu c"
+  },
+  {
+   "src": "A \\xrightarrow{\\text{a long label}} B"
+  },
+  {
+   "src": "\\ce{N2 + 3H2 <=>[\\text{Fe}][\\text{450°C}] 2NH3}"
   }
  ]
 }

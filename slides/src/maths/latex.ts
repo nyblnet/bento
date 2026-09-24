@@ -103,7 +103,7 @@ const PHYSICS: Record<string, [number, string]> = {
   dd: [0, '\\text{d}'], differential: [0, '\\text{d}'], order: [1, '\\mathcal{O}\\left(#1\\right)'],
   vb: [1, '\\boldsymbol{#1}'], vectorbold: [1, '\\boldsymbol{#1}'], va: [1, '\\vec{\\boldsymbol{#1}}'], vectorarrow: [1, '\\vec{\\boldsymbol{#1}}'], vu: [1, '\\hat{\\boldsymbol{#1}}'], vectorunit: [1, '\\hat{\\boldsymbol{#1}}'],
   grad: [0, '\\pmb{\\nabla}'], gradient: [0, '\\pmb{\\nabla}'], divergence: [0, '\\pmb{\\nabla}\\pmb{\\cdot}'], curl: [0, '\\pmb{\\nabla}\\mskip4mu\\pmb{\\times}\\mskip4mu'], laplacian: [0, '\\nabla^2'],
-  cross: [0, '\\pmb{\\times}'], crossproduct: [0, '\\pmb{\\times}'], dotproduct: [0, '\\pmb{\\cdot}'], vdot: [0, '\\pmb{\\cdot}'],
+  cross: [0, '\\pmb{\\times}'], cp: [0, '\\mskip4mu\\pmb{\\times}\\mskip4mu'], crossproduct: [0, '\\pmb{\\times}'], dotproduct: [0, '\\pmb{\\cdot}'], vdot: [0, '\\pmb{\\cdot}'],
   qq: [1, '\\quad\\text{ #1 }\\quad'], qqtext: [1, '\\quad\\text{ #1 }\\quad'], pv: [0, '\\mathcal{P}'], PV: [0, '\\mathcal{P}'], principalvalue: [0, '\\mathcal{P}'],
   set: [1, '\\{#1\\}'], Set: [1, '\\left\\{\\:#1\\:\\right\\}'], Bra: [1, '\\left\\langle #1\\right|'], Ket: [1, '\\left|#1\\right\\rangle'],
   innerproduct: [2, '\\left\\langle #1\\middle|#2\\right\\rangle'], outerproduct: [2, '\\left|#1\\right\\rangle\\left\\langle #2\\right|'], dyad: [2, '\\left|#1\\right\\rangle\\left\\langle #2\\right|'], op: [2, '\\left|#1\\right\\rangle\\left\\langle #2\\right|'],
@@ -404,7 +404,7 @@ class Parser {
       }
       case 'emph': return { k: 'text', t: [...this.rawGroup()].map((c) => styledChar(c, 'it')).join('') }
       case 'hspace': { if (this.is('ch', '*')) this.next(); return { k: 'space', em: dimEm(this.rawGroup()) } }
-      case 'mspace': case 'hskip': case 'kern': case 'mkern': case 'mskip': { const d = this.rawGroup(); return { k: 'space', em: dimEm(name.startsWith('m') && !/[a-z]{2}\s*$/.test(d) ? d + 'mu' : d) } }
+      case 'mspace': case 'hskip': case 'kern': case 'mkern': case 'mskip': { const d = this.dimension(); return { k: 'space', em: dimEm(name.startsWith('m') && !/[a-z]{2}\s*$/.test(d) ? d + 'mu' : d) } }
       case 'vspace': { if (this.is('ch', '*')) this.next(); this.rawGroup(); return { k: 'row', c: [] } }
       case 'notag': case 'nonumber': case 'label': { if (name === 'label') this.rawGroup(); return { k: 'row', c: [] } }
       case 'tag': {
@@ -470,6 +470,28 @@ class Parser {
       case 'varinjlim': return { k: 'accent', b: mi('lim', { fn: true }), a: '→', under: true, stretchy: true, lim: true }
       case 'varprojlim': return { k: 'accent', b: mi('lim', { fn: true }), a: '←', under: true, stretchy: true, lim: true }
       case 'idotsint': return row([mo('∫', { big: true }), mo('⋯'), mo('∫', { big: true })])
+      // the last of Temml's vocabulary (#551): actuarial angle, long
+      // division, mirrored text, coherence relations, mhchem's standard state
+      // and dashed bonds, \futurelet
+      case 'angl': return { k: 'style', c: this.parseGroup(), rule: 'angl' }
+      case 'angln': return { k: 'style', c: mi('n'), rule: 'angl' }
+      case 'longdiv': return row([mo(')', { stretchy: true }), { k: 'style', c: this.parseGroup(), rule: 'top' }])
+      case 'reflectbox': return { k: 'style', c: { k: 'text', t: this.rawGroup() }, mirror: true }
+      case 'coh': case 'incoh': {
+        const [top, bot] = name === 'coh' ? ['⌢', '⌣'] : ['⌣', '⌢']
+        return row([{ k: 'space', em: 0.2778 }, { k: 'scr', b: mi(bot), sup: mi(top), limits: true }, { k: 'space', em: 0.2778 }])
+      }
+      case 'scoh': case 'sincoh': return row([{ k: 'space', em: 0.2778 }, mi(name === 'scoh' ? '⌢' : '⌣'), { k: 'space', em: 0.2778 }])
+      case 'standardstate': return { k: 'style', c: { k: 'text', t: '⦵' }, size: 0.5 }
+      case 'uniDash': case 'triDash': case 'tripleDash': case 'tripleDashOverLine': case 'tripleDashOverDoubleLine': case 'tripleDashBetweenDoubleLine':
+        return { k: 'bond', kind: name }
+      case 'futurelet': {
+        // \futurelet\cs\a\b: \cs becomes the token AFTER \a, which stays put
+        const cs = this.next()
+        const ahead = this.toks[this.i + 1]
+        if (ahead) this.macros.set(cs.v, { n: 0, body: [ahead] })
+        return { k: 'row', c: [] }
+      }
       case 'surd': return mo('√')
       case 'LaTeX': case 'TeX': case 'Temml': case 'KaTeX': return { k: 'text', t: name }
       case 'eqref': return { k: 'text', t: `(${this.rawGroup()})` }
@@ -550,6 +572,14 @@ class Parser {
     if (this.lenient) return { k: 'unknown', t: '\\' + name }
     throw new MathError(`unknown command \\${name}`)
   }
+  /** a TeX dimension: {3pt}, or unbraced as TeX allows — \kern3pt, \mskip4mu */
+  dimension(): string {
+    if (this.is('{')) return this.rawGroup()
+    let s = ''
+    while (this.is('ch') && /[-\d.]/.test(this.peek()!.v)) s += this.next().v
+    for (let k = 0; k < 2 && this.is('ch') && /[a-z]/.test(this.peek()!.v); k++) s += this.next().v
+    return s
+  }
   /** a {group}'s source text exactly as typed (for \ce and \pu) */
   rawSource(): string {
     return this.argTokens().map((t) => (t.t === 'cmd' ? '\\' + t.v + (/^[a-zA-Z]+$/.test(t.v) ? ' ' : '') : t.v)).join('')
@@ -592,8 +622,46 @@ class Parser {
     if (!under && allowSup && this.is('^')) { this.next(); return { k: 'scr', b: node, sup: this.parseGroup(), limits: true } }
     return node
   }
+  /** amscd's CD: objects and arrows on a grid. `@>a>b>` → with a over and b
+   *  under, `@<<<` ←, `@=` a long equals; `@VaVbV` ↓ with a left and b right,
+   *  `@AAA` ↑, `@|` a double bar; `@.` leaves a cell empty. A row holding a
+   *  vertical arrow puts its arrows under the objects (even columns); an
+   *  object row interleaves objects and horizontal arrows. */
+  cd(): MNode {
+    const stop = (t: Tok) => (t.t === 'ch' && t.v === '@') || t.t === '\\\\' || t.t === '&' || (t.t === 'cmd' && t.v === 'end')
+    const label = (ch: string) => { const r = this.parseRow((t) => t.t === 'ch' && t.v === ch); this.next(); return r }
+    const some = (n: MNode) => (n.k === 'row' && n.c.length === 0 ? undefined : n)
+    const small = (n: MNode) => (some(n) ? { k: 'style', c: n, size: 0.7 } as MNode : { k: 'row', c: [] } as MNode)
+    const object = () => { let o = this.parseRow(stop); while (this.is('&')) { this.next(); o = row([o, this.parseRow(stop)]) } return o }
+    const rows: MNode[][] = []
+    for (;;) {
+      const parts: MNode[] = [object()]
+      let vertical = false
+      while (this.is('ch', '@')) {
+        this.next()
+        const k = this.next().v
+        if (k === '>' || k === '<') { const a = label(k), b = label(k); parts.push({ k: 'xarrow', a: k === '>' ? '→' : '←', over: some(a), under: some(b) }) }
+        else if (k === '=') parts.push({ k: 'xarrow', a: '=' })
+        else if (k === 'V' || k === 'A') { vertical = true; const a = label(k), b = label(k); parts.push(row([small(a), mo(k === 'V' ? '↓' : '↑', { stretchy: true, size: 1.8 }), small(b)])) }
+        else if (k === '|') { vertical = true; parts.push(mo('‖', { stretchy: true, size: 1.8 })) }
+        else if (k === '.') parts.push({ k: 'row', c: [] })
+        else throw new MathError(`bad CD arrow @${k}`)
+        parts.push(object())
+      }
+      // a vertical row: its arrows go in the object columns, gaps between
+      rows.push(vertical ? parts.filter((_, i) => i % 2).flatMap((a, i) => (i ? [{ k: 'row', c: [] } as MNode, a] : [a])) : parts)
+      if (this.is('\\\\')) { this.next(); continue }
+      break
+    }
+    if (!this.is('cmd', 'end')) throw new MathError('bad CD')
+    this.next()
+    if (this.rawGroup() !== 'CD') throw new MathError('mismatched \\end')
+    if (rows.length > 1 && rows[rows.length - 1].every((c) => c.k === 'row' && c.c.length === 0)) rows.pop()
+    return { k: 'table', rows, align: 'c', display: true }
+  }
   environment(): MNode {
     const name = this.rawGroup()
+    if (name === 'CD') return this.cd()
     const fences = ENV_FENCES[name]
     if (!fences) throw new MathError(`unknown environment ${name}`)
     // a starred matrix takes [l|c|r]; an array its column spec; alignat a count
