@@ -18,6 +18,15 @@ pre-1.0.
   too, largest first, once the pictures kept in the document pass a
   quarter-megabyte together.
 
+- **A document in Downloads or Documents remembers where it lives.** Chrome
+  will not let any app hold a standing grant to those folders, so a deck kept
+  there used to show the full save dialog on every reopen. Bento now remembers
+  the file itself: the first ⌘S after you reopen asks once — Chrome offers
+  "Allow on every visit" — and after that it saves silently in place, like a
+  deck that never left. Move or delete the file and it simply asks again. This
+  is for a deck opened from a real web address or through the iOS, Android or
+  browser-extension apps; a deck opened straight from disk keeps asking each
+  time, by the same rule that isolates local files from each other.
 - **Collaborators stop flickering in and out.** A person whose tab was in the
   background appeared to leave and rejoin about once a minute: a browser slows a
   hidden tab's timers to roughly one tick a minute, so their "still here" beat
