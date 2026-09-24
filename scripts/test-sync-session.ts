@@ -34,6 +34,18 @@ const listeners: Record<string, Array<() => void>> = {};
   clearInterval: (h: number) => clearInterval(h),
   addEventListener: (ev: string, fn: () => void) => { (listeners[ev] ??= []).push(fn); },
 };
+// A document with a mutable `hidden` and captured visibilitychange handlers, so
+// the rig can background/foreground a tab and fire the event the session listens
+// for. The session uses document only for these two things (presence away + the
+// visibility beat).
+const visHandlers: Array<() => void> = [];
+const fakeDoc = {
+  hidden: false,
+  addEventListener: (ev: string, fn: () => void) => { if (ev === 'visibilitychange') visHandlers.push(fn); },
+};
+(globalThis as unknown as { document: unknown }).document = fakeDoc;
+/** background/foreground every tab and fire visibilitychange, as a browser does */
+const setHidden = (h: boolean) => { fakeDoc.hidden = h; for (const fn of visHandlers) fn(); };
 
 // App source is written for Vite and imports without file extensions; Node
 // needs help resolving those. Registered BEFORE the dynamic imports below —
@@ -44,6 +56,7 @@ register('./lib/ts-resolve-hooks.mjs', import.meta.url);
 const { Store } = await import('../slides/src/store.ts');
 const { SyncSession } = await import('../slides/src/sync/session.ts');
 const { newDoc, emptySlide } = await import('../slides/src/model.ts');
+const { SYNC_V } = await import('../kernel/src/sync/crdt.ts');
 
 let failures = 0, checks = 0;
 function ok(cond: boolean, msg: string) {
@@ -317,6 +330,56 @@ H('a photo-heavy deck snapshot fits under the relay frame ceiling (assets travel
     'a snapshot refusal emits { snapshot:true, ops:0, permanent:true }');
   un();
   s.stop?.();
+}
+
+// ---- a backgrounded tab is `away`, not gone, and beats on return -----------
+H('presence: a hidden tab is away, and a return beats at once');
+{
+  const { sa, sb, close } = tabs();
+  await settle(150);
+  const aFromB = () => sb.peers().find(p => p.actor === sa.actor);
+  setHidden(true); // browsers fire visibilitychange → the session beats
+  await settle(150);
+  ok(aFromB()?.away === true, 'a hidden tab is seen as away by its peer, not dropped');
+  setHidden(false);
+  await settle(150);
+  ok(!aFromB()?.away, 'returning to the foreground clears away immediately (beat on visibilitychange)');
+  close();
+  setHidden(false);
+}
+
+// ---- a slow (throttled) beat is not swept before the TTL; a real leave is ---
+// A backgrounded tab's timers throttle to ~once a minute; the sweep must not
+// drop such a peer between beats. The clock is mocked so the peer's AGE is
+// controlled, and the heartbeat is sped up so the sweep runs without a 75 s wait.
+H('presence: a peer last seen 60s ago survives; 80s is swept');
+{
+  const win = (globalThis as unknown as { window: { setInterval: (fn: () => void, ms: number) => unknown } }).window;
+  const realSI = win.setInterval;
+  win.setInterval = (fn: () => void, ms: number) => realSI(fn, ms >= 1000 ? 30 : ms); // 5s heartbeat → 30ms
+  const realNow = Date.now; let clock = 5_000_000; (Date as unknown as { now: () => number }).now = () => clock;
+  try {
+    const doc = newDoc(); doc.docId = `rig-ttl-${Math.random().toString(36).slice(2, 8)}`;
+    const s = new Store(JSON.parse(JSON.stringify(doc)));
+    const sess = new SyncSession(s);
+    await settle(80); // sess attaches; sweep now runs every ~30ms
+    const ch = new BroadcastChannel(`bento-sync-${doc.docId}`);
+    // one peer beats ONCE and never again (throttled to silence), at clock=t0
+    ch.postMessage({ t: 'p', a: 'ghost', pv: SYNC_V, p: { name: 'Ghost', color: '#8FA3BF', slide: 's1', sel: [] } });
+    await settle(80);
+    const hasGhost = () => sess.peers().some(p => p.actor === 'ghost');
+    ok(hasGhost(), 'the peer is present after its single beat');
+    clock += 60_000; // 60s later, no further beat
+    await settle(120);
+    ok(hasGhost(), 'a peer last seen 60s ago is NOT swept — the TTL clears the 60s hidden-tab throttle');
+    clock += 20_000; // 80s total
+    await settle(120);
+    ok(!hasGhost(), 'a peer gone 80s IS swept — a real departure still clears');
+    ch.close(); sess.stop?.();
+  } finally {
+    (Date as unknown as { now: () => number }).now = realNow;
+    win.setInterval = realSI;
+  }
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
