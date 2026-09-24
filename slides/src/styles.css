@@ -501,6 +501,16 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
    and still broken on Windows. Read docs/DECISIONS.md, 2026-08-25, before
    touching this; the rig is slides/probe/radical-join.html. */
 
+/* A formula that did not render, on the editor canvas only (render.ts
+   mathHint, #540): the author's text stays exactly as typed, a faint dotted
+   underline says it was meant as maths, and the title says why. */
+.bento-math-miss {
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 0.18em;
+  cursor: help;
+}
+
 .bento-el-text,
 .bento-el-code
  .bento-text-inner {

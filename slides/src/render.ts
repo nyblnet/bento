@@ -7,7 +7,8 @@ import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/
 import type { BentoDoc, EmbedElement, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey, paginates, isWebUrl } from './model'
 import { chartSnapshotSvg } from './charts'
-import { renderMath as mathsLite } from './maths/index.ts'
+import { renderMath as mathsLite, mathError } from './maths/index.ts'
+import { resolveMathHtml } from './maths/delimiters.ts'
 import { renderCodeInto } from './code'
 import { tipSpec, tipInsetPx, shortenPathEnds } from './tips'
 import { formatDate } from './datefmt'
@@ -25,6 +26,11 @@ export interface RenderOpts {
   liveMedia?: boolean
   /** dynamic-field values ({{page}} etc.) for this slide; auto-filled by renderSlide */
   fields?: FieldContext
+  /** EDITOR CANVAS only: mark a formula that did not render (dotted
+   *  underline + a title from this, given what went wrong — `\\foo`, or
+   *  "spaces" for `$ x^2 $`). Thumbnails, present, print and the static
+   *  preview never pass it, so the hint never leaves the editor. */
+  mathHint?: (what: string) => string
 }
 
 /** Values dynamic field tokens resolve against, computed per slide. */
@@ -569,33 +575,17 @@ function renderMath(src: string, display: boolean): string | null {
   return out
 }
 
-export function resolveMath(html: string): string {
-  if (html.indexOf('$') < 0) return html
-  // TEXT SEGMENTS ONLY. The input is sanitized HTML, and a `$` can sit inside
-  // an attribute — `<a href="https://x.example/$a$b">` (web links, #465).
-  // Run over the whole string, the inline rule paired those two dollars and
-  // wrote a <math> into the href: a dead link and stray markup (nothing the
-  // author chose became an attribute, but the link was gone). So the string
-  // is split on tags, each text run is transformed on its own, and a formula
-  // can never span or enter a tag.
-  return html.split(/(<[^>]*>)/).map((part, i) => (i % 2 ? part : resolveMathText(part))).join('')
-}
-
-function resolveMathText(text: string): string {
-  if (text.indexOf('$') < 0) return text
-  // $$…$$ first (display), then $…$ (inline). The inline form is deliberately
-  // fussy so ordinary prose survives: no whitespace just inside the delimiters
-  // and no digit straight after the closer, which is what keeps "it costs $5
-  // and $10" from parsing as math. A backslash-escaped \$ is a literal dollar.
-  let out = text.replace(/(^|[^\\])\$\$([^$]+?)\$\$/g, (m, pre: string, src: string) => {
-    const ml = renderMath(src, true)
-    return ml ? pre + ml : m
-  })
-  out = out.replace(/(^|[^\\$])\$(\S(?:[^$\n]*?\S)?)\$(?!\d)/g, (m, pre: string, src: string) => {
-    const ml = renderMath(src, false)
-    return ml ? pre + ml : m
-  })
-  return out.replace(/\\\$/g, '$') // the escape has done its job
+// Where the formulas are — the four delimiters, text runs only (#465), and
+// display formulas across line breaks (#540) — lives in maths/delimiters.ts,
+// DOM-free so its rigs drive the code itself.
+export function resolveMath(html: string, hint?: (what: string) => string): string {
+  return resolveMathHtml(html, renderMath, hint && ((src, display, spaced) => {
+    if (spaced) return hint('spaces')
+    const tex = decodeEntities(src)
+    const m = /^typst:\s*/.exec(tex)
+    const why = mathError(m ? tex.slice(m[0].length) : tex, { display, syntax: m ? 'typst' : 'latex' })
+    return why ? hint(why) : null
+  }))
 }
 
 /**
@@ -1184,7 +1174,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.style.lineHeight = String(el.lineHeight)
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
       inner.style.width = '100%'
-      inner.innerHTML = resolveMath(sanitizeHtml(resolveFields(el.html, opts.fields)))
+      inner.innerHTML = resolveMath(sanitizeHtml(resolveFields(el.html, opts.fields)), opts.mathHint)
       // layout placeholder: prompt while empty (editor), gone while presenting
       const isEmpty = !inner.textContent?.trim() && !el.html.includes('<img')
       if (el.placeholder && isEmpty) {

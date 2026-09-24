@@ -11,9 +11,30 @@ pre-1.0.
 
 ## [Unreleased]
 
-- Refresh embedded fonts after JSON replacement, removal and undo/redo. Extend
-  #516 without rewriting the font stylesheet for unrelated edits; cover import,
-  font removal, asset replacement and undo/redo in packaged Chromium tests.
+- **Formulas that stayed as raw text now render.** 1.2.0 replaced the maths
+  engine with a smaller one of our own, and a whole set of everyday LaTeX fell
+  back to raw text: `\frac12`, `\over` and `\choose`, `\pmod`, `\middle|`,
+  `\colon`, `\xrightarrow`, `\substack`, `\cfrac`, `\operatorname*`, `\tag`,
+  `\hspace` and the other spacing commands, `\rm`/`\bf` switches, `gather`,
+  `split`, `multline` and `alignat`, and symbols like `\leqslant`, `\nmid`
+  and `\checkmark`. All of these render now. `\tag{1}` shows as a "(1)" label
+  after the formula, not pushed to the right margin, and `\notag` and
+  `\vspace` render as nothing. Formulas can also be written between `\( … \)`
+  (inline) and `\[ … \]` (display), the form ChatGPT, Claude and most
+  Markdown produce, and a `$$ … $$` or `\[ … \]` formula may run over several
+  lines of a text box. In the editor, a formula that still does not render
+  gets a faint dotted underline, with a tooltip naming the command it did not
+  know. The underline only appears while editing, never in the show, in print
+  or in the saved file. Pasting or editing a formula no longer drops the
+  backslash from `\_`. Reported in #540.
+- **Embedded fonts show up after "Replace from JSON".** Rahul Ravikumar (#516)
+  found that a deck loaded through Replace from JSON could keep showing
+  fallback fonts instead of the ones embedded in it (every time, for a font
+  used by code snippets) and fixed it by refreshing the fonts whenever the
+  document changes. Building on that, a font you remove from the deck now
+  disappears, undo and redo bring fonts back and forth, replacing a font's
+  file takes effect, and ordinary edits no longer re-apply every embedded
+  font.
 
 ## [1.2.3] — 2026-09-19
 

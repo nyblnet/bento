@@ -951,4 +951,6 @@ export const strings: Catalog = {
   "{n} pictures are still uploading; they will follow.": "{n} billeder uploades stadig; de følger.",
   "1 picture still uploading…": "1 billede uploades…",
   "{n} pictures still uploading…": "{n} billeder uploades…",
+  "Not rendered: {what}": "Ikke gengivet: {what}",
+  "no space just inside the $ signs": "intet mellemrum lige inden for $-tegnene",
 }

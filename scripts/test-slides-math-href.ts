@@ -18,11 +18,14 @@
 // the link intact and clickable with `$x^2$` rendering beside it.
 //
 // render.ts is not node-importable (DOM), so the rig holds the SOURCE to the
-// split and drives the split's behaviour with the same regexes.
+// split and drives the split's behaviour with the same regexes. Since #540
+// the split lives in slides/src/maths/delimiters.ts, which is DOM-free, so
+// the rig now drives that code itself rather than a copy of its regexes.
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { resolveMathHtml } from '../slides/src/maths/delimiters.ts'
 
 let failures = 0
 let checks = 0
@@ -33,24 +36,19 @@ function ok(cond: boolean, msg: string) {
 }
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const render = readFileSync(join(root, 'slides/src/render.ts'), 'utf8')
+const delims = readFileSync(join(root, 'slides/src/maths/delimiters.ts'), 'utf8')
 
 console.log('the source\n')
-const rm = render.slice(render.indexOf('export function resolveMath'), render.indexOf('export function resolveMath') + 1600)
-ok(/html\.split\(\/\(<\[\^>\]\*>\)\/\)\.map\(\(part, i\) => \(i % 2 \? part : resolveMathText\(part\)\)\)\.join\(''\)/.test(rm), 'resolveMath splits on tags and hands only the text runs to resolveMathText')
-ok(/function resolveMathText\(text: string\)/.test(render), 'the $$/$ rules live on the text-run function')
-ok(!/html\.replace\(\/\(\^\|\[\^\\\\\]\)\\\$\\\$/.test(rm), 'no rule runs over the whole HTML any more')
-ok(/\$\$…\$\$ first \(display\), then \$…\$ \(inline\)/.test(rm), 'the fussy inline rule is unchanged (no whitespace inside, no digit after)')
+ok(/export function resolveMath\(html: string, hint\?[^)]*\)[^{]*\{\s*return resolveMathHtml\(html, renderMath,/.test(render), 'render.ts resolveMath hands the html to resolveMathHtml')
+ok(/const parts = html\.split\(\/\(<\[\^>\]\*>\)\/\)/.test(delims) && /parts\.map\(\(p, i\) => \(i % 2 \? p : resolveRun\(/.test(delims), 'resolveMathHtml splits on tags and hands only the text runs to resolveRun')
+ok(!/html\.replace\(/.test(delims), 'no rule runs over the whole HTML')
+ok(delims.includes("/(^|[^\\\\$])\\$(\\S(?:[^$\\n]*?\\S)?)\\$(?!\\d)/g"), 'the fussy inline rule is unchanged (no whitespace inside, no digit after)')
 
-console.log('\nthe behaviour, with the same split and a stand-in renderer\n')
+console.log('\nthe behaviour, with the real split and a stand-in renderer\n')
 // the stand-in: any source becomes a <math> stub — what matters is WHERE the
 // rules are allowed to look, not what the engine prints
 const stub = (src: string) => `<math>${src}</math>`
-const text = (t: string) => {
-  let out = t.replace(/(^|[^\\])\$\$([^$]+?)\$\$/g, (_m, pre: string, src: string) => pre + stub(src))
-  out = out.replace(/(^|[^\\$])\$(\S(?:[^$\n]*?\S)?)\$(?!\d)/g, (_m, pre: string, src: string) => pre + stub(src))
-  return out.replace(/\\\$/g, '$')
-}
-const resolve = (html: string) => html.split(/(<[^>]*>)/).map((p, i) => (i % 2 ? p : text(p))).join('')
+const resolve = (html: string) => resolveMathHtml(html, stub)
 
 const link = '<a href="https://x.example/$a$b" rel="noopener">link</a>'
 ok(resolve(link) === link, 'a $ pair inside an href is untouched — the link is intact')

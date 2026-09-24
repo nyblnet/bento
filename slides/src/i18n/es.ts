@@ -943,4 +943,6 @@ export const es: Catalog = {
   "{n} pictures are still uploading; they will follow.": "{n} imágenes todavía se están subiendo; llegarán después.",
   "1 picture still uploading…": "1 imagen subiéndose…",
   "{n} pictures still uploading…": "{n} imágenes subiéndose…",
+  "Not rendered: {what}": "Sin representar: {what}",
+  "no space just inside the $ signs": "sin espacio justo dentro de los signos $",
 }
