@@ -24,8 +24,8 @@ pre-1.0.
   which chat assistants produce), now stacked on separate lines.
   - **`aligned` now aligns.** The equals signs in an `aligned` block line up
     and `cases` columns sit to the left, the way TeX sets them. Until now
-    every column was centred. Decks that use `aligned` or `cases` will look
-    different after updating.
+    every column was centred. **Existing decks that use `aligned` or `cases`
+    change alignment when they update to this version.**
   - **One unknown command no longer loses the formula.** The rest renders
     and the unknown command shows as its own name in red, so an audience sees
     the maths, not a line of raw LaTeX. In the editor the formula still gets
@@ -48,7 +48,29 @@ pre-1.0.
     `\xleftrightarrow`, `\xmapsto`, `\xlongequal`, the equilibrium arrows and
     `\overrightarrow` used to keep their natural length under a long label or
     a long base; they now span it. Screen readers still hear the arrow.
+- **A deck with lots of small images can be shared live.** Sharing sends big
+  pictures separately from the document, but only ones over about 64 KB — so a
+  deck with many smaller images (a wall of icons, say) could still add up to
+  more than a live session's frame could carry. Those now travel separately
+  too, largest first, once the pictures kept in the document pass a
+  quarter-megabyte together.
 
+- **A document in Downloads or Documents remembers where it lives.** Chrome
+  will not let any app hold a standing grant to those folders, so a deck kept
+  there used to show the full save dialog on every reopen. Bento now remembers
+  the file itself: the first ⌘S after you reopen asks once — Chrome offers
+  "Allow on every visit" — and after that it saves silently in place, like a
+  deck that never left. Move or delete the file and it simply asks again. This
+  is for a deck opened from a real web address or through the iOS, Android or
+  browser-extension apps; a deck opened straight from disk keeps asking each
+  time, by the same rule that isolates local files from each other.
+- **Collaborators stop flickering in and out.** A person whose tab was in the
+  background appeared to leave and rejoin about once a minute: a browser slows a
+  hidden tab's timers to roughly one tick a minute, so their "still here" beat
+  arrived later than the 13-second window that decided who was present. The
+  window is now long enough to cover a throttled tab, a tab sends its beat the
+  moment it comes back to the foreground, and a backgrounded collaborator now
+  shows as away rather than vanishing.
 - **Formulas that stayed as raw text now render.** 1.2.0 replaced the maths
   engine with a smaller one of our own, and a whole set of everyday LaTeX fell
   back to raw text: `\frac12`, `\over` and `\choose`, `\pmod`, `\middle|`,
@@ -65,6 +87,14 @@ pre-1.0.
   know. The underline only appears while editing, never in the show, in print
   or in the saved file. Pasting or editing a formula no longer drops the
   backslash from `\_`. Reported in #540.
+- **Embedded fonts show up after "Replace from JSON".** Rahul Ravikumar (#516)
+  found that a deck loaded through Replace from JSON could keep showing
+  fallback fonts instead of the ones embedded in it (every time, for a font
+  used by code snippets) and fixed it by refreshing the fonts whenever the
+  document changes. Building on that, a font you remove from the deck now
+  disappears, undo and redo bring fonts back and forth, replacing a font's
+  file takes effect, and ordinary edits no longer re-apply every embedded
+  font.
 
 ## [1.2.3] — 2026-09-19
 
