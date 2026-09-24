@@ -54,7 +54,7 @@ const { register } = await import('node:module');
 register('./lib/ts-resolve-hooks.mjs', import.meta.url);
 
 const { Store } = await import('../slides/src/store.ts');
-const { SyncSession } = await import('../slides/src/sync/session.ts');
+const { SyncSession, assetsToOffload } = await import('../slides/src/sync/session.ts');
 const { newDoc, emptySlide } = await import('../slides/src/model.ts');
 const { SYNC_V } = await import('../kernel/src/sync/crdt.ts');
 
@@ -380,6 +380,29 @@ H('presence: a peer last seen 60s ago survives; 80s is swept');
     (Date as unknown as { now: () => number }).now = realNow;
     win.setInterval = realSI;
   }
+}
+
+// ---- cumulative offload: the inline total, not just per-asset size ---------
+H('cumulative offload picks the largest inline assets when the total overflows');
+{
+  const K = 1024;
+  // fifty 50 KB icons — none over 64 KB, but 2.5 MB inline together
+  const icons = Array.from({ length: 50 }, (_, i) => ({ key: `i${i}`, len: 50 * K, offloadable: true }));
+  const picks = assetsToOffload(icons, 64 * K, 256 * K);
+  const left = icons.filter(e => !picks.has(e.key)).reduce((n, e) => n + e.len, 0);
+  ok(picks.size > 0 && left <= 256 * K,
+    `fifty 50 KB icons: enough offloaded to get inline under 256 KB (${picks.size} offloaded, ${(left / K) | 0} KB left)`);
+  // per-asset rule still applies; small assets under the total stay inline
+  const mixed = [{ key: 'big', len: 100 * K, offloadable: true }, { key: 's1', len: 10 * K, offloadable: true }, { key: 's2', len: 10 * K, offloadable: true }];
+  const p2 = assetsToOffload(mixed, 64 * K, 256 * K);
+  ok(p2.has('big') && !p2.has('s1') && !p2.has('s2'), 'one over-64 KB asset offloads; small ones under the total stay inline');
+  // a deck under the total keeps everything inline — no needless offload
+  const small = Array.from({ length: 4 }, (_, i) => ({ key: `s${i}`, len: 40 * K, offloadable: true }));
+  ok(assetsToOffload(small, 64 * K, 256 * K).size === 0, 'a deck under the total keeps its assets inline');
+  // a raw-SVG asset (not offloadable) is never picked, even when it pushes the total over
+  const withSvg = [{ key: 'svg', len: 300 * K, offloadable: false }, { key: 'png', len: 200 * K, offloadable: true }];
+  const p4 = assetsToOffload(withSvg, 64 * K, 256 * K);
+  ok(!p4.has('svg') && p4.has('png'), 'a raw-SVG asset stays inline (nothing to blob); the offloadable one goes');
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

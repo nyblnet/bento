@@ -11,6 +11,13 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A deck with lots of small images can be shared live.** Sharing sends big
+  pictures separately from the document, but only ones over about 64 KB — so a
+  deck with many smaller images (a wall of icons, say) could still add up to
+  more than a live session's frame could carry. Those now travel separately
+  too, largest first, once the pictures kept in the document pass a
+  quarter-megabyte together.
+
 - **Collaborators stop flickering in and out.** A person whose tab was in the
   background appeared to leave and rejoin about once a minute: a browser slows a
   hidden tab's timers to roughly one tick a minute, so their "still here" beat
