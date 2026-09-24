@@ -949,4 +949,6 @@ export const strings: Catalog = {
   "{n} pictures are still uploading; they will follow.": "{n} gambar masih diunggah; akan menyusul.",
   "1 picture still uploading…": "1 gambar diunggah…",
   "{n} pictures still uploading…": "{n} gambar diunggah…",
+  "Not rendered: {what}": "Tidak dirender: {what}",
+  "no space just inside the $ signs": "tanpa spasi tepat di dalam tanda $",
 }

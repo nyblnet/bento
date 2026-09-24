@@ -943,4 +943,6 @@ export const strings: Catalog = {
   "{n} pictures are still uploading; they will follow.": "그림 {n}개가 아직 업로드 중입니다. 곧 도착합니다.",
   "1 picture still uploading…": "그림 1개 업로드 중…",
   "{n} pictures still uploading…": "그림 {n}개 업로드 중…",
+  "Not rendered: {what}": "렌더링되지 않음: {what}",
+  "no space just inside the $ signs": "$ 기호 바로 안쪽에 공백을 두지 마세요",
 }

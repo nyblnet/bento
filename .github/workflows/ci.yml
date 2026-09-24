@@ -1450,6 +1450,12 @@ jobs:
         # pairs with one in the text, so a link whose address carries a
         # dollar sign keeps its href (pre-existing since #465).
         run: node scripts/test-slides-math-href.ts
+      - name: Maths delimiters rig
+        # #540: \(…\) and \[…\] beside $…$ and $$…$$, escapes literal,
+        # "$5 and $10" still prose; display maths may span <br>/<div>/<p>
+        # line breaks and nothing else; the editor-only "Not rendered" hint;
+        # paste and commit keep a formula's backslashes. Real engine, DOM-free.
+        run: node scripts/test-slides-math-delims.ts
       - name: Compact document rig
         # The agent authoring form (#422): compactDoc/expandDoc are inverses
         # on the starter deck, expansion equals the editor's insert helpers

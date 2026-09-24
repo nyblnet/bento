@@ -9,7 +9,15 @@
  */
 
 import { type MNode, type Font, row, mi, mn, mo, MathError, symNode } from './ast.ts'
-import { byTex, FUNCTIONS, LIMIT_FUNCTIONS } from './symbols.ts'
+import { byTex, FUNCTIONS, LIMIT_FUNCTIONS, styledChar } from './symbols.ts'
+
+/** A node that is only letters (\rm Res, \mathrm{Res}) as its text, else null. */
+function textOf(n: MNode): string | null {
+  if (n.k === 'sym' && n.cls === 'i') return n.t
+  if (n.k === 'style' && !n.color && !n.box && !n.cancel) return textOf(n.c)
+  if (n.k === 'row') { const parts = n.c.map(textOf); return parts.every((p) => p !== null) && parts.length ? parts.join('') : null }
+  return null
+}
 
 type Tok = { t: 'cmd' | 'ch' | '{' | '}' | '^' | '_' | '&' | '\\\\' | 'ws'; v: string }
 
@@ -39,12 +47,26 @@ function tokenize(src: string): Tok[] {
 const OPEN_FENCES: Record<string, string> = { '(': '(', '[': '[', '\\{': '{', '|': '|', '.': '', '\\langle': '⟨', '\\lfloor': '⌊', '\\lceil': '⌈', '\\|': '‖', '\\vert': '|', '\\Vert': '‖', '\\lbrace': '{', '\\lbrack': '[' }
 const CLOSE_FENCES: Record<string, string> = { ')': ')', ']': ']', '\\}': '}', '|': '|', '.': '', '\\rangle': '⟩', '\\rfloor': '⌋', '\\rceil': '⌉', '\\|': '‖', '\\vert': '|', '\\Vert': '‖', '\\rbrace': '}', '\\rbrack': ']' }
 const BIG: Record<string, number> = { big: 1.2, Big: 1.8, bigg: 2.4, Bigg: 3 }
-const ACCENTS: Record<string, [string, boolean?]> = { hat: ['^'], widehat: ['^', true], tilde: ['~'], widetilde: ['~', true], bar: ['‾'], overline: ['‾', true], vec: ['→'], dot: ['˙'], ddot: ['¨'], acute: ['´'], grave: ['`'], breve: ['˘'], check: ['ˇ'], overrightarrow: ['→', true], overleftarrow: ['←', true] }
+const ACCENTS: Record<string, [string, boolean?]> = { hat: ['^'], widehat: ['^', true], tilde: ['~'], widetilde: ['~', true], bar: ['‾'], overline: ['‾', true], vec: ['→'], dot: ['˙'], ddot: ['¨'], acute: ['´'], grave: ['`'], breve: ['˘'], check: ['ˇ'], overrightarrow: ['→', true], overleftarrow: ['←', true], mathring: ['˚'] }
 const UNDER: Record<string, string> = { underline: '_', underbrace: '⏟', underrightarrow: '→' }
 const OVER: Record<string, string> = { overbrace: '⏞' }
 const FONTS: Record<string, Font> = { mathbb: 'bb', mathcal: 'cal', mathscr: 'scr', mathfrak: 'frak', mathbf: 'bf', boldsymbol: 'bf', bm: 'bf', mathit: 'it', mathsf: 'sf', mathtt: 'tt', mathrm: 'rm', operatorname: 'rm', textbf: 'bf', textit: 'it' }
-const SPACES: Record<string, number> = { ',': 0.1667, ':': 0.2222, ';': 0.2778, '!': -0.1667, quad: 1, qquad: 2, ' ': 0.25 }
-const ENV_FENCES: Record<string, [string, string]> = { matrix: ['', ''], pmatrix: ['(', ')'], bmatrix: ['[', ']'], Bmatrix: ['{', '}'], vmatrix: ['|', '|'], Vmatrix: ['‖', '‖'], cases: ['{', ''], aligned: ['', ''], align: ['', ''], 'align*': ['', ''], gathered: ['', ''], gather: ['', ''], array: ['', ''], smallmatrix: ['', ''] }
+const SPACES: Record<string, number> = { ',': 0.1667, ':': 0.2222, ';': 0.2778, '!': -0.1667, quad: 1, qquad: 2, ' ': 0.25, thinspace: 0.1667, medspace: 0.2222, thickspace: 0.2778, enspace: 0.5, negthinspace: -0.1667 }
+const ENV_FENCES: Record<string, [string, string]> = { matrix: ['', ''], pmatrix: ['(', ')'], bmatrix: ['[', ']'], Bmatrix: ['{', '}'], vmatrix: ['|', '|'], Vmatrix: ['‖', '‖'], cases: ['{', ''], aligned: ['', ''], align: ['', ''], 'align*': ['', ''], gathered: ['', ''], gather: ['', ''], 'gather*': ['', ''], array: ['', ''], smallmatrix: ['', ''], split: ['', ''], multline: ['', ''], 'multline*': ['', ''], eqnarray: ['', ''], 'eqnarray*': ['', ''], equation: ['', ''], 'equation*': ['', ''], alignat: ['', ''], 'alignat*': ['', ''], alignedat: ['', ''] }
+/** \xrightarrow and family: the arrow each draws */
+const XARROWS: Record<string, string> = { xrightarrow: '→', xleftarrow: '←', xleftrightarrow: '↔', xRightarrow: '⇒', xLeftarrow: '⇐', xLeftrightarrow: '⇔', xmapsto: '↦', xhookrightarrow: '↪', xhookleftarrow: '↩', xtwoheadrightarrow: '↠', xtwoheadleftarrow: '↞', xlongequal: '=' }
+/** the old font switches (\rm Res): the rest of the group in that font */
+const SWITCHES: Record<string, Font> = { rm: 'rm', bf: 'bf', it: 'it', sf: 'sf', tt: 'tt', cal: 'cal' }
+/** infix fractions: {a \over b}, {n \choose k}, {a \atop b} */
+const INFIX = new Set(['over', 'choose', 'atop', 'brace', 'brack'])
+/** a TeX dimension → em (the units a slide formula can mean; 10pt type) */
+function dimEm(s: string): number {
+  const m = /^\s*(-?[\d.]+)\s*(em|ex|pt|mu|px|mm|cm|in|bp|pc)?\s*$/.exec(s)
+  if (!m) throw new MathError(`bad dimension ${s}`)
+  const n = parseFloat(m[1])
+  const per: Record<string, number> = { em: 1, ex: 0.431, pt: 0.1, mu: 1 / 18, px: 0.0625, mm: 0.2845, cm: 2.845, in: 7.227, bp: 0.1004, pc: 1.2 }
+  return n * per[m[2] ?? 'em']
+}
 
 class Parser {
   i = 0
@@ -58,11 +80,40 @@ class Parser {
   next(): Tok { this.skipWs(); const t = this.toks[this.i++]; if (!t) throw new MathError('unexpected end'); return t }
   is(t: Tok['t'], v?: string): boolean { const p = this.peek(); return !!p && p.t === t && (v === undefined || p.v === v) }
 
-  /** A sequence up to a terminator the caller owns. */
+  /** A sequence up to a terminator the caller owns. An infix fraction
+   *  (\over, \choose, \atop) splits the WHOLE sequence at itself. */
   parseRow(stop: (t: Tok) => boolean): MNode {
     const c: MNode[] = []
-    while (this.peek() && !stop(this.peek()!)) c.push(this.parseScripted())
+    while (this.peek() && !stop(this.peek()!)) {
+      const p = this.peek()!
+      if (p.t === 'cmd' && INFIX.has(p.v)) {
+        this.next()
+        const n = row(c), d = this.parseRow(stop)
+        if (p.v === 'over') return { k: 'frac', n, d }
+        const f: MNode = { k: 'frac', n, d, nobar: true }
+        if (p.v === 'atop') return f
+        const [l, r] = p.v === 'choose' ? ['(', ')'] : p.v === 'brace' ? ['{', '}'] : ['[', ']']
+        return { k: 'fence', l, r, c: f, explicit: true }
+      }
+      const n = this.parseScripted()
+      // \notag, \vspace, \displaystyle: nothing to lay out, so no empty box
+      if (!(n.k === 'row' && n.c.length === 0)) c.push(n)
+    }
     return row(c)
+  }
+  /** A macro's argument: a {group}, or ONE token — \frac12 is 1 over 2,
+   *  where a bare 12 in a row is the number twelve. */
+  parseArg(): MNode {
+    const p = this.peek()
+    if (!p) throw new MathError('missing argument')
+    if (p.t === '{') return this.parseGroup()
+    if (p.t === 'ch') { this.next(); return /[0-9]/.test(p.v) ? mn(p.v) : this.charAtomSingle(p.v) }
+    return this.parseAtom()
+  }
+  private charAtomSingle(v: string): MNode {
+    if (/[a-zA-Z]/.test(v)) return mi(v)
+    if ('+-*/=<>,;:!?|.()[]'.includes(v)) return mo(v === '-' ? '−' : v === '*' ? '∗' : v)
+    return mi(v)
   }
   parseGroup(): MNode {
     if (this.is('{')) {
@@ -81,7 +132,7 @@ class Parser {
     // big operators take under/over limits in display mode — except the
     // integrals, which TeX (and Temml) keep at the side
     let limits = base.k === 'sym' && !!base.big && this.display && !/[∫∬∭∮]/.test(base.t)
-    if (base.k === 'sym' && base.fn && LIMIT_FUNCTIONS.includes(base.t)) limits = this.display
+    if (base.k === 'sym' && base.fn && (LIMIT_FUNCTIONS.includes(base.t) || base.limfn)) limits = this.display
     for (;;) {
       if (this.is('cmd', 'limits')) { this.next(); limits = true; continue }
       if (this.is('cmd', 'nolimits')) { this.next(); limits = false; continue }
@@ -134,8 +185,20 @@ class Parser {
     if (sym) return symNode(sym)
     if (FUNCTIONS.includes(name) || LIMIT_FUNCTIONS.includes(name)) return mi(name, { fn: true })
     if (name in SPACES) return { k: 'space', em: SPACES[name] }
-    if (name in FONTS) return this.font(FONTS[name], name === 'operatorname')
-    if (name in ACCENTS) { const [a, s] = ACCENTS[name]; return { k: 'accent', b: this.parseGroup(), a, stretchy: s } }
+    if (name in FONTS) {
+      // \operatorname*{argmax}: the star puts its scripts under/over in display
+      if (name === 'operatorname' && this.is('ch', '*')) { this.next(); const n = this.font('rm', true); if (n.k === 'sym') n.limfn = true; return n }
+      return this.font(FONTS[name], name === 'operatorname')
+    }
+    if (name in SWITCHES) return { k: 'style', c: this.parseRow((t) => t.t === '}'), font: SWITCHES[name] }
+    if (name in XARROWS) {
+      let under: MNode | undefined
+      if (this.is('ch', '[')) { this.next(); under = this.parseRow((t) => t.t === 'ch' && t.v === ']'); this.next() }
+      const over = this.parseArg()
+      const empty = (n: MNode | undefined) => !n || (n.k === 'row' && n.c.length === 0)
+      return { k: 'xarrow', a: XARROWS[name], over: empty(over) ? undefined : over, under: empty(under) ? undefined : under }
+    }
+    if (name in ACCENTS) { const [a, s] = ACCENTS[name]; return { k: 'accent', b: this.parseArg(), a, stretchy: s } }
     if (name in UNDER) { const b = this.parseGroup(); const node: MNode = { k: 'accent', b, a: UNDER[name], under: true, stretchy: true }; return this.braceLabel(node, name === 'underbrace', true) }
     if (name in OVER) { const b = this.parseGroup(); const node: MNode = { k: 'accent', b, a: OVER[name], stretchy: true }; return this.braceLabel(node, true, false) }
     if (name in BIG || /^[bB]igg?[lrm]$/.test(name)) {
@@ -144,12 +207,61 @@ class Parser {
       return mo(d, { stretchy: true, size })
     }
     switch (name) {
-      case 'frac': case 'dfrac': case 'tfrac': return { k: 'frac', n: this.parseGroup(), d: this.parseGroup(), display: name === 'dfrac' ? true : name === 'tfrac' ? false : undefined }
-      case 'binom': case 'dbinom': case 'tbinom': return { k: 'fence', l: '(', r: ')', c: { k: 'frac', n: this.parseGroup(), d: this.parseGroup(), nobar: true }, explicit: true }
+      case 'frac': case 'dfrac': case 'tfrac': return { k: 'frac', n: this.parseArg(), d: this.parseArg(), display: name === 'dfrac' ? true : name === 'tfrac' ? false : undefined }
+      case 'cfrac': return { k: 'frac', n: this.parseArg(), d: this.parseArg(), display: true }
+      case 'binom': case 'dbinom': case 'tbinom': return { k: 'fence', l: '(', r: ')', c: { k: 'frac', n: this.parseArg(), d: this.parseArg(), nobar: true }, explicit: true }
+      case 'genfrac': {
+        // \genfrac{left}{right}{thickness}{style}{num}{den}
+        const fenceOf = (s: string, close: boolean) => { const t = s.trim(); if (!t) return ''; const tab = close ? CLOSE_FENCES : OPEN_FENCES; if (t in tab) return tab[t]; if (t in OPEN_FENCES) return OPEN_FENCES[t]; if (t in CLOSE_FENCES) return CLOSE_FENCES[t]; throw new MathError(`bad delimiter ${t}`) }
+        const rawArg = () => { if (this.is('{')) { this.next(); let s = ''; while (!this.is('}')) { const t = this.next(); s += t.t === 'cmd' ? '\\' + t.v : t.v } this.next(); return s } return this.next().v }
+        const l = fenceOf(rawArg(), false), r = fenceOf(rawArg(), true), thick = rawArg().trim(), st = rawArg().trim()
+        const f: MNode = { k: 'frac', n: this.parseArg(), d: this.parseArg(), nobar: /^0(\.0*)?\s*[a-z]*$/.test(thick) || undefined, display: st === '0' ? true : st === '1' ? false : undefined }
+        return l || r ? { k: 'fence', l, r, c: f, explicit: true } : f
+      }
       case 'sqrt': {
         let idx: MNode | undefined
         if (this.is('ch', '[')) { this.next(); idx = this.parseRow((t) => t.t === 'ch' && t.v === ']'); this.next() }
-        return { k: 'sqrt', b: this.parseGroup(), i: idx }
+        return { k: 'sqrt', b: this.parseArg(), i: idx }
+      }
+      case 'middle': return mo(this.delim(), { stretchy: true, pad: '0.05em' })
+      case 'colon': return mo(':', { pad: '0em', rpad: '0.1667em' })
+      case 'bmod': return mo('mod', { pad: '0.2222em' })
+      case 'pmod': case 'pod': case 'mod': {
+        const arg = this.parseArg()
+        const modWord = mi('mod', { fn: true })
+        // an empty <mo> first, as Temml writes it: a line may break there
+        if (name === 'mod') return row([mo(''), { k: 'space', em: 0.6667 }, modWord, { k: 'space', em: 0.3333 }, arg])
+        return row([mo(''), { k: 'space', em: 0.4444 }, { k: 'fence', l: '(', r: ')', c: name === 'pmod' ? row([modWord, { k: 'space', em: 0.3333 }, arg]) : arg }])
+      }
+      case 'substack': {
+        if (!this.is('{')) throw new MathError('\\substack needs a group')
+        this.next()
+        const rows: MNode[][] = [[this.parseRow((t) => t.t === '}' || t.t === '\\\\')]]
+        while (this.is('\\\\')) { this.next(); rows.push([this.parseRow((t) => t.t === '}' || t.t === '\\\\')]) }
+        if (!this.is('}')) throw new MathError('missing }')
+        this.next()
+        return { k: 'table', rows, align: 's' }
+      }
+      case 'mathbin': case 'mathrel': case 'mathord': case 'mathop': case 'mathopen': case 'mathclose': case 'mathpunct': {
+        const g = this.parseArg()
+        const flat = textOf(g)
+        if (name === 'mathord') return g.k === 'sym' ? mi(g.t) : g
+        if (name === 'mathop') return flat !== null ? mi(flat, { fn: true }) : g
+        if (g.k !== 'sym') return g
+        const pad = name === 'mathbin' ? '0.2222em' : name === 'mathrel' ? '0.2778em' : name === 'mathpunct' ? '0em' : undefined
+        return mo(g.t, pad ? { pad, rpad: name === 'mathpunct' ? '0.1667em' : undefined } : {})
+      }
+      case 'emph': return { k: 'text', t: [...this.rawGroup()].map((c) => styledChar(c, 'it')).join('') }
+      case 'hspace': { if (this.is('ch', '*')) this.next(); return { k: 'space', em: dimEm(this.rawGroup()) } }
+      case 'mspace': case 'hskip': case 'kern': case 'mkern': case 'mskip': { const d = this.rawGroup(); return { k: 'space', em: dimEm(name.startsWith('m') && !/[a-z]{2}\s*$/.test(d) ? d + 'mu' : d) } }
+      case 'vspace': { if (this.is('ch', '*')) this.next(); this.rawGroup(); return { k: 'row', c: [] } }
+      case 'notag': case 'nonumber': case 'label': { if (name === 'label') this.rawGroup(); return { k: 'row', c: [] } }
+      case 'tag': {
+        // an equation label, set after the formula at a quad's distance;
+        // \tag* without the parentheses
+        const star = this.is('ch', '*'); if (star) this.next()
+        const t = this.rawGroup()
+        return row([{ k: 'space', em: 1 }, { k: 'text', t: star ? t : `(${t})` }])
       }
       case 'left': {
         const l = this.delim()
@@ -229,7 +341,7 @@ class Parser {
     const name = this.rawGroup()
     const fences = ENV_FENCES[name]
     if (!fences) throw new MathError(`unknown environment ${name}`)
-    if (name === 'array') this.rawGroup() // column spec, ignored beyond alignment
+    if (name === 'array' || name.startsWith('alignat')) this.rawGroup() // column spec / column count, ignored beyond alignment
     const rows: MNode[][] = [[]]
     const cur = () => rows[rows.length - 1]
     const cell = (): MNode => this.parseRow((t) => t.t === '&' || t.t === '\\\\' || (t.t === 'cmd' && t.v === 'end'))
@@ -242,7 +354,10 @@ class Parser {
     }
     // a trailing \\ leaves an empty last row
     if (rows.length > 1 && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0].k === 'row' && (rows[rows.length - 1][0] as { c: MNode[] }).c.length === 0) rows.pop()
-    const align = name.startsWith('align') || name === 'aligned' ? 'rl' : name === 'cases' ? 'll' : 'c'
+    const align = name.startsWith('align') || name === 'aligned' || name === 'split' || name.startsWith('eqnarray') ? 'rl'
+      : name === 'cases' ? 'll' : name.startsWith('multline') || name.startsWith('gather') || name.startsWith('equation') ? 'd' : 'c'
+    // equation: one line, no table around it
+    if (name.startsWith('equation') && rows.length === 1 && rows[0].length === 1) return rows[0][0]
     return { k: 'table', rows, l: fences[0], r: fences[1], align }
   }
 }
