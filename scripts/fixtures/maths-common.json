@@ -1041,6 +1041,12 @@
   },
   {
    "src": "\\ce{N2 + 3H2 <=>[\\text{Fe}][\\text{450°C}] 2NH3}"
+  },
+  {
+   "src": "\\pu{1.2e3 kJ/mol} \\quad \\pu{9.81 m s^-2} \\quad \\pu{3 kg.m/s}"
+  },
+  {
+   "src": "\\ce{CuSO4.5H2O}"
   }
  ]
 }

@@ -51,8 +51,9 @@ function species(t: string): string {
     // a state symbol in parentheses: (s) (l) (g) (aq) (cr)
     if ((m = /^\((s|l|g|aq|cr|sln|ads)\)/.exec(rest))) { out += `\\mathrm{(${m[1]})}`; i += m[0].length; prevAtom = false; continue }
     if ((m = /^[A-Z][a-z]*/.exec(rest)) || (!prevAtom && (m = /^[a-z]+/.exec(rest)))) { out += `\\mathrm{${m[0]}}`; i += m[0].length; prevAtom = true; continue }
-    // subscript count after an atom or a closing bracket
-    if (prevAtom && (m = /^\d+/.exec(rest))) { out += `_{${m[0]}}`; i += m[0].length; continue }
+    // subscript count after an atom or a closing bracket; any other count
+    // (after a hydrate dot: CuSO4.5H2O) is a coefficient
+    if ((m = /^\d+/.exec(rest))) { out += prevAtom ? `_{${m[0]}}` : m[0]; i += m[0].length; continue }
     // a charge: ^2-, ^{3+}, ^+ — or a bare trailing + or - (Na+, Cl-, SO4^2-)
     if ((m = /^\^\{?([0-9]*[+-]|[0-9]+|[+-])\}?/.exec(rest))) { out += `^{${m[1]}}`; i += m[0].length; prevAtom = false; continue }
     if (prevAtom && (m = /^([0-9]*[+-])$/.exec(rest))) { out += `^{${m[1]}}`; i += m[0].length; continue }
@@ -90,10 +91,12 @@ export function puToTex(src: string): string {
   const num = m ? m[1] + (m[2] ? `\\times 10^{${m[2]}}` : '') : ''
   const unit = (m ? m[3] : src).trim()
   if (!unit) return num
+  // letters first: the commands inserted after (\cdot, \mathord) must not
+  // themselves be wrapped in \mathrm
   const u = unit.split(/\s+/).map((w) => w
+    .replace(/([A-Za-zµμΩ°]+)/g, '\\mathrm{$1}')
     .replace(/[.*]/g, '\\cdot ')
     .replace(/\//g, '\\mathord{/}')
-    .replace(/([A-Za-zµμΩ°]+)/g, '\\mathrm{$1}')
     .replace(/\^\{?(-?\d+)\}?/g, '^{$1}')).join('\\,')
   return num ? `${num}\\,${u}` : u
 }

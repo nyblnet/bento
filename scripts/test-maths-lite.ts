@@ -113,6 +113,12 @@ ok(cd.startsWith('<math xmlns="http://www.w3.org/1998/Math/MathML" display="bloc
 ok(/<mi>A<\/mi><\/mtd><mtd[^>]*>.*<\/mtd><mtd[^>]*><mi>B<\/mi>/.test(cd) && /↓<\/mo>.*<\/mtd><mtd[^>]*><mrow><\/mrow><\/mtd><mtd/.test(cd), 'CD: A → B across; the vertical row leaves the arrow column empty')
 ok(renderMath('a\\kern3pt b') === renderMath('a\\kern{3pt} b') && renderMath('a\\mskip4mu b') === renderMath('a\\mskip{4mu} b'), 'an unbraced dimension is read whole, as TeX does (\\kern3pt, \\mskip4mu)')
 ok(!/<mi>m<\/mi><mi>u<\/mi>/.test(renderMath('\\vb{a} \\cp \\vb{b}')!) && !/<mi>m<\/mi><mi>u<\/mi>/.test(renderMath('\\curl f')!), '\\cp and \\curl leave no stray "mu"')
+// mhchem (#551): \pu wraps unit LETTERS in \mathrm, and only then inserts
+// \cdot and \mathord{/} — the other order wrapped the words "cdot" and
+// "mathord" themselves and the formula fell back to raw text
+const pu = renderMath('\\pu{1.2e3 kJ/mol} \\quad \\pu{3 kg.m/s}')!
+ok(pu.includes('<mi mathvariant="normal">J</mi></mrow><mi>/</mi><mrow><mi mathvariant="normal">m</mi>') && pu.includes('<mo>⋅</mo>') && !/cdot|mathord|<mi[^>]*>[cm]<\/mi><mi[^>]*>[do]<\/mi><mi[^>]*>[ot]<\/mi>/.test(pu), '\\pu: units upright, a / and a ⋅ between them, no command name leaks into the text')
+ok(renderMath('\\ce{CuSO4.5H2O}')!.includes('<mo>⋅</mo><mn>5</mn>'), '\\ce: the count after a hydrate dot is a number')
 ok(renderMath('7\\longdiv{364}')!.includes('<mo stretchy="true">)</mo><mrow style="border-top:0.065em solid;padding-top:0.1em">'), '\\longdiv: a stretchy ) and a rule over the dividend')
 // #551: Chrome will not stretch → (measured): it is drawn, sized by a table
 // column as wide as its wider label, announced as → to assistive tech
