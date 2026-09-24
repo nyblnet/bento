@@ -120,6 +120,24 @@ const pu = renderMath('\\pu{1.2e3 kJ/mol} \\quad \\pu{3 kg.m/s}')!
 ok(pu.includes('<mi mathvariant="normal">J</mi></mrow><mi>/</mi><mrow><mi mathvariant="normal">m</mi>') && pu.includes('<mo>⋅</mo>') && !/cdot|mathord|<mi[^>]*>[cm]<\/mi><mi[^>]*>[do]<\/mi><mi[^>]*>[ot]<\/mi>/.test(pu), '\\pu: units upright, a / and a ⋅ between them, no command name leaks into the text')
 ok(renderMath('\\ce{CuSO4.5H2O}')!.includes('<mo>⋅</mo><mn>5</mn>'), '\\ce: the count after a hydrate dot is a number')
 ok(renderMath('7\\longdiv{364}')!.includes('<mo stretchy="true">)</mo><mrow style="border-top:0.065em solid;padding-top:0.1em">'), '\\longdiv: a stretchy ) and a rule over the dividend')
+
+// TABLE RULES (#551). The tree comparison drops `style` by design, so it
+// could never see that maths-lite dropped array's | and \hline: Temml draws
+// them as plain cell borders, which showed in Bento before 1.2.0 without its
+// stylesheet, and every ruled array lost its lines in 1.2.0. These are the
+// border declarations Temml 0.13.3 writes per cell (captured 2026-09-25),
+// compared as sets so declaration order does not matter.
+const borders = (html: string) => [...html.matchAll(/<mtd[^>]*style="([^"]*)"/g)].map((m) => m[1].split(';').filter((d) => d.startsWith('border')).sort().join(' | '))
+const S = 'border-bottom:0.06em solid', T = 'border-top:0.06em solid', L = 'border-left:0.06em solid', RS = 'border-right:0.06em solid'
+const TEMML_RULES: [string, string[]][] = [
+  ['\\begin{array}{|c|c|} \\hline a & b \\\\ \\hline c & d \\\\ \\hline \\end{array}', [[L, RS, S, T].sort().join(' | '), [RS, S, T].sort().join(' | '), [L, RS, S].sort().join(' | '), [RS, S].sort().join(' | ')]],
+  ['\\begin{array}{c:c} a & b \\\\ \\hdashline c & d \\end{array}', ['border-bottom:0.06em dashed | border-right:0.06em dashed', 'border-bottom:0.06em dashed', 'border-right:0.06em dashed', '']],
+  ['\\begin{array}{c||c} a & b \\\\ \\hline\\hline c & d \\end{array}', ['border-bottom:0.15em double | border-right:0.15em double', 'border-bottom:0.15em double', 'border-right:0.15em double', '']],
+  ['\\begin{pmatrix} 1 & 0 \\\\ \\hline 0 & 1 \\end{pmatrix}', [S, S, '', '']],
+]
+for (const [src, want] of TEMML_RULES) ok(JSON.stringify(borders(renderMath(src, { display: true })!)) === JSON.stringify(want), `rules drawn as Temml draws them: ${src}`)
+ok(!borders(renderMath('\\begin{array}{cc} a & b \\\\ c & d \\end{array}', { display: true })!).some(Boolean), 'no rules asked for, no borders drawn')
+ok(renderMath('\\genfrac{(}{]}{0pt}{2}{a}{b}')!.includes('<mstyle displaystyle="false" scriptlevel="1"><mfrac linethickness="0">'), '\\genfrac style 2 is script size, as Temml sets it')
 // #551: Chrome will not stretch → (measured): it is drawn, sized by a table
 // column as wide as its wider label, announced as → to assistive tech
 const xr = renderMath('A \\xrightarrow[u]{\\text{over}} B')!
@@ -226,7 +244,9 @@ const STYLE_FORMS = [
   // \angl / \longdiv rules, \reflectbox
   /^background:currentColor$/, /^padding-top:[\d.]+em$/,
   /^border-top:0\.065em solid;border-right:0\.065em solid;padding:0\.1em 0\.12em 0 0\.1em$/, /^border-top:0\.065em solid;padding-top:0\.1em$/, /^transform:scaleX\(-1\)$/,
-  /^(text-align:-webkit-(left|right);)?padding-left:(0|1)em;padding-right:0em$/, /^(text-align:-webkit-(left|right);)?padding-left:(0em|5\.9776pt);padding-right:(0em|5\.9776pt)$/,
+  // (a cell may end with the table's rules: \hline, array | : ||)
+  /^(text-align:-webkit-(left|right);)?padding-left:(0|1)em;padding-right:0em(;border-(top|bottom|left|right):0\.(06em (solid|dashed)|15em double))*$/,
+  /^(text-align:-webkit-(left|right);)?padding-left:(0em|5\.9776pt);padding-right:(0em|5\.9776pt)(;border-(top|bottom|left|right):0\.(06em (solid|dashed)|15em double))*$/,
 ]
 const COLOR_SHAPE = /^(#[0-9a-f]{3,8}|[a-z]{3,20}|(rgba?|hsla?)\([\d.%,\s/]+\))$/i
 // the constant declarations the style node can emit (#551 added the cancel
@@ -245,6 +265,7 @@ const STYLE_PROBES = ['\\textcolor{red}{x}', '\\textcolor{#abc}{x}', '\\textcolo
   // author's colour reaches a style attribute, attacked the same way
   '\\bcancel{x}', '\\xcancel{x}', '\\sout{x}', '\\large x', '\\pmb{x}', '\\llap{x}', '\\clap{x}', '\\colorbox{yellow}{x}', '\\fcolorbox{red}{#ff0}{x}', 'A \\xrightarrow{f} B', '\\overrightarrow{AB}',
   '\\angl{n}', '7\\longdiv{364}', '\\reflectbox{x}', 'C\\tripleDashBetweenDoubleLine C', '\\begin{CD} A @>f>> B \\end{CD}',
+  '\\begin{array}{|c:c||c|} \\hline a & b & c \\\\ \\hdashline d & e & f \\\\ \\hline\\hline \\end{array}',
   '\\colorbox{red;position:fixed}{x}', '\\colorbox{url(x)}{x}', '\\fcolorbox{red;top:0}{blue}{x}', '\\fcolorbox{red}{blue;left:0}{x}', '\\colorbox{var(--x)}{x}']
 for (const src of STYLE_PROBES) {
   const out = renderMath(src) ?? ''

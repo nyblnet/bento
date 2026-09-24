@@ -1047,6 +1047,21 @@
   },
   {
    "src": "\\ce{CuSO4.5H2O}"
+  },
+  {
+   "src": "\\begin{array}{|c|c|} \\hline a & b \\\\ \\hline c & d \\\\ \\hline \\end{array}",
+   "display": true
+  },
+  {
+   "src": "\\begin{array}{l|r} \\text{item} & \\text{cost} \\\\ \\hline x & 1 \\\\ y & 22 \\end{array}",
+   "display": true
+  },
+  {
+   "src": "\\left[\\begin{array}{cc:c} 1 & 2 & 3 \\\\ 4 & 5 & 6 \\end{array}\\right]",
+   "display": true
+  },
+  {
+   "src": "\\genfrac{(}{)}{0pt}{2}{n}{k}"
   }
  ]
 }

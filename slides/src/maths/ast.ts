@@ -17,13 +17,17 @@ export type MNode =
   | { k: 'sym'; cls: 'i' | 'n' | 'o'; t: string; /** upright multi-letter (sin, lim) */ fn?: boolean; /** stretchy fence/accent op */ stretchy?: boolean; /** \mathrm-style upright single letter */ up?: boolean; /** big operator (sum) */ big?: boolean; /** \big family: minsize in em */ size?: number; /** explicit lspace/rspace (\mid) */ pad?: string; /** a different rspace (\colon) */ rpad?: string; /** render-time: operator after an operator */ prefix?: boolean; /** \operatorname*: limits under/over in display mode */ limfn?: boolean }
   | { k: 'text'; t: string }
   | { k: 'space'; em: number }
-  | { k: 'frac'; n: MNode; d: MNode; /** no bar (binom, atop) */ nobar?: boolean; /** \dfrac/\tfrac */ display?: boolean }
+  | { k: 'frac'; n: MNode; d: MNode; /** no bar (binom, atop) */ nobar?: boolean; /** \dfrac/\tfrac */ display?: boolean; /** \genfrac's script / scriptscript style: 1 or 2 */ level?: number }
   | { k: 'sqrt'; b: MNode; i?: MNode }
   /** scripts; `limits` = under/over placement (sum in display mode, \limits) */
   | { k: 'scr'; b: MNode; sub?: MNode; sup?: MNode; limits?: boolean }
   /** \left … \right and \big fences — l/r may be '' for \left. */
   | { k: 'fence'; l: string; r: string; c: MNode; /** minsize multiplier for \big family */ size?: number; /** \left…\right: say stretchy out loud (plain parens stretch by the operator dictionary anyway) */ explicit?: boolean }
-  | { k: 'table'; rows: MNode[][]; l?: string; r?: string; /** the environment's spacing family, e.g. 'rl' for align */ align?: string; /** row lines */ lines?: boolean; /** per-column alignment, one of l/c/r per column (the last repeats); absent = centred */ cols?: string; /** dcases, darray: cells in display style */ display?: boolean }
+  | { k: 'table'; rows: MNode[][]; l?: string; r?: string; /** the environment's spacing family, e.g. 'rl' for align */ align?: string; /** row lines */ lines?: boolean; /** per-column alignment, one of l/c/r per column (the last repeats); absent = centred */ cols?: string; /** dcases, darray: cells in display style */ display?: boolean
+    /** rules between columns (array's `|`, `:`, `||`): one per boundary, 0…ncols; '' = none */
+    vlines?: string[]
+    /** rules between rows (\hline, \hdashline, \hline\hline): one per boundary, 0…rows */
+    hlines?: string[] }
   | { k: 'accent'; b: MNode; a: string; under?: boolean; stretchy?: boolean; /** \varinjlim and family: scripts go under/over in display mode */ lim?: boolean }
   /** \smash, \hphantom/\vphantom, \llap/\rlap/\clap: a box whose ink or
    *  extent is taken away in one dimension (mpadded, as Temml spells it) */

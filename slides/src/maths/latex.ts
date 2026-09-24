@@ -366,7 +366,7 @@ class Parser {
         const fenceOf = (s: string, close: boolean) => { const t = s.trim(); if (!t) return ''; const tab = close ? CLOSE_FENCES : OPEN_FENCES; if (t in tab) return tab[t]; if (t in OPEN_FENCES) return OPEN_FENCES[t]; if (t in CLOSE_FENCES) return CLOSE_FENCES[t]; throw new MathError(`bad delimiter ${t}`) }
         const rawArg = () => { if (this.is('{')) { this.next(); let s = ''; while (!this.is('}')) { const t = this.next(); s += t.t === 'cmd' ? '\\' + t.v : t.v } this.next(); return s } return this.next().v }
         const l = fenceOf(rawArg(), false), r = fenceOf(rawArg(), true), thick = rawArg().trim(), st = rawArg().trim()
-        const f: MNode = { k: 'frac', n: this.parseArg(), d: this.parseArg(), nobar: /^0(\.0*)?\s*[a-z]*$/.test(thick) || undefined, display: st === '0' ? true : st === '1' ? false : undefined }
+        const f: MNode = { k: 'frac', n: this.parseArg(), d: this.parseArg(), nobar: /^0(\.0*)?\s*[a-z]*$/.test(thick) || undefined, display: st === '0' ? true : st === '1' ? false : undefined, level: st === '2' ? 1 : st === '3' ? 2 : undefined }
         return l || r ? { k: 'fence', l, r, c: f, explicit: true } : f
       }
       case 'sqrt': {
@@ -559,7 +559,9 @@ class Parser {
       case 'lvert': case 'rvert': return mo('|')
       case 'lbrack': return mo('[')
       case 'rbrack': return mo(']')
-      case 'hline': return { k: 'row', c: [] }
+      // a rule mid-row has no row edge to sit on; environment() reads the
+      // ones at a row's start (where TeX allows them) as table rules
+      case 'hline': case 'hdashline': return { k: 'row', c: [] }
       case '$': return mi('$')
       case '%': return mi('%')
       case '&': return mi('&')
@@ -667,15 +669,31 @@ class Parser {
     // a starred matrix takes [l|c|r]; an array its column spec; alignat a count
     let cols: string | undefined
     if (name.endsWith('matrix*')) cols = this.optTokens()?.map((t) => t.v).join('').replace(/[^lcr]/g, '') || undefined
-    if (name.endsWith('array')) cols = this.rawGroup().replace(/[^lcr]/g, '') || undefined
-    else if (name.startsWith('alignat')) this.rawGroup()
+    // column rules from the spec: | solid, : dashed, || double, each on the
+    // boundary it sits at (0 = before the first column)
+    let vlines: string[] | undefined
+    if (name.endsWith('array')) {
+      const spec = this.rawGroup().replace(/\{[^}]*\}/g, '') // p{2cm}, @{…}: arguments, not columns
+      cols = spec.replace(/[^lcr]/g, '') || undefined
+      const vl = ['']
+      for (const c of spec) {
+        if (c === '|' || c === ':') vl[vl.length - 1] = c === ':' ? 'dashed' : vl[vl.length - 1] === 'solid' ? 'double' : 'solid'
+        else if ('lcr'.includes(c)) vl.push('')
+      }
+      if (vl.some(Boolean)) vlines = vl
+    } else if (name.startsWith('alignat')) this.rawGroup()
+    // row rules at the start of a row: \hline solid, \hdashline dashed, two
+    // in a row double — on the boundary above that row
+    const hl: string[] = []
+    const rule = () => { let r = ''; while (this.is('cmd', 'hline') || this.is('cmd', 'hdashline')) { const v = this.next().v; r = r ? 'double' : v === 'hline' ? 'solid' : 'dashed' } return r }
     const rows: MNode[][] = [[]]
     const cur = () => rows[rows.length - 1]
     const cell = (): MNode => this.parseRow((t) => t.t === '&' || t.t === '\\\\' || (t.t === 'cmd' && t.v === 'end'))
+    hl[0] = rule()
     cur().push(cell())
     for (;;) {
       if (this.is('&')) { this.next(); cur().push(cell()); continue }
-      if (this.is('\\\\')) { this.next(); if (this.is('ch', '[')) { while (!this.is('ch', ']')) this.next(); this.next() } rows.push([]); cur().push(cell()); continue }
+      if (this.is('\\\\')) { this.next(); if (this.is('ch', '[')) { while (!this.is('ch', ']')) this.next(); this.next() } hl[rows.length] = rule(); rows.push([]); cur().push(cell()); continue }
       if (this.is('cmd', 'end')) { this.next(); const e = this.rawGroup(); if (e !== name) throw new MathError('mismatched \\end'); break }
       throw new MathError('bad table')
     }
@@ -690,7 +708,8 @@ class Parser {
     const ncol = Math.max(...rows.map((r) => r.length))
     if (align === 'rl') cols = name.startsWith('eqnarray') ? 'rcl' : 'rl'.repeat(Math.ceil(ncol / 2))
     if (align === 'll') cols = 'l'
-    return { k: 'table', rows, l: fences[0], r: fences[1], align, cols, display: name === 'dcases' || name === 'drcases' || name === 'darray' || undefined }
+    return { k: 'table', rows, l: fences[0], r: fences[1], align, cols, display: name === 'dcases' || name === 'drcases' || name === 'darray' || undefined,
+      vlines, hlines: hl.some(Boolean) ? hl : undefined }
   }
 }
 

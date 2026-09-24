@@ -36,6 +36,10 @@ pre-1.0.
     `\norm`, `\bra`, `\ket`, `\qty`, `\grad` and the rest) and mhchem's
     `\ce{…}` and `\pu{…}` (formulas, charges, states, hydrates, reaction arrows
     with labels, units, dashed bonds).
+  - **Tables in formulas get their lines back.** Since 1.2.0 an `array`'s
+    column bars (`|`, dashed `:`, double `||`) and its `\hline` /
+    `\hdashline` rules were silently dropped; they are drawn again, exactly
+    as before 1.2.0.
   - **Commutative diagrams** (`\begin{CD} A @>f>> B … \end{CD}`), long
     division (`\longdiv`), the actuarial angle (`\angl`) and `\reflectbox`.
     Together with the above, every command and environment the pre-1.2.0

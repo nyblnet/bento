@@ -114,6 +114,7 @@ function print(n: MNode, font: Font | undefined): string {
     case 'space': return n.em < 0 ? `<mrow style="margin-left:${n.em}em;"></mrow>` : `<mspace width="${n.em}em"></mspace>`
     case 'frac': {
       const inner = `<mfrac${n.nobar ? ' linethickness="0"' : ''}>${print(n.n, font)}${print(n.d, font)}</mfrac>`
+      if (n.level) return `<mstyle displaystyle="false" scriptlevel="${n.level}">${inner}</mstyle>`
       return n.display === undefined ? inner : `<mstyle displaystyle="${n.display}">${inner}</mstyle>`
     }
     case 'sqrt': return n.i ? `<mroot>${print(n.b, font)}${print(n.i, font)}</mroot>` : `<msqrt>${print(n.b, font)}</msqrt>`
@@ -157,7 +158,20 @@ function print(n: MNode, font: Font | undefined): string {
       // columnalign attribute says it for engines that read that instead.
       const colOf = (i: number) => (n.cols ? n.cols[Math.min(i, n.cols.length - 1)] : 'c')
       const cell = (i: number) => { const c = colOf(i); return c === 'l' || c === 'r' ? ` columnalign="${c === 'l' ? 'left' : 'right'}" style="text-align:-webkit-${c === 'l' ? 'left' : 'right'};` : ' style="' }
-      const body = n.rows.map((r) => `<mtr>${r.map((c, i) => `<mtd${cell(i)}${pad(i)}">${print(c, font)}</mtd>`).join('')}</mtr>`).join('')
+      // Rules (#551), as Temml draws them — plain cell borders, which is why
+      // they showed in Bento before 1.2.0 without Temml's stylesheet: a column
+      // rule on the right of the column before it (the left of the first), a
+      // row rule on the bottom of the row above it (the top of the first).
+      const RULE: Record<string, string> = { solid: '0.06em solid', dashed: '0.06em dashed', double: '0.15em double' }
+      const rules = (r: number, i: number) => {
+        const out: string[] = []
+        if (r === 0 && n.hlines?.[0]) out.push(`border-top:${RULE[n.hlines[0]]}`)
+        if (n.hlines?.[r + 1]) out.push(`border-bottom:${RULE[n.hlines[r + 1]]}`)
+        if (i === 0 && n.vlines?.[0]) out.push(`border-left:${RULE[n.vlines[0]]}`)
+        if (n.vlines?.[i + 1]) out.push(`border-right:${RULE[n.vlines[i + 1]]}`)
+        return out.length ? ';' + out.join(';') : ''
+      }
+      const body = n.rows.map((r, ri) => `<mtr>${r.map((c, i) => `<mtd${cell(i)}${pad(i)}${rules(ri, i)}">${print(c, font)}</mtd>`).join('')}</mtr>`).join('')
       // aligned/gather rows are display-style (Temml sets it on the table)
       const table = `<mtable${cols === 'rl' || cols === 'd' || n.display ? ' displaystyle="true"' : ''}>${body}</mtable>`
       return n.l || n.r ? `<mrow><mo fence="true" form="prefix" stretchy="true">${esc(n.l ?? '')}</mo>${table}<mo fence="true" form="postfix" stretchy="true">${esc(n.r ?? '')}</mo></mrow>` : table
