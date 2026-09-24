@@ -953,4 +953,6 @@ export const strings: Catalog = {
   "{n} pictures are still uploading; they will follow.": "รูปภาพ {n} รูปยังอัปโหลดอยู่ จะตามมาภายหลัง",
   "1 picture still uploading…": "กำลังอัปโหลดรูปภาพ 1 รูป…",
   "{n} pictures still uploading…": "กำลังอัปโหลดรูปภาพ {n} รูป…",
+  "Not rendered: {what}": "แสดงผลไม่ได้: {what}",
+  "no space just inside the $ signs": "ห้ามเว้นวรรคชิดด้านในเครื่องหมาย $",
 }

@@ -943,4 +943,6 @@ export const zhHant: Catalog = {
   "{n} pictures are still uploading; they will follow.": "還有 {n} 張圖片正在上傳；稍後送達。",
   "1 picture still uploading…": "1 張圖片上傳中…",
   "{n} pictures still uploading…": "{n} 張圖片上傳中…",
+  "Not rendered: {what}": "未能呈現：{what}",
+  "no space just inside the $ signs": "$ 符號內側不要緊貼空格",
 }

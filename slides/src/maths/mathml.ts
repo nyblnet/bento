@@ -53,9 +53,9 @@ function print(n: MNode, font: Font | undefined): string {
         return font === 'rm' || n.up ? `<mi mathvariant="normal">${esc(t)}</mi>` : `<mi>${esc(t)}</mi>`
       }
       const attrs: string[] = []
-      if (n.pad !== undefined) attrs.push(` lspace="${n.pad}" rspace="${n.pad}"`)
+      if (n.pad !== undefined) attrs.push(` lspace="${n.pad}" rspace="${n.rpad ?? n.pad}"`)
       if (n.prefix && !'([{)]}'.includes(n.t)) attrs.push(' form="prefix" stretchy="false"')
-      if (n.t === '|' && n.pad !== undefined) attrs.push(' stretchy="false"')
+      if (n.t === '|' && n.pad !== undefined && !n.stretchy) attrs.push(' stretchy="false"')
       // a bare "(" in the middle of a row would be inferred INFIX by MathML
       // Core and spaced like a binary operator; TeX treats it as an opening
       // fence. Temml spells this out per paren; so do we.
@@ -98,7 +98,7 @@ function print(n: MNode, font: Font | undefined): string {
       // cases: 1em before the condition column; aligned: none (the & carries
       // the relation's own spacing); matrices: Temml's absolute 5.9776pt
       const pad = (i: number) => cols === 'll' ? `padding-left:${i === 0 ? '0' : '1'}em;padding-right:0em`
-        : cols === 'rl' ? 'padding-left:0em;padding-right:0em'
+        : cols === 'rl' || cols === 's' || cols === 'd' ? 'padding-left:0em;padding-right:0em'
         : `padding-left:${i === 0 ? '0em' : '5.9776pt'};padding-right:${i === ncol - 1 ? '0em' : '5.9776pt'}`
       // centred cells say nothing (the default); left/right say so the way
       // Temml's tml-left/tml-right classes would with its stylesheet
@@ -109,8 +109,20 @@ function print(n: MNode, font: Font | undefined): string {
       // (2026-09-15): nothing moves on update. `al` still decides the padding.
       const body = n.rows.map((r) => `<mtr>${r.map((c, i) => `<mtd style="${pad(i)}">${print(c, font)}</mtd>`).join('')}</mtr>`).join('')
       // aligned/gather rows are display-style (Temml sets it on the table)
-      const table = `<mtable${cols === 'rl' ? ' displaystyle="true"' : ''}>${body}</mtable>`
+      const table = `<mtable${cols === 'rl' || cols === 'd' ? ' displaystyle="true"' : ''}>${body}</mtable>`
       return n.l || n.r ? `<mrow><mo fence="true" form="prefix" stretchy="true">${esc(n.l ?? '')}</mo>${table}<mo fence="true" form="postfix" stretchy="true">${esc(n.r ?? '')}</mo></mrow>` : table
+    }
+    case 'xarrow': {
+      // Temml's spelling, so a deck keeps its look: the arrow stretches under
+      // a label padded 0.4286em a side, over a 3.5em minimum, a thick space
+      // either side of the whole
+      const lab = (x: MNode, under: boolean) => `<${under ? 'munder' : 'mover'}><mrow><mspace width="0.4286em"></mspace>${print(x, font)}<mspace width="0.4286em"></mspace></mrow><mspace width="3.5em"></mspace></${under ? 'munder' : 'mover'}>`
+      const arrow = `<mo stretchy="true" lspace="0em" rspace="0em">${esc(n.a)}</mo>`
+      const body = n.over && n.under ? `<munderover>${arrow}${lab(n.under, true)}${lab(n.over, false)}</munderover>`
+        : n.under ? `<munder>${arrow}${lab(n.under, true)}</munder>`
+        : n.over ? `<mover>${arrow}${lab(n.over, false)}</mover>`
+        : `<mover>${arrow}<mspace width="3.5em"></mspace></mover>`
+      return `<mrow><mspace width="0.2778em"></mspace>${body}<mspace width="0.2778em"></mspace></mrow>`
     }
     case 'accent': {
       // math-depth:0 keeps the accent glyph at full size inside scripts — the

@@ -948,4 +948,6 @@ export const strings: Catalog = {
   "{n} pictures are still uploading; they will follow.": "{n} bilder laddas fortfarande upp; de kommer.",
   "1 picture still uploading…": "1 bild laddas upp…",
   "{n} pictures still uploading…": "{n} bilder laddas upp…",
+  "Not rendered: {what}": "Inte återgiven: {what}",
+  "no space just inside the $ signs": "inget mellanslag direkt innanför $-tecknen",
 }

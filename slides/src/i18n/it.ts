@@ -943,4 +943,6 @@ export const it: Catalog = {
   "{n} pictures are still uploading; they will follow.": "{n} immagini sono ancora in caricamento; arriveranno.",
   "1 picture still uploading…": "1 immagine in caricamento…",
   "{n} pictures still uploading…": "{n} immagini in caricamento…",
+  "Not rendered: {what}": "Non visualizzata: {what}",
+  "no space just inside the $ signs": "nessuno spazio subito dentro i segni $",
 }

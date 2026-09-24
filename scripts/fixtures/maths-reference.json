@@ -1,6 +1,6 @@
 {
  "temml": "0.13.3",
- "frozen": "2026-09-15",
+ "frozen": "2026-09-24",
  "formulas": [
   {
    "src": "ax^2 + bx + c = 0",
@@ -547,6 +547,372 @@
    "display": true,
    "from": "standard",
    "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"σ\"}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"z\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"e\"}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"z\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]}]}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msubsup\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"∑\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"j\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"K\"}]}]},{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"e\"}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"z\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"j\"}]}]}]}]}]}]}]}"
+  },
+  {
+   "src": "p \\land q",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"p\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"∧\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"q\"}]}]}]}"
+  },
+  {
+   "src": "p \\lor q",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"p\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"∨\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"q\"}]}]}]}"
+  },
+  {
+   "src": "x \\gets y",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"←\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"y\"}]}]}]}"
+  },
+  {
+   "src": "\\top",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"⊤\"}]}]}"
+  },
+  {
+   "src": "\\bot",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"⊥\"}]}]}"
+  },
+  {
+   "src": "A \\xrightarrow{f} B",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"→\"}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]}]}]}"
+  },
+  {
+   "src": "A \\xleftarrow{g} B",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"←\"}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"g\"}]}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]}]}]}"
+  },
+  {
+   "src": "A \\xleftrightarrow{h} B",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"↔\"}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"h\"}]}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]}]}]}"
+  },
+  {
+   "src": "A \\xRightarrow{i} B",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"⇒\"}]},{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]}]}]}"
+  },
+  {
+   "src": "\\frac12",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}"
+  },
+  {
+   "src": "x^\\frac12",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"msup\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}]}"
+  },
+  {
+   "src": "\\frac1{2}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}"
+  },
+  {
+   "src": "\\tfrac12",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}"
+  },
+  {
+   "src": "\\dfrac12",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"2\"}]}]}]}"
+  },
+  {
+   "src": "a \\over b",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "{a+1 \\over b}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "n \\choose k",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"k\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "{n \\choose k}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"k\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "a \\atop b",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "\\cfrac{1}{1 + \\cfrac{1}{x}}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]}]}]}]}"
+  },
+  {
+   "src": "\\genfrac{(}{)}{0pt}{}{n}{k}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"k\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "\\dbinom{n}{k}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"k\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "\\tbinom{n}{k}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mfrac\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"k\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "\\dagger",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"†\"}]}]}"
+  },
+  {
+   "src": "\\ddagger",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"‡\"}]}]}"
+  },
+  {
+   "src": "a \\nmid b",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"∤\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "a \\nparallel b",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"∦\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "\\square",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"□\"}]}]}"
+  },
+  {
+   "src": "\\blacksquare",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"■\"}]}]}"
+  },
+  {
+   "src": "\\checkmark",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"✓\"}]}]}"
+  },
+  {
+   "src": "f \\colon A \\to B",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\":\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"→\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]}]}]}"
+  },
+  {
+   "src": "a \\leqslant b",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⩽\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "a \\geqslant b",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⩾\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "a \\lesssim b",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"≲\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "a \\gtrsim b",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"≳\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "A \\varsubsetneq B",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⊊︀\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]}]}]}"
+  },
+  {
+   "src": "A \\subsetneq B",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⊊\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]}]}]}"
+  },
+  {
+   "src": "A \\supsetneq B",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⊋\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]}]}]}"
+  },
+  {
+   "src": "A \\nsubseteq B",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⊈\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"B\"}]}]}]}"
+  },
+  {
+   "src": "a \\bmod n",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"mod\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]}]}]}"
+  },
+  {
+   "src": "a \\equiv b \\pmod{n}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"≡\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mo\",\"kids\":[]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"mod\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "a \\equiv b \\pod{n}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"≡\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mo\",\"kids\":[]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "a \\equiv b \\mod{n}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"≡\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]},{\"tag\":\"mo\",\"kids\":[]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"mod\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]}]}]}"
+  },
+  {
+   "src": "\\sum_{\\substack{i < n \\\\ j < m}} a_{ij}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"∑\"}]},{\"tag\":\"mtable\",\"kids\":[{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"<\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]}]}]}]},{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"j\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"<\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"m\"}]}]}]}]}]}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"i\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"j\"}]}]}]}]}]}"
+  },
+  {
+   "src": "\\left\\{ x \\middle| x > 0 \\right\\}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"{\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"|\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\">\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"0\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"}\"}]}]}]}"
+  },
+  {
+   "src": "\\mathring{A}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mover\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"A\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"˚\"}]}]}]}"
+  },
+  {
+   "src": "a \\mathbin{\\star} b",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⋆\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "a \\mathrel{\\sim} b",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"∼\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "\\mathop{\\rm Res} f",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"Res\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]}]}]}"
+  },
+  {
+   "src": "\\mathord{+}",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"+\"}]}]}"
+  },
+  {
+   "src": "\\operatorname*{argmax}_x f(x)",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"argmax\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"f\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"(\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\")\"}]}]}]}"
+  },
+  {
+   "src": "\\emph{note} x",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mtext\",\"kids\":[{\"t\":\"𝑛𝑜𝑡𝑒\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]}]}]}"
+  },
+  {
+   "src": "a \\hspace{1em} b",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "a \\vspace{1em} b",
+   "display": false,
+   "from": "issue:540",
+   "tree": null
+  },
+  {
+   "src": "x_1, \\dotsc, x_n",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\",\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"…\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\",\"}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]}]}]}]}"
+  },
+  {
+   "src": "x_1 + \\dotsb + x_n",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mn\",\"kids\":[{\"t\":\"1\"}]}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"⋯\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"msub\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"x\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"n\"}]}]}]}]}"
+  },
+  {
+   "src": "\\begin{multline} a + b \\\\ + c \\end{multline}",
+   "display": true,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mtable\",\"kids\":[{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mtext\",\"kids\":[{\"tag\":\"span\",\"kids\":[]}]}]}]},{\"tag\":\"mtr\",\"kids\":[{\"tag\":\"mtd\",\"kids\":[]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mo\",\"kids\":[{\"t\":\"+\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"c\"}]}]}]},{\"tag\":\"mtd\",\"kids\":[{\"tag\":\"mtext\",\"kids\":[{\"tag\":\"span\",\"kids\":[]}]}]}]}]}]}"
+  },
+  {
+   "src": "\\begin{eqnarray} a &=& b \\\\ c &=& d \\end{eqnarray}",
+   "display": true,
+   "from": "issue:540",
+   "tree": null
+  },
+  {
+   "src": "a = b \\tag{1}",
+   "display": false,
+   "from": "issue:540",
+   "tree": null
+  },
+  {
+   "src": "a = b \\notag",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
+  },
+  {
+   "src": "a = b \\nonumber",
+   "display": false,
+   "from": "issue:540",
+   "tree": "{\"tag\":\"math\",\"kids\":[{\"tag\":\"mrow\",\"kids\":[{\"tag\":\"mi\",\"kids\":[{\"t\":\"a\"}]},{\"tag\":\"mo\",\"kids\":[{\"t\":\"=\"}]},{\"tag\":\"mi\",\"kids\":[{\"t\":\"b\"}]}]}]}"
   }
  ]
 }

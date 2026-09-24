@@ -51,27 +51,61 @@ ok(renderMath('') === null || renderMath('') === '<math xmlns="http://www.w3.org
 console.log('\nthe reference set, against the frozen Temml trees\n')
 type Ref = { src: string; display: boolean; from: string; tree: string | null }
 const reference = JSON.parse(readFileSync(join(root, 'scripts/fixtures/maths-reference.json'), 'utf8')) as { temml: string; frozen: string; formulas: Ref[] }
-ok(reference.formulas.length === 91 && reference.temml === '0.13.3', `the reference is the spike's 91-formula set, frozen from Temml ${reference.temml} on ${reference.frozen}`)
+ok(reference.formulas.length === 152 && reference.temml === '0.13.3', `the reference is the spike's 91 formulas plus issue #540's 61, frozen from Temml ${reference.temml} on ${reference.frozen}`)
 const corpus = reference.formulas.filter((f) => f.from.startsWith('corpus:') && !f.src.includes('…'))
 ok(corpus.length >= 9 && corpus.every((c) => renderMath(c.src, { display: c.display }) !== null), `every formula our decks and rigs carry renders (${corpus.length})`)
 // Known residuals -- each one a place where Temml's tree is NOT what we want:
 // menclose is blank on Chrome (we draw the rule), and one extra mrow level
 // with 0.0% pixel difference. Anything else that differs is a regression.
-const RESIDUAL = new Set(['\\overline{AB}', '\\underline{x}', '\\sigma(z)_i = \\frac{e^{z_i}}{\\sum_{j=1}^K e^{z_j}}'])
+const RESIDUAL = new Set(['\\overline{AB}', '\\underline{x}', '\\sigma(z)_i = \\frac{e^{z_i}}{\\sum_{j=1}^K e^{z_j}}',
+  // #540: Temml wraps a \mathop word as <mo><mi>Res</mi></mo>; ours is the
+  // function-name <mi>, which spaces the same and is valid MathML
+  '\\mathop{\\rm Res} f',
+  // #540: Temml's multline is three columns with an equation-number <span>
+  // in the third (its stylesheet, which Bento never loads, positions it);
+  // ours is the one column of lines, centred like every Bento table
+  '\\begin{multline} a + b \\\\ + c \\end{multline}'])
+// Where maths-lite deliberately renders what Temml refused (#540): \vspace
+// is dropped (a slide formula has no vertical flow to space), eqnarray is
+// aligned like align, and \tag outside display mode is still a label
+const BEYOND_TEMML = new Set(['a \\vspace{1em} b', '\\begin{eqnarray} a &=& b \\\\ c &=& d \\end{eqnarray}', 'a = b \\tag{1}'])
 let both = 0, same = 0
 const unexpected: string[] = []
 for (const f of reference.formulas) {
   const lite = renderMath(f.src, { display: f.display })
   const key = lite ? treeKey(lite) : null
-  if (!f.tree || !key) { if (!!f.tree !== !!key) unexpected.push(`${f.src} (temml ${!!f.tree}, ours ${!!key})`); continue }
+  if (!f.tree || !key) { if (!!f.tree !== !!key && !(key && BEYOND_TEMML.has(f.src))) unexpected.push(`${f.src} (temml ${!!f.tree}, ours ${!!key})`); continue }
   both++
   if (key === f.tree) same++
   else if (!RESIDUAL.has(f.src)) unexpected.push(f.src)
 }
-ok(both === 89, '89 formulas render in both (the two refused are the canvas placeholder hint, refused by both)')
+ok(both === 147, '147 formulas render in both (refused by both: the canvas placeholder hint, twice; three render only here — BEYOND_TEMML)')
 ok(same / both >= 0.95, `>=95% identical normalised trees: ${same}/${both} = ${(100 * same / both).toFixed(1)}%`)
 ok(unexpected.length === 0, `every mismatch is a listed residual -- unexpected: ${unexpected.join(' · ') || 'none'}`)
 ok(both - same === RESIDUAL.size, `and every listed residual still differs (${both - same} of ${RESIDUAL.size}) -- remove one from the list when it is closed`)
+
+// THE HARD LIST (#540). The 95% gate let 57 commands Temml rendered fall
+// back to raw text in 1.2.0 — a percentage cannot see a regression that is
+// small against the whole set. Every formula here must render: one null and
+// this goes red, whatever the percentage says.
+const hard = JSON.parse(readFileSync(join(root, 'scripts/fixtures/maths-540.json'), 'utf8')) as { mustRender: string[] }
+const nulls = hard.mustRender.filter((src) => renderMath(src, { display: /\\begin\{(multline|eqnarray)\}/.test(src) }) === null)
+ok(hard.mustRender.length === 61 && nulls.length === 0, `every must-render formula renders (${hard.mustRender.length - nulls.length}/${hard.mustRender.length})${nulls.length ? ' — null: ' + nulls.join(' · ') : ''}`)
+ok(hard.mustRender.every((src) => reference.formulas.some((f) => f.src === src)), 'and every one is in the frozen reference, so its tree is gated too')
+
+console.log('\n#540: the shapes the new commands take\n')
+ok(renderMath('\\frac12')!.includes('<mfrac><mn>1</mn><mn>2</mn></mfrac>') && renderMath('\\sqrt2')!.includes('<msqrt><mn>2</mn></msqrt>'), 'a macro argument is ONE token: \\frac12 is ½, \\sqrt2 is √2')
+ok(renderMath('12')!.includes('<mn>12</mn>'), '…while 12 in a row stays the number twelve')
+ok(renderMath('{a+1 \\over b}')!.includes('<mfrac><mrow><mi>a</mi><mo>+</mo><mn>1</mn></mrow><mi>b</mi></mfrac>'), '\\over splits the whole group')
+ok(renderMath('n \\choose k')!.includes('stretchy="true">(</mo><mfrac linethickness="0">'), '\\choose is a binomial')
+ok(renderMath('A \\xrightarrow[u]{o} B')!.includes('<munderover><mo stretchy="true" lspace="0em" rspace="0em">→</mo>'), '\\xrightarrow[under]{over} labels both sides')
+ok(renderMath('a \\equiv b \\pmod{n}')!.includes('<mi>mod</mi>'), '\\pmod writes (mod n)')
+ok(renderMath('\\left\\{ x \\middle| x > 0 \\right\\}')!.includes('<mo lspace="0.05em" rspace="0.05em" stretchy="true">|</mo>'), '\\middle| is one stretchy bar')
+ok(renderMath('f \\colon A \\to B')!.includes('<mo lspace="0em" rspace="0.1667em">:</mo>'), '\\colon: no space before, a thin one after')
+ok(renderMath('a = b \\tag{1}')!.includes('<mtext>(1)</mtext>') && renderMath('a = b \\tag*{A}')!.includes('<mtext>A</mtext>'), '\\tag is a label after the formula, in parentheses; \\tag* without')
+ok(renderMath('a = b \\notag') === renderMath('a = b') && renderMath('a \\vspace{2em} b') === renderMath('a b'), '\\notag, \\nonumber and \\vspace render as nothing')
+ok(renderMath('\\operatorname*{argmax}_x f', { display: true })!.includes('<munder>') && renderMath('\\operatorname*{argmax}_x f')!.includes('<msub>'), '\\operatorname*: limits under in display, at the side inline')
+ok(renderMath('\\emph{note}')!.includes('<mtext>𝑛𝑜𝑡𝑒</mtext>'), '\\emph is italic text')
 
 console.log('\nMathML shape\n')
 const q = renderMath('x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}', { display: true })!

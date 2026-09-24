@@ -943,4 +943,6 @@ export const de: Catalog = {
   "{n} pictures are still uploading; they will follow.": "{n} Bilder werden noch hochgeladen; sie folgen.",
   "1 picture still uploading…": "1 Bild wird noch hochgeladen…",
   "{n} pictures still uploading…": "{n} Bilder werden noch hochgeladen…",
+  "Not rendered: {what}": "Nicht gerendert: {what}",
+  "no space just inside the $ signs": "kein Leerzeichen direkt innerhalb der $-Zeichen",
 }
