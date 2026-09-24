@@ -40,3 +40,19 @@ export function renderMath(src: string, opts: { display?: boolean; syntax?: Synt
     return null
   }
 }
+
+/**
+ * Why `src` does not render, or null when it does: the unknown command
+ * (`\foo`) when that is the reason — the usual one — else the parser's own
+ * message. For the editor's "Not rendered" hint; never shown in a document.
+ */
+export function mathError(src: string, opts: { display?: boolean; syntax?: Syntax } = {}): string | null {
+  try {
+    toMathML(parseMath(src, opts), !!opts.display)
+    return null
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    const unknown = /^unknown command (\\\S+)/.exec(msg)
+    return unknown ? unknown[1] : msg
+  }
+}

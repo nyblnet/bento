@@ -31,6 +31,7 @@ export const SYMBOLS: Sym[] = [
   T('cdot', 'dot.op', '⋅'), T('ast', 'ast', '∗'), T('star', 'star', '⋆'), T('circ', 'compose', '∘'),
   T('bullet', 'bullet', '∙'), T('cap', 'sect', '∩'), T('cup', 'union', '∪'), T('setminus', 'without', '∖'),
   T('oplus', 'plus.circle', '⊕'), T('otimes', 'times.circle', '⊗'), T('wedge', 'and', '∧'), T('vee', 'or', '∨'),
+  T('land', 'and', '∧'), T('lor', 'or', '∨'), T('dagger', 'dagger', '†'), T('ddagger', 'dagger.double', '‡'), T('diamond', 'diamond.stroked.small', '⋄'),
   // relations
   T('le', 'lt.eq', '≤'), T('leq', 'lt.eq', '≤'), T('ge', 'gt.eq', '≥'), T('geq', 'gt.eq', '≥'), T('ne', 'eq.not', '≠'), T('neq', 'eq.not', '≠'),
   T('approx', 'approx', '≈'), T('equiv', 'equiv', '≡'), T('sim', 'tilde.op', '∼'), T('simeq', 'tilde.eq', '≃'), T('cong', 'tilde.equiv', '≅'),
@@ -38,19 +39,28 @@ export const SYMBOLS: Sym[] = [
   T('subset', 'subset', '⊂'), T('supset', 'supset', '⊃'), T('subseteq', 'subset.eq', '⊆'), T('supseteq', 'supset.eq', '⊇'),
   T('in', 'in', '∈'), T('notin', 'in.not', '∉'), T('ni', 'in.rev', '∋'), T('parallel', 'parallel', '∥'), T('perp', 'perp', '⟂'),
   T('mid', 'divides', '|'), T('models', 'models', '⊧'), T('vdash', 'tack.r', '⊢'),
+  T('nmid', 'divides.not', '∤'), T('nparallel', 'parallel.not', '∦'),
+  T('leqslant', 'lt.eq.slant', '⩽'), T('geqslant', 'gt.eq.slant', '⩾'), T('lesssim', 'lt.tilde', '≲'), T('gtrsim', 'gt.tilde', '≳'),
+  T('nleq', 'lt.eq.not', '≰'), T('ngeq', 'gt.eq.not', '≱'), T('nless', 'lt.not', '≮'), T('ngtr', 'gt.not', '≯'), T('lneq', 'lt.neq', '⪇'), T('gneq', 'gt.neq', '⪈'),
+  T('nsim', 'tilde.not', '≁'), T('ncong', 'tilde.equiv.not', '≇'),
+  T('subsetneq', 'subset.neq', '⊊'), T('supsetneq', 'supset.neq', '⊋'), T('varsubsetneq', 'subset.neq', '⊊︀'), T('varsupsetneq', 'supset.neq', '⊋︀'),
+  T('nsubseteq', 'subset.eq.not', '⊈'), T('nsupseteq', 'supset.eq.not', '⊉'),
   // arrows
   T('to', 'arrow.r', '→'), T('rightarrow', 'arrow.r', '→'), T('leftarrow', 'arrow.l', '←'), T('leftrightarrow', 'arrow.l.r', '↔'),
   T('Rightarrow', 'arrow.r.double', '⇒'), T('Leftarrow', 'arrow.l.double', '⇐'), T('Leftrightarrow', 'arrow.l.r.double', '⇔'), T('iff', 'arrow.l.r.double.long', '⟺'),
   T('mapsto', 'arrow.r.bar', '↦'), T('longrightarrow', 'arrow.r.long', '⟶'), T('uparrow', 'arrow.t', '↑'), T('downarrow', 'arrow.b', '↓'),
   T('implies', 'arrow.r.double.long', '⟹'), T('hookrightarrow', 'arrow.r.hook', '↪'),
+  T('gets', 'arrow.l', '←'),
   // logic & sets
   T('forall', 'forall', '∀', 'i'), T('exists', 'exists', '∃', 'i'), T('nexists', 'exists.not', '∄', 'i'), T('neg', 'not', '¬'), T('lnot', 'not', '¬'),
   T('emptyset', 'emptyset', '∅', 'i'), T('varnothing', 'nothing', '∅', 'i'), T('infty', 'infinity', '∞', 'i'), T('partial', 'diff', '∂', 'i'), T('nabla', 'nabla', '∇'),
   T('angle', 'angle', '∠'), T('triangle', 'triangle', '△'), T('hbar', 'planck.reduce', 'ℏ', 'i'), T('ell', 'ell', 'ℓ', 'i'),
   T('Re', 'Re', 'ℜ', 'i'), T('Im', 'Im', 'ℑ', 'i'), T('aleph', 'aleph', 'ℵ', 'i'), T('wp', 'wp', '℘', 'i'),
   T('degree', 'degree', '°'), T('prime', 'prime', '′'), T('therefore', 'therefore', '∴'), T('because', 'because', '∵'),
+  T('top', 'top', '⊤', 'i'), T('bot', 'bot', '⊥', 'i'), T('square', 'square.stroked', '□', 'i'), T('Box', 'square.stroked', '□', 'i'), T('blacksquare', 'square.filled', '■', 'i'), T('checkmark', 'checkmark', '✓', 'i'),
   // dots
   T('ldots', 'dots.h', '…'), T('cdots', 'dots.h.c', '⋯'), T('vdots', 'dots.v', '⋮'), T('ddots', 'dots.down', '⋱'), T('dots', 'dots', '…'),
+  T('dotsc', 'dots.h', '…'), T('dotso', 'dots.h', '…'), T('dotsb', 'dots.h.c', '⋯'), T('dotsm', 'dots.h.c', '⋯'), T('dotsi', 'dots.h.c', '⋯'),
   // big operators (limits go under/over in display mode)
   T('sum', 'sum', '∑', 'big'), T('prod', 'product', '∏', 'big'), T('coprod', 'coproduct', '∐', 'big'),
   T('int', 'integral', '∫', 'big'), T('iint', 'integral.double', '∬', 'big'), T('iiint', 'integral.triple', '∭', 'big'), T('oint', 'integral.cont', '∮', 'big'),

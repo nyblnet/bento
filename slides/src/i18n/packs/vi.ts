@@ -949,4 +949,6 @@ export const strings: Catalog = {
   "{n} pictures are still uploading; they will follow.": "{n} hình vẫn đang tải lên; sẽ đến sau.",
   "1 picture still uploading…": "1 hình đang tải lên…",
   "{n} pictures still uploading…": "{n} hình đang tải lên…",
+  "Not rendered: {what}": "Không hiển thị được: {what}",
+  "no space just inside the $ signs": "không có dấu cách ngay bên trong cặp dấu $",
 }

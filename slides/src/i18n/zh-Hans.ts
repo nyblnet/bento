@@ -943,4 +943,6 @@ export const zhHans: Catalog = {
   "{n} pictures are still uploading; they will follow.": "还有 {n} 张图片正在上传；稍后送达。",
   "1 picture still uploading…": "1 张图片上传中…",
   "{n} pictures still uploading…": "{n} 张图片上传中…",
+  "Not rendered: {what}": "未能渲染：{what}",
+  "no space just inside the $ signs": "$ 符号内侧不要紧挨空格",
 }

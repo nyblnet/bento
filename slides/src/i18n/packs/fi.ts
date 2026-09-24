@@ -956,4 +956,6 @@ export const strings: Catalog = {
   "{n} pictures are still uploading; they will follow.": "{n} kuvaa latautuu vielä; ne seuraavat perässä.",
   "1 picture still uploading…": "1 kuva latautuu…",
   "{n} pictures still uploading…": "{n} kuvaa latautuu…",
+  "Not rendered: {what}": "Ei piirretty: {what}",
+  "no space just inside the $ signs": "ei välilyöntiä heti $-merkkien sisäpuolelle",
 }

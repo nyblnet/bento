@@ -14,7 +14,7 @@
 export type MNode =
   | { k: 'row'; c: MNode[] }
   /** an identifier (mi), number (mn) or operator (mo) */
-  | { k: 'sym'; cls: 'i' | 'n' | 'o'; t: string; /** upright multi-letter (sin, lim) */ fn?: boolean; /** stretchy fence/accent op */ stretchy?: boolean; /** \mathrm-style upright single letter */ up?: boolean; /** big operator (sum) */ big?: boolean; /** \big family: minsize in em */ size?: number; /** explicit lspace/rspace (\mid) */ pad?: string; /** render-time: operator after an operator */ prefix?: boolean }
+  | { k: 'sym'; cls: 'i' | 'n' | 'o'; t: string; /** upright multi-letter (sin, lim) */ fn?: boolean; /** stretchy fence/accent op */ stretchy?: boolean; /** \mathrm-style upright single letter */ up?: boolean; /** big operator (sum) */ big?: boolean; /** \big family: minsize in em */ size?: number; /** explicit lspace/rspace (\mid) */ pad?: string; /** a different rspace (\colon) */ rpad?: string; /** render-time: operator after an operator */ prefix?: boolean; /** \operatorname*: limits under/over in display mode */ limfn?: boolean }
   | { k: 'text'; t: string }
   | { k: 'space'; em: number }
   | { k: 'frac'; n: MNode; d: MNode; /** no bar (binom, atop) */ nobar?: boolean; /** \dfrac/\tfrac */ display?: boolean }
@@ -25,6 +25,9 @@ export type MNode =
   | { k: 'fence'; l: string; r: string; c: MNode; /** minsize multiplier for \big family */ size?: number; /** \left…\right: say stretchy out loud (plain parens stretch by the operator dictionary anyway) */ explicit?: boolean }
   | { k: 'table'; rows: MNode[][]; l?: string; r?: string; /** column aligns, e.g. 'rl' for align */ align?: string; /** row lines */ lines?: boolean }
   | { k: 'accent'; b: MNode; a: string; under?: boolean; stretchy?: boolean }
+  /** \xrightarrow[under]{over} and family: a stretchy arrow with labels
+   *  (printed the way Temml spells it — the labels padded, a 3.5em minimum) */
+  | { k: 'xarrow'; a: string; over?: MNode; under?: MNode }
   /** font/colour/box wrapper */
   | { k: 'style'; c: MNode; font?: Font; color?: string; box?: boolean; /** \cancel */ cancel?: boolean }
 
