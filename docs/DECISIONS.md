@@ -7397,11 +7397,21 @@ states, hydrates, arrows with labels, bonds, units) — not Temml's 1,500-line
 state machine, and anything it does not recognise passes through as upright
 text.
 
-**Known limit, not fixed: some arrows do not stretch in Chrome.** Measured in
-Chrome 153 on macOS with every maths font: `← ⇐ ⇒ ⇔ ↤ ↩ ↪` and the harpoons
-stretch to a label; `→ ↦ ↔ ⇌ ↠ =` do not, whatever the form, font or script
-element. Two workarounds were built and rejected on sight: a mirrored
-stretched `←` loses its arrowhead, and a stretched `⇀` with a `⇁` laid over
-its end misplaces the barb. So `\xrightarrow{a long label}` draws a
-glyph-sized arrow, as Temml's output always did in Bento. A real fix is
-probably an inline SVG arrow; that is its own change.
+**Arrows Chrome will not stretch are drawn in SVG.** Measured in Chrome 153
+on macOS with every maths font: `← ⇐ ⇒ ⇔ ↤ ↩ ↪` and the harpoons stretch to a
+label; `→ ↦ ↔ ↠ ↞ = ⇌ ⇋ ⇄` never do, whatever the operator form, font or
+script element — so `\xrightarrow{a long label}` drew a short arrow under a
+long label (in Temml's output too). Two glyph workarounds were built and
+rejected on sight: a mirrored stretched `←` loses its arrowhead, and a
+stretched `⇀` with a `⇁` laid over its end misplaces the barb. What works:
+`\x…arrow` becomes a one-column `mtable` — over label, arrow, under label,
+each label row balanced by a phantom of the other so the arrow row sits on
+the axis — and the arrow is an inline `<svg>` absolutely positioned in a
+relatively positioned `mtd` (`min-width:3.5em`), lines at 0–100%, heads in
+nested svgs pinned at 0%/100% so they never distort, sizes in em.
+`\overrightarrow` and kin pad the base and draw over the padding, so the
+baseline never moves. `role="img"` + `aria-label` keep the written arrow for
+assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
+rigs treat a drawn arrow as a deliberate difference: named in
+`test-maths-lite.ts`, counted with the identical ones in the coverage floor.
+Cost: +966 B of shell.

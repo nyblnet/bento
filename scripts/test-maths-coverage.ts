@@ -50,7 +50,11 @@ const common = JSON.parse(readFileSync(join(root, 'scripts/fixtures/maths-common
 
 const results = fix.forms.map((f) => {
   const ml = renderMath(f.src, { display: f.display })
-  return { ...f, ours: ml, same: !!ml && treeKey(ml) === f.tree }
+  // a DRAWN arrow (#551: → ↔ ↦ = ⇌ … Chrome will not stretch, so they are
+  // an inline svg) differs from Temml's mover on purpose; it counts with the
+  // identical ones, and is reported on its own line
+  const drawn = !!ml && ml.includes('<svg role="img" aria-label=')
+  return { ...f, ours: ml, drawn, same: !!ml && (drawn || treeKey(ml) === f.tree) }
 })
 const renders = results.filter((r) => r.ours).length
 const identical = results.filter((r) => r.same).length
@@ -71,7 +75,7 @@ console.log(`Temml ${fix.temml}'s vocabulary (${results.length} commands and env
 const lost = fix.covered.filter((c) => !results.find((r) => r.cmd === c)?.ours)
 ok(lost.length === 0, `no covered command falls back to raw text${lost.length ? ' — lost: ' + lost.join(' ') : ''} (${fix.covered.length} covered)`)
 ok(renders >= fix.floor.renders, `renders ${renders} of ${results.length}, floor ${fix.floor.renders}`)
-ok(identical >= fix.floor.identical, `tree-identical to Temml ${identical}, floor ${fix.floor.identical}`)
+ok(identical >= fix.floor.identical, `tree-identical to Temml ${identical} (${results.filter((r) => r.drawn).length} of them arrows drawn in svg on purpose), floor ${fix.floor.identical}`)
 if (renders > fix.floor.renders || identical > fix.floor.identical) console.log('        (above the floor — run with --update to raise it)')
 
 console.log('\nthe common tier (scripts/fixtures/maths-common.json)\n')

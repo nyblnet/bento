@@ -36,9 +36,10 @@ pre-1.0.
     `\norm`, `\bra`, `\ket`, `\qty`, `\grad` and the rest) and mhchem's
     `\ce{…}` and `\pu{…}` (formulas, charges, states, hydrates, reaction arrows
     with labels, units).
-  - Known limit: in Chrome, `\xrightarrow` and a few other arrows keep their
-    natural length under a long label instead of stretching to it, as they
-    always have in Bento.
+  - **Labelled arrows stretch to their label.** In Chrome, `\xrightarrow`,
+    `\xleftrightarrow`, `\xmapsto`, `\xlongequal`, the equilibrium arrows and
+    `\overrightarrow` used to keep their natural length under a long label or
+    a long base; they now span it. Screen readers still hear the arrow.
 
 - **Formulas that stayed as raw text now render.** 1.2.0 replaced the maths
   engine with a smaller one of our own, and a whole set of everyday LaTeX fell

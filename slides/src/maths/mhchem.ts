@@ -23,22 +23,17 @@
 const ARROWS: Record<string, string> = { '->': 'rightarrow', '<-': 'leftarrow', '<->': 'leftrightarrow', '<=>': 'rightleftharpoons', '<=>>': 'rightleftharpoons', '<<=>': 'rightleftharpoons', '<-->': 'leftrightarrows' }
 const ARROW = /^(<=>>|<<=>|<-->|<=>|<->|->|<-)((?:\[[^\]]*\])*)$/
 
-/** a label on an arrow: chemistry, unless it is $maths$ */
-const label = (s: string) => (s.startsWith('$') && s.endsWith('$') ? s.slice(1, -1) : ceToTex(s))
+/** a label on an arrow: chemistry, unless it is $maths$ or already LaTeX */
+const label = (s: string) => (s.startsWith('$') && s.endsWith('$') ? s.slice(1, -1) : s.includes('\\') ? s : ceToTex(s))
+/** the labelled form of each arrow: they stretch to the label */
+const X_ARROWS: Record<string, string> = { rightarrow: 'xrightarrow', leftarrow: 'xleftarrow', leftrightarrow: 'xleftrightarrow', rightleftharpoons: 'xrightleftharpoons', leftrightarrows: 'xtofrom' }
 
 function arrow(tok: string): string {
   const m = ARROW.exec(tok)!
-  const labels = [...m[2].matchAll(/\[([^\]]*)\]/g)].map((x) => x[1])
-  const [over, under] = labels
+  const [over, under] = [...m[2].matchAll(/\[([^\]]*)\]/g)].map((x) => x[1])
   const a = ARROWS[m[1]]
-  if (a === 'rightarrow' || a === 'leftarrow' || a === 'leftrightarrow') {
-    if (!over && !under) return `\\${a}`
-    return `\\x${a}${under ? `[${label(under)}]` : ''}{${over ? label(over) : ''}}`
-  }
-  let s = `\\${a}`
-  if (over) s = `\\overset{${label(over)}}{${s}}`
-  if (under) s = `\\underset{${label(under)}}{${s}}`
-  return s
+  if (!over && !under) return `\\${a}`
+  return `\\${X_ARROWS[a]}${under ? `[${label(under)}]` : ''}{${over ? label(over) : ''}}`
 }
 
 /** one species: 2H2O(l), SO4^2-, [Cu(NH3)4]^2+, CuSO4.5H2O, e- */
@@ -78,7 +73,8 @@ function species(t: string): string {
 export function ceToTex(src: string): string {
   // arrows need no spaces around them in mhchem: give them some
   const spaced = src.replace(/(<=>>|<<=>|<-->|<=>|<->|->|<-)((?:\[[^\]]*\])*)/g, ' $1$2 ').trim()
-  return spaced.split(/\s+/).map((tok) => {
+  // split on spaces, but never inside a [label] or {group}: ->[heat up]
+  return (spaced.match(/(?:\[[^\]]*\]|\{[^}]*\}|\S)+/g) ?? []).map((tok) => {
     if (ARROW.test(tok)) return arrow(tok)
     if (tok === '+') return '+'
     if (tok === '^') return '\\uparrow'

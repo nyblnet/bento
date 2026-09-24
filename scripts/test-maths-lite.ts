@@ -69,17 +69,25 @@ const RESIDUAL = new Set(['\\overline{AB}', '\\underline{x}', '\\sigma(z)_i = \\
 // is dropped (a slide formula has no vertical flow to space), eqnarray is
 // aligned like align, and \tag outside display mode is still a label
 const BEYOND_TEMML = new Set(['a \\vspace{1em} b', '\\begin{eqnarray} a &=& b \\\\ c &=& d \\end{eqnarray}', 'a = b \\tag{1}'])
+// DRAWN (#551): the arrows Chrome will not stretch (→ ↔ ↦ ↠ = ⇌ …) are an
+// inline SVG sized by the layout, so their tree is a table (or a padded row)
+// where Temml's is an mover — different on purpose, measured in Chrome. They
+// are named here, must still carry the svg, and stay out of the percentage.
+const DRAWN = new Set(['\\overrightarrow{AB}', 'A \\xrightarrow{f} B', 'A \\xleftrightarrow{h} B'])
 let both = 0, same = 0
 const unexpected: string[] = []
+const drawnSeen: string[] = []
 for (const f of reference.formulas) {
   const lite = renderMath(f.src, { display: f.display })
   const key = lite ? treeKey(lite) : null
   if (!f.tree || !key) { if (!!f.tree !== !!key && !(key && BEYOND_TEMML.has(f.src))) unexpected.push(`${f.src} (temml ${!!f.tree}, ours ${!!key})`); continue }
+  if (DRAWN.has(f.src)) { if (lite!.includes('<svg role="img" aria-label=')) drawnSeen.push(f.src); continue }
   both++
   if (key === f.tree) same++
   else if (!RESIDUAL.has(f.src)) unexpected.push(f.src)
 }
-ok(both === 147, '147 formulas render in both (refused by both: the canvas placeholder hint, twice; three render only here — BEYOND_TEMML)')
+ok(both + DRAWN.size === 147, '147 formulas render in both (refused by both: the canvas placeholder hint, twice; three render only here — BEYOND_TEMML)')
+ok(drawnSeen.length === DRAWN.size, `the drawn arrows are drawn (${drawnSeen.length}/${DRAWN.size}), out of the comparison on purpose`)
 ok(same / both >= 0.95, `>=95% identical normalised trees: ${same}/${both} = ${(100 * same / both).toFixed(1)}%`)
 ok(unexpected.length === 0, `every mismatch is a listed residual -- unexpected: ${unexpected.join(' · ') || 'none'}`)
 ok(both - same === RESIDUAL.size, `and every listed residual still differs (${both - same} of ${RESIDUAL.size}) -- remove one from the list when it is closed`)
@@ -98,7 +106,12 @@ ok(renderMath('\\frac12')!.includes('<mfrac><mn>1</mn><mn>2</mn></mfrac>') && re
 ok(renderMath('12')!.includes('<mn>12</mn>'), '…while 12 in a row stays the number twelve')
 ok(renderMath('{a+1 \\over b}')!.includes('<mfrac><mrow><mi>a</mi><mo>+</mo><mn>1</mn></mrow><mi>b</mi></mfrac>'), '\\over splits the whole group')
 ok(renderMath('n \\choose k')!.includes('stretchy="true">(</mo><mfrac linethickness="0">'), '\\choose is a binomial')
-ok(renderMath('A \\xrightarrow[u]{o} B')!.includes('<munderover><mo stretchy="true" lspace="0em" rspace="0em">→</mo>'), '\\xrightarrow[under]{over} labels both sides')
+ok(renderMath('A \\xleftarrow[u]{o} B')!.includes('<munderover><mo stretchy="true" lspace="0em" rspace="0em">←</mo>'), '\\xleftarrow[under]{over} labels both sides (← stretches natively)')
+// #551: Chrome will not stretch → (measured): it is drawn, sized by a table
+// column as wide as its wider label, announced as → to assistive tech
+const xr = renderMath('A \\xrightarrow[u]{\\text{over}} B')!
+ok(/<mtable><mtr><mtd style="padding:0"><mrow scriptlevel="1" displaystyle="false">.*over.*<\/mtd><\/mtr><mtr><mtd style="padding:0;position:relative;min-width:3.5em;height:0.6em"><mtext><svg role="img" aria-label="→"/.test(xr) && xr.includes('<mphantom>'), '\\xrightarrow: the over label, then the drawn arrow at the column\'s width, then the under label (each row balanced by a phantom of the other)')
+ok(renderMath('\\overrightarrow{AB}')!.startsWith('<math xmlns="http://www.w3.org/1998/Math/MathML"><mrow style="position:relative;padding-top:0.5em">') && !renderMath('\\vec{v}')!.includes('<svg'), '\\overrightarrow: the arrow drawn over the base, baseline kept; a small \\vec stays a glyph')
 ok(renderMath('a \\equiv b \\pmod{n}')!.includes('<mi>mod</mi>'), '\\pmod writes (mod n)')
 ok(renderMath('\\left\\{ x \\middle| x > 0 \\right\\}')!.includes('<mo lspace="0.05em" rspace="0.05em" stretchy="true">|</mo>'), '\\middle| is one stretchy bar')
 ok(renderMath('f \\colon A \\to B')!.includes('<mo lspace="0em" rspace="0.1667em">:</mo>'), '\\colon: no space before, a thin one after')
@@ -150,7 +163,7 @@ ok(renderMath('\\begin{cases} a & b \\\\ c & d \\end{cases}')!.includes('<mtd co
 ok(renderMath('\\begin{aligned} a &= b \\end{aligned}')!.includes('<mtable displaystyle="true">') && renderMath('\\begin{aligned} a &= b \\end{aligned}')!.includes('<mtd columnalign="right" style="text-align:-webkit-right;padding-left:0em;padding-right:0em"><mi>a</mi></mtd><mtd columnalign="left" style="text-align:-webkit-left;padding-left:0em;padding-right:0em">'), 'aligned: display style, no column padding, right|left so the relations line up')
 ok(!/text-align|columnalign/.test(renderMath('\\begin{pmatrix} 1 & 2 \\end{pmatrix}')!) && renderMath('\\begin{pmatrix*}[r] 1 & -2 \\end{pmatrix*}')!.includes('text-align:-webkit-right'), 'a matrix stays centred; a starred matrix takes its [r]')
 ok(renderMath('\\vec{v}')!.includes('<mo stretchy="false">→</mo>') && renderMath('\\hat{x}')!.includes('style="math-depth:0"'), "\\vec shrinks to script size, \\hat stays full — Temml's look")
-ok(renderMath('\\overrightarrow{AB}')!.includes('stretchy="true" style="math-depth:0"'), 'a stretchy arrow accent stays full size')
+ok(renderMath('\\overleftarrow{AB}')!.includes('stretchy="true" style="math-depth:0"'), 'a stretchy arrow accent stays full size')
 ok(renderMath('\\overline{AB}')!.includes('<mover><mrow><mi>A</mi><mi>B</mi></mrow><mo stretchy="true" style="math-depth:0">‾</mo></mover>'), "\\overline draws a stretchy rule (Temml's menclose is blank on Chrome — kept ours)")
 ok(renderMath('\\binom{n}{k}')!.includes('stretchy="true">(</mo><mfrac linethickness="0">'), 'binom parens stretch')
 ok(renderMath('\\int_0^1', { display: true })!.includes('<msubsup>'), 'integrals keep side limits in display mode')
@@ -174,8 +187,15 @@ ok(!/"temml"/.test(readFileSync(join(root, 'slides/package.json'), 'utf8')), 'te
 
 console.log('\ntrust: every attribute is ours\n')
 const attrsOf = (html: string) => [...html.matchAll(/\s([a-zA-Z-]+)="/g)].map((m) => m[1])
-const ALLOWED = new Set(['xmlns', 'display', 'mathvariant', 'stretchy', 'fence', 'form', 'lspace', 'rspace', 'style', 'linethickness', 'displaystyle', 'accent', 'width', 'minsize', 'maxsize', 'separator', 'symmetric', 'largeop', 'movablelimits', 'columnalign', 'rowspacing', 'columnspacing', 'scriptlevel', 'height', 'depth', 'voffset', 'mathcolor', 'mathbackground', 'columnlines', 'rowlines', 'frame', 'notation', 'accentunder'])
-for (const src of ['\\href{javascript:alert(1)}{x}', 'x" onload="alert(1)', '<img src=x onerror=alert(1)>', '\\text{<script>1</script>}', '\\textcolor{red;background:url(x)}{y}', '\\textcolor{url(javascript:1)}{y}', '\\mathrm{a} onclick=1']) {
+const ALLOWED = new Set(['xmlns', 'display', 'mathvariant', 'stretchy', 'fence', 'form', 'lspace', 'rspace', 'style', 'linethickness', 'displaystyle', 'accent', 'width', 'minsize', 'maxsize', 'separator', 'symmetric', 'largeop', 'movablelimits', 'columnalign', 'rowspacing', 'columnspacing', 'scriptlevel', 'height', 'depth', 'voffset', 'mathcolor', 'mathbackground', 'columnlines', 'rowlines', 'frame', 'notation', 'accentunder',
+  // the drawn arrows' svg (#551): every value a constant of the printer
+  'role', 'aria-label', 'viewBox', 'x', 'y', 'x1', 'x2', 'y1', 'y2', 'd', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'overflow'])
+for (const src of ['\\href{javascript:alert(1)}{x}', 'x" onload="alert(1)', '<img src=x onerror=alert(1)>', '\\text{<script>1</script>}', '\\textcolor{red;background:url(x)}{y}', '\\textcolor{url(javascript:1)}{y}', '\\mathrm{a} onclick=1',
+  // #551: the drawn arrows carry svg; its attributes are all constants, and
+  // author text only ever reaches it as an escaped label
+  // (the injected attribute is `zz` so the word check above cannot mistake
+  // correctly escaped label TEXT for an attribute; attrsOf is the real test)
+  'A \\xrightarrow{\\text{x" zz="1}} B', 'A \\xrightleftharpoons[\\text{<svg zz=1>}]{} B', '\\overrightarrow{\\text{"><b zz=1>}}']) {
   const out = renderMath(src) ?? renderMath(src, { syntax: 'typst' }) ?? ''
   ok(!/<script|onload|onerror|onclick|javascript:|url\(/i.test(out) && attrsOf(out).every((a) => ALLOWED.has(a)), `no author-controlled attribute or tag survives: ${JSON.stringify(src)} -> ${out ? out.slice(0, 60) + '…' : 'refused'}`)
 }
@@ -186,6 +206,9 @@ ok(renderMath('\\textcolor{#ff0000}{x}')!.includes('style="color:#ff0000"') && r
 // rgb/hsl. A loosened isCssColor that lets a `;` through goes red here.
 const STYLE_FORMS = [
   /^margin-left:-?[\d.]+em;$/, /^math-depth:0$/, /^transform:translateX\(-(100|50)%\)$/,
+  // the drawn arrows (#551): constant boxes, no author text reaches them
+  /^padding:0$/, /^padding:0;position:relative;min-width:3\.5em;height:0\.6em$/, /^position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible$/,
+  /^position:relative;padding-(top|bottom):0\.5em$/, /^position:absolute;left:0;(top|bottom):0;width:100%;height:0\.45em$/,
   /^(text-align:-webkit-(left|right);)?padding-left:(0|1)em;padding-right:0em$/, /^(text-align:-webkit-(left|right);)?padding-left:(0em|5\.9776pt);padding-right:(0em|5\.9776pt)$/,
 ]
 const COLOR_SHAPE = /^(#[0-9a-f]{3,8}|[a-z]{3,20}|(rgba?|hsla?)\([\d.%,\s/]+\))$/i

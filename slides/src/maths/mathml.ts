@@ -22,6 +22,43 @@ export function toMathML(n: MNode, display: boolean): string {
   return `<math xmlns="http://www.w3.org/1998/Math/MathML"${display ? ' display="block"' : ''}>${print(n, undefined)}</math>`
 }
 
+// ARROWS CHROME WILL NOT STRETCH, DRAWN (#551). Measured in Chrome 153 on
+// macOS with every maths font: ← ⇐ ⇒ ⇔ ↤ ↩ ↪ and the harpoons stretch to a
+// label as MathML asks; → ↦ ↔ ↠ ↞ = ⇌ ⇋ ⇄ never do, whatever the form, font
+// or script element, so \xrightarrow{a long label} drew a short arrow under
+// a long label. Mirroring a stretched ← lost its head; a harpoon pair
+// misplaced its barb. So these are an inline SVG: lines at 0…100% of a box
+// the layout sizes (a table column for \x…arrow, the base for an accent),
+// heads in a nested svg pinned at 0% or 100% so they never distort, all in
+// em so they follow the text size. role="img" + aria-label keep the arrow
+// the author wrote for assistive tech. The ones Chrome stretches stay glyphs.
+type Head = [side: 'l' | 'r', dy: number, kind: 'f' | 'u' | 'd', dx: number]
+const DRAWN: Record<string, { lines: number[]; heads: Head[]; bar?: boolean }> = {
+  '→': { lines: [0], heads: [['r', 0, 'f', 0]] },
+  '↦': { lines: [0], heads: [['r', 0, 'f', 0]], bar: true },
+  '↔': { lines: [0], heads: [['r', 0, 'f', 0], ['l', 0, 'f', 0]] },
+  '↠': { lines: [0], heads: [['r', 0, 'f', 0], ['r', 0, 'f', -0.25]] },
+  '↞': { lines: [0], heads: [['l', 0, 'f', 0], ['l', 0, 'f', 0.25]] },
+  '=': { lines: [-0.1, 0.1], heads: [] },
+  '⇌': { lines: [-0.12, 0.12], heads: [['r', -0.12, 'u', 0], ['l', 0.12, 'd', 0]] },
+  '⇋': { lines: [-0.12, 0.12], heads: [['l', -0.12, 'u', 0], ['r', 0.12, 'd', 0]] },
+  '⇄': { lines: [-0.14, 0.14], heads: [['r', -0.14, 'f', 0], ['l', 0.14, 'f', 0]] },
+}
+/** the arrow as svg filling its (positioned) box; `s` = head size in em */
+function arrowSvg(a: string, s: number, stroke: number): string {
+  const spec = DRAWN[a]
+  const sw = ` stroke="currentColor" stroke-width="${stroke}em" fill="none" stroke-linecap="round"`
+  const hw = ` stroke="currentColor" stroke-width="${+(stroke / s * 10).toFixed(2)}" fill="none" stroke-linecap="round"`
+  // a head: tip at (0,5) of a 10-unit box, barbs back toward the line
+  const path = (side: string, kind: string) => { const b = side === 'r' ? -9 : 9, c = side === 'r' ? -2 : 2
+    return `${kind !== 'd' ? `M${b},0.5 Q${c},4.6 0,5` : 'M0,5'}${kind !== 'u' ? ` Q${c},5.4 ${b},9.5` : ''}` }
+  const at = (x: string, dy: number, dx: number, d: string) => `<svg x="${x}" y="50%" overflow="visible"><svg x="${dx}em" y="${+(dy - s / 2).toFixed(3)}em" width="${s}em" height="${s}em" viewBox="0 0 10 10" overflow="visible"><path d="${d}"${hw}></path></svg></svg>`
+  return `<svg role="img" aria-label="${esc(a)}" style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible">`
+    + spec.lines.map((dy) => `<svg y="50%" overflow="visible"><line x1="0" x2="100%" y1="${dy}em" y2="${dy}em"${sw}></line></svg>`).join('')
+    + spec.heads.map(([side, dy, kind, dx]) => at(side === 'r' ? '100%' : '0', dy, dx, path(side, kind))).join('')
+    + (spec.bar ? at('0', 0, 0, 'M0,1 L0,9') : '') + '</svg>'
+}
+
 /** a function name, or a scripted function name (\sin^2, \lim_{…}) */
 const isFn = (n: MNode): boolean => (n.k === 'sym' && n.cls === 'i' && !!n.fn) || (n.k === 'scr' && isFn(n.b))
 
@@ -129,11 +166,20 @@ function print(n: MNode, font: Font | undefined): string {
       // Temml's spelling, so a deck keeps its look: the arrow stretches under
       // a label padded 0.4286em a side, over a 3.5em minimum, a thick space
       // either side of the whole
-      // KNOWN LIMIT (#551, measured in Chrome 153, macOS, every maths font):
-      // Chrome stretches ← ⇐ ⇒ ⇔ ↤ ↩ ↪ and the harpoons to the label, but
-      // not → ↦ ↔ ⇌ ↠ = — whatever the form, font or script element. A
-      // mirrored stretched ← loses its head, and a harpoon pair misaligns,
-      // so those arrows stay glyph-sized under a long label (as in Temml).
+      if (DRAWN[n.a]) {
+        // one column, three rows: over label | the drawn arrow | under label.
+        // The column is as wide as the wider label (3.5em at least) and the
+        // svg fills its cell. Each label row carries an invisible copy of the
+        // other label, so the two rows are the same height and the arrow row
+        // sits on the math axis — where the table is centred — like an mo.
+        // labels at script size, as an over/under script would be
+        const text = (x?: MNode) => (x ? `<mrow scriptlevel="1" displaystyle="false"><mspace width="0.4286em"></mspace>${print(x, font)}<mspace width="0.4286em"></mspace></mrow>` : '')
+        const ghost = (x?: MNode) => (x ? `<mpadded width="0px"><mphantom>${text(x)}</mphantom></mpadded>` : '')
+        const td = '<mtd style="padding:0">'
+        return `<mrow><mspace width="0.2778em"></mspace><mtable><mtr>${td}${text(n.over)}${ghost(n.under)}</mtd></mtr>`
+          + `<mtr><mtd style="padding:0;position:relative;min-width:3.5em;height:0.6em"><mtext>${arrowSvg(n.a, 0.5, 0.055)}</mtext></mtd></mtr>`
+          + `<mtr>${td}${text(n.under)}${ghost(n.over)}</mtd></mtr></mtable><mspace width="0.2778em"></mspace></mrow>`
+      }
       const lab = (x: MNode, under: boolean) => `<${under ? 'munder' : 'mover'}><mrow><mspace width="0.4286em"></mspace>${print(x, font)}<mspace width="0.4286em"></mspace></mrow><mspace width="3.5em"></mspace></${under ? 'munder' : 'mover'}>`
       const arrow = `<mo stretchy="true" lspace="0em" rspace="0em">${esc(n.a)}</mo>`
       const body = n.over && n.under ? `<munderover>${arrow}${lab(n.under, true)}${lab(n.over, false)}</munderover>`
@@ -147,6 +193,13 @@ function print(n: MNode, font: Font | undefined): string {
       // same spelling Temml uses, so a deck looks the way it does today
       // Temml keeps hats/bars/tildes at full size (math-depth:0) but lets the
       // arrow accents shrink to script size — matched, so \vec looks as today
+      // a stretchy accent Chrome will not stretch (\overrightarrow): the base,
+      // padded above (or below), with the drawn arrow absolutely over that
+      // padding at the base's full width; the baseline never moves
+      if (n.stretchy && DRAWN[n.a]) {
+        const edge = n.under ? 'bottom' : 'top'
+        return `<mrow style="position:relative;padding-${edge}:0.5em">${print(n.b, font)}<mtext style="position:absolute;left:0;${edge}:0;width:100%;height:0.45em">${arrowSvg(n.a, 0.36, 0.045)}</mtext></mrow>`
+      }
       const full = n.stretchy || !/[→←]/.test(n.a)
       const acc = `<mo stretchy="${n.stretchy ? 'true' : 'false'}"${full ? ' style="math-depth:0"' : ''}>${esc(n.a)}</mo>`
       // no accent="true": Chrome then draws the glyph as a plain over-script
