@@ -629,4 +629,7 @@ export const zh_Hant: Catalog = {
   "Date": "日期",
   "Person": "人員",
   "Labels": "標籤",
+  "Footnotes": "註腳",
+  "Back to the text": "回到內文",
+  "Write the note": "撰寫註腳",
 }

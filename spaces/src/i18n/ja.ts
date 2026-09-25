@@ -629,4 +629,7 @@ export const ja: Catalog = {
   "Date": "日付",
   "Person": "担当者",
   "Labels": "ラベル",
+  "Footnotes": "脚注",
+  "Back to the text": "本文に戻る",
+  "Write the note": "脚注を入力",
 }

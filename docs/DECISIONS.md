@@ -14,6 +14,53 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-09-10 — bento/spaces footnotes: the reference is a TEXT TOKEN, and the number is derived
+
+**Decision.** A footnote in `bento/spaces` is `doc.footnotes` (a document-level
+map, label → inline html — bento/type's shape) plus the literal text `[^label]`
+inside a block's `html`. The number a reader sees is derived at render time from
+order of appearance, per page, and is never stored.
+
+**Why a text token rather than an anchor.** bento/type anchors a reference by
+character offset into a block's `text` runs, and can: it owns the run list and
+rewrites every offset in one place. A spaces block carries `html`, and an offset
+into html is a position in one particular serialization of a position — three
+things move it without changing a word of the prose: `canonicalize()` reorders
+mark nesting at every typing-run close, `sanitizeInline()` unwraps and strips on
+every read of untrusted html, and the CRDT merges `html` as one register, which
+an offset in a second register cannot merge with.
+
+The other candidate was an inline marker element (`<sup>`, or an `<a href="#fn/…">`
+with a new scheme in `HREF_OK`). Rejected because a new allowlist entry is a
+ONE-WAY DATA HAZARD, which sanitize.ts's own comment on `HREF_OK` already spells
+out: a reference written by this build would be STRIPPED, silently, by every
+build shipped before it, on the first edit that touched the block. A text token
+is round-tripped byte-for-byte by builds that already exist — verified by
+loading a footnoted document into a shell built from the previous release.
+
+**Why the number is derived.** Footnotes renumber on insertion, so a stored
+number is wrong the moment a sentence moves and nothing says so. Same rule as
+calc.ts's magic notes and slides' dynamic fields: store the token, derive the
+output. The label is therefore an identifier, not a number, exactly as in pandoc
+and Obsidian — which is also why the markdown round trip is the identity
+function on the reference half.
+
+**Consequences a future session should not treat as bugs.** (1) While a block is
+being EDITED the author sees `[^1]`, not a superscript — injecting marker markup
+into a contenteditable host puts it one keystroke from being committed into
+`html` (`host.innerHTML` is written to the model on every `input`), which loses
+the reference and stores a literal "1". The derived form is drawn in reading
+view, print and the file-manager still. (2) A dangling reference is still
+numbered and gets an empty row, because that is the authoring gesture and
+because what is missing is the note, not the reference. (3) An orphaned note is
+reported, never deleted. (4) `[^…]` inside a `code` block is not scanned.
+
+**Pointers.** `spaces/src/footnotes.ts` (the whole argument, at length),
+`spaces/CHANGELOG.md`, `docs/spaces-agents.md` §Footnotes, rigs in
+`scripts/test-spaces-model.ts` and `scripts/test-spaces-agent.ts`.
+
+---
+
 ## 2026-08-19 — Cross-app embedding: static render + source, never a second renderer
 
 **Decision.** One block/element shape, `bento/embed`, shared by every app in both

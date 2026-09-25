@@ -629,4 +629,7 @@ export const zh_Hans: Catalog = {
   "Date": "日期",
   "Person": "人员",
   "Labels": "标签",
+  "Footnotes": "脚注",
+  "Back to the text": "返回正文",
+  "Write the note": "撰写脚注",
 }
