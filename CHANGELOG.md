@@ -11,6 +11,13 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Orange text can be read in dark mode again.** The armed comment tool, the
+  tick beside your language, your own name in a comment thread and the labels
+  on slide and point comments were drawn in a dark brown meant for text on the
+  orange, on dark panels where it all but vanished. They now use a lighter
+  gold, and the comment labels on a slide carry a soft halo so they read on
+  any slide, light or dark, in either theme.
+
 ## [1.2.4] — 2026-09-25
 
 - **Formulas that stayed as raw text now render.** 1.2.0 replaced the maths
