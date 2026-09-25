@@ -1,0 +1,164 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+
+   THE SHARED CHROME TOKENS. Tier 4 of the UI-primitive work — the design
+   vocabulary the kernel primitives' fallback chains land on, defined once so
+   the four apps stop drifting apart. menu.css said this out loud: "The four
+   apps disagree about tokens: dash has --line-strong … and a --radius of 7px
+   against their 10px. Resolving that is a maintainer's ruling and it is tier 4
+   of this project, so this file does not pre-empt it." This file is that
+   ruling, settled in working/design/chrome-unification.md §1 (values by
+   measurement) and §4 (the D1–D8 rulings the maintainer confirmed 2026-09-25).
+
+   HOW IT SHIPS. Like every other kernel .css: an app imports it and Vite folds
+   it into the one stylesheet postbuild-compress.mjs deflates into
+   `#bento-rt-css`. Nothing in the build changes for that.
+
+   ADOPTION IS SEPARATE FROM THIS PR. No app imports this sheet yet; migrating
+   an app (import this, delete its own copies of these tokens) is its own change,
+   spaces first, slides after. scripts/test-ui-tokens.ts guards the migration:
+   once an app imports this file it may not also re-declare a frozen token here.
+
+   ————————————— THE THEMING MECHANISM, AND WHY IT IS THIS —————————————
+
+   The four apps flip dark by three different mechanisms (menu.css enumerates
+   them): slides and type key off `:root[data-theme="dark"]`; spaces uses that
+   AND a `prefers-color-scheme: dark` media query; dash follows the OS through
+   `light-dark()` + `color-scheme`. A SHARED sheet has to carry the dark values
+   in a form that lands correctly under ALL of them, so it uses two dark blocks
+   and NOT `light-dark()`:
+
+     1. `:root[data-theme="dark"]`             — the explicit toggle (all apps
+                                                  that have one).
+     2. `@media (prefers-color-scheme: dark)`  — the OS, for the apps that
+        guarded by `:not([data-theme="light"])`  follow it (dash; spaces when
+                                                  untoggled).
+
+   `light-dark()` is deliberately AVOIDED: slides sets `color-scheme: only
+   light`, under which `light-dark()` would freeze the light value forever and
+   the media query above never fires — which is exactly right for slides (it
+   goes dark only when you toggle `data-theme`, handled by block 1). dash sets
+   no `data-theme`, so block 2 gives it OS dark. spaces gets whichever applies.
+   Every app reaches its dark values; none is forced into a mechanism it doesn't
+   use. (The theming guard in scripts/lib/ui-theme-guard.ts recognises a token
+   as "themed" when it is re-declared in either block, so tokens defined here
+   read as themed for every primitive chain that lands on them.)
+
+   Colours that DO NOT flip carry one value and appear in neither dark block:
+   --accent (the brand orange is the brand orange in any theme), --accent-on
+   (ink sitting ON that fill — the fill didn't change, so its ink mustn't), and
+   --brand (the wordmark coral). Non-colour tokens (radius, size, z-index) are
+   the same in both themes by construction. Shadows flip through ONE channel,
+   --shade, so the elevation tokens below need no dark copy.
+
+   @app-settable: --bg --drawer-bp
+   Two tokens are PARAMETERS, not frozen: an app is expected to set them and the
+   drift guard allows it. --bg is the window ground and genuinely differs by app
+   (slides paints its ground with --chrome; a reading app wants true white / near
+   black). --drawer-bp is D6 — "the drawer breakpoint carried as one kernel
+   parameter each app sets" (a canvas and a reading column collapse to one panel
+   at different widths). Everything else here is frozen: redefining it is the
+   drift this file exists to end. */
+
+:root {
+  /* ————— Colour roles (§1.1). Light values; dark in the two blocks below. ————— */
+  --ink: #1e2a3a;        /* primary text / icons on the chrome's own surfaces */
+  --ink-2: #31445c;      /* secondary text — subheads, active-but-not-primary */
+  --muted: #5b6472;      /* de-emphasised text — captions, hints, placeholders */
+  --surface: #ffffff;    /* cards, menus, dialogs — the raised paper */
+  --field: #ffffff;      /* the inside of an input / textarea / select */
+  --chrome: #f5f7fa;     /* toolbars, panels, chips — the frame around content */
+  --chrome-2: #eceff4;   /* a second chrome tint — insets, hovered rows */
+  --line: #e3e8ef;       /* a subtle divider — the hairline between rows */
+  --edge: #b9c3d2;       /* a border that must be SEEN — an input's outline */
+  --accent: #f7a600;     /* the brand orange. DOES NOT FLIP. */
+  --accent-ink: #7a5200; /* accent-COLOURED text on the chrome's surfaces (flips) */
+  --accent-on: #3a2a00;  /* text sitting ON the solid --accent fill. DOES NOT FLIP. */
+  --blue: #5b8def;       /* the secondary accent — links, selection, info */
+  --brand: #ff9e8a;      /* the wordmark coral. DOES NOT FLIP. */
+  --shade: 20 30 45;     /* shadow COLOUR CHANNEL — used as rgb(var(--shade)/a) */
+
+  /* ————— The ground (PARAMETER — see @app-settable). ————— */
+  --bg: #ffffff;         /* the window behind everything. slides sets var(--chrome). */
+
+  /* ————— Radius scale (§4.2). No theme. ————— */
+  --radius-xs: 5px;      /* kbd caps, chips */
+  --radius-sm: 6px;      /* inputs, menu rows (10 − 4 padding) */
+  --radius-btn: 8px;     /* buttons */
+  --radius: 10px;        /* menus, popovers, floating bars, panel cards */
+  --radius-lg: 14px;     /* dialogs (D4 gives them a real title, and a real corner) */
+
+  /* ————— Elevation (§4.2). Flips through --shade alone. ————— */
+  --shadow-pop: 0 12px 32px rgb(var(--shade) / .16);  /* menus, popovers, format bar */
+  --shadow-dlg: 0 18px 50px rgb(var(--shade) / .28);  /* dialogs */
+  --scrim: rgb(var(--shade) / .38);                   /* the dim behind a dialog */
+
+  /* ————— Sizing (§4.2 + D5). No theme. ————— */
+  --ctl-h: 30px;         /* one height for buttons, inputs, selects */
+  --tap: 44px;           /* D5: the coarse-pointer touch target (HIG, slides mobile) */
+  --fs-cap: 11px;        /* uppercase section captions (both apps already agreed) */
+  --fs-ui: 13px;         /* the default UI text size */
+  --fs-hint: 12px;       /* hints, secondary lines */
+
+  /* ————— Dialog title (D4). A real title, not a caption. ————— */
+  --fs-title: 17px;      /* D4: the dialog heading — 17px … */
+  --fw-title: 650;       /*    … at 650, between the two apps' 700 and 11px caption */
+
+  /* ————— Menu shortcuts (D8). ————— */
+  --kbd-font: inherit;   /* D8: SANS, not mono — the kbd glyphs take the UI font */
+  --kbd-align: right;    /* D8: the shortcut column is right-aligned in the row.
+                            (The glyph ORDER ⌃⌥⇧⌘ is a content rule, not a token —
+                            authored into each menu item's shortcut string.) */
+
+  /* ————— Stacking (§4.2). Chrome layers only; canvas-internal z stays app. ————— */
+  --z-bar: 50;           /* toolbars, floating bars */
+  --z-pop: 60;           /* menus, popovers, tooltips */
+  --z-dlg: 1000;         /* modal dialogs + their scrim */
+  --z-toast: 1100;       /* transient pills — above a dialog on purpose */
+
+  /* ————— Drawer breakpoint (D6, PARAMETER — see @app-settable). ————— */
+  --drawer-bp: 700px;    /* below this the side panel becomes a drawer. Each app
+                            sets its own (slides 700, a reading column wider);
+                            a media query can't read a var, so an app consumes
+                            this through JS (getComputedStyle) or a container
+                            query — the value lives in ONE place regardless. */
+}
+
+/* ————————————————— DARK — block 1: the explicit toggle ————————————————— */
+:root[data-theme="dark"] {
+  --ink: #e7eaf0;
+  --ink-2: #b3bcca;
+  --muted: #8b95a4;
+  --surface: #1b2027;
+  --field: #10141a;
+  --chrome: #1e232b;
+  --chrome-2: #272d36;
+  --line: #2e353f;
+  --edge: #454e5c;
+  --accent-ink: #f0b74e; /* was #3a2a00 in slides = 1.09:1 — the fix from #557 */
+  --blue: #7aa5f5;
+  --shade: 0 0 0;        /* on a dark surface a shadow is black, not slate */
+  --bg: #14181e;
+}
+
+/* ————————————————— DARK — block 2: the OS, for apps that follow it ————————————————
+   Guarded by :not([data-theme="light"]) so an app's explicit LIGHT toggle wins
+   over the OS. slides' `color-scheme: only light` makes this never match there,
+   which is intended — slides goes dark only via block 1. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #e7eaf0;
+    --ink-2: #b3bcca;
+    --muted: #8b95a4;
+    --surface: #1b2027;
+    --field: #10141a;
+    --chrome: #1e232b;
+    --chrome-2: #272d36;
+    --line: #2e353f;
+    --edge: #454e5c;
+    --accent-ink: #f0b74e;
+    --blue: #7aa5f5;
+    --shade: 0 0 0;
+    --bg: #14181e;
+  }
+}
