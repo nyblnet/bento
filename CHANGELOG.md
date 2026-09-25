@@ -89,10 +89,9 @@ pre-1.0.
   too, largest first, once the pictures kept in the document pass a
   quarter-megabyte together.
 - **A deck opened from the web or the Bento apps remembers where it is
-  saved.** Chrome
-  will not let any app hold a standing grant to the Downloads or Documents
-  folders, so a deck kept there used to show the full save dialog on every reopen. Bento now remembers
-  the file itself: the first ⌘S after you reopen asks once — Chrome offers
+  saved.** Chrome will not let any app hold a standing grant to the Downloads
+  or Documents folders, so a deck kept there used to show the full save dialog
+  on every reopen. Bento now remembers the file itself: the first ⌘S after you reopen asks once — Chrome offers
   "Allow on every visit" — and after that it saves silently in place, like a
   deck that never left. Move or delete the file and it simply asks again. This
   is for a deck opened from a real web address or through the iOS, Android or
