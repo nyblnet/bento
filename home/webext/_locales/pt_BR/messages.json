@@ -199,7 +199,7 @@
     "message": "Escolha a pasta onde seus documentos ficam"
   },
   "setupStep1Note": {
-    "message": "Uma pasta ampla costuma bastar — cobre tudo que está dentro."
+    "message": "Uma pasta ampla costuma bastar — ela cobre tudo dentro dela. O Chrome não entrega a pasta pessoal em si nem a Library: escolha Documentos, Mesa ou a pasta onde seus documentos estão."
   },
   "setupStep2": {
     "message": "Ligue o acesso a arquivos locais",
@@ -517,5 +517,134 @@
   },
   "surveyOnlySeen": {
     "message": "Só é possível encontrar assim os documentos abertos neste navegador."
+  },
+  "placingFolder": {
+    "message": "Procurando “$1” no disco…"
+  },
+  "placeNoDisk": {
+    "message": "O Chrome não deixou a extensão ler “$1” do disco para encontrá-la (listagens file:// recusadas)."
+  },
+  "placeTried": {
+    "message": "Procurou “$1” em $2 lugares do disco — não está lá."
+  },
+  "badgeNotAdded": {
+    "message": "não adicionada"
+  },
+  "badgeNotAddedTip": {
+    "message": "Encontrado no disco. Abre, mas ao salvar vai perguntar onde — adicione a pasta para salvar no lugar."
+  },
+  "folderFoundTip": {
+    "message": "Encontrada no disco, não adicionada: seus documentos abrem, mas salvar pergunta onde."
+  },
+  "menuAddFolder": {
+    "message": "Adicionar a pasta para salvar no lugar…"
+  },
+  "pickThisFolder": {
+    "message": "No seletor, escolha a pasta “$1” — o Chrome precisa ver você escolher."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” não é a pasta deste documento (“$2”). Tente de novo e escolha essa."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” já foi adicionada."
+  },
+  "bentoFolderBtn": {
+    "message": "Criar uma pasta Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "Na janela, crie uma nova pasta chamada “Bento” dentro de Documentos e escolha-a."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” é sua pasta Bento — novos documentos vão para lá e salvam no lugar."
+  },
+  "bentoFolderTip": {
+    "message": "Uma pasta dentro de Documentos que salva no lugar e recebe os novos documentos. O Chrome não concede a própria Documentos."
+  },
+  "defaultFolder": {
+    "message": "novos documentos vão aqui"
+  },
+  "fgTitle": {
+    "message": "Salvar “$1” no lugar de agora em diante?"
+  },
+  "fgTitleLapsed": {
+    "message": "Reconectar “$1”?"
+  },
+  "fgLead": {
+    "message": "O bento/home guarda a permissão só para este arquivo, então cada salvamento escreve direto nele. Escolha o mesmo arquivo na próxima janela."
+  },
+  "fgLeadLapsed": {
+    "message": "O bento/home já tem este arquivo; o navegador quer que você o confirme de novo."
+  },
+  "fgChoose": {
+    "message": "Escolher o arquivo…"
+  },
+  "fgReconnect": {
+    "message": "Reconectar"
+  },
+  "fgOnce": {
+    "message": "Só desta vez"
+  },
+  "fgNotSame": {
+    "message": "Esse não é o arquivo que pediu (“$1”). Escolha esse, ou feche esta janela."
+  },
+  "fgDenied": {
+    "message": "A permissão não foi concedida."
+  },
+  "droppedGranted": {
+    "message": "Adicionados: $1 pastas, $2 arquivos."
+  },
+  "setFilesTitle": {
+    "message": "Arquivos"
+  },
+  "setFilesSub": {
+    "message": "Documentos fora de qualquer pasta adicionada que salvam no lugar por conta própria — escolhidos uma vez, ou arrastados para a biblioteca."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: o navegador não entregou nenhum handle de arquivo para este arraste."
+  },
+  "dropNotBento": {
+    "message": "“$1” não é um documento Bento (.bento.html) — não adicionado."
+  },
+  "setDownloadsTitle": {
+    "message": "Downloads"
+  },
+  "setDownloadsSub": {
+    "message": "Documentos na pasta Downloads podem salvar no lugar pelos downloads do Chrome — a menos que o Chrome esteja configurado para perguntar onde salvar cada arquivo, o que transforma cada salvamento em uma janela."
+  },
+  "setDownloadsOff": {
+    "message": "O Chrome perguntou onde salvar — salvar em Downloads está desligado até essa configuração mudar"
+  },
+  "setDownloadsRetry": {
+    "message": "Tentar de novo"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 arquivos no disco têm exatamente estes bytes — adicionado, mas não pode salvar no lugar até que difiram."
+  },
+  "addFiles": {
+    "message": "Adicionar arquivos…"
+  },
+  "tdGrant": {
+    "message": "Salvar aqui sem perguntar…"
+  },
+  "tdViaFolder": {
+    "message": "salva no lugar — a pasta está adicionada"
+  },
+  "tdViaFile": {
+    "message": "salva no lugar — este arquivo está adicionado"
+  },
+  "tdViaDownloads": {
+    "message": "salva no lugar — está em Downloads"
+  },
+  "tdNotYet": {
+    "message": "pergunta onde salvar, toda vez"
+  },
+  "badgeNotSavingTip": {
+    "message": "Este documento ainda não pode salvar no lugar — abra o painel do bento/home para resolver."
+  },
+  "noticeOsBlocked": {
+    "message": "O macOS está impedindo o navegador de acessar $1, então os documentos de lá não aparecem até você permitir: Ajustes do Sistema → Privacidade e Segurança → Arquivos e Pastas → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "Ajustes do Sistema → Privacidade e Segurança → Arquivos e Pastas"
   }
 }

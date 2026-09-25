@@ -30,11 +30,25 @@
 // The ONLY import here. status.js owns what the UI is told, and the badge is
 // UI — duplicating the "is anything lapsed?" rule would let the icon and the
 // popup disagree about the same folders.
-import { setLapsedBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
+import { setLapsedBadge, setTabBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
 import { checkForUpdate } from './update.js'
-import { learnPrefix } from './db.js'
+import { learnPrefix, noteOpened } from './db.js'
 import { t } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
+import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads, downloadsUnusable, setDownloadsUnusable, defaultDeps as defaultFileGrantDeps } from './filegrant.js'
+import { recentOpened } from './db.js'
+
+/** Same-named files the extension knows at OTHER paths: opened documents and the library's last scan. */
+async function knownTwins(path) {
+  const name = path.split('/').pop()
+  const out = new Set()
+  try { for (const p of Object.keys(await recentOpened())) if (p !== path && p.split('/').pop() === name) out.add(p) } catch { /* none */ }
+  try {
+    const scanned = (await chrome.storage.local.get('lastScan'))?.lastScan
+    if (Array.isArray(scanned)) for (const p of scanned) if (p !== path && p.split('/').pop() === name) out.add(p)
+  } catch { /* none */ }
+  return [...out]
+}
 
 // Re-exported: these moved to route.js so the PAGES can place a path too,
 // but they are still part of this module's tested surface.
@@ -249,23 +263,156 @@ export async function backup(sender, text, name, deps) {
 }
 
 /** Can this sender's file be written in place? Resolves; writes nothing. */
-export async function claim(sender, deps) {
+/**
+ * Where a save for this sender goes, in order: a FOLDER grant (resolve), a
+ * FILE grant for that one document, the DOWNLOADS folder through the
+ * downloads API. Each is checked from scratch on every message; nothing is
+ * carried. `via` says which, for the page's console and the badge.
+ */
+export async function resolveAny(sender, deps = {}) {
   const r = await resolve(sender, deps)
-  return r.ok ? { ok: true, name: r.name } : { ok: false, reason: r.reason }
+  if (r.ok) return { ...r, via: 'folder' }
+  const path = pathFromSender(sender)
+  if (!path) return r
+  // each further door fails soft: no store, no downloads API, no answer — the
+  // save falls to the picker, never to an exception
+  const fgDeps = deps.filegrant ?? { ...defaultFileGrantDeps(), otherCopies: (p) => knownTwins(p) }
+  const fg = await (deps.resolveFileGrant ?? resolveFileGrant)(path, fgDeps).catch(() => ({ ok: false, reason: 'none' }))
+  if (fg.ok) return { ok: true, name: path.split('/').pop(), handle: fg.handle, key: fg.key, via: 'file' }
+  // the Downloads door, unless this Chrome prompts for every download (then
+  // it was switched off the first time it prompted; Settings says so)
+  const unusable = await (deps.downloadsUnusable ?? downloadsUnusable)(deps.filegrant).catch(() => false)
+  const dir = unusable ? null : await (deps.downloadsDir ?? downloadsDir)(deps.filegrant).catch(() => null)
+  const rel = downloadsRelative(path, dir)
+  if (rel) return { ok: true, name: path.split('/').pop(), rel, via: 'downloads' }
+  return { ok: false, reason: fg.reason === 'lapsed' ? 'file grant needs renewing' : r.reason, path }
+}
+
+export async function claim(sender, deps) {
+  const r = await resolveAny(sender, deps)
+  return r.ok ? { ok: true, name: r.name, via: r.via } : { ok: false, reason: r.reason }
 }
 
 /** Write the sender's own file. Re-resolves, so no state is carried. */
-export async function write(sender, text, deps) {
-  const r = await resolve(sender, deps)
+export async function write(sender, text, deps = {}) {
+  const r = await resolveAny(sender, deps)
   if (!r.ok) return { ok: false, reason: r.reason }
   try {
+    if (r.via === 'downloads') {
+      const bytes = await (deps.writeViaDownloads ?? writeViaDownloads)(r.rel, text, deps.filegrant)
+      return { ok: true, bytes, via: r.via }
+    }
     const w = await r.handle.createWritable()
     await w.write(text)
     await w.close()
-    return { ok: true, bytes: text.length }
+    return { ok: true, bytes: text.length, via: r.via }
   } catch (e) {
+    // a file grant whose file is gone is no grant: forget it
+    if (r.via === 'file' && e?.name === 'NotFoundError') await (deps.dropFileGrant ?? dropFileGrant)(r.key, deps.filegrant).catch(() => {})
+    // Chrome prompted for the download: this door is shut for good in this
+    // Chrome, THIS save finishes through the browser's own picker (the page
+    // is told to), and the next one is offered a file grant instead.
+    if (r.via === 'downloads' && e?.name === 'DownloadsPrompted') {
+      await (deps.setDownloadsUnusable ?? setDownloadsUnusable)(true, deps.filegrant).catch(() => {})
+      return { ok: false, reason: 'Chrome asks where to save each download', retry: 'native' }
+    }
     return { ok: false, reason: `${e.name}: ${e.message}` }
   }
+}
+
+// ---------------------------------------------------------------- the offer
+//
+// A ⌘S that nothing covers is the moment to ask, once: the page's `claim`
+// gets { ok:false, reason:'setup', token } while a small window
+// (src/filegrant.html) asks the person to pick the file; the page then waits
+// on `claim { token }` as long as the window is open. In memory only, like
+// the assistant's consent: an eviction loses one pending save (the page falls
+// to its picker), and the window's own storing survives regardless.
+const offers = new Map() // token → { path, resolve, promise }
+
+async function offerFileGrant(path, lapsed) {
+  const open = [...offers.values()].find((o) => o.path === path)
+  if (open) return open
+  const token = crypto.randomUUID()
+  let resolve
+  const promise = new Promise((r) => { resolve = r })
+  const entry = { path, resolve, promise, token }
+  offers.set(token, entry)
+  const url = new URL(chrome.runtime.getURL('src/filegrant.html'))
+  url.searchParams.set('path', path)
+  url.searchParams.set('token', token)
+  if (lapsed) url.searchParams.set('lapsed', '1')
+  chrome.windows.create({ url: url.href, type: 'popup', width: 480, height: 320, focused: true })
+    .catch(() => { offers.delete(token); resolve(false) })
+  return entry
+}
+
+/**
+ * How a document at this url would save — for the extension's OWN pages
+ * (the side panel showing the active tab's state). Only they may name a url:
+ * a content script's answer comes from its browser-stamped sender.
+ */
+async function saveStatus(sender, url) {
+  const ours = sender?.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''))
+  if (!ours || typeof url !== 'string') return { ok: false, reason: 'not an extension page' }
+  const r = await resolveAny({ url, frameId: 0 })
+  return r.ok ? { ok: true, via: r.via, name: r.name } : { ok: false, reason: r.reason, path: pathFromSender({ url, frameId: 0 }) }
+}
+
+/**
+ * A badge on the toolbar icon FOR THIS TAB when the document in it cannot
+ * save in place yet — the cue that the side panel has a button for that.
+ * Per tab, so it says nothing about other documents.
+ */
+async function badgeTab(tabId, sender) {
+  if (tabId == null) return
+  let covered = false
+  try { covered = (await resolveAny(sender)).ok } catch { covered = false }
+  await setTabBadge(tabId, !covered)
+}
+
+/** `claim` with the offer: what the page's first phase gets. */
+export async function claimOrOffer(sender, payload, deps) {
+  // second phase: the page waiting on a window it was told about
+  if (typeof payload?.token === 'string') {
+    const o = offers.get(payload.token)
+    if (!o) return { ok: false, reason: 'no such offer' }
+    const chosen = await o.promise
+    if (!chosen) return { ok: false, reason: 'declined' }
+    const r = await resolveAny(sender, deps)
+    return r.ok ? { ok: true, name: r.name, via: r.via } : { ok: false, reason: r.reason }
+  }
+  const r = await resolveAny(sender, deps)
+  if (r.ok) return { ok: true, name: r.name, via: r.via }
+  const path = pathFromSender(sender)
+  if (!path || !(await isFileAccessOn())) return { ok: false, reason: r.reason }
+  if (await declined(path)) return { ok: false, reason: r.reason }
+  const o = await offerFileGrant(path, r.reason === 'file grant needs renewing')
+  return { ok: false, reason: 'setup', token: o.token }
+}
+
+const isFileAccessOn = () => new Promise((res) => {
+  try { chrome.extension.isAllowedFileSchemeAccess((v) => res(!!v)) } catch { res(false) }
+})
+
+/** The offer window's port: its disconnect is the window closing without an answer. */
+function watchOfferWindow(port) {
+  const ours = port.sender?.id === chrome.runtime.id && typeof port.sender.url === 'string' && port.sender.url.startsWith(chrome.runtime.getURL('src/filegrant.html'))
+  if (!ours) { port.disconnect(); return }
+  const token = port.name.slice('filegrant:'.length)
+  port.onDisconnect.addListener(() => {
+    const o = offers.get(token)
+    if (o) { offers.delete(token); o.resolve(false) }
+  })
+}
+
+/** The window answered (it stored the grant itself, or recorded the decline). */
+function offerAnswered(sender, msg) {
+  const ours = sender?.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL('src/filegrant.html'))
+  if (!ours) return { ok: false, reason: 'not the offer window' }
+  const o = offers.get(msg.token)
+  if (o) { offers.delete(msg.token); o.resolve(msg.chosen === true) }
+  return { ok: true }
 }
 
 // `chrome` is absent when this module is loaded by the test rig, which imports
@@ -277,8 +424,14 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     // and writes nothing. Opening a document is the moment to learn its folder
     // — waiting for a save meant a fresh install listed documents it could not
     // open.
+    // Every opened document is remembered by path (db.js noteOpened) so the
+    // library lists it whether or not any grant or scan covers it.
+    if (msg?.op === 'hello') { const p = pathFromSender(sender); if (p) { void noteOpened(p).catch(() => {}); void badgeTab(sender.tab?.id, sender) } }
     const run = msg?.op === 'hello' ? claim(sender)
-      : msg?.op === 'claim' ? claim(sender)
+      : msg?.op === 'claim' ? claimOrOffer(sender, msg.payload)
+      : msg?.op === 'filegrant.answered' ? Promise.resolve(offerAnswered(sender, msg))
+      : msg?.op === 'save.status' ? saveStatus(sender, msg.url)
+      : msg?.op === 'save.rebadge' ? (async () => { const tabs = await chrome.tabs.query({ url: 'file:///*.bento.html' }).catch(() => []); for (const tb of tabs) await badgeTab(tb.id, { url: tb.url, frameId: 0, tab: tb }); return { ok: true } })()
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
       : Promise.resolve({ ok: false, reason: 'unknown op' })
@@ -291,6 +444,10 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       void reportLapsed()
     }, (e) => sendResponse({ ok: false, reason: String(e?.message || e) }))
     return true // async response
+  })
+
+  chrome.runtime.onConnect.addListener((port) => {
+    if (port.name.startsWith('filegrant:')) watchOfferWindow(port)
   })
 
   // The worker restarts constantly; the badge has to survive that, and startup

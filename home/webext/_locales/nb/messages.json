@@ -189,7 +189,7 @@
     "message": "Velg mappen dokumentene dine ligger i"
   },
   "setupStep1Note": {
-    "message": "Én bred mappe holder som regel — den dekker alt inni."
+    "message": "Én bred mappe er som regel nok — den dekker alt i den. Chrome gir ikke fra seg selve hjemmemappen eller Library: velg Dokumenter, Skrivebord eller mappen dokumentene dine ligger i."
   },
   "setupStep2": {
     "message": "Slå på tilgang til lokale filer"
@@ -484,5 +484,134 @@
   },
   "surveyOnlySeen": {
     "message": "Bare dokumenter som er åpnet i denne nettleseren kan finnes slik."
+  },
+  "placingFolder": {
+    "message": "Leter etter «$1» på disken …"
+  },
+  "placeNoDisk": {
+    "message": "Chrome lot ikke utvidelsen lese «$1» fra disken for å finne den (file://-lister avvist)."
+  },
+  "placeTried": {
+    "message": "Lette etter «$1» på $2 steder på disken — ikke der."
+  },
+  "badgeNotAdded": {
+    "message": "ikke lagt til"
+  },
+  "badgeNotAddedTip": {
+    "message": "Funnet på disken. Den åpnes, men lagring spør hvor — legg til mappen for å lagre på stedet."
+  },
+  "folderFoundTip": {
+    "message": "Funnet på disken, ikke lagt til: dokumentene åpnes, men lagring spør hvor."
+  },
+  "menuAddFolder": {
+    "message": "Legg til mappen for å lagre på stedet …"
+  },
+  "pickThisFolder": {
+    "message": "Velg mappen «$1» i velgeren — Chrome må se at du velger den."
+  },
+  "pickedWrongFolder": {
+    "message": "«$1» er ikke mappen dette dokumentet ligger i («$2»). Prøv igjen og velg den."
+  },
+  "folderAlreadyAdded": {
+    "message": "«$1» er allerede lagt til."
+  },
+  "bentoFolderBtn": {
+    "message": "Opprett en Bento-mappe …"
+  },
+  "bentoFolderHow": {
+    "message": "Lag en ny mappe kalt «Bento» i Dokumenter i dialogen, og velg den."
+  },
+  "bentoFolderMade": {
+    "message": "«$1» er Bento-mappen din — nye dokumenter havner der og lagres på stedet."
+  },
+  "bentoFolderTip": {
+    "message": "En mappe i Dokumenter som lagrer på stedet og tar imot nye dokumenter. Chrome gir ikke fra seg selve Dokumenter."
+  },
+  "defaultFolder": {
+    "message": "nye dokumenter havner her"
+  },
+  "fgTitle": {
+    "message": "Lagre «$1» på stedet fra nå av?"
+  },
+  "fgTitleLapsed": {
+    "message": "Koble til «$1» igjen?"
+  },
+  "fgLead": {
+    "message": "bento/home beholder tillatelsen for akkurat denne filen, så hver lagring skriver rett til den. Velg den samme filen i neste dialog."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home har allerede denne filen; nettleseren vil at du bekrefter den igjen."
+  },
+  "fgChoose": {
+    "message": "Velg filen …"
+  },
+  "fgReconnect": {
+    "message": "Koble til igjen"
+  },
+  "fgOnce": {
+    "message": "Bare denne gangen"
+  },
+  "fgNotSame": {
+    "message": "Det er ikke filen som spurte («$1»). Velg den, eller lukk dette vinduet."
+  },
+  "fgDenied": {
+    "message": "Tillatelsen ble ikke gitt."
+  },
+  "droppedGranted": {
+    "message": "Lagt til: $1 mapper, $2 filer."
+  },
+  "setFilesTitle": {
+    "message": "Filer"
+  },
+  "setFilesSub": {
+    "message": "Dokumenter utenfor enhver lagt-til mappe som lagrer på stedet på egen hånd — valgt én gang, eller sluppet i biblioteket."
+  },
+  "dropNoHandle": {
+    "message": "«$1»: nettleseren ga ikke noe filhåndtak for dette slippet."
+  },
+  "dropNotBento": {
+    "message": "«$1» er ikke et Bento-dokument (.bento.html) — ikke lagt til."
+  },
+  "setDownloadsTitle": {
+    "message": "Nedlastinger"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumenter i Nedlastinger-mappen kan lagres på stedet via Chromes nedlastinger — med mindre Chrome er satt til å spørre hvor hver fil skal lagres, som gjør hver lagring til en dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome spurte hvor det skulle lagres — lagring i Nedlastinger er av til den innstillingen endres"
+  },
+  "setDownloadsRetry": {
+    "message": "Prøv igjen"
+  },
+  "dropTwins": {
+    "message": "«$1»: $2 filer på disken har nøyaktig disse bytene — lagt til, men kan ikke lagre på stedet før de er forskjellige."
+  },
+  "addFiles": {
+    "message": "Legg til filer …"
+  },
+  "tdGrant": {
+    "message": "Lagre her uten å spørre …"
+  },
+  "tdViaFolder": {
+    "message": "lagrer på stedet — mappen er lagt til"
+  },
+  "tdViaFile": {
+    "message": "lagrer på stedet — denne filen er lagt til"
+  },
+  "tdViaDownloads": {
+    "message": "lagrer på stedet — ligger i Nedlastinger"
+  },
+  "tdNotYet": {
+    "message": "spør hvor det skal lagres, hver gang"
+  },
+  "badgeNotSavingTip": {
+    "message": "Dette dokumentet kan ikke lagre på stedet ennå — åpne bento/home-panelet for å ordne det."
+  },
+  "noticeOsBlocked": {
+    "message": "macOS holder nettleseren ute av $1, så dokumenter der vises ikke før du tillater det: Systeminnstillinger → Personvern og sikkerhet → Filer og mapper → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "Systeminnstillinger → Personvern og sikkerhet → Filer og mapper"
   }
 }

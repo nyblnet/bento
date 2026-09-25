@@ -199,7 +199,7 @@
     "message": "Scegli la cartella dove vivono i tuoi documenti"
   },
   "setupStep1Note": {
-    "message": "Di solito basta una cartella ampia — copre tutto ciò che contiene."
+    "message": "Di solito basta una cartella ampia: copre tutto ciò che contiene. Chrome non concede la cartella home stessa né Library: scegli Documenti, Scrivania o la cartella in cui stanno i tuoi documenti."
   },
   "setupStep2": {
     "message": "Attiva l’accesso ai file locali",
@@ -517,5 +517,134 @@
   },
   "surveyOnlySeen": {
     "message": "Così si trovano solo i documenti aperti in questo browser."
+  },
+  "placingFolder": {
+    "message": "Ricerca di «$1» sul disco…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome non ha permesso all’estensione di leggere «$1» dal disco per trovarla (elenchi file:// rifiutati)."
+  },
+  "placeTried": {
+    "message": "Cercato «$1» in $2 posizioni sul disco: non è lì."
+  },
+  "badgeNotAdded": {
+    "message": "non aggiunta"
+  },
+  "badgeNotAddedTip": {
+    "message": "Trovato sul disco. Si apre, ma il salvataggio chiederà dove: aggiungi la sua cartella per salvare sul posto."
+  },
+  "folderFoundTip": {
+    "message": "Trovata sul disco, non aggiunta: i suoi documenti si aprono, ma il salvataggio chiede dove."
+  },
+  "menuAddFolder": {
+    "message": "Aggiungi la sua cartella per salvare sul posto…"
+  },
+  "pickThisFolder": {
+    "message": "Nel selettore scegli la cartella «$1»: Chrome deve vederti sceglierla."
+  },
+  "pickedWrongFolder": {
+    "message": "«$1» non è la cartella di questo documento («$2»). Riprova e scegli quella."
+  },
+  "folderAlreadyAdded": {
+    "message": "«$1» è già aggiunta."
+  },
+  "bentoFolderBtn": {
+    "message": "Crea una cartella Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "Nella finestra, crea una nuova cartella chiamata «Bento» dentro Documenti e scegli quella."
+  },
+  "bentoFolderMade": {
+    "message": "«$1» è la tua cartella Bento: i nuovi documenti vanno lì e si salvano sul posto."
+  },
+  "bentoFolderTip": {
+    "message": "Una cartella dentro Documenti che salva sul posto e accoglie i nuovi documenti. Chrome non concede Documenti in sé."
+  },
+  "defaultFolder": {
+    "message": "i nuovi documenti vanno qui"
+  },
+  "fgTitle": {
+    "message": "Salvare «$1» sul posto d’ora in poi?"
+  },
+  "fgTitleLapsed": {
+    "message": "Ricollegare «$1»?"
+  },
+  "fgLead": {
+    "message": "bento/home conserva il permesso per questo solo file, così ogni salvataggio scrive direttamente lì. Scegli lo stesso file nella prossima finestra."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home ha già questo file; il browser vuole che lo confermi di nuovo."
+  },
+  "fgChoose": {
+    "message": "Scegli il file…"
+  },
+  "fgReconnect": {
+    "message": "Ricollega"
+  },
+  "fgOnce": {
+    "message": "Solo questa volta"
+  },
+  "fgNotSame": {
+    "message": "Non è il file che ha chiesto («$1»). Scegli quello, o chiudi questa finestra."
+  },
+  "fgDenied": {
+    "message": "Il permesso non è stato concesso."
+  },
+  "droppedGranted": {
+    "message": "Aggiunti: $1 cartelle, $2 file."
+  },
+  "setFilesTitle": {
+    "message": "File"
+  },
+  "setFilesSub": {
+    "message": "Documenti fuori da ogni cartella aggiunta che si salvano sul posto da soli: scelti una volta, o trascinati nella libreria."
+  },
+  "dropNoHandle": {
+    "message": "«$1»: il browser non ha fornito alcun handle di file per questo trascinamento."
+  },
+  "dropNotBento": {
+    "message": "«$1» non è un documento Bento (.bento.html): non aggiunto."
+  },
+  "setDownloadsTitle": {
+    "message": "Download"
+  },
+  "setDownloadsSub": {
+    "message": "I documenti nella cartella Download possono salvarsi sul posto tramite i download di Chrome — a meno che Chrome non sia impostato per chiedere dove salvare ogni file, il che trasforma ogni salvataggio in una finestra."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome ha chiesto dove salvare: il salvataggio in Download è disattivato finché quell’impostazione non cambia"
+  },
+  "setDownloadsRetry": {
+    "message": "Riprova"
+  },
+  "dropTwins": {
+    "message": "«$1»: $2 file sul disco hanno esattamente questi byte — aggiunto, ma non può salvare sul posto finché non differiscono."
+  },
+  "addFiles": {
+    "message": "Aggiungi file…"
+  },
+  "tdGrant": {
+    "message": "Salva qui senza chiedere…"
+  },
+  "tdViaFolder": {
+    "message": "salva sul posto: la sua cartella è aggiunta"
+  },
+  "tdViaFile": {
+    "message": "salva sul posto: questo file è aggiunto"
+  },
+  "tdViaDownloads": {
+    "message": "salva sul posto: è in Download"
+  },
+  "tdNotYet": {
+    "message": "chiede dove salvare, ogni volta"
+  },
+  "badgeNotSavingTip": {
+    "message": "Questo documento non può ancora salvare sul posto: apri il pannello bento/home per rimediare."
+  },
+  "noticeOsBlocked": {
+    "message": "macOS impedisce al browser di accedere a $1, quindi i documenti lì non vengono elencati finché non lo consenti: Impostazioni di Sistema → Privacy e sicurezza → File e cartelle → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "Impostazioni di Sistema → Privacy e sicurezza → File e cartelle"
   }
 }

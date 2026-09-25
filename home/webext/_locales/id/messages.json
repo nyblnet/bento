@@ -189,7 +189,7 @@
     "message": "Pilih folder tempat dokumen Anda berada"
   },
   "setupStep1Note": {
-    "message": "Satu folder luas biasanya cukup — ia mencakup semua yang ada di dalamnya."
+    "message": "Satu folder yang luas biasanya cukup — mencakup semua isinya. Chrome tidak akan menyerahkan folder beranda itu sendiri atau Library: pilih Dokumen, Desktop, atau folder tempat dokumen Anda berada."
   },
   "setupStep2": {
     "message": "Nyalakan akses berkas lokal"
@@ -484,5 +484,134 @@
   },
   "surveyOnlySeen": {
     "message": "Cara ini hanya menemukan dokumen yang pernah dibuka di peramban ini."
+  },
+  "placingFolder": {
+    "message": "Mencari “$1” di disk…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome tidak mengizinkan ekstensi membaca “$1” dari disk untuk menemukannya (daftar file:// ditolak)."
+  },
+  "placeTried": {
+    "message": "Mencari “$1” di $2 tempat di disk — tidak ada."
+  },
+  "badgeNotAdded": {
+    "message": "belum ditambahkan"
+  },
+  "badgeNotAddedTip": {
+    "message": "Ditemukan di disk. Bisa dibuka, tetapi saat menyimpan akan ditanya ke mana — tambahkan foldernya agar tersimpan di tempat."
+  },
+  "folderFoundTip": {
+    "message": "Ditemukan di disk, belum ditambahkan: dokumennya bisa dibuka, tetapi menyimpan menanyakan ke mana."
+  },
+  "menuAddFolder": {
+    "message": "Tambahkan foldernya agar tersimpan di tempat…"
+  },
+  "pickThisFolder": {
+    "message": "Di pemilih, pilih folder “$1” — Chrome harus melihat Anda memilihnya."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” bukan folder dokumen ini (“$2”). Coba lagi dan pilih yang itu."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” sudah ditambahkan."
+  },
+  "bentoFolderBtn": {
+    "message": "Buat folder Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "Di dialog, buat folder baru bernama “Bento” di dalam Dokumen dan pilih folder itu."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” adalah folder Bento Anda — dokumen baru masuk ke sana dan tersimpan di tempat."
+  },
+  "bentoFolderTip": {
+    "message": "Folder di dalam Dokumen yang menyimpan di tempat dan menerima dokumen baru. Chrome tidak akan memberikan Dokumen itu sendiri."
+  },
+  "defaultFolder": {
+    "message": "dokumen baru masuk ke sini"
+  },
+  "fgTitle": {
+    "message": "Simpan “$1” di tempat mulai sekarang?"
+  },
+  "fgTitleLapsed": {
+    "message": "Hubungkan kembali “$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home menyimpan izin hanya untuk berkas ini, sehingga setiap penyimpanan menulis langsung ke sana. Pilih berkas yang sama di dialog berikutnya."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home sudah memiliki berkas ini; peramban ingin Anda mengonfirmasinya lagi."
+  },
+  "fgChoose": {
+    "message": "Pilih berkas…"
+  },
+  "fgReconnect": {
+    "message": "Hubungkan kembali"
+  },
+  "fgOnce": {
+    "message": "Hanya kali ini"
+  },
+  "fgNotSame": {
+    "message": "Itu bukan berkas yang meminta (“$1”). Pilih yang itu, atau tutup jendela ini."
+  },
+  "fgDenied": {
+    "message": "Izin tidak diberikan."
+  },
+  "droppedGranted": {
+    "message": "Ditambahkan: $1 folder, $2 berkas."
+  },
+  "setFilesTitle": {
+    "message": "Berkas"
+  },
+  "setFilesSub": {
+    "message": "Dokumen di luar folder mana pun yang ditambahkan, yang tersimpan di tempat dengan sendirinya — dipilih sekali, atau dijatuhkan ke pustaka."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: peramban tidak memberikan handle berkas untuk penjatuhan ini."
+  },
+  "dropNotBento": {
+    "message": "“$1” bukan dokumen Bento (.bento.html) — tidak ditambahkan."
+  },
+  "setDownloadsTitle": {
+    "message": "Unduhan"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumen di folder Unduhan dapat tersimpan di tempat melalui unduhan Chrome — kecuali Chrome disetel untuk menanyakan lokasi setiap berkas, yang mengubah setiap penyimpanan menjadi dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome menanyakan lokasi penyimpanan — menyimpan ke Unduhan dimatikan sampai setelan itu berubah"
+  },
+  "setDownloadsRetry": {
+    "message": "Coba lagi"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 berkas di disk memiliki byte yang persis sama — ditambahkan, tetapi tidak bisa menyimpan di tempat sampai keduanya berbeda."
+  },
+  "addFiles": {
+    "message": "Tambahkan berkas…"
+  },
+  "tdGrant": {
+    "message": "Simpan di sini tanpa bertanya…"
+  },
+  "tdViaFolder": {
+    "message": "tersimpan di tempat — foldernya sudah ditambahkan"
+  },
+  "tdViaFile": {
+    "message": "tersimpan di tempat — berkas ini sudah ditambahkan"
+  },
+  "tdViaDownloads": {
+    "message": "tersimpan di tempat — ada di Unduhan"
+  },
+  "tdNotYet": {
+    "message": "selalu bertanya ke mana menyimpan"
+  },
+  "badgeNotSavingTip": {
+    "message": "Dokumen ini belum bisa menyimpan di tempat — buka panel bento/home untuk memperbaikinya."
+  },
+  "noticeOsBlocked": {
+    "message": "macOS menghalangi peramban mengakses $1, jadi dokumen di sana tidak ditampilkan sampai Anda mengizinkannya: System Settings → Privacy & Security → Files and Folders → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "System Settings → Privacy & Security → Files and Folders"
   }
 }

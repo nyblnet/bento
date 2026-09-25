@@ -189,7 +189,7 @@
     "message": "Välj mappen där dina dokument ligger"
   },
   "setupStep1Note": {
-    "message": "En bred mapp räcker oftast — den täcker allt som finns i den."
+    "message": "En bred mapp räcker oftast — den täcker allt i den. Chrome lämnar inte ut själva hemmappen eller Library: välj Dokument, Skrivbord eller mappen där dina dokument ligger."
   },
   "setupStep2": {
     "message": "Slå på åtkomst till lokala filer"
@@ -484,5 +484,134 @@
   },
   "surveyOnlySeen": {
     "message": "Bara dokument som öppnats i den här webbläsaren kan hittas så här."
+  },
+  "placingFolder": {
+    "message": "Letar efter ”$1” på disken…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome lät inte tillägget läsa ”$1” från disken för att hitta den (file://-listor nekades)."
+  },
+  "placeTried": {
+    "message": "Letade efter ”$1” på $2 platser på disken — inte där."
+  },
+  "badgeNotAdded": {
+    "message": "inte tillagd"
+  },
+  "badgeNotAddedTip": {
+    "message": "Hittad på disken. Den öppnas, men sparning frågar var — lägg till mappen för att spara på plats."
+  },
+  "folderFoundTip": {
+    "message": "Hittad på disken, inte tillagd: dokumenten öppnas, men sparning frågar var."
+  },
+  "menuAddFolder": {
+    "message": "Lägg till dess mapp för att spara på plats…"
+  },
+  "pickThisFolder": {
+    "message": "Välj mappen ”$1” i väljaren — Chrome måste se dig välja den."
+  },
+  "pickedWrongFolder": {
+    "message": "”$1” är inte mappen det här dokumentet ligger i (”$2”). Försök igen och välj den."
+  },
+  "folderAlreadyAdded": {
+    "message": "”$1” är redan tillagd."
+  },
+  "bentoFolderBtn": {
+    "message": "Skapa en Bento-mapp…"
+  },
+  "bentoFolderHow": {
+    "message": "Skapa i dialogen en ny mapp med namnet ”Bento” i Dokument och välj den."
+  },
+  "bentoFolderMade": {
+    "message": "”$1” är din Bento-mapp — nya dokument hamnar där och sparas på plats."
+  },
+  "bentoFolderTip": {
+    "message": "En mapp i Dokument som sparar på plats och tar emot nya dokument. Chrome lämnar inte ut själva Dokument."
+  },
+  "defaultFolder": {
+    "message": "nya dokument hamnar här"
+  },
+  "fgTitle": {
+    "message": "Spara ”$1” på plats från och med nu?"
+  },
+  "fgTitleLapsed": {
+    "message": "Återanslut ”$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home behåller tillståndet för just den här filen, så varje sparning skriver direkt till den. Välj samma fil i nästa dialog."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home har redan den här filen; webbläsaren vill att du bekräftar den igen."
+  },
+  "fgChoose": {
+    "message": "Välj filen…"
+  },
+  "fgReconnect": {
+    "message": "Återanslut"
+  },
+  "fgOnce": {
+    "message": "Bara den här gången"
+  },
+  "fgNotSame": {
+    "message": "Det är inte filen som frågade (”$1”). Välj den, eller stäng det här fönstret."
+  },
+  "fgDenied": {
+    "message": "Tillståndet gavs inte."
+  },
+  "droppedGranted": {
+    "message": "Tillagt: $1 mappar, $2 filer."
+  },
+  "setFilesTitle": {
+    "message": "Filer"
+  },
+  "setFilesSub": {
+    "message": "Dokument utanför varje tillagd mapp som sparar på plats på egen hand — valda en gång, eller släppta i biblioteket."
+  },
+  "dropNoHandle": {
+    "message": "”$1”: webbläsaren lämnade inget fil-handle för den här släppningen."
+  },
+  "dropNotBento": {
+    "message": "”$1” är inte ett Bento-dokument (.bento.html) — inte tillagt."
+  },
+  "setDownloadsTitle": {
+    "message": "Hämtningar"
+  },
+  "setDownloadsSub": {
+    "message": "Dokument i mappen Hämtningar kan sparas på plats via Chromes hämtningar — om inte Chrome är inställt på att fråga var varje fil ska sparas, vilket gör varje sparning till en dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome frågade var det skulle sparas — sparning i Hämtningar är av tills den inställningen ändras"
+  },
+  "setDownloadsRetry": {
+    "message": "Försök igen"
+  },
+  "dropTwins": {
+    "message": "”$1”: $2 filer på disken har exakt dessa bytes — tillagd, men kan inte spara på plats förrän de skiljer sig."
+  },
+  "addFiles": {
+    "message": "Lägg till filer…"
+  },
+  "tdGrant": {
+    "message": "Spara här utan att fråga…"
+  },
+  "tdViaFolder": {
+    "message": "sparar på plats — mappen är tillagd"
+  },
+  "tdViaFile": {
+    "message": "sparar på plats — den här filen är tillagd"
+  },
+  "tdViaDownloads": {
+    "message": "sparar på plats — ligger i Hämtningar"
+  },
+  "tdNotYet": {
+    "message": "frågar var det ska sparas, varje gång"
+  },
+  "badgeNotSavingTip": {
+    "message": "Det här dokumentet kan inte spara på plats ännu — öppna bento/home-panelen för att ordna det."
+  },
+  "noticeOsBlocked": {
+    "message": "macOS håller webbläsaren borta från $1, så dokument där listas inte förrän du tillåter det: Systeminställningar → Integritet och säkerhet → Filer och mappar → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "Systeminställningar → Integritet och säkerhet → Filer och mappar"
   }
 }

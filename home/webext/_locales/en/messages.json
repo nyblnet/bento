@@ -207,7 +207,7 @@
     "message": "Choose the folder your documents live in"
   },
   "setupStep1Note": {
-    "message": "One broad folder is usually enough — it covers everything inside it."
+    "message": "One broad folder is usually enough — it covers everything inside it. Chrome will not hand over your home folder itself, or Library: choose Documents, Desktop, or the folder your documents live in."
   },
   "setupStep2": {
     "message": "Turn on local file access",
@@ -542,5 +542,177 @@
   },
   "surveyOnlySeen": {
     "message": "Only documents opened in this browser can be found this way."
+  },
+  "placingFolder": {
+    "message": "Looking for “$1” on disk…",
+    "description": "Toast while the extension probes the disk for where a granted folder lives. $1 is the folder name."
+  },
+  "placeNoDisk": {
+    "message": "Chrome would not let the extension read “$1” from disk to find it (file:// listings refused).",
+    "description": "Unplaced-folder banner: the disk probe could not read any file:// listing. $1 is the folder name."
+  },
+  "placeTried": {
+    "message": "Looked for “$1” in $2 places on disk — not there.",
+    "description": "Unplaced-folder banner: the disk probe ran and found nothing. $1 folder name, $2 a count."
+  },
+  "badgeNotAdded": {
+    "message": "not added",
+    "description": "Badge on a document found on disk whose folder has no grant."
+  },
+  "badgeNotAddedTip": {
+    "message": "Found on disk. It opens, but saving will ask where — add its folder to save in place.",
+    "description": "Tooltip of that badge."
+  },
+  "folderFoundTip": {
+    "message": "Found on disk, not added: its documents open, but saving asks where.",
+    "description": "Sidebar tooltip on a folder found on disk without a grant."
+  },
+  "menuAddFolder": {
+    "message": "Add its folder to save in place…",
+    "description": "Card menu: grant the folder a found document sits in."
+  },
+  "pickThisFolder": {
+    "message": "In the picker, choose the folder “$1” — Chrome has to see you pick it.",
+    "description": "Toast before the folder picker opens. $1 is the folder name."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” is not the folder this document is in (“$2”). Try again and pick that one.",
+    "description": "Toast when the picked folder does not contain the document. $1 picked, $2 expected."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” is already added.",
+    "description": "Toast when the picked folder is already granted. $1 is the folder name."
+  },
+  "bentoFolderBtn": {
+    "message": "Create a Bento folder…",
+    "description": "Button: make and grant a Bento folder in Documents."
+  },
+  "bentoFolderHow": {
+    "message": "In the dialog, make a new folder called “Bento” inside Documents and choose it.",
+    "description": "Toast before the folder picker opens for the Bento folder. Keep the folder name “Bento”."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” is your Bento folder — new documents go there and save in place.",
+    "description": "Toast after the Bento folder is granted. $1 is the folder name."
+  },
+  "bentoFolderTip": {
+    "message": "A folder inside Documents that saves in place and takes new documents. Chrome will not grant Documents itself.",
+    "description": "Tooltip of the Create-a-Bento-folder button."
+  },
+  "defaultFolder": {
+    "message": "new documents go here",
+    "description": "Settings folder row: marks the folder new documents are created in."
+  },
+  "fgTitle": {
+    "message": "Save “$1” in place from now on?",
+    "description": "Offer window title. $1 file name."
+  },
+  "fgTitleLapsed": {
+    "message": "Reconnect “$1”?",
+    "description": "Offer window title when the extension already holds the file but its permission lapsed. $1 file name."
+  },
+  "fgLead": {
+    "message": "bento/home keeps permission for this one file, so every save writes straight back to it. Pick the same file in the next dialog.",
+    "description": "Offer window body."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home already has this file; the browser wants you to confirm it again.",
+    "description": "Offer window body when reconnecting."
+  },
+  "fgChoose": {
+    "message": "Choose the file…",
+    "description": "Offer window: opens the OS file picker."
+  },
+  "fgReconnect": {
+    "message": "Reconnect",
+    "description": "Offer window: renews a lapsed permission."
+  },
+  "fgOnce": {
+    "message": "Just this once",
+    "description": "Offer window: decline; the document's own Save dialog follows."
+  },
+  "fgNotSame": {
+    "message": "That is not the file that asked (“$1”). Pick that one, or close this window.",
+    "description": "Offer window: the picked file is not the one that asked. $1 expected file name."
+  },
+  "fgDenied": {
+    "message": "Permission was not granted.",
+    "description": "Offer window: the permission prompt was refused."
+  },
+  "droppedGranted": {
+    "message": "Added: $1 folders, $2 files.",
+    "description": "Toast after files/folders were dropped onto the library. $1 folders, $2 files (numbers)."
+  },
+  "setFilesTitle": {
+    "message": "Files",
+    "description": "Settings section: per-file grants."
+  },
+  "setFilesSub": {
+    "message": "Documents outside any added folder that save in place on their own — picked once, or dropped onto the library.",
+    "description": "Settings section explanation."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: the browser handed over no file handle for this drop.",
+    "description": "Toast when a dropped item yields no file handle. $1 file name."
+  },
+  "dropNotBento": {
+    "message": "“$1” is not a Bento document (.bento.html) — not added.",
+    "description": "Toast when a dropped file is not a .bento.html. $1 file name."
+  },
+  "setDownloadsTitle": {
+    "message": "Downloads",
+    "description": "Settings section title: the Downloads door."
+  },
+  "setDownloadsSub": {
+    "message": "Documents in your Downloads folder can save in place through Chrome's downloads — unless Chrome is set to ask where to save each file, which turns every save into a dialog.",
+    "description": "Settings: explanation of the Downloads door and the Chrome setting that breaks it."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome asked where to save — saving into Downloads is off until that setting changes",
+    "description": "Settings row: the Downloads door was switched off because Chrome prompted."
+  },
+  "setDownloadsRetry": {
+    "message": "Try again",
+    "description": "Settings: re-enable the Downloads door after changing the Chrome setting."
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 files on disk have exactly these bytes — added, but it cannot save in place until they differ.",
+    "description": "Toast when a dropped file has byte-identical twins on disk. $1 file name, $2 count."
+  },
+  "addFiles": {
+    "message": "Add files…",
+    "description": "Settings: opens a multi-select file picker to grant several documents at once."
+  },
+  "tdGrant": {
+    "message": "Save here without asking…",
+    "description": "Side panel: button that grants the active tab's document so it saves in place."
+  },
+  "tdViaFolder": {
+    "message": "saves in place — its folder is added",
+    "description": "Side panel: the active document saves in place through a folder grant."
+  },
+  "tdViaFile": {
+    "message": "saves in place — this file is added",
+    "description": "Side panel: the active document saves in place through its own file grant."
+  },
+  "tdViaDownloads": {
+    "message": "saves in place — it is in Downloads",
+    "description": "Side panel: the active document saves in place because it is in Downloads."
+  },
+  "tdNotYet": {
+    "message": "asks where to save, every time",
+    "description": "Side panel: the active document has no grant."
+  },
+  "badgeNotSavingTip": {
+    "message": "This document cannot save in place yet — open the bento/home panel to fix that.",
+    "description": "Toolbar icon tooltip on a tab whose document cannot save in place."
+  },
+  "noticeOsBlocked": {
+    "message": "macOS is keeping the browser out of $1, so documents there are not listed until you allow it: System Settings → Privacy & Security → Files and Folders → Google Chrome.",
+    "description": "Notice when macOS refuses the browser a folder. $1 is the folder names. REVIEW: the System Settings path must match the OS's own labels."
+  },
+  "noticeOsBlockedPath": {
+    "message": "System Settings → Privacy & Security → Files and Folders",
+    "description": "The System Settings path, repeated as a code line under the notice. REVIEW: match the OS's own labels."
   }
 }

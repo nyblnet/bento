@@ -445,8 +445,8 @@ const multiDeps = (...grants: Array<{ tree: Record<string, any>; perm?: string; 
   ok(st.includes("'dirs'") && st.includes("'dir'"),
     "status.js owns the grant keys, including the legacy 'dir' still migrated")
   ok(db.includes("'prefixes'"), "db.js owns the learned path prefixes")
-  ok(/VERSION = 2/.test(db) && /objectStoreNames\.contains/.test(db),
-    'the version bump for the cache store is guarded, so a v1 install upgrades rather than throwing')
+  ok(/VERSION = 3/.test(db) && /objectStoreNames\.contains/.test(db),
+    'the version bumps (cache store, file-grant store) are guarded, so an older install upgrades rather than throwing')
 }
 
 // ---- 10. the lapsed-grant badge stays wired --------------------------------

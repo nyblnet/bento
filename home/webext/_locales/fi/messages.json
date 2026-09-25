@@ -189,7 +189,7 @@
     "message": "Valitse kansio, jossa asiakirjasi ovat"
   },
   "setupStep1Note": {
-    "message": "Yksi laaja kansio riittää yleensä — se kattaa kaiken sen sisällä."
+    "message": "Yksi laaja kansio riittää yleensä — se kattaa kaiken sisällään. Chrome ei luovuta itse kotikansiota eikä Library-kansiota: valitse Dokumentit, Työpöytä tai kansio, jossa asiakirjasi ovat."
   },
   "setupStep2": {
     "message": "Ota paikallisten tiedostojen käyttö käyttöön"
@@ -484,5 +484,134 @@
   },
   "surveyOnlySeen": {
     "message": "Näin löytyvät vain tässä selaimessa avatut asiakirjat."
+  },
+  "placingFolder": {
+    "message": "Etsitään kansiota ”$1” levyltä…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome ei antanut laajennuksen lukea kansiota ”$1” levyltä sen löytämiseksi (file://-listaukset evätty)."
+  },
+  "placeTried": {
+    "message": "Kansiota ”$1” etsittiin $2 paikasta levyltä — ei siellä."
+  },
+  "badgeNotAdded": {
+    "message": "ei lisätty"
+  },
+  "badgeNotAddedTip": {
+    "message": "Löytyi levyltä. Avautuu, mutta tallennus kysyy minne — lisää kansio, niin tallennus tapahtuu paikalleen."
+  },
+  "folderFoundTip": {
+    "message": "Löytyi levyltä, ei lisätty: sen asiakirjat avautuvat, mutta tallennus kysyy minne."
+  },
+  "menuAddFolder": {
+    "message": "Lisää kansio, jotta tallennus tapahtuu paikalleen…"
+  },
+  "pickThisFolder": {
+    "message": "Valitse valitsimessa kansio ”$1” — Chromen on nähtävä sinun valitsevan sen."
+  },
+  "pickedWrongFolder": {
+    "message": "”$1” ei ole tämän asiakirjan kansio (”$2”). Yritä uudelleen ja valitse se."
+  },
+  "folderAlreadyAdded": {
+    "message": "”$1” on jo lisätty."
+  },
+  "bentoFolderBtn": {
+    "message": "Luo Bento-kansio…"
+  },
+  "bentoFolderHow": {
+    "message": "Luo valintaikkunassa Dokumentit-kansioon uusi kansio nimeltä ”Bento” ja valitse se."
+  },
+  "bentoFolderMade": {
+    "message": "”$1” on Bento-kansiosi — uudet asiakirjat menevät sinne ja tallentuvat paikalleen."
+  },
+  "bentoFolderTip": {
+    "message": "Dokumentit-kansion sisällä oleva kansio, joka tallentaa paikalleen ja ottaa uudet asiakirjat vastaan. Itse Dokumentit-kansiota Chrome ei luovuta."
+  },
+  "defaultFolder": {
+    "message": "uudet asiakirjat tulevat tänne"
+  },
+  "fgTitle": {
+    "message": "Tallennetaanko ”$1” tästä lähtien paikalleen?"
+  },
+  "fgTitleLapsed": {
+    "message": "Yhdistetäänkö ”$1” uudelleen?"
+  },
+  "fgLead": {
+    "message": "bento/home säilyttää luvan juuri tälle tiedostolle, joten jokainen tallennus kirjoittaa suoraan siihen. Valitse sama tiedosto seuraavassa ikkunassa."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home tuntee tämän tiedoston jo; selain haluaa, että vahvistat sen uudelleen."
+  },
+  "fgChoose": {
+    "message": "Valitse tiedosto…"
+  },
+  "fgReconnect": {
+    "message": "Yhdistä uudelleen"
+  },
+  "fgOnce": {
+    "message": "Vain tämän kerran"
+  },
+  "fgNotSame": {
+    "message": "Tuo ei ole tiedosto, joka kysyi (”$1”). Valitse se, tai sulje tämä ikkuna."
+  },
+  "fgDenied": {
+    "message": "Lupaa ei annettu."
+  },
+  "droppedGranted": {
+    "message": "Lisätty: $1 kansiota, $2 tiedostoa."
+  },
+  "setFilesTitle": {
+    "message": "Tiedostot"
+  },
+  "setFilesSub": {
+    "message": "Lisättyjen kansioiden ulkopuoliset asiakirjat, jotka tallentuvat paikalleen itsestään — kerran valitut tai kirjastoon pudotetut."
+  },
+  "dropNoHandle": {
+    "message": "”$1”: selain ei antanut tiedostokahvaa tälle pudotukselle."
+  },
+  "dropNotBento": {
+    "message": "”$1” ei ole Bento-asiakirja (.bento.html) — ei lisätty."
+  },
+  "setDownloadsTitle": {
+    "message": "Lataukset"
+  },
+  "setDownloadsSub": {
+    "message": "Lataukset-kansion asiakirjat voivat tallentua paikalleen Chromen latausten kautta — paitsi jos Chrome on asetettu kysymään jokaisen tiedoston tallennuspaikkaa, jolloin jokainen tallennus on valintaikkuna."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome kysyi tallennuspaikkaa — tallennus Lataukset-kansioon on pois päältä, kunnes tuo asetus muuttuu"
+  },
+  "setDownloadsRetry": {
+    "message": "Yritä uudelleen"
+  },
+  "dropTwins": {
+    "message": "”$1”: $2 tiedostolla levyllä on täsmälleen nämä tavut — lisätty, mutta paikalleen tallennus onnistuu vasta kun ne eroavat."
+  },
+  "addFiles": {
+    "message": "Lisää tiedostoja…"
+  },
+  "tdGrant": {
+    "message": "Tallenna tähän kysymättä…"
+  },
+  "tdViaFolder": {
+    "message": "tallentuu paikalleen — kansio on lisätty"
+  },
+  "tdViaFile": {
+    "message": "tallentuu paikalleen — tämä tiedosto on lisätty"
+  },
+  "tdViaDownloads": {
+    "message": "tallentuu paikalleen — on Lataukset-kansiossa"
+  },
+  "tdNotYet": {
+    "message": "kysyy tallennuspaikkaa joka kerta"
+  },
+  "badgeNotSavingTip": {
+    "message": "Tämä asiakirja ei vielä tallennu paikalleen — avaa bento/home-paneeli korjataksesi sen."
+  },
+  "noticeOsBlocked": {
+    "message": "macOS estää selaimelta pääsyn kansioon $1, joten sen asiakirjat eivät näy ennen kuin sallit sen: Järjestelmäasetukset → Tietosuoja ja suojaus → Tiedostot ja kansiot → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "Järjestelmäasetukset → Tietosuoja ja suojaus → Tiedostot ja kansiot"
   }
 }
