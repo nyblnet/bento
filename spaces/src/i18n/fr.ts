@@ -638,7 +638,7 @@ export const fr: Catalog = {
   "Accent text": "Texte d’accent",
   "Add a font file…": "Ajouter un fichier de police…",
   "Almanac": "Almanach",
-  "An editorial serif, a drop cap, marigold as the only colour.": "Un caractère éditorial, une lettrine, le jaune souci pour seule couleur.",
+  "An editorial serif, a drop cap, and marigold for its accent.": "Un caractère éditorial, une lettrine, et le jaune souci pour accent.",
   "As written": "Tel qu’écrit",
   "Asterism": "Astérisme",
   "Bands": "Bandes",

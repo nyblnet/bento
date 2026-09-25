@@ -638,7 +638,7 @@ export const ja: Catalog = {
   "Accent text": "アクセントの文字",
   "Add a font file…": "フォントファイルを追加…",
   "Almanac": "アルマナック",
-  "An editorial serif, a drop cap, marigold as the only colour.": "編集的なセリフ体、ドロップキャップ、唯一の色はマリーゴールド。",
+  "An editorial serif, a drop cap, and marigold for its accent.": "編集的なセリフ体、ドロップキャップ、アクセントはマリーゴールド。",
   "As written": "入力どおり",
   "Asterism": "アステリズム",
   "Bands": "帯",

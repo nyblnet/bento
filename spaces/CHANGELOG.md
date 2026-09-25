@@ -479,7 +479,7 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 - **A space can have a design.** About → Design offers six: **Ledger** (a
   grotesque grid, figures in a monospace, cobalt rules), **Almanac** (an
-  editorial serif, a drop cap, marigold as the only colour), **Studio** (the
+  editorial serif, a drop cap, marigold for its accent), **Studio** (the
   Bento tile — a canvas or a gallery becomes navy with slate, coral and cream
   compartments), **Broadsheet** (a news serif under double rules, justified,
   with pull quotes), **Typescript** (a typewritten manuscript) and **Riso** (a
@@ -494,14 +494,17 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   labels and code — including a font file you drop in, which is embedded like
   a picture — and the layout switches (callouts, quotes, tables, rules, drop
   cap, tiles…). Every value is checked before it is used, and a colour that
-  would leave text under 4.5:1 is not used.
+  would leave text under 4.5:1 is not used. Every design keeps the five
+  callout tones (note, tip, important, warning, caution) five distinct
+  colours of its own; a custom design that paints them alike gets its base's
+  five back.
 
   The Markdown export now opens with the design as front matter (`design:
   almanac`), and importing it into a space without a design brings the design
   along. Format: an optional `design` name and an optional `designs` map; an
   older build shows the default look and keeps both. The designs use fonts
   already on the reader's machine — nothing is fetched. Shell 271,810 →
-  300,476 B (+28,666; roughly 12 KB of that is the picker and panel's 117
+  300,835 B (+29,025; roughly 12 KB of that is the picker and panel's 115
   new strings in nine languages).
 
 ## [0.1.0] — 2026-08-03

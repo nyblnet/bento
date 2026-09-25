@@ -35,6 +35,8 @@
   --d-tile: var(--dl-tile); --d-tile-ink: var(--dl-tile-ink);
   --d-cell1: var(--dl-cell1); --d-cell2: var(--dl-cell2); --d-cell3: var(--dl-cell3);
   --d-cell1-ink: var(--dl-cell1-ink); --d-cell2-ink: var(--dl-cell2-ink); --d-cell3-ink: var(--dl-cell3-ink);
+  --d-tone-note: var(--dl-tone-note); --d-tone-tip: var(--dl-tone-tip); --d-tone-important: var(--dl-tone-important);
+  --d-tone-warning: var(--dl-tone-warning); --d-tone-caution: var(--dl-tone-caution);
 
   /* The app's roles, INSIDE THE SURFACE ONLY. Every existing block rule in
      styles.css reads these, which is why a design recolours callouts, boards,
@@ -45,6 +47,8 @@
   --edge: color-mix(in srgb, var(--d-rule-c) 55%, var(--d-ink));
   --chrome: var(--d-soft); --chrome-2: color-mix(in srgb, var(--d-soft) 90%, var(--d-ink));
   --accent: var(--d-accent); --accent-ink: var(--d-accent-ink);
+  --tone-note: var(--d-tone-note); --tone-tip: var(--d-tone-tip); --tone-important: var(--d-tone-important);
+  --tone-warning: var(--d-tone-warning); --tone-caution: var(--d-tone-caution);
   --ph: color-mix(in srgb, var(--d-muted) 60%, var(--d-paper));
   --ghost: color-mix(in srgb, var(--d-muted) 75%, var(--d-paper));
   --radius: var(--d-radius);
@@ -61,6 +65,8 @@
     --d-tile: var(--dd-tile); --d-tile-ink: var(--dd-tile-ink);
     --d-cell1: var(--dd-cell1); --d-cell2: var(--dd-cell2); --d-cell3: var(--dd-cell3);
     --d-cell1-ink: var(--dd-cell1-ink); --d-cell2-ink: var(--dd-cell2-ink); --d-cell3-ink: var(--dd-cell3-ink);
+    --d-tone-note: var(--dd-tone-note); --d-tone-tip: var(--dd-tone-tip); --d-tone-important: var(--dd-tone-important);
+    --d-tone-warning: var(--dd-tone-warning); --d-tone-caution: var(--dd-tone-caution);
   }
 }
 @media screen {
@@ -72,6 +78,8 @@
     --d-tile: var(--dd-tile); --d-tile-ink: var(--dd-tile-ink);
     --d-cell1: var(--dd-cell1); --d-cell2: var(--dd-cell2); --d-cell3: var(--dd-cell3);
     --d-cell1-ink: var(--dd-cell1-ink); --d-cell2-ink: var(--dd-cell2-ink); --d-cell3-ink: var(--dd-cell3-ink);
+    --d-tone-note: var(--dd-tone-note); --d-tone-tip: var(--dd-tone-tip); --d-tone-important: var(--dd-tone-important);
+    --d-tone-warning: var(--dd-tone-warning); --d-tone-caution: var(--dd-tone-caution);
   }
 }
 
@@ -139,14 +147,13 @@
 
 /* ————— callouts —————
    The tone's icon and NAME always travel with the box (styles.css), so a
-   design may restyle the box freely — including `tones: accent`, which gives
-   every tone the design's one colour. */
-[data-sd-tones="accent"] {
-  --tone-note: var(--d-accent); --tone-tip: var(--d-accent); --tone-important: var(--d-accent);
-  --tone-warning: var(--d-accent); --tone-caution: var(--d-accent);
-}
+   design restyles the box — but never collapses the tones: each design names
+   five hues of its own (the --d-tone-* roles on the surface), and the
+   validator holds them pairwise apart. */
 [data-sd-callout="outline"] .sp-b-callout {
   background: transparent; border: max(1px, calc(var(--d-rule) * .75)) solid var(--d-ink); border-radius: var(--d-radius);
+  /* the box is ink; the TONE is the start bar */
+  border-inline-start: 5px solid var(--tone-h);
 }
 [data-sd-callout="rules"] .sp-b-callout {
   background: transparent; border: 0; border-block: 1px solid var(--tone-line); border-radius: 0; padding-inline: 0;

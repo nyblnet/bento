@@ -7454,7 +7454,7 @@ print root). Every rule is keyed under `[data-sp-design]` or a `data-sd-*`
 attribute, which is what makes "no design" the untouched stylesheet — the model
 rig parses the file and asserts it. Adding a built-in is a data entry. Switches
 added so far: `headStyle headCase label labelInk h2 dropCap callout quote table
-numerals check tile tones shadow justify divider bullet`, plus the metrics
+numerals check tile shadow justify divider bullet`, plus the metrics
 `size leading titleSize titleWeight titleTracking titleLeading headWeight radius
 rule`.
 
@@ -7493,6 +7493,18 @@ line spacing ≥ 1.3, title ≥ 1.4em. There is no display, visibility or opacit
 switch, and the only generated `content` is constant decoration. A custom value
 that breaks a floor falls back; an ink the author did not set is re-chosen for
 a ground they did, so a dark accent is kept rather than refused.
+
+**Tone is meaning.** The first cut had a `tones: accent` switch that gave all
+five callout tones the design's one colour; Studio, Almanac and Typescript drew
+five identical boxes, the Note reading "the blue one" in coral. Measured in
+pixels, one distinct fill or label ink out of five in each. The switch is gone:
+the five tones are palette roles (`toneNote … toneCaution`) that every design
+names in its own register, and the validator holds them pairwise apart as
+PAINTED — the fill for a filled callout, the hue (rule, start bar, shadow)
+otherwise — at an sRGB distance of at least 24; a custom design that collapses
+them gets its base's five back. Measured after: five distinct fills or tone
+edges and five distinct label inks in every design and mode where the style
+colours them.
 
 **Consent stays chrome** (finding 1). The remote-content gate sits inside the
 column, so it reads the CHROME's tokens (captured at `:root` as `--sp-app-*`
@@ -7537,7 +7549,9 @@ and seen to fail, each at its own assertion: an unscoped rule in designs.css;
 every built-in resolving to Ledger; an unknown name resolving to something; the
 unknown-design finding removed; `design` stripped at load; the importer
 ignoring `design:`; the default writing `design: undefined`; the hex check
-removed; the contrast floors removed.
+removed; the contrast floors removed; the five tones collapsed to the accent in every
+built-in; the custom-design tone check removed; the surface no longer mapping
+the tone roles.
 
-**Cost.** Shell 271,810 → 300,476 B (+28,666, 10.5%); about 12 KB of it is 117
+**Cost.** Shell 271,810 → 300,835 B (+29,025, 10.7%); about 12 KB of it is 115
 new UI strings in nine languages.

@@ -638,7 +638,7 @@ export const es: Catalog = {
   "Accent text": "Texto de acento",
   "Add a font file…": "Añadir un archivo de fuente…",
   "Almanac": "Almanaque",
-  "An editorial serif, a drop cap, marigold as the only colour.": "Una serifa editorial, una capitular y el amarillo caléndula como único color.",
+  "An editorial serif, a drop cap, and marigold for its accent.": "Una serifa editorial, una capitular y el amarillo caléndula como acento.",
   "As written": "Tal como se escribió",
   "Asterism": "Asterismo",
   "Bands": "Bandas",

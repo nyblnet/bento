@@ -638,7 +638,7 @@ export const zh_Hant: Catalog = {
   "Accent text": "強調色文字",
   "Add a font file…": "新增字型檔案…",
   "Almanac": "年鑑",
-  "An editorial serif, a drop cap, marigold as the only colour.": "編輯風格的襯線體，首字放大，萬壽菊黃是唯一的顏色。",
+  "An editorial serif, a drop cap, and marigold for its accent.": "編輯風格的襯線體，首字放大，以萬壽菊黃為強調色。",
   "As written": "按原樣",
   "Asterism": "星號分隔",
   "Bands": "條帶",

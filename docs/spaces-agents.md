@@ -78,7 +78,8 @@ take a name (`system grotesk humanist condensed transitional oldstyle news mono
 typewriter rounded`) or `asset:<key>` naming a `data:font/…` asset; `props`
 take the words and ranges listed in `spaces/src/designs.ts` `PROPS`. Palette
 roles: `paper ink muted rule soft accent accentInk onAccent tile tileInk cell1
-cell2 cell3`. A value that fails is dropped to the base design's and reported as
+cell2 cell3 toneNote toneTip toneImportant toneWarning toneCaution` (the five
+callout tones must stay distinct — `design-contrast` if they collapse). A value that fails is dropped to the base design's and reported as
 `bad-design-value`; a colour that would put text under 4.5:1 is dropped as
 `design-contrast`. There is no free CSS anywhere in a design. A name that is
 also a built-in's is never used (`design-shadows-builtin`).

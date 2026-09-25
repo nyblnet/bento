@@ -3752,6 +3752,23 @@ function fsTable(f: string): string {
   ok(/\[data-sp-design\] :is\(\.sp-remote, \.sp-media-empty\) \{[^}]*--ink: var\(--sp-app-ink\)[^}]*color: var\(--sp-app-ink\)/.test(flat),
     'the remote-content gate reads the CHROME\'s tokens inside a designed page')
 
+  // TONE IS MEANING: five callout tones stay five things in every design and mode
+  for (const [name, d] of Object.entries({ plain: D.PLAIN, ...D.BUILT_INS })) {
+    for (const mode of ['light', 'dark'] as const) {
+      const sig = D.toneSignature(d[mode], d.props.callout)
+      let min = Infinity
+      for (let i = 0; i < 5; i++) for (let j = i + 1; j < 5; j++) min = Math.min(min, D.rgbDistance(sig[i], sig[j]))
+      ok(min >= D.TONE_MIN_DISTANCE, `${name} ${mode}: the five callout tones are pairwise distinct as painted (${d.props.callout}; closest pair ${min.toFixed(0)} apart, floor ${D.TONE_MIN_DISTANCE})`)
+    }
+  }
+  ok(['note', 'tip', 'important', 'warning', 'caution'].every((t) => new RegExp(`\\[data-sp-design\\] \\{[^}]*--tone-${t}: var\\(--d-tone-${t}\\)`).test(flat)),
+    'the surface maps the five tone roles onto the tones every callout rule reads')
+  const one = base()
+  ;(one as { designs?: unknown }).designs = { mono: { base: 'studio', light: { toneNote: '#ff9e8a', toneTip: '#ff9e8a', toneImportant: '#ff9e8a', toneWarning: '#ff9e8a', toneCaution: '#ff9e8a' } } }
+  D.setDesign(one, 'mono')
+  ok(D.tonesDistinct(D.resolveDesign(one)!.design.light, 'fill') && validateDoc(one).findings.some((f) => f.code === 'design-contrast' && /toneTip/.test(f.path ?? '')),
+    'a custom design that paints all five tones one colour gets the base\'s five back, and validate() names it')
+
   // fonts travel as assets
   const fd = base()
   fd.assets = { f1: 'data:font/woff2;base64,AAAA', img: 'data:image/png;base64,AAAA' }

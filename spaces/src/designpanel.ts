@@ -46,7 +46,7 @@ function designHint(name: string | null): string {
   switch (name) {
     case null: return t('The look every space starts with.')
     case 'ledger': return t('A precise grid, figures in a monospace, cobalt rules.')
-    case 'almanac': return t('An editorial serif, a drop cap, marigold as the only colour.')
+    case 'almanac': return t('An editorial serif, a drop cap, and marigold for its accent.')
     case 'studio': return t('The Bento tile: navy, slate, coral and cream compartments.')
     case 'broadsheet': return t('A news serif under double rules, justified, with pull quotes.')
     case 'typescript': return t('A typewritten manuscript: one face, capitals, a two-colour ribbon.')
@@ -70,6 +70,11 @@ const COLOUR_LABEL = (k: PaletteKey): string => {
     case 'cell1': return t('Cell 1')
     case 'cell2': return t('Cell 2')
     case 'cell3': return t('Cell 3')
+    case 'toneNote': return t('Note')
+    case 'toneTip': return t('Tip')
+    case 'toneImportant': return t('Important')
+    case 'toneWarning': return t('Warning')
+    case 'toneCaution': return t('Caution')
   }
 }
 
@@ -115,7 +120,6 @@ const PROP_LABEL = (k: PropKey): string => {
     case 'numerals': return t('Figures')
     case 'check': return t('Checkboxes')
     case 'tile': return t('Tiles')
-    case 'tones': return t('Callout colours')
     case 'shadow': return t('Shadows')
     case 'justify': return t('Justified text')
     case 'divider': return t('Dividers')
@@ -133,7 +137,7 @@ const VALUE_LABEL = (k: PropKey, v: string): string => {
     case 'label:plain': case 'quote:plain': return t('Plain')
     case 'label:smallcaps': return t('Small capitals')
     case 'labelInk:ink': return t('Text colour')
-    case 'labelInk:accent': case 'tones:accent': return t('Accent')
+    case 'labelInk:accent': return t('Accent')
     case 'h2:none': case 'shadow:none': return t('None')
     case 'h2:above': return t('Rule above')
     case 'h2:double': return t('Double rule above')
@@ -160,7 +164,6 @@ const VALUE_LABEL = (k: PropKey, v: string): string => {
     case 'check:native': return t('System')
     case 'check:square': case 'bullet:square': return t('Square')
     case 'check:round': return t('Round')
-    case 'tones:hue': return t('One hue per tone')
     case 'shadow:hard': return t('Hard offset')
     case 'divider:rule': return t('Hairline')
     case 'divider:ink': return t('Heavy rule')

@@ -638,7 +638,7 @@ export const de: Catalog = {
   "Accent text": "Akzenttext",
   "Add a font file…": "Schriftdatei hinzufügen…",
   "Almanac": "Almanach",
-  "An editorial serif, a drop cap, marigold as the only colour.": "Eine redaktionelle Serifenschrift, eine Initiale, Ringelblumengelb als einzige Farbe.",
+  "An editorial serif, a drop cap, and marigold for its accent.": "Eine redaktionelle Serifenschrift, eine Initiale und Ringelblumengelb als Akzent.",
   "As written": "Wie geschrieben",
   "Asterism": "Asterismus",
   "Bands": "Bänder",

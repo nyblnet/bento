@@ -45,9 +45,28 @@ export const PALETTE_KEYS = [
   'paper', 'ink', 'muted', 'rule', 'soft',
   'accent', 'accentInk', 'onAccent',
   'tile', 'tileInk', 'cell1', 'cell2', 'cell3',
+  'toneNote', 'toneTip', 'toneImportant', 'toneWarning', 'toneCaution',
 ] as const
 export type PaletteKey = (typeof PALETTE_KEYS)[number]
 export type Palette = Record<PaletteKey, string>
+
+/**
+ * The five callout tones are PALETTE ROLES, one colour each, per mode.
+ *
+ * TONE IS MEANING: a warning must not look like a tip. The first cut had a
+ * `tones: accent` switch that gave all five the design's one colour — and
+ * Studio, Almanac and Typescript drew five identical boxes, the Note reading
+ * "the blue one" in coral. So each design now names five hues of its own
+ * character, and the validator holds them pairwise apart (TONE_MIN_DISTANCE).
+ */
+export const TONE_KEYS = ['toneNote', 'toneTip', 'toneImportant', 'toneWarning', 'toneCaution'] as const
+type ToneKey = (typeof TONE_KEYS)[number]
+/** styles.css's own tone hues — the default a design inherits unless it names its own */
+const APP_TONES: Record<ToneKey, string> = {
+  toneNote: '#7d9cbd', toneTip: '#4f9e79', toneImportant: '#8a72cc', toneWarning: '#d9a326', toneCaution: '#cd6a63',
+}
+type PaletteIn = Omit<Palette, ToneKey> & Partial<Pick<Palette, ToneKey>>
+const pal = (p: PaletteIn): Palette => ({ ...APP_TONES, ...p })
 
 /** Where a face is used: titles and headings, prose, labels, code/numerals. */
 export const FONT_ROLES = ['display', 'body', 'label', 'mono'] as const
@@ -109,7 +128,6 @@ export const PROPS = {
   numerals: oneOf('lining', 'mono', 'oldstyle'),
   check: oneOf('native', 'square', 'round'),
   tile: oneOf('off', 'on'),
-  tones: oneOf('hue', 'accent'),
   shadow: oneOf('none', 'hard'),
   justify: oneOf('off', 'on'),
   divider: oneOf('rule', 'ink', 'double', 'asterism', 'short'),
@@ -161,28 +179,28 @@ export interface DesignData {
  * styles.css's own light and dark tokens.
  */
 export const PLAIN: Design = {
-  light: {
+  light: pal({
     paper: '#ffffff', ink: '#1e2a3a', muted: '#5b6472', rule: '#e3e8ef', soft: '#f5f7fa',
     accent: '#f7a600', accentInk: '#7a5200', onAccent: '#1e2a3a',
     tile: '#1e2a3a', tileInk: '#ffffff', cell1: '#3b6fd4', cell2: '#f7a600', cell3: '#eceff4',
-  },
-  dark: {
+  }),
+  dark: pal({
     paper: '#14181e', ink: '#e7eaf0', muted: '#8b95a4', rule: '#2e353f', soft: '#1e232b',
     accent: '#f7a600', accentInk: '#f0b74e', onAccent: '#1e2a3a',
     tile: '#0d1015', tileInk: '#e7eaf0', cell1: '#3b6fd4', cell2: '#f7a600', cell3: '#272d36',
-  },
+  }),
   fonts: { display: 'system', body: 'system', label: 'system', mono: 'mono' },
   props: {
     size: 1, leading: 1.65, titleSize: 2.06, titleWeight: 700, titleTracking: -0.02, titleLeading: 1.18,
     headWeight: 700, radius: 10, rule: 1,
     headStyle: 'normal', headCase: 'none', label: 'plain', labelInk: 'ink', h2: 'none', dropCap: 'off',
     callout: 'tint', quote: 'plain', table: 'grid', numerals: 'lining', check: 'native', tile: 'off',
-    tones: 'hue', shadow: 'none', justify: 'off', divider: 'rule', bullet: 'disc',
+    shadow: 'none', justify: 'off', divider: 'rule', bullet: 'disc',
   },
 }
 
-const make = (over: { light: Palette; dark: Palette; fonts: Design['fonts']; props: Partial<Props> }): Design =>
-  ({ ...over, props: { ...PLAIN.props, ...over.props } })
+const make = (over: { light: PaletteIn; dark: PaletteIn; fonts: Design['fonts']; props: Partial<Props> }): Design =>
+  ({ ...over, light: pal(over.light), dark: pal(over.dark), props: { ...PLAIN.props, ...over.props } })
 
 /**
  * The built-in designs. Each is defensible from a real publishing tradition,
@@ -214,8 +232,8 @@ export const BUILT_INS: Readonly<Record<string, Design>> = {
   }),
   // ALMANAC — the literary quarterly and the seed catalogue: an old-style
   // serif set large, italic heads with a short rule under them, a drop cap on
-  // the opening paragraph, and marigold as the only colour (callout tones
-  // collapse to it; the tone's icon and name still tell them apart).
+  // the opening paragraph, and marigold as the one accent. The callout tones
+  // keep five hues of their own, in the same earthy register.
   almanac: make({
     light: {
       paper: '#edf0e7', ink: '#1c2a21', muted: '#56645a', rule: '#cdd4c4', soft: '#e2e7da',
@@ -223,18 +241,21 @@ export const BUILT_INS: Readonly<Record<string, Design>> = {
       // marks that carry meaning, and #c98a0b was 2.56:1 on this paper
       accent: '#b07800', accentInk: '#7f5600', onAccent: '#0f1510',
       tile: '#1c2a21', tileInk: '#edf0e7', cell1: '#b07800', cell2: '#cdd4c4', cell3: '#e2e7da',
+      // an editorial set around the marigold: slate, sage, plum, marigold, rust
+      toneNote: '#5f7f8c', toneTip: '#6b8f4e', toneImportant: '#8a6a9a', toneWarning: '#b07800', toneCaution: '#b0503a',
     },
     dark: {
       paper: '#141a16', ink: '#e3e8dd', muted: '#a1ad9f', rule: '#2c3730', soft: '#1b231e',
       accent: '#e4b04a', accentInk: '#edc574', onAccent: '#141a16',
       tile: '#0b0f0c', tileInk: '#e3e8dd', cell1: '#e4b04a', cell2: '#2c3730', cell3: '#1b231e',
+      toneNote: '#8fb0bc', toneTip: '#9cc07c', toneImportant: '#b89ac8', toneWarning: '#e4b04a', toneCaution: '#e0806a',
     },
     fonts: { display: 'oldstyle', body: 'transitional', label: 'transitional', mono: 'mono' },
     props: {
       size: 1.09, leading: 1.6, titleSize: 3.2, titleWeight: 500, titleTracking: -0.02, titleLeading: 1,
       headWeight: 500, radius: 2, headStyle: 'italic', label: 'caps', labelInk: 'accent', h2: 'bar',
       dropCap: 'on', callout: 'rules', quote: 'display', table: 'rules', numerals: 'oldstyle',
-      check: 'round', tones: 'accent', divider: 'short',
+      check: 'round', divider: 'short',
     },
   }),
   // STUDIO — the Bento mark as layout grammar: a navy tile holding slate,
@@ -245,17 +266,21 @@ export const BUILT_INS: Readonly<Record<string, Design>> = {
       paper: '#ffffff', ink: '#16273e', muted: '#566781', rule: '#dde3ec', soft: '#f0ebe0',
       accent: '#ff9e8a', accentInk: '#b84a34', onAccent: '#16273e',
       tile: '#16273e', tileInk: '#f0ebe0', cell1: '#5e7699', cell2: '#ff9e8a', cell3: '#f0ebe0',
+      // filled boxes, so the five hues are saturated enough to stay five
+      // things at a 40% fill (closest pair 42 apart)
+      toneNote: '#3f7fd0', toneTip: '#2fae6f', toneImportant: '#a45ee0', toneWarning: '#f5c542', toneCaution: '#ff5f4f',
     },
     dark: {
       paper: '#0b1320', ink: '#eef1f6', muted: '#9aa8be', rule: '#223149', soft: '#16273e',
       accent: '#ff9e8a', accentInk: '#ffb5a5', onAccent: '#16273e',
       tile: '#1b3050', tileInk: '#f0ebe0', cell1: '#5e7699', cell2: '#ff9e8a', cell3: '#f0ebe0',
+      toneNote: '#3f7fd0', toneTip: '#2fae6f', toneImportant: '#a45ee0', toneWarning: '#f5c542', toneCaution: '#ff5f4f',
     },
     fonts: { display: 'humanist', body: 'humanist', label: 'humanist', mono: 'mono' },
     props: {
       size: 1.03, titleSize: 3.4, titleWeight: 800, titleTracking: -0.04, titleLeading: 0.95,
       headWeight: 780, radius: 14, callout: 'fill', quote: 'tile', table: 'bands', check: 'round',
-      tile: 'on', tones: 'accent',
+      tile: 'on',
     },
   }),
   // BROADSHEET — the newspaper: a bold news serif under thick-and-thin
@@ -288,17 +313,20 @@ export const BUILT_INS: Readonly<Record<string, Design>> = {
       paper: '#faf8f2', ink: '#1c1b19', muted: '#5e5b54', rule: '#cbc6ba', soft: '#f0ece2',
       accent: '#c0392b', accentInk: '#a5301f', onAccent: '#ffffff',
       tile: '#1c1b19', tileInk: '#faf8f2', cell1: '#c0392b', cell2: '#cbc6ba', cell3: '#f0ece2',
+      // the ribbon's red for caution; the other four as typed inks
+      toneNote: '#6b6760', toneTip: '#4f7a5c', toneImportant: '#5a5a9e', toneWarning: '#b8862b', toneCaution: '#c0392b',
     },
     dark: {
       paper: '#121212', ink: '#e4e1d8', muted: '#9d998f', rule: '#33312d', soft: '#1c1b19',
       accent: '#ff7a6b', accentInk: '#ff9285', onAccent: '#121212',
       tile: '#050505', tileInk: '#e4e1d8', cell1: '#ff7a6b', cell2: '#33312d', cell3: '#1c1b19',
+      toneNote: '#a8a399', toneTip: '#7fb08d', toneImportant: '#9c9ce0', toneWarning: '#e0b25a', toneCaution: '#ff7a6b',
     },
     fonts: { display: 'typewriter', body: 'typewriter', label: 'typewriter', mono: 'typewriter' },
     props: {
       size: 0.95, leading: 1.85, titleSize: 1.6, titleWeight: 700, titleTracking: 0.02, titleLeading: 1.3,
       headWeight: 700, radius: 0, rule: 1, headCase: 'upper', h2: 'under', callout: 'outline',
-      quote: 'indent', table: 'grid', check: 'square', tones: 'accent', divider: 'asterism', bullet: 'dash',
+      quote: 'indent', table: 'grid', check: 'square', divider: 'asterism', bullet: 'dash',
     },
   }),
   // RISO — the risograph zine: two spot inks (federal blue and fluorescent
@@ -520,16 +548,18 @@ function enforceFloors(out: Design, base: Design, at: string, problems: DesignPr
     // paper (designs.css, FILL_MIX). A custom accent can make that mix too
     // dark for the ink — measured: 4.27:1 on a teal fork in dark — so the
     // mix is checked here, where the numbers are, and the accent falls back.
-    if (out.props.callout === 'fill' && !fillReadable(pal, out.props.tones) && pal.accent !== base[mode].accent) pal.accent = base[mode].accent
+    if (out.props.callout === 'fill' && !fillReadable(pal)) for (const k of TONE_KEYS) pal[k] = base[mode][k]
+    // TONE IS MEANING: five tones a reader cannot tell apart are one tone
+    if (!tonesDistinct(pal, out.props.callout)) for (const k of TONE_KEYS) pal[k] = base[mode][k]
     for (const k of PALETTE_KEYS) {
       if (pal[k] === was[k]) continue
       problems.push({ code: 'design-contrast', path: `${at}.${mode}.${k}`,
-        message: `${at}.${mode}.${k} = ${was[k]} would leave text under its contrast floor (${CONTRAST_FLOORS.filter(([f, b]) => f === k || b === k).map(([f, b, m]) => `${f} on ${b} ${m}:1`).join(', ') || 'callout fill or tile cell 4.5:1'}); the base design's ${pal[k]} is used.` })
+        message: `${at}.${mode}.${k} = ${was[k]} would leave text under its contrast floor (${CONTRAST_FLOORS.filter(([f, b]) => f === k || b === k).map(([f, b, m]) => `${f} on ${b} ${m}:1`).join(', ') || 'callout fill or tile cell 4.5:1, or five tones a reader must tell apart'}); the base design's ${pal[k]} is used.` })
     }
   }
   // …and if the base's own colours cannot carry a fill either, the SWITCH
   // falls back instead: a design never gets to put text on a ground it fails.
-  if (out.props.callout === 'fill' && !(fillReadable(out.light, out.props.tones) && fillReadable(out.dark, out.props.tones))) {
+  if (out.props.callout === 'fill' && !(fillReadable(out.light) && fillReadable(out.dark))) {
     const to = base.props.callout === 'fill' ? 'tint' : base.props.callout
     problems.push({ code: 'design-contrast', path: `${at}.props.callout`,
       message: `${at}.props.callout = "fill" puts text under 4.5:1 with these colours; "${to}" is used.` })
@@ -552,9 +582,28 @@ export function mixHex(a: string, b: string, p: number): string {
   return '#' + x.map((c, i) => Math.round((c * p + y[i] * (1 - p)) * 255).toString(16).padStart(2, '0')).join('')
 }
 
-function fillReadable(pal: Palette, tones: Props['tones']): boolean {
-  const hues = tones === 'accent' ? [pal.accent] : TONE_HUES
-  return hues.every((h) => contrast(pal.ink, mixHex(h, pal.paper, FILL_MIX)) >= 4.5)
+function fillReadable(pal: Palette): boolean {
+  return TONE_KEYS.every((k) => contrast(pal.ink, mixHex(pal[k], pal.paper, FILL_MIX)) >= 4.5)
+}
+
+/**
+ * What tells one tone from another ON THE PAGE, per callout style: a filled
+ * box is told by its fill; every other style draws the tone's own hue as a
+ * rule, a start bar or a shadow, and colours its label from it.
+ */
+export function toneSignature(pal: Palette, callout: Props['callout']): string[] {
+  return TONE_KEYS.map((k) => (callout === 'fill' ? mixHex(pal[k], pal.paper, FILL_MIX) : pal[k]))
+}
+/** Smallest sRGB distance (0–441) two tones' signatures may sit apart. */
+export const TONE_MIN_DISTANCE = 24
+export function rgbDistance(a: string, b: string): number {
+  const [x, y] = [channels(a), channels(b)]
+  return Math.hypot(...x.map((c, i) => (c - y[i]) * 255))
+}
+export function tonesDistinct(pal: Palette, callout: Props['callout']): boolean {
+  const s = toneSignature(pal, callout)
+  for (let i = 0; i < s.length; i++) for (let j = i + 1; j < s.length; j++) if (rgbDistance(s[i], s[j]) < TONE_MIN_DISTANCE) return false
+  return true
 }
 
 export interface Resolved {
