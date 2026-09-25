@@ -12,6 +12,12 @@
 import type { BentoDoc, Slide } from "./model.ts"
 import { tokenize, type Tok } from "../../kernel/src/tokenize.ts"
 
+// Tokens that usually occur in pairs are related to each other.
+// This way, if one is matched then the other is also matched automatically.
+const RELATED_TOKENS_BEGIN = new Set<string>(['{', '[', '(', '<'])
+const RELATED_TOKENS_END = new Set<string>(['}', ']', ')', '>'])
+const RELATED_SEARCH_LIMIT = 2
+
 // The stable token that we can diff between slides.
 
 export class Token {
@@ -25,6 +31,10 @@ export class Token {
   readonly scopes: Array<string>
   readonly lineNumber: number
   readonly offset: number
+  // Related tokens when applicable.
+  // This is only populated when the content is in the `RELATED_TOKENS_*` set.
+  _related: Token|undefined
+  _relatedIndex: number|undefined
 
   constructor(content: string, scopes: Array<string>, lineNumber: number, offset: number) {
     this.content = content
@@ -32,6 +42,8 @@ export class Token {
     this.lineNumber = lineNumber
     this.offset = offset
     this._id = undefined
+    this._related = undefined
+    this._relatedIndex = undefined
   }
 
   morphId(): string {
@@ -57,10 +69,14 @@ export class Token {
     const buckets = this.scopes.map((sc) => (sc === 'f' ? 'x' : sc))
     const json = {
       content: this.content,
-      scopes: buckets,
-      depth: this.depth()
+      scopes: buckets
     }
     return JSON.stringify(json)
+  }
+
+  assignRelated(related: Token, relatedIndex: number) {
+    this._related = related
+    this._relatedIndex = relatedIndex
   }
 
   /**
@@ -278,6 +294,25 @@ export class HeckelDiff {
           statesP[np] = match
           statesC[nc] = match
           next.push(nc)
+          // Check for related tokens
+          const rp = previous[np]._relatedIndex
+          const rc = current[nc]._relatedIndex
+          if (current[nc]._related && previous[np]._related && rc && rp) {
+            if (statesP[rp].kind !== 'empty') continue
+            if (statesC[rc].kind !== 'empty') continue
+            const related: Match = {
+              kind: 'match',
+              previousIdx: rp,
+              previous: previous[np]._related,
+              currentIdx: rc,
+              current: current[nc]._related
+            }
+            // Propagate morph id
+            related.current.setMorphId(related.previous.morphId())
+            statesP[rp] = related
+            statesC[rc] = related
+            next.push(rc)
+          }
         }
       }
       frontier = next
@@ -316,18 +351,55 @@ export class HeckelDiff {
    * the previous add-then-delete dance re-added a key on its third occurrence,
    * so any token repeating an odd number of times — a third `)` is enough —
    * became a false "unique" anchor and Phase 1 paired wrong positions.
+   *
+   * We also use this opportunity to relate tokens that ought to occur in matching pairs.
+   * Punctuation tokens like `{`, `(`, `[`, and `<` have a matching `}`, `)`, `]`, and `>` respectively.
+   * Comments are always prefixed by a comment preamble, so we don't have to worry about scopes.
    * Regression: scripts/test-codediff.ts.
    */
   private static anchors(tokens: Token[]): Map<string, { frequency: number, index: number }> {
+    // Keep track of related tokens.
+    // Useful to track matching pairs of tokens so we can consume them cleanly.
+    const stack = new Array<{token: Token, index: number}>()
     const freq = new Map<string, { frequency: number, index: number }>()
     for (let i = 0; i < tokens.length; i += 1) {
-      const key = tokens[i].key()
+      const token = tokens[i]
+      const key = token.key()
+      const content = token.content
+      if (RELATED_TOKENS_BEGIN.has(content)) {
+        stack.push({token: token, index: i})
+      }
+      if (RELATED_TOKENS_END.has(content)) {
+        var j = 0
+        while(j < RELATED_SEARCH_LIMIT) {
+          const begin = stack.pop()
+          if (!begin) break
+          if (HeckelDiff.areRelated(begin.token, token)) {
+            // Relate the tokens to each other.
+            begin.token.assignRelated(token, i)
+            token.assignRelated(begin.token, begin.index)
+            break
+          }
+          j += 1
+        }
+      }
       const e = freq.get(key)
       if (e) e.frequency += 1
       else freq.set(key, { frequency: 1, index: i })
     }
     for (const [key, e] of freq) if (e.frequency !== 1) freq.delete(key)
     return freq
+  }
+
+  private static areRelated(first: Token, second: Token): boolean {
+    // It's enough to only check for the content here.
+    // We are intentionally not making too many assumptions around the Token
+    // scopes here, to keep the Tokenizer open-ended.
+    if (first.content === '{' && second.content === '}') return true
+    if (first.content === '[' && second.content === ']') return true
+    if (first.content === '(' && second.content === ')') return true
+    if (first.content === '<' && second.content === '>') return true
+    return false
   }
 
   private static zip(parsed: Array<Token[]>): Array<number[]> {
