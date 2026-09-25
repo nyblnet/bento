@@ -1541,6 +1541,39 @@ html, body {
   font-size: 9px;
   padding: 0 2px;
   opacity: 0.75;
+  /* IT MUST NOT REACH THE LETTER. The badge is absolutely positioned (above)
+     so the letter stays centred on the COLUMN, which is right — but nothing
+     stopped a long type name running underneath it, and the two then paint on
+     top of each other: measured on the starter workbook, Italian renders "F"
+     and "Percentuale" overlapping by 8px, so neither the column letter nor the
+     type can be read. That is shipped today, not something a new locale
+     introduced; Portuguese only widens it from one column to three
+     ("Monetário", "Porcentagem"). English sits at exactly 0.0px clearance,
+     which is to say the layout had no margin at all and the first slightly
+     longer word was always going to collide.
+
+     The letter is the ADDRESS — how a person says which column they mean — so
+     it is the one that must survive.
+
+     THE CAP IS ENGLISH'S OWN WIDTH, and that is a deliberate ceiling rather
+     than a comfortable one. A cap generous enough to guarantee real clearance
+     (50% - 9px) also truncates English "Percent", which is a regression in the
+     shipped UI to fix a translation — not a trade worth making inside an i18n
+     change. So the rule is exactly: NO LOCALE MAY BE TIGHTER THAN ENGLISH. The
+     longer words truncate to the width English already occupies, and nothing
+     that fits today moves by a pixel.
+
+     That leaves English itself still at ~0px clearance, which is a real
+     finding and not one CSS can answer: at 109px the strip simply does not
+     have room for a centred letter and the word "Percent". Fixing it properly
+     means shorter labels in the badge or a strip that lays the two out in
+     flow, and both are design calls about the header rather than about
+     Portuguese. Filed, not smuggled in here. The full name is already in
+     `title`. */
+  max-width: calc(50% - 2px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .dg-hstrip .dg-type:hover { opacity: 1; color: var(--accent); }
 /* HIERARCHY FROM TYPE, NOT FROM FILL. The column name is the one piece of
