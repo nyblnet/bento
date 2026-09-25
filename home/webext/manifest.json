@@ -13,6 +13,10 @@
   "optional_permissions": [
     "history"
   ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
   "options_page": "src/home.html#settings",
   "background": {
     "service_worker": "src/background.js",
@@ -23,6 +27,7 @@
       "matches": [
         "file:///*.bento.html"
       ],
+      "all_frames": false,
       "js": [
         "src/page-bridge.js"
       ],
@@ -33,6 +38,7 @@
       "matches": [
         "file:///*.bento.html"
       ],
+      "all_frames": false,
       "js": [
         "src/relay.js"
       ],

@@ -484,5 +484,185 @@
   },
   "surveyOnlySeen": {
     "message": "لا يمكن العثور بهذه الطريقة إلا على المستندات التي فُتحت في هذا المتصفح."
+  },
+  "setAsstTitle": {
+    "message": "المساعد"
+  },
+  "setAsstSub": {
+    "message": "إلى أين تُرسَل المحادثة حول مستند. يبقى المفتاح في هذا الامتداد — لا يرى المستند سوى الرد."
+  },
+  "asstProvider": {
+    "message": "المزوّد"
+  },
+  "asstProvBuiltin": {
+    "message": "نموذج Chrome المدمج (Gemini Nano) — على هذا الجهاز"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (مفتاح AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "متوافق مع OpenAI (OpenAI وOpenRouter وOllama وLM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "عنوان URL الأساسي"
+  },
+  "asstModel": {
+    "message": "النموذج"
+  },
+  "asstKey": {
+    "message": "مفتاح API"
+  },
+  "asstKeyOptional": {
+    "message": "اختياري لخادم محلي مثل Ollama أو LM Studio."
+  },
+  "asstSave": {
+    "message": "حفظ"
+  },
+  "asstSaved": {
+    "message": "حُفظت إعدادات المساعد"
+  },
+  "asstAccessDeclined": {
+    "message": "رُفض الوصول إلى الموقع. تُرسَل الطلبات مع ذلك، وتعمل عندما يسمح الخادم بامتدادات المتصفح (CORS)."
+  },
+  "asstCheck": {
+    "message": "التحقق من الاتصال"
+  },
+  "asstChecking": {
+    "message": "جارٍ التحقق…"
+  },
+  "asstReachable": {
+    "message": "يمكن الوصول — أجاب $1."
+  },
+  "asstBuiltinReady": {
+    "message": "جاهز على هذا الجهاز."
+  },
+  "asstBuiltinDownload": {
+    "message": "النموذج ليس على هذا الجهاز بعد. اضغط «تنزيل النموذج» في إعدادات امتداد bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "لا يوجد نموذج مدمج في Chrome هذا. اختر مزوّدًا آخر في إعدادات الامتداد."
+  },
+  "asstOnDevice": {
+    "message": "هذا الجهاز"
+  },
+  "asstNotConfigured": {
+    "message": "لم يُعدّ المساعد بعد — افتح إعدادات امتداد bento/home."
+  },
+  "asstUnreachable": {
+    "message": "تعذّر الوصول إلى $1. هل الخادم يعمل، وهل يسمح بالطلبات من امتدادات المتصفح (CORS)؟"
+  },
+  "asstWaitConsent": {
+    "message": "بانتظار إذنك — أجب عن السؤال ثم حاول مجددًا."
+  },
+  "asstDenied": {
+    "message": "لا يُسمح لهذا المستند باستخدام المساعد."
+  },
+  "asstAllowedTitle": {
+    "message": "المستندات المسموح لها باستخدام المساعد"
+  },
+  "asstAllowedSub": {
+    "message": "يسأل كل مستند مرة واحدة قبل طلبه الأول. أزل مستندًا ليُسأل من جديد."
+  },
+  "consentTitle": {
+    "message": "السماح لهذا المستند باستخدام مساعدك؟"
+  },
+  "consentLead": {
+    "message": "سيتمكن من إرسال نص إلى $1 ($2) وقراءة الردود. لا يُشارَك مفتاحك معه أبدًا."
+  },
+  "consentRemember": {
+    "message": "سيُتذكَّر لهذا الملف. يمكنك تغيير ذلك لاحقًا في إعدادات الامتداد."
+  },
+  "consentAllow": {
+    "message": "السماح"
+  },
+  "consentDeny": {
+    "message": "ليس الآن"
+  },
+  "asstBuiltinDownloading": {
+    "message": "يحمّل Chrome النموذج. حاول مجددًا عند اكتماله."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "تنزيل النموذج"
+  },
+  "asstBuiltinProgress": {
+    "message": "جارٍ تنزيل النموذج… $1٪"
+  },
+  "asstBuiltinRequirements": {
+    "message": "نحو 2–4 غيغابايت. يحتاج Chrome إلى نحو 22 غيغابايت خالية على القرص وشبكة غير محدودة البيانات، وإلا أبلغ أن النموذج غير متاح."
+  },
+  "asstContext": {
+    "message": "نافذة السياق (رموز)"
+  },
+  "asstContextHint": {
+    "message": "اتركه فارغًا لاستخدام ما يبلّغ عنه المزوّد. املأه لخادم تستضيفه بنفسك ولا يعرف حدّه سواك."
+  },
+  "asstContextKnown": {
+    "message": "نافذة السياق: $1 رمز"
+  },
+  "asstShowAll": {
+    "message": "إظهار كل النماذج، لا نماذج المحادثة فقط"
+  },
+  "asstOtherModelRow": {
+    "message": "أخرى…"
+  },
+  "asstOtherModel": {
+    "message": "معرّف النموذج كما يسمّيه المزوّد تمامًا"
+  },
+  "asstBadModel": {
+    "message": "هذا ليس معرّف نموذج: أحرف وأرقام و . _ : / - فقط."
+  },
+  "asstWindow": {
+    "message": "العرض أكبر من أن يتّسع له هذا النموذج: يحتاج الطلب نحو $1 رمزًا ويقبل النموذج $2. اختر نموذجًا بنافذة أوسع أو اختصر العرض."
+  },
+  "asstOutlineOnly": {
+    "message": "لم يتّسع في نافذة هذا النموذج سوى المخطط؛ لم يُرسَل المحتوى المحدد كاملًا."
+  },
+  "asstNoDocument": {
+    "message": "لم يسلّم المستند محتواه."
+  },
+  "asstSendsNotice": {
+    "message": "يرسل مخطط العرض و$1 إلى $2؛ تبقى التعليقات هنا."
+  },
+  "asstOnDeviceModel": {
+    "message": "النموذج على هذا الجهاز"
+  },
+  "asstFocusGeneric": {
+    "message": "العناصر المحددة أو الشريحة المفتوحة"
+  },
+  "asstSearch": {
+    "message": "السماح للنموذج بالبحث في الويب"
+  },
+  "asstSearchNative": {
+    "message": "لهذا المسار بحث ويب خاص به ($1)؛ الاستعلام هو الشيء الجديد الوحيد الذي يخرج."
+  },
+  "asstSearchNone": {
+    "message": "ليس لهذا النموذج بحث ويب خاص به — حدّد نقطة بحث أدناه."
+  },
+  "asstRead": {
+    "message": "قراءة صفحات الويب"
+  },
+  "asstReadOn": {
+    "message": "السماح بقراءة صفحات الويب…"
+  },
+  "asstReadOff": {
+    "message": "إيقاف قراءة صفحات الويب"
+  },
+  "asstReadOnNote": {
+    "message": "يستطيع المساعد قراءة الصفحات التي يجدها (كنص، وليس كتعليمات أبدًا)."
+  },
+  "asstReadOffNote": {
+    "message": "متوقف. لا يستطيع المساعد قراءة صفحات الويب؛ نقرة هنا تسأل المتصفح مرة واحدة."
+  },
+  "asstSearchEndpoint": {
+    "message": "نقطة البحث"
+  },
+  "asstSearchEndpointHint": {
+    "message": "نسخة SearXNG، أو https://api.search.brave.com/ مع مفتاحها أدناه. تُستخدم فقط عندما لا يملك النموذج بحثًا خاصًا."
+  },
+  "asstSearchKey": {
+    "message": "مفتاح البحث"
   }
 }

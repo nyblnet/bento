@@ -484,5 +484,185 @@
   },
   "surveyOnlySeen": {
     "message": "इस तरह केवल वही दस्तावेज़ मिलते हैं जो इस ब्राउज़र में खोले गए हों।"
+  },
+  "setAsstTitle": {
+    "message": "सहायक"
+  },
+  "setAsstSub": {
+    "message": "किसी दस्तावेज़ के बारे में चैट कहाँ भेजी जाती है। कुंजी इसी एक्सटेंशन में रहती है — दस्तावेज़ को केवल जवाब दिखता है।"
+  },
+  "asstProvider": {
+    "message": "प्रदाता"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome का अंतर्निहित मॉडल (Gemini Nano) — इसी डिवाइस पर"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio कुंजी)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-संगत (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "आधार URL"
+  },
+  "asstModel": {
+    "message": "मॉडल"
+  },
+  "asstKey": {
+    "message": "API कुंजी"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama या LM Studio जैसे स्थानीय सर्वर के लिए वैकल्पिक।"
+  },
+  "asstSave": {
+    "message": "सहेजें"
+  },
+  "asstSaved": {
+    "message": "सहायक की सेटिंग सहेजी गईं"
+  },
+  "asstAccessDeclined": {
+    "message": "साइट पहुँच अस्वीकार की गई। अनुरोध फिर भी भेजे जाते हैं, और तब काम करते हैं जब सर्वर ब्राउज़र एक्सटेंशन की अनुमति देता है (CORS)।"
+  },
+  "asstCheck": {
+    "message": "कनेक्शन जाँचें"
+  },
+  "asstChecking": {
+    "message": "जाँच हो रही है…"
+  },
+  "asstReachable": {
+    "message": "पहुँच में है — $1 ने जवाब दिया।"
+  },
+  "asstBuiltinReady": {
+    "message": "इस डिवाइस पर तैयार है।"
+  },
+  "asstBuiltinDownload": {
+    "message": "मॉडल अभी इस डिवाइस पर नहीं है। bento/home एक्सटेंशन की सेटिंग में “मॉडल डाउनलोड करें” दबाएँ।"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "इस Chrome में अंतर्निहित मॉडल नहीं है। एक्सटेंशन की सेटिंग में कोई और प्रदाता चुनें।"
+  },
+  "asstOnDevice": {
+    "message": "यह डिवाइस"
+  },
+  "asstNotConfigured": {
+    "message": "सहायक अभी सेट नहीं हुआ है — bento/home एक्सटेंशन की सेटिंग खोलें।"
+  },
+  "asstUnreachable": {
+    "message": "$1 तक नहीं पहुँचा जा सका। क्या सर्वर चल रहा है, और क्या वह ब्राउज़र एक्सटेंशन के अनुरोधों की अनुमति देता है (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "आपकी अनुमति की प्रतीक्षा है — संकेत का जवाब दें, फिर दोबारा कोशिश करें।"
+  },
+  "asstDenied": {
+    "message": "इस दस्तावेज़ को सहायक इस्तेमाल करने की अनुमति नहीं है।"
+  },
+  "asstAllowedTitle": {
+    "message": "सहायक इस्तेमाल करने की अनुमति वाले दस्तावेज़"
+  },
+  "asstAllowedSub": {
+    "message": "हर दस्तावेज़ अपने पहले अनुरोध से पहले एक बार पूछता है। दोबारा पूछे जाने के लिए किसी को हटाएँ।"
+  },
+  "consentTitle": {
+    "message": "इस दस्तावेज़ को आपका सहायक इस्तेमाल करने दें?"
+  },
+  "consentLead": {
+    "message": "यह $1 ($2) को टेक्स्ट भेज सकेगा और जवाब पढ़ सकेगा। आपकी कुंजी इसके साथ कभी साझा नहीं की जाती।"
+  },
+  "consentRemember": {
+    "message": "इस फ़ाइल के लिए याद रखा जाएगा। आप इसे बाद में एक्सटेंशन की सेटिंग में बदल सकते हैं।"
+  },
+  "consentAllow": {
+    "message": "अनुमति दें"
+  },
+  "consentDeny": {
+    "message": "अभी नहीं"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome मॉडल डाउनलोड कर रहा है। पूरा होने पर दोबारा कोशिश करें।"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "मॉडल डाउनलोड करें"
+  },
+  "asstBuiltinProgress": {
+    "message": "मॉडल डाउनलोड हो रहा है… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "लगभग 2–4 GB। Chrome को डिस्क पर लगभग 22 GB खाली जगह और बिना डेटा-सीमा वाला नेटवर्क चाहिए, वरना वह मॉडल को अनुपलब्ध बताता है।"
+  },
+  "asstContext": {
+    "message": "संदर्भ विंडो (टोकन)"
+  },
+  "asstContextHint": {
+    "message": "प्रदाता द्वारा बताए मान के लिए खाली छोड़ें। ऐसे स्व-होस्टेड सर्वर के लिए भरें जिसकी सीमा केवल आप जानते हैं।"
+  },
+  "asstContextKnown": {
+    "message": "संदर्भ विंडो: $1 टोकन"
+  },
+  "asstShowAll": {
+    "message": "सभी मॉडल दिखाएँ, केवल चैट वाले नहीं"
+  },
+  "asstOtherModelRow": {
+    "message": "अन्य…"
+  },
+  "asstOtherModel": {
+    "message": "मॉडल ID, ठीक वैसे जैसे प्रदाता उसे नाम देता है"
+  },
+  "asstBadModel": {
+    "message": "यह मॉडल ID नहीं है: केवल अक्षर, अंक और . _ : / -"
+  },
+  "asstWindow": {
+    "message": "डेक इस मॉडल के लिए बहुत बड़ा है: अनुरोध को लगभग $1 टोकन चाहिए और मॉडल $2 लेता है। बड़ी विंडो वाला मॉडल चुनें, या डेक छोटा करें।"
+  },
+  "asstOutlineOnly": {
+    "message": "इस मॉडल की विंडो में केवल रूपरेखा समाई; चयनित सामग्री पूरी नहीं भेजी गई।"
+  },
+  "asstNoDocument": {
+    "message": "दस्तावेज़ ने अपनी सामग्री नहीं सौंपी।"
+  },
+  "asstSendsNotice": {
+    "message": "डेक की रूपरेखा और $1 को $2 पर भेजता है; टिप्पणियाँ यहीं रहती हैं।"
+  },
+  "asstOnDeviceModel": {
+    "message": "इस डिवाइस का मॉडल"
+  },
+  "asstFocusGeneric": {
+    "message": "चयनित तत्व या खुली स्लाइड"
+  },
+  "asstSearch": {
+    "message": "मॉडल को वेब पर खोजने दें"
+  },
+  "asstSearchNative": {
+    "message": "इस रूट की अपनी वेब खोज है ($1); केवल प्रश्न ही नई चीज़ है जो बाहर जाती है।"
+  },
+  "asstSearchNone": {
+    "message": "इस मॉडल की अपनी वेब खोज नहीं है — नीचे एक खोज एंडपॉइंट सेट करें।"
+  },
+  "asstRead": {
+    "message": "वेब पेज पढ़ना"
+  },
+  "asstReadOn": {
+    "message": "वेब पेज पढ़ने की अनुमति दें…"
+  },
+  "asstReadOff": {
+    "message": "वेब पेज पढ़ना बंद करें"
+  },
+  "asstReadOnNote": {
+    "message": "सहायक मिले पेज पढ़ सकता है (टेक्स्ट के रूप में, निर्देशों के रूप में कभी नहीं)।"
+  },
+  "asstReadOffNote": {
+    "message": "बंद। सहायक वेब पेज नहीं पढ़ सकता; यहाँ एक क्लिक ब्राउज़र से एक बार पूछता है।"
+  },
+  "asstSearchEndpoint": {
+    "message": "खोज एंडपॉइंट"
+  },
+  "asstSearchEndpointHint": {
+    "message": "एक SearXNG इंस्टेंस, या नीचे की कुंजी के साथ https://api.search.brave.com/। केवल तब उपयोग होता है जब मॉडल की अपनी खोज न हो।"
+  },
+  "asstSearchKey": {
+    "message": "खोज कुंजी"
   }
 }

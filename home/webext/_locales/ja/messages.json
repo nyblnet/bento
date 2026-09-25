@@ -517,5 +517,185 @@
   },
   "surveyOnlySeen": {
     "message": "この方法で見つかるのは、このブラウザーで開いたドキュメントだけです。"
+  },
+  "setAsstTitle": {
+    "message": "アシスタント"
+  },
+  "setAsstSub": {
+    "message": "ドキュメントについてのチャットの送り先です。キーはこの拡張機能の中に留まり、ドキュメントには返答しか見えません。"
+  },
+  "asstProvider": {
+    "message": "プロバイダー"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome 内蔵モデル（Gemini Nano）— このデバイス上"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini（AI Studio のキー）"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic（Claude）"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI 互換（OpenAI、OpenRouter、Ollama、LM Studio…）"
+  },
+  "asstBaseUrl": {
+    "message": "ベース URL"
+  },
+  "asstModel": {
+    "message": "モデル"
+  },
+  "asstKey": {
+    "message": "API キー"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama や LM Studio などのローカルサーバーでは省略できます。"
+  },
+  "asstSave": {
+    "message": "保存"
+  },
+  "asstSaved": {
+    "message": "アシスタントの設定を保存しました"
+  },
+  "asstAccessDeclined": {
+    "message": "サイトへのアクセスが拒否されました。リクエストはそれでも送られ、サーバーがブラウザー拡張機能を許可していれば（CORS）動作します。"
+  },
+  "asstCheck": {
+    "message": "接続を確認"
+  },
+  "asstChecking": {
+    "message": "確認中…"
+  },
+  "asstReachable": {
+    "message": "到達できました — $1 が応答しました。"
+  },
+  "asstBuiltinReady": {
+    "message": "このデバイスで使用できます。"
+  },
+  "asstBuiltinDownload": {
+    "message": "モデルはまだこのデバイスにありません。拡張機能 bento/home の設定で「モデルをダウンロード」を押してください。"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "この Chrome には内蔵モデルがありません。拡張機能の設定で別のプロバイダーを選んでください。"
+  },
+  "asstOnDevice": {
+    "message": "このデバイス"
+  },
+  "asstNotConfigured": {
+    "message": "アシスタントはまだ設定されていません — 拡張機能 bento/home の設定を開いてください。"
+  },
+  "asstUnreachable": {
+    "message": "$1 に到達できません。サーバーは起動していますか？ また、ブラウザー拡張機能からのリクエストを許可していますか（CORS）？"
+  },
+  "asstWaitConsent": {
+    "message": "このデバイスでの許可を待っています…"
+  },
+  "asstDenied": {
+    "message": "このデバイスで許可が拒否されました — 何も変更されていません。"
+  },
+  "asstAllowedTitle": {
+    "message": "アシスタントの使用を許可したドキュメント"
+  },
+  "asstAllowedSub": {
+    "message": "各ドキュメントは最初のリクエストの前に一度だけ尋ねます。削除すると、次回また尋ねられます。"
+  },
+  "consentTitle": {
+    "message": "このドキュメントにアシスタントの使用を許可しますか？"
+  },
+  "consentLead": {
+    "message": "許可すると $1（$2）へテキストを送り、返答を読めるようになります。キーがドキュメントに渡ることはありません。"
+  },
+  "consentRemember": {
+    "message": "このファイルについて記憶されます。あとから拡張機能の設定で変更できます。"
+  },
+  "consentAllow": {
+    "message": "許可"
+  },
+  "consentDeny": {
+    "message": "今はしない"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome がモデルをダウンロード中です。完了してからもう一度お試しください。"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "モデルをダウンロード"
+  },
+  "asstBuiltinProgress": {
+    "message": "モデルをダウンロード中… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "約 2〜4 GB です。Chrome にはディスクの空き容量が約 22 GB と、従量制でないネットワークが必要です。満たさない場合、モデルは利用不可と報告されます。"
+  },
+  "asstContext": {
+    "message": "コンテキストウィンドウ（トークン）"
+  },
+  "asstContextHint": {
+    "message": "空欄にするとプロバイダーの申告値を使います。上限をあなただけが知っている自前のサーバーの場合に入力してください。"
+  },
+  "asstContextKnown": {
+    "message": "コンテキストウィンドウ: $1 トークン"
+  },
+  "asstShowAll": {
+    "message": "チャット用だけでなく、すべてのモデルを表示"
+  },
+  "asstOtherModelRow": {
+    "message": "その他…"
+  },
+  "asstOtherModel": {
+    "message": "プロバイダーが命名しているとおりのモデル ID"
+  },
+  "asstBadModel": {
+    "message": "モデル ID ではありません。使えるのは英数字と . _ : / - だけです。"
+  },
+  "asstWindow": {
+    "message": "デッキのアウトラインだけでもこのモデルには大きすぎます（$1 トークン。ウィンドウは $2）。拡張機能の設定でより大きなウィンドウのモデルを選んでください。"
+  },
+  "asstOutlineOnly": {
+    "message": "このモデルのウィンドウにはアウトラインしか収まらないため、語句・ノート・スライドは変更できますが、位置やスタイルは変更できません。"
+  },
+  "asstNoDocument": {
+    "message": "ドキュメントが内容を渡しませんでした。"
+  },
+  "asstSendsNotice": {
+    "message": "デッキのアウトラインと$1を $2 に送ります。コメントはここに残ります。"
+  },
+  "asstOnDeviceModel": {
+    "message": "デバイス上のモデル"
+  },
+  "asstFocusGeneric": {
+    "message": "選択中の要素または開いているスライド"
+  },
+  "asstSearch": {
+    "message": "モデルにウェブ検索を許可する"
+  },
+  "asstSearchNative": {
+    "message": "このルートには独自のウェブ検索があります（$1）。新たに送信されるのは検索クエリだけです。"
+  },
+  "asstSearchNone": {
+    "message": "このモデルには独自のウェブ検索がありません。下に検索エンドポイントを設定してください。"
+  },
+  "asstRead": {
+    "message": "ウェブページの読み取り"
+  },
+  "asstReadOn": {
+    "message": "ウェブページの読み取りを許可…"
+  },
+  "asstReadOff": {
+    "message": "ウェブページの読み取りをやめる"
+  },
+  "asstReadOnNote": {
+    "message": "アシスタントは見つけたページを読めます（テキストとして。指示としては扱いません）。"
+  },
+  "asstReadOffNote": {
+    "message": "オフ。アシスタントはウェブページを読めません。ここをクリックするとブラウザーが一度確認します。"
+  },
+  "asstSearchEndpoint": {
+    "message": "検索エンドポイント"
+  },
+  "asstSearchEndpointHint": {
+    "message": "SearXNG のインスタンス、または下のキーと組み合わせた https://api.search.brave.com/。モデルに独自の検索がない場合にのみ使われます。"
+  },
+  "asstSearchKey": {
+    "message": "検索キー"
   }
 }

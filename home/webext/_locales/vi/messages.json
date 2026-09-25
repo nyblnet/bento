@@ -484,5 +484,185 @@
   },
   "surveyOnlySeen": {
     "message": "Cách này chỉ tìm được tài liệu đã mở trong trình duyệt này."
+  },
+  "setAsstTitle": {
+    "message": "Trợ lý"
+  },
+  "setAsstSub": {
+    "message": "Nơi cuộc trò chuyện về một tài liệu được gửi đến. Khóa nằm lại trong tiện ích này — tài liệu chỉ thấy câu trả lời."
+  },
+  "asstProvider": {
+    "message": "Nhà cung cấp"
+  },
+  "asstProvBuiltin": {
+    "message": "Mô hình tích hợp của Chrome (Gemini Nano) — trên thiết bị này"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (khóa AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Tương thích OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL gốc"
+  },
+  "asstModel": {
+    "message": "Mô hình"
+  },
+  "asstKey": {
+    "message": "Khóa API"
+  },
+  "asstKeyOptional": {
+    "message": "Không bắt buộc với máy chủ cục bộ như Ollama hoặc LM Studio."
+  },
+  "asstSave": {
+    "message": "Lưu"
+  },
+  "asstSaved": {
+    "message": "Đã lưu cài đặt trợ lý"
+  },
+  "asstAccessDeclined": {
+    "message": "Quyền truy cập trang web đã bị từ chối. Yêu cầu vẫn được gửi, và hoạt động khi máy chủ cho phép tiện ích trình duyệt (CORS)."
+  },
+  "asstCheck": {
+    "message": "Kiểm tra kết nối"
+  },
+  "asstChecking": {
+    "message": "Đang kiểm tra…"
+  },
+  "asstReachable": {
+    "message": "Kết nối được — $1 đã trả lời."
+  },
+  "asstBuiltinReady": {
+    "message": "Sẵn sàng trên thiết bị này."
+  },
+  "asstBuiltinDownload": {
+    "message": "Mô hình chưa có trên thiết bị này. Hãy nhấn “Tải mô hình” trong cài đặt của tiện ích bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Chrome này không có mô hình tích hợp. Hãy chọn nhà cung cấp khác trong cài đặt của tiện ích."
+  },
+  "asstOnDevice": {
+    "message": "thiết bị này"
+  },
+  "asstNotConfigured": {
+    "message": "Trợ lý chưa được thiết lập — hãy mở cài đặt của tiện ích bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Không kết nối được với $1. Máy chủ có đang chạy không, và có cho phép yêu cầu từ tiện ích trình duyệt (CORS) không?"
+  },
+  "asstWaitConsent": {
+    "message": "Đang chờ bạn cho phép — hãy trả lời lời nhắc rồi thử lại."
+  },
+  "asstDenied": {
+    "message": "Tài liệu này không được phép dùng trợ lý."
+  },
+  "asstAllowedTitle": {
+    "message": "Tài liệu được phép dùng trợ lý"
+  },
+  "asstAllowedSub": {
+    "message": "Mỗi tài liệu hỏi một lần trước yêu cầu đầu tiên. Xóa một tài liệu để được hỏi lại."
+  },
+  "consentTitle": {
+    "message": "Cho phép tài liệu này dùng trợ lý của bạn?"
+  },
+  "consentLead": {
+    "message": "Nó sẽ có thể gửi văn bản đến $1 ($2) và đọc câu trả lời. Khóa của bạn không bao giờ được chia sẻ với nó."
+  },
+  "consentRemember": {
+    "message": "Đã ghi nhớ cho tệp này. Bạn có thể thay đổi sau trong cài đặt của tiện ích."
+  },
+  "consentAllow": {
+    "message": "Cho phép"
+  },
+  "consentDeny": {
+    "message": "Để sau"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome đang tải mô hình. Hãy thử lại khi tải xong."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Tải mô hình"
+  },
+  "asstBuiltinProgress": {
+    "message": "Đang tải mô hình… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Khoảng 2–4 GB. Chrome cần khoảng 22 GB dung lượng trống trên ổ đĩa và mạng không giới hạn dữ liệu; nếu không, mô hình được báo là không khả dụng."
+  },
+  "asstContext": {
+    "message": "Cửa sổ ngữ cảnh (token)"
+  },
+  "asstContextHint": {
+    "message": "Để trống để dùng giá trị nhà cung cấp báo. Điền vào cho máy chủ tự vận hành mà chỉ bạn biết giới hạn."
+  },
+  "asstContextKnown": {
+    "message": "Cửa sổ ngữ cảnh: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Hiện tất cả mô hình, không chỉ những mô hình dành cho trò chuyện"
+  },
+  "asstOtherModelRow": {
+    "message": "Khác…"
+  },
+  "asstOtherModel": {
+    "message": "ID mô hình, đúng như nhà cung cấp đặt tên"
+  },
+  "asstBadModel": {
+    "message": "Đó không phải ID mô hình: chỉ gồm chữ cái, chữ số và . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Bộ trình chiếu quá lớn cho mô hình này: yêu cầu cần khoảng $1 token và mô hình nhận $2. Hãy chọn mô hình có cửa sổ lớn hơn, hoặc rút ngắn bộ trình chiếu."
+  },
+  "asstOutlineOnly": {
+    "message": "Chỉ dàn ý vừa với cửa sổ của mô hình này; nội dung đã chọn không được gửi đầy đủ."
+  },
+  "asstNoDocument": {
+    "message": "Tài liệu không chuyển giao nội dung của nó."
+  },
+  "asstSendsNotice": {
+    "message": "Gửi dàn ý bộ trình chiếu và $1 đến $2; bình luận ở lại đây."
+  },
+  "asstOnDeviceModel": {
+    "message": "mô hình trên thiết bị này"
+  },
+  "asstFocusGeneric": {
+    "message": "các phần tử đã chọn hoặc trang chiếu đang mở"
+  },
+  "asstSearch": {
+    "message": "Cho phép mô hình tìm kiếm trên web"
+  },
+  "asstSearchNative": {
+    "message": "Tuyến này có tìm kiếm web riêng ($1); truy vấn là thứ mới duy nhất được gửi đi."
+  },
+  "asstSearchNone": {
+    "message": "Mô hình này không có tìm kiếm web riêng — hãy đặt điểm tìm kiếm bên dưới."
+  },
+  "asstRead": {
+    "message": "Đọc trang web"
+  },
+  "asstReadOn": {
+    "message": "Cho phép đọc trang web…"
+  },
+  "asstReadOff": {
+    "message": "Ngừng đọc trang web"
+  },
+  "asstReadOnNote": {
+    "message": "Trợ lý có thể đọc các trang nó tìm thấy (dưới dạng văn bản, không bao giờ là chỉ dẫn)."
+  },
+  "asstReadOffNote": {
+    "message": "Tắt. Trợ lý không thể đọc trang web; nhấp vào đây sẽ hỏi trình duyệt một lần."
+  },
+  "asstSearchEndpoint": {
+    "message": "Điểm tìm kiếm"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Một phiên bản SearXNG, hoặc https://api.search.brave.com/ với khóa bên dưới. Chỉ dùng khi mô hình không có tìm kiếm riêng."
+  },
+  "asstSearchKey": {
+    "message": "Khóa tìm kiếm"
   }
 }

@@ -517,5 +517,185 @@
   },
   "surveyOnlySeen": {
     "message": "Seuls les documents ouverts dans ce navigateur peuvent être trouvés ainsi."
+  },
+  "setAsstTitle": {
+    "message": "Assistant"
+  },
+  "setAsstSub": {
+    "message": "Où est envoyée une conversation à propos d’un document. La clé reste dans cette extension — un document ne voit jamais que la réponse."
+  },
+  "asstProvider": {
+    "message": "Fournisseur"
+  },
+  "asstProvBuiltin": {
+    "message": "Modèle intégré à Chrome (Gemini Nano) — sur cet appareil"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (clé AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Compatible OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL de base"
+  },
+  "asstModel": {
+    "message": "Modèle"
+  },
+  "asstKey": {
+    "message": "Clé API"
+  },
+  "asstKeyOptional": {
+    "message": "Facultative pour un serveur local comme Ollama ou LM Studio."
+  },
+  "asstSave": {
+    "message": "Enregistrer"
+  },
+  "asstSaved": {
+    "message": "Réglages de l’assistant enregistrés"
+  },
+  "asstAccessDeclined": {
+    "message": "L’accès au site a été refusé. Les requêtes sont quand même envoyées, et fonctionnent si le serveur accepte les extensions de navigateur (CORS)."
+  },
+  "asstCheck": {
+    "message": "Vérifier la connexion"
+  },
+  "asstChecking": {
+    "message": "Vérification…"
+  },
+  "asstReachable": {
+    "message": "Joignable — $1 a répondu."
+  },
+  "asstBuiltinReady": {
+    "message": "Prêt sur cet appareil."
+  },
+  "asstBuiltinDownload": {
+    "message": "Le modèle n’est pas encore sur cet appareil. Appuyez sur « Télécharger le modèle » dans les réglages de l’extension bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Ce Chrome n’a pas de modèle intégré. Choisissez un autre fournisseur dans les réglages de l’extension."
+  },
+  "asstOnDevice": {
+    "message": "cet appareil"
+  },
+  "asstNotConfigured": {
+    "message": "L’assistant n’est pas encore configuré — ouvrez les réglages de l’extension bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Impossible de joindre $1. Le serveur est-il lancé, et accepte-t-il les requêtes des extensions de navigateur (CORS) ?"
+  },
+  "asstWaitConsent": {
+    "message": "En attente de votre autorisation sur cet appareil…"
+  },
+  "asstDenied": {
+    "message": "L’autorisation a été refusée sur cet appareil — rien n’a été modifié."
+  },
+  "asstAllowedTitle": {
+    "message": "Documents autorisés à utiliser l’assistant"
+  },
+  "asstAllowedSub": {
+    "message": "Chaque document demande une fois, avant sa première requête. Retirez-en un pour qu’il redemande."
+  },
+  "consentTitle": {
+    "message": "Autoriser ce document à utiliser votre assistant ?"
+  },
+  "consentLead": {
+    "message": "Il pourra envoyer du texte à $1 ($2) et lire les réponses. Votre clé ne lui est jamais transmise."
+  },
+  "consentRemember": {
+    "message": "Mémorisé pour ce fichier. Vous pourrez le changer plus tard dans les réglages de l’extension."
+  },
+  "consentAllow": {
+    "message": "Autoriser"
+  },
+  "consentDeny": {
+    "message": "Pas maintenant"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome télécharge le modèle. Réessayez quand ce sera terminé."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Télécharger le modèle"
+  },
+  "asstBuiltinProgress": {
+    "message": "Téléchargement du modèle… $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Environ 2 à 4 Go. Chrome a besoin d’environ 22 Go libres sur le disque et d’un réseau non limité, sinon il signale le modèle comme indisponible."
+  },
+  "asstContext": {
+    "message": "Fenêtre de contexte (jetons)"
+  },
+  "asstContextHint": {
+    "message": "Laissez vide pour utiliser la valeur indiquée par le fournisseur. Renseignez-la pour un serveur auto-hébergé dont vous seul connaissez la limite."
+  },
+  "asstContextKnown": {
+    "message": "Fenêtre de contexte : $1 jetons"
+  },
+  "asstShowAll": {
+    "message": "Afficher tous les modèles, pas seulement ceux pour le chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Autre…"
+  },
+  "asstOtherModel": {
+    "message": "Identifiant du modèle, exactement comme le fournisseur le nomme"
+  },
+  "asstBadModel": {
+    "message": "Ce n’est pas un identifiant de modèle : lettres, chiffres et . _ : / - uniquement."
+  },
+  "asstWindow": {
+    "message": "Le plan du deck à lui seul est trop volumineux pour ce modèle ($1 jetons ; sa fenêtre est de $2). Choisissez un modèle à fenêtre plus grande dans les réglages de l’extension."
+  },
+  "asstOutlineOnly": {
+    "message": "Seul le plan tient dans la fenêtre de ce modèle : il peut changer les mots, les notes et les diapositives, mais pas les positions ni le style."
+  },
+  "asstNoDocument": {
+    "message": "Le document n’a pas transmis son contenu."
+  },
+  "asstSendsNotice": {
+    "message": "Envoie le plan du deck et $1 à $2 ; les commentaires restent ici."
+  },
+  "asstOnDeviceModel": {
+    "message": "le modèle sur l’appareil"
+  },
+  "asstFocusGeneric": {
+    "message": "les éléments sélectionnés ou la diapositive ouverte"
+  },
+  "asstSearch": {
+    "message": "Laisser le modèle chercher sur le web"
+  },
+  "asstSearchNative": {
+    "message": "Cette route a sa propre recherche web ($1) ; seule la requête quitte en plus l’ordinateur."
+  },
+  "asstSearchNone": {
+    "message": "Ce modèle n’a pas de recherche web propre — indiquez un point de recherche ci-dessous."
+  },
+  "asstRead": {
+    "message": "Lecture de pages web"
+  },
+  "asstReadOn": {
+    "message": "Autoriser la lecture de pages web…"
+  },
+  "asstReadOff": {
+    "message": "Ne plus lire de pages web"
+  },
+  "asstReadOnNote": {
+    "message": "L’assistant peut lire les pages qu’il trouve (comme du texte, jamais comme des instructions)."
+  },
+  "asstReadOffNote": {
+    "message": "Désactivé. L’assistant ne peut pas lire de pages web ; un clic ici le demande une fois au navigateur."
+  },
+  "asstSearchEndpoint": {
+    "message": "Point de recherche"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Une instance SearXNG, ou https://api.search.brave.com/ avec sa clé ci-dessous. Utilisé seulement quand le modèle n’a pas de recherche propre."
+  },
+  "asstSearchKey": {
+    "message": "Clé de recherche"
   }
 }

@@ -484,5 +484,185 @@
   },
   "surveyOnlySeen": {
     "message": "Cara ini hanya menemukan dokumen yang pernah dibuka di peramban ini."
+  },
+  "setAsstTitle": {
+    "message": "Asisten"
+  },
+  "setAsstSub": {
+    "message": "Ke mana obrolan tentang dokumen dikirim. Kuncinya tetap di ekstensi ini — dokumen hanya pernah melihat balasannya."
+  },
+  "asstProvider": {
+    "message": "Penyedia"
+  },
+  "asstProvBuiltin": {
+    "message": "Model bawaan Chrome (Gemini Nano) — di perangkat ini"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (kunci AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Kompatibel OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL dasar"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "Kunci API"
+  },
+  "asstKeyOptional": {
+    "message": "Opsional untuk server lokal seperti Ollama atau LM Studio."
+  },
+  "asstSave": {
+    "message": "Simpan"
+  },
+  "asstSaved": {
+    "message": "Setelan asisten disimpan"
+  },
+  "asstAccessDeclined": {
+    "message": "Akses situs ditolak. Permintaan tetap dikirim, dan berfungsi bila server mengizinkan ekstensi peramban (CORS)."
+  },
+  "asstCheck": {
+    "message": "Periksa koneksi"
+  },
+  "asstChecking": {
+    "message": "Memeriksa…"
+  },
+  "asstReachable": {
+    "message": "Terjangkau — $1 menjawab."
+  },
+  "asstBuiltinReady": {
+    "message": "Siap di perangkat ini."
+  },
+  "asstBuiltinDownload": {
+    "message": "Model belum ada di perangkat ini. Tekan “Unduh model” di setelan ekstensi bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Chrome ini tidak memiliki model bawaan. Pilih penyedia lain di setelan ekstensi."
+  },
+  "asstOnDevice": {
+    "message": "perangkat ini"
+  },
+  "asstNotConfigured": {
+    "message": "Asisten belum disiapkan — buka setelan ekstensi bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Tidak dapat menjangkau $1. Apakah server berjalan, dan apakah server mengizinkan permintaan dari ekstensi peramban (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Menunggu izin Anda — jawab pertanyaannya, lalu coba lagi."
+  },
+  "asstDenied": {
+    "message": "Dokumen ini tidak diizinkan memakai asisten."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumen yang diizinkan memakai asisten"
+  },
+  "asstAllowedSub": {
+    "message": "Setiap dokumen bertanya sekali sebelum permintaan pertamanya. Hapus salah satu agar ditanya lagi."
+  },
+  "consentTitle": {
+    "message": "Izinkan dokumen ini memakai asisten Anda?"
+  },
+  "consentLead": {
+    "message": "Dokumen ini akan dapat mengirim teks ke $1 ($2) dan membaca balasannya. Kunci Anda tidak pernah dibagikan kepadanya."
+  },
+  "consentRemember": {
+    "message": "Diingat untuk berkas ini. Anda dapat mengubahnya nanti di setelan ekstensi."
+  },
+  "consentAllow": {
+    "message": "Izinkan"
+  },
+  "consentDeny": {
+    "message": "Jangan sekarang"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome sedang mengunduh model. Coba lagi setelah selesai."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Unduh model"
+  },
+  "asstBuiltinProgress": {
+    "message": "Mengunduh model… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Sekitar 2–4 GB. Chrome memerlukan kira-kira 22 GB ruang kosong di disk dan jaringan tanpa kuota terbatas; jika tidak, model dilaporkan tidak tersedia."
+  },
+  "asstContext": {
+    "message": "Jendela konteks (token)"
+  },
+  "asstContextHint": {
+    "message": "Kosongkan untuk memakai nilai yang dilaporkan penyedia. Isi untuk server yang Anda hosting sendiri dan hanya Anda yang tahu batasnya."
+  },
+  "asstContextKnown": {
+    "message": "Jendela konteks: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Tampilkan semua model, bukan hanya yang untuk obrolan"
+  },
+  "asstOtherModelRow": {
+    "message": "Lainnya…"
+  },
+  "asstOtherModel": {
+    "message": "ID model, persis seperti yang dinamai penyedia"
+  },
+  "asstBadModel": {
+    "message": "Itu bukan ID model: hanya huruf, angka, dan . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Presentasi terlalu besar untuk model ini: permintaan membutuhkan sekitar $1 token dan model menerima $2. Pilih model dengan jendela lebih besar, atau perpendek presentasi."
+  },
+  "asstOutlineOnly": {
+    "message": "Hanya kerangka yang muat di jendela model ini; konten yang dipilih tidak dikirim seluruhnya."
+  },
+  "asstNoDocument": {
+    "message": "Dokumen tidak menyerahkan isinya."
+  },
+  "asstSendsNotice": {
+    "message": "Mengirim kerangka presentasi dan $1 ke $2; komentar tetap di sini."
+  },
+  "asstOnDeviceModel": {
+    "message": "model di perangkat ini"
+  },
+  "asstFocusGeneric": {
+    "message": "elemen yang dipilih atau slide yang terbuka"
+  },
+  "asstSearch": {
+    "message": "Izinkan model mencari di web"
+  },
+  "asstSearchNative": {
+    "message": "Rute ini punya pencarian web sendiri ($1); kueri adalah satu-satunya hal baru yang keluar."
+  },
+  "asstSearchNone": {
+    "message": "Model ini tidak punya pencarian web sendiri — tetapkan endpoint pencarian di bawah."
+  },
+  "asstRead": {
+    "message": "Membaca halaman web"
+  },
+  "asstReadOn": {
+    "message": "Izinkan membaca halaman web…"
+  },
+  "asstReadOff": {
+    "message": "Berhenti membaca halaman web"
+  },
+  "asstReadOnNote": {
+    "message": "Asisten dapat membaca halaman yang ditemukannya (sebagai teks, tidak pernah sebagai instruksi)."
+  },
+  "asstReadOffNote": {
+    "message": "Nonaktif. Asisten tidak dapat membaca halaman web; klik di sini meminta peramban sekali."
+  },
+  "asstSearchEndpoint": {
+    "message": "Endpoint pencarian"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Instans SearXNG, atau https://api.search.brave.com/ dengan kuncinya di bawah. Hanya dipakai bila model tidak punya pencarian sendiri."
+  },
+  "asstSearchKey": {
+    "message": "Kunci pencarian"
   }
 }

@@ -484,5 +484,185 @@
   },
   "surveyOnlySeen": {
     "message": "Bare dokumenter som er åpnet i denne nettleseren kan finnes slik."
+  },
+  "setAsstTitle": {
+    "message": "Assistent"
+  },
+  "setAsstSub": {
+    "message": "Hvor en samtale om et dokument sendes. Nøkkelen blir i denne utvidelsen — et dokument ser bare svaret."
+  },
+  "asstProvider": {
+    "message": "Leverandør"
+  },
+  "asstProvBuiltin": {
+    "message": "Chromes innebygde modell (Gemini Nano) — på denne enheten"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio-nøkkel)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-kompatibel (OpenAI, OpenRouter, Ollama, LM Studio …)"
+  },
+  "asstBaseUrl": {
+    "message": "Basis-URL"
+  },
+  "asstModel": {
+    "message": "Modell"
+  },
+  "asstKey": {
+    "message": "API-nøkkel"
+  },
+  "asstKeyOptional": {
+    "message": "Valgfri for en lokal server som Ollama eller LM Studio."
+  },
+  "asstSave": {
+    "message": "Lagre"
+  },
+  "asstSaved": {
+    "message": "Assistentinnstillinger lagret"
+  },
+  "asstAccessDeclined": {
+    "message": "Tilgang til nettstedet ble avslått. Forespørsler sendes likevel, og virker når serveren tillater nettleserutvidelser (CORS)."
+  },
+  "asstCheck": {
+    "message": "Sjekk tilkobling"
+  },
+  "asstChecking": {
+    "message": "Sjekker …"
+  },
+  "asstReachable": {
+    "message": "Nås — $1 svarte."
+  },
+  "asstBuiltinReady": {
+    "message": "Klar på denne enheten."
+  },
+  "asstBuiltinDownload": {
+    "message": "Modellen er ikke på denne enheten ennå. Trykk på «Last ned modell» i innstillingene for utvidelsen bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Denne Chrome har ingen innebygd modell. Velg en annen leverandør i utvidelsens innstillinger."
+  },
+  "asstOnDevice": {
+    "message": "denne enheten"
+  },
+  "asstNotConfigured": {
+    "message": "Assistenten er ikke satt opp ennå — åpne innstillingene for utvidelsen bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Fikk ikke kontakt med $1. Kjører serveren, og tillater den forespørsler fra nettleserutvidelser (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Venter på tillatelsen din — svar på spørsmålet, og prøv igjen."
+  },
+  "asstDenied": {
+    "message": "Dette dokumentet har ikke lov til å bruke assistenten."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumenter som har lov til å bruke assistenten"
+  },
+  "asstAllowedSub": {
+    "message": "Hvert dokument spør én gang før sin første forespørsel. Fjern ett for å bli spurt igjen."
+  },
+  "consentTitle": {
+    "message": "Skal dette dokumentet få bruke assistenten din?"
+  },
+  "consentLead": {
+    "message": "Det vil kunne sende tekst til $1 ($2) og lese svarene. Nøkkelen din deles aldri med det."
+  },
+  "consentRemember": {
+    "message": "Husket for denne filen. Du kan endre det senere i utvidelsens innstillinger."
+  },
+  "consentAllow": {
+    "message": "Tillat"
+  },
+  "consentDeny": {
+    "message": "Ikke nå"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome laster ned modellen. Prøv igjen når den er ferdig."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Last ned modell"
+  },
+  "asstBuiltinProgress": {
+    "message": "Laster ned modellen … $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Omtrent 2–4 GB. Chrome trenger rundt 22 GB ledig plass på disken og et nettverk uten datagrense, ellers melder den modellen som utilgjengelig."
+  },
+  "asstContext": {
+    "message": "Kontekstvindu (tokens)"
+  },
+  "asstContextHint": {
+    "message": "La stå tomt for å bruke det leverandøren oppgir. Fyll ut for en selvdrevet server der bare du kjenner grensen."
+  },
+  "asstContextKnown": {
+    "message": "Kontekstvindu: $1 tokens"
+  },
+  "asstShowAll": {
+    "message": "Vis alle modeller, ikke bare de for chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Annen …"
+  },
+  "asstOtherModel": {
+    "message": "Modell-ID, nøyaktig slik leverandøren kaller den"
+  },
+  "asstBadModel": {
+    "message": "Det er ikke en modell-ID: bare bokstaver, sifre og . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Presentasjonen er for stor for denne modellen: forespørselen trenger omtrent $1 tokens, og modellen tar $2. Velg en modell med større vindu, eller forkort presentasjonen."
+  },
+  "asstOutlineOnly": {
+    "message": "Bare disposisjonen fikk plass i vinduet til denne modellen; det valgte innholdet ble ikke sendt i sin helhet."
+  },
+  "asstNoDocument": {
+    "message": "Dokumentet leverte ikke innholdet sitt."
+  },
+  "asstSendsNotice": {
+    "message": "Sender presentasjonens disposisjon og $1 til $2; kommentarer blir her."
+  },
+  "asstOnDeviceModel": {
+    "message": "modellen på denne enheten"
+  },
+  "asstFocusGeneric": {
+    "message": "de valgte elementene eller det åpne lysbildet"
+  },
+  "asstSearch": {
+    "message": "La modellen søke på nettet"
+  },
+  "asstSearchNative": {
+    "message": "Denne ruten har egen nettsøk ($1); spørringen er det eneste nye som forlater maskinen."
+  },
+  "asstSearchNone": {
+    "message": "Denne modellen har ikke eget nettsøk — angi et søkeendepunkt nedenfor."
+  },
+  "asstRead": {
+    "message": "Lesing av nettsider"
+  },
+  "asstReadOn": {
+    "message": "Tillat lesing av nettsider …"
+  },
+  "asstReadOff": {
+    "message": "Slutt å lese nettsider"
+  },
+  "asstReadOnNote": {
+    "message": "Assistenten kan lese sider den finner (som tekst, aldri som instruksjoner)."
+  },
+  "asstReadOffNote": {
+    "message": "Av. Assistenten kan ikke lese nettsider; et klikk her spør nettleseren én gang."
+  },
+  "asstSearchEndpoint": {
+    "message": "Søkeendepunkt"
+  },
+  "asstSearchEndpointHint": {
+    "message": "En SearXNG-instans, eller https://api.search.brave.com/ med nøkkelen nedenfor. Brukes bare når modellen ikke har eget søk."
+  },
+  "asstSearchKey": {
+    "message": "Søkenøkkel"
   }
 }
