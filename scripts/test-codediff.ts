@@ -162,5 +162,33 @@ const toksOf = (states: State[] | undefined) =>
   check('call -> plain reference keeps identity', !!a && !!b && a.morphId() === b.morphId())
 }
 
+// 10. RELATED TOKENS KEEP THEIR IDENTITY
+{
+  const beforeSnippet = `
+    fun inner() {
+      val x = 10
+      val y = 20
+      println(x + y)
+    }
+  `
+  const afterSnippet = `
+    fun outer() {
+      fun inner() {
+        val x = 10
+        val y = 20
+        println(x + y)
+      }
+    }
+  `
+  const states = new HeckelDiff(codeDoc([beforeSnippet, afterSnippet], 'kotlin')).computeDiffs('g')
+  const before = states.get(0)
+  const after = states.get(1)
+  // Filter out the fallback scope. Every other token should match.
+  const beforeIds = toksOf(before).filter((t => t.scopes.join('') !== 'x')).map(t => t.morphId())
+  const afterIds = new Set(idsOf(after))
+  const matched = beforeIds.every(id => afterIds.has(id))
+  check('related tokens should keep their identity', matched)
+}
+
 console.log(FAILS.length ? `\n${FAILS.length} FAILED` : '\nall passed')
 process.exit(FAILS.length ? 1 : 0)
