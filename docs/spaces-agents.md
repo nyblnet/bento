@@ -52,6 +52,41 @@ document into the empty block.
 }
 ```
 
+### Designs
+
+`"design": "almanac"` sets how the pages look. Leave it **out** for the default
+look — never write `""` or `null`. Built-ins: `ledger`, `almanac`, `studio`,
+`broadsheet`, `typescript`, `riso`. The author picks the design; each reader's
+light/dark setting picks between the design's two palettes. An unknown name
+renders the default look, is kept, and `validate()` reports `unknown-design`.
+
+A space can carry its own design in `"designs"`, as overrides on a built-in:
+
+```jsonc
+"design": "harbour",
+"designs": { "harbour": {
+  "label": "Harbour", "base": "almanac",
+  "light": { "accent": "#0f6e63", "paper": "#f3f1ea" },   // #rgb or #rrggbb only
+  "dark":  { "accent": "#4fc2b1" },
+  "fonts": { "body": "news", "display": "asset:<key>" },   // a name, or an embedded font
+  "props": { "callout": "fill", "quote": "bar", "radius": 4 }
+} }
+```
+
+**Every value is validated, never interpreted.** Colours must be hex; `fonts`
+take a name (`system grotesk humanist condensed transitional oldstyle news mono
+typewriter rounded`) or `asset:<key>` naming a `data:font/…` asset; `props`
+take the words and ranges listed in `spaces/src/designs.ts` `PROPS`. Palette
+roles: `paper ink muted rule soft accent accentInk onAccent tile tileInk cell1
+cell2 cell3`. A value that fails is dropped to the base design's and reported as
+`bad-design-value`; a colour that would put text under 4.5:1 is dropped as
+`design-contrast`. There is no free CSS anywhere in a design. A name that is
+also a built-in's is never used (`design-shadows-builtin`).
+
+The Markdown export opens with the design as front matter —
+`design: harbour` plus a one-line `designs: {…}` JSON for a carried design —
+and importing that file into a space with no design adopts it.
+
 **Both arrays are flat and in pre-order; nesting is a `parent` field.** A child
 always follows its parent, which is what lets one forward pass rebuild the
 tree. Do not nest arrays inside arrays.

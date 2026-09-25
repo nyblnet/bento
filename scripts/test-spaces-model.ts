@@ -3594,5 +3594,181 @@ function fsTable(f: string): string {
 }
 
 
+// ---- page designs (DECISIONS 2026-09-26) ----------------------------------
+// The author picks the design; the reader's theme picks between its two
+// palettes. A design is DATA — palettes, font names, switch words, numbers —
+// and one base stylesheet (designs.css) reads it. What must never break:
+// no `design` renders today's CSS untouched; each name selects its own
+// tokens; an unknown name falls back, round-trips and is named; returning to
+// the default deletes the key; and no author text ever becomes CSS.
+{
+  const D = await import('../spaces/src/designs.ts')
+  const { validateDoc } = await import('../spaces/src/agent.ts')
+  const { orphanAssets } = await import('../spaces/src/assets.ts')
+  const fsd = await import('node:fs')
+  const rdd = (f: string) => fsd.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+  const css = rdd('designs.css')
+  const base = (): SpacesDoc => {
+    const r = parseDoc(JSON.stringify({ format: FORMAT, version: 1, docId: 'dsg-doc', title: 'D', pages: [{ id: 'p1', title: 'P', blocks: [{ id: 'b1', type: 'p', html: 'hi' }] }] }))
+    if (!r.ok) throw new Error('fixture')
+    return r.doc
+  }
+
+  // ABSENT = TODAY. Nothing resolves, and nothing in designs.css can match a
+  // surface that carries no design attribute: every rule is keyed under one,
+  // except the :root block that only CAPTURES the chrome's own tokens.
+  const plain = base()
+  ok(D.resolveDesign(plain) === null, 'no `design` key resolves to no design (the untouched stylesheet)')
+  ok(!Object.hasOwn(plain, 'design'), 'a document without a design gains no key by being loaded')
+  const flat = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const selectors: string[] = []
+  for (const m of flat.matchAll(/([^{}]+)\{/g)) {
+    const s = m[1].trim()
+    if (!s || s.startsWith('@')) continue
+    // split at TOP-LEVEL commas only: `:is(a, b)` is one selector
+    let depth = 0, cur = ''
+    for (const ch of s) {
+      if (ch === '(') depth++
+      if (ch === ')') depth--
+      if (ch === ',' && depth === 0) { selectors.push(cur.trim()); cur = '' } else cur += ch
+    }
+    selectors.push(cur.trim())
+  }
+  const unscoped = selectors.filter((s) => !/\[data-sp-design\]|\[data-sd-[a-z0-9]+="[a-z0-9]+"\]/.test(s) && s !== ':root')
+  ok(selectors.length > 60 && unscoped.length === 0,
+    `every designs.css selector is scoped to a designed surface (${selectors.length} selectors; unscoped: ${unscoped.join(' | ') || 'none'})`)
+  const rootBlocks = [...flat.matchAll(/(^|\})\s*:root\s*\{([^}]*)\}/g)].map((m) => m[2])
+  ok(rootBlocks.length === 1 && rootBlocks[0].split(';').filter((d) => d.trim()).every((d) => /^\s*--sp-app-[a-z0-9-]+:\s*var\(--[a-z0-9-]+\)\s*$/.test(d)),
+    'the one unscoped :root block only captures chrome tokens (--sp-app-* = var(--…)) and styles nothing')
+  const docKeyOld = JSON.stringify([plain.title, plain.home, plain.pages])
+  ok(docContentKey(plain) === docKeyOld, 'a document with no design keys for recovery exactly as it did before designs existed')
+
+  // EACH NAME SELECTS ITS OWN SHEET: its name on the surface, its own tokens,
+  // and a CSS rule for every switch value it uses that differs from today.
+  const sigs = new Set<string>()
+  for (const name of D.BUILT_IN_NAMES) {
+    const doc = base()
+    D.setDesign(doc, name)
+    const r = D.resolveDesign(doc)
+    const st = r && D.designStyle(r)
+    ok(!!st && st.attrs['data-sp-design'] === name && r!.design === D.BUILT_INS[name], `design "${name}" resolves to its own entry and stamps data-sp-design="${name}"`)
+    if (st) sigs.add(JSON.stringify([st.attrs, st.vars]))
+  }
+  ok(sigs.size === D.BUILT_IN_NAMES.length, `the ${D.BUILT_IN_NAMES.length} built-ins put ${sigs.size} distinct token sets on the surface`)
+  ok(D.BUILT_IN_NAMES.length >= 6, 'six built-ins ship: ledger, almanac, studio, broadsheet, typescript, riso')
+  for (const k of D.PROP_KEYS) {
+    const rule = D.PROPS[k] as { kind: string; values?: readonly string[] }
+    if (rule.kind !== 'enum') { ok(css.includes(`var(--d-${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())})`), `designs.css reads the metric --d-${k}`); continue }
+    for (const v of rule.values!) {
+      if (v === D.PLAIN.props[k]) continue
+      ok(css.includes(`[data-sd-${k.toLowerCase()}="${v}"]`), `switch ${k}="${v}" has a rule in designs.css (a word with no rule is a switch that does nothing)`)
+    }
+  }
+  for (const k of D.PALETTE_KEYS) {
+    const v = `--dl-${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}`
+    ok(css.includes(`var(${v})`) && css.includes(`var(${v.replace('--dl-', '--dd-')})`), `palette role ${k} is read in both palettes`)
+  }
+  const darkBlocks = [...css.matchAll(/:root:not\(\[data-theme="light"\]\) \[data-sp-design\] \{([^}]*)\}|:root\[data-theme="dark"\] \[data-sp-design\] \{([^}]*)\}/g)].map((m) => (m[1] ?? m[2]).trim())
+  ok(darkBlocks.length === 2 && darkBlocks[0] === darkBlocks[1], 'the two dark mappings (OS dark, reader chose dark) are byte-identical')
+  ok(/@media screen and \(prefers-color-scheme: dark\)/.test(css) && /@media screen \{\s*:root\[data-theme="dark"\]/.test(css),
+    'both dark mappings are @media screen, so print gets the light palette')
+
+  // UNKNOWN FALLS BACK, ROUND-TRIPS, AND IS NAMED
+  const unk = base()
+  ;(unk as { design?: string }).design = 'nonesuch'
+  ok(D.resolveDesign(unk) === null, 'an unknown design name renders the default look')
+  const back = parseDoc(JSON.stringify(unk))
+  ok(back.ok && (back.doc as { design?: string }).design === 'nonesuch', 'an unknown design name survives a load/save round trip untouched')
+  ok(validateDoc(unk).findings.some((f) => f.code === 'unknown-design' && f.path === 'design'), 'validate() names an unknown design')
+  ok(validateDoc(plain).findings.every((f) => !/design/.test(f.code)), 'validate() says nothing about a document with no design')
+  const shadow = base()
+  ;(shadow as { designs?: unknown }).designs = { ledger: { base: 'studio' } }
+  D.setDesign(shadow, 'ledger')
+  ok(D.resolveDesign(shadow)?.design === D.BUILT_INS.ledger && validateDoc(shadow).findings.some((f) => f.code === 'design-shadows-builtin'),
+    'a doc-local design named like a built-in shadows nothing, and validate() says so')
+
+  // THE DEFAULT DELETES THE KEY
+  const dd = base()
+  D.setDesign(dd, 'almanac')
+  D.setDesign(dd, null)
+  ok(!Object.hasOwn(dd, 'design') && JSON.stringify(dd) === JSON.stringify(base()), 'returning to the default deletes `design` — byte-identical to never having chosen')
+  ok(/setDesign\(store\.doc, name\)/.test(rdd('designpanel.ts')) && /store\.commit\(\(\) => setDesign/.test(rdd('designpanel.ts')),
+    'the picker writes through setDesign inside ONE store.commit (one undo step)')
+
+  // CUSTOM DESIGNS: validated, not sanitized
+  const hostile = '</style><script>alert(1)</script>'
+  const cd = base()
+  ;(cd as { designs?: unknown }).designs = { mine: {
+    base: 'ledger', label: 'Mine',
+    light: { accent: hostile, paper: '#fffdf8', ink: 'red' },
+    fonts: { body: hostile, display: 'news', mono: 'asset:nope' },
+    props: { callout: hostile, radius: 999, size: 0.1, quote: 'pull', leading: '1.5' },
+  } }
+  D.setDesign(cd, 'mine')
+  const rc = D.resolveDesign(cd)!
+  ok(rc.custom && rc.design.light.accent === D.BUILT_INS.ledger.light.accent && rc.design.light.ink === D.BUILT_INS.ledger.light.ink,
+    'a colour that is not #rgb/#rrggbb falls back to the base design (hostile string, named colour)')
+  ok(rc.design.light.paper === '#fffdf8' && rc.design.fonts.display === 'news' && rc.design.props.quote === 'pull', 'the valid values of the same custom design are used')
+  ok(rc.design.fonts.body === D.BUILT_INS.ledger.fonts.body && rc.design.fonts.mono === D.BUILT_INS.ledger.fonts.mono, 'a font that is neither a listed name nor an embedded font asset falls back')
+  ok(rc.design.props.callout === D.BUILT_INS.ledger.props.callout && rc.design.props.radius === 0 && rc.design.props.size === 1 && rc.design.props.leading === D.BUILT_INS.ledger.props.leading,
+    'a switch outside its words, or a number outside its range (or not a number), falls back')
+  const st = D.designStyle(rc)
+  const every = [...Object.values(st.attrs), ...Object.values(st.vars), ...D.previewRules(rc).flatMap(([s, d]) => [s, ...Object.values(d)])]
+  ok(every.length > 60 && every.every((v) => !/[<>{};\\]/.test(v)),
+    'nothing a design puts on a surface or into the preview can carry "<", "{" or "}" — a hostile value never reaches CSS text')
+  const vf = validateDoc(cd).findings.filter((f) => f.code === 'bad-design-value').map((f) => f.path)
+  for (const p of ['designs.mine.light.accent', 'designs.mine.light.ink', 'designs.mine.fonts.body', 'designs.mine.fonts.mono', 'designs.mine.props.callout', 'designs.mine.props.radius', 'designs.mine.props.size', 'designs.mine.props.leading']) {
+    ok(vf.includes(p), `validate() names the dropped value at ${p}`)
+  }
+  ok(!/<script/i.test(JSON.stringify(D.previewRules(rc))), 'the preview rules of a hostile design hold no script text')
+
+  // FLOORS: no design may hide text
+  for (const [name, d] of Object.entries({ plain: D.PLAIN, ...D.BUILT_INS })) {
+    for (const mode of ['light', 'dark'] as const) {
+      const low = D.CONTRAST_FLOORS.filter(([f, b, m]) => D.contrast(d[mode][f], d[mode][b]) < m)
+      ok(low.length === 0, `${name} ${mode} clears every contrast floor${low.length ? ` (fails ${low.map(([f, b]) => f + '/' + b).join(', ')})` : ''}`)
+    }
+  }
+  const hide = base()
+  ;(hide as { designs?: unknown }).designs = { ghost: { light: { ink: '#ffffff', paper: '#ffffff', muted: '#fefefe' }, dark: { ink: '#14181e' } } }
+  D.setDesign(hide, 'ghost')
+  const rh = D.resolveDesign(hide)!
+  ok(D.contrast(rh.design.light.ink, rh.design.light.paper) >= 4.5 && D.contrast(rh.design.light.muted, rh.design.light.paper) >= 4.5 && D.contrast(rh.design.dark.ink, rh.design.dark.paper) >= 4.5,
+    'a palette that sets text equal to its ground is pulled back over the 4.5:1 floor')
+  ok(validateDoc(hide).findings.some((f) => f.code === 'design-contrast'), 'validate() names a colour dropped for contrast')
+  const fillFork = base()
+  ;(fillFork as { designs?: unknown }).designs = { teal: { base: 'almanac', dark: { accent: '#4fc2b1' }, props: { callout: 'fill' } } }
+  D.setDesign(fillFork, 'teal')
+  const rf = D.resolveDesign(fillFork)!
+  const fillOk = (p: { ink: string; paper: string; accent: string }) => D.contrast(p.ink, D.mixHex(p.accent, p.paper, D.FILL_MIX)) >= 4.5
+  ok(fillOk(rf.design.light) && fillOk(rf.design.dark), 'a filled callout keeps its ink over 4.5:1 on the fill (the dark teal fork measured 4.27 before this floor)')
+  ok(css.includes(`${D.FILL_MIX * 100}%, var(--bg))`), 'designs.css fills a callout with the same FILL_MIX the floor checks')
+  const toneCss = [...rdd('styles.css').matchAll(/--tone-(?:note|tip|important|warning|caution): (#[0-9a-f]{6});/g)].slice(0, 5).map((m) => m[1])
+  ok(JSON.stringify(toneCss) === JSON.stringify([...D.TONE_HUES]), 'designs.ts TONE_HUES are styles.css\'s tone hues')
+  const PR = D.PROPS as Record<string, { kind: string; min?: number }>
+  ok(PR.size.min! >= 0.85 && PR.leading.min! >= 1.3 && PR.titleSize.min! >= 1.4, 'size, line spacing and title floors hold (0.85, 1.3, 1.4em)')
+  ok(!/\b(display|visibility|opacity)\s*:/.test(flat.replace(/display:\s*(block|flex|inline-grid|inline-flex)/g, '')), 'designs.css never hides: no display:none, visibility or opacity')
+  ok([...flat.matchAll(/(?<![-\w])content:\s*([^;]+);/g)].every((m) => /^'[^']*'$/.test(m[1].trim())), 'every generated `content` in designs.css is a constant string, never author data')
+  ok(/\[data-sp-design\] :is\(\.sp-remote, \.sp-media-empty\) \{[^}]*--ink: var\(--sp-app-ink\)[^}]*color: var\(--sp-app-ink\)/.test(flat),
+    'the remote-content gate reads the CHROME\'s tokens inside a designed page')
+
+  // fonts travel as assets
+  const fd = base()
+  fd.assets = { f1: 'data:font/woff2;base64,AAAA', img: 'data:image/png;base64,AAAA' }
+  ;(fd as { designs?: unknown }).designs = { face: { fonts: { body: 'asset:f1', display: 'asset:img' } } }
+  D.setDesign(fd, 'face')
+  const rfd = D.resolveDesign(fd)!
+  ok(rfd.design.fonts.body === 'asset:f1' && rfd.design.fonts.display === D.PLAIN.fonts.display, 'an embedded font asset is honoured; an image under a font role is refused')
+  ok(D.designStyle(rfd).vars['--d-body'].startsWith(`'bento-face-`), 'an embedded face gets a family name derived from its key, never from author text')
+  ok(!orphanAssets(fd).includes('f1'), 'a face a design uses is not an orphan asset')
+
+  // preview: inline styles, never a <style> with design values
+  const pv = rdd('preview.ts')
+  ok(/applyPreviewRules\(box, previewRules\(design\)\)/.test(pv) && !/previewSheet/.test(pv) && /style\.textContent = SHEET\(doc\)\n/.test(pv),
+    'preview.ts puts the design on as inline styles; its <style> holds only the fixed sheet')
+  ok(/style\.setProperty\(k, v\)/.test(rdd('designs.ts')), 'preview declarations go through the CSSOM, which re-parses every value')
+}
+
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

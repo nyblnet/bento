@@ -34,6 +34,7 @@ import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, 
 import { SPECS, SPEC } from './blocks.ts'
 import { sanitizeInline, textOf, inertBody, esc, UNWRAP } from './sanitize.ts'
 import { orphanAssets, humanBytes } from './assets.ts'
+import { designProblems, designAssetKeys, BUILT_IN_NAMES } from './designs.ts'
 import {
   type FieldSpec, ISSUE_FIELDS, fieldsOf, fieldByKey, optionOf, propBlock, propHtml, valuesOf, isIssue, headerLength,
 } from './fields.ts'
@@ -517,6 +518,29 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
         }
       }
     }
+  }
+
+  // ---- the design ----------------------------------------------------------
+  // Validated, never sanitized: every value a doc-local design carries is
+  // checked against a closed rule, and one that fails is DROPPED to the base
+  // design's value. The document still opens and still looks designed — so
+  // this is the only place an author finds out a colour was not used.
+  for (const pr of designProblems(doc)) {
+    add({ code: pr.code, path: pr.path, message: pr.message,
+      severity: pr.code === 'unknown-design-key' ? 'info' : 'warning',
+      fix: pr.code === 'unknown-design'
+        ? `Set design to one of ${BUILT_IN_NAMES.join(', ')}, define it under designs, or delete the key for the default look.`
+        : pr.code === 'design-shadows-builtin' || pr.code === 'bad-design-name'
+          ? 'Rename the entry (lowercase letters, digits, hyphens; not a built-in name) and point design at the new name.'
+          : 'Write a value the rule accepts (see docs/spaces-agents.md, Designs), or delete the key to take the base design\'s.' })
+  }
+  for (const k of designAssetKeys(doc)) {
+    if (!(k in assets)) {
+      add({ code: 'missing-asset', severity: 'error', path: 'designs',
+        message: `A design names embedded font asset "${k}", which is not in doc.assets — the face never loads and text falls back to the role's stack.`,
+        fix: 'Add the font data: URI under that key, or point the font role at a name from the list.' })
+    }
+    usedAssets.add(k)
   }
 
   // ---- assets --------------------------------------------------------------

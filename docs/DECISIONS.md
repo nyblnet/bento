@@ -7417,3 +7417,127 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-09-26 — bento/spaces: the author picks the design; the reader's theme picks its palette
+
+**The maintainer's ruling, and what it replaces.** Designs are selectable in the
+document. The author picks the design; the reader's light/dark setting picks
+between that design's two palettes; the app chrome stays the reader's. This
+reverses the second half of the 2026-08-22 entry ("bento/spaces goes dark, and
+its reading column goes with it"), which concluded:
+
+> So in spaces the reading surface IS chrome and it follows the reader.
+
+That was the right call while the column had nothing of the author's to show —
+`doc.theme`'s colours were painted only by the thumbnail. It is superseded now
+that a design exists. What survives from it: the theme is still a viewer
+preference and never document data, the three-state light/dark rule, and dark
+being `@media screen` so paper is light. `kernel/src/theme.ts` already said "the
+document does not invert… a slide's background is document data the author
+chose"; spaces now joins slides there.
+
+**Format (additive).** `doc.design`: a built-in name or a key of `doc.designs`.
+ABSENT is the default look, and returning to the default DELETES the key
+(`designs.ts setDesign`), so a space that tried a design and went back is
+byte-identical to one that never did. An unknown name renders the default,
+round-trips untouched, and `validate()` reports `unknown-design`. Document-wide
+for now; the resolver takes a name rather than reading a fixed field, so a
+later `Page.design` resolves through the same function and overrides it
+without a format change.
+
+**A design is data, not a stylesheet** (the maintainer's follow-up: designs are
+an open set, built-in and custom). Two palettes of thirteen colour roles, four
+font roles, and a closed set of switches (`designs.ts PROPS`). ONE base
+stylesheet, `spaces/src/designs.css`, reads the custom properties and data
+attributes `applyDesign()` writes onto the reading surface (`.sp-main`, and the
+print root). Every rule is keyed under `[data-sp-design]` or a `data-sd-*`
+attribute, which is what makes "no design" the untouched stylesheet — the model
+rig parses the file and asserts it. Adding a built-in is a data entry. Switches
+added so far: `headStyle headCase label labelInk h2 dropCap callout quote table
+numerals check tile tones shadow justify divider bullet`, plus the metrics
+`size leading titleSize titleWeight titleTracking titleLeading headWeight radius
+rule`.
+
+**Six built-ins**, each from a publishing tradition and differing in structure,
+not palette: Ledger (the financial report / Swiss grid), Almanac (the literary
+quarterly), Studio (the Bento mark as layout grammar — the tile), Broadsheet
+(the newspaper), Typescript (the manuscript / RFC), Riso (the risograph zine).
+Almanac's accent is #b07800 rather than the prototype's #c98a0b: the drop cap
+and a done box are marks that carry meaning, and #c98a0b measured 2.56:1 on its
+paper.
+
+**Custom designs are tier 1 and the whole story: token-only.** `doc.designs`
+holds overrides on a built-in base. Every value is VALIDATED, never sanitized:
+a colour must be `#rgb`/`#rrggbb`, a font a name from `FONT_STACKS` or
+`asset:<key>` naming a `data:font/…` asset, a switch one of its words, a number
+inside its range. A failure is dropped to the base's value and named by
+`validate()`. No author text becomes CSS: stacks are the module's own strings,
+an embedded face gets a family name derived from its asset key and is loaded
+through the FontFace API (no `@font-face` text), and attribute values are
+PROPS words. A doc-local name that is also a built-in's shadows nothing.
+
+**Raw author CSS does not ship.** Deliberately not built, and the security
+review of the same day kept it that way: a stylesheet in a mailed file can
+fetch (tracking) and can overlay Save or the password gate. Revisiting it means
+its own field, its own sanitizer and its own review — never `designs.ts`, whose
+guarantee is that nothing in it is free text.
+
+**No design may hide text** (security review, finding 3: `design`/`designs` are
+ordinary CRDT registers, so any writer in a live space can restyle every
+reader's page — accepted, because a writer can already edit the words). The
+floors, stated in the validator: text, secondary text and accent text on paper,
+text on wells, text on the accent and on the tile all ≥ 4.5:1; a tile cell
+against the ink chosen for it ≥ 4.5:1; a FILLED callout's ink over the fill mix
+≥ 4.5:1 (a teal fork measured 4.27:1 in dark before this floor); size ≥ 0.85,
+line spacing ≥ 1.3, title ≥ 1.4em. There is no display, visibility or opacity
+switch, and the only generated `content` is constant decoration. A custom value
+that breaks a floor falls back; an ink the author did not set is re-chosen for
+a ground they did, so a dark accent is kept rather than refused.
+
+**Consent stays chrome** (finding 1). The remote-content gate sits inside the
+column, so it reads the CHROME's tokens (captured at `:root` as `--sp-app-*`
+before any surface re-points them) and its own type. Measured in pixels with
+the design tokens overwritten to ink = paper: the gate stays 12.59:1 light and
+11.5:1 dark, identical to an honest design.
+
+**Nothing of a design goes into a `<style>` that reaches the shell** (finding
+2). The static preview draws the design — a thumbnail is the document's face —
+in its LIGHT palette, as inline styles written through `style.setProperty`, so
+the CSSOM re-parses every value; the preview's `<style>` holds only its fixed
+sheet. A custom design carrying `</style><script>` in its label, a colour, a
+font and two switches saved to a shell that passed `shell-gate.mjs` and ran
+nothing on reopen.
+
+**Markdown.** The export opens with `design: <name>`, plus a one-line
+`designs: {…}` JSON (valid YAML flow syntax, so no YAML parser) when the design
+is the space's own. Front matter holding only those keys is consumed on
+import; any other front matter keeps the old rule and is kept verbatim. An
+import adopts the design only into a space that has none.
+
+**Fonts: system stacks ship; the real faces are measured, not chosen.** Zero
+font bytes in this change. The intended faces, latin-subset woff2, cheapest of
+variable vs the minimum static weights: Ledger 137,504 B (Schibsted Grotesk
+variable 97,024 + JetBrains Mono variable 40,480); Almanac 271,072 B (Fraunces
+variable 149,092 + Source Serif 4 statics 121,980 — its variable file is
+252,108); Studio 76,868 B (Bricolage Grotesque variable). Total 485,444 B,
+about 647 KB as base64 — 2.4× today's whole 271,810 B shell. Broadsheet,
+Typescript and Riso were drawn for faces machines already have. The options,
+for the maintainer: every face in every shell (+~650 KB each); system stacks
+only (this change); or the author drops a font file in, which lands as an
+asset in that one document (built — Customise → Add a font file).
+
+**Open for security, not settled here.** An embedded face can remap glyphs, so
+a writer could make displayed text differ from stored text. It gives a writer
+nothing they cannot do by editing, but display and data diverging is a new
+shape; the consent gate is pinned to the system stack either way.
+
+**Guarded.** `scripts/test-spaces-model.ts` (design section, 1057 checks in
+all) and `scripts/test-spaces-roundtrip.ts` (Markdown front matter). Sabotaged
+and seen to fail, each at its own assertion: an unscoped rule in designs.css;
+every built-in resolving to Ledger; an unknown name resolving to something; the
+unknown-design finding removed; `design` stripped at load; the importer
+ignoring `design:`; the default writing `design: undefined`; the hex check
+removed; the contrast floors removed.
+
+**Cost.** Shell 271,810 → 300,476 B (+28,666, 10.5%); about 12 KB of it is 117
+new UI strings in nine languages.

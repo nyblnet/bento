@@ -477,6 +477,33 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **A space can have a design.** About → Design offers six: **Ledger** (a
+  grotesque grid, figures in a monospace, cobalt rules), **Almanac** (an
+  editorial serif, a drop cap, marigold as the only colour), **Studio** (the
+  Bento tile — a canvas or a gallery becomes navy with slate, coral and cream
+  compartments), **Broadsheet** (a news serif under double rules, justified,
+  with pull quotes), **Typescript** (a typewritten manuscript) and **Riso** (a
+  two-ink risograph zine). Hover one to see it on the page; clicking it is one
+  undo step. The design travels in the file; each reader's light or dark
+  setting picks between the design's two palettes, and the app's own bar and
+  panels stay the reader's. It prints (in its light palette) and it is what a
+  file manager's thumbnail shows. A file with no design looks exactly as it did.
+
+  **Customise…** makes the current design the space's own and opens a panel
+  beside the page: colours for light and dark, a face for headings, body,
+  labels and code — including a font file you drop in, which is embedded like
+  a picture — and the layout switches (callouts, quotes, tables, rules, drop
+  cap, tiles…). Every value is checked before it is used, and a colour that
+  would leave text under 4.5:1 is not used.
+
+  The Markdown export now opens with the design as front matter (`design:
+  almanac`), and importing it into a space without a design brings the design
+  along. Format: an optional `design` name and an optional `designs` map; an
+  older build shows the default look and keeps both. The designs use fonts
+  already on the reader's machine — nothing is fetched. Shell 271,810 →
+  300,476 B (+28,666; roughly 12 KB of that is the picker and panel's 117
+  new strings in nine languages).
+
 ## [0.1.0] — 2026-08-03
 
 First release.
