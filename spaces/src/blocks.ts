@@ -22,6 +22,7 @@
 
 import type { Block } from './model'
 import { effectiveParents, tableOf, writeTable, linkCard } from './model.ts'
+import { anchorOf, embedToMd } from './embed.ts'
 import type { IconName } from './icons'
 
 export interface BlockSpec {
@@ -242,6 +243,24 @@ export const SPECS: BlockSpec[] = [
     type: 'pagelink', label: 'Link to page', hint: 'A card that opens a page', icon: 'link',
     tag: 'div', custom: true,
     toMd: (b, _text, _indent, ctx) => [`→ [[${ctx.titleOf(String(b.page)) ?? '?'}]]`],
+  },
+  {
+    // TRANSCLUSION — the pagelink's other half. A pagelink says where
+    // something is; an embed shows it, live, from the source.
+    //
+    // `text: false` for the reason a pagelink has none: the block's content is
+    // somewhere else, and an editable line beside it would be a second place
+    // to type that nothing displays. Its `html` is written by the editor as a
+    // plain link to the target, which is what a build that predates this type
+    // renders (render.ts default case) — the additivity fallback, not a copy.
+    type: 'embed', label: 'Embed a page', hint: 'A live view of another page', icon: 'page',
+    tag: 'div', custom: true,
+    // BACK TO THE SYNTAX IT CAME FROM. markdown.ts parses Obsidian's
+    // `![[Page]]` and, before this type existed, silently turned every one
+    // into a plain link — so a vault lost every embed on the way in and the
+    // export had nothing to write back. The two halves are one round trip and
+    // scripts/test-spaces-model.ts asserts it in both directions.
+    toMd: (b, _text, _indent, ctx) => [embedToMd(ctx.titleOf(String(b.page)), anchorOf(b))],
   },
   {
     // A LINK TO SOMEWHERE ON THE WEB — the outward-facing sibling of pagelink.

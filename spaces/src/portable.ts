@@ -19,6 +19,7 @@
 // `.ts` extensions ON PURPOSE: node resolves this module directly for the rig.
 import { type SpacesDoc, type Page, type Block, repairId, pageAssetKeys } from './model.ts'
 import { esc } from './sanitize.ts'
+import { isPageRef } from './embed.ts'
 
 /** An `<a href="#p/…">` in a block, however many attributes it carries. */
 const PAGE_LINK = /<a\s([^>]*?)href="#p\/([^"]*)"([^>]*)>([\s\S]*?)<\/a>/g
@@ -185,13 +186,21 @@ export function extractSpace(
         b.html = r.html
         unlinked += r.cut
       }
-      if (b.type === 'pagelink' && typeof b.page === 'string' && !inSet.has(b.page)) {
+      if (isPageRef(b) && !inSet.has(String(b.page))) {
         // a pagelink IS its target; with the target gone there is no block left
-        // to be, so it becomes the same honest text an inline link becomes
+        // to be, so it becomes the same honest text an inline link becomes.
+        //
+        // AN EMBED IS THE SAME BLOCK-SHAPED REFERENCE and takes the same
+        // treatment — more urgently, if anything: a pagelink whose target
+        // stayed behind is a chip that does nothing, while an embed whose
+        // target stayed behind is a page's worth of CONTENT that silently is
+        // not in the extract. `anchor` goes with it; a section name is
+        // meaningless once there is no page to find it on.
         unlinked++
         b.type = 'p'
-        b.html = literalLink(titleOf.get(b.page) ?? b.page, '')
+        b.html = literalLink(titleOf.get(String(b.page)) ?? String(b.page), '')
         delete b.page
+        delete b.anchor
       }
     }
   }
@@ -349,15 +358,21 @@ export function planGraft(
         dropped += r.cut
         relinked += r.changed
       }
-      if (b.type === 'pagelink' && typeof b.page === 'string') {
-        if (arrived.has(b.page)) {
-          const next = idMap.get(b.page) ?? b.page
-          if (next !== b.page) { b.page = next; relinked++ }
+      // Both kinds of page reference, by the one predicate — an embed grafted
+      // into another space that kept pointing at the ORIGINAL space's page id
+      // would render "that page is not here" in a document where the page
+      // demonstrably is.
+      if (isPageRef(b)) {
+        const ref = String(b.page)
+        if (arrived.has(ref)) {
+          const next = idMap.get(ref) ?? ref
+          if (next !== ref) { b.page = next; relinked++ }
         } else {
           dropped++
           b.type = 'p'
-          b.html = literalLink(titleOf.get(b.page) ?? b.page, '')
+          b.html = literalLink(titleOf.get(ref) ?? ref, '')
           delete b.page
+          delete b.anchor
         }
       }
     }
