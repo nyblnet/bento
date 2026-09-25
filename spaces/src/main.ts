@@ -230,6 +230,11 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   editor.connectSync(session)
 
   if (!frozen && doc.readonly) {
+    // A FILE SAVED FOR READING OPENS AS ONE. Until now `doc.readonly` only
+    // locked the store, so a reading copy arrived as the full editor with every
+    // control inert — which reads as a broken editor rather than as a document.
+    // reading.ts says what such a copy carries and what it does not.
+    editor.enterReadingCopy()
     banner(t('This is a reading copy. It opens for reading; nothing you do here changes the file.'))
   } else if (!frozen && isReaderCopy(doc)) {
     banner(t('This is a view-only copy — it follows the live session but can’t change this space.'))
