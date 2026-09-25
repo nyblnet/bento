@@ -14,6 +14,17 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-09-20 — shared save coordination and document differences
+
+Move immutable JSON snapshots, serialized revision-aware saves, and conditional
+field reversal into kernel. The save host supplies document and revision; the
+history caller supplies excluded root metadata. Neither helper owns dirty UI,
+undo grouping, selection, or document-shape rules. Cross-shape fixtures cover
+slide elements, note blocks and spreadsheet cells. App adoption remains a
+separate change; existing spaces/dash undo policies are not replaced by this
+extraction. See `kernel/src/savequeue.ts`, `kernel/src/history.ts` and
+`scripts/test-kernel-document-state.ts`.
+
 ## 2026-08-19 — Cross-app embedding: static render + source, never a second renderer
 
 **Decision.** One block/element shape, `bento/embed`, shared by every app in both

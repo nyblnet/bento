@@ -209,6 +209,16 @@ encryption), `autosave.ts`, `update.ts`, `anim.ts`, `charts.ts`, the `i18n.ts`
 engine, `app.ts` (per-app identity via `configureApp`), `doc.ts` (the
 `KernelDoc` envelope). Apps import these through facades at their own paths.
 
+`savequeue.ts` coordinates writes through a `SaveHost` (current document and a
+monotonic revision); all writes that use or adopt the same handle share one
+queue. Apps advance that revision for local and remote mutations, including
+keystrokes within grouped undo runs, and acknowledge a save only while its
+captured document and revision remain current. `documentvalue.ts` copies JSON
+containers without re-encoding immutable asset strings. `history.ts` supplies
+identity-addressed differences and conditional reversal for JSON documents;
+apps choose excluded root metadata, undo grouping, budgets, selection repair,
+and content invariants. These helpers know no slide/page/sheet schema.
+
 The CRDT engine is `kernel/src/sync/crdt.ts` now. It takes its document shape
 as a `DocShape` at construction, so one algebra serves every app with no app's
 vocabulary in the kernel. A shape is four things:
