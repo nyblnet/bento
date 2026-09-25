@@ -18,6 +18,7 @@
 
 // `.ts` extensions ON PURPOSE: node resolves this module directly for the rig.
 import { type SpacesDoc, type Page, type Block, repairId, pageAssetKeys } from './model.ts'
+import { designAssetKeys } from './designs.ts'
 import { esc } from './sanitize.ts'
 
 /** An `<a href="#p/…">` in a block, however many attributes it carries. */
@@ -207,6 +208,9 @@ export function extractSpace(
   // Dropping it changes how the extract LOOKS, which an export must not do.
   const fonts = (doc.fonts ?? []).filter((f) => (doc.assets ?? {})[f.asset] !== undefined)
   for (const f of fonts) used.add(f.asset)
+  // …and so is a face the space's DESIGN embeds: `design`/`designs` travel
+  // with the clone below, so the bytes they name must travel too
+  for (const k of designAssetKeys(doc)) used.add(k)
   const assets: Record<string, string> = {}
   for (const k of used) {
     const v = (doc.assets ?? {})[k]

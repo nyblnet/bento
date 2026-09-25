@@ -19,6 +19,7 @@
 import { type Block, type Page, uid, writeTable } from './model.ts'
 import { esc } from './sanitize.ts'
 import { keepClasses } from './marks.ts'
+import { readDesignFrontMatter } from './designs.ts'
 
 /** A tab indents four columns. Nothing here depends on the exact number; it
  *  only has to be the same everywhere so nesting is consistent. */
@@ -188,6 +189,10 @@ export interface ParsedNote {
   blocks: Block[]
   /** the YAML between the leading `---` fences, verbatim */
   frontmatter?: string
+  /** `design:` from the front matter — what this app's own export writes */
+  design?: string
+  /** `designs:` from the front matter: a design the file carried with it */
+  designs?: Record<string, unknown>
   images: PendingImage[]
   /** images pointing at the web: kept, but not loaded until a reader asks */
   remoteImages: number
@@ -238,6 +243,20 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
         break
       }
     }
+  }
+
+  // A DESIGN RIDES IN THE FRONT MATTER (designs.ts designFrontMatter). When
+  // design keys are ALL it holds — which is exactly what this app's export
+  // writes — it is consumed, not kept as a folded yaml block: a space that
+  // goes out and comes back must not grow a "Frontmatter" toggle each trip.
+  // Anything else keeps the old rule and is kept verbatim.
+  let design: string | undefined
+  let designs: Record<string, unknown> | undefined
+  if (frontmatter !== undefined) {
+    const fm = readDesignFrontMatter(frontmatter)
+    design = fm.design
+    designs = fm.designs
+    if (fm.onlyOurs && (design !== undefined || designs !== undefined)) frontmatter = undefined
   }
 
   let title = ''
@@ -420,6 +439,8 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     title: title || fileTitle,
     blocks,
     ...(frontmatter !== undefined ? { frontmatter } : {}),
+    ...(design !== undefined ? { design } : {}),
+    ...(designs !== undefined ? { designs } : {}),
     images,
     remoteImages,
     tables,
@@ -492,6 +513,10 @@ export interface ImportStats {
 
 export interface ImportPlan {
   pages: Page[]
+  /** the first design a note named in its front matter (path order) */
+  design?: string
+  /** designs the notes carried, first writer wins per name */
+  designs?: Record<string, unknown>
   /** local image references, still to be resolved against picked files */
   images: PendingImage[]
   stats: ImportStats
@@ -609,6 +634,8 @@ export function planImport(
   }
 
   // ---- fill the pages ------------------------------------------------------
+  let design: string | undefined
+  const designs: Record<string, unknown> = {}
   for (const f of src) {
     const note = parsed.get(f.path)!
     const page = filePage.get(f.path)!
@@ -619,6 +646,8 @@ export function planImport(
       page.blocks.push(...frontmatterBlocks(note.frontmatter))
     }
     page.blocks.push(...note.blocks)
+    if (note.design !== undefined && design === undefined) design = note.design
+    for (const [k, v] of Object.entries(note.designs ?? {})) if (!Object.hasOwn(designs, k)) designs[k] = v
     for (const img of note.images) images.push({ ...img, dir })
     stats.tables += note.tables
     stats.remoteImages += note.remoteImages
@@ -655,7 +684,11 @@ export function planImport(
   for (const p of pages) stats.blocks += p.blocks.length
   stats.duplicateNames = collisions
   stats.pages = pages.length
-  return { pages, images, stats }
+  return {
+    pages, images, stats,
+    ...(design !== undefined ? { design } : {}),
+    ...(Object.keys(designs).length ? { designs } : {}),
+  }
 }
 
 /**
