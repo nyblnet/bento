@@ -382,6 +382,52 @@ console.log('\nmedia: <video>/<audio> with a link inside')
   }
 }
 
+console.log('\ninline marks: every mark the model has, exported and read back')
+{
+  const MARKS: Array<[string, string]> = [
+    ['strong', 'a <strong>bold</strong> word'],
+    ['em', 'an <em>emphasised</em> word'],
+    ['u', 'an <u>underlined</u> word'],
+    ['s', 'a <s>struck</s> word'],
+    ['sub', 'H<sub>2</sub>O'],
+    ['sup', 'x<sup>2</sup>'],
+    ['code', 'some <code>code</code> here'],
+    ['a', 'a <a href="https://x.y/?a=1&amp;b=2">link</a> here'],
+    ['mark (plain highlight, ==x==)', 'a <mark>highlighted</mark> word'],
+    ['span (ink colour)', 'a <span class="sp-fg-red">red</span> word'],
+    ['mark (band colour)', 'a <mark class="sp-bg-yellow">banded</mark> word'],
+    ['nested marks', '<a href="https://x.y"><mark><span class="sp-fg-blue"><strong><em>all</em></strong></span></mark></a> of them'],
+  ]
+  for (const [name, html] of MARKS) {
+    const t = trip({ blocks: [b('p', html)] })
+    ok(qualifies(t), `${name}: byte-identical`, qualifies(t) ? undefined : why(t))
+  }
+  const hi = trip({ blocks: [b('p', 'a <mark>highlighted</mark> word')] })
+  ok(hi.md.trim() === 'a ==highlighted== word', 'a plain highlight is written ==x==, Obsidian\'s spelling', hi.md)
+}
+{
+  const got = only('[ink]{color=red} [band]{bg=yellow} [both]{color=blue bg=green}\n')
+  ok(got[0]?.html === '<span class="sp-fg-red">ink</span> <mark class="sp-bg-yellow">band</mark> <mark class="sp-bg-green"><span class="sp-fg-blue">both</span></mark>',
+    'Pandoc spans with palette colours read as the palette marks', JSON.stringify(got))
+}
+{
+  const cases = [
+    '[x]{color=coral}',
+    '[x]{color="red;background:url(//t.invalid)"}',
+    '[x]{bg=red onclick=alert(1)}',
+    '[x]{color=red .evil}',
+    '[x]{#id color=red}',
+    '[x]{color=sp-fg-red}',
+    '[x]{color=__proto__}',
+    '[x]{color=toString}',
+  ]
+  for (const src of cases) {
+    const got = only(`${src}\n`)
+    ok(got.length === 1 && !/class=|<span|<mark/.test(got[0].html ?? ''),
+      `HOSTILE colour: ${src} stays text, and no class is minted`, JSON.stringify(got))
+  }
+}
+
 console.log('\ntoggles: <details>, open or folded, holding anything')
 {
   const t = trip({ blocks: [b('toggle', 'Open one', { open: true }), b('toggle', 'Shut one', { open: false })] })

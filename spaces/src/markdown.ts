@@ -18,7 +18,7 @@
 // `scripts/test-spaces-model.ts`, which node resolves without a bundler.
 import { type Block, type Page, uid, writeTable, linkCard, linkCardHtml } from './model.ts'
 import { esc, externalHref } from './sanitize.ts'
-import { keepClasses } from './marks.ts'
+import { keepClasses, PALETTE } from './marks.ts'
 
 /** A tab indents four columns. Nothing here depends on the exact number; it
  *  only has to be the same everywhere so nesting is consistent. */
@@ -142,8 +142,36 @@ export function inlineHtml(src: string): string {
         ? hold(`<a href="${esc(url)}">`) + text + hold('</a>')
         : m)
 
+  // A PANDOC SPAN carrying a palette colour — `[words]{color=red}` for the
+  // ink, `[words]{bg=yellow}` for the band behind them, or both. This app's
+  // own exporter writes colour as raw `<span class="sp-fg-red">`, which GitHub
+  // and Obsidian show as clean text (the brace form would show as literal
+  // braces there); this is the other spelling, for Markdown written with
+  // Pandoc in mind. THE PALETTE ONLY: a name outside it (`coral`,
+  // `red;background:url(…)`) or any key but these two leaves the whole span
+  // as the text it was, so nothing here can mint a class the sanitizer's
+  // pattern would then accept.
+  s = s.replace(/\[([^[\]\n]+)\]\{([^{}\n]*)\}/g, (m: string, x: string, list: string) => {
+    const a = parseAttrs(`{${list}}`)
+    if (!a || a.id !== undefined || a.classes.length || !a.kv.size) return m
+    const named = (k: string): string | undefined => {
+      const v = a.kv.get(k)
+      return v !== undefined && (PALETTE as readonly string[]).includes(v) ? v : undefined
+    }
+    for (const k of a.kv.keys()) if ((k !== 'color' && k !== 'bg') || !named(k)) return m
+    const fg = named('color'), bg = named('bg')
+    const open = (bg ? `<mark class="sp-bg-${bg}">` : '') + (fg ? `<span class="sp-fg-${fg}">` : '')
+    const close = (fg ? '</span>' : '') + (bg ? '</mark>' : '')
+    return hold(open) + x + hold(close)
+  })
+
   s = s.replace(/~~([\s\S]+?)~~/g, (_m, x: string) => hold('<s>') + x + hold('</s>'))
   s = s.replace(/==([\s\S]+?)==/g, (_m, x: string) => hold('<mark>') + x + hold('</mark>'))
+  // `***x***` — bold AND italic, which is how the exporter spells the pair
+  // (marks.ts: strong outside em). Left to the two rules below it read as
+  // `**` + `*x` + `**` and then an `*` with no partner, and came back as the
+  // mis-nested `<strong><em>x</strong></em>`.
+  s = s.replace(/\*\*\*(?=\S)([^*]+?)\*\*\*/g, (_m, x: string) => hold('<strong><em>') + x + hold('</em></strong>'))
   s = s.replace(/\*\*(?=\S)([\s\S]+?)\*\*/g, (_m, x: string) => hold('<strong>') + x + hold('</strong>'))
   s = s.replace(/(^|[^\w\\])__(?=\S)([\s\S]+?)__(?!\w)/g,
     (_m, pre: string, x: string) => pre + hold('<strong>') + x + hold('</strong>'))

@@ -550,6 +550,15 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   `javascript:` source or a relative path, arrives as its label and the address
   as plain code text, never as a player.
 
+- **Every inline mark survives Markdown, and Pandoc's colour spans come in.**
+  Bold with italic (`***both***`, the way the exporter writes the pair)
+  came back wrongly nested and now comes back as written. Colour still leaves as
+  `<span class="sp-fg-red">`, which GitHub and Obsidian show as clean text, and
+  a highlight still leaves as `==x==`. The importer now also reads
+  `[words]{color=red}` and `[words]{bg=yellow}`, but only for the nine palette
+  colours. A name outside the palette, or any other key, leaves the span as the
+  text it was.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
