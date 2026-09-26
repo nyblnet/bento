@@ -5,9 +5,10 @@
 //   npm run build:single --prefix slides && node scripts/test-slides-chrome-rulings-browser.mjs
 //
 // WHAT THIS PROVES (seven items from spaces' bar-parity pass, #572):
-//   1. D2 — the Save-as and Share menus show each command's description as a
-//      second line, not a tooltip, readable (4.5:1) in both themes, including
-//      on Share's ink-filled primary action;
+//   1. D2, as revised 2026-09-26 — Save-as rows stay one 30px line with the
+//      description as the hover tooltip AND as a visually-hidden
+//      aria-describedby node; Share shows it as a second line, readable
+//      (4.5:1) in both themes, including on its ink-filled primary action;
 //   2. D4 — dialog titles (help, Version history) are 17px/650, not the
 //      browser's 19.5px/700 h2;
 //   3. D8 — help-sheet shortcuts are in the interface face, right-aligned;
@@ -49,45 +50,33 @@ try {
   const openSave = () => p.evaluate(() => document.querySelector('.ed-split-caret').click())
 
   // --- 1. D2 descriptions ------------------------------------------------------
-  console.log('D2: consequential menus describe each command on a second line\n')
+  console.log('D2 (revised): Save-as rows are one line, the description a tooltip and an ARIA description\n')
   await openSave()
   const save = await p.evaluate(() => [...document.querySelectorAll('.ed-save-menu > .ed-btn')].map((b) => {
-    const d = b.querySelector('.ed-mi-desc')
-    const name = b.querySelector('span')?.firstChild?.textContent ?? ''
-    const r = d?.getBoundingClientRect(), n = b.querySelector('span')?.getBoundingClientRect()
-    return { name, desc: !!d, below: !!(d && r.top >= n.top + 10), visible: !!(d && r.height > 0), title: b.title }
+    const id = b.getAttribute('aria-describedby'), d = id && document.getElementById(id)
+    const r = d?.getBoundingClientRect()
+    return { name: b.getAttribute('aria-label') ?? b.textContent.trim(), h: b.getBoundingClientRect().height, title: b.title,
+      desc: d?.textContent ?? '', hidden: !!(d && r.width <= 1 && r.height <= 1), inRow: !!(d && b.contains(d)), second: !!b.querySelector('.ed-mi-desc') }
   }))
   const described = save.filter((x) => x.desc)
   ok(described.length >= 8, `${described.length} of ${save.length} Save-as rows carry a description (Export slides as images opens a dialog that explains itself)`)
-  ok(described.every((x) => x.visible && x.below), 'each description is visible, on its own line under the name')
-  ok(save.every((x) => !x.title), 'no row repeats it as a tooltip')
+  ok(save.every((x) => Math.abs(x.h - 30) <= 0.5 && !x.second), `every row is one 30px line (${[...new Set(save.map((x) => x.h))].join('/')}px)`)
+  ok(described.every((x) => x.title === x.desc), 'the description is the row\'s hover tooltip (title)')
+  ok(described.every((x) => x.hidden && x.inRow), '…and the same text is the aria-describedby target, visually hidden inside the row')
   // the name stays the name: the description is announced AS a description
   const replaceRow = p.getByRole('button', { name: 'Replace from JSON…', exact: true })
   ok(await replaceRow.count() === 1, 'a described row keeps its bare name ("Replace from JSON…"), not name+description')
-  ok(/^Paste edited document JSON/.test(await replaceRow.evaluate((b) => document.getElementById(b.getAttribute('aria-describedby'))?.textContent ?? '')),
-    'its description is wired as aria-describedby')
   const menuW = await p.evaluate(() => document.querySelector('.ed-save-menu').getBoundingClientRect().width)
-  ok(menuW <= 264.5 && menuW >= 240, `the list wraps at a set width (${menuW}px, 240–264)`)
-  // descriptions make the list tall: on a short window it must scroll, not
-  // run off the bottom with its last commands out of reach
+  ok(menuW <= 264.5 && menuW >= 240, `the list keeps spaces' width for it (${menuW}px, 240–264)`)
+  // on a short window (phone landscape) it must scroll, not run off the
+  // bottom with its last commands out of reach
   await closeAll()
-  await p.setViewportSize({ width: 1280, height: 700 })
+  await p.setViewportSize({ width: 1280, height: 260 })
   await openSave()
   const fit = await p.evaluate(() => { const m = document.querySelector('.ed-save-menu'); const last = m.lastElementChild; last.scrollIntoView({ block: 'nearest' }); const r = last.getBoundingClientRect(); return { bottom: Math.round(m.getBoundingClientRect().bottom), lastBottom: Math.round(r.bottom), vh: innerHeight } })
-  ok(fit.bottom <= fit.vh && fit.lastBottom <= fit.vh, `at 700px tall the list ends on screen (${fit.bottom} ≤ ${fit.vh}) and its last row scrolls into reach`)
+  ok(fit.bottom <= fit.vh && fit.lastBottom <= fit.vh, `at 260px tall the list ends on screen (${fit.bottom} ≤ ${fit.vh}) and its last row scrolls into reach`)
   await closeAll()
   await p.setViewportSize({ width: 1440, height: 900 })
-  await openSave()
-  for (const th of THEMES) {
-    await theme(th)
-    const c = await p.evaluate(() => {
-      const d = document.querySelector('.ed-save-menu .ed-mi-desc')
-      return { fg: getComputedStyle(d).color, bg: getComputedStyle(document.querySelector('.ed-save-menu')).backgroundColor }
-    })
-    const r = contrast(c.fg, c.bg)
-    ok(r >= 4.5, `${th}: description ${r.toFixed(2)}:1 on the menu ≥ 4.5`)
-  }
-  await closeAll()
   await theme('light')
   await p.evaluate(() => document.querySelector('.ed-btn-share').click())
   const share = await p.evaluate(() => [...document.querySelectorAll('.ed-share-pop .ed-share-btn')].map((b) => ({

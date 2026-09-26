@@ -86,22 +86,29 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
 ]
 
 /**
- * A menu row's label, with its description as a SECOND LINE rather than a
- * tooltip (maintainer ruling D2: consequential menus — Save as, Share — say
- * what a command does before you run it; a tooltip never shows on a phone and
- * waits a second on a desktop). The description sits inside the label span so
- * the bar's compact tier, which hides and restores `.ed-btn > span`, carries
- * it along; an empty description adds nothing. The name keeps an element of
- * its own and is the row's accessible NAME; the description is announced as
- * its description (aria-describedby), not glued onto the name.
+ * A menu row's label and its description (maintainer ruling D2, as revised
+ * 2026-09-26). Two shapes:
+ *  - 'line' (Share): the description is a second line under the name;
+ *  - 'tip' (Save as): the row stays ONE 30px line and the description is the
+ *    row's hover tooltip (the native `title`) — "all the extra text describing
+ *    the entry can be mouseovers".
+ * Either way the name keeps an element of its own and is the row's accessible
+ * NAME, and the description is its accessible DESCRIPTION via aria-describedby
+ * — in the tooltip shape on a visually-hidden node, because a tooltip is not
+ * announced reliably and never appears on a phone. The description sits inside
+ * the label span so the bar's compact tier, which hides and restores
+ * `.ed-btn > span`, carries it along. An empty description adds nothing.
  */
 let menuDescSeq = 0
-function menuLabel(label: string, desc: string, row: HTMLElement): HTMLSpanElement {
+function menuLabel(label: string, desc: string, row: HTMLElement, shape: 'line' | 'tip' = 'line'): HTMLSpanElement {
   if (!desc) return Object.assign(document.createElement('span'), { textContent: label })
-  const span = Object.assign(document.createElement('span'), { className: 'ed-mi' })
+  const span = Object.assign(document.createElement('span'), { className: shape === 'line' ? 'ed-mi' : '' })
   const name = Object.assign(document.createElement('span'), { className: 'ed-mi-name', textContent: label })
-  const note = Object.assign(document.createElement('small'), { className: 'ed-mi-desc', textContent: desc, id: `ed-mi-desc-${++menuDescSeq}` })
+  const note = Object.assign(document.createElement(shape === 'line' ? 'small' : 'span'), {
+    className: shape === 'line' ? 'ed-mi-desc' : 'ed-sr-only', textContent: desc, id: `ed-mi-desc-${++menuDescSeq}`,
+  })
   span.append(name, note)
+  if (shape === 'tip') row.title = desc
   row.setAttribute('aria-label', label)
   row.setAttribute('aria-describedby', note.id)
   return span
@@ -917,7 +924,7 @@ export class Editor {
       const b = document.createElement('button')
       b.className = 'ed-btn'
       if (icon) b.innerHTML = icon
-      b.appendChild(menuLabel(label, title, b))
+      b.appendChild(menuLabel(label, title, b, 'tip'))
       b.addEventListener('click', () => {
         close()
         onClick()

@@ -2451,19 +2451,24 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .ed-save-menu { min-width: 190px; }
 .ed-save-menu .ed-btn { font-size: 12.5px; }
-/* D2: a consequential menu (Save as, Share) says what each command does on a
-   second line under its name — before, only as a tooltip, which a phone never
-   shows. The row stops being one line, so it gets a width to wrap at (the
-   names set the list's width, spaces' 240–264 for the same list), and the
-   icon aligns with the NAME, not the middle of two lines. */
+/* D2 (revised 2026-09-26): Share says what each action does on a second line
+   under its name; Save as keeps one-line rows and puts it in the tooltip, with
+   the same text in a visually-hidden node for aria-describedby. A two-line row
+   aligns its icon with the NAME, not the middle of two lines. The Save list
+   keeps spaces' width for the same list (240–264). */
 .ed-save-menu { width: min(264px, calc(100vw - 16px)); }
-/* …and so it is tall: ~570px of rows, which ran off the bottom of a 768px
-   laptop window with the last commands unreachable. It scrolls within the
-   space under the bar. Safe to make a scroll box (hard-won #10): nothing in
+/* A long list on a short window (phone landscape, a split screen) must not
+   run off the bottom with its last commands unreachable: it scrolls within
+   the space under the bar. Safe to make a scroll box (hard-won #10): nothing in
    it floats. --ed-bar-bottom is published by editor.ts. */
 .ed-save-menu { max-height: calc(100dvh - var(--ed-bar-bottom, 56px) - 12px); overflow-y: auto; }
 .ed-btn:has(> .ed-mi) { align-items: flex-start; white-space: normal; text-align: start; }
 .ed-btn:has(> .ed-mi) > svg { margin-top: 1px; flex: none; }
+/* present for assistive tech, absent for the eye */
+.ed-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
 .ed-mi-desc {
   display: block; margin-top: 2px;
   font-size: 12px; font-weight: 400; line-height: 1.35; color: var(--muted);

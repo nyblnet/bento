@@ -11,9 +11,10 @@ pre-1.0.
 
 ## [Unreleased]
 
-- **Save as and Share say what each command does.** Their descriptions now
-  sit under each command's name instead of in a tooltip that never shows on a
-  phone; the Save-as list scrolls when a short window cannot hold it. Dialog
+- **Share says what each action does.** Its descriptions now sit under each
+  action's name instead of in a tooltip that never shows on a phone. Save as
+  keeps one-line rows with the description on hover, and screen readers now
+  announce it; the Save-as list scrolls when a short window cannot hold it. Dialog
   titles are a little smaller (17px), keyboard shortcuts in the help sheet are
   set in the interface font and line up on the right, and keyboard focus
   draws a clear amber ring. Also fixed: the Save caret's ▾ vanished at
