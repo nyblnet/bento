@@ -292,6 +292,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   z-index: 50;
   min-width: 150px;
 }
+/* The light shadow is navy at 14%, which on the dark chrome is a navy smudge
+   on navy and lifts nothing off the page. Dark gets black, deeper — the same
+   move --slide-shadow makes for the canvas. */
+:root[data-theme="dark"] .ed-menu { box-shadow: 0 8px 24px rgb(0 0 0 / 0.5); }
 /* DIRECT child, not any descendant. Phone chrome demotes whole dropdown
    widgets (Share, Language) into the ⋯ menu, so a descendant selector opened
    their menus too — ⋯ came up with the entire language list already unrolled
@@ -740,6 +744,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   align-items: center;
   justify-content: center;
 }
+/* D4: a dialog title is 17px/650 (the kernel's .bkd-title). Before, this was
+   the browser's h2 — 1.5em of 13px = 19.5px at 700 — in help, Version history
+   and every other .ed-about card. */
+.ed-about h2 { font-size: 17px; font-weight: 650; }
 .ed-about {
   /* 440 rather than 360: release notes ride inline in the manifest now, and a
      narrower box turned every bullet into two wrapped lines. The calc() keeps
@@ -1058,10 +1066,12 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   color: var(--muted); margin: 0 0 6px;
 }
 .ed-help-row { display: grid; grid-template-columns: 128px 1fr; gap: 12px; align-items: baseline; padding: 3px 0; font-size: 13px; }
+/* D8: shortcuts in the interface face, not monospace, right-aligned against
+   what they do — the column reads as a list of keys, as a menu's does */
 .ed-help-row kbd {
-  font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: inherit; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
   background: var(--chrome-2); border: 1px solid var(--line);
-  border-radius: 5px; padding: 2px 6px; color: var(--ink); white-space: nowrap; justify-self: start;
+  border-radius: 5px; padding: 2px 6px; color: var(--ink); white-space: nowrap; justify-self: end;
 }
 .ed-help-tips { margin: 4px 0 0; padding-inline-start: 18px; font-size: 13px; line-height: 1.5; color: var(--ink); }
 .ed-help-tips li { margin: 3px 0; }
@@ -2227,6 +2237,9 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-title { flex: 0 1 220px; min-width: 48px; }
 .ed-topbar.ed-bar-compact .ed-btn > span { display: none; } /* icons + tooltips take over */
 .ed-topbar.ed-bar-compact .ed-btn.ed-btn-update > span { display: inline; } /* version chip is signal */
+/* the Save caret's ▾ is its only content, not a label — hiding it left an
+   empty 16px button */
+.ed-topbar.ed-bar-compact .ed-btn > span.ed-caret { display: inline; }
 /* …but NEVER inside an open dropdown/menu — those items are text; hiding
    their labels left icon-only mystery menus on phones. */
 .ed-topbar.ed-bar-compact .ed-menu .ed-btn > span,
@@ -2333,7 +2346,9 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   .ed-topbar .ed-btn { min-width: 44px; min-height: 44px; justify-content: center; }
   /* the wordmark is a button too (About), and on a phone it is the mark alone */
   .ed-topbar .ed-logo { min-width: 44px; min-height: 44px; justify-content: center; }
-  .ed-topbar .ed-menu .ed-btn { min-width: 0; } /* menu rows are text, not targets */
+  /* menu rows are text, not targets — and read from the start edge; the
+     centring above is for the bar's icon buttons and used to leak in here */
+  .ed-topbar .ed-menu .ed-btn { min-width: 0; justify-content: flex-start; }
   .ed-title { flex: 0 1 220px; }
   .ed-phone-tools {
     display: flex;
@@ -2436,6 +2451,33 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .ed-save-menu { min-width: 190px; }
 .ed-save-menu .ed-btn { font-size: 12.5px; }
+/* D2: a consequential menu (Save as, Share) says what each command does on a
+   second line under its name — before, only as a tooltip, which a phone never
+   shows. The row stops being one line, so it gets a width to wrap at (the
+   names set the list's width, spaces' 240–264 for the same list), and the
+   icon aligns with the NAME, not the middle of two lines. */
+.ed-save-menu { width: min(264px, calc(100vw - 16px)); }
+/* …and so it is tall: ~570px of rows, which ran off the bottom of a 768px
+   laptop window with the last commands unreachable. It scrolls within the
+   space under the bar. Safe to make a scroll box (hard-won #10): nothing in
+   it floats. --ed-bar-bottom is published by editor.ts. */
+.ed-save-menu { max-height: calc(100dvh - var(--ed-bar-bottom, 56px) - 12px); overflow-y: auto; }
+.ed-btn:has(> .ed-mi) { align-items: flex-start; white-space: normal; text-align: start; }
+.ed-btn:has(> .ed-mi) > svg { margin-top: 1px; flex: none; }
+.ed-mi-desc {
+  display: block; margin-top: 2px;
+  font-size: 12px; font-weight: 400; line-height: 1.35; color: var(--muted);
+}
+/* on the ink fill (Share's primary action) the muted grey would vanish */
+.ed-btn-primary .ed-mi-desc { color: color-mix(in srgb, var(--surface) 78%, var(--ink)); }
+
+/* A designed keyboard ring, the kernel's (kernel/src/ui/menu.css .bkm-item):
+   --accent-ink, 2px. Bar and dialog buttons draw it OUTSIDE, on the surface
+   they sit on (inside, it would sit on Save's ink fill); rows in a menu draw
+   it INSIDE, where the list's own padding would clip it. :focus-visible, so
+   a pointer never sees it. */
+.ed-btn:focus-visible, .ed-logo:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.ed-menu .ed-btn:focus-visible { outline-offset: -2px; }
 /* when the adjacent panel is collapsed the chevron pins fully on-screen,
    docked to the edge like a drawer pull */
 .ed-sidebar.ed-collapsed + .ed-resizer .ed-panel-toggle {
