@@ -7417,3 +7417,51 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-09-26 — bento/spaces: the Markdown form of every block, and the syntax reserved for the rest
+
+**Decision.** Every spaces block type except `prop` now survives Markdown byte
+for byte: the JSON comes back with only its ids changed, and the next export is
+the same text. `scripts/test-spaces-md-strict.ts` holds that bar type by type,
+with 19 of 20 types passing. The forms, with the full table in
+`docs/spaces-agents.md` under "Markdown in and out":
+
+- toggle `<details>`/`<summary>`; image size `{width=60% w=640 h=300}`
+  (Pandoc attributes); media `<video>`/`<audio>` holding a link to the clip;
+  page link `[[Title]]` alone on a line; view and canvas as `bento-view` and
+  `bento-canvas` fences holding one JSON line; block ids as a trailing `{#id}`.
+- **A link card is a link plus a hidden marker**,
+  `[title](url) — desc <!-- bento:card site="…" image="…" -->`. This
+  EXTENDS 2026-08-22 ("in Markdown a link card is a link") without reversing
+  it. An unmarked lone link would turn every README line that is just a link
+  into a card. A fence would stop it being a link. A Pandoc `{.card …}`
+  would print on GitHub, and a `data:` thumbnail in it would be kilobytes of
+  visible text. A `data:` thumbnail over 512 bytes is left out, as a pinned
+  loss.
+- **A clip leaves as html, superseding 2026-08-22's "a clip exports as a
+  markdown LINK".** The link survives as the element's fallback content, so a
+  renderer that strips `<video>` shows exactly the old export, and one that
+  keeps it plays the clip. `autoplay` is written as `data-autoplay`, so an
+  exported file never makes another renderer obey what this app records and
+  refuses.
+- **Colour keeps its raw-html export.** `<span class="sp-fg-red">` renders as
+  clean text on GitHub and in Obsidian. Pandoc's `[x]{color=red}` would print
+  its brackets there. The importer also accepts `[x]{color=…}` and `{bg=…}`,
+  palette names only.
+- **Ids are written only where something points**, at a comment anchor or a
+  `#p/<page>/<block>` target, so a space with neither exports exactly as it
+  did before. That is asserted against a pinned pre-change export. On import
+  an id already used in the note, in the import or in the target space is
+  replaced, and ids matching an `Object.prototype` name are refused.
+
+**Import is an untrusted path, and none of this widened it.** No html
+attribute is copied by name. Urls pass the same allowlists as the editor, and
+fences go through `JSON.parse` and never `eval`. A fence cannot set `id`,
+`type`, `parent`, `html` or `comments`, and a malformed fence stays a code
+block. Block `html` still goes through `sanitizeInline` in the importer.
+
+**Reserved for features not yet on main** (math `$…$`/`$$…$$`, a
+`` ```mermaid `` fence, `` ```chart bar `` over a table or CSV,
+`![[Page]]`/`![[Page#Section]]`, GFM footnotes, `:::columns`/`:::hero`/`:::card`):
+the syntax is fixed in `docs/spaces-agents.md` so the branches that ship them
+agree with each other and with this importer.

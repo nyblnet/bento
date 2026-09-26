@@ -2216,12 +2216,18 @@ function fsTable(f: string): string {
       { id: 'p3', title: 'Third', group: 'Done', fields: '' },
     ],
   }).join('\n')
-  ok(md.includes('[First](#p/p1)') && md.includes('[Third](#p/p3)'),
-    'a board exports its ISSUES, each one a link back to its page')
-  ok(md.includes('**Todo**') && md.includes('**Done**'), '…grouped as the board groups them')
-  ok(md.indexOf('**Todo**') < md.indexOf('**Done**'), '…in the board\'s column order')
-  ok(md.includes('[First](#p/p1) — High'), '…carrying the same chips the card shows')
-  ok(viewSpec.toMd!({ id: 'v', type: 'view' } as Block, 'Issues', '', ctx).join('\n').includes('_No issues._'),
+  // A ```bento-view fence: the settings as one JSON line (what reads back as a
+  // view), then the issues as `//` lines for a reader elsewhere — the fence's
+  // round trip is held byte for byte in scripts/test-spaces-md-strict.ts
+  ok(md.startsWith('```bento-view\n{"name":"Issues"}\n') && md.endsWith('\n```'),
+    'a board exports as a bento-view fence carrying its settings')
+  ok(md.includes('//   - First') && md.includes('//   - Third'),
+    'a board exports its ISSUES, one readable line each')
+  ok(md.includes('// Todo') && md.includes('// Done'), '…grouped as the board groups them')
+  ok(md.indexOf('// Todo') < md.indexOf('// Done'), '…in the board\'s column order')
+  ok(md.includes('//   - First — High'), '…carrying the same chips the card shows')
+  ok(!/^#/m.test(md), '…and no line of it starts with `#`, which a tool splitting at headings would cut on')
+  ok(viewSpec.toMd!({ id: 'v', type: 'view' } as Block, 'Issues', '', { ...ctx, inline: (h: string) => h }).join('\n').includes('// No issues.'),
     'an empty board says so rather than exporting a bare heading')
 }
 
@@ -2341,16 +2347,23 @@ function fsTable(f: string): string {
   ok(mediaPlayback({ id: 'x', type: 'media', kind: 'holo-tape' }).kind === 'video',
     'a kind from a newer build degrades to video, which plays an audio file anyway')
 
-  // MARKDOWN HAS NO VIDEO. A link is the one form correct in every renderer;
-  // `![](clip.mp4)` is image syntax and draws a broken-image glyph everywhere.
+  // MARKDOWN HAS NO VIDEO. A clip leaves as the html element, holding a LINK:
+  // a renderer that strips <video> keeps its content, which is the link this
+  // block used to export as — and `![](clip.mp4)` (image syntax, a broken
+  // glyph everywhere) is still never written. The element's fields are held to
+  // byte identity in scripts/test-spaces-md-strict.ts.
   const md = (b: Block): string =>
-    (SPEC.get('media')!.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [] })).join('\n')
-  ok(md({ id: 'x', type: 'media', src: 'asset:k1' }) === '[Video](asset:k1)',
-    'a clip exports as a markdown LINK, not as an image')
-  ok(md({ id: 'x', type: 'media', kind: 'audio', src: 'https://h/x.mp3' }) === '[Audio](https://h/x.mp3)',
+    (SPEC.get('media')!.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [], inline: (h: string) => h })).join('\n')
+  const inner = (b: Block): string => /<a href="[^"]*">([^<]*)<\/a><\/(?:video|audio)>$/.exec(md(b))?.[1] ?? '(no link)'
+  ok(/^<video src="asset:k1" controls><a href="asset:k1">Video<\/a><\/video>$/.test(md({ id: 'x', type: 'media', src: 'asset:k1' })),
+    'a clip exports as a <video> holding a markdown-safe LINK to it, never as an image')
+  ok(/^<audio src="https:\/\/h\/x.mp3"/.test(md({ id: 'x', type: 'media', kind: 'audio', src: 'https://h/x.mp3' })) &&
+    inner({ id: 'x', type: 'media', kind: 'audio', src: 'https://h/x.mp3' }) === 'Audio',
     '…named for what it is')
-  ok(md({ id: 'x', type: 'media', src: 'asset:k1', alt: 'The demo' }) === '[The demo](asset:k1)',
+  ok(inner({ id: 'x', type: 'media', src: 'asset:k1', alt: 'The demo' }) === 'The demo',
     '…using alt as the label when there is one, exactly as the image exporter does')
+  ok(!/ autoplay/.test(md({ id: 'x', type: 'media', src: 'asset:k1', autoplay: true })),
+    '…and never with a live autoplay attribute, which another renderer would obey')
   ok(md({ id: 'x', type: 'media' }) === '_Video_',
     'and a block with no source yet exports as a word, never as an empty link')
 
@@ -2536,7 +2549,13 @@ function fsTable(f: string): string {
 
   // --- markdown: a link card is a link -------------------------------------
   const linkSpec = SPEC.get('link')!
-  const md = (b: Block) => linkSpec.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [] }).join('\n')
+  const withMarker = (b: Block) => linkSpec.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [], inline: (h: string) => h }).join('\n')
+  // the VISIBLE line; the trailing `<!-- bento:card … -->` that marks it as a
+  // card (hidden by every renderer) is asserted on its own below and covered
+  // field by field in scripts/test-spaces-md-strict.ts
+  const md = (b: Block) => withMarker(b).replace(/ <!-- bento:card[^\n]*-->$/, '')
+  ok(/ <!-- bento:card -->$/.test(withMarker(card({ url: 'https://a.b/x', title: 'Docs' }))),
+    'a card line ends in the bento:card marker comment, which is what makes it a card on the way back in')
   ok(md(card({ url: 'https://a.b/x', title: 'Docs' })) === '[Docs](https://a.b/x)',
     'a link card exports as a markdown link')
   ok(md(card({ url: 'https://a.b/x', title: 'Docs', desc: 'The manual' })) === '[Docs](https://a.b/x) — The manual',
@@ -3378,12 +3397,12 @@ function fsTable(f: string): string {
   ok(TAG_OF.canvas === 'div', 'a canvas is a div, like every other surface block')
   ok(!LIST_OF.canvas, 'a canvas is not a list item')
 
-  // ITS MARKDOWN IS ITS NAME. The cards follow as their own indented lines,
-  // because they are their own blocks — so `toMd` must NOT print them again.
-  const cvMd = cvSpec!.toMd!({ id: 'cv', type: 'canvas' } as Block, 'Launch plan', '', {} as never)
-  ok(cvMd.join('\n') === '**Launch plan**', 'a canvas exports as its name')
-  ok(cvSpec!.toMd!({ id: 'cv', type: 'canvas' } as Block, '', '', {} as never)[0] === '**Canvas**',
-    'an unnamed canvas still says what it is rather than exporting a blank line')
+  // ITS MARKDOWN IS A bento-canvas FENCE: its name, its settings and where each
+  // card sits. The cards follow as their own lines, because they are their own
+  // blocks — so `toMd` must NOT print them again.
+  const cvMd = cvSpec!.toMd!({ id: 'cv', type: 'canvas' } as Block, 'Launch plan', '', { cardsOf: () => [[10, 20], null] } as never)
+  ok(cvMd.join('\n') === '```bento-canvas\n{"name":"Launch plan","cards":[[10,20],null]}\n```',
+    'a canvas exports as a fence holding its name and its cards\' positions, and not the cards')
 
   // A CARD'S OWN WORDS TRAVEL, AS THEIR OWN LINE. mdLayout decides the two
   // decorations a block cannot decide for itself, and the one that matters here
@@ -3394,7 +3413,7 @@ function fsTable(f: string): string {
   // which a plain text card's does not — so the assertion is on the quote.)
   const cvLay = mdLayout(cvPage.blocks)
   ok(cvLay[1].quote === '', 'a card is not swept into its canvas as a blockquote')
-  ok(cvLay[1].indent === '  ', "…and mdLayout reads it as its container's child")
+  ok(cvLay[1].indent === '', "…and mdLayout writes it at the canvas's own level (the bento-canvas fence counts its cards)")
 }
 
 

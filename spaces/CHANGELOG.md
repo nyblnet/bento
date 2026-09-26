@@ -502,6 +502,91 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   reason, so the rig fails if one starts to qualify without the pin being
   lifted on purpose.
 
+- **A toggle leaves as `<details>` and comes back a toggle.** It used to export
+  as `- text` and return as a bullet, with its fold state gone and its contents
+  loose. Now it is `<details open>` or `<details>`, then `<summary>`, then its
+  contents as ordinary Markdown, then `</details>`. GitHub, Obsidian and any
+  browser draw that as the same fold. The importer also reads `<details>` as
+  GitHub READMEs write it: the summary on its own indented line, on one line
+  with its body, or never closed. It takes one fact from the tag, whether it
+  says `open`, and copies nothing else from it, so an `onclick` or `ontoggle`
+  on it reaches nothing. A space with no toggles exports exactly as before, and
+  the rig now checks that byte for byte.
+
+- **An image keeps its size through Markdown.** The width you dragged, and the
+  pixel size that holds its space while it loads, now follow the image as a
+  Pandoc attribute list: `![alt](src "caption"){width=60% w=640 h=300}`.
+  Pandoc and markdown-it-attrs read that. GitHub and Obsidian show the braces
+  as text after the picture, which only happens on a sized image. Only numbers
+  are written and only validated numbers are read back: a width between 10% and
+  100%, and both pixel sizes or neither. Any other key or value is ignored and
+  the image is kept.
+
+- **A link card comes back a link card.** It still leaves as a link,
+  `[title](url) — description`, followed by a comment,
+  `<!-- bento:card site="…" image="…" -->`. GitHub, Obsidian and browsers
+  hide the comment, so the page reads as the link and nothing else. The comment
+  is what marks the line as a card, so a README line that happens to be a lone
+  link stays a paragraph. It also carries the fields the visible line cannot:
+  site, icon and thumbnail, plus title and description for a card with no
+  address. Every field is checked on the way back in. The address must be
+  http, https or mailto, and anything else is dropped. The thumbnail must be an
+  embedded picture: no remote address and no svg. The other fields are stored
+  as plain text. One loss is deliberate: a thumbnail embedded as more than 512
+  bytes of data is not written into the Markdown, because in a plain editor it
+  would be a screen of base64 after every card.
+
+- **A video or audio clip comes back a clip.** It exported as a Markdown link
+  and returned as a paragraph, losing controls, loop, muted, poster, size and
+  caption. It now leaves as `<video>` or `<audio>` carrying those fields, with
+  a link to the clip inside it. Obsidian and browsers play it. A renderer that
+  strips the tag keeps the link, which is exactly what the old export was.
+  Autoplay is written as `data-autoplay`, so the file never makes another
+  renderer start the clip; this app records autoplay and never obeys it. The
+  importer also reads clips as READMEs write them, including a `<source>` child
+  and a tag spread over several lines. Nothing is copied from the tag by name.
+  The source must be an embedded clip or an http(s) address, and the poster an
+  embedded raster picture or an http(s) address. Anything else, such as a
+  `javascript:` source or a relative path, arrives as its label and the address
+  as plain code text, never as a player.
+
+- **Every inline mark survives Markdown, and Pandoc's colour spans come in.**
+  Bold with italic (`***both***`, the way the exporter writes the pair)
+  came back wrongly nested and now comes back as written. Colour still leaves as
+  `<span class="sp-fg-red">`, which GitHub and Obsidian show as clean text, and
+  a highlight still leaves as `==x==`. The importer now also reads
+  `[words]{color=red}` and `[words]{bg=yellow}`, but only for the nine palette
+  colours. A name outside the palette, or any other key, leaves the span as the
+  text it was.
+
+- **Page links, boards and canvases come back as themselves.** A page link
+  leaves as `[[Title]]` on its own line. Obsidian reads that as a link to the
+  note, and the importer turns it back into a page card for the page with that
+  title, whether it came in the same import or is already in the space. A link
+  to no page stays the text it was. A board leaves as a
+  ```` ```bento-view ```` fence: its settings on one JSON line, then its issues
+  as readable `//` lines, which the importer ignores and the next export writes
+  again. A canvas leaves as a ```` ```bento-canvas ```` fence holding its
+  settings and each card's position, with the cards following as their own
+  lines, so the positions survive. The fences are read with a JSON parser into
+  the block's own fields. No id, type, parent, text or comments can be set that
+  way, and a fence that does not parse stays the code block it looks like.
+
+- **A block something points at keeps its id through Markdown.** A block
+  with a review thread, or one a `#p/page/block` link targets, now exports
+  with ` {#id}` after its line. That is Pandoc's heading-attribute spelling,
+  which markdown-it-attrs also reads after any block. The importer gives the
+  block that id back. Blocks nothing points at carry no id, so most exports
+  do not change at all. Ids stay unique. A block copied in another editor
+  with its id keeps its words and gets a fresh id. Two notes in one import
+  cannot share an id, and neither can a note and the space it is imported
+  into; the later holder is renamed and its children follow it. Only plain
+  identifiers are taken, and never a name like `constructor`. Two limits:
+  the threads themselves do not travel, because Markdown has nowhere to put
+  them, so what survives is the anchor they re-attach by. And a table or a
+  divider never carries an id, because the attribute would break the row or
+  the rule.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

@@ -4731,9 +4731,17 @@ export class Editor {
       const key = page.title.trim().toLowerCase()
       if (key && !existing.has(key)) existing.set(key, page.id)
     }
+    // every id the space already uses, so a `{#id}` in a note never lands on
+    // a second block (or a page) with the same id
+    const usedIds = new Set<string>()
+    for (const page of s.doc.pages) {
+      usedIds.add(page.id)
+      for (const b of page.blocks) usedIds.add(b.id)
+    }
     const plan = planImport(files, {
       rootTitle: t('Imported notes'),
       resolveExisting: (target) => existing.get(target),
+      idTaken: (id) => usedIds.has(id),
     })
 
     // ---- images ------------------------------------------------------------
