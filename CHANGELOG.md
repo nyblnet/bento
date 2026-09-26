@@ -11,6 +11,17 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Screen readers announce what each Save-as and Share command does.** The
+  menus keep one-line rows with the description on hover, and the same text
+  is now read out as the command's description; the Save-as list scrolls when
+  a short window cannot hold it. The Share menu's actions are plain rows like
+  Save as, rather than a stack of boxed buttons. Dialog
+  titles are a little smaller (17px), keyboard shortcuts in the help sheet are
+  set in the interface font and line up on the right, and keyboard focus
+  draws a clear amber ring. Also fixed: the Save caret's ▾ vanished at
+  medium window widths, rows in the phone ⋯ menu were centred, and menus in
+  the dark theme cast a navy shadow that did not show.
+
 - **Save is the top bar's primary button; the bar's other buttons line up.**
   Save and its save-as caret are now filled with the text colour, like the
   primary buttons in dialogs, in light and dark themes. The amber
@@ -21,6 +32,13 @@ pre-1.0.
   it is a 44px target. Switching the interface language no longer leaves the
   old top bar's resize listener, size observer and menu listeners running
   behind the new one. Found by spaces' top-bar parity check (#567).
+
+- **Orange text can be read in dark mode again.** The armed comment tool, the
+  tick beside your language, your own name in a comment thread and the labels
+  on slide and point comments were drawn in a dark brown meant for text on the
+  orange, on dark panels where it all but vanished. They now use a lighter
+  gold, and the comment labels on a slide carry a soft halo so they read on
+  any slide, light or dark, in either theme.
 
 ## [1.2.4] — 2026-09-25
 

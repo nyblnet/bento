@@ -24,7 +24,8 @@
   --line: #e3e8ef;
   --muted: #5b6472;
   --accent: #f7a600;
-  --accent-ink: #7a5200;
+  --accent-ink: #7a5200;     /* accent-coloured TEXT on the chrome's own surfaces */
+  --accent-on: #3a2a00;      /* text sitting ON the solid --accent fill */
   --blue: #5b8def;
   --field: #ffffff;          /* form-control surface — CHROME, not the slide */
   --surface: #ffffff;        /* panels, dialogs, menus */
@@ -43,7 +44,12 @@
   --line: #333a45;
   --muted: #8b95a4;
   --accent: #f7a600;
-  --accent-ink: #3a2a00;     /* text ON the accent, so it flips */
+  /* accent-coloured TEXT on dark chrome: lifted, as spaces does. It used to
+     be #3a2a00 (meant for text ON the orange) and every text use sat on the
+     dark surfaces instead — 1.09:1, invisible (spaces' chrome audit, 2026-09).
+     Text on the orange fill has its own token, and it does not flip. */
+  --accent-ink: #f0b74e;
+  --accent-on: #3a2a00;
   --blue: #7aa5f5;           /* lifted: #5b8def is unreadable on dark chrome */
   --field: #12151a;
   --surface: #21262e;
@@ -56,6 +62,12 @@
 
 :root {
   --radius: 10px;
+  /* Chrome text drawn OVER THE SLIDE (the comment labels) sits on the deck's
+     background, not the chrome's, so neither theme's ink is safe on its own:
+     a dark slide hid the light theme's brown, a light slide would hide the
+     dark theme's gold. A halo in the chrome's surface colour gives the text
+     its own ground on any slide. */
+  --over-slide-halo: 0 0 2px var(--surface), 0 0 2px var(--surface), 0 0 4px var(--surface);
 }
 
 * { box-sizing: border-box; }
@@ -280,6 +292,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   z-index: 50;
   min-width: 150px;
 }
+/* The light shadow is navy at 14%, which on the dark chrome is a navy smudge
+   on navy and lifts nothing off the page. Dark gets black, deeper — the same
+   move --slide-shadow makes for the canvas. */
+:root[data-theme="dark"] .ed-menu { box-shadow: 0 8px 24px rgb(0 0 0 / 0.5); }
 /* DIRECT child, not any descendant. Phone chrome demotes whole dropdown
    widgets (Share, Language) into the ⋯ menu, so a descendant selector opened
    their menus too — ⋯ came up with the entire language list already unrolled
@@ -728,6 +744,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   align-items: center;
   justify-content: center;
 }
+/* D4: a dialog title is 17px/650 (the kernel's .bkd-title). Before, this was
+   the browser's h2 — 1.5em of 13px = 19.5px at 700 — in help, Version history
+   and every other .ed-about card. */
+.ed-about h2 { font-size: 17px; font-weight: 650; }
 .ed-about {
   /* 440 rather than 360: release notes ride inline in the manifest now, and a
      narrower box turned every bullet into two wrapped lines. The calc() keeps
@@ -1046,10 +1066,12 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   color: var(--muted); margin: 0 0 6px;
 }
 .ed-help-row { display: grid; grid-template-columns: 128px 1fr; gap: 12px; align-items: baseline; padding: 3px 0; font-size: 13px; }
+/* D8: shortcuts in the interface face, not monospace, right-aligned against
+   what they do — the column reads as a list of keys, as a menu's does */
 .ed-help-row kbd {
-  font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: inherit; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
   background: var(--chrome-2); border: 1px solid var(--line);
-  border-radius: 5px; padding: 2px 6px; color: var(--ink); white-space: nowrap; justify-self: start;
+  border-radius: 5px; padding: 2px 6px; color: var(--ink); white-space: nowrap; justify-self: end;
 }
 .ed-help-tips { margin: 4px 0 0; padding-inline-start: 18px; font-size: 13px; line-height: 1.5; color: var(--ink); }
 .ed-help-tips li { margin: 3px 0; }
@@ -1283,7 +1305,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   z-index: 12;
   pointer-events: none;
   background: var(--accent);
-  color: #3a2800;
+  color: var(--accent-on);
   font: 700 10.5px/1 -apple-system, 'Segoe UI', system-ui, sans-serif;
   padding: 5px 9px;
   border-radius: 999px;
@@ -1302,11 +1324,13 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent-ink);
+  text-shadow: var(--over-slide-halo);
 }
 .ed-comment-hl.pin {
   width: 0; height: 0;
   font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--accent-ink);
+  text-shadow: var(--over-slide-halo);
   white-space: nowrap;
   padding-left: 12px;
   padding-top: 2px;
@@ -1349,7 +1373,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   cursor: pointer;
   box-shadow: 0 1px 4px rgb(15 23 36 / 0.3);
 }
-.ed-step-badge.sel { background: var(--accent); color: #3a2800; }
+.ed-step-badge.sel { background: var(--accent); color: var(--accent-on); }
 .ed-step-badge:hover { transform: scale(1.15); }
 .ed-comment-marker {
   position: absolute;
@@ -1359,7 +1383,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   border: none;
   border-radius: 50% 50% 50% 3px;
   background: var(--accent);
-  color: #3a2800;
+  color: var(--accent-on);
   font: 700 10px/19px inherit;
   font-family: inherit;
   text-align: center;
@@ -1921,22 +1945,16 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   color: #b8860b;
 }
 .ed-share-status.ok { color: #2e8b57; }
-.ed-share-btn {
-  justify-content: center;
-  font-size: 12.5px;
-  padding: 6px 10px;
-  white-space: normal;
-  text-align: center;
-  line-height: 1.35;
-}
-/* share actions read as BUTTONS at rest, not hover-reveal text */
-.ed-share-btn:not(.ed-btn-primary) {
-  background: var(--chrome);
-  border: 1px solid var(--line);
-}
-.ed-share-btn:not(.ed-btn-primary):hover { background: var(--chrome-2); }
-.ed-share-btn { width: 100%; justify-content: flex-start; text-align: start; }
+/* Share's actions are plain menu rows, the same as Save as: 12.5px, one line,
+   a hover fill and nothing at rest. They were boxed buttons (2026-07-20, so
+   they would not read as text among the panel's notes); the SHARE A COPY
+   heading and the icons do that now, and the boxes made the panel busier. */
+.ed-share-btn { width: 100%; justify-content: flex-start; text-align: start; font-size: 12.5px; }
 .ed-share-btn svg { flex: none; }
+/* the panel's 7px gap spaces its sections (name, people, status); between two
+   action rows it would make a list of rows look like a stack of chips —
+   adjacent rows touch, as they do in every other menu */
+.ed-share-pop > .ed-share-btn + .ed-share-btn { margin-block-start: -7px; }
 
 /* divider usable in any dropdown menu */
 .ed-menu-sep { height: 1px; background: var(--line); margin: 3px 2px; }
@@ -2099,6 +2117,14 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .ed-share-me .who { font-weight: 600; }
 .ed-share-me .where { margin-inline-start: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* Your own row: the NAME stays whole and the key gives way. The shared
+   .ed-share-peer rules below do the opposite (a peer's "on slide 3" is short;
+   their name is what can run long), which cut "Guest (you)" to "Guest (y…"
+   beside a 20-character key. The key is a fingerprint you compare by its
+   start, and its full form is in the row's tooltip. A very long name still
+   yields at 65%. Doubled class: the peer rules come later in the file. */
+.ed-share-peer.ed-share-me .who { flex: none; max-width: 65%; }
+.ed-share-peer.ed-share-me .where { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: end; }
 .ed-share-peer {
   display: flex;
   align-items: center;
@@ -2213,6 +2239,9 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-title { flex: 0 1 220px; min-width: 48px; }
 .ed-topbar.ed-bar-compact .ed-btn > span { display: none; } /* icons + tooltips take over */
 .ed-topbar.ed-bar-compact .ed-btn.ed-btn-update > span { display: inline; } /* version chip is signal */
+/* the Save caret's ▾ is its only content, not a label — hiding it left an
+   empty 16px button */
+.ed-topbar.ed-bar-compact .ed-btn > span.ed-caret { display: inline; }
 /* …but NEVER inside an open dropdown/menu — those items are text; hiding
    their labels left icon-only mystery menus on phones. */
 .ed-topbar.ed-bar-compact .ed-menu .ed-btn > span,
@@ -2319,7 +2348,9 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   .ed-topbar .ed-btn { min-width: 44px; min-height: 44px; justify-content: center; }
   /* the wordmark is a button too (About), and on a phone it is the mark alone */
   .ed-topbar .ed-logo { min-width: 44px; min-height: 44px; justify-content: center; }
-  .ed-topbar .ed-menu .ed-btn { min-width: 0; } /* menu rows are text, not targets */
+  /* menu rows are text, not targets — and read from the start edge; the
+     centring above is for the bar's icon buttons and used to leak in here */
+  .ed-topbar .ed-menu .ed-btn { min-width: 0; justify-content: flex-start; }
   .ed-title { flex: 0 1 220px; }
   .ed-phone-tools {
     display: flex;
@@ -2422,6 +2453,29 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .ed-save-menu { min-width: 190px; }
 .ed-save-menu .ed-btn { font-size: 12.5px; }
+/* D2 (revised 2026-09-26): Save as and Share keep one-line rows and put each
+   description in the tooltip, with the same text in a visually-hidden node for
+   aria-describedby (editor.ts menuLabel). The Save list keeps spaces' width
+   for the same list (240–264). */
+.ed-save-menu { width: min(264px, calc(100vw - 16px)); }
+/* A long list on a short window (phone landscape, a split screen) must not
+   run off the bottom with its last commands unreachable: it scrolls within
+   the space under the bar. Safe to make a scroll box (hard-won #10): nothing in
+   it floats. --ed-bar-bottom is published by editor.ts. */
+.ed-save-menu { max-height: calc(100dvh - var(--ed-bar-bottom, 56px) - 12px); overflow-y: auto; }
+/* present for assistive tech, absent for the eye */
+.ed-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* A designed keyboard ring, the kernel's (kernel/src/ui/menu.css .bkm-item):
+   --accent-ink, 2px. Bar and dialog buttons draw it OUTSIDE, on the surface
+   they sit on (inside, it would sit on Save's ink fill); rows in a menu draw
+   it INSIDE, where the list's own padding would clip it. :focus-visible, so
+   a pointer never sees it. */
+.ed-btn:focus-visible, .ed-logo:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.ed-menu .ed-btn:focus-visible { outline-offset: -2px; }
 /* when the adjacent panel is collapsed the chevron pins fully on-screen,
    docked to the edge like a drawer pull */
 .ed-sidebar.ed-collapsed + .ed-resizer .ed-panel-toggle {

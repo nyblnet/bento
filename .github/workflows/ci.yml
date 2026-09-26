@@ -1472,6 +1472,12 @@ jobs:
         # the recorded floor, and every commonly typed formula renders. The
         # check a fixed sample could not make, which is how #540 slipped by.
         run: node scripts/test-maths-coverage.ts
+      - name: Accent contrast rig
+        # The accent as text reads in both themes: every --accent-ink text use
+        # is audited against the surface behind it and reaches 4.5:1; text on
+        # the orange fill uses --accent-on; labels drawn over the slide carry a
+        # surface halo. Dark --accent-ink was #3a2a00 on dark chrome — 1.09:1.
+        run: node scripts/test-slides-accent-contrast.ts
       - name: Compact document rig
         # The agent authoring form (#422): compactDoc/expandDoc are inverses
         # on the starter deck, expansion equals the editor's insert helpers
@@ -1913,3 +1919,8 @@ jobs:
         # primary in both themes, and N language rebuilds leaving one set of
         # window/document listeners and bar observers.
         run: node scripts/test-slides-topbar-browser.mjs
+      - name: Chrome rulings in Chromium
+        # D2 menu descriptions (readable both themes, ARIA-wired, scroll on a
+        # short window), D4 dialog titles, D8 help shortcuts, the compact Save
+        # caret, phone menu rows, the designed focus ring, dark menu shadow.
+        run: node scripts/test-slides-chrome-rulings-browser.mjs
