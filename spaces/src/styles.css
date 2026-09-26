@@ -163,6 +163,7 @@
   --share-ok: #2e8b57;
   --dirty-ring: #16273e;
   --pop-shadow: 0 8px 24px rgb(20 30 45 / 0.14);
+  --pop-chrome: #f5f7fa;   /* a framed button inside a popover: slides' --chrome */
 
   /* The BROWSER's own furniture — scrollbars, form controls, the canvas behind
      a rubber-band scroll — follows this, and CSS cannot reach any of it.
@@ -218,6 +219,7 @@
     --dirty-ring: #16273e;
     /* slides #573: navy at 14% lifts nothing off dark chrome; black, deeper */
     --pop-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+    --pop-chrome: #1b1f26;
     color-scheme: only dark;
   }
 }
@@ -263,6 +265,7 @@
     --dirty-ring: #16273e;
     /* slides #573: navy at 14% lifts nothing off dark chrome; black, deeper */
     --pop-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+    --pop-chrome: #1b1f26;
     color-scheme: only dark;
   }
 }
@@ -2399,6 +2402,9 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
   width: auto; min-width: 250px; max-width: 290px; padding: 12px;
 }
 .sp-pop.sp-people.sp-sheet { max-width: none; }
+/* slides' popover sits at its 250px floor (it is sized against its button);
+   a fixed popover would instead grow to the cap as soon as a note wraps */
+.sp-pop.sp-people:not(.sp-sheet) { width: 250px; }
 .sp-share-name { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .sp-share-name .sp-input { flex: 1; min-width: 0; padding: 5px 8px; border-radius: 6px; font-size: 12.5px; background: var(--field); }
 /* a stacked field (the link card's) */
@@ -2426,26 +2432,23 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 .sp-pempty, .sp-pnote { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 0; }
 .sp-pacts { display: flex; flex-direction: column; gap: 7px; }
 .sp-paction {
-  display: flex; align-items: flex-start; gap: 6px; width: 100%; text-align: start;
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: start;
   font: inherit; font-size: 12.5px; line-height: 1.35; color: var(--ink-2);
-  background: var(--chrome); border: 1px solid var(--pop-line); border-radius: 8px;
+  background: var(--pop-chrome); border: 1px solid var(--pop-line); border-radius: 8px;
   padding: 6px 10px; cursor: pointer;
 }
 .sp-paction:hover { background: var(--pop-hover); }
 .sp-paction:active { background: var(--pop-line); }
 .sp-paction-primary, .sp-paction-primary:hover { background: var(--ink); border-color: transparent; color: var(--surface); }
 .sp-paction-primary:hover { background: var(--ink-2); }
-.sp-paction-ico { display: flex; flex: none; margin-top: 1px; }
+.sp-paction-ico { display: flex; flex: none; }
 .sp-paction-ico svg { display: block; }
-.sp-paction-body { display: flex; flex-direction: column; min-width: 0; }
-.sp-paction strong { font-weight: 400; }
-.sp-paction-body span { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.35; margin-top: 2px; }
-.sp-paction-primary .sp-paction-body span { color: color-mix(in srgb, var(--pop-bg) 78%, var(--ink)); }
+.sp-paction-body { display: block; min-width: 0; }
 .sp-paction-sep { height: 1px; background: var(--pop-line); margin: 2px 0; }
 
 /* THIS device's row in the People list, on a chrome ground as slides' */
-.sp-pme { cursor: default; background: var(--chrome); border-radius: 7px; gap: 7px; }
-.sp-pme:hover { background: var(--chrome); }
+.sp-pme { cursor: default; background: var(--pop-chrome); border-radius: 7px; gap: 7px; }
+.sp-pme:hover { background: var(--pop-chrome); }
 .sp-pme .sp-pname { font-weight: 600; }
 .sp-pme .sp-ppage { font-size: 11px; font-variant-numeric: tabular-nums; }
 

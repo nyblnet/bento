@@ -463,9 +463,10 @@ export class CollabUi {
 
   /**
    * One share action: slides' framed button (icon, name; the first one
-   * primary), and under the name what it does — D2 rules the Share popover a
-   * consequence menu, so the description is on the button, not only in a
-   * tooltip as slides has it.
+   * primary), one line. What it does is the hover tooltip (`title`) and the
+   * button's accessible description through a visually hidden span — the Save
+   * menu's row shape, extended to Share by the maintainer (DECISIONS
+   * 2026-09-26).
    */
   private action(icon: string, primary: boolean, label: string, hint: string, run: () => void): HTMLElement {
     const b = document.createElement('button')
@@ -474,11 +475,12 @@ export class CollabUi {
     const ico = el('span', 'sp-paction-ico')
     ico.innerHTML = icon
     const body = el('span', 'sp-paction-body')
-    body.append(el('strong', '', label))
+    body.append(el('span', 'sp-paction-name', label))
     if (hint) {
-      const d = el('span', '', hint)
+      const d = el('span', 'sp-vh', hint)
       d.id = `sp-pdesc-${++CollabUi.descSeq}`
       body.append(d)
+      b.title = hint
       b.setAttribute('aria-label', label)
       b.setAttribute('aria-describedby', d.id)
     }

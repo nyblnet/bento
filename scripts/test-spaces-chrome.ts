@@ -132,30 +132,23 @@ const SLIDES_MENU = {
   saveFont: /\.ed-save-menu \.ed-btn \{ font-size:\s*([^;]+);/.exec(slidesCss)?.[1],
 }
 SLIDES_MENU.rowInk = SLIDES_MENU.rowInk ? decl(slidesRoot, SLIDES_MENU.rowInk) : undefined
-// D2's second line (slides #573 `.ed-mi-desc`) and the keyboard ring
-// (`.ed-btn:focus-visible` outside, `.ed-menu .ed-btn:focus-visible` inside)
-const edDesc = block('.ed-mi-desc')
-const SLIDES_DESC = {
-  size: decl(edDesc, 'font-size'), weight: decl(edDesc, 'font-weight'), lh: decl(edDesc, 'line-height'),
-  ink: /var\((--[a-z0-9-]+)\)/.exec(decl(edDesc, 'color') ?? '')?.[1], top: decl(edDesc, 'margin-top'),
-}
+// The keyboard ring (`.ed-btn:focus-visible` outside, `.ed-menu
+// .ed-btn:focus-visible` inside) and the one-line Share button (`.ed-share-btn`)
 const ringOut = /\n\.ed-btn:focus-visible[^{]*\{([^}]*)\}/.exec(slidesCss)?.[1] ?? ''
 const SLIDES_RING = {
   outline: /outline:\s*([^;]+);/.exec(ringOut)?.[1]?.trim(),
   outside: /outline-offset:\s*([^;]+);/.exec(ringOut)?.[1]?.trim(),
   inside: /\n\.ed-menu \.ed-btn:focus-visible \{[^}]*outline-offset:\s*([^;]+);/.exec(slidesCss)?.[1]?.trim(),
 }
-// This PR is stacked below slides #573, which is where slides gains both. Until
-// it lands, a slides checkout without them is held to the RULED values (D2's
-// second line, the kernel ring) — the same numbers #573 writes — and the check
-// says which source it used. Once slides carries them, they are read, and a
-// slides change moves the target.
-const descRead = Object.values(SLIDES_DESC).every(Boolean), ringRead = Object.values(SLIDES_RING).every(Boolean)
-const hasDesc = /\.ed-mi-desc/.test(slidesCss), hasRing = /\.ed-btn:focus-visible/.test(slidesCss)
-if (!hasDesc) Object.assign(SLIDES_DESC, { size: '12px', weight: '400', lh: '1.35', ink: '--muted', top: '2px' })
+// Stacked below slides #573, where slides gains the ring: until it lands, a
+// slides checkout without it is held to the kernel's ring, and the check says so.
+const hasRing = /\.ed-btn:focus-visible/.test(slidesCss)
+const ringRead = Object.values(SLIDES_RING).every(Boolean)
 if (!hasRing) Object.assign(SLIDES_RING, { outline: '2px solid var(--accent-ink)', outside: '2px', inside: '-2px' })
-ok((descRead || !hasDesc) && (ringRead || !hasRing),
-  `slides' menu descriptions and keyboard ring are read from its stylesheet where it has them (${hasDesc ? 'descriptions: slides' : 'descriptions: D2 ruling'}, ${hasRing ? 'ring: slides' : 'ring: kernel ruling'}; ${JSON.stringify(SLIDES_DESC)} ${JSON.stringify(SLIDES_RING)})`)
+ok(ringRead || !hasRing, `slides' keyboard ring is read from its stylesheet where it has it (${hasRing ? 'slides' : 'kernel ruling'}; ${JSON.stringify(SLIDES_RING)})`)
+const shareBtn = block('.ed-share-btn')
+const shareH = (() => { const pad = /^(\d+(?:\.\d+)?)px/.exec(decl(shareBtn, 'padding') ?? '')?.[1]; const fs = parseFloat(decl(shareBtn, 'font-size') ?? ''); const lh = parseFloat(decl(shareBtn, 'line-height') ?? ''); return pad && fs && lh ? Math.round(fs * lh + 2 * +pad + 2) : NaN })()
+ok(Number.isFinite(shareH), `slides' one-line Share button height can be derived from .ed-share-btn (${shareH}px)`)
 const ringInk = /var\((--[a-z0-9-]+)\)/.exec(SLIDES_RING.outline ?? '')?.[1]
 ok(Object.values(SLIDES_MENU).every(Boolean), `slides' menu values can be read from its stylesheet (${JSON.stringify(SLIDES_MENU)})`)
 
@@ -265,6 +258,10 @@ async function browser(chrome: string, html: string): Promise<void> {
 
     const TRIG = (label: string) => `[...document.querySelectorAll('.sp-bar button')].find(b => b.getAttribute('aria-label') === ${JSON.stringify(label)})`
     const OPEN = `[...document.querySelectorAll('.bkm-open > .bkm-menu')].find(m => m.getBoundingClientRect().height > 0)`
+    // one row's shape: its height, whether a description is drawn, its tooltip,
+    // its accessible name, and where its accessible description lives
+    const ROWSHAPE = (rows: string, nameSel: string) => `(() => ${rows}.map(r => { const d = document.getElementById(r.getAttribute('aria-describedby') || ''); const dr = d?.getBoundingClientRect(); return { inside: !!d && r.contains(d), name: r.querySelector(${JSON.stringify(nameSel)})?.textContent, h: Math.round(r.getBoundingClientRect().height), drawn: !!r.querySelector('.bkm-hint'), title: r.title, aria: r.getAttribute('aria-label'), desc: d?.textContent ?? null, hidden: !!dr && dr.width <= 1 && dr.height <= 1 } }))()`
+    const rowOk = (r: any) => !r.drawn && !!r.title && r.title === r.desc && r.aria === r.name && r.hidden && r.inside
     const FOCUSED = `(document.activeElement?.textContent || '').trim().slice(0, 30)`
 
     // ——— desktop ———
@@ -291,12 +288,13 @@ async function browser(chrome: string, html: string): Promise<void> {
     const hexOf = (rgb: string) => '#' + (rgb.match(/\d+/g) ?? []).slice(0, 3).map((n) => (+n).toString(16).padStart(2, '0')).join('')
     ok(rowRing.style === 'solid' && rowRing.w === ringW && hexOf(rowRing.color) === rowRing.want && rowRing.off === SLIDES_RING.inside,
       `a menu row's keyboard ring is slides': ${SLIDES_RING.outline}, offset ${SLIDES_RING.inside} (${JSON.stringify(rowRing)})`)
-    // THE SAVE MENU IS ONE LINE A ROW, as slides' (the maintainer's revision of
-    // D2, 2026-09-26): what a row does is its hover tooltip, as slides' `title`,
-    // and — for a screen reader — its accessible description via aria-describedby
-    // on an element that is not drawn. The name alone is the accessible name.
-    const one = await js<any>(`(() => { const rows = [...(${OPEN}).querySelectorAll('.bkm-item')]; return rows.map(r => { const d = document.getElementById(r.getAttribute('aria-describedby') || ''); const dr = d?.getBoundingClientRect(); return { inside: !!d && r.contains(d), name: r.querySelector('.bkm-text').textContent, h: Math.round(r.getBoundingClientRect().height), drawn: !!r.querySelector('.bkm-hint'), title: r.title, aria: r.getAttribute('aria-label'), desc: d?.textContent ?? null, hidden: !!dr && dr.width <= 1 && dr.height <= 1 } }) })()`)
-    const bad = one.filter((r: any) => r.h !== 30 || r.drawn || !r.title || r.title !== r.desc || r.aria !== r.name || !r.hidden || !r.inside)
+    // SAVE AND SHARE ARE ONE LINE A ROW, as slides' (the maintainer's revisions
+    // of D2, 2026-09-26): what a row does is its hover tooltip (`title` on the
+    // row itself) and — for a screen reader — its accessible description via
+    // aria-describedby on an element that is not drawn, inside the row. The name
+    // alone is the accessible name.
+    const one = await js<any>(ROWSHAPE(`[...(${OPEN}).querySelectorAll('.bkm-item')]`, '.bkm-text'))
+    const bad = one.filter((r: any) => r.h !== 30 || !rowOk(r))
     ok(one.length >= 9 && bad.length === 0,
       `every Save row is one 30px line whose description is its tooltip and its hidden aria-describedby, the name alone its name (${one.length} rows${bad.length ? '; wrong: ' + JSON.stringify(bad.slice(0, 2)) : ''})`)
 
@@ -336,15 +334,24 @@ async function browser(chrome: string, html: string): Promise<void> {
     ok(barRing.fv && barRing.style === 'solid' && barRing.w === /(\d+px)/.exec(SLIDES_RING.outline ?? '')?.[1] && barRing.off === SLIDES_RING.outside,
       `a bar button's keyboard ring is slides': outside, offset ${SLIDES_RING.outside} (${JSON.stringify(barRing)})`)
 
-    // Share keeps D2's drawn second line: slides' type, wired as the DESCRIPTION
+    // …and every Share action has the same shape, one line at slides' button height
     await tap(`document.querySelector('.sp-bar .sp-live')`)
-    const desc = await js<any>(`(() => { const row = [...document.querySelectorAll('.sp-pop .sp-paction')].find(r => r.textContent.startsWith('View-only copy')); if (!row) return null; const h = row.querySelector('.sp-paction-body span'); const c = getComputedStyle(h); return { size: c.fontSize, weight: c.fontWeight, lh: c.lineHeight, ink: c.color, top: c.marginTop, muted: getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(), name: row.getAttribute('aria-label'), by: row.getAttribute('aria-describedby'), byText: document.getElementById(row.getAttribute('aria-describedby') || '')?.textContent, hint: h.textContent } })()`)
-    const lhPx = `${Math.round(parseFloat(SLIDES_DESC.size ?? '0') * parseFloat(SLIDES_DESC.lh ?? '0') * 100) / 100}px`
-    ok(!!desc && desc.size === SLIDES_DESC.size && desc.weight === SLIDES_DESC.weight && parseFloat(desc.lh).toFixed(2) === parseFloat(lhPx).toFixed(2) && desc.top === SLIDES_DESC.top && SLIDES_DESC.ink === '--muted' && hexOf(desc.ink) === desc.muted,
-      `a Share action's description is slides' second line — ${SLIDES_DESC.size}/${SLIDES_DESC.weight}, line-height ${SLIDES_DESC.lh}, ${SLIDES_DESC.ink}, ${SLIDES_DESC.top} under the name (${JSON.stringify(desc)})`)
-    ok(!!desc && desc.name === 'View-only copy…' && !!desc.by && desc.byText === desc.hint,
-      `…and it is the action's DESCRIPTION (aria-describedby), the name alone its accessible name (${desc?.name} / ${desc?.by})`)
+    const acts = await js<any>(ROWSHAPE(`[...document.querySelectorAll('.sp-pop .sp-paction')]`, '.sp-paction-name'))
+    const badActs = acts.filter((r: any) => r.h !== shareH || !rowOk(r))
+    ok(acts.length >= 3 && badActs.length === 0,
+      `every Share action is one ${shareH}px line whose description is its tooltip and its hidden aria-describedby, the name alone its name (${acts.length} actions${badActs.length ? '; wrong: ' + JSON.stringify(badActs.slice(0, 2)) : ''})`)
     await key('Escape', 0, 'Escape')
+
+    // NO TOP-BAR SURFACE DRAWS A SECOND-LINE DESCRIPTION. Open each of them and
+    // look for one: a kernel hint, or any described row whose description is
+    // painted bigger than a pixel.
+    const drawn: string[] = []
+    const DRAWN = `(() => { const out = []; const scope = [...document.querySelectorAll('.bkm-open > .bkm-menu, .sp-pop')].filter(e => e.getBoundingClientRect().height > 0); for (const m of scope) { for (const h of m.querySelectorAll('.bkm-hint')) if (h.getBoundingClientRect().height > 1) out.push('hint: ' + h.textContent.slice(0, 30)); for (const r of m.querySelectorAll('[aria-describedby]')) { const d = document.getElementById(r.getAttribute('aria-describedby')); const b = d?.getBoundingClientRect(); if (b && (b.width > 1 || b.height > 1)) out.push('drawn: ' + d.textContent.slice(0, 30)) } } return out })()`
+    for (const trig of ['Insert a block — text, headings, lists, code, images', 'Other ways to save', 'Language']) {
+      await tap(TRIG(trig)); drawn.push(...(await js<string[]>(DRAWN)).map((x) => `${trig.split(' ')[0]} ${x}`)); await key('Escape', 0, 'Escape')
+    }
+    await tap(`document.querySelector('.sp-bar .sp-live')`); drawn.push(...(await js<string[]>(DRAWN)).map((x) => `Share ${x}`)); await key('Escape', 0, 'Escape')
+    ok(drawn.length === 0, `no surface opened from the bar draws a second-line description — Insert, Save, Language, Share (${drawn.join('; ') || 'none'})`)
 
     await tap(SAVEM)
     await tap(`[...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith('Insert'))`)
