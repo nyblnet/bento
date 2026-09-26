@@ -6216,7 +6216,7 @@ export class Editor {
       importMarkdown: () => this.openImport(),
       moreExports: (m) => {
         row(m, { icon: ICONS.canvas, label: t('Export page as slides…'),
-          hint: t('The page as a bento/slides deck, ready to paste into Bento Slides'), run: () => this.openExportDeck() })
+          desc: t('The page as a bento/slides deck, ready to paste into Bento Slides'), run: () => this.openExportDeck() })
       },
     }
   }
