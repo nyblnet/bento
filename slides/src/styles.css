@@ -2451,30 +2451,21 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .ed-save-menu { min-width: 190px; }
 .ed-save-menu .ed-btn { font-size: 12.5px; }
-/* D2 (revised 2026-09-26): Share says what each action does on a second line
-   under its name; Save as keeps one-line rows and puts it in the tooltip, with
-   the same text in a visually-hidden node for aria-describedby. A two-line row
-   aligns its icon with the NAME, not the middle of two lines. The Save list
-   keeps spaces' width for the same list (240–264). */
+/* D2 (revised 2026-09-26): Save as and Share keep one-line rows and put each
+   description in the tooltip, with the same text in a visually-hidden node for
+   aria-describedby (editor.ts menuLabel). The Save list keeps spaces' width
+   for the same list (240–264). */
 .ed-save-menu { width: min(264px, calc(100vw - 16px)); }
 /* A long list on a short window (phone landscape, a split screen) must not
    run off the bottom with its last commands unreachable: it scrolls within
    the space under the bar. Safe to make a scroll box (hard-won #10): nothing in
    it floats. --ed-bar-bottom is published by editor.ts. */
 .ed-save-menu { max-height: calc(100dvh - var(--ed-bar-bottom, 56px) - 12px); overflow-y: auto; }
-.ed-btn:has(> .ed-mi) { align-items: flex-start; white-space: normal; text-align: start; }
-.ed-btn:has(> .ed-mi) > svg { margin-top: 1px; flex: none; }
 /* present for assistive tech, absent for the eye */
 .ed-sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
 }
-.ed-mi-desc {
-  display: block; margin-top: 2px;
-  font-size: 12px; font-weight: 400; line-height: 1.35; color: var(--muted);
-}
-/* on the ink fill (Share's primary action) the muted grey would vanish */
-.ed-btn-primary .ed-mi-desc { color: color-mix(in srgb, var(--surface) 78%, var(--ink)); }
 
 /* A designed keyboard ring, the kernel's (kernel/src/ui/menu.css .bkm-item):
    --accent-ink, 2px. Bar and dialog buttons draw it OUTSIDE, on the surface

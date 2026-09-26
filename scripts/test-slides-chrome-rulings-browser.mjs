@@ -5,10 +5,9 @@
 //   npm run build:single --prefix slides && node scripts/test-slides-chrome-rulings-browser.mjs
 //
 // WHAT THIS PROVES (seven items from spaces' bar-parity pass, #572):
-//   1. D2, as revised 2026-09-26 — Save-as rows stay one 30px line with the
-//      description as the hover tooltip AND as a visually-hidden
-//      aria-describedby node; Share shows it as a second line, readable
-//      (4.5:1) in both themes, including on its ink-filled primary action;
+//   1. D2, as revised 2026-09-26 — Save-as and Share rows stay one line with
+//      the description as the hover tooltip AND as a visually-hidden
+//      aria-describedby node, and both menus fit the screen;
 //   2. D4 — dialog titles (help, Version history) are 17px/650, not the
 //      browser's 19.5px/700 h2;
 //   3. D8 — help-sheet shortcuts are in the interface face, right-aligned;
@@ -78,21 +77,19 @@ try {
   await closeAll()
   await p.setViewportSize({ width: 1440, height: 900 })
   await theme('light')
+  await p.setViewportSize({ width: 1440, height: 768 })
   await p.evaluate(() => document.querySelector('.ed-btn-share').click())
-  const share = await p.evaluate(() => [...document.querySelectorAll('.ed-share-pop .ed-share-btn')].map((b) => ({
-    desc: !!b.querySelector('.ed-mi-desc'), title: b.title, primary: b.classList.contains('ed-btn-primary'),
-  })))
-  ok(share.length > 0 && share.filter((x) => x.desc).length >= 1, `Share's actions carry descriptions (${share.filter((x) => x.desc).length} of ${share.length})`)
-  ok(share.every((x) => !x.title || !x.desc), 'a described Share action has no duplicate tooltip')
-  for (const th of THEMES) {
-    await theme(th)
-    const cs = await p.evaluate(() => [...document.querySelectorAll('.ed-share-pop .ed-share-btn')].filter((b) => b.querySelector('.ed-mi-desc')).map((b) => {
-      const bg = getComputedStyle(b).backgroundColor
-      return { fg: getComputedStyle(b.querySelector('.ed-mi-desc')).color, bg: bg === 'rgba(0, 0, 0, 0)' ? getComputedStyle(document.querySelector('.ed-share-pop')).backgroundColor : bg, primary: b.classList.contains('ed-btn-primary') }
-    }))
-    const worst = Math.min(...cs.map((c) => contrast(c.fg, c.bg)))
-    ok(cs.length > 0 && worst >= 4.5, `${th}: Share descriptions ≥ 4.5:1 on their fill, primary included (worst ${worst.toFixed(2)}:1)`)
-  }
+  const share = await p.evaluate(() => [...document.querySelectorAll('.ed-share-pop .ed-share-btn')].map((b) => {
+    const id = b.getAttribute('aria-describedby'), d = id && document.getElementById(id), r = d?.getBoundingClientRect()
+    return { title: b.title, desc: d?.textContent ?? '', hidden: !!(d && r.width <= 1 && r.height <= 1 && b.contains(d)), tall: b.getBoundingClientRect().height }
+  }))
+  const shared = share.filter((x) => x.desc)
+  ok(share.length >= 5 && shared.length === share.length, `Share's ${share.length} actions each carry a description`)
+  ok(shared.every((x) => x.title === x.desc && x.hidden), 'as the hover tooltip, and as a visually hidden aria-describedby target in the row')
+  ok(share.every((x) => x.tall <= 36), `every Share row is one line (${[...new Set(share.map((x) => Math.round(x.tall)))].join('/')}px tall)`)
+  const shareBottom = await p.evaluate(() => Math.round(document.querySelector('.ed-share-pop').getBoundingClientRect().bottom))
+  ok(shareBottom <= 768, `the Share menu ends on a 768px laptop screen (bottom ${shareBottom})`)
+  await p.setViewportSize({ width: 1440, height: 900 })
   await closeAll()
   await theme('light')
 
