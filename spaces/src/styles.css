@@ -1123,20 +1123,84 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   p, li { orphans: 2; widows: 2; }
 }
 
-/* ————— topbar dropdowns ————— */
-.sp-dd { position: relative; }
-.sp-ddmenu {
-  display: none; position: absolute; top: calc(100% + 5px); inset-inline-start: 0;
-  min-width: 250px; flex-direction: column; z-index: 60;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 12px 34px rgb(var(--shade) / .2); padding: 5px;
+/* ————— the chrome scale, named as the suite's shared sheet names it —————
+   The values the D1–D8 rulings settled (2026-09-25), under the names the
+   kernel's tier-4 token sheet gives them, so adopting that sheet later is a
+   deletion here and a rename nowhere. Its own block, and UNTHEMED: these are
+   sizes, and the one colour in them (the shadow) reads `--shade`, which the
+   dark blocks already flip. */
+:root {
+  --radius-sm: 6px;      /* inputs, menu rows */
+  --radius-lg: 14px;     /* dialogs and sheets */
+  --shadow-pop: 0 12px 32px rgb(var(--shade) / .16);   /* menus, popovers */
+  --ctl-h: 30px;
+  --tap: 44px;           /* D5: a coarse pointer's target */
+  --fs-hint: 12px;
+  --z-pop: 60;
 }
-.sp-dd.sp-open .sp-ddmenu { display: flex; }
-.sp-dd:last-child .sp-ddmenu { inset-inline-start: auto; inset-inline-end: 0; }
+
+/* ————— menus: the kernel's (kernel/src/ui/menu.css) —————
+   Every dropdown and anchored menu is `createMenu`; see menus.ts for why. The
+   primitive reads its look through `--bkm-*` chains, and these are this app's
+   answers. Structure and behaviour are the kernel's and are not restated here.
+   Menus keep `--radius` (10px): `--radius-lg` is the DIALOG corner, and the
+   kernel's chain would otherwise hand a menu 14px. */
+.sp-app, .sp-mn-anchored {
+  --bkm-radius: var(--radius);
+  --bkm-item-radius: var(--radius-sm);
+  --bkm-shadow: var(--shadow-pop);
+  --bkm-ink: var(--ink);
+  --bkm-font-size: 13.5px;
+  --bkm-min-width: 240px;
+  --bkm-z: var(--z-pop);
+}
+.sp-mn-pop { font-family: inherit; }
+.sp-mn-pop .bkm-text { font-weight: 600; }
+.sp-mn-pop .bkm-hint { font-size: var(--fs-hint); }
+.sp-mn-pop .bkm-item { min-height: var(--ctl-h); }
+/* Selectors that override the kernel sheet carry `.bkm`/`.bkm-menu`: the
+   bundle places that sheet AFTER this file, so equal specificity loses.
+   A row that TEACHES may wrap, but no menu here is wider than a phone column. */
+.bkm-menu.sp-mn-pop { max-width: min(320px, calc(100vw - 16px)); }
+.sp-mn-pop .bkm-body { flex: 1 1 auto; }
+.sp-mn-pop .bkm-selected { background: var(--chrome-2); }
+/* a SHORTCUT sits at the row's end, in the interface face, right-aligned, in
+   ⌃⌥⇧⌘ order (D8) — never a second line under the name, where it read as a
+   description of the command */
+.sp-mkbd {
+  margin-inline-start: auto; padding-inline-start: 14px; flex: none;
+  font: inherit; font-size: var(--fs-hint); color: var(--muted);
+  letter-spacing: .02em; white-space: nowrap;
+}
+/* the trigger is a bar button like any other */
+.sp-mn > .bkm-trigger { display: inline-flex; align-items: center; gap: 6px; }
+/* the menu hanging off the save caret is the save split's; reset the wrapper */
+.sp-split .sp-mn { display: flex; align-items: stretch; }
+/* the anchored menu's wrapper sits exactly over its anchor (menus.ts places it)
+   and must take no clicks of its own */
+.bkm.sp-mn-anchored { position: fixed; pointer-events: none; z-index: var(--z-pop); }
+.bkm.sp-mn-anchored > .bkm-menu { pointer-events: auto; }
+/* …and on a phone it is a SHEET at the bottom edge, where a thumb reaches it and
+   nothing can be placed off-screen */
+.bkm.sp-mn-anchored > .bkm-menu.sp-mn-sheet {
+  position: fixed; top: auto; left: 8px; right: 8px;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  max-width: none; min-width: 0; max-height: 62vh;
+  border-radius: var(--radius-lg); padding: 8px;
+  box-shadow: 0 -8px 40px rgb(var(--shade) / .28);
+}
+/* rows that are not commands — the "Width" caption, a filter's field name */
+.sp-mn-pop .sp-menu-label:first-child { border-top: 0; margin-top: 0; }
+/* a form inside a menu (a new property, a callout's own icon) */
+.sp-mn-pop .sp-newprop, .sp-mn-pop .sp-tonerow { padding: 4px 6px 6px; }
+
+/* ————— rows outside the kernel menu —————
+   The design picker's rows (designpanel.ts) are built by hand and keep this
+   class; they are drawn to match a kernel row exactly. */
 .sp-dditem {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  text-align: start; font: inherit; color: var(--ink);
-  background: transparent; border: 0; border-radius: 7px;
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  text-align: start; font: inherit; font-size: 13.5px; color: var(--ink);
+  background: transparent; border: 0; border-radius: var(--radius-sm);
   padding: 7px 9px; cursor: pointer;
 }
 .sp-dditem:hover { background: var(--chrome-2); }
@@ -1461,13 +1525,12 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 @media (pointer: coarse) {
   .sp-bar .sp-btn { min-width: 40px; min-height: 40px; justify-content: center; }
   .sp-dditem { padding-block: 11px; }
+  /* D5: a menu row is a 44px target under a finger, like every other one */
+  .sp-mn-pop .bkm-item { min-height: var(--tap); }
+  /* …and a shortcut is noise where there is no keyboard to press it on */
+  .sp-mkbd { display: none; }
 }
 
-/* A menu opened from the right end of the bar must open INWARD. Anchoring
-   every dropdown to its start edge put the ⋯ and Save menus half off-screen at
-   375px — the items were there, just unreadable. */
-.sp-dd-end .sp-ddmenu { inset-inline-start: auto; inset-inline-end: 0; }
-.sp-ddmenu { max-width: calc(100vw - 20px); }
 
 /* ————— find & replace on a small screen —————
    Measured at a 575px viewport: the bar laid out 644px wide and started at
@@ -1501,7 +1564,6 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   border-start-end-radius: 0; border-end-end-radius: 0;
   padding-inline-end: 10px;
 }
-.sp-split .sp-dd { display: flex; align-items: stretch; }
 .sp-split .sp-caret > .sp-btn {
   height: 100%; padding: 6px 6px;
   border-start-start-radius: 0; border-end-start-radius: 0;

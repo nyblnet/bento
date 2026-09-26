@@ -490,6 +490,7 @@ export const es: Catalog = {
   "Type / for blocks, [[ to link a page": "Escribe / para bloques, [[ para enlazar una página",
   "Underline": "Subrayado",
   "Underline — ⌘U": "Subrayado — ⌘U",
+  "Undo": "Deshacer",
   "Undo (⌘Z)": "Deshacer (⌘Z)",
   "Unlock": "Desbloquear",
   "Unlocked, but the document inside could not be read.": "Desbloqueado, pero no se pudo leer el documento de dentro.",
