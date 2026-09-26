@@ -79,9 +79,9 @@ const FIX: Record<string, () => Fixture> = {
   quote: () => ({ blocks: [b('quote', 'Said once.<br>Said twice.')] }),
   code: () => ({ blocks: [b('code', 'const a = 1\nif (a &lt; 2) {}', { lang: 'ts' })] }),
   divider: () => ({ blocks: [b('p', 'above'), b('divider'), b('p', 'below')] }),
-  // alt, src, caption — what `![alt](src "title")` can say. Size is pinned
-  // separately below.
-  image: () => ({ blocks: [b('image', '', { src: 'asset:abc', alt: 'A diagram', caption: 'Drawn, not "photographed"' })] }),
+  // alt, src, caption — `![alt](src "title")` — and the size as a Pandoc
+  // attribute list, `{width=80% w=640 h=300}`
+  image: () => ({ blocks: [b('image', '', { src: 'asset:abc', alt: 'A diagram', caption: 'Drawn, not "photographed"', width: 80, w: 640, h: 300 })] }),
   media: () => ({ blocks: [b('media', '', { kind: 'audio', src: 'asset:tone', alt: 'A tone', controls: true })] }),
   link: () => ({ blocks: [b('link', '<a href="https://bento.page">Bento</a> — desc', { url: 'https://bento.page', title: 'Bento', desc: 'desc', site: 'bento.page' })] }),
   pagelink: () => ({ blocks: [b('pagelink', '', { page: 'other' })], extraPages: [{ id: 'other', title: 'Other page', blocks: [b('p', 'x')] }] }),
@@ -251,16 +251,42 @@ console.log('\nquotes and images at their edges')
   const t = trip({ blocks: [b('image', '', { src: 'asset:x', alt: 'no caption' })] })
   ok(qualifies(t) && !t.md.includes('"'), 'an image without a caption exports no title', qualifies(t) ? undefined : why(t))
 }
-// A PINNED FIELD LOSS inside a qualifying type. `![alt](src "caption")` has no
-// place for a size, so a sized image is NOT byte-identical — and when
-// `{width=80%}` (or similar) is taught to both sides, this fails and asks for
-// the pin to come out.
+console.log('\nimage sizes: {width=N% w= h=}')
 {
-  const t = trip({ blocks: [b('image', '', { src: 'asset:abc', alt: 'A', caption: 'c', w: 640, h: 300, width: 80 })] })
-  const kept = t.back[0] as Record<string, unknown>
-  ok(kept.w === undefined && kept.h === undefined && kept.width === undefined,
-    'pinned: an image\'s w/h/width do not survive Markdown (needs an attribute syntax such as {width=80%})',
-    'the size now survives — remove this pin and fold the size into the image fixture')
+  const t = trip({ blocks: [b('image', '', { src: 'asset:abc', width: 62.5 }), b('image', '', { src: 'asset:d', alt: 'only px', w: 12, h: 34 })] })
+  ok(qualifies(t) && t.md.includes('{width=62.5%}') && t.md.includes('{w=12 h=34}'),
+    'a fractional width alone, and pixels alone, each round-trip', qualifies(t) ? undefined : why(t))
+}
+{
+  const t = trip({ blocks: [b('image', '', { src: 'asset:x', width: 'wide', w: 'x', h: 3 } as never)] })
+  ok(!/\{/.test(t.md), 'a size field holding a non-number is not written', t.md)
+}
+{
+  const got = only('- ![a](asset:k){width=40%}\n')
+  ok(got[0]?.type === 'image' && got[0].width === 40, 'a sized image as a list item keeps its size', JSON.stringify(got))
+}
+{
+  const got = only('![a](pic.png){width=30% w=100}\n![b](pic.png){width=5%}\n![c](pic.png){width=300px height=200}\n')
+  ok(got.length === 3 && got[0].width === 30 && got[0].w === undefined && got[1].width === undefined && got[2].width === undefined && got[2].w === undefined,
+    'Pandoc-flavoured sizes outside the model (one of w/h, under 10%, px widths) are ignored, the image kept', JSON.stringify(got))
+}
+{
+  const hostile = [
+    '![x](a.png){width="><script>alert(1)</script>"}',
+    '![x](a.png){width=100% onerror=alert(1) style="background:url(//t.invalid)"}',
+    '![x](a.png){width=javascript:alert(1)}',
+    '![x](a.png){width=50% w=1e9 h=-1}',
+    '![x](a.png){width=50%" onload="alert(1)}',
+  ]
+  for (const line of hostile) {
+    const got = only(`${line}\n`)
+    const all = JSON.stringify(got)
+    const img = got.find((x) => x.type === 'image')
+    const keys = img ? Object.keys(img).filter((k) => !['id', 'type', 'html', 'src', 'alt', 'width'].includes(k)) : []
+    ok(!/onerror|onload|style|javascript/i.test(Object.keys(img ?? {}).join(' ')) && keys.length === 0 &&
+      (img?.width === undefined || img.width === 100 || img.width === 50) && !/<script/i.test(img?.alt ?? ''),
+    `HOSTILE size: ${line} — no key but a validated width reaches the block`, all)
+  }
 }
 
 console.log('\ntoggles: <details>, open or folded, holding anything')

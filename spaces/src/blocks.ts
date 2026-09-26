@@ -384,10 +384,16 @@ export const SPECS: BlockSpec[] = [
     // lost its caption on the way out. Written verbatim (it is the same inline
     // html both ways), with `"` and `\` escaped as CommonMark spells them in a
     // title, and on one line: a newline would end the image.
+    //
+    // Its SIZE follows as a Pandoc attribute list, `{width=60% w=640 h=300}`:
+    // Pandoc and markdown-it-attrs read it, GitHub and Obsidian show it as
+    // literal text after the picture — the one visible cost, paid only by a
+    // sized image. Absent fields write nothing, so an unsized image exports
+    // exactly as it did before.
     toMd: (b) => {
       const cap = String(b.caption ?? '').replace(/\s*\n\s*/g, ' ')
       const title = cap ? ` "${cap.replace(/["\\]/g, '\\$&')}"` : ''
-      return [`![${String(b.alt ?? '')}](${String(b.src ?? '')}${title})`]
+      return [`![${String(b.alt ?? '')}](${String(b.src ?? '')}${title})${sizeAttrs(b)}`]
     },
   },
   {
@@ -421,6 +427,25 @@ export const SPECS: BlockSpec[] = [
     },
   },
 ]
+
+/**
+ * A block's size as a Pandoc attribute list, or '' when it has none.
+ *
+ * ONLY NUMBERS LEAVE. `width` is a percentage and `w`/`h` pixel counts; a
+ * field holding anything else — a string out of a hand-edited file — is not
+ * written, so nothing a file says can end the list early or add a key.
+ * `extra` is appended inside the braces (a block id, in a later family).
+ */
+export function sizeAttrs(b: Block, extra: string[] = []): string {
+  const num = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined
+  const parts = [...extra]
+  const width = num(b.width)
+  if (width !== undefined) parts.push(`width=${width}%`)
+  const w = num(b.w), h = num(b.h)
+  if (w !== undefined && h !== undefined && Number.isInteger(w) && Number.isInteger(h)) parts.push(`w=${w}`, `h=${h}`)
+  return parts.length ? `{${parts.join(' ')}}` : ''
+}
 
 /** The `:---:` rule row's four forms, which are the whole of what GFM can say
  *  about alignment — and the reason `colAlign` is per column, not per cell. */

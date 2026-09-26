@@ -513,6 +513,15 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   on it reaches nothing. A space with no toggles exports exactly as before, and
   the rig now checks that byte for byte.
 
+- **An image keeps its size through Markdown.** The width you dragged, and the
+  pixel size that holds its space while it loads, now follow the image as a
+  Pandoc attribute list: `![alt](src "caption"){width=60% w=640 h=300}`.
+  Pandoc and markdown-it-attrs read that. GitHub and Obsidian show the braces
+  as text after the picture, which only happens on a sized image. Only numbers
+  are written and only validated numbers are read back: a width between 10% and
+  100%, and both pixel sizes or neither. Any other key or value is ignored and
+  the image is kept.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

@@ -199,15 +199,75 @@ const mk = (type: string, extra: Partial<Block> = {}): Block => ({ id: uid('b'),
 
 // The title may hold `\"` and `\\` — CommonMark's escapes, and what the
 // exporter writes for a caption containing either (blocks.ts image toMd).
-const IMG_LINE = /^!\[([^\]]*)\]\(\s*<?([^\s)>]*)>?(?:\s+"((?:[^"\\]|\\.)*)")?\s*\)$/
+// A trailing `{…}` is a Pandoc attribute list: `{width=60% w=640 h=300}`.
+const IMG_LINE = /^!\[([^\]]*)\]\(\s*<?([^\s)>]*)>?(?:\s+"((?:[^"\\]|\\.)*)")?\s*\)(\{[^{}\n]*\})?$/
+
+/**
+ * A PANDOC ATTRIBUTE LIST — `{#id .class key=value key="quoted value"}` — the
+ * syntax Pandoc, markdown-it-attrs and kramdown-alikes already read after an
+ * image, a link or a heading. Parsed into plain strings and NOTHING is
+ * interpreted here: each caller takes only the keys it knows, validates each
+ * value against its own pattern, and ignores the rest. An attribute list out
+ * of a mailed file is data, and the only way it can matter is through a
+ * validator that says yes.
+ *
+ * A malformed list (an unterminated quote, a token that is none of the three
+ * forms) yields null, and the caller treats the line as ordinary text.
+ */
+export interface Attrs { id?: string; classes: string[]; kv: Map<string, string> }
+export function parseAttrs(src: string): Attrs | null {
+  const m = /^\{([^{}\n]*)\}$/.exec(src.trim())
+  if (!m) return null
+  const out: Attrs = { classes: [], kv: new Map() }
+  const re = /\s*(?:#([A-Za-z][\w-]*)|\.([A-Za-z][\w-]*)|([A-Za-z][\w-]*)=(?:"([^"]*)"|([^\s"]+)))\s*/y
+  let at = 0
+  const body = m[1]
+  while (at < body.length) {
+    re.lastIndex = at
+    const t = re.exec(body)
+    if (!t || re.lastIndex === at) return null
+    at = re.lastIndex
+    if (t[1] !== undefined) out.id = t[1]
+    else if (t[2] !== undefined) out.classes.push(t[2])
+    else if (!out.kv.has(t[3])) out.kv.set(t[3], t[4] ?? t[5] ?? '')
+  }
+  return out
+}
+
+/**
+ * An image's (or a clip's) SIZE out of its attribute list, validated.
+ *
+ * `width` is the block's percentage of the text column, 10..100, written with
+ * its `%` exactly as Pandoc spells a relative width. `w`/`h` are the intrinsic
+ * pixels the block keeps to hold its aspect box while it decodes — not a
+ * display size, so they are NOT Pandoc's `width`/`height` (a foreign
+ * `width=300px` means something else and is ignored rather than guessed at).
+ * Both or neither: one of the pair is not an aspect ratio.
+ */
+export function sizeOf(a: Attrs | null): { width?: number; w?: number; h?: number } {
+  if (!a) return {}
+  const out: { width?: number; w?: number; h?: number } = {}
+  const pct = /^(\d{1,3}(?:\.\d{1,3})?)%$/.exec(a.kv.get('width') ?? '')
+  if (pct) { const n = Number(pct[1]); if (n >= 10 && n <= 100) out.width = n }
+  const w = /^[1-9]\d{0,4}$/.test(a.kv.get('w') ?? '') ? Number(a.kv.get('w')) : 0
+  const h = /^[1-9]\d{0,4}$/.test(a.kv.get('h') ?? '') ? Number(a.kv.get('h')) : 0
+  if (w && h) { out.w = w; out.h = h }
+  return out
+}
 const IMG_EMBED = /^!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]$/
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i
 
 /** A line that is nothing but an image. `![[x]]` counts only when it names an
  *  image FILE — otherwise it is an embed of another note, which is a link. */
-function imageOf(line: string): { ref: string; alt: string; caption?: string } | null {
+function imageOf(line: string): { ref: string; alt: string; caption?: string; attrs?: Attrs | null } | null {
   const m = IMG_LINE.exec(line.trim())
-  if (m) return { ref: m[2], alt: m[1], ...(m[3] ? { caption: m[3].replace(/\\(["\\])/g, '$1') } : {}) }
+  if (m) {
+    return {
+      ref: m[2], alt: m[1],
+      ...(m[3] ? { caption: m[3].replace(/\\(["\\])/g, '$1') } : {}),
+      ...(m[4] ? { attrs: parseAttrs(m[4]) } : {}),
+    }
+  }
   const e = IMG_EMBED.exec(line.trim())
   if (e && IMAGE_EXT.test(e[1].trim())) return { ref: e[1].trim(), alt: '' }
   return null
@@ -285,10 +345,10 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
   // where a relative path counts as remote. The question here is different —
   // "could a file the user picked satisfy this address" — and a relative path
   // is the one case where the answer is yes.
-  const imageBlock = (ref: string, alt: string, caption: string | undefined, parent?: string) => {
+  const imageBlock = (ref: string, alt: string, caption: string | undefined, parent?: string, attrs?: Attrs | null) => {
     // `html: ''` is the shape model.newBlock gives every block, so an image
     // that goes out and comes back is the same JSON the editor made
-    const b = mk('image', { html: '', src: ref, ...(alt ? { alt } : {}), ...(caption ? { caption } : {}) })
+    const b = mk('image', { html: '', src: ref, ...(alt ? { alt } : {}), ...(caption ? { caption } : {}), ...sizeOf(attrs ?? null) })
     add(b, parent)
     if (/^(https?:)?\/\//i.test(ref)) remoteImages++
     else if (!/^data:/i.test(ref)) images.push({ block: b, ref, dir: '' })
@@ -475,7 +535,7 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
       const block = todo
         ? add(mk('todo', { html: inlineHtml(todo[2]), done: todo[1] !== ' ' }), owner)
         : pic
-          ? imageBlock(pic.ref, pic.alt, pic.caption, owner)
+          ? imageBlock(pic.ref, pic.alt, pic.caption, owner, pic.attrs)
           : add(mk(/^\d/.test(item[1]) ? 'number' : 'bullet', { html: inlineHtml(text) }), owner)
       // An IMAGE is not a container and holds no text, so it is neither a
       // continuation target nor a parent.
@@ -499,7 +559,7 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     const pic = imageOf(body)
     if (pic) {
       para = null
-      imageBlock(pic.ref, pic.alt, pic.caption, ownerFor(indent))
+      imageBlock(pic.ref, pic.alt, pic.caption, ownerFor(indent), pic.attrs)
       continue
     }
 
