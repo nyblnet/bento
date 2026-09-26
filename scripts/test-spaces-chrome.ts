@@ -263,7 +263,13 @@ async function browser(chrome: string, html: string): Promise<void> {
 
     // …and it IS slides' Save menu: the rows, in order, and the rule where slides has it
     const saveRows = await js<any>(`(() => { const m = ${OPEN}; return [...m.children].map(c => c.classList.contains('bkm-sep') ? '—' : (c.querySelector('.bkm-text')?.textContent ?? '')) })()`)
-    ok(JSON.stringify(saveRows.filter((x: string) => x !== '—')) === JSON.stringify(SAVE_ORDER),
+    // in order; a build may carry more exports in the export slot (the tour's
+    // page-as-slides), so SAVE_ORDER must be an in-order subsequence
+    const shown = saveRows.filter((x: string) => x !== '—')
+    let seenAt = -1
+    const inOrder = SAVE_ORDER.every((l) => { const i = shown.indexOf(l); const okay = i > seenAt; seenAt = i; return okay })
+    const extra = shown.filter((l: string) => !SAVE_ORDER.includes(l))
+    ok(inOrder && extra.every((l: string) => /^Export /.test(l)),
       `the Save menu renders the document commands in order (${saveRows.join(' · ')})`)
     ok(saveRows.indexOf('—') === saveRows.indexOf('Version history…') - 1 && saveRows.indexOf('—') > saveRows.indexOf('Encrypt with password…'),
       'a rule sets the timeline and JSON rows apart from the file rows, where slides has its separator')
@@ -291,7 +297,7 @@ async function browser(chrome: string, html: string): Promise<void> {
     await tap(`[...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith('Insert'))`)
     const exclusive = await js<number>(`document.querySelectorAll('.bkm-open').length`)
     ok(exclusive === 1, `opening Insert shuts Save ▾ — one menu open at a time (${exclusive} open)`)
-    const im = await js<any>(`(() => { const m = ${OPEN}; const row = [...m.querySelectorAll('.bkm-item')][0]; return { font: getComputedStyle(row.querySelector('.bkm-text')).fontSize, h: Math.round(row.getBoundingClientRect().height), tail: [...m.querySelectorAll('.bkm-item')].slice(-3).map(r => r.querySelector('.bkm-text').textContent) } })()`)
+    const im = await js<any>(`(() => { const m = ${OPEN}; const row = [...m.querySelectorAll('.bkm-item')][0]; const kids = [...m.children]; const sep = kids.findIndex(c => c.classList.contains('bkm-sep')); return { font: getComputedStyle(row.querySelector('.bkm-text')).fontSize, h: Math.round(row.getBoundingClientRect().height), tail: kids.slice(sep + 1, sep + 4).map(r => r.querySelector('.bkm-text')?.textContent) } })()`)
     ok(im.font === SLIDES_MENU.rowFont && im.h === 30, `Insert's rows are slides' command rows, ${SLIDES_MENU.rowFont} and 30px (${im.font}, ${im.h}px)`)
     ok(JSON.stringify(im.tail) === JSON.stringify(['New page', "Today's journal", 'New issue']), `＋ Insert ends, after a rule, on the pages you can add (${im.tail.join(' · ')})`)
     const ins = await js<any>(`(() => { const r = (${OPEN}).getBoundingClientRect(); return { bottom: Math.round(r.bottom), vh: innerHeight } })()`)
