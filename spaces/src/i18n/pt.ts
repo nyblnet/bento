@@ -490,6 +490,7 @@ export const pt: Catalog = {
   "Type / for blocks, [[ to link a page": "Escreva / para blocos, [[ para ligar uma página",
   "Underline": "Sublinhado",
   "Underline — ⌘U": "Sublinhado — ⌘U",
+  "Undo": "Desfazer",
   "Undo (⌘Z)": "Desfazer (⌘Z)",
   "Unlock": "Desbloquear",
   "Unlocked, but the document inside could not be read.": "Desbloqueado, mas não foi possível ler o documento lá dentro.",

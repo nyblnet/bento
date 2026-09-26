@@ -490,6 +490,7 @@ export const ja: Catalog = {
   "Type / for blocks, [[ to link a page": "/ でブロック、[[ でページにリンク",
   "Underline": "下線",
   "Underline — ⌘U": "下線 — ⌘U",
+  "Undo": "元に戻す",
   "Undo (⌘Z)": "元に戻す (⌘Z)",
   "Unlock": "ロック解除",
   "Unlocked, but the document inside could not be read.": "ロックは解除しましたが、中のドキュメントを読み取れませんでした。",

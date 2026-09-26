@@ -490,6 +490,7 @@ export const zh_Hans: Catalog = {
   "Type / for blocks, [[ to link a page": "输入 / 插入块，[[ 链接页面",
   "Underline": "下划线",
   "Underline — ⌘U": "下划线 — ⌘U",
+  "Undo": "撤销",
   "Undo (⌘Z)": "撤销 (⌘Z)",
   "Unlock": "解锁",
   "Unlocked, but the document inside could not be read.": "已解锁，但无法读取其中的文档。",

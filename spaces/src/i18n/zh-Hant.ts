@@ -490,6 +490,7 @@ export const zh_Hant: Catalog = {
   "Type / for blocks, [[ to link a page": "輸入 / 插入區塊，輸入 [[ 連結頁面",
   "Underline": "底線",
   "Underline — ⌘U": "底線 — ⌘U",
+  "Undo": "還原",
   "Undo (⌘Z)": "還原 (⌘Z)",
   "Unlock": "解鎖",
   "Unlocked, but the document inside could not be read.": "已解鎖，但無法讀取裡面的文件。",

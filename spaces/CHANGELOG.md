@@ -477,6 +477,37 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **Every menu is the suite's menu now, and it behaves like one.** Insert, ⋯,
+  the save caret, the block and page ⋯ menus, a board's group, sort, filter and
+  source menus, a field's options, a code block's language and a callout's tone
+  are all built on the kernel's shared menu. You can walk every one of them with
+  the arrow keys and close it with Escape, and focus goes back to the button
+  that opened it. Opening one menu closes any other. Four things this fixes,
+  each measured in the built file:
+  - A menu closed with Escape left its click-away listener behind, and that
+    listener closed the NEXT thing you opened on your first click inside it:
+    Escape a block menu, press ⌘K, click in the search box, and the search
+    vanished.
+  - On a phone the ⋯ menu was 950px tall on an 844px screen. Its last three
+    rows, which are the only ways to save a copy or export on a phone, could
+    not be reached. It now ends inside the screen and scrolls.
+  - The Insert menu's last row ran off the bottom of a 1440×900 window. Insert
+    is one line per row now, with the Markdown shortcut (`#`, `1.`, `>`) on the
+    right. The descriptions stay on the `/` menu, where you learn them.
+  - With About or the shortcut sheet open, `[` collapsed the page list behind
+    it and `?` opened a second sheet on top. Nothing reaches the page under an
+    open dialog now.
+
+  On a phone, every anchored menu is a sheet at the bottom of the screen,
+  including the page ⋯ menu, which used to be a small popup over the drawer.
+  Rows are 44px tall under a finger. Shortcuts are right-aligned and written
+  in one order, ⌃⌥⇧⌘ (⌥⌘N, not ⌘⌥N). They are hidden where there is no
+  keyboard. Only menus whose rows have consequences keep a second line saying
+  what each row does (save a copy, archive, delete, page width). The overflow
+  button is ⋯, not ⋮, as in slides. A search, import or export dialog now
+  closes with Escape wherever the focus is, not only while it is inside the
+  card. The graph view puts focus in its card, not on the dimmed page behind it.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
