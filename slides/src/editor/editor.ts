@@ -249,12 +249,26 @@ export class Editor {
   // --- DOM ----------------------------------------------------------------
 
   private build() {
+    // Everything the previous build hung on window, document or the store dies
+    // with its DOM. build() runs again on every language switch, and each run
+    // used to add another resize listener, another ResizeObserver and eight
+    // outside-press listeners that kept the old bar alive and re-fitted it.
+    this.buildScope.abort()
+    this.buildScope = new AbortController()
+    for (const o of this.buildObservers) o.disconnect()
+    this.buildObservers = []
     this.root.innerHTML = ''
     this.root.className = 'ed-root'
 
     // topbar
     const bar = div('ed-topbar')
-    const logo = div('ed-logo')
+    // A real button: it opens About, so it takes focus, answers Enter/Space and
+    // has a name a screen reader can read (the visible word is hidden at the
+    // tight tier and on phones, leaving only the mark).
+    const logo = document.createElement('button')
+    logo.type = 'button'
+    logo.className = 'ed-logo'
+    logo.setAttribute('aria-label', t('About bento/slides — version, updates, licenses'))
     logo.innerHTML =
       `<svg class="ed-logo-mark" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">` +
       `<rect width="32" height="32" rx="7" fill="#16273E"/>` +
@@ -263,7 +277,6 @@ export class Editor {
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
       `</svg> <b>bento<span style="color:#FF9E8A">/</span>slides</b>`
     logo.title = t('About bento/slides — version, updates, licenses')
-    logo.style.cursor = 'pointer'
     logo.addEventListener('click', () => this.openAbout())
     const title = document.createElement('input')
     title.className = 'ed-title'
@@ -275,12 +288,13 @@ export class Editor {
       this.syncWindowTitle()
     })
     // remote/programmatic title changes reflect live (unless being typed in)
-    this.store.on('doc', () => {
+    const offTitle = this.store.on('doc', () => {
       if (document.activeElement !== title && title.value !== this.store.doc.title) {
         title.value = this.store.doc.title
         this.syncWindowTitle()
       }
     })
+    this.buildScope.signal.addEventListener('abort', offTitle)
 
     // The FILE this deck is open as — deliberately separate from the deck
     // title above, because the two drift apart constantly (rename the deck and
@@ -438,7 +452,7 @@ export class Editor {
     pill.append(showB, caret, pmenu)
     document.addEventListener('pointerdown', (ev) => {
       if (!pill.contains(ev.target as Node)) pill.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     // shared bottom-right cluster: [Slideshow pill] [zoom pill] — the canvas
     // appends its zoombar to canvasWrap; we adopt it into the cluster below.
     const corner = div('ed-corner-br')
@@ -490,15 +504,14 @@ export class Editor {
     // under CDP-driven viewport changes, and a phone ROTATING is exactly this
     // path); the plain resize listener is belt and braces on top. fitTopbar
     // is idempotent, so the overlap costs a few reads.
-    this.barRO?.disconnect()
+    const signal = this.buildScope.signal
     this.barRO = new ResizeObserver(() => this.fitTopbar())
     this.barRO.observe(bar)
-    window.addEventListener('resize', () => this.fitTopbar())
+    window.addEventListener('resize', () => this.fitTopbar(), { signal })
     // The bar's CONTENT changes width too, at a constant viewport (avatars
     // join, the update chip appears, the file chip fills in, the "Saved" tag
     // flashes), and each of these used to clip the end of the bar. fitTopbar
     // drops the records its own mutations queue, so this cannot loop.
-    this.barMO?.disconnect()
     this.barMO = new MutationObserver(() => this.fitTopbar())
     this.barMO.observe(bar, {
       childList: true, subtree: true, characterData: true,
@@ -512,8 +525,10 @@ export class Editor {
     // differ per device and change when the phone rotates.
     const publishBarBottom = () =>
       this.root.style.setProperty('--ed-bar-bottom', `${Math.round(bar.getBoundingClientRect().bottom)}px`)
-    new ResizeObserver(publishBarBottom).observe(bar)
-    window.addEventListener('resize', publishBarBottom)
+    const bottomRO = new ResizeObserver(publishBarBottom)
+    bottomRO.observe(bar)
+    window.addEventListener('resize', publishBarBottom, { signal })
+    this.buildObservers.push(this.barRO, this.barMO, bottomRO)
     publishBarBottom()
 
     this.wireDrawerDismiss()
@@ -723,6 +738,10 @@ export class Editor {
   private topbar: HTMLElement | null = null
   private barRO: ResizeObserver | null = null
   private barMO: MutationObserver | null = null
+  /** Scope of one build(): aborted by the next, so the window/document/store
+   *  listeners the bar and its dropdowns register never outlive their DOM. */
+  private buildScope = new AbortController()
+  private buildObservers: (ResizeObserver | MutationObserver)[] = []
 
   /**
    * Size the topbar by MEASURING it, not by width breakpoints. Breakpoints
@@ -809,7 +828,7 @@ export class Editor {
   private closeOnOutsidePress(wrap: HTMLElement) {
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
   }
 
   /**
@@ -831,7 +850,7 @@ export class Editor {
       if (target instanceof Element && target.closest('.ed-topbar')) return
       if (!this.sidebar.contains(target)) this.closePanel('left')
       if (!this.props.contains(target)) this.closePanel('right')
-    }, true)
+    }, { capture: true, signal: this.buildScope.signal })
   }
 
   // --- Save dropdown: copy / new deck / template -----------------------------
@@ -851,7 +870,7 @@ export class Editor {
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     return wrap
   }
 
@@ -1290,7 +1309,7 @@ export class Editor {
     wrap.append(this.shareB, panel)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     return wrap
   }
 
@@ -1733,7 +1752,7 @@ export class Editor {
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     return wrap
   }
 
@@ -1754,7 +1773,7 @@ export class Editor {
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     return wrap
   }
 
@@ -2226,7 +2245,7 @@ export class Editor {
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     return wrap
   }
 
