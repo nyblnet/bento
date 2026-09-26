@@ -609,6 +609,13 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
     it, menus cast a deeper shadow in dark mode, and a keyboard focus ring
     in the accent colour marks where you are in the bar, menus and dialogs.
 
+- **The bar's labels are slides' labels.** The `?` button and its sheet are
+  "Shortcuts & tips", ⋯ is "More actions", Print is "Export PDF (print)", the
+  Save caret reads "Save as… — copy, new space, password", the wordmark reads
+  "About bento/spaces — version, updates, licenses", and the Save row is
+  "Duplicate as new space…". The translations are slides' own wherever slides
+  has the same string.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

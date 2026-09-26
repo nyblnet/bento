@@ -284,7 +284,9 @@ export class Editor {
       '<rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/>' +
       '<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>' +
       '</svg><b class="sp-mark-word">bento<span>/</span>spaces</b>'
-    mark.title = t('About this space')
+    // slides' wording with spaces' name: what the mark opens, and what is in it
+    mark.title = t('About bento/spaces — version, updates, licenses')
+    mark.setAttribute('aria-label', t('About bento/spaces — version, updates, licenses'))
     mark.addEventListener('click', () => this.openAbout())
 
     // THE UPDATE CHIP — slides' peach pill beside the wordmark, present ONLY
@@ -384,12 +386,12 @@ export class Editor {
         run: () => this.toggleReading(),
         keep: (b) => { this.readB = b } },
       { icon: 'graph', label: t('Graph'), run: () => this.openGraph() },
-      { icon: 'print', label: t('Print or save as PDF'), kbd: keys('mod', 'P'), run: () => this.openPrint() },
+      { icon: 'print', label: t('Export PDF (print)'), kbd: keys('mod', 'P'), run: () => this.openPrint() },
     ]
 
     // In the bar's corner as in slides — the globe and the `?` — and in ⋯ only
     // once the bar has folded them away.
-    const helpB = iconBtn('help', `${t('Keyboard shortcuts')} (?)`, () => this.openHelp())
+    const helpB = iconBtn('help', t('Shortcuts & tips (?)'), () => this.openHelp())
     helpB.classList.add('sp-help')
     // slides' glyph — a bold `?`, the key it stands for — not a circled icon
     helpB.innerHTML = '<b class="sp-help-q" aria-hidden="true">?</b>'
@@ -410,7 +412,7 @@ export class Editor {
     const saveList = (m: Menu) => saveRows(m, this.docHost())
 
     const more = barMenu({
-      icon: ICONS.more, label: '', tip: t('More'), end: true, scroll: true, className: 'sp-more',
+      icon: ICONS.more, label: '', tip: t('More actions'), end: true, scroll: true, className: 'sp-more',
       fill: (m) => {
         // Slides' folded ⋯: the controls the bar gave up, in the bar's own
         // order, then the Save list. The list SCROLLS (`scroll`): folded it is
@@ -429,7 +431,7 @@ export class Editor {
           queueMicrotask(() => anchoredMenu(moreB, (lm) => this.fillLanguages(lm),
             { label: t('Language'), sheet: this.isDrawer(), returnFocus: moreB }))
         } })
-        row(m, { icon: ICONS.help, label: t('Keyboard shortcuts'), kbd: '?', run: () => this.openHelp() })
+        row(m, { icon: ICONS.help, label: t('Shortcuts & tips'), kbd: '?', run: () => this.openHelp() })
         m.separator()
         saveList(m)
       },
@@ -460,7 +462,7 @@ export class Editor {
     saveB.append(this.dirtyDot)
     const saveMore = barMenu({
       // slides' caret is the ▾ glyph at 10px, not a 12px chevron icon
-      icon: '<span class="sp-caret-g" aria-hidden="true">▾</span>', label: '', tip: t('Other ways to save'), end: true, className: 'sp-caret sp-savemenu',
+      icon: '<span class="sp-caret-g" aria-hidden="true">▾</span>', label: '', tip: t('Save as… — copy, new space, password'), end: true, className: 'sp-caret sp-savemenu',
       scroll: true, fill: saveList,
     }).root
 
@@ -3224,7 +3226,7 @@ export class Editor {
         ['[', t('Show or hide the page list')],
         [']', t('Show or hide properties')],
         [M('mod', 'S'), t('Save')],
-        [M('mod', 'P'), t('Print or save as PDF')],
+        [M('mod', 'P'), t('Export PDF (print)')],
         ['?', t('This list')],
         ['Esc', t('Leave the reading view')],
       ]],
@@ -3238,7 +3240,7 @@ export class Editor {
     // On the kernel dialog like every other modal: the card no longer takes
     // the focus itself, which painted a 2px ring round the whole sheet on
     // open, and `?` pressed again cannot stack a second copy.
-    this.openOverlay(t('Keyboard shortcuts'), (card) => {
+    this.openOverlay(t('Shortcuts & tips'), (card) => {
       const grid = el('div', 'sp-keys-grid')
       for (const [title, rows] of groups) {
         const g = el('section', 'sp-keys-g')
@@ -5038,7 +5040,7 @@ export class Editor {
       saveCopy: () => { void this.saveAs('copy') },
       exportMarkdown: () => this.exportMarkdown(),
       exportSpace: () => this.openExportSpace(),
-      // "Duplicate as a new space…" writes a DIFFERENT document, so it takes
+      // "Duplicate as new space…" writes a DIFFERENT document, so it takes
       // the extract's writer rather than the copy path: that one keeps no file
       // handle, which is what leaves you editing this space afterwards.
       writeCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
