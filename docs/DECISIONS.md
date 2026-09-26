@@ -8791,3 +8791,34 @@ not nowrap (a start-anchored list then shrinks to its min-width and wraps
 names); a scrolling list lets its 1px separators shrink to nothing. Dialog:
 frame 1px → none, padding `20px 22px` → 20px, shadow and scrim to slides'.
 
+## 2026-09-26 — D2 revised for the Save menu: one-line rows, the description as a tooltip
+
+**The maintainer's ruling:** "We can make the save menu even closer to slides,
+all the extra text describing the entry can be mouseovers."
+
+This revises D2 (descriptions visible on consequential menus) for **Save ▾
+only**. Its rows go back to one line — 30px, 12.5px/400, slides' `.ed-save-menu
+.ed-btn` — and what each row does becomes its hover tooltip: the native `title`
+on the row, as slides' Save rows (slides #573 made the same change).
+
+Accessibility is kept, not traded: the same text stays the row's accessible
+DESCRIPTION through `aria-describedby`, pointing at a visually hidden element
+inside the row (`.sp-vh`, slides' `.ed-sr-only` rules), while `aria-label`
+keeps the command's name alone. With `aria-describedby` present, `title` is not
+also announced as the description.
+
+**Touch has no hover, and slides has nothing for it** — a tooltip simply never
+appears under a finger in either app. So on a phone or tablet the description
+is available only to a screen reader. That is recorded rather than filled with
+new UI here; if it matters, it is a suite question (both apps at once).
+
+**Share keeps its drawn second line** (the ruling named the Save menu), in both
+apps. Next to it the two popovers now differ in density: Save is a list of
+one-line commands, Share a stack of described buttons. Share was already a
+different object (framed buttons, a form, a status line), so the difference
+reads as two kinds of surface rather than one inconsistency.
+
+`scripts/test-spaces-chrome.ts` holds every Save row to one 30px line whose
+`title` equals its `aria-describedby` text, that element ≤ 1×1 and inside the
+row, and the name alone as `aria-label`.
+

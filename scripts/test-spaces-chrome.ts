@@ -291,13 +291,14 @@ async function browser(chrome: string, html: string): Promise<void> {
     const hexOf = (rgb: string) => '#' + (rgb.match(/\d+/g) ?? []).slice(0, 3).map((n) => (+n).toString(16).padStart(2, '0')).join('')
     ok(rowRing.style === 'solid' && rowRing.w === ringW && hexOf(rowRing.color) === rowRing.want && rowRing.off === SLIDES_RING.inside,
       `a menu row's keyboard ring is slides': ${SLIDES_RING.outline}, offset ${SLIDES_RING.inside} (${JSON.stringify(rowRing)})`)
-    // D2's second line: slides' type, and wired as a DESCRIPTION, the name staying the name
-    const desc = await js<any>(`(() => { const row = [...(${OPEN}).querySelectorAll('.bkm-item')].find(r => r.textContent.startsWith('Duplicate as a new space')); const h = row.querySelector('.bkm-hint'); const c = getComputedStyle(h); return { size: c.fontSize, weight: c.fontWeight, lh: c.lineHeight, ink: c.color, top: c.marginTop, muted: getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(), name: row.getAttribute('aria-label'), by: row.getAttribute('aria-describedby'), byText: document.getElementById(row.getAttribute('aria-describedby') || '')?.textContent, hint: h.textContent } })()`)
-    const lhPx = `${Math.round(parseFloat(SLIDES_DESC.size ?? '0') * parseFloat(SLIDES_DESC.lh ?? '0') * 100) / 100}px`
-    ok(desc.size === SLIDES_DESC.size && desc.weight === SLIDES_DESC.weight && parseFloat(desc.lh).toFixed(2) === parseFloat(lhPx).toFixed(2) && desc.top === SLIDES_DESC.top && SLIDES_DESC.ink === '--muted' && hexOf(desc.ink) === desc.muted,
-      `a Save row's description is slides' second line — ${SLIDES_DESC.size}/${SLIDES_DESC.weight}, line-height ${SLIDES_DESC.lh}, ${SLIDES_DESC.ink}, ${SLIDES_DESC.top} under the name (${JSON.stringify(desc)})`)
-    ok(desc.name === 'Duplicate as a new space…' && !!desc.by && desc.byText === desc.hint,
-      `…and it is the row's DESCRIPTION (aria-describedby), the name alone its accessible name (${desc.name} / ${desc.by})`)
+    // THE SAVE MENU IS ONE LINE A ROW, as slides' (the maintainer's revision of
+    // D2, 2026-09-26): what a row does is its hover tooltip, as slides' `title`,
+    // and — for a screen reader — its accessible description via aria-describedby
+    // on an element that is not drawn. The name alone is the accessible name.
+    const one = await js<any>(`(() => { const rows = [...(${OPEN}).querySelectorAll('.bkm-item')]; return rows.map(r => { const d = document.getElementById(r.getAttribute('aria-describedby') || ''); const dr = d?.getBoundingClientRect(); return { inside: !!d && r.contains(d), name: r.querySelector('.bkm-text').textContent, h: Math.round(r.getBoundingClientRect().height), drawn: !!r.querySelector('.bkm-hint'), title: r.title, aria: r.getAttribute('aria-label'), desc: d?.textContent ?? null, hidden: !!dr && dr.width <= 1 && dr.height <= 1 } }) })()`)
+    const bad = one.filter((r: any) => r.h !== 30 || r.drawn || !r.title || r.title !== r.desc || r.aria !== r.name || !r.hidden || !r.inside)
+    ok(one.length >= 9 && bad.length === 0,
+      `every Save row is one 30px line whose description is its tooltip and its hidden aria-describedby, the name alone its name (${one.length} rows${bad.length ? '; wrong: ' + JSON.stringify(bad.slice(0, 2)) : ''})`)
 
     // …and it IS slides' Save menu: the rows, in order, and the rule where slides has it
     const saveRows = await js<any>(`(() => { const m = ${OPEN}; return [...m.children].map(c => c.classList.contains('bkm-sep') ? '—' : (c.querySelector('.bkm-text')?.textContent ?? '')) })()`)
@@ -325,8 +326,8 @@ async function browser(chrome: string, html: string): Promise<void> {
     if (cs.slice(0, 4).join() !== ss.slice(3, 7).join() || cs.slice(4, 7).join() !== ss.slice(0, 3).join()) off.push(`shadow ${mm.shadow} ≠ ${SLIDES_MENU.shadow}`)
     if (mm.frame !== `${frameW} solid`) off.push(`frame ${mm.frame} ≠ ${SLIDES_MENU.rowFrame}`)
     if (mm.ink !== hexRgb(SLIDES_MENU.rowInk) || mm.icoInk !== mm.ink) off.push(`ink ${mm.ink}/${mm.icoInk} ≠ ${SLIDES_MENU.rowInk}`)
-    if (mm.weight !== '400') off.push(`row weight ${mm.weight}, slides' is 400`)
-    ok(off.length === 0, `the Save menu computes to slides' stylesheet values — offset, padding, corner, shadow, rows at ${SLIDES_MENU.saveFont}/400 in ${SLIDES_MENU.rowInk}, separators (${off.join('; ') || JSON.stringify(mm)})`)
+    if (mm.weight !== '400' || mm.h !== 30) off.push(`row ${mm.weight} ${mm.h}px, slides' is 400 30px`)
+    ok(off.length === 0, `the Save menu computes to slides' stylesheet values (.ed-save-menu .ed-btn) — offset, padding, corner, shadow, 30px rows at ${SLIDES_MENU.saveFont}/400 in ${SLIDES_MENU.rowInk}, separators (${off.join('; ') || JSON.stringify(mm)})`)
     await key('Escape', 0, 'Escape')
     const afterEsc = await js<any>(`({ open: !!(${OPEN}), exp: (${SAVEM}).getAttribute('aria-expanded'), focus: document.activeElement === (${SAVEM}) })`)
     ok(!afterEsc.open && afterEsc.exp === 'false' && afterEsc.focus, `Escape closes Save ▾, clears aria-expanded and puts focus back on its trigger (${JSON.stringify(afterEsc)})`)
@@ -334,6 +335,16 @@ async function browser(chrome: string, html: string): Promise<void> {
     const barRing = await js<any>(`(() => { const e = document.activeElement; const c = getComputedStyle(e); return { fv: e.matches(':focus-visible'), style: c.outlineStyle, w: c.outlineWidth, off: c.outlineOffset } })()`)
     ok(barRing.fv && barRing.style === 'solid' && barRing.w === /(\d+px)/.exec(SLIDES_RING.outline ?? '')?.[1] && barRing.off === SLIDES_RING.outside,
       `a bar button's keyboard ring is slides': outside, offset ${SLIDES_RING.outside} (${JSON.stringify(barRing)})`)
+
+    // Share keeps D2's drawn second line: slides' type, wired as the DESCRIPTION
+    await tap(`document.querySelector('.sp-bar .sp-live')`)
+    const desc = await js<any>(`(() => { const row = [...document.querySelectorAll('.sp-pop .sp-paction')].find(r => r.textContent.startsWith('View-only copy')); if (!row) return null; const h = row.querySelector('.sp-paction-body span'); const c = getComputedStyle(h); return { size: c.fontSize, weight: c.fontWeight, lh: c.lineHeight, ink: c.color, top: c.marginTop, muted: getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(), name: row.getAttribute('aria-label'), by: row.getAttribute('aria-describedby'), byText: document.getElementById(row.getAttribute('aria-describedby') || '')?.textContent, hint: h.textContent } })()`)
+    const lhPx = `${Math.round(parseFloat(SLIDES_DESC.size ?? '0') * parseFloat(SLIDES_DESC.lh ?? '0') * 100) / 100}px`
+    ok(!!desc && desc.size === SLIDES_DESC.size && desc.weight === SLIDES_DESC.weight && parseFloat(desc.lh).toFixed(2) === parseFloat(lhPx).toFixed(2) && desc.top === SLIDES_DESC.top && SLIDES_DESC.ink === '--muted' && hexOf(desc.ink) === desc.muted,
+      `a Share action's description is slides' second line — ${SLIDES_DESC.size}/${SLIDES_DESC.weight}, line-height ${SLIDES_DESC.lh}, ${SLIDES_DESC.ink}, ${SLIDES_DESC.top} under the name (${JSON.stringify(desc)})`)
+    ok(!!desc && desc.name === 'View-only copy…' && !!desc.by && desc.byText === desc.hint,
+      `…and it is the action's DESCRIPTION (aria-describedby), the name alone its accessible name (${desc?.name} / ${desc?.by})`)
+    await key('Escape', 0, 'Escape')
 
     await tap(SAVEM)
     await tap(`[...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith('Insert'))`)
