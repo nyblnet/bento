@@ -508,6 +508,25 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   closes with Escape wherever the focus is, not only while it is inside the
   card. The graph view puts focus in its card, not on the dimmed page behind it.
 
+- **Every dialog and both side panels are the suite's.** About, the keyboard
+  shortcuts, Search, Link to page, Link card, Import, the import reports,
+  Export page as a space, Print and the graph now use the kernel's dialog. Each
+  one keeps the keyboard inside it: Tab used to leave the import dialog on 23
+  presses out of 25. Escape closes any of them wherever the focus is. Each opens
+  on a real title (17px, D4) rather than a small grey caption, with the
+  corner, shadow and scrim slides uses.
+  - The shortcut sheet no longer draws a blue ring around itself when it opens.
+    Its shortcuts are written in one order, ⌃⌥⇧⌘.
+  - In Search and in Link to page, the arrow keys move through the results while
+    you keep typing, and Enter opens the highlighted one. Before, a result could
+    only be reached with Tab.
+
+  The page list and the properties panel are the kernel's side panel. You drag
+  the edge to resize, double-click it to reset, and use the chevron to close or
+  open. Below 820px each panel is a drawer over the page. Your widths and
+  open/closed choices are kept exactly as before, under the same keys. Opening
+  and closing the drawer on a phone never changes what a desktop remembers.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
