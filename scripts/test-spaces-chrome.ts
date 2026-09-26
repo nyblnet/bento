@@ -109,6 +109,69 @@ ok(!!slidesFloor && !!slidesPhone &&
 ok(/createTopbarFit\(bar,/.test(editor) && !/private fitTopbar\(/.test(editor),
   'the editor fits its bar through topbar.ts, not a private hand-copy')
 
+// WHAT OPENS FROM THE BAR IS SLIDES' TOO. The menu's numbers are read out of
+// slides' stylesheet (`.ed-menu`, `.ed-btn`, `.ed-menu-sep`, `.ed-save-menu`),
+// and the browser half holds spaces' COMPUTED values to them — so the day
+// slides changes a menu, this rig says the two apps have parted.
+const block = (sel: string) => new RegExp(`\\n${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([\\s\\S]*?)\\n\\}`).exec(slidesCss)?.[1] ?? ''
+const decl = (b: string, prop: string) => new RegExp(`(?:^|[;\\s])${prop}:\\s*([^;]+);`).exec(b)?.[1]?.trim()
+const edMenu = block('.ed-menu'), edBtn = block('.ed-btn')
+const slidesRoot = /\n:root, :root\[data-theme="light"\] \{([\s\S]*?)\n\}/.exec(slidesCss)?.[1] ?? ''
+const SLIDES_MENU = {
+  offset: /calc\(100% \+ (\d+px)\)/.exec(decl(edMenu, 'top') ?? '')?.[1],
+  pad: decl(edMenu, 'padding'),
+  radius: /\n\s*--radius:\s*([^;]+);/.exec(slidesCss)?.[1],
+  shadow: decl(edMenu, 'box-shadow'),
+  rowFont: decl(edBtn, 'font-size'),
+  rowPad: decl(edBtn, 'padding'),
+  rowGap: decl(edBtn, 'gap'),
+  rowRadius: decl(edBtn, 'border-radius'),
+  rowFrame: decl(edBtn, 'border'),
+  rowInk: /var\((--[a-z0-9-]+)\)/.exec(decl(edBtn, 'color') ?? '')?.[1],
+  sepMargin: /\.ed-menu-sep \{[^}]*margin:\s*([^;]+);/.exec(slidesCss)?.[1],
+  saveFont: /\.ed-save-menu \.ed-btn \{ font-size:\s*([^;]+);/.exec(slidesCss)?.[1],
+}
+SLIDES_MENU.rowInk = SLIDES_MENU.rowInk ? decl(slidesRoot, SLIDES_MENU.rowInk) : undefined
+// The keyboard ring (`.ed-btn:focus-visible` outside, `.ed-menu
+// .ed-btn:focus-visible` inside)
+const ringOut = /\n\.ed-btn:focus-visible[^{]*\{([^}]*)\}/.exec(slidesCss)?.[1] ?? ''
+const SLIDES_RING = {
+  outline: /outline:\s*([^;]+);/.exec(ringOut)?.[1]?.trim(),
+  outside: /outline-offset:\s*([^;]+);/.exec(ringOut)?.[1]?.trim(),
+  inside: /\n\.ed-menu \.ed-btn:focus-visible \{[^}]*outline-offset:\s*([^;]+);/.exec(slidesCss)?.[1]?.trim(),
+}
+// Stacked below slides #573, where slides gains the ring: until it lands, a
+// slides checkout without it is held to the kernel's ring, and the check says so.
+const hasRing = /\.ed-btn:focus-visible/.test(slidesCss)
+const ringRead = Object.values(SLIDES_RING).every(Boolean)
+if (!hasRing) Object.assign(SLIDES_RING, { outline: '2px solid var(--accent-ink)', outside: '2px', inside: '-2px' })
+ok(ringRead || !hasRing, `slides' keyboard ring is read from its stylesheet where it has it (${hasRing ? 'slides' : 'kernel ruling'}; ${JSON.stringify(SLIDES_RING)})`)
+const ringInk = /var\((--[a-z0-9-]+)\)/.exec(SLIDES_RING.outline ?? '')?.[1]
+ok(Object.values(SLIDES_MENU).every(Boolean), `slides' menu values can be read from its stylesheet (${JSON.stringify(SLIDES_MENU)})`)
+
+// THE SAVE MENU IS SLIDES' SAVE MENU: the document-level commands, in slides'
+// order wherever spaces has the same command. Slides' order is read from its
+// buildSaveAsItems; spaces' from doccmds.ts SAVE_ORDER, which the browser half
+// then holds the rendered menu to.
+const saveFn = slidesEd.slice(slidesEd.indexOf('  private buildSaveAsItems('), slidesEd.indexOf('  private fillPhoneSaveAs('))
+const slidesSave = [...saveFn.matchAll(/item\(ICONS\.\w+, t\('([^']+)'\)/g)].map((m) => m[1])
+const doccmds = read('doccmds.ts')
+const SAVE_ORDER: string[] = JSON.parse(('[' + (/export const SAVE_ORDER = \[([\s\S]*?)\]/.exec(doccmds)?.[1] ?? '') + ']').replace(/'/g, '"').replace(/,\s*\]$/, ']'))
+// spaces' command for each of slides' (null: spaces has none)
+const EQUIV: Record<string, string | null> = {
+  'Save a copy…': 'Save a copy…', 'Duplicate as new deck…': 'Duplicate as a new space…',
+  'Export slides as images…': 'Export as Markdown…', 'Encrypt with password…': 'Encrypt with password…',
+  'Change password…': null, 'Remove password': null,
+  'Version history…': 'Version history…', 'Copy document JSON': 'Copy document JSON',
+  'Copy compact JSON (for agents)': null, 'Replace from JSON…': 'Replace from JSON…', 'Start from scratch…': null,
+}
+const unmapped = slidesSave.filter((l) => !(l in EQUIV))
+ok(slidesSave.length >= 9 && unmapped.length === 0, `every row of slides' Save menu has an entry in the equivalence table (${slidesSave.length} rows; new: ${unmapped.join(', ') || 'none'})`)
+const wantOrder = slidesSave.map((l) => EQUIV[l]).filter((x): x is string => !!x)
+const got = wantOrder.map((l) => SAVE_ORDER.indexOf(l))
+ok(got.every((i) => i >= 0) && got.every((i, k) => k === 0 || i > got[k - 1]),
+  `spaces' Save menu holds slides' document commands in slides' order (${wantOrder.join(' · ')} at ${got.join(',')})`)
+
 // ————— browser half ————————————————————————————————————————————————————————
 console.log('\nthe built shell, driven with trusted input\n')
 const CHROME = [process.env.BENTO_CHROME, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -192,6 +255,10 @@ async function browser(chrome: string, html: string): Promise<void> {
 
     const TRIG = (label: string) => `[...document.querySelectorAll('.sp-bar button')].find(b => b.getAttribute('aria-label') === ${JSON.stringify(label)})`
     const OPEN = `[...document.querySelectorAll('.bkm-open > .bkm-menu')].find(m => m.getBoundingClientRect().height > 0)`
+    // one row's shape: its height, whether a description is drawn, its tooltip,
+    // its accessible name, and where its accessible description lives
+    const ROWSHAPE = (rows: string, nameSel: string) => `(() => ${rows}.map(r => { const d = document.getElementById(r.getAttribute('aria-describedby') || ''); const dr = d?.getBoundingClientRect(); return { inside: !!d && r.contains(d), name: r.querySelector(${JSON.stringify(nameSel)})?.textContent, h: Math.round(r.getBoundingClientRect().height), drawn: !!r.querySelector('.bkm-hint'), title: r.title, aria: r.getAttribute('aria-label'), desc: d?.textContent ?? null, hidden: !!dr && dr.width <= 1 && dr.height <= 1 } }))()`
+    const rowOk = (r: any) => !r.drawn && !!r.title && r.title === r.desc && r.aria === r.name && r.hidden && r.inside
     const FOCUSED = `(document.activeElement?.textContent || '').trim().slice(0, 30)`
 
     // ——— desktop ———
@@ -200,22 +267,103 @@ async function browser(chrome: string, html: string): Promise<void> {
     ok(await js(`document.visibilityState === 'visible' && document.querySelector('meta[name=generator]')?.content === 'bento-spaces'`),
       'the page under test is the spaces shell, visible')
 
-    await tap(TRIG('More'))
-    const more = await js<any>(`(() => { const m = ${OPEN}; const t = ${TRIG('More')}; if (!m) return null; const r = m.getBoundingClientRect(); return { exp: t.getAttribute('aria-expanded'), role: m.getAttribute('role'), bottom: r.bottom, vh: innerHeight } })()`)
-    ok(more && more.exp === 'true' && more.role === 'menu', `⋯ opens as a menu and says so (aria-expanded ${more?.exp}, role ${more?.role})`)
+    // ⋯ is slides' folded ⋯: absent from a bar that has room
+    ok(await js<boolean>(`!(${TRIG('More')}) || (${TRIG('More')}).getBoundingClientRect().width === 0`),
+      'at 1440 there is no ⋯ — as in slides, it exists only once the bar folds')
+    const SAVEM = TRIG('Other ways to save')
+    await tap(SAVEM)
+    const more = await js<any>(`(() => { const m = ${OPEN}; const t = ${SAVEM}; if (!m) return null; const r = m.getBoundingClientRect(); return { exp: t.getAttribute('aria-expanded'), role: m.getAttribute('role'), bottom: r.bottom, vh: innerHeight } })()`)
+    ok(more && more.exp === 'true' && more.role === 'menu', `Save ▾ opens as a menu and says so (aria-expanded ${more?.exp}, role ${more?.role})`)
     await key('ArrowDown', 0, 'ArrowDown')
     const first = await js<string>(FOCUSED)
     await key('ArrowDown', 0, 'ArrowDown')
     const second = await js<string>(FOCUSED)
-    ok(first.startsWith('New page') && second.startsWith("Today's journal"), `arrow keys walk the ⋯ rows ("${first}" → "${second}")`)
-    await key('Escape', 0, 'Escape')
-    const afterEsc = await js<any>(`({ open: !!(${OPEN}), exp: (${TRIG('More')}).getAttribute('aria-expanded'), focus: document.activeElement === (${TRIG('More')}) })`)
-    ok(!afterEsc.open && afterEsc.exp === 'false' && afterEsc.focus, `Escape closes ⋯, clears aria-expanded and puts focus back on its trigger (${JSON.stringify(afterEsc)})`)
+    ok(first.startsWith('Save a copy') && second.startsWith('Duplicate as a new space'), `arrow keys walk the Save rows ("${first}" → "${second}")`)
+    // the ring on a row reached by the keyboard is slides': --accent-ink, INSIDE
+    const rowRing = await js<any>(`(() => { const e = document.activeElement; const c = getComputedStyle(e); return { style: c.outlineStyle, w: c.outlineWidth, color: c.outlineColor, off: c.outlineOffset, want: getComputedStyle(document.documentElement).getPropertyValue(${JSON.stringify(ringInk)}).trim() } })()`)
+    const ringW = /(\d+px)/.exec(SLIDES_RING.outline ?? '')?.[1]
+    const hexOf = (rgb: string) => '#' + (rgb.match(/\d+/g) ?? []).slice(0, 3).map((n) => (+n).toString(16).padStart(2, '0')).join('')
+    ok(rowRing.style === 'solid' && rowRing.w === ringW && hexOf(rowRing.color) === rowRing.want && rowRing.off === SLIDES_RING.inside,
+      `a menu row's keyboard ring is slides': ${SLIDES_RING.outline}, offset ${SLIDES_RING.inside} (${JSON.stringify(rowRing)})`)
+    // SAVE AND SHARE ARE ONE LINE A ROW, as slides' (the maintainer's revisions
+    // of D2, 2026-09-26): what a row does is its hover tooltip (`title` on the
+    // row itself) and — for a screen reader — its accessible description via
+    // aria-describedby on an element that is not drawn, inside the row. The name
+    // alone is the accessible name.
+    const one = await js<any>(ROWSHAPE(`[...(${OPEN}).querySelectorAll('.bkm-item')]`, '.bkm-text'))
+    const bad = one.filter((r: any) => r.h !== 30 || !rowOk(r))
+    ok(one.length >= 9 && bad.length === 0,
+      `every Save row is one 30px line whose description is its tooltip and its hidden aria-describedby, the name alone its name (${one.length} rows${bad.length ? '; wrong: ' + JSON.stringify(bad.slice(0, 2)) : ''})`)
 
-    await tap(TRIG('More'))
+    // …and it IS slides' Save menu: the rows, in order, and the rule where slides has it
+    const saveRows = await js<any>(`(() => { const m = ${OPEN}; return [...m.children].map(c => c.classList.contains('bkm-sep') ? '—' : (c.querySelector('.bkm-text')?.textContent ?? '')) })()`)
+    // in order; a build may carry more exports in the export slot (the tour's
+    // page-as-slides), so SAVE_ORDER must be an in-order subsequence
+    const shown = saveRows.filter((x: string) => x !== '—')
+    let seenAt = -1
+    const inOrder = SAVE_ORDER.every((l) => { const i = shown.indexOf(l); const okay = i > seenAt; seenAt = i; return okay })
+    const extra = shown.filter((l: string) => !SAVE_ORDER.includes(l))
+    ok(inOrder && extra.every((l: string) => /^Export /.test(l)),
+      `the Save menu renders the document commands in order (${saveRows.join(' · ')})`)
+    ok(saveRows.indexOf('—') === saveRows.indexOf('Version history…') - 1 && saveRows.indexOf('—') > saveRows.indexOf('Encrypt with password…'),
+      'a rule sets the timeline and JSON rows apart from the file rows, where slides has its separator')
+
+    // …measured against slides' own stylesheet
+    const mm = await js<any>(`(() => { const m = ${OPEN}, t = ${SAVEM}; const c = getComputedStyle(m); const row = [...m.querySelectorAll('.bkm-item')].find(r => r.textContent.startsWith('Version history')); const rc = getComputedStyle(row); const tx = getComputedStyle(row.querySelector('.bkm-text')); const ico = getComputedStyle(row.querySelector('.bkm-ico')); const sep = getComputedStyle(m.querySelector('.bkm-sep'));
+      return { offset: Math.round(m.getBoundingClientRect().top - t.getBoundingClientRect().bottom) + 'px', pad: c.padding, radius: c.borderTopLeftRadius, shadow: c.boxShadow, rowFont: tx.fontSize, weight: tx.fontWeight, rowPad: rc.padding, rowGap: rc.columnGap, rowRadius: rc.borderTopLeftRadius, frame: rc.borderTopWidth + ' ' + rc.borderTopStyle, ink: tx.color, icoInk: ico.color, h: Math.round(row.getBoundingClientRect().height), sepMargin: sep.margin } })()`)
+    const nums = (x: string | undefined) => (x ?? '').match(/[\d.]+/g)?.map(Number).join(',') ?? ''
+    const hexRgb = (h: string | undefined) => { const x = (h ?? '').replace('#', ''); return `rgb(${parseInt(x.slice(0, 2), 16)}, ${parseInt(x.slice(2, 4), 16)}, ${parseInt(x.slice(4, 6), 16)})` }
+    const frameW = /(\d+px)/.exec(SLIDES_MENU.rowFrame ?? '')?.[1]
+    const want = { offset: SLIDES_MENU.offset, pad: SLIDES_MENU.pad, radius: SLIDES_MENU.radius, rowFont: SLIDES_MENU.saveFont, rowPad: SLIDES_MENU.rowPad, rowGap: SLIDES_MENU.rowGap, rowRadius: SLIDES_MENU.rowRadius, sepMargin: SLIDES_MENU.sepMargin }
+    const off = Object.entries(want).filter(([k, v]) => mm[k] !== v).map(([k, v]) => `${k} ${mm[k]} ≠ ${v}`)
+    // computed: "rgba(r, g, b, a) x y blur spread"; slides: "x y blur rgb(r g b / a)"
+    const cs = nums(mm.shadow).split(','), ss = nums(SLIDES_MENU.shadow).split(',')
+    if (cs.slice(0, 4).join() !== ss.slice(3, 7).join() || cs.slice(4, 7).join() !== ss.slice(0, 3).join()) off.push(`shadow ${mm.shadow} ≠ ${SLIDES_MENU.shadow}`)
+    if (mm.frame !== `${frameW} solid`) off.push(`frame ${mm.frame} ≠ ${SLIDES_MENU.rowFrame}`)
+    if (mm.ink !== hexRgb(SLIDES_MENU.rowInk) || mm.icoInk !== mm.ink) off.push(`ink ${mm.ink}/${mm.icoInk} ≠ ${SLIDES_MENU.rowInk}`)
+    if (mm.weight !== '400' || mm.h !== 30) off.push(`row ${mm.weight} ${mm.h}px, slides' is 400 30px`)
+    ok(off.length === 0, `the Save menu computes to slides' stylesheet values (.ed-save-menu .ed-btn) — offset, padding, corner, shadow, 30px rows at ${SLIDES_MENU.saveFont}/400 in ${SLIDES_MENU.rowInk}, separators (${off.join('; ') || JSON.stringify(mm)})`)
+    await key('Escape', 0, 'Escape')
+    const afterEsc = await js<any>(`({ open: !!(${OPEN}), exp: (${SAVEM}).getAttribute('aria-expanded'), focus: document.activeElement === (${SAVEM}) })`)
+    ok(!afterEsc.open && afterEsc.exp === 'false' && afterEsc.focus, `Escape closes Save ▾, clears aria-expanded and puts focus back on its trigger (${JSON.stringify(afterEsc)})`)
+    // …where a bar button's ring is drawn OUTSIDE, on the bar
+    const barRing = await js<any>(`(() => { const e = document.activeElement; const c = getComputedStyle(e); return { fv: e.matches(':focus-visible'), style: c.outlineStyle, w: c.outlineWidth, off: c.outlineOffset } })()`)
+    ok(barRing.fv && barRing.style === 'solid' && barRing.w === /(\d+px)/.exec(SLIDES_RING.outline ?? '')?.[1] && barRing.off === SLIDES_RING.outside,
+      `a bar button's keyboard ring is slides': outside, offset ${SLIDES_RING.outside} (${JSON.stringify(barRing)})`)
+
+    // …and every Share action is the same row: one 30px line, its description
+    // the tooltip and the hidden aria-describedby (slides #573)
+    await tap(`document.querySelector('.sp-bar .sp-live')`)
+    const acts = await js<any>(ROWSHAPE(`[...document.querySelectorAll('.sp-pop .sp-paction')]`, '.sp-paction-name'))
+    const badActs = acts.filter((r: any) => r.h !== 30 || !rowOk(r))
+    ok(acts.length >= 3 && badActs.length === 0,
+      `every Share action is one 30px line whose description is its tooltip and its hidden aria-describedby, the name alone its name (${acts.length} actions${badActs.length ? '; wrong: ' + JSON.stringify(badActs.slice(0, 2)) : ''})`)
+    // …a plain menu row as slides' (#573): nothing at rest — no fill, no frame,
+    // no filled primary — at the Save rows' size, and adjacent rows touching
+    const plain = await js<any>(`(() => { const rows = [...document.querySelectorAll('.sp-pop .sp-paction')]; const save = null; const out = rows.map(r => { const c = getComputedStyle(r); return { bg: c.backgroundColor, frame: c.borderTopColor, font: c.fontSize, pad: c.padding } }); const touch = rows.every((r, i) => { const n = rows[i + 1]; return !n || n.previousElementSibling !== r || Math.round(n.getBoundingClientRect().top - r.getBoundingClientRect().bottom) === 0 }); return { out, touch } })()`)
+    const loud = plain.out.filter((r: any) => r.bg !== 'rgba(0, 0, 0, 0)' || r.frame !== 'rgba(0, 0, 0, 0)' || r.font !== SLIDES_MENU.saveFont || r.pad !== SLIDES_MENU.rowPad)
+    ok(loud.length === 0 && plain.touch,
+      `Share's actions are plain rows — no fill or frame at rest, no primary, ${SLIDES_MENU.saveFont} in ${SLIDES_MENU.rowPad}, adjacent rows touching (${loud.length ? JSON.stringify(loud[0]) : 'ok'}; touch ${plain.touch})`)
+    await key('Escape', 0, 'Escape')
+
+    // NO TOP-BAR SURFACE DRAWS A SECOND-LINE DESCRIPTION. Open each of them and
+    // look for one: a kernel hint, or any described row whose description is
+    // painted bigger than a pixel.
+    const drawn: string[] = []
+    const DRAWN = `(() => { const out = []; const scope = [...document.querySelectorAll('.bkm-open > .bkm-menu, .sp-pop')].filter(e => e.getBoundingClientRect().height > 0); for (const m of scope) { for (const h of m.querySelectorAll('.bkm-hint')) if (h.getBoundingClientRect().height > 1) out.push('hint: ' + h.textContent.slice(0, 30)); for (const r of m.querySelectorAll('[aria-describedby]')) { const d = document.getElementById(r.getAttribute('aria-describedby')); const b = d?.getBoundingClientRect(); if (b && (b.width > 1 || b.height > 1)) out.push('drawn: ' + d.textContent.slice(0, 30)) } } return out })()`
+    for (const trig of ['Insert a block — text, headings, lists, code, images', 'Other ways to save', 'Language']) {
+      await tap(TRIG(trig)); drawn.push(...(await js<string[]>(DRAWN)).map((x) => `${trig.split(' ')[0]} ${x}`)); await key('Escape', 0, 'Escape')
+    }
+    await tap(`document.querySelector('.sp-bar .sp-live')`); drawn.push(...(await js<string[]>(DRAWN)).map((x) => `Share ${x}`)); await key('Escape', 0, 'Escape')
+    ok(drawn.length === 0, `no surface opened from the bar draws a second-line description — Insert, Save, Language, Share (${drawn.join('; ') || 'none'})`)
+
+    await tap(SAVEM)
     await tap(`[...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith('Insert'))`)
     const exclusive = await js<number>(`document.querySelectorAll('.bkm-open').length`)
-    ok(exclusive === 1, `opening Insert shuts ⋯ — one menu open at a time (${exclusive} open)`)
+    ok(exclusive === 1, `opening Insert shuts Save ▾ — one menu open at a time (${exclusive} open)`)
+    const im = await js<any>(`(() => { const m = ${OPEN}; const row = [...m.querySelectorAll('.bkm-item')][0]; const kids = [...m.children]; const sep = kids.findIndex(c => c.classList.contains('bkm-sep')); return { font: getComputedStyle(row.querySelector('.bkm-text')).fontSize, h: Math.round(row.getBoundingClientRect().height), tail: kids.slice(sep + 1, sep + 4).map(r => r.querySelector('.bkm-text')?.textContent) } })()`)
+    ok(im.font === SLIDES_MENU.rowFont && im.h === 30, `Insert's rows are slides' command rows, ${SLIDES_MENU.rowFont} and 30px (${im.font}, ${im.h}px)`)
+    ok(JSON.stringify(im.tail) === JSON.stringify(['New page', "Today's journal", 'New issue']), `＋ Insert ends, after a rule, on the pages you can add (${im.tail.join(' · ')})`)
     const ins = await js<any>(`(() => { const r = (${OPEN}).getBoundingClientRect(); return { bottom: Math.round(r.bottom), vh: innerHeight } })()`)
     ok(ins.bottom <= ins.vh, `the Insert menu fits a 1440×900 window (bottom ${ins.bottom} ≤ ${ins.vh}; it ran to 910 before)`)
     await click(900, 700)
@@ -293,19 +441,17 @@ async function browser(chrome: string, html: string): Promise<void> {
     ok(!/rgba\(0, 0, 0, 0\)/.test(about.frame), `a dialog's secondary button has a visible frame (${about.frame})`)
     await key('Escape', 0, 'Escape')
 
-    // D3: a refusal is a notice the reader sees, not a whisper in the bar
-    await tap(TRIG('More'))
-    await tap(`[...document.querySelectorAll('.bkm-open .bkm-item')].find(b => b.textContent.startsWith('Make this page an issue'))`)
-    await tap(TRIG('More'))
-    await tap(`[...document.querySelectorAll('.bkm-open .bkm-item')].find(b => b.textContent.startsWith('Make this page an issue'))`)
+    // D3: an outcome is a notice the reader sees, not a whisper in the bar —
+    // Copy document JSON from Save ▾ says whether the clipboard took it
+    await tap(TRIG('Other ways to save'))
+    await tap(`[...document.querySelectorAll('.bkm-open .bkm-item')].find(b => b.textContent.startsWith('Copy document JSON'))`)
     const note = await js<any>(`(() => { const n = document.querySelector('.sp-notice.sp-on'); if (!n) return null; const r = n.getBoundingClientRect(); return { text: n.textContent, role: n.getAttribute('role'), cr: ${CONTRAST}(n), z: +getComputedStyle(n).zIndex, onScreen: r.bottom <= innerHeight && r.top > innerHeight / 2 } })()`)
-    ok(note && note.role === 'status' && note.cr >= 4.5 && note.z > 1000 && note.onScreen,
-      `a refusal ("Already an issue") arrives as a notice: announced, legible, above dialogs, at the foot of the window (${JSON.stringify(note)})`)
-    await js(`window.bento.undo(); 1`)
+    ok(note && note.role === 'status' && note.cr >= 4.5 && note.z > 1000 && note.onScreen && /JSON copied|clipboard/.test(note.text),
+      `an outcome ("Document JSON copied" / the clipboard refusing) arrives as a notice: announced, legible, above dialogs, at the foot of the window (${JSON.stringify(note)})`)
 
     // ——— dialogs: the kernel's ———
     const MODAL = `[...document.querySelectorAll('[aria-modal="true"]')].find(d => d.getBoundingClientRect().height > 0)`
-    await tap(TRIG('More'))
+    await tap(TRIG('Other ways to save'))
     await tap(`[...document.querySelectorAll('.bkm-open .bkm-item')].find(b => b.textContent.startsWith('Import Markdown'))`)
     const title = await js<any>(`(() => { const d = ${MODAL}; const h = d && d.querySelector('.bkd-title'); if (!h) return null; const c = getComputedStyle(h); return { text: h.textContent, size: c.fontSize, weight: c.fontWeight, labelled: document.getElementById(d.getAttribute('aria-labelledby') || '') === h } })()`)
     ok(title && title.size === '17px' && title.weight === '650' && title.labelled,
@@ -479,13 +625,68 @@ async function browser(chrome: string, html: string): Promise<void> {
     await sleep(250)
     const moreAt = await js<any>(`(() => { const bar = ${BAR}; const b = ${TRIG('More')}; if (/auto|scroll/.test(getComputedStyle(bar).overflowX)) bar.scrollLeft = bar.scrollWidth; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, on: r.right <= innerWidth } })()`)
     await click(moreAt.x, moreAt.y)
-    const se = await js<any>(`(() => { const m = ${OPEN}; if (!m) return null; const r = m.getBoundingClientRect(); const rows = [...m.querySelectorAll('.bkm-item')]; const f = rows[0].getBoundingClientRect(); const hit = document.elementsFromPoint(f.x + f.width / 2, f.y + f.height / 2)[0]; return { left: Math.round(r.left), right: Math.round(r.right), vw: innerWidth, first: rows[0].contains(hit), lang: rows.some(x => x.textContent.trim() === 'Language'), help: rows.some(x => x.textContent.trim().startsWith('Keyboard shortcuts')) } })()`)
+    const se = await js<any>(`(() => { const m = ${OPEN}; if (!m) return null; const r = m.getBoundingClientRect(); const rows = [...m.querySelectorAll('.bkm-item')]; const live = rows.find(x => x.getAttribute('aria-disabled') !== 'true'); const f = live.getBoundingClientRect(); const hit = document.elementsFromPoint(f.x + f.width / 2, f.y + f.height / 2)[0]; return { left: Math.round(r.left), right: Math.round(r.right), vw: innerWidth, first: live.contains(hit), lang: rows.some(x => x.textContent.trim() === 'Language'), help: rows.some(x => x.textContent.trim().startsWith('Keyboard shortcuts')) } })()`)
     ok(se && moreAt.on && se.left >= 0 && se.right <= se.vw && se.first && se.lang && se.help,
       `at 320px ⋯ opens on screen, its rows pressable, carrying Language and Keyboard shortcuts (${JSON.stringify(se)})`)
     await tap(`[...(${OPEN}).querySelectorAll('.bkm-item')].find(b => b.textContent.trim() === 'Language')`)
     const sheet2 = await js<any>(`(() => { const m = ${OPEN}; if (!m) return null; const rows = [...m.querySelectorAll('.bkm-item')]; const r = m.getBoundingClientRect(); return { n: rows.length, onScreen: r.top >= 0 && r.bottom <= innerHeight, on: rows.filter(x => x.getAttribute('aria-checked') === 'true').length } })()`)
     ok(sheet2 && sheet2.n >= 8 && sheet2.onScreen && sheet2.on === 1, `⋯ → Language opens the same list, on screen (${JSON.stringify(sheet2)})`)
     await key('Escape', 0, 'Escape')
+
+    // ——— NOTHING WAS DELETED, ONLY MOVED ———
+    // The commands reachable from the bar BEFORE the Save menu took slides'
+    // order, captured on the shell built from spaces-topbar (#567) by the same
+    // walk as below: every bar button, every row of every bar menu, the page's
+    // own menu and every button in About, at 1440 and at 390. Each must still be
+    // reachable at the same width — under its own name, or under the name
+    // slides gives the same command.
+    const BEFORE_BOTH = ['About this space', 'Insert a block', 'Search all pages', 'Not sharing yet', 'Save',
+      'Text', 'Heading 1', 'Heading 2', 'Heading 3', 'Bulleted list', 'Numbered list', 'To-do', 'Toggle', 'Callout',
+      'Quote', 'Code', 'Divider', 'Table', 'Link to page', 'Link to the web', 'Board or list', 'Canvas', 'Image',
+      'Video or audio', 'Save a copy…', 'Export as Markdown…', 'Export page as a space…',
+      'New page', "Today's journal", 'New issue', 'Make this page an issue', 'Import Markdown…', 'Graph',
+      'Print or save as PDF', 'Rename', 'New page inside', 'Comment on this page', 'Archive', 'Column', 'Wide',
+      'Full width', 'Use this width for every page', 'Delete…', 'Check for updates', 'Set a password…',
+      'Copy document JSON', 'Export as Markdown', 'Duplicate as a new space…', 'Replace from JSON…', 'Close',
+      'Undo', 'Redo', 'Reading view', 'Properties', 'Language', 'Keyboard shortcuts']
+    const BEFORE: Record<number, string[]> = {
+      // (the ⋯ trigger itself was also there; it is a container, not a
+      // command — slides has none at this width — and every row it held is
+      // checked here in its new home)
+      1440: [...BEFORE_BOTH, 'Other ways to save',
+        'English', '日本語', '简体中文', '繁體中文', 'Español', 'Français', 'Deutsch', 'Italiano', 'Português'],
+      390: [...BEFORE_BOTH, 'Pages', 'More'],
+    }
+    // renamed to slides' word for the same command
+    const ALIAS: Record<string, string> = { 'Set a password…': 'Encrypt with password…', 'Export as Markdown': 'Export as Markdown…' }
+    const WALK = `(async () => {
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+      const vis = (e) => { const r = e.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false; for (let n = e; n; n = n.parentElement) { const c = getComputedStyle(n); if (c.display === 'none' || c.visibility === 'hidden') return false } return true }
+      const name = (s) => s.split(' (')[0].split(' — ')[0].trim()
+      const esc = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      const out = {}
+      const add = (where, label) => { label = name(label); if (label && !out[label]) out[label] = where }
+      const bar = document.querySelector('.sp-bar')
+      for (const b of bar.querySelectorAll('button')) if (vis(b) && !b.closest('.bkm-menu')) add('bar', b.getAttribute('aria-label') || b.title || b.textContent)
+      for (const tr of [...bar.querySelectorAll('.bkm > .bkm-trigger')].filter(vis)) {
+        tr.click(); await sleep(60)
+        for (const r of tr.parentElement.querySelector(':scope > .bkm-menu').querySelectorAll('.bkm-item')) add('menu', r.querySelector('.bkm-text')?.textContent || '')
+        esc(); await sleep(60)
+      }
+      const more = document.querySelector('.sp-treelink.sp-here .sp-rowmore')
+      if (more) { more.click(); await sleep(80); const m = [...document.querySelectorAll('.sp-mn-anchored .bkm-menu')].pop(); if (m) for (const r of m.querySelectorAll('.bkm-item')) add('page menu', r.querySelector('.bkm-text')?.textContent || ''); esc(); await sleep(60) }
+      document.querySelector('.sp-mark').click(); await sleep(250)
+      const d = [...document.querySelectorAll('[aria-modal="true"]')].pop()
+      if (d) for (const b of d.querySelectorAll('button')) add('About', b.textContent)
+      esc(); await sleep(100)
+      return out
+    })()`
+    for (const w of [1440, 390]) {
+      await open(w < 700)
+      const now = await js<Record<string, string>>(WALK)
+      const lost = BEFORE[w].filter((c) => !((ALIAS[c] ?? c) in now))
+      ok(lost.length === 0, `at ${w}px every command reachable before is reachable now (${BEFORE[w].length} checked${lost.length ? '; LOST: ' + lost.join(', ') : ''})`)
+    }
     ws.close()
   } finally {
     try { child.kill('SIGKILL') } catch { /* gone */ }

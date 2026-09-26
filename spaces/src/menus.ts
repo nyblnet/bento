@@ -52,6 +52,13 @@ export interface Row {
    * line (D2): the name is the description.
    */
   hint?: string
+  /**
+   * What the row does, NOT drawn: the hover tooltip (`title`, as slides' Save
+   * rows) and the row's accessible description through a visually hidden
+   * element, so a screen reader still hears it. The Save menu's rows use this
+   * rather than `hint` since the maintainer revised D2 for that menu.
+   */
+  desc?: string
   /** a keyboard shortcut, shown right-aligned in the row (D8) */
   kbd?: string
   off?: boolean
@@ -60,11 +67,36 @@ export interface Row {
   run: () => void
 }
 
+let descSeq = 0
+
 /** One row. Composition over the kernel's `item()`: the shortcut slot is ours. */
 export function row(m: Menu, r: Row): HTMLButtonElement {
   const b = m.item(r.label, r.run, {
     icon: r.icon, hint: r.hint, off: r.off, selected: r.selected, keepOpen: r.keepOpen,
   })
+  // D2's second line is the row's DESCRIPTION, not part of its name: the name
+  // is the accessible name, the hint is announced through aria-describedby
+  // (slides' menuLabel, #573). Without this a screen reader read name and
+  // sentence as one run-on label.
+  if (r.desc) {
+    const d = document.createElement('span')
+    d.className = 'sp-vh'
+    d.id = `sp-mdesc-${++descSeq}`
+    d.textContent = r.desc
+    // inside the label, after the name — where slides' `.ed-sr-only` sits
+    ;(b.querySelector('.bkm-body') ?? b).append(d)
+    // the native tooltip on the row itself, as slides' Save rows (#573). With
+    // aria-describedby present, `title` is not also read as the description.
+    b.title = r.desc
+    b.setAttribute('aria-label', r.label)
+    b.setAttribute('aria-describedby', d.id)
+  }
+  const hint = b.querySelector<HTMLElement>('.bkm-hint')
+  if (hint) {
+    hint.id = `sp-mdesc-${++descSeq}`
+    b.setAttribute('aria-label', r.label)
+    b.setAttribute('aria-describedby', hint.id)
+  }
   if (r.kbd) {
     const k = document.createElement('kbd')
     k.className = 'sp-mkbd'
@@ -146,7 +178,7 @@ export interface AnchoredOpts {
   role?: 'menu' | 'dialog' | 'listbox'
 }
 
-const GAP = 6
+const GAP = 4 // slides' .ed-menu offset
 const EDGE = 8
 
 /**

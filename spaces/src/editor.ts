@@ -36,6 +36,7 @@ import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale, localeChoices, setLocale, applyDirection } from './i18n'
 import { openAbout } from './about'
+import { saveRows, type DocHost } from './doccmds.ts'
 import { openGraphView } from './graph.ts'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
@@ -286,6 +287,15 @@ export class Editor {
     mark.title = t('About this space')
     mark.addEventListener('click', () => this.openAbout())
 
+    // THE UPDATE CHIP — slides' peach pill beside the wordmark, present ONLY
+    // when the launch check found a newer version. Its click opens About on a
+    // fresh check, which is where updating happens.
+    const chip = iconBtn('sync', '', () => this.openAbout(true))
+    chip.classList.add('sp-update')
+    chip.hidden = !this.updateVersion
+    if (this.updateVersion) this.paintUpdateChip(chip, this.updateVersion)
+    this.updateChip = chip
+
     // Pages panel toggle — on every width, like slides' Slides/Format toggles.
     // A sidebar you cannot put away is a sidebar you resent on a laptop.
     const pagesB = iconBtn('panelLeft', t('Pages — show or hide the page list'), () => this.toggleSidebar())
@@ -333,70 +343,52 @@ export class Editor {
           else this.focusBlock(fresh.id)
         } })
       }
+      // …and after a rule, the other thing you add: a PAGE. Slides' insert
+      // group ends on Comment, the one tool that is not an element; these are
+      // spaces' equivalents, with their shortcuts (D8).
+      m.separator()
+      this.pageRows(m)
     } }).root
 
     this.undoB = iconBtn('undo', t('Undo (⌘Z)'), () => { this.store.undo(); this.repaint() })
     this.redoB = iconBtn('redo', t('Redo (⇧⌘Z)'), () => { this.store.redo(); this.repaint() })
     const search = iconBtn('search', t('Search all pages (⌘K)'), () => this.openSearch())
 
-    // WHERE A COMMAND LIVES. One rule, because the bar used to have none and it
-    // showed: eight secondary buttons sat in the bar AND were repeated verbatim
-    // in the ⋯ menu at the same time, so half of ⋯ pointed at things already on
-    // screen. Print and Password each had two homes. About had three entry
-    // points under two different names — all calling one dialog.
+    // WHERE A COMMAND LIVES — slides' map, command for command, so the two
+    // apps do not teach two different toolbars:
     //
-    //   · The bar carries what you reach for WHILE WRITING.
-    //   · ⋯ carries the rest, plus whatever the bar has had to drop.
-    //   · Save ▾ is only about writing THIS file somewhere.
-    //   · Nothing is listed in two places at the same width.
+    //   · The bar carries what you reach for while working, and the output
+    //     buttons slides keeps there (its PDF button is Print here).
+    //   · Save ▾ carries everything that acts on the FILE: copy, duplicate,
+    //     export, password, then the timeline and the JSON round trip
+    //     (doccmds.ts, in slides' order).
+    //   · ＋ Insert carries what you add: blocks, and after a rule, pages.
+    //   · ⋯ exists only once the bar has FOLDED, as slides' does: the bar
+    //     controls it had to give up, in slides' order, then the Save list.
+    //   · About is reached from the wordmark, as in slides.
     //
-    // The measurement that produced the fold still holds: at 375px the old bar
-    // wanted 678px, so seven of eleven controls — Save included — sat off the
-    // right edge. Below the breakpoint the inline copies hide and ⋯ picks them
-    // up, one list feeding both, because a phone menu maintained by hand as a
-    // copy of the desktop row drifts the first time either one changes.
-    // `kbd` is a shortcut, printed right-aligned (D8). `hint` is a visible
-    // second line, and a row gets one only when it has a CONSEQUENCE worth
-    // reading before you press it (D2) — "Make this page an issue" adds four
-    // fields to it; "Graph" just opens a view, and its name says so.
+    // A command slides has no equivalent for goes where slides would put one
+    // of its kind (DECISIONS 2026-09-26): Graph is a view, so it is a bar
+    // button beside Reading view; "Make this page an issue" acts on one page,
+    // so it is in the page's own menu; Import Markdown… is the document
+    // arriving as data, so it sits under Save beside Replace from JSON.
     type BarAction = {
       icon: IconName
       label: string
       kbd?: string
-      hint?: string
       run: () => void
       keep?: (b: HTMLButtonElement) => void
     }
-
-    // Reached while writing, so it stays in the bar until the bar runs out of
-    // room. Reading view is a MODE — you leave and re-enter it while working,
-    // and a mode you cannot see the state of is a mode you lose track of.
     const barActions: BarAction[] = [
       { icon: 'eye', label: t('Reading view'),
         run: () => this.toggleReading(),
         keep: (b) => { this.readB = b } },
-    ]
-
-    // Reached once a session or less. A button in the bar for something you do
-    // once is a button in the way of everything you do constantly, so these
-    // live in ⋯ at every width — findable, out of the road, and each with the
-    // keyboard shortcut printed beside it.
-    const menuActions: BarAction[] = [
-      { icon: 'page', label: t('New page'), kbd: keys('alt', 'mod', 'N'), run: () => this.newPage() },
-      { icon: 'book', label: t("Today's journal"), kbd: keys('shift', 'mod', 'J'), run: () => this.openJournal() },
-      { icon: 'board', label: t('New issue'), kbd: keys('shift', 'mod', 'I'), run: () => this.newIssue() },
-      { icon: 'tag', label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
-        run: () => this.makeIssue() },
-      { icon: 'markdown', label: t('Import Markdown…'), run: () => this.openImport() },
       { icon: 'graph', label: t('Graph'), run: () => this.openGraph() },
       { icon: 'print', label: t('Print or save as PDF'), kbd: keys('mod', 'P'), run: () => this.openPrint() },
-      { icon: 'info', label: t('About this space'), run: () => this.openAbout() },
     ]
 
     // In the bar's corner as in slides — the globe and the `?` — and in ⋯ only
-    // once the bar has folded them away. A help screen only reachable by
-    // pressing the key it documents is a help screen for people who did not
-    // need it, which is why `?` is a button at all.
+    // once the bar has folded them away.
     const helpB = iconBtn('help', `${t('Keyboard shortcuts')} (?)`, () => this.openHelp())
     helpB.classList.add('sp-help')
     // slides' glyph — a bold `?`, the key it stands for — not a circled icon
@@ -413,59 +405,33 @@ export class Editor {
       return b
     })
 
-    // The ways to write this document somewhere else — a CONSEQUENCE menu, so
-    // every row says what it leaves behind (D2). One list for the caret and
-    // for the folded ⋯, so the two can never offer different things.
-    const saveRows = (m: Menu) => {
-      row(m, { icon: ICONS.copy, label: t('Save a copy…'), hint: t('A second file — the original is left alone'),
-        run: () => { void this.saveAs('copy') } })
-      row(m, { icon: ICONS.markdown, label: t('Export as Markdown…'), hint: t('Every page, as one .md file'),
-        run: () => this.exportMarkdown() })
-      row(m, { icon: ICONS.page, label: t('Export page as a space…'), hint: t('One page and what is under it, as its own file'),
-        run: () => this.openExportSpace() })
-    }
+    // The file's own commands (D2: a consequence menu). One list for the caret
+    // and for the folded ⋯, so the two can never offer different things.
+    const saveList = (m: Menu) => saveRows(m, this.docHost())
 
     const more = barMenu({
       icon: ICONS.more, label: '', tip: t('More'), end: true, scroll: true, className: 'sp-more',
       fill: (m) => {
-        // On a PHONE the ⋯ menu also carries the history pair and the other
-        // ways to save. Measured at 390px with a coarse pointer: eleven bar
-        // controls wanted 467px of a 390px viewport, and Save — the one action
-        // that must never be off-screen — ended at x = 426. Undo/redo, the
-        // wordmark and the save caret are what a phone gives up so that the
-        // document title beside them is still wide enough to read.
-        //
-        // The list SCROLLS (`scroll`). Folded, it was sixteen rows — 950px in
-        // an 844px phone viewport — and the last three, the ONLY ways to save
-        // a copy or export on a phone, sat below the screen with nothing to
-        // scroll them into view.
-        const folded = this.isFolded()
-        if (folded) {
-          // THE PROPERTIES PANEL, ONCE THE BAR HAS FOLDED: its 40px button took
-          // the document title from 70px to 26px at 375px.
-          row(m, { icon: ICONS.panelRight, label: t('Properties'), kbd: ']', run: () => this.toggleInsp() })
-          row(m, { icon: ICONS.undo, label: t('Undo'), kbd: keys('mod', 'Z'), off: !this.store.canUndo,
-            run: () => { this.store.undo(); this.repaint() } })
-          row(m, { icon: ICONS.redo, label: t('Redo'), kbd: keys('shift', 'mod', 'Z'), off: !this.store.canRedo,
-            run: () => { this.store.redo(); this.repaint() } })
-          m.separator()
-        }
-        for (const a of menuActions) row(m, { icon: ICONS[a.icon], label: a.label, kbd: a.kbd, hint: a.hint, run: a.run })
-        // …and only THEN what the bar itself has had to give up. Listing these
-        // unconditionally is what made ⋯ a duplicate of the visible row.
-        if (folded) {
-          for (const a of barActions) row(m, { icon: ICONS[a.icon], label: a.label, kbd: a.kbd, run: a.run })
-          // The globe's list, one tap further: a menu cannot hold a menu, so
-          // the row opens the same list as its own popup (a sheet on a phone).
-          const moreB = m.trigger
-          row(m, { icon: ICONS.globe, label: t('Language'), run: () => {
-            queueMicrotask(() => anchoredMenu(moreB, (lm) => this.fillLanguages(lm),
-              { label: t('Language'), sheet: this.isDrawer(), returnFocus: moreB }))
-          } })
-          row(m, { icon: ICONS.help, label: t('Keyboard shortcuts'), kbd: '?', run: () => this.openHelp() })
-          m.separator()
-          saveRows(m)
-        }
+        // Slides' folded ⋯: the controls the bar gave up, in the bar's own
+        // order, then the Save list. The list SCROLLS (`scroll`): folded it is
+        // taller than a phone, and its last rows are the ONLY way to save a
+        // copy or export there.
+        row(m, { icon: ICONS.undo, label: t('Undo'), kbd: keys('mod', 'Z'), off: !this.store.canUndo,
+          run: () => { this.store.undo(); this.repaint() } })
+        row(m, { icon: ICONS.redo, label: t('Redo'), kbd: keys('shift', 'mod', 'Z'), off: !this.store.canRedo,
+          run: () => { this.store.redo(); this.repaint() } })
+        row(m, { icon: ICONS.panelRight, label: t('Properties'), kbd: ']', run: () => this.toggleInsp() })
+        for (const a of barActions) row(m, { icon: ICONS[a.icon], label: a.label, kbd: a.kbd, run: a.run })
+        // The globe's list, one tap further: a menu cannot hold a menu, so
+        // the row opens the same list as its own popup (a sheet on a phone).
+        const moreB = m.trigger
+        row(m, { icon: ICONS.globe, label: t('Language'), run: () => {
+          queueMicrotask(() => anchoredMenu(moreB, (lm) => this.fillLanguages(lm),
+            { label: t('Language'), sheet: this.isDrawer(), returnFocus: moreB }))
+        } })
+        row(m, { icon: ICONS.help, label: t('Keyboard shortcuts'), kbd: '?', run: () => this.openHelp() })
+        m.separator()
+        saveList(m)
       },
     }).root
 
@@ -493,8 +459,9 @@ export class Editor {
       : t('Unsaved changes — ⌘S downloads an updated copy')
     saveB.append(this.dirtyDot)
     const saveMore = barMenu({
-      icon: ICONS.chevronDown, label: '', tip: t('Other ways to save'), end: true, className: 'sp-caret',
-      fill: saveRows,
+      // slides' caret is the ▾ glyph at 10px, not a 12px chevron icon
+      icon: '<span class="sp-caret-g" aria-hidden="true">▾</span>', label: '', tip: t('Other ways to save'), end: true, className: 'sp-caret sp-savemenu',
+      scroll: true, fill: saveList,
     }).root
 
     // LEFT = the document (mark · title · save state · history), RIGHT = doing
@@ -512,8 +479,8 @@ export class Editor {
     // document (mark · title · history), then the insert tools — here the one
     // ＋ Insert, which is right for a document — then the RIGHT group, doing
     // things with it, ending in the language globe and `?` as slides' does.
-    // ⋯ closes the row: it is a home at every width here (slides has it only
-    // folded), and last is where slides' folded bar puts it.
+    // ⋯ closes the row once the bar has folded — only then, as in slides — and
+    // last is where slides' folded bar puts it.
     const insertGroup = el('div', 'sp-group sp-group-insert')
     insertGroup.append(insert)
     const right = el('div', 'sp-group sp-group-right')
@@ -529,13 +496,12 @@ export class Editor {
     //
     // The Pages button (drawer widths only) follows the title, as slides'
     // Slides button does: the corner is the suite's mark, at every width.
-    bar.append(mark, title, pagesB, history, insertGroup, this.statusEl, right)
+    bar.append(mark, chip, title, pagesB, history, insertGroup, this.statusEl, right)
 
     // Drive the fit now, and again whenever the bar's size or its CONTENT
     // changes — topbar.ts, slides' algorithm with its tiers, its 120px title
     // floor and its 700px phone. A rebuilt bar gets a fresh fit; the old one's
     // observers and its window listener go with it.
-    this.topbar = bar
     this.barFit?.destroy()
     this.barFit = createTopbarFit(bar, {
       tiers: ['sp-bar-compact', 'sp-bar-tight', 'sp-bar-fold'],
@@ -733,21 +699,6 @@ export class Editor {
 
   private isDrawer(): boolean {
     return window.matchMedia(`(max-width: ${DRAWER_BELOW}px)`).matches
-  }
-
-  /**
-   * Has the bar FOLDED — are undo/redo and the save caret currently inside ⋯
-   * rather than in the bar?
-   *
-   * This used to be `matchMedia('(max-width: 600px)')`, with a comment saying
-   * the number was duplicated from the stylesheet on purpose. It is not needed
-   * at all now: the fit (topbar.ts) puts the tier on the bar as a class, so the menu can
-   * ASK what is on screen instead of re-deriving it from a width and hoping
-   * the two agree. When they disagreed the symptom was a menu offering Undo
-   * while Undo sat in the bar two centimetres away.
-   */
-  private isFolded(): boolean {
-    return !!this.topbar?.classList.contains('sp-bar-fold')
   }
 
   /**
@@ -2809,7 +2760,6 @@ export class Editor {
   /** the live session, once main.ts has handed it over (connectSync) */
   private session: import('./sync/session.ts').SyncSession | null = null
   private liveSlot!: HTMLElement
-  private topbar: HTMLElement | null = null
   private barFit: TopbarFit | null = null
   private treeTimer: ReturnType<typeof setTimeout> | undefined
   private paintTreeSoon(): void {
@@ -3905,6 +3855,13 @@ export class Editor {
       } })
 
       row(m, { icon: ICONS.plus, label: t('New page inside'), run: () => this.newPage(pageId) })
+      // Moved here from ⋯ (DECISIONS 2026-09-26): it acts on ONE page, and the
+      // page's own menu is where slides keeps what acts on one slide. A
+      // consequence row (D2): it adds four fields.
+      if (!s.readOnly && !isIssue(page)) {
+        row(m, { icon: ICONS.tag, label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
+          run: () => this.makeIssue(pageId) })
+      }
 
       // A thread about the PAGE — the second and last anchor. It is offered
       // where the page's own actions are, and only for the page in view,
@@ -5061,20 +5018,55 @@ export class Editor {
     this.collab?.sync()
   }
 
-  /** One About, one copy path — both entry points route through saveAs('copy'). */
-  private openAbout(): void {
+  /** About: what the app is, whether it is current, and the viewer's preferences. */
+  private openAbout(runCheck = false): void {
     openAbout({
       store: this.store,
       onRepaint: () => this.build(),
-      onSaveCopy: () => { void this.saveAs('copy') },
-      onImport: () => this.openImport(),
-      onExportSpace: () => this.openExportSpace(),
+      onStatus: (msg) => this.notice(msg),
+      runCheck,
+    })
+  }
+
+  /** What the Save menu's rows reach (doccmds.ts). One copy path: saveAs('copy'). */
+  private docHost(): DocHost {
+    return {
+      store: this.store,
+      openOverlay: (title, build, o) => this.openOverlay(title, build, o),
+      repaint: () => this.repaint(),
+      notice: (msg) => this.notice(msg),
+      saveCopy: () => { void this.saveAs('copy') },
+      exportMarkdown: () => this.exportMarkdown(),
+      exportSpace: () => this.openExportSpace(),
       // "Duplicate as a new space…" writes a DIFFERENT document, so it takes
       // the extract's writer rather than the copy path: that one keeps no file
       // handle, which is what leaves you editing this space afterwards.
-      onWriteCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
-      onStatus: (msg) => this.notice(msg),
-    })
+      writeCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
+      importMarkdown: () => this.openImport(),
+    }
+  }
+
+  /** The pages you can add — the foot of ＋ Insert, in shortcut order. */
+  private pageRows(m: Menu): void {
+    row(m, { icon: ICONS.page, label: t('New page'), kbd: keys('alt', 'mod', 'N'), run: () => this.newPage() })
+    row(m, { icon: ICONS.book, label: t("Today's journal"), kbd: keys('shift', 'mod', 'J'), run: () => this.openJournal() })
+    row(m, { icon: ICONS.board, label: t('New issue'), kbd: keys('shift', 'mod', 'I'), run: () => this.newIssue() })
+  }
+
+  private updateVersion: string | null = null
+  private updateChip: HTMLButtonElement | null = null
+
+  /** The launch check found `version`: show slides' chip, and say so once (D3). */
+  updateFound(version: string): void {
+    this.updateVersion = version
+    if (this.updateChip) { this.updateChip.hidden = false; this.paintUpdateChip(this.updateChip, version) }
+    this.notice(t('Update available: v{v} — click the peach button to update', { v: version }))
+  }
+
+  private paintUpdateChip(b: HTMLButtonElement, version: string): void {
+    b.innerHTML = `${ICONS.sync}<span>v${escapeHtml(version)}</span>`
+    b.title = t('Version {v} is available — click to update', { v: version })
+    b.setAttribute('aria-label', b.title)
   }
 
   // ---- routing ------------------------------------------------------------
@@ -5370,7 +5362,7 @@ function caretRect(): DOMRect {
  * THE HEIGHT IS THE ROOM IT ACTUALLY HAS, not a fraction of the window. The
  * CSS capped every popover at 44vh, which on a 900px-tall window is 396px —
  * and the share panel wants 543. Measured before this: 149px clipped, with
- * "Start live session" and "Reset access…" both below the fold. The primary
+ * "Go live" and "Reset access…" both below the fold. The primary
  * action of the sharing panel was reachable only by noticing that a box with
  * no visible scrollbar scrolls. A laptop at 800px fares worse.
  *
@@ -5381,7 +5373,9 @@ function caretRect(): DOMRect {
  */
 function place(pop: HTMLElement, anchor: HTMLElement | DOMRect): void {
   const r = anchor instanceof HTMLElement ? anchor.getBoundingClientRect() : anchor
-  const GAP = 6, EDGE = 8
+  // 4px off the anchor: slides' `.ed-menu` offset, which every popover here
+  // now shares with the menus (the kernel's default is 6)
+  const GAP = 4, EDGE = 8
   const below = innerHeight - r.bottom - GAP - EDGE
   const above = r.top - GAP - EDGE
   const useBelow = below >= above || below >= 320
@@ -5390,7 +5384,9 @@ function place(pop: HTMLElement, anchor: HTMLElement | DOMRect): void {
   // actually have rather than the one CSS would have forced on it
   const w = pop.offsetWidth || 260
   const h = pop.offsetHeight || 260
-  let left = r.left
+  // a popover hanging off a control at the bar's END grows inward and lines up
+  // with it, as slides' share popover does (`inset-inline-end: 0`)
+  let left = pop.classList.contains('sp-pop-end') ? r.right - w : r.left
   if (left + w > innerWidth - EDGE) left = Math.max(EDGE, innerWidth - w - EDGE)
   pop.style.left = `${Math.max(EDGE, left)}px`
   pop.style.top = `${useBelow ? r.bottom + GAP : Math.max(EDGE, r.top - h - GAP)}px`

@@ -7616,3 +7616,159 @@ title, where slides puts its Slides button.
 
 A kernel line proposes `kernel/src/ui/topbar.ts`. When it lands, this file
 becomes an import and slides' `fitTopbar` its second caller.
+
+## 2026-09-26 — What opens from the spaces bar is slides': the Save menu holds the file's commands, ⋯ is fold-only
+
+**The maintainer's ruling:** "when I talk about the top bar, I mean everything
+about it." #567 matched the bar's own geometry; the menus, popovers and dialogs
+it opens still looked and were organised differently. Spaces' ⋯ had 13.5px/600
+`--ink` rows with no separators and a two-line row; the Save caret had three
+rows; the rest of the file's commands were scattered through ⋯ and About.
+
+**Look.** Every surface is measured against slides (#568's build) and set to
+its values through the kernel primitives' hooks, never a fork: the menu rows
+(13px/400 `--ink-2`, 16px icons in the same ink, `6px 9px` with a 1px
+transparent frame, 6px gap, 8px corners, 30px tall, 44px under 700px), the list
+(4px padding, 4px off the trigger, slides' shadow, 3px 2px separators), the
+Save menu at 12.5px, the Share popover (`.ed-share-pop` section for section),
+the dialogs (`.ed-about`: no frame, 20px in, 440 wide, slides' shadow and
+scrim; the shortcut sheet 700), the notice (`.ed-toast`), and the split Save
+button (#568's primary split). The values live in ONE block per surface in
+spaces/src/styles.css, and scripts/test-spaces-chrome.ts reads slides' menu
+numbers out of slides' stylesheet and holds the computed values to them. In
+dark, what opens from the bar uses slides' surface family (`--pop-bg`
+`#21262e`, `--pop-line`, `--pop-hover`), a step lighter than spaces' panels.
+
+**Where D-rulings and slides disagreed, the ruling won — and slides then
+moved to it (#573).** D2 makes Save and Share consequence menus: every row
+carries a visible second line (12px/1.35 `--muted`, 2px under the name), wired
+as the row's DESCRIPTION through `aria-describedby`, the name alone its
+accessible name — spaces' `menus.ts row()` and the Share actions do exactly
+what slides' `menuLabel` does. D4 dialog titles are 17px/650 in both; D8 help
+shortcuts are sans and right-aligned in both. The keyboard ring is the
+kernel's in both: 2px `--accent-ink`, OUTSIDE (+2px) on bar and dialog buttons,
+INSIDE (−2px) on rows in a list. The dark menu shadow is `0 8px 24px rgb(0 0 0
+/ .5)`; spaces carries it as a `--pop-shadow` token defined in both of its dark
+blocks, so dark chosen by the OS and dark picked in About both get it. The Save
+list is `min(264px, 100vw − 16px)` wide and scrolls in the room under the bar
+(`100dvh − --sp-bar-bottom − 12px`).
+
+**Organisation — slides' map, command for command:**
+
+- **Save ▾** holds everything that acts on the FILE, in slides' order: Save a
+  copy, Duplicate as a new space (was About), the exports (Markdown, page as a
+  space; the tour's page as slides), Encrypt with password / Change / Remove
+  (was About → Password, a `prompt()`; now slides' two-field dialog), a rule,
+  Version history (was About → History; now its own dialog), Copy document
+  JSON (was About), Replace from JSON (was About → Careful; own dialog), and
+  Import Markdown… (was ⋯ and About). Slides has no import; importing is the
+  document arriving as data, so it sits beside Replace from JSON, the one
+  command of that kind slides has. Slides' Copy compact JSON and Start from
+  scratch have no spaces equivalent and are not invented here.
+- **⋯ exists only once the bar has folded**, as slides' does, and holds what
+  slides' holds: the controls the bar gave up, in bar order, then the Save
+  list. This reverses the #563 reading that ⋯ was "a home at every width".
+- **Commands slides has no equivalent for go where slides puts one of their
+  kind.** New page, Today's journal, New issue: things you ADD, so the foot of
+  ＋ Insert after a rule — slides' insert group ends on Comment, its one tool
+  that is not an element (the tour's Templates… joins them). Graph: a VIEW, so
+  a bar button beside Reading view. Print or save as PDF: slides' PDF button,
+  so a bar button in the same place. "Make this page an issue": acts on ONE
+  page, so the page's own ⋯ menu, where slides keeps what acts on one slide.
+  About: the wordmark, its only route in slides.
+- **About holds what slides' About holds**: the head, updates, the viewer's
+  appearance and language, then the file's numbers and the document's
+  properties (the tour's Design picker stays: it is a document property).
+
+Nothing was deleted. The rig walks every bar button, every bar menu row, the
+page menu and every About button on the #567 shell, and asserts each is still
+reachable at the same width — under its own name or slides' name for it
+(Set a password… → Encrypt with password…).
+
+**Kernel defaults that differ from slides'** (proposed to the kernel as
+defaults, so slides can adopt the kernel menu without changing its look):
+offset 6 → 4, list padding 5 → 4, row padding `7px 9px` → `6px 9px`, row gap
+9 → 6, row frame 0 → 1px transparent, row radius 7 → 8, icon ink `--muted` →
+row ink, min-width 200 → 150, shadow `0 12px 32px /.16` → `0 8px 24px /.14`,
+separator margin `4px 6px` → `3px 2px`, no pressed state → `--line`, a dark
+shadow of `0 8px 24px rgb(0 0 0 / .5)`, `.bkm-hint` 12px/1.35 with 2px above and
+an `aria-describedby` wiring from the row; row text
+not nowrap (a start-anchored list then shrinks to its min-width and wraps
+names); a scrolling list lets its 1px separators shrink to nothing. Dialog:
+frame 1px → none, padding `20px 22px` → 20px, shadow and scrim to slides'.
+
+## 2026-09-26 — D2 revised for the Save menu: one-line rows, the description as a tooltip
+
+**The maintainer's ruling:** "We can make the save menu even closer to slides,
+all the extra text describing the entry can be mouseovers."
+
+This revises D2 (descriptions visible on consequential menus) for **Save ▾
+only**. Its rows go back to one line — 30px, 12.5px/400, slides' `.ed-save-menu
+.ed-btn` — and what each row does becomes its hover tooltip: the native `title`
+on the row, as slides' Save rows (slides #573 made the same change).
+
+Accessibility is kept, not traded: the same text stays the row's accessible
+DESCRIPTION through `aria-describedby`, pointing at a visually hidden element
+inside the row (`.sp-vh`, slides' `.ed-sr-only` rules), while `aria-label`
+keeps the command's name alone. With `aria-describedby` present, `title` is not
+also announced as the description.
+
+**Touch has no hover, and slides has nothing for it** — a tooltip simply never
+appears under a finger in either app. So on a phone or tablet the description
+is available only to a screen reader. That is recorded rather than filled with
+new UI here; if it matters, it is a suite question (both apps at once).
+
+**Share keeps its drawn second line** (the ruling named the Save menu), in both
+apps. Next to it the two popovers now differ in density: Save is a list of
+one-line commands, Share a stack of described buttons. Share was already a
+different object (framed buttons, a form, a status line), so the difference
+reads as two kinds of surface rather than one inconsistency.
+
+`scripts/test-spaces-chrome.ts` holds every Save row to one 30px line whose
+`title` equals its `aria-describedby` text, that element ≤ 1×1 and inside the
+row, and the name alone as `aria-label`.
+
+## 2026-09-26 — D2 revised for Share too: one-line actions, the description as a tooltip
+
+**The maintainer's ruling, confirmed directly:** "Yes, share should be 1 line
+as well." It reached spaces first as a relay from the slides session (slides
+#573, 36465bf1), and the maintainer then confirmed it directly; this entry
+records it as the maintainer's own ruling.
+
+Share's actions take exactly the Save rows' shape (the entry above): one line,
+with the description as the native `title` on the action, the name alone as
+`aria-label`, and the description again as a visually hidden element inside
+the action, referenced by `aria-describedby`. The popover sits at slides'
+250px. This supersedes the previous entry's "Share keeps its drawn second line".
+
+So no surface opened from the bar draws a second-line description any more,
+in either app; D2's visible descriptions survive only in menus that are not
+the bar's (the page menu's width choices, "Make this page an issue").
+`scripts/test-spaces-chrome.ts` holds Save and Share to the same row-shape
+assertion, and walks Insert, Save, Language and Share for anything drawn.
+The touch caveat of the entry above applies to Share as well.
+
+## 2026-09-26 — Share's actions are plain menu rows
+
+**The maintainer's ruling, confirmed directly:** "Yes it's what I asked for."
+It first came as a relay from slides #573 (cea2fa26), where the maintainer is
+reported to have said the Share panel "looks a lot cleaner without" the boxes.
+
+Share's actions are menu rows like Save's — slides' `.ed-btn` in a menu:
+12.5px, one 30px line, `6px 9px` inside a transparent 1px frame, a hover fill
+(`--pop-hover`) and nothing at rest. There is no ink-filled primary on
+"Invite to edit…" any more. Adjacent action rows touch; the popover's other
+sections (your name, People, the status line) keep its 7px gap, and the rule
+before the session controls keeps 7px either side as slides' does. The boxed
+buttons (a 2026-07-20 choice in slides, so actions would not read as text among
+the notes) are retired: the SHARE A COPY caption and the icons do that job.
+
+`scripts/test-spaces-chrome.ts` asserts no fill or frame at rest, no primary,
+the Save rows' size and padding, and adjacent actions touching.
+
+
+The session action is labelled **"Go live"**, slides' own string, with slides'
+translations copied verbatim into all eight catalogs — the maintainer: "Use
+Slides as the reference, so we should say Go live as well." (It read "Start
+live session".) bento/dash still says "Start live session"; that is dash's to
+align.
