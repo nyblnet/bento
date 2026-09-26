@@ -45,6 +45,7 @@ export const ICONS = {
   globe: svg('<circle cx="12" cy="12" r="9"/><path d="M3 12 h18"/><ellipse cx="12" cy="12" rx="4.2" ry="9"/>'),
   code: svg('<polyline points="8 6 4 12 8 18"/><polyline points="16 6 20 12 16 18"/>'),
   history: svg('<circle cx="12" cy="12" r="8.5"/><polyline points="12 7 12 12 15.5 14"/>'),
+  importDoc: svg('<path d="M5 9V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-4"/><path d="M14 3v5h5"/><path d="M2 12h9"/><path d="m8 9 3 3-3 3"/>'),
   share: svg('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17.5" cy="10.5" r="2.4"/><path d="M15.8 15.6c1.9.3 3.6 1.6 4.4 3.9"/>'),
   table: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="14.5" x2="21" y2="14.5"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/>'),
   // shape menu entries

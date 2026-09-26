@@ -11,6 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Import a PowerPoint.** The Save-as menu has an "Import PowerPoint…" entry
+  next to Replace from JSON. It opens the PowerPoint importer on bento.page in
+  a new tab, which turns a .pptx into a Bento deck; it needs an internet
+  connection, and the entry's tooltip says so.
+
 ## [1.2.4] — 2026-09-25
 
 - **Formulas that stayed as raw text now render.** 1.2.0 replaced the maths

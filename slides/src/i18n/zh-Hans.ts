@@ -604,6 +604,8 @@ export const zhHans: Catalog = {
   "Remove {name} — revokes this device’s access; everyone else is unaffected": "移除 {name} — 撤销该设备的访问权限；其他人不受影响",
   "Replace from JSON": "从 JSON 替换",
   "Replace from JSON…": "从 JSON 替换…",
+  "Import PowerPoint…": "导入 PowerPoint…",
+  "Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.": "在新标签页打开 bento.page 上的 PowerPoint 导入工具，将 .pptx 转换为 Bento 演示文稿。需要联网。",
   "Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.": "重置访问权限？已发送的所有副本将停止同步；只有此后保存的副本才能加入。",
   "Reset access…": "重置访问权限…",
   "Save a copy…": "保存副本…",

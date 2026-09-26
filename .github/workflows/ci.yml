@@ -1908,3 +1908,7 @@ jobs:
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-slides-font-lifecycle-browser.mjs
+      - name: Import PowerPoint link in Chromium
+        # Save as → Import PowerPoint… opens only the bento.page importer, in a
+        # new tab with no opener, and its tooltip says it needs the network.
+        run: node scripts/test-slides-import-link-browser.mjs
