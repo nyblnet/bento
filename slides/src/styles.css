@@ -2117,6 +2117,14 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .ed-share-me .who { font-weight: 600; }
 .ed-share-me .where { margin-inline-start: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* Your own row: the NAME stays whole and the key gives way. The shared
+   .ed-share-peer rules below do the opposite (a peer's "on slide 3" is short;
+   their name is what can run long), which cut "Guest (you)" to "Guest (y…"
+   beside a 20-character key. The key is a fingerprint you compare by its
+   start, and its full form is in the row's tooltip. A very long name still
+   yields at 65%. Doubled class: the peer rules come later in the file. */
+.ed-share-peer.ed-share-me .who { flex: none; max-width: 65%; }
+.ed-share-peer.ed-share-me .where { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: end; }
 .ed-share-peer {
   display: flex;
   align-items: center;

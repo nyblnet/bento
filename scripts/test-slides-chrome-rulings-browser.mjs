@@ -100,6 +100,17 @@ try {
   ok(look.boxed === 0 && look.primary === 0, `Share's actions are plain rows at rest — no fill, no frame, no primary (${look.boxed} boxed, ${look.primary} primary)`)
   ok(look.gaps.length >= 4 && look.gaps.every((g) => g === 0), `adjacent Share rows touch, as in Save as (gaps ${look.gaps.join('/')})`)
   const shareBottom = await p.evaluate(() => Math.round(document.querySelector('.ed-share-pop').getBoundingClientRect().bottom))
+  // your own People row: the name stays whole and the key fingerprint gives
+  // way (it was the other way round: "Guest (y…" beside a whole key). A
+  // mid-length name makes the row too narrow for both whatever the key is.
+  const me = await p.evaluate(() => {
+    try { localStorage.setItem('bento-author', 'Jordan Whitaker') } catch {}
+    const btn = document.querySelector('.ed-btn-share'); btn.click(); btn.click() // close + reopen = re-render
+    const who = document.querySelector('.ed-share-me .who'), where = document.querySelector('.ed-share-me .where'), row = document.querySelector('.ed-share-me')
+    const cut = (e) => e.scrollWidth > e.clientWidth + 1
+    return { who: who.textContent, whoCut: cut(who), keyCut: cut(where), over: row.scrollWidth > row.clientWidth + 1 }
+  })
+  ok(!me.whoCut && me.keyCut && !me.over, `your own People row keeps "${me.who}" whole and ellipses the key instead (name cut: ${me.whoCut}, key cut: ${me.keyCut})`)
   ok(shareBottom <= 768, `the Share menu ends on a 768px laptop screen (bottom ${shareBottom})`)
   await p.setViewportSize({ width: 1440, height: 900 })
   await closeAll()
