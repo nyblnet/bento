@@ -233,6 +233,7 @@ export const de: Catalog = {
   "Journal date": "Journaldatum",
   "Key-verified identity": "Schlüssel-verifizierte Identität",
   "Language": "Sprache",
+  "Share": "Teilen",
   "Language follows whoever opens the file. It is never written into the document.": "Die Sprache richtet sich danach, wer die Datei öffnet. Sie wird nie ins Dokument geschrieben.",
   "Language — what this block is highlighted as": "Sprache — wie dieser Block hervorgehoben wird",
   "Last saved": "Zuletzt gespeichert",

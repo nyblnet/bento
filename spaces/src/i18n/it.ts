@@ -233,6 +233,7 @@ export const it: Catalog = {
   "Journal date": "Data del diario",
   "Key-verified identity": "Identità verificata da chiave",
   "Language": "Lingua",
+  "Share": "Condividi",
   "Language follows whoever opens the file. It is never written into the document.": "La lingua segue chi apre il file. Non viene mai scritta nel documento.",
   "Language — what this block is highlighted as": "Linguaggio — come viene evidenziato questo blocco",
   "Last saved": "Ultimo salvataggio",

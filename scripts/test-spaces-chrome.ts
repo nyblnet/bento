@@ -81,6 +81,34 @@ ok(handDialogs.length === 0, `no file hand-builds a modal overlay any more — e
 ok(/createPanel\(/.test(editor) && !/private makeResizer\(/.test(editor) && !/sp-pane-tab/.test(css),
   'both side panels are the kernel panel; spaces\' own resizer and chevron are gone')
 
+// THE TOP BAR IS SLIDES' BAR. Its numbers are read out of slides' own source,
+// so the day slides changes its bar this rig says the two apps have parted,
+// rather than asserting a copy of a number that has already moved.
+const slidesCss = readFileSync(join(root, 'slides/src/styles.css'), 'utf8')
+const slidesEd = readFileSync(join(root, 'slides/src/editor/editor.ts'), 'utf8')
+const edBar = /\n\.ed-topbar \{([\s\S]*?)\n\}/.exec(slidesCss)?.[1] ?? ''
+const SLIDES_BAR = {
+  gap: /\bgap:\s*(\d+px)/.exec(edBar)?.[1],
+  // padding: max(8px, …top…) max(14px, …right…) 8px max(14px, …left…)
+  padY: /padding:\s*max\((\d+px)/.exec(edBar)?.[1],
+  padX: [...(/padding:([^;]*);/.exec(edBar)?.[1] ?? '').matchAll(/max\((\d+px)/g)][1]?.[1],
+}
+ok(!!(SLIDES_BAR.gap && SLIDES_BAR.padY && SLIDES_BAR.padX), `slides' bar values can be read from its stylesheet (${JSON.stringify(SLIDES_BAR)})`)
+const spBar = /\n\.sp-bar \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+ok(new RegExp(`\\bgap:\\s*${SLIDES_BAR.gap}`).test(spBar) && new RegExp(`padding:\\s*${SLIDES_BAR.padY} max\\(${SLIDES_BAR.padX}`).test(spBar),
+  `.sp-bar declares slides' padding and gap (${SLIDES_BAR.padY}/${SLIDES_BAR.padX}, gap ${SLIDES_BAR.gap})`)
+// …and slides' fit: the title floor and the phone width are its constants
+const edFit = slidesEd.slice(slidesEd.indexOf('  private fitTopbar() {'))
+const slidesFloor = /getBoundingClientRect\(\)\.width < (\d+)/.exec(edFit)?.[1]
+const slidesPhone = /innerWidth <= (\d+)/.exec(edFit)?.[1]
+const topbar = read('topbar.ts')
+ok(!!slidesFloor && !!slidesPhone &&
+  new RegExp(`titleFloor \\?\\? ${slidesFloor}\\b`).test(topbar) && new RegExp(`phoneWidth \\?\\? ${slidesPhone}\\b`).test(topbar) &&
+  new RegExp(`max-width: ${slidesPhone}px\\) \\{\\n  \\.sp-bar, \\.sp-bar\\.sp-bar-compact`).test(css),
+  `the fit is slides': title floor ${slidesFloor}px, phone ${slidesPhone}px, the same width in the phone stylesheet`)
+ok(/createTopbarFit\(bar,/.test(editor) && !/private fitTopbar\(/.test(editor),
+  'the editor fits its bar through topbar.ts, not a private hand-copy')
+
 // ————— browser half ————————————————————————————————————————————————————————
 console.log('\nthe built shell, driven with trusted input\n')
 const CHROME = [process.env.BENTO_CHROME, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -365,6 +393,99 @@ async function browser(chrome: string, html: string): Promise<void> {
     const afterNav = await js<any>(`({ w: document.querySelector('.sp-side').closest('.bkp').getBoundingClientRect().width, scrim: !!document.querySelector('.sp-scrim'), stored: localStorage.getItem('bento-sp-pane-closed') })`)
     ok(afterNav.w === 0 && !afterNav.scrim && afterNav.stored === null,
       `following a page shuts the drawer and its scrim, and writes nothing to the desktop preference (${JSON.stringify(afterNav)})`)
+
+    // ——— the top bar is slides' bar ———
+    await open(false)
+    const BAR = `document.querySelector('.sp-bar')`
+    const geo = await js<any>(`(() => { const c = getComputedStyle(${BAR}); return { gap: c.columnGap, padY: c.paddingTop, padX: c.paddingInlineStart, padE: c.paddingInlineEnd, tier: ${BAR}.className } })()`)
+    ok(geo.gap === SLIDES_BAR.gap && geo.padY === SLIDES_BAR.padY && geo.padX === SLIDES_BAR.padX && geo.padE === SLIDES_BAR.padX,
+      `at 1440 the bar's padding and gap are slides' (${geo.padY}/${geo.padX}, gap ${geo.gap}; slides ${SLIDES_BAR.padY}/${SLIDES_BAR.padX}, gap ${SLIDES_BAR.gap}; ${geo.tier})`)
+
+    // Language: the globe opens the list slides' globe shows, and choosing one rebuilds the chrome in it
+    await tap(TRIG('Language'))
+    const langs = await js<any>(`(() => { const m = ${OPEN}; if (!m) return null; const rows = [...m.querySelectorAll('.bkm-item')]; return { n: rows.length, names: rows.map(r => r.textContent.trim()), on: rows.filter(r => r.getAttribute('aria-checked') === 'true').map(r => r.textContent.trim()) } })()`)
+    ok(langs && langs.n >= 8 && langs.names.includes('English') && langs.names.includes('Deutsch') && langs.on.length === 1 && langs.on[0] === 'English',
+      `the globe opens the language list, the one in force checked (${JSON.stringify(langs)})`)
+    await tap(`[...(${OPEN}).querySelectorAll('.bkm-item')].find(b => b.textContent.trim() === 'Deutsch')`)
+    const de = await js<any>(`({ lang: document.documentElement.lang, insert: document.querySelector('.sp-bar .sp-group-insert .sp-btnlabel')?.textContent, share: !!document.querySelector('.sp-bar .sp-live') })`)
+    ok(de.lang === 'de' && de.insert === 'Einfügen' && de.share,
+      `choosing Deutsch rebuilds the bar in German and keeps the Share control (${JSON.stringify(de)})`)
+    await tap(`document.querySelector('.sp-bar .sp-lang > button')`)
+    await tap(`[...(${OPEN}).querySelectorAll('.bkm-item')].find(b => b.textContent.trim() === 'English')`)
+    // Help: `?` in the bar opens the shortcut sheet
+    await tap(`document.querySelector('.sp-bar .sp-help')`)
+    const help = await js<string | null>(`(() => { const d = [...document.querySelectorAll('[aria-modal="true"]')].find(d => d.getBoundingClientRect().height > 0); return d?.querySelector('.bkd-title')?.textContent ?? null })()`)
+    ok(help === 'Keyboard shortcuts', `the bar's ? opens the keyboard shortcuts (${help})`)
+    await key('Escape', 0, 'Escape')
+
+    // Every control, at every width, can be reached and pressed: on screen (the
+    // bar scrolled to it when it scrolls) and topmost at its own centre.
+    const REACH = `(() => { const bar = ${BAR}; const vis = (e) => { const r = e.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false; for (let n = e; n && n !== bar; n = n.parentElement) { const c = getComputedStyle(n); if (c.display === 'none' || c.visibility === 'hidden') return false } return true }
+      const ctl = [...bar.querySelectorAll('button, input')].filter(e => !e.closest('.bkm-menu')).filter(vis)
+      const bad = []
+      // Scroll ONLY the bar, and only if a person could: overflow:hidden on
+      // the app root is still scrollable from script, so scrollIntoView would
+      // 'reach' a control that is clipped for every real reader.
+      const scrolls = /auto|scroll/.test(getComputedStyle(bar).overflowX)
+      for (const e of ctl) { let r = e.getBoundingClientRect(); if (scrolls && (r.right > innerWidth || r.left < 0)) { bar.scrollLeft += r.right > innerWidth ? r.right - innerWidth + 2 : r.left - 2; r = e.getBoundingClientRect() } const top = document.elementsFromPoint(r.x + r.width / 2, r.y + r.height / 2)[0]
+        if (r.left < -0.5 || r.right > innerWidth + 0.5 || r.top < 0 || !top || !(e === top || e.contains(top))) bad.push((e.getAttribute('aria-label') || e.className).slice(0, 18) + '@' + Math.round(r.left) + '..' + Math.round(r.right)) }
+      bar.scrollLeft = 0
+      const app = document.querySelector('.sp-app'); if (app.scrollLeft || scrollX) bad.push('page scrolled sideways')
+      return { n: ctl.length, bad, tier: [...bar.classList].filter(c => /compact|tight|fold/.test(c)).map(c => c.slice(7)).join('+') || 'full', over: bar.scrollWidth - bar.clientWidth, scrolls: getComputedStyle(bar).overflowX } })()`
+    const reach: string[] = []
+    for (const w of [1440, 1280, 1024, 900, 800, 700, 600, 480, 390, 360, 320]) {
+      const phone = w <= 390
+      await send('Emulation.setDeviceMetricsOverride', { width: w, height: phone ? 844 : 900, deviceScaleFactor: phone ? 2 : 1, mobile: phone })
+      await send('Emulation.setTouchEmulationEnabled', { enabled: phone, maxTouchPoints: phone ? 5 : 1 })
+      await sleep(250)
+      const r = await js<any>(REACH)
+      reach.push(`${w}:${r.tier}${r.bad.length ? ' UNREACHABLE ' + r.bad.join(',') : ''}`)
+      if (r.bad.length) ok(false, `at ${w}px every bar control can be reached and pressed (${r.bad.join(', ')})`)
+    }
+    ok(!reach.some(s => s.includes('UNREACHABLE')), `every bar control is on screen and topmost at its centre, 320–1440 (${reach.join(' · ')})`)
+
+    // The fold engages BEFORE the bar overflows: no width where an unfolded bar
+    // is wider than itself, and every phone width folded.
+    const over: string[] = []
+    let foldAt = 0
+    for (let w = 1440; w >= 320; w -= 20) {
+      await send('Emulation.setDeviceMetricsOverride', { width: w, height: 900, deviceScaleFactor: 1, mobile: false })
+      await send('Emulation.setTouchEmulationEnabled', { enabled: false, maxTouchPoints: 1 })
+      await sleep(90)
+      const r = await js<any>(`(() => { const b = ${BAR}; return { fold: b.classList.contains('sp-bar-fold'), over: b.scrollWidth - b.clientWidth } })()`)
+      if (r.fold && !foldAt) foldAt = w
+      if (!r.fold && r.over > 1) over.push(`${w}:+${r.over}`)
+      if (w <= 700 && !r.fold) over.push(`${w}:unfolded`)
+    }
+    ok(over.length === 0 && foldAt > 0, `the fold tier engages before the bar overflows (first fold at ${foldAt}px; ${over.join(' ') || 'no overflow unfolded'})`)
+    // …and under browser zoom, where the viewport is wide but the bar is not: the
+    // phone rule cannot fire, so only MEASURING folds it (150%, 1440 → 720).
+    await js(`document.documentElement.style.zoom = '1.5'; 1`)
+    const zover: string[] = []
+    let zfold = 0
+    for (let w = 1440; w >= 720; w -= 40) {
+      await send('Emulation.setDeviceMetricsOverride', { width: w, height: 900, deviceScaleFactor: 1, mobile: false })
+      await sleep(90)
+      const r = await js<any>(`(() => { const b = ${BAR}; return { fold: b.classList.contains('sp-bar-fold'), over: b.scrollWidth - b.clientWidth } })()`)
+      if (r.fold && !zfold) zfold = w
+      if (!r.fold && r.over > 1) zover.push(`${w}:+${r.over}`)
+    }
+    await js(`document.documentElement.style.zoom = ''; 1`)
+    ok(zover.length === 0 && zfold > 700, `at 150% zoom the measured fold engages before the bar overflows (first fold at ${zfold}px; ${zover.join(' ') || 'no overflow unfolded'})`)
+
+    // Below the fold's floor the bar scrolls, and ⋯ still opens a menu you can press
+    await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 844, deviceScaleFactor: 2, mobile: true })
+    await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
+    await sleep(250)
+    const moreAt = await js<any>(`(() => { const bar = ${BAR}; const b = ${TRIG('More')}; if (/auto|scroll/.test(getComputedStyle(bar).overflowX)) bar.scrollLeft = bar.scrollWidth; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, on: r.right <= innerWidth } })()`)
+    await click(moreAt.x, moreAt.y)
+    const se = await js<any>(`(() => { const m = ${OPEN}; if (!m) return null; const r = m.getBoundingClientRect(); const rows = [...m.querySelectorAll('.bkm-item')]; const f = rows[0].getBoundingClientRect(); const hit = document.elementsFromPoint(f.x + f.width / 2, f.y + f.height / 2)[0]; return { left: Math.round(r.left), right: Math.round(r.right), vw: innerWidth, first: rows[0].contains(hit), lang: rows.some(x => x.textContent.trim() === 'Language'), help: rows.some(x => x.textContent.trim().startsWith('Keyboard shortcuts')) } })()`)
+    ok(se && moreAt.on && se.left >= 0 && se.right <= se.vw && se.first && se.lang && se.help,
+      `at 320px ⋯ opens on screen, its rows pressable, carrying Language and Keyboard shortcuts (${JSON.stringify(se)})`)
+    await tap(`[...(${OPEN}).querySelectorAll('.bkm-item')].find(b => b.textContent.trim() === 'Language')`)
+    const sheet2 = await js<any>(`(() => { const m = ${OPEN}; if (!m) return null; const rows = [...m.querySelectorAll('.bkm-item')]; const r = m.getBoundingClientRect(); return { n: rows.length, onScreen: r.top >= 0 && r.bottom <= innerHeight, on: rows.filter(x => x.getAttribute('aria-checked') === 'true').length } })()`)
+    ok(sheet2 && sheet2.n >= 8 && sheet2.onScreen && sheet2.on === 1, `⋯ → Language opens the same list, on screen (${JSON.stringify(sheet2)})`)
+    await key('Escape', 0, 'Escape')
     ws.close()
   } finally {
     try { child.kill('SIGKILL') } catch { /* gone */ }
