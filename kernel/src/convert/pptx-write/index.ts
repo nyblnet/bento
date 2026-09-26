@@ -475,7 +475,10 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     { partName: '/ppt/presProps.xml', contentType: CT.presProps },
     { partName: '/ppt/viewProps.xml', contentType: CT.viewProps },
     { partName: '/ppt/tableStyles.xml', contentType: CT.tableStyles },
-    ...(hasNotes ? [{ partName: '/ppt/notesMasters/notesMaster1.xml', contentType: CT.notesMaster }] : []),
+    ...(hasNotes ? [
+      { partName: '/ppt/notesMasters/notesMaster1.xml', contentType: CT.notesMaster },
+      { partName: '/ppt/theme/theme2.xml', contentType: CT.theme },
+    ] : []),
     ...slideXml.map((_, i) => ({ partName: `/ppt/slides/slide${i + 1}.xml`, contentType: CT.slide })),
     ...extraOverrides, // charts + notesSlides, gathered in the walk
     { partName: '/docProps/core.xml', contentType: CT.coreProps },
@@ -508,6 +511,8 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     ...(hasNotes ? [
       { name: 'ppt/notesMasters/notesMaster1.xml', data: enc.encode(notesMasterXml()) },
       { name: 'ppt/notesMasters/_rels/notesMaster1.xml.rels', data: enc.encode(notesMasterRels()) },
+      // the notes master's own theme part (see notesMasterRels)
+      { name: 'ppt/theme/theme2.xml', data: enc.encode(themeXml(doc.theme)) },
     ] : []),
     ...slideXml.flatMap((xml, i) => [
       { name: `ppt/slides/slide${i + 1}.xml`, data: enc.encode(xml) },

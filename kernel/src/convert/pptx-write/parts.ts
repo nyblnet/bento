@@ -431,12 +431,23 @@ export function notesMasterXml(): string {
     x('p:notesMaster', PML_XMLNS, [
       x('p:cSld', undefined, [spTree([])]),
       x('p:clrMap', CLR_MAP_ATTRS),
+      // notesStyle is OPTIONAL in the schema and its absence is a PowerPoint
+      // repair prompt — found by bisection: a one-slide deck whose only extra
+      // feature was a speaker note repaired, and every real notesMaster
+      // carries this element. One level is enough; readers inherit the rest.
+      x('p:notesStyle', undefined, [
+        x('a:lvl1pPr', undefined, [x('a:defRPr', { sz: 1200 })]),
+      ]),
     ]),
   )
 }
 
 export function notesMasterRels(): string {
-  return relsPart([{ id: 'rId1', type: REL.theme, target: '../theme/theme1.xml' }])
+  // The notes master gets its OWN theme part, never a share of the slide
+  // master's. Same bisection: every real producer pairs each master with its
+  // own theme (slideMaster->theme1, notesMaster->theme2), and PowerPoint's
+  // repair dialog is the price of assuming the association can be many-to-one.
+  return relsPart([{ id: 'rId1', type: REL.theme, target: '../theme/theme2.xml' }])
 }
 
 // --- notesSlide --------------------------------------------------------------

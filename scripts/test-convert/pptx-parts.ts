@@ -208,8 +208,13 @@ function preambleOk(cSld: XElem): boolean {
 
   const nm = parseXml(notesMasterXml())
   ok(nm.local === 'notesMaster' && kid(nm, NS.p, 'clrMap') !== undefined, 'notesMaster carries cSld + clrMap')
-  ok(attr(kids(parseXml(notesMasterRels()), NS.rel, 'Relationship')[0], 'Target') === '../theme/theme1.xml',
-    'notesMaster shares theme1')
+  // Both pinned by bisection against real macOS PowerPoint (2026-08-24): a
+  // one-slide deck whose ONLY extra feature was a speaker note raised the
+  // repair dialog until the notes master carried a notesStyle AND its own
+  // theme part. Schema-optional, reader-required — same class as presProps.
+  ok(kid(nm, NS.p, 'notesStyle') !== undefined, 'notesMaster carries notesStyle (absence = repair dialog)')
+  ok(attr(kids(parseXml(notesMasterRels()), NS.rel, 'Relationship')[0], 'Target') === '../theme/theme2.xml',
+    'notesMaster has its OWN theme part, never a share of the slide master\'s')
 }
 
 // --- notesSlide --------------------------------------------------------------
