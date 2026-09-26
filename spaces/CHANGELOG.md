@@ -502,6 +502,17 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   reason, so the rig fails if one starts to qualify without the pin being
   lifted on purpose.
 
+- **A toggle leaves as `<details>` and comes back a toggle.** It used to export
+  as `- text` and return as a bullet, with its fold state gone and its contents
+  loose. Now it is `<details open>` or `<details>`, then `<summary>`, then its
+  contents as ordinary Markdown, then `</details>`. GitHub, Obsidian and any
+  browser draw that as the same fold. The importer also reads `<details>` as
+  GitHub READMEs write it: the summary on its own indented line, on one line
+  with its body, or never closed. It takes one fact from the tag, whether it
+  says `open`, and copies nothing else from it, so an `onclick` or `ontoggle`
+  on it reaches nothing. A space with no toggles exports exactly as before, and
+  the rig now checks that byte for byte.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

@@ -102,7 +102,6 @@ const FIX: Record<string, () => Fixture> = {
 // the design brief's own row, so a reader of a failure knows what closing it
 // would take. Removing a pin is the deliberate edit this rig asks for.
 const PINNED: Record<string, string> = {
-  toggle: 'exports as `- text` and comes back a bullet; needs `<details open><summary>` (an html-block parser)',
   link: 'exports as `[title](url) — desc` and comes back a paragraph; needs a lone-link-line rule or a fence, and `site`/`image` are lost',
   media: 'exports as `[label](src)` and comes back a paragraph; needs `<video>`/`<audio>` html or a fence, and `controls`/`loop`/`muted` are lost',
   prop: 'exports as `**Status:** In progress` and comes back a paragraph; the natural form is front matter (`status: doing`), and value id vs label needs the schema',
@@ -182,6 +181,38 @@ for (const type of Object.keys(FIX)) {
 const expected = types.length - Object.keys(PINNED).length
 ok(exact === expected, `${exact} of ${types.length} block types are byte-identical (expected ${expected}; ${Object.keys(PINNED).length} pinned)`)
 
+// ---- a space with none of the lossless-family shapes -------------------------
+// Every family below (toggles, sized images, cards, media, page links, views,
+// canvases, block ids) changes how ITS OWN block exports. A space that has none
+// of them must export exactly as it did before any family existed — byte for
+// byte, marks and all — so a README someone keeps in git does not churn
+// because the exporter learned a shape the document never used. The expected
+// text was captured from the exporter BEFORE the first family landed.
+
+console.log('\na space without any family shape exports byte-identically to before')
+{
+  const t = b('table', '')
+  writeTable(t, { rows: [['A', 'B'], ['1', '<strong>2</strong>']], cols: [1, 1], colAlign: ['', 'right'], header: true })
+  const blocks = [
+    { id: 'g1', type: 'p', html: 'Plain <strong>bold</strong> <em>em</em> <u>u</u> <s>s</s> <sub>2</sub> <sup>3</sup> <code>c</code> <mark>hi</mark> <a href="https://x.y/z">link</a> and a <a href="#p/pg2">page link</a>.' },
+    { id: 'g2', type: 'h1', html: 'One' }, { id: 'g3', type: 'h2', html: 'Two' }, { id: 'g4', type: 'h3', html: 'Three' },
+    { id: 'g5', type: 'bullet', html: 'a' }, { id: 'g6', type: 'bullet', html: 'b', parent: 'g5' },
+    { id: 'g7', type: 'number', html: 'n' }, { id: 'g8', type: 'todo', html: 't', done: true },
+    t,
+    { id: 'g10', type: 'callout', html: 'Careful', tone: 'warning' }, { id: 'g11', type: 'p', html: 'inside', parent: 'g10' },
+    { id: 'g12', type: 'quote', html: 'q<br>r' },
+    { id: 'g13', type: 'code', html: 'x &lt; 1', lang: 'js' },
+    { id: 'g14', type: 'divider', html: '' },
+    { id: 'g15', type: 'image', html: '', src: 'asset:k', alt: 'alt', caption: 'cap' },
+    { id: 'g16', type: 'p', html: '<span class="sp-fg-red">red</span> <mark class="sp-bg-blue">band</mark> Last {not an attribute} [bracket] ==text== line' },
+  ] as Block[]
+  const d = { ...doc([{ id: 'pg', title: 'Plain', blocks }, { id: 'pg2', title: 'Second', parent: 'pg', blocks: [b('p', 'child page')] }]), docId: 'g', title: 'G' }
+  const got = toMarkdown(new Store(d as never) as never)
+  const want = "# Plain\n\nPlain **bold** *em* <u>u</u> ~~s~~ <sub>2</sub> <sup>3</sup> `c` ==hi== [link](https://x.y/z) and a [page link](#p/pg2).\n\n# One\n\n## Two\n\n### Three\n\n- a\n\n  - b\n\n1. n\n\n- [x] t\n\n| A | B |\n| --- | ---: |\n| 1 | **2** |\n\n> [!WARNING]\n> Careful\n>\n> inside\n\n> q\n> r\n\n```js\nx < 1\n```\n\n---\n\n![alt](asset:k \"cap\")\n\n<span class=\"sp-fg-red\">red</span> <mark class=\"sp-bg-blue\">band</mark> Last {not an attribute} [bracket] ==text== line\n\n## Second\n\nchild page\n"
+  ok(got === want, 'export of a plain space is byte-identical to the pre-family exporter',
+    got === want ? undefined : `want:\n${want}\ngot:\n${got}`)
+}
+
 // ---- the shapes one fixture per type does not reach -------------------------
 
 console.log('\ncallouts: every tone, and a body that is more than one paragraph')
@@ -230,6 +261,68 @@ console.log('\nquotes and images at their edges')
   ok(kept.w === undefined && kept.h === undefined && kept.width === undefined,
     'pinned: an image\'s w/h/width do not survive Markdown (needs an attribute syntax such as {width=80%})',
     'the size now survives — remove this pin and fold the size into the image fixture')
+}
+
+console.log('\ntoggles: <details>, open or folded, holding anything')
+{
+  const t = trip({ blocks: [b('toggle', 'Open one', { open: true }), b('toggle', 'Shut one', { open: false })] })
+  ok(qualifies(t) && t.md.includes('<details open>') && t.md.includes('<details>\n'),
+    'an open and a folded toggle keep their state, and an empty one closes at once', qualifies(t) ? undefined : why(t))
+}
+{
+  const outer = b('toggle', 'Outer &amp; more', { open: true })
+  const inner = b('toggle', 'Inner <strong>bold</strong>', { open: false, parent: outer.id })
+  const li = b('bullet', 'a point', { parent: inner.id })
+  const t = trip({ blocks: [outer, inner, b('p', 'deep', { parent: inner.id }), li, b('bullet', 'under it', { parent: li.id }),
+    b('p', 'back in outer', { parent: outer.id }), b('p', 'outside')] })
+  ok(qualifies(t), 'a toggle in a toggle, holding a paragraph and a nested list, then prose after both', qualifies(t) ? undefined : why(t))
+}
+{
+  const c = b('callout', 'Box', { tone: 'tip' })
+  const tg = b('toggle', 'Fold in a box', { open: true, parent: c.id })
+  const t = trip({ blocks: [c, tg, b('p', 'folded words', { parent: tg.id }), b('p', 'still in the box', { parent: c.id }), b('p', 'out')] })
+  ok(qualifies(t), 'a toggle inside a callout closes inside the blockquote', qualifies(t) ? undefined : why(t))
+}
+{
+  const tg = b('toggle', 'Holds a box', { open: false })
+  const c = b('callout', 'Boxed', { tone: 'note', parent: tg.id })
+  const t = trip({ blocks: [tg, c, b('p', 'box body', { parent: c.id }), b('p', 'after')] })
+  ok(qualifies(t), 'a callout inside a toggle', qualifies(t) ? undefined : why(t))
+}
+{
+  const tg = b('toggle', 'Code inside', { open: true })
+  const t = trip({ blocks: [tg, b('code', 'x = 1\n\ny = 2', { lang: 'py', parent: tg.id })] })
+  ok(qualifies(t), 'a code block with a blank line inside a toggle', qualifies(t) ? undefined : why(t))
+}
+
+console.log('\ntoggles written elsewhere, and hostile ones')
+{
+  // the shape GitHub's own docs show, summary indented on its own line
+  const got = only('<details>\n  <summary>Click to expand</summary>\n\n  ### Heading\n  1. Foo\n  2. Bar\n\n</details>\n\nAfter.\n')
+  ok(got.map((x) => `${x.type}${x.parent === got[0].id ? '^' : ''}`).join(' ') === 'toggle h3^ number^ number^ p' &&
+    got[0].html === 'Click to expand' && got[0].open === false,
+  'GitHub: a folded <details> with an indented summary holds its heading and list', JSON.stringify(got))
+}
+{
+  const got = only('<details><summary><b>Why?</b></summary>Because.</details>\n\nNext.\n')
+  ok(got.map((x) => `${x.type}${x.parent === got[0]?.id ? '^' : ''}`).join(' ') === 'toggle p^ p' &&
+    got[0].html === '<b>Why?</b>' && got[1].html === 'Because.',
+  'a one-line <details><summary>…</summary>body</details>', JSON.stringify(got))
+}
+{
+  const got = only('<details open>\n<summary>Unclosed</summary>\n\nbody\n')
+  ok(got.length === 2 && got[0].type === 'toggle' && got[0].open === true && got[1].parent === got[0].id,
+    'a <details> never closed holds the rest of the note', JSON.stringify(got))
+}
+{
+  const got = only('</details>\n\ntext\n')
+  ok(got.length === 1 && got[0].type === 'p' && got[0].html === 'text', 'a stray </details> is dropped', JSON.stringify(got))
+}
+{
+  const got = only('<details onclick="alert(1)" ontoggle=alert(2) title="open"><summary onmouseover="alert(3)">Hi <img src=x onerror=alert(4)></summary>\n\nbody\n\n</details>\n')
+  const all = JSON.stringify(got)
+  ok(got[0]?.type === 'toggle' && got[0].open === false && !/alert|onclick|ontoggle|onmouseover|onerror|<img/i.test(all),
+    'HOSTILE: <details onclick ontoggle> and <summary onmouseover> carry no attribute or tag into the block, and `title="open"` is not the open flag', all)
 }
 
 // ---- Markdown this app did not write ----------------------------------------

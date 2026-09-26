@@ -76,6 +76,14 @@ export interface BlockSpec {
    * what mdLayout() below works out.
    */
   mdQuoteChildren?: boolean
+  /**
+   * In markdown, this type is an html `<details>` element and its subtree
+   * sits between its `<summary>` and the closing `</details>` that mdLayout()
+   * places after the last descendant. The children are NOT indented further
+   * than the block itself: indenting a paragraph inside `<details>` would make
+   * GitHub read it as a nested list's continuation, or at four columns as code.
+   */
+  mdDetails?: boolean
   /** Rendered by a dedicated case in render.ts, not by tag + inline host. */
   custom?: boolean
   /** Carries editable inline html. False for divider, image, pagelink. */
@@ -154,9 +162,20 @@ export const SPECS: BlockSpec[] = [
   },
   {
     type: 'toggle', label: 'Toggle', hint: 'Collapsible section', icon: 'toggle',
-    tag: 'div', text: true, custom: true, container: 'fold',
+    tag: 'div', text: true, custom: true, container: 'fold', mdDetails: true,
     init: (b) => { if (b.open === undefined) b.open = true },
-    toMd: (_b, text, indent) => [`${indent}- ${text}`],
+    // A TOGGLE IS `<details>`, which GitHub, Obsidian and every browser render
+    // as the same fold — the one piece of html a Markdown reader already knows
+    // as "collapsible". `open` is written only when the block is open (the
+    // renderer reads an absent `open` as folded, and so does html). The
+    // summary is the block's text as inline MARKDOWN, so it reads back through
+    // the same converter as every other line; GitHub shows `**` literally in a
+    // summary, which is the price of one converter instead of two.
+    //
+    // The children follow as ordinary markdown and mdLayout() writes the
+    // closing `</details>` after the last of them. Exported as `- text` before
+    // this, and read back as a bullet: the fold and its state were lost.
+    toMd: (b, text, indent) => [`${indent}<details${b.open === true ? ' open' : ''}>`, `${indent}<summary>${text}</summary>`],
   },
   {
     type: 'callout', label: 'Callout', hint: 'A note, tip or warning', icon: 'callout',
@@ -562,7 +581,9 @@ export const LIST_OF: Record<string, 'ul' | 'ol'> =
  * this. This is the part with the edge cases, so this is the part that has to
  * be reachable from a test.
  */
-export function mdLayout(blocks: Block[]): Array<{ quote: string; indent: string; sep: string }> {
+export interface MdLine { quote: string; indent: string; sep: string; close: Array<{ quote: string; line: string }> }
+
+export function mdLayout(blocks: Block[]): MdLine[] {
   const byId = new Map(blocks.map((b) => [b.id, b]))
   // HOP-CAPPED: `parent` is a plain id in a file anyone can hand-edit, so two
   // blocks can name each other. The renderer is a pre-order pass and cannot
@@ -588,18 +609,36 @@ export function mdLayout(blocks: Block[]): Array<{ quote: string; indent: string
   const alert = (b: Block): string | undefined => owners(b).find(wraps)?.id
   const depth = (b: Block): number => owners(b).filter(wraps).length
 
-  return blocks.map((b, i) => {
+  const folds = (b: Block | undefined): boolean => !!b && SPEC.get(b.type)?.mdDetails === true
+  const out: MdLine[] = []
+  const at = new Map(blocks.map((b, i) => [b.id, i]))
+  blocks.forEach((b, i) => {
     const parent = b.parent ? byId.get(b.parent) : undefined
     // Inside a callout a child is the alert's BODY, not a nested list item.
     // Indenting it makes GitHub read it as a nested list — or, at four spaces,
-    // as a code block.
-    const indent = parent && !wraps(parent) ? '  ' : ''
+    // as a code block. Inside a `<details>` fold it sits at the fold's own
+    // indent, for the same reason. (Effective parent for the fold case: the
+    // fold's line is already laid out, because a parent is always earlier.)
+    const effParent = eff.get(b.id)
+    const fold = effParent !== undefined && folds(byId.get(effParent)) ? at.get(effParent) : undefined
+    const indent = fold !== undefined ? out[fold].indent : parent && !wraps(parent) ? '  ' : ''
     const next = blocks[i + 1]
     // "same alert" compares the alert the NEXT block is in against the alert
     // this one IS or is in, so a callout and its first child are joined, and so
     // are two children of one callout — but two adjacent callouts are not.
     const mine = wraps(b) ? b.id : alert(b)
     const sep = next && alert(next) && alert(next) === mine ? '> '.repeat(depth(next)).trimEnd() : ''
-    return { quote: '> '.repeat(depth(b)), indent, sep }
+    // EVERY FOLD WHOSE SUBTREE ENDS HERE closes here, innermost first: this
+    // block itself if it is a fold with no children, then each fold above it
+    // that the next block is not inside.
+    const nextOwners = next ? new Set(owners(next).map((o) => o.id)) : new Set<string>()
+    const close: MdLine['close'] = []
+    for (const f of [b, ...owners(b)]) {
+      if (!folds(f) || nextOwners.has(f.id)) continue
+      const q = '> '.repeat(depth(f))
+      close.push({ quote: q, line: '' }, { quote: q, line: `${out[at.get(f.id)!]?.indent ?? indent}</details>` })
+    }
+    out.push({ quote: '> '.repeat(depth(b)), indent, sep, close })
   })
+  return out
 }

@@ -260,6 +260,12 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
    * callout on `stack` as their owner until `end`.
    */
   const alerts: Array<{ end: number; depth: number }> = []
+  /**
+   * Open `<details>` folds, innermost last: how deep `stack` was before each
+   * opened. A fold is a container like an alert, but it ends at an explicit
+   * `</details>` rather than at the end of a blockquote.
+   */
+  const folds: Array<{ depth: number }> = []
   /** a callout whose tag line held no text: its next line, if adjacent, is its text */
   let alertText: Block | null = null
   /** the paragraph a soft line break continues, and the quote a `>` continues */
@@ -292,6 +298,8 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
   for (; i < lines.length; i++) {
     while (alerts.length && i >= alerts[alerts.length - 1].end) {
       stack.length = alerts.pop()!.depth
+      // a fold left open inside the box ends with it
+      while (folds.length && folds[folds.length - 1].depth > stack.length) folds.pop()
       para = null; quote = null; alertText = null
     }
     const ownText = alertText
@@ -375,6 +383,51 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
       // h4–h6 land on h3: the model has three heading levels, and dropping a
       // deep heading to a paragraph would lose the outline entirely
       add(mk(`h${Math.min(head[1].length, 3)}`, { html: inlineHtml(head[2]) }), ownerFor(indent))
+      continue
+    }
+
+    // A `<details>` FOLD is a toggle. GitHub renders it, Obsidian renders it,
+    // and it is what this app's exporter writes (blocks.ts toggle toMd).
+    //
+    // THE TAG IS READ, NEVER KEPT. Of everything the opening tag may carry,
+    // the one fact taken from it is whether it says `open`; no attribute value
+    // is copied anywhere, so `<details onclick=…>` or `<details ontoggle=…>`
+    // costs the importer nothing to refuse — there is no html built from it to
+    // refuse. The summary is inline markdown and goes through inlineHtml like
+    // any other line (and sanitizeInline after it, in the importer).
+    const det = /^<details(\s[^>]*)?>(.*)$/i.exec(body)
+    if (det) {
+      para = null; quote = null
+      // quoted values out first, so `title="open"` does not read as the flag
+      const attrs = (det[1] ?? '').replace(/"[^"]*"|'[^']*'/g, '""')
+      const open = /(?:^|\s)open(?:\s|=|$)/i.test(attrs)
+      let rest = det[2].trim()
+      if (!rest) {
+        // the summary on the next non-blank line, as GitHub READMEs indent it
+        let j = i + 1
+        while (j < lines.length && !lines[j].trim()) j++
+        if (/^<summary(?:\s[^>]*)?>/i.test(lines[j]?.trim() ?? '')) { rest = lines[j].trim(); i = j }
+      }
+      const sum = /^<summary(?:\s[^>]*)?>(.*?)<\/summary>(.*)$/i.exec(rest)
+      const toggle = add(mk('toggle', { html: inlineHtml(sum ? sum[1].trim() : ''), open }), ownerFor(indent))
+      // anything after the summary on the same line is the fold's first line,
+      // and a `</details>` there closes it at once
+      let after = (sum ? sum[2] : rest).trim()
+      const shut = /<\/details>\s*$/i.test(after)
+      after = after.replace(/<\/details>\s*$/i, '').trim()
+      if (after) add(mk('p', { html: inlineHtml(after) }), toggle.id)
+      if (!shut) {
+        folds.push({ depth: stack.length })
+        // below `indent`, so no line of the body can pop it; `</details>` does
+        stack.push({ indent: indent - 0.5, id: toggle.id })
+      }
+      continue
+    }
+    if (/^<\/details\s*>$/i.test(body)) {
+      para = null; quote = null
+      const f = folds.pop()
+      // a stray closer (no fold open) is dropped, as the raw-tag sweep would
+      if (f) stack.length = Math.min(stack.length, f.depth)
       continue
     }
 

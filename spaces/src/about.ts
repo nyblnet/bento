@@ -873,7 +873,7 @@ export function toMarkdown(store: Store): string {
       // registry in one pass (blocks.ts mdLayout).
       const layout = mdLayout(page.blocks)
       page.blocks.forEach((b, i) => {
-        const { quote, indent, sep } = layout[i]
+        const { quote, indent, sep, close } = layout[i]
         const text = htmlToMd(b.html ?? '')
         // From the block registry, so a new type exports correctly the moment
         // it is declared. An UNKNOWN type — a file written by a newer build —
@@ -891,6 +891,8 @@ export function toMarkdown(store: Store): string {
         // An empty line inside a quote must be a bare '>', never '> ' and never
         // blank: a blank line closes the blockquote.
         out.push(...lines.flatMap((l) => l.split('\n')).map((l) => (l ? quote + l : quote.trimEnd())))
+        // the `</details>` of every fold that ends at this block (blocks.ts)
+        for (const c of close) out.push(c.line ? c.quote + c.line : c.quote.trimEnd())
         out.push(sep)
       })
     }
