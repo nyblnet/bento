@@ -811,12 +811,37 @@ export class Editor {
     // The relay refuses things the user can act on — too large, room full. For
     // the permanent codes their change stays in this copy and reaches nobody,
     // which they must be told rather than left to discover.
-    session.onNotice((n) => this.status(syncNoticeText(n)))
+    session.onNotice((n) => this.notice(syncNoticeText(n)))
     this.collab.tryJoin()
     // a document REPLACED under us (Replace-from-JSON, a restored version) may
     // be a different document with different credentials
     this.store.on('doc', () => this.collab?.tryJoin())
     if (this.liveSlot) this.liveSlot.replaceWith(this.collab.button())
+  }
+
+  /**
+   * THE SECOND LEVEL (D3): a message the reader must not miss — a refusal, a
+   * failure, an outcome that happened out of view (a copy written, the relay
+   * refusing a change). It was the same 12px `--muted` whisper in the bar as
+   * "Edited", which fades in under two seconds and on a phone sits over the
+   * title strip; "Every page opens wide on this screen from now on" is a
+   * sentence nobody could read before it left. A pill at the foot of the
+   * window, above everything (a dialog included), announced politely, as
+   * slides' toast is. The status line keeps the ambient first level.
+   */
+  notice(msg: string): void {
+    if (!msg) return
+    let n = document.querySelector<HTMLElement>('.sp-notice')
+    if (!n) {
+      n = el('div', 'sp-notice')
+      n.setAttribute('role', 'status')
+      n.setAttribute('aria-live', 'polite')
+      document.body.append(n)
+    }
+    n.textContent = msg
+    n.classList.add('sp-on')
+    clearTimeout((n as any)._t)
+    ;(n as any)._t = setTimeout(() => n?.classList.remove('sp-on'), 3600)
   }
 
   status(msg: string): void {
@@ -968,7 +993,7 @@ export class Editor {
   private reparentPage(id: string, parent: string): void {
     if (id === parent) return
     for (let p: string | undefined = parent; p; p = this.store.index.page.get(p)?.parent) {
-      if (p === id) { this.status(t('A page cannot contain itself')); return }
+      if (p === id) { this.notice(t('A page cannot contain itself')); return }
     }
     this.store.commit(() => {
       const page = this.store.index.page.get(id)
@@ -1845,7 +1870,7 @@ export class Editor {
     const s = this.store
     const page = pageId ? s.index.page.get(pageId) : s.page
     if (!page || s.readOnly) return
-    if (isIssue(page)) { this.status(t('Already an issue')); return }
+    if (isIssue(page)) { this.notice(t('Already an issue')); return }
     const fields = fieldsOf(s.doc).filter((f) => ISSUE_FIELDS.includes(f.key))
     s.commit(() => {
       page.blocks.unshift(...fields.map((f) => propBlock(f, f.def ?? '', newBlock('prop').id)))
@@ -3667,7 +3692,7 @@ export class Editor {
             try {
               const prepared = await prepareImage(file)
               draft.image = await internAsset(s.doc, prepared.dataUri)
-            } catch { this.status(t('That file could not be read as an image')); return }
+            } catch { this.notice(t('That file could not be read as an image')); return }
             paintPick()
           })()
         })
@@ -3932,7 +3957,7 @@ export class Editor {
       const applyAll = (v: 'wide' | 'full' | undefined) => {
         setReaderWidth(v)
         this.paintPage()
-        this.status(v ? t('Every page opens wide on this screen from now on')
+        this.notice(v ? t('Every page opens wide on this screen from now on')
                       : t('Pages open at their normal width again'))
       }
       row(m, {
@@ -3960,7 +3985,7 @@ export class Editor {
     const s = this.store
     const page = s.index.page.get(pageId)
     if (!page) return
-    if (s.doc.pages.length <= 1) { this.status(t('A space needs at least one page')); return }
+    if (s.doc.pages.length <= 1) { this.notice(t('A space needs at least one page')); return }
     const inbound = (s.index.backlinks.get(pageId) ?? []).length
     const kids = s.doc.pages.filter((p) => p.parent === pageId).length
     const parts = [t('Delete “{name}”?', { name: page.title || t('Untitled') })]
@@ -4012,7 +4037,7 @@ export class Editor {
         ? { dataUri: await blobToDataUri(file), w: 0, h: 0, original: true, wasBytes: file.size }
         : await prepareImage(file)
     } catch {
-      this.status(t('That file could not be read as an image'))
+      this.notice(t('That file could not be read as an image'))
       return
     }
 
@@ -4119,7 +4144,7 @@ export class Editor {
     try {
       dataUri = await blobToDataUri(file)
     } catch {
-      this.status(t('That file could not be read'))
+      this.notice(t('That file could not be read'))
       return
     }
     const kind = (file as File).type?.startsWith('audio/') ? 'audio' : 'video'
@@ -4157,7 +4182,7 @@ export class Editor {
     // inline html, so it never passes through sanitize.ts at all — a
     // `javascript:` typed into this box would be written straight onto the
     // element. The allowlist is the test, never a `javascript:` blocklist.
-    if (!/^https?:\/\//i.test(url)) { this.status(t('That needs to be an http or https address')); return }
+    if (!/^https?:\/\//i.test(url)) { this.notice(t('That needs to be an http or https address')); return }
     const kind = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|weba)(\?|#|$)/i.test(url) ? 'audio' : 'video'
     this.writeMedia(blockId, insertAfter, (b) => { b.src = url; b.kind = kind })
     this.status('')
@@ -4197,7 +4222,7 @@ export class Editor {
         this.status(t('Reading image…'))
         let prepared
         try { prepared = await prepareImage(file) } catch {
-          this.status(t('That file could not be read as an image')); return
+          this.notice(t('That file could not be read as an image')); return
         }
         const ref = await internAsset(this.store.doc, prepared.dataUri)
         this.store.commit(() => { const b = this.store.block(blockId); if (b) b.poster = ref })
@@ -4231,7 +4256,7 @@ export class Editor {
         this.status(t('Reading image…'))
         let prepared
         try { prepared = await prepareImage(file) } catch {
-          this.status(t('That file could not be read as an image')); return
+          this.notice(t('That file could not be read as an image')); return
         }
         if (prepared.dataUri.length > IMAGE_EMBED_BUDGET) {
           const okay = confirm(t(
@@ -4393,20 +4418,20 @@ export class Editor {
    */
   async importSpace(file: File, under?: string): Promise<void> {
     const s = this.store
-    if (s.readOnly) { this.status(t('This file is open read-only')); return }
+    if (s.readOnly) { this.notice(t('This file is open read-only')); return }
     let text: string
-    try { text = await file.text() } catch { this.status(t('That file could not be read')); return }
+    try { text = await file.text() } catch { this.notice(t('That file could not be read')); return }
 
     const body = spaceBlockOf(text)
     if (body === 'encrypted') {
       // The password is not ours to ask for, and the honest instruction is the
       // one that works: open the file where the password already is.
-      this.status(t('That space is password-protected. Open it, then export the pages you want.'))
+      this.notice(t('That space is password-protected. Open it, then export the pages you want.'))
       return
     }
     const res = parseDoc(body ?? '')
     if (!res.ok) {
-      this.status(res.err === 'format'
+      this.notice(res.err === 'format'
         ? t('That file is not a bento/spaces document')
         : t('That file could not be read'))
       return
@@ -4515,7 +4540,7 @@ export class Editor {
           const out = extractSpace(s.doc, pick.value, { subtree: kids.checked, docId: uid('doc') })
           close()
           void this.onExportSpace?.(out.doc).then((ok) => {
-            if (ok) this.status(t('Exported {n} page(s) as a new space', { n: out.stats.pages }))
+            if (ok) this.notice(t('Exported {n} page(s) as a new space', { n: out.stats.pages }))
           })
         }, true),
         plainBtn(t('Close'), close),
@@ -4535,14 +4560,14 @@ export class Editor {
    */
   async importFiles(picked: PickedFile[], opts: { under?: string } = {}): Promise<void> {
     const s = this.store
-    if (s.readOnly) { this.status(t('This file is open read-only')); return }
+    if (s.readOnly) { this.notice(t('This file is open read-only')); return }
     const notes = picked.filter((p) => NOTE_EXT.test(p.path))
     if (!notes.length) {
       // A space is a legitimate thing to drop on the import, and it arrives by
       // the same gesture: one route in, whatever kind of notes they are.
       const space = picked.find((p) => SPACE_EXT.test(p.path))
       if (space) { await this.importSpace(space.file, opts.under); return }
-      this.status(t('No Markdown files in that selection'))
+      this.notice(t('No Markdown files in that selection'))
       return
     }
     if (notes.length > 500 &&
@@ -4553,7 +4578,7 @@ export class Editor {
     try {
       files = await Promise.all(notes.map(async (p) => ({ path: p.path, text: await p.file.text() })))
     } catch {
-      this.status(t('Those files could not be read'))
+      this.notice(t('Those files could not be read'))
       return
     }
 
@@ -5003,14 +5028,14 @@ export class Editor {
       ? await shareModule.inviteCopy(this.store.doc)
       : shareModule.readerCopy(this.store.doc)
     if (!out) {
-      this.status(kind === 'invite'
+      this.notice(kind === 'invite'
         ? t('Only the owner of this space can invite people')
         : t('This space has no live session to follow'))
       return
     }
     const ok = await this.onShareCopy?.(out, kind)
     if (ok) {
-      this.status(kind === 'invite'
+      this.notice(kind === 'invite'
         ? t('Editor copy saved — recipients join live with edit access')
         : t('Read-only copy saved — it follows the live session, view only'))
     }
@@ -5039,7 +5064,7 @@ export class Editor {
       // the extract's writer rather than the copy path: that one keeps no file
       // handle, which is what leaves you editing this space afterwards.
       onWriteCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
-      onStatus: (msg) => this.status(msg),
+      onStatus: (msg) => this.notice(msg),
     })
   }
 

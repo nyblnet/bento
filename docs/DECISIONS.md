@@ -7543,3 +7543,27 @@ it gets left open over the page.
 
 **Cost:** +1,234 B of shell (284,627 → 285,861, `ZOPFLI=0`). The deleted
 dialog and panel code is smaller than the kernel sheets that replace it.
+
+## 2026-09-26 — Spaces has two levels of transient message; phone targets are 44px
+
+**D3 in spaces: `status()` and `notice()`.**
+- The bar's status line stays the first level. It holds ambient state that is
+  true for a moment: "Edited", "Saved", "Editing", "Reading view".
+- `Editor.notice()` is the second level: a pill at the foot of the window,
+  `role=status`, above dialogs (`--z-toast` 1100), like slides' toast. It is
+  for messages the reader must not miss:
+  - a sync refusal (`syncNoticeText`);
+  - a read or import failure;
+  - a refused move;
+  - a copy or export written;
+  - a viewer preference that now applies to every page.
+
+Before this, both levels were the same 12px `--muted` line that fades in under
+two seconds. On a phone that line sits over the title strip. A future message
+picks its level by that test: if missing it would leave the reader wrong about
+their file, it is a notice. The kernel has no notice primitive yet. When one
+lands, this method is the only caller to move.
+
+**D5 in spaces:** under a coarse pointer the bar's buttons, the Live control,
+the page-tree rows and their ⋯, the format bar and every menu row are 44px
+(`--tap`). The bar was 40px.
