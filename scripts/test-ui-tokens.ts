@@ -101,7 +101,7 @@ ok(darkMedia.size > 8, `the prefers-color-scheme:dark block parses (${darkMedia.
 // ————————————————————— which tokens must flip, which must not —————————————————————
 
 const MUST_FLIP = ['--ink', '--ink-2', '--muted', '--surface', '--field', '--chrome',
-  '--chrome-2', '--line', '--edge', '--accent-ink', '--blue', '--shade', '--bg']
+  '--chrome-2', '--line', '--edge', '--accent-ink', '--blue', '--danger', '--shade', '--bg']
 const NEVER_FLIP = ['--accent', '--accent-on', '--brand']
 
 for (const t of MUST_FLIP) {
@@ -163,6 +163,11 @@ for (const theme of ['light', 'dark'] as const) {
   ok(cr('--accent-on', '--accent') >= 4.5, `${theme}: --accent-on on the --accent fill — ${cr('--accent-on', '--accent').toFixed(2)}:1 (≥4.5)`)
   // The secondary accent, at the UI/large-text floor.
   ok(cr('--blue', '--surface') >= 3, `${theme}: --blue on --surface — ${cr('--blue', '--surface').toFixed(2)}:1 (≥3)`)
+  // Destructive-action ink is real text (a "Delete" label), so the body floor.
+  // It flips precisely because a dark-red would fail this in the dark theme.
+  for (const bg of ['--surface', '--chrome']) {
+    ok(cr('--danger', bg) >= 4.5, `${theme}: --danger text on ${bg} — ${cr('--danger', bg).toFixed(2)}:1 (≥4.5)`)
+  }
   // --edge is "the border that must be seen"; --line is the subtle hairline.
   // Their ordering is the invariant §1 states — edge reads harder than line.
   ok(cr('--edge', '--surface') > cr('--line', '--surface'),

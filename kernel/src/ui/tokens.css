@@ -75,6 +75,10 @@
   --accent-ink: #7a5200; /* accent-COLOURED text on the chrome's surfaces (flips) */
   --accent-on: #3a2a00;  /* text sitting ON the solid --accent fill. DOES NOT FLIP. */
   --blue: #5b8def;       /* the secondary accent — links, selection, info */
+  --danger: #a3231a;     /* destructive-action ink — a delete, a reset (flips:
+                            a dark-red on light chrome could not read on a dark
+                            one, which is why spaces' single #a3231a was
+                            light-only; the dark value below is the fix) */
   --brand: #ff9e8a;      /* the wordmark coral. DOES NOT FLIP. */
   --shade: 20 30 45;     /* shadow COLOUR CHANNEL — used as rgb(var(--shade)/a) */
 
@@ -137,6 +141,7 @@
   --edge: #454e5c;
   --accent-ink: #f0b74e; /* was #3a2a00 in slides = 1.09:1 — the fix from #557 */
   --blue: #7aa5f5;
+  --danger: #f28b82;     /* a lighter red reads on the dark surface (6.85:1) */
   --shade: 0 0 0;        /* on a dark surface a shadow is black, not slate */
   --bg: #14181e;
 }
@@ -158,6 +163,7 @@
     --edge: #454e5c;
     --accent-ink: #f0b74e;
     --blue: #7aa5f5;
+    --danger: #f28b82;
     --shade: 0 0 0;
     --bg: #14181e;
   }
