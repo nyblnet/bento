@@ -132,6 +132,31 @@ const SLIDES_MENU = {
   saveFont: /\.ed-save-menu \.ed-btn \{ font-size:\s*([^;]+);/.exec(slidesCss)?.[1],
 }
 SLIDES_MENU.rowInk = SLIDES_MENU.rowInk ? decl(slidesRoot, SLIDES_MENU.rowInk) : undefined
+// D2's second line (slides #573 `.ed-mi-desc`) and the keyboard ring
+// (`.ed-btn:focus-visible` outside, `.ed-menu .ed-btn:focus-visible` inside)
+const edDesc = block('.ed-mi-desc')
+const SLIDES_DESC = {
+  size: decl(edDesc, 'font-size'), weight: decl(edDesc, 'font-weight'), lh: decl(edDesc, 'line-height'),
+  ink: /var\((--[a-z0-9-]+)\)/.exec(decl(edDesc, 'color') ?? '')?.[1], top: decl(edDesc, 'margin-top'),
+}
+const ringOut = /\n\.ed-btn:focus-visible[^{]*\{([^}]*)\}/.exec(slidesCss)?.[1] ?? ''
+const SLIDES_RING = {
+  outline: /outline:\s*([^;]+);/.exec(ringOut)?.[1]?.trim(),
+  outside: /outline-offset:\s*([^;]+);/.exec(ringOut)?.[1]?.trim(),
+  inside: /\n\.ed-menu \.ed-btn:focus-visible \{[^}]*outline-offset:\s*([^;]+);/.exec(slidesCss)?.[1]?.trim(),
+}
+// This PR is stacked below slides #573, which is where slides gains both. Until
+// it lands, a slides checkout without them is held to the RULED values (D2's
+// second line, the kernel ring) — the same numbers #573 writes — and the check
+// says which source it used. Once slides carries them, they are read, and a
+// slides change moves the target.
+const descRead = Object.values(SLIDES_DESC).every(Boolean), ringRead = Object.values(SLIDES_RING).every(Boolean)
+const hasDesc = /\.ed-mi-desc/.test(slidesCss), hasRing = /\.ed-btn:focus-visible/.test(slidesCss)
+if (!hasDesc) Object.assign(SLIDES_DESC, { size: '12px', weight: '400', lh: '1.35', ink: '--muted', top: '2px' })
+if (!hasRing) Object.assign(SLIDES_RING, { outline: '2px solid var(--accent-ink)', outside: '2px', inside: '-2px' })
+ok((descRead || !hasDesc) && (ringRead || !hasRing),
+  `slides' menu descriptions and keyboard ring are read from its stylesheet where it has them (${hasDesc ? 'descriptions: slides' : 'descriptions: D2 ruling'}, ${hasRing ? 'ring: slides' : 'ring: kernel ruling'}; ${JSON.stringify(SLIDES_DESC)} ${JSON.stringify(SLIDES_RING)})`)
+const ringInk = /var\((--[a-z0-9-]+)\)/.exec(SLIDES_RING.outline ?? '')?.[1]
 ok(Object.values(SLIDES_MENU).every(Boolean), `slides' menu values can be read from its stylesheet (${JSON.stringify(SLIDES_MENU)})`)
 
 // THE SAVE MENU IS SLIDES' SAVE MENU: the document-level commands, in slides'
@@ -260,6 +285,19 @@ async function browser(chrome: string, html: string): Promise<void> {
     await key('ArrowDown', 0, 'ArrowDown')
     const second = await js<string>(FOCUSED)
     ok(first.startsWith('Save a copy') && second.startsWith('Duplicate as a new space'), `arrow keys walk the Save rows ("${first}" → "${second}")`)
+    // the ring on a row reached by the keyboard is slides': --accent-ink, INSIDE
+    const rowRing = await js<any>(`(() => { const e = document.activeElement; const c = getComputedStyle(e); return { style: c.outlineStyle, w: c.outlineWidth, color: c.outlineColor, off: c.outlineOffset, want: getComputedStyle(document.documentElement).getPropertyValue(${JSON.stringify(ringInk)}).trim() } })()`)
+    const ringW = /(\d+px)/.exec(SLIDES_RING.outline ?? '')?.[1]
+    const hexOf = (rgb: string) => '#' + (rgb.match(/\d+/g) ?? []).slice(0, 3).map((n) => (+n).toString(16).padStart(2, '0')).join('')
+    ok(rowRing.style === 'solid' && rowRing.w === ringW && hexOf(rowRing.color) === rowRing.want && rowRing.off === SLIDES_RING.inside,
+      `a menu row's keyboard ring is slides': ${SLIDES_RING.outline}, offset ${SLIDES_RING.inside} (${JSON.stringify(rowRing)})`)
+    // D2's second line: slides' type, and wired as a DESCRIPTION, the name staying the name
+    const desc = await js<any>(`(() => { const row = [...(${OPEN}).querySelectorAll('.bkm-item')].find(r => r.textContent.startsWith('Duplicate as a new space')); const h = row.querySelector('.bkm-hint'); const c = getComputedStyle(h); return { size: c.fontSize, weight: c.fontWeight, lh: c.lineHeight, ink: c.color, top: c.marginTop, muted: getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(), name: row.getAttribute('aria-label'), by: row.getAttribute('aria-describedby'), byText: document.getElementById(row.getAttribute('aria-describedby') || '')?.textContent, hint: h.textContent } })()`)
+    const lhPx = `${Math.round(parseFloat(SLIDES_DESC.size ?? '0') * parseFloat(SLIDES_DESC.lh ?? '0') * 100) / 100}px`
+    ok(desc.size === SLIDES_DESC.size && desc.weight === SLIDES_DESC.weight && parseFloat(desc.lh).toFixed(2) === parseFloat(lhPx).toFixed(2) && desc.top === SLIDES_DESC.top && SLIDES_DESC.ink === '--muted' && hexOf(desc.ink) === desc.muted,
+      `a Save row's description is slides' second line — ${SLIDES_DESC.size}/${SLIDES_DESC.weight}, line-height ${SLIDES_DESC.lh}, ${SLIDES_DESC.ink}, ${SLIDES_DESC.top} under the name (${JSON.stringify(desc)})`)
+    ok(desc.name === 'Duplicate as a new space…' && !!desc.by && desc.byText === desc.hint,
+      `…and it is the row's DESCRIPTION (aria-describedby), the name alone its accessible name (${desc.name} / ${desc.by})`)
 
     // …and it IS slides' Save menu: the rows, in order, and the rule where slides has it
     const saveRows = await js<any>(`(() => { const m = ${OPEN}; return [...m.children].map(c => c.classList.contains('bkm-sep') ? '—' : (c.querySelector('.bkm-text')?.textContent ?? '')) })()`)
@@ -287,11 +325,15 @@ async function browser(chrome: string, html: string): Promise<void> {
     if (cs.slice(0, 4).join() !== ss.slice(3, 7).join() || cs.slice(4, 7).join() !== ss.slice(0, 3).join()) off.push(`shadow ${mm.shadow} ≠ ${SLIDES_MENU.shadow}`)
     if (mm.frame !== `${frameW} solid`) off.push(`frame ${mm.frame} ≠ ${SLIDES_MENU.rowFrame}`)
     if (mm.ink !== hexRgb(SLIDES_MENU.rowInk) || mm.icoInk !== mm.ink) off.push(`ink ${mm.ink}/${mm.icoInk} ≠ ${SLIDES_MENU.rowInk}`)
-    if (mm.weight !== '400' || mm.h !== 30) off.push(`row ${mm.weight} ${mm.h}px, slides' is 400 30px`)
-    ok(off.length === 0, `the Save menu computes to slides' stylesheet values — offset, padding, corner, shadow, 30px rows at ${SLIDES_MENU.saveFont}/400 in ${SLIDES_MENU.rowInk}, separators (${off.join('; ') || JSON.stringify(mm)})`)
+    if (mm.weight !== '400') off.push(`row weight ${mm.weight}, slides' is 400`)
+    ok(off.length === 0, `the Save menu computes to slides' stylesheet values — offset, padding, corner, shadow, rows at ${SLIDES_MENU.saveFont}/400 in ${SLIDES_MENU.rowInk}, separators (${off.join('; ') || JSON.stringify(mm)})`)
     await key('Escape', 0, 'Escape')
     const afterEsc = await js<any>(`({ open: !!(${OPEN}), exp: (${SAVEM}).getAttribute('aria-expanded'), focus: document.activeElement === (${SAVEM}) })`)
     ok(!afterEsc.open && afterEsc.exp === 'false' && afterEsc.focus, `Escape closes Save ▾, clears aria-expanded and puts focus back on its trigger (${JSON.stringify(afterEsc)})`)
+    // …where a bar button's ring is drawn OUTSIDE, on the bar
+    const barRing = await js<any>(`(() => { const e = document.activeElement; const c = getComputedStyle(e); return { fv: e.matches(':focus-visible'), style: c.outlineStyle, w: c.outlineWidth, off: c.outlineOffset } })()`)
+    ok(barRing.fv && barRing.style === 'solid' && barRing.w === /(\d+px)/.exec(SLIDES_RING.outline ?? '')?.[1] && barRing.off === SLIDES_RING.outside,
+      `a bar button's keyboard ring is slides': outside, offset ${SLIDES_RING.outside} (${JSON.stringify(barRing)})`)
 
     await tap(SAVEM)
     await tap(`[...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith('Insert'))`)

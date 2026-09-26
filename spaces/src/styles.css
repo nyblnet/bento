@@ -159,6 +159,7 @@
   --share-wait: #b8860b;
   --share-ok: #2e8b57;
   --dirty-ring: #16273e;
+  --pop-shadow: 0 8px 24px rgb(20 30 45 / 0.14);
 
   /* The BROWSER's own furniture — scrollbars, form controls, the canvas behind
      a rubber-band scroll — follows this, and CSS cannot reach any of it.
@@ -212,6 +213,8 @@
     --share-wait: #b8860b;
     --share-ok: #2e8b57;
     --dirty-ring: #16273e;
+    /* slides #573: navy at 14% lifts nothing off dark chrome; black, deeper */
+    --pop-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
     color-scheme: only dark;
   }
 }
@@ -255,6 +258,8 @@
     --share-wait: #b8860b;
     --share-ok: #2e8b57;
     --dirty-ring: #16273e;
+    /* slides #573: navy at 14% lifts nothing off dark chrome; black, deeper */
+    --pop-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
     color-scheme: only dark;
   }
 }
@@ -954,7 +959,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   position: fixed; z-index: 60; width: 260px; max-height: 80vh; overflow: auto;
   /* slides' menu surface (the parity block), as every popover from the bar */
   background: var(--pop-bg); border: 1px solid var(--pop-line); border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgb(20 30 45 / 0.14); padding: 6px;
+  box-shadow: var(--pop-shadow); padding: 6px;
 }
 
 /* ————— banners + gates ————— */
@@ -1254,7 +1259,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-app, .sp-mn-anchored {
   --bkm-radius: var(--radius);
   --bkm-item-radius: 8px;
-  --bkm-shadow: 0 8px 24px rgb(20 30 45 / 0.14);
+  --bkm-shadow: var(--pop-shadow);
   --bkm-bg: var(--pop-bg);
   --bkm-border: var(--pop-line);
   --bkm-hover: var(--pop-hover);
@@ -1285,10 +1290,19 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    and the Save list. Nothing in a menu shrinks; the list scrolls instead. */
 .bkm-menu.sp-mn-pop > * { flex-shrink: 0; }
 .sp-mn-pop .bkm-sep { margin: 3px 2px; }
-.sp-mn-pop .bkm-hint { font-size: var(--fs-hint); }
+/* D2 descriptions, slides' `.ed-mi-desc` (#573): 12px/1.35 --muted, 2px under
+   the name, regular weight; the icon lines up with the NAME, not the middle */
+.sp-mn-pop .bkm-hint { font-size: 12px; font-weight: 400; line-height: 1.35; color: var(--muted); margin-top: 2px; }
+.sp-mn-pop .bkm-item:has(.bkm-hint) { align-items: flex-start; }
+.sp-mn-pop .bkm-item:has(.bkm-hint) > .bkm-ico { margin-top: 1px; }
 /* slides' Save menu is the one list set a half-point smaller, and at least 190
    wide; its descriptions (D2) wrap under the name rather than widening it */
-.sp-savemenu > .bkm-menu.sp-mn-pop { min-width: 240px; }
+/* slides #573: the list is 264 wide (less on a phone) and scrolls in the room
+   under the bar, which topbar.ts publishes as --sp-bar-bottom */
+.sp-savemenu > .bkm-menu.sp-mn-pop {
+  width: min(264px, calc(100vw - 16px));
+  max-height: calc(100dvh - var(--sp-bar-bottom, 56px) - 12px);
+}
 .sp-savemenu .bkm-item { font-size: 12.5px; }
 /* Selectors that override the kernel sheet carry `.bkm`/`.bkm-menu`: the
    bundle places that sheet AFTER this file, so equal specificity loses.
@@ -2242,12 +2256,12 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 .sp-paction:active { background: var(--pop-line); }
 .sp-paction-primary, .sp-paction-primary:hover { background: var(--ink); border-color: transparent; color: var(--surface); }
 .sp-paction-primary:hover { background: var(--ink-2); }
-.sp-paction-ico { display: flex; flex: none; }
+.sp-paction-ico { display: flex; flex: none; margin-top: 1px; }
 .sp-paction-ico svg { display: block; }
-.sp-paction-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sp-paction-body { display: flex; flex-direction: column; min-width: 0; }
 .sp-paction strong { font-weight: 400; }
-.sp-paction-body span { color: var(--muted); font-size: 11.5px; }
-.sp-paction-primary .sp-paction-body span { color: color-mix(in srgb, var(--surface) 72%, var(--ink)); }
+.sp-paction-body span { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.35; margin-top: 2px; }
+.sp-paction-primary .sp-paction-body span { color: color-mix(in srgb, var(--pop-bg) 78%, var(--ink)); }
 .sp-paction-sep { height: 1px; background: var(--pop-line); margin: 2px 0; }
 
 /* THIS device's row in the People list, on a chrome ground as slides' */
@@ -2615,3 +2629,17 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-canvas-body { background: none; background-image: none; }
   .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }
+
+/* ————— SLIDES PARITY: the keyboard ring —————
+   slides #573 (and the kernel's .bkm-item): 2px --accent-ink. Bar and dialog
+   buttons draw it OUTSIDE, on the surface they sit on (inside, it would vanish
+   into Save's ink fill); rows in a list draw it INSIDE, where the list's own
+   padding would clip it. :focus-visible, so a pointer never sees it. */
+.sp-bar button:not(.bkm-item):focus-visible, .bkd-card button:not(.bkm-item):focus-visible {
+  outline: 2px solid var(--accent-ink); outline-offset: 2px;
+}
+.sp-pop .sp-paction:focus-visible, .sp-pop .sp-pitem:focus-visible, .sp-mn-pop .bkm-item:focus-visible,
+.bkd-card .sp-result:focus-visible, .bkd-card .sp-ab-version:focus-visible {
+  outline: 2px solid var(--accent-ink); outline-offset: -2px;
+}
+

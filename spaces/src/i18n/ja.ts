@@ -647,4 +647,6 @@ export const ja: Catalog = {
   "Replace from JSON": "JSON から置き換え",
   "Update available: v{v} — click the peach button to update": "更新があります: v{v} — ピーチ色のボタンをクリックで更新",
   "Version {v} is available — click to update": "バージョン {v} があります — クリックで更新",
+  "Plain JSON of every page — no live-session keys": "全ページのプレーンな JSON — ライブセッションの鍵は含みません",
+  "Takes effect on the next save": "次の保存から有効になります",
 }

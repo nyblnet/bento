@@ -647,4 +647,6 @@ export const zh_Hant: Catalog = {
   "Replace from JSON": "從 JSON 取代",
   "Update available: v{v} — click the peach button to update": "有可用更新：v{v} — 點按桃色按鈕更新",
   "Version {v} is available — click to update": "版本 {v} 可用 — 點按以更新",
+  "Plain JSON of every page — no live-session keys": "所有頁面的純 JSON — 不含即時工作階段金鑰",
+  "Takes effect on the next save": "下次儲存時生效",
 }

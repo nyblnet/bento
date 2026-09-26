@@ -7639,13 +7639,19 @@ numbers out of slides' stylesheet and holds the computed values to them. In
 dark, what opens from the bar uses slides' surface family (`--pop-bg`
 `#21262e`, `--pop-line`, `--pop-hover`), a step lighter than spaces' panels.
 
-**Where D-rulings and slides disagree, the ruling wins.** D2 makes Save and
-Share consequence menus, so the rows whose effect you should read first carry
-a visible second line (Duplicate, Encrypt/Remove password, Replace from JSON;
-every Share action). Slides keeps those in tooltips; that is filed for slides.
-D4 keeps a dialog's title at 17px/650 where slides' help and version dialogs
-use a 19.5px/700 `h2`; also filed. D8 keeps shortcuts sans and right-aligned
-where slides' help sheet uses monospace.
+**Where D-rulings and slides disagreed, the ruling won — and slides then
+moved to it (#573).** D2 makes Save and Share consequence menus: every row
+carries a visible second line (12px/1.35 `--muted`, 2px under the name), wired
+as the row's DESCRIPTION through `aria-describedby`, the name alone its
+accessible name — spaces' `menus.ts row()` and the Share actions do exactly
+what slides' `menuLabel` does. D4 dialog titles are 17px/650 in both; D8 help
+shortcuts are sans and right-aligned in both. The keyboard ring is the
+kernel's in both: 2px `--accent-ink`, OUTSIDE (+2px) on bar and dialog buttons,
+INSIDE (−2px) on rows in a list. The dark menu shadow is `0 8px 24px rgb(0 0 0
+/ .5)`; spaces carries it as a `--pop-shadow` token defined in both of its dark
+blocks, so dark chosen by the OS and dark picked in About both get it. The Save
+list is `min(264px, 100vw − 16px)` wide and scrolls in the room under the bar
+(`100dvh − --sp-bar-bottom − 12px`).
 
 **Organisation — slides' map, command for command:**
 
@@ -7684,7 +7690,9 @@ defaults, so slides can adopt the kernel menu without changing its look):
 offset 6 → 4, list padding 5 → 4, row padding `7px 9px` → `6px 9px`, row gap
 9 → 6, row frame 0 → 1px transparent, row radius 7 → 8, icon ink `--muted` →
 row ink, min-width 200 → 150, shadow `0 12px 32px /.16` → `0 8px 24px /.14`,
-separator margin `4px 6px` → `3px 2px`, no pressed state → `--line`; row text
+separator margin `4px 6px` → `3px 2px`, no pressed state → `--line`, a dark
+shadow of `0 8px 24px rgb(0 0 0 / .5)`, `.bkm-hint` 12px/1.35 with 2px above and
+an `aria-describedby` wiring from the row; row text
 not nowrap (a start-anchored list then shrinks to its min-width and wraps
 names); a scrolling list lets its 1px separators shrink to nothing. Dialog:
 frame 1px → none, padding `20px 22px` → 20px, shadow and scrim to slides'.

@@ -99,6 +99,7 @@ export interface CollabUiHost {
 }
 
 export class CollabUi {
+  private static descSeq = 0
   private host: CollabUiHost
   private btn: HTMLButtonElement | null = null
   private known = new Map<string, string>()
@@ -460,9 +461,14 @@ export class CollabUi {
     ico.innerHTML = icon
     const body = el('span', 'sp-paction-body')
     body.append(el('strong', '', label))
-    if (hint) body.append(el('span', '', hint))
+    if (hint) {
+      const d = el('span', '', hint)
+      d.id = `sp-pdesc-${++CollabUi.descSeq}`
+      body.append(d)
+      b.setAttribute('aria-label', label)
+      b.setAttribute('aria-describedby', d.id)
+    }
     b.append(ico, body)
-    b.title = hint
     b.addEventListener('click', run)
     return b
   }
