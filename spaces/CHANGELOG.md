@@ -536,6 +536,20 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   bytes of data is not written into the Markdown, because in a plain editor it
   would be a screen of base64 after every card.
 
+- **A video or audio clip comes back a clip.** It exported as a Markdown link
+  and returned as a paragraph, losing controls, loop, muted, poster, size and
+  caption. It now leaves as `<video>` or `<audio>` carrying those fields, with
+  a link to the clip inside it. Obsidian and browsers play it. A renderer that
+  strips the tag keeps the link, which is exactly what the old export was.
+  Autoplay is written as `data-autoplay`, so the file never makes another
+  renderer start the clip; this app records autoplay and never obeys it. The
+  importer also reads clips as READMEs write them, including a `<source>` child
+  and a tag spread over several lines. Nothing is copied from the tag by name.
+  The source must be an embedded clip or an http(s) address, and the poster an
+  embedded raster picture or an http(s) address. Anything else, such as a
+  `javascript:` source or a relative path, arrives as its label and the address
+  as plain code text, never as a player.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

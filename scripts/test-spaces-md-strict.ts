@@ -102,7 +102,6 @@ const FIX: Record<string, () => Fixture> = {
 // the design brief's own row, so a reader of a failure knows what closing it
 // would take. Removing a pin is the deliberate edit this rig asks for.
 const PINNED: Record<string, string> = {
-  media: 'exports as `[label](src)` and comes back a paragraph; needs `<video>`/`<audio>` html or a fence, and `controls`/`loop`/`muted` are lost',
   prop: 'exports as `**Status:** In progress` and comes back a paragraph; the natural form is front matter (`status: doing`), and value id vs label needs the schema',
   view: 'exports as a title and a grouped issue list and comes back as p+p+bullet; needs a `bento-view` fence (its rows are other pages)',
   pagelink: 'exports as `→ [[Title]]` and comes back a paragraph holding a wikilink',
@@ -336,6 +335,50 @@ console.log('\nlink cards: [title](url) — desc <!-- bento:card … -->')
   for (const [line, fine] of hostile) {
     const got = only(`${line}\n`)
     ok(fine(got), `HOSTILE card: ${line}`, JSON.stringify(got))
+  }
+}
+
+console.log('\nmedia: <video>/<audio> with a link inside')
+{
+  const t = trip({ blocks: [
+    b('media', '', { kind: 'video', src: 'https://v.example/a%20b.mp4?x=1&y=2', alt: 'The <demo> & more', caption: 'A <strong>caption</strong>', poster: 'asset:still',
+      controls: false, loop: true, muted: true, autoplay: true, width: 75, w: 1280, h: 720 }),
+    b('media', '', { kind: 'audio', src: 'data:audio/mpeg;base64,SUQz', controls: true }),
+  ] })
+  ok(qualifies(t), 'a video carrying every field (controls off, loop, muted, autoplay, poster, sizes, caption) and an embedded audio clip',
+    qualifies(t) ? undefined : why(t))
+  ok(!/\sautoplay[\s>=]/.test(t.md) && t.md.includes('data-autoplay'),
+    'autoplay is recorded as data-autoplay, so no other renderer plays the clip on the author\'s behalf', t.md)
+  ok(/<a href="[^"]+">The &lt;demo&gt; &amp; more<\/a><\/video>/.test(t.md),
+    'the element holds a link to the clip: a renderer that strips <video> still shows the old export', t.md)
+}
+{
+  const got = only('<video controls width="640" height="360">\n  <source src="https://example.com/demo.mp4" type="video/mp4">\n  Your browser does not play video.\n</video>\n\nAfter.\n')
+  ok(got.length === 2 && got[0].type === 'media' && got[0].src === 'https://example.com/demo.mp4' && got[0].controls === true &&
+    got[0].w === 640 && got[1].html === 'After.', 'README: a multi-line <video> with a <source> child', JSON.stringify(got))
+}
+{
+  const got = only('<audio src="https://example.com/a.mp3" autoplay></audio>\n')
+  ok(got[0]?.type === 'media' && got[0].kind === 'audio' && got[0].autoplay === true && got[0].controls === false,
+    'a real autoplay is recorded (and mediaPlayback never obeys it)', JSON.stringify(got))
+}
+{
+  const hostile: Array<[string, (x: Block[]) => boolean]> = [
+    ['<video src="javascript:alert(1)" controls><a href="javascript:alert(1)">x</a></video>', (x) => x[0]?.type === 'p' && x[0].src === undefined && /<code>javascript:alert\(1\)<\/code>/.test(x[0].html ?? '')],
+    ['<video src=" JAVASCRIPT:alert(1)"></video>', (x) => x[0]?.type === 'p'],
+    ['<audio src="file:///etc/passwd"></audio>', (x) => x[0]?.type === 'p'],
+    ['<video src="clip.mp4"></video>', (x) => x[0]?.type === 'p' && (x[0].html ?? '').includes('<code>clip.mp4</code>')],
+    ['<video src="https://ok.example/a.mp4" onerror="alert(1)" onloadstart=alert(2) style="x:url(//t.invalid)" poster="javascript:alert(3)"></video>',
+      (x) => x[0]?.type === 'media' && x[0].poster === undefined && !/alert|onerror|style/i.test(JSON.stringify(x))],
+    ['<video src="https://ok.example/a.mp4" poster="data:image/svg+xml;base64,PHN2Zz4="></video>', (x) => x[0]?.type === 'media' && x[0].poster === undefined],
+    ['<video src="https://ok.example/a.mp4" data-caption="&lt;img src=x onerror=alert(1)&gt;"></video>',
+      (x) => x[0]?.type === 'media' && x[0].caption === '<img src=x onerror=alert(1)>'],
+    ['<video src="https://ok.example/a.mp4"><script>alert(1)</script></video>', (x) => x[0]?.type === 'media' && !/script/i.test(JSON.stringify(x))],
+    ['<video src="https://ok.example/a.mp4">', (x) => x.every((y) => y.type === 'p') && !/<video/i.test(JSON.stringify(x))],
+  ]
+  for (const [line, fine] of hostile) {
+    const got = only(`${line}\n`)
+    ok(fine(got), `HOSTILE media: ${line}`, JSON.stringify(got))
   }
 }
 

@@ -2341,16 +2341,23 @@ function fsTable(f: string): string {
   ok(mediaPlayback({ id: 'x', type: 'media', kind: 'holo-tape' }).kind === 'video',
     'a kind from a newer build degrades to video, which plays an audio file anyway')
 
-  // MARKDOWN HAS NO VIDEO. A link is the one form correct in every renderer;
-  // `![](clip.mp4)` is image syntax and draws a broken-image glyph everywhere.
+  // MARKDOWN HAS NO VIDEO. A clip leaves as the html element, holding a LINK:
+  // a renderer that strips <video> keeps its content, which is the link this
+  // block used to export as — and `![](clip.mp4)` (image syntax, a broken
+  // glyph everywhere) is still never written. The element's fields are held to
+  // byte identity in scripts/test-spaces-md-strict.ts.
   const md = (b: Block): string =>
-    (SPEC.get('media')!.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [] })).join('\n')
-  ok(md({ id: 'x', type: 'media', src: 'asset:k1' }) === '[Video](asset:k1)',
-    'a clip exports as a markdown LINK, not as an image')
-  ok(md({ id: 'x', type: 'media', kind: 'audio', src: 'https://h/x.mp3' }) === '[Audio](https://h/x.mp3)',
+    (SPEC.get('media')!.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [], inline: (h: string) => h })).join('\n')
+  const inner = (b: Block): string => /<a href="[^"]*">([^<]*)<\/a><\/(?:video|audio)>$/.exec(md(b))?.[1] ?? '(no link)'
+  ok(/^<video src="asset:k1" controls><a href="asset:k1">Video<\/a><\/video>$/.test(md({ id: 'x', type: 'media', src: 'asset:k1' })),
+    'a clip exports as a <video> holding a markdown-safe LINK to it, never as an image')
+  ok(/^<audio src="https:\/\/h\/x.mp3"/.test(md({ id: 'x', type: 'media', kind: 'audio', src: 'https://h/x.mp3' })) &&
+    inner({ id: 'x', type: 'media', kind: 'audio', src: 'https://h/x.mp3' }) === 'Audio',
     '…named for what it is')
-  ok(md({ id: 'x', type: 'media', src: 'asset:k1', alt: 'The demo' }) === '[The demo](asset:k1)',
+  ok(inner({ id: 'x', type: 'media', src: 'asset:k1', alt: 'The demo' }) === 'The demo',
     '…using alt as the label when there is one, exactly as the image exporter does')
+  ok(!/ autoplay/.test(md({ id: 'x', type: 'media', src: 'asset:k1', autoplay: true })),
+    '…and never with a live autoplay attribute, which another renderer would obey')
   ok(md({ id: 'x', type: 'media' }) === '_Video_',
     'and a block with no source yet exports as a word, never as an empty link')
 

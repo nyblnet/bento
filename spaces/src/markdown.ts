@@ -321,6 +321,71 @@ function cardOf(line: string): Partial<Block> | null {
   return out
 }
 
+// ---- media ------------------------------------------------------------------
+
+const unattr = (v: string): string =>
+  v.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+
+/** An html tag's attributes, lower-cased names, values decoded. Booleans map
+ *  to ''. Parsing only: what any name MEANS is decided by the caller. */
+function htmlAttrs(src: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const m of src.matchAll(/([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g)) {
+    const k = m[1].toLowerCase()
+    if (!out.has(k)) out.set(k, unattr(m[2] ?? m[3] ?? m[4] ?? ''))
+  }
+  return out
+}
+
+/**
+ * Where a clip or its poster may point: an asset key, an inline file of the
+ * right kind, or an http(s) address — the three forms the model has, and the
+ * same allowlist the editor's "Use a link…" box applies. An ALLOWLIST, like
+ * HREF_OK: `javascript:`, `file:`, `blob:`, a relative path and anything
+ * the URL parser would normalise into one of those all fail it.
+ */
+const MEDIA_SRC = /^(?:asset:[A-Za-z0-9_-]{1,128}|data:(?:video|audio)\/[\w.+-]{1,40};base64,[A-Za-z0-9+/]+=*|https?:\/\/[^\s"'<>]+)$/i
+const POSTER_SRC = /^(?:asset:[A-Za-z0-9_-]{1,128}|data:image\/(?:png|jpeg|gif|webp|avif);base64,[A-Za-z0-9+/]+=*|https?:\/\/[^\s"'<>]+)$/i
+
+/**
+ * `<video …>…</video>` or `<audio …>…</audio>` (already joined onto one line)
+ * → a media block's fields, or null when the source is not one the model may
+ * hold. Reads the element blocks.ts media toMd writes, and the shapes READMEs
+ * use: a `<source src>` child instead of a `src` attribute, and a real
+ * `autoplay` (recorded, never obeyed — mediaPlayback). Every value is checked;
+ * no attribute is copied by name, so `onerror`, `style` and the rest have
+ * nowhere to go.
+ */
+function mediaOf(html: string): { fields: Partial<Block> } | { refused: string; label: string } | null {
+  const m = /^<(video|audio)(\s[^>]*)?>([\s\S]*?)<\/\1\s*>$/i.exec(html.trim())
+  if (!m) return null
+  const kind = m[1].toLowerCase()
+  const a = htmlAttrs(m[2] ?? '')
+  const inner = m[3]
+  const source = /<source(\s[^>]*)?>/i.exec(inner)
+  const raw = (a.get('src') ?? (source ? htmlAttrs(source[1] ?? '').get('src') : undefined) ?? '').trim()
+  const fallback = /<a(?:\s[^>]*)?>([\s\S]*?)<\/a>/i.exec(inner)?.[1] ?? inner
+  const label = unattr(fallback.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim()
+  if (!MEDIA_SRC.test(raw)) return { refused: raw, label }
+  const f: Partial<Block> = { kind, src: raw }
+  const alt = (a.get('title') ?? a.get('aria-label') ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 500)
+  if (alt) f.alt = alt
+  f.controls = a.has('controls')
+  if (a.has('loop')) f.loop = true
+  if (a.has('muted')) f.muted = true
+  if (a.has('autoplay') || a.has('data-autoplay')) f.autoplay = true
+  const poster = (a.get('poster') ?? '').trim()
+  if (POSTER_SRC.test(poster)) f.poster = poster
+  const px = (v: string | undefined) => (/^[1-9]\d{0,4}$/.test(v ?? '') ? Number(v) : 0)
+  const w = px(a.get('width')), h = px(a.get('height'))
+  if (w && h) { f.w = w; f.h = h }
+  const pct = /^(\d{1,3}(?:\.\d{1,3})?)$/.exec(a.get('data-width') ?? '')
+  if (pct && Number(pct[1]) >= 10 && Number(pct[1]) <= 100) f.width = Number(pct[1])
+  const caption = (a.get('data-caption') ?? '').trim()
+  if (caption) f.caption = caption.slice(0, 2000)
+  return { fields: f }
+}
+
 /** A line that is nothing but an image. `![[x]]` counts only when it names an
  *  image FILE — otherwise it is an embed of another note, which is a link. */
 function imageOf(line: string): { ref: string; alt: string; caption?: string; attrs?: Attrs | null } | null {
@@ -625,6 +690,27 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
       para = null
       imageBlock(pic.ref, pic.alt, pic.caption, ownerFor(indent), pic.attrs)
       continue
+    }
+
+    // A CLIP — `<video>`/`<audio>`, on one line as the exporter writes it or
+    // spread over a few as READMEs do (bounded: an unclosed tag is text).
+    const clipOpen = /^<(video|audio)(?:\s|>)/i.exec(body)
+    if (clipOpen) {
+      let html = body
+      let j = i
+      const closer = new RegExp(`</${clipOpen[1]}\\s*>`, 'i')
+      while (!closer.test(html) && j + 1 < lines.length && j - i < 20) html += `\n${lines[++j].trim()}`
+      const clip = closer.test(html) ? mediaOf(html) : null
+      if (clip) {
+        para = null
+        i = j
+        if ('fields' in clip) add(mk('media', { html: '', ...clip.fields }), ownerFor(indent))
+        // A SOURCE THE MODEL MAY NOT HOLD is shown, never loaded: the words
+        // and the address as inert code, the same way an image that could
+        // not be imported is reported. `javascript:` ends up as text.
+        else add(mk('p', { html: `${esc(clip.label || clipOpen[1].toLowerCase())}${clip.refused ? ` <code>${esc(clip.refused)}</code>` : ''}` }), ownerFor(indent))
+        continue
+      }
     }
 
     const card = body.includes('<!-- bento:card') ? cardOf(body) : null

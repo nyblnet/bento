@@ -416,26 +416,49 @@ export const SPECS: BlockSpec[] = [
     // what the file actually IS, so the default here only has to be the shape
     // that degrades usefully.
     init: (b) => { if (b.kind === undefined) b.kind = 'video' },
-    // MARKDOWN HAS NO VIDEO, and pretending otherwise loses the block.
+    // MARKDOWN HAS NO VIDEO, so a clip leaves as the html element every
+    // Markdown renderer that allows html already plays — `<video>` or
+    // `<audio>` — WITH A LINK INSIDE IT:
     //
-    // Three candidates, and only one of them is right in more than one place.
-    // `![](clip.mp4)` is IMAGE syntax: every renderer that has ever existed
-    // draws a broken-image glyph for it. A bare URL on its own line becomes a
-    // player on github.com and on nothing else, so it exports as a naked
-    // string everywhere a reader is likelier to open the file. A LINK is
-    // correct in all of them: it says what the thing is and where it is, and
-    // the one renderer that could do better still shows something you can
-    // click.
+    //   <video src="clip.mp4" controls loop title="The demo"><a href="clip.mp4">The demo</a></video>
+    //
+    // A renderer that plays media hides the link (it is the element's fallback
+    // content); a renderer that strips the tag keeps its content, which is
+    // the link this block used to export as. So it degrades to exactly the
+    // old export, and in Obsidian or a browser it plays.
+    //
+    // `autoplay` is written as `data-autoplay`: the block RECORDS it and this
+    // app never obeys it (mediaPlayback), and an exported file must not make
+    // some other renderer obey it on our behalf. The fields with no html
+    // attribute (the column percentage, the caption) ride as data-*;
+    // `width`/`height` are the intrinsic pixels, which is what those html
+    // attributes mean.
     //
     // The target is `src` verbatim, `asset:` and data: included, exactly as
-    // the image exporter already writes it. That link does not resolve outside
-    // the space — which is the truth about an embedded clip, and a truthful
-    // dead link beats a silently dropped block.
+    // the image exporter already writes it. That does not resolve outside the
+    // space — which is the truth about an embedded clip.
     toMd: (b) => {
-      const kind = String(b.kind ?? 'video') === 'audio' ? 'Audio' : 'Video'
-      const label = String(b.alt ?? '') || kind
+      const video = String(b.kind ?? 'video') !== 'audio'
+      const kind = video ? 'Video' : 'Audio'
       const src = String(b.src ?? '')
-      return [src ? `[${label}](${src})` : `_${kind}_`]
+      if (!src) return [`_${kind}_`]
+      const alt = String(b.alt ?? '')
+      const at = (k: string, v: unknown) => (typeof v === 'string' && v ? ` ${k}="${attrValue(v)}"` : '')
+      const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined)
+      const tag = video ? 'video' : 'audio'
+      let a = ` src="${attrValue(src)}"`
+      if (b.controls !== false) a += ' controls'
+      if (b.loop === true) a += ' loop'
+      if (b.muted === true) a += ' muted'
+      if (b.autoplay === true) a += ' data-autoplay'
+      a += at('poster', b.poster) + at('title', alt)
+      const w = num(b.w), h = num(b.h)
+      if (w !== undefined && h !== undefined && Number.isInteger(w) && Number.isInteger(h)) a += ` width="${w}" height="${h}"`
+      const width = num(b.width)
+      if (width !== undefined) a += ` data-width="${width}"`
+      a += at('data-caption', b.caption)
+      const label = (alt || kind).replace(/\s*\n\s*/g, ' ')
+      return [`<${tag}${a}><a href="${attrValue(src)}">${attrValue(label)}</a></${tag}>`]
     },
   },
 ]
@@ -458,6 +481,11 @@ export function sizeAttrs(b: Block, extra: string[] = []): string {
   if (w !== undefined && h !== undefined && Number.isInteger(w) && Number.isInteger(h)) parts.push(`w=${w}`, `h=${h}`)
   return parts.length ? `{${parts.join(' ')}}` : ''
 }
+
+/** An html attribute value (and element text): `&`, `"`, `<`, `>` as
+ *  entities, one line. markdown.ts decodes exactly these four. */
+export const attrValue = (v: string): string =>
+  v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\s*\n\s*/g, ' ')
 
 /**
  * A data: image larger than this is left out of a card's comment. It would be
