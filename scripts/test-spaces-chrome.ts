@@ -159,7 +159,7 @@ const doccmds = read('doccmds.ts')
 const SAVE_ORDER: string[] = JSON.parse(('[' + (/export const SAVE_ORDER = \[([\s\S]*?)\]/.exec(doccmds)?.[1] ?? '') + ']').replace(/'/g, '"').replace(/,\s*\]$/, ']'))
 // spaces' command for each of slides' (null: spaces has none)
 const EQUIV: Record<string, string | null> = {
-  'Save a copy…': 'Save a copy…', 'Duplicate as new deck…': 'Duplicate as a new space…',
+  'Save a copy…': 'Save a copy…', 'Duplicate as new deck…': 'Duplicate as new space…',
   'Export slides as images…': 'Export as Markdown…', 'Encrypt with password…': 'Encrypt with password…',
   'Change password…': null, 'Remove password': null,
   'Version history…': 'Version history…', 'Copy document JSON': 'Copy document JSON',
@@ -268,9 +268,9 @@ async function browser(chrome: string, html: string): Promise<void> {
       'the page under test is the spaces shell, visible')
 
     // ⋯ is slides' folded ⋯: absent from a bar that has room
-    ok(await js<boolean>(`!(${TRIG('More')}) || (${TRIG('More')}).getBoundingClientRect().width === 0`),
+    ok(await js<boolean>(`!(${TRIG('More actions')}) || (${TRIG('More actions')}).getBoundingClientRect().width === 0`),
       'at 1440 there is no ⋯ — as in slides, it exists only once the bar folds')
-    const SAVEM = TRIG('Other ways to save')
+    const SAVEM = TRIG('Save as… — copy, new space, password')
     await tap(SAVEM)
     const more = await js<any>(`(() => { const m = ${OPEN}; const t = ${SAVEM}; if (!m) return null; const r = m.getBoundingClientRect(); return { exp: t.getAttribute('aria-expanded'), role: m.getAttribute('role'), bottom: r.bottom, vh: innerHeight } })()`)
     ok(more && more.exp === 'true' && more.role === 'menu', `Save ▾ opens as a menu and says so (aria-expanded ${more?.exp}, role ${more?.role})`)
@@ -278,7 +278,7 @@ async function browser(chrome: string, html: string): Promise<void> {
     const first = await js<string>(FOCUSED)
     await key('ArrowDown', 0, 'ArrowDown')
     const second = await js<string>(FOCUSED)
-    ok(first.startsWith('Save a copy') && second.startsWith('Duplicate as a new space'), `arrow keys walk the Save rows ("${first}" → "${second}")`)
+    ok(first.startsWith('Save a copy') && second.startsWith('Duplicate as new space'), `arrow keys walk the Save rows ("${first}" → "${second}")`)
     // the ring on a row reached by the keyboard is slides': --accent-ink, INSIDE
     const rowRing = await js<any>(`(() => { const e = document.activeElement; const c = getComputedStyle(e); return { style: c.outlineStyle, w: c.outlineWidth, color: c.outlineColor, off: c.outlineOffset, want: getComputedStyle(document.documentElement).getPropertyValue(${JSON.stringify(ringInk)}).trim() } })()`)
     const ringW = /(\d+px)/.exec(SLIDES_RING.outline ?? '')?.[1]
@@ -351,7 +351,7 @@ async function browser(chrome: string, html: string): Promise<void> {
     // painted bigger than a pixel.
     const drawn: string[] = []
     const DRAWN = `(() => { const out = []; const scope = [...document.querySelectorAll('.bkm-open > .bkm-menu, .sp-pop')].filter(e => e.getBoundingClientRect().height > 0); for (const m of scope) { for (const h of m.querySelectorAll('.bkm-hint')) if (h.getBoundingClientRect().height > 1) out.push('hint: ' + h.textContent.slice(0, 30)); for (const r of m.querySelectorAll('[aria-describedby]')) { const d = document.getElementById(r.getAttribute('aria-describedby')); const b = d?.getBoundingClientRect(); if (b && (b.width > 1 || b.height > 1)) out.push('drawn: ' + d.textContent.slice(0, 30)) } } return out })()`
-    for (const trig of ['Insert a block — text, headings, lists, code, images', 'Other ways to save', 'Language']) {
+    for (const trig of ['Insert a block — text, headings, lists, code, images', 'Save as… — copy, new space, password', 'Language']) {
       await tap(TRIG(trig)); drawn.push(...(await js<string[]>(DRAWN)).map((x) => `${trig.split(' ')[0]} ${x}`)); await key('Escape', 0, 'Escape')
     }
     await tap(`document.querySelector('.sp-bar .sp-live')`); drawn.push(...(await js<string[]>(DRAWN)).map((x) => `Share ${x}`)); await key('Escape', 0, 'Escape')
@@ -443,7 +443,7 @@ async function browser(chrome: string, html: string): Promise<void> {
 
     // D3: an outcome is a notice the reader sees, not a whisper in the bar —
     // Copy document JSON from Save ▾ says whether the clipboard took it
-    await tap(TRIG('Other ways to save'))
+    await tap(SAVEM)
     await tap(`[...document.querySelectorAll('.bkm-open .bkm-item')].find(b => b.textContent.startsWith('Copy document JSON'))`)
     const note = await js<any>(`(() => { const n = document.querySelector('.sp-notice.sp-on'); if (!n) return null; const r = n.getBoundingClientRect(); return { text: n.textContent, role: n.getAttribute('role'), cr: ${CONTRAST}(n), z: +getComputedStyle(n).zIndex, onScreen: r.bottom <= innerHeight && r.top > innerHeight / 2 } })()`)
     ok(note && note.role === 'status' && note.cr >= 4.5 && note.z > 1000 && note.onScreen && /JSON copied|clipboard/.test(note.text),
@@ -451,7 +451,7 @@ async function browser(chrome: string, html: string): Promise<void> {
 
     // ——— dialogs: the kernel's ———
     const MODAL = `[...document.querySelectorAll('[aria-modal="true"]')].find(d => d.getBoundingClientRect().height > 0)`
-    await tap(TRIG('Other ways to save'))
+    await tap(SAVEM)
     await tap(`[...document.querySelectorAll('.bkm-open .bkm-item')].find(b => b.textContent.startsWith('Import Markdown'))`)
     const title = await js<any>(`(() => { const d = ${MODAL}; const h = d && d.querySelector('.bkd-title'); if (!h) return null; const c = getComputedStyle(h); return { text: h.textContent, size: c.fontSize, weight: c.fontWeight, labelled: document.getElementById(d.getAttribute('aria-labelledby') || '') === h } })()`)
     ok(title && title.size === '17px' && title.weight === '650' && title.labelled,
@@ -513,7 +513,7 @@ async function browser(chrome: string, html: string): Promise<void> {
       return { small: bs.filter(b => b.w < 44 || b.h < 44), save: { w: Math.round(save.width), h: Math.round(save.height) } } })()`)
     ok(bar.small.length === 0, `every phone bar control is a 44px target (D5) (too small: ${JSON.stringify(bar.small)})`)
     ok(bar.save.w === bar.save.h, `phone Save is a square icon button, not a slab (${bar.save.w}×${bar.save.h}; 66×40 before)`)
-    await tap(TRIG('More'))
+    await tap(TRIG('More actions'))
     const ph = await js<any>(`(() => { const m = ${OPEN}; const r = m.getBoundingClientRect(); const rows = [...m.querySelectorAll('.bkm-item')]; return { bottom: r.bottom, vh: innerHeight, n: rows.length, minH: Math.min(...rows.map(x => x.getBoundingClientRect().height)), scrolls: m.scrollHeight > m.clientHeight } })()`)
     ok(ph.bottom <= ph.vh, `the phone ⋯ menu ends inside the screen (bottom ${Math.round(ph.bottom)} ≤ ${ph.vh}; 1003 before)`)
     ok(ph.minH >= 44, `every phone menu row is a 44px target (smallest ${ph.minH.toFixed(1)}px)`)
@@ -561,7 +561,7 @@ async function browser(chrome: string, html: string): Promise<void> {
     // Help: `?` in the bar opens the shortcut sheet
     await tap(`document.querySelector('.sp-bar .sp-help')`)
     const help = await js<string | null>(`(() => { const d = [...document.querySelectorAll('[aria-modal="true"]')].find(d => d.getBoundingClientRect().height > 0); return d?.querySelector('.bkd-title')?.textContent ?? null })()`)
-    ok(help === 'Keyboard shortcuts', `the bar's ? opens the keyboard shortcuts (${help})`)
+    ok(help === 'Shortcuts & tips', `the bar's ? opens Shortcuts & tips (${help})`)
     await key('Escape', 0, 'Escape')
 
     // Every control, at every width, can be reached and pressed: on screen (the
@@ -623,11 +623,11 @@ async function browser(chrome: string, html: string): Promise<void> {
     await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 844, deviceScaleFactor: 2, mobile: true })
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
     await sleep(250)
-    const moreAt = await js<any>(`(() => { const bar = ${BAR}; const b = ${TRIG('More')}; if (/auto|scroll/.test(getComputedStyle(bar).overflowX)) bar.scrollLeft = bar.scrollWidth; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, on: r.right <= innerWidth } })()`)
+    const moreAt = await js<any>(`(() => { const bar = ${BAR}; const b = ${TRIG('More actions')}; if (/auto|scroll/.test(getComputedStyle(bar).overflowX)) bar.scrollLeft = bar.scrollWidth; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, on: r.right <= innerWidth } })()`)
     await click(moreAt.x, moreAt.y)
-    const se = await js<any>(`(() => { const m = ${OPEN}; if (!m) return null; const r = m.getBoundingClientRect(); const rows = [...m.querySelectorAll('.bkm-item')]; const live = rows.find(x => x.getAttribute('aria-disabled') !== 'true'); const f = live.getBoundingClientRect(); const hit = document.elementsFromPoint(f.x + f.width / 2, f.y + f.height / 2)[0]; return { left: Math.round(r.left), right: Math.round(r.right), vw: innerWidth, first: live.contains(hit), lang: rows.some(x => x.textContent.trim() === 'Language'), help: rows.some(x => x.textContent.trim().startsWith('Keyboard shortcuts')) } })()`)
+    const se = await js<any>(`(() => { const m = ${OPEN}; if (!m) return null; const r = m.getBoundingClientRect(); const rows = [...m.querySelectorAll('.bkm-item')]; const live = rows.find(x => x.getAttribute('aria-disabled') !== 'true'); const f = live.getBoundingClientRect(); const hit = document.elementsFromPoint(f.x + f.width / 2, f.y + f.height / 2)[0]; return { left: Math.round(r.left), right: Math.round(r.right), vw: innerWidth, first: live.contains(hit), lang: rows.some(x => x.textContent.trim() === 'Language'), help: rows.some(x => x.textContent.trim().startsWith('Shortcuts & tips')) } })()`)
     ok(se && moreAt.on && se.left >= 0 && se.right <= se.vw && se.first && se.lang && se.help,
-      `at 320px ⋯ opens on screen, its rows pressable, carrying Language and Keyboard shortcuts (${JSON.stringify(se)})`)
+      `at 320px ⋯ opens on screen, its rows pressable, carrying Language and Shortcuts & tips (${JSON.stringify(se)})`)
     await tap(`[...(${OPEN}).querySelectorAll('.bkm-item')].find(b => b.textContent.trim() === 'Language')`)
     const sheet2 = await js<any>(`(() => { const m = ${OPEN}; if (!m) return null; const rows = [...m.querySelectorAll('.bkm-item')]; const r = m.getBoundingClientRect(); return { n: rows.length, onScreen: r.top >= 0 && r.bottom <= innerHeight, on: rows.filter(x => x.getAttribute('aria-checked') === 'true').length } })()`)
     ok(sheet2 && sheet2.n >= 8 && sheet2.onScreen && sheet2.on === 1, `⋯ → Language opens the same list, on screen (${JSON.stringify(sheet2)})`)
@@ -658,7 +658,10 @@ async function browser(chrome: string, html: string): Promise<void> {
       390: [...BEFORE_BOTH, 'Pages', 'More'],
     }
     // renamed to slides' word for the same command
-    const ALIAS: Record<string, string> = { 'Set a password…': 'Encrypt with password…', 'Export as Markdown': 'Export as Markdown…' }
+    const ALIAS: Record<string, string> = { 'Set a password…': 'Encrypt with password…', 'Export as Markdown': 'Export as Markdown…',
+      // slides' labels, adopted 2026-09-26 (the walk keeps a name up to its first " (" or " — ")
+      'About this space': 'About bento/spaces', 'Keyboard shortcuts': 'Shortcuts & tips', 'More': 'More actions',
+      'Other ways to save': 'Save as…', 'Print or save as PDF': 'Export PDF', 'Duplicate as a new space…': 'Duplicate as new space…' }
     const WALK = `(async () => {
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
       const vis = (e) => { const r = e.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false; for (let n = e; n; n = n.parentElement) { const c = getComputedStyle(n); if (c.display === 'none' || c.visibility === 'hidden') return false } return true }

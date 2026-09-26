@@ -52,7 +52,7 @@ export interface DocHost {
 export function saveRows(m: Menu, h: DocHost): void {
   const ro = h.store.readOnly
   row(m, { icon: ICONS.copy, label: t('Save a copy…'), desc: t('A second file — the original is left alone'), run: () => h.saveCopy() })
-  row(m, { icon: ICONS.plus, label: t('Duplicate as a new space…'),
+  row(m, { icon: ICONS.plus, label: t('Duplicate as new space…'),
     desc: t('Same pages, new identity — it never syncs with this one'),
     run: () => duplicate(h) })
   row(m, { icon: ICONS.markdown, label: t('Export as Markdown…'), desc: t('Every page, as one .md file'), run: () => h.exportMarkdown() })
@@ -79,7 +79,7 @@ export function saveRows(m: Menu, h: DocHost): void {
 
 /** The labels, in order — what the chrome rig holds the menu to. */
 export const SAVE_ORDER = [
-  'Save a copy…', 'Duplicate as a new space…', 'Export as Markdown…', 'Export page as a space…',
+  'Save a copy…', 'Duplicate as new space…', 'Export as Markdown…', 'Export page as a space…',
   'Encrypt with password…', 'Version history…', 'Copy document JSON', 'Replace from JSON…', 'Import Markdown…',
 ]
 

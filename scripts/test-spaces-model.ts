@@ -511,7 +511,7 @@ for (const [label, input, err] of [
   ok(/openHelp\(\): void/.test(ed), 'there is a shortcut list')
   ok(/e\.key === '\?' && !isTyping\(\)/.test(ed),
     "…opened by ? , behind the same isTyping guard as [ and ] (it is a character people type)")
-  ok(/label: t\('Keyboard shortcuts'\)/.test(ed),
+  ok(/label: t\('Shortcuts & tips'\)/.test(ed),
     '…and reachable from the menu, not only by the key it documents')
 
   // Pull the ⌘-letters out of the overlay's own table and demand a binding for
@@ -1038,7 +1038,7 @@ for (const [label, input, err] of [
 
   // a menu opened from the right end must open inward
   // (the kernel menu's `alignEnd` is what opens it inward — kernel/src/ui/menu.css .bkm-end)
-  ok(/tip: t\('More'\), end: true/.test(ed) && /tip: t\('Other ways to save'\), end: true/.test(ed),
+  ok(/tip: t\('More actions'\), end: true/.test(ed) && /tip: t\('Save as… — copy, new space, password'\), end: true/.test(ed),
     'both right-end menus open inward (the kernel menu\'s alignEnd)')
 }
 

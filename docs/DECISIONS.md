@@ -8866,3 +8866,31 @@ translations copied verbatim into all eight catalogs — the maintainer: "Use
 Slides as the reference, so we should say Go live as well." (It read "Start
 live session".) bento/dash still says "Start live session"; that is dash's to
 align.
+
+## 2026-09-26 — spaces' bar labels are slides' labels
+
+**The maintainer's ruling:** "yes, let's go with the recommendation you came
+up with on the labels". The rule behind it is the standing one: slides is the
+reference for spaces' chrome in look, organisation and wording.
+
+Where slides has the same control, spaces now uses slides' string, and its
+eight translations are copied verbatim from `slides/src/i18n/`. Checked
+against slides at #573's head:
+
+- the `?` sheet, its button and the ⋯ row: "Keyboard shortcuts" → "Shortcuts & tips";
+- the ⋯ trigger: "More" → "More actions";
+- the Print button and its ⋯ row: "Print or save as PDF" → "Export PDF (print)".
+  The dialog it opens keeps its own title, "Print or save as PDF", because
+  the dialog is where that choice is made. Slides has no dialog at this step.
+
+Where slides' string names the app or the document, spaces keeps slides'
+structure and puts in its own nouns. These are new strings, translated here:
+
+- the Save caret: "Other ways to save" → "Save as… — copy, new space, password";
+- the wordmark: "About this space" → "About bento/spaces — version, updates,
+  licenses". It is now also the mark's `aria-label`, as in slides, because the
+  word beside the mark is hidden at the tight tier;
+- the Save row: "Duplicate as a new space…" → "Duplicate as new space…".
+
+These are unchanged on purpose: "Remove password…" keeps its confirmation
+dialog, and "Properties" stays.
