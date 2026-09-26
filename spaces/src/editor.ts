@@ -26,7 +26,8 @@ import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
 import { FormatBar } from './formatbar'
 import type { MarkTag } from './marks'
-import { MENU_SPECS, MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
+import { MD_SPECS, SPEC, CALLOUT_TONES } from './blocks'
+import { insertFamilies, insertSections, type InsertItem } from './inserts.ts'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
   reorderPages, columnMoves, ISSUE_FIELDS, withField, freeFieldKey, fieldTypeLabel, FIELD_TYPES,
@@ -94,8 +95,6 @@ const CTRL = navigator.platform.toLowerCase().includes('mac') ? 'metaKey' : 'ctr
 // (blocks.ts), so a type cannot end up with a menu entry and no trigger, or a
 // trigger that no menu mentions.
 const AUTOFORMAT = MD_SPECS
-
-const SLASH_ITEMS = MENU_SPECS
 
 /** The four keys caret.ts answers for. A Set so the keymap's hot path is one lookup. */
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
@@ -229,6 +228,8 @@ export class Editor {
   private inspClosed = true
   /** the block the panel is describing: the last one the caret or a click was in */
   private inspOn: string | null = null
+  /** the page list's ＋ ▾ menu, rebuilt with the list (destroy the last one) */
+  private newPageMenu: Menu | null = null
   /** review threads — markers in the end margin, badges in the tree */
   private comments: CommentsUi
   private format!: FormatBar
@@ -371,51 +372,27 @@ export class Editor {
     })
     this.statusEl = el('span', 'sp-status')
 
-    // insert — the block menu, reachable without knowing "/" exists
-    // named so reading mode can take it away — it is the one control in the bar
-    // whose entire purpose is changing the document
-    // A COMMAND LIST, so one line a row (D2): the name says what it is. The
-    // markdown trigger that makes the same block is its shortcut, shown where
-    // shortcuts go (D8); a hint that is a description rather than a key is not
-    // repeated here — it is still on the / menu, which is the place you learn.
-    const insert = barMenu({
-      icon: ICONS.plus, label: t('Insert'), tip: t('Insert a block — text, headings, lists, code, images'),
-      scroll: true,
-      fill: (m) => {
-      for (const item of SLASH_ITEMS) {
-        row(m, { icon: ICONS[item.icon], label: t(item.label), kbd: mdTrigger(item.hint), run: () => {
-          const page = this.store.page
-          if (!page) return
-          // pagelink and embed both start life as a paragraph and become
-          // themselves only when a page has been chosen — dismissing the
-          // picker must leave a block you can type in, never a card pointing
-          // at nothing.
-          const fresh = newBlock(item.type === 'pagelink' || item.type === 'embed' ? 'p' : item.type)
-          SPEC.get(fresh.type)?.init?.(fresh)
-          this.store.commit(() => { page.blocks.push(fresh) })
-          this.paintPage()
-          if (item.type === 'pagelink') this.insertPageCard(fresh.id)
-          else if (item.type === 'embed') this.insertEmbed(fresh.id)
-          // the block is already a `link` — dismissing the dialog leaves an
-          // empty card with its own way back in, never a half-made block
-          else if (item.type === 'link') this.openLinkCard(fresh.id)
-          else if (item.type === 'image') void this.pickImage(fresh.id)
-          // a table has no block-level host to focus — the caret belongs in the
-          // first cell, which is also where a person starts typing
-          else if (item.type === 'table') this.focusCell(fresh.id, 0, 0)
-          // straight to the picker, exactly like Image. Cancelling is not a
-          // dead end: the block renders its own chooser (render.ts 'media'),
-          // which is also the only route the / menu needs.
-          else if (item.type === 'media') void this.pickMedia(fresh.id)
-          else this.focusBlock(fresh.id)
-        } })
+    // THE INSERT GROUP — slides' shape (DECISIONS 2026-09-26): one button per
+    // kind of thing, each opening a small menu only when the kind has variants,
+    // and Comment last, as slides ends its group. The families are inserts.ts,
+    // which the / menu reads too, so the two cannot offer different things.
+    // New pages are not inserted into a page: they are on the page list's ＋ ▾.
+    const insertGroup = el('div', 'sp-group sp-group-insert')
+    for (const f of insertFamilies()) {
+      if (f.items.length === 1) {
+        const item = f.items[0]
+        const b = labelBtn(ICONS[f.icon], t(f.label), t(f.tip), () => this.insertItem(item))
+        b.dataset.insert = item.key
+        insertGroup.append(b)
+        continue
       }
-      // …and after a rule, the other thing you add: a PAGE. Slides' insert
-      // group ends on Comment, the one tool that is not an element; these are
-      // spaces' equivalents, with their shortcuts (D8).
-      m.separator()
-      this.pageRows(m)
-    } }).root
+      insertGroup.append(barMenu({
+        icon: ICONS[f.icon], label: t(f.label), tip: t(f.tip), className: 'sp-insmenu',
+        fill: (m) => this.insertRows(m, f.items),
+      }).root)
+    }
+    insertGroup.append(labelBtn(ICONS.comment, t('Comment'), t('Comment — on the block with the caret, or on this page'),
+      () => this.commentHere()))
 
     this.undoB = iconBtn('undo', t('Undo (⌘Z)'), () => { this.store.undo(); this.repaint() })
     this.redoB = iconBtn('redo', t('Redo (⇧⌘Z)'), () => { this.store.redo(); this.repaint() })
@@ -429,7 +406,9 @@ export class Editor {
     //   · Save ▾ carries everything that acts on the FILE: copy, duplicate,
     //     export, password, then the timeline and the JSON round trip
     //     (doccmds.ts, in slides' order).
-    //   · ＋ Insert carries what you add: blocks, and after a rule, pages.
+    //   · The insert group carries what you add to a page, one button per
+    //     kind, as slides' does (inserts.ts); new PAGES are on the page
+    //     list's ＋ ▾, because a page is added to the space, not to a page.
     //   · ⋯ exists only once the bar has FOLDED, as slides' does: the bar
     //     controls it had to give up, in slides' order, then the Save list.
     //   · About is reached from the wordmark, as in slides.
@@ -487,6 +466,18 @@ export class Editor {
           run: () => { this.store.undo(); this.repaint() } })
         row(m, { icon: ICONS.redo, label: t('Redo'), kbd: keys('shift', 'mod', 'Z'), off: !this.store.canRedo,
           run: () => { this.store.redo(); this.repaint() } })
+        // …then the insert group, folded: each family with variants under its
+        // caption, the one-member kinds set apart by a rule (inserts.ts), and
+        // Comment last, as the group ends in the bar
+        if (this.canInsert()) {
+          for (const sec of insertSections()) {
+            if (sec.caption) caption(m, t(sec.caption))
+            else if (sec.rule) m.separator()
+            this.insertRows(m, sec.items)
+          }
+          row(m, { icon: ICONS.comment, label: t('Comment'), run: () => this.commentHere() })
+          m.separator()
+        }
         row(m, { icon: ICONS.panelRight, label: t('Properties'), kbd: ']', run: () => this.toggleInsp() })
         for (const a of barActions) row(m, { icon: ICONS[a.icon], label: a.label, kbd: a.kbd, run: a.run })
         // The globe's list, one tap further: a menu cannot hold a menu, so
@@ -542,15 +533,12 @@ export class Editor {
       () => this.toggleInsp())
     inspB.classList.add('sp-insp-toggle')
 
-    insert.classList.add('sp-ins-dd')
     // Slides' layout, group for group (chrome-unification §2.1): LEFT is the
     // document (mark · title · history), then the insert tools — here the one
     // ＋ Insert, which is right for a document — then the RIGHT group, doing
     // things with it, ending in the language globe and `?` as slides' does.
     // ⋯ closes the row once the bar has folded — only then, as in slides — and
     // last is where slides' folded bar puts it.
-    const insertGroup = el('div', 'sp-group sp-group-insert')
-    insertGroup.append(insert)
     const right = el('div', 'sp-group sp-group-right')
     right.append(search, ...inlineSecondary, inspB, this.liveSlot, saveGroup, lang, helpB, more)
 
@@ -933,14 +921,28 @@ export class Editor {
     // with the other secondary actions instead, which puts it in the ⋯ menu on
     // a phone from one list rather than two. Dropping a folder on the window
     // still works and is how most people will actually find it.
-    // Once the space HAS templates, the ＋ offers them; with none it makes a
-    // blank page as it always did (openNewPagePicker returns false and the
-    // fallback runs). The check is on the document, so the control only grows
-    // for the author who asked for it.
+    //
+    // NEW PAGES START HERE, on the list they join — a ＋ ▾ split, as slides'
+    // Save is a split: the common action (New page), and its caret holding
+    // the other ways a page arrives, with their shortcuts. They used to sit at
+    // the foot of the bar's ＋ Insert, among the blocks, where a page is not a
+    // thing you insert into the page you are on.
+    const split = el('div', 'sp-newsplit')
+    // Once the space HAS templates, ＋ offers them; with none it makes a blank
+    // page as it always did (openNewPagePicker returns false and the fallback
+    // runs). The caret beside it holds the other ways a page arrives.
     const plus = iconBtn('plus', t('New page (⌘⌥N)'), () => {
       if (!openNewPagePicker(this.templateHost, plus, () => this.newPage())) this.newPage()
     })
-    head.append(plus)
+    plus.classList.add('sp-newpage')
+    this.newPageMenu?.destroy()
+    this.newPageMenu = barMenu({
+      icon: '<span class="sp-caret-g" aria-hidden="true">▾</span>', label: '',
+      tip: t('New… — page, journal, issue'), end: true, className: 'sp-caret sp-newmenu',
+      fill: (m) => this.pageRows(m),
+    })
+    split.append(plus, this.newPageMenu.root)
+    head.append(split)
     this.sidebar.append(head)
 
     const list = el('ul', 'sp-tree')
@@ -1438,6 +1440,111 @@ export class Editor {
     })
     this.paintPage()
     this.focusBlock(fresh.id)
+  }
+
+  /** Whether the page in view takes new blocks from the bar at all. */
+  private canInsert(): boolean {
+    return !!this.store.page && !this.store.readOnly && !this.reading
+  }
+
+  /**
+   * The block the caret (or the last click) is in, if it is on this page.
+   *
+   * `inspOn` is set on focusin and mousedown inside the page, and pressing a
+   * bar button changes neither, so it still names the block you were in when
+   * you reached for the bar. A click on the page's blank space clears it.
+   */
+  private caretBlock(): Block | undefined {
+    const id = this.inspOn
+    return id ? this.store.page?.blocks.find((b) => b.id === id) : undefined
+  }
+
+  /** Rows for one family's members, with the family's own rules. */
+  private insertRows(m: Menu, items: InsertItem[]): void {
+    for (const item of items) {
+      if (item.rule) m.separator()
+      const r = row(m, { icon: ICONS[item.icon], label: t(item.label), kbd: mdTrigger(item.hint), run: () => this.insertItem(item) })
+      // the item's key, so a rig can hold the bar and the / menu to one list
+      r.dataset.insert = item.key
+    }
+  }
+
+  /**
+   * INSERT ONE THING from the bar — where slides puts a new element: where you
+   * are working. It goes AFTER the block holding the caret, as that block's
+   * sibling and after anything nested in it; with no caret on the page it goes
+   * at the end. One commit, so one undo takes it away, and the caret lands in
+   * it — or the thing that fills it opens (the picker, the link card, the
+   * first cell).
+   */
+  insertItem(item: InsertItem): void {
+    const s = this.store
+    const page = s.page
+    if (!page || !this.canInsert()) return
+    const at = this.caretBlock()
+    const make = (): Block => {
+      const fresh = newBlock(item.type)
+      SPEC.get(item.type)?.init?.(fresh)
+      item.init?.(fresh)
+      if (at?.parent) fresh.parent = at.parent
+      // a block born inside a canvas is born somewhere ON it
+      placeNewCard(page, fresh)
+      return fresh
+    }
+    const put = (fresh: Block) => {
+      s.commit(() => {
+        if (!at) { page.blocks.push(fresh); return }
+        const i = page.blocks.findIndex((b) => b.id === at.id)
+        // past the anchor's whole subtree: its children follow it in the list
+        let end = i + 1
+        const inside = new Set([at.id])
+        while (end < page.blocks.length && page.blocks[end].parent && inside.has(page.blocks[end].parent!)) {
+          inside.add(page.blocks[end].id)
+          end++
+        }
+        page.blocks.splice(end, 0, fresh)
+      })
+      this.paintPage()
+    }
+    // A page card is made whole or not at all: the picker comes FIRST, so the
+    // one commit writes a card that points somewhere, and Escape inserts
+    // nothing — never a card pointing at no page.
+    // …and so is an embed: its own picker (a page, or one section of it)
+    if (item.type === 'embed') {
+      this.insertEmbed(at?.id ?? page.id, (pageId, anchor) => {
+        const fresh = make()
+        this.embedFields(fresh, pageId, anchor)
+        put(fresh)
+      })
+      return
+    }
+    if (item.type === 'pagelink') {
+      this.openPagePicker(at?.id ?? page.id, null, (pageId) => {
+        const fresh = make()
+        fresh.page = pageId
+        fresh.html = ''
+        put(fresh)
+      })
+      return
+    }
+    const fresh = make()
+    put(fresh)
+    // the block is already a `link`: dismissing the dialog leaves an empty
+    // card with its own way back in, never a half-made block
+    if (item.type === 'link') this.openLinkCard(fresh.id)
+    else if (item.type === 'image') void this.pickImage(fresh.id)
+    // a table's text is in its cells: the caret belongs in the first one
+    else if (item.type === 'table') this.focusCell(fresh.id, 0, 0)
+    // straight to the picker, like Image; cancelling leaves the block's own
+    // chooser (render.ts 'media')
+    else if (item.type === 'media') void this.pickMedia(fresh.id)
+    else this.focusBlock(fresh.id)
+  }
+
+  /** The bar's Comment: on the block holding the caret, or on the page. */
+  private commentHere(): void {
+    if (!this.canInsert()) return
+    this.comments.openNew(this.caretBlock()?.id)
   }
 
   /** Move a block (and anything nested under it) to sit after another. */
@@ -3890,7 +3997,7 @@ export class Editor {
     setTimeout(() => node.classList.remove('sp-nudge'), 400)
   }
 
-  setType(id: string, type: string): void {
+  setType(id: string, type: string, variant?: (b: Block) => void): void {
     this.store.commit(() => {
       const b = this.store.block(id)
       if (!b) return
@@ -3899,6 +4006,8 @@ export class Editor {
       // block type does not need a line here as well — this was the fifth place
       // a type had to be added, and the one that was easiest to forget
       SPEC.get(type)?.init?.(b)
+      // …and the / row's variant (a view's layout, a clip's kind; inserts.ts)
+      variant?.(b)
     })
     this.paintPage()
     // a table's text is in its cells, so there is no block host to put the
@@ -4400,9 +4509,15 @@ export class Editor {
     const list = el('ul', 'sp-results')
     pop.append(find, list)
 
-    let items = SLASH_ITEMS
+    // The bar's insert families, in the bar's order and under its names
+    // (inserts.ts): a family with variants under its caption, the one-member
+    // kinds set apart by a rule. Filtering drops the captions — a match list
+    // is one run.
+    const sections = insertSections()
+    const all = sections.flatMap((x) => x.items)
+    let items = all
     let sel = 0
-    const commit = (item: typeof SLASH_ITEMS[number]) => {
+    const commit = (item: InsertItem) => {
       this.closeOverlay()
       const blk = this.store.block(blockId)
       // the "/" that opened the menu is a command, not content
@@ -4410,16 +4525,24 @@ export class Editor {
       if (item.type === 'pagelink') this.insertPageCard(blockId)
       else if (item.type === 'embed') this.insertEmbed(blockId)
       else if (item.type === 'link') { this.setType(blockId, 'link'); this.openLinkCard(blockId) }
-      else this.setType(blockId, item.type)
+      else this.setType(blockId, item.type, item.init)
     }
     const paint = () => {
       list.innerHTML = ''
+      const filtered = items !== all
       items.forEach((item, i) => {
+        if (!filtered) {
+          const sec = sections.find((x) => x.items[0] === item)
+          // not options: the listbox's arrows walk `items`, never these
+          const deco = sec?.caption ? el('li', 'sp-results-cap', t(sec.caption)) : sec?.rule ? el('li', 'sp-results-rule') : null
+          if (deco) { deco.setAttribute('role', 'presentation'); list.append(deco) }
+        }
         const li = document.createElement('li')
         const b = document.createElement('button')
         b.className = 'sp-result' + (i === sel ? ' sp-sel' : '')
         b.type = 'button'
         b.setAttribute('role', 'option')
+        b.dataset.insert = item.key
         b.innerHTML =
           `<span class="sp-result-ico">${ICONS[item.icon]}</span>` +
           `<span class="sp-result-txt"><strong>${escapeHtml(t(item.label))}</strong>` +
@@ -4432,7 +4555,7 @@ export class Editor {
     }
     find.addEventListener('input', () => {
       const q = find.value.trim().toLowerCase()
-      items = SLASH_ITEMS.filter((i) => t(i.label).toLowerCase().includes(q) || i.type.includes(q))
+      items = q ? all.filter((i) => t(i.label).toLowerCase().includes(q) || i.type.includes(q)) : all
       sel = 0
       paint()
     })
@@ -4479,15 +4602,19 @@ export class Editor {
     const s = this.store
     s.commit(() => {
       const b = s.block(blockId)
-      const target = s.index.page.get(pageId)
-      if (!b) return
-      b.type = 'embed'
-      b.page = pageId
-      if (anchor) b.anchor = anchor
-      else delete b.anchor
-      b.html = `<a href="#p/${pageId}">${escapeHtml(target?.title || t('Untitled'))}</a>`
+      if (b) this.embedFields(b, pageId, anchor)
     })
     this.paintPage()
+  }
+
+  /** An embed's fields, written together: what it shows, and its readable `html`. */
+  private embedFields(b: Block, pageId: string, anchor?: string): void {
+    const target = this.store.index.page.get(pageId)
+    b.type = 'embed'
+    b.page = pageId
+    if (anchor) b.anchor = anchor
+    else delete b.anchor
+    b.html = `<a href="#p/${pageId}">${escapeHtml(target?.title || t('Untitled'))}</a>`
   }
 
   /**
@@ -4500,7 +4627,10 @@ export class Editor {
    * `sectionOf` matches against, so a section you can pick here is a section
    * that resolves.
    */
-  private insertEmbed(blockId: string): void {
+  private insertEmbed(blockId: string, then?: (pageId: string, anchor?: string) => void): void {
+    // the bar makes the block only once a page is chosen (insertItem); the /
+    // menu converts the block it was opened on
+    const pick = (pageId: string, anchor?: string) => then ? then(pageId, anchor) : this.applyEmbed(blockId, pageId, anchor)
     const s = this.store
     if (s.readOnly || this.reading) return
     this.openOverlay(t('Embed a page'), (card, close) => {
@@ -4532,10 +4662,10 @@ export class Editor {
           const title = p.title || t('Untitled')
           const heads = headingsOf(p).filter((h) => !q || h.text.toLowerCase().includes(q))
           const hit = !q || title.toLowerCase().includes(q)
-          if (hit) row(title, t('The whole page'), () => this.applyEmbed(blockId, p.id))
+          if (hit) row(title, t('The whole page'), () => pick(p.id))
           for (const h of (hit ? headingsOf(p) : heads)) {
             row(`${title} › ${h.text}`, t('That section only'),
-              () => this.applyEmbed(blockId, p.id, h.text))
+              () => pick(p.id, h.text))
           }
           if (list.childElementCount > 40) break
         }
@@ -6223,7 +6353,7 @@ export class Editor {
     }
   }
 
-  /** The pages you can add — the foot of ＋ Insert, in shortcut order. */
+  /** The pages you can add — the page list's ＋ ▾, in shortcut order. */
   private pageRows(m: Menu): void {
     row(m, { icon: ICONS.page, label: t('New page'), kbd: keys('alt', 'mod', 'N'), run: () => this.newPage() })
     row(m, { icon: ICONS.book, label: t("Today's journal"), kbd: keys('shift', 'mod', 'J'), run: () => this.openJournal() })
@@ -6324,6 +6454,26 @@ function isTyping(): boolean {
   const a = document.activeElement as HTMLElement | null
   if (!a) return false
   return a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT'
+}
+
+/**
+ * A bar button with its word — slides' `btn(icon, label, run, title)`: the
+ * label is a span the compact tier hides, the tooltip is the name a screen
+ * reader hears once it has.
+ */
+function labelBtn(icon: string, label: string, tip: string, onClick: () => void): HTMLButtonElement {
+  const b = document.createElement('button')
+  b.className = 'sp-btn'
+  b.type = 'button'
+  b.innerHTML = icon
+  const l = document.createElement('span')
+  l.className = 'sp-btnlabel'
+  l.textContent = label
+  b.append(l)
+  b.title = tip
+  b.setAttribute('aria-label', tip)
+  b.addEventListener('click', onClick)
+  return b
 }
 
 function iconBtn(name: IconName, label: string, onClick: () => void): HTMLButtonElement {

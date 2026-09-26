@@ -836,7 +836,9 @@ for (const [label, input, err] of [
       // whatever the loop variable is called — spec, item, i. The BRACKET form
       // is what stays flagged, because that is the shape that has actually
       // shipped English three times.
-      if (/\.(label|hint)$/.test(e)) continue
+      // inserts.ts is swept the same way (`label:`/`hint:`/`tip:`), and a
+      // section's caption IS its family's label
+      if (/\.(label|hint|tip|caption)$/.test(e)) continue
       offenders.push(`${f}: t(${e.slice(0, 40)})`)
     }
   }
@@ -1117,7 +1119,10 @@ for (const [label, input, err] of [
   ok(/import \{[^}]*\bTAG_OF\b[^}]*\bLIST_OF\b[^}]*\} from '\.\/blocks'/.test(ren) &&
      !/const TAG_OF: Record/.test(ren) && !/const LIST_OF: Record/.test(ren),
     'render.ts derives its tag and list maps rather than repeating them')
-  ok(/const SLASH_ITEMS = MENU_SPECS/.test(ed), 'the / menu is the registry')
+  // the / menu is the registry, through the insert families (inserts.ts),
+  // which filter MENU_SPECS and are held to place every listed type
+  ok(/const sections = insertSections\(\)/.test(ed) && /import \{[^}]*\bMENU_SPECS\b[^}]*\} from '\.\/blocks\.ts'/.test(read('inserts.ts')),
+    'the / menu is the registry, through inserts.ts')
   ok(/const AUTOFORMAT = MD_SPECS/.test(ed), 'autoformat is the registry')
   ok(/SPEC\.get\(b\.type\)/.test(ab) && !/case 'bullet': out\.push/.test(ab),
     'markdown export is the registry, not a parallel switch')
@@ -3566,7 +3571,7 @@ function fsTable(f: string): string {
   const sweep = fs.readFileSync(new URL('../scripts/build-spaces-i18n.mjs', import.meta.url), 'utf8')
   const packed = fs.readFileSync(new URL('../spaces/src/i18n/packed.ts', import.meta.url), 'utf8')
 
-  ok(/blocks\.ts'\)/.test(sweep) && /label\|hint/.test(sweep),
+  ok(/'blocks\.ts', 'inserts\.ts'/.test(sweep) && /label\|hint/.test(sweep),
     'the key sweep reads block spec labels and hints, not only literal t() calls')
   for (const label of ['Bulleted list', 'Callout', 'Board or list', 'Video or audio']) {
     ok(packed.includes(JSON.stringify(label)),
