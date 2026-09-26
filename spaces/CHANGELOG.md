@@ -1284,6 +1284,82 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   the way: a menu opened from another menu (and any popover opened right after
   one closed) was dismissed by the first click inside it. Shell 300,835 →
   305,242 B (+4,407).
+- **Every menu is the suite's menu now, and it behaves like one.** Insert, ⋯,
+  the save caret, the block and page ⋯ menus, a board's group, sort, filter and
+  source menus, a field's options, a code block's language and a callout's tone
+  are all built on the kernel's shared menu. You can walk every one of them with
+  the arrow keys and close it with Escape, and focus goes back to the button
+  that opened it. Opening one menu closes any other. Four things this fixes,
+  each measured in the built file:
+  - A menu closed with Escape left its click-away listener behind, and that
+    listener closed the NEXT thing you opened on your first click inside it:
+    Escape a block menu, press ⌘K, click in the search box, and the search
+    vanished.
+  - On a phone the ⋯ menu was 950px tall on an 844px screen. Its last three
+    rows, which are the only ways to save a copy or export on a phone, could
+    not be reached. It now ends inside the screen and scrolls.
+  - The Insert menu's last row ran off the bottom of a 1440×900 window. Insert
+    is one line per row now, with the Markdown shortcut (`#`, `1.`, `>`) on the
+    right. The descriptions stay on the `/` menu, where you learn them.
+  - With About or the shortcut sheet open, `[` collapsed the page list behind
+    it and `?` opened a second sheet on top. Nothing reaches the page under an
+    open dialog now.
+
+  On a phone, every anchored menu is a sheet at the bottom of the screen,
+  including the page ⋯ menu, which used to be a small popup over the drawer.
+  Rows are 44px tall under a finger. Shortcuts are right-aligned and written
+  in one order, ⌃⌥⇧⌘ (⌥⌘N, not ⌘⌥N). They are hidden where there is no
+  keyboard. Only menus whose rows have consequences keep a second line saying
+  what each row does (save a copy, archive, delete, page width). The overflow
+  button is ⋯, not ⋮, as in slides. A search, import or export dialog now
+  closes with Escape wherever the focus is, not only while it is inside the
+  card. The graph view puts focus in its card, not on the dimmed page behind it.
+
+- **Every dialog and both side panels are the suite's.** About, the keyboard
+  shortcuts, Search, Link to page, Link card, Import, the import reports,
+  Export page as a space, Print and the graph now use the kernel's dialog. Each
+  one keeps the keyboard inside it: Tab used to leave the import dialog on 23
+  presses out of 25. Escape closes any of them wherever the focus is. Each opens
+  on a real title (17px, D4) rather than a small grey caption, with the
+  corner, shadow and scrim slides uses.
+  - The shortcut sheet no longer draws a blue ring around itself when it opens.
+    Its shortcuts are written in one order, ⌃⌥⇧⌘.
+  - In Search and in Link to page, the arrow keys move through the results while
+    you keep typing, and Enter opens the highlighted one. Before, a result could
+    only be reached with Tab.
+
+  The page list and the properties panel are the kernel's side panel. You drag
+  the edge to resize, double-click it to reset, and use the chevron to close or
+  open. Below 820px each panel is a drawer over the page. Your widths and
+  open/closed choices are kept exactly as before, under the same keys. Opening
+  and closing the drawer on a phone never changes what a desktop remembers.
+
+- **The phone bar, the dialogs' buttons, and messages you must not miss.**
+  - **Phone targets.** Every control in the phone bar is a 44px target now.
+    Five of them were 40px and the Live button was 35×29. Page rows and their
+    ⋯ are 44px too; they were 28px and 20×20.
+  - **Save on a phone** is a square icon button. It used to be a 66×40 dark
+    slab with the icon at one end. The unsaved dot is a badge on its corner.
+  - **The Live button** sits on the same grid as the buttons beside it and has
+    no frame of its own.
+  - **Dialog buttons.** A secondary button in a dialog looks like a button:
+    Import's "Choose a folder…" and "Choose a space…" read as plain words
+    before. The primary button's text follows the theme, so it no longer
+    disappears in dark mode.
+  - **About's links** are darker, 4.5:1 or better. They were 3.23:1.
+  - **Messages you must not miss** now show as a notice at the foot of the
+    window, the way slides shows them. That covers:
+    - a change the relay refused;
+    - a file that could not be read;
+    - a page that cannot contain itself;
+    - "every page opens wide from now on";
+    - a copy that was written.
+
+    Before, these were the same small grey line in the bar as "Edited", and it
+    faded in under two seconds. "Edited" and "Saved" stay on the bar.
+  - **Small fixes.** The properties panel's section headings get a real
+    disclosure caret, where the old one rendered as a dot. The share panel sets
+    "Reset access…" apart from the rows above it.
 
 ## [0.1.0] — 2026-08-03
 

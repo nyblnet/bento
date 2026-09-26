@@ -588,6 +588,7 @@ export const zh_Hant: Catalog = {
   "Unassigned": "未指派",
   "Underline": "底線",
   "Underline — ⌘U": "底線 — ⌘U",
+  "Undo": "還原",
   "Undo (⌘Z)": "還原 (⌘Z)",
   "Undo, redo": "復原、重做",
   "Unlock": "解鎖",

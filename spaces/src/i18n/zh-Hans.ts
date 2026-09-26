@@ -588,6 +588,7 @@ export const zh_Hans: Catalog = {
   "Unassigned": "未指派",
   "Underline": "下划线",
   "Underline — ⌘U": "下划线 — ⌘U",
+  "Undo": "撤销",
   "Undo (⌘Z)": "撤销 (⌘Z)",
   "Undo, redo": "撤销、重做",
   "Unlock": "解锁",

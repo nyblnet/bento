@@ -588,6 +588,7 @@ export const ja: Catalog = {
   "Unassigned": "担当者なし",
   "Underline": "下線",
   "Underline — ⌘U": "下線 — ⌘U",
+  "Undo": "元に戻す",
   "Undo (⌘Z)": "元に戻す (⌘Z)",
   "Undo, redo": "取り消し・やり直し",
   "Unlock": "ロック解除",

@@ -588,6 +588,7 @@ export const it: Catalog = {
   "Unassigned": "Non assegnato",
   "Underline": "Sottolineato",
   "Underline — ⌘U": "Sottolineato — ⌘U",
+  "Undo": "Annulla",
   "Undo (⌘Z)": "Annulla (⌘Z)",
   "Undo, redo": "Annulla, ripeti",
   "Unlock": "Sblocca",

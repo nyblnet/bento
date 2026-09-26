@@ -588,6 +588,7 @@ export const de: Catalog = {
   "Unassigned": "Nicht zugewiesen",
   "Underline": "Unterstrichen",
   "Underline — ⌘U": "Unterstrichen — ⌘U",
+  "Undo": "Rückgängig",
   "Undo (⌘Z)": "Rückgängig (⌘Z)",
   "Undo, redo": "Rückgängig, wiederherstellen",
   "Unlock": "Entsperren",

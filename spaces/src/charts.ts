@@ -679,6 +679,21 @@ export interface ChartWiring {
   today: () => string
   /** mint an id for a new period */
   uid: () => string
+  /**
+   * Open a menu of rows on `anchor` — the editor's kernel menu (menus.ts
+   * through menuAt), so the period picker has the same Escape, arrow keys,
+   * press-away and single listener pair as every other menu in the app. A
+   * hook rather than an import: this file also runs under node in the rigs,
+   * where the menu's stylesheet import cannot load.
+   */
+  menu: (anchor: HTMLElement, label: string, rows: ChartMenuRow[]) => void
+}
+
+export interface ChartMenuRow {
+  label: string
+  /** a hairline above this row */
+  sep?: boolean
+  run: () => void
 }
 
 /**
@@ -706,60 +721,43 @@ export function wireCharts(root: HTMLElement, w: ChartWiring): void {
 }
 
 function openPeriodMenu(anchor: HTMLElement, blockId: string, w: ChartWiring): void {
-  document.querySelector('.sp-chart-menu')?.remove()
-  const menu = document.createElement('div')
-  menu.className = 'sp-chart-menu'
-  const rect = anchor.getBoundingClientRect()
-  menu.style.left = `${Math.round(rect.left + window.scrollX)}px`
-  menu.style.top = `${Math.round(rect.bottom + window.scrollY + 4)}px`
-
   const pick = (periodId: string) => {
     w.commit(() => {
       const b = w.block(blockId) as { period?: string } | undefined
       if (b) b.period = periodId
     })
-    menu.remove()
     w.repaint()
   }
 
-  for (const { id, period } of periodList(w.doc())) {
-    const row = document.createElement('button')
-    row.type = 'button'
-    row.className = 'sp-chart-menuitem'
-    row.textContent = `${period.label || t('Period')} · ${dayLabel(period.from)} – ${dayLabel(period.to)}`
-    row.addEventListener('click', () => pick(id))
-    menu.appendChild(row)
-  }
+  const rows: ChartMenuRow[] = periodList(w.doc()).map(({ id, period }) => ({
+    label: `${period.label || t('Period')} · ${dayLabel(period.from)} – ${dayLabel(period.to)}`,
+    run: () => pick(id),
+  }))
 
-  const fresh = document.createElement('button')
-  fresh.type = 'button'
-  fresh.className = 'sp-chart-menuitem sp-chart-menunew'
-  fresh.textContent = t('New two-week period from today')
-  fresh.addEventListener('click', () => {
-    const today = w.today()
-    const id = w.uid()
-    w.commit(() => {
-      // The baseline is taken RIGHT NOW, from live state, and `base.at` records
-      // that — so a period started on day 4 of a sprint says "committed on the
-      // 4th" rather than pretending it was the 1st. No past trail key is ever
-      // fabricated: the days before the record existed are gaps.
-      startPeriod(w.doc(), id, {
-        label: t('Period from {date}', { date: dayLabel(today) }),
-        from: today,
-        to: addDays(today, 13),
-        today,
+  rows.push({
+    label: t('New two-week period from today'),
+    sep: rows.length > 0,
+    run: () => {
+      const today = w.today()
+      const id = w.uid()
+      w.commit(() => {
+        // The baseline is taken RIGHT NOW, from live state, and `base.at`
+        // records that — so a period started on day 4 of a sprint says
+        // "committed on the 4th" rather than pretending it was the 1st. No
+        // past trail key is ever fabricated: the days before the record
+        // existed are gaps.
+        startPeriod(w.doc(), id, {
+          label: t('Period from {date}', { date: dayLabel(today) }),
+          from: today,
+          to: addDays(today, 13),
+          today,
+        })
+        const b = w.block(blockId) as { period?: string } | undefined
+        if (b) b.period = id
       })
-      const b = w.block(blockId) as { period?: string } | undefined
-      if (b) b.period = id
-    })
-    menu.remove()
-    w.repaint()
+      w.repaint()
+    },
   })
-  menu.appendChild(fresh)
 
-  document.body.appendChild(menu)
-  const away = (ev: MouseEvent) => {
-    if (!menu.contains(ev.target as Node)) { menu.remove(); document.removeEventListener('mousedown', away) }
-  }
-  setTimeout(() => document.addEventListener('mousedown', away), 0)
+  w.menu(anchor, t('Period'), rows)
 }

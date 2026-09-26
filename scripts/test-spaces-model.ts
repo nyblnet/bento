@@ -473,10 +473,11 @@ for (const [label, input, err] of [
 
   ok(!/\.sp-pop \{[^}]*max-height: 44vh/.test(css), 'the popover is not capped at a fraction of the window')
   ok(/pop\.style\.maxHeight = /.test(ed), '…place() gives it the room the anchor actually leaves')
-  // Both popover builders must route through the helper, or the one that does
-  // not will size itself once and stay that size while the window moves.
-  const viaHelper = (ed.match(/else this\.placed\(pop, anchor\)/g) ?? []).length
-  ok(viaHelper === 2, 'both popover call sites place through the same helper')
+  // Every popover that is not a menu routes through ONE helper, float(), or
+  // the one that does not will size itself once and stay that size while the
+  // window moves. (Menus are the kernel's, placed by spaces/src/menus.ts.)
+  const viaHelper = (ed.match(/this\.float\(pop, /g) ?? []).length
+  ok(viaHelper >= 4, `every non-menu popover places through the same helper, float() (${viaHelper} call sites)`)
   ok(/addEventListener\('resize', reflow\)/.test(ed), '…which re-places on resize')
   ok(/removeEventListener\('resize', reflow\)/.test(ed), '…and takes the listener back off when it closes')
 
@@ -517,7 +518,9 @@ for (const [label, input, err] of [
   const from = ed.indexOf('const groups: Array<[string, Array<[string, string]>]>')
   const table = ed.slice(from, ed.indexOf("const grid = el('div', 'sp-keys-grid')", from))
   const letters = new Set<string>()
-  for (const m of table.matchAll(/'[⌘⇧⌥]*⌘([A-Z])'/g)) letters.add(m[1].toLowerCase())
+  // the sheet spells every chord through keys() (D8's one formatter), so a
+  // chord is `M(…'mod'…, 'X')`
+  for (const m of table.matchAll(/M\([^)]*'mod', '([A-Z])'\)/g)) letters.add(m[1].toLowerCase())
   ok(letters.size >= 8, `the list actually names shortcuts (${letters.size} found)`)
   for (const c of [...letters].sort()) {
     // Both spellings the file uses: the long `e.key.toLowerCase() === 'x'` of
@@ -949,7 +952,7 @@ for (const [label, input, err] of [
   ok(/const menuActions: BarAction\[\]/.test(ed), '…the ⋯-only actions as another')
   ok(/barActions\.map\(/.test(ed), '…the inline row is built from the bar list')
   ok(/for \(const a of menuActions\)/.test(ed), '…⋯ always carries the menu-only actions')
-  ok(/isFolded\(\)\) \{\s*\n\s*for \(const a of barActions\)/.test(ed),
+  ok(/const folded = this\.isFolded\(\)/.test(ed) && /if \(folded\) \{\s*\n\s*for \(const a of barActions\)/.test(ed),
     '…and picks up the bar list ONLY once folded, or ⋯ duplicates the visible row')
 
   // WHICH TIER a rule lives in is the thing worth pinning — but the tiers are
@@ -1020,7 +1023,7 @@ for (const [label, input, err] of [
   const edCode = ed.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
   ok(!/matchMedia\('\(max-width: 600px\)'\)/.test(edCode),
     'no phone breakpoint is duplicated in the editor CODE')
-  ok(/if \(this\.isFolded\(\)\)/.test(ed) && /t\('Undo \(⌘Z\)'\)/.test(ed) && /t\('Redo \(⇧⌘Z\)'\)/.test(ed),
+  ok(/if \(folded\) \{[\s\S]{0,400}?label: t\('Undo'\)[\s\S]{0,300}?label: t\('Redo'\)/.test(ed),
     '…and the ⋯ menu picks up undo/redo exactly when the bar has folded them away')
 
   // the bar must never become a scroller — that hides the same controls, just
@@ -1029,11 +1032,9 @@ for (const [label, input, err] of [
   ok(!/overflow-x:\s*(auto|scroll)/.test(barRule), 'the topbar does not scroll horizontally')
 
   // a menu opened from the right end must open inward
-  ok(/\.sp-dd-end \.sp-ddmenu \{ inset-inline-start: auto; inset-inline-end: 0/.test(css),
-    'right-end dropdowns open inward')
-  ok(/more\.classList\.add\('sp-more', 'sp-dd-end'\)/.test(ed) &&
-     /saveMore\.classList\.add\('sp-caret', 'sp-dd-end'\)/.test(ed),
-    '…and both right-end menus say so')
+  // (the kernel menu's `alignEnd` is what opens it inward — kernel/src/ui/menu.css .bkm-end)
+  ok(/tip: t\('More'\), end: true/.test(ed) && /tip: t\('Other ways to save'\), end: true/.test(ed),
+    'both right-end menus open inward (the kernel menu\'s alignEnd)')
 }
 
 // ---- one declaration per block type ---------------------------------------
@@ -1804,23 +1805,32 @@ function fsTable(f: string): string {
   const css = fsp.readFileSync(new URL('../spaces/src/styles.css', import.meta.url), 'utf8')
   const ic = fsp.readFileSync(new URL('../spaces/src/icons.ts', import.meta.url), 'utf8')
 
-  ok(/makeResizer\(\)/.test(ed), 'the page list has a resizer strip')
-  ok(/col-resize/.test(css), '…that resizes')
-  ok(/dblclick[\s\S]{0,200}PANE_DEFAULT/.test(ed), '…double-click resets it to the default width')
-  ok(/PANE_MIN[\s\S]{0,400}PANE_MAX/.test(ed) || /Math\.min\(Editor\.PANE_MAX/.test(ed),
-    '…and the width is clamped')
-  ok(/localStorage\.setItem\('bento-sp-pane'/.test(ed),
-    'the width is the READER\'s — localStorage, never the document')
+  // THE PANELS ARE THE KERNEL'S (kernel/src/ui/panel.ts): its strip resizes,
+  // double-click resets to `defaultWidth`, it clamps to min/max, and its
+  // chevron rides the strip. What spaces still owns is asserted here.
+  const kpanel = fsp.readFileSync(new URL('../kernel/src/ui/panel.ts', import.meta.url), 'utf8')
+  const kcss = fsp.readFileSync(new URL('../kernel/src/ui/panel.css', import.meta.url), 'utf8')
+  ok(/createPanel\(\{[\s\S]{0,240}defaultWidth: o\.def, minWidth: o\.min, maxWidth: o\.max/.test(ed),
+    'the page list is a kernel panel with a default and a clamped width')
+  ok(/addEventListener\('dblclick'[\s\S]{0,120}resetWidth\(\)/.test(kpanel) && /col-resize/.test(kcss),
+    '…whose strip resizes, and double-click resets it to the default width')
+  ok(/localStorage\.setItem\(o\.widthKey/.test(ed) && /widthKey: 'bento-sp-pane'/.test(ed),
+    'the width is the READER\'s — localStorage under the key readers already have, never the document')
+  ok(!/storageKey:/.test(ed.slice(ed.indexOf('private makePanel('), ed.indexOf('private syncScrim('))),
+    '…written by the editor, not the primitive, so a phone drawer never persists a desktop preference')
+  ok(/if \(!this\.isDrawer\(\)\) \{\s*\n\s*try \{\s*\n\s*localStorage\.setItem\(o\.widthKey/.test(ed),
+    '…and only while the panel is a column')
 
-  ok(/sp-pane-tab/.test(css) && /sp-pane-closed/.test(css), 'the panel collapses from a tab on the strip')
-  const tabRule = css.slice(css.indexOf('.sp-pane-tab {'), css.indexOf('}', css.indexOf('.sp-pane-tab {')))
-  ok(!/opacity:\s*0\b/.test(tabRule), 'the collapse chevron is visible without hovering')
-  ok(/\.sp-side\.sp-pane-closed \+ \.sp-resizer \.sp-pane-tab/.test(css),
+  const tabRule = kcss.slice(kcss.indexOf('.bkp-toggle {'), kcss.indexOf('}', kcss.indexOf('.bkp-toggle {')))
+  ok(tabRule.length > 20 && !/opacity:\s*0\b/.test(tabRule), 'the collapse chevron is visible without hovering')
+  ok(/\.bkp-start\.bkp-collapsed \.bkp-toggle \{ left: 0;/.test(css),
     '…and stays reachable when the panel is closed, docked to the edge')
 
   // the drawer breakpoint keeps its overlay behaviour: a 0px column on a phone
-  // would leave nothing to reopen from
-  ok(/isDrawer\(\)[\s\S]{0,120}max-width: 820px/.test(ed), 'below 820px the panel is a drawer, not a column')
+  // would leave nothing to reopen from. ONE number, handed to the kernel (D6).
+  ok(/const DRAWER_BELOW = 820/.test(ed) && /drawerBelow: DRAWER_BELOW/.test(ed) &&
+     /isDrawer\(\)[\s\S]{0,120}max-width: \$\{DRAWER_BELOW\}px/.test(ed),
+    'below 820px the panel is a drawer, not a column — one breakpoint, the kernel\'s parameter')
 
   // the suite's undo/redo, not a circular arrow that reads as "reload"
   ok(/M9 14 4 9l5-5/.test(ic) && /m15 14 5-5-5-5/.test(ic),
@@ -3194,18 +3204,19 @@ function fsTable(f: string): string {
     'the properties panel is CLOSED by default')
   ok(/localStorage\.getItem\('bento-sp-insp-closed'\) !== '0'/.test(editor),
     "…and only an explicit '0' opens it, so an absent preference is still closed")
-  ok(/localStorage\.setItem\('bento-sp-insp-closed'/.test(editor),
+  ok(/closedKey: 'bento-sp-insp-closed'/.test(editor) && /localStorage\.setItem\(o\.closedKey/.test(editor),
     'the open/closed state PERSISTS, so it is chosen once and not every session')
 
   // 2. WHILE CLOSED IT TAKES NO WIDTH. `.sp-main` is `flex: 1 1 auto`, so a
   //    closed panel that zeroes its basis, its inline padding and its border is
   //    a panel the reading column cannot feel. Any one of the three left in
   //    place is width off the page on every screen.
-  const shut = css.slice(css.indexOf('.sp-insp.sp-pane-closed'))
-  const rule = shut.slice(0, shut.indexOf('}') + 1)
-  ok(/flex-basis:\s*0/.test(rule), 'a closed properties panel has flex-basis 0')
-  ok(/padding-inline:\s*0/.test(rule), '…no inline padding')
-  ok(/border-inline-start-width:\s*0/.test(rule), '…and no border')
+  //    (The panel is the kernel's now: a collapsed panel is `--bkp-collapsed-w`
+  //    wide, its content is display:none, and spaces sets the width to 0.)
+  ok(/--bkp-collapsed-w:\s*0px/.test(css), 'a closed properties panel is 0px wide')
+  const kc = fsTable('../../kernel/src/ui/panel.css')
+  ok(/\.bkp-collapsed > \.bkp-content \{ display: none; \}/.test(kc), '…its content takes no room')
+  ok(/\.bkp\.bkp-collapsed \{ border-inline-width: 0; \}/.test(css), '…and no border')
   ok(/\.sp-main \{\s*\n?\s*flex: 1 1 auto/.test(css),
     'the reading column is flex:1 1 auto, so the width a closed panel gives up goes back to it')
 
@@ -3217,11 +3228,12 @@ function fsTable(f: string): string {
 
   // 4. BELOW THE DRAWER BREAKPOINT IT IS AN OVERLAY, not a third column — the
   //    bargain the page list already makes at the same 820px.
-  const phone = css.slice(css.indexOf('@media (max-width: 820px) {\n  .sp-insp-rz'))
-  ok(/\.sp-insp \{ display: none; \}/.test(phone.slice(0, 400)),
-    'below 820px the panel is absent until asked for')
-  ok(/\.sp-insp\.sp-open \{[^}]*position: fixed/.test(phone.slice(0, 800)),
-    '…and then it is a fixed overlay, never a column')
+  ok(/if \(mql\?\.matches\) collapsed = true/.test(fsTable('../../kernel/src/ui/panel.ts')) &&
+     /drawerBelow: DRAWER_BELOW/.test(editor),
+    'below 820px the panel is absent until asked for (a drawer boots shut)')
+  ok(/\.bkp-drawer \{[^}]*position: absolute/.test(fsTable('../../kernel/src/ui/panel.css')) &&
+     /\.sp-body \{[^}]*position: relative/.test(css),
+    '…and then it is an overlay of the page, never a column')
 
   // 5. THE ACCORDION IS SLIDES', including the persisted-per-title open state,
   //    so a section added below is collapsible without anyone remembering.

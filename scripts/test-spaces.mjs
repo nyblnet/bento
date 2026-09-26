@@ -74,6 +74,8 @@ const RIGS = [
   { name: 'mentions', file: 'scripts/test-spaces-mentions.ts' },
   { name: 'md-strict', file: 'scripts/test-spaces-md-strict.ts', bundle: true },
   { name: 'size',    file: 'scripts/test-spaces-size.mjs' },
+  // drives the BUILT shell in Chrome; self-skips outside CI without one
+  { name: 'chrome',  file: 'scripts/test-spaces-chrome.ts' },
 ]
 
 // A rig that exists but is not listed here would never run locally, and the

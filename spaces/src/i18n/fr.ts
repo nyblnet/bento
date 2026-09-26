@@ -588,6 +588,7 @@ export const fr: Catalog = {
   "Unassigned": "Non attribué",
   "Underline": "Souligné",
   "Underline — ⌘U": "Souligné — ⌘U",
+  "Undo": "Annuler",
   "Undo (⌘Z)": "Annuler (⌘Z)",
   "Undo, redo": "Annuler, rétablir",
   "Unlock": "Déverrouiller",

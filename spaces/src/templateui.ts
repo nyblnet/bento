@@ -9,11 +9,11 @@
 // this needs and nothing else — so this file never sees the editor's internals
 // and the editor's diff for the feature is a handful of lines.
 //
-// The dialogs are built the way openHelp() builds its: an `sp-overlay`
-// backdrop, an `sp-card` with role=dialog, Escape and backdrop-click to close,
-// and focus returned where it came from. No new CSS — every class used here
-// already exists in styles.css, which is another file this zone should not be
-// racing five branches for.
+// The dialogs and the menu are the editor's — the kernel dialog through
+// `host.dialog` and the kernel menu through `host.menu` (menus.ts) — so they
+// share its Escape, focus trap, focus return, press-away and the editor's
+// one-overlay rule that keeps the block keymap quiet under a modal. No new CSS:
+// every class used here already exists in styles.css.
 
 import { type Page, type SpacesDoc, newPage } from './model.ts'
 import { t, locale } from './i18n.ts'
@@ -22,6 +22,7 @@ import {
   type PageTemplate, applyTemplate, makeTemplate, putTemplate, removeTemplate,
   setJournalTemplate, templatesOf, templateById,
 } from './templates.ts'
+import { row as menuRow, caption, type Menu } from './menus.ts'
 
 /**
  * What this module needs from the editor, and all it may have.
@@ -50,6 +51,10 @@ export interface TemplateHost {
    * Measured in the built shell, which is how it was found.
    */
   pageIcon(icon: string | undefined): string
+  /** A modal — the editor's kernel dialog. `title` is its visible heading. */
+  dialog(title: string, build: (body: HTMLElement, close: () => void) => void): void
+  /** A menu anchored on `anchor` — the editor's kernel menu. */
+  menu(anchor: HTMLElement, label: string, fill: (m: Menu) => void): void
 }
 
 const escapeHtml = (s: string): string =>
@@ -60,30 +65,6 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
   if (cls) n.className = cls
   if (text) n.textContent = text
   return n
-}
-
-/** A modal card. Returns the card to fill and the close function. */
-function card(label: string): { card: HTMLElement; close: () => void } {
-  const back = el('div', 'sp-overlay')
-  const box = el('div', 'sp-card')
-  box.setAttribute('role', 'dialog')
-  box.setAttribute('aria-modal', 'true')
-  box.setAttribute('aria-label', label)
-  const returnFocus = document.activeElement as HTMLElement | null
-  const close = () => {
-    back.remove()
-    document.removeEventListener('keydown', onKey, true)
-    returnFocus?.focus?.()
-  }
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') { e.stopPropagation(); close() }
-  }
-  back.append(box)
-  back.addEventListener('click', (e) => { if (e.target === back) close() })
-  document.addEventListener('keydown', onKey, true)
-  document.body.append(back)
-  box.tabIndex = -1
-  return { card: box, close }
 }
 
 function button(label: string, run: () => void, primary = false): HTMLButtonElement {
@@ -106,8 +87,7 @@ function button(label: string, run: () => void, primary = false): HTMLButtonElem
  */
 export function savePageAsTemplate(host: TemplateHost, page: Page): void {
   if (host.readOnly) return
-  const { card: box, close } = card(t('Save as template'))
-  box.append(el('h2', 'sp-card-h', t('Save as template')))
+  host.dialog(t('Save as template'), (box, close) => {
   box.append(el('p', 'sp-note', t('New pages can start as a copy of this one. The page itself is not changed.')))
 
   const field = el('div', 'sp-field')
@@ -136,8 +116,10 @@ export function savePageAsTemplate(host: TemplateHost, page: Page): void {
   const row = el('div', 'sp-row')
   row.append(button(t('Cancel'), close), button(t('Save template'), save, true))
   box.append(row)
-  input.focus()
-  input.select()
+  // after the dialog's own first-focus, which would land on the field anyway
+  // but would not select the title in it
+  setTimeout(() => { input.focus(); input.select() }, 0)
+  })
 }
 
 // ---- start a page from one -------------------------------------------------
@@ -172,10 +154,9 @@ export function newPageFromTemplate(host: TemplateHost, tplId: string, parent?: 
  * is the only way to reach "none" without a ninth control.
  */
 export function openTemplates(host: TemplateHost): void {
-  const { card: box, close } = card(t('Templates'))
+  host.dialog(t('Templates'), (box, close) => {
   const paint = () => {
     box.innerHTML = ''
-    box.append(el('h2', 'sp-card-h', t('Templates')))
     const list = templatesOf(host.doc)
     const journalId = typeof host.doc.journalTemplate === 'string' ? host.doc.journalTemplate : ''
 
@@ -229,9 +210,9 @@ export function openTemplates(host: TemplateHost): void {
       foot.append(button(t('Close'), close))
       box.append(foot)
     }
-    box.focus()
   }
   paint()
+  })
 }
 
 /** The templates a "new page" menu should offer, empty when there are none. */
@@ -246,9 +227,10 @@ export const pickable = (doc: SpacesDoc): PageTemplate[] => templatesOf(doc)
  * nothing, and every space starts with no templates, so that would be the
  * default experience of this feature for everyone who never uses it.
  *
- * Positioned against the anchor by MEASUREMENT and flipped when the room below
- * runs out. A popover hanging off the bottom of a short window is a failure
- * this app has already written down twice.
+ * The kernel menu, anchored (menus.ts anchoredMenu): placed by measurement,
+ * flipped when the room below runs out, a bottom sheet on a phone. A popover
+ * hanging off the bottom of a short window is a failure this app has already
+ * written down twice.
  */
 export function openNewPagePicker(
   host: TemplateHost, anchor: HTMLElement, blank: () => void, parent?: string,
@@ -256,42 +238,12 @@ export function openNewPagePicker(
   const list = templatesOf(host.doc)
   if (!list.length) return false
 
-  const pop = el('div', 'sp-pop')
-  pop.setAttribute('role', 'menu')
-  const close = () => {
-    pop.remove()
-    document.removeEventListener('keydown', onKey, true)
-    document.removeEventListener('mousedown', away, true)
-  }
-  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close() } }
-  const away = (e: MouseEvent) => { if (!pop.contains(e.target as Node)) close() }
-
-  const item = (icon: string | undefined, label: string, run: () => void) => {
-    const b = document.createElement('button')
-    b.className = 'sp-dditem'
-    b.type = 'button'
-    b.setAttribute('role', 'menuitem')
-    b.innerHTML = `<span class="sp-result-ico">${host.pageIcon(icon)}</span>` +
-      `<span class="sp-result-txt"><strong>${escapeHtml(label)}</strong></span>`
-    b.addEventListener('click', (e) => { e.stopPropagation(); close(); run() })
-    return b
-  }
-
-  pop.append(item('plus', t('Blank page'), blank))
-  pop.append(el('div', 'sp-menu-label', t('From a template')))
-  for (const tpl of list) {
-    pop.append(item(tpl.icon, tpl.name, () => newPageFromTemplate(host, tpl.id, parent)))
-  }
-
-  document.body.append(pop)
-  const r = anchor.getBoundingClientRect()
-  const h = pop.getBoundingClientRect().height
-  const below = window.innerHeight - r.bottom - 8
-  pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 268))}px`
-  if (h > below && r.top > below) pop.style.top = `${Math.max(8, r.top - h - 6)}px`
-  else { pop.style.top = `${r.bottom + 6}px`; pop.style.maxHeight = `${Math.max(120, below)}px` }
-
-  document.addEventListener('keydown', onKey, true)
-  setTimeout(() => document.addEventListener('mousedown', away, true), 0)
+  host.menu(anchor, t('New page'), (m) => {
+    menuRow(m, { icon: host.pageIcon('plus'), label: t('Blank page'), run: blank })
+    caption(m, t('From a template'))
+    for (const tpl of list) {
+      menuRow(m, { icon: host.pageIcon(tpl.icon), label: tpl.name, run: () => newPageFromTemplate(host, tpl.id, parent) })
+    }
+  })
   return true
 }

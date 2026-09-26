@@ -8511,3 +8511,153 @@ cap leaked onto Studio and Ledger.
 **Not built on this base:** transclusion (#428) and a side peek do not exist on
 `main`; the host-design rule is written for them and held by the rig's "only
 renderPage stamps" assertion.
+
+## 2026-09-26 — Spaces adopts the kernel menu; an anchored menu is the primitive mounted over its anchor
+
+**Every menu in bento/spaces is `createMenu` (kernel/src/ui/menu.ts), through
+one adapter, `spaces/src/menus.ts`.** That covers the topbar dropdowns (Insert,
+⋯, the save caret) and the nine anchored popovers that were menus: the block and
+page ⋯ menus, a view's group, sort, filter and source, a select field's options,
+a code block's language, a callout's tone, and "Add a property". Spaces' own
+`dropdown()`, `menuItem()`, `trapAndClose()` and every per-popover `mousedown`
+away-listener are deleted. `scripts/test-spaces-chrome.ts` asserts that the
+adapter is the only spaces file importing the kernel menu, and drives the
+built shell with trusted CDP input.
+
+**Why adopt the primitive, and not fix spaces' copies.** Measured on the built
+shell before the change:
+- No menu had arrow keys.
+- A popover closed by Escape left its away-listener on the document. That
+  listener closed the next overlay on its first mousedown, even a press inside
+  it. Escape a block menu, press ⌘K, click in the search card, and the search
+  closed.
+- The phone ⋯ menu was 950px tall in an 844px viewport, and its last three rows
+  were unreachable.
+- At 1440×900 the Insert menu ran 10px off the bottom of the window.
+
+The kernel's rig already proves Escape with focus return, arrows, `aria-expanded`,
+outside-press, mutual exclusion and a single delegated listener pair. Adopting
+the primitive gets all of it. Fixing four copies would have left four copies.
+
+**The anchored mode is composition, not a fork.** The kernel positions a menu
+under its own trigger in CSS. `anchoredMenu()` mounts the menu's wrapper
+`position: fixed` exactly over the anchor with the trigger hidden. It places the
+popup against the viewport with the rules the old `place()` used: flip above
+when there is more room, cap the height to the room available, clamp to the
+edges. Below the drawer breakpoint the popup is a bottom sheet. The primitive
+has no close callback, so the adapter observes the wrapper's `bkm-open` class.
+That is the one signal every close path shares: a row, Escape, an outside
+press, another menu opening. The observer tears the menu down, calls `onClose`
+exactly once, and returns focus to the anchor if focus was inside the menu.
+
+**What stays a popover, and why.** These keep spaces' `.sp-pop` and are not
+menus:
+- the `/` block filter, a combobox whose input keeps focus;
+- the icon grid;
+- a free-text field value;
+- the share panel;
+- a comment thread.
+
+They go through one helper, `float()`. It registers its Escape handler, its
+away-listener and its resize reflow in a teardown list that `closeOverlay()`
+always runs, so no path leaves a listener behind. A panel of controls announces
+`role="dialog"`, not `role="menu"`. The share panel and the thread said "menu"
+while holding a textarea.
+
+**A modal owns the keyboard.** The editor's keymap returns before reading any
+global shortcut while an `[aria-modal="true"]` element exists. Before this, `[`
+toggled the page list behind About (and persisted that choice), and `?` stacked
+a second modal.
+
+**The rulings applied here** (maintainer, 2026-09-25):
+- **D2:** a visible second line only where a row has a consequence (Save-as,
+  the page menu's archive, width and delete, "Make this page an issue");
+  command lists are one line.
+- **D5:** 44px menu rows under a coarse pointer.
+- **D7:** ⋯, not ⋮.
+- **D8:** shortcuts right-aligned in the UI face, in ⌃⌥⇧⌘ order, from one
+  helper (`keys()`); hidden where the pointer is coarse.
+
+The chrome scale uses the names of the shared token sheet. That sheet is not
+merged, so spaces does not depend on it; adopting it later deletes spaces'
+unthemed `:root` scale block.
+
+**Gaps the kernel menu has, written down for the kernel rather than forked
+here:**
+- an anchored mode with viewport-aware placement;
+- a close callback;
+- a right-aligned shortcut slot on a row;
+- `role` and `aria-checked` options for `menuitemcheckbox` and
+  `menuitemradio` rows (the adapter sets them after `item()` returns).
+
+**Cost:** +2,041 B of shell (282,586 → 284,627, both built with `ZOPFLI=0`).
+The kernel sheet carries rules spaces never needed (the scrolling bar, nested
+menus). The kernel file's own header predicted a slightly bigger shell.
+
+## 2026-09-26 — Spaces adopts the kernel dialog and panel; spaces keeps panel persistence
+
+**Every modal in bento/spaces is `createDialog`** (kernel/src/ui/dialog.ts):
+About, the shortcut sheet, Search, Link to page, Link card, Import and its
+reports, Export page as a space, Print, and the graph. The graph's module now
+returns its content, and the editor wraps it. Spaces' `.sp-overlay`/`.sp-card`
+shell, its per-dialog Escape and Tab handlers, and About's hand-written focus
+trap are deleted. `scripts/test-spaces-chrome.ts` asserts that no spaces file
+builds a modal by hand.
+
+What this fixed, measured on the built shell:
+- Tab left the Import dialog 23 times in 25.
+- Escape worked only while focus was inside the card.
+- The shortcut sheet focused its own card and ringed the whole dialog.
+
+The dialog heading is the primitive's `.bkd-title` at 17px/650 (D4). Section
+captions keep the 11px uppercase style. About has no visible title: the suite's
+lockup heads it, as in slides, and the dialog is named by `aria-label`.
+
+**Both side panels are `createPanel`** (kernel/src/ui/panel.ts), with
+`drawerBelow: 820`. That is the per-app parameter D6 rules for; slides uses
+700. Spaces' two hand-copied resizers, chevrons and phone drawer rules are
+deleted.
+
+**Persistence stays in spaces.** The panels get no `storageKey`. The primitive
+persists `collapsed` in drawer mode too. A phone drawer shut by following a
+link would then become the desktop preference, and the page list would stay
+shut on every later desktop open. That is the bug `closeDrawer()` was written
+to prevent. Instead, the editor writes the keys readers already have
+(`bento-sp-pane`, `bento-sp-pane-closed`, `bento-sp-insp`,
+`bento-sp-insp-closed`), and only while a panel is a column. Nothing migrates,
+and no reader's layout resets. The primitive has no scrim, so spaces adds one
+behind an open drawer. A drawer you can shut only from the button that opened
+it gets left open over the page.
+
+**Kernel gaps, written down rather than forked:**
+- `createPanel` should not persist while it is a drawer.
+- `createPanel` needs an optional scrim.
+- The panel's chevron needs a localizable label. Spaces sets `title` and
+  `aria-label` after creation.
+
+**Cost:** +1,234 B of shell (284,627 → 285,861, `ZOPFLI=0`). The deleted
+dialog and panel code is smaller than the kernel sheets that replace it.
+
+## 2026-09-26 — Spaces has two levels of transient message; phone targets are 44px
+
+**D3 in spaces: `status()` and `notice()`.**
+- The bar's status line stays the first level. It holds ambient state that is
+  true for a moment: "Edited", "Saved", "Editing", "Reading view".
+- `Editor.notice()` is the second level: a pill at the foot of the window,
+  `role=status`, above dialogs (`--z-toast` 1100), like slides' toast. It is
+  for messages the reader must not miss:
+  - a sync refusal (`syncNoticeText`);
+  - a read or import failure;
+  - a refused move;
+  - a copy or export written;
+  - a viewer preference that now applies to every page.
+
+Before this, both levels were the same 12px `--muted` line that fades in under
+two seconds. On a phone that line sits over the title strip. A future message
+picks its level by that test: if missing it would leave the reader wrong about
+their file, it is a notice. The kernel has no notice primitive yet. When one
+lands, this method is the only caller to move.
+
+**D5 in spaces:** under a coarse pointer the bar's buttons, the Live control,
+the page-tree rows and their ⋯, the format bar and every menu row are 44px
+(`--tap`). The bar was 40px.

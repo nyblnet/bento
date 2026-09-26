@@ -312,15 +312,37 @@ option { background: var(--field); color: var(--ink); }
 .sp-primary { background: var(--ink); color: var(--bg); padding: 6px 14px; }
 .sp-primary:hover { background: var(--ink-2); }
 
-.sp-body { display: flex; flex: 1 1 auto; min-height: 0; }
+/* `relative`: a panel below the drawer breakpoint is an absolute overlay of
+   THIS box (the kernel's `.bkp-drawer`), under the bar and over the page. */
+.sp-body { display: flex; flex: 1 1 auto; min-height: 0; position: relative; }
+
+/* ————— the side panels: the kernel's (kernel/src/ui/panel.css) —————
+   Width, resize strip, collapse chevron, RTL, the drawer: all the primitive's,
+   through `--bkp-*`. A closed panel is 0px — the reading column gets its whole
+   width back, which is the bargain the properties panel was built on — and its
+   chevron docks flush to the screen edge so there is always a way back. */
+.sp-app {
+  --bkp-bg: var(--bg);
+  --bkp-collapsed-w: 0px;
+  --bkp-drawer-z: 50;
+  --bkp-drawer-shadow: 0 0 50px rgb(var(--shade) / .3);
+  --bkp-resizer-hover: color-mix(in srgb, var(--blue) 45%, transparent);
+}
+.bkp.bkp-collapsed { border-inline-width: 0; }
+.bkp-start.bkp-collapsed .bkp-toggle { left: 0; transform: translateY(-50%); }
+.bkp-end.bkp-collapsed .bkp-toggle { left: auto; right: 0; transform: translateY(-50%); }
+[dir='rtl'] .bkp-start.bkp-collapsed .bkp-toggle { left: auto; right: 0; }
+[dir='rtl'] .bkp-end.bkp-collapsed .bkp-toggle { right: auto; left: 0; }
+.bkp-toggle { z-index: 15; box-shadow: 0 1px 4px rgb(var(--shade) / .12); }
+.bkp-toggle:hover { color: var(--ink); border-color: var(--edge); }
+/* On a phone the panels are drawers opened from the bar (Pages, and ⋯ →
+   Properties): no strip, no chevron over the page's edge. */
+.bkp-drawer > .bkp-resizer { display: none; }
+.sp-scrim { position: fixed; inset: 0; background: rgb(var(--shade) / .3); z-index: 45; }
 
 /* ————— sidebar ————— */
 .sp-side {
-  /* the reader's width, restored from localStorage — never the document's */
-  flex: 0 0 var(--sp-panew, 244px); min-width: 0;
-  transition: flex-basis .18s ease, padding .18s ease;
-  border-inline-end: 1px solid var(--line); background: var(--bg);
-  overflow: auto; padding: 10px 8px max(16px, env(safe-area-inset-bottom));
+  padding: 10px 8px max(16px, env(safe-area-inset-bottom));
 }
 .sp-side-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -882,17 +904,27 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
 .sp-mentions li:focus-within .sp-mention-link { opacity: 1; }
 @media (hover: none) { .sp-mention-link { opacity: 1; } }
 
-/* ————— menus + overlays ————— */
-.sp-overlay {
-  position: fixed; inset: 0; background: rgb(var(--shade) / .34);
-  display: flex; align-items: flex-start; justify-content: center;
-  padding-top: 11vh; z-index: 60;
+/* ————— dialogs: the kernel's (kernel/src/ui/dialog.css) —————
+   Every modal is `createDialog`. Its look comes through `--bkd-*`, set on the
+   root because the scrim is mounted on <body>, outside `.sp-app`. The heading
+   is the kernel's `.bkd-title`, 17px/650 (D4). */
+:root {
+  --bkd-radius: var(--radius-lg);
+  --bkd-shadow: var(--shadow-dlg);
+  --bkd-scrim: var(--scrim);
+  --bkd-body-ink: var(--ink);
 }
-.sp-card {
-  width: min(560px, 92vw); max-height: 72vh; overflow: auto;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 18px 48px rgb(var(--shade) / .22); padding: 12px;
-}
+/* Selectors carry `.bkd-*` twice where they override the kernel sheet, which
+   the bundle places after this file. */
+.bkd-card.sp-dlg { width: 560px; }
+.bkd-card.sp-dlg-wide { width: 720px; max-width: min(720px, 100%); }
+.bkd-card.sp-dlg .bkd-title { letter-spacing: -0.005em; }
+/* a palette (search, "link to page") sits high and grows DOWN, so a result
+   list arriving does not re-centre the card under the pointer */
+.bkd-overlay.sp-dlg-top { align-items: flex-start; padding-top: 11vh; }
+/* the graph is a viewer: the whole card is its canvas */
+.bkd-card.sp-dlg-graph { width: auto; max-width: none; padding: 0; overflow: hidden; }
+.bkd-overlay:has(.sp-dlg-graph) { padding: 14px; }
 .sp-card-h {
   font-size: 11px; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.07em; color: var(--muted); margin: 2px 4px 8px;
@@ -964,15 +996,9 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
    BOTH axes (hard-won #10), so a floating child of it would be cut on the left
    and the bottom with nothing to show for it. */
 .sp-note { color: var(--muted); font-size: 12.5px; margin: 6px 4px 10px; line-height: 1.55; }
-/* The card is a column with its own scroll, sized off the VIEWPORT rather than
-   a breakpoint: 375px wide with a 12px gutter and 1600px wide are the same
-   rule. `.sp-card`'s 72vh is for a find palette that wants to sit high; a
-   dialog this long wants the height, so it takes 88vh and centres. */
-.sp-overlay-about { align-items: center; padding: 12px; padding-top: 12px; }
+/* The kernel dialog's card is the scroller and sizes itself to the viewport
+   (a bottom sheet on a phone); this is the column inside it. */
 .sp-about {
-  width: min(560px, calc(100vw - 24px));
-  max-height: min(88vh, calc(100vh - 24px));
-  padding: 18px;
   display: flex; flex-direction: column; gap: 2px;
   /* Sections are flex items, and a flex item SHRINKS by default — which is how
      slides' update block collapsed to its min-height and spilled its children
@@ -988,7 +1014,7 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
 .sp-about .sp-card-h { margin: 0 2px 8px; }
 /* the head and the promo line are the title of the dialog, not a section */
 .sp-ab-promo { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 6px 4px 2px; }
-.sp-ab-promo a { color: var(--blue); text-decoration: none; }
+.sp-ab-promo a { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); text-decoration: underline; text-underline-offset: 2px; }
 .sp-ab-promo a:hover { text-decoration: underline; }
 
 /* What is in this file. Four numbers, and then the sentence that explains
@@ -1020,11 +1046,15 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
    outlined boxes there would be noise. In THIS card the same class has to read
    as a control against a white panel with no hover to help it, so the dialog
    gives every non-primary button its border back. Slides' about does exactly
-   this, for exactly this reason. */
-.sp-about .sp-btn { border-color: var(--line); background: var(--chrome); }
-.sp-about .sp-btn:hover { background: var(--chrome-2); }
-.sp-about .sp-primary { border-color: var(--ink); background: var(--ink); color: #fff; }
-.sp-about .sp-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
+   this, for exactly this reason.
+   EVERY dialog, not only About: Import's "Choose a folder…" and "Choose a
+   space…" and Export's "Close" rendered as bare words beside a filled primary,
+   with nothing to say they were buttons. And the primary's ink is the GROUND,
+   never `#fff` — on the dark theme's near-white fill `#fff` was invisible. */
+.bkd-card .sp-btn { border-color: var(--line); background: var(--chrome); }
+.bkd-card .sp-btn:hover { background: var(--chrome-2); }
+.bkd-card .sp-primary { border-color: var(--ink); background: var(--ink); color: var(--bg); }
+.bkd-card .sp-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
 
 .sp-ab-check {
   display: flex; align-items: center; gap: 7px;
@@ -1093,19 +1123,6 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
 .sp-menu { display: none; }
 @media (max-width: 820px) {
   .sp-menu { display: inline-flex; }
-  /* The drawer is simply absent until asked for. An animated off-canvas panel
-     is nicer, and two attempts at one (a logical inset, then a transform) both
-     failed to move under measurement — so this ships the version whose
-     behaviour is obvious from the rule. A slide-in can come back with a test
-     that proves it. */
-  .sp-side { display: none; }
-  .sp-side.sp-open {
-    display: block; position: fixed; inset: 0 auto 0 0; width: 268px;
-    z-index: 50; box-shadow: 0 0 50px rgb(var(--shade) / .3);
-    padding-top: max(14px, env(safe-area-inset-top));
-  }
-  [dir='rtl'] .sp-side.sp-open { inset: 0 0 0 auto; }
-  .sp-scrim { position: fixed; inset: 0; background: rgb(var(--shade) / .3); z-index: 45; }
   .sp-main { --sp-pad-x: 18px; --sp-pad-y: 26px; padding: var(--sp-pad-y) var(--sp-pad-x) 45vh; }
   /* THE MARGIN THE GUTTER LIVES IN — see below — and it hangs off the PAGE, not
      off `.sp-main`. `.sp-main` is chrome and follows the interface direction;
@@ -1158,7 +1175,7 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
        it a dark reader's UA furniture prints dark over our white. */
     color-scheme: only light !important;
   }
-  .sp-bar, .sp-side, .sp-insp, .sp-insp-rz, .sp-banner, .sp-gutter, .sp-scrim, .sp-langchip { display: none !important; }
+  .sp-bar, .bkp, .sp-side, .sp-insp, .sp-banner, .sp-gutter, .sp-scrim, .sp-langchip { display: none !important; }
   .sp-tb-tools, .sp-tb-grip { display: none !important; }
   .sp-main { overflow: visible; --sp-pad-x: 0px; --sp-pad-y: 0px; padding: 0; background: #fff; }
   .sp-toggle-body[hidden] { display: block !important; }  /* toggles print OPEN */
@@ -1192,20 +1209,87 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
   p, li { orphans: 2; widows: 2; }
 }
 
-/* ————— topbar dropdowns ————— */
-.sp-dd { position: relative; }
-.sp-ddmenu {
-  display: none; position: absolute; top: calc(100% + 5px); inset-inline-start: 0;
-  min-width: 250px; flex-direction: column; z-index: 60;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 12px 34px rgb(var(--shade) / .2); padding: 5px;
+/* ————— the chrome scale, named as the suite's shared sheet names it —————
+   The values the D1–D8 rulings settled (2026-09-25), under the names the
+   kernel's tier-4 token sheet gives them, so adopting that sheet later is a
+   deletion here and a rename nowhere. Its own block, and UNTHEMED: these are
+   sizes, and the one colour in them (the shadow) reads `--shade`, which the
+   dark blocks already flip. */
+:root {
+  --radius-sm: 6px;      /* inputs, menu rows */
+  --radius-lg: 14px;     /* dialogs and sheets */
+  --shadow-pop: 0 12px 32px rgb(var(--shade) / .16);   /* menus, popovers */
+  --shadow-dlg: 0 18px 50px rgb(var(--shade) / .28);   /* dialogs */
+  --scrim: rgb(var(--shade) / .38);                    /* the dim behind a dialog */
+  --ctl-h: 30px;
+  --tap: 44px;           /* D5: a coarse pointer's target */
+  --fs-hint: 12px;
+  --z-pop: 60;
+  --z-toast: 1100;       /* a notice, above a dialog on purpose */
 }
-.sp-dd.sp-open .sp-ddmenu { display: flex; }
-.sp-dd:last-child .sp-ddmenu { inset-inline-start: auto; inset-inline-end: 0; }
+
+/* ————— menus: the kernel's (kernel/src/ui/menu.css) —————
+   Every dropdown and anchored menu is `createMenu`; see menus.ts for why. The
+   primitive reads its look through `--bkm-*` chains, and these are this app's
+   answers. Structure and behaviour are the kernel's and are not restated here.
+   Menus keep `--radius` (10px): `--radius-lg` is the DIALOG corner, and the
+   kernel's chain would otherwise hand a menu 14px. */
+.sp-app, .sp-mn-anchored {
+  --bkm-radius: var(--radius);
+  --bkm-item-radius: var(--radius-sm);
+  --bkm-shadow: var(--shadow-pop);
+  --bkm-ink: var(--ink);
+  --bkm-font-size: 13.5px;
+  --bkm-min-width: 240px;
+  --bkm-z: var(--z-pop);
+}
+.sp-mn-pop { font-family: inherit; }
+.sp-mn-pop .bkm-text { font-weight: 600; }
+.sp-mn-pop .bkm-hint { font-size: var(--fs-hint); }
+.sp-mn-pop .bkm-item { min-height: var(--ctl-h); }
+/* Selectors that override the kernel sheet carry `.bkm`/`.bkm-menu`: the
+   bundle places that sheet AFTER this file, so equal specificity loses.
+   A row that TEACHES may wrap, but no menu here is wider than a phone column. */
+.bkm-menu.sp-mn-pop { max-width: min(320px, calc(100vw - 16px)); }
+.sp-mn-pop .bkm-body { flex: 1 1 auto; }
+.sp-mn-pop .bkm-selected { background: var(--chrome-2); }
+/* a SHORTCUT sits at the row's end, in the interface face, right-aligned, in
+   ⌃⌥⇧⌘ order (D8) — never a second line under the name, where it read as a
+   description of the command */
+.sp-mkbd {
+  margin-inline-start: auto; padding-inline-start: 14px; flex: none;
+  font: inherit; font-size: var(--fs-hint); color: var(--muted);
+  letter-spacing: .02em; white-space: nowrap;
+}
+/* the trigger is a bar button like any other */
+.sp-mn > .bkm-trigger { display: inline-flex; align-items: center; gap: 6px; }
+/* the menu hanging off the save caret is the save split's; reset the wrapper */
+.sp-split .sp-mn { display: flex; align-items: stretch; }
+/* the anchored menu's wrapper sits exactly over its anchor (menus.ts places it)
+   and must take no clicks of its own */
+.bkm.sp-mn-anchored { position: fixed; pointer-events: none; z-index: var(--z-pop); }
+.bkm.sp-mn-anchored > .bkm-menu { pointer-events: auto; }
+/* …and on a phone it is a SHEET at the bottom edge, where a thumb reaches it and
+   nothing can be placed off-screen */
+.bkm.sp-mn-anchored > .bkm-menu.sp-mn-sheet {
+  position: fixed; top: auto; left: 8px; right: 8px;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  max-width: none; min-width: 0; max-height: 62vh;
+  border-radius: var(--radius-lg); padding: 8px;
+  box-shadow: 0 -8px 40px rgb(var(--shade) / .28);
+}
+/* rows that are not commands — the "Width" caption, a filter's field name */
+.sp-mn-pop .sp-menu-label:first-child { border-top: 0; margin-top: 0; }
+/* a form inside a menu (a new property, a callout's own icon) */
+.sp-mn-pop .sp-newprop, .sp-mn-pop .sp-tonerow { padding: 4px 6px 6px; }
+
+/* ————— rows outside the kernel menu —————
+   The design picker's rows (designpanel.ts) are built by hand and keep this
+   class; they are drawn to match a kernel row exactly. */
 .sp-dditem {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  text-align: start; font: inherit; color: var(--ink);
-  background: transparent; border: 0; border-radius: 7px;
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  text-align: start; font: inherit; font-size: 13.5px; color: var(--ink);
+  background: transparent; border: 0; border-radius: var(--radius-sm);
   padding: 7px 9px; cursor: pointer;
 }
 .sp-dditem:hover { background: var(--chrome-2); }
@@ -1489,10 +1573,8 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
 
 /* The shortcut list. Two columns, keys right-aligned against their meanings,
    so the eye runs down one edge instead of hunting across a ragged gap. */
-/* wider than the other cards, because this one is a two-column table and
-   .sp-card's 560px leaves 534px of content — four pixels short of two 260px
-   columns plus the gap, which silently collapsed the grid back to one */
-.sp-keys { width: min(720px, 92vw); max-width: none; }
+/* The sheet opens WIDE (`sp-dlg-wide`, 720px): a 560px card leaves too little
+   for two 260px columns plus the gap, which silently collapsed the grid to one. */
 .sp-keys-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 0 30px; align-items: start;
@@ -1565,10 +1647,20 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
 .sp-bar-fold .sp-mark { display: none; }
 .sp-bar-fold .sp-group-history { display: none; }
 .sp-bar-fold .sp-split .sp-caret { display: none; }
-/* with the caret gone Save is one button again, not the left half of two */
+/* with the caret gone Save is one button again, not the left half of two —
+   and a SQUARE one: the icon centred, the padding even. It was a 66×40 slab
+   with the icon at its left and ~26px of empty fill on its right, because the
+   label's end padding (and the unsaved dot's slot) outlived the label. */
 .sp-bar-fold .sp-split > .sp-btn:first-child {
   border-start-end-radius: 8px; border-end-end-radius: 8px;
-  padding-inline-end: 14px;
+  padding-inline: 9px; justify-content: center;
+}
+/* once the word is gone, the unsaved dot is a BADGE on the corner of the icon
+   button — the slides treatment — not a slot that holds the button wide */
+.sp-bar-compact .sp-primary { position: relative; }
+.sp-bar-compact .sp-primary .sp-dirty {
+  position: absolute; top: 5px; inset-inline-end: 5px; margin: 0;
+  box-shadow: 0 0 0 2px var(--ink);
 }
 /* THE STATUS LINE LEAVES THE FLOW. It is a nowrap span, so a long message
    ("Reading view — press Esc or the eye to edit" is ~250px) would shove the
@@ -1589,16 +1681,34 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
    ellipsises when there is none. */
 .sp-status { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-/* Hit targets: a 30px button is a miss on a touch screen. */
+/* D3's second level (editor.ts notice): what the reader must not miss. The
+   inverse of the surface — ink fill, ground text — like slides' toast and the
+   kernel tooltip, above a dialog on purpose. */
+.sp-notice {
+  position: fixed; left: 50%; bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
+  transform: translate(-50%, 6px); z-index: var(--z-toast);
+  max-width: min(520px, calc(100vw - 32px)); padding: 9px 16px;
+  border-radius: 999px; background: var(--ink); color: var(--bg);
+  font-size: 13px; line-height: 1.35; text-align: center;
+  box-shadow: var(--shadow-pop); pointer-events: none;
+  opacity: 0; transition: opacity .18s ease, transform .18s ease;
+}
+.sp-notice.sp-on { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .sp-notice { transition: none; } }
+
+/* Hit targets: a 30px button is a miss on a touch screen. 44, not 40 (D5 —
+   HIG, and slides' phone bar): measured, five bar buttons were 40×40, the
+   Live button 35×29, a page row 28px tall and its ⋯ 20×20. */
 @media (pointer: coarse) {
-  .sp-bar .sp-btn { min-width: 40px; min-height: 40px; justify-content: center; }
-  /* The sharing button is a `.sp-live`, not a `.sp-btn`, so the rule above
-     stepped straight over it: measured at 320px with the coarse rules applied,
-     five bar controls came out 40×40 and this one 35×29 — the odd one out, and
-     the one that opens a popover. Widening it does not cost the bar its fit:
-     Save's right edge stays at 311 inside 320. */
-  .sp-bar .sp-live { min-width: 40px; min-height: 40px; justify-content: center; }
+  .sp-bar .sp-btn, .sp-bar .sp-live { min-width: var(--tap); min-height: var(--tap); justify-content: center; }
+  .sp-treelink { min-height: var(--tap); padding-inline-end: 40px; }
+  .sp-treelink .sp-rowmore { width: 36px; height: var(--tap); inset-inline-end: 2px; }
+  .sp-fmt-btn { min-height: var(--tap); }
   .sp-dditem { padding-block: 11px; }
+  /* D5: a menu row is a 44px target under a finger, like every other one */
+  .sp-mn-pop .bkm-item { min-height: var(--tap); }
+  /* …and a shortcut is noise where there is no keyboard to press it on */
+  .sp-mkbd { display: none; }
 }
 
 /* WHILE A FINGER IS DRAGGING. The press that starts a touch drag is also the
@@ -1614,38 +1724,6 @@ body.sp-touchdrag, body.sp-touchdrag * { -webkit-user-select: none; user-select:
    rule, with the finger parked at the board's right edge for 1400ms:
    scrollLeft 0 → 0. */
 body.sp-touchdrag .sp-board { scroll-snap-type: none; }
-
-/* A menu opened from the right end of the bar must open INWARD. Anchoring
-   every dropdown to its start edge put the ⋯ and Save menus half off-screen at
-   375px — the items were there, just unreadable. */
-.sp-dd-end .sp-ddmenu { inset-inline-start: auto; inset-inline-end: 0; }
-.sp-ddmenu { max-width: calc(100vw - 20px); }
-
-/* A MENU TALLER THAN THE WINDOW IS A MENU WITH ITEMS NOBODY CAN REACH.
-   Measured on the built shell at 390×800: Insert laid out 19 items 1000px tall
-   with its bottom at y = 1053, so five of them — Table, Link to the web, Image,
-   Video or audio and the divider above them — were 253px below the viewport;
-   ⋯ laid out 928px with its bottom at 981. The menu is `position: absolute`
-   inside a fixed bar, so the page cannot be scrolled to them and there is no
-   gesture that reaches them at all. Not a phone bug, either: at 861px of
-   browser height on a laptop the same five items are off the bottom.
-
-   `100dvh`, not `100vh`: on a phone `vh` is the tall viewport with the URL bar
-   retracted, so a cap written in `vh` still runs the menu under the chrome that
-   is actually on screen.
-
-   BOTH AXES ARE SPELLED OUT ON PURPOSE. Setting one to a non-`visible` value
-   computes the other to `auto`, and a scroll container CLIPS what is positioned
-   inside it — a floating child can never escape one (CLAUDE.md's ⋯/Share
-   popover trap, which cost slides a silently half-drawn popover). Every child
-   of these menus today is a `position: static` `.sp-dditem`, verified in the
-   built shell: 16 of 16 in ⋯, 19 of 19 in Insert. Anything demoted in here
-   later must be a SECTION OF THE LIST, never a popover anchored to it. */
-.sp-ddmenu {
-  max-height: calc(100dvh - 64px);
-  overflow-y: auto; overflow-x: hidden;
-  overscroll-behavior: contain;
-}
 
 /* ————— find & replace on a small screen —————
    Measured at a 575px viewport: the bar laid out 644px wide and started at
@@ -1679,7 +1757,6 @@ body.sp-touchdrag .sp-board { scroll-snap-type: none; }
   border-start-end-radius: 0; border-end-end-radius: 0;
   padding-inline-end: 10px;
 }
-.sp-split .sp-dd { display: flex; align-items: stretch; }
 .sp-split .sp-caret > .sp-btn {
   height: 100%; padding: 6px 6px;
   border-start-start-radius: 0; border-end-start-radius: 0;
@@ -1732,52 +1809,8 @@ body.sp-touchdrag .sp-board { scroll-snap-type: none; }
 .sp-about-logo b + span { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
 .sp-about-logo:hover b { text-decoration: underline; }
 
-/* ————— the panel edge: resize here, collapse here —————
-   Slides' pattern, and its reasoning: the control that hides a panel belongs on
-   the panel's own edge, where you are already looking, rather than in a toolbar
-   across the room. */
-.sp-resizer {
-  flex: none; width: 5px; position: relative;
-  cursor: col-resize; background: transparent;
-  transition: background .12s ease .08s;
-}
-.sp-resizer:hover,
-body.sp-col-resizing .sp-resizer { background: color-mix(in srgb, var(--blue) 45%, transparent); }
+/* the table's column grip borrows the panels' old resize cursor */
 body.sp-col-resizing { cursor: col-resize; user-select: none; }
-.sp-noanim { transition: none !important; }
-
-/* The chevron rides the strip and is ALWAYS visible — same as slides. A
-   hover-only affordance is one nobody finds: the first version of this faded in
-   on hover, so the way to hide the panel was invisible until you happened to
-   pass over a 5px strip. */
-.sp-pane-tab {
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 16px; height: 44px; padding: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--surface); color: var(--muted);
-  border: 1px solid var(--line); border-radius: 8px;
-  cursor: pointer; z-index: 15;
-  box-shadow: 0 1px 4px rgb(var(--shade) / .12);
-}
-.sp-pane-tab:hover { color: var(--ink); border-color: var(--edge); }
-.sp-pane-tab svg { width: 13px; height: 13px; display: block; }
-
-/* Collapsed: the panel takes no width and the strip carries only the chevron,
-   docked flush to the screen edge so there is always a way back. */
-.sp-side.sp-pane-closed {
-  flex-basis: 0; padding-inline: 0; border-inline-end-width: 0; overflow: hidden;
-}
-.sp-side.sp-pane-closed + .sp-resizer { cursor: default; }
-.sp-side.sp-pane-closed + .sp-resizer:hover { background: transparent; }
-.sp-side.sp-pane-closed + .sp-resizer .sp-pane-tab {
-  inset-inline-start: 0; left: auto; transform: translateY(-50%);
-}
-
-/* On a phone the panel is a drawer, not a column: no strip, no resizing. */
-@media (max-width: 820px) {
-  .sp-resizer { display: none; }
-}
 
 /* THE PAGES BUTTON ONLY EXISTS WHERE THE PANEL IS A DRAWER.
    Above the breakpoint the panel has its own chevron, on its own edge, where
@@ -1792,31 +1825,12 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
 }
 
 /* ————— the properties panel —————
-   The sibling of the page list, on the other edge, with the SAME resizer strip
-   and the SAME chevron. Two collapse idioms in one window would be two things
-   to learn for one behaviour.
-
-   IT COSTS NOTHING WHILE CLOSED, and that is the whole point of the rule
-   rather than a nicety: the wide-page work that shipped one commit before this
-   gives the column the window's slack, and a panel holding 280px of it open by
-   default would take that back on every screen. Closed is `flex-basis: 0`, no
-   padding and no border — `.sp-main` is `flex: 1 1 auto`, so the column is the
-   width it would be if this file did not exist. */
+   The sibling of the page list, on the other edge — the same kernel panel, so
+   the same strip and the same chevron. IT COSTS NOTHING WHILE CLOSED
+   (`--bkp-collapsed-w: 0px` above): the reading column is the width it would
+   be if this panel did not exist. */
 .sp-insp {
-  flex: 0 0 var(--sp-inspw, 280px); min-width: 0;
-  transition: flex-basis .18s ease, padding .18s ease;
-  border-inline-start: 1px solid var(--line); background: var(--bg);
-  overflow: auto; padding: 10px 10px max(16px, env(safe-area-inset-bottom));
-}
-.sp-insp.sp-pane-closed {
-  flex-basis: 0; padding-inline: 0; border-inline-start-width: 0; overflow: hidden;
-}
-/* Mirror of the page list's strip. The chevron docks to the END edge when the
-   panel is shut, so there is always a way back in. */
-.sp-insp-rz.sp-shut { cursor: default; }
-.sp-insp-rz.sp-shut:hover { background: transparent; }
-.sp-insp-rz.sp-shut .sp-pane-tab {
-  inset-inline-end: 0; left: auto; transform: translateY(-50%);
+  padding: 10px 10px max(16px, env(safe-area-inset-bottom));
 }
 
 .sp-insp-title {
@@ -1834,10 +1848,15 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
   border-radius: 7px; cursor: pointer; user-select: none;
 }
 .sp-insp-sec:hover { background: var(--chrome-2); }
+/* a drawn disclosure caret, turning as the group opens — the ▾/▸ glyphs at
+   9px rendered as a bullet dot beside each heading, and read as a list */
 .sp-insp-sec::before {
-  content: '▾'; font-size: 9px; color: var(--muted); width: 9px;
+  content: ''; flex: none; width: 0; height: 0; margin: 0 2px;
+  border-inline: 4px solid transparent; border-top: 5px solid var(--muted);
+  transition: transform .12s ease;
 }
-.sp-insp-sec.sp-shut::before { content: '▸'; }
+.sp-insp-sec.sp-shut::before { transform: rotate(-90deg); }
+[dir='rtl'] .sp-insp-sec.sp-shut::before { transform: rotate(90deg); }
 .sp-insp-sub {
   margin-inline-start: auto; font-weight: 400; font-size: 11.5px;
   color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1873,18 +1892,9 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
 }
 .sp-insp .sp-select { max-width: 100%; }
 
-/* THE SAME BARGAIN THE PAGE LIST MAKES BELOW THE BREAKPOINT: an overlay, not a
-   third column. 820px of window does not hold two panels and a page. */
-@media (max-width: 820px) {
-  .sp-insp-rz { display: none; }
-  .sp-insp { display: none; }
-  .sp-insp.sp-open {
-    display: block; position: fixed; inset: 0 0 0 auto; width: 288px;
-    z-index: 50; box-shadow: 0 0 50px rgb(var(--shade) / .3);
-    padding-top: max(14px, env(safe-area-inset-top));
-  }
-  [dir='rtl'] .sp-insp.sp-open { inset: 0 auto 0 0; }
-}
+/* Below the breakpoint BOTH panels are overlays, not columns — 820px of window
+   does not hold two panels and a page. The kernel panel does that itself
+   (`drawerBelow`, editor.ts DRAWER_BELOW). */
 
 /* THE BUTTON IS SHOWN AT EVERY WIDTH, and this is a correction.
    It was hidden above the breakpoint on the reasoning that the chevron on the
@@ -2171,14 +2181,19 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
    document, and a colleague reading a page two levels down the tree is not an
    event. Dots, not banners. */
 
+/* A bar button like every other: the 30px grid, no frame, the same ink. It was
+   35×29 with a 16px glyph, `--muted` ink (3.45:1) and the only border in the
+   bar, so it read as a different kind of control. The border comes back only
+   as the LIVE state below, where it means something. */
 .sp-live {
-  display: inline-flex; align-items: center; gap: 5px;
-  border: 1px solid var(--line); background: none; color: var(--muted);
-  border-radius: 8px; padding: 5px 8px; cursor: pointer; font: inherit; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 36px; height: var(--ctl-h);
+  border: 1px solid transparent; background: none; color: var(--ink-2);
+  border-radius: 8px; padding: 6px 9px; cursor: pointer; font: inherit; font-size: 13px; line-height: 1;
 }
 .sp-live:hover { background: var(--chrome-2); color: var(--ink); }
 .sp-live .sp-ico { display: inline-flex; }
-.sp-live .sp-ico svg { width: 17px; height: 17px; }
+.sp-live .sp-ico svg { width: 16px; height: 16px; }
 .sp-live-n:empty { display: none; }
 .sp-live-n { font-size: 12px; font-variant-numeric: tabular-nums; }
 /* LIVE is a state worth seeing at a glance, and OFF must not look broken —
@@ -2228,6 +2243,7 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
   padding: 7px 8px; border-radius: 7px; cursor: pointer;
 }
 .sp-paction:hover { background: var(--chrome-2); }
+.sp-paction-sep { height: 1px; background: var(--line); margin: 8px 4px 10px; }
 .sp-paction span { color: var(--muted); font-size: 12px; }
 
 /* THIS device's row in the People list: it is you, so it is not a target. */
@@ -2294,7 +2310,10 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 }
 .sp-cm-me {
   border: 0; background: none; font: inherit; font-size: 11px; text-transform: none;
-  letter-spacing: 0; color: var(--muted); cursor: pointer; padding: 0;
+  letter-spacing: 0; color: var(--muted); cursor: pointer;
+  /* a 49×13 target was a miss; the padding is the hit area, pulled back out
+     of the layout by the negative margin so the heading does not move */
+  padding: 6px 8px; margin: -6px -8px; border-radius: 6px;
 }
 .sp-cm-me:hover { color: var(--ink); }
 .sp-cm-entries { display: flex; flex-direction: column; gap: 8px; padding: 0 6px 8px; }
@@ -2628,23 +2647,11 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
 .sp-chart-keygap i { background: repeating-linear-gradient(45deg, var(--edge) 0 2px, transparent 2px 4px); }
 .sp-chart-keysample i { background: none; border-top: 2px dashed var(--muted); height: 0; border-radius: 0; }
 .sp-chart-pick { margin-top: 8px; }
-.sp-chart-menu {
-  position: absolute; z-index: 60; min-width: 220px; max-width: 320px;
-  background: var(--chrome); border: 1px solid var(--edge); border-radius: 8px;
-  padding: 4px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
-}
-.sp-chart-menuitem {
-  display: block; width: 100%; text-align: start; padding: 7px 9px;
-  background: none; border: 0; border-radius: 6px; color: var(--ink); font: inherit; font-size: 13px;
-  cursor: pointer;
-}
-.sp-chart-menuitem:hover { background: var(--chrome-2); }
-.sp-chart-menunew { border-top: 1px solid var(--edge); border-radius: 0 0 6px 6px; margin-top: 2px; }
 
 @media print {
   /* a chart is the page's evidence: it prints, whole, and without its control */
   .sp-b-chart { break-inside: avoid; }
-  .sp-chart-pick, .sp-chart-menu { display: none !important; }
+  .sp-chart-pick { display: none !important; }
   /* the surface IS the content: it prints where it was placed, and it is not
      broken across a page boundary */
   .sp-b-canvas { break-inside: avoid; }
