@@ -2883,6 +2883,12 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
 .sp-dsg-cols { display: grid; grid-template-columns: 1fr 48px 48px; gap: 4px 8px; align-items: center; font-size: 13px; }
 .sp-dsg-cols > span { color: var(--ink-2); }
 .sp-dsg-cols > span:nth-child(2), .sp-dsg-cols > span:nth-child(3) { font-size: 11.5px; color: var(--muted); text-align: center; }
+/* one page's design choices (page ⋯ menu, properties panel): the swatch sits
+   where a menu item's icon does, so the rows read as the page menu's own */
+.sp-dsg-menu { min-width: 250px; }
+.sp-dsg-item .sp-result-ico { display: inline-flex; align-items: center; justify-content: center; }
+.sp-dsg-item .sp-dsg-sw b { height: 16px; }
+.sp-insp-dsg { max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-dsg-cols input[type='color'] { width: 44px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--field); }
 @media (max-width: 720px) { .sp-dsg-panel { top: auto; height: 62vh; inset-inline: 8px; width: auto; } }
 @media print { .sp-dsg-panel { display: none !important; } }

@@ -33,6 +33,7 @@ import { todayISO } from './journal.ts'
 import { chartSnapshotSvg } from '../../kernel/src/charts.ts'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
+import { applyDesign, resolvePageDesign, type Resolved } from './designs.ts'
 import { renderCanvasHead, placeCard } from './canvas.ts'
 import { viewEmbed, anchorOf } from './embed.ts'
 import { markRefs, notesOnPage, noteOf, noteId, refId, type PageNotes } from './footnotes.ts'
@@ -87,6 +88,17 @@ export interface RenderOpts {
   /** the page whose numbering `footnotes` is — DOM ids are document-global and
    *  print draws every page at once, so a label's ids are scoped by page */
   footnoteScope?: string
+  /**
+   * The design the PAGE ROOT carries (renderPage only). Absent = this page's
+   * own resolved design (designs.ts resolvePageDesign); `null` = none, for a
+   * caller that styles the result itself (the static preview's inline rules).
+   *
+   * Only a page ROOT ever carries one. Everything rendered INSIDE a page — a
+   * gallery card, a view's rows, a page card, a future transclusion — is built
+   * by renderBlocks under the host's root and so wears the HOST's design: the
+   * design is the page you are on, not the page a card points at.
+   */
+  design?: Resolved | null
 }
 
 // The tag and list maps come from the block registry (blocks.ts), so a new
@@ -1069,6 +1081,13 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   const art = document.createElement('article')
   art.className = 'sp-page'
   art.style.direction = 'ltr'
+  // EACH PAGE ROOT CARRIES ITS OWN RESOLVED DESIGN. Print puts every page of a
+  // space side by side under one root that carries none, so each keeps its
+  // own; the editor's surface carries the SAME resolved design as the page it
+  // shows, so the two can never disagree. designs.css matches ancestors by
+  // attribute, so two roots with DIFFERENT designs must never nest — which is
+  // why nothing inside a page is ever rendered through here.
+  applyDesign(art, doc, opts.design !== undefined ? opts.design : resolvePageDesign(doc, page.id))
 
   const inner = document.createElement('div')
   inner.className = 'sp-page-inner'

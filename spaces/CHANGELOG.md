@@ -1265,6 +1265,26 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   divider never carries an id, because the attribute would break the row or
   the rule.
 
+- **A page can have its own design, and a section passes its design down.**
+  Each page's ⋯ menu — and the properties panel — has **Design**: "Same as
+  parent" (or "Same as space" at the top), showing what that comes to, then
+  every design. Hover one to see it on the page; choosing is one undo step,
+  and going back to "Same as parent" leaves the file exactly as it was. Set
+  one on a section and every page inside it takes it, unless a page sets its
+  own. **Customise…** from there makes a design of that page's own, kept in
+  the space, without touching the section or the rest of the space.
+  Everything shown inside a page — gallery cards, boards, page cards — takes
+  the design of the page you are on, not the page it points at. Printing the
+  whole space prints each page in its own design; the file's thumbnail shows
+  the home page's. **Export page as Markdown…** writes one page as a note,
+  with `design:` in its front matter when the page chose one itself, and
+  importing notes puts each note's design back on its own page — an import no
+  longer changes the space's own design. Format: an optional `design` on a
+  page; an older build shows the space's design and keeps it. Also fixed on
+  the way: a menu opened from another menu (and any popover opened right after
+  one closed) was dismissed by the first click inside it. Shell 300,835 →
+  305,242 B (+4,407).
+
 ## [0.1.0] — 2026-08-03
 
 First release.

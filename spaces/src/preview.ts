@@ -50,11 +50,15 @@
 // because there is still no reader to ask. designs.ts `previewRules` supplies
 // it as flat values — no custom properties, no color-mix() — and they go on as
 // INLINE styles through the CSSOM, never into the <style> block below.
+//
+// WHICH design: the HOME page's, resolved (designs.ts resolvePageDesign) — the
+// still IS the home page, so it wears what that page wears on screen, its own
+// design or its section's before the space's.
 
 import type { SpacesDoc, Page } from './model'
 import { renderPage } from './render'
 import { homePage } from './model'
-import { resolveDesign, previewRules, applyPreviewRules } from './designs.ts'
+import { resolvePageDesign, previewRules, applyPreviewRules } from './designs.ts'
 
 /** Above this the preview is trimmed, then dropped to a title card. A preview
  *  is a courtesy; it must never be why a file is large. */
@@ -222,7 +226,7 @@ function titleCard(doc: SpacesDoc): HTMLElement {
   return col
 }
 
-function wrap(inner: HTMLElement, doc: SpacesDoc): HTMLElement {
+function wrap(inner: HTMLElement, doc: SpacesDoc, page: Page): HTMLElement {
   const box = document.createElement('div')
   // z-index above the splash (9999) and the loader's failure card (99999)
   box.className = 'bp'
@@ -233,7 +237,7 @@ function wrap(inner: HTMLElement, doc: SpacesDoc): HTMLElement {
   // THE DESIGN GOES ON AS INLINE STYLES, NEVER INTO THE <style> ABOVE: this
   // node is written into the saved shell, and author-chosen values must not
   // become raw text inside a style element there (designs.ts previewRules).
-  const design = resolveDesign(doc)
+  const design = resolvePageDesign(doc, page.id)
   if (design) applyPreviewRules(box, previewRules(design))
   return box
 }
@@ -259,13 +263,15 @@ export function buildSpacePreview(doc: SpacesDoc): HTMLElement | null {
       forceOpen: true,
       printing: true,
       titleOf: (id) => doc.pages.find((p) => p.id === id)?.title,
+      // no design on the root: the still is styled by wrap(), inline
+      design: null,
     })
     const col = document.createElement('div')
     col.className = 'bp-col'
     while (rendered.firstChild) col.appendChild(rendered.firstChild)
     staticize(col, keepImages, doc)
-    const built = wrap(col, doc)
+    const built = wrap(col, doc, page)
     if (byteLength(built) <= PREVIEW_BUDGET) return built
   }
-  return wrap(titleCard(doc), doc)
+  return wrap(titleCard(doc), doc, page)
 }

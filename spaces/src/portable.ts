@@ -18,7 +18,7 @@
 
 // `.ts` extensions ON PURPOSE: node resolves this module directly for the rig.
 import { type SpacesDoc, type Page, type Block, repairId, pageAssetKeys } from './model.ts'
-import { designAssetKeys } from './designs.ts'
+import { designAssetKeys, designSource } from './designs.ts'
 import { esc } from './sanitize.ts'
 import { isPageRef } from './embed.ts'
 import { allNotes, mergeNotes, renameRefs } from './footnotes.ts'
@@ -177,6 +177,17 @@ export function extractSpace(
     inSet.has(id) ? { id } : { text: titleOf.get(id) ?? id }
 
   for (const p of pages) {
+    // A DESIGN INHERITED FROM A PAGE THAT DOES NOT TRAVEL is pinned on the page
+    // that wore it, BEFORE its parent is cut: a Ledger section's child exported
+    // on its own must still look like Ledger, and the section is not in the
+    // file to inherit from. A design the page sets itself, or takes from the
+    // space (whose `design` travels in the clone below), needs nothing.
+    // Only a page whose PARENT is cut: one inside the extract inherits from a
+    // page that did travel, pinned or not.
+    if (p.design === undefined && (p.id === rootId || !p.parent || !inSet.has(p.parent))) {
+      const src = designSource(doc, p.id)
+      if (src.from === 'ancestor' && src.pageId && !inSet.has(src.pageId) && typeof src.name === 'string') p.design = src.name
+    }
     // the root becomes the home page of its own document, so it has no parent;
     // a child whose parent did not travel is re-homed onto the root rather than
     // left dangling (parseDoc drops such a parent anyway — doing it here keeps

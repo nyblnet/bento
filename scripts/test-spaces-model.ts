@@ -6091,6 +6091,115 @@ function fsTable(f: string): string {
   ok(/style\.setProperty\(k, v\)/.test(rdd('designs.ts')), 'preview declarations go through the CSSOM, which re-parses every value')
 }
 
+// ---- per-page designs (DECISIONS 2026-09-26, per-page addendum) -------------
+// `page.design` is the same kind of value as `doc.design`. Precedence, nearest
+// first: the page's own, the nearest ancestor's, the space's, today's look.
+// The NEAREST KEY DECIDES even when it names nothing this build knows.
+{
+  const D = await import('../spaces/src/designs.ts')
+  const { validateDoc } = await import('../spaces/src/agent.ts')
+  const rdm = (f: string) => nodeFs.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+  const tree = (): SpacesDoc => {
+    const r = parseDoc(JSON.stringify({ format: FORMAT, version: 1, docId: 'pd-doc', title: 'T', design: 'almanac', pages: [
+      { id: 'home', title: 'Home', blocks: [{ id: 'b0', type: 'p', html: 'x' }] },
+      { id: 'sec', title: 'Section', parent: 'home', blocks: [{ id: 'b1', type: 'p', html: 'x' }] },
+      { id: 'kid', title: 'Kid', parent: 'sec', blocks: [{ id: 'b2', type: 'p', html: 'x' }] },
+      { id: 'leaf', title: 'Leaf', parent: 'kid', blocks: [{ id: 'b3', type: 'p', html: 'x' }] },
+    ] }))
+    if (!r.ok) throw new Error('fixture')
+    return r.doc
+  }
+  const pg = (d: SpacesDoc, id: string) => d.pages.find((p) => p.id === id)!
+  const at = (d: SpacesDoc, id: string) => D.resolvePageDesign(d, id)?.name ?? null
+
+  // INHERITANCE ORDER
+  const d = tree()
+  ok(at(d, 'leaf') === 'almanac' && D.designSource(d, 'leaf').from === 'space', 'no page names a design: every page wears the space\'s')
+  D.setPageDesign(pg(d, 'sec'), 'ledger')
+  ok(at(d, 'sec') === 'ledger' && at(d, 'kid') === 'ledger' && at(d, 'leaf') === 'ledger' && at(d, 'home') === 'almanac',
+    'a design on a section restyles its whole subtree, and nothing above it')
+  ok(D.designSource(d, 'leaf').from === 'ancestor' && D.designSource(d, 'leaf').pageId === 'sec', 'the subtree takes it from the NEAREST ancestor that names one')
+  D.setPageDesign(pg(d, 'kid'), 'studio')
+  ok(at(d, 'kid') === 'studio' && at(d, 'leaf') === 'studio' && at(d, 'sec') === 'ledger',
+    'a nearer ancestor beats a farther one, and the page\'s own beats both')
+  D.setPageDesign(pg(d, 'leaf'), 'riso')
+  ok(at(d, 'leaf') === 'riso', 'a page\'s own design wins over every ancestor and the space')
+  ok(D.resolvePageDesign(d, 'leaf', undefined, true)?.name === 'studio', '"Same as parent" resolves to what the page would inherit (its parent\'s, studio)')
+  const nod = tree()
+  D.setDesign(nod, null)
+  ok(at(nod, 'leaf') === null && D.designSource(nod, 'leaf').from === 'none', 'no design anywhere: today\'s look')
+
+  // RETURNING TO INHERIT DELETES THE KEY
+  const del = tree()
+  const before = JSON.stringify(del)
+  D.setPageDesign(pg(del, 'kid'), 'broadsheet')
+  D.setPageDesign(pg(del, 'kid'), null)
+  ok(!Object.hasOwn(pg(del, 'kid'), 'design') && JSON.stringify(del) === before,
+    'choosing "Same as parent" DELETES page.design — byte-identical to never having chosen')
+  ok(/setPageDesign\(q, name\)/.test(rdm('designpanel.ts')) && /store\.commit\(\(\) => \{\s*const q = store\.index\.page\.get\(pageId\)\s*if \(q\) setPageDesign\(q, name\)/.test(rdm('designpanel.ts')),
+    'the page picker writes through setPageDesign inside ONE store.commit (one undo step)')
+
+  // AN UNKNOWN NAME FALLS BACK TO THE DEFAULT, ROUND-TRIPS, AND IS NAMED
+  const unk = tree()
+  D.setPageDesign(pg(unk, 'sec'), 'ledger')
+  ;(pg(unk, 'kid') as { design?: string }).design = 'from-a-newer-build'
+  ok(at(unk, 'kid') === null, 'an unknown page design renders the DEFAULT look — it does not fall through to the section\'s ledger')
+  ok(at(unk, 'leaf') === null, '…and the pages under it inherit that default, not the section\'s design')
+  const back = parseDoc(JSON.stringify(unk))
+  ok(back.ok && (back.doc.pages.find((p) => p.id === 'kid') as { design?: string }).design === 'from-a-newer-build',
+    'an unknown page design survives a load/save round trip untouched')
+  const vf = validateDoc(unk).findings
+  ok(vf.some((f) => f.code === 'unknown-design' && f.page === 'kid' && f.path === 'design'), 'validate() names the unknown design, on that page')
+  ok(!vf.some((f) => f.code === 'unknown-design' && f.page === 'sec'), 'validate() says nothing about a page whose design resolves')
+  ;(pg(unk, 'leaf') as { design?: unknown }).design = 7
+  ok(at(unk, 'leaf') === null && validateDoc(unk).findings.some((f) => f.code === 'bad-design' && f.page === 'leaf'),
+    'a non-string page design renders the default and is named as bad-design')
+
+  // PREVIEW: never data, and exact
+  const pv = tree()
+  D.setPageDesign(pg(pv, 'sec'), 'ledger')
+  const snap = JSON.stringify(pv)
+  ok(D.resolvePageDesign(pv, 'leaf', { page: 'sec', name: 'studio' })?.name === 'studio', 'hovering a choice on a section previews it on a page inside that section')
+  ok(D.resolvePageDesign(pv, 'leaf', { page: 'sec', name: null })?.name === 'almanac', 'hovering "Same as parent" on the section previews the space\'s design below it')
+  ok(D.resolvePageDesign(pv, 'leaf', { name: 'riso' })?.name === 'ledger', 'hovering a SPACE design leaves a page under a designed section as it is — as choosing it would')
+  ok(JSON.stringify(pv) === snap, 'a preview writes nothing to the document')
+
+  // THE REGISTRY is the space's, and every page draws on it
+  const reg = tree()
+  ;(reg as { designs?: unknown }).designs = { harbour: { base: 'almanac', light: { accent: '#0f6e63' } } }
+  D.setPageDesign(pg(reg, 'kid'), 'harbour')
+  ok(D.resolvePageDesign(reg, 'leaf')?.custom === true && D.resolvePageDesign(reg, 'leaf')?.name === 'harbour', 'a page can wear a custom design from the space\'s registry, and its subtree inherits it')
+  ok(JSON.stringify(D.namedDesigns(reg).sort()) === JSON.stringify(['almanac', 'harbour']), 'namedDesigns lists the space\'s and every page\'s design')
+
+  // OLDER BUILDS: page.design is an unknown page field to them; parseDoc keeps it
+  ok(docContentKey(reg) !== docContentKey(tree()), 'a page design is content: choosing one offers crash recovery')
+
+  // EMBEDDED CONTENT WEARS THE HOST'S DESIGN: only renderPage stamps a design,
+  // and only on the page ROOT; renderBlocks (every card, row and embed) never
+  const rsrc = rdm('render.ts')
+  const fnBody = (src: string, name: string) => { const i = src.indexOf(`export function ${name}(`); return src.slice(i, src.indexOf('\nexport function', i + 10)) }
+  ok((rsrc.match(/applyDesign\(/g) ?? []).length === 1 && /applyDesign\(art, doc,/.test(fnBody(rsrc, 'renderPage')),
+    'render.ts stamps a design in ONE place: the page root renderPage builds')
+  ok(!/applyDesign|data-sp-design/.test(fnBody(rsrc, 'renderBlocks')) && !/applyDesign|data-sp-design/.test(fnBody(rsrc, 'renderBlock')),
+    'renderBlocks/renderBlock never stamp a design, so embedded content can only wear its host\'s')
+  const esrc = rdm('editor.ts')
+  ok(/applyDesign\(host, s\.doc, null\)/.test(esrc), 'the print root carries NO design, so it cannot reach a page that has none of its own')
+
+  // "Export page as a space" keeps the look: a design inherited from a page
+  // that does not travel is pinned on the page that wore it
+  const ex = tree()
+  D.setPageDesign(pg(ex, 'sec'), 'ledger')
+  const cutx = extractSpace(ex, 'kid', { docId: 'doc-pd', now: '2026-09-26T00:00:00.000Z' })
+  const xk = cutx.doc.pages.find((p) => p.id === 'kid')!
+  const xl = cutx.doc.pages.find((p) => p.id === 'leaf')!
+  ok(xk.design === 'ledger' && xl.design === undefined && D.resolvePageDesign(cutx.doc, 'leaf')?.name === 'ledger',
+    'an extracted page keeps the design its (untravelled) section gave it; its own children still just inherit')
+  const ex2 = tree()
+  const cut2 = extractSpace(ex2, 'kid', { docId: 'doc-pd2', now: '2026-09-26T00:00:00.000Z' })
+  ok(cut2.doc.pages.every((p) => p.design === undefined) && D.resolvePageDesign(cut2.doc, 'kid')?.name === 'almanac',
+    'a design that came from the SPACE travels as the space\'s, and pins nothing')
+}
+
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)

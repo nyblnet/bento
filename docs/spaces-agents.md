@@ -84,9 +84,25 @@ callout tones must stay distinct — `design-contrast` if they collapse). A valu
 `design-contrast`. There is no free CSS anywhere in a design. A name that is
 also a built-in's is never used (`design-shadows-builtin`).
 
-The Markdown export opens with the design as front matter —
-`design: harbour` plus a one-line `designs: {…}` JSON for a carried design —
-and importing that file into a space with no design adopts it.
+**A page can name its own design** with the same kind of value:
+`{ "id": "p-…", "title": "Q3 figures", "design": "ledger", … }`. Absent means
+inherit: a page wears its own design, else its nearest ancestor's, else the
+space's `design`, else the default look — so a design on a section restyles
+its whole subtree. Leave the key out to inherit (never `""` or `null`). An
+unknown name renders the DEFAULT look on that page (it does not fall through
+to the parent's), is kept, and `validate()` reports `unknown-design` with that
+page's id. Custom designs a page uses live in the space's `"designs"` like any
+other. Embedded content — a gallery card, a view's rows, a page card — wears
+the design of the page it is shown ON, not the page it points at.
+
+The Markdown export opens with the design as front matter. The whole-space
+file says `design: <space's design>` plus a one-line `designs: {…}` JSON
+carrying every custom design the space or any page names; a single page's note
+("Export page as Markdown…") says `design:` only when that page sets one
+itself — an inherited design is not written. Import reads `design:` back onto
+EACH note's own page and adds the carried `designs:` entries to the space's
+registry (never over a name the space already uses); it does not change the
+space's own `design`.
 
 **Both arrays are flat and in pre-order; nesting is a `parent` field.** A child
 always follows its parent, which is what lets one forward pass rebuild the
