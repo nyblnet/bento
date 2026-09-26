@@ -518,7 +518,8 @@ async function browser(chrome: string, html: string): Promise<void> {
     const np = await js<any>(`(() => { const m = ${OPEN}; if (!m) return null; return [...m.querySelectorAll('.bkm-item')].map(r => r.querySelector('.bkm-text').textContent + ' ' + (r.querySelector('.sp-mkbd')?.textContent ?? '')) })()`)
     await key('Escape', 0, 'Escape')
     const plusTip = await js<string>(`document.querySelector('.sp-side .sp-newpage').getAttribute('aria-label')`)
-    ok(JSON.stringify(np) === JSON.stringify(['New page ⌥⌘N', "Today's journal ⇧⌘J", 'New issue ⇧⌘I']) && /^New page/.test(plusTip),
+    // (a build with templates adds Templates… after these three)
+    ok(JSON.stringify(np?.slice(0, 3)) === JSON.stringify(['New page ⌥⌘N', "Today's journal ⇧⌘J", 'New issue ⇧⌘I']) && (np?.slice(3) ?? []).every((r: string) => /^Templates/.test(r)) && /^New page/.test(plusTip),
       `the page list's ＋ ▾ holds the ways a page arrives, with their shortcuts, and ＋ itself is New page (${JSON.stringify(np)}; ＋ "${plusTip}")`)
     const pagesInBar = await js<boolean>(`[...document.querySelectorAll('.sp-bar .bkm-item, .sp-bar button')].some(b => /New page|Today's journal|New issue/.test(b.textContent))`)
     ok(!pagesInBar, 'no new-page command is left in the top bar')
@@ -861,7 +862,8 @@ async function browser(chrome: string, html: string): Promise<void> {
         add('bar', b.getAttribute('aria-label') || b.title || b.textContent)
         // an insert button is also known by its word ("Table" beside "Add a table — …")
         const word = b.querySelector('.sp-btnlabel')?.textContent
-        if (word && getComputedStyle(b.querySelector('.sp-btnlabel')).display !== 'none') add('bar', word)
+        // (the button is on the bar at every tier above the fold, its word or not)
+        if (word) add('bar', word)
       }
       for (const tr of [...bar.querySelectorAll('.bkm > .bkm-trigger')].filter(vis)) {
         tr.click(); await sleep(60)
