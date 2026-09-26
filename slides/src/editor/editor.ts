@@ -1345,9 +1345,11 @@ export class Editor {
       panel.appendChild(e)
       return e
     }
-    const action = (icon: string, label: string, primary: boolean, onClick: () => void, title = '') => {
+    // plain menu rows, as in Save as — the section heading and the icons mark
+    // them as commands; boxing each one only made the panel busier
+    const action = (icon: string, label: string, onClick: () => void, title = '') => {
       const b = document.createElement('button')
-      b.className = primary ? 'ed-btn ed-btn-primary ed-share-btn' : 'ed-btn ed-share-btn'
+      b.className = 'ed-btn ed-share-btn'
       if (icon) b.innerHTML = icon
       b.appendChild(menuLabel(label, title, b))
       b.addEventListener('click', onClick)
@@ -1506,19 +1508,19 @@ export class Editor {
       const label = div('ed-share-label')
       label.textContent = t('Share a copy')
       panel.appendChild(label)
-      action(ICONS.share, t('Invite to edit…'), true, () => void this.inviteToEdit(),
+      action(ICONS.share, t('Invite to edit…'), () => void this.inviteToEdit(),
         t('Saves a copy to send. Whoever opens it edits this deck live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.'))
-      action(ICONS.eye, t('View-only copy…'), false, () => void this.saveReaderCopy(),
+      action(ICONS.eye, t('View-only copy…'), () => void this.saveReaderCopy(),
         t('A live viewer: follows every edit as it happens but can never change the deck — the relay enforces it.'))
-      action(ICONS.slideshow, t('Present-only file…'), false, () => void this.savePresentationPackage(),
+      action(ICONS.slideshow, t('Present-only file…'), () => void this.savePresentationPackage(),
         t('A sealed hand-out that opens straight into the show — no editor, no live connection.'))
-      action(ICONS.broadcast, t('Audience copy…'), false, () => void this.saveAudienceCopy(),
+      action(ICONS.broadcast, t('Audience copy…'), () => void this.saveAudienceCopy(),
         t('A hand-out for a live show: opens into the presentation and follows your slides while you are live. Never carries your speaker notes or comments.'))
       if (this.store.doc.collab?.audience) {
-        action(ICONS.broadcast, t('Issue new tickets…'), false, () => void this.issueNewTickets(),
+        action(ICONS.broadcast, t('Issue new tickets…'), () => void this.issueNewTickets(),
           t('Replaces the audience tickets: every audience copy saved so far stops working.'))
       }
-      action(ICONS.template, t('Template…'), false, () => void this.saveAsTemplate(),
+      action(ICONS.template, t('Template…'), () => void this.saveAsTemplate(),
         t('A reusable starter: everyone who opens it gets their own fresh, independent deck.'))
     } else {
       note(t('This is a view-only copy — it follows the live session but can’t change the deck.'))
@@ -1528,17 +1530,17 @@ export class Editor {
     if (canWrite) {
       panel.appendChild(div('ed-share-sep'))
       if (on) {
-        action(ICONS.stop, t('Stop sharing'), false, () => {
+        action(ICONS.stop, t('Stop sharing'), () => {
           if (!this.session) return
           stopSharing(this.session, this.store)
           this.wireOnlineStatus()
           this.renderSharePanel()
         }, t('Disconnect this deck from the live session. Copies keep their last state and can rejoin if you go live again.'))
       } else {
-        action(ICONS.live, t('Go live'), false, () => void this.goLive().then(() => this.renderSharePanel()),
+        action(ICONS.live, t('Go live'), () => void this.goLive().then(() => this.renderSharePanel()),
           t('Connect to the live session without saving a new copy — copies you sent earlier will meet you there.'))
       }
-      action(ICONS.key, t('Reset access…'), false, async () => {
+      action(ICONS.key, t('Reset access…'), async () => {
         if (!this.session) return
         if (!confirm(t('Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.'))) return
         await rotateKeys(this.session, this.store)
