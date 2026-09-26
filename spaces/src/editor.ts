@@ -46,6 +46,10 @@ import { startSharing } from '../../kernel/src/sync/online.ts'
 import * as shareModule from './share.ts'
 import { ICONS, type IconName } from './icons'
 import { barMenu, anchoredMenu, row, caption, extra, keys, type Menu } from './menus.ts'
+import { createDialog, type Dialog } from '../../kernel/src/ui/dialog.ts'
+import '../../kernel/src/ui/dialog.css'
+import { createPanel, type Panel } from '../../kernel/src/ui/panel.ts'
+import '../../kernel/src/ui/panel.css'
 import { PropsPanel } from './props'
 import {
   internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
@@ -59,6 +63,14 @@ const CTRL = navigator.platform.toLowerCase().includes('mac') ? 'metaKey' : 'ctr
 const AUTOFORMAT = MD_SPECS
 
 const SLASH_ITEMS = MENU_SPECS
+/**
+ * Below this width both side panels are DRAWERS over the page, not columns.
+ * One number, handed to the kernel panel as `drawerBelow` (D6: the breakpoint
+ * is a per-app parameter of the shared primitive). Spaces' is 820, not slides'
+ * 700: a reading column needs more room beside a panel than a canvas does
+ * (DECISIONS 2026-08-10, "the drawer breakpoint, not 720").
+ */
+const DRAWER_BELOW = 820
 /**
  * A block's markdown trigger, when its hint IS one ("#", "1.", "```") — the
  * shortcut an Insert row prints right-aligned. A hint that is a description
@@ -143,7 +155,8 @@ export class Editor {
   private readB: HTMLButtonElement | null = null
   private redoB!: HTMLButtonElement
   private dirtyDot!: HTMLElement
-  private paneTab: HTMLButtonElement | null = null
+  private pagesPanel: Panel | null = null
+  private inspPanel: Panel | null = null
   private static readonly PANE_MIN = 150
   private static readonly PANE_MAX = 420
   private static readonly PANE_DEFAULT = 244
@@ -154,8 +167,6 @@ export class Editor {
   // this reader has opened it. See props.ts on why the default is that way
   // round.
   private inspector!: HTMLElement
-  private inspTab: HTMLButtonElement | null = null
-  private inspRz: HTMLElement | null = null
   private props: PropsPanel | null = null
   private static readonly INSP_MIN = 200
   private static readonly INSP_MAX = 420
@@ -224,7 +235,6 @@ export class Editor {
       main: () => this.main,
       editable: () => !this.store.readOnly && !this.reading && !this.overlay,
     })
-    if (this.paneClosed) this.sidebar.classList.add('sp-pane-closed')
     this.props = new PropsPanel(this.inspector, {
       store: this.store,
       target: () => this.inspOn,
@@ -518,15 +528,26 @@ export class Editor {
 
     this.inspector = el('aside', 'sp-insp')
     this.inspector.setAttribute('aria-label', t('Properties'))
-    if (this.inspClosed) this.inspector.classList.add('sp-pane-closed')
 
     const body = el('div', 'sp-body')
-    body.append(this.sidebar, this.makeResizer(), this.main, this.makeInspResizer(), this.inspector)
+    this.pagesPanel = this.makePanel(this.sidebar, {
+      side: 'start', label: t('Pages'),
+      def: Editor.PANE_DEFAULT, min: Editor.PANE_MIN, max: Editor.PANE_MAX,
+      width: this.paneW, collapsed: this.paneClosed,
+      widthKey: 'bento-sp-pane', closedKey: 'bento-sp-pane-closed',
+      show: t('Show the page list ([)'), hide: t('Hide the page list ([)'),
+    })
+    // CLOSED UNLESS THIS READER OPENED IT (see the constructor): `collapsed`
+    // is the stored preference, and absent means shut.
+    this.inspPanel = this.makePanel(this.inspector, {
+      side: 'end', label: t('Properties'),
+      def: Editor.INSP_DEFAULT, min: Editor.INSP_MIN, max: Editor.INSP_MAX,
+      width: this.inspW, collapsed: this.inspClosed,
+      widthKey: 'bento-sp-insp', closedKey: 'bento-sp-insp-closed',
+      show: t('Show properties (])'), hide: t('Hide properties (])'),
+    })
+    body.append(this.pagesPanel.root, this.main, this.inspPanel.root)
     this.root.append(bar, body)
-    this.applyPaneWidth()
-    this.syncPaneChevron()
-    this.applyInspWidth()
-    this.syncInspChevron()
 
     // WHICH BLOCK THE PANEL MEANS. Capture-phase on the page, because the
     // interesting blocks are the ones with no editable host to focus — a table,
@@ -603,184 +624,89 @@ export class Editor {
   }
 
 
-  /** Open/close the page drawer on narrow screens, with a scrim to tap away. */
   /**
-   * The strip between the page list and the page: drag to resize, chevron to
-   * collapse, double-click to reset. Slides' pattern, and its reasoning — the
-   * control that hides a panel belongs ON the panel's edge, where you are
-   * already looking, not in a toolbar across the room.
+   * A side panel: the kernel's (kernel/src/ui/panel.ts). The strip on its inner
+   * edge resizes it (double-click resets), the chevron on the strip collapses
+   * it, it docks flush when shut, it widens the other way under RTL, and below
+   * the drawer breakpoint it is an overlay rather than a column — every one of
+   * which spaces had hand-built, twice over (one copy per panel).
    *
-   * The width is the reader's, so it lives in localStorage, never the document.
+   * WHAT STAYS HERE, deliberately:
+   *   · PERSISTENCE. The primitive persists its collapsed state in drawer mode
+   *     too, and a phone drawer shut by following a link would then leave the
+   *     page list shut on the desktop, for good — the bug `closeDrawer` exists
+   *     to prevent. So no `storageKey`: the editor writes the reader's own keys
+   *     (`bento-sp-pane`, `bento-sp-insp` and their `-closed`) and only when the
+   *     panel is a column. The keys are the ones every reader already has, so
+   *     nothing is migrated and nobody's layout resets.
+   *   · The SCRIM behind a drawer (the primitive has none): a drawer you can
+   *     only shut from the button that opened it is one people leave open over
+   *     the page they wanted to read.
+   *   · The chevron's words — the primitive is language-free.
    */
-  private makeResizer(): HTMLElement {
-    const handle = el('div', 'sp-resizer')
-    handle.title = t('Drag to resize · double-click to reset')
-
-    const tab = document.createElement('button')
-    tab.className = 'sp-pane-tab'
-    tab.type = 'button'
-    tab.addEventListener('click', (e) => { e.stopPropagation(); this.togglePane() })
-    this.paneTab = tab
-    handle.append(tab)
-
-    handle.addEventListener('mousedown', (down) => {
-      if (down.target === tab) return          // the chevron is a click, not a drag
-      if (this.paneClosed) return
-      down.preventDefault()
-      const startX = down.clientX
-      const startW = this.paneW
-      this.sidebar.classList.add('sp-noanim')
-      document.body.classList.add('sp-col-resizing')
-      const move = (ev: MouseEvent) => {
-        // clientX is physical; which way widens depends on the edge the panel
-        // is docked to, and RTL swaps that over.
-        const dx = ev.clientX - startX
-        const widens = document.dir === 'rtl' ? -dx : dx
-        this.paneW = Math.min(Editor.PANE_MAX, Math.max(Editor.PANE_MIN, startW + widens))
-        this.applyPaneWidth()
-      }
-      const up = () => {
-        window.removeEventListener('mousemove', move)
-        window.removeEventListener('mouseup', up)
-        this.sidebar.classList.remove('sp-noanim')
-        document.body.classList.remove('sp-col-resizing')
-        try { localStorage.setItem('bento-sp-pane', String(this.paneW)) } catch { /* storage can throw */ }
-      }
-      window.addEventListener('mousemove', move)
-      window.addEventListener('mouseup', up)
+  private makePanel(content: HTMLElement, o: {
+    side: 'start' | 'end'; label: string; def: number; min: number; max: number
+    width: number; collapsed: boolean; widthKey: string; closedKey: string
+    show: string; hide: string
+  }): Panel {
+    const p = createPanel({
+      content, side: o.side, label: o.label,
+      defaultWidth: o.def, minWidth: o.min, maxWidth: o.max,
+      collapsed: o.collapsed, drawerBelow: DRAWER_BELOW,
     })
-
-    handle.addEventListener('dblclick', () => {
-      this.paneW = Editor.PANE_DEFAULT
-      this.applyPaneWidth()
-      try { localStorage.setItem('bento-sp-pane', String(this.paneW)) } catch { /* storage can throw */ }
-    })
-    return handle
-  }
-
-  private applyPaneWidth(): void {
-    this.sidebar.style.setProperty('--sp-panew', `${this.paneW}px`)
-  }
-
-  /**
-   * The properties panel's edge — the page list's strip, mirrored.
-   *
-   * Deliberately a second small method rather than a parameterised one: the two
-   * differ in which direction widens (the panel is docked to the END edge, so a
-   * drag toward the start makes it bigger) and in which way the chevron points,
-   * and a `side` flag threaded through both would be harder to read than this.
-   */
-  private makeInspResizer(): HTMLElement {
-    const handle = el('div', 'sp-resizer sp-insp-rz')
-    handle.title = t('Drag to resize · double-click to reset')
-    if (this.inspClosed) handle.classList.add('sp-shut')
-    this.inspRz = handle
-
-    const tab = document.createElement('button')
-    tab.className = 'sp-pane-tab'
-    tab.type = 'button'
-    tab.addEventListener('click', (e) => { e.stopPropagation(); this.toggleInsp() })
-    this.inspTab = tab
-    handle.append(tab)
-
-    handle.addEventListener('mousedown', (down) => {
-      if (down.target === tab) return
-      if (this.inspClosed) return
-      down.preventDefault()
-      const startX = down.clientX
-      const startW = this.inspW
-      this.inspector.classList.add('sp-noanim')
-      document.body.classList.add('sp-col-resizing')
-      const move = (ev: MouseEvent) => {
-        // the panel is on the END edge, so dragging toward the START widens it
-        const dx = startX - ev.clientX
-        const widens = document.dir === 'rtl' ? -dx : dx
-        this.inspW = Math.min(Editor.INSP_MAX, Math.max(Editor.INSP_MIN, startW + widens))
-        this.applyInspWidth()
+    p.setWidth(o.width)
+    p.resizer.title = t('Drag to resize · double-click to reset')
+    const chev = p.resizer.querySelector<HTMLElement>('.bkp-toggle')
+    const sync = () => {
+      const label = p.collapsed ? o.show : o.hide
+      if (chev) { chev.title = label; chev.setAttribute('aria-label', label) }
+      if (!this.isDrawer()) {
+        try {
+          localStorage.setItem(o.widthKey, String(p.width))
+          // '0' is OPEN and '1' is shut, for both panels: the page list reads
+          // '1' as shut and the properties panel reads anything but '0' as shut
+          localStorage.setItem(o.closedKey, p.collapsed ? '1' : '0')
+        } catch { /* storage can throw; the defaults are fine */ }
       }
-      const up = () => {
-        window.removeEventListener('mousemove', move)
-        window.removeEventListener('mouseup', up)
-        this.inspector.classList.remove('sp-noanim')
-        document.body.classList.remove('sp-col-resizing')
-        try { localStorage.setItem('bento-sp-insp', String(this.inspW)) } catch { /* storage can throw */ }
-      }
-      window.addEventListener('mousemove', move)
-      window.addEventListener('mouseup', up)
-    })
-
-    handle.addEventListener('dblclick', () => {
-      this.inspW = Editor.INSP_DEFAULT
-      this.applyInspWidth()
-      try { localStorage.setItem('bento-sp-insp', String(this.inspW)) } catch { /* storage can throw */ }
-    })
-    return handle
-  }
-
-  private applyInspWidth(): void {
-    this.inspector.style.setProperty('--sp-inspw', `${this.inspW}px`)
-  }
-
-  private syncInspChevron(): void {
-    if (!this.inspTab) return
-    const rtl = document.dir === 'rtl'
-    // points the way it will MOVE the panel
-    const closing = this.inspClosed === rtl
-    this.inspTab.innerHTML = closing ? ICONS.chevronRight : ICONS.chevronLeft
-    this.inspTab.title = this.inspClosed ? t('Show properties (])') : t('Hide properties (])')
-    this.inspTab.setAttribute('aria-label', this.inspTab.title)
-    this.inspTab.setAttribute('aria-expanded', String(!this.inspClosed))
-  }
-
-  /** Collapse or restore the properties panel. On a phone it is an overlay. */
-  toggleInsp(force?: boolean): void {
-    if (this.isDrawer()) {
-      const open = force !== undefined ? force : !this.inspector.classList.contains('sp-open')
-      this.inspector.classList.toggle('sp-open', open)
-      // The same scrim the page list gets, for the same reason: an overlay you
-      // can only close from the menu you opened it from is one people leave
-      // open over the page they wanted to read.
-      document.querySelector('.sp-scrim')?.remove()
-      if (open) {
-        const scrim = el('div', 'sp-scrim')
-        scrim.addEventListener('click', () => this.toggleInsp(false))
-        document.body.append(scrim)
-      }
-      return
+      this.syncScrim()
     }
-    this.inspector.classList.remove('sp-open')
-    this.inspClosed = force !== undefined ? !force : !this.inspClosed
-    this.inspector.classList.toggle('sp-pane-closed', this.inspClosed)
-    this.inspRz?.classList.toggle('sp-shut', this.inspClosed)
-    this.syncInspChevron()
-    // '0' means OPEN. Absent is closed, which is what a reader who has never
-    // touched this gets — see the constructor.
-    try { localStorage.setItem('bento-sp-insp-closed', this.inspClosed ? '1' : '0') } catch { /* storage can throw */ }
+    p.onChange(sync)
+    sync()
+    return p
   }
 
-  private syncPaneChevron(): void {
-    if (!this.paneTab) return
-    // points the way it will MOVE the panel, which is the only thing a chevron
-    // can usefully mean
-    const rtl = document.dir === 'rtl'
-    const closing = this.paneClosed !== rtl
-    this.paneTab.innerHTML = closing ? ICONS.chevronRight : ICONS.chevronLeft
-    this.paneTab.title = this.paneClosed ? t('Show the page list ([)') : t('Hide the page list ([)')
-    this.paneTab.setAttribute('aria-label', this.paneTab.title)
-    this.paneTab.setAttribute('aria-expanded', String(!this.paneClosed))
+  /** The dim behind an open drawer, and the tap that shuts it. */
+  private syncScrim(): void {
+    const open = this.isDrawer() &&
+      ((this.pagesPanel && !this.pagesPanel.collapsed) || (this.inspPanel && !this.inspPanel.collapsed))
+    let scrim = document.querySelector<HTMLElement>('.sp-scrim')
+    if (!open) { scrim?.remove(); return }
+    if (scrim) return
+    scrim = el('div', 'sp-scrim')
+    scrim.addEventListener('click', () => { this.pagesPanel?.collapse(); this.inspPanel?.collapse() })
+    document.body.append(scrim)
   }
 
-  /** Collapse or restore the page list. On a phone it is a drawer instead. */
+  /** Collapse or restore the properties panel — a column, or on a phone a drawer. */
+  toggleInsp(force?: boolean): void {
+    const p = this.inspPanel
+    if (!p) return
+    if (force === undefined) p.toggle()
+    else if (force) p.expand()
+    else p.collapse()
+  }
+
+  /** Collapse or restore the page list — a column, or on a phone a drawer. */
   togglePane(force?: boolean): void {
-    if (this.isDrawer()) { this.toggleSidebar(force); return }
-    this.paneClosed = force !== undefined ? !force : !this.paneClosed
-    this.sidebar.classList.toggle('sp-pane-closed', this.paneClosed)
-    this.syncPaneChevron()
-    try { localStorage.setItem('bento-sp-pane-closed', this.paneClosed ? '1' : '0') } catch { /* storage can throw */ }
+    const p = this.pagesPanel
+    if (!p) return
+    if (force === undefined) p.toggle()
+    else if (force) p.expand()
+    else p.collapse()
   }
 
   private isDrawer(): boolean {
-    return window.matchMedia('(max-width: 820px)').matches
+    return window.matchMedia(`(max-width: ${DRAWER_BELOW}px)`).matches
   }
 
   /**
@@ -856,19 +782,9 @@ export class Editor {
     if (this.isDrawer()) this.toggleSidebar(false)
   }
 
+  /** One page-list control for every width: the panel is a column or a drawer by itself. */
   private toggleSidebar(force?: boolean): void {
-    // Below the drawer breakpoint the panel is an overlay, not a column: the
-    // page needs the whole width, so collapsing to a 0px column would leave
-    // nothing to reopen it from.
-    if (!this.isDrawer()) { this.togglePane(force); return }
-    const open = force ?? !this.sidebar.classList.contains('sp-open')
-    this.sidebar.classList.toggle('sp-open', open)
-    document.querySelector('.sp-scrim')?.remove()
-    if (open) {
-      const scrim = el('div', 'sp-scrim')
-      scrim.addEventListener('click', () => this.toggleSidebar(false))
-      document.body.append(scrim)
-    }
+    this.togglePane(force)
   }
 
   /**
@@ -3210,29 +3126,44 @@ export class Editor {
   }
 
   // ---- overlays -----------------------------------------------------------
-  private openOverlay(title: string, build: (body: HTMLElement, close: () => void) => void): void {
+  /**
+   * A MODAL, on the kernel's dialog (kernel/src/ui/dialog.ts).
+   *
+   * The primitive brings what spaces' own overlay lacked, each measured on the
+   * built shell before this: a focus TRAP (Tab left the import dialog 23 times
+   * in 25), Escape on the document rather than on the backdrop (one click on
+   * the card's blank space used to leave a dialog the keyboard could not
+   * close), `aria-modal` + `aria-labelledby`, focus returned to the opener, and
+   * a scrim above every menu. The title is the dialog's HEADING — 17px/650,
+   * the D4 ruling — where each dialog used to open on an 11px uppercase
+   * caption; captions are for sections.
+   *
+   * It is still the editor's one overlay: `this.overlay` gates the keymap, and
+   * closeOverlay() takes it down with everything it registered.
+   */
+  private openOverlay(
+    title: string, build: (body: HTMLElement, close: () => void) => void,
+    o: { wide?: boolean; top?: boolean; className?: string } = {},
+  ): Dialog {
     this.closeOverlay()
-    const back = el('div', 'sp-overlay')
-    const card = el('div', 'sp-card')
-    card.setAttribute('role', 'dialog')
-    card.setAttribute('aria-modal', 'true')
-    card.setAttribute('aria-label', title)
-    const close = () => this.closeOverlay()
-    build(card, close)
-    back.append(card)
-    back.addEventListener('mousedown', (e) => { if (e.target === back) close() })
-    document.body.append(back)
-    this.overlay = back
-    // On the DOCUMENT, capture-phase: hung off the backdrop, Escape worked only
-    // while focus was inside the card, and one click on the card's blank space
-    // left a dialog you could not dismiss from the keyboard.
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || this.overlay !== back) return
-      e.preventDefault(); e.stopPropagation(); close()
-    }
-    document.addEventListener('keydown', onEsc, true)
-    this.overlayOff.push(() => document.removeEventListener('keydown', onEsc, true))
-    card.querySelector<HTMLElement>('input,button,[tabindex]')?.focus()
+    const body = el('div', 'sp-dlg-body' + (o.className ? ' ' + o.className : ''))
+    let d: Dialog | null = null
+    const close = () => d?.close()
+    build(body, close)
+    d = createDialog({
+      title, content: body,
+      onClose: () => { if (d && this.overlay === d.root) this.closeOverlay() },
+    })
+    d.card.classList.add('sp-dlg')
+    if (o.wide) d.card.classList.add('sp-dlg-wide')
+    // a palette (search, find a page) sits high and grows downward, so its
+    // results do not re-centre the card under the pointer on every keystroke
+    if (o.top) d.root.classList.add('sp-dlg-top')
+    d.open()
+    this.overlay = d.root
+    const dd = d
+    this.overlayOff.push(() => dd.close())
+    return d
   }
 
   /**
@@ -3244,100 +3175,72 @@ export class Editor {
    * rather than the page. The starter space describes the same keys in prose,
    * but the starter is a document — the first thing many people do is delete
    * it, and the reference should not go with it.
-   *
-   * Built on .sp-overlay/.sp-card, the About dialog's shell, so it inherits
-   * the dialog's scrim, escape handling and focus return rather than growing a
-   * second set.
+   * (That is the sheet openHelp() builds, below the graph.)
    */
   /**
    * The space as a picture: pages, and the links between them.
    *
-   * The DRAWING lives in graph.ts; what is here is only what an overlay is in
-   * this editor — one at a time, and it owns the keyboard while it is open
-   * (`this.overlay`). Teardown rides on `overlayOff`, which is the list
-   * `closeOverlay` already calls before it removes the node: the graph has
-   * observers and an animation frame to give back, and there is no second
-   * teardown path to forget about.
+   * The DRAWING lives in graph.ts; the modal around it is the kernel dialog,
+   * like every other one here. Teardown rides on `overlayOff`, which
+   * closeOverlay() always runs: the graph has observers and an animation frame
+   * to give back, and there is no second teardown path to forget about.
    */
   openGraph(): void {
     this.closeOverlay()
-    const returnFocus = document.activeElement as HTMLElement | null
+    const close = () => this.closeOverlay()
     const view = openGraphView({
       doc: this.store.doc,
       index: this.store.index,
       currentId: this.store.pageId,
       open: (id) => { close(); this.store.goToPage(id); this.repaint() },
-      close: () => close(),
+      close,
     })
-    const close = () => {
-      this.closeOverlay()
-      returnFocus?.focus?.()
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopPropagation(); close() }
-    }
-    document.addEventListener('keydown', onKey, true)
-    this.overlay = view.el
-    // the key handler leaves with the graph however it closes — closed by
-    // another overlay opening, it used to stay on the document
-    this.overlayOff.push(() => view.destroy(), () => document.removeEventListener('keydown', onKey, true))
-    document.body.append(view.el)
-    // focus goes INTO the card, not onto the scrim behind it
-    const card = view.el.querySelector<HTMLElement>('[role=dialog]') ?? view.el
-    card.tabIndex = -1
-    card.focus()
+    let d: Dialog | null = null
+    d = createDialog({
+      label: t('Graph'), content: view.el,
+      onClose: () => { if (d && this.overlay === d.root) this.closeOverlay() },
+    })
+    d.card.classList.add('sp-dlg', 'sp-dlg-graph')
+    d.open()
+    this.overlay = d.root
+    const dd = d
+    this.overlayOff.push(() => view.destroy(), () => dd.close())
   }
 
   openHelp(): void {
-    this.closeOverlay()
-    const returnFocus = document.activeElement as HTMLElement | null
-    const back = el('div', 'sp-overlay')
-    const card = el('div', 'sp-card sp-keys')
-    card.setAttribute('role', 'dialog')
-    card.setAttribute('aria-modal', 'true')
-    card.setAttribute('aria-label', t('Keyboard shortcuts'))
-
-    const close = () => {
-      back.remove()
-      document.removeEventListener('keydown', onKey, true)
-      returnFocus?.focus?.()
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopPropagation(); close() }
-    }
-
-    const h = el('h2', 'sp-card-h', t('Keyboard shortcuts'))
-    card.append(h)
-
+    // Every key below is written by keys(), the one place the suite's order
+    // (⌃⌥⇧⌘, D8) lives. This sheet was typed by hand and disagreed with
+    // itself — ⇧⌘S beside ⌘⇧J — and with the menus.
+    const M = (...k: string[]) => keys(...k)
     const groups: Array<[string, Array<[string, string]>]> = [
       [t('Writing'), [
         ['↵', t('A new block')],
-        ['Tab / ⇧Tab', t('Indent, or move back out')],
+        [`Tab / ${M('shift')}Tab`, t('Indent, or move back out')],
         ['/', t('The block menu, on an empty line')],
         ['[[', t('Link to another page')],
-        ['⌘Z / ⇧⌘Z', t('Undo, redo')],
+        [`${M('mod', 'Z')} / ${M('shift', 'mod', 'Z')}`, t('Undo, redo')],
       ]],
       [t('Formatting'), [
-        ['⌘B', t('Bold')],
-        ['⌘I', t('Italic')],
-        ['⌘U', t('Underline')],
-        ['⇧⌘S', t('Strikethrough')],
-        ['⌘E', t('Code')],
-        ['⇧⌘H', t('Highlight')],
-        ['⌘K', t('Link the selected words')],
+        [M('mod', 'B'), t('Bold')],
+        [M('mod', 'I'), t('Italic')],
+        [M('mod', 'U'), t('Underline')],
+        [M('shift', 'mod', 'S'), t('Strikethrough')],
+        [M('mod', 'E'), t('Code')],
+        [M('shift', 'mod', 'H'), t('Highlight')],
+        [M('mod', 'K'), t('Link the selected words')],
       ]],
       [t('Getting around'), [
-        ['⌘K', t('Search all pages, with nothing selected')],
-        ['⌘F', t('Find and replace')],
-        ['⌘⌥N', t('New page')],
-        ['⌘⇧J', t("Today's journal")],
-        ['⌘⇧I', t('New issue')],
+        [M('mod', 'K'), t('Search all pages, with nothing selected')],
+        [M('mod', 'F'), t('Find and replace')],
+        [M('alt', 'mod', 'N'), t('New page')],
+        [M('shift', 'mod', 'J'), t("Today's journal")],
+        [M('shift', 'mod', 'I'), t('New issue')],
       ]],
       [t('The workspace'), [
         ['[', t('Show or hide the page list')],
         [']', t('Show or hide properties')],
-        ['⌘S', t('Save')],
-        ['⌘P', t('Print or save as PDF')],
+        [M('mod', 'S'), t('Save')],
+        [M('mod', 'P'), t('Print or save as PDF')],
         ['?', t('This list')],
         ['Esc', t('Leave the reading view')],
       ]],
@@ -3345,30 +3248,28 @@ export class Editor {
 
     // Two columns where there is room. In one column the four groups run to
     // 23 rows and the last three fall off the bottom of the card — a help
-    // screen that hides the help, which is the same defect this pass just took
-    // out of the share panel. The grid collapses to one column on a phone,
+    // screen that hides the help. The grid collapses to one column on a phone,
     // where scrolling a list is what you expect anyway.
-    const grid = el('div', 'sp-keys-grid')
-    for (const [title, rows] of groups) {
-      const g = el('section', 'sp-keys-g')
-      g.append(el('h3', 'sp-keys-h', title))
-      const list = el('dl', 'sp-keys-list')
-      for (const [key, what] of rows) {
-        const dt = el('dt', '', '')
-        dt.append(el('kbd', 'sp-kbd', key))
-        list.append(dt, el('dd', '', what))
+    //
+    // On the kernel dialog like every other modal: the card no longer takes
+    // the focus itself, which painted a 2px ring round the whole sheet on
+    // open, and `?` pressed again cannot stack a second copy.
+    this.openOverlay(t('Keyboard shortcuts'), (card) => {
+      const grid = el('div', 'sp-keys-grid')
+      for (const [title, rows] of groups) {
+        const g = el('section', 'sp-keys-g')
+        g.append(el('h3', 'sp-keys-h', title))
+        const list = el('dl', 'sp-keys-list')
+        for (const [key, what] of rows) {
+          const dt = el('dt', '', '')
+          dt.append(el('kbd', 'sp-kbd', key))
+          list.append(dt, el('dd', '', what))
+        }
+        g.append(list)
+        grid.append(g)
       }
-      g.append(list)
-      grid.append(g)
-    }
-    card.append(grid)
-
-    back.append(card)
-    back.addEventListener('click', (e) => { if (e.target === back) close() })
-    document.addEventListener('keydown', onKey, true)
-    document.body.append(back)
-    card.tabIndex = -1
-    card.focus()
+      card.append(grid)
+    }, { wide: true, className: 'sp-keys' })
   }
 
   /**
@@ -3533,7 +3434,7 @@ export class Editor {
   /** ⌘K — search every page, including collapsed toggles and archived pages. */
   openSearch(): void {
     const s = this.store
-    this.openOverlay(t('Search'), (card, close) => {
+    this.openOverlay(t('Search this space'), (card, close) => {
       const input = document.createElement('input')
       input.className = 'sp-find'
       input.placeholder = t('Search all pages…')
@@ -3566,13 +3467,31 @@ export class Editor {
           results.append(li)
         }
         if (!results.childElementCount) results.append(el('li', 'sp-noresult', t('Nothing found')))
+        at = 0
+        mark()
       }
+      // THE ARROWS MOVE THE HIGHLIGHT, the query keeps the focus — the / menu's
+      // pattern. They did nothing here: a result was reachable only by Tab,
+      // which walks past it into the rest of the card.
+      let at = 0
+      const rows = () => [...results.querySelectorAll<HTMLElement>('.sp-result')]
+      const mark = () => {
+        rows().forEach((r, i) => {
+          r.classList.toggle('sp-sel', i === at)
+          r.setAttribute('aria-selected', String(i === at))
+        })
+        rows()[at]?.scrollIntoView({ block: 'nearest' })
+      }
+      input.setAttribute('aria-label', t('Search all pages…'))
       input.addEventListener('input', run)
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') results.querySelector<HTMLElement>('.sp-result')?.click()
+        const n = rows().length
+        if (e.key === 'ArrowDown' && n) { e.preventDefault(); at = (at + 1) % n; mark() }
+        else if (e.key === 'ArrowUp' && n) { e.preventDefault(); at = (at - 1 + n) % n; mark() }
+        else if (e.key === 'Enter') rows()[at]?.click()
       })
-      card.append(el('h2', 'sp-card-h', t('Search this space')), input, results)
-    })
+      card.append(input, results)
+    }, { top: true })
   }
 
   /**
@@ -3697,7 +3616,6 @@ export class Editor {
     }
 
     this.openOverlay(t('Link card'), (card, close) => {
-      card.append(el('h2', 'sp-card-h', t('Link card')))
 
       const why = document.createElement('p')
       why.className = 'sp-note'
@@ -3832,11 +3750,28 @@ export class Editor {
           li.append(b)
           list.append(li)
         }
+        at = 0
+        mark()
       }
+      // the same arrows-move-the-highlight as search and the / menu
+      let at = 0
+      const rows = () => [...list.querySelectorAll<HTMLElement>('.sp-result')]
+      const mark = () => rows().forEach((r, i) => {
+        r.classList.toggle('sp-sel', i === at)
+        r.setAttribute('aria-selected', String(i === at))
+        if (i === at) r.scrollIntoView({ block: 'nearest' })
+      })
+      input.setAttribute('aria-label', t('Find or create a page…'))
       input.addEventListener('input', run)
+      input.addEventListener('keydown', (e) => {
+        const n = rows().length
+        if (e.key === 'ArrowDown' && n) { e.preventDefault(); at = (at + 1) % n; mark() }
+        else if (e.key === 'ArrowUp' && n) { e.preventDefault(); at = (at - 1 + n) % n; mark() }
+        else if (e.key === 'Enter' && n) { e.preventDefault(); rows()[at]?.click() }
+      })
       card.append(input, list)
       run()
-    })
+    }, { top: true })
   }
 
   /** Pick a page icon from the stylised set. */
@@ -4350,7 +4285,6 @@ export class Editor {
    */
   openImport(): void {
     this.openOverlay(t('Bring notes in'), (card, close) => {
-      card.append(el('h2', 'sp-card-h', t('Bring notes in')))
 
       const what = document.createElement('p')
       what.className = 'sp-note'
@@ -4494,7 +4428,6 @@ export class Editor {
     this.repaint()
 
     this.openOverlay(t('Imported a space'), (card, close) => {
-      card.append(el('h2', 'sp-card-h', t('Imported a space')))
       const lines = [
         t('{pages} page(s) and {blocks} block(s) added from that space.',
           { pages: plan.stats.pages, blocks: plan.stats.blocks }),
@@ -4532,7 +4465,6 @@ export class Editor {
   openExportSpace(): void {
     const s = this.store
     this.openOverlay(t('Export a page as a space'), (card, close) => {
-      card.append(el('h2', 'sp-card-h', t('Export a page as a space')))
 
       const what = document.createElement('p')
       what.className = 'sp-note'
@@ -4710,8 +4642,7 @@ export class Editor {
     this.repaint()
     this.status(t('Imported'))
 
-    this.openOverlay(t('Import Markdown'), (card, close) => {
-      card.append(el('h2', 'sp-card-h', t('Imported')))
+    this.openOverlay(t('Imported'), (card, close) => {
       const lines: string[] = [
         t('{pages} page(s) and {blocks} block(s) added from {files} file(s).',
           { pages: plan.stats.pages, blocks: plan.stats.blocks, files: plan.stats.files }),
@@ -4929,8 +4860,7 @@ export class Editor {
    */
   openPrint(): void {
     const s = this.store
-    this.openOverlay(t('Print'), (card, close) => {
-      card.append(el('h2', 'sp-card-h', t('Print or save as PDF')))
+    this.openOverlay(t('Print or save as PDF'), (card, close) => {
 
       const scope = document.createElement('div')
       scope.className = 'sp-choices'

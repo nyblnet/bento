@@ -7499,3 +7499,47 @@ here:**
 **Cost:** +2,041 B of shell (282,586 → 284,627, both built with `ZOPFLI=0`).
 The kernel sheet carries rules spaces never needed (the scrolling bar, nested
 menus). The kernel file's own header predicted a slightly bigger shell.
+
+## 2026-09-26 — Spaces adopts the kernel dialog and panel; spaces keeps panel persistence
+
+**Every modal in bento/spaces is `createDialog`** (kernel/src/ui/dialog.ts):
+About, the shortcut sheet, Search, Link to page, Link card, Import and its
+reports, Export page as a space, Print, and the graph. The graph's module now
+returns its content, and the editor wraps it. Spaces' `.sp-overlay`/`.sp-card`
+shell, its per-dialog Escape and Tab handlers, and About's hand-written focus
+trap are deleted. `scripts/test-spaces-chrome.ts` asserts that no spaces file
+builds a modal by hand.
+
+What this fixed, measured on the built shell:
+- Tab left the Import dialog 23 times in 25.
+- Escape worked only while focus was inside the card.
+- The shortcut sheet focused its own card and ringed the whole dialog.
+
+The dialog heading is the primitive's `.bkd-title` at 17px/650 (D4). Section
+captions keep the 11px uppercase style. About has no visible title: the suite's
+lockup heads it, as in slides, and the dialog is named by `aria-label`.
+
+**Both side panels are `createPanel`** (kernel/src/ui/panel.ts), with
+`drawerBelow: 820`. That is the per-app parameter D6 rules for; slides uses
+700. Spaces' two hand-copied resizers, chevrons and phone drawer rules are
+deleted.
+
+**Persistence stays in spaces.** The panels get no `storageKey`. The primitive
+persists `collapsed` in drawer mode too. A phone drawer shut by following a
+link would then become the desktop preference, and the page list would stay
+shut on every later desktop open. That is the bug `closeDrawer()` was written
+to prevent. Instead, the editor writes the keys readers already have
+(`bento-sp-pane`, `bento-sp-pane-closed`, `bento-sp-insp`,
+`bento-sp-insp-closed`), and only while a panel is a column. Nothing migrates,
+and no reader's layout resets. The primitive has no scrim, so spaces adds one
+behind an open drawer. A drawer you can shut only from the button that opened
+it gets left open over the page.
+
+**Kernel gaps, written down rather than forked:**
+- `createPanel` should not persist while it is a drawer.
+- `createPanel` needs an optional scrim.
+- The panel's chevron needs a localizable label. Spaces sets `title` and
+  `aria-label` after creation.
+
+**Cost:** +1,234 B of shell (284,627 → 285,861, `ZOPFLI=0`). The deleted
+dialog and panel code is smaller than the kernel sheets that replace it.

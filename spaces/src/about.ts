@@ -22,9 +22,10 @@
 //     panel, every confirmation) opens IN FLOW as a block of the list, and the
 //     card scrolls to it. A 250px popover anchored inside a scrolling menu is
 //     the bug that cost this project a day in slides' phone chrome.
-//   · `.sp-overlay` carries z-index 60, which is a CEILING on every descendant
-//     rather than merely an order. Nothing in this dialog tries to escape it,
-//     and nothing added later can be made to by raising its own z-index.
+//   · The kernel dialog's scrim carries a z-index (1000, above every menu),
+//     and that is a CEILING on every descendant rather than merely an order.
+//     Nothing in this dialog tries to escape it, and nothing added later can
+//     be made to by raising its own z-index.
 
 import {
   checkForUpdates, applyUpdate, applyUpdateInPlace, canUpdateInPlace,
@@ -36,6 +37,8 @@ import {
   canWriteInPlace, openedFileName,
 } from '../../kernel/src/save.ts'
 import { clearVersions, clearRecovery, listVersions, type Snapshot } from '../../kernel/src/autosave.ts'
+import { createDialog, type Dialog } from '../../kernel/src/ui/dialog.ts'
+import '../../kernel/src/ui/dialog.css'
 import { t, localeChoices, locale, setLocale } from './i18n'
 import { appearanceSection } from './appearance'
 import { esc, textOf } from './sanitize'
@@ -101,27 +104,18 @@ export async function launchUpdateCheck(): Promise<void> {
 export function openAbout(hooks: AboutHooks): void {
   const { store, onRepaint, onSaveCopy, onImport, onExportSpace, onWriteCopy, onStatus } = hooks
   const doc = store.doc
-  const returnFocus = document.activeElement as HTMLElement | null
 
-  const back = document.createElement('div')
-  back.className = 'sp-overlay sp-overlay-about'
+  // THE KERNEL'S DIALOG (kernel/src/ui/dialog.ts) is the shell; `card` is its
+  // content. The primitive took the three things this file used to hand-roll —
+  // a capture-phase document Escape (a <select> steals focus, so an Escape on
+  // the card itself stopped working), the Tab trap, focus returned to the
+  // opener — and adds the scrim above every menu. No visible title, as in
+  // slides: the suite's lockup below IS the heading, and the dialog is named
+  // for a screen reader instead.
   const card = document.createElement('div')
-  card.className = 'sp-card sp-about'
-  card.setAttribute('role', 'dialog')
-  card.setAttribute('aria-modal', 'true')
-  card.setAttribute('aria-label', t('About this space'))
-
-  const close = () => {
-    back.remove()
-    document.removeEventListener('keydown', onKey, true)
-    returnFocus?.focus?.()
-  }
-  // Capture-phase and on the DOCUMENT, as slides does: a dialog whose Escape
-  // handler hangs off its own element stops working the moment focus leaves it
-  // — which a <select> dropdown does on every platform.
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') { e.stopPropagation(); close() }
-  }
+  card.className = 'sp-about'
+  let dlg: Dialog | null = null
+  const close = () => dlg?.close()
 
   // ---- small builders ----------------------------------------------------
   const h = (text: string) => {
@@ -727,25 +721,10 @@ export function openAbout(hooks: AboutHooks): void {
   foot.append(button(t('Close'), close, true))
   card.append(foot)
 
-  // ---- focus ---------------------------------------------------------------
-  // Trapped, because this is a modal: Tab off either end wraps rather than
-  // walking into an editor the reader cannot see.
-  card.addEventListener('keydown', (e) => {
-    if (e.key !== 'Tab') return
-    const f = [...card.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input:not([disabled]), select, textarea')]
-      .filter((el) => el.offsetParent !== null)
-    if (!f.length) return
-    const first = f[0]
-    const last = f[f.length - 1]
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
-  })
-
-  back.append(card)
-  back.addEventListener('mousedown', (e) => { if (e.target === back) close() })
-  document.addEventListener('keydown', onKey, true)
-  document.body.append(back)
+  dlg = createDialog({ label: t('About this space'), content: card })
+  dlg.card.classList.add('sp-dlg', 'sp-dlg-about')
+  dlg.open()
+  // the one control the dialog opens FOR, not the logo link the trap would pick
   checkBtn.focus()
 }
 

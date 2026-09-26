@@ -351,7 +351,7 @@ export function prefersReducedMotion(): boolean {
  * shell's inflated stylesheet taught (kernel/src/save.ts serializeBody).
  */
 const CSS = `
-.sp-overlay-graph { align-items: center; padding: 14px; padding-top: 14px; }
+
 .sp-graph {
   width: min(1180px, calc(100vw - 28px));
   height: min(820px, calc(100vh - 28px));
@@ -463,11 +463,9 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
   layoutGraph(g)
   const layoutMs = performance.now() - t0
 
-  const back = mk('div', 'sp-overlay sp-overlay-graph')
-  const card = mk('div', 'sp-card sp-graph')
-  card.setAttribute('role', 'dialog')
-  card.setAttribute('aria-modal', 'true')
-  card.setAttribute('aria-label', t('Graph'))
+  // The CONTENT only. The modal around it — scrim, trap, Escape, focus return —
+  // is the kernel's dialog, which the editor wraps this in.
+  const card = mk('div', 'sp-graph')
 
   const head = mk('div', 'sp-graph-head')
   head.append(mk('h2', 'sp-card-h', t('Graph')))
@@ -493,7 +491,6 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
     t('Click a page to open it · drag to move · scroll to zoom'))
 
   card.append(head, stage, foot)
-  back.append(card)
 
   // ——— camera ———
   let scale = 1
@@ -766,7 +763,6 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
 
   fitBtn.addEventListener('click', () => { fit(); draw() })
   closeBtn.addEventListener('click', () => opts.close())
-  back.addEventListener('click', (e) => { if (e.target === back) opts.close() })
 
   // ——— theme + size, both of which move under us ———
   const ro = new ResizeObserver(() => resize())
@@ -801,11 +797,11 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
   // Each was checked through these rather than by looking at the screen:
   // `frames: 0` beside `reveal: 1` is the proof that a graph opened in a
   // background tab still arrives. Six numbers on a node thrown away at close.
-  ;(back as unknown as { __graph: unknown }).__graph = {
+  ;(card as unknown as { __graph: unknown }).__graph = {
     nodes: g.nodes.length, edges: g.edges.length, layoutMs, reduced,
     get reveal() { return reveal },
     get frames() { return frames },
   }
 
-  return { el: back, destroy, graph: g }
+  return { el: card, destroy, graph: g }
 }
