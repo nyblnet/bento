@@ -2536,7 +2536,13 @@ function fsTable(f: string): string {
 
   // --- markdown: a link card is a link -------------------------------------
   const linkSpec = SPEC.get('link')!
-  const md = (b: Block) => linkSpec.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [] }).join('\n')
+  const withMarker = (b: Block) => linkSpec.toMd!(b, '', '', { titleOf: () => undefined, rowsOf: () => [], inline: (h: string) => h }).join('\n')
+  // the VISIBLE line; the trailing `<!-- bento:card … -->` that marks it as a
+  // card (hidden by every renderer) is asserted on its own below and covered
+  // field by field in scripts/test-spaces-md-strict.ts
+  const md = (b: Block) => withMarker(b).replace(/ <!-- bento:card[^\n]*-->$/, '')
+  ok(/ <!-- bento:card -->$/.test(withMarker(card({ url: 'https://a.b/x', title: 'Docs' }))),
+    'a card line ends in the bento:card marker comment, which is what makes it a card on the way back in')
   ok(md(card({ url: 'https://a.b/x', title: 'Docs' })) === '[Docs](https://a.b/x)',
     'a link card exports as a markdown link')
   ok(md(card({ url: 'https://a.b/x', title: 'Docs', desc: 'The manual' })) === '[Docs](https://a.b/x) — The manual',

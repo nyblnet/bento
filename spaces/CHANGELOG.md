@@ -522,6 +522,20 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   100%, and both pixel sizes or neither. Any other key or value is ignored and
   the image is kept.
 
+- **A link card comes back a link card.** It still leaves as a link,
+  `[title](url) — description`, followed by a comment,
+  `<!-- bento:card site="…" image="…" -->`. GitHub, Obsidian and browsers
+  hide the comment, so the page reads as the link and nothing else. The comment
+  is what marks the line as a card, so a README line that happens to be a lone
+  link stays a paragraph. It also carries the fields the visible line cannot:
+  site, icon and thumbnail, plus title and description for a card with no
+  address. Every field is checked on the way back in. The address must be
+  http, https or mailto, and anything else is dropped. The thumbnail must be an
+  embedded picture: no remote address and no svg. The other fields are stored
+  as plain text. One loss is deliberate: a thumbnail embedded as more than 512
+  bytes of data is not written into the Markdown, because in a plain editor it
+  would be a screen of base64 after every card.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

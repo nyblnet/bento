@@ -286,18 +286,30 @@ export const SPECS: BlockSpec[] = [
     // link, so the default export would already be close — but `html` is a
     // fallback for old builds, and an export that reads it would silently
     // export nothing at all for a card an agent wrote fields-only.
+    //
+    // WHAT MAKES IT A CARD, and not a paragraph that happens to be one link, is
+    // a trailing html comment: `<!-- bento:card site="…" image="…" -->`.
+    // GitHub, Obsidian and every html renderer hide a comment, so the page
+    // reads as the link and its description and nothing else — where a Pandoc
+    // `{.card site=…}` would print as text after every card, and a data: image
+    // in it as kilobytes of it. An UNMARKED lone link is not read as a card:
+    // that would turn every README line that is just a link into one. The
+    // fields the visible line cannot say (site, icon, image; title and desc
+    // for a card with no url) ride in the comment. See cardComment().
     toMd: (b) => {
       const c = linkCard(b)
+      const meta = ` ${cardComment(b, c.url)}`
       // no url, no link: a card that is not clickable must not export as
       // something a reader will click
-      if (!c.url) return [[c.title, c.desc].filter(Boolean).join(' — ')]
-      const tail = c.desc ? ` — ${c.desc}` : ''
+      if (!c.url) return [[c.title, c.desc].filter(Boolean).join(' — ') + meta]
+      const tail = c.desc ? ` — ${c.desc.replace(/\s*\n\s*/g, ' ')}` : ''
       // `[` and `]` in a title end the link text early and leave the url as
-      // loose parenthesised prose; a url holding a space or a bracket needs the
-      // angle form, which is what <> is FOR in CommonMark
-      const label = c.title.replace(/([[\]])/g, '\\$1')
+      // loose parenthesised prose (and a backslash would escape the bracket
+      // after it); a url holding a space or a bracket needs the angle form,
+      // which is what <> is FOR in CommonMark
+      const label = c.title.replace(/\s*\n\s*/g, ' ').replace(/([\\[\]])/g, '\\$1')
       const href = /[\s()<>]/.test(c.url) ? `<${c.url}>` : c.url
-      return [`[${label}](${href})${tail}`]
+      return [`[${label}](${href})${tail}${meta}`]
     },
   },
   {
@@ -445,6 +457,38 @@ export function sizeAttrs(b: Block, extra: string[] = []): string {
   const w = num(b.w), h = num(b.h)
   if (w !== undefined && h !== undefined && Number.isInteger(w) && Number.isInteger(h)) parts.push(`w=${w}`, `h=${h}`)
   return parts.length ? `{${parts.join(' ')}}` : ''
+}
+
+/**
+ * A data: image larger than this is left out of a card's comment. It would be
+ * invisible on GitHub, but not in a plain editor, where a thumbnail's worth of
+ * base64 after every card is the whole screen. The loss is pinned in
+ * scripts/test-spaces-md-strict.ts.
+ */
+export const CARD_IMAGE_MD_BUDGET = 512
+
+/**
+ * A comment-safe attribute value. `&` first, so the others are unambiguous;
+ * `"` so the value cannot end early; `<` and `>` so no tag and no `-->` can
+ * form; and `--` because it is what ends a comment. Undone in reverse by
+ * markdown.ts cardFields().
+ */
+export const commentValue = (v: string): string =>
+  v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/--/g, '-&#45;').replace(/\s*\n\s*/g, ' ')
+
+/** The marker that makes a link line a link card, with the fields the line
+ *  itself cannot carry. Raw stored fields, never the derived fallbacks. */
+export function cardComment(b: Block, url: string): string {
+  const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
+  const parts: string[] = []
+  const put = (k: string, v: string) => { if (v) parts.push(`${k}="${commentValue(v)}"`) }
+  if (!url) { put('title', str(b.title)); put('desc', str(b.desc)) }
+  put('site', str(b.site))
+  put('icon', str(b.icon))
+  const image = str(b.image)
+  if (!(image.startsWith('data:') && image.length > CARD_IMAGE_MD_BUDGET)) put('image', image)
+  return `<!-- bento:card${parts.map((p) => ` ${p}`).join('')} -->`
 }
 
 /** The `:---:` rule row's four forms, which are the whole of what GFM can say

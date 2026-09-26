@@ -34,7 +34,7 @@ import { parseNote } from '../spaces/src/markdown.ts'
 import { Store } from '../spaces/src/store.ts'
 import { SPECS, CALLOUT_TONES } from '../spaces/src/blocks.ts'
 import { DEFAULT_FIELDS, propBlock } from '../spaces/src/fields.ts'
-import { type Block, type Page, type SpacesDoc, defaultTheme, writeTable } from '../spaces/src/model.ts'
+import { type Block, type Page, type SpacesDoc, defaultTheme, writeTable, linkCard, linkCardHtml } from '../spaces/src/model.ts'
 
 let checks = 0
 let failures = 0
@@ -83,7 +83,7 @@ const FIX: Record<string, () => Fixture> = {
   // attribute list, `{width=80% w=640 h=300}`
   image: () => ({ blocks: [b('image', '', { src: 'asset:abc', alt: 'A diagram', caption: 'Drawn, not "photographed"', width: 80, w: 640, h: 300 })] }),
   media: () => ({ blocks: [b('media', '', { kind: 'audio', src: 'asset:tone', alt: 'A tone', controls: true })] }),
-  link: () => ({ blocks: [b('link', '<a href="https://bento.page">Bento</a> — desc', { url: 'https://bento.page', title: 'Bento', desc: 'desc', site: 'bento.page' })] }),
+  link: () => ({ blocks: [b('link', '<a href="https://bento.page">Bento</a> — desc', { url: 'https://bento.page', title: 'Bento', desc: 'desc', site: 'bento.page', icon: '🍱', image: 'asset:thumb' })] }),
   pagelink: () => ({ blocks: [b('pagelink', '', { page: 'other' })], extraPages: [{ id: 'other', title: 'Other page', blocks: [b('p', 'x')] }] }),
   prop: () => ({ blocks: [propBlock(DEFAULT_FIELDS[0], 'doing', id())] }),
   table: () => {
@@ -102,7 +102,6 @@ const FIX: Record<string, () => Fixture> = {
 // the design brief's own row, so a reader of a failure knows what closing it
 // would take. Removing a pin is the deliberate edit this rig asks for.
 const PINNED: Record<string, string> = {
-  link: 'exports as `[title](url) — desc` and comes back a paragraph; needs a lone-link-line rule or a fence, and `site`/`image` are lost',
   media: 'exports as `[label](src)` and comes back a paragraph; needs `<video>`/`<audio>` html or a fence, and `controls`/`loop`/`muted` are lost',
   prop: 'exports as `**Status:** In progress` and comes back a paragraph; the natural form is front matter (`status: doing`), and value id vs label needs the schema',
   view: 'exports as a title and a grouped issue list and comes back as p+p+bullet; needs a `bento-view` fence (its rows are other pages)',
@@ -286,6 +285,57 @@ console.log('\nimage sizes: {width=N% w= h=}')
     ok(!/onerror|onload|style|javascript/i.test(Object.keys(img ?? {}).join(' ')) && keys.length === 0 &&
       (img?.width === undefined || img.width === 100 || img.width === 50) && !/<script/i.test(img?.alt ?? ''),
     `HOSTILE size: ${line} — no key but a validated width reaches the block`, all)
+  }
+}
+
+console.log('\nlink cards: [title](url) — desc <!-- bento:card … -->')
+{
+  const card = (f: Record<string, unknown>) => {
+    const x = b('link', '', f)
+    x.html = linkCardHtml(linkCard(x))
+    return x
+  }
+  const t = trip({ blocks: [
+    card({ url: 'https://x.y/a b(c)', title: 'Tricky [title] with \\ and -- dashes', desc: 'says "hi" --> <b>not a tag</b>', site: 'x--y "site" >' }),
+    card({ title: 'No url here', desc: 'still a card' }),
+    card({ url: 'https://only.url/' }),
+    card({ url: 'mailto:a@b.c', title: 'Mail', image: 'data:image/png;base64,iVBORw0KGgo=' }),
+  ] })
+  ok(qualifies(t), 'brackets, backslashes, dashes, quotes and a --> in the fields; a card with no url; an untitled one; a small data: thumbnail',
+    qualifies(t) ? undefined : why(t))
+  ok(t.md.split('\n').filter((l) => l.includes('<!-- bento:card')).every((l) => {
+    const c = l.slice(l.lastIndexOf('<!-- bento:card') + 4)
+    return c.indexOf('--') === c.length - 3 && !/[<>]/.test(c.slice(0, -1))
+  }), 'no field can close or nest the marker comment: its only `--` is the closing one', t.md)
+}
+{
+  // THE PINNED LOSS: a large data: thumbnail is left out of the export
+  const big = `data:image/png;base64,${'A'.repeat(4000)}`
+  const x = b('link', '', { url: 'https://big.img/', title: 'Big', image: big })
+  x.html = linkCardHtml(linkCard(x))
+  const t = trip({ blocks: [x] })
+  ok(!t.md.includes('AAAA') && t.back[0]?.type === 'link' && t.back[0].image === undefined,
+    'pinned: a data: thumbnail over CARD_IMAGE_MD_BUDGET does not leave (the card does, without it)', t.md)
+}
+{
+  const got = only('[Docs](https://example.com) — the manual\n\n[Just a link](https://example.com)\n')
+  ok(got.length === 2 && got.every((x) => x.type === 'p'), 'an UNMARKED lone link stays a paragraph', JSON.stringify(got))
+}
+{
+  const hostile: Array<[string, (x: Block[]) => boolean]> = [
+    ['[Click](javascript:alert(1)) <!-- bento:card -->', (x) => x[0]?.type === 'link' && x[0].url === undefined && !/javascript/i.test(x[0].html ?? '')],
+    ['[Click]( JAVASCRIPT:alert(1)) <!-- bento:card -->', (x) => x[0]?.url === undefined && x[0]?.title === 'Click' && !/javascript/i.test(JSON.stringify(x))],
+    ['[x](https://ok.example) <!-- bento:card image="https://tracker.invalid/p.png" -->', (x) => x[0]?.type === 'link' && x[0].image === undefined],
+    ['[x](https://ok.example) <!-- bento:card image="data:image/svg+xml;base64,PHN2Zz4=" -->', (x) => x[0]?.image === undefined],
+    ['[x](https://ok.example) <!-- bento:card image="javascript:alert(1)" onload="alert(1)" -->', (x) => x[0]?.image === undefined && !('onload' in (x[0] ?? {}))],
+    ['[x](https://ok.example) <!-- bento:card site="a" --> <script>alert(1)</script> <!-- bento:card -->', (x) => !/<script/i.test(JSON.stringify(x))],
+    ['[x](https://ok.example) <!-- bento:card site="<img src=x onerror=alert(1)>" -->', (x) => !/<img/i.test(JSON.stringify(x))],
+    ['[x](https://ok.example) <!-- bento:card site="&lt;img src=x onerror=alert(1)&gt;" -->', (x) => x[0]?.type === 'link' && x[0].site === '<img src=x onerror=alert(1)>' && !/<img/i.test(x[0].html ?? '')],
+    ['[x](https://ok.example) <!-- bento:other site="evil" -->', (x) => x[0]?.type === 'p'],
+  ]
+  for (const [line, fine] of hostile) {
+    const got = only(`${line}\n`)
+    ok(fine(got), `HOSTILE card: ${line}`, JSON.stringify(got))
   }
 }
 

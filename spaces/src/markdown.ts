@@ -16,8 +16,8 @@
 
 // `.ts` extensions ON PURPOSE: this module is imported directly by
 // `scripts/test-spaces-model.ts`, which node resolves without a bundler.
-import { type Block, type Page, uid, writeTable } from './model.ts'
-import { esc } from './sanitize.ts'
+import { type Block, type Page, uid, writeTable, linkCard, linkCardHtml } from './model.ts'
+import { esc, externalHref } from './sanitize.ts'
 import { keepClasses } from './marks.ts'
 
 /** A tab indents four columns. Nothing here depends on the exact number; it
@@ -256,6 +256,70 @@ export function sizeOf(a: Attrs | null): { width?: number; w?: number; h?: numbe
 }
 const IMG_EMBED = /^!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]$/
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i
+
+// ---- link cards -------------------------------------------------------------
+
+/**
+ * A LINK CARD's line: a link, an optional ` — description`, and the marker
+ * comment blocks.ts cardComment() writes — or, for a card with no url, any
+ * text before the marker (its title and desc are in the comment). The marker is
+ * what makes it a card; the same line without it is an ordinary paragraph.
+ */
+const CARD_LINE = /^(?:\[((?:\\.|[^\]\\])*)\]\(\s*(?:<([^>\n]*)>|([^\s()<>]*))\s*\)(?: — (.*?))?|(.*?))\s*<!-- bento:card((?:\s+[a-z]+="[^"<>]*")*)\s*-->$/
+
+const uncomment = (v: string): string =>
+  v.replace(/&#45;/g, '-').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+
+/** A thumbnail a card may point at: an asset key, or an inline raster image.
+ *  Never a remote address (linkCard() would drop one anyway) and never svg. */
+const CARD_IMAGE = /^(?:asset:[A-Za-z0-9_-]{1,128}|data:image\/(?:png|jpeg|gif|webp|avif);base64,[A-Za-z0-9+/]+=*)$/
+
+/**
+ * A card line → the card's fields, every one validated, or null when the line
+ * is not a card. Plain-text fields (title, desc, site, icon) are stored as
+ * TEXT — the renderer writes them with textContent — and capped; the url must
+ * pass externalHref(), the same allowlist the editor's card dialog uses, and
+ * a url that fails it is dropped rather than stored (the card keeps its
+ * title and is a dead card, which is what render.ts draws for one).
+ */
+function cardOf(line: string): Partial<Block> | null {
+  const m = CARD_LINE.exec(line)
+  if (!m) return null
+  const kv = new Map<string, string>()
+  for (const a of m[6].matchAll(/([a-z]+)="([^"]*)"/g)) if (!kv.has(a[1])) kv.set(a[1], uncomment(a[2]))
+  const text = (v: string | undefined, cap: number): string => (v ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, cap)
+  const out: Partial<Block> = {}
+  const linked = m[2] !== undefined || m[3] !== undefined
+  if (linked) {
+    const url = externalHref(m[2] ?? m[3])
+    const shown = text(m[1].replace(/\\([\\[\]])/g, '$1'), 500)
+    if (url) out.url = url
+    // an untitled card exports its url as its text; that is not a title
+    if (shown && shown !== url) out.title = shown
+    const desc = text(m[4], 2000)
+    if (desc) out.desc = desc
+  } else {
+    // no title in the marker: the visible words are the title, as plain text
+    // — a line whose link could not be read (`[Evil](javascript:…)`, whose
+    // parentheses the url pattern refuses) keeps its words, not its address
+    const shown = m[5] ?? ''
+    // a second marker (or any comment) in the words is not a card line: it is
+    // someone trying to close ours early, and the line stays text
+    if (shown.includes('<!--')) return null
+    const words = /^\[((?:\\.|[^\]\\])*)\]\(.*\)$/.exec(shown)?.[1].replace(/\\([\\[\]])/g, '$1') ?? plainText(shown)
+    const title = text(kv.get('title') ?? words, 500)
+    const desc = text(kv.get('desc'), 2000)
+    if (title) out.title = title
+    if (desc) out.desc = desc
+  }
+  const site = text(kv.get('site'), 200)
+  if (site) out.site = site
+  const icon = text(kv.get('icon'), 16)
+  if (icon) out.icon = icon
+  const image = kv.get('image') ?? ''
+  if (CARD_IMAGE.test(image)) out.image = image
+  return out
+}
 
 /** A line that is nothing but an image. `![[x]]` counts only when it names an
  *  image FILE — otherwise it is an embed of another note, which is a link. */
@@ -560,6 +624,17 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     if (pic) {
       para = null
       imageBlock(pic.ref, pic.alt, pic.caption, ownerFor(indent), pic.attrs)
+      continue
+    }
+
+    const card = body.includes('<!-- bento:card') ? cardOf(body) : null
+    if (card) {
+      para = null
+      const b = mk('link', card)
+      // the readable fallback an old build renders, written from the fields
+      // by the one function the editor also uses (model.ts)
+      b.html = linkCardHtml(linkCard(b))
+      add(b, ownerFor(indent))
       continue
     }
 
