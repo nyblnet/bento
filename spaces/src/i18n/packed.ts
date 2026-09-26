@@ -409,6 +409,7 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Search this space": ["このスペースを検索","搜索此空间","搜尋此空間","Buscar en este espacio","Rechercher dans cet espace","Diesen Space durchsuchen","Cerca in questo spazio","Pesquisar neste espaço"],
   "Select": ["選択","单选","單選","Selección","Sélection","Auswahl","Selezione","Seleção"],
   "Set a password…": ["パスワードを設定…","设置密码…","設定密碼…","Establecer una contraseña…","Définir un mot de passe…","Passwort festlegen…","Imposta una password…","Definir uma palavra-passe…"],
+  "Share": ["共有","共享","共用","Compartir","Partager","Teilen","Condividi","Compartilhar"],
   "Share this space": ["このスペースを共有","共享此空间","分享此空間","Compartir este espacio","Partager cet espace","Diesen Space teilen","Condividi questo spazio","Partilhar este espaço"],
   "Show as a board": ["ボードで表示","以看板显示","以看板顯示","Mostrar como tablero","Afficher en tableau","Als Board anzeigen","Mostra come bacheca","Mostrar como quadro"],
   "Show as a gallery": ["ギャラリーで表示","以图库显示","以圖庫顯示","Mostrar como galería","Afficher en galerie","Als Galerie anzeigen","Mostra come galleria","Mostrar como galeria"],

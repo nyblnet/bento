@@ -7567,3 +7567,52 @@ lands, this method is the only caller to move.
 **D5 in spaces:** under a coarse pointer the bar's buttons, the Live control,
 the page-tree rows and their ⋯, the format bar and every menu row are 44px
 (`--tap`). The bar was 40px.
+
+## 2026-09-26 — The spaces top bar is slides' bar, and the fit is one algorithm
+
+The maintainer's complaint was that spaces' interface "is not fully following
+slides", and the chrome work before this barely touched the bar. Measured on
+the #565 build at 1440: padding 8/12 against slides' 8/14, gap 6 against 10,
+groups at 2 and 4 against 6, a bold 136×30 wordmark button against slides'
+15px/400 lockup, a 240px semibold title with an 8px corner against 220px,
+regular, 6px. Each of those is slides' value now, and
+`scripts/test-spaces-chrome.ts` reads the padding, the gap, the title floor and
+the phone width out of SLIDES' SOURCE and compares, so the two cannot part
+silently.
+
+**Language and Help are in the bar, as in slides.** The globe opens the list
+slides' globe shows (`localeChoices()`, the one in force ticked,
+`menuitemradio`), and choosing one rebuilds the chrome. Slides' last row,
+"Manage languages…", has no spaces counterpart because spaces has no language
+packs. When the bar folds, both move into ⋯ as rows. "Keyboard shortcuts" is no
+longer in ⋯ at widths where `?` is on screen: one home per command per width.
+
+**One fit, shaped for the kernel.** `spaces/src/topbar.ts`
+(`createTopbarFit`) is slides' `fitTopbar` with the app taken out: tier
+classes, the title, and the "a menu is open" test are options. The hand-copy it
+replaces had drifted in three ways (§3.2 of the chrome audit): a 110px title
+floor where slides uses 120, a fold on a squeezed title rather than on real
+overflow, and no phone rule. So spaces changed tier at 800/720/600 where slides
+changes at 1360/880/720. Now it follows slides' rules:
+- compact and tight step down while the bar overflows or the title is under
+  120px;
+- fold waits for true overflow;
+- at 700px or below the bar folds unconditionally.
+
+Spaces has fewer controls, so its measured thresholds are 900/800/700.
+
+**Below the fold's floor the bar scrolls** (≤700px). A folded spaces bar needs
+about 370px (measured: ⋯ ends at 366 plus 6px padding). The app root clips, so without this the excess was cut off with ⋯
+inside it. A scroll container clips both axes, so the bar's menus go
+`position: fixed` under `--sp-bar-bottom`, which the fit publishes. The bar
+takes no `z-index`, so it never becomes a ceiling for them (slides' hard-won
+detail 9).
+
+**This reverses one line of 2026-08-10:** a phone no longer gives up the
+wordmark. The mark stays in the corner, as slides' does, and it is a 44px
+target there because it is a button (D5). Undo and redo stay in ⋯ on a phone,
+as that entry ruled. The Pages button moves from before the mark to after the
+title, where slides puts its Slides button.
+
+A kernel line proposes `kernel/src/ui/topbar.ts`. When it lands, this file
+becomes an import and slides' `fitTopbar` its second caller.

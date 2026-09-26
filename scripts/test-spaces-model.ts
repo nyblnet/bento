@@ -867,7 +867,10 @@ for (const [label, input, err] of [
   ok(/^\.sp-more \{ display: inline-flex/m.test(css),
     '⋯ is in the bar at EVERY width, being a home and not only an overflow')
   ok(!/\.sp-bar-fold \.sp-more \{ display/.test(css), '…so it is not gated on the fold any more')
-  ok(inTier('fold', /\.sp-mark \{ display: none/), '…and the mark goes (About is in ⋯)')
+  // The mark STAYS when folded, as slides' does (DECISIONS 2026-09-26, which
+  // reverses the 2026-08-10 line that gave it up on a phone).
+  ok(!/\.sp-bar-fold \.sp-mark \{ display: none/.test(css), '…but the mark stays in the corner, as slides\' does')
+  ok(/\.sp-bar-fold \.sp-lang, \.sp-bar-fold \.sp-help \{ display: none/.test(css), '…and the globe and ? go into ⋯')
   ok(inTier('fold', /\.sp-group-history \{ display: none/), '…and the history pair')
   ok(inTier('fold', /\.sp-split \.sp-caret \{ display: none/), '…and the save caret')
   ok(/\.sp-bar-fold \.sp-status \{\n\s*position: absolute/.test(css),
@@ -876,7 +879,7 @@ for (const [label, input, err] of [
   // NO px query may govern the fold any more. A stray one would re-introduce
   // exactly the disagreement this replaced: CSS folding at one width while the
   // menu decides its contents at another.
-  const foldSelectors = [/\.sp-sec \{ display: none/, /\.sp-mark \{ display: none/,
+  const foldSelectors = [/\.sp-sec \{ display: none/, /\.sp-help \{ display: none/,
     /\.sp-group-history \{ display: none/, /\.sp-split \.sp-caret \{ display: none/]
   for (const sel of foldSelectors) {
     const i = css.search(sel)
@@ -888,14 +891,17 @@ for (const [label, input, err] of [
 
   // The bar is sized by MEASUREMENT, and the measurement is the overflow of
   // the bar's own box — not a number written down twice.
-  ok(/private fitTopbar\(\): void \{/.test(ed), 'fitTopbar exists')
-  ok(/bar\.scrollWidth - bar\.clientWidth/.test(ed), '…and it measures overflow rather than matching a width')
-  ok(/new ResizeObserver\(\(\) => this\.fitTopbar\(\)\)/.test(ed), 'a ResizeObserver drives it on viewport change')
-  ok(/new MutationObserver\(\(\) => this\.fitTopbar\(\)\)/.test(ed),
+  // The fit lives in topbar.ts (slides' algorithm, shaped to move to the kernel).
+  const tb = fs.readFileSync(new URL('../spaces/src/topbar.ts', import.meta.url), 'utf8')
+  ok(/export function createTopbarFit\(/.test(tb) && /createTopbarFit\(bar,/.test(ed), 'the editor fits its bar with createTopbarFit')
+  ok(/bar\.scrollWidth - bar\.clientWidth/.test(tb), '…and it measures overflow rather than matching a width')
+  ok(/new ResizeObserver\(\(\) => fit\(\)\)/.test(tb), 'a ResizeObserver drives it on viewport change')
+  ok(/new MutationObserver\(\(\) => fit\(\)\)/.test(tb),
     '…and a MutationObserver for content that changes width at a fixed viewport')
-  ok(/attributeFilter: \['style', 'hidden'\]/.test(ed),
+  ok(/attributeFilter: \['style', 'hidden'\]/.test(tb),
     "…which does NOT watch 'class', or its own tier flips would feed it")
-  ok(/this\.barMO\?\.takeRecords\(\)/.test(ed), '…and it drops the records its own mutations queue')
+  ok(/mo\.takeRecords\(\)/.test(tb), '…and it drops the records its own mutations queue')
+  ok(/this\.barFit\?\.destroy\(\)/.test(ed), '…and a rebuilt bar disposes the old fit (no observer or window listener left behind)')
 
   // THE JS GATE ASKS THE DOM. It used to be matchMedia with the phone number
   // written down a second time, and the comment beside it admitted as much;
