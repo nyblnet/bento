@@ -961,4 +961,6 @@ export const zh_Hans: Catalog = {
   "Replace from JSON": "从 JSON 替换",
   "Update available: v{v} — click the peach button to update": "有可用更新：v{v} — 点击桃色按钮更新",
   "Version {v} is available — click to update": "版本 {v} 可用 — 点击更新",
+  "Plain JSON of every page — no live-session keys": "所有页面的纯 JSON — 不含实时会话密钥",
+  "Takes effect on the next save": "下次保存时生效",
 }

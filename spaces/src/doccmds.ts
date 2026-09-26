@@ -45,26 +45,20 @@ export interface DocHost {
 }
 
 /**
- * The rows, into `m`. A CONSEQUENCE menu (D2): a row whose effect you should
- * read before you press it says so on the row; every row also carries its
- * description as a tooltip, which is where slides keeps all of them.
+ * The rows, into `m`. A CONSEQUENCE menu (D2): every row says what it does on a
+ * second line under its name, as slides' Save menu does since #573.
  */
 export function saveRows(m: Menu, h: DocHost): void {
   const ro = h.store.readOnly
-  const tip = (b: HTMLElement, s: string) => { b.title = s; return b }
-
-  tip(row(m, { icon: ICONS.copy, label: t('Save a copy…'), run: () => h.saveCopy() }),
-    t('A second file — the original is left alone'))
+  row(m, { icon: ICONS.copy, label: t('Save a copy…'), hint: t('A second file — the original is left alone'), run: () => h.saveCopy() })
   row(m, { icon: ICONS.plus, label: t('Duplicate as a new space…'),
     hint: t('Same pages, new identity — it never syncs with this one'),
     run: () => duplicate(h) })
-  tip(row(m, { icon: ICONS.markdown, label: t('Export as Markdown…'), run: () => h.exportMarkdown() }),
-    t('Every page, as one .md file'))
-  tip(row(m, { icon: ICONS.page, label: t('Export page as a space…'), run: () => h.exportSpace() }),
-    t('One page and what is under it, as its own file'))
+  row(m, { icon: ICONS.markdown, label: t('Export as Markdown…'), hint: t('Every page, as one .md file'), run: () => h.exportMarkdown() })
+  row(m, { icon: ICONS.page, label: t('Export page as a space…'), hint: t('One page and what is under it, as its own file'), run: () => h.exportSpace() })
   h.moreExports?.(m)
   if (isEncryptionActive()) {
-    row(m, { icon: ICONS.lock, label: t('Change password…'), off: ro, run: () => openPassword(h) })
+    row(m, { icon: ICONS.lock, label: t('Change password…'), hint: t('Takes effect on the next save'), off: ro, run: () => openPassword(h) })
     row(m, { icon: ICONS.lock, label: t('Remove password…'),
       hint: t('The next save writes plain, readable JSON'), off: ro, run: () => openRemovePassword(h) })
   } else {
@@ -74,13 +68,12 @@ export function saveRows(m: Menu, h: DocHost): void {
 
   // the document AS DATA — the timeline and the round trips
   m.separator()
-  tip(row(m, { icon: ICONS.history, label: t('Version history…'), run: () => openHistory(h) }),
-    t('Versions are kept in this browser only — never in the file, never online. Restoring is undoable.'))
-  row(m, { icon: ICONS.code, label: t('Copy document JSON'), run: () => copyJson(h) })
+  row(m, { icon: ICONS.history, label: t('Version history…'), hint: t('Versions are kept in this browser only — never in the file, never online. Restoring is undoable.'), run: () => openHistory(h) })
+  row(m, { icon: ICONS.code, label: t('Copy document JSON'), hint: t('Plain JSON of every page — no live-session keys'),
+    run: () => copyJson(h) })
   row(m, { icon: ICONS.code, label: t('Replace from JSON…'), hint: t('Replaces every page — ⌘Z undoes'),
     off: ro, run: () => openReplaceJson(h) })
-  tip(row(m, { icon: ICONS.markdown, label: t('Import Markdown…'), off: ro, run: () => h.importMarkdown() }),
-    t('A folder of .md files becomes pages, with the folder tree and the [[wikilinks]] intact.'))
+  row(m, { icon: ICONS.markdown, label: t('Import Markdown…'), off: ro, hint: t('A folder of .md files becomes pages, with the folder tree and the [[wikilinks]] intact.'), run: () => h.importMarkdown() })
 }
 
 /** The labels, in order — what the chrome rig holds the menu to. */

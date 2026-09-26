@@ -961,4 +961,6 @@ export const it: Catalog = {
   "Replace from JSON": "Sostituisci da JSON",
   "Update available: v{v} — click the peach button to update": "Aggiornamento disponibile: v{v} — fai clic sul pulsante pesca per aggiornare",
   "Version {v} is available — click to update": "Versione {v} disponibile — clic per aggiornare",
+  "Plain JSON of every page — no live-session keys": "JSON semplice di tutte le pagine — senza chiavi della sessione live",
+  "Takes effect on the next save": "Ha effetto dal prossimo salvataggio",
 }

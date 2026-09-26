@@ -6215,8 +6215,8 @@ export class Editor {
       writeCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
       importMarkdown: () => this.openImport(),
       moreExports: (m) => {
-        const b = row(m, { icon: ICONS.canvas, label: t('Export page as slides…'), run: () => this.openExportDeck() })
-        b.title = t('The page as a bento/slides deck, ready to paste into Bento Slides')
+        row(m, { icon: ICONS.canvas, label: t('Export page as slides…'),
+          hint: t('The page as a bento/slides deck, ready to paste into Bento Slides'), run: () => this.openExportDeck() })
       },
     }
   }

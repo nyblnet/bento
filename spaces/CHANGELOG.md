@@ -1409,6 +1409,11 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
     session controls. Each action still says what it does under its name.
   - **An update found at launch shows slides' peach version chip** beside the
     wordmark and says so once; clicking it opens About on a fresh check.
+  - **Every Save row says what it does** on a second line, which a screen
+    reader announces as the row's description rather than part of its name.
+    The Save list scrolls under the bar on a short window instead of running
+    off it, menus cast a deeper shadow in dark mode, and a keyboard focus ring
+    in the accent colour marks where you are in the bar, menus and dialogs.
 
 ## [0.1.0] — 2026-08-03
 

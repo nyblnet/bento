@@ -60,11 +60,23 @@ export interface Row {
   run: () => void
 }
 
+let descSeq = 0
+
 /** One row. Composition over the kernel's `item()`: the shortcut slot is ours. */
 export function row(m: Menu, r: Row): HTMLButtonElement {
   const b = m.item(r.label, r.run, {
     icon: r.icon, hint: r.hint, off: r.off, selected: r.selected, keepOpen: r.keepOpen,
   })
+  // D2's second line is the row's DESCRIPTION, not part of its name: the name
+  // is the accessible name, the hint is announced through aria-describedby
+  // (slides' menuLabel, #573). Without this a screen reader read name and
+  // sentence as one run-on label.
+  const hint = b.querySelector<HTMLElement>('.bkm-hint')
+  if (hint) {
+    hint.id = `sp-mdesc-${++descSeq}`
+    b.setAttribute('aria-label', r.label)
+    b.setAttribute('aria-describedby', hint.id)
+  }
   if (r.kbd) {
     const k = document.createElement('kbd')
     k.className = 'sp-mkbd'
