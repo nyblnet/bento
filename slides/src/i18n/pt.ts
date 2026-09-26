@@ -593,6 +593,8 @@ export const pt: Catalog = {
   "Remove {name} — revokes this device’s access; everyone else is unaffected": "Remover {name} — revoga o acesso deste dispositivo; ninguém mais é afetado",
   "Replace from JSON": "Substituir a partir de JSON",
   "Replace from JSON…": "Substituir a partir de JSON…",
+  "Import PowerPoint…": "Importar PowerPoint…",
+  "Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.": "Abre o importador de PowerPoint do bento.page em uma nova aba: converte um .pptx em uma apresentação Bento. Requer conexão com a internet.",
   "Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.": "Redefinir o acesso? Toda cópia que você enviou para de sincronizar; apenas cópias salvas depois disso podem entrar.",
   "Reset access…": "Redefinir acesso…",
   "Save a copy…": "Salvar uma cópia…",

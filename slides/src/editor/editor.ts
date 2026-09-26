@@ -85,6 +85,16 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
   { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly', tip: 'Click to place corners; click the first point (or double-click) to close the shape' },
 ]
 
+/**
+ * The PowerPoint importer on the site (bento/convert builds the page). A
+ * LINK, not a feature of this file: the conversion needs the network, and a
+ * saved deck never loads anything on its own, so the entry opens the page in
+ * a new tab and says so in its tooltip. Slides' release carries the site, so
+ * the entry and the page ship together. The path is provisional until convert
+ * settles it.
+ */
+export const IMPORT_PPTX_URL = 'https://bento.page/import'
+
 export class Editor {
   private canvas!: SlideCanvas
   private panel!: PropsPanel
@@ -926,6 +936,10 @@ export class Editor {
       item(ICONS.code, t('Replace from JSON…'),
         t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
         () => this.openReplaceJson())
+      // with the other import, where spaces has Import Markdown…
+      item(ICONS.importDoc, t('Import PowerPoint…'),
+        t('Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.'),
+        () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') })
       item(ICONS.template, t('Start from scratch…'),
         t('Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.'),
         () => this.startFromScratch())

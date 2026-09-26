@@ -604,6 +604,8 @@ export const de: Catalog = {
   "Remove {name} — revokes this device’s access; everyone else is unaffected": "{name} entfernen — widerruft den Zugriff dieses Geräts; alle anderen bleiben unberührt",
   "Replace from JSON": "Aus JSON ersetzen",
   "Replace from JSON…": "Aus JSON ersetzen…",
+  "Import PowerPoint…": "PowerPoint importieren…",
+  "Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.": "Öffnet den PowerPoint-Import auf bento.page in einem neuen Tab – er macht aus einer .pptx eine Bento-Präsentation. Benötigt eine Internetverbindung.",
   "Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.": "Zugriff zurücksetzen? Alle gesendeten Kopien synchronisieren nicht mehr; nur danach gespeicherte können beitreten.",
   "Reset access…": "Zugriff zurücksetzen…",
   "Save a copy…": "Kopie speichern…",
