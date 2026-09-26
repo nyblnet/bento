@@ -392,7 +392,9 @@ for (const [label, input, err] of [
 {
   const fs = await import('node:fs')
   const main = fs.readFileSync(new URL('../spaces/src/main.ts', import.meta.url), 'utf8')
-  const about = fs.readFileSync(new URL('../spaces/src/about.ts', import.meta.url), 'utf8')
+  // the password and the timeline are Save-menu commands now (doccmds.ts),
+  // as slides keeps them; About no longer holds either
+  const about = fs.readFileSync(new URL('../spaces/src/doccmds.ts', import.meta.url), 'utf8')
 
   // the debounce body must stand down when encryption is on
   const guarded = /if \(isEncryptionActive\(\)\) return[\s\S]{0,200}?putRecovery/.test(main)
@@ -417,7 +419,7 @@ for (const [label, input, err] of [
   // The restore has to go through replaceDoc: it is the one path that
   // checkpoints undo first, which is what makes the note "Restoring is
   // undoable" true rather than reassuring.
-  ok(/listVersions\(/.test(about), 'About reads the timeline')
+  ok(/listVersions\(/.test(about), 'Version history… reads the timeline')
   ok(/store\.replaceDoc\(restored\)/.test(about), '…and restores through replaceDoc, so ⌘Z walks it back')
 }
 
@@ -829,17 +831,15 @@ for (const [label, input, err] of [
   const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
   const css = fs.readFileSync(new URL('../spaces/src/styles.css', import.meta.url), 'utf8')
 
-  // TWO lists now, and the split is the point. Everything used to be one list
-  // rendered BOTH inline and into ⋯ unconditionally, so on a desktop half of ⋯
-  // pointed at buttons already on screen. What still must not happen is a ⋯
-  // menu maintained BY HAND as a copy of the row — so each list is declared
-  // once and ⋯ takes the inline one only when the bar has actually dropped it.
+  // ONE list for the bar's secondary row, rendered inline and — once the bar
+  // has folded — into ⋯, which is then the only place it is visible (⋯ exists
+  // only folded, as slides' does: DECISIONS 2026-09-26). A ⋯ maintained BY
+  // HAND as a copy of the row is what must not come back.
   ok(/const barActions: BarAction\[\]/.test(ed), 'the bar actions are declared as one typed list')
-  ok(/const menuActions: BarAction\[\]/.test(ed), '…the ⋯-only actions as another')
+  ok(!/const menuActions: BarAction\[\]/.test(ed), '…and there is no second, ⋯-only list any more (its rows moved to Insert, Save, the bar and the page menu)')
   ok(/barActions\.map\(/.test(ed), '…the inline row is built from the bar list')
-  ok(/for \(const a of menuActions\)/.test(ed), '…⋯ always carries the menu-only actions')
-  ok(/const folded = this\.isFolded\(\)/.test(ed) && /if \(folded\) \{\s*\n\s*for \(const a of barActions\)/.test(ed),
-    '…and picks up the bar list ONLY once folded, or ⋯ duplicates the visible row')
+  ok(/for \(const a of barActions\) row\(m,/.test(ed), '…and folded ⋯ is built from the same list')
+  ok(/saveList\(m\)/.test(ed) && /fill: saveList/.test(ed), '…and ends on the Save list, the same function the caret fills from')
 
   // WHICH TIER a rule lives in is the thing worth pinning — but the tiers are
   // no longer px media queries. They were (820 and 600), and the numbers moved
@@ -861,12 +861,11 @@ for (const [label, input, err] of [
   ok(inTier('compact', /\.sp-primary span\.sp-savelabel \{ display: none/), "…including Save's")
   ok(inTier('tight', /\.sp-mark-word \{ display: none/), 'tight drops the wordmark, keeping the mark')
   ok(inTier('fold', /\.sp-sec \{ display: none/), 'fold moves the secondary row into ⋯')
-  // ⋯ is no longer fold-only: it is the home of the once-a-session commands, so
-  // gating it on the fold would put New page, the journal, import, print and
-  // About out of a desktop user's reach entirely.
-  ok(/^\.sp-more \{ display: inline-flex/m.test(css),
-    '⋯ is in the bar at EVERY width, being a home and not only an overflow')
-  ok(!/\.sp-bar-fold \.sp-more \{ display/.test(css), '…so it is not gated on the fold any more')
+  // ⋯ is fold-only again, as slides': its once-a-session rows now live where
+  // slides keeps their kind (Insert, Save ▾, the bar, the page menu, About on
+  // the mark), so a desktop ⋯ would only duplicate them.
+  ok(/^\.sp-bar \.sp-more \{ display: none; \}/m.test(css) && /^\.sp-bar\.sp-bar-fold \.sp-more \{ display: inline-flex; \}/m.test(css),
+    '⋯ exists only once the bar has folded, as slides\' does')
   // The mark STAYS when folded, as slides' does (DECISIONS 2026-09-26, which
   // reverses the 2026-08-10 line that gave it up on a phone).
   ok(!/\.sp-bar-fold \.sp-mark \{ display: none/.test(css), '…but the mark stays in the corner, as slides\' does')
@@ -907,16 +906,16 @@ for (const [label, input, err] of [
   // written down a second time, and the comment beside it admitted as much;
   // when the two disagreed the symptom was a menu offering Undo while Undo sat
   // in the bar two centimetres away.
-  ok(/isFolded\(\): boolean \{[\s\S]{0,160}?classList\.contains\('sp-bar-fold'\)/.test(ed),
-    'isFolded() reads the tier off the bar instead of re-deriving it from a width')
+  ok(!/isFolded\(\)/.test(ed),
+    'nothing re-derives the fold: ⋯ is visible only in the fold tier, so what it holds needs no test of it')
   // Comments STRIPPED before this one: the doc comment above isFolded quotes
   // the expression it replaced, and an assertion that reads prose is an
   // assertion that fails when somebody explains themselves.
   const edCode = ed.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
   ok(!/matchMedia\('\(max-width: 600px\)'\)/.test(edCode),
     'no phone breakpoint is duplicated in the editor CODE')
-  ok(/if \(folded\) \{[\s\S]{0,400}?label: t\('Undo'\)[\s\S]{0,300}?label: t\('Redo'\)/.test(ed),
-    '…and the ⋯ menu picks up undo/redo exactly when the bar has folded them away')
+  ok(/className: 'sp-more'[\s\S]{0,900}?label: t\('Undo'\)[\s\S]{0,300}?label: t\('Redo'\)/.test(ed),
+    '…and the ⋯ menu carries undo/redo, which the fold takes out of the bar')
 
   // the bar must never become a scroller — that hides the same controls, just
   // less honestly, and it is the fix everyone reaches for first

@@ -574,7 +574,12 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
    * Never fatal, and never in the way: the result only changes a sentence in
    * the About dialog.
    */
-  void launchUpdateCheck().catch(() => { /* an unreachable server is not an error here */ })
+  // A found update also puts slides' peach chip beside the wordmark, and says
+  // so once — the one launch result a reader must not miss (D3's pill). "Up to
+  // date" stays a sentence in About, where slides' toast also repeats it.
+  void launchUpdateCheck()
+    .then((r) => { if (r?.status === 'update') editor.updateFound(r.release.version) })
+    .catch(() => { /* an unreachable server is not an error here */ })
 }
 
 function banner(text: string, actions: Array<[string, () => void]> = []): void {
