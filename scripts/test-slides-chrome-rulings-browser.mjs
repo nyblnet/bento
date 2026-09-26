@@ -87,6 +87,18 @@ try {
   ok(share.length >= 5 && shared.length === share.length, `Share's ${share.length} actions each carry a description`)
   ok(shared.every((x) => x.title === x.desc && x.hidden), 'as the hover tooltip, and as a visually hidden aria-describedby target in the row')
   ok(share.every((x) => x.tall <= 36), `every Share row is one line (${[...new Set(share.map((x) => Math.round(x.tall)))].join('/')}px tall)`)
+  // plain rows like Save as: nothing at rest, no ink-filled primary, and
+  // adjacent rows touch rather than stacking as separate chips
+  const look = await p.evaluate(() => {
+    const rows = [...document.querySelectorAll('.ed-share-pop > .ed-share-btn')]
+    const clear = (c) => c === 'rgba(0, 0, 0, 0)' || c === 'transparent'
+    const boxed = rows.filter((b) => { const c = getComputedStyle(b); return !clear(c.backgroundColor) || !clear(c.borderTopColor) }).length
+    const gaps = []
+    for (let i = 1; i < rows.length; i++) if (rows[i].previousElementSibling === rows[i - 1]) gaps.push(Math.round(rows[i].getBoundingClientRect().top - rows[i - 1].getBoundingClientRect().bottom))
+    return { boxed, primary: rows.filter((b) => b.classList.contains('ed-btn-primary')).length, gaps }
+  })
+  ok(look.boxed === 0 && look.primary === 0, `Share's actions are plain rows at rest — no fill, no frame, no primary (${look.boxed} boxed, ${look.primary} primary)`)
+  ok(look.gaps.length >= 4 && look.gaps.every((g) => g === 0), `adjacent Share rows touch, as in Save as (gaps ${look.gaps.join('/')})`)
   const shareBottom = await p.evaluate(() => Math.round(document.querySelector('.ed-share-pop').getBoundingClientRect().bottom))
   ok(shareBottom <= 768, `the Share menu ends on a 768px laptop screen (bottom ${shareBottom})`)
   await p.setViewportSize({ width: 1440, height: 900 })

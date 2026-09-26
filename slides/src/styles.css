@@ -1945,22 +1945,16 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   color: #b8860b;
 }
 .ed-share-status.ok { color: #2e8b57; }
-.ed-share-btn {
-  justify-content: center;
-  font-size: 12.5px;
-  padding: 6px 10px;
-  white-space: normal;
-  text-align: center;
-  line-height: 1.35;
-}
-/* share actions read as BUTTONS at rest, not hover-reveal text */
-.ed-share-btn:not(.ed-btn-primary) {
-  background: var(--chrome);
-  border: 1px solid var(--line);
-}
-.ed-share-btn:not(.ed-btn-primary):hover { background: var(--chrome-2); }
-.ed-share-btn { width: 100%; justify-content: flex-start; text-align: start; }
+/* Share's actions are plain menu rows, the same as Save as: 12.5px, one line,
+   a hover fill and nothing at rest. They were boxed buttons (2026-07-20, so
+   they would not read as text among the panel's notes); the SHARE A COPY
+   heading and the icons do that now, and the boxes made the panel busier. */
+.ed-share-btn { width: 100%; justify-content: flex-start; text-align: start; font-size: 12.5px; }
 .ed-share-btn svg { flex: none; }
+/* the panel's 7px gap spaces its sections (name, people, status); between two
+   action rows it would make a list of rows look like a stack of chips —
+   adjacent rows touch, as they do in every other menu */
+.ed-share-pop > .ed-share-btn + .ed-share-btn { margin-block-start: -7px; }
 
 /* divider usable in any dropdown menu */
 .ed-menu-sep { height: 1px; background: var(--line); margin: 3px 2px; }
