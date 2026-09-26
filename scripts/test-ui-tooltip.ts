@@ -56,14 +56,14 @@ const theTip = () => doc.body.querySelectorAll('.bkt')[0]
 {
   const a = anchor()
   attachTooltip(a as unknown as HTMLElement, 'Save the deck', { delay: 15 })
-  a.fire('mouseenter')
+  a.fire('pointerenter', { pointerType: 'mouse' })
   ok(!theTip() || theTip().hidden, 'nothing shows before the delay')
   await wait(30)
   const tip = theTip()
   ok(tip && !tip.hidden, 'the tip shows after the delay')
   ok(tip.text === 'Save the deck', 'with the anchor’s text')
   ok(a.getAttribute('aria-describedby') === tip.id, 'the anchor is aria-describedby the tip')
-  a.fire('mouseleave')
+  a.fire('pointerleave')
   ok(a.getAttribute('aria-describedby') === null, 'leaving clears aria-describedby immediately')
   await wait(80)
   ok(theTip().hidden, 'and the tip hides')
@@ -74,21 +74,21 @@ const theTip = () => doc.body.querySelectorAll('.bkt')[0]
   const scroller = new El('div') // a would-be scroll container
   const a = anchor(); scroller.appendChild(a)
   attachTooltip(a as unknown as HTMLElement, 'Tip', { delay: 5 })
-  a.fire('mouseenter'); await wait(15)
+  a.fire('pointerenter', { pointerType: 'mouse' }); await wait(15)
   const tip = theTip()
   ok(tip.parent === doc.body, 'the tip is a child of document.body, NOT of the anchor’s container (so no ancestor clips it)')
   ok(tip.style.position === 'fixed', 'it is position:fixed')
   ok(tip.style.left && (tip.style.top !== 'auto' || tip.style.bottom), 'it is positioned from the anchor rect')
-  a.fire('mouseleave'); await wait(80)
+  a.fire('pointerleave'); await wait(80)
 }
 
 // ——— no flash: leaving before the delay never shows it ———
 {
   const a = anchor()
   attachTooltip(a as unknown as HTMLElement, 'Nope', { delay: 40 })
-  a.fire('mouseenter')
+  a.fire('pointerenter', { pointerType: 'mouse' })
   await wait(10)
-  a.fire('mouseleave') // before the 40ms delay
+  a.fire('pointerleave') // before the 40ms delay
   // check at +35 (t≈45): PAST the 40ms show delay, but BEFORE the 60ms hide
   // grace — so a tip that (wrongly) showed would still be visible here. This
   // window is what makes the check catch a missing flash-guard, rather than the
@@ -113,11 +113,11 @@ const theTip = () => doc.body.querySelectorAll('.bkt')[0]
   const a = anchor(), b = anchor()
   attachTooltip(a as unknown as HTMLElement, 'A', { delay: 5 })
   attachTooltip(b as unknown as HTMLElement, 'B', { delay: 5 })
-  a.fire('mouseenter'); await wait(15); a.fire('mouseleave'); await wait(80)
-  b.fire('mouseenter'); await wait(15)
+  a.fire('pointerenter', { pointerType: 'mouse' }); await wait(15); a.fire('pointerleave'); await wait(80)
+  b.fire('pointerenter', { pointerType: 'mouse' }); await wait(15)
   ok(doc.body.querySelectorAll('.bkt').length === 1, 'there is exactly one tip element for all anchors')
   ok(theTip().text === 'B', 'and it carries the current anchor’s text')
-  b.fire('mouseleave'); await wait(80)
+  b.fire('pointerleave'); await wait(80)
 }
 
 // ——— detach removes the listeners and aria ———
@@ -125,9 +125,45 @@ const theTip = () => doc.body.querySelectorAll('.bkt')[0]
   const a = anchor()
   const detach = attachTooltip(a as unknown as HTMLElement, 'Gone', { delay: 5 })
   detach()
-  a.fire('mouseenter'); await wait(20)
+  a.fire('pointerenter', { pointerType: 'mouse' }); await wait(20)
   ok(theTip().hidden, 'after detach, hovering the anchor does nothing')
   ok(a.getAttribute('aria-describedby') === null, 'and no aria wiring remains')
+}
+
+// ——— touch: a tap must NOT raise a sticky tooltip ———
+// A tap emulates mouseenter + focus, and a hover tooltip that showed on it would
+// stay until blur — the reason spaces kept native `title` on its bar. The hover
+// path ignores a touch pointer; the focus path is suppressed when the focus was
+// reached by a tap (the pointerdown before it was touch).
+{
+  const a = anchor()
+  attachTooltip(a as unknown as HTMLElement, 'On a phone', { delay: 5 })
+  a.fire('pointerenter', { pointerType: 'touch' })
+  await wait(15)
+  ok(theTip().hidden, 'a touch pointerenter does not show the tip')
+  // a tap also focuses the control; that focus must not show it either
+  a.fire('pointerdown', { pointerType: 'touch' })
+  a.fire('focus')
+  await wait(15)
+  ok(theTip().hidden, 'the focus a tap causes does not show the tip')
+}
+// but a real hover (mouse pointer) and a keyboard focus (no preceding pointer)
+// still show — the suppression is touch-specific, not a blanket disable
+{
+  const a = anchor()
+  attachTooltip(a as unknown as HTMLElement, 'On a mouse', { delay: 5 })
+  a.fire('pointerenter', { pointerType: 'mouse' })
+  await wait(15)
+  ok(theTip() && !theTip().hidden, 'a mouse hover still shows the tip')
+  a.fire('pointerleave'); await wait(80)
+}
+{
+  const a = anchor()
+  attachTooltip(a as unknown as HTMLElement, 'By keyboard', { delay: 5 })
+  a.fire('focus') // a keyboard focus: no pointerdown preceded it
+  await wait(15)
+  ok(theTip() && !theTip().hidden, 'a keyboard focus (no preceding tap) still shows the tip')
+  a.fire('blur'); await wait(80)
 }
 
 // ——— THEMING GUARD (shared helper) ———

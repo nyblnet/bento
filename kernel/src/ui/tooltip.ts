@@ -30,6 +30,18 @@ export interface TooltipOpts {
   placement?: 'top' | 'bottom'
 }
 
+/** A pointer that cannot hover. A tap on a touchscreen emulates the same
+ *  `mouseenter`/focus a mouse produces, so a naive hover tooltip SHOWS on the
+ *  tap and then STAYS — there is no pointer to leave, so nothing hides it until
+ *  the control blurs. That is the one thing that kept spaces from adopting this
+ *  on its bar. The fix is to ignore touch on both paths: the hover path checks
+ *  the pointer type, and the focus path is suppressed when the focus was reached
+ *  by a touch tap (tracked per anchor via the preceding pointerdown), so a
+ *  KEYBOARD focus — which has no preceding pointer — still shows. */
+function isTouch(ev: unknown): boolean {
+  return !!ev && typeof ev === 'object' && (ev as { pointerType?: string }).pointerType === 'touch'
+}
+
 /** The one body-level tip element, reused across every anchor — a tooltip is
  *  singular on screen, so there is never a reason for more than one. */
 let tip: HTMLElement | null = null
@@ -73,6 +85,10 @@ export function attachTooltip(anchor: HTMLElement, text: string, opts: TooltipOp
   const delay = opts.delay ?? 400
   const placement = opts.placement ?? 'top'
 
+  // The last pointer that touched this anchor was a finger — so the focus that
+  // follows it is a tap, not a keyboard tab, and must not raise a tooltip.
+  let focusFromTouch = false
+
   const show = (): void => {
     if (hideTimer) { clearTimeout(hideTimer); hideTimer = null }
     if (showTimer) clearTimeout(showTimer)
@@ -91,18 +107,25 @@ export function attachTooltip(anchor: HTMLElement, text: string, opts: TooltipOp
     // primitive stays simple — no hovering the tip itself (it is not interactive)
     hideTimer = setTimeout(hideNow, 60)
   }
+  const onPointerDown = (ev: unknown): void => { focusFromTouch = isTouch(ev) }
+  const onPointerEnter = (ev: unknown): void => { if (!isTouch(ev)) show() }
+  const onFocus = (): void => { if (!focusFromTouch) show() }
   const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') hide() }
 
-  anchor.addEventListener('mouseenter', show)
-  anchor.addEventListener('mouseleave', hide)
-  anchor.addEventListener('focus', show)
+  // Pointer events, not mouse events: a mouse fires both, and only the pointer
+  // event carries the `pointerType` that lets a tap be told from a hover.
+  anchor.addEventListener('pointerdown', onPointerDown as EventListener)
+  anchor.addEventListener('pointerenter', onPointerEnter as EventListener)
+  anchor.addEventListener('pointerleave', hide)
+  anchor.addEventListener('focus', onFocus)
   anchor.addEventListener('blur', hide)
   anchor.addEventListener('keydown', onKey)
 
   return () => {
-    anchor.removeEventListener('mouseenter', show)
-    anchor.removeEventListener('mouseleave', hide)
-    anchor.removeEventListener('focus', show)
+    anchor.removeEventListener('pointerdown', onPointerDown as EventListener)
+    anchor.removeEventListener('pointerenter', onPointerEnter as EventListener)
+    anchor.removeEventListener('pointerleave', hide)
+    anchor.removeEventListener('focus', onFocus)
     anchor.removeEventListener('blur', hide)
     anchor.removeEventListener('keydown', onKey)
     anchor.removeAttribute('aria-describedby')

@@ -46,7 +46,18 @@ class El {
   getAttribute(k: string) { return this.attrs.get(k) ?? null }
   append(...xs: El[]) { for (const x of xs) { x.parent = this; this.children.push(x) } }
   appendChild(x: El) { x.parent = this; this.children.push(x); return x }
-  remove() { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this) }
+  remove() { if (this.parent) { this.parent.children = this.parent.children.filter((c) => c !== this); this.parent = null } }
+  // Enough tree for the drawer scrim, which inserts itself as the panel's
+  // previous sibling and removes itself again.
+  get parentNode(): El | null { return this.parent }
+  insertBefore(node: El, ref: El | null) {
+    node.parent = this
+    const i = ref ? this.children.indexOf(ref) : -1
+    if (i < 0) this.children.push(node); else this.children.splice(i, 0, node)
+    return node
+  }
+  get isConnected(): boolean { let n: El | null = this; while (n) { if (n === body) return true; n = n.parent }; return false }
+  contains(o: El | null): boolean { for (let n = o; n; n = n.parent) if (n === this) return true; return false }
   addEventListener(t: string, fn: Handler) { const a = this.handlers.get(t) ?? []; a.push(fn); this.handlers.set(t, a) }
   removeEventListener(t: string, fn: Handler) { this.handlers.set(t, (this.handlers.get(t) ?? []).filter((f) => f !== fn)) }
   fire(t: string, ev: Record<string, unknown> = {}) {
@@ -225,6 +236,60 @@ const chevronOf = (p: P) => (p.resizer as unknown as El).children[0]
   ok(R(p).parent === null || !R(p).parent, 'destroy removes the root')
 }
 
+// ——— a drawer NEVER persists: a phone drawer shut by navigation must not
+// become the desktop boot state (#8) ———
+{
+  store.clear(); MQ = false
+  const a = createPanel({ content: mkContent(), side: 'end', defaultWidth: 236, minWidth: 100, maxWidth: 400, storageKey: 'k-dp' })
+  a.setWidth(300) // wide-mode preference: open, 300
+  eq('wide mode persisted the open state', store.get('k-dp'), JSON.stringify({ width: 300, collapsed: false }))
+  setMedia(true) // enter drawer
+  a.collapse(); a.expand(); a.toggle() // toggling the drawer around
+  eq('toggling the drawer wrote nothing to storage', store.get('k-dp'), JSON.stringify({ width: 300, collapsed: false }))
+  a.destroy()
+  // and a fresh wide panel still boots OPEN — the drawer never poisoned it
+  MQ = false
+  const b = createPanel({ content: mkContent(), side: 'end', defaultWidth: 236, minWidth: 100, maxWidth: 400, storageKey: 'k-dp' })
+  ok(!b.collapsed, 'a later wide panel still boots open')
+  b.destroy()
+}
+
+// ——— the drawer scrim (#9): present only while an open drawer wants it, and a
+// click on it closes the drawer ———
+{
+  MQ = false
+  const host = new El('div'); body.appendChild(host)
+  const p = createPanel({ content: mkContent(), side: 'end', defaultWidth: 236, minWidth: 100, maxWidth: 400, scrim: true })
+  host.appendChild(R(p))
+  const scrimIn = () => host.children.some((c) => c.classList.contains('bkp-scrim'))
+  ok(!scrimIn(), 'no scrim while the panel is a docked column')
+  setMedia(true) // drawer, and it boots shut
+  ok(!scrimIn(), 'no scrim while the drawer is shut')
+  p.expand()
+  ok(scrimIn(), 'an OPEN drawer shows a scrim, as the panel\'s sibling')
+  const scrim = host.children.find((c) => c.classList.contains('bkp-scrim'))!
+  scrim.fire('click')
+  ok(p.collapsed, 'a click on the scrim closes the drawer')
+  ok(!scrimIn(), 'and the scrim goes with it')
+  p.destroy()
+  host.remove()
+  MQ = false
+}
+
+// ——— the chevron takes an accessible name per state (#10) ———
+{
+  const p = createPanel({
+    content: mkContent(), side: 'start', defaultWidth: 200, minWidth: 100, maxWidth: 400,
+    showLabel: 'Show the pages', hideLabel: 'Hide the pages',
+  })
+  const chev = chevronOf(p)
+  eq('open: the chevron says it will hide', chev.getAttribute('aria-label'), 'Hide the pages')
+  eq('open: and its title matches', chev.title, 'Hide the pages')
+  p.collapse()
+  eq('collapsed: the chevron says it will show', chev.getAttribute('aria-label'), 'Show the pages')
+  p.destroy()
+}
+
 // ——— THEMING GUARD — shared with the menu primitive's rig via
 // scripts/lib/ui-theme-guard.ts. It pins one property: every colour panel.css
 // paints resolves, for each of the four apps, to a token that app both defines
@@ -238,6 +303,10 @@ const chevronOf = (p: P) => (p.resizer as unknown as El).children[0]
     cssPath: join(root, 'kernel/src/ui/panel.css'),
     prefix: 'bkp',
     colourProps: new Set(['bg', 'border', 'toggle-ink', 'resizer-hover']),
+    // The scrim is a theme-independent dim over the page (like dialog.css's), so
+    // it lands on --scrim, a tokens.css token no app themes — exempt, as the
+    // menu rig exempts its shadow.
+    exempt: new Set(['scrim']),
     appStyles,
   })) ok(r.pass, r.msg)
 }
