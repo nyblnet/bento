@@ -1908,3 +1908,8 @@ jobs:
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-slides-font-lifecycle-browser.mjs
+      - name: Top bar in Chromium
+        # 30px row and 44px phone targets, the wordmark as a named button, Save
+        # primary in both themes, and N language rebuilds leaving one set of
+        # window/document listeners and bar observers.
+        run: node scripts/test-slides-topbar-browser.mjs

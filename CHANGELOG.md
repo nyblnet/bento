@@ -11,6 +11,17 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Save is the top bar's primary button; the bar's other buttons line up.**
+  Save and its save-as caret are now filled with the text colour, like the
+  primary buttons in dialogs, in light and dark themes. The amber
+  unsaved-changes dot has a dark ring so it still shows on the light fill of
+  the dark theme. The ? help button is now the same 36×30 as its neighbours
+  (it was 28×29). The bento/slides wordmark is a real button: it can be
+  reached with Tab, Enter opens About, screen readers name it, and on a phone
+  it is a 44px target. Switching the interface language no longer leaves the
+  old top bar's resize listener, size observer and menu listeners running
+  behind the new one. Found by spaces' top-bar parity check (#567).
+
 ## [1.2.4] — 2026-09-25
 
 - **Formulas that stayed as raw text now render.** 1.2.0 replaced the maths
