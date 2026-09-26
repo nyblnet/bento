@@ -8710,3 +8710,76 @@ title, where slides puts its Slides button.
 
 A kernel line proposes `kernel/src/ui/topbar.ts`. When it lands, this file
 becomes an import and slides' `fitTopbar` its second caller.
+
+## 2026-09-26 — What opens from the spaces bar is slides': the Save menu holds the file's commands, ⋯ is fold-only
+
+**The maintainer's ruling:** "when I talk about the top bar, I mean everything
+about it." #567 matched the bar's own geometry; the menus, popovers and dialogs
+it opens still looked and were organised differently. Spaces' ⋯ had 13.5px/600
+`--ink` rows with no separators and a two-line row; the Save caret had three
+rows; the rest of the file's commands were scattered through ⋯ and About.
+
+**Look.** Every surface is measured against slides (#568's build) and set to
+its values through the kernel primitives' hooks, never a fork: the menu rows
+(13px/400 `--ink-2`, 16px icons in the same ink, `6px 9px` with a 1px
+transparent frame, 6px gap, 8px corners, 30px tall, 44px under 700px), the list
+(4px padding, 4px off the trigger, slides' shadow, 3px 2px separators), the
+Save menu at 12.5px, the Share popover (`.ed-share-pop` section for section),
+the dialogs (`.ed-about`: no frame, 20px in, 440 wide, slides' shadow and
+scrim; the shortcut sheet 700), the notice (`.ed-toast`), and the split Save
+button (#568's primary split). The values live in ONE block per surface in
+spaces/src/styles.css, and scripts/test-spaces-chrome.ts reads slides' menu
+numbers out of slides' stylesheet and holds the computed values to them. In
+dark, what opens from the bar uses slides' surface family (`--pop-bg`
+`#21262e`, `--pop-line`, `--pop-hover`), a step lighter than spaces' panels.
+
+**Where D-rulings and slides disagree, the ruling wins.** D2 makes Save and
+Share consequence menus, so the rows whose effect you should read first carry
+a visible second line (Duplicate, Encrypt/Remove password, Replace from JSON;
+every Share action). Slides keeps those in tooltips; that is filed for slides.
+D4 keeps a dialog's title at 17px/650 where slides' help and version dialogs
+use a 19.5px/700 `h2`; also filed. D8 keeps shortcuts sans and right-aligned
+where slides' help sheet uses monospace.
+
+**Organisation — slides' map, command for command:**
+
+- **Save ▾** holds everything that acts on the FILE, in slides' order: Save a
+  copy, Duplicate as a new space (was About), the exports (Markdown, page as a
+  space; the tour's page as slides), Encrypt with password / Change / Remove
+  (was About → Password, a `prompt()`; now slides' two-field dialog), a rule,
+  Version history (was About → History; now its own dialog), Copy document
+  JSON (was About), Replace from JSON (was About → Careful; own dialog), and
+  Import Markdown… (was ⋯ and About). Slides has no import; importing is the
+  document arriving as data, so it sits beside Replace from JSON, the one
+  command of that kind slides has. Slides' Copy compact JSON and Start from
+  scratch have no spaces equivalent and are not invented here.
+- **⋯ exists only once the bar has folded**, as slides' does, and holds what
+  slides' holds: the controls the bar gave up, in bar order, then the Save
+  list. This reverses the #563 reading that ⋯ was "a home at every width".
+- **Commands slides has no equivalent for go where slides puts one of their
+  kind.** New page, Today's journal, New issue: things you ADD, so the foot of
+  ＋ Insert after a rule — slides' insert group ends on Comment, its one tool
+  that is not an element (the tour's Templates… joins them). Graph: a VIEW, so
+  a bar button beside Reading view. Print or save as PDF: slides' PDF button,
+  so a bar button in the same place. "Make this page an issue": acts on ONE
+  page, so the page's own ⋯ menu, where slides keeps what acts on one slide.
+  About: the wordmark, its only route in slides.
+- **About holds what slides' About holds**: the head, updates, the viewer's
+  appearance and language, then the file's numbers and the document's
+  properties (the tour's Design picker stays: it is a document property).
+
+Nothing was deleted. The rig walks every bar button, every bar menu row, the
+page menu and every About button on the #567 shell, and asserts each is still
+reachable at the same width — under its own name or slides' name for it
+(Set a password… → Encrypt with password…).
+
+**Kernel defaults that differ from slides'** (proposed to the kernel as
+defaults, so slides can adopt the kernel menu without changing its look):
+offset 6 → 4, list padding 5 → 4, row padding `7px 9px` → `6px 9px`, row gap
+9 → 6, row frame 0 → 1px transparent, row radius 7 → 8, icon ink `--muted` →
+row ink, min-width 200 → 150, shadow `0 12px 32px /.16` → `0 8px 24px /.14`,
+separator margin `4px 6px` → `3px 2px`, no pressed state → `--line`; row text
+not nowrap (a start-anchored list then shrinks to its min-width and wraps
+names); a scrolling list lets its 1px separators shrink to nothing. Dialog:
+frame 1px → none, padding `20px 22px` → 20px, shadow and scrim to slides'.
+

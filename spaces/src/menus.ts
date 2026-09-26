@@ -146,7 +146,7 @@ export interface AnchoredOpts {
   role?: 'menu' | 'dialog' | 'listbox'
 }
 
-const GAP = 6
+const GAP = 4 // slides' .ed-menu offset
 const EDGE = 8
 
 /**

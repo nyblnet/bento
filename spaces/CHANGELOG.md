@@ -1382,6 +1382,34 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   - **Fixed:** changing the language in About took the Share button out of the
     bar until you reloaded.
 
+- **Everything that opens from the top bar is slides' too.** Menus, the Share
+  popover, the dialogs, the shortcut sheet, the notice pill and the update
+  chip now take slides' measurements: 30px menu rows in 13px regular type (the
+  Save menu 12.5px, as in slides), the icons in the same ink as the words,
+  hairline separators, a 4px gap under the button, slides' shadow, and in dark
+  mode slides' slightly lighter menu surface. The Save button and its caret are
+  slides' primary split, pixel for pixel, at every width.
+  - **The Save menu holds everything that acts on the file, in slides'
+    order.** Save a copy, Duplicate as a new space, the Markdown and page
+    exports, Encrypt with password (Change or Remove once set), then Version
+    history, Copy document JSON, Replace from JSON and Import Markdown. Most of
+    these used to be sections of the About dialog; About now holds what slides'
+    About holds — the version and updates, your appearance and language, the
+    file's numbers and the document's properties.
+  - **Encrypt with password asks twice**, in a dialog, instead of a single
+    browser prompt; Version history and Replace from JSON open as their own
+    dialogs.
+  - **⋯ appears only when the bar is too narrow**, as in slides, and then holds
+    the buttons the bar gave up followed by the Save menu. Its other rows moved
+    to where slides keeps their kind: New page, Today's journal and New issue
+    to the foot of ＋ Insert; Graph and Print to the bar beside Reading view;
+    "Make this page an issue" to the page's own ⋯ menu; About to the wordmark.
+  - **The Share popover is laid out as slides' is**: your name on one line,
+    People, the connection line in amber or green, Share a copy, then the
+    session controls. Each action still says what it does under its name.
+  - **An update found at launch shows slides' peach version chip** beside the
+    wordmark and says so once; clicking it opens About on a fresh check.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
