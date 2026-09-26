@@ -264,6 +264,7 @@ export const es: Catalog = {
   "Keyboard shortcuts": "Atajos de teclado",
   "Labels": "Etiquetas",
   "Language": "Idioma",
+  "Share": "Compartir",
   "Language follows whoever opens the file. It is never written into the document.": "El idioma sigue a quien abre el archivo. Nunca se escribe en el documento.",
   "Language — what this block is highlighted as": "Lenguaje — cómo se colorea este bloque",
   "Last saved": "Última vez guardado",

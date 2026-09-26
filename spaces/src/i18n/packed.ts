@@ -611,6 +611,7 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Select": ["選択","单选","單選","Selección","Sélection","Auswahl","Selezione","Seleção"],
   "Set a password…": ["パスワードを設定…","设置密码…","設定密碼…","Establecer una contraseña…","Définir un mot de passe…","Passwort festlegen…","Imposta una password…","Definir uma palavra-passe…"],
   "Shadows": ["影","阴影","陰影","Sombras","Ombres","Schatten","Ombre","Sombras"],
+  "Share": ["共有","共享","共用","Compartir","Partager","Teilen","Condividi","Compartilhar"],
   "Share this space": ["このスペースを共有","共享此空间","分享此空間","Compartir este espacio","Partager cet espace","Diesen Space teilen","Condividi questo spazio","Partilhar este espaço"],
   "Short bar": ["短い線","短横线","短橫線","Barra corta","Barre courte","Kurzer Balken","Barra corta","Barra curta"],
   "Short bar below": ["下に短い線","下方短横线","下方短橫線","Barra corta debajo","Barre courte dessous","Kurzer Balken darunter","Barra corta sotto","Barra curta por baixo"],

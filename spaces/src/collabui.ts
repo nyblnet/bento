@@ -137,7 +137,11 @@ export class CollabUi {
     const b = document.createElement('button')
     b.type = 'button'
     b.className = 'sp-live'
-    b.innerHTML = `<span class="sp-ico">${ICONS.people}</span><span class="sp-live-n"></span>`
+    b.innerHTML = `<span class="sp-ico">${ICONS.people}</span><span class="sp-btnlabel"></span><span class="sp-live-n"></span>`
+    // The word, as slides' "Share" carries it: an icon of two heads is not a
+    // name for "share this space". It collapses with the bar's compact tier
+    // like every other label; the tooltip still says the state.
+    b.querySelector('.sp-btnlabel')!.textContent = t('Share')
     b.addEventListener('click', () => this.openPanel(b))
     this.btn = b
     this.sync()

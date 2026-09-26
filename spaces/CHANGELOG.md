@@ -1361,6 +1361,27 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
     disclosure caret, where the old one rendered as a dot. The share panel sets
     "Reset access…" apart from the rows above it.
 
+- **The top bar is slides' top bar.** Same padding (8/14) and spacing (10
+  between groups, 6 inside one), the same mark at the same size, a 220px title
+  in regular weight, and every button on the same 30px grid. The Save half is
+  slides' width with its caret; it stays the dark primary button. The unsaved
+  dot is a badge on Save's corner at every width. Language (the globe) and the
+  keyboard shortcuts (`?`) now sit in the bar's corner, as in slides. The globe
+  opens the same list of languages slides shows, with the current one ticked.
+  Choosing one rebuilds the chrome in that language. Share is labelled "Share".
+  ＋ Insert stays one menu, next to undo and redo where slides keeps its insert
+  tools, and ⋯ closes the row.
+  - **It narrows as slides' does.** Labels go first, then the word beside the
+    mark, then controls fold into ⋯. On a phone the bar always folds. Below
+    what even a folded bar needs (about 370px), it scrolls sideways instead of
+    cutting off ⋯, and its menus still open fully on screen. Before, spaces
+    dropped its labels only at 800px, where slides drops them at 1360.
+  - **On a phone** the mark stays in the corner as a 44px button to About, and
+    the Pages button follows the title. Language and Keyboard shortcuts are in
+    ⋯ once the bar has folded.
+  - **Fixed:** changing the language in About took the Share button out of the
+    bar until you reloaded.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

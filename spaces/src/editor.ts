@@ -44,7 +44,7 @@ import { extractSpace, planGraft } from './portable'
 import { headingsOf } from './embed.ts'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
-import { t, locale } from './i18n'
+import { t, locale, localeChoices, setLocale, applyDirection } from './i18n'
 import { openAbout, downloadMarkdown } from './about'
 import { applyDesign, adoptDesign, resolveDesign, resolvePageDesign, type Resolved, type DesignPreview } from './designs.ts'
 import { openDesignPanel, pageDesignRows, designLabel } from './designpanel'
@@ -68,6 +68,7 @@ import * as shareModule from './share.ts'
 import { readerNav, readingCopy } from './reading'
 import { ICONS, type IconName } from './icons'
 import { barMenu, anchoredMenu, row, caption, extra, keys, type Menu } from './menus.ts'
+import { createTopbarFit, type TopbarFit } from './topbar.ts'
 import { createDialog, type Dialog } from '../../kernel/src/ui/dialog.ts'
 import '../../kernel/src/ui/dialog.css'
 import { createPanel, type Panel } from '../../kernel/src/ui/panel.ts'
@@ -456,10 +457,20 @@ export class Editor {
       { icon: 'graph', label: t('Graph'), run: () => this.openGraph() },
       { icon: 'print', label: t('Print or save as PDF'), kbd: keys('mod', 'P'), run: () => this.openPrint() },
       { icon: 'info', label: t('About this space'), run: () => this.openAbout() },
-      // A help screen only reachable by pressing the key it documents is a
-      // help screen for people who did not need it.
-      { icon: 'help', label: t('Keyboard shortcuts'), kbd: '?', run: () => this.openHelp() },
     ]
+
+    // In the bar's corner as in slides — the globe and the `?` — and in ⋯ only
+    // once the bar has folded them away. A help screen only reachable by
+    // pressing the key it documents is a help screen for people who did not
+    // need it, which is why `?` is a button at all.
+    const helpB = iconBtn('help', `${t('Keyboard shortcuts')} (?)`, () => this.openHelp())
+    helpB.classList.add('sp-help')
+    // slides' glyph — a bold `?`, the key it stands for — not a circled icon
+    helpB.innerHTML = '<b class="sp-help-q" aria-hidden="true">?</b>'
+    const lang = barMenu({
+      icon: ICONS.globe, label: '', tip: t('Language'), end: true, scroll: true, className: 'sp-lang',
+      fill: (m) => this.fillLanguages(m),
+    }).root
 
     const inlineSecondary = barActions.map((a) => {
       const b = iconBtn(a.icon, a.kbd ? `${a.label} (${a.kbd})` : a.label, a.run)
@@ -512,16 +523,27 @@ export class Editor {
         // unconditionally is what made ⋯ a duplicate of the visible row.
         if (folded) {
           for (const a of barActions) row(m, { icon: ICONS[a.icon], label: a.label, kbd: a.kbd, run: a.run })
+          // The globe's list, one tap further: a menu cannot hold a menu, so
+          // the row opens the same list as its own popup (a sheet on a phone).
+          const moreB = m.trigger
+          row(m, { icon: ICONS.globe, label: t('Language'), run: () => {
+            queueMicrotask(() => anchoredMenu(moreB, (lm) => this.fillLanguages(lm),
+              { label: t('Language'), sheet: this.isDrawer(), returnFocus: moreB }))
+          } })
+          row(m, { icon: ICONS.help, label: t('Keyboard shortcuts'), kbd: '?', run: () => this.openHelp() })
           m.separator()
           saveRows(m)
         }
       },
     }).root
 
-    // The live control sits BEFORE ⋯ and is replaced in place once the session
-    // exists (connectSync). A placeholder rather than a conditional build, so
-    // the bar's widths do not shift when a document turns out to be shared.
-    this.liveSlot = el('span', 'sp-live-slot')
+    // The live control is replaced in place once the session exists
+    // (connectSync). A placeholder rather than a conditional build, so the
+    // bar's widths do not shift when a document turns out to be shared — and
+    // on a REBUILD (a language change) the session already exists, so the
+    // button goes straight in. It used to stay a placeholder: switching
+    // language in About took the Share control out of the bar until reload.
+    this.liveSlot = this.collab ? this.collab.button() : el('span', 'sp-live-slot')
 
     // save is a split control, as in slides: the common action, and the
     // less-common ways of writing this document somewhere else
@@ -555,41 +577,45 @@ export class Editor {
     inspB.classList.add('sp-insp-toggle')
 
     insert.classList.add('sp-ins-dd')
+    // Slides' layout, group for group (chrome-unification §2.1): LEFT is the
+    // document (mark · title · history), then the insert tools — here the one
+    // ＋ Insert, which is right for a document — then the RIGHT group, doing
+    // things with it, ending in the language globe and `?` as slides' does.
+    // ⋯ closes the row: it is a home at every width here (slides has it only
+    // folded), and last is where slides' folded bar puts it.
+    const insertGroup = el('div', 'sp-group sp-group-insert')
+    insertGroup.append(insert)
     const right = el('div', 'sp-group sp-group-right')
-    right.append(insert, search, ...inlineSecondary, inspB, this.liveSlot, more, saveGroup)
+    right.append(search, ...inlineSecondary, inspB, this.liveSlot, saveGroup, lang, helpB, more)
 
-    // The status goes AFTER undo/redo, never before. It is transient text that
-    // grows from nothing to a whole sentence, and anything downstream of it in
-    // the flex flow gets shoved sideways every time it changes — measured at
-    // 36px on a plain edit and 246px entering reading view, which is more than
-    // a button's width, so undo lands where redo just was. Past the history
-    // group it grows into the slack the right group's margin-auto already
-    // holds, and nothing before it can move. Reported against slides as #300.
-    bar.append(pagesB, mark, title, history, this.statusEl, right)
+    // The status goes AFTER the history and the insert tools, never before.
+    // It is transient text that grows from nothing to a whole sentence, and
+    // anything downstream of it in the flex flow gets shoved sideways every
+    // time it changes — measured at 36px on a plain edit and 246px entering
+    // reading view, so undo landed where redo just was. Here it grows into the
+    // slack the right group's margin-auto already holds, and nothing before it
+    // can move. Reported against slides as #300.
+    //
+    // The Pages button (drawer widths only) follows the title, as slides'
+    // Slides button does: the corner is the suite's mark, at every width.
+    bar.append(mark, title, pagesB, history, insertGroup, this.statusEl, right)
 
     // Drive the fit now, and again whenever the bar's size or its CONTENT
-    // changes. The ResizeObserver is the primary width signal — it fires for
-    // every viewport change, including a phone rotating, where matchMedia
-    // change events are unreliable under a driven viewport. The MutationObserver
-    // catches the constant-width case: the people count appearing when someone
-    // joins, the "Saved" tag flashing, the update chip arriving. Each of those
-    // clipped the end of the bar under the old breakpoints.
+    // changes — topbar.ts, slides' algorithm with its tiers, its 120px title
+    // floor and its 700px phone. A rebuilt bar gets a fresh fit; the old one's
+    // observers and its window listener go with it.
     this.topbar = bar
-    this.barRO?.disconnect()
-    this.barRO = new ResizeObserver(() => this.fitTopbar())
-    this.barRO.observe(bar)
-    this.barMO?.disconnect()
-    this.barMO = new MutationObserver(() => this.fitTopbar())
-    this.barMO.observe(bar, {
-      childList: true, subtree: true, characterData: true,
-      // NOT 'class': fitTopbar's own tier flips are class changes on this very
-      // element, and observing them makes the fix for the loop (takeRecords)
-      // the only thing standing between here and a spin. Slides omits it for
-      // the same reason.
-      attributes: true, attributeFilter: ['style', 'hidden'],
+    this.barFit?.destroy()
+    this.barFit = createTopbarFit(bar, {
+      tiers: ['sp-bar-compact', 'sp-bar-tight', 'sp-bar-fold'],
+      title: () => bar.querySelector<HTMLElement>('.sp-doctitle'),
+      // Re-fitting starts by UNFOLDING, which would slam shut a menu somebody
+      // is reading — and ⋯'s contents depend on the tier, so rebuilding it
+      // mid-read would change it under them. The next resize runs it again.
+      busy: () => !!this.overlay || !!bar.querySelector('.bkm-open'),
+      bottomVar: '--sp-bar-bottom',
+      varHost: this.root,
     })
-    // …and once the bar is actually in the document and has a width to measure
-    queueMicrotask(() => this.fitTopbar())
 
     this.sidebar = el('nav', 'sp-side')
     this.sidebar.setAttribute('aria-label', t('Pages'))
@@ -813,7 +839,7 @@ export class Editor {
    *
    * This used to be `matchMedia('(max-width: 600px)')`, with a comment saying
    * the number was duplicated from the stylesheet on purpose. It is not needed
-   * at all now: fitTopbar puts the tier on the bar as a class, so the menu can
+   * at all now: the fit (topbar.ts) puts the tier on the bar as a class, so the menu can
    * ASK what is on screen instead of re-deriving it from a width and hoping
    * the two agree. When they disagreed the symptom was a menu offering Undo
    * while Undo sat in the bar two centimetres away.
@@ -823,44 +849,28 @@ export class Editor {
   }
 
   /**
-   * Size the topbar by MEASURING it, not by width breakpoints.
-   *
-   * A px guess cannot answer the question being asked. The same buttons need
-   * different room at the same viewport width depending on browser zoom, OS
-   * text scaling, and how long the labels are in the reader's language — eight
-   * catalogs ship inside every file, and "Insert" is 76px in English and
-   * nothing like that in German. The bar's own CONTENT changes width too, at a
-   * fixed viewport: the people count appears when somebody joins a session.
-   * Each of those cases clipped the end of the bar under the old 820/600
-   * breakpoints. Slides settled this first (#239); this is its pattern.
-   *
-   * Start from the widest layout, step down a tier while the bar still
-   * overflows its own box.
+   * The language list — the globe's, and ⋯'s once the bar has folded. The same
+   * rows slides' globe shows: every language this build carries, each in its
+   * own name, the one in force checked. Language follows the READER, never
+   * the file (PLATFORM §8): nothing here touches the document.
    */
-  private fitTopbar(): void {
-    const bar = this.topbar
-    if (!bar || !bar.isConnected) return
-    const tiers = ['sp-bar-compact', 'sp-bar-tight', 'sp-bar-fold']
-    // Re-fitting starts by UNFOLDING, which would slam shut a menu somebody is
-    // reading — and the ⋯ menu's contents depend on the tier, so rebuilding it
-    // mid-read would change it under them. The next resize runs this again.
-    if (this.overlay || bar.querySelector('.bkm-open')) return
-    // scrollWidth counts content sticking out of the padding box even with
-    // overflow visible, so this IS the clipped-controls condition. 1px of
-    // slack absorbs subpixel rounding at fractional zoom.
-    const overflow = () => bar.scrollWidth - bar.clientWidth > 1
-    // The title is the only shrinkable thing in the bar, so flexbox crushes it
-    // toward its floor before anything overflows. Waiting for hard overflow
-    // would mean full labels beside an unreadable document title.
-    const title = bar.querySelector<HTMLElement>('.sp-doctitle')
-    const cramped = () => overflow() || (!!title && title.getBoundingClientRect().width < 110)
-    bar.classList.remove(...tiers)
-    if (cramped()) bar.classList.add('sp-bar-compact')
-    if (cramped()) bar.classList.add('sp-bar-tight')
-    if (cramped()) bar.classList.add('sp-bar-fold')
-    // the class flips above queued mutation records of their own; drop them,
-    // or the observer re-runs this forever
-    this.barMO?.takeRecords()
+  private fillLanguages(m: Menu): void {
+    const now = locale()
+    for (const c of localeChoices()) {
+      const b = row(m, { label: c.label, selected: c.code === now, run: () => this.chooseLanguage(c.code) })
+      b.setAttribute('role', 'menuitemradio')
+      b.setAttribute('aria-checked', String(c.code === now))
+      b.lang = c.code
+      b.classList.toggle('sp-lang-on', c.code === now)
+    }
+  }
+
+  private chooseLanguage(code: string): void {
+    if (code === locale()) return
+    setLocale(code)
+    applyDirection()
+    // the chrome is built in the reader's language, so it is built again
+    this.build()
   }
 
   /**
@@ -3361,8 +3371,7 @@ export class Editor {
   private session: import('./sync/session.ts').SyncSession | null = null
   private liveSlot!: HTMLElement
   private topbar: HTMLElement | null = null
-  private barRO: ResizeObserver | null = null
-  private barMO: MutationObserver | null = null
+  private barFit: TopbarFit | null = null
   private treeTimer: ReturnType<typeof setTimeout> | undefined
   private paintTreeSoon(): void {
     clearTimeout(this.treeTimer)

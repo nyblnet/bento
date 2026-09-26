@@ -264,6 +264,7 @@ export const zh_Hans: Catalog = {
   "Keyboard shortcuts": "键盘快捷键",
   "Labels": "标签",
   "Language": "语言",
+  "Share": "共享",
   "Language follows whoever opens the file. It is never written into the document.": "语言跟随打开文件的人，绝不会写入文档。",
   "Language — what this block is highlighted as": "语言 — 这个块按什么语言着色",
   "Last saved": "上次保存",

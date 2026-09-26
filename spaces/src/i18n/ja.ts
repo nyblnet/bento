@@ -264,6 +264,7 @@ export const ja: Catalog = {
   "Keyboard shortcuts": "キーボードショートカット",
   "Labels": "ラベル",
   "Language": "言語",
+  "Share": "共有",
   "Language follows whoever opens the file. It is never written into the document.": "言語はファイルを開いた人に従います。ドキュメントには書き込まれません。",
   "Language — what this block is highlighted as": "言語 — このブロックを何として色分けするか",
   "Last saved": "最終保存",

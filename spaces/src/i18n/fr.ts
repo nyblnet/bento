@@ -264,6 +264,7 @@ export const fr: Catalog = {
   "Keyboard shortcuts": "Raccourcis clavier",
   "Labels": "Étiquettes",
   "Language": "Langue",
+  "Share": "Partager",
   "Language follows whoever opens the file. It is never written into the document.": "La langue suit la personne qui ouvre le fichier. Elle n’est jamais écrite dans le document.",
   "Language — what this block is highlighted as": "Langage — la coloration de ce bloc",
   "Last saved": "Dernier enregistrement",
