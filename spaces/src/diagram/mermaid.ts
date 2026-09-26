@@ -570,6 +570,7 @@ export function mermaidToDiagram(src: string, opts: MermaidOpts): { elements: DE
     return { from: e.from, to: e.to, minlen: e.len, lw, lh }
   })
   const L = layout(lnodes, lclusters, ledges, ast.dir, { nodeGap: 40, rankGap: 56, pad: 16, maxDummies: LIMITS.dummies })
+  for (const id of L.ignoredDir) warnings.push(`direction in subgraph ${id} ignored: its members link outside it (as in mermaid)`)
   if (L.capped) warnings.push('the graph is too large to route every long edge; some are drawn straight')
   if (clipped) warnings.push(`${clipped} label(s) longer than ${LIMITS.labelLines} lines: the text is kept but the shape is sized for ${LIMITS.labelLines}`)
 
@@ -649,6 +650,8 @@ export function mermaidToDiagram(src: string, opts: MermaidOpts): { elements: DE
     out.push(label(id, { x: b.x + 8 * k, y: b.y + 4 * k, w: b.w - 16 * k, h: lclusters[0].top * k - 4 * k }, g.label, F * 0.875, g.style.color ?? P.ink, { align: 'left', valign: 'top', fontWeight: 600, groupId: id }))
   }
   const edgeLabels: DText[] = []
+  const polys: Pt[][] = []
+  const jobs: Array<[string, number, Pt[], number]> = []
   ast.edges.forEach((e, i) => {
     if (e.stroke === 'invisible') return
     const A = boxes.get(e.from)!, B = boxes.get(e.to)!
@@ -689,28 +692,57 @@ export function mermaidToDiagram(src: string, opts: MermaidOpts): { elements: DE
       }
     }
     out.push(el)
-    const t = elab[i]
-    if (t) {
-      let p = labAt[i]
-      if (!p) {
-        // no label dummy (sidecar or capped): the polyline's midpoint
-        let total = 0
-        for (let j = 1; j < pts.length; j++) total += Math.hypot(pts[j].x - pts[j - 1].x, pts[j].y - pts[j - 1].y)
-        let acc = 0
-        p = pts[0]
-        for (let j = 1; j < pts.length; j++) {
-          const seg = Math.hypot(pts[j].x - pts[j - 1].x, pts[j].y - pts[j - 1].y)
-          if (acc + seg >= total / 2) { const f = seg ? (total / 2 - acc) / seg : 0; p = { x: pts[j - 1].x + (pts[j].x - pts[j - 1].x) * f, y: pts[j - 1].y + (pts[j].y - pts[j - 1].y) * f }; break }
-          acc += seg
-        }
-      }
-      const lw = t.w * k + 8 * k, lh = t.h * k + 4 * k
-      const c = horiz ? { x: p.x, y: p.y + 4 * k + lh / 2 } : { x: p.x + 6 * k + lw / 2, y: p.y }
-      // the text box gets 12px of slack past the reserved space: a label that
-      // wraps because the width estimate ran short is worse than a tight one
-      edgeLabels.push(label(id, { x: c.x - lw / 2 - (horiz ? 6 * k : 0), y: c.y - lh / 2, w: lw + 12 * k, h: lh }, e.label, EF, P.ink, horiz ? {} : { align: 'left' }))
-    }
+    polys.push(pts)
+    if (elab[i]) jobs.push([id, i, pts, polys.length - 1])
   })
+  // Edge labels: the layout's spot first (beside the edge's middle, where it
+  // reserved room), else the other side, else further along the edge — the
+  // first spot that crosses no other edge and covers no node or label wins.
+  // With no clear spot the layout's stands.
+  const seg = (a: Pt, b: Pt, r: Box) => {
+    // Liang–Barsky: does segment ab enter box r?
+    let t0 = 0, t1 = 1
+    const dx = b.x - a.x, dy = b.y - a.y
+    for (const [p, q] of [[-dx, a.x - r.x], [dx, r.x + r.w - a.x], [-dy, a.y - r.y], [dy, r.y + r.h - a.y]]) {
+      if (!p) { if (q < 0) return false; continue }
+      const t = q / p
+      if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t } else { if (t < t0) return false; if (t < t1) t1 = t }
+    }
+    return t0 < t1
+  }
+  const over = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+  const along = (pts: Pt[], f: number): Pt => {
+    let total = 0
+    for (let j = 1; j < pts.length; j++) total += Math.hypot(pts[j].x - pts[j - 1].x, pts[j].y - pts[j - 1].y)
+    for (let j = 1, acc = 0; j < pts.length; j++) {
+      const d = Math.hypot(pts[j].x - pts[j - 1].x, pts[j].y - pts[j - 1].y)
+      if (acc + d >= total * f) { const u = d ? (total * f - acc) / d : 0; return { x: pts[j - 1].x + (pts[j].x - pts[j - 1].x) * u, y: pts[j - 1].y + (pts[j].y - pts[j - 1].y) * u } }
+      acc += d
+    }
+    return pts[0]
+  }
+  const taken: Box[] = ast.nodes.map((n) => boxes.get(n.id)!)
+  for (const [id, i, pts, own] of jobs) {
+    const t = elab[i]!, e = ast.edges[i]
+    const lw = t.w * k + 8 * k, lh = t.h * k + 4 * k
+    const at = (p: Pt, s: number): Box => {
+      const c = horiz ? { x: p.x, y: p.y + s * (4 * k + lh / 2) } : { x: p.x + s * (6 * k + lw / 2), y: p.y }
+      return { x: c.x - lw / 2, y: c.y - lh / 2, w: lw, h: lh }
+    }
+    const clear = (r: Box) => !taken.some((b) => over(b, r)) && !polys.some((pl, j) => j !== own && pl.some((p, q) => q > 0 && seg(pl[q - 1], p, r)))
+    const first = at(labAt[i] ?? along(pts, 0.5), 1)
+    let best = first
+    if (!clear(first)) {
+      for (const f of [0.5, 0.35, 0.65, 0.25, 0.75]) {
+        const c = [at(along(pts, f), 1), at(along(pts, f), -1)].find(clear)
+        if (c) { best = c; break }
+      }
+    }
+    taken.push(best)
+    // the text box gets 12px of slack past the reserved space: a label that
+    // wraps because the width estimate ran short is worse than a tight one
+    edgeLabels.push(label(id, { x: best.x - (horiz ? 6 * k : 0), y: best.y, w: lw + 12 * k, h: lh }, e.label, EF, P.ink, horiz ? {} : { align: 'left' }))
+  }
   for (const n of ast.nodes) {
     const b = boxes.get(n.id)!, id = eid.get(n.id)!
     const g = n.parent ? { groupId: eid.get(n.parent)! } : {}
@@ -834,16 +866,44 @@ export function diagramToMermaid(elements: readonly { type: string; id: string }
   const gids = new Set(groups.map((g) => g.id))
   const nodeParent = (e: DShape) => (e.groupId && gids.has(e.groupId) ? e.groupId : null)
 
-  // direction: where edges point on average
-  let dir = opts.direction
-  if (!dir) {
-    let sx = 0, sy = 0
-    for (const e of edges) {
-      const a = e.from && byId.get(e.from.el), b = e.to && byId.get(e.to.el)
-      if (a && b && a !== b) { const p = center(a), q = center(b); sx += q.x - p.x; sy += q.y - p.y }
+  // direction, per scope: where the edges between that scope's children point
+  const holder = (id: string): string | null => (gids.has(id) ? parentOf.get(id) ?? null : nodeParent(byId.get(id) as DShape))
+  // the element that stands for x among S's children; a subgraph whose members
+  // link outside is transparent (its members are laid out with S's own)
+  const childOf = (x: string, S: string | null): string | undefined => {
+    let stand = x
+    for (let cur = x, k = 0; k < 100; k++) {
+      const p = holder(cur)
+      if (p === S) return stand
+      if (p === null) return undefined
+      if (!crossed(p)) stand = p
+      cur = p
     }
-    dir = Math.abs(sx) > Math.abs(sy) * 1.2 ? (sx < 0 ? 'RL' : 'LR') : sy < 0 ? 'BT' : 'TB'
   }
+  // In a layered layout every forward edge moves the same way along the layer
+  // axis while its sideways sign varies, so a direction scores the edges that
+  // move its way (a sum of vectors would let one long edge decide)
+  const DIRS4: Dir[] = ['TB', 'LR', 'BT', 'RL']
+  const infer = (S: string | null | undefined): Dir | undefined => {
+    const votes = [0, 0, 0, 0]
+    for (const e of edges) {
+      if (!e.from || !e.to || !byId.has(e.from.el) || !byId.has(e.to.el)) continue
+      const a = S === undefined ? e.from.el : childOf(e.from.el, S), b = S === undefined ? e.to.el : childOf(e.to.el, S)
+      if (!a || !b || a === b) continue
+      const p = center(byId.get(a)!), q = center(byId.get(b)!), dx = q.x - p.x, dy = q.y - p.y
+      if (dy > 1) votes[0]++
+      if (dx > 1) votes[1]++
+      if (dy < -1) votes[2]++
+      if (dx < -1) votes[3]++
+    }
+    const best = votes.indexOf(Math.max(...votes))
+    return votes[best] ? DIRS4[best] : undefined
+  }
+  // a subgraph none of whose members links outside is laid out in its own direction
+  const within = (x: string, g: string) => { for (let c: string | null = holder(x), k = 0; c && k < 100; c = holder(c), k++) if (c === g) return true; return false }
+  const cross = new Map<string, boolean>()
+  const crossed = (g: string): boolean => cross.get(g) ?? (cross.set(g, edges.some((e) => e.from && e.to && e.from.el !== g && e.to.el !== g && byId.has(e.from.el) && byId.has(e.to.el) && within(e.from.el, g) !== within(e.to.el, g))), cross.get(g)!)
+  const dir = opts.direction ?? infer(null) ?? infer(undefined) ?? 'TB'
   const lines = [`flowchart ${dir === 'TB' ? 'TD' : dir}`]
   const styles: string[] = []
   const style = (e: DShape, dfFill: string, dfStroke: string) => {
@@ -862,18 +922,25 @@ export function diagramToMermaid(elements: readonly { type: string; id: string }
     else { const [o, c] = WRAPS[n.shape]; lines.push(`${ind}${id}${o}${quote(lab || ' ')}${c}`) }
     style(n.e, P.fill, P.stroke)
   }
-  const emit = (parent: string | null, ind: string) => {
+  const emit = (parent: string | null, ind: string, cdir: Dir) => {
     for (const n of nodes) if (nodeParent(n.e) === parent) decl(n, ind)
     for (const g of groups) {
       if (parentOf.get(g.id) !== parent) continue
       const id = mid.get(g.id)!, lab = labelOf.get(g.id) ?? id
       lines.push(`${ind}subgraph ${id}${lab === id ? '' : ` [${quote(lab)}]`}`)
-      emit(g.id, ind + '    ')
+      let d = cdir
+      if (!crossed(g.id)) {
+        // mermaid's default for such a subgraph is the parent's direction turned (TB ⇄ LR)
+        const def: Dir = cdir === 'TB' ? 'LR' : 'TB'
+        d = infer(g.id) ?? def
+        if (d !== def) lines.push(`${ind}    direction ${d}`)
+      }
+      emit(g.id, ind + '    ', d)
       lines.push(`${ind}end`)
       style(g, P.groupFill, P.groupStroke)
     }
   }
-  emit(null, '    ')
+  emit(null, '    ', dir)
   for (const e of edges) {
     const a = e.from && mid.get(e.from.el), b = e.to && mid.get(e.to.el)
     if (!a || !b) { lost.push({ el: e.id, what: e.from && e.to ? 'connector to an element mermaid cannot name' : 'connector with a free end' }); continue }

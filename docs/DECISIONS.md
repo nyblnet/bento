@@ -7456,12 +7456,35 @@ show. Style is limited to fill/stroke/color. Colours are validated (hex,
 rgb/hsl functions, and named colours by shape — letters only), so a style
 can never carry `url(…)` or a `;` into an element.
 
-**A subgraph is laid out on its own and then becomes one node in its
-parent.** That guarantees a subgraph box never overlaps a node outside it,
-and it makes `direction` inside a subgraph work. The cost is visible: mermaid
-interleaves subgraph members with their neighbours, and ours cannot, so an
-edge between nodes in different subgraphs runs straight and can cross other
-nodes.
+**Subgraphs follow mermaid's two rules.**
+
+- **A subgraph none of whose members links outside it is laid out on its
+  own** and then takes part in its parent as a single node. It uses its own
+  `direction`, or the parent's turned (TB becomes LR, anything else becomes
+  TB); the turn is mermaid's, and it is why the docs' "two" draws sideways.
+- **A subgraph whose members DO link outside is a compound.** Its members
+  take part in the parent's layering and ordering, kept contiguous in every
+  layer. Sibling subgraphs keep one order in every layer, so each box is a
+  rectangle. Each box's left and right borders are single variables, solved
+  together with everything around them, so no node that is not a member
+  lands inside a box.
+  - A bend point belongs to the innermost subgraph holding both ends of its
+    edge, so edges between subgraphs bend in the space between the boxes.
+  - Mermaid ignores `direction` on such a subgraph. So do we, and we warn.
+  - An edge drawn to a compound box is laid out against one of its members,
+    so it is drawn straight.
+
+This replaced a first version that laid every subgraph out alone. That
+version could never let one subgraph stand beside another spanning
+subgraph, and it drew edges through other subgraphs: on the corpus, 14 edges
+ran through nodes and 5 through boxes, against 2 and 2 now. The rig ratchets
+both counts, labels sitting on other edges, and total connector length and
+area; they may only go down.
+
+**Edge labels step off other edges.** A label tries the layout's spot, then
+the other side of its edge, then positions further along it. The first spot
+that crosses no other edge and covers no node or label wins. In a crowded
+fan with nothing clear, the layout's spot stands.
 
 **Caps, not hangs.** 500 nodes, 2,000 edges, subgraphs 24 deep, and a budget
 for long-edge bends. Past a cap the rest is dropped with a warning. A

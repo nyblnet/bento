@@ -18,6 +18,10 @@
 //      real element exactly where slides' syncConnectors would put it (or the
 //      diagram jumps on its first edit), and it must be byte-for-byte the
 //      same every run and match the committed snapshot.
+//   2b. ROUTING. No edge is drawn through a node it does not connect, or
+//      through a subgraph box holding neither of its ends; no edge label sits
+//      on another edge; no two edges share both ends unless the source says
+//      so twice. Corpus totals are ratcheted: they may only go down.
 //   3. ROUND TRIP. mermaid → elements → mermaid is semantically equal: same
 //      nodes, labels, shapes, edges, edge labels and kinds, subgraph
 //      membership, colours and direction.
@@ -135,6 +139,62 @@ function attachFaults(els: DElement[]): string[] {
 function htmlFaults(els: DElement[]): string[] {
   return els.filter((e): e is DText => e.type === 'text').filter((t) => /<(?!br>)/.test(t.html) || /[<>]/.test(t.html.replace(/<br>/g, ''))).map((t) => t.id)
 }
+/** a connector's drawn path as a polyline (cubics sampled 8 per segment) */
+function polyline(e: DShape): Pt[] {
+  if (e.shape === 'line') return ends(e)
+  const n = (e.d ?? '').match(/-?\d*\.?\d+(?:e-?\d+)?/g)!.map(Number)
+  const [px, py, pw, ph] = e.pathBox ?? [0, 0, e.w, e.h]
+  const m = (x: number, y: number) => ({ x: e.x + (x - px) * e.w / pw, y: e.y + (y - py) * e.h / ph })
+  const out: Pt[] = [m(n[0], n[1])]
+  for (let i = 2; i + 5 < n.length; i += 6) {
+    const p0 = out[out.length - 1], c1 = m(n[i], n[i + 1]), c2 = m(n[i + 2], n[i + 3]), p1 = m(n[i + 4], n[i + 5])
+    for (let t = 0.125; t <= 1.0001; t += 0.125) {
+      const u = 1 - t
+      out.push({ x: u * u * u * p0.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p1.x, y: u * u * u * p0.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p1.y })
+    }
+  }
+  return out
+}
+/** Liang–Barsky: does segment ab enter box r? */
+function segHits(a: Pt, b: Pt, r: Box): boolean {
+  let t0 = 0, t1 = 1
+  const dx = b.x - a.x, dy = b.y - a.y
+  for (const [p, q] of [[-dx, a.x - r.x], [dx, r.x + r.w - a.x], [-dy, a.y - r.y], [dy, r.y + r.h - a.y]]) {
+    if (p === 0) { if (q < 0) return false; continue }
+    const t = q / p
+    if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t } else { if (t < t0) return false; if (t < t1) t1 = t }
+  }
+  return t0 < t1
+}
+const crosses = (pl: Pt[], r: Box) => pl.some((p, i) => i > 0 && segHits(pl[i - 1], p, r))
+/** edges drawn through nodes they do not connect / boxes holding neither end / labels on other edges */
+function routing(els: DElement[]) {
+  const conns = els.filter(isConn), nodes = els.filter(isNode), boxes = els.filter(isGroup)
+  const byId = new Map(els.map((e) => [e.id, e]))
+  const within = (a: Box, b: Box) => a.x >= b.x && a.y >= b.y && a.x + a.w <= b.x + b.w && a.y + a.h <= b.y + b.h
+  const node: string[] = [], box: string[] = [], label: string[] = []
+  for (const c of conns) {
+    const pl = polyline(c), A = byId.get(c.from!.el)!, B = byId.get(c.to!.el)!
+    for (const n of nodes) if (n !== A && n !== B && crosses(pl, { x: n.x + 2, y: n.y + 2, w: n.w - 4, h: n.h - 4 })) node.push(`${c.id} through ${n.id}`)
+    for (const b of boxes) if (b !== A && b !== B && !within(A, b) && !within(B, b) && crosses(pl, { x: b.x + 2, y: b.y + 2, w: b.w - 4, h: b.h - 4 })) box.push(`${c.id} through ${b.id}`)
+    const t = els.find((x) => x.id === `${c.id}-label`)
+    // the label's inked core: the text box carries 12px of slack on its trailing side
+    if (t) for (const o of conns) if (o !== c && crosses(polyline(o), { x: t.x + 6, y: t.y + 2, w: Math.max(0, t.w - 18), h: t.h - 4 })) label.push(`${t.id} on ${o.id}`)
+  }
+  return { node, box, label }
+}
+/** pairs of connectors sharing both ends, beyond what the source declared */
+function doubled(els: DElement[], ast: FlowAST): string[] {
+  const idOf = makeIds(), m = new Map<string, string>()
+  for (const n of ast.nodes) m.set(n.id, idOf(n.id))
+  for (const g of ast.subgraphs) m.set(g.id, idOf(g.id))
+  const key = (a: string, b: string) => [a, b].sort().join(' ~ ')
+  const declared = new Map<string, number>()
+  for (const e of ast.edges) if (e.stroke !== 'invisible') { const k = key(m.get(e.from)!, m.get(e.to)!); declared.set(k, (declared.get(k) ?? 0) + 1) }
+  const drawn = new Map<string, number>()
+  for (const c of els.filter(isConn)) { const k = key(c.from!.el, c.to!.el); drawn.set(k, (drawn.get(k) ?? 0) + 1) }
+  return [...drawn].filter(([k, n]) => n > (declared.get(k) ?? 0)).map(([k, n]) => `${k} ×${n}`)
+}
 function idFaults(els: DElement[]): string[] {
   const seen = new Set<string>(), bad: string[] = []
   for (const e of els) {
@@ -151,7 +211,23 @@ function semantics(ast: FlowAST) {
   for (const n of ast.nodes) m.set(n.id, idOf(n.id))
   for (const g of ast.subgraphs) m.set(g.id, idOf(g.id))
   const nodes = ast.nodes.map((n) => `${m.get(n.id)} ${n.shape} ${JSON.stringify(n.label)} in:${n.parent ? m.get(n.parent) : '-'} ${n.style.fill ?? ''}/${n.style.stroke ?? ''}/${n.style.color ?? ''}`).sort()
-  const groups = ast.subgraphs.map((g) => `${m.get(g.id)} ${JSON.stringify(g.label)} in:${g.parent ? m.get(g.parent) : '-'} ${g.style.fill ?? ''}/${g.style.stroke ?? ''}`).sort()
+  // effective direction (mermaid's rule): a subgraph whose members link outside
+  // follows its context; otherwise its own direction, or the context's turned
+  const par = new Map<string, string | null>([...ast.nodes.map((n) => [n.id, n.parent] as const), ...ast.subgraphs.map((g) => [g.id, g.parent] as const)])
+  const anc = (x: string) => { const o: string[] = []; for (let p = par.get(x); p; p = par.get(p) ?? null) o.push(p); return o }
+  const linked = new Set<string>()
+  for (const e of ast.edges) {
+    const A = anc(e.from), B = anc(e.to)
+    for (const c of A) if (!B.includes(c) && c !== e.to) linked.add(c)
+    for (const c of B) if (!A.includes(c) && c !== e.from) linked.add(c)
+  }
+  const eff = (g: string | null): string => {
+    if (!g) return ast.dir
+    const sg = ast.subgraphs.find((x) => x.id === g)!
+    const ctx = eff(sg.parent)
+    return linked.has(g) ? ctx : sg.dir ?? (ctx === 'TB' ? 'LR' : 'TB')
+  }
+  const groups = ast.subgraphs.map((g) => `${m.get(g.id)} ${JSON.stringify(g.label)} in:${g.parent ? m.get(g.parent) : '-'} ${g.style.fill ?? ''}/${g.style.stroke ?? ''} dir:${eff(g.id)}`).sort()
   const edges = ast.edges.filter((e) => e.stroke !== 'invisible').map((e) => {
     let [a, b, s, t] = [m.get(e.from)!, m.get(e.to)!, e.start, e.end]
     if (s !== 'none' && t === 'none') [a, b, s, t] = [b, a, t, s]
@@ -198,6 +274,23 @@ section('negative controls')
   ok(groupFaults(outside).length > 0, 'group checker catches a member outside its box')
   const dup = [...structuredClone(els), structuredClone(els[0])]
   ok(idFaults(dup).length > 0, 'id checker catches a duplicate id')
+  const rr = mermaidToDiagram('flowchart LR\nA --> B\nA -->|a label| C\nD', { w: 800, h: 600 })
+  const clean = routing(rr.elements)
+  ok(!clean.node.length && !clean.box.length && !clean.label.length && !doubled(rr.elements, rr.ast).length, 'clean routing baseline passes')
+  const blocked = structuredClone(rr.elements)
+  const D = blocked.find((e) => e.id === 'D')!, AB = blocked.find((e) => e.id === 'A-B') as DShape
+  const [p0, p1] = ends(AB)
+  D.x = (p0.x + p1.x) / 2 - D.w / 2; D.y = (p0.y + p1.y) / 2 - D.h / 2
+  ok(routing(blocked).node.length > 0, 'routing checker catches an edge through a node')
+  const onEdge = structuredClone(rr.elements)
+  const lab = onEdge.find((e) => e.id === 'A-C-label')!
+  lab.x = (p0.x + p1.x) / 2 - lab.w / 2; lab.y = (p0.y + p1.y) / 2 - lab.h / 2
+  ok(routing(onEdge).label.length > 0, 'routing checker catches a label on another edge')
+  const twice = [...structuredClone(rr.elements), { ...structuredClone(AB), id: 'A-B-again' }]
+  ok(doubled(twice, rr.ast).length > 0, 'doubled-edge checker catches a second A–B connector the source never declared')
+  ok(!doubled(mermaidToDiagram('flowchart LR\nA --> B\nA --> B\nB --> A', { w: 800, h: 600 }).elements, parseMermaid('flowchart LR\nA --> B\nA --> B\nB --> A').ast).length, 'doubled-edge checker allows edges the source declares twice')
+  const sd = semantics(parseMermaid('flowchart TB\nsubgraph s\nx --> y\nend').ast), sd2 = semantics(parseMermaid('flowchart TB\nsubgraph s\ndirection TB\nx --> y\nend').ast)
+  ok(diffSemantics(sd, sd2, true).length > 0, 'round-trip comparator catches a changed subgraph direction')
   const s1 = semantics(parseMermaid('flowchart TD\nA[x] --> B').ast)
   for (const [bad, what] of [['flowchart TD\nA[y] --> B', 'a changed label'], ['flowchart TD\nA(x) --> B', 'a changed shape'], ['flowchart TD\nA[x] --- B', 'a changed head'], ['flowchart TD\nA[x]\nB', 'a dropped edge'], ['flowchart LR\nA[x] --> B', 'a changed direction']])
     ok(diffSemantics(s1, semantics(parseMermaid(bad).ast), true).length > 0, `round-trip comparator catches ${what}`)
@@ -280,6 +373,13 @@ const fresh: Record<string, string> = {}
 // fixtures that are NOT valid mermaid (kept on purpose: they must warn, not crash)
 const INVALID = new Set(['readme-21-ainativelang.mmd'])
 let totalNodes = 0, totalEdges = 0
+// routing ratchet: corpus totals may only go down (measured when the compound
+// layout landed: 14 edges through nodes, 5 through boxes, 5 labels on edges
+// before it; the numbers below after it)
+const RATCHET = { node: 2, box: 2, label: 3, length: 33360, area: 9974 }
+const totals = { node: 0, box: 0, label: 0, length: 0, area: 0 }
+// fixtures that must route perfectly clean
+const CLEAN = new Set(['docs-subgraphs.mmd', 'docs-subgraph-direction.mmd', 'docs-christmas.mmd', 'readme-23-architecture-as-code.mmd', 'readme-24-architecture-as-code.mmd', 'readme-46-temporalio-graphs.mmd', 'readme-10-tachi.mmd', 'readme-09-flowchestra.mmd'])
 for (const f of files) {
   const src = readFileSync(join(FIX, f), 'utf8')
   ok(/^%% source: https:\/\/\S+ \((MIT|Apache-2\.0)[^)]*\)/.test(src), `${f}: attributed to a permissively licensed source`)
@@ -291,6 +391,19 @@ for (const f of files) {
   const els = r.elements
   for (const [name, faults] of [['overlap', overlapping(els)], ['attach', attachFaults(els)], ['groups', groupFaults(els)], ['html', htmlFaults(els)], ['ids', idFaults(els)]] as const)
     ok(!faults.length, `${f}: ${name} ${faults.slice(0, 3).join(', ')}`)
+  const dbl = doubled(els, r.ast)
+  ok(!dbl.length, `${f}: no two edges share both ends unless declared twice (${dbl.join(', ')})`)
+  const rt = routing(els)
+  totals.node += rt.node.length; totals.box += rt.box.length; totals.label += rt.label.length
+  if (CLEAN.has(f)) ok(!rt.node.length && !rt.box.length && !rt.label.length, `${f}: routes clear of nodes, boxes and labels (${[...rt.node, ...rt.box, ...rt.label].join('; ')})`)
+  // compactness, measured unscaled: total connector length and drawing area
+  const big = mermaidToDiagram(src, { w: 1e5, h: 1e5 }).elements
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  for (const e of big) {
+    if (isConn(e)) totals.length += polyline(e).reduce((m, p, i, a) => (i ? m + Math.hypot(p.x - a[i - 1].x, p.y - a[i - 1].y) : 0), 0)
+    x0 = Math.min(x0, e.x); y0 = Math.min(y0, e.y); x1 = Math.max(x1, e.x + e.w); y1 = Math.max(y1, e.y + e.h)
+  }
+  if (big.length) totals.area += (x1 - x0) * (y1 - y0) / 1000
   const nodeIds = new Set(els.filter(isNode).map((e) => e.id))
   ok(nodeIds.size === r.ast.nodes.length, `${f}: one shape per node`)
   const texts = els.filter((e): e is DText => e.type === 'text')
@@ -316,6 +429,33 @@ for (const f of files) {
   ok(diagramToMermaid(mermaidToDiagram(back.src, { w: 1200, h: 800 }).elements).src === back.src, `${f}: emitted source is a fixed point`)
 }
 console.log(`  ${files.length} flowcharts, ${totalNodes} nodes, ${totalEdges} edges`)
+totals.length = Math.round(totals.length); totals.area = Math.round(totals.area)
+console.log(`  routing: ${totals.node} edges through nodes, ${totals.box} through boxes, ${totals.label} labels on edges; ${totals.length} px of connectors over ${totals.area}k px² unscaled`)
+for (const k of ['node', 'box', 'label', 'length', 'area'] as const) ok(totals[k] <= RATCHET[k], `layout ratchet: ${k} ${totals[k]} ≤ ${RATCHET[k]}`)
+
+section('subgraph layout')
+{
+  const get = (els: DElement[], id: string) => els.find((e) => e.id === id)!
+  const sg = mermaidToDiagram(readFileSync(join(FIX, 'docs-subgraphs.mmd'), 'utf8'), { w: 1200, h: 800 }).elements
+  const b1 = get(sg, 'b1'), b2 = get(sg, 'b2')
+  ok(Math.abs(center(b1).y - center(b2).y) < 1 && b2.x > b1.x + b1.w, 'docs-subgraphs: "two" has no outside links, so it turns LR (b1 → b2 sideways), as in mermaid')
+  const one = get(sg, 'one'), two = get(sg, 'two'), three = get(sg, 'three')
+  const apart = (a: Box, b: Box) => a.x + a.w <= b.x || b.x + b.w <= a.x
+  ok(apart(three, one) && apart(three, two), '"three" stands beside "one" and "two", not stacked on them')
+  ok(one.y + one.h <= two.y, '"one" sits above "two" (one --> two)')
+  ok(three.y <= get(sg, 'c1').y && three.y + three.h >= get(sg, 'c2').y + get(sg, 'c2').h && get(sg, 'c2').y > two.y, '"three" spans from c1 down past "two" to c2')
+  ok((get(sg, 'one-two') as DShape).shape === 'line' && (get(sg, 'three-two') as DShape).shape === 'line', 'an edge drawn to a compound box goes straight (its layout bends belong to a member, not the box)')
+  const sd = mermaidToDiagram(readFileSync(join(FIX, 'docs-subgraph-direction.mmd'), 'utf8'), { w: 1200, h: 800 }).elements
+  const [i1, f1, i2, f2] = ['i1', 'f1', 'i2', 'f2'].map((id) => get(sd, id))
+  ok(f1.x + f1.w <= i1.x && Math.abs(center(f1).y - center(i1).y) < 1, 'direction RL inside a subgraph is honoured (f1 left of i1)')
+  ok(f2.y + f2.h <= i2.y && Math.abs(center(f2).x - center(i2).x) < 1, 'direction BT inside a subgraph is honoured (f2 above i2)')
+  const ig = mermaidToDiagram('flowchart TB\nsubgraph s\ndirection LR\nx --> y\nend\ny --> z', { w: 800, h: 600 })
+  const [x, y] = ['x', 'y'].map((id) => get(ig.elements, id))
+  ok(ig.warnings.some((w) => /direction in subgraph s ignored/.test(w)) && y.y > x.y + x.h, 'direction on a subgraph whose members link outside is ignored, with a warning (as in mermaid)')
+  // compound nesting: members of nested subgraphs that link out keep strangers out of every box
+  const nest = mermaidToDiagram('flowchart TB\nsubgraph A\n a1\n subgraph B\n  b1 --> b2\n  subgraph C\n   c1\n  end\n end\nend\nsubgraph D\n d1\nend\nr1 --> a1 --> b1\nb2 --> c1 --> d1 --> r2\nr1 --> d1\nc1 --> r2\na1 --> r2', { w: 1200, h: 800 })
+  ok(!groupFaults(nest.elements).length && !overlapping(nest.elements).length && !attachFaults(nest.elements).length, `nested compound subgraphs: clean (${groupFaults(nest.elements).join()})`)
+}
 if (UPDATE) { writeFileSync(SNAP, JSON.stringify(fresh, null, 1) + '\n'); console.log(`  wrote ${SNAP}`) }
 else ok(Object.keys(snaps).sort().join() === Object.keys(fresh).sort().join(), 'snapshot file lists exactly the corpus')
 
@@ -347,6 +487,19 @@ section('layout sidecar')
 }
 
 // --- 4. what diagramToMermaid reports lost ------------------------------------------
+
+section('edge labels step off other edges')
+{
+  // pinned so that edge C→D crosses the middle of A→B, where its label would go
+  const side = { A: { x: 300, y: 100, w: 60, h: 40 }, B: { x: 300, y: 500, w: 60, h: 40 }, C: { x: 40, y: 300, w: 60, h: 40 }, D: { x: 700, y: 300, w: 60, h: 40 } }
+  const r = mermaidToDiagram('flowchart TD\nA -->|a label here| B\nC --> D', { w: 800, h: 600, layout: side })
+  ok(!routing(r.elements).label.length, `a label whose spot is crossed by another edge moves along its own edge (${routing(r.elements).label.join()})`)
+  const lab = r.elements.find((e) => e.id === 'A-B-label')!
+  ok(lab.y + lab.h < 320 || lab.y > 340, 'it moved off the crossing, not merely beside it')
+  // with nowhere clear to go the layout's spot stands
+  const fan = 'flowchart LR\n' + Array.from({ length: 12 }, (_, i) => `A -->|label ${i}| N${i}`).join('\n')
+  ok(mermaidToDiagram(fan, { w: 800, h: 600 }).elements.filter((e) => e.type === 'text').length === 25, 'a crowded fan still gets every label')
+}
 
 section('reverse: loss is reported exactly')
 {
@@ -417,6 +570,14 @@ function timed<T>(label: string, fn: () => T): T {
   const dp = timed('300-deep subgraph nesting', () => mermaidToDiagram(deep, { w: 1200, h: 800 }))
   ok(dp.warnings.some((w) => /deeper than/.test(w)) && dp.ast.subgraphs.length === LIMITS.depth, `nesting flattened at ${LIMITS.depth} with a warning`)
   ok(!groupFaults(dp.elements).length && !overlapping(dp.elements).length, 'deep nesting: boxes still contain their members')
+  const deepC = 'flowchart TD\nroot\n' + Array.from({ length: 30 }, (_, i) => `subgraph g${i}\nm${i}`).join('\n') + '\n' + 'end\n'.repeat(30) + Array.from({ length: 24 }, (_, i) => `m${i} --> root`).join('\n')
+  const dc = timed('24 nested subgraphs, every level linking out', () => mermaidToDiagram(deepC, { w: 1200, h: 800 }))
+  ok(!groupFaults(dc.elements).length && !overlapping(dc.elements).length && !attachFaults(dc.elements).length, 'deep compound nesting: boxes contain members and nothing else')
+  let seed2 = 7
+  const r2n = () => ((seed2 = (Math.imul(seed2 ^ (seed2 >>> 13), 0x5bd1e995) + 0x9e3779b9) | 0) >>> 0) / 2 ** 32
+  const many = 'flowchart LR\n' + Array.from({ length: 20 }, (_, g) => `subgraph s${g}\n` + Array.from({ length: 20 }, (_, i) => `  n${g}_${i}`).join('\n') + '\nend').join('\n') + '\n' + Array.from({ length: 900 }, () => `n${Math.floor(r2n() * 20)}_${Math.floor(r2n() * 20)} --> n${Math.floor(r2n() * 20)}_${Math.floor(r2n() * 20)}`).join('\n')
+  const mc = timed('400 nodes in 20 subgraphs, 900 random edges across them', () => mermaidToDiagram(many, { w: 1200, h: 800 }))
+  ok(!groupFaults(mc.elements).length && !overlapping(mc.elements).length && !attachFaults(mc.elements).length, 'many compound subgraphs with random cross edges: clean')
   const proto = mermaidToDiagram('flowchart TD\n__proto__ --> constructor\nconstructor --> toString\nhasOwnProperty["#constructor; #__proto__; &constructor;"] --> __proto__\nclassDef __proto__ fill:red\nclass toString __proto__\nsubgraph prototype\nvalueOf\nend\nstyle __proto__ fill:#fff', { w: 800, h: 600 })
   ok(Object.getOwnPropertyNames(Object.prototype).sort().join() === protoBefore && !('fill' in Object.prototype), 'Object.prototype untouched')
   ok(!idFaults(proto.elements).length && proto.elements.filter(isNode).length === 5, `__proto__-style ids become safe, distinct element ids (${proto.elements.map((e) => e.id).join()})`)
@@ -482,7 +643,7 @@ section('size')
   if (existsSync(esbuild)) {
     // Minified bytes. The brief's target was 10 KB for parser + layout; see the
     // PR for why it sits above that. These budgets stop it GROWING unnoticed.
-    const BUDGET = { 'parser + layout': 15000, 'mermaid → elements': 24500, 'whole module (both directions)': 30000 }
+    const BUDGET = { 'parser + layout': 20500, 'mermaid → elements': 31000, 'whole module (both directions)': 37000 }
     const entries: Record<keyof typeof BUDGET, string> = {
       'parser + layout': "export { parseMermaid } from './spaces/src/diagram/mermaid.ts'; export { layout } from './spaces/src/diagram/layout.ts'",
       'mermaid → elements': "export { mermaidToDiagram } from './spaces/src/diagram/mermaid.ts'",
