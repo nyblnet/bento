@@ -7555,3 +7555,123 @@ the tone roles.
 
 **Cost.** Shell 271,810 → 300,835 B (+29,025, 10.7%); about 12 KB of it is 115
 new UI strings in nine languages.
+
+### Addendum, same day — a page can set its own design
+
+**The maintainer's ask ("go"): designs per page as well as per space.** The
+claim above — "the resolver takes a name… so a later `Page.design` resolves
+through the same function" — held for the LOOKUP and nothing else, and two traps
+were waiting. `resolveDesign(doc, name = doc.design)` reads the SPACE's design
+when handed `undefined`, so "this page names nothing" silently meant "the
+space's" wherever a caller passed an absent key straight through; the page
+resolver passes `null`. And designs.css matches by ANCESTOR attribute at equal
+specificity, so two design roots NESTED with different designs do not resolve
+to the nearer one: source order decides, and a switch only one of them sets
+leaks into the other. #559 put the space's design on the print root and every
+page inside it; with per-page designs that is a nesting. Measured (sabotage
+below): with the print root carrying the space's Almanac, Almanac's drop cap
+appeared on the Studio and Ledger pages in print.
+
+**Format (additive).** `page.design`: the same kind of value as `doc.design`
+(a built-in or a key of `doc.designs`). ABSENT = inherit; choosing "Same as
+parent" DELETES the key (`designs.ts setPageDesign`). Older builds ignore it and
+show the space's design; parseDoc keeps it like any unknown page field.
+
+**Precedence, nearest first: the page's own, the nearest ancestor's, the
+space's, today's look** (`designs.ts designSource` / `resolvePageDesign`, the
+one place a page's look is decided — the surface, the page root, print and the
+thumbnail all ask it). So a design on a section restyles its subtree. **The
+nearest KEY decides, even an unknown one:** a page naming a design this build
+does not know renders the DEFAULT look — it does not fall through to its
+parent's — and so do the pages under it. Falling through would make a typo, or
+a newer build's built-in, look like a deliberate choice of the section's.
+validate() names it as `unknown-design` with the page's id. There is no
+"Default" choice for a page: the format's value is a name, and the default has
+none.
+
+**No two design roots nest with different designs — the invariant that replaces
+scoping.** Rather than rewrite designs.css into `@scope (…) to (…)` blocks (the
+only CSS that gives nearest-root isolation; newest in Firefox, and a browser
+without it would drop every design rule), the structure guarantees it:
+
+- `renderPage` stamps its page ROOT (`article.sp-page`) with that page's
+  resolved design, and it is the only place in render.ts that stamps one.
+- The editor puts the SAME resolved design on `.sp-main` and on the page root
+  inside it (`editor.syncDesign`), preview included, so the one nesting that
+  exists is always identical.
+- The print root carries NONE; each page root carries its own, and the contents
+  list the space's.
+- Everything rendered inside a page — gallery cards, view rows, page cards, and
+  a transclusion when #428 lands — is built by renderBlocks under the host's
+  root and so wears the HOST's design: the design is the page you are ON, not
+  the page a card points at.
+
+The model rig asserts each of those in source; the browser checks measure them.
+
+**Picker.** The page ⋯ menu gains **Design** (its hint says what the page wears
+now, "Inherited · Almanac" or its own), and the properties panel a Design row;
+both open one menu (`designpanel.ts pageDesignRows`). First row: "Same as
+parent" ("Same as space" at the top level) with what it resolves to. Hover
+previews exactly — `DesignPreview` tries a name at one page or at the space and
+resolves the page in view through the same precedence, so hovering a SPACE
+design over a page with its own design correctly changes nothing. The preview
+starts on a pointer MOVE, not mouseenter: the menu opens where the page menu
+was and a row lands under a still pointer, which the browser reports as an
+enter (measured: the page flipped to Riso the instant the menu opened).
+Choosing is one undo step. **Customise…** forks into `doc.designs` and assigns
+the fork to THIS page only — including when the page merely inherits a custom
+design, which is copied, so customising one page never restyles its section.
+Removing a custom design sends every reference to it (the space's and each
+page's) back to its base, or deletes the key.
+
+**Export page as a space** pins a design a page inherited from an ancestor that
+does not travel onto the extracted page whose parent was cut, so the extract
+looks as it did.
+
+**Markdown — one file exports, a note imports.** The export is ONE file
+("Every page, as one .md file"), and it imports as ONE page: its headings come
+back as blocks, not pages — true before this and unchanged. So per-page designs
+round-trip through the note-per-page unit: **Export page as Markdown…** (new,
+page ⋯ menu) writes `design:` only when that page sets one ITSELF (an inherited
+design is not written — the note would pin a look the page never chose), plus
+the one `designs:` entry it names. The whole-space file writes the space's
+`design:` and a `designs:` line carrying every custom design the space OR ANY
+PAGE names. On import, a note's `design:` lands on THAT note's page, the carried
+entries join the registry (never over a name in use), and **the space's own
+design is no longer adopted** — reversing #559's "an import adopts the design
+into a space that has none": an import adds pages; it restyles only them.
+Front-matter handling only; no Markdown body parsing changed.
+
+**Collab.** `page.design` is an ordinary page-property register in the kernel
+engine, like `width` or `cover`; inherit travels as a deletion. Guarded in
+`scripts/test-sync-spaces.ts`.
+
+**Static preview** wears the HOME page's resolved design (its own, its
+section's, then the space's), still as inline styles through the CSSOM.
+
+**Found on the way, fixed here.** Every popover's mousedown-away listener
+outlived its popover when the popover was closed some other way (a menu item,
+Escape), and the next mousedown anywhere then closed WHATEVER overlay was open.
+Opening Design from the page menu hit it on the first click: the choice never
+landed. The listeners now drop themselves once their popover is detached.
+
+**Guarded, each sabotaged and seen to fail.** Model rig (per-page section): the
+ancestor walk cut (9 assertions fail), the space consulted before the page (12),
+inherit writing `''` instead of deleting (1), an unknown name falling through
+to the parent (3), the print root stamped with the space's design (1), a gallery
+card stamped with its own page's design (1). Roundtrip rig: the importer not
+setting `page.design` (4), a page note writing its INHERITED design (4). In the
+browser (headless Chrome over 127.0.0.1, uniquely named builds): on a Studio
+page, a gallery of Ledger pages measured Studio (radius 14px, cell
+rgb(94,118,153), Avenir) and the only design root inside `.sp-main` was its own
+page root; with the card sabotage it measured Ledger (radius 0, rgb(39,67,214))
+with five nested roots. In print media each page root carried its own design
+(Studio Avenir, Ledger Helvetica Neue, Almanac Iowan; the Studio callout the
+print hairline), no drop cap outside Almanac; with the root stamped, the drop
+cap leaked onto Studio and Ledger.
+
+**Cost.** Shell 300,835 → 305,242 B (+4,407), ten new strings in nine languages.
+
+**Not built on this base:** transclusion (#428) and a side peek do not exist on
+`main`; the host-design rule is written for them and held by the rig's "only
+renderPage stamps" assertion.

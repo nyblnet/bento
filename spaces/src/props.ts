@@ -29,6 +29,8 @@ import { CALLOUT_TONES, SPEC } from './blocks'
 import { toneLabel } from './render'
 import { CODE_LANGS, normLang } from './highlight'
 import { t } from './i18n'
+import { resolvePageDesign } from './designs.ts'
+import { designLabel } from './designpanel'
 
 /**
  * What the panel needs from the editor.
@@ -53,6 +55,8 @@ export interface PropsHost {
   openIconPicker(pageId: string, anchor: HTMLElement): void
   /** the editor owns popovers; the panel only says which page wants one */
   openAddProperty(pageId: string, anchor: HTMLElement): void
+  /** this page's design choices — the same menu the page ⋯ menu opens */
+  openPageDesign(pageId: string, anchor: HTMLElement): void
   /** the editor owns the icon set and the emoji fallback */
   pageIcon(icon: string | undefined): string
   openLinkCard(id: string): void
@@ -339,6 +343,21 @@ export class PropsPanel {
       }, { scope: 'doc' })
       this.app.repaint()
     }))
+
+    // THIS PAGE'S DESIGN — a button that opens the page menu's own choices,
+    // not a <select>: an option in a native dropdown cannot be hovered for a
+    // preview, and the preview is the point. It reads what the page wears
+    // NOW, inherited or its own.
+    {
+      const r = resolvePageDesign(s.doc, page.id)
+      const wears = designLabel(s.doc, r?.name ?? null)
+      const b = mk('button', 'sp-btn sp-insp-dsg',
+        page.design !== undefined ? wears : t('Inherited · {name}', { name: wears }))
+      b.type = 'button'
+      b.setAttribute('aria-haspopup', 'menu')
+      b.addEventListener('click', (e) => { e.preventDefault(); this.app.openPageDesign(page.id, b) })
+      this.row(t('Design'), b)
+    }
 
     this.row(t('Archived'), this.toggle(page.archived === true, (v) => {
       if (s.readOnly) return

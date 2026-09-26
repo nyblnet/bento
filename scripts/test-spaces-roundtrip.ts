@@ -165,9 +165,12 @@ ok(/!\[[^\]]+\]\([^)]+\)/.test(md), 'an image exports with its alt text and refe
     'a design the space carries round-trips through Markdown value for value (and only the one in use travels)')
   const plan = planImport([{ path: 'space.md', text: mdC }], { rootTitle: 'Imported' })
   const into = starterDoc() as unknown as Record<string, unknown>
-  const adopted = adoptDesign(into as never, plan.design, plan.designs)
-  ok(adopted === 'harbour' && into.design === 'harbour' && JSON.stringify((into.designs as Record<string, unknown>).harbour) === JSON.stringify(harbour),
-    'importing that Markdown into a space with no design adopts the design it carried')
+  // the editor's call since per-page designs: registry only, never the space's
+  const adopted = adoptDesign(into as never, undefined, plan.designs)
+  ok(adopted === null && into.design === undefined && JSON.stringify((into.designs as Record<string, unknown>).harbour) === JSON.stringify(harbour),
+    'importing that Markdown adds the design it carried to the registry, and leaves the space\'s own design alone')
+  ok(plan.pages.length === 1 && plan.pages[0].design === 'harbour',
+    'the note\'s `design:` lands on the page the note became, so it looks as it left')
   const already = starterDoc() as unknown as Record<string, unknown>
   already.design = 'ledger'
   ok(adoptDesign(already as never, plan.design, plan.designs) === null && already.design === 'ledger',
@@ -179,6 +182,77 @@ ok(/!\[[^\]]+\]\([^)]+\)/.test(md), 'an image exports with its alt text and refe
   ok(noteO.design === 'from: a newer build', 'a design name this build does not know still round-trips through the front matter')
   const obsidian = parseNote('---\ntags: [a]\ndesign: ledger\n---\n# Note\n\nbody', 'x')
   ok(obsidian.design === 'ledger' && obsidian.frontmatter === 'tags: [a]\ndesign: ledger', 'front matter with other keys is still kept verbatim')
+}
+
+// ---- per-page designs through Markdown -------------------------------------
+// The export is one file today ("Every page, as one .md file"), and it imports
+// as ONE note: its headings come back as blocks, not pages. So the round trip
+// that carries PER-PAGE designs is the note-per-page one — "Export page as
+// Markdown…", and a folder of notes on import — and the whole-space file is
+// held to carrying the space's design and the registry every page draws on.
+{
+  type P = { id: string; parent?: string; title: string; design?: string }
+  const space = starterDoc() as unknown as { design?: string; designs?: Record<string, unknown>; pages: P[] }
+  space.design = 'almanac'
+  const tide = { label: 'Tide', base: 'studio', light: { accent: '#0f6e63' } }
+  space.designs = { tide, spare: { base: 'riso' } }
+  const [home, sec] = [space.pages[0], space.pages.find((p) => p.parent === space.pages[0].id) ?? space.pages[1]]
+  const kid: P = { id: 'p-kid-rt', title: 'Kid note', parent: sec.id, blocks: [{ id: 'b-kid-rt', type: 'p', html: 'kid' }] } as never
+  space.pages.push(kid)
+  sec.design = 'ledger'
+  const st = new Store(space as never)
+  const one = (id: string) => toMarkdown(st as never, { page: id })
+
+  const mdSec = one(sec.id)
+  ok(mdSec.startsWith('---\ndesign: ledger\n---\n\n# '),'a page that sets its own design exports `design:` in its note\'s front matter')
+  const mdKid = one(kid.id)
+  ok(mdKid.startsWith('# ') && !/^design:/m.test(mdKid), 'a page that only INHERITS its design (here, its section\'s ledger) writes no front matter')
+  const mdHome = one(home.id)
+  ok(mdHome.startsWith('# '), 'a page wearing the space\'s design writes none either — the space\'s design is the space file\'s to say')
+  kid.design = 'tide'
+  const mdTide = one(kid.id)
+  ok(mdTide.startsWith('---\ndesign: tide\ndesigns: {"tide":') && !mdTide.includes('spare'),
+    'a page on a custom design carries that one registry entry, and only it')
+
+  // import each note as its own page, as a folder of notes
+  const plan = planImport([
+    { path: 'notes/Section.md', text: mdSec },
+    { path: 'notes/Kid note.md', text: mdTide },
+    { path: 'notes/Home.md', text: mdHome },
+  ], { rootTitle: 'Imported' })
+  const byTitle = (t: string) => plan.pages.find((p) => p.title === t)
+  ok(byTitle(sec.title)?.design === 'ledger' && byTitle('Kid note')?.design === 'tide' && byTitle(home.title)?.design === undefined,
+    'import reads each note\'s `design:` back onto ITS page, and a note without one stays inheriting')
+  ok(!plan.pages.some((p) => (p.blocks ?? []).some((b) => (b as { frontmatter?: unknown }).frontmatter)),
+    'design-only front matter is consumed on every note, never kept as a folded yaml block')
+  const target = starterDoc() as unknown as Record<string, unknown>
+  adoptDesign(target as never, undefined, plan.designs)
+  ok(target.design === undefined && JSON.stringify((target.designs as Record<string, unknown>).tide) === JSON.stringify(tide),
+    'the custom design a page carried joins the target space\'s registry, and the space\'s own design is untouched')
+
+  // unknown names survive per page
+  kid.design = 'from-a-newer-build'
+  const planU = planImport([{ path: 'k.md', text: one(kid.id) }], { rootTitle: 'x' })
+  ok(planU.pages[0].design === 'from-a-newer-build', 'a page design this build does not know round-trips through its note')
+
+  // the whole-space file: the space's design + every custom one a page names
+  kid.design = 'tide'
+  const whole = toMarkdown(st as never)
+  ok(whole.startsWith('---\ndesign: almanac\ndesigns: {"tide":') && !whole.includes('"spare"'),
+    'the whole-space export names the space\'s design and carries every custom design a page uses (not unused ones)')
+  const planW = planImport([{ path: 'space.md', text: whole }], { rootTitle: 'x' })
+  ok(planW.pages.length === 1 && planW.pages[0].design === 'almanac' && JSON.stringify(planW.designs?.tide) === JSON.stringify(tide),
+    'importing the whole-space file gives ONE page (as before) wearing the space\'s design, and brings the registry')
+
+  // one undo step, and inherit deletes the key — through the real store
+  const s2 = new Store(starterDoc() as never)
+  const p2 = (s2 as unknown as { doc: { pages: P[] } }).doc.pages[1]
+  const key0 = JSON.stringify((s2 as unknown as { doc: unknown }).doc)
+  s2.commit(() => { p2.design = 'riso' }, { structure: false })
+  s2.commit(() => { delete p2.design }, { structure: false })
+  ok(JSON.stringify((s2 as unknown as { doc: unknown }).doc) === key0, 'set then "Same as parent" leaves the document byte-identical')
+  s2.undo()
+  ok(((s2 as unknown as { doc: { pages: P[] } }).doc.pages[1]).design === 'riso', 'each design choice is exactly ONE undo step')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
