@@ -7728,3 +7728,25 @@ reads as two kinds of surface rather than one inconsistency.
 `title` equals its `aria-describedby` text, that element ≤ 1×1 and inside the
 row, and the name alone as `aria-label`.
 
+## 2026-09-26 — D2 revised for Share too: one-line actions, the description as a tooltip
+
+**The maintainer's ruling, confirmed directly:** "Yes, share should be 1 line
+as well." It reached spaces first as a relay from the slides session (slides
+#573, 36465bf1), and the maintainer then confirmed it directly; this entry
+records it as the maintainer's own ruling.
+
+Share's actions take exactly the Save rows' shape (the entry above): one line
+— slides' `.ed-share-btn`, 12.5px/400, `6px 10px`, 31px tall, framed on the
+popover's chrome (`--pop-chrome`, slides' `--chrome`, #1b1f26 in dark) — with
+the description as the native `title` on the action, the name alone as
+`aria-label`, and the description again as a visually hidden element inside
+the action, referenced by `aria-describedby`. The popover sits at slides'
+250px. This supersedes the previous entry's "Share keeps its drawn second line".
+
+So no surface opened from the bar draws a second-line description any more,
+in either app; D2's visible descriptions survive only in menus that are not
+the bar's (the page menu's width choices, "Make this page an issue").
+`scripts/test-spaces-chrome.ts` holds Save and Share to the same row-shape
+assertion, and walks Insert, Save, Language and Share for anything drawn.
+The touch caveat of the entry above applies to Share as well.
+
