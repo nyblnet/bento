@@ -87,7 +87,7 @@ const TABLE: Array<Omit<InsertFamily, 'items'> & { items: Entry[] }> = [
     items: ['table'],
   },
   {
-    id: 'chart', label: 'Chart', icon: 'graph',
+    id: 'chart', label: 'Chart', icon: 'chart',
     tip: 'Add a chart of the issues in this space',
     items: ['chart'],
   },
