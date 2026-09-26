@@ -250,6 +250,31 @@ async function browser(chrome: string, html: string): Promise<void> {
     ok(aboutGone, 'Escape closes About with the focus nowhere in it')
     if (!aboutGone) throw new Error('About did not close; the steps after this need the page')
 
+    // WCAG contrast of an element's text against its composited ground
+    const CONTRAST = `((el) => { const P = (s) => { const m = s.match(/[\\d.]+/g).map(Number); return { r: m[0], g: m[1], b: m[2], a: m[3] ?? 1 } }
+      const over = (f, b) => ({ r: f.r * f.a + b.r * (1 - f.a), g: f.g * f.a + b.g * (1 - f.a), b: f.b * f.a + b.b * (1 - f.a), a: 1 })
+      const L = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b) }
+      let bg = { r: 255, g: 255, b: 255, a: 1 }; const chain = []; for (let n = el; n && n.nodeType === 1; n = n.parentElement) chain.push(n)
+      for (const n of chain.reverse()) { const c = P(getComputedStyle(n).backgroundColor); if (c.a > 0) bg = over(c, bg) }
+      const fg = over(P(getComputedStyle(el).color), bg); const [x, y] = [L(fg), L(bg)].sort((a, b) => b - a); return +((x + 0.05) / (y + 0.05)).toFixed(2) })`
+
+    // About: its links read, and its buttons look like buttons
+    await tap(`document.querySelector('.sp-mark')`)
+    const about = await js<any>(`(() => { const d = [...document.querySelectorAll('[aria-modal="true"]')].pop(); const a = d.querySelector('.sp-ab-promo a'); const b = [...d.querySelectorAll('.sp-btn:not(.sp-primary)')][0]; return { link: ${CONTRAST}(a), frame: getComputedStyle(b).borderTopColor } })()`)
+    ok(about.link >= 4.5, `About's links clear 4.5:1 (${about.link}; 3.23 before)`)
+    ok(!/rgba\(0, 0, 0, 0\)/.test(about.frame), `a dialog's secondary button has a visible frame (${about.frame})`)
+    await key('Escape', 0, 'Escape')
+
+    // D3: a refusal is a notice the reader sees, not a whisper in the bar
+    await tap(TRIG('More'))
+    await tap(`[...document.querySelectorAll('.bkm-open .bkm-item')].find(b => b.textContent.startsWith('Make this page an issue'))`)
+    await tap(TRIG('More'))
+    await tap(`[...document.querySelectorAll('.bkm-open .bkm-item')].find(b => b.textContent.startsWith('Make this page an issue'))`)
+    const note = await js<any>(`(() => { const n = document.querySelector('.sp-notice.sp-on'); if (!n) return null; const r = n.getBoundingClientRect(); return { text: n.textContent, role: n.getAttribute('role'), cr: ${CONTRAST}(n), z: +getComputedStyle(n).zIndex, onScreen: r.bottom <= innerHeight && r.top > innerHeight / 2 } })()`)
+    ok(note && note.role === 'status' && note.cr >= 4.5 && note.z > 1000 && note.onScreen,
+      `a refusal ("Already an issue") arrives as a notice: announced, legible, above dialogs, at the foot of the window (${JSON.stringify(note)})`)
+    await js(`window.bento.undo(); 1`)
+
     // ——— dialogs: the kernel's ———
     const MODAL = `[...document.querySelectorAll('[aria-modal="true"]')].find(d => d.getBoundingClientRect().height > 0)`
     await tap(TRIG('More'))
@@ -308,6 +333,12 @@ async function browser(chrome: string, html: string): Promise<void> {
 
     // ——— phone ———
     await open(true)
+    const bar = await js<any>(`(() => { const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden' }
+      const bs = [...document.querySelectorAll('.sp-bar button')].filter(vis).map(b => { const r = b.getBoundingClientRect(); return { l: (b.getAttribute('aria-label') || b.title || '').slice(0, 14), w: Math.round(r.width), h: Math.round(r.height) } })
+      const save = [...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith('Save')).getBoundingClientRect()
+      return { small: bs.filter(b => b.w < 44 || b.h < 44), save: { w: Math.round(save.width), h: Math.round(save.height) } } })()`)
+    ok(bar.small.length === 0, `every phone bar control is a 44px target (D5) (too small: ${JSON.stringify(bar.small)})`)
+    ok(bar.save.w === bar.save.h, `phone Save is a square icon button, not a slab (${bar.save.w}×${bar.save.h}; 66×40 before)`)
     await tap(TRIG('More'))
     const ph = await js<any>(`(() => { const m = ${OPEN}; const r = m.getBoundingClientRect(); const rows = [...m.querySelectorAll('.bkm-item')]; return { bottom: r.bottom, vh: innerHeight, n: rows.length, minH: Math.min(...rows.map(x => x.getBoundingClientRect().height)), scrolls: m.scrollHeight > m.clientHeight } })()`)
     ok(ph.bottom <= ph.vh, `the phone ⋯ menu ends inside the screen (bottom ${Math.round(ph.bottom)} ≤ ${ph.vh}; 1003 before)`)
@@ -328,6 +359,8 @@ async function browser(chrome: string, html: string): Promise<void> {
     const drawer = await js<any>(`(() => { const p = document.querySelector('.sp-side').closest('.bkp'); const r = p.getBoundingClientRect(); const row = document.querySelectorAll('.sp-treelink')[1].getBoundingClientRect(); return { drawer: p.classList.contains('bkp-drawer'), w: r.width, scrim: !!document.querySelector('.sp-scrim'), reach: !!document.elementFromPoint(row.x + 20, row.y + row.height / 2)?.closest('.sp-treelink') } })()`)
     ok(drawer.drawer && drawer.w > 200 && drawer.scrim && drawer.reach,
       `on a phone the page list opens as a drawer over a scrim, its rows reachable (${JSON.stringify(drawer)})`)
+    const rows = await js<any>(`(() => { const rs = [...document.querySelectorAll('.sp-treelink')].slice(0, 6); const m = rs[0].querySelector('.sp-rowmore').getBoundingClientRect(); return { minRow: Math.min(...rs.map(r => r.getBoundingClientRect().height)), more: [Math.round(m.width), Math.round(m.height)] } })()`)
+    ok(rows.minRow >= 44 && rows.more[1] >= 44, `page rows and their ⋯ are 44px targets on a phone (row ${rows.minRow}, ⋯ ${rows.more.join('×')}; 28 and 20×20 before)`)
     await tap(`document.querySelectorAll('.sp-treelink')[1]`)
     const afterNav = await js<any>(`({ w: document.querySelector('.sp-side').closest('.bkp').getBoundingClientRect().width, scrim: !!document.querySelector('.sp-scrim'), stored: localStorage.getItem('bento-sp-pane-closed') })`)
     ok(afterNav.w === 0 && !afterNav.scrim && afterNav.stored === null,

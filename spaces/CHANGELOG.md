@@ -527,6 +527,33 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   open/closed choices are kept exactly as before, under the same keys. Opening
   and closing the drawer on a phone never changes what a desktop remembers.
 
+- **The phone bar, the dialogs' buttons, and messages you must not miss.**
+  - **Phone targets.** Every control in the phone bar is a 44px target now.
+    Five of them were 40px and the Live button was 35×29. Page rows and their
+    ⋯ are 44px too; they were 28px and 20×20.
+  - **Save on a phone** is a square icon button. It used to be a 66×40 dark
+    slab with the icon at one end. The unsaved dot is a badge on its corner.
+  - **The Live button** sits on the same grid as the buttons beside it and has
+    no frame of its own.
+  - **Dialog buttons.** A secondary button in a dialog looks like a button:
+    Import's "Choose a folder…" and "Choose a space…" read as plain words
+    before. The primary button's text follows the theme, so it no longer
+    disappears in dark mode.
+  - **About's links** are darker, 4.5:1 or better. They were 3.23:1.
+  - **Messages you must not miss** now show as a notice at the foot of the
+    window, the way slides shows them. That covers:
+    - a change the relay refused;
+    - a file that could not be read;
+    - a page that cannot contain itself;
+    - "every page opens wide from now on";
+    - a copy that was written.
+
+    Before, these were the same small grey line in the bar as "Edited", and it
+    faded in under two seconds. "Edited" and "Saved" stay on the bar.
+  - **Small fixes.** The properties panel's section headings get a real
+    disclosure caret, where the old one rendered as a dot. The share panel sets
+    "Reset access…" apart from the rows above it.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
