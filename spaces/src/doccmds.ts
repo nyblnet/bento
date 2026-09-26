@@ -45,35 +45,36 @@ export interface DocHost {
 }
 
 /**
- * The rows, into `m`. A CONSEQUENCE menu (D2): every row says what it does on a
- * second line under its name, as slides' Save menu does since #573.
+ * The rows, into `m`. One line each, as slides' Save menu: what a row does is
+ * its hover tooltip and its accessible description, not a second line — the
+ * maintainer's revision of D2 for this menu (DECISIONS 2026-09-26).
  */
 export function saveRows(m: Menu, h: DocHost): void {
   const ro = h.store.readOnly
-  row(m, { icon: ICONS.copy, label: t('Save a copy…'), hint: t('A second file — the original is left alone'), run: () => h.saveCopy() })
+  row(m, { icon: ICONS.copy, label: t('Save a copy…'), desc: t('A second file — the original is left alone'), run: () => h.saveCopy() })
   row(m, { icon: ICONS.plus, label: t('Duplicate as a new space…'),
-    hint: t('Same pages, new identity — it never syncs with this one'),
+    desc: t('Same pages, new identity — it never syncs with this one'),
     run: () => duplicate(h) })
-  row(m, { icon: ICONS.markdown, label: t('Export as Markdown…'), hint: t('Every page, as one .md file'), run: () => h.exportMarkdown() })
-  row(m, { icon: ICONS.page, label: t('Export page as a space…'), hint: t('One page and what is under it, as its own file'), run: () => h.exportSpace() })
+  row(m, { icon: ICONS.markdown, label: t('Export as Markdown…'), desc: t('Every page, as one .md file'), run: () => h.exportMarkdown() })
+  row(m, { icon: ICONS.page, label: t('Export page as a space…'), desc: t('One page and what is under it, as its own file'), run: () => h.exportSpace() })
   h.moreExports?.(m)
   if (isEncryptionActive()) {
-    row(m, { icon: ICONS.lock, label: t('Change password…'), hint: t('Takes effect on the next save'), off: ro, run: () => openPassword(h) })
+    row(m, { icon: ICONS.lock, label: t('Change password…'), desc: t('Takes effect on the next save'), off: ro, run: () => openPassword(h) })
     row(m, { icon: ICONS.lock, label: t('Remove password…'),
-      hint: t('The next save writes plain, readable JSON'), off: ro, run: () => openRemovePassword(h) })
+      desc: t('The next save writes plain, readable JSON'), off: ro, run: () => openRemovePassword(h) })
   } else {
     row(m, { icon: ICONS.lock, label: t('Encrypt with password…'),
-      hint: t('No recovery — lose the password and the space is gone'), off: ro, run: () => openPassword(h) })
+      desc: t('No recovery — lose the password and the space is gone'), off: ro, run: () => openPassword(h) })
   }
 
   // the document AS DATA — the timeline and the round trips
   m.separator()
-  row(m, { icon: ICONS.history, label: t('Version history…'), hint: t('Versions are kept in this browser only — never in the file, never online. Restoring is undoable.'), run: () => openHistory(h) })
-  row(m, { icon: ICONS.code, label: t('Copy document JSON'), hint: t('Plain JSON of every page — no live-session keys'),
+  row(m, { icon: ICONS.history, label: t('Version history…'), desc: t('Versions are kept in this browser only — never in the file, never online. Restoring is undoable.'), run: () => openHistory(h) })
+  row(m, { icon: ICONS.code, label: t('Copy document JSON'), desc: t('Plain JSON of every page — no live-session keys'),
     run: () => copyJson(h) })
-  row(m, { icon: ICONS.code, label: t('Replace from JSON…'), hint: t('Replaces every page — ⌘Z undoes'),
+  row(m, { icon: ICONS.code, label: t('Replace from JSON…'), desc: t('Replaces every page — ⌘Z undoes'),
     off: ro, run: () => openReplaceJson(h) })
-  row(m, { icon: ICONS.markdown, label: t('Import Markdown…'), off: ro, hint: t('A folder of .md files becomes pages, with the folder tree and the [[wikilinks]] intact.'), run: () => h.importMarkdown() })
+  row(m, { icon: ICONS.markdown, label: t('Import Markdown…'), off: ro, desc: t('A folder of .md files becomes pages, with the folder tree and the [[wikilinks]] intact.'), run: () => h.importMarkdown() })
 }
 
 /** The labels, in order — what the chrome rig holds the menu to. */
