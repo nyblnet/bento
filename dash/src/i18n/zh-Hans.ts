@@ -483,7 +483,7 @@ export const zhHans: Catalog = {
   "Split on": "分隔符",
   "Split the selected column into several, on a delimiter or at fixed widths": "按分隔符或固定宽度将所选列拆分为多列",
   "Spreadsheet": "电子表格",
-  "Start live session": "开始实时协作",
+  "Go live": "开始直播",
   "Stop sharing": "停止共享",
   "Story": "故事",
   "Subject": "主题",

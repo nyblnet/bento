@@ -483,7 +483,7 @@ export const ja: Catalog = {
   "Split on": "区切り文字",
   "Split the selected column into several, on a delimiter or at fixed widths": "選択した列を、区切り文字または固定幅で複数の列に分割します",
   "Spreadsheet": "スプレッドシート",
-  "Start live session": "ライブセッションを開始",
+  "Go live": "ライブ開始",
   "Stop sharing": "共有を停止",
   "Story": "ストーリー",
   "Subject": "件名",

@@ -483,7 +483,7 @@ export const es: Catalog = {
   "Split on": "Dividir por",
   "Split the selected column into several, on a delimiter or at fixed widths": "Dividir la columna seleccionada en varias, por un delimitador o a anchos fijos",
   "Spreadsheet": "Hoja de cálculo",
-  "Start live session": "Iniciar sesión en directo",
+  "Go live": "Ir en vivo",
   "Stop sharing": "Dejar de compartir",
   "Story": "Historia",
   "Subject": "Asunto",

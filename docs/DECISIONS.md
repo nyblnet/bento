@@ -7417,3 +7417,12 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-09-26 — dash: the session action says "Go live"
+
+Slides is the chrome reference, and slides calls starting a live session "Go
+live"; spaces already follows it. Dash said "Start live session". Dash now uses
+slides' string and its seven catalog values verbatim, so all three apps name the
+action identically in every language. `scripts/test-dash-stopsharing.ts` asserts
+the new string.
+

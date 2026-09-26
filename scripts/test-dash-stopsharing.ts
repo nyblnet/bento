@@ -81,7 +81,7 @@ console.log('\nno width hides the off switch')
 console.log('\nand the label is the one a reader would look for')
 {
   ok(/t\('Stop sharing'\)/.test(people), 'the live label is "Stop sharing", not a symbol')
-  ok(/t\('Start live session'\)/.test(people), 'and the idle one says what it will do')
+  ok(/t\('Go live'\)/.test(people), 'and the idle one says what it will do')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

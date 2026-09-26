@@ -761,7 +761,7 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
   return active
 }
 
-/** flip sharing on and connect — the "Start live session" action. Credentials
+/** flip sharing on and connect — the "Go live" action. Credentials
  *  already exist (minted at creation); this only arms them. */
 export async function startSharing(session: SyncSession, store: Store): Promise<OnlineTransport | null> {
   if (offlineEnabled()) return null

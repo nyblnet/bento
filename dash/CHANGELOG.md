@@ -12,6 +12,10 @@ There is no server, so a break here would be permanent.
 
 The release that came out of watching somebody use 0.2.0.
 
+- **The sharing action says "Go live"**, as it does in slides and spaces, in
+  every language — the catalog values are slides' own, so the three apps name
+  one action one way.
+
 - **Sheet tabs along the bottom**, where every spreadsheet has kept them since
   Excel 5. They were a list inside the left panel; that panel is gone, and the
   grid is about 200px wider at every window size. Drag to reorder — and because

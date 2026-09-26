@@ -483,7 +483,7 @@ export const zhHant: Catalog = {
   "Split on": "分隔符號",
   "Split the selected column into several, on a delimiter or at fixed widths": "按分隔符號或固定寬度將所選欄拆分為多欄",
   "Spreadsheet": "試算表",
-  "Start live session": "開始即時協作",
+  "Go live": "開始直播",
   "Stop sharing": "停止共用",
   "Story": "故事",
   "Subject": "主旨",
