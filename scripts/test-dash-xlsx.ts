@@ -572,13 +572,12 @@ ok(_internals.safeSheetName('a/b:c', new Set()) === 'a-b-c', 'the forbidden char
 ok(_internals.safeSheetName('Sheet', new Set(['sheet'])) === 'Sheet 2', 'and a duplicate is disambiguated')
 ok(xlsxFileName('Q1 / plan') === 'Q1 - plan.xlsx', 'the download name is filesystem-safe')
 
-// =========================================== REAL .xlsx FILES OFF THIS MACHINE
+// =========================================== REAL .xlsx FIXTURES (BENTO_XLSX_FIXTURES)
 {
-  const candidates = [
-    '/Users/andy/devel/sxadc/raw_categories.xlsx',
-    '/Users/andy/Documents/Digitalise Growth-Initiatives-Cost-Model.xlsx',
-    '/Users/andy/Downloads/Digital_Sonar_Resource_Validation_v5.xlsx',
-  ].filter(existsSync)
+  // Optional real workbooks, named by BENTO_XLSX_FIXTURES (path-list, ':'
+  // separated). Never a path baked into the source: the rig must read only
+  // what is checked in or what the operator points it at.
+  const candidates = (process.env.BENTO_XLSX_FIXTURES ?? '').split(':').map((p) => p.trim()).filter((p) => p && existsSync(p))
   if (!candidates.length) console.log('  SKIP  no real .xlsx to import')
   for (const path of candidates) {
     const short = path.split('/').pop()!

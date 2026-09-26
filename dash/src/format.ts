@@ -132,7 +132,10 @@ export function formatValue(v: unknown, col: Pick<Column, 'type' | 'format'>): s
   const p = readPattern(col.format)
   const isPct = p.pct || t === 'percent'
   const shown = isPct ? n * 100 : n
-  const dp = p.dp ?? (t === 'money' ? 2 : isPct ? 0 : shown % 1 === 0 ? 0 : 2)
+  // Intl.NumberFormat throws for more than 100 fraction digits, so a format
+  // string like "0.000…" (long enough) would break the never-throws contract.
+  const rawDp = p.dp ?? (t === 'money' ? 2 : isPct ? 0 : shown % 1 === 0 ? 0 : 2)
+  const dp = Math.max(0, Math.min(100, rawDp))
 
   const group = p.group || (!col.format && (t === 'money' || Math.abs(shown) >= 10_000))
   // A percent COLUMN prints a `%` even with no pattern saying so, which

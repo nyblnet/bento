@@ -308,6 +308,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-thumb:hover { border-color: #c9d2de; }
 .ed-thumb.active { border-color: var(--accent); }
+/* in the multi-selection: a tint and the accent ring; the active one keeps its ring */
+.ed-thumb.selected { border-color: var(--accent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.ed-thumb.selected::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--accent) 12%, transparent); pointer-events: none; }
+.ed-thumb.dragging { opacity: .5; }
 .ed-thumb.drop { border-color: var(--blue); }
 .ed-thumb-num {
   position: absolute;
@@ -477,6 +481,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .bento-slide { position: relative; overflow: hidden; }
 
 .bento-el { position: absolute; contain: layout style; }
+/* A web link inside text: underlined in the author's colour, a pointer only
+   in the show (the editor treats it as text — canvas.ts swallows the click). */
+.bento-el a[href] { color: inherit; text-decoration: underline; text-underline-offset: 0.12em; }
+.bento-present-overlay .bento-el a[href] { cursor: pointer; }
 
 /* Formulas are left on the browser's own `math` family ON PURPOSE — naming a
    maths font here fixes nothing and has been reverted three times. The
@@ -492,6 +500,16 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
    back to `math` — and it is deliberately NOT shipped: it is clean on macOS
    and still broken on Windows. Read docs/DECISIONS.md, 2026-08-25, before
    touching this; the rig is slides/probe/radical-join.html. */
+
+/* A formula that did not render, on the editor canvas only (render.ts
+   mathHint, #540): the author's text stays exactly as typed, a faint dotted
+   underline says it was meant as maths, and the title says why. */
+.bento-math-miss {
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 0.18em;
+  cursor: help;
+}
 
 .bento-el-text,
 .bento-el-code
@@ -525,6 +543,9 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   text-decoration: line-through;
   opacity: 0.75;
 }
+/* An unnumbered slide is in the show but continues the previous page number:
+   the sidebar shows that number, dimmed, with a trailing dot as the marker. */
+.ed-thumb-num.ed-num-unnumbered { opacity: 0.6; font-style: italic; }
 
 .ed-stage .bento-el { cursor: grab; }
 .ed-stage .bento-el:active { cursor: grabbing; }
@@ -557,6 +578,29 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   margin: 18px 0 8px;
 }
 .ed-section:first-child { margin-top: 2px; }
+
+/* layers list (editor/layers.ts): one compact row per element, top first */
+.ed-layers {
+  display: flex; flex-direction: column; gap: 1px; outline: none; margin-bottom: 6px;
+  /* a busy slide (the showcase title has 39 elements) must not push the Slide
+     controls a screen down: the list scrolls inside itself past ~12 rows */
+  max-height: 300px; overflow-y: auto;
+}
+.ed-layers:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: 6px; }
+.ed-layer {
+  display: flex; align-items: center; gap: 7px;
+  padding: 3px 6px; border-radius: 6px; font-size: 12px; line-height: 18px;
+  cursor: default; user-select: none; border: 1px solid transparent;
+}
+.ed-layer:hover { background: rgb(94 118 153 / 0.10); }
+.ed-layer.sel { background: rgb(94 118 153 / 0.18); border-color: rgb(94 118 153 / 0.35); }
+.ed-layer.grouped { padding-left: 20px; }
+.ed-layer.dragging { opacity: 0.4; }
+.ed-layer.drop-above { box-shadow: 0 -2px 0 0 var(--accent); }
+.ed-layer.drop-below { box-shadow: 0 2px 0 0 var(--accent); }
+.ed-layer-glyph { flex: none; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); font-size: 10px; font-weight: 700; }
+.ed-layer-glyph svg { width: 14px; height: 14px; }
+.ed-layer-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .ed-row {
   display: flex;
@@ -844,11 +888,11 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   --r-background-color: #000;
   --r-main-color: #fff;
   --r-main-font-size: 32px;
-  --r-link-color: #f7a600;
+  --r-link-color: var(--accent);
   --r-link-color-hover: #ffc23e;
-  --r-selection-background-color: #f7a600;
+  --r-selection-background-color: var(--accent);
   --r-controls-color: rgb(255 255 255 / 0.6);
-  --r-progress-color: #f7a600;
+  --r-progress-color: var(--accent);
   --r-overlay-element-bg-color: 255, 255, 255;
   --r-overlay-element-fg-color: 0, 0, 0;
 }
@@ -864,6 +908,12 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .bento-present-overlay.laser-over-slide .bento-slide,
 .bento-present-overlay.laser-over-slide .bento-slide * { cursor: none !important; }
+/* While the laser is armed, dragging on the slide must never select text. */
+.bento-present-overlay.laser-enabled .bento-slide,
+.bento-present-overlay.laser-enabled .bento-slide * {
+  user-select: none;
+  -webkit-user-select: none;
+}
 .bento-laser-trail {
   position: absolute;
   inset: 0;
@@ -896,6 +946,17 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   transition: opacity 0.08s linear;
 }
 .bento-laser-dot.visible { opacity: 1; }
+.bento-laser-dot.bento-remote {
+  /* Frames arrive at ~30fps; a short linear tween (longer than one frame
+     interval so it always settles, short enough to add no lag) smooths the
+     last step — Excalidraw steps at 33ms with no tween at all, this is
+     strictly smoother. The LOCAL dot keeps its opacity-only transition: at
+     60fps a position tween would smear it behind the hand. */
+  transition:
+    left 0.045s linear,
+    top 0.045s linear,
+    opacity 0.08s linear;
+}
 .bento-present-overlay.reduce-motion .bento-laser-trail { display: none; }
 .bento-present-overlay.reduce-motion .bento-laser-dot { transition: none; }
 /* Reduced motion (M / speaker toggle / OS prefers-reduced-motion): JS fx are
@@ -938,7 +999,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .bento-present-overlay .bento-el[data-link] { cursor: pointer; }
 .bento-present-overlay .bento-el[data-link]:hover {
-  outline: 2.5px solid var(--bento-accent, #f7a600);
+  outline: 2.5px solid var(--bento-accent, var(--accent));
   outline-offset: 3px;
   border-radius: 999px;
 }
@@ -1146,6 +1207,9 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   padding: 5px 0;
   justify-content: center;
 }
+/* reveal verbs: caption + three text buttons sharing the row */
+.ed-reveal-row { display: flex; align-items: center; gap: 4px; margin: 3px 0; }
+.ed-reveal-row .ed-btn { flex: 1; min-width: 0; padding: 5px 4px; justify-content: center; font-size: 11px; }
 .ed-arrange-cap {
   flex: none;
   width: 46px;
@@ -1250,6 +1314,29 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-comment-marker.fresh { animation: ed-cmt-pop 0.45s ease-out; }
 
 .ed-comment-layer { position: absolute; inset: 0; pointer-events: none; z-index: 12; }
+
+/* reveal-step badges (editor/stepbadges.ts): editor-only chrome beside the
+   rendered slide, never inside it */
+.ed-step-layer { position: absolute; inset: 0; pointer-events: none; z-index: 12; }
+.ed-step-badge {
+  position: absolute;
+  pointer-events: auto;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border: 2px solid var(--surface);
+  border-radius: 10px;
+  background: #1e2a3a;
+  color: #fff;
+  font: 700 10px/15px inherit;
+  font-family: inherit;
+  text-align: center;
+  box-sizing: border-box;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgb(15 23 36 / 0.3);
+}
+.ed-step-badge.sel { background: var(--accent); color: #3a2800; }
+.ed-step-badge:hover { transform: scale(1.15); }
 .ed-comment-marker {
   position: absolute;
   pointer-events: auto;
@@ -1343,7 +1430,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   box-shadow: 0 12px 32px rgb(15 23 36 / 0.18);
   padding: 12px 14px;
   max-width: 420px;
-  max-height: 70vh;
+  max-height: calc(100vh - 16px);
   overflow-y: auto;
 }
 .ed-layoutpick-title {
@@ -1542,7 +1629,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-.sv-timer:hover { color: #f7a600; }
+.sv-timer:hover { color: var(--accent); }
 .sv-clock { font-size: 15px; color: #9fb0c3; }
 .sv-count { font-size: 15px; color: #9fb0c3; font-variant-numeric: tabular-nums; }
 .sv-ctrls { margin-left: auto; display: flex; align-items: center; gap: 6px; }
@@ -1562,7 +1649,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .sv-btn:hover:not([disabled]) { background: #2a323c; color: #fff; }
 .sv-btn[disabled] { opacity: 0.35; cursor: default; }
-.sv-btn.active { background: #f7a600; border-color: #f7a600; color: #14181d; }
+.sv-btn.active { background: var(--accent); border-color: var(--accent); color: #14181d; }
 .sv-main { display: flex; gap: 22px; padding: 14px 22px; align-items: flex-start; flex: 1; min-height: 0; }
 .sv-frame {
   position: relative;
@@ -1623,7 +1710,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   overflow: hidden;
 }
 .sv-thumb:hover { border-color: #4a5a72; }
-.sv-thumb.current { border-color: #f7a600; }
+.sv-thumb.current { border-color: var(--accent); }
 .sv-thumb .sv-frame { box-shadow: none; border-radius: 0; }
 .sv-thumb-n {
   position: absolute;
@@ -1639,7 +1726,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   line-height: 1.4;
   text-align: center;
 }
-.sv-thumb.current .sv-thumb-n { background: #f7a600; color: #14181d; }
+.sv-thumb.current .sv-thumb-n { background: var(--accent); color: #14181d; }
 .sv-grid {
   position: fixed;
   inset: 0;
@@ -1667,6 +1754,11 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   background: #000;
 }
 .bento-blackout[hidden] { display: none; }
+/* Reveal steps (fx.step): an element whose step has not come yet. Visibility,
+   not display — it keeps its box (nothing reflows when it appears), keeps
+   morph and layout measurements honest, and its entrance tween can start
+   from opacity 0 the moment the class comes off. Present-mode only. */
+.bento-present-overlay .bento-step-hidden { visibility: hidden !important; pointer-events: none; }
 
 /* transient confirmation pill in present mode (e.g. Reduced motion on/off) */
 .bento-present-toast {
@@ -1685,6 +1777,43 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   transition: opacity 0.25s ease;
 }
 .bento-present-toast.show { opacity: 1; }
+
+/* --- live broadcast, audience side ------------------------------------- */
+/* Follow chip: the viewer's toggle (browse ⇄ follow); disabled under lock. */
+.bento-follow-chip {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 61;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  background: rgb(20 30 45 / 0.82);
+  color: #fff;
+  font: 500 13px/1.2 system-ui, sans-serif;
+  padding: 7px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.bento-follow-chip:hover { opacity: 1; }
+.bento-follow-chip.following { border-color: var(--bento-accent, var(--accent)); }
+.bento-follow-chip[disabled] { cursor: default; opacity: 0.7; }
+/* Status card: waiting for the presenter / the show has ended / ticket dead. */
+.bento-show-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 61;
+  background: rgb(20 30 45 / 0.9);
+  color: #fff;
+  font: 500 16px/1.4 system-ui, sans-serif;
+  padding: 16px 24px;
+  border-radius: 12px;
+  max-width: 70vw;
+  text-align: center;
+  pointer-events: none;
+}
+.bento-show-card[hidden] { display: none; }
 
 /* --- live collaboration ----------------------------------------------- */
 .ed-avatars {

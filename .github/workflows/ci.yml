@@ -379,12 +379,77 @@ jobs:
         # bugs found in review ride along.
         run: node scripts/test-codediff.ts
 
+      - name: Shared panel primitive rig
+        # kernel/src/ui/panel.ts is the second UI primitive (after the menu):
+        # the resizable, collapsible side panel three apps hand-rolled and a
+        # fourth stubbed. Every check guards a piece of invisible behaviour each
+        # app learned alone — the no-animation-during-drag class, the RTL widen
+        # direction, a collapsed panel refusing to drag, per-viewer persistence
+        # clamped on restore, the drawer that boots shut below a phone width —
+        # plus the theming guard (every colour chain reaches a token each of the
+        # four apps defines and themes). Each is mutation-caught.
+        run: node scripts/test-ui-panel.ts
+      - name: Shared dialog primitive rig
+        # kernel/src/ui/dialog.ts is the tier-3 consolidation: the modal all
+        # four apps build their About dialog on. The checks guard behaviour that
+        # lived in one app or none — focus captured on open and restored to the
+        # opener on close, a capture-phase document Escape that does not fall
+        # through to the editor behind it, backdrop dismissal that a click on the
+        # card does not trigger, and a real focus trap (Tab wraps in the card) —
+        # plus listener cleanup and the shared theming guard. Each is
+        # mutation-caught; none is visible to a developer with a mouse.
+        run: node scripts/test-ui-dialog.ts
+      - name: Shared tooltip primitive rig
+        # kernel/src/ui/tooltip.ts — built ahead of a consumer (no app has a
+        # hover tooltip; all four use native title=), so the checks pin the
+        # contract chosen, not a behaviour found: shows after a delay on
+        # hover/focus, hides on leave/blur/Escape, wires aria-describedby, does
+        # not flash on a pointer passing through, and — the one that matters —
+        # renders in document.body as a fixed element so no scroll container
+        # clips it (hard-won detail 10). Behaviours mutation-caught; themed
+        # through the shared guard.
+        run: node scripts/test-ui-tooltip.ts
+      - name: Shared toggle primitive rig
+        # kernel/src/ui/toggle.ts — built ahead of a consumer (the three
+        # "toggle"-named classes across the apps are a native checkbox, a
+        # disclosure block and a button group; no shared switch). The checks pin
+        # the contract chosen: a real role="switch" with aria-checked, a click
+        # toggles and fires onChange, set() updates state WITHOUT firing
+        # onChange, and it is a <button> so the platform gives it keyboard
+        # activation. Behaviours mutation-caught; themed through the shared guard
+        # (whose alias-indirection fix — a token defined as var(--other) is
+        # themed iff --other is — landed here so dash's --chrome-2: var(--hover)
+        # resolves).
+        run: node scripts/test-ui-toggle.ts
+      - name: Shared menu primitive rig
+        # kernel/src/ui/menu.ts replaces four hand-rolled dropdowns, and what
+        # differed between them was all INVISIBLE: three of the four apps
+        # publish no aria-expanded at all, five of slides' eight dropdowns never
+        # dismissed on an outside press, no app closed a menu on Escape or let
+        # an arrow key move through one, and two apps added a document listener
+        # per dropdown and removed none. Each of those is a check here, because
+        # every one of them is a regression a sighted developer with a mouse
+        # would never notice.
+        run: node scripts/test-ui-menu.ts
+
       - name: First-page preview rig
         # Every save writes a static render of page one for file-manager
         # thumbnails. Two decisions in that path fail silently: an encrypted
         # deck must never carry one, and author content must never reach the
         # file carrying a script tag.
         run: node scripts/test-preview.ts
+
+      - name: sidebar multi-select — a block move keeps order and carries states
+        # Discussion #514. The unit is a parent with its states; the old
+        # single-index splice left states behind, which this rig shows.
+        run: node scripts/test-slides-multiselect.ts
+
+      - name: presence toasts — said once per real arrival and departure
+        # A hidden tab's heartbeat arrives once a minute, the room drops the
+        # peer and the next beat brings them back: "left" / "joined" every
+        # minute for everyone else. The grace and the quiet window are what
+        # keep that silent; this rig runs them on a manual clock.
+        run: node scripts/test-slides-presence-toasts.ts
 
       - name: Media autoplay rig
         # An author set a clip's Autoplay to Off and it played anyway, every
@@ -421,6 +486,22 @@ jobs:
         # behaviour (refusal, aborting what is already in flight, cross-tab).
         run: node scripts/test-offline.ts
 
+      - name: Origin-trust rig
+        # The release-manifest / sync / pack URL dev overrides live in
+        # localStorage, which is shared across all file:// documents — so they
+        # are honoured only from a real, isolated origin (sharedStorageOrigin).
+        run: node scripts/test-origin-overrides.ts
+
+      - name: Embed element rig
+        # The `embed` element (docs/DECISIONS.md 2026-08-19 shape): the static
+        # view always paints through the svg sanitiser; a live sandboxed frame
+        # exists only online with the offline switch off, and drops back to
+        # the view on error. Node half plus headless Chrome with a request log.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-embed.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-embed.mjs"
+          node --no-warnings "$RUNNER_TEMP/test-embed.mjs"
+
       - name: Untrusted-markup sanitizer rig
         # Every deck is untrusted input somebody may open, paste or receive over
         # collab, and script in that page owns the collab keys, the plaintext
@@ -448,6 +529,17 @@ jobs:
         # and a user-facing path that reaches serializeFile instead of
         # serializeAuto — so a NEW export path cannot reintroduce either.
         run: node scripts/test-export-secrets.ts
+
+      - name: bento check rig (browser)
+        # scripts/bento-check.mjs is the closing half of an agent's loop: load
+        # a deck in headless Chrome and report what validate() finds, with
+        # element ids and paths, plus one PNG per slide through #480's render
+        # path and a contact sheet. The rig drives it as a child process on
+        # the built shell: a deck with an overflowing box and an off-canvas
+        # rect names both; --json, --png, exit codes; a compact document is
+        # refused in plain words on a shell without compact input. Self-skips
+        # only OUTSIDE CI where Chrome or the shell is missing.
+        run: node scripts/test-bento-check.ts
 
       - name: Blob content-address rig
         # Encrypted assets are fetched by content address from a relay the
@@ -595,6 +687,15 @@ jobs:
         # every host silently loses the distinction.
         run: node scripts/test-savepurpose.ts
 
+      - name: Remember-the-file-handle rig
+        # A deck in ~/Documents or ~/Downloads can never be covered by a
+        # directory grant (Chrome's blocklist), so it re-ran the save picker on
+        # every reopen. The FILE handle is remembered (IndexedDB by docId) and
+        # reconnected with a permission prompt inside the save gesture. Guards:
+        # name-match, denied/NotFound -> picker + drop, only a real handle (never
+        # a host polyfill), reconnect BEFORE serialize so activation stays fresh.
+        run: node scripts/test-file-handle.ts
+
       - name: Guarded storage rig
         # localStorage's absence is hostile: reading the PROPERTY throws, so
         # `if (localStorage)` is itself the crash and one bare read at module
@@ -639,6 +740,22 @@ jobs:
         # properties as unknown, and an agent acting on that deletes working
         # configuration — so the generated file is committed and pinned here.
         run: node scripts/build-modelkeys.mjs --check
+
+      - name: Schema is current
+        # schema/slides.json is generated from the gate's tables
+        # (slides/src/schema.ts via scripts/build-schema.mjs) and published at
+        # bento.page/schema/slides.json; a stale file would describe a format
+        # the runtime does not accept, so the committed copy is pinned here.
+        run: node scripts/build-schema.mjs --check
+
+      - name: Document schema rig
+        # one source (file == buildSchema == window.bento.schema()); schema
+        # keys == gate keys per type; the starter deck validates and a typo
+        # does not; $schema is stripped on load and accepted by the 1.1.0 and
+        # main parseDoc (frozen); the URL is never fetched.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-schema.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-schema.mjs"
+          node "$RUNNER_TEMP/test-slides-schema.mjs"
 
       - name: Document validation rig
         # validate() is only useful if it is trusted: the rig proves the starter
@@ -906,6 +1023,67 @@ jobs:
         # relay that cannot be rolled back independently of the shells already
         # in people's files. This diffs only what goes on the wire.
         run: node scripts/test-relay-protocol.ts
+
+      - name: relay broadcast rig
+        # A show is a special case of collaboration: an audience member holds
+        # an owner-signed `audience` invite and a per-show key, and the relay
+        # routes by stream. What breaks silently if this regresses: an audience
+        # socket admitted on the room token (it holds the show key, not the
+        # room key, so the compare must be skipped for the role and only the
+        # role); an audience socket that can send anything (the invite is on the
+        # same chain as a writer's, so the check is by role); an aud frame that
+        # reaches the room stream or the room's op log (show-key ciphertext
+        # persisted forever, replayed to every future collaborator as noise); a
+        # late joiner served the room's op log; show state kept in memory,
+        # which hibernation evicts mid-show; and the presenter-loss grace timer
+        # firing the DO's single alarm as the 30-day room WIPE. Each is a
+        # mutation this rig turns red on.
+        run: node scripts/test-relay-broadcast.ts
+
+      - name: relay authorization rig
+        # Drives the real Room durable object with fake sockets and storage.
+        # What it guards: the relay stamps a fanned-out frame with exactly what
+        # it verified and never with what it did not; a socket that merely
+        # hash-matches the room's public key is challenged and handed no blob
+        # write ticket, cannot latch the room, and cannot answer with a forged,
+        # replayed or cross-room proof; revocation re-mints the ticket to
+        # proven sockets only; and a snapshot claiming a seq the room has not
+        # reached is refused rather than allowed to prune the op log. Every
+        # one of these is silent when it regresses — the relay keeps working
+        # and simply trusts more than it should.
+        run: node scripts/test-relay-auth.ts
+
+      - name: publish account gate — the release account is checked before the site goes live
+        # publish-site.mjs mirrored and pushed the site and THEN failed to
+        # create the GitHub release, three releases running, because gh was
+        # the work profile (a job/temp worktree). The gate runs before rsync;
+        # this rig pins the rule and the order.
+        run: node scripts/test-publish-account.ts
+
+      - name: client vouch rig — the other half of read-only
+        # Drives a REAL OnlineTransport (kernel's and dash's twin) through a
+        # fake socket in a signed room. Every copy holds the room key, so a
+        # reader can encrypt an op batch and the blind relay fans it out
+        # unstamped; the client's `vouched()` is the only thing between that
+        # frame and every live editor applying it. With `vouched` mutated to
+        # `return true`, every other rig in the tree stayed green — security
+        # found that by mutation, and this rig is the answer: unstamped ops and
+        # snapshots refused, stamped ones applied, presence unaffected, legacy
+        # r-rooms permissive. Bundled because the kernel transport uses
+        # parameter properties, which node's strip-only loader rejects.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-sync-vouch.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-sync-vouch.mjs"
+          node "$RUNNER_TEMP/test-sync-vouch.mjs"
+
+      - name: session broadcast surface rig
+        # startShow/endShow, the verb channel, and the audience's reception.
+        # What breaks silently if it regresses: the audsnap under the show key
+        # is the LIVE sync state instead of a fresh adopt of the projected doc,
+        # which leaks `stash` (deleted slides' notes) and the whole per-keystroke
+        # text history past the projection; or a local op reaches the audience
+        # without the app's projection applied. Both are mutation-caught here.
+        run: node scripts/test-sync-show.ts
 
       - name: dash validator rig
         # 109 checks over the shapes that read as DATA rather than as damage —
@@ -1245,6 +1423,225 @@ jobs:
         # is the regression.
         run: node scripts/test-layouts.ts
 
+      - name: slides asset-pruning rig
+        # doc.assets was append-only: delete every slide, save, and the "empty"
+        # deck was still 20 MB (#442). A save now writes a copy with the
+        # unreferenced assets dropped. Weighted toward "kept", one case per
+        # reference form, because dropping too much is the worse failure — an
+        # image gone from a file with nothing on screen to say so.
+        run: node scripts/test-slides-assets.ts
+
+      - name: Slides built-in fonts rig
+        # The shell carries two faces; a deck names them (builtin:…) instead
+        # of embedding 86 KB the file already has. At save a deck embedding
+        # byte-identical bytes is rewritten to name them; a different font
+        # keeps its bytes; the live document is untouched; measured saving.
+        run: node scripts/test-slides-fonts.ts
+
+      - name: Slides code colours rig
+        # theme.codePalette's editor: one row per token scope from one list
+        # (code.ts CODE_SCOPES), built-in colour shown when the deck has
+        # none, the field written only on a change; plain literals, not
+        # palette references. And accent 2–6 rows/swatches only for slots
+        # the deck carries (six identical peach swatches were not choices).
+        run: node scripts/test-code-palette.ts
+
+      - name: Slides pagination rig
+        # Three ways a slide declines a page number (state, hidden, unnumbered)
+        # and only one of them stays in the walk; every surface — page fields,
+        # presenter counter, sidebar — asks the same predicate, and a build of
+        # morph steps reads "18, 18, 18" rather than "18, 19, 20" (#282).
+        run: node scripts/test-slides-pagination.ts
+
+      - name: Slides reveal-steps rig
+        # fx.step, "animate on click": → reveals the next step before it
+        # leaves the slide, ← hides it; backward arrival is fully revealed;
+        # gaps are pressed through; the audience follows the presenter's
+        # step. Decisions in slides/src/steps.ts, DOM-free (#282, option 2).
+        run: node scripts/test-slides-steps.ts
+
+      - name: Maths engine rig
+        # slides/src/maths replaced Temml (2026-09-15): never-throws contract;
+        # the 91-formula reference set matches Temml's FROZEN trees on ≥95%
+        # (scripts/fixtures/maths-reference.json; every mismatch must be a
+        # listed residual); Typst ≡ LaTeX on the shared tree; every emitted
+        # attribute is the engine's own; the symbol table has no duplicates.
+        run: node scripts/test-maths-lite.ts
+
+      - name: Reveal authoring rig
+        # Reading order (top-to-bottom, then left-to-right, rows by vertical
+        # overlap) is deterministic; the verbs continue the slide's sequence;
+        # the badge cycle never reaches 0; and the badge layer is editor
+        # chrome that render/present/preview do not know.
+        run: node scripts/test-slides-reveal-ui.ts
+
+      - name: Date/time field patterns rig
+        # {{date:M/D/YY}} / {{time:h:mm a}} pin a shape for every viewer
+        # (datefmt.ts): token precedence, [bracketed] literals, 12-hour
+        # tokens, locale month names; every panel preset formats; render.ts
+        # routes the argument. Bare {{date}} stays viewer-locale (#381).
+        run: node scripts/test-slides-fields.ts
+
+      - name: Typed bullets become lists rig
+        # editor/bullets.ts bulletsToLists: glyph lines become real <ul><li>
+        # at commit (hanging indent), nesting by indent, untouched otherwise,
+        # idempotent; both paste handlers read the clipboard through
+        # editor/paste.ts (the html flavour, sanitized) -- #502, #503.
+        run: node scripts/test-slides-bullets.ts
+      - name: Inline-edit listeners rig
+        # Every keydown/input/paste/blur listener a text-box or cell edit
+        # attaches carries that edit's AbortSignal, and both commits abort it —
+        # a node re-edited without a re-render used to stack listeners and
+        # paste N times.
+        run: node scripts/test-slides-edit-listeners.ts
+
+      - name: Live-session notice wording rig
+        # A refused whole-deck snapshot (SyncNotice.snapshot, #509) is worded as
+        # the deck, never as a change or an image; the Share popover polls
+        # pendingBlobUploads() only while open; strings in every core catalog.
+        run: node scripts/test-slides-sync-notice.ts
+
+      - name: Shell loader and carrier rig
+        # base86 payloads (scripts/lib/b86.mjs) round-trip and can never
+        # contain </script, <!--, -->, ]]> or ${; the loader inflates
+        # synchronously and runs the runtime as an inline classic script
+        # FIRST (mounted before DOMContentLoaded, as the uncompressed build
+        # is), probes and waits on nothing, falls to new Function then blob
+        # only on a refusal, installs Trusted Types policies lazily, and
+        # records window.bento.loader. The gate goes red on a hand-edited
+        # payload. The browser half drives headless Chrome with a real
+        # background tab: mounted before DCL hidden, splash gone within 50 ms
+        # of the mount there. Needs slides/node_modules and the built shell.
+        run: node scripts/test-shell-loader.ts
+
+      - name: Maths in links rig
+        # resolveMath transforms text runs only: a `$` inside an href never
+        # pairs with one in the text, so a link whose address carries a
+        # dollar sign keeps its href (pre-existing since #465).
+        run: node scripts/test-slides-math-href.ts
+      - name: Maths delimiters rig
+        # #540: \(…\) and \[…\] beside $…$ and $$…$$, escapes literal,
+        # "$5 and $10" still prose; display maths may span <br>/<div>/<p>
+        # line breaks and nothing else; the editor-only "Not rendered" hint;
+        # paste and commit keep a formula's backslashes. Real engine, DOM-free.
+        run: node scripts/test-slides-math-delims.ts
+      - name: Maths coverage rig
+        # #551: maths-lite against Temml's WHOLE vocabulary (1,237 commands and
+        # environments, frozen offline): no covered command may fall back to
+        # raw text, the rendering and tree-identical counts may not drop below
+        # the recorded floor, and every commonly typed formula renders. The
+        # check a fixed sample could not make, which is how #540 slipped by.
+        run: node scripts/test-maths-coverage.ts
+      - name: Compact document rig
+        # The agent authoring form (#422): compactDoc/expandDoc are inverses
+        # on the starter deck, expansion equals the editor's insert helpers
+        # field for field, nested arrays flatten, ids mint deterministically,
+        # the loader gates the expanded doc, the file on disk stays full.
+        run: node scripts/test-slides-compact.ts
+
+      - name: Agent-deck corpus rig
+        # scripts/fixtures/agent-decks/*.json — compact decks written the way
+        # agents write them (md, omitted h, nested arrays) — load through the
+        # real loader with zero dropped keys and zero validate() errors; a
+        # deliberately wrong deck reports every drop at its path with a reason.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-agent-decks.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-agent-decks.mjs"
+          node "$RUNNER_TEMP/test-slides-agent-decks.mjs"
+
+      - name: Compact layouts and roles rig
+        # A compact slide names a layout and its elements carry roles: the
+        # layout's frames through model.ts applyLayout (the editor's own
+        # path), ids kept so same-layout slides morph, unknown roles fall
+        # back and are reported, explicit geometry wins, bodies stack, and
+        # AGENTS.md's layout table is checked against the code.
+        run: node scripts/test-slides-compact-layouts.ts
+
+      - name: Gate parity rig (the load-report collector changes no decision)
+        # main's untrusted.ts frozen from git at rig time and bundled beside
+        # the branch's; every checked-in deck plus a hostile corpus goes
+        # through both with the collector OFF and the outputs must be
+        # byte-identical. Security-reviewed hunk (#486).
+        run: |
+          git fetch --no-tags --depth=1 origin main
+          node scripts/test-gate-parity.ts
+
+      - name: Layers panel rig
+        # editor/layerrows.ts, DOM-free: rows top-first, labels per type,
+        # group indent, moveInPaintOrder == the Order buttons (front/back/±1,
+        # a group moves as one, a no-op returns the same array), highlight
+        # follows the selection; render/present never see the list (#371).
+        run: node scripts/test-slides-layers.ts
+      - name: Export slides as images rig
+        # exportimages.ts decisions (DOM-free): the page set is the print set
+        # (hidden/state out, deck order), names pad NN and use the kernel's
+        # own title sanitiser, JPEG matte/PNG none, 1x/2x integer sizes; and
+        # the editor half renders via renderSlide with no PREVIEW_BUDGET tier.
+        run: node scripts/test-slides-export-images.ts
+      - name: Connectors rig
+        # #302/#303/#304: one tip catalogue (tips.ts) behind the model, the
+        # gate, the panel and the markers; per-tip insets (hollow tips stop the
+        # stroke at the head); the double arrow's polygon is symmetric; a
+        # curve's end tangent and the re-route that moves only its end points;
+        # the straight connector's 1.0.2 functions byte-identical.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-connectors.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-slides-connectors.mjs"
+          node --no-warnings "$RUNNER_TEMP/test-slides-connectors.mjs"
+
+      - name: Image crop rig
+        # crop.ts: {x, y, scale} → the one CSS mapping every surface uses;
+        # the frame can never show empty space; the shape gate admits the
+        # field and refuses wrong shapes; one image branch in render.ts;
+        # present tweens a crop only when both sides carry one (#319).
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-crop.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-crop.mjs"
+          node "$RUNNER_TEMP/test-slides-crop.mjs"
+      - name: Photos shrink at insert rig
+        # editor/shrink.ts decisions, DOM-free: photo vs graphic (lossy vs
+        # lossless), the ≥20% keep rule, the 2560 px cap, svg/gif untouched,
+        # every insert path routed, model.ts untouched. The encode itself is
+        # measured in Chrome (PR #).
+        run: node scripts/test-slides-shrink.ts
+
+      - name: Compress pictures in this deck rig
+        # editor/compressdeck.ts planning half, DOM-free: image elements only,
+        # an asset once however many elements share it, SVG/GIF/media/fonts
+        # never; applyCompress writes in place and drops the replaced asset's
+        # blob reference; the editor dry-runs first and commits once.
+        run: node scripts/test-slides-compress-deck.ts
+      - name: Image aspect-ratio lock rig
+        # keepAspectRatio (#372): absent = locked, so old files resize as
+        # before; Shift is the one-drag exception either way; re-locking
+        # deletes the field and keeps the current shape; unlocking sets
+        # fit:'fill'. Also holds the set-aside parts of #372 out of the tree.
+        run: node scripts/test-slides-aspect-lock.ts
+
+      - name: Web links and bullets rig
+        # A link is one thing in four places — isWebUrl — and every surface
+        # that lets a URL in or out asks it: the shape gate, the text
+        # sanitizer, the markdown converters, and the show before it opens a
+        # NEW tab with noopener,noreferrer. javascript:/data: are text.
+        # Bullets from "- " and "* ", indented sub-bullets. (#421, #255, #368)
+        run: node scripts/test-slides-links.ts
+
+      - name: Audience projection rig
+        # Live broadcast: the handout, the join snapshot and every streamed op
+        # go through slides/src/audience.ts, which keeps back speaker notes
+        # and review comments and nothing else. Runs the negative control
+        # first — with the boundary emptied the rig must go red, or it is
+        # checking nothing.
+        run: |
+          if node scripts/test-audience-projection.ts --mutate > /dev/null 2>&1; then
+            echo 'negative control passed with the boundary removed'; exit 1; fi
+          node scripts/test-audience-projection.ts
+
+      - name: Broadcast follow-mode rig
+        # The audience side's decisions (slides/src/follow.ts): nav by slide
+        # ID with the index only as fallback — an insert mid-talk moves nobody;
+        # follow is the viewer's, lock is the presenter's and wins; laser
+        # samples rate-limited at the source with pen-up always sent.
+        run: node scripts/test-broadcast-follow.ts
+
       - name: slides store rig
         # The editor's undo/redo, selection and whole-deck replacement, at the
         # store level rather than through the DOM. Bundled first for the same
@@ -1548,3 +1945,26 @@ jobs:
         # which paints "Edited" and would credit a colleague's typing to you.
         # The last section is two real sessions over a real BroadcastChannel.
         run: node --no-warnings scripts/test-sync-spaces-session.ts
+
+  slides-font-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone documents
+        run: |
+          npm ci --prefix slides
+          npm run build:single --prefix slides
+      - name: Exercise the packaged documents in Chromium
+        # Real UI and serialization, offline; delayed mock writes expose save races.
+        run: |
+          node scripts/test-slides-font-lifecycle-browser.mjs

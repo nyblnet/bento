@@ -3704,6 +3704,53 @@ payload 72KB → 79KB). Most of it is the finding messages, which are the
 product: a code with no explanation is not actionable. Anyone tempted to shrink
 this should shorten prose, not drop checks.
 
+## 2026-08-08 — Live broadcast control channel
+
+**Decision.** The presenter of a deck can broadcast to copies of it over the
+existing relay: a "Save broadcast copy…" Share-menu export embeds
+`collab.broadcast = {room, relay}` and boots the copy into a locked
+present-follow viewer; the presenter's speaker view arms a broadcast per show
+(off by default) and sends signed control frames over a dedicated
+BroadcastSocket. Frame types: `{ctl:'nav',n,g}` (presenter-visible slide
+number, 1-based with interactive states excluded), `{ctl:'laser',p,g}` /
+`{ctl:'laser',off:1,g}` (slide-fraction stroke points, hold-to-draw, ~30fps
+client throttle) and `{ctl:'black',on:1|0,g}` (persisted as `lastBlack` and
+replayed to late joiners, unlike laser which is transient). Signatures over
+literal texts (`nav.${n}`, `laser.${p}`, `laser.off`, `black.on`/`black.off`)
+with the presenter's key; the relay fans a signature-less copy (clients trust
+its verification, like ops) and sends `{ctl:'presence',n}` viewer counts on
+connect/close. The relay keeps the generic per-socket rate limiter (RATE_BURST
+400/10s — enough for a full laser stroke with nav headroom) and the storage is
+two small values (`lastNav`/`lastBlack`) replayed ahead of any live frame, so
+a late joiner always lands on the newest slide. Relay changes are
+backward-compatible: old copies ignore unknown ctl frames. Details:
+docs/broadcast-design.md, server/sync-worker/src/worker.js,
+slides/src/present.ts, slides/src/main.ts.
+
+## 2026-08-10 — Broadcast rooms derived from the presenter's signing key; hosted client
+
+**Decision.** One room system for ALL broadcasts: the room is derived from the
+PRESENTER's signing key — the key this copy signs control frames with: the
+owner key (owner deck), the per-copy invite key (a shared editor copy — each
+invitee's room is unique to their copy), the shared writer key (legacy), or a
+device-local broadcast key (no-collab decks). `room = b64url(sha256(signerPub))
+[0:10]`, re-hashed until it doesn't start with 'w' (a 'w' name would be
+mistaken for a signed collab room by the relay); the relay connect token is
+derived from the room name (`tok = b64url(sha256(room))[0:18]`). Presenter and
+viewers compute the same values, so the shareable link is
+`<hostClient>?room=<name>` (no tok) and the copy embeds `broadcast:{room,relay}`
+(no tok). The relay TOFUs the presenter's `?w=` signer key per non-`w` room
+(like the tok) and verifies nav/laser/black against it; signed rooms keep the
+owner-key commitment. The collab-socket reuse path is removed; earlier
+`?b=` re-pointing and `?room=&tok=` URL formats were dropped during
+development (no backward compatibility). The hosted variant: a broadcast copy
+hosted once on the presenter's server (`doc.meta.hostClient`, set in the
+About dialog's Document properties — no prompt), re-pointed at any presenter
+via `?room=`, and joining the deck's collab room as a live reader replica so
+content updates in real time. The URL carries only the nav capability; the
+file carries the deck key (same trust as the read-only copy). Key rotation
+breaks the pinned signer key until the deck is duplicated (new docId) —
+accepted. Design: docs/broadcast-design.md, docs/hosted-broadcast-design.md.
 ## dash: a workbook holds two kinds of sheet — spreadsheets and datasets
 
 2026-08-11. Settles a tension that was shipping as a visual lie.
@@ -7180,3 +7227,1120 @@ its own. What is honest without a ruling is smaller and differently shaped:
 typography presets (`fontFamily`/`headingFamily`/`measure`, which ARE document
 data), which would first need the column to paint the font fields at all. Left
 for the ruling rather than shipped under the wrong name.
+## 2026-09-13 — Broadcast is a special case of collaboration: the relay half
+
+**Decision.** A live show is not a second transport. An audience member is a
+collaborator holding a TICKET — an owner-signed invite with role `audience`,
+on the same chain as "Invite to edit" — whose `collab.key` is a per-show SHOW
+KEY rather than the room key. The relay (`server/sync-worker/`) implements
+the show as five rules, each guarded by `scripts/test-relay-broadcast.ts`:
+
+1. **Admission is the invite, not the token.** `?tok=` is a hash of the room
+   key and an audience copy cannot derive it, so the token compare is skipped
+   for the `audience` role and only for it. `w` rooms only; only while live
+   (else close `4002 not-live`); refused on a revoked invite; refused `4003
+   show-full` when the held show has outgrown its cap.
+2. **Audience sockets are receive-only.** Every frame from one is dropped.
+   Control verbs verify by ROLE — the socket's pinned writer key — never by
+   chain membership, because the audience invite is on the same chain.
+3. **Two streams.** A frame tagged `s:'aud'` goes to audience sockets only,
+   is never persisted whatever else it carries, and comes only from writer
+   sockets while live. The room stream never reaches an audience socket —
+   including presence, in either direction. `nav`/`black` are signed with the
+   stream in the text and retained as latest state; `laser` is unsigned and
+   never retained.
+4. **The relay holds the show, in DO storage.** One presenter `audsnap` on
+   `live` and at checkpoints; aud ops since; nav/black. A late joiner is served
+   that and never the op log or the room's persisted snapshot. Storage, not
+   memory: the Hibernation API evicts the object mid-connection, and an
+   in-memory show would vanish silently. Past 256 KB of held ops the presenter
+   is asked to checkpoint once; past twice that, joiners are refused until it
+   does.
+5. **`end` is any writer's; grace is the only unsigned path.** Presenter
+   socket loss starts 60 s; a writer's `live` cancels it; audience activity
+   never extends it. When it fires the show ends and **the room survives**.
+
+**The Durable Object has one alarm, and it used to mean "wipe the room".**
+Every timer now goes through one multiplexer (`schedule`/`rearm`/`alarm`):
+each kind stores its due time, the DO alarm is armed to the earliest, and the
+handler runs whichever are due. Arming the grace timer with a bare `setAlarm`
+would have replaced the idle alarm and, on firing, run the wipe on a live
+room. The rig asserts the room survives a grace expiry and that the idle
+alarm still evaporates it.
+
+**`ready` carries `v` (relay protocol version, 2) and `bc:1`.** `v` is the
+one read-only way to tell a deployed relay from the last one; every other
+discriminator is a write or needs an owner key. Clients feature-detect
+broadcast on `bc`.
+
+Deploy: after #452's relay (deployed 2026-09-13 as `62a12ffa`, from
+`b1b4a67`), as its own deploy. Additive to every shipped client — none sends
+`ivr=audience` or `s:'aud'`, and `v`/`bc` on `ready` are ignored by clients
+that do not read them. The client half (slides) feature-detects and lands
+separately. Design note: private until the client ships, then promoted.
+
+## 2026-09-13 — Broadcast: the client half is a projection, a ticket, and two toggles
+
+The relay half is the entry above. This is what the slides client decided,
+built on the same day against it, with the reasoning that should not be
+re-derived.
+
+**The audience receives a PROJECTION, and one module builds all three
+surfaces.** `slides/src/audience.ts` builds the handout ("Audience copy…"),
+the join snapshot the relay serves (`projectDoc`), and filters every op the
+presenter streams (`projectOp`). Speaker notes and review comments are kept
+back — no export path stripped either before, so the first draft would have
+sent a presenter's notes to the room in the file, in the snapshot, and LIVE
+as they typed. Hidden slides stay: reachable by link, part of the deck. The
+rule that made the module honest, found by driving the real CRDT rather than
+hand-built ops: **every place the doc projection strips, the op projection
+must strip the op carrying the same content** — `doc.layouts` syncs as one
+document-level register, not as slide nodes, and "Save slide as layout"
+mid-show would have streamed a layout's notes while the handout was clean.
+`scripts/test-audience-projection.ts` diffs eight real editor edits through
+the engine and searches the projected wire for a sentinel, content-agnostic,
+so a register nobody knows about yet is caught; CI runs its negative control
+first.
+
+**An audience copy is `role: 'audience'`, not `'reader'`.** Every check that
+reads `collab.role` would otherwise do reader things — join the room path,
+boot the locked editor, skip autosave — and the audience boot path is the
+show. It holds the SHOW key as `collab.key`, the owner-signed audience invite,
+no room key, no private halves, blobs inlined (blob keys derive from
+`collab.key`, so a show-key copy could never open room-key blobs). The ticket
+(invite + show key) lives in the presenter's `collab.audience`, minted once
+and reused for every show; "Issue new tickets" re-mints it and revokes the old
+invite at the relay — defence in depth behind the cryptographic cut.
+
+**The join snapshot is built from a FRESH sync state**, never the save-time
+one: `stash` carries dead-window values including deleted slides' notes, and
+the text history carries every keystroke. The client hands the session the
+projected document only; the session builds the state.
+
+**Navigation is by slide ID; the visible index is only a fallback.** The
+design this replaced navigated by index, and an insert mid-talk moved every
+viewer to the wrong slide, silently. **Follow is the viewer's toggle; Lock is
+the presenter's and wins** — it forces follow on and makes the toggle inert.
+Lock is a UX constraint, not a security one: the viewer holds the whole deck,
+and the button says so in those words rather than implying otherwise. **Live
+is off on every show**; presenting locally never broadcasts by itself. Laser
+samples leave at ≤ 20 fps with pen-up always sent (`slides/src/follow.ts`,
+`scripts/test-broadcast-follow.ts`).
+
+**What was deleted with the old shape:** the separate broadcast socket, its
+derived rooms and trust-on-first-use pinning, `doc.broadcast`, the hosting
+URL, the hosted client, and the relay integration check that tested them.
+The contributor's relay verb logic, follow UI and off-by-default rule are the
+surviving core; the PR stays theirs.
+
+## 2026-09 — Shared UI primitives, tier 2: the side panel + resizer
+
+**Decision.** The resizable, collapsible side panel moves into the kernel as
+`kernel/src/ui/panel.ts` + `panel.css`, guarded by `scripts/test-ui-panel.ts`.
+Kernel definition only — each app's migration is that zone's own change, as with
+the menu (tier 1). Same rules: structure and behaviour are shared; token VALUES
+read through `--bkp-*` fallback chains onto whatever the host app already
+defines, so adoption is appearance-neutral and no theme mechanism is imposed
+(never `light-dark()`, for the reason in the tier-1 entry). The persistence key
+is INJECTED — the kernel does not hardcode an app's localStorage namespace.
+
+**Why, measured by concept.** Three apps implement the same resizable panel and
+a fourth stubs it: slides (`.ed-sidebar`/`.ed-props`, two resizers, RTL widen,
+`bento-ed-panels`, phone drawers), spaces (`.sp-insp`, `bento-sp-*`), dash
+(explicitly "ported from slides", one panel, `]` collapse, `bento-dash-panels`),
+and type, whose `.t-props` is a FIXED-WIDTH aside with no resizer, collapse or
+persistence — its CSS even says it copied the row metrics "at a fixed width, as
+slides and dash both do" and none of the machinery. So "slides is the basis"
+again gives the fourth app the LEAST; type would gain drag/collapse/persistence
+from adopting this, not lose anything.
+
+**The value is knowledge, not bytes**, as with the menu. Each app learned the
+same non-obvious things alone: a panel needs a no-animation class DURING a drag
+or its width transition chases the cursor; the collapse chevron docks flush to
+the screen edge when shut; widening flips direction under RTL because the drag
+delta is physical while the panel is docked logically; a panel boots SHUT below
+a phone width; and (hard-won detail 10) a panel is `overflow:auto`, so anything
+floating inside it is clipped on both axes and must escape rather than overflow.
+`panel.ts`/`panel.css` are the one home for each.
+
+Pointers: `kernel/src/ui/panel.ts`, `kernel/src/ui/panel.css`,
+`scripts/test-ui-panel.ts` (62 checks; the drag/RTL/collapse/persistence/drawer
+behaviours are each mutation-caught, and the theming guard is reproduced from
+tier 1 — to be factored into one shared helper when both primitives have landed).
+## 2026-09-09 — Shared UI primitives live in the kernel; the menu is the first, and values stay the app's
+
+**Decision.** The seven UI primitives every Bento app implements independently
+move into `kernel/src/ui/`, one at a time, each as its own serialized kernel PR.
+The menu/dropdown is first: `kernel/src/ui/menu.ts` + `menu.css`, guarded by
+`scripts/test-ui-menu.ts`. **This lands the shared definition only — each app's
+migration is that app zone's own change**, per the kernel zone's rule that a
+kernel PR never carries the app half.
+
+**Why, and it is not bytes.** Each Bento app is one self-contained file, so
+shared code is bundled into each anyway; measured, the primitive adds 604
+compressed bytes to the slides shell while slides still carries its own menu
+code as well. A general primitive can easily cost more than the specific thing
+one app needed. The return is elsewhere.
+
+Comparing CSS selector NAMES across the apps finds nothing — two apps
+implementing the identical dropdown as `.ed-menu` and `.dv-menu` register as
+zero overlap, which is why an earlier count of 11 shared selectors out of 2,156
+concluded, wrongly, that there was nothing to share. Compared by CONCEPT, seven
+primitives are implemented four times over. The dropdown is one design copied
+four times, and the tell is the offset from the trigger: slides `calc(100% +
+4px)`, spaces `+5px`, dash `+6px`, type `+6px`. Nobody designed 4, 5, 6, 6.
+
+**The real cost is that hard-won knowledge has nowhere to live.** CLAUDE.md's
+hard-won details 9 and 10 — a flex item's `z-index` is a CEILING that caps every
+descendant, and `overflow-y: auto` also clips HORIZONTALLY — cost slides real
+debugging. Slides, spaces AND dash each record both traps in their own source,
+because each hit the same wall independently. Type records only one. Three teams
+paid for the same two lessons, and the only home either lesson had was a comment
+in one app's CSS. `menu.css` is now that home.
+
+**What differed between the four was invisible, and that is what the primitive
+fixes.** Of slides' eight dropdowns, five had no outside-press dismissal at all,
+one hand-rolled it inline and two called a helper; none closed on Escape. Three
+of the four apps publish no `aria-expanded` anywhere. No app had arrow-key
+navigation. slides and spaces each add document listeners per dropdown and
+remove none. So the primitive takes dash's single delegated listener pair and
+mutual exclusion, spaces' ARIA and disabled/selected row semantics, slides'
+split-button and phone-fold structure — and adds the arrow-key navigation and
+focus-return that no app had.
+
+**"Slides is the basis" is true of the CSS and false of the behaviour.** It was
+the maintainer's default and it holds for structure; where slides has the least,
+the fuller implementation wins on its merits and this entry says which.
+
+**Token VALUES are deliberately NOT settled here**, and neither is the theming
+MECHANISM. dash has `--line-strong`, `--shadow-pop`, `--radius-lg` and `--hover`
+that the other three lack, and a `--radius` of 7px against their 10px. Separately
+— and more importantly for a shared sheet — the four theme by three different
+mechanisms: slides and type via `:root[data-theme="dark"]`, spaces via that AND a
+`prefers-color-scheme` media query, dash via `light-dark()`, which resolves off
+`color-scheme`. All four DO have a dark theme; what differs is who decides.
+
+**A shared stylesheet therefore cannot express themed values with
+`light-dark()`.** slides sets `:root { color-scheme: only light }` deliberately
+(`slides/src/styles.css:96`) because without it a dark-mode phone renders native
+form controls dark under the app's dark ink — "blank" dropdowns — and Chrome on
+Android may force-darken the page. Under `only light`, every `light-dark()`
+value pins to its light half forever, so a shared sheet built on it would
+silently cost slides the dark theme it already has.
+
+`menu.css` sidesteps all of it: every value reads through a `--bkm-*` property
+whose fallback chain **consumes whatever themed token the host app already
+defines, by whichever mechanism that app themes it**. That is why one sheet
+survives four theming mechanisms without picking one, why adoption is
+appearance-neutral, and why tier 1 did not have to wait for the mechanism
+ruling. Only two values had to be picked, because a shared rule cannot hold
+four: the trigger offset (6px) and the stacking level (60), each the majority
+and each overridable per app.
+
+**The literal at the end of a themed chain is a latent dark-mode bug**, and this
+is the one defect tier 1 actually shipped and then caught. A chain ends in a
+light-only literal so the rule is never invalid; an app defining none of the
+tokens above it silently gets that literal in DARK mode. `type` has no
+`--surface` — its chrome surface token is `--field` — so `--bkm-bg` fell through
+to `#fff`, which would have painted a white menu under light ink. Fixed by
+extending the chain, and guarded by `scripts/test-ui-menu.ts`, which now asserts
+statically that every colour chain reaches a token each of the four apps both
+DEFINES and THEMES. A comment naming the gap was not enough; it named this one
+and the fallback was still wrong.
+
+**A boundary for tier 4, found here and not settled here.** Menus are chrome,
+and chrome should follow the theme — every app already themes the token this
+sheet consumes. The DOCUMENT must not, which `kernel/src/theme.ts:17-18` states
+outright. `type` draws that line explicitly and correctly, with `--paper` for
+the page and `--field` commented "form-control surface — CHROME, not paper".
+The shared token set should make that distinction explicit rather than inherit
+whichever app's habit arrives first.
+
+**The kernel ships CSS now, which it never did before.** Verified end to end
+rather than assumed: an app's `import '../../kernel/src/ui/menu.css'` is folded
+by Vite into the single stylesheet that `scripts/postbuild-compress.mjs`
+deflates into the `#bento-rt-css` payload, and the rules inflate intact out of
+the built shell. No build change was needed. `menu.ts` deliberately does NOT
+import its own stylesheet: keeping them separate is what lets the rig exercise
+the whole primitive in node with no build machinery and no CSS-import stub.
+
+Pointers: `kernel/src/ui/menu.ts` (the four-app comparison, function by
+function), `kernel/src/ui/menu.css` (details 9 and 10, written down once),
+`scripts/test-ui-menu.ts` (what each check guards, and which app's gap it is).
+
+## 2026-09 — UI primitives tier 3: the modal dialog (and three built ahead of a consumer)
+
+**Decision.** Tier 3 of the UI primitives is `kernel/src/ui/dialog.ts` +
+`dialog.css`, guarded by `scripts/test-ui-dialog.ts`. Kernel half only; same
+discipline as the menu and the panel (values through `--bkd-*` chains onto the
+host's own tokens, never `light-dark()`, the shared theming guard).
+
+**The dialog is a real consolidation.** All four apps build their About dialog
+(and smaller confirms) on a per-app overlay — slides `.ed-about-overlay`, spaces
+`.sp-overlay`, dash `.dx-about`, type `.t-overlay`, each with its own open/close
+in an `about.ts`. As the tier's brief predicted, this is where "slides is the
+basis" gives the LEAST: slides' dialog machinery is one class and a blur, while
+spaces captures and restores focus and closes on a capture-phase document
+Escape, and type cleans up a named handler. The primitive takes spaces'/type's
+behaviour and adds what no app had — a focus trap, backdrop dismissal, and
+`role="dialog"`/`aria-modal`/`aria-labelledby` — so the modal works for the
+keyboard, not only the mouse. The overlay is `position: fixed` at a z above the
+topbar's ceiling, so it escapes every ancestor stacking context (detail 9) and
+clip (detail 10).
+
+**The other three of tier 3 are built ahead of a consumer, on the maintainer's
+call ("build all four, they would come into play soon"), NOT as consolidations.**
+The four-way read found nothing to consolidate for them, and that read stands as
+the record:
+- **tooltip** — no app has a CSS tooltip; all four use the native `title`
+  attribute. A custom one is a new abstraction, built forward-looking.
+- **toggle** — the three toggle-named classes are three concepts (a native
+  checkbox, a disclosure block body, a segmented button group); no shared switch
+  exists. Built as a labelled `role="switch"`, forward-looking.
+- **chip** — 21 classes across four apps are homonyms (a removable filter chip,
+  static badges, clickable pickers); the only behavioural one is dash-only. Built
+  minimal — a label with an optional removable ✕ and count — shaped against
+  dash's filter chip, forward-looking.
+
+Each of the three ships as its own PR and should be revisited if no app adopts
+it. This entry is their record as design decisions rather than consolidations.
+
+Pointers: `kernel/src/ui/dialog.{ts,css}`, `scripts/test-ui-dialog.ts` (66
+checks; focus restore, capture-phase Escape, backdrop guard, focus trap and
+listener cleanup each mutation-caught), `working/team/notes/kernel.md` (the
+tier-3 four-way read and its correction).
+
+## 2026-09 — UI primitives tier 3: the tooltip (built ahead of a consumer)
+
+**Decision.** `kernel/src/ui/tooltip.ts` + `tooltip.css`, guarded by
+`scripts/test-ui-tooltip.ts`. Kernel half only; same discipline as the other
+primitives (`--bkt-*` chains onto host tokens, never `light-dark()`, the shared
+theming guard).
+
+**This is NOT a consolidation** — recorded here as one of the three tier-3
+primitives the maintainer chose to build ahead of a consumer ("build all four,
+they would come into play soon"). The four-way read found no app has a hover
+tooltip: all four use the native `title` attribute (99/132/135/65 uses), and the
+`*-tip` classes that exist are a help overlay, a tone indicator and a drop
+marker. So this is a new, deliberately minimal abstraction, to be revisited if
+no app adopts it.
+
+**The one thing it gets right on purpose:** it is never clipped. A tooltip is
+the primitive most likely to be born inside a scroll container (a panel, a
+menu), and hard-won detail 10 says an ancestor with `overflow:auto` clips both
+axes. So the tip is a single `document.body`-level, `position: fixed` element,
+positioned from the anchor's rect — it has no scrolling ancestor to be trapped
+by, by construction. Shown after a delay (no flash on a pointer passing
+through), hidden on leave/blur/Escape, wired with `aria-describedby`.
+
+Pointers: `kernel/src/ui/tooltip.{ts,css}`, `scripts/test-ui-tooltip.ts` (34
+checks; delay, the body/fixed placement, the flash-guard, aria wiring and Escape
+each mutation-caught).
+
+## 2026-09-13 — Reveal steps are presentation state, not slides; unnumbered slides are the other half
+
+Discussion #282 asked for "animate on click" and offered two shapes. Both
+shipped, because they answer different questions.
+
+**`unnumbered: true` on a slide** — in the walk, takes no page number, and
+`{{page}}` on it continues the previous slide's. It is the THIRD answer to
+`paginates` (beside `stateOf` and `hidden`) and the only one that stays in
+`inLinearFlow`; every surface counts by that one predicate, so nothing else
+changed. It covers more than reveals — a section card, an interstitial — which
+is why it exists on its own. `numberHidden` is about hidden slides and does not
+touch it.
+
+**`fx.step` on an element** — hidden when the slide appears, revealed on the
+n-th `→` (running its entrance, or a plain fade if it has none), hidden again by
+`←`; `→` leaves the slide only once every step is shown. Elements sharing a
+step appear together; gaps in the numbering are pressed through in one go;
+arriving BACKWARD lands fully revealed, the way PowerPoint and reveal.js do.
+The decisions live in `slides/src/steps.ts`, DOM-free, so the rig drives them
+(`scripts/test-slides-steps.ts`); present.ts is the DOM around them.
+
+**Why state and not slides.** One slide stays one slide: one page number, one
+morph pairing, one speaker note, one thumbnail, one entry in the sidebar. The
+alternative — steps as hidden slides — would have leaked into all five. The
+cost is one navigation state the old shell does not know, and that degrades
+the right way: an older shell shows every element at once, the same slide
+fully revealed, which is what additivity promises ("opens plain", not "opens
+wrong").
+
+**Hidden by `visibility`, not `display`.** A stepped element keeps its box, so
+nothing reflows when it appears, morph measurements stay honest, and the
+entrance tween starts from opacity 0 the instant the class comes off.
+Measured in a real browser on the manual clock (the driven tab was hidden and
+rAF would have lied): the revealed element's opacity went 0.00 → 0.08 → 0.66
+→ 1.00 across the fade; on a morph arrival the stepped elements sat hidden
+while the carried element morphed, then revealed on `→`.
+
+**The wire.** A presenter's `nav` carries `step`; an audience copy following a
+live broadcast applies it — forward with the entrance, backward as a hide —
+and parks it when the nav names another slide, applying it after that slide
+enters. The speaker view shows `step/max` beside the slide number.
+## 2026-09 — UI primitives tier 3: the toggle switch (built ahead of a consumer)
+
+**Decision.** `kernel/src/ui/toggle.ts` + `toggle.css`, guarded by
+`scripts/test-ui-toggle.ts`. Kernel half only; same discipline as the others.
+
+**Not a consolidation** — the third of the three tier-3 primitives the
+maintainer chose to build ahead of a consumer. The four-way read found no shared
+on/off switch: slides' `input.ed-toggle` is a native checkbox, spaces'
+`.sp-toggle-body` is a disclosure block's collapsible body, type's `.t-toggles`
+is a segmented button group. So this is a new, minimal switch, to be revisited
+if no app adopts it.
+
+The one thing it gets right: it is a real `<button role="switch">` with
+`aria-checked`, so the platform gives it keyboard activation and a screen reader
+announces it as a switch and its state — a switch that is not mouse-only. `set()`
+updates state without firing `onChange` (a set is the app's doing, not the
+user's). The ON track is `--accent`, which several apps deliberately do NOT
+invert, so it is the one colour chain checked for "defines" but not "themes".
+
+**A guard improvement landed with it.** `scripts/lib/ui-theme-guard.ts` now
+follows one level of alias indirection: a token defined as `--x: var(--y)` is
+themed iff `--y` is themed. dash writes `--chrome-2: var(--hover)` and `--hover`
+is themed via `light-dark()`; without this the guard read `--chrome-2` as
+un-themed though it inverts at runtime. All five UI rigs re-run green against the
+updated guard (adding to the themed set can only relax, never regress).
+
+Pointers: `kernel/src/ui/toggle.{ts,css}`, `scripts/test-ui-toggle.ts` (61
+checks; role, click-toggle, aria, set-not-firing-onChange, destroy each
+mutation-caught).
+
+## 2026-09-14 — A deck names the shell's fonts instead of embedding them
+
+**Measured first.** Three real decks, document block only: a photo deck was
+96% assets; two text decks were 80% assets — and in those two, the "assets"
+were the same two woff2 files, Fraunces 900 and Instrument Sans, 86 KB. Both
+faces are compiled into every shell (`fontdata.ts`). Every saved deck carried
+them again. The structure an AI actually edits was 17–21 KB.
+
+**Decision.** A `doc.fonts[]` entry may name a face the shell carries —
+`asset: 'builtin:fraunces-900'`, `'builtin:instrument-sans'` — with no bytes
+in `assets`. `resolveFontSrc` asks the deck's table first, then
+`BUILTIN_FONTS`; `injectFonts` goes through it. The starter deck names both.
+At save, `adoptBuiltinFonts` (slides' save facade, beside the asset prune)
+rewrites any deck whose embedded bytes are IDENTICAL to a built-in face —
+by bytes, not by family name, so a deck carrying its own cut of Fraunces
+keeps it — and the bytes leave the file. The live document is never touched.
+Measured in Chrome: both faces load from the shell; a legacy deck saved
+85,269 bytes smaller.
+
+**What it costs, said plainly.** An older shell opening a new deck looks
+the `builtin:` key up in `assets`, finds nothing, and skips the rule: those
+two families render in the system fallback until the shell updates itself.
+That is a degrade, not a break, and it is the additivity promise's edge —
+"opens plain", not "opens wrong". Accepted because the saving is 80% of a
+typical text deck's data and the update channel closes the window.
+
+**What was rejected.** Compressing the document block (the splice contract
+says plaintext, and a chat AI reads it); subsetting fonts to used glyphs
+(fragile under editing); moving assets to a payload block outside
+`#bento-doc` (an old shell re-serialises from the doc alone and would drop
+them). The next lever is photos — there is no downscale or recompression at
+insert today — and that is format-neutral.
+## 2026-09-14 — Web links: one scheme test, a new tab, and never from the editor
+
+Issue #421 (discussions #373, #374). A deck can now link out: an element's
+`link` may be an http(s) URL as well as a slide id, and `[caption](https://…)`
+in a text box becomes an `<a href>`. The decisions, because each one is a
+place a later change could quietly loosen:
+
+**One scheme test, four callers.** `isWebUrl` in `model.ts` — http and https
+only, bounded length, no quote or angle bracket — is asked by the shape gate
+(an element `link` is a web URL or a slide id), the text sanitizer (an `<a>`
+keeps its href only when it passes, and is UNWRAPPED to its text otherwise —
+never kept href-less), the markdown converters, and the show before it opens
+anything. `javascript:` and `data:` are text everywhere. Measured in Chrome
+against the sanitizer: a web anchor keeps exactly its href and no other
+attribute; `javascript:`/`data:`/attribute-less anchors become plain text.
+
+**Always a new tab, never a navigation.** The file IS the presentation; a
+same-tab navigation would end the show and, on a `file://` deck, leave
+nothing to come back to. `window.open(url, '_blank', 'noopener,noreferrer')`
+— `noopener` so the page cannot reach this window, `noreferrer` so the deck's
+location is not sent. `target`/`rel` are decided at click time and never
+stored in the document, so no document can ask for `_top` or `opener`.
+
+**Never from the editor.** A click on a link in the canvas edits text; it
+does not follow the link. Links open only from the show.
+
+**The offline switch is honoured.** A viewer who asked for no network activity
+does not get a browser tab making a request on a click; the show says so in a
+toast. Measured: with the switch on, a click opens nothing.
+
+Also in the same change, unrelated to security: `* ` makes a bullet like `- `
+(#255), two or more leading spaces make an indented sub-bullet (#368), and the
+`?` overlay lists the shortcuts it had been missing (#269).
+
+## 2026-09-14 — The text sanitizer walks what it unwraps
+
+A hole in `sanitizeHtml` (`slides/src/render.ts`), the one sanitizer for
+every text element and table cell — run at render, on the canvas, and on
+every paste — was open in every shell since the function was written. Fixed
+in #467 (`95b6b97`), shipped in 1.1.0. Written down because the shape is
+general and a later sanitizer could repeat it.
+
+**What it did.** The walk iterated a SNAPSHOT of a node's children. On a tag
+not in the allowlist it unwrapped: lifted the children into the parent ahead
+of the cursor, removed the tag, and `continue`d. The lifted children were not
+in the snapshot, so the pass never visited them. Any allowed tag nested inside
+any unknown tag kept every attribute it arrived with —
+`<section><b onclick="…">`, `<foo><span style="position:fixed">`, at any
+depth — while the same markup under an allowed parent was cleaned. Measured
+in Chrome through the real text-element render path: a click and a hover on
+such text ran the handlers. A deck file or a Bento clipboard payload from
+someone else was enough; nothing looked wrong on screen.
+
+**Why the rig did not see it.** Every case in `test-sanitize` was flat. The
+sanitizer's own allowlist was right and every flat attack was refused, so the
+rig was green for the whole of its life. The shape nobody had tried was
+nesting an allowed tag inside a refused one.
+
+**The fix.** Walk first, then lift: `walk(elChild)` before the children are
+moved up, so a lifted child is held to the same rule as its siblings. Two
+lines, one at the general unwrap and one at the refused-anchor unwrap that
+#465 adds. `sanitizeSvg` was never affected — it REMOVES an unknown element
+whole rather than unwrapping it, which is the other correct answer.
+
+**The rig now.** One case renders five nested shapes plus the allowed-parent
+control through `renderSlide`, then clicks and hovers the lifted elements in
+Chrome. With the recursion removed it goes red three ways and the handlers
+run (`pwned 41,42`); with it, nothing runs. That is the assertion that would
+have caught this: not "did the attribute survive" but "did anything execute".
+
+**The rule this leaves.** A sanitizer that removes an element has exactly two
+correct options for its children: drop them with it, or sanitize them before
+lifting them. Lifting first is always wrong, whatever the loop looks like.
+And every attack case in a sanitizer rig gets a nested variant.
+
+## 2026-09-14 — Asset pruning must wrap the app's save entry point
+
+Issue #442's 1.1.0 follow-up exposed a facade trap. `slides/src/save.ts` had
+shadowed the kernel serializers, but its re-exported `saveFile` called the
+kernel's lexically-bound `serializeAuto`, so ordinary ⌘S bypassed slides'
+asset pruning. The result was a deck that still retained a deleted image's
+bytes until a different write path happened to serialize it.
+
+The decision is that every app-facing write entry point must hand the kernel a
+prepared document. Slides now shares `prepareForSave` across `saveFile`,
+`serializeAuto`, and `serializeFile`; the preparation remains copy-on-write so
+the live document keeps its assets for undo. `scripts/test-slides-assets.ts`
+checks the facade wiring as well as the pure reachability cases.
+
+## 2026-09-15 — The saved deck names its schema
+
+Every deck the app writes now opens with
+`"$schema": "https://bento.page/schema/slides.json"` — the first key of the
+JSON in `#bento-doc`. The schema itself is generated from the runtime's own
+validation tables (`slides/src/schema.ts` reads what `untrusted.ts` accepts
+and what `modelkeys.generated.ts` names; `scripts/build-schema.mjs` prints
+it; CI fails when `schema/slides.json` is stale), so it can never describe a
+deck the app would refuse. It is published at that URL with a version-pinned
+twin, returned by `window.bento.schema()` in a running file, listed in
+`https://bento.page/llms.txt`, and named in the Tooling comment.
+
+**Why a key in the file.** The shell is compressed, so a model that READS a
+`.bento.html` sees only the plaintext: the Tooling comment and the JSON. A
+pointer in the JSON is the one door that travels with the data — through a
+copy, a paste into a chat, a `Copy document JSON`. `window.bento.schema()`
+serves the other reader, an agent driving the browser.
+
+**Additive.** The key is written by `prepareForSave` at serialization only
+and stripped by `parseDoc` on load, so it exists in the bytes on disk and
+nowhere else: not in the live store, the CRDT, a recovery snapshot or a clip.
+The one condition `parseDoc` applies (`format` + a non-empty `slides`) is
+the same in the 1.1.0 release (03280f5) and on main, and neither looks at
+other top-level keys — an older shell keeps the key and writes it back
+unchanged; its `validate()` lists it as an unknown key, a warning. The rig
+holds a frozen copy of that condition. Nothing fetches the URL: the rig
+greps every carrier line for `fetch`/`import`/`href`/`src`, and the load was
+watched in Chrome — zero requests to bento.page.
+
+**Cost.** 50 bytes per saved file, plaintext. The schema machinery in the
+shell is +2,263 B compressed (measured: 756,103 → 758,366), which also
+covers a gap found on the way — the `code` element was missing from the
+model-keys map, so the paste gate dropped every code element and
+`validate()` knew none of its keys.
+
+**Not decided here.** Whether the schema URL should be versioned in the
+pointer itself (`slides-1.1.0.json`). The unpinned URL always describes the
+current release; a deck written by an older shell and read against a newer
+schema only ever gains optional keys, by additivity, so the unpinned form is
+correct for validation and the pinned twins exist for anyone who wants
+exactness.
+## 2026-09-15 — Maths: an in-house engine replaces Temml, and reads Typst
+
+Temml (64 KB compressed, ~10% of the shell) rendered `$…$` to MathML. It is
+gone; `slides/src/maths/` does the job — parse → one shared tree → MathML
+emitter, a LaTeX front end and a Typst front end over ONE symbol table
+(LaTeX name / Typst name / code point). Nothing in the file format changes:
+the document stores the source the author typed, as it always did.
+
+**Measured first, then built.** Every `$…$` in the starter deck, the gallery
+decks, the guestbook and every rig fixture: 6 distinct formulas — fractions,
+roots, scripts, `\left\right`, `\pm`. The gallery and guestbook decks carry
+no maths at all. So the engine's supported set is the obvious tier over that,
+not a cut of anything measured: fractions and roots, scripts and limits,
+`\left\right` and the `\big` family, matrices/cases/aligned, accents and
+braces, `\mathbb`/`\mathcal`/`\mathfrak` as Unicode code points (Chrome
+ignores `mathvariant`), `\text`, `\textcolor`, `\boxed`. Not covered:
+`\substack`, `\xrightarrow`, `\ce`, `\tag`, `\hline` — a formula using them
+renders as typed, exactly as any TeX Temml refused did.
+
+**Compared, in Chrome, 91 formulas** (the 11 from our corpus + 80 from the
+categories of Temml's supported-functions page): normalised MathML trees
+identical on 96.6%, rendered ink identical (<0.5% pixels) on 97.8%. Three
+rounds closed every divergence that was ours by adopting Temml's metric
+(`\mid`, `\!`, function application, upright Greek capitals, primes, `\iff`,
+`\boxed`, accent sizes, the 2 px on every matrix cell). What remains is
+Temml's: `\overline`/`\underline` via `menclose`, which Chrome does not draw
+— we draw the rule, a fix; and one extra `mrow` level with 0.0% pixel change.
+
+**`cases` and `aligned` centre their columns.** TeX left-aligns them; Temml
+does too — through a stylesheet Bento never loaded, so every deck to date
+rendered them centred. Measured `mtd` offsets: ours `[0, 20.2]`, Temml's
+`[10.1, 10.1]`. The maintainer looked at both on the demo deck and chose
+centred: it matches every existing deck, and it looks better. Recorded so
+nobody "fixes" it back to TeX.
+
+**Typst input, syntax A.** `$typst: a/b$` and `$$typst: …$$` — the marker is
+`typst:` immediately after the opening delimiter, case-sensitive, optional
+whitespace after the colon. Chosen over a per-document setting because it
+costs the format nothing (the marker is text), a mixed deck works formula by
+formula, and an older shell shows `$typst: a/b$` literally — degraded,
+legible, the same promise `$…$` already makes. A per-document default can be
+added later without contradicting this; the marker would still override it.
+Typst and LaTeX agree on the shared tree for 122/122 equivalence cases once
+Typst's paren groups (which script the whole group — a real semantic
+difference, not a bug) are folded.
+
+**Trust is structural.** Temml ran with `trust:false` so `\href` was inert.
+The emitter constructs every attribute itself; the one place author text
+reaches a `style` attribute — `\textcolor` — accepts only a CSS colour shape
+(hex, a name, `rgb()`/`hsl()` over numbers). The rig throws `\href`,
+`onload=`, `<script>` and a `url(` colour at it and asserts every emitted
+attribute is on the engine's own list.
+
+**The rig holds the comparison without Temml.** Temml's trees for the 91
+formulas were frozen the day it left (`scripts/maths-freeze-reference.ts` →
+`scripts/fixtures/maths-reference.json`, Temml 0.13.3). `scripts/
+test-maths-lite.ts` compares the engine's trees to them and requires ≥95%
+identical AND every mismatch to be on the explicit residual list — a printer
+change that moves a glyph fails CI, not a slide. Pixels stay out of CI: they
+were measured in the spike and there is no Temml left to draw the other side.
+
+**Numbers.** Engine 775 lines, 24 KB minified, 8.3 KB gzip. Shell on the day
+it shipped (#485, against main 131015e): 756,103 → 690,067 B compressed
+(−66,036 B, −8.7%). The spike that measured all of the above was PR #483
+(closed, three rounds).
+
+## 2026-09-16 — The shell starts the way nothing refuses, and carries its runtime in base86
+
+A .bento.html attached in Microsoft Teams stopped opening once the shell was
+compressed (1.0.x). The maintainer tested seven loader variants in Teams,
+each with a marker on the first slide, and the results decided the loader:
+
+| variant | open pane | preview pane |
+| --- | --- | --- |
+| A — 1.1.0 shell, module import from a `blob:` URL | blank | blank |
+| B — the runtime inserted as an inline module script | splash only | works |
+| B2 — B plus an on-page diagnostic panel | splash only | works |
+| B3 — B plus `trustedTypes.createPolicy` at boot | splash only | blank |
+| B4 — inline first, then `new Function`, then blob; eager policies | works | blank |
+| B5 — `new Function('')` probe first, then inline; eager policies | works | blank |
+| B6 — B5 with the policies made lazy | works | blank |
+| C — the uncompressed build, every script parser-inserted | works | works |
+
+**Two panes, two policies.** The open pane sends a header policy that allows
+the file's own inline scripts by sha256 hash plus `'unsafe-eval'` (hashes
+present, so `'unsafe-inline'` is ignored per spec), no `blob:`, a sandbox
+without `allow-same-origin`, `connect-src 'none'`. C works there because
+every script it has is parser-inserted and hashed; A fails on `blob:`; B
+fails because an inserted script is unhashed. Reproduced locally
+(`scripts/loader-csp-server.py --hash`) before anything was built on it.
+The preview column is recorded as observed but is NOT evidence — see
+"The preview pane is not deterministic" below; every decision here rests on
+the open pane, which answered the same way on every upload.
+
+**Consequence: no probing.** The loader does first the one thing refused
+nowhere — insert the inline module, exactly as B — a step that a hashing
+policy refuses with a report and nothing accepts silently, so the cascade
+never guesses; it reaches for anything else only after a `securitypolicyviolation` attributed to that attempt
+(matched by `blockedURI`, not by timing: the eval probe's own violation
+arrives a task later and was once read as the inline attempt failing):
+then `new Function("'use strict';" + js)()` — an indirect eval, ungoverned
+by script hashes and allowed by `'unsafe-eval'`; the bundle has no top-level
+`import`, `export` or `await`, so it is a classic function body, and a
+`//# sourceURL=bento-slides.js` names it in DevTools — then the blob import.
+Trusted Types policies (`bento` for the script sink, `default` because the
+renderer and the save path assign `innerHTML` and `script.text` from strings)
+are created only after a sink throws the TypeError that names them, and that
+step is retried once. The loader counts violations from its first statement
+and records `{ path, tried, tt, violations }` on `window.bento.loader`.
+Measured under five local policies: zero violations wherever inline is
+allowed; path `function` under the open-pane policy; the lazy install under
+enforced Trusted Types.
+
+**Cost.** Boot to editor mount in plain Chrome, twelve interleaved runs:
+1.1.0 loader median 404 ms, this loader 421 ms (b64) / 367 ms (b86). The
+inline-module path parses the bundle the same way the blob import did; the
+eval-first order was ~80 ms quicker but probes (kept as
+`--loader cascade-eval-first` for the record).
+
+**Encoding.** Every shell byte is paid per send, so the two payload blocks
+moved from base64 to base86: printable ASCII 0x21–0x7E minus `<` `>` `&`
+`"` `'` `\` `-` `{` — 86 symbols, so `</script`, `<!--`, `-->`, `]]>` and
+`${` are unproducible by construction (asserted by the gate on every payload
+and by a 10,000-buffer rig). Four bytes in five characters: 6.4 bits per
+character against base64's 6, a payload ×1.25 instead of ×1.333 — 6.25%
+smaller; the theoretical limit for 86 symbols is 6.43 bits, so 4→5 is within
+0.4% of it and a 7→9 group (6.22 bits/char) would be WORSE, not better —
+larger groups buy nothing here. Block type `bento/deflate-b86`; the gate,
+the site scripts and the loader read both types. Measured on the release
+shell: 699,847 → 661,768 B (−38,079, −5.4% of the file; the payloads
+themselves −6.25%). The in-page decoder — a 128-entry lookup and 32-bit
+groups — takes 11 ms on the runtime payload against 47 ms for
+`Uint8Array.from(atob(...))`, so the smaller file also boots sooner.
+
+**Set aside, measured.** Alternative carriers (`<template>`, `text/plain`)
+and a plain-JavaScript inflater for hosts without DecompressionStream stay
+as opt-in flags (`--carrier`, `--inflate`), built because the delivery of
+the payload was once the hypothesis; the diagnostic panel showed the
+payload found and inflated in Teams, so neither is needed there.
+
+**No request from an embedded view.** The open-pane diagnostic panel, read
+in Teams, ended with `connect-src` violations for the launch update check —
+a request the policy forbids and the app has no business making from a
+frame that cannot store the answer. kernel `net.ts` now
+decides once at boot whether the document is an embedded view and `netFetch` /
+`netWebSocket` — the one place the app touches the network — refuse before
+any request. The decision needs ALL THREE signs — framed (`self !== top`),
+an opaque DOCUMENT origin (`self.origin === 'null'`) and a storage read
+throwing `SecurityError` — because the first cut ("opaque, or storage throws") would
+have switched off updates and collab for people nobody embedded: Firefox
+reports origin `null` for a file:// deck (Chromium 152 reports `file://`,
+measured, so Chromium desktops were never at risk), and so do a data: URL, a
+WebView loaded from a string with no base URL, and a top-level response under
+CSP `sandbox`; a normal tab with site data blocked throws on the storage
+read. That the Teams pane is all three is measured, not assumed: the B2
+diagnostic panel, opened in Teams by the maintainer, printed `framed`
+alongside origin `null` and the storage `SecurityError`. The origin sign
+reads `self.origin`, the document's origin, not `location.origin`, which is
+the URL's: measured in Chromium 152, a sandboxed frame loaded by `src`
+reports its http origin in `location.origin` while `self.origin` is `null`
+(a `srcdoc` or `data:` frame says `null` in both — the B2 panel probed
+`location.origin` and printed `null`, so that is how the Teams pane loads
+the file). On `location.origin` the local sandboxed-iframe harness was not
+sandboxed at all and made the manifest request; on `self.origin` it is, and a top-level file:// deck (Chromium:
+`self.origin` `null`, `location.origin` `file://`) still is not, because
+it is not framed. The rig probes each
+sign alone and in pairs in child processes (the decision is cached per
+process) and asserts only the triple is sandboxed. The refusal is terminal —
+a frame's sandboxing does not change while it lives — so the transport must
+not retry a `SandboxedError` (kernel's change in `sync/online.ts`, on top of
+this one). With the fix: the launch check, the relay join and the pack listing never
+start, the About dialog says "Updates are not checked inside an embedded
+view", and `window.bento.sandboxed` exposes the decision. Measured: a plain
+tab makes exactly one manifest request at launch; the sandboxed frames make
+none and raise no violation after boot over five seconds. Storage still does
+not persist there — autosave and preferences are per visit — and that is
+stated in the changelog line. Previews are untouched:
+`preview.ts`, the remover and the gate's preview-carrying-shell invariant
+are not part of this change, and the thumbnailers that render the preview
+run no script at all.
+
+**The preview pane is not deterministic.** Eleven more files were built to
+bisect why the preview card stayed blue for base86 when it had rendered the
+editor for base64 (B7): base86 minus one candidate symbol at a time (`%`,
+`*`, `?`, `#`, `:`, `@`), minus `?` and `#`, and minus the six URL
+delimiters (`% : / ? # @`, 80 symbols, 7→9 groups). Round seven settled
+it: B11d (no `:`) and B11e (no `@`) rendered the editor on first upload and
+were blue on a second upload of the SAME bytes, and B7 — the editor
+yesterday — was blue today. The preview pane's outcome varies between
+uploads of identical bytes, so no conclusion about any character stands,
+including B10b's one-time success; the earlier reading of blank preview
+cards as "a reported violation is fatal" is withdrawn on the same ground.
+The open pane has been deterministic throughout: base86 + this cascade +
+`sandboxed()` open there every time. The counts below are kept as data —
+what each alphabet exposes in the real runtime payload — with no inference
+drawn from them:
+
+| payload | chars | `/*` | `*/` | `//` | `%xx` | `://` | `?x=` | `#`+alnum | `@`+alnum |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| b64 | 660,200 | 0 | 0 | 227 | 0 | 0 | 0 | 0 | 0 |
+| b86 | 618,937 | 82 | 90 | 72 | 486 | 2 | 249 | 5,240 | 5,416 |
+| b80 | 636,621 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+**The tell, and the mechanism.** Blue preview cards showed the splash with
+no mark, wordmark or bar — every one of those begins at opacity 0 and
+animates in — so the card was rendered by a document whose animations never
+advanced: a hidden document. Chrome measured in a background tab (CDP,
+Chromium 152): CSS animations hold their first frame, `requestAnimationFrame`
+never fires, `setTimeout(25)` fires after 675 ms, decoding runs 4–6× slower;
+`setTimeout(0)`, promises and an inserted script's execution are prompt.
+Against that, the two files that differed in Teams differed exactly here:
+the uncompressed build's runtime is a parser-inserted script, so its editor
+is mounted BEFORE DOMContentLoaded (measured: mounted at DCL, 105 ms hidden);
+the compressed shell's loader awaited `DecompressionStream` and then
+inserted a `type="module"` script — both land in later tasks — so `load`
+fired at 12 ms with nothing mounted and the editor arrived ~300 ms later
+hidden (A: 292–437 ms, B7-b86: 287–364 ms). A viewer that renders the
+document off-screen and captures it around `load` sees the splash from the
+compressed file and the editor from the uncompressed one, and the race
+between its capture and a throttled task is the nondeterminism observed.
+Then the splash: `main.ts` held it on a 1250 ms timer and removed it 550 ms
+after adding the fade class — two timers a hidden document throttles (splash
+gone at 2.4–2.9 s hidden against 1.8 s visible, for every build including
+the uncompressed one), so a deck opened in a background tab showed its splash
+until it was looked at.
+
+**Consequence: mounted before `load`, and the splash never waits.** The
+loader now decodes and inflates synchronously — the ~2 KB JavaScript
+inflater that was an opt-in flag, 18 ms on the runtime payload against
+`DecompressionStream`'s 6 (99 against 18 hidden) — and runs the runtime as
+an inline CLASSIC script, which executes inside `appendChild`; whether the
+policy took it is known when the call returns, so no wait, no violation
+listener on the critical path. Then `new Function`, also synchronous; the
+blob import is the one promise and the last resort. Measured: the compressed
+shell mounts at 123 ms visible / 138 ms hidden, before DOMContentLoaded in
+both, as the uncompressed build does; the old loader 109 / 287 ms, after
+`load`. The splash is removed at once when `document.hidden`, on a
+`visibilitychange` to hidden, or — visible — after a hold capped at 800 ms
+from navigation and a fade that ends by timer or `transitionend`, whichever
+first: gone 2 ms after the mount hidden, 1,241 ms after it visible. The rig
+drives headless Chrome with a real background tab (a decoy tab activated
+before navigation) and asserts both, plus that the built loader contains no
+`requestAnimationFrame`, `setTimeout`, `setInterval`, `fonts.ready` or
+`DOMContentLoaded` and exactly one `await`. The editor's own boot was
+audited for the same waits: `main.ts` reaches `new Editor` and
+`window.bento` synchronously from the doc; the constructor builds the whole
+UI synchronously; the canvas renders in its constructor and only its
+re-scale rides a `ResizeObserver`; `fitTopbar` measures synchronously once
+and re-measures on observers; the launch update check sits on a 1.5 s
+timer that is off the mount path; nothing awaits a frame or a font before
+the app exists.
+
+The experimental alphabets stay in `scripts/lib/b86.mjs` behind
+`--encoding` (`makeCodec` is build-side only; the shipped loader carries
+the b86 decoder alone, verified by grep on the built shell), and the
+diagnostic panel stays behind `--diag`. Default: b86, cascade, no panel.
+
+## 2026-09-17 — A lean (`text: false`) sync stamp loses different-block edits on a snapshot reunion; guarded, not yet fixed
+
+`SyncState.toJSON({ text: false })` omits the per-node token history (the RGA
+`txt` generations) to shrink a saved file — meant for bento/spaces, whose typed
+prose would make that history dwarf its own document. Finding, measured with the
+kernel engine alone (spaces' convergence rig, reproduced in a throwaway): a lean
+stamp **silently loses an edit to a DIFFERENT block** when a mailed-back copy is
+reunited by `mergeSnapshot`.
+
+Mechanism: a `txt` edit advances the node's text GENERATION (`txt[el].sd`) but
+NOT its `html` LWW register (`regs[el+' html']`). A `text: false` stamp drops the
+generation, so the only stamped carrier of that edit is gone; `mergeSnapshot`
+compares registers, sees the html register unchanged, and keeps the base value.
+Two forks that edited *different* blocks lose one edit — and it is silent because
+the documents still CONVERGE. A live op-replay session is unaffected: a `set`/`txt`
+op both carries the value and stamps its register. The loss is specific to a lean
+stamp reunited by snapshot — which is exactly the rejoin path a lean stamp
+requires (a re-seeded generation would split-brain against a peer still holding
+the original, so op-resume is unsafe; see scripts/test-sync-shape.ts).
+
+Status: LATENT, not live. No shipping path stamps lean. Every app stamps the full
+history via `stampInto` → `toJSON()` default (`text: true`), the differ runs
+`text: true` (session.ts), and bento/spaces' `SyncSession` extends the kernel one
+without overriding the stamp. The prior crdt.ts comment claiming "bento/spaces
+does NOT stamp text history" and "ABSENT MEANS BLOCK-LEVEL MERGING, not breakage …
+the SAME paragraph" was stale AND wrong on the safety promise; corrected.
+
+Done now (this change): the crdt.ts comment states reality; `toJSON` REFUSES
+`text: false` without `unsafeOmitTextHistory: true`, so a future size optimisation
+that wires `stampInto` lean hits a wall instead of a silent loss (the rigs pass
+the flag); scripts/test-sync-shape.ts pins the different-block loss as a NEGATIVE
+CONTROL (assert the loss, invert it when the engine is fixed) alongside a full
+snapshot of the same edit that is kept — proving the loss is the missing history,
+not the merge.
+
+Deferred: making lean safe is a separate kernel change — a stamped html-register
+carrier that survives dropping the generation, WITHOUT out-ranking a concurrent
+generation (that would break the same-block RGA merge). Its gate is the full
+convergence rig, `scripts/test-sync`. Where it is wanted: bento/spaces per-block
+text under Markdown storage (working/design/spaces-pages.md follow-ups).
+
+## 2026-09-17 — A relay snapshot obeys the blob-offload rule: large inline assets are stripped
+
+`crdt.ts` diffDoc keeps inline assets over `BLOB_INLINE_MAX` (64 KB) out of ops
+— they travel as blobs (`offloadAssets`) and the receiver rebuilds them with
+`resolveBlobs`. The relay SNAPSHOT paths did not: `session.snapshot()`,
+`recoverFromDiffFailure`, and the fork snapshot in `hello()` all serialised the
+FULL `store.doc` with every inline asset. On a photo-heavy deck that inlines the
+whole asset table, and the wire frame — `base64(iv ‖ AES-GCM(JSON))`, ~4/3 the
+JSON — exceeds the relay's `MAX_FRAME` (1,900,000). Measured on the maintainer's
+real deck: 1.57 MB doc (1.43 MB inline photos, none over the per-image limit) →
+~2.1 MB frame → relay refuses `too-large`. Because a snapshot is never acked, no
+op matched the refusal (`matchRefused` → null → `refused('too-large', null)` →
+notice `ops:0`), so the editor showed the per-CHANGE wording with a per-image
+limit — wrong for a whole-deck snapshot.
+
+Fix: snapshots apply diffDoc's rule via `SyncSession.snapshotDoc()` — drop
+`assets.<k>` whose inline value is over `BLOB_INLINE_MAX`, keep `blobs` intact;
+the receiver materialises them with `resolveBlobs` exactly as it does for ops.
+`offloadAssets` already runs on every flush (and `snapshot()` flushes first), so
+the blob refs exist by the time a snapshot is uploaded on a shared deck. Residual,
+stated: a large asset whose offload has not yet completed (or a relay with no
+blob store — `unsupported`) has no ref, so the receiver shows it blank until the
+ref syncs — identical to the existing op path, and self-healing. Rig:
+`scripts/test-sync-session.ts` asserts the stripped snapshot frame is under
+`MAX_FRAME` while the full-doc frame is over (negative control), the blob ref
+survives, and the local store keeps the full asset.
+
+Message: after this fix a snapshot is essentially never refused for assets. If a
+snapshot is still refused `too-large` (many sub-64 KB assets, or huge text), the
+transport surfaces `refused('too-large', null)` → the session emits a notice with
+`ops: 0` and no `media` flag — the signal the editor can use to say "the whole
+deck is too large to share" rather than "that change is too large". (Wording is
+the slides zone's.)
+
+
+## 2026-09-19 — file:// is one shared origin; keep secrets and trust out of it
+
+Chrome (and other browsers) give EVERY `file://` document one shared,
+enumerable storage origin: `localStorage`, IndexedDB and the rest are common
+to every local `.bento.html` the user opens. Measured with two decks in
+different folders — deck B read deck A's IndexedDB and localStorage.
+Consequences and the rule they leave:
+
+- **Auto-save leaked collaboration secrets.** `putRecovery`/`addVersion`
+  wrote `JSON.stringify(doc)`, and `doc.collab` carries the room read key,
+  `ownerPriv`, `writerPriv` and the audience show key. Any local file read the
+  auto-save store and lifted them — silent read+write to those live rooms,
+  plus every auto-saved deck's plaintext. Fixed: snapshots are content-only
+  (`collab` dropped before the write); restore re-attaches `collab` from the
+  file being restored into, so recovery is unchanged. Encrypted decks were
+  already skipped.
+- **Boot-read URL overrides were forgeable.** `bento-update-url`,
+  `bento-sync-url`, `bento-packs-url` are dev overrides read at startup; a
+  malicious local file could plant one and steer the next deck to a hostile
+  server. `sharedStorageOrigin()` now gates all three — honoured only from a
+  real web origin (https, or http on localhost), never `file://` or an opaque
+  origin, fail-safe to "shared" when the origin can't be determined. The
+  auto-save strip and the update/sync gate shipped in #520; the pack-URL
+  override gate in #523.
+- **The native hosts were never exposed.** iOS serves each document from
+  `bento-tray://<hash-of-path>/` and Android from
+  `https://<hash-of-uri>.bento-tray.invalid/` — a per-document origin, so
+  cross-deck reads are impossible there. The webext does NOT change this: it
+  supplies a directory handle but the deck still opens as a `file://` page.
+
+The rule: on `file://` there is no origin identity to bind a capability to.
+Nothing secret goes into a `file://`-reachable store unstripped, and no
+boot-time trust decision is taken from one. Still open, for the follow-up:
+the `bento-member-<docId>` device signing key and plaintext auto-save content
+(a per-file key in `#bento-doc`); and #519's persistent file-handle grant,
+which for the same reason is safe only under a real origin.
+
+## 2026-09-24 — Maths: TeX's column alignment, partial rendering, and coverage held to Temml's whole vocabulary
+
+Issue #540 found 57 everyday commands that 1.2.0's engine dropped to raw
+text; #550 fixed the reported ones. The follow-up measured the rest and
+settled four things that reverse or extend the 2026-09-15 entry.
+
+**Columns align the way TeX aligns them — reversing 2026-09-15.** `aligned`
+is right|left so the relations line up, `eqnarray` right|centre|left, the
+`cases` family left, a starred matrix takes its `[l|c|r]`, an `array` its
+column spec. The centred look was kept so no deck would move; the maintainer
+reversed it after seeing `&=` fail to line up — to the person who typed it,
+that is a bug, not a style. Existing decks with `aligned`/`cases` DO change
+on update. How it is spelled matters and was measured in Chrome 153: an
+`mtd` ignores `text-align:left|right|center|end` (all lay out at the start
+edge) and honours only the `-webkit-` keywords, so cells carry
+`text-align:-webkit-left|right` plus the `columnalign` attribute for engines
+that read that.
+
+**One unknown command no longer loses the formula.** Slides render LENIENT
+(`renderMath(…, { lenient: true })`): a command the engine does not know is
+drawn as its own name in a warning colour and the rest of the formula
+renders. Malformed input (an unclosed brace, a stray `\end`) still leaves the
+source as typed. The editor's "Not rendered: \foo" hint still marks it. The
+rigs render STRICT, so they measure what the engine actually knows.
+
+**Coverage is measured against Temml's whole vocabulary, with a floor.**
+`scripts/maths-freeze-coverage.ts` froze one minimal form of every command
+and environment named in Temml 0.13.3's source (1,237) with Temml's tree;
+`scripts/test-maths-coverage.ts` requires that no covered command falls back,
+that the rendering and tree-identical counts stay at or above the recorded
+floor (raised with `--update`), and that every formula in
+`scripts/fixtures/maths-common.json` (the commonly typed tier) renders. A
+fixed sample of 91 could not see what was not in it — that is how #540 got
+through. At this entry: all 1,237 render, 1,122 tree-identical or
+deliberately drawn — including amscd's `CD` diagrams (a small parser for
+`@>a>b>`, `@VaVbV`, `@=`, `@|`, `@.`), `\longdiv`, `\angl`, `\reflectbox`,
+the coherence relations and mhchem's drawn bonds. Engine 20.8 KB compressed
+against Temml's 59.2 KB measured the same way (esbuild minify + deflate).
+
+**Macros and the two packages.** `\newcommand`/`\renewcommand`/
+`\providecommand`/`\def`/`\let`/`\DeclareMathOperator` work within ONE
+formula (a deck-wide preamble would be a format change and is not made
+here). The physics package is built-in macros over what the parser knows;
+mhchem's `\ce`/`\pu` are a small rewriter to LaTeX (formulas, charges,
+states, hydrates, arrows with labels, bonds, units) — not Temml's 1,500-line
+state machine, and anything it does not recognise passes through as upright
+text.
+
+**Arrows Chrome will not stretch are drawn in SVG.** Measured in Chrome 153
+on macOS with every maths font: `← ⇐ ⇒ ⇔ ↤ ↩ ↪` and the harpoons stretch to a
+label; `→ ↦ ↔ ↠ ↞ = ⇌ ⇋ ⇄` never do, whatever the operator form, font or
+script element — so `\xrightarrow{a long label}` drew a short arrow under a
+long label (in Temml's output too). Two glyph workarounds were built and
+rejected on sight: a mirrored stretched `←` loses its arrowhead, and a
+stretched `⇀` with a `⇁` laid over its end misplaces the barb. What works:
+`\x…arrow` becomes a one-column `mtable` — over label, arrow, under label,
+each label row balanced by a phantom of the other so the arrow row sits on
+the axis — and the arrow is an inline `<svg>` absolutely positioned in a
+relatively positioned `mtd` (`min-width:3.5em`), lines at 0–100%, heads in
+nested svgs pinned at 0%/100% so they never distort, sizes in em.
+`\overrightarrow` and kin pad the base and draw over the padding, so the
+baseline never moves. `role="img"` + `aria-label` keep the written arrow for
+assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
+rigs treat a drawn arrow as a deliberate difference: named in
+`test-maths-lite.ts`, counted with the identical ones in the coverage floor.
+Cost: +966 B of shell.
+
+## 2026-09-26 — bento/spaces: the author picks the design; the reader's theme picks its palette
+
+**The maintainer's ruling, and what it replaces.** Designs are selectable in the
+document. The author picks the design; the reader's light/dark setting picks
+between that design's two palettes; the app chrome stays the reader's. This
+reverses the second half of the 2026-08-22 entry ("bento/spaces goes dark, and
+its reading column goes with it"), which concluded:
+
+> So in spaces the reading surface IS chrome and it follows the reader.
+
+That was the right call while the column had nothing of the author's to show —
+`doc.theme`'s colours were painted only by the thumbnail. It is superseded now
+that a design exists. What survives from it: the theme is still a viewer
+preference and never document data, the three-state light/dark rule, and dark
+being `@media screen` so paper is light. `kernel/src/theme.ts` already said "the
+document does not invert… a slide's background is document data the author
+chose"; spaces now joins slides there.
+
+**Format (additive).** `doc.design`: a built-in name or a key of `doc.designs`.
+ABSENT is the default look, and returning to the default DELETES the key
+(`designs.ts setDesign`), so a space that tried a design and went back is
+byte-identical to one that never did. An unknown name renders the default,
+round-trips untouched, and `validate()` reports `unknown-design`. Document-wide
+for now; the resolver takes a name rather than reading a fixed field, so a
+later `Page.design` resolves through the same function and overrides it
+without a format change.
+
+**A design is data, not a stylesheet** (the maintainer's follow-up: designs are
+an open set, built-in and custom). Two palettes of thirteen colour roles, four
+font roles, and a closed set of switches (`designs.ts PROPS`). ONE base
+stylesheet, `spaces/src/designs.css`, reads the custom properties and data
+attributes `applyDesign()` writes onto the reading surface (`.sp-main`, and the
+print root). Every rule is keyed under `[data-sp-design]` or a `data-sd-*`
+attribute, which is what makes "no design" the untouched stylesheet — the model
+rig parses the file and asserts it. Adding a built-in is a data entry. Switches
+added so far: `headStyle headCase label labelInk h2 dropCap callout quote table
+numerals check tile shadow justify divider bullet`, plus the metrics
+`size leading titleSize titleWeight titleTracking titleLeading headWeight radius
+rule`.
+
+**Six built-ins**, each from a publishing tradition and differing in structure,
+not palette: Ledger (the financial report / Swiss grid), Almanac (the literary
+quarterly), Studio (the Bento mark as layout grammar — the tile), Broadsheet
+(the newspaper), Typescript (the manuscript / RFC), Riso (the risograph zine).
+Almanac's accent is #b07800 rather than the prototype's #c98a0b: the drop cap
+and a done box are marks that carry meaning, and #c98a0b measured 2.56:1 on its
+paper.
+
+**Custom designs are tier 1 and the whole story: token-only.** `doc.designs`
+holds overrides on a built-in base. Every value is VALIDATED, never sanitized:
+a colour must be `#rgb`/`#rrggbb`, a font a name from `FONT_STACKS` or
+`asset:<key>` naming a `data:font/…` asset, a switch one of its words, a number
+inside its range. A failure is dropped to the base's value and named by
+`validate()`. No author text becomes CSS: stacks are the module's own strings,
+an embedded face gets a family name derived from its asset key and is loaded
+through the FontFace API (no `@font-face` text), and attribute values are
+PROPS words. A doc-local name that is also a built-in's shadows nothing.
+
+**Raw author CSS does not ship.** Deliberately not built, and the security
+review of the same day kept it that way: a stylesheet in a mailed file can
+fetch (tracking) and can overlay Save or the password gate. Revisiting it means
+its own field, its own sanitizer and its own review — never `designs.ts`, whose
+guarantee is that nothing in it is free text.
+
+**No design may hide text** (security review, finding 3: `design`/`designs` are
+ordinary CRDT registers, so any writer in a live space can restyle every
+reader's page — accepted, because a writer can already edit the words). The
+floors, stated in the validator: text, secondary text and accent text on paper,
+text on wells, text on the accent and on the tile all ≥ 4.5:1; a tile cell
+against the ink chosen for it ≥ 4.5:1; a FILLED callout's ink over the fill mix
+≥ 4.5:1 (a teal fork measured 4.27:1 in dark before this floor); size ≥ 0.85,
+line spacing ≥ 1.3, title ≥ 1.4em. There is no display, visibility or opacity
+switch, and the only generated `content` is constant decoration. A custom value
+that breaks a floor falls back; an ink the author did not set is re-chosen for
+a ground they did, so a dark accent is kept rather than refused.
+
+**Tone is meaning.** The first cut had a `tones: accent` switch that gave all
+five callout tones the design's one colour; Studio, Almanac and Typescript drew
+five identical boxes, the Note reading "the blue one" in coral. Measured in
+pixels, one distinct fill or label ink out of five in each. The switch is gone:
+the five tones are palette roles (`toneNote … toneCaution`) that every design
+names in its own register, and the validator holds them pairwise apart as
+PAINTED — the fill for a filled callout, the hue (rule, start bar, shadow)
+otherwise — at an sRGB distance of at least 24; a custom design that collapses
+them gets its base's five back. Measured after: five distinct fills or tone
+edges and five distinct label inks in every design and mode where the style
+colours them.
+
+**Consent stays chrome** (finding 1). The remote-content gate sits inside the
+column, so it reads the CHROME's tokens (captured at `:root` as `--sp-app-*`
+before any surface re-points them) and its own type. Measured in pixels with
+the design tokens overwritten to ink = paper: the gate stays 12.59:1 light and
+11.5:1 dark, identical to an honest design.
+
+**Nothing of a design goes into a `<style>` that reaches the shell** (finding
+2). The static preview draws the design — a thumbnail is the document's face —
+in its LIGHT palette, as inline styles written through `style.setProperty`, so
+the CSSOM re-parses every value; the preview's `<style>` holds only its fixed
+sheet. A custom design carrying `</style><script>` in its label, a colour, a
+font and two switches saved to a shell that passed `shell-gate.mjs` and ran
+nothing on reopen.
+
+**Markdown.** The export opens with `design: <name>`, plus a one-line
+`designs: {…}` JSON (valid YAML flow syntax, so no YAML parser) when the design
+is the space's own. Front matter holding only those keys is consumed on
+import; any other front matter keeps the old rule and is kept verbatim. An
+import adopts the design only into a space that has none.
+
+**Fonts: system stacks ship; the real faces are measured, not chosen.** Zero
+font bytes in this change. The intended faces, latin-subset woff2, cheapest of
+variable vs the minimum static weights: Ledger 137,504 B (Schibsted Grotesk
+variable 97,024 + JetBrains Mono variable 40,480); Almanac 271,072 B (Fraunces
+variable 149,092 + Source Serif 4 statics 121,980 — its variable file is
+252,108); Studio 76,868 B (Bricolage Grotesque variable). Total 485,444 B,
+about 647 KB as base64 — 2.4× today's whole 271,810 B shell. Broadsheet,
+Typescript and Riso were drawn for faces machines already have. The options,
+for the maintainer: every face in every shell (+~650 KB each); system stacks
+only (this change); or the author drops a font file in, which lands as an
+asset in that one document (built — Customise → Add a font file).
+
+**Open for security, not settled here.** An embedded face can remap glyphs, so
+a writer could make displayed text differ from stored text. It gives a writer
+nothing they cannot do by editing, but display and data diverging is a new
+shape; the consent gate is pinned to the system stack either way.
+
+**Guarded.** `scripts/test-spaces-model.ts` (design section, 1057 checks in
+all) and `scripts/test-spaces-roundtrip.ts` (Markdown front matter). Sabotaged
+and seen to fail, each at its own assertion: an unscoped rule in designs.css;
+every built-in resolving to Ledger; an unknown name resolving to something; the
+unknown-design finding removed; `design` stripped at load; the importer
+ignoring `design:`; the default writing `design: undefined`; the hex check
+removed; the contrast floors removed; the five tones collapsed to the accent in every
+built-in; the custom-design tone check removed; the surface no longer mapping
+the tone roles.
+
+**Cost.** Shell 271,810 → 300,835 B (+29,025, 10.7%); about 12 KB of it is 115
+new UI strings in nine languages.

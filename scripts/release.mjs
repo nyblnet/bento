@@ -363,6 +363,18 @@ if (app.ownsSiteContent) {
   mkdirSync(join(site, 'help'), { recursive: true })
   cpSync(join(root, 'site-src/help.html'), join(site, 'help/index.html'))
 
+  // /schema/slides.json (+ the version-pinned twin) and /llms.txt — the
+  // document schema and the agent index, at the URLs every saved deck's
+  // `$schema` key, the Tooling comment and AGENTS.md advertise. The schema
+  // is generated from the gate's tables (scripts/build-schema.mjs, pinned by
+  // CI); pinned twins of earlier versions stay published because the seed
+  // above restores them.
+  mkdirSync(join(site, 'schema'), { recursive: true })
+  for (const f of readdirSync(join(root, 'schema')).filter((f) => f.endsWith('.json'))) {
+    cpSync(join(root, 'schema', f), join(site, 'schema', f))
+  }
+  cpSync(join(root, 'site-src/llms.txt'), join(site, 'llms.txt'))
+
   // 404 — of course it's a deck (see build-404-deck.mjs + site-src/404.html).
   execFileSync('node', [join(root, 'scripts/build-404-deck.mjs'), join(site, '404.bento.html')], { stdio: 'inherit' })
   cpSync(join(root, 'site-src/404.html'), join(site, '404.html'))

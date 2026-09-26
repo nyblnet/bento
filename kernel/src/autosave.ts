@@ -163,6 +163,24 @@ function tx<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectStore) 
 }
 
 /**
+ * A recovery/version snapshot is CONTENT ONLY — `doc.collab` is dropped.
+ *
+ * Every autosave writes to IndexedDB, and Chrome gives every `file://` document
+ * ONE shared origin, so an IndexedDB record is readable by any other local
+ * document. `doc.collab` carries the live-room secrets — the read key, the owner
+ * and writer private keys, the invite, the audience key — and content recovery
+ * has no use for them: restore takes `collab` from the file that is actually
+ * open, never from the snapshot (see the editor's restore path), so a snapshot
+ * that keeps collab would only be a place for those secrets to leak. A deck that
+ * was never saved has no file to re-read and re-mints its collab, as it does
+ * today. `collab` is a top-level field, so omitting it here removes it whole.
+ */
+function contentOnly(doc: KernelDoc): string {
+  const { collab: _collab, ...rest } = doc as KernelDoc & { collab?: unknown }
+  return JSON.stringify(rest)
+}
+
+/**
  * Write the single latest recovery snapshot for this doc.
  *
  * Returns whether it ACTUALLY stored. `tx()` resolves null on every failure
@@ -176,7 +194,7 @@ function tx<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectStore) 
  */
 export async function putRecovery(doc: KernelDoc): Promise<boolean> {
   const key = await tx(RECOVERY, 'readwrite', (s) =>
-    s.put({ docId: doc.docId, at: Date.now(), title: doc.title, json: JSON.stringify(doc) } as Snapshot))
+    s.put({ docId: doc.docId, at: Date.now(), title: doc.title, json: contentOnly(doc) } as Snapshot))
   return key != null
 }
 
@@ -198,7 +216,7 @@ export async function clearVersions(docId: string): Promise<void> {
 
 export async function addVersion(doc: KernelDoc): Promise<void> {
   await tx(VERSIONS, 'readwrite', (s) =>
-    s.add({ docId: doc.docId, at: Date.now(), title: doc.title, json: JSON.stringify(doc) } as Snapshot))
+    s.add({ docId: doc.docId, at: Date.now(), title: doc.title, json: contentOnly(doc) } as Snapshot))
   // prune to the newest MAX_VERSIONS for this doc
   const all = await listVersions(doc.docId)
   if (all.length > MAX_VERSIONS) {

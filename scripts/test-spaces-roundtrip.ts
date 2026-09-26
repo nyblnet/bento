@@ -44,7 +44,8 @@
 // less than one with a stated blind spot.
 import { starterDoc } from '../spaces/src/starter.ts'
 import { toMarkdown } from '../spaces/src/about.ts'
-import { parseNote } from '../spaces/src/markdown.ts'
+import { parseNote, planImport } from '../spaces/src/markdown.ts'
+import { adoptDesign } from '../spaces/src/designs.ts'
 import { Store } from '../spaces/src/store.ts'
 
 let checks = 0
@@ -184,6 +185,47 @@ ok(/!\[[^\]]+\]\([^)]+\)/.test(md), 'an image exports with its alt text and refe
     'a line that BEGINS with a tag reads back as a paragraph, never a heading')
   ok(String(back.blocks[0]?.html ?? '').includes('#leading'),
     '…with the tag still in it')
+}
+
+// ---- the design rides in the front matter ---------------------------------
+// "Selectable in the page Markdown": `design:` names it, and a design the
+// space carries itself travels as one `designs:` line. A space with no design
+// exports exactly as before — no front matter at all.
+{
+  ok(md.startsWith('# '), 'a space with no design exports with no front matter')
+
+  const withDesign = starterDoc() as unknown as Record<string, unknown>
+  withDesign.design = 'almanac'
+  const mdA = toMarkdown(new Store(withDesign as never) as never)
+  ok(mdA.startsWith('---\ndesign: almanac\n---\n'), 'a built-in design leads the export as `design: almanac` front matter')
+  const noteA = parseNote(mdA, 'x')
+  ok(noteA.design === 'almanac', 'the importer reads `design` back out of the front matter')
+  ok(noteA.frontmatter === undefined, 'front matter holding only the design is consumed, not kept as a folded yaml block')
+
+  const custom = starterDoc() as unknown as Record<string, unknown>
+  const harbour = { label: 'Harbour', base: 'almanac', light: { accent: '#0f6e63' }, props: { callout: 'fill' } }
+  custom.designs = { harbour, unused: { base: 'riso' } }
+  custom.design = 'harbour'
+  const mdC = toMarkdown(new Store(custom as never) as never)
+  const noteC = parseNote(mdC, 'x')
+  ok(noteC.design === 'harbour' && JSON.stringify(noteC.designs) === JSON.stringify({ harbour }),
+    'a design the space carries round-trips through Markdown value for value (and only the one in use travels)')
+  const plan = planImport([{ path: 'space.md', text: mdC }], { rootTitle: 'Imported' })
+  const into = starterDoc() as unknown as Record<string, unknown>
+  const adopted = adoptDesign(into as never, plan.design, plan.designs)
+  ok(adopted === 'harbour' && into.design === 'harbour' && JSON.stringify((into.designs as Record<string, unknown>).harbour) === JSON.stringify(harbour),
+    'importing that Markdown into a space with no design adopts the design it carried')
+  const already = starterDoc() as unknown as Record<string, unknown>
+  already.design = 'ledger'
+  ok(adoptDesign(already as never, plan.design, plan.designs) === null && already.design === 'ledger',
+    'an import never restyles a space that already has a design')
+
+  const odd = starterDoc() as unknown as Record<string, unknown>
+  odd.design = 'from: a newer build'
+  const noteO = parseNote(toMarkdown(new Store(odd as never) as never), 'x')
+  ok(noteO.design === 'from: a newer build', 'a design name this build does not know still round-trips through the front matter')
+  const obsidian = parseNote('---\ntags: [a]\ndesign: ledger\n---\n# Note\n\nbody', 'x')
+  ok(obsidian.design === 'ledger' && obsidian.frontmatter === 'tags: [a]\ndesign: ledger', 'front matter with other keys is still kept verbatim')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

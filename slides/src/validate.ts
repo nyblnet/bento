@@ -24,7 +24,9 @@
 
 import type { BentoDoc, Slide, SlideElement, TextElement } from './model.ts'
 import { MODEL_KEYS } from './modelkeys.generated.ts'
+import { isRemoteUrl } from '../../kernel/src/net.ts'
 import { measureElements } from './measure.ts'
+import { BUILTIN_FONTS } from './fonts.ts'
 import { eachRef, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
 
 export type Severity = 'error' | 'warning' | 'info'
@@ -152,10 +154,19 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
     }
   }
   for (const f of doc.fonts ?? []) {
-    if (f.asset && !assets[f.asset]) {
-      add({ code: 'missing-asset', severity: 'error', path: `fonts.${f.family}`,
-        message: `Font "${f.family}" points at asset "${f.asset}", which is not in doc.assets — the face will not load and text falls back silently.` })
+    if (!f.asset || assets[f.asset]) continue
+    // A `builtin:` key names a face the shell carries (fonts.ts BUILTIN_FONTS)
+    // — a satisfied reference with no bytes in the file. Only an unknown
+    // built-in name is broken.
+    if (f.asset.startsWith('builtin:')) {
+      if (!(f.asset in BUILTIN_FONTS)) {
+        add({ code: 'missing-asset', severity: 'error', path: `fonts.${f.family}`,
+          message: `Font "${f.family}" names built-in face "${f.asset}", which this app does not carry (known: ${Object.keys(BUILTIN_FONTS).join(', ')}) — the face will not load and text falls back silently.` })
+      }
+      continue
     }
+    add({ code: 'missing-asset', severity: 'error', path: `fonts.${f.family}`,
+      message: `Font "${f.family}" points at asset "${f.asset}", which is not in doc.assets — the face will not load and text falls back silently.` })
   }
   // A live-shared deck carries the keys to its own room — that is how opening a
   // copy joins a session with no account and nothing to configure. The file IS
@@ -345,11 +356,34 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
             message: `Connector ${side} references element "${end.el}", which is not on this slide — that end is dropped and stops following.` })
         }
       }
-      for (const key of ['src', 'asset', 'poster'] as const) {
+      for (const key of ['src', 'asset', 'poster', 'view'] as const) {
         const ref = (el as any)[key]
         if (typeof ref === 'string' && ref.startsWith('asset:') && !assets[ref.slice(6)]) {
           add({ ...at, code: 'missing-asset', severity: 'error', path: key,
             message: `${key} references asset "${ref.slice(6)}", which is not in doc.assets — nothing renders.` })
+        }
+      }
+
+      // embed -------------------------------------------------
+      // The view is the tier that ALWAYS paints: offline, in thumbnails, in
+      // print and in an upstream shell that has never heard of `app`. Without
+      // it the element is a hole; pointing it at the network breaks the
+      // offline guarantee the whole shape exists to keep.
+      if (el.type === 'embed') {
+        const view = typeof el.view === 'string' ? el.view.trim() : ''
+        if (!view) {
+          add({ ...at, code: 'embed-missing-view', severity: 'error', path: 'view',
+            message: 'Embed has no view. It renders as an empty box offline, in thumbnails and in print. Set view to inline <svg> markup or an "asset:" key holding it.' })
+        } else if (!view.startsWith('<') && !view.startsWith('asset:') && isRemoteUrl(view)) {
+          // markup and asset refs are judged first: in a browser isRemoteUrl
+          // resolves any bare string against the page, and "<svg…" would
+          // come back as a relative http url
+          add({ ...at, code: 'embed-remote-view', severity: 'warning', path: 'view',
+            message: 'Embed view is a URL. It needs the network to show and paints nothing offline. Capture the view into doc.assets instead.' })
+        }
+        if (el.live && el.app === 'web' && !(typeof el.url === 'string' && /^https?:\/\//i.test(el.url))) {
+          add({ ...at, code: 'embed-live-no-url', severity: 'warning', path: 'url',
+            message: 'live is on but url is not an http(s) address. No frame is created, only the view shows.' })
         }
       }
 

@@ -414,7 +414,10 @@ export class PathEditor {
         dot.setAttribute('cy', String(p.y))
         dot.setAttribute('r', String(rad))
       }
-      dot.setAttribute('fill', i === 0 ? '#f7a600' : sel ? '#5b8def' : '#fff')
+      // the rest-position anchor wears the chrome accent (a CSS token, so it
+      // is set as a style, not an attribute — attributes cannot take var())
+      dot.style.fill = i === 0 ? 'var(--accent)' : sel ? 'var(--blue)' : '#fff'
+      dot.removeAttribute('fill')
       dot.setAttribute('stroke', sel ? '#2f6df6' : '#31445c')
       dot.setAttribute('stroke-width', String((sel ? 2.4 : 1.6) * k))
       dot.classList.add('ed-pe-anchor')
@@ -457,7 +460,7 @@ export class PathEditor {
     const dur = loop?.duration ?? 3
     const preview = mk('circle')
     preview.setAttribute('r', String(4.5 * k))
-    preview.setAttribute('fill', '#f7a600')
+    preview.style.fill = 'var(--accent)' // chrome token, as a style (attributes cannot take var())
     preview.style.pointerEvents = 'none'
     preview.classList.add('ed-pe-dot')
     svg.appendChild(preview)

@@ -39,13 +39,62 @@
 // untrusted intake — remote CRDT ops off the relay — can adopt the same
 // checks, key by key, through `checkElementProp`.
 
+import { stripEnvelope } from './envelope'
 import type { Slide, SlideElement } from './model'
+import { isWebUrl } from './model'
 import { parseThemeRef } from './palette.ts'
 import { MODEL_KEYS } from './modelkeys.generated'
+import { TIP_KINDS } from './tips'
 
 /** Reject. JSON has no `undefined`, so it can never collide with a real value. */
 const DROP = undefined
-type Check = (v: unknown) => unknown
+/**
+ * A check carries a DESCRIPTION of what it accepts (a JSON Schema fragment) so
+ * the same table that gates a paste can be printed for agents — schema.ts
+ * builds `https://bento.page/schema/slides.json` and `window.bento.schema()`
+ * from these, and CI pins the checked-in file to them. The description is
+ * metadata on the function: attaching it changes nothing about what the
+ * check does, and a check with none is emitted as an untyped value.
+ */
+export type JsonSchema = Record<string, unknown>
+type Check = ((v: unknown) => unknown) & { schema?: JsonSchema }
+const tag = (fn: (v: unknown) => unknown, schema: JsonSchema): Check => Object.assign(fn, { schema })
+
+/**
+ * The load report (compact input, round two). The gate drops silently by
+ * design — that is right for a hostile file and wrong for an agent that
+ * misspelled `fontSize`. `withDropReport` runs a gate call with a collector
+ * attached; every drop names a JSON-pointer-ish path and a one-line reason.
+ * Off by default: with no collector, `note()` is one null check and the path
+ * stack is never touched, so a paste or a remote op costs what it did.
+ */
+export interface Dropped { path: string; reason: string }
+let collector: Dropped[] | null = null
+const trail: string[] = []
+const note = (key: string | null, reason: string) => {
+  if (!collector) return
+  collector.push({ path: '/' + (key === null ? trail : [...trail, key]).join('/'), reason })
+}
+const within = <T>(key: string, fn: () => T): T => {
+  if (!collector) return fn()
+  trail.push(key)
+  try { return fn() } finally { trail.pop() }
+}
+/** Add a segment to the report path around `fn` — for a caller that walks a
+ *  list itself (compactload.ts adds /slides/<i>). No-op with no collector. */
+export const withPathSegment = <T>(key: string, fn: () => T): T => within(key, fn)
+/** Run `fn` collecting every drop the gate makes; returns the list. */
+export function withDropReport<T>(fn: () => T): { result: T; dropped: Dropped[] } {
+  // Nesting: an inner report gets its own list and a fresh trail, and the
+  // outer one gets both of its back afterwards — so a gate call that itself
+  // asks for a report (none does today) cannot truncate the caller's paths.
+  const prevCollector = collector
+  const prevTrail = trail.splice(0)
+  const dropped: Dropped[] = []
+  collector = dropped
+  try { return { result: fn(), dropped } }
+  finally { collector = prevCollector; trail.splice(0, trail.length, ...prevTrail) }
+}
 
 /**
  * Assigning `out['__proto__'] = x` on a plain object walks the setter and
@@ -118,18 +167,19 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /** Finite number, or a numeric string coerced to one. Out of range = DROP. */
-const num = (min: number, max: number): Check => (v) => {
+const num = (min: number, max: number): Check => tag((v) => {
   const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
   return typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max ? n : DROP
-}
-const bool: Check = (v) => (typeof v === 'boolean' ? v : DROP)
-const oneOf = (...allowed: string[]): Check => (v) =>
-  typeof v === 'string' && allowed.includes(v) ? v : DROP
+}, { type: 'number', minimum: min, maximum: max })
+const bool: Check = tag((v) => (typeof v === 'boolean' ? v : DROP), { type: 'boolean' })
+const oneOf = (...allowed: string[]): Check => tag((v) =>
+  typeof v === 'string' && allowed.includes(v) ? v : DROP, { type: 'string', enum: allowed })
 /** Free text that reaches the DOM as text, never as markup. */
-const str = (max: number): Check => (v) => (typeof v === 'string' && v.length <= max ? v : DROP)
+const str = (max: number): Check => tag((v) => (typeof v === 'string' && v.length <= max ? v : DROP), { type: 'string', maxLength: max })
 /** A value that ends up inside a CSS declaration or an HTML attribute. */
-const cssValue = (max = LIMITS.scalar): Check => (v) =>
-  typeof v === 'string' && v.length <= max && !CSS_BREAKOUT.test(v) ? v : DROP
+const cssValue = (max = LIMITS.scalar): Check => tag((v) =>
+  typeof v === 'string' && v.length <= max && !CSS_BREAKOUT.test(v) ? v : DROP,
+  { type: 'string', maxLength: max, pattern: '^[^"\'<>{};]*$' })
 /**
  * A COLOUR, judged by exactly the rule render.ts:cssColor applies when it
  * writes one into markup — same allowlist, same `url(`/`expression`/`@`/`\`
@@ -143,11 +193,11 @@ const cssValue = (max = LIMITS.scalar): Check => (v) =>
  */
 const COLOR_CHARS = /^[#a-zA-Z0-9(),.%\s/-]+$/
 const COLOR_TRICKS = /url\s*\(|expression|@|\\/i
-const color = (max = LIMITS.color): Check => (v) => {
+const color = (max = LIMITS.color): Check => tag((v) => {
   if (typeof v !== 'string') return DROP
   const s = v.trim()
   return s && s.length <= max && COLOR_CHARS.test(s) && !COLOR_TRICKS.test(s) ? v : DROP
-}
+}, { type: 'string', maxLength: max, description: 'CSS colour; no url()' })
 /**
  * An svg PAINT (`fill` / `stroke`): a colour, or a reference to a gradient or
  * filter defined inside this document's own markup. The quoted form is what
@@ -159,18 +209,21 @@ const color = (max = LIMITS.color): Check => (v) => {
  * asked for, and it is a colour rule that would otherwise wave it through.
  */
 const LOCAL_PAINT_REF = /^url\(\s*(?:"#[\w.:-]+"|'#[\w.:-]+'|#[\w.:-]+)\s*\)$/
-const paint: Check = (v) =>
-  typeof v === 'string' && v.length <= LIMITS.color && LOCAL_PAINT_REF.test(v.trim()) ? v : color()(v)
+const paint: Check = tag((v) =>
+  typeof v === 'string' && v.length <= LIMITS.color && LOCAL_PAINT_REF.test(v.trim()) ? v : color()(v),
+  { type: 'string', maxLength: LIMITS.color, description: 'CSS colour or url(#local-id)' })
 /**
  * A font stack, which legitimately quotes multi-word families ('Segoe UI').
  * Quotes are therefore allowed here — renderTableHtml escapes them, and
  * injectFonts passes the family through JSON.stringify — but a brace or a
  * semicolon still ends a declaration, so those are not.
  */
-const fontStack: Check = (v) =>
-  typeof v === 'string' && v.length <= LIMITS.fontStack && !/[<>{};]/.test(v) ? v : DROP
-const pathData: Check = (v) =>
-  typeof v === 'string' && v.length <= LIMITS.html && PATH_DATA.test(v) ? v : DROP
+const fontStack: Check = tag((v) =>
+  typeof v === 'string' && v.length <= LIMITS.fontStack && !/[<>{};]/.test(v) ? v : DROP,
+  { type: 'string', maxLength: LIMITS.fontStack })
+const pathData: Check = tag((v) =>
+  typeof v === 'string' && v.length <= LIMITS.html && PATH_DATA.test(v) ? v : DROP,
+  { type: 'string', maxLength: LIMITS.html, description: 'SVG path data' })
 /**
  * src / poster: a data: URI, an asset: key, a URL, or a relative path.
  *
@@ -184,11 +237,11 @@ const pathData: Check = (v) =>
  * this into an attribute breakout, so it must escape or re-check — noted here
  * because the safety lives at the call site, not in this value.
  */
-const mediaRef: Check = (v) => {
+const mediaRef: Check = tag((v) => {
   if (typeof v !== 'string' || v.length > LIMITS.asset) return DROP
   if (HAS_SCHEME.test(v)) return SAFE_SCHEME.test(v) ? v : DROP
   return CSS_BREAKOUT.test(v) ? DROP : v // a bare path still lands in an attribute
-}
+}, { type: 'string', maxLength: LIMITS.asset, description: 'data: URI, asset:<key> or URL' })
 
 /**
  * Rebuild an object from a key table, dropping every key and value it fails.
@@ -204,16 +257,30 @@ const mediaRef: Check = (v) => {
 function shape(
   keys: readonly string[], checks: Record<string, Check>, required: readonly string[] = [],
 ): Check {
-  return (v) => {
+  return tag((v) => {
     if (!isPlainObject(v)) return DROP
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(v)) {
-      if (key === PROTO || !keys.includes(key)) continue
-      const val = checks[key]?.(v[key])
+      if (key === PROTO || !keys.includes(key)) { note(key, 'unknown key'); continue }
+      const val = within(key, () => checks[key]?.(v[key]))
       if (val !== DROP) out[key] = val
+      else note(key, 'invalid value')
     }
-    return required.every((key) => out[key] !== DROP) ? out : DROP
-  }
+    const missing = required.filter((key) => out[key] === DROP)
+    if (missing.length) { note(null, `missing required ${missing.join(', ')} — object dropped`); return DROP }
+    return out
+  }, objectSchema(keys, checks, required))
+}
+
+/** The schema of a `shape`: exactly the keys it keeps, each as its check says. */
+export function objectSchema(
+  keys: readonly string[], checks: Record<string, Check>, required: readonly string[] = [],
+): JsonSchema {
+  const properties: Record<string, JsonSchema> = {}
+  for (const key of keys) if (checks[key]) properties[key] = checks[key].schema ?? {}
+  const out: JsonSchema = { type: 'object', properties, additionalProperties: false }
+  if (required.length) out.required = [...required]
+  return out
 }
 
 /**
@@ -221,16 +288,16 @@ function shape(
  * arrays are positional — a table's cells line up with its columns, a chart's
  * data with its labels — and silently closing a hole would misalign the rest.
  */
-const list = (max: number, item: Check): Check => (v) => {
-  if (!Array.isArray(v) || v.length > max) return DROP
+const list = (max: number, item: Check): Check => tag((v) => {
+  if (!Array.isArray(v) || v.length > max) { note(null, Array.isArray(v) ? `more than ${max} entries` : 'not a list'); return DROP }
   const out: unknown[] = []
-  for (const entry of v) {
-    const val = item(entry)
-    if (val === DROP) return DROP
+  for (let i = 0; i < v.length; i++) {
+    const val = within(String(i), () => item(v[i]))
+    if (val === DROP) { note(String(i), 'invalid entry — the whole list is dropped'); return DROP }
     out.push(val)
   }
   return out
-}
+}, { type: 'array', maxItems: max, items: item.schema ?? {} })
 
 const gradient = shape(MODEL_KEYS.gradient, {
   angle: num(-3600, 3600),
@@ -247,6 +314,7 @@ const fx = shape(MODEL_KEYS.fx, {
   enter: oneOf('fade-up', 'fade', 'fade-down', 'slide-left', 'slide-right', 'slide-up', 'slide-down'),
   enterDur: num(0, 600),
   order: num(-1e4, 1e4),
+  step: num(0, 1e4),
   countUp: bool,
   ambient: oneOf('kenburns'),
   ken: shape(MODEL_KEYS.fxKen, {
@@ -288,7 +356,7 @@ const tableRows = list(LIMITS.rows, shape(MODEL_KEYS.tableRow, {
  * chartSnapshotSvg already catches), because a half-pruned option is still an
  * attacker's shape, kept.
  */
-const chartOption: Check = (v) => {
+const chartOption: Check = tag((v) => {
   if (!isPlainObject(v)) return DROP
   let nodes = LIMITS.optionNodes
   const pure = (node: unknown, depth: number): boolean => {
@@ -308,7 +376,33 @@ const chartOption: Check = (v) => {
     )
   }
   return pure(v, LIMITS.optionDepth) ? v : DROP
-}
+}, { type: 'object', description: 'ECharts-shaped option, plain JSON' })
+
+/**
+ * The `embed` element. `url` is what a live iframe LOADS, so it
+ * is held to http(s) and nothing else: a `javascript:` or `data:` page in a
+ * sandboxed frame cannot reach this document, but it would still be a page
+ * of someone else's choosing running on the reader's screen. `view` is svg
+ * markup or an `asset:` ref and gets the svg element's own ceiling; what the
+ * renderer does with the markup is the renderer's business (sanitizeSvg).
+ * `doc` is the source: an asset ref, or the same bounded plain JSON a chart
+ * option is held to: a source is data, never code (docs/format.md).
+ */
+// Not held to CSS_BREAKOUT: a query string legitimately carries `;` and
+// quotes, and the one consumer assigns it as a DOM property (`iframe.src`),
+// where it is a value and never re-parsed as markup (the mediaRef argument).
+const webUrl: Check = tag((v) =>
+  typeof v === 'string' && v.length <= LIMITS.prose && isWebUrl(v) ? v : DROP,
+  { type: 'string', maxLength: LIMITS.prose, pattern: '^https?://' })
+// An embedded document is another deck's JSON, and a deck's envelope carries
+// its collaboration secrets: `collab` (room, read key, private halves, and the
+// saved sync state) and `docId`. Neither is content. Left in place they would
+// pass this gate, survive every save by additivity, and travel with every copy
+// and export — and the export-secrets rig reads the top-level block only. So
+// an object source leaves here without them, whatever put them there — by the
+// same rule the export strip applies on the way out (envelope.ts).
+const embedDoc: Check = tag((v) => (typeof v === 'string' ? cssValue()(v) : stripEnvelope(chartOption(v))),
+  { anyOf: [{ type: 'string', maxLength: LIMITS.scalar }, { type: 'object' }] })
 
 // `el` is required: a connector end with no element to anchor to is dangling,
 // and editor.syncConnectors drops those anyway
@@ -336,7 +430,7 @@ const connectorEnd = shape(MODEL_KEYS.connectorEnd, {
  * not parse is dead weight the validator will report forever, so it is dropped
  * here rather than carried.
  */
-const themeRefs: Check = (v) => {
+const themeRefs: Check = tag((v) => {
   if (!isPlainObject(v)) return DROP
   const out: Record<string, string> = {}
   let n = 0
@@ -353,16 +447,18 @@ const themeRefs: Check = (v) => {
     out[key] = token
   }
   return Object.keys(out).length ? out : DROP
-}
+}, { type: 'object', additionalProperties: { type: 'string' }, maxProperties: LIMITS.themeRefs, description: 'property path → palette token' })
 
-const ELEMENT_CHECKS: Record<string, Check> = {
+export const ELEMENT_CHECKS: Record<string, Check> = {
   themeRefs,
   // identity + geometry
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),
-  groupId: cssValue(), showOnHover: cssValue(), link: cssValue(),
+  groupId: cssValue(), showOnHover: cssValue(),
+  // a slide id, or an http(s) URL — the same test the renderer and the show apply
+  link: tag((v) => (isWebUrl(v) ? v : cssValue()(v)), { type: 'string', maxLength: LIMITS.prose, description: 'slide id or http(s) URL' }),
   x: num(-1e6, 1e6), y: num(-1e6, 1e6), w: num(0, 1e6), h: num(0, 1e6),
   rotation: num(-3600, 3600), opacity: num(0, 1),
-  shadow: (v) => (Array.isArray(v) ? list(16, shadowSpec)(v) : shadowSpec(v)),
+  shadow: tag((v) => (Array.isArray(v) ? list(16, shadowSpec)(v) : shadowSpec(v)), { anyOf: [shadowSpec.schema!, { type: 'array', maxItems: 16, items: shadowSpec.schema! }] }),
   blur: num(0, 1000), backdropFilter: num(0, 1000), blend: cssValue(64),
   fx,
   // text
@@ -376,16 +472,19 @@ const ELEMENT_CHECKS: Record<string, Check> = {
   }, ['width', 'color']),
   // shape
   shape: oneOf('rect', 'ellipse', 'triangle', 'arrow', 'line', 'path'),
+  heads: num(2, 2),
   fill: paint, fillGradient: gradient, stroke: paint,
   strokeWidth: num(0, 1e4), strokeDash: num(0, 1e4),
   strokeStyle: oneOf('solid', 'dashed', 'dotted'),
-  lineStart: oneOf('none', 'arrow', 'dot', 'bar'), lineEnd: oneOf('none', 'arrow', 'dot', 'bar'),
+  // the tip list is tips.ts's — one catalogue for the gate, the panel and the renderer
+  lineStart: oneOf(...TIP_KINDS), lineEnd: oneOf(...TIP_KINDS),
   radius: num(0, 1e5), d: pathData,
-  pathBox: (v) => (Array.isArray(v) && v.length === 4 ? list(4, num(-1e6, 1e6))(v) : DROP),
+  pathBox: tag((v) => (Array.isArray(v) && v.length === 4 ? list(4, num(-1e6, 1e6))(v) : DROP), { type: 'array', minItems: 4, maxItems: 4, items: { type: 'number' } }),
   from: connectorEnd, to: connectorEnd,
   // image / svg / media
   src: mediaRef, poster: mediaRef, asset: cssValue(),
-  fit: oneOf('contain', 'cover', 'fill'),
+  fit: oneOf('contain', 'cover', 'fill'), keepAspectRatio: bool,
+  crop: shape(MODEL_KEYS.imageCrop, { x: num(0, 1), y: num(0, 1), scale: num(1, 64) }, ['x', 'y', 'scale']),
   markup: str(LIMITS.markup), css: str(LIMITS.css),
   kind: oneOf('video', 'audio'),
   autoplay: bool, loop: bool, muted: bool, controls: bool,
@@ -394,6 +493,14 @@ const ELEMENT_CHECKS: Record<string, Check> = {
   source: shape(['tableId'], { tableId: cssValue() }, ['tableId']),
   columns: list(LIMITS.cols, shape(['w'], { w: num(0, 1e6) }, ['w'])),
   rows: tableRows, header: bool, style: tableStyle,
+  // embed
+  app: cssValue(), view: str(LIMITS.markup), doc: embedDoc, url: webUrl, live: bool,
+  // code — the raw snippet is text (code.ts tokenizes it, never innerHTML);
+  // grammar/theme names and asset ids land in lookups, not markup. Not in
+  // REQUIRED_ELEMENT_KEYS: renderCodeInto returns false without content and
+  // the caller falls back to plain text — a degrade, not a throw.
+  content: str(LIMITS.html), grammarName: cssValue(64), themeName: cssValue(64),
+  grammarAssetId: cssValue(), themeAssetId: cssValue(),
   type: oneOf(...Object.keys(MODEL_KEYS.element)),
 }
 
@@ -423,7 +530,9 @@ const ELEMENT_CHECKS: Record<string, Check> = {
  * throwing — losing a whole pasted element over a defaultable number is the
  * worse trade. `svg` is absent for a different reason: its content comes from
  * `markup` OR `asset` (2 of the 4780 elements in a real deck use the asset
- * form), and svgMarkup already falls back to ''.
+ * form), and svgMarkup already falls back to ''. `embed` is
+ * absent for the same reason: an empty or refused `view` paints a
+ * placeholder, never throws.
  */
 const REQUIRED_ELEMENT_KEYS: Record<string, readonly string[]> = {
   text: ['html'],
@@ -453,36 +562,39 @@ export function checkElementProp(
 
 /** Rebuild a foreign element, or null if it is not one. */
 export function sanitizeElement(value: unknown): SlideElement | null {
-  if (!isPlainObject(value)) return null
+  if (!isPlainObject(value)) { note(null, 'not an object — element dropped'); return null }
   const type = value.type
-  if (typeof type !== 'string') return null
+  if (typeof type !== 'string') { note('type', 'missing — element dropped'); return null }
   const known = (MODEL_KEYS.element as Record<string, readonly string[]>)[type]
-  if (!known) return null
+  if (!known) { note('type', `unknown element type "${type}" — element dropped`); return null }
   // Identity is not optional: ids anchor selection, morph, comments and the
   // CRDT node key, and a slide paste keeps them (only slide ids are reminted).
   const id = ELEMENT_CHECKS.id(value.id)
-  if (typeof id !== 'string' || !id) return null
+  if (typeof id !== 'string' || !id) { note('id', 'missing or invalid — element dropped'); return null }
   const out: Record<string, unknown> = { type, id }
   for (const key of Object.keys(value)) {
-    if (key === 'type' || key === 'id' || key === PROTO || !known.includes(key)) continue
-    const val = ELEMENT_CHECKS[key]?.(value[key])
+    if (key === 'type' || key === 'id') continue
+    if (key === PROTO || !known.includes(key)) { note(key, `unknown key for a ${type} element`); continue }
+    const val = within(key, () => ELEMENT_CHECKS[key]?.(value[key]))
     if (val !== DROP) out[key] = val
+    else note(key, 'invalid value')
   }
   // An element missing what its type needs is not a degraded element, it is one
   // the format cannot express — and the renderer throws on it (see above), which
   // takes the whole slide down, not just the paste.
-  if (!(REQUIRED_ELEMENT_KEYS[type] ?? []).every((key) => out[key] !== DROP)) return null
+  const missing = (REQUIRED_ELEMENT_KEYS[type] ?? []).filter((key) => out[key] === DROP)
+  if (missing.length) { note(null, `missing required ${missing.join(', ')} — element dropped`); return null }
   return out as unknown as SlideElement
 }
 
 
-const SLIDE_CHECKS: Record<string, Check> = {
+export const SLIDE_CHECKS: Record<string, Check> = {
   id: cssValue(), name: str(LIMITS.prose), stateOf: cssValue(), themeRefs,
   // background is a CSS `background` shorthand, so it gets the colour rule at
   // the shorthand's length — wide enough for a multi-stop linear-gradient(),
   // still no url() reaching for the network from a pasted slide
   background: color(LIMITS.scalar), notes: str(LIMITS.html),
-  hidden: bool,
+  hidden: bool, unnumbered: bool,
   transition: oneOf('none', 'fade', 'slide', 'zoom', 'morph'),
   hover: shape(['type', 'dim', 'default'], {
     type: oneOf('focus-group', 'reveal'), dim: num(0, 1), default: cssValue(),
@@ -496,9 +608,9 @@ const SLIDE_CHECKS: Record<string, Check> = {
   })),
   // elements are dropped INDIVIDUALLY: one hostile element must not cost the
   // author the rest of a legitimately copied slide
-  elements: (v) => (Array.isArray(v) && v.length <= LIMITS.elements
-    ? v.map(sanitizeElement).filter((el): el is SlideElement => el !== null)
-    : DROP),
+  elements: tag((v) => (Array.isArray(v) && v.length <= LIMITS.elements
+    ? v.map((el, i) => within(String(i), () => sanitizeElement(el))).filter((el): el is SlideElement => el !== null)
+    : DROP), { type: 'array', maxItems: LIMITS.elements, items: { $ref: '#/$defs/element' } }),
 }
 
 /**
@@ -514,9 +626,9 @@ export const CHECKED_KEYS = {
 
 /** Rebuild a foreign slide, or null if it is not one. */
 export function sanitizeSlide(value: unknown): Slide | null {
-  if (!isPlainObject(value)) return null
+  if (!isPlainObject(value)) { note(null, 'not an object — slide dropped'); return null }
   const id = SLIDE_CHECKS.id(value.id)
-  if (typeof id !== 'string' || !id) return null
+  if (typeof id !== 'string' || !id) { note('id', 'missing or invalid — slide dropped'); return null }
   const out = shape(MODEL_KEYS.slide, SLIDE_CHECKS)(value) as Record<string, unknown>
   if (!Array.isArray(out.elements)) out.elements = []
   return out as unknown as Slide

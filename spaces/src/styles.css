@@ -25,7 +25,10 @@
    most of the window: not a dark interface, and a re-introduction of the
    floating-card look that was deliberately removed.
 
-   So in spaces the reading surface IS chrome, and it follows the reader.
+   So in spaces the reading surface IS chrome, and it follows the reader —
+   UNTIL THE DOCUMENT HAS A DESIGN (DECISIONS, 2026-09-26). Then the author's
+   design owns the surface and the reader's theme picks between its two
+   palettes; designs.css does that, and nothing in this file changes for it.
    `doc.theme.background/color/accent` still exist in the format and are still
    the DOCUMENT's own colours — but the only thing that paints them is the
    static file-manager preview (preview.ts), which renders with scripting off,
@@ -2855,3 +2858,31 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
     60% { transform: translateX(-2px) }
   }
 }
+/* ————— the design picker and the customise panel —————
+   CHROME: the app's controls for choosing a design, drawn in the app's
+   tokens. The designs themselves live in designs.css and never reach here —
+   the panel sits on <body>, outside the reading surface. */
+.sp-dsg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 2px 4px 8px; }
+.sp-dsg-choice strong { display: flex; align-items: center; gap: 7px; }
+.sp-dsg-sw { display: inline-flex; flex: 0 0 auto; border-radius: 4px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+.sp-dsg-sw b { width: 9px; height: 14px; display: block; }
+.sp-dsg-panel {
+  position: fixed; z-index: 55; top: 58px; bottom: 12px; inset-inline-end: 12px;
+  width: min(340px, calc(100vw - 24px)); overflow: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 12px 34px rgb(var(--shade) / .2); padding: 10px 12px 12px;
+}
+.sp-dsg-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sp-dsg-sub { font-size: 12px; font-weight: 600; color: var(--muted); margin: 14px 0 6px; }
+.sp-dsg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 13px; }
+.sp-dsg-row > span { color: var(--ink-2); }
+.sp-dsg-row .sp-select, .sp-dsg-row .sp-input { max-width: 58%; }
+.sp-dsg-range { display: inline-flex; align-items: center; gap: 6px; }
+.sp-dsg-range input { width: 120px; }
+.sp-dsg-range output { min-width: 38px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.sp-dsg-cols { display: grid; grid-template-columns: 1fr 48px 48px; gap: 4px 8px; align-items: center; font-size: 13px; }
+.sp-dsg-cols > span { color: var(--ink-2); }
+.sp-dsg-cols > span:nth-child(2), .sp-dsg-cols > span:nth-child(3) { font-size: 11.5px; color: var(--muted); text-align: center; }
+.sp-dsg-cols input[type='color'] { width: 44px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--field); }
+@media (max-width: 720px) { .sp-dsg-panel { top: auto; height: 62vh; inset-inline: 8px; width: auto; } }
+@media print { .sp-dsg-panel { display: none !important; } }

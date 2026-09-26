@@ -16,7 +16,8 @@ import { lsGet, lsSet } from '../storage.ts'
 import { offlineEnabled } from '../update.ts'
 // Every request in the app goes through the one chokepoint (kernel/src/net.ts)
 // so the offline switch cannot be forgotten — see GHSA-5c3x-xqp6-g94r.
-import { netWebSocket } from '../net.ts'
+import { netWebSocket, SandboxedError, sharedStorageOrigin } from '../net.ts'
+import { appConfig } from '../app.ts'
 
 /** the app's store, structurally — see session.ts HostStore */
 type Store = HostStore
@@ -58,11 +59,15 @@ export async function signFrame(key: CryptoKey, i: string, d: string): Promise<s
   return b64u.enc(new Uint8Array(sig))
 }
 
-/** Sign an arbitrary string with a b64url PKCS#8 private key (cert chains). */
-export async function signText(privB64: string, text: string): Promise<string> {
-  const key = await importSignKey(privB64)
+/** Sign an arbitrary string with an already-imported signing key. */
+export async function signWith(key: CryptoKey, text: string): Promise<string> {
   const sig = await crypto.subtle.sign(SIGN_ALG, key, new TextEncoder().encode(text))
   return b64u.enc(new Uint8Array(sig))
+}
+
+/** Sign an arbitrary string with a b64url PKCS#8 private key (cert chains). */
+export async function signText(privB64: string, text: string): Promise<string> {
+  return signWith(await importSignKey(privB64), text)
 }
 
 async function mintKeypair(): Promise<{ pub: string; priv: string }> {
@@ -73,14 +78,14 @@ async function mintKeypair(): Promise<{ pub: string; priv: string }> {
   }
 }
 
-export type CollabInvite = { pub: string; priv: string; role: 'writer' | 'commenter'; exp?: number; sig: string }
+export type CollabInvite = { pub: string; priv: string; role: 'writer' | 'commenter' | 'audience'; exp?: number; sig: string }
 
 /** Owner-signed invite: a delegation keypair whose private half rides in the
  *  shared copy. Chain: owner signs `inv.${pub}.${role}.${exp||0}`; a joining
  *  device later signs its own pubkey with the invite key (`dlg.${memberPub}`).
  *  The relay verifies both signatures and never sees private material — so a
  *  blind relay still cannot certify its own key. */
-export async function mintInvite(ownerPrivB64: string, role: 'writer' | 'commenter' = 'writer', exp = 0): Promise<CollabInvite> {
+export async function mintInvite(ownerPrivB64: string, role: 'writer' | 'commenter' | 'audience' = 'writer', exp = 0): Promise<CollabInvite> {
   const kp = await mintKeypair()
   const sig = await signText(ownerPrivB64, `inv.${kp.pub}.${role}.${exp}`)
   return { pub: kp.pub, priv: kp.priv, role, ...(exp ? { exp } : {}), sig }
@@ -144,12 +149,32 @@ export async function mintCollab(): Promise<CollabCreds> {
   }
 }
 
-/** dev override for the relay host (e.g. ws://localhost:8787) */
+/** The relay host: the localStorage dev override (e.g. ws://localhost:8787),
+ *  else the host the app configured (a fork running its own relay), else the
+ *  platform default. Rigs that never call configureApp() get the default.
+ *
+ *  A file's collab capability is complete only WITHIN the publisher that
+ *  minted it. `CollabCreds` carries the room and the key and no host, which
+ *  was total while every build had one relay; with per-publisher relays, the
+ *  same file opened in another publisher's build joins that publisher's
+ *  relay, where the room id is a valid commitment and is simply created
+ *  fresh. Both sides are live, on two relays, and never meet — a silent
+ *  split, not a leak (the relay is blind and the payloads are E2EE). This is
+ *  accepted and consistent with the update channel refusing another
+ *  publisher's manifests: a fork is its own trust domain. Cross-publisher
+ *  collaboration would need the host stamped into `collab` — an additive
+ *  format change, and its own serialized kernel PR. */
 export function syncHost(): string {
+  let configured: string | undefined
+  try { configured = appConfig().syncHost } catch { /* not configured: platform default */ }
   try {
-    return lsGet('bento-sync-url') || DEFAULT_SYNC_HOST
+    // The localStorage dev override is honoured only from a real, isolated
+    // origin: on file:// (shared storage) a malicious local deck could plant it
+    // and steer this deck's collab at a hostile relay.
+    const devOverride = sharedStorageOrigin() ? '' : lsGet('bento-sync-url')
+    return devOverride || configured || DEFAULT_SYNC_HOST
   } catch {
-    return DEFAULT_SYNC_HOST
+    return configured || DEFAULT_SYNC_HOST
   }
 }
 
@@ -236,12 +261,34 @@ export class OnlineTransport implements Transport {
       /** replay done: (actor,seq) pairs the room holds; return true to upload a snapshot */
       onReady: (seen: Set<string>, seq: number) => boolean
       /** the relay refused a frame; `ops` are the ones it will never accept
-       *  (null when the refusal couldn't be pinned to a frame we sent) */
-      onRefused?: (code: RefusalCode, ops: Op[] | null) => void
+       *  (null when the refusal couldn't be pinned to a frame we sent). `opts.snapshot`
+       *  = the refused frame was a whole-deck snapshot (no op of ours matched it). */
+      onRefused?: (code: RefusalCode, ops: Op[] | null, opts?: { snapshot?: boolean }) => void
+      // ——— broadcast reception (audience side, and the presenter's own
+      // checkpoint/count signals). All optional: a session with no show wires
+      // none of them and nothing below fires. ———
+      /** an aud op batch (audience): apply through the reader path */
+      onShowOps?: (ops: Op[]) => void
+      /** an aud snapshot (audience): the whole show document under Ke */
+      onShowSnap?: (doc: SyncDoc, state: SyncStateJSON) => void
+      /** a control verb (audience): nav/black/laser with its decrypted payload */
+      onShowVerb?: (kind: 'nav' | 'black' | 'laser', payload: unknown) => void
+      /** the relay asks the presenter to checkpoint (soft cap or show-full) */
+      onShowCheckpoint?: () => void
+      /** coarse audience count, to the presenter */
+      onShowCount?: (n: number) => void
+      /** an audience socket was closed by the relay (4001 end/grace, 4002
+       *  not-live, 4003 show-full, 1008 revoked) */
+      onShowClosed?: (code: number) => void
     },
     private auth?: AuthSpec,
   ) {
     this.docId = docId
+    this.writeReadyP = new Promise<void>((r) => { this.resolveWriteReady = r })
+    // Known before init's async work: an audience socket is a chain whose
+    // invite the owner signed with role 'audience'. Set here so startShow and
+    // the send guards see it immediately.
+    this.audienceMode = auth?.kind === 'chain' && auth.invite.role === 'audience'
     this.init(room)
   }
 
@@ -255,11 +302,43 @@ export class OnlineTransport implements Transport {
    *  Null until init() has derived the token. */
   blobCreds(): { base: string; room: string; tok: string; rawKey: Uint8Array } | null {
     if (!this.roomName || !this.tokValue) return null
-    return { base: this.originValue, room: this.roomName, tok: this.tokValue, rawKey: b64u.dec(this.keyB64) }
+    // The write ticket (relay: Room.writeTicket) when this socket earned one,
+    // else the read token. Uploads authorized by the token alone let any
+    // read-only copy fill the room's blob quota, so the relay hands writers a
+    // separate credential over the certified socket; reads accept either.
+    return {
+      base: this.originValue,
+      room: this.roomName,
+      tok: this.writeTicket || this.tokValue,
+      rawKey: b64u.dec(this.keyB64),
+    }
   }
+  /** True once this socket can upload: it holds the write ticket, or the relay
+   *  finished `ready` without offering one (an older relay, or a reader — either
+   *  way the room token is what uploads take there). Callers that PUT before this
+   *  resolves would send the token into a ticket-latched room and 403. */
+  writeReady(): Promise<void> {
+    return this.writeReadyP
+  }
+  private writeReadyP: Promise<void>
+  private resolveWriteReady: () => void = () => {}
   private roomName = ''
   private tokValue = ''
   private originValue = ''
+  /** relay-issued blob write ticket; null until a PROVEN socket is handed one */
+  private writeTicket: string | null = null
+  /** `w`-room: the relay verifies writer signatures, so its stamps mean
+   *  something and unstamped content-bearing frames can be refused. Legacy
+   *  `r` rooms sign nothing — gating there would drop every legitimate frame. */
+  private signedRoom = false
+  /** An audience socket: connects on the audience path (ivr=audience) and is
+   *  RECEIVE-ONLY — it sends no protocol frame, only the transport keepalive.
+   *  The relay drops anything else it sent, but a client that does not send it
+   *  in the first place cannot leak presence or an op it should not have. */
+  private audienceMode = false
+  /** True when this transport is an audience socket — receive-only. The session
+   *  refuses startShow on it, and every show sender below no-ops. */
+  get audience(): boolean { return this.audienceMode }
 
   private async init(room: string) {
     const raw = b64u.dec(this.keyB64)
@@ -276,6 +355,7 @@ export class OnlineTransport implements Transport {
       this.originValue = u.origin
       this.roomName = u.pathname.replace(/^\/d\//, '')
       this.tokValue = tok
+      this.signedRoom = this.roomName[0] === 'w'
     } catch { /* malformed room url — blobs simply stay unavailable */ }
     // Writers sign op frames; readers omit auth and the relay drops their
     // writes. Two writer shapes: DIRECT (the presented `w` key hash-matches the
@@ -286,14 +366,22 @@ export class OnlineTransport implements Transport {
     if (a?.kind === 'direct') {
       if (a.priv) { try { this.signKey = await importSignKey(a.priv) } catch { this.signKey = null } }
       this.myPub = a.pub
-      this.url = `${room}?tok=${tok}&w=${a.pub}`
+      // bt=1: we understand the blob write ticket. The relay only starts
+      // REQUIRING it for uploads once a PROVEN writer has said so, which is
+      // what lets the relay ship ahead of clients without 403ing their asset
+      // offload. Sent by every writer shape; honoured only after `prove`.
+      this.url = `${room}?tok=${tok}&bt=1&w=${a.pub}`
     } else if (a?.kind === 'chain') {
       const id = await deviceIdentity(this.docId)
       try { this.signKey = await importSignKey(id.priv) } catch { this.signKey = null }
       this.myPub = id.pub
       const iv = a.invite
       const dg = await signText(iv.priv, `dlg.${id.pub}`)
-      this.url = `${room}?tok=${tok}&w=${id.pub}&o=${a.owner}` +
+      // An audience member connects on the audience path: ivr=audience (which
+      // the owner signed into the invite), no bt (it never proves, never gets a
+      // ticket), and receive-only. audienceMode was set in the constructor.
+      const bt = this.audienceMode ? '' : '&bt=1'
+      this.url = `${room}?tok=${tok}${bt}&w=${id.pub}&o=${a.owner}` +
         `&ivp=${iv.pub}&ivr=${iv.role}&ive=${iv.exp ?? 0}&ivs=${iv.sig}&dg=${dg}`
     } else {
       this.url = `${room}?tok=${tok}`
@@ -320,7 +408,13 @@ export class OnlineTransport implements Transport {
     let ws: WebSocket
     try {
       ws = netWebSocket(`${this.url}&since=${this.lastSeq()}`)
-    } catch {
+    } catch (e) {
+      // A sandboxed embed (Teams/SharePoint preview) refuses every socket at
+      // the net chokepoint, permanently and identically — retrying would only
+      // flap 'connecting' forever. Treat it as TERMINAL, exactly as drop()
+      // treats close codes 4001/1008: stop, schedule no reconnect. (The offline
+      // switch is different — it can flip back off, so it stays retryable.)
+      if (e instanceof SandboxedError) { this.closed = true; this.setStatus('closed'); return }
       this.retry()
       return
     }
@@ -343,15 +437,24 @@ export class OnlineTransport implements Transport {
       if (data === 'pong') { this.awaitingPong = false; return } // keepalive reply
       this.onEnvelope(data).catch(() => {})
     }
-    const drop = () => {
+    const drop = (ev?: { code?: number }) => {
       if (this.ws !== ws) return
       this.stopHeartbeat()
       this.ws = null
       this.setStatus('closed')
+      // Broadcast close codes carry meaning: the relay closed an audience
+      // socket deliberately. 4001 end/grace and 1008 revoked are TERMINAL —
+      // the show is over or access is gone, so do not reconnect into a wall;
+      // 4002 not-live and 4003 show-full are transient (the presenter has not
+      // gone live yet, or the show is momentarily full), so reconnect with
+      // backoff — that IS the "waiting for the presenter" state.
+      const code = ev?.code
+      if (code && code >= 4001 && code <= 4003 || code === 1008) this.hooks.onShowClosed?.(code!)
+      if (code === 4001 || code === 1008) { this.closed = true; return }
       this.retry()
     }
     ws.onclose = drop
-    ws.onerror = drop
+    ws.onerror = () => drop()
   }
 
   private startHeartbeat(ws: WebSocket) {
@@ -398,6 +501,19 @@ export class OnlineTransport implements Transport {
       this.throttle(typeof env.retryInMs === 'number' ? env.retryInMs : 10_000)
       return
     }
+    // Not in RefusalCode on purpose: it never reaches SyncNotice (nothing was
+    // lost, so there is nothing to tell the user), and widening the exported
+    // union would make every app's notice switch non-exhaustive for a code it
+    // will never see.
+    if ((env.code as string) === 'snap-ahead') {
+      // We uploaded a snapshot claiming to cover a seq the room has not reached.
+      // The relay refused it rather than prune ops it still needs — nothing was
+      // lost, the op log is intact, and the next snapshot cadence will retry
+      // with a `q` the room agrees with. Loud, because it means this copy's
+      // sequence counter drifted ahead of the room, which is a bug to find.
+      console.warn('[bento-sync] relay refused a snapshot ahead of the room’s seq — nothing lost', env)
+      return
+    }
     if (env.code !== 'too-large' && env.code !== 'storage-failed' && env.code !== 'room-full') {
       // a code from a newer relay: no recovery we can invent is better than
       // leaving the op in the log, where `need` will retry it honestly
@@ -407,7 +523,10 @@ export class OnlineTransport implements Transport {
     const culprit = this.matchRefused(env)
     if (culprit) this.awaitingAck = this.awaitingAck.filter((o) => o !== culprit)
     console.warn(`[bento-sync] relay refused a frame (${env.code})`, env)
-    this.hooks.onRefused?.(env.code, culprit?.ops ?? null)
+    // No matched op for a whole-frame refusal = the frame was a snapshot (ops
+    // are tracked and matched by id; snapshots are never acked). Lets the editor
+    // word it "the deck is too large" rather than "that change is too large".
+    this.hooks.onRefused?.(env.code, culprit?.ops ?? null, culprit ? undefined : { snapshot: true })
   }
 
   /**
@@ -483,7 +602,18 @@ export class OnlineTransport implements Transport {
   }
 
   private async onEnvelope(text: string) {
-    let env: { i?: string; d?: string; q?: number; snap?: number; ctl?: string; p?: string } & RefusedEnv
+    let env: {
+      i?: string; d?: string; q?: number; snap?: number; ctl?: string; p?: string
+      /** the writer signature the relay VERIFIED before fanning this out */
+      g?: string
+      /** blob write ticket — only ever sent to a socket that proved its key */
+      wt?: string
+      /** possession nonce on `ready`: sign it to prove the `?w=` key is ours */
+      c?: string
+      /** broadcast: the audience stream tag, the verb name, the count */
+      s?: string
+      n?: number
+    } & RefusedEnv
     try {
       env = JSON.parse(text)
     } catch {
@@ -495,7 +625,21 @@ export class OnlineTransport implements Transport {
       if (env.p && env.p === this.myPub) {
         console.info('[bento-sync] this copy’s access was revoked by the owner')
         this.close()
+        return
       }
+      // a removal re-mints the room's blob ticket (the removed copy still holds
+      // the old one); the relay sends the replacement to PROVEN sockets only
+      if (typeof env.wt === 'string') this.writeTicket = env.wt
+      return
+    }
+    // The ticket arrives on its own frame, after `prove` — never on `ready`.
+    // Presenting the owner's PUBLIC key hash-matches the room name, and every
+    // reader copy carries that key; a ticket issued on the hash-match alone
+    // would go to any reader. Only a socket that signed the relay's nonce with
+    // the matching PRIVATE key is handed one.
+    if (env.ctl === 'wt') {
+      if (typeof env.wt === 'string') this.writeTicket = env.wt
+      this.resolveWriteReady()
       return
     }
     // the relay would not take a frame and said so (v1.0.9 relay and later;
@@ -504,6 +648,9 @@ export class OnlineTransport implements Transport {
       this.handleRefusal(env)
       return
     }
+    // ——— broadcast control, no encrypted body ———
+    if (env.ctl === 'audckpt') { this.hooks.onShowCheckpoint?.(); return }
+    if (env.ctl === 'audcount') { if (typeof env.n === 'number') this.hooks.onShowCount?.(env.n); return }
     if (env.ctl === 'ack' || env.ctl === 'ready') {
       // one ack = the oldest un-acked persisted frame landed
       if (env.ctl === 'ack') this.awaitingAck.shift()
@@ -511,7 +658,26 @@ export class OnlineTransport implements Transport {
         this.saveSeq(env.q)
         this.maybeSnapshot(env.q)
       }
+      if (env.ctl === 'ready' && typeof env.q !== 'number') {
+        // An AUDIENCE ready: `bc`/`v`, no `q`. The audience is receive-only and
+        // has no op log to replay or snapshot — running the collab path below
+        // would make it try to upload one. It is simply live now.
+        this.inReplay = false
+        this.resolveWriteReady()
+        return
+      }
       if (env.ctl === 'ready') {
+        // `c` is the relay's possession challenge, present only for a socket
+        // whose `?w=` hash-matched the room. Answer it and the ticket follows on
+        // its own `wt` frame; a reader (no signing key) cannot answer and never
+        // gets one. No `c` at all = an older relay, or we joined as a reader —
+        // in both cases uploads take the room token and there is nothing to
+        // wait for, so writes are released now.
+        if (typeof env.c === 'string' && this.signKey && this.roomName) {
+          void this.prove(env.c)
+        } else {
+          this.resolveWriteReady()
+        }
         this.inReplay = false
         const wantSnap = this.hooks.onReady(this.replaySeen, env.q ?? 0)
         this.replaySeen = new Set()
@@ -534,12 +700,37 @@ export class OnlineTransport implements Transport {
       return // wrong key / corrupted — ignore
     }
     if (typeof env.q === 'number') this.saveSeq(env.q)
+    // ——— broadcast reception (audience side). These arrive pre-routed by the
+    // relay, which only fans them to audience sockets and verified every
+    // signed one; the payload is under Ke, which only show participants hold.
+    // So they do not go through vouched() — that is the ROOM's read-only
+    // guarantee, a different trust path from the relay-routed show stream. ———
+    if (env.s === 'aud' && !env.ctl) {
+      const f = payload as { ops?: Op[] }
+      if (f?.ops) this.hooks.onShowOps?.(f.ops)
+      return
+    }
+    if (env.ctl === 'audsnap') {
+      const sn = payload as { doc: SyncDoc; state: SyncStateJSON }
+      if (sn?.doc && sn.state) this.hooks.onShowSnap?.(sn.doc, sn.state)
+      return
+    }
+    if (env.ctl === 'nav' || env.ctl === 'black' || env.ctl === 'laser') {
+      this.hooks.onShowVerb?.(env.ctl, payload)
+      return
+    }
     if (env.snap === 1) {
+      if (!this.vouched(env)) return
       const s = payload as { doc: SyncDoc; state: SyncStateJSON }
       if (s && s.doc && s.state) this.hooks.onSnap(s.doc, s.state)
       return
     }
     const frame = payload as Frame
+    // Decrypting a frame proves the sender holds the READ key — which every
+    // copy carries, read-only ones included. Authorship is a separate question
+    // and only the relay can answer it, so content-bearing frames are refused
+    // without its stamp.
+    if ((frame.t === 'ops' || frame.t === 'snap') && !this.vouched(env)) return
     if (this.inReplay && frame.t === 'ops') {
       for (const op of frame.ops) this.replaySeen.add(`${op.a}:${op.s}`)
     }
@@ -547,6 +738,38 @@ export class OnlineTransport implements Transport {
   }
 
   private inReplay = true
+
+  /**
+   * Did the relay vouch for this envelope? In a signed room it stamps exactly
+   * what it checked: `q` on a frame it persisted (verified before storage) and
+   * an echoed `g` on a signed frame it fanned out. An unstamped frame reached
+   * us because someone encrypted it with the room key — a read-only copy can
+   * do that, and a blind relay cannot tell the ciphertext of an op batch from
+   * the ciphertext of a presence beat, so it forwards both. Refusing the
+   * unstamped ones HERE is what makes read-only hold for live peers and not
+   * just for the persisted log.
+   *
+   * Legacy `r` rooms have no signatures at all: gating them would drop every
+   * frame, so they stay on the pre-signing trust model.
+   */
+  private vouched(env: { q?: number; g?: string }): boolean {
+    return !this.signedRoom || typeof env.q === 'number' || typeof env.g === 'string'
+  }
+
+  /** Answer the relay's possession challenge: sign `prove.<nonce>.<room>` with
+   *  the key we presented as `?w=`. The room name is in the signed text so a
+   *  signature can never be replayed into another room, and the nonce is
+   *  per-socket and single-use so it cannot be replayed into this one. */
+  private async prove(nonce: string) {
+    if (!this.signKey || !this.ws) return
+    try {
+      const g = await signWith(this.signKey, `prove.${nonce}.${this.roomName}`)
+      this.ws.send(JSON.stringify({ ctl: 'prove', g }))
+    } catch {
+      // cannot sign → we are effectively a reader; do not hold writes forever
+      this.resolveWriteReady()
+    }
+  }
 
   private snapInFlight = false
 
@@ -573,19 +796,82 @@ export class OnlineTransport implements Transport {
     }
   }
 
-  private async encrypt(plain: string): Promise<{ i: string; d: string } | null> {
-    if (!this.key) return null
+  private async encrypt(plain: string, key: CryptoKey | null = this.key): Promise<{ i: string; d: string } | null> {
+    if (!key) return null
     const iv = new Uint8Array(12)
     crypto.getRandomValues(iv)
     const ct = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv: iv as BufferSource },
-      this.key,
+      key,
       new TextEncoder().encode(plain),
     )
     return { i: b64u.enc(iv), d: b64u.enc(new Uint8Array(ct)) }
   }
 
+  // ——— BROADCAST: the presenter's audience stream ———
+  // The presenter's socket carries the room key (this.key). A show's audience
+  // holds a SEPARATE show key Ke; the presenter encrypts a second copy of each
+  // op batch and each control frame under Ke, tagged s:'aud', and the relay
+  // routes those to audience sockets only. Only the presenter side needs this:
+  // an audience copy's own this.key already IS Ke (its collab.key is the show
+  // key), so it decrypts s:'aud' frames on the ordinary path below.
+  private showKey: CryptoKey | null = null
+
+  /** Install (or clear) the show key. Raw AES-GCM key, base64url. */
+  async setShowKey(rawB64: string | null): Promise<void> {
+    if (this.audienceMode) return
+    this.showKey = rawB64
+      ? await crypto.subtle.importKey('raw', b64u.dec(rawB64) as BufferSource, 'AES-GCM', false, ['encrypt'])
+      : null
+  }
+
+  /** One op batch to the audience: sealed under Ke, tagged s:'aud'. NEVER
+   *  persisted by the relay (it ignores p on this stream), so it does not join
+   *  the resend log — a dropped aud batch is recovered by the next audsnap, not
+   *  by replay. Silent no-op if there is no show key or the socket is gone. */
+  async sendAud(ops: Op[]): Promise<void> {
+    if (this.audienceMode) return
+    const enc = await this.encrypt(JSON.stringify({ t: 'ops', a: 'show', ops }), this.showKey)
+    if (!enc || !this.ws) return
+    try { this.ws.send(JSON.stringify({ s: 'aud', i: enc.i, d: enc.d })) } catch { /* gone */ }
+  }
+
+  /** The whole (already app-projected) document to the audience, under Ke. */
+  async sendAudSnap(doc: SyncDoc, state: SyncStateJSON): Promise<void> {
+    if (this.audienceMode) return
+    const enc = await this.encrypt(JSON.stringify({ doc, state }), this.showKey)
+    if (!enc || !this.ws) return
+    try { this.ws.send(JSON.stringify({ ctl: 'audsnap', i: enc.i, d: enc.d })) } catch { /* gone */ }
+  }
+
+  /** A control verb. live/end sign the literal; nav/black encrypt their payload
+   *  under Ke and sign the ciphertext with the stream in the text (so a
+   *  room-stream signature cannot be replayed as the audience's); laser is
+   *  unsigned. The relay checks all of this against the socket's proven key. */
+  async sendVerb(kind: 'live' | 'end' | 'nav' | 'black' | 'laser', payload?: unknown): Promise<void> {
+    if (this.audienceMode || !this.ws) return
+    try {
+      if (kind === 'live' || kind === 'end') {
+        const g = this.signKey ? await signWith(this.signKey, kind) : undefined
+        this.ws.send(JSON.stringify({ ctl: kind, g }))
+        return
+      }
+      const enc = await this.encrypt(JSON.stringify(payload ?? null), this.showKey)
+      if (!enc) return
+      if (kind === 'laser') {
+        this.ws.send(JSON.stringify({ ctl: 'laser', s: 'aud', i: enc.i, d: enc.d }))
+        return
+      }
+      const g = this.signKey ? await signFrame(this.signKey, `${kind}.aud.${enc.i}`, enc.d) : undefined
+      this.ws.send(JSON.stringify({ ctl: kind, s: 'aud', i: enc.i, d: enc.d, g }))
+    } catch { /* gone */ }
+  }
+
   send(frame: Frame) {
+    // An audience socket is receive-only: it never puts a protocol frame on the
+    // wire (the relay would drop it, but not sending it is the guarantee). The
+    // keepalive ping is not a protocol frame and is left alone.
+    if (this.audienceMode) return
     void (async () => {
       const enc = await this.encrypt(JSON.stringify(frame))
       if (!enc) return
@@ -597,6 +883,12 @@ export class OnlineTransport implements Transport {
         // sign the ciphertext so the relay verifies authorship while blind.
         if (this.signKey) env.g = await signFrame(this.signKey, enc.i, enc.d)
         ops = frame.ops
+      } else if (frame.t === 'snap' && this.signKey) {
+        // A rejoining fork's snapshot is ephemeral (never persisted) but it
+        // REPLACES what every live peer holds — the same authority as an op
+        // batch, and it used to travel unsigned. Sign it so the relay can
+        // vouch for it; peers now refuse a `snap` it hasn't stamped.
+        env = { ...enc, g: await signFrame(this.signKey, enc.i, enc.d) }
       }
       // remember what rode in the frame so a refusal can name it
       this.write({ id, text: JSON.stringify(env), ops, bytes: enc.i.length + enc.d.length, tries: 0 })
@@ -663,7 +955,15 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
     // v2 owner → direct with ownerPriv; v2 member → invite chain (device key
     // minted per-machine); legacy → the shared writer key pair.
     let auth: AuthSpec | undefined
-    if (collab.role !== 'reader') {
+    if (collab.role === 'audience') {
+      // An AUDIENCE copy: its collab.key is the show key Ke, its invite is the
+      // owner-signed `audience` ticket. It joins on the chain (ivr=audience,
+      // set from the invite role) and the transport makes it receive-only. No
+      // audience invite, no join — there is nothing to fall back to.
+      if (collab.owner && collab.invite) {
+        auth = { kind: 'chain', owner: collab.owner, invite: collab.invite, docId }
+      }
+    } else if (collab.role !== 'reader') {
       if (collab.v === 2 && collab.owner && collab.ownerPriv) {
         auth = { kind: 'direct', pub: collab.owner, priv: collab.ownerPriv }
       } else if (collab.v === 2 && collab.owner && collab.invite) {
@@ -677,7 +977,18 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
       getSnapshot: () => session.snapshot(),
       onOpen: () => session.hello(),
       onReady: (seen) => session.onRelayReady(seen),
-      onRefused: (code, ops) => session.refused(code, ops),
+      onRefused: (code, ops, opts) => {
+        // show-full is a broadcast refusal: it means "checkpoint now", handled
+        // by the show path, not the collab resend log.
+        if ((code as string) === 'show-full') { session.showCheckpoint(); return }
+        session.refused(code, ops, opts)
+      },
+      onShowOps: (ops) => session.applyShowOps(ops),
+      onShowSnap: (doc, state) => session.applyShowSnap(doc, state),
+      onShowVerb: (kind, payload) => session.showVerb(kind, payload),
+      onShowCheckpoint: () => session.showCheckpoint(),
+      onShowCount: (n) => session.showCount(n),
+      onShowClosed: (code) => session.showClosed(code),
     }, auth)
     return active
   })

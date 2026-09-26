@@ -42,6 +42,89 @@ export class OfflineError extends Error {
   }
 }
 
+/** Thrown by netFetch/netWebSocket inside an embedded view (see sandboxed). */
+export class SandboxedError extends Error {
+  constructor(what = 'the network') {
+    super(`This file is open inside an embedded view — not reaching ${what}.`)
+    this.name = 'SandboxedError'
+  }
+}
+
+/**
+ * Is this document an EMBEDDED VIEW — the way Microsoft Teams / SharePoint
+ * open an attachment: a sandboxed frame without allow-same-origin, whose
+ * policy blocks every connection and whose preview pane treats a reported
+ * violation as fatal? ALL THREE signs are required, because each alone is
+ * something else:
+ *
+ *   · framed (`self !== top`; a cross-origin top throws on the read and
+ *     counts as framed) — a Teams pane is always a frame: the B2 diagnostic
+ *     panel, opened in Teams by the maintainer, printed `framed` alongside
+ *     origin 'null' and the storage SecurityError;
+ *   · an opaque DOCUMENT origin (`self.origin === 'null'`; `location.origin`
+ *     is the URL's origin, a different thing — measured in Chromium 152, a
+ *     sandboxed frame loaded by src reports its http origin there while
+ *     self.origin is 'null'; the B2 panel in Teams printed location.origin
+ *     'null', so that pane loads the file as srcdoc or a data: URL, where
+ *     both agree) — BUT so are documents nobody embedded: Chromium 152
+ *     reports self.origin 'null' for a top-level file:// deck (location
+ *     origin 'file://'), and so do a data: URL, a WebView loaded from a
+ *     string with no base URL, and a top-level response under CSP `sandbox`.
+ *     On the origin alone those users would have lost updates and collab;
+ *   · a storage read throwing SecurityError — BUT a normal tab with site
+ *     data blocked throws there too, top-level, with a real origin (the
+ *     offline-mode notes above treat that as survivable, and it is).
+ *
+ * A Teams pane is framed AND opaque AND storage-less; nothing else that
+ * opens a deck is all three. Decided once; a frame's sandboxing does not
+ * change while it lives. Inside one, no launch update check,
+ * no language-pack listing, no relay socket. Remote media in the document
+ * is loaded by the browser from a src attribute and is not ours to gate.
+ */
+let sandboxFlag: boolean | null = null
+export const sandboxed = (): boolean => {
+  if (sandboxFlag !== null) return sandboxFlag
+  let framed = false
+  try { framed = typeof self !== 'undefined' && typeof top !== 'undefined' && self !== top } catch { framed = true }
+  let opaque = false
+  try {
+    const o = typeof self !== 'undefined' && typeof (self as { origin?: unknown }).origin === 'string' ? (self as { origin: string }).origin : location.origin
+    opaque = o === 'null'
+  } catch { opaque = false }
+  let storageThrows = false
+  try { void globalThis.localStorage } catch (e) { storageThrows = !!e && (e as { name?: string }).name === 'SecurityError' }
+  sandboxFlag = framed && opaque && storageThrows
+  return sandboxFlag
+}
+
+/**
+ * Is this document's localStorage / IndexedDB SHARED with other local documents?
+ *
+ * Chrome gives every `file://` page ONE origin, so one deck's localStorage and
+ * IndexedDB are readable and writable by any other local `.bento.html` the user
+ * opens. An opaque origin (`self.origin === 'null'`) is untrusted the same way.
+ * A real web origin (https, or http on localhost) has isolated per-origin
+ * storage and is trusted.
+ *
+ * Boot-read DEV OVERRIDES (the release-manifest URL, the sync host, the pack
+ * host) must NOT be honoured from shared storage: a malicious local deck could
+ * plant one and steer the next deck the user opens to a hostile server. Read
+ * them only when this returns false. Distinct from `sandboxed()` — a plain
+ * file:// deck is not sandboxed (not framed) but its storage IS shared.
+ * Fail safe: if the origin cannot be determined, treat storage as shared.
+ */
+export const sharedStorageOrigin = (): boolean => {
+  try {
+    if (typeof location !== 'undefined' && location.protocol === 'file:') return true
+    const o = typeof self !== 'undefined' && typeof (self as { origin?: unknown }).origin === 'string'
+      ? (self as { origin: string }).origin
+      : (typeof location !== 'undefined' ? location.origin : 'null')
+    return o === 'null'
+  } catch {
+    return true
+  }
+}
+
 /**
  * Set for THIS session once anyone flips the switch, so the guarantee holds
  * even where the preference cannot be stored. Storage-blocked contexts are
@@ -120,6 +203,7 @@ export function startNetGuard(): void {
 
 /** fetch(), refused when offline and abortable the moment the switch flips. */
 export async function netFetch(input: string | URL, init: RequestInit = {}): Promise<Response> {
+  if (sandboxed()) throw new SandboxedError(String(input))
   if (offlineEnabled()) throw new OfflineError(String(input))
   const ac = new AbortController()
   inFlight.add(ac)
@@ -137,6 +221,7 @@ export async function netFetch(input: string | URL, init: RequestInit = {}): Pro
 
 /** new WebSocket(), refused when offline and closed the moment the switch flips. */
 export function netWebSocket(url: string): WebSocket {
+  if (sandboxed()) throw new SandboxedError(url)
   if (offlineEnabled()) throw new OfflineError(url)
   const ws = new WebSocket(url)
   sockets.add(ws)

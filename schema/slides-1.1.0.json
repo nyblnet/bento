@@ -1,0 +1,2379 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bento.page/schema/slides.json",
+  "title": "bento/slides document",
+  "description": "The #bento-doc JSON of a Bento Slides file, generated from the app's validation tables. Guide: https://bento.page/agents.md",
+  "x-bento-version": "1.1.0",
+  "$ref": "#/$defs/doc",
+  "$defs": {
+    "prop-fx": {
+      "type": "object",
+      "properties": {
+        "ambient": {
+          "type": "string",
+          "enum": [
+            "kenburns"
+          ]
+        },
+        "countUp": {
+          "type": "boolean"
+        },
+        "enter": {
+          "type": "string",
+          "enum": [
+            "fade-up",
+            "fade",
+            "fade-down",
+            "slide-left",
+            "slide-right",
+            "slide-up",
+            "slide-down"
+          ]
+        },
+        "enterDur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "ken": {
+          "type": "object",
+          "properties": {
+            "dir": {
+              "type": "string",
+              "enum": [
+                "drift",
+                "out",
+                "in"
+              ]
+            },
+            "duration": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3600
+            },
+            "scale": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "loop": {
+          "type": "object",
+          "properties": {
+            "delay": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3600
+            },
+            "distance": {
+              "type": "number",
+              "minimum": -100000,
+              "maximum": 100000
+            },
+            "duration": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3600
+            },
+            "ease": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "path": {
+              "type": "string",
+              "maxLength": 65536,
+              "description": "SVG path data"
+            },
+            "speeds": {
+              "type": "array",
+              "maxItems": 2000,
+              "items": {
+                "type": "number",
+                "minimum": 0.001,
+                "maximum": 1000
+              }
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "dash-march",
+                "motion-path"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        "order": {
+          "type": "number",
+          "minimum": -10000,
+          "maximum": 10000
+        },
+        "step": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      },
+      "additionalProperties": false
+    },
+    "prop-shadow": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "blur": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "color": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "CSS colour; no url()"
+            },
+            "x": {
+              "type": "number",
+              "minimum": -10000,
+              "maximum": 10000
+            },
+            "y": {
+              "type": "number",
+              "minimum": -10000,
+              "maximum": 10000
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "blur",
+            "color"
+          ]
+        },
+        {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "properties": {
+              "blur": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              "color": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "CSS colour; no url()"
+              },
+              "x": {
+                "type": "number",
+                "minimum": -10000,
+                "maximum": 10000
+              },
+              "y": {
+                "type": "number",
+                "minimum": -10000,
+                "maximum": 10000
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "blur",
+              "color"
+            ]
+          }
+        }
+      ]
+    },
+    "prop-colorGradient": {
+      "type": "object",
+      "properties": {
+        "angle": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "stops": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "color": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "CSS colour; no url()"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "at",
+              "color"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "stops"
+      ]
+    },
+    "prop-themeRefs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "maxProperties": 64,
+      "description": "property path → palette token"
+    },
+    "prop-textStroke": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        },
+        "fill": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "width",
+        "color"
+      ]
+    },
+    "prop-link": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "slide id or http(s) URL"
+    },
+    "text": {
+      "type": "object",
+      "properties": {
+        "align": {
+          "type": "string",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "backdropFilter": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "blend": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        },
+        "colorGradient": {
+          "$ref": "#/$defs/prop-colorGradient"
+        },
+        "fontFamily": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "fontSize": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "fontWeight": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "fx": {
+          "$ref": "#/$defs/prop-fx"
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "groupId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "h": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "html": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "letterSpacing": {
+          "type": "number",
+          "minimum": -1000,
+          "maximum": 1000
+        },
+        "lineHeight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "link": {
+          "$ref": "#/$defs/prop-link"
+        },
+        "morphId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "placeholder": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "shadow": {
+          "$ref": "#/$defs/prop-shadow"
+        },
+        "showOnHover": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "textStroke": {
+          "$ref": "#/$defs/prop-textStroke"
+        },
+        "themeRefs": {
+          "$ref": "#/$defs/prop-themeRefs"
+        },
+        "type": {
+          "const": "text"
+        },
+        "valign": {
+          "type": "string",
+          "enum": [
+            "top",
+            "middle",
+            "bottom"
+          ]
+        },
+        "w": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "x": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id",
+        "html"
+      ],
+      "description": "text element; x/y/w/h in slide px (1280×720 default); a stable id pairs morphs"
+    },
+    "prop-fillGradient": {
+      "type": "object",
+      "properties": {
+        "angle": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "stops": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "color": {
+                "type": "string",
+                "maxLength": 64,
+                "description": "CSS colour; no url()"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "at",
+              "color"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "stops"
+      ]
+    },
+    "prop-from": {
+      "type": "object",
+      "properties": {
+        "el": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "side": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "top",
+            "right",
+            "bottom",
+            "left"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "el"
+      ]
+    },
+    "prop-to": {
+      "type": "object",
+      "properties": {
+        "el": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "side": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "top",
+            "right",
+            "bottom",
+            "left"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "el"
+      ]
+    },
+    "shape": {
+      "type": "object",
+      "properties": {
+        "backdropFilter": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "blend": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "d": {
+          "type": "string",
+          "maxLength": 65536,
+          "description": "SVG path data"
+        },
+        "fill": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour or url(#local-id)"
+        },
+        "fillGradient": {
+          "$ref": "#/$defs/prop-fillGradient"
+        },
+        "from": {
+          "$ref": "#/$defs/prop-from"
+        },
+        "fx": {
+          "$ref": "#/$defs/prop-fx"
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "groupId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "h": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "heads": {
+          "type": "number",
+          "minimum": 2,
+          "maximum": 2
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "lineEnd": {
+          "type": "string",
+          "enum": [
+            "none",
+            "arrow",
+            "dot",
+            "bar",
+            "arrow-open",
+            "triangle",
+            "triangle-open",
+            "diamond",
+            "diamond-open",
+            "square",
+            "circle-open"
+          ]
+        },
+        "lineStart": {
+          "type": "string",
+          "enum": [
+            "none",
+            "arrow",
+            "dot",
+            "bar",
+            "arrow-open",
+            "triangle",
+            "triangle-open",
+            "diamond",
+            "diamond-open",
+            "square",
+            "circle-open"
+          ]
+        },
+        "link": {
+          "$ref": "#/$defs/prop-link"
+        },
+        "morphId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "pathBox": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "number"
+          }
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "shadow": {
+          "$ref": "#/$defs/prop-shadow"
+        },
+        "shape": {
+          "type": "string",
+          "enum": [
+            "rect",
+            "ellipse",
+            "triangle",
+            "arrow",
+            "line",
+            "path"
+          ]
+        },
+        "showOnHover": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "stroke": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour or url(#local-id)"
+        },
+        "strokeDash": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "strokeStyle": {
+          "type": "string",
+          "enum": [
+            "solid",
+            "dashed",
+            "dotted"
+          ]
+        },
+        "strokeWidth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "themeRefs": {
+          "$ref": "#/$defs/prop-themeRefs"
+        },
+        "to": {
+          "$ref": "#/$defs/prop-to"
+        },
+        "type": {
+          "const": "shape"
+        },
+        "w": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "x": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id",
+        "shape",
+        "fill"
+      ],
+      "description": "shape element; x/y/w/h in slide px (1280×720 default); a stable id pairs morphs"
+    },
+    "prop-crop": {
+      "type": "object",
+      "properties": {
+        "scale": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "scale"
+      ]
+    },
+    "image": {
+      "type": "object",
+      "properties": {
+        "backdropFilter": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "blend": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "crop": {
+          "$ref": "#/$defs/prop-crop"
+        },
+        "fit": {
+          "type": "string",
+          "enum": [
+            "contain",
+            "cover",
+            "fill"
+          ]
+        },
+        "fx": {
+          "$ref": "#/$defs/prop-fx"
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "groupId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "h": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "keepAspectRatio": {
+          "type": "boolean"
+        },
+        "link": {
+          "$ref": "#/$defs/prop-link"
+        },
+        "morphId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "shadow": {
+          "$ref": "#/$defs/prop-shadow"
+        },
+        "showOnHover": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "src": {
+          "type": "string",
+          "maxLength": 33554432,
+          "description": "data: URI, asset:<key> or URL"
+        },
+        "themeRefs": {
+          "$ref": "#/$defs/prop-themeRefs"
+        },
+        "type": {
+          "const": "image"
+        },
+        "w": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "x": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id",
+        "src"
+      ],
+      "description": "image element; x/y/w/h in slide px (1280×720 default); a stable id pairs morphs"
+    },
+    "svg": {
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "backdropFilter": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "blend": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "css": {
+          "type": "string",
+          "maxLength": 131072
+        },
+        "fx": {
+          "$ref": "#/$defs/prop-fx"
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "groupId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "h": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "link": {
+          "$ref": "#/$defs/prop-link"
+        },
+        "markup": {
+          "type": "string",
+          "maxLength": 4194304
+        },
+        "morphId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "shadow": {
+          "$ref": "#/$defs/prop-shadow"
+        },
+        "showOnHover": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "themeRefs": {
+          "$ref": "#/$defs/prop-themeRefs"
+        },
+        "type": {
+          "const": "svg"
+        },
+        "w": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "x": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "description": "svg element; x/y/w/h in slide px (1280×720 default); a stable id pairs morphs"
+    },
+    "prop-source": {
+      "type": "object",
+      "properties": {
+        "tableId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tableId"
+      ]
+    },
+    "prop-option": {
+      "type": "object",
+      "description": "ECharts-shaped option, plain JSON"
+    },
+    "chart": {
+      "type": "object",
+      "properties": {
+        "backdropFilter": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "blend": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "fx": {
+          "$ref": "#/$defs/prop-fx"
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "groupId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "h": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "link": {
+          "$ref": "#/$defs/prop-link"
+        },
+        "morphId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "option": {
+          "$ref": "#/$defs/prop-option"
+        },
+        "preset": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "shadow": {
+          "$ref": "#/$defs/prop-shadow"
+        },
+        "showOnHover": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "source": {
+          "$ref": "#/$defs/prop-source"
+        },
+        "themeRefs": {
+          "$ref": "#/$defs/prop-themeRefs"
+        },
+        "type": {
+          "const": "chart"
+        },
+        "w": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "x": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id",
+        "option"
+      ],
+      "description": "chart element; x/y/w/h in slide px (1280×720 default); a stable id pairs morphs"
+    },
+    "prop-style": {
+      "type": "object",
+      "properties": {
+        "borderColor": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        },
+        "borderWidth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "cellPadX": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "cellPadY": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        },
+        "fontFamily": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "fontSize": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "headerBg": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        },
+        "headerColor": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "zebra": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        }
+      },
+      "additionalProperties": false
+    },
+    "prop-rows": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "type": "object",
+        "properties": {
+          "cells": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "properties": {
+                "align": {
+                  "type": "string",
+                  "enum": [
+                    "left",
+                    "center",
+                    "right"
+                  ]
+                },
+                "bg": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "description": "CSS colour; no url()"
+                },
+                "bold": {
+                  "type": "boolean"
+                },
+                "color": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "description": "CSS colour; no url()"
+                },
+                "html": {
+                  "type": "string",
+                  "maxLength": 65536
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "cells"
+        ]
+      }
+    },
+    "prop-columns": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "properties": {
+          "w": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "w"
+        ]
+      }
+    },
+    "table": {
+      "type": "object",
+      "properties": {
+        "backdropFilter": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "blend": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "columns": {
+          "$ref": "#/$defs/prop-columns"
+        },
+        "fx": {
+          "$ref": "#/$defs/prop-fx"
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "groupId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "h": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "header": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "link": {
+          "$ref": "#/$defs/prop-link"
+        },
+        "morphId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "rows": {
+          "$ref": "#/$defs/prop-rows"
+        },
+        "shadow": {
+          "$ref": "#/$defs/prop-shadow"
+        },
+        "showOnHover": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "style": {
+          "$ref": "#/$defs/prop-style"
+        },
+        "themeRefs": {
+          "$ref": "#/$defs/prop-themeRefs"
+        },
+        "type": {
+          "const": "table"
+        },
+        "w": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "x": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id",
+        "columns",
+        "rows"
+      ],
+      "description": "table element; x/y/w/h in slide px (1280×720 default); a stable id pairs morphs"
+    },
+    "media": {
+      "type": "object",
+      "properties": {
+        "autoplay": {
+          "type": "boolean"
+        },
+        "backdropFilter": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "blend": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "controls": {
+          "type": "boolean"
+        },
+        "fit": {
+          "type": "string",
+          "enum": [
+            "contain",
+            "cover",
+            "fill"
+          ]
+        },
+        "fx": {
+          "$ref": "#/$defs/prop-fx"
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "groupId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "h": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "video",
+            "audio"
+          ]
+        },
+        "link": {
+          "$ref": "#/$defs/prop-link"
+        },
+        "loop": {
+          "type": "boolean"
+        },
+        "morphId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "poster": {
+          "type": "string",
+          "maxLength": 33554432,
+          "description": "data: URI, asset:<key> or URL"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "shadow": {
+          "$ref": "#/$defs/prop-shadow"
+        },
+        "showOnHover": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "src": {
+          "type": "string",
+          "maxLength": 33554432,
+          "description": "data: URI, asset:<key> or URL"
+        },
+        "themeRefs": {
+          "$ref": "#/$defs/prop-themeRefs"
+        },
+        "type": {
+          "const": "media"
+        },
+        "w": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "x": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id",
+        "kind",
+        "src"
+      ],
+      "description": "media element; x/y/w/h in slide px (1280×720 default); a stable id pairs morphs"
+    },
+    "prop-doc": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 200
+        },
+        {
+          "type": "object"
+        }
+      ]
+    },
+    "embed": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "backdropFilter": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "blend": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "doc": {
+          "$ref": "#/$defs/prop-doc"
+        },
+        "fx": {
+          "$ref": "#/$defs/prop-fx"
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "groupId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "h": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "link": {
+          "$ref": "#/$defs/prop-link"
+        },
+        "live": {
+          "type": "boolean"
+        },
+        "morphId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "shadow": {
+          "$ref": "#/$defs/prop-shadow"
+        },
+        "showOnHover": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "themeRefs": {
+          "$ref": "#/$defs/prop-themeRefs"
+        },
+        "type": {
+          "const": "embed"
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 4000,
+          "pattern": "^https?://"
+        },
+        "view": {
+          "type": "string",
+          "maxLength": 4194304
+        },
+        "w": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "x": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "description": "embed element; x/y/w/h in slide px (1280×720 default); a stable id pairs morphs"
+    },
+    "code": {
+      "type": "object",
+      "properties": {
+        "align": {
+          "type": "string",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "backdropFilter": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "blend": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "fontFamily": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "fontSize": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "fx": {
+          "$ref": "#/$defs/prop-fx"
+        },
+        "grammarAssetId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "grammarName": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "groupId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "h": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "lineHeight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "link": {
+          "$ref": "#/$defs/prop-link"
+        },
+        "morphId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "shadow": {
+          "$ref": "#/$defs/prop-shadow"
+        },
+        "showOnHover": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "themeAssetId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "themeName": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "themeRefs": {
+          "$ref": "#/$defs/prop-themeRefs"
+        },
+        "type": {
+          "const": "code"
+        },
+        "valign": {
+          "type": "string",
+          "enum": [
+            "top",
+            "middle",
+            "bottom"
+          ]
+        },
+        "w": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "x": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "description": "code element; x/y/w/h in slide px (1280×720 default); a stable id pairs morphs"
+    },
+    "element": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/text"
+        },
+        {
+          "$ref": "#/$defs/shape"
+        },
+        {
+          "$ref": "#/$defs/image"
+        },
+        {
+          "$ref": "#/$defs/svg"
+        },
+        {
+          "$ref": "#/$defs/chart"
+        },
+        {
+          "$ref": "#/$defs/table"
+        },
+        {
+          "$ref": "#/$defs/media"
+        },
+        {
+          "$ref": "#/$defs/embed"
+        },
+        {
+          "$ref": "#/$defs/code"
+        }
+      ]
+    },
+    "slide": {
+      "type": "object",
+      "properties": {
+        "background": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "CSS colour; no url()"
+        },
+        "comments": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "author": {
+                "type": "string",
+                "maxLength": 4000
+              },
+              "elementId": {
+                "type": "string",
+                "maxLength": 200,
+                "pattern": "^[^\"'<>{};]*$"
+              },
+              "id": {
+                "type": "string",
+                "maxLength": 200,
+                "pattern": "^[^\"'<>{};]*$"
+              },
+              "replies": {
+                "type": "array",
+                "maxItems": 500,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "maxLength": 200,
+                      "pattern": "^[^\"'<>{};]*$"
+                    },
+                    "author": {
+                      "type": "string",
+                      "maxLength": 4000
+                    },
+                    "text": {
+                      "type": "string",
+                      "maxLength": 4000
+                    },
+                    "at": {
+                      "type": "string",
+                      "maxLength": 200
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "resolved": {
+                "type": "boolean"
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 4000
+              },
+              "x": {
+                "type": "number",
+                "minimum": -1000000,
+                "maximum": 1000000
+              },
+              "y": {
+                "type": "number",
+                "minimum": -1000000,
+                "maximum": 1000000
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "elements": {
+          "type": "array",
+          "maxItems": 5000,
+          "items": {
+            "$ref": "#/$defs/element"
+          }
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "hover": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "focus-group",
+                "reveal"
+              ]
+            },
+            "dim": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "default": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "stateOf": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
+        "themeRefs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "maxProperties": 64,
+          "description": "property path → palette token"
+        },
+        "transition": {
+          "type": "string",
+          "enum": [
+            "none",
+            "fade",
+            "slide",
+            "zoom",
+            "morph"
+          ]
+        },
+        "unnumbered": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "description": "stateOf = hidden variant reached by a link; transition morph pairs same-id elements"
+    },
+    "tableStyle": {
+      "type": "object",
+      "properties": {
+        "borderColor": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        },
+        "borderWidth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "cellPadX": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "cellPadY": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        },
+        "fontFamily": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "fontSize": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "headerBg": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        },
+        "headerColor": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "zebra": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "CSS colour; no url()"
+        }
+      },
+      "additionalProperties": false
+    },
+    "theme": {
+      "type": "object",
+      "properties": {
+        "accent": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "accent colour"
+        },
+        "background": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "slide background"
+        },
+        "chartPalette": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "series colour"
+          }
+        },
+        "codePalette": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "token colour"
+            },
+            "c": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "token colour"
+            },
+            "d": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "token colour"
+            },
+            "f": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "token colour"
+            },
+            "k": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "token colour"
+            },
+            "n": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "token colour"
+            },
+            "p": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "token colour"
+            },
+            "s": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "token colour"
+            }
+          },
+          "additionalProperties": false
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "body text colour"
+        },
+        "fontFamily": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "CSS font-family stack for body text"
+        },
+        "headingFamily": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "display face for headings; absent = fontFamily"
+        },
+        "palette": {
+          "type": "object",
+          "properties": {
+            "accent2": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "brand slot accent2"
+            },
+            "accent3": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "brand slot accent3"
+            },
+            "accent4": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "brand slot accent4"
+            },
+            "accent5": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "brand slot accent5"
+            },
+            "accent6": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "brand slot accent6"
+            },
+            "bg2": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "brand slot bg2"
+            },
+            "folHlink": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "brand slot folHlink"
+            },
+            "hlink": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "brand slot hlink"
+            },
+            "tx2": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "brand slot tx2"
+            }
+          },
+          "additionalProperties": false
+        },
+        "table": {
+          "$ref": "#/$defs/tableStyle"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "background",
+        "color",
+        "accent",
+        "fontFamily"
+      ]
+    },
+    "doc": {
+      "type": "object",
+      "properties": {
+        "assets": {
+          "type": "object",
+          "maxProperties": 2000,
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 33554432
+          },
+          "description": "key → data: URI or svg, used as asset:<key>"
+        },
+        "blobs": {
+          "type": "object",
+          "description": "runtime-written"
+        },
+        "collab": {
+          "type": "object",
+          "description": "runtime-written credentials; never author"
+        },
+        "docId": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "runtime-minted uuid; omit"
+        },
+        "fonts": {
+          "type": "array",
+          "maxItems": 2000,
+          "items": {
+            "type": "object",
+            "properties": {
+              "asset": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "asset:<key> or builtin:<name>"
+              },
+              "family": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "style": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "weight": {
+                "type": "string",
+                "maxLength": 64
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "family",
+              "asset"
+            ]
+          }
+        },
+        "format": {
+          "const": "bento/slides"
+        },
+        "layouts": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/slide"
+          },
+          "description": "slide templates"
+        },
+        "meta": {
+          "type": "object",
+          "properties": {
+            "author": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "company": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "event": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "keywords": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "subject": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          },
+          "additionalProperties": false
+        },
+        "modified": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "runtime-written"
+        },
+        "present": {
+          "type": "object",
+          "properties": {
+            "controls": {
+              "type": "boolean"
+            },
+            "morphSeconds": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 60
+            },
+            "numberHidden": {
+              "type": "boolean"
+            },
+            "progress": {
+              "type": "boolean"
+            },
+            "slideNumber": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "readonly": {
+          "type": "boolean",
+          "description": "presentation package"
+        },
+        "size": {
+          "type": "object",
+          "properties": {
+            "height": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "width": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 100000
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "width",
+            "height"
+          ]
+        },
+        "slides": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/slide"
+          }
+        },
+        "template": {
+          "type": "boolean"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "format version; this shell writes 1"
+        },
+        "$schema": {
+          "type": "string"
+        },
+        "compact": {
+          "const": true,
+          "description": "input only: omitted fields take editor defaults (AGENTS.md)"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "slides"
+      ]
+    }
+  }
+}

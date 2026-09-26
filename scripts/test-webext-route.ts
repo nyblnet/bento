@@ -64,15 +64,15 @@ ok(pathFromSender({ url: 'file:///Users/x/My%20Decks/Q3.bento.html' }) === '/Use
 // ---- placing a path ---------------------------------------------------------
 {
   const dir = dirHandle('Decks', { 'Q3.bento.html': fileHandle('Q3.bento.html', ['Q3.bento.html']) })
-  const p = await prefixFor(dir, '/Users/andy/Work/Decks/Q3.bento.html')
-  ok(p === '/Users/andy/Work/Decks', `a document at the grant root places the folder (${p})`)
+  const p = await prefixFor(dir, '/Users/you/Work/Decks/Q3.bento.html')
+  ok(p === '/Users/you/Work/Decks', `a document at the grant root places the folder (${p})`)
 }
 {
   const dir = dirHandle('Decks', {
     Clients: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['Clients', 'Q3.bento.html']) },
   })
-  const p = await prefixFor(dir, '/Users/andy/Decks/Clients/Q3.bento.html')
-  ok(p === '/Users/andy/Decks', `a nested document places the folder, not its subfolder (${p})`)
+  const p = await prefixFor(dir, '/Users/you/Decks/Clients/Q3.bento.html')
+  ok(p === '/Users/you/Decks', `a nested document places the folder, not its subfolder (${p})`)
 }
 {
   // The grant's name repeating in the path. Both split points are tried, and
@@ -80,8 +80,8 @@ ok(pathFromSender({ url: 'file:///Users/x/My%20Decks/Q3.bento.html' }) === '/Use
   const dir = dirHandle('Decks', {
     Decks: { 'Q3.bento.html': fileHandle('Q3.bento.html', ['Decks', 'Q3.bento.html']) },
   })
-  const p = await prefixFor(dir, '/Users/andy/Decks/Decks/Q3.bento.html')
-  ok(p === '/Users/andy/Decks', `a repeated folder name resolves to the route that exists (${p})`)
+  const p = await prefixFor(dir, '/Users/you/Decks/Decks/Q3.bento.html')
+  ok(p === '/Users/you/Decks', `a repeated folder name resolves to the route that exists (${p})`)
 }
 
 // ---- what must be REFUSED ---------------------------------------------------
@@ -90,11 +90,11 @@ ok(pathFromSender({ url: 'file:///Users/x/My%20Decks/Q3.bento.html' }) === '/Use
 // document in it opens the wrong file, silently.
 {
   const dir = dirHandle('Decks', { 'Q3.bento.html': fileHandle('Q3.bento.html', ['Q3.bento.html']) })
-  ok(await prefixFor(dir, '/Users/andy/Elsewhere/Q3.bento.html') === null,
+  ok(await prefixFor(dir, '/Users/you/Elsewhere/Q3.bento.html') === null,
     'a path whose folder name does not appear is refused')
-  ok(await prefixFor(dir, '/Users/andy/Decks/Missing.bento.html') === null,
+  ok(await prefixFor(dir, '/Users/you/Decks/Missing.bento.html') === null,
     'a document that is not in the grant is refused, even under the right folder name')
-  ok(await prefixFor(dir, '/Users/andy/Decks/Sub/Q3.bento.html') === null,
+  ok(await prefixFor(dir, '/Users/you/Decks/Sub/Q3.bento.html') === null,
     'a route through a directory that does not exist is refused')
   ok(await prefixFor(dir, '/Q3.bento.html') === null,
     'a path with no folder segment at all is refused')
@@ -108,7 +108,7 @@ ok(pathFromSender({ url: 'file:///Users/x/My%20Decks/Q3.bento.html' }) === '/Use
   })
   // A history entry for a DIFFERENT Q3 at the grant root — the grant has no such
   // file, only Clients/Q3, so nothing may be learned from it.
-  ok(await prefixFor(dir, '/Users/andy/Decks/Q3.bento.html') === null,
+  ok(await prefixFor(dir, '/Users/you/Decks/Q3.bento.html') === null,
     'a same-named file at a different depth teaches nothing — resolve() must agree with the tail')
 }
 {
@@ -117,7 +117,7 @@ ok(pathFromSender({ url: 'file:///Users/x/My%20Decks/Q3.bento.html' }) === '/Use
   const orphan: any = fileHandle('Q3.bento.html', ['Q3.bento.html'])
   orphan.__rel = null
   const dir = dirHandle('Decks', { 'Q3.bento.html': orphan })
-  ok(await prefixFor(dir, '/Users/andy/Decks/Q3.bento.html') === null,
+  ok(await prefixFor(dir, '/Users/you/Decks/Q3.bento.html') === null,
     'a candidate the grant will not resolve is refused')
 }
 
@@ -130,7 +130,7 @@ ok(pathFromSender({ url: 'file:///Users/x/My%20Decks/Q3.bento.html' }) === '/Use
   const dir: any = dirHandle('home', tree)
   let enumerated = 0
   dir.entries = async function* () { enumerated++ }
-  const hits = await locateIn(dir, '/Users/andy/home/Q3.bento.html')
+  const hits = await locateIn(dir, '/Users/you/home/Q3.bento.html')
   ok(hits.length === 1, 'the route finds the file inside a 500-entry grant')
   ok(enumerated === 0, `and enumerates nothing to do it (${enumerated} scans)`)
 }

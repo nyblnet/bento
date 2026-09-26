@@ -1,0 +1,288 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   bento/spaces page designs — the ONE base stylesheet every design runs on.
+
+   WHAT THIS FILE IS. A design is data (designs.ts): two palettes, four font
+   roles and a closed set of switches. applyDesign() writes them onto the
+   READING SURFACE as custom properties (--dl-*, --dd-*, --d-*) and data
+   attributes (data-sp-design, data-sd-*). Every rule below is keyed under one
+   of those, so:
+
+   · NO DESIGN IS TODAY, BYTE FOR BYTE. A surface with no `data-sp-design`
+     matches nothing in this file; the model rig asserts that every selector
+     here is scoped.
+   · A DESIGN NEVER REACHES THE CHROME. The attributes live on `.sp-main`, the
+     print root and nothing else; the bar, the panels, menus, popovers and
+     dialogs are outside them, and popovers mount on <body>.
+   · A NEW BUILT-IN IS A DATA ENTRY. If a look needs structure that the
+     switches cannot express, add a switch here that any design can use.
+
+   NO LITERAL COLOURS outside the print block: every colour is a design token
+   or derived from one, which is what lets a custom palette recolour all of it.
+
+   LIGHT/DARK. The design carries both palettes; the READER's theme picks one.
+   The same three-state rule as styles.css, so the dark mapping appears twice
+   (OS-dark unless the reader chose light, and the reader choosing dark) and
+   both are @media screen — print matches neither and gets the light palette
+   without a third copy. */
+
+/* ————— the surface: design tokens, and the app's roles re-pointed at them ————— */
+[data-sp-design] {
+  --d-paper: var(--dl-paper); --d-ink: var(--dl-ink); --d-muted: var(--dl-muted);
+  --d-rule-c: var(--dl-rule); --d-soft: var(--dl-soft);
+  --d-accent: var(--dl-accent); --d-accent-ink: var(--dl-accent-ink); --d-on-accent: var(--dl-on-accent);
+  --d-mark: var(--dl-mark);
+  --d-tile: var(--dl-tile); --d-tile-ink: var(--dl-tile-ink);
+  --d-cell1: var(--dl-cell1); --d-cell2: var(--dl-cell2); --d-cell3: var(--dl-cell3);
+  --d-cell1-ink: var(--dl-cell1-ink); --d-cell2-ink: var(--dl-cell2-ink); --d-cell3-ink: var(--dl-cell3-ink);
+  --d-tone-note: var(--dl-tone-note); --d-tone-tip: var(--dl-tone-tip); --d-tone-important: var(--dl-tone-important);
+  --d-tone-warning: var(--dl-tone-warning); --d-tone-caution: var(--dl-tone-caution);
+
+  /* The app's roles, INSIDE THE SURFACE ONLY. Every existing block rule in
+     styles.css reads these, which is why a design recolours callouts, boards,
+     cards and code wells it has no rule of its own for. */
+  --bg: var(--d-paper); --surface: var(--d-paper); --field: var(--d-paper);
+  --ink: var(--d-ink); --ink-2: color-mix(in srgb, var(--d-ink) 82%, var(--d-paper));
+  --muted: var(--d-muted); --line: var(--d-rule-c);
+  --edge: color-mix(in srgb, var(--d-rule-c) 55%, var(--d-ink));
+  --chrome: var(--d-soft); --chrome-2: color-mix(in srgb, var(--d-soft) 90%, var(--d-ink));
+  --accent: var(--d-accent); --accent-ink: var(--d-accent-ink);
+  --tone-note: var(--d-tone-note); --tone-tip: var(--d-tone-tip); --tone-important: var(--d-tone-important);
+  --tone-warning: var(--d-tone-warning); --tone-caution: var(--d-tone-caution);
+  --ph: color-mix(in srgb, var(--d-muted) 60%, var(--d-paper));
+  --ghost: color-mix(in srgb, var(--d-muted) 75%, var(--d-paper));
+  --radius: var(--d-radius);
+  background: var(--d-paper); color: var(--d-ink);
+}
+
+/* DARK — identical by contract, see the header */
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) [data-sp-design] {
+    --d-paper: var(--dd-paper); --d-ink: var(--dd-ink); --d-muted: var(--dd-muted);
+    --d-rule-c: var(--dd-rule); --d-soft: var(--dd-soft);
+    --d-accent: var(--dd-accent); --d-accent-ink: var(--dd-accent-ink); --d-on-accent: var(--dd-on-accent);
+    --d-mark: var(--dd-mark);
+    --d-tile: var(--dd-tile); --d-tile-ink: var(--dd-tile-ink);
+    --d-cell1: var(--dd-cell1); --d-cell2: var(--dd-cell2); --d-cell3: var(--dd-cell3);
+    --d-cell1-ink: var(--dd-cell1-ink); --d-cell2-ink: var(--dd-cell2-ink); --d-cell3-ink: var(--dd-cell3-ink);
+    --d-tone-note: var(--dd-tone-note); --d-tone-tip: var(--dd-tone-tip); --d-tone-important: var(--dd-tone-important);
+    --d-tone-warning: var(--dd-tone-warning); --d-tone-caution: var(--dd-tone-caution);
+  }
+}
+@media screen {
+  :root[data-theme="dark"] [data-sp-design] {
+    --d-paper: var(--dd-paper); --d-ink: var(--dd-ink); --d-muted: var(--dd-muted);
+    --d-rule-c: var(--dd-rule); --d-soft: var(--dd-soft);
+    --d-accent: var(--dd-accent); --d-accent-ink: var(--dd-accent-ink); --d-on-accent: var(--dd-on-accent);
+    --d-mark: var(--dd-mark);
+    --d-tile: var(--dd-tile); --d-tile-ink: var(--dd-tile-ink);
+    --d-cell1: var(--dd-cell1); --d-cell2: var(--dd-cell2); --d-cell3: var(--dd-cell3);
+    --d-cell1-ink: var(--dd-cell1-ink); --d-cell2-ink: var(--dd-cell2-ink); --d-cell3-ink: var(--dd-cell3-ink);
+    --d-tone-note: var(--dd-tone-note); --d-tone-tip: var(--dd-tone-tip); --d-tone-important: var(--dd-tone-important);
+    --d-tone-warning: var(--dd-tone-warning); --d-tone-caution: var(--dd-tone-caution);
+  }
+}
+
+/* ————— type ————— */
+[data-sp-design] .sp-page-inner { font-family: var(--d-body); font-size: calc(var(--sp-read) * var(--d-size)); }
+.sp-app.sp-reading [data-sp-design] .sp-page-inner { font-size: calc(17px * var(--d-size)); }
+[data-sp-design] .sp-b { line-height: var(--d-leading); }
+[data-sp-design] :is(.sp-title, .sp-b-h1, .sp-b-h2) { font-family: var(--d-display); }
+[data-sp-design] .sp-title {
+  font-size: var(--d-title-size); font-weight: var(--d-title-weight);
+  letter-spacing: var(--d-title-tracking); line-height: var(--d-title-leading);
+  text-wrap: balance;
+}
+[data-sp-design] :is(.sp-b-h1, .sp-b-h2, .sp-b-h3) { font-weight: var(--d-head-weight); }
+[data-sd-headstyle="italic"] :is(.sp-b-h1, .sp-b-h2) { font-style: italic; }
+[data-sd-headcase="upper"] :is(.sp-title, .sp-b-h1, .sp-b-h2) { text-transform: uppercase; }
+[data-sp-design] :is(p, li, h1, h2, h3, blockquote, td, th, figcaption) code,
+[data-sp-design] .sp-b-code code { font-family: var(--d-mono); }
+
+/* LABELS — the small type that names things: a third-level head, a table
+   header, a callout's name, the breadcrumb that reads as the page's kicker. */
+[data-sp-design] :is(.sp-b-h3, .sp-tb th.sp-tb-cell, .sp-view-table th, .sp-callout-chip, .sp-crumb,
+  .sp-backlinks-h, .sp-col-head, .sp-view-title, .sp-canvas-title) { font-family: var(--d-label); }
+[data-sd-label="caps"] :is(.sp-b-h3, .sp-tb th.sp-tb-cell, .sp-view-table th, .sp-callout-chip, .sp-crumb,
+  .sp-col-head, .sp-view-title, .sp-canvas-title) { text-transform: uppercase; letter-spacing: .08em; }
+[data-sd-label="caps"] .sp-b-h3 { font-size: .84em; }
+[data-sd-label="smallcaps"] :is(.sp-b-h3, .sp-tb th.sp-tb-cell, .sp-view-table th, .sp-callout-chip, .sp-crumb,
+  .sp-col-head, .sp-view-title, .sp-canvas-title) { font-variant-caps: all-small-caps; letter-spacing: .05em; }
+[data-sd-label="italic"] :is(.sp-b-h3, .sp-tb th.sp-tb-cell, .sp-view-table th, .sp-crumb, .sp-view-title) { font-style: italic; }
+[data-sd-labelink="accent"] :is(.sp-b-h3, .sp-crumb, .sp-crumb a) { color: var(--d-accent-ink); }
+
+/* SECOND-LEVEL HEADS carry the section structure */
+[data-sd-h2="above"] .sp-b-h2 { border-top: var(--d-rule) solid var(--d-ink); padding-top: .5em; margin-top: 1.5em; }
+[data-sd-h2="double"] .sp-b-h2 { border-top: calc(var(--d-rule) * 3 + 1px) double var(--d-ink); padding-top: .45em; margin-top: 1.5em; }
+[data-sd-h2="bar"] .sp-b-h2::after { content: ''; display: block; width: 48px; height: 2px; margin-top: .4em; background: var(--d-mark); }
+[data-sd-h2="under"] .sp-b-h2 > .sp-text { text-decoration: underline; text-decoration-thickness: var(--d-rule); text-underline-offset: .22em; }
+
+/* THE OPENING PARAGRAPH — the first paragraph at the top level of the page */
+[data-sd-dropcap="on"] .sp-page-inner > .sp-b-p:not(.sp-b-p ~ .sp-b-p) > .sp-text::first-letter {
+  float: left; font-family: var(--d-display); font-size: 3.3em; line-height: .82;
+  padding: .07em .1em 0 0; font-weight: 600; font-style: normal; color: var(--d-mark);
+}
+[data-sd-justify="on"] :is(.sp-b-p, .sp-b-bullet, .sp-b-number) > .sp-text { text-align: justify; hyphens: auto; }
+[data-sd-numerals="oldstyle"] .sp-page-inner { font-variant-numeric: oldstyle-nums; }
+[data-sd-numerals="oldstyle"] :is(.sp-tb, .sp-view-table) { font-variant-numeric: lining-nums tabular-nums; }
+[data-sd-numerals="mono"] :is(.sp-tb, .sp-view-table) { font-variant-numeric: tabular-nums; }
+/* a right-aligned column is how a table says "these are figures" */
+[data-sd-numerals="mono"] .sp-tb td[style*="right"] { font-family: var(--d-mono); font-size: .92em; }
+
+/* ————— lists and tasks ————— */
+[data-sd-bullet="dash"] ul.sp-list > .sp-b-bullet { list-style-type: '–  '; }
+[data-sd-bullet="square"] ul.sp-list > .sp-b-bullet { list-style-type: square; }
+[data-sd-check="square"] .sp-check, [data-sd-check="round"] .sp-check {
+  appearance: none; -webkit-appearance: none;
+  width: .95em; height: .95em; margin: .42em 0 0; flex: 0 0 auto;
+  display: inline-grid; place-content: center; cursor: pointer;
+  border: 1.5px solid var(--d-muted); border-radius: 0; background: transparent;
+}
+[data-sd-check="round"] .sp-check { border-radius: 50%; }
+[data-sd-check="square"] .sp-check:checked, [data-sd-check="round"] .sp-check:checked { background: var(--d-mark); border-color: var(--d-mark); }
+[data-sd-check="square"] .sp-check:checked::before, [data-sd-check="round"] .sp-check:checked::before {
+  content: ''; width: .46em; height: .24em; border: solid var(--d-paper); border-width: 0 0 2px 2px;
+  transform: translateY(-.05em) rotate(-45deg);
+}
+
+/* ————— callouts —————
+   The tone's icon and NAME always travel with the box (styles.css), so a
+   design restyles the box — but never collapses the tones: each design names
+   five hues of its own (the --d-tone-* roles on the surface), and the
+   validator holds them pairwise apart. */
+[data-sd-callout="outline"] .sp-b-callout {
+  background: transparent; border: max(1px, calc(var(--d-rule) * .75)) solid var(--d-ink); border-radius: var(--d-radius);
+  /* the box is ink; the TONE is the start bar */
+  border-inline-start: 5px solid var(--tone-h);
+}
+[data-sd-callout="rules"] .sp-b-callout {
+  background: transparent; border: 0; border-block: 1px solid var(--tone-line); border-radius: 0; padding-inline: 0;
+}
+[data-sd-callout="fill"] .sp-b-callout {
+  /* 40% = designs.ts FILL_MIX, where its legibility is checked */
+  --tone-bg: color-mix(in srgb, var(--tone-h) 40%, var(--bg)); --tone-ink: var(--d-ink);
+  border: 0; border-radius: calc(var(--d-radius) + 4px); padding: 14px 18px;
+}
+[data-sd-callout="shadow"] .sp-b-callout {
+  background: var(--d-paper); border: 2px solid var(--d-ink); border-radius: var(--d-radius);
+  box-shadow: 5px 5px 0 var(--tone-h);
+}
+
+/* ————— quotes ————— */
+[data-sd-quote="bar"] .sp-b-quote {
+  border-inline-start: calc(var(--d-rule) + 2px) solid var(--d-mark); padding-inline-start: 18px;
+  color: var(--d-ink); font-size: 1.16em; font-weight: 600; letter-spacing: -.01em;
+}
+[data-sd-quote="display"] .sp-b-quote {
+  border: 0; padding: 0; margin: 18px 0; color: var(--d-ink);
+  font-family: var(--d-display); font-style: italic; font-size: 1.5em; line-height: 1.28;
+}
+[data-sd-quote="pull"] .sp-b-quote {
+  border: 0; border-block: var(--d-rule) solid var(--d-ink); padding: 14px 6%; margin: 22px 0;
+  text-align: center; color: var(--d-ink);
+  font-family: var(--d-display); font-weight: var(--d-head-weight); font-size: 1.32em; line-height: 1.3;
+}
+[data-sd-quote="tile"] .sp-b-quote {
+  /* the roles a chip or a link inside the quote reads, re-pointed at the
+     tile, or inline code is a pale chip with pale text on it */
+  --ink: var(--d-tile-ink);
+  --chrome-2: color-mix(in srgb, var(--d-tile-ink) 16%, var(--d-tile));
+  --line: color-mix(in srgb, var(--d-tile-ink) 28%, var(--d-tile));
+  border: 0; background: var(--d-tile); color: var(--d-tile-ink);
+  border-radius: calc(var(--d-radius) + 8px); padding: 20px 24px; margin: 14px 0;
+  font-family: var(--d-display); font-weight: 700; font-size: 1.28em; line-height: 1.25; letter-spacing: -.015em;
+}
+[data-sd-quote="indent"] .sp-b-quote { border: 0; padding-inline: 2.5em 1.5em; color: var(--d-ink); }
+
+/* ————— tables ————— */
+[data-sp-design] .sp-tb th.sp-tb-cell { background: var(--d-soft); }
+[data-sd-table="rules"] .sp-tb-cell { border-inline-width: 0; border-top-width: 0; }
+[data-sd-table="rules"] .sp-tb th.sp-tb-cell { background: transparent; border-bottom: var(--d-rule) solid var(--d-ink); }
+[data-sd-table="rules"] .sp-view-table th { border-bottom: var(--d-rule) solid var(--d-ink); }
+[data-sd-table="bands"] .sp-tb { border-collapse: separate; border-spacing: 0 6px; }
+[data-sd-table="bands"] .sp-tb-cell { border: 0; background: var(--d-soft); }
+[data-sd-table="bands"] .sp-tb th.sp-tb-cell { background: transparent; }
+[data-sd-table="bands"] .sp-tb td.sp-tb-cell:first-child {
+  border-start-start-radius: var(--d-radius); border-end-start-radius: var(--d-radius); font-weight: 600;
+}
+[data-sd-table="bands"] .sp-tb td.sp-tb-cell:last-child { border-start-end-radius: var(--d-radius); border-end-end-radius: var(--d-radius); }
+[data-sp-design] .sp-view-table th { color: var(--d-muted); }
+
+/* ————— rules between sections ————— */
+[data-sd-divider="ink"] .sp-b-divider hr { border-top: var(--d-rule) solid var(--d-ink); }
+[data-sd-divider="double"] .sp-b-divider hr { border-top: calc(var(--d-rule) * 3 + 1px) double var(--d-ink); }
+[data-sd-divider="short"] .sp-b-divider hr { width: 64px; margin-inline: auto; border-top: 2px solid var(--d-mark); }
+[data-sd-divider="asterism"] .sp-b-divider hr { border: 0; height: auto; overflow: visible; text-align: center; }
+[data-sd-divider="asterism"] .sp-b-divider hr::after { content: '*\2003*\2003*'; color: var(--d-muted); font-family: var(--d-body); }
+
+/* ————— cards, boards, canvases —————
+   Corners follow the design; so does the hard offset shadow a riso print
+   gets when the second drum does not quite register. */
+[data-sp-design] :is(.sp-issue, .sp-gcard, .sp-col, .sp-pagecard, .sp-linkcard, .sp-canvas-body,
+  .sp-canvas-body > .sp-cv-card, .sp-prop-val, .sp-b-image img, .sp-b-media video) { border-radius: var(--d-radius); }
+[data-sd-shadow="hard"] :is(.sp-issue, .sp-gcard, .sp-pagecard, .sp-linkcard, .sp-canvas-body > .sp-cv-card, .sp-b-code pre) {
+  border: 2px solid var(--d-ink); box-shadow: 4px 4px 0 var(--d-accent);
+}
+
+/* THE TILE — the Bento mark as layout grammar. A canvas and a gallery sit on
+   the design's tile colour and their cards take the three cell colours in
+   turn, each with an ink chosen for contrast (designs.ts), and the card's own
+   roles re-pointed so chips, dates and links inside it read on the cell. */
+[data-sd-tile="on"] :is(.sp-canvas-body, .sp-gallery) {
+  background-color: var(--d-tile); background-image: none; border-color: transparent;
+  border-radius: calc(var(--d-radius) + 10px);
+}
+[data-sd-tile="on"] .sp-gallery { padding: 14px; }
+[data-sd-tile="on"] :is(.sp-canvas-body > .sp-cv-card, .sp-gcard) {
+  --cell: var(--d-cell1); --cell-ink: var(--d-cell1-ink);
+  --ink: var(--cell-ink); --ink-2: var(--cell-ink);
+  --muted: color-mix(in srgb, var(--cell-ink) 80%, var(--cell));
+  --line: color-mix(in srgb, var(--cell-ink) 22%, var(--cell));
+  --chrome: color-mix(in srgb, var(--cell-ink) 12%, var(--cell));
+  --chrome-2: color-mix(in srgb, var(--cell-ink) 16%, var(--cell));
+  --surface: var(--cell);
+  background: var(--cell); color: var(--cell-ink); border-color: transparent;
+}
+[data-sd-tile="on"] :is(.sp-canvas-body > .sp-cv-card:nth-child(3n+2 of .sp-cv-card), .sp-gcard:nth-child(3n+2)) {
+  --cell: var(--d-cell2); --cell-ink: var(--d-cell2-ink);
+}
+[data-sd-tile="on"] :is(.sp-canvas-body > .sp-cv-card:nth-child(3n of .sp-cv-card), .sp-gcard:nth-child(3n)) {
+  --cell: var(--d-cell3); --cell-ink: var(--d-cell3-ink);
+}
+
+/* ————— consent stays chrome —————
+   The remote-content gate asks the reader a question ("load this from the
+   web?"), and it sits INSIDE the column. It must never read a design's
+   tokens: a palette could make its text match its ground, or disguise the
+   button as prose. So it takes the CHROME's values, captured at the root
+   before any surface re-points them, and its own type. The same holds for any
+   future consent or security affordance rendered inside a page — add it to
+   this list, and the rig's pixel check covers it. */
+:root {
+  --sp-app-ink: var(--ink); --sp-app-ink-2: var(--ink-2); --sp-app-muted: var(--muted);
+  --sp-app-line: var(--line); --sp-app-edge: var(--edge); --sp-app-bg: var(--bg);
+  --sp-app-surface: var(--surface); --sp-app-chrome: var(--chrome); --sp-app-chrome-2: var(--chrome-2);
+}
+[data-sp-design] :is(.sp-remote, .sp-media-empty) {
+  --ink: var(--sp-app-ink); --ink-2: var(--sp-app-ink-2); --muted: var(--sp-app-muted);
+  --line: var(--sp-app-line); --edge: var(--sp-app-edge); --bg: var(--sp-app-bg);
+  --surface: var(--sp-app-surface); --chrome: var(--sp-app-chrome); --chrome-2: var(--sp-app-chrome-2);
+  --radius: 10px;
+  color: var(--sp-app-ink); background-color: var(--sp-app-chrome-2);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px; font-style: normal; font-weight: 400; line-height: 1.5;
+  letter-spacing: normal; text-transform: none; text-align: start; font-variant: normal;
+  border-radius: 10px; box-shadow: none;
+}
+
+/* ————— paper —————
+   The light palette applies by construction (the dark mapping is screen-only).
+   The paper's own tint is NOT printed — the sheet of paper is the paper — and
+   a box whose only edge was a fill or a shadow gets the print sheet's
+   hairline, as a tinted callout already does (styles.css). */
+@media print {
+  [data-sp-design] { background: none; }
+  [data-sd-callout="fill"] .sp-b-callout, [data-sd-callout="shadow"] .sp-b-callout { border: 1px solid #767676; box-shadow: none; }
+  [data-sd-quote="tile"] .sp-b-quote { background: none; color: var(--d-ink); border: 1px solid #767676; }
+  [data-sd-shadow="hard"] :is(.sp-issue, .sp-gcard, .sp-pagecard, .sp-linkcard, .sp-canvas-body > .sp-cv-card, .sp-b-code pre) { box-shadow: none; }
+}
