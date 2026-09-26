@@ -41,14 +41,26 @@
 //      language list already unrolled inside it.
 
 import { fileURLToPath } from 'node:url'
-import { installDom, fireDoc } from './lib/dash-dom.ts'
+import { installDom, fireDoc, type El } from './lib/dash-dom.ts'
 import { checkThemedChains } from './lib/ui-theme-guard.ts'
 
 const { doc } = installDom()
 const bar = doc.createElement('div')
 doc.body.appendChild(bar)
 
-const { createMenu, closeAllMenus } = await import('../kernel/src/ui/menu.ts')
+// openAnchoredMenu reaches for browser globals a no-layout DOM lacks. Placement
+// PIXELS are a browser concern (the spaces QA measured them under CDP); the rig
+// proves the BEHAVIOUR — mounts, opens, aria, onClose on every path — so these
+// shims only have to exist, not compute. (Same division dash-dom states for
+// getBoundingClientRect.)
+{
+  const g = globalThis as Record<string, unknown>
+  g.addEventListener ??= () => {}
+  g.removeEventListener ??= () => {}
+  g.getComputedStyle ??= () => ({ direction: 'ltr' })
+}
+
+const { createMenu, closeAllMenus, keys, openAnchoredMenu } = await import('../kernel/src/ui/menu.ts')
 
 let failures = 0
 let checks = 0
@@ -261,6 +273,120 @@ const A = (el: unknown, k: string): string | null => (el as any).getAttribute(k)
   inner.destroy()
 }
 
+// ————— 11. onClose fires ONCE per real close, on every path —————
+// spaces and #561 both had to watch the open-state class with a MutationObserver
+// to hear a close; the callback replaces that, so each path is checked.
+{
+  const paths: Array<[string, (m: ReturnType<typeof createMenu>) => void]> = [
+    ['a row chosen', (m) => { m.open(); click(m.menu.querySelector('.bkm-item')) }],
+    ['Escape', (m) => { m.open(); key('Escape') }],
+    ['a press outside', (m) => { m.open(); pressOutside() }],
+    ['close()', (m) => { m.open(); m.close() }],
+  ]
+  for (const [name, act] of paths) {
+    let closed = 0
+    const m = createMenu('C', 'C', { onClose: () => { closed++ } })
+    bar.appendChild(m.root as never)
+    m.item('Row', () => {})
+    act(m)
+    eq(`onClose fires on ${name}`, closed, 1)
+    // a redundant close must NOT re-run it
+    m.close()
+    eq(`onClose does not re-fire when already closed (${name})`, closed, 1)
+    m.destroy()
+  }
+  // mutual exclusion closes the other menu THROUGH its onClose
+  let firstClosed = 0
+  const first = createMenu('1', '1', { onClose: () => { firstClosed++ } })
+  const second = createMenu('2', '2')
+  bar.append(first.root as never, second.root as never)
+  first.open()
+  second.open()
+  eq('opening another menu fires the first\'s onClose', firstClosed, 1)
+  first.destroy(); second.destroy()
+}
+
+// ————— 12. the shortcut slot (D8) and the keys() formatter —————
+{
+  const m = createMenu('E', 'E')
+  bar.appendChild(m.root as never)
+  const row = m.item('Save a copy', () => {}, { kbd: keys('shift', 'mod', 'S') })
+  const kbd = row.querySelector('.bkm-kbd')
+  ok('a kbd row carries a .bkm-kbd', !!kbd)
+  eq('keys() orders the modifiers ⌃⌥⇧⌘', kbd?.textContent, '⇧⌘S')
+  const plain = m.item('Rename', () => {})
+  ok('a row with no shortcut has no kbd', !plain.querySelector('.bkm-kbd'))
+  m.destroy()
+}
+eq('keys(): mod alone', keys('mod', 'S'), '⌘S')
+eq('keys(): reorders out-of-order modifiers', keys('mod', 'shift', 'J'), '⇧⌘J')
+eq('keys(): all four in order', keys('mod', 'shift', 'alt', 'ctrl', 'K'), '⌃⌥⇧⌘K')
+
+// ————— 13. checkbox / radio rows —————
+{
+  const m = createMenu('T', 'T')
+  bar.appendChild(m.root as never)
+  const check = m.item('Wrap', () => {}, { role: 'checkbox', checked: true })
+  eq('a checkbox row has the role', A(check, 'role'), 'menuitemcheckbox')
+  eq('…and its checked state', A(check, 'aria-checked'), 'true')
+  const radio = m.item('Calm', () => {}, { role: 'radio', checked: false })
+  eq('a radio row has the role', A(radio, 'role'), 'menuitemradio')
+  eq('…and its unchecked state', A(radio, 'aria-checked'), 'false')
+  const plain = m.item('Run', () => {})
+  eq('a plain row is still a menuitem', A(plain, 'role'), 'menuitem')
+  ok('a plain row has no aria-checked', A(plain, 'aria-checked') === null)
+  m.destroy()
+}
+
+// ————— 14. a popup role override for a form-bearing popup (M10) —————
+{
+  const m = createMenu('S', 'S', { role: 'dialog' })
+  bar.appendChild(m.root as never)
+  eq('the popup takes the given role', A(m.menu, 'role'), 'dialog')
+  m.destroy()
+}
+
+// ————— 15. openAnchoredMenu: opened from a foreign anchor —————
+{
+  const anchor = doc.createElement('button')
+  bar.appendChild(anchor)
+  let closed = 0
+  const m = openAnchoredMenu(anchor as never, (menu) => { menu.item('Rename', () => {}) }, {
+    label: 'Row actions', onClose: () => { closed++ },
+  })
+  ok('it opens immediately', m.isOpen)
+  ok('the wrapper is mounted in the body', doc.body.contains(m.root as never))
+  ok('the wrapper is marked anchored', (m.root as unknown as El).classList.contains('bkm-anchored'))
+  eq('the hidden trigger is out of the tab order', A(m.trigger, 'tabindex'), '-1')
+  ok('the trigger is hidden', (m.trigger as unknown as El).hidden)
+  eq('the popup carries the name', A(m.menu, 'aria-label'), 'Row actions')
+  // close by choosing a row → onClose runs and the wrapper is gone
+  click(m.menu.querySelector('.bkm-item'))
+  eq('onClose ran once', closed, 1)
+  ok('the wrapper was removed from the body', !doc.body.contains(m.root as never))
+}
+// returns focus to the anchor when it closes with focus inside it. Checked via
+// an outside press: the Escape path ALSO returns focus to the anchor in a browser
+// (the hidden, then destroyed, trigger's .focus() is a no-op there, so the anchor
+// return holds), but the no-layout DOM focuses a hidden node regardless — so this
+// path, which has no competing refocus, is the honest one to assert here.
+{
+  const anchor = doc.createElement('button')
+  bar.appendChild(anchor)
+  const m = openAnchoredMenu(anchor as never, (menu) => { menu.item('Go', () => {}) }, { label: 'M' })
+  ;(m.menu.querySelector('.bkm-item') as unknown as { focus(): void }).focus()
+  pressOutside()
+  eq('focus returns to the anchor', doc.activeElement, anchor)
+}
+// a sheet skips placement and is marked as a sheet
+{
+  const anchor = doc.createElement('button')
+  bar.appendChild(anchor)
+  const m = openAnchoredMenu(anchor as never, (menu) => { menu.item('X', () => {}) }, { label: 'Sheet', sheet: true })
+  ok('a sheet popup is marked bkm-sheet', (m.menu as unknown as El).classList.contains('bkm-sheet'))
+  m.close()
+}
+
 // ————— 10. THE THEMING GUARD — every colour chain resolves, for each of the
 // four apps, to a token that app both DEFINES and THEMES. Shared with the panel
 // primitive's rig through scripts/lib/ui-theme-guard.ts; that file states what
@@ -273,7 +399,7 @@ const A = (el: unknown, k: string): string | null => (el as any).getAttribute(k)
   for (const r of checkThemedChains({
     cssPath: fileURLToPath(new URL('../kernel/src/ui/menu.css', import.meta.url)),
     prefix: 'bkm',
-    colourProps: new Set(['bg', 'border', 'ink', 'hover', 'ico', 'focus']),
+    colourProps: new Set(['bg', 'border', 'ink', 'hover', 'ico', 'focus', 'kbd-ink']),
     exempt: new Set(['shadow']),
     appStyles,
   })) ok(r.msg, r.pass)
