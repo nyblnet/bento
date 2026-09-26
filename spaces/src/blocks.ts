@@ -84,6 +84,13 @@ export interface BlockSpec {
    * GitHub read it as a nested list's continuation, or at four columns as code.
    */
   mdDetails?: boolean
+  /**
+   * In markdown, this type's children are written at ITS OWN indent, not one
+   * level in: they are delimited some other way (a `</details>`, a counted
+   * fence), and indenting them only invites a renderer to read them as a
+   * nested list or code.
+   */
+  mdLevelChildren?: boolean
   /** Rendered by a dedicated case in render.ts, not by tag + inline host. */
   custom?: boolean
   /** Carries editable inline html. False for divider, image, pagelink. */
@@ -121,6 +128,9 @@ export interface MdCtx {
    * context, exactly like the two questions above.
    */
   inline: (html: string) => string
+  /** a canvas's cards' positions, in order: `[x, y]`, or null for a card
+   *  with none (it takes a slot at read time) */
+  cardsOf?: (b: Block) => Array<[number, number] | null>
 }
 
 export const SPECS: BlockSpec[] = [
@@ -162,7 +172,7 @@ export const SPECS: BlockSpec[] = [
   },
   {
     type: 'toggle', label: 'Toggle', hint: 'Collapsible section', icon: 'toggle',
-    tag: 'div', text: true, custom: true, container: 'fold', mdDetails: true,
+    tag: 'div', text: true, custom: true, container: 'fold', mdDetails: true, mdLevelChildren: true,
     init: (b) => { if (b.open === undefined) b.open = true },
     // A TOGGLE IS `<details>`, which GitHub, Obsidian and every browser render
     // as the same fold — the one piece of html a Markdown reader already knows
@@ -265,7 +275,15 @@ export const SPECS: BlockSpec[] = [
   {
     type: 'pagelink', label: 'Link to page', hint: 'A card that opens a page', icon: 'link',
     tag: 'div', custom: true,
-    toMd: (b, _text, _indent, ctx) => [`→ [[${ctx.titleOf(String(b.page)) ?? '?'}]]`],
+    // `[[Title]]` ALONE ON ITS LINE: a wikilink, which Obsidian and Foam read
+    // as a link to that note, and which this app's importer reads back as a
+    // page card (markdown.ts). A title a wikilink cannot spell — one holding
+    // `[`, `]`, `|`, `#`, `^` or a newline — and a card to a missing page keep
+    // the old `→ [[…]]` form, which reads back as the paragraph it is.
+    toMd: (b, _text, _indent, ctx) => {
+      const title = ctx.titleOf(String(b.page))
+      return title && title.trim() === title && /^[^[\]|#^\n]+$/.test(title) ? [`[[${title}]]`] : [`→ [[${title ?? '?'}]]`]
+    },
   },
   {
     // A LINK TO SOMEWHERE ON THE WEB — the outward-facing sibling of pagelink.
@@ -349,21 +367,30 @@ export const SPECS: BlockSpec[] = [
     // from the pages that follow. The rows are derived (the export applies the
     // same filter and sort the screen does), which is why they arrive through
     // the context rather than off the block.
-    toMd: (b, text, indent, ctx) => {
+    //
+    // A ```` ```bento-view ```` FENCE: the view's settings as one JSON line
+    // (fenceJson), which is what makes it a view again on the way back in —
+    // then THE ISSUES, as `//` lines the importer ignores — never `#`, which a
+    // tool splitting a file at its headings cuts on. The rows are derived
+    // (the export applies the same filter and sort the screen does), which is
+    // why they arrive through the context rather than off the block, and why
+    // they are regenerated rather than read back. Outside this app the fence is
+    // a code block: the settings and a readable list of the work.
+    toMd: (b, text, _indent, ctx) => {
       const rows = ctx.rowsOf(b)
-      const out = [`**${text || 'Issues'}**`, '']
-      if (!rows.length) return [...out, `${indent}_No issues._`]
+      const out = ['```bento-view', fenceJson(b, text)]
+      if (!rows.length) out.push('// No issues.')
       let group: string | undefined
       for (const r of rows) {
         // grouped exactly as the board groups, and a flat list when it is one
         if (r.group !== undefined && r.group !== group) {
           group = r.group
-          out.push('', `${indent}**${group}**`, '')
+          out.push(`// ${oneLine(group)}`)
         }
         const meta = r.fields ? ` — ${r.fields}` : ''
-        out.push(`${indent}- [${r.title}](#p/${r.id})${meta}`)
+        out.push(`//   - ${oneLine(r.title + meta)}`)
       }
-      return out
+      return [...out, '```']
     },
   },
   {
@@ -380,13 +407,18 @@ export const SPECS: BlockSpec[] = [
     // unknown type), the name must NOT duplicate them. A table's fallback has
     // to hold its cells' text and pays for it in bytes; a canvas's does not.
     type: 'canvas', label: 'Canvas', hint: 'Cards you place by hand', icon: 'canvas',
-    tag: 'div', text: true, custom: true, container: 'always',
+    tag: 'div', text: true, custom: true, container: 'always', mdLevelChildren: true,
     // THE NAME, then the cards — which arrive on their own, as the indented
     // lines of the blocks they are. A canvas is a picture and Markdown has no
     // pictures, so the honest export is the list of what is on it, in document
     // order. Positions are what does not survive, and saying so in the export
     // would be a comment in someone else's document.
-    toMd: (_b, text) => [`**${text || 'Canvas'}**`],
+    //
+    // A ```` ```bento-canvas ```` FENCE holding the canvas's settings and each
+    // card's position, in order (fenceJson); the cards follow it as their own
+    // lines, and the importer hands it the next `cards.length` blocks at its
+    // level. Outside this app: a code block, then the cards as text.
+    toMd: (b, text, _indent, ctx) => ['```bento-canvas', fenceJson(b, text, ctx.cardsOf?.(b)), '```'],
   },
   {
     type: 'image', label: 'Image', hint: 'Embedded in the file', icon: 'image',
@@ -480,6 +512,25 @@ export function sizeAttrs(b: Block, extra: string[] = []): string {
   const w = num(b.w), h = num(b.h)
   if (w !== undefined && h !== undefined && Number.isInteger(w) && Number.isInteger(h)) parts.push(`w=${w}`, `h=${h}`)
   return parts.length ? `{${parts.join(' ')}}` : ''
+}
+
+/** A readable `//` line inside a fence: one line, and never a fence of its own. */
+const oneLine = (s: string): string => s.replace(/\s*\n\s*/g, ' ').replace(/`/g, "'")
+
+/**
+ * A view's or a canvas's fence body: ONE JSON line. `name` is the block's text
+ * as inline markdown, `cards` a canvas's card positions, and every other key a
+ * field of the block — all of them, so a field a newer build adds round-trips.
+ * Fields named `name` or `cards` would collide and are not written.
+ */
+export function fenceJson(b: Block, text: string, cards?: Array<[number, number] | null>): string {
+  const out: Record<string, unknown> = { name: text }
+  for (const [k, v] of Object.entries(b)) {
+    if (['id', 'type', 'parent', 'html', 'comments', 'name', 'cards'].includes(k) || v === undefined) continue
+    out[k] = v
+  }
+  if (cards && cards.some((c) => c)) out.cards = cards
+  return JSON.stringify(out)
 }
 
 /** An html attribute value (and element text): `&`, `"`, `<`, `>` as
@@ -717,7 +768,8 @@ export function mdLayout(blocks: Block[]): MdLine[] {
     // indent, for the same reason. (Effective parent for the fold case: the
     // fold's line is already laid out, because a parent is always earlier.)
     const effParent = eff.get(b.id)
-    const fold = effParent !== undefined && folds(byId.get(effParent)) ? at.get(effParent) : undefined
+    const level = (x: Block | undefined): boolean => !!x && SPEC.get(x.type)?.mdLevelChildren === true
+    const fold = effParent !== undefined && level(byId.get(effParent)) ? at.get(effParent) : undefined
     const indent = fold !== undefined ? out[fold].indent : parent && !wraps(parent) ? '  ' : ''
     const next = blocks[i + 1]
     // "same alert" compares the alert the NEXT block is in against the alert

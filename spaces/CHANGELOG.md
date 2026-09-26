@@ -559,6 +559,19 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   colours. A name outside the palette, or any other key, leaves the span as the
   text it was.
 
+- **Page links, boards and canvases come back as themselves.** A page link
+  leaves as `[[Title]]` on its own line. Obsidian reads that as a link to the
+  note, and the importer turns it back into a page card for the page with that
+  title, whether it came in the same import or is already in the space. A link
+  to no page stays the text it was. A board leaves as a
+  ```` ```bento-view ```` fence: its settings on one JSON line, then its issues
+  as readable `//` lines, which the importer ignores and the next export writes
+  again. A canvas leaves as a ```` ```bento-canvas ```` fence holding its
+  settings and each card's position, with the cards following as their own
+  lines, so the positions survive. The fences are read with a JSON parser into
+  the block's own fields. No id, type, parent, text or comments can be set that
+  way, and a fence that does not parse stays the code block it looks like.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

@@ -414,6 +414,79 @@ function mediaOf(html: string): { fields: Partial<Block> } | { refused: string; 
   return { fields: f }
 }
 
+// ---- views and canvases -------------------------------------------------------
+
+/** What a structured fence may hold at most. A file can be hand-edited or
+ *  generated; a view's settings are a few hundred bytes. */
+const FENCE_MAX = 65536
+/** A field name a fence may set: a plain identifier. Excludes `__proto__`
+ *  by construction (it starts with `_`), and the reserved names below by
+ *  list. */
+const FIELD_KEY = /^[A-Za-z][A-Za-z0-9]{0,31}$/
+const RESERVED = new Set(['id', 'type', 'parent', 'html', 'comments', 'name', 'cards', 'constructor', 'prototype'])
+
+/**
+ * A ```` ```bento-view ```` or ```` ```bento-canvas ```` fence → the block.
+ *
+ * The body is ONE JSON object (blocks.ts fenceJson writes it): `name` is the
+ * block's text as inline markdown, `cards` (canvas only) the card positions,
+ * and every other key is a field of the block, copied as data — so a field a
+ * newer build adds to a view round-trips through this one. Lines starting `//`
+ * are the readable summary the exporter adds for people reading the file
+ * elsewhere, and are ignored. JSON.parse, never eval; the object's OWN keys
+ * only, each a plain identifier; nothing structural (`id`, `type`, `parent`,
+ * `html`, `comments`) can be set from the fence. Anything malformed returns
+ * null and the fence stays the code block it looks like.
+ *
+ * This is no more trust than the app already extends to a `.bento.html` file
+ * someone mails you, whose blocks are JSON with every one of these fields.
+ */
+function fencedBlock(kind: 'view' | 'canvas' | string, body: string[]): { block: Block; cards?: Array<[number, number] | null> } | null {
+  const json = body.filter((l) => l.trim() && !l.trim().startsWith('//'))
+  if (json.length !== 1 || json[0].length > FENCE_MAX) return null
+  let obj: unknown
+  try { obj = JSON.parse(json[0]) } catch { return null }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null
+  const o = obj as Record<string, unknown>
+  const block = mk(kind, { html: typeof o.name === 'string' ? inlineHtml(o.name) : '' })
+  for (const k of Object.keys(o)) {
+    if (!Object.hasOwn(o, k) || !FIELD_KEY.test(k) || RESERVED.has(k)) continue
+    block[k] = o[k]
+  }
+  if (kind !== 'canvas') return { block }
+  const cards: Array<[number, number] | null> = []
+  if (Array.isArray(o.cards)) {
+    for (const c of o.cards.slice(0, 1000)) {
+      cards.push(Array.isArray(c) && c.length === 2 && c.every((n) => typeof n === 'number' && Number.isFinite(n))
+        ? [c[0] as number, c[1] as number] : null)
+    }
+  }
+  return { block, cards }
+}
+
+/**
+ * Turn the `[[Title]]` page links parseNote left pending into real page ids.
+ *
+ * One that names no page becomes the paragraph it would otherwise have been,
+ * holding the literal `[[Title]]` — the same rule as an inline wikilink that
+ * finds nothing (resolveWikilinks): honest text, never a card to nowhere.
+ */
+export function resolvePageLinks(blocks: Block[], lookup: (target: string) => string | undefined): { linked: number; dangling: number } {
+  let linked = 0, dangling = 0
+  for (const b of blocks) {
+    if (b.type !== 'pagelink' || typeof b.page !== 'string' || !b.page.startsWith(WIKI_SCHEME)) continue
+    let target = b.page.slice(WIKI_SCHEME.length)
+    try { target = decodeURIComponent(target) } catch { /* keep the raw form */ }
+    const id = lookup(target)
+    if (id) { b.page = id; linked++; continue }
+    dangling++
+    b.type = 'p'
+    delete b.page
+    b.html = `[[${esc(target)}]]`
+  }
+  return { linked, dangling }
+}
+
 /** A line that is nothing but an image. `![[x]]` counts only when it names an
  *  image FILE — otherwise it is an embed of another note, which is a link. */
 function imageOf(line: string): { ref: string; alt: string; caption?: string; attrs?: Attrs | null } | null {
@@ -483,6 +556,9 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
    * `</details>` rather than at the end of a blockquote.
    */
   const folds: Array<{ depth: number }> = []
+  /** canvases read from a `bento-canvas` fence, and the card positions each
+   *  one carries — the cards themselves are the blocks that follow it */
+  const canvases: Array<{ block: Block; cards: Array<[number, number] | null> }> = []
   /** a callout whose tag line held no text: its next line, if adjacent, is its text */
   let alertText: Block | null = null
   /** the paragraph a soft line break continues, and the quote a `>` continues */
@@ -541,7 +617,14 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
         buf.push(lines[j].startsWith(' '.repeat(indent)) ? lines[j].slice(indent) : lines[j])
       }
       i = j
-      add(mk('code', { html: esc(buf.join('\n')), ...(fence[2] ? { lang: fence[2].toLowerCase() } : {}) }), owner)
+      const lang = fence[2].toLowerCase()
+      const structured = lang === 'bento-view' || lang === 'bento-canvas' ? fencedBlock(lang.slice(6), buf) : null
+      if (structured) {
+        add(structured.block, owner)
+        if (structured.cards) canvases.push({ block: structured.block, cards: structured.cards })
+        continue
+      }
+      add(mk('code', { html: esc(buf.join('\n')), ...(fence[2] ? { lang } : {}) }), owner)
       continue
     }
 
@@ -741,6 +824,19 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
       }
     }
 
+    // A PAGE LINK is a wikilink ALONE on its line — `[[Title]]`, which
+    // Obsidian and Foam already read as a link to that note. Resolved to a
+    // page id with the other wikilinks, once every page exists; one that
+    // names no page falls back to the paragraph it would have been
+    // (resolvePageLinks). An aliased `[[a|b]]` stays inline: the alias is
+    // words a page card has no place for.
+    const lone = /^\[\[([^[\]|#^\n]+)\]\]$/.exec(body)
+    if (lone && lone[1].trim()) {
+      para = null
+      add(mk('pagelink', { html: '', page: `${WIKI_SCHEME}${encodeURIComponent(lone[1].trim())}` }), ownerFor(indent))
+      continue
+    }
+
     const card = body.includes('<!-- bento:card') ? cardOf(body) : null
     if (card) {
       para = null
@@ -762,6 +858,21 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     if (ownText) { ownText.html = text; para = ownText }
     else if (para) para.html = `${para.html}<br>${text}`
     else para = add(mk('p', { html: text }), ownerFor(indent))
+  }
+
+  // A CANVAS OWNS THE CARDS ITS FENCE COUNTS: the next `cards.length` blocks
+  // at the canvas's own level, in order, each taking its position. Their own
+  // children stay theirs. Counting rather than indenting, because a card is
+  // any block type and several types export without indentation.
+  for (const { block, cards } of canvases) {
+    let k = blocks.indexOf(block) + 1
+    for (const pos of cards) {
+      while (k < blocks.length && blocks[k].parent !== block.parent) k++
+      if (k >= blocks.length) break
+      const card = blocks[k++]
+      card.parent = block.id
+      if (pos) { card.x = pos[0]; card.y = pos[1] }
+    }
   }
 
   return {
@@ -975,6 +1086,10 @@ export function planImport(
   // ---- wikilinks, once every page exists ----------------------------------
   const { index, collisions } = linkIndex(src, parsed, filePage, tops.size === 1 ? [...tops][0] : '')
   for (const page of pages) {
+    const pl = resolvePageLinks(page.blocks, (target) =>
+      index.get(linkKey(target)) ?? opts.resolveExisting?.(linkKey(target)))
+    stats.linked += pl.linked
+    stats.dangling += pl.dangling
     for (const b of page.blocks) {
       if (!b.html) continue
       const r = resolveWikilinks(b.html, (target) =>

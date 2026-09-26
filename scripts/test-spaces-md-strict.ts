@@ -30,7 +30,7 @@
 // A block type with no fixture fails as well: a type added to blocks.ts has to
 // be put on one side of this line or the other.
 import { toMarkdown } from '../spaces/src/about.ts'
-import { parseNote } from '../spaces/src/markdown.ts'
+import { parseNote, planImport, resolvePageLinks } from '../spaces/src/markdown.ts'
 import { Store } from '../spaces/src/store.ts'
 import { SPECS, CALLOUT_TONES } from '../spaces/src/blocks.ts'
 import { DEFAULT_FIELDS, propBlock } from '../spaces/src/fields.ts'
@@ -92,10 +92,15 @@ const FIX: Record<string, () => Fixture> = {
     return { blocks: [t] }
   },
   view: () => ({
-    blocks: [b('view', 'Issues', { layout: 'board', groupBy: 'status' })],
+    blocks: [b('view', 'Open <em>issues</em>', { layout: 'board', groupBy: 'status', filter: { is: { status: ['todo', 'doing'] } }, sort: { key: 'status', dir: 'desc' } })],
     extraPages: [{ id: 'iss1', title: 'Fix it', parent: PAGE, blocks: [propBlock(DEFAULT_FIELDS[0], 'todo', id()), b('p', 'body')] }],
   }),
-  canvas: () => { const c = b('canvas', 'Roadmap'); return { blocks: [c, b('p', 'card one', { parent: c.id, x: 40, y: 60 }), b('p', 'card two', { parent: c.id, x: 300, y: 120 })] } },
+  canvas: () => {
+    const c = b('canvas', 'Roadmap', { ratio: 1 })
+    const three = b('bullet', 'card three, a list', { parent: c.id, x: 12.5, y: 0 })
+    return { blocks: [c, b('p', 'card one', { parent: c.id, x: 40, y: 60 }), b('p', 'card two', { parent: c.id, x: 300, y: 120 }),
+      three, b('bullet', 'its own child', { parent: three.id }), b('p', 'card four, placed by slot', { parent: c.id }), b('p', 'after the canvas')] }
+  },
 }
 
 // THE PINS — the types Markdown cannot yet carry, each with why. The reason is
@@ -103,9 +108,6 @@ const FIX: Record<string, () => Fixture> = {
 // would take. Removing a pin is the deliberate edit this rig asks for.
 const PINNED: Record<string, string> = {
   prop: 'exports as `**Status:** In progress` and comes back a paragraph; the natural form is front matter (`status: doing`), and value id vs label needs the schema',
-  view: 'exports as a title and a grouped issue list and comes back as p+p+bullet; needs a `bento-view` fence (its rows are other pages)',
-  pagelink: 'exports as `→ [[Title]]` and comes back a paragraph holding a wikilink',
-  canvas: 'exports its name and cards as prose and comes back as paragraphs; card positions are lost (a `bento-canvas` fence or `{x= y=}` attributes)',
 }
 
 // ---- the measurement --------------------------------------------------------
@@ -141,6 +143,10 @@ function trip(fx: Fixture): Trip {
     section(toMarkdown(new Store(doc([{ id: PAGE, title: TITLE, blocks }, ...extra]) as never) as never), extra)
   const md = exportOf(fx.blocks)
   const back = parseNote(md, TITLE).blocks
+  // `[[Title]]` page links resolve once every page exists — planImport's job,
+  // done here against the fixture's own pages by title
+  const byTitle = new Map([{ id: PAGE, title: TITLE }, ...extra].map((p) => [p.title.toLowerCase(), p.id]))
+  resolvePageLinks(back, (target) => byTitle.get(target.toLowerCase()))
   return { md, md2: exportOf(back), inJson: canon(strip(fx.blocks)), outJson: canon(strip(back)), back }
 }
 
@@ -426,6 +432,53 @@ console.log('\ninline marks: every mark the model has, exported and read back')
     ok(got.length === 1 && !/class=|<span|<mark/.test(got[0].html ?? ''),
       `HOSTILE colour: ${src} stays text, and no class is minted`, JSON.stringify(got))
   }
+}
+
+console.log('\npage links, views and canvases')
+{
+  const others: Page[] = [{ id: 'o1', title: 'Other page', blocks: [b('p', 'x')] }, { id: 'o2', title: 'Odd [title] | here', blocks: [b('p', 'y')] }]
+  const t = trip({ blocks: [b('pagelink', '', { page: 'o1' }), b('pagelink', '', { page: 'o2' }), b('pagelink', '', { page: 'gone' })], extraPages: others })
+  ok(t.back[0]?.type === 'pagelink' && t.back[0].page === 'o1' && t.md.startsWith('[[Other page]]\n'),
+    'a page link is `[[Title]]` alone on its line, and resolves to the page', why(t))
+  ok(t.back[1]?.type === 'p' && t.back[2]?.type === 'p' && t.md.includes('→ [[?]]'),
+    'pinned: a title a wikilink cannot spell, and a missing page, keep the old `→ [[…]]` paragraph', why(t))
+}
+{
+  const plan = planImport([{ path: 'v/A.md', text: '[[B]]\n\n[[Home]]\n\n[[Missing]]\n' }, { path: 'v/B.md', text: 'bee\n' }],
+    { rootTitle: 'R', resolveExisting: (k) => (k === 'home' ? 'existing-home' : undefined) })
+  const a = plan.pages.find((p) => p.title === 'A')!
+  const bId = plan.pages.find((p) => p.title === 'B')!.id
+  ok(a.blocks[0].type === 'pagelink' && a.blocks[0].page === bId && a.blocks[1].page === 'existing-home' &&
+    a.blocks[2].type === 'p' && plan.stats.linked === 2 && plan.stats.dangling === 1,
+  'planImport resolves a lone [[link]] to a page in the import, then to one the space already has, and counts a miss', JSON.stringify(a.blocks))
+}
+{
+  const got = only('[[Nowhere]]\n\n[[A|alias]]\n\nSee [[B]] inline.\n')
+  resolvePageLinks(got, () => undefined)
+  ok(got.map((x) => x.type).join(' ') === 'p p p' && got[0].html === '[[Nowhere]]',
+    'an unresolved lone link, an aliased one and an inline one are all paragraphs', JSON.stringify(got))
+}
+{
+  const view = (body: string) => only('```bento-view\n' + body + '\n```\n')[0]
+  const hostile: Array<[string, (x: Block) => boolean]> = [
+    ['{"name":"x","id":"evil","type":"p","parent":"p1","html":"<img src=x onerror=alert(1)>","comments":[{"text":"x"}]}',
+      (x) => x.type === 'view' && x.id !== 'evil' && x.parent === undefined && x.html === 'x' && x.comments === undefined],
+    ['{"name":"<img src=x onerror=alert(1)>"}', (x) => x.type === 'view' && !/<img/i.test(x.html ?? '')],
+    ['{"__proto__":{"polluted":1},"constructor":{"x":1},"layout":"list"}',
+      (x) => x.type === 'view' && x.layout === 'list' && ({} as Record<string, unknown>).polluted === undefined && !Object.hasOwn(x, 'constructor')],
+    ['not json at all', (x) => x.type === 'code' && x.lang === 'bento-view'],
+    ['{"a":1}\n{"b":2}', (x) => x.type === 'code'],
+    ['[1,2,3]', (x) => x.type === 'code'],
+    ['{"name":"x","layout":"toString"}', (x) => x.type === 'view' && x.layout === 'toString'],
+  ]
+  for (const [body, fine] of hostile) {
+    const got = view(body)
+    ok(!!got && fine(got), `HOSTILE view fence: ${body.slice(0, 70)}`, JSON.stringify(got))
+  }
+  const cv = only('```bento-canvas\n{"name":"C","cards":[[1,2],"x",[1e999,3],[4,5,6]]}\n```\n\na\n\nb\n\nc\n\nd\n\ne\n')
+  ok(cv[0].type === 'canvas' && cv.slice(1, 5).every((x) => x.parent === cv[0].id) && cv[5].parent === undefined &&
+    cv[1].x === 1 && cv[2].x === undefined && cv[3].x === undefined && cv[4].x === undefined,
+  'HOSTILE canvas positions: only [finite, finite] pairs place a card; the count still claims its cards', JSON.stringify(cv))
 }
 
 console.log('\ntoggles: <details>, open or folded, holding anything')

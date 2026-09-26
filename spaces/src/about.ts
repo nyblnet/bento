@@ -43,7 +43,7 @@ import { docForExport } from './model'
 import { htmlToMd } from './marks.ts'
 import { humanBytes } from './assets'
 import { SPEC, mdLayout, type MdCtx } from './blocks'
-import { parseDoc, uid } from './model'
+import { parseDoc, uid, effectiveParents } from './model'
 import {
   issuesOf, passesFilter, sortRows, fieldByKey, optionOf, fieldsOf,
 } from './fields'
@@ -820,6 +820,17 @@ export function toMarkdown(store: Store): string {
     // one type whose text is not a single string. A table with its own inline
     // rules would be the second place `**bold**` is decided.
     inline: htmlToMd,
+    // a canvas's cards are the blocks it owns, in order — by the one parent
+    // rule (model.ts effectiveParents), the same one the canvas renders by
+    cardsOf: (b: Block) => {
+      const page = store.doc.pages.find((p) => p.blocks.includes(b))
+      if (!page) return []
+      const eff = effectiveParents(page)
+      return page.blocks.filter((c) => eff.get(c.id) === b.id).map((c) => {
+        const x = (c as { x?: unknown }).x, y = (c as { y?: unknown }).y
+        return typeof x === 'number' && typeof y === 'number' && Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null
+      })
+    },
     // DERIVED THE SAME WAY THE SCREEN DERIVES IT — same filter, same sort, same
     // grouping — so the file you download is the board you were looking at. A
     // second traversal here is how an export starts quietly disagreeing with

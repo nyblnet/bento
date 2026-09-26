@@ -2216,12 +2216,18 @@ function fsTable(f: string): string {
       { id: 'p3', title: 'Third', group: 'Done', fields: '' },
     ],
   }).join('\n')
-  ok(md.includes('[First](#p/p1)') && md.includes('[Third](#p/p3)'),
-    'a board exports its ISSUES, each one a link back to its page')
-  ok(md.includes('**Todo**') && md.includes('**Done**'), '…grouped as the board groups them')
-  ok(md.indexOf('**Todo**') < md.indexOf('**Done**'), '…in the board\'s column order')
-  ok(md.includes('[First](#p/p1) — High'), '…carrying the same chips the card shows')
-  ok(viewSpec.toMd!({ id: 'v', type: 'view' } as Block, 'Issues', '', ctx).join('\n').includes('_No issues._'),
+  // A ```bento-view fence: the settings as one JSON line (what reads back as a
+  // view), then the issues as `//` lines for a reader elsewhere — the fence's
+  // round trip is held byte for byte in scripts/test-spaces-md-strict.ts
+  ok(md.startsWith('```bento-view\n{"name":"Issues"}\n') && md.endsWith('\n```'),
+    'a board exports as a bento-view fence carrying its settings')
+  ok(md.includes('//   - First') && md.includes('//   - Third'),
+    'a board exports its ISSUES, one readable line each')
+  ok(md.includes('// Todo') && md.includes('// Done'), '…grouped as the board groups them')
+  ok(md.indexOf('// Todo') < md.indexOf('// Done'), '…in the board\'s column order')
+  ok(md.includes('//   - First — High'), '…carrying the same chips the card shows')
+  ok(!/^#/m.test(md), '…and no line of it starts with `#`, which a tool splitting at headings would cut on')
+  ok(viewSpec.toMd!({ id: 'v', type: 'view' } as Block, 'Issues', '', { ...ctx, inline: (h: string) => h }).join('\n').includes('// No issues.'),
     'an empty board says so rather than exporting a bare heading')
 }
 
@@ -3391,12 +3397,12 @@ function fsTable(f: string): string {
   ok(TAG_OF.canvas === 'div', 'a canvas is a div, like every other surface block')
   ok(!LIST_OF.canvas, 'a canvas is not a list item')
 
-  // ITS MARKDOWN IS ITS NAME. The cards follow as their own indented lines,
-  // because they are their own blocks — so `toMd` must NOT print them again.
-  const cvMd = cvSpec!.toMd!({ id: 'cv', type: 'canvas' } as Block, 'Launch plan', '', {} as never)
-  ok(cvMd.join('\n') === '**Launch plan**', 'a canvas exports as its name')
-  ok(cvSpec!.toMd!({ id: 'cv', type: 'canvas' } as Block, '', '', {} as never)[0] === '**Canvas**',
-    'an unnamed canvas still says what it is rather than exporting a blank line')
+  // ITS MARKDOWN IS A bento-canvas FENCE: its name, its settings and where each
+  // card sits. The cards follow as their own lines, because they are their own
+  // blocks — so `toMd` must NOT print them again.
+  const cvMd = cvSpec!.toMd!({ id: 'cv', type: 'canvas' } as Block, 'Launch plan', '', { cardsOf: () => [[10, 20], null] } as never)
+  ok(cvMd.join('\n') === '```bento-canvas\n{"name":"Launch plan","cards":[[10,20],null]}\n```',
+    'a canvas exports as a fence holding its name and its cards\' positions, and not the cards')
 
   // A CARD'S OWN WORDS TRAVEL, AS THEIR OWN LINE. mdLayout decides the two
   // decorations a block cannot decide for itself, and the one that matters here
@@ -3407,7 +3413,7 @@ function fsTable(f: string): string {
   // which a plain text card's does not — so the assertion is on the quote.)
   const cvLay = mdLayout(cvPage.blocks)
   ok(cvLay[1].quote === '', 'a card is not swept into its canvas as a blockquote')
-  ok(cvLay[1].indent === '  ', "…and mdLayout reads it as its container's child")
+  ok(cvLay[1].indent === '', "…and mdLayout writes it at the canvas's own level (the bento-canvas fence counts its cards)")
 }
 
 
