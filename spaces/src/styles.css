@@ -163,7 +163,7 @@
   --share-ok: #2e8b57;
   --dirty-ring: #16273e;
   --pop-shadow: 0 8px 24px rgb(20 30 45 / 0.14);
-  --pop-chrome: #f5f7fa;   /* a framed button inside a popover: slides' --chrome */
+  --pop-chrome: #f5f7fa;   /* the Share popover's you-row ground: slides' --chrome */
 
   /* The BROWSER's own furniture — scrollbars, form controls, the canvas behind
      a rubber-band scroll — follows this, and CSS cannot reach any of it.
@@ -2430,21 +2430,24 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 .sp-ppage { color: var(--muted); font-size: 11.5px; margin-inline-start: auto;
   max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-pempty, .sp-pnote { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 0; }
-.sp-pacts { display: flex; flex-direction: column; gap: 7px; }
+.sp-pacts { display: flex; flex-direction: column; gap: 0; }
+/* slides #573: Share's actions are plain menu rows — `.ed-btn` in a menu:
+   12.5px, one 30px line, 6px 9px inside a transparent 1px frame, a hover fill
+   and nothing at rest, no filled primary; adjacent rows touch */
 .sp-paction {
   display: flex; align-items: center; gap: 6px; width: 100%; text-align: start;
-  font: inherit; font-size: 12.5px; line-height: 1.35; color: var(--ink-2);
-  background: var(--pop-chrome); border: 1px solid var(--pop-line); border-radius: 8px;
-  padding: 6px 10px; cursor: pointer;
+  font: inherit; font-size: 12.5px; color: var(--ink-2);
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  padding: 6px 9px; cursor: pointer; white-space: nowrap;
 }
 .sp-paction:hover { background: var(--pop-hover); }
 .sp-paction:active { background: var(--pop-line); }
-.sp-paction-primary, .sp-paction-primary:hover { background: var(--ink); border-color: transparent; color: var(--surface); }
-.sp-paction-primary:hover { background: var(--ink-2); }
 .sp-paction-ico { display: flex; flex: none; }
 .sp-paction-ico svg { display: block; }
-.sp-paction-body { display: block; min-width: 0; }
-.sp-paction-sep { height: 1px; background: var(--pop-line); margin: 2px 0; }
+.sp-paction-body { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* the rows touch, so the rule carries the popover's 7px either side, as
+   slides' `.ed-share-sep` gets from its gap */
+.sp-paction-sep { height: 1px; background: var(--pop-line); margin: 9px 0; }
 
 /* THIS device's row in the People list, on a chrome ground as slides' */
 .sp-pme { cursor: default; background: var(--pop-chrome); border-radius: 7px; gap: 7px; }

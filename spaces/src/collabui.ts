@@ -408,10 +408,10 @@ export class CollabUi {
       // spaces' counterpart of slides' Present-only file, and sits where it does.
       pop.append(el('div', 'sp-share-label', t('Share a copy')))
       const acts = el('div', 'sp-pacts')
-      acts.append(this.action(ICONS.people, true, t('Invite to edit…'),
+      acts.append(this.action(ICONS.people, t('Invite to edit…'),
         t('Saves a copy to send. Whoever opens it edits this space live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.'),
         () => { close(); this.host.shareCopy('invite') }))
-      acts.append(this.action(ICONS.eye, false, t('View-only copy…'),
+      acts.append(this.action(ICONS.eye, t('View-only copy…'),
         t('A live viewer: follows every edit as it happens but can never change this space — the relay enforces it.'),
         () => { close(); this.host.shareCopy('viewonly') }))
       acts.append(readingAct())
@@ -421,7 +421,7 @@ export class CollabUi {
         // back into a session you had stopped was to save a copy, which is how
         // one space becomes four files.
         acts.append(el('div', 'sp-paction-sep'))
-        acts.append(this.action(ICONS.broadcast, false, t('Start live session'), t('Connect to the live session without saving a new copy — copies you sent earlier will meet you there.'), () => {
+        acts.append(this.action(ICONS.broadcast, t('Start live session'), t('Connect to the live session without saving a new copy — copies you sent earlier will meet you there.'), () => {
           close()
           void this.host.goLive().then(() => {
             this.sync(); this.host.paintTree()
@@ -430,7 +430,7 @@ export class CollabUi {
         }))
       } else {
         acts.append(el('div', 'sp-paction-sep'))
-        acts.append(this.action(ICONS.broadcast, false, t('Stop sharing'), t('This copy goes offline; the others carry on'), () => {
+        acts.append(this.action(ICONS.broadcast, t('Stop sharing'), t('This copy goes offline; the others carry on'), () => {
           close()
           stopSharing(this.host.session, store)
           this.sync(); this.host.paintTree()
@@ -446,7 +446,7 @@ export class CollabUi {
         // the thumb lands, and a stray tap there asked a native confirm() to
         // stand between the reader and revoking every copy they had sent. A
         // rule and the danger ink make it read as what it is before the tap.
-        acts.append(this.action(ICONS.lock, false, t('Reset access…'),
+        acts.append(this.action(ICONS.lock, t('Reset access…'),
           t('Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.'),
           () => {
             if (!confirm(t('Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.'))) return
@@ -462,16 +462,16 @@ export class CollabUi {
   }
 
   /**
-   * One share action: slides' framed button (icon, name; the first one
-   * primary), one line. What it does is the hover tooltip (`title`) and the
+   * One share action: a plain menu row, as slides' (#573) — icon and name on
+   * one line, a hover fill and nothing at rest, no filled primary. What it does is the hover tooltip (`title`) and the
    * button's accessible description through a visually hidden span — the Save
    * menu's row shape, extended to Share by the maintainer (DECISIONS
    * 2026-09-26).
    */
-  private action(icon: string, primary: boolean, label: string, hint: string, run: () => void): HTMLElement {
+  private action(icon: string, label: string, hint: string, run: () => void): HTMLElement {
     const b = document.createElement('button')
     b.type = 'button'
-    b.className = 'sp-paction' + (primary ? ' sp-paction-primary' : '')
+    b.className = 'sp-paction'
     const ico = el('span', 'sp-paction-ico')
     ico.innerHTML = icon
     const body = el('span', 'sp-paction-body')

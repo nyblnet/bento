@@ -133,7 +133,7 @@ const SLIDES_MENU = {
 }
 SLIDES_MENU.rowInk = SLIDES_MENU.rowInk ? decl(slidesRoot, SLIDES_MENU.rowInk) : undefined
 // The keyboard ring (`.ed-btn:focus-visible` outside, `.ed-menu
-// .ed-btn:focus-visible` inside) and the one-line Share button (`.ed-share-btn`)
+// .ed-btn:focus-visible` inside)
 const ringOut = /\n\.ed-btn:focus-visible[^{]*\{([^}]*)\}/.exec(slidesCss)?.[1] ?? ''
 const SLIDES_RING = {
   outline: /outline:\s*([^;]+);/.exec(ringOut)?.[1]?.trim(),
@@ -146,9 +146,6 @@ const hasRing = /\.ed-btn:focus-visible/.test(slidesCss)
 const ringRead = Object.values(SLIDES_RING).every(Boolean)
 if (!hasRing) Object.assign(SLIDES_RING, { outline: '2px solid var(--accent-ink)', outside: '2px', inside: '-2px' })
 ok(ringRead || !hasRing, `slides' keyboard ring is read from its stylesheet where it has it (${hasRing ? 'slides' : 'kernel ruling'}; ${JSON.stringify(SLIDES_RING)})`)
-const shareBtn = block('.ed-share-btn')
-const shareH = (() => { const pad = /^(\d+(?:\.\d+)?)px/.exec(decl(shareBtn, 'padding') ?? '')?.[1]; const fs = parseFloat(decl(shareBtn, 'font-size') ?? ''); const lh = parseFloat(decl(shareBtn, 'line-height') ?? ''); return pad && fs && lh ? Math.round(fs * lh + 2 * +pad + 2) : NaN })()
-ok(Number.isFinite(shareH), `slides' one-line Share button height can be derived from .ed-share-btn (${shareH}px)`)
 const ringInk = /var\((--[a-z0-9-]+)\)/.exec(SLIDES_RING.outline ?? '')?.[1]
 ok(Object.values(SLIDES_MENU).every(Boolean), `slides' menu values can be read from its stylesheet (${JSON.stringify(SLIDES_MENU)})`)
 
@@ -334,12 +331,19 @@ async function browser(chrome: string, html: string): Promise<void> {
     ok(barRing.fv && barRing.style === 'solid' && barRing.w === /(\d+px)/.exec(SLIDES_RING.outline ?? '')?.[1] && barRing.off === SLIDES_RING.outside,
       `a bar button's keyboard ring is slides': outside, offset ${SLIDES_RING.outside} (${JSON.stringify(barRing)})`)
 
-    // …and every Share action has the same shape, one line at slides' button height
+    // …and every Share action is the same row: one 30px line, its description
+    // the tooltip and the hidden aria-describedby (slides #573)
     await tap(`document.querySelector('.sp-bar .sp-live')`)
     const acts = await js<any>(ROWSHAPE(`[...document.querySelectorAll('.sp-pop .sp-paction')]`, '.sp-paction-name'))
-    const badActs = acts.filter((r: any) => r.h !== shareH || !rowOk(r))
+    const badActs = acts.filter((r: any) => r.h !== 30 || !rowOk(r))
     ok(acts.length >= 3 && badActs.length === 0,
-      `every Share action is one ${shareH}px line whose description is its tooltip and its hidden aria-describedby, the name alone its name (${acts.length} actions${badActs.length ? '; wrong: ' + JSON.stringify(badActs.slice(0, 2)) : ''})`)
+      `every Share action is one 30px line whose description is its tooltip and its hidden aria-describedby, the name alone its name (${acts.length} actions${badActs.length ? '; wrong: ' + JSON.stringify(badActs.slice(0, 2)) : ''})`)
+    // …a plain menu row as slides' (#573): nothing at rest — no fill, no frame,
+    // no filled primary — at the Save rows' size, and adjacent rows touching
+    const plain = await js<any>(`(() => { const rows = [...document.querySelectorAll('.sp-pop .sp-paction')]; const save = null; const out = rows.map(r => { const c = getComputedStyle(r); return { bg: c.backgroundColor, frame: c.borderTopColor, font: c.fontSize, pad: c.padding } }); const touch = rows.every((r, i) => { const n = rows[i + 1]; return !n || n.previousElementSibling !== r || Math.round(n.getBoundingClientRect().top - r.getBoundingClientRect().bottom) === 0 }); return { out, touch } })()`)
+    const loud = plain.out.filter((r: any) => r.bg !== 'rgba(0, 0, 0, 0)' || r.frame !== 'rgba(0, 0, 0, 0)' || r.font !== SLIDES_MENU.saveFont || r.pad !== SLIDES_MENU.rowPad)
+    ok(loud.length === 0 && plain.touch,
+      `Share's actions are plain rows — no fill or frame at rest, no primary, ${SLIDES_MENU.saveFont} in ${SLIDES_MENU.rowPad}, adjacent rows touching (${loud.length ? JSON.stringify(loud[0]) : 'ok'}; touch ${plain.touch})`)
     await key('Escape', 0, 'Escape')
 
     // NO TOP-BAR SURFACE DRAWS A SECOND-LINE DESCRIPTION. Open each of them and
