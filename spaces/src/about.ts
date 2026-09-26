@@ -48,8 +48,8 @@ import { docForExport } from './model'
 import { htmlToMd } from './marks.ts'
 import { definitionLines } from './footnotes.ts'
 import { humanBytes } from './assets'
-import { SPEC, mdLayout, type MdCtx } from './blocks'
-import { parseDoc, uid } from './model'
+import { SPEC, mdLayout, withBlockId, type MdCtx } from './blocks'
+import { parseDoc, uid, effectiveParents } from './model'
 import {
   issuesOf, passesFilter, sortRows, fieldByKey, optionOf, fieldsOf,
 } from './fields'
@@ -999,6 +999,17 @@ export function toMarkdown(store: Store): string {
     // one type whose text is not a single string. A table with its own inline
     // rules would be the second place `**bold**` is decided.
     inline: htmlToMd,
+    // a canvas's cards are the blocks it owns, in order — by the one parent
+    // rule (model.ts effectiveParents), the same one the canvas renders by
+    cardsOf: (b: Block) => {
+      const page = store.doc.pages.find((p) => p.blocks.includes(b))
+      if (!page) return []
+      const eff = effectiveParents(page)
+      return page.blocks.filter((c) => eff.get(c.id) === b.id).map((c) => {
+        const x = (c as { x?: unknown }).x, y = (c as { y?: unknown }).y
+        return typeof x === 'number' && typeof y === 'number' && Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null
+      })
+    },
     // DERIVED THE SAME WAY THE SCREEN DERIVES IT — same filter, same sort, same
     // grouping — so the file you download is the board you were looking at. A
     // second traversal here is how an export starts quietly disagreeing with
@@ -1044,6 +1055,15 @@ export function toMarkdown(store: Store): string {
   // neither was ever visited. Store.tree() carries the visited set and surfaces
   // what a cycle orphans, and this now inherits both. Measured before the fix:
   // 13 pages in the file, 11 in the export.
+  // THE BLOCKS SOMETHING POINTS AT — a review thread's anchor, or the target
+  // of a `#p/<page>/<block>` link anywhere in the space (a table cell and a
+  // caption included, hence the whole serialised page list). Only these carry
+  // `{#id}` in the export (blocks.ts withBlockId).
+  const anchored = new Set<string>()
+  for (const page of store.doc.pages) {
+    for (const b of page.blocks) if (Array.isArray(b.comments) && b.comments.length) anchored.add(b.id)
+  }
+  for (const m of JSON.stringify(store.doc.pages).matchAll(/#p\/[^"\\/]+\/([A-Za-z][A-Za-z0-9_-]{0,63})/g)) anchored.add(m[1])
   const walk = () => {
     for (const { page, depth } of store.tree()) {
       out.push(`${'#'.repeat(Math.min(depth + 1, 6))} ${page.title}`, '')
@@ -1052,13 +1072,14 @@ export function toMarkdown(store: Store): string {
       // registry in one pass (blocks.ts mdLayout).
       const layout = mdLayout(page.blocks)
       page.blocks.forEach((b, i) => {
-        const { quote, indent, sep } = layout[i]
+        const { quote, indent, sep, close } = layout[i]
         const text = htmlToMd(b.html ?? '')
         // From the block registry, so a new type exports correctly the moment
         // it is declared. An UNKNOWN type — a file written by a newer build —
         // falls through to its text, which is the honest default.
         const spec = SPEC.get(b.type)
-        const lines = spec?.toMd ? spec.toMd(b, text, indent, ctx) : [text]
+        const own = (spec?.toMd ? spec.toMd(b, text, indent, ctx) : [text]).flatMap((l) => l.split('\n'))
+        const lines = anchored.has(b.id) ? withBlockId(b, own) : own
         // PER LINE, not per returned element. A spec returns ELEMENTS, and an
         // element can hold newlines: a code block's body is one multi-line
         // string, and htmlToMd turns <br> into a newline in ordinary text. Any
@@ -1070,6 +1091,8 @@ export function toMarkdown(store: Store): string {
         // An empty line inside a quote must be a bare '>', never '> ' and never
         // blank: a blank line closes the blockquote.
         out.push(...lines.flatMap((l) => l.split('\n')).map((l) => (l ? quote + l : quote.trimEnd())))
+        // the `</details>` of every fold that ends at this block (blocks.ts)
+        for (const c of close) out.push(c.line ? c.quote + c.line : c.quote.trimEnd())
         out.push(sep)
       })
       // FOOTNOTE DEFINITIONS, AFTER THE PAGE THEY BELONG TO.

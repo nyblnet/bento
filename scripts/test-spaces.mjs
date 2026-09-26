@@ -72,6 +72,7 @@ const RIGS = [
   { name: 'roundtrip', file: 'scripts/test-spaces-roundtrip.ts', bundle: true },
   { name: 'reading', file: 'scripts/test-spaces-reading.ts', bundle: true },
   { name: 'mentions', file: 'scripts/test-spaces-mentions.ts' },
+  { name: 'md-strict', file: 'scripts/test-spaces-md-strict.ts', bundle: true },
   { name: 'size',    file: 'scripts/test-spaces-size.mjs' },
 ]
 

@@ -311,6 +311,69 @@ never becomes a reference.
 
 Markdown import and export both speak `[^1]` and `[^1]: the note.`, so an
 Obsidian or Pandoc vault keeps its footnotes in both directions.
+## Markdown in and out
+
+"Download as Markdown" writes every page as one `.md` file, and "Import
+Markdown" reads `.md` files, a folder of them or an Obsidian vault. For every
+block type except `prop`, a block that goes out comes back as the same block,
+with the same JSON apart from its id and the same text on the next export
+(`scripts/test-spaces-md-strict.ts` holds that bar type by type). You can
+write these forms by hand or generate them, and they are what this app reads.
+
+The rule behind every choice: **use a syntax other Markdown tools already
+read**, so the file still makes sense on GitHub, in Obsidian and in a plain
+editor. Invent syntax only where nothing exists, and then use a fenced block,
+which everything else shows as code.
+
+| block | Markdown |
+|---|---|
+| `p`, `h1`–`h3`, lists, `todo`, `quote`, `code`, `divider` | CommonMark / GFM, as you would write it |
+| `table` | a GFM pipe table; an empty header row means `header: false` |
+| `callout` | a GitHub alert, `> [!WARNING]`, with the body inside the blockquote |
+| `toggle` | `<details open>` (or `<details>` when folded), `<summary>text</summary>`, the children, then `</details>` |
+| `image` | `![alt](src "caption"){width=60% w=640 h=300}`. The size is a Pandoc attribute list: `width` is the column percentage (10–100), and `w`/`h` are the intrinsic pixels, both or neither |
+| `link` | `[title](url) — description <!-- bento:card site="…" icon="…" image="…" -->`. The comment makes the line a card, and every renderer hides it. A lone link without it stays a paragraph |
+| `media` | `<video src="…" controls loop muted poster="…" title="alt" width="…" height="…" data-width="…" data-caption="…" data-autoplay><a href="…">alt</a></video>`, or `<audio …>` |
+| `pagelink` | `[[Page title]]` alone on its line |
+| `view` | a fence `` ```bento-view `` holding ONE JSON line, `{"name":"Issues","layout":"board","groupBy":"status"}`, which may be followed by `//` lines (ignored) |
+| `canvas` | a fence `` ```bento-canvas `` holding `{"name":"Map","ratio":1.6,"cards":[[40,60],null]}`, then the cards as the next blocks at the same level, one per `cards` entry |
+| `prop` | `**Status:** In progress`, which comes back as a paragraph. Fields will move to front matter |
+
+Inline marks: `**bold**`, `*italic*`, `***both***`, `~~strike~~`,
+`` `code` ``, `==highlight==`, and `<u>`, `<sub>` and `<sup>` as raw html.
+A palette colour is raw `<span class="sp-fg-red">` or
+`<mark class="sp-bg-yellow">`, and on import the Pandoc forms
+`[words]{color=red}` and `[words]{bg=yellow}` also work. Only the nine
+palette names count: gray, brown, orange, yellow, green, blue, purple, pink
+and red.
+
+**Block ids.** ` {#id}` at the end of a block's line (for a fence, on its
+opening line; for a toggle, on the `<details>` line) gives the block that id.
+The exporter writes one only on blocks that something points at: a comment
+thread, or a `#p/<page>/<block>` link. On import an id that is already used,
+in the note, in the import or in the space, is replaced with a fresh one.
+Tables and dividers never carry an id.
+
+**Everything imported is untrusted.** Links, clip sources, posters and card
+thumbnails go through the same allowlists as the editor: `https:`, `http:` and
+`mailto:` for links; `asset:`, an inline file of the right kind or `http(s)`
+for media; and never `javascript:`, svg data or a relative path for a player.
+No attribute is copied from html by name. Fences are read with `JSON.parse`,
+and a fence cannot set `id`, `type`, `parent`, `html` or `comments`.
+
+### Reserved syntax, for features not yet on main
+
+These features exist only on unmerged branches. When they land, their
+Markdown form is this one, so every branch reads the same file the same way:
+
+| feature | Markdown | why |
+|---|---|---|
+| math | `$…$` inline, `$$…$$` on its own lines for a display block | what GitHub, Obsidian, Pandoc and KaTeX-based tools read |
+| diagram | a `` ```mermaid `` fence holding the source | GitHub and Obsidian render it, and it is a `code` block with `lang: "mermaid"` today, so nothing changes in the format |
+| chart | `` ```chart bar `` (or `line`, `pie` …), holding a GFM table or CSV of the data | everything else shows the data as a readable table. The chart type is the word after `chart` |
+| transclusion | `![[Page]]`, or `![[Page#Section]]` for part of a page, alone on its line | Obsidian's embed. `![[picture.png]]` stays an image |
+| footnotes | `[^1]` in the text and `[^1]: the note.` below | GFM footnotes, which GitHub renders |
+| layout | `:::columns`, `:::hero` and `:::card` fenced divs, closed by `:::` | Pandoc and markdown-it-container read them, and anything else shows the markers as text around readable content |
 
 ## The issue tracker
 

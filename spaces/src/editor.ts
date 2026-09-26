@@ -5797,17 +5797,22 @@ export class Editor {
     }
 
     // Pages this space already has, so an incremental import links INTO it —
-    // BY EVERY NAME they answer to. `nameIndex` carries titles and aliases and
-    // settles the ties, which is what makes `[[NYC]]` in an imported vault
-    // land on the page already titled "New York": aliases have to reach the
-    // resolver or they are an alias in name only.
+    // BY EVERY NAME they answer to (`nameIndex` carries titles and aliases).
     const existing = nameIndex(s.doc).byName
+    // every id the space already uses, so a `{#id}` in a note never lands on
+    // a second block (or a page) with the same id
+    const usedIds = new Set<string>()
+    for (const page of s.doc.pages) {
+      usedIds.add(page.id)
+      for (const b of page.blocks) usedIds.add(b.id)
+    }
     const plan = planImport(files, {
       rootTitle: t('Imported notes'),
       resolveExisting: (target) => existing.get(target),
       // so an imported `[^1]` that would land on a note this space already has
       // is renamed, in the plan, along with the references to it
       existingNotes: s.doc.footnotes,
+      idTaken: (id) => usedIds.has(id),
     })
 
     // ---- images ------------------------------------------------------------

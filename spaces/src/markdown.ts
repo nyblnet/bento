@@ -16,10 +16,10 @@
 
 // `.ts` extensions ON PURPOSE: this module is imported directly by
 // `scripts/test-spaces-model.ts`, which node resolves without a bundler.
-import { type Block, type Page, uid, writeTable } from './model.ts'
-import { esc } from './sanitize.ts'
+import { type Block, type Page, uid, writeTable, linkCard, linkCardHtml } from './model.ts'
+import { esc, externalHref } from './sanitize.ts'
 import { takeDefinitions, mergeNotes, renameRefs } from './footnotes.ts'
-import { keepClasses } from './marks.ts'
+import { keepClasses, PALETTE } from './marks.ts'
 import { parseEmbedLine, linkEmbeds } from './embed.ts'
 import { readDesignFrontMatter } from './designs.ts'
 
@@ -150,8 +150,36 @@ export function inlineHtml(src: string): string {
         ? hold(`<a href="${esc(url)}">`) + text + hold('</a>')
         : m)
 
+  // A PANDOC SPAN carrying a palette colour — `[words]{color=red}` for the
+  // ink, `[words]{bg=yellow}` for the band behind them, or both. This app's
+  // own exporter writes colour as raw `<span class="sp-fg-red">`, which GitHub
+  // and Obsidian show as clean text (the brace form would show as literal
+  // braces there); this is the other spelling, for Markdown written with
+  // Pandoc in mind. THE PALETTE ONLY: a name outside it (`coral`,
+  // `red;background:url(…)`) or any key but these two leaves the whole span
+  // as the text it was, so nothing here can mint a class the sanitizer's
+  // pattern would then accept.
+  s = s.replace(/\[([^[\]\n]+)\]\{([^{}\n]*)\}/g, (m: string, x: string, list: string) => {
+    const a = parseAttrs(`{${list}}`)
+    if (!a || a.id !== undefined || a.classes.length || !a.kv.size) return m
+    const named = (k: string): string | undefined => {
+      const v = a.kv.get(k)
+      return v !== undefined && (PALETTE as readonly string[]).includes(v) ? v : undefined
+    }
+    for (const k of a.kv.keys()) if ((k !== 'color' && k !== 'bg') || !named(k)) return m
+    const fg = named('color'), bg = named('bg')
+    const open = (bg ? `<mark class="sp-bg-${bg}">` : '') + (fg ? `<span class="sp-fg-${fg}">` : '')
+    const close = (fg ? '</span>' : '') + (bg ? '</mark>' : '')
+    return hold(open) + x + hold(close)
+  })
+
   s = s.replace(/~~([\s\S]+?)~~/g, (_m, x: string) => hold('<s>') + x + hold('</s>'))
   s = s.replace(/==([\s\S]+?)==/g, (_m, x: string) => hold('<mark>') + x + hold('</mark>'))
+  // `***x***` — bold AND italic, which is how the exporter spells the pair
+  // (marks.ts: strong outside em). Left to the two rules below it read as
+  // `**` + `*x` + `**` and then an `*` with no partner, and came back as the
+  // mis-nested `<strong><em>x</strong></em>`.
+  s = s.replace(/\*\*\*(?=\S)([^*]+?)\*\*\*/g, (_m, x: string) => hold('<strong><em>') + x + hold('</em></strong>'))
   s = s.replace(/\*\*(?=\S)([\s\S]+?)\*\*/g, (_m, x: string) => hold('<strong>') + x + hold('</strong>'))
   s = s.replace(/(^|[^\w\\])__(?=\S)([\s\S]+?)__(?!\w)/g,
     (_m, pre: string, x: string) => pre + hold('<strong>') + x + hold('</strong>'))
@@ -220,15 +248,279 @@ export interface ParsedNote {
 
 const mk = (type: string, extra: Partial<Block> = {}): Block => ({ id: uid('b'), type, ...extra })
 
-const IMG_LINE = /^!\[([^\]]*)\]\(\s*<?([^\s)>]*)>?(?:\s+"([^"]*)")?\s*\)$/
+// The title may hold `\"` and `\\` — CommonMark's escapes, and what the
+// exporter writes for a caption containing either (blocks.ts image toMd).
+// A trailing `{…}` is a Pandoc attribute list: `{width=60% w=640 h=300}`.
+const IMG_LINE = /^!\[([^\]]*)\]\(\s*<?([^\s)>]*)>?(?:\s+"((?:[^"\\]|\\.)*)")?\s*\)(\{[^{}\n]*\})?$/
+
+/**
+ * A PANDOC ATTRIBUTE LIST — `{#id .class key=value key="quoted value"}` — the
+ * syntax Pandoc, markdown-it-attrs and kramdown-alikes already read after an
+ * image, a link or a heading. Parsed into plain strings and NOTHING is
+ * interpreted here: each caller takes only the keys it knows, validates each
+ * value against its own pattern, and ignores the rest. An attribute list out
+ * of a mailed file is data, and the only way it can matter is through a
+ * validator that says yes.
+ *
+ * A malformed list (an unterminated quote, a token that is none of the three
+ * forms) yields null, and the caller treats the line as ordinary text.
+ */
+export interface Attrs { id?: string; classes: string[]; kv: Map<string, string> }
+export function parseAttrs(src: string): Attrs | null {
+  const m = /^\{([^{}\n]*)\}$/.exec(src.trim())
+  if (!m) return null
+  const out: Attrs = { classes: [], kv: new Map() }
+  const re = /\s*(?:#([A-Za-z][\w-]*)|\.([A-Za-z][\w-]*)|([A-Za-z][\w-]*)=(?:"([^"]*)"|([^\s"]+)))\s*/y
+  let at = 0
+  const body = m[1]
+  while (at < body.length) {
+    re.lastIndex = at
+    const t = re.exec(body)
+    if (!t || re.lastIndex === at) return null
+    at = re.lastIndex
+    if (t[1] !== undefined) out.id = t[1]
+    else if (t[2] !== undefined) out.classes.push(t[2])
+    else if (!out.kv.has(t[3])) out.kv.set(t[3], t[4] ?? t[5] ?? '')
+  }
+  return out
+}
+
+/**
+ * An image's (or a clip's) SIZE out of its attribute list, validated.
+ *
+ * `width` is the block's percentage of the text column, 10..100, written with
+ * its `%` exactly as Pandoc spells a relative width. `w`/`h` are the intrinsic
+ * pixels the block keeps to hold its aspect box while it decodes — not a
+ * display size, so they are NOT Pandoc's `width`/`height` (a foreign
+ * `width=300px` means something else and is ignored rather than guessed at).
+ * Both or neither: one of the pair is not an aspect ratio.
+ */
+export function sizeOf(a: Attrs | null): { width?: number; w?: number; h?: number } {
+  if (!a) return {}
+  const out: { width?: number; w?: number; h?: number } = {}
+  const pct = /^(\d{1,3}(?:\.\d{1,3})?)%$/.exec(a.kv.get('width') ?? '')
+  if (pct) { const n = Number(pct[1]); if (n >= 10 && n <= 100) out.width = n }
+  const w = /^[1-9]\d{0,4}$/.test(a.kv.get('w') ?? '') ? Number(a.kv.get('w')) : 0
+  const h = /^[1-9]\d{0,4}$/.test(a.kv.get('h') ?? '') ? Number(a.kv.get('h')) : 0
+  if (w && h) { out.w = w; out.h = h }
+  return out
+}
 const IMG_EMBED = /^!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]$/
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i
 
+// ---- link cards -------------------------------------------------------------
+
+/**
+ * A LINK CARD's line: a link, an optional ` — description`, and the marker
+ * comment blocks.ts cardComment() writes — or, for a card with no url, any
+ * text before the marker (its title and desc are in the comment). The marker is
+ * what makes it a card; the same line without it is an ordinary paragraph.
+ */
+const CARD_LINE = /^(?:\[((?:\\.|[^\]\\])*)\]\(\s*(?:<([^>\n]*)>|([^\s()<>]*))\s*\)(?: — (.*?))?|(.*?))\s*<!-- bento:card((?:\s+[a-z]+="[^"<>]*")*)\s*-->$/
+
+const uncomment = (v: string): string =>
+  v.replace(/&#45;/g, '-').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+
+/** A thumbnail a card may point at: an asset key, or an inline raster image.
+ *  Never a remote address (linkCard() would drop one anyway) and never svg. */
+const CARD_IMAGE = /^(?:asset:[A-Za-z0-9_-]{1,128}|data:image\/(?:png|jpeg|gif|webp|avif);base64,[A-Za-z0-9+/]+=*)$/
+
+/**
+ * A card line → the card's fields, every one validated, or null when the line
+ * is not a card. Plain-text fields (title, desc, site, icon) are stored as
+ * TEXT — the renderer writes them with textContent — and capped; the url must
+ * pass externalHref(), the same allowlist the editor's card dialog uses, and
+ * a url that fails it is dropped rather than stored (the card keeps its
+ * title and is a dead card, which is what render.ts draws for one).
+ */
+function cardOf(line: string): Partial<Block> | null {
+  const m = CARD_LINE.exec(line)
+  if (!m) return null
+  const kv = new Map<string, string>()
+  for (const a of m[6].matchAll(/([a-z]+)="([^"]*)"/g)) if (!kv.has(a[1])) kv.set(a[1], uncomment(a[2]))
+  const text = (v: string | undefined, cap: number): string => (v ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, cap)
+  const out: Partial<Block> = {}
+  const linked = m[2] !== undefined || m[3] !== undefined
+  if (linked) {
+    const url = externalHref(m[2] ?? m[3])
+    const shown = text(m[1].replace(/\\([\\[\]])/g, '$1'), 500)
+    if (url) out.url = url
+    // an untitled card exports its url as its text; that is not a title
+    if (shown && shown !== url) out.title = shown
+    const desc = text(m[4], 2000)
+    if (desc) out.desc = desc
+  } else {
+    // no title in the marker: the visible words are the title, as plain text
+    // — a line whose link could not be read (`[Evil](javascript:…)`, whose
+    // parentheses the url pattern refuses) keeps its words, not its address
+    const shown = m[5] ?? ''
+    // a second marker (or any comment) in the words is not a card line: it is
+    // someone trying to close ours early, and the line stays text
+    if (shown.includes('<!--')) return null
+    const words = /^\[((?:\\.|[^\]\\])*)\]\(.*\)$/.exec(shown)?.[1].replace(/\\([\\[\]])/g, '$1') ?? plainText(shown)
+    const title = text(kv.get('title') ?? words, 500)
+    const desc = text(kv.get('desc'), 2000)
+    if (title) out.title = title
+    if (desc) out.desc = desc
+  }
+  const site = text(kv.get('site'), 200)
+  if (site) out.site = site
+  const icon = text(kv.get('icon'), 16)
+  if (icon) out.icon = icon
+  const image = kv.get('image') ?? ''
+  if (CARD_IMAGE.test(image)) out.image = image
+  return out
+}
+
+// ---- media ------------------------------------------------------------------
+
+const unattr = (v: string): string =>
+  v.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+
+/** An html tag's attributes, lower-cased names, values decoded. Booleans map
+ *  to ''. Parsing only: what any name MEANS is decided by the caller. */
+function htmlAttrs(src: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const m of src.matchAll(/([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g)) {
+    const k = m[1].toLowerCase()
+    if (!out.has(k)) out.set(k, unattr(m[2] ?? m[3] ?? m[4] ?? ''))
+  }
+  return out
+}
+
+/**
+ * Where a clip or its poster may point: an asset key, an inline file of the
+ * right kind, or an http(s) address — the three forms the model has, and the
+ * same allowlist the editor's "Use a link…" box applies. An ALLOWLIST, like
+ * HREF_OK: `javascript:`, `file:`, `blob:`, a relative path and anything
+ * the URL parser would normalise into one of those all fail it.
+ */
+const MEDIA_SRC = /^(?:asset:[A-Za-z0-9_-]{1,128}|data:(?:video|audio)\/[\w.+-]{1,40};base64,[A-Za-z0-9+/]+=*|https?:\/\/[^\s"'<>]+)$/i
+const POSTER_SRC = /^(?:asset:[A-Za-z0-9_-]{1,128}|data:image\/(?:png|jpeg|gif|webp|avif);base64,[A-Za-z0-9+/]+=*|https?:\/\/[^\s"'<>]+)$/i
+
+/**
+ * `<video …>…</video>` or `<audio …>…</audio>` (already joined onto one line)
+ * → a media block's fields, or null when the source is not one the model may
+ * hold. Reads the element blocks.ts media toMd writes, and the shapes READMEs
+ * use: a `<source src>` child instead of a `src` attribute, and a real
+ * `autoplay` (recorded, never obeyed — mediaPlayback). Every value is checked;
+ * no attribute is copied by name, so `onerror`, `style` and the rest have
+ * nowhere to go.
+ */
+function mediaOf(html: string): { fields: Partial<Block> } | { refused: string; label: string } | null {
+  const m = /^<(video|audio)(\s[^>]*)?>([\s\S]*?)<\/\1\s*>$/i.exec(html.trim())
+  if (!m) return null
+  const kind = m[1].toLowerCase()
+  const a = htmlAttrs(m[2] ?? '')
+  const inner = m[3]
+  const source = /<source(\s[^>]*)?>/i.exec(inner)
+  const raw = (a.get('src') ?? (source ? htmlAttrs(source[1] ?? '').get('src') : undefined) ?? '').trim()
+  const fallback = /<a(?:\s[^>]*)?>([\s\S]*?)<\/a>/i.exec(inner)?.[1] ?? inner
+  const label = unattr(fallback.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim()
+  if (!MEDIA_SRC.test(raw)) return { refused: raw, label }
+  const f: Partial<Block> = { kind, src: raw }
+  const alt = (a.get('title') ?? a.get('aria-label') ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 500)
+  if (alt) f.alt = alt
+  f.controls = a.has('controls')
+  if (a.has('loop')) f.loop = true
+  if (a.has('muted')) f.muted = true
+  if (a.has('autoplay') || a.has('data-autoplay')) f.autoplay = true
+  const poster = (a.get('poster') ?? '').trim()
+  if (POSTER_SRC.test(poster)) f.poster = poster
+  const px = (v: string | undefined) => (/^[1-9]\d{0,4}$/.test(v ?? '') ? Number(v) : 0)
+  const w = px(a.get('width')), h = px(a.get('height'))
+  if (w && h) { f.w = w; f.h = h }
+  const pct = /^(\d{1,3}(?:\.\d{1,3})?)$/.exec(a.get('data-width') ?? '')
+  if (pct && Number(pct[1]) >= 10 && Number(pct[1]) <= 100) f.width = Number(pct[1])
+  const caption = (a.get('data-caption') ?? '').trim()
+  if (caption) f.caption = caption.slice(0, 2000)
+  return { fields: f }
+}
+
+// ---- views and canvases -------------------------------------------------------
+
+/** What a structured fence may hold at most. A file can be hand-edited or
+ *  generated; a view's settings are a few hundred bytes. */
+const FENCE_MAX = 65536
+/** A field name a fence may set: a plain identifier. Excludes `__proto__`
+ *  by construction (it starts with `_`), and the reserved names below by
+ *  list. */
+const FIELD_KEY = /^[A-Za-z][A-Za-z0-9]{0,31}$/
+const RESERVED = new Set(['id', 'type', 'parent', 'html', 'comments', 'name', 'cards', 'constructor', 'prototype'])
+
+/**
+ * A ```` ```bento-view ```` or ```` ```bento-canvas ```` fence → the block.
+ *
+ * The body is ONE JSON object (blocks.ts fenceJson writes it): `name` is the
+ * block's text as inline markdown, `cards` (canvas only) the card positions,
+ * and every other key is a field of the block, copied as data — so a field a
+ * newer build adds to a view round-trips through this one. Lines starting `//`
+ * are the readable summary the exporter adds for people reading the file
+ * elsewhere, and are ignored. JSON.parse, never eval; the object's OWN keys
+ * only, each a plain identifier; nothing structural (`id`, `type`, `parent`,
+ * `html`, `comments`) can be set from the fence. Anything malformed returns
+ * null and the fence stays the code block it looks like.
+ *
+ * This is no more trust than the app already extends to a `.bento.html` file
+ * someone mails you, whose blocks are JSON with every one of these fields.
+ */
+function fencedBlock(kind: 'view' | 'canvas' | string, body: string[]): { block: Block; cards?: Array<[number, number] | null> } | null {
+  const json = body.filter((l) => l.trim() && !l.trim().startsWith('//'))
+  if (json.length !== 1 || json[0].length > FENCE_MAX) return null
+  let obj: unknown
+  try { obj = JSON.parse(json[0]) } catch { return null }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null
+  const o = obj as Record<string, unknown>
+  const block = mk(kind, { html: typeof o.name === 'string' ? inlineHtml(o.name) : '' })
+  for (const k of Object.keys(o)) {
+    if (!Object.hasOwn(o, k) || !FIELD_KEY.test(k) || RESERVED.has(k)) continue
+    block[k] = o[k]
+  }
+  if (kind !== 'canvas') return { block }
+  const cards: Array<[number, number] | null> = []
+  if (Array.isArray(o.cards)) {
+    for (const c of o.cards.slice(0, 1000)) {
+      cards.push(Array.isArray(c) && c.length === 2 && c.every((n) => typeof n === 'number' && Number.isFinite(n))
+        ? [c[0] as number, c[1] as number] : null)
+    }
+  }
+  return { block, cards }
+}
+
+/**
+ * Turn the `[[Title]]` page links parseNote left pending into real page ids.
+ *
+ * One that names no page becomes the paragraph it would otherwise have been,
+ * holding the literal `[[Title]]` — the same rule as an inline wikilink that
+ * finds nothing (resolveWikilinks): honest text, never a card to nowhere.
+ */
+export function resolvePageLinks(blocks: Block[], lookup: (target: string) => string | undefined): { linked: number; dangling: number } {
+  let linked = 0, dangling = 0
+  for (const b of blocks) {
+    if (b.type !== 'pagelink' || typeof b.page !== 'string' || !b.page.startsWith(WIKI_SCHEME)) continue
+    let target = b.page.slice(WIKI_SCHEME.length)
+    try { target = decodeURIComponent(target) } catch { /* keep the raw form */ }
+    const id = lookup(target)
+    if (id) { b.page = id; linked++; continue }
+    dangling++
+    b.type = 'p'
+    delete b.page
+    b.html = `[[${esc(target)}]]`
+  }
+  return { linked, dangling }
+}
+
 /** A line that is nothing but an image. `![[x]]` counts only when it names an
  *  image FILE — otherwise it is an embed of another note, which is a link. */
-function imageOf(line: string): { ref: string; alt: string; caption?: string } | null {
+function imageOf(line: string): { ref: string; alt: string; caption?: string; attrs?: Attrs | null } | null {
   const m = IMG_LINE.exec(line.trim())
-  if (m) return { ref: m[2], alt: m[1], ...(m[3] ? { caption: m[3] } : {}) }
+  if (m) {
+    return {
+      ref: m[2], alt: m[1],
+      ...(m[3] ? { caption: m[3].replace(/\\(["\\])/g, '$1') } : {}),
+      ...(m[4] ? { attrs: parseAttrs(m[4]) } : {}),
+    }
+  }
   const e = IMG_EMBED.exec(line.trim())
   if (e && IMAGE_EXT.test(e[1].trim())) return { ref: e[1].trim(), alt: '' }
   return null
@@ -291,6 +583,25 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
 
   /** open list levels, innermost last */
   const stack: Array<{ indent: number; id: string }> = []
+  /**
+   * Open GitHub alerts, innermost last: the line index where each one's
+   * blockquote ENDS, and how deep `stack` was before it opened. An alert is a
+   * container whose body is ordinary markdown — lists, fences, nested alerts —
+   * so its lines are un-quoted IN PLACE and read by this same loop, with the
+   * callout on `stack` as their owner until `end`.
+   */
+  const alerts: Array<{ end: number; depth: number }> = []
+  /**
+   * Open `<details>` folds, innermost last: how deep `stack` was before each
+   * opened. A fold is a container like an alert, but it ends at an explicit
+   * `</details>` rather than at the end of a blockquote.
+   */
+  const folds: Array<{ depth: number }> = []
+  /** canvases read from a `bento-canvas` fence, and the card positions each
+   *  one carries — the cards themselves are the blocks that follow it */
+  const canvases: Array<{ block: Block; cards: Array<[number, number] | null> }> = []
+  /** a callout whose tag line held no text: its next line, if adjacent, is its text */
+  let alertText: Block | null = null
   /** the paragraph a soft line break continues, and the quote a `>` continues */
   let para: Block | null = null
   let quote: Block | null = null
@@ -299,17 +610,44 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop()
     return stack[stack.length - 1]?.id || undefined
   }
+  /** the block the line being read created or continued — where a trailing
+   *  `{#id}` on that line belongs */
+  let touched: Block | null = null
+  /** the id a line carried, waiting for that line to finish */
+  let pendingId: string | null = null
   const add = (b: Block, parent?: string): Block => {
     if (parent) b.parent = parent
     blocks.push(b)
+    touched = b
     return b
+  }
+  const taken = new Set<string>()
+  /**
+   * Give the block the line just read the id that line carried. The block was
+   * minted with a fresh id when the line began, and anything opened since
+   * (a list level, a callout's body) points at that one — so it is a RENAME,
+   * of the stack entries and of any `parent` already written. An id this note
+   * has already given out stays with its first holder: a paragraph another
+   * editor duplicated keeps its words and gets a fresh id.
+   */
+  const settleId = () => {
+    const id = pendingId
+    pendingId = null
+    if (!id || !touched || taken.has(id)) return
+    taken.add(id)
+    const old = touched.id
+    touched.id = id
+    for (const e of stack) if (e.id === old) e.id = id
+    for (const b of blocks) if (b.parent === old) b.parent = id
   }
   // NOT model.isRemote(): that answers "would loading this touch the network",
   // where a relative path counts as remote. The question here is different —
   // "could a file the user picked satisfy this address" — and a relative path
   // is the one case where the answer is yes.
-  const imageBlock = (ref: string, alt: string, caption: string | undefined, parent?: string) => {
-    const b = mk('image', { src: ref, ...(alt ? { alt } : {}), ...(caption ? { caption } : {}) })
+  const imageBlock = (ref: string, alt: string, caption: string | undefined, parent?: string, attrs?: Attrs | null) => {
+    // `html: ''` is the shape model.newBlock gives every block, so an image
+    // that goes out and comes back is the same JSON the editor made
+    const b = mk('image', { html: '', src: ref, ...(alt ? { alt } : {}), ...(caption ? { caption } : {}), ...sizeOf(attrs ?? null) })
     add(b, parent)
     if (/^(https?:)?\/\//i.test(ref)) remoteImages++
     else if (!/^data:/i.test(ref)) images.push({ block: b, ref, dir: '' })
@@ -317,11 +655,32 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
   }
 
   for (; i < lines.length; i++) {
+    settleId()
+    while (alerts.length && i >= alerts[alerts.length - 1].end) {
+      stack.length = alerts.pop()!.depth
+      // a fold left open inside the box ends with it
+      while (folds.length && folds[folds.length - 1].depth > stack.length) folds.pop()
+      para = null; quote = null; alertText = null
+    }
+    const ownText = alertText
+    alertText = null
     const line = lines[i].replace(/\t/g, TAB)
     const indent = /^ */.exec(line)![0].length
-    const body = line.slice(indent).trimEnd()
+    let body = line.slice(indent).trimEnd()
 
-    if (!body) { para = null; quote = null; continue }
+    // A BLOCK ID — ` {#id}` ending a line, Pandoc's heading-attribute
+    // spelling and what markdown-it-attrs reads after any block. Taken off
+    // the line before anything else reads it, and given to whichever block
+    // this line creates or continues (settleId, at the next line). Only a
+    // plain identifier, and never a name Object.prototype already has.
+    const idm = / \{#([A-Za-z][A-Za-z0-9_-]{0,63})\}$/.exec(body)
+    if (idm && !(idm[1] in Object.prototype)) {
+      body = body.slice(0, idm.index).trimEnd()
+      pendingId = idm[1]
+      touched = null
+    }
+
+    if (!body) { para = null; quote = null; pendingId = null; continue }
 
     // fenced code — taken whole, so nothing inside is interpreted
     const fence = /^(`{3,}|~{3,})\s*(\S*)/.exec(body)
@@ -337,7 +696,14 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
         buf.push(lines[j].startsWith(' '.repeat(indent)) ? lines[j].slice(indent) : lines[j])
       }
       i = j
-      add(mk('code', { html: esc(buf.join('\n')), ...(fence[2] ? { lang: fence[2].toLowerCase() } : {}) }), owner)
+      const lang = fence[2].toLowerCase()
+      const structured = lang === 'bento-view' || lang === 'bento-canvas' ? fencedBlock(lang.slice(6), buf) : null
+      if (structured) {
+        add(structured.block, owner)
+        if (structured.cards) canvases.push({ block: structured.block, cards: structured.cards })
+        continue
+      }
+      add(mk('code', { html: esc(buf.join('\n')), ...(fence[2] ? { lang } : {}) }), owner)
       continue
     }
 
@@ -385,7 +751,8 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
 
     if (/^([-*_])\s*(?:\1\s*){2,}$/.test(body)) {
       para = null; quote = null
-      add(mk('divider'), ownerFor(indent))
+      // `html: ''`, as model.newBlock writes it — see imageBlock
+      add(mk('divider', { html: '' }), ownerFor(indent))
       continue
     }
 
@@ -398,11 +765,80 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
       continue
     }
 
+    // A `<details>` FOLD is a toggle. GitHub renders it, Obsidian renders it,
+    // and it is what this app's exporter writes (blocks.ts toggle toMd).
+    //
+    // THE TAG IS READ, NEVER KEPT. Of everything the opening tag may carry,
+    // the one fact taken from it is whether it says `open`; no attribute value
+    // is copied anywhere, so `<details onclick=…>` or `<details ontoggle=…>`
+    // costs the importer nothing to refuse — there is no html built from it to
+    // refuse. The summary is inline markdown and goes through inlineHtml like
+    // any other line (and sanitizeInline after it, in the importer).
+    const det = /^<details(\s[^>]*)?>(.*)$/i.exec(body)
+    if (det) {
+      para = null; quote = null
+      // quoted values out first, so `title="open"` does not read as the flag
+      const attrs = (det[1] ?? '').replace(/"[^"]*"|'[^']*'/g, '""')
+      const open = /(?:^|\s)open(?:\s|=|$)/i.test(attrs)
+      let rest = det[2].trim()
+      if (!rest) {
+        // the summary on the next non-blank line, as GitHub READMEs indent it
+        let j = i + 1
+        while (j < lines.length && !lines[j].trim()) j++
+        if (/^<summary(?:\s[^>]*)?>/i.test(lines[j]?.trim() ?? '')) { rest = lines[j].trim(); i = j }
+      }
+      const sum = /^<summary(?:\s[^>]*)?>(.*?)<\/summary>(.*)$/i.exec(rest)
+      const toggle = add(mk('toggle', { html: inlineHtml(sum ? sum[1].trim() : ''), open }), ownerFor(indent))
+      // anything after the summary on the same line is the fold's first line,
+      // and a `</details>` there closes it at once
+      let after = (sum ? sum[2] : rest).trim()
+      const shut = /<\/details>\s*$/i.test(after)
+      after = after.replace(/<\/details>\s*$/i, '').trim()
+      if (after) add(mk('p', { html: inlineHtml(after) }), toggle.id)
+      if (!shut) {
+        folds.push({ depth: stack.length })
+        // below `indent`, so no line of the body can pop it; `</details>` does
+        stack.push({ indent: indent - 0.5, id: toggle.id })
+      }
+      continue
+    }
+    if (/^<\/details\s*>$/i.test(body)) {
+      para = null; quote = null
+      const f = folds.pop()
+      // a stray closer (no fold open) is dropped, as the raw-tag sweep would
+      if (f) stack.length = Math.min(stack.length, f.depth)
+      continue
+    }
+
+    // A GITHUB ALERT — `> [!WARNING]` opening a blockquote — is a callout, and
+    // the five tags ARE the five tones (blocks.ts CALLOUT_TONES), so this is
+    // the exporter read backwards. Obsidian's spelling reads too: lower case,
+    // a fold marker (`[!tip]-`, dropped: a callout does not fold) and text on
+    // the tag line. Any other tag stays a quote, word for word — and so does
+    // a tag that does not OPEN its blockquote.
+    const alert = quote ? null : /^>\s?\[!(note|tip|important|warning|caution)\][+-]?(?:\s+(.*))?$/i.exec(body)
+    if (alert) {
+      para = null
+      const callout = add(mk('callout', { html: inlineHtml(alert[2] ?? ''), tone: alert[1].toLowerCase() }), ownerFor(indent))
+      let j = i + 1
+      for (; j < lines.length; j++) {
+        const m = /^( *)>\s?(.*)$/.exec(lines[j].replace(/\t/g, TAB))
+        if (!m || m[1].length < indent) break
+        lines[j] = ' '.repeat(indent) + m[2]
+      }
+      alerts.push({ end: j, depth: stack.length })
+      // below `indent`, so no line of the body can pop it before `end` does
+      stack.push({ indent: indent - 0.5, id: callout.id })
+      if (callout.html) para = callout
+      else alertText = callout
+      continue
+    }
+
     const q = /^>\s?(.*)$/.exec(body)
     if (q) {
       para = null
       const text = inlineHtml(q[1].replace(/^[>\s]+/, ''))
-      if (quote) quote.html = `${quote.html}<br>${text}`
+      if (quote) { quote.html = `${quote.html}<br>${text}`; touched = quote }
       else quote = add(mk('quote', { html: text }), ownerFor(indent))
       continue
     }
@@ -418,7 +854,7 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
       const block = todo
         ? add(mk('todo', { html: inlineHtml(todo[2]), done: todo[1] !== ' ' }), owner)
         : pic
-          ? imageBlock(pic.ref, pic.alt, pic.caption, owner)
+          ? imageBlock(pic.ref, pic.alt, pic.caption, owner, pic.attrs)
           : add(mk(/^\d/.test(item[1]) ? 'number' : 'bullet', { html: inlineHtml(text) }), owner)
       // An IMAGE is not a container and holds no text, so it is neither a
       // continuation target nor a parent.
@@ -442,7 +878,52 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     const pic = imageOf(body)
     if (pic) {
       para = null
-      imageBlock(pic.ref, pic.alt, pic.caption, ownerFor(indent))
+      imageBlock(pic.ref, pic.alt, pic.caption, ownerFor(indent), pic.attrs)
+      continue
+    }
+
+    // A CLIP — `<video>`/`<audio>`, on one line as the exporter writes it or
+    // spread over a few as READMEs do (bounded: an unclosed tag is text).
+    const clipOpen = /^<(video|audio)(?:\s|>)/i.exec(body)
+    if (clipOpen) {
+      let html = body
+      let j = i
+      const closer = new RegExp(`</${clipOpen[1]}\\s*>`, 'i')
+      while (!closer.test(html) && j + 1 < lines.length && j - i < 20) html += `\n${lines[++j].trim()}`
+      const clip = closer.test(html) ? mediaOf(html) : null
+      if (clip) {
+        para = null
+        i = j
+        if ('fields' in clip) add(mk('media', { html: '', ...clip.fields }), ownerFor(indent))
+        // A SOURCE THE MODEL MAY NOT HOLD is shown, never loaded: the words
+        // and the address as inert code, the same way an image that could
+        // not be imported is reported. `javascript:` ends up as text.
+        else add(mk('p', { html: `${esc(clip.label || clipOpen[1].toLowerCase())}${clip.refused ? ` <code>${esc(clip.refused)}</code>` : ''}` }), ownerFor(indent))
+        continue
+      }
+    }
+
+    // A PAGE LINK is a wikilink ALONE on its line — `[[Title]]`, which
+    // Obsidian and Foam already read as a link to that note. Resolved to a
+    // page id with the other wikilinks, once every page exists; one that
+    // names no page falls back to the paragraph it would have been
+    // (resolvePageLinks). An aliased `[[a|b]]` stays inline: the alias is
+    // words a page card has no place for.
+    const lone = /^\[\[([^[\]|#^\n]+)\]\]$/.exec(body)
+    if (lone && lone[1].trim()) {
+      para = null
+      add(mk('pagelink', { html: '', page: `${WIKI_SCHEME}${encodeURIComponent(lone[1].trim())}` }), ownerFor(indent))
+      continue
+    }
+
+    const card = body.includes('<!-- bento:card') ? cardOf(body) : null
+    if (card) {
+      para = null
+      const b = mk('link', card)
+      // the readable fallback an old build renders, written from the fields
+      // by the one function the editor also uses (model.ts)
+      b.html = linkCardHtml(linkCard(b))
+      add(b, ownerFor(indent))
       continue
     }
 
@@ -472,8 +953,25 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     // facts), and joining them into a paragraph is not reversible — while
     // keeping them is, by deleting the break.
     const text = inlineHtml(body)
-    if (para) para.html = `${para.html}<br>${text}`
+    if (ownText) { ownText.html = text; para = ownText; touched = ownText }
+    else if (para) { para.html = `${para.html}<br>${text}`; touched = para }
     else para = add(mk('p', { html: text }), ownerFor(indent))
+  }
+  settleId()
+
+  // A CANVAS OWNS THE CARDS ITS FENCE COUNTS: the next `cards.length` blocks
+  // at the canvas's own level, in order, each taking its position. Their own
+  // children stay theirs. Counting rather than indenting, because a card is
+  // any block type and several types export without indentation.
+  for (const { block, cards } of canvases) {
+    let k = blocks.indexOf(block) + 1
+    for (const pos of cards) {
+      while (k < blocks.length && blocks[k].parent !== block.parent) k++
+      if (k >= blocks.length) break
+      const card = blocks[k++]
+      card.parent = block.id
+      if (pos) { card.x = pos[0]; card.y = pos[1] }
+    }
   }
 
   return {
@@ -611,6 +1109,14 @@ export function planImport(
     /** the footnotes the space already has, so an imported label that would
      *  land on a DIFFERENT note is renamed rather than silently reused */
     existingNotes?: Record<string, string>
+    /**
+     * Is this id already used in the space the import lands in — by a block
+     * or a page? A `{#id}` a note carries is kept only when the answer is no
+     * and no earlier note in this import took it; otherwise the block gets a
+     * fresh id. Ids are unique document-wide, and a Markdown file is the one
+     * place an id arrives that this app did not mint.
+     */
+    idTaken?: (id: string) => boolean
   },
 ): ImportPlan {
   const src = files
@@ -721,9 +1227,31 @@ export function planImport(
     stats.remoteImages += note.remoteImages
   }
 
+  // ---- block ids: unique across the import and the space ------------------
+  // Each note already refused a repeat of its own ids; this is the same rule
+  // across notes (a vault where one note was copied to make another) and
+  // against the space being imported into (a space's own export, imported
+  // back into it). The later holder is renamed, children and all.
+  {
+    const seen = new Set<string>(pages.map((p) => p.id))
+    for (const page of pages) {
+      for (const b of page.blocks) {
+        if (!seen.has(b.id) && !opts.idTaken?.(b.id)) { seen.add(b.id); continue }
+        const old = b.id
+        b.id = uid('b')
+        seen.add(b.id)
+        for (const c of page.blocks) if (c.parent === old) c.parent = b.id
+      }
+    }
+  }
+
   // ---- wikilinks, once every page exists ----------------------------------
   const { index, collisions } = linkIndex(src, parsed, filePage, tops.size === 1 ? [...tops][0] : '')
   for (const page of pages) {
+    const pl = resolvePageLinks(page.blocks, (target) =>
+      index.get(linkKey(target)) ?? opts.resolveExisting?.(linkKey(target)))
+    stats.linked += pl.linked
+    stats.dangling += pl.dangling
     for (const b of page.blocks) {
       if (!b.html) continue
       const r = resolveWikilinks(b.html, (target) =>

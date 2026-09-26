@@ -250,13 +250,26 @@ jobs:
         # checked: the starter space is exported and read back, and no page may
         # come back with materially less text than it went in with, nor may a
         # single block vanish entirely. Block TYPES are deliberately not
-        # asserted — Markdown has no callout, toggle, media embed or board, so a
-        # callout leaving as a blockquote is the format being honest, not a bug.
+        # asserted here — Markdown has no toggle, media embed or board, so a toggle
+        # leaving as a bullet is the format being honest, not a bug (the strict
+        # rig below holds each type to its own bar).
         # (Bundled: the app's imports are extensionless.)
         run: |
           slides/node_modules/.bin/esbuild scripts/test-spaces-roundtrip.ts --bundle --platform=node --format=esm \
             --outfile="$RUNNER_TEMP/test-spaces-roundtrip.mjs"
           node "$RUNNER_TEMP/test-spaces-roundtrip.mjs"
+
+      - name: Spaces Markdown strict rig
+        # The round-trip rig above checks WORDS; this checks TYPES. Every
+        # registered block type is exported and read back, and must return as
+        # the same JSON (ids aside) and re-export to the same text — or be
+        # PINNED with the reason Markdown cannot carry it yet. A pinned type
+        # that starts to round-trip fails too, so closing a gap is a deliberate
+        # edit to the rig. (Bundled: the app's imports are extensionless.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-md-strict.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-md-strict.mjs"
+          node "$RUNNER_TEMP/test-spaces-md-strict.mjs"
 
       - name: Spaces model rig
         # Properties that fail SILENTLY, and that a shipped file cannot be
