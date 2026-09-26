@@ -85,6 +85,28 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
   { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly', tip: 'Click to place corners; click the first point (or double-click) to close the shape' },
 ]
 
+/**
+ * A menu row's label, with its description as a SECOND LINE rather than a
+ * tooltip (maintainer ruling D2: consequential menus — Save as, Share — say
+ * what a command does before you run it; a tooltip never shows on a phone and
+ * waits a second on a desktop). The description sits inside the label span so
+ * the bar's compact tier, which hides and restores `.ed-btn > span`, carries
+ * it along; an empty description adds nothing. The name keeps an element of
+ * its own and is the row's accessible NAME; the description is announced as
+ * its description (aria-describedby), not glued onto the name.
+ */
+let menuDescSeq = 0
+function menuLabel(label: string, desc: string, row: HTMLElement): HTMLSpanElement {
+  if (!desc) return Object.assign(document.createElement('span'), { textContent: label })
+  const span = Object.assign(document.createElement('span'), { className: 'ed-mi' })
+  const name = Object.assign(document.createElement('span'), { className: 'ed-mi-name', textContent: label })
+  const note = Object.assign(document.createElement('small'), { className: 'ed-mi-desc', textContent: desc, id: `ed-mi-desc-${++menuDescSeq}` })
+  span.append(name, note)
+  row.setAttribute('aria-label', label)
+  row.setAttribute('aria-describedby', note.id)
+  return span
+}
+
 export class Editor {
   private canvas!: SlideCanvas
   private panel!: PropsPanel
@@ -439,7 +461,7 @@ export class Editor {
       if ((e as AnimationEvent).animationName !== 'ed-runner-fade') return
       pill.classList.remove('ed-hint-pulse')
     })
-    const caret = btn('<span class="ed-caret">▴</span>', '', () => pill.classList.toggle('open'),
+    const caret = btn('<span class="ed-caret" aria-hidden="true">▴</span>', '', () => pill.classList.toggle('open'),
       t('More ways to present'))
     caret.classList.add('ed-pill-caret')
     const pmenu = div('ed-menu')
@@ -858,7 +880,7 @@ export class Editor {
   private saveDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
     const menu = div('ed-menu ed-save-menu')
-    const trigger = btn('<span class="ed-caret">▾</span>', '', () => {
+    const trigger = btn('<span class="ed-caret" aria-hidden="true">▾</span>', '', () => {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) rebuild()
     }, t('Save as… — copy, new deck, password'))
@@ -895,8 +917,7 @@ export class Editor {
       const b = document.createElement('button')
       b.className = 'ed-btn'
       if (icon) b.innerHTML = icon
-      b.appendChild(Object.assign(document.createElement('span'), { textContent: label }))
-      b.title = title
+      b.appendChild(menuLabel(label, title, b))
       b.addEventListener('click', () => {
         close()
         onClick()
@@ -1326,8 +1347,7 @@ export class Editor {
       const b = document.createElement('button')
       b.className = primary ? 'ed-btn ed-btn-primary ed-share-btn' : 'ed-btn ed-share-btn'
       if (icon) b.innerHTML = icon
-      b.appendChild(Object.assign(document.createElement('span'), { textContent: label }))
-      if (title) b.title = title
+      b.appendChild(menuLabel(label, title, b))
       b.addEventListener('click', onClick)
       panel.appendChild(b)
       return b
