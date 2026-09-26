@@ -403,6 +403,8 @@ export interface DesignProblem {
   code: string
   path: string
   message: string
+  /** the page whose `design` this is about; absent = the space */
+  page?: string
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -637,9 +639,121 @@ export function resolveDesign(doc: SpacesDoc, name: unknown = (doc as { design?:
   return { name, design: resolveData(doc, name, local[name]), custom: true }
 }
 
+// ---- per page ----------------------------------------------------------------
+//
+// A PAGE MAY NAME ITS OWN DESIGN (DECISIONS 2026-09-26, per-page addendum).
+// `page.design` is the same kind of value as `doc.design` — a built-in name or
+// a key of `doc.designs` — and it is ADDITIVE: absent means inherit, and an
+// older build that has never heard of it renders the space's design and
+// round-trips the key untouched.
+//
+// PRECEDENCE, nearest first: the page's own key, then the nearest ancestor
+// that has one, then `doc.design`, then today's look. THE NEAREST KEY DECIDES,
+// even when it names nothing this build knows: an unknown name renders the
+// default look (exactly as an unknown `doc.design` does) rather than silently
+// falling through to a design further up, which would make a typo look like a
+// deliberate choice of the parent's.
+
+/**
+ * A look at a design that is not written down: the picker's hover, and the
+ * customise panel's unsaved draft. NEVER document data.
+ *
+ * `page` + `name` tries a name at one page (null = the key removed, i.e.
+ * inherit); `name` alone tries it at the space. `draft` stands in for a
+ * doc-local design wherever that name resolves.
+ */
+export interface DesignPreview {
+  page?: string
+  name?: string | null
+  draft?: Resolved
+}
+
+/** Where a page's design comes from, before it is resolved. */
+export interface DesignSource {
+  /** the raw value that decides (undefined = nobody set one) */
+  name: unknown
+  from: 'page' | 'ancestor' | 'space' | 'none'
+  /** the page whose key decided, for 'page' and 'ancestor' */
+  pageId?: string
+}
+
+type PageRec = { id: string; parent?: unknown; design?: unknown }
+
+/**
+ * Where `pageId`'s design comes from. `skipSelf` answers "what would this page
+ * inherit" — the picker's "Same as parent" row.
+ *
+ * Cycle-guarded, and a parent that does not resolve ends the walk at the
+ * space, the same way the tree shows such a page at the root.
+ */
+export function designSource(doc: SpacesDoc, pageId: string | null | undefined, opts: { skipSelf?: boolean; preview?: DesignPreview } = {}): DesignSource {
+  const pv = opts.preview
+  const pages = (doc.pages ?? []) as PageRec[]
+  const byId = new Map(pages.map((p) => [p.id, p]))
+  const seen = new Set<string>()
+  let p = pageId ? byId.get(pageId) : undefined
+  let first = true
+  while (p && !seen.has(p.id)) {
+    seen.add(p.id)
+    if (!(first && opts.skipSelf)) {
+      const v = pv && pv.page === p.id && pv.name !== undefined ? (pv.name ?? undefined) : p.design
+      if (v !== undefined) return { name: v, from: first ? 'page' : 'ancestor', pageId: p.id }
+    }
+    first = false
+    p = typeof p.parent === 'string' ? byId.get(p.parent) : undefined
+  }
+  const d = pv && pv.page === undefined && pv.name !== undefined ? (pv.name ?? undefined) : (doc as { design?: unknown }).design
+  return d !== undefined ? { name: d, from: 'space' } : { name: undefined, from: 'none' }
+}
+
+/**
+ * The design a page renders in, or null for the default look.
+ *
+ * THIS IS THE ONE PLACE A PAGE'S LOOK IS DECIDED. The editor's surface, the
+ * page root renderPage builds, print and the static preview all ask it, so
+ * none of them can disagree about which design a page wears.
+ */
+export function resolvePageDesign(doc: SpacesDoc, pageId: string | null | undefined, preview?: DesignPreview, skipSelf = false): Resolved | null {
+  const src = designSource(doc, pageId, { skipSelf, preview })
+  // null, never undefined: resolveDesign's default parameter reads doc.design
+  const r = resolveDesign(doc, src.name === undefined ? null : src.name)
+  if (r && preview?.draft && preview.draft.name === r.name) return preview.draft
+  return r
+}
+
+/**
+ * Set or clear ONE PAGE's design. Returning to inherit DELETES the key, so a
+ * page that tried a design and went back is byte-identical to one that never
+ * did — the same rule `setDesign` keeps for the space.
+ */
+export function setPageDesign(page: { design?: unknown }, name: string | null): void {
+  if (name) page.design = name
+  else delete page.design
+}
+
+/** Every design name the space or any page names explicitly. */
+export function namedDesigns(doc: SpacesDoc): string[] {
+  const out = new Set<string>()
+  const d = (doc as { design?: unknown }).design
+  if (typeof d === 'string' && d) out.add(d)
+  for (const p of (doc.pages ?? []) as PageRec[]) if (typeof p.design === 'string' && p.design) out.add(p.design)
+  return [...out]
+}
+
 /** Everything validate() should say about `design` and `designs`. */
 export function designProblems(doc: SpacesDoc): DesignProblem[] {
   const out: DesignProblem[] = []
+  // A PAGE's design is named the same way the space's is, on that page
+  for (const p of (doc.pages ?? []) as PageRec[]) {
+    if (p.design === undefined) continue
+    if (typeof p.design !== 'string' || !p.design) {
+      out.push({ code: 'bad-design', path: 'design', page: p.id,
+        message: `design = ${JSON.stringify(p.design)} is not a design name, so this page shows the default look. The value is kept.` })
+    } else if (!resolveDesign(doc, p.design)) {
+      out.push({ code: 'unknown-design', path: 'design', page: p.id,
+        message: `design "${p.design}" is neither a built-in (${BUILT_IN_NAMES.join(', ')}) nor defined in designs, so this page shows the default look (it does not fall through to its parent's). The value is kept.` })
+    }
+  }
   const raw = doc as { design?: unknown; designs?: unknown }
   if (raw.designs !== undefined && !isObj(raw.designs)) {
     out.push({ code: 'bad-design', path: 'designs', message: 'designs is not an object of named designs; it is kept in the file and ignored.' })
@@ -716,22 +830,38 @@ export function setDesign(doc: SpacesDoc, name: string | null): void {
 // ---- Markdown front matter -----------------------------------------------------
 
 /**
- * The front matter an export opens with, or [] when there is no design.
+ * The front matter an export opens with, or [] when there is nothing to say.
  *
- * THE SMALLEST CORRECT FRONT MATTER: `design:` names it, and when the design
- * is one this document carries, `designs:` holds that one entry as a single
- * line of JSON — which is YAML flow syntax, so any YAML reader accepts it and
- * no YAML parser is needed to read it back. A space with no design exports
- * with no front matter at all, exactly as before.
+ * THE SMALLEST CORRECT FRONT MATTER: `design:` names it, and when a design is
+ * one this document carries, `designs:` holds its entry as a single line of
+ * JSON — which is YAML flow syntax, so any YAML reader accepts it and no YAML
+ * parser is needed to read it back. A space with no design exports with no
+ * front matter at all, exactly as before.
+ *
+ * TWO SCOPES. With no `pageId` this is the WHOLE-SPACE export's header:
+ * `design:` is the space's, and `designs:` carries every doc-local design the
+ * space or any page names, so the registry travels whole. With a `pageId` it
+ * is ONE PAGE's note: `design:` only when that page sets one EXPLICITLY — an
+ * inherited design is not written, because the note would then pin a look the
+ * page never chose — and `designs:` only the entry that page names.
  */
-export function designFrontMatter(doc: SpacesDoc): string[] {
-  const name = (doc as { design?: unknown }).design
-  if (typeof name !== 'string' || !name) return []
-  const lines = ['---', `design: ${/^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.stringify(name)}`]
+export function designFrontMatter(doc: SpacesDoc, pageId?: string): string[] {
   const local = localDesigns(doc)
-  if (!isBuiltIn(name) && Object.hasOwn(local, name)) {
-    lines.push(`designs: ${JSON.stringify({ [name]: local[name] })}`)
+  let name: unknown
+  let carried: string[]
+  if (pageId === undefined) {
+    name = (doc as { design?: unknown }).design
+    carried = namedDesigns(doc)
+  } else {
+    name = ((doc.pages ?? []) as PageRec[]).find((p) => p.id === pageId)?.design
+    carried = typeof name === 'string' && name ? [name] : []
   }
+  carried = carried.filter((n) => !isBuiltIn(n) && Object.hasOwn(local, n))
+  const named = typeof name === 'string' && name ? name : ''
+  if (!named && !carried.length) return []
+  const lines = ['---']
+  if (named) lines.push(`design: ${/^[A-Za-z0-9_-]+$/.test(named) ? named : JSON.stringify(named)}`)
+  if (carried.length) lines.push(`designs: ${JSON.stringify(Object.fromEntries(carried.map((n) => [n, local[n]])))}`)
   lines.push('---', '')
   return lines
 }
@@ -770,13 +900,17 @@ export function readDesignFrontMatter(yaml: string): FrontMatterDesign {
 }
 
 /**
- * Adopt a design that arrived with imported notes. Mutates `doc`; call it
- * inside the import's one commit.
+ * Adopt what arrived with imported notes. Mutates `doc`; call it inside the
+ * import's one commit.
  *
  * CONSERVATIVE BY DESIGN: a doc-local entry is added only under a name this
  * space does not already use, and `design` is set only when the space has
- * none and the name resolves — an import adds pages, it does not restyle a
- * space somebody already designed. Returns the name adopted, if any.
+ * none and the name resolves.
+ *
+ * PER PAGE NOW (2026-09-26 addendum): planImport sets a note's `design:` on
+ * THAT note's page, so the editor passes no `design` here and an import never
+ * restyles the rest of the space — it only brings the REGISTRY entries the
+ * notes carried. Returns the space-level name adopted, if any.
  */
 export function adoptDesign(doc: SpacesDoc, design: string | undefined, designs: Record<string, unknown> | undefined): string | null {
   const d = doc as { design?: unknown; designs?: Record<string, unknown> }

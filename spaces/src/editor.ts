@@ -35,9 +35,9 @@ import { extractSpace, planGraft } from './portable'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale } from './i18n'
-import { openAbout } from './about'
-import { applyDesign, adoptDesign, type Resolved } from './designs.ts'
-import { openDesignPanel } from './designpanel'
+import { openAbout, downloadMarkdown } from './about'
+import { applyDesign, adoptDesign, resolveDesign, resolvePageDesign, type Resolved, type DesignPreview } from './designs.ts'
+import { openDesignPanel, pageDesignRows, designLabel } from './designpanel'
 import { openGraphView } from './graph.ts'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
@@ -222,6 +222,7 @@ export class Editor {
       pickMedia: (id) => void this.pickMedia(id),
       openIconPicker: (pageId, anchor) => this.openIconPicker(pageId, anchor),
       openAddProperty: (pageId, anchor) => this.openAddProperty(pageId, anchor),
+      openPageDesign: (pageId, anchor) => this.openPageDesign(pageId, anchor),
       pageIcon: (icon) => pageIcon(icon),
       openLinkCard: (id) => this.openLinkCard(id),
       addTableRow: (id, at) => this.addTableRow(id, at),
@@ -1179,27 +1180,72 @@ export class Editor {
    * The design the picker is showing on hover, or undefined for none.
    * A preview is never document data: it is painted, never committed.
    */
-  private designPreview: Resolved | null | undefined = undefined
+  private designPreview: DesignPreview | undefined = undefined
+  /** the page root renderPage built for the page in view */
+  private pageRoot: HTMLElement | null = null
 
   /**
-   * Put the document's design (or the one being previewed) on the reading
-   * surface. The surface is `.sp-main` and nothing else — the bar, both panels
-   * and every popover stay the reader's (DECISIONS, 2026-09-26).
+   * Put THE PAGE IN VIEW's design (or the one being previewed) on the reading
+   * surface. The surface is `.sp-main` and the page root inside it, and
+   * nothing else — the bar, both panels and every popover stay the reader's
+   * (DECISIONS, 2026-09-26). Both get the SAME resolved design, so the two
+   * nested roots can never disagree (designs.css matches by ancestor).
    */
-  syncDesign(): void {
-    applyDesign(this.main, this.store.doc, this.designPreview)
+  syncDesign(): Resolved | null {
+    const s = this.store
+    const r = resolvePageDesign(s.doc, s.page?.id, this.designPreview)
+    applyDesign(this.main, s.doc, r)
+    if (this.pageRoot?.isConnected) applyDesign(this.pageRoot, s.doc, r)
+    return r
   }
 
   /** Show a design on the page without writing it; `undefined` ends the preview. */
-  previewDesign(r: Resolved | null | undefined): void {
-    this.designPreview = r
+  previewDesign(pv: DesignPreview | undefined): void {
+    this.designPreview = pv
     this.syncDesign()
+  }
+
+  /**
+   * One page's design choices, as a menu — from the page ⋯ menu and from the
+   * properties panel's Design row (designpanel.ts pageDesignRows).
+   */
+  openPageDesign(pageId: string, anchor: HTMLElement): void {
+    const s = this.store
+    if (!s.index.page.get(pageId)) return
+    this.closeOverlay()
+    const pop = el('div', 'sp-pop sp-dsg-menu')
+    pop.setAttribute('role', 'menu')
+    pop.setAttribute('aria-label', t('Design'))
+    pop.append(el('div', 'sp-menu-label', t('Design')))
+    // THE PREVIEW ENDS WITH THE MENU, however the menu goes: a click on a row,
+    // Escape, a click away — a hover preview that outlives its menu is a
+    // design on screen that is not in the file.
+    const end = () => this.previewDesign(undefined)
+    pop.append(...pageDesignRows({
+      store: s,
+      pageId,
+      preview: (pv) => this.previewDesign(pv),
+      done: () => { end(); this.closeOverlay() },
+      openPanel: (id) => openDesignPanel(s, (pv) => this.previewDesign(pv), id),
+    }))
+    pop.addEventListener('mouseleave', end)
+    document.body.append(pop)
+    this.overlay = pop
+    place(pop, anchor)
+    const away = (ev: MouseEvent) => {
+      if (!pop.isConnected) { document.removeEventListener('mousedown', away); return }
+      if (!pop.contains(ev.target as Node)) { end(); this.closeOverlay(); document.removeEventListener('mousedown', away) }
+    }
+    setTimeout(() => document.addEventListener('mousedown', away), 0)
+    const obs = new MutationObserver(() => { if (!pop.isConnected) { end(); obs.disconnect() } })
+    obs.observe(document.body, { childList: true })
+    this.trapAndClose(pop, () => anchor.focus?.())
   }
 
   private paintPage(): void {
     const s = this.store
     const page = s.page
-    this.syncDesign()
+    const design = this.syncDesign()
     // The bar holds a reference to the block host it is floating over, and this
     // is about to replace every one of them.
     this.format?.close()
@@ -1219,7 +1265,10 @@ export class Editor {
       titleOf: (id) => s.index.page.get(id)?.title,
       allowRemote: (src) => this.allowedRemote.has(src),
       readerWidth: readerWidth(),
+      // the same resolution the surface just took, preview included
+      design,
     })
+    this.pageRoot = view
     // the icon lives beside the title, where changing it is discoverable
     const inner = view.querySelector('.sp-page-inner')
     if (inner && !s.readOnly && !this.reading) {
@@ -1587,6 +1636,7 @@ export class Editor {
     if (this.isDrawer()) pop.classList.add('sp-sheet-in')
     else this.placed(pop, anchor)
     const away = (ev: MouseEvent) => {
+      if (!pop.isConnected) { document.removeEventListener('mousedown', away); return }
       if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
     }
     setTimeout(() => document.addEventListener('mousedown', away), 0)
@@ -1807,6 +1857,7 @@ export class Editor {
     if (this.isDrawer()) pop.classList.add('sp-sheet-in')
     else this.placed(pop, anchor)
     const away = (ev: MouseEvent) => {
+      if (!pop.isConnected) { document.removeEventListener('mousedown', away); return }
       if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
     }
     setTimeout(() => document.addEventListener('mousedown', away), 0)
@@ -2075,6 +2126,7 @@ export class Editor {
     if (sheet) pop.classList.add('sp-sheet-in')
     else place(pop, anchor)
     const away = (ev: MouseEvent) => {
+      if (!pop.isConnected) { document.removeEventListener('mousedown', away); return }
       if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
     }
     setTimeout(() => document.addEventListener('mousedown', away), 0)
@@ -2979,6 +3031,7 @@ export class Editor {
     place(pop, anchor)
     setTimeout(() => {
       const away = (ev: MouseEvent) => {
+        if (!pop.isConnected) { document.removeEventListener('mousedown', away); return }
         if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
       }
       document.addEventListener('mousedown', away)
@@ -3724,6 +3777,7 @@ export class Editor {
     // clicking anywhere else dismisses, but not the first click that opened it
     setTimeout(() => {
       const away = (ev: MouseEvent) => {
+        if (!pop.isConnected) { document.removeEventListener('mousedown', away); return }
         if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
       }
       document.addEventListener('mousedown', away)
@@ -3951,6 +4005,7 @@ export class Editor {
     place(pop, anchor)
     setTimeout(() => {
       const away = (ev: MouseEvent) => {
+        if (!pop.isConnected) { document.removeEventListener('mousedown', away); return }
         if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
       }
       document.addEventListener('mousedown', away)
@@ -4022,6 +4077,7 @@ export class Editor {
     place(pop, anchor)
     setTimeout(() => {
       const away = (ev: MouseEvent) => {
+        if (!pop.isConnected) { document.removeEventListener('mousedown', away); return }
         if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
       }
       document.addEventListener('mousedown', away)
@@ -4121,6 +4177,25 @@ export class Editor {
       pref ? t('Only pages that ask for it') : t('On this screen only — it is not saved in the file'),
       () => applyAll(pref ? undefined : (current === 'full' ? 'full' : 'wide'))))
 
+    // THIS PAGE'S DESIGN — the author's choice, per page, beside the width
+    // (the other thing about how a page is set). The hint says what the page
+    // wears NOW, inherited or its own, so the entry answers before it opens.
+    {
+      const own = page.design !== undefined
+      const r = resolvePageDesign(s.doc, pageId)
+      const wears = designLabel(s.doc, r?.name ?? null)
+      // the choices open where this menu was, anchored to the same ⋯
+      const item = this.menuItem('palette', t('Design'),
+        own ? wears : t('Inherited · {name}', { name: wears }), () => this.openPageDesign(pageId, anchor))
+      item.setAttribute('aria-haspopup', 'menu')
+      pop.append(item)
+    }
+
+    pop.append(this.menuItem('markdown', t('Export page as Markdown…'), t('This page as one .md note'), () => {
+      this.closeOverlay()
+      downloadMarkdown(s, pageId)
+    }))
+
     pop.append(this.menuItem('trash', t('Delete…'), t('Links to it become dead'), () => {
       this.closeOverlay()
       this.deletePage(pageId)
@@ -4131,6 +4206,7 @@ export class Editor {
     place(pop, anchor)
     setTimeout(() => {
       const away = (ev: MouseEvent) => {
+        if (!pop.isConnected) { document.removeEventListener('mousedown', away); return }
         if (!pop.contains(ev.target as Node)) { this.closeOverlay(); document.removeEventListener('mousedown', away) }
       }
       document.addEventListener('mousedown', away)
@@ -4829,12 +4905,15 @@ export class Editor {
       for (const page of plan.pages) if (!page.parent || !arrived.has(page.parent)) page.parent = under
     }
 
-    // ONE commit, so ⌘Z takes the pages AND any design they brought
-    let adopted: string | null = null
+    // ONE commit, so ⌘Z takes the pages AND any design they brought. A note's
+    // `design:` is already on ITS page (planImport); the space's own design is
+    // never touched by an import — only the registry entries the notes carried
+    // join it (designs.ts adoptDesign, called with no space-level name).
     s.commit(() => {
       s.doc.pages.push(...plan.pages)
-      adopted = adoptDesign(s.doc, plan.design, plan.designs)
+      adoptDesign(s.doc, undefined, plan.designs)
     })
+    const designed = plan.pages.filter((p) => p.design !== undefined).length
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
     this.status(t('Imported'))
@@ -4858,7 +4937,7 @@ export class Editor {
         lines.push(t('{n} note name(s) appear more than once, so links naming them all went to the first.',
           { n: plan.stats.duplicateNames }))
       }
-      if (adopted) lines.push(t('The notes named a design, so this space now uses it.'))
+      if (designed) lines.push(t('{n} page(s) arrived with a design of their own.', { n: designed }))
       if (plan.stats.frontmatter) {
         lines.push(t('{n} page(s) had frontmatter, kept verbatim in a folded block.', { n: plan.stats.frontmatter }))
       }
@@ -5129,9 +5208,13 @@ export class Editor {
     const s = this.store
     const host = el('div', 'sp-printroot')
     host.style.direction = 'ltr'
-    // the document's design, in its LIGHT palette: the dark mapping is
-    // @media screen, so paper never matches it
-    applyDesign(host, s.doc)
+    // EACH PAGE PRINTS IN ITS OWN DESIGN, in its LIGHT palette (the dark
+    // mapping is @media screen, so paper never matches it). The ROOT carries
+    // NONE: renderPage stamps every page root with its own resolved design,
+    // and a design on the root would reach any page that has none of its own
+    // (designs.css matches by ancestor). The contents list is the space's, so
+    // it wears the space's design.
+    applyDesign(host, s.doc, null)
 
     const pages = opts.whole
       ? s.tree().map((n) => n.page).filter((p) => opts.archived || !p.archived)
@@ -5149,6 +5232,7 @@ export class Editor {
         ul.append(li)
       }
       toc.append(ul)
+      applyDesign(toc, s.doc, resolveDesign(s.doc))
       host.append(toc)
     }
 
@@ -5243,8 +5327,8 @@ export class Editor {
       // handle, which is what leaves you editing this space afterwards.
       onWriteCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
       onStatus: (msg) => this.status(msg),
-      previewDesign: (r) => this.previewDesign(r),
-      openDesignPanel: () => openDesignPanel(this.store, (r) => this.previewDesign(r)),
+      previewDesign: (pv) => this.previewDesign(pv),
+      openDesignPanel: () => openDesignPanel(this.store, (pv) => this.previewDesign(pv)),
     })
   }
 
