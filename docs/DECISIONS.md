@@ -7735,10 +7735,8 @@ as well." It reached spaces first as a relay from the slides session (slides
 #573, 36465bf1), and the maintainer then confirmed it directly; this entry
 records it as the maintainer's own ruling.
 
-Share's actions take exactly the Save rows' shape (the entry above): one line
-— slides' `.ed-share-btn`, 12.5px/400, `6px 10px`, 31px tall, framed on the
-popover's chrome (`--pop-chrome`, slides' `--chrome`, #1b1f26 in dark) — with
-the description as the native `title` on the action, the name alone as
+Share's actions take exactly the Save rows' shape (the entry above): one line,
+with the description as the native `title` on the action, the name alone as
 `aria-label`, and the description again as a visually hidden element inside
 the action, referenced by `aria-describedby`. The popover sits at slides'
 250px. This supersedes the previous entry's "Share keeps its drawn second line".
@@ -7749,4 +7747,22 @@ the bar's (the page menu's width choices, "Make this page an issue").
 `scripts/test-spaces-chrome.ts` holds Save and Share to the same row-shape
 assertion, and walks Insert, Save, Language and Share for anything drawn.
 The touch caveat of the entry above applies to Share as well.
+
+## 2026-09-26 — Share's actions are plain menu rows
+
+**The maintainer's ruling, confirmed directly:** "Yes it's what I asked for."
+It first came as a relay from slides #573 (cea2fa26), where the maintainer is
+reported to have said the Share panel "looks a lot cleaner without" the boxes.
+
+Share's actions are menu rows like Save's — slides' `.ed-btn` in a menu:
+12.5px, one 30px line, `6px 9px` inside a transparent 1px frame, a hover fill
+(`--pop-hover`) and nothing at rest. There is no ink-filled primary on
+"Invite to edit…" any more. Adjacent action rows touch; the popover's other
+sections (your name, People, the status line) keep its 7px gap, and the rule
+before the session controls keeps 7px either side as slides' does. The boxed
+buttons (a 2026-07-20 choice in slides, so actions would not read as text among
+the notes) are retired: the SHARE A COPY caption and the icons do that job.
+
+`scripts/test-spaces-chrome.ts` asserts no fill or frame at rest, no primary,
+the Save rows' size and padding, and adjacent actions touching.
 

@@ -599,7 +599,7 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
     "Make this page an issue" to the page's own ⋯ menu; About to the wordmark.
   - **The Share popover is laid out as slides' is**: your name on one line,
     People, the connection line in amber or green, Share a copy, then the
-    session controls. Each action still says what it does under its name.
+    session controls — its actions plain one-line rows like the Save menu's.
   - **An update found at launch shows slides' peach version chip** beside the
     wordmark and says so once; clicking it opens About on a fresh check.
   - **Every Save row and Share action says what it does** in its hover
