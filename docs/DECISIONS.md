@@ -7766,3 +7766,9 @@ the notes) are retired: the SHARE A COPY caption and the icons do that job.
 `scripts/test-spaces-chrome.ts` asserts no fill or frame at rest, no primary,
 the Save rows' size and padding, and adjacent actions touching.
 
+
+The session action is labelled **"Go live"**, slides' own string, with slides'
+translations copied verbatim into all eight catalogs — the maintainer: "Use
+Slides as the reference, so we should say Go live as well." (It read "Start
+live session".) bento/dash still says "Start live session"; that is dash's to
+align.

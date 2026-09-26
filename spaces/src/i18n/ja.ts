@@ -411,7 +411,7 @@ export const ja: Catalog = {
   "Sort by {field}": "{field}で並べ替え",
   "Space name": "スペース名",
   "Square": "正方形",
-  "Start live session": "ライブセッションを開始",
+  "Go live": "ライブ開始",
   "Start silent": "音を出さずに開始する",
   "Stop sharing": "共有を停止",
   "Stop widening every page": "すべてのページを広げるのをやめる",

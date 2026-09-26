@@ -5362,7 +5362,7 @@ function caretRect(): DOMRect {
  * THE HEIGHT IS THE ROOM IT ACTUALLY HAS, not a fraction of the window. The
  * CSS capped every popover at 44vh, which on a 900px-tall window is 396px —
  * and the share panel wants 543. Measured before this: 149px clipped, with
- * "Start live session" and "Reset access…" both below the fold. The primary
+ * "Go live" and "Reset access…" both below the fold. The primary
  * action of the sharing panel was reachable only by noticing that a box with
  * no visible scrollbar scrolls. A laptop at 800px fares worse.
  *

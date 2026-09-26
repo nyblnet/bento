@@ -411,7 +411,7 @@ export const fr: Catalog = {
   "Sort by {field}": "Trier par {field}",
   "Space name": "Nom de l’espace",
   "Square": "Carré",
-  "Start live session": "Démarrer la session en direct",
+  "Go live": "Passer en direct",
   "Start silent": "Démarrer sans le son",
   "Stop sharing": "Arrêter le partage",
   "Stop widening every page": "Ne plus élargir toutes les pages",

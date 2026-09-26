@@ -411,7 +411,7 @@ export const es: Catalog = {
   "Sort by {field}": "Ordenar por {field}",
   "Space name": "Nombre del espacio",
   "Square": "Cuadrado",
-  "Start live session": "Iniciar sesión en vivo",
+  "Go live": "Ir en vivo",
   "Start silent": "Empezar en silencio",
   "Stop sharing": "Dejar de compartir",
   "Stop widening every page": "Dejar de ensanchar todas las páginas",
