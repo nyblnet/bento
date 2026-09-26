@@ -488,7 +488,7 @@ export const zh_Hans: Catalog = {
   "Sort by {field}": "按{field}排序",
   "Space name": "空间名称",
   "Square": "方形",
-  "Start live session": "开始实时会话",
+  "Go live": "开始直播",
   "Start silent": "开始时静音",
   "Stop sharing": "停止共享",
   "Stop widening every page": "不再加宽所有页面",

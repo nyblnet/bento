@@ -488,7 +488,7 @@ export const pt: Catalog = {
   "Sort by {field}": "Ordenar por {field}",
   "Space name": "Nome do espaço",
   "Square": "Quadrado",
-  "Start live session": "Iniciar sessão ao vivo",
+  "Go live": "Ficar ao vivo",
   "Start silent": "Começar sem som",
   "Stop sharing": "Parar de compartilhar",
   "Stop widening every page": "Deixar de alargar todas as páginas",

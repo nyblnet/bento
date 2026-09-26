@@ -488,7 +488,7 @@ export const it: Catalog = {
   "Sort by {field}": "Ordina per {field}",
   "Space name": "Nome dello spazio",
   "Square": "Quadrato",
-  "Start live session": "Avvia sessione dal vivo",
+  "Go live": "Vai live",
   "Start silent": "Parti senza audio",
   "Stop sharing": "Interrompi condivisione",
   "Stop widening every page": "Smetti di allargare tutte le pagine",

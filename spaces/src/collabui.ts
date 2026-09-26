@@ -421,7 +421,7 @@ export class CollabUi {
         // back into a session you had stopped was to save a copy, which is how
         // one space becomes four files.
         acts.append(el('div', 'sp-paction-sep'))
-        acts.append(this.action(ICONS.broadcast, t('Start live session'), t('Connect to the live session without saving a new copy — copies you sent earlier will meet you there.'), () => {
+        acts.append(this.action(ICONS.broadcast, t('Go live'), t('Connect to the live session without saving a new copy — copies you sent earlier will meet you there.'), () => {
           close()
           void this.host.goLive().then(() => {
             this.sync(); this.host.paintTree()
