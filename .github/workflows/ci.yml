@@ -380,6 +380,13 @@ jobs:
         # clear WCAG AA) and that once an app adopts the sheet it may not
         # re-declare a frozen token — the drift the file exists to end.
         run: node scripts/test-ui-tokens.ts
+      - name: Shared notice primitive rig
+        # kernel/src/ui/notice.ts is D3 — transient messages as two levels of one
+        # primitive: an ambient status line (the text must LEAVE the bar after the
+        # fade, not just fade, or a nowrap word holds the bar's width for the
+        # session) and a toast pill (body-level, singular, above a dialog). Both
+        # were real in the apps and neither was shared; this rig pins each lesson.
+        run: node scripts/test-ui-notice.ts
 
       - name: First-page preview rig
         # Every save writes a static render of page one for file-manager

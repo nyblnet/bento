@@ -98,7 +98,14 @@
      comment to be remembered. */
   background: var(--bkm-bg, var(--surface, var(--field, #fff)));
   border: 1px solid var(--bkm-border, var(--line-strong, var(--line, #e3e8ef)));
-  border-radius: var(--bkm-radius, var(--radius-lg, var(--radius, 10px)));
+  /* A MENU'S radius is `--radius` (10px), not the dialog's `--radius-lg` (14px).
+     The chain used to reach for `--radius-lg` first, so once tier 4 gave dialogs
+     their own 14px `--radius-lg` (tokens.css, D4), an app that defined it for its
+     dialogs got 14px MENUS it never asked for. tokens.css §4.2 assigns `--radius`
+     to "menus, popovers, floating bars, panel cards" and `--radius-lg` to dialogs
+     alone; the menu radius follows that. An app that wants otherwise still sets
+     `--bkm-radius`. */
+  border-radius: var(--bkm-radius, var(--radius, 10px));
   box-shadow: var(--bkm-shadow, var(--shadow-pop, 0 12px 32px rgb(20 30 45 / 0.16)));
 
   /* ————— HARD-WON DETAIL 9, and the reason this primitive exists —————
@@ -224,6 +231,25 @@
   display: block;
 }
 
+/* ————— the shortcut slot (D8) —————
+   Right-aligned at the row's end (margin-auto pushes it past the growing body),
+   SANS not mono (--kbd-font is `inherit`; a menu shortcut is chrome text, not a
+   code sample), and quiet. Format the string with keys() so the modifier order
+   is ⌃⌥⇧⌘ everywhere at once. */
+.bkm-kbd {
+  margin-inline-start: auto;
+  padding-inline-start: 12px;
+  flex: none;
+  font-family: var(--kbd-font, inherit);
+  font-size: var(--bkm-kbd-size, 12px);
+  color: var(--bkm-kbd-ink, var(--muted, #6b7789));
+  white-space: nowrap;
+}
+/* A shortcut is noise where there is no keyboard to press it on. */
+@media (pointer: coarse) {
+  .bkm-kbd { display: none; }
+}
+
 .bkm-sep {
   height: 1px;
   background: var(--bkm-border, var(--line, #e3e8ef));
@@ -290,6 +316,39 @@
   top: calc(var(--bkm-bar-bottom, 56px) + var(--bkm-gap, 6px));
   inset-inline-end: max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px));
   inset-inline-start: auto;
+}
+
+/* ————— anchored menus (openAnchoredMenu) —————
+
+   A menu opened from something that is not its own trigger — a row's ⋯, a
+   block's grip, a board chip, a caret. The wrapper is placed `position: fixed`
+   OVER the anchor (openAnchoredMenu sets left/top/width/height from the anchor's
+   rect), so its own `.bkm-menu` — still `position: absolute` — hangs off it
+   exactly as a bar dropdown hangs off its trigger, and every existing rule
+   (open state, scroll, nested-menu flattening) applies unchanged. The JS then
+   flips it above / clamps it / caps its height against the viewport. Three apps
+   each wrote this as a bespoke fixed-over-anchor wrapper; it is one place now. */
+.bkm-anchored {
+  position: fixed;
+  z-index: var(--bkm-z, 60);
+}
+
+/* ————— a bottom sheet (openAnchoredMenu {sheet:true}) —————
+   Below the app's own drawer width an anchored menu is a sheet instead: docked
+   to the foot of the screen, full width, the reach a thumb has — dialog.css docks
+   its card the same way. Placement JS is skipped for a sheet, so this CSS owns
+   its position; `position: fixed` pins it to the viewport (the wrapper has no
+   transform to trap it). */
+.bkm-menu.bkm-sheet {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-start: auto;
+  bottom: 0;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 80dvh;
+  border-radius: var(--bkm-radius, var(--radius, 10px)) var(--bkm-radius, var(--radius, 10px)) 0 0;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
 }
 
 /* Touch targets. A menu row on a phone is a 44px target like everything else. */

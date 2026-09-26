@@ -74,6 +74,18 @@ export interface MenuItemOpts {
   selected?: boolean
   /** Skip the default "choosing a row closes the menu". */
   keepOpen?: boolean
+  /** A keyboard shortcut for this command, shown right-aligned at the row's end
+   *  (D8). Format it with `keys()` so the modifier order is Apple's ⌃⌥⇧⌘. It is
+   *  hidden under a coarse pointer (menu.css) — a shortcut is noise where there
+   *  is no keyboard. spaces appended its own `<kbd>`; this is that, shared. */
+  kbd?: string
+  /** A row that toggles rather than runs: `checkbox` for an independent toggle
+   *  (a filter), `radio` for one-of-a-set (a tone). Announced
+   *  `menuitemcheckbox`/`menuitemradio` with `aria-checked` from `checked`.
+   *  Distinct from `selected` (which is `aria-current`, "the view is on this"). */
+  role?: 'checkbox' | 'radio'
+  /** The checked state for a `checkbox`/`radio` row. */
+  checked?: boolean
 }
 
 export interface MenuOpts {
@@ -89,6 +101,18 @@ export interface MenuOpts {
    *  state — "Hide comments" becomes "Show comments" — and rendering it once at
    *  mount leaves it permanently wrong after the first use. */
   fill?: (menu: HTMLElement, close: () => void) => void
+  /** The popup's ARIA role. `menu` (default) for a list of commands; `dialog`
+   *  when the popup holds a form or inputs (a share panel, a comment box — a
+   *  `role=menu` around a textarea is what spaces' M10 flagged); `listbox` for a
+   *  selection list. Arrow-key row nav only engages for actual `.bkm-item`
+   *  rows, so a `dialog` popup is left to its own focus order. */
+  role?: 'menu' | 'dialog' | 'listbox'
+  /** Runs once each time the menu closes, however it closed — a row, Escape, a
+   *  press outside, another menu opening, or `close()`. The only way to hear all
+   *  of those was a MutationObserver on the open-state class (spaces' anchored
+   *  menus, #561's design preview that must end on every close path); this is
+   *  that hook, so neither has to watch the class. */
+  onClose?: () => void
 }
 
 export interface Menu {
@@ -219,7 +243,7 @@ export function createMenu(label: string, tip: string, opts: MenuOpts = {}): Men
 
   const menu = document.createElement('div')
   menu.className = 'bkm-menu' + (opts.menuClass ? ' ' + opts.menuClass : '')
-  menu.setAttribute('role', 'menu')
+  menu.setAttribute('role', opts.role ?? 'menu')
   if (opts.alignEnd) root.classList.add('bkm-end')
 
   let dead = false
@@ -229,8 +253,14 @@ export function createMenu(label: string, tip: string, opts: MenuOpts = {}): Men
     trigger,
     menu,
     close(): void {
+      // Fire onClose ONCE per real close — only on the open→closed transition,
+      // so a redundant close() (mutual exclusion shutting an already-shut menu,
+      // a double Escape) does not re-run it. Every close path funnels through
+      // here, which is what makes this the one place the callback belongs.
+      const wasOpen = root.classList.contains(OPEN)
       root.classList.remove(OPEN)
       trigger.setAttribute('aria-expanded', 'false')
+      if (wasOpen) opts.onClose?.()
     },
   }
 
@@ -266,7 +296,11 @@ export function createMenu(label: string, tip: string, opts: MenuOpts = {}): Men
       b.type = 'button'
       b.className =
         'bkm-item' + (io.off ? ' bkm-off' : '') + (io.selected ? ' bkm-selected' : '')
-      b.setAttribute('role', 'menuitem')
+      b.setAttribute(
+        'role',
+        io.role === 'checkbox' ? 'menuitemcheckbox' : io.role === 'radio' ? 'menuitemradio' : 'menuitem',
+      )
+      if (io.role) b.setAttribute('aria-checked', String(!!io.checked))
       if (io.off) b.setAttribute('aria-disabled', 'true')
       if (io.selected) b.setAttribute('aria-current', 'true')
       if (io.icon) {
@@ -288,6 +322,12 @@ export function createMenu(label: string, tip: string, opts: MenuOpts = {}): Men
         body.appendChild(hint)
       }
       b.appendChild(body)
+      if (io.kbd) {
+        const k = document.createElement('kbd')
+        k.className = 'bkm-kbd'
+        k.textContent = io.kbd
+        b.appendChild(k)
+      }
       b.addEventListener('click', (ev) => {
         ev.stopPropagation()
         if (io.off) return
@@ -339,4 +379,133 @@ export function createMenu(label: string, tip: string, opts: MenuOpts = {}): Men
  *  events — starting a presentation, entering a modal. */
 export function closeAllMenus(): void {
   for (const m of live) m.close()
+}
+
+/**
+ * Format a keyboard shortcut for a row's `kbd` slot, with the modifiers in
+ * Apple's canonical ⌃⌥⇧⌘ order (D8). `mod` is the platform command key (⌘). One
+ * formatter, so a menu and a help sheet can never disagree the way spaces' did —
+ * ⇧⌘S beside ⌘⇧J in the same list, because each string was typed by hand.
+ *
+ *   keys('mod', 'S')          → '⌘S'
+ *   keys('shift', 'mod', 'S') → '⇧⌘S'
+ *   keys('mod', 'alt', 'N')   → '⌥⌘N'
+ */
+export function keys(...parts: Array<'ctrl' | 'alt' | 'shift' | 'mod' | string>): string {
+  const ORDER = ['ctrl', 'alt', 'shift', 'mod']
+  const GLYPH: Record<string, string> = { ctrl: '⌃', alt: '⌥', shift: '⇧', mod: '⌘' }
+  const mods = parts.filter((p) => ORDER.includes(p)).sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b))
+  const rest = parts.filter((p) => !ORDER.includes(p))
+  return mods.map((m) => GLYPH[m]).join('') + rest.join('')
+}
+
+export interface AnchoredMenuOpts {
+  /** The menu's accessible name (the popup's `aria-label`). */
+  label: string
+  /** A bottom sheet rather than an anchored popup — the reach a thumb has on a
+   *  phone. The app decides when (its own drawer breakpoint); the primitive just
+   *  skips placement and lets the sheet CSS dock it. */
+  sheet?: boolean
+  /** Extra class on the wrapper. */
+  className?: string
+  /** Extra class on the popup. */
+  menuClass?: string
+  /** The popup's role (see MenuOpts.role). Default `menu`. */
+  role?: 'menu' | 'dialog' | 'listbox'
+  /** Runs once, however the menu closed. */
+  onClose?: () => void
+  /** Where focus returns when the menu closes with focus still inside it.
+   *  Defaults to the anchor element (a DOMRect anchor has nowhere to return). */
+  returnFocus?: HTMLElement | null
+}
+
+const A_GAP = 6
+const A_EDGE = 8
+
+/** Place an anchored popup against the viewport: the wrapper sits over the
+ *  anchor, the popup takes the side with more room, is capped to that room, and
+ *  is clamped inside the screen edges. Ported from the identical rules three
+ *  apps each wrote (spaces' place(), slides' fold rule, dash's data-dd). */
+function placeAnchored(root: HTMLElement, pop: HTMLElement, r: DOMRect): void {
+  root.style.left = `${r.left}px`
+  root.style.top = `${r.top}px`
+  root.style.width = `${r.width}px`
+  root.style.height = `${r.height}px`
+  const below = innerHeight - r.bottom - A_GAP - A_EDGE
+  const above = r.top - A_GAP - A_EDGE
+  // Prefer below unless above genuinely has more room AND below is cramped.
+  const useBelow = below >= above || below >= 320
+  pop.style.maxHeight = `${Math.max(160, useBelow ? below : above)}px`
+  pop.style.top = useBelow ? `calc(100% + ${A_GAP}px)` : 'auto'
+  pop.style.bottom = useBelow ? 'auto' : `calc(100% + ${A_GAP}px)`
+  // Clamp on the physical inline axis; the logical inset the CSS sets is cleared
+  // first so left/right win.
+  pop.style.insetInlineStart = 'auto'
+  pop.style.insetInlineEnd = 'auto'
+  const w = pop.offsetWidth
+  const rtl = getComputedStyle(root).direction === 'rtl'
+  let left = rtl ? r.right - w : r.left
+  if (left + w > innerWidth - A_EDGE) left = innerWidth - w - A_EDGE
+  if (left < A_EDGE) left = A_EDGE
+  pop.style.left = `${left - r.left}px`
+  pop.style.right = 'auto'
+}
+
+/**
+ * Open a menu FROM something that is not its own trigger — a row's ⋯, a block's
+ * grip, a board chip, or a bare caret rectangle. The kernel dropdown is CSS-
+ * positioned under its trigger; this mounts the wrapper `position: fixed` over
+ * the anchor (trigger hidden) and places the popup against the viewport, or docks
+ * it as a bottom sheet on a phone. Built once, opened once, and torn down on any
+ * close — spaces wrote exactly this as a MutationObserver adapter over the
+ * primitive; with `onClose` it is no longer an app's to keep.
+ *
+ * `anchor` may be an element (whose live rect is followed on resize) or a fixed
+ * `DOMRect` (a caret position). Returns the open Menu.
+ */
+export function openAnchoredMenu(
+  anchor: HTMLElement | DOMRect,
+  fill: (menu: Menu) => void,
+  o: AnchoredMenuOpts,
+): Menu {
+  let torn = false
+  // Duck-typed, not `instanceof HTMLElement`: an anchor is an element if it can
+  // report its own rect, a DOMRect if it cannot. (`instanceof HTMLElement` also
+  // throws where the global is absent, e.g. a headless rig.)
+  const anchorEl = typeof (anchor as { getBoundingClientRect?: unknown }).getBoundingClientRect === 'function'
+    ? (anchor as HTMLElement)
+    : null
+  const rect = (): DOMRect => (anchorEl ? anchorEl.getBoundingClientRect() : (anchor as DOMRect))
+  const place = (): void => { if (!o.sheet && !torn) placeAnchored(m.root, m.menu, rect()) }
+  const teardown = (): void => {
+    if (torn) return
+    torn = true
+    removeEventListener('resize', place)
+    const hadFocus = m.root.contains(document.activeElement)
+    m.destroy()
+    o.onClose?.()
+    if (hadFocus) {
+      const back = o.returnFocus ?? anchorEl
+      try { back?.focus?.() } catch { /* the anchor went with a repaint */ }
+    }
+  }
+  const m = createMenu('', o.label, {
+    className: 'bkm-anchored' + (o.className ? ' ' + o.className : ''),
+    // Anchored menus always scroll (bkm-scroll) — they are placed with a capped
+    // max-height, so a long list must scroll inside that cap, not overflow it.
+    menuClass: 'bkm-scroll' + (o.sheet ? ' bkm-sheet' : '') + (o.menuClass ? ' ' + o.menuClass : ''),
+    role: o.role,
+    onClose: teardown,
+  })
+  m.trigger.hidden = true
+  m.trigger.tabIndex = -1
+  m.menu.setAttribute('aria-label', o.label)
+  // Built once for the single open — an anchored menu is not a persistent bar
+  // control, so there is no `fill` re-render on reopen.
+  fill(m)
+  document.body.appendChild(m.root)
+  m.open()
+  place()
+  addEventListener('resize', place)
+  return m
 }

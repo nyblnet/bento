@@ -120,3 +120,18 @@ body.bkp-resizing { cursor: col-resize; user-select: none; }
   background: transparent;
   border: 0;
 }
+
+/* ————— the optional drawer scrim (PanelOpts.scrim) —————
+   A tap-to-close dim behind an OPEN drawer. It is inserted as the panel's
+   PREVIOUS SIBLING (panel.ts), so it and the drawer live in one stacking context
+   and it layers just beneath the drawer's z — a body-level scrim at a fixed z can
+   land above or below an in-layout drawer depending on the app root's own z
+   (detail 9). `position: fixed` still lets it cover the viewport. The dim reads
+   the same in both themes, so it is `--scrim` (a --shade-derived channel; see
+   tokens.css) with a literal fallback, not a per-theme colour chain. */
+.bkp-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--bkp-scrim-z, 39); /* one below the drawer's 40 */
+  background: var(--bkp-scrim, var(--scrim, rgb(20 30 45 / 0.38)));
+}

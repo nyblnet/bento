@@ -63,6 +63,16 @@ export interface PanelOpts {
   drawerBelow?: number
   /** Accessible name for the panel region. */
   label?: string
+  /** Dim the canvas behind an OPEN drawer with a tap-to-close scrim. Only ever
+   *  shown in drawer mode (a docked column needs none); ignored otherwise.
+   *  spaces added its own `.sp-scrim` for exactly this. */
+  scrim?: boolean
+  /** Accessible name + tooltip for the collapse chevron, per state. The
+   *  primitive is language-free, so an app that wants the chevron named passes
+   *  both: `hideLabel` when the panel is open (the chevron will collapse it),
+   *  `showLabel` when it is collapsed. Absent = no name (today's behaviour). */
+  showLabel?: string
+  hideLabel?: string
 }
 
 export interface Panel {
@@ -142,18 +152,52 @@ export function createPanel(opts: PanelOpts): Panel {
     }
   }
 
+  // An optional tap-to-close scrim behind an open drawer. It is inserted as a
+  // SIBLING of the panel root (not body-level), so it shares the drawer's
+  // stacking context and layers below it deterministically — a body-level scrim
+  // at a fixed z can land above or below an in-layout drawer depending on the
+  // app root's own z, which is exactly the cross-context trap detail 9 warns of.
+  // `position: fixed` (panel.css) still lets it cover the viewport.
+  let scrim: HTMLElement | null = null
+  if (opts.scrim) {
+    scrim = document.createElement('div')
+    scrim.className = 'bkp-scrim'
+    scrim.addEventListener('click', () => api.collapse())
+  }
+
   const listeners = new Set<() => void>()
   const fire = (): void => listeners.forEach((fn) => fn())
 
   function persist(): void {
-    if (opts.storageKey) lsSet(opts.storageKey, JSON.stringify({ width, collapsed }))
+    // NEVER persist while a drawer. A phone drawer is shut by navigation, not by
+    // preference, so writing `collapsed: true` here would become the DESKTOP
+    // boot state next session — the bug spaces' `closeDrawer` was written to
+    // dodge. In drawer mode `collapsed` is transient and `width` is unused (the
+    // drawer is a full overlay, the resizer hidden), so nothing here needs
+    // saving; the last column-mode values stay in storage untouched.
+    if (opts.storageKey && !mql?.matches) lsSet(opts.storageKey, JSON.stringify({ width, collapsed }))
   }
 
   function render(): void {
+    const drawer = !!mql?.matches
     root.style.setProperty('--bkp-w', `${width}px`)
     root.classList.toggle('bkp-collapsed', collapsed)
-    root.classList.toggle('bkp-drawer', !!mql?.matches)
+    root.classList.toggle('bkp-drawer', drawer)
     chevron.setAttribute('aria-expanded', String(!collapsed))
+    if (opts.showLabel || opts.hideLabel) {
+      const name = (collapsed ? opts.showLabel : opts.hideLabel) ?? ''
+      chevron.title = name
+      chevron.setAttribute('aria-label', name)
+    }
+    // The scrim is present in the DOM only while an OPEN drawer wants it, as the
+    // panel's previous sibling — so it shares the drawer's stacking context and
+    // layers just beneath it (panel.css). Inserted late (root must be mounted),
+    // which is fine: it is never wanted at boot (a drawer boots shut).
+    if (scrim) {
+      const want = drawer && !collapsed
+      if (want && !scrim.isConnected && root.parentNode) root.parentNode.insertBefore(scrim, root)
+      else if (!want && scrim.isConnected) scrim.remove()
+    }
   }
 
   const api: Panel = {
@@ -177,6 +221,7 @@ export function createPanel(opts: PanelOpts): Panel {
     destroy(): void {
       mql?.removeEventListener?.('change', onMql)
       root.remove()
+      scrim?.remove()
       listeners.clear()
     },
   }

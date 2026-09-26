@@ -1,0 +1,56 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+
+   THE SHARED NOTICE styles — the TOAST level (D3). See notice.ts for the two
+   levels and why they exist. Sibling of menu/panel/dialog.css; the same two
+   rules hold and are not restated:
+
+   1. VALUES ARE THE HOST APP'S — every colour through a `--bkn-*` chain onto the
+      app's own token; never light-dark(); the shared theming guard checks every
+      colour chain resolves, per app, to a token that app defines and themes.
+   2. Structure and behaviour are shared; only the look is the host's.
+
+   The AMBIENT level has no CSS here on purpose: it is written into the app's own
+   bar element, which the app styles (position in the bar, its muted face, its
+   fade transition). notice.ts owns only its timing and the class it toggles. */
+
+.bkn-toast {
+  /* A pill at the foot of the window, centred, above EVERYTHING — a dialog
+     included (--z-toast is the top of the chrome stack) — so a message the reader
+     must not miss is never painted over, and body-level + fixed so no ancestor
+     clips it (detail 10). Non-interactive: it announces, it does not capture. */
+  position: fixed;
+  left: 50%;
+  bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
+  transform: translate(-50%, 6px);
+  z-index: var(--bkn-z, var(--z-toast, 1100));
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 9px 16px;
+  border-radius: 999px;
+  /* INVERTED against the page: ink is the fill, the surface colour is the text —
+     both flip with the theme, so the pill stays high-contrast in either. These
+     are the two tokens dialog.css leans on (proven themed in every app), used
+     the other way round. */
+  background: var(--bkn-bg, var(--ink, #1e2a3a));
+  /* --field is in the chain because type has no --surface — its chrome surface
+     token is --field (menu.css explains this at length). Without it a type toast
+     would fall to the light-only literal. */
+  color: var(--bkn-ink, var(--surface, var(--field, #fff)));
+  font-size: var(--bkn-font-size, 13px);
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: var(--bkn-shadow, var(--shadow-pop, 0 12px 32px rgb(20 30 45 / 0.16)));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.bkn-toast.bkn-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bkn-toast { transition: opacity 0.18s ease; }
+  .bkn-toast.bkn-on { transform: translate(-50%, 0); }
+}
