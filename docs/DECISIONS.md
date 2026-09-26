@@ -7417,3 +7417,54 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-09-26 — Mermaid flowcharts: our own parser and layout, and labels are inert text
+
+A diagram can carry Mermaid source, so a page round-trips through Markdown
+(```` ```mermaid ```` renders on GitHub) and an agent can write one. The
+mermaid library is megabytes and nothing may be fetched at runtime (PLATFORM
+§1), so `spaces/src/diagram/` has its own reader: `mermaid.ts` (parser, element
+output, reverse) and `layout.ts` (a layered layout). Neither imports app code
+— the element types are structural copies of slides' — so either app can use
+them, and they are a candidate for the kernel beside the connector engine.
+Nothing calls them yet; the rig is `scripts/test-diagram-mermaid.ts`.
+
+**The target is slides' elements, not a picture.** Nodes are shape elements
+(rect, rounded and stadium by radius, ellipse, triangle, and fixed 100×100
+path templates for the rest), labels are text elements, and edges are
+line/path shapes with `from`/`to` ConnectorEnd refs (`side: 'auto'`). Each
+connector end is written exactly where slides' `syncConnectors` would put it,
+so an edited diagram does not jump on its first edit. Self-loops are the one
+exception: they pin sides, because with `auto` both ends would collapse to
+the node's centre. Slides has no edge labels, so an edge label is a text
+element beside the edge's middle. It does not follow the edge when a node
+moves.
+
+**It is lossy both ways, and says so.** Mermaid → elements invents positions.
+An optional `layout` sidecar (`{id: {x,y,w,h}}`, made by `diagramLayout`)
+makes hand-placed positions win, and new nodes are placed around them.
+Elements → mermaid drops positions, sizes and edge length (`--->`), and
+returns `lost: [{el, what}]` for everything else it cannot say: rotation,
+opacity, gradients, shadows, rich text, tips mermaid has no arrow for, edge
+colour, free text, unanchored lines, and element types. Node and subgraph
+colours survive as `style` statements.
+
+**Labels are text.** `<br>` is a line break and every other tag stays
+literal, escaped and inert. Mermaid would render `<b>`; we show it. The
+emitted source writes `<` and `>` as `#lt;`/`#gt;` so GitHub shows what we
+show. Style is limited to fill/stroke/color. Colours are validated (hex,
+rgb/hsl functions, and named colours by shape — letters only), so a style
+can never carry `url(…)` or a `;` into an element.
+
+**A subgraph is laid out on its own and then becomes one node in its
+parent.** That guarantees a subgraph box never overlaps a node outside it,
+and it makes `direction` inside a subgraph work. The cost is visible: mermaid
+interleaves subgraph members with their neighbours, and ours cannot, so an
+edge between nodes in different subgraphs runs straight and can cross other
+nodes.
+
+**Caps, not hangs.** 500 nodes, 2,000 edges, subgraphs 24 deep, and a budget
+for long-edge bends. Past a cap the rest is dropped with a warning. A
+statement that cannot be read is dropped whole, with a warning. Unsupported
+syntax (`click`, `linkStyle`, directives, other diagram types) produces a
+warning and never throws.
