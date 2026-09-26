@@ -14,11 +14,10 @@
 // and this is the path OUT — the sentence people are asked to trust when they
 // decide whether to keep a year of notes in one HTML file.
 //
-// WHAT IT DOES NOT CHECK, deliberately: block TYPES. Markdown has no callout,
-// no toggle, no media embed, no board. A callout leaves as a blockquote, a
-// toggle as a bullet, a link card as `[title](url)`, an image as `![alt](ref)`.
-// Asserting type-for-type round-tripping would be asserting that Markdown is
-// something it is not, and would fail on every honest export.
+// WHAT IT DOES NOT CHECK, deliberately: block TYPES. Markdown has no toggle,
+// no media embed, no board: a toggle leaves as a bullet, a link card as
+// `[title](url)`. Type-for-type is test-spaces-md-strict.ts's bar, per block,
+// with the types Markdown cannot carry pinned there by name.
 //
 // WHAT IT DOES CHECK is the thing that would actually hurt: WORDS. If a
 // paragraph, a table cell or a list item goes into the exporter and does not

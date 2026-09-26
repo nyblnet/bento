@@ -197,7 +197,9 @@ export interface ParsedNote {
 
 const mk = (type: string, extra: Partial<Block> = {}): Block => ({ id: uid('b'), type, ...extra })
 
-const IMG_LINE = /^!\[([^\]]*)\]\(\s*<?([^\s)>]*)>?(?:\s+"([^"]*)")?\s*\)$/
+// The title may hold `\"` and `\\` — CommonMark's escapes, and what the
+// exporter writes for a caption containing either (blocks.ts image toMd).
+const IMG_LINE = /^!\[([^\]]*)\]\(\s*<?([^\s)>]*)>?(?:\s+"((?:[^"\\]|\\.)*)")?\s*\)$/
 const IMG_EMBED = /^!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]$/
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i
 
@@ -205,7 +207,7 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i
  *  image FILE — otherwise it is an embed of another note, which is a link. */
 function imageOf(line: string): { ref: string; alt: string; caption?: string } | null {
   const m = IMG_LINE.exec(line.trim())
-  if (m) return { ref: m[2], alt: m[1], ...(m[3] ? { caption: m[3] } : {}) }
+  if (m) return { ref: m[2], alt: m[1], ...(m[3] ? { caption: m[3].replace(/\\(["\\])/g, '$1') } : {}) }
   const e = IMG_EMBED.exec(line.trim())
   if (e && IMAGE_EXT.test(e[1].trim())) return { ref: e[1].trim(), alt: '' }
   return null
@@ -250,6 +252,16 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
 
   /** open list levels, innermost last */
   const stack: Array<{ indent: number; id: string }> = []
+  /**
+   * Open GitHub alerts, innermost last: the line index where each one's
+   * blockquote ENDS, and how deep `stack` was before it opened. An alert is a
+   * container whose body is ordinary markdown — lists, fences, nested alerts —
+   * so its lines are un-quoted IN PLACE and read by this same loop, with the
+   * callout on `stack` as their owner until `end`.
+   */
+  const alerts: Array<{ end: number; depth: number }> = []
+  /** a callout whose tag line held no text: its next line, if adjacent, is its text */
+  let alertText: Block | null = null
   /** the paragraph a soft line break continues, and the quote a `>` continues */
   let para: Block | null = null
   let quote: Block | null = null
@@ -268,7 +280,9 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
   // "could a file the user picked satisfy this address" — and a relative path
   // is the one case where the answer is yes.
   const imageBlock = (ref: string, alt: string, caption: string | undefined, parent?: string) => {
-    const b = mk('image', { src: ref, ...(alt ? { alt } : {}), ...(caption ? { caption } : {}) })
+    // `html: ''` is the shape model.newBlock gives every block, so an image
+    // that goes out and comes back is the same JSON the editor made
+    const b = mk('image', { html: '', src: ref, ...(alt ? { alt } : {}), ...(caption ? { caption } : {}) })
     add(b, parent)
     if (/^(https?:)?\/\//i.test(ref)) remoteImages++
     else if (!/^data:/i.test(ref)) images.push({ block: b, ref, dir: '' })
@@ -276,6 +290,12 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
   }
 
   for (; i < lines.length; i++) {
+    while (alerts.length && i >= alerts[alerts.length - 1].end) {
+      stack.length = alerts.pop()!.depth
+      para = null; quote = null; alertText = null
+    }
+    const ownText = alertText
+    alertText = null
     const line = lines[i].replace(/\t/g, TAB)
     const indent = /^ */.exec(line)![0].length
     const body = line.slice(indent).trimEnd()
@@ -344,7 +364,8 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
 
     if (/^([-*_])\s*(?:\1\s*){2,}$/.test(body)) {
       para = null; quote = null
-      add(mk('divider'), ownerFor(indent))
+      // `html: ''`, as model.newBlock writes it — see imageBlock
+      add(mk('divider', { html: '' }), ownerFor(indent))
       continue
     }
 
@@ -354,6 +375,30 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
       // h4–h6 land on h3: the model has three heading levels, and dropping a
       // deep heading to a paragraph would lose the outline entirely
       add(mk(`h${Math.min(head[1].length, 3)}`, { html: inlineHtml(head[2]) }), ownerFor(indent))
+      continue
+    }
+
+    // A GITHUB ALERT — `> [!WARNING]` opening a blockquote — is a callout, and
+    // the five tags ARE the five tones (blocks.ts CALLOUT_TONES), so this is
+    // the exporter read backwards. Obsidian's spelling reads too: lower case,
+    // a fold marker (`[!tip]-`, dropped: a callout does not fold) and text on
+    // the tag line. Any other tag stays a quote, word for word — and so does
+    // a tag that does not OPEN its blockquote.
+    const alert = quote ? null : /^>\s?\[!(note|tip|important|warning|caution)\][+-]?(?:\s+(.*))?$/i.exec(body)
+    if (alert) {
+      para = null
+      const callout = add(mk('callout', { html: inlineHtml(alert[2] ?? ''), tone: alert[1].toLowerCase() }), ownerFor(indent))
+      let j = i + 1
+      for (; j < lines.length; j++) {
+        const m = /^( *)>\s?(.*)$/.exec(lines[j].replace(/\t/g, TAB))
+        if (!m || m[1].length < indent) break
+        lines[j] = ' '.repeat(indent) + m[2]
+      }
+      alerts.push({ end: j, depth: stack.length })
+      // below `indent`, so no line of the body can pop it before `end` does
+      stack.push({ indent: indent - 0.5, id: callout.id })
+      if (callout.html) para = callout
+      else alertText = callout
       continue
     }
 
@@ -412,7 +457,8 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     // facts), and joining them into a paragraph is not reversible — while
     // keeping them is, by deleting the break.
     const text = inlineHtml(body)
-    if (para) para.html = `${para.html}<br>${text}`
+    if (ownText) { ownText.html = text; para = ownText }
+    else if (para) para.html = `${para.html}<br>${text}`
     else para = add(mk('p', { html: text }), ownerFor(indent))
   }
 
