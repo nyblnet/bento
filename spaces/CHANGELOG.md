@@ -572,6 +572,21 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   the block's own fields. No id, type, parent, text or comments can be set that
   way, and a fence that does not parse stays the code block it looks like.
 
+- **A block something points at keeps its id through Markdown.** A block
+  with a review thread, or one a `#p/page/block` link targets, now exports
+  with ` {#id}` after its line. That is Pandoc's heading-attribute spelling,
+  which markdown-it-attrs also reads after any block. The importer gives the
+  block that id back. Blocks nothing points at carry no id, so most exports
+  do not change at all. Ids stay unique. A block copied in another editor
+  with its id keeps its words and gets a fresh id. Two notes in one import
+  cannot share an id, and neither can a note and the space it is imported
+  into; the later holder is renamed and its children follow it. Only plain
+  identifiers are taken, and never a name like `constructor`. Two limits:
+  the threads themselves do not travel, because Markdown has nowhere to put
+  them, so what survives is the anchor they re-attach by. And a table or a
+  divider never carries an id, because the attribute would break the row or
+  the rule.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

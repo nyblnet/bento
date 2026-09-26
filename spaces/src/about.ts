@@ -42,7 +42,7 @@ import { esc, textOf } from './sanitize'
 import { docForExport } from './model'
 import { htmlToMd } from './marks.ts'
 import { humanBytes } from './assets'
-import { SPEC, mdLayout, type MdCtx } from './blocks'
+import { SPEC, mdLayout, withBlockId, type MdCtx } from './blocks'
 import { parseDoc, uid, effectiveParents } from './model'
 import {
   issuesOf, passesFilter, sortRows, fieldByKey, optionOf, fieldsOf,
@@ -876,6 +876,15 @@ export function toMarkdown(store: Store): string {
   // neither was ever visited. Store.tree() carries the visited set and surfaces
   // what a cycle orphans, and this now inherits both. Measured before the fix:
   // 13 pages in the file, 11 in the export.
+  // THE BLOCKS SOMETHING POINTS AT — a review thread's anchor, or the target
+  // of a `#p/<page>/<block>` link anywhere in the space (a table cell and a
+  // caption included, hence the whole serialised page list). Only these carry
+  // `{#id}` in the export (blocks.ts withBlockId).
+  const anchored = new Set<string>()
+  for (const page of store.doc.pages) {
+    for (const b of page.blocks) if (Array.isArray(b.comments) && b.comments.length) anchored.add(b.id)
+  }
+  for (const m of JSON.stringify(store.doc.pages).matchAll(/#p\/[^"\\/]+\/([A-Za-z][A-Za-z0-9_-]{0,63})/g)) anchored.add(m[1])
   const walk = () => {
     for (const { page, depth } of store.tree()) {
       out.push(`${'#'.repeat(Math.min(depth + 1, 6))} ${page.title}`, '')
@@ -890,7 +899,8 @@ export function toMarkdown(store: Store): string {
         // it is declared. An UNKNOWN type — a file written by a newer build —
         // falls through to its text, which is the honest default.
         const spec = SPEC.get(b.type)
-        const lines = spec?.toMd ? spec.toMd(b, text, indent, ctx) : [text]
+        const own = (spec?.toMd ? spec.toMd(b, text, indent, ctx) : [text]).flatMap((l) => l.split('\n'))
+        const lines = anchored.has(b.id) ? withBlockId(b, own) : own
         // PER LINE, not per returned element. A spec returns ELEMENTS, and an
         // element can hold newlines: a code block's body is one multi-line
         // string, and htmlToMd turns <br> into a newline in ordinary text. Any

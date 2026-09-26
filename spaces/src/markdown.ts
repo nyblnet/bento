@@ -569,10 +569,35 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop()
     return stack[stack.length - 1]?.id || undefined
   }
+  /** the block the line being read created or continued — where a trailing
+   *  `{#id}` on that line belongs */
+  let touched: Block | null = null
+  /** the id a line carried, waiting for that line to finish */
+  let pendingId: string | null = null
   const add = (b: Block, parent?: string): Block => {
     if (parent) b.parent = parent
     blocks.push(b)
+    touched = b
     return b
+  }
+  const taken = new Set<string>()
+  /**
+   * Give the block the line just read the id that line carried. The block was
+   * minted with a fresh id when the line began, and anything opened since
+   * (a list level, a callout's body) points at that one — so it is a RENAME,
+   * of the stack entries and of any `parent` already written. An id this note
+   * has already given out stays with its first holder: a paragraph another
+   * editor duplicated keeps its words and gets a fresh id.
+   */
+  const settleId = () => {
+    const id = pendingId
+    pendingId = null
+    if (!id || !touched || taken.has(id)) return
+    taken.add(id)
+    const old = touched.id
+    touched.id = id
+    for (const e of stack) if (e.id === old) e.id = id
+    for (const b of blocks) if (b.parent === old) b.parent = id
   }
   // NOT model.isRemote(): that answers "would loading this touch the network",
   // where a relative path counts as remote. The question here is different —
@@ -589,6 +614,7 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
   }
 
   for (; i < lines.length; i++) {
+    settleId()
     while (alerts.length && i >= alerts[alerts.length - 1].end) {
       stack.length = alerts.pop()!.depth
       // a fold left open inside the box ends with it
@@ -599,9 +625,21 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     alertText = null
     const line = lines[i].replace(/\t/g, TAB)
     const indent = /^ */.exec(line)![0].length
-    const body = line.slice(indent).trimEnd()
+    let body = line.slice(indent).trimEnd()
 
-    if (!body) { para = null; quote = null; continue }
+    // A BLOCK ID — ` {#id}` ending a line, Pandoc's heading-attribute
+    // spelling and what markdown-it-attrs reads after any block. Taken off
+    // the line before anything else reads it, and given to whichever block
+    // this line creates or continues (settleId, at the next line). Only a
+    // plain identifier, and never a name Object.prototype already has.
+    const idm = / \{#([A-Za-z][A-Za-z0-9_-]{0,63})\}$/.exec(body)
+    if (idm && !(idm[1] in Object.prototype)) {
+      body = body.slice(0, idm.index).trimEnd()
+      pendingId = idm[1]
+      touched = null
+    }
+
+    if (!body) { para = null; quote = null; pendingId = null; continue }
 
     // fenced code — taken whole, so nothing inside is interpreted
     const fence = /^(`{3,}|~{3,})\s*(\S*)/.exec(body)
@@ -759,7 +797,7 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     if (q) {
       para = null
       const text = inlineHtml(q[1].replace(/^[>\s]+/, ''))
-      if (quote) quote.html = `${quote.html}<br>${text}`
+      if (quote) { quote.html = `${quote.html}<br>${text}`; touched = quote }
       else quote = add(mk('quote', { html: text }), ownerFor(indent))
       continue
     }
@@ -855,10 +893,11 @@ export function parseNote(text: string, fileTitle: string): ParsedNote {
     // facts), and joining them into a paragraph is not reversible — while
     // keeping them is, by deleting the break.
     const text = inlineHtml(body)
-    if (ownText) { ownText.html = text; para = ownText }
-    else if (para) para.html = `${para.html}<br>${text}`
+    if (ownText) { ownText.html = text; para = ownText; touched = ownText }
+    else if (para) { para.html = `${para.html}<br>${text}`; touched = para }
     else para = add(mk('p', { html: text }), ownerFor(indent))
   }
+  settleId()
 
   // A CANVAS OWNS THE CARDS ITS FENCE COUNTS: the next `cards.length` blocks
   // at the canvas's own level, in order, each taking its position. Their own
@@ -987,6 +1026,14 @@ export function planImport(
      * arrive as dead text.
      */
     resolveExisting?: (target: string) => string | undefined
+    /**
+     * Is this id already used in the space the import lands in — by a block
+     * or a page? A `{#id}` a note carries is kept only when the answer is no
+     * and no earlier note in this import took it; otherwise the block gets a
+     * fresh id. Ids are unique document-wide, and a Markdown file is the one
+     * place an id arrives that this app did not mint.
+     */
+    idTaken?: (id: string) => boolean
   },
 ): ImportPlan {
   const src = files
@@ -1081,6 +1128,24 @@ export function planImport(
     for (const img of note.images) images.push({ ...img, dir })
     stats.tables += note.tables
     stats.remoteImages += note.remoteImages
+  }
+
+  // ---- block ids: unique across the import and the space ------------------
+  // Each note already refused a repeat of its own ids; this is the same rule
+  // across notes (a vault where one note was copied to make another) and
+  // against the space being imported into (a space's own export, imported
+  // back into it). The later holder is renamed, children and all.
+  {
+    const seen = new Set<string>(pages.map((p) => p.id))
+    for (const page of pages) {
+      for (const b of page.blocks) {
+        if (!seen.has(b.id) && !opts.idTaken?.(b.id)) { seen.add(b.id); continue }
+        const old = b.id
+        b.id = uid('b')
+        seen.add(b.id)
+        for (const c of page.blocks) if (c.parent === old) c.parent = b.id
+      }
+    }
   }
 
   // ---- wikilinks, once every page exists ----------------------------------

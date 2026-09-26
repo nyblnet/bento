@@ -120,6 +120,8 @@ function strip(blocks: Block[]): unknown[] {
     return parent === undefined ? rest : { ...rest, parent: `#${pos.get(parent) ?? parent}` }
   })
 }
+/** a block carrying one review thread — what makes an id worth exporting */
+const on2 = (x: Block): Block => Object.assign(x, { comments: [{ id: 'c', author: 'A', at: '2026-09-26T00:00:00Z', text: 't' }] })
 const canon = (v: unknown): string => JSON.stringify(v, (_k, x) =>
   x && typeof x === 'object' && !Array.isArray(x)
     ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, (x as Record<string, unknown>)[k]]))
@@ -479,6 +481,69 @@ console.log('\npage links, views and canvases')
   ok(cv[0].type === 'canvas' && cv.slice(1, 5).every((x) => x.parent === cv[0].id) && cv[5].parent === undefined &&
     cv[1].x === 1 && cv[2].x === undefined && cv[3].x === undefined && cv[4].x === undefined,
   'HOSTILE canvas positions: only [finite, finite] pairs place a card; the count still claims its cards', JSON.stringify(cv))
+}
+
+console.log('\nblock ids: {#id} on the blocks something points at')
+{
+  // A thread on every type that can carry an id; the export writes `{#id}` for
+  // exactly those, and the import gives each block back its own id.
+  const thread = [{ id: 'c1', author: 'A', at: '2026-09-26T00:00:00Z', text: 'look' }]
+  const on = (x: Block): Block => Object.assign(x, { comments: thread })
+  const li = on(b('bullet', 'a point'))
+  const tg = on(b('toggle', 'fold', { open: true }))
+  const cv = on(b('canvas', 'Map'))
+  const blocks: Block[] = [
+    on(b('h2', 'A heading')), on(b('p', 'two<br>lines')), li, on(b('bullet', 'its child', { parent: li.id })),
+    on(b('todo', 'do it', { done: false })), on(b('callout', 'boxed', { tone: 'note' })), on(b('callout', '', { tone: 'tip' })),
+    on(b('quote', 'said<br>twice')), on(b('code', 'x = 1', { lang: 'py' })), tg, on(b('p', 'folded', { parent: tg.id })),
+    on(b('image', '', { src: 'asset:i', width: 50 })), on(b('media', '', { kind: 'audio', src: 'asset:a' })),
+    on(b('link', '<a href="https://x.y">X</a>', { url: 'https://x.y', title: 'X' })),
+    on(b('pagelink', '', { page: 'o1' })), on(b('view', 'Issues', { layout: 'list' })),
+    cv, on(b('p', 'a card', { parent: cv.id, x: 5, y: 5 })),
+    b('p', 'no thread, no id'),
+  ]
+  const t = trip({ blocks, extraPages: [{ id: 'o1', title: 'Other', blocks: [b('p', 'x')] }] })
+  const want = blocks.map((x) => x.id)
+  const got = t.back.map((x) => x.id)
+  ok(t.back.length === blocks.length && want.slice(0, -1).every((id, k) => got[k] === id) && got.at(-1) !== want.at(-1),
+    'every anchored block comes back with ITS id, and an unanchored one does not export one', `want ${want.join(' ')}\ngot  ${got.join(' ')}\n${t.md}`)
+  ok(t.back[3].parent === li.id && t.back[10].parent === tg.id && t.back[17].parent === cv.id,
+    '…and children point at the renamed parents (list, fold, canvas)', JSON.stringify(t.back.map((x) => [x.id, x.parent])))
+  // THE THREADS THEMSELVES DO NOT TRAVEL: Markdown has no comments, so the
+  // second export has nothing anchored and writes no ids. What the trip keeps
+  // is the id, which is what a thread (or a later re-import) re-attaches by.
+  ok(t.md2 === t.md.replace(/ \{#[^}]+\}/g, ''), '…and the second export is the first without the ids (the threads stayed home)', why(t))
+  ok(!/\{#/.test(t.md.split('\n').filter((l) => l.includes('no thread')).join('')), 'a block nothing points at carries no id')
+}
+{
+  const target = b('p', 'linked to')
+  const t = trip({ blocks: [b('p', `see <a href="#p/${PAGE}/${target.id}">there</a>`), target] })
+  ok(t.md.includes(`linked to {#${target.id}}`) && t.back[1].id === target.id,
+    'a #p/<page>/<block> link makes its target carry {#id}', t.md)
+}
+{
+  const t = trip({ blocks: [on2(b('table', '')), on2(b('divider'))] })
+  ok(!/\{#/.test(t.md), 'pinned: a table and a divider never carry {#id} (a row or a rule would break)', t.md)
+}
+{
+  const got = only('one {#dup-1}\n\ntwo {#dup-1}\n')
+  ok(got[0].id === 'dup-1' && got[1].id !== 'dup-1' && got[1].html === 'two',
+    'a duplicated block (same {#id} twice in a note) keeps its words; only the first keeps the id', JSON.stringify(got))
+}
+{
+  const plan = planImport([{ path: 'n/A.md', text: 'alpha {#b-shared}\n\n- item {#b-mine}\n  - child\n' }, { path: 'n/B.md', text: 'beta {#b-shared}\n' }],
+    { rootTitle: 'R', idTaken: (id) => id === 'b-mine' })
+  const a = plan.pages.find((p) => p.title === 'A')!.blocks
+  const bb = plan.pages.find((p) => p.title === 'B')!.blocks
+  ok(a[0].id === 'b-shared' && bb[0].id !== 'b-shared', 'across notes: the first note keeps a shared id, the second is renamed', JSON.stringify([a, bb]))
+  ok(a[1].id !== 'b-mine' && a[2].parent === a[1].id, 'an id the space already uses is renamed, and its children follow it', JSON.stringify(a))
+}
+{
+  for (const src of ['x {#__proto__}', 'x {#constructor}', 'x {#"><script>alert(1)</script>}', 'x {#1abc}', 'x {#a b}', `x {#${'a'.repeat(80)}}`]) {
+    const got = only(`${src}\n`)
+    ok(got.length === 1 && got[0].id.startsWith('b-') && !/<script/i.test(got[0].html ?? ''),
+      `HOSTILE id: ${src.slice(0, 50)} is not taken as an id`, JSON.stringify(got))
+  }
 }
 
 console.log('\ntoggles: <details>, open or folded, holding anything')

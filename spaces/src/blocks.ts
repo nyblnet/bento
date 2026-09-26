@@ -514,6 +514,31 @@ export function sizeAttrs(b: Block, extra: string[] = []): string {
   return parts.length ? `{${parts.join(' ')}}` : ''
 }
 
+/**
+ * A block id Markdown may carry: `{#id}` after the block's line. Ids are only
+ * WRITTEN for blocks something points at — a review thread anchored to the
+ * block, or a `#p/<page>/<block>` link — so a space with neither exports
+ * exactly as it always has, and the ids that do appear are the ones whose
+ * loss would orphan something.
+ */
+export const BLOCK_ID = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/
+/** The id goes on the FIRST line of these (a fence's info line, the
+ *  `<details>` tag), the LAST non-empty line of anything else. */
+const ID_ON_FIRST = new Set(['code', 'toggle', 'view', 'canvas'])
+/** A trailing `{#id}` would break these: a table row becomes a ragged row,
+ *  a `---` stops being a rule. Their ids are not written (a known loss). */
+export const NO_MD_ID = new Set(['table', 'divider'])
+
+export function withBlockId(b: Block, lines: string[]): string[] {
+  if (NO_MD_ID.has(b.type) || !BLOCK_ID.test(b.id) || b.id in Object.prototype) return lines
+  let k = ID_ON_FIRST.has(b.type) ? 0 : -1
+  if (k < 0) for (let j = lines.length - 1; j >= 0; j--) if (lines[j].replace(/^[>\s]*/, '')) { k = j; break }
+  if (k < 0) return lines
+  const out = [...lines]
+  out[k] = `${out[k]} {#${b.id}}`
+  return out
+}
+
 /** A readable `//` line inside a fence: one line, and never a fence of its own. */
 const oneLine = (s: string): string => s.replace(/\s*\n\s*/g, ' ').replace(/`/g, "'")
 
