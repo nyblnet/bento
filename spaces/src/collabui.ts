@@ -381,7 +381,7 @@ export class CollabUi {
       // both sides of the canWrite gate below. A reading copy strips the room
       // and the read key rather than passing either on, so it needs no
       // capability this copy might not hold — and it starts no session.
-      const readingAct = () => this.action(ICONS.book, false, t('Save a reading copy…'),
+      const readingAct = () => this.action(ICONS.book, t('Save a reading copy…'),
         t('A sealed file for someone who will only read it: the pages with no editing tools, no comment threads, and none of this space’s keys — it never joins the live session.'),
         () => { close(); this.host.shareCopy('reading') })
 
