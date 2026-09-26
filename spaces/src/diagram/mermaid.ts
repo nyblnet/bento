@@ -452,7 +452,7 @@ export function estimateWidth(text: string, fontSize: number): number {
   let w = 0
   for (const ch of text) {
     const c = ch.codePointAt(0)!
-    w += c >= 0x1100 ? 1 : /[iljtf.,:;'|!()[\] ]/.test(ch) ? 0.3 : /[mwMW@%]/.test(ch) ? 0.86 : /[A-Z0-9#&]/.test(ch) ? 0.64 : 0.53
+    w += c >= 0x1100 ? 1 : /[iljtf.,:;'|!()[\] ]/.test(ch) ? 0.3 : /[mwMW@%]/.test(ch) ? 0.86 : /[A-Z0-9#&]/.test(ch) ? 0.66 : 0.55
   }
   return w * fontSize
 }
@@ -706,7 +706,9 @@ export function mermaidToDiagram(src: string, opts: MermaidOpts): { elements: DE
       }
       const lw = t.w * k + 8 * k, lh = t.h * k + 4 * k
       const c = horiz ? { x: p.x, y: p.y + 4 * k + lh / 2 } : { x: p.x + 6 * k + lw / 2, y: p.y }
-      edgeLabels.push(label(id, { x: c.x - lw / 2, y: c.y - lh / 2, w: lw, h: lh }, e.label, EF, P.ink))
+      // the text box gets 12px of slack past the reserved space: a label that
+      // wraps because the width estimate ran short is worse than a tight one
+      edgeLabels.push(label(id, { x: c.x - lw / 2 - (horiz ? 6 * k : 0), y: c.y - lh / 2, w: lw + 12 * k, h: lh }, e.label, EF, P.ink, horiz ? {} : { align: 'left' }))
     }
   })
   for (const n of ast.nodes) {
