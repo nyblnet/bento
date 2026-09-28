@@ -435,10 +435,11 @@ for (const [label, input, err] of [
 
   ok(!/\.sp-pop \{[^}]*max-height: 44vh/.test(css), 'the popover is not capped at a fraction of the window')
   ok(/pop\.style\.maxHeight = /.test(ed), '…place() gives it the room the anchor actually leaves')
-  // Both popover builders must route through the helper, or the one that does
-  // not will size itself once and stay that size while the window moves.
-  const viaHelper = (ed.match(/else this\.placed\(pop, anchor\)/g) ?? []).length
-  ok(viaHelper === 2, 'both popover call sites place through the same helper')
+  // Every popover that is not a menu routes through ONE helper, float(), or
+  // the one that does not will size itself once and stay that size while the
+  // window moves. (Menus are the kernel's, placed by spaces/src/menus.ts.)
+  const viaHelper = (ed.match(/this\.float\(pop, /g) ?? []).length
+  ok(viaHelper >= 4, `every non-menu popover places through the same helper, float() (${viaHelper} call sites)`)
   ok(/addEventListener\('resize', reflow\)/.test(ed), '…which re-places on resize')
   ok(/removeEventListener\('resize', reflow\)/.test(ed), '…and takes the listener back off when it closes')
 
@@ -835,7 +836,7 @@ for (const [label, input, err] of [
   ok(/const menuActions: BarAction\[\]/.test(ed), '…the ⋯-only actions as another')
   ok(/barActions\.map\(/.test(ed), '…the inline row is built from the bar list')
   ok(/for \(const a of menuActions\)/.test(ed), '…⋯ always carries the menu-only actions')
-  ok(/isFolded\(\)\) \{\s*\n\s*for \(const a of barActions\)/.test(ed),
+  ok(/const folded = this\.isFolded\(\)/.test(ed) && /if \(folded\) \{\s*\n\s*for \(const a of barActions\)/.test(ed),
     '…and picks up the bar list ONLY once folded, or ⋯ duplicates the visible row')
 
   // WHICH TIER a rule lives in is the thing worth pinning — but the tiers are
@@ -906,7 +907,7 @@ for (const [label, input, err] of [
   const edCode = ed.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
   ok(!/matchMedia\('\(max-width: 600px\)'\)/.test(edCode),
     'no phone breakpoint is duplicated in the editor CODE')
-  ok(/if \(this\.isFolded\(\)\)/.test(ed) && /t\('Undo \(⌘Z\)'\)/.test(ed) && /t\('Redo \(⇧⌘Z\)'\)/.test(ed),
+  ok(/if \(folded\) \{[\s\S]{0,400}?label: t\('Undo'\)[\s\S]{0,300}?label: t\('Redo'\)/.test(ed),
     '…and the ⋯ menu picks up undo/redo exactly when the bar has folded them away')
 
   // the bar must never become a scroller — that hides the same controls, just
@@ -915,11 +916,9 @@ for (const [label, input, err] of [
   ok(!/overflow-x:\s*(auto|scroll)/.test(barRule), 'the topbar does not scroll horizontally')
 
   // a menu opened from the right end must open inward
-  ok(/\.sp-dd-end \.sp-ddmenu \{ inset-inline-start: auto; inset-inline-end: 0/.test(css),
-    'right-end dropdowns open inward')
-  ok(/more\.classList\.add\('sp-more', 'sp-dd-end'\)/.test(ed) &&
-     /saveMore\.classList\.add\('sp-caret', 'sp-dd-end'\)/.test(ed),
-    '…and both right-end menus say so')
+  // (the kernel menu's `alignEnd` is what opens it inward — kernel/src/ui/menu.css .bkm-end)
+  ok(/tip: t\('More'\), end: true/.test(ed) && /tip: t\('Other ways to save'\), end: true/.test(ed),
+    'both right-end menus open inward (the kernel menu\'s alignEnd)')
 }
 
 // ---- one declaration per block type ---------------------------------------

@@ -7417,3 +7417,85 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-09-26 — Spaces adopts the kernel menu; an anchored menu is the primitive mounted over its anchor
+
+**Every menu in bento/spaces is `createMenu` (kernel/src/ui/menu.ts), through
+one adapter, `spaces/src/menus.ts`.** That covers the topbar dropdowns (Insert,
+⋯, the save caret) and the nine anchored popovers that were menus: the block and
+page ⋯ menus, a view's group, sort, filter and source, a select field's options,
+a code block's language, a callout's tone, and "Add a property". Spaces' own
+`dropdown()`, `menuItem()`, `trapAndClose()` and every per-popover `mousedown`
+away-listener are deleted. `scripts/test-spaces-chrome.ts` asserts that the
+adapter is the only spaces file importing the kernel menu, and drives the
+built shell with trusted CDP input.
+
+**Why adopt the primitive, and not fix spaces' copies.** Measured on the built
+shell before the change:
+- No menu had arrow keys.
+- A popover closed by Escape left its away-listener on the document. That
+  listener closed the next overlay on its first mousedown, even a press inside
+  it. Escape a block menu, press ⌘K, click in the search card, and the search
+  closed.
+- The phone ⋯ menu was 950px tall in an 844px viewport, and its last three rows
+  were unreachable.
+- At 1440×900 the Insert menu ran 10px off the bottom of the window.
+
+The kernel's rig already proves Escape with focus return, arrows, `aria-expanded`,
+outside-press, mutual exclusion and a single delegated listener pair. Adopting
+the primitive gets all of it. Fixing four copies would have left four copies.
+
+**The anchored mode is composition, not a fork.** The kernel positions a menu
+under its own trigger in CSS. `anchoredMenu()` mounts the menu's wrapper
+`position: fixed` exactly over the anchor with the trigger hidden. It places the
+popup against the viewport with the rules the old `place()` used: flip above
+when there is more room, cap the height to the room available, clamp to the
+edges. Below the drawer breakpoint the popup is a bottom sheet. The primitive
+has no close callback, so the adapter observes the wrapper's `bkm-open` class.
+That is the one signal every close path shares: a row, Escape, an outside
+press, another menu opening. The observer tears the menu down, calls `onClose`
+exactly once, and returns focus to the anchor if focus was inside the menu.
+
+**What stays a popover, and why.** These keep spaces' `.sp-pop` and are not
+menus:
+- the `/` block filter, a combobox whose input keeps focus;
+- the icon grid;
+- a free-text field value;
+- the share panel;
+- a comment thread.
+
+They go through one helper, `float()`. It registers its Escape handler, its
+away-listener and its resize reflow in a teardown list that `closeOverlay()`
+always runs, so no path leaves a listener behind. A panel of controls announces
+`role="dialog"`, not `role="menu"`. The share panel and the thread said "menu"
+while holding a textarea.
+
+**A modal owns the keyboard.** The editor's keymap returns before reading any
+global shortcut while an `[aria-modal="true"]` element exists. Before this, `[`
+toggled the page list behind About (and persisted that choice), and `?` stacked
+a second modal.
+
+**The rulings applied here** (maintainer, 2026-09-25):
+- **D2:** a visible second line only where a row has a consequence (Save-as,
+  the page menu's archive, width and delete, "Make this page an issue");
+  command lists are one line.
+- **D5:** 44px menu rows under a coarse pointer.
+- **D7:** ⋯, not ⋮.
+- **D8:** shortcuts right-aligned in the UI face, in ⌃⌥⇧⌘ order, from one
+  helper (`keys()`); hidden where the pointer is coarse.
+
+The chrome scale uses the names of the shared token sheet. That sheet is not
+merged, so spaces does not depend on it; adopting it later deletes spaces'
+unthemed `:root` scale block.
+
+**Gaps the kernel menu has, written down for the kernel rather than forked
+here:**
+- an anchored mode with viewport-aware placement;
+- a close callback;
+- a right-aligned shortcut slot on a row;
+- `role` and `aria-checked` options for `menuitemcheckbox` and
+  `menuitemradio` rows (the adapter sets them after `item()` returns).
+
+**Cost:** +2,041 B of shell (282,586 → 284,627, both built with `ZOPFLI=0`).
+The kernel sheet carries rules spaces never needed (the scrolling bar, nested
+menus). The kernel file's own header predicted a slightly bigger shell.

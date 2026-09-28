@@ -233,6 +233,17 @@ jobs:
         # mistakes is made in the source.
         run: node scripts/test-spaces-model.ts
 
+      - name: Spaces chrome rig
+        # Every spaces menu is the kernel's createMenu (through
+        # spaces/src/menus.ts). This drives the BUILT shell with trusted CDP
+        # input and asserts what spaces used to get wrong invisibly: arrow keys
+        # in every menu, Escape with focus return, one menu open at a time, no
+        # listener left on the document by a menu closed with Escape (one used
+        # to close the NEXT overlay on its first click), no global shortcut
+        # under a modal, and phone menus that end inside the screen with 44px
+        # rows. Needs the shell built above; a skip in CI is a failure.
+        run: node scripts/test-spaces-chrome.ts
+
       - name: spaces rig manifest
         # Bookkeeping, not a ninth run of the eight steps above. scripts/
         # test-spaces.mjs is the local entry point for the spaces suite (two of
