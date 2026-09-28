@@ -95,6 +95,10 @@ jobs:
         working-directory: slides
         run: node_modules/.bin/tsc -b
 
+      - name: Kernel document-state helpers
+        # Cross-shape reversal and immutable, ordered saves preserve later edits.
+        run: node scripts/test-kernel-document-state.ts
+
       - name: Typecheck kernel (standalone)
         # Apps also typecheck kernel transitively through their imports; this
         # catches kernel-only errors under the kernel's own flags.
