@@ -884,9 +884,34 @@ const CSS_FN_ALLOWED = new Set([
   'url',
 ])
 
-/** A function call in CSS text: a name (letters, escapes, non-ASCII) then `(`,
- *  not after a colon — `:not(`, `:nth-child(` are selectors, not values. */
-const CSS_FN_CALL = /(^|[^:\w\\-])((?:[-\w]|\\[\s\S]|[^\x00-\x7f])+)\(/g
+/** A function call in CSS text: a name (letters, escapes, non-ASCII) then `(`.
+ *  `pre` is the character before it, so a caller can tell a call written
+ *  straight after a colon. */
+const CSS_FN_CALL = /(^|[^\w\\-])((?:[-\w]|\\[\s\S]|[^\x00-\x7f])+)\(/g
+
+/**
+ * Selector pseudo-classes and pseudo-elements that take an argument. After a
+ * colon, a name on THIS list is a selector (`:not(`, `::part(`), not a value;
+ * none of them can fetch. Every other call after a colon is a value
+ * (`fill:rgb(`, `width:calc(`) and is judged by CSS_FN_ALLOWED like any other.
+ * The text pass used to spare EVERY colon-preceded call, which left
+ * `prop:fn(` with no space to the CSSOM check alone — caught there in every
+ * browser, but this pass is meant to fail closed on its own.
+ */
+const CSS_PSEUDO_FNS = new Set([
+  'not', 'is', 'where', 'has', 'matches', '-webkit-any', '-moz-any',
+  'nth-child', 'nth-last-child', 'nth-of-type', 'nth-last-of-type', 'nth-col', 'nth-last-col',
+  'lang', 'dir', 'host', 'host-context', 'state', 'active-view-transition-type',
+  'slotted', 'part', 'cue', 'cue-region', 'highlight',
+  'view-transition-group', 'view-transition-image-pair', 'view-transition-old', 'view-transition-new',
+])
+
+/** May this sheet call `name`? `pre` is the character in front of it. */
+function cssCallAllowed(pre: string, name: string): boolean {
+  if (name.includes('\\')) return false
+  const n = name.toLowerCase()
+  return CSS_FN_ALLOWED.has(n) || (pre === ':' && CSS_PSEUDO_FNS.has(n))
+}
 
 /**
  * Neutralise every function call a sheet may not make: RENAMED to one no
@@ -896,7 +921,7 @@ const CSS_FN_CALL = /(^|[^:\w\\-])((?:[-\w]|\\[\s\S]|[^\x00-\x7f])+)\(/g
  */
 function cssRefuseFunctions(css: string): string {
   return css.replace(CSS_FN_CALL, (m, pre: string, name: string) =>
-    !name.includes('\\') && CSS_FN_ALLOWED.has(name.toLowerCase()) ? m : `${pre}bento-refused(`)
+    cssCallAllowed(pre, name) ? m : `${pre}bento-refused(`)
 }
 
 /** Does this CSS text carry a fetch — an off-list function, or a url() to
@@ -904,7 +929,7 @@ function cssRefuseFunctions(css: string): string {
 function cssFetches(text: string): boolean {
   const t = cssDecodeIdentEscapes(text)
   if (urlTargets(t).some((u) => !(u.startsWith('#') || u.startsWith('data:image/')))) return true
-  return Array.from(t.matchAll(CSS_FN_CALL)).some((m) => m[2].includes('\\') || !CSS_FN_ALLOWED.has(m[2].toLowerCase()))
+  return Array.from(t.matchAll(CSS_FN_CALL)).some((m) => !cssCallAllowed(m[1], m[2]))
 }
 
 /**
