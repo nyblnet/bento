@@ -199,6 +199,25 @@ for (const at of ['@media screen{.p{fill:red}}', '@supports (fill:red){.p{fill:r
 ok(sanitizeSvgCss('.p::before{content:"a@b"}') === '.p::before{content:"a@b"}',
   'an @ that does not start a token is not an at-rule')
 
+// The escaped-url and image-set families #519's follow-up closed. url( written
+// with escapes is decoded and cut by the text pass, so it can be judged here in
+// node. image-set() placed straight after a property colon is left to the
+// browser's CSSOM pass on purpose (the text pass's colon boundary spares :not(),
+// so its proof is in the browser section below and NOT asserted here — in node
+// sanitizeSvgCss keeps it, by design, because node never renders it.
+for (const spelling of ['\\75 rl', 'u\\72 l', '\\75\\72\\6c', '\\000075rl']) {
+  ok(sanitizeSvgCss(`.p{background-image:${spelling}(https://evil.example/x)}`).includes('background-image:none'),
+    `an escaped url() spelling — ${spelling}( — is rewritten to none by the text pass`)
+}
+ok(sanitizeSvgCss('@supports (color:red){.p{background-image:\\75 rl(https://evil.example/x)}}').includes('none'),
+  'and inside @supports it is cut the same way')
+ok(sanitizeSvgCss('.p{fill:url(#g)}') === '.p{fill:url(#g)}', 'url(#…) is left exactly alone')
+ok(sanitizeSvgCss('.p{background-image:url(data:image/png;base64,iVBORw0KGgo=)}').includes('data:image/'),
+  'and a data:image url is kept — the ban is on the network, not on pictures')
+ok(svgUrlRefsAllowed('background-image:\\75 rl(https://evil.example/x)', 'style') === false,
+  'the style="" gate refuses an escaped url()')
+ok(svgUrlRefsAllowed('fill:url(#g)', 'style') === true, 'and keeps url(#…) in a style attribute')
+
 // --- 2. the table, end to end ------------------------------------------------
 //
 // renderTableHtml is a string builder with no DOM in it, so the real output can
@@ -299,7 +318,7 @@ const CHROME = [
  * it. Written without backticks or `${` so it can live in a template literal.
  */
 const probeSource = (renderPath: string, modelPath: string, pastePath: string) => `
-import { renderSlide, sanitizeHtml } from ${JSON.stringify(renderPath)}
+import { renderSlide, sanitizeHtml, sanitizeSvgCss, svgUrlRefsAllowed } from ${JSON.stringify(renderPath)}
 import { newDoc } from ${JSON.stringify(modelPath)}
 import { clipboardToHtml } from ${JSON.stringify(pastePath)}
 
@@ -504,6 +523,89 @@ if (location.pathname === '/meta.html') {
     check('a diagram keeps @keyframes and @media — the allowlist is not a ban on CSS',
       (sheet.querySelector('style')?.textContent ?? '').includes('@keyframes bp-spin') &&
       (sheet.querySelector('style')?.textContent ?? '').includes('@media (min-width:1px)'))
+
+    // --- 4c. the css egress families the escaped-url / image-set fix closed ----
+    //
+    // sanitizeSvgCss is a two-layer filter and its SECOND layer is the browser's
+    // own parse (cssomFindsFetch), which is why these live in the browser half
+    // and not the node one: a fetch function written straight after a property
+    // colon — background-image:image-set(…) — slips the text pass's colon
+    // boundary, the one that spares :not(, and is caught only when a real CSSOM
+    // re-serialises the rule with a space and drops the whole sheet. The escaped
+    // spellings of url( are cut by the text pass alone. So sanitizeSvgCss is run
+    // HERE, in the engine, and its output injected into a live <style>; a local
+    // server logs whether anything reached out.
+    //
+    // Every negative below is non-vacuous: the raw positive controls FETCH in
+    // this engine (url(), and image-set in both spellings — measured), so a zero
+    // on a sanitised row means the sanitiser stopped it, not that the engine
+    // never asks. A backslash is String.fromCharCode(92), never written
+    // literally — this code is inside probeSource's template literal, where a
+    // lone backslash collapses before the probe runs (see the @import rows).
+    const BS = String.fromCharCode(92)
+    const eBox = (seg: string): HTMLElement => {
+      const b = document.createElement('div'); b.id = 'eg-' + seg
+      b.style.width = '40px'; b.style.height = '40px'; b.style.display = 'block'
+      document.body.appendChild(b); return b
+    }
+    const eForce = (b: HTMLElement) => { void b.offsetHeight; b.getBoundingClientRect() }
+    // sanitiser OUTPUT injected live — exactly the text render.ts hands the
+    // document for an svg <style> or the model's css field. BOX → the box's id.
+    const egress = (seg: string, sheet: string) => {
+      const b = eBox(seg); const s = document.createElement('style')
+      s.textContent = sanitizeSvgCss(sheet.split('BOX').join('#' + b.id))
+      document.head.appendChild(s); eForce(b)
+    }
+    // positive control: the SAME shape, NOT sanitised — it must reach the server.
+    const egressRaw = (seg: string, sheet: string) => {
+      const b = eBox(seg); const s = document.createElement('style')
+      s.textContent = sheet.split('BOX').join('#' + b.id)
+      document.head.appendChild(s); eForce(b)
+    }
+    egressRaw('pos-url', 'BOX{background-image:url("' + O + '/eg-pos-url")}')
+    egressRaw('pos-imgset', 'BOX{background-image:image-set("' + O + '/eg-pos-imgset" 1x)}')
+    egress('neg', 'BOX{background-image:url("' + O + '/eg-neg")}')
+    egress('esc-u', 'BOX{background-image:' + BS + '75 rl("' + O + '/eg-esc-u")}')
+    egress('esc-r', 'BOX{background-image:u' + BS + '72 l("' + O + '/eg-esc-r")}')
+    egress('esc-all', 'BOX{background-image:' + BS + '75' + BS + '72' + BS + '6c("' + O + '/eg-esc-all")}')
+    egress('esc-hex', 'BOX{background-image:' + BS + '000075rl("' + O + '/eg-esc-hex")}')
+    egress('imgset', 'BOX{background-image:image-set("' + O + '/eg-imgset" 1x)}')
+    egress('wk-imgset', 'BOX{background-image:-webkit-image-set("' + O + '/eg-wk-imgset" 1x)}')
+    egress('imgset-escfn', 'BOX{background-image:image-se' + BS + '74 ("' + O + '/eg-imgset-escfn" 1x)}')
+    egress('cursor', 'BOX{cursor:image-set("' + O + '/eg-cursor" 1x), auto}')
+    egress('at-media', '@media all{BOX{background-image:image-set("' + O + '/eg-at-media" 1x)}}')
+    egress('at-supports', '@supports (color:red){BOX{background-image:' + BS + '75 rl("' + O + '/eg-at-supports")}}')
+    // the allowed shapes still draw: url(#…) and a data:image survive the filter.
+    check('css-egress — url(#grad) survives the css filter untouched',
+      sanitizeSvgCss('#x{fill:url(#grad)}').indexOf('url(#grad)') >= 0)
+    check('css-egress — a data:image background survives the css filter',
+      sanitizeSvgCss('#x{background-image:url(data:image/png;base64,iVBORw0KGgo=)}').indexOf('data:image/') >= 0)
+    // style="" is a declaration block: svgUrlRefsAllowed with the element.style
+    // oracle. In a browser the oracle re-parses and REFUSES image-set and the
+    // escaped url; the harmless declarations are kept.
+    check('css-egress — style="" image-set is refused',
+      svgUrlRefsAllowed('background-image:image-set("' + O + '/x" 1x)', 'style') === false)
+    check('css-egress — style="" an escaped url is refused',
+      svgUrlRefsAllowed('background-image:' + BS + '75 rl("' + O + '/x")', 'style') === false)
+    check('css-egress — style="" fill:red is kept', svgUrlRefsAllowed('fill:red', 'style') === true)
+    check('css-egress — style="" url(#grad) is kept', svgUrlRefsAllowed('fill:url(#g)', 'style') === true)
+    // belt: if the gate ever WRONGLY allowed one, WRITING it would fetch. The raw
+    // control proves a style="" background reaches the server in this engine.
+    {
+      const raw = eBox('attr-pos'); raw.style.cssText = 'background-image:url("' + O + '/eg-attr-pos")'; eForce(raw)
+      const gated = (seg: string, decl: string) => {
+        const b = eBox(seg); if (svgUrlRefsAllowed(decl, 'style')) b.style.cssText = decl; eForce(b)
+      }
+      gated('attr-imgset', 'background-image:image-set("' + O + '/eg-attr-imgset" 1x)')
+      gated('attr-esc', 'background-image:' + BS + '75 rl("' + O + '/eg-attr-esc")')
+    }
+    // markup spellings: an escaped url in a fill attribute and in the svg <style>.
+    // draw() is the full render path; the allowed paint-server and <image>
+    // fetches asserted elsewhere are the matching positive controls.
+    draw('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">' +
+      '<rect width="10" height="10" fill="' + BS + '75 rl(' + O + '/eg-m-fill)"/></svg>')
+    draw('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><sty' + 'le>' +
+      'rect{fill:' + BS + '75 rl(' + O + '/eg-m-style)}</sty' + 'le><rect width="10" height="10"/></svg>')
 
     // --- 5. SMIL retargeting ---------------------------------------------------
     const smil = draw('<svg><rect id="sm" width="10" height="10">' +
@@ -788,6 +890,33 @@ async function runBrowserSection(chrome: string) {
     ok(hits.includes('/remote.png'), 'an <image href="http(s)://…"> still loads — that one is allowed on purpose')
     ok(hits.includes('/xlink-remote.png'), 'and so does the xlink:href spelling of it — the policy is not a ban on pictures')
     ok(hits.includes('/embed-view.png'), '9 — an embed view is held to the svg policy, no stricter: its <image> loads too')
+
+    // 4c — the escaped-url / image-set css egress families (the #519 follow-up).
+    // Positive controls first: they prove the request path is live, so the zeros
+    // that follow are a boundary and not an artefact of the engine.
+    ok(hits.includes('/eg-pos-url'), '4c — a raw url() background fetches here (the css request path is live)')
+    ok(hits.includes('/eg-pos-imgset'), '4c — a raw image-set() background fetches here too (positive control)')
+    ok(hits.includes('/eg-attr-pos'), '4c — a raw style="" url() background fetches here (style-attr path is live)')
+    const cssEgress: Array<[string, string]> = [
+      ['neg', 'a plain external url()'],
+      ['esc-u', 'an escaped u — the \\75 rl( spelling of url('],
+      ['esc-r', 'an escaped r — the u\\72 l( spelling'],
+      ['esc-all', 'a fully escaped \\75\\72\\6c( spelling'],
+      ['esc-hex', 'the six-digit \\000075rl( spelling'],
+      ['imgset', 'image-set() straight after the colon (the CSSOM-pass case)'],
+      ['wk-imgset', '-webkit-image-set()'],
+      ['imgset-escfn', "image-set() with the function name itself escaped"],
+      ['cursor', 'image-set() carried on cursor'],
+      ['at-media', 'image-set() nested in @media'],
+      ['at-supports', 'an escaped url() nested in @supports'],
+      ['attr-imgset', 'image-set() in a style="" attribute'],
+      ['attr-esc', 'an escaped url() in a style="" attribute'],
+      ['m-fill', 'an escaped url() in a fill="" attribute'],
+      ['m-style', 'an escaped url() in the svg <style>'],
+    ]
+    for (const [seg, what] of cssEgress) {
+      ok(!hits.includes('/eg-' + seg), '4c — sanitised, no fetch: ' + what)
+    }
   } finally {
     server.close()
     fs.rmSync(tmp, { recursive: true, force: true })
