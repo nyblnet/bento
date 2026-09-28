@@ -11,6 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.2.5] — 2026-09-28
+
+- **Security: update this file. This release closes three security issues
+  found in our own review.** None needs anything from you beyond updating. What
+  each one was is described here once people have had time to update.
 - **Orange text can be read in dark mode again.** The armed comment tool, the
   tick beside your language, your own name in a comment thread and the labels
   on slide and point comments were drawn in a dark brown meant for text on the
