@@ -7417,3 +7417,48 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-09-28 — Spaces: the unsaved dot answers for one revision, and every write of the open file queues
+
+Spaces adopts the kernel's `SaveQueue` (kernel/src/savequeue.ts). The race it
+closes was real in every app: ⌘S awaited `saveFile` and then cleared the
+dirty flag, so an edit made while the write was in flight was never written
+and was shown as saved. The rule now, owned by `spaces/src/saving.ts`:
+
+- **The dot clears only when the write that captured THAT revision is
+  acknowledged** — `isCurrent()` read after the write resolves, never the
+  resolve itself. A stale write still counts as written: it gets its version
+  entry (the snapshot that reached disk, not what is on screen now), but it
+  does not clear recovery, because the recovery snapshot is then the only copy
+  of the newer edit.
+- **`store.revision` advances on every mutation**, including each keystroke
+  inside a typing run (which deliberately raises no 'doc' event) and every
+  remote apply, even while the space is already dirty. An undo that swaps the
+  document object is stale by identity.
+- **Every write to the OPEN file goes through one queue**: ⌘S and About's
+  in-place self-update (`applyUpdateInPlace` adopts the same handle; overlapping
+  it with a save let whichever closed last decide the file's shell). The
+  update's old "Reload into new version" line set the dot false
+  unconditionally; that was the same race, and it is gone.
+- **Copies and exports stay OUT of the queue** — Save a copy, the page
+  extract, Duplicate as new space, the invite and view-only copies. They write
+  a different file, never keep its handle (`keepHandle` false, the lesson
+  slides paid for), and never touch the dot. Queuing them would only put a
+  file picker in front of ⌘S.
+- **Encryption is unchanged** — `saveFile` serializes the snapshot through
+  `serializeAuto`, the encryption-aware path.
+- **A failed write says so** and leaves the space dirty; the queue is not
+  poisoned, so the next ⌘S writes. It used to leave "Saving…" on screen and
+  surface as an unhandled rejection.
+- **⌘S in a read-only space behaves as before.** The adopting branch (#537)
+  also made doSave return early when `store.readOnly`; that is not part of
+  this fix and would have left a view-only follower's dot — lit by every
+  remote op — impossible to clear. Whether a frozen (newer-version) file
+  should refuse ⌘S is its own decision.
+
+Proof: `scripts/test-spaces-save-revisions.ts` holds a write open, edits under
+it, releases it, and requires the space still dirty with the edit in the next
+write; plus a failed write, back-to-back saves, a remote edit and an undo
+mid-write. Reverting to mark-saved-on-resolve fails five checks. Spaces does
+not stamp `collab.sync` on ⌘S the way slides does; the queue's `prepare` is
+where that would go, and it is filed rather than folded in here.
