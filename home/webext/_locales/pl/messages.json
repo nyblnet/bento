@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Ustawienia systemowe → Prywatność i ochrona → Pliki i foldery"
+  },
+  "fgLeadFolder": {
+    "message": "Wybierz w następnym oknie folder „$1”, a od teraz każdy dokument w nim zapisze się w miejscu — ten i sąsiednie."
+  },
+  "fgChooseFolder": {
+    "message": "Wybierz folder „$1”…"
+  },
+  "fgOnlyFile": {
+    "message": "Tylko ten plik…"
+  },
+  "fgNotContaining": {
+    "message": "„$1” nie zawiera tego dokumentu — wybierz „$2” lub folder wyżej."
+  },
+  "tdGrantFolder": {
+    "message": "Zapisuj wszystko w „$1” bez pytania…"
   }
 }

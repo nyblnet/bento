@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "System Settings → Privacy & Security → Files and Folders"
+  },
+  "fgLeadFolder": {
+    "message": "اگلے ڈائیلاگ میں ”$1“ فولڈر چنیں — اب سے اس میں ہر دستاویز اسی جگہ محفوظ ہو گی: یہ اور اس کے ساتھ والی۔"
+  },
+  "fgChooseFolder": {
+    "message": "”$1“ فولڈر چنیں…"
+  },
+  "fgOnlyFile": {
+    "message": "صرف یہ فائل…"
+  },
+  "fgNotContaining": {
+    "message": "”$1“ میں یہ دستاویز نہیں — ”$2“ یا اس کے اوپر کا کوئی فولڈر چنیں۔"
+  },
+  "tdGrantFolder": {
+    "message": "”$1“ میں سب کچھ بغیر پوچھے محفوظ کریں…"
   }
 }

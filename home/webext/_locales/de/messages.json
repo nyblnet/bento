@@ -646,5 +646,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Systemeinstellungen → Datenschutz & Sicherheit → Dateien und Ordner"
+  },
+  "fgLeadFolder": {
+    "message": "Wählen Sie im nächsten Dialog den Ordner „$1“, dann speichert jedes Dokument darin ab jetzt direkt — dieses und seine Nachbarn."
+  },
+  "fgChooseFolder": {
+    "message": "Ordner „$1“ wählen …"
+  },
+  "fgOnlyFile": {
+    "message": "Nur diese Datei …"
+  },
+  "fgNotContaining": {
+    "message": "„$1“ enthält dieses Dokument nicht — wählen Sie „$2“ oder einen Ordner darüber."
+  },
+  "tdGrantFolder": {
+    "message": "Alles in „$1“ ohne Nachfrage speichern …"
   }
 }

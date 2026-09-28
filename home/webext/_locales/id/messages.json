@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "System Settings → Privacy & Security → Files and Folders"
+  },
+  "fgLeadFolder": {
+    "message": "Pilih folder “$1” di dialog berikutnya dan setiap dokumen di dalamnya tersimpan di tempat mulai sekarang — yang ini dan tetangganya."
+  },
+  "fgChooseFolder": {
+    "message": "Pilih folder “$1”…"
+  },
+  "fgOnlyFile": {
+    "message": "Hanya berkas ini…"
+  },
+  "fgNotContaining": {
+    "message": "“$1” tidak memuat dokumen ini — pilih “$2”, atau folder di atasnya."
+  },
+  "tdGrantFolder": {
+    "message": "Simpan semua di “$1” tanpa bertanya…"
   }
 }

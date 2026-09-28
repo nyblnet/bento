@@ -12,7 +12,7 @@
 import { getGrants, putGrants, status, setLapsedBadge } from './status.js'
 import { t, localize, initI18n } from './i18n.js'
 import { listDocuments, describe, newDocument } from './library.js'
-import { grantPickedFile } from './filegrant.js'
+import { inBlockedFolder, folderOf, grantFolderFor, grantFileFor } from './grantflow.js'
 
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => (
@@ -302,6 +302,9 @@ async function renderThisDoc() {
     dot.className = 'dot bad'
     $('tdState').textContent = r?.reason === 'file grant needs renewing' ? t('needsReconnecting') : t('tdNotYet')
     btn.hidden = false
+    // the folder when Chrome allows it — every sibling then saves too
+    const folder = folderOf(tdPath).split('/').filter(Boolean).pop() ?? ''
+    btn.textContent = inBlockedFolder(tdPath) ? t('tdGrant') : t('tdGrantFolder', folder)
   }
 }
 $('tdGrant').addEventListener('click', async () => {
@@ -309,12 +312,14 @@ $('tdGrant').addEventListener('click', async () => {
   const btn = $('tdGrant')
   btn.disabled = true
   try {
-    const startIn = /\/Downloads\//.test(tdPath) ? 'downloads' : /\/Desktop\//.test(tdPath) ? 'desktop' : 'documents'
     $('tdState').textContent = '…'
-    const [handle] = await window.showOpenFilePicker({ startIn, multiple: false, types: [{ description: 'Bento', accept: { 'text/html': ['.html'] } }] })
-    if (!handle) return
-    const r = await grantPickedFile(handle, tdPath)
-    if (!r.ok) { $('tdState').textContent = r.reason === 'denied' ? t('fgDenied') : t('fgNotSame', tdPath.split('/').pop()); return }
+    const r = inBlockedFolder(tdPath) ? await grantFileFor(tdPath) : await grantFolderFor(tdPath)
+    if (!r.ok) {
+      $('tdState').textContent = r.reason === 'denied' ? t('fgDenied')
+        : r.reason === 'not-containing' ? t('fgNotContaining', r.name ?? '', folderOf(tdPath).split('/').pop())
+        : r.reason === 'cancelled' ? t('tdNotYet') : t('fgNotSame', tdPath.split('/').pop())
+      return
+    }
     try { await chrome.runtime.sendMessage({ op: 'save.rebadge' }) } catch { /* fine */ }
     await renderThisDoc()
   } catch (e) {

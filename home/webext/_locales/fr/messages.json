@@ -646,5 +646,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Réglages Système → Confidentialité et sécurité → Fichiers et dossiers"
+  },
+  "fgLeadFolder": {
+    "message": "Choisissez le dossier « $1 » dans le prochain dialogue : chaque document qu’il contient s’enregistrera désormais sur place — celui-ci et ses voisins."
+  },
+  "fgChooseFolder": {
+    "message": "Choisir le dossier « $1 »…"
+  },
+  "fgOnlyFile": {
+    "message": "Seulement ce fichier…"
+  },
+  "fgNotContaining": {
+    "message": "« $1 » ne contient pas ce document — choisissez « $2 », ou un dossier au-dessus."
+  },
+  "tdGrantFolder": {
+    "message": "Tout enregistrer dans « $1 » sans demander…"
   }
 }

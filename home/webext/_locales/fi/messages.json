@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Järjestelmäasetukset → Tietosuoja ja suojaus → Tiedostot ja kansiot"
+  },
+  "fgLeadFolder": {
+    "message": "Valitse seuraavassa ikkunassa kansio ”$1”, niin jokainen sen asiakirja tallentuu tästä lähtien paikalleen — tämä ja naapurit."
+  },
+  "fgChooseFolder": {
+    "message": "Valitse kansio ”$1”…"
+  },
+  "fgOnlyFile": {
+    "message": "Vain tämä tiedosto…"
+  },
+  "fgNotContaining": {
+    "message": "”$1” ei sisällä tätä asiakirjaa — valitse ”$2” tai sen yläpuolinen kansio."
+  },
+  "tdGrantFolder": {
+    "message": "Tallenna kaikki kansiossa ”$1” kysymättä…"
   }
 }

@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "System Settings → Privacy & Security → Files and Folders"
+  },
+  "fgLeadFolder": {
+    "message": "در پنجرهٔ بعد پوشهٔ «$1» را انتخاب کنید تا از این پس هر سند درون آن در جای خود ذخیره شود — این سند و همسایه‌هایش."
+  },
+  "fgChooseFolder": {
+    "message": "انتخاب پوشهٔ «$1»…"
+  },
+  "fgOnlyFile": {
+    "message": "فقط همین پرونده…"
+  },
+  "fgNotContaining": {
+    "message": "«$1» این سند را ندارد — «$2» یا پوشه‌ای بالاتر از آن را انتخاب کنید."
+  },
+  "tdGrantFolder": {
+    "message": "ذخیرهٔ همه‌چیز در «$1» بدون پرسش…"
   }
 }

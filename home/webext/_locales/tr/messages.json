@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Sistem Ayarları → Gizlilik ve Güvenlik → Dosyalar ve Klasörler"
+  },
+  "fgLeadFolder": {
+    "message": "Sonraki iletişim kutusunda “$1” klasörünü seçin; içindeki her belge bundan sonra yerinde kaydedilir — bu ve komşuları."
+  },
+  "fgChooseFolder": {
+    "message": "“$1” klasörünü seç…"
+  },
+  "fgOnlyFile": {
+    "message": "Yalnızca bu dosya…"
+  },
+  "fgNotContaining": {
+    "message": "“$1” bu belgeyi içermiyor — “$2” klasörünü ya da üstündeki bir klasörü seçin."
+  },
+  "tdGrantFolder": {
+    "message": "“$1” içindeki her şeyi sormadan kaydet…"
   }
 }

@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Systeeminstellingen → Privacy en beveiliging → Bestanden en mappen"
+  },
+  "fgLeadFolder": {
+    "message": "Kies in het volgende venster de map “$1”; elk document erin slaat voortaan ter plekke op — dit en de buren."
+  },
+  "fgChooseFolder": {
+    "message": "Map “$1” kiezen…"
+  },
+  "fgOnlyFile": {
+    "message": "Alleen dit bestand…"
+  },
+  "fgNotContaining": {
+    "message": "“$1” bevat dit document niet — kies “$2” of een map erboven."
+  },
+  "tdGrantFolder": {
+    "message": "Alles in “$1” opslaan zonder vragen…"
   }
 }

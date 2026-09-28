@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Systeminställningar → Integritet och säkerhet → Filer och mappar"
+  },
+  "fgLeadFolder": {
+    "message": "Välj mappen ”$1” i nästa dialog så sparas varje dokument i den på plats från och med nu — det här och grannarna."
+  },
+  "fgChooseFolder": {
+    "message": "Välj mappen ”$1”…"
+  },
+  "fgOnlyFile": {
+    "message": "Bara den här filen…"
+  },
+  "fgNotContaining": {
+    "message": "”$1” innehåller inte det här dokumentet — välj ”$2” eller en mapp ovanför."
+  },
+  "tdGrantFolder": {
+    "message": "Spara allt i ”$1” utan att fråga…"
   }
 }

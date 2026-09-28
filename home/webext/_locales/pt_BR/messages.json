@@ -646,5 +646,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Ajustes do Sistema → Privacidade e Segurança → Arquivos e Pastas"
+  },
+  "fgLeadFolder": {
+    "message": "Escolha a pasta “$1” na próxima janela e todos os documentos nela passam a salvar no lugar — este e os vizinhos."
+  },
+  "fgChooseFolder": {
+    "message": "Escolher a pasta “$1”…"
+  },
+  "fgOnlyFile": {
+    "message": "Só este arquivo…"
+  },
+  "fgNotContaining": {
+    "message": "“$1” não contém este documento — escolha “$2” ou uma pasta acima dela."
+  },
+  "tdGrantFolder": {
+    "message": "Salvar tudo em “$1” sem perguntar…"
   }
 }

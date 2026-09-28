@@ -714,5 +714,25 @@
   "noticeOsBlockedPath": {
     "message": "System Settings → Privacy & Security → Files and Folders",
     "description": "The System Settings path, repeated as a code line under the notice. REVIEW: match the OS's own labels."
+  },
+  "fgLeadFolder": {
+    "message": "Choose the folder “$1” in the next dialog and every document in it saves straight back from now on — this one and its neighbours.",
+    "description": "Offer window body when the document's folder can be granted. $1 folder name."
+  },
+  "fgChooseFolder": {
+    "message": "Choose the folder “$1”…",
+    "description": "Offer window primary button: grant the document's folder. $1 folder name."
+  },
+  "fgOnlyFile": {
+    "message": "Only this file…",
+    "description": "Offer window secondary button: grant only the one file."
+  },
+  "fgNotContaining": {
+    "message": "“$1” does not contain this document — choose “$2”, or a folder above it.",
+    "description": "Status when the chosen folder does not contain the document. $1 chosen folder, $2 the document's folder."
+  },
+  "tdGrantFolder": {
+    "message": "Save everything in “$1” without asking…",
+    "description": "Side panel button: grant the active document's folder. $1 folder name."
   }
 }

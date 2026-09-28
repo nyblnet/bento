@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Systeminnstillinger → Personvern og sikkerhet → Filer og mapper"
+  },
+  "fgLeadFolder": {
+    "message": "Velg mappen «$1» i neste dialog, så lagres hvert dokument i den på stedet fra nå av — dette og naboene."
+  },
+  "fgChooseFolder": {
+    "message": "Velg mappen «$1» …"
+  },
+  "fgOnlyFile": {
+    "message": "Bare denne filen …"
+  },
+  "fgNotContaining": {
+    "message": "«$1» inneholder ikke dette dokumentet — velg «$2» eller en mappe over den."
+  },
+  "tdGrantFolder": {
+    "message": "Lagre alt i «$1» uten å spørre …"
   }
 }

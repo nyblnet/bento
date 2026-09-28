@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "시스템 설정 → 개인정보 보호 및 보안 → 파일 및 폴더"
+  },
+  "fgLeadFolder": {
+    "message": "다음 대화상자에서 “$1” 폴더를 선택하면, 이제부터 그 안의 모든 문서(이 문서와 옆의 문서들)가 제자리에 저장됩니다."
+  },
+  "fgChooseFolder": {
+    "message": "“$1” 폴더 선택…"
+  },
+  "fgOnlyFile": {
+    "message": "이 파일만…"
+  },
+  "fgNotContaining": {
+    "message": "“$1”에는 이 문서가 없습니다. “$2” 또는 그 위의 폴더를 선택하세요."
+  },
+  "tdGrantFolder": {
+    "message": "“$1”의 모든 것을 묻지 않고 저장…"
   }
 }

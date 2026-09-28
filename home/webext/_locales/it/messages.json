@@ -646,5 +646,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Impostazioni di Sistema → Privacy e sicurezza → File e cartelle"
+  },
+  "fgLeadFolder": {
+    "message": "Scegli la cartella «$1» nella prossima finestra e da ora ogni documento al suo interno si salverà sul posto: questo e i suoi vicini."
+  },
+  "fgChooseFolder": {
+    "message": "Scegli la cartella «$1»…"
+  },
+  "fgOnlyFile": {
+    "message": "Solo questo file…"
+  },
+  "fgNotContaining": {
+    "message": "«$1» non contiene questo documento: scegli «$2» o una cartella superiore."
+  },
+  "tdGrantFolder": {
+    "message": "Salva tutto in «$1» senza chiedere…"
   }
 }

@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "System Settings → Privacy & Security → Files and Folders"
+  },
+  "fgLeadFolder": {
+    "message": "পরের ডায়ালগে “$1” ফোল্ডারটি বেছে নিন — এখন থেকে এর প্রতিটি নথি জায়গায় সংরক্ষিত হবে: এটি ও পাশেরগুলো।"
+  },
+  "fgChooseFolder": {
+    "message": "“$1” ফোল্ডার বেছে নিন…"
+  },
+  "fgOnlyFile": {
+    "message": "শুধু এই ফাইল…"
+  },
+  "fgNotContaining": {
+    "message": "“$1”-এ এই নথি নেই — “$2” বা তার উপরের কোনো ফোল্ডার বেছে নিন।"
+  },
+  "tdGrantFolder": {
+    "message": "“$1”-এর সবকিছু না জিজ্ঞেস করে সংরক্ষণ করুন…"
   }
 }

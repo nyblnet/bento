@@ -18,6 +18,7 @@ import { prefixFor } from './route.js'
 import { learnPrefix, prefixes, recentOpened, GRANT, get, put } from './db.js'
 import { placeFolder, scanDisk, fileUrl, blockedFolders } from './place.js'
 import { listFileGrants, addFileGrant, dropFileGrant, handleIsPath, downloadsUnusable, setDownloadsUnusable } from './filegrant.js'
+import { startInFor } from './grantflow.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
 import { t, localize, LOCALES, localeLabel, localeOverride, setLocale, initI18n }
   from './i18n.js'
@@ -542,7 +543,7 @@ function surveyPanel(onDone) {
           // choice, in a real dialog, and an extension cannot pre-select a path
           // — `startIn` takes a well-known name or an existing handle, never an
           // arbitrary one. So the proposal is a signpost, not a shortcut.
-          const dir = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' })
+          const dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'bento-grant', startIn: 'documents' })
           await dir.requestPermission({ mode: 'readwrite' })
           const dirs = await getGrants()
           for (const existing of dirs) if (await existing.isSameEntry(dir)) { add.disabled = false; return }
@@ -735,7 +736,7 @@ async function addFolderFor(d) {
   toast(t('pickThisFolder', d.folder))
   let dir
   try {
-    dir = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' })
+    dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'bento-grant', startIn: await startInFor(d.path) })
   } catch (e) { if (e?.name !== 'AbortError') toast(e.message); return }
   const prefix = await prefixFor(dir, d.path).catch(() => null)
   if (!prefix) { toast(t('pickedWrongFolder', dir.name, d.folder)); return }
@@ -1192,7 +1193,7 @@ $('addFolder').addEventListener('click', async () => {
     // as wholes with its own "contains system files" dialog, and there is no
     // way around it from here — so the picker opens in Documents, where the
     // folder it WILL accept is one level down, and the set-up note says so.
-    const dir = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' })
+    const dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'bento-grant' })
     await adoptGrant(dir)
   } catch (e) {
     if (e?.name !== 'AbortError') toast(e.message)
@@ -1212,7 +1213,7 @@ async function createBentoFolder() {
   toast(t('bentoFolderHow'))
   let dir
   try {
-    dir = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' })
+    dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'bento-grant', startIn: 'documents' })
   } catch (e) { if (e?.name !== 'AbortError') toast(e.message); return null }
   await adoptGrant(dir, { asDefault: true })
   toast(t('bentoFolderMade', dir.name))
@@ -1542,7 +1543,7 @@ async function renderSettings() {
     addFiles.onclick = async () => {
       let handles = []
       try {
-        handles = await window.showOpenFilePicker({ multiple: true, startIn: 'documents', types: [{ description: 'Bento', accept: { 'text/html': ['.html'] } }] })
+        handles = await window.showOpenFilePicker({ multiple: true, id: 'bento-grant', types: [{ description: 'Bento', accept: { 'text/html': ['.html'] } }] })
       } catch (e) { if (e?.name !== 'AbortError') toast(e.message); return }
       let n = 0
       for (const h of handles) {

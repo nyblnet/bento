@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "System Settings → Privacy & Security → Files and Folders"
+  },
+  "fgLeadFolder": {
+    "message": "Piliin ang folder na “$1” sa susunod na dialog at mula ngayon, bawat dokumento roon ay direktang mase-save — ito at ang mga katabi nito."
+  },
+  "fgChooseFolder": {
+    "message": "Piliin ang folder na “$1”…"
+  },
+  "fgOnlyFile": {
+    "message": "Ang file na ito lang…"
+  },
+  "fgNotContaining": {
+    "message": "Hindi naglalaman ng dokumentong ito ang “$1” — piliin ang “$2”, o isang folder sa itaas nito."
+  },
+  "tdGrantFolder": {
+    "message": "I-save ang lahat sa “$1” nang hindi nagtatanong…"
   }
 }

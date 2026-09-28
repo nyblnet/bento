@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "System Settings → Privacy & Security → Files and Folders"
+  },
+  "fgLeadFolder": {
+    "message": "Chọn thư mục “$1” trong hộp thoại tiếp theo và từ nay mọi tài liệu trong đó sẽ lưu tại chỗ — tài liệu này và các tài liệu bên cạnh."
+  },
+  "fgChooseFolder": {
+    "message": "Chọn thư mục “$1”…"
+  },
+  "fgOnlyFile": {
+    "message": "Chỉ tệp này…"
+  },
+  "fgNotContaining": {
+    "message": "“$1” không chứa tài liệu này — hãy chọn “$2”, hoặc một thư mục phía trên."
+  },
+  "tdGrantFolder": {
+    "message": "Lưu mọi thứ trong “$1” mà không hỏi…"
   }
 }

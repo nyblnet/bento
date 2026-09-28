@@ -17,7 +17,8 @@
   .file small { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; direction: ltr; unicode-bidi: isolate; text-align: start }
   .lead { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.45 }
-  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: auto; flex-wrap: wrap }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: auto; flex-wrap: wrap }
+  .actions .link { margin-inline-end: auto }
   .status { font-size: 12px; color: var(--dim); margin: 0; min-height: 1.2em }
 </style>
 <h1 id="title"></h1>
@@ -25,6 +26,7 @@
 <p class="lead" id="lead"></p>
 <p class="status" id="status"></p>
 <div class="actions">
+  <button class="btn link" id="onlyFile" hidden></button>
   <button class="btn" id="once" data-i18n="fgOnce"></button>
   <button class="btn primary" id="choose"></button>
 </div>

@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Systemindstillinger → Anonymitet og sikkerhed → Filer og mapper"
+  },
+  "fgLeadFolder": {
+    "message": "Vælg mappen “$1” i næste dialog, så gemmes alle dokumenter i den på stedet fra nu af — dette og naboerne."
+  },
+  "fgChooseFolder": {
+    "message": "Vælg mappen “$1”…"
+  },
+  "fgOnlyFile": {
+    "message": "Kun denne fil…"
+  },
+  "fgNotContaining": {
+    "message": "“$1” indeholder ikke dette dokument — vælg “$2” eller en mappe over den."
+  },
+  "tdGrantFolder": {
+    "message": "Gem alt i “$1” uden at spørge…"
   }
 }

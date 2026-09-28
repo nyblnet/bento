@@ -646,5 +646,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "システム設定 → プライバシーとセキュリティ → ファイルとフォルダ"
+  },
+  "fgLeadFolder": {
+    "message": "次のダイアログでフォルダー「$1」を選ぶと、今後その中のすべてのドキュメント（これも隣のものも）がその場に保存されます。"
+  },
+  "fgChooseFolder": {
+    "message": "フォルダー「$1」を選択…"
+  },
+  "fgOnlyFile": {
+    "message": "このファイルだけ…"
+  },
+  "fgNotContaining": {
+    "message": "「$1」にはこのドキュメントがありません。「$2」かその上のフォルダーを選んでください。"
+  },
+  "tdGrantFolder": {
+    "message": "「$1」内はすべて確認なしで保存…"
   }
 }

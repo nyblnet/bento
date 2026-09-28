@@ -646,5 +646,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "系統設定 → 隱私權與安全性 → 檔案與檔案夾"
+  },
+  "fgLeadFolder": {
+    "message": "在接下來的對話框中選擇資料夾「$1」，從此其中每份文件（這一份和旁邊的）都會就地儲存。"
+  },
+  "fgChooseFolder": {
+    "message": "選擇資料夾「$1」……"
+  },
+  "fgOnlyFile": {
+    "message": "僅此檔案……"
+  },
+  "fgNotContaining": {
+    "message": "「$1」不包含此文件——請選擇「$2」或其上層資料夾。"
+  },
+  "tdGrantFolder": {
+    "message": "「$1」中的所有內容不再詢問直接儲存……"
   }
 }

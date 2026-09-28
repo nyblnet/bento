@@ -646,5 +646,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "Ajustes del Sistema → Privacidad y seguridad → Archivos y carpetas"
+  },
+  "fgLeadFolder": {
+    "message": "Elige la carpeta «$1» en el siguiente diálogo y todos sus documentos se guardarán en el sitio a partir de ahora: este y sus vecinos."
+  },
+  "fgChooseFolder": {
+    "message": "Elegir la carpeta «$1»…"
+  },
+  "fgOnlyFile": {
+    "message": "Solo este archivo…"
+  },
+  "fgNotContaining": {
+    "message": "«$1» no contiene este documento: elige «$2» o una carpeta superior."
+  },
+  "tdGrantFolder": {
+    "message": "Guardar todo en «$1» sin preguntar…"
   }
 }

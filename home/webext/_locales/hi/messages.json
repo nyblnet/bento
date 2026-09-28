@@ -613,5 +613,20 @@
   },
   "noticeOsBlockedPath": {
     "message": "System Settings → Privacy & Security → Files and Folders"
+  },
+  "fgLeadFolder": {
+    "message": "अगले डायलॉग में “$1” फ़ोल्डर चुनें — अब से उसमें हर दस्तावेज़ उसी जगह सहेजा जाएगा: यह और इसके पड़ोसी।"
+  },
+  "fgChooseFolder": {
+    "message": "“$1” फ़ोल्डर चुनें…"
+  },
+  "fgOnlyFile": {
+    "message": "केवल यह फ़ाइल…"
+  },
+  "fgNotContaining": {
+    "message": "“$1” में यह दस्तावेज़ नहीं है — “$2” या उसके ऊपर का कोई फ़ोल्डर चुनें।"
+  },
+  "tdGrantFolder": {
+    "message": "“$1” में सब कुछ बिना पूछे सहेजें…"
   }
 }

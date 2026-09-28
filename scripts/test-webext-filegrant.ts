@@ -197,11 +197,12 @@ console.log('\n— the page side: waiting on the offer')
   ok(/claimOrOffer/.test(bgSrc) && /filegrant\.html/.test(bgSrc) && /isFileAccessOn/.test(bgSrc), 'the worker offers the window only with file-URL access on')
   ok(/declined\(path\)/.test(bgSrc), 'a declined file is not asked again')
   const winSrc = read('src/filegrant-window.js')
-  ok(/showOpenFilePicker/.test(winSrc) && /grantPickedFile\(handle, path\)/.test(winSrc), 'the window picks in the extension\'s context and stores only through the proof (grantPickedFile: bytes and mtime)')
+  const flowSrc = read('src/grantflow.js')
+  ok(/grantFileFor\(path\)/.test(winSrc) && /showOpenFilePicker/.test(flowSrc) && /grantPickedFile\)\(handle, path\)/.test(flowSrc), 'the window picks in the extension\'s context and a file grant is stored only through the proof (grantPickedFile: bytes and mtime)')
   const fgSrc = read('src/filegrant.js')
   ok(/export async function grantPickedFile/.test(fgSrc) && /handleIsPath\(handle, path, deps\)/.test(fgSrc) && /sameMtime\(handle, path, deps\)/.test(fgSrc), 'grantPickedFile proves bytes AND mtime before storing')
   const panel = read('src/panel.js')
-  ok(/save\.status/.test(panel) && /grantPickedFile\(handle, tdPath\)/.test(panel) && /showOpenFilePicker/.test(panel), 'the side panel shows the active document\'s state and grants it with the same proof')
+  ok(/save\.status/.test(panel) && /grantFileFor\(tdPath\)/.test(panel) && /grantFolderFor\(tdPath\)/.test(panel), 'the side panel shows the active document\'s state and grants it through the same flow')
   const home = read('src/home.js')
   ok(/getAsFileSystemHandle/.test(home) && /addFileGrant\(handle, path\)/.test(home), 'the library takes drops as grants — a folder or a file — with no dialog')
   ok(/listFileGrants\(\)/.test(home) && /dropFileGrant\(g\.key\)/.test(home), 'Settings lists file grants with Remove')
@@ -222,6 +223,39 @@ console.log('\n— a Chrome that asks where to save every download')
   await fg.setDownloadsUnusable(false, w.deps)
   ok((await bg.claim(FILE('/Users/you/Downloads/P.bento.html'), deps)).via === 'downloads', 'Settings "Try again" reopens it')
   ok(/retry === 'native'/.test(read('src/page-bridge.js')) && /native\(forNative\(\{ suggestedName: name \}\)\)/.test(read('src/page-bridge.js')), 'page-bridge finishes such a save through the native picker instead of throwing the bytes away')
+}
+
+console.log('\n— the grant flow: the folder when Chrome allows it, the picker near the document')
+{
+  const gf = await import('../home/webext/src/grantflow.js')
+  ok(gf.inBlockedFolder('/Users/you/Documents/Q3.bento.html') && gf.inBlockedFolder('/Users/you/Downloads/Q3.bento.html') && gf.inBlockedFolder('/Users/you/Desktop/Q3.bento.html') && gf.inBlockedFolder('/Users/you/Q3.bento.html') && gf.inBlockedFolder('/C:/Users/you/OneDrive/Documents/Q3.bento.html') && gf.inBlockedFolder('/home/you/Q3.bento.html'),
+    'inBlockedFolder: directly in home / Documents / Desktop / Downloads (and OneDrive) → a file grant')
+  ok(!gf.inBlockedFolder('/Users/you/Documents/Decks/Q3.bento.html') && !gf.inBlockedFolder('/Users/you/Desktop/teams-test/B1.bento.html') && !gf.inBlockedFolder('/Volumes/Work/Q3.bento.html'),
+    'inBlockedFolder: any subfolder → the FOLDER is offered, so its siblings save too')
+  // nearest start: the held handle sharing the longest path
+  const decks = { name: 'Decks', tag: 'decks' }, other = { name: 'Other', tag: 'other' }
+  const fileH = { name: 'x.bento.html', tag: 'file' }
+  const deps: any = {
+    prefixes: async () => ({ Decks: '/Users/you/Documents/Decks', Other: '/Users/you/Pictures/Other' }),
+    getGrants: async () => [decks, other],
+    listFileGrants: async () => [{ handle: fileH, path: '/Users/you/Desktop/teams-test/x.bento.html' }],
+  }
+  ok((await gf.startInFor('/Users/you/Documents/Decks/2026/Q3.bento.html', deps)) === decks, 'startInFor: a folder grant above the document')
+  ok((await gf.startInFor('/Users/you/Desktop/teams-test/B2.bento.html', deps)) === fileH, 'startInFor: a file grant beside it (its picker opens in that folder)')
+  ok((await gf.startInFor('/Users/you/Downloads/new.bento.html', { prefixes: async () => ({}), getGrants: async () => [], listFileGrants: async () => [] })) === 'downloads', 'startInFor: nothing near → the well-known folder the path is under')
+  ok((await gf.startInFor('/Users/you/Music/x.bento.html', deps)) === 'documents', 'startInFor: sharing only the home is not "near"')
+  // folder grant: accepted only if it contains the document
+  let stored: any[] = []
+  const learned: any[] = []
+  const base = { ...deps, getGrants: async () => stored, putGrants: async (l: any[]) => { stored = l }, learnPrefix: async (n: string, p: string) => { learned.push([n, p]) } }
+  const teams = { name: 'teams-test', requestPermission: async () => 'granted', isSameEntry: async () => false }
+  const okR = await gf.grantFolderFor('/Users/you/Desktop/teams-test/B2.bento.html', { ...base, showDirectoryPicker: async (o: any) => { base.seen = o; return teams }, prefixFor: async () => '/Users/you/Desktop/teams-test' })
+  ok(okR.ok && stored.includes(teams) && learned[0][1] === '/Users/you/Desktop/teams-test' && base.seen.id === gf.PICKER_ID && base.seen.mode === 'readwrite', 'grantFolderFor: the folder is stored, placed, and the picker remembers its folder (id)')
+  const wrong = await gf.grantFolderFor('/Users/you/Desktop/teams-test/B2.bento.html', { ...base, showDirectoryPicker: async () => ({ name: 'Elsewhere', requestPermission: async () => 'granted' }), prefixFor: async () => null })
+  ok(!wrong.ok && wrong.reason === 'not-containing' && wrong.name === 'Elsewhere', 'grantFolderFor: a folder that does not contain the document is refused, by name')
+  const home = read('src/filegrant-window.js'), panel = read('src/panel.js')
+  ok(/inBlockedFolder\(path\)/.test(home) && /grantFolderFor\(path\)/.test(home) && /grantFileFor\(path\)/.test(home), 'the offer window offers the folder first, "Only this file" as the alternative')
+  ok(/grantFolderFor\(tdPath\)/.test(panel) && /inBlockedFolder\(tdPath\)/.test(panel), 'the side panel does the same')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
