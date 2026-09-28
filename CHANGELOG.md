@@ -14,8 +14,33 @@ pre-1.0.
 ## [1.2.5] — 2026-09-28
 
 - **Security: update this file. This release closes three security issues
-  found in our own review.** None needs anything from you beyond updating. What
-  each one was is described here once people have had time to update.
+  found in our own review.** None needs anything from you beyond updating.
+  - **A slide could quietly phone home when opened.** A deck carrying a vector
+    drawing could, through a corner of the styling it is allowed to use, make
+    your browser fetch a web address the author chose the moment the slide was
+    shown — a silent read receipt with your IP and the time you opened it, the
+    very thing a self-contained file is meant not to do. No code ran and
+    nothing looked wrong on screen; every route that carries a drawing (a
+    mailed file, a paste, a live edit) could carry it. Drawing styles are now
+    checked by the browser's own parser instead of by pattern-matching, so the
+    disguises that slipped past — an address written with escape codes, or as
+    one of CSS's image functions — no longer do.
+  - **Another local file could hijack "Restore your unsaved changes."** On a
+    desktop browser, local files opened from disk share one storage area (the
+    same quirk behind the 1.2.2 fix). A malicious `.bento.html` opened from
+    disk could plant a fake recovery snapshot for one of your decks; the next
+    time you opened that deck, the "Restore your unsaved changes?" prompt would
+    offer it, and restoring it could move the deck into a live session the
+    attacker controlled — later edits syncing to them, their keys written into
+    your file on save. Restored snapshots now pass through the same safety
+    check as pasted JSON, and the deck's identity and live-session keys always
+    come from the real file, never from a snapshot.
+  - **A malformed Office file could freeze the tab.** Importing a crafted
+    `.pptx` or `.xlsx` (bento/slides' import page, bento/dash's spreadsheet
+    import) could exhaust memory and hang the browser: a tiny compressed part
+    that expands without bound. Imports now stop unpacking a part the moment it
+    grows past its declared size, so a decompression bomb is refused instead of
+    swallowing the tab.
 - **Orange text can be read in dark mode again.** The armed comment tool, the
   tick beside your language, your own name in a comment thread and the labels
   on slide and point comments were drawn in a dark brown meant for text on the
