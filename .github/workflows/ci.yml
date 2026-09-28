@@ -645,6 +645,15 @@ jobs:
         # throw when storage does.
         run: node scripts/test-storage.ts
 
+      - name: Save queue rig
+        # kernel/src/savequeue.ts serializes writes against one file handle and
+        # acknowledges each by revision, so an edit made WHILE an async write is in
+        # flight is never marked saved and lost (the setDirty-after-write race
+        # every app had). The rig pins serialization, the detached snapshot,
+        # isCurrent() going stale on any later edit or same-id replacement, the
+        # document-swap discard, and that a failed write never poisons the queue.
+        run: node scripts/test-savequeue.ts
+
       - name: App registry rig
         # scripts/apps.mjs drives what a release builds, stages and signs. A
         # release SIGNS, and the key never reaches CI, so the pipeline itself
