@@ -371,6 +371,15 @@ jobs:
         # every one of them is a regression a sighted developer with a mouse
         # would never notice.
         run: node scripts/test-ui-menu.ts
+      - name: Shared chrome tokens rig
+        # kernel/src/ui/tokens.css is tier 4 — the design vocabulary the four
+        # apps had each drawn slightly differently (slides' dark accent text was
+        # 1.09:1; the neutrals disagreed; every app rolled its own radius and
+        # touch target). This rig proves the tokens are sound (every flipping
+        # colour has both themes, the two dark blocks agree, text/fill pairs
+        # clear WCAG AA) and that once an app adopts the sheet it may not
+        # re-declare a frozen token — the drift the file exists to end.
+        run: node scripts/test-ui-tokens.ts
 
       - name: First-page preview rig
         # Every save writes a static render of page one for file-manager
