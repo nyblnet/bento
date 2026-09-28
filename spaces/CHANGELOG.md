@@ -477,6 +477,31 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **Callouts, quotes and captions survive a trip through Markdown.** Four
+  places where the exporter and the importer disagreed with each other, each
+  measured by exporting one block and reading it back:
+  - A **GitHub alert** — `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`,
+    `[!CAUTION]` — now imports as a callout of that tone, with everything in
+    the box (lists, code, a nested alert) as its body. The export already
+    wrote alerts; the importer read them back as a plain quote with `[!WARNING]`
+    as its first words. Alerts written by GitHub or Obsidian read the same way,
+    including Obsidian's lower-case tags, fold markers and text on the tag
+    line. Other tags (`[!info]`) stay a quote, word for word.
+  - A **quote with a line break** exported its second line without `> `, so a
+    blank line inside it came back as a quote followed by a loose paragraph.
+    Every line is marked now.
+  - An **image caption** leaves as the Markdown title, `![alt](src "caption")`.
+    The importer already read that title as the caption; the exporter was
+    dropping it. An image's size still does not survive — Markdown has no
+    place for it.
+  - A **divider** comes back as the same block the editor made.
+
+  `scripts/test-spaces-md-strict.ts` holds every block type to this bar: 13 of
+  the 20 now come back byte for byte (9 did before), and the other 7 — toggle,
+  link card, media, field, board, page link, canvas — are pinned with the
+  reason, so the rig fails if one starts to qualify without the pin being
+  lifted on purpose.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
