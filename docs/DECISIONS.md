@@ -7417,3 +7417,77 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-09-26 — Mermaid flowcharts: our own parser and layout, and labels are inert text
+
+A diagram can carry Mermaid source, so a page round-trips through Markdown
+(```` ```mermaid ```` renders on GitHub) and an agent can write one. The
+mermaid library is megabytes and nothing may be fetched at runtime (PLATFORM
+§1), so `spaces/src/diagram/` has its own reader: `mermaid.ts` (parser, element
+output, reverse) and `layout.ts` (a layered layout). Neither imports app code
+— the element types are structural copies of slides' — so either app can use
+them, and they are a candidate for the kernel beside the connector engine.
+Nothing calls them yet; the rig is `scripts/test-diagram-mermaid.ts`.
+
+**The target is slides' elements, not a picture.** Nodes are shape elements
+(rect, rounded and stadium by radius, ellipse, triangle, and fixed 100×100
+path templates for the rest), labels are text elements, and edges are
+line/path shapes with `from`/`to` ConnectorEnd refs (`side: 'auto'`). Each
+connector end is written exactly where slides' `syncConnectors` would put it,
+so an edited diagram does not jump on its first edit. Self-loops are the one
+exception: they pin sides, because with `auto` both ends would collapse to
+the node's centre. Slides has no edge labels, so an edge label is a text
+element beside the edge's middle. It does not follow the edge when a node
+moves.
+
+**It is lossy both ways, and says so.** Mermaid → elements invents positions.
+An optional `layout` sidecar (`{id: {x,y,w,h}}`, made by `diagramLayout`)
+makes hand-placed positions win, and new nodes are placed around them.
+Elements → mermaid drops positions, sizes and edge length (`--->`), and
+returns `lost: [{el, what}]` for everything else it cannot say: rotation,
+opacity, gradients, shadows, rich text, tips mermaid has no arrow for, edge
+colour, free text, unanchored lines, and element types. Node and subgraph
+colours survive as `style` statements.
+
+**Labels are text.** `<br>` is a line break and every other tag stays
+literal, escaped and inert. Mermaid would render `<b>`; we show it. The
+emitted source writes `<` and `>` as `#lt;`/`#gt;` so GitHub shows what we
+show. Style is limited to fill/stroke/color. Colours are validated (hex,
+rgb/hsl functions, and named colours by shape — letters only), so a style
+can never carry `url(…)` or a `;` into an element.
+
+**Subgraphs follow mermaid's two rules.**
+
+- **A subgraph none of whose members links outside it is laid out on its
+  own** and then takes part in its parent as a single node. It uses its own
+  `direction`, or the parent's turned (TB becomes LR, anything else becomes
+  TB); the turn is mermaid's, and it is why the docs' "two" draws sideways.
+- **A subgraph whose members DO link outside is a compound.** Its members
+  take part in the parent's layering and ordering, kept contiguous in every
+  layer. Sibling subgraphs keep one order in every layer, so each box is a
+  rectangle. Each box's left and right borders are single variables, solved
+  together with everything around them, so no node that is not a member
+  lands inside a box.
+  - A bend point belongs to the innermost subgraph holding both ends of its
+    edge, so edges between subgraphs bend in the space between the boxes.
+  - Mermaid ignores `direction` on such a subgraph. So do we, and we warn.
+  - An edge drawn to a compound box is laid out against one of its members,
+    so it is drawn straight.
+
+This replaced a first version that laid every subgraph out alone. That
+version could never let one subgraph stand beside another spanning
+subgraph, and it drew edges through other subgraphs: on the corpus, 14 edges
+ran through nodes and 5 through boxes, against 2 and 2 now. The rig ratchets
+both counts, labels sitting on other edges, and total connector length and
+area; they may only go down.
+
+**Edge labels step off other edges.** A label tries the layout's spot, then
+the other side of its edge, then positions further along it. The first spot
+that crosses no other edge and covers no node or label wins. In a crowded
+fan with nothing clear, the layout's spot stands.
+
+**Caps, not hangs.** 500 nodes, 2,000 edges, subgraphs 24 deep, and a budget
+for long-edge bends. Past a cap the rest is dropped with a warning. A
+statement that cannot be read is dropped whole, with a warning. Unsupported
+syntax (`click`, `linkStyle`, directives, other diagram types) produces a
+warning and never throws.

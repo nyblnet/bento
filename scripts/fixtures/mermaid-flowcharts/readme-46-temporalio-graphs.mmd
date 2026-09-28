@@ -1,0 +1,25 @@
+%% source: https://github.com/LucaDeLeo/temporalio-graphs/blob/HEAD/README.md (MIT)
+flowchart TB
+    subgraph OrderWorkflow
+        s_Order((Start)) --> ProcessOrder[Process Order]
+        ProcessOrder --> ext_sig_ship[/Signal 'ship_order'\]
+        ext_sig_ship --> e_Order((End))
+    end
+
+    subgraph ShippingWorkflow
+        sig_handler_ship{{ship_order}}
+        s_Ship((Start)) --> ShipPackage[Ship Package]
+        ShipPackage --> ext_sig_notify[/Signal 'notify_shipped'\]
+    end
+
+    subgraph NotificationWorkflow
+        sig_handler_notify{{notify_shipped}}
+    end
+
+    %% Cross-workflow signal connections
+    ext_sig_ship -.ship_order.-> sig_handler_ship
+    ext_sig_notify -.notify_shipped.-> sig_handler_notify
+
+    %% Signal handler styling
+    style sig_handler_ship fill:#e6f3ff,stroke:#0066cc
+    style sig_handler_notify fill:#e6f3ff,stroke:#0066cc

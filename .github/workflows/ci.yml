@@ -233,6 +233,17 @@ jobs:
         # mistakes is made in the source.
         run: node scripts/test-spaces-model.ts
 
+      - name: Mermaid flowchart ⇄ diagram rig
+        # spaces/src/diagram/: our own Mermaid flowchart parser and layered
+        # layout (the mermaid library is megabytes and nothing is fetched at
+        # runtime). Over a corpus of real README flowcharts: no overlapping
+        # nodes, every connector end exactly where slides' syncConnectors puts
+        # it, byte-identical snapshots, and mermaid → elements → mermaid
+        # semantically equal. Hostile input (caps, __proto__ ids, script in
+        # labels, pathological cycles) inside a time budget, and a size budget
+        # (needs slides' esbuild, installed above).
+        run: node scripts/test-diagram-mermaid.ts
+
       - name: spaces rig manifest
         # Bookkeeping, not a ninth run of the eight steps above. scripts/
         # test-spaces.mjs is the local entry point for the spaces suite (two of
