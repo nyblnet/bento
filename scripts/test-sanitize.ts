@@ -199,6 +199,24 @@ for (const at of ['@media screen{.p{fill:red}}', '@supports (fill:red){.p{fill:r
 ok(sanitizeSvgCss('.p::before{content:"a@b"}') === '.p::before{content:"a@b"}',
   'an @ that does not start a token is not an at-rule')
 
+// A call written straight after a colon is a SELECTOR only if its name is a
+// pseudo-class/-element function; any other is a value, judged by the function
+// allowlist like a call anywhere else. The text pass used to spare every
+// colon-preceded call, leaving `prop:fn(` (no space) to the CSSOM check alone.
+// `bento-probe` stands in for any function off the allowlist.
+for (const sel of ['.a:not(.b){fill:red}', '.a:nth-child(2n+1):is(.b,.c){fill:red}', '.a:where(.b):has(.c){fill:red}',
+  '.a::part(x){fill:red}', '::view-transition-group(x){opacity:1}', '.a:lang(ja):dir(rtl){fill:red}']) {
+  ok(sanitizeSvgCss(sel) === sel, `selector functions after a colon are kept: ${sel.slice(0, sel.indexOf('{'))}`)
+}
+ok(sanitizeSvgCss('.p{fill:rgb(1,2,3);width:calc(1px + 2px)}') === '.p{fill:rgb(1,2,3);width:calc(1px + 2px)}',
+  'allowed value functions straight after a colon are kept')
+ok(sanitizeSvgCss('.p{fill:bento-probe(1)}').includes('fill:bento-refused('),
+  'an off-list function straight after a property colon is refused by the text pass')
+ok(sanitizeSvgCss('.p{fill: bento-probe(1)}').includes('bento-refused('),
+  '…as it already was with a space')
+ok(sanitizeSvgCss('.p{fill:not(1)}') === '.p{fill:not(1)}',
+  'a pseudo name used as a value is spared (it can fetch nothing, and CSS drops it as invalid)')
+
 // --- 2. the table, end to end ------------------------------------------------
 //
 // renderTableHtml is a string builder with no DOM in it, so the real output can
