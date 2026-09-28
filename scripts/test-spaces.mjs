@@ -51,6 +51,10 @@ const RIGS = [
   { name: 'invite',  file: 'scripts/test-spaces-invite.ts', bundle: true },
   { name: 'roundtrip', file: 'scripts/test-spaces-roundtrip.ts', bundle: true },
   { name: 'size',    file: 'scripts/test-spaces-size.mjs' },
+  // Revision tracking has no timezone dependency; the browser rig needs the
+  // built spaces shell and Playwright/Chrome (the CI browser job provides both).
+  { name: 'save-revisions', file: 'scripts/test-spaces-save-revisions.ts' },
+  { name: 'save-browser', file: 'scripts/test-spaces-save-browser.mjs' },
 ]
 
 // A rig that exists but is not listed here would never run locally, and the
