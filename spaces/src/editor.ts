@@ -36,6 +36,8 @@ import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale } from './i18n'
 import { openAbout } from './about'
+import { applyDesign, adoptDesign, type Resolved } from './designs.ts'
+import { openDesignPanel } from './designpanel'
 import { openGraphView } from './graph.ts'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
@@ -229,7 +231,7 @@ export class Editor {
     })
     this.store.on('tree', () => this.paintTree())
     this.store.on('page', () => { this.paintPage(); this.paintTree() })
-    this.store.on('doc', () => { this.status(t('Edited')); this.syncHistoryButtons(); this.syncDirty() })
+    this.store.on('doc', () => { this.status(t('Edited')); this.syncHistoryButtons(); this.syncDirty(); this.syncDesign() })
     // A REMOTE change moves the unsaved dot without claiming you made it —
     // 'doc' paints "Edited", 'dirty' paints only the dot. See store.setDirty.
     this.store.on('dirty', () => this.syncDirty())
@@ -1173,9 +1175,31 @@ export class Editor {
   }
 
   // ---- the page -----------------------------------------------------------
+  /**
+   * The design the picker is showing on hover, or undefined for none.
+   * A preview is never document data: it is painted, never committed.
+   */
+  private designPreview: Resolved | null | undefined = undefined
+
+  /**
+   * Put the document's design (or the one being previewed) on the reading
+   * surface. The surface is `.sp-main` and nothing else — the bar, both panels
+   * and every popover stay the reader's (DECISIONS, 2026-09-26).
+   */
+  syncDesign(): void {
+    applyDesign(this.main, this.store.doc, this.designPreview)
+  }
+
+  /** Show a design on the page without writing it; `undefined` ends the preview. */
+  previewDesign(r: Resolved | null | undefined): void {
+    this.designPreview = r
+    this.syncDesign()
+  }
+
   private paintPage(): void {
     const s = this.store
     const page = s.page
+    this.syncDesign()
     // The bar holds a reference to the block host it is floating over, and this
     // is about to replace every one of them.
     this.format?.close()
@@ -4805,7 +4829,12 @@ export class Editor {
       for (const page of plan.pages) if (!page.parent || !arrived.has(page.parent)) page.parent = under
     }
 
-    s.commit(() => { s.doc.pages.push(...plan.pages) })
+    // ONE commit, so ⌘Z takes the pages AND any design they brought
+    let adopted: string | null = null
+    s.commit(() => {
+      s.doc.pages.push(...plan.pages)
+      adopted = adoptDesign(s.doc, plan.design, plan.designs)
+    })
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
     this.status(t('Imported'))
@@ -4829,6 +4858,7 @@ export class Editor {
         lines.push(t('{n} note name(s) appear more than once, so links naming them all went to the first.',
           { n: plan.stats.duplicateNames }))
       }
+      if (adopted) lines.push(t('The notes named a design, so this space now uses it.'))
       if (plan.stats.frontmatter) {
         lines.push(t('{n} page(s) had frontmatter, kept verbatim in a folded block.', { n: plan.stats.frontmatter }))
       }
@@ -5099,6 +5129,9 @@ export class Editor {
     const s = this.store
     const host = el('div', 'sp-printroot')
     host.style.direction = 'ltr'
+    // the document's design, in its LIGHT palette: the dark mapping is
+    // @media screen, so paper never matches it
+    applyDesign(host, s.doc)
 
     const pages = opts.whole
       ? s.tree().map((n) => n.page).filter((p) => opts.archived || !p.archived)
@@ -5210,6 +5243,8 @@ export class Editor {
       // handle, which is what leaves you editing this space afterwards.
       onWriteCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
       onStatus: (msg) => this.status(msg),
+      previewDesign: (r) => this.previewDesign(r),
+      openDesignPanel: () => openDesignPanel(this.store, (r) => this.previewDesign(r)),
     })
   }
 

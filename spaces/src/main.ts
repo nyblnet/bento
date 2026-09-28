@@ -5,6 +5,9 @@
 // what gets re-serialized on save.
 
 import './styles.css'
+// AFTER styles.css: a design rule and the base rule it restyles often tie on
+// specificity, and the tie goes to the later sheet.
+import './designs.css'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
 import { startTheme } from '../../kernel/src/theme.ts'
 import {

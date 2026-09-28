@@ -38,6 +38,8 @@ import {
 import { clearVersions, clearRecovery, listVersions, type Snapshot } from '../../kernel/src/autosave.ts'
 import { t, localeChoices, locale, setLocale } from './i18n'
 import { appearanceSection } from './appearance'
+import { designSection } from './designpanel'
+import { designFrontMatter, type Resolved } from './designs.ts'
 import { esc, textOf } from './sanitize'
 import { docForExport } from './model'
 import { htmlToMd } from './marks.ts'
@@ -75,6 +77,10 @@ export interface AboutHooks {
   onWriteCopy?: (doc: SpacesDoc) => Promise<boolean>
   /** the editor's status line, for the confirmations that outlive the dialog */
   onStatus?: (message: string) => void
+  /** paint a design on the page without writing it (the picker's hover) */
+  previewDesign?: (r: Resolved | null | undefined) => void
+  /** the non-modal customise panel, opened over the page */
+  openDesignPanel?: () => void
 }
 
 /**
@@ -99,7 +105,7 @@ export async function launchUpdateCheck(): Promise<void> {
 }
 
 export function openAbout(hooks: AboutHooks): void {
-  const { store, onRepaint, onSaveCopy, onImport, onExportSpace, onWriteCopy, onStatus } = hooks
+  const { store, onRepaint, onSaveCopy, onImport, onExportSpace, onWriteCopy, onStatus, previewDesign, openDesignPanel } = hooks
   const doc = store.doc
   const returnFocus = document.activeElement as HTMLElement | null
 
@@ -112,6 +118,7 @@ export function openAbout(hooks: AboutHooks): void {
   card.setAttribute('aria-label', t('About this space'))
 
   const close = () => {
+    previewDesign?.(undefined)
     back.remove()
     document.removeEventListener('keydown', onKey, true)
     returnFocus?.focus?.()
@@ -291,6 +298,18 @@ export function openAbout(hooks: AboutHooks): void {
   props.append(titleRow)
   props.append(row(t('Document id'), mono(doc.docId)))
   if (doc.modified) props.append(row(t('Last saved'), mono(shortStamp(doc.modified))))
+
+  // ---- design ------------------------------------------------------------
+  // The AUTHOR's choice, so it sits with the document's own properties and
+  // not with the reader's theme and language further down (DECISIONS,
+  // 2026-09-26). Built in designpanel.ts; this costs one import and one call.
+  if (previewDesign && openDesignPanel) {
+    section(t('Design'), ...designSection({
+      store,
+      preview: previewDesign,
+      openPanel: () => { close(); openDesignPanel() },
+    }))
+  }
 
   // ---- updates -----------------------------------------------------------
   const upSec = section(t('Updates'))
@@ -896,7 +915,9 @@ export function toMarkdown(store: Store): string {
     }
   }
   walk()
-  return out.join('\n').replace(/\n{3,}/g, '\n\n')
+  // The design leads, as front matter, so the Markdown carries the look with
+  // it (designs.ts designFrontMatter). Nothing is written when there is none.
+  return [...designFrontMatter(store.doc), ...out].join('\n').replace(/\n{3,}/g, '\n\n')
 }
 
 /**

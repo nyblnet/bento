@@ -349,6 +349,20 @@ export interface SpacesDoc {
   /** the page shown on open; absent ⇒ pages[0] */
   home?: string
   theme: Theme
+  /**
+   * The page design the AUTHOR chose (DECISIONS 2026-09-26): a built-in name
+   * (designs.ts BUILT_INS) or a key of `designs`. ABSENT = the default look,
+   * and returning to the default DELETES the key. An unknown name renders the
+   * default and round-trips untouched. Document-wide today; a per-page
+   * `Page.design` would resolve through the same function and override it.
+   */
+  design?: string
+  /**
+   * Designs this document carries itself, by name: overrides on a built-in
+   * base, every value validated before use (designs.ts resolveData). A name
+   * that is also a built-in's is never used.
+   */
+  designs?: Record<string, unknown>
   assets?: Record<string, string>
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
   readonly?: boolean
@@ -548,7 +562,13 @@ export const newPage = (title = 'Untitled', extra: Partial<Page> = {}): Page =>
 
 /** Content that matters for "did this change" — excludes volatile fields. */
 export function docContentKey(doc: SpacesDoc): string {
-  return JSON.stringify([doc.title, doc.home, doc.pages])
+  // The design is content: a crash right after choosing one must still offer
+  // the recovery. Appended only when present, so a document with no design
+  // keys exactly as it did before designs existed.
+  const d = doc as { design?: unknown; designs?: unknown }
+  return JSON.stringify(d.design === undefined && d.designs === undefined
+    ? [doc.title, doc.home, doc.pages]
+    : [doc.title, doc.home, doc.pages, d.design ?? null, d.designs ?? null])
 }
 
 // ---- derived, NEVER stored -------------------------------------------------
