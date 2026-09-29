@@ -484,5 +484,185 @@
   },
   "surveyOnlySeen": {
     "message": "با این روش تنها سندهایی پیدا می‌شوند که در این مرورگر باز شده‌اند."
+  },
+  "setAsstTitle": {
+    "message": "دستیار"
+  },
+  "setAsstSub": {
+    "message": "جایی که گفت‌وگو دربارهٔ یک سند به آن فرستاده می‌شود. کلید در همین افزونه می‌ماند — سند فقط پاسخ را می‌بیند."
+  },
+  "asstProvider": {
+    "message": "ارائه‌دهنده"
+  },
+  "asstProvBuiltin": {
+    "message": "مدل داخلی Chrome ‏(Gemini Nano) — روی همین دستگاه"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (کلید AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "سازگار با OpenAI ‏(OpenAI، OpenRouter، Ollama، LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "نشانی پایه"
+  },
+  "asstModel": {
+    "message": "مدل"
+  },
+  "asstKey": {
+    "message": "کلید API"
+  },
+  "asstKeyOptional": {
+    "message": "برای سرور محلی مانند Ollama یا LM Studio اختیاری است."
+  },
+  "asstSave": {
+    "message": "ذخیره"
+  },
+  "asstSaved": {
+    "message": "تنظیمات دستیار ذخیره شد"
+  },
+  "asstAccessDeclined": {
+    "message": "دسترسی به سایت رد شد. درخواست‌ها با این حال فرستاده می‌شوند و وقتی سرور افزونه‌های مرورگر را مجاز بداند (CORS) کار می‌کنند."
+  },
+  "asstCheck": {
+    "message": "بررسی اتصال"
+  },
+  "asstChecking": {
+    "message": "در حال بررسی…"
+  },
+  "asstReachable": {
+    "message": "در دسترس — $1 پاسخ داد."
+  },
+  "asstBuiltinReady": {
+    "message": "روی این دستگاه آماده است."
+  },
+  "asstBuiltinDownload": {
+    "message": "مدل هنوز روی این دستگاه نیست. در تنظیمات افزونهٔ bento/home «دانلود مدل» را بزنید."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "این Chrome مدل داخلی ندارد. در تنظیمات افزونه ارائه‌دهندهٔ دیگری انتخاب کنید."
+  },
+  "asstOnDevice": {
+    "message": "این دستگاه"
+  },
+  "asstNotConfigured": {
+    "message": "دستیار هنوز راه‌اندازی نشده — تنظیمات افزونهٔ bento/home را باز کنید."
+  },
+  "asstUnreachable": {
+    "message": "دسترسی به $1 ممکن نشد. آیا سرور در حال اجراست و درخواست‌های افزونه‌های مرورگر را مجاز می‌داند (CORS)؟"
+  },
+  "asstWaitConsent": {
+    "message": "در انتظار اجازهٔ شما — به پرسش پاسخ دهید و دوباره امتحان کنید."
+  },
+  "asstDenied": {
+    "message": "این سند اجازهٔ استفاده از دستیار را ندارد."
+  },
+  "asstAllowedTitle": {
+    "message": "سندهای مجاز به استفاده از دستیار"
+  },
+  "asstAllowedSub": {
+    "message": "هر سند پیش از نخستین درخواستش یک بار می‌پرسد. یکی را حذف کنید تا دوباره پرسیده شود."
+  },
+  "consentTitle": {
+    "message": "به این سند اجازه داده شود از دستیار شما استفاده کند؟"
+  },
+  "consentLead": {
+    "message": "می‌تواند متن به $1 ‏($2) بفرستد و پاسخ‌ها را بخواند. کلید شما هرگز با آن به اشتراک گذاشته نمی‌شود."
+  },
+  "consentRemember": {
+    "message": "برای این پرونده به خاطر سپرده می‌شود. بعداً می‌توانید آن را در تنظیمات افزونه تغییر دهید."
+  },
+  "consentAllow": {
+    "message": "اجازه"
+  },
+  "consentDeny": {
+    "message": "الآن نه"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome در حال دانلود مدل است. پس از پایان دوباره امتحان کنید."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "دانلود مدل"
+  },
+  "asstBuiltinProgress": {
+    "message": "در حال دانلود مدل… ‎$1٪"
+  },
+  "asstBuiltinRequirements": {
+    "message": "حدود ۲ تا ۴ گیگابایت. Chrome به حدود ۲۲ گیگابایت فضای خالی روی دیسک و شبکه‌ای بدون محدودیت داده نیاز دارد؛ در غیر این صورت مدل را در دسترس نمی‌داند."
+  },
+  "asstContext": {
+    "message": "پنجرهٔ زمینه (توکن)"
+  },
+  "asstContextHint": {
+    "message": "برای استفاده از مقداری که ارائه‌دهنده گزارش می‌دهد خالی بگذارید. برای سرور خودمیزبان که فقط شما حدش را می‌دانید پر کنید."
+  },
+  "asstContextKnown": {
+    "message": "پنجرهٔ زمینه: $1 توکن"
+  },
+  "asstShowAll": {
+    "message": "نمایش همهٔ مدل‌ها، نه فقط مدل‌های گفت‌وگو"
+  },
+  "asstOtherModelRow": {
+    "message": "دیگر…"
+  },
+  "asstOtherModel": {
+    "message": "شناسهٔ مدل، دقیقاً همان‌طور که ارائه‌دهنده نام‌گذاری می‌کند"
+  },
+  "asstBadModel": {
+    "message": "این شناسهٔ مدل نیست: فقط حروف، ارقام و . _ : / -"
+  },
+  "asstWindow": {
+    "message": "این ارائه برای این مدل بیش از حد بزرگ است: درخواست حدود $1 توکن نیاز دارد و مدل $2 می‌پذیرد. مدلی با پنجرهٔ بزرگ‌تر انتخاب کنید یا ارائه را کوتاه کنید."
+  },
+  "asstOutlineOnly": {
+    "message": "فقط طرح کلی در پنجرهٔ این مدل جا شد؛ محتوای انتخاب‌شده به‌طور کامل فرستاده نشد."
+  },
+  "asstNoDocument": {
+    "message": "سند محتوای خود را تحویل نداد."
+  },
+  "asstSendsNotice": {
+    "message": "طرح کلی ارائه و $1 را به $2 می‌فرستد؛ نظرها همین‌جا می‌مانند."
+  },
+  "asstOnDeviceModel": {
+    "message": "مدل روی این دستگاه"
+  },
+  "asstFocusGeneric": {
+    "message": "عنصرهای انتخاب‌شده یا اسلاید باز"
+  },
+  "asstSearch": {
+    "message": "اجازه به مدل برای جست‌وجو در وب"
+  },
+  "asstSearchNative": {
+    "message": "این مسیر جست‌وجوی وب خودش را دارد ($1)؛ تنها چیز تازه‌ای که بیرون می‌رود پرسش است."
+  },
+  "asstSearchNone": {
+    "message": "این مدل جست‌وجوی وب خودش را ندارد — در زیر یک نقطهٔ جست‌وجو تعیین کنید."
+  },
+  "asstRead": {
+    "message": "خواندن صفحات وب"
+  },
+  "asstReadOn": {
+    "message": "اجازهٔ خواندن صفحات وب…"
+  },
+  "asstReadOff": {
+    "message": "توقف خواندن صفحات وب"
+  },
+  "asstReadOnNote": {
+    "message": "دستیار می‌تواند صفحاتی را که می‌یابد بخواند (به‌عنوان متن، هرگز به‌عنوان دستور)."
+  },
+  "asstReadOffNote": {
+    "message": "خاموش. دستیار نمی‌تواند صفحات وب را بخواند؛ یک کلیک اینجا یک بار از مرورگر می‌پرسد."
+  },
+  "asstSearchEndpoint": {
+    "message": "نقطهٔ جست‌وجو"
+  },
+  "asstSearchEndpointHint": {
+    "message": "یک نمونهٔ SearXNG، یا https://api.search.brave.com/ با کلیدش در زیر. فقط وقتی استفاده می‌شود که مدل جست‌وجوی خودش را نداشته باشد."
+  },
+  "asstSearchKey": {
+    "message": "کلید جست‌وجو"
   }
 }

@@ -517,5 +517,185 @@
   },
   "surveyOnlySeen": {
     "message": "這種方式只能找到在此瀏覽器中開啟過的文件。"
+  },
+  "setAsstTitle": {
+    "message": "助理"
+  },
+  "setAsstSub": {
+    "message": "關於文件的對話會送到哪裡。金鑰只保存在此擴充功能中，文件只看得到回覆。"
+  },
+  "asstProvider": {
+    "message": "提供者"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome 內建模型（Gemini Nano）— 在這部裝置上"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini（AI Studio 金鑰）"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic（Claude）"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI 相容（OpenAI、OpenRouter、Ollama、LM Studio……）"
+  },
+  "asstBaseUrl": {
+    "message": "基礎 URL"
+  },
+  "asstModel": {
+    "message": "模型"
+  },
+  "asstKey": {
+    "message": "API 金鑰"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama 或 LM Studio 等本機伺服器可不填。"
+  },
+  "asstSave": {
+    "message": "儲存"
+  },
+  "asstSaved": {
+    "message": "已儲存助理設定"
+  },
+  "asstAccessDeclined": {
+    "message": "網站存取已遭拒絕。要求仍會送出，並在伺服器允許瀏覽器擴充功能（CORS）時正常運作。"
+  },
+  "asstCheck": {
+    "message": "檢查連線"
+  },
+  "asstChecking": {
+    "message": "檢查中……"
+  },
+  "asstReachable": {
+    "message": "可連線 — $1 已回應。"
+  },
+  "asstBuiltinReady": {
+    "message": "已在這部裝置上就緒。"
+  },
+  "asstBuiltinDownload": {
+    "message": "模型尚未在這部裝置上。請在 bento/home 擴充功能的設定中按「下載模型」。"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "這個 Chrome 沒有內建模型。請在擴充功能的設定中選擇其他提供者。"
+  },
+  "asstOnDevice": {
+    "message": "這部裝置"
+  },
+  "asstNotConfigured": {
+    "message": "助理尚未設定 — 請開啟 bento/home 擴充功能的設定。"
+  },
+  "asstUnreachable": {
+    "message": "無法連線至 $1。伺服器是否正在執行？是否允許來自瀏覽器擴充功能的要求（CORS）？"
+  },
+  "asstWaitConsent": {
+    "message": "正在等待您在此裝置上授權…"
+  },
+  "asstDenied": {
+    "message": "在此裝置上被拒絕授權 — 未作任何變更。"
+  },
+  "asstAllowedTitle": {
+    "message": "允許使用助理的文件"
+  },
+  "asstAllowedSub": {
+    "message": "每份文件在第一次要求前會詢問一次。移除後會再次詢問。"
+  },
+  "consentTitle": {
+    "message": "允許這份文件使用您的助理嗎？"
+  },
+  "consentLead": {
+    "message": "它將能夠傳送文字至 $1（$2）並讀取回覆。您的金鑰絕不會與它共用。"
+  },
+  "consentRemember": {
+    "message": "將為這個檔案記住此選擇。之後可以在擴充功能的設定中變更。"
+  },
+  "consentAllow": {
+    "message": "允許"
+  },
+  "consentDeny": {
+    "message": "暫不"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome 正在下載模型。完成後請再試一次。"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "下載模型"
+  },
+  "asstBuiltinProgress": {
+    "message": "正在下載模型…… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "約 2–4 GB。Chrome 需要磁碟約 22 GB 可用空間以及非計量網路，否則會回報模型無法使用。"
+  },
+  "asstContext": {
+    "message": "上下文視窗（token）"
+  },
+  "asstContextHint": {
+    "message": "留空則使用提供者回報的值。自建伺服器的上限只有您知道時，請填寫。"
+  },
+  "asstContextKnown": {
+    "message": "上下文視窗：$1 個 token"
+  },
+  "asstShowAll": {
+    "message": "顯示所有模型，而不只是適合聊天的"
+  },
+  "asstOtherModelRow": {
+    "message": "其他……"
+  },
+  "asstOtherModel": {
+    "message": "模型 ID，與提供者的命名完全一致"
+  },
+  "asstBadModel": {
+    "message": "這不是模型 ID：只能包含字母、數字和 . _ : / -"
+  },
+  "asstWindow": {
+    "message": "僅簡報大綱就已超出此模型的視窗（$1 個 token，視窗為 $2）。請在擴充功能設定中選擇視窗更大的模型。"
+  },
+  "asstOutlineOnly": {
+    "message": "此模型的視窗只容得下大綱，因此它可以修改文字、備註和投影片，但不能修改位置或樣式。"
+  },
+  "asstNoDocument": {
+    "message": "文件沒有交出其內容。"
+  },
+  "asstSendsNotice": {
+    "message": "將簡報大綱和$1傳送到 $2；註解留在本機。"
+  },
+  "asstOnDeviceModel": {
+    "message": "裝置上的模型"
+  },
+  "asstFocusGeneric": {
+    "message": "所選元素或目前開啟的投影片"
+  },
+  "asstSearch": {
+    "message": "允許模型搜尋網頁"
+  },
+  "asstSearchNative": {
+    "message": "此路由有自己的網頁搜尋（$1）；額外送出的只有搜尋詞。"
+  },
+  "asstSearchNone": {
+    "message": "此模型沒有自己的網頁搜尋——請在下方設定搜尋端點。"
+  },
+  "asstRead": {
+    "message": "讀取網頁"
+  },
+  "asstReadOn": {
+    "message": "允許讀取網頁……"
+  },
+  "asstReadOff": {
+    "message": "停止讀取網頁"
+  },
+  "asstReadOnNote": {
+    "message": "助理可以讀取它找到的頁面（作為文字，絕不作為指令）。"
+  },
+  "asstReadOffNote": {
+    "message": "已關閉。助理無法讀取網頁；點擊此處會向瀏覽器詢問一次。"
+  },
+  "asstSearchEndpoint": {
+    "message": "搜尋端點"
+  },
+  "asstSearchEndpointHint": {
+    "message": "一個 SearXNG 執行個體，或 https://api.search.brave.com/ 配合下方金鑰。僅在模型沒有自己的搜尋時使用。"
+  },
+  "asstSearchKey": {
+    "message": "搜尋金鑰"
   }
 }

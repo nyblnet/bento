@@ -484,5 +484,185 @@
   },
   "surveyOnlySeen": {
     "message": "Näin löytyvät vain tässä selaimessa avatut asiakirjat."
+  },
+  "setAsstTitle": {
+    "message": "Avustaja"
+  },
+  "setAsstSub": {
+    "message": "Minne asiakirjaa koskeva keskustelu lähetetään. Avain pysyy tässä laajennuksessa — asiakirja näkee aina vain vastauksen."
+  },
+  "asstProvider": {
+    "message": "Palveluntarjoaja"
+  },
+  "asstProvBuiltin": {
+    "message": "Chromen sisäänrakennettu malli (Gemini Nano) — tällä laitteella"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio -avain)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-yhteensopiva (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Perus-URL"
+  },
+  "asstModel": {
+    "message": "Malli"
+  },
+  "asstKey": {
+    "message": "API-avain"
+  },
+  "asstKeyOptional": {
+    "message": "Valinnainen paikalliselle palvelimelle, kuten Ollamalle tai LM Studiolle."
+  },
+  "asstSave": {
+    "message": "Tallenna"
+  },
+  "asstSaved": {
+    "message": "Avustajan asetukset tallennettu"
+  },
+  "asstAccessDeclined": {
+    "message": "Pääsy sivustoon evättiin. Pyynnöt tehdään silti, ja ne toimivat, kun palvelin sallii selainlaajennukset (CORS)."
+  },
+  "asstCheck": {
+    "message": "Tarkista yhteys"
+  },
+  "asstChecking": {
+    "message": "Tarkistetaan…"
+  },
+  "asstReachable": {
+    "message": "Tavoitettavissa — $1 vastasi."
+  },
+  "asstBuiltinReady": {
+    "message": "Valmis tällä laitteella."
+  },
+  "asstBuiltinDownload": {
+    "message": "Malli ei ole vielä tällä laitteella. Paina ”Lataa malli” bento/home-laajennuksen asetuksissa."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Tässä Chromessa ei ole sisäänrakennettua mallia. Valitse toinen palveluntarjoaja laajennuksen asetuksista."
+  },
+  "asstOnDevice": {
+    "message": "tämä laite"
+  },
+  "asstNotConfigured": {
+    "message": "Avustajaa ei ole vielä otettu käyttöön — avaa bento/home-laajennuksen asetukset."
+  },
+  "asstUnreachable": {
+    "message": "Palvelinta $1 ei tavoitettu. Onko palvelin käynnissä, ja salliiko se selainlaajennusten pyynnöt (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Odotetaan lupaasi — vastaa kysymykseen ja yritä sitten uudelleen."
+  },
+  "asstDenied": {
+    "message": "Tämä asiakirja ei saa käyttää avustajaa."
+  },
+  "asstAllowedTitle": {
+    "message": "Asiakirjat, jotka saavat käyttää avustajaa"
+  },
+  "asstAllowedSub": {
+    "message": "Jokainen asiakirja kysyy kerran ennen ensimmäistä pyyntöään. Poista yksi, niin sitä kysytään uudelleen."
+  },
+  "consentTitle": {
+    "message": "Saako tämä asiakirja käyttää avustajaasi?"
+  },
+  "consentLead": {
+    "message": "Se voi lähettää tekstiä kohteeseen $1 ($2) ja lukea vastaukset. Avaintasi ei koskaan jaeta sille."
+  },
+  "consentRemember": {
+    "message": "Muistetaan tälle tiedostolle. Voit muuttaa tätä myöhemmin laajennuksen asetuksista."
+  },
+  "consentAllow": {
+    "message": "Salli"
+  },
+  "consentDeny": {
+    "message": "Ei nyt"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome lataa mallia. Yritä uudelleen, kun lataus on valmis."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Lataa malli"
+  },
+  "asstBuiltinProgress": {
+    "message": "Ladataan mallia… $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Noin 2–4 Gt. Chrome tarvitsee noin 22 Gt vapaata levytilaa ja verkon, jossa ei ole datarajaa; muuten se ilmoittaa, ettei malli ole saatavilla."
+  },
+  "asstContext": {
+    "message": "Kontekstin ikkuna (tokeneita)"
+  },
+  "asstContextHint": {
+    "message": "Jätä tyhjäksi, niin käytetään palveluntarjoajan ilmoittamaa arvoa. Täytä itse ylläpidetylle palvelimelle, jonka rajan vain sinä tiedät."
+  },
+  "asstContextKnown": {
+    "message": "Kontekstin ikkuna: $1 tokenia"
+  },
+  "asstShowAll": {
+    "message": "Näytä kaikki mallit, ei vain keskusteluun tarkoitetut"
+  },
+  "asstOtherModelRow": {
+    "message": "Muu…"
+  },
+  "asstOtherModel": {
+    "message": "Mallin tunnus täsmälleen palveluntarjoajan nimeämänä"
+  },
+  "asstBadModel": {
+    "message": "Tuo ei ole mallin tunnus: vain kirjaimia, numeroita ja . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Esitys on liian suuri tälle mallille: pyyntö tarvitsee noin $1 tokenia ja malli ottaa $2. Valitse malli, jolla on suurempi ikkuna, tai lyhennä esitystä."
+  },
+  "asstOutlineOnly": {
+    "message": "Vain jäsennys mahtui tämän mallin ikkunaan; valittua sisältöä ei lähetetty kokonaan."
+  },
+  "asstNoDocument": {
+    "message": "Asiakirja ei luovuttanut sisältöään."
+  },
+  "asstSendsNotice": {
+    "message": "Lähettää esityksen jäsennyksen ja $1 kohteeseen $2; kommentit jäävät tänne."
+  },
+  "asstOnDeviceModel": {
+    "message": "tämän laitteen malli"
+  },
+  "asstFocusGeneric": {
+    "message": "valitut elementit tai avoinna oleva dia"
+  },
+  "asstSearch": {
+    "message": "Anna mallin hakea verkosta"
+  },
+  "asstSearchNative": {
+    "message": "Tällä reitillä on oma verkkohaku ($1); hakukysely on ainoa uusi asia, joka lähtee."
+  },
+  "asstSearchNone": {
+    "message": "Tällä mallilla ei ole omaa verkkohakua — määritä hakupäätepiste alla."
+  },
+  "asstRead": {
+    "message": "Verkkosivujen lukeminen"
+  },
+  "asstReadOn": {
+    "message": "Salli verkkosivujen lukeminen…"
+  },
+  "asstReadOff": {
+    "message": "Lopeta verkkosivujen lukeminen"
+  },
+  "asstReadOnNote": {
+    "message": "Avustaja voi lukea löytämiään sivuja (tekstinä, ei koskaan ohjeina)."
+  },
+  "asstReadOffNote": {
+    "message": "Pois. Avustaja ei voi lukea verkkosivuja; napsautus tässä kysyy selaimelta kerran."
+  },
+  "asstSearchEndpoint": {
+    "message": "Hakupäätepiste"
+  },
+  "asstSearchEndpointHint": {
+    "message": "SearXNG-instanssi tai https://api.search.brave.com/ ja sen avain alla. Käytetään vain, kun mallilla ei ole omaa hakua."
+  },
+  "asstSearchKey": {
+    "message": "Hakuavain"
   }
 }

@@ -484,5 +484,185 @@
   },
   "surveyOnlySeen": {
     "message": "Cara ini hanya menemui dokumen yang pernah dibuka dalam pelayar ini."
+  },
+  "setAsstTitle": {
+    "message": "Pembantu"
+  },
+  "setAsstSub": {
+    "message": "Ke mana sembang tentang dokumen dihantar. Kunci kekal dalam sambungan ini — dokumen hanya pernah melihat balasannya."
+  },
+  "asstProvider": {
+    "message": "Pembekal"
+  },
+  "asstProvBuiltin": {
+    "message": "Model terbina dalam Chrome (Gemini Nano) — pada peranti ini"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (kunci AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Serasi OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL asas"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "Kunci API"
+  },
+  "asstKeyOptional": {
+    "message": "Pilihan untuk pelayan setempat seperti Ollama atau LM Studio."
+  },
+  "asstSave": {
+    "message": "Simpan"
+  },
+  "asstSaved": {
+    "message": "Tetapan pembantu disimpan"
+  },
+  "asstAccessDeclined": {
+    "message": "Akses tapak ditolak. Permintaan tetap dibuat, dan berfungsi apabila pelayan membenarkan sambungan pelayar (CORS)."
+  },
+  "asstCheck": {
+    "message": "Semak sambungan"
+  },
+  "asstChecking": {
+    "message": "Menyemak…"
+  },
+  "asstReachable": {
+    "message": "Boleh dicapai — $1 menjawab."
+  },
+  "asstBuiltinReady": {
+    "message": "Sedia pada peranti ini."
+  },
+  "asstBuiltinDownload": {
+    "message": "Model belum ada pada peranti ini. Tekan “Muat turun model” dalam tetapan sambungan bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Chrome ini tiada model terbina dalam. Pilih pembekal lain dalam tetapan sambungan."
+  },
+  "asstOnDevice": {
+    "message": "peranti ini"
+  },
+  "asstNotConfigured": {
+    "message": "Pembantu belum disediakan — buka tetapan sambungan bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Tidak dapat mencapai $1. Adakah pelayan sedang berjalan, dan adakah ia membenarkan permintaan daripada sambungan pelayar (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Menunggu kebenaran anda — jawab gesaan itu, kemudian cuba lagi."
+  },
+  "asstDenied": {
+    "message": "Dokumen ini tidak dibenarkan menggunakan pembantu."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumen yang dibenarkan menggunakan pembantu"
+  },
+  "asstAllowedSub": {
+    "message": "Setiap dokumen bertanya sekali sebelum permintaan pertamanya. Buang satu untuk ditanya semula."
+  },
+  "consentTitle": {
+    "message": "Benarkan dokumen ini menggunakan pembantu anda?"
+  },
+  "consentLead": {
+    "message": "Ia akan dapat menghantar teks ke $1 ($2) dan membaca balasannya. Kunci anda tidak pernah dikongsi dengannya."
+  },
+  "consentRemember": {
+    "message": "Diingati untuk fail ini. Anda boleh mengubahnya kemudian dalam tetapan sambungan."
+  },
+  "consentAllow": {
+    "message": "Benarkan"
+  },
+  "consentDeny": {
+    "message": "Bukan sekarang"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome sedang memuat turun model. Cuba lagi apabila selesai."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Muat turun model"
+  },
+  "asstBuiltinProgress": {
+    "message": "Memuat turun model… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Kira-kira 2–4 GB. Chrome memerlukan lebih kurang 22 GB ruang kosong pada cakera dan rangkaian tanpa had data; jika tidak, model dilaporkan tidak tersedia."
+  },
+  "asstContext": {
+    "message": "Tetingkap konteks (token)"
+  },
+  "asstContextHint": {
+    "message": "Biarkan kosong untuk menggunakan nilai yang dilaporkan pembekal. Isi untuk pelayan hos sendiri yang hadnya hanya anda tahu."
+  },
+  "asstContextKnown": {
+    "message": "Tetingkap konteks: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Tunjukkan semua model, bukan hanya yang untuk sembang"
+  },
+  "asstOtherModelRow": {
+    "message": "Lain-lain…"
+  },
+  "asstOtherModel": {
+    "message": "ID model, tepat seperti yang dinamakan pembekal"
+  },
+  "asstBadModel": {
+    "message": "Itu bukan ID model: hanya huruf, digit dan . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Pembentangan terlalu besar untuk model ini: permintaan memerlukan kira-kira $1 token dan model menerima $2. Pilih model dengan tetingkap lebih besar, atau pendekkan pembentangan."
+  },
+  "asstOutlineOnly": {
+    "message": "Hanya rangka yang muat dalam tetingkap model ini; kandungan yang dipilih tidak dihantar sepenuhnya."
+  },
+  "asstNoDocument": {
+    "message": "Dokumen tidak menyerahkan kandungannya."
+  },
+  "asstSendsNotice": {
+    "message": "Menghantar rangka pembentangan dan $1 ke $2; komen kekal di sini."
+  },
+  "asstOnDeviceModel": {
+    "message": "model pada peranti ini"
+  },
+  "asstFocusGeneric": {
+    "message": "elemen yang dipilih atau slaid yang terbuka"
+  },
+  "asstSearch": {
+    "message": "Benarkan model mencari di web"
+  },
+  "asstSearchNative": {
+    "message": "Laluan ini ada carian web sendiri ($1); pertanyaan ialah satu-satunya perkara baharu yang keluar."
+  },
+  "asstSearchNone": {
+    "message": "Model ini tiada carian web sendiri — tetapkan titik akhir carian di bawah."
+  },
+  "asstRead": {
+    "message": "Membaca halaman web"
+  },
+  "asstReadOn": {
+    "message": "Benarkan membaca halaman web…"
+  },
+  "asstReadOff": {
+    "message": "Berhenti membaca halaman web"
+  },
+  "asstReadOnNote": {
+    "message": "Pembantu boleh membaca halaman yang ditemuinya (sebagai teks, bukan sebagai arahan)."
+  },
+  "asstReadOffNote": {
+    "message": "Dimatikan. Pembantu tidak boleh membaca halaman web; satu klik di sini bertanya kepada pelayar sekali."
+  },
+  "asstSearchEndpoint": {
+    "message": "Titik akhir carian"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Contoh SearXNG, atau https://api.search.brave.com/ dengan kuncinya di bawah. Digunakan hanya apabila model tiada carian sendiri."
+  },
+  "asstSearchKey": {
+    "message": "Kunci carian"
   }
 }

@@ -484,5 +484,185 @@
   },
   "surveyOnlySeen": {
     "message": "Zo worden alleen documenten gevonden die in deze browser zijn geopend."
+  },
+  "setAsstTitle": {
+    "message": "Assistent"
+  },
+  "setAsstSub": {
+    "message": "Waar een chat over een document naartoe gaat. De sleutel blijft in deze extensie — een document ziet alleen ooit het antwoord."
+  },
+  "asstProvider": {
+    "message": "Aanbieder"
+  },
+  "asstProvBuiltin": {
+    "message": "Ingebouwd Chrome-model (Gemini Nano) — op dit apparaat"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio-sleutel)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-compatibel (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Basis-URL"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "API-sleutel"
+  },
+  "asstKeyOptional": {
+    "message": "Optioneel voor een lokale server zoals Ollama of LM Studio."
+  },
+  "asstSave": {
+    "message": "Opslaan"
+  },
+  "asstSaved": {
+    "message": "Assistentinstellingen opgeslagen"
+  },
+  "asstAccessDeclined": {
+    "message": "Sitetoegang is geweigerd. Verzoeken worden toch gedaan, en werken als de server browserextensies toestaat (CORS)."
+  },
+  "asstCheck": {
+    "message": "Verbinding controleren"
+  },
+  "asstChecking": {
+    "message": "Controleren…"
+  },
+  "asstReachable": {
+    "message": "Bereikbaar — $1 heeft geantwoord."
+  },
+  "asstBuiltinReady": {
+    "message": "Klaar op dit apparaat."
+  },
+  "asstBuiltinDownload": {
+    "message": "Het model staat nog niet op dit apparaat. Druk op “Model downloaden” in de instellingen van de extensie bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Deze Chrome heeft geen ingebouwd model. Kies een andere aanbieder in de instellingen van de extensie."
+  },
+  "asstOnDevice": {
+    "message": "dit apparaat"
+  },
+  "asstNotConfigured": {
+    "message": "De assistent is nog niet ingesteld — open de instellingen van de extensie bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Kan $1 niet bereiken. Draait de server, en staat die verzoeken van browserextensies toe (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Wachten op uw toestemming — beantwoord de vraag en probeer het opnieuw."
+  },
+  "asstDenied": {
+    "message": "Dit document mag de assistent niet gebruiken."
+  },
+  "asstAllowedTitle": {
+    "message": "Documenten die de assistent mogen gebruiken"
+  },
+  "asstAllowedSub": {
+    "message": "Elk document vraagt één keer, vóór zijn eerste verzoek. Verwijder er een om opnieuw gevraagd te worden."
+  },
+  "consentTitle": {
+    "message": "Dit document uw assistent laten gebruiken?"
+  },
+  "consentLead": {
+    "message": "Het kan dan tekst naar $1 ($2) sturen en de antwoorden lezen. Uw sleutel wordt er nooit mee gedeeld."
+  },
+  "consentRemember": {
+    "message": "Onthouden voor dit bestand. U kunt dit later wijzigen in de instellingen van de extensie."
+  },
+  "consentAllow": {
+    "message": "Toestaan"
+  },
+  "consentDeny": {
+    "message": "Niet nu"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome downloadt het model. Probeer het opnieuw als het klaar is."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Model downloaden"
+  },
+  "asstBuiltinProgress": {
+    "message": "Model wordt gedownload… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Ongeveer 2–4 GB. Chrome heeft zo’n 22 GB vrije schijfruimte en een netwerk zonder datalimiet nodig, anders meldt het dat het model niet beschikbaar is."
+  },
+  "asstContext": {
+    "message": "Contextvenster (tokens)"
+  },
+  "asstContextHint": {
+    "message": "Laat leeg om te gebruiken wat de aanbieder meldt. Vul het in voor een zelf gehoste server waarvan alleen u de limiet kent."
+  },
+  "asstContextKnown": {
+    "message": "Contextvenster: $1 tokens"
+  },
+  "asstShowAll": {
+    "message": "Alle modellen tonen, niet alleen die voor chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Anders…"
+  },
+  "asstOtherModel": {
+    "message": "Model-id, precies zoals de aanbieder het noemt"
+  },
+  "asstBadModel": {
+    "message": "Dat is geen model-id: alleen letters, cijfers en . _ : / -"
+  },
+  "asstWindow": {
+    "message": "De presentatie is te groot voor dit model: het verzoek heeft ongeveer $1 tokens nodig en het model neemt er $2. Kies een model met een groter venster of kort de presentatie in."
+  },
+  "asstOutlineOnly": {
+    "message": "Alleen de outline paste in het venster van dit model; de geselecteerde inhoud is niet volledig verstuurd."
+  },
+  "asstNoDocument": {
+    "message": "Het document heeft zijn inhoud niet overhandigd."
+  },
+  "asstSendsNotice": {
+    "message": "Stuurt de outline van de presentatie en $1 naar $2; opmerkingen blijven hier."
+  },
+  "asstOnDeviceModel": {
+    "message": "het model op dit apparaat"
+  },
+  "asstFocusGeneric": {
+    "message": "de geselecteerde elementen of de geopende dia"
+  },
+  "asstSearch": {
+    "message": "Het model op het web laten zoeken"
+  },
+  "asstSearchNative": {
+    "message": "Deze route heeft eigen webzoeken ($1); de zoekopdracht is het enige nieuwe dat vertrekt."
+  },
+  "asstSearchNone": {
+    "message": "Dit model heeft geen eigen webzoeken — stel hieronder een zoek-endpoint in."
+  },
+  "asstRead": {
+    "message": "Webpagina’s lezen"
+  },
+  "asstReadOn": {
+    "message": "Lezen van webpagina’s toestaan…"
+  },
+  "asstReadOff": {
+    "message": "Stoppen met webpagina’s lezen"
+  },
+  "asstReadOnNote": {
+    "message": "De assistent kan gevonden pagina’s lezen (als tekst, nooit als instructies)."
+  },
+  "asstReadOffNote": {
+    "message": "Uit. De assistent kan geen webpagina’s lezen; een klik hier vraagt het de browser één keer."
+  },
+  "asstSearchEndpoint": {
+    "message": "Zoek-endpoint"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Een SearXNG-instantie, of https://api.search.brave.com/ met de sleutel hieronder. Alleen gebruikt als het model geen eigen zoeken heeft."
+  },
+  "asstSearchKey": {
+    "message": "Zoeksleutel"
   }
 }
