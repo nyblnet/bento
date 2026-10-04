@@ -47,7 +47,7 @@ import { parseDocInputReport } from '../compactload'
 import { gateRestored, guardOpenedDoc } from '../restoregate'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
-import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
+import { deletePlan, expand, moveBlock, parents, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
 import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
@@ -3186,8 +3186,13 @@ export class Editor {
         if (this.store.selection.length) {
           void navigator.clipboard?.writeText?.(serializeElements(this.store.selectedElements, this.store.doc)).catch(() => {})
         } else {
-          void navigator.clipboard?.writeText?.(serializeSlides([this.store.slide], this.store.doc)).catch(() => {})
-          this.toast(t('Slide copied — ⌘V in any deck to paste it'))
+          const slides = this.selectedSlides()
+          void navigator.clipboard?.writeText?.(serializeSlides(slides, this.store.doc)).catch(() => {})
+          if (slides.length > 1) {
+            this.toast(t('Slides copied — ⌘V in any deck to paste it'))
+          } else {
+            this.toast(t('Slide copied — ⌘V in any deck to paste it'))
+          }
         }
         return
       }
@@ -3270,12 +3275,33 @@ export class Editor {
     this.store.select([])
   }
 
-  /** Put the selection (or, with nothing selected, the slide) on the system
+  /** Selected slides + parents in deck order. */
+  private selectedSlides(): Slide[] {
+    if (this.thumbSel.length) {
+      // Ideally we use `expand` but paste is not `unit` aware at the moment.
+      // Should really be done as a follow up.
+      const indexes = parents(this.store.doc.slides, this.thumbSel)
+      const selected = []
+      for (const i of indexes) {
+        const slide = this.store.doc.slides[i]
+        if (slide) {
+          selected.push(slide)
+        }
+      }
+      if (selected.length > 0) {
+        return selected
+      }
+    }
+    // Fallback to the slide that was selected.
+    return [this.store.slide]
+  }
+
+  /** Put the selection (or, with nothing selected, the slides) on the system
    *  clipboard as a Bento payload. Shared by ⌘C and the context menu. */
   private copySelection() {
     const text = this.store.selection.length
       ? serializeElements(this.store.selectedElements, this.store.doc)
-      : serializeSlides([this.store.slide], this.store.doc)
+      : serializeSlides(this.selectedSlides(), this.store.doc)
     void navigator.clipboard?.writeText?.(text).catch(() => {})
   }
 
