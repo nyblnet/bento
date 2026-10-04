@@ -477,6 +477,38 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **A saved copy of a shared space rejoins its live session with its offline
+  edits.** ⌘S, Save a copy and both self-update writes now stamp the live
+  session's sync state into the file (`collab.sync`), as bento/slides always
+  has. Before, a copy edited away from the session reopened as if it had never
+  synced: its edits stayed in that copy and never reached anyone else, and an
+  edit to a paragraph somebody had also changed was overwritten by theirs.
+  Measured in two Chrome tabs: edit in one, save, edit the saved file offline,
+  edit in the other tab meanwhile, reopen — the old build ends with the two
+  tabs disagreeing; this one shows both edits in both tabs. View-only copies,
+  page extracts, Markdown and JSON exports, and "Duplicate as a new space…"
+  carry no sync state, and a file opened read-only is never re-stamped.
+- **⌘Z no longer undoes who a space is.** Undo restores a snapshot of the
+  whole document, and it used to bring that snapshot's identity back with the
+  content: edit something, then Stop sharing, and the next ⌘Z switched sharing
+  back on, silently rejoining the room you had just left. A key rotation could
+  be undone into the revoked key the same way, and a new docId or a read-only
+  mode reverted to whatever the snapshot held. Undo and redo now move content
+  only. The docId, the live-session credentials and the read-only and template
+  modes always stay as they are in the open space. Restoring a version, the
+  recovery banner, Replace from JSON and `bento.loadDoc` follow the same rule:
+  they replace the pages, title and theme, and never the space's identity.
+  Bento Slides had the same bug.
+- **A copy that cannot write never gets writer chrome.** Whether a copy may
+  write was decided by `collab.role !== 'reader'`, so the live-show
+  `'audience'` role — and any role added later — passed as a writer: an
+  audience copy opened editable, was labelled Editor in People, and made local
+  commits the relay then refused. It is an allowlist now (`copyCanWrite` in
+  `share.ts`, the same shape as bento/type's): no role field or `'writer'`
+  writes, anything else opens view-only. Every gate — the boot lock, the Share
+  popover, the People label — asks that one function. Plain files and legacy
+  rooms open exactly as before.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

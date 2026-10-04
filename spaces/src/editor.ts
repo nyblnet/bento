@@ -5168,7 +5168,8 @@ export class Editor {
     this.store.endRun()
     // Copies rejoin as true FORKS: the stamped CRDT state is what lets an
     // offline edit on either side merge two-way rather than clobber.
-    this.session?.stampInto(this.store.doc)
+    // (readerCopy clears it again — a viewer is not a fork.)
+    shareModule.stampSync(this.store, this.session)
     const out = kind === 'invite'
       ? await shareModule.inviteCopy(this.store.doc)
       : shareModule.readerCopy(this.store.doc)
@@ -5210,6 +5211,8 @@ export class Editor {
       // handle, which is what leaves you editing this space afterwards.
       onWriteCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
       onStatus: (msg) => this.status(msg),
+      // both self-update writes carry this space's CRDT state, as ⌘S does
+      onBeforeWrite: () => shareModule.stampSync(this.store, this.session),
     })
   }
 
