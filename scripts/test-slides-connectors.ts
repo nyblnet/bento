@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { TIPS, TIP_KINDS, tipSpec, tipInsetPx, endTangent, shortenPathEnds, movePathEnds, pathEnds } from '../slides/src/tips.ts'
 import { parseBezier } from '../slides/src/editor/bezier.ts'
-import { borderPoint, lineEndpoints, setLineEndpoints } from '../kernel/src/geom.ts'
+import { borderPoint, lineEndpoints, setLineEndpoints, boxCenter, sideMidpoint, connectorEndpoint, boxAnchors, nearestAnchor, boxContains, type ConnectorSide, type Box, type Pt as GPt } from '../kernel/src/geom.ts'
 
 let failures = 0
 let checks = 0
@@ -191,6 +191,86 @@ ok(/el\.shape !== 'line' && el\.shape !== 'path'/.test(editor) && /if \(isPath\)
 const canvas = read('slides/src/editor/canvas.ts')
 ok(/kind === 'curve-connector'/.test(canvas) && /el\.lineEnd = 'arrow'\n\s+if \(fromA\) el\.from/.test(canvas), 'the Curved connector tool draws a path with a tip and anchors like Connector')
 ok(/label: 'Curved connector'/.test(editor) && /label: 'Double arrow'/.test(editor), 'both new shapes are in the Shape menu')
+
+console.log('\nconnector routing + snapping moved to the kernel (byte-identical)\n')
+// The diagram-engine lift (step 3) moved the connector SEMANTICS — border/side
+// routing, the box anchor set, nearest-anchor snapping and the padded hit-test —
+// into kernel/src/geom.ts, and slides' editor.ts/canvas.ts now call them. Pin the
+// relocation to the exact inline code it replaced: reference implementations are
+// verbatim what synced/anchorsFor/snap/elementAt computed before, and the kernel
+// helpers must agree byte-for-byte across side, auto and free-end cases.
+{
+  type Side = ConnectorSide
+  const SIDES: Array<Side | undefined> = [undefined, 'auto', 'top', 'right', 'bottom', 'left']
+  // OLD inline code, verbatim:
+  const oldEnd = (box: Box, side: Side | undefined, toward: GPt): GPt =>
+    side && side !== 'auto' ? sideMidpoint(box, side) : borderPoint(box, toward)
+  const oldAnchors = (e: Box) => [
+    { side: 'top' as const, pt: { x: e.x + e.w / 2, y: e.y } },
+    { side: 'right' as const, pt: { x: e.x + e.w, y: e.y + e.h / 2 } },
+    { side: 'bottom' as const, pt: { x: e.x + e.w / 2, y: e.y + e.h } },
+    { side: 'left' as const, pt: { x: e.x, y: e.y + e.h / 2 } },
+    { side: 'auto' as const, pt: { x: e.x + e.w / 2, y: e.y + e.h / 2 } },
+  ]
+  type Snap = { el: string; side: Side; pt: GPt } | null
+  const oldSnap = (anchors: ReturnType<typeof oldAnchors>, p: GPt, tol: number): Snap => {
+    let best: Snap = null
+    let bd = tol
+    for (const cand of anchors) {
+      const d = Math.hypot(p.x - cand.pt.x, p.y - cand.pt.y)
+      if (d < bd) { bd = d; best = { el: 'x', side: cand.side, pt: cand.pt } }
+    }
+    return best
+  }
+  const oldContains = (e: Box, pt: GPt, pad: number) =>
+    pt.x >= e.x - pad && pt.x <= e.x + e.w + pad && pt.y >= e.y - pad && pt.y <= e.y + e.h + pad
+
+  const eq = (a: GPt, b: GPt) => a.x === b.x && a.y === b.y
+  // deterministic LCG so a failure reproduces
+  let seed = 0x2f6df6
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
+  const box = (): Box => ({ x: rnd() * 2000 - 500, y: rnd() * 2000 - 500, w: 1 + rnd() * 600, h: 1 + rnd() * 400 })
+  const pt = (): GPt => ({ x: rnd() * 2000 - 500, y: rnd() * 2000 - 500 })
+
+  let endOk = true, anchorOk = true, snapOk = true, containsOk = true, scenarioOk = true
+  for (let i = 0; i < 4000; i++) {
+    const b = box(), toward = pt(), side = SIDES[Math.floor(rnd() * SIDES.length)]
+    if (!eq(connectorEndpoint(b, side, toward), oldEnd(b, side, toward))) endOk = false
+    const a1 = boxAnchors(b), a0 = oldAnchors(b)
+    if (JSON.stringify(a1) !== JSON.stringify(a0)) anchorOk = false
+    const p = pt(), tol = rnd() * 60
+    const n1 = nearestAnchor(a1, p, tol), n0 = oldSnap(a0, p, tol)
+    if (JSON.stringify(n1 && { side: n1.side, pt: n1.pt }) !== JSON.stringify(n0 && { side: n0.side, pt: n0.pt })) snapOk = false
+    const pad = rnd() * 30
+    if (boxContains(b, p, pad) !== oldContains(b, p, pad)) containsOk = false
+  }
+  ok(endOk, 'connectorEndpoint == the old inline end() across side / auto / free-end (4000 cases)')
+  ok(anchorOk, 'boxAnchors == the old anchorsFor list, same order (4000 boxes)')
+  ok(snapOk, 'nearestAnchor == the old snap selection, same tie-order (4000 points)')
+  ok(containsOk, 'boxContains == the old elementAt predicate (4000 points × pads)')
+
+  // full connector scenarios: two boxes, each kind of anchoring, na/nb both ways
+  for (let i = 0; i < 2000; i++) {
+    const fb = box(), tb = box()
+    const [la, lb] = lineEndpoints({ x: Math.min(fb.x, tb.x), y: fb.y, w: 200, h: 4, rotation: 0 })
+    for (const fs of SIDES) for (const ts of SIDES) {
+      const na1 = connectorEndpoint(fb, fs, boxCenter(tb))
+      const nb1 = connectorEndpoint(tb, ts, boxCenter(fb))
+      const na0 = oldEnd(fb, fs, boxCenter(tb))
+      const nb0 = oldEnd(tb, ts, boxCenter(fb))
+      if (!eq(na1, na0) || !eq(nb1, nb0)) scenarioOk = false
+    }
+    // free end: one side anchored, the other rides toward the loose endpoint
+    if (!eq(connectorEndpoint(fb, undefined, lb), oldEnd(fb, undefined, lb))) scenarioOk = false
+    if (!eq(connectorEndpoint(tb, 'auto', la), oldEnd(tb, 'auto', la))) scenarioOk = false
+  }
+  ok(scenarioOk, 'two-box connectors route identically for every from/to side pair + a free end (2000 × 38)')
+
+  // slides imports the kernel helpers through ./lineedit (the one import site)
+  ok(/export \{ boxCenter, borderPoint, sideMidpoint, boxAnchors, connectorEndpoint, nearestAnchor, boxContains/.test(read('slides/src/editor/lineedit.ts')), 'lineedit re-exports the connector geom — ./lineedit stays the import site')
+  ok(/connectorEndpoint\(fromBox, c\.from\?\.side/.test(editor) && !/const end = \(box/.test(editor), 'editor.ts syncConnectors calls connectorEndpoint, inline end() gone')
+  ok(/boxAnchors\(this\.store\.slide\.elements\.find/.test(canvas) && /nearestAnchor\(anchorsFor\(id\)/.test(canvas) && /boxContains\(e, pt, pad\)/.test(canvas), 'canvas.ts uses boxAnchors / nearestAnchor / boxContains, inline dups gone')
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

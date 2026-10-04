@@ -24,7 +24,7 @@ import { movePathEnds, pathEnds } from '../tips'
 import {
   isLineLike, lineEndpoints, pathIsClosed, pathIsStraight, setLineEndpoints, type Pt,
 } from '../../../kernel/src/geom.ts'
-export { boxCenter, borderPoint, sideMidpoint } from '../../../kernel/src/geom.ts'
+export { boxCenter, borderPoint, sideMidpoint, boxAnchors, connectorEndpoint, nearestAnchor, boxContains, type ConnectorSide } from '../../../kernel/src/geom.ts'
 export { isLineLike, lineEndpoints, pathIsClosed, pathIsStraight, setLineEndpoints }
 
 const rnd = (v: number) => Math.round(v * 100) / 100

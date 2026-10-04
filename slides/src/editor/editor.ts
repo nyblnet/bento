@@ -30,7 +30,7 @@ import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
-import { borderPoint, boxCenter, lineEndpoints, pathEndpoints, setLineEndpoints, setPathEndpoints, sideMidpoint } from './lineedit'
+import { boxCenter, connectorEndpoint, lineEndpoints, pathEndpoints, setLineEndpoints, setPathEndpoints } from './lineedit'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
 import { stepOf } from '../steps'
@@ -2540,11 +2540,10 @@ export class Editor {
       const [a, b] = isPath ? pathEnds! : lineEndpoints(c)
       const fromBox = c.from ? byId.get(c.from.el) : null
       const toBox = c.to ? byId.get(c.to.el) : null
-      // explicit side → pin to that side's midpoint; 'auto' → nearest border
-      const end = (box: SlideElement, side: 'auto' | 'top' | 'right' | 'bottom' | 'left' | undefined, toward: { x: number; y: number }) =>
-        side && side !== 'auto' ? sideMidpoint(box, side) : borderPoint(box, toward)
-      const na = fromBox ? end(fromBox, c.from?.side, toBox ? boxCenter(toBox) : b) : a
-      const nb = toBox ? end(toBox, c.to?.side, fromBox ? boxCenter(fromBox) : a) : b
+      // explicit side → pin to that side's midpoint; 'auto' → ride the border
+      // toward the other end (kernel geom: connectorEndpoint)
+      const na = fromBox ? connectorEndpoint(fromBox, c.from?.side, toBox ? boxCenter(toBox) : b) : a
+      const nb = toBox ? connectorEndpoint(toBox, c.to?.side, fromBox ? boxCenter(fromBox) : a) : b
       if (Math.hypot(na.x - a.x, na.y - a.y) > 0.5 || Math.hypot(nb.x - b.x, nb.y - b.y) > 0.5) {
         if (isPath) setPathEndpoints(c, na, nb)
         else setLineEndpoints(c, na, nb)
