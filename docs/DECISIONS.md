@@ -14,6 +14,45 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-04 — "+" offers only apps that can be made now, on every host
+
+**Decision.** A host's "New document" offers an app only when that app's
+release channel serves a release that **verifies** — signature, app identity
+and rollback floor, the same checks used to create the document — or when a
+verified shell for it is already cached. Read at runtime, each time "+" opens.
+This **supersedes** one line of "2026-08-16 — Creating a document: every host
+VERIFIES the release it downloads": *"the app list is aspirational on every
+host. All three say '<App> has not been released yet'."*
+
+**Why.** The aspirational list offered every app and refused the unreleased
+ones after they were chosen. On 2026-10-04 that meant Spaces and Dash in the
+iOS menu with both channels answering 404 — two options in front of App Review
+that do nothing, which is guideline 2.1's placeholder case. The list existed to
+keep "adding an app to the list is the whole integration" true; reading the
+channels at runtime keeps that and adds that an app now appears by itself the
+day its channel goes live, with no host release.
+
+**Two details that matter.**
+
+- **Verified, not merely reachable.** An HTTP 200 with a bad signature does not
+  put an app in the menu. Offering something the create path would then refuse
+  is the failure being replaced, so the two must apply the same checks.
+- **The cache keeps offline "New" working.** A shell in the host's own cache
+  was verified when it was written, so an app used before stays on offer with
+  no connection. With no live channel and nothing cached, "+" says so, rather
+  than showing an empty menu.
+
+It is still only the release channel, and still only when creating a
+document. Probes run concurrently, so "+" waits for the slowest channel rather
+than the sum of them, capped at 8 s.
+
+**Status.** iOS implements it first (`home/ios/Releases.swift`
+`available()`). Android and the extension still show the aspirational list and
+follow once this is accepted — until then the hosts differ on this one point,
+recorded here rather than left to be found.
+
+---
+
 ## 2026-08-19 — Cross-app embedding: static render + source, never a second renderer
 
 **Decision.** One block/element shape, `bento/embed`, shared by every app in both
