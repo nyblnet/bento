@@ -63,10 +63,14 @@ const sha256Hex = async (bytes: Uint8Array): Promise<string> =>
     .join('')
 
 // --- browser globals the module graph expects -------------------------------
+/** what the dev override slot holds; cases set it */
+let storedPacksUrl: string | null = null
 Object.defineProperty(globalThis, 'localStorage', {
   configurable: true,
-  value: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  value: { getItem: (k: string) => (k === 'bento-packs-url' ? storedPacksUrl : null), setItem: () => {}, removeItem: () => {} },
 })
+/** every URL fetched, in order — which channel the module actually spoke to */
+const fetched: string[] = []
 
 // Swap ONLY the trust root: any EC JWK import (there is exactly one call site,
 // verifySigned's) resolves to the test public key. Everything else passes
@@ -123,6 +127,7 @@ const res = (body: Uint8Array | string, status = 200) => ({
 Object.defineProperty(globalThis, 'fetch', {
   configurable: true,
   value: async (url: string, init?: { method?: string }) => {
+    fetched.push(url)
     if (url === `${CHANNEL}/packs.json`) return servedIndex === null ? res('', 404) : res(servedIndex)
     if (url === `${CHANNEL}/${PACK_URL}`) {
       if (servedPack === null) return res('', 404)
@@ -260,6 +265,34 @@ packs.unstageFromFile('fil')
 i18n.setLocale('tl')
 ok(i18n.t('Delete') === 'Delete', 'removing the pack removes its alias too')
 i18n.setLocale('en')
+
+// --- the channel override reads from the host ------------------------------
+//
+// 'bento-packs-url' is a boot-read override. Where every local document
+// shares one storage (file://, an opaque origin — kernel net.ts
+// sharedStorageOrigin), it is ignored; on a real web origin it is honoured.
+// Node has no `location`, so the module sees a shared origin by default —
+// the fail-safe reading.
+console.log('\nthe channel override')
+{
+  storedPacksUrl = 'https://evil.example/channel'
+  fetched.length = 0
+  await packs.availablePacks()
+  ok(fetched.length > 0 && fetched.every((u) => u.startsWith(CHANNEL + '/')) && !fetched.some((u) => u.includes('evil.example')), `shared storage (the default here): the override is ignored, the default channel is spoken to (${fetched[0]})`)
+  // a real web origin: the override is a developer's own setting and is honoured
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: { protocol: 'https:', origin: 'https://dev.example' } })
+  Object.defineProperty(globalThis, 'self', { configurable: true, value: { origin: 'https://dev.example' } })
+  fetched.length = 0
+  await packs.availablePacks()
+  ok(fetched.length > 0 && fetched.every((u) => u.startsWith('https://evil.example/channel/')), `a real origin: the override is honoured (${fetched[0]})`)
+  // file:// is shared even with a location
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: { protocol: 'file:', origin: 'null' } })
+  Object.defineProperty(globalThis, 'self', { configurable: true, value: { origin: 'null' } })
+  fetched.length = 0
+  await packs.availablePacks()
+  ok(fetched.length > 0 && fetched.every((u) => u.startsWith(CHANNEL + '/')), 'file://: the override is ignored')
+  storedPacksUrl = null
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) {
