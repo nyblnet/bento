@@ -437,6 +437,12 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     // MARK: - the save bridge
 
     func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
+        // Only the open document may use the bridge. Checked before anything in
+        // the message is read; see BridgeSender.
+        let sender = message.frameInfo.securityOrigin
+        guard BridgeSender.accepts(isMainFrame: message.frameInfo.isMainFrame,
+                                   scheme: sender.protocol, host: sender.host,
+                                   documentHost: originHost) else { return }
         guard let m = message.body as? [String: Any],
               let id = m["id"] as? Int, let op = m["op"] as? String else { return }
 

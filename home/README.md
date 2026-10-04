@@ -460,7 +460,7 @@ here rather than discovered later.
 | per-document origin | `bento-tray://<sha24>` custom scheme | `https://<sha24>.bento-tray.invalid`, intercepted | same |
 | document served from memory, never parsed | ✓ | ✓ | same |
 | bridge injected at document start | `WKUserScript(.atDocumentStart)` | `addDocumentStartJavaScript` | same |
-| bridge reachable only from the document | `forMainFrameOnly` | `allowedOriginRules` + `isMainFrame` | same |
+| bridge reachable only from the document | every message checked: main frame + own origin (`BridgeSender`) | `allowedOriginRules` + `isMainFrame` | same |
 | first `begin` = open document, later = export | ✓ | ✓ | same |
 | an export can never address the open file | `exportName` + `targetsOpenDocument` | identical logic | same |
 | page-supplied filenames sanitised | `safeFileName` | `safeFileName` | same |
