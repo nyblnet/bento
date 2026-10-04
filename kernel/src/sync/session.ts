@@ -1054,7 +1054,15 @@ export class SyncSession {
     const view = this.host.captureView?.()
     try {
       const res = this.state.mergeSnapshot(this.store.doc, rdoc, rstate)
-      if (res.changed) this.afterRemoteChange(true, view)
+      if (res.changed) {
+        this.afterRemoteChange(true, view)
+        // We absorbed register-only state a snapshot carried — it isn't in our
+        // log, so a peer that joins later can't learn it from our catch-up. Carry
+        // it onward: re-snap new peers too (bounded once-per-peer, see 'hello').
+        // This is what converges a 3-tab offline chain (A forks, B merges A, C
+        // joins asking B) over replay-less BroadcastChannel.
+        this.carriesForkState = true
+      }
     } finally {
       this.applying = false
     }

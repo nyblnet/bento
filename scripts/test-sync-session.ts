@@ -467,6 +467,47 @@ H('a non-fork session does not snap new peers (log catch-up suffices)');
   sA.stop?.();
 }
 
+// Offline chain: A forks, B merges A's snapshot (so B holds that state only in
+// registers), then C joins asking B. B must carry the fork onward — otherwise C,
+// a third same-machine tab with no relay replay, never converges.
+H('a merged-in fork is carried onward to a third tab (offline chain)');
+{
+  const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));
+  const docId = `chain-${Math.random().toString(36).slice(2, 8)}`;
+  // A: build + open the fork
+  const base = newDoc(); base.docId = docId;
+  (base as unknown as { collab: { room: string; key: string; on: boolean } }).collab = { room: 'r', key: 'k', on: true };
+  const seed = new Store(clone(base)); const sseed = new SyncSession(seed);
+  seed.commit(() => { seed.doc.title = 'forked offline'; });
+  await settle();
+  (sseed as unknown as { stampInto: (d: unknown) => void }).stampInto(seed.doc);
+  sseed.stop?.();
+  const A = new Store(clone(seed.doc)); const sA = new SyncSession(A);
+  const aSent: Array<{ t: string; doc?: unknown; state?: unknown }> = [];
+  sA.addTransport(() => ({ send: (f: { t: string }) => aSent.push(f), close() {} }) as never);
+  (sA as unknown as { onFrame: (f: unknown) => void }).onFrame({ t: 'hello', a: 'B', vv: {}, p: {}, pv: SYNC_V });
+  const aSnap = aSent.find((f) => f.t === 'snap') as undefined | { doc: unknown; state: unknown };
+  ok(!!aSnap, 'A offered its fork snapshot');
+  sA.stop?.();
+
+  // B: a pristine replica that MERGES A's snapshot (holds the state in registers)
+  const pristine = newDoc(); pristine.docId = docId; pristine.title = 'original';
+  const B = new Store(clone(pristine)); const sB = new SyncSession(B);
+  const bSent: Array<{ t: string; doc?: { title?: string } }> = [];
+  sB.addTransport(() => ({ send: (f: { t: string }) => bSent.push(f), close() {} }) as never);
+  (sB as unknown as { applySnapshot: (d: unknown, s: unknown) => void }).applySnapshot(aSnap!.doc, aSnap!.state);
+  ok(B.doc.title === 'forked offline', 'B merged the fork content');
+  ok((sB as unknown as { carriesForkState: boolean }).carriesForkState === true,
+    'B now carries the fork state onward');
+
+  // C: a third tab joins later, asking B — B must re-snap it
+  bSent.length = 0;
+  (sB as unknown as { onFrame: (f: unknown) => void }).onFrame({ t: 'hello', a: 'C', vv: {}, p: {}, pv: SYNC_V });
+  const bSnap = bSent.find((f) => f.t === 'snap') as undefined | { doc?: { title?: string } };
+  ok(!!bSnap && bSnap.doc?.title === 'forked offline', 'B re-sends the fork to the third tab');
+  sB.stop?.();
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 // BroadcastChannel and the heartbeat keep node's event loop alive
 process.exit(failures ? 1 : 0);
