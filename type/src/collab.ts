@@ -42,6 +42,7 @@ import { SyncSession, hostStore, type Peer, type SyncNotice } from './sync/sessi
 import type { Store } from './store.ts';
 import type { Editor } from './editor.ts';
 import type { TypeDoc } from './model.ts';
+import { copyCanWrite } from './model.ts';
 import { t } from './i18n.ts';
 
 // ─────────────────────────────────────────────────────────────── small DOM
@@ -309,7 +310,10 @@ export function initCollab(store: Store, editor: Editor): void {
 
     if (cme) {
       let myRole: 'owner' | 'editor' | 'viewer' | undefined;
-      if (cme.role === 'reader') myRole = 'viewer';
+      // A copy that cannot write is a Viewer whatever else it carries — an
+      // audience copy holds an owner-signed INVITE (its show ticket), and the
+      // line below would otherwise have called it an Editor.
+      if (!copyCanWrite(cme)) myRole = 'viewer';
       else if (cme.v === 2 && cme.ownerPriv) myRole = 'owner';
       else if (cme.v === 2 && cme.invite) myRole = 'editor';
       if (myRole) {
@@ -366,7 +370,7 @@ export function initCollab(store: Store, editor: Editor): void {
       status.textContent = t('○ Not live — turns on when you share');
     }
 
-    const canWrite = !!cme && cme.role !== 'reader';
+    const canWrite = copyCanWrite(cme);
     if (canWrite) {
       const label = el('div', 'tc-label');
       label.textContent = t('Share a copy');

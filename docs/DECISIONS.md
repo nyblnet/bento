@@ -7417,3 +7417,27 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-10-04 — Whether a copy may write is an allowlist of roles (type)
+
+**A copy's write capability is decided by the roles that can write, never by
+the roles that cannot.** bento/type's share popover and People label asked
+`collab.role !== 'reader'`. When #454 added `'audience'` — a live-show member
+whose transport is receive-only (kernel/src/sync/online.ts) — that test
+answered "yes": an audience copy opened in type was labelled **Editor** and
+offered "Invite to edit…" and "View-only copy…", contradicting the transport
+beneath it. Measured: an audience-shaped `collab` survives `parseDoc` with
+`role: 'audience'` intact, and the old test returns true for it. The relay
+still refused its writes, so the defect was a misleading UI, not a capability.
+
+`copyCanWrite` (type/src/model.ts) now returns true only for an absent role
+(every file older than the role field writes) or `'writer'`, and both gates in
+type/src/collab.ts use it. It fails CLOSED: a role nobody has taught it about
+gets view-only chrome, which is a visible, harmless bug, where the denylist's
+failure was invisible and misleading. Type's `collab.role` type is also widened
+to the kernel's own union (sync/crdt.ts) — it was narrower, which is why
+nothing flagged the gap.
+
+The same `!== 'reader'` shape stands in slides (editor.ts), spaces (share.ts)
+and dash (sync/online.ts); filed for those zones rather than changed here.
+`test-type-model.ts` pins the shape, including a role nobody has invented yet.

@@ -345,8 +345,15 @@ export interface TypeDoc {
     v?: number;
     owner?: string;
     ownerPriv?: string;
-    /** 'reader' = this copy is a live viewer: receives updates, never sends. */
-    role?: 'writer' | 'reader';
+    /**
+     * What this COPY may do. Absent or 'writer' = it writes. 'reader' = a live
+     * viewer: receives updates, never sends. 'audience' = a live-SHOW member
+     * (kernel sync, #454): its key is the show key and its transport is
+     * receive-only. Typed to match the kernel's own union (sync/crdt.ts) — it
+     * was narrower here, which is how a role the kernel can hand us came to be
+     * read as a writer by collab.ts. See `copyCanWrite`.
+     */
+    role?: 'writer' | 'reader' | 'audience';
     invite?: {
       pub: string;
       priv: string;
@@ -359,6 +366,25 @@ export interface TypeDoc {
   };
   /** unknown fields are PRESERVED — format additivity (PLATFORM §3) */
   [extra: string]: unknown;
+}
+
+/**
+ * May THIS COPY write to its room?
+ *
+ * An ALLOWLIST, and the shape is the point. collab.ts used to ask
+ * `role !== 'reader'`, which answers "yes" for every role invented after it —
+ * so when the kernel added 'audience' (a live-show member whose transport is
+ * receive-only), type labelled that copy an Editor and offered it "Invite to
+ * edit…", contradicting the transport underneath. Failing CLOSED is the safe
+ * direction: a future role that can write would show view-only chrome until
+ * someone teaches this function about it, which is a visible, harmless bug;
+ * the old shape's failure was an invisible, misleading one.
+ *
+ * Absent means writer because every file older than the role field is one.
+ */
+export function copyCanWrite(collab: TypeDoc['collab'] | undefined): boolean {
+  if (!collab) return false;
+  return collab.role === undefined || collab.role === 'writer';
 }
 
 /**
