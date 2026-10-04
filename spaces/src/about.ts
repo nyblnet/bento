@@ -657,10 +657,9 @@ export function openAbout(hooks: AboutHooks): void {
       // The live session belongs to THIS document, not to the pasted text.
       // Content is imported; identity and capability are not — adopting the
       // pasted `collab` would either wipe the room credentials or silently
-      // move this space into somebody else's room.
-      const keep = store.doc.collab
-      if (keep) res.doc.collab = keep
-      else delete res.doc.collab
+      // move this space into somebody else's room. replaceDoc keeps the live
+      // docId, collab and file mode itself (store.ts FROM_LIVE), for this and
+      // every other whole-document restore.
       store.replaceDoc(res.doc)
       onRepaint()
       close()

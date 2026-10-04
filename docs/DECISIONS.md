@@ -7417,3 +7417,35 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-10-04 — Spaces: undo, redo and every whole-document restore keep the live identity (`FROM_LIVE`)
+
+`spaces/src/store.ts` exports `FROM_LIVE = ['docId', 'collab', 'readonly',
+'template']`: top-level keys that a whole-document restore always takes from
+the LIVE document, never from what it restores. It has the same name and shape
+as slides' `FROM_LIVE` (`slides/src/restoregate.ts`, the same fix for slides'
+snapshot undo, #605), so the kernel can lift one shared list later. It applies
+to undo, redo and `replaceDoc`, which is the path for version history, the
+recovery banner, Replace from JSON and `bento.loadDoc`. Before this fix, an
+edit followed by Stop sharing came back ON at the next ⌘Z.
+
+Each key, and why it is identity rather than content:
+- `docId` never changes (PLATFORM §3). Versions and recovery are keyed by it,
+  so a restore that changed it would detach the space from its own history.
+- `collab` is a capability, and its `on` switch is a choice made about this
+  copy. A snapshot from before Stop sharing would rejoin the room. One from
+  before Rotate keys would bring back the revoked key.
+- `readonly` is the file's sealed mode, and undo must not unseal it.
+- `template` re-mints `docId` on every open, so it controls identity. Slides
+  has no such field, which is the one difference between the two lists.
+
+Kept OFF the list on purpose: `theme` and any other design setting are
+content and undo like content. `format`, `version` and `policy` describe how
+the content is encoded and travel with it. `assets` is a different case: undo
+and redo keep the live assets because snapshots leave them out to save space,
+but a `replaceDoc` brings its own.
+
+Version restore keeps the live `docId` and `collab` for the same reason undo
+does. A version is a past state of the content, and the room and keys are
+this copy's present capability. Restoring from before a rotation or before
+Stop sharing must not re-arm what the person turned off.

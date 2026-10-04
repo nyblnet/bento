@@ -313,7 +313,7 @@ bento.removeBlocks([ids])                  // → {ok:true, removed, missing, ad
 bento.moveBlock(id, {pageId?, afterId?, beforeId?, parent?})
 bento.updatePage(id, patch)                // → {ok:true, id} | {ok:false, err}
 bento.removePage(id, {descendants?})       // → {ok:true, removed, rehomed, links}
-bento.loadDoc(json)                        // replace everything (one undo step)
+bento.loadDoc(json)                        // replace the content (one undo step); docId, collab, readonly, template stay
 
 bento.serialize()                          // the whole .bento.html file
 bento.undo() / bento.redo()

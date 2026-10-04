@@ -477,6 +477,18 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **⌘Z no longer undoes who a space is.** Undo restores a snapshot of the
+  whole document, and it used to bring that snapshot's identity back with the
+  content: edit something, then Stop sharing, and the next ⌘Z switched sharing
+  back on, silently rejoining the room you had just left. A key rotation could
+  be undone into the revoked key the same way, and a new docId or a read-only
+  mode reverted to whatever the snapshot held. Undo and redo now move content
+  only. The docId, the live-session credentials and the read-only and template
+  modes always stay as they are in the open space. Restoring a version, the
+  recovery banner, Replace from JSON and `bento.loadDoc` follow the same rule:
+  they replace the pages, title and theme, and never the space's identity.
+  Bento Slides had the same bug.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
