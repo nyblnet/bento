@@ -86,6 +86,20 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
   { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly', tip: 'Click to place corners; click the first point (or double-click) to close the shape' },
 ]
 
+/**
+ * May this copy write? An ALLOWLIST that fails closed: a deck with no live
+ * session, or one whose role is absent (owner and legacy writer copies) or
+ * 'writer'. Every other role — 'reader', 'audience', and any role a later
+ * version adds — is read-only here. It used to be `role !== 'reader'`, a
+ * denylist that answered yes for the broadcast 'audience' role, so an audience
+ * copy dropped onto a running editor got "Invite to edit…", "Reset access…"
+ * and an Editor label. (The relay refused its writes all along; this was the
+ * chrome, not the capability.)
+ */
+export function canWriteDeck(collab: { role?: string } | undefined): boolean {
+  return !collab || collab.role === undefined || collab.role === 'writer'
+}
+
 export class Editor {
   private canvas!: SlideCanvas
   private panel!: PropsPanel
@@ -138,6 +152,10 @@ export class Editor {
     store.on('doc', () => this.syncThemeRefs())
     store.on('doc', () => this.syncFonts())
     this.syncFonts()
+    // A document that cannot write can ARRIVE in a running editor, not only boot
+    // in one — an audience or reader copy dropped onto it, or loaded by script.
+    // The build-time check never sees those, so the lock follows the document.
+    store.on('doc', () => { if (!store.readOnly && !canWriteDeck(store.doc.collab)) this.enterReaderMode() })
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
@@ -524,7 +542,7 @@ export class Editor {
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
 
-    if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
+    if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
   }
 
   /** Live viewer: block user edits (store.readOnly), hide editing chrome, and
@@ -1356,7 +1374,7 @@ export class Editor {
     if (cme) {
       let myPub: string | undefined
       let myRole: 'owner' | 'editor' | 'viewer' | undefined
-      if (cme.role === 'reader') myRole = 'viewer'
+      if (!canWriteDeck(cme)) myRole = 'viewer'
       else if (cme.v === 2 && cme.ownerPriv) { myRole = 'owner'; myPub = cme.owner }
       else if (cme.v === 2 && cme.invite) {
         myRole = 'editor'
@@ -1461,7 +1479,7 @@ export class Editor {
 
     // SHARE ACTIONS — sharing IS files: each button saves a copy to send, and
     // turns the live session on. Labels stay short; the tooltips explain.
-    const canWrite = !!cme && cme.role !== 'reader'
+    const canWrite = !!cme && canWriteDeck(cme)
     if (canWrite) {
       const label = div('ed-share-label')
       label.textContent = t('Share a copy')

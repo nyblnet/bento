@@ -20,6 +20,13 @@ pre-1.0.
   was left out. Tables and charts become marked placeholders for now.
   The same conversion runs from a terminal as
   `node convert/cli.mjs deck.pptx`.
+- **A view-only or audience copy opened inside the editor stays view-only.**
+  Dropping an audience copy (the hand-out for a live show) onto an open deck,
+  or loading one by script, used to offer "Invite to edit…", "Go live" and
+  "Reset access…" and call you an Editor; a read-only copy opened the same way
+  could be edited. Both are now locked, the same as when you open them
+  directly. The live session never accepted their changes; now the editor
+  agrees.
 
 ## [1.2.5] — 2026-09-28
 
