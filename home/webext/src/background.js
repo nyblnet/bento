@@ -35,6 +35,7 @@ import { checkForUpdate } from './update.js'
 import { learnPrefix } from './db.js'
 import { t } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
+import * as docstore from './store.js'
 
 // Re-exported: these moved to route.js so the PAGES can place a path too,
 // but they are still part of this module's tested surface.
@@ -268,6 +269,41 @@ export async function write(sender, text, deps) {
   }
 }
 
+// ---------------------------------------------------------------- DocStore
+//
+// The document's sidecar data, in this origin (store.js). The PATH is the
+// sender's, derived here; nothing in the payload can name another one.
+
+const STORE_OPS = {
+  'store.get': docstore.get, 'store.chunk': docstore.chunk, 'store.put': docstore.put,
+  'store.commit': docstore.commit, 'store.set': docstore.set, 'store.list': docstore.list,
+  'store.delete': docstore.remove,
+}
+let storeDeps = null
+export function docstoreDeps() {
+  if (!storeDeps) {
+    storeDeps = {
+      db: docstore.idbAdapter(),
+      now: () => Date.now(),
+      txid: () => crypto.randomUUID(),
+      // a file is still there if file:// answers for it (the extension can read file://)
+      exists: async (path) => {
+        const r = await fetch(`file://${path.split('/').map(encodeURIComponent).join('/')}`, { method: 'HEAD' })
+        return r.ok
+      },
+    }
+  }
+  return storeDeps
+}
+export async function storeOp(op, sender, payload, deps = docstoreDeps()) {
+  const fn = STORE_OPS[op]
+  if (!fn) return { ok: false, reason: 'unknown op' }
+  // Top frame only, here too: the content scripts never run in a sub-frame,
+  // but a partition is too valuable to rest on that alone.
+  const path = sender?.frameId === 0 ? pathFromSender(sender) : null
+  return fn(path, payload ?? {}, deps)
+}
+
 // `chrome` is absent when this module is loaded by the test rig, which imports
 // the logic above and never needs the listener.
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
@@ -281,6 +317,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'claim' ? claim(sender)
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
+      : typeof msg?.op === 'string' && msg.op.startsWith('store.') ? storeOp(msg.op, sender, msg.payload)
       : Promise.resolve({ ok: false, reason: 'unknown op' })
     run.then((r) => {
       sendResponse(r)
@@ -305,6 +342,9 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   // would cost the `alarms` permission for a courtesy. Store installs are never
   // asked — `checkForUpdate` returns immediately for them.
   chrome.runtime.onStartup?.addListener(() => void checkForUpdate())
+  // DocStore's sweep: partitions of files that are gone or untouched for a
+  // month, and transfers that never committed. Once per browser session.
+  chrome.runtime.onStartup?.addListener(() => { void docstore.gc(docstoreDeps()).catch(() => {}) })
   chrome.runtime.onInstalled?.addListener(() => void checkForUpdate())
   void reportLapsed()
 

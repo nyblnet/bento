@@ -1319,6 +1319,10 @@ document.addEventListener('visibilitychange', () => {
 // Before ANY painting: a saved language choice has to be in hand, or the page
 // renders in the browser's language and visibly re-renders a moment later.
 await initI18n()
+// The extension's storage holds documents' version history (store.js): ask
+// the browser not to evict it under disk pressure. Best effort — the answer
+// is the browser's, and nothing depends on it.
+try { void navigator.storage?.persist?.() } catch { /* not offered */ }
 localize()
 
 // Read BEFORE the first grid render, so someone who chose list mode never

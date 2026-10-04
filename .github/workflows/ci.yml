@@ -611,6 +611,14 @@ jobs:
         # request. Every failure mode here is silent by nature.
         run: node scripts/test-webext-update.ts
 
+      - name: WebExtension DocStore rig
+        # A document's recovery, version history and keys live in the
+        # extension's origin, partitioned by the file path the browser reports.
+        # One document must never reach another's entries, a payload must never
+        # name a partition, bytes must survive the base64 and chunked paths, and
+        # a half-sent value must never be visible.
+        run: node scripts/test-webext-store.ts
+
       - name: WebExtension localisation rig
         # Every failure mode of a message catalogue is silent: a key the code
         # uses but English lacks renders as the key name, a locale missing a key
