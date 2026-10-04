@@ -87,6 +87,15 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
 ]
 
 /**
+ * The PowerPoint importer on the site (bento/convert's page, #589). A LINK,
+ * not a feature of this file: the conversion needs the network, and a saved
+ * deck never loads anything on its own, so the entry opens the page in a new
+ * tab and says so in its tooltip. Slides' release carries the site, so the
+ * entry and the page ship together.
+ */
+export const IMPORT_PPTX_URL = 'https://bento.page/import'
+
+/**
  * May this copy write? An ALLOWLIST that fails closed: a deck with no live
  * session, or one whose role is absent (owner and legacy writer copies) or
  * 'writer'. Every other role — 'reader', 'audience', and any role a later
@@ -945,6 +954,10 @@ export class Editor {
       item(ICONS.code, t('Replace from JSON…'),
         t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
         () => this.openReplaceJson())
+      // with the other import, where spaces has Import Markdown…
+      item(ICONS.importDoc, t('Import PowerPoint…'),
+        t('Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.'),
+        () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') })
       item(ICONS.template, t('Start from scratch…'),
         t('Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.'),
         () => this.startFromScratch())

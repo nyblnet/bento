@@ -273,6 +273,7 @@ export const zhHant: Catalog = {
   "That is already a caption": "這已經是題注",
   "That is not a bento/type document: {detail}": "這不是 bento/type 文件：{detail}",
   "That is not an address this document can link to": "這不是本文件可以連結到的位址",
+  "That saved version could not be restored.": "無法還原該已儲存的版本。",
   "That sheet is larger than any printer takes.": "該紙張尺寸超出任何印表機的支援範圍。",
   "That sheet is smaller than 2 inches — pick a bigger page.": "該紙張尺寸小於 2 英吋 — 請選擇更大的頁面。",
   "The document is the interchange unit: hand this JSON to an AI, get one back, and paste it in. `window.bento` exposes the same thing to scripts.": "文件本身就是交換單元：把這段 JSON 交給 AI，拿到回傳結果後貼回來即可。指令碼可透過 `window.bento` 使用相同的介面。",

@@ -58,7 +58,7 @@ const LIMIT = 200;
  */
 export const FROM_LIVE = ['docId', 'collab', 'readonly'] as const;
 
-function keepLiveIdentity(doc: TypeDoc, live: TypeDoc): void {
+export function keepLiveIdentity(doc: TypeDoc, live: TypeDoc): void {
   const d = doc as unknown as Record<string, unknown>;
   const l = live as unknown as Record<string, unknown>;
   for (const k of FROM_LIVE) {

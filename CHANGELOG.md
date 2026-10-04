@@ -27,6 +27,9 @@ pre-1.0.
   could be edited. Both are now locked, the same as when you open them
   directly. The live session never accepted their changes; now the editor
   agrees.
+- **Save as → Import PowerPoint…** The Save-as menu has an entry next to
+  Replace from JSON that opens that importer (bento.page/import) in a new tab.
+  It needs an internet connection, and the entry's tooltip says so.
 
 ## [1.2.5] — 2026-09-28
 
