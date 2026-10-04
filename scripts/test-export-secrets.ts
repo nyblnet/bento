@@ -238,6 +238,21 @@ for (const name of EXPORTS) {
 ok(!/writeText\(JSON\.stringify\(this\.store\.doc\)/.test(body('copyDocJson')),
   'copyDocJson() copies a stripped CLONE, never the live document')
 
+// The invite copy (slides' "Invite to edit…", saveEditorCopy) keeps the room and
+// adds a scoped invite. Calling the stripper is not enough — it must run FIRST:
+// stripped after the invite is minted, nothing is lost, but stripped never (or
+// re-attached after) and the deck's own writerPriv/ownerPriv travel beside the
+// invite — a second way in that the People list cannot revoke. The same order
+// SHARE_APPS pins for spaces' share.ts below; slides mints its copies from
+// editor.ts methods rather than a share module, so it is pinned here.
+{
+  const inv = mask(body('saveEditorCopy'))
+  const strip = inv.search(/stripCollabSecrets\(\s*clone\s*,\s*\{\s*keepRoom:\s*true\s*\}\s*\)/)
+  const mint = inv.indexOf('mintInvite(')
+  ok(strip >= 0 && mint >= 0 && strip < mint,
+    'saveEditorCopy() strips the clone (keepRoom) BEFORE it mints the scoped invite')
+}
+
 // The audience copy (live broadcast) is the one export that does NOT go
 // through stripCollabSecrets: it is built by the audience PROJECTION, which
 // replaces the collab block outright (show key as collab.key, audience
@@ -426,7 +441,12 @@ function exportedBody(src: string, name: string): string {
   return src.slice(open, i + 1)
 }
 
-const SHARE_APPS = ['spaces']
+// The BUILDER checks hold for every app that mints share copies in a share.ts.
+// They covered spaces alone until 2026-10-04 — and type, which built its copies
+// inline in collab.ts with a stripper that kept writerPriv, went unchecked.
+// The CALL-SITE checks below are spaces' editor architecture and stay spaces'.
+const SHARE_APPS = ['spaces', 'type']
+const SHARE_CALLSITE_APPS = new Set(['spaces'])
 for (const app of SHARE_APPS) {
   const rel = `${app}/src/share.ts`
   let src: string
@@ -451,6 +471,14 @@ for (const app of SHARE_APPS) {
     `${rel}: it strips FIRST — a stray writerPriv beside an invite is a second, unrevokable way in`)
   ok(!/ownerPriv\s*[,}]/.test(mask(exportedBody(src, 'readerCopy'))),
     `${rel}: readerCopy never re-attaches a private key`)
+
+  if (!SHARE_CALLSITE_APPS.has(app)) {
+    // type's call site: collab.ts must build every copy through share.ts.
+    const collab = read(`${app}/src/collab.ts`)
+    ok(/inviteCopy\(/.test(collab) && /readerCopy\(/.test(collab) && !/stripCollabSecrets/.test(collab),
+      `${app}/src/collab.ts mints share copies only through share.ts`)
+    continue
+  }
 
   // The call site. A share copy must reach the file through a writer that takes
   // a DOCUMENT — the ordinary save path serializes the open one.

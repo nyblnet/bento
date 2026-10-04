@@ -196,5 +196,59 @@ ok(!isOwner(memberDoc), 'an invited copy does not read as the owner')
 ok((await inviteCopy(memberDoc)) === null, 'inviteCopy() refuses — it holds no key to root a chain in')
 ok(canWrite(memberDoc), '…but it can still write, which is the point of an invite')
 
+// ---------------------------------------------------------------------------
+console.log('\nwhich copies may write — an allowlist that fails closed')
+
+// share.ts used to ask `role !== 'reader'`, which answers "yes" for every role
+// invented after it. The kernel's 'audience' (a live-show member, receive-only
+// transport) is the one that exists today; the rest stand in for tomorrow's.
+// Every gate — canWrite, isReaderCopy, the boot lock in main.ts, the People
+// label in collabui.ts — answers through copyCanWrite, so this pins all of them.
+{
+  const { copyCanWrite, isReaderCopy } = await import('../spaces/src/share.ts')
+  const { Store } = await import('../spaces/src/store.ts')
+  const withCollab = (collab: unknown): SpacesDoc => ({ ...JSON.parse(JSON.stringify(doc)), collab }) as SpacesDoc
+  const room = { v: 2, on: true, room: c.room, key: c.key, owner: c.owner }
+  const writes = (d: SpacesDoc) => canWrite(d) && !isReaderCopy(d)
+  const locked = (d: SpacesDoc) => !canWrite(d) && isReaderCopy(d)
+
+  ok(writes(doc), 'an OWNER copy writes (no role field; marked by ownerPriv)')
+  ok(writes(memberDoc), 'an invited editor writes')
+  ok(writes(withCollab({ ...room, role: 'writer' })), "role 'writer' writes")
+  ok(writes(withCollab({ on: true, room: 'r1', key: 'K', writerPub: 'WP', writerPriv: 'WK' })),
+    'a LEGACY copy with no role field writes — every pre-role file is one')
+  const plain = withCollab(undefined)
+  delete plain.collab
+  ok(!isReaderCopy(plain), 'a plain file with NO collab is not locked — it opens editable exactly as before')
+
+  ok(locked(viewer!), "role 'reader' is read-only")
+  ok(locked(withCollab({ ...room, role: 'audience',
+    invite: { pub: 'IP', priv: 'IK', role: 'audience', sig: 'S' } })),
+    "role 'audience' is read-only — though it carries an invite, which is what made it read as an Editor")
+  ok(locked(withCollab({ ...room, role: 'presenter-of-tomorrow' })),
+    'a role nobody has taught this about fails CLOSED, not open')
+  ok(locked(withCollab({ ...room, role: 7 })), 'a non-string role is read-only')
+  ok(locked(withCollab({ ...room, role: null })), 'a null role is read-only — null is not absent')
+  ok(locked(withCollab(JSON.parse(`{"room":"w1","key":"K","role":"__proto__"}`))), "role '__proto__' is read-only")
+  ok(locked(withCollab(JSON.parse(`{"room":"w1","key":"K","role":"owner"}`))),
+    "role 'owner' is read-only — it is not a role value; ownership is a key, not a label")
+  // Inherited `role` must not answer for the file in either direction.
+  ok(!copyCanWrite(Object.assign(Object.create({ role: 'writer' }), { role: 'reader', room: 'w1', key: 'K' })),
+    'an own reader role is not overridden by an inherited writer one')
+
+  // The lock as main.ts derives it, and what it does to a commit.
+  const audienceDoc = withCollab({ ...room, role: 'audience' })
+  const s = new Store(audienceDoc)
+  if (audienceDoc.readonly || isReaderCopy(audienceDoc)) s.readOnly = true
+  const before = JSON.stringify(s.doc)
+  s.commit(() => { s.doc.title = 'changed by an audience' })
+  ok(s.readOnly && JSON.stringify(s.doc) === before && !s.dirty,
+    'an audience copy boots with a read-only store, and its commit is a no-op')
+  const ws = new Store(withCollab({ ...room, role: 'writer' }))
+  if (isReaderCopy(ws.doc)) ws.readOnly = true
+  ws.commit(() => { ws.doc.title = 'changed by a writer' })
+  ok(!ws.readOnly && ws.doc.title === 'changed by a writer', '…and a writer copy commits as before')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)
