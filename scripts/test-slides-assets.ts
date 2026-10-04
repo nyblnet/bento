@@ -16,8 +16,8 @@
 // a count of six would pass if the wrong six survived.
 //
 // The prune is pure and runs in node, which is why this rig can exist. The
-// facade wiring (slides/src/save.ts) is one line per serializer and is checked
-// by reading the file, since exercising it needs a DOM.
+// facade wiring (slides/src/save.ts) is checked by reading the file, since
+// exercising it needs a DOM.
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -44,12 +44,16 @@ console.log('every reference form keeps its asset')
     assets: {
       'img': PNG, 'poster': PNG, 'vid': PNG, 'svg': '<svg/>',
       'gram': '{}', 'thm': '{}', 'font': PNG, 'layout-img': PNG,
+      'embed-view': '<svg/>', 'embed-doc': '{"rows":[]}',
     },
     slides: [{ id: 's1', elements: [
       el({ id: 'i', type: 'image', src: 'asset:img' }),
       el({ id: 'm', type: 'media', kind: 'video', src: 'asset:vid', poster: 'asset:poster' }),
       el({ id: 'v', type: 'svg', asset: 'svg' }),
       el({ id: 'c', type: 'code', grammarAssetId: 'gram', themeAssetId: 'thm' }),
+      // an embed's view and source are both interned by "Capture view…", so a
+      // prune that did not know this element would empty every embed on save
+      el({ id: 'e', type: 'embed', app: 'bento/dash', view: 'asset:embed-view', doc: 'asset:embed-doc' }),
     ] } as never],
     layouts: [{ id: 'L', elements: [el({ id: 'li', type: 'image', src: 'asset:layout-img' })] } as never],
     fonts: [{ family: 'F', asset: 'font' }],
@@ -57,10 +61,14 @@ console.log('every reference form keeps its asset')
   const out = pruneUnusedAssets(d)
   ok(out === d, 'nothing to drop → the SAME object comes back (no copy, no allocation)')
   const used = referencedAssetKeys(d)
-  for (const k of ['img', 'poster', 'vid', 'svg', 'gram', 'thm', 'font', 'layout-img']) {
+  for (const k of ['img', 'poster', 'vid', 'svg', 'gram', 'thm', 'font', 'layout-img', 'embed-view', 'embed-doc']) {
     ok(used.has(k), `referenced: ${k}`)
   }
-  ok(used.size === 8, `exactly the eight referenced keys, no strays (got ${used.size})`)
+  ok(used.size === 10, `exactly the ten referenced keys, no strays (got ${used.size})`)
+  // an embed whose view and doc are INLINE names no asset at all
+  const inline = doc({ assets: { orphan: PNG }, slides: [{ id: 's', elements: [
+    el({ id: 'e', type: 'embed', app: 'web', view: '<svg/>', doc: { rows: [] } }) ] } as never] })
+  ok(pruneUnusedAssets(inline).assets === undefined, 'an inline embed references nothing; the orphan goes')
 }
 
 console.log('\nthe report: delete everything, save, and the deck is empty for real')
@@ -124,10 +132,16 @@ console.log('\nthe facade actually routes through the prune')
 {
   const here = dirname(fileURLToPath(import.meta.url))
   const facade = readFileSync(join(here, '../slides/src/save.ts'), 'utf8')
-  ok(/export function serializeAuto\([^)]*\)[^{]*\{[^}]*pruneUnusedAssets/.test(facade),
-    'serializeAuto is shadowed and calls pruneUnusedAssets')
-  ok(/export function serializeFile\([^)]*\)[^{]*\{[^}]*pruneUnusedAssets/.test(facade),
-    'serializeFile is shadowed and calls pruneUnusedAssets')
+  ok(/function prepareForSave[\s\S]*pruneUnusedAssets\(adoptBuiltinFonts\(doc\)\)/.test(facade),
+    'save preparation prunes assets and adopts fonts')
+  ok(/export function serializeAuto\([^)]*\)[\s\S]*prepareForSave\(doc\)/.test(facade),
+    'serializeAuto uses save preparation')
+  ok(/export function serializeFile\([^)]*\)[\s\S]*prepareForSave\(doc\)/.test(facade),
+    'serializeFile uses save preparation')
+  ok(/saveFile as kernelSaveFile/.test(facade),
+    'slides aliases the kernel saveFile')
+  ok(/export function saveFile\([^)]*\)[\s\S]*kernelSaveFile\(prepareForSave\(doc\), forcePicker\)/.test(facade),
+    'saveFile uses save preparation')
   ok(/export \* from '\.\.\/\.\.\/kernel\/src\/save\.ts'/.test(facade),
     'everything else still comes from the kernel')
 }

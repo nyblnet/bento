@@ -15,10 +15,13 @@ import {
 } from './save'
 import { maybeShowReturnGate } from './editor/returngate'
 import { buildSlidePreview } from './preview'
-import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
+import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate, sandboxed } from './update'
 import { i18nApi, t, applyDirection } from './i18n'
 import { parseDoc, type BentoDoc, type TextElement } from './model'
+import { compactJson } from './compact'
+import { parseDocInputReport, fitAutoHeights, restack, type LoadReport } from './compactload'
 import { validateDoc, type ValidateOpts } from './validate'
+import { buildSchema } from './schema'
 import { resolveThemeRefs } from './palette'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
 import { starterDoc } from './starterdeck'
@@ -27,7 +30,7 @@ import { Store } from './store'
 import { Editor } from './editor/editor'
 import { startPresentation } from './present'
 import { SyncSession } from './sync/session'
-import { onlineTransport, startSharing, stopSharing } from './sync/online'
+import { onlineTransport, startSharing, stopSharing, disconnectOnline, joinFromDoc } from './sync/online'
 
 // Tell the kernel who this app is — must precede any kernel module use
 // (window title suffix, save-picker label, update manifest + its `app` check).
@@ -133,8 +136,76 @@ function bootWith(doc: BentoDoc, docIsFresh = false) {
   // re-derives through the editor's `doc` hook; nothing else would visit a
   // player file at all.
   resolveThemeRefs(doc)
-  if (doc.readonly) playerMode(doc)
+  if (doc.collab?.role === 'audience') audienceMode(doc)
+  else if (doc.readonly) playerMode(doc)
   else editorMode(doc, docIsFresh)
+}
+
+/**
+ * An AUDIENCE copy boots straight into the show and follows the presenter
+ * while they are live. It is a collaborator holding a ticket: `collab.key` is
+ * the per-show key, the invite is the owner-signed audience one, and the
+ * session's transport connects receive-only on that role — it never mints or
+ * joins a session of its own, never sends a frame. The projected deck (no
+ * notes, no comments) streams in through the ordinary reader path, so the
+ * slides update live as the presenter edits; the three verbs (nav, black,
+ * laser) reach the overlay through the session's show events. Between shows
+ * the file is a plain, working deck — leaving the show lands on a card, never
+ * the editor. (docs/DECISIONS.md, the broadcast entry.)
+ */
+function audienceMode(doc: BentoDoc) {
+  document.title = `${doc.title} — ${appConfig().appName}`
+  if (doc.fonts?.length) injectFonts(doc)
+  document.getElementById('bento-splash')?.remove()
+
+  const store = new Store(doc)
+  const session = new SyncSession(store)
+  joinFromDoc(session, store)
+
+  let exited = false
+  let unsubscribeDoc: (() => void) | null = null
+  const exitCard = () => {
+    if (exited) return
+    exited = true
+    disconnectOnline(session)
+    unsubscribeDoc?.()
+    const card = document.createElement('div')
+    card.className = 'ed-player'
+    card.innerHTML =
+      `<div class="ed-playercard"><h1>${doc.title.replace(/</g, '&lt;')}</h1>` +
+      `<p>${t('You left the show — reopen this file to rejoin')}</p></div>`
+    document.body.appendChild(card)
+  }
+
+  const show = startPresentation(doc, 0, exitCard, {
+    broadcast: { audience: true, onShow: (fn) => session.onShow(fn) },
+    onDocChange: ({ slidesEl, deck, buildSection }) => {
+      const applyDoc = () => {
+        const cur = deck.getIndices().h
+        const curId = doc.slides[cur]?.id
+        if (doc.slides.length !== slidesEl.children.length) {
+          // structural change: rebuild the section list and re-settle on the
+          // same slide BY ID (an insert before it must not move the audience)
+          slidesEl.replaceChildren(...doc.slides.map(buildSection))
+          deck.sync()
+          const back = doc.slides.findIndex((sl) => sl.id === curId)
+          show.goTo(back >= 0 ? back : Math.min(cur, doc.slides.length - 1))
+        } else {
+          // content change: re-render the current slide in place (no fx replay —
+          // the slide is already shown; entrance fx run on slidechange only).
+          // The CONTENTS of a fresh section, not the section itself: a
+          // <section> nested inside a <section> is a vertical slide to Reveal,
+          // and the next arrow would descend into it instead of advancing.
+          const section = slidesEl.children[cur] as HTMLElement | undefined
+          const slide = doc.slides[cur]
+          if (section && slide) section.replaceChildren(...buildSection(slide, cur).childNodes)
+        }
+      }
+      unsubscribeDoc = store.on('doc', applyDoc)
+    },
+  })
+
+  ;(window as any).bento = { format: doc.format, doc }
 }
 
 /**
@@ -194,19 +265,21 @@ if (location.hash === '#present') {
 }
 
 // Dismiss the boot splash (inline in index.html so it paints before this
-// bundle parses). Hold it briefly so the assemble animation reads as a
-// brand moment instead of a flicker; the pristine capture ran before this,
-// so saved files keep the splash for their own next boot.
-{
-  const splash = document.getElementById('bento-splash')
-  if (splash) {
-    const wait = Math.max(0, 1250 - performance.now())
-    setTimeout(() => {
-      splash.classList.add('done')
-      setTimeout(() => splash.remove(), 550)
-    }, wait)
-  }
-}
+// bundle parses). The pristine capture ran before this, so saved files keep
+// the splash for their own next boot. Visible, it is held briefly so the
+// assemble animation reads as a brand moment instead of a flicker — but
+// the hold is a capped timer that a visibility change cuts short, and
+// removal never waits on an animation or transition: a HIDDEN document
+// (a background tab; a viewer rendering the file off-screen for a preview
+// card) freezes CSS animations at their first frame, delivers no frames,
+// and throttles timers to a wakeup a second or none at all — so a splash
+// that waited for its own fade to end stayed over the mounted editor for
+// as long as nobody looked, and Teams' preview card showed the splash with
+// the mark still at opacity 0 (measured: identical bytes previewed on one
+// upload and not the next, the race being the pane's capture against a
+// throttled timer). Hidden, the splash goes the moment the editor exists.
+dismissSplash()
+
 
 // Small scripting surface for tooling and automation: read/replace the
 // document model and serialize the full .bento.html file.
@@ -238,7 +311,8 @@ if (location.hash === '#present') {
     transports: () => session.transportKinds,
     /** start an online session (mints doc.collab, connects the relay) */
     share: () => {
-      void startSharing(session, store)
+      // same guard as editor.goLive(): an audience copy never mints a session
+      if (store.doc.collab?.role !== 'audience') void startSharing(session, store)
       return store.doc.collab
     },
     unshare: () => stopSharing(session, store),
@@ -246,15 +320,40 @@ if (location.hash === '#present') {
   },
   /**
    * AI/tooling round-trip: replace the whole document from a JSON string
-   * (the contents of #bento-doc). Validates via parseDoc; returns false and
-   * changes nothing on invalid input. Undoable in the editor.
+   * (the contents of #bento-doc, or a COMPACT document — `"compact": true`
+   * with defaults omitted, nested element arrays and missing ids allowed; see
+   * src/compact.ts). Validates via parseDoc; returns false and changes
+   * nothing on invalid input. Undoable in the editor.
+   *
+   * On success returns the LOAD REPORT (truthy, so `if (loadDoc(j))` still
+   * reads as before): `{ ok: true, compact, dropped: [{path, reason}],
+   * expanded, fitted, findings, refit }` — what the gate discarded and why,
+   * how many fields the compact expansion filled, how many text boxes were
+   * fitted to their text, and validate()'s findings on the loaded document.
+   * An agent's loop: load → read dropped/findings → fix → load again.
    */
-  loadDoc(json: string): boolean {
-    const next = parseDoc(json)
-    if (!next) return false
-    store.replaceDoc(next)
-    return true
+  loadDoc(json: string): LoadReport | false {
+    const parsed = parseDocInputReport(json)
+    if (!parsed) return false
+    store.replaceDoc(parsed.doc)
+    // Heights measured while a deck font was still downloading are measured
+    // against the fallback face. Once the fonts settle, fit those boxes
+    // again as one undoable step — the report says which they were.
+    if (parsed.report.refit.length) {
+      void document.fonts.ready.then(() => {
+        if (store.doc !== parsed.doc) return // the deck moved on
+        const n = fitAutoHeights(store.doc, { autoHeight: parsed.report.refit })
+        if (n) { restack(store.doc, { stacks: parsed.report.stacks }); store.commit(() => {}) }
+      })
+    }
+    return parsed.report
   },
+  /**
+   * The document as compact JSON: every field equal to what the editor would
+   * have inserted left out. The shape an agent should write; loadDoc and
+   * "Replace from JSON…" take it back. The FILE is always saved full.
+   */
+  compact: () => compactJson(store.doc),
   /**
    * Report what the runtime would otherwise swallow: unknown keys, text that
    * overflows its box, elements off the canvas, effects that can never run,
@@ -292,6 +391,10 @@ if (location.hash === '#present') {
    * returns the updated file's html (this doc inside the new shell);
    * apply() downloads it. check(url) accepts an override for testing.
    */
+  /** true inside an embedded view (a sandboxed frame — Teams, SharePoint):
+   *  no update check, no network at all from the app; storage does not
+   *  persist. Decided once at boot by kernel net.ts sandboxed(). */
+  sandboxed: sandboxed(),
   updates: {
     version: APP_VERSION,
     check: (url?: string) => checkForUpdates(url),
@@ -310,6 +413,15 @@ if (location.hash === '#present') {
    * each item carries the slide, a typed anchor (element / point / slide),
    * author, text, replies and resolved state.
    */
+  /**
+   * The document schema (JSON Schema 2020-12), built from the gate's own
+   * tables — the same JSON as https://bento.page/schema/slides.json for
+   * this version. For an agent driving the browser; a text reader takes
+   * the URL from the Tooling comment or the deck's `$schema` key instead.
+   */
+  schema() {
+    return buildSchema(APP_VERSION)
+  },
   comments() {
     return store.doc.slides.flatMap((s, slideIndex) =>
       (s.comments ?? []).map((c) => ({
@@ -332,3 +444,33 @@ if (location.hash === '#present') {
 }
 
 } // editorMode
+
+/**
+ * Remove the boot splash: at once when the document is hidden, else after a
+ * capped hold that a visibilitychange cuts short. The fade is a CSS
+ * transition; removal follows it by a timer OR transitionend, whichever
+ * comes first, and never depends on either alone.
+ */
+function dismissSplash() {
+  const splash = document.getElementById('bento-splash')
+  if (!splash) return
+  let gone = false
+  const remove = () => {
+    if (gone) return
+    gone = true
+    document.removeEventListener('visibilitychange', onVisibility)
+    splash.remove()
+  }
+  const fade = () => {
+    if (gone) return
+    if (document.hidden) { remove(); return }
+    splash.classList.add('done')
+    splash.addEventListener('transitionend', remove, { once: true })
+    setTimeout(remove, 550)
+  }
+  const onVisibility = () => { if (document.hidden) remove() }
+  document.addEventListener('visibilitychange', onVisibility)
+  if (document.hidden) { remove(); return }
+  // the brand hold, at most: 800 ms after navigation, visible only
+  setTimeout(fade, Math.max(0, 800 - performance.now()))
+}
