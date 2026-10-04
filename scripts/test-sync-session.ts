@@ -57,6 +57,7 @@ const { Store } = await import('../slides/src/store.ts');
 const { SyncSession, assetsToOffload } = await import('../slides/src/sync/session.ts');
 const { newDoc, emptySlide } = await import('../slides/src/model.ts');
 const { SYNC_V } = await import('../kernel/src/sync/crdt.ts');
+const { FROM_LIVE, keepLiveIdentity, CAP_FIELDS, withoutCaps, COLLAB_READER_KEEP, collabForReader } = await import('../kernel/src/docfields.ts');
 
 let failures = 0, checks = 0;
 function ok(cond: boolean, msg: string) {
@@ -557,6 +558,76 @@ H('a read-only live viewer still materialises a relay-offloaded image (not via c
   ok(got === bytesToDataUri(bytes, 'image/png'), 'the offloaded image lands in assets despite the read-only commit gate');
   ok(emitted.length > 0, 'a change event fired so the read-only viewer re-renders');
   sess.stop?.();
+}
+
+// The shared doc-fields lists (kernel/src/docfields.ts) that every app imports:
+// identity kept live on restore, and the capability/secret projections — proven
+// here so the one module the apps depend on has the behaviour pinned centrally.
+H('docfields: identity is taken from the live doc on restore, never the snapshot');
+{
+  const live = { docId: 'new', collab: { on: false }, readonly: true, title: 'live' } as Record<string, unknown>;
+  const restored = { docId: 'old', collab: { on: true }, template: true, title: 'snap' } as Record<string, unknown>;
+  keepLiveIdentity(restored, live);
+  ok(restored.docId === 'new', 'docId comes from live');
+  ok((restored.collab as { on: boolean }).on === false, 'collab comes from live (sharing stays off)');
+  ok(restored.readonly === true, 'readonly comes from live');
+  ok(!('template' in restored), 'a field live lacks is DELETED from the restored doc (no snapshot leak)');
+  ok(restored.title === 'snap', 'non-identity content is left as the snapshot had it');
+  ok([...FROM_LIVE].join() === 'docId,collab,readonly,template', 'FROM_LIVE is the agreed superset');
+}
+
+H('docfields: withoutCaps drops top-level capabilities, keeps content');
+{
+  const doc = { docId: 'x', slides: [], title: 't', collab: { ownerPriv: 'SECRET' } } as Record<string, unknown>;
+  const stripped = withoutCaps(doc) as Record<string, unknown>;
+  ok(!('collab' in stripped), 'withoutCaps removes collab');
+  ok(stripped.docId === 'x' && 'slides' in stripped && stripped.title === 't', 'content is kept');
+  ok((doc as { collab?: unknown }).collab !== undefined, 'the source doc is untouched (shallow copy)');
+  ok([...CAP_FIELDS].join() === 'collab', 'CAP_FIELDS is the top-level capability denylist');
+}
+
+H('docfields: collabForReader is an allowlist — unknown + known secrets fail closed');
+{
+  const dirty = {
+    room: 'r', key: 'k', owner: 'o', writerPub: 'wp', on: true, v: 2, role: 'reader',
+    ownerPriv: 'X', writerPriv: 'Y', invite: { priv: 'Z' }, audience: {}, sync: { v: SYNC_V },
+    futureSecret: 'LEAK',
+  } as Record<string, unknown>;
+  const clean = collabForReader(dirty);
+  ok(!('ownerPriv' in clean) && !('writerPriv' in clean) && !('invite' in clean) && !('audience' in clean),
+    'the write/owner secrets are dropped');
+  ok(!('sync' in clean), 'the CRDT sync stamp is dropped (readers carry no stamp)');
+  ok(!('futureSecret' in clean), 'an UNKNOWN field is dropped too — the allowlist fails closed');
+  ok(Object.keys(clean).sort().join() === 'key,on,owner,role,room,v,writerPub', 'exactly the allowlisted fields present survive');
+  ok(clean.room === 'r' && clean.key === 'k', 'room + the symmetric read key are kept (a reader must decrypt + join)');
+  ok([...COLLAB_READER_KEEP].length === 7, 'COLLAB_READER_KEEP is the 7-field public allowlist');
+}
+
+H('docfields: a reader copy with NO sync stamp joins a live room and converges');
+{
+  const docId = `ro-conv-${Math.random().toString(36).slice(2, 10)}`;
+  // W: the live room — a writer with secrets + (conceptually) a sync stamp.
+  const wdoc = newDoc(); wdoc.docId = docId;
+  (wdoc as unknown as { collab: Record<string, unknown> }).collab = {
+    room: 'r', key: 'k', on: true, v: 2, owner: 'o', ownerPriv: 'SECRET',
+    writerPub: 'wp', writerPriv: 'WSECRET', role: 'writer', invite: { priv: 'INV' }, sync: { v: SYNC_V },
+  };
+  const W = new Store(JSON.parse(JSON.stringify(wdoc)));
+  const sW = new SyncSession(W);
+  W.commit(() => { W.doc.title = 'room content'; });
+  await settle();
+  // The reader copy carries only collabForReader(W.collab): no sync, no secrets.
+  const rcollab = collabForReader((W.doc as unknown as { collab: Record<string, unknown> }).collab);
+  ok(!('sync' in rcollab) && !('writerPriv' in rcollab) && !('ownerPriv' in rcollab),
+    'the reader copy is built with no sync stamp and no write/owner secrets');
+  const rdoc = newDoc(); rdoc.docId = docId; rdoc.title = 'stale';
+  (rdoc as unknown as { collab: Record<string, unknown> }).collab = rcollab;
+  const R = new Store(JSON.parse(JSON.stringify(rdoc)));
+  const sR = new SyncSession(R);
+  await settle();
+  ok(R.doc.title === 'room content',
+    `the no-stamp reader converged to the room content (got ${JSON.stringify(R.doc.title)})`);
+  sW.stop?.(); sR.stop?.();
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

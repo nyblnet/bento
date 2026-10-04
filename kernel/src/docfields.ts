@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+//
+// Fields a COPY of a document treats specially — the two sides of "not ordinary
+// content." Every Bento app shares these lists, so a field added in one place is
+// handled everywhere and a new secret fails CLOSED instead of leaking.
+//
+//   1. Identity/capability kept LIVE across undo/redo and every whole-document
+//      restore (FROM_LIVE) — never resurrected from a snapshot.
+//   2. Capabilities/secrets STRIPPED when a copy is exported or shared
+//      (CAP_FIELDS at the top level; COLLAB_READER_KEEP — an ALLOWLIST — within
+//      a kept collab block).
+//
+// The helpers operate on plain objects: each app's doc/collab shape is a
+// superset of the kernel's, so this module stays app-agnostic and imports
+// nothing.
+
+type Obj = Record<string, unknown>
+
+// --- identity (kept live on undo/redo + whole-doc restore) ------------------
+
+/** Top-level fields that are identity or capability, never undoable content.
+ *  undo/redo and every whole-document restore keep the LIVE value, not the
+ *  snapshot's — so nothing can resurrect an old docId, a stale sharing flag, a
+ *  dropped read-only mode or a cleared template flag. SUPERSET across apps: a
+ *  field absent from a given app's doc makes keeping it live a no-op. */
+export const FROM_LIVE = ['docId', 'collab', 'readonly', 'template'] as const
+
+/** After a restore has replaced `doc` with a snapshot, put identity back from
+ *  the LIVE doc — or delete it where live lacks it, so the snapshot's value can
+ *  never leak through. Mutates `restored` in place. */
+export function keepLiveIdentity(restored: Obj, live: Obj): void {
+  for (const k of FROM_LIVE) {
+    if (k in live && live[k] !== undefined) restored[k] = live[k]
+    else delete restored[k]
+  }
+}
+
+// --- capabilities / secrets (stripped on export) ----------------------------
+
+/** Top-level fields that carry a write/owner capability or secret. A copy that
+ *  does NOT keep the live room drops these entirely. A new top-level secret is
+ *  closed by adding it here, beside where capabilities are minted. (Top level is
+ *  a denylist: most top-level fields are content and cannot be allowlisted.) */
+export const CAP_FIELDS = ['collab'] as const
+
+/** A shallow copy of `doc` with every capability field removed. */
+export function withoutCaps<T extends object>(doc: T): T {
+  const out = { ...(doc as Obj) }
+  for (const k of CAP_FIELDS) delete out[k]
+  return out as T
+}
+
+/** Within a KEPT collab block, the fields a reader/viewer copy may carry. This
+ *  is an ALLOWLIST: anything not listed — writerPriv, ownerPriv, invite,
+ *  audience, the CRDT `sync` stamp, and any field added later — is dropped, so a
+ *  new secret fails CLOSED. `sync` is deliberately excluded: a reader does not
+ *  contribute, so it adopts fresh and converges from the room, and carrying no
+ *  stamp removes stale-stamp risk (writer/invite copies keep sync through their
+ *  own builders). `key` (the symmetric READ cap) and `room` stay — a reader
+ *  needs them to decrypt and join. */
+export const COLLAB_READER_KEEP =
+  ['room', 'key', 'owner', 'writerPub', 'on', 'v', 'role'] as const
+
+/** Project a collab block down to what a reader/viewer copy may hold: a new
+ *  object with only the allowlisted fields that are present. */
+export function collabForReader(collab: Obj): Obj {
+  const out: Obj = {}
+  for (const k of COLLAB_READER_KEEP) if (k in collab && collab[k] !== undefined) out[k] = collab[k]
+  return out
+}
