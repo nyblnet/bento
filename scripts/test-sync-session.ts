@@ -405,6 +405,68 @@ H('cumulative offload picks the largest inline assets when the total overflows')
   ok(!p4.has('svg') && p4.has('png'), 'a raw-SVG asset stays inline (nothing to blob); the offloadable one goes');
 }
 
+// A fork's offline contributions live only in its doc values + restored
+// registers, never as replayable log ops. It snapshots them once at its own
+// hello; a peer that joins LATER (a same-machine tab, over replay-less
+// BroadcastChannel) misses that and never converges. The fork must re-send its
+// snapshot to each genuinely new peer.
+H('a fork re-sends its snapshot to a peer that joins later');
+{
+  // Build a saved FORK file: a shared doc, edited, with the CRDT state stamped
+  // in (what an offline-edited copy carries on disk).
+  const base = newDoc(); base.docId = `fork-${Math.random().toString(36).slice(2, 8)}`;
+  (base as unknown as { collab: { room: string; key: string; on: boolean } }).collab = { room: 'r', key: 'k', on: true };
+  const seed = new Store(JSON.parse(JSON.stringify(base)));
+  const sseed = new SyncSession(seed);
+  seed.commit(() => { seed.doc.title = 'forked offline'; });
+  await settle();
+  (sseed as unknown as { stampInto: (d: unknown) => void }).stampInto(seed.doc);
+  sseed.stop?.();
+  const forkFile = JSON.parse(JSON.stringify(seed.doc));
+  ok(!!forkFile.collab?.sync, 'the saved fork carries a stamped CRDT state');
+
+  // Open the fork; capture what it sends.
+  const A = new Store(JSON.parse(JSON.stringify(forkFile)));
+  const sA = new SyncSession(A);
+  const sent: Array<{ t: string }> = [];
+  sA.addTransport(() => ({ send: (f: { t: string }) => sent.push(f), close() {} }) as never);
+  ok((sA as unknown as { carriesForkState: boolean }).carriesForkState === true,
+    'a restored fork knows it carries un-logged state');
+
+  const hello = (a: string) => (sA as unknown as { onFrame: (f: unknown) => void })
+    .onFrame({ t: 'hello', a, vv: {}, p: {}, pv: SYNC_V });
+
+  // a brand-new peer announces itself → the fork answers with a snapshot
+  sent.length = 0;
+  hello('late-tab');
+  const snap = sent.find((f) => f.t === 'snap') as undefined | { doc: { title?: string } };
+  ok(!!snap, 'the fork answers a new peer’s hello with a snapshot');
+  ok(snap?.doc?.title === 'forked offline', 'the snapshot carries the fork’s content');
+
+  // a repeat hello from a peer we already know must NOT re-snap
+  sent.length = 0;
+  hello('late-tab');
+  ok(!sent.some((f) => f.t === 'snap'), 'a repeat hello from a known peer is not re-snapped');
+
+  sA.stop?.();
+}
+
+H('a non-fork session does not snap new peers (log catch-up suffices)');
+{
+  const plain = newDoc(); plain.docId = `plain-${Math.random().toString(36).slice(2, 8)}`;
+  const A = new Store(JSON.parse(JSON.stringify(plain)));
+  const sA = new SyncSession(A);
+  const sent: Array<{ t: string }> = [];
+  sA.addTransport(() => ({ send: (f: { t: string }) => sent.push(f), close() {} }) as never);
+  ok((sA as unknown as { carriesForkState: boolean }).carriesForkState === false,
+    'a fresh adopt carries no fork state');
+  sent.length = 0;
+  (sA as unknown as { onFrame: (f: unknown) => void })
+    .onFrame({ t: 'hello', a: 'peer2', vv: {}, p: {}, pv: SYNC_V });
+  ok(!sent.some((f) => f.t === 'snap'), 'a non-fork does not snap; the op log catches peers up');
+  sA.stop?.();
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 // BroadcastChannel and the heartbeat keep node's event loop alive
 process.exit(failures ? 1 : 0);
