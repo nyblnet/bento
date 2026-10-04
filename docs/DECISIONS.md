@@ -7417,3 +7417,27 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-10-04 — CORRECTION: `file://` documents share one storage origin
+
+The 2026-08-02 entry "bento/home is closed; the host is a WebExtension" says
+the browser "treats `file://` as a unique origin per file — per-document
+isolation for free". That is wrong for storage. Measured in Chrome on
+2026-09-19: every document opened from disk shares one origin for
+IndexedDB and localStorage, so anything one local document stores, any other
+local HTML file can read.
+
+What follows:
+
+- **With bento/home installed**, data a document keeps beside itself
+  (recovery, version history, keys) belongs in the extension's own origin,
+  partitioned by the file path the browser reports for the sender
+  (`sender.url`). The page never names its own path or partition, and a
+  document id the page supplies is never a key. That partition is the
+  isolation the 2026-08-02 entry assumed `file://` provided.
+- **Without the extension**, the page's own storage is shared, and is
+  designed for as such (kernel's storage work), not treated as private.
+- **The WebExtension choice still stands** on that entry's other
+  measurements (a directory grant covers files never picked; a handle cannot
+  cross origins). This premise is no longer one of its reasons, and should not
+  be cited as a reason against a native host.
