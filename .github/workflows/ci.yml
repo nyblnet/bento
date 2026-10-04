@@ -1856,6 +1856,14 @@ jobs:
         # a null lookup there has silently broken the boot twice.
         run: node scripts/test-type-chrome.ts
 
+      - name: Type restore-gate rig
+        # A snapshot kept in the browser (Unsaved changes banner, Version
+        # history) is foreign input: on file:// any local page can write it.
+        # Restoring one never brings its own docId, room/keys or mode, and an
+        # honest one keeps the open file's sharing. Replace from JSON — a
+        # document the person chose — is NOT gated. Counterpart of slides'.
+        run: node scripts/test-type-restore-gate.ts
+
       - name: Clipboard embedded-font rig
         run: |
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"

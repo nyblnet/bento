@@ -7889,3 +7889,30 @@ is not undoable whichever action changed it. slides behaves the same.
 adapter, undoes all the way back checking at every step, and covers each field
 including one that is absent in the live document. Reverting to the full swap
 reddens every identity row and the undo-must-not-unlock pair.
+
+## 2026-10-04 — A browser-kept snapshot is gated before it is restored (type)
+
+**Restoring something this browser kept — the "Unsaved changes … were found"
+banner, or a Version history entry — passes `gateRestored`
+(type/src/restoregate.ts), the counterpart of slides' restoregate.ts.** The
+snapshot goes through `parseDoc` (recovery used to `JSON.parse` it with no
+format check at all), and its `docId`, `collab` and `readonly` are always the
+OPEN file's — the same `FROM_LIVE` list undo uses. Those snapshots live in
+IndexedDB, which on file:// every local document shares (see 2026-09-19), so
+they are foreign input arriving behind the app's most trusting prompt.
+
+**It also fixes a bug that needed no forger.** The kernel writes snapshots
+without `collab` (autosave.ts `contentOnly`), so restoring your OWN unsaved
+changes replaced the document with one that had no room credentials at all —
+measured: on a view-only copy that dropped `collab` and, through the
+read-only lock, made the copy editable. With the gate, the open file's sharing
+survives every restore.
+
+**Restore is not open.** Opening a file and "Replace from JSON…" are documents
+the person chose, and keep their own identity; only a browser-kept snapshot is
+gated. Version history therefore has its own hook (`onRestoreDoc`) rather than
+reusing Replace from JSON's, which is how it had come to carry the snapshot's
+identity in. slides' gate additionally rebuilds content key by key; type has
+no such layer, and its renderer already treats any opened file's content as
+untrusted — the risk specific to a snapshot is the identity and capability,
+which is what this closes. `test-type-restore-gate.ts` pins it.

@@ -31,12 +31,18 @@ export interface AboutHooks {
   /** pages, from the last pagination pass — the dialog does not re-measure */
   pages: number;
   onReplaceDoc(json: string): void;
+  /**
+   * Restore a version THIS BROWSER kept. Not onReplaceDoc: a pasted document
+   * keeps its own identity, a browser-kept snapshot never does — it is gated
+   * (restoregate.ts) and takes docId, collab and readonly from the open file.
+   */
+  onRestoreDoc(json: string): void;
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
-export function openAbout({ store, pages, onReplaceDoc }: AboutHooks): void {
+export function openAbout({ store, pages, onReplaceDoc, onRestoreDoc }: AboutHooks): void {
   const back = document.createElement('div');
   back.className = 't-overlay';
   const card = document.createElement('div');
@@ -209,13 +215,15 @@ export function openAbout({ store, pages, onReplaceDoc }: AboutHooks): void {
   // ---- version history -----------------------------------------------------
   //
   // Browses the auto-save timeline autosave.ts keeps in IndexedDB (never in
-  // the file, never online). Restoring reuses `onReplaceDoc` exactly as
-  // "Replace from JSON…" does above — `Snapshot.json` already IS a bento/type
-  // document JSON string — so this needed no new hook into main.ts: parseDoc
-  // validates it, store.replace makes it undoable, editor.render() repaints.
+  // the file, never online). Restoring does NOT reuse `onReplaceDoc`, though it
+  // once did — `Snapshot.json` already is a bento/type document, so it looked
+  // like the same act. It is not: Replace from JSON is a document the person
+  // chose, and keeps its own identity; a snapshot is foreign input from a store
+  // any local page can write, and must not bring its own docId, room or mode.
+  // So it has its own hook, which goes through restoregate.ts.
   const historyRow = document.createElement('div');
   historyRow.className = 't-row';
-  historyRow.append(button(t('Version history…'), () => openVersionHistory({ store, onReplaceDoc, close })));
+  historyRow.append(button(t('Version history…'), () => openVersionHistory({ store, onRestoreDoc, close })));
   card.append(historyRow);
   card.append(p(t(
     'Versions are saved automatically as you edit, kept only in this browser, ' +
@@ -248,7 +256,7 @@ export function openAbout({ store, pages, onReplaceDoc }: AboutHooks): void {
  * render synchronously the moment the wordmark is clicked.
  */
 async function openVersionHistory(
-  { store, onReplaceDoc, close: closeAbout }: { store: Store; onReplaceDoc(json: string): void; close(): void },
+  { store, onRestoreDoc, close: closeAbout }: { store: Store; onRestoreDoc(json: string): void; close(): void },
 ): Promise<void> {
   const versions = await listVersions(store.doc.docId);
 
@@ -285,7 +293,7 @@ async function openVersionHistory(
       doIt.textContent = t('Restore');
       rowEl.append(label, doIt);
       rowEl.addEventListener('click', () => {
-        onReplaceDoc(v.json);
+        onRestoreDoc(v.json);
         close();
         closeAbout();
       });
