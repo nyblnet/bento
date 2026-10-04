@@ -207,7 +207,8 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   // `frozen` is the other, unrelated reason to lock: this build does not
   // understand the file and must not rewrite it.
   //
-  // `collab.role === 'reader'` is the THIRD, unrelated reason, and it is the
+  // A collab role that cannot write — 'reader', 'audience', or one this build
+  // does not know (share.ts copyCanWrite, an allowlist) — is the THIRD, unrelated reason, and it is the
   // only one of the three that keeps receiving: a view-only copy follows the
   // live session and can never send to it. The lock here is a courtesy to the
   // person holding it — the ENFORCEMENT is the relay, which pins a verified
