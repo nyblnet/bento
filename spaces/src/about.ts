@@ -40,6 +40,7 @@ import { t, localeChoices, locale, setLocale } from './i18n'
 import { appearanceSection } from './appearance'
 import { esc, textOf } from './sanitize'
 import { docForExport } from './model'
+import { duplicateAsNew } from './share.ts'
 import { htmlToMd } from './marks.ts'
 import { humanBytes } from './assets'
 import { SPEC, mdLayout, type MdCtx } from './blocks'
@@ -75,6 +76,12 @@ export interface AboutHooks {
   onWriteCopy?: (doc: SpacesDoc) => Promise<boolean>
   /** the editor's status line, for the confirmations that outlive the dialog */
   onStatus?: (message: string) => void
+  /**
+   * Called immediately before a self-update writes THIS document into a new
+   * shell — stamps the live session's CRDT state (share.ts stampSync), so the
+   * updated file rejoins as a fork exactly as a ⌘S-saved one does.
+   */
+  onBeforeWrite?: () => void
 }
 
 /**
@@ -99,7 +106,7 @@ export async function launchUpdateCheck(): Promise<void> {
 }
 
 export function openAbout(hooks: AboutHooks): void {
-  const { store, onRepaint, onSaveCopy, onImport, onExportSpace, onWriteCopy, onStatus } = hooks
+  const { store, onRepaint, onSaveCopy, onImport, onExportSpace, onWriteCopy, onStatus, onBeforeWrite } = hooks
   const doc = store.doc
   const returnFocus = document.activeElement as HTMLElement | null
 
@@ -377,6 +384,7 @@ export function openAbout(hooks: AboutHooks): void {
         inPlace.disabled = true
         inPlace.textContent = t('Verifying…')
         try {
+          onBeforeWrite?.()
           const written = await applyUpdateInPlace(rel, store.doc)
           if (written) {
             box.replaceChildren(updatedCard(rel, written.backup))
@@ -402,6 +410,7 @@ export function openAbout(hooks: AboutHooks): void {
         try {
           // the update writes a NEW file and leaves this one untouched, so a
           // bad update is undone by deleting the download
+          onBeforeWrite?.()
           await applyUpdate(rel, store.doc)
           get.textContent = t('Downloaded ✓')
           box.append(note(t('This window keeps running v{v} until you open the downloaded file.', { v: APP_VERSION })))
@@ -607,10 +616,8 @@ export function openAbout(hooks: AboutHooks): void {
       // A DUPLICATE, not a copy: a fresh docId and no collaboration
       // credentials, so it can never sync with the space it came from. You
       // keep editing this one — the writer holds no handle (portable.ts).
-      const clone = JSON.parse(JSON.stringify(store.doc)) as SpacesDoc
-      clone.docId = uid('doc')
-      delete clone.collab
-      clone.modified = new Date().toISOString()
+      // share.ts duplicateAsNew: the stamped `sync` goes with `collab`.
+      const clone = duplicateAsNew(store.doc, uid('doc'))
       close()
       void onWriteCopy(clone)
     })] : []),

@@ -477,6 +477,18 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **A saved copy of a shared space rejoins its live session with its offline
+  edits.** ⌘S, Save a copy and both self-update writes now stamp the live
+  session's sync state into the file (`collab.sync`), as bento/slides always
+  has. Before, a copy edited away from the session reopened as if it had never
+  synced: its edits stayed in that copy and never reached anyone else, and an
+  edit to a paragraph somebody had also changed was overwritten by theirs.
+  Measured in two Chrome tabs: edit in one, save, edit the saved file offline,
+  edit in the other tab meanwhile, reopen — the old build ends with the two
+  tabs disagreeing; this one shows both edits in both tabs. View-only copies,
+  page extracts, Markdown and JSON exports, and "Duplicate as a new space…"
+  carry no sync state, and a file opened read-only is never re-stamped.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

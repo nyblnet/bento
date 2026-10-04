@@ -7417,3 +7417,51 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-10-04 — bento/spaces saves stamp `collab.sync`; which writes carry it
+
+Slides has always stamped the session's CRDT state into `doc.collab.sync` on
+save, so an offline-edited copy rejoins as a true fork (docs/collab-design.md).
+Spaces had the restore side (it uses the kernel session, whose `attach()`
+restores a `SYNC_V` stamp) but stamped only the invite copy. Measured, with the
+stamp removed: a reopened copy is a fresh adopt — its offline edits are already
+in the shadow, so no op is minted for them and peers never receive them (the
+two copies stay different), and an offline edit to a block a peer also changed
+is overwritten by the peer's replay.
+
+One function decides it, `spaces/src/share.ts stampSync(store, session)`,
+called at the moment the document is taken for a write. Per path:
+
+- **⌘S, Save a copy, Update this file, Download updated copy, the invite** —
+  stamp the CURRENT state. All four write this replica.
+- **View-only copy** — no state (`readerCopy` clears `sync`), as slides: a
+  viewer rejoining as a fork of itself is a fork nobody can merge back.
+- **Page extract, Copy document JSON, Markdown** — no `collab` at all.
+- **Duplicate as a new space** — `duplicateAsNew`: fresh `docId`, no `collab`,
+  so no `sync`; it never meets its ancestor's channel or room.
+- **Encrypted** — the stamp is part of the doc JSON, so it is inside the
+  envelope like everything else (`serializeAuto`).
+- **A store opened read-only never stamps** (frozen, reader copy, reading
+  copy). A frozen file may carry a `sync` of a SYNC_V this build cannot read,
+  and the format promises an unknown field survives a round trip untouched.
+
+**Older builds.** A build without this change opens a stamped file, restores
+from it (the restore side shipped with spaces' sync in #320), and writes it
+back byte-identical on ⌘S — checked in Chrome against the pre-change shell. It
+does not re-stamp, so an edit it saves is not in the stamp. Measured: on
+rejoin, a new block still reaches peers, but a changed paragraph does not —
+the two copies disagree on it (same mechanism as the 2026-09-17 lean-stamp
+entry: a text generation the stamp does not carry). The same is true of an
+edit written into `#bento-doc` from outside the app, which is why
+docs/spaces-agents.md now says to edit a shared space through `window.bento`.
+Shipped builds already produced such files (they stamped the invite copy).
+
+**Cost.** The stamp is the full text history (lean stamping is refused,
+2026-09-17). Measured: 400 word-sized edits to one paragraph, 1.8 KB of text,
+stamp 57 KB. Slides accepts this; prose makes it grow faster. Dash caps its
+stamp at 2 MB and drops it past that; spaces does not cap today.
+
+**After the save queue (#580).** The stamp moves from `doSave` into the
+queue's `prepare`, immediately before the detached snapshot is copied, so the
+stamp describes exactly the revision that is written. The self-update in place
+goes through the same queue there, so its `onBeforeWrite` stamp moves with it.
