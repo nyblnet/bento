@@ -388,6 +388,18 @@ export function copyCanWrite(collab: TypeDoc['collab'] | undefined): boolean {
 }
 
 /**
+ * Is this a RECEIVE-ONLY copy — one that follows a room and must not edit it?
+ *
+ * Not simply `!copyCanWrite`: a document with no `collab` at all is a local
+ * document and is perfectly editable; `copyCanWrite` answers "no" for it only
+ * because there is no room to write TO. This is the question the edit lock
+ * asks, and it is the same one bento/slides' `canWriteDeck` answers.
+ */
+export function copyIsReceiveOnly(collab: TypeDoc['collab'] | undefined): boolean {
+  return !!collab && !copyCanWrite(collab);
+}
+
+/**
  * The document as it should leave this app — WITHOUT its collaboration
  * credentials.
  *

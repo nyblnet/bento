@@ -7441,3 +7441,22 @@ nothing flagged the gap.
 The same `!== 'reader'` shape stands in slides (editor.ts), spaces (share.ts)
 and dash (sync/online.ts); filed for those zones rather than changed here.
 `test-type-model.ts` pins the shape, including a role nobody has invented yet.
+
+**And a receive-only copy is locked, by a lock DERIVED from the document.**
+The mislabel had a worse twin: type mints view-only copies ("View-only copy…")
+yet its editor was unconditionally `contentEditable` and `Store.commit` never
+checked — so a reader could type freely while the popover said the copy
+"can't change the document". The relay dropped those edits, so they lived only
+locally and autosave could write them back, drifting the file from the room it
+follows. Measured in headless Chrome on the built shell: with no lock, a reader
+copy loaded via `loadDoc` stayed editable and typed text landed; with the lock,
+it is not editable and the text holds. `Store.locked` is recomputed on every
+change — never decided once at boot — because bento/slides found the
+build-time version, which a reader copy loaded into a running editor walked
+straight past. User commits are refused while locked; the sync session's own
+commits carry `system: true` and pass, because kernel session.ts writes a
+peer's published images into the document through `commit`, and a reader
+needs those more than anyone. Remote edits arrive through `touch()`, not
+`commit`, so a locked copy still follows the room. `copyIsReceiveOnly` is the
+lock's question (a document with no `collab` is local and editable — unlike
+`copyCanWrite`, which says no only because there is no room to write to).

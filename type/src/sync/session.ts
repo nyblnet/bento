@@ -64,7 +64,10 @@ export function hostStore(store: Store, onRemoteApplied?: () => void): HostStore
       store.touch();
       onRemoteApplied?.();
     },
-    commit(fn: () => void) { store.commit(() => fn()); },
+    // SYSTEM commits: the kernel only commits to record what it fetched or
+    // published (blob refs, materialised assets), never an edit — so they must
+    // get through a receive-only copy's lock. See Store.commit.
+    commit(fn: () => void) { store.commit(() => fn(), { system: true }); },
     // type has no dirty flag: the document is saved from the editor's own
     // state, and a remote edit does not change whether THIS person has
     // unsaved work. Accepting and ignoring beats inventing a flag nothing reads.

@@ -10,8 +10,15 @@
 //   · undo/redo round-trips exactly, including interleaved
 //   · a block snapshot restores the block it names even after the body moved
 
-import { Store } from '../type/src/store.ts';
-import { emptyDoc, uid, type TypeDoc } from '../type/src/model.ts';
+import { register } from 'node:module';
+// The sync adapter (hostStore) pulls the kernel transport in, which uses
+// TypeScript node's strip-only loader cannot run — so this rig loads through
+// the repo's transpiling hooks, like the other rigs that reach the sync stack.
+register('./lib/ts-resolve-hooks.mjs', import.meta.url);
+const { Store } = await import('../type/src/store.ts');
+import type { TypeDoc } from '../type/src/model.ts';
+const { emptyDoc, uid, parseDoc } = await import('../type/src/model.ts');
+const { hostStore } = await import('../type/src/sync/session.ts');
 
 let checks = 0, failures = 0;
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`); } else console.log(`  ok    ${m}`); };
@@ -128,6 +135,65 @@ H('listeners fire once per commit');
   off();
   s.commit(d => { d.body[0].text = 'z'; });
   ok(n === 3, 'and unsubscribing stops them');
+}
+
+console.log('\n— a receive-only copy takes no edits, and still receives —');
+{
+  // Through parseDoc, the way a real file arrives — the lock is decided from
+  // what survives intake, not from a hand-built object.
+  const docOf = (collab?: object): TypeDoc => {
+    const d: TypeDoc = { ...emptyDoc(), body: [{ id: 'p1', kind: 'para', text: 'agreed' }] };
+    const r = parseDoc(JSON.stringify(collab ? { ...d, collab } : d));
+    if (!r.ok) throw new Error('fixture did not parse');
+    return r.doc;
+  };
+  const room = { v: 2, on: true, room: 'w1', key: 'K', owner: 'OP' };
+  // FACTORIES, not shared objects: a Store holds the document it is given, so
+  // a case that writes through one (the remote-edit case below does) would
+  // otherwise leak into every later case that reuses the fixture — which is
+  // exactly how the first version of this section failed.
+  const writer   = () => docOf({ ...room, ownerPriv: 'OK' });
+  const reader   = () => docOf({ ...room, role: 'reader' });
+  const audience = () => docOf({ ...room, role: 'audience', invite: { pub: 'IP', priv: 'IK', role: 'audience', sig: 'S' } });
+  const local    = () => docOf();
+  const edit = (st: Store) => st.commit(d => { d.body[0].text = 'CHANGED'; });
+  const text = (st: Store) => st.doc.body[0].text;
+
+  let st = new Store(writer()); edit(st);
+  ok(!st.locked && text(st) === 'CHANGED', 'a writer copy edits');
+  st = new Store(local()); edit(st);
+  ok(!st.locked && text(st) === 'CHANGED', 'a LOCAL document (no collab) edits — no room is not read-only');
+
+  st = new Store(reader()); edit(st);
+  ok(st.locked, 'a view-only reader copy is locked');
+  ok(text(st) === 'agreed', 'and a user edit is REFUSED — it would live only here and drift from the room');
+  ok(!st.canUndo, 'leaving nothing on the undo stack either');
+  st = new Store(audience()); edit(st);
+  ok(st.locked && text(st) === 'agreed', 'an audience copy is locked the same way');
+
+  // The sync session's own commits must still land — a reader needs a peer's
+  // published images more than anyone (kernel session.ts resolveBlobs).
+  st = new Store(reader());
+  hostStore(st).commit(() => { (st.doc.assets ??= {}).img = 'data:image/png;base64,AA=='; });
+  ok(st.doc.assets?.img !== undefined, "a SYSTEM commit through the session adapter gets through the lock — readers still get images");
+
+  // A remote edit is applied surgically and announced with touch(), never commit.
+  st = new Store(reader()); let heard = 0; st.on(() => heard++);
+  st.doc.body[0].text = 'from the room'; st.touch();
+  ok(heard === 1 && text(st) === 'from the room', 'a REMOTE edit still lands on a locked copy — it follows the room');
+
+  // THE ARRIVAL PATH bento/slides found: a receive-only copy loaded into an
+  // editor that is already running.
+  st = new Store(writer());
+  ok(!st.locked, 'an editor that boots on a writer copy starts unlocked');
+  st.replace(reader());
+  ok(st.locked, 'and LOCKS when a reader copy is loaded into it later (loadDoc, Replace from JSON, recovery)');
+  edit(st);
+  ok(text(st) === 'agreed', 'so the newly-arrived copy refuses edits too');
+  st.undo();
+  ok(!st.locked, 'undoing that replace restores the writer copy — and unlocks with it');
+  edit(st);
+  ok(text(st) === 'CHANGED', 'which edits again');
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
