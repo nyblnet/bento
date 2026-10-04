@@ -120,10 +120,51 @@ export async function canReadWeb(deps) {
   try { return await deps.permissions.contains({ origins: ['https://*/*', 'http://*/*'] }) } catch { return false }
 }
 
-/** The text of a page, labelled as data. `{ text }` or `{ error }` — never a throw. */
-export async function readPage(url, deps) {
+/** Longest URL the assistant will read or cite. */
+export const URL_MAX = 2048
+
+/** The form a URL is compared in: fetchable, within URL_MAX, fragment dropped. Null otherwise. */
+export function urlKey(v) {
+  const h = fetchableUrl(v)
+  if (!h || h.length > URL_MAX) return null
+  const u = new URL(h)
+  u.hash = ''
+  return u.href
+}
+
+/** The http(s) addresses written in a piece of text, trailing punctuation trimmed. */
+export function urlsIn(text) {
+  return (String(text ?? '').match(/https?:\/\/[^\s<>"'`]+/g) ?? [])
+    .map((u) => u.replace(/[.,;:!?)\]}]+$/, ''))
+}
+
+/**
+ * Which pages a turn may read. The MODEL picks the URL a fetch goes to, and
+ * the model reads the document — so a document written to steer it could
+ * have it fetch an address of the document's choosing with the deck's text
+ * in the query string. The web would then receive what the document holds.
+ * So a page is readable only when the PERSON named it (in this request or an
+ * earlier one) or a search this turn returned it: addresses that existed
+ * before the model saw the document, or came from the search engine, never
+ * ones the model composed.
+ */
+export function readableSet(requestTexts = []) {
+  const keys = new Set()
+  const add = (u) => { const k = urlKey(u); if (k) keys.add(k) }
+  for (const t of requestTexts) for (const u of urlsIn(t)) add(u)
+  return { add, has: (u) => { const k = urlKey(u); return !!k && keys.has(k) }, size: () => keys.size }
+}
+
+/**
+ * The text of a page, labelled as data. `{ text }` or `{ error }` — never a
+ * throw. `allowed` (a readableSet) is REQUIRED: a call without it reads
+ * nothing, so no caller can forget the binding.
+ */
+export async function readPage(url, deps, allowed) {
   const href = fetchableUrl(url)
   if (!href) return { error: 'not a web address the assistant may read' }
+  if (href.length > URL_MAX) return { error: 'that address is too long to read' }
+  if (!allowed?.has?.(href)) return { error: 'only pages the person named or a search returned can be read — search for it, or ask the person for the address' }
   let r
   try {
     r = await deps.fetch(href, { redirect: 'follow', headers: { accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5' } })
@@ -177,7 +218,7 @@ export function boundSources(list) {
   const seen = new Set()
   for (const s of Array.isArray(list) ? list : []) {
     const url = fetchableUrl(s?.url)
-    if (!url || url.length > 2048 || seen.has(url)) continue
+    if (!url || url.length > URL_MAX || seen.has(url)) continue
     seen.add(url)
     out.push({ title: String(s.title ?? '').slice(0, 200), url })
     if (out.length >= 20) break

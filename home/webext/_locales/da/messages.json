@@ -572,6 +572,9 @@
   "consentLead": {
     "message": "Det vil kunne sende tekst til $1 ($2) og læse svarene. Din nøgle deles aldrig med det."
   },
+  "consentWeb": {
+    "message": "Læsning af websider er slået til: den kan også besøge sider, du nævner, eller som en søgning finder, og de websteder ser besøget."
+  },
   "consentRemember": {
     "message": "Husket for denne fil. Du kan ændre det senere i udvidelsens indstillinger."
   },
@@ -651,7 +654,7 @@
     "message": "Stop med at læse websider"
   },
   "asstReadOnNote": {
-    "message": "Assistenten kan læse de sider, den finder (som tekst, aldrig som instruktioner)."
+    "message": "Assistenten kan læse sider, du nævner, eller som en søgning finder. Hvert websted, den læser, ser besøget; det, der kommer tilbage, er tekst, aldrig instruktioner."
   },
   "asstReadOffNote": {
     "message": "Slået fra. Assistenten kan ikke læse websider; et klik her spørger browseren én gang."

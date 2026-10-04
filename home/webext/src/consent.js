@@ -27,6 +27,11 @@ try { path = decodeURIComponent(new URL(doc).pathname) } catch { /* shown as giv
 document.getElementById('name').textContent = path.split('/').filter(Boolean).pop() || path
 document.getElementById('path').textContent = path
 document.getElementById('lead').textContent = t('consentLead', host, model)
+// Reading pages means the assistant's requests reach those sites: say so here,
+// where the person decides, not only in Settings.
+try {
+  if (await chrome.permissions.contains({ origins: ['https://*/*', 'http://*/*'] })) document.getElementById('web').hidden = false
+} catch { /* no answer: the line stays hidden */ }
 
 let port = null
 try {

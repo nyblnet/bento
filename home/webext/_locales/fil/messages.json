@@ -572,6 +572,9 @@
   "consentLead": {
     "message": "Makakapagpadala ito ng teksto sa $1 ($2) at makakabasa ng mga sagot. Hindi kailanman ibinabahagi rito ang iyong key."
   },
+  "consentWeb": {
+    "message": "Naka-on ang pagbasa ng mga web page: maaari rin nitong bisitahin ang mga pahinang binanggit mo o nahanap ng search, at nakikita ng mga site na iyon ang pagbisita."
+  },
   "consentRemember": {
     "message": "Naaalala para sa file na ito. Maaari mo itong baguhin mamaya sa mga setting ng extension."
   },
@@ -651,7 +654,7 @@
     "message": "Itigil ang pagbabasa ng mga web page"
   },
   "asstReadOnNote": {
-    "message": "Nababasa ng assistant ang mga page na nahahanap nito (bilang teksto, hindi kailanman bilang mga tagubilin)."
+    "message": "Mababasa ng assistant ang mga pahinang binanggit mo o nahanap ng search. Nakikita ng bawat site na binabasa nito ang pagbisita; ang bumabalik ay teksto, hindi kailanman utos."
   },
   "asstReadOffNote": {
     "message": "Naka-off. Hindi makababasa ng mga web page ang assistant; isang click dito ang magtatanong sa browser nang isang beses."

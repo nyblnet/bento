@@ -572,6 +572,9 @@
   "consentLead": {
     "message": "Ia akan dapat menghantar teks ke $1 ($2) dan membaca balasannya. Kunci anda tidak pernah dikongsi dengannya."
   },
+  "consentWeb": {
+    "message": "Membaca halaman web dihidupkan: ia juga boleh melawat halaman yang anda namakan atau yang ditemui carian, dan laman itu nampak lawatan tersebut."
+  },
   "consentRemember": {
     "message": "Diingati untuk fail ini. Anda boleh mengubahnya kemudian dalam tetapan sambungan."
   },
@@ -651,7 +654,7 @@
     "message": "Berhenti membaca halaman web"
   },
   "asstReadOnNote": {
-    "message": "Pembantu boleh membaca halaman yang ditemuinya (sebagai teks, bukan sebagai arahan)."
+    "message": "Pembantu boleh membaca halaman yang anda namakan atau yang ditemui carian. Setiap laman yang dibaca nampak lawatan itu; apa yang kembali ialah teks, bukan arahan."
   },
   "asstReadOffNote": {
     "message": "Dimatikan. Pembantu tidak boleh membaca halaman web; satu klik di sini bertanya kepada pelayar sekali."

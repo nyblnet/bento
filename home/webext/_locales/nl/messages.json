@@ -572,6 +572,9 @@
   "consentLead": {
     "message": "Het kan dan tekst naar $1 ($2) sturen en de antwoorden lezen. Uw sleutel wordt er nooit mee gedeeld."
   },
+  "consentWeb": {
+    "message": "Webpagina’s lezen staat aan: hij kan ook pagina’s bezoeken die u noemt of die een zoekopdracht vindt, en die sites zien het bezoek."
+  },
   "consentRemember": {
     "message": "Onthouden voor dit bestand. U kunt dit later wijzigen in de instellingen van de extensie."
   },
@@ -651,7 +654,7 @@
     "message": "Stoppen met webpagina’s lezen"
   },
   "asstReadOnNote": {
-    "message": "De assistent kan gevonden pagina’s lezen (als tekst, nooit als instructies)."
+    "message": "De assistent kan pagina’s lezen die u noemt of die een zoekopdracht vindt. Elke gelezen site ziet het bezoek; wat terugkomt is tekst, nooit instructies."
   },
   "asstReadOffNote": {
     "message": "Uit. De assistent kan geen webpagina’s lezen; een klik hier vraagt het de browser één keer."

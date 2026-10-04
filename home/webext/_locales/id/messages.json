@@ -572,6 +572,9 @@
   "consentLead": {
     "message": "Dokumen ini akan dapat mengirim teks ke $1 ($2) dan membaca balasannya. Kunci Anda tidak pernah dibagikan kepadanya."
   },
+  "consentWeb": {
+    "message": "Membaca halaman web aktif: asisten juga dapat mengunjungi halaman yang Anda sebutkan atau yang ditemukan pencarian, dan situs tersebut melihat kunjungannya."
+  },
   "consentRemember": {
     "message": "Diingat untuk berkas ini. Anda dapat mengubahnya nanti di setelan ekstensi."
   },
@@ -651,7 +654,7 @@
     "message": "Berhenti membaca halaman web"
   },
   "asstReadOnNote": {
-    "message": "Asisten dapat membaca halaman yang ditemukannya (sebagai teks, tidak pernah sebagai instruksi)."
+    "message": "Asisten dapat membaca halaman yang Anda sebutkan atau yang ditemukan pencarian. Setiap situs yang dibaca melihat kunjungannya; yang kembali adalah teks, bukan instruksi."
   },
   "asstReadOffNote": {
     "message": "Nonaktif. Asisten tidak dapat membaca halaman web; klik di sini meminta peramban sekali."

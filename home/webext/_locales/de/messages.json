@@ -605,6 +605,9 @@
   "consentLead": {
     "message": "Es kann dann Text an $1 ($2) senden und die Antworten lesen. Ihr Schlüssel wird nie mit ihm geteilt."
   },
+  "consentWeb": {
+    "message": "Das Lesen von Webseiten ist an: Er kann auch Seiten besuchen, die Sie nennen oder die eine Suche findet, und diese Websites sehen den Besuch."
+  },
   "consentRemember": {
     "message": "Für diese Datei gemerkt. Sie können das später in den Einstellungen der Erweiterung ändern."
   },
@@ -684,7 +687,7 @@
     "message": "Webseiten nicht mehr lesen"
   },
   "asstReadOnNote": {
-    "message": "Der Assistent kann gefundene Seiten lesen (als Text, nie als Anweisungen)."
+    "message": "Der Assistent kann Seiten lesen, die Sie nennen oder die eine Suche findet. Jede gelesene Website sieht den Besuch; was zurückkommt, ist Text, nie Anweisungen."
   },
   "asstReadOffNote": {
     "message": "Aus. Der Assistent kann keine Webseiten lesen; ein Klick hier fragt den Browser einmal."

@@ -572,6 +572,9 @@
   "consentLead": {
     "message": "Nó sẽ có thể gửi văn bản đến $1 ($2) và đọc câu trả lời. Khóa của bạn không bao giờ được chia sẻ với nó."
   },
+  "consentWeb": {
+    "message": "Đọc trang web đang bật: trợ lý cũng có thể truy cập các trang bạn nêu hoặc tìm kiếm tìm thấy, và các trang đó thấy lượt truy cập."
+  },
   "consentRemember": {
     "message": "Đã ghi nhớ cho tệp này. Bạn có thể thay đổi sau trong cài đặt của tiện ích."
   },
@@ -651,7 +654,7 @@
     "message": "Ngừng đọc trang web"
   },
   "asstReadOnNote": {
-    "message": "Trợ lý có thể đọc các trang nó tìm thấy (dưới dạng văn bản, không bao giờ là chỉ dẫn)."
+    "message": "Trợ lý có thể đọc các trang bạn nêu hoặc tìm kiếm tìm thấy. Mỗi trang được đọc đều thấy lượt truy cập; nội dung trả về là văn bản, không bao giờ là chỉ dẫn."
   },
   "asstReadOffNote": {
     "message": "Tắt. Trợ lý không thể đọc trang web; nhấp vào đây sẽ hỏi trình duyệt một lần."

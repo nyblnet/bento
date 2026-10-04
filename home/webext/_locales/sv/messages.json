@@ -572,6 +572,9 @@
   "consentLead": {
     "message": "Det kommer att kunna skicka text till $1 ($2) och läsa svaren. Din nyckel delas aldrig med det."
   },
+  "consentWeb": {
+    "message": "Läsning av webbsidor är på: den kan också besöka sidor du nämner eller som en sökning hittar, och de webbplatserna ser besöket."
+  },
   "consentRemember": {
     "message": "Sparat för den här filen. Du kan ändra det senare i tilläggets inställningar."
   },
@@ -651,7 +654,7 @@
     "message": "Sluta läsa webbsidor"
   },
   "asstReadOnNote": {
-    "message": "Assistenten kan läsa sidor den hittar (som text, aldrig som instruktioner)."
+    "message": "Assistenten kan läsa sidor du nämner eller som en sökning hittar. Varje webbplats den läser ser besöket; det som kommer tillbaka är text, aldrig instruktioner."
   },
   "asstReadOffNote": {
     "message": "Av. Assistenten kan inte läsa webbsidor; ett klick här frågar webbläsaren en gång."

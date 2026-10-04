@@ -572,6 +572,9 @@
   "consentLead": {
     "message": "Będzie mógł wysyłać tekst do $1 ($2) i czytać odpowiedzi. Twój klucz nigdy nie jest mu udostępniany."
   },
+  "consentWeb": {
+    "message": "Czytanie stron jest włączone: może też odwiedzać strony, które podasz lub które znajdzie wyszukiwanie, a te witryny widzą wizytę."
+  },
   "consentRemember": {
     "message": "Zapamiętane dla tego pliku. Możesz to zmienić później w ustawieniach rozszerzenia."
   },
@@ -651,7 +654,7 @@
     "message": "Przestań czytać strony WWW"
   },
   "asstReadOnNote": {
-    "message": "Asystent może czytać znalezione strony (jako tekst, nigdy jako instrukcje)."
+    "message": "Asystent może czytać strony, które podasz lub które znajdzie wyszukiwanie. Każda czytana witryna widzi wizytę; to, co wraca, jest tekstem, nigdy poleceniami."
   },
   "asstReadOffNote": {
     "message": "Wyłączone. Asystent nie może czytać stron WWW; kliknięcie tutaj pyta przeglądarkę raz."

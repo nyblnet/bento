@@ -605,6 +605,9 @@
   "consentLead": {
     "message": "Ele poderá enviar texto para $1 ($2) e ler as respostas. Sua chave nunca é compartilhada com ele."
   },
+  "consentWeb": {
+    "message": "A leitura de páginas da web está ativada: ele também pode visitar páginas que você indicar ou que uma busca encontrar, e esses sites veem a visita."
+  },
   "consentRemember": {
     "message": "Lembrado para este arquivo. Você pode mudar isso depois nas configurações da extensão."
   },
@@ -684,7 +687,7 @@
     "message": "Parar de ler páginas web"
   },
   "asstReadOnNote": {
-    "message": "O assistente pode ler as páginas que encontra (como texto, nunca como instruções)."
+    "message": "O assistente pode ler páginas que você indicar ou que uma busca encontrar. Cada site lido vê a visita; o que volta é texto, nunca instruções."
   },
   "asstReadOffNote": {
     "message": "Desligado. O assistente não pode ler páginas web; um clique aqui pede ao navegador uma vez."

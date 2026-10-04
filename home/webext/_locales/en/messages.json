@@ -659,6 +659,10 @@
     "message": "It will be able to send text to $1 ($2) and read the replies. Your key is never shared with it.",
     "description": "Permission window body. $1 is the server hostname or 'this device', $2 the model name. REVIEW: this is a security prompt."
   },
+  "consentWeb": {
+    "message": "Reading web pages is on: it can also visit pages you name or a search finds, and those sites see the visit.",
+    "description": "Permission window: extra line shown only when the assistant may read web pages. REVIEW: this is a security prompt."
+  },
   "consentRemember": {
     "message": "Remembered for this file. You can change it later in the extension's settings.",
     "description": "Permission window: note that the answer is stored per file."
@@ -764,7 +768,7 @@
     "description": "Button: give the permission back."
   },
   "asstReadOnNote": {
-    "message": "The assistant can read pages it finds (as text, never as instructions).",
+    "message": "The assistant can read pages you name or a search finds. Each site it reads sees the visit; what comes back is text, never instructions.",
     "description": "Note when reading pages is allowed."
   },
   "asstReadOffNote": {

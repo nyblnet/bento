@@ -572,6 +572,9 @@
   "consentLead": {
     "message": "Det vil kunne sende tekst til $1 ($2) og lese svarene. Nøkkelen din deles aldri med det."
   },
+  "consentWeb": {
+    "message": "Lesing av nettsider er på: den kan også besøke sider du nevner eller som et søk finner, og de nettstedene ser besøket."
+  },
   "consentRemember": {
     "message": "Husket for denne filen. Du kan endre det senere i utvidelsens innstillinger."
   },
@@ -651,7 +654,7 @@
     "message": "Slutt å lese nettsider"
   },
   "asstReadOnNote": {
-    "message": "Assistenten kan lese sider den finner (som tekst, aldri som instruksjoner)."
+    "message": "Assistenten kan lese sider du nevner eller som et søk finner. Hvert nettsted den leser, ser besøket; det som kommer tilbake, er tekst, aldri instruksjoner."
   },
   "asstReadOffNote": {
     "message": "Av. Assistenten kan ikke lese nettsider; et klikk her spør nettleseren én gang."

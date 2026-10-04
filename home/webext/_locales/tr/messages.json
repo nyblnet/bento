@@ -572,6 +572,9 @@
   "consentLead": {
     "message": "$1 ($2) adresine metin gönderebilecek ve yanıtları okuyabilecek. Anahtarınız onunla asla paylaşılmaz."
   },
+  "consentWeb": {
+    "message": "Web sayfalarını okuma açık: belirttiğiniz veya bir aramanın bulduğu sayfaları da ziyaret edebilir ve bu siteler ziyareti görür."
+  },
   "consentRemember": {
     "message": "Bu dosya için hatırlanacak. Bunu daha sonra uzantının ayarlarından değiştirebilirsiniz."
   },
@@ -651,7 +654,7 @@
     "message": "Web sayfalarını okumayı bırak"
   },
   "asstReadOnNote": {
-    "message": "Asistan bulduğu sayfaları okuyabilir (metin olarak, asla talimat olarak değil)."
+    "message": "Asistan, sizin belirttiğiniz veya bir aramanın bulduğu sayfaları okuyabilir. Okunan her site ziyareti görür; dönen şey metindir, asla talimat değildir."
   },
   "asstReadOffNote": {
     "message": "Kapalı. Asistan web sayfalarını okuyamaz; buraya bir tıklama tarayıcıya bir kez sorar."

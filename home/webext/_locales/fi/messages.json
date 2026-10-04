@@ -572,6 +572,9 @@
   "consentLead": {
     "message": "Se voi lähettää tekstiä kohteeseen $1 ($2) ja lukea vastaukset. Avaintasi ei koskaan jaeta sille."
   },
+  "consentWeb": {
+    "message": "Verkkosivujen lukeminen on päällä: se voi myös avata sivuja, jotka nimeät tai jotka haku löytää, ja ne sivustot näkevät käynnin."
+  },
   "consentRemember": {
     "message": "Muistetaan tälle tiedostolle. Voit muuttaa tätä myöhemmin laajennuksen asetuksista."
   },
@@ -651,7 +654,7 @@
     "message": "Lopeta verkkosivujen lukeminen"
   },
   "asstReadOnNote": {
-    "message": "Avustaja voi lukea löytämiään sivuja (tekstinä, ei koskaan ohjeina)."
+    "message": "Avustaja voi lukea sivuja, jotka nimeät tai jotka haku löytää. Jokainen luettu sivusto näkee käynnin; takaisin tuleva on tekstiä, ei koskaan ohjeita."
   },
   "asstReadOffNote": {
     "message": "Pois. Avustaja ei voi lukea verkkosivuja; napsautus tässä kysyy selaimelta kerran."
