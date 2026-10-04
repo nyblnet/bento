@@ -201,10 +201,7 @@ ok(sanitizeSvgCss('.p::before{content:"a@b"}') === '.p::before{content:"a@b"}',
 
 // The escaped-url and image-set families #519's follow-up closed. url( written
 // with escapes is decoded and cut by the text pass, so it can be judged here in
-// node. image-set() placed straight after a property colon is left to the
-// browser's CSSOM pass on purpose (the text pass's colon boundary spares :not(),
-// so its proof is in the browser section below and NOT asserted here — in node
-// sanitizeSvgCss keeps it, by design, because node never renders it.
+// node.
 for (const spelling of ['\\75 rl', 'u\\72 l', '\\75\\72\\6c', '\\000075rl']) {
   ok(sanitizeSvgCss(`.p{background-image:${spelling}(https://evil.example/x)}`).includes('background-image:none'),
     `an escaped url() spelling — ${spelling}( — is rewritten to none by the text pass`)
@@ -217,6 +214,40 @@ ok(sanitizeSvgCss('.p{background-image:url(data:image/png;base64,iVBORw0KGgo=)}'
 ok(svgUrlRefsAllowed('background-image:\\75 rl(https://evil.example/x)', 'style') === false,
   'the style="" gate refuses an escaped url()')
 ok(svgUrlRefsAllowed('fill:url(#g)', 'style') === true, 'and keeps url(#…) in a style attribute')
+
+// …and the image-set spellings the browser section measures, judged here too:
+// written straight after a property colon they used to slip the text pass and
+// rely on the CSSOM check alone. The text pass now refuses them on its own, so
+// even with no CSSOM (this node run) nothing that can fetch survives.
+for (const css of [
+  '.p{background-image:image-set("https://evil.example/a" 1x)}',
+  '.p{background-image:-webkit-image-set("https://evil.example/b" 1x)}',
+  '.p{background-image:image-se\\74 ("https://evil.example/c" 1x)}',
+  '.p{cursor:image-set("https://evil.example/d" 1x), auto}',
+  '@media all{.p{background-image:image-set("https://evil.example/e" 1x)}}',
+]) {
+  const out = sanitizeSvgCss(css)
+  ok(!/image-set\(/i.test(out) && out.includes('bento-refused('),
+    `image-set straight after a colon is refused by the text pass alone: ${css.slice(0, 44)}…`)
+}
+
+// A call written straight after a colon is a SELECTOR only if its name is a
+// pseudo-class/-element function; any other is a value, judged by the function
+// allowlist like a call anywhere else. The text pass used to spare every
+// colon-preceded call, leaving `prop:fn(` (no space) to the CSSOM check alone.
+// `bento-probe` stands in for any function off the allowlist.
+for (const sel of ['.a:not(.b){fill:red}', '.a:nth-child(2n+1):is(.b,.c){fill:red}', '.a:where(.b):has(.c){fill:red}',
+  '.a::part(x){fill:red}', '::view-transition-group(x){opacity:1}', '.a:lang(ja):dir(rtl){fill:red}']) {
+  ok(sanitizeSvgCss(sel) === sel, `selector functions after a colon are kept: ${sel.slice(0, sel.indexOf('{'))}`)
+}
+ok(sanitizeSvgCss('.p{fill:rgb(1,2,3);width:calc(1px + 2px)}') === '.p{fill:rgb(1,2,3);width:calc(1px + 2px)}',
+  'allowed value functions straight after a colon are kept')
+ok(sanitizeSvgCss('.p{fill:bento-probe(1)}').includes('fill:bento-refused('),
+  'an off-list function straight after a property colon is refused by the text pass')
+ok(sanitizeSvgCss('.p{fill: bento-probe(1)}').includes('bento-refused('),
+  '…as it already was with a space')
+ok(sanitizeSvgCss('.p{fill:not(1)}') === '.p{fill:not(1)}',
+  'a pseudo name used as a value is spared (it can fetch nothing, and CSS drops it as invalid)')
 
 // --- 2. the table, end to end ------------------------------------------------
 //
@@ -526,15 +557,15 @@ if (location.pathname === '/meta.html') {
 
     // --- 4c. the css egress families the escaped-url / image-set fix closed ----
     //
-    // sanitizeSvgCss is a two-layer filter and its SECOND layer is the browser's
-    // own parse (cssomFindsFetch), which is why these live in the browser half
-    // and not the node one: a fetch function written straight after a property
-    // colon — background-image:image-set(…) — slips the text pass's colon
-    // boundary, the one that spares :not(, and is caught only when a real CSSOM
-    // re-serialises the rule with a space and drops the whole sheet. The escaped
-    // spellings of url( are cut by the text pass alone. So sanitizeSvgCss is run
-    // HERE, in the engine, and its output injected into a live <style>; a local
-    // server logs whether anything reached out.
+    // sanitizeSvgCss is a two-layer filter: a text pass, then — where there is a
+    // browser — the browser's own parse (cssomFindsFetch) as the last word. Each
+    // layer stops these families on its own now: section 1 pins the text pass in
+    // node (including image-set written straight after a property colon, which
+    // the text pass used to spare and leave to the CSSOM check alone), and this
+    // block proves the end result in a real engine — sanitizeSvgCss run HERE,
+    // its output injected into a live <style>, while a local server logs
+    // whether anything reached out. A regression in either layer alone is caught
+    // by the other half of the rig.
     //
     // Every negative below is non-vacuous: the raw positive controls FETCH in
     // this engine (url(), and image-set in both spellings — measured), so a zero

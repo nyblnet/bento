@@ -11,6 +11,50 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.2.6] — 2026-10-04
+
+- **Open a PowerPoint deck in Bento: bento.page/import.** Drop a `.pptx` on
+  the page and get back a `.bento.html` deck you can edit and present. The
+  conversion runs in your browser and the deck is never uploaded. The page
+  fetches only the current signed slides release to build on, checks its
+  signature and fingerprint, and refuses anything that fails. Before you
+  download, it shows what was carried over, what was approximated and what
+  was left out. Tables and charts become marked placeholders for now.
+  The same conversion runs from a terminal as
+  `node convert/cli.mjs deck.pptx`.
+- **Save as → Import PowerPoint…** The Save-as menu has an entry next to
+  Replace from JSON that opens that importer (bento.page/import) in a new tab.
+  It needs an internet connection, and the entry's tooltip says so.
+- **Security: update this file. This release closes further issues found in
+  our own review.** None needs anything from you beyond updating. What each one
+  was is described here once people have had time to update.
+- **Undo can no longer reverse Stop sharing, Reset access or Duplicate as new
+  deck.** Undoing an edit made before one of those used to bring back the old
+  sharing settings, which could restore access you had just removed from a
+  collaborator. **If you have used Reset access on a shared deck, update and
+  then reset access again** to be sure the change stuck.
+- **A hand-written or AI-written deck no longer gets stuck on the loading
+  screen.** A document that left out a required part — the theme, the page
+  size, a slide's background, or an element's content — opened to the splash
+  screen and stayed there. It now opens: the missing parts take the editor's
+  defaults, anything that was given is kept, and an element with nothing to
+  show is left out.
+- **A view-only or audience copy opened inside the editor stays view-only.**
+  Dropping an audience copy (the hand-out for a live show) onto an open deck,
+  or loading one by script, used to offer "Invite to edit…", "Go live" and
+  "Reset access…" and call you an Editor; a read-only copy opened the same way
+  could be edited. Both are now locked, the same as when you open them
+  directly. The live session never accepted their changes; now the editor
+  agrees.
+- **Pictures a collaborator adds now appear in a read-only live copy.** Large
+  pictures travel through the live session separately from the deck, and a
+  read-only viewer showed them as blank boxes. They now load like everything
+  else.
+- **A copy edited offline catches up every tab opened later.** When a copy
+  you edited offline reconnected, its changes reached the collaborators online
+  at that moment; a tab opened afterwards on the same computer could miss them.
+  It now receives them too.
+
 ## [1.2.5] — 2026-09-28
 
 - **Security: update this file. This release closes three security issues
