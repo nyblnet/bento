@@ -313,7 +313,7 @@ bento.removeBlocks([ids])                  // → {ok:true, removed, missing, ad
 bento.moveBlock(id, {pageId?, afterId?, beforeId?, parent?})
 bento.updatePage(id, patch)                // → {ok:true, id} | {ok:false, err}
 bento.removePage(id, {descendants?})       // → {ok:true, removed, rehomed, links}
-bento.loadDoc(json)                        // replace everything (one undo step)
+bento.loadDoc(json)                        // replace the content (one undo step); docId, collab, readonly, template stay
 
 bento.serialize()                          // the whole .bento.html file
 bento.undo() / bento.redo()
@@ -596,5 +596,9 @@ rather than vanishing quietly at save time.
   — the file round-trips byte-exact and edits are refused.
 - A remote image `src` shows a placeholder until the reader asks for it. Embed
   the bytes as an `asset:` instead — see **Images** above.
-- There is no collaboration yet. Two people editing two copies get two files
-  and no merge.
+- A shared space (its `collab` names a room) syncs between open copies, and a
+  saved copy carries its sync state in `collab.sync` so it can rejoin the
+  session later as a fork. Leave `collab` alone. An edit written into
+  `#bento-doc` from outside the app is not in that state, so it is not reliably
+  carried to the other copies when the file next joins — edit a shared space
+  through `window.bento` in the open file instead.

@@ -95,11 +95,22 @@ jobs:
         working-directory: slides
         run: node_modules/.bin/tsc -b
 
+      - name: Spaces save revisions
+        # Typing runs and remote changes invalidate in-flight saves even while dirty.
+        run: node scripts/test-spaces-save-revisions.ts
+
       - name: Typecheck kernel (standalone)
         # Apps also typecheck kernel transitively through their imports; this
         # catches kernel-only errors under the kernel's own flags.
         working-directory: slides
         run: node_modules/.bin/tsc -p ../kernel
+
+      - name: Typecheck convert (standalone)
+        # convert/ is a library beside the apps (the CLI and bento.page/import
+        # use it; no shell does), so no app's tsc -b reaches it. Its own flags,
+        # its own pass — the same as kernel's.
+        working-directory: slides
+        run: node_modules/.bin/tsc -p ../convert
 
       - name: Build single-file shell
         working-directory: slides
@@ -160,6 +171,18 @@ jobs:
           slides/node_modules/.bin/esbuild scripts/test-spaces-undo.ts --bundle --platform=node --format=esm \
             --outfile="$RUNNER_TEMP/test-spaces-undo.mjs"
           node "$RUNNER_TEMP/test-spaces-undo.mjs"
+
+      - name: Spaces restore-gate rig
+        # The recovery snapshot and every History entry live in IndexedDB, which
+        # every file:// document shares, so restore is foreign input. Like
+        # slides' restore gate: an entry naming another space is refused, it
+        # never brings collab/readonly/template, block html is sanitized, and
+        # junk, frozen, __proto__ and oversized entries apply nothing.
+        # (Bundled: store.ts imports './model' extensionless.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-restore-gate.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-restore-gate.mjs"
+          node "$RUNNER_TEMP/test-spaces-restore-gate.mjs"
 
       - name: Spaces agent-surface rig
         # agent.ts is ~900 lines and shipped with no coverage at all: two of the
@@ -859,6 +882,12 @@ jobs:
       - name: bento/dash selection and clipboard
         run: node scripts/test-dash-select.ts
 
+      - name: bento/dash sharing state
+        # Start/stop/rotate sharing mark the workbook unsaved (a rotation is
+        # revocation and must reach the file); only a writer copy offers write
+        # auth or calls itself an Editor — an allowlist, failing closed.
+        run: node scripts/test-dash-share-dirty.ts
+
       - name: bento/dash conditional formatting
         run: node scripts/test-dash-condfmt.ts
 
@@ -932,10 +961,15 @@ jobs:
         # The pptx importer's resolver is where real decks' fidelity lives --
         # 91% of colour and 71% of run properties are indirect, and every hop
         # fails silently (a backwards clrMap still renders, just dark-on-dark).
-        # Seven rigs, 378 checks, negative controls proven against mutated
-        # implementations; load.ts is the gate that matters: every emitted
-        # document must pass the REAL slides parseDoc with zero validateDoc
-        # errors.
+        # Negative controls proven against mutated implementations; load.ts is
+        # the gate that matters for import: every emitted document must pass the
+        # REAL slides parseDoc with zero validateDoc errors. The runner also
+        # covers the `bento convert` CLI (it needs the shell built above and
+        # Chrome for "it opens"; neither may skip in CI), the delivery chain
+        # behind bento.page/import (signature, pin, version floor, untrusted-
+        # input gate, zip limits, exactly two requests), the built page's CSP,
+        # and the boundary: no app imports convert/, and the engine touches no
+        # DOM global.
         run: node scripts/test-convert.ts
 
       - name: bento/dash zip
@@ -1966,3 +2000,26 @@ jobs:
         # unknown-role copy arriving in a running editor (dropped, loadDoc) gets
         # no write actions and is locked; owner and writer copies keep theirs.
         run: node scripts/test-slides-audience-gate-browser.mjs
+
+  spaces-save-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone documents
+        run: |
+          npm ci --prefix spaces
+          npm run build:single --prefix spaces
+      - name: Exercise the packaged documents in Chromium
+        # Real UI and serialization, offline; delayed mock writes expose save races.
+        run: |
+          node scripts/test-spaces-save-browser.mjs

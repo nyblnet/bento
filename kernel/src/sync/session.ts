@@ -405,6 +405,18 @@ export class SyncSession {
   /** a restored offline fork still owes the room its snapshot */
   private forkPending = false
 
+  /**
+   * This replica carries offline-fork contributions that live only in its doc
+   * VALUES + restored registers, never as replayable log ops. `forkPending`
+   * drives the ONE broadcast at our own hello and is cleared once the relay has
+   * our server snapshot; this stays set for the session, because a peer that
+   * joins LATER still can't learn those contributions from the log. Online late
+   * joiners recover from the relay's server snapshot, but a same-machine tab
+   * joins over BroadcastChannel, which has no replay — so we re-snap each new
+   * peer while this holds (see onFrame 'hello').
+   */
+  private carriesForkState = false
+
   /** the loaded doc arrived carrying collab creds (was saved/shared) */
   private bornWithCollab = false
   /** the user opted in this session (saved, or hit "Start live session") */
@@ -444,6 +456,7 @@ export class SyncSession {
       // merge the fork BOTH ways (see docs/collab-design.md)
       this.state = this.host.engine.fromJSON(this.actor, JSON.parse(JSON.stringify(saved)))
       this.forkPending = true
+      this.carriesForkState = true
     } else {
       // no saved state, or state from the pre-composite-key era (v1) — that
       // scheme collapsed same-id-on-many-slides, so it is discarded and the
@@ -670,6 +683,7 @@ export class SyncSession {
     console.error('[bento-sync] diff failed; recovering via snapshot', err)
     this.shadow = JSON.stringify(this.store.doc)
     this.forkPending = true
+    this.carriesForkState = true
     try {
       // inlined rather than this.snapshot() — that calls flush(), and flush()
       // is our caller
@@ -693,6 +707,7 @@ export class SyncSession {
     if (f.a === this.actor) return
     switch (f.t) {
       case 'hello': {
+        const newcomer = !this.peersMap.has(f.a)
         this.touchPeer(f.a, f.p)
         // answer so the newcomer learns us + catch them up from our log,
         // AND tell them our vv so ops they minted before connecting (which
@@ -701,6 +716,16 @@ export class SyncSession {
         this.send({ t: 'need', a: this.actor, vv: this.state.vv })
         const missing = this.state.missingFor(this.log, f.vv)
         if (missing.length) this.send({ t: 'ops', a: this.actor, ops: missing })
+        // A fork's offline contributions aren't in the log — the log catch-up
+        // above can't convey them. We snapshot them ONCE at our own hello, which
+        // a peer that joins LATER misses; re-send to each genuinely new peer so
+        // a same-machine tab opened later (BroadcastChannel has no replay) still
+        // merges our fork. Online peers also get it from the relay snapshot; the
+        // merge is idempotent, so a duplicate is harmless.
+        if (newcomer && this.carriesForkState) {
+          const s = this.snapshot()
+          this.send({ t: 'snap', a: this.actor, doc: s.doc, state: s.state })
+        }
         break
       }
       case 'ops':
@@ -1034,7 +1059,15 @@ export class SyncSession {
     const view = this.host.captureView?.()
     try {
       const res = this.state.mergeSnapshot(this.store.doc, rdoc, rstate)
-      if (res.changed) this.afterRemoteChange(true, view)
+      if (res.changed) {
+        this.afterRemoteChange(true, view)
+        // We absorbed register-only state a snapshot carried — it isn't in our
+        // log, so a peer that joins later can't learn it from our catch-up. Carry
+        // it onward: re-snap new peers too (bounded once-per-peer, see 'hello').
+        // This is what converges a 3-tab offline chain (A forks, B merges A, C
+        // joins asking B) over replay-less BroadcastChannel.
+        this.carriesForkState = true
+      }
     } finally {
       this.applying = false
     }
