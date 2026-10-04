@@ -7465,7 +7465,12 @@ keep bento/home out of the chooser; but content URIs have opaque paths, so
 offer the app for every binary file — a store-review problem. How often real
 senders do this is a hardware question, not one to guess at here.
 
-**For the iOS host** (`exportCopy`): it cannot write a 0-byte file — it writes a
-temp copy first — but it reports success when the picker is *presented*, so a
-cancelled export reads as saved, and it has no export memory either. Whether
-repeated autosaves to an export handle stack pickers there is unmeasured.
+**For the iOS host** (`exportCopy`): it could not write a 0-byte file — it
+writes a temp copy first — but it reported success when the picker was
+*presented*, so a cancelled export read as saved, and it had no export memory
+either. Fixed in #600 under the same rules, so both hosts answer a page the same
+way; verified there by reading and a standalone state-machine check, not yet on
+a device. One iOS-specific difference is recorded in #600's entry: its picker
+copies the temp file as it stood when the picker opened, so bytes from a write
+that joined later must be written over the placed copy before anyone is
+answered.
