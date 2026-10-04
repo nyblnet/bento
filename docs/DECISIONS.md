@@ -14,6 +14,32 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-04 — iOS: "Save a copy…" reports what the picker actually did
+
+**Decision.** iOS follows the same rules as Android's 2026-10-04 entry on
+saving from a read-only document (#595), so the two hosts give the same answer
+to a page. A copy is remembered for the session by the name its handle was vended
+under. Writes that arrive while its picker is open join that picker, and the
+newest bytes win. A different name while a picker is open is refused out loud. A
+cancel fails every write waiting on it. The rules live in Foundation-only
+`home/ios/ExportSessions.swift`; `EditorViewController` presents the picker and
+does the writing.
+
+**Why.** `exportCopy` reported success the moment the picker *appeared*, and
+set no delegate. So a cancelled "Save a copy…" told the page the copy was
+saved. Nothing remembered where a copy went, either, so every later write to
+that handle opened another picker — or, if one was already up, UIKit declined the
+second presentation and never called back, and the page's save waited forever.
+iOS never wrote a 0-byte file as Android did: it writes the temp copy before
+asking.
+
+**One iOS-specific detail.** The picker copies the temp file as it stood when
+the picker opened. So when a write joins afterwards, the newer bytes are written
+over the placed copy once the user has chosen, before any waiting write is
+answered.
+
+---
+
 ## 2026-08-19 — Cross-app embedding: static render + source, never a second renderer
 
 **Decision.** One block/element shape, `bento/embed`, shared by every app in both
