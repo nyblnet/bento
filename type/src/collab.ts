@@ -31,11 +31,12 @@
 // sync/session.ts's SyncSession is for.
 
 import './collab.css';
+import { inviteCopy, readerCopy } from './share.ts';
 import { serializeAuto, writeUpdatedFileAs } from '../../kernel/src/save.ts';
 import { lsGet, lsSet } from '../../kernel/src/storage.ts';
 import { offlineEnabled } from '../../kernel/src/net.ts';
 import {
-  joinFromDoc, mintInvite, onlineTransport, rotateKeys,
+  joinFromDoc, onlineTransport, rotateKeys,
   sharingOn, startSharing, stopSharing,
 } from './sync/online.ts';
 import { SyncSession, hostStore, type Peer, type SyncNotice } from './sync/session.ts';
@@ -78,14 +79,6 @@ function noticeText(n: SyncNotice): string {
     case 'rate-limited':
       return 'Too many changes at once — live sync is catching up.';
   }
-}
-
-/** A copy sent for someone else to work on must not carry the owner's keys. */
-function stripCollabSecrets(doc: TypeDoc, opts: { keepRoom?: boolean } = {}) {
-  if (!doc.collab) return;
-  if (!opts.keepRoom) { delete doc.collab; return; }
-  delete doc.collab.ownerPriv;
-  delete doc.collab.invite;
 }
 
 /** Where a peer is, in terms someone reading the sidebar understands. */
@@ -259,10 +252,9 @@ export function initCollab(store: Store, editor: Editor): void {
       return;
     }
     session.stampInto(store.doc);
-    const clone: TypeDoc = JSON.parse(JSON.stringify(store.doc));
-    stripCollabSecrets(clone, { keepRoom: true });
-    clone.collab!.invite = await mintInvite(c.ownerPriv, 'writer');
-    clone.collab!.on = true;
+    // Built in share.ts, the one place share copies are minted (and the place
+    // test-export-secrets and test-type-share inspect).
+    const clone = await inviteCopy(store.doc, c.ownerPriv);
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'invite' });
       if (ok) toast(t('Editor copy saved — recipients join live with edit access'));
@@ -275,9 +267,7 @@ export function initCollab(store: Store, editor: Editor): void {
     await goLive();
     const c = store.doc.collab;
     if (!c?.room || !c.key) { toast(t('This document has no live session to follow')); return; }
-    const clone: TypeDoc = JSON.parse(JSON.stringify(store.doc));
-    clone.collab = { ...c, role: 'reader', on: true, sync: undefined };
-    stripCollabSecrets(clone, { keepRoom: true });
+    const clone = readerCopy(store.doc);
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'viewonly' });
       if (ok) toast(t('View-only copy saved — it follows the live session'));

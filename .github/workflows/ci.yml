@@ -1800,6 +1800,13 @@ jobs:
         # script rather than sanitising one.
         run: node scripts/test-type-embed.ts
 
+      - name: Type share-copy rig
+        # A view-only copy carries the room it follows and NO private key —
+        # not the owner's, not a legacy writer key, not an invite — whatever the
+        # source document held; an editor copy writes only through its own
+        # fresh, revocable invite. Every copy is minted in type/src/share.ts.
+        run: node scripts/test-type-share.ts
+
       - name: Type chrome rig
         # Where controls live: nothing in two menus, no inserts in the
         # overflow, and every element the chrome reaches for actually exists —

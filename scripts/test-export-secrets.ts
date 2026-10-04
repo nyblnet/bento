@@ -426,7 +426,12 @@ function exportedBody(src: string, name: string): string {
   return src.slice(open, i + 1)
 }
 
-const SHARE_APPS = ['spaces']
+// The BUILDER checks hold for every app that mints share copies in a share.ts.
+// They covered spaces alone until 2026-10-04 — and type, which built its copies
+// inline in collab.ts with a stripper that kept writerPriv, went unchecked.
+// The CALL-SITE checks below are spaces' editor architecture and stay spaces'.
+const SHARE_APPS = ['spaces', 'type']
+const SHARE_CALLSITE_APPS = new Set(['spaces'])
 for (const app of SHARE_APPS) {
   const rel = `${app}/src/share.ts`
   let src: string
@@ -451,6 +456,14 @@ for (const app of SHARE_APPS) {
     `${rel}: it strips FIRST — a stray writerPriv beside an invite is a second, unrevokable way in`)
   ok(!/ownerPriv\s*[,}]/.test(mask(exportedBody(src, 'readerCopy'))),
     `${rel}: readerCopy never re-attaches a private key`)
+
+  if (!SHARE_CALLSITE_APPS.has(app)) {
+    // type's call site: collab.ts must build every copy through share.ts.
+    const collab = read(`${app}/src/collab.ts`)
+    ok(/inviteCopy\(/.test(collab) && /readerCopy\(/.test(collab) && !/stripCollabSecrets/.test(collab),
+      `${app}/src/collab.ts mints share copies only through share.ts`)
+    continue
+  }
 
   // The call site. A share copy must reach the file through a writer that takes
   // a DOCUMENT — the ordinary save path serializes the open one.

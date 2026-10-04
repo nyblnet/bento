@@ -356,6 +356,15 @@ export interface TypeDoc {
       /** owner's signature over `inv.${pub}.${role}.${exp||0}` */
       sig: string;
     };
+    /**
+     * The LEGACY (pre-v2) shared writer keypair. bento/type never mints one —
+     * its rooms are owner-keyed — but a document can ARRIVE holding one, and
+     * parseDoc keeps `collab` verbatim. Declared so the code that must strip
+     * the private half can name it: undeclared, it was the one key the share
+     * stripper left in every view-only copy. Matches kernel sync/crdt.ts.
+     */
+    writerPub?: string;
+    writerPriv?: string;
   };
   /** unknown fields are PRESERVED — format additivity (PLATFORM §3) */
   [extra: string]: unknown;
