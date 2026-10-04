@@ -45,6 +45,7 @@ import { htmlToMd } from './marks.ts'
 import { humanBytes } from './assets'
 import { SPEC, mdLayout, type MdCtx } from './blocks'
 import { parseDoc, uid } from './model'
+import { restoreInto } from './restoregate'
 import {
   issuesOf, passesFilter, sortRows, fieldByKey, optionOf, fieldsOf,
 } from './fields'
@@ -573,13 +574,13 @@ export function openAbout(hooks: AboutHooks): void {
       doIt.textContent = t('Restore')
       b.append(left, tag, doIt)
       b.addEventListener('click', () => {
-        let restored: SpacesDoc
-        try { restored = JSON.parse(v.json) as SpacesDoc } catch {
-          say(t('That version could not be read')); return
-        }
-        // replaceDoc checkpoints undo first, so ⌘Z walks this back — the same
-        // contract the recovery banner's Restore already honours.
-        store.replaceDoc(restored)
+        // FOREIGN INPUT, gated as the recovery banner gates it (restoregate.ts):
+        // every file:// document shares this IndexedDB. A refusal applies
+        // nothing and leaves the entry where it is.
+        if (store.readOnly) { say(t('This file is open read-only')); return }
+        // replaceDoc (inside restoreInto) checkpoints undo first, so ⌘Z walks
+        // this back — the same contract the recovery banner's Restore honours.
+        if (!restoreInto(store, v.json)) { say(t('That version could not be read')); return }
         onRepaint()
         close()
         say(t('Restored the version from {when} — ⌘Z undoes it', { when }))

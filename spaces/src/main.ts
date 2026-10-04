@@ -17,7 +17,8 @@ import { putRecovery, getRecovery, clearRecovery, pruneOld, addVersion } from '.
 import { APP_VERSION } from '../../kernel/src/update.ts'
 import { t, locale, applyDirection } from './i18n'
 import { i18nApi } from '../../kernel/src/i18n.ts'
-import { parseDoc, docContentKey, uid, newPage, type SpacesDoc, type ParseResult } from './model'
+import { parseDoc, uid, newPage, type SpacesDoc, type ParseResult } from './model'
+import { recoveryOffered, restoreInto } from './restoregate'
 import {
   validateDoc, outlineDoc, statsDoc,
   planInsertBlocks, planUpdateBlock, planRemoveBlocks, planMoveBlock, planUpdatePage, planRemovePage,
@@ -609,15 +610,26 @@ function banner(text: string, actions: Array<[string, () => void]> = []): void {
   document.body.prepend(bar)
 }
 
-/** A snapshot that differs from the file we loaded means a crash lost work. */
+/**
+ * A snapshot that differs from the file we loaded means a crash lost work.
+ *
+ * The snapshot is FOREIGN INPUT (restoregate.ts): every file:// document shares
+ * this IndexedDB, so it is offered only when it passes the gate, and compared as
+ * it WOULD be restored. An entry that is not this space, not a document, or
+ * that gates down to what is already open never shows a banner at all — like
+ * slides' checkRecovery.
+ */
 async function offerRecovery(doc: SpacesDoc, store: Store, editor: Editor): Promise<void> {
+  if (store.readOnly) return // a reading copy, a view-only follower or a frozen file is never rewritten
   const snap = await getRecovery(doc.docId)
-  if (!snap) return
-  let saved: SpacesDoc
-  try { saved = JSON.parse(snap.json) as SpacesDoc } catch { return }
-  if (docContentKey(saved) === docContentKey(doc)) return
+  if (!snap || !recoveryOffered(snap.json, doc)) return
   banner(t('Unsaved changes from a previous session were found.'), [
-    [t('Restore'), () => { store.replaceDoc(saved); editor.repaint() }],
+    [t('Restore'), () => {
+      // re-gated against the space as it is NOW (restoreInto). A refusal
+      // applies nothing and keeps the entry; only Discard deletes it.
+      if (!restoreInto(store, snap.json)) { editor.status(t('That version could not be read')); return }
+      editor.repaint()
+    }],
     [t('Discard'), () => { void clearRecovery(doc.docId) }],
   ])
 }

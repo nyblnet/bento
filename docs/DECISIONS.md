@@ -7698,3 +7698,32 @@ needs those more than anyone. Remote edits arrive through `touch()`, not
 `commit`, so a locked copy still follows the room. `copyIsReceiveOnly` is the
 lock's question (a document with no `collab` is local and editable — unlike
 `copyCanWrite`, which says no only because there is no room to write to).
+
+## 2026-10-04 — Spaces: a restore from this browser passes a gate, like slides' restoregate
+
+`spaces/src/restoregate.ts` is the spaces counterpart of slides'
+`slides/src/restoregate.ts` (`gateRestored`, rig
+`scripts/test-slides-restore-gate.ts`). The recovery snapshot and every
+History entry live in IndexedDB, and every `file://` document shares that
+origin, so a stored entry is foreign input. The recovery check
+(`recoveryOffered`), the banner's Restore and History's Restore all go
+through it (`restoreInto`); none of them parses a stored entry straight into
+`replaceDoc` any more.
+
+The gate refuses, applying nothing and deleting nothing, an entry that is over
+`MAX_RESTORE_CHARS` (128 MiB), is not JSON, has a `__proto__` key anywhere,
+names a docId other than the open space's (checked on the raw value, before
+`parseDoc` could mint one), fails `parseDoc`, or would open frozen (newer
+version or unknown policy): a restore cannot open read-only, so it must not
+happen. What passes has every block's `html` run through `sanitizeInline`,
+the gate importSpace puts on arriving blocks, and takes identity from the
+live space via `FROM_LIVE`. A read-only store is never restored into, and the
+banner is shown only for an entry that passes and differs from the open space
+as it would be restored, so a bad entry cannot raise one.
+
+Two deliberate differences from slides. Spaces REFUSES a foreign docId where
+slides overwrites it with the live one: a space's content is its pages, and
+another space's pages under this one's identity is exactly the forgery. And
+spaces does NOT drop unknown keys: the format is additive, a file open keeps
+every field it does not understand, and the restore path must not be the one
+that loses them.
