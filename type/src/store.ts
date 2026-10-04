@@ -19,6 +19,7 @@
 //    presses, not five plus however many times the page re-laid-out.
 
 import type { Block, TypeDoc } from './model.ts';
+import { copyIsReceiveOnly } from './model.ts';
 
 type Snap =
   | { kind: 'doc'; doc: TypeDoc }
@@ -38,7 +39,22 @@ export class Store {
   /** the open coalescing run, so a burst of typing is ONE undo step */
   #run: string | null = null;
 
-  constructor(doc: TypeDoc) { this.#doc = doc; }
+  constructor(doc: TypeDoc) { this.#doc = doc; this.#relock(); }
+
+  /**
+   * True while the document is a RECEIVE-ONLY copy (a view-only reader, or a
+   * live-show audience member). User edits are refused; see `commit`.
+   *
+   * DERIVED from the document and recomputed on every change, never set once
+   * at boot. A copy can arrive in a running editor by load, by `loadDoc`, by
+   * restoring a recovery snapshot, or by undoing a replace — and bento/slides
+   * found the version of this lock that was decided only at build time, which
+   * a dropped-in reader copy simply walked past. Deriving it means there is no
+   * path to forget.
+   */
+  #locked = false;
+  get locked(): boolean { return this.#locked; }
+  #relock(): void { this.#locked = copyIsReceiveOnly(this.#doc.collab); }
 
   get doc(): TypeDoc { return this.#doc; }
   get canUndo(): boolean { return this.#undo.length > 0; }
@@ -47,7 +63,7 @@ export class Store {
   get undoDepth(): number { return this.#undo.length; }
 
   on(fn: Listener): () => void { this.#listeners.add(fn); return () => this.#listeners.delete(fn); }
-  #emit() { for (const fn of this.#listeners) fn(this.#doc); }
+  #emit() { this.#relock(); for (const fn of this.#listeners) fn(this.#doc); }
 
   #snap(scope: Scope): Snap {
     if (scope === 'doc') return { kind: 'doc', doc: clone(this.#doc) };
@@ -69,7 +85,14 @@ export class Store {
    * one undo step, which is how a typed word is one press of ⌘Z rather than
    * five. Any commit without a run, or with a different one, closes the group.
    */
-  commit(fn: (doc: TypeDoc) => void, opts: { scope?: Scope; run?: string } = {}): void {
+  commit(fn: (doc: TypeDoc) => void, opts: { scope?: Scope; run?: string; system?: boolean } = {}): void {
+    // A receive-only copy takes no USER edits — the relay would drop them, so
+    // they would live only here and quietly diverge this file from the room it
+    // claims to follow. `system` is for the sync session's own bookkeeping
+    // (materialising a peer's published images, kernel session.ts
+    // resolveBlobs), which a reader needs more than anyone: blocking it would
+    // leave every reader looking at empty pictures.
+    if (this.#locked && !opts.system) return;
     const scope = opts.scope ?? 'doc';
     const run = opts.run ?? null;
     if (run === null || run !== this.#run) this.#push(this.#snap(scope));
