@@ -750,4 +750,5 @@ export const zhHant: Catalog = {
   "“{name}” is the older Excel format. Open it in Excel and save it as .xlsx, and dash will read it.": "「{name}」是舊版的 Excel 格式。請在 Excel 中開啟並另存為 .xlsx，dash 就能讀取。",
   "…or cut at character positions": "…或按字元位置切分",
   "＋ Comment on the selected cell": "＋ 為選取的儲存格加註解",
+  "Not a number — left out of totals, and a formula that reads it gives #VALUE!": "不是數字 — 未計入合計，讀取它的公式會得到 #VALUE!",
 }
