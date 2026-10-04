@@ -46,7 +46,7 @@ const warn = (m) => { console.warn(`⚠ guestbook re-seed skipped: ${m}`) }
 // App payload fingerprint — the deflate-b64 runtime blocks. Two decks with the
 // same hash embed the same shell (identical runtime), whatever their doc holds.
 const appHash = (html) => {
-  const blocks = [...html.matchAll(/type="bento\/deflate-b64"[^>]*>([A-Za-z0-9+/=]+)</g)].map((m) => m[1])
+  const blocks = [...html.matchAll(/type="bento\/deflate-b(?:64|86)"[^>]*>([^<]+)</g)].map((m) => m[1])
   return blocks.length ? createHash('sha256').update(blocks.join('')).digest('hex') : null
 }
 

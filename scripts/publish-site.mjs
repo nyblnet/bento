@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url'
 import { gatePackIndex } from './sign-packs.mjs'
 import { walk, plannedDeletions, groupDeletions, supersededPacks } from './site-inventory.mjs'
 import { APPS, RELEASE_MARKER, tagFor } from './apps.mjs'
+import { accountMayRelease, activeAccount, mismatchMessage, noOwnerMessage, ownerOfRemote, repoRemote } from './gh-account.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const site = join(root, 'site')
@@ -106,7 +107,7 @@ if (doGallery) {
 const shellFile = join(site, 'releases/slides/Bento_Slides.bento.html')
 if (existsSync(shellFile)) {
   const appHash = (file) => {
-    const blocks = [...readFileSync(file, 'utf8').matchAll(/type="bento\/deflate-b64"[^>]*>([A-Za-z0-9+/=]+)</g)].map((m) => m[1])
+    const blocks = [...readFileSync(file, 'utf8').matchAll(/type="bento\/deflate-b(?:64|86)"[^>]*>([^<]+)</g)].map((m) => m[1])
     return blocks.length ? createHash('sha256').update(blocks.join('')).digest('hex') : null
   }
   const shellHash = appHash(shellFile)
@@ -315,6 +316,30 @@ if (!existsSync(join(site, 'guestbook.bento.html'))) {
   } else {
     console.log(`• deletion gate: ${published.length} published file(s), none would be removed ✓`)
   }
+}
+
+// ---- the gh account, BEFORE anything is published ------------------------
+//
+// Publishing has two halves — mirror the site, then create the GitHub
+// release — and the second needs gh to be the repo owner's account. Three
+// releases running it was not (a job/temp worktree, where the shell's chpwd
+// hook selects the work profile), and the failure came AFTER the site was
+// live. So: which account is gh, and may it release here? Checked here, with
+// nothing mirrored yet; the message names the command to run from ~/devel.
+// scripts/gh-account.mjs holds the rule; scripts/test-publish-account.ts the
+// cases. --dry skips it (a dry run publishes nothing either way); every real
+// publish runs it, because every real publish ends in the release step.
+if (!dry) {
+  const remote = repoRemote(root, (cmd, a) => capture(cmd, a, { stdio: ['ignore', 'pipe', 'ignore'] }))
+  const owner = remote ? ownerOfRemote(remote.url) : null
+  const status = (() => { try { return capture('gh', ['auth', 'status'], { stdio: ['ignore', 'pipe', 'pipe'] }) } catch (e) { return String(e?.stdout ?? '') + String(e?.stderr ?? '') } })()
+  const account = activeAccount(status)
+  const allowed = (process.env.BENTO_RELEASE_ACCOUNTS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  // never skip: an owner that cannot be read is a refusal, not a warning
+  if (!owner) die(noOwnerMessage(root))
+  else if (!accountMayRelease(account, owner, allowed)) {
+    die(mismatchMessage({ account, owner, repoRoot: root.startsWith(process.env.HOME ?? '') ? root : '~/devel/bento', cmd: `node scripts/publish-site.mjs ${args.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}` }))
+  } else console.log(`• gh account: ${account} ✓ (may release on ${owner})`)
 }
 
 if (dry) rsyncFlags.push('-n', '-v', '--itemize-changes')
