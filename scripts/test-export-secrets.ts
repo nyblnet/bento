@@ -238,6 +238,21 @@ for (const name of EXPORTS) {
 ok(!/writeText\(JSON\.stringify\(this\.store\.doc\)/.test(body('copyDocJson')),
   'copyDocJson() copies a stripped CLONE, never the live document')
 
+// The invite copy (slides' "Invite to edit…", saveEditorCopy) keeps the room and
+// adds a scoped invite. Calling the stripper is not enough — it must run FIRST:
+// stripped after the invite is minted, nothing is lost, but stripped never (or
+// re-attached after) and the deck's own writerPriv/ownerPriv travel beside the
+// invite — a second way in that the People list cannot revoke. The same order
+// SHARE_APPS pins for spaces' share.ts below; slides mints its copies from
+// editor.ts methods rather than a share module, so it is pinned here.
+{
+  const inv = mask(body('saveEditorCopy'))
+  const strip = inv.search(/stripCollabSecrets\(\s*clone\s*,\s*\{\s*keepRoom:\s*true\s*\}\s*\)/)
+  const mint = inv.indexOf('mintInvite(')
+  ok(strip >= 0 && mint >= 0 && strip < mint,
+    'saveEditorCopy() strips the clone (keepRoom) BEFORE it mints the scoped invite')
+}
+
 // The audience copy (live broadcast) is the one export that does NOT go
 // through stripCollabSecrets: it is built by the audience PROJECTION, which
 // replaces the collab block outright (show key as collab.key, audience
