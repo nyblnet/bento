@@ -30,7 +30,7 @@ import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
-import { borderPoint, boxCenter, lineEndpoints, pathEndpoints, setLineEndpoints, setPathEndpoints, sideMidpoint } from './lineedit'
+import { boxCenter, connectorEndpoint, lineEndpoints, pathEndpoints, setLineEndpoints, setPathEndpoints } from './lineedit'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
 import { stepOf } from '../steps'
@@ -42,7 +42,7 @@ import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { stripEmbeddedEnvelopes } from '../envelope'
 import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
-import { gateRestored } from '../restoregate'
+import { gateRestored, guardOpenedDoc } from '../restoregate'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
 import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
@@ -85,6 +85,29 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
   { kind: 'path', label: 'Freeform', icon: ICONS.freeform, draw: 'free', tip: 'Draw by hand — the stroke smooths into an editable curve' },
   { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly', tip: 'Click to place corners; click the first point (or double-click) to close the shape' },
 ]
+
+/**
+ * The PowerPoint importer on the site (bento/convert's page, #589). A LINK,
+ * not a feature of this file: the conversion needs the network, and a saved
+ * deck never loads anything on its own, so the entry opens the page in a new
+ * tab and says so in its tooltip. Slides' release carries the site, so the
+ * entry and the page ship together.
+ */
+export const IMPORT_PPTX_URL = 'https://bento.page/import'
+
+/**
+ * May this copy write? An ALLOWLIST that fails closed: a deck with no live
+ * session, or one whose role is absent (owner and legacy writer copies) or
+ * 'writer'. Every other role — 'reader', 'audience', and any role a later
+ * version adds — is read-only here. It used to be `role !== 'reader'`, a
+ * denylist that answered yes for the broadcast 'audience' role, so an audience
+ * copy dropped onto a running editor got "Invite to edit…", "Reset access…"
+ * and an Editor label. (The relay refused its writes all along; this was the
+ * chrome, not the capability.)
+ */
+export function canWriteDeck(collab: { role?: string } | undefined): boolean {
+  return !collab || collab.role === undefined || collab.role === 'writer'
+}
 
 export class Editor {
   private canvas!: SlideCanvas
@@ -138,6 +161,10 @@ export class Editor {
     store.on('doc', () => this.syncThemeRefs())
     store.on('doc', () => this.syncFonts())
     this.syncFonts()
+    // A document that cannot write can ARRIVE in a running editor, not only boot
+    // in one — an audience or reader copy dropped onto it, or loaded by script.
+    // The build-time check never sees those, so the lock follows the document.
+    store.on('doc', () => { if (!store.readOnly && !canWriteDeck(store.doc.collab)) this.enterReaderMode() })
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
@@ -524,7 +551,7 @@ export class Editor {
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
 
-    if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
+    if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
   }
 
   /** Live viewer: block user edits (store.readOnly), hide editing chrome, and
@@ -927,6 +954,10 @@ export class Editor {
       item(ICONS.code, t('Replace from JSON…'),
         t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
         () => this.openReplaceJson())
+      // with the other import, where spaces has Import Markdown…
+      item(ICONS.importDoc, t('Import PowerPoint…'),
+        t('Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.'),
+        () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') })
       item(ICONS.template, t('Start from scratch…'),
         t('Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.'),
         () => this.startFromScratch())
@@ -1149,23 +1180,18 @@ export class Editor {
     applyB.className = 'ed-btn ed-btn-primary'
     applyB.textContent = t('Apply')
     applyB.addEventListener('click', () => {
-      // parseDoc + replaceDoc rather than window.bento.loadDoc (which is the
-      // same two calls) because the collab decision has to be made BEFORE the
-      // swap: replaceDoc's events reach the sync session synchronously, and it
-      // re-attaches to whatever `collab` the new document holds.
-      //
-      // The live session belongs to THIS document, not to the pasted text. The
-      // copy side sends no collab at all, so adopting the pasted one would
-      // either wipe the user's room credentials (paste of our own JSON) or
-      // silently move the deck into a room that came from somewhere else.
-      // Content is imported; identity and capability are not.
-      const parsed = parseDocInputReport(ta.value) // full or compact (src/compact.ts)
+      // The pasted text is foreign input, full or compact (src/compact.ts):
+      // the gate rebuilds it (restoregate.ts sanitizeDoc), and with `live` the
+      // identity and capability stay THIS document's — its docId (recovery
+      // and versions are keyed by it, on a store other local files share),
+      // its live session (the copy side sends no collab, so adopting the
+      // pasted one would wipe the room or move the deck into someone else's)
+      // and its file mode. Decided BEFORE the swap: replaceDoc's events reach
+      // the sync session synchronously and it re-attaches to whatever
+      // `collab` the new document holds. Content is imported; identity is not.
+      const parsed = parseDocInputReport(ta.value, { live: this.store.doc })
       if (parsed) {
-        const next = parsed.doc
-        const keep = this.store.doc.collab
-        if (keep) next.collab = keep
-        else delete next.collab
-        this.store.replaceDoc(next)
+        this.store.replaceDoc(parsed.doc)
         // the load report, summarised; the whole thing goes to the console
         // where an agent driving the page (or a person) can read the paths
         const r = parsed.report
@@ -1356,7 +1382,7 @@ export class Editor {
     if (cme) {
       let myPub: string | undefined
       let myRole: 'owner' | 'editor' | 'viewer' | undefined
-      if (cme.role === 'reader') myRole = 'viewer'
+      if (!canWriteDeck(cme)) myRole = 'viewer'
       else if (cme.v === 2 && cme.ownerPriv) { myRole = 'owner'; myPub = cme.owner }
       else if (cme.v === 2 && cme.invite) {
         myRole = 'editor'
@@ -1461,7 +1487,7 @@ export class Editor {
 
     // SHARE ACTIONS — sharing IS files: each button saves a copy to send, and
     // turns the live session on. Labels stay short; the tooltips explain.
-    const canWrite = !!cme && cme.role !== 'reader'
+    const canWrite = !!cme && canWriteDeck(cme)
     if (canWrite) {
       const label = div('ed-share-label')
       label.textContent = t('Share a copy')
@@ -2522,11 +2548,10 @@ export class Editor {
       const [a, b] = isPath ? pathEnds! : lineEndpoints(c)
       const fromBox = c.from ? byId.get(c.from.el) : null
       const toBox = c.to ? byId.get(c.to.el) : null
-      // explicit side → pin to that side's midpoint; 'auto' → nearest border
-      const end = (box: SlideElement, side: 'auto' | 'top' | 'right' | 'bottom' | 'left' | undefined, toward: { x: number; y: number }) =>
-        side && side !== 'auto' ? sideMidpoint(box, side) : borderPoint(box, toward)
-      const na = fromBox ? end(fromBox, c.from?.side, toBox ? boxCenter(toBox) : b) : a
-      const nb = toBox ? end(toBox, c.to?.side, fromBox ? boxCenter(fromBox) : a) : b
+      // explicit side → pin to that side's midpoint; 'auto' → ride the border
+      // toward the other end (kernel geom: connectorEndpoint)
+      const na = fromBox ? connectorEndpoint(fromBox, c.from?.side, toBox ? boxCenter(toBox) : b) : a
+      const nb = toBox ? connectorEndpoint(toBox, c.to?.side, fromBox ? boxCenter(fromBox) : a) : b
       if (Math.hypot(na.x - a.x, na.y - a.y) > 0.5 || Math.hypot(nb.x - b.x, nb.y - b.y) > 0.5) {
         if (isPath) setPathEndpoints(c, na, nb)
         else setLineEndpoints(c, na, nb)
@@ -2771,6 +2796,10 @@ export class Editor {
     }
     const next = parseDoc(JSON.stringify(parsed))
     if (!next) { alert(t('{name} isn’t a Bento document.', { name: named })); return true }
+    // a file is guarded by value only — its own identity, and no key dropped,
+    // since it may come from a newer Bento (restoregate.ts guardOpenedDoc)
+    const neutralised = guardOpenedDoc(next)
+    if (neutralised.length) console.info('[bento] opened file: neutralised', neutralised)
 
     if (writable) adoptFileHandle(handle)
     this.openedAs = named

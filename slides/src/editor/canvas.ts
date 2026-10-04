@@ -15,7 +15,7 @@ import { bulletsToLists } from './bullets'
 import { clipboardToHtml } from './paste'
 import { execFormat, hideFormatBar, syncFormatBar } from './richtext'
 import { PathEditor } from './patheditor'
-import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors } from './lineedit'
+import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors, boxAnchors, nearestAnchor, boxContains } from './lineedit'
 import { CropEditor } from './cropedit'
 import { BezierEditor, isCurve } from './beziereditor'
 import { simplifyPoints } from './patheditor'
@@ -1717,16 +1717,8 @@ export class SlideCanvas {
     }
     type Pt = { x: number; y: number }
     type Snap = { el: string; side: 'auto' | 'top' | 'right' | 'bottom' | 'left'; pt: Pt } | null
-    const anchorsFor = (id: string) => {
-      const e = this.store.slide.elements.find((x) => x.id === id)!
-      return [
-        { side: 'top' as const, pt: { x: e.x + e.w / 2, y: e.y } },
-        { side: 'right' as const, pt: { x: e.x + e.w, y: e.y + e.h / 2 } },
-        { side: 'bottom' as const, pt: { x: e.x + e.w / 2, y: e.y + e.h } },
-        { side: 'left' as const, pt: { x: e.x, y: e.y + e.h / 2 } },
-        { side: 'auto' as const, pt: { x: e.x + e.w / 2, y: e.y + e.h / 2 } },
-      ]
-    }
+    const anchorsFor = (id: string) =>
+      boxAnchors(this.store.slide.elements.find((x) => x.id === id)!)
     // visible anchor points on the element under the cursor (connector tool)
     const showAnchors = (p: Pt | null) => {
       dots.innerHTML = ''
@@ -1748,13 +1740,10 @@ export class SlideCanvas {
       if (kind !== 'connector' && kind !== 'curve-connector') return { a: null, pt: p }
       const id = this.elementAt(p, 12 * Math.max(k(), 1))
       if (!id) return { a: null, pt: p }
-      let best: Snap = null
-      let bd = 30 * Math.max(k(), 1)
-      for (const cand of anchorsFor(id)) {
-        const d = Math.hypot(p.x - cand.pt.x, p.y - cand.pt.y)
-        if (d < bd) { bd = d; best = { el: id, side: cand.side, pt: cand.pt } }
-      }
-      return best ? { a: best, pt: best.pt } : { a: { el: id, side: 'auto', pt: p }, pt: p }
+      const near = nearestAnchor(anchorsFor(id), p, 30 * Math.max(k(), 1))
+      return near
+        ? { a: { el: id, side: near.side, pt: near.pt }, pt: near.pt }
+        : { a: { el: id, side: 'auto', pt: p }, pt: p }
     }
 
     if (kind === 'poly') {
@@ -1864,7 +1853,7 @@ export class SlideCanvas {
     for (let i = els.length - 1; i >= 0; i--) {
       const e = els[i]
       if (e.type === 'shape' && (e.shape === 'line' || e.shape === 'path')) continue
-      if (pt.x >= e.x - pad && pt.x <= e.x + e.w + pad && pt.y >= e.y - pad && pt.y <= e.y + e.h + pad) return e.id
+      if (boxContains(e, pt, pad)) return e.id
     }
     return null
   }
