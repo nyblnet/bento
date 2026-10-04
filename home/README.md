@@ -467,6 +467,7 @@ here rather than discovered later.
 | in-place write | `UIDocument.save(.forOverwriting)` | `openOutputStream(uri, "wt")` | same |
 | export destination chosen by the author | `UIDocumentPickerViewController` | `ACTION_CREATE_DOCUMENT` | same |
 | `alert` / `confirm` / `prompt` | `WKUIDelegate` | `WebChromeClient` | same |
+| a link that leaves the document | opens in Safari; the document stays (`LinkPolicy`) | opens in the browser (`shouldOverrideUrlLoading`) | same |
 | `<input type="file">` | native | `onShowFileChooser` | same |
 | element fullscreen | declined | declined | same |
 | safe-area insets, natively + `--tray-safe-*` | ✓ | ✓ | same |

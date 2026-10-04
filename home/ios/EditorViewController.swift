@@ -326,9 +326,34 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     // saves often, and a download cannot overwrite the user's original anyway —
     // that is what the FSA path is for.
 
+    /// A document never navigates away from itself. A link to the web opens in
+    /// Safari, where it belongs, and the document stays on screen.
+    ///
+    /// Allowing every navigation, as this used to, meant a link in a deck
+    /// replaced the deck with a website inside the editor — with back navigation
+    /// disabled, so the only way out was to close the document. It also made the
+    /// app a web browser as far as the App Store age rating is concerned
+    /// ("unrestricted web access"), which a document editor has no reason to be.
+    ///
+    /// The rule itself lives in LinkPolicy, where it can be checked without a
+    /// simulator; this only applies the answer.
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        decisionHandler(navigationAction.shouldPerformDownload ? .download : .allow)
+        if navigationAction.shouldPerformDownload { decisionHandler(.download); return }
+
+        // A nil targetFrame is a new window (target=_blank, window.open): it
+        // would leave the document just as surely as replacing it would.
+        switch LinkPolicy.decide(navigationAction.request.url,
+                                 replacesDocument: navigationAction.targetFrame?.isMainFrame ?? true,
+                                 documentHost: originHost) {
+        case .allow:
+            decisionHandler(.allow)
+        case .openExternally(let url):
+            decisionHandler(.cancel)
+            UIApplication.shared.open(url)
+        case .drop:
+            decisionHandler(.cancel)
+        }
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,

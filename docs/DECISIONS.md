@@ -14,6 +14,30 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-04 — A link that leaves a document opens outside it, on every host
+
+**Decision.** In a native host, a document never navigates away from itself.
+A link to the web (http, https) or to mail opens in the system — Safari, the
+browser, the mail app — and the document stays on screen. Anything else that
+would replace the document is dropped. Frames inside a document are untouched:
+an embed loading its own content is the document's business. Android has worked
+this way since it became a document host; iOS now matches it rule for rule
+(`home/ios/LinkPolicy.swift`).
+
+**Why.** iOS allowed every navigation, so a link in a deck replaced the deck
+with a website inside the editor, with back navigation disabled — the only way
+out was to close the document. And an app that shows arbitrary websites is,
+for the App Store's age-rating questionnaire, offering unrestricted web access,
+which rates it 18+. A document editor has no reason to be a web browser; with
+links opening outside it, that answer is "no" and the rating 4+.
+
+**Why the scheme list is short.** A document is content the user opened, and
+the host should not launch another app on its say-so. http, https and mailto are
+what a link in a document means. A custom URL scheme is dropped rather than
+opened, the same choice Android makes.
+
+---
+
 ## 2026-08-19 — Cross-app embedding: static render + source, never a second renderer
 
 **Decision.** One block/element shape, `bento/embed`, shared by every app in both
