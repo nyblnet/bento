@@ -64,7 +64,18 @@ export function hostStore(store: Store, onRemoteApplied?: () => void): HostStore
       store.touch();
       onRemoteApplied?.();
     },
-    commit(fn: () => void) { store.commit(() => fn()); },
+    // SYSTEM commits, never content edits — so they must get through a
+    // receive-only copy's lock (see Store.commit). Two kinds reach here:
+    //   · the session's blob bookkeeping (kernel session.ts offloadAssets /
+    //     resolveBlobs — though kernel #604 moves resolveBlobs off commit);
+    //   · the copy's own CONNECTION state, through collab.ts's use of this same
+    //     wrapper: kernel online.ts startSharing / stopSharing / rotateKeys
+    //     commit `doc.collab`. The share UI only offers those to writers, but
+    //     `window.bento.sync.unshare()` is ungated — and a viewer choosing to
+    //     disconnect is their preference, not an edit to the room. Without this
+    //     flag it half-works: the transport drops, `collab.on` stays true, and
+    //     the copy rejoins on its next open. test-type-store.ts pins that.
+    commit(fn: () => void) { store.commit(() => fn(), { system: true }); },
     // type has no dirty flag: the document is saved from the editor's own
     // state, and a remote edit does not change whether THIS person has
     // unsaved work. Accepting and ignoring beats inventing a flag nothing reads.
