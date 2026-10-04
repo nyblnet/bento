@@ -83,7 +83,10 @@ const built = spawnSync(esbuild, [
 if (built.status !== 0) die(`could not build the engine:\n${built.stderr}`)
 const api = await import(pathToFileURL(bundle).href)
 
-const count = (r) => `${r.counts.carried ?? 0} carried · ${r.counts.approximated ?? 0} approximated · ${r.counts.dropped ?? 0} dropped`
+// The engine reports only what it could NOT carry as-is, so "0 carried" would
+// read as "nothing made it"; the carried tally is shown only when it is counted.
+const count = (r) => [r.counts.carried ? `${r.counts.carried} carried` : '',
+  `${r.counts.approximated ?? 0} approximated`, `${r.counts.dropped ?? 0} dropped`].filter(Boolean).join(' · ')
 function printReport(r) {
   process.stderr.write(`fidelity: ${count(r)}\n`)
   // One line per (verdict, code), dropped first — the engine reports per slide,
