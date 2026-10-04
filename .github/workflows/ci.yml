@@ -1094,6 +1094,12 @@ jobs:
         # this rig pins the rule and the order.
         run: node scripts/test-publish-account.ts
 
+      - name: app payload fingerprint — a shell with no payload never passes the publish gates
+        # publish-site's shell-consistency gate hashed the shell and every deck
+        # to null when its matcher went stale, and null === null passed it while
+        # it checked nothing. One shared helper; null is "cannot tell", never a match.
+        run: node scripts/test-apphash.ts
+
       - name: client vouch rig — the other half of read-only
         # Drives a REAL OnlineTransport (kernel's and dash's twin) through a
         # fake socket in a signed room. Every copy holds the room key, so a
