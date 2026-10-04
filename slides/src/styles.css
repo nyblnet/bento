@@ -24,7 +24,8 @@
   --line: #e3e8ef;
   --muted: #5b6472;
   --accent: #f7a600;
-  --accent-ink: #7a5200;
+  --accent-ink: #7a5200;     /* accent-coloured TEXT on the chrome's own surfaces */
+  --accent-on: #3a2a00;      /* text sitting ON the solid --accent fill */
   --blue: #5b8def;
   --field: #ffffff;          /* form-control surface — CHROME, not the slide */
   --surface: #ffffff;        /* panels, dialogs, menus */
@@ -43,7 +44,12 @@
   --line: #333a45;
   --muted: #8b95a4;
   --accent: #f7a600;
-  --accent-ink: #3a2a00;     /* text ON the accent, so it flips */
+  /* accent-coloured TEXT on dark chrome: lifted, as spaces does. It used to
+     be #3a2a00 (meant for text ON the orange) and every text use sat on the
+     dark surfaces instead — 1.09:1, invisible (spaces' chrome audit, 2026-09).
+     Text on the orange fill has its own token, and it does not flip. */
+  --accent-ink: #f0b74e;
+  --accent-on: #3a2a00;
   --blue: #7aa5f5;           /* lifted: #5b8def is unreadable on dark chrome */
   --field: #12151a;
   --surface: #21262e;
@@ -56,6 +62,12 @@
 
 :root {
   --radius: 10px;
+  /* Chrome text drawn OVER THE SLIDE (the comment labels) sits on the deck's
+     background, not the chrome's, so neither theme's ink is safe on its own:
+     a dark slide hid the light theme's brown, a light slide would hide the
+     dark theme's gold. A halo in the chrome's surface colour gives the text
+     its own ground on any slide. */
+  --over-slide-halo: 0 0 2px var(--surface), 0 0 2px var(--surface), 0 0 4px var(--surface);
 }
 
 * { box-sizing: border-box; }
@@ -1269,7 +1281,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   z-index: 12;
   pointer-events: none;
   background: var(--accent);
-  color: #3a2800;
+  color: var(--accent-on);
   font: 700 10.5px/1 -apple-system, 'Segoe UI', system-ui, sans-serif;
   padding: 5px 9px;
   border-radius: 999px;
@@ -1288,11 +1300,13 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent-ink);
+  text-shadow: var(--over-slide-halo);
 }
 .ed-comment-hl.pin {
   width: 0; height: 0;
   font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--accent-ink);
+  text-shadow: var(--over-slide-halo);
   white-space: nowrap;
   padding-left: 12px;
   padding-top: 2px;
@@ -1335,7 +1349,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   cursor: pointer;
   box-shadow: 0 1px 4px rgb(15 23 36 / 0.3);
 }
-.ed-step-badge.sel { background: var(--accent); color: #3a2800; }
+.ed-step-badge.sel { background: var(--accent); color: var(--accent-on); }
 .ed-step-badge:hover { transform: scale(1.15); }
 .ed-comment-marker {
   position: absolute;
@@ -1345,7 +1359,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   border: none;
   border-radius: 50% 50% 50% 3px;
   background: var(--accent);
-  color: #3a2800;
+  color: var(--accent-on);
   font: 700 10px/19px inherit;
   font-family: inherit;
   text-align: center;

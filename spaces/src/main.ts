@@ -33,7 +33,7 @@ import { buildSpacePreview } from './preview'
 import { Store } from './store'
 import { Editor } from './editor'
 import { SyncSession } from './sync/session.ts'
-import { isReaderCopy } from './share.ts'
+import { isReaderCopy, stampSync } from './share.ts'
 import { downloadMarkdown, launchUpdateCheck } from './about'
 
 configureApp({
@@ -207,7 +207,8 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   // `frozen` is the other, unrelated reason to lock: this build does not
   // understand the file and must not rewrite it.
   //
-  // `collab.role === 'reader'` is the THIRD, unrelated reason, and it is the
+  // A collab role that cannot write — 'reader', 'audience', or one this build
+  // does not know (share.ts copyCanWrite, an allowlist) — is the THIRD, unrelated reason, and it is the
   // only one of the three that keeps receiving: a view-only copy follows the
   // live session and can never send to it. The lock here is a courtesy to the
   // person holding it — the ENFORCEMENT is the relay, which pins a verified
@@ -262,6 +263,10 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     //
     // The status line was dead too: saveFile returns 'saved-as' down the
     // forcePicker path, never 'saved', so the confirmation never appeared.
+    //
+    // A copy of THIS space is this replica, so it carries the CRDT state like
+    // ⌘S does: opened later, it rejoins as a fork rather than a fresh adopt.
+    stampSync(store, session)
     void serializeAuto(store.doc)
       .then((html) => writeUpdatedFileAs(html, store.doc, { suffix: suffix === 'copy' ? 'copy' : suffix }))
       .then((ok) => { if (ok) editor.status(t('Copy saved — you are still editing the original')) })
@@ -313,6 +318,11 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   async function doSave(): Promise<void> {
     store.endRun()
     editor.status(t('Saving…'))
+    // Stamped at the moment the document is taken for the write, and nowhere
+    // earlier: the state must describe exactly the bytes that reach the file,
+    // or the registers restored on reopen defend the wrong values. When the
+    // save queue lands this moves into its prepare step, beside the snapshot.
+    stampSync(store, session)
     const res = await saveFile(store.doc)
     if (res === 'saved' || res === 'saved-as' || res === 'downloaded') {
       // the document is on disk now — the dot goes out

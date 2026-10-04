@@ -101,6 +101,13 @@ jobs:
         working-directory: slides
         run: node_modules/.bin/tsc -p ../kernel
 
+      - name: Typecheck convert (standalone)
+        # convert/ is a library beside the apps (the CLI and bento.page/import
+        # use it; no shell does), so no app's tsc -b reaches it. Its own flags,
+        # its own pass — the same as kernel's.
+        working-directory: slides
+        run: node_modules/.bin/tsc -p ../convert
+
       - name: Build single-file shell
         working-directory: slides
         run: npm run build:single
@@ -611,6 +618,22 @@ jobs:
         # request. Every failure mode here is silent by nature.
         run: node scripts/test-webext-update.ts
 
+      - name: WebExtension placement rig
+        # A granted folder has no path; the library can only open a document
+        # by its file:// URL. Placement GUESSES paths and PROVES one by bytes
+        # and by the grant itself — the property that matters is that a wrong
+        # guess (same name, other bytes; same bytes, a copy elsewhere) is never
+        # recorded. Also the title card drawn for a document with no preview.
+        run: node scripts/test-webext-place.ts
+
+      - name: WebExtension file-grant rig
+        # Saving in place for a document outside every granted folder: a
+        # per-file handle the extension holds, the downloads API for Downloads,
+        # the one-time offer. Each must write only the sender's own file, use a
+        # handle only when proven to be that file (name and bytes), and fail to
+        # the browser's own picker — never to nothing.
+        run: node scripts/test-webext-filegrant.ts
+
       - name: WebExtension localisation rig
         # Every failure mode of a message catalogue is silent: a key the code
         # uses but English lacks renders as the key name, a locale missing a key
@@ -644,6 +667,15 @@ jobs:
         # regression: importing a module that reads storage on load must not
         # throw when storage does.
         run: node scripts/test-storage.ts
+
+      - name: Save queue rig
+        # kernel/src/savequeue.ts serializes writes against one file handle and
+        # acknowledges each by revision, so an edit made WHILE an async write is in
+        # flight is never marked saved and lost (the setDirty-after-write race
+        # every app had). The rig pins serialization, the detached snapshot,
+        # isCurrent() going stale on any later edit or same-id replacement, the
+        # document-swap discard, and that a failed write never poisons the queue.
+        run: node scripts/test-savequeue.ts
 
       - name: App registry rig
         # scripts/apps.mjs drives what a release builds, stages and signs. A
@@ -834,6 +866,12 @@ jobs:
       - name: bento/dash selection and clipboard
         run: node scripts/test-dash-select.ts
 
+      - name: bento/dash sharing state
+        # Start/stop/rotate sharing mark the workbook unsaved (a rotation is
+        # revocation and must reach the file); only a writer copy offers write
+        # auth or calls itself an Editor — an allowlist, failing closed.
+        run: node scripts/test-dash-share-dirty.ts
+
       - name: bento/dash conditional formatting
         run: node scripts/test-dash-condfmt.ts
 
@@ -907,16 +945,28 @@ jobs:
         # The pptx importer's resolver is where real decks' fidelity lives --
         # 91% of colour and 71% of run properties are indirect, and every hop
         # fails silently (a backwards clrMap still renders, just dark-on-dark).
-        # Seven rigs, 378 checks, negative controls proven against mutated
-        # implementations; load.ts is the gate that matters: every emitted
-        # document must pass the REAL slides parseDoc with zero validateDoc
-        # errors.
+        # Negative controls proven against mutated implementations; load.ts is
+        # the gate that matters for import: every emitted document must pass the
+        # REAL slides parseDoc with zero validateDoc errors. The runner also
+        # covers the `bento convert` CLI (it needs the shell built above and
+        # Chrome for "it opens"; neither may skip in CI), the delivery chain
+        # behind bento.page/import (signature, pin, version floor, untrusted-
+        # input gate, zip limits, exactly two requests), the built page's CSP,
+        # and the boundary: no app imports convert/, and the engine touches no
+        # DOM global.
         run: node scripts/test-convert.ts
 
       - name: bento/dash zip
         # Verified against real unzip implementations, not only our own reader:
         # a reader and a writer that share a bug agree with each other perfectly.
         run: node scripts/test-dash-zip.ts
+
+      - name: zip decompression-bomb cap
+        # readZip caps each entry's inflated output at min(declared size, a hard
+        # ceiling), aborting the stream the instant it overflows — a crafted
+        # archive that under-declares its size can no longer exhaust memory before
+        # the size check runs. Every check is mutation-proven against a neutered cap.
+        run: node scripts/test-zip-bomb.ts
 
       - name: bento/dash xlsx
         # Both 1900 date epochs, including the leap-year bug — getting it wrong
@@ -1472,6 +1522,12 @@ jobs:
         # the recorded floor, and every commonly typed formula renders. The
         # check a fixed sample could not make, which is how #540 slipped by.
         run: node scripts/test-maths-coverage.ts
+      - name: Accent contrast rig
+        # The accent as text reads in both themes: every --accent-ink text use
+        # is audited against the surface behind it and reaches 4.5:1; text on
+        # the orange fill uses --accent-on; labels drawn over the slide carry a
+        # surface halo. Dark --accent-ink was #3a2a00 on dark chrome — 1.09:1.
+        run: node scripts/test-slides-accent-contrast.ts
       - name: Compact document rig
         # The agent authoring form (#422): compactDoc/expandDoc are inverses
         # on the starter deck, expansion equals the editor's insert helpers
@@ -1771,6 +1827,13 @@ jobs:
         # script rather than sanitising one.
         run: node scripts/test-type-embed.ts
 
+      - name: Type share-copy rig
+        # A view-only copy carries the room it follows and NO private key —
+        # not the owner's, not a legacy writer key, not an invite — whatever the
+        # source document held; an editor copy writes only through its own
+        # fresh, revocable invite. Every copy is minted in type/src/share.ts.
+        run: node scripts/test-type-share.ts
+
       - name: Type chrome rig
         # Where controls live: nothing in two menus, no inserts in the
         # overflow, and every element the chrome reaches for actually exists —
@@ -1781,6 +1844,14 @@ jobs:
         run: |
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"
           node "$RUNNER_TEMP/test-clipboard.mjs"
+
+      - name: Restore gate rig
+        # A snapshot kept in the browser (recovery banner, Version history) is
+        # foreign input: gated like a pasted clip, and it never brings its own
+        # docId, live-session credentials or file mode.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-restore-gate.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-restore-gate.mjs"
+          node "$RUNNER_TEMP/test-slides-restore-gate.mjs"
 
       - name: CRDT property-removal rig
         # Removing a property travels as a `set` op with `v` ABSENT, and the
@@ -1908,6 +1979,11 @@ jobs:
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-slides-font-lifecycle-browser.mjs
+      - name: Write chrome follows the copy's role in Chromium
+        # canWriteDeck is an allowlist that fails closed: an audience, reader or
+        # unknown-role copy arriving in a running editor (dropped, loadDoc) gets
+        # no write actions and is locked; owner and writer copies keep theirs.
+        run: node scripts/test-slides-audience-gate-browser.mjs
       - name: Import PowerPoint link in Chromium
         # Save as → Import PowerPoint… opens only the bento.page importer, in a
         # new tab with no opener, and its tooltip says it needs the network.
