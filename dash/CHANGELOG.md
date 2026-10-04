@@ -12,6 +12,14 @@ There is no server, so a break here would be permanent.
 
 The release that came out of watching somebody use 0.2.0.
 
+- **Restoring unsaved changes or an old version keeps this workbook's own
+  sharing room, keys and identity.** A restore brings back the CONTENT of a
+  snapshot; the snapshot's copies of the docId, the room and its keys, and the
+  read-only and template flags are now ignored, the same way slides' restore
+  gate treats them. Snapshots share one browser store on file://, so any page
+  opened there could have filed one under this workbook's id, and Restore
+  would have moved the workbook into that page's room.
+
 - **Sheet tabs along the bottom**, where every spreadsheet has kept them since
   Excel 5. They were a list inside the left panel; that panel is gone, and the
   grid is about 200px wider at every window size. Drag to reorder — and because
