@@ -30,6 +30,7 @@ import type { Frame, RefusalCode, SyncSession, Transport } from './session.ts'
 import { offlineEnabled } from '../../../kernel/src/update.ts'
 import { netWebSocket } from '../../../kernel/src/net.ts'
 import { lsGet, lsSet } from '../../../kernel/src/storage.ts'
+import { carryThroughRotation } from '../../../kernel/src/docfields.ts'
 
 export const DEFAULT_SYNC_HOST = 'wss://sync.bento.page'
 const SNAP_EVERY = 200 // ops between encrypted snapshot uploads
@@ -827,8 +828,9 @@ export async function rotateKeys(session: SyncSession, store: Store) {
   stopSharing(session, store)
   const fresh = await mintCollab()
   const doc = store.doc as DashDoc & { collab?: CollabBlock }
-  const sync = doc.collab?.sync
-  doc.collab = sync ? { ...fresh, sync } : fresh
+  // fresh keys = the revocation; carry the rotate-survivors (sync, links) from
+  // the old block (kernel/src/docfields.ts COLLAB_ROTATE_KEEP)
+  doc.collab = carryThroughRotation(fresh, doc.collab)
   // revocation is only real once the FILE holds the new keys
   store.markUnsaved()
 }

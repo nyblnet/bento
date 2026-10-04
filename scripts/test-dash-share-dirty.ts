@@ -102,6 +102,21 @@ console.log('starting, stopping and rotating sharing mark the workbook unsaved')
   disconnectOnline(sess as never)
 }
 
+console.log('\nrotation keeps the CRDT stamp and published links (shared kernel helper)')
+{
+  const s = new Store(fresh({ ...(await mintCollab()), on: true })), sess = fakeSession()
+  const before = collabOf(s.doc) as Record<string, unknown>
+  before.sync = { v: 2, tag: 'keepme' } // set on the live block (parseDoc wouldn't carry unknowns)
+  before.links = [{ url: 'https://pub/x' }]
+  const oldPriv = before.ownerPriv
+  await rotateKeys(sess as never, s)
+  const after = collabOf(s.doc) as Record<string, unknown>
+  ok((after.sync as { tag?: string })?.tag === 'keepme', 'the CRDT sync stamp survived the rotation')
+  ok(JSON.stringify(after.links) === JSON.stringify([{ url: 'https://pub/x' }]), 'published links survived the rotation (dash uses the kernel COLLAB_ROTATE_KEEP)')
+  ok(after.ownerPriv !== oldPriv, 'the owner private key is fresh — access was revoked')
+  disconnectOnline(sess as never)
+}
+
 console.log('\nminting credentials for a NEW workbook stays silent')
 {
   // and so does opting a never-saved workbook in: its credentials were minted
