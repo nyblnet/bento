@@ -125,7 +125,7 @@ class Parser {
         case 'lr': { const inner = this.args1(); return inner.k === 'fence' ? inner : inner }
         case 'mat': { const rows = this.rows(';', ','); return { k: 'table', rows, l: '(', r: ')', align: 'c' } }
         case 'vec': { const rows = this.rows(';', ','); return { k: 'table', rows: rows.length === 1 ? rows[0].map((c) => [c]) : rows, l: '(', r: ')', align: 'c' } }
-        case 'cases': { const rows = this.rows(',', '&'); return { k: 'table', rows, l: '{', r: '', align: 'll' } }
+        case 'cases': { const rows = this.rows(',', '&'); return { k: 'table', rows, l: '{', r: '', align: 'll', cols: 'l' } }
         case 'display': { const inner = this.args1(); return inner }
         case 'op': return mi(this.rawArg(), { fn: true })
         case 'limits': case 'scripts': { const inner = this.args1(); return inner }

@@ -10,7 +10,7 @@ import type { Store } from '../store'
 import { t } from '../i18n'
 import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type SlideElement, type TableElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
-import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
+import { autoformatAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
 import { bulletsToLists } from './bullets'
 import { clipboardToHtml } from './paste'
 import { execFormat, hideFormatBar, syncFormatBar } from './richtext'
@@ -31,6 +31,11 @@ import type { Peer } from '../sync/session'
 const TAP_SLOP = 10
 /** …and how long it may rest. Past this it is a press, not a tap. */
 const TAP_HOLD_MS = 700
+
+/** The title on an unrendered formula (render.ts mathHint): what went wrong,
+ *  translated at call time — `\\foo` is shown as typed. */
+const mathHintTitle = (what: string) =>
+  t('Not rendered: {what}', { what: what === 'spaces' ? t('no space just inside the $ signs') : what })
 
 export class SlideCanvas {
   private stage: HTMLElement
@@ -851,7 +856,8 @@ export class SlideCanvas {
     if (this.pathEditor?.active) this.pathEditor.cancel() // doc changed under us
     if (this.cropEditor?.active) this.cropEditor.cancel()
     const slide = this.store.slide
-    const next = renderSlide(slide, this.store.doc)
+    // the canvas alone marks a formula that did not render (#540)
+    const next = renderSlide(slide, this.store.doc, { mathHint: mathHintTitle })
     // hover-reveal slides: preview one set at a time; hidden sets are
     // display:none so they don't block selection
     const sets = [...new Set(slide.elements.map((e) => e.showOnHover).filter(Boolean))] as string[]
@@ -1404,7 +1410,9 @@ export class SlideCanvas {
     // Remember that we swapped: on commit the resolved view has to be put back
     // even when the text did NOT change, and only a re-render can do that.
     this.editingShowedRaw = false
-    if (model?.type === 'text' && typeof model.html === 'string' && /\{\{|\$/.test(model.html)) {
+    // (`\(` and `\[` open formulas too, #540 — and an unrendered one wears the
+    // editor's hint span, which must never be what the author edits)
+    if (model?.type === 'text' && typeof model.html === 'string' && /\{\{|\$|\\[([]/.test(model.html)) {
       // SANITIZED, even though the point of the swap is to show what the model
       // holds. This is the only place raw model html reaches the live canvas —
       // the render path has always cleaned it — so without this, double-
@@ -1503,7 +1511,7 @@ export class SlideCanvas {
     // typed "- " bullets are glyphs while you type (markdown.ts says why);
     // once the edit ends they become real list items, so a long bullet wraps
     // under its text rather than under the glyph (#502, editor/bullets.ts)
-    const html = bulletsToLists(sanitizeHtml(inner.innerHTML.replace(/\u200B/g, '').replace(/\\([*_~`-])/g, '$1')))
+    const html = bulletsToLists(sanitizeHtml(stripMarkerEscapes(inner.innerHTML.replace(/\u200B/g, ''))))
     const grownH = Math.max(parseFloat(node.style.height) || 0, inner.scrollHeight)
     const el = this.store.doc.slides
       .find((slide) => slide.id === slideId)
@@ -1614,7 +1622,7 @@ export class SlideCanvas {
       `td[data-r="${cell.r}"][data-c="${cell.c}"] .bento-cell-inner`)
     if (!inner || !id) return
     inner.contentEditable = 'false'
-    const html = sanitizeHtml(inner.innerHTML.replace(/\u200B/g, '').replace(/\\([*_~`-])/g, '$1'))
+    const html = sanitizeHtml(stripMarkerEscapes(inner.innerHTML.replace(/\u200B/g, '')))
     const el = this.store.doc.slides
       .find((slide) => slide.id === slideId)
       ?.elements.find((element) => element.id === id)

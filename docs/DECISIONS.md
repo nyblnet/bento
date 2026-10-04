@@ -7279,3 +7279,141 @@ generation (that would break the same-block RGA merge). Its gate is the full
 convergence rig, `scripts/test-sync`. Where it is wanted: bento/spaces per-block
 text under Markdown storage (working/design/spaces-pages.md follow-ups).
 
+## 2026-09-17 — A relay snapshot obeys the blob-offload rule: large inline assets are stripped
+
+`crdt.ts` diffDoc keeps inline assets over `BLOB_INLINE_MAX` (64 KB) out of ops
+— they travel as blobs (`offloadAssets`) and the receiver rebuilds them with
+`resolveBlobs`. The relay SNAPSHOT paths did not: `session.snapshot()`,
+`recoverFromDiffFailure`, and the fork snapshot in `hello()` all serialised the
+FULL `store.doc` with every inline asset. On a photo-heavy deck that inlines the
+whole asset table, and the wire frame — `base64(iv ‖ AES-GCM(JSON))`, ~4/3 the
+JSON — exceeds the relay's `MAX_FRAME` (1,900,000). Measured on the maintainer's
+real deck: 1.57 MB doc (1.43 MB inline photos, none over the per-image limit) →
+~2.1 MB frame → relay refuses `too-large`. Because a snapshot is never acked, no
+op matched the refusal (`matchRefused` → null → `refused('too-large', null)` →
+notice `ops:0`), so the editor showed the per-CHANGE wording with a per-image
+limit — wrong for a whole-deck snapshot.
+
+Fix: snapshots apply diffDoc's rule via `SyncSession.snapshotDoc()` — drop
+`assets.<k>` whose inline value is over `BLOB_INLINE_MAX`, keep `blobs` intact;
+the receiver materialises them with `resolveBlobs` exactly as it does for ops.
+`offloadAssets` already runs on every flush (and `snapshot()` flushes first), so
+the blob refs exist by the time a snapshot is uploaded on a shared deck. Residual,
+stated: a large asset whose offload has not yet completed (or a relay with no
+blob store — `unsupported`) has no ref, so the receiver shows it blank until the
+ref syncs — identical to the existing op path, and self-healing. Rig:
+`scripts/test-sync-session.ts` asserts the stripped snapshot frame is under
+`MAX_FRAME` while the full-doc frame is over (negative control), the blob ref
+survives, and the local store keeps the full asset.
+
+Message: after this fix a snapshot is essentially never refused for assets. If a
+snapshot is still refused `too-large` (many sub-64 KB assets, or huge text), the
+transport surfaces `refused('too-large', null)` → the session emits a notice with
+`ops: 0` and no `media` flag — the signal the editor can use to say "the whole
+deck is too large to share" rather than "that change is too large". (Wording is
+the slides zone's.)
+
+
+## 2026-09-19 — file:// is one shared origin; keep secrets and trust out of it
+
+Chrome (and other browsers) give EVERY `file://` document one shared,
+enumerable storage origin: `localStorage`, IndexedDB and the rest are common
+to every local `.bento.html` the user opens. Measured with two decks in
+different folders — deck B read deck A's IndexedDB and localStorage.
+Consequences and the rule they leave:
+
+- **Auto-save leaked collaboration secrets.** `putRecovery`/`addVersion`
+  wrote `JSON.stringify(doc)`, and `doc.collab` carries the room read key,
+  `ownerPriv`, `writerPriv` and the audience show key. Any local file read the
+  auto-save store and lifted them — silent read+write to those live rooms,
+  plus every auto-saved deck's plaintext. Fixed: snapshots are content-only
+  (`collab` dropped before the write); restore re-attaches `collab` from the
+  file being restored into, so recovery is unchanged. Encrypted decks were
+  already skipped.
+- **Boot-read URL overrides were forgeable.** `bento-update-url`,
+  `bento-sync-url`, `bento-packs-url` are dev overrides read at startup; a
+  malicious local file could plant one and steer the next deck to a hostile
+  server. `sharedStorageOrigin()` now gates all three — honoured only from a
+  real web origin (https, or http on localhost), never `file://` or an opaque
+  origin, fail-safe to "shared" when the origin can't be determined. The
+  auto-save strip and the update/sync gate shipped in #520; the pack-URL
+  override gate in #523.
+- **The native hosts were never exposed.** iOS serves each document from
+  `bento-tray://<hash-of-path>/` and Android from
+  `https://<hash-of-uri>.bento-tray.invalid/` — a per-document origin, so
+  cross-deck reads are impossible there. The webext does NOT change this: it
+  supplies a directory handle but the deck still opens as a `file://` page.
+
+The rule: on `file://` there is no origin identity to bind a capability to.
+Nothing secret goes into a `file://`-reachable store unstripped, and no
+boot-time trust decision is taken from one. Still open, for the follow-up:
+the `bento-member-<docId>` device signing key and plaintext auto-save content
+(a per-file key in `#bento-doc`); and #519's persistent file-handle grant,
+which for the same reason is safe only under a real origin.
+
+## 2026-09-24 — Maths: TeX's column alignment, partial rendering, and coverage held to Temml's whole vocabulary
+
+Issue #540 found 57 everyday commands that 1.2.0's engine dropped to raw
+text; #550 fixed the reported ones. The follow-up measured the rest and
+settled four things that reverse or extend the 2026-09-15 entry.
+
+**Columns align the way TeX aligns them — reversing 2026-09-15.** `aligned`
+is right|left so the relations line up, `eqnarray` right|centre|left, the
+`cases` family left, a starred matrix takes its `[l|c|r]`, an `array` its
+column spec. The centred look was kept so no deck would move; the maintainer
+reversed it after seeing `&=` fail to line up — to the person who typed it,
+that is a bug, not a style. Existing decks with `aligned`/`cases` DO change
+on update. How it is spelled matters and was measured in Chrome 153: an
+`mtd` ignores `text-align:left|right|center|end` (all lay out at the start
+edge) and honours only the `-webkit-` keywords, so cells carry
+`text-align:-webkit-left|right` plus the `columnalign` attribute for engines
+that read that.
+
+**One unknown command no longer loses the formula.** Slides render LENIENT
+(`renderMath(…, { lenient: true })`): a command the engine does not know is
+drawn as its own name in a warning colour and the rest of the formula
+renders. Malformed input (an unclosed brace, a stray `\end`) still leaves the
+source as typed. The editor's "Not rendered: \foo" hint still marks it. The
+rigs render STRICT, so they measure what the engine actually knows.
+
+**Coverage is measured against Temml's whole vocabulary, with a floor.**
+`scripts/maths-freeze-coverage.ts` froze one minimal form of every command
+and environment named in Temml 0.13.3's source (1,237) with Temml's tree;
+`scripts/test-maths-coverage.ts` requires that no covered command falls back,
+that the rendering and tree-identical counts stay at or above the recorded
+floor (raised with `--update`), and that every formula in
+`scripts/fixtures/maths-common.json` (the commonly typed tier) renders. A
+fixed sample of 91 could not see what was not in it — that is how #540 got
+through. At this entry: all 1,237 render, 1,122 tree-identical or
+deliberately drawn — including amscd's `CD` diagrams (a small parser for
+`@>a>b>`, `@VaVbV`, `@=`, `@|`, `@.`), `\longdiv`, `\angl`, `\reflectbox`,
+the coherence relations and mhchem's drawn bonds. Engine 20.8 KB compressed
+against Temml's 59.2 KB measured the same way (esbuild minify + deflate).
+
+**Macros and the two packages.** `\newcommand`/`\renewcommand`/
+`\providecommand`/`\def`/`\let`/`\DeclareMathOperator` work within ONE
+formula (a deck-wide preamble would be a format change and is not made
+here). The physics package is built-in macros over what the parser knows;
+mhchem's `\ce`/`\pu` are a small rewriter to LaTeX (formulas, charges,
+states, hydrates, arrows with labels, bonds, units) — not Temml's 1,500-line
+state machine, and anything it does not recognise passes through as upright
+text.
+
+**Arrows Chrome will not stretch are drawn in SVG.** Measured in Chrome 153
+on macOS with every maths font: `← ⇐ ⇒ ⇔ ↤ ↩ ↪` and the harpoons stretch to a
+label; `→ ↦ ↔ ↠ ↞ = ⇌ ⇋ ⇄` never do, whatever the operator form, font or
+script element — so `\xrightarrow{a long label}` drew a short arrow under a
+long label (in Temml's output too). Two glyph workarounds were built and
+rejected on sight: a mirrored stretched `←` loses its arrowhead, and a
+stretched `⇀` with a `⇁` laid over its end misplaces the barb. What works:
+`\x…arrow` becomes a one-column `mtable` — over label, arrow, under label,
+each label row balanced by a phantom of the other so the arrow row sits on
+the axis — and the arrow is an inline `<svg>` absolutely positioned in a
+relatively positioned `mtd` (`min-width:3.5em`), lines at 0–100%, heads in
+nested svgs pinned at 0%/100% so they never distort, sizes in em.
+`\overrightarrow` and kin pad the base and draw over the padding, so the
+baseline never moves. `role="img"` + `aria-label` keep the written arrow for
+assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
+rigs treat a drawn arrow as a deliberate difference: named in
+`test-maths-lite.ts`, counted with the identical ones in the coverage floor.
+Cost: +966 B of shell.

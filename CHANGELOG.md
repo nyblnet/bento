@@ -11,6 +11,164 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.2.5] — 2026-09-28
+
+- **Security: update this file. This release closes three security issues
+  found in our own review.** None needs anything from you beyond updating. What
+  each one was is described here once people have had time to update.
+- **Orange text can be read in dark mode again.** The armed comment tool, the
+  tick beside your language, your own name in a comment thread and the labels
+  on slide and point comments were drawn in a dark brown meant for text on the
+  orange, on dark panels where it all but vanished. They now use a lighter
+  gold, and the comment labels on a slide carry a soft halo so they read on
+  any slide, light or dark, in either theme.
+
+## [1.2.4] — 2026-09-25
+
+- **Formulas that stayed as raw text now render.** 1.2.0 replaced the maths
+  engine with a smaller one of our own, and a whole set of everyday LaTeX fell
+  back to raw text: `\frac12`, `\over` and `\choose`, `\pmod`, `\middle|`,
+  `\colon`, `\xrightarrow`, `\substack`, `\cfrac`, `\operatorname*`, `\tag`,
+  `\hspace` and the other spacing commands, `\rm`/`\bf` switches, `gather`,
+  `split`, `multline` and `alignat`, and symbols like `\leqslant`, `\nmid`
+  and `\checkmark`. All of these render now. `\tag{1}` shows as a "(1)" label
+  after the formula, not pushed to the right margin, and `\notag` and
+  `\vspace` render as nothing. Formulas can also be written between `\( … \)`
+  (inline) and `\[ … \]` (display), the form ChatGPT, Claude and most
+  Markdown produce, and a `$$ … $$` or `\[ … \]` formula may run over several
+  lines of a text box. In the editor, a formula that still does not render
+  gets a faint dotted underline, with a tooltip naming the command it did not
+  know. The underline only appears while editing, never in the show, in print
+  or in the saved file. Pasting or editing a formula no longer drops the
+  backslash from `\_`. Reported in #540.
+- **Maths covers the rest of LaTeX; aligned and cases now line up as TeX sets
+  them.** After the fix for #540,
+  a check against the old engine's whole vocabulary found about a hundred
+  more commonly typed commands that still showed as raw text: long and
+  vertical arrows (`\Longrightarrow`, `\Uparrow`, `\rightleftharpoons`),
+  `\odot`, `\preceq`, `\triangleq`, `\varpi`, `\imath`, `\oiint`, `\coth`,
+  `\argmax`, card suits, `\pounds` and many more. Every one renders now, along
+  with `\hphantom`, `\smash`, `\llap`, `\sideset`, starred matrices,
+  `rcases`/`dcases`, `\fbox`, `\colorbox`, `\bcancel`, `\large`/`\small`,
+  `\bold`, `\Bbb` and `\textsc`, symbols typed directly (`∈`, `≤`), and
+  line breaks written straight into a display formula (`a = b \\ c = d`,
+  which chat assistants produce), now stacked on separate lines.
+  - **`aligned` now aligns.** The equals signs in an `aligned` block line up
+    and `cases` columns sit to the left, the way TeX sets them. Until now
+    every column was centred. **Existing decks that use `aligned` or `cases`
+    change alignment when they update to this version.**
+  - **One unknown command no longer loses the formula.** The rest renders
+    and the unknown command shows as its own name in red, so an audience sees
+    the maths, not a line of raw LaTeX. In the editor the formula still gets
+    the "Not rendered" hint naming the command.
+  - **Your own macros:** `\newcommand`, `\renewcommand`, `\def` and
+    `\DeclareMathOperator` work inside the formula that defines them.
+  - **Physics and chemistry:** the physics package (`\dv`, `\pdv`, `\abs`,
+    `\norm`, `\bra`, `\ket`, `\qty`, `\grad` and the rest) and mhchem's
+    `\ce{…}` and `\pu{…}` (formulas, charges, states, hydrates, reaction arrows
+    with labels, units, dashed bonds).
+  - **Tables in formulas get their lines back.** Since 1.2.0 an `array`'s
+    column bars (`|`, dashed `:`, double `||`) and its `\hline` /
+    `\hdashline` rules were silently dropped; they are drawn again, exactly
+    as before 1.2.0.
+  - **Commutative diagrams** (`\begin{CD} A @>f>> B … \end{CD}`), long
+    division (`\longdiv`), the actuarial angle (`\angl`) and `\reflectbox`.
+    Together with the above, every command and environment the pre-1.2.0
+    engine knew now renders.
+  - **Labelled arrows stretch to their label.** In Chrome, `\xrightarrow`,
+    `\xleftrightarrow`, `\xmapsto`, `\xlongequal`, the equilibrium arrows and
+    `\overrightarrow` used to keep their natural length under a long label or
+    a long base; they now span it. Screen readers still hear the arrow.
+- **Embedded fonts show up after "Replace from JSON".** Rahul Ravikumar (#516)
+  found that a deck loaded through Replace from JSON could keep showing
+  fallback fonts instead of the ones embedded in it (every time, for a font
+  used by code snippets) and fixed it by refreshing the fonts whenever the
+  document changes. Building on that, a font you remove from the deck now
+  disappears, undo and redo bring fonts back and forth, replacing a font's
+  file takes effect, and ordinary edits no longer re-apply every embedded
+  font.
+- **Collaborators stop flickering in and out.** A person whose tab was in the
+  background appeared to leave and rejoin about once a minute: a browser slows a
+  hidden tab's timers to roughly one tick a minute, so their "still here" beat
+  arrived later than the 13-second window that decided who was present. The
+  window is now long enough to cover a throttled tab, a tab sends its beat the
+  moment it comes back to the foreground, and a backgrounded collaborator now
+  shows as away rather than vanishing.
+- **A deck with lots of small images can be shared live.** Sharing sends big
+  pictures separately from the document, but only ones over about 64 KB — so a
+  deck with many smaller images (a wall of icons, say) could still add up to
+  more than a live session's frame could carry. Those now travel separately
+  too, largest first, once the pictures kept in the document pass a
+  quarter-megabyte together.
+- **A deck opened from the web or the Bento apps remembers where it is
+  saved.** Chrome will not let any app hold a standing grant to the Downloads
+  or Documents folders, so a deck kept there used to show the full save dialog
+  on every reopen. Bento now remembers the file itself: the first ⌘S after you
+  reopen asks once — Chrome offers "Allow on every visit" — and after that it
+  saves silently in place, like a deck that never left. Move or delete the
+  file and it simply asks again. This is for a deck opened from a real web
+  address or through the iOS, Android or browser-extension apps; a deck opened
+  straight from disk keeps asking each time, by the same rule that isolates
+  local files from each other.
+
+## [1.2.3] — 2026-09-19
+
+- **Select several slides in the sidebar and move them together.** ⌘/Ctrl-click
+  adds a slide to the selection, ⇧-click selects a range from the current one,
+  and dragging any selected slide moves the whole selection as a block, in its
+  order, as one undoable step; Delete removes the selection with the usual
+  warning about states and links. A slide's interactive states now travel with
+  it when it is dragged — before this a moved slide left its states behind,
+  nested under whatever slide was now before them. Asked for in discussion
+  #514.
+
+## [1.2.2] — 2026-09-19
+
+- **Security: update this file. Another local file could read this deck's
+  collaboration keys, and steer where it looks for updates.** On a desktop
+  browser, a deck opened straight from disk (a `file://` page) shares one
+  storage area with every other local Bento file the user opens — a quirk of
+  how browsers treat local files. A malicious `.bento.html` opened from disk
+  could read the auto-save store and lift a shared deck's room keys (read and
+  write access to that live session), and could plant the address this app
+  checks for updates, sync, and language packs so the next deck contacted a
+  server of its choosing (signed-update verification still blocked any
+  unsigned build). Auto-save now stores document content only — never the
+  collaboration keys — and those addresses are honoured only from a real web
+  origin, never a local file. **The iOS and Android apps were never affected**
+  — each document already runs in its own isolated origin. Affects desktop
+  browsers opening a local file, with or without the extension.
+
+- **A deck full of photos can be shared live again.** A deck whose pictures
+  were each under the sharing limit but together came to more than about a
+  megabyte could not be shared at all — the copy a joining collaborator
+  receives was sent as one oversize frame the relay refused. Each picture
+  already travelled separately when it changed; that copy now does the same,
+  so the deck shares no matter how many photos it holds.
+- **When a deck is too large to share live, the message says so.** A refused
+  whole-deck checkpoint used to read as "that change is too large (about 1 MB
+  max)", blaming an edit that was fine. It now says the deck is too large to
+  share in one piece, and the Share panel shows how many pictures are still
+  uploading while a live session catches up.
+- **Compress the pictures already in a deck.** 1.2.0 shrinks a photo as you
+  insert it; a deck made before that still carries its photos at full size.
+  About ▸ *Compress pictures in this deck…* runs every picture through the
+  same rules — 2560 px at most, photos re-encoded, screenshots and logos left
+  lossless — shows the measured total first ("3 pictures · 71.5 MB → 1.6 MB")
+  and applies it as one undoable step. A picture that is already a JPEG or
+  WebP within the cap is left alone, so running it twice changes nothing.
+  In a live session the new bytes are shared like any other change.
+- **"Joined" and "left" are said once per real arrival and departure.** A
+  collaborator who switched to another tab for a few minutes was announced
+  as leaving and joining once a minute, to everyone in the room, while
+  doing nothing: browsers slow a hidden tab's timers to once a minute, so
+  their presence heartbeat arrived late, the room dropped them, and the next
+  beat brought them back. A departure is now announced only once it has
+  lasted, and a return within a few minutes is not a new arrival. The avatar
+  strip still follows presence exactly; this changes only what gets said.
+- **Publishing a release checks the GitHub account first, so the site can no
+  longer go live while the release fails.**
+
 ## [1.2.1] — 2026-09-17
 
 - **Pasting into a table cell lands once.** Edit a cell, leave it unchanged,

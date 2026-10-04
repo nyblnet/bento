@@ -171,6 +171,10 @@ export interface PresenceInfo {
   pub?: string
   /** capability of this copy, derived locally from its collab material */
   role?: 'owner' | 'editor' | 'viewer'
+  /** the tab is backgrounded (document.hidden) — the UI can dim the avatar
+   *  instead of treating a throttled beat as a departure. Presence only; never
+   *  in the document. Absent = present/unknown. */
+  away?: boolean
 }
 
 export interface Peer extends PresenceInfo {
@@ -268,6 +272,10 @@ export interface SyncNotice {
   ops: number
   /** the abandoned ops carried embedded media — lets the UI say "that image" */
   media?: boolean
+  /** the refused frame was a whole-deck SNAPSHOT, not a single change (the relay
+   *  could not attribute it to any op of ours). Lets the UI say "this deck is too
+   *  large to share" rather than "that change is too large". `ops` is 0 here. */
+  snapshot?: boolean
 }
 
 /** Same-machine transport: every open tab/window of this document. */
@@ -306,7 +314,51 @@ function tabActor(): string {
 
 const DIFF_DEBOUNCE_MS = 90
 const HEARTBEAT_MS = 5000
-const PEER_TTL_MS = 13000
+// The TTL must clear the worst LEGITIMATE beat interval, not a multiple of the
+// ideal one. A browser throttles a backgrounded tab's timers hard — Chrome to
+// about once a MINUTE after a few minutes hidden, Safari sooner — so a
+// collaborator whose tab is in the background still beats, just every ~60 s. At
+// 13 s (2.6× the 5 s ideal) the sweep dropped them between throttled beats and
+// the next beat re-added them: everyone saw that person leave and rejoin once a
+// minute. 75 s clears the 60 s throttle with margin. A real departure is still
+// gone within 75 s (and instantly on `bye`); backgrounded peers also send
+// `away` so the UI can dim rather than wait.
+const PEER_TTL_MS = 75000
+
+/** Offload once the inline assets TOTAL runs past this, even if no single one is
+ *  over BLOB_INLINE_MAX — the "fifty 50 KB icons" deck whose sum overflows a
+ *  frame. Below the relay MAX_FRAME with room for the document and its state. */
+const INLINE_TOTAL_MAX = 256 * 1024
+
+/**
+ * Which inline assets to offload to blobs. Pure, so it is tested without a relay
+ * (session.offloadAssets does the upload). Two rules:
+ *   · per-asset  — anything over `inlineMax` (too big to ride in an op);
+ *   · cumulative — when the inline TOTAL is over `totalMax`, the LARGEST inline
+ *     assets, biggest first, until the remaining inline bytes are back under it.
+ * `offloadable` is false for a raw-SVG asset (not a data: URI) — it stays inline
+ * because there is nothing to blob; it still counts toward the total.
+ */
+export function assetsToOffload(
+  entries: Array<{ key: string; len: number; offloadable: boolean }>,
+  inlineMax: number,
+  totalMax: number,
+): Set<string> {
+  const picks = new Set<string>()
+  let total = 0
+  for (const e of entries) total += e.len
+  for (const e of entries) if (e.offloadable && e.len > inlineMax) picks.add(e.key)
+  if (total > totalMax) {
+    let rem = total
+    for (const e of entries) if (picks.has(e.key)) rem -= e.len
+    for (const e of entries.filter((e) => !picks.has(e.key) && e.offloadable).sort((a, b) => b.len - a.len)) {
+      if (rem <= totalMax) break
+      picks.add(e.key)
+      rem -= e.len
+    }
+  }
+  return picks
+}
 
 export class SyncSession {
   readonly actor: string
@@ -339,6 +391,13 @@ export class SyncSession {
     store.on('doc', () => this.onLocalChange())
     for (const ev of host.presenceEvents) store.on(ev, () => this.pushPresence())
     window.addEventListener('beforeunload', () => this.broadcast({ t: 'bye', a: this.actor }))
+    // A backgrounded tab's heartbeat is throttled to ~once a minute, so beat the
+    // instant it changes visibility: on return the peer refreshes before the TTL
+    // could sweep it, and on leaving it carries `away` so peers dim promptly.
+    // visibilitychange fires unthrottled in both directions.
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => this.pushPresence())
+    }
   }
 
   // --- lifecycle -----------------------------------------------------------
@@ -458,6 +517,12 @@ export class SyncSession {
    * IS small enough to sync. Runs after a local edit; the reference lands on
    * the next flush like any other change.
    *
+   * TWO rules pick what to offload — see assetsToOffload: anything over
+   * BLOB_INLINE_MAX (too big for an op), AND, when the inline TOTAL runs past
+   * INLINE_TOTAL_MAX, the largest inline assets until it is back under, so a
+   * deck of fifty 50 KB icons (none over 64 KB alone) does not sum past the
+   * snapshot/frame ceiling.
+   *
    * The bytes are always cached locally even when the upload fails, because
    * the cache is per-ORIGIN: same-machine tabs syncing over BroadcastChannel
    * resolve from it with no relay involved at all.
@@ -465,12 +530,15 @@ export class SyncSession {
   private async offloadAssets() {
     const doc = this.store.doc
     const assets = doc.assets ?? {}
+    const entries = Object.entries(assets)
+      .filter(([k, v]) => typeof v === 'string' && !doc.blobs?.[k])
+      .map(([k, v]) => ({ key: k, len: (v as string).length, offloadable: dataUriToBytes(v as string) !== null }))
+    const picks = assetsToOffload(entries, BLOB_INLINE_MAX, INLINE_TOTAL_MAX)
+    if (!picks.size) return
     const creds = this.blobCreds()
-    for (const [k, v] of Object.entries(assets)) {
-      if (typeof v !== 'string' || v.length <= BLOB_INLINE_MAX) continue
-      if (doc.blobs?.[k]) continue // already published
-      const parsed = dataUriToBytes(v)
-      if (!parsed) continue // raw SVG markup, not binary — leave it inline
+    for (const k of picks) {
+      const parsed = dataUriToBytes(assets[k] as string)
+      if (!parsed) continue // offloadable was true, but be defensive
       if (encodedSize(parsed.bytes.length) > MAX_BLOB) {
         this.notify('blob-too-large', k)
         continue
@@ -603,7 +671,7 @@ export class SyncSession {
       this.broadcast({
         t: 'snap',
         a: this.actor,
-        doc: JSON.parse(JSON.stringify(this.store.doc)) as SyncDoc,
+        doc: this.snapshotDoc(),
         state: JSON.parse(JSON.stringify(this.state.toJSON())),
       })
     } catch (e2) {
@@ -734,6 +802,7 @@ export class SyncSession {
       ...(this.editingEl ? { editing: this.editingEl } : {}),
       ...(pub ? { pub } : {}),
       ...(role ? { role } : {}),
+      ...(typeof document !== 'undefined' && document.hidden ? { away: true } : {}),
     }
   }
 
@@ -892,7 +961,7 @@ export class SyncSession {
    * ONLY the exact ops the refused frame carried — never a range, never the
    * rest of the log, and never anything when the frame couldn't be identified.
    */
-  refused(code: RefusalCode, ops: Op[] | null) {
+  refused(code: RefusalCode, ops: Op[] | null, opts?: { snapshot?: boolean }) {
     const doomed = ops ?? []
     if (doomed.length) {
       const keys = new Set(doomed.map((o) => `${o.a}:${o.s}`))
@@ -903,18 +972,53 @@ export class SyncSession {
       permanent: code !== 'rate-limited',
       ops: doomed.length,
       ...(this.host.carriesMedia(doomed) ? { media: true } : {}),
+      ...(opts?.snapshot ? { snapshot: true } : {}),
     })
   }
 
   // --- snapshots (online catch-up + file-fork merge) ------------------------
 
+  /**
+   * A doc clone SAFE to put in a relay snapshot frame. Inline assets larger than
+   * BLOB_INLINE_MAX are DROPPED — exactly as crdt.ts diffDoc keeps them out of
+   * ops — because they travel as blobs (offloadAssets) and the receiver
+   * materialises them with resolveBlobs. Without this, a photo-heavy deck's
+   * snapshot inlines the whole asset table and the frame text (after JSON +
+   * AES-GCM + base64) exceeds the relay's MAX_FRAME, so the relay refuses it
+   * 'too-large'; since a snapshot is never acked no op matches the refusal and
+   * the editor showed the wrong per-change limit. `blobs` is left intact so the
+   * references survive. See docs/DECISIONS.md and docs/blob-offload.md.
+   */
+  private snapshotDoc(): SyncDoc {
+    const doc = JSON.parse(JSON.stringify(this.store.doc)) as SyncDoc
+    const assets = doc.assets
+    if (assets)
+      for (const [k, v] of Object.entries(assets))
+        if (typeof v === 'string' && v.length > BLOB_INLINE_MAX) delete assets[k]
+    return doc
+  }
+
   /** current (doc, sync-state) pair for an encrypted relay snapshot */
   snapshot(): { doc: SyncDoc; state: SyncStateJSON } {
     this.flush()
     return {
-      doc: JSON.parse(JSON.stringify(this.store.doc)) as SyncDoc,
+      doc: this.snapshotDoc(),
       state: JSON.parse(JSON.stringify(this.state.toJSON())),
     }
+  }
+
+  /** How many inline assets are still awaiting blob offload — over
+   *  BLOB_INLINE_MAX and without a published `blobs` reference yet. While this is
+   *  > 0 a joining collaborator may see those pictures blank until the reference
+   *  syncs, so the editor can surface "N pictures still uploading". Cheap: one
+   *  pass over the asset table. */
+  pendingBlobUploads(): number {
+    const doc = this.store.doc
+    const assets = doc.assets ?? {}
+    let n = 0
+    for (const [k, v] of Object.entries(assets))
+      if (typeof v === 'string' && v.length > BLOB_INLINE_MAX && !doc.blobs?.[k]) n++
+    return n
   }
 
   /** merge a remote snapshot (relay replay for far-behind joiners) */

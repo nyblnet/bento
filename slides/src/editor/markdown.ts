@@ -147,16 +147,28 @@ function placeCaret(node: Node, offset: number) {
 const escapeHtml = (s: string) =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 
+/** A formula on one line, in any of the four delimiters the renderer reads
+ *  (maths/delimiters.ts). Markdown stays out of it: `\\_` is LaTeX's literal
+ *  underscore and `a^*` is a starred superscript, not an escape or emphasis. */
+const FORMULA = /(\$\$[^$\n]+?\$\$|(?<!\\)\\\([^\n]+?\\\)|(?<!\\)\\\[[^\n]+?\\\]|(?<![\\$])\$\S(?:[^$\n]*?\S)?\$(?!\d))/
+
+/** Drop the backslash from escaped markdown markers (`\\*x\\*` → `*x*`) —
+ *  outside formulas only (#540). */
+export function stripMarkerEscapes(s: string): string {
+  return s.split(FORMULA).map((part, i) => (i % 2 ? part : part.replace(/\\([*_~`-])/g, '$1'))).join('')
+}
+
 /** Pasted plain text → the inline-HTML subset (bold/italic/strike/code/bullets/<br>).
  *  Backslash escapes markers: \*x\* pastes as literal *x*. */
 export function markdownToHtml(text: string): string {
   // park escaped markers in the private-use area so patterns can't see them
   const PARK = ''
   const parked: string[] = []
-  const withParked = text.replace(/\\([*_~`-])/g, (_, c: string) => {
-    parked.push(c)
-    return PARK + (parked.length - 1) + PARK
-  })
+  const park = (c: string) => PARK + (parked.push(c) - 1) + PARK
+  // formulas first, whole and escaped, so no marker rule reaches inside one
+  const withParked = text.split(FORMULA)
+    .map((part, i) => (i % 2 ? park(escapeHtml(part)) : part.replace(/\\([*_~`-])/g, (_, c: string) => park(c))))
+    .join('')
   const out = withParked
     .split('\n')
     .map((line) => {

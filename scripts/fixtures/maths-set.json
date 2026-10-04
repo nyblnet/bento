@@ -453,5 +453,310 @@
   "src": "\\sigma(z)_i = \\frac{e^{z_i}}{\\sum_{j=1}^K e^{z_j}}",
   "display": true,
   "from": "standard"
+ },
+ {
+  "src": "p \\land q",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "p \\lor q",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "x \\gets y",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\top",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\bot",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "A \\xrightarrow{f} B",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "A \\xleftarrow{g} B",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "A \\xleftrightarrow{h} B",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "A \\xRightarrow{i} B",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\frac12",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "x^\\frac12",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\frac1{2}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\tfrac12",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\dfrac12",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\over b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "{a+1 \\over b}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "n \\choose k",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "{n \\choose k}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\atop b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\cfrac{1}{1 + \\cfrac{1}{x}}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\genfrac{(}{)}{0pt}{}{n}{k}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\dbinom{n}{k}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\tbinom{n}{k}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\dagger",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\ddagger",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\nmid b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\nparallel b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\square",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\blacksquare",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\checkmark",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "f \\colon A \\to B",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\leqslant b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\geqslant b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\lesssim b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\gtrsim b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "A \\varsubsetneq B",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "A \\subsetneq B",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "A \\supsetneq B",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "A \\nsubseteq B",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\bmod n",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\equiv b \\pmod{n}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\equiv b \\pod{n}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\equiv b \\mod{n}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\sum_{\\substack{i < n \\\\ j < m}} a_{ij}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\left\\{ x \\middle| x > 0 \\right\\}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\mathring{A}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\mathbin{\\star} b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\mathrel{\\sim} b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\mathop{\\rm Res} f",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\mathord{+}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\operatorname*{argmax}_x f(x)",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\emph{note} x",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\hspace{1em} b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a \\vspace{1em} b",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "x_1, \\dotsc, x_n",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "x_1 + \\dotsb + x_n",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\begin{multline} a + b \\\\ + c \\end{multline}",
+  "display": true,
+  "from": "issue:540"
+ },
+ {
+  "src": "\\begin{eqnarray} a &=& b \\\\ c &=& d \\end{eqnarray}",
+  "display": true,
+  "from": "issue:540"
+ },
+ {
+  "src": "a = b \\tag{1}",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a = b \\notag",
+  "display": false,
+  "from": "issue:540"
+ },
+ {
+  "src": "a = b \\nonumber",
+  "display": false,
+  "from": "issue:540"
  }
 ]

@@ -98,6 +98,34 @@ export const sandboxed = (): boolean => {
 }
 
 /**
+ * Is this document's localStorage / IndexedDB SHARED with other local documents?
+ *
+ * Chrome gives every `file://` page ONE origin, so one deck's localStorage and
+ * IndexedDB are readable and writable by any other local `.bento.html` the user
+ * opens. An opaque origin (`self.origin === 'null'`) is untrusted the same way.
+ * A real web origin (https, or http on localhost) has isolated per-origin
+ * storage and is trusted.
+ *
+ * Boot-read DEV OVERRIDES (the release-manifest URL, the sync host, the pack
+ * host) must NOT be honoured from shared storage: a malicious local deck could
+ * plant one and steer the next deck the user opens to a hostile server. Read
+ * them only when this returns false. Distinct from `sandboxed()` — a plain
+ * file:// deck is not sandboxed (not framed) but its storage IS shared.
+ * Fail safe: if the origin cannot be determined, treat storage as shared.
+ */
+export const sharedStorageOrigin = (): boolean => {
+  try {
+    if (typeof location !== 'undefined' && location.protocol === 'file:') return true
+    const o = typeof self !== 'undefined' && typeof (self as { origin?: unknown }).origin === 'string'
+      ? (self as { origin: string }).origin
+      : (typeof location !== 'undefined' ? location.origin : 'null')
+    return o === 'null'
+  } catch {
+    return true
+  }
+}
+
+/**
  * Set for THIS session once anyone flips the switch, so the guarantee holds
  * even where the preference cannot be stored. Storage-blocked contexts are
  * not an edge case here — they are private windows and locked-down browsers,

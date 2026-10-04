@@ -379,6 +379,18 @@ jobs:
         # file carrying a script tag.
         run: node scripts/test-preview.ts
 
+      - name: sidebar multi-select — a block move keeps order and carries states
+        # Discussion #514. The unit is a parent with its states; the old
+        # single-index splice left states behind, which this rig shows.
+        run: node scripts/test-slides-multiselect.ts
+
+      - name: presence toasts — said once per real arrival and departure
+        # A hidden tab's heartbeat arrives once a minute, the room drops the
+        # peer and the next beat brings them back: "left" / "joined" every
+        # minute for everyone else. The grace and the quiet window are what
+        # keep that silent; this rig runs them on a manual clock.
+        run: node scripts/test-slides-presence-toasts.ts
+
       - name: Media autoplay rig
         # An author set a clip's Autoplay to Off and it played anyway, every
         # show, since media shipped in v0.9.16. render.ts wrote
@@ -413,6 +425,12 @@ jobs:
         # stops the NEXT call site being wrong, plus the chokepoint's own
         # behaviour (refusal, aborting what is already in flight, cross-tab).
         run: node scripts/test-offline.ts
+
+      - name: Origin-trust rig
+        # The release-manifest / sync / pack URL dev overrides live in
+        # localStorage, which is shared across all file:// documents — so they
+        # are honoured only from a real, isolated origin (sharedStorageOrigin).
+        run: node scripts/test-origin-overrides.ts
 
       - name: Embed element rig
         # The `embed` element (docs/DECISIONS.md 2026-08-19 shape): the static
@@ -593,6 +611,22 @@ jobs:
         # request. Every failure mode here is silent by nature.
         run: node scripts/test-webext-update.ts
 
+      - name: WebExtension placement rig
+        # A granted folder has no path; the library can only open a document
+        # by its file:// URL. Placement GUESSES paths and PROVES one by bytes
+        # and by the grant itself — the property that matters is that a wrong
+        # guess (same name, other bytes; same bytes, a copy elsewhere) is never
+        # recorded. Also the title card drawn for a document with no preview.
+        run: node scripts/test-webext-place.ts
+
+      - name: WebExtension file-grant rig
+        # Saving in place for a document outside every granted folder: a
+        # per-file handle the extension holds, the downloads API for Downloads,
+        # the one-time offer. Each must write only the sender's own file, use a
+        # handle only when proven to be that file (name and bytes), and fail to
+        # the browser's own picker — never to nothing.
+        run: node scripts/test-webext-filegrant.ts
+
       - name: WebExtension localisation rig
         # Every failure mode of a message catalogue is silent: a key the code
         # uses but English lacks renders as the key name, a locale missing a key
@@ -616,6 +650,15 @@ jobs:
         # `id` is the signal; if the three purposes ever collapse to one value
         # every host silently loses the distinction.
         run: node scripts/test-savepurpose.ts
+
+      - name: Remember-the-file-handle rig
+        # A deck in ~/Documents or ~/Downloads can never be covered by a
+        # directory grant (Chrome's blocklist), so it re-ran the save picker on
+        # every reopen. The FILE handle is remembered (IndexedDB by docId) and
+        # reconnected with a permission prompt inside the save gesture. Guards:
+        # name-match, denied/NotFound -> picker + drop, only a real handle (never
+        # a host polyfill), reconnect BEFORE serialize so activation stays fresh.
+        run: node scripts/test-file-handle.ts
 
       - name: Guarded storage rig
         # localStorage's absence is hostile: reading the PROPERTY throws, so
@@ -899,6 +942,13 @@ jobs:
         # a reader and a writer that share a bug agree with each other perfectly.
         run: node scripts/test-dash-zip.ts
 
+      - name: zip decompression-bomb cap
+        # readZip caps each entry's inflated output at min(declared size, a hard
+        # ceiling), aborting the stream the instant it overflows — a crafted
+        # archive that under-declares its size can no longer exhaust memory before
+        # the size check runs. Every check is mutation-proven against a neutered cap.
+        run: node scripts/test-zip-bomb.ts
+
       - name: bento/dash xlsx
         # Both 1900 date epochs, including the leap-year bug — getting it wrong
         # shifts every date by four years, silently.
@@ -973,6 +1023,13 @@ jobs:
         # one of these is silent when it regresses — the relay keeps working
         # and simply trusts more than it should.
         run: node scripts/test-relay-auth.ts
+
+      - name: publish account gate — the release account is checked before the site goes live
+        # publish-site.mjs mirrored and pushed the site and THEN failed to
+        # create the GitHub release, three releases running, because gh was
+        # the work profile (a job/temp worktree). The gate runs before rsync;
+        # this rig pins the rule and the order.
+        run: node scripts/test-publish-account.ts
 
       - name: client vouch rig — the other half of read-only
         # Drives a REAL OnlineTransport (kernel's and dash's twin) through a
@@ -1409,6 +1466,12 @@ jobs:
         # paste N times.
         run: node scripts/test-slides-edit-listeners.ts
 
+      - name: Live-session notice wording rig
+        # A refused whole-deck snapshot (SyncNotice.snapshot, #509) is worded as
+        # the deck, never as a change or an image; the Share popover polls
+        # pendingBlobUploads() only while open; strings in every core catalog.
+        run: node scripts/test-slides-sync-notice.ts
+
       - name: Shell loader and carrier rig
         # base86 payloads (scripts/lib/b86.mjs) round-trip and can never
         # contain </script, <!--, -->, ]]> or ${; the loader inflates
@@ -1427,6 +1490,25 @@ jobs:
         # pairs with one in the text, so a link whose address carries a
         # dollar sign keeps its href (pre-existing since #465).
         run: node scripts/test-slides-math-href.ts
+      - name: Maths delimiters rig
+        # #540: \(…\) and \[…\] beside $…$ and $$…$$, escapes literal,
+        # "$5 and $10" still prose; display maths may span <br>/<div>/<p>
+        # line breaks and nothing else; the editor-only "Not rendered" hint;
+        # paste and commit keep a formula's backslashes. Real engine, DOM-free.
+        run: node scripts/test-slides-math-delims.ts
+      - name: Maths coverage rig
+        # #551: maths-lite against Temml's WHOLE vocabulary (1,237 commands and
+        # environments, frozen offline): no covered command may fall back to
+        # raw text, the rendering and tree-identical counts may not drop below
+        # the recorded floor, and every commonly typed formula renders. The
+        # check a fixed sample could not make, which is how #540 slipped by.
+        run: node scripts/test-maths-coverage.ts
+      - name: Accent contrast rig
+        # The accent as text reads in both themes: every --accent-ink text use
+        # is audited against the surface behind it and reaches 4.5:1; text on
+        # the orange fill uses --accent-on; labels drawn over the slide carry a
+        # surface halo. Dark --accent-ink was #3a2a00 on dark chrome — 1.09:1.
+        run: node scripts/test-slides-accent-contrast.ts
       - name: Compact document rig
         # The agent authoring form (#422): compactDoc/expandDoc are inverses
         # on the starter deck, expansion equals the editor's insert helpers
@@ -1497,6 +1579,13 @@ jobs:
         # every insert path routed, model.ts untouched. The encode itself is
         # measured in Chrome (PR #).
         run: node scripts/test-slides-shrink.ts
+
+      - name: Compress pictures in this deck rig
+        # editor/compressdeck.ts planning half, DOM-free: image elements only,
+        # an asset once however many elements share it, SVG/GIF/media/fonts
+        # never; applyCompress writes in place and drops the replaced asset's
+        # blob reference; the editor dry-runs first and commits once.
+        run: node scripts/test-slides-compress-deck.ts
       - name: Image aspect-ratio lock rig
         # keepAspectRatio (#372): absent = locked, so old files resize as
         # before; Shift is the one-drag exception either way; re-locking
@@ -1730,6 +1819,14 @@ jobs:
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"
           node "$RUNNER_TEMP/test-clipboard.mjs"
 
+      - name: Restore gate rig
+        # A snapshot kept in the browser (recovery banner, Version history) is
+        # foreign input: gated like a pasted clip, and it never brings its own
+        # docId, live-session credentials or file mode.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-restore-gate.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-restore-gate.mjs"
+          node "$RUNNER_TEMP/test-slides-restore-gate.mjs"
+
       - name: CRDT property-removal rig
         # Removing a property travels as a `set` op with `v` ABSENT, and the
         # receiving replica threw on it: JSON.stringify(undefined) is undefined,
@@ -1833,3 +1930,26 @@ jobs:
         # which paints "Edited" and would credit a colleague's typing to you.
         # The last section is two real sessions over a real BroadcastChannel.
         run: node --no-warnings scripts/test-sync-spaces-session.ts
+
+  slides-font-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone documents
+        run: |
+          npm ci --prefix slides
+          npm run build:single --prefix slides
+      - name: Exercise the packaged documents in Chromium
+        # Real UI and serialization, offline; delayed mock writes expose save races.
+        run: |
+          node scripts/test-slides-font-lifecycle-browser.mjs

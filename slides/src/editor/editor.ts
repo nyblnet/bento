@@ -42,8 +42,14 @@ import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { stripEmbeddedEnvelopes } from '../envelope'
 import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
+import { gateRestored } from '../restoregate'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
-import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, type ShrinkResult } from './shrink'
+import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
+import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
+import { dryRun, applyCompress, type DryRun } from './compressdeck'
+import { createDialog } from '../../../kernel/src/ui/dialog.ts'
+import '../../../kernel/src/ui/dialog.css'
+import { PresenceToasts } from './presencetoasts'
 
 const i18nT = t
 
@@ -83,6 +89,10 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
 export class Editor {
   private canvas!: SlideCanvas
   private panel!: PropsPanel
+  /** Sidebar multi-selection: PARENT indices (slidesel.ts). The current slide
+   *  is the anchor and the canvas slide; this set is what a drag moves and
+   *  Delete removes. Empty = just the current slide, as before. */
+  private thumbSel: number[] = []
   private sidebar!: HTMLElement
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
@@ -95,6 +105,8 @@ export class Editor {
   private avatarsBox!: HTMLElement
   private shareB!: HTMLElement
   private shareWrap!: HTMLElement
+  /** the popover's "pictures still uploading" poll — runs only while it is open */
+  private uploadPoll: number | null = null
   private session: import('../sync/session').SyncSession | null = null
   private updateFound: string | null = null
   private lastAutoCheck: import('../update').UpdateCheck | null = null
@@ -107,7 +119,9 @@ export class Editor {
   ) {
     this.build()
     this.wireKeyboard()
-    store.on('slides', () => this.rebuildSidebar())
+    // a slide-list change makes the sidebar selection's indices stale: drop it
+    // (a drag re-selects the moved block by id right after its commit)
+    store.on('slides', () => { this.thumbSel = []; this.rebuildSidebar() })
     store.on('current', () => this.highlightSidebar())
     store.on('doc', () => this.scheduleThumbs())
     store.on('dirty', () => {
@@ -122,6 +136,8 @@ export class Editor {
     store.on('doc', () => this.syncLinkedCharts())
     store.on('doc', () => this.syncConnectors())
     store.on('doc', () => this.syncThemeRefs())
+    store.on('doc', () => this.syncFonts())
+    this.syncFonts()
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
@@ -131,29 +147,29 @@ export class Editor {
   /** wire the live-collaboration session (avatars, remote selections, relay) */
   connectSync(session: import('../sync/session').SyncSession) {
     this.session = session
-    let known = new Map(session.peers().map((p) => [p.actor, p.name]))
+    // presence arrivals/departures get a quiet heads-up — said once per REAL
+    // arrival and departure (presencetoasts.ts: a departure must last, a
+    // return within minutes is a flap of a throttled tab, not a join), and
+    // not at all in a crowded room, where the per-peer toasts would storm
+    const toasts = new PresenceToasts({
+      toast: (kind, name) => this.toast(kind === 'joined' ? t('{name} joined', { name }) : t('{name} left', { name })),
+    }, session.peers())
     session.onPeers(() => {
       this.renderAvatars()
       this.canvas.setRemotePeers(session.peers())
       if (this.shareWrap.classList.contains('open')) this.renderSharePanel()
-      // presence arrivals/departures get a quiet heads-up — but in a crowded
-      // room (or when joining one, where every existing peer looks like a fresh
-      // arrival), the per-peer toasts would storm. Stay silent past a threshold.
-      const now = new Map(session.peers().map((p) => [p.actor, p.name]))
-      if (now.size <= 8) {
-        for (const [actor, name] of now) {
-          if (!known.has(actor)) this.toast(t('{name} joined', { name }))
-        }
-        for (const [actor, name] of known) {
-          if (!now.has(actor)) this.toast(t('{name} left', { name }))
-        }
-      }
-      known = now
+      toasts.update(session.peers())
     })
     // the relay refused something (too big, room full, throttled) — the user
     // needs to know, because for the permanent codes their change stays in
     // this copy and never reaches anyone else
-    session.onNotice((n) => this.toast(syncNoticeText(n)))
+    session.onNotice((n) => {
+      let text = syncNoticeText(n)
+      // pictures still uploading are informational here (see syncNoticeText)
+      const pending = n.snapshot ? session.pendingBlobUploads() : 0
+      if (pending > 0) text += ' ' + (pending === 1 ? t('1 picture is still uploading; it will follow.') : t('{n} pictures are still uploading; they will follow.', { n: pending }))
+      this.toast(text)
+    })
     this.canvas.onTextEditChange = (elId) => session.setEditing(elId)
     this.store.on('current', () => this.canvas.setRemotePeers(session.peers()))
     // a document that carries collab config joins its relay session — at
@@ -1417,6 +1433,22 @@ export class Editor {
     const tr = onlineTransport()
     const on = sharingOn(this.store) && !!tr
     const status = note('', 'ed-share-status')
+    // pictures still uploading (inline assets over the blob threshold with no
+    // ref yet): polled once a second ONLY while the popover is open — the
+    // interval stops itself the moment the wrap is closed. Hidden at 0.
+    if (this.uploadPoll !== null) { clearInterval(this.uploadPoll); this.uploadPoll = null }
+    if (on && this.session) {
+      const uploading = note('', 'ed-share-uploading')
+      uploading.hidden = true
+      const tick = () => {
+        if (!this.shareWrap.classList.contains('open')) { if (this.uploadPoll !== null) clearInterval(this.uploadPoll); this.uploadPoll = null; return }
+        const k = this.session?.pendingBlobUploads() ?? 0
+        uploading.hidden = k === 0
+        uploading.textContent = k === 1 ? t('1 picture still uploading…') : t('{n} pictures still uploading…', { n: k })
+      }
+      tick()
+      this.uploadPoll = window.setInterval(tick, 1000)
+    }
     if (on) {
       const n = (this.session?.peers().length ?? 0) + 1
       status.textContent = tr!.status === 'open'
@@ -1767,10 +1799,17 @@ export class Editor {
     const tools = div('ed-thumb-tools')
     tools.append(
       btn(ICONS.copy, '', (ev) => { ev.stopPropagation(); this.duplicateSlide(i) }, t('Duplicate slide')),
-      btn(ICONS.trash, '', (ev) => { ev.stopPropagation(); this.deleteSlide(i) }, t('Delete slide')),
+      btn(ICONS.trash, '', (ev) => { ev.stopPropagation(); this.deleteSlides(this.thumbTargets(i)) }, t('Delete slide')),
     )
     item.append(num, surface, tools)
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (ev) => {
+      // Shift = a range from the current slide; Cmd/Ctrl = toggle this one;
+      // plain = this one alone (as always). The canvas stays on the current
+      // slide for the modified clicks — it is the anchor, not a target.
+      const mod = ev.metaKey || ev.ctrlKey
+      if (ev.shiftKey && !isState) { this.setThumbSel(selRange(this.store.doc.slides, this.store.currentIndex, i)); return }
+      if (mod && !isState) { this.setThumbSel(selToggle(this.store.doc.slides, this.thumbSel.length ? this.thumbSel : [this.store.currentIndex], i)); return }
+      this.setThumbSel([])
       this.store.goTo(i)
       // On a phone the slide list is a drawer laid OVER the canvas, so picking
       // a slide left the answer hidden behind the question — you had to find
@@ -1914,19 +1953,39 @@ export class Editor {
     return gap
   }
 
+  /** The multi-selection, normalised to parents; the sidebar repaints. */
+  private setThumbSel(sel: number[]) {
+    this.thumbSel = selParents(this.store.doc.slides, sel)
+    this.highlightSidebar()
+  }
+
+  /** What a sidebar action acts on: the selection when the thumb is in it,
+   *  else that thumb alone. */
+  private thumbTargets(index: number): number[] {
+    const inSel = this.thumbSel.includes(index)
+    return inSel ? this.thumbSel : [index]
+  }
+
   private wireThumbDrag(item: HTMLElement, index: number) {
     // Select on press, before the browser starts native dragging. Waiting for
     // click/dragstart leaves Moveable's previous canvas target live while the
-    // pointer crosses the workspace.
+    // pointer crosses the workspace. A modified press (Shift/Cmd/Ctrl) is a
+    // selection gesture handled on click; a press on a thumb that is already
+    // in the selection keeps the selection (so it can be dragged as a block).
     item.addEventListener('mousedown', (ev) => {
       if (ev.button !== 0 || (ev.target instanceof Element && ev.target.closest('.ed-thumb-tools'))) return
       ev.stopPropagation() // keep the canvas Moveable gesture controller out
-      this.store.goTo(index)
+      if (ev.shiftKey || ev.metaKey || ev.ctrlKey) return
+      if (!this.thumbSel.includes(index)) { this.setThumbSel([]); this.store.goTo(index) }
     })
     item.addEventListener('dragstart', (ev) => {
-      ev.dataTransfer!.setData('text/bento-slide', String(index))
+      // the payload is every parent index that moves — the selection when
+      // this thumb is part of it, else this one; states follow their parent
+      ev.dataTransfer!.setData('text/bento-slide', JSON.stringify(this.thumbTargets(index)))
       ev.dataTransfer!.effectAllowed = 'move'
+      item.classList.add('dragging')
     })
+    item.addEventListener('dragend', () => item.classList.remove('dragging'))
     item.addEventListener('dragover', (ev) => {
       ev.preventDefault()
       item.classList.add('drop')
@@ -1935,20 +1994,38 @@ export class Editor {
     item.addEventListener('drop', (ev) => {
       ev.preventDefault()
       item.classList.remove('drop')
-      const from = parseInt(ev.dataTransfer!.getData('text/bento-slide'))
-      if (Number.isNaN(from) || from === index) return
-      this.store.commit(() => {
-        const [moved] = this.store.doc.slides.splice(from, 1)
-        this.store.doc.slides.splice(index, 0, moved)
-      }, 'slides')
+      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), index)
     })
+  }
+
+  /** Move the dragged units (a JSON list of parent indices, or one index
+   *  from an older payload) as a block to sit where `index` is; one commit. */
+  private dropSlides(payload: string, index: number) {
+    let from: number[]
+    try { const v = JSON.parse(payload); from = Array.isArray(v) ? v.map(Number) : [Number(v)] } catch { from = [parseInt(payload)] }
+    from = from.filter((n) => Number.isInteger(n) && n >= 0)
+    if (!from.length) return
+    const before = this.store.doc.slides
+    const after = moveBlock(before, from, index)
+    if (after === before) return
+    const currentId = before[this.store.currentIndex]?.id
+    const movedIds = expand(before, from).map((i) => before[i].id)
+    this.store.commit(() => { this.store.doc.slides = after }, 'slides')
+    // the selection follows the slides, by id; the canvas stays on its slide
+    const at = after.findIndex((s) => s.id === currentId)
+    if (at >= 0 && at !== this.store.currentIndex) this.store.goTo(at)
+    this.setThumbSel(after.map((s, i) => (movedIds.includes(s.id) ? i : -1)).filter((i) => i >= 0))
   }
 
   private highlightSidebar() {
     let active: HTMLElement | undefined
+    // the selection paints parents AND their states (they move together)
+    const selected = new Set(expand(this.store.doc.slides, this.thumbSel))
     this.sidebar.querySelectorAll<HTMLElement>('.ed-thumb').forEach((n) => {
-      const isActive = Number(n.dataset.index) === this.store.currentIndex
+      const idx = Number(n.dataset.index)
+      const isActive = idx === this.store.currentIndex
       n.classList.toggle('active', isActive)
+      n.classList.toggle('selected', selected.has(idx))
       if (isActive) active = n
     })
     active?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
@@ -1990,6 +2067,27 @@ export class Editor {
       this.store.doc.slides.splice(i + 1, 0, clone)
     }, 'slides')
     this.store.goTo(i + 1)
+  }
+
+  /** Delete several units at once — the sidebar's multi-selection — with
+   *  the same cascade and confirm as one slide (states go with parents,
+   *  links into the doomed are cleared, a linear slide must survive). */
+  private deleteSlides(indices: number[]) {
+    if (indices.length === 1) return this.deleteSlide(indices[0])
+    const plan = deletePlan(this.store.doc.slides, indices)
+    if (!plan.survives) return this.toast(t('A deck needs at least one slide'))
+    const n = selParents(this.store.doc.slides, indices).length
+    const parts = [
+      plan.states ? `${plan.states} interactive state${plan.states > 1 ? 's' : ''} will be deleted with them` : '',
+      plan.links ? `${plan.links} element link${plan.links > 1 ? 's' : ''} will be cleared` : '',
+    ].filter(Boolean).join('; ')
+    if (!window.confirm(parts ? t('Delete {n} slides? {parts}.', { n: String(n), parts }) : t('Delete {n} slides?', { n: String(n) }))) return
+    const doomed = plan.doomed
+    this.store.commit(() => {
+      this.store.doc.slides = this.store.doc.slides.filter((s) => !doomed.has(s.id))
+      for (const s of this.store.doc.slides) for (const el of s.elements) if (el.link && doomed.has(el.link)) delete el.link
+    }, 'slides')
+    this.setThumbSel([])
   }
 
   private deleteSlide(i: number) {
@@ -2299,7 +2397,6 @@ export class Editor {
     if (clip?.kind === 'elements') {
       let added: SlideElement[] = []
       this.store.commit(() => { added = insertElements(clip, this.store.doc, this.store.slide) })
-      if (clip.fonts?.length) injectFonts(this.store.doc)
       this.store.select(added.map((e) => e.id))
       this.toast(added.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: added.length }))
       return true
@@ -2308,7 +2405,6 @@ export class Editor {
       const at = this.store.currentIndex + 1
       let made: Slide[] = []
       this.store.commit(() => { made = insertSlides(clip, this.store.doc, at) }, 'slides')
-      if (clip.fonts?.length) injectFonts(this.store.doc)
       this.rebuildSidebar()
       this.store.goTo(at)
       this.toast(made.length === 1 ? t('Pasted 1 slide') : t('Pasted {n} slides', { n: made.length }))
@@ -2371,6 +2467,13 @@ export class Editor {
       this.canvas.render()
       this.scheduleThumbs()
     }
+  }
+
+  /**
+   * Re-inject custom font bundles when applicable.
+   */
+  private syncFonts() {
+    injectFonts(this.store.doc)
   }
 
   // --- live table→chart binding -------------------------------------------------
@@ -2506,10 +2609,12 @@ export class Editor {
     const doc = this.store.doc
     const snap = await getRecovery(doc.docId)
     if (!snap) return
-    let recovered: import('../model').BentoDoc
-    try { recovered = JSON.parse(snap.json) } catch { return }
-    if (docContentKey(recovered) === docContentKey(doc)) return // the file already has these edits
-    this.showRecoveryBanner(snap, recovered)
+    // A snapshot is foreign input (restoregate.ts): offered only if it is a
+    // document after the untrusted gate, compared as it WOULD be restored
+    const gated = gateRestored(snap.json, doc)
+    if (!gated) return
+    if (docContentKey(gated.doc) === docContentKey(doc)) return // the file already has these edits
+    this.showRecoveryBanner(snap)
   }
 
   /**
@@ -2690,7 +2795,7 @@ export class Editor {
     document.body.appendChild(bar)
   }
 
-  private showRecoveryBanner(snap: Snapshot, recovered: import('../model').BentoDoc) {
+  private showRecoveryBanner(snap: Snapshot) {
     document.querySelector('.ed-recover')?.remove()
     const bar = div('ed-recover')
     const when = new Date(snap.at).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
@@ -2700,7 +2805,13 @@ export class Editor {
     restore.className = 'ed-btn ed-btn-primary'
     restore.textContent = t('Restore')
     restore.addEventListener('click', () => {
-      this.store.replaceDoc(recovered)
+      // gated again against the document as it is NOW: the live session may
+      // have been joined or rotated since the banner appeared, and the identity
+      // re-attached must be the current one
+      const gated = gateRestored(snap.json, this.store.doc)
+      if (!gated) { bar.remove(); return }
+      if (gated.dropped.length) console.info('[bento] restore: dropped', gated.dropped)
+      this.store.replaceDoc(gated.doc)
       this.canvas.render()
       bar.remove()
       this.toast(t('Restored your unsaved changes'))
@@ -2738,7 +2849,10 @@ export class Editor {
           `<span class="vh-do">${t('Restore')}</span>`
         rowEl.addEventListener('click', () => {
           try {
-            this.store.replaceDoc(JSON.parse(v.json))
+            const gated = gateRestored(v.json, this.store.doc) // foreign input, as above
+            if (!gated) throw new Error('not a document')
+            if (gated.dropped.length) console.info('[bento] restore: dropped', gated.dropped)
+            this.store.replaceDoc(gated.doc)
             this.canvas.render()
             overlay.remove()
             this.toast(t('Restored the version from {when} — ⌘Z undoes', { when }))
@@ -2806,6 +2920,7 @@ export class Editor {
       [`${mod}-${t('scroll')}`, t('Zoom in and out')],
       [`${mod}+ · ${mod}− · ${mod}0`, t('Zoom in · out · fit the slide')],
       ['← · →', t('Walk the slides when nothing is selected; nudge the selection otherwise')],
+      [`${mod}-${t('click')} · ⇧-${t('click')}`, t('Select several slides in the sidebar; drag any of them to move them all, Delete removes them')],
     ])
     section(colR, t('Lines & curves'), [
       [t('Shape ▾'), t('Draw a line, curved line or connector — then drag on the canvas')],
@@ -3003,6 +3118,10 @@ export class Editor {
         if (this.store.selection.length) {
           ev.preventDefault()
           this.deleteSelection()
+        } else if (this.thumbSel.length > 1 && !inField) {
+          // a sidebar multi-selection and nothing on the canvas: Delete means the slides
+          ev.preventDefault()
+          this.deleteSlides(this.thumbSel)
         }
         return
       }
@@ -3036,6 +3155,7 @@ export class Editor {
         return
       }
       if (ev.key === 'Escape') {
+        if (this.thumbSel.length) this.setThumbSel([])
         if (this.canvas.isDrawing) this.canvas.cancelDraw()
         else if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
         else this.store.select([])
@@ -3491,6 +3611,20 @@ export class Editor {
     shrinkRow.title = t('A pasted phone photo is stored at slide resolution instead of full size. Off: pictures are stored exactly as they come.')
     box.appendChild(shrinkRow)
 
+    // the explicit pass over pictures already in the deck (editor/compressdeck.ts):
+    // dry run → the real numbers in a confirmation → one undo step
+    const compressRow = document.createElement('div')
+    compressRow.className = 'ed-about-auto'
+    const compressBtn = document.createElement('button')
+    compressBtn.className = 'ed-btn'
+    compressBtn.textContent = t('Compress pictures in this deck…')
+    compressBtn.title = t('Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.')
+    const compressNote = document.createElement('span')
+    compressNote.className = 'ed-hint'
+    compressBtn.addEventListener('click', () => { void this.compressDeckPictures(compressBtn, compressNote, overlay) })
+    compressRow.append(compressBtn, compressNote)
+    box.appendChild(compressRow)
+
     // the hard no-network switch: blocks update checks AND online
     // collaboration for this browser. Same-machine tab sync is not
     // networking and stays on.
@@ -3577,6 +3711,51 @@ export class Editor {
     if (runCheck || this.updateFound) checkB.click()
   }
 
+  /** About ▸ Compress pictures in this deck…: every picture runs through the
+   *  insert-time shrink rules; the confirmation states the measured total; one
+   *  store commit applies it. Nothing is written until Compress is clicked. */
+  private async compressDeckPictures(btn: HTMLButtonElement, note: HTMLElement, aboutOverlay: HTMLElement) {
+    if (this.store.readOnly) return
+    btn.disabled = true
+    const doc = this.store.doc
+    let run: DryRun
+    try {
+      run = await dryRun(doc, (done, total) => { note.textContent = t('{done} of {total}…', { done: String(done), total: String(total) }) })
+    } finally {
+      btn.disabled = false
+      note.textContent = ''
+    }
+    if (!run.shrunk.length) {
+      this.toast(run.examined ? t('Every picture is already as small as it gets') : t('This deck has no pictures to compress'))
+      return
+    }
+    const n = run.shrunk.length
+    const pct = Math.round((1 - run.after / run.before) * 100)
+    const body = document.createElement('div')
+    const sum = document.createElement('p')
+    sum.textContent = t('{n} pictures · {before} → {after} (−{pct}%)', { n: String(n), before: fmtBytes(run.before), after: fmtBytes(run.after), pct: String(pct) })
+    const hint = document.createElement('p')
+    hint.className = 'ed-hint'
+    hint.textContent = t('Graphics and logos stay lossless; photos are re-encoded at up to 2560 px. ⌘Z undoes it until you save.')
+    body.append(sum, hint)
+    const cancel = document.createElement('button')
+    cancel.className = 'ed-btn'
+    cancel.textContent = t('Cancel')
+    const go = document.createElement('button')
+    go.className = 'ed-btn ed-primary'
+    go.textContent = t('Compress')
+    const dlg = createDialog({ title: t('Compress pictures in this deck'), content: body, actions: [cancel, go] })
+    cancel.addEventListener('click', () => dlg.close())
+    go.addEventListener('click', () => {
+      dlg.close()
+      let applied = 0
+      this.store.commit(() => { applied = applyCompress(this.store.doc, run) })
+      aboutOverlay.remove()
+      this.toast(t('{n} pictures compressed — {before} → {after}', { n: String(applied), before: fmtBytes(run.before), after: fmtBytes(run.after) }))
+    })
+    dlg.open()
+  }
+
   toast(message: string) {
     document.querySelector('.ed-toast')?.remove()
     const t = div('ed-toast')
@@ -3619,6 +3798,13 @@ function languageInstallError(code: import('../packs').PackError): string {
 function syncNoticeText(n: import('../sync/session').SyncNotice): string {
   switch (n.code) {
     case 'too-large':
+      // A refused whole-deck SNAPSHOT is not a change and not an image: after
+      // #509 the snapshot carries no inline pictures, so this means the deck's
+      // own text/tables/small assets exceed the relay's frame ceiling. Say so —
+      // "that change" would blame an edit that is fine. The count of pictures
+      // still uploading is informational (the transient offload window), not
+      // the cause.
+      if (n.snapshot) return t('This deck is too large to share live in one piece. Your changes are saved in your copy, but a collaborator joining now may not receive the whole deck.')
       return n.media
         ? t('That image is too large to share live (about 1 MB max). It’s saved in your copy, but collaborators won’t see it.')
         : t('That change is too large to share live (about 1 MB max). It’s saved in your copy, but collaborators won’t see it.')

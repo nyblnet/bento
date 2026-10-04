@@ -7,7 +7,8 @@ import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/
 import type { BentoDoc, EmbedElement, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey, paginates, isWebUrl } from './model'
 import { chartSnapshotSvg } from './charts'
-import { renderMath as mathsLite } from './maths/index.ts'
+import { renderMath as mathsLite, mathError } from './maths/index.ts'
+import { resolveMathHtml } from './maths/delimiters.ts'
 import { renderCodeInto } from './code'
 import { tipSpec, tipInsetPx, shortenPathEnds } from './tips'
 import { formatDate } from './datefmt'
@@ -25,6 +26,11 @@ export interface RenderOpts {
   liveMedia?: boolean
   /** dynamic-field values ({{page}} etc.) for this slide; auto-filled by renderSlide */
   fields?: FieldContext
+  /** EDITOR CANVAS only: mark a formula that did not render (dotted
+   *  underline + a title from this, given what went wrong — `\\foo`, or
+   *  "spaces" for `$ x^2 $`). Thumbnails, present, print and the static
+   *  preview never pass it, so the hint never leaves the editor. */
+  mathHint?: (what: string) => string
 }
 
 /** Values dynamic field tokens resolve against, computed per slide. */
@@ -559,7 +565,8 @@ function renderMath(src: string, display: boolean): string | null {
   try {
     const tex = decodeEntities(src)
     const m = /^typst:\s*/.exec(tex)
-    const ml = mathsLite(m ? tex.slice(m[0].length) : tex, { display, syntax: m ? 'typst' : 'latex' })
+    // lenient (#551): an unknown command shows as its name, the rest renders
+    const ml = mathsLite(m ? tex.slice(m[0].length) : tex, { display, syntax: m ? 'typst' : 'latex', lenient: true })
     out = ml ? tagSymbols(ml) : null // not valid maths — leave the author's text exactly as typed
   } catch {
     out = null
@@ -569,33 +576,17 @@ function renderMath(src: string, display: boolean): string | null {
   return out
 }
 
-export function resolveMath(html: string): string {
-  if (html.indexOf('$') < 0) return html
-  // TEXT SEGMENTS ONLY. The input is sanitized HTML, and a `$` can sit inside
-  // an attribute — `<a href="https://x.example/$a$b">` (web links, #465).
-  // Run over the whole string, the inline rule paired those two dollars and
-  // wrote a <math> into the href: a dead link and stray markup (nothing the
-  // author chose became an attribute, but the link was gone). So the string
-  // is split on tags, each text run is transformed on its own, and a formula
-  // can never span or enter a tag.
-  return html.split(/(<[^>]*>)/).map((part, i) => (i % 2 ? part : resolveMathText(part))).join('')
-}
-
-function resolveMathText(text: string): string {
-  if (text.indexOf('$') < 0) return text
-  // $$…$$ first (display), then $…$ (inline). The inline form is deliberately
-  // fussy so ordinary prose survives: no whitespace just inside the delimiters
-  // and no digit straight after the closer, which is what keeps "it costs $5
-  // and $10" from parsing as math. A backslash-escaped \$ is a literal dollar.
-  let out = text.replace(/(^|[^\\])\$\$([^$]+?)\$\$/g, (m, pre: string, src: string) => {
-    const ml = renderMath(src, true)
-    return ml ? pre + ml : m
-  })
-  out = out.replace(/(^|[^\\$])\$(\S(?:[^$\n]*?\S)?)\$(?!\d)/g, (m, pre: string, src: string) => {
-    const ml = renderMath(src, false)
-    return ml ? pre + ml : m
-  })
-  return out.replace(/\\\$/g, '$') // the escape has done its job
+// Where the formulas are — the four delimiters, text runs only (#465), and
+// display formulas across line breaks (#540) — lives in maths/delimiters.ts,
+// DOM-free so its rigs drive the code itself.
+export function resolveMath(html: string, hint?: (what: string) => string): string {
+  return resolveMathHtml(html, renderMath, hint && ((src, display, spaced) => {
+    if (spaced) return hint('spaces')
+    const tex = decodeEntities(src)
+    const m = /^typst:\s*/.exec(tex)
+    const why = mathError(m ? tex.slice(m[0].length) : tex, { display, syntax: m ? 'typst' : 'latex' })
+    return why ? hint(why) : null
+  }))
 }
 
 /**
@@ -847,8 +838,94 @@ export function svgHrefAllowed(value: string, tag = 'image'): boolean {
 
 /** Every `url(…)` target in a CSS-ish string, quotes and padding removed. */
 function urlTargets(value: string): string[] {
-  return Array.from(value.matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi))
+  return Array.from(cssDecodeIdentEscapes(value).matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi))
     .map((m) => m[2].replace(/[\u0000-\u0020]/g, '').toLowerCase())
+}
+
+
+/**
+ * CSS escapes that spell IDENTIFIER characters, decoded: `\75 ` is `u`, `\72`
+ * is `r`, `\l` is `l`. The browser decodes escapes inside an ident before it
+ * decides what the token is, so a check over the raw text has to read the
+ * letters the browser will read. Escapes for anything else (`\28` for a
+ * paren, `\22` for a quote) are left as they are: inside an ident they are
+ * just part of the name, never syntax, and decoding them here would invent
+ * syntax the browser never sees.
+ */
+function cssDecodeIdentEscapes(css: string): string {
+  return css.replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([^\n\r\f0-9a-fA-F])/g, (m, hexs: string | undefined, ch: string | undefined) => {
+    const c = hexs ? String.fromCodePoint(Math.min(parseInt(hexs, 16), 0x10ffff)) : ch!
+    return /^[-\w]$/.test(c) || c.codePointAt(0)! >= 0x80 ? c : m
+  })
+}
+
+/**
+ * The CSS functions an untrusted svg sheet or style value may call, as an
+ * ALLOWLIST, for the reason the at-rules below are one. A function that takes
+ * an image can fetch, and some take the address as a bare string with no
+ * `url(` in it; a list of the dangerous ones would be one browser release from
+ * incomplete. Everything a diagram draws with is here: colour, maths,
+ * transforms, gradients, filters, shapes, easing, grid sizing, font-face
+ * descriptors, custom properties. `url` is policed on its own (in-document
+ * `#` and `data:image/` targets only).
+ */
+const CSS_FN_ALLOWED = new Set([
+  'rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color', 'color-mix', 'light-dark',
+  'calc', 'min', 'max', 'clamp', 'round', 'mod', 'rem', 'abs', 'sign', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'pow', 'sqrt', 'hypot', 'log', 'exp',
+  'var', 'env',
+  'translate', 'translatex', 'translatey', 'translatez', 'translate3d', 'rotate', 'rotatex', 'rotatey', 'rotatez', 'rotate3d',
+  'scale', 'scalex', 'scaley', 'scalez', 'scale3d', 'skew', 'skewx', 'skewy', 'matrix', 'matrix3d', 'perspective',
+  'cubic-bezier', 'steps', 'linear',
+  'linear-gradient', 'radial-gradient', 'conic-gradient', 'repeating-linear-gradient', 'repeating-radial-gradient', 'repeating-conic-gradient',
+  '-webkit-linear-gradient', '-webkit-radial-gradient', '-webkit-repeating-linear-gradient', '-webkit-repeating-radial-gradient',
+  'blur', 'brightness', 'contrast', 'drop-shadow', 'grayscale', 'hue-rotate', 'invert', 'opacity', 'saturate', 'sepia',
+  'circle', 'ellipse', 'inset', 'polygon', 'path', 'rect', 'xywh', 'ray',
+  'counter', 'counters', 'minmax', 'repeat', 'fit-content', 'local', 'format', 'tech', 'selector',
+  'url',
+])
+
+/** A function call in CSS text: a name (letters, escapes, non-ASCII) then `(`,
+ *  not after a colon — `:not(`, `:nth-child(` are selectors, not values. */
+const CSS_FN_CALL = /(^|[^:\w\\-])((?:[-\w]|\\[\s\S]|[^\x00-\x7f])+)\(/g
+
+/**
+ * Neutralise every function call a sheet may not make: RENAMED to one no
+ * browser implements, so the declaration it sits in is invalid and CSS drops
+ * it (the same fail-closed move as the at-rules). A name still holding an
+ * escape after decoding is refused on sight.
+ */
+function cssRefuseFunctions(css: string): string {
+  return css.replace(CSS_FN_CALL, (m, pre: string, name: string) =>
+    !name.includes('\\') && CSS_FN_ALLOWED.has(name.toLowerCase()) ? m : `${pre}bento-refused(`)
+}
+
+/** Does this CSS text carry a fetch — an off-list function, or a url() to
+ *  anything but `#…` / `data:image/…`? Escapes are decoded first. */
+function cssFetches(text: string): boolean {
+  const t = cssDecodeIdentEscapes(text)
+  if (urlTargets(t).some((u) => !(u.startsWith('#') || u.startsWith('data:image/')))) return true
+  return Array.from(t.matchAll(CSS_FN_CALL)).some((m) => m[2].includes('\\') || !CSS_FN_ALLOWED.has(m[2].toLowerCase()))
+}
+
+/**
+ * The browser's own reading of a sheet, where there is a browser. A
+ * constructed CSSStyleSheet is parsed but never applied, so nothing in it
+ * loads, and its rules serialise CANONICALLY: escapes decoded, a bare-string
+ * image function written with `url(…)`. Every top-level rule's cssText (which
+ * carries its nested rules: @media, @supports, @layer, nesting) is checked for
+ * a fetch the text filter missed. There should never be one; if there is, the
+ * whole sheet is dropped rather than trusted. `null` = no CSSOM here (the node
+ * rigs), where the text filter, which fails closed on its own, is the answer.
+ */
+function cssomFindsFetch(css: string): boolean | null {
+  if (typeof CSSStyleSheet === 'undefined') return null
+  try {
+    const sheet = new CSSStyleSheet()
+    sheet.replaceSync(css)
+    return Array.from(sheet.cssRules).some((r) => cssFetches(r.cssText))
+  } catch {
+    return true // the browser would not parse it: keep none of it
+  }
 }
 
 /**
@@ -860,8 +937,21 @@ function urlTargets(value: string): string[] {
  *
  * Exported for `scripts/test-sanitize.ts`.
  */
-export function svgUrlRefsAllowed(value: string): boolean {
-  return urlTargets(value).every((t) => t.startsWith('#') || t.startsWith('data:image/'))
+export function svgUrlRefsAllowed(value: string, attr = ''): boolean {
+  const n = attr.toLowerCase()
+  const allowed = (t: string) => t.startsWith('#') || t.startsWith('data:image/')
+  // aria-* and data-* are text, never parsed as CSS: an accessible label that
+  // reads "f(x) = 2" is not a function call, so only a url() is looked at
+  if (n.startsWith('aria-') || n.startsWith('data-')) return urlTargets(value).every(allowed)
+  if (cssFetches(value)) return false
+  // `style` is a declaration block: where there is a browser, its own parse
+  // (on a detached element, which loads nothing) is checked too
+  if (n === 'style' && typeof document !== 'undefined') {
+    const probe = document.createElement('div')
+    probe.style.cssText = value
+    if (cssFetches(probe.style.cssText)) return false
+  }
+  return true
 }
 
 /**
@@ -916,10 +1006,16 @@ export function sanitizeSvgCss(css: string): string {
     (/^-?[a-zA-Z][-\w]*$/.test(kw) && CSS_AT_ALLOWED.has(kw.toLowerCase())
       ? `${pre}@${kw}`
       : `${pre}@bento-refused `))
-  return atFiltered.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, _q: string, target: string) => {
+  // Function names are read the way the browser reads them — escapes decoded —
+  // before anything is judged, then every function off the allowlist is
+  // refused, then url() targets are checked on the decoded text.
+  const fnFiltered = cssRefuseFunctions(cssDecodeIdentEscapes(atFiltered))
+  const out = fnFiltered.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, _q: string, target: string) => {
     const v = String(target).replace(/[\u0000-\u0020]/g, '').toLowerCase()
     return v.startsWith('#') || v.startsWith('data:image/') ? m : 'none'
   })
+  // …and where there is a browser, its own parse is the last word
+  return cssomFindsFetch(out) === true ? '' : out
 }
 
 /**
@@ -980,7 +1076,7 @@ export function sanitizeSvg(markup: string, scope: string): DocumentFragment {
           if (!svgAttrAllowed(target) || /(^|:)(href|style)$/.test(target)) { gone = true; break }
           continue
         }
-        if (!svgUrlRefsAllowed(attr.value) || (name === 'style' && /@import|expression\s*\(/i.test(attr.value))) {
+        if (!svgUrlRefsAllowed(attr.value, name) || (name === 'style' && /@import|expression\s*\(/i.test(attr.value))) {
           el.removeAttribute(attr.name)
           continue
         }
@@ -1184,7 +1280,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.style.lineHeight = String(el.lineHeight)
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
       inner.style.width = '100%'
-      inner.innerHTML = resolveMath(sanitizeHtml(resolveFields(el.html, opts.fields)))
+      inner.innerHTML = resolveMath(sanitizeHtml(resolveFields(el.html, opts.fields)), opts.mathHint)
       // layout placeholder: prompt while empty (editor), gone while presenting
       const isEmpty = !inner.textContent?.trim() && !el.html.includes('<img')
       if (el.placeholder && isEmpty) {

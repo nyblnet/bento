@@ -28,15 +28,40 @@ export const isTypst = (src: string): boolean => TYPST_MARKER.test(src)
 /** Source with the marker removed (unchanged when there is none). */
 export const stripMarker = (src: string): string => src.replace(TYPST_MARKER, '')
 
-export function parseMath(src: string, opts: { display?: boolean; syntax?: Syntax } = {}): MNode {
-  return (opts.syntax === 'typst' ? parseTypst : parseLatex)(src, !!opts.display)
+export function parseMath(src: string, opts: { display?: boolean; syntax?: Syntax; lenient?: boolean } = {}): MNode {
+  return opts.syntax === 'typst' ? parseTypst(src, !!opts.display) : parseLatex(src, !!opts.display, !!opts.lenient)
 }
 
-/** MathML for `src`, or null when it is not valid maths in that syntax. */
-export function renderMath(src: string, opts: { display?: boolean; syntax?: Syntax } = {}): string | null {
+/**
+ * MathML for `src`, or null when it is not valid maths in that syntax.
+ *
+ * `lenient` (what slides render with, #551): a command maths-lite does not
+ * know is drawn as its own name in a warning colour and the rest of the
+ * formula renders — one unfamiliar word no longer throws the whole formula
+ * back as raw LaTeX in front of an audience. Malformed input (an unclosed
+ * brace, a stray \end) is still null. Strict is the default so the rigs
+ * measure what the engine actually knows.
+ */
+export function renderMath(src: string, opts: { display?: boolean; syntax?: Syntax; lenient?: boolean } = {}): string | null {
   try {
     return toMathML(parseMath(src, opts), !!opts.display)
   } catch {
     return null
+  }
+}
+
+/**
+ * Why `src` does not render, or null when it does: the unknown command
+ * (`\foo`) when that is the reason — the usual one — else the parser's own
+ * message. For the editor's "Not rendered" hint; never shown in a document.
+ */
+export function mathError(src: string, opts: { display?: boolean; syntax?: Syntax } = {}): string | null {
+  try {
+    toMathML(parseMath(src, opts), !!opts.display)
+    return null
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    const unknown = /^unknown command (\\\S+)/.exec(msg)
+    return unknown ? unknown[1] : msg
   }
 }

@@ -8,7 +8,9 @@
     "contextMenus",
     "notifications",
     "sidePanel",
-    "storage"
+    "storage",
+    "downloads",
+    "downloads.ui"
   ],
   "optional_permissions": [
     "history"
@@ -73,5 +75,8 @@
       "description": "Open the bento/home panel beside this document"
     }
   },
-  "default_locale": "en"
+  "default_locale": "en",
+  "host_permissions": [
+    "file:///*"
+  ]
 }

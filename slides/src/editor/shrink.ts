@@ -145,14 +145,25 @@ const kept = (dataUrl: string, before: number, width: number, height: number, re
  * The whole thing: decode, cap, classify, encode, compare. Always resolves —
  * anything that cannot be decoded is stored as it came, the way it always was.
  */
-export async function shrinkImageFile(file: Blob): Promise<ShrinkResult> {
+export async function shrinkImageFile(file: Blob, opts: { force?: boolean; skipLossyAtCap?: boolean } = {}): Promise<ShrinkResult> {
   const before = file.size
   const original = await readDataUrl(file)
-  if (!shrinkEnabled()) return kept(original, before, 0, 0, 'off')
+  // `force`: the explicit "Compress pictures in this deck…" action — the
+  // preference governs what happens at INSERT, not what a user asked for
+  if (!opts.force && !shrinkEnabled()) return kept(original, before, 0, 0, 'off')
   if (untouchable(file.type)) return kept(original, before, 0, 0, 'untouchable')
 
   let bmp: ImageBitmap
   try { bmp = await createImageBitmap(file) } catch { return kept(original, before, 0, 0, 'undecodable') }
+  // `skipLossyAtCap`: the deck-wide pass. A JPEG/WebP already within the cap
+  // has been through a lossy encoder once; encoding it again at 0.85 is
+  // smaller every time and worse every time (generation loss), so the 20%
+  // rule alone would let a second pass "shrink" the first pass's output.
+  // Once is the rule: such a picture is kept as it is.
+  if (opts.skipLossyAtCap && /^image\/(jpeg|webp)$/i.test(file.type) && Math.max(bmp.width, bmp.height) <= MAX_EDGE) {
+    const { width: w0, height: h0 } = bmp; bmp.close()
+    return kept(original, before, w0, h0, 'no gain')
+  }
   const { width, height } = fitEdge(bmp.width, bmp.height)
   const canvas = document.createElement('canvas')
   canvas.width = width; canvas.height = height

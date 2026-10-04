@@ -76,24 +76,32 @@ export function firstFamily(stack: string): string {
   return (stack.split(',')[0] ?? '').trim().replace(/^['"]|['"]$/g, '').toLowerCase()
 }
 
-/**
- * (Re)register @font-face rules for every embedded font in the document.
- * Idempotent — call at boot and again whenever a font is added.
- */
+// A descriptor snapshot avoids rebuilding large data-URL CSS on unrelated edits.
+// Compare values, not doc/array identity: imports replace objects; editing mutates them.
+const injected = new WeakMap<HTMLStyleElement, string[]>()
+
+/** Refresh on every document event, including removal/undo. Only font changes
+ * touch the stylesheet, so unrelated edits never restart font loading. */
 export function injectFonts(doc: BentoDoc) {
-  const css = (doc.fonts ?? [])
-    .map((f) => {
-      const src = resolveFontSrc(doc, f.asset)
-      if (!src) return ''
-      return `@font-face{font-family:${JSON.stringify(f.family)};src:url(${JSON.stringify(src)});` +
-        `font-weight:${f.weight ?? 'normal'};font-style:${f.style ?? 'normal'};font-display:swap}`
-    })
-    .join('\n')
+  const faces = (doc.fonts ?? []).map(f => ({
+    family: f.family, src: resolveFontSrc(doc, f.asset) ?? '',
+    weight: f.weight ?? 'normal', style: f.style ?? 'normal',
+  }))
+  const signature = faces.flatMap(f => [f.family, f.src, f.weight, f.style])
   let style = document.getElementById('bento-fonts') as HTMLStyleElement | null
+  const previous = style && injected.get(style)
+  if (previous && previous.length === signature.length && previous.every((v, i) => v === signature[i])) return
+  const css = faces.filter(f => f.src).map(f =>
+    `@font-face{font-family:${JSON.stringify(f.family)};src:url(${JSON.stringify(f.src)});` +
+    `font-weight:${f.weight};font-style:${f.style};font-display:swap}`,
+  ).join('\n')
   if (!style) {
+    if (!css) return
     style = document.createElement('style')
     style.id = 'bento-fonts'
+    style.setAttribute('data-bento-transient', '')
     document.head.appendChild(style)
   }
-  style.textContent = css
+  if (style.textContent !== css) style.textContent = css
+  injected.set(style, signature)
 }
