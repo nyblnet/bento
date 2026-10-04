@@ -1,0 +1,1067 @@
+{
+ "note": "The commonly typed tier (#551): every entry must render. Individual commands from the gaps analysis, the gaps page rows, and its structural examples. Widen freely; never remove an entry to make the rig pass.",
+ "mustRender": [
+  {
+   "src": "α"
+  },
+  {
+   "src": "+"
+  },
+  {
+   "src": "β"
+  },
+  {
+   "src": "="
+  },
+  {
+   "src": "γ"
+  },
+  {
+   "src": "x"
+  },
+  {
+   "src": "∈"
+  },
+  {
+   "src": "ℝ"
+  },
+  {
+   "src": "\\mathbb{R}"
+  },
+  {
+   "src": "\\boxed{x}"
+  },
+  {
+   "src": "\\cancel{x}"
+  },
+  {
+   "src": "\\color{red}{x}"
+  },
+  {
+   "src": "\\textcolor{red}{x}"
+  },
+  {
+   "src": "\\phantom{x}"
+  },
+  {
+   "src": "\\overbrace{a+b}^{n}"
+  },
+  {
+   "src": "\\underbrace{a+b}_{n}"
+  },
+  {
+   "src": "\\sideset{}{'}\\sum"
+  },
+  {
+   "src": "\\overset{!}{=}"
+  },
+  {
+   "src": "\\underset{x}{\\min}"
+  },
+  {
+   "src": "\\stackrel{def}{=}"
+  },
+  {
+   "src": "\\not="
+  },
+  {
+   "src": "\\not\\in"
+  },
+  {
+   "src": "\\lim\\limits_{x}"
+  },
+  {
+   "src": "\\sum\\nolimits_i"
+  },
+  {
+   "src": "\\big("
+  },
+  {
+   "src": "\\Big("
+  },
+  {
+   "src": "\\bigg("
+  },
+  {
+   "src": "\\Bigg("
+  },
+  {
+   "src": "\\dfrac{a}{b} \\tfrac{a}{b}"
+  },
+  {
+   "src": "\\displaystyle"
+  },
+  {
+   "src": "\\sum"
+  },
+  {
+   "src": "\\text{if } x > 0"
+  },
+  {
+   "src": "\\mathrm{d}x"
+  },
+  {
+   "src": "\\vec{v} \\hat{x} \\tilde{y} \\dot{x} \\ddot{x}"
+  },
+  {
+   "src": "\\widehat{abc} \\widetilde{abc}"
+  },
+  {
+   "src": "\\overline{x} \\underline{x}"
+  },
+  {
+   "src": "\\overrightarrow{AB} \\overleftarrow{AB}"
+  },
+  {
+   "src": "\\lVert"
+  },
+  {
+   "src": "\\rVert"
+  },
+  {
+   "src": "\\lvert"
+  },
+  {
+   "src": "\\rvert"
+  },
+  {
+   "src": "\\lfloor"
+  },
+  {
+   "src": "\\rfloor"
+  },
+  {
+   "src": "\\lceil"
+  },
+  {
+   "src": "\\rceil"
+  },
+  {
+   "src": "\\begin{cases} a & x>0 \\\\ b & \\text{else} \\end{cases}"
+  },
+  {
+   "src": "\\begin{pmatrix} 1 & 0 \\\\ 0 & 1 \\end{pmatrix}"
+  },
+  {
+   "src": "\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}"
+  },
+  {
+   "src": "\\begin{smallmatrix} a & b \\end{smallmatrix}"
+  },
+  {
+   "src": "\\begin{align} a &= b \\end{align}"
+  },
+  {
+   "src": "\\iint"
+  },
+  {
+   "src": "\\iiint"
+  },
+  {
+   "src": "\\oint"
+  },
+  {
+   "src": "\\nabla"
+  },
+  {
+   "src": "\\partial"
+  },
+  {
+   "src": "\\infty"
+  },
+  {
+   "src": "\\hbar"
+  },
+  {
+   "src": "\\ell"
+  },
+  {
+   "src": "\\Re"
+  },
+  {
+   "src": "\\Im"
+  },
+  {
+   "src": "\\aleph"
+  },
+  {
+   "src": "\\emptyset"
+  },
+  {
+   "src": "\\varnothing"
+  },
+  {
+   "src": "\\forall"
+  },
+  {
+   "src": "\\exists"
+  },
+  {
+   "src": "\\nexists"
+  },
+  {
+   "src": "\\neg"
+  },
+  {
+   "src": "\\therefore"
+  },
+  {
+   "src": "\\because"
+  },
+  {
+   "src": "\\approx"
+  },
+  {
+   "src": "\\sim"
+  },
+  {
+   "src": "\\simeq"
+  },
+  {
+   "src": "\\cong"
+  },
+  {
+   "src": "\\equiv"
+  },
+  {
+   "src": "\\propto"
+  },
+  {
+   "src": "\\ll"
+  },
+  {
+   "src": "\\gg"
+  },
+  {
+   "src": "\\ne"
+  },
+  {
+   "src": "\\le"
+  },
+  {
+   "src": "\\ge"
+  },
+  {
+   "src": "\\subset"
+  },
+  {
+   "src": "\\supset"
+  },
+  {
+   "src": "\\subseteq"
+  },
+  {
+   "src": "\\supseteq"
+  },
+  {
+   "src": "\\cup"
+  },
+  {
+   "src": "\\cap"
+  },
+  {
+   "src": "\\setminus"
+  },
+  {
+   "src": "\\bigcup"
+  },
+  {
+   "src": "\\bigcap"
+  },
+  {
+   "src": "\\oplus"
+  },
+  {
+   "src": "\\otimes"
+  },
+  {
+   "src": "\\odot"
+  },
+  {
+   "src": "\\ominus"
+  },
+  {
+   "src": "\\times"
+  },
+  {
+   "src": "\\div"
+  },
+  {
+   "src": "\\cdot"
+  },
+  {
+   "src": "\\pm"
+  },
+  {
+   "src": "\\mp"
+  },
+  {
+   "src": "\\circ"
+  },
+  {
+   "src": "\\star"
+  },
+  {
+   "src": "\\ast"
+  },
+  {
+   "src": "\\to"
+  },
+  {
+   "src": "\\gets"
+  },
+  {
+   "src": "\\mapsto"
+  },
+  {
+   "src": "\\implies"
+  },
+  {
+   "src": "\\iff"
+  },
+  {
+   "src": "\\Rightarrow"
+  },
+  {
+   "src": "\\Leftarrow"
+  },
+  {
+   "src": "\\Leftrightarrow"
+  },
+  {
+   "src": "\\longrightarrow"
+  },
+  {
+   "src": "\\longleftarrow"
+  },
+  {
+   "src": "\\Longrightarrow"
+  },
+  {
+   "src": "\\Longleftarrow"
+  },
+  {
+   "src": "\\Longleftrightarrow"
+  },
+  {
+   "src": "\\uparrow"
+  },
+  {
+   "src": "\\downarrow"
+  },
+  {
+   "src": "\\Uparrow"
+  },
+  {
+   "src": "\\Downarrow"
+  },
+  {
+   "src": "\\updownarrow"
+  },
+  {
+   "src": "\\nearrow"
+  },
+  {
+   "src": "\\searrow"
+  },
+  {
+   "src": "\\rightleftharpoons"
+  },
+  {
+   "src": "\\hookrightarrow"
+  },
+  {
+   "src": "\\hookleftarrow"
+  },
+  {
+   "src": "\\twoheadrightarrow"
+  },
+  {
+   "src": "\\leftharpoonup"
+  },
+  {
+   "src": "\\rightharpoonup"
+  },
+  {
+   "src": "\\preceq"
+  },
+  {
+   "src": "\\succeq"
+  },
+  {
+   "src": "\\prec"
+  },
+  {
+   "src": "\\succ"
+  },
+  {
+   "src": "\\perp"
+  },
+  {
+   "src": "\\parallel"
+  },
+  {
+   "src": "\\mid"
+  },
+  {
+   "src": "\\vdash"
+  },
+  {
+   "src": "\\dashv"
+  },
+  {
+   "src": "\\models"
+  },
+  {
+   "src": "\\doteq"
+  },
+  {
+   "src": "\\triangleq"
+  },
+  {
+   "src": "\\asymp"
+  },
+  {
+   "src": "\\varpi"
+  },
+  {
+   "src": "\\varrho"
+  },
+  {
+   "src": "\\varsigma"
+  },
+  {
+   "src": "\\varkappa"
+  },
+  {
+   "src": "\\varepsilon"
+  },
+  {
+   "src": "\\vartheta"
+  },
+  {
+   "src": "\\varphi"
+  },
+  {
+   "src": "\\varGamma"
+  },
+  {
+   "src": "\\varDelta"
+  },
+  {
+   "src": "\\imath"
+  },
+  {
+   "src": "\\jmath"
+  },
+  {
+   "src": "\\hslash"
+  },
+  {
+   "src": "\\beth"
+  },
+  {
+   "src": "\\gimel"
+  },
+  {
+   "src": "\\dag"
+  },
+  {
+   "src": "\\ddag"
+  },
+  {
+   "src": "\\leqq"
+  },
+  {
+   "src": "\\geqq"
+  },
+  {
+   "src": "\\lessgtr"
+  },
+  {
+   "src": "\\triangleleft"
+  },
+  {
+   "src": "\\triangleright"
+  },
+  {
+   "src": "\\lhd"
+  },
+  {
+   "src": "\\rhd"
+  },
+  {
+   "src": "\\bigodot"
+  },
+  {
+   "src": "\\bigoplus"
+  },
+  {
+   "src": "\\bigotimes"
+  },
+  {
+   "src": "\\bigsqcup"
+  },
+  {
+   "src": "\\biguplus"
+  },
+  {
+   "src": "\\sqcup"
+  },
+  {
+   "src": "\\sqcap"
+  },
+  {
+   "src": "\\sqsubseteq"
+  },
+  {
+   "src": "\\uplus"
+  },
+  {
+   "src": "\\amalg"
+  },
+  {
+   "src": "\\wr"
+  },
+  {
+   "src": "\\smallint"
+  },
+  {
+   "src": "\\oiint"
+  },
+  {
+   "src": "\\iiiint"
+  },
+  {
+   "src": "\\bigstar"
+  },
+  {
+   "src": "\\lozenge"
+  },
+  {
+   "src": "\\blacklozenge"
+  },
+  {
+   "src": "\\triangle"
+  },
+  {
+   "src": "\\angle"
+  },
+  {
+   "src": "\\measuredangle"
+  },
+  {
+   "src": "\\clubsuit"
+  },
+  {
+   "src": "\\spadesuit"
+  },
+  {
+   "src": "\\heartsuit"
+  },
+  {
+   "src": "\\diamondsuit"
+  },
+  {
+   "src": "\\flat"
+  },
+  {
+   "src": "\\sharp"
+  },
+  {
+   "src": "\\natural"
+  },
+  {
+   "src": "\\copyright"
+  },
+  {
+   "src": "\\pounds"
+  },
+  {
+   "src": "\\longmapsto"
+  },
+  {
+   "src": "\\leadsto"
+  },
+  {
+   "src": "\\circlearrowleft"
+  },
+  {
+   "src": "\\dddot{x}"
+  },
+  {
+   "src": "\\overleftrightarrow{AB}"
+  },
+  {
+   "src": "\\hphantom{x} \\vphantom{x}"
+  },
+  {
+   "src": "\\smash{x}"
+  },
+  {
+   "src": "\\mathstrut"
+  },
+  {
+   "src": "\\large"
+  },
+  {
+   "src": "\\small"
+  },
+  {
+   "src": "\\bold{x}"
+  },
+  {
+   "src": "\\Bbb{R}"
+  },
+  {
+   "src": "\\frak{g}"
+  },
+  {
+   "src": "\\pmb{x}"
+  },
+  {
+   "src": "\\boldsymbol{x}"
+  },
+  {
+   "src": "\\mathfrak{g} \\mathscr{L}"
+  },
+  {
+   "src": "\\textbf{x} \\textit{x}"
+  },
+  {
+   "src": "\\textsc{x}"
+  },
+  {
+   "src": "\\eqref{e}"
+  },
+  {
+   "src": "\\def\\x{y} \\x"
+  },
+  {
+   "src": "\\ce{H2O}"
+  },
+  {
+   "src": "\\dv{f}{x}"
+  },
+  {
+   "src": "\\pdv{f}{x}"
+  },
+  {
+   "src": "\\abs{x}"
+  },
+  {
+   "src": "\\norm{x}"
+  },
+  {
+   "src": "\\bra{x} \\ket{y}"
+  },
+  {
+   "src": "\\langle"
+  },
+  {
+   "src": "y"
+  },
+  {
+   "src": "\\rangle"
+  },
+  {
+   "src": "\\lt"
+  },
+  {
+   "src": "\\gt"
+  },
+  {
+   "src": "\\argmax_x f"
+  },
+  {
+   "src": "\\sgn"
+  },
+  {
+   "src": "\\colon="
+  },
+  {
+   "src": "\\coloneqq"
+  },
+  {
+   "src": "\\operatorname{tr} A"
+  },
+  {
+   "src": "\\det"
+  },
+  {
+   "src": "A"
+  },
+  {
+   "src": "\\dim"
+  },
+  {
+   "src": "V"
+  },
+  {
+   "src": "\\ker"
+  },
+  {
+   "src": "f"
+  },
+  {
+   "src": "\\deg"
+  },
+  {
+   "src": "p"
+  },
+  {
+   "src": "\\sinh"
+  },
+  {
+   "src": "\\cosh"
+  },
+  {
+   "src": "\\tanh"
+  },
+  {
+   "src": "\\coth"
+  },
+  {
+   "src": "\\arcsin"
+  },
+  {
+   "src": "\\arccos"
+  },
+  {
+   "src": "\\arctan"
+  },
+  {
+   "src": "\\gcd"
+  },
+  {
+   "src": "\\Pr(x)"
+  },
+  {
+   "src": "\\hom"
+  },
+  {
+   "src": "\\binom{n}{k} \\dbinom{n}{k} \\tbinom{n}{k}"
+  },
+  {
+   "src": "\\sqrt[3]{x}"
+  },
+  {
+   "src": "x^{\\prime} x' x''"
+  },
+  {
+   "src": "\\begin{bmatrix*}[r] 1 & -1 \\end{bmatrix*}"
+  },
+  {
+   "src": "\\begin{rcases} a \\\\ b \\end{rcases}"
+  },
+  {
+   "src": "\\begin{dcases} a & b \\end{dcases}"
+  },
+  {
+   "src": "\\fbox{x}"
+  },
+  {
+   "src": "\\colorbox{yellow}{x}"
+  },
+  {
+   "src": "\\bcancel{x} \\xcancel{x}"
+  },
+  {
+   "src": "\\cancelto{0}{x}"
+  },
+  {
+   "src": "\\ref{x}"
+  },
+  {
+   "src": "\\newline"
+  },
+  {
+   "src": "\\\\"
+  },
+  {
+   "src": "\\,\\:\\;\\!\\quad\\qquad"
+  },
+  {
+   "src": "\\mathcal{F}"
+  },
+  {
+   "src": "\\mathsf{A} \\mathtt{A} \\mathit{A} \\mathbf{A}"
+  },
+  {
+   "src": "A \\Longrightarrow B"
+  },
+  {
+   "src": "A \\Longleftarrow B"
+  },
+  {
+   "src": "A \\Longleftrightarrow B"
+  },
+  {
+   "src": "x \\longleftarrow y"
+  },
+  {
+   "src": "\\Uparrow \\; \\Downarrow"
+  },
+  {
+   "src": "\\nearrow \\; \\searrow"
+  },
+  {
+   "src": "A \\rightleftharpoons B"
+  },
+  {
+   "src": "A \\hookleftarrow B"
+  },
+  {
+   "src": "A \\twoheadrightarrow B"
+  },
+  {
+   "src": "\\leftharpoonup \\; \\rightharpoonup"
+  },
+  {
+   "src": "x \\longmapsto x^2"
+  },
+  {
+   "src": "a \\leadsto b"
+  },
+  {
+   "src": "a \\odot b"
+  },
+  {
+   "src": "a \\ominus b"
+  },
+  {
+   "src": "a \\sqcup b \\sqcap c"
+  },
+  {
+   "src": "A \\uplus B"
+  },
+  {
+   "src": "a \\amalg b"
+  },
+  {
+   "src": "a \\wr b"
+  },
+  {
+   "src": "a \\preceq b \\succeq c"
+  },
+  {
+   "src": "A \\sqsubseteq B"
+  },
+  {
+   "src": "\\Gamma \\dashv \\phi"
+  },
+  {
+   "src": "a \\doteq b"
+  },
+  {
+   "src": "a \\triangleq b"
+  },
+  {
+   "src": "f \\asymp g"
+  },
+  {
+   "src": "a \\leqq b \\geqq c"
+  },
+  {
+   "src": "a \\lessgtr b"
+  },
+  {
+   "src": "N \\triangleleft G"
+  },
+  {
+   "src": "N \\lhd G \\rhd H"
+  },
+  {
+   "src": "x \\coloneqq 1"
+  },
+  {
+   "src": "a \\lt b \\gt c"
+  },
+  {
+   "src": "\\varpi \\; \\varrho \\; \\varsigma \\; \\varkappa"
+  },
+  {
+   "src": "\\varGamma \\; \\varDelta"
+  },
+  {
+   "src": "\\hat\\imath + \\hat\\jmath"
+  },
+  {
+   "src": "\\beth_0 \\; \\gimel"
+  },
+  {
+   "src": "\\dag \\; \\ddag"
+  },
+  {
+   "src": "\\bigstar \\; \\lozenge \\; \\blacklozenge"
+  },
+  {
+   "src": "\\measuredangle ABC"
+  },
+  {
+   "src": "\\clubsuit \\spadesuit \\heartsuit \\diamondsuit"
+  },
+  {
+   "src": "\\flat \\; \\sharp \\; \\natural"
+  },
+  {
+   "src": "\\copyright \\; \\pounds 5"
+  },
+  {
+   "src": "\\bigodot_{i} x_i"
+  },
+  {
+   "src": "\\bigsqcup_i A_i"
+  },
+  {
+   "src": "\\biguplus_i A_i"
+  },
+  {
+   "src": "\\oiint_S \\mathbf{F} \\cdot d\\mathbf{S}"
+  },
+  {
+   "src": "\\iiiint f"
+  },
+  {
+   "src": "\\smallint f"
+  },
+  {
+   "src": "\\coth x"
+  },
+  {
+   "src": "\\sgn x"
+  },
+  {
+   "src": "\\argmax_x f(x)"
+  },
+  {
+   "src": "\\hphantom{x} a \\vphantom{\\int} b"
+  },
+  {
+   "src": "\\smash{y} + 1"
+  },
+  {
+   "src": "\\sqrt{\\mathstrut a}"
+  },
+  {
+   "src": "\\sideset{}{'}\\sum_{n} a_n"
+  },
+  {
+   "src": "\\begin{bmatrix*}[r] 1 & -10 \\\\ -2 & 3 \\end{bmatrix*}"
+  },
+  {
+   "src": "\\begin{rcases} a & x>0 \\\\ b & x<0 \\end{rcases}"
+  },
+  {
+   "src": "\\begin{dcases} \\frac12 & x>0 \\\\ 0 & \\text{else} \\end{dcases}"
+  },
+  {
+   "src": "\\bcancel{x} \\; \\xcancel{y}"
+  },
+  {
+   "src": "\\bold{v}"
+  },
+  {
+   "src": "\\textsc{Abc}"
+  },
+  {
+   "src": "\\large x + \\small y"
+  },
+  {
+   "src": "E = mc^2 \\eqref{eq1}"
+  },
+  {
+   "src": "\\abs{x} + \\norm{v}"
+  },
+  {
+   "src": "\\bra{\\psi} \\ket{\\phi}"
+  },
+  {
+   "src": "\\ce{H2O + CO2 -> H2CO3}"
+  },
+  {
+   "src": "a = b + c \\\\ d = e",
+   "display": true
+  },
+  {
+   "src": "\\begin{aligned} f(x) &= (x+1)^2 \\\\ &= x^2 + 2x + 1 \\\\ g &= 0 \\end{aligned}",
+   "display": true
+  },
+  {
+   "src": "\\int_0^1 f(x)\\,dx \\approx \\smallint f",
+   "display": true
+  },
+  {
+   "src": "A \\xrightarrow{f} B \\qquad A \\xleftarrow{g} B"
+  },
+  {
+   "src": "\\newcommand{\\R}{\\mathbb{R}} x \\in \\R"
+  },
+  {
+   "src": "\\def\\f#1{#1^2} \\f{x} + \\f{y}"
+  },
+  {
+   "src": "\\renewcommand{\\vec}[1]{\\mathbf{#1}} \\vec{v}"
+  },
+  {
+   "src": "\\begin{CD} A @>f>> B \\\\ @VgVV @VVhV \\\\ C @>>k> D \\end{CD}",
+   "display": true
+  },
+  {
+   "src": "\\begin{CD} A @<\\alpha<< B @= C \\\\ @AAA @| @VV\\beta V \\\\ D @. E @>>> F \\end{CD}",
+   "display": true
+  },
+  {
+   "src": "\\begin{CD} 0 @>>> \\ker f @>>> M @>f>> N @>>> 0 \\end{CD}",
+   "display": true
+  },
+  {
+   "src": "a_{\\angl{n}} \\quad \\ddot{a}_{\\angln}"
+  },
+  {
+   "src": "7\\longdiv{364}"
+  },
+  {
+   "src": "\\reflectbox{mirror}"
+  },
+  {
+   "src": "A \\coh B \\quad A \\incoh B \\quad A \\scoh B \\quad A \\sincoh B"
+  },
+  {
+   "src": "\\Delta H^{\\standardstate}"
+  },
+  {
+   "src": "\\mathrm{C}\\uniDash\\mathrm{C} \\; \\mathrm{C}\\tripleDashOverDoubleLine\\mathrm{C}"
+  },
+  {
+   "src": "\\vb{a} \\cp \\vb{b} = a\\kern3pt b\\mskip4mu c"
+  },
+  {
+   "src": "A \\xrightarrow{\\text{a long label}} B"
+  },
+  {
+   "src": "\\ce{N2 + 3H2 <=>[\\text{Fe}][\\text{450°C}] 2NH3}"
+  },
+  {
+   "src": "\\pu{1.2e3 kJ/mol} \\quad \\pu{9.81 m s^-2} \\quad \\pu{3 kg.m/s}"
+  },
+  {
+   "src": "\\ce{CuSO4.5H2O}"
+  },
+  {
+   "src": "\\begin{array}{|c|c|} \\hline a & b \\\\ \\hline c & d \\\\ \\hline \\end{array}",
+   "display": true
+  },
+  {
+   "src": "\\begin{array}{l|r} \\text{item} & \\text{cost} \\\\ \\hline x & 1 \\\\ y & 22 \\end{array}",
+   "display": true
+  },
+  {
+   "src": "\\left[\\begin{array}{cc:c} 1 & 2 & 3 \\\\ 4 & 5 & 6 \\end{array}\\right]",
+   "display": true
+  },
+  {
+   "src": "\\genfrac{(}{)}{0pt}{2}{n}{k}"
+  }
+ ]
+}

@@ -145,7 +145,7 @@ const spacesDoc = (blocks: unknown[]) => ({
   }
 
   const withText = JSON.stringify(A.toJSON())
-  const without = JSON.stringify(A.toJSON({ text: false }))
+  const without = JSON.stringify(A.toJSON({ text: false, unsafeOmitTextHistory: true }))
   ok(withText.includes('"txt"'), 'the default stamp carries the token history')
   ok(!without.includes('"txt"'), 'and `text: false` leaves it out entirely')
   ok(without.length * 5 < withText.length,
@@ -207,12 +207,74 @@ const spacesDoc = (blocks: unknown[]) => ({
   // here so it cannot be forgotten when it is written.
   {
     const full = JSON.parse(JSON.stringify(A.toJSON()))
-    const lean = JSON.parse(JSON.stringify(A.toJSON({ text: false })))
+    const lean = JSON.parse(JSON.stringify(A.toJSON({ text: false, unsafeOmitTextHistory: true })))
     ok(!!full.txt && !lean.txt, 'the two stamps differ only in the token history')
     const keptGeneration = Object.keys(full.txt ?? {}).length
     ok(keptGeneration > 0,
       `a typed paragraph has a generation to lose (${keptGeneration} node(s) with token history)`)
   }
+}
+
+// ---------------------------------------------------------------------------
+// PINNED (finding, 2026-09-17): the reunion path the section above PRESCRIBES
+// for a lean stamp — "rejoin by taking a peer's snapshot (mergeSnapshot)" —
+// LOSES an edit to a DIFFERENT block. A txt edit advances the node's text
+// generation but not its html LWW register; a text:false stamp drops the
+// generation, so mergeSnapshot has no stamped carrier for the edit and keeps
+// the base value. This is a NEGATIVE CONTROL: it asserts the loss so the loss
+// is not silent, and so the day the engine carries a stamped html register
+// through a lean stamp, THESE assertions flip and must be inverted.
+// docs/DECISIONS.md 2026-09-17. No shipping path stamps lean — this is latent.
+{
+  const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v))
+  const threeBlocks = () => spacesDoc([
+    { id: 'b0', type: 'p', html: 'zero' },
+    { id: 'b1', type: 'p', html: 'one' },
+    { id: 'b2', type: 'p', html: 'two' },
+  ]) as never as { pages: { blocks: { id: string; html: string }[] }[] }
+  const editBlock = (eng: SpacesSync, d: { pages: { blocks: { html: string }[] }[] }, i: number, html: string) => {
+    const n = clone(d); n.pages[0].blocks[i].html = html
+    eng.diff(d as never, n as never, { text: true })
+    d.pages[0].blocks[i].html = html
+  }
+
+  const origin = new SpacesSync('origin'); origin.adopt(threeBlocks() as never)
+  // the saved file both forks open — LEAN, spaces' would-be size optimisation
+  const saved = JSON.stringify(origin.toJSON({ text: false, unsafeOmitTextHistory: true }))
+
+  const X = SpacesSync.fromJSON('xavier', JSON.parse(saved))
+  const Y = SpacesSync.fromJSON('yasmin', JSON.parse(saved))
+  const dx = threeBlocks(), dy = threeBlocks()
+  editBlock(X, dx, 1, 'one — FROM-X')   // X edits block b1
+  editBlock(Y, dy, 2, 'two — FROM-Y')   // Y edits block b2 — a DIFFERENT block
+  // X reunites by taking Y's LEAN snapshot (the prescribed rejoin for lean stamps)
+  X.mergeSnapshot(dx as never, clone(dy) as never, Y.toJSON({ text: false, unsafeOmitTextHistory: true }))
+  ok(dx.pages[0].blocks[1].html === 'one — FROM-X', "X keeps its own edit through the reunion")
+  ok(!dx.pages[0].blocks[2].html.includes('FROM-Y'),
+    `KNOWN LOSS: a lean-stamp snapshot reunion drops the peer's DIFFERENT-block edit ` +
+    `(b2 is ${JSON.stringify(dx.pages[0].blocks[2].html)}) — invert when the engine fix lands`)
+
+  // the SAME reunion with a FULL snapshot keeps it — proving the loss is the
+  // dropped token history, not the merge.
+  const X2 = SpacesSync.fromJSON('xavier', JSON.parse(saved))
+  const dx2 = threeBlocks()
+  editBlock(X2, dx2, 1, 'one — FROM-X')
+  X2.mergeSnapshot(dx2 as never, clone(dy) as never, Y.toJSON())
+  ok(dx2.pages[0].blocks[2].html.includes('FROM-Y'),
+    'a FULL (text:true) snapshot of the very same edit is KEPT — the loss is the missing history, not mergeSnapshot')
+}
+
+// ---- the guard: a lean stamp is REFUSED without acknowledgement -------------
+// The wall that keeps a future size optimisation from wiring stampInto to the
+// silent loss above.
+{
+  const A = new SpacesSync('a'); A.adopt(spacesDoc([{ id: 'b1', type: 'p', html: 'x' }]) as never)
+  let threw = false
+  try { A.toJSON({ text: false }) } catch { threw = true }
+  ok(threw, 'toJSON({ text: false }) REFUSES without unsafeOmitTextHistory — the footgun hits a wall, not a silent loss')
+  let ok2 = false
+  try { A.toJSON({ text: false, unsafeOmitTextHistory: true }); ok2 = true } catch { /* */ }
+  ok(ok2, 'and the acknowledged form is allowed — the rigs, and a future engine fix, opt in explicitly')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

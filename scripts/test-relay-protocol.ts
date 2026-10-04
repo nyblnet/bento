@@ -94,7 +94,12 @@ const same = (re: RegExp, what: string): void => {
 console.log('the signature chain the relay verifies')
 // `inv.${pub}.${role}.${exp}` — an owner blessing an invite key.
 // `rev.${pub}` — an owner revoking one. `${i}.${d}` — a frame signature.
-same(/`(inv|rev|mem|own)\.[^`]*`/g, 'signature texts')
+// Every text a client signs and the relay verifies. `dlg.` (the invite-signed
+// delegation of a device key) was on the wire and NOT in this list; `prove.`
+// (the possession challenge) joined it in the relay-auth change. A text that
+// is not in this alternation is a text the two transports can spell
+// differently without anything going red.
+same(/`(inv|rev|mem|own|dlg|prove)\.[^`]*`/g, 'signature texts')
 
 console.log('\nthe crypto')
 same(/name: '[A-Za-z-]+'/g, 'algorithm names')
@@ -102,8 +107,19 @@ same(/namedCurve: '[^']+'/g, 'curve')
 same(/hash: '[^']+'/g, 'hash')
 
 console.log('\nthe wire')
-// The possession proof in the query string, and the frame envelope keys.
-same(/[?&](tok|room|pub|sig|inv|role|exp)=/g, 'query parameters')
+// The query string the relay parses at connect. This list used to name
+// `room|pub|sig|inv|role|exp`, none of which is on the wire — the real
+// parameters are the token, the writer key, the owner key, the five invite
+// fields, the delegation, the replay cursor, and (relay-auth) the
+// ticket-capable flag. With the wrong names the guard matched `tok=` alone
+// and reported the two transports identical while they could differ on
+// everything else. These are the names the worker reads.
+same(/[?&](tok|w|o|ivp|ivr|ive|ivs|dg|since|bt)=/g, 'query parameters')
+// Control frames the relay emits or consumes by name, and the envelope keys
+// that carry its stamps. A client that spells one of these differently is a
+// client the relay cannot talk to.
+same(/ctl === '(ready|ack|refused|revoked|revoke|wt|prove)'/g, 'control frames read')
+same(/ctl: '(revoke|prove)'/g, 'control frames sent')
 same(/'(ping|pong)'/g, 'keepalive frames')
 
 console.log('\nthe timings a relay and a client have to agree about')
