@@ -31,6 +31,42 @@ type Listener = (doc: TypeDoc) => void;
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const LIMIT = 200;
 
+/**
+ * What undo and redo must NEVER move: the open file's identity and capability.
+ *
+ * A whole-document snapshot carries every field the document had, so swapping
+ * one in used to roll these back too — measured on this code before the fix:
+ * "Reset access" then ⌘Z put the REVOKED room key back (a copy you had just
+ * cut off could rejoin the next time you went live), and "Stop sharing" then
+ * ⌘Z turned sharing back on. ⌘Z means "undo what I wrote", not "undo who this
+ * file is or who may reach it".
+ *
+ * So undo/redo move CONTENT and take these from the live document:
+ *   docId    — identity; regenerating or reverting it orphans autosave,
+ *              recovery and sync for the file
+ *   collab   — the room, its keys and whether it is on: capability, and the
+ *              thing #588's read-only lock reads, so undo can never unlock a
+ *              view-only copy
+ *   readonly — the file's mode
+ * The same list as bento/slides' FROM_LIVE (restoregate.ts). A local copy for
+ * now; kernel will lift one shared list for every app.
+ *
+ * Consequence worth knowing: undoing a whole-document REPLACE (Replace from
+ * JSON, loadDoc, restoring a recovery snapshot) brings back the earlier
+ * CONTENT under the identity that replace brought in — identity is not
+ * undoable, whichever action changed it. bento/slides behaves the same.
+ */
+export const FROM_LIVE = ['docId', 'collab', 'readonly'] as const;
+
+function keepLiveIdentity(doc: TypeDoc, live: TypeDoc): void {
+  const d = doc as unknown as Record<string, unknown>;
+  const l = live as unknown as Record<string, unknown>;
+  for (const k of FROM_LIVE) {
+    if (l[k] !== undefined) d[k] = l[k];
+    else delete d[k];
+  }
+}
+
 export class Store {
   #doc: TypeDoc;
   #undo: Snap[] = [];
@@ -126,7 +162,9 @@ export class Store {
   #apply(s: Snap): Snap {
     if (s.kind === 'doc') {
       const inverse: Snap = { kind: 'doc', doc: clone(this.#doc) };
+      const live = this.#doc;
       this.#doc = s.doc;
+      keepLiveIdentity(this.#doc, live);
       return inverse;
     }
     // A block snapshot restores that block in place. If the block is gone (a

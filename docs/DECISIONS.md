@@ -7460,3 +7460,29 @@ needs those more than anyone. Remote edits arrive through `touch()`, not
 `commit`, so a locked copy still follows the room. `copyIsReceiveOnly` is the
 lock's question (a document with no `collab` is local and editable — unlike
 `copyCanWrite`, which says no only because there is no room to write to).
+
+## 2026-10-04 — Undo moves content, never identity (type)
+
+**Undo and redo take a document's `docId`, `collab` and `readonly` from the
+live document, never from the snapshot.** bento/type's `Store.#apply` swapped
+whole-document snapshots in wholesale, so it rolled back identity and
+capability along with text. Measured on that code: "Reset access" — which is
+revocation — then ⌘Z put the revoked room key and room back, so a copy the
+owner had just cut off could rejoin the next time they went live; "Stop
+sharing" then ⌘Z turned sharing back on. ⌘Z means "undo what I wrote", not
+"undo who this file is or who may reach it". It is also what keeps #588's
+read-only lock honest: the lock reads `collab`, so undo can never unlock a
+view-only copy.
+
+The list (`FROM_LIVE`, type/src/store.ts) is the same as bento/slides'
+(restoregate.ts, applied to undo in #605). It is a local copy for now; kernel
+will lift one shared list. In type, `collab` is the field that changes in
+place (the sharing actions); `docId` and `readonly` change only when another
+document is loaded over this one. So undoing a whole-document REPLACE brings
+back the earlier content under the identity that replace brought in — identity
+is not undoable whichever action changed it. slides behaves the same.
+
+`test-type-store.ts` drives the real sharing helpers through the session
+adapter, undoes all the way back checking at every step, and covers each field
+including one that is absent in the live document. Reverting to the full swap
+reddens every identity row and the undo-must-not-unlock pair.
