@@ -15,6 +15,7 @@
 import type { Store } from '../store'
 import type { ShapeElement } from '../model'
 import { anchorsToPath, parseAnchors, samplePathAnchors } from './patheditor'
+import { movePathEnds, pathEnds } from '../tips'
 
 const rnd = (v: number) => Math.round(v * 100) / 100
 /** Closed shapes (polygons) end with Z; straight ones have no curve commands. */
@@ -106,6 +107,67 @@ export function setPathAnchors(el: ShapeElement, pts: Pt[], opts: { closed?: boo
   el.d = (opts.straight
     ? 'M ' + rel.map((p) => `${p.x} ${p.y}`).join(' L ')
     : anchorsToPath(rel)) + (opts.closed ? ' Z' : '')
+}
+
+/** First and last on-curve points of an open path shape, in slide coords —
+ *  exact (parsed, not sampled), for connector re-routing. */
+export function pathEndpoints(el: ShapeElement): [Pt, Pt] | null {
+  const ends = pathEnds(el.d ?? '')
+  if (!ends) return null
+  const [px, py, pw, ph] = el.pathBox ?? [0, 0, el.w || 1, el.h || 1]
+  const sx = el.w / (pw || 1)
+  const sy = el.h / (ph || 1)
+  const out = (p: Pt): Pt => ({ x: el.x + (p.x - px) * sx, y: el.y + (p.y - py) * sy })
+  return [out(ends[0]), out(ends[1])]
+}
+
+/** Move an open path's ends to new slide-coord points (connector re-route,
+ *  #302): interior anchors keep their positions exactly; the box and pathBox
+ *  are renormalised to the on-curve points, the way setPathAnchors does. */
+export function setPathEndpoints(el: ShapeElement, a: Pt, b: Pt): void {
+  const [px, py, pw, ph] = el.pathBox ?? [0, 0, el.w || 1, el.h || 1]
+  const sx = el.w / (pw || 1)
+  const sy = el.h / (ph || 1)
+  // slide → current path units
+  const toPath = (p: Pt): Pt => ({ x: px + (p.x - el.x) / sx, y: py + (p.y - el.y) / sy })
+  const moved = movePathEnds(el.d ?? '', toPath(a), toPath(b))
+  // renormalise: pathBox [0,0,w,h] over the on-curve points, at scale 1
+  const nodes = parseBezierPoints(moved)
+  if (!nodes.length) return
+  const abs = nodes.map((p) => ({ x: el.x + (p.x - px) * sx, y: el.y + (p.y - py) * sy }))
+  const minX = Math.min(...abs.map((p) => p.x))
+  const minY = Math.min(...abs.map((p) => p.y))
+  const w = Math.max(Math.max(...abs.map((p) => p.x)) - minX, 1)
+  const h = Math.max(Math.max(...abs.map((p) => p.y)) - minY, 1)
+  // re-express every coordinate (points AND handles) in the new box
+  const re = moved.replace(/-?\d*\.?\d+(?:e-?\d+)?/g, (() => {
+    let i = 0
+    return (tok: string) => {
+      const v = Number(tok)
+      const isX = i++ % 2 === 0
+      const s = isX ? rnd(el.x + (v - px) * sx - minX) : rnd(el.y + (v - py) * sy - minY)
+      return String(s)
+    }
+  })())
+  el.x = minX
+  el.y = minY
+  el.w = w
+  el.h = h
+  el.pathBox = [0, 0, w, h]
+  el.d = re
+}
+
+/** On-curve points of an M/C path string (path units). */
+function parseBezierPoints(d: string): Pt[] {
+  const out: Pt[] = []
+  const re = /([MC])\s*((?:-?\d*\.?\d+(?:e-?\d+)?[\s,]*)+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(d))) {
+    const nums = m[2].trim().split(/[\s,]+/).map(Number)
+    if (m[1] === 'M') out.push({ x: nums[0], y: nums[1] })
+    else out.push({ x: nums[4], y: nums[5] })
+  }
+  return out
 }
 
 export class LineEditor {
