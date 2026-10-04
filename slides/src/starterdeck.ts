@@ -20,10 +20,9 @@ import {
   newDoc, uid, defaultText, defaultShape, defaultChart, defaultTable, defaultCode,
   type BentoDoc, type Slide, type SlideElement, type TextElement, type ShapeElement,
   type SvgElement, type TableElement,
-} from './model'
-import { FRAUNCES_900, INSTRUMENT_VAR } from './fontdata'
+} from './model.ts'
 
-/** Display face — embedded in the file (see fontdata.ts). */
+/** Display face — the shell's own (fonts.ts BUILTIN_FONTS), named by the deck, not embedded. */
 const DISPLAY = "'Fraunces', Georgia, serif"
 /** Text face — embedded variable sans. */
 const BODY = "'Instrument Sans', -apple-system, 'Segoe UI', Helvetica, sans-serif"
@@ -321,13 +320,29 @@ export function starterDoc(): BentoDoc {
   doc.theme.accent = PEACH
   // new charts (＋ Chart, table→chart) inherit the deck's midnight-&-peach family
   doc.theme.chartPalette = [PEACH, STEEL, PEACH_SOFT, STEEL_SOFT, MIST, PEACH_DEEP]
+  /**
+   * Code Palette:
+   * 8 colours, not four hundred scopes — the zero-cost tier. When the
+   * signed-extension tier lands, grammarAssetId/themeAssetId select real
+   * TextMate rendering and this map becomes the fallback.
+   */
+  doc.theme.codePalette = {
+    c: '#6b7f8f', // comment
+    s: '#c98a3e', // string
+    n: '#b0688f', // number
+    k: '#5b8def', // keyword
+    f: '#3fa9a0', // call
+    p: '#7c8794', // punctuation
+    a: '#3f9142', // diff: added
+    d: '#c25a43', // diff: removed
+  }
+  // The two faces are the shell's own (fonts.ts BUILTIN_FONTS): named, not
+  // embedded — 86 KB that every saved deck used to carry twice.
   doc.fonts = [
-    { family: 'Fraunces', asset: 'font-fraunces-900', weight: '900' },
-    { family: 'Instrument Sans', asset: 'font-instrument', weight: '400 700' },
+    { family: 'Fraunces', asset: 'builtin:fraunces-900', weight: '900' },
+    { family: 'Instrument Sans', asset: 'builtin:instrument-sans', weight: '400 700' },
   ]
   doc.assets = {
-    'font-fraunces-900': FRAUNCES_900,
-    'font-instrument': INSTRUMENT_VAR,
     'dots-ink': DOTS_INK,
     'dots-paper': DOTS_PAPER,
     'aurora-amber': AURORA_PEACH,
