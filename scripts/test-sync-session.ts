@@ -57,7 +57,7 @@ const { Store } = await import('../slides/src/store.ts');
 const { SyncSession, assetsToOffload } = await import('../slides/src/sync/session.ts');
 const { newDoc, emptySlide } = await import('../slides/src/model.ts');
 const { SYNC_V } = await import('../kernel/src/sync/crdt.ts');
-const { FROM_LIVE, keepLiveIdentity, CAP_FIELDS, withoutCaps, COLLAB_READER_KEEP, collabForReader, COLLAB_INVITE_KEEP, collabForInvite } = await import('../kernel/src/docfields.ts');
+const { FROM_LIVE, keepLiveIdentity, CAP_FIELDS, withoutCaps, COLLAB_READER_KEEP, collabForReader, COLLAB_INVITE_KEEP, collabForInvite, COLLAB_ROTATE_KEEP, carryThroughRotation } = await import('../kernel/src/docfields.ts');
 
 let failures = 0, checks = 0;
 function ok(cond: boolean, msg: string) {
@@ -645,6 +645,41 @@ H('docfields: a reader copy with NO sync stamp joins a live room and converges')
   ok(R.doc.title === 'room content',
     `the no-stamp reader converged to the room content (got ${JSON.stringify(R.doc.title)})`);
   sW.stop?.(); sR.stop?.();
+}
+
+H('docfields: a key rotation carries sync + links onto fresh keys, drops the rest');
+{
+  const fresh = { room: 'NEW', key: 'NK', on: true, v: 2, owner: 'o2', ownerPriv: 'FRESHPRIV', role: 'writer' } as Record<string, unknown>;
+  const old = {
+    room: 'OLD', key: 'OK', on: true, v: 2, owner: 'o1', ownerPriv: 'OLDPRIV',
+    sync: { v: SYNC_V, tag: 'history' }, links: [{ url: 'https://pub/1' }], writerPriv: 'W',
+  } as Record<string, unknown>;
+  const rot = carryThroughRotation(fresh, old) as Record<string, unknown>;
+  ok(rot.room === 'NEW' && rot.key === 'NK' && rot.ownerPriv === 'FRESHPRIV', 'the fresh keys win — the rotation revokes the old ones');
+  ok(JSON.stringify(rot.sync) === JSON.stringify(old.sync), 'the CRDT sync stamp is carried over (history survives)');
+  ok(JSON.stringify(rot.links) === JSON.stringify(old.links), 'published links survive the reset (maintainer ruling)');
+  ok(!('writerPriv' in rot), 'an old private half is NOT carried — it is revoked');
+  ok([...COLLAB_ROTATE_KEEP].join() === 'sync,links', 'COLLAB_ROTATE_KEEP is sync + links');
+  ok(carryThroughRotation(fresh, undefined) === fresh, 'no old block → the fresh collab is returned as-is');
+}
+
+H('rotateKeys rebuilds with fresh keys but preserves sync + links (kernel + dash share the helper)');
+{
+  const { rotateKeys } = await import('../kernel/src/sync/online.ts');
+  const doc = newDoc(); doc.docId = `rot-${Math.random().toString(36).slice(2, 10)}`;
+  (doc as unknown as { collab: Record<string, unknown> }).collab = {
+    room: 'old-room', key: 'old-key', on: true, v: 2, owner: 'o', ownerPriv: 'OLD',
+    sync: { v: SYNC_V, tag: 'keepme' }, links: [{ url: 'https://pub/x' }],
+  };
+  const store = new Store(JSON.parse(JSON.stringify(doc)));
+  const sess = new SyncSession(store);
+  await (rotateKeys as (s: unknown, st: unknown) => Promise<void>)(sess, store);
+  const c = (store.doc as unknown as { collab: Record<string, unknown> }).collab;
+  ok(c.room !== 'old-room' && c.key !== 'old-key', 'rotateKeys minted fresh room + key (access reset)');
+  ok((c.sync as { tag?: string })?.tag === 'keepme', 'the sync stamp survived the rotation');
+  ok(JSON.stringify(c.links) === JSON.stringify([{ url: 'https://pub/x' }]), 'the published links survived the rotation');
+  ok(c.ownerPriv !== 'OLD', 'the old owner private key is gone (revoked)');
+  sess.stop?.();
 }
 
 // Undo/redo move CONTENT, never identity. Two halves: stopSharing is no longer
