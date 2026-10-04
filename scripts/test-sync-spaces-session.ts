@@ -292,6 +292,238 @@ H('end to end: two tabs of one space converge')
 }
 
 // ---------------------------------------------------------------------------
+// A SAVED FILE REJOINS AS A FORK.
+//
+// Slides stamps `doc.collab.sync` (the session's CRDT state) into every save of
+// a shared deck; spaces did not, so an offline-edited copy of a shared space
+// reopened as a FRESH ADOPT. Its offline edits were already in the document it
+// adopted — the shadow — so no op was ever minted for them and no peer ever
+// received them. Everything below drives the code ⌘S runs: share.ts stampSync
+// at the moment the document is taken, then the file's JSON through parseDoc,
+// a new Store and a new SyncSession, which is exactly what boot() does with a
+// file. Each phase is a REAL tab on a REAL BroadcastChannel; "offline" closes
+// that tab's transports while its session keeps diffing, which is what a lost
+// connection looks like to the session.
+const { stampSync, duplicateAsNew } = await import('../spaces/src/share.ts')
+const { parseDoc } = await import('../spaces/src/model.ts')
+type AnySession = InstanceType<typeof SyncSession>
+const priv = (s: AnySession) => s as unknown as {
+  transports: Array<{ close(): void }>
+  heartbeat: ReturnType<typeof setInterval> | null
+  state: { lamport: number; vv: Record<string, number> }
+  forkPending: boolean
+}
+/** the connection drops; the session keeps diffing local edits */
+function goOffline(s: AnySession): void {
+  for (const tr of priv(s).transports) tr.close()
+  priv(s).transports = []
+}
+/** the tab is closed */
+function closeTab(s: AnySession): void {
+  goOffline(s)
+  if (priv(s).heartbeat) clearInterval(priv(s).heartbeat!)
+}
+/** ⌘S: stamp, then the bytes that reach the file (the doc JSON) */
+function save(store: AnyStore, session: AnySession): string {
+  stampSync(store, session)
+  return JSON.stringify(store.doc)
+}
+/** open a saved file in a new tab, as boot() does */
+function reopen(file: string): { store: AnyStore; session: AnySession } {
+  const r = parseDoc(file)
+  if (!r.ok) throw new Error('saved file did not parse')
+  const store = new Store(r.doc)
+  return { store, session: new SyncSession(store) }
+}
+const html = (s: AnyStore, id: string) => s.block(id)?.html
+const pagesKey = (s: AnyStore) => JSON.stringify(s.doc.pages)
+
+H('a saved file rejoins as a fork: A edits offline, B edits meanwhile, both survive')
+{
+  const a = space('fork'), b = space('fork')
+  const sa = new SyncSession(a), sb = new SyncSession(b)
+  await settle()
+  a.commit(() => { a.doc.pages[0].blocks.push({ id: 'shared', type: 'p', html: 'written live' }) }, { structure: true })
+  await settle()
+  ok(html(b, 'shared') === 'written live', 'live: A’s block reached B before anyone went offline')
+
+  // A saves while live — the stamp is the CURRENT state, and only shared
+  // documents carry it
+  const first = save(a, sa)
+  const stamped = JSON.parse(first).collab?.sync
+  ok(!!stamped && stamped.v === 2 && stamped.lamport > 0,
+    `⌘S stamps collab.sync (v=${stamped?.v}, lamport=${stamped?.lamport})`)
+
+  // A drops offline, edits, saves, closes
+  goOffline(sa)
+  a.commit(() => { a.doc.pages[0].blocks.push({ id: 'off-a', type: 'p', html: 'written offline in A' }) }, { structure: true })
+  a.commit(() => { a.doc.pages[1].title = 'Renamed offline in A' })
+  await settle()
+  const file = save(a, sa)
+  closeTab(sa)
+  ok((JSON.parse(file).collab?.sync?.lamport ?? 0) > (stamped?.lamport ?? 0),
+    'the offline save stamps the NEWER state — the one that knows about the offline edits')
+
+  // meanwhile B keeps working
+  b.commit(() => { b.doc.pages[0].blocks.push({ id: 'on-b', type: 'p', html: 'written by B meanwhile' }) }, { structure: true })
+  b.commit(() => { b.doc.pages[2].title = 'Renamed by B meanwhile' })
+  await settle()
+  ok(!b.block('off-a'), 'while A is away B has not seen its edit (the partition is real)')
+
+  // A reopens the saved file and rejoins
+  const { store: a2, session: sa2 } = reopen(file)
+  ok(priv(sa2).forkPending === true && priv(sa2).state.lamport > 0,
+    'the reopened file restored its CRDT state (a fork, not a fresh adopt)')
+  await settle(600)
+
+  ok(html(b, 'off-a') === 'written offline in A', 'B received A’s offline block')
+  ok(b.doc.pages[1].title === 'Renamed offline in A', 'B received A’s offline rename')
+  ok(html(a2, 'on-b') === 'written by B meanwhile', 'A received B’s block from the time it was away')
+  ok(a2.doc.pages[2].title === 'Renamed by B meanwhile', 'A received B’s rename')
+  ok(html(a2, 'off-a') === 'written offline in A' && a2.doc.pages[1].title === 'Renamed offline in A',
+    'replay did NOT overwrite A’s offline edits on A')
+  ok(pagesKey(a2) === pagesKey(b), 'A and B converged on the same pages')
+  closeTab(sa2); closeTab(sb)
+}
+
+H('a saved file rejoins as a fork: concurrent edits to the SAME block')
+{
+  const a = space('same'), b = space('same')
+  const sa = new SyncSession(a), sb = new SyncSession(b)
+  await settle()
+  goOffline(sa)
+  // both rewrite b1 ("hello") while partitioned — A on its side, B on its own
+  a.commit(() => { a.doc.pages[0].blocks[0].html = 'hello from A offline' })
+  b.commit(() => { b.doc.pages[0].blocks[0].html = 'B says hello' })
+  // and both edit the same page's title, a plain LWW register
+  a.commit(() => { a.doc.pages[0].title = 'Home (A)' })
+  await settle()
+  b.commit(() => { b.doc.pages[0].title = 'Home (B)' })
+  await settle()
+  const file = save(a, sa)
+  closeTab(sa)
+  const { store: a2, session: sa2 } = reopen(file)
+  await settle(600)
+  const merged = html(a2, 'b1') ?? ''
+  ok(merged === html(b, 'b1'), `the block's text converged on both sides ("${merged}")`)
+  ok(merged.includes('from A offline') && merged.includes('B says'),
+    'the text merge kept BOTH sides’ words — neither edit was thrown away')
+  ok(a2.doc.pages[0].title === b.doc.pages[0].title,
+    `the title (a register) converged on one winner ("${a2.doc.pages[0].title}")`)
+  ok(pagesKey(a2) === pagesKey(b), 'A and B converged on the same pages')
+  closeTab(sa2); closeTab(sb)
+}
+
+H('a stamped file reopened with no peers keeps its edits and its state')
+{
+  const a = space('alone')
+  const sa = new SyncSession(a)
+  a.commit(() => { a.doc.pages[0].blocks.push({ id: 'solo', type: 'p', html: 'mine' }) }, { structure: true })
+  await settle()
+  const file = save(a, sa)
+  closeTab(sa)
+  const before = JSON.parse(file)
+  const { store: a2, session: sa2 } = reopen(file)
+  await settle()
+  ok(pagesKey(a2) === JSON.stringify(before.pages), 'nothing in the document moved on reopen with nobody there')
+  ok(priv(sa2).forkPending && priv(sa2).state.vv[Object.keys(before.collab?.sync?.vv ?? {})[0]] > 0,
+    'the restored version vector still knows the earlier tab’s ops')
+  a2.commit(() => { a2.doc.pages[0].blocks.push({ id: 'solo-2', type: 'p', html: 'more' }) }, { structure: true })
+  await settle()
+  const again = JSON.parse(save(a2, sa2))
+  ok((again.collab?.sync?.lamport ?? 0) > (before.collab?.sync?.lamport ?? 0), 'and saving again stamps a state that has moved on')
+  closeTab(sa2)
+
+  // The next time the file is opened with somebody there, they get
+  // everything the lone tab wrote. The colleague's tab is open FIRST: a fork
+  // announces itself with one `snap` at its own hello, so over the
+  // same-machine channel a peer that opens AFTER the fork never hears it (the
+  // relay covers that case by persisting the fork's snapshot — onRelayReady).
+  // That gap is the kernel session's, shared with slides, and not this rig's.
+  const colleague = space('alone')
+  const sl = new SyncSession(colleague)
+  await settle()
+  const { store: a3, session: sa3 } = reopen(JSON.stringify(again))
+  await settle(600)
+  ok(html(colleague, 'solo') === 'mine' && html(colleague, 'solo-2') === 'more',
+    'reopened later with a colleague there, the edits made with nobody there reach them')
+  ok(pagesKey(colleague) === pagesKey(a3), 'and the two converge')
+  closeTab(sa3); closeTab(sl)
+
+  // pre-v2 state (bare-id keys) is DISCARDED, as in slides: the file joins as
+  // a never-synced adopt rather than restoring registers it cannot read
+  const legacy = JSON.parse(file)
+  legacy.collab.sync = { v: 1, lamport: 99, regs: { x: [99, 'z'] } }
+  const { session: sv1 } = reopen(JSON.stringify(legacy))
+  ok(priv(sv1).state.lamport === 0 && priv(sv1).forkPending === false,
+    'a pre-v2 stamp is discarded — fresh adopt, not a restore')
+  closeTab(sv1)
+}
+
+H('what each write carries: the rules per path')
+{
+  const a = space('rules')
+  const sa = new SyncSession(a)
+  a.commit(() => { a.doc.pages[0].blocks.push({ id: 'r1', type: 'p', html: 'x' }) }, { structure: true })
+  await settle()
+
+  // a never-shared space stays clean
+  const solo = space('rules-solo')
+  delete (solo.doc as { collab?: unknown }).collab
+  const ss = new SyncSession(solo)
+  stampSync(solo, ss)
+  ok(!(solo.doc as { collab?: { sync?: unknown } }).collab?.sync, 'a space with no session gets no stamp')
+  closeTab(ss)
+
+  // a read-only store never rewrites what the file carries
+  const ro = space('rules-ro')
+  const foreign = { v: 3, lamport: 7, future: true }
+  ;(ro.doc.collab as { sync?: unknown }).sync = foreign
+  ro.readOnly = true
+  const sro = new SyncSession(ro)
+  stampSync(ro, sro)
+  ok(JSON.stringify((ro.doc.collab as { sync?: unknown }).sync) === JSON.stringify(foreign),
+    'a read-only (frozen / reader / reading-copy) store leaves an unknown-version stamp untouched')
+  closeTab(sro)
+
+  // an older build round-trips the stamp byte-for-byte: parseDoc keeps unknown
+  // and known collab fields exactly as written
+  const file = save(a, sa)
+  const r = parseDoc(file)
+  ok(r.ok && JSON.stringify(r.doc.collab?.sync) === JSON.stringify(JSON.parse(file).collab?.sync) && !!r.doc.collab?.sync,
+    'parseDoc carries collab.sync through untouched')
+
+  // Duplicate as a new space: new identity, no credentials, no state
+  const dup = duplicateAsNew(a.doc, 'doc-dup', '2026-10-04T00:00:00.000Z')
+  ok(dup.docId === 'doc-dup' && !('collab' in dup), 'Duplicate drops collab — and with it the stamped sync')
+  ok(!!(a.doc.collab as { sync?: unknown }).sync, '…without touching the original, which keeps its own')
+  closeTab(sa)
+}
+
+H('Duplicate as a new space never syncs with its ancestor')
+{
+  const a = space('ancestor'), b = space('ancestor')
+  const sa = new SyncSession(a), sb = new SyncSession(b)
+  await settle()
+  stampSync(a, sa)
+  const dupStore = new Store(parseDoc(JSON.stringify(duplicateAsNew(a.doc, 'doc-dup-2'))).doc)
+  const sd = new SyncSession(dupStore)
+  await settle()
+  ok(priv(sd).forkPending === false && priv(sd).state.lamport === 0,
+    'the duplicate starts from no state — it is not a fork of anything')
+  dupStore.commit(() => { dupStore.doc.pages[0].blocks.push({ id: 'in-dup', type: 'p', html: 'only in the duplicate' }) }, { structure: true })
+  a.commit(() => { a.doc.pages[0].blocks.push({ id: 'in-anc', type: 'p', html: 'only in the ancestor' }) }, { structure: true })
+  await settle(600)
+  ok(!a.block('in-dup') && !b.block('in-dup'), 'an edit in the duplicate never reaches the ancestor’s tabs')
+  ok(!dupStore.block('in-anc'), 'and an edit in the ancestor never reaches the duplicate')
+  ok(html(b, 'in-anc') === 'only in the ancestor', '(while the ancestor’s own tabs still sync — the channel is live)')
+  const room = (dupStore.doc.collab as { room?: string } | undefined)?.room
+  ok(!room || room !== (a.doc.collab as { room?: string }).room,
+    `the duplicate is in no room of the ancestor's (room ${room ?? 'none yet'})`)
+  closeTab(sa); closeTab(sb); closeTab(sd)
+}
+
+// ---------------------------------------------------------------------------
 H('the people UI: who is on which page')
 {
   // Only the pure part. The panel, the dots and the three button states were

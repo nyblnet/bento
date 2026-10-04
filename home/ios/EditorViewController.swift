@@ -47,6 +47,13 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     /// fail: Bento derives it from the deck TITLE, so it rarely matches, and
     /// every save would wrongly prompt.
     private var openDocumentVended = false
+    /// Where copies the page saved went, and the picker currently asking — see
+    /// ExportSessions for the rules. Touched on the main thread only.
+    private var exports = ExportSessions()
+    /// Writes to a copy run here, one at a time and in order. A later save can
+    /// address the copy before an earlier one has finished; two writes racing on
+    /// one file is how a document gets interleaved.
+    private let exportWrites = DispatchQueue(label: "page.bento.home.export-writes")
     private var isPresentingFullscreen = false
     private var fullscreenObs: NSKeyValueObservation?
 
@@ -326,9 +333,34 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     // saves often, and a download cannot overwrite the user's original anyway —
     // that is what the FSA path is for.
 
+    /// A document never navigates away from itself. A link to the web opens in
+    /// Safari, where it belongs, and the document stays on screen.
+    ///
+    /// Allowing every navigation, as this used to, meant a link in a deck
+    /// replaced the deck with a website inside the editor — with back navigation
+    /// disabled, so the only way out was to close the document. It also made the
+    /// app a web browser as far as the App Store age rating is concerned
+    /// ("unrestricted web access"), which a document editor has no reason to be.
+    ///
+    /// The rule itself lives in LinkPolicy, where it can be checked without a
+    /// simulator; this only applies the answer.
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        decisionHandler(navigationAction.shouldPerformDownload ? .download : .allow)
+        if navigationAction.shouldPerformDownload { decisionHandler(.download); return }
+
+        // A nil targetFrame is a new window (target=_blank, window.open): it
+        // would leave the document just as surely as replacing it would.
+        switch LinkPolicy.decide(navigationAction.request.url,
+                                 replacesDocument: navigationAction.targetFrame?.isMainFrame ?? true,
+                                 documentHost: originHost) {
+        case .allow:
+            decisionHandler(.allow)
+        case .openExternally(let url):
+            decisionHandler(.cancel)
+            UIApplication.shared.open(url)
+        case .drop:
+            decisionHandler(.cancel)
+        }
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
@@ -437,6 +469,12 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     // MARK: - the save bridge
 
     func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
+        // Only the open document may use the bridge. Checked before anything in
+        // the message is read; see BridgeSender.
+        let sender = message.frameInfo.securityOrigin
+        guard BridgeSender.accepts(isMainFrame: message.frameInfo.isMainFrame,
+                                   scheme: sender.protocol, host: sender.host,
+                                   documentHost: originHost) else { return }
         guard let m = message.body as? [String: Any],
               let id = m["id"] as? Int, let op = m["op"] as? String else { return }
 
@@ -463,6 +501,12 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
             let want = (m["name"] as? String) ?? ""
             if targetsOpenDocument(want) {
                 reply(id, ok: true, value: String(data: document.html, encoding: .utf8) ?? "")
+            } else if let dest = exports.destination(for: want) {
+                // A copy the user already placed is that handle's file now.
+                exportWrites.async { [weak self] in
+                    let text = Self.readScoped(dest)
+                    DispatchQueue.main.async { self?.reply(id, ok: text != nil, value: text ?? "could not read the copy") }
+                }
             } else {
                 reply(id, ok: true, value: nil)
             }
@@ -480,8 +524,21 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
                     self?.reply(id, ok: ok, value: ok ? nil : "write failed")
                 }
             } else {
-                exportCopy(named: name, text: text) { [weak self] ok, err in
-                    self?.reply(id, ok: ok, value: err)
+                switch exports.write(name: name, text: text, id: id) {
+                case .present:
+                    // `done` only ever reports a failure to ASK — an unsafe name,
+                    // or no way to show the picker. Whether the copy was saved is
+                    // the picker delegate's to say, below.
+                    exportCopy(named: name, text: text) { [weak self] ok, err in
+                        guard let self, !ok else { return }
+                        for waiting in self.exports.cancelled() { self.reply(waiting, ok: false, value: err) }
+                    }
+                case .joined:
+                    break   // answered with the picker's result
+                case .writeTo(let dest):
+                    writeCopy(text, to: dest) { [weak self] err in self?.reply(id, ok: err == nil, value: err) }
+                case .refuse(let why):
+                    reply(id, ok: false, value: why)
                 }
             }
 
@@ -595,8 +652,36 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
             done(false, "unsafe name"); return
         }
         do { try Data(text.utf8).write(to: tmp) } catch { done(false, "\(error)"); return }
+        // UIKit refuses to present over something already presented, and then
+        // never calls back — the page's save would wait forever. Say so instead.
+        guard presentedViewController == nil else { done(false, "another dialog is open"); return }
         let picker = UIDocumentPickerViewController(forExporting: [tmp], asCopy: true)
-        present(picker, animated: true) { done(true, nil) }
+        picker.delegate = self
+        // Presenting the picker is not the save. It used to report success
+        // here, so a cancelled "Save a copy…" told the page the copy was saved.
+        present(picker, animated: true)
+    }
+
+    /// Write `text` over a copy the user placed earlier. Off the main thread,
+    /// serialised, coordinated, and inside the security scope the picker gave.
+    private func writeCopy(_ text: String, to dest: URL, then: @escaping (String?) -> Void) {
+        exportWrites.async {
+            let scoped = dest.startAccessingSecurityScopedResource()
+            defer { if scoped { dest.stopAccessingSecurityScopedResource() } }
+            var coordination: NSError?
+            var failure: String?
+            NSFileCoordinator().coordinate(writingItemAt: dest, options: .forReplacing, error: &coordination) { url in
+                do { try Data(text.utf8).write(to: url, options: .atomic) } catch { failure = "\(error)" }
+            }
+            if let coordination { failure = failure ?? "\(coordination)" }
+            DispatchQueue.main.async { then(failure) }
+        }
+    }
+
+    private static func readScoped(_ url: URL) -> String? {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        return (try? Data(contentsOf: url)).flatMap { String(data: $0, encoding: .utf8) }
     }
 }
 
@@ -607,6 +692,27 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
 /// only on a discrete tap, so a presenter swiping through a deck would never
 /// wake the exit control — the gesture that most needs to keep it alive is the
 /// one a tap recognizer cannot see. Observing touchesBegan catches every kind.
+/// The answer to "Save a copy…": where the user put it, or that they didn't.
+extension EditorViewController: UIDocumentPickerDelegate {
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let dest = urls.first else { documentPickerWasCancelled(controller); return }
+        let (waiting, owed) = exports.picked(dest)
+        guard let owed else {
+            for id in waiting { reply(id, ok: true, value: nil) }
+            return
+        }
+        // A write joined after the picker opened, so the copy it made is
+        // already stale. Bring it up to the newest bytes before answering.
+        writeCopy(owed, to: dest) { [weak self] err in
+            for id in waiting { self?.reply(id, ok: err == nil, value: err) }
+        }
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        for id in exports.cancelled() { reply(id, ok: false, value: "cancelled") }
+    }
+}
+
 final class TouchWatcher: UIGestureRecognizer {
     private let onTouch: () -> Void
 

@@ -76,9 +76,31 @@ export function isOwner(doc: SpacesDoc): boolean {
   return !!(c && c.v === 2 && c.owner && c.ownerPriv)
 }
 
+/**
+ * May THIS COPY write to its room? The one answer every gate in spaces asks.
+ *
+ * An ALLOWLIST, and the shape is the point. This used to be
+ * `role !== 'reader'`, which answers "yes" for every role invented after it —
+ * so when the kernel added 'audience' (a live-show member whose transport is
+ * receive-only), an audience copy opened in spaces got writer chrome and made
+ * local commits the relay then refused. Failing CLOSED is the safe direction:
+ * a future role that can write shows view-only until it is taught here, a
+ * visible and harmless bug; the old shape's failure was invisible.
+ *
+ * Absent means writer because every file older than the role field is one —
+ * the owner copy included, which is marked by `ownerPriv`, not by a role.
+ * Read as an OWN property, so nothing inherited can answer for the file.
+ * Same shape and name as type's (type/src/model.ts).
+ */
+export function copyCanWrite(collab: SpacesDoc['collab'] | undefined): boolean {
+  if (!collab || typeof collab !== 'object') return false
+  if (!Object.prototype.hasOwnProperty.call(collab, 'role')) return true
+  return collab.role === undefined || collab.role === 'writer'
+}
+
 /** Can this copy write at all? A reader copy holds no signing key. */
 export function canWrite(doc: SpacesDoc): boolean {
-  return !!doc.collab && doc.collab.role !== 'reader'
+  return copyCanWrite(doc.collab)
 }
 
 /**
@@ -132,13 +154,73 @@ export function readerCopy(doc: SpacesDoc): SpacesDoc | null {
 }
 
 /**
+ * Write this replica's CRDT state into `doc.collab.sync`, immediately before
+ * the document is taken for a write of THIS space — ⌘S, Save a copy, the
+ * invite, and both self-update writes.
+ *
+ * Why it matters: a saved file that carries the state rejoins its live session
+ * as a true FORK. Its registers defend the edits made while it was offline,
+ * relay replay is deduplicated by version vector instead of re-applied over
+ * them, and the kernel session sends a `snap` frame on rejoin that merges the
+ * fork into every peer, both ways. A file saved WITHOUT it reopens as a fresh
+ * adopt: its offline edits are already in the shadow, so no op is ever minted
+ * for them and no peer ever sees them (scripts/test-sync-spaces-session.ts,
+ * "a saved file rejoins as a fork", measures exactly that under sabotage).
+ *
+ * The kernel's `stampInto` already refuses a document with no session
+ * (`collab` absent or `on: false`). This adds the one rule a space needs on
+ * top: a store opened READ-ONLY never stamps. All three ways to get there
+ * mean the file's `sync` is not ours to rewrite —
+ *
+ *   · frozen      written by a newer build: whatever `sync` it carries may be
+ *                 a SYNC_V this build cannot read, and the format promise is
+ *                 that an unknown field survives a round trip untouched
+ *   · reader copy `readerCopy()` removed `sync` on purpose; a viewer that
+ *                 rejoined as a fork of itself would be a fork nobody can merge
+ *   · `readonly`  a sealed reading copy has no session to rejoin
+ *
+ * and a read-only store has made no edits of its own to defend.
+ *
+ * Copies that are NOT this replica never reach here and carry no state: the
+ * page extract and "Copy document JSON" drop `collab` whole, "Duplicate as a
+ * new space…" is a new identity (`duplicateAsNew`), and the view-only copy
+ * clears `sync` in `readerCopy()`.
+ */
+export function stampSync(
+  store: { readonly readOnly: boolean; readonly doc: SpacesDoc },
+  session: { stampInto(doc: SpacesDoc): void } | null | undefined,
+): void {
+  if (!session || store.readOnly) return
+  session.stampInto(store.doc)
+}
+
+/**
+ * "Duplicate as a new space…": the same pages under a NEW identity.
+ *
+ * A fresh `docId` and no `collab` at all — not even the stamped `sync`. The
+ * duplicate must never meet the space it came from: the docId keys the
+ * same-machine channel, the room keys the relay, and the stamped state would
+ * make it rejoin the ancestor's room as a fork of it. It mints credentials of
+ * its own when it is first opened, exactly as a new space does.
+ */
+export function duplicateAsNew(doc: SpacesDoc, docId: string, now = new Date().toISOString()): SpacesDoc {
+  const out = clone(doc)
+  out.docId = docId
+  delete out.collab
+  out.modified = now
+  return out
+}
+
+/**
  * Is this copy a live viewer — one that follows the session read-only?
  *
  * Distinct from `doc.readonly`, which is a SEALED reading copy with no session
  * at all. Both lock the editor; only this one keeps receiving.
  */
 export function isReaderCopy(doc: SpacesDoc): boolean {
-  return doc.collab?.role === 'reader'
+  // Every collab copy that is not an allowlisted writer — 'reader', 'audience',
+  // and any role not yet invented. No collab at all is a plain file: editable.
+  return !!doc.collab && !copyCanWrite(doc.collab)
 }
 
 /**
