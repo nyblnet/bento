@@ -55,6 +55,16 @@ export interface ElementBase {
     enterDur?: number
     /** stagger step within the entrance sequence; equal values enter together */
     order?: number
+    /**
+     * Reveal step ("animate on click", discussion #282): 1 or more means the
+     * element is HIDDEN when the slide appears and revealed on the n-th → —
+     * running its `enter` then, or a plain fade when it has none; ← hides it
+     * again; → leaves the slide only once every step is shown. Arriving
+     * backward shows every step. Absent/0 = shown with the slide. Presentation
+     * state, not slides: one slide, one page number, one morph pairing. An
+     * older shell shows every element at once. Decisions in src/steps.ts.
+     */
+    step?: number
     /** animate numeric parts of the text from 0 to their final value */
     countUp?: boolean
     /** continuous ambient motion (slow zoom, for full-bleed photos) */
@@ -83,6 +93,12 @@ export interface ElementBase {
         }
   }
   /** while presenting, clicking this element jumps to the slide with this id */
+  /**
+   * Click target while presenting: a slide id (jump there — the state-slide
+   * idiom), or an http(s) URL (opens in a NEW tab, never navigating the deck
+   * away; `isWebUrl` is the whole scheme test, so `javascript:` and `data:`
+   * are not links). Discussion #373/#374. Editor clicks never follow it.
+   */
   link?: string
   /** semantic group tag — hover focus and multi-element behaviours target it */
   group?: string
@@ -184,8 +200,11 @@ export interface GradientFill {
   stops: Array<{ at: number; color: string }>
 }
 
-/** Decoration at a line's tip. Sized relative to the stroke width. */
-export type LineEnding = 'none' | 'arrow' | 'dot' | 'bar'
+/** Decoration at a line's tip. Sized relative to the stroke width. The
+ *  catalogue — geometry, insets, panel labels — is slides/src/tips.ts; the
+ *  seven kinds after `bar` arrived in 1.1.1 (#303) and are additive: an older
+ *  shell that does not know one draws that end plain. */
+export type LineEnding = 'none' | 'arrow' | 'dot' | 'bar' | 'arrow-open' | 'triangle' | 'triangle-open' | 'diamond' | 'diamond-open' | 'square' | 'circle-open'
 
 export interface ShapeElement extends ElementBase {
   type: 'shape'
@@ -197,11 +216,18 @@ export interface ShapeElement extends ElementBase {
   strokeWidth: number
   /** corner radius, rect only */
   radius: number
+  /** arrow only (v1.1.1, #304): 2 = a head at both ends. Absent = one head.
+   *  A property, not a shape kind, on purpose: a shipped shell's renderer
+   *  switches on `shape` with no default and would throw on a kind it does
+   *  not know — an unknown property it simply ignores, so 1.1.0 draws the
+   *  single arrow instead of failing the slide. */
+  heads?: 2
   /** dash length in px; 0/undefined = solid stroke (legacy — see strokeStyle) */
   strokeDash?: number
   /** stroke pattern; wins over strokeDash when set */
   strokeStyle?: 'solid' | 'dashed' | 'dotted'
-  /** line shape only: tip decorations */
+  /** line and (v1.1.1, #302) open path shapes: tip decorations. On a path
+   *  the tip points along the curve's end tangent. */
   lineStart?: LineEnding
   lineEnd?: LineEnding
   /** path only: SVG path data in the coordinate space given by pathBox */
@@ -225,12 +251,34 @@ export interface ConnectorEnd {
   side?: 'auto' | 'top' | 'right' | 'bottom' | 'left'
 }
 
+/**
+ * Which part of a picture shows inside its frame (discussion #319). The frame
+ * is the element box; the picture is scaled to COVER it, then `scale` (≥ 1)
+ * enlarges it further and `x`/`y` (0..1) say which edge of the enlarged
+ * picture the frame is aligned to — 0 = left/top, 0.5 = centred, 1 =
+ * right/bottom. Absent = the element's `fit` alone, exactly as before, so a
+ * shell that predates this field shows the whole cover-fitted picture
+ * (centred) and never a blank frame. Rendered with plain CSS (crop.ts).
+ */
+export interface ImageCrop {
+  x: number
+  y: number
+  scale: number
+}
+
 export interface ImageElement extends ElementBase {
   type: 'image'
   /** data: URI, or "asset:<key>" referencing doc.assets */
   src: string
   fit: 'contain' | 'cover' | 'fill'
   radius: number
+  /** Absent or true: a resize keeps the image's proportions (Shift frees it
+   *  for one drag). false: width and height move independently — the frame
+   *  can be stretched, and Shift holds the ratio for one drag instead.
+   *  Re-locking keeps whatever shape the image has at that moment. */
+  keepAspectRatio?: boolean
+  /** pan + zoom inside the frame; absent = `fit` alone (crop.ts) */
+  crop?: ImageCrop
 }
 
 export interface SvgElement extends ElementBase {
@@ -332,8 +380,47 @@ export interface MediaElement extends ElementBase {
   controls?: boolean
 }
 
+/**
+ * An embedded artifact, built to the `bento/embed` shape
+ * (docs/DECISIONS.md, 2026-08-19) so it round-trips through upstream shells.
+ * Three tiers, and the ORDER is the design: `view` is a static render that
+ * ALWAYS paints, with no extra code, in any app; `doc` is the source, so the
+ * embed is not a screenshot; a live sandboxed iframe is OPT-IN per element.
+ *
+ * `app: 'web'` with a `url` is a live web surface on a slide. The
+ * frame is created only while online AND with the offline switch off
+ * (render.ts:liveFrameAllowed); otherwise the view shows. Unknown `app`
+ * values are RENDERED (their view), never rejected.
+ */
+/**
+ * The one scheme test for anything that opens or loads a web page — an
+ * embed's `url` (the paste gate and the live-frame gate), an element `link`,
+ * a text `<a href>` — shared so no surface is looser than another. http and
+ * https only, bounded, no quote or angle bracket (attribute breakout); a URL
+ * that is merely well-formed but `javascript:`/`data:`/`file:` is not one.
+ */
+export const isWebUrl = (v: unknown): v is string =>
+  // (the quote characters are written as escapes: a bare quote inside a regex
+  // literal reads as an unterminated string to the source-shape rigs' masker)
+  typeof v === 'string' && v.length <= 2048 && /^https?:\/\/[^\s\x22\x27<>]+$/i.test(v)
+
+export interface EmbedElement extends ElementBase {
+  type: 'embed'
+  /** the app that made it: 'bento/dash', 'bento/type', … or 'web' for a page */
+  app: string
+  /** the static render: raw <svg> markup, or "asset:<key>" holding it */
+  view: string
+  /** the source, when there is one: pure JSON, or "asset:<key>" */
+  doc?: unknown
+  /** app 'web' only: the page the live frame loads (http(s) only) */
+  url?: string
+  /** opt in to a sandboxed live iframe over the view while online */
+  live?: boolean
+}
+
 export type SlideElement =
   | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement | CodeElement
+  | EmbedElement
 
 /**
  * A review comment thread. Editor-only metadata: never rendered while
@@ -390,6 +477,18 @@ export interface Slide {
    * office-suite behaviour of counting it.
    */
   hidden?: boolean
+  /**
+   * In the walk, but takes no page number. The arrow keys reach it like any
+   * slide; `{{page}}` on it shows the number of the slide before it, so it
+   * reads as a CONTINUATION of that page. For a build — three recommendations
+   * revealed one slide at a time with `morph` — the audience sees "18" three
+   * times instead of 18, 19, 20 (discussion #282); equally for an interstitial
+   * or a section card that should not count. Distinct from `hidden` (out of
+   * the walk) and from `stateOf` (a variant reached by link): this is the
+   * third answer to `paginates`, and the ONLY one that stays in `inLinearFlow`.
+   * Absent = counts, so every existing file is unchanged.
+   */
+  unnumbered?: boolean
   /**
    * present-mode hover behaviour:
    * - focus-group: dim every element outside the hovered element's group
@@ -456,6 +555,25 @@ export interface BentoDoc {
     chartPalette?: string[]
     /** defaults for newly inserted tables; omitted decks keep the standard look */
     table?: Partial<TableStyle>
+    /** Code Palette (Tier-0). */
+    codePalette?: {
+      // comment
+      c?: string,
+      // string
+      s?: string,
+      // number
+      n?: string,
+      // keyword
+      k?: string,
+      // function calls
+      f?: string,
+      // punctutations
+      p?: string,
+      // diff: additions
+      a?: string,
+      // diff: deletions / removals
+      d?: string,
+    }
   }
   /** present-mode chrome; decks with built-in chrome can turn Reveal's off */
   present?: {
@@ -500,6 +618,9 @@ export interface BentoDoc {
   /**
    * embedded fonts: each entry becomes an @font-face at boot, with the font
    * data living in assets (data: URI). Elements then use `family` normally.
+   * `asset` may instead name a face the shell carries (`builtin:…`, see
+   * fonts.ts BUILTIN_FONTS) — no bytes in the file; a shell that does not
+   * know the key renders the family with its fallback stack.
    */
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
   /**
@@ -539,7 +660,7 @@ export interface BentoDoc {
     writerPub?: string
     writerPriv?: string
     /** 'reader' = this copy is a live viewer: receives updates, never sends. */
-    role?: 'writer' | 'reader'
+    role?: 'writer' | 'reader' | 'audience'
     /**
      * Fine-grained access (v1.0.3+, `v: 2`): per-person keys. The room id
      * commits to the OWNER's pubkey. A member copy carries an INVITE — an
@@ -554,11 +675,27 @@ export interface BentoDoc {
     invite?: {
       pub: string
       priv: string
-      role: 'writer' | 'commenter'
+      /** 'audience' (live broadcast) admits a receive-only socket for the
+       *  duration of a show; it travels only in audience copies, whose `key`
+       *  is the show key rather than the room key (see src/audience.ts). */
+      role: 'writer' | 'commenter' | 'audience'
       /** unix ms expiry; 0/absent = no expiry */
       exp?: number
       /** owner's signature over `inv.${pub}.${role}.${exp||0}` */
       sig: string
+    }
+    /**
+     * Live broadcast tickets (PRESENTER's copy only; additive, old shells
+     * preserve it). Minted once by "Save audience copy…" and reused for every
+     * show until "Issue new tickets" re-mints both halves, which kills every
+     * outstanding audience copy: `invite` is the owner-signed audience
+     * invite the relay admits on, `key` the per-show symmetric key the
+     * presenter double-encrypts under while live. Never in an audience copy
+     * (that copy carries the invite and has `key` AS its collab.key).
+     */
+    audience?: {
+      invite: { pub: string; priv: string; role: 'audience'; exp?: number; sig: string }
+      key: string
     }
   }
   /**
@@ -954,6 +1091,13 @@ const bar = (id: string, frame: { x: number; y: number; w: number; h: number }):
   rotation: 0, opacity: 1, fill: '#F7A600', stroke: 'transparent', strokeWidth: 0, radius: 2,
 })
 
+/** A card backdrop: a soft panel grouped with the text that sits on it. */
+const card = (id: string, frame: { x: number; y: number; w: number; h: number }, role: string): ShapeElement => ({
+  id, type: 'shape', shape: 'rect', ...frame,
+  rotation: 0, opacity: 1, fill: '#F3F0EA', stroke: 'transparent', strokeWidth: 0, radius: 16,
+  groupId: `l3c-g${role.slice(-1)}`,
+})
+
 /**
  * The canvas the built-in layout geometry below is authored against.
  *
@@ -1034,6 +1178,53 @@ export function builtinLayouts(size?: { width: number; height: number }): Slide[
           { fontSize: 18, fontWeight: 600, color: '#F7A600', letterSpacing: 3, valign: 'middle', role: 'kicker' }),
       ],
     },
+    // Four layouts an agent reaches for (compact input: `layout` + `role`,
+    // compact.ts). Roles are the slot names; the card backdrops share a
+    // groupId per card so a card moves as one in the editor.
+    {
+      id: 'layout-three-cards', name: 'Three cards', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('l3c-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        card('l3c-bg1', { x: 120, y: 220, w: 426, h: 560 }, 'card1'),
+        ph('l3c-card1', 'First card', { x: 152, y: 252, w: 362, h: 496 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'card1', groupId: 'l3c-g1' }),
+        card('l3c-bg2', { x: 587, y: 220, w: 426, h: 560 }, 'card2'),
+        ph('l3c-card2', 'Second card', { x: 619, y: 252, w: 362, h: 496 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'card2', groupId: 'l3c-g2' }),
+        card('l3c-bg3', { x: 1054, y: 220, w: 426, h: 560 }, 'card3'),
+        ph('l3c-card3', 'Third card', { x: 1086, y: 252, w: 362, h: 496 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'card3', groupId: 'l3c-g3' }),
+      ],
+    },
+    {
+      id: 'layout-quote', name: 'Quote', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        bar('lq-bar', { x: 160, y: 300, w: 8, h: 300 }),
+        ph('lq-quote', 'Click to add a quote', { x: 208, y: 300, w: 1232, h: 300 },
+          { fontSize: 48, fontWeight: 500, valign: 'middle', lineHeight: 1.3, role: 'quote' }),
+        ph('lq-attr', 'Who said it', { x: 208, y: 620, w: 1232, h: 44 },
+          { fontSize: 24, color: '#586A80', valign: 'middle', role: 'attribution' }),
+      ],
+    },
+    {
+      id: 'layout-image-left', name: 'Image left', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('lil-image', 'Add an image', { x: 120, y: 120, w: 640, h: 660 },
+          { fontSize: 24, color: '#8A98AB', align: 'center', valign: 'middle', role: 'image' }),
+        ph('lil-title', 'Click to add title', { x: 820, y: 120, w: 660, h: 120 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        ph('lil-body', 'Click to add content', { x: 820, y: 264, w: 660, h: 516 },
+          { fontSize: 24, color: '#586A80', valign: 'top', lineHeight: 1.5, role: 'body' }),
+      ],
+    },
+    {
+      id: 'layout-image-right', name: 'Image right', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('lir-title', 'Click to add title', { x: 120, y: 120, w: 660, h: 120 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        ph('lir-body', 'Click to add content', { x: 120, y: 264, w: 660, h: 516 },
+          { fontSize: 24, color: '#586A80', valign: 'top', lineHeight: 1.5, role: 'body' }),
+        ph('lir-image', 'Add an image', { x: 840, y: 120, w: 640, h: 660 },
+          { fontSize: 24, color: '#8A98AB', align: 'center', valign: 'middle', role: 'image' }),
+      ],
+    },
     { id: 'layout-blank', name: 'Blank', background: '#FFFFFF', transition: 'fade', notes: '', elements: [] },
   ]
   if (!size || (size.width === LAYOUT_BASE.width && size.height === LAYOUT_BASE.height)) return base
@@ -1070,12 +1261,17 @@ export function applyLayout(
 ): SlideElement[] {
   const donors = slide.elements
   const consumed = new Set<SlideElement>()
+  // An `image` slot is a text placeholder ("Add an image") that an IMAGE
+  // donor replaces outright — the picture takes the slot's frame and id, so
+  // slides from the same layout still morph their pictures.
+  const imageSlot = (lel: SlideElement) => lel.role === 'image' && lel.type === 'text'
   const findDonor = (lel: SlideElement): SlideElement | undefined => {
     const byId = donors.find((e) => !consumed.has(e) && e.id === lel.id)
     if (byId) return byId
     if (!lel.role) return undefined
     return donors.find(
-      (e) => !consumed.has(e) && e.role === lel.role && e.type === lel.type && textHasContent(e),
+      (e) => !consumed.has(e) && e.role === lel.role &&
+        ((e.type === lel.type && textHasContent(e)) || (imageSlot(lel) && e.type === 'image')),
     )
   }
   const out: SlideElement[] = layout.elements.map((lel) => {
@@ -1083,7 +1279,16 @@ export function applyLayout(
     const d = findDonor(lel)
     if (d) {
       consumed.add(d)
+      if (imageSlot(lel) && d.type === 'image') {
+        const pic = JSON.parse(JSON.stringify(d)) as SlideElement
+        return { ...pic, id: lel.id, x: lel.x, y: lel.y, w: lel.w, h: lel.h, rotation: lel.rotation, role: 'image' }
+      }
       if (copy.type === 'text' && d.type === 'text' && textHasContent(d)) copy.html = d.html
+      if (copy.type === 'image' && d.type === 'image') {
+        copy.src = d.src
+        if (d.fit) copy.fit = d.fit
+        if (d.crop) copy.crop = d.crop
+      }
       if (d.link) copy.link = d.link
     }
     return copy
@@ -1112,11 +1317,12 @@ export function layoutElementIds(doc: BentoDoc): Set<string> {
  *
  * The single answer to that question — page fields, the presenter's counter,
  * the sidebar — so they cannot disagree about which slide is "4". Interactive
- * states never count; hidden slides count only when the deck opts into
+ * states never count; an `unnumbered` slide never counts (it continues the
+ * page before it); hidden slides count only when the deck opts into
  * office-suite numbering.
  */
 export const paginates = (s: Slide, doc: BentoDoc): boolean =>
-  !s.stateOf && (!s.hidden || !!doc.present?.numberHidden)
+  !s.stateOf && !s.unnumbered && (!s.hidden || !!doc.present?.numberHidden)
 
 /**
  * Is this slide part of the linear walk?
@@ -1153,6 +1359,10 @@ export function parseDoc(json: string): BentoDoc | null {
   try {
     const doc = JSON.parse(json)
     if (doc && doc.format === FORMAT && Array.isArray(doc.slides) && doc.slides.length > 0) {
+      // The saved file names its schema (save.ts writes `$schema` first);
+      // it is a pointer for readers, not document data, so it never enters
+      // the live document — validate() would otherwise report it unknown.
+      delete doc.$schema
       // Documents from before docId existed get one minted here; it persists
       // on the next save and stays stable from then on.
       if (typeof doc.docId !== 'string' || !doc.docId) doc.docId = newDocId()

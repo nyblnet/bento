@@ -92,7 +92,12 @@ matters. Neither needs the signing key.
 1. Bump **that app's** `package.json` version — `slides/package.json`,
    `spaces/package.json` or `dash/package.json` (it becomes `APP_VERSION` in
    the shell and the manifest version — single source of truth). Apps version
-   independently.
+   independently. **Bumping the version stales `schema/*.json`** — the
+   generated schema carries the version — so run `node scripts/build-schema.mjs`
+   and commit `schema/slides.json` plus the new `schema/slides-<version>.json`
+   in the same PR, or CI's "Schema is current" step goes red. Earlier
+   `slides-<version>.json` copies stay: they are the pinned URLs old files may
+   point at.
 2. Land it and tag. `main` is branch-protected and requires a pull request, so
    the bump CANNOT be committed directly — open a small PR for it, merge, then
    tag the merge commit.
@@ -172,6 +177,23 @@ matters. Neither needs the signing key.
    BENTO_SITE_DIR=~/devel/bento-site node scripts/publish-site.mjs "release vX.Y.Z"
    ```
 
+   **Build anywhere; publish from a path under `~/devel`.** The shell picks
+   the `gh` profile by directory (a chpwd hook), and a job or temp worktree
+   — `/tmp/rel`, a tool’s scratch directory — maps to the WORK profile,
+   which cannot create a release on this repo. `publish-site.mjs` checks the
+   active `gh` account against the repo owner **before it mirrors anything**
+   and, on a mismatch, prints the exact command to run from `~/devel/bento`
+   and exits non-zero. Three releases were created by hand before this check
+   existed because the site went live first and the release step failed
+   after. So: `cd ~/devel/bento` (or any checkout under `~/devel`) and run
+   the publish from there, pointing `BENTO_SITE_DIR` at the site repo. A
+   collaborator with release rights who is not the owner can be allowed with
+   `BENTO_RELEASE_ACCOUNTS=name1,name2`. The repo owner is read from the
+   `origin` remote — of the checkout, or of the main gitdir when the checkout
+   is a worktree (a detached release worktree included). A checkout with no
+   remote at all is **refused**, not skipped; `BENTO_RELEASE_OWNER=<owner>`
+   is the way out for a copied tree.
+
    This mirrors the assembled `site/` tree into `../bento-site` (or
    `$BENTO_SITE_DIR`) and pushes it. **`site/` is fully generated — never edit
    it by hand.** The authored sources are tracked in *this* repo and assembled
@@ -212,9 +234,10 @@ matters. Neither needs the signing key.
    an existing release is left alone and only a missing asset is uploaded, so
    re-running publish is safe.
 
-   It is deliberately **not** best-effort. If `gh` is unauthenticated, or the
-   asset is missing afterwards, publish exits non-zero and tells you the exact
-   command to run. This used to be a manual step, and it was silently missed
+   It is deliberately **not** best-effort. The account is checked before the
+   mirror (step 5); if `gh` is unauthenticated or the wrong account, nothing
+   is published; if the asset is missing afterwards, publish exits non-zero
+   and tells you the exact command to run. This used to be a manual step, and it was silently missed
    for v1.0.10 — the site was live and self-updating while the repo showed no
    release at all. Documentation didn't prevent that, so the check now does.
 7. **Verify against the LIVE channel, not the local build.** These are the
