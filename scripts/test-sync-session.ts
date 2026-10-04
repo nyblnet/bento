@@ -411,29 +411,50 @@ H('cumulative offload picks the largest inline assets when the total overflows')
 // prior edit's snapshot can't resurrect an old docId, a stale sharing flag or a
 // dropped read-only mode.
 H('undo/redo keep the live identity (docId, collab, readonly), never the snapshot');
-{
-  const { stopSharing } = await import('../kernel/src/sync/online.ts');
+type Id = { collab: { on: boolean }; docId: string; readonly?: boolean; title: string };
+const freshShared = () => {
   const doc = newDoc(); doc.docId = 'live-id';
   (doc as unknown as { collab: { room: string; key: string; on: boolean } }).collab = { room: 'r', key: 'k', on: true };
   const store = new Store(JSON.parse(JSON.stringify(doc)));
-  const sess = new SyncSession(store);
-  // the one genuine, undoable content edit — its snapshot captures the OLD
-  // identity (collab on, docId live-id, no readonly)
+  return { store, sess: new SyncSession(store) };
+};
+// Both halves must prove the fix — i.e. the restored snapshot must carry STALE
+// identity, so the row goes RED on main's unfixed store. The identity-changing
+// actions (Stop sharing via markShared, "Duplicate as new deck", a present-only
+// save) therefore run AFTER the step whose snapshot the undo/redo pops.
+{
+  // UNDO: edit, THEN change identity, THEN undo — the content-edit snapshot it
+  // pops was taken while sharing was on / docId was live-id / no readonly.
+  const { stopSharing } = await import('../kernel/src/sync/online.ts');
+  const { store, sess } = freshShared();
   store.commit(() => { store.doc.title = 'a real edit'; });
-  // identity changes that are NOT content edits: Stop sharing (markShared),
-  // then "Duplicate as new deck" (new docId) + a present-only save (readonly)
   stopSharing(sess as never, store as never);
   const d0 = store.doc as unknown as { docId: string; readonly?: boolean };
   d0.docId = 'new-id'; d0.readonly = true; store.setDirty(true);
-  store.undo(); // pops the content-edit snapshot
-  const d = store.doc as unknown as { collab: { on: boolean }; docId: string; readonly?: boolean; title: string };
+  store.undo(); // pops the content-edit snapshot (stale identity on main)
+  const d = store.doc as unknown as Id;
   ok(d.collab.on === false, 'undo keeps the live collab (sharing stays off)');
   ok(d.docId === 'new-id', 'undo keeps the live docId, not the snapshot’s old one');
   ok(d.readonly === true, 'undo keeps the live read-only mode');
   ok(d.title !== 'a real edit', 'undo still reverted the genuine content edit');
-  store.redo(); // re-applies the content edit
-  const r = store.doc as unknown as { collab: { on: boolean }; docId: string; readonly?: boolean; title: string };
-  ok(r.collab.on === false && r.docId === 'new-id' && r.readonly === true, 'redo also keeps the live identity set');
+  sess.stop?.();
+}
+{
+  // REDO: edit, undo, THEN change identity, THEN redo. The redo entry was
+  // captured at undo time — before the identity changes — so it carries the
+  // OLD identity, and main resurrects all three on redo (slides' sequence).
+  const { stopSharing } = await import('../kernel/src/sync/online.ts');
+  const { store, sess } = freshShared();
+  store.commit(() => { store.doc.title = 'a real edit'; });
+  store.undo(); // redo entry captured here still has the OLD identity
+  stopSharing(sess as never, store as never);
+  const d0 = store.doc as unknown as { docId: string; readonly?: boolean };
+  d0.docId = 'new-id'; d0.readonly = true; store.setDirty(true);
+  store.redo(); // pops the stale-identity redo entry
+  const r = store.doc as unknown as Id;
+  ok(r.collab.on === false, 'redo keeps the live collab (sharing stays off)');
+  ok(r.docId === 'new-id', 'redo keeps the live docId, not the snapshot’s old one');
+  ok(r.readonly === true, 'redo keeps the live read-only mode');
   ok(r.title === 'a real edit', 'redo re-applied the content edit');
   sess.stop?.();
 }
