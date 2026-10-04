@@ -340,8 +340,14 @@ console.log('\nrestoring a whole workbook is reversible, from both surfaces')
   const about = readSrc('about.ts')
   const recovery = readSrc('recovery.ts')
 
-  ok(about.includes("import { offerUndoRestore } from './recovery.ts'"),
+  ok(/import \{[^}]*\bofferUndoRestore\b[^}]*\} from '\.\/recovery\.ts'/.test(about),
     'about.ts imports the shared offer rather than growing a second one')
+  // Version history's click handler is DOM-only, so it is checked here, by
+  // what it calls: a stored version becomes a document ONLY through
+  // `restoredWorkbook`, which keeps the live identity. A bare parseDoc of a
+  // snapshot is the planted-room hole (see 'a PLANTED snapshot' below).
+  ok(/restoredWorkbook\(snap\.json, store\.doc\)/.test(about) && !/parseDoc\(snap\.json\)/.test(about),
+    'Version history restores through restoredWorkbook, never a bare parseDoc of the snapshot')
   ok(about.includes('offerUndoRestore(hooks, before,'),
     'and its version restore calls it, holding the pre-restore document')
   ok(!/confirm\(t\('Restore this version/.test(about),
@@ -448,6 +454,66 @@ console.log('\nrestoring a whole workbook is reversible, from both surfaces')
     'and hands over the ARRAY, so showFindings can put one bullet per finding')
   ok(/ReadonlyArray<\{ message: string \}>/.test(drop),
     'the host contract admits an array at all — the string-only signature was what forced the join')
+}
+
+console.log('\na PLANTED snapshot cannot move this workbook into another room')
+// On file:// every local document shares one IndexedDB origin, and the store
+// is keyed by docId — so any page opened in the same browser can write an
+// entry under THIS workbook's docId. Its JSON is the attacker's to write. The
+// restore must keep the live workbook's identity, and take only the content.
+{
+  const { restoredWorkbook, swapWorkbook, FROM_LIVE } = await import('../dash/src/recovery.ts')
+  const { Store } = await import('../dash/src/store.ts')
+  const mine = { room: 'w-MINE', key: 'k-mine', on: true, owner: 'o-mine', ownerPriv: 'p-mine', v: 2 }
+  const theirs = { room: 'w-ATTACKER', key: 'k-attacker', on: true, owner: 'o-attacker', ownerPriv: 'p-attacker', v: 2 }
+  const live = loaded({ collab: mine } as Partial<DashDoc>)
+  // the planted row: filed under MY docId, carrying THEIR identity — and a
+  // real content change, so the banner has something to offer
+  const planted = workbook({ docId: 'doc-ATTACKER', collab: theirs, readonly: true, template: true, title: 'Bait' } as Partial<DashDoc>)
+  const row: Snapshot = { docId: live.docId, at: 1_700_000_000_000, title: 'Bait', json: JSON.stringify(planted) }
+
+  ok(FROM_LIVE.join() === 'docId,collab,readonly,template',
+    'four fields come from the live workbook; adding or removing one is a decision, not an oversight')
+
+  const d = decide({ doc: live, encrypted: false, readOnly: false, snapshot: row })
+  ok(d.offer, 'the banner still offers it — the content differs, and refusing would hide real unsaved work')
+  if (d.offer) {
+    const c = (d.doc as { collab?: { room?: string; key?: string } }).collab
+    ok(c?.room === 'w-MINE' && c?.key === 'k-mine', `RECOVERY keeps MY room and key, not the planted ones — got ${c?.room}`)
+    ok(d.doc.docId === live.docId, `and my docId — got ${d.doc.docId}`)
+    ok(!(d.doc as { readonly?: boolean }).readonly, 'a planted readonly does not lock me out')
+    ok(!(d.doc as { template?: boolean }).template, 'a planted template does not stop the automatic save or fork my identity')
+    ok(d.doc.title === 'Bait', 'the CONTENT is the snapshot\'s — that is what a restore is for')
+
+    // end to end, through the swap the Restore button makes
+    const store = new Store(live)
+    const host = { store, showingSheet: () => 'sheet-1', showSheet: () => {} }
+    ok(swapWorkbook(host, d.doc), 'the restore goes through')
+    const after = store.doc as { collab?: { room?: string }; docId: string }
+    ok(after.collab?.room === 'w-MINE' && after.docId === live.docId,
+      `AFTER the Restore click the workbook is still in MY room — ${after.collab?.room}`)
+  }
+
+  // Version history: the same function, the same answer
+  const v = restoredWorkbook(JSON.stringify(planted), live) as (DashDoc & { collab?: { room?: string } }) | null
+  ok(v?.collab?.room === 'w-MINE' && v?.docId === live.docId && !(v as { readonly?: boolean }).readonly,
+    `VERSION HISTORY restore keeps my identity too — got ${v?.collab?.room}`)
+
+  // a live workbook that has no room does not GAIN one from a snapshot
+  const bare = loaded()
+  const b = restoredWorkbook(JSON.stringify(planted), bare) as { collab?: unknown } | null
+  ok(b !== null && b.collab === undefined, 'a workbook with no room does not acquire the planted one')
+
+  // a row that differs ONLY in its room is not even offered
+  const onlyRoom = workbook({ collab: theirs } as Partial<DashDoc>)
+  const same = decide({ doc: loaded({ collab: mine } as Partial<DashDoc>), encrypted: false, readOnly: false,
+    snapshot: { ...row, json: JSON.stringify(onlyRoom) } })
+  ok(!same.offer && same.why === 'same', 'a snapshot whose only difference is a room is not offered at all')
+
+  // the paths that SHOULD adopt a file's identity are untouched: parseDoc
+  const opened = parseDoc(JSON.stringify(planted))
+  ok(opened.ok && (opened.doc as { collab?: { room?: string } }).collab?.room === 'w-ATTACKER',
+    'parseDoc itself still keeps a file\'s own room — opening a FILE carries its capability by design')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
