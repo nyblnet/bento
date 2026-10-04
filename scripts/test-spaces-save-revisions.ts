@@ -170,5 +170,52 @@ console.log('\nan undo while the write is in flight')
   check(h.html() === 'one', 'and the undo held')
 }
 
+// ---- collab.sync is stamped in the queue's prepare (#594 × the save queue) ---
+// The stamp must describe exactly the bytes written: taken after any write
+// ahead of this one, immediately before the snapshot is copied. `started` is
+// that prepare step, so a stamp made there must be IN the snapshot the write
+// receives, and a save queued behind another stamps at its own start.
+console.log('\ncollab.sync is stamped in prepare, inside the snapshot')
+{
+  const p = parseSpace(JSON.stringify({ format: 'bento/spaces', version: 1, docId: 'stamp', title: 'Stamp', pages: [{ id: 'p', title: 'Page', blocks: [{ id: 'b', type: 'p', html: 'one' }] }] }))
+  assert(p.ok)
+  const store = new SpacesStore(p.doc)
+  const queue = new SaveQueue({ getDocument: () => store.doc, getRevision: () => store.revision })
+  let n = 0
+  const stamp = () => { (store.doc as any).collab = { sync: { mark: ++n } } }
+  const written: number[] = []
+  const gates: Array<() => void> = []
+  const write = (snapshot: any) => new Promise<'saved'>((resolve) => {
+    written.push(snapshot.collab?.sync?.mark ?? 0)
+    gates.push(() => resolve('saved'))
+  })
+  const tick = async () => { for (let i = 0; i < 5; i++) await Promise.resolve() }
+  store.commit(() => { store.doc.pages[0].blocks[0].html = 'two' })
+  const a = saveRevision(store, queue, write, stamp)
+  const b = saveRevision(store, queue, write, stamp)
+  await tick()
+  check(written.length === 1 && written[0] === 1, 'the first write carries the stamp made in its own prepare')
+  gates[0]()
+  await a
+  await tick()
+  check(written.length === 2 && written[1] === 2, 'a save queued behind it stamps again at its own start, not when it was asked for')
+  gates[1]()
+  const out = await b
+  check(out.kind === 'written' && out.current, 'stamping in prepare does not make the write stale')
+}
+
+// The wiring: the code ⌘S and "Update this file" run passes the stamp into
+// the queue's prepare. Removing it fails no behavioural rig on its own (#594's
+// proof of this path was a browser probe), so the call sites are pinned here.
+console.log('\nmain.ts stamps inside the queue for both writes of this file')
+{
+  const { readFileSync } = await import('node:fs')
+  const src = readFileSync(new URL('../spaces/src/main.ts', import.meta.url), 'utf8')
+  const doSave = src.match(/saveRevision\(store, saves,[\s\S]*?\)\)/)?.[0] ?? ''
+  check(/stampSync\(store, session\)/.test(doSave), '⌘S passes stampSync as the prepare step of saveRevision')
+  const inPlace = src.match(/editor\.onUpdateInPlace = async[\s\S]*?saves\.run\(([\s\S]*?)applyUpdateInPlace/)?.[1] ?? ''
+  check(/stampSync\(store, session\)/.test(inPlace), '"Update this file" stamps in the queue\'s prepare too')
+}
+
 if (failures) { console.error(`\n${failures} save-race check(s) FAILED`); process.exit(1) }
 console.log('\nspaces save race: an edit made during a write stays unsaved until a write that holds it lands')
