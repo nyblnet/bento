@@ -177,6 +177,20 @@ console.log('\n— a receive-only copy takes no edits, and still receives —');
   hostStore(st).commit(() => { (st.doc.assets ??= {}).img = 'data:image/png;base64,AA=='; });
   ok(st.doc.assets?.img !== undefined, "a SYSTEM commit through the session adapter gets through the lock — readers still get images");
 
+  // The copy's own CONNECTION state goes through the same adapter (collab.ts
+  // wraps the store with hostStore for kernel online.ts's sharing helpers),
+  // and `window.bento.sync.unshare()` reaches stopSharing on ANY copy. A viewer
+  // disconnecting must stick — not drop the socket while the file still says
+  // on:true and quietly rejoins next open. This is why `system: true` stays on
+  // the adapter even once no blob path needs it.
+  {
+    const { stopSharing } = await import('../kernel/src/sync/online.ts');
+    st = new Store(reader());
+    stopSharing({ removeTransport() {} } as never, hostStore(st));
+    ok(st.doc.collab?.on === false,
+       'a READER can turn its own sharing off (bento.sync.unshare) — connection state is not a content edit');
+  }
+
   // A remote edit is applied surgically and announced with touch(), never commit.
   st = new Store(reader()); let heard = 0; st.on(() => heard++);
   st.doc.body[0].text = 'from the room'; st.touch();
