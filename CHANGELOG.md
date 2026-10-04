@@ -11,6 +11,13 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **A hand-written or AI-written deck no longer gets stuck on the loading
+  screen.** A document that left out a required part — the theme, the page
+  size, a slide's background, or an element's content — opened to the splash
+  screen and stayed there. It now opens: the missing parts take the editor's
+  defaults, anything that was given is kept, and an element with nothing to
+  show is left out.
+
 ## [1.2.5] — 2026-09-28
 
 - **Security: update this file. This release closes three security issues

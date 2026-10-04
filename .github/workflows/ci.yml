@@ -1929,3 +1929,7 @@ jobs:
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-slides-font-lifecycle-browser.mjs
+      - name: Under-specified documents boot in Chromium
+        # parseDoc fills required fields only where absent and drops elements
+        # that cannot render; unknown keys and element types survive (additivity).
+        run: node scripts/test-slides-minimal-doc-browser.mjs
