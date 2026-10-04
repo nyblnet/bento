@@ -28,8 +28,11 @@ import { parseDoc, type BentoDoc, type Slide } from './model'
 import { LIMITS, sanitizeAssets, sanitizeFonts, sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './untrusted'
 
 const DOC_KEYS = new Set<string>(MODEL_KEYS.doc)
-/** identity and capability: always the open file's, never the snapshot's */
-const FROM_LIVE = ['docId', 'collab', 'readonly'] as const
+/** identity and capability: always the open file's, never the snapshot's. Shared
+ *  with the Store's undo/redo (store.ts restore()), which keeps the same set live
+ *  so Cmd-Z never resurrects an old docId, a stale sharing flag, or a dropped
+ *  read-only mode. */
+export const FROM_LIVE = ['docId', 'collab', 'readonly'] as const
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 

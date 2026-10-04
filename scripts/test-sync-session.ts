@@ -405,6 +405,39 @@ H('cumulative offload picks the largest inline assets when the total overflows')
   ok(!p4.has('svg') && p4.has('png'), 'a raw-SVG asset stays inline (nothing to blob); the offloadable one goes');
 }
 
+// Undo/redo move CONTENT, never identity. Two halves: stopSharing is no longer
+// its own undo step (kernel markShared), AND the Store keeps the live identity
+// set (docId, collab, readonly — restoregate's FROM_LIVE) across a restore, so a
+// prior edit's snapshot can't resurrect an old docId, a stale sharing flag or a
+// dropped read-only mode.
+H('undo/redo keep the live identity (docId, collab, readonly), never the snapshot');
+{
+  const { stopSharing } = await import('../kernel/src/sync/online.ts');
+  const doc = newDoc(); doc.docId = 'live-id';
+  (doc as unknown as { collab: { room: string; key: string; on: boolean } }).collab = { room: 'r', key: 'k', on: true };
+  const store = new Store(JSON.parse(JSON.stringify(doc)));
+  const sess = new SyncSession(store);
+  // the one genuine, undoable content edit — its snapshot captures the OLD
+  // identity (collab on, docId live-id, no readonly)
+  store.commit(() => { store.doc.title = 'a real edit'; });
+  // identity changes that are NOT content edits: Stop sharing (markShared),
+  // then "Duplicate as new deck" (new docId) + a present-only save (readonly)
+  stopSharing(sess as never, store as never);
+  const d0 = store.doc as unknown as { docId: string; readonly?: boolean };
+  d0.docId = 'new-id'; d0.readonly = true; store.setDirty(true);
+  store.undo(); // pops the content-edit snapshot
+  const d = store.doc as unknown as { collab: { on: boolean }; docId: string; readonly?: boolean; title: string };
+  ok(d.collab.on === false, 'undo keeps the live collab (sharing stays off)');
+  ok(d.docId === 'new-id', 'undo keeps the live docId, not the snapshot’s old one');
+  ok(d.readonly === true, 'undo keeps the live read-only mode');
+  ok(d.title !== 'a real edit', 'undo still reverted the genuine content edit');
+  store.redo(); // re-applies the content edit
+  const r = store.doc as unknown as { collab: { on: boolean }; docId: string; readonly?: boolean; title: string };
+  ok(r.collab.on === false && r.docId === 'new-id' && r.readonly === true, 'redo also keeps the live identity set');
+  ok(r.title === 'a real edit', 'redo re-applied the content edit');
+  sess.stop?.();
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 // BroadcastChannel and the heartbeat keep node's event loop alive
 process.exit(failures ? 1 : 0);
