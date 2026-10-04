@@ -11,6 +11,16 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Save is the top bar's primary button; the bar's other buttons line up.**
+  Save and its save-as caret are now filled with the text colour, like the
+  primary buttons in dialogs, in light and dark themes. The amber
+  unsaved-changes dot has a dark ring so it still shows on the light fill of
+  the dark theme. The ? help button is now the same 36×30 as its neighbours
+  (it was 28×29). The bento/slides wordmark is a real button: it can be
+  reached with Tab, Enter opens About, screen readers name it, and on a phone
+  it is a 44px target. Switching the interface language no longer leaves the
+  old top bar's resize listener, size observer and menu listeners running
+  behind the new one. Found by spaces' top-bar parity check (#567).
 - **Screen readers announce what each Save-as and Share command does.** The
   menus keep one-line rows with the description on hover, and the same text
   is now read out as the command's description; the Save-as list scrolls when
@@ -22,17 +32,11 @@ pre-1.0.
   medium window widths, rows in the phone ⋯ menu were centred, and menus in
   the dark theme cast a navy shadow that did not show.
 
-- **Save is the top bar's primary button; the bar's other buttons line up.**
-  Save and its save-as caret are now filled with the text colour, like the
-  primary buttons in dialogs, in light and dark themes. The amber
-  unsaved-changes dot has a dark ring so it still shows on the light fill of
-  the dark theme. The ? help button is now the same 36×30 as its neighbours
-  (it was 28×29). The bento/slides wordmark is a real button: it can be
-  reached with Tab, Enter opens About, screen readers name it, and on a phone
-  it is a 44px target. Switching the interface language no longer leaves the
-  old top bar's resize listener, size observer and menu listeners running
-  behind the new one. Found by spaces' top-bar parity check (#567).
+## [1.2.5] — 2026-09-28
 
+- **Security: update this file. This release closes three security issues
+  found in our own review.** None needs anything from you beyond updating. What
+  each one was is described here once people have had time to update.
 - **Orange text can be read in dark mode again.** The armed comment tool, the
   tick beside your language, your own name in a comment thread and the labels
   on slide and point comments were drawn in a dark brown meant for text on the
