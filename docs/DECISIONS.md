@@ -7417,3 +7417,55 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-10-04 — Android: a save from a read-only document remembers where it went, and one picker answers every write
+
+The `ACTION_VIEW` route (a document handed over by Files, Drive or Gmail) was
+written in #363 and first exercised on a device here. A writable grant — the
+system Files app gives one — works end to end: open, edit, save in place, kill,
+reopen. A **read-only** grant, the usual case from mail and most senders, lost
+data, and in a way that looks like success.
+
+**What was measured** (emulator, Android 16, a 1.2 MB slides deck). After an
+edit, Bento's ⌘S and its autosave write-back (2.5s debounce) send two `write`s
+for the same handle before the export picker returns. The host kept ONE pending
+export: the second write overwrote it and launched a second picker on top of the
+first. The first result to come back consumed the bytes; the second found nothing
+pending and returned silently, leaving the file the picker had just created at
+**0 bytes** — and the first write's promise was never answered. Separately,
+nothing remembered where a copy had gone, so every later autosave to that handle
+went back to a picker: one per edit.
+
+**Decided:**
+
+- **Exports are remembered for the session, by the name the handle was vended
+  under.** A later write or read on that name goes straight to the copy. That is
+  what the handle means on desktop: Save-As, then the copy is the document you
+  are editing. The grant from `ACTION_CREATE_DOCUMENT` lasts as long as the
+  activity, which is as long as the page's handle does. Recorded the moment the
+  picker returns, not when the first write lands, so an autosave in between goes
+  to the copy rather than to a new picker.
+- **One picker per name.** Writes that arrive while it is open join it — newest
+  bytes win, every id gets the one result. A *different* name while a picker is
+  open is refused out loud ("another save is waiting for a location") rather than
+  queued behind a dialog that is visibly for another file. A cancelled picker
+  rejects every joined write.
+- **All writes run on one thread, in order.** The copy can be addressed before
+  its first write finishes; two threads truncating one file is how a document
+  gets interleaved.
+- **A null output stream is a failure.** The code read
+  `openOutputStream(…)?.use { … } ?: "no output stream"` then `null`, which built
+  the error and discarded it — a provider returning no stream was reported to the
+  page as a save.
+
+**Not changed, deliberately:** the intent filter stays `text/html`. Mail and
+cloud senders often label attachments `application/octet-stream`, which would
+keep bento/home out of the chooser; but content URIs have opaque paths, so
+`pathPattern` cannot narrow by `.html`, and a bare octet-stream filter would
+offer the app for every binary file — a store-review problem. How often real
+senders do this is a hardware question, not one to guess at here.
+
+**For the iOS host** (`exportCopy`): it cannot write a 0-byte file — it writes a
+temp copy first — but it reports success when the picker is *presented*, so a
+cancelled export reads as saved, and it has no export memory either. Whether
+repeated autosaves to an export handle stack pickers there is unmeasured.
