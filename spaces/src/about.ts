@@ -27,9 +27,9 @@
 //     and nothing added later can be made to by raising its own z-index.
 
 import {
-  checkForUpdates, applyUpdate, applyUpdateInPlace, canUpdateInPlace,
+  checkForUpdates, applyUpdate, canUpdateInPlace,
   autoCheckEnabled, setAutoCheck, compareVersions,
-  APP_VERSION, type ReleaseInfo, type UpdateCheck,
+  APP_VERSION, type ReleaseInfo, type UpdateCheck, type InPlaceOutcome,
 } from '../../kernel/src/update.ts'
 import {
   setEncryptionPassword, isEncryptionActive,
@@ -45,6 +45,7 @@ import { htmlToMd } from './marks.ts'
 import { humanBytes } from './assets'
 import { SPEC, mdLayout, type MdCtx } from './blocks'
 import { parseDoc, uid } from './model'
+import { restoreInto } from './restoregate'
 import {
   issuesOf, passesFilter, sortRows, fieldByKey, optionOf, fieldsOf,
 } from './fields'
@@ -77,9 +78,18 @@ export interface AboutHooks {
   /** the editor's status line, for the confirmations that outlive the dialog */
   onStatus?: (message: string) => void
   /**
-   * Called immediately before a self-update writes THIS document into a new
-   * shell — stamps the live session's CRDT state (share.ts stampSync), so the
-   * updated file rejoins as a fork exactly as a ⌘S-saved one does.
+   * "Update this file" — the kernel's applyUpdateInPlace, run through main.ts's
+   * save queue. NOT called directly from here: it rewrites the same file ⌘S
+   * does, so the two must never be open on one handle at once, and only the
+   * queue's acknowledgement may say the disk holds what is on screen.
+   * null = nothing was written (cancelled, or the space was swapped).
+   */
+  onUpdateInPlace: (release: ReleaseInfo) => Promise<InPlaceOutcome | null>
+  /**
+   * Called immediately before "Download updated copy" writes THIS document
+   * into a new shell — stamps the live session's CRDT state (share.ts
+   * stampSync), so the updated file rejoins as a fork exactly as a ⌘S-saved
+   * one does. "Update this file" is stamped inside the save queue instead.
    */
   onBeforeWrite?: () => void
 }
@@ -106,7 +116,7 @@ export async function launchUpdateCheck(): Promise<void> {
 }
 
 export function openAbout(hooks: AboutHooks): void {
-  const { store, onRepaint, onSaveCopy, onImport, onExportSpace, onWriteCopy, onStatus, onBeforeWrite } = hooks
+  const { store, onRepaint, onSaveCopy, onImport, onExportSpace, onWriteCopy, onStatus, onUpdateInPlace, onBeforeWrite } = hooks
   const doc = store.doc
   const returnFocus = document.activeElement as HTMLElement | null
 
@@ -384,8 +394,7 @@ export function openAbout(hooks: AboutHooks): void {
         inPlace.disabled = true
         inPlace.textContent = t('Verifying…')
         try {
-          onBeforeWrite?.()
-          const written = await applyUpdateInPlace(rel, store.doc)
+          const written = await onUpdateInPlace(rel)
           if (written) {
             box.replaceChildren(updatedCard(rel, written.backup))
           } else {
@@ -441,8 +450,11 @@ export function openAbout(hooks: AboutHooks): void {
           ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
           : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION }),
     ))
+    // No `store.dirty = false` here any more: whether the disk holds this exact
+    // document is the save queue's to say, and it already said so when the
+    // update was written (main.ts onUpdateInPlace). An edit typed since then is
+    // NOT on disk, and clearing the dot for it would be the race all over again.
     done.append(actions(button(t('Reload into new version'), () => {
-      store.dirty = false // disk already holds this exact document
       location.reload()
     }, true)))
     return done
@@ -573,13 +585,13 @@ export function openAbout(hooks: AboutHooks): void {
       doIt.textContent = t('Restore')
       b.append(left, tag, doIt)
       b.addEventListener('click', () => {
-        let restored: SpacesDoc
-        try { restored = JSON.parse(v.json) as SpacesDoc } catch {
-          say(t('That version could not be read')); return
-        }
-        // replaceDoc checkpoints undo first, so ⌘Z walks this back — the same
-        // contract the recovery banner's Restore already honours.
-        store.replaceDoc(restored)
+        // FOREIGN INPUT, gated as the recovery banner gates it (restoregate.ts):
+        // every file:// document shares this IndexedDB. A refusal applies
+        // nothing and leaves the entry where it is.
+        if (store.readOnly) { say(t('This file is open read-only')); return }
+        // replaceDoc (inside restoreInto) checkpoints undo first, so ⌘Z walks
+        // this back — the same contract the recovery banner's Restore honours.
+        if (!restoreInto(store, v.json)) { say(t('That version could not be read')); return }
         onRepaint()
         close()
         say(t('Restored the version from {when} — ⌘Z undoes it', { when }))

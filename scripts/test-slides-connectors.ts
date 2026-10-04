@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { TIPS, TIP_KINDS, tipSpec, tipInsetPx, endTangent, shortenPathEnds, movePathEnds, pathEnds } from '../slides/src/tips.ts'
 import { parseBezier } from '../slides/src/editor/bezier.ts'
-import { borderPoint, lineEndpoints, setLineEndpoints } from '../kernel/src/geom.ts'
+import { borderPoint, lineEndpoints, setLineEndpoints, boxCenter, sideMidpoint, connectorEndpoint, boxAnchors, nearestAnchor, boxContains, type ConnectorSide, type Box, type Pt as GPt } from '../kernel/src/geom.ts'
 
 let failures = 0
 let checks = 0
@@ -51,7 +51,11 @@ const editor = read('slides/src/editor/editor.ts')
 ok(/TIPS\.map\(\(tip\) => \[tip\.kind, t\(tip\.label\)\]\)/.test(panels), 'the panel lists the catalogue — model words as values, translated labels for display')
 ok(/el\.shape === 'line' \|\| \(el\.shape === 'path' && !\/z\\s\*\$\/i\.test/.test(panels), 'tips are offered on lines and OPEN paths, never on a polygon')
 const render = read('slides/src/render.ts')
-ok(/const spec = tipSpec\(kind\)/.test(render) && !/'M 0 0\.4 L 7\.6 4 L 0 7\.6 Z'/.test(render), 'the renderer builds markers from the catalogue, not from its own geometry')
+// shapeSvg + markerRef moved to the kernel (kernel/src/shape.ts) with step 2 of
+// the diagram-engine lift; the tip catalogue to kernel/src/tips.ts. Source pins
+// that checked the moved code follow it there.
+const shape = read('kernel/src/shape.ts')
+ok(/const spec = tipSpec\(kind\)/.test(shape) && !/'M 0 0\.4 L 7\.6 4 L 0 7\.6 Z'/.test(shape), 'the shape renderer builds markers from the catalogue, not from its own geometry')
 ok(new Set(TIP_KINDS).size === TIP_KINDS.length, 'no duplicate kinds')
 ok(TIPS.every((s) => s.label.length > 0), 'every tip has a panel label')
 
@@ -70,7 +74,7 @@ ok(close(tipInsetPx('triangle-open', 3), tipSpec('triangle-open')!.inset * 3), '
 ok(tipInsetPx(undefined, 3) === 0 && tipInsetPx('none', 3) === 0, 'no tip → no inset')
 
 console.log('\nthe double arrow\n')
-ok(/if \(el\.heads === 2\) \{/.test(render.slice(render.indexOf("case 'arrow': {"), render.indexOf("case 'line': {"))), 'render.ts draws the two-headed polygon inside the ARROW branch')
+ok(/if \(el\.heads === 2\) \{/.test(shape.slice(shape.indexOf("case 'arrow': {"), shape.indexOf("case 'line': {"))), 'shape.ts draws the two-headed polygon inside the ARROW branch')
 ok(/heads: num\(2, 2\)/.test(gate), 'the gate admits heads: 2 on a shape')
 ok(/heads\?: 2/.test(model), 'the model has heads?: 2 on ShapeElement')
 ok(!/arrow2/.test(model) && !/arrow2/.test(gate) && !/'arrow2'/.test(render), 'no new shape kind anywhere — arrow2 is gone')
@@ -127,7 +131,7 @@ for (const s of TIPS) {
   if (['none', 'arrow', 'dot', 'bar'].includes(s.kind)) continue
   ok(frozenMarker(s.kind) === 'bar', `${s.kind}: 1.1.0 draws a BAR at that end (not a plain end) — no throw`)
 }
-ok(/in 1\.1\.0 and older the renderer matches only\n \* 'arrow' and 'dot' and draws a BAR/.test(read('slides/src/tips.ts')), 'tips.ts states the degrade')
+ok(/in 1\.1\.0 and older the renderer matches only\n \* 'arrow' and 'dot' and draws a BAR/.test(read('kernel/src/tips.ts')), 'tips.ts states the degrade')
 ok(/those shells draw a bar where a\n  new tip should be; a double arrow shows there as a single one/.test(read('CHANGELOG.md')), 'the changelog states the same degrade, no softer')
 
 console.log('\nend tangent\n')
@@ -184,13 +188,105 @@ console.log('\nthe legacy straight connector\n')
   ok(el.w === 100 && el.x === 0 && el.y === -2 && el.rotation === 0, 'setLineEndpoints rebuilds the box from two endpoints')
   const bp = borderPoint({ x: 0, y: 0, w: 100, h: 100 }, { x: 200, y: 50 })
   ok(bp.x === 100 && bp.y === 50, 'borderPoint lands on the border along the ray to the target')
+  // rotated + diagonal cases (slides review on #592 asked for coverage beyond rotation 0)
+  const vert = lineEndpoints({ x: 0, y: 0, w: 100, h: 4, rotation: 90 })
+  const approx = (a: number, b: number) => Math.abs(a - b) < 1e-6
+  ok(approx(vert[0].x, 50) && approx(vert[0].y, -48) && approx(vert[1].x, 50) && approx(vert[1].y, 52),
+    'lineEndpoints at 90° gives a vertical pair about the box centre')
+  // deno-lint-ignore no-explicit-any
+  const rot: any = { h: 4 }
+  setLineEndpoints(rot, { x: 50, y: 0 }, { x: 50, y: 100 })
+  ok(rot.w === 100 && approx(rot.rotation, 90) && approx(rot.x, 0) && approx(rot.y, 48),
+    'setLineEndpoints encodes a vertical drag as rotation 90')
+  const diag = borderPoint({ x: 0, y: 0, w: 100, h: 100 }, { x: 200, y: 200 })
+  ok(diag.x === 100 && diag.y === 100, 'borderPoint on a diagonal ray lands on the corner')
 }
 // and the marker numbers an old deck was drawn with
-ok(/inset the endpoints so the tip's point lands on the box edge/.test(render) && /tipInsetPx\(el\.lineStart, lw\)/.test(render), 'a line insets by the catalogue — 2.6 for the original three (asserted above)')
+ok(/inset the endpoints so the tip's point lands on the box edge/.test(shape) && /tipInsetPx\(el\.lineStart, lw\)/.test(shape), 'a line insets by the catalogue — 2.6 for the original three (asserted above)')
 ok(/el\.shape !== 'line' && el\.shape !== 'path'/.test(editor) && /if \(isPath\) setPathEndpoints\(c, na, nb\)\n\s+else setLineEndpoints\(c, na, nb\)/.test(editor), 'syncConnectors routes lines through setLineEndpoints and paths through setPathEndpoints')
 const canvas = read('slides/src/editor/canvas.ts')
 ok(/kind === 'curve-connector'/.test(canvas) && /el\.lineEnd = 'arrow'\n\s+if \(fromA\) el\.from/.test(canvas), 'the Curved connector tool draws a path with a tip and anchors like Connector')
 ok(/label: 'Curved connector'/.test(editor) && /label: 'Double arrow'/.test(editor), 'both new shapes are in the Shape menu')
+
+console.log('\nconnector routing + snapping moved to the kernel (byte-identical)\n')
+// The diagram-engine lift (step 3) moved the connector SEMANTICS — border/side
+// routing, the box anchor set, nearest-anchor snapping and the padded hit-test —
+// into kernel/src/geom.ts, and slides' editor.ts/canvas.ts now call them. Pin the
+// relocation to the exact inline code it replaced: reference implementations are
+// verbatim what synced/anchorsFor/snap/elementAt computed before, and the kernel
+// helpers must agree byte-for-byte across side, auto and free-end cases.
+{
+  type Side = ConnectorSide
+  const SIDES: Array<Side | undefined> = [undefined, 'auto', 'top', 'right', 'bottom', 'left']
+  // OLD inline code, verbatim:
+  const oldEnd = (box: Box, side: Side | undefined, toward: GPt): GPt =>
+    side && side !== 'auto' ? sideMidpoint(box, side) : borderPoint(box, toward)
+  const oldAnchors = (e: Box) => [
+    { side: 'top' as const, pt: { x: e.x + e.w / 2, y: e.y } },
+    { side: 'right' as const, pt: { x: e.x + e.w, y: e.y + e.h / 2 } },
+    { side: 'bottom' as const, pt: { x: e.x + e.w / 2, y: e.y + e.h } },
+    { side: 'left' as const, pt: { x: e.x, y: e.y + e.h / 2 } },
+    { side: 'auto' as const, pt: { x: e.x + e.w / 2, y: e.y + e.h / 2 } },
+  ]
+  type Snap = { el: string; side: Side; pt: GPt } | null
+  const oldSnap = (anchors: ReturnType<typeof oldAnchors>, p: GPt, tol: number): Snap => {
+    let best: Snap = null
+    let bd = tol
+    for (const cand of anchors) {
+      const d = Math.hypot(p.x - cand.pt.x, p.y - cand.pt.y)
+      if (d < bd) { bd = d; best = { el: 'x', side: cand.side, pt: cand.pt } }
+    }
+    return best
+  }
+  const oldContains = (e: Box, pt: GPt, pad: number) =>
+    pt.x >= e.x - pad && pt.x <= e.x + e.w + pad && pt.y >= e.y - pad && pt.y <= e.y + e.h + pad
+
+  const eq = (a: GPt, b: GPt) => a.x === b.x && a.y === b.y
+  // deterministic LCG so a failure reproduces
+  let seed = 0x2f6df6
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
+  const box = (): Box => ({ x: rnd() * 2000 - 500, y: rnd() * 2000 - 500, w: 1 + rnd() * 600, h: 1 + rnd() * 400 })
+  const pt = (): GPt => ({ x: rnd() * 2000 - 500, y: rnd() * 2000 - 500 })
+
+  let endOk = true, anchorOk = true, snapOk = true, containsOk = true, scenarioOk = true
+  for (let i = 0; i < 4000; i++) {
+    const b = box(), toward = pt(), side = SIDES[Math.floor(rnd() * SIDES.length)]
+    if (!eq(connectorEndpoint(b, side, toward), oldEnd(b, side, toward))) endOk = false
+    const a1 = boxAnchors(b), a0 = oldAnchors(b)
+    if (JSON.stringify(a1) !== JSON.stringify(a0)) anchorOk = false
+    const p = pt(), tol = rnd() * 60
+    const n1 = nearestAnchor(a1, p, tol), n0 = oldSnap(a0, p, tol)
+    if (JSON.stringify(n1 && { side: n1.side, pt: n1.pt }) !== JSON.stringify(n0 && { side: n0.side, pt: n0.pt })) snapOk = false
+    const pad = rnd() * 30
+    if (boxContains(b, p, pad) !== oldContains(b, p, pad)) containsOk = false
+  }
+  ok(endOk, 'connectorEndpoint == the old inline end() across side / auto / free-end (4000 cases)')
+  ok(anchorOk, 'boxAnchors == the old anchorsFor list, same order (4000 boxes)')
+  ok(snapOk, 'nearestAnchor == the old snap selection, same tie-order (4000 points)')
+  ok(containsOk, 'boxContains == the old elementAt predicate (4000 points × pads)')
+
+  // full connector scenarios: two boxes, each kind of anchoring, na/nb both ways
+  for (let i = 0; i < 2000; i++) {
+    const fb = box(), tb = box()
+    const [la, lb] = lineEndpoints({ x: Math.min(fb.x, tb.x), y: fb.y, w: 200, h: 4, rotation: 0 })
+    for (const fs of SIDES) for (const ts of SIDES) {
+      const na1 = connectorEndpoint(fb, fs, boxCenter(tb))
+      const nb1 = connectorEndpoint(tb, ts, boxCenter(fb))
+      const na0 = oldEnd(fb, fs, boxCenter(tb))
+      const nb0 = oldEnd(tb, ts, boxCenter(fb))
+      if (!eq(na1, na0) || !eq(nb1, nb0)) scenarioOk = false
+    }
+    // free end: one side anchored, the other rides toward the loose endpoint
+    if (!eq(connectorEndpoint(fb, undefined, lb), oldEnd(fb, undefined, lb))) scenarioOk = false
+    if (!eq(connectorEndpoint(tb, 'auto', la), oldEnd(tb, 'auto', la))) scenarioOk = false
+  }
+  ok(scenarioOk, 'two-box connectors route identically for every from/to side pair + a free end (2000 × 38)')
+
+  // slides imports the kernel helpers through ./lineedit (the one import site)
+  ok(/export \{ boxCenter, borderPoint, sideMidpoint, boxAnchors, connectorEndpoint, nearestAnchor, boxContains/.test(read('slides/src/editor/lineedit.ts')), 'lineedit re-exports the connector geom — ./lineedit stays the import site')
+  ok(/connectorEndpoint\(fromBox, c\.from\?\.side/.test(editor) && !/const end = \(box/.test(editor), 'editor.ts syncConnectors calls connectorEndpoint, inline end() gone')
+  ok(/boxAnchors\(this\.store\.slide\.elements\.find/.test(canvas) && /nearestAnchor\(anchorsFor\(id\)/.test(canvas) && /boxContains\(e, pt, pad\)/.test(canvas), 'canvas.ts uses boxAnchors / nearestAnchor / boxContains, inline dups gone')
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)
