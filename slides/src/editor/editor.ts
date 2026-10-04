@@ -42,6 +42,7 @@ import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { stripEmbeddedEnvelopes } from '../envelope'
 import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
+import { gateRestored } from '../restoregate'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
 import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
@@ -2627,10 +2628,12 @@ export class Editor {
     const doc = this.store.doc
     const snap = await getRecovery(doc.docId)
     if (!snap) return
-    let recovered: import('../model').BentoDoc
-    try { recovered = JSON.parse(snap.json) } catch { return }
-    if (docContentKey(recovered) === docContentKey(doc)) return // the file already has these edits
-    this.showRecoveryBanner(snap, recovered)
+    // A snapshot is foreign input (restoregate.ts): offered only if it is a
+    // document after the untrusted gate, compared as it WOULD be restored
+    const gated = gateRestored(snap.json, doc)
+    if (!gated) return
+    if (docContentKey(gated.doc) === docContentKey(doc)) return // the file already has these edits
+    this.showRecoveryBanner(snap)
   }
 
   /**
@@ -2811,7 +2814,7 @@ export class Editor {
     document.body.appendChild(bar)
   }
 
-  private showRecoveryBanner(snap: Snapshot, recovered: import('../model').BentoDoc) {
+  private showRecoveryBanner(snap: Snapshot) {
     document.querySelector('.ed-recover')?.remove()
     const bar = div('ed-recover')
     const when = new Date(snap.at).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
@@ -2821,7 +2824,13 @@ export class Editor {
     restore.className = 'ed-btn ed-btn-primary'
     restore.textContent = t('Restore')
     restore.addEventListener('click', () => {
-      this.store.replaceDoc(recovered)
+      // gated again against the document as it is NOW: the live session may
+      // have been joined or rotated since the banner appeared, and the identity
+      // re-attached must be the current one
+      const gated = gateRestored(snap.json, this.store.doc)
+      if (!gated) { bar.remove(); return }
+      if (gated.dropped.length) console.info('[bento] restore: dropped', gated.dropped)
+      this.store.replaceDoc(gated.doc)
       this.canvas.render()
       bar.remove()
       this.toast(t('Restored your unsaved changes'))
@@ -2859,7 +2868,10 @@ export class Editor {
           `<span class="vh-do">${t('Restore')}</span>`
         rowEl.addEventListener('click', () => {
           try {
-            this.store.replaceDoc(JSON.parse(v.json))
+            const gated = gateRestored(v.json, this.store.doc) // foreign input, as above
+            if (!gated) throw new Error('not a document')
+            if (gated.dropped.length) console.info('[bento] restore: dropped', gated.dropped)
+            this.store.replaceDoc(gated.doc)
             this.canvas.render()
             overlay.remove()
             this.toast(t('Restored the version from {when} — ⌘Z undoes', { when }))

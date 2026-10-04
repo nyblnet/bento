@@ -918,6 +918,13 @@ jobs:
         # a reader and a writer that share a bug agree with each other perfectly.
         run: node scripts/test-dash-zip.ts
 
+      - name: zip decompression-bomb cap
+        # readZip caps each entry's inflated output at min(declared size, a hard
+        # ceiling), aborting the stream the instant it overflows — a crafted
+        # archive that under-declares its size can no longer exhaust memory before
+        # the size check runs. Every check is mutation-proven against a neutered cap.
+        run: node scripts/test-zip-bomb.ts
+
       - name: bento/dash xlsx
         # Both 1900 date epochs, including the leap-year bug — getting it wrong
         # shifts every date by four years, silently.
@@ -1472,6 +1479,12 @@ jobs:
         # the recorded floor, and every commonly typed formula renders. The
         # check a fixed sample could not make, which is how #540 slipped by.
         run: node scripts/test-maths-coverage.ts
+      - name: Accent contrast rig
+        # The accent as text reads in both themes: every --accent-ink text use
+        # is audited against the surface behind it and reaches 4.5:1; text on
+        # the orange fill uses --accent-on; labels drawn over the slide carry a
+        # surface halo. Dark --accent-ink was #3a2a00 on dark chrome — 1.09:1.
+        run: node scripts/test-slides-accent-contrast.ts
       - name: Compact document rig
         # The agent authoring form (#422): compactDoc/expandDoc are inverses
         # on the starter deck, expansion equals the editor's insert helpers
@@ -1781,6 +1794,14 @@ jobs:
         run: |
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"
           node "$RUNNER_TEMP/test-clipboard.mjs"
+
+      - name: Restore gate rig
+        # A snapshot kept in the browser (recovery banner, Version history) is
+        # foreign input: gated like a pasted clip, and it never brings its own
+        # docId, live-session credentials or file mode.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-slides-restore-gate.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-restore-gate.mjs"
+          node "$RUNNER_TEMP/test-slides-restore-gate.mjs"
 
       - name: CRDT property-removal rig
         # Removing a property travels as a `set` op with `v` ABSENT, and the
