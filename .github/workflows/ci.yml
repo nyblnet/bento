@@ -465,6 +465,19 @@ jobs:
             --outfile="$RUNNER_TEMP/test-embed.mjs"
           node --no-warnings "$RUNNER_TEMP/test-embed.mjs"
 
+      - name: File-open / boot document gate rig
+        # Opening a foreign .bento.html and booting a directly-opened file run
+        # bare parseDoc -> render + injectFonts with no structural gate, exposing
+        # the document-level egress the element sanitiser never sees: a
+        # slide.background url(), an -face src from an external asset value,
+        # a weight/style src-breakout. Positive controls (raw) fetch; the opened
+        # document reaches the request log zero times; unknown keys/props from a
+        # NEWER deck survive (format additivity). Browser half needs Chrome.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-fileopen-gate.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-fileopen-gate.mjs"
+          node "$RUNNER_TEMP/test-fileopen-gate.mjs"
+
       - name: Untrusted-markup sanitizer rig
         # Every deck is untrusted input somebody may open, paste or receive over
         # collab, and script in that page owns the collab keys, the plaintext
@@ -482,6 +495,21 @@ jobs:
           slides/node_modules/.bin/esbuild scripts/test-sanitize.ts --bundle --platform=node --format=esm \
             --outfile="$RUNNER_TEMP/test-sanitize.mjs"
           node "$RUNNER_TEMP/test-sanitize.mjs"
+
+      - name: Replace-from-JSON document gate rig
+        # The document text that arrives through window.bento.loadDoc and
+        # "Replace from JSON…" is foreign input, full or compact. It passes the
+        # structural gate (restoregate.ts sanitizeDoc): the open deck keeps its
+        # identity (docId, collab, readonly), unknown keys/props are dropped, and
+        # the document-level egress surfaces the element sanitiser never sees —
+        # slide.background url(), an @font-face src resolved from an external
+        # asset value, a weight/style src-breakout — are neutralised. Positive
+        # controls (raw, un-gated) fetch; the gated document reaches the request
+        # log zero times. Browser half needs Chrome; it self-skips otherwise.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-replace-json-gate.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-replace-json-gate.mjs"
+          node "$RUNNER_TEMP/test-replace-json-gate.mjs"
 
       - name: Export-secrets rig
         # "Copy document JSON" shipped the room's owner private key while the
@@ -2012,6 +2040,10 @@ jobs:
         # Save as → Import PowerPoint… opens only the bento.page importer, in a
         # new tab with no opener, and its tooltip says it needs the network.
         run: node scripts/test-slides-import-link-browser.mjs
+      - name: Under-specified documents boot in Chromium
+        # parseDoc fills required fields only where absent and drops elements
+        # that cannot render; unknown keys and element types survive (additivity).
+        run: node scripts/test-slides-minimal-doc-browser.mjs
 
   spaces-save-browser:
     runs-on: ubuntu-latest

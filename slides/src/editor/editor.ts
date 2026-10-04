@@ -42,7 +42,7 @@ import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { stripEmbeddedEnvelopes } from '../envelope'
 import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
-import { gateRestored } from '../restoregate'
+import { gateRestored, guardOpenedDoc } from '../restoregate'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
 import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
@@ -1180,23 +1180,18 @@ export class Editor {
     applyB.className = 'ed-btn ed-btn-primary'
     applyB.textContent = t('Apply')
     applyB.addEventListener('click', () => {
-      // parseDoc + replaceDoc rather than window.bento.loadDoc (which is the
-      // same two calls) because the collab decision has to be made BEFORE the
-      // swap: replaceDoc's events reach the sync session synchronously, and it
-      // re-attaches to whatever `collab` the new document holds.
-      //
-      // The live session belongs to THIS document, not to the pasted text. The
-      // copy side sends no collab at all, so adopting the pasted one would
-      // either wipe the user's room credentials (paste of our own JSON) or
-      // silently move the deck into a room that came from somewhere else.
-      // Content is imported; identity and capability are not.
-      const parsed = parseDocInputReport(ta.value) // full or compact (src/compact.ts)
+      // The pasted text is foreign input, full or compact (src/compact.ts):
+      // the gate rebuilds it (restoregate.ts sanitizeDoc), and with `live` the
+      // identity and capability stay THIS document's — its docId (recovery
+      // and versions are keyed by it, on a store other local files share),
+      // its live session (the copy side sends no collab, so adopting the
+      // pasted one would wipe the room or move the deck into someone else's)
+      // and its file mode. Decided BEFORE the swap: replaceDoc's events reach
+      // the sync session synchronously and it re-attaches to whatever
+      // `collab` the new document holds. Content is imported; identity is not.
+      const parsed = parseDocInputReport(ta.value, { live: this.store.doc })
       if (parsed) {
-        const next = parsed.doc
-        const keep = this.store.doc.collab
-        if (keep) next.collab = keep
-        else delete next.collab
-        this.store.replaceDoc(next)
+        this.store.replaceDoc(parsed.doc)
         // the load report, summarised; the whole thing goes to the console
         // where an agent driving the page (or a person) can read the paths
         const r = parsed.report
@@ -2801,6 +2796,10 @@ export class Editor {
     }
     const next = parseDoc(JSON.stringify(parsed))
     if (!next) { alert(t('{name} isn’t a Bento document.', { name: named })); return true }
+    // a file is guarded by value only — its own identity, and no key dropped,
+    // since it may come from a newer Bento (restoregate.ts guardOpenedDoc)
+    const neutralised = guardOpenedDoc(next)
+    if (neutralised.length) console.info('[bento] opened file: neutralised', neutralised)
 
     if (writable) adoptFileHandle(handle)
     this.openedAs = named
