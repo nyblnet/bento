@@ -21,6 +21,7 @@
 // 2026 opens in every later build, so "am I running the newest app" is a
 // question about this copy of the reader's software.
 
+import { saveRevision, savingFor, type Acknowledge } from './saving.ts'
 import {
   APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace,
   checkForUpdates, offlineEnabled, setAutoCheck, setOffline,
@@ -45,6 +46,11 @@ export interface SettingsHooks {
    * update half of the switch.
    */
   sync?: SyncSession
+  /**
+   * What an in-place update that wrote this workbook owes the screen
+   * (saving.ts). Optional so a host with no unsaved dot still updates.
+   */
+  ack?: Acknowledge
 }
 
 // --- the launch-time update check (PLATFORM §6) -------------------------------
@@ -291,10 +297,30 @@ export function openSettings(hooks: SettingsHooks): void {
       upStatus.textContent = t('Downloading and verifying…')
       // Two shapes, and the difference is worth stating because one of them
       // leaves the file on disk untouched and the other does not.
+      //
+      // IN PLACE IS A WRITE TO THE OPEN FILE, so it goes through the same
+      // queue as ⌘S and the automatic save (saving.ts). It did not, and an
+      // automatic save landing mid-update wrote the OLD shell over the new one
+      // — and after a successful update every later automatic save did the
+      // same, because this page IS the old shell. So success also ends this
+      // session's writing (`superseded`): the file is current, the reload runs
+      // the new version, and nothing here may put the old one back.
+      const inPlace = async (): Promise<string> => {
+        const out = await saveRevision(store, async (snap) => {
+          const ok = await applyUpdateInPlace(rel, snap)
+          // INSIDE the queued write, not after it resolves: the next queued
+          // write starts the moment this one settles, a tick before any code
+          // awaiting it runs, and would write the old shell straight back.
+          if (ok) savingFor(store).superseded = true
+          return ok
+        }, (ok) => ok ? 'open-file' : 'nowhere',
+          { adopt: () => {}, clean: () => hooks.ack?.clean() })
+        if (out.kind === 'failed') throw out.error
+        if (out.kind !== 'done' || !out.value) return t('Cancelled — nothing was changed.')
+        return t('Updated. A backup of the old version was downloaded beside it — reload to run {v}.', { v: rel.version })
+      }
       const run = canUpdateInPlace()
-        ? applyUpdateInPlace(rel, store.doc).then((ok) => ok
-          ? t('Updated. A backup of the old version was downloaded beside it — reload to run {v}.', { v: rel.version })
-          : t('Cancelled — nothing was changed.'))
+        ? inPlace()
         : applyUpdate(rel, store.doc).then(() =>
           t('Downloaded. Open the new file — this one is unchanged.'))
       void run

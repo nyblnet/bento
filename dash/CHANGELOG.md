@@ -12,6 +12,25 @@ There is no server, so a break here would be permanent.
 
 The release that came out of watching somebody use 0.2.0.
 
+- **An edit made while a save is writing is no longer marked saved.** Every
+  save — ⌘S, the automatic save to the file, Save a copy, Save as new workbook
+  and the in-place update — now goes through one queue that writes a snapshot
+  and clears the unsaved dot only if nothing changed while it was writing.
+  Before, the dot went out when the write finished, so a keystroke made in that
+  second was missing from the file and nothing said so.
+
+- **Dropping a workbook onto the window can no longer write the old one into
+  it.** An automatic save that was mid-write when the file was dropped used to
+  finish into the NEW file's handle. The swap now waits for it.
+
+- **After "Update this file", this window stops saving to it.** The page is
+  still the old version, and its next automatic save would have put the old
+  version back. ⌘S now says to reload first.
+
+- **Save a copy clears the unsaved dot** when the copy holds everything — it is
+  the file you carry on working in — and a failed copy says so instead of
+  failing silently.
+
 - **Sheet tabs along the bottom**, where every spreadsheet has kept them since
   Excel 5. They were a list inside the left panel; that panel is gone, and the
   grid is about 200px wider at every window size. Drag to reorder — and because

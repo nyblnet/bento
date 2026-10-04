@@ -7417,3 +7417,38 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-10-04 — dash adopts the kernel SaveQueue; the queue also orders handle swaps
+
+Dash takes the kernel's `SaveQueue` (#579) directly, replacing #538's
+app-local approach, through `dash/src/saving.ts` — the same shape spaces took in
+#580. Recorded here because three of its rules are not obvious from the kernel's
+contract, and the second applies to every app.
+
+- **Every write to the open file, and every change of which file is open, goes
+  through one queue per store.** ⌘S, the Save menu, automatic write-back, the
+  in-place self-update, and a dropped file adopting its handle. The drop was
+  the surprise: the kernel's write reads its held handle AFTER the serializer
+  awaits, so a handle swap during an in-flight write sends the OLD document into
+  the NEW file. `afterPendingWrites` waits for the queue, then swaps in the
+  continuation, which runs before the next queued task starts (that task is
+  chained on `tail.catch`, a tick later); stale writes for the old document are
+  then discarded by the queue's identity check. The swap is deliberately not a
+  queued task, because the queue skips tasks whose document was replaced, and a
+  swap must never be skipped.
+- **The revision advances on every `doc` event and on `touch()`.** `touch()`
+  covers the writes that go straight onto the document without an event:
+  document properties, and the four sharing-credential writes in `sync/`, which
+  now call it.
+- **An in-place update marks the session `superseded` inside the queued write.**
+  This page is the old shell, so any later write would downgrade the file.
+  Setting the flag after the write resolves is one tick too late: the next
+  queued write has already started. The rig carries that as a control.
+- A ⌘S that DOWNLOADS (no in-place save) still clears the dot, but is not
+  adopted as the file's content. Exports (template, read-only copy) do not
+  touch the open handle and stay outside the queue.
+
+Not fixed here, found in the audit: starting, stopping or rotating sharing
+changes the document without lighting the unsaved dot, so a key rotation —
+revocation — can be lost on close with no warning.
+

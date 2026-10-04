@@ -185,7 +185,7 @@ export class SyncSession {
   private async ensureCollab() {
     if (this.store.doc.collab) return
     const creds = await mintCollab()
-    if (!this.store.doc.collab) this.store.doc.collab = creds
+    if (!this.store.doc.collab) { this.store.doc.collab = creds; this.store.touch() }
   }
 
   // --- the patch tap --------------------------------------------------------

@@ -769,6 +769,9 @@ export async function startSharing(session: SyncSession, store: Store): Promise<
   const doc = store.doc as DashDoc & { collab?: CollabBlock }
   if (!doc.collab) doc.collab = await mintCollab()
   doc.collab.on = true
+  // a document change with no store event — the save queue must see it, or a
+  // write snapshotted before it could still clear the dot (saving.ts)
+  store.touch()
   session.enableSharing()
   return joinFromDoc(session, store)
 }
@@ -792,7 +795,7 @@ export function stopSharing(session: SyncSession, store: Store) {
     active = null
   }
   const c = collabOf(store.doc)
-  if (c && c.on !== false) c.on = false
+  if (c && c.on !== false) { c.on = false; store.touch() }
 }
 
 /** revocation: mint a fresh room + key. Every previously sent copy loses
@@ -803,6 +806,7 @@ export async function rotateKeys(session: SyncSession, store: Store) {
   const doc = store.doc as DashDoc & { collab?: CollabBlock }
   const sync = doc.collab?.sync
   doc.collab = sync ? { ...fresh, sync } : fresh
+  store.touch()
 }
 
 /** Save-a-copy helpers: what to strip for each tier. A reader copy keeps the

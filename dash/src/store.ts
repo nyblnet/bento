@@ -996,7 +996,17 @@ export class Store {
     return () => set.delete(fn)
   }
 
+  /**
+   * Advances on EVERY document change — committed, mid-run, remote, and the
+   * few writes that go straight onto the doc and call `touch()` (document
+   * properties, sharing credentials). The save queue compares it at
+   * acknowledgement time: a write may clear the unsaved dot only if this has
+   * not moved since its snapshot. View changes do not count.
+   */
+  revision = 0
+
   private emit(ev: StoreEvent): void {
+    if (ev === 'doc') this.revision++
     for (const fn of this.listeners.get(ev) ?? []) fn()
   }
 
@@ -1214,6 +1224,7 @@ export class Store {
 
   /** Model changed without a new undo entry (mid-run). */
   touch(): void {
+    this.revision++
     this.doc.modified = new Date().toISOString()
   }
 
