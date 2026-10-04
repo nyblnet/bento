@@ -7417,3 +7417,28 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-10-04 — slides: write chrome is an allowlist, and the lock follows a document that arrives
+
+The editor decided whether a copy could write with `collab.role !== 'reader'`. That
+was a denylist, so the broadcast `audience` role (#454) passed it: an audience
+copy dropped onto a running editor, or handed to `window.bento.loadDoc`, got
+"Invite to edit…", "Go live" and "Reset access…", an Editor label, and no
+editing lock. Measured on 1.2.5 by both routes. Booting an audience copy was
+never affected (`bootWith` sends it to the show), and the relay refused its
+writes throughout, so this was chrome, not capability. Separately, the
+read-only lock ran only at build time, so even a plain reader copy dropped onto
+a running editor could be edited.
+
+Fixed: `canWriteDeck(collab)` in `slides/src/editor/editor.ts` is an allowlist
+that fails closed. No collab, an absent role (owner and legacy writer copies)
+or `'writer'` may write; `'reader'`, `'audience'` and any role a later version
+adds are read-only. It gates the Share panel's write actions, the People row's
+label and the read-only lock, and a store listener applies the lock when a
+non-writing document arrives in a running editor. Type made the same change
+for its write chrome the same day; the two apps share the rule.
+
+Rule: decide what a copy may do by naming the roles that MAY, never the roles
+that may not. A role added later should arrive read-only until someone grants
+it more. Guarded by `scripts/test-slides-audience-gate-browser.mjs` (both
+routes, reader, unknown role, owner/writer controls; mutation-checked).

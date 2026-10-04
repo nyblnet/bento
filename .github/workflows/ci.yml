@@ -1929,3 +1929,8 @@ jobs:
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-slides-font-lifecycle-browser.mjs
+      - name: Write chrome follows the copy's role in Chromium
+        # canWriteDeck is an allowlist that fails closed: an audience, reader or
+        # unknown-role copy arriving in a running editor (dropped, loadDoc) gets
+        # no write actions and is locked; owner and writer copies keep theirs.
+        run: node scripts/test-slides-audience-gate-browser.mjs
