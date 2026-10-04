@@ -14,6 +14,7 @@
 type Scope = 'doc' | 'page'
 
 import { type SpacesDoc, type Page, type Block, buildIndex, type SpaceIndex, homePage } from './model'
+import { FROM_LIVE } from '../../kernel/src/docfields.ts'
 
 type Listener = () => void
 type Event = 'doc' | 'page' | 'tree' | 'selection' | 'dirty'
@@ -46,10 +47,10 @@ const UNDO_BUDGET = 24 * 1024 * 1024
  * is encoded and travel with it; `assets` is kept by undo/redo for a different
  * reason — snapshots omit it for size — and a replaceDoc brings its own.
  *
- * Same name and shape as slides' FROM_LIVE (slides/src/restoregate.ts) so the
- * kernel can lift one shared list; spaces adds `template`, which slides lacks.
+ * The shared list now lives in the kernel (kernel/src/docfields.ts) and is
+ * re-exported here, so restoregate.ts keeps importing it from `./store.ts`.
  */
-export const FROM_LIVE = ['docId', 'collab', 'readonly', 'template'] as const
+export { FROM_LIVE }
 
 /** Overwrite `next`'s FROM_LIVE keys with `live`'s — including deleting one the
  *  live document does not have. Mutates and returns `next`. */

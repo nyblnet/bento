@@ -67,9 +67,10 @@ export const COLLAB_READER_KEEP =
 /** Project a collab block down to what a reader/viewer copy may hold: a new
  *  object with only the allowlisted fields that are present, and role forced to
  *  'reader' — never the source's role. */
-export function collabForReader(collab: Obj): Obj {
+export function collabForReader(collab: object): Obj {
+  const src = collab as Obj
   const out: Obj = {}
-  for (const k of COLLAB_READER_KEEP) if (Object.hasOwn(collab, k) && collab[k] !== undefined) out[k] = collab[k]
+  for (const k of COLLAB_READER_KEEP) if (Object.hasOwn(src, k) && src[k] !== undefined) out[k] = src[k]
   out.role = 'reader'
   return out
 }
@@ -80,12 +81,19 @@ export function collabForReader(collab: Obj): Obj {
  *  ALLOWLIST — ownerPriv, writerPriv, audience, any link records, and any field
  *  added later are dropped. The role rides inside `invite` (invite.role), not the
  *  top level, so collabForInvite sets no top-level role. */
-export const COLLAB_INVITE_KEEP = [...COLLAB_READER_KEEP, 'sync', 'invite'] as const
+export const COLLAB_INVITE_KEEP = [...COLLAB_READER_KEEP, 'sync'] as const
 
-/** Project a collab block down to what an invite copy may hold: a new object with
- *  only the allowlisted fields that are present. */
-export function collabForInvite(collab: Obj): Obj {
+/** Project a collab block to what an invite copy may hold, then attach the
+ *  FRESHLY-MINTED `invite` and set the top-level role FROM it. The source's own
+ *  invite, links and role are never carried (they are not in the allowlist, and
+ *  invite + role come only from the parameter), so a commenter invite opens
+ *  locked (role:'commenter') and a writer invite editable — never the source's
+ *  chrome. */
+export function collabForInvite(collab: object, invite: { role: string }): Obj {
+  const src = collab as Obj
   const out: Obj = {}
-  for (const k of COLLAB_INVITE_KEEP) if (Object.hasOwn(collab, k) && collab[k] !== undefined) out[k] = collab[k]
+  for (const k of COLLAB_INVITE_KEEP) if (Object.hasOwn(src, k) && src[k] !== undefined) out[k] = src[k]
+  out.invite = invite
+  out.role = invite.role
   return out
 }

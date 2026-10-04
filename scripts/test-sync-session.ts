@@ -604,20 +604,23 @@ H('docfields: collabForReader is an allowlist — unknown + known secrets fail c
   ok([...COLLAB_READER_KEEP].length === 6, 'COLLAB_READER_KEEP is the 6-field public allowlist (role is forced, not copied)');
 }
 
-H('docfields: collabForInvite keeps sync + invite, still drops secrets and unknowns');
+H('docfields: collabForInvite keeps sync, attaches a FRESH invite, role from it');
 {
   const dirty = {
     room: 'r', key: 'k', owner: 'o', writerPub: 'wp', on: true, v: 2, role: 'writer',
-    sync: { v: SYNC_V }, invite: { pub: 'ip', priv: 'isecret', role: 'writer', sig: 's' },
+    sync: { v: SYNC_V }, invite: { pub: 'SOURCE', priv: 'sourceSecret', role: 'writer', sig: 's' },
     ownerPriv: 'X', writerPriv: 'Y', audience: {},
     links: [{ url: 'https://leak' }], ownerSecret: 'LEAK',
   } as Record<string, unknown>;
-  const inv = collabForInvite(dirty);
-  ok('sync' in inv && 'invite' in inv, 'an invite copy keeps sync (it contributes) and its invite delegation');
-  ok(!('ownerPriv' in inv) && !('writerPriv' in inv) && !('audience' in inv), 'owner/writer secrets are still dropped');
+  const fresh = { pub: 'FRESH', priv: 'freshSecret', role: 'commenter', sig: 'f' };
+  const inv = collabForInvite(dirty, fresh);
+  ok('sync' in inv, 'an invite copy keeps sync (it contributes, so it forks from the stamp)');
+  ok(inv.invite === fresh, 'the invite is the FRESH one passed in');
+  ok((inv.invite as { pub: string }).pub === 'FRESH', 'never the source invite — that delegation can’t ride along');
+  ok(inv.role === 'commenter', 'the top-level role is taken FROM the fresh invite (a commenter invite opens locked)');
+  ok(!('ownerPriv' in inv) && !('writerPriv' in inv) && !('audience' in inv), 'owner/writer secrets are dropped');
   ok(!('links' in inv) && !('ownerSecret' in inv), 'an invite copy carries NO unknown field (links / ownerSecret dropped)');
-  ok(!('role' in inv), 'no top-level role on an invite copy — the role rides in invite.role');
-  ok([...COLLAB_INVITE_KEEP].slice(-2).join() === 'sync,invite', 'COLLAB_INVITE_KEEP is the reader list plus sync + invite');
+  ok([...COLLAB_INVITE_KEEP].slice(-1)[0] === 'sync' && ![...COLLAB_INVITE_KEEP].includes('invite' as never), 'COLLAB_INVITE_KEEP is the reader list plus sync (invite comes from the param, not the allowlist)');
 }
 
 H('docfields: a reader copy with NO sync stamp joins a live room and converges');

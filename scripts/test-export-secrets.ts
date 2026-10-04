@@ -448,12 +448,13 @@ function exportedBody(src: string, name: string): string {
   return src.slice(open, i + 1)
 }
 
-// The BUILDER checks hold for every app that mints share copies in a share.ts.
-// They covered spaces alone until 2026-10-04 — and type, which built its copies
-// inline in collab.ts with a stripper that kept writerPriv, went unchecked.
-// The CALL-SITE checks below are spaces' editor architecture and stay spaces'.
-const SHARE_APPS = ['spaces', 'type']
-const SHARE_CALLSITE_APPS = new Set(['spaces'])
+// The delete-based stripper TEXT checks hold only for an app that still mints
+// copies that way. type does (inline in collab.ts, through share.ts's stripper).
+// spaces moved to the kernel ALLOWLIST (collabForReader / collabForInvite) on
+// 2026-10-04; its builders are proven BEHAVIOURALLY in scripts/test-spaces-invite.ts
+// — this rig runs under strip-only node and cannot import a file with a parameter
+// property, so it keeps spaces' SOURCE guard here and the behaviour lives there.
+const SHARE_APPS = ['type']
 for (const app of SHARE_APPS) {
   const rel = `${app}/src/share.ts`
   let src: string
@@ -479,32 +480,40 @@ for (const app of SHARE_APPS) {
   ok(!/ownerPriv\s*[,}]/.test(mask(exportedBody(src, 'readerCopy'))),
     `${rel}: readerCopy never re-attaches a private key`)
 
-  if (!SHARE_CALLSITE_APPS.has(app)) {
-    // type's call site: collab.ts must build every copy through share.ts.
-    const collab = read(`${app}/src/collab.ts`)
-    ok(/inviteCopy\(/.test(collab) && /readerCopy\(/.test(collab) && !/stripCollabSecrets/.test(collab),
-      `${app}/src/collab.ts mints share copies only through share.ts`)
-    continue
-  }
+  // type's call site: collab.ts must build every copy through share.ts.
+  const collab = read(`${app}/src/collab.ts`)
+  ok(/inviteCopy\(/.test(collab) && /readerCopy\(/.test(collab) && !/stripCollabSecrets/.test(collab),
+    `${app}/src/collab.ts mints share copies only through share.ts`)
+}
 
-  // The call site. A share copy must reach the file through a writer that takes
-  // a DOCUMENT — the ordinary save path serializes the open one.
-  const ed = read(`${app}/src/editor.ts`)
+// spaces: minted through the kernel allowlist now. SOURCE guard (behaviour is in
+// scripts/test-spaces-invite.ts): both builders route through the kernel helper,
+// the delete-based stripper is gone, and neither rebuilds collab by SPREADING the
+// source (`{ ...c }`) — the denylist bypass that would carry every secret back.
+{
+  const rel = 'spaces/src/share.ts'
+  const src = read(rel)
+  ok(!/stripCollabSecrets/.test(src), `${rel}: the delete-based stripper is gone — the kernel allowlist replaces it`)
+  const inviteFn = mask(exportedBody(src, 'inviteCopy'))
+  const readerFn = mask(exportedBody(src, 'readerCopy'))
+  ok(/collabForInvite\(/.test(inviteFn), `${rel}: inviteCopy routes through collabForInvite`)
+  ok(/collabForReader\(/.test(readerFn), `${rel}: readerCopy routes through collabForReader`)
+  ok(/mintInvite\(/.test(inviteFn), `${rel}: inviteCopy still mints a SCOPED invite`)
+  ok(!/\{\s*\.\.\.c\b/.test(inviteFn) && !/\{\s*\.\.\.c\b/.test(readerFn),
+    `${rel}: neither builder rebuilds collab by spreading the source — that bypass carries every secret`)
+
+  // the call site (unchanged by the migration): the share button derives its
+  // document and writes through the encrypt-aware hook, never the ordinary save.
+  const ed = read('spaces/src/editor.ts')
   const share = bodies(ed).get('shareCopy') ?? ''
-  ok(!!share, `${app}/src/editor.ts has a shareCopy()`)
-  ok(/inviteCopy\(|readerCopy\(/.test(share),
-    `${app}: the share button derives its document (inviteCopy/readerCopy)`)
-  ok(!/saveAs\(/.test(mask(share)),
-    `${app}: the share button does NOT reach the ordinary copy path — that path writes store.doc, credentials and all`)
-  ok(/onShareCopy\?\.\(/.test(share), `${app}: it writes through the share-copy hook`)
-
-  // …and that hook must encrypt, and must not become the ⌘S target.
-  const main = read(`${app}/src/main.ts`)
+  ok(!!share, 'spaces/src/editor.ts has a shareCopy()')
+  ok(/inviteCopy\(|readerCopy\(/.test(share), 'spaces: the share button derives its document (inviteCopy/readerCopy)')
+  ok(!/saveAs\(/.test(mask(share)), 'spaces: the share button does NOT reach the ordinary copy path')
+  ok(/onShareCopy\?\.\(/.test(share), 'spaces: it writes through the share-copy hook')
+  const main = read('spaces/src/main.ts')
   const hook = main.slice(main.indexOf('editor.onShareCopy'), main.indexOf('editor.onShareCopy') + 400)
-  ok(/serializeAuto\(/.test(hook),
-    `${app}: onShareCopy writes through serializeAuto — an active password reaches the shared copy`)
-  ok(!/keepHandle:\s*true/.test(hook),
-    `${app}: onShareCopy does not retain the file handle — the next ⌘S must not overwrite the copy with the full document`)
+  ok(/serializeAuto\(/.test(hook), 'spaces: onShareCopy writes through serializeAuto — a password reaches the copy')
+  ok(!/keepHandle:\s*true/.test(hook), 'spaces: onShareCopy does not retain the file handle')
 }
 
 // --- the OTHER half of the round trip: pasting one back in -------------------

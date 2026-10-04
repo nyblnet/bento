@@ -33,39 +33,11 @@
 // client and the deployed worker drift apart.
 
 import { mintInvite } from '../../kernel/src/sync/online.ts'
+import { collabForReader, collabForInvite } from '../../kernel/src/docfields.ts'
 import type { SpacesDoc } from './model.ts'
 
 /** A share export's filename suffix — also what the UI calls the copy. */
 export type ShareKind = 'invite' | 'viewonly'
-
-/**
- * Take the live session out of a copy that is about to leave this machine.
- *
- * ONE list, in one place, and DERIVED BY DELETING rather than by rebuilding
- * the block from an allow-list: a private field added to `CollabCreds` later
- * is covered here without anyone remembering to act. Divergent per-export
- * copies of this list are how one export path ends up leaking what the other
- * three strip — slides wrote that sentence after it happened.
- *
- * The default is to drop `collab` outright: a template, a page extract or the
- * JSON on the clipboard must not join anything, and `room` + `key` together
- * ARE the read capability. `keepRoom` is for the copies that are MEANT to
- * follow the session — they keep the room, the symmetric read key and the
- * PUBLIC keys, and lose only the private halves.
- *
- * Note what `keepRoom` does NOT do: it never adds a capability. An invite is
- * added afterwards, deliberately and visibly, by `inviteCopy()`.
- */
-export function stripCollabSecrets(doc: SpacesDoc, opts: { keepRoom?: boolean } = {}): void {
-  if (!doc.collab) return
-  if (!opts.keepRoom) {
-    delete doc.collab
-    return
-  }
-  delete doc.collab.writerPriv // the muzzle — no room-wide write capability travels
-  delete doc.collab.ownerPriv // …nor the owner key, which can also revoke…
-  delete doc.collab.invite //    …nor any invite (delegation) material we hold
-}
 
 /** A deep clone, so nothing done to a copy can reach the open document. */
 const clone = (doc: SpacesDoc): SpacesDoc => JSON.parse(JSON.stringify(doc)) as SpacesDoc
@@ -124,9 +96,11 @@ export async function inviteCopy(doc: SpacesDoc): Promise<SpacesDoc | null> {
   const c = doc.collab
   if (!c?.room || !c.key || !isOwner(doc)) return null
   const out = clone(doc)
-  stripCollabSecrets(out, { keepRoom: true })
-  out.collab!.invite = await mintInvite(c.ownerPriv!, 'writer')
-  out.collab!.on = true
+  // allowlist (kernel docfields): keeps room/read-key/public keys + sync, drops
+  // every private half AND anything unknown; the fresh invite and the top-level
+  // role come from mintInvite, never from the source.
+  const invite = await mintInvite(c.ownerPriv!, 'writer')
+  out.collab = { ...collabForInvite(c, invite), on: true } as SpacesDoc['collab']
   return out
 }
 
@@ -148,8 +122,9 @@ export function readerCopy(doc: SpacesDoc): SpacesDoc | null {
   const c = doc.collab
   if (!c?.room || !c.key) return null
   const out = clone(doc)
-  out.collab = { ...c, role: 'reader', on: true, sync: undefined }
-  stripCollabSecrets(out, { keepRoom: true })
+  // allowlist (kernel docfields): keeps room/read-key/public keys, forces
+  // role:'reader', drops every private half, the sync stamp AND anything unknown.
+  out.collab = { ...collabForReader(c), on: true } as SpacesDoc['collab']
   return out
 }
 
