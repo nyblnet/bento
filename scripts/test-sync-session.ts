@@ -57,7 +57,7 @@ const { Store } = await import('../slides/src/store.ts');
 const { SyncSession, assetsToOffload } = await import('../slides/src/sync/session.ts');
 const { newDoc, emptySlide } = await import('../slides/src/model.ts');
 const { SYNC_V } = await import('../kernel/src/sync/crdt.ts');
-const { FROM_LIVE, keepLiveIdentity, CAP_FIELDS, withoutCaps, COLLAB_READER_KEEP, collabForReader } = await import('../kernel/src/docfields.ts');
+const { FROM_LIVE, keepLiveIdentity, CAP_FIELDS, withoutCaps, COLLAB_READER_KEEP, collabForReader, COLLAB_INVITE_KEEP, collabForInvite } = await import('../kernel/src/docfields.ts');
 
 let failures = 0, checks = 0;
 function ok(cond: boolean, msg: string) {
@@ -589,18 +589,35 @@ H('docfields: withoutCaps drops top-level capabilities, keeps content');
 H('docfields: collabForReader is an allowlist — unknown + known secrets fail closed');
 {
   const dirty = {
-    room: 'r', key: 'k', owner: 'o', writerPub: 'wp', on: true, v: 2, role: 'reader',
+    room: 'r', key: 'k', owner: 'o', writerPub: 'wp', on: true, v: 2, role: 'writer',
     ownerPriv: 'X', writerPriv: 'Y', invite: { priv: 'Z' }, audience: {}, sync: { v: SYNC_V },
-    futureSecret: 'LEAK',
+    links: [{ url: 'https://leak' }], futureSecret: 'LEAK',
   } as Record<string, unknown>;
   const clean = collabForReader(dirty);
   ok(!('ownerPriv' in clean) && !('writerPriv' in clean) && !('invite' in clean) && !('audience' in clean),
     'the write/owner secrets are dropped');
   ok(!('sync' in clean), 'the CRDT sync stamp is dropped (readers carry no stamp)');
-  ok(!('futureSecret' in clean), 'an UNKNOWN field is dropped too — the allowlist fails closed');
-  ok(Object.keys(clean).sort().join() === 'key,on,owner,role,room,v,writerPub', 'exactly the allowlisted fields present survive');
+  ok(!('links' in clean) && !('futureSecret' in clean), 'link records and any UNKNOWN field are dropped — the allowlist fails closed');
+  ok(clean.role === 'reader', 'role is FORCED to reader — a writer source never projects as a writer (#588 class)');
+  ok(Object.keys(clean).sort().join() === 'key,on,owner,role,room,v,writerPub', 'exactly the allowlisted fields + the forced role survive');
   ok(clean.room === 'r' && clean.key === 'k', 'room + the symmetric read key are kept (a reader must decrypt + join)');
-  ok([...COLLAB_READER_KEEP].length === 7, 'COLLAB_READER_KEEP is the 7-field public allowlist');
+  ok([...COLLAB_READER_KEEP].length === 6, 'COLLAB_READER_KEEP is the 6-field public allowlist (role is forced, not copied)');
+}
+
+H('docfields: collabForInvite keeps sync + invite, still drops secrets and unknowns');
+{
+  const dirty = {
+    room: 'r', key: 'k', owner: 'o', writerPub: 'wp', on: true, v: 2, role: 'writer',
+    sync: { v: SYNC_V }, invite: { pub: 'ip', priv: 'isecret', role: 'writer', sig: 's' },
+    ownerPriv: 'X', writerPriv: 'Y', audience: {},
+    links: [{ url: 'https://leak' }], ownerSecret: 'LEAK',
+  } as Record<string, unknown>;
+  const inv = collabForInvite(dirty);
+  ok('sync' in inv && 'invite' in inv, 'an invite copy keeps sync (it contributes) and its invite delegation');
+  ok(!('ownerPriv' in inv) && !('writerPriv' in inv) && !('audience' in inv), 'owner/writer secrets are still dropped');
+  ok(!('links' in inv) && !('ownerSecret' in inv), 'an invite copy carries NO unknown field (links / ownerSecret dropped)');
+  ok(!('role' in inv), 'no top-level role on an invite copy — the role rides in invite.role');
+  ok([...COLLAB_INVITE_KEEP].slice(-2).join() === 'sync,invite', 'COLLAB_INVITE_KEEP is the reader list plus sync + invite');
 }
 
 H('docfields: a reader copy with NO sync stamp joins a live room and converges');

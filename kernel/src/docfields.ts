@@ -31,7 +31,7 @@ export const FROM_LIVE = ['docId', 'collab', 'readonly', 'template'] as const
  *  never leak through. Mutates `restored` in place. */
 export function keepLiveIdentity(restored: Obj, live: Obj): void {
   for (const k of FROM_LIVE) {
-    if (k in live && live[k] !== undefined) restored[k] = live[k]
+    if (Object.hasOwn(live, k) && live[k] !== undefined) restored[k] = live[k]
     else delete restored[k]
   }
 }
@@ -53,19 +53,39 @@ export function withoutCaps<T extends object>(doc: T): T {
 
 /** Within a KEPT collab block, the fields a reader/viewer copy may carry. This
  *  is an ALLOWLIST: anything not listed — writerPriv, ownerPriv, invite,
- *  audience, the CRDT `sync` stamp, and any field added later — is dropped, so a
- *  new secret fails CLOSED. `sync` is deliberately excluded: a reader does not
- *  contribute, so it adopts fresh and converges from the room, and carrying no
- *  stamp removes stale-stamp risk (writer/invite copies keep sync through their
- *  own builders). `key` (the symmetric READ cap) and `room` stay — a reader
- *  needs them to decrypt and join. */
+ *  audience, the CRDT `sync` stamp, any link records, and any field added later —
+ *  is dropped, so a new secret fails CLOSED. `sync` is deliberately excluded: a
+ *  reader does not contribute, so it adopts fresh and converges from the room,
+ *  and carrying no stamp removes stale-stamp risk (writer/invite copies keep sync
+ *  through their own builders). `key` (the symmetric READ cap) and `room` stay —
+ *  a reader needs them to decrypt and join. `role` is NOT copied from the source
+ *  (a writer's collab must never project as a writer — the #588 class);
+ *  collabForReader sets it to 'reader' itself. */
 export const COLLAB_READER_KEEP =
-  ['room', 'key', 'owner', 'writerPub', 'on', 'v', 'role'] as const
+  ['room', 'key', 'owner', 'writerPub', 'on', 'v'] as const
 
 /** Project a collab block down to what a reader/viewer copy may hold: a new
- *  object with only the allowlisted fields that are present. */
+ *  object with only the allowlisted fields that are present, and role forced to
+ *  'reader' — never the source's role. */
 export function collabForReader(collab: Obj): Obj {
   const out: Obj = {}
-  for (const k of COLLAB_READER_KEEP) if (k in collab && collab[k] !== undefined) out[k] = collab[k]
+  for (const k of COLLAB_READER_KEEP) if (Object.hasOwn(collab, k) && collab[k] !== undefined) out[k] = collab[k]
+  out.role = 'reader'
+  return out
+}
+
+/** Within a kept collab, the fields an INVITE (edit/comment) copy may carry: the
+ *  reader allowlist PLUS the CRDT `sync` stamp (an invite copy contributes, so it
+ *  forks from the stamp) and the owner-signed `invite` delegation. Still an
+ *  ALLOWLIST — ownerPriv, writerPriv, audience, any link records, and any field
+ *  added later are dropped. The role rides inside `invite` (invite.role), not the
+ *  top level, so collabForInvite sets no top-level role. */
+export const COLLAB_INVITE_KEEP = [...COLLAB_READER_KEEP, 'sync', 'invite'] as const
+
+/** Project a collab block down to what an invite copy may hold: a new object with
+ *  only the allowlisted fields that are present. */
+export function collabForInvite(collab: Obj): Obj {
+  const out: Obj = {}
+  for (const k of COLLAB_INVITE_KEEP) if (Object.hasOwn(collab, k) && collab[k] !== undefined) out[k] = collab[k]
   return out
 }
