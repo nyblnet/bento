@@ -7916,3 +7916,31 @@ identity in. slides' gate additionally rebuilds content key by key; type has
 no such layer, and its renderer already treats any opened file's content as
 untrusted — the risk specific to a snapshot is the identity and capability,
 which is what this closes. `test-type-restore-gate.ts` pins it.
+## 2026-10-04 — parseDoc fills what the format requires, and only that
+
+`parseDoc` checked `format` and a non-empty `slides` and nothing else. A
+hand- or agent-written document that omitted a REQUIRED field passed it and
+then crashed the shell during boot: no `theme` died on `undefined.palette`, no
+`size` on `width`, a bare `{type:'text'}` on `indexOf`, a `null` element on
+`themeRefs`. The reader was left on the splash screen with no way out. Measured
+on 1.2.5 with 13 under-specified shapes; found by opening agent-written test
+documents.
+
+Fixed in `model.ts`: `parseDoc` fills each required field (`title`, `version`,
+`size`, `theme` and its four keys, and on each slide `id`, `background`,
+`transition`, `elements`, `notes`) from the editor's own defaults (`newDoc`,
+`emptySlide`), ONLY where it is absent or the wrong type. It drops an element
+that cannot render: not an object, no `type`, or missing a key its type
+requires. `REQUIRED_ELEMENT_KEYS` moved from untrusted.ts into model.ts, so the
+paste gate and the file gate share one table. A slide that is not an object is
+dropped; no slide left means null, as before.
+
+Rule, and why it does not break format additivity: never REPAIR a value that
+is present, and never drop what this version does not understand. An element of
+an unknown type is kept whole (it renders as nothing, which the renderer
+already tolerates), and unknown keys on the document, a slide, the theme or an
+element ride through and are saved back. What is dropped is only what no
+version writes and no renderer can draw. Verified: 9 real decks pass through
+byte-identical with every element kept, and a document from a "newer version"
+keeps its unknown keys and element type through boot.
+`scripts/test-slides-minimal-doc-browser.mjs` guards it (mutation-checked).

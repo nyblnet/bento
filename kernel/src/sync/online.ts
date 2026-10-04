@@ -996,6 +996,19 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
   return active
 }
 
+/** Apply a sharing/collab change WITHOUT an undo step. collab is per-copy
+ *  capability + config, never document content, so a user's Cmd-Z must not
+ *  toggle it: an undone "Stop sharing" left the flag ON with no connection (UI
+ *  and session disagreeing), and an undone key rotation would restore a revoked
+ *  key. The doc is still marked dirty so the change saves, and 'doc' is emitted
+ *  so the Live UI refreshes, but it never goes through store.commit (which pushes
+ *  undo). collab is excluded from the sync diff, so emitting 'doc' sends no op. */
+function markShared(store: Store, fn: () => void) {
+  fn()
+  store.setDirty(true)
+  store.emit('doc')
+}
+
 /** flip sharing on and connect — the "Start live session" action.
  * Credentials already exist (minted at creation); this only arms them. */
 export async function startSharing(session: SyncSession, store: Store): Promise<OnlineTransport | null> {
@@ -1003,9 +1016,9 @@ export async function startSharing(session: SyncSession, store: Store): Promise<
   if (active) return active
   if (!store.doc.collab) {
     const creds = await mintCollab()
-    store.commit(() => { store.doc.collab = creds })
+    markShared(store, () => { store.doc.collab = creds })
   }
-  store.commit(() => { store.doc.collab!.on = true })
+  markShared(store, () => { store.doc.collab!.on = true })
   return joinFromDoc(session, store)
 }
 
@@ -1029,9 +1042,7 @@ export function stopSharing(session: SyncSession, store: Store) {
     active = null
   }
   if (store.doc.collab && store.doc.collab.on !== false) {
-    store.commit(() => {
-      store.doc.collab!.on = false
-    })
+    markShared(store, () => { store.doc.collab!.on = false })
   }
 }
 
@@ -1040,9 +1051,10 @@ export function stopSharing(session: SyncSession, store: Store) {
 export async function rotateKeys(session: SyncSession, store: Store) {
   stopSharing(session, store)
   const fresh = await mintCollab()
-  store.commit(() => {
+  markShared(store, () => {
     // fresh keys = the revocation; carry the rotate-survivors (sync, links) from
-    // the old block (kernel/src/docfields.ts COLLAB_ROTATE_KEEP)
+    // the old block (kernel/src/docfields.ts COLLAB_ROTATE_KEEP). Not a commit —
+    // a key reset is connection state, not an undoable edit (#605).
     store.doc.collab = carryThroughRotation(fresh, store.doc.collab)
   })
 }

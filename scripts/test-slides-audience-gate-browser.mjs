@@ -14,7 +14,9 @@
 // Now `canWriteDeck` is an allowlist that fails closed — no collab, no role, or
 // 'writer' — and the read-only lock follows a document that arrives, not only
 // one that boots (which also covers a plain READER copy dropped onto an editor).
-//   1. audience copy, by loadDoc and by drop: no write actions, Viewer, locked;
+//   1. audience copy dropped: no write actions, Viewer, locked. By loadDoc it
+//      no longer arrives at all — loadDoc keeps the OPEN deck's identity (the
+//      document gate), so the pasted audience collab is never adopted;
 //   2. reader copy dropped: locked (was not — the lock ran at build only);
 //   3. a role this version does not know: read-only (fails closed);
 //   4. controls: an owner copy (no role) and a 'writer' copy keep every action,
@@ -73,13 +75,25 @@ async function arrive(kind, route) {
 }
 
 try {
-  for (const route of ['loadDoc', 'drop']) {
-    console.log(`\naudience copy, by ${route}\n`)
-    const r = await arrive('audience', route)
+  console.log('\naudience copy, by drop\n')
+  {
+    // a FILE keeps its own identity when opened, so the audience role arrives
+    const r = await arrive('audience', 'drop')
     ok(r.role === 'audience', `it arrived in the editor (role ${r.role})`)
     ok(!WRITE_ACTIONS.some((a) => r.actions.includes(a)), `no write actions (${r.actions.join(', ') || 'none'})`)
     ok(/Viewer/.test(r.me) && !/Editor|Owner/.test(r.me), `the People row says Viewer ("${r.me}")`)
     ok(r.locked && r.banners === 1, `editing is locked, one banner (${r.banners})`)
+    ok(r.errors.length === 0, `no page errors${r.errors.length ? ': ' + r.errors.join('; ') : ''}`)
+  }
+  console.log('\naudience copy, by loadDoc\n')
+  {
+    // loadDoc REPLACES the open deck's content and keeps the open deck's
+    // identity (the document gate, restoregate.ts sanitizeDoc with live): the
+    // pasted audience collab is never adopted, so there is nothing to lock —
+    // the deck is still the owner's, with the owner's actions
+    const r = await arrive('audience', 'loadDoc')
+    ok(r.role !== 'audience', `the pasted audience identity is not adopted (role ${r.role ?? 'none'})`)
+    ok(!r.locked && r.banners === 0 && WRITE_ACTIONS.every((a) => r.actions.includes(a)), 'the open deck stays the open deck: unlocked, its own actions')
     ok(r.errors.length === 0, `no page errors${r.errors.length ? ': ' + r.errors.join('; ') : ''}`)
   }
   console.log('\nreader copy dropped onto the editor\n')
@@ -89,12 +103,12 @@ try {
   }
   console.log('\na role this version does not know\n')
   {
-    const r = await arrive('future', 'loadDoc')
+    const r = await arrive('future', 'drop')
     ok(r.locked && !WRITE_ACTIONS.some((a) => r.actions.includes(a)), `fails closed: locked, no write actions (${r.actions.join(', ') || 'none'})`)
   }
   for (const kind of ['owner', 'writer']) {
     console.log(`\ncontrol: ${kind} copy\n`)
-    const r = await arrive(kind, 'loadDoc')
+    const r = await arrive(kind, 'drop') // a file keeps its own identity
     ok(WRITE_ACTIONS.every((a) => r.actions.includes(a)), `every write action is offered`)
     ok(!r.locked && r.banners === 0, 'editing is not locked')
     ok(kind === 'owner' ? /Owner/.test(r.me) : /Editor/.test(r.me), `the People row says ${kind === 'owner' ? 'Owner' : 'Editor'} ("${r.me}")`)

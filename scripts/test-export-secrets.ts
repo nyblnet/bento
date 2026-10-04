@@ -295,16 +295,23 @@ for (const [name, src] of editor) {
 // The paste side of the JSON round-trip. Adopting the pasted block would wipe
 // the user's own credentials (our copy sends none) or move the deck into a
 // room that came from somewhere else.
+// The identity is now kept by the document gate itself (restoregate.ts
+// sanitizeDoc with `live` — docId, collab and readonly come from the open deck),
+// which openReplaceJson invokes through parseDocInputReport; the gate's own rig
+// (test-replace-json-gate.ts) RUNS that identity rule. Pinned here: the paste
+// path hands the gate the open document.
 const paste = body('openReplaceJson')
-ok(/const keep = this\.store\.doc\.collab/.test(paste) &&
-  /next\.collab = keep/.test(paste) && /delete next\.collab/.test(paste),
-  'openReplaceJson() keeps THIS document\'s collab instead of adopting the pasted one')
+const pasteCode = mask(paste)
+const gateAt = pasteCode.search(/parseDocInputReport\(\s*ta\.value\s*,\s*\{\s*live:\s*this\.store\.doc\s*\}\s*\)/)
+ok(gateAt >= 0,
+  'openReplaceJson() parses through the gate with { live: this.store.doc } — THIS document\'s collab, never the pasted one')
 // …and settles it BEFORE the swap: replaceDoc's events reach the sync session
 // synchronously, so a fix-up afterwards would already have re-attached the
-// session to the pasted credentials.
+// session to the pasted credentials. (Both indices must exist: a missing
+// pattern returns -1, which is "before" everything and proved nothing.)
 // Masked, because the comment above the code names both of them.
-const pasteCode = mask(paste)
-ok(pasteCode.indexOf('next.collab = keep') < pasteCode.indexOf('replaceDoc(') && !/loadDoc/.test(pasteCode),
+const swapAt = pasteCode.indexOf('replaceDoc(')
+ok(gateAt >= 0 && swapAt >= 0 && gateAt < swapAt && !/loadDoc/.test(pasteCode),
   'openReplaceJson() decides the session before replaceDoc, not after')
 
 // --- 3. no user-facing path writes plaintext --------------------------------
