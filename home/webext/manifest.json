@@ -9,10 +9,15 @@
     "notifications",
     "sidePanel",
     "storage",
+    "downloads",
+    "downloads.ui",
     "unlimitedStorage"
   ],
   "optional_permissions": [
     "history"
+  ],
+  "host_permissions": [
+    "file:///*"
   ],
   "options_page": "src/home.html#settings",
   "background": {
