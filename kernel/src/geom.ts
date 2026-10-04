@@ -305,3 +305,54 @@ export function sideMidpoint(b: Box, side: 'top' | 'right' | 'bottom' | 'left'):
   if (side === 'left') return { x: b.x, y: b.y + b.h / 2 }
   return { x: b.x + b.w, y: b.y + b.h / 2 }
 }
+
+// --- connectors -------------------------------------------------------------
+// A connector is a line/path whose ends anchor to elements (model: from/to
+// {el, side}). These are the pure routing + snapping primitives; the editor owns
+// the derive-not-commit pass (syncConnectors), the draw tool and the handles.
+
+/** A connector end's side: a named border midpoint, or 'auto' = ride the border
+ *  toward the other end (and, as a snap anchor, the box centre). */
+export type ConnectorSide = 'auto' | 'top' | 'right' | 'bottom' | 'left'
+
+/** Where a connector end sits on an anchored box: an explicit side pins to that
+ *  side's midpoint; 'auto' (or undefined) rides the border toward `toward` — the
+ *  other end's point. */
+export function connectorEndpoint(b: Box, side: ConnectorSide | undefined, toward: Pt): Pt {
+  return side && side !== 'auto' ? sideMidpoint(b, side) : borderPoint(b, toward)
+}
+
+/** The snap anchors a box offers a connector: the four side midpoints, then the
+ *  centre as 'auto'. Order is stable so nearest-anchor ties resolve the same way
+ *  everywhere. */
+export function boxAnchors(b: Box): Array<{ side: ConnectorSide; pt: Pt }> {
+  return [
+    { side: 'top', pt: sideMidpoint(b, 'top') },
+    { side: 'right', pt: sideMidpoint(b, 'right') },
+    { side: 'bottom', pt: sideMidpoint(b, 'bottom') },
+    { side: 'left', pt: sideMidpoint(b, 'left') },
+    { side: 'auto', pt: boxCenter(b) },
+  ]
+}
+
+/** The nearest anchor to `p` strictly within `tol` (euclidean), or null. First
+ *  anchor wins a tie, matching the draw tool's scan order. */
+export function nearestAnchor(
+  anchors: ReadonlyArray<{ side: ConnectorSide; pt: Pt }>,
+  p: Pt,
+  tol: number,
+): { side: ConnectorSide; pt: Pt } | null {
+  let best: { side: ConnectorSide; pt: Pt } | null = null
+  let bd = tol
+  for (const a of anchors) {
+    const d = Math.hypot(p.x - a.pt.x, p.y - a.pt.y)
+    if (d < bd) { bd = d; best = a }
+  }
+  return best
+}
+
+/** Is `p` inside `b` grown by `pad` on every side (inclusive)? */
+export function boxContains(b: Box, p: Pt, pad = 0): boolean {
+  return p.x >= b.x - pad && p.x <= b.x + b.w + pad
+    && p.y >= b.y - pad && p.y <= b.y + b.h + pad
+}
