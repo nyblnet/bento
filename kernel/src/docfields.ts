@@ -97,3 +97,22 @@ export function collabForInvite(collab: object, invite: { role: string }): Obj {
   out.role = invite.role
   return out
 }
+
+/** On a key rotation ("Reset access…") the collab is rebuilt with FRESH keys —
+ *  that is the revocation. These sub-fields are carried from the old block onto
+ *  the fresh one: the CRDT `sync` stamp (so the document's collab history
+ *  survives the reset) and `links` (published-link records survive a reset — the
+ *  maintainer's ruling). To make Reset REVOKE links instead, drop 'links' here —
+ *  a one-line change. */
+export const COLLAB_ROTATE_KEEP = ['sync', 'links'] as const
+
+/** Build the rotated collab: the freshly-minted block with the rotate-survivor
+ *  sub-fields carried over from `old`. Returns a new object; `fresh`'s type is
+ *  preserved. */
+export function carryThroughRotation<T extends object>(fresh: T, old: object | undefined): T {
+  if (!old) return fresh
+  const out = { ...(fresh as Obj) }
+  const src = old as Obj
+  for (const k of COLLAB_ROTATE_KEEP) if (Object.hasOwn(src, k) && src[k] !== undefined) out[k] = src[k]
+  return out as T
+}

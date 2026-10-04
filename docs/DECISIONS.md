@@ -7944,3 +7944,66 @@ version writes and no renderer can draw. Verified: 9 real decks pass through
 byte-identical with every element kept, and a document from a "newer version"
 keeps its unknown keys and element type through boot.
 `scripts/test-slides-minimal-doc-browser.mjs` guards it (mutation-checked).
+
+## 2026-09-28 — the svg style sanitizer matches the browser's parse, not text
+
+`sanitizeSvgCss` removed external `url(...)` with a regex over the raw CSS.
+CSS decodes escapes in an ident BEFORE deciding a token is `url(`, so
+`\75 rl(https://…)` is a url the regex never sees; and the string-form image
+functions (`image-set("https://…" 1x)`, `-webkit-image-set`) carry a fetch
+with no `url(` at all. Either reached the network when an svg element was
+rendered — a read receipt (reader IP + timing) on open, exactly what PLATFORM
+§1 and the remote-image consent rule exist to prevent. No script execution.
+Reachable by every route that carries an svg element (file, paste, collab op,
+Replace-from-JSON). Fixed by parsing instead of matching: decode escapes,
+allowlist CSS function names (image functions other than `url(#…)` /
+`url(data:image/…)` refused), and confirm with a constructed `CSSStyleSheet`
+and an `element.style` oracle that canonicalise both families back to `url()`
+on read-back — so the check is the browser's own parse, not a spelling.
+Measured before and after in Chromium against a request-logging server (every
+escape/image-set/nested family plus the positive control), and end to end
+through a built deck with a zero-request network log; mutation-verified.
+Rule: a text scan can never enumerate the ways a browser spells a fetch;
+sanitize CSS by parsing it the way the browser will, and assert egress, not
+substrings. (Note: `scopeCss` corrupts every at-rule but `@keyframes`, so a
+nested `@media` was not live-exploitable through the css path; the sanitizer
+neutralises it anyway.)
+
+## 2026-09-28 — a restored snapshot is untrusted input; identity comes from the file
+
+Autosave recovery and version history are keyed only by `docId` in the shared
+`file://` store, and Restore applied the stored JSON with a raw `replaceDoc` —
+outside the untrusted-input gate that paste and Replace-from-JSON use. A local
+file could plant a snapshot under a victim deck's `docId`; on Restore the deck
+adopted the snapshot's `collab` (moving it into a room and key the planter
+chose — later edits sync there, and ⌘S writes those credentials into the real
+file) and its `readonly` flag. Content substitution behind a trustworthy
+prompt, escalating to live exfiltration; no user action beyond clicking
+"Restore your unsaved changes." Fixed: a new gate rebuilds a restored snapshot
+through the untrusted.ts sanitizers (`sanitizeSlide`/`sanitizeAssets`/
+`sanitizeFonts`, non-model keys dropped, settings shape-checked), and `docId`,
+`collab` and `readonly` are ALWAYS the open file's, never the snapshot's; a
+snapshot that is not a document after the gate is never offered; the recovery
+banner AND version-history restore both gate. Rule: anything read back from
+browser storage on a shared origin is foreign input — sanitize its content and
+take identity and capability from the live file, never from the stored copy.
+The durable fix (a per-file key so a forged entry is not even offered) is the
+local-storage programme.
+
+## 2026-09-28 — decompression stops at the declared size
+
+`readZip` bounded the compressed input to the entry's `csize` but inflated the
+whole stream into memory before checking the result against `usize`; the
+convert preflight trusted the declared sizes. A crafted archive that
+under-declares inflates far past its stated size (deflate reaches ~1032:1)
+before any guard fires — a client-side memory-exhaustion DoS on opening a
+`.pptx` (import page) or `.xlsx` (dash). Fixed once in `readZip`: a bounded
+reader over the `DecompressionStream` aborts the moment cumulative output
+passes `min(declared usize, 256 MiB)`, so the output is never fully allocated;
+dash, convert and the import page inherit it. Verified by running a real
+under-declared bomb — refused with ~2.5 MB peak allocation, versus ~73 MB when
+the cap is neutered, proving the bounded reader (not the post-hoc size check)
+does the work — with legitimate `.pptx`/`.xlsx` imports unaffected. Rule: a
+size limit must be enforced DURING decompression, never after; the declared
+size in a container header is an attacker input, and the primitive, not the
+caller's preflight, must hold the ceiling.
