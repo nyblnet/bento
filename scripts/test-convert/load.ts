@@ -41,7 +41,7 @@ if (!process.env.BENTO_CONVERT_LOAD_BUNDLED) {
   process.exit(r.status ?? 1)
 }
 
-const { convertPptx } = await import('../../kernel/src/convert/pptx.ts')
+const { convertPptx } = await import('../../convert/src/pptx.ts')
 const { allFixtures } = await import('./_fixtures.ts')
 const { parseDoc } = await import('../../slides/src/model.ts')
 const { validateDoc } = await import('../../slides/src/validate.ts')
