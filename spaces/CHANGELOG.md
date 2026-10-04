@@ -489,6 +489,17 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   they replace the pages, title and theme, and never the space's identity.
   Bento Slides had the same bug.
 
+- **Restoring from this browser checks what it restores.** The recovery
+  banner's snapshot and every History entry are kept in the browser's storage,
+  which every local Bento file shares, so they are now treated like a file
+  that arrived from somewhere else, as Bento Slides already treats them. An
+  entry that names a different space, is not a bento/spaces document, was
+  written by a newer version, or is oversized is not restored: nothing
+  changes, and the entry is left where it is. Text in a restored entry is
+  cleaned the way an imported space's is. A bad entry never raises the
+  recovery banner in the first place. Reading copies and view-only copies
+  don't offer to restore at all.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

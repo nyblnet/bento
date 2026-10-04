@@ -161,6 +161,18 @@ jobs:
             --outfile="$RUNNER_TEMP/test-spaces-undo.mjs"
           node "$RUNNER_TEMP/test-spaces-undo.mjs"
 
+      - name: Spaces restore-gate rig
+        # The recovery snapshot and every History entry live in IndexedDB, which
+        # every file:// document shares, so restore is foreign input. Like
+        # slides' restore gate: an entry naming another space is refused, it
+        # never brings collab/readonly/template, block html is sanitized, and
+        # junk, frozen, __proto__ and oversized entries apply nothing.
+        # (Bundled: store.ts imports './model' extensionless.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-restore-gate.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-restore-gate.mjs"
+          node "$RUNNER_TEMP/test-spaces-restore-gate.mjs"
+
       - name: Spaces agent-surface rig
         # agent.ts is ~900 lines and shipped with no coverage at all: two of the
         # five defects an adversarial review found in round 2 lived here,
