@@ -19,8 +19,14 @@ dependency to the core document lifecycle is off-platform.
 
 Byte order of a shipped shell (postbuild-compress):
 `chrome → NOTICE → tooling comment → plaintext #bento-doc → splash → compressed payloads`.
-Runtime JS/CSS ship deflated in `bento/deflate-b64` script blocks with a ~1KB
-loader (DecompressionStream → blob import).
+Runtime JS/CSS ship deflated in `bento/deflate-b86` script blocks (base86:
+86 printable ASCII symbols chosen so a payload can never close or comment out
+its own block; 6.25% smaller than the `bento/deflate-b64` blocks of 1.1.0 and
+earlier, which every reader still accepts) with a ~3KB loader
+(a synchronous JavaScript inflate → an inline classic script, then `new
+Function`, then a blob import — whichever the host's policy allows first,
+tried in that order; the app is mounted before DOMContentLoaded, as in the
+uncompressed build, with no timer or frame on the way).
 
 ## 2. The splice contract (FROZEN)
 
@@ -104,8 +110,14 @@ Authoritative spec: `docs/collab-design.md`. The non-negotiables:
 
 - Shipped files check `https://bento.page/releases/<app>/manifest.json`
   (user-initiated or launch check) and verify: ECDSA P-256 signature over the
-  manifest payload against the `PUBLIC_KEY_JWK` embedded in the shell, sha256
-  of the fetched shell, and **version monotonicity**.
+  manifest payload against the **publisher's public key** — the platform's
+  `PUBLIC_KEY_JWK` unless the app was built with its own via
+  `configureApp({ publicKeyJwk })` — sha256 of the fetched shell, and
+  **version monotonicity**. The key is fixed at build time and is never read
+  from a document, a URL or the network. **A shell built for one publisher
+  never accepts another publisher's signatures**: an upstream build refuses a
+  fork-signed manifest and a fork build refuses the platform's
+  (`scripts/test-release-channel.mjs` pins both directions).
 - Manifest shape: `{ payload: "<json string>", sig: "<b64>" }` where payload
   carries `{ app, version, sha256, url, at }`.
 - The signing key lives offline (`~/.bento/release-key.json`), never in the
