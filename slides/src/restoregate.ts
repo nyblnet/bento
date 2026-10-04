@@ -80,6 +80,11 @@ export function gateRestored(json: string, live: BentoDoc): { doc: BentoDoc; dro
   let raw: unknown
   try { raw = JSON.parse(json) } catch { return null }
   if (!isObj(raw)) return null
+  // A snapshot slide with no id is junk, never a slide autosave wrote. parseDoc
+  // now MINTS a missing id (so a hand-written FILE still opens), which would
+  // turn that junk into a blank slide worth offering — so it is dropped here,
+  // first, exactly as sanitizeSlide below always dropped it.
+  if (Array.isArray(raw.slides)) raw.slides = raw.slides.filter((s) => isObj(s) && typeof s.id === 'string' && s.id !== '')
   // parseDoc is the format check. A `template` flag makes it mint a new
   // identity and drop collab — harmless here, because identity is replaced
   // with the open file's below either way
