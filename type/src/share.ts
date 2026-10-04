@@ -6,62 +6,49 @@
 // copy…"). Minted in one place, DOM-free, so the copy that ships is the copy
 // the rigs inspect.
 //
-// It used to be built inline in collab.ts, and its stripper dropped ownerPriv
-// and the invite but NOT writerPriv. bento/type never mints a writer key — its
-// rooms are v2, owner-keyed — but `parseDoc` carries `collab` through verbatim,
-// so a document that ARRIVED holding a legacy writer key (an older file, a
-// pasted JSON) handed that key to every view-only copy made from it: a "reader"
-// holding a private key that writes, which defeats the read-only tier at the
-// relay. Nothing caught it because scripts/test-export-secrets.ts's share-copy
-// checks ran against spaces alone; this file is shaped to that same contract
-// (stripCollabSecrets / inviteCopy / readerCopy) so they now cover type too.
+// It used to be built inline in collab.ts with a hand list of fields to delete
+// that dropped ownerPriv and the invite but NOT a legacy writer key. bento/type
+// never mints a writer key — its rooms are v2, owner-keyed — but `parseDoc`
+// carries `collab` through verbatim, so a document that ARRIVED holding a legacy
+// writer key (an older file, a pasted JSON) handed that key to every view-only
+// copy made from it: a "reader" holding a private key that writes, which defeats
+// the read-only tier at the relay. The kernel ALLOWLIST closes that whole class —
+// a copy keeps only what is on the list, so an arrived-with field it does not
+// know is dropped, not carried.
 //
-// Still a HAND LIST of private fields. The kernel's shared allowlist of what a
-// copy may keep will replace it; until then, a new private field in `collab`
-// must be added to stripCollabSecrets.
+// The private fields a copy must not carry are now the kernel's shared ALLOWLIST
+// (kernel/src/docfields.ts): a reader/invite copy keeps only what is on the list,
+// so a new field in `collab` — private or not — fails CLOSED instead of riding
+// along. The whole-block default drop lives in docForExport.
 
 import { mintInvite } from './sync/online.ts';
+import { collabForReader, collabForInvite } from '../../kernel/src/docfields.ts';
 import type { TypeDoc } from './model.ts';
 
 const clone = (doc: TypeDoc): TypeDoc => JSON.parse(JSON.stringify(doc)) as TypeDoc;
 
 /**
- * Remove every private key a copy for someone else must not carry.
- *
- * By default the WHOLE block goes — the room key is a capability too. With
- * `keepRoom`, the room and its public keys stay (so the copy can follow the
- * live session) and every private key goes: the owner's, any legacy writer
- * key, and any invite keypair this document holds.
- */
-export function stripCollabSecrets(doc: TypeDoc, opts: { keepRoom?: boolean } = {}): void {
-  if (!doc.collab) return;
-  if (!opts.keepRoom) { delete doc.collab; return; }
-  delete doc.collab.ownerPriv;
-  delete doc.collab.writerPriv;
-  delete doc.collab.invite;
-}
-
-/**
  * An EDITOR copy: joins live with edit access through its own owner-signed
- * invite, which the owner can revoke. It strips FIRST — a writer key left
- * beside the invite would be a second way in that no revocation reaches.
+ * invite, which the owner can revoke. The allowlist keeps room/read-key/public
+ * keys + sync and drops every private half; the fresh invite and the top-level
+ * role come from mintInvite, never from the source — so a legacy writer key or a
+ * source invite can never ride along.
  */
 export async function inviteCopy(doc: TypeDoc, ownerPriv: string): Promise<TypeDoc> {
   const out = clone(doc);
-  stripCollabSecrets(out, { keepRoom: true });
-  out.collab!.invite = await mintInvite(ownerPriv, 'writer');
-  out.collab!.on = true;
+  const invite = await mintInvite(ownerPriv, 'writer');
+  out.collab = { ...collabForInvite(out.collab!, invite), on: true } as TypeDoc['collab'];
   return out;
 }
 
 /**
- * A VIEW-ONLY copy: follows the live session and never writes. It carries the
- * room and the public keys, and no private key of any kind; the relay drops
- * anything it tries to send.
+ * A VIEW-ONLY copy: follows the live session and never writes. The allowlist
+ * keeps the room and the public keys, forces role:'reader', and drops every
+ * private key, the sync stamp AND anything unknown; the relay drops anything it
+ * tries to send.
  */
 export function readerCopy(doc: TypeDoc): TypeDoc {
   const out = clone(doc);
-  out.collab = { ...out.collab!, role: 'reader', on: true, sync: undefined };
-  stripCollabSecrets(out, { keepRoom: true });
+  out.collab = { ...collabForReader(out.collab!), on: true } as TypeDoc['collab'];
   return out;
 }

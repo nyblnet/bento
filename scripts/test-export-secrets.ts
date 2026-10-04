@@ -448,50 +448,16 @@ function exportedBody(src: string, name: string): string {
   return src.slice(open, i + 1)
 }
 
-// The delete-based stripper TEXT checks hold only for an app that still mints
-// copies that way. type does (inline in collab.ts, through share.ts's stripper).
-// spaces moved to the kernel ALLOWLIST (collabForReader / collabForInvite) on
-// 2026-10-04; its builders are proven BEHAVIOURALLY in scripts/test-spaces-invite.ts
-// — this rig runs under strip-only node and cannot import a file with a parameter
-// property, so it keeps spaces' SOURCE guard here and the behaviour lives there.
-const SHARE_APPS = ['type']
-for (const app of SHARE_APPS) {
+// spaces and type both mint copies through the kernel ALLOWLIST
+// (collabForReader / collabForInvite) now. Their builders are proven BEHAVIOURALLY
+// in scripts/test-spaces-invite.ts and scripts/test-type-share.ts (bundled via
+// esbuild, running the real functions); this rig runs under strip-only node and
+// cannot import a file with a parameter property, so for each it keeps a SOURCE
+// guard: the builders route through the kernel helpers and reintroduce neither the
+// delete-stripper nor a spread-the-source bypass. The cross-app "no builder
+// bypasses" row lands with the slides adoption (the last one).
+for (const app of ['spaces', 'type']) {
   const rel = `${app}/src/share.ts`
-  let src: string
-  try { src = read(rel) } catch {
-    ok(false, `${rel} exists — share copies must be minted in one place`)
-    continue
-  }
-  const stripper = exportedBody(src, 'stripCollabSecrets')
-  ok(!!stripper, `${rel}: found stripCollabSecrets() — the checks below are worthless without it`)
-  ok(/delete doc\.collab\.ownerPriv\b/.test(stripper), `${rel}: the stripper drops ownerPriv`)
-  ok(/delete doc\.collab\.writerPriv\b/.test(stripper), `${rel}: the stripper drops writerPriv`)
-  ok(/delete doc\.collab\.invite\b/.test(stripper), `${rel}: the stripper drops any invite it holds`)
-  ok(/delete doc\.collab\b(?!\.)/.test(stripper),
-    `${rel}: the stripper drops the whole block by default — the room key is a capability too`)
-
-  const inviteFn = exportedBody(src, 'inviteCopy')
-  ok(/stripCollabSecrets\(\s*out\s*,\s*\{\s*keepRoom:\s*true\s*\}\s*\)/.test(inviteFn),
-    `${rel}: inviteCopy strips before it delegates`)
-  ok(/mintInvite\(/.test(inviteFn), `${rel}: inviteCopy mints a SCOPED invite rather than passing the room's own keys`)
-  const masked = mask(inviteFn)
-  ok(masked.indexOf('stripCollabSecrets(') < masked.indexOf('mintInvite('),
-    `${rel}: it strips FIRST — a stray writerPriv beside an invite is a second, unrevokable way in`)
-  ok(!/ownerPriv\s*[,}]/.test(mask(exportedBody(src, 'readerCopy'))),
-    `${rel}: readerCopy never re-attaches a private key`)
-
-  // type's call site: collab.ts must build every copy through share.ts.
-  const collab = read(`${app}/src/collab.ts`)
-  ok(/inviteCopy\(/.test(collab) && /readerCopy\(/.test(collab) && !/stripCollabSecrets/.test(collab),
-    `${app}/src/collab.ts mints share copies only through share.ts`)
-}
-
-// spaces: minted through the kernel allowlist now. SOURCE guard (behaviour is in
-// scripts/test-spaces-invite.ts): both builders route through the kernel helper,
-// the delete-based stripper is gone, and neither rebuilds collab by SPREADING the
-// source (`{ ...c }`) — the denylist bypass that would carry every secret back.
-{
-  const rel = 'spaces/src/share.ts'
   const src = read(rel)
   ok(!/stripCollabSecrets/.test(src), `${rel}: the delete-based stripper is gone — the kernel allowlist replaces it`)
   const inviteFn = mask(exportedBody(src, 'inviteCopy'))
@@ -499,11 +465,24 @@ for (const app of SHARE_APPS) {
   ok(/collabForInvite\(/.test(inviteFn), `${rel}: inviteCopy routes through collabForInvite`)
   ok(/collabForReader\(/.test(readerFn), `${rel}: readerCopy routes through collabForReader`)
   ok(/mintInvite\(/.test(inviteFn), `${rel}: inviteCopy still mints a SCOPED invite`)
-  ok(!/\{\s*\.\.\.c\b/.test(inviteFn) && !/\{\s*\.\.\.c\b/.test(readerFn),
-    `${rel}: neither builder rebuilds collab by spreading the source — that bypass carries every secret`)
+  // the bypass: rebuilding collab by spreading ANY source expression (`{ ...c }`,
+  // `{ ...doc.collab }`, `{ ...out.collab }`) instead of the kernel helper carries
+  // every secret. The only spread allowed is of a collabFor* projection.
+  ok(!/\{\s*\.\.\.(?!collabFor)/.test(inviteFn) && !/\{\s*\.\.\.(?!collabFor)/.test(readerFn),
+    `${rel}: neither builder rebuilds collab by spreading the source — only a collabFor* projection`)
+}
 
-  // the call site (unchanged by the migration): the share button derives its
-  // document and writes through the encrypt-aware hook, never the ordinary save.
+// type's call site: collab.ts must build every copy through share.ts.
+{
+  const collab = read('type/src/collab.ts')
+  ok(/inviteCopy\(/.test(collab) && /readerCopy\(/.test(collab) && !/stripCollabSecrets/.test(collab),
+    'type/src/collab.ts mints share copies only through share.ts')
+}
+
+// spaces' call site: the share button derives its document and writes through the
+// encrypt-aware hook, never the ordinary save path. (Its share.ts source guard is
+// in the loop above, alongside type.)
+{
   const ed = read('spaces/src/editor.ts')
   const share = bodies(ed).get('shareCopy') ?? ''
   ok(!!share, 'spaces/src/editor.ts has a shareCopy()')

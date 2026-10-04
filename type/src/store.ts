@@ -20,6 +20,7 @@
 
 import type { Block, TypeDoc } from './model.ts';
 import { copyIsReceiveOnly } from './model.ts';
+import { FROM_LIVE } from '../../kernel/src/docfields.ts';
 
 type Snap =
   | { kind: 'doc'; doc: TypeDoc }
@@ -48,15 +49,16 @@ const LIMIT = 200;
  *              thing #588's read-only lock reads, so undo can never unlock a
  *              view-only copy
  *   readonly — the file's mode
- * The same list as bento/slides' FROM_LIVE (restoregate.ts). A local copy for
- * now; kernel will lift one shared list for every app.
+ * Now the shared kernel list (kernel/src/docfields.ts), re-exported here. The
+ * kernel superset also carries `template`, which type has no field for — keeping
+ * a field the document never has is a no-op.
  *
  * Consequence worth knowing: undoing a whole-document REPLACE (Replace from
  * JSON, loadDoc, restoring a recovery snapshot) brings back the earlier
  * CONTENT under the identity that replace brought in — identity is not
  * undoable, whichever action changed it. bento/slides behaves the same.
  */
-export const FROM_LIVE = ['docId', 'collab', 'readonly'] as const;
+export { FROM_LIVE };
 
 export function keepLiveIdentity(doc: TypeDoc, live: TypeDoc): void {
   const d = doc as unknown as Record<string, unknown>;

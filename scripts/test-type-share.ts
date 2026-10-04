@@ -25,7 +25,7 @@
 import { register } from 'node:module'
 import { readFileSync } from 'node:fs'
 register('./lib/ts-resolve-hooks.mjs', import.meta.url)
-const { readerCopy, inviteCopy, stripCollabSecrets } = await import('../type/src/share.ts')
+const { readerCopy, inviteCopy } = await import('../type/src/share.ts')
 const { emptyDoc, parseDoc } = await import('../type/src/model.ts')
 const { mintCollab } = await import('../kernel/src/sync/online.ts')
 import type { TypeDoc } from '../type/src/model.ts'
@@ -80,10 +80,46 @@ console.log('\nan editor copy writes only through its own invite\n')
   ok(e.collab?.invite?.role === 'writer' && e.collab?.on === true, 'a live editor invite')
 }
 
-console.log('\nthe default strip removes the room too\n')
+// The allowlist bar (security, 2026-10-04): every builder, from ONE source
+// carrying every known secret, an unknown field and a JSON own __proto__ key —
+// only the allowlist survives, nothing by name and nothing new by accident. (The
+// whole-block default drop is docForExport's, pinned in test-export-secrets.ts.)
+console.log('\nevery builder, from one poisoned source\n')
 {
-  const d = arrived(); stripCollabSecrets(d)
-  ok(!('collab' in d), 'with no keepRoom, the whole collab block goes — the room key is a capability')
+  const poisoned = arrived()
+  const pc = JSON.parse('{"__proto__":{"polluted":true}}') as Record<string, unknown>
+  Object.assign(pc, poisoned.collab, {
+    writerPriv: 'WRITER-PRIVATE',
+    invite: { pub: 'SRC', priv: 'INVITE-PRIVATE', role: 'writer', sig: 's' },
+    audience: { invite: { priv: 'AUD-PRIVATE' } },
+    sync: { v: 2, tag: 'stamp' }, links: [{ url: 'https://pub' }], futureSecret: 'LEAK',
+  })
+  poisoned.collab = pc as TypeDoc['collab']
+
+  const READER_KEYS = ['room', 'key', 'owner', 'writerPub', 'on', 'v', 'role']
+  const INVITE_KEYS = ['room', 'key', 'owner', 'writerPub', 'on', 'v', 'sync', 'invite', 'role']
+  const POISON = ['writerPriv', 'ownerPriv', 'audience', 'futureSecret', 'links']
+
+  const rc = readerCopy(poisoned).collab as Record<string, unknown>
+  const ic = (await inviteCopy(poisoned, (await mintCollab()).ownerPriv as string)).collab as Record<string, unknown>
+
+  ok(Object.keys(rc).every((k) => READER_KEYS.includes(k)),
+    `reader copy: ONLY reader-allowlist keys survive (${Object.keys(rc).sort().join(',')})`)
+  ok(rc.role === 'reader' && rc.sync === undefined, 'reader: role forced reader, no sync stamp')
+  ok(Object.keys(ic).every((k) => INVITE_KEYS.includes(k)),
+    `invite copy: ONLY invite-allowlist keys survive (${Object.keys(ic).sort().join(',')})`)
+  ok(ic.sync !== undefined && (ic.invite as { pub: string }).pub !== 'SRC',
+    'invite: keeps sync, carries a FRESH invite not the source\'s')
+  ok(ic.role === 'writer', 'invite: top-level role from the fresh writer invite (type mints writer invites only)')
+  for (const f of POISON) { ok(!(f in rc), `reader drops ${f}`); ok(!(f in ic), `invite drops ${f}`) }
+  ok(!Object.hasOwn(rc, '__proto__') && !Object.hasOwn(ic, '__proto__'), 'neither copy carries a __proto__ own key')
+  ok(({} as Record<string, unknown>).polluted === undefined, 'and the __proto__ source key polluted nothing (Object.hasOwn)')
+
+  // the planted bypass: rebuilding collab by SPREADING the source keeps every
+  // secret; the exact-key-set check above is what turns that red.
+  const bypass = { ...pc, role: 'reader' } as Record<string, unknown>
+  ok('writerPriv' in bypass && !Object.keys(bypass).every((k) => READER_KEYS.includes(k)),
+    'a spread-the-source bypass FAILS the reader key-set check (not vacuous)')
 }
 
 console.log('\nevery copy is minted in share.ts\n')
