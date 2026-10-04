@@ -10,16 +10,20 @@ import type { Store } from '../store'
 import { t } from '../i18n'
 import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type SlideElement, type TableElement } from '../model'
 import { renderSlide, sanitizeHtml } from '../render'
-import { autoformatAtCaret, clearAutoformat, markdownToHtml, undoAutoformat } from './markdown'
+import { autoformatAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
+import { bulletsToLists } from './bullets'
+import { clipboardToHtml } from './paste'
 import { execFormat, hideFormatBar, syncFormatBar } from './richtext'
 import { PathEditor } from './patheditor'
 import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors } from './lineedit'
+import { CropEditor } from './cropedit'
 import { BezierEditor, isCurve } from './beziereditor'
 import { simplifyPoints } from './patheditor'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
-type DrawKind = 'line' | 'path' | 'connector' | 'free' | 'poly'
+type DrawKind = 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly'
 import { CommentsUI } from './comments'
+import { StepBadges } from './stepbadges'
 import type { Peer } from '../sync/session'
 
 /** How far a finger may travel and still count as a tap rather than a drag.
@@ -27,6 +31,11 @@ import type { Peer } from '../sync/session'
 const TAP_SLOP = 10
 /** …and how long it may rest. Past this it is a press, not a tap. */
 const TAP_HOLD_MS = 700
+
+/** The title on an unrendered formula (render.ts mathHint): what went wrong,
+ *  translated at call time — `\\foo` is shown as typed. */
+const mathHintTitle = (what: string) =>
+  t('Not rendered: {what}', { what: what === 'spaces' ? t('no space just inside the $ signs') : what })
 
 export class SlideCanvas {
   private stage: HTMLElement
@@ -44,6 +53,12 @@ export class SlideCanvas {
   private pinching = false
   private zoomLabel: HTMLElement | null = null
   private editing: HTMLElement | null = null
+  /** The listeners of the CURRENT inline edit (text box or table cell), so
+   *  they die with it. Without this a node that was edited, committed with
+   *  no change (no re-render, same node) and edited again carried one more
+   *  keydown/input/paste listener each time — Tab through a table's cells,
+   *  then paste into one, and the paste landed N times over. */
+  private editListeners: AbortController | null = null
   /** Slide identity captured when an inline edit begins. Element ids may be
    *  shared across duplicated slides, so resolving through store.slide at
    *  commit time can write into the wrong slide after navigation or a remote
@@ -66,9 +81,11 @@ export class SlideCanvas {
   private panning = false
   private pathEditor!: PathEditor
   private lineEditor!: LineEditor
+  private cropEditor!: CropEditor
   private bezierEditor!: BezierEditor
   private drawOverlay: HTMLElement | null = null
   private comments!: CommentsUI
+  private stepBadges!: StepBadges
 
   constructor(
     private wrap: HTMLElement,
@@ -78,6 +95,12 @@ export class SlideCanvas {
     this.scroller.className = 'ed-scroll'
     this.stage = document.createElement('div')
     this.stage.className = 'ed-stage'
+    // A link in text (<a href>, from [caption](url)) is content here, not a
+    // control: a click selects and edits like any other text, and never
+    // navigates the editor away. Links open only from the show (present.ts).
+    this.stage.addEventListener('click', (ev) => {
+      if ((ev.target as HTMLElement).closest('a[href]')) ev.preventDefault()
+    }, true)
     this.scaleHost = document.createElement('div')
     this.scaleHost.className = 'ed-stage-scale'
     this.stage.appendChild(this.scaleHost)
@@ -302,13 +325,19 @@ export class SlideCanvas {
     this.pathEditor.setScaleGetter(() => this.scale)
     this.lineEditor = new LineEditor(this.scaleHost, store)
     this.lineEditor.setScaleGetter(() => this.scale)
+    this.cropEditor = new CropEditor(this.scaleHost, store, () => this.scale, () => this.syncTargets())
     this.bezierEditor = new BezierEditor(this.scaleHost, store)
     this.bezierEditor.setScaleGetter(() => this.scale)
+    document.addEventListener('bento:edit-crop', ((ev: CustomEvent) => {
+      const id = String(ev.detail?.id ?? '')
+      if (id) this.startCropEdit(id)
+    }) as EventListener)
     document.addEventListener('bento:edit-path', ((ev: CustomEvent) => {
       this.startPathEdit(ev.detail.id)
     }) as EventListener)
 
     this.comments = new CommentsUI(store, this.stage, () => this.scale)
+    this.stepBadges = new StepBadges(store, this.stage, () => this.scale)
 
     // Alt/Option-click digs through overlapping elements: first click grabs
     // the topmost, each further alt-click steps one element deeper (wrapping).
@@ -339,7 +368,10 @@ export class SlideCanvas {
       }
       if (textEl) { this.startTextEdit(textEl); return }
       const td = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-table td[data-c]')
-      if (td) this.editCellFromTd(td)
+      if (td) { this.editCellFromTd(td); return }
+      // a picture: double-click opens crop mode (pan + zoom inside the frame)
+      const pic = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-image')
+      if (pic?.dataset.elId) this.startCropEdit(pic.dataset.elId)
     })
 
     // Touch has no double-click. Selecto and Moveable preventDefault the touch
@@ -387,7 +419,7 @@ export class SlideCanvas {
       const start = tap
       tap = null
       if (!start || ev.touches.length || this.store.readOnly) return
-      if (this.editing || this.editingCell || this.isPathEditing) return
+      if (this.editing || this.editingCell || this.isPathEditing || this.isCropEditing) return
       const t = ev.changedTouches[0]
       if (!t) return
       if (Math.hypot(t.clientX - start.x, t.clientY - start.y) > TAP_SLOP) return
@@ -408,6 +440,10 @@ export class SlideCanvas {
         // so they can be hit-tested directly — but the control box is above
         // them, hence the whole stack rather than the topmost node.
         opened = this.editCellUnder(node, t.clientX, t.clientY)
+      } else if (node.classList.contains('bento-el-image')) {
+        // a picture opens crop mode: a finger pans, two fingers zoom
+        this.startCropEdit(id)
+        opened = true
       }
       // Cancel the tap we consumed. Without this the browser replays it as
       // mousedown → mouseup → click ~300ms later at the ORIGINAL screen point,
@@ -513,6 +549,7 @@ export class SlideCanvas {
     this.moveable.updateRect()
     if (this.zoomLabel) this.zoomLabel.textContent = `${Math.round(this.scale * 100)}%`
     this.comments?.refresh()
+    this.stepBadges?.refresh()
     this.drawRemote()
   }
 
@@ -766,6 +803,23 @@ export class SlideCanvas {
     this.store.select([pick])
   }
 
+  // --- crop editing (pan + zoom a picture inside its frame) --------------------
+
+  get isCropEditing() { return this.cropEditor.active }
+
+  startCropEdit(elId: string) {
+    this.commitTextEdit()
+    this.store.select([elId])
+    this.cropEditor.start(elId)
+    this.syncTargets()
+  }
+
+  /** finish crop editing; commit=false puts back what was there on entry */
+  stopCropEdit(commit = true) {
+    if (commit) this.cropEditor.commit()
+    else this.cropEditor.cancel()
+  }
+
   // --- motion-path editing ----------------------------------------------------
 
   get isPathEditing() {
@@ -800,8 +854,10 @@ export class SlideCanvas {
     if (this.editing) { this.pendingRender = true; return }
     this.pendingRender = false
     if (this.pathEditor?.active) this.pathEditor.cancel() // doc changed under us
+    if (this.cropEditor?.active) this.cropEditor.cancel()
     const slide = this.store.slide
-    const next = renderSlide(slide, this.store.doc)
+    // the canvas alone marks a formula that did not render (#540)
+    const next = renderSlide(slide, this.store.doc, { mathHint: mathHintTitle })
     // hover-reveal slides: preview one set at a time; hidden sets are
     // display:none so they don't block selection
     const sets = [...new Set(slide.elements.map((e) => e.showOnHover).filter(Boolean))] as string[]
@@ -924,7 +980,7 @@ export class SlideCanvas {
     // A single selected line/curve/connector is edited with endpoint handles
     // (LineEditor), not Moveable's box — grab an end and drag it.
     const sel = this.store.selectedElements
-    const one = sel.length === 1 && !this.editing && !this.pathEditor.active ? sel[0] : null
+    const one = sel.length === 1 && !this.editing && !this.pathEditor.active && !this.cropEditor?.active ? sel[0] : null
     // Curves get true bezier handles (BezierEditor); lines and straight polygons
     // keep endpoint/anchor handles (LineEditor).
     const curve = !!one && isCurve(one)
@@ -933,7 +989,7 @@ export class SlideCanvas {
     else if (lineLike) { this.lineEditor.attach(one!.id); this.bezierEditor.detach() }
     else { this.lineEditor.detach(); this.bezierEditor.detach() }
     const handled = curve || lineLike
-    const targets = this.editing || this.pathEditor?.active || handled ? [] : this.selectedNodes()
+    const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes()
     // snap against slide bounds/center and every non-selected element
     const others = this.surface
       ? [this.surface, ...Array.from(this.surface.querySelectorAll<HTMLElement>('.bento-el'))].filter(
@@ -952,6 +1008,7 @@ export class SlideCanvas {
     // otherwise shift-click resurrects targets from a previously shown slide.
     this.selecto.setSelectedTargets(targets)
     this.updateTableHandles()
+    this.stepBadges?.refresh()
   }
 
   // --- column resize handles (single selected table) --------------------------
@@ -1099,16 +1156,21 @@ export class SlideCanvas {
         target.style.top = `${top}px`
       }
     }
-    const syncKeepRatio = (inputEvent: MouseEvent | undefined) => {
-      const want = !!inputEvent?.shiftKey
+    // Shift keeps the ratio — except for an image, whose own setting is the
+    // default and Shift is the one-drag exception either way: a locked image
+    // (keepAspectRatio absent/true) is freed by Shift, an unlocked one held.
+    const syncKeepRatio = (inputEvent: MouseEvent | undefined, target: HTMLElement) => {
+      const el = target.dataset.elId ? this.store.element(target.dataset.elId) : undefined
+      const locked = el?.type === 'image' && el.keepAspectRatio !== false
+      const want = inputEvent?.shiftKey ? !locked : locked
       if (mv.keepRatio !== want) mv.keepRatio = want
     }
     mv.on('resizeStart', (e) => {
-      syncKeepRatio(e.inputEvent as MouseEvent)
+      syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
       noteResizeStart(e.target as HTMLElement)
     })
     mv.on('resize', (e) => {
-      syncKeepRatio(e.inputEvent as MouseEvent)
+      syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
       applyResize(e.target as HTMLElement, e.width, e.height, e.drag.left, e.drag.top, e.inputEvent as MouseEvent)
     })
     mv.on('resizeGroupStart', (e) => e.events.forEach((ev) => noteResizeStart(ev.target as HTMLElement)))
@@ -1209,6 +1271,13 @@ export class SlideCanvas {
       }
       if (this.pathEditor?.active) {
         e.stop() // the path overlay owns the pointer while editing
+        return
+      }
+      if (this.cropEditor?.active) {
+        // a press on the grey surround ends the crop, like a click outside
+        // the frame does on the slide; nothing starts a marquee under it
+        this.cropEditor.commit()
+        e.stop()
         return
       }
       if (this.editing) {
@@ -1341,7 +1410,9 @@ export class SlideCanvas {
     // Remember that we swapped: on commit the resolved view has to be put back
     // even when the text did NOT change, and only a re-render can do that.
     this.editingShowedRaw = false
-    if (model?.type === 'text' && typeof model.html === 'string' && /\{\{|\$/.test(model.html)) {
+    // (`\(` and `\[` open formulas too, #540 — and an unrendered one wears the
+    // editor's hint span, which must never be what the author edits)
+    if (model?.type === 'text' && typeof model.html === 'string' && /\{\{|\$|\\[([]/.test(model.html)) {
       // SANITIZED, even though the point of the swap is to show what the model
       // holds. This is the only place raw model html reaches the live canvas —
       // the render path has always cleaned it — so without this, double-
@@ -1358,6 +1429,9 @@ export class SlideCanvas {
       this.editingShowedRaw = true
     }
     this.editing = node
+    this.editListeners?.abort()
+    this.editListeners = new AbortController()
+    const signal = this.editListeners.signal
     this.editingSlideId = this.store.slide.id
     node.classList.add('bento-editing')
     inner.contentEditable = 'true'
@@ -1389,20 +1463,24 @@ export class SlideCanvas {
           execFormat(cmd)
         }
       }
-    })
+    }, { signal })
     // markdown affordances: **bold** / *italic* / `code` / ~~strike~~ / "- "
     // collapse as you type (⌘Z reverts, backslash escapes); pasted plain
     // text converts the same patterns
     inner.addEventListener('input', () => {
       if (!autoformatAtCaret()) clearAutoformat()
-    })
+    }, { signal })
     inner.addEventListener('paste', (ev) => {
+      // formatting travels: the clipboard's html flavour, through the one
+      // sanitizer (editor/paste.ts); plain text keeps its markdown conversion
+      const rich = clipboardToHtml(ev.clipboardData)
+      if (rich) { ev.preventDefault(); document.execCommand('insertHTML', false, rich); return }
       const text = ev.clipboardData?.getData('text/plain')
       if (!text) return
       ev.preventDefault()
       document.execCommand('insertHTML', false, sanitizeHtml(markdownToHtml(text)))
-    })
-    inner.addEventListener('blur', () => this.commitTextEdit(), { once: true })
+    }, { signal })
+    inner.addEventListener('blur', () => this.commitTextEdit(), { once: true, signal })
   }
 
   /** collaborator presence: notified when text editing starts/stops */
@@ -1417,6 +1495,8 @@ export class SlideCanvas {
     if (!node) return
     if (this.editingCell) { this.commitCellEdit(node); return }
     const slideId = this.editingSlideId
+    this.editListeners?.abort()
+    this.editListeners = null
     this.editing = null
     this.editingSlideId = null
     this.onTextEditChange?.(undefined)
@@ -1428,7 +1508,10 @@ export class SlideCanvas {
     // For code, we care about the raw innerText
     const text = inner.innerText
     // drop the zero-width caret spacers autoformat leaves behind
-    const html = sanitizeHtml(inner.innerHTML.replace(/\u200B/g, '').replace(/\\([*_~`-])/g, '$1'))
+    // typed "- " bullets are glyphs while you type (markdown.ts says why);
+    // once the edit ends they become real list items, so a long bullet wraps
+    // under its text rather than under the glyph (#502, editor/bullets.ts)
+    const html = bulletsToLists(sanitizeHtml(stripMarkerEscapes(inner.innerHTML.replace(/\u200B/g, ''))))
     const grownH = Math.max(parseFloat(node.style.height) || 0, inner.scrollHeight)
     const el = this.store.doc.slides
       .find((slide) => slide.id === slideId)
@@ -1486,6 +1569,9 @@ export class SlideCanvas {
     const inner = td.querySelector<HTMLElement>('.bento-cell-inner')
     if (!node || !inner) return
     this.editing = node
+    this.editListeners?.abort()
+    this.editListeners = new AbortController()
+    const signal = this.editListeners.signal
     this.editingSlideId = this.store.slide.id
     this.editingCell = { r, c }
     node.classList.add('bento-editing')
@@ -1506,21 +1592,27 @@ export class SlideCanvas {
         const cmd = { b: 'bold', i: 'italic', u: 'underline' }[ev.key.toLowerCase()]
         if (cmd) { ev.preventDefault(); execFormat(cmd) }
       }
-    })
-    inner.addEventListener('input', () => { if (!autoformatAtCaret()) clearAutoformat() })
+    }, { signal })
+    inner.addEventListener('input', () => { if (!autoformatAtCaret()) clearAutoformat() }, { signal })
     inner.addEventListener('paste', (ev) => {
+      // formatting travels: the clipboard's html flavour, through the one
+      // sanitizer (editor/paste.ts); plain text keeps its markdown conversion
+      const rich = clipboardToHtml(ev.clipboardData)
+      if (rich) { ev.preventDefault(); document.execCommand('insertHTML', false, rich); return }
       const text = ev.clipboardData?.getData('text/plain')
       if (!text) return
       ev.preventDefault()
       document.execCommand('insertHTML', false, sanitizeHtml(markdownToHtml(text)))
-    })
-    inner.addEventListener('blur', () => this.commitTextEdit(), { once: true })
+    }, { signal })
+    inner.addEventListener('blur', () => this.commitTextEdit(), { once: true, signal })
   }
 
   private commitCellEdit(node: HTMLElement) {
     const cell = this.editingCell!
     const id = node.dataset.elId
     const slideId = this.editingSlideId
+    this.editListeners?.abort()
+    this.editListeners = null
     this.editing = null
     this.editingSlideId = null
     this.editingCell = null
@@ -1530,7 +1622,7 @@ export class SlideCanvas {
       `td[data-r="${cell.r}"][data-c="${cell.c}"] .bento-cell-inner`)
     if (!inner || !id) return
     inner.contentEditable = 'false'
-    const html = sanitizeHtml(inner.innerHTML.replace(/\u200B/g, '').replace(/\\([*_~`-])/g, '$1'))
+    const html = sanitizeHtml(stripMarkerEscapes(inner.innerHTML.replace(/\u200B/g, '')))
     const el = this.store.doc.slides
       .find((slide) => slide.id === slideId)
       ?.elements.find((element) => element.id === id)
@@ -1638,7 +1730,7 @@ export class SlideCanvas {
     // visible anchor points on the element under the cursor (connector tool)
     const showAnchors = (p: Pt | null) => {
       dots.innerHTML = ''
-      if (kind !== 'connector' || !p) return
+      if ((kind !== 'connector' && kind !== 'curve-connector') || !p) return
       const id = this.elementAt(p, 12 * Math.max(k(), 1))
       if (!id) return
       for (const a of anchorsFor(id)) {
@@ -1653,7 +1745,7 @@ export class SlideCanvas {
       }
     }
     const snap = (p: Pt): { a: Snap; pt: Pt } => {
-      if (kind !== 'connector') return { a: null, pt: p }
+      if (kind !== 'connector' && kind !== 'curve-connector') return { a: null, pt: p }
       const id = this.elementAt(p, 12 * Math.max(k(), 1))
       if (!id) return { a: null, pt: p }
       let best: Snap = null
@@ -1733,7 +1825,7 @@ export class SlideCanvas {
         const p = toSlide(e)
         const sn = snap(p)
         showAnchors(p)
-        setPreview(kind === 'path' ? this.curveBowD(start, sn.pt) : `M ${start.x} ${start.y} L ${sn.pt.x} ${sn.pt.y}`)
+        setPreview(kind === 'path' || kind === 'curve-connector' ? this.curveBowD(start, sn.pt) : `M ${start.x} ${start.y} L ${sn.pt.x} ${sn.pt.y}`)
       }
       const up = (e: MouseEvent) => {
         window.removeEventListener('mousemove', move)
@@ -1785,15 +1877,22 @@ export class SlideCanvas {
     toA?: { el: string; side: 'auto' | 'top' | 'right' | 'bottom' | 'left' },
   ) {
     const ink = readableInk(this.store.slide.background)
-    if (kind === 'path') {
+    if (kind === 'path' || kind === 'curve-connector') {
       const el = defaultShape('path', { fill: 'transparent', stroke: ink, strokeWidth: 3 }) as ShapeElement
       const mx = (a.x + b.x) / 2
       const my = (a.y + b.y) / 2
       const dx = b.x - a.x
       const dy = b.y - a.y
       const len = Math.hypot(dx, dy) || 1
-      const off = len * 0.2
+      // a gentle default bow: the connector bends ~15%, a plain curve 20%
+      const off = len * (kind === 'curve-connector' ? 0.15 : 0.2)
       setPathAnchors(el, [a, { x: mx - (dy / len) * off, y: my + (dx / len) * off }, b])
+      if (kind === 'curve-connector') {
+        // #302: a curve that sticks like a Connector and carries a tip
+        el.lineEnd = 'arrow'
+        if (fromA) el.from = { el: fromA.el, side: fromA.side }
+        if (toA) el.to = { el: toA.el, side: toA.side }
+      }
       this.insert(el)
       return
     }

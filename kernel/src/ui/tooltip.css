@@ -1,0 +1,31 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+
+   THE SHARED TOOLTIP styles. Built ahead of a consumer (see tooltip.ts); minimal
+   by intent. Same two rules as the other primitives:
+   1. Values through `--bkt-*` chains onto the host's own tokens; never
+      light-dark(); the shared theming guard checks it.
+   2. Structure and behaviour shared; only the look is the host's.
+
+   The tip is a single body-level, position:fixed element — it has no scrolling
+   ancestor to clip it (hard-won detail 10), which is the whole reason a tooltip
+   is rendered here rather than next to its anchor in the tree. */
+
+.bkt {
+  position: fixed;
+  z-index: var(--bkt-z, 1100); /* above dialogs' scrim too: a tip in a dialog must show */
+  transform: translateX(-50%); /* centre on the anchor's mid-x (set as `left`) */
+  max-width: var(--bkt-max, 240px);
+  padding: 5px 8px;
+  font-size: var(--bkt-font-size, 12px);
+  line-height: 1.35;
+  color: var(--bkt-ink, var(--surface, var(--chrome, #fff)));
+  /* the tooltip is the INVERSE of the surface — dark bubble on a light app,
+     light on a dark one — which is what --ink gives on both, the same pairing
+     the primary button uses. */
+  background: var(--bkt-bg, var(--ink, #1e2a3a));
+  border-radius: var(--bkt-radius, 6px);
+  box-shadow: var(--bkt-shadow, 0 4px 14px rgb(20 30 45 / 0.24));
+  pointer-events: none; /* the tip never eats a click; it is not interactive */
+  white-space: normal;
+}
