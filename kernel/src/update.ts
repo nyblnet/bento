@@ -26,7 +26,7 @@ import {
   hasFileHandle, writeUpdatedFile, writeUpdatedFileAs, writeBackupBeside, hostCan,
 } from './save.ts'
 import { lsDel, lsGet, lsSet } from './storage.ts'
-import { netFetch } from './net.ts'
+import { netFetch, sharedStorageOrigin } from './net.ts'
 
 declare const __APP_VERSION__: string
 
@@ -41,7 +41,7 @@ export const APP_VERSION: string = typeof __APP_VERSION__ !== 'undefined' ? __AP
  * Re-exported here because this has been update.ts's public surface since
  * 0.9.x and shipped code imports it from here.
  */
-export { offlineEnabled, setOffline, OfflineError, startNetGuard } from './net.ts'
+export { offlineEnabled, setOffline, OfflineError, startNetGuard, sandboxed, SandboxedError } from './net.ts'
 
 export const autoCheckEnabled = (): boolean => lsGet('bento-auto-check') !== 'off'
 export const setAutoCheck = (on: boolean): void => {
@@ -132,7 +132,9 @@ export async function verifySigned(raw: string, what = 'signed file'): Promise<u
     throw new Error(`the ${what} is malformed`)
 
   const key = await crypto.subtle.importKey(
-    'jwk', PUBLIC_KEY_JWK as JsonWebKey,
+    // A fork with its own release channel supplies its key via configureApp();
+    // the platform key below is the default so upstream builds are unchanged.
+    'jwk', (appConfig().publicKeyJwk ?? PUBLIC_KEY_JWK) as JsonWebKey,
     { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'],
   )
   const ok = await crypto.subtle.verify(
@@ -203,7 +205,13 @@ async function verifyManifest(raw: string): Promise<ReleaseInfo> {
 
 /** Ask the release origin for the latest version. */
 export async function checkForUpdates(manifestUrl?: string): Promise<UpdateCheck> {
-  const url = manifestUrl ?? lsGet('bento-update-url') ?? updateManifestUrl()
+  // The localStorage dev override is honoured only from a real, isolated origin.
+  // On file:// (and opaque origins) storage is shared with every other local
+  // document, so a malicious deck could plant an override that steers this deck's
+  // update check at a hostile server (signatures still block RCE; this stops the
+  // downgrade/DoS/steer). Dev works from localhost or a real origin.
+  const devOverride = sharedStorageOrigin() ? null : lsGet('bento-update-url')
+  const url = manifestUrl ?? devOverride ?? updateManifestUrl()
   try {
     const res = await netFetch(url, { cache: 'no-store' })
     if (!res.ok) throw new Error(`release server answered ${res.status}`)
