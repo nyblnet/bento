@@ -508,6 +508,57 @@ H('a merged-in fork is carried onward to a third tab (offline chain)');
   sB.stop?.();
 }
 
+// A read-only live-viewer copy (store.commit is inert) must still show a
+// relay-offloaded image. resolveBlobs used to materialise through store.commit,
+// so the bytes never landed and the picture stayed blank; it now applies them
+// the way a remote op does (mutate + emit), bypassing the app's read-only gate.
+H('a read-only live viewer still materialises a relay-offloaded image (not via commit)');
+{
+  // the same-origin blob cache (so getBlob is cache-first and never needs the
+  // network). Resolved from whichever app workspace has fake-indexeddb — the same
+  // relative strategy the esbuild hook uses, because this rig runs DIRECT (no root
+  // node_modules in CI, and the hook does not resolve bare package names). Set
+  // BEFORE the first cache call, since blobs.ts memoises the DB handle on first use.
+  {
+    const { createRequire } = await import('node:module');
+    const { pathToFileURL } = await import('node:url');
+    let idbMod: { indexedDB: unknown } | undefined;
+    for (const app of ['slides', 'type', 'spaces', 'dash']) {
+      try {
+        const req = createRequire(new URL(`../${app}/package.json`, import.meta.url));
+        idbMod = await import(pathToFileURL(req.resolve('fake-indexeddb')).href);
+        break;
+      } catch { /* try the next app workspace */ }
+    }
+    (globalThis as unknown as { indexedDB: unknown }).indexedDB = idbMod?.indexedDB;
+  }
+  const { blobKey, cachePut, bytesToDataUri } = await import('../kernel/src/sync/blobs.ts');
+  const rawKey = new Uint8Array(32).fill(7);
+  const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4]);
+  const key = await blobKey(rawKey, bytes);
+  await cachePut(key, bytes); await settle(30); // prime the cache (let the IDB write commit) a same-machine peer would have written
+  const doc = newDoc();
+  doc.docId = `ro-${Math.random().toString(36).slice(2, 10)}`;
+  (doc as unknown as { blobs: Record<string, { key: string; mime: string }> }).blobs = { hero: { key, mime: 'image/png' } };
+  const store = new Store(JSON.parse(JSON.stringify(doc)));
+  store.readOnly = true; // the whole point: user/app commits are no-ops here
+  const sess = new SyncSession(store);
+  // a transport that can reach a (fake) relay — supplies blobCreds; getBlob is
+  // cache-first, so it returns the primed bytes without touching the network
+  sess.addTransport(() => ({ kind: 'fake', send() {}, close() {}, blobCreds: () => ({ base: 'http://relay.test', room: 'r', tok: 't', rawKey }) } as never));
+  // spy on emit to see the viewer was told to re-render, without knowing the app's event names
+  const emitted: string[] = [];
+  const origEmit = store.emit.bind(store);
+  (store as unknown as { emit: (ev: string) => void }).emit = (ev: string) => { emitted.push(ev); return origEmit(ev); };
+  emitted.length = 0;
+  await (sess as unknown as { resolveBlobs: () => Promise<void> }).resolveBlobs();
+  await settle(80);
+  const got = (store.doc as unknown as { assets?: Record<string, string> }).assets?.hero;
+  ok(got === bytesToDataUri(bytes, 'image/png'), 'the offloaded image lands in assets despite the read-only commit gate');
+  ok(emitted.length > 0, 'a change event fired so the read-only viewer re-renders');
+  sess.stop?.();
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 // BroadcastChannel and the heartbeat keep node's event loop alive
 process.exit(failures ? 1 : 0);

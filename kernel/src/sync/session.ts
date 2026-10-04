@@ -597,10 +597,15 @@ export class SyncSession {
           ? await getBlob({ base: creds.base, room: creds.room, tok: creds.tok }, creds.rawKey, ref.key)
           : null
         if (!bytes) { this.notify('blob-unavailable', k); continue }
-        this.store.commit(() => {
-          const d = this.store.doc
-          ;(d.assets ??= {})[k] = bytesToDataUri(bytes, ref.mime)
-        })
+        // Land the materialised asset the way a REMOTE OP does — mutate the doc
+        // and emit the store's change events, NOT store.commit. A read-only
+        // live-viewer copy no-ops commit (store.readOnly), so going through it
+        // left relay-offloaded images blank for readers; assets are local
+        // content-addressed bytes (never an op), so the differ sends nothing
+        // either way and the shadow needs no update.
+        const d = this.store.doc
+        ;(d.assets ??= {})[k] = bytesToDataUri(bytes, ref.mime)
+        for (const ev of this.host.changeEvents) this.store.emit(ev)
       } finally {
         this.fetching.delete(ref.key)
       }
