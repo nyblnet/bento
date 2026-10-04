@@ -13,6 +13,7 @@
 import type { Op, SyncStateJSON } from './crdt.ts'
 import type { Frame, HostStore, RefusalCode, SyncDoc, SyncSession, Transport } from './session.ts'
 import { lsGet, lsSet } from '../storage.ts'
+import { carryThroughRotation } from '../docfields.ts'
 import { offlineEnabled } from '../update.ts'
 // Every request in the app goes through the one chokepoint (kernel/src/net.ts)
 // so the offline switch cannot be forgotten — see GHSA-5c3x-xqp6-g94r.
@@ -1040,7 +1041,8 @@ export async function rotateKeys(session: SyncSession, store: Store) {
   stopSharing(session, store)
   const fresh = await mintCollab()
   store.commit(() => {
-    const sync = store.doc.collab?.sync
-    store.doc.collab = sync ? { ...fresh, sync } : fresh
+    // fresh keys = the revocation; carry the rotate-survivors (sync, links) from
+    // the old block (kernel/src/docfields.ts COLLAB_ROTATE_KEEP)
+    store.doc.collab = carryThroughRotation(fresh, store.doc.collab)
   })
 }
