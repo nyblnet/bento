@@ -30,7 +30,7 @@ import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
-import { borderPoint, boxCenter, lineEndpoints, pathEndpoints, setLineEndpoints, setPathEndpoints, sideMidpoint } from './lineedit'
+import { boxCenter, connectorEndpoint, lineEndpoints, pathEndpoints, setLineEndpoints, setPathEndpoints } from './lineedit'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
 import { stepOf } from '../steps'
@@ -86,6 +86,29 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
   { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly', tip: 'Click to place corners; click the first point (or double-click) to close the shape' },
 ]
 
+/**
+ * The PowerPoint importer on the site (bento/convert's page, #589). A LINK,
+ * not a feature of this file: the conversion needs the network, and a saved
+ * deck never loads anything on its own, so the entry opens the page in a new
+ * tab and says so in its tooltip. Slides' release carries the site, so the
+ * entry and the page ship together.
+ */
+export const IMPORT_PPTX_URL = 'https://bento.page/import'
+
+/**
+ * May this copy write? An ALLOWLIST that fails closed: a deck with no live
+ * session, or one whose role is absent (owner and legacy writer copies) or
+ * 'writer'. Every other role — 'reader', 'audience', and any role a later
+ * version adds — is read-only here. It used to be `role !== 'reader'`, a
+ * denylist that answered yes for the broadcast 'audience' role, so an audience
+ * copy dropped onto a running editor got "Invite to edit…", "Reset access…"
+ * and an Editor label. (The relay refused its writes all along; this was the
+ * chrome, not the capability.)
+ */
+export function canWriteDeck(collab: { role?: string } | undefined): boolean {
+  return !collab || collab.role === undefined || collab.role === 'writer'
+}
+
 export class Editor {
   private canvas!: SlideCanvas
   private panel!: PropsPanel
@@ -138,6 +161,10 @@ export class Editor {
     store.on('doc', () => this.syncThemeRefs())
     store.on('doc', () => this.syncFonts())
     this.syncFonts()
+    // A document that cannot write can ARRIVE in a running editor, not only boot
+    // in one — an audience or reader copy dropped onto it, or loaded by script.
+    // The build-time check never sees those, so the lock follows the document.
+    store.on('doc', () => { if (!store.readOnly && !canWriteDeck(store.doc.collab)) this.enterReaderMode() })
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
@@ -524,7 +551,7 @@ export class Editor {
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
 
-    if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
+    if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
   }
 
   /** Live viewer: block user edits (store.readOnly), hide editing chrome, and
@@ -927,6 +954,10 @@ export class Editor {
       item(ICONS.code, t('Replace from JSON…'),
         t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
         () => this.openReplaceJson())
+      // with the other import, where spaces has Import Markdown…
+      item(ICONS.importDoc, t('Import PowerPoint…'),
+        t('Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.'),
+        () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') })
       item(ICONS.template, t('Start from scratch…'),
         t('Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.'),
         () => this.startFromScratch())
@@ -1356,7 +1387,7 @@ export class Editor {
     if (cme) {
       let myPub: string | undefined
       let myRole: 'owner' | 'editor' | 'viewer' | undefined
-      if (cme.role === 'reader') myRole = 'viewer'
+      if (!canWriteDeck(cme)) myRole = 'viewer'
       else if (cme.v === 2 && cme.ownerPriv) { myRole = 'owner'; myPub = cme.owner }
       else if (cme.v === 2 && cme.invite) {
         myRole = 'editor'
@@ -1461,7 +1492,7 @@ export class Editor {
 
     // SHARE ACTIONS — sharing IS files: each button saves a copy to send, and
     // turns the live session on. Labels stay short; the tooltips explain.
-    const canWrite = !!cme && cme.role !== 'reader'
+    const canWrite = !!cme && canWriteDeck(cme)
     if (canWrite) {
       const label = div('ed-share-label')
       label.textContent = t('Share a copy')
@@ -2522,11 +2553,10 @@ export class Editor {
       const [a, b] = isPath ? pathEnds! : lineEndpoints(c)
       const fromBox = c.from ? byId.get(c.from.el) : null
       const toBox = c.to ? byId.get(c.to.el) : null
-      // explicit side → pin to that side's midpoint; 'auto' → nearest border
-      const end = (box: SlideElement, side: 'auto' | 'top' | 'right' | 'bottom' | 'left' | undefined, toward: { x: number; y: number }) =>
-        side && side !== 'auto' ? sideMidpoint(box, side) : borderPoint(box, toward)
-      const na = fromBox ? end(fromBox, c.from?.side, toBox ? boxCenter(toBox) : b) : a
-      const nb = toBox ? end(toBox, c.to?.side, fromBox ? boxCenter(fromBox) : a) : b
+      // explicit side → pin to that side's midpoint; 'auto' → ride the border
+      // toward the other end (kernel geom: connectorEndpoint)
+      const na = fromBox ? connectorEndpoint(fromBox, c.from?.side, toBox ? boxCenter(toBox) : b) : a
+      const nb = toBox ? connectorEndpoint(toBox, c.to?.side, fromBox ? boxCenter(fromBox) : a) : b
       if (Math.hypot(na.x - a.x, na.y - a.y) > 0.5 || Math.hypot(nb.x - b.x, nb.y - b.y) > 0.5) {
         if (isPath) setPathEndpoints(c, na, nb)
         else setLineEndpoints(c, na, nb)

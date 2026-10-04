@@ -25,6 +25,45 @@ const RUN_IDLE_MS = 600
 const UNDO_BUDGET = 24 * 1024 * 1024
 
 /**
+ * Top-level keys a whole-document restore ALWAYS takes from the LIVE document,
+ * never from what it restores: undo, redo, and every replaceDoc (version
+ * history, the recovery banner, Replace from JSON, bento.loadDoc).
+ *
+ * These are who the space IS and what this copy may do, not what it says:
+ *   · `docId`    — identity (PLATFORM §3). A snapshot taken before "Duplicate as
+ *                  a new space" or pasted from another file must not make this
+ *                  space claim somebody else's id, its versions and its room.
+ *   · `collab`   — the live-session capability and its on/off switch. A
+ *                  snapshot from before Stop sharing would silently rejoin the
+ *                  room; one from before Rotate keys would resurrect a revoked key.
+ *   · `readonly` — the file's sealed-reading-copy mode. Undo must not unfreeze it.
+ *   · `template` — a file mode that RE-MINTS `docId` on every open (model.ts),
+ *                  so it governs identity: pasted or restored, it would make
+ *                  this space a new document each time it is opened.
+ *
+ * NOT on the list, deliberately: `theme` (and any design setting) is content
+ * and undoes like content; `format`/`version`/`policy` describe how the content
+ * is encoded and travel with it; `assets` is kept by undo/redo for a different
+ * reason — snapshots omit it for size — and a replaceDoc brings its own.
+ *
+ * Same name and shape as slides' FROM_LIVE (slides/src/restoregate.ts) so the
+ * kernel can lift one shared list; spaces adds `template`, which slides lacks.
+ */
+export const FROM_LIVE = ['docId', 'collab', 'readonly', 'template'] as const
+
+/** Overwrite `next`'s FROM_LIVE keys with `live`'s — including deleting one the
+ *  live document does not have. Mutates and returns `next`. */
+function keepLiveIdentity(live: SpacesDoc, next: SpacesDoc): SpacesDoc {
+  const from = live as Record<string, unknown>
+  const to = next as Record<string, unknown>
+  for (const k of FROM_LIVE) {
+    if (from[k] !== undefined) to[k] = from[k]
+    else delete to[k]
+  }
+  return next
+}
+
+/**
  * One undoable step.
  *
  * A `page` entry holds ONE page's JSON; a `doc` entry holds the whole document
@@ -62,6 +101,8 @@ export class Store {
    * is "the file IS the document" is the one thing it should say.
    */
   dirty = false
+  /** Every mutation, even within a typing run or while already dirty. */
+  revision = 0
 
   private undoStack: Entry[] = []
   private redoStack: Entry[] = []
@@ -84,6 +125,7 @@ export class Store {
   }
 
   emit(ev: Event): void {
+    if (ev === 'doc') this.revision++
     for (const fn of this.listeners.get(ev) ?? []) fn()
   }
 
@@ -177,6 +219,7 @@ export class Store {
 
   /** Model changed without a new undo entry (mid-run). */
   touch(): void {
+    this.revision++
     // A typing run deliberately does NOT emit 'doc' per keystroke — that is the
     // whole point of the run. But the FIRST keystroke changes something the
     // reader can see: the file now differs from the disk. Announce that once,
@@ -199,6 +242,8 @@ export class Store {
    * a colleague's keystroke must move the dot without claiming to be yours.
    */
   setDirty(v: boolean): void {
+    // Remote apply calls this even when the dirty flag is already set.
+    if (v) this.revision++
     if (this.dirty === v) return
     this.dirty = v
     // NOT 'doc'. The editor reads 'doc' as "you edited something" and paints
@@ -262,8 +307,12 @@ export class Store {
       // reach here, and dropping the entry is better than throwing.
       if (at >= 0) this.doc.pages[at] = JSON.parse(entry.json) as Page
     } else {
-      const assets = this.doc.assets
-      this.doc = { ...(JSON.parse(entry.json) as SpacesDoc), ...(assets ? { assets } : {}) }
+      // CONTENT moves, identity does not: the snapshot's docId/collab/readonly
+      // are whatever they were when it was taken, and Stop sharing, a key
+      // rotation or a mode change since then must survive ⌘Z and ⌘⇧Z alike.
+      const live = this.doc
+      const assets = live.assets
+      this.doc = keepLiveIdentity(live, { ...(JSON.parse(entry.json) as SpacesDoc), ...(assets ? { assets } : {}) })
     }
     this.pageId = entry.viewId
     this.reindex()
@@ -316,12 +365,17 @@ export class Store {
     this.emit('selection')
   }
 
-  /** Replace the whole document — the AI round-trip and version restore path. */
+  /**
+   * Replace the whole document — the AI round-trip, version restore and
+   * recovery path. Content is replaced; identity is not (FROM_LIVE): a version
+   * from before Stop sharing or Rotate keys, or JSON pasted from another space,
+   * never brings its own docId, room credentials or file mode with it.
+   */
   replaceDoc(next: SpacesDoc): void {
     this.dirty = true
     this.endRun()
     this.checkpoint()
-    this.doc = next
+    this.doc = keepLiveIdentity(this.doc, next)
     this.reindex()
     this.pageId = homePage(next)?.id ?? ''
     this.emit('doc')

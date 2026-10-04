@@ -11,6 +11,26 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Open a PowerPoint deck in Bento: bento.page/import.** Drop a `.pptx` on
+  the page and get back a `.bento.html` deck you can edit and present. The
+  conversion runs in your browser and the deck is never uploaded. The page
+  fetches only the current signed slides release to build on, checks its
+  signature and fingerprint, and refuses anything that fails. Before you
+  download, it shows what was carried over, what was approximated and what
+  was left out. Tables and charts become marked placeholders for now.
+  The same conversion runs from a terminal as
+  `node convert/cli.mjs deck.pptx`.
+- **A view-only or audience copy opened inside the editor stays view-only.**
+  Dropping an audience copy (the hand-out for a live show) onto an open deck,
+  or loading one by script, used to offer "Invite to edit…", "Go live" and
+  "Reset access…" and call you an Editor; a read-only copy opened the same way
+  could be edited. Both are now locked, the same as when you open them
+  directly. The live session never accepted their changes; now the editor
+  agrees.
+- **Save as → Import PowerPoint…** The Save-as menu has an entry next to
+  Replace from JSON that opens that importer (bento.page/import) in a new tab.
+  It needs an internet connection, and the entry's tooltip says so.
+
 ## [1.2.5] — 2026-09-28
 
 - **Security: update this file. This release closes three security issues
