@@ -35,7 +35,7 @@ import { buildSpacePreview } from './preview'
 import { Store } from './store'
 import { Editor } from './editor'
 import { SyncSession } from './sync/session.ts'
-import { isReaderCopy } from './share.ts'
+import { isReaderCopy, stampSync } from './share.ts'
 import { downloadMarkdown, launchUpdateCheck } from './about'
 
 configureApp({
@@ -266,6 +266,10 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     //
     // The status line was dead too: saveFile returns 'saved-as' down the
     // forcePicker path, never 'saved', so the confirmation never appeared.
+    //
+    // A copy of THIS space is this replica, so it carries the CRDT state like
+    // ⌘S does: opened later, it rejoins as a fork rather than a fresh adopt.
+    stampSync(store, session)
     void serializeAuto(store.doc)
       .then((html) => writeUpdatedFileAs(html, store.doc, { suffix: suffix === 'copy' ? 'copy' : suffix }))
       .then((ok) => { if (ok) editor.status(t('Copy saved — you are still editing the original')) })
@@ -320,8 +324,11 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     // and saving.ts clears the dot only if nothing changed while the bytes were
     // being written. The copies and share exports stay outside it on purpose —
     // they write a DIFFERENT file and never keep its handle.
+    // collab.sync is stamped in the queue's prepare step: after any write
+    // ahead of this one, immediately before the snapshot is copied, so the
+    // state describes exactly the bytes that reach the file (#594).
     const out = await saveRevision(store, saves, (snapshot) => saveFile(snapshot),
-      () => editor.status(t('Saving…')))
+      () => { stampSync(store, session); editor.status(t('Saving…')) })
     if (out.kind === 'failed') {
       console.error('bento/spaces: save failed', out.error)
       editor.status(t('Save failed — see console'))
@@ -355,7 +362,9 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
    * when that snapshot is still the document on screen.
    */
   editor.onUpdateInPlace = async (rel) => {
-    const saved = await saves.run(() => store.endRun(), (snapshot) => applyUpdateInPlace(rel, snapshot))
+    // stamped in prepare, beside the snapshot, exactly as ⌘S is
+    const saved = await saves.run(() => { store.endRun(); stampSync(store, session) },
+      (snapshot) => applyUpdateInPlace(rel, snapshot))
     if (!saved?.value) return null
     if (saved.isCurrent()) store.setDirty(false)
     return saved.value

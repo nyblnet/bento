@@ -40,6 +40,7 @@ import { t, localeChoices, locale, setLocale } from './i18n'
 import { appearanceSection } from './appearance'
 import { esc, textOf } from './sanitize'
 import { docForExport } from './model'
+import { duplicateAsNew } from './share.ts'
 import { htmlToMd } from './marks.ts'
 import { humanBytes } from './assets'
 import { SPEC, mdLayout, type MdCtx } from './blocks'
@@ -83,6 +84,13 @@ export interface AboutHooks {
    * null = nothing was written (cancelled, or the space was swapped).
    */
   onUpdateInPlace: (release: ReleaseInfo) => Promise<InPlaceOutcome | null>
+  /**
+   * Called immediately before "Download updated copy" writes THIS document
+   * into a new shell — stamps the live session's CRDT state (share.ts
+   * stampSync), so the updated file rejoins as a fork exactly as a ⌘S-saved
+   * one does. "Update this file" is stamped inside the save queue instead.
+   */
+  onBeforeWrite?: () => void
 }
 
 /**
@@ -107,7 +115,7 @@ export async function launchUpdateCheck(): Promise<void> {
 }
 
 export function openAbout(hooks: AboutHooks): void {
-  const { store, onRepaint, onSaveCopy, onImport, onExportSpace, onWriteCopy, onStatus, onUpdateInPlace } = hooks
+  const { store, onRepaint, onSaveCopy, onImport, onExportSpace, onWriteCopy, onStatus, onUpdateInPlace, onBeforeWrite } = hooks
   const doc = store.doc
   const returnFocus = document.activeElement as HTMLElement | null
 
@@ -410,6 +418,7 @@ export function openAbout(hooks: AboutHooks): void {
         try {
           // the update writes a NEW file and leaves this one untouched, so a
           // bad update is undone by deleting the download
+          onBeforeWrite?.()
           await applyUpdate(rel, store.doc)
           get.textContent = t('Downloaded ✓')
           box.append(note(t('This window keeps running v{v} until you open the downloaded file.', { v: APP_VERSION })))
@@ -618,10 +627,8 @@ export function openAbout(hooks: AboutHooks): void {
       // A DUPLICATE, not a copy: a fresh docId and no collaboration
       // credentials, so it can never sync with the space it came from. You
       // keep editing this one — the writer holds no handle (portable.ts).
-      const clone = JSON.parse(JSON.stringify(store.doc)) as SpacesDoc
-      clone.docId = uid('doc')
-      delete clone.collab
-      clone.modified = new Date().toISOString()
+      // share.ts duplicateAsNew: the stamped `sync` goes with `collab`.
+      const clone = duplicateAsNew(store.doc, uid('doc'))
       close()
       void onWriteCopy(clone)
     })] : []),
@@ -668,10 +675,9 @@ export function openAbout(hooks: AboutHooks): void {
       // The live session belongs to THIS document, not to the pasted text.
       // Content is imported; identity and capability are not — adopting the
       // pasted `collab` would either wipe the room credentials or silently
-      // move this space into somebody else's room.
-      const keep = store.doc.collab
-      if (keep) res.doc.collab = keep
-      else delete res.doc.collab
+      // move this space into somebody else's room. replaceDoc keeps the live
+      // docId, collab and file mode itself (store.ts FROM_LIVE), for this and
+      // every other whole-document restore.
       store.replaceDoc(res.doc)
       onRepaint()
       close()
