@@ -101,6 +101,13 @@ jobs:
         working-directory: slides
         run: node_modules/.bin/tsc -p ../kernel
 
+      - name: Typecheck convert (standalone)
+        # convert/ is a library beside the apps (the CLI and bento.page/import
+        # use it; no shell does), so no app's tsc -b reaches it. Its own flags,
+        # its own pass — the same as kernel's.
+        working-directory: slides
+        run: node_modules/.bin/tsc -p ../convert
+
       - name: Build single-file shell
         working-directory: slides
         run: npm run build:single
@@ -859,6 +866,12 @@ jobs:
       - name: bento/dash selection and clipboard
         run: node scripts/test-dash-select.ts
 
+      - name: bento/dash sharing state
+        # Start/stop/rotate sharing mark the workbook unsaved (a rotation is
+        # revocation and must reach the file); only a writer copy offers write
+        # auth or calls itself an Editor — an allowlist, failing closed.
+        run: node scripts/test-dash-share-dirty.ts
+
       - name: bento/dash conditional formatting
         run: node scripts/test-dash-condfmt.ts
 
@@ -932,10 +945,15 @@ jobs:
         # The pptx importer's resolver is where real decks' fidelity lives --
         # 91% of colour and 71% of run properties are indirect, and every hop
         # fails silently (a backwards clrMap still renders, just dark-on-dark).
-        # Seven rigs, 378 checks, negative controls proven against mutated
-        # implementations; load.ts is the gate that matters: every emitted
-        # document must pass the REAL slides parseDoc with zero validateDoc
-        # errors.
+        # Negative controls proven against mutated implementations; load.ts is
+        # the gate that matters for import: every emitted document must pass the
+        # REAL slides parseDoc with zero validateDoc errors. The runner also
+        # covers the `bento convert` CLI (it needs the shell built above and
+        # Chrome for "it opens"; neither may skip in CI), the delivery chain
+        # behind bento.page/import (signature, pin, version floor, untrusted-
+        # input gate, zip limits, exactly two requests), the built page's CSP,
+        # and the boundary: no app imports convert/, and the engine touches no
+        # DOM global.
         run: node scripts/test-convert.ts
 
       - name: bento/dash zip

@@ -71,22 +71,45 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController,
         }
     }
 
-    /// Which Bento. The list is aspirational on purpose — only slides has a
-    /// published channel today, and an unreleased one says so plainly rather
-    /// than being hidden, because adding an app to `Releases.apps` is meant to
-    /// be the whole integration.
+    /// Which Bento — only the ones that can actually be made right now.
+    ///
+    /// `Releases.available()` asks each channel and keeps the apps whose release
+    /// verifies, plus any with a verified shell already cached for offline use.
+    /// So an app appears here on its own the day its channel goes live, and an
+    /// unreleased one is simply absent rather than offered and then refused.
     private func chooseApp(_ done: @escaping (Releases.App?) -> Void) {
-        let sheet = UIAlertController(title: "New document", message: nil, preferredStyle: .actionSheet)
-        for app in Releases.apps {
-            sheet.addAction(UIAlertAction(title: "\(app.label) — \(app.blurb)", style: .default) { _ in
-                done(app)
-            })
+        let checking = UIAlertController(title: nil, message: "Checking what's available…",
+                                         preferredStyle: .alert)
+        present(checking, animated: true)
+
+        Task { @MainActor in
+            let offered = await Releases.available()
+
+            // Fully dismissed before anything else is presented — presenting into
+            // an alert's dismissal animation silently does nothing (see create).
+            await withCheckedContinuation { finished in
+                checking.dismiss(animated: true) { finished.resume() }
+            }
+
+            guard !offered.isEmpty else {
+                done(nil)
+                self.report("Starting a new document needs a connection the first time, "
+                            + "and bento/home couldn't reach bento.page.")
+                return
+            }
+
+            let sheet = UIAlertController(title: "New document", message: nil, preferredStyle: .actionSheet)
+            for app in offered {
+                sheet.addAction(UIAlertAction(title: "\(app.label) — \(app.blurb)", style: .default) { _ in
+                    done(app)
+                })
+            }
+            sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in done(nil) })
+            sheet.popoverPresentationController?.sourceView = self.view
+            sheet.popoverPresentationController?.sourceRect =
+                CGRect(x: self.view.bounds.midX, y: self.view.bounds.midY, width: 0, height: 0)
+            self.present(sheet, animated: true)
         }
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in done(nil) })
-        sheet.popoverPresentationController?.sourceView = view
-        sheet.popoverPresentationController?.sourceRect =
-            CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
-        present(sheet, animated: true)
     }
 
     private func create(_ app: Releases.App,
