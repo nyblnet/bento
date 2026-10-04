@@ -7417,3 +7417,28 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-10-04 — dash: sharing changes mark the workbook unsaved; copy roles are an allowlist
+
+Dash carries its own copy of the sharing verbs (`dash/src/sync/online.ts`), and
+they wrote `doc.collab` directly. Slides, spaces and type use the kernel's
+versions, which go through `store.commit`, and each of those apps lights its
+unsaved state from commit. Checked all three: none has this gap.
+
+- **`Store.markUnsaved()`** advances the document (`touch`) and raises a new
+  `'unsaved'` event that main.ts wires to the same `markDirty` as `doc`. It is
+  deliberately NOT a commit: sharing state is not an edit to the data and must
+  not be undoable. It is called when sharing turns on from off, turns off, or
+  rotates. Minting credentials for a new workbook stays silent, because dash
+  mints with `on: true` and an untouched starter must close without a warning.
+- **`copyCanWrite(collab)`** — absent role or `'writer'` writes; everything else,
+  including any role invented later, does not. It replaces `role !== 'reader'`
+  in the relay auth gate and in presence. The same rule as type's (#588); the
+  kernel's union added `'audience'` and dash's narrower type had hidden it.
+- Rig `scripts/test-dash-share-dirty.ts`, 27 checks, uses a fake WebSocket so
+  no network is touched. Seven sabotages each turn it red.
+
+Observed, not changed: the kernel's `startSharing`/`stopSharing` commit through
+the UNDO history in slides, spaces and type, so ⌘Z after "Stop sharing" sets
+`collab.on` back without reconnecting.
+
