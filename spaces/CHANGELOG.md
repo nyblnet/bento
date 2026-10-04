@@ -508,6 +508,18 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   writes, anything else opens view-only. Every gate — the boot lock, the Share
   popover, the People label — asks that one function. Plain files and legacy
   rooms open exactly as before.
+- **Fixed: an edit made while the file was being written could be marked saved.**
+  Saving takes a moment — the file is reconnected, the space is written out,
+  the disk answers — and a word typed in that moment went into the space after
+  the file's copy had already been taken. When the write finished, the unsaved
+  dot went out anyway, so the file was missing the edit and nothing said so.
+  Now each save writes the space exactly as it was when that save began, and
+  the dot goes out only if nothing has changed since. Anything newer — your own
+  typing, a colleague's edit arriving live, an undo — keeps the dot on and goes
+  into the next save. Two saves in quick succession wait for each other instead
+  of writing the file at the same time, and so does "Update this file" in
+  About. A save that fails now says so ("Save failed — see console") instead of
+  leaving "Saving…" on screen, and the space stays unsaved.
 
 - **Restoring from this browser checks what it restores.** The recovery
   banner's snapshot and every History entry are kept in the browser's storage,

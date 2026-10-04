@@ -4,6 +4,8 @@
 // capture the pristine document BEFORE any DOM mutation — the captured copy is
 // what gets re-serialized on save.
 
+import { SaveQueue } from '../../kernel/src/savequeue.ts'
+import { saveRevision } from './saving'
 import './styles.css'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
 import { startTheme } from '../../kernel/src/theme.ts'
@@ -14,7 +16,7 @@ import {
   isEncryptionActive,
 } from '../../kernel/src/save.ts'
 import { putRecovery, getRecovery, clearRecovery, pruneOld, addVersion } from '../../kernel/src/autosave.ts'
-import { APP_VERSION } from '../../kernel/src/update.ts'
+import { APP_VERSION, applyUpdateInPlace } from '../../kernel/src/update.ts'
 import { t, locale, applyDirection } from './i18n'
 import { i18nApi } from '../../kernel/src/i18n.ts'
 import { parseDoc, uid, newPage, type SpacesDoc, type ParseResult } from './model'
@@ -199,6 +201,7 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   document.getElementById('bento-splash')?.remove()
 
   const store = new Store(doc)
+  const saves = new SaveQueue({ getDocument: () => store.doc, getRevision: () => store.revision })
   // `doc.readonly` was declared in the format and read by NOTHING: a space
   // saved as a reading copy opened fully editable, so the one property the
   // sender chose was the one the file did not keep. It is not a security
@@ -317,28 +320,32 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   let lastVersionAt = 0
 
   async function doSave(): Promise<void> {
-    store.endRun()
-    editor.status(t('Saving…'))
-    // Stamped at the moment the document is taken for the write, and nowhere
-    // earlier: the state must describe exactly the bytes that reach the file,
-    // or the registers restored on reopen defend the wrong values. When the
-    // save queue lands this moves into its prepare step, beside the snapshot.
-    stampSync(store, session)
-    const res = await saveFile(store.doc)
-    if (res === 'saved' || res === 'saved-as' || res === 'downloaded') {
-      // the document is on disk now — the dot goes out
-      store.dirty = false
-      editor.syncDirty()
+    // Every write of THIS file goes through `saves` (the in-place self-update
+    // too, below): the queue keeps two writes from overlapping on one handle,
+    // and saving.ts clears the dot only if nothing changed while the bytes were
+    // being written. The copies and share exports stay outside it on purpose —
+    // they write a DIFFERENT file and never keep its handle.
+    // collab.sync is stamped in the queue's prepare step: after any write
+    // ahead of this one, immediately before the snapshot is copied, so the
+    // state describes exactly the bytes that reach the file (#594).
+    const out = await saveRevision(store, saves, (snapshot) => saveFile(snapshot),
+      () => { stampSync(store, session); editor.status(t('Saving…')) })
+    if (out.kind === 'failed') {
+      console.error('bento/spaces: save failed', out.error)
+      editor.status(t('Save failed — see console'))
+      return
     }
-    if (res === 'saved' || res === 'saved-as' || res === 'downloaded') {
-      // A SAVE IS THE MOMENT WORTH KEEPING. The throttle below catches long
-      // editing runs, but the point somebody chose to write the file is the
-      // point they would most want back, so it is never throttled away.
-      // Encrypted spaces keep nothing here, for the reason putRecovery does not.
-      if (!isEncryptionActive()) { void addVersion(store.doc); lastVersionAt = Date.now() }
-    }
-    if (res === 'saved') {
-      void clearRecovery(store.doc.docId)
+    if (out.kind !== 'written') { editor.status(''); return }
+    // A SAVE IS THE MOMENT WORTH KEEPING. The throttle below catches long
+    // editing runs, but the point somebody chose to write the file is the
+    // point they would most want back, so it is never throttled away. The
+    // version is the snapshot that was WRITTEN, not whatever is on screen now.
+    // Encrypted spaces keep nothing here, for the reason putRecovery does not.
+    if (!isEncryptionActive()) { void addVersion(out.doc); lastVersionAt = Date.now() }
+    if (out.result === 'saved' && out.current) {
+      // Only when the disk holds what is on screen: after a stale write the
+      // recovery snapshot is the one copy of the newer edit.
+      void clearRecovery(out.doc.docId)
       // "Saved" is doing real work here: on a browser without file-system
       // access this was a NEW download, and saying so is the difference
       // between understanding that and losing track of which copy is current
@@ -346,6 +353,22 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     } else {
       editor.status('')
     }
+  }
+
+  /**
+   * The in-place self-update rewrites the SAME file ⌘S does, so it takes the
+   * same queue: without it an update and a save could be open on one handle at
+   * once, and whichever closed last would decide which shell the file ends up
+   * as. It writes the queue's snapshot, and — like a save — clears the dot only
+   * when that snapshot is still the document on screen.
+   */
+  editor.onUpdateInPlace = async (rel) => {
+    // stamped in prepare, beside the snapshot, exactly as ⌘S is
+    const saved = await saves.run(() => { store.endRun(); stampSync(store, session) },
+      (snapshot) => applyUpdateInPlace(rel, snapshot))
+    if (!saved?.value) return null
+    if (saved.isCurrent()) store.setDirty(false)
+    return saved.value
   }
 
   // A recovery snapshot is the ONLY backstop on browsers with no file-system

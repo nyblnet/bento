@@ -14,6 +14,42 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-04 — "+" offers only apps that can be made now, on every host
+
+**Decision.** A host's "New document" offers an app only when that app's
+release channel serves a release that **verifies** — signature, app identity
+and rollback floor, the same checks used to create the document — or when a
+verified shell for it is already cached. Read at runtime, each time "+" opens.
+This **supersedes** one line of "2026-08-16 — Creating a document: every host
+VERIFIES the release it downloads": *"the app list is aspirational on every
+host. All three say '<App> has not been released yet'."*
+
+**Why.** The aspirational list offered every app and refused the unreleased
+ones after they were chosen. On 2026-10-04 that meant Spaces and Dash in the
+iOS menu with both channels answering 404 — two options in front of App Review
+that do nothing, which is guideline 2.1's placeholder case. The list existed to
+keep "adding an app to the list is the whole integration" true; reading the
+channels at runtime keeps that and adds that an app now appears by itself the
+day its channel goes live, with no host release.
+
+**Two details that matter.**
+
+- **Verified, not merely reachable.** An HTTP 200 with a bad signature does not
+  put an app in the menu. Offering something the create path would then refuse
+  is the failure being replaced, so the two must apply the same checks.
+- **The cache keeps offline "New" working.** A shell in the host's own cache
+  was verified when it was written, so an app used before stays on offer with
+  no connection. With no live channel and nothing cached, "+" says so, rather
+  than showing an empty menu.
+
+It is still only the release channel, and still only when creating a
+document. Probes run concurrently, so "+" waits for the slowest channel rather
+than the sum of them, capped at 8 s.
+
+**Status.** iOS implements it first (`home/ios/Releases.swift`
+`available()`). Android and the extension still show the aspirational list and
+follow once this is accepted — until then the hosts differ on this one point,
+recorded here rather than left to be found.
 ## 2026-10-04 — iOS: "Save a copy…" reports what the picker actually did
 
 **Decision.** iOS follows the same rules as Android's 2026-10-04 entry on
@@ -7465,6 +7501,62 @@ rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
 
+## 2026-10-04 — Android: a save from a read-only document remembers where it went, and one picker answers every write
+
+The `ACTION_VIEW` route (a document handed over by Files, Drive or Gmail) was
+written in #363 and first exercised on a device here. A writable grant — the
+system Files app gives one — works end to end: open, edit, save in place, kill,
+reopen. A **read-only** grant, the usual case from mail and most senders, lost
+data, and in a way that looks like success.
+
+**What was measured** (emulator, Android 16, a 1.2 MB slides deck). After an
+edit, Bento's ⌘S and its autosave write-back (2.5s debounce) send two `write`s
+for the same handle before the export picker returns. The host kept ONE pending
+export: the second write overwrote it and launched a second picker on top of the
+first. The first result to come back consumed the bytes; the second found nothing
+pending and returned silently, leaving the file the picker had just created at
+**0 bytes** — and the first write's promise was never answered. Separately,
+nothing remembered where a copy had gone, so every later autosave to that handle
+went back to a picker: one per edit.
+
+**Decided:**
+
+- **Exports are remembered for the session, by the name the handle was vended
+  under.** A later write or read on that name goes straight to the copy. That is
+  what the handle means on desktop: Save-As, then the copy is the document you
+  are editing. The grant from `ACTION_CREATE_DOCUMENT` lasts as long as the
+  activity, which is as long as the page's handle does. Recorded the moment the
+  picker returns, not when the first write lands, so an autosave in between goes
+  to the copy rather than to a new picker.
+- **One picker per name.** Writes that arrive while it is open join it — newest
+  bytes win, every id gets the one result. A *different* name while a picker is
+  open is refused out loud ("another save is waiting for a location") rather than
+  queued behind a dialog that is visibly for another file. A cancelled picker
+  rejects every joined write.
+- **All writes run on one thread, in order.** The copy can be addressed before
+  its first write finishes; two threads truncating one file is how a document
+  gets interleaved.
+- **A null output stream is a failure.** The code read
+  `openOutputStream(…)?.use { … } ?: "no output stream"` then `null`, which built
+  the error and discarded it — a provider returning no stream was reported to the
+  page as a save.
+
+**Not changed, deliberately:** the intent filter stays `text/html`. Mail and
+cloud senders often label attachments `application/octet-stream`, which would
+keep bento/home out of the chooser; but content URIs have opaque paths, so
+`pathPattern` cannot narrow by `.html`, and a bare octet-stream filter would
+offer the app for every binary file — a store-review problem. How often real
+senders do this is a hardware question, not one to guess at here.
+
+**For the iOS host** (`exportCopy`): it could not write a 0-byte file — it
+writes a temp copy first — but it reported success when the picker was
+*presented*, so a cancelled export read as saved, and it had no export memory
+either. Fixed in #600 under the same rules, so both hosts answer a page the same
+way; verified there by reading and a standalone state-machine check, not yet on
+a device. One iOS-specific difference is recorded in #600's entry: its picker
+copies the temp file as it stood when the picker opened, so bytes from a write
+that joined later must be written over the placed copy before anyone is
+answered.
 ## 2026-10-04 — PowerPoint import lives in convert/, beside the apps, and builds only on a verified, current shell
 
 **Where it lives.** The pptx importer moved from `kernel/src/convert/` to a
@@ -7727,3 +7819,73 @@ another space's pages under this one's identity is exactly the forgery. And
 spaces does NOT drop unknown keys: the format is additive, a file open keeps
 every field it does not understand, and the restore path must not be the one
 that loses them.
+## 2026-09-28 — Spaces: the unsaved dot answers for one revision, and every write of the open file queues
+
+Spaces adopts the kernel's `SaveQueue` (kernel/src/savequeue.ts). The race it
+closes was real in every app: ⌘S awaited `saveFile` and then cleared the
+dirty flag, so an edit made while the write was in flight was never written
+and was shown as saved. The rule now, owned by `spaces/src/saving.ts`:
+
+- **The dot clears only when the write that captured THAT revision is
+  acknowledged** — `isCurrent()` read after the write resolves, never the
+  resolve itself. A stale write still counts as written: it gets its version
+  entry (the snapshot that reached disk, not what is on screen now), but it
+  does not clear recovery, because the recovery snapshot is then the only copy
+  of the newer edit.
+- **`store.revision` advances on every mutation**, including each keystroke
+  inside a typing run (which deliberately raises no 'doc' event) and every
+  remote apply, even while the space is already dirty. An undo that swaps the
+  document object is stale by identity.
+- **Every write to the OPEN file goes through one queue**: ⌘S and About's
+  in-place self-update (`applyUpdateInPlace` adopts the same handle; overlapping
+  it with a save let whichever closed last decide the file's shell). The
+  update's old "Reload into new version" line set the dot false
+  unconditionally; that was the same race, and it is gone.
+- **Copies and exports stay OUT of the queue** — Save a copy, the page
+  extract, Duplicate as new space, the invite and view-only copies. They write
+  a different file, never keep its handle (`keepHandle` false, the lesson
+  slides paid for), and never touch the dot. Queuing them would only put a
+  file picker in front of ⌘S.
+- **Encryption is unchanged** — `saveFile` serializes the snapshot through
+  `serializeAuto`, the encryption-aware path.
+- **A failed write says so** and leaves the space dirty; the queue is not
+  poisoned, so the next ⌘S writes. It used to leave "Saving…" on screen and
+  surface as an unhandled rejection.
+- **⌘S in a read-only space behaves as before.** The adopting branch (#537)
+  also made doSave return early when `store.readOnly`; that is not part of
+  this fix and would have left a view-only follower's dot — lit by every
+  remote op — impossible to clear. Whether a frozen (newer-version) file
+  should refuse ⌘S is its own decision.
+
+Proof: `scripts/test-spaces-save-revisions.ts` holds a write open, edits under
+it, releases it, and requires the space still dirty with the edit in the next
+write; plus a failed write, back-to-back saves, a remote edit and an undo
+mid-write. Reverting to mark-saved-on-resolve fails five checks. Spaces does
+not stamp `collab.sync` on ⌘S the way slides does; the queue's `prepare` is
+where that would go, and it is filed rather than folded in here.
+
+## 2026-10-04 — Undo moves content, never identity (type)
+
+**Undo and redo take a document's `docId`, `collab` and `readonly` from the
+live document, never from the snapshot.** bento/type's `Store.#apply` swapped
+whole-document snapshots in wholesale, so it rolled back identity and
+capability along with text. Measured on that code: "Reset access" — which is
+revocation — then ⌘Z put the revoked room key and room back, so a copy the
+owner had just cut off could rejoin the next time they went live; "Stop
+sharing" then ⌘Z turned sharing back on. ⌘Z means "undo what I wrote", not
+"undo who this file is or who may reach it". It is also what keeps #588's
+read-only lock honest: the lock reads `collab`, so undo can never unlock a
+view-only copy.
+
+The list (`FROM_LIVE`, type/src/store.ts) is the same as bento/slides'
+(restoregate.ts, applied to undo in #605). It is a local copy for now; kernel
+will lift one shared list. In type, `collab` is the field that changes in
+place (the sharing actions); `docId` and `readonly` change only when another
+document is loaded over this one. So undoing a whole-document REPLACE brings
+back the earlier content under the identity that replace brought in — identity
+is not undoable whichever action changed it. slides behaves the same.
+
+`test-type-store.ts` drives the real sharing helpers through the session
+adapter, undoes all the way back checking at every step, and covers each field
+including one that is absent in the live document. Reverting to the full swap
+reddens every identity row and the undo-must-not-unlock pair.

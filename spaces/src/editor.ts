@@ -175,6 +175,9 @@ export class Editor {
    */
   onShareCopy: ((doc: SpacesDoc, suffix: string) => Promise<boolean>) | null = null
   onPrint: (() => void) | null = null
+  /** About's "Update this file" — supplied by main.ts, which owns the save queue */
+  onUpdateInPlace: ((release: import('../../kernel/src/update.ts').ReleaseInfo) =>
+    Promise<import('../../kernel/src/update.ts').InPlaceOutcome | null>) | null = null
 
   constructor(root: HTMLElement, store: Store) {
     this.root = root
@@ -5211,6 +5214,7 @@ export class Editor {
       // handle, which is what leaves you editing this space afterwards.
       onWriteCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
       onStatus: (msg) => this.status(msg),
+      onUpdateInPlace: (rel) => this.onUpdateInPlace?.(rel) ?? Promise.resolve(null),
       // both self-update writes carry this space's CRDT state, as ⌘S does
       onBeforeWrite: () => shareModule.stampSync(this.store, this.session),
     })
