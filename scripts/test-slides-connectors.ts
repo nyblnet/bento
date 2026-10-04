@@ -51,7 +51,11 @@ const editor = read('slides/src/editor/editor.ts')
 ok(/TIPS\.map\(\(tip\) => \[tip\.kind, t\(tip\.label\)\]\)/.test(panels), 'the panel lists the catalogue — model words as values, translated labels for display')
 ok(/el\.shape === 'line' \|\| \(el\.shape === 'path' && !\/z\\s\*\$\/i\.test/.test(panels), 'tips are offered on lines and OPEN paths, never on a polygon')
 const render = read('slides/src/render.ts')
-ok(/const spec = tipSpec\(kind\)/.test(render) && !/'M 0 0\.4 L 7\.6 4 L 0 7\.6 Z'/.test(render), 'the renderer builds markers from the catalogue, not from its own geometry')
+// shapeSvg + markerRef moved to the kernel (kernel/src/shape.ts) with step 2 of
+// the diagram-engine lift; the tip catalogue to kernel/src/tips.ts. Source pins
+// that checked the moved code follow it there.
+const shape = read('kernel/src/shape.ts')
+ok(/const spec = tipSpec\(kind\)/.test(shape) && !/'M 0 0\.4 L 7\.6 4 L 0 7\.6 Z'/.test(shape), 'the shape renderer builds markers from the catalogue, not from its own geometry')
 ok(new Set(TIP_KINDS).size === TIP_KINDS.length, 'no duplicate kinds')
 ok(TIPS.every((s) => s.label.length > 0), 'every tip has a panel label')
 
@@ -70,7 +74,7 @@ ok(close(tipInsetPx('triangle-open', 3), tipSpec('triangle-open')!.inset * 3), '
 ok(tipInsetPx(undefined, 3) === 0 && tipInsetPx('none', 3) === 0, 'no tip → no inset')
 
 console.log('\nthe double arrow\n')
-ok(/if \(el\.heads === 2\) \{/.test(render.slice(render.indexOf("case 'arrow': {"), render.indexOf("case 'line': {"))), 'render.ts draws the two-headed polygon inside the ARROW branch')
+ok(/if \(el\.heads === 2\) \{/.test(shape.slice(shape.indexOf("case 'arrow': {"), shape.indexOf("case 'line': {"))), 'shape.ts draws the two-headed polygon inside the ARROW branch')
 ok(/heads: num\(2, 2\)/.test(gate), 'the gate admits heads: 2 on a shape')
 ok(/heads\?: 2/.test(model), 'the model has heads?: 2 on ShapeElement')
 ok(!/arrow2/.test(model) && !/arrow2/.test(gate) && !/'arrow2'/.test(render), 'no new shape kind anywhere — arrow2 is gone')
@@ -127,7 +131,7 @@ for (const s of TIPS) {
   if (['none', 'arrow', 'dot', 'bar'].includes(s.kind)) continue
   ok(frozenMarker(s.kind) === 'bar', `${s.kind}: 1.1.0 draws a BAR at that end (not a plain end) — no throw`)
 }
-ok(/in 1\.1\.0 and older the renderer matches only\n \* 'arrow' and 'dot' and draws a BAR/.test(read('slides/src/tips.ts')), 'tips.ts states the degrade')
+ok(/in 1\.1\.0 and older the renderer matches only\n \* 'arrow' and 'dot' and draws a BAR/.test(read('kernel/src/tips.ts')), 'tips.ts states the degrade')
 ok(/those shells draw a bar where a\n  new tip should be; a double arrow shows there as a single one/.test(read('CHANGELOG.md')), 'the changelog states the same degrade, no softer')
 
 console.log('\nend tangent\n')
@@ -184,9 +188,21 @@ console.log('\nthe legacy straight connector\n')
   ok(el.w === 100 && el.x === 0 && el.y === -2 && el.rotation === 0, 'setLineEndpoints rebuilds the box from two endpoints')
   const bp = borderPoint({ x: 0, y: 0, w: 100, h: 100 }, { x: 200, y: 50 })
   ok(bp.x === 100 && bp.y === 50, 'borderPoint lands on the border along the ray to the target')
+  // rotated + diagonal cases (slides review on #592 asked for coverage beyond rotation 0)
+  const vert = lineEndpoints({ x: 0, y: 0, w: 100, h: 4, rotation: 90 })
+  const approx = (a: number, b: number) => Math.abs(a - b) < 1e-6
+  ok(approx(vert[0].x, 50) && approx(vert[0].y, -48) && approx(vert[1].x, 50) && approx(vert[1].y, 52),
+    'lineEndpoints at 90° gives a vertical pair about the box centre')
+  // deno-lint-ignore no-explicit-any
+  const rot: any = { h: 4 }
+  setLineEndpoints(rot, { x: 50, y: 0 }, { x: 50, y: 100 })
+  ok(rot.w === 100 && approx(rot.rotation, 90) && approx(rot.x, 0) && approx(rot.y, 48),
+    'setLineEndpoints encodes a vertical drag as rotation 90')
+  const diag = borderPoint({ x: 0, y: 0, w: 100, h: 100 }, { x: 200, y: 200 })
+  ok(diag.x === 100 && diag.y === 100, 'borderPoint on a diagonal ray lands on the corner')
 }
 // and the marker numbers an old deck was drawn with
-ok(/inset the endpoints so the tip's point lands on the box edge/.test(render) && /tipInsetPx\(el\.lineStart, lw\)/.test(render), 'a line insets by the catalogue — 2.6 for the original three (asserted above)')
+ok(/inset the endpoints so the tip's point lands on the box edge/.test(shape) && /tipInsetPx\(el\.lineStart, lw\)/.test(shape), 'a line insets by the catalogue — 2.6 for the original three (asserted above)')
 ok(/el\.shape !== 'line' && el\.shape !== 'path'/.test(editor) && /if \(isPath\) setPathEndpoints\(c, na, nb\)\n\s+else setLineEndpoints\(c, na, nb\)/.test(editor), 'syncConnectors routes lines through setLineEndpoints and paths through setPathEndpoints')
 const canvas = read('slides/src/editor/canvas.ts')
 ok(/kind === 'curve-connector'/.test(canvas) && /el\.lineEnd = 'arrow'\n\s+if \(fromA\) el\.from/.test(canvas), 'the Curved connector tool draws a path with a tip and anchors like Connector')
