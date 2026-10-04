@@ -8,7 +8,8 @@
     "contextMenus",
     "notifications",
     "sidePanel",
-    "storage"
+    "storage",
+    "unlimitedStorage"
   ],
   "optional_permissions": [
     "history"
