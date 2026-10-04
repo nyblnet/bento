@@ -76,9 +76,31 @@ export function isOwner(doc: SpacesDoc): boolean {
   return !!(c && c.v === 2 && c.owner && c.ownerPriv)
 }
 
+/**
+ * May THIS COPY write to its room? The one answer every gate in spaces asks.
+ *
+ * An ALLOWLIST, and the shape is the point. This used to be
+ * `role !== 'reader'`, which answers "yes" for every role invented after it —
+ * so when the kernel added 'audience' (a live-show member whose transport is
+ * receive-only), an audience copy opened in spaces got writer chrome and made
+ * local commits the relay then refused. Failing CLOSED is the safe direction:
+ * a future role that can write shows view-only until it is taught here, a
+ * visible and harmless bug; the old shape's failure was invisible.
+ *
+ * Absent means writer because every file older than the role field is one —
+ * the owner copy included, which is marked by `ownerPriv`, not by a role.
+ * Read as an OWN property, so nothing inherited can answer for the file.
+ * Same shape and name as type's (type/src/model.ts).
+ */
+export function copyCanWrite(collab: SpacesDoc['collab'] | undefined): boolean {
+  if (!collab || typeof collab !== 'object') return false
+  if (!Object.prototype.hasOwnProperty.call(collab, 'role')) return true
+  return collab.role === undefined || collab.role === 'writer'
+}
+
 /** Can this copy write at all? A reader copy holds no signing key. */
 export function canWrite(doc: SpacesDoc): boolean {
-  return !!doc.collab && doc.collab.role !== 'reader'
+  return copyCanWrite(doc.collab)
 }
 
 /**
@@ -138,7 +160,9 @@ export function readerCopy(doc: SpacesDoc): SpacesDoc | null {
  * at all. Both lock the editor; only this one keeps receiving.
  */
 export function isReaderCopy(doc: SpacesDoc): boolean {
-  return doc.collab?.role === 'reader'
+  // Every collab copy that is not an allowlisted writer — 'reader', 'audience',
+  // and any role not yet invented. No collab at all is a plain file: editable.
+  return !!doc.collab && !copyCanWrite(doc.collab)
 }
 
 /**
