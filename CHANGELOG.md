@@ -11,6 +11,16 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Open a PowerPoint deck in Bento: bento.page/import.** Drop a `.pptx` on
+  the page and get back a `.bento.html` deck you can edit and present. The
+  conversion runs in your browser and the deck is never uploaded. The page
+  fetches only the current signed slides release to build on, checks its
+  signature and fingerprint, and refuses anything that fails. Before you
+  download, it shows what was carried over, what was approximated and what
+  was left out. Tables and charts become marked placeholders for now.
+  The same conversion runs from a terminal as
+  `node convert/cli.mjs deck.pptx`.
+
 ## [1.2.5] — 2026-09-28
 
 - **Security: update this file. This release closes three security issues

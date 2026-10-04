@@ -7417,3 +7417,54 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-10-04 — PowerPoint import lives in convert/, beside the apps, and builds only on a verified, current shell
+
+**Where it lives.** The pptx importer moved from `kernel/src/convert/` to a
+top-level `convert/` (engine in `convert/src/`, the bento.page/import page in
+`convert/page/`, the CLI at `convert/cli.mjs`). The kernel is the machinery
+every app imports; no app imports the importer, so it does not belong there.
+`kernel/src/convert/zip.ts` stays, because dash's xlsx import uses it. No
+shell grows: `scripts/test-convert/boundary.ts` fails if any app or kernel
+source imports `convert/`, or if the engine's bundles use a DOM global (the
+CLI runs it in node, the page in a browser).
+
+**What a converted file is built on.** A converted deck carries its shell for
+good, so the converter never uses a shell it cannot vouch for.
+`convert/src/deliver.ts` fetches the release manifest, verifies its signature
+with the kernel's `verifySigned`, then fetches the shell with `fetchPinned`
+against the signed sha256. A failure at either step is a refusal, never a
+fallback. The page fetches from its own origin (its CSP is `connect-src
+'self'`) by re-rooting the signed URL's path. That grants no trust, because
+trust comes from the signature and the pin, not the URL.
+
+**The version floor.** A signature proves a shell is genuine, not that it is
+current: a stale mirror or a cached manifest still verifies. `MIN_SHELL_VERSION`
+in `deliver.ts` is the oldest release the converter will build on, checked
+before the shell is downloaded. A version that is not plain dotted numbers is
+refused rather than compared, since `compareVersions` reads non-numeric parts
+as 0. **A release that ships a security fix bumps it to its own version.**
+`scripts/release.mjs` refuses a slides release below the floor, so the page
+can never refuse the release it shipped with.
+
+**Converter output is untrusted input.** A `.pptx` is attacker-controlled, so
+the converted document passes slides' untrusted-input gate (`sanitizeSlide`,
+`sanitizeAssets`, `sanitizeFonts`) and `parseDoc` before it is spliced. A
+preflight over the zip's central directory bounds input size, entry count,
+total declared size and compression ratio, and refuses ZIP64, before anything
+is inflated. Typeface names, which reach CSS, are filtered in the importer
+too, so three independent layers refuse them.
+
+**The page's privacy claim is its CSP.** `scripts/build-import-page.mjs`
+inlines one script and one stylesheet and writes a policy of `default-src
+'none'`, `connect-src 'self'`, and script and style allowed only by the
+sha256 of that exact content. The build refuses a page with more than one
+policy or an inline script that is not the hashed one (a `String.replace`
+`$`-pattern once spliced a second page head into the output).
+`scripts/test-convert/import-page.ts` checks the built page, including that
+it loads no resource from anywhere and names no network destination but the
+manifest.
+
+**Not done here.** The splice writes the document block directly rather than
+going through `serializeWith`, so a converted file has no first-page
+thumbnail until its first save in the app.
