@@ -14,16 +14,6 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
-- **A copy that cannot write never gets writer chrome.** Whether a copy may
-  write was decided by `collab.role !== 'reader'`, so the live-show
-  `'audience'` role — and any role added later — passed as a writer: an
-  audience copy opened editable, was labelled Editor in People, and made local
-  commits the relay then refused. It is an allowlist now (`copyCanWrite` in
-  `share.ts`, the same shape as bento/type's): no role field or `'writer'`
-  writes, anything else opens view-only. Every gate — the boot lock, the Share
-  popover, the People label — asks that one function. Plain files and legacy
-  rooms open exactly as before.
-
 - **The whole gallery card is the target, and a long title stops inflating its
   row.** In a shelf of covers the picture is what you point at, so the title's
   link now stretches over the card rather than the card holding a second one —
@@ -486,6 +476,16 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   Japanese readers see 2026年8月6日木曜日, German readers Donnerstag, 6. August
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
+
+- **A copy that cannot write never gets writer chrome.** Whether a copy may
+  write was decided by `collab.role !== 'reader'`, so the live-show
+  `'audience'` role — and any role added later — passed as a writer: an
+  audience copy opened editable, was labelled Editor in People, and made local
+  commits the relay then refused. It is an allowlist now (`copyCanWrite` in
+  `share.ts`, the same shape as bento/type's): no role field or `'writer'`
+  writes, anything else opens view-only. Every gate — the boot lock, the Share
+  popover, the People label — asks that one function. Plain files and legacy
+  rooms open exactly as before.
 
 ## [0.1.0] — 2026-08-03
 
