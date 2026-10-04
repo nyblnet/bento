@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { TIPS, TIP_KINDS, tipSpec, tipInsetPx, endTangent, shortenPathEnds, movePathEnds, pathEnds } from '../slides/src/tips.ts'
 import { parseBezier } from '../slides/src/editor/bezier.ts'
+import { borderPoint, lineEndpoints, setLineEndpoints } from '../kernel/src/geom.ts'
 
 let failures = 0
 let checks = 0
@@ -169,33 +170,21 @@ const ends = pathEnds(bow)!
 ok(close(ends[0].x, 0) && close(ends[1].x, 200), 'pathEnds reads the two on-curve ends')
 
 console.log('\nthe legacy straight connector\n')
-// lineedit.ts cannot load in node (it reaches the i18n packs at import), so
-// the straight-line path is held to its 1.0.2 text: these three functions are
-// what routed every connector before this change, byte for byte.
-const lineedit = read('slides/src/editor/lineedit.ts')
-const fn = (name: string) => { const i = lineedit.indexOf(`export function ${name}(`); return lineedit.slice(i, lineedit.indexOf('\n}\n', i) + 3) }
-ok(fn('lineEndpoints') === `export function lineEndpoints(el: ShapeElement): [Pt, Pt] {
-  const cx = el.x + el.w / 2
-  const cy = el.y + el.h / 2
-  const rad = ((el.rotation || 0) * Math.PI) / 180
-  const hw = el.w / 2
-  const dx = Math.cos(rad) * hw
-  const dy = Math.sin(rad) * hw
-  return [{ x: cx - dx, y: cy - dy }, { x: cx + dx, y: cy + dy }]
+// These three functions routed every connector before this change. The
+// diagram-engine lift moved them to the kernel (kernel/src/geom.ts), which —
+// unlike lineedit.ts — is pure and node-loadable, so instead of pinning their
+// TEXT (the old workaround for "lineedit can't import in node") we now exercise
+// their OUTPUT: a stronger guarantee that the relocation changed nothing.
+{
+  const ep = lineEndpoints({ x: 0, y: 0, w: 100, h: 4, rotation: 0 })
+  ok(ep[0].x === 0 && ep[0].y === 2 && ep[1].x === 100 && ep[1].y === 2, 'lineEndpoints splits a flat box into its two ends')
+  // deno-lint-ignore no-explicit-any
+  const el: any = { h: 4 }
+  setLineEndpoints(el, { x: 0, y: 0 }, { x: 100, y: 0 })
+  ok(el.w === 100 && el.x === 0 && el.y === -2 && el.rotation === 0, 'setLineEndpoints rebuilds the box from two endpoints')
+  const bp = borderPoint({ x: 0, y: 0, w: 100, h: 100 }, { x: 200, y: 50 })
+  ok(bp.x === 100 && bp.y === 50, 'borderPoint lands on the border along the ray to the target')
 }
-`, 'lineEndpoints is the 1.0.2 text')
-ok(fn('setLineEndpoints') === `export function setLineEndpoints(el: ShapeElement, a: Pt, b: Pt): void {
-  const cx = (a.x + b.x) / 2
-  const cy = (a.y + b.y) / 2
-  const w = Math.max(Math.hypot(b.x - a.x, b.y - a.y), 1)
-  const h = el.h || 4
-  el.w = w
-  el.x = cx - w / 2
-  el.y = cy - h / 2
-  el.rotation = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI
-}
-`, 'setLineEndpoints is the 1.0.2 text')
-ok(fn('borderPoint').includes('const s = Math.min(sx, sy)\n  return { x: cx + dx * s, y: cy + dy * s }'), 'borderPoint is the 1.0.2 text')
 // and the marker numbers an old deck was drawn with
 ok(/inset the endpoints so the tip's point lands on the box edge/.test(render) && /tipInsetPx\(el\.lineStart, lw\)/.test(render), 'a line insets by the catalogue — 2.6 for the original three (asserted above)')
 ok(/el\.shape !== 'line' && el\.shape !== 'path'/.test(editor) && /if \(isPath\) setPathEndpoints\(c, na, nb\)\n\s+else setLineEndpoints\(c, na, nb\)/.test(editor), 'syncConnectors routes lines through setLineEndpoints and paths through setPathEndpoints')

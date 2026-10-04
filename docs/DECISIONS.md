@@ -14,6 +14,30 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-04 — A link that leaves a document opens outside it, on every host
+
+**Decision.** In a native host, a document never navigates away from itself.
+A link to the web (http, https) or to mail opens in the system — Safari, the
+browser, the mail app — and the document stays on screen. Anything else that
+would replace the document is dropped. Frames inside a document are untouched:
+an embed loading its own content is the document's business. Android has worked
+this way since it became a document host; iOS now matches it rule for rule
+(`home/ios/LinkPolicy.swift`).
+
+**Why.** iOS allowed every navigation, so a link in a deck replaced the deck
+with a website inside the editor, with back navigation disabled — the only way
+out was to close the document. And an app that shows arbitrary websites is,
+for the App Store's age-rating questionnaire, offering unrestricted web access,
+which rates it 18+. A document editor has no reason to be a web browser; with
+links opening outside it, that answer is "no" and the rating 4+.
+
+**Why the scheme list is short.** A document is content the user opened, and
+the host should not launch another app on its say-so. http, https and mailto are
+what a link in a document means. A custom URL scheme is dropped rather than
+opened, the same choice Android makes.
+
+---
+
 ## 2026-08-19 — Cross-app embedding: static render + source, never a second renderer
 
 **Decision.** One block/element shape, `bento/embed`, shared by every app in both
@@ -7449,3 +7473,108 @@ Version restore keeps the live `docId` and `collab` for the same reason undo
 does. A version is a past state of the content, and the room and keys are
 this copy's present capability. Restoring from before a rotation or before
 Stop sharing must not re-arm what the person turned off.
+## 2026-10-04 — dash: a restore takes content from the snapshot, identity from the live workbook
+
+Dash's recovery banner and Version history now go through
+`restoredWorkbook(json, live)` (`dash/src/recovery.ts`), the same split as
+slides' `gateRestored`. Four fields come from the LIVE workbook, never the
+snapshot: `docId`, `collab`, `readonly`, and — dash's own addition — `template`,
+because a restored template flag stops the automatic save to the file and
+re-mints the identity on the next open. A field the live workbook lacks is
+removed, so a roomless workbook cannot gain a room from a snapshot.
+
+`parseDoc` is deliberately unchanged: opening or dropping a FILE adopts that
+file's own capability, which is the design. Replace from JSON already keeps the
+live `collab` (about.ts) and still takes `docId`/`readonly` from the paste — a
+deliberate user action, left as is.
+
+## 2026-10-04 — dash: sharing changes mark the workbook unsaved; copy roles are an allowlist
+
+Dash carries its own copy of the sharing verbs (`dash/src/sync/online.ts`), and
+they wrote `doc.collab` directly. Slides, spaces and type use the kernel's
+versions, which go through `store.commit`, and each of those apps lights its
+unsaved state from commit. Checked all three: none has this gap.
+
+- **`Store.markUnsaved()`** advances the document (`touch`) and raises a new
+  `'unsaved'` event that main.ts wires to the same `markDirty` as `doc`. It is
+  deliberately NOT a commit: sharing state is not an edit to the data and must
+  not be undoable. It is called when sharing turns on from off, turns off, or
+  rotates. Minting credentials for a new workbook stays silent, because dash
+  mints with `on: true` and an untouched starter must close without a warning.
+- **`copyCanWrite(collab)`** — absent role or `'writer'` writes; everything else,
+  including any role invented later, does not. It replaces `role !== 'reader'`
+  in the relay auth gate and in presence. The same rule as type's (#588); the
+  kernel's union added `'audience'` and dash's narrower type had hidden it.
+- Rig `scripts/test-dash-share-dirty.ts`, 27 checks, uses a fake WebSocket so
+  no network is touched. Seven sabotages each turn it red.
+
+Observed, not changed: the kernel's `startSharing`/`stopSharing` commit through
+the UNDO history in slides, spaces and type, so ⌘Z after "Stop sharing" sets
+`collab.on` back without reconnecting.
+
+## 2026-10-04 — slides: write chrome is an allowlist, and the lock follows a document that arrives
+
+The editor decided whether a copy could write with `collab.role !== 'reader'`. That
+was a denylist, so the broadcast `audience` role (#454) passed it: an audience
+copy dropped onto a running editor, or handed to `window.bento.loadDoc`, got
+"Invite to edit…", "Go live" and "Reset access…", an Editor label, and no
+editing lock. Measured on 1.2.5 by both routes. Booting an audience copy was
+never affected (`bootWith` sends it to the show), and the relay refused its
+writes throughout, so this was chrome, not capability. Separately, the
+read-only lock ran only at build time, so even a plain reader copy dropped onto
+a running editor could be edited.
+
+Fixed: `canWriteDeck(collab)` in `slides/src/editor/editor.ts` is an allowlist
+that fails closed. No collab, an absent role (owner and legacy writer copies)
+or `'writer'` may write; `'reader'`, `'audience'` and any role a later version
+adds are read-only. It gates the Share panel's write actions, the People row's
+label and the read-only lock, and a store listener applies the lock when a
+non-writing document arrives in a running editor. Type made the same change
+for its write chrome the same day; the two apps share the rule.
+
+Rule: decide what a copy may do by naming the roles that MAY, never the roles
+that may not. A role added later should arrive read-only until someone grants
+it more. Guarded by `scripts/test-slides-audience-gate-browser.mjs` (both
+routes, reader, unknown role, owner/writer controls; mutation-checked).
+## 2026-10-04 — Whether a copy may write is an allowlist of roles (type)
+
+**A copy's write capability is decided by the roles that can write, never by
+the roles that cannot.** bento/type's share popover and People label asked
+`collab.role !== 'reader'`. When #454 added `'audience'` — a live-show member
+whose transport is receive-only (kernel/src/sync/online.ts) — that test
+answered "yes": an audience copy opened in type was labelled **Editor** and
+offered "Invite to edit…" and "View-only copy…", contradicting the transport
+beneath it. Measured: an audience-shaped `collab` survives `parseDoc` with
+`role: 'audience'` intact, and the old test returns true for it. The relay
+still refused its writes, so the defect was a misleading UI, not a capability.
+
+`copyCanWrite` (type/src/model.ts) now returns true only for an absent role
+(every file older than the role field writes) or `'writer'`, and both gates in
+type/src/collab.ts use it. It fails CLOSED: a role nobody has taught it about
+gets view-only chrome, which is a visible, harmless bug, where the denylist's
+failure was invisible and misleading. Type's `collab.role` type is also widened
+to the kernel's own union (sync/crdt.ts) — it was narrower, which is why
+nothing flagged the gap.
+
+The same `!== 'reader'` shape stands in slides (editor.ts), spaces (share.ts)
+and dash (sync/online.ts); filed for those zones rather than changed here.
+`test-type-model.ts` pins the shape, including a role nobody has invented yet.
+
+**And a receive-only copy is locked, by a lock DERIVED from the document.**
+The mislabel had a worse twin: type mints view-only copies ("View-only copy…")
+yet its editor was unconditionally `contentEditable` and `Store.commit` never
+checked — so a reader could type freely while the popover said the copy
+"can't change the document". The relay dropped those edits, so they lived only
+locally and autosave could write them back, drifting the file from the room it
+follows. Measured in headless Chrome on the built shell: with no lock, a reader
+copy loaded via `loadDoc` stayed editable and typed text landed; with the lock,
+it is not editable and the text holds. `Store.locked` is recomputed on every
+change — never decided once at boot — because bento/slides found the
+build-time version, which a reader copy loaded into a running editor walked
+straight past. User commits are refused while locked; the sync session's own
+commits carry `system: true` and pass, because kernel session.ts writes a
+peer's published images into the document through `commit`, and a reader
+needs those more than anyone. Remote edits arrive through `touch()`, not
+`commit`, so a locked copy still follows the room. `copyIsReceiveOnly` is the
+lock's question (a document with no `collab` is local and editable — unlike
+`copyCanWrite`, which says no only because there is no room to write to).
