@@ -114,7 +114,7 @@ const launch = (win) => new Promise((r) => win.launchQueue.setConsumer((p) => r(
   win.launchQueue.setConsumer((p) => { got = p })
   await tick(); await tick()
   ok(begins[0] && begins[0].launch === true, 'the launch request is marked launch:true')
-  ok(got === null, 'a read-only document gets no launch handle — and no export dialog at open')
+  ok(got === null, 'a read-only document gets no launch handle, so no export handle posing as its file')
   const h = await win.showSaveFilePicker({ suggestedName: 'Deck' })
   ok(h.name !== OPEN, 'its ⌘S still goes the export route, as before')
 }

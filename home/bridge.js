@@ -119,8 +119,10 @@
   //
   // The request is marked `launch: true`. A host that cannot hand over the open
   // document — already handed out, or (Android) a read-only grant — must answer
-  // no, never fall through to its export picker: that would put a save dialog on
-  // screen the moment a document opened. bridge.js ships inside each host app,
+  // no, never fall through to an export: the page would adopt an export handle as
+  // its own file, and the first autosave after any edit would open a save dialog
+  // nobody asked for (measured on Android; the same on iOS, where begin only
+  // vends a name and the picker comes with the first write). bridge.js ships inside each host app,
   // so the flag and the host that honours it always arrive together.
   //
   // LAZY, deliberately: nothing is asked of the host until a page calls
