@@ -495,6 +495,29 @@ for (const app of ['spaces', 'type']) {
   ok(!/keepHandle:\s*true/.test(hook), 'spaces: onShareCopy does not retain the file handle')
 }
 
+// dash: its save-a-copy builders live in sync/online.ts (not a share.ts), minted
+// through the kernel allowlist now. SOURCE guard; the behaviour is in
+// scripts/test-dash-share-dirty.ts. The old builders used a destructure-REST
+// denylist ({ ownerPriv, ...rest }) that kept writerPriv and sync — the allowlist
+// closes both, so the guard also rejects a return to that shape.
+{
+  const rel = 'dash/src/sync/online.ts'
+  const src = read(rel)
+  const readerFn = mask(exportedBody(src, 'readerCopy'))
+  const inviteFn = mask(exportedBody(src, 'inviteCopy'))
+  ok(/collabForReader\(/.test(readerFn), `${rel}: readerCopy routes through collabForReader`)
+  ok(/collabForInvite\(/.test(inviteFn), `${rel}: inviteCopy routes through collabForInvite`)
+  ok(/mintInvite\(/.test(inviteFn), `${rel}: inviteCopy mints a SCOPED invite`)
+  ok(!/\{\s*\.\.\.(?!collabFor)/.test(readerFn) && !/\{\s*\.\.\.(?!collabFor)/.test(inviteFn),
+    `${rel}: neither builder rebuilds collab by spreading the source — only a collabFor* projection`)
+  ok(!/\.\.\.rest\b/.test(readerFn) && !/\.\.\.rest\b/.test(inviteFn),
+    `${rel}: neither builder uses a destructure-rest denylist`)
+  // a non-owner early-return must NOT hand back the un-projected source block
+  // (`return collab`) — that leaks everything; refuse with `return null` instead.
+  ok(!/\breturn collab\b/.test(inviteFn),
+    `${rel}: inviteCopy never returns the source block unchanged (null for a non-owner)`)
+}
+
 // --- the OTHER half of the round trip: pasting one back in -------------------
 //
 // Stripping `collab` out of "Copy document JSON" is right, and it changed what

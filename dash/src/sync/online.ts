@@ -30,7 +30,7 @@ import type { Frame, RefusalCode, SyncSession, Transport } from './session.ts'
 import { offlineEnabled } from '../../../kernel/src/update.ts'
 import { netWebSocket } from '../../../kernel/src/net.ts'
 import { lsGet, lsSet } from '../../../kernel/src/storage.ts'
-import { carryThroughRotation } from '../../../kernel/src/docfields.ts'
+import { carryThroughRotation, collabForReader, collabForInvite } from '../../../kernel/src/docfields.ts'
 
 export const DEFAULT_SYNC_HOST = 'wss://sync.bento.page'
 const SNAP_EVERY = 200 // ops between encrypted snapshot uploads
@@ -835,18 +835,22 @@ export async function rotateKeys(session: SyncSession, store: Store) {
   store.markUnsaved()
 }
 
-/** Save-a-copy helpers: what to strip for each tier. A reader copy keeps the
- *  READ key and loses every private half, so the relay drops its writes. */
+/** Save-a-copy helpers, via the kernel ALLOWLIST (kernel/src/docfields.ts): a copy
+ *  keeps only what is on the list, so a new field — private or not — fails CLOSED.
+ *  A reader keeps the READ key and loses every private half AND the sync stamp
+ *  (a reader does not contribute), so the relay drops its writes. */
 export function readerCopy(collab: CollabBlock): CollabBlock {
-  const { ownerPriv: _o, writerPriv: _w, invite: _i, ...rest } = collab
-  return { ...rest, role: 'reader' }
+  return collabForReader(collab) as unknown as CollabBlock
 }
 
-/** An invite copy: the owner's private half stays home, an owner-signed invite
- *  travels. Each device that opens it mints its own member key. */
-export async function inviteCopy(collab: CollabBlock): Promise<CollabBlock> {
-  if (!collab.ownerPriv) return collab // not the owner's copy — nothing to delegate
+/** An invite copy: the owner's private half stays home; a FRESH owner-signed
+ *  invite travels and the top-level role comes from it. Each device that opens it
+ *  mints its own member key. The allowlist drops any legacy writer key too. */
+export async function inviteCopy(collab: CollabBlock): Promise<CollabBlock | null> {
+  // A non-owner holds no key to root the chain in — and returning the SOURCE
+  // block would leak writerPriv, sync, an old invite and any other field. Refuse,
+  // as spaces does, rather than hand back an un-projected copy.
+  if (!collab.ownerPriv) return null
   const invite = await mintInvite(collab.ownerPriv)
-  const { ownerPriv: _o, ...rest } = collab
-  return { ...rest, invite, role: 'writer' }
+  return collabForInvite(collab, invite) as unknown as CollabBlock
 }

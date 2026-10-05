@@ -42,7 +42,7 @@ const { parseDoc } = await import('../dash/src/model.ts')
 const { Store } = await import('../dash/src/store.ts')
 const online = await import('../dash/src/sync/online.ts')
 const { SyncSession } = await import('../dash/src/sync/session.ts')
-const { startSharing, stopSharing, rotateKeys, copyCanWrite, joinFromDoc, collabOf, mintCollab, disconnectOnline } = online
+const { startSharing, stopSharing, rotateKeys, copyCanWrite, joinFromDoc, collabOf, mintCollab, disconnectOnline, readerCopy, inviteCopy } = online
 type DashDoc = import('../dash/src/model.ts').DashDoc
 
 let checks = 0, failures = 0
@@ -167,6 +167,54 @@ console.log('\nan audience copy is a Viewer in presence, not an Editor')
     const p = (sess.presence ?? sess.selfPresence)?.call(sess)
     ok(p?.role === want, `role ${role ?? '(absent, owner keys)'} → ${want} — got ${p?.role}`)
   }
+}
+
+// The allowlist bar (security, 2026-10-05): dash's save-a-copy builders go through
+// the kernel allowlist now (online.ts readerCopy/inviteCopy). Build each from ONE
+// collab carrying every known secret, an unknown field and a JSON own __proto__
+// key, and prove only the allowlist survives.
+console.log('\nshare copies, from one poisoned collab (the allowlist bar)')
+{
+  const base = await mintCollab() // a real ownerPriv, so inviteCopy can sign
+  const pc = JSON.parse('{"__proto__":{"polluted":true}}') as Record<string, unknown>
+  Object.assign(pc, base, {
+    writerPriv: 'WPRIV',
+    invite: { pub: 'SRC', priv: 'SRCPRIV', role: 'writer', sig: 's' },
+    audience: { invite: { priv: 'APRIV' } },
+    sync: { v: 2, tag: 'stamp' }, links: [{ url: 'https://pub' }], futureSecret: 'LEAK',
+  })
+
+  const READER_KEYS = ['room', 'key', 'owner', 'writerPub', 'on', 'v', 'role']
+  const INVITE_KEYS = ['room', 'key', 'owner', 'writerPub', 'on', 'v', 'sync', 'invite', 'role']
+  const POISON = ['writerPriv', 'ownerPriv', 'audience', 'futureSecret', 'links']
+
+  const rc = readerCopy(pc as never) as unknown as Record<string, unknown>
+  const ic = (await inviteCopy(pc as never)) as unknown as Record<string, unknown>
+
+  ok(Object.keys(rc).every((k) => READER_KEYS.includes(k)),
+    `reader copy: ONLY reader-allowlist keys survive (${Object.keys(rc).sort().join(',')})`)
+  ok(rc.role === 'reader' && rc.sync === undefined, 'reader: role forced reader, no sync stamp (dash used to keep it)')
+  ok(Object.keys(ic).every((k) => INVITE_KEYS.includes(k)),
+    `invite copy: ONLY invite-allowlist keys survive (${Object.keys(ic).sort().join(',')})`)
+  ok(ic.sync !== undefined && (ic.invite as { pub: string }).pub !== 'SRC',
+    'invite: keeps sync, carries a FRESH invite not the source’s')
+  ok(ic.role === 'writer', 'invite: top-level role from the fresh writer invite')
+  for (const f of POISON) { ok(!(f in rc), `reader drops ${f}`); ok(!(f in ic), `invite drops ${f}`) }
+  ok(!Object.hasOwn(rc, '__proto__') && !Object.hasOwn(ic, '__proto__'), 'neither copy carries a __proto__ own key')
+  ok(({} as Record<string, unknown>).polluted === undefined, 'and the __proto__ source key polluted nothing (Object.hasOwn)')
+
+  // the planted bypass: the old destructure-rest kept writerPriv (dash's bug) and
+  // sync; spreading the source keeps every secret. The key-set check turns it red.
+  const bypass = { ...pc, role: 'reader' } as Record<string, unknown>
+  ok('writerPriv' in bypass && !Object.keys(bypass).every((k) => READER_KEYS.includes(k)),
+    'a spread-the-source bypass FAILS the reader key-set check (not vacuous)')
+
+  // a NON-owner source holds no key to root a chain in; inviteCopy must REFUSE,
+  // never hand back the un-projected source block (which would leak every secret).
+  const nonOwner = { ...pc } as Record<string, unknown>
+  delete nonOwner.ownerPriv
+  ok((await inviteCopy(nonOwner as never)) === null,
+    'inviteCopy on a non-owner source returns null, never the source block')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
