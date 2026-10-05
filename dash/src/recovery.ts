@@ -52,6 +52,7 @@ import { isEncryptionActive } from '../../kernel/src/save.ts'
 import { planReplace } from './about.ts'
 import { parseDoc, type DashDoc } from './model.ts'
 import type { Store } from './store.ts'
+import { FROM_LIVE } from '../../kernel/src/docfields.ts'
 import { t } from './i18n.ts'
 
 // --- the content key ---------------------------------------------------------
@@ -143,15 +144,63 @@ export interface DecideInput {
  * is not offered — the alternative is a Restore button that hands the app a
  * document it will then refuse, which is a dead end wearing a live button.
  */
+/**
+ * The fields a restore takes from the LIVE workbook, never from the snapshot.
+ *
+ * A recovery entry or a kept version is a CONTENT snapshot of THIS workbook,
+ * not a new file — so who it is (`docId`), which room it shares into and with
+ * which keys (`collab`), and what it may do (`readonly`, `template`) are facts
+ * about the workbook on screen. The snapshot's copies of them are not
+ * evidence: on file:// every local document shares one IndexedDB origin, and
+ * the store is keyed by docId, so any page opened in the same browser can
+ * write an entry under this workbook's docId. Before this, that entry's
+ * `collab` rode `parseDoc` straight into `replaceDoc`, and one Restore click
+ * moved the workbook into the writer's room.
+ *
+ * `template` is dash's own: restored, it would stop the automatic save to the
+ * file (writeback.ts refuses a template) and make the next open re-mint the
+ * identity. Same class as the other three — and all four are the shared kernel
+ * list now (kernel/src/docfields.ts), re-exported here.
+ *
+ * Opening a FILE and Replace from JSON do not come through here. A file
+ * carries its own capability by design; Replace from JSON keeps the live room
+ * already (about.ts).
+ */
+export { FROM_LIVE }
+
+/** The snapshot's content under the live workbook's identity. */
+export function keepLiveIdentity(next: DashDoc, live: DashDoc): DashDoc {
+  const out = { ...next } as Record<string, unknown>
+  const from = live as unknown as Record<string, unknown>
+  for (const k of FROM_LIVE) {
+    if (from[k] !== undefined) out[k] = from[k]
+    else delete out[k]
+  }
+  return out as unknown as DashDoc
+}
+
+/**
+ * A stored snapshot, parsed and put under the live workbook's identity — the
+ * ONE way a recovery entry or a kept version becomes a document. Both the
+ * banner (`decide`) and Version history (about.ts) call this, so neither can
+ * forget the identity half. `null` when the snapshot cannot be opened.
+ */
+export function restoredWorkbook(json: string, live: DashDoc): DashDoc | null {
+  const res = parseDoc(json)
+  return res.ok ? keepLiveIdentity(res.doc, live) : null
+}
+
 export function decide(input: DecideInput): RecoveryDecision {
   if (input.encrypted) return { offer: false, why: 'encrypted' }
   if (input.readOnly) return { offer: false, why: 'read-only' }
   if (!input.snapshot) return { offer: false, why: 'none' }
   if (input.snapshot.docId !== input.doc.docId) return { offer: false, why: 'other-doc' }
-  const res = parseDoc(input.snapshot.json)
-  if (!res.ok) return { offer: false, why: 'unreadable' }
-  if (contentKey(res.doc) === contentKey(input.doc)) return { offer: false, why: 'same' }
-  return { offer: true, doc: res.doc, at: input.snapshot.at }
+  // Identity from the live workbook BEFORE the comparison, so a snapshot that
+  // differs only in its room is not even offered.
+  const doc = restoredWorkbook(input.snapshot.json, input.doc)
+  if (!doc) return { offer: false, why: 'unreadable' }
+  if (contentKey(doc) === contentKey(input.doc)) return { offer: false, why: 'same' }
+  return { offer: true, doc, at: input.snapshot.at }
 }
 
 // --- swapping a whole workbook in -------------------------------------------

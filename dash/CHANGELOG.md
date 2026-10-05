@@ -39,6 +39,25 @@ The release that came out of watching somebody use 0.2.0.
 - **The formula bar follows a paste and a right-click.** Both moved the cursor
   without re-reading the cell, so the bar described the value from before.
 
+- **Restoring unsaved changes or an old version keeps this workbook's own
+  sharing room, keys and identity.** A restore brings back the CONTENT of a
+  snapshot; the snapshot's copies of the docId, the room and its keys, and the
+  read-only and template flags are now ignored, the same way slides' restore
+  gate treats them. Snapshots share one browser store on file://, so any page
+  opened there could have filed one under this workbook's id, and Restore
+  would have moved the workbook into that page's room.
+- **Stopping sharing or rotating its keys now marks the workbook unsaved.**
+  Rotating the keys is how you cut off everyone you sent a copy to, and it only
+  takes effect once the file holds the new keys. It used to change the workbook
+  without lighting the unsaved dot, so closing the window threw the rotation
+  away with no warning and no automatic save. Turning sharing back on after
+  stopping it does the same.
+
+- **A live-show audience copy no longer presents itself as an editor.** Its
+  role was checked as "anything but reader", so it offered its show ticket to
+  the relay as write access and appeared as an Editor to everyone else. Only a
+  writer copy now does either.
+
 - **Sheet tabs along the bottom**, where every spreadsheet has kept them since
   Excel 5. They were a list inside the left panel; that panel is gone, and the
   grid is about 200px wider at every window size. Drag to reorder — and because
