@@ -437,8 +437,8 @@ export function docForExport(doc: TypeDoc): TypeDoc {
  * the one shared list of capability fields) removes them from the document
  * itself; this ALSO walks into bento/type's own embed blocks, because an
  * embedded bento/type document can hold embeds of its own and the kernel helper
- * is shallow. Only bento/type's body is walked: other apps nest differently, and
- * their top-level `collab` is what withoutCaps already removes.
+ * is shallow. The walk follows bento/type's own nesting: the `body` of each
+ * embedded document, and the `embed` blocks within it.
  *
  * Pure — returns a new document where anything changed, never mutating the
  * input, because one caller (docForExport) is handed the LIVE document.
