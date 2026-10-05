@@ -202,6 +202,9 @@ export class Editor {
    */
   onShareCopy: ((doc: SpacesDoc, suffix: string) => Promise<boolean>) | null = null
   onPrint: (() => void) | null = null
+  /** About's "Update this file" — supplied by main.ts, which owns the save queue */
+  onUpdateInPlace: ((release: import('../../kernel/src/update.ts').ReleaseInfo) =>
+    Promise<import('../../kernel/src/update.ts').InPlaceOutcome | null>) | null = null
 
   constructor(root: HTMLElement, store: Store) {
     this.root = root
@@ -5023,7 +5026,8 @@ export class Editor {
     this.store.endRun()
     // Copies rejoin as true FORKS: the stamped CRDT state is what lets an
     // offline edit on either side merge two-way rather than clobber.
-    this.session?.stampInto(this.store.doc)
+    // (readerCopy clears it again — a viewer is not a fork.)
+    shareModule.stampSync(this.store, this.session)
     const out = kind === 'invite'
       ? await shareModule.inviteCopy(this.store.doc)
       : shareModule.readerCopy(this.store.doc)
@@ -5065,6 +5069,9 @@ export class Editor {
       // handle, which is what leaves you editing this space afterwards.
       onWriteCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
       onStatus: (msg) => this.notice(msg),
+      onUpdateInPlace: (rel) => this.onUpdateInPlace?.(rel) ?? Promise.resolve(null),
+      // both self-update writes carry this space's CRDT state, as ⌘S does
+      onBeforeWrite: () => shareModule.stampSync(this.store, this.session),
     })
   }
 

@@ -273,6 +273,7 @@ export const ja: Catalog = {
   "That is already a caption": "それはすでにキャプションです",
   "That is not a bento/type document: {detail}": "bento/type の文書ではありません：{detail}",
   "That is not an address this document can link to": "この文書からリンクできるアドレスではありません",
+  "That saved version could not be restored.": "保存されたバージョンを復元できませんでした。",
   "That sheet is larger than any printer takes.": "その用紙サイズはどのプリンターにも対応していません。",
   "That sheet is smaller than 2 inches — pick a bigger page.": "その用紙サイズは 2 インチ未満です — もっと大きいページを選んでください。",
   "The document is the interchange unit: hand this JSON to an AI, get one back, and paste it in. `window.bento` exposes the same thing to scripts.": "文書そのものが交換単位です — この JSON を AI に渡して受け取った JSON を貼り付けてください。スクリプトからは `window.bento` で同じものを利用できます。",

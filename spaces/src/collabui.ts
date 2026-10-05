@@ -237,7 +237,10 @@ export class CollabUi {
     const doc = this.host.store.doc
     const c = doc.collab
     if (!c) return {}
-    if (c.role === 'reader') return { role: 'viewer' }
+    // Any copy that cannot write is a Viewer whatever else it carries — an
+    // audience copy holds an owner-signed INVITE (its show ticket), and the
+    // invite branch below would otherwise have called it an Editor.
+    if (isReaderCopy(doc)) return { role: 'viewer' }
     if (isOwner(doc)) return { role: 'owner', pub: c.owner }
     if (c.v === 2 && c.invite) {
       let pub: string | undefined

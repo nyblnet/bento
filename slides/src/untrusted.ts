@@ -41,7 +41,7 @@
 
 import { stripEnvelope } from './envelope'
 import type { Slide, SlideElement } from './model'
-import { isWebUrl } from './model'
+import { isWebUrl, REQUIRED_ELEMENT_KEYS } from './model'
 import { parseThemeRef } from './palette.ts'
 import { MODEL_KEYS } from './modelkeys.generated'
 import { TIP_KINDS } from './tips'
@@ -534,14 +534,9 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
  * absent for the same reason: an empty or refused `view` paints a
  * placeholder, never throws.
  */
-const REQUIRED_ELEMENT_KEYS: Record<string, readonly string[]> = {
-  text: ['html'],
-  shape: ['shape', 'fill'],
-  image: ['src'],
-  chart: ['option'],
-  table: ['columns', 'rows'],
-  media: ['kind', 'src'],
-}
+// The table itself lives in model.ts: parseDoc holds a FILE to the same rule
+// (an element that cannot render is dropped there too), and one list cannot
+// drift from itself.
 
 /** Exported so the rig can prove each name is a real key of that element type. */
 export const REQUIRED_KEYS: Readonly<Record<string, readonly string[]>> = REQUIRED_ELEMENT_KEYS
