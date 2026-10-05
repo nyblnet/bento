@@ -38,7 +38,12 @@ import { PROVENANCE_OPS } from './steps.ts'
 import type { CellOverride, Comment, View, Column, ColumnData, ColumnType, DashDoc, Measure, Sheet, Step, TableSheet, CanvasCell, CanvasSheet } from './model.ts'
 
 type Listener = () => void
-export type StoreEvent = 'doc' | 'view' | 'selection'
+/**
+ * 'unsaved' — the document changed in a way that is not an edit to its data
+ * and goes through no patch (sharing switched on or off, keys rotated), but
+ * the FILE must still be rewritten for it. See `markUnsaved`.
+ */
+export type StoreEvent = 'doc' | 'view' | 'selection' | 'unsaved'
 
 /** Idle that closes a run. Autosave debounces longer, so no snapshot lands mid-run. */
 const RUN_IDLE_MS = 600
@@ -1210,6 +1215,21 @@ export class Store {
     mutate()
     if (orderChanged(before, this.order)) this.viewBarrier = true
     this.emit('view')
+  }
+
+  /**
+   * The document changed OUTSIDE the patch vocabulary, and the file is now
+   * behind it. Not undoable, not a repaint — just "this needs saving".
+   *
+   * Exists for sharing. Starting, stopping and rotating write `doc.collab`
+   * directly (they are not edits to the workbook's data and must not sit in
+   * its undo history), and nothing told the unsaved dot. So a key ROTATION —
+   * which is revocation — could be closed without a warning and without the
+   * automatic save, and the file kept the keys that were meant to be dead.
+   */
+  markUnsaved(): void {
+    this.touch()
+    this.emit('unsaved')
   }
 
   /** Model changed without a new undo entry (mid-run). */

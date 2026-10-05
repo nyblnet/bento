@@ -1334,6 +1334,8 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   ;(window as unknown as Record<string, unknown>).__sync = sync
 
   store.on('doc', markDirty)
+  // sharing switched on/off or keys rotated: no data edit, but the file is behind
+  store.on('unsaved', markDirty)
 
   // The wordmark and the version chip open About. Mounted AFTER markDirty
   // exists — it takes it as the dirty signal for the edits it makes itself.
