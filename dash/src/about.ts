@@ -55,7 +55,7 @@ import { addVersion, listVersions } from '../../kernel/src/autosave.ts'
 // The alternative was a third module for one banner, or a hook wired through
 // main.ts that a future edit could quietly forget to pass, which would put the
 // two restore paths straight back into disagreeing about reversibility.
-import { offerUndoRestore } from './recovery.ts'
+import { offerUndoRestore, restoredWorkbook } from './recovery.ts'
 import { t } from './i18n.ts'
 import { docBudget, docBytes, parseDoc, rowCount, type DashDoc, type DocMeta , docForExport } from './model.ts'
 
@@ -324,12 +324,15 @@ export function openAbout(hooks: AboutHooks): void {
       b.addEventListener('click', () => {
         // A snapshot is this app's own JSON, but it is still parsed rather than
         // trusted: it may predate an id repair, or a sheet this build refuses.
-        const res = parseDoc(snap.json)
-        if (!res.ok) { alert(t('That version could not be read.')); return }
+        // And its docId, room, keys and locks are THIS workbook's, not the
+        // snapshot's — see FROM_LIVE in recovery.ts for why a stored version
+        // is not evidence of any of them.
+        const restored = restoredWorkbook(snap.json, store.doc)
+        if (!restored) { alert(t('That version could not be read.')); return }
         // Held BEFORE the swap: `replaceDoc` empties both undo stacks, so this
         // object is the only route back to the workbook on screen right now.
         const before = store.doc
-        if (!replaceWorkbook(hooks, res.doc)) {
+        if (!replaceWorkbook(hooks, restored)) {
           alert(t('That version has no table sheet to show.'))
           return
         }

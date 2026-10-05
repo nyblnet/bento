@@ -418,7 +418,11 @@ for (const [label, input, err] of [
   // checkpoints undo first, which is what makes the note "Restoring is
   // undoable" true rather than reassuring.
   ok(/listVersions\(/.test(about), 'About reads the timeline')
-  ok(/store\.replaceDoc\(restored\)/.test(about), '…and restores through replaceDoc, so ⌘Z walks it back')
+  // (through restoreInto since the restore gate: the stored entry is foreign
+  // input, gated first — restoregate.ts — and then handed to replaceDoc)
+  const gate = fs.readFileSync(new URL('../spaces/src/restoregate.ts', import.meta.url), 'utf8')
+  ok(/restoreInto\(store, v\.json\)/.test(about) && /store\.replaceDoc\(g\.doc\)/.test(gate),
+    '…and restores through replaceDoc, so ⌘Z walks it back')
 }
 
 // ---- a popover is as tall as the room it has ------------------------------
