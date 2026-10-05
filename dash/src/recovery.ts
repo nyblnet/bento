@@ -52,6 +52,7 @@ import { isEncryptionActive } from '../../kernel/src/save.ts'
 import { planReplace } from './about.ts'
 import { parseDoc, type DashDoc } from './model.ts'
 import type { Store } from './store.ts'
+import { FROM_LIVE } from '../../kernel/src/docfields.ts'
 import { t } from './i18n.ts'
 
 // --- the content key ---------------------------------------------------------
@@ -158,13 +159,14 @@ export interface DecideInput {
  *
  * `template` is dash's own: restored, it would stop the automatic save to the
  * file (writeback.ts refuses a template) and make the next open re-mint the
- * identity. Same class as the other three.
+ * identity. Same class as the other three — and all four are the shared kernel
+ * list now (kernel/src/docfields.ts), re-exported here.
  *
  * Opening a FILE and Replace from JSON do not come through here. A file
  * carries its own capability by design; Replace from JSON keeps the live room
  * already (about.ts).
  */
-export const FROM_LIVE = ['docId', 'collab', 'readonly', 'template'] as const
+export { FROM_LIVE }
 
 /** The snapshot's content under the live workbook's identity. */
 export function keepLiveIdentity(next: DashDoc, live: DashDoc): DashDoc {
