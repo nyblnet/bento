@@ -15,7 +15,7 @@
 //
 // No DOM anywhere: the input html is the sanitizer's inline subset
 // (render.ts ALLOWED_TAGS: B I U BR SPAN DIV P STRONG EM S CODE — attributes
-// already stripped), which a ~40-line tokenizer covers completely. The kernel
+// already stripped), which a ~40-line tokenizer covers completely. The writer
 // must run under node, and pulling in a DOM shim for eleven known tags would
 // be the dependency this rework exists to delete.
 
@@ -25,7 +25,7 @@ import { scrubC0, x, type XChild, type XNode } from '../xmlout.ts'
 
 // --- input --------------------------------------------------------------------
 // Structural subset of slides' TextElement (same inversion as types.ts: the
-// kernel never imports from an app). The real element is a superset; unknown
+// writer never imports from an app). The real element is a superset; unknown
 // fields are ignored, the effect-shaped ones are read only to REPORT them.
 
 export interface TextElIn {
@@ -248,7 +248,7 @@ export function parseInlineHtml(html: string, trimTrailingBreak = true): InlineR
 }
 
 // --- dynamic fields -----------------------------------------------------------
-// resolveFields' semantics PORTED, not imported (kernel cannot reach slides/):
+// resolveFields' semantics PORTED, not imported (the writer does not reach into slides/):
 // same token grammar, same zero-pad rule ({{page:2}} → "06"), same
 // empty-string default for missing doc-props. The two tokens PowerPoint can
 // keep LIVE become a:fld — {{page}} → type="slidenum" (330 census hits, THE

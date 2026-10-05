@@ -18,6 +18,7 @@ import { readZip, type ZipParts } from '../../kernel/src/convert/zip.ts'
 import { parseXml, kids, kid, attr, textOf, descendants, NS, type XElem } from '../../convert/src/xml.ts'
 import { exportPptx, type ExportDoc, type ExportElement } from '../../convert/src/pptx-write/index.ts'
 import type { FidelityReport } from '../../convert/src/report.ts'
+import { brokenRels, danglingRefs, packageProblems } from './_export-harness.ts'
 
 let failures = 0
 let checks = 0
@@ -33,41 +34,8 @@ const partXml = (parts: ZipParts, name: string): XElem => parseXml(partText(part
 
 // --- wiring checkers (the rig's own, exercised by negative controls below) ---
 
-function resolvePath(baseDir: string, target: string): string {
-  const segs = baseDir ? baseDir.split('/') : []
-  for (const part of target.split('/')) {
-    if (part === '..') segs.pop()
-    else if (part !== '.' && part !== '') segs.push(part)
-  }
-  return segs.join('/')
-}
-
-/** Every internal rel target in every .rels part must be a zip part. */
-function brokenRels(parts: ZipParts): string[] {
-  const broken: string[] = []
-  for (const [name, data] of parts) {
-    if (!name.endsWith('.rels')) continue
-    // ppt/slides/_rels/slide1.xml.rels belongs to ppt/slides/slide1.xml —
-    // rels resolve against the OWNER part's directory, not the _rels dir.
-    const baseDir = name === '_rels/.rels' ? '' : name.slice(0, name.indexOf('/_rels/'))
-    for (const rel of kids(parseXml(dec.decode(data)), NS.rel, 'Relationship')) {
-      if (attr(rel, 'TargetMode') === 'External') continue
-      const target = resolvePath(baseDir, attr(rel, 'Target') ?? '')
-      if (!parts.has(target)) broken.push(`${name} -> ${target}`)
-    }
-  }
-  return broken
-}
-
-/** Every r:id/r:embed/r:link in a part must name a rel in ITS rels part. */
-function danglingRefs(xml: string, relsXml: string): string[] {
-  const ids = new Set([...relsXml.matchAll(/Id="(rId\d+)"/g)].map((m) => m[1]))
-  const missing: string[] = []
-  for (const m of xml.matchAll(/r:(?:id|embed|link)="([^"]+)"/g)) {
-    if (!ids.has(m[1])) missing.push(m[1])
-  }
-  return missing
-}
+// brokenRels and danglingRefs live in the shared harness; the negative
+// controls below prove the harness's copies, the ones every rig uses.
 
 const codesOf = (report: FidelityReport): Set<string> => new Set(report.entries.map((e) => e.code))
 
@@ -240,6 +208,10 @@ console.log('every XML part parses with the kernel parser')
 
 console.log('wiring')
 ok(brokenRels(parts).length === 0, 'every internal rel target exists in the zip')
+{
+  const problems = packageProblems(parts)
+  ok(problems.length === 0, problems.length ? `harness: ${problems.join('; ')}` : 'the harness finds nothing wrong with the whole package')
+}
 {
   let bad = ''
   for (let i = 1; i <= 4; i++) {
@@ -419,6 +391,18 @@ console.log('negative controls')
   ok(brokenRels(doctored).length > 0, 'NEGATIVE: rel checker catches a deleted part')
   ok(danglingRefs('<p:sp r:embed="rId99"/>', partText(parts, 'ppt/slides/_rels/slide1.xml.rels')).length === 1,
     'NEGATIVE: ref checker catches an unknown rId')
+  {
+    const noProps = new Map(parts)
+    noProps.delete('ppt/presProps.xml')
+    ok(packageProblems(noProps).some((p) => /presProps/.test(p)), 'NEGATIVE: the harness catches a missing presProps.xml')
+    const noStyle = new Map(parts)
+    noStyle.set('ppt/notesMasters/notesMaster1.xml', new TextEncoder().encode(
+      partText(parts, 'ppt/notesMasters/notesMaster1.xml').replace(/<p:notesStyle>[\s\S]*<\/p:notesStyle>/, '')))
+    ok(packageProblems(noStyle).some((p) => /notesStyle/.test(p)), 'NEGATIVE: the harness catches a notes master without notesStyle')
+    const untyped = new Map(parts)
+    untyped.set('ppt/stray.bin', new Uint8Array([1]))
+    ok(packageProblems(untyped).some((p) => /stray\.bin has no content type/.test(p)), 'NEGATIVE: the harness catches an untyped part')
+  }
 
   let threw = false
   try {

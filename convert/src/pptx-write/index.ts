@@ -24,9 +24,9 @@
 //   - doc.meta → docProps/core.xml (author/subject/keywords, #88's
 //     author-or-'bento/slides' default) and app.xml (company).
 //
-// WHAT THE KERNEL CANNOT DO, BY DESIGN: derive the deck's chart palette
-// (deriveChartPalette is app code in slides/src/model.ts) — the slides-side
-// caller passes it via opts.chartPalette; doc.theme.chartPalette wins when the
+// WHAT THE WRITER DOES NOT DO, BY DESIGN: derive the deck's chart palette
+// (deriveChartPalette is app code in slides/src/model.ts) — the caller
+// (src/export.ts) passes it via opts.chartPalette; doc.theme.chartPalette wins when the
 // deck declares one. And no filenames or downloads: this returns BYTES plus the
 // fidelity report; naming and saving are the host's concern (#88's safeName
 // stays app-side).
@@ -53,11 +53,14 @@ import {
 } from './media.ts'
 import { tableFrame } from './tables.ts'
 import { chartExport } from './charts.ts'
+import type { WriteCtx } from './contract.ts'
+import { writeCode, type CodeElIn } from './code.ts'
+import { writeEmbed, type EmbedElIn } from './embed.ts'
 import type { OutChart, OutTable } from '../types.ts'
 
 // --- input --------------------------------------------------------------------
 // Structural mirror of the REAL bento/slides document (slides/src/model.ts is
-// the ground truth) — same inversion as every other module here: the kernel
+// the ground truth) — same inversion as every other module here: the writer
 // never imports from an app, and the real BentoDoc is a superset whose unknown
 // fields are simply never read. Element inputs reuse the writers' own In types
 // so one definition cannot drift from what its writer actually reads.
@@ -79,6 +82,8 @@ export type ExportElement =
   | ({ type: 'chart' } & ChartElIn & ElCommon)
   | (OutTable & { morphId?: string } & ElCommon) // type: 'table'
   | ({ type: 'media' } & MediaIn & ElCommon)
+  | (CodeElIn & ElCommon)
+  | (EmbedElIn & ElCommon)
 
 /** OutChart with `preset` loosened to the model's optional free string —
  *  chartExport never consults it (the option's series types decide). */
@@ -119,7 +124,7 @@ export interface ExportDoc {
 export interface ExportOpts {
   /** Deck chart palette for charts without an explicit option.color —
    *  doc.theme.chartPalette wins over this; slides-side callers pass
-   *  deriveChartPalette(doc.theme.accent) (app code the kernel cannot run).
+   *  deriveChartPalette(doc.theme.accent) (app code the writer does not import).
    *  Both absent = the ECharts stock colours. */
   chartPalette?: string[]
   /** Zip timestamp. Omitted = the fixed 1980 epoch, so two exports of one
@@ -417,6 +422,16 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
         }
         case 'media': {
           const node = mediaPoster(el, shapeId, where, mediaCtx)
+          wireLink(node, el.link)
+          emit(node)
+          break
+        }
+        // Writers on the contract.ts interface. Both are stubs that report the
+        // element dropped until someone writes them (see their files).
+        case 'code':
+        case 'embed': {
+          const ctx: WriteCtx = { shapeId, report, where, media: mediaCtx, theme: doc.theme }
+          const node = el.type === 'code' ? writeCode(el, ctx) : writeEmbed(el, ctx)
           wireLink(node, el.link)
           emit(node)
           break

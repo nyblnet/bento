@@ -38,7 +38,7 @@ import { x, type XNode } from '../xmlout.ts'
 import { REL, type RelEntry } from './parts.ts'
 
 // --- input shapes ------------------------------------------------------------
-// Structural, like ../types.ts: the kernel never imports from an app. OutImage
+// Structural, like ../types.ts: the writer never imports from an app. OutImage
 // already exists (the importer emits it); svg and media elements are export-
 // only inputs, declared here with exactly the fields this module reads —
 // slides/src/model.ts is the semantic ground truth for every one of them.
@@ -77,7 +77,7 @@ B64['_'] = 63
 
 /**
  * Decode a base64 string to bytes. Hand-rolled because the two platform
- * decoders are both wrong for the kernel: Buffer is node-only, and atob
+ * decoders are both wrong for the writer: Buffer is node-only, and atob
  * round-trips through a binary STRING (one JS char per byte — an allocation
  * disaster at 8 MB video scale, and another loop to repack anyway).
  * Whitespace is skipped (long data URIs get wrapped by editors); padding is
@@ -225,7 +225,7 @@ export interface MediaCtx {
 }
 
 /** "asset:<key>" → the asset's value; anything else passes through. The same
- *  resolution as slides' render.resolveAsset, restated because the kernel
+ *  resolution as slides' render.resolveAsset, restated because the writer
  *  cannot import from an app. */
 function resolveSrc(assets: Record<string, string>, ref: string): string {
   return ref.startsWith('asset:') ? (assets[ref.slice(6)] ?? '') : ref

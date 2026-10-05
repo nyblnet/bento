@@ -79,7 +79,7 @@ const yAxisList = (v: unknown): Dict[] => (Array.isArray(v) ? v.map(dict) : [dic
 // Series colour resolution order = charts-lite's: explicit option.color array,
 // else the deck palette the integrator passes (doc.theme.chartPalette or
 // slides' deriveChartPalette(accent) — that derivation lives in the app, the
-// kernel only consumes the result), else the ECharts stock four #88 fell back
+// writer only consumes the result), else the ECharts stock four #88 fell back
 // to. Local hex-only conversion: chart colours are opaque fills; the css
 // parsing lives in tables.ts's cssSolid but here only the hex is wanted.
 
