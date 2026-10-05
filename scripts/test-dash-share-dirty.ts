@@ -208,6 +208,13 @@ console.log('\nshare copies, from one poisoned collab (the allowlist bar)')
   const bypass = { ...pc, role: 'reader' } as Record<string, unknown>
   ok('writerPriv' in bypass && !Object.keys(bypass).every((k) => READER_KEYS.includes(k)),
     'a spread-the-source bypass FAILS the reader key-set check (not vacuous)')
+
+  // a NON-owner source holds no key to root a chain in; inviteCopy must REFUSE,
+  // never hand back the un-projected source block (which would leak every secret).
+  const nonOwner = { ...pc } as Record<string, unknown>
+  delete nonOwner.ownerPriv
+  ok((await inviteCopy(nonOwner as never)) === null,
+    'inviteCopy on a non-owner source returns null, never the source block')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

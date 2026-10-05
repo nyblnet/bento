@@ -846,8 +846,11 @@ export function readerCopy(collab: CollabBlock): CollabBlock {
 /** An invite copy: the owner's private half stays home; a FRESH owner-signed
  *  invite travels and the top-level role comes from it. Each device that opens it
  *  mints its own member key. The allowlist drops any legacy writer key too. */
-export async function inviteCopy(collab: CollabBlock): Promise<CollabBlock> {
-  if (!collab.ownerPriv) return collab // not the owner's copy — nothing to delegate
+export async function inviteCopy(collab: CollabBlock): Promise<CollabBlock | null> {
+  // A non-owner holds no key to root the chain in — and returning the SOURCE
+  // block would leak writerPriv, sync, an old invite and any other field. Refuse,
+  // as spaces does, rather than hand back an un-projected copy.
+  if (!collab.ownerPriv) return null
   const invite = await mintInvite(collab.ownerPriv)
   return collabForInvite(collab, invite) as unknown as CollabBlock
 }

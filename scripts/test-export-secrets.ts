@@ -512,6 +512,10 @@ for (const app of ['spaces', 'type']) {
     `${rel}: neither builder rebuilds collab by spreading the source — only a collabFor* projection`)
   ok(!/\.\.\.rest\b/.test(readerFn) && !/\.\.\.rest\b/.test(inviteFn),
     `${rel}: neither builder uses a destructure-rest denylist`)
+  // a non-owner early-return must NOT hand back the un-projected source block
+  // (`return collab`) — that leaks everything; refuse with `return null` instead.
+  ok(!/\breturn collab\b/.test(inviteFn),
+    `${rel}: inviteCopy never returns the source block unchanged (null for a non-owner)`)
 }
 
 // --- the OTHER half of the round trip: pasting one back in -------------------
