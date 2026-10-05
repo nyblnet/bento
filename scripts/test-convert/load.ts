@@ -12,7 +12,7 @@
 // in the actual app — and if it does not, nothing else matters.
 //
 // Mechanics: slides' validate.ts pulls render.ts, whose imports are
-// extensionless and include the temml package, so plain node type-stripping
+// extensionless (and pull in DOM-touching modules), so plain node type-stripping
 // cannot run it. Same answer as scripts/test-validate.ts: bundle with esbuild
 // first. This rig does that itself — when run directly it bundles ITSELF and
 // re-executes the bundle, so the runner (and a bare `node`) need no wrapper.
@@ -41,7 +41,7 @@ if (!process.env.BENTO_CONVERT_LOAD_BUNDLED) {
   process.exit(r.status ?? 1)
 }
 
-const { convertPptx } = await import('../../kernel/src/convert/pptx.ts')
+const { convertPptx } = await import('../../convert/src/pptx.ts')
 const { allFixtures } = await import('./_fixtures.ts')
 const { parseDoc } = await import('../../slides/src/model.ts')
 const { validateDoc } = await import('../../slides/src/validate.ts')
