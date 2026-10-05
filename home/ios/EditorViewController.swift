@@ -363,6 +363,16 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
         }
     }
 
+    /// A new page holds no handles, so the open document is the next page's to
+    /// claim again. Without this, a reload spent the first begin on the old
+    /// page, and the
+    /// new page's first save (or its launch handle) was taken for an export and
+    /// prompted for a destination. Fires for main-frame commits only; a fragment
+    /// change is not a commit.
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        openDocumentVended = false
+    }
+
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
         decisionHandler(navigationResponse.canShowMIMEType ? .allow : .download)
@@ -483,6 +493,12 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
             if !openDocumentVended {
                 openDocumentVended = true
                 reply(id, ok: true, value: document.fileURL.lastPathComponent)
+            } else if m["launch"] as? Bool == true {
+                // The page asked for the file it was opened with (bridge.js
+                // launchQueue), and it has already been handed out. That is a
+                // no, never an export: an export would put a save dialog on
+                // screen the moment the document opened.
+                reply(id, ok: false, value: "the open document was already handed out")
             } else {
                 // A copy/template/read-only export. Ask where it goes; it must
                 // never land on the open document.

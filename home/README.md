@@ -462,6 +462,9 @@ here rather than discovered later.
 | bridge injected at document start | `WKUserScript(.atDocumentStart)` | `addDocumentStartJavaScript` | same |
 | bridge reachable only from the document | every message checked: main frame + own origin (`BridgeSender`) | `allowedOriginRules` + `isMainFrame` | same |
 | first `begin` = open document, later = export | ✓ | ✓ | same |
+| the open document offered at boot via `launchQueue`, only to a page that asks | ✓ (`home/bridge.js`) | ✓ (`home/bridge.js`) | same |
+| a launch request it cannot meet is refused, never exported | ✓ | **not yet** — read-only grants would prompt at open | differs |
+| a reload may claim the open document again | resets on main-frame commit | **not yet** | differs |
 | an export can never address the open file | `exportName` + `targetsOpenDocument` | identical logic | same |
 | page-supplied filenames sanitised | `safeFileName` | `safeFileName` | same |
 | in-place write | `UIDocument.save(.forOverwriting)` | `openOutputStream(uri, "wt")` | same |
