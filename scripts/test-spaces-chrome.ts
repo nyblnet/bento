@@ -164,6 +164,8 @@ const EQUIV: Record<string, string | null> = {
   'Change password…': null, 'Remove password': null,
   'Version history…': 'Version history…', 'Copy document JSON': 'Copy document JSON',
   'Copy compact JSON (for agents)': null, 'Replace from JSON…': 'Replace from JSON…', 'Start from scratch…': null,
+  // slides' way in from another format, in the slot spaces gives its own
+  'Import PowerPoint…': 'Import Markdown…',
 }
 const unmapped = slidesSave.filter((l) => !(l in EQUIV))
 ok(slidesSave.length >= 9 && unmapped.length === 0, `every row of slides' Save menu has an entry in the equivalence table (${slidesSave.length} rows; new: ${unmapped.join(', ') || 'none'})`)
