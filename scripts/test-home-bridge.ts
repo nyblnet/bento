@@ -112,9 +112,11 @@ ok(exportCopy.includes('hasPrefix(') && exportCopy.includes('safeFileName(name)'
   'both guards come before the write — the ordering is the property, not their presence')
 
 // The launch handle (bridge.js launchQueue). A launch request the host cannot
-// meet must be REFUSED — falling through to the export branch would put a save
-// dialog on screen as the document opens. And a new page may claim the open
-// document again, or a reload's first save is taken for an export.
+// meet must be REFUSED — falling through to the export branch hands the page an
+// export handle as its own file, so the first autosave after an edit opens a save
+// dialog nobody asked for. And a new page may claim the open document again, or a
+// reload's first save is taken for an export; and it forgets the old page's
+// Save-As copies, or its first export under a reused name lands in one unasked.
 {
   const begin = swift.slice(swift.indexOf('case "begin":'), swift.indexOf('case "read":'))
   const refuse = begin.indexOf('m["launch"] as? Bool == true')
@@ -126,13 +128,14 @@ ok(exportCopy.includes('hasPrefix(') && exportCopy.includes('safeFileName(name)'
   const commit = slice(swift, 'didCommit navigation: WKNavigation!)')
   ok(/openDocumentVended = false/.test(commit),
     'a main-frame commit lets the new page claim the open document again')
+  ok(/exports = ExportSessions\(\)/.test(commit),
+    "a main-frame commit forgets the old page's Save-As copies")
 }
 
-// The same two rules on Android (EditorActivity.kt), plus one only Android
-// needs: since #595 it remembers where each Save-As copy went, keyed by the
-// name a handle was vended under, and a new page holds no such handle — so a
-// reload must forget those too, or the new page's first export under the same
-// name would be written into the previous page's copy without asking.
+// The same rules on Android (EditorActivity.kt): the launch refusal, and both
+// resets on a main-frame page start — the hand-over, and the Save-As copies
+// #595 remembers by vended name (a new page holds no such handle, so its first
+// export under the same name would otherwise land in the old page's copy).
 {
   const KT = join(dirname(SRC), '../android/app/src/main/java/page/bento/home/EditorActivity.kt')
   const kt = readFileSync(KT, 'utf8')

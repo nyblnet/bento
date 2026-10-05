@@ -23,11 +23,12 @@ before the export branch; and a main-frame `onPageStarted` (WebView's
 equivalent of iOS's `didCommit`; fragment changes and `pushState` do not fire it)
 lets the new page claim the open document again.
 
-**One Android-only addition.** Since 2026-10-04 Android remembers where each
-Save-As copy went, keyed by the name its handle was vended under. A new page
-holds no such handle, so the reload also **clears that map** — otherwise the new
-page's first export vended under the same name would be written straight into
-the previous page's copy, without a picker. iOS keeps no such map across pages.
+**The same hook forgets the old page's Save-As copies** — the second reset in
+the entry below, which both hosts make. On Android the copies are #595's
+`exportTargets`, keyed by the name a handle was vended under; a new page holds
+no such handle, so without the reset its first export vended under the same name
+would be written straight into the previous page's copy, without a picker. Found
+on Android first (case 4 below); iOS made the same reset in #635.
 
 **The symptom, measured rather than predicted** (emulator, Android 16, the
 #635 bridge, `setConsumer` called the way the kernel will). Without the refusal
@@ -75,11 +76,18 @@ consumer gets that same name; it never spends a second `begin`.
 it as `begin` with `launch: true`. A host that cannot hand over the open document —
 already handed out, or a grant it cannot write in place (Android's read-only
 `ACTION_VIEW`) — answers **no**. Falling through to the export branch, as an
-unmarked `begin` would, puts a save dialog on screen the moment a document opens.
+unmarked `begin` would, hands the page an EXPORT handle as if it were its own
+file: nothing appears at open (`begin` only vends a name, on both hosts), but the
+first autosave after any edit opens a save dialog nobody asked for. Measured on
+Android by home-android on a control build; the same by reading on iOS, where the
+picker comes with the first write.
 The page then keeps today's path: its ⌘S behaves exactly as before.
 
-**With it:** a host forgets the hand-over when the main frame commits a new page, so
-a reload's first claim is again the open document rather than an export.
+**With it:** when the main frame commits a new page, a host forgets the hand-over —
+so a reload's first claim is again the open document rather than an export — and
+forgets the old page's remembered Save-As copies (2026-10-04 entries, #595/#600),
+which are keyed by vended name: a new page's first export under the same name would
+otherwise write into the previous page's copy without asking.
 
 **Per host:** iOS does both in this change. **Android must refuse a `launch`
 request it cannot meet before its bridge.js ships with this** — today its `begin`

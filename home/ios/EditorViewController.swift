@@ -369,8 +369,15 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
     /// new page's first save (or its launch handle) was taken for an export and
     /// prompted for a destination. Fires for main-frame commits only; a fragment
     /// change is not a commit.
+    ///
+    /// The remembered Save-As copies go with it. They are keyed by the name a
+    /// handle was vended under, and a new page's export can be vended under the
+    /// same name — it would then write into the previous page's copy without
+    /// asking. A picker still open from the old page answers nobody; its
+    /// delegate finds nothing pending and does nothing.
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         openDocumentVended = false
+        exports = ExportSessions()
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
@@ -496,8 +503,10 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
             } else if m["launch"] as? Bool == true {
                 // The page asked for the file it was opened with (bridge.js
                 // launchQueue), and it has already been handed out. That is a
-                // no, never an export: an export would put a save dialog on
-                // screen the moment the document opened.
+                // no, never an export: the page would adopt the export handle
+                // as its own file, and its first autosave after an edit would
+                // open the export picker (exportCopy runs on the first write)
+                // with nobody having asked to save anything.
                 reply(id, ok: false, value: "the open document was already handed out")
             } else {
                 // A copy/template/read-only export. Ask where it goes; it must
