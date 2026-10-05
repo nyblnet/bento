@@ -14,6 +14,41 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-05 — Android meets the `launchQueue` rules, and a reload also forgets its Save-As copies
+
+**Decision.** Android implements the two host rules from the entry below: a
+`begin` marked `launch: true` that it cannot meet — a read-only grant (the usual
+`ACTION_VIEW` from mail) or a document already handed out — is answered **no**,
+before the export branch; and a main-frame `onPageStarted` (WebView's
+equivalent of iOS's `didCommit`; fragment changes and `pushState` do not fire it)
+lets the new page claim the open document again.
+
+**One Android-only addition.** Since 2026-10-04 Android remembers where each
+Save-As copy went, keyed by the name its handle was vended under. A new page
+holds no such handle, so the reload also **clears that map** — otherwise the new
+page's first export vended under the same name would be written straight into
+the previous page's copy, without a picker. iOS keeps no such map across pages.
+
+**The symptom, measured rather than predicted** (emulator, Android 16, the
+#635 bridge, `setConsumer` called the way the kernel will). Without the refusal
+a read-only document does not prompt *at open*: `begin` only vends a name, so
+the page is handed an export handle (`deck.bento.html`) and the **first write**
+— the kernel's first autosave after any edit — opens a save dialog unprompted.
+Without the reset, a writable document's first ⌘S after a reload opens a
+picker instead of saving in place. With both, every case passed: read-only
+refuses (consumer never called, no picker, ⌘S still offers Save-As, original
+untouched); writable hands over `viewtest.bento.html` and a write through it
+lands in place; after a reload the consumer is handed the document again and
+⌘S saves in place; after a reload a read-only page's save asks again rather than
+writing the previous copy.
+
+**Guarded by** `scripts/test-home-bridge.ts` — four Android shape checks beside
+iOS's: the refusal exists, precedes the export branch, and the page-start hook
+resets both the hand-over and the remembered copies. All four fail against the
+pre-change `EditorActivity.kt`.
+
+---
+
 ## 2026-10-05 — A native host hands the page the file it opened, through `launchQueue`
 
 **Decision.** `home/bridge.js` (iOS and Android) defines `window.launchQueue`. When
