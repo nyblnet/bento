@@ -390,6 +390,7 @@ export const ja: Catalog = {
   "Save an untouched copy…": "元のままのコピーを保存…",
   "Saved": "保存しました",
   "Saved a new copy": "新しいコピーを保存しました",
+  "Save failed — see console": "保存に失敗 — コンソールを確認",
   "Saves a copy that joins this session": "このセッションに参加するコピーを保存します",
   "Saves a copy to send. Whoever opens it edits this space live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.": "送るためのコピーを保存します。開いた人はこの Space をあなたと一緒にライブ編集できます（エンドツーエンド暗号化）。あなたはオーナーのままで、メンバーリストからいつでも削除できます。",
   "Saving…": "保存中…",

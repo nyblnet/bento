@@ -95,11 +95,22 @@ jobs:
         working-directory: slides
         run: node_modules/.bin/tsc -b
 
+      - name: Spaces save revisions
+        # Typing runs and remote changes invalidate in-flight saves even while dirty.
+        run: node scripts/test-spaces-save-revisions.ts
+
       - name: Typecheck kernel (standalone)
         # Apps also typecheck kernel transitively through their imports; this
         # catches kernel-only errors under the kernel's own flags.
         working-directory: slides
         run: node_modules/.bin/tsc -p ../kernel
+
+      - name: Typecheck convert (standalone)
+        # convert/ is a library beside the apps (the CLI and bento.page/import
+        # use it; no shell does), so no app's tsc -b reaches it. Its own flags,
+        # its own pass — the same as kernel's.
+        working-directory: slides
+        run: node_modules/.bin/tsc -p ../convert
 
       - name: Build single-file shell
         working-directory: slides
@@ -160,6 +171,18 @@ jobs:
           slides/node_modules/.bin/esbuild scripts/test-spaces-undo.ts --bundle --platform=node --format=esm \
             --outfile="$RUNNER_TEMP/test-spaces-undo.mjs"
           node "$RUNNER_TEMP/test-spaces-undo.mjs"
+
+      - name: Spaces restore-gate rig
+        # The recovery snapshot and every History entry live in IndexedDB, which
+        # every file:// document shares, so restore is foreign input. Like
+        # slides' restore gate: an entry naming another space is refused, it
+        # never brings collab/readonly/template, block html is sanitized, and
+        # junk, frozen, __proto__ and oversized entries apply nothing.
+        # (Bundled: store.ts imports './model' extensionless.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-restore-gate.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-restore-gate.mjs"
+          node "$RUNNER_TEMP/test-spaces-restore-gate.mjs"
 
       - name: Spaces agent-surface rig
         # agent.ts is ~900 lines and shipped with no coverage at all: two of the
@@ -442,6 +465,19 @@ jobs:
             --outfile="$RUNNER_TEMP/test-embed.mjs"
           node --no-warnings "$RUNNER_TEMP/test-embed.mjs"
 
+      - name: File-open / boot document gate rig
+        # Opening a foreign .bento.html and booting a directly-opened file run
+        # bare parseDoc -> render + injectFonts with no structural gate, exposing
+        # the document-level egress the element sanitiser never sees: a
+        # slide.background url(), an -face src from an external asset value,
+        # a weight/style src-breakout. Positive controls (raw) fetch; the opened
+        # document reaches the request log zero times; unknown keys/props from a
+        # NEWER deck survive (format additivity). Browser half needs Chrome.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-fileopen-gate.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-fileopen-gate.mjs"
+          node "$RUNNER_TEMP/test-fileopen-gate.mjs"
+
       - name: Untrusted-markup sanitizer rig
         # Every deck is untrusted input somebody may open, paste or receive over
         # collab, and script in that page owns the collab keys, the plaintext
@@ -459,6 +495,21 @@ jobs:
           slides/node_modules/.bin/esbuild scripts/test-sanitize.ts --bundle --platform=node --format=esm \
             --outfile="$RUNNER_TEMP/test-sanitize.mjs"
           node "$RUNNER_TEMP/test-sanitize.mjs"
+
+      - name: Replace-from-JSON document gate rig
+        # The document text that arrives through window.bento.loadDoc and
+        # "Replace from JSON…" is foreign input, full or compact. It passes the
+        # structural gate (restoregate.ts sanitizeDoc): the open deck keeps its
+        # identity (docId, collab, readonly), unknown keys/props are dropped, and
+        # the document-level egress surfaces the element sanitiser never sees —
+        # slide.background url(), an @font-face src resolved from an external
+        # asset value, a weight/style src-breakout — are neutralised. Positive
+        # controls (raw, un-gated) fetch; the gated document reaches the request
+        # log zero times. Browser half needs Chrome; it self-skips otherwise.
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-replace-json-gate.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-replace-json-gate.mjs"
+          node "$RUNNER_TEMP/test-replace-json-gate.mjs"
 
       - name: Export-secrets rig
         # "Copy document JSON" shipped the room's owner private key while the
@@ -669,6 +720,15 @@ jobs:
         # throw when storage does.
         run: node scripts/test-storage.ts
 
+      - name: Save queue rig
+        # kernel/src/savequeue.ts serializes writes against one file handle and
+        # acknowledges each by revision, so an edit made WHILE an async write is in
+        # flight is never marked saved and lost (the setDirty-after-write race
+        # every app had). The rig pins serialization, the detached snapshot,
+        # isCurrent() going stale on any later edit or same-id replacement, the
+        # document-swap discard, and that a failed write never poisons the queue.
+        run: node scripts/test-savequeue.ts
+
       - name: App registry rig
         # scripts/apps.mjs drives what a release builds, stages and signs. A
         # release SIGNS, and the key never reaches CI, so the pipeline itself
@@ -858,6 +918,12 @@ jobs:
       - name: bento/dash selection and clipboard
         run: node scripts/test-dash-select.ts
 
+      - name: bento/dash sharing state
+        # Start/stop/rotate sharing mark the workbook unsaved (a rotation is
+        # revocation and must reach the file); only a writer copy offers write
+        # auth or calls itself an Editor — an allowlist, failing closed.
+        run: node scripts/test-dash-share-dirty.ts
+
       - name: bento/dash conditional formatting
         run: node scripts/test-dash-condfmt.ts
 
@@ -931,10 +997,15 @@ jobs:
         # The pptx importer's resolver is where real decks' fidelity lives --
         # 91% of colour and 71% of run properties are indirect, and every hop
         # fails silently (a backwards clrMap still renders, just dark-on-dark).
-        # Seven rigs, 378 checks, negative controls proven against mutated
-        # implementations; load.ts is the gate that matters: every emitted
-        # document must pass the REAL slides parseDoc with zero validateDoc
-        # errors.
+        # Negative controls proven against mutated implementations; load.ts is
+        # the gate that matters for import: every emitted document must pass the
+        # REAL slides parseDoc with zero validateDoc errors. The runner also
+        # covers the `bento convert` CLI (it needs the shell built above and
+        # Chrome for "it opens"; neither may skip in CI), the delivery chain
+        # behind bento.page/import (signature, pin, version floor, untrusted-
+        # input gate, zip limits, exactly two requests), the built page's CSP,
+        # and the boundary: no app imports convert/, and the engine touches no
+        # DOM global.
         run: node scripts/test-convert.ts
 
       - name: bento/dash zip
@@ -1030,6 +1101,12 @@ jobs:
         # the work profile (a job/temp worktree). The gate runs before rsync;
         # this rig pins the rule and the order.
         run: node scripts/test-publish-account.ts
+
+      - name: app payload fingerprint — a shell with no payload never passes the publish gates
+        # publish-site's shell-consistency gate hashed the shell and every deck
+        # to null when its matcher went stale, and null === null passed it while
+        # it checked nothing. One shared helper; null is "cannot tell", never a match.
+        run: node scripts/test-apphash.ts
 
       - name: client vouch rig — the other half of read-only
         # Drives a REAL OnlineTransport (kernel's and dash's twin) through a
@@ -1808,11 +1885,26 @@ jobs:
         # script rather than sanitising one.
         run: node scripts/test-type-embed.ts
 
+      - name: Type share-copy rig
+        # A view-only copy carries the room it follows and NO private key —
+        # not the owner's, not a legacy writer key, not an invite — whatever the
+        # source document held; an editor copy writes only through its own
+        # fresh, revocable invite. Every copy is minted in type/src/share.ts.
+        run: node scripts/test-type-share.ts
+
       - name: Type chrome rig
         # Where controls live: nothing in two menus, no inserts in the
         # overflow, and every element the chrome reaches for actually exists —
         # a null lookup there has silently broken the boot twice.
         run: node scripts/test-type-chrome.ts
+
+      - name: Type restore-gate rig
+        # A snapshot kept in the browser (Unsaved changes banner, Version
+        # history) is foreign input: on file:// any local page can write it.
+        # Restoring one never brings its own docId, room/keys or mode, and an
+        # honest one keeps the open file's sharing. Replace from JSON — a
+        # document the person chose — is NOT gated. Counterpart of slides'.
+        run: node scripts/test-type-restore-gate.ts
 
       - name: Clipboard embedded-font rig
         run: |
@@ -1953,3 +2045,49 @@ jobs:
         # Real UI and serialization, offline; delayed mock writes expose save races.
         run: |
           node scripts/test-slides-font-lifecycle-browser.mjs
+      - name: Write chrome follows the copy's role in Chromium
+        # canWriteDeck is an allowlist that fails closed: an audience, reader or
+        # unknown-role copy arriving in a running editor (dropped, loadDoc) gets
+        # no write actions and is locked; owner and writer copies keep theirs.
+        run: node scripts/test-slides-audience-gate-browser.mjs
+      - name: Import PowerPoint link in Chromium
+        # Save as → Import PowerPoint… opens only the bento.page importer, in a
+        # new tab with no opener, and its tooltip says it needs the network.
+        run: node scripts/test-slides-import-link-browser.mjs
+      - name: Under-specified documents boot in Chromium
+        # parseDoc fills required fields only where absent and drops elements
+        # that cannot render; unknown keys and element types survive (additivity).
+        run: node scripts/test-slides-minimal-doc-browser.mjs
+      - name: Top bar in Chromium
+        # 30px row and 44px phone targets, the wordmark as a named button, Save
+        # primary in both themes, and N language rebuilds leaving one set of
+        # window/document listeners and bar observers.
+        run: node scripts/test-slides-topbar-browser.mjs
+      - name: Chrome rulings in Chromium
+        # D2 menu descriptions (readable both themes, ARIA-wired, scroll on a
+        # short window), D4 dialog titles, D8 help shortcuts, the compact Save
+        # caret, phone menu rows, the designed focus ring, dark menu shadow.
+        run: node scripts/test-slides-chrome-rulings-browser.mjs
+
+  spaces-save-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone documents
+        run: |
+          npm ci --prefix spaces
+          npm run build:single --prefix spaces
+      - name: Exercise the packaged documents in Chromium
+        # Real UI and serialization, offline; delayed mock writes expose save races.
+        run: |
+          node scripts/test-spaces-save-browser.mjs

@@ -163,6 +163,33 @@ export const EMU_PER_PX = 9525
  * concern); the emitted stack keeps the original first so a machine that has
  * the real face uses it.
  */
+/**
+ * A typeface name from the source file, or undefined when it is not safe to
+ * write into CSS.
+ *
+ * A .pptx names its own fonts, so a typeface name is attacker-controlled text,
+ * and it lands in `fontFamily`, which the renderer interpolates into CSS. A
+ * name like `x;}</style><img src=x onerror=…>` used to reach the document
+ * verbatim. slides' untrusted-input gate catches it downstream, and render.ts
+ * validates again at render time, but an importer should not produce the value
+ * at all. Three layers, each sufficient alone, is the point.
+ *
+ * DENY rather than allow: real face names span every script ("游ゴシック",
+ * "Segoe UI Semibold", "Helvetica Neue LT Std 55"), so a character allow-list
+ * would reject genuine fonts. What is refused are the characters that mean
+ * something to CSS or HTML, plus control characters, which no font name needs.
+ */
+export function safeFace(name: string | undefined): string | undefined {
+  if (!name) return undefined
+  const n = name.trim()
+  if (!n || n.length > 100 || /[<>{};"'\\`]/.test(n) || /[\u0000-\u001f\u007f]/.test(n)) return undefined
+  return n
+}
+
+/** A SAFE face as one CSS family token: bare when it is a plain identifier,
+ *  single-quoted otherwise (safeFace guarantees it holds no quote to escape). */
+export const cssFace = (name: string): string => (/[^A-Za-z0-9-]/.test(name) ? `'${name}'` : name)
+
 export const METRIC_SUBSTITUTES: Record<string, string> = {
   Calibri: 'Carlito',
   Cambria: 'Caladea',
