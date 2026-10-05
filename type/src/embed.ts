@@ -26,7 +26,7 @@
 // every renderer in every file to cover the matrix, and version skew between
 // the embedded copy and the real app.
 
-import { uid, type Block } from './model.ts';
+import { uid, embedSafe, type Block } from './model.ts';
 import { t } from './i18n.ts';
 import { registerTool, type FeatureContext } from './features.ts';
 
@@ -227,7 +227,13 @@ export function readArtifact(html: string): EmbedData | null {
   // to show without running anything.
   const still = PREVIEW.exec(html);
   const view = still && safeView(still[1]) ? still[1] : fallbackView(app);
-  return { app, view, doc: parsed };
+  // The source document rides along so a reader can open the original — but
+  // never its capabilities. embedSafe (model.ts) removes the CAP_FIELDS of the
+  // shared kernel list (kernel/src/docfields.ts) — today `collab`: the source
+  // room's read key and any private keys a writer's or owner's copy holds —
+  // and does the same inside any embeds that document carries. docId is kept:
+  // it names the source so a reader can open it, and is not a capability.
+  return { app, view, doc: embedSafe(parsed) };
 }
 
 /** When a file carries no preview, the embed still says what it is. */
