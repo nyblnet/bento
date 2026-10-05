@@ -16,11 +16,19 @@
 // the collab block entirely in editor.ts.
 
 import { mintInvite } from './sync/online'
+import { stripEmbeddedEnvelopes } from './envelope'
 import { collabForReader, collabForInvite } from '../../kernel/src/docfields.ts'
 import type { BentoDoc } from './model'
 
-/** A deep clone, so nothing done to a copy can reach the open document. */
-const clone = (doc: BentoDoc): BentoDoc => JSON.parse(JSON.stringify(doc)) as BentoDoc
+/** A deep clone with the EMBEDDED-document strip applied, so neither a copy's own
+ *  collab (handled below by the allowlist) nor any document embedded inside it can
+ *  carry a capability or secret out. A deep clone first, so nothing done to the
+ *  copy reaches the open document. */
+const cloneForShare = (doc: BentoDoc): BentoDoc => {
+  const out = JSON.parse(JSON.stringify(doc)) as BentoDoc
+  stripEmbeddedEnvelopes(out)
+  return out
+}
 
 /**
  * A VIEW-ONLY copy: follows the live session and never writes. Keeps the room,
@@ -28,7 +36,7 @@ const clone = (doc: BentoDoc): BentoDoc => JSON.parse(JSON.stringify(doc)) as Be
  * half, the sync stamp and anything unknown — the relay drops whatever it sends.
  */
 export function readerCopy(doc: BentoDoc): BentoDoc {
-  const out = clone(doc)
+  const out = cloneForShare(doc)
   out.collab = { ...collabForReader(out.collab!), on: true } as BentoDoc['collab']
   return out
 }
@@ -41,7 +49,7 @@ export function readerCopy(doc: BentoDoc): BentoDoc {
  * invite can never ride along.
  */
 export async function inviteCopy(doc: BentoDoc, ownerPriv: string): Promise<BentoDoc> {
-  const out = clone(doc)
+  const out = cloneForShare(doc)
   const invite = await mintInvite(ownerPriv, 'writer')
   out.collab = { ...collabForInvite(out.collab!, invite), on: true } as BentoDoc['collab']
   return out

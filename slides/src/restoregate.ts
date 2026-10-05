@@ -26,13 +26,17 @@
 import { MODEL_KEYS } from './modelkeys.generated'
 import { FORMAT, parseDoc, type BentoDoc, type Slide } from './model'
 import { LIMITS, SLIDE_CHECKS, sanitizeAssets, sanitizeFonts, sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './untrusted'
+import { FROM_LIVE } from '../../kernel/src/docfields.ts'
 
 const DOC_KEYS = new Set<string>(MODEL_KEYS.doc)
-/** identity and capability: always the open file's, never the snapshot's. Shared
+/** Identity and capability: always the open file's, never the snapshot's. Shared
  *  with the Store's undo/redo (store.ts restore()), which keeps the same set live
  *  so Cmd-Z never resurrects an old docId, a stale sharing flag, or a dropped
- *  read-only mode. */
-export const FROM_LIVE = ['docId', 'collab', 'readonly'] as const
+ *  read-only mode. Now the kernel list, re-exported here. Its extra `template` is a
+ *  no-op for slides: template is written only on the Save-as-template clone, never
+ *  on a live editing doc, so there is never a live value to keep — the snapshot's
+ *  template is dropped exactly as before (pinned by a rig). */
+export { FROM_LIVE }
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 

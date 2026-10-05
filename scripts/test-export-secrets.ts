@@ -553,6 +553,32 @@ for (const app of ['spaces', 'type', 'slides']) {
     'no copy builder in any app bypasses the kernel allowlist — all route through collabFor* and spread no source')
 }
 
+// Embedded documents: a doc can EMBED another bento document inside it, and that
+// inner document carries its own room keys. A reader/invite copy must strip the
+// inner document's envelope or the copy leaks the inner room. This is the strip
+// the slides extraction briefly lost; pin it by source so it can't be dropped
+// again, across every app that embeds. (Reader + invite builders only.)
+{
+  // slides embeds (el.doc) and its builders clone through the embedded-document
+  // strip — the behaviour is run in scripts/test-slides-share.ts.
+  const s = read('slides/src/share.ts')
+  const slidesStrips = /stripEmbeddedEnvelopes\(/.test(mask(s))
+    && /\bcloneForShare\(/.test(mask(exportedBody(s, 'readerCopy')))
+    && /\bcloneForShare\(/.test(mask(exportedBody(s, 'inviteCopy')))
+  ok(slidesStrips, 'slides: reader and invite copies strip the embedded document (via cloneForShare)')
+
+  // type ALSO embeds (type/src/embed.ts) but its copies do not yet scrub embedded
+  // documents — security found it; the fix (type-embed-intake: CAP_FIELDS/withoutCaps
+  // at intake) is verified and routed for the maintainer's timing. This is a KNOWN
+  // gap, tracked as EXPECTED-RED so it stays loud without failing the suite, and so
+  // it FLIPS the moment type lands the fix (turn this into a hard ok() then).
+  const ty = read('type/src/share.ts')
+  const typeStrips = /stripEmbeddedEnvelopes\(|withoutCaps\(|CAP_FIELDS/
+    .test(mask(exportedBody(ty, 'readerCopy')) + mask(exportedBody(ty, 'inviteCopy')))
+  if (typeStrips) ok(true, 'type: embedded-document strip HAS landed — promote this to a hard check and drop the expected-red note')
+  else console.log('  ⚠ EXPECTED-RED  type: copies do not yet scrub embedded documents — pending type-embed-intake (security-found, routed); flips green when it lands')
+}
+
 // --- the OTHER half of the round trip: pasting one back in -------------------
 //
 // Stripping `collab` out of "Copy document JSON" is right, and it changed what
