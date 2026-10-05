@@ -5,12 +5,15 @@
 // and the measure script: this one needs the untrusted gate (bundled) and the
 // DOM (text measurement).
 //
-// parseDoc (model.ts) stays what it is — the file on disk is always full. A
-// COMPACT document is authored by a tool, so it gets the untrusted shape gate
-// on the way in (sanitizeSlide, the same rule pasted clips and remote ops
-// meet): an unknown key or a malformed value is dropped rather than reaching
-// the renderer. A full document is not gated here — that is today's
-// behaviour and today's promise (your own file is yours).
+// parseDoc (model.ts) stays what it is — the file on disk is always full. The
+// document text that arrives HERE ("Replace from JSON…", window.bento.loadDoc)
+// comes from a chat, a tool, a clipboard — anywhere — so compact OR full, it
+// gets the untrusted structural gate on the way in (restoregate.ts
+// sanitizeDoc: sanitizeSlide, sanitizeAssets, sanitizeFonts, blob refs,
+// unknown keys dropped — the same rule pasted clips, remote ops and restored
+// snapshots meet), and with `live` it never brings its own identity: docId,
+// collab and readonly stay the open deck's. A full document used to pass on
+// parseDoc alone, which checks the format and nothing else.
 //
 // Round two adds the LOAD REPORT: what the gate dropped (path + reason), what
 // expansion filled, and validate()'s findings on the result — so an agent's
@@ -26,6 +29,7 @@ import { sanitizeSlide, withDropReport, withPathSegment, type Dropped } from './
 import { expandDocWithStats, isCompact, STACK_GAP, type ExpandStats } from './compact'
 import { measureElement } from './measure'
 import { validateDoc, type ValidateResult } from './validate'
+import { sanitizeDoc } from './restoregate'
 
 export interface LoadReport {
   ok: true
@@ -57,15 +61,26 @@ export function parseDocInput(json: string): BentoDoc | null {
   return parseDocInputReport(json)?.doc ?? null
 }
 
-/** parseDocInput, plus the report. `fit` runs the text measurement (browser
- *  only); it is skipped where there is no DOM. */
-export function parseDocInputReport(json: string, fit = typeof document !== 'undefined'): { doc: BentoDoc; report: LoadReport } | null {
+export interface InputOptions {
+  /** run the text measurement (browser only); default: when there is a DOM */
+  fit?: boolean
+  /** the open document: its docId, collab and readonly are kept, never the input's */
+  live?: BentoDoc
+}
+
+/** parseDocInput, plus the report. A bare boolean is the old `fit` argument. */
+export function parseDocInputReport(json: string, opts: boolean | InputOptions = {}): { doc: BentoDoc; report: LoadReport } | null {
+  const o: InputOptions = typeof opts === 'boolean' ? { fit: opts } : opts
+  const fit = o.fit ?? typeof document !== 'undefined'
   let raw: unknown
   try { raw = JSON.parse(json) } catch { return null }
   if (!isCompact(raw)) {
-    const doc = parseDoc(json)
-    if (!doc) return null
-    return { doc, report: { ok: true, compact: false, dropped: [], expanded: 0, fitted: 0, findings: validateDoc(doc), refit: [], laidOut: 0, stacks: [] } }
+    const base = parseDoc(json)
+    if (!base) return null
+    const gated = sanitizeDoc(base as unknown as Record<string, unknown>, o.live)
+    if (!gated) return null
+    const doc = gated.doc
+    return { doc, report: { ok: true, compact: false, dropped: gated.dropped, expanded: 0, fitted: 0, findings: validateDoc(doc), refit: [], laidOut: 0, stacks: [] } }
   }
   const { doc: expanded, stats } = expandDocWithStats(raw)
   const ex = expanded as unknown as Record<string, unknown>
@@ -75,8 +90,14 @@ export function parseDocInputReport(json: string, fit = typeof document !== 'und
       .map((s, i) => withPathSegment('slides', () => withPathSegment(String(i), () => sanitizeSlide(s))))
       .filter((s): s is Slide => s !== null))
   ex.slides = slides
-  const doc = parseDoc(JSON.stringify(ex))
-  if (!doc) return null
+  const base = parseDoc(JSON.stringify(ex))
+  if (!base) return null
+  // the rest of the document — assets, fonts, blobs, settings, identity — goes
+  // through the same gate as a full one (slides pass again, idempotently)
+  const gated = sanitizeDoc(base as unknown as Record<string, unknown>, o.live)
+  if (!gated) return null
+  const doc = gated.doc
+  dropped.push(...gated.dropped)
   let fitted = 0
   let refit: ExpandStats['autoHeight'] = []
   if (fit && stats.autoHeight.length) {

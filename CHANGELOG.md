@@ -11,11 +11,80 @@ pre-1.0.
 
 ## [Unreleased]
 
+## [1.2.6] — 2026-10-04
+
+- **Open a PowerPoint deck in Bento: bento.page/import.** Drop a `.pptx` on
+  the page and get back a `.bento.html` deck you can edit and present. The
+  conversion runs in your browser and the deck is never uploaded. The page
+  fetches only the current signed slides release to build on, checks its
+  signature and fingerprint, and refuses anything that fails. Before you
+  download, it shows what was carried over, what was approximated and what
+  was left out. Tables and charts become marked placeholders for now.
+  The same conversion runs from a terminal as
+  `node convert/cli.mjs deck.pptx`.
+- **Save as → Import PowerPoint…** The Save-as menu has an entry next to
+  Replace from JSON that opens that importer (bento.page/import) in a new tab.
+  It needs an internet connection, and the entry's tooltip says so.
+- **Security: update this file. This release closes further issues found in
+  our own review.** None needs anything from you beyond updating. What each one
+  was is described here once people have had time to update.
+- **Undo can no longer reverse Stop sharing, Reset access or Duplicate as new
+  deck.** Undoing an edit made before one of those used to bring back the old
+  sharing settings, which could restore access you had just removed from a
+  collaborator. **If you have used Reset access on a shared deck, update and
+  then reset access again** to be sure the change stuck.
+- **A hand-written or AI-written deck no longer gets stuck on the loading
+  screen.** A document that left out a required part — the theme, the page
+  size, a slide's background, or an element's content — opened to the splash
+  screen and stayed there. It now opens: the missing parts take the editor's
+  defaults, anything that was given is kept, and an element with nothing to
+  show is left out.
+- **A view-only or audience copy opened inside the editor stays view-only.**
+  Dropping an audience copy (the hand-out for a live show) onto an open deck,
+  or loading one by script, used to offer "Invite to edit…", "Go live" and
+  "Reset access…" and call you an Editor; a read-only copy opened the same way
+  could be edited. Both are now locked, the same as when you open them
+  directly. The live session never accepted their changes; now the editor
+  agrees.
+- **Pictures a collaborator adds now appear in a read-only live copy.** Large
+  pictures travel through the live session separately from the deck, and a
+  read-only viewer showed them as blank boxes. They now load like everything
+  else.
+- **A copy edited offline catches up every tab opened later.** When a copy
+  you edited offline reconnected, its changes reached the collaborators online
+  at that moment; a tab opened afterwards on the same computer could miss them.
+  It now receives them too.
+
 ## [1.2.5] — 2026-09-28
 
 - **Security: update this file. This release closes three security issues
-  found in our own review.** None needs anything from you beyond updating. What
-  each one was is described here once people have had time to update.
+  found in our own review.** None needs anything from you beyond updating.
+  - **A slide could quietly phone home when opened.** A deck carrying a vector
+    drawing could, through a corner of the styling it is allowed to use, make
+    your browser fetch a web address the author chose the moment the slide was
+    shown — a silent read receipt with your IP and the time you opened it, the
+    very thing a self-contained file is meant not to do. No code ran and
+    nothing looked wrong on screen; every route that carries a drawing (a
+    mailed file, a paste, a live edit) could carry it. Drawing styles are now
+    checked by the browser's own parser instead of by pattern-matching, so the
+    disguises that slipped past — an address written with escape codes, or as
+    one of CSS's image functions — no longer do.
+  - **Another local file could hijack "Restore your unsaved changes."** On a
+    desktop browser, local files opened from disk share one storage area (the
+    same quirk behind the 1.2.2 fix). A malicious `.bento.html` opened from
+    disk could plant a fake recovery snapshot for one of your decks; the next
+    time you opened that deck, the "Restore your unsaved changes?" prompt would
+    offer it, and restoring it could move the deck into a live session the
+    attacker controlled — later edits syncing to them, their keys written into
+    your file on save. Restored snapshots now pass through the same safety
+    check as pasted JSON, and the deck's identity and live-session keys always
+    come from the real file, never from a snapshot.
+  - **A malformed Office file could freeze the tab.** Importing a crafted
+    `.pptx` or `.xlsx` (bento/slides' import page, bento/dash's spreadsheet
+    import) could exhaust memory and hang the browser: a tiny compressed part
+    that expands without bound. Imports now stop unpacking a part the moment it
+    grows past its declared size, so a decompression bomb is refused instead of
+    swallowing the tab.
 - **Orange text can be read in dark mode again.** The armed comment tool, the
   tick beside your language, your own name in a comment thread and the labels
   on slide and point comments were drawn in a dark brown meant for text on the

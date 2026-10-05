@@ -460,13 +460,14 @@ here rather than discovered later.
 | per-document origin | `bento-tray://<sha24>` custom scheme | `https://<sha24>.bento-tray.invalid`, intercepted | same |
 | document served from memory, never parsed | ✓ | ✓ | same |
 | bridge injected at document start | `WKUserScript(.atDocumentStart)` | `addDocumentStartJavaScript` | same |
-| bridge reachable only from the document | `forMainFrameOnly` | `allowedOriginRules` + `isMainFrame` | same |
+| bridge reachable only from the document | every message checked: main frame + own origin (`BridgeSender`) | `allowedOriginRules` + `isMainFrame` | same |
 | first `begin` = open document, later = export | ✓ | ✓ | same |
 | an export can never address the open file | `exportName` + `targetsOpenDocument` | identical logic | same |
 | page-supplied filenames sanitised | `safeFileName` | `safeFileName` | same |
 | in-place write | `UIDocument.save(.forOverwriting)` | `openOutputStream(uri, "wt")` | same |
 | export destination chosen by the author | `UIDocumentPickerViewController` | `ACTION_CREATE_DOCUMENT` | same |
 | `alert` / `confirm` / `prompt` | `WKUIDelegate` | `WebChromeClient` | same |
+| a link that leaves the document | opens in Safari; the document stays (`LinkPolicy`) | opens in the browser (`shouldOverrideUrlLoading`) | same |
 | `<input type="file">` | native | `onShowFileChooser` | same |
 | element fullscreen | declined | declined | same |
 | safe-area insets, natively + `--tray-safe-*` | ✓ | ✓ | same |

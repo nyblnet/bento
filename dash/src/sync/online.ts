@@ -30,6 +30,7 @@ import type { Frame, RefusalCode, SyncSession, Transport } from './session.ts'
 import { offlineEnabled } from '../../../kernel/src/update.ts'
 import { netWebSocket } from '../../../kernel/src/net.ts'
 import { lsGet, lsSet } from '../../../kernel/src/storage.ts'
+import { carryThroughRotation } from '../../../kernel/src/docfields.ts'
 
 export const DEFAULT_SYNC_HOST = 'wss://sync.bento.page'
 const SNAP_EVERY = 200 // ops between encrypted snapshot uploads
@@ -105,8 +106,31 @@ export interface CollabBlock {
   /** legacy 1.0.2-era shared writer key */
   writerPub?: string
   writerPriv?: string
-  role?: 'writer' | 'reader'
+  /**
+   * What this COPY may do. Absent or 'writer' = it writes; 'reader' = a live
+   * viewer; 'audience' = a live-SHOW member (kernel sync, #454) whose transport
+   * is receive-only. Typed to the kernel's own union — it was narrower here,
+   * which is how a role the kernel can hand us came to be read as a writer.
+   * See `copyCanWrite`.
+   */
+  role?: 'writer' | 'reader' | 'audience'
   sync?: SyncStateJSON
+}
+
+/**
+ * May THIS COPY write to its room?
+ *
+ * An ALLOWLIST, failing closed. Both gates used to ask `role !== 'reader'`,
+ * which says yes to every role invented after it — so an 'audience' copy
+ * offered its owner-signed show ticket as WRITE auth and called itself an
+ * Editor in presence. A future role that can write will show as view-only
+ * until this learns about it: visible and harmless. The old shape's failure
+ * was invisible and wrong. Absent means writer because every file older than
+ * the role field is one. Same rule as type's `copyCanWrite` (#588).
+ */
+export function copyCanWrite(collab: CollabBlock | undefined): boolean {
+  if (!collab) return false
+  return collab.role === undefined || collab.role === 'writer'
 }
 
 export const collabOf = (doc: DashDoc): CollabBlock | undefined =>
@@ -740,7 +764,7 @@ export function joinFromDoc(session: SyncSession, store: Store): OnlineTransport
     }
     active?.close()
     let auth: AuthSpec | undefined
-    if (collab.role !== 'reader') {
+    if (copyCanWrite(collab)) {
       if (collab.v === 2 && collab.owner && collab.ownerPriv) {
         auth = { kind: 'direct', pub: collab.owner, priv: collab.ownerPriv }
       } else if (collab.v === 2 && collab.owner && collab.invite) {
@@ -768,7 +792,10 @@ export async function startSharing(session: SyncSession, store: Store): Promise<
   if (active) return active
   const doc = store.doc as DashDoc & { collab?: CollabBlock }
   if (!doc.collab) doc.collab = await mintCollab()
+  const was = doc.collab.on
   doc.collab.on = true
+  // the file has to learn it is shared, or a copy saved from it never joins
+  if (was !== true) store.markUnsaved()
   session.enableSharing()
   return joinFromDoc(session, store)
 }
@@ -792,7 +819,7 @@ export function stopSharing(session: SyncSession, store: Store) {
     active = null
   }
   const c = collabOf(store.doc)
-  if (c && c.on !== false) c.on = false
+  if (c && c.on !== false) { c.on = false; store.markUnsaved() }
 }
 
 /** revocation: mint a fresh room + key. Every previously sent copy loses
@@ -801,8 +828,11 @@ export async function rotateKeys(session: SyncSession, store: Store) {
   stopSharing(session, store)
   const fresh = await mintCollab()
   const doc = store.doc as DashDoc & { collab?: CollabBlock }
-  const sync = doc.collab?.sync
-  doc.collab = sync ? { ...fresh, sync } : fresh
+  // fresh keys = the revocation; carry the rotate-survivors (sync, links) from
+  // the old block (kernel/src/docfields.ts COLLAB_ROTATE_KEEP)
+  doc.collab = carryThroughRotation(fresh, doc.collab)
+  // revocation is only real once the FILE holds the new keys
+  store.markUnsaved()
 }
 
 /** Save-a-copy helpers: what to strip for each tier. A reader copy keeps the
