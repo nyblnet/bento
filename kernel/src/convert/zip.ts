@@ -40,6 +40,22 @@ export class ZipError extends Error {
   constructor(message: string) { super(message); this.name = 'ZipError' }
 }
 
+/** Thrown when a single entry's decompressed output passes its cap — a
+ *  decompression bomb. A subclass so readZip can tell it apart from an ordinary
+ *  inflate failure and give the user the right refusal. */
+export class ZipBombError extends ZipError {
+  constructor(message: string) { super(message); this.name = 'ZipBombError' }
+}
+
+/** The hard per-entry output ceiling, the backstop when a crafted archive
+ *  DECLARES a huge uncompressed size (the declared size is otherwise the cap).
+ *  DEFLATE expands up to ~1032:1, so a real on-disk few-MB entry can inflate to
+ *  many GB; without a cap that lands as a tab-killing allocation before any size
+ *  check runs. 256 MiB is far above any legitimate OPC part and well below the
+ *  point a browser tab dies; an app with a stricter budget passes its own
+ *  `maxEntryBytes` to readZip (convert's preflight sits below this). */
+export const MAX_ENTRY_BYTES = 256 * 1024 * 1024
+
 const SIG_LOCAL = 0x04034b50
 const SIG_CD = 0x02014b50
 const SIG_EOCD = 0x06054b50
@@ -81,16 +97,40 @@ export function crc32(b: Uint8Array): number {
 
 const hasCompression = (): boolean => typeof CompressionStream !== 'undefined'
 
-async function through(b: Uint8Array, s: ReadableWritablePair<Uint8Array, Uint8Array>): Promise<Uint8Array> {
+async function through(
+  b: Uint8Array,
+  s: ReadableWritablePair<Uint8Array, Uint8Array>,
+  cap = Infinity,
+): Promise<Uint8Array> {
   // A Blob is the shortest route from bytes to a ReadableStream that works
-  // identically in a browser and in node's rigs; `Response.arrayBuffer` is the
-  // shortest route back. Neither allocates more than one extra copy.
-  const out = new Blob([b as BlobPart]).stream().pipeThrough(s as ReadableWritablePair<BufferSource, BufferSource>)
-  return new Uint8Array(await new Response(out as BodyInit).arrayBuffer())
+  // identically in a browser and in node's rigs.
+  const out = new Blob([b as BlobPart]).stream()
+    .pipeThrough(s as ReadableWritablePair<BufferSource, BufferSource>) as unknown as ReadableStream<Uint8Array>
+  // Uncapped (the write side): `Response.arrayBuffer` is the shortest route back
+  // and this path is unchanged.
+  if (cap === Infinity) return new Uint8Array(await new Response(out as BodyInit).arrayBuffer())
+  // Capped (inflate): read incrementally and ABORT the moment cumulative output
+  // passes the cap, so a decompression bomb never gets its full output allocated
+  // — the guard that used to run only AFTER the whole stream was in memory.
+  const reader = out.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value) continue
+    total += value.length
+    if (total > cap) {
+      await reader.cancel().catch(() => {})
+      throw new ZipBombError(`decompressed output exceeded its ${cap}-byte cap`)
+    }
+    chunks.push(value)
+  }
+  return concat(chunks)
 }
 
-const inflateRaw = (b: Uint8Array): Promise<Uint8Array> =>
-  through(b, new DecompressionStream('deflate-raw') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>)
+const inflateRaw = (b: Uint8Array, cap = Infinity): Promise<Uint8Array> =>
+  through(b, new DecompressionStream('deflate-raw') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>, cap)
 
 const deflateRaw = (b: Uint8Array): Promise<Uint8Array> =>
   through(b, new CompressionStream('deflate-raw') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>)
@@ -136,7 +176,11 @@ function findEocd(v: DataView, len: number): number {
  * that stops early and a total that is wrong by exactly the missing rows, and
  * nothing on screen says so.
  */
-export async function readZip(bytes: Uint8Array): Promise<ZipParts> {
+export async function readZip(
+  bytes: Uint8Array,
+  opts: { maxEntryBytes?: number } = {},
+): Promise<ZipParts> {
+  const ceiling = opts.maxEntryBytes ?? MAX_ENTRY_BYTES
   if (bytes.length < 22) throw new ZipError('this file is too small to be a ZIP archive')
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const eocd = findEocd(v, bytes.length)
@@ -215,9 +259,17 @@ export async function readZip(bytes: Uint8Array): Promise<ZipParts> {
       // caller saw an unnamed exception from somewhere inside a stream and had
       // nothing to tell the user. Every failure this file can produce has to
       // arrive as a ZipError naming the part, or the refusal is not a refusal.
+      // The cap is the DECLARED size (a legitimate entry inflates to exactly
+      // that), floored by the hard ceiling for an archive that declares a huge
+      // one. A crafted archive that UNDER-declares — the bomb — expands past its
+      // own declared usize and trips the cap long before memory is gone.
+      const cap = Math.min(usize, ceiling)
       try {
-        data = await inflateRaw(raw)
-      } catch {
+        data = await inflateRaw(raw, cap)
+      } catch (e) {
+        if (e instanceof ZipBombError) {
+          throw new ZipError(`"${name}" expands past its ${cap}-byte cap — refusing it as a possible decompression bomb`)
+        }
         throw new ZipError(`"${name}" could not be decompressed — the file is damaged or truncated`)
       }
     } else throw new ZipError(`"${name}" uses compression method ${method}, which dash does not implement`)

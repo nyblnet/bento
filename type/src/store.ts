@@ -19,6 +19,8 @@
 //    presses, not five plus however many times the page re-laid-out.
 
 import type { Block, TypeDoc } from './model.ts';
+import { copyIsReceiveOnly } from './model.ts';
+import { FROM_LIVE } from '../../kernel/src/docfields.ts';
 
 type Snap =
   | { kind: 'doc'; doc: TypeDoc }
@@ -30,6 +32,43 @@ type Listener = (doc: TypeDoc) => void;
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const LIMIT = 200;
 
+/**
+ * What undo and redo must NEVER move: the open file's identity and capability.
+ *
+ * A whole-document snapshot carries every field the document had, so swapping
+ * one in used to roll these back too — measured on this code before the fix:
+ * "Reset access" then ⌘Z put the REVOKED room key back (a copy you had just
+ * cut off could rejoin the next time you went live), and "Stop sharing" then
+ * ⌘Z turned sharing back on. ⌘Z means "undo what I wrote", not "undo who this
+ * file is or who may reach it".
+ *
+ * So undo/redo move CONTENT and take these from the live document:
+ *   docId    — identity; regenerating or reverting it orphans autosave,
+ *              recovery and sync for the file
+ *   collab   — the room, its keys and whether it is on: capability, and the
+ *              thing #588's read-only lock reads, so undo can never unlock a
+ *              view-only copy
+ *   readonly — the file's mode
+ * Now the shared kernel list (kernel/src/docfields.ts), re-exported here. The
+ * kernel superset also carries `template`, which type has no field for — keeping
+ * a field the document never has is a no-op.
+ *
+ * Consequence worth knowing: undoing a whole-document REPLACE (Replace from
+ * JSON, loadDoc, restoring a recovery snapshot) brings back the earlier
+ * CONTENT under the identity that replace brought in — identity is not
+ * undoable, whichever action changed it. bento/slides behaves the same.
+ */
+export { FROM_LIVE };
+
+export function keepLiveIdentity(doc: TypeDoc, live: TypeDoc): void {
+  const d = doc as unknown as Record<string, unknown>;
+  const l = live as unknown as Record<string, unknown>;
+  for (const k of FROM_LIVE) {
+    if (l[k] !== undefined) d[k] = l[k];
+    else delete d[k];
+  }
+}
+
 export class Store {
   #doc: TypeDoc;
   #undo: Snap[] = [];
@@ -38,7 +77,22 @@ export class Store {
   /** the open coalescing run, so a burst of typing is ONE undo step */
   #run: string | null = null;
 
-  constructor(doc: TypeDoc) { this.#doc = doc; }
+  constructor(doc: TypeDoc) { this.#doc = doc; this.#relock(); }
+
+  /**
+   * True while the document is a RECEIVE-ONLY copy (a view-only reader, or a
+   * live-show audience member). User edits are refused; see `commit`.
+   *
+   * DERIVED from the document and recomputed on every change, never set once
+   * at boot. A copy can arrive in a running editor by load, by `loadDoc`, by
+   * restoring a recovery snapshot, or by undoing a replace — and bento/slides
+   * found the version of this lock that was decided only at build time, which
+   * a dropped-in reader copy simply walked past. Deriving it means there is no
+   * path to forget.
+   */
+  #locked = false;
+  get locked(): boolean { return this.#locked; }
+  #relock(): void { this.#locked = copyIsReceiveOnly(this.#doc.collab); }
 
   get doc(): TypeDoc { return this.#doc; }
   get canUndo(): boolean { return this.#undo.length > 0; }
@@ -47,7 +101,7 @@ export class Store {
   get undoDepth(): number { return this.#undo.length; }
 
   on(fn: Listener): () => void { this.#listeners.add(fn); return () => this.#listeners.delete(fn); }
-  #emit() { for (const fn of this.#listeners) fn(this.#doc); }
+  #emit() { this.#relock(); for (const fn of this.#listeners) fn(this.#doc); }
 
   #snap(scope: Scope): Snap {
     if (scope === 'doc') return { kind: 'doc', doc: clone(this.#doc) };
@@ -69,7 +123,14 @@ export class Store {
    * one undo step, which is how a typed word is one press of ⌘Z rather than
    * five. Any commit without a run, or with a different one, closes the group.
    */
-  commit(fn: (doc: TypeDoc) => void, opts: { scope?: Scope; run?: string } = {}): void {
+  commit(fn: (doc: TypeDoc) => void, opts: { scope?: Scope; run?: string; system?: boolean } = {}): void {
+    // A receive-only copy takes no USER edits — the relay would drop them, so
+    // they would live only here and quietly diverge this file from the room it
+    // claims to follow. `system` is for the sync session's own bookkeeping
+    // (materialising a peer's published images, kernel session.ts
+    // resolveBlobs), which a reader needs more than anyone: blocking it would
+    // leave every reader looking at empty pictures.
+    if (this.#locked && !opts.system) return;
     const scope = opts.scope ?? 'doc';
     const run = opts.run ?? null;
     if (run === null || run !== this.#run) this.#push(this.#snap(scope));
@@ -103,7 +164,9 @@ export class Store {
   #apply(s: Snap): Snap {
     if (s.kind === 'doc') {
       const inverse: Snap = { kind: 'doc', doc: clone(this.#doc) };
+      const live = this.#doc;
       this.#doc = s.doc;
+      keepLiveIdentity(this.#doc, live);
       return inverse;
     }
     // A block snapshot restores that block in place. If the block is gone (a

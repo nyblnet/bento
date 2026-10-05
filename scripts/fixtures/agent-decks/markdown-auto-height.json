@@ -1,0 +1,65 @@
+{
+  "compact": true,
+  "title": "Agent-written notes",
+  "slides": [
+    {
+      "elements": [
+        {
+          "type": "text",
+          "x": 96,
+          "y": 60,
+          "w": 1088,
+          "md": "Release notes",
+          "fontSize": 56,
+          "fontWeight": 800,
+          "align": "left"
+        },
+        [
+          {
+            "type": "text",
+            "x": 96,
+            "y": 180,
+            "w": 520,
+            "md": "**Broadcast.** Audience copies follow the presenter.\n\n- locked or free\n- per-show key\n  - nothing after the show",
+            "fontSize": 24,
+            "align": "left",
+            "valign": "top"
+          },
+          {
+            "type": "text",
+            "x": 664,
+            "y": 180,
+            "w": 520,
+            "md": "**Reveal.** Elements appear on the arrow key.\n\n- in reading order\n- together\n- `fx.step` in the file",
+            "fontSize": 24,
+            "align": "left",
+            "valign": "top"
+          }
+        ],
+        {
+          "type": "text",
+          "x": 96,
+          "y": 600,
+          "w": 1088,
+          "h": "auto",
+          "md": "Read more at [bento.page](https://bento.page)",
+          "fontSize": 20,
+          "opacity": 0.7
+        }
+      ]
+    },
+    {
+      "elements": [
+        {
+          "type": "text",
+          "x": 96,
+          "y": 60,
+          "w": 1088,
+          "md": "Thanks",
+          "fontSize": 72,
+          "fontWeight": 800
+        }
+      ]
+    }
+  ]
+}

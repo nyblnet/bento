@@ -57,6 +57,12 @@
   /* --- everything below is plumbing, and looks like it --- */
   footer { border-top: 1px solid var(--line); padding: 9px 14px 12px; margin-top: 6px;
     flex: none }
+  .thisdoc { border-top: 1px solid var(--line); padding: 9px 14px; flex: none }
+  .thisdoc .row { display: flex; align-items: center; gap: 8px }
+  .thisdoc .grow { flex: 1; min-width: 0; display: flex; flex-direction: column }
+  .thisdoc b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .thisdoc span span { color: var(--dim); font-size: 12px }
+  /* dot colours come from ui.css (.dot.ok / .dot.bad) */
   .status { display: flex; gap: 8px; align-items: center; color: var(--dim); font-size: 12px }
   .status .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap }
@@ -79,6 +85,16 @@
 <div class="docs" id="docs"></div>
 <div class="empty" id="empty" hidden></div>
 
+<!-- THE DOCUMENT IN THE ACTIVE TAB: how it saves, and the one button that
+     makes it save in place when nothing covers it yet. The picker runs here,
+     in the extension's own context, which is the only place it may. -->
+<section class="thisdoc" id="thisdoc" hidden>
+  <div class="row">
+    <span class="dot" id="tdDot"></span>
+    <span class="grow"><b id="tdName"></b><span id="tdState"></span></span>
+    <button class="btn" id="tdGrant" hidden data-i18n="tdGrant"></button>
+  </div>
+</section>
 <footer>
   <div class="status">
     <span class="dot" id="dot"></span>

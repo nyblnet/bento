@@ -273,6 +273,7 @@ export const es: Catalog = {
   "That is already a caption": "Eso ya es un título",
   "That is not a bento/type document: {detail}": "No es un documento de bento/type: {detail}",
   "That is not an address this document can link to": "Esa no es una dirección a la que este documento pueda enlazar",
+  "That saved version could not be restored.": "No se pudo restaurar esa versión guardada.",
   "That sheet is larger than any printer takes.": "Esa hoja es más grande de lo que admite cualquier impresora.",
   "That sheet is smaller than 2 inches — pick a bigger page.": "Esa hoja mide menos de 2 pulgadas: elige una página más grande.",
   "The document is the interchange unit: hand this JSON to an AI, get one back, and paste it in. `window.bento` exposes the same thing to scripts.": "El documento es la unidad de intercambio: entrega este JSON a una IA, recibe otro y pégalo aquí. `window.bento` expone lo mismo a los scripts.",

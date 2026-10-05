@@ -9,11 +9,17 @@ import 'reveal.js/dist/reveal.css'
 import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
-import { morphKey, paginates, inLinearFlow } from './model'
+import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
+import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
+import { ICONS } from './icons'
 import { t } from './i18n'
 import { lsGet, lsSet } from '../../kernel/src/storage.ts'
+import type { ShowEvent, ShowVerbs } from '../../kernel/src/sync/session.ts'
+import { FollowState, laserDue } from './follow'
+import { StepState, stepOf, shownAt } from './steps'
+import { offlineEnabled } from './update'
 
 const MORPH_DURATION_DEFAULT = 0.65
 /** Set per-deck by doc.present.morphSeconds; clamped to something sane. */
@@ -22,13 +28,55 @@ const MORPH_EASE = 'power2.inOut'
 
 export interface PresentSession {
   exit(): void
+  /** Absolute slide navigation: jump the show to a 0-based slide index. */
+  goTo(index: number): void
+  /** Show or hide the audience blackout (audience copy side). */
+  setBlack(on: boolean): void
+  /** Position the remote laser dot from the presenter (null = hide). */
+  setRemoteLaser(p: string | null): void
+}
+
+/**
+ * Live broadcast, as the show sees it. Broadcast is a special case of live
+ * collaboration (docs/DECISIONS.md): the presenter's session streams a
+ * PROJECTED copy of the deck plus three signed verbs to audience copies over
+ * the room they already share. present.ts owns only what is visible — the
+ * Live/Lock toggles, the audience count, follow mode, the cards — and hands
+ * every wire concern to the session through this surface. Payloads are
+ * slides' own objects, sealed by the transport:
+ *   nav   { id, i, lock }   slide ID first (an insert mid-talk costs nothing),
+ *                           visible index as the fallback, and the lock flag
+ *   black { on, lock }
+ *   laser 'fx,fy' | null    fractions of the slide box; ≤ 20 fps at the source
+ */
+export interface PresentBroadcast {
+  /** presenter side — absent on an audience copy */
+  presenter?: {
+    start(): Promise<void>
+    stop(): Promise<void>
+    verbs(): ShowVerbs | null
+  }
+  /** both sides: verbs (audience), count/checkpoint (presenter), closed */
+  onShow(fn: (e: ShowEvent) => void): () => void
+  /** true on an audience copy: follow the presenter, show the follow chip */
+  audience?: boolean
 }
 
 export function startPresentation(
   doc: BentoDoc,
   startIndex: number,
   onExit: (lastIndex: number) => void,
-  opts: { fullscreen?: boolean } = {},
+  opts: {
+    fullscreen?: boolean
+    /** hosted-client live sync: invoked once at init with the pieces needed to
+     *  re-render the deck on remote doc changes (slidesEl, deck, buildSection) */
+    onDocChange?: (ctx: {
+      slidesEl: HTMLElement
+      deck: Reveal.Api
+      buildSection: (s: BentoDoc['slides'][number], i: number) => HTMLElement
+    }) => void
+    broadcast?: PresentBroadcast
+  } = {},
 ): PresentSession {
   MORPH_DURATION = Math.min(6, Math.max(0.1, doc.present?.morphSeconds ?? MORPH_DURATION_DEFAULT))
 
@@ -46,7 +94,10 @@ export function startPresentation(
   revealEl.appendChild(slidesEl)
   overlay.appendChild(revealEl)
 
-  doc.slides.forEach((slide, i) => {
+  // Extracted from the forEach so the broadcast viewer can rebuild one
+  // section when the presenter's document changes underneath it. The index
+  // is the loop's: `morphNext` looks one slide ahead.
+  const buildSection = (slide: BentoDoc['slides'][number], i: number) => {
     const section = document.createElement('section')
     // Morph slides swap instantly; the Flip animation supplies the motion.
     //
@@ -68,6 +119,11 @@ export function startPresentation(
       slide.transition === 'morph' || morphNext ? 'none' : slide.transition
     if (!inLinearFlow(slide)) section.dataset.bentoState = '1' // dimmed in overview
     const surface = renderSlide(slide, doc, { hidePlaceholders: true, liveMedia: true })
+    // Web links: rel set AT MOUNT, in the show only, never stored — a click
+    // goes through openWeb, but the browser's own routes to an anchor (the
+    // context menu's "open in new tab", a drag) do not, and on a hosted deck
+    // they would otherwise send this page's location as the referrer.
+    for (const a of Array.from(surface.querySelectorAll<HTMLAnchorElement>('a[href]'))) a.rel = 'noopener noreferrer'
     // reveal slides start with only the default hover set visible
     if (slide.hover?.type === 'reveal') applyRevealSet(surface, slide.hover.default ?? null, slide.hover.default)
     section.appendChild(surface)
@@ -77,8 +133,9 @@ export function startPresentation(
       aside.textContent = slide.notes
       section.appendChild(aside)
     }
-    slidesEl.appendChild(section)
-  })
+    return section
+  }
+  doc.slides.forEach((slide, i) => slidesEl.appendChild(buildSection(slide, i)))
 
   document.body.appendChild(overlay)
 
@@ -90,13 +147,53 @@ export function startPresentation(
     const p = doc.slides.findIndex((s) => s.id === pid)
     return p >= 0 ? p : i
   }
+  // ——— reveal steps (fx.step): → reveals the next step before it leaves the
+  // slide, ← hides the last one before it leaves. Decisions in steps.ts.
+  const steps = new StepState<SlideElement>()
+  /** Hide/show every stepped element of a section for the current step. */
+  const applyStep = (section: HTMLElement, slide: Slide, step: number) => {
+    for (const el of slide.elements ?? []) {
+      if (!stepOf(el)) continue
+      const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      node?.classList.toggle('bento-step-hidden', !shownAt(el, step))
+    }
+  }
+  const currentSection = () => deck.getCurrentSlide() as HTMLElement | null
+  const revealStep = (r: { step: number; reveal: SlideElement[] }) => {
+    const cur = deck.getIndices().h
+    const section = currentSection()
+    if (!section) return
+    applyStep(section, doc.slides[cur], r.step)
+    if (!reduceMotion) runEnterFx(doc.slides[cur], section, new Set(r.reveal.map((el) => el.id)), true)
+    sendNav(cur)
+    updateSpeakerControls()
+  }
+  const hideStep = (r: { step: number; hide: SlideElement[] }) => {
+    const cur = deck.getIndices().h
+    const section = currentSection()
+    if (!section) return
+    for (const el of r.hide) {
+      const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      if (!node) continue
+      anim.killTweensOf(node)
+      applyElementFrame(node, el)
+      resetXform(node)
+    }
+    applyStep(section, doc.slides[cur], r.step)
+    sendNav(cur)
+    updateSpeakerControls()
+  }
   const goNext = () => {
+    const r = steps.next()
+    if (r.kind === 'step') return revealStep(r)
     const cur = deck.getIndices().h
     for (let i = (isState(cur) ? anchorOf(cur) : cur) + 1; i < doc.slides.length; i++) {
       if (!isState(i)) return deck.slide(i, 0)
     }
   }
   const goPrev = () => {
+    const r = steps.prev()
+    if (r.kind === 'step') return hideStep(r)
     const cur = deck.getIndices().h
     if (isState(cur)) return deck.slide(anchorOf(cur), 0)
     for (let i = cur - 1; i >= 0; i--) {
@@ -104,6 +201,7 @@ export function startPresentation(
     }
   }
   const hasNext = () => {
+    if (steps.hasNext()) return true
     const cur = deck.getIndices().h
     for (let i = (isState(cur) ? anchorOf(cur) : cur) + 1; i < doc.slides.length; i++) {
       if (!isState(i)) return true
@@ -111,6 +209,7 @@ export function startPresentation(
     return false
   }
   const hasPrev = () => {
+    if (steps.hasPrev()) return true
     const cur = deck.getIndices().h
     if (isState(cur)) return true // right-swipe returns to the parent slide
     for (let i = cur - 1; i >= 0; i--) {
@@ -159,9 +258,13 @@ export function startPresentation(
   laserTrail.append(laserTrailHalo, laserTrailCore)
   const laserDot = document.createElement('div')
   laserDot.className = 'bento-laser-dot'
-  laserLayer.append(laserTrail, laserDot)
+  const remoteLaserDot = document.createElement('div')
+  remoteLaserDot.className = 'bento-laser-dot bento-remote'
+  laserLayer.append(laserTrail, laserDot, remoteLaserDot)
 
-  const LASER_TRAIL_LIFETIME = 275
+  // ~0.8s fade, in the direction of Excalidraw's 1s laser decay — short enough
+  // to stay responsive, long enough that the tail reads as a sweep, not a smear.
+  const LASER_TRAIL_LIFETIME = 800
   const LASER_TRAIL_SAMPLE_MS = 5
   const LASER_TRAIL_SEGMENTS = Math.ceil(LASER_TRAIL_LIFETIME / LASER_TRAIL_SAMPLE_MS) + 1
   const laserTrailHaloSegments: SVGPathElement[] = []
@@ -201,12 +304,15 @@ export function startPresentation(
     () => ({ x: 0, y: 0, time: 0 }),
   )
   let laserEnabled = false
+  let laserDrawing = false
   let laserFrame = 0
   let laserTrailFrame = 0
   let laserTrailStart = 0
   let laserTrailLength = 0
   let laserTrailVisibleSegments = 0
   let laserPoint: { x: number; y: number } | null = null
+  let laserSentThisStroke = false
+  let lastLaserSend = 0
 
   const hideLaserDot = () => {
     laserDot.classList.remove('visible')
@@ -347,18 +453,24 @@ export function startPresentation(
   }
 
   const resetLaserPointer = () => {
+    if (laserDrawing && laserSentThisStroke) {
+      laserDrawing = false
+      sendLaserPoint(null)
+    }
+    laserDrawing = false
     hideLaserDot()
     clearLaserTrail()
     if (laserFrame) cancelAnimationFrame(laserFrame)
     laserFrame = 0
     laserPoint = null
     overlay.classList.remove('laser-over-slide')
+    laserSentThisStroke = false
   }
 
   const paintLaser = (now: number) => {
     laserFrame = 0
     const point = laserPoint
-    if (!laserEnabled || blacked || !deckReady || !point) {
+    if (!laserEnabled || blacked || !deckReady || !point || !laserDrawing) {
       resetLaserPointer()
       return
     }
@@ -379,6 +491,17 @@ export function startPresentation(
       overlay.classList.remove('laser-over-slide')
       return
     }
+    const sendAt = performance.now()
+    // ~30fps on the wire — Excalidraw's CURSOR_SYNC_TIMEOUT=33ms. The relay
+    // burst (400/10s) fits a continuous stroke with nav headroom; the copy
+    // still sub-frame-smooths with a short CSS tween.
+    if (sendAt - lastLaserSend >= 33) {
+      const fx = Math.max(0, Math.min(1, (point.x - rect.left) / rect.width))
+      const fy = Math.max(0, Math.min(1, (point.y - rect.top) / rect.height))
+      sendLaserPoint(`${fx.toFixed(4)},${fy.toFixed(4)}`)
+      lastLaserSend = sendAt
+      laserSentThisStroke = true
+    }
     const host = overlay.getBoundingClientRect()
     const x = point.x - host.left
     const y = point.y - host.top
@@ -394,9 +517,83 @@ export function startPresentation(
   }
 
   const scheduleLaser = (ev: PointerEvent) => {
-    if (!laserEnabled || ev.pointerType === 'touch' || !ev.isPrimary) return
+    if (!laserEnabled || !laserDrawing || ev.pointerType === 'touch' || !ev.isPrimary) return
     laserPoint = { x: ev.clientX, y: ev.clientY }
     if (!laserFrame) laserFrame = requestAnimationFrame(paintLaser)
+  }
+
+  // ——— remote (broadcast) laser trail ———
+  // The channel carries dot points at ~30fps (33ms throttle); the LOCAL trail is sampled at
+  // 5ms/1.5px and is never sent. Excalidraw's collab laser is the model here:
+  // the trail head is glued to the pointer's CURRENT position and the whole
+  // stroke redraws every frame — never pre-baked ahead of it. Feeding the
+  // received points subdivided along the tween path injected the ENTIRE
+  // 100ms segment at arrival while the dot still crawled after it, so the
+  // trail visibly ran AHEAD of the pointer. Instead, sample the dot's
+  // RENDERED position every frame (the CSS tween glides it; offsetLeft/Top
+  // are already in trail coordinate space) and feed that — head glued to the
+  // dot at every instant, same fade, same taper, no wire change.
+  let remoteTrailFrame = 0
+  const sampleRemoteTrail = (now: number) => {
+    remoteTrailFrame = 0
+    if (laserDrawing || reduceMotion || blacked || !remoteLaserDot.classList.contains('visible')) return
+    addLaserTrailPoint(remoteLaserDot.offsetLeft, remoteLaserDot.offsetTop, now)
+    if (laserTrailLength > 1) {
+      if (laserTrailFrame) cancelAnimationFrame(laserTrailFrame)
+      renderLaserTrail(now)
+    }
+    remoteTrailFrame = requestAnimationFrame(sampleRemoteTrail)
+  }
+  const clearRemoteLaser = () => {
+    if (remoteTrailFrame) cancelAnimationFrame(remoteTrailFrame)
+    remoteTrailFrame = 0
+    remoteLaserDot.classList.remove('visible')
+    clearLaserTrail()
+  }
+
+  const setRemoteLaser = (p: string | null) => {
+    if (!p || blacked) {
+      clearRemoteLaser()
+      return
+    }
+    // The laser layer only enters the DOM when the laser was armed locally —
+    // on a broadcast copy nobody ever arms it, so mount it on first remote
+    // frame or the dot would be positioned on a detached element.
+    buildLaser()
+    const section = deck.getCurrentSlide() as HTMLElement | null
+    const surface = section?.querySelector<HTMLElement>('.bento-slide')
+    if (!surface) {
+      clearRemoteLaser()
+      return
+    }
+    const rect = surface.getBoundingClientRect()
+    const parts = p.split(',')
+    const fx = parseFloat(parts[0] ?? 'NaN')
+    const fy = parseFloat(parts[1] ?? 'NaN')
+    if (!Number.isFinite(fx) || !Number.isFinite(fy)) {
+      clearRemoteLaser()
+      return
+    }
+    const host = overlay.getBoundingClientRect()
+    const x = rect.left + Math.max(0, Math.min(1, fx)) * rect.width - host.left
+    const y = rect.top + Math.max(0, Math.min(1, fy)) * rect.height - host.top
+    if (remoteLaserDot.classList.contains('visible')) {
+      // Mid-stroke: let the short tween glide the dot to the new frame.
+      remoteLaserDot.style.left = `${x}px`
+      remoteLaserDot.style.top = `${y}px`
+    } else {
+      // A new stroke after a release: the dot is hidden at its OLD spot and the
+      // CSS left/top tween would fly it across the gap — the trail sampler
+      // traces that ghost glide into a line from the last position. Snap it to
+      // the new position first (tween off), then re-enable for the stream.
+      remoteLaserDot.style.transition = 'none'
+      remoteLaserDot.style.left = `${x}px`
+      remoteLaserDot.style.top = `${y}px`
+      void remoteLaserDot.offsetWidth // reflow so the snap lands before re-enabling
+      remoteLaserDot.style.transition = ''
+      remoteLaserDot.classList.add('visible')
+    }
+    if (!remoteTrailFrame) remoteTrailFrame = requestAnimationFrame(sampleRemoteTrail)
   }
 
   const setLaserEnabled = (on: boolean, feedback = true) => {
@@ -411,14 +608,47 @@ export function startPresentation(
   const toggleLaser = () => setLaserEnabled(!laserEnabled)
 
   overlay.addEventListener('pointermove', scheduleLaser, true)
+  overlay.addEventListener('pointerdown', (ev: PointerEvent) => {
+    if (!laserEnabled || ev.pointerType === 'touch' || !ev.isPrimary || !deckReady) return
+    const section = deck.getCurrentSlide() as HTMLElement | null
+    const surface = section?.querySelector<HTMLElement>('.bento-slide')
+    if (!surface) return
+    const rect = surface.getBoundingClientRect()
+    if (
+      ev.clientX < rect.left || ev.clientX > rect.right ||
+      ev.clientY < rect.top || ev.clientY > rect.bottom
+    ) return
+    laserDrawing = true
+    laserSentThisStroke = false
+    laserPoint = { x: ev.clientX, y: ev.clientY }
+    if (!laserFrame) laserFrame = requestAnimationFrame(paintLaser)
+    const fx = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width))
+    const fy = Math.max(0, Math.min(1, (ev.clientY - rect.top) / rect.height))
+    sendLaserPoint(`${fx.toFixed(4)},${fy.toFixed(4)}`)
+    lastLaserSend = performance.now()
+    laserSentThisStroke = true
+  }, true)
+  overlay.addEventListener('pointerup', () => {
+    if (!laserDrawing) return
+    laserDrawing = false
+    // resetLaserPointer's own off-send guard needs laserDrawing still true, so
+    // the off frame fires HERE — before the stroke is cleared.
+    if (laserSentThisStroke) sendLaserPoint(null)
+    resetLaserPointer()
+  })
   overlay.addEventListener('pointerleave', resetLaserPointer)
   const onWindowBlur = () => resetLaserPointer()
   window.addEventListener('blur', onWindowBlur)
 
   const setBlack = (on: boolean) => {
     blacked = on
-    if (on) resetLaserPointer()
+    if (on) {
+      resetLaserPointer()
+      sendLaserPoint(null)
+      setRemoteLaser(null)
+    }
     blackout.hidden = !on
+    sendBlackPoint(on)
     updateSpeakerControls()
   }
   const toggleBlack = () => setBlack(!blacked)
@@ -515,9 +745,40 @@ export function startPresentation(
   // be opened (from the editor) before that, so gate any deck.getIndices() read
   // and re-populate once the deck is ready.
   let deckReady = false
+  // Broadcast follow-mode may receive a nav frame before Reveal finishes init;
+  // park it here and apply as soon as the deck is ready.
+  let pendingIndex: number | null = null
   // true when we adopted a speaker window the EDITOR opened — we drive it but
   // must not close it on exit (it lives beyond this present session).
   let speakerAdopted = false
+  // ——— live broadcast ———
+  const bc = opts.broadcast
+  let showOn = false        // presenter: live
+  let showLock = false      // presenter: the audience is held on my slide
+  let showCount = 0         // presenter: audience sockets, coarse
+  const follow = new FollowState(!!bc?.audience) // audience: follow ⇄ browse, lock
+  let followChip: HTMLButtonElement | null = null
+
+  // Laser frames leave at ≤ 20 fps; the viewer's dot glides between samples
+  // (CSS tween, see setRemoteLaser) so the trail stays smooth. Nav and black
+  // are rare and never throttled. `null` (pen up) always goes (follow.ts).
+  let lastLaserSent = 0
+  const sendLaserPoint = (p: string | null) => {
+    if (!showOn) return
+    const now = performance.now()
+    if (!laserDue(p, now, lastLaserSent)) return
+    lastLaserSent = now
+    bc?.presenter?.verbs()?.laser(p)
+  }
+  const sendBlackPoint = (on: boolean) => {
+    if (!showOn) return
+    bc?.presenter?.verbs()?.black({ on, lock: showLock })
+  }
+  const sendNav = (idx: number) => {
+    if (!showOn) return
+    bc?.presenter?.verbs()?.nav({ id: doc.slides[idx]?.id, i: visibleIndex(idx), lock: showLock, step: steps.step })
+  }
+
   // Second-screen placement is set up in the EDITOR (properties panel) before
   // presenting — that's where the Window Management permission is granted via a
   // dedicated gesture, and the layout is cached in ../screens. Here we just read
@@ -554,7 +815,10 @@ export function startPresentation(
     const cur = deck.getIndices().h
     const anchor = isState(cur) ? anchorOf(cur) : cur
     const count = d.querySelector('.sv-count')
-    if (count) count.textContent = `${visibleIndex(cur)} / ${visibleTotal}`
+    if (count) {
+      const max = doc.slides[cur] ? Math.max(0, ...doc.slides[cur].elements.map(stepOf)) : 0
+      count.textContent = `${visibleIndex(cur)} / ${visibleTotal}` + (max ? ` · ${steps.step}/${max}` : '')
+    }
     d.querySelectorAll<HTMLElement>('.sv-thumb').forEach((th) => {
       const on = Number(th.dataset.idx) === anchor
       th.classList.toggle('current', on)
@@ -569,6 +833,23 @@ export function startPresentation(
     nav('laser')?.classList.toggle('active', laserEnabled)
     nav('laser')?.setAttribute('aria-pressed', String(laserEnabled))
     nav('reduce')?.classList.toggle('active', reduceMotion)
+    const liveBtn = nav('live')
+    if (liveBtn) {
+      liveBtn.classList.toggle('active', showOn)
+      liveBtn.setAttribute('aria-pressed', String(showOn))
+    }
+    const lockBtn = nav('lock')
+    if (lockBtn) {
+      lockBtn.classList.toggle('active', showLock)
+      lockBtn.setAttribute('aria-pressed', String(showLock))
+      lockBtn.toggleAttribute('disabled', !showOn)
+    }
+    const badge = d.querySelector<HTMLElement>('.sv-bcast')
+    if (badge) {
+      badge.hidden = !showOn
+      badge.textContent = showOn ? String(showCount) : ''
+      badge.title = t('N viewers').replace('N', String(showCount))
+    }
   }
 
   // A brief centred pill so a keypress (M) gives visible confirmation — the
@@ -581,6 +862,54 @@ export function startPresentation(
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show') // restart the fade
     clearTimeout(toastTimer)
     toastTimer = window.setTimeout(() => el!.classList.remove('show'), 1400)
+  }
+
+  const stopShow = async () => {
+    if (!showOn) return
+    sendLaserPoint(null)
+    sendBlackPoint(false)
+    showOn = false
+    showLock = false
+    showCount = 0
+    updateSpeakerControls()
+    try { await bc?.presenter?.stop() } catch (err) { console.error('[bento-broadcast] end failed', err) }
+  }
+
+  // OFF on every show. Presenting locally must never silently broadcast; the
+  // presenter goes live on purpose, from the speaker view, every time.
+  const toggleShow = async () => {
+    if (!bc?.presenter) return
+    if (showOn) {
+      await stopShow()
+      flashPresentMsg(t('Broadcast ended'))
+      return
+    }
+    if (offlineEnabled()) {
+      flashPresentMsg(t('Broadcast refused in offline mode'))
+      return
+    }
+    try {
+      await bc.presenter.start()
+      showOn = true
+      updateSpeakerControls()
+      sendNav(deck.getIndices().h)
+      if (blacked) sendBlackPoint(true)
+      flashPresentMsg(t('Live — audience copies now follow you'))
+    } catch (err) {
+      console.error('[bento-broadcast] go live failed', err)
+      flashPresentMsg(t('Broadcast failed'))
+    }
+  }
+
+  // Lock is a UX constraint, not a security one — the audience already holds
+  // the whole deck (their copy IS the deck). It disables their follow toggle;
+  // it hides nothing. The button's title says so, in those words.
+  const toggleLock = () => {
+    if (!showOn) return
+    showLock = !showLock
+    updateSpeakerControls()
+    sendNav(deck.getIndices().h) // the lock flag rides on nav
+    flashPresentMsg(showLock ? t('Audience locked to your slide') : t('Audience may browse the deck'))
   }
 
   const setReduceMotion = (on: boolean, persist = true) => {
@@ -674,10 +1003,13 @@ export function startPresentation(
           navBtn('next', '›', t('Next')) +
           navBtn('last', '⇥', t('Last slide')) +
           navBtn('black', '■', t('Black screen (B)')) +
-          navBtn('laser', '🟒', t('Laser pointer (L)'), true) +
+          navBtn('laser', ICONS.laser, t('Laser pointer (L)'), true) +
           navBtn('grid', '▦', t('All slides (G)')) +
           navBtn('reduce', '⏸', t('Reduce motion (M)')) +
+          navBtn('live', ICONS.broadcast, t('Go live — audience copies follow your slides')) +
+          navBtn('lock', '🔒', t('Lock keeps the audience on your slide. It does not hide the rest of the deck, which they already have.')) +
         `</div>` +
+        `<span class="sv-bcast" hidden title="${t('N viewers')}"></span>` +
       `</div>` +
       `<div class="sv-main">` +
         `<div class="sv-current"></div>` +
@@ -688,6 +1020,18 @@ export function startPresentation(
       `</div>` +
       `<div class="sv-rail"></div>` +
       `<div class="sv-grid" hidden><div class="sv-grid-inner"></div></div>`
+
+    const bcastStyle = d.createElement('style')
+    bcastStyle.textContent =
+      // a display property on the rule would override the UA's [hidden]{display:none},
+      // so the [hidden] variant must restate it explicitly
+      `.sv-bcast { display:inline-block; min-width:1.6em; text-align:center; background:rgba(255,255,255,0.15); border-radius:999px; padding:0.15em 0.5em; margin-left:0.5em; font-size:0.85em; line-height:1; }` +
+      `.sv-bcast[hidden] { display:none; }`
+    // the popup head persists across openSpeaker calls — never append a second copy
+    if (!d.head.querySelector('style[data-bento-bcast]')) {
+      bcastStyle.dataset.bentoBcast = '1'
+      d.head.appendChild(bcastStyle)
+    }
 
     speakerStart = performance.now()
     d.querySelector('.sv-timer')?.addEventListener('click', () => { speakerStart = performance.now() })
@@ -743,6 +1087,8 @@ export function startPresentation(
       else if (k === 'laser') toggleLaser()
       else if (k === 'grid') toggleGrid()
       else if (k === 'reduce') toggleReduceMotion()
+      else if (k === 'live') void toggleShow()
+      else if (k === 'lock') toggleLock()
     }
     d.querySelectorAll<HTMLButtonElement>('.sv-btn[data-nav]').forEach((b) => {
       b.addEventListener('click', () => doNav(b.dataset.nav!))
@@ -833,6 +1179,8 @@ export function startPresentation(
   const exit = () => {
     if (exited) return
     exited = true
+    void stopShow() // a broadcast never outlives its show
+    unShow?.()
     // measurements are keyed by slide INDEX, so they'd be wrong for the next
     // show if the deck was edited in between — never carry them across
     symCache.clear()
@@ -904,6 +1252,12 @@ export function startPresentation(
       if (!ev.repeat) toggleLaser()
       return
     }
+    if (ev.key === 'b' || ev.key === 'B') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      toggleBlack()
+      return
+    }
     const key = ev.key || ({ 32: ' ', 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
     if (key === 'ArrowRight' || key === 'PageDown' || key === ' ') {
       ev.preventDefault()
@@ -968,6 +1322,11 @@ export function startPresentation(
     // (Reveal keeps sections mounted) — start clean before any fx runs.
     sweepSymbolSpans(to)
     const forward = toIdx > fromIdx
+    // Reveal steps: forward arrives with them hidden, backward fully shown —
+    // unless the audience is following a presenter who named the step.
+    steps.enter(doc.slides[toIdx]?.elements ?? [], forward)
+    if (pendingStep !== null) { steps.set(pendingStep); pendingStep = null }
+    applyStep(to, doc.slides[toIdx], steps.step)
     // Morph forward into a morph slide, and un-morph when backing out of one.
     const morphing =
       from &&
@@ -979,7 +1338,7 @@ export function startPresentation(
         runMorphArrivalCountUps(doc.slides[fromIdx], doc.slides[toIdx], to)
       }
     }
-    else if (!reduceMotion) runEnterFx(doc.slides[toIdx], to)
+    else if (!reduceMotion) runEnterFx(doc.slides[toIdx], to, undefined, false, steps.step)
     if (!reduceMotion) {
       runAmbientFx(doc.slides[toIdx], to)
       restartSvgAnimations(to)
@@ -996,24 +1355,161 @@ export function startPresentation(
     // symbol-morph on the way out. symbolOffsets normalises by the element's
     // own box, so measuring mid-morph is safe.
     cacheSlideSymbols(doc, to, toIdx)
+    sendNav(toIdx)
     updateSpeaker()
   }) as any)
 
-  // Clicking an element with a link jumps to its target slide.
+  // Open a web page from the show — always a NEW tab, never navigating the
+  // deck away (the file IS the presentation; a same-tab navigation would end
+  // it and, on a file:// deck, leave nothing to come back to). noopener so the
+  // page cannot reach this window; noreferrer so the deck's location is not
+  // sent. The offline switch is honoured: a viewer who asked for no network
+  // activity does not get a browser tab making a request on a click.
+  const openWeb = (url: string) => {
+    if (offlineEnabled()) { flashPresentMsg(t('Links are off in offline mode')); return }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+  // Clicking an element with a link jumps to its target slide, or opens a web
+  // page; an <a href> inside text (the [caption](url) markdown) opens too.
   slidesEl.addEventListener('click', (ev) => {
+    const anchor = (ev.target as HTMLElement).closest<HTMLAnchorElement>('a[href]')
+    if (anchor && slidesEl.contains(anchor)) {
+      ev.preventDefault()
+      ev.stopPropagation()
+      const href = anchor.getAttribute('href') ?? ''
+      if (isWebUrl(href)) openWeb(href)
+      return
+    }
     const target = (ev.target as HTMLElement).closest<HTMLElement>('[data-link]')
     if (!target) return
-    const idx = doc.slides.findIndex((s) => s.id === target.dataset.link)
+    const link = target.dataset.link ?? ''
+    if (isWebUrl(link)) {
+      ev.preventDefault()
+      ev.stopPropagation()
+      openWeb(link)
+      return
+    }
+    const idx = doc.slides.findIndex((s) => s.id === link)
     if (idx >= 0) {
       ev.preventDefault()
       ev.stopPropagation()
       deck.slide(idx, 0)
     }
   })
+  // A middle-click fires `auxclick`, not `click`, and the browser's default
+  // for it on an anchor is "open in a new tab" — straight past the offline
+  // gate and the noreferrer flag. Route it through the same door.
+  slidesEl.addEventListener('auxclick', (ev) => {
+    const anchor = (ev.target as HTMLElement).closest<HTMLAnchorElement>('a[href]')
+    if (!anchor) return
+    ev.preventDefault()
+    ev.stopPropagation()
+    if (ev.button === 1) {
+      const href = anchor.getAttribute('href') ?? ''
+      if (isWebUrl(href)) openWeb(href)
+    }
+  })
+
+  const goTo = (index: number) => {
+    if (deckReady) deck.slide(index, 0)
+    else pendingIndex = index
+  }
+  // A presenter's nav names the step too. Same slide: apply it here (reveal
+  // forward with the entrance, hide backward); another slide: park it for
+  // slidechanged, which enters the slide and then sets it.
+  let pendingStep: number | null = null
+  const followStep = (index: number, step: number | undefined) => {
+    if (typeof step !== 'number') return
+    if (index !== deck.getIndices().h) { pendingStep = step; return }
+    const was = steps.step
+    steps.set(step)
+    if (steps.step === was) return
+    const section = currentSection()
+    const slide = doc.slides[index]
+    if (!section || !slide) return
+    if (steps.step > was) {
+      applyStep(section, slide, steps.step)
+      const ids = new Set(slide.elements.filter((el) => stepOf(el) > was && stepOf(el) <= steps.step).map((el) => el.id))
+      if (!reduceMotion) runEnterFx(slide, section, ids, true)
+    } else {
+      for (const el of slide.elements) {
+        if (stepOf(el) <= steps.step || stepOf(el) > was) continue
+        const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+        if (node) { anim.killTweensOf(node); applyElementFrame(node, el); resetXform(node) }
+      }
+      applyStep(section, slide, steps.step)
+    }
+  }
+
+  // ——— the audience side: follow the presenter ———
+  // The decisions live in follow.ts (rig-driven); this is the DOM around them.
+  const updateFollowChip = () => {
+    if (!followChip) return
+    const state = follow.label()
+    followChip.classList.toggle('following', follow.following)
+    followChip.toggleAttribute('disabled', follow.locked)
+    followChip.textContent = state === 'locked'
+      ? t('Following the presenter (locked)')
+      : state === 'following' ? t('Following the presenter') : t('Browsing — click to follow')
+    followChip.title = state === 'locked'
+      ? t('The presenter has locked the audience to their slide')
+      : state === 'following' ? t('Click to browse the deck on your own') : t('Click to snap back to the presenter')
+  }
+  const showCard = (text: string, sticky = false) => {
+    let el = overlay.querySelector<HTMLElement>('.bento-show-card')
+    if (!el) { el = document.createElement('div'); el.className = 'bento-show-card'; overlay.appendChild(el) }
+    el.textContent = text
+    el.hidden = false
+    if (!sticky) window.setTimeout(() => { if (el) el.hidden = true }, 4000)
+  }
+  if (bc?.audience) {
+    followChip = document.createElement('button')
+    followChip.className = 'bento-follow-chip'
+    followChip.addEventListener('click', () => {
+      const jump = follow.toggle()
+      updateFollowChip()
+      if (jump !== null) goTo(jump)
+    })
+    overlay.appendChild(followChip)
+    updateFollowChip()
+    showCard(t('Waiting for the presenter…'), true)
+  }
+  let unShow: (() => void) | undefined
+  if (bc) {
+    unShow = bc.onShow((e) => {
+      if (e.t === 'count') { showCount = e.n; updateSpeakerControls(); return }
+      if (e.t === 'checkpoint') return // the session re-sends the audsnap itself
+      if (e.t === 'closed') {
+        if (!bc.audience) return
+        if (e.code === 4001) { follow.applyLock(false); updateFollowChip(); showCard(t('The show has ended — this copy stays a working deck')) }
+        else if (e.code === 4002) showCard(t('Waiting for the presenter…'), true)
+        else if (e.code === 1008) showCard(t('Your audience copy is no longer valid — ask the presenter for a new one'), true)
+        return
+      }
+      if (!bc.audience) return
+      const p = (e.payload ?? {}) as { id?: string; i?: number; on?: boolean; lock?: boolean }
+      if (e.kind === 'nav') {
+        overlay.querySelector<HTMLElement>('.bento-show-card')?.setAttribute('hidden', '')
+        const jump = follow.nav(doc.slides, p)
+        updateFollowChip()
+        if (jump !== null) { followStep(jump, (p as { step?: number }).step); goTo(jump) }
+      } else if (e.kind === 'black') {
+        follow.applyLock(p.lock)
+        updateFollowChip()
+        setBlack(!!p.on)
+      } else if (e.kind === 'laser') {
+        setRemoteLaser(typeof e.payload === 'string' ? e.payload : null)
+      }
+    })
+  }
 
   deck.initialize().then(() => {
     deckReady = true
     if (startIndex > 0) deck.slide(startIndex, 0)
+    if (pendingIndex !== null) {
+      deck.slide(pendingIndex, 0)
+      pendingIndex = null
+    }
     // if the speaker view was opened before init (macOS reorder), fill it now
     updateSpeaker()
     // late layout: fonts/images that finish loading after init can change
@@ -1023,8 +1519,10 @@ export function startPresentation(
     setTimeout(onResize, 600)
     const first = slidesEl.children[startIndex] as HTMLElement | undefined
     if (first) {
+      steps.enter(doc.slides[startIndex]?.elements ?? [], true)
+      applyStep(first, doc.slides[startIndex], steps.step)
       if (!reduceMotion) {
-        runEnterFx(doc.slides[startIndex], first)
+        runEnterFx(doc.slides[startIndex], first, undefined, false, steps.step)
         runAmbientFx(doc.slides[startIndex], first)
         restartSvgAnimations(first)
       }
@@ -1035,9 +1533,12 @@ export function startPresentation(
       mountLiveCharts(doc.slides[startIndex], first)
       startMediaIn(first)
     }
+    if (opts?.onDocChange) {
+      opts.onDocChange({ slidesEl, deck, buildSection })
+    }
   })
 
-  return { exit }
+  return { exit, goTo, setBlack, setRemoteLaser }
 }
 
 // --- media playback -----------------------------------------------------------
@@ -1133,10 +1634,18 @@ function enterSpec(kind: EnterKind, enterDur?: number) {
 }
 
 /** Staggered entrance animations + count-ups for the incoming slide. */
-function runEnterFx(slide: Slide, section: HTMLElement) {
+/**
+ * `only` restricts the run to those element ids (a reveal step); `revealing`
+ * gives an element with no `fx.enter` of its own a plain fade, because a
+ * stepped element that simply pops in reads as a glitch, not a reveal. `step`
+ * `atStep` (slide entry) leaves elements hidden by the step counter alone — they run
+ * their entrance when their step comes.
+ */
+function runEnterFx(slide: Slide, section: HTMLElement, only?: Set<string>, revealing = false, atStep = 0) {
   const entering = fxNodes(slide, section)
     // reveal-set members are shown/hidden by hover, never by entrance tweens
-    .filter(([el]) => (el.fx!.enter || el.fx!.countUp) && !el.showOnHover)
+    .filter(([el]) => (el.fx!.enter || el.fx!.countUp || (revealing && only?.has(el.id))) && !el.showOnHover)
+    .filter(([el]) => (only ? only.has(el.id) : shownAt(el, atStep)))
     .sort((a, b) => (a[0].fx!.order ?? 0) - (b[0].fx!.order ?? 0))
   // Delay derives from fx.order when set (equal order ⇒ elements enter
   // together — how a diagram reveals band-by-band), else from list position.
@@ -1146,8 +1655,9 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
     // motion-path loops own the transform — an entrance tween on the same
     // node would fight it and freeze the dot off its path
     if (fx.loop?.type === 'motion-path') return
-    if (fx.enter) {
-      const spec = enterSpec(fx.enter, fx.enterDur)
+    const kind = fx.enter ?? (revealing ? 'fade' : undefined)
+    if (kind) {
+      const spec = enterSpec(kind, fx.enterDur)
       anim.fromTo(
         node,
         spec.from,
@@ -1156,7 +1666,7 @@ function runEnterFx(slide: Slide, section: HTMLElement) {
           x: 0,
           y: 0,
           duration: spec.duration,
-          delay: 0.12 + Math.min(step, 24) * 0.05,
+          delay: (revealing ? 0 : 0.12) + Math.min(step, 24) * 0.05,
           ease: spec.ease,
         },
       )
@@ -1839,6 +2349,22 @@ function runMorph(
       const inner = to.querySelector<HTMLElement>('.bento-text-inner')
       if (inner) {
         anim.fromTo(inner, { color: a.color }, { color: b.color, duration: MORPH_DURATION, ease: MORPH_EASE })
+      }
+    }
+    // A picture's crop (pan + zoom inside its frame) tweens numerically when
+    // BOTH sides carry one — the house style, same as the box above. When only
+    // one side has a crop there is no honest midpoint between "the whole
+    // cover-fitted picture as `fit` says" and a window into it, so the crop
+    // snaps with the slide and only the box morphs (crop.ts lerpCrop).
+    if (a.type === 'image' && b.type === 'image' && a.crop && b.crop && !isIdentityCrop(a.crop) && !isIdentityCrop(b.crop)) {
+      const img = to.querySelector<HTMLImageElement>('img')
+      if (img) {
+        const state = { p: 0 }
+        anim.to(state, {
+          p: 1, duration: MORPH_DURATION, ease: MORPH_EASE,
+          onUpdate() { img.style.cssText = cropImgStyle(lerpCrop(a.crop!, b.crop!, state.p)) },
+          onComplete() { img.style.cssText = cropImgStyle(b.crop!) },
+        })
       }
     }
   }

@@ -6,7 +6,9 @@
 // Only three values are app-specific across the whole kernel: the id the
 // release manifest is signed with, the display name that appears in window
 // titles and save dialogs, and where updates are fetched from. Everything
-// else in the kernel is genuinely app-agnostic.
+// else in the kernel is genuinely app-agnostic. Two OPTIONAL values exist for
+// a fork that runs its own release channel and relay: the signing public key
+// and the default sync host. Absent, the platform defaults apply unchanged.
 //
 // Deliberately NOT a general "kernel init" — modules that need no config
 // (anim, charts) take none, so there is no import-order trap and no false
@@ -24,6 +26,16 @@ export interface AppConfig {
   appName: string
   /** Release manifest URL. Dev override: localStorage 'bento-update-url'. */
   manifestUrl: string
+  /** Release-signing PUBLIC key (P-256 JWK) that manifests and pack indexes
+   *  are verified against. Optional: absent, the kernel uses the platform key
+   *  embedded in update.ts. A fork that publishes its own signed channel sets
+   *  this so its shipped files never accept a manifest signed by another key
+   *  (appId already refuses another app; this refuses another PUBLISHER). */
+  publicKeyJwk?: { kty: 'EC'; crv: 'P-256'; x: string; y: string }
+  /** Default relay host for collaboration (wss://…). Optional: absent, the
+   *  kernel uses DEFAULT_SYNC_HOST in sync/online.ts. The localStorage
+   *  'bento-sync-url' dev override wins over both. */
+  syncHost?: string
 }
 
 let config: AppConfig | null = null

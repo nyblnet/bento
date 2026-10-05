@@ -15,67 +15,20 @@
 import type { Store } from '../store'
 import type { ShapeElement } from '../model'
 import { anchorsToPath, parseAnchors, samplePathAnchors } from './patheditor'
+import { movePathEnds, pathEnds } from '../tips'
+// The pure line/box/anchor geometry moved to the kernel (kernel/src/geom.ts) so
+// bento/spaces diagrams share it. Re-exported here so `./lineedit` stays the
+// import site for editor.ts / canvas.ts and behaviour is unchanged. What remains
+// in this file needs the DOM (LineEditor) or slides' model/tips (pathAnchors,
+// setPathAnchors, the path-endpoint connector re-route).
+import {
+  isLineLike, lineEndpoints, pathIsClosed, pathIsStraight, setLineEndpoints, type Pt,
+} from '../../../kernel/src/geom.ts'
+export { boxCenter, borderPoint, sideMidpoint, boxAnchors, connectorEndpoint, nearestAnchor, boxContains, type ConnectorSide } from '../../../kernel/src/geom.ts'
+export { isLineLike, lineEndpoints, pathIsClosed, pathIsStraight, setLineEndpoints }
 
 const rnd = (v: number) => Math.round(v * 100) / 100
-/** Closed shapes (polygons) end with Z; straight ones have no curve commands. */
-export const pathIsClosed = (d?: string) => /z\s*$/i.test(d ?? '')
-export const pathIsStraight = (d?: string) => !/[csqta]/i.test(d ?? '')
-
 const SVG_NS = 'http://www.w3.org/2000/svg'
-type Pt = { x: number; y: number }
-
-/** True for shapes this editor takes over (instead of Moveable's box). */
-export function isLineLike(el: { type: string; shape?: string }): boolean {
-  return el.type === 'shape' && (el.shape === 'line' || el.shape === 'path')
-}
-
-/** The two endpoints of a line shape, in slide coords. */
-export function lineEndpoints(el: ShapeElement): [Pt, Pt] {
-  const cx = el.x + el.w / 2
-  const cy = el.y + el.h / 2
-  const rad = ((el.rotation || 0) * Math.PI) / 180
-  const hw = el.w / 2
-  const dx = Math.cos(rad) * hw
-  const dy = Math.sin(rad) * hw
-  return [{ x: cx - dx, y: cy - dy }, { x: cx + dx, y: cy + dy }]
-}
-
-/** Write a line shape from two endpoints (keeps its stroke-box thickness). */
-export function setLineEndpoints(el: ShapeElement, a: Pt, b: Pt): void {
-  const cx = (a.x + b.x) / 2
-  const cy = (a.y + b.y) / 2
-  const w = Math.max(Math.hypot(b.x - a.x, b.y - a.y), 1)
-  const h = el.h || 4
-  el.w = w
-  el.x = cx - w / 2
-  el.y = cy - h / 2
-  el.rotation = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI
-}
-
-type Box = { x: number; y: number; w: number; h: number }
-export function boxCenter(b: Box): Pt {
-  return { x: b.x + b.w / 2, y: b.y + b.h / 2 }
-}
-/** Where the ray from box b's centre toward `target` crosses b's border. */
-export function borderPoint(b: Box, target: Pt): Pt {
-  const cx = b.x + b.w / 2
-  const cy = b.y + b.h / 2
-  const dx = target.x - cx
-  const dy = target.y - cy
-  if (!dx && !dy) return { x: cx, y: cy }
-  const sx = dx ? b.w / 2 / Math.abs(dx) : Infinity
-  const sy = dy ? b.h / 2 / Math.abs(dy) : Infinity
-  const s = Math.min(sx, sy)
-  return { x: cx + dx * s, y: cy + dy * s }
-}
-
-/** Midpoint of one side of a box (connector anchor points). */
-export function sideMidpoint(b: Box, side: 'top' | 'right' | 'bottom' | 'left'): Pt {
-  if (side === 'top') return { x: b.x + b.w / 2, y: b.y }
-  if (side === 'bottom') return { x: b.x + b.w / 2, y: b.y + b.h }
-  if (side === 'left') return { x: b.x, y: b.y + b.h / 2 }
-  return { x: b.x + b.w, y: b.y + b.h / 2 }
-}
 
 /** Anchor points of a path shape, in slide coords. Straight paths (polylines/
  *  polygons) parse exactly; curves are sampled+reduced. */
@@ -106,6 +59,67 @@ export function setPathAnchors(el: ShapeElement, pts: Pt[], opts: { closed?: boo
   el.d = (opts.straight
     ? 'M ' + rel.map((p) => `${p.x} ${p.y}`).join(' L ')
     : anchorsToPath(rel)) + (opts.closed ? ' Z' : '')
+}
+
+/** First and last on-curve points of an open path shape, in slide coords —
+ *  exact (parsed, not sampled), for connector re-routing. */
+export function pathEndpoints(el: ShapeElement): [Pt, Pt] | null {
+  const ends = pathEnds(el.d ?? '')
+  if (!ends) return null
+  const [px, py, pw, ph] = el.pathBox ?? [0, 0, el.w || 1, el.h || 1]
+  const sx = el.w / (pw || 1)
+  const sy = el.h / (ph || 1)
+  const out = (p: Pt): Pt => ({ x: el.x + (p.x - px) * sx, y: el.y + (p.y - py) * sy })
+  return [out(ends[0]), out(ends[1])]
+}
+
+/** Move an open path's ends to new slide-coord points (connector re-route,
+ *  #302): interior anchors keep their positions exactly; the box and pathBox
+ *  are renormalised to the on-curve points, the way setPathAnchors does. */
+export function setPathEndpoints(el: ShapeElement, a: Pt, b: Pt): void {
+  const [px, py, pw, ph] = el.pathBox ?? [0, 0, el.w || 1, el.h || 1]
+  const sx = el.w / (pw || 1)
+  const sy = el.h / (ph || 1)
+  // slide → current path units
+  const toPath = (p: Pt): Pt => ({ x: px + (p.x - el.x) / sx, y: py + (p.y - el.y) / sy })
+  const moved = movePathEnds(el.d ?? '', toPath(a), toPath(b))
+  // renormalise: pathBox [0,0,w,h] over the on-curve points, at scale 1
+  const nodes = parseBezierPoints(moved)
+  if (!nodes.length) return
+  const abs = nodes.map((p) => ({ x: el.x + (p.x - px) * sx, y: el.y + (p.y - py) * sy }))
+  const minX = Math.min(...abs.map((p) => p.x))
+  const minY = Math.min(...abs.map((p) => p.y))
+  const w = Math.max(Math.max(...abs.map((p) => p.x)) - minX, 1)
+  const h = Math.max(Math.max(...abs.map((p) => p.y)) - minY, 1)
+  // re-express every coordinate (points AND handles) in the new box
+  const re = moved.replace(/-?\d*\.?\d+(?:e-?\d+)?/g, (() => {
+    let i = 0
+    return (tok: string) => {
+      const v = Number(tok)
+      const isX = i++ % 2 === 0
+      const s = isX ? rnd(el.x + (v - px) * sx - minX) : rnd(el.y + (v - py) * sy - minY)
+      return String(s)
+    }
+  })())
+  el.x = minX
+  el.y = minY
+  el.w = w
+  el.h = h
+  el.pathBox = [0, 0, w, h]
+  el.d = re
+}
+
+/** On-curve points of an M/C path string (path units). */
+function parseBezierPoints(d: string): Pt[] {
+  const out: Pt[] = []
+  const re = /([MC])\s*((?:-?\d*\.?\d+(?:e-?\d+)?[\s,]*)+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(d))) {
+    const nums = m[2].trim().split(/[\s,]+/).map(Number)
+    if (m[1] === 'M') out.push({ x: nums[0], y: nums[1] })
+    else out.push({ x: nums[4], y: nums[5] })
+  }
+  return out
 }
 
 export class LineEditor {
