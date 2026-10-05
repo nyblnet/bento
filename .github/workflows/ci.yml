@@ -2050,6 +2050,11 @@ jobs:
         # parseDoc fills required fields only where absent and drops elements
         # that cannot render; unknown keys and element types survive (additivity).
         run: node scripts/test-slides-minimal-doc-browser.mjs
+      - name: Top bar in Chromium
+        # 30px row and 44px phone targets, the wordmark as a named button, Save
+        # primary in both themes, and N language rebuilds leaving one set of
+        # window/document listeners and bar observers.
+        run: node scripts/test-slides-topbar-browser.mjs
 
   spaces-save-browser:
     runs-on: ubuntu-latest
