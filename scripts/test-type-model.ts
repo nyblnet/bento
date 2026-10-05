@@ -18,7 +18,7 @@
 //      footnote marker in the middle of a word during the spike, so there is
 //      one function that moves both and this pins it.
 
-import { parseDoc, spliceText, emptyDoc, FORMAT, plainText, wordCount, type Block } from '../type/src/model.ts';
+import { parseDoc, spliceText, emptyDoc, FORMAT, plainText, wordCount, copyCanWrite, type Block } from '../type/src/model.ts';
 
 let checks = 0, failures = 0;
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`); } else console.log(`  ok    ${m}`); };
@@ -126,6 +126,36 @@ H('odds and ends');
     { id: 'a', kind: 'h2', text: 'Heading' }, { id: 'b', kind: 'para', text: 'two words' }] }));
   ok(r.ok && wordCount(r.doc) === 3, 'word count counts across blocks');
   ok(r.ok && plainText(r.doc) === 'Heading\ntwo words', 'plain text joins blocks with newlines');
+}
+
+console.log('\n— which copies may write —');
+{
+  // The copy shapes the kernel actually mints (kernel/src/sync/online.ts
+  // mintCollab / mintInvite, and #454's show ticket), run through parseDoc the
+  // way a real file reaches collab.ts — not hand-built collab objects, because
+  // what matters is what survives intake.
+  const via = (collab: object) => {
+    const r = parseDoc(JSON.stringify({ ...emptyDoc(), collab }));
+    return r.ok ? r.doc.collab : undefined;
+  };
+  const owner    = via({ v: 2, on: true, room: 'w1', key: 'K', owner: 'OP', ownerPriv: 'OK' });
+  const editor   = via({ v: 2, on: true, room: 'w1', key: 'K', owner: 'OP',
+                         invite: { pub: 'IP', priv: 'IK', role: 'writer', sig: 'S' } });
+  const legacy   = via({ on: true, room: 'r1', key: 'K', writerPub: 'WP', writerPriv: 'WK' });
+  const reader   = via({ v: 2, on: true, room: 'w1', key: 'K', owner: 'OP', role: 'reader' });
+  const audience = via({ v: 2, on: true, room: 'w1', key: 'KE', owner: 'OP', role: 'audience',
+                         invite: { pub: 'IP', priv: 'IK', role: 'audience', sig: 'S' } });
+
+  ok(audience?.role === 'audience', "an audience copy's role SURVIVES parseDoc — so collab.ts really is handed it");
+  ok(copyCanWrite(owner), 'an owner copy writes');
+  ok(copyCanWrite(editor), 'an invited editor writes');
+  ok(copyCanWrite(legacy), 'a legacy copy with no role field writes — every pre-role file is one');
+  ok(!copyCanWrite(reader), 'a view-only reader does not');
+  ok(!copyCanWrite(audience),
+     'an AUDIENCE copy does not — though it carries an invite, which is what made it read as an Editor');
+  ok(!copyCanWrite(via({ v: 2, on: true, room: 'w1', key: 'K', role: 'presenter-of-tomorrow' })),
+     'a role nobody has taught this about fails CLOSED, not open — the shape that would have caught this');
+  ok(!copyCanWrite(undefined), 'and a document with no collab at all has nothing to write to');
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
