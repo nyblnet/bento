@@ -8030,3 +8030,41 @@ does the work — with legitimate `.pptx`/`.xlsx` imports unaffected. Rule: a
 size limit must be enforced DURING decompression, never after; the declared
 size in a container header is an attacker input, and the primitive, not the
 caller's preflight, must hold the ceiling.
+
+## 2026-10-05 — PowerPoint export is a library and a command-line tool, never an app button
+
+**The decision.** Import came first (bento.page/import). Export ships as
+`convert/src/export.ts` and `bento convert deck.bento.html --to pptx`, not as
+a command inside slides, so every shared file stays small and the app stays
+focused. The writer (`convert/src/pptx-write/`, about 3,500 lines) never
+enters a shell. `scripts/test-convert/boundary.ts` fails if any app imports
+`convert/`, if the writer uses a DOM global, or if any part of the writer
+reaches the bento.page/import bundle. That last check was mutation-tested:
+a page that calls the writer is caught, and an unused re-export, which
+esbuild tree-shakes away, correctly passes.
+
+**Whose code it is.** The writer is built on the mappings contributed in
+#88 (cherry-picked with their author's authorship), with a first-party
+integrator and the package boilerplate PowerPoint needs.
+
+**Schema-valid is not PowerPoint-valid.** Every part of an early export
+passed the ECMA-376 transitional schemas, and PowerPoint for Mac still
+offered to repair the file. The missing pieces are parts the schema calls
+optional and the reader requires: `presProps.xml`, `viewProps.xml`,
+`tableStyles.xml`, a presentation→theme relationship, `p:notesStyle` in the
+notes master, and a notes master that owns its own theme part rather than
+sharing the slide master's. All are pinned by the rigs, and the shared
+harness (`scripts/test-convert/_export-harness.ts`, `packageProblems`) checks
+them for any export. The class is open-ended, so a change to the writer
+still ends with one exported deck opened in real PowerPoint.
+
+**Built for contributors.** Element writers follow one contract
+(`pptx-write/contract.ts`): one node or null, every loss reported, no app
+imports, no new dependencies, deterministic output. The two element types
+with no writer yet, `code` and `embed`, have stub writers that report
+themselves dropped. `scripts/test-convert/pptx-coverage.ts` reads the element
+types from slides' `SlideElement` union and fails when slides adds a type
+the exporter does not handle, or when a writer drops an element without
+reporting it. `convert/CONTRIBUTING.md` walks through writing one and lists
+the open tasks.
+

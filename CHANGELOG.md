@@ -11,6 +11,14 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Save a deck as PowerPoint, from a terminal.**
+  `node convert/cli.mjs deck.bento.html --to pptx` writes `deck.pptx`, with
+  speaker notes, links, tables, charts, pictures and hidden slides. It reports
+  what it approximated or left out: animations show their final frame, Morph
+  becomes a plain cut, and code and embedded documents are not exported yet.
+  Export is a library and a command-line tool rather than a button in the
+  app, so every shared file stays small and the app stays focused.
+
 - **Screen readers announce what each Save-as and Share command does.** The
   menus keep one-line rows with the description on hover, and the same text
   is now read out as the command's description; the Save-as list scrolls when
