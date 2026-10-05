@@ -36,6 +36,7 @@ import {
 import { canonicalize } from './canon.ts';
 import { registerReady, type FeatureContext } from './features.ts';
 import type { TypeDoc } from './model.ts';
+import { gateRestored } from './restoregate.ts';
 import { t } from './i18n.ts';
 
 export { putRecovery, getRecovery, clearRecovery, addVersion, listVersions, pruneOld, clearVersions };
@@ -101,14 +102,17 @@ async function checkRecovery(ctx: FeatureContext): Promise<void> {
   const doc = ctx.store.doc;
   const snap = await getRecovery(doc.docId);
   if (!snap) return;
-  let recovered: TypeDoc;
-  try { recovered = JSON.parse(snap.json) as TypeDoc; } catch { return; }
+  // A snapshot is foreign input (restoregate.ts): format-checked, and never
+  // allowed to bring its own identity. Anything parseDoc refuses is simply
+  // not offered — the file on disk is still the file.
+  const recovered = gateRestored(snap.json, doc);
+  if (!recovered) return;
   // The file on disk already has these edits (this save cycle wrote both) —
   // nothing to offer back. Compared with the shared content key, not a
   // byte comparison, so volatile churn (modified timestamps, sync state)
   // never trips a false banner.
   if (docContentKey(recovered) === docContentKey(doc)) return;
-  showRecoveryBanner(ctx, snap, recovered);
+  showRecoveryBanner(ctx, snap);
 }
 
 let styleInjected = false;
@@ -131,7 +135,7 @@ function ensureStyle(): void {
   document.head.appendChild(style);
 }
 
-function showRecoveryBanner(ctx: FeatureContext, snap: Snapshot, recovered: TypeDoc): void {
+function showRecoveryBanner(ctx: FeatureContext, snap: Snapshot): void {
   ensureStyle();
   document.querySelector('.t-recover')?.remove();
   const bar = document.createElement('div');
@@ -145,9 +149,15 @@ function showRecoveryBanner(ctx: FeatureContext, snap: Snapshot, recovered: Type
   restore.type = 'button';
   restore.textContent = t('Restore');
   restore.addEventListener('click', () => {
-    // Through the store, so this is one ⌘Z away from undone — never a
-    // silent, un-undoable swap of the document under the author.
-    ctx.store.replace(recovered);
+    // Gated AGAIN, against the document open at the click: identity comes from
+    // the live document, and that can change while this banner is up (Stop
+    // sharing, Reset access). Through the store, so this is one ⌘Z away from
+    // undone — never a silent, un-undoable swap of the document under the author.
+    const gated = gateRestored(snap.json, ctx.store.doc);
+    // Never fall back to the copy gated when the banner appeared: its identity
+    // was the document's THEN, which is the staleness this re-gate exists for.
+    if (!gated) { bar.remove(); return; }
+    ctx.store.replace(gated);
     ctx.refresh();
     bar.remove();
     ctx.toast(t('Restored your unsaved changes'));

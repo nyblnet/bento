@@ -14,6 +14,89 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-04 — "+" offers only apps that can be made now, on every host
+
+**Decision.** A host's "New document" offers an app only when that app's
+release channel serves a release that **verifies** — signature, app identity
+and rollback floor, the same checks used to create the document — or when a
+verified shell for it is already cached. Read at runtime, each time "+" opens.
+This **supersedes** one line of "2026-08-16 — Creating a document: every host
+VERIFIES the release it downloads": *"the app list is aspirational on every
+host. All three say '<App> has not been released yet'."*
+
+**Why.** The aspirational list offered every app and refused the unreleased
+ones after they were chosen. On 2026-10-04 that meant Spaces and Dash in the
+iOS menu with both channels answering 404 — two options in front of App Review
+that do nothing, which is guideline 2.1's placeholder case. The list existed to
+keep "adding an app to the list is the whole integration" true; reading the
+channels at runtime keeps that and adds that an app now appears by itself the
+day its channel goes live, with no host release.
+
+**Two details that matter.**
+
+- **Verified, not merely reachable.** An HTTP 200 with a bad signature does not
+  put an app in the menu. Offering something the create path would then refuse
+  is the failure being replaced, so the two must apply the same checks.
+- **The cache keeps offline "New" working.** A shell in the host's own cache
+  was verified when it was written, so an app used before stays on offer with
+  no connection. With no live channel and nothing cached, "+" says so, rather
+  than showing an empty menu.
+
+It is still only the release channel, and still only when creating a
+document. Probes run concurrently, so "+" waits for the slowest channel rather
+than the sum of them, capped at 8 s.
+
+**Status.** iOS implements it first (`home/ios/Releases.swift`
+`available()`). Android and the extension still show the aspirational list and
+follow once this is accepted — until then the hosts differ on this one point,
+recorded here rather than left to be found.
+## 2026-10-04 — iOS: "Save a copy…" reports what the picker actually did
+
+**Decision.** iOS follows the same rules as Android's 2026-10-04 entry on
+saving from a read-only document (#595), so the two hosts give the same answer
+to a page. A copy is remembered for the session by the name its handle was vended
+under. Writes that arrive while its picker is open join that picker, and the
+newest bytes win. A different name while a picker is open is refused out loud. A
+cancel fails every write waiting on it. The rules live in Foundation-only
+`home/ios/ExportSessions.swift`; `EditorViewController` presents the picker and
+does the writing.
+
+**Why.** `exportCopy` reported success the moment the picker *appeared*, and
+set no delegate. So a cancelled "Save a copy…" told the page the copy was
+saved. Nothing remembered where a copy went, either, so every later write to
+that handle opened another picker — or, if one was already up, UIKit declined the
+second presentation and never called back, and the page's save waited forever.
+iOS never wrote a 0-byte file as Android did: it writes the temp copy before
+asking.
+
+**One iOS-specific detail.** The picker copies the temp file as it stood when
+the picker opened. So when a write joins afterwards, the newer bytes are written
+over the placed copy once the user has chosen, before any waiting write is
+answered.
+## 2026-10-04 — A link that leaves a document opens outside it, on every host
+
+**Decision.** In a native host, a document never navigates away from itself.
+A link to the web (http, https) or to mail opens in the system — Safari, the
+browser, the mail app — and the document stays on screen. Anything else that
+would replace the document is dropped. Frames inside a document are untouched:
+an embed loading its own content is the document's business. Android has worked
+this way since it became a document host; iOS now matches it rule for rule
+(`home/ios/LinkPolicy.swift`).
+
+**Why.** iOS allowed every navigation, so a link in a deck replaced the deck
+with a website inside the editor, with back navigation disabled — the only way
+out was to close the document. And an app that shows arbitrary websites is,
+for the App Store's age-rating questionnaire, offering unrestricted web access,
+which rates it 18+. A document editor has no reason to be a web browser; with
+links opening outside it, that answer is "no" and the rating 4+.
+
+**Why the scheme list is short.** A document is content the user opened, and
+the host should not launch another app on its say-so. http, https and mailto are
+what a link in a document means. A custom URL scheme is dropped rather than
+opened, the same choice Android makes.
+
+---
+
 ## 2026-08-19 — Cross-app embedding: static render + source, never a second renderer
 
 **Decision.** One block/element shape, `bento/embed`, shared by every app in both
@@ -7466,3 +7549,533 @@ assistive tech. The arrows Chrome does stretch stay font glyphs. The tree
 rigs treat a drawn arrow as a deliberate difference: named in
 `test-maths-lite.ts`, counted with the identical ones in the coverage floor.
 Cost: +966 B of shell.
+
+## 2026-10-04 — CORRECTION: `file://` documents share one storage origin
+
+The 2026-08-02 entry "bento/home is closed; the host is a WebExtension" says
+the browser "treats `file://` as a unique origin per file — per-document
+isolation for free". That is wrong for storage. Measured in Chrome on
+2026-09-19: every document opened from disk shares one origin for
+IndexedDB and localStorage, so anything one local document stores, any other
+local HTML file can read.
+
+What follows:
+
+- **With bento/home installed**, data a document keeps beside itself
+  (recovery, version history, keys) belongs in the extension's own origin,
+  partitioned by the file path the browser reports for the sender
+  (`sender.url`). The page never names its own path or partition, and a
+  document id the page supplies is never a key. That partition is the
+  isolation the 2026-08-02 entry assumed `file://` provided.
+- **Without the extension**, the page's own storage is shared, and is
+  designed for as such (kernel's storage work), not treated as private.
+- **The WebExtension choice still stands** on that entry's other
+  measurements (a directory grant covers files never picked; a handle cannot
+  cross origins). This premise is no longer one of its reasons, and should not
+  be cited as a reason against a native host.
+## 2026-10-04 — Android: a save from a read-only document remembers where it went, and one picker answers every write
+
+The `ACTION_VIEW` route (a document handed over by Files, Drive or Gmail) was
+written in #363 and first exercised on a device here. A writable grant — the
+system Files app gives one — works end to end: open, edit, save in place, kill,
+reopen. A **read-only** grant, the usual case from mail and most senders, lost
+data, and in a way that looks like success.
+
+**What was measured** (emulator, Android 16, a 1.2 MB slides deck). After an
+edit, Bento's ⌘S and its autosave write-back (2.5s debounce) send two `write`s
+for the same handle before the export picker returns. The host kept ONE pending
+export: the second write overwrote it and launched a second picker on top of the
+first. The first result to come back consumed the bytes; the second found nothing
+pending and returned silently, leaving the file the picker had just created at
+**0 bytes** — and the first write's promise was never answered. Separately,
+nothing remembered where a copy had gone, so every later autosave to that handle
+went back to a picker: one per edit.
+
+**Decided:**
+
+- **Exports are remembered for the session, by the name the handle was vended
+  under.** A later write or read on that name goes straight to the copy. That is
+  what the handle means on desktop: Save-As, then the copy is the document you
+  are editing. The grant from `ACTION_CREATE_DOCUMENT` lasts as long as the
+  activity, which is as long as the page's handle does. Recorded the moment the
+  picker returns, not when the first write lands, so an autosave in between goes
+  to the copy rather than to a new picker.
+- **One picker per name.** Writes that arrive while it is open join it — newest
+  bytes win, every id gets the one result. A *different* name while a picker is
+  open is refused out loud ("another save is waiting for a location") rather than
+  queued behind a dialog that is visibly for another file. A cancelled picker
+  rejects every joined write.
+- **All writes run on one thread, in order.** The copy can be addressed before
+  its first write finishes; two threads truncating one file is how a document
+  gets interleaved.
+- **A null output stream is a failure.** The code read
+  `openOutputStream(…)?.use { … } ?: "no output stream"` then `null`, which built
+  the error and discarded it — a provider returning no stream was reported to the
+  page as a save.
+
+**Not changed, deliberately:** the intent filter stays `text/html`. Mail and
+cloud senders often label attachments `application/octet-stream`, which would
+keep bento/home out of the chooser; but content URIs have opaque paths, so
+`pathPattern` cannot narrow by `.html`, and a bare octet-stream filter would
+offer the app for every binary file — a store-review problem. How often real
+senders do this is a hardware question, not one to guess at here.
+
+**For the iOS host** (`exportCopy`): it could not write a 0-byte file — it
+writes a temp copy first — but it reported success when the picker was
+*presented*, so a cancelled export read as saved, and it had no export memory
+either. Fixed in #600 under the same rules, so both hosts answer a page the same
+way; verified there by reading and a standalone state-machine check, not yet on
+a device. One iOS-specific difference is recorded in #600's entry: its picker
+copies the temp file as it stood when the picker opened, so bytes from a write
+that joined later must be written over the placed copy before anyone is
+answered.
+## 2026-10-04 — PowerPoint import lives in convert/, beside the apps, and builds only on a verified, current shell
+
+**Where it lives.** The pptx importer moved from `kernel/src/convert/` to a
+top-level `convert/` (engine in `convert/src/`, the bento.page/import page in
+`convert/page/`, the CLI at `convert/cli.mjs`). The kernel is the machinery
+every app imports; no app imports the importer, so it does not belong there.
+`kernel/src/convert/zip.ts` stays, because dash's xlsx import uses it. No
+shell grows: `scripts/test-convert/boundary.ts` fails if any app or kernel
+source imports `convert/`, or if the engine's bundles use a DOM global (the
+CLI runs it in node, the page in a browser).
+
+**What a converted file is built on.** A converted deck carries its shell for
+good, so the converter never uses a shell it cannot vouch for.
+`convert/src/deliver.ts` fetches the release manifest, verifies its signature
+with the kernel's `verifySigned`, then fetches the shell with `fetchPinned`
+against the signed sha256. A failure at either step is a refusal, never a
+fallback. The page fetches from its own origin (its CSP is `connect-src
+'self'`) by re-rooting the signed URL's path. That grants no trust, because
+trust comes from the signature and the pin, not the URL.
+
+**The version floor.** A signature proves a shell is genuine, not that it is
+current: a stale mirror or a cached manifest still verifies. `MIN_SHELL_VERSION`
+in `deliver.ts` is the oldest release the converter will build on, checked
+before the shell is downloaded. A version that is not plain dotted numbers is
+refused rather than compared, since `compareVersions` reads non-numeric parts
+as 0. **A release that ships a security fix bumps it to its own version.**
+`scripts/release.mjs` refuses a slides release below the floor, so the page
+can never refuse the release it shipped with.
+
+**Converter output is untrusted input.** A `.pptx` is attacker-controlled, so
+the converted document passes slides' untrusted-input gate (`sanitizeSlide`,
+`sanitizeAssets`, `sanitizeFonts`) and `parseDoc` before it is spliced. A
+preflight over the zip's central directory bounds input size, entry count,
+total declared size and compression ratio, and refuses ZIP64, before anything
+is inflated. Typeface names, which reach CSS, are filtered in the importer
+too, so three independent layers refuse them.
+
+**The page's privacy claim is its CSP.** `scripts/build-import-page.mjs`
+inlines one script and one stylesheet and writes a policy of `default-src
+'none'`, `connect-src 'self'`, and script and style allowed only by the
+sha256 of that exact content. The build refuses a page with more than one
+policy or an inline script that is not the hashed one (a `String.replace`
+`$`-pattern once spliced a second page head into the output).
+`scripts/test-convert/import-page.ts` checks the built page, including that
+it loads no resource from anywhere and names no network destination but the
+manifest.
+
+**Not done here.** The splice writes the document block directly rather than
+going through `serializeWith`, so a converted file has no first-page
+thumbnail until its first save in the app.
+## 2026-10-04 — bento/spaces saves stamp `collab.sync`; which writes carry it
+
+Slides has always stamped the session's CRDT state into `doc.collab.sync` on
+save, so an offline-edited copy rejoins as a true fork (docs/collab-design.md).
+Spaces had the restore side (it uses the kernel session, whose `attach()`
+restores a `SYNC_V` stamp) but stamped only the invite copy. Measured, with the
+stamp removed: a reopened copy is a fresh adopt — its offline edits are already
+in the shadow, so no op is minted for them and peers never receive them (the
+two copies stay different), and an offline edit to a block a peer also changed
+is overwritten by the peer's replay.
+
+One function decides it, `spaces/src/share.ts stampSync(store, session)`,
+called at the moment the document is taken for a write. Per path:
+
+- **⌘S, Save a copy, Update this file, Download updated copy, the invite** —
+  stamp the CURRENT state. All four write this replica.
+- **View-only copy** — no state (`readerCopy` clears `sync`), as slides: a
+  viewer rejoining as a fork of itself is a fork nobody can merge back.
+- **Page extract, Copy document JSON, Markdown** — no `collab` at all.
+- **Duplicate as a new space** — `duplicateAsNew`: fresh `docId`, no `collab`,
+  so no `sync`; it never meets its ancestor's channel or room.
+- **Encrypted** — the stamp is part of the doc JSON, so it is inside the
+  envelope like everything else (`serializeAuto`).
+- **A store opened read-only never stamps** (frozen, reader copy, reading
+  copy). A frozen file may carry a `sync` of a SYNC_V this build cannot read,
+  and the format promises an unknown field survives a round trip untouched.
+
+**Older builds.** A build without this change opens a stamped file, restores
+from it (the restore side shipped with spaces' sync in #320), and writes it
+back byte-identical on ⌘S — checked in Chrome against the pre-change shell. It
+does not re-stamp, so an edit it saves is not in the stamp. Measured: on
+rejoin, a new block still reaches peers, but a changed paragraph does not —
+the two copies disagree on it (same mechanism as the 2026-09-17 lean-stamp
+entry: a text generation the stamp does not carry). The same is true of an
+edit written into `#bento-doc` from outside the app, which is why
+docs/spaces-agents.md now says to edit a shared space through `window.bento`.
+Shipped builds already produced such files (they stamped the invite copy).
+
+**Cost.** The stamp is the full text history (lean stamping is refused,
+2026-09-17). Measured: 400 word-sized edits to one paragraph, 1.8 KB of text,
+stamp 57 KB. Slides accepts this; prose makes it grow faster. Dash caps its
+stamp at 2 MB and drops it past that; spaces does not cap today.
+
+**After the save queue (#580).** The stamp moves from `doSave` into the
+queue's `prepare`, immediately before the detached snapshot is copied, so the
+stamp describes exactly the revision that is written. The self-update in place
+goes through the same queue there, so its `onBeforeWrite` stamp moves with it.
+## 2026-10-04 — Spaces: undo, redo and every whole-document restore keep the live identity (`FROM_LIVE`)
+
+`spaces/src/store.ts` exports `FROM_LIVE = ['docId', 'collab', 'readonly',
+'template']`: top-level keys that a whole-document restore always takes from
+the LIVE document, never from what it restores. It has the same name and shape
+as slides' `FROM_LIVE` (`slides/src/restoregate.ts`, the same fix for slides'
+snapshot undo, #605), so the kernel can lift one shared list later. It applies
+to undo, redo and `replaceDoc`, which is the path for version history, the
+recovery banner, Replace from JSON and `bento.loadDoc`. Before this fix, an
+edit followed by Stop sharing came back ON at the next ⌘Z.
+
+Each key, and why it is identity rather than content:
+- `docId` never changes (PLATFORM §3). Versions and recovery are keyed by it,
+  so a restore that changed it would detach the space from its own history.
+- `collab` is a capability, and its `on` switch is a choice made about this
+  copy. A snapshot from before Stop sharing would rejoin the room. One from
+  before Rotate keys would bring back the revoked key.
+- `readonly` is the file's sealed mode, and undo must not unseal it.
+- `template` re-mints `docId` on every open, so it controls identity. Slides
+  has no such field, which is the one difference between the two lists.
+
+Kept OFF the list on purpose: `theme` and any other design setting are
+content and undo like content. `format`, `version` and `policy` describe how
+the content is encoded and travel with it. `assets` is a different case: undo
+and redo keep the live assets because snapshots leave them out to save space,
+but a `replaceDoc` brings its own.
+
+Version restore keeps the live `docId` and `collab` for the same reason undo
+does. A version is a past state of the content, and the room and keys are
+this copy's present capability. Restoring from before a rotation or before
+Stop sharing must not re-arm what the person turned off.
+## 2026-10-04 — dash: a restore takes content from the snapshot, identity from the live workbook
+
+Dash's recovery banner and Version history now go through
+`restoredWorkbook(json, live)` (`dash/src/recovery.ts`), the same split as
+slides' `gateRestored`. Four fields come from the LIVE workbook, never the
+snapshot: `docId`, `collab`, `readonly`, and — dash's own addition — `template`,
+because a restored template flag stops the automatic save to the file and
+re-mints the identity on the next open. A field the live workbook lacks is
+removed, so a roomless workbook cannot gain a room from a snapshot.
+
+`parseDoc` is deliberately unchanged: opening or dropping a FILE adopts that
+file's own capability, which is the design. Replace from JSON already keeps the
+live `collab` (about.ts) and still takes `docId`/`readonly` from the paste — a
+deliberate user action, left as is.
+
+## 2026-10-04 — dash: sharing changes mark the workbook unsaved; copy roles are an allowlist
+
+Dash carries its own copy of the sharing verbs (`dash/src/sync/online.ts`), and
+they wrote `doc.collab` directly. Slides, spaces and type use the kernel's
+versions, which go through `store.commit`, and each of those apps lights its
+unsaved state from commit. Checked all three: none has this gap.
+
+- **`Store.markUnsaved()`** advances the document (`touch`) and raises a new
+  `'unsaved'` event that main.ts wires to the same `markDirty` as `doc`. It is
+  deliberately NOT a commit: sharing state is not an edit to the data and must
+  not be undoable. It is called when sharing turns on from off, turns off, or
+  rotates. Minting credentials for a new workbook stays silent, because dash
+  mints with `on: true` and an untouched starter must close without a warning.
+- **`copyCanWrite(collab)`** — absent role or `'writer'` writes; everything else,
+  including any role invented later, does not. It replaces `role !== 'reader'`
+  in the relay auth gate and in presence. The same rule as type's (#588); the
+  kernel's union added `'audience'` and dash's narrower type had hidden it.
+- Rig `scripts/test-dash-share-dirty.ts`, 27 checks, uses a fake WebSocket so
+  no network is touched. Seven sabotages each turn it red.
+
+Observed, not changed: the kernel's `startSharing`/`stopSharing` commit through
+the UNDO history in slides, spaces and type, so ⌘Z after "Stop sharing" sets
+`collab.on` back without reconnecting.
+
+## 2026-10-04 — slides: write chrome is an allowlist, and the lock follows a document that arrives
+
+The editor decided whether a copy could write with `collab.role !== 'reader'`. That
+was a denylist, so the broadcast `audience` role (#454) passed it: an audience
+copy dropped onto a running editor, or handed to `window.bento.loadDoc`, got
+"Invite to edit…", "Go live" and "Reset access…", an Editor label, and no
+editing lock. Measured on 1.2.5 by both routes. Booting an audience copy was
+never affected (`bootWith` sends it to the show), and the relay refused its
+writes throughout, so this was chrome, not capability. Separately, the
+read-only lock ran only at build time, so even a plain reader copy dropped onto
+a running editor could be edited.
+
+Fixed: `canWriteDeck(collab)` in `slides/src/editor/editor.ts` is an allowlist
+that fails closed. No collab, an absent role (owner and legacy writer copies)
+or `'writer'` may write; `'reader'`, `'audience'` and any role a later version
+adds are read-only. It gates the Share panel's write actions, the People row's
+label and the read-only lock, and a store listener applies the lock when a
+non-writing document arrives in a running editor. Type made the same change
+for its write chrome the same day; the two apps share the rule.
+
+Rule: decide what a copy may do by naming the roles that MAY, never the roles
+that may not. A role added later should arrive read-only until someone grants
+it more. Guarded by `scripts/test-slides-audience-gate-browser.mjs` (both
+routes, reader, unknown role, owner/writer controls; mutation-checked).
+## 2026-10-04 — Whether a copy may write is an allowlist of roles (type)
+
+**A copy's write capability is decided by the roles that can write, never by
+the roles that cannot.** bento/type's share popover and People label asked
+`collab.role !== 'reader'`. When #454 added `'audience'` — a live-show member
+whose transport is receive-only (kernel/src/sync/online.ts) — that test
+answered "yes": an audience copy opened in type was labelled **Editor** and
+offered "Invite to edit…" and "View-only copy…", contradicting the transport
+beneath it. Measured: an audience-shaped `collab` survives `parseDoc` with
+`role: 'audience'` intact, and the old test returns true for it. The relay
+still refused its writes, so the defect was a misleading UI, not a capability.
+
+`copyCanWrite` (type/src/model.ts) now returns true only for an absent role
+(every file older than the role field writes) or `'writer'`, and both gates in
+type/src/collab.ts use it. It fails CLOSED: a role nobody has taught it about
+gets view-only chrome, which is a visible, harmless bug, where the denylist's
+failure was invisible and misleading. Type's `collab.role` type is also widened
+to the kernel's own union (sync/crdt.ts) — it was narrower, which is why
+nothing flagged the gap.
+
+The same `!== 'reader'` shape stands in slides (editor.ts), spaces (share.ts)
+and dash (sync/online.ts); filed for those zones rather than changed here.
+`test-type-model.ts` pins the shape, including a role nobody has invented yet.
+
+**And a receive-only copy is locked, by a lock DERIVED from the document.**
+The mislabel had a worse twin: type mints view-only copies ("View-only copy…")
+yet its editor was unconditionally `contentEditable` and `Store.commit` never
+checked — so a reader could type freely while the popover said the copy
+"can't change the document". The relay dropped those edits, so they lived only
+locally and autosave could write them back, drifting the file from the room it
+follows. Measured in headless Chrome on the built shell: with no lock, a reader
+copy loaded via `loadDoc` stayed editable and typed text landed; with the lock,
+it is not editable and the text holds. `Store.locked` is recomputed on every
+change — never decided once at boot — because bento/slides found the
+build-time version, which a reader copy loaded into a running editor walked
+straight past. User commits are refused while locked; the sync session's own
+commits carry `system: true` and pass, because kernel session.ts writes a
+peer's published images into the document through `commit`, and a reader
+needs those more than anyone. Remote edits arrive through `touch()`, not
+`commit`, so a locked copy still follows the room. `copyIsReceiveOnly` is the
+lock's question (a document with no `collab` is local and editable — unlike
+`copyCanWrite`, which says no only because there is no room to write to).
+
+## 2026-10-04 — Spaces: a restore from this browser passes a gate, like slides' restoregate
+
+`spaces/src/restoregate.ts` is the spaces counterpart of slides'
+`slides/src/restoregate.ts` (`gateRestored`, rig
+`scripts/test-slides-restore-gate.ts`). The recovery snapshot and every
+History entry live in IndexedDB, and every `file://` document shares that
+origin, so a stored entry is foreign input. The recovery check
+(`recoveryOffered`), the banner's Restore and History's Restore all go
+through it (`restoreInto`); none of them parses a stored entry straight into
+`replaceDoc` any more.
+
+The gate refuses, applying nothing and deleting nothing, an entry that is over
+`MAX_RESTORE_CHARS` (128 MiB), is not JSON, has a `__proto__` key anywhere,
+names a docId other than the open space's (checked on the raw value, before
+`parseDoc` could mint one), fails `parseDoc`, or would open frozen (newer
+version or unknown policy): a restore cannot open read-only, so it must not
+happen. What passes has every block's `html` run through `sanitizeInline`,
+the gate importSpace puts on arriving blocks, and takes identity from the
+live space via `FROM_LIVE`. A read-only store is never restored into, and the
+banner is shown only for an entry that passes and differs from the open space
+as it would be restored, so a bad entry cannot raise one.
+
+Two deliberate differences from slides. Spaces REFUSES a foreign docId where
+slides overwrites it with the live one: a space's content is its pages, and
+another space's pages under this one's identity is exactly the forgery. And
+spaces does NOT drop unknown keys: the format is additive, a file open keeps
+every field it does not understand, and the restore path must not be the one
+that loses them.
+## 2026-09-28 — Spaces: the unsaved dot answers for one revision, and every write of the open file queues
+
+Spaces adopts the kernel's `SaveQueue` (kernel/src/savequeue.ts). The race it
+closes was real in every app: ⌘S awaited `saveFile` and then cleared the
+dirty flag, so an edit made while the write was in flight was never written
+and was shown as saved. The rule now, owned by `spaces/src/saving.ts`:
+
+- **The dot clears only when the write that captured THAT revision is
+  acknowledged** — `isCurrent()` read after the write resolves, never the
+  resolve itself. A stale write still counts as written: it gets its version
+  entry (the snapshot that reached disk, not what is on screen now), but it
+  does not clear recovery, because the recovery snapshot is then the only copy
+  of the newer edit.
+- **`store.revision` advances on every mutation**, including each keystroke
+  inside a typing run (which deliberately raises no 'doc' event) and every
+  remote apply, even while the space is already dirty. An undo that swaps the
+  document object is stale by identity.
+- **Every write to the OPEN file goes through one queue**: ⌘S and About's
+  in-place self-update (`applyUpdateInPlace` adopts the same handle; overlapping
+  it with a save let whichever closed last decide the file's shell). The
+  update's old "Reload into new version" line set the dot false
+  unconditionally; that was the same race, and it is gone.
+- **Copies and exports stay OUT of the queue** — Save a copy, the page
+  extract, Duplicate as new space, the invite and view-only copies. They write
+  a different file, never keep its handle (`keepHandle` false, the lesson
+  slides paid for), and never touch the dot. Queuing them would only put a
+  file picker in front of ⌘S.
+- **Encryption is unchanged** — `saveFile` serializes the snapshot through
+  `serializeAuto`, the encryption-aware path.
+- **A failed write says so** and leaves the space dirty; the queue is not
+  poisoned, so the next ⌘S writes. It used to leave "Saving…" on screen and
+  surface as an unhandled rejection.
+- **⌘S in a read-only space behaves as before.** The adopting branch (#537)
+  also made doSave return early when `store.readOnly`; that is not part of
+  this fix and would have left a view-only follower's dot — lit by every
+  remote op — impossible to clear. Whether a frozen (newer-version) file
+  should refuse ⌘S is its own decision.
+
+Proof: `scripts/test-spaces-save-revisions.ts` holds a write open, edits under
+it, releases it, and requires the space still dirty with the edit in the next
+write; plus a failed write, back-to-back saves, a remote edit and an undo
+mid-write. Reverting to mark-saved-on-resolve fails five checks. Spaces does
+not stamp `collab.sync` on ⌘S the way slides does; the queue's `prepare` is
+where that would go, and it is filed rather than folded in here.
+
+## 2026-10-04 — Undo moves content, never identity (type)
+
+**Undo and redo take a document's `docId`, `collab` and `readonly` from the
+live document, never from the snapshot.** bento/type's `Store.#apply` swapped
+whole-document snapshots in wholesale, so it rolled back identity and
+capability along with text. Measured on that code: "Reset access" — which is
+revocation — then ⌘Z put the revoked room key and room back, so a copy the
+owner had just cut off could rejoin the next time they went live; "Stop
+sharing" then ⌘Z turned sharing back on. ⌘Z means "undo what I wrote", not
+"undo who this file is or who may reach it". It is also what keeps #588's
+read-only lock honest: the lock reads `collab`, so undo can never unlock a
+view-only copy.
+
+The list (`FROM_LIVE`, type/src/store.ts) is the same as bento/slides'
+(restoregate.ts, applied to undo in #605). It is a local copy for now; kernel
+will lift one shared list. In type, `collab` is the field that changes in
+place (the sharing actions); `docId` and `readonly` change only when another
+document is loaded over this one. So undoing a whole-document REPLACE brings
+back the earlier content under the identity that replace brought in — identity
+is not undoable whichever action changed it. slides behaves the same.
+
+`test-type-store.ts` drives the real sharing helpers through the session
+adapter, undoes all the way back checking at every step, and covers each field
+including one that is absent in the live document. Reverting to the full swap
+reddens every identity row and the undo-must-not-unlock pair.
+
+## 2026-10-04 — A browser-kept snapshot is gated before it is restored (type)
+
+**Restoring something this browser kept — the "Unsaved changes … were found"
+banner, or a Version history entry — passes `gateRestored`
+(type/src/restoregate.ts), the counterpart of slides' restoregate.ts.** The
+snapshot goes through `parseDoc` (recovery used to `JSON.parse` it with no
+format check at all), and its `docId`, `collab` and `readonly` are always the
+OPEN file's — the same `FROM_LIVE` list undo uses. Those snapshots live in
+IndexedDB, which on file:// every local document shares (see 2026-09-19), so
+they are foreign input arriving behind the app's most trusting prompt.
+
+**It also fixes a bug that needed no forger.** The kernel writes snapshots
+without `collab` (autosave.ts `contentOnly`), so restoring your OWN unsaved
+changes replaced the document with one that had no room credentials at all —
+measured: on a view-only copy that dropped `collab` and, through the
+read-only lock, made the copy editable. With the gate, the open file's sharing
+survives every restore.
+
+**Restore is not open.** Opening a file and "Replace from JSON…" are documents
+the person chose, and keep their own identity; only a browser-kept snapshot is
+gated. Version history therefore has its own hook (`onRestoreDoc`) rather than
+reusing Replace from JSON's, which is how it had come to carry the snapshot's
+identity in. slides' gate additionally rebuilds content key by key; type has
+no such layer, and its renderer already treats any opened file's content as
+untrusted — the risk specific to a snapshot is the identity and capability,
+which is what this closes. `test-type-restore-gate.ts` pins it.
+## 2026-10-04 — parseDoc fills what the format requires, and only that
+
+`parseDoc` checked `format` and a non-empty `slides` and nothing else. A
+hand- or agent-written document that omitted a REQUIRED field passed it and
+then crashed the shell during boot: no `theme` died on `undefined.palette`, no
+`size` on `width`, a bare `{type:'text'}` on `indexOf`, a `null` element on
+`themeRefs`. The reader was left on the splash screen with no way out. Measured
+on 1.2.5 with 13 under-specified shapes; found by opening agent-written test
+documents.
+
+Fixed in `model.ts`: `parseDoc` fills each required field (`title`, `version`,
+`size`, `theme` and its four keys, and on each slide `id`, `background`,
+`transition`, `elements`, `notes`) from the editor's own defaults (`newDoc`,
+`emptySlide`), ONLY where it is absent or the wrong type. It drops an element
+that cannot render: not an object, no `type`, or missing a key its type
+requires. `REQUIRED_ELEMENT_KEYS` moved from untrusted.ts into model.ts, so the
+paste gate and the file gate share one table. A slide that is not an object is
+dropped; no slide left means null, as before.
+
+Rule, and why it does not break format additivity: never REPAIR a value that
+is present, and never drop what this version does not understand. An element of
+an unknown type is kept whole (it renders as nothing, which the renderer
+already tolerates), and unknown keys on the document, a slide, the theme or an
+element ride through and are saved back. What is dropped is only what no
+version writes and no renderer can draw. Verified: 9 real decks pass through
+byte-identical with every element kept, and a document from a "newer version"
+keeps its unknown keys and element type through boot.
+`scripts/test-slides-minimal-doc-browser.mjs` guards it (mutation-checked).
+
+## 2026-09-28 — the svg style sanitizer matches the browser's parse, not text
+
+`sanitizeSvgCss` removed external `url(...)` with a regex over the raw CSS.
+CSS decodes escapes in an ident BEFORE deciding a token is `url(`, so
+`\75 rl(https://…)` is a url the regex never sees; and the string-form image
+functions (`image-set("https://…" 1x)`, `-webkit-image-set`) carry a fetch
+with no `url(` at all. Either reached the network when an svg element was
+rendered — a read receipt (reader IP + timing) on open, exactly what PLATFORM
+§1 and the remote-image consent rule exist to prevent. No script execution.
+Reachable by every route that carries an svg element (file, paste, collab op,
+Replace-from-JSON). Fixed by parsing instead of matching: decode escapes,
+allowlist CSS function names (image functions other than `url(#…)` /
+`url(data:image/…)` refused), and confirm with a constructed `CSSStyleSheet`
+and an `element.style` oracle that canonicalise both families back to `url()`
+on read-back — so the check is the browser's own parse, not a spelling.
+Measured before and after in Chromium against a request-logging server (every
+escape/image-set/nested family plus the positive control), and end to end
+through a built deck with a zero-request network log; mutation-verified.
+Rule: a text scan can never enumerate the ways a browser spells a fetch;
+sanitize CSS by parsing it the way the browser will, and assert egress, not
+substrings. (Note: `scopeCss` corrupts every at-rule but `@keyframes`, so a
+nested `@media` was not live-exploitable through the css path; the sanitizer
+neutralises it anyway.)
+
+## 2026-09-28 — a restored snapshot is untrusted input; identity comes from the file
+
+Autosave recovery and version history are keyed only by `docId` in the shared
+`file://` store, and Restore applied the stored JSON with a raw `replaceDoc` —
+outside the untrusted-input gate that paste and Replace-from-JSON use. A local
+file could plant a snapshot under a victim deck's `docId`; on Restore the deck
+adopted the snapshot's `collab` (moving it into a room and key the planter
+chose — later edits sync there, and ⌘S writes those credentials into the real
+file) and its `readonly` flag. Content substitution behind a trustworthy
+prompt, escalating to live exfiltration; no user action beyond clicking
+"Restore your unsaved changes." Fixed: a new gate rebuilds a restored snapshot
+through the untrusted.ts sanitizers (`sanitizeSlide`/`sanitizeAssets`/
+`sanitizeFonts`, non-model keys dropped, settings shape-checked), and `docId`,
+`collab` and `readonly` are ALWAYS the open file's, never the snapshot's; a
+snapshot that is not a document after the gate is never offered; the recovery
+banner AND version-history restore both gate. Rule: anything read back from
+browser storage on a shared origin is foreign input — sanitize its content and
+take identity and capability from the live file, never from the stored copy.
+The durable fix (a per-file key so a forged entry is not even offered) is the
+local-storage programme.
+
+## 2026-09-28 — decompression stops at the declared size
+
+`readZip` bounded the compressed input to the entry's `csize` but inflated the
+whole stream into memory before checking the result against `usize`; the
+convert preflight trusted the declared sizes. A crafted archive that
+under-declares inflates far past its stated size (deflate reaches ~1032:1)
+before any guard fires — a client-side memory-exhaustion DoS on opening a
+`.pptx` (import page) or `.xlsx` (dash). Fixed once in `readZip`: a bounded
+reader over the `DecompressionStream` aborts the moment cumulative output
+passes `min(declared usize, 256 MiB)`, so the output is never fully allocated;
+dash, convert and the import page inherit it. Verified by running a real
+under-declared bomb — refused with ~2.5 MB peak allocation, versus ~73 MB when
+the cap is neutered, proving the bounded reader (not the post-hoc size check)
+does the work — with legitimate `.pptx`/`.xlsx` imports unaffected. Rule: a
+size limit must be enforced DURING decompression, never after; the declared
+size in a container header is an attacker input, and the primitive, not the
+caller's preflight, must hold the ceiling.
