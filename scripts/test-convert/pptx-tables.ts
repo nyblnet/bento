@@ -6,20 +6,20 @@
 //   node scripts/test-convert/pptx-tables.ts     (Node ≥ 23.6 strips types natively)
 //
 // Emitted graphicFrames are re-read with the convert engine's own parser
-// (kernel/src/convert/xml.ts) — same posture as pptx-parts: not proof
+// (convert/src/xml.ts) — same posture as pptx-parts: not proof
 // PowerPoint accepts the file, but every claim checked (grid sums, schema
 // child order in tcPr, escaping, cell counts) is one PowerPoint validates.
 // The NEGATIVE controls are computations verified to fail: naive per-column
 // rounding really does lose an EMU, and PR #88's zebra parity really does
 // stripe the wrong rows on a header-less table.
 
-import { parseXml, kids, kid, attr, textOf, descendants, NS, type XElem } from '../../kernel/src/convert/xml.ts'
-import { serialize, x } from '../../kernel/src/convert/xmlout.ts'
-import { Report } from '../../kernel/src/convert/report.ts'
-import { EMU_PER_PX, type OutTable } from '../../kernel/src/convert/types.ts'
+import { parseXml, kids, kid, attr, textOf, descendants, NS, type XElem } from '../../convert/src/xml.ts'
+import { serialize, x } from '../../convert/src/xmlout.ts'
+import { Report } from '../../convert/src/report.ts'
+import { EMU_PER_PX, type OutTable } from '../../convert/src/types.ts'
 import {
   tableFrame, splitEmu, htmlParagraphs, cssSolid, TABLE_GRAPHIC_URI,
-} from '../../kernel/src/convert/pptx-write/tables.ts'
+} from '../../convert/src/pptx-write/tables.ts'
 
 let failures = 0
 let checks = 0

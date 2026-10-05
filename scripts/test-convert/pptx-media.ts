@@ -13,15 +13,15 @@
 // every fit are both indistinguishable from correct output until PowerPoint
 // meets them.
 
-import { parseXml, kids, kid, attr, textOf, NS, type XElem } from '../../kernel/src/convert/xml.ts'
-import { serialize, x } from '../../kernel/src/convert/xmlout.ts'
-import { PML_XMLNS, REL, type RelEntry } from '../../kernel/src/convert/pptx-write/parts.ts'
+import { parseXml, kids, kid, attr, textOf, NS, type XElem } from '../../convert/src/xml.ts'
+import { serialize, x } from '../../convert/src/xmlout.ts'
+import { PML_XMLNS, REL, type RelEntry } from '../../convert/src/pptx-write/parts.ts'
 import {
   decodeBase64, decodeDataUri, MediaStore,
   imagePic, svgPic, mediaPoster,
   type ImageIn, type SvgIn, type MediaIn, type MediaCtx,
-} from '../../kernel/src/convert/pptx-write/media.ts'
-import { Report } from '../../kernel/src/convert/report.ts'
+} from '../../convert/src/pptx-write/media.ts'
+import { Report } from '../../convert/src/report.ts'
 
 let failures = 0
 let checks = 0

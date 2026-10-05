@@ -6,20 +6,20 @@
 //   node scripts/test-convert/pptx-shapes.ts     (Node ≥ 23.6 strips types natively)
 //
 // Every emitted node is re-read through the convert engine's own PARSER
-// (kernel/src/convert/xml.ts) and checked against HAND-COMPUTED EMU/angle/
+// (convert/src/xml.ts) and checked against HAND-COMPUTED EMU/angle/
 // percentage values — the arithmetic is done twice, once in the module and
 // once on paper here, so a unit slip (px vs pt, degree vs 60000ths) fails a
 // number, not a vibe. NEGATIVE controls exercise the honesty paths: an
 // unsupported arc command must produce a report entry and a parseable path,
 // never garbage coordinates; a 'bar' tip must confess it has no OOXML twin.
 
-import { parseXml, kids, kid, attr, NS, type XElem } from '../../kernel/src/convert/xml.ts'
-import { serialize, x } from '../../kernel/src/convert/xmlout.ts'
-import { PML_XMLNS } from '../../kernel/src/convert/pptx-write/parts.ts'
-import { Report } from '../../kernel/src/convert/report.ts'
+import { parseXml, kids, kid, attr, NS, type XElem } from '../../convert/src/xml.ts'
+import { serialize, x } from '../../convert/src/xmlout.ts'
+import { PML_XMLNS } from '../../convert/src/pptx-write/parts.ts'
+import { Report } from '../../convert/src/report.ts'
 import {
   emu, xfrmNode, parseColor, solidFill, cssAngleToOoxml, shapeNode, type ShapeIn,
-} from '../../kernel/src/convert/pptx-write/shapes.ts'
+} from '../../convert/src/pptx-write/shapes.ts'
 
 let failures = 0
 let checks = 0

@@ -6,7 +6,7 @@
 //   node scripts/test-convert/pptx-parts.ts     (Node ≥ 23.6 strips types natively)
 //
 // The emitter and the part builders are checked against the convert engine's
-// own PARSER (kernel/src/convert/xml.ts) — code written for reading other
+// own PARSER (convert/src/xml.ts) — code written for reading other
 // people's files, months apart from the writer, with its own strict grammar.
 // Not proof PowerPoint accepts the output (only PowerPoint is), but every
 // structural claim here — namespaces resolve, escaping round-trips, required
@@ -15,15 +15,15 @@
 // an emitter whose validation never throws is indistinguishable from no
 // validation at all.
 
-import { parseXml, kids, kid, attr, textOf, NS, type XElem } from '../../kernel/src/convert/xml.ts'
-import { serialize, x } from '../../kernel/src/convert/xmlout.ts'
+import { parseXml, kids, kid, attr, textOf, NS, type XElem } from '../../convert/src/xml.ts'
+import { serialize, x } from '../../convert/src/xmlout.ts'
 import {
   CT, REL, SLD_ID_FLOOR, MASTER_ID_BASE,
   contentTypes, relsPart, presentationXml, presentationRels,
   themeXml, slideMasterXml, slideMasterRels, slideLayoutXml, slideLayoutRels,
   notesMasterXml, notesMasterRels, notesSlideXml, notesSlideRels,
   slidePart, slideLayoutRel,
-} from '../../kernel/src/convert/pptx-write/parts.ts'
+} from '../../convert/src/pptx-write/parts.ts'
 
 let failures = 0
 let checks = 0

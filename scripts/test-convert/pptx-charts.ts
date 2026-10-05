@@ -14,11 +14,11 @@
 // core finding), it must produce a data TABLE and a 'chart-approximated'
 // report entry.
 
-import { parseXml, kids, kid, attr, textOf, descendants, NS, type XElem } from '../../kernel/src/convert/xml.ts'
-import { serialize, x } from '../../kernel/src/convert/xmlout.ts'
-import { Report } from '../../kernel/src/convert/report.ts'
-import type { OutChart } from '../../kernel/src/convert/types.ts'
-import { chartExport, CHART_GRAPHIC_URI } from '../../kernel/src/convert/pptx-write/charts.ts'
+import { parseXml, kids, kid, attr, textOf, descendants, NS, type XElem } from '../../convert/src/xml.ts'
+import { serialize, x } from '../../convert/src/xmlout.ts'
+import { Report } from '../../convert/src/report.ts'
+import type { OutChart } from '../../convert/src/types.ts'
+import { chartExport, CHART_GRAPHIC_URI } from '../../convert/src/pptx-write/charts.ts'
 
 let failures = 0
 let checks = 0

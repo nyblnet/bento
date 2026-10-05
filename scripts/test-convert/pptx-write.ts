@@ -15,9 +15,9 @@
 // a break proves nothing about the packages it passes.
 
 import { readZip, type ZipParts } from '../../kernel/src/convert/zip.ts'
-import { parseXml, kids, kid, attr, textOf, descendants, NS, type XElem } from '../../kernel/src/convert/xml.ts'
-import { exportPptx, type ExportDoc, type ExportElement } from '../../kernel/src/convert/pptx-write/index.ts'
-import type { FidelityReport } from '../../kernel/src/convert/report.ts'
+import { parseXml, kids, kid, attr, textOf, descendants, NS, type XElem } from '../../convert/src/xml.ts'
+import { exportPptx, type ExportDoc, type ExportElement } from '../../convert/src/pptx-write/index.ts'
+import type { FidelityReport } from '../../convert/src/report.ts'
 
 let failures = 0
 let checks = 0

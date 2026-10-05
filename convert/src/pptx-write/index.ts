@@ -35,7 +35,7 @@
 // any order, but a streaming consumer is entitled to refuse to type parts it
 // has already passed — third-party readers have (see zip.ts writeZip).
 
-import { writeZip, type ZipEntry } from '../zip.ts'
+import { writeZip, type ZipEntry } from '../../../kernel/src/convert/zip.ts'
 import { Report, type FidelityReport } from '../report.ts'
 import { scrubC0, serialize, x, type XChild, type XNode } from '../xmlout.ts'
 import {

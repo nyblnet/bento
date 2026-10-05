@@ -6,19 +6,19 @@
 //   node scripts/test-convert/pptx-text.ts     (Node ≥ 23.6 strips types natively)
 //
 // Emitted shapes are re-read through the convert engine's own PARSER
-// (kernel/src/convert/xml.ts) — independent code with its own strict grammar,
+// (convert/src/xml.ts) — independent code with its own strict grammar,
 // so escaping claims are round-trip facts, not string.includes hopes. The
 // NEGATIVE controls each demonstrate a failure mode that was OBSERVED (the
 // phantom trailing line is reproduced live by disabling the trim).
 
-import { parseXml, descendants, kid, kids, attr, textOf, NS, type XElem } from '../../kernel/src/convert/xml.ts'
-import { serialize, x } from '../../kernel/src/convert/xmlout.ts'
-import { PML_XMLNS } from '../../kernel/src/convert/pptx-write/parts.ts'
+import { parseXml, descendants, kid, kids, attr, textOf, NS, type XElem } from '../../convert/src/xml.ts'
+import { serialize, x } from '../../convert/src/xmlout.ts'
+import { PML_XMLNS } from '../../convert/src/pptx-write/parts.ts'
 import {
   parseInlineHtml, cssColor, textSp,
   type FieldValues, type TextElIn, type TextSpOpts,
-} from '../../kernel/src/convert/pptx-write/text.ts'
-import { Report } from '../../kernel/src/convert/report.ts'
+} from '../../convert/src/pptx-write/text.ts'
+import { Report } from '../../convert/src/report.ts'
 
 let failures = 0
 let checks = 0
