@@ -283,7 +283,7 @@ async function browser(chrome: string, html: string): Promise<void> {
     ok(ring.outline === 'none', `the shortcut sheet does not ring the whole card when it opens (outline ${ring.outline})`)
     await key('Escape', 0, 'Escape')
 
-    await key('k', 4, 'KeyK', 75)
+    await key('k', await MOD(), 'KeyK', 75)
     await send('Input.insertText', { text: 'page' })
     await sleep(250)
     await key('ArrowDown', 0, 'ArrowDown')
