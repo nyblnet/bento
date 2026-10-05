@@ -190,7 +190,8 @@ export async function readPage(url, deps, allowed) {
     if (!isRedirect) break
     const loc = r.headers?.get?.('location')
     if (loc) {
-      const next = fetchableUrl(new URL(loc, at).href)
+      let next = null
+      try { next = fetchableUrl(new URL(loc, at).href) } catch { /* a malformed Location: refused below, never thrown */ }
       if (!next || next.length > URL_MAX) return { error: 'that page redirects to an address the assistant may not read' }
       at = next
       continue
