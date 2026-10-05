@@ -7,8 +7,8 @@
 // Offline by construction — every import here passes --shell, so nothing is
 // fetched. The signed-channel path is the delivery rig's (deliver.ts), which
 // drives the real verifySigned with a throwaway key. What this rig owns is the
-// command line: usage and refusals, the import itself, and that a converted
-// file OPENS — booted in headless Chrome through
+// command line: usage and refusals, the import, the export and the round trip,
+// the notes fix end to end, and that a converted file OPENS — booted in headless Chrome through
 // scripts/bento-check.mjs, the same harness CI already trusts.
 //
 // Like the bento-check rig: without Chrome or a built shell it SKIPS locally,
@@ -19,6 +19,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readZip } from '../../kernel/src/convert/zip.ts'
 import { fxMinimal } from './_fixtures.ts'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -53,12 +54,20 @@ const docOf = (html: string) => {
   return JSON.parse(html.slice(s, html.indexOf(CLOSE, s)))
 }
 
+const deckWith = (doc: unknown) => {
+  const html = fs.readFileSync(shell, 'utf8')
+  const s = html.indexOf(BLOCK) + BLOCK.length
+  return html.slice(0, s) + JSON.stringify(doc).replace(/</g, '\\u003c') + html.slice(html.indexOf(CLOSE, s))
+}
+
 console.log('usage')
 {
   const r = run([])
   ok(r.code === 2 && /usage:/.test(r.err), 'no arguments → exit 2 and the usage')
   ok(run(['x.pptx', '--offline']).code === 2, '--offline without --shell → exit 2 (checked before touching the disk)')
-  ok(run(['x.bento.html']).code === 2, 'an input that is not a .pptx → exit 2')
+  ok(run(['x.bento.html']).code === 2, 'a .bento.html without --to pptx → exit 2 (export is asked for, never guessed)')
+  ok(run(['x.bento.html', '--to', 'docx']).code === 2, '--to docx → exit 2')
+  ok(run(['x.pptx', '--to', 'pptx']).code === 2, '--to pptx on a .pptx → exit 2')
   ok(run(['x.pptx', '--frobnicate']).code === 2, 'an unknown option → exit 2')
   ok(run(['missing.pptx', '--shell', shell]).code === 1, 'a missing input → exit 1')
   const h = run(['--help'])
@@ -80,6 +89,46 @@ const imported = path.join(tmp, 'rig.bento.html')
   ok(doc.format === 'bento/slides' && doc.title === 'Rig Deck', 'the file carries the converted document')
   const gate = spawnSync(process.execPath, [path.join(root, 'scripts/shell-gate.mjs'), imported], { encoding: 'utf8' })
   ok(gate.status === 0, 'the output passes the splice-contract gate every release runs')
+}
+
+console.log('export, and the round trip')
+{
+  const out = path.join(tmp, 'back.pptx')
+  const r = run([imported, '--to', 'pptx', '-o', out])
+  ok(r.code === 0 && fs.existsSync(out), `the imported deck exports back to .pptx (exit ${r.code})`)
+  const parts = await readZip(new Uint8Array(fs.readFileSync(out)))
+  ok(parts.has('ppt/presentation.xml') && parts.has('[Content_Types].xml'), 'the .pptx is a real package')
+  // The notes fix, end to end through the CLI: a deck with speaker notes must
+  // carry notesStyle in its notes master and a notes-master theme of its own.
+  const base = docOf(fs.readFileSync(imported, 'utf8'))
+  base.slides[0].notes = 'A speaker note.'
+  const noted = path.join(tmp, 'noted.bento.html')
+  fs.writeFileSync(noted, deckWith(base))
+  const nr = run([noted, '--to', 'pptx', '-o', path.join(tmp, 'noted.pptx')])
+  const np = await readZip(new Uint8Array(fs.readFileSync(path.join(tmp, 'noted.pptx'))))
+  const nm = new TextDecoder().decode(np.get('ppt/notesMasters/notesMaster1.xml') ?? new Uint8Array())
+  const nmRels = new TextDecoder().decode(np.get('ppt/notesMasters/_rels/notesMaster1.xml.rels') ?? new Uint8Array())
+  ok(nr.code === 0 && /<p:notesStyle>/.test(nm), 'a deck with notes exports a notes master carrying p:notesStyle')
+  ok(np.has('ppt/theme/theme2.xml') && /theme2\.xml/.test(nmRels),
+    'and the notes master owns its own theme part (theme2.xml), not a share of the slide master’s')
+}
+
+console.log('export refusals, each saying what to do')
+{
+  const refuse = (name: string, doc: unknown, want: RegExp, msg: string) => {
+    const f = path.join(tmp, name)
+    fs.writeFileSync(f, deckWith(doc))
+    const r = run([f, '--to', 'pptx', '-o', path.join(tmp, name + '.pptx')])
+    ok(r.code === 1 && want.test(r.err) && !fs.existsSync(path.join(tmp, name + '.pptx')), msg)
+  }
+  refuse('enc.bento.html', { format: 'bento/enc', v: 1, it: 1, salt: '', iv: '', data: '' },
+    /password/, 'an encrypted deck is refused, pointing at "save a copy without a password"')
+  refuse('compact.bento.html', { format: 'bento/slides', compact: true, slides: [] },
+    /compact/, 'a raw compact document is refused, pointing at opening and saving it once')
+  refuse('spaces.bento.html', { format: 'bento/spaces', pages: [] },
+    /only bento\/slides/, 'a non-slides file is refused')
+  const fresh = run([shell, '--to', 'pptx', '-o', path.join(tmp, 'fresh.pptx')])
+  ok(fresh.code === 1 && /empty/.test(fresh.err), 'a fresh shell (empty #bento-doc) is refused, not exported as nothing')
 }
 
 console.log('it opens')
