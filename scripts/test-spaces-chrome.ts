@@ -158,6 +158,12 @@ async function browser(chrome: string, html: string): Promise<void> {
       await js('try { localStorage.clear() } catch {}; document.activeElement?.blur?.(); 1')
       await sleep(400)
     }
+    // The editor's ⌘ is metaKey on a Mac and ctrlKey everywhere else
+    // (spaces/src/editor.ts CTRL, read from navigator.platform). Press the one
+    // THE PAGE reads — a hard-coded Meta passes on a Mac and never reaches the
+    // shortcut on CI's Linux runner, which is how ⌘K "failed" there.
+    const MOD = async (): Promise<number> =>
+      (await js<boolean>(`navigator.platform.toLowerCase().includes('mac')`)) ? 4 : 2
     await send('Page.enable')
     await send('Runtime.enable')
     await send('Emulation.setFocusEmulationEnabled', { enabled: true })
@@ -212,7 +218,7 @@ async function browser(chrome: string, html: string): Promise<void> {
     const same = JSON.stringify(Object.entries(afterMenus).sort()) === JSON.stringify(Object.entries(baseline).sort())
     ok(same, `five block menus closed by Escape leave the document's listeners exactly as they were (${JSON.stringify(baseline)} → ${JSON.stringify(afterMenus)})`)
     await js(`document.activeElement?.blur?.(); 1`)
-    await key('k', 4, 'KeyK', 75)
+    await key('k', await MOD(), 'KeyK', 75)
     const card = await at(`[...document.querySelectorAll('[role=dialog]')].find(d => d.getBoundingClientRect().height > 0)`)
     ok(!!card, '⌘K opens the search dialog')
     if (card) {
