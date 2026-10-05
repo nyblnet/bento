@@ -391,6 +391,7 @@ export const it: Catalog = {
   "Save an untouched copy…": "Salva una copia senza toccare l’originale…",
   "Saved": "Salvato",
   "Saved a new copy": "Salvata una nuova copia",
+  "Save failed — see console": "Salvataggio non riuscito — vedi console",
   "Saves a copy that joins this session": "Salva una copia che entra in questa sessione",
   "Saves a copy to send. Whoever opens it edits this space live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.": "Salva una copia da inviare. Chi la apre modifica questo Space live con te (crittografia end-to-end); resti il proprietario e puoi rimuoverli dall’elenco Persone.",
   "Saving…": "Salvataggio…",

@@ -391,6 +391,7 @@ export const zh_Hans: Catalog = {
   "Save an untouched copy…": "另存副本，原文件不动…",
   "Saved": "已保存",
   "Saved a new copy": "已保存新副本",
+  "Save failed — see console": "保存失败 — 请查看控制台",
   "Saves a copy that joins this session": "保存一个会加入此会话的副本",
   "Saves a copy to send. Whoever opens it edits this space live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.": "保存一份用于发送的副本。打开的人可与你实时共同编辑此 Space（端到端加密）；你仍是所有者，可随时从成员列表中移除他们。",
   "Saving…": "保存中…",

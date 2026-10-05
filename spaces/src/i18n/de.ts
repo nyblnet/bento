@@ -391,6 +391,7 @@ export const de: Catalog = {
   "Save an untouched copy…": "Unveränderte Kopie speichern…",
   "Saved": "Gespeichert",
   "Saved a new copy": "Neue Kopie gespeichert",
+  "Save failed — see console": "Speichern fehlgeschlagen — siehe Konsole",
   "Saves a copy that joins this session": "Speichert eine Kopie, die dieser Sitzung beitritt",
   "Saves a copy to send. Whoever opens it edits this space live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.": "Speichert eine Kopie zum Versenden. Wer sie öffnet, bearbeitet diesen Space live mit dir (Ende-zu-Ende-verschlüsselt); du bleibst Eigentümer und kannst sie aus der Personenliste entfernen.",
   "Saving…": "Speichere…",

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--IMPORT_CSP-->
+<title>Open a PowerPoint deck in bento/slides — bento.page</title>
+<meta name="description" content="Turn a .pptx into a bento/slides deck: one self-contained HTML file you can edit and present in any browser. Converted on your device — nothing is uploaded.">
+<link rel="canonical" href="https://bento.page/import">
+<meta name="theme-color" content="#0D1B2E">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="bento">
+<meta property="og:url" content="https://bento.page/import">
+<meta property="og:title" content="Open a PowerPoint deck in bento/slides">
+<meta property="og:description" content="Converted on your device — nothing is uploaded.">
+<meta property="og:image" content="https://bento.page/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2316273E'/%3E%3Crect x='5' y='5' width='7' height='22' rx='2.5' fill='%235E7699'/%3E%3Crect x='14' y='5' width='13' height='10' rx='2.5' fill='%23FF9E8A'/%3E%3Crect x='14' y='17' width='13' height='10' rx='2.5' fill='%23F0EBE0'/%3E%3C/svg%3E">
+<style>
+:root{
+  --ink:#0D1B2E; --panel:#16273E; --panel2:#1B2F49; --line:rgba(182,193,210,.16);
+  --text:rgba(196,206,221,.92); --dim:rgba(182,193,210,.62); --white:#F4F6F9;
+  --peach:#FF9E8A; --peach2:#ED8266; --steel:#5E7699; --bone:#F0EBE0; --bad:#FF8A8A;
+  --in:'Instrument Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --fr:Fraunces,Georgia,'Times New Roman',serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--ink);color:var(--text);font-family:var(--in);line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--peach)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+header{border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:16px;height:60px}
+.mark{display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--white);font-weight:800;font-size:19.5px}
+.mark .sub{color:var(--dim);font-weight:500}
+.spacer{flex:1}
+.nav{color:var(--dim);text-decoration:none;font-weight:600;font-size:14px}
+h1{font-family:var(--fr);color:var(--white);font-size:clamp(28px,5vw,40px);line-height:1.15;margin:48px 0 12px}
+.lede{font-size:17px;margin-bottom:24px}
+.private{display:flex;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:28px;font-size:14.5px}
+.private strong{color:var(--white)}
+#drop{display:block;border:2px dashed var(--line);border-radius:16px;padding:44px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+#drop.over,#drop:hover{border-color:var(--peach);background:rgba(255,158,138,.05)}
+#drop strong{display:block;color:var(--white);font-size:18px;margin-bottom:6px}
+#drop input{position:absolute;width:1px;height:1px;opacity:0}
+.hint{color:var(--dim);font-size:13.5px}
+#status{margin:22px 0;padding:12px 16px;border-radius:10px;background:var(--panel)}
+#status[data-kind=error]{color:var(--bad);border:1px solid rgba(255,138,138,.35)}
+#result{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+#result h2{color:var(--white);font-size:19px;margin-bottom:4px;word-break:break-all}
+.meta{color:var(--dim);font-size:13.5px;margin:6px 0}
+.report{list-style:none;margin:12px 0 18px}
+.report li{padding:8px 0;border-top:1px solid var(--line);font-size:14.5px}
+.tag{display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:2px 7px;border-radius:5px;margin-right:6px;background:var(--panel2);color:var(--bone)}
+.dropped .tag{color:var(--bad)}
+.n{color:var(--dim)}
+.btn{display:inline-block;background:var(--peach);color:var(--ink);font-weight:800;text-decoration:none;padding:12px 20px;border-radius:10px;margin:6px 0 4px}
+.btn:hover{background:var(--peach2)}
+footer{border-top:1px solid var(--line);margin-top:56px;padding:22px 0;color:var(--dim);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <a class="mark" href="/">
+      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#16273E"/><rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/><rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/><rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/></svg>
+      bento<span class="sub">/import</span>
+    </a>
+    <div class="spacer"></div>
+    <a class="nav" href="/slides/">Open the editor</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>Open a PowerPoint deck in bento/slides</h1>
+  <p class="lede">Turn a .pptx into a bento/slides deck: one HTML file that edits and presents itself in any browser, with nothing to install.</p>
+
+  <p class="private"><span aria-hidden="true">🔒</span><span><strong>Your file never leaves this device.</strong>
+    Conversion runs entirely in this browser tab. Nothing is uploaded, and this page runs no analytics.
+    The only things it downloads are the latest bento/slides app and its signed release record, so that the app it puts your deck into is verified as genuine.</span></p>
+
+  <label id="drop">
+    <strong>Drop a .pptx here, or choose one</strong>
+    <span class="hint">PowerPoint presentations up to <span id="limit">100 MB</span></span>
+    <input id="file" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation">
+  </label>
+
+  <div id="status" role="status" aria-live="polite" hidden></div>
+  <section id="result" aria-live="polite" hidden></section>
+
+  <p class="hint">What comes across: text, shapes, colours, pictures, where everything sits on each slide, and your speaker notes.
+    What doesn't yet: tables and charts are marked with a placeholder box, and animations are not carried.
+    The list after converting says exactly what changed in your deck.</p>
+</main>
+
+<footer><div class="wrap">bento — self-contained office documents · <a href="/help">Help</a> · <a href="https://github.com/nyblnet/bento">Source</a></div></footer>
+<!--IMPORT_SCRIPT-->
+</body>
+</html>

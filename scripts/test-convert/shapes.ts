@@ -19,13 +19,13 @@
 //     directly, skipping the inner group's own scaling) is computed and
 //     asserted to differ from the composed one.
 
-import { parseXml } from '../../kernel/src/convert/xml.ts'
-import type { XElem } from '../../kernel/src/convert/xml.ts'
-import { parseTheme } from '../../kernel/src/convert/theme.ts'
-import { Report } from '../../kernel/src/convert/report.ts'
-import type { InheritCtx, ThemeCtx } from '../../kernel/src/convert/types.ts'
-import { shapeFrom, groupChildren } from '../../kernel/src/convert/shapes.ts'
-import type { ShapeDeps } from '../../kernel/src/convert/shapes.ts'
+import { parseXml } from '../../convert/src/xml.ts'
+import type { XElem } from '../../convert/src/xml.ts'
+import { parseTheme } from '../../convert/src/theme.ts'
+import { Report } from '../../convert/src/report.ts'
+import type { InheritCtx, ThemeCtx } from '../../convert/src/types.ts'
+import { shapeFrom, groupChildren } from '../../convert/src/shapes.ts'
+import type { ShapeDeps } from '../../convert/src/shapes.ts'
 
 let failures = 0
 let checks = 0
