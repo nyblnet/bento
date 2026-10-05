@@ -28,9 +28,9 @@
 //     be made to by raising its own z-index.
 
 import {
-  checkForUpdates, applyUpdate, applyUpdateInPlace, canUpdateInPlace,
+  checkForUpdates, applyUpdate, canUpdateInPlace,
   autoCheckEnabled, setAutoCheck, compareVersions,
-  APP_VERSION, type ReleaseInfo, type UpdateCheck,
+  APP_VERSION, type ReleaseInfo, type UpdateCheck, type InPlaceOutcome,
 } from '../../kernel/src/update.ts'
 import {
   canWriteInPlace, openedFileName,
@@ -56,6 +56,21 @@ export interface AboutHooks {
   onStatus?: (message: string) => void
   /** open on a fresh update check — the update chip's click, as in slides */
   runCheck?: boolean
+  /**
+   * "Update this file" — the kernel's applyUpdateInPlace, run through main.ts's
+   * save queue. NOT called directly from here: it rewrites the same file ⌘S
+   * does, so the two must never be open on one handle at once, and only the
+   * queue's acknowledgement may say the disk holds what is on screen.
+   * null = nothing was written (cancelled, or the space was swapped).
+   */
+  onUpdateInPlace: (release: ReleaseInfo) => Promise<InPlaceOutcome | null>
+  /**
+   * Called immediately before "Download updated copy" writes THIS document
+   * into a new shell — stamps the live session's CRDT state (share.ts
+   * stampSync), so the updated file rejoins as a fork exactly as a ⌘S-saved
+   * one does. "Update this file" is stamped inside the save queue instead.
+   */
+  onBeforeWrite?: () => void
 }
 
 /**
@@ -81,7 +96,7 @@ export async function launchUpdateCheck(): Promise<UpdateCheck | null> {
 }
 
 export function openAbout(hooks: AboutHooks): void {
-  const { store, onRepaint } = hooks
+  const { store, onRepaint, onUpdateInPlace, onBeforeWrite } = hooks
   const doc = store.doc
 
   // THE KERNEL'S DIALOG (kernel/src/ui/dialog.ts) is the shell; `card` is its
@@ -349,7 +364,7 @@ export function openAbout(hooks: AboutHooks): void {
         inPlace.disabled = true
         inPlace.textContent = t('Verifying…')
         try {
-          const written = await applyUpdateInPlace(rel, store.doc)
+          const written = await onUpdateInPlace(rel)
           if (written) {
             box.replaceChildren(updatedCard(rel, written.backup))
           } else {
@@ -374,6 +389,7 @@ export function openAbout(hooks: AboutHooks): void {
         try {
           // the update writes a NEW file and leaves this one untouched, so a
           // bad update is undone by deleting the download
+          onBeforeWrite?.()
           await applyUpdate(rel, store.doc)
           get.textContent = t('Downloaded ✓')
           box.append(note(t('This window keeps running v{v} until you open the downloaded file.', { v: APP_VERSION })))
@@ -404,8 +420,11 @@ export function openAbout(hooks: AboutHooks): void {
           ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
           : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION }),
     ))
+    // No `store.dirty = false` here any more: whether the disk holds this exact
+    // document is the save queue's to say, and it already said so when the
+    // update was written (main.ts onUpdateInPlace). An edit typed since then is
+    // NOT on disk, and clearing the dot for it would be the race all over again.
     done.append(actions(button(t('Reload into new version'), () => {
-      store.dirty = false // disk already holds this exact document
       location.reload()
     }, true)))
     return done

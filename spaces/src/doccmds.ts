@@ -27,6 +27,8 @@ import { t } from './i18n'
 import { ICONS } from './icons'
 import { row, type Menu } from './menus.ts'
 import { docForExport, parseDoc, uid, type SpacesDoc } from './model'
+import { restoreInto } from './restoregate'
+import { duplicateAsNew } from './share.ts'
 import type { Store } from './store'
 
 export interface DocHost {
@@ -91,10 +93,8 @@ export const SAVE_ORDER = [
  * the writer holds no handle (portable.ts).
  */
 function duplicate(h: DocHost): void {
-  const clone = JSON.parse(JSON.stringify(h.store.doc)) as SpacesDoc
-  clone.docId = uid('doc')
-  delete clone.collab
-  clone.modified = new Date().toISOString()
+  // share.ts duplicateAsNew: the stamped `sync` goes with `collab`.
+  const clone: SpacesDoc = duplicateAsNew(h.store.doc, uid('doc'))
   void h.writeCopy(clone)
 }
 
@@ -203,10 +203,13 @@ function openHistory(h: DocHost): void {
         b.type = 'button'
         b.append(el('span', 'sp-ab-when', when), el('span', 'sp-ab-vtag', i === 0 ? t('most recent') : ''), el('span', 'sp-ab-vdo', t('Restore')))
         b.addEventListener('click', () => {
-          let restored: SpacesDoc
-          try { restored = JSON.parse(v.json) as SpacesDoc } catch { h.notice(t('That version could not be read')); return }
-          // replaceDoc checkpoints undo first, so ⌘Z walks this back
-          h.store.replaceDoc(restored)
+          // FOREIGN INPUT, gated as the recovery banner gates it (restoregate.ts):
+          // every file:// document shares this IndexedDB. A refusal applies
+          // nothing and leaves the entry where it is.
+          if (h.store.readOnly) { h.notice(t('This file is open read-only')); return }
+          // replaceDoc (inside restoreInto) checkpoints undo first, so ⌘Z walks
+          // this back — the same contract the recovery banner's Restore honours.
+          if (!restoreInto(h.store, v.json)) { h.notice(t('That version could not be read')); return }
           h.repaint()
           close()
           h.notice(t('Restored the version from {when} — ⌘Z undoes it', { when }))
@@ -239,9 +242,9 @@ function openReplaceJson(h: DocHost): void {
         setTimeout(() => { apply.textContent = t('Replace') }, 2000)
         return
       }
-      const keep = h.store.doc.collab
-      if (keep) res.doc.collab = keep
-      else delete res.doc.collab
+      // The live session belongs to THIS document, not to the pasted text:
+      // replaceDoc keeps the live docId, collab and file mode itself
+      // (store.ts FROM_LIVE), for this and every other whole-document restore.
       h.store.replaceDoc(res.doc)
       h.repaint()
       close()
