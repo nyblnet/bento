@@ -389,6 +389,7 @@ export const zh_Hant: Catalog = {
   "Save an untouched copy…": "儲存原封不動的副本…",
   "Saved": "已儲存",
   "Saved a new copy": "已儲存新副本",
+  "Save failed — see console": "儲存失敗 — 請查看主控台",
   "Saves a copy that joins this session": "儲存一份會加入此工作階段的副本",
   "Saves a copy to send. Whoever opens it edits this space live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.": "儲存一份用於傳送的副本。開啟的人可與你即時共同編輯此 Space（端對端加密）；你仍是擁有者，可隨時從成員列表中移除他們。",
   "Saving…": "儲存中…",

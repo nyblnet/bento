@@ -4,13 +4,12 @@
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
 import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/net.ts'
-import type { BentoDoc, EmbedElement, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
+import type { BentoDoc, EmbedElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey, paginates, isWebUrl } from './model'
 import { chartSnapshotSvg } from './charts'
 import { renderMath as mathsLite, mathError } from './maths/index.ts'
 import { resolveMathHtml } from './maths/delimiters.ts'
 import { renderCodeInto } from './code'
-import { tipSpec, tipInsetPx, shortenPathEnds } from './tips'
 import { formatDate } from './datefmt'
 import { cropImgStyle, isIdentityCrop } from './crop'
 
@@ -251,231 +250,12 @@ export function applyElementFrame(node: HTMLElement, el: SlideElement) {
   }
 }
 
-// Gradient ids must be unique per rendered instance: the same element renders
-// on the canvas, in sidebar thumbnails and in the present overlay, and svg
-// url(#…) references resolve document-wide.
-let gradSeq = 0
-
-/** Gradient line endpoints (objectBoundingBox units) for a CSS-convention
- *  angle: 0deg points up, 90deg points right. Shared with morph tweening. */
-export function gradientLineCoords(angle: number) {
-  const rad = ((angle ?? 180) * Math.PI) / 180
-  const dx = Math.sin(rad) / 2
-  const dy = -Math.cos(rad) / 2
-  return { x1: 0.5 - dx, y1: 0.5 - dy, x2: 0.5 + dx, y2: 0.5 + dy }
-}
-
-/** CSS linear-gradient() from a GradientFill. CSS angle convention matches the
- *  model (0deg = bottom->top, 90deg = left->right), so pass angle straight. */
-export function cssLinearGradient(g: NonNullable<ShapeElement['fillGradient']>): string {
-  const stops = g.stops
-    .map((s) => `${s.color} ${Math.round(Math.min(Math.max(s.at, 0), 1) * 100)}%`)
-    .join(', ')
-  return `linear-gradient(${g.angle}deg, ${stops})`
-}
-
-/** Materialize a GradientFill as a <defs> gradient; returns its url() ref. */
-function gradientRef(svg: SVGSVGElement, g: NonNullable<ShapeElement['fillGradient']>): string {
-  const id = `bento-grad-${gradSeq++}`
-  const defs = document.createElementNS(SVG_NS, 'defs')
-  const lin = document.createElementNS(SVG_NS, 'linearGradient')
-  lin.setAttribute('id', id)
-  const { x1, y1, x2, y2 } = gradientLineCoords(g.angle)
-  lin.setAttribute('x1', String(x1))
-  lin.setAttribute('y1', String(y1))
-  lin.setAttribute('x2', String(x2))
-  lin.setAttribute('y2', String(y2))
-  for (const s of g.stops) {
-    const stop = document.createElementNS(SVG_NS, 'stop')
-    stop.setAttribute('offset', String(Math.min(Math.max(s.at, 0), 1)))
-    stop.setAttribute('stop-color', s.color)
-    lin.appendChild(stop)
-  }
-  defs.appendChild(lin)
-  svg.appendChild(defs)
-  return `url(#${id})`
-}
-
-/** stroke-dasharray for the element's line style (undefined = solid). */
-function dashArray(el: ShapeElement, w: number): string | undefined {
-  if (el.strokeStyle === 'dashed') return `${Math.max(w * 2.4, 7)} ${Math.max(w * 1.8, 5)}`
-  if (el.strokeStyle === 'dotted') return `0.1 ${Math.max(w * 2.2, 5)}`
-  if (el.strokeStyle === 'solid') return undefined
-  if (el.strokeDash) return `${el.strokeDash} ${el.strokeDash}` // legacy numeric dash
-  return undefined
-}
-
-let markSeq = 0
-
-/** A line-tip marker in <defs>; sized in strokeWidth units, colored like the
- *  line. Geometry comes from tips.ts — one catalogue for every tip. A hollow
- *  tip is an outline in the line colour with an open interior. */
-function markerRef(svg: SVGSVGElement, kind: NonNullable<ShapeElement['lineStart']>, color: string, start: boolean): string | null {
-  const spec = tipSpec(kind)
-  if (!spec) return null
-  const id = `bento-mark-${markSeq++}`
-  const marker = document.createElementNS(SVG_NS, 'marker')
-  marker.setAttribute('id', id)
-  marker.setAttribute('viewBox', '0 0 8 8')
-  marker.setAttribute('refX', String(spec.refX))
-  marker.setAttribute('refY', '4')
-  marker.setAttribute('orient', start ? 'auto-start-reverse' : 'auto')
-  marker.setAttribute('markerWidth', String(spec.size))
-  marker.setAttribute('markerHeight', String(spec.size))
-  const g = spec.geom
-  let tip: SVGElement
-  if (g.tag === 'path') {
-    tip = document.createElementNS(SVG_NS, 'path')
-    tip.setAttribute('d', g.d)
-  } else if (g.tag === 'circle') {
-    tip = document.createElementNS(SVG_NS, 'circle')
-    tip.setAttribute('cx', String(g.cx))
-    tip.setAttribute('cy', String(g.cy))
-    tip.setAttribute('r', String(g.r))
-  } else {
-    tip = document.createElementNS(SVG_NS, 'rect')
-    tip.setAttribute('x', String(g.x))
-    tip.setAttribute('y', String(g.y))
-    tip.setAttribute('width', String(g.w))
-    tip.setAttribute('height', String(g.h))
-  }
-  if (spec.hollow) {
-    tip.setAttribute('fill', 'none')
-    tip.setAttribute('stroke', color)
-    tip.setAttribute('stroke-width', '1.1')
-    tip.setAttribute('stroke-linejoin', 'round')
-  } else {
-    tip.setAttribute('fill', color)
-  }
-  marker.appendChild(tip)
-  let defs = svg.querySelector('defs')
-  if (!defs) {
-    defs = document.createElementNS(SVG_NS, 'defs')
-    svg.appendChild(defs)
-  }
-  defs.appendChild(marker)
-  return `url(#${id})`
-}
-
-export function shapeSvg(el: ShapeElement): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, 'svg')
-  const { w, h } = el
-  const sw = el.strokeWidth
-  const inset = sw / 2
-  svg.setAttribute('viewBox', `0 0 ${Math.max(w, 1)} ${Math.max(h, 1)}`)
-  svg.setAttribute('preserveAspectRatio', 'none')
-  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible'
-
-  let node: SVGElement
-  switch (el.shape) {
-    case 'path': {
-      // arbitrary vector data, stretched from its authored viewBox into the box
-      if (el.pathBox) svg.setAttribute('viewBox', el.pathBox.join(' '))
-      node = document.createElementNS(SVG_NS, 'path')
-      let d = el.d ?? ''
-      // Tips on a curve (#302): SVG orients a marker along the path's own end
-      // tangent, so the head points the way the curve arrives. The endpoint is
-      // pulled back along that tangent by the tip's inset (tips.ts) so the
-      // point lands on the model's endpoint and a hollow head has no stroke
-      // inside it. Insets are in slide px; the path is in pathBox units, so
-      // divide by the box→slide scale (uniform for anything the editor draws —
-      // a connector is renormalised on every re-route).
-      if ((el.lineStart || el.lineEnd) && sw > 0 && !/z\s*$/i.test(d)) {
-        const [, , pw, ph] = el.pathBox ?? [0, 0, w, h]
-        const k = ((w / (pw || 1)) + (h / (ph || 1))) / 2 || 1
-        d = shortenPathEnds(d, tipInsetPx(el.lineStart, sw) / k, tipInsetPx(el.lineEnd, sw) / k)
-        const color = el.stroke && el.stroke !== 'transparent' ? el.stroke : el.fill
-        const mStart = el.lineStart ? markerRef(svg, el.lineStart, color, true) : null
-        const mEnd = el.lineEnd ? markerRef(svg, el.lineEnd, color, false) : null
-        if (mStart) node.setAttribute('marker-start', mStart)
-        if (mEnd) node.setAttribute('marker-end', mEnd)
-        if (tipSpec(el.lineStart)?.hollow || tipSpec(el.lineEnd)?.hollow) node.setAttribute('stroke-linecap', 'butt')
-      }
-      node.setAttribute('d', d)
-      if (sw > 0) node.setAttribute('vector-effect', 'non-scaling-stroke')
-      break
-    }
-    case 'rect': {
-      node = document.createElementNS(SVG_NS, 'rect')
-      node.setAttribute('x', String(inset))
-      node.setAttribute('y', String(inset))
-      node.setAttribute('width', String(Math.max(w - sw, 0)))
-      node.setAttribute('height', String(Math.max(h - sw, 0)))
-      if (el.radius) node.setAttribute('rx', String(el.radius))
-      break
-    }
-    case 'ellipse': {
-      node = document.createElementNS(SVG_NS, 'ellipse')
-      node.setAttribute('cx', String(w / 2))
-      node.setAttribute('cy', String(h / 2))
-      node.setAttribute('rx', String(Math.max(w / 2 - inset, 0)))
-      node.setAttribute('ry', String(Math.max(h / 2 - inset, 0)))
-      break
-    }
-    case 'triangle': {
-      node = document.createElementNS(SVG_NS, 'polygon')
-      node.setAttribute('points', `${w / 2},${inset} ${w - inset},${h - inset} ${inset},${h - inset}`)
-      break
-    }
-    case 'arrow': {
-      // right-pointing arrow: shaft + head, proportional to the box
-      node = document.createElementNS(SVG_NS, 'polygon')
-      const shaftH = h * 0.44
-      const y0 = (h - shaftH) / 2
-      if (el.heads === 2) {
-        // a head at BOTH ends (#304): the same head, mirrored, symmetric about
-        // the box centre. Still `shape: 'arrow'` — a shell that predates
-        // `heads` draws the single arrow. Morph: the polygon's points are not
-        // tweened (no shape geometry is); a one-head ↔ two-head morph tweens
-        // the box and fill and the point list snaps at the swap.
-        const headW = Math.min(w * 0.3, h)
-        node.setAttribute(
-          'points',
-          `0,${h / 2} ${headW},0 ${headW},${y0} ${w - headW},${y0} ${w - headW},0 ${w},${h / 2} ${w - headW},${h} ${w - headW},${y0 + shaftH} ${headW},${y0 + shaftH} ${headW},${h}`,
-        )
-        break
-      }
-      const headW = Math.min(w * 0.38, h)
-      node.setAttribute(
-        'points',
-        `0,${y0} ${w - headW},${y0} ${w - headW},0 ${w},${h / 2} ${w - headW},${h} ${w - headW},${y0 + shaftH} 0,${y0 + shaftH}`,
-      )
-      break
-    }
-    case 'line': {
-      node = document.createElementNS(SVG_NS, 'line')
-      const lw = Math.max(sw, 2)
-      // inset the endpoints so the tip's point lands on the box edge (tips.ts:
-      // the three original kinds keep their 2.6 — every old deck unchanged)
-      node.setAttribute('x1', String(tipInsetPx(el.lineStart, lw)))
-      node.setAttribute('y1', String(h / 2))
-      node.setAttribute('x2', String(w - tipInsetPx(el.lineEnd, lw)))
-      node.setAttribute('y2', String(h / 2))
-      node.setAttribute('stroke', el.fill)
-      node.setAttribute('stroke-width', String(lw))
-      const hollow = tipSpec(el.lineStart)?.hollow || tipSpec(el.lineEnd)?.hollow
-      node.setAttribute('stroke-linecap', el.strokeStyle === 'dashed' || hollow ? 'butt' : 'round')
-      const lineDash = dashArray(el, lw)
-      if (lineDash) node.setAttribute('stroke-dasharray', lineDash)
-      const mStart = el.lineStart ? markerRef(svg, el.lineStart, el.fill, true) : null
-      const mEnd = el.lineEnd ? markerRef(svg, el.lineEnd, el.fill, false) : null
-      if (mStart) node.setAttribute('marker-start', mStart)
-      if (mEnd) node.setAttribute('marker-end', mEnd)
-      svg.appendChild(node)
-      return svg
-    }
-  }
-  node.setAttribute('fill', el.fillGradient?.stops.length ? gradientRef(svg, el.fillGradient) : el.fill)
-  if (el.stroke && el.stroke !== 'transparent' && sw > 0) {
-    node.setAttribute('stroke', el.stroke)
-    node.setAttribute('stroke-width', String(sw))
-    const dash = dashArray(el, sw)
-    if (dash) node.setAttribute('stroke-dasharray', dash)
-    if (el.strokeStyle === 'dotted') node.setAttribute('stroke-linecap', 'round')
-  }
-  svg.appendChild(node)
-  return svg
-}
+// The shape renderer moved to the kernel (kernel/src/shape.ts) so bento/spaces
+// diagrams render shapes through one engine. Re-exported here so render.ts stays
+// the import site (present.ts imports gradientLineCoords; renderElement below uses
+// shapeSvg and cssLinearGradient) and the pixels are unchanged.
+import { cssLinearGradient, shapeSvg } from '../../kernel/src/shape.ts'
+export { cssLinearGradient, gradientLineCoords, shapeSvg } from '../../kernel/src/shape.ts'
 
 // --- math ($…$ → MathML) -----------------------------------------------------
 
@@ -838,8 +618,119 @@ export function svgHrefAllowed(value: string, tag = 'image'): boolean {
 
 /** Every `url(…)` target in a CSS-ish string, quotes and padding removed. */
 function urlTargets(value: string): string[] {
-  return Array.from(value.matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi))
+  return Array.from(cssDecodeIdentEscapes(value).matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi))
     .map((m) => m[2].replace(/[\u0000-\u0020]/g, '').toLowerCase())
+}
+
+
+/**
+ * CSS escapes that spell IDENTIFIER characters, decoded: `\75 ` is `u`, `\72`
+ * is `r`, `\l` is `l`. The browser decodes escapes inside an ident before it
+ * decides what the token is, so a check over the raw text has to read the
+ * letters the browser will read. Escapes for anything else (`\28` for a
+ * paren, `\22` for a quote) are left as they are: inside an ident they are
+ * just part of the name, never syntax, and decoding them here would invent
+ * syntax the browser never sees.
+ */
+function cssDecodeIdentEscapes(css: string): string {
+  return css.replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([^\n\r\f0-9a-fA-F])/g, (m, hexs: string | undefined, ch: string | undefined) => {
+    const c = hexs ? String.fromCodePoint(Math.min(parseInt(hexs, 16), 0x10ffff)) : ch!
+    return /^[-\w]$/.test(c) || c.codePointAt(0)! >= 0x80 ? c : m
+  })
+}
+
+/**
+ * The CSS functions an untrusted svg sheet or style value may call, as an
+ * ALLOWLIST, for the reason the at-rules below are one. A function that takes
+ * an image can fetch, and some take the address as a bare string with no
+ * `url(` in it; a list of the dangerous ones would be one browser release from
+ * incomplete. Everything a diagram draws with is here: colour, maths,
+ * transforms, gradients, filters, shapes, easing, grid sizing, font-face
+ * descriptors, custom properties. `url` is policed on its own (in-document
+ * `#` and `data:image/` targets only).
+ */
+const CSS_FN_ALLOWED = new Set([
+  'rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color', 'color-mix', 'light-dark',
+  'calc', 'min', 'max', 'clamp', 'round', 'mod', 'rem', 'abs', 'sign', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'pow', 'sqrt', 'hypot', 'log', 'exp',
+  'var', 'env',
+  'translate', 'translatex', 'translatey', 'translatez', 'translate3d', 'rotate', 'rotatex', 'rotatey', 'rotatez', 'rotate3d',
+  'scale', 'scalex', 'scaley', 'scalez', 'scale3d', 'skew', 'skewx', 'skewy', 'matrix', 'matrix3d', 'perspective',
+  'cubic-bezier', 'steps', 'linear',
+  'linear-gradient', 'radial-gradient', 'conic-gradient', 'repeating-linear-gradient', 'repeating-radial-gradient', 'repeating-conic-gradient',
+  '-webkit-linear-gradient', '-webkit-radial-gradient', '-webkit-repeating-linear-gradient', '-webkit-repeating-radial-gradient',
+  'blur', 'brightness', 'contrast', 'drop-shadow', 'grayscale', 'hue-rotate', 'invert', 'opacity', 'saturate', 'sepia',
+  'circle', 'ellipse', 'inset', 'polygon', 'path', 'rect', 'xywh', 'ray',
+  'counter', 'counters', 'minmax', 'repeat', 'fit-content', 'local', 'format', 'tech', 'selector',
+  'url',
+])
+
+/** A function call in CSS text: a name (letters, escapes, non-ASCII) then `(`.
+ *  `pre` is the character before it, so a caller can tell a call written
+ *  straight after a colon. */
+const CSS_FN_CALL = /(^|[^\w\\-])((?:[-\w]|\\[\s\S]|[^\x00-\x7f])+)\(/g
+
+/**
+ * Selector pseudo-classes and pseudo-elements that take an argument. After a
+ * colon, a name on THIS list is a selector (`:not(`, `::part(`), not a value;
+ * none of them can fetch. Every other call after a colon is a value
+ * (`fill:rgb(`, `width:calc(`) and is judged by CSS_FN_ALLOWED like any other.
+ * The text pass used to spare EVERY colon-preceded call, which left
+ * `prop:fn(` with no space to the CSSOM check alone — caught there in every
+ * browser, but this pass is meant to fail closed on its own.
+ */
+const CSS_PSEUDO_FNS = new Set([
+  'not', 'is', 'where', 'has', 'matches', '-webkit-any', '-moz-any',
+  'nth-child', 'nth-last-child', 'nth-of-type', 'nth-last-of-type', 'nth-col', 'nth-last-col',
+  'lang', 'dir', 'host', 'host-context', 'state', 'active-view-transition-type',
+  'slotted', 'part', 'cue', 'cue-region', 'highlight',
+  'view-transition-group', 'view-transition-image-pair', 'view-transition-old', 'view-transition-new',
+])
+
+/** May this sheet call `name`? `pre` is the character in front of it. */
+function cssCallAllowed(pre: string, name: string): boolean {
+  if (name.includes('\\')) return false
+  const n = name.toLowerCase()
+  return CSS_FN_ALLOWED.has(n) || (pre === ':' && CSS_PSEUDO_FNS.has(n))
+}
+
+/**
+ * Neutralise every function call a sheet may not make: RENAMED to one no
+ * browser implements, so the declaration it sits in is invalid and CSS drops
+ * it (the same fail-closed move as the at-rules). A name still holding an
+ * escape after decoding is refused on sight.
+ */
+function cssRefuseFunctions(css: string): string {
+  return css.replace(CSS_FN_CALL, (m, pre: string, name: string) =>
+    cssCallAllowed(pre, name) ? m : `${pre}bento-refused(`)
+}
+
+/** Does this CSS text carry a fetch — an off-list function, or a url() to
+ *  anything but `#…` / `data:image/…`? Escapes are decoded first. */
+function cssFetches(text: string): boolean {
+  const t = cssDecodeIdentEscapes(text)
+  if (urlTargets(t).some((u) => !(u.startsWith('#') || u.startsWith('data:image/')))) return true
+  return Array.from(t.matchAll(CSS_FN_CALL)).some((m) => !cssCallAllowed(m[1], m[2]))
+}
+
+/**
+ * The browser's own reading of a sheet, where there is a browser. A
+ * constructed CSSStyleSheet is parsed but never applied, so nothing in it
+ * loads, and its rules serialise CANONICALLY: escapes decoded, a bare-string
+ * image function written with `url(…)`. Every top-level rule's cssText (which
+ * carries its nested rules: @media, @supports, @layer, nesting) is checked for
+ * a fetch the text filter missed. There should never be one; if there is, the
+ * whole sheet is dropped rather than trusted. `null` = no CSSOM here (the node
+ * rigs), where the text filter, which fails closed on its own, is the answer.
+ */
+function cssomFindsFetch(css: string): boolean | null {
+  if (typeof CSSStyleSheet === 'undefined') return null
+  try {
+    const sheet = new CSSStyleSheet()
+    sheet.replaceSync(css)
+    return Array.from(sheet.cssRules).some((r) => cssFetches(r.cssText))
+  } catch {
+    return true // the browser would not parse it: keep none of it
+  }
 }
 
 /**
@@ -851,8 +742,21 @@ function urlTargets(value: string): string[] {
  *
  * Exported for `scripts/test-sanitize.ts`.
  */
-export function svgUrlRefsAllowed(value: string): boolean {
-  return urlTargets(value).every((t) => t.startsWith('#') || t.startsWith('data:image/'))
+export function svgUrlRefsAllowed(value: string, attr = ''): boolean {
+  const n = attr.toLowerCase()
+  const allowed = (t: string) => t.startsWith('#') || t.startsWith('data:image/')
+  // aria-* and data-* are text, never parsed as CSS: an accessible label that
+  // reads "f(x) = 2" is not a function call, so only a url() is looked at
+  if (n.startsWith('aria-') || n.startsWith('data-')) return urlTargets(value).every(allowed)
+  if (cssFetches(value)) return false
+  // `style` is a declaration block: where there is a browser, its own parse
+  // (on a detached element, which loads nothing) is checked too
+  if (n === 'style' && typeof document !== 'undefined') {
+    const probe = document.createElement('div')
+    probe.style.cssText = value
+    if (cssFetches(probe.style.cssText)) return false
+  }
+  return true
 }
 
 /**
@@ -907,10 +811,16 @@ export function sanitizeSvgCss(css: string): string {
     (/^-?[a-zA-Z][-\w]*$/.test(kw) && CSS_AT_ALLOWED.has(kw.toLowerCase())
       ? `${pre}@${kw}`
       : `${pre}@bento-refused `))
-  return atFiltered.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, _q: string, target: string) => {
+  // Function names are read the way the browser reads them — escapes decoded —
+  // before anything is judged, then every function off the allowlist is
+  // refused, then url() targets are checked on the decoded text.
+  const fnFiltered = cssRefuseFunctions(cssDecodeIdentEscapes(atFiltered))
+  const out = fnFiltered.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, _q: string, target: string) => {
     const v = String(target).replace(/[\u0000-\u0020]/g, '').toLowerCase()
     return v.startsWith('#') || v.startsWith('data:image/') ? m : 'none'
   })
+  // …and where there is a browser, its own parse is the last word
+  return cssomFindsFetch(out) === true ? '' : out
 }
 
 /**
@@ -971,7 +881,7 @@ export function sanitizeSvg(markup: string, scope: string): DocumentFragment {
           if (!svgAttrAllowed(target) || /(^|:)(href|style)$/.test(target)) { gone = true; break }
           continue
         }
-        if (!svgUrlRefsAllowed(attr.value) || (name === 'style' && /@import|expression\s*\(/i.test(attr.value))) {
+        if (!svgUrlRefsAllowed(attr.value, name) || (name === 'style' && /@import|expression\s*\(/i.test(attr.value))) {
           el.removeAttribute(attr.name)
           continue
         }

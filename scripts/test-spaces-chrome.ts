@@ -164,6 +164,8 @@ const EQUIV: Record<string, string | null> = {
   'Change password…': null, 'Remove password': null,
   'Version history…': 'Version history…', 'Copy document JSON': 'Copy document JSON',
   'Copy compact JSON (for agents)': null, 'Replace from JSON…': 'Replace from JSON…', 'Start from scratch…': null,
+  // slides' way in from another format, in the slot spaces gives its own
+  'Import PowerPoint…': 'Import Markdown…',
 }
 const unmapped = slidesSave.filter((l) => !(l in EQUIV))
 ok(slidesSave.length >= 9 && unmapped.length === 0, `every row of slides' Save menu has an entry in the equivalence table (${slidesSave.length} rows; new: ${unmapped.join(', ') || 'none'})`)
@@ -281,6 +283,12 @@ async function browser(chrome: string, html: string): Promise<void> {
       await js('try { localStorage.clear() } catch {}; document.activeElement?.blur?.(); 1')
       await sleep(400)
     }
+    // The editor's ⌘ is metaKey on a Mac and ctrlKey everywhere else
+    // (spaces/src/editor.ts CTRL, read from navigator.platform). Press the one
+    // THE PAGE reads — a hard-coded Meta passes on a Mac and never reaches the
+    // shortcut on CI's Linux runner, which is how ⌘K "failed" there.
+    const MOD = async (): Promise<number> =>
+      (await js<boolean>(`navigator.platform.toLowerCase().includes('mac')`)) ? 4 : 2
     await send('Page.enable')
     await send('Runtime.enable')
     await send('Emulation.setFocusEmulationEnabled', { enabled: true })
@@ -543,7 +551,7 @@ async function browser(chrome: string, html: string): Promise<void> {
     const same = JSON.stringify(Object.entries(afterMenus).sort()) === JSON.stringify(Object.entries(baseline).sort())
     ok(same, `five block menus closed by Escape leave the document's listeners exactly as they were (${JSON.stringify(baseline)} → ${JSON.stringify(afterMenus)})`)
     await js(`document.activeElement?.blur?.(); 1`)
-    await key('k', 4, 'KeyK', 75)
+    await key('k', await MOD(), 'KeyK', 75)
     const card = await at(`[...document.querySelectorAll('[role=dialog]')].find(d => d.getBoundingClientRect().height > 0)`)
     ok(!!card, '⌘K opens the search dialog')
     if (card) {
@@ -631,7 +639,7 @@ async function browser(chrome: string, html: string): Promise<void> {
     ok(ring.outline === 'none', `the shortcut sheet does not ring the whole card when it opens (outline ${ring.outline})`)
     await key('Escape', 0, 'Escape')
 
-    await key('k', 4, 'KeyK', 75)
+    await key('k', await MOD(), 'KeyK', 75)
     await send('Input.insertText', { text: 'page' })
     await sleep(250)
     await key('ArrowDown', 0, 'ArrowDown')

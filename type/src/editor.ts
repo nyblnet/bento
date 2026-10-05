@@ -39,7 +39,11 @@ export class Editor {
   constructor(host: HTMLElement, store: Store) {
     this.host = host;
     this.store = store;
-    host.contentEditable = 'true';
+    // Editable only while the copy may write — and kept in step with the store,
+    // because a receive-only copy can arrive AFTER boot (see Store.locked).
+    const follow = () => { host.contentEditable = store.locked ? 'false' : 'true'; };
+    follow();
+    store.on(follow);
     host.spellcheck = true;
     this.render();
     host.addEventListener('beforeinput', this.#beforeInput);
