@@ -5,7 +5,10 @@
 // bento convert — PowerPoint in and out, from a terminal.
 //
 //   node convert/cli.mjs <deck.pptx> [-o out.bento.html] [--shell path | --offline]
-//   node convert/cli.mjs <deck.bento.html> --to pptx [-o out.pptx]
+//   node convert/cli.mjs <deck.bento.html|doc.json> --to pptx [-o out.pptx]
+//
+// Either direction takes --report <file.json>: the full fidelity report, as
+// data, for a script or a bug report.
 //
 // A leading `convert` is accepted and ignored, so a future `bento` dispatcher
 // can call this as `bento convert …` unchanged.
@@ -50,8 +53,8 @@ process.on('warning', (w) => {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const USAGE = `usage:
-  bento convert <deck.pptx> [-o out.bento.html] [--shell path | --offline]
-  bento convert <deck.bento.html> --to pptx [-o out.pptx]`
+  bento convert <deck.pptx> [-o out.bento.html] [--shell path | --offline] [--report r.json]
+  bento convert <deck.bento.html|doc.json> --to pptx [-o out.pptx] [--report r.json]`
 
 function die(msg, code = 1) {
   process.stderr.write(`bento convert: ${msg}\n`)
@@ -61,12 +64,13 @@ function die(msg, code = 1) {
 // --- arguments ---------------------------------------------------------------
 const argv = process.argv.slice(2)
 if (argv[0] === 'convert') argv.shift()
-const opts = { out: null, to: null, shell: null, offline: false, input: null }
+const opts = { out: null, to: null, shell: null, offline: false, input: null, report: null }
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   const val = () => (i + 1 < argv.length ? argv[++i] : die(`${a} needs a value\n${USAGE}`, 2))
   if (a === '-o' || a === '--out') opts.out = val()
   else if (a === '--to') opts.to = val()
+  else if (a === '--report') opts.report = val()
   else if (a === '--shell') opts.shell = val()
   else if (a === '--offline') opts.offline = true
   else if (a === '-h' || a === '--help') { process.stdout.write(USAGE + '\n'); process.exit(0) }
@@ -77,10 +81,10 @@ for (let i = 0; i < argv.length; i++) {
 if (!opts.input) die(USAGE, 2)
 if (opts.to && opts.to !== 'pptx') die(`--to ${opts.to}: only pptx is supported`, 2)
 const isPptx = /\.pptx$/i.test(opts.input)
-const isBento = /\.html?$/i.test(opts.input)
+const isBento = /\.(html?|json)$/i.test(opts.input)
 const exporting = opts.to === 'pptx'
 if (exporting ? !isBento : !isPptx)
-  die(`${opts.input}: expected ${exporting ? 'a .bento.html to export' : 'a .pptx (or a .bento.html with --to pptx)'}`, 2)
+  die(`${opts.input}: expected ${exporting ? 'a .bento.html or document .json to export' : 'a .pptx (or a .bento.html with --to pptx)'}`, 2)
 if (!exporting && opts.offline && !opts.shell) die('--offline needs --shell: there is no other shell to use', 2)
 if (!fs.existsSync(opts.input)) die(`no such file: ${opts.input}`)
 
@@ -102,26 +106,17 @@ const count = (r) => [r.counts.carried ? `${r.counts.carried} carried` : '',
   `${r.counts.approximated ?? 0} approximated`, `${r.counts.dropped ?? 0} dropped`].filter(Boolean).join(' · ')
 function printReport(r) {
   process.stderr.write(`fidelity: ${count(r)}\n`)
-  // One line per (verdict, code), dropped first — the engine reports per slide,
-  // so a long deck otherwise repeats the same code once per slide and the one
-  // line that matters drowns. Same folding as the /import page.
-  const folded = new Map()
-  for (const e of r.entries) {
-    if (e.verdict === 'carried') continue
-    const k = `${e.verdict}\u0000${e.code}`
-    const f = folded.get(k) ?? { ...e, count: 0 }
-    f.count += e.count ?? 1
-    folded.set(k, f)
-  }
-  const rank = { dropped: 0, approximated: 1 }
-  for (const e of [...folded.values()].sort((a, b) => (rank[a.verdict] ?? 2) - (rank[b.verdict] ?? 2)))
-    process.stderr.write(`  ${e.verdict.padEnd(12)} ${e.code}${e.count > 1 ? ` ×${e.count}` : ''} — ${e.detail}\n`)
+  // One line per kind of loss, dropped first, with the slides it happened on
+  // (convert/src/report.ts foldReport; the pages use the same function).
+  for (const e of api.foldReport(r))
+    process.stderr.write(`  ${e.verdict.padEnd(12)} ${e.code}${e.count > 1 ? ` ×${e.count}` : ''}${e.where ? ` (${e.where})` : ''} — ${e.detail}\n`)
+  if (opts.report) fs.writeFileSync(opts.report, JSON.stringify(r, null, 2) + '\n')
 }
 
 try {
   if (exporting) {
     const res = await api.bentoToPptx(fs.readFileSync(opts.input, 'utf8'))
-    const out = opts.out ?? opts.input.replace(/(\.bento)?\.html?$/i, '') + '.pptx'
+    const out = opts.out ?? opts.input.replace(/(\.bento)?\.(html?|json)$/i, '') + '.pptx'
     fs.writeFileSync(out, res.bytes)
     printReport(res.report)
     process.stderr.write(`wrote ${out} (${res.bytes.length} bytes)\n`)

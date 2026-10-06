@@ -54,6 +54,7 @@ import {
 import { tableFrame } from './tables.ts'
 import { chartExport } from './charts.ts'
 import type { WriteCtx } from './contract.ts'
+import { packageProblems } from './verify.ts'
 import { writeCode, type CodeElIn } from './code.ts'
 import { writeEmbed, type EmbedElIn } from './embed.ts'
 import type { OutChart, OutTable } from '../types.ts'
@@ -118,6 +119,8 @@ export interface ExportDoc {
   meta?: { author?: string; company?: string; subject?: string; event?: string; keywords?: string }
   present?: { numberHidden?: boolean }
   assets?: Record<string, string>
+  /** the deck's own typefaces (slides' doc.fonts); only the names are read */
+  fonts?: Array<{ family: string }>
   slides: ExportSlide[]
 }
 
@@ -131,6 +134,12 @@ export interface ExportOpts {
    *  deck are byte-identical (dates INSIDE the deck — {{date}} text — still
    *  freeze to export day; that is content, not metadata). */
   at?: Date
+  /** Counts the formulas in a text element's html. Formulas export as their
+   *  source text (PowerPoint does not typeset LaTeX); with this, each slide
+   *  that has one says so in the report. The writer cannot find them itself
+   *  (the scanner is app code: slides' maths/delimiters.ts), so the caller
+   *  passes it, like chartPalette. Absent = not reported. */
+  formulasIn?: (html: string) => number
 }
 
 export interface PptxExport {
@@ -258,6 +267,14 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     throw new Error('exportPptx: the deck has no linear slides (only interactive states) — nothing to export')
   }
   const omitted = doc.slides.length - exported.length
+  // The deck's own fonts travel inside the .bento.html; a .pptx can embed
+  // fonts too, but this writer does not, so say which ones need installing.
+  const ownFonts = [...new Set((doc.fonts ?? []).map((f) => f.family).filter(Boolean))]
+  if (ownFonts.length) {
+    report.add('approximated', 'fonts-not-embedded', 'document',
+      `the deck's own fonts (${ownFonts.join(', ')}) are not embedded; install them where the .pptx is opened, or PowerPoint substitutes another font`)
+  }
+
   if (omitted > 0) {
     report.add('dropped', 'state-slides-omitted', 'document',
       `${omitted} interactive state slide(s) omitted — a state is a click-reached variant, not a linear slide`)
@@ -363,6 +380,10 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
       }
       switch (el.type) {
         case 'text': {
+          if (opts.formulasIn && opts.formulasIn(el.html) > 0) {
+            report.add('approximated', 'maths-as-source', where,
+              'formulas export as their source text (LaTeX); PowerPoint does not typeset them')
+          }
           const link = resolveLink(el.link)
           emit(textSp(el, {
             shapeId,
@@ -543,6 +564,10 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     ...store.files().map((f) => ({ name: f.name, data: f.bytes })),
   ]
 
+  // The self-check (verify.ts): a package with a broken wire is a writer
+  // bug, so it is refused here rather than handed to PowerPoint to repair.
+  const problems = packageProblems(new Map(entries.map((e) => [e.name, e.data])))
+  if (problems.length) throw new Error(`the PowerPoint package failed its self-check (a bug in the writer): ${problems.join('; ')}`)
   const bytes = await writeZip(entries, opts.at ? { at: opts.at } : {})
   return { bytes, report: report.build() }
 }

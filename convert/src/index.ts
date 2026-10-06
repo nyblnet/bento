@@ -8,3 +8,4 @@
 
 export * from './api.ts'
 export * from './export.ts'
+export { foldReport, slideRange, type FoldedEntry } from './report.ts'

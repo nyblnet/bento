@@ -113,6 +113,24 @@ console.log('export, and the round trip')
     'and the notes master owns its own theme part (theme2.xml), not a share of the slide master’s')
 }
 
+console.log('the report, and document JSON in')
+{
+  // export the imported deck once more, asking for the report as data
+  const rj = path.join(tmp, 'report.json')
+  const r = run([imported, '--to', 'pptx', '-o', path.join(tmp, 'again.pptx'), '--report', rj])
+  let rep: { entries?: unknown[]; counts?: unknown } = {}
+  try { rep = JSON.parse(fs.readFileSync(rj, 'utf8')) } catch { /* reported below */ }
+  ok(r.code === 0 && Array.isArray(rep.entries) && !!rep.counts, '--report writes the full fidelity report as JSON')
+  // a deck with an omitted state names "the whole deck"; per-slide losses name slides
+  const base = docOf(fs.readFileSync(imported, 'utf8'))
+  base.slides[0].transition = 'morph'
+  const json = path.join(tmp, 'doc.json')
+  fs.writeFileSync(json, JSON.stringify(base))
+  const j = run([json, '--to', 'pptx', '-o', path.join(tmp, 'from-json.pptx')])
+  ok(j.code === 0 && fs.existsSync(path.join(tmp, 'from-json.pptx')), `document JSON exports like a .bento.html (exit ${j.code})`)
+  ok(/morph-not-exported \(slide 1\)/.test(j.err), 'each report line names the slides it happened on')
+}
+
 console.log('export refusals, each saying what to do')
 {
   const refuse = (name: string, doc: unknown, want: RegExp, msg: string) => {
