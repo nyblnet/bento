@@ -110,6 +110,14 @@ relationships, parts without a content type, XML that doesn't parse,
 `[Content_Types].xml` not first, missing property parts, and a notes master
 without its own theme. A package can pass the official XML schemas and still
 make PowerPoint offer to repair it; those checks are the gap between the two.
+They live in `pptx-write/verify.ts`, and every export runs them before
+writing the zip: if your writer breaks the package, the export refuses and
+says which part is wrong.
+
+Typefaces go through `pptx-write/fonts.ts` (`typefaceOf`). PowerPoint takes
+one font name, not a CSS stack. Use it rather than taking the stack's first
+family, which may be a CSS generic (`ui-monospace`) or a font only one
+operating system has (`SF Mono`).
 
 Copy the rig shape from `pptx-coverage.ts` (an `ok()` helper, `N/N checks
 passed`, exit 1 on failure). Name your rig `scripts/test-convert/pptx-<thing>.ts`;

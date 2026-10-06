@@ -8068,3 +8068,36 @@ the exporter does not handle, or when a writer drops an element without
 reporting it. `convert/CONTRIBUTING.md` walks through writing one and lists
 the open tasks.
 
+## 2026-10-06 — PowerPoint export: one typeface per stack, a self-check on every export, a report that names slides
+
+Measured against an earlier converter built on a third-party PowerPoint
+library, on six real decks. Ours was already smaller (the starter deck
+exports at 61 KB against 9.4 MB, because nothing is rasterised and images are
+stored once). It was also more editable: gradients, connectors, custom paths
+and charts stay native, and hard shadows and strikethrough survive. These
+behaviours were taken from that converter; no code was taken:
+
+- **The report names slides.** `foldReport` (convert/src/report.ts) folds
+  the writer's per-slide entries to one line per kind of loss and keeps
+  where it happened ("slides 3, 5–7"). The CLI and the pages share it.
+- **Formulas and fonts are reported.** Formulas already exported as their
+  LaTeX source and now say so (`maths-as-source`). They are found by slides'
+  own scanner (`maths/delimiters.ts`), passed in by `export.ts` because the
+  writer imports no app. The deck's own fonts are named
+  (`fonts-not-embedded`), since the .pptx does not carry them.
+- **A self-check on every export** (`pptx-write/verify.ts`, the checks the
+  rigs used). A package with a broken relationship, an untyped part or a
+  missing required part is a writer bug, and the export refuses it rather
+  than handing PowerPoint a file to repair.
+- **Document JSON in, report JSON out** (`--report`).
+
+**One typeface per stack.** PowerPoint takes a single font name and
+substitutes silently when it is missing; it cannot fall through a CSS stack.
+Both converters wrote `ui-monospace`, which is a CSS generic and not a font.
+`typefaceOf` (`pptx-write/fonts.ts`) takes the stack's first family that is
+neither a CSS generic nor a font only one operating system ships ('SF Mono',
+'Menlo', 'Helvetica Neue', 'Segoe UI', …). slides' monospace stack therefore
+becomes Consolas, which Office installs on Windows and macOS. A stack of
+generics alone maps to a font every PowerPoint has (monospace → Courier New,
+sans-serif → Arial). The deck's own fonts are never skipped.
+
