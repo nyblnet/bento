@@ -21,6 +21,7 @@
 
 import { EMU_PER_PX } from '../types.ts'
 import type { Report } from '../report.ts'
+import { typefaceOf } from './fonts.ts'
 import { scrubC0, x, type XChild, type XNode } from '../xmlout.ts'
 
 // --- input --------------------------------------------------------------------
@@ -307,9 +308,9 @@ const pxEmu = (px: number): number => Math.round(px * EMU_PER_PX)
 const ANCHOR: Record<TextElIn['valign'], string> = { top: 't', middle: 'ctr', bottom: 'b' }
 const ALGN: Record<TextElIn['align'], string> = { left: 'l', center: 'ctr', right: 'r' }
 
-/** First family of a css stack, quotes stripped — #88's firstFont. */
-const firstFont = (stack: string): string =>
-  (stack.split(',')[0] ?? 'Arial').trim().replace(/^['"]|['"]$/g, '') || 'Arial'
+/** The stack's typeface (fonts.ts: first real family, generics mapped) —
+ *  #88's firstFont, which took the first family even when it was generic. */
+const firstFont = (stack: string): string => typefaceOf(stack)
 
 const stripTags = (html: string): string => html.replace(/<[^>]*>/g, '')
 

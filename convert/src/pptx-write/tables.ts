@@ -36,6 +36,7 @@
 // same verdicts here through the fidelity report.
 
 import { scrubC0, x, type XChild, type XNode } from '../xmlout.ts'
+import { typefaceOf } from './fonts.ts'
 import { EMU_PER_PX, type OutTable, type OutTableCell } from '../types.ts'
 import type { Report } from '../report.ts'
 
@@ -198,10 +199,8 @@ function readStyle(style: Record<string, unknown> | undefined): TableStyleIn {
 /** First family of a css stack, quotes stripped — the run-level a:latin wants
  *  one typeface name. Absent = omit; the theme's minor font (the deck font,
  *  per parts.ts) then applies. */
-const firstFamily = (stack: string | undefined): string | undefined => {
-  const f = (stack ?? '').split(',')[0]?.replace(/['"]/g, '').trim()
-  return f || undefined
-}
+const firstFamily = (stack: string | undefined): string | undefined =>
+  stack?.trim() ? typefaceOf(stack) : undefined
 
 // --- the mapper --------------------------------------------------------------
 

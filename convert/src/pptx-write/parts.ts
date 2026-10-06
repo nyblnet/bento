@@ -35,6 +35,7 @@
 // moment it is built, and the only consumer is writeZip (via TextEncoder).
 
 import { serialize, x, type XChild, type XNode } from '../xmlout.ts'
+import { typefaceOf } from './fonts.ts'
 
 // --- namespaces, relationship types, content types ---------------------------
 // Mirrors of xml.ts's NS table, plus the write-side vocabularies. Declared as
@@ -269,7 +270,7 @@ function hex6(css: string, fallback: string): string {
 /** First family of a css font stack, quotes stripped — 'Inter, sans-serif' →
  *  'Inter'. (The same reduction PR #88 fed to PptxGenJS's theme.) */
 function firstFamily(fontFamily: string): string {
-  return (fontFamily.split(',')[0] ?? 'Arial').replace(/['"]/g, '').trim() || 'Arial'
+  return typefaceOf(fontFamily)
 }
 
 const srgb = (val: string): XNode => x('a:srgbClr', { val })
