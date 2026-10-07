@@ -547,6 +547,14 @@ jobs:
         # Source-shape checks; the Swift half self-skips without a toolchain.
         run: node scripts/test-home-bridge.ts
 
+      - name: home launch handle rig
+        # A page in a native host held no file handle until its first save, so
+        # autosave never wrote the file. home/bridge.js now hands it over through
+        # launchQueue — lazily, so documents from older runtimes keep their first
+        # silent save — and a launch request the host cannot meet is refused,
+        # never turned into an export. Runs the real bridge against a fake host.
+        run: node scripts/test-home-launch.mjs
+
       - name: tray mark is one source
         # tray-icon.svg is the only drawing of the mark. Everything else is
         # generated from it: the Android launcher vectors (which have no <rect>,

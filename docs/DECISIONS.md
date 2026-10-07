@@ -14,6 +14,59 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-05 — A native host hands the page the file it opened, through `launchQueue`
+
+**Decision.** `home/bridge.js` (iOS and Android) defines `window.launchQueue`. When
+a page calls `setConsumer`, the bridge asks the host for the open document (the
+existing `begin`) and delivers its handle as `{ files: [handle] }` — the File
+Handling API's shape, and the same handle `showSaveFilePicker` returns. The kernel
+consumes it at boot and adopts the handle, so autosave writes the file from the
+first edit.
+
+**Why.** A page in a host held no handle until its first ⌘S, and every app's
+autosave writes the file only with one. So an edit made and left never reached
+disk — the 2026-08-16 observation the iOS submission pack carried as B6, found by
+reading on 2026-10-05.
+
+**Lazy, and why that is load-bearing.** Hosts treat the FIRST `begin` as the open
+document and every later one as an export. The bridge asks nothing until a page
+calls `setConsumer`, so a document saved by an older runtime — frozen code that
+never will — keeps today's behaviour exactly: its first ⌘S gets the open document
+silently. Asking eagerly at load would have turned that first save into a Save-As
+prompt for every existing document. If a ⌘S already claimed the open document, the
+consumer gets that same name; it never spends a second `begin`.
+
+**A launch request is marked, and refused rather than exported.** The bridge sends
+it as `begin` with `launch: true`. A host that cannot hand over the open document —
+already handed out, or a grant it cannot write in place (Android's read-only
+`ACTION_VIEW`) — answers **no**. Falling through to the export branch, as an
+unmarked `begin` would, hands the page an EXPORT handle as if it were its own
+file: nothing appears at open (`begin` only vends a name, on both hosts), but the
+first autosave after any edit opens a save dialog nobody asked for. Measured on
+Android by home-android on a control build; the same by reading on iOS, where the
+picker comes with the first write.
+The page then keeps today's path: its ⌘S behaves exactly as before.
+
+**With it:** when the main frame commits a new page, a host forgets the hand-over —
+so a reload's first claim is again the open document rather than an export — and
+forgets the old page's remembered Save-As copies (2026-10-04 entries, #595/#600),
+which are keyed by vended name: a new page's first export under the same name would
+otherwise write into the previous page's copy without asking.
+
+**Per host:** iOS does both in this change. **Android must refuse a `launch`
+request it cannot meet before its bridge.js ships with this** — today its `begin`
+exports when `!canWriteInPlace`, which on a read-only grant would now prompt at
+open. Android's reload reset is the same one-line change as iOS's. Both are
+home-android's; the parity table in home/README.md says "not yet" until they land.
+
+**Guarded by** `scripts/test-home-launch.mjs`, which runs the real bridge against a
+host applying the hosts' rule. It fails against an eager bridge, one that forgets
+the first begin, one that drops the launch flag, one that assigns `launchQueue`
+instead of defining it, and the pre-change bridge. `scripts/test-home-bridge.ts`
+pins the iOS refusal and its order before the export branch, and the reset.
+
+---
+
 ## 2026-10-04 — "+" offers only apps that can be made now, on every host
 
 **Decision.** A host's "New document" offers an app only when that app's
@@ -46,10 +99,13 @@ It is still only the release channel, and still only when creating a
 document. Probes run concurrently, so "+" waits for the slowest channel rather
 than the sum of them, capped at 8 s.
 
-**Status.** iOS implements it first (`home/ios/Releases.swift`
-`available()`). Android and the extension still show the aspirational list and
-follow once this is accepted — until then the hosts differ on this one point,
-recorded here rather than left to be found.
+**Status.** **Accepted** by the maintainer, merged with #596 on 2026-10-04.
+iOS implements it (`home/ios/Releases.swift` `available()`). Android and the
+extension still show the aspirational list and are to follow — until they do,
+the hosts differ on this one point, recorded here rather than left to be found.
+
+---
+
 ## 2026-10-04 — iOS: "Save a copy…" reports what the picker actually did
 
 **Decision.** iOS follows the same rules as Android's 2026-10-04 entry on
@@ -8068,3 +8124,24 @@ does the work — with legitimate `.pptx`/`.xlsx` imports unaffected. Rule: a
 size limit must be enforced DURING decompression, never after; the declared
 size in a container header is an attacker input, and the primitive, not the
 caller's preflight, must hold the ceiling.
+
+## 2026-10-05 — An embed keeps the source document, never its capabilities (type)
+
+**An embedded document's `collab` block — that document's sharing keys — does
+not travel with it, in or out of bento/type.** An `embed` block carries a copy
+of another Bento document so a reader can open the original; that copy keeps
+its content and `docId` and loses the kernel's capability fields
+(`CAP_FIELDS` / `withoutCaps`, kernel/src/docfields.ts), at every depth of
+bento/type's own embed blocks (the kernel helper is shallow, and an embedded
+bento/type document can hold embeds of its own).
+
+Applied where a document comes in and wherever it goes out:
+- **in** — `readArtifact` (embedding a file) and `parseDoc` (opening a file,
+  Replace from JSON, `loadDoc`, a restored snapshot);
+- **out** — the view-only and editor share copies, "Copy document JSON"
+  (`docForExport`), Save, and the browser's recovery and version snapshots.
+
+Both ends, because an embed can reach the live document by a path neither end
+sees alone (a peer's sync op, a document stored before intake was scrubbed).
+A document's OWN `collab` is untouched by any of this; that is the file's.
+`test-type-embed.ts`, `test-type-share.ts` and `test-export-secrets.ts` pin it.
