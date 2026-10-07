@@ -764,4 +764,5 @@ export const pt: Catalog = {
   "Delete \"{name}\"?": "Excluir “{name}”?",
   "Open \"{name}\" as a spreadsheet": "Abrir “{name}” como planilha",
   "Not a number — left out of totals, and a formula that reads it gives #VALUE!": "Não é um número — fica fora dos totais, e uma fórmula que o lê dá #VALUE!",
+  "This file was updated. Reload to run the new version before saving again.": "Este arquivo foi atualizado. Recarregue para executar a nova versão antes de salvar novamente.",
 }
