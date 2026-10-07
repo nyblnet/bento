@@ -77,7 +77,7 @@ class FakeFSHandle {
 ;(globalThis as Record<string, unknown>).self = { origin: 'https://bento.page' }
 const ON_SCREEN = 'Q3-board.bento.html'
 
-const { reconnectHandle, consumeLaunchQueue, hasFileHandle, currentFileName } = await import('../kernel/src/save.ts')
+const { reconnectHandle, consumeLaunchQueue, hasFileHandle, currentFileName, writeUpdatedFile } = await import('../kernel/src/save.ts')
 const DOC = { docId: 'd1', title: 'Q3' }
 const reset = () => store.clear()
 const has = () => store.has('d1')
@@ -225,17 +225,36 @@ console.log('\nlaunchQueue: a launched document is writable from the first edit'
   consumeLaunchQueue()
   ok(hasFileHandle(), 'a second consume is harmless (setConsumer re-registration is caught)')
 
-  // the adopted handle really is writable — the bytes a save produces reach disk
-  void (async () => { const w = await launched.createWritable(); await w.write('<html>edited'); await w.close() })()
-  ok(true, 'the adopted handle is writable (createWritable) — the seam autosave writes through')
 }
 
-// Source pin: autosave writes the FILE exactly when a handle is held, so a handle
-// adopted at launch means the first autosave writes to disk, not just IndexedDB.
+// The whole B6 claim, proven by RUNNING: boot with a vended handle, then the
+// kernel write path the editor autosave invokes under hasFileHandle()
+// (writeUpdatedFile → the handle's createWritable().write) must put the NEW bytes
+// on THAT handle. serializeAuto needs a DOM, so the rig stands in its output with
+// a known marker; the seam under test is adopt → writeUpdatedFile → write.
+console.log('\nthe first write after a launch lands on the launched file')
+{
+  const EDIT = '<html>edited after launch</html>'
+  let got: Blob | null = null
+  const target = {
+    kind: 'file', name: ON_SCREEN,
+    async createWritable() { return { async write(b: Blob) { got = b }, async close() {} } },
+  }
+  ;(globalThis as Record<string, unknown>).launchQueue = { setConsumer(fn: (p: unknown) => void) { fn({ files: [target] }) } }
+  consumeLaunchQueue()
+  let wrote = false
+  try { await writeUpdatedFile(EDIT); wrote = !!got && (await (got as Blob).text()) === EDIT } catch { /* no handle → stays false */ }
+  ok(wrote, 'the write reached the launched handle with the new content — autosave saves in place from the first edit')
+}
+
+// Source pin for the trigger the behavioural row stands in for: the editor
+// autosave calls writeUpdatedFile only under hasFileHandle() — which the adopted
+// launch handle satisfies, so the first autosave takes the file path, not the
+// IndexedDB snapshot.
 {
   const ed = readFileSync(join(root, 'slides/src/editor/editor.ts'), 'utf8')
   ok(/if \(hasFileHandle\(\)\) \{[\s\S]{0,200}?writeUpdatedFile\(/.test(ed),
-    'editor autosave writes the file under hasFileHandle() — the gate a launched handle satisfies')
+    'editor autosave calls writeUpdatedFile under hasFileHandle() — the trigger for the write above')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
