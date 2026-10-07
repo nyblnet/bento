@@ -475,11 +475,18 @@ export async function decryptEnvelope(env: EncEnvelope, password: string): Promi
  * Encryption-aware serialization into an arbitrary shell — THE path for
  * saves and self-updates. Plain when no password is active.
  */
+/**
+ * The exact bytes that go INTO `#bento-doc`: the document JSON when no password
+ * is active, or the `bento/enc` envelope over that JSON when one is. This is the
+ * payload a save writes — the shell (serializeBody) is furniture around it — and
+ * it is DOM-free, so it is the seam a rig can drive the real write path with.
+ */
+export async function encodeDocBody(doc: KernelDoc): Promise<string> {
+  return encPassword ? encryptBody(JSON.stringify(doc), encPassword) : JSON.stringify(doc)
+}
+
 export async function serializeDocInto(shell: Document, doc: KernelDoc): Promise<string> {
-  const body = encPassword
-    ? await encryptBody(JSON.stringify(doc), encPassword)
-    : JSON.stringify(doc)
-  return serializeBody(shell, body, doc)
+  return serializeBody(shell, await encodeDocBody(doc), doc)
 }
 
 /** Encryption-aware serializeFile. */

@@ -77,7 +77,7 @@ class FakeFSHandle {
 ;(globalThis as Record<string, unknown>).self = { origin: 'https://bento.page' }
 const ON_SCREEN = 'Q3-board.bento.html'
 
-const { reconnectHandle, consumeLaunchQueue, hasFileHandle, currentFileName, writeUpdatedFile } = await import('../kernel/src/save.ts')
+const { reconnectHandle, consumeLaunchQueue, hasFileHandle, currentFileName, writeUpdatedFile, encodeDocBody, setEncryptionPassword, parseEnvelope, decryptEnvelope } = await import('../kernel/src/save.ts')
 const DOC = { docId: 'd1', title: 'Q3' }
 const reset = () => store.clear()
 const has = () => store.has('d1')
@@ -215,6 +215,12 @@ console.log('\nlaunchQueue: a launched document is writable from the first edit'
   consumeLaunchQueue()
   ok(!hasFileHandle(), 'a refused launch (empty files) adopts nothing')
 
+  // (c) with no vended handle, the write path writes NOTHING — it throws rather
+  // than touch a file it was never given. (fileHandle is still null here.)
+  let threw = false
+  try { await writeUpdatedFile('<html>x') } catch { threw = true }
+  ok(threw && !hasFileHandle(), 'with no handle, writeUpdatedFile writes nothing (throws, no file touched)')
+
   setQueue({ files: [launched] }) // the host handed over the open document
   consumeLaunchQueue()
   ok(hasFileHandle(), 'the launched file handle is adopted — hasFileHandle() is now true, so autosave writes the FILE')
@@ -227,24 +233,41 @@ console.log('\nlaunchQueue: a launched document is writable from the first edit'
 
 }
 
-// The whole B6 claim, proven by RUNNING: boot with a vended handle, then the
-// kernel write path the editor autosave invokes under hasFileHandle()
-// (writeUpdatedFile → the handle's createWritable().write) must put the NEW bytes
-// on THAT handle. serializeAuto needs a DOM, so the rig stands in its output with
-// a known marker; the seam under test is adopt → writeUpdatedFile → write.
-console.log('\nthe first write after a launch lands on the launched file')
+// The whole B6 claim, proven by RUNNING the REAL write path: boot with a vended
+// handle, then writeUpdatedFile → the handle's createWritable().write (what the
+// editor autosave invokes under hasFileHandle()) must put the real document bytes
+// on THAT handle. We drive it with encodeDocBody — the exact bytes a save puts in
+// #bento-doc; the HTML shell around them is DOM-only furniture (serializeBody),
+// proven by the splice/preview rigs, and carries the body verbatim.
+console.log('\nthe first write after a launch carries the real document')
 {
-  const EDIT = '<html>edited after launch</html>'
-  let got: Blob | null = null
-  const target = {
-    kind: 'file', name: ON_SCREEN,
-    async createWritable() { return { async write(b: Blob) { got = b }, async close() {} } },
+  const DOC = { docId: 'launch-doc', title: 'Secret Q3 numbers', format: 'bento/slides', slides: [] }
+  const MARKER = 'Secret Q3 numbers' // document content that must never appear in an encrypted file
+  const capture = () => {
+    let got: Blob | null = null
+    return { kind: 'file', name: ON_SCREEN, text: async () => (got ? await got.text() : ''),
+      async createWritable() { return { async write(b: Blob) { got = b }, async close() {} } } }
   }
-  ;(globalThis as Record<string, unknown>).launchQueue = { setConsumer(fn: (p: unknown) => void) { fn({ files: [target] }) } }
-  consumeLaunchQueue()
-  let wrote = false
-  try { await writeUpdatedFile(EDIT); wrote = !!got && (await (got as Blob).text()) === EDIT } catch { /* no handle → stays false */ }
-  ok(wrote, 'the write reached the launched handle with the new content — autosave saves in place from the first edit')
+  const vend = (h: unknown) => { (globalThis as Record<string, unknown>).launchQueue = { setConsumer(fn: (p: unknown) => void) { fn({ files: [h] }) } }; consumeLaunchQueue() }
+
+  // (a) plaintext: the bytes written parse back to the edited document
+  setEncryptionPassword(null)
+  const plain = capture(); vend(plain)
+  await writeUpdatedFile(await encodeDocBody(DOC))
+  const back = JSON.parse(await plain.text())
+  ok(back.docId === DOC.docId && back.title === DOC.title, 'the written bytes parse back to the edited document')
+
+  // (b) with a password active: a bento/enc envelope, no plaintext, decrypts back
+  setEncryptionPassword('hunter2')
+  const sealed = capture(); vend(sealed)
+  await writeUpdatedFile(await encodeDocBody(DOC))
+  const bytes = await sealed.text()
+  const env = parseEnvelope(bytes)
+  ok(!!env, 'with a password active the written bytes are a bento/enc envelope')
+  ok(!bytes.includes(MARKER), 'and carry NO plaintext — the document title appears nowhere in the file')
+  const dec = env ? await decryptEnvelope(env, 'hunter2') : null
+  ok(!!dec && JSON.parse(dec).docId === DOC.docId, 'and decrypt back to the edited document with the password')
+  setEncryptionPassword(null) // reset module state for anything after
 }
 
 // Source pin for the trigger the behavioural row stands in for: the editor
