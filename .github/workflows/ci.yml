@@ -1917,6 +1917,14 @@ jobs:
         # document the person chose — is NOT gated. Counterpart of slides'.
         run: node scripts/test-type-restore-gate.ts
 
+      - name: Type signature-chain rig
+        # Canonical JSON and the chained signatures over it. A canonicalization
+        # bug does not crash — it silently fails valid documents or passes
+        # tampered ones — so this pins determinism, key order by UTF-16 code
+        # unit, volatile fields at every depth, and that the signer's NAME is
+        # inside the signed text (it was once only displayed beside the tick).
+        run: node scripts/test-type-canon.ts
+
       - name: Clipboard embedded-font rig
         run: |
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"
