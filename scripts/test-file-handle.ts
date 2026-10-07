@@ -77,7 +77,7 @@ class FakeFSHandle {
 ;(globalThis as Record<string, unknown>).self = { origin: 'https://bento.page' }
 const ON_SCREEN = 'Q3-board.bento.html'
 
-const { reconnectHandle, consumeLaunchQueue, hasFileHandle, currentFileName, writeUpdatedFile, encodeDocBody, setEncryptionPassword, parseEnvelope, decryptEnvelope } = await import('../kernel/src/save.ts')
+const { reconnectHandle, consumeLaunchQueue, hasFileHandle, currentFileName, writeUpdatedFile, encodeDocBody, setEncryptionPassword, parseEnvelope, decryptEnvelope, adoptFileHandle, embeddedDocBlock } = await import('../kernel/src/save.ts')
 const DOC = { docId: 'd1', title: 'Q3' }
 const reset = () => store.clear()
 const has = () => store.has('d1')
@@ -183,6 +183,27 @@ const settle = () => new Promise((r) => setTimeout(r, 10))
   ok(/instanceof FileSystemFileHandle/.test(src), 'only a real FileSystemFileHandle is stored (host polyfill skipped)')
 }
 
+// --- embeddedDocBlock: the string-level #bento-doc extractor ------------------
+// It reads the block from file BYTES (so the launch check runs with no parser),
+// anchored by indexOf on the exact ` id="bento-doc"` attribute.
+console.log('\nembeddedDocBlock reads the #bento-doc body from file bytes')
+{
+  // the block body is opaque to the extractor (it is whatever bytes sit there), so
+  // an interior newline is possible; the boot DOM holds it as LF (HTML parsing
+  // normalises), a file on disk may hold it as CRLF. A multi-line body proves the
+  // normalise does real work — with single-line JSON, trim alone would hide it.
+  const body = '{"docId":"x",\n"title":"T"}'
+  const close = '</scr' + 'ipt>'
+  const file = (b: string) => `<!doctype html><head><script type="application/json" id="bento-doc">\n${b}\n${close}</head>`
+  ok(embeddedDocBlock(file(body)) === body, 'extracts the #bento-doc body')
+  ok(embeddedDocBlock(file(body.replace(/\n/g, '\r\n'))) === body,
+    'CRLF line endings (surrounding AND interior) normalise to the LF body — a CRLF file still compares equal')
+  // a data-id lookalike must NOT be mistaken for the real block (the old \bid regex did)
+  const lookalike = `<script data-id="bento-doc">\nDECOY\n${close}` + file(body)
+  ok(embeddedDocBlock(lookalike) === body, 'a data-id="bento-doc" lookalike is skipped; the real id block is read')
+  ok(embeddedDocBlock('<html>no block here</html>') === null, 'no block → null')
+}
+
 // --- launchQueue: a launched document holds a writable handle at boot ---------
 // A page opened in a native host or an installed PWA held NO handle until its
 // first Cmd-S, so autosave only snapshotted to IndexedDB and the file on disk
@@ -273,6 +294,32 @@ console.log('\nlaunchQueue adopts the open document — and only it')
   // a second consume is harmless (setConsumer re-registration is caught)
   await vend([open])
   ok(hasFileHandle(), 'a second consume is harmless')
+
+  // THE RACE (security's condition): the consumer awaits getFile. If a Save As /
+  // "Duplicate as new deck" sets its own handle WHILE the check is pending, the
+  // launch must NOT snap the handle back to the launched file and overwrite it.
+  // A deferred getFile holds the check open across the adopt.
+  {
+    let release!: (v: { text: () => Promise<string> }) => void
+    const slow = {
+      kind: 'file', name: ON_SCREEN, // its file WOULD match — only the race must stop it
+      getFile: () => new Promise<{ text: () => Promise<string> }>((res) => { release = res }),
+      async createWritable() { return { async write() {}, async close() {} } },
+    }
+    let pending: unknown
+    ;(globalThis as Record<string, unknown>).launchQueue = { setConsumer(fn: (p: unknown) => void) { pending = fn({ files: [slow] }) } }
+    consumeLaunchQueue() // the consumer starts and awaits slow.getFile() — still pending
+    const saveAs = {
+      kind: 'file', name: 'Saved-As-elsewhere.bento.html',
+      async createWritable() { return { async write() {}, async close() {} } },
+    }
+    adoptFileHandle(saveAs as never) // the user does Save As during the await
+    release({ text: async () => fileWith(BOOT) }) // now getFile resolves and the file DOES match
+    await pending
+    ok(hasFileHandle() && currentFileName() === 'Saved-As-elsewhere.bento.html',
+      'a Save As during the pending check wins — the launch does not snap back and overwrite it')
+  }
+
   delete (globalThis as Record<string, unknown>).document
 }
 
