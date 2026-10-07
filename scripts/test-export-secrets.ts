@@ -592,16 +592,15 @@ for (const app of ['spaces', 'type', 'slides']) {
     && /\bcloneForShare\(/.test(mask(exportedBody(s, 'inviteCopy')))
   ok(slidesStrips, 'slides: reader and invite copies strip the embedded document (via cloneForShare)')
 
-  // type ALSO embeds (type/src/embed.ts) but its copies do not yet scrub embedded
-  // documents — security found it; the fix (type-embed-intake: CAP_FIELDS/withoutCaps
-  // at intake) is verified and routed for the maintainer's timing. This is a KNOWN
-  // gap, tracked as EXPECTED-RED so it stays loud without failing the suite, and so
-  // it FLIPS the moment type lands the fix (turn this into a hard ok() then).
+  // type ALSO embeds (type/src/embed.ts); #633 makes every share copy embed-safe by
+  // cloning through withoutEmbeddedCaps, so a source embed (older file, pasted JSON)
+  // is scrubbed, not only embed.ts's intake path. (Behaviour is run in
+  // scripts/test-type-share.ts.)
   const ty = read('type/src/share.ts')
-  const typeStrips = /stripEmbeddedEnvelopes\(|withoutCaps\(|CAP_FIELDS/
-    .test(mask(exportedBody(ty, 'readerCopy')) + mask(exportedBody(ty, 'inviteCopy')))
-  if (typeStrips) ok(true, 'type: embedded-document strip HAS landed — promote this to a hard check and drop the expected-red note')
-  else console.log('  ⚠ EXPECTED-RED  type: copies do not yet scrub embedded documents — pending type-embed-intake (security-found, routed); flips green when it lands')
+  ok(/withoutEmbeddedCaps\(/.test(mask(ty))
+    && /\bclone\(/.test(mask(exportedBody(ty, 'readerCopy')))
+    && /\bclone\(/.test(mask(exportedBody(ty, 'inviteCopy'))),
+    'type: reader and invite copies scrub embedded documents (clone through withoutEmbeddedCaps, #633)')
 }
 
 // --- the OTHER half of the round trip: pasting one back in -------------------

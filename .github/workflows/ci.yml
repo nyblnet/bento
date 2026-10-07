@@ -1884,6 +1884,13 @@ jobs:
         # fresh, revocable invite. Every copy is minted in type/src/share.ts.
         run: node scripts/test-type-share.ts
 
+      - name: Slides share-copy rig
+        # The view-only and editor copies (slides/src/share.ts) carry only the
+        # kernel allowlist — no private key, a fresh invite, no sync on a reader —
+        # and strip any EMBEDDED document's envelope. Runs the real builders with
+        # real keys through the ts hook, like the type rig above.
+        run: node scripts/test-slides-share.ts
+
       - name: Type chrome rig
         # Where controls live: nothing in two menus, no inserts in the
         # overflow, and every element the chrome reaches for actually exists —
