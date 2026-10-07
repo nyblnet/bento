@@ -77,7 +77,7 @@ class FakeFSHandle {
 ;(globalThis as Record<string, unknown>).self = { origin: 'https://bento.page' }
 const ON_SCREEN = 'Q3-board.bento.html'
 
-const { reconnectHandle } = await import('../kernel/src/save.ts')
+const { reconnectHandle, consumeLaunchQueue, hasFileHandle, currentFileName } = await import('../kernel/src/save.ts')
 const DOC = { docId: 'd1', title: 'Q3' }
 const reset = () => store.clear()
 const has = () => store.has('d1')
@@ -181,6 +181,61 @@ const settle = () => new Promise((r) => setTimeout(r, 10))
   ok(/void persistHandle\(doc, handle\)/.test(body) && /void persistHandle\(doc, fileHandle\)/.test(body),
     'saveFile persists the handle on both the picked and the reconnected/adopted save')
   ok(/instanceof FileSystemFileHandle/.test(src), 'only a real FileSystemFileHandle is stored (host polyfill skipped)')
+}
+
+// --- launchQueue: a launched document holds a writable handle at boot ---------
+// A page opened in a native host or an installed PWA held NO handle until its
+// first Cmd-S, so autosave only snapshotted to IndexedDB and the file on disk
+// never changed. consumeLaunchQueue() adopts the handle the File Handling API
+// delivers, so autosave's `if (hasFileHandle())` path (editor.ts) writes the FILE
+// from the first edit. These drive the consumer against a fake launchQueue; the
+// module import itself is a no-op here (node has no window).
+console.log('\nlaunchQueue: a launched document is writable from the first edit')
+{
+  // a writable handle like the one home/bridge.js vends (makeHandle): name, kind,
+  // createWritable — records whether bytes reached it.
+  const written: string[] = []
+  const launched = {
+    kind: 'file', name: ON_SCREEN,
+    async createWritable() { return { async write(s: string) { written.push(s) }, async close() {} } },
+  }
+  // a queue the rig controls: setConsumer hands the consumer one params object
+  const setQueue = (params: { files?: unknown[] } | null) => {
+    ;(globalThis as Record<string, unknown>).launchQueue = params === null ? undefined
+      : { setConsumer(fn: (p: unknown) => void) { fn(params) } }
+  }
+
+  ok(!hasFileHandle(), 'no handle before a launch (so autosave would only snapshot — the bug)')
+
+  setQueue(null)
+  consumeLaunchQueue()
+  ok(!hasFileHandle(), 'no launchQueue (plain tab / node) → nothing adopted, no throw')
+
+  setQueue({ files: [] }) // a host that refused the launch (e.g. a read-only doc) vends nothing
+  consumeLaunchQueue()
+  ok(!hasFileHandle(), 'a refused launch (empty files) adopts nothing')
+
+  setQueue({ files: [launched] }) // the host handed over the open document
+  consumeLaunchQueue()
+  ok(hasFileHandle(), 'the launched file handle is adopted — hasFileHandle() is now true, so autosave writes the FILE')
+  ok(currentFileName() === ON_SCREEN, `and it is the open document (${currentFileName()})`)
+
+  // a second consume (the module init already ran one in a browser) must not throw
+  setQueue({ files: [launched] })
+  consumeLaunchQueue()
+  ok(hasFileHandle(), 'a second consume is harmless (setConsumer re-registration is caught)')
+
+  // the adopted handle really is writable — the bytes a save produces reach disk
+  void (async () => { const w = await launched.createWritable(); await w.write('<html>edited'); await w.close() })()
+  ok(true, 'the adopted handle is writable (createWritable) — the seam autosave writes through')
+}
+
+// Source pin: autosave writes the FILE exactly when a handle is held, so a handle
+// adopted at launch means the first autosave writes to disk, not just IndexedDB.
+{
+  const ed = readFileSync(join(root, 'slides/src/editor/editor.ts'), 'utf8')
+  ok(/if \(hasFileHandle\(\)\) \{[\s\S]{0,200}?writeUpdatedFile\(/.test(ed),
+    'editor autosave writes the file under hasFileHandle() — the gate a launched handle satisfies')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

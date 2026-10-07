@@ -798,6 +798,45 @@ export function adoptFileHandle(handle: FsFileHandle): void {
 }
 
 /**
+ * Consume the File Handling API's `window.launchQueue` at boot and adopt the
+ * handle it delivers for the open document — so a document opened in an installed
+ * PWA (`file_handlers`) or in a native host (home/bridge.js, which defines a
+ * `launchQueue` carrying the open file's handle) holds a writable handle from the
+ * FIRST edit, not only after the first ⌘S. Without this a reviewer who edits,
+ * leaves the app and reopens the file sees nothing saved — "saved in place" is the
+ * app's whole claim.
+ *
+ * The queue is the host's single trigger: `setConsumer` is what begins the one
+ * launch request (`launch: true`), and the host answers it with the open document
+ * and no picker — a host that cannot (a read-only document) refuses it and vends
+ * nothing, so we adopt only when a handle actually arrives. Persistence is not
+ * done here: a native host re-delivers every launch, and a real PWA handle is
+ * persisted by the ordinary save path (`persistHandle`, which skips host
+ * polyfills). Calling `setConsumer` more than once is the API's own error, so this
+ * is guarded to run once.
+ */
+export function consumeLaunchQueue(): void {
+  const w = globalThis as unknown as {
+    launchQueue?: { setConsumer?: (fn: (params: { files?: FsFileHandle[] }) => void) => void }
+  }
+  const lq = w.launchQueue
+  if (!lq || typeof lq.setConsumer !== 'function') return
+  try {
+    lq.setConsumer((params) => {
+      const handle = params?.files?.[0]
+      if (handle) adoptFileHandle(handle) // only when the host actually vended one
+    })
+  } catch { /* setConsumer rejects a second registration — the first already won */ }
+}
+
+// At boot, in a browser context, claim the open document's handle. A module-level
+// call is deliberate: it keeps the seam in the kernel, so every app gets it with
+// no per-app change, and it is the consumer's job to begin the launch request.
+// node (rigs, tooling) has no `launchQueue`; a plain, non-installed tab has none
+// either — both no-op. The rig drives consumeLaunchQueue() directly.
+if (typeof window !== 'undefined') consumeLaunchQueue()
+
+/**
  * The name of the file this document is actually open AS, when knowable.
  *
  * Two sources, best first: a held FS Access handle, else this document's own
