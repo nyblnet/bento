@@ -124,7 +124,7 @@ try {
     const { p } = await fresh()
     await edit(p)
     await typeLines(p, ['alpha one', 'beta two'])
-    await p.keyboard.press('Meta+a')
+    await p.keyboard.press('ControlOrMeta+a') // select-all on every platform: Meta+A is not select-all on Linux CI
     await p.keyboard.press('`')
     await commit(p)
     let e = await els(p)
@@ -132,7 +132,7 @@ try {
     ok(e[0]?.type === 'text' && codes === 2, `two lines, two <code> runs (${e[0]?.html})`)
     ok(/<code>alpha one<\/code>/.test(e[0]?.html) && /<code>beta two<\/code>/.test(e[0]?.html), 'each line wrapped whole, text unchanged')
     await edit(p)
-    await p.keyboard.press('Meta+a')
+    await p.keyboard.press('ControlOrMeta+a') // select-all on every platform: Meta+A is not select-all on Linux CI
     await p.keyboard.press('`')
     await commit(p)
     e = await els(p)
