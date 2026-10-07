@@ -56,6 +56,8 @@ const RIGS = [
   // built spaces shell and Playwright/Chrome (the CI browser job provides both).
   { name: 'save-revisions', file: 'scripts/test-spaces-save-revisions.ts' },
   { name: 'save-browser', file: 'scripts/test-spaces-save-browser.mjs' },
+  // drives the BUILT shell in Chrome; self-skips outside CI without one
+  { name: 'chrome',  file: 'scripts/test-spaces-chrome.ts' },
 ]
 
 // A rig that exists but is not listed here would never run locally, and the
