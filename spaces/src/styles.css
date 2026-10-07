@@ -258,21 +258,29 @@ option { background: var(--field); color: var(--ink); }
 /* ————— shell ————— */
 .sp-app { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 
+/* THE BAR IS SLIDES' BAR (`.ed-topbar`), value for value: 8/14 padding, 10
+   between groups, 6 inside one, the mark at 15px/400, a 220px title at
+   14px/400 with a 6px corner, and every button on the 30px grid. Measured
+   before (chrome-unification §2.1, and again on #565): 8/12, gap 6, a bold
+   136×30 wordmark button, a 240px semibold title with an 8px corner, groups at
+   2 and 4. Two apps of one suite should not teach two toolbars. */
 .sp-bar {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 8px max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left));
   background: var(--surface); border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
 }
+/* A BUTTON (it opens About, and a keyboard reaches it) drawn as slides' mark,
+   which is a plain lockup: no frame, no fill, 15px/400 with the word in bold. */
 .sp-mark {
-  display: inline-flex; align-items: center; gap: 7px;
-  font: inherit; font-weight: 700; font-size: 14px; letter-spacing: -0.01em;
-  white-space: nowrap; padding: 4px 7px 4px 4px; user-select: none;
-  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
+  font: inherit; font-size: 15px; font-weight: 400; line-height: normal;
+  white-space: nowrap; padding: 0; user-select: none;
+  background: transparent; border: 0; border-radius: 5px;
   color: var(--ink); cursor: pointer;
 }
-.sp-mark:hover { background: var(--chrome-2); }
-.sp-mark-svg { display: block; flex: 0 0 auto; }
+.sp-mark:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.sp-mark-svg { display: block; flex: 0 0 auto; border-radius: 5px; }
 /* the coral is BRAND: the splash's `.bs-word b`, and the mark in every app
    of the suite. It reads on both grounds, so it is one value, not two. */
 .sp-mark-word span { color: var(--brand); }
@@ -280,12 +288,12 @@ option { background: var(--field); color: var(--ink); }
   /* Sized, not greedy: a title input that eats the slack pushed undo/redo away
      from the document they belong to and left them floating mid-bar. The
      spacer is the right group's margin-inline-start:auto. */
-  flex: 0 1 240px; min-width: 0;
-  font: inherit; font-size: 14px; font-weight: 600; color: var(--ink);
+  flex: 0 1 220px; width: 220px; min-width: 48px;
+  font: inherit; font-size: 14px; font-weight: 400; color: var(--ink);
   background: transparent; border: 1px solid transparent;
-  border-radius: 8px; padding: 5px 8px;
+  border-radius: 6px; padding: 5px 8px;
 }
-.sp-doctitle:hover { background: var(--chrome); }
+.sp-doctitle:hover { border-color: var(--line); }
 .sp-doctitle:focus { background: var(--field); border-color: var(--blue); outline: none; }
 .sp-status {
   font-size: 12px; color: var(--muted); white-space: nowrap;
@@ -1226,7 +1234,6 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-dditem:hover { background: var(--chrome-2); }
 .sp-dditem strong { display: block; font-size: 13.5px; font-weight: 600; }
 .sp-dditem span span { display: block; color: var(--muted); font-size: 12px; }
-.sp-caret .sp-btn { padding: 6px 5px; }
 .sp-panel-toggle { display: inline-flex; }
 
 /* ————— page icon ————— */
@@ -1466,12 +1473,6 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   border-radius: 6px; white-space: nowrap;
 }
 
-/* ————— narrow topbar: hide, never scroll —————
-   Measured at 375px: the bar wanted 678px, so seven of eleven controls sat off
-   the right edge — Save among them, which made the file unsaveable on a phone.
-   The rule is slides' rule: drop text and fold the less-used controls into ⋯,
-   so every action stays reachable at every width. A horizontally scrolling
-   toolbar hides the same controls, just less honestly. */
 /* ⋯ IS A HOME, NOT JUST AN OVERFLOW. It used to be display:none until the bar
    folded, which was right while every command it held also had a button in the
    bar. It no longer does: the commands you reach for once a session live here
@@ -1480,55 +1481,46 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    whatever the bar drops as the window narrows. */
 .sp-more { display: inline-flex; }
 
-/* The tier starts at the DRAWER breakpoint (820px), not at 720. It was 720, and
-   measured at 768 — an iPad in portrait — the bar still laid out 795px wide: the
-   save caret ended at x = 795, 27px off the screen. 721–820 is the band where
-   the page list is already an overlay rather than a column, which is exactly the
-   band where the bar is competing with the document for width. One breakpoint,
-   one meaning. */
 /* ————— the topbar fits itself by MEASURING —————
-   These three tiers are applied by editor.ts fitTopbar(), which steps down
-   while the bar still overflows its own box. They were px media queries (820
-   and 600) until it became clear a px guess cannot answer the question being
-   asked: the same buttons need different room at the same viewport width
-   depending on browser zoom, OS text scaling, how long the labels are in the
-   reader's language — eight catalogs ship in every file — and live content
-   like the people count appearing when somebody joins. Slides settled this
-   first (#239); this is its pattern, with this app's controls. */
+   Slides' tiers, stepped through by slides' algorithm (topbar.ts, the port of
+   slides' fitTopbar): each is tried only while the bar still does not fit.
+   They were px media queries once (820 and 600), and then a hand-copy of
+   slides' algorithm that had drifted to other thresholds (§3.2: spaces went
+   compact at 800 where slides goes at 1360). A px guess cannot answer the
+   question: the same buttons need different room at the same width under
+   browser zoom, OS text scaling, and eight catalogs of labels. The PADDING and
+   GAP of each tier are slides' too. */
 
-/* compact: the words beside the icons go. Measured: Insert 76.6px labelled
-   against 40px as an icon; Save's word costs 44px and says nothing the icon
-   does not. */
+/* compact: the words beside the icons go. */
 .sp-bar-compact .sp-primary span.sp-savelabel { display: none; }
 .sp-bar-compact .sp-btnlabel { display: none; }
-.sp-bar-compact { gap: 2px; }
-.sp-bar-compact .sp-doctitle { font-size: 13px; }
+.sp-bar.sp-bar-compact {
+  gap: 6px;
+  padding: 8px max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left));
+}
 
 /* tight: the wordmark loses its word, keeping the mark — which is the route
-   to About, and the corner every app in the suite puts it in. */
+   to About, and the corner every app in the suite puts it in. Narrower
+   horizontally only, as in slides: the bar must not change height as a window
+   is dragged. */
+.sp-bar.sp-bar-tight {
+  gap: 4px;
+  padding: 8px max(6px, env(safe-area-inset-right)) 8px max(6px, env(safe-area-inset-left));
+}
 .sp-bar-tight .sp-mark-word { display: none; }
 
 /* fold: whole controls move into ⋯. Nothing is lost, everything is one tap
    away, and the editor asks the DOM which tier is live rather than re-deriving
-   it from a width — see fitTopbar. */
+   it from a width. The mark stays, as slides' does: it is the corner. */
 .sp-bar-fold .sp-sec { display: none; }
-.sp-bar-fold .sp-mark { display: none; }
 .sp-bar-fold .sp-group-history { display: none; }
 .sp-bar-fold .sp-split .sp-caret { display: none; }
+.sp-bar-fold .sp-lang, .sp-bar-fold .sp-help { display: none; }
 /* with the caret gone Save is one button again, not the left half of two —
-   and a SQUARE one: the icon centred, the padding even. It was a 66×40 slab
-   with the icon at its left and ~26px of empty fill on its right, because the
-   label's end padding (and the unsaved dot's slot) outlived the label. */
+   and a SQUARE one, the icon centred. */
 .sp-bar-fold .sp-split > .sp-btn:first-child {
   border-start-end-radius: 8px; border-end-end-radius: 8px;
   padding-inline: 9px; justify-content: center;
-}
-/* once the word is gone, the unsaved dot is a BADGE on the corner of the icon
-   button — the slides treatment — not a slot that holds the button wide */
-.sp-bar-compact .sp-primary { position: relative; }
-.sp-bar-compact .sp-primary .sp-dirty {
-  position: absolute; top: 5px; inset-inline-end: 5px; margin: 0;
-  box-shadow: 0 0 0 2px var(--ink);
 }
 /* THE STATUS LINE LEAVES THE FLOW. It is a nowrap span, so a long message
    ("Reading view — press Esc or the eye to edit" is ~250px) would shove the
@@ -1568,7 +1560,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    HIG, and slides' phone bar): measured, five bar buttons were 40×40, the
    Live button 35×29, a page row 28px tall and its ⋯ 20×20. */
 @media (pointer: coarse) {
-  .sp-bar .sp-btn, .sp-bar .sp-live { min-width: var(--tap); min-height: var(--tap); justify-content: center; }
+  .sp-bar .sp-btn, .sp-bar .sp-live, .sp-bar .sp-mark { min-width: var(--tap); min-height: var(--tap); justify-content: center; }
   .sp-treelink { min-height: var(--tap); padding-inline-end: 40px; }
   .sp-treelink .sp-rowmore { width: 36px; height: var(--tap); inset-inline-end: 2px; }
   .sp-fmt-btn { min-height: var(--tap); }
@@ -1599,54 +1591,94 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 
 /* ————— the toolbar, grouped as slides groups it —————
-   LEFT is the document (mark · title · save state · history); RIGHT is what you
-   do with it. Two apps in one suite should not teach two different toolbars. */
-.sp-group { display: flex; align-items: center; gap: 6px; }
-.sp-group-right { margin-inline-start: auto; gap: 4px; }
-.sp-group-history { gap: 2px; }
+   LEFT is the document (mark · title · history), then the insert tools, then
+   RIGHT, what you do with it. 6px inside a group, as slides' `.ed-group` —
+   history was 2 and the right group 4, which made spaces' bar the denser of
+   two bars that were meant to be one. */
+.sp-group { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.sp-group-right { margin-inline-start: auto; }
 
 /* Save is ONE control with two halves, fused — not two buttons that happen to
-   be adjacent. The caret is visibly part of the thing it modifies. */
+   be adjacent. The caret is visibly part of the thing it modifies. Slides'
+   proportions (a 70×30 half and a 21px caret, where spaces' were 97 and 30);
+   spaces' fill, because Save is the primary action in both apps (D1). */
 .sp-split { display: inline-flex; align-items: stretch; }
 .sp-split > .sp-btn:first-child {
+  position: relative;
   border-start-end-radius: 0; border-end-end-radius: 0;
-  padding-inline-end: 10px;
+  padding: 6px 9px;
 }
 .sp-split .sp-caret > .sp-btn {
-  height: 100%; padding: 6px 6px;
+  height: 100%; padding: 6px 4px;
   border-start-start-radius: 0; border-end-start-radius: 0;
   margin-inline-start: 1px;
   background: var(--ink); color: var(--bg);
 }
+.sp-split .sp-caret > .sp-btn svg { width: 12px; height: 12px; }
 .sp-split .sp-caret > .sp-btn:hover { background: var(--ink-2); }
 
 /* The unsaved dot lives ON Save: the place you look to find out whether you
-   need to press it is the button itself. */
+   need to press it is the button itself. A BADGE on the corner, as slides'
+   `.ed-dirty` — not a slot that holds the button 14px wider for a dot that is
+   usually not there. Ringed in the button's own fill so it reads on it. */
 .sp-dirty {
+  position: absolute; top: 3px; inset-inline-end: 3px;
   width: 7px; height: 7px; border-radius: 50%;
-  background: var(--accent); margin-inline-start: 7px;
-  opacity: 0; transition: opacity .18s;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--ink);
+  opacity: 0; transition: opacity .18s; pointer-events: none;
 }
 .sp-dirty.sp-on { opacity: 1; }
 
-/* ————— phone topbar: the second tier —————
-   The first tier folds the six secondary actions into ⋯. That was not enough:
-   measured on a 390×844 viewport with a coarse pointer, the bar still laid out
-   467px wide inside 390px and Save's right edge landed at x = 426 — the primary
-   action, 36px off the screen. What is left after ⋯ is still eleven controls'
-   worth of 40px touch targets, and eleven of those do not fit in 390.
+/* `?` is slides' glyph, on the bar's grid: slides' own is 28×29 because a
+   16px-wide slot was never reserved for it; here it is a 36×30 button like
+   its neighbours, the glyph centred in a 16px box. */
+.sp-help { justify-content: center; }
+.sp-help-q { display: block; width: 16px; font-size: 15px; font-weight: 800; line-height: 16px; text-align: center; }
 
-   So a phone gives up, in this order and for these reasons:
-     · the wordmark — About is the first thing in ⋯, and the mark is only a
-       route to it (35px)
-     · undo/redo — added to ⋯ instead, where they carry their shortcut and
-       their disabled state (84px)
-     · the save caret — every one of its four items is in ⋯ or in About: Print
-       and About directly, Save-a-copy and Export-as-Markdown appended there on
-       a phone, Password inside About (48px)
-   Save itself never moves. Measured after, coarse pointer, scrollWidth ==
-   clientWidth at every one: 320 (Save's right edge 308), 375 (363), 390 (378),
-   768 (725, and the rightmost control at 756). */
+/* the language in force, marked as slides marks it */
+.sp-lang-on .bkm-text::after { content: ' ✓'; color: var(--accent-ink); }
+
+/* ————— the phone bar —————
+   Viewport-scoped, like slides' `@media (max-width: 700px)`: this is about
+   touch and small screens, not about whether the bar fits, so it stays a media
+   query. topbar.ts folds unconditionally at the same 700.
+
+   The tighter padding is listed with the tier classes: a media query adds no
+   specificity, so a bare `.sp-bar` here loses to `.sp-bar.sp-bar-tight` and the
+   phone bar silently keeps the desktop padding (slides measured exactly that). */
+@media (max-width: 700px) {
+  .sp-bar, .sp-bar.sp-bar-compact, .sp-bar.sp-bar-tight {
+    padding: 6px max(6px, env(safe-area-inset-right)) 6px max(6px, env(safe-area-inset-left));
+  }
+  .sp-bar .sp-btn, .sp-bar .sp-live { min-width: var(--tap); min-height: var(--tap); justify-content: center; }
+  /* the mark is a button (About), so it is a 44px target like the rest (D5);
+     the glyph stays slides' 20px, centred in it */
+  .sp-bar .sp-mark { min-width: var(--tap); min-height: var(--tap); justify-content: center; }
+  .sp-doctitle { min-width: 0; }
+
+  /* BELOW THE FOLD'S FLOOR THE BAR SCROLLS. Fully folded it still needs the
+     mark, the title and seven 44px targets — about 330px — and a 320px screen
+     (an iPhone SE, any iPhone with Display Zoom) does not have them. The app
+     root clips, so the excess used to be simply cut off; in slides that hid ⋯,
+     the only route to half the commands. A partly visible button is its own
+     affordance. (slides' CLAUDE.md, hard-won detail 10.) */
+  .sp-bar {
+    overflow-x: auto; overscroll-behavior-x: contain;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .sp-bar::-webkit-scrollbar { display: none; }
+  /* …and a scroll container clips BOTH axes, so every menu hanging off the bar
+     would now be cut off by the bar itself. `fixed` takes it out of that clip;
+     it is pinned to the end of the screen, under the bar's bottom edge, which
+     topbar.ts publishes because it moves with the safe-area insets. */
+  .sp-bar .bkm.bkm-open > .bkm-menu {
+    position: fixed;
+    top: calc(var(--sp-bar-bottom, 57px) + 4px);
+    inset-inline-end: max(6px, env(safe-area-inset-right));
+    inset-inline-start: auto;
+  }
+}
+
 /* About opens with the suite's mark, as slides does — a dialog that starts on a
    section heading does not say what you are looking at. */
 .sp-about-head { margin-bottom: 4px; }
@@ -1673,7 +1705,8 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
    LEFT of the wordmark, pushing the suite's mark out of the corner every app in
    the suite puts it in. Slides has no topbar panel toggle at all, for the same
    reason. Below the breakpoint there is no strip to hang a chevron on, so the
-   button is the only way in and it leads the bar. */
+   button is the only way in; it follows the title, where slides' phone bar
+   puts its Slides button, and the mark keeps the corner. */
 .sp-panel-toggle { display: none; }
 @media (max-width: 820px) {
   .sp-panel-toggle { display: inline-flex; }
