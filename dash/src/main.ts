@@ -47,6 +47,7 @@ import { installPrint, openPrintDialog } from './print.ts'
 import './ask.css'
 import { openColumnMenu } from './filterui.ts'
 import { installSaveMenu, adoptOpenedDoc, toast } from './saveui.ts'
+import { savingFor, saveRevision, type Acknowledge } from './saving.ts'
 import { dismissSplash, dismissSplashNow } from './splash.ts'
 import { t, i18nApi } from './i18n.ts'
 import {
@@ -1289,9 +1290,25 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // writes exactly what ⌘S writes. Stamping is dash's to add on both paths at
   // once; the dep exists in writeback.ts so that change is one line here.
   const writeBack = new FileWriteBack()
+  const saving = savingFor(store)
+  // What every write that reached the open file owes the screen. `clean` is
+  // called only when the bytes written are the revision on screen — see
+  // saving.ts; clearing on resolve is the race this replaced.
+  const ack: Acknowledge = {
+    adopt: (d) => writeBack.adopt(d),
+    clean: () => { dirty = false; dirtyEl.hidden = true; dirtyEl.title = '' },
+  }
   let wbTag: HTMLElement | null = null
   async function runWriteBack(): Promise<void> {
-    const { notice } = await writeBack.run(store.doc, store.readOnly)
+    if (saving.superseded) return
+    // Through the queue, on the snapshot. write-back's own `lastWritten`
+    // records the bytes it wrote, so it adopts itself — `adopt` here would
+    // also reset its failure state, which is its own to manage.
+    const out = await saveRevision(store, (snap) => writeBack.run(snap, store.readOnly),
+      (r) => r.outcome.kind === 'wrote' ? 'open-file' : 'nowhere',
+      { adopt: () => {}, clean: ack.clean })
+    if (out.kind !== 'done') return
+    const { notice } = out.value
     if (!notice) return
     if (notice.say === 'failed') {
       // INTERRUPTS, unlike a success. The file on disk is now older than the
@@ -1304,11 +1321,10 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
         .replace('{why}', notice.why))
       return
     }
-    // The bytes are on disk. Clearing the dot here is the whole point: it is
-    // the same claim ⌘S makes, and it is now true without one.
-    dirty = false
-    dirtyEl.hidden = true
-    dirtyEl.title = ''
+    // The bytes are on disk. Clearing the dot is the whole point — and it
+    // was done above by `saveRevision`, ONLY if no edit landed while they were
+    // being written. An edit that did keeps the dot on and the next cycle
+    // writes it.
     if (notice.say === 'recovered') toast(t('Saved to the file — automatic saving is working again.'))
     wbTag ??= app.querySelector<HTMLElement>('.dx-wb')
     if (!wbTag) return
@@ -1347,6 +1363,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     showingSheet: () => grid.showingId(),
     showSheet: (id: string) => grid.setSheet(id),
     onDirty: markDirty,
+    ack,
     // so Offline mode can HANG UP an open relay socket, not merely refuse the
     // next connection — a switch that leaves the current one running is not one
     sync,
@@ -1461,6 +1478,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     button: app.querySelector<HTMLElement>('[data-act="save"]')!,
     store,
     save: doSave,
+    ack,
   })
   const undoBtn = app.querySelector<HTMLButtonElement>('[data-act="undo"]')!
   const redoBtn = app.querySelector<HTMLButtonElement>('[data-act="redo"]')!
@@ -1999,25 +2017,33 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // A throw was invisible too: an unhandled rejection in the console of an
     // app the user is not looking at the console of. A revoked permission, a
     // deleted file and a full disk all arrive this way.
-    let r: Awaited<ReturnType<typeof saveFile>>
-    try {
-      r = await saveFile(store.doc)
-    } catch (err) {
+    if (saving.superseded) {
+      toast(t('This file was updated. Reload to run the new version before saving again.'))
+      return
+    }
+    // Through the queue (saving.ts): the snapshot is what is written, and the
+    // dot goes out only if it is still what is on screen when the write lands.
+    // `adopt` — these bytes ARE the file now, so write-back must not rewrite
+    // them, and a manual save through the same handle clears any standing
+    // "automatic saving failed" warning — happens for an in-place write ONLY.
+    // A DOWNLOAD wrote a copy to Downloads and left the open file stale, so
+    // adopting it would tell the next cycle the file is current when it is the
+    // one thing that is not.
+    const out = await saveRevision(store, (snap) => saveFile(snap),
+      (r) => r === 'saved' || r === 'saved-as' ? 'open-file' : r === 'downloaded' ? 'download' : 'nowhere',
+      ack)
+    if (out.kind === 'failed') {
+      const err = out.error
       toast(t('Save failed — {why}').replace('{why}', err instanceof Error ? err.message : String(err)))
       return
     }
+    if (out.kind === 'superseded') {
+      toast(t('This file was updated. Reload to run the new version before saving again.'))
+      return
+    }
+    if (out.kind !== 'done') return
+    const r = out.value
     if (r === 'cancelled') return          // they closed the picker; they know
-    dirty = false
-    dirtyEl.hidden = true
-    dirtyEl.title = ''
-    // These bytes ARE the file now, so write-back must not immediately rewrite
-    // them — and a manual save that succeeded through the same handle clears
-    // any standing "automatic saving failed" warning, which would otherwise sit
-    // there contradicting the toast that is about to appear. Not for a
-    // DOWNLOAD: that wrote a copy to Downloads and left the open file stale, so
-    // adopting it would tell the next cycle the file is current when it is the
-    // one thing that is not.
-    if (r !== 'downloaded') writeBack.adopt(store.doc)
     const name = currentFileName()
     if (r === 'downloaded') {
       toast(t('This browser cannot write files in place, so a copy was saved to your Downloads. The file open here is unchanged.'))

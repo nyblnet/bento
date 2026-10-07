@@ -8176,6 +8176,37 @@ size limit must be enforced DURING decompression, never after; the declared
 size in a container header is an attacker input, and the primitive, not the
 caller's preflight, must hold the ceiling.
 
+## 2026-10-04 — dash adopts the kernel SaveQueue; the queue also orders handle swaps
+
+Dash takes the kernel's `SaveQueue` (#579) directly, replacing #538's
+app-local approach, through `dash/src/saving.ts` — the same shape spaces took in
+#580. Recorded here because three of its rules are not obvious from the kernel's
+contract, and the second applies to every app.
+
+- **Every write to the open file, and every change of which file is open, goes
+  through one queue per store.** ⌘S, the Save menu, automatic write-back, the
+  in-place self-update, and a dropped file adopting its handle. The drop was
+  the surprise: the kernel's write reads its held handle AFTER the serializer
+  awaits, so a handle swap during an in-flight write sends the OLD document into
+  the NEW file. `afterPendingWrites` waits for the queue, then swaps in the
+  continuation, which runs before the next queued task starts (that task is
+  chained on `tail.catch`, a tick later); stale writes for the old document are
+  then discarded by the queue's identity check. The swap is deliberately not a
+  queued task, because the queue skips tasks whose document was replaced, and a
+  swap must never be skipped.
+- **The revision advances on every `doc` event and on `touch()`.** `touch()`
+  covers the writes that go straight onto the document without an event:
+  document properties, credential minting for a new workbook, and sharing
+  start/stop/rotate (which call `markUnsaved()`, itself a `touch()`, since #597).
+- **An in-place update marks the session `superseded` inside the queued write.**
+  This page is the old shell, so any later write would downgrade the file.
+  Setting the flag after the write resolves is one tick too late: the next
+  queued write has already started. The rig carries that as a control.
+- A ⌘S that DOWNLOADS (no in-place save) still clears the dot, but is not
+  adopted as the file's content. Exports (template, read-only copy) do not
+  touch the open handle and stay outside the queue.
+
+
 ## 2026-09-26 — Spaces adopts the kernel menu; an anchored menu is the primitive mounted over its anchor
 
 **Every menu in bento/spaces is `createMenu` (kernel/src/ui/menu.ts), through
@@ -8277,3 +8308,47 @@ Both ends, because an embed can reach the live document by a path neither end
 sees alone (a peer's sync op, a document stored before intake was scrubbed).
 A document's OWN `collab` is untouched by any of this; that is the file's.
 `test-type-embed.ts`, `test-type-share.ts` and `test-export-secrets.ts` pin it.
+
+## 2026-09-26 — Spaces adopts the kernel dialog and panel; spaces keeps panel persistence
+
+**Every modal in bento/spaces is `createDialog`** (kernel/src/ui/dialog.ts):
+About, the shortcut sheet, Search, Link to page, Link card, Import and its
+reports, Export page as a space, Print, and the graph. The graph's module now
+returns its content, and the editor wraps it. Spaces' `.sp-overlay`/`.sp-card`
+shell, its per-dialog Escape and Tab handlers, and About's hand-written focus
+trap are deleted. `scripts/test-spaces-chrome.ts` asserts that no spaces file
+builds a modal by hand.
+
+What this fixed, measured on the built shell:
+- Tab left the Import dialog 23 times in 25.
+- Escape worked only while focus was inside the card.
+- The shortcut sheet focused its own card and ringed the whole dialog.
+
+The dialog heading is the primitive's `.bkd-title` at 17px/650 (D4). Section
+captions keep the 11px uppercase style. About has no visible title: the suite's
+lockup heads it, as in slides, and the dialog is named by `aria-label`.
+
+**Both side panels are `createPanel`** (kernel/src/ui/panel.ts), with
+`drawerBelow: 820`. That is the per-app parameter D6 rules for; slides uses
+700. Spaces' two hand-copied resizers, chevrons and phone drawer rules are
+deleted.
+
+**Persistence stays in spaces.** The panels get no `storageKey`. The primitive
+persists `collapsed` in drawer mode too. A phone drawer shut by following a
+link would then become the desktop preference, and the page list would stay
+shut on every later desktop open. That is the bug `closeDrawer()` was written
+to prevent. Instead, the editor writes the keys readers already have
+(`bento-sp-pane`, `bento-sp-pane-closed`, `bento-sp-insp`,
+`bento-sp-insp-closed`), and only while a panel is a column. Nothing migrates,
+and no reader's layout resets. The primitive has no scrim, so spaces adds one
+behind an open drawer. A drawer you can shut only from the button that opened
+it gets left open over the page.
+
+**Kernel gaps, written down rather than forked:**
+- `createPanel` should not persist while it is a drawer.
+- `createPanel` needs an optional scrim.
+- The panel's chevron needs a localizable label. Spaces sets `title` and
+  `aria-label` after creation.
+
+**Cost:** +1,234 B of shell (284,627 → 285,861, `ZOPFLI=0`). The deleted
+dialog and panel code is smaller than the kernel sheets that replace it.

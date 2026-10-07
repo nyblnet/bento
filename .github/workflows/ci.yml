@@ -946,6 +946,14 @@ jobs:
         # auth or calls itself an Editor — an allowlist, failing closed.
         run: node scripts/test-dash-share-dirty.ts
 
+      - name: bento/dash save race (kernel SaveQueue)
+        # The unsaved dot goes out only for the revision that was written; a
+        # dropped file's handle swap waits for the write in flight; an in-place
+        # update stops the old shell from writing again. Each guard is
+        # sabotaged in the PR that introduced it; the rig carries two controls
+        # that reproduce the bugs without the guard.
+        run: node scripts/test-dash-save-revisions.ts
+
       - name: bento/dash conditional formatting
         run: node scripts/test-dash-condfmt.ts
 
@@ -1595,6 +1603,11 @@ jobs:
         # line breaks and nothing else; the editor-only "Not rendered" hint;
         # paste and commit keep a formula's backslashes. Real engine, DOM-free.
         run: node scripts/test-slides-math-delims.ts
+      - name: Code fence rig
+        # ``` fences in a text box: which text is a fence (closed only), the
+        # language aliases, autoformat's open-fence guard, and the elements a
+        # fenced box becomes (identity on the first part, no duplicate morph key).
+        run: node scripts/test-slides-code-fence.ts
       - name: Maths coverage rig
         # #551: maths-lite against Temml's WHOLE vocabulary (1,237 commands and
         # environments, frozen offline): no covered command may fall back to
@@ -1914,6 +1927,13 @@ jobs:
         # fresh, revocable invite. Every copy is minted in type/src/share.ts.
         run: node scripts/test-type-share.ts
 
+      - name: Slides share-copy rig
+        # The view-only and editor copies (slides/src/share.ts) carry only the
+        # kernel allowlist — no private key, a fresh invite, no sync on a reader —
+        # and strip any EMBEDDED document's envelope. Runs the real builders with
+        # real keys through the ts hook, like the type rig above.
+        run: node scripts/test-slides-share.ts
+
       - name: Type chrome rig
         # Where controls live: nothing in two menus, no inserts in the
         # overflow, and every element the chrome reaches for actually exists —
@@ -2090,6 +2110,11 @@ jobs:
         # short window), D4 dialog titles, D8 help shortcuts, the compact Save
         # caret, phone menu rows, the designed focus ring, dark menu shadow.
         run: node scripts/test-slides-chrome-rulings-browser.mjs
+      - name: Code in a text box in Chromium
+        # Real typing: a ``` fence becomes a Code element (in place, or split
+        # out of the text around it), select + ` wraps lines in <code>, pasted
+        # fences convert, and an unclosed fence stays text.
+        run: node scripts/test-slides-code-fence-browser.mjs
 
   spaces-save-browser:
     runs-on: ubuntu-latest
