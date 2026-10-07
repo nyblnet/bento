@@ -76,6 +76,10 @@ const guardAt = onKey.indexOf(`if (document.querySelector('[aria-modal="true"]')
 const firstShortcut = onKey.indexOf("e.key.toLowerCase() === 'k'")
 ok(guardAt > 0 && guardAt < firstShortcut,
   'the editor\'s keymap stands down under a modal BEFORE any global shortcut is read')
+const handDialogs = files.filter((f) => /'sp-overlay|setAttribute\('aria-modal'/.test(read(f)))
+ok(handDialogs.length === 0, `no file hand-builds a modal overlay any more — every one is createDialog (found in: ${handDialogs.join(', ') || 'none'})`)
+ok(/createPanel\(/.test(editor) && !/private makeResizer\(/.test(editor) && !/sp-pane-tab/.test(css),
+  'both side panels are the kernel panel; spaces\' own resizer and chevron are gone')
 
 // ————— browser half ————————————————————————————————————————————————————————
 console.log('\nthe built shell, driven with trusted input\n')
@@ -246,10 +250,101 @@ async function browser(chrome: string, html: string): Promise<void> {
     const underModal = await js<any>(`({ side: document.querySelector('.sp-side').className, modals: document.querySelectorAll('[aria-modal="true"]').length })`)
     ok(underModal.side === side0 && underModal.modals === 1,
       `under About, \`[\` and \`?\` do nothing behind it (page list ${underModal.side === side0 ? 'unchanged' : 'TOGGLED'}, ${underModal.modals} modal open)`)
+    // focus is on <body> here (blurred above): Escape must still reach the dialog
     await key('Escape', 0, 'Escape')
+    const aboutGone = await js<boolean>(`!document.querySelector('[aria-modal="true"]')`)
+    ok(aboutGone, 'Escape closes About with the focus nowhere in it')
+    if (!aboutGone) throw new Error('About did not close; the steps after this need the page')
+
+    // WCAG contrast of an element's text against its composited ground
+    const CONTRAST = `((el) => { const P = (s) => { const m = s.match(/[\\d.]+/g).map(Number); return { r: m[0], g: m[1], b: m[2], a: m[3] ?? 1 } }
+      const over = (f, b) => ({ r: f.r * f.a + b.r * (1 - f.a), g: f.g * f.a + b.g * (1 - f.a), b: f.b * f.a + b.b * (1 - f.a), a: 1 })
+      const L = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b) }
+      let bg = { r: 255, g: 255, b: 255, a: 1 }; const chain = []; for (let n = el; n && n.nodeType === 1; n = n.parentElement) chain.push(n)
+      for (const n of chain.reverse()) { const c = P(getComputedStyle(n).backgroundColor); if (c.a > 0) bg = over(c, bg) }
+      const fg = over(P(getComputedStyle(el).color), bg); const [x, y] = [L(fg), L(bg)].sort((a, b) => b - a); return +((x + 0.05) / (y + 0.05)).toFixed(2) })`
+
+    // About: its links read, and its buttons look like buttons
+    await tap(`document.querySelector('.sp-mark')`)
+    const about = await js<any>(`(() => { const d = [...document.querySelectorAll('[aria-modal="true"]')].pop(); const a = d.querySelector('.sp-ab-promo a'); const b = [...d.querySelectorAll('.sp-btn:not(.sp-primary)')][0]; return { link: ${CONTRAST}(a), frame: getComputedStyle(b).borderTopColor } })()`)
+    ok(about.link >= 4.5, `About's links clear 4.5:1 (${about.link}; 3.23 before)`)
+    ok(!/rgba\(0, 0, 0, 0\)/.test(about.frame), `a dialog's secondary button has a visible frame (${about.frame})`)
+    await key('Escape', 0, 'Escape')
+
+    // D3: a refusal is a notice the reader sees, not a whisper in the bar
+    await tap(TRIG('More'))
+    await tap(`[...document.querySelectorAll('.bkm-open .bkm-item')].find(b => b.textContent.startsWith('Make this page an issue'))`)
+    await tap(TRIG('More'))
+    await tap(`[...document.querySelectorAll('.bkm-open .bkm-item')].find(b => b.textContent.startsWith('Make this page an issue'))`)
+    const note = await js<any>(`(() => { const n = document.querySelector('.sp-notice.sp-on'); if (!n) return null; const r = n.getBoundingClientRect(); return { text: n.textContent, role: n.getAttribute('role'), cr: ${CONTRAST}(n), z: +getComputedStyle(n).zIndex, onScreen: r.bottom <= innerHeight && r.top > innerHeight / 2 } })()`)
+    ok(note && note.role === 'status' && note.cr >= 4.5 && note.z > 1000 && note.onScreen,
+      `a refusal ("Already an issue") arrives as a notice: announced, legible, above dialogs, at the foot of the window (${JSON.stringify(note)})`)
+    await js(`window.bento.undo(); 1`)
+
+    // ——— dialogs: the kernel's ———
+    const MODAL = `[...document.querySelectorAll('[aria-modal="true"]')].find(d => d.getBoundingClientRect().height > 0)`
+    await tap(TRIG('More'))
+    await tap(`[...document.querySelectorAll('.bkm-open .bkm-item')].find(b => b.textContent.startsWith('Import Markdown'))`)
+    const title = await js<any>(`(() => { const d = ${MODAL}; const h = d && d.querySelector('.bkd-title'); if (!h) return null; const c = getComputedStyle(h); return { text: h.textContent, size: c.fontSize, weight: c.fontWeight, labelled: document.getElementById(d.getAttribute('aria-labelledby') || '') === h } })()`)
+    ok(title && title.size === '17px' && title.weight === '650' && title.labelled,
+      `a dialog opens on a real title, 17px/650, wired to aria-labelledby (D4) (${JSON.stringify(title)})`)
+    let outside = 0
+    for (let i = 0; i < 20; i++) {
+      await key('Tab', 0, 'Tab', 9)
+      if (!(await js<boolean>(`(${MODAL})?.contains(document.activeElement) ?? false`))) outside++
+    }
+    ok(outside === 0, `Tab never leaves an open dialog (${outside} of 20 presses landed outside; 23 of 25 did before)`)
+    const blank = await js<any>(`(() => { const r = (${MODAL}).getBoundingClientRect(); return { x: r.right - 12, y: r.bottom - 8 } })()`)
+    await click(blank.x, blank.y)
+    // …and with focus nowhere at all: the old handler hung off the backdrop, so
+    // Escape worked only while focus was inside the card
+    await js(`document.activeElement?.blur?.(); 1`)
+    await key('Escape', 0, 'Escape')
+    ok(!(await js<boolean>(`!!(${MODAL})`)), 'Escape closes a dialog wherever the focus is (it only worked with focus in the card)')
+
+    await js(`document.activeElement?.blur?.(); 1`)
+    await key('?', 8, 'Slash', 191)
+    const ring = await js<any>(`(() => { const d = ${MODAL}; const c = getComputedStyle(d); return { outline: c.outlineStyle, focusIn: d.contains(document.activeElement) } })()`)
+    ok(ring.outline === 'none', `the shortcut sheet does not ring the whole card when it opens (outline ${ring.outline})`)
+    await key('Escape', 0, 'Escape')
+
+    await key('k', await MOD(), 'KeyK', 75)
+    await send('Input.insertText', { text: 'page' })
+    await sleep(250)
+    await key('ArrowDown', 0, 'ArrowDown')
+    const srch = await js<any>(`({ sel: [...document.querySelectorAll('.sp-result')].findIndex(r => r.getAttribute('aria-selected') === 'true'), focusInInput: document.activeElement?.tagName === 'INPUT' })`)
+    ok(srch.sel === 1 && srch.focusInInput, `ArrowDown walks the search results while the query keeps focus (${JSON.stringify(srch)})`)
+    await key('Escape', 0, 'Escape')
+
+    // ——— panels: the kernel's ———
+    await js(`document.activeElement?.blur?.(); 1`)
+    const side = `document.querySelector('.sp-side').closest('.bkp')`
+    const w0 = await js<number>(`(${side}).getBoundingClientRect().width`)
+    await key('[', 0, 'BracketLeft', 219)
+    await sleep(350) // the width animates (.14s); measure where it lands
+    const shut = await js<any>(`(() => { const t = (${side}).querySelector('.bkp-toggle').getBoundingClientRect(); return { w: (${side}).getBoundingClientRect().width, chev: Math.round(t.x), exp: (${side}).querySelector('.bkp-toggle').getAttribute('aria-expanded') } })()`)
+    ok(w0 > 200 && shut.w === 0 && shut.chev === 0 && shut.exp === 'false',
+      `\`[\` collapses the page list to nothing, its chevron docked at the edge (${w0} → ${shut.w}px, chevron at x=${shut.chev})`)
+    await key('[', 0, 'BracketLeft', 219)
+    await sleep(350)
+    const strip = await js<any>(`(() => { const r = (${side}).querySelector('.bkp-resizer').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + 150 } })()`)
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: strip.x, y: strip.y })
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: strip.x, y: strip.y, button: 'left', clickCount: 1 })
+    for (let i = 1; i <= 6; i++) { await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: strip.x + i * 10, y: strip.y, button: 'left', buttons: 1 }); await sleep(20) }
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: strip.x + 60, y: strip.y, button: 'left', clickCount: 1 })
+    await sleep(200)
+    const dragged = await js<any>(`({ w: Math.round((${side}).getBoundingClientRect().width), stored: localStorage.getItem('bento-sp-pane') })`)
+    ok(Math.abs(dragged.w - (w0 + 60)) <= 2 && dragged.stored === String(dragged.w),
+      `dragging the strip widens the page list and remembers it for this reader (${w0} → ${dragged.w}, stored ${dragged.stored})`)
 
     // ——— phone ———
     await open(true)
+    const bar = await js<any>(`(() => { const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden' }
+      const bs = [...document.querySelectorAll('.sp-bar button')].filter(vis).map(b => { const r = b.getBoundingClientRect(); return { l: (b.getAttribute('aria-label') || b.title || '').slice(0, 14), w: Math.round(r.width), h: Math.round(r.height) } })
+      const save = [...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith('Save')).getBoundingClientRect()
+      return { small: bs.filter(b => b.w < 44 || b.h < 44), save: { w: Math.round(save.width), h: Math.round(save.height) } } })()`)
+    ok(bar.small.length === 0, `every phone bar control is a 44px target (D5) (too small: ${JSON.stringify(bar.small)})`)
+    ok(bar.save.w === bar.save.h, `phone Save is a square icon button, not a slab (${bar.save.w}×${bar.save.h}; 66×40 before)`)
     await tap(TRIG('More'))
     const ph = await js<any>(`(() => { const m = ${OPEN}; const r = m.getBoundingClientRect(); const rows = [...m.querySelectorAll('.bkm-item')]; return { bottom: r.bottom, vh: innerHeight, n: rows.length, minH: Math.min(...rows.map(x => x.getBoundingClientRect().height)), scrolls: m.scrollHeight > m.clientHeight } })()`)
     ok(ph.bottom <= ph.vh, `the phone ⋯ menu ends inside the screen (bottom ${Math.round(ph.bottom)} ≤ ${ph.vh}; 1003 before)`)
@@ -262,6 +357,20 @@ async function browser(chrome: string, html: string): Promise<void> {
     const sheet = await js<any>(`(() => { const m = ${OPEN}; if (!m) return null; const r = m.getBoundingClientRect(); return { bottom: r.bottom, vh: innerHeight, w: r.width, vw: innerWidth, minH: Math.min(...[...m.querySelectorAll('.bkm-item')].map(x => x.getBoundingClientRect().height)) } })()`)
     ok(sheet && sheet.vh - sheet.bottom <= 12 && sheet.w >= sheet.vw - 20 && sheet.minH >= 44,
       `on a phone the block menu is a bottom sheet of 44px rows (${JSON.stringify(sheet)})`)
+    await key('Escape', 0, 'Escape')
+
+    // the page list is a DRAWER here: opened from the bar, dimmed behind, shut
+    // by following a page — and none of that is the reader's desktop preference
+    await tap(`[...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith('Pages'))`)
+    const drawer = await js<any>(`(() => { const p = document.querySelector('.sp-side').closest('.bkp'); const r = p.getBoundingClientRect(); const row = document.querySelectorAll('.sp-treelink')[1].getBoundingClientRect(); return { drawer: p.classList.contains('bkp-drawer'), w: r.width, scrim: !!document.querySelector('.sp-scrim'), reach: !!document.elementFromPoint(row.x + 20, row.y + row.height / 2)?.closest('.sp-treelink') } })()`)
+    ok(drawer.drawer && drawer.w > 200 && drawer.scrim && drawer.reach,
+      `on a phone the page list opens as a drawer over a scrim, its rows reachable (${JSON.stringify(drawer)})`)
+    const rows = await js<any>(`(() => { const rs = [...document.querySelectorAll('.sp-treelink')].slice(0, 6); const m = rs[0].querySelector('.sp-rowmore').getBoundingClientRect(); return { minRow: Math.min(...rs.map(r => r.getBoundingClientRect().height)), more: [Math.round(m.width), Math.round(m.height)] } })()`)
+    ok(rows.minRow >= 44 && rows.more[1] >= 44, `page rows and their ⋯ are 44px targets on a phone (row ${rows.minRow}, ⋯ ${rows.more.join('×')}; 28 and 20×20 before)`)
+    await tap(`document.querySelectorAll('.sp-treelink')[1]`)
+    const afterNav = await js<any>(`({ w: document.querySelector('.sp-side').closest('.bkp').getBoundingClientRect().width, scrim: !!document.querySelector('.sp-scrim'), stored: localStorage.getItem('bento-sp-pane-closed') })`)
+    ok(afterNav.w === 0 && !afterNav.scrim && afterNav.stored === null,
+      `following a page shuts the drawer and its scrim, and writes nothing to the desktop preference (${JSON.stringify(afterNav)})`)
     ws.close()
   } finally {
     try { child.kill('SIGKILL') } catch { /* gone */ }
