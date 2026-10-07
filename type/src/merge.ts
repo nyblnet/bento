@@ -246,7 +246,21 @@ function readCanvasSheet(s: Record<string, unknown>): MergeSheet {
 export function readMergeSource(html: string): MergeSource | null {
   const art = readArtifact(html);
   if (!art) return null;
-  const doc = art.doc as Record<string, unknown> | undefined;
+  return sourceOfDoc(art.doc);
+}
+
+/**
+ * The same read, from a document we ALREADY hold.
+ *
+ * `readMergeSource` starts from a file the user just picked; `live.ts` starts
+ * from the copy an `embed` block is already carrying, which never goes back
+ * through HTML. Splitting it here rather than re-deriving the sheet shape over
+ * there keeps ONE decoder for dash's column encodings — the `pack` case below
+ * is exactly the kind of thing that would get fixed in one copy and not the
+ * other.
+ */
+export function sourceOfDoc(parsed: unknown): MergeSource | null {
+  const doc = parsed as Record<string, unknown> | undefined;
   if (!doc || doc.format !== 'bento/dash' || !Array.isArray(doc.sheets)) return null;
   const sheets: MergeSheet[] = [];
   for (const raw of doc.sheets as Array<Record<string, unknown>>) {

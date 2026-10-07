@@ -52,3 +52,7 @@ import './micro.ts';
 // and one complete .bento.html per row of a bound sheet. merge.ts imports
 // fields.ts, so this one line mounts both — see fields.ts's header.
 import './merge.ts';
+// live cells: a field whose value is a cell of a sheet this document embeds,
+// addressed by row label and column heading — see live.ts's header for why not
+// by cell reference.
+import './live.ts';

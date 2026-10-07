@@ -308,7 +308,29 @@ export interface FieldContext {
   pages?: number;
   /** the merge row, keyed by `fieldKey` — see merge.ts */
   row?: Record<string, string>;
+  /**
+   * A live cell in a sheet this document embeds — see live.ts.
+   *
+   * Consulted LAST, after the row and the built-ins, so adding this could not
+   * change what any existing field resolves to. It only ever answers names that
+   * parse as an address (`Q3!Revenue`), and those cannot collide with a
+   * built-in or, in practice, with a column heading.
+   */
+  cell?: (name: string) => string | null;
 }
+
+/**
+ * Where live cells plug in.
+ *
+ * A REGISTRATION rather than an import, because live.ts already imports this
+ * file for `fieldKey` and importing it back would make a cycle — and because it
+ * is how the rest of this app mounts an optional capability (registerPreview,
+ * registerPaginated). A build that never loads live.ts resolves every field
+ * exactly as it did before.
+ */
+type CellFactory = (doc: TypeDoc) => (name: string) => string | null;
+let cellFactory: CellFactory | null = null;
+export function registerCells(f: CellFactory): void { cellFactory = f; }
 
 /** The field values a document supplies about itself. */
 export function fieldContext(doc: TypeDoc, over: Partial<FieldContext> = {}): FieldContext {
@@ -323,6 +345,7 @@ export function fieldContext(doc: TypeDoc, over: Partial<FieldContext> = {}): Fi
     keywords: m.keywords ?? '',
     date: new Date(),
     ...(merge?.row ? { row: merge.row } : {}),
+    ...(cellFactory ? { cell: cellFactory(doc) } : {}),
     ...over,
   };
 }
@@ -356,7 +379,7 @@ export function resolveField(f: FieldRef, ctx: FieldContext, fkey = ''): string 
     case 'time': return ctx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     case 'page': return pad(ctx.pageOf?.(fkey));
     case 'pages': return pad(ctx.pages);
-    default: return null;
+    default: return ctx.cell?.(f.name) ?? null;
   }
 }
 

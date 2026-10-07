@@ -1944,6 +1944,12 @@ jobs:
         # comments or revision history from the template.
         run: node scripts/test-type-fields.ts
 
+      - name: Type live-cells rig
+        # A field bound to an embedded sheet by row label and column heading,
+        # so inserting, reordering or sorting rows cannot re-point a sentence
+        # at a different number.
+        run: node scripts/test-type-live.ts
+
       - name: Clipboard embedded-font rig
         run: |
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"
