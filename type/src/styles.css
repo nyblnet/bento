@@ -367,6 +367,11 @@ html, body {
 .t-paper h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: var(--paper-ink-2); hyphens: none; }
 .t-paper p { margin: 0 0 10px; text-align: justify; orphans: 2; widows: 2; text-wrap: pretty; }
 .t-paper p + p { text-indent: 1.4em; margin-top: -10px; padding-top: 10px; }
+/* Optical margin alignment (micro.ts). The offset is RELATIVE positioning and
+   nothing else, because a relatively positioned box is painted moved and
+   changes the layout of nothing — which is the only reason hanging punctuation
+   can be added to a document whose pagination is already a promise. */
+.t-hang { position: relative; }
 /* ————— figures ————— */
 .t-paper .t-figure {
   margin: 14px 0; text-align: center;

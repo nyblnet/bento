@@ -302,6 +302,17 @@ export interface TypeDoc {
    * already in.
    */
   type?: { family?: string; size?: number };
+  /**
+   * Optical margin alignment — hanging punctuation. See micro.ts.
+   *
+   * ABSENT MEANS ON, which is the one place this format deliberately does not
+   * render an old file exactly as it rendered before. What an old file promises
+   * is its PAGINATION, and that is untouched: the offsets are applied in
+   * rendering space (`position: relative`), never fed back into line breaking,
+   * and the pass verifies per paragraph that no line boundary moved. Only
+   * `false` is stored, because the default carries no information.
+   */
+  optical?: boolean;
   revisions: Revision[];
   signatures: Signature[];
   /**
@@ -748,6 +759,8 @@ export function parseDoc(raw: string): ParseResult {
     signatures: Array.isArray(json.signatures) ? json.signatures as Signature[] : [],
   };
   if (Object.keys(styles).length) doc.styles = styles; else delete doc.styles;
+  // only `false` is a value; anything else — including a junk one — is the default
+  if (json.optical === false) doc.optical = false; else delete doc.optical;
   if (typeof json.docId !== 'string' || !json.docId) repaired.push('minted a missing docId');
   // Comment threads: parse totally, THEN repair. The order matters and the
   // feature's note says why — repairing before an anchor moves would clamp it

@@ -45,3 +45,6 @@ import './autosave.ts';
 // the static first-page render written into every saved file, for readers
 // (thumbnailers) that run no script — see preview.ts's header.
 import './preview.ts';
+// optical margin alignment (hanging punctuation) — see micro.ts's header for
+// why it can be added to a document whose pagination is already a promise.
+import './micro.ts';

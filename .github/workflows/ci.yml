@@ -1932,6 +1932,12 @@ jobs:
         # count-only check cannot see it.
         run: node scripts/test-type-compare.ts
 
+      - name: Type hanging-punctuation rig
+        # Optical margin alignment may only PAINT. A line break is held only
+        # when each line's first and last character both stay on it — a check
+        # on first characters alone passed a real reflow.
+        run: node scripts/test-type-micro.ts
+
       - name: Clipboard embedded-font rig
         run: |
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"
