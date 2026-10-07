@@ -147,6 +147,20 @@
   --tone-important: #8a72cc;
   --tone-warning: #d9a326;
   --tone-caution: #cd6a63;
+  /* WHAT OPENS FROM THE BAR wears slides' surfaces (the parity block, below
+     the menus). Light they are spaces' own; dark they are slides' #21262e
+     family, a step lighter than spaces' panels, so a menu over the page reads
+     exactly as it does over a slide. */
+  --pop-bg: #ffffff;
+  --pop-line: #e3e8ef;
+  --pop-hover: #eceff4;
+  --update-bg: #ff9e8a;
+  --update-ink: #0d1b2e;
+  --share-wait: #b8860b;
+  --share-ok: #2e8b57;
+  --dirty-ring: #16273e;
+  --pop-shadow: 0 8px 24px rgb(20 30 45 / 0.14);
+  --pop-chrome: #f5f7fa;   /* the Share popover's you-row ground: slides' --chrome */
 
   /* The BROWSER's own furniture — scrollbars, form controls, the canvas behind
      a rubber-band scroll — follows this, and CSS cannot reach any of it.
@@ -192,6 +206,17 @@
     --tone-important: #8a72cc;
     --tone-warning: #d9a326;
     --tone-caution: #cd6a63;
+    --pop-bg: #21262e;
+    --pop-line: #333a45;
+    --pop-hover: #262b34;
+    --update-bg: #ff9e8a;
+    --update-ink: #0d1b2e;
+    --share-wait: #b8860b;
+    --share-ok: #2e8b57;
+    --dirty-ring: #16273e;
+    /* slides #573: navy at 14% lifts nothing off dark chrome; black, deeper */
+    --pop-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+    --pop-chrome: #1b1f26;
     color-scheme: only dark;
   }
 }
@@ -227,6 +252,17 @@
     --tone-important: #8a72cc;
     --tone-warning: #d9a326;
     --tone-caution: #cd6a63;
+    --pop-bg: #21262e;
+    --pop-line: #333a45;
+    --pop-hover: #262b34;
+    --update-bg: #ff9e8a;
+    --update-ink: #0d1b2e;
+    --share-wait: #b8860b;
+    --share-ok: #2e8b57;
+    --dirty-ring: #16273e;
+    /* slides #573: navy at 14% lifts nothing off dark chrome; black, deeper */
+    --pop-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+    --pop-chrome: #1b1f26;
     color-scheme: only dark;
   }
 }
@@ -316,6 +352,11 @@ option { background: var(--field); color: var(--ink); }
    have been white on near-white the moment the theme flipped. */
 .sp-primary { background: var(--ink); color: var(--bg); padding: 6px 14px; }
 .sp-primary:hover { background: var(--ink-2); }
+/* slides' update chip (.ed-btn-update): peach, bold, beside the wordmark,
+   and in the DOM only while an update is waiting */
+.sp-btn.sp-update { background: var(--update-bg); color: var(--update-ink); font-weight: 700; }
+.sp-btn.sp-update:hover { background: var(--update-bg); filter: brightness(0.96); }
+.sp-btn.sp-update[hidden] { display: none; }
 
 /* `relative`: a panel below the drawer breakpoint is an absolute overlay of
    THIS box (the kernel's `.bkp-drawer`), under the bar and over the page. */
@@ -853,10 +894,31 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   --bkd-scrim: var(--scrim);
   --bkd-body-ink: var(--ink);
 }
+/* ————— SLIDES PARITY: dialogs —————
+   slides' `.ed-about` card and `.ed-about-overlay` scrim (slides/src/
+   styles.css): the same 14px corner, no frame, 20px in, 13px text, slides'
+   shadow and scrim, and slides' surface in dark. Widths are slides' too:
+   About 440, the shortcut sheet 700. The heading stays the kernel's 17px/650
+   title where a dialog has one (D4) — slides' 19.5px/700 `h2` is the deviation,
+   filed for slides. Kernel defaults that differ: frame 1px --line (none),
+   padding 20px 22px (20px), shadow 0 18px 60px /.30 (0 18px 50px
+   rgb(15 23 36 / .3)), scrim rgb(20 30 45 / .44) (rgb(15 23 36 / .38)). */
+:root {
+  --bkd-bg: var(--pop-bg);
+  --bkd-border: transparent;
+  --bkd-shadow: 0 18px 50px rgb(15 23 36 / 0.3);
+  --bkd-scrim: rgb(15 23 36 / 0.38);
+}
+.bkd-card.sp-dlg { padding: 20px; font-size: 13px; }
+/* slides' .ed-about width, for About and the Save menu's own dialogs */
+.bkd-card.sp-dlg.sp-dlg-about, .bkd-card.sp-dlg.sp-dlg-narrow { width: 440px; }
+.sp-dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; padding: 0; }
+.sp-note.sp-dlg-err { color: var(--c-red); min-height: 1em; margin: 0 4px; }
+.sp-ab-field > span { flex: 0 0 120px; font-size: 12px; color: var(--muted); }
 /* Selectors carry `.bkd-*` twice where they override the kernel sheet, which
    the bundle places after this file. */
 .bkd-card.sp-dlg { width: 560px; }
-.bkd-card.sp-dlg-wide { width: 720px; max-width: min(720px, 100%); }
+.bkd-card.sp-dlg-wide { width: 700px; max-width: min(700px, 100%); }
 .bkd-card.sp-dlg .bkd-title { letter-spacing: -0.005em; }
 /* a palette (search, "link to page") sits high and grows DOWN, so a result
    list arriving does not re-centre the card under the pointer */
@@ -865,26 +927,26 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .bkd-card.sp-dlg-graph { width: auto; max-width: none; padding: 0; overflow: hidden; }
 .bkd-overlay:has(.sp-dlg-graph) { padding: 14px; }
 .sp-card-h {
-  font-size: 11px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--muted); margin: 2px 4px 8px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); margin: 2px 4px 8px;
 }
 .sp-find {
-  width: 100%; font: inherit; font-size: 14px; padding: 9px 11px; color: var(--ink);
-  background: var(--field); border: 1px solid var(--line); border-radius: 8px;
+  width: 100%; font: inherit; font-size: 13px; padding: 5px 8px; color: var(--ink);
+  background: var(--field); border: 1px solid var(--line); border-radius: 6px;
 }
 .sp-find:focus { border-color: var(--blue); outline: none; }
 .sp-results { list-style: none; margin: 8px 0 0; padding: 0; }
 .sp-result {
   display: flex; align-items: center; gap: 10px;
   width: 100%; text-align: start; font: inherit; color: var(--ink);
-  background: transparent; border: 0; border-radius: 7px; padding: 8px 10px; cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 6px 9px; cursor: pointer;
 }
-.sp-result:hover, .sp-result.sp-sel { background: var(--chrome-2); }
+.sp-result:hover, .sp-result.sp-sel { background: var(--pop-hover); }
 .sp-result-ico { flex: 0 0 auto; color: var(--muted); display: flex; }
 .sp-result-txt { min-width: 0; }
-.sp-result strong { display: block; font-size: 14px; font-weight: 600; }
+.sp-result strong { display: block; font-size: 13px; font-weight: 600; }
 .sp-result span {
-  display: block; color: var(--muted); font-size: 12.5px;
+  display: block; color: var(--muted); font-size: 12px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .sp-result.sp-new { color: var(--blue); }
@@ -898,8 +960,9 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
      panel's primary action off the bottom on an ordinary laptop. This value is
      only the fallback for a popover placed some other way. */
   position: fixed; z-index: 60; width: 260px; max-height: 80vh; overflow: auto;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 12px 34px rgb(var(--shade) / .2); padding: 6px;
+  /* slides' menu surface (the parity block), as every popover from the bar */
+  background: var(--pop-bg); border: 1px solid var(--pop-line); border-radius: var(--radius);
+  box-shadow: var(--pop-shadow); padding: 6px;
 }
 
 /* ————— banners + gates ————— */
@@ -963,9 +1026,11 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
      on its own row. 112 makes it 2×2 on a phone and one row of four on a
      desktop card, which is the same readout either way rather than a ragged
      one. Measured inner widths: 315px at 375, 524px at 1600. */
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px; margin: 0 2px 4px;
 }
+/* four across in slides' 440 card; two by two on a narrow phone */
+@media (max-width: 420px) { .sp-ab-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .sp-ab-stat {
   background: var(--chrome); border: 1px solid var(--line); border-radius: 8px;
   padding: 8px 10px; min-width: 0;
@@ -979,7 +1044,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 /* a labelled field, the shape slides' document properties use */
 .sp-ab-field { display: flex; align-items: center; gap: 10px; padding: 2px 4px 8px; }
 .sp-ab-field label { flex: 0 0 auto; font-size: 12px; color: var(--muted); }
-.sp-ab-field .sp-input { flex: 1 1 auto; min-width: 0; }
+.sp-ab-field .sp-input { flex: 1 1 auto; min-width: 0; font-size: 13px; padding: 5px 8px; border-radius: 6px; background: var(--field); }
 
 /* `.sp-btn` is transparent by design — the topbar is icon-only and a row of
    outlined boxes there would be noise. In THIS card the same class has to read
@@ -990,7 +1055,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    space…" and Export's "Close" rendered as bare words beside a filled primary,
    with nothing to say they were buttons. And the primary's ink is the GROUND,
    never `#fff` — on the dark theme's near-white fill `#fff` was invisible. */
-.bkd-card .sp-btn { border-color: var(--line); background: var(--chrome); }
+.bkd-card .sp-btn { border-color: var(--line); background: var(--pop-bg); }  /* slides' About: --surface */
 .bkd-card .sp-btn:hover { background: var(--chrome-2); }
 .bkd-card .sp-primary { border-color: var(--ink); background: var(--ink); color: var(--bg); }
 .bkd-card .sp-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
@@ -1173,25 +1238,89 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    answers. Structure and behaviour are the kernel's and are not restated here.
    Menus keep `--radius` (10px): `--radius-lg` is the DIALOG corner, and the
    kernel's chain would otherwise hand a menu 14px. */
+/* ————— SLIDES PARITY: menus —————
+   Every value in this block is slides' `.ed-menu` / `.ed-btn` / `.ed-menu-sep`
+   (slides/src/styles.css), so a menu opened from either app's bar is the same
+   object: 13px/400 rows in --ink-2, 16px icons in the same ink, 30px rows
+   (6px 9px, a 1px transparent frame, 6px gap, 8px corners), a 4px list
+   padding, 4px off the trigger, hairline separators 3px 2px, slides' shadow,
+   and the Save menu at 12.5px. scripts/test-spaces-chrome.ts reads slides'
+   numbers out of slides' stylesheet and holds these computed values to them.
+
+   It is ONE block because it is a set of answers to the kernel menu's hooks,
+   not a fork of it. Where the kernel has a hook (`--bkm-*`) it is used; where
+   it has none — the list padding, a row's padding, gap and frame, the
+   separator's margin, a pressed state — the rule is here, and each of those is
+   filed for the kernel as a proposed default (board, 2026-09-26), so that
+   slides can one day adopt the kernel menu without changing how it looks.
+   Kernel defaults that differ from slides': offset 6 (slides 4), list padding
+   5 (4), row padding 7px 9px (6px 9px), row gap 9 (6), row frame 0 (1px
+   transparent), row radius 7 (8), row ink --ink-2 via chain (same), icon ink
+   --muted (--ink-2), font 13 (same), min-width 200 (150), shadow
+   0 12px 32px /.16 (0 8px 24px /.14), separator margin 4px 6px (3px 2px), no
+   :active (--line). */
 .sp-app, .sp-mn-anchored {
   --bkm-radius: var(--radius);
-  --bkm-item-radius: var(--radius-sm);
-  --bkm-shadow: var(--shadow-pop);
-  --bkm-ink: var(--ink);
-  --bkm-font-size: 13.5px;
-  --bkm-min-width: 240px;
+  --bkm-item-radius: 8px;
+  --bkm-shadow: var(--pop-shadow);
+  --bkm-bg: var(--pop-bg);
+  --bkm-border: var(--pop-line);
+  --bkm-hover: var(--pop-hover);
+  --bkm-ink: var(--ink-2);
+  --bkm-ico: var(--ink-2);
+  --bkm-font-size: 13px;
+  --bkm-min-width: 150px;
+  --bkm-gap: 4px;
   --bkm-z: var(--z-pop);
 }
 .sp-mn-pop { font-family: inherit; }
-.sp-mn-pop .bkm-text { font-weight: 600; }
-.sp-mn-pop .bkm-hint { font-size: var(--fs-hint); }
-.sp-mn-pop .bkm-item { min-height: var(--ctl-h); }
+.bkm-menu.sp-mn-pop { padding: 4px; }
+.sp-mn-pop .bkm-item {
+  gap: 6px; padding: 6px 9px; border: 1px solid transparent;
+  min-height: var(--ctl-h); line-height: normal;
+}
+.sp-mn-pop .bkm-item:active { background: var(--pop-line); }
+/* a row is ONE line, as slides' (`.ed-btn` is nowrap): the list is as wide as
+   its longest name. Without it an absolutely placed list shrinks toward its
+   150px floor and names wrap into 44px rows. A description still wraps, under
+   the name, at the width the names set; a name longer than the cap ellipses. */
+.sp-mn-pop .bkm-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 16px; }
+/* 16px, not `normal`: a language row carries `lang="ja"`, and the Japanese
+   face's normal line is 20px — its row came out 34px among 30px ones */
+.sp-mn-pop .bkm-body { min-width: 0; }
+/* a scrolling list is a flex column with a max-height, so its 1px separators
+   SHRANK to nothing — the folded ⋯ lost the rule between the bar's controls
+   and the Save list. Nothing in a menu shrinks; the list scrolls instead. */
+.bkm-menu.sp-mn-pop > * { flex-shrink: 0; }
+.sp-mn-pop .bkm-sep { margin: 3px 2px; }
+/* read by a screen reader, never drawn: a Save row's description */
+.sp-vh {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+/* D2 descriptions, slides' `.ed-mi-desc` (#573): 12px/1.35 --muted, 2px under
+   the name, regular weight; the icon lines up with the NAME, not the middle */
+.sp-mn-pop .bkm-hint { font-size: 12px; font-weight: 400; line-height: 1.35; color: var(--muted); margin-top: 2px; }
+.sp-mn-pop .bkm-item:has(.bkm-hint) { align-items: flex-start; }
+.sp-mn-pop .bkm-item:has(.bkm-hint) > .bkm-ico { margin-top: 1px; }
+/* slides' Save menu is the one list set a half-point smaller, and at least 190
+   wide; its descriptions (D2) wrap under the name rather than widening it */
+/* slides #573: the list is 264 wide (less on a phone) and scrolls in the room
+   under the bar, which topbar.ts publishes as --sp-bar-bottom */
+.sp-savemenu > .bkm-menu.sp-mn-pop {
+  width: min(264px, calc(100vw - 16px));
+  max-height: calc(100dvh - var(--sp-bar-bottom, 56px) - 12px);
+}
+.sp-savemenu .bkm-item { font-size: 12.5px; }
 /* Selectors that override the kernel sheet carry `.bkm`/`.bkm-menu`: the
    bundle places that sheet AFTER this file, so equal specificity loses.
    A row that TEACHES may wrap, but no menu here is wider than a phone column. */
 .bkm-menu.sp-mn-pop { max-width: min(320px, calc(100vw - 16px)); }
+.sp-savemenu > .bkm-menu.sp-mn-pop { max-width: min(264px, calc(100vw - 16px)); }
 .sp-mn-pop .bkm-body { flex: 1 1 auto; }
-.sp-mn-pop .bkm-selected { background: var(--chrome-2); }
+/* ⋯ exists only once the bar has folded, as slides' does */
+.sp-bar .sp-more { display: none; }
+.sp-bar.sp-bar-fold .sp-more { display: inline-flex; }
 /* a SHORTCUT sits at the row's end, in the interface face, right-aligned, in
    ⌃⌥⇧⌘ order (D8) — never a second line under the name, where it read as a
    description of the command */
@@ -1456,7 +1585,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-keys-g { min-width: 0; }
 .sp-keys-h {
-  margin: 16px 2px 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em;
+  margin: 16px 2px 6px; font-size: 11px; font-weight: 700; letter-spacing: .06em;
   text-transform: uppercase; color: var(--muted);
 }
 .sp-keys-g:first-child .sp-keys-h, .sp-keys-g:nth-child(2) .sp-keys-h { margin-top: 8px; }
@@ -1465,12 +1594,12 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   margin: 0; align-items: baseline;
 }
 .sp-keys-list dt { justify-self: end; }
-.sp-keys-list dd { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.sp-keys-list dd { margin: 0; font-size: 13px; color: var(--ink); }
 .sp-kbd {
-  display: inline-block; padding: 2px 7px; font: inherit; font-size: 12px;
+  display: inline-block; padding: 2px 6px; font: inherit; font-size: 12px; font-weight: 600;
   font-variant-numeric: tabular-nums; color: var(--ink);
-  background: var(--chrome-2); border: 1px solid var(--line);
-  border-radius: 6px; white-space: nowrap;
+  background: var(--pop-hover); border: 1px solid var(--line);
+  border-radius: 5px; white-space: nowrap;
 }
 
 /* ⋯ IS A HOME, NOT JUST AN OVERFLOW. It used to be display:none until the bar
@@ -1520,6 +1649,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    and a SQUARE one, the icon centred. */
 .sp-bar-fold .sp-split > .sp-btn:first-child {
   border-start-end-radius: 8px; border-end-end-radius: 8px;
+  border-inline-end: 1px solid var(--ink);
   padding-inline: 9px; justify-content: center;
 }
 /* THE STATUS LINE LEAVES THE FLOW. It is a nowrap span, so a long message
@@ -1545,13 +1675,14 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    inverse of the surface — ink fill, ground text — like slides' toast and the
    kernel tooltip, above a dialog on purpose. */
 .sp-notice {
-  position: fixed; left: 50%; bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
-  transform: translate(-50%, 6px); z-index: var(--z-toast);
+  position: fixed; left: 50%; bottom: max(26px, calc(env(safe-area-inset-bottom) + 16px));
+  transform: translate(-50%, 12px); z-index: var(--z-toast);
   max-width: min(520px, calc(100vw - 32px)); padding: 9px 16px;
-  border-radius: 999px; background: var(--ink); color: var(--bg);
-  font-size: 13px; line-height: 1.35; text-align: center;
-  box-shadow: var(--shadow-pop); pointer-events: none;
-  opacity: 0; transition: opacity .18s ease, transform .18s ease;
+  /* slides' .ed-toast: --ink pill, --surface ink, no shadow, .25s */
+  border-radius: 999px; background: var(--ink); color: var(--pop-bg);
+  font-size: 13px; text-align: center;
+  pointer-events: none;
+  opacity: 0; transition: opacity .25s ease, transform .25s ease;
 }
 .sp-notice.sp-on { opacity: 1; transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) { .sp-notice { transition: none; } }
@@ -1603,19 +1734,27 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    proportions (a 70×30 half and a 21px caret, where spaces' were 97 and 30);
    spaces' fill, because Save is the primary action in both apps (D1). */
 .sp-split { display: inline-flex; align-items: stretch; }
+/* Slides' split as #568 made it primary: --surface ink on an --ink fill, a
+   1px --ink frame with no seam on the Save half, and the caret parted from it
+   by a hairline in the text colour mixed into the fill — slides' `.ed-split`
+   and `.ed-split-caret`, value for value, measured at 1440 and at the compact
+   tier (Save 70/35 wide, caret 21, both 30 tall). */
 .sp-split > .sp-btn:first-child {
   position: relative;
   border-start-end-radius: 0; border-end-end-radius: 0;
   padding: 6px 9px;
+  border-color: var(--ink); border-inline-end: none; color: var(--pop-bg);
 }
+.sp-split > .sp-btn:first-child:hover { border-color: var(--ink-2); }
 .sp-split .sp-caret > .sp-btn {
-  height: 100%; padding: 6px 4px;
+  height: 100%; padding: 6px 7px;
   border-start-start-radius: 0; border-end-start-radius: 0;
-  margin-inline-start: 1px;
-  background: var(--ink); color: var(--bg);
+  border-color: var(--ink);
+  border-inline-start-color: color-mix(in srgb, var(--pop-bg) 35%, var(--ink));
+  background: var(--ink); color: var(--pop-bg);
 }
-.sp-split .sp-caret > .sp-btn svg { width: 12px; height: 12px; }
-.sp-split .sp-caret > .sp-btn:hover { background: var(--ink-2); }
+.sp-caret-g { font-size: 10px; line-height: 1; }
+.sp-split .sp-caret > .sp-btn:hover { background: var(--ink-2); border-color: var(--ink-2); }
 
 /* The unsaved dot lives ON Save: the place you look to find out whether you
    need to press it is the button itself. A BADGE on the corner, as slides'
@@ -1624,7 +1763,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-dirty {
   position: absolute; top: 3px; inset-inline-end: 3px;
   width: 7px; height: 7px; border-radius: 50%;
-  background: var(--accent); box-shadow: 0 0 0 2px var(--ink);
+  background: var(--accent); box-shadow: 0 0 0 1.5px var(--dirty-ring);
   opacity: 0; transition: opacity .18s; pointer-events: none;
 }
 .sp-dirty.sp-on { opacity: 1; }
@@ -1650,6 +1789,8 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   .sp-bar, .sp-bar.sp-bar-compact, .sp-bar.sp-bar-tight {
     padding: 6px max(6px, env(safe-area-inset-right)) 6px max(6px, env(safe-area-inset-left));
   }
+  /* slides' phone rows: 44px targets, the desktop padding (D5) */
+  .sp-mn-pop .bkm-item { min-height: var(--tap); }
   .sp-bar .sp-btn, .sp-bar .sp-live { min-width: var(--tap); min-height: var(--tap); justify-content: center; }
   /* the mark is a button (About), so it is a 44px target like the rest (D5);
      the glyph stays slides' 20px, centred in it */
@@ -2075,39 +2216,70 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 }
 .sp-dot-more { background: var(--chrome-2); color: var(--muted); }
 
-.sp-people { min-width: 260px; padding: 10px; }
-.sp-pop-title { font-weight: 650; margin: 0 0 8px; }
+/* ————— SLIDES PARITY: the Share popover —————
+   slides' `.ed-share-pop` and its parts (slides/src/styles.css), value for
+   value: 12px padding, 7px between parts, 250–290 wide, your name on one line,
+   10.5px/700 uppercase section labels, the status in amber or green, and the
+   actions as framed 12.5px buttons with the first one filled. The one thing
+   that is not slides' is the second line on each action — D2 rules Share a
+   consequence menu, so what a button does is written on it. */
+.sp-pop.sp-people {
+  display: flex; flex-direction: column; gap: 7px;
+  width: auto; min-width: 250px; max-width: 290px; padding: 12px;
+}
+.sp-pop.sp-people.sp-sheet { max-width: none; }
+/* slides' popover sits at its 250px floor (it is sized against its button);
+   a fixed popover would instead grow to the cap as soon as a note wraps */
+.sp-pop.sp-people:not(.sp-sheet) { width: 250px; }
+.sp-share-name { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.sp-share-name .sp-input { flex: 1; min-width: 0; padding: 5px 8px; border-radius: 6px; font-size: 12.5px; background: var(--field); }
+/* a stacked field (the link card's) */
 .sp-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
 .sp-field-lbl { font-size: 12px; color: var(--muted); }
+.sp-share-label {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--muted); margin-top: 3px;
+}
 .sp-input {
   font: inherit; padding: 6px 8px; border: 1px solid var(--line);
   border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%;
 }
-.sp-plist { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.sp-plist { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
 .sp-pitem {
   display: flex; align-items: center; gap: 8px; width: 100%;
-  border: 0; background: none; font: inherit; color: inherit;
-  padding: 5px 6px; border-radius: 7px; cursor: pointer; text-align: start;
+  border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--ink);
+  padding: 4px 6px; border-radius: 6px; cursor: pointer; text-align: start;
 }
-.sp-pitem:hover { background: var(--chrome-2); }
-.sp-pname { font-weight: 550; }
+.sp-pitem:hover { background: var(--pop-hover); }
+.sp-pname { font-weight: 550; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* where they are, quietly — the page title is context, not the subject */
-.sp-ppage { color: var(--muted); font-size: 12px; margin-inline-start: auto;
+.sp-ppage { color: var(--muted); font-size: 11.5px; margin-inline-start: auto;
   max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sp-pempty, .sp-pnote { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
-.sp-pacts { display: flex; flex-direction: column; gap: 4px; }
+.sp-pempty, .sp-pnote { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 0; }
+.sp-pacts { display: flex; flex-direction: column; gap: 0; }
+/* slides #573: Share's actions are plain menu rows — `.ed-btn` in a menu:
+   12.5px, one 30px line, 6px 9px inside a transparent 1px frame, a hover fill
+   and nothing at rest, no filled primary; adjacent rows touch */
 .sp-paction {
-  display: flex; flex-direction: column; gap: 1px; text-align: start;
-  border: 0; background: none; font: inherit; color: inherit;
-  padding: 7px 8px; border-radius: 7px; cursor: pointer;
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: start;
+  font: inherit; font-size: 12.5px; color: var(--ink-2);
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  padding: 6px 9px; cursor: pointer; white-space: nowrap;
 }
-.sp-paction:hover { background: var(--chrome-2); }
-.sp-paction-sep { height: 1px; background: var(--line); margin: 8px 4px 10px; }
-.sp-paction span { color: var(--muted); font-size: 12px; }
+.sp-paction:hover { background: var(--pop-hover); }
+.sp-paction:active { background: var(--pop-line); }
+.sp-paction-ico { display: flex; flex: none; }
+.sp-paction-ico svg { display: block; }
+.sp-paction-body { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* the rows touch, so the rule carries the popover's 7px either side, as
+   slides' `.ed-share-sep` gets from its gap */
+.sp-paction-sep { height: 1px; background: var(--pop-line); margin: 9px 0; }
 
-/* THIS device's row in the People list: it is you, so it is not a target. */
-.sp-pme { cursor: default; }
-.sp-pme:hover { background: none; }
+/* THIS device's row in the People list, on a chrome ground as slides' */
+.sp-pme { cursor: default; background: var(--pop-chrome); border-radius: 7px; gap: 7px; }
+.sp-pme:hover { background: var(--pop-chrome); }
+.sp-pme .sp-pname { font-weight: 600; }
+.sp-pme .sp-ppage { font-size: 11px; font-variant-numeric: tabular-nums; }
 
 /* Remove, on a peer row. Deliberately faint until the row is hovered — a
    revocation is one click and it is not undoable, so it must not read as
@@ -2119,15 +2291,15 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 .sp-pitem:hover .sp-pkick { opacity: 1; }
 .sp-pkick:hover { background: color-mix(in srgb, var(--c-red) 18%, transparent); color: var(--c-red); }
 
-/* The connection line. One glance = which of the five states this copy is in,
-   and the dot carries the colour so the words never have to. */
-.sp-pstatus { font-size: 12px; color: var(--muted); margin: 2px 0 8px; }
-.sp-pstatus.ok { color: var(--accent-ink); }
+/* The connection line, slides' `.ed-share-status`: amber until live, green
+   once it is. One glance = which of the five states this copy is in. */
+.sp-pstatus { font-size: 12.5px; font-weight: 600; color: var(--share-wait); }
+.sp-pstatus.ok { color: var(--share-ok); }
 
 /* A heading inside a menu: the three width rows are a CHOICE among themselves,
    not three more actions in the list above them. */
 .sp-menu-label {
-  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
   color: var(--muted); padding: 10px 10px 4px; margin-top: 4px;
   border-top: 1px solid var(--line);
 }
@@ -2468,3 +2640,17 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-canvas-body { background: none; background-image: none; }
   .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }
+
+/* ————— SLIDES PARITY: the keyboard ring —————
+   slides #573 (and the kernel's .bkm-item): 2px --accent-ink. Bar and dialog
+   buttons draw it OUTSIDE, on the surface they sit on (inside, it would vanish
+   into Save's ink fill); rows in a list draw it INSIDE, where the list's own
+   padding would clip it. :focus-visible, so a pointer never sees it. */
+.sp-bar button:not(.bkm-item):focus-visible, .bkd-card button:not(.bkm-item):focus-visible {
+  outline: 2px solid var(--accent-ink); outline-offset: 2px;
+}
+.sp-pop .sp-paction:focus-visible, .sp-pop .sp-pitem:focus-visible, .sp-mn-pop .bkm-item:focus-visible,
+.bkd-card .sp-result:focus-visible, .bkd-card .sp-ab-version:focus-visible {
+  outline: 2px solid var(--accent-ink); outline-offset: -2px;
+}
+
