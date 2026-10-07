@@ -751,4 +751,5 @@ export const it: Catalog = {
   "…or cut at character positions": "…oppure taglia a posizioni di carattere",
   "＋ Comment on the selected cell": "＋ Commenta la cella selezionata",
   "This file was updated. Reload to run the new version before saving again.": "Questo file è stato aggiornato. Ricarica per avviare la nuova versione prima di salvare di nuovo.",
+  "Not a number — left out of totals, and a formula that reads it gives #VALUE!": "Non è un numero — escluso dai totali, e una formula che lo legge dà #VALUE!",
 }

@@ -111,6 +111,27 @@ ok(exportCopy.includes('hasPrefix(') && exportCopy.includes('safeFileName(name)'
   && exportCopy.indexOf('write(to: tmp)') > exportCopy.indexOf('hasPrefix('),
   'both guards come before the write — the ordering is the property, not their presence')
 
+// The launch handle (bridge.js launchQueue). A launch request the host cannot
+// meet must be REFUSED — falling through to the export branch hands the page an
+// export handle as its own file, so the first autosave after an edit opens a save
+// dialog nobody asked for. And a new page may claim the open document again, or a
+// reload's first save is taken for an export; and it forgets the old page's
+// Save-As copies, or its first export under a reused name lands in one unasked.
+{
+  const begin = swift.slice(swift.indexOf('case "begin":'), swift.indexOf('case "read":'))
+  const refuse = begin.indexOf('m["launch"] as? Bool == true')
+  const exportAt = begin.indexOf('exportName(')
+  ok(refuse > 0 && /reply\(id, ok: false/.test(begin.slice(refuse, refuse + 600)),
+    'a launch request for an already-vended document is refused')
+  ok(refuse > 0 && exportAt > refuse,
+    'the launch refusal comes before the export branch, so it can never reach a picker')
+  const commit = slice(swift, 'didCommit navigation: WKNavigation!)')
+  ok(/openDocumentVended = false/.test(commit),
+    'a main-frame commit lets the new page claim the open document again')
+  ok(/exports = ExportSessions\(\)/.test(commit),
+    "a main-frame commit forgets the old page's Save-As copies")
+}
+
 if (spawnSync('swiftc', ['--version']).status !== 0) {
   console.log('  skip  no Swift toolchain on this machine — behaviour checks not run')
   console.log(`\n${checks - failures}/${checks} checks passed`)

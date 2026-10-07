@@ -751,4 +751,5 @@ export const zhHant: Catalog = {
   "…or cut at character positions": "…或按字元位置切分",
   "＋ Comment on the selected cell": "＋ 為選取的儲存格加註解",
   "This file was updated. Reload to run the new version before saving again.": "此檔案已更新。請先重新載入以執行新版本，再進行儲存。",
+  "Not a number — left out of totals, and a formula that reads it gives #VALUE!": "不是數字 — 未計入合計，讀取它的公式會得到 #VALUE!",
 }

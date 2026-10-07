@@ -751,4 +751,5 @@ export const de: Catalog = {
   "…or cut at character positions": "…oder an Zeichenpositionen schneiden",
   "＋ Comment on the selected cell": "＋ Kommentar zur ausgewählten Zelle",
   "This file was updated. Reload to run the new version before saving again.": "Diese Datei wurde aktualisiert. Laden Sie neu, um die neue Version zu starten, bevor Sie erneut speichern.",
+  "Not a number — left out of totals, and a formula that reads it gives #VALUE!": "Keine Zahl — aus den Summen ausgenommen, und eine Formel, die sie liest, ergibt #VALUE!",
 }

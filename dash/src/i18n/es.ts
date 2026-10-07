@@ -751,4 +751,5 @@ export const es: Catalog = {
   "…or cut at character positions": "…o cortar en posiciones de carácter",
   "＋ Comment on the selected cell": "＋ Comentar la celda seleccionada",
   "This file was updated. Reload to run the new version before saving again.": "Este archivo se ha actualizado. Recarga para ejecutar la nueva versión antes de volver a guardar.",
+  "Not a number — left out of totals, and a formula that reads it gives #VALUE!": "No es un número: queda fuera de los totales, y una fórmula que lo lea da #VALUE!",
 }

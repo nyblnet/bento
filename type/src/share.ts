@@ -23,9 +23,12 @@
 
 import { mintInvite } from './sync/online.ts';
 import { collabForReader, collabForInvite } from '../../kernel/src/docfields.ts';
-import type { TypeDoc } from './model.ts';
+import { withoutEmbeddedCaps, type TypeDoc } from './model.ts';
 
-const clone = (doc: TypeDoc): TypeDoc => JSON.parse(JSON.stringify(doc)) as TypeDoc;
+// Every share copy starts here, so every one is embed-safe: an embedded
+// document never carries its own sharing keys out of this file, however it got
+// in (an older file, a pasted JSON — not only through embed.ts's intake).
+const clone = (doc: TypeDoc): TypeDoc => withoutEmbeddedCaps(JSON.parse(JSON.stringify(doc)) as TypeDoc);
 
 /**
  * An EDITOR copy: joins live with edit access through its own owner-signed

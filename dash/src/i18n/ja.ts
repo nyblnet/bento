@@ -751,4 +751,5 @@ export const ja: Catalog = {
   "…or cut at character positions": "…または文字位置で区切る",
   "＋ Comment on the selected cell": "＋ 選択したセルにコメント",
   "This file was updated. Reload to run the new version before saving again.": "このファイルは更新されました。再度保存する前に、再読み込みして新しいバージョンを起動してください。",
+  "Not a number — left out of totals, and a formula that reads it gives #VALUE!": "数値ではありません — 合計から除外され、これを参照する数式は #VALUE! になります",
 }
