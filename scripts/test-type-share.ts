@@ -26,7 +26,7 @@ import { register } from 'node:module'
 import { readFileSync } from 'node:fs'
 register('./lib/ts-resolve-hooks.mjs', import.meta.url)
 const { readerCopy, inviteCopy } = await import('../type/src/share.ts')
-const { emptyDoc, parseDoc } = await import('../type/src/model.ts')
+const { emptyDoc, parseDoc, docForExport } = await import('../type/src/model.ts')
 const { mintCollab } = await import('../kernel/src/sync/online.ts')
 import type { TypeDoc } from '../type/src/model.ts'
 
@@ -133,6 +133,58 @@ console.log('\nevery copy is minted in share.ts\n')
     .filter(f => f.endsWith('.ts') && f !== 'share.ts' && f !== 'model.ts')
     .filter(f => /role:\s*'(?:reader|audience)'/.test(read('type/src/' + f)))
   ok(rogue.length === 0, `no copy builder outside share.ts sets a reader/audience role (${rogue.join(', ') || 'none'}) — type builds no audience copies at all`)
+}
+
+console.log('\nembedded documents don\'t carry sharing keys out\n')
+{
+  // An embed's copy of its source document, carrying that document's FULL
+  // sharing envelope plus its docId. It is put onto the live body DIRECTLY —
+  // not through parseDoc, which now cleans embeds on entry — because the point
+  // is a document that reached the live file by another path (a peer's sync op,
+  // anything pre-dating the intake scrub). Built through parseDoc, the rows
+  // below would pass whether or not the outbound strip existed.
+  const ENV = { v: 2, on: true, room: 'w-src', key: 'SRC-READ-KEY', owner: 'SRC-OWNER-PUB', ownerPriv: 'SRC-OWNER-KEY',
+                writerPub: 'SRC-WRITER-PUB', writerPriv: 'SRC-WRITER-KEY', invite: { pub: 'SRC-INV-PUB', priv: 'SRC-INVITE-KEY', role: 'writer', sig: 'S' } }
+  const SECRETS = ['SRC-READ-KEY', 'SRC-OWNER-KEY', 'SRC-WRITER-KEY', 'SRC-INVITE-KEY']
+  const withDirtyEmbed = async (): Promise<TypeDoc> => {
+    const r = parseDoc(JSON.stringify({ ...emptyDoc(), body: [{ id: 'p1', kind: 'para', text: 'see the deck' }],
+      collab: await mintCollab() }))
+    if (!r.ok) throw new Error('fixture did not parse')
+    r.doc.body.push({ id: 'e1', kind: 'embed', text: '',
+      embed: { app: 'bento/slides', view: '<svg/>', doc: { format: 'bento/slides', docId: 'deck-SRC', title: 'Q3', collab: ENV } } } as never)
+    return r.doc
+  }
+  const embedded = (d: TypeDoc) => (d.body.find(b => b.kind === 'embed') as { embed: { doc: Record<string, unknown> } }).embed.doc
+  const clean = (d: TypeDoc) => { const b = JSON.stringify(d.body); return SECRETS.every(x => !b.includes(x)) }
+
+  const src = await withDirtyEmbed()
+  ok(!clean(src), 'the fixture really holds an embed carrying a full sharing envelope')
+
+  const r = readerCopy(src)
+  ok(clean(r) && !('collab' in embedded(r)), 'a VIEW-ONLY copy carries none of the embedded document\'s keys')
+  ok(embedded(r).docId === 'deck-SRC' && embedded(r).title === 'Q3', 'while the embedded document and its docId are kept')
+
+  const own = (await mintCollab()).ownerPriv as string
+  const i = await inviteCopy(src, own)
+  ok(clean(i) && !('collab' in embedded(i)), 'an EDITOR copy carries none of them either')
+
+  const x = docForExport(src)
+  ok(clean(x) && !('collab' in embedded(x)), '"Copy document JSON" (docForExport) carries none of them')
+  ok(!('collab' in x), 'and still drops the document\'s own room, as it always has')
+
+  ok(!clean(src) && 'collab' in embedded(src), 'none of the three mutated the OPEN document')
+
+  // Entry: a document arriving through parseDoc (open, Replace from JSON,
+  // loadDoc, restore) comes in with its embeds already clean.
+  const entering = parseDoc(JSON.stringify({ ...emptyDoc(), body: [{ id: 'e1', kind: 'embed', text: '',
+    embed: { app: 'bento/slides', view: '<svg/>', doc: { format: 'bento/slides', docId: 'deck-SRC', collab: ENV } } }] }))
+  ok(entering.ok && clean(entering.doc), 'a document ENTERING bento/type has its embeds cleaned on the way in')
+
+  // Leaving to disk: Save and the browser snapshots go through the same strip.
+  const main = read('type/src/main.ts'), auto = read('type/src/autosave.ts')
+  ok(/saveFile\(withoutEmbeddedCaps\(store\.doc\)/.test(main), 'Save writes the document with its embeds cleaned')
+  ok(/putRecovery\(safe\)/.test(auto) && /addVersion\(safe\)/.test(auto) && /const safe = withoutEmbeddedCaps\(doc\)/.test(auto),
+     'and so do the recovery snapshot and the version history, which any local page can read')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

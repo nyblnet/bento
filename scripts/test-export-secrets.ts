@@ -388,8 +388,33 @@ for (const app of CLIP_APPS) {
   try { src = read(`${app}/src/model.ts`) } catch { continue }
   if (!/docForExport/.test(src)) continue
   const body = src.slice(src.indexOf('export function docForExport'))
-  ok(/\.\.\.rest|delete .*collab|const \{ collab/.test(body.slice(0, 400)),
+  // A docForExport that delegates to the kernel's shared scrubber is checked
+  // THROUGH it: the rule is how capabilities leave, not which file spells it.
+  const delegated = /withoutCaps\(/.test(body.slice(0, 160)) && /from '\.\.\/\.\.\/kernel\/src\/docfields\.ts'/.test(src)
+  const stripper = delegated ? read('kernel/src/docfields.ts').slice(read('kernel/src/docfields.ts').indexOf('export function withoutCaps')) : body
+  ok(/\.\.\.rest|delete .*collab|const \{ collab|delete out\[k\]/.test(stripper.slice(0, 400)),
     `${app}/src/model.ts: docForExport strips by REMOVING collab, not by listing fields to keep`)
+  if (delegated) {
+    ok(/CAP_FIELDS\s*=\s*\[[^\]]*'collab'/.test(read('kernel/src/docfields.ts')),
+      `${app}: the kernel's CAP_FIELDS — the one shared list — names collab`)
+  }
+}
+
+// EMBEDDED documents. bento/type's embed block carries a copy of another
+// document; its sharing keys must neither come in (intake) nor go out (every
+// path a document leaves by). Read from source, like the checks above.
+{
+  let model = '', embed = '', share = ''
+  try { model = read('type/src/model.ts'); embed = read('type/src/embed.ts'); share = read('type/src/share.ts') } catch { /* no type */ }
+  if (embed) {
+    const fn = embed.slice(embed.indexOf('export function readArtifact'))
+    ok(/return \{[^}]*doc:\s*embedSafe\(/.test(fn.slice(0, fn.indexOf('\n}') + 2)),
+      'type/src/embed.ts: readArtifact keeps the source document only through embedSafe — embedded documents don\'t carry sharing keys in')
+    ok(/return withoutEmbeddedCaps\(withoutCaps\(doc\)\)/.test(model),
+      'type/src/model.ts: docForExport also strips embedded documents\' keys')
+    ok(/const clone = \(doc: TypeDoc\): TypeDoc => withoutEmbeddedCaps\(/.test(share),
+      'type/src/share.ts: every share copy is built from an embed-safe clone')
+  }
 }
 
 // ---------------------------------------------------------------------------

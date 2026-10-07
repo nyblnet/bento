@@ -8086,3 +8086,24 @@ does the work — with legitimate `.pptx`/`.xlsx` imports unaffected. Rule: a
 size limit must be enforced DURING decompression, never after; the declared
 size in a container header is an attacker input, and the primitive, not the
 caller's preflight, must hold the ceiling.
+
+## 2026-10-05 — An embed keeps the source document, never its capabilities (type)
+
+**An embedded document's `collab` block — that document's sharing keys — does
+not travel with it, in or out of bento/type.** An `embed` block carries a copy
+of another Bento document so a reader can open the original; that copy keeps
+its content and `docId` and loses the kernel's capability fields
+(`CAP_FIELDS` / `withoutCaps`, kernel/src/docfields.ts), at every depth of
+bento/type's own embed blocks (the kernel helper is shallow, and an embedded
+bento/type document can hold embeds of its own).
+
+Applied where a document comes in and wherever it goes out:
+- **in** — `readArtifact` (embedding a file) and `parseDoc` (opening a file,
+  Replace from JSON, `loadDoc`, a restored snapshot);
+- **out** — the view-only and editor share copies, "Copy document JSON"
+  (`docForExport`), Save, and the browser's recovery and version snapshots.
+
+Both ends, because an embed can reach the live document by a path neither end
+sees alone (a peer's sync op, a document stored before intake was scrubbed).
+A document's OWN `collab` is untouched by any of this; that is the file's.
+`test-type-embed.ts`, `test-type-share.ts` and `test-export-secrets.ts` pin it.
