@@ -256,6 +256,17 @@ jobs:
         # mistakes is made in the source.
         run: node scripts/test-spaces-model.ts
 
+      - name: Spaces chrome rig
+        # Every spaces menu is the kernel's createMenu (through
+        # spaces/src/menus.ts). This drives the BUILT shell with trusted CDP
+        # input and asserts what spaces used to get wrong invisibly: arrow keys
+        # in every menu, Escape with focus return, one menu open at a time, no
+        # listener left on the document by a menu closed with Escape (one used
+        # to close the NEXT overlay on its first click), no global shortcut
+        # under a modal, and phone menus that end inside the screen with 44px
+        # rows. Needs the shell built above; a skip in CI is a failure.
+        run: node scripts/test-spaces-chrome.ts
+
       - name: spaces rig manifest
         # Bookkeeping, not a ninth run of the eight steps above. scripts/
         # test-spaces.mjs is the local entry point for the spaces suite (two of
@@ -546,6 +557,14 @@ jobs:
         # including over another deck the user would later open and trust.
         # Source-shape checks; the Swift half self-skips without a toolchain.
         run: node scripts/test-home-bridge.ts
+
+      - name: home launch handle rig
+        # A page in a native host held no file handle until its first save, so
+        # autosave never wrote the file. home/bridge.js now hands it over through
+        # launchQueue — lazily, so documents from older runtimes keep their first
+        # silent save — and a launch request the host cannot meet is refused,
+        # never turned into an export. Runs the real bridge against a fake host.
+        run: node scripts/test-home-launch.mjs
 
       - name: tray mark is one source
         # tray-icon.svg is the only drawing of the mark. Everything else is
@@ -909,6 +928,17 @@ jobs:
 
       - name: bento/dash selection and clipboard
         run: node scripts/test-dash-select.ts
+
+      - name: bento/dash data entry through the real editor
+        # Widget⇥12⇥4.50⏎ has to come home to column A. select.ts had the
+        # Tab-run model and test-dash-select.ts proved it; the editor's finish()
+        # never called it. This one drives typeInto + the cell's own onkeydown.
+        run: node scripts/test-dash-entry.ts
+
+      - name: bento/dash cross-sheet structure
+        # Insert a row on Pipeline and =SUM(Pipeline!D1:D8) on Scratch has to
+        # widen. a1.ts had the scope rule; Grid.shiftFormulas walked one sheet.
+        run: node scripts/test-dash-xshift.ts
 
       - name: bento/dash sharing state
         # Start/stop/rotate sharing mark the workbook unsaved (a rotation is
