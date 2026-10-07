@@ -12,6 +12,15 @@ There is no server, so a break here would be permanent.
 
 The release that came out of watching somebody use 0.2.0.
 
+- **Portuguese.** dash's interface is available in Portuguese, the eighth
+  language beside English, Japanese, Simplified and Traditional Chinese,
+  Spanish, French, German and Italian. The translation rig now finds the
+  languages from the catalogs on disk instead of a fixed list, so it can no
+  longer report a set complete while a language it was never told about is
+  missing strings. The type label in a column header now stops short of the
+  column letter, which longer type names in Italian and Portuguese used to
+  overlap.
+
 - **Renaming a sheet renames it everywhere.** `=SUM(Pipeline!D1:D8)` names the
   sheet by name, and renaming the tab used to leave it pointing at a sheet that
   no longer existed — the starter workbook's own cross-sheet totals read
