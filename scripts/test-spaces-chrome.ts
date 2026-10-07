@@ -95,14 +95,40 @@ async function browser(chrome: string, html: string): Promise<void> {
   const server = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); r.end(html) })
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
   const port = (server.address() as { port: number }).port
-  const profile = mkdtempSync(join(tmpdir(), 'bento-spaces-chrome-'))
-  const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check',
-    '--disable-background-networking', '--disable-component-update', '--disable-sync', '--hide-scrollbars',
-    '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'], { stdio: 'ignore' })
+  // A cold Chrome on a CI runner took 10.1s to write DevToolsActivePort in the
+  // last green run, against a 10s wait — it passed by a hair, and slower starts
+  // failed main three times on 2026-10-07 with a bare ENOENT. So: wait up to
+  // 45s per attempt, stop early if Chrome exits, relaunch ONCE on a fresh
+  // profile, and say why (exit code + stderr) instead of throwing on a file.
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+  const launch = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bento-spaces-chrome-'))
+    const proc = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check',
+      '--disable-background-networking', '--disable-component-update', '--disable-sync', '--hide-scrollbars',
+      '--remote-debugging-port=0', '--user-data-dir=' + dir, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
+    const state = { exited: null as number | null, stderr: '' }
+    proc.stderr?.on('data', (d) => { if (state.stderr.length < 4000) state.stderr += String(d) })
+    proc.on('exit', (code) => { state.exited = code ?? -1 })
+    return { dir, proc, state }
+  }
+  let { dir: profile, proc: child, state } = launch()
   try {
-    const portFile = join(profile, 'DevToolsActivePort')
-    for (let i = 0; i < 100 && !existsSync(portFile); i++) await sleep(100)
+    let portFile = join(profile, 'DevToolsActivePort')
+    for (let attempt = 1; ; attempt++) {
+      const started = Date.now()
+      while (!existsSync(portFile) && state.exited === null && Date.now() - started < 45_000) await sleep(100)
+      if (existsSync(portFile)) {
+        console.log(`  (Chrome up in ${((Date.now() - started) / 1000).toFixed(1)}s${attempt > 1 ? ', on the relaunch' : ''})`)
+        break
+      }
+      const why = `${state.exited === null ? 'no DevToolsActivePort after 45s' : `exited with ${state.exited}`}: ${state.stderr.trim().slice(-1500)}`
+      if (attempt === 2) throw new Error(`Chrome did not start on two attempts (${why})`)
+      console.log(`  (Chrome did not start — ${why.split('\n')[0]} — relaunching once)`)
+      try { child.kill('SIGKILL') } catch { /* gone */ }
+      try { rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }) } catch { /* temp dir */ }
+      ;({ dir: profile, proc: child, state } = launch())
+      portFile = join(profile, 'DevToolsActivePort')
+    }
     const cdp = readFileSync(portFile, 'utf8').split('\n')[0].trim()
     const t = await (await fetch(`http://127.0.0.1:${cdp}/json/new?about:blank`, { method: 'PUT' })).json() as { webSocketDebuggerUrl: string }
     const ws = new WebSocket(t.webSocketDebuggerUrl)
