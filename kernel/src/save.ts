@@ -47,6 +47,21 @@ export function readEmbeddedDoc(): string | null {
 }
 
 /**
+ * The `#bento-doc` body from an HTML string — the file as bytes, not the live
+ * DOM — so a handle's current file can be checked against the open document
+ * without a parser (it runs in the launch consumer AND in a node rig). Trimmed to
+ * match readEmbeddedDoc, and the body is <-escaped at write time so it can never
+ * itself contain the close tag. null if there is no block. */
+export function embeddedDocBlock(html: string): string | null {
+  const open = new RegExp(`<script\\b[^>]*\\bid=["']${DATA_BLOCK_ID}["'][^>]*>`, 'i').exec(html)
+  if (!open) return null
+  const start = open.index + open[0].length
+  const end = html.indexOf(SCRIPT_CLOSE, start)
+  if (end < 0) return null
+  return html.slice(start, end).trim() || null
+}
+
+/**
  * Extra plaintext blocks the app wants written into every saved shell —
  * language packs today (docs/i18n-packs.md), whatever else later. The kernel
  * stays ignorant of what they mean: it is told an id, a type and a JSON body,
@@ -506,6 +521,7 @@ type SaveResult = 'saved' | 'saved-as' | 'downloaded' | 'cancelled'
 
 interface FsFileHandle {
   createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }>
+  getFile?(): Promise<{ text(): Promise<string> }>
   name: string
 }
 
@@ -828,10 +844,19 @@ export function consumeLaunchQueue(): void {
   }
   const lq = w.launchQueue
   if (!lq || typeof lq.setConsumer !== 'function') return
+  // The open document's #bento-doc, captured now (boot, before any edit). The
+  // handle we adopt must still point at THIS document: a host bug that vends the
+  // wrong file would otherwise have the first autosave silently overwrite it.
+  const booted = readEmbeddedDoc()
   try {
-    lq.setConsumer((params) => {
+    lq.setConsumer(async (params) => {
       const handle = params?.files?.[0]
-      if (handle) adoptFileHandle(handle) // only when the host actually vended one
+      if (!handle || !booted || typeof handle.getFile !== 'function') return
+      try {
+        const text = await (await handle.getFile()).text()
+        if (embeddedDocBlock(text) === booted) adoptFileHandle(handle) // same document — safe to write in place
+        // else: a different file (or none) — leave it; ⌘S falls back to the picker
+      } catch { /* unreadable handle → do not adopt */ }
     })
   } catch { /* setConsumer rejects a second registration — the first already won */ }
 }
