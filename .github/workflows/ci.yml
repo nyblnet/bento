@@ -1925,6 +1925,13 @@ jobs:
         # inside the signed text (it was once only displayed beside the tick).
         run: node scripts/test-type-canon.ts
 
+      - name: Type compare rig
+        # Comparing with another file is a VIEW: nothing commits, and the diff
+        # runs from that file to this one. Asserts which side is <del> and which
+        # is <ins>, because a reversed diff keeps the same change count and a
+        # count-only check cannot see it.
+        run: node scripts/test-type-compare.ts
+
       - name: Clipboard embedded-font rig
         run: |
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"

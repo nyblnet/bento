@@ -151,6 +151,45 @@ the host should not launch another app on its say-so. http, https and mailto are
 what a link in a document means. A custom URL scheme is dropped rather than
 opened, the same choice Android makes.
 
+## 2026-09-09 — bento/type: comparing with another file is a VIEW, never a merge
+
+**Decision.** `type/src/compare.ts` points the existing redline engine at a
+SECOND FILE — the user picks or drops another `.bento.html` (or a bare `.json`
+document) and gets the same word-level redline the Snapshot flow gives. Two
+constraints are settled here, because both are easy to reverse by accident.
+
+**No accept/reject against a foreign base.** `redlineview.ts` gained a
+`resolvable` flag and the file comparison passes `false`. Against a SNAPSHOT,
+reject means "restore what this document said a moment ago", and the
+accept/reject arithmetic lands somewhere the author meant to be. Against
+somebody else's document it means adopting their text wholesale — that is a
+merge, and a merge is a different feature with different questions (whose ids
+win, what happens to comments and tracked changes). Comparing may not touch the
+document and may not reach the saved file, the same rule the theme and the
+locale follow. If a future session wants three-way merge, it is new work beside
+this, not a flag flipped on it.
+
+**The direction is named in the UI, every time.** `redline(before, after)` is
+not symmetric but its change COUNT is: swap the ends and you get the same number
+of cards, each saying the opposite of the truth, with nothing on screen able to
+tell you which. The other file is `before` and the live document is `after` —
+their text paints as `<del>`, yours as `<ins>` — and the panel heading names
+both ends rather than saying "7 changes".
+
+Degenerate cases are part of the feature rather than error handling around it:
+an identical file is ANSWERED and never painted as an empty redline (an empty
+list is indistinguishable from a comparison that silently failed); another Bento
+app's file names the app it actually is; a differing `docId` is legitimate and
+noted, not refused; `parseDoc` repairs are surfaced, because a repaired block id
+shows up in the redline as a change nobody made.
+
+**Pointers.** `type/src/comparedoc.ts` (the reading and the direction, no DOM),
+`type/src/compare.ts` (the surface), `showComparison` in `redlineview.ts`. Rig:
+`scripts/test-type-compare.ts`, whose fixture is the BUILT
+`type/dist-single/*.bento.html` when one is on disk, and which pins the
+orientation by change CONTENT rather than count — verified by swapping the two
+arguments and watching six checks go red while the count stayed at three.
+
 ---
 
 ## 2026-08-19 — Cross-app embedding: static render + source, never a second renderer

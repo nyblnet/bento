@@ -37,6 +37,7 @@ import './comments.ts';
 // is what makes an eighty-change document usable.
 import './review.ts';
 import './redlineview.ts';  // snapshot redlining — own panel host, see its header
+import './compare.ts';      // the same redline against another FILE — a view, never a merge
 // auto-save + crash recovery: a debounced IndexedDB snapshot, a restore
 // banner on boot when it disagrees with the loaded file, and version
 // history (About dialog). See autosave.ts's header for the full design.
