@@ -9,6 +9,8 @@
 // Bento needs exactly this much of the API (kernel/src/save.ts):
 //   showSaveFilePicker({suggestedName}) -> { name, createWritable() }
 //   createWritable() -> { write(Blob|string), close() }
+// ...plus, from runtimes that know to ask, the file it was opened with:
+//   launchQueue.setConsumer(fn) -> fn({ files: [handle] })
 // ...and hasFsAccess() is just `typeof window.showSaveFilePicker === 'function'`.
 //
 // That is why the app needs NO changes to Bento and works with decks saved by
@@ -89,9 +91,57 @@
     // Do NOT try to infer this by comparing suggestedName to the open file:
     // Bento derives that name from the DECK TITLE, so it rarely matches and
     // every save would wrongly prompt.
-    const name = await call('begin', { suggestedName: want })
-    return makeHandle(name)
+    return makeHandle(await begin(want))
   }
+
+  // The FIRST begin is the open document, by the host's rule above. Kept, so a
+  // launch consumer that arrives after a ⌘S gets that same name rather than
+  // asking again — a second begin would be an export, and would prompt.
+  let opened = null
+  const begin = (want, launch) => {
+    const p = call('begin', launch ? { suggestedName: want, launch: true } : { suggestedName: want })
+    if (!opened) {
+      opened = p
+      // A refused first begin vended nothing, so the next one may still claim it.
+      p.catch(() => { if (opened === p) opened = null })
+    }
+    return p
+  }
+
+  // ----------------------------------------------------- the open document
+  //
+  // `launchQueue` is the File Handling API's way of handing a page the file it
+  // was opened with. Without it, a page in this host holds NO handle until its
+  // first ⌘S, and Bento's autosave writes the file only when it holds one — so
+  // an edit made and left never reached disk. The kernel consumes this at boot
+  // and adopts the handle, after which autosave writes in place from the first
+  // edit.
+  //
+  // The request is marked `launch: true`. A host that cannot hand over the open
+  // document — already handed out, or (Android) a read-only grant — must answer
+  // no, never fall through to an export: the page would adopt an export handle as
+  // its own file, and the first autosave after any edit would open a save dialog
+  // nobody asked for (measured on Android; the same on iOS, where begin only
+  // vends a name and the picker comes with the first write). bridge.js ships inside each host app,
+  // so the flag and the host that honours it always arrive together.
+  //
+  // LAZY, deliberately: nothing is asked of the host until a page calls
+  // setConsumer. A document saved by a runtime that predates this never calls
+  // it, so its first ⌘S still gets the open document silently, exactly as
+  // before. Asking eagerly at load would have spent that first begin and turned
+  // every old document's first save into a Save-As prompt.
+  //
+  // Defined, not assigned: a Chromium WebView may already carry a native
+  // launchQueue that will never deliver anything here, and an accessor
+  // property silently ignores a plain assignment.
+  Object.defineProperty(window, 'launchQueue', { configurable: true, enumerable: true, value: {
+    setConsumer(consumer) {
+      if (typeof consumer !== 'function') return
+      ;(opened || begin('', true)).then(
+        (name) => consumer({ files: [makeHandle(name)] }),
+        () => { /* the host declined; the page keeps today's ⌘S path */ })
+    },
+  } })
 
   // A FileSystemFileHandle faithful enough for apps that are not Bento.
   // Bento itself only ever touches createWritable/write/close, but this host

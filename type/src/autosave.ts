@@ -35,7 +35,7 @@ import {
 } from '../../kernel/src/autosave.ts';
 import { canonicalize } from './canon.ts';
 import { registerReady, type FeatureContext } from './features.ts';
-import type { TypeDoc } from './model.ts';
+import { withoutEmbeddedCaps, type TypeDoc } from './model.ts';
 import { gateRestored } from './restoregate.ts';
 import { t } from './i18n.ts';
 
@@ -90,11 +90,14 @@ async function runAutosave(ctx: FeatureContext): Promise<void> {
   // put a legible copy on disk beside a file whose whole purpose is that it
   // is not legible. See canSnapshot() above.
   if (!canSnapshot()) return;
-  const stored = await putRecovery(doc);
+  // A snapshot lands in IndexedDB, which on file:// any local page can read —
+  // so embeds go in without another document's sharing keys.
+  const safe = withoutEmbeddedCaps(doc);
+  const stored = await putRecovery(safe);
   if (!stored) return; // no usable IndexedDB here (private browsing, some file:// contexts)
   if (Date.now() - lastVersionAt > VERSION_THROTTLE_MS) {
     lastVersionAt = Date.now();
-    await addVersion(doc);
+    await addVersion(safe);
   }
 }
 

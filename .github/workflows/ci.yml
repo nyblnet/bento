@@ -547,6 +547,14 @@ jobs:
         # Source-shape checks; the Swift half self-skips without a toolchain.
         run: node scripts/test-home-bridge.ts
 
+      - name: home launch handle rig
+        # A page in a native host held no file handle until its first save, so
+        # autosave never wrote the file. home/bridge.js now hands it over through
+        # launchQueue — lazily, so documents from older runtimes keep their first
+        # silent save — and a launch request the host cannot meet is refused,
+        # never turned into an export. Runs the real bridge against a fake host.
+        run: node scripts/test-home-launch.mjs
+
       - name: tray mark is one source
         # tray-icon.svg is the only drawing of the mark. Everything else is
         # generated from it: the Android launcher vectors (which have no <rect>,
@@ -917,6 +925,17 @@ jobs:
 
       - name: bento/dash selection and clipboard
         run: node scripts/test-dash-select.ts
+
+      - name: bento/dash data entry through the real editor
+        # Widget⇥12⇥4.50⏎ has to come home to column A. select.ts had the
+        # Tab-run model and test-dash-select.ts proved it; the editor's finish()
+        # never called it. This one drives typeInto + the cell's own onkeydown.
+        run: node scripts/test-dash-entry.ts
+
+      - name: bento/dash cross-sheet structure
+        # Insert a row on Pipeline and =SUM(Pipeline!D1:D8) on Scratch has to
+        # widen. a1.ts had the scope rule; Grid.shiftFormulas walked one sheet.
+        run: node scripts/test-dash-xshift.ts
 
       - name: bento/dash sharing state
         # Start/stop/rotate sharing mark the workbook unsaved (a rotation is
