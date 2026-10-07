@@ -11,6 +11,12 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Dollar amounts next to escaped dollars stay text.** In a line like
+  "$10, and \$x\$", the first dollar could pair with an escaped one and the
+  words between were treated as a formula: the editor flagged them as a
+  formula that failed to render. An escaped `\$` now never opens or closes a
+  formula, inline or display, while an escaped dollar inside a formula still
+  belongs to it.
 - **Screen readers announce what each Save-as and Share command does.** The
   menus keep one-line rows with the description on hover, and the same text
   is now read out as the command's description; the Save-as list scrolls when
