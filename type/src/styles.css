@@ -34,6 +34,14 @@
   --paper-trk: #1a6b4a;
   --paper-trk-bg: #eaf3ef;
   --paper-trk-del: #a3312a;
+  /* Fields (fields.ts) are PAPER ink for the same reason tracked changes are:
+     the chip sits on the page, and a computed value that changed colour with a
+     chrome preference would be the one thing on the sheet doing so. The
+     UNBOUND colour is deliberately loud — a field nothing supplies is the state
+     that ruins two hundred envelopes, so it must be impossible to skim past. */
+  --paper-field-bg: #eef3fb;
+  --paper-field-ink: #24405f;
+  --paper-field-miss: #a3312a;
 
   /* geometry */
   --radius: 10px;
@@ -599,6 +607,65 @@ html, body {
 }
 .t-xref-item:hover { background: var(--chrome-2); }
 .t-xref-broken-head { margin: 12px 0 4px; font-size: 11px; color: var(--bad); font-weight: 600; }
+/* ─────────────────────────────────────────────────────────────────── fields
+   A field renders as a faint chip so an author can tell computed text from
+   text they typed. It is `contenteditable=false` and owns no characters in the
+   model (fields.ts), so it cannot be typed over or half-deleted. On PAPER the
+   chip is gone entirely: print.ts and preview.ts carry their own stylesheets
+   and neither knows this class, so a printed field is ordinary text. */
+.t-paper .t-field {
+  background: var(--paper-field-bg);
+  color: var(--paper-field-ink);
+  border-radius: 3px;
+  padding: 0 2px;
+  white-space: nowrap;
+}
+/* Nothing supplies this field. It prints as NOTHING, so the editor is the only
+   place anyone can find out — hence the dashed outline rather than a tint. */
+.t-paper .t-field-unbound {
+  background: transparent;
+  color: var(--paper-field-miss);
+  border: 1px dashed var(--paper-field-miss);
+  padding: 0 3px;
+  font-style: italic;
+}
+
+/* the Insert-field picker and the merge dialog — CHROME, so no --paper here */
+.t-field-pick { width: min(420px, 100%); }
+.t-field-pick h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+.t-field-list { display: flex; flex-direction: column; gap: 2px; max-height: 46vh; overflow-y: auto; }
+.t-field-list button {
+  display: flex; gap: 8px; align-items: baseline; justify-content: space-between;
+  text-align: start; font: inherit; font-size: 12.5px; padding: 5px 8px; cursor: pointer;
+  background: transparent; color: var(--ink);
+  border: 1px solid transparent; border-radius: 6px;
+}
+.t-field-list button:hover, .t-field-list button:focus-visible {
+  background: var(--chrome-2); border-color: var(--line); outline: none;
+}
+.t-field-list button span { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.t-field-head { margin: 10px 0 3px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.t-field-head:first-child { margin-top: 0; }
+.t-field-custom { display: flex; gap: 6px; margin-top: 10px; }
+.t-field-custom .t-input { flex: 1; }
+
+.t-merge { width: min(480px, 100%); }
+.t-merge h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+.t-merge-note { margin: 6px 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.t-merge-warn { margin: 6px 0; font-size: 12px; color: var(--bad); line-height: 1.5; }
+.t-merge-cols { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.t-merge-cols code {
+  font-size: 11.5px; padding: 2px 6px; border-radius: 5px;
+  background: var(--chrome-2); color: var(--ink-2); border: 1px solid var(--line);
+}
+.t-merge-cols .t-merge-clash { color: var(--bad); border-color: var(--bad); }
+.t-merge-pattern { flex: 1; min-width: 0; }
+.t-merge-bar {
+  height: 6px; margin: 12px 0 6px; border-radius: 3px;
+  background: var(--chrome-2); overflow: hidden;
+}
+.t-merge-bar > div { height: 100%; width: 0; background: var(--accent); transition: width .12s linear; }
+
 /* ─────────────────────────────────────────────────────── the link popover
    CHROME, not document: it floats over the page and must follow the reader's
    theme, so no --paper token appears here (scripts/test-type-theme.mjs would

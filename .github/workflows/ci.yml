@@ -1938,6 +1938,12 @@ jobs:
         # on first characters alone passed a real reflow.
         run: node scripts/test-type-micro.ts
 
+      - name: Type fields and mail-merge rig
+        # Fields are atoms resolved at render, never stored resolved. Merged
+        # letters get a fresh docId each and carry no credentials, signatures,
+        # comments or revision history from the template.
+        run: node scripts/test-type-fields.ts
+
       - name: Clipboard embedded-font rig
         run: |
           slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"

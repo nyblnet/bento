@@ -48,3 +48,7 @@ import './preview.ts';
 // optical margin alignment (hanging punctuation) — see micro.ts's header for
 // why it can be added to a document whose pagination is already a promise.
 import './micro.ts';
+// fields and mail merge: {{tokens}} resolved at render (never in the model),
+// and one complete .bento.html per row of a bound sheet. merge.ts imports
+// fields.ts, so this one line mounts both — see fields.ts's header.
+import './merge.ts';

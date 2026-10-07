@@ -16,6 +16,9 @@ import { withoutCaps } from '../../kernel/src/docfields.ts';
 // value import is safe: xref.ts imports only TYPES from this module, precisely
 // so the core can call into it without a cycle
 import { shiftRefs } from './xref.ts';
+// same arrangement, same reason: fields.ts imports only TYPES from this module,
+// so the core can call into it without a value-level cycle. See fields.ts.
+import { readFieldRefs, shiftFields, type FieldRef } from './fields.ts';
 import { readThreadsRaw, reconcileThreads } from './comments.ts';
 
 export const FORMAT = 'bento/type';
@@ -168,6 +171,13 @@ export interface Block {
   refs?: XrefRef[];
   /** citations, by offset into `text` — atoms, like `notes` */
   cites?: CiteRef[];
+  /**
+   * Fields — text the document computes rather than stores — by offset into
+   * `text`, atoms like `notes`. `{{page}}`, `{{title}}`, and the merge columns
+   * a mail merge binds. See fields.ts for why a field is an atom in this app
+   * and a literal token in bento/slides.
+   */
+  fields?: FieldRef[];
 
   /**
    * A named style this block carries BY REFERENCE — see docstyles.ts.
@@ -328,6 +338,15 @@ export interface TypeDoc {
    * and reads identically.
    */
   track?: boolean;
+  /**
+   * What a mail merge bound this document to — see merge.ts.
+   *
+   * ON THE OUTPUT, not on the template: an emitted letter carries the row it
+   * was made from, so its FIELDS still resolve and it is still a document
+   * rather than a rendering of one. Additive and optional, so a document that
+   * never merged has nothing here and reads exactly as it always did.
+   */
+  merge?: { source?: string; columns?: string[]; row?: Record<string, string> };
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>;
   assets?: Record<string, string>;
   readonly?: boolean;
@@ -605,6 +624,7 @@ export function parseDoc(raw: string): ParseResult {
     // failure — only a "this named style no longer exists" the panel can show.
     if (typeof b.styleId === 'string' && b.styleId) out.styleId = b.styleId; else delete out.styleId;
     delete out.level; delete out.cell; delete out.image; delete out.caption; delete out.refs; delete out.cites;
+    delete out.fields;
     if (typeof b.role === 'string') out.role = b.role;
     // `level` is clamped and only kept on list kinds. A level on a paragraph
     // would be silently meaningless, and a level of 40 would render as a list
@@ -689,6 +709,13 @@ export function parseDoc(raw: string): ParseResult {
           .sort((x, y) => x.at - y.at)
       : undefined;
     if (cites?.length) out.cites = cites;
+    // A field whose name means nothing to this build is KEPT, like a dangling
+    // cross-reference and unlike a dangling footnote: an unbound field renders
+    // as its name in the editor and as nothing on paper (fields.ts), which is
+    // a visible hole somebody can fix. Dropping it would silently delete the
+    // author's intention to say a name there.
+    const fields = readFieldRefs(b.fields, text.length);
+    if (fields.length) out.fields = fields;
     body.push(out);
   });
   if (!body.length) body.push({ id: uid(), kind: 'para', text: '' });
@@ -841,6 +868,10 @@ export function spliceText(block: Block, at: number, removed: number, added: str
   if (block.refs?.length) {
     const r = shiftRefs(block.refs, at, removed, added.length);
     if (r.length) out.refs = r; else delete out.refs;
+  }
+  if (block.fields?.length) {
+    const f = shiftFields(block.fields, at, removed, added.length);
+    if (f.length) out.fields = f; else delete out.fields;
   }
   if (block.notes?.length) {
     const end = at + removed;

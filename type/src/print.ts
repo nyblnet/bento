@@ -30,6 +30,7 @@ import { blockStyle } from './layout.ts';
 import { docStyleCss } from './docstyles.ts';
 import { embedHtml } from './embed.ts';
 import { applyOptical, opticalOn } from './micro.ts';
+import { fieldContext, fillFieldsHtml, pagination } from './fields.ts';
 
 export interface PrintOptions {
   /** running head text; omitted = the document title */
@@ -188,7 +189,14 @@ function bodyHtml(doc: TypeDoc, lang: string): string {
   // The DOM pass (numberXrefs) and this string pass fill the SAME atoms from
   // the SAME index, which is what stops the printed numbering drifting from the
   // screen's — the drift this module exists to prevent.
-  return fillXrefsHtml(out.join('\n'), captionIndex(body, lang));
+  // Fields are filled by the SAME string pass, from the SAME measurements the
+  // editor took (fields.ts `pagination()` is set by the paginated hook, and
+  // print is generated from that very pass) — so `{{page}}` prints the page the
+  // field is actually on and cannot disagree with the screen. An UNBOUND field
+  // resolves to nothing here, span and all: paper must never show the
+  // machinery. See fields.ts's header.
+  return fillFieldsHtml(fillXrefsHtml(out.join('\n'), captionIndex(body, lang)),
+                        fieldContext(doc, pagination()));
 }
 
 /**
