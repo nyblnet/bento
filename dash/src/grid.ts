@@ -20,7 +20,7 @@
 // the type as a control, not a label.
 
 import { formatValue, alignFor, TYPE_LABEL } from './format.ts'
-import type { CanvasCell, CanvasSheet, Column, ColumnType, Sheet, TableSheet } from './model.ts'
+import type { CanvasCell, CanvasSheet, CellOverride, Column, ColumnType, Sheet, TableSheet } from './model.ts'
 import { appearanceCss } from './cellfmt.ts'
 import { readCell, type Patch, type Store } from './store.ts'
 import { recalc, isErr, type Vec } from './formula.ts'
@@ -35,7 +35,7 @@ import { t } from './i18n.ts'
 import { resizeColumn, autoFitWidth, hiddenSet, readFrozen, insertRowsAt } from './rowcol.ts'
 import {
   cellKey, isFormula, recalcSheetCells, recalcWorkbook, spillExtent, translateCellFormula,
-  shiftSheetFormulas, workbookSources,
+  shiftSheetFormulas, shiftDefinedNames, workbookSources,
 } from './cellformula.ts'
 import { mountFind, type FindUI, type Hit } from './find.ts'
 // The data-validation stylesheet is imported HERE rather than in datavalid.ts,
@@ -348,6 +348,21 @@ export function aggregate(
 /** What a total with nothing to total looks like. One spelling, two readouts. */
 export const NO_TOTAL = '—'
 
+const isNumericType = (ty: string): boolean => ty === 'number' || ty === 'money' || ty === 'percent'
+
+/**
+ * Why a stored value does not belong in its numeric column, or null.
+ * A string that is not blank and not a number is the case: it will be skipped
+ * by every aggregate and turn any formula that reads it into #VALUE!, and
+ * until this was marked, nothing on screen said so.
+ */
+export function mistypedWhy(c: Column, v: unknown): string | null {
+  if (!isNumericType(c.type) || c.formula) return null
+  if (typeof v !== 'string' || v.trim() === '') return null
+  if (Number.isFinite(Number(v))) return null
+  return t('Not a number — left out of totals, and a formula that reads it gives #VALUE!')
+}
+
 // --- the spreadsheet kind (`kind: 'canvas'`) ---------------------------------
 //
 // A CANVAS SHEET IS UNBOUNDED, and that is the whole difference. A dataset ends
@@ -624,7 +639,15 @@ export class Grid {
       // left the grid drawing blanks and rows in an order matching nothing.
       if (this.store.lastTouched.structural || this.store.lastTouched.all) this.applyView()
       this.sel.resize(this.selRows(), cols(this.sheet).length)
+      this.mistyped.clear()   // counts are a fact about the document; re-derive after any change
       this.paint()
+      // …AND ANNOUNCE HERE TOO. The paragraph above says why the formula bar is
+      // re-read on every document change — and then applied it to the canvas
+      // branch only. On a dataset, paste six cells over D1:E3 and the cell
+      // read £9,100, the model held 9100, and the formula bar still said 12400
+      // until the cursor moved. Two readouts on one screen disagreeing, and
+      // the wrong one was the editable one.
+      this.announce()
     })
     this.store.on('view', () => this.paint())
   }
@@ -640,21 +663,44 @@ export class Grid {
    * of wrong numbers that each look perfectly reasonable.
    */
   shiftFormulas(axis: 'row' | 'col', at: number, count: number): Patch[] {
-    const s = this.sheet
-    const cells = s.cells
-    if (!cells) return []
-    const pairs: Array<[string, string]> = []
-    for (const k in cells) {
-      const f = cells[k]?.f
-      if (typeof f === 'string') pairs.push([k, f])
+    const on = this.sheet
+    const out: Patch[] = []
+    // EVERY SHEET, not just this one. `=SUM(Pipeline!D1:D8)` on Scratch names
+    // rows on Pipeline, so a row inserted on Pipeline moves it exactly as it
+    // moves Pipeline's own formulas — and until this walked the workbook it
+    // stayed `D1:D8` over nine deals, a wrong total wearing a right one's
+    // clothes. `scope` is what keeps a reference to any OTHER sheet still.
+    for (const s of this.store.doc.sheets) {
+      const cells = (s as { cells?: Record<string, { f?: unknown }> }).cells
+      if (!cells) continue
+      const pairs: Array<[string, string]> = []
+      for (const k in cells) {
+        const f = cells[k]?.f
+        if (typeof f === 'string') pairs.push([k, f])
+      }
+      const moved = shiftSheetFormulas(pairs, axis, at, count, { on: on.name, self: s.name })
+      if (!moved.length) continue
+      if (s.kind === 'canvas') {
+        const next: Record<string, CanvasCell> = {}
+        for (const [k, f] of moved) next[k] = { ...(cells[k] as CanvasCell), f }
+        out.push({ op: 'setCanvasCells', sheet: s.id, cells: next })
+      } else {
+        out.push({
+          op: 'setOverrides', sheet: s.id,
+          keys: moved.map(([k]) => k),
+          v: moved.map(([k, f]) => ({ ...(cells[k] as CellOverride), f })),
+        })
+      }
     }
-    const moved = shiftSheetFormulas(pairs, axis, at, count)
-    if (!moved.length) return []
-    return [{
-      op: 'setOverrides', sheet: s.id,
-      keys: moved.map(([k]) => k),
-      v: moved.map(([k, f]) => ({ ...cells[k], f })),
-    }]
+    // A defined name that points INTO this sheet by qualifier moves with it;
+    // an unqualified one has no sheet of its own and is left where it is.
+    const names = shiftDefinedNames(this.store.doc.names, axis, at, count, { on: on.name })
+    if (names.length) {
+      const next = { ...this.store.doc.names }
+      for (const [k, ref] of names) next[k] = { ...next[k], ref }
+      out.push({ op: 'setDocProps', props: { names: next } })
+    }
+    return out
   }
 
   /**
@@ -939,7 +985,9 @@ export class Grid {
         `<span class="dg-hmain">` +
         `<span class="dg-name" title="${esc(c.formula ? `= ${c.formula}` : c.name)}">${esc(c.name)}${arrow}</span>` +
         (c.formula ? `<span class="dg-fx" title="${esc('= ' + c.formula)}">fx</span>` : '') +
-        (c.failed ? `<span class="dg-warn" title="${esc(t('{n} value(s) could not be read as {type}').replace('{n}', String(c.failed)).replace('{type}', t(TYPE_LABEL[c.type])))}">!</span>` : '') +
+        ((c.failed ?? 0) + this.mistypedCount(c) > 0
+          ? `<span class="dg-warn" title="${esc(t('{n} value(s) could not be read as {type}').replace('{n}', String((c.failed ?? 0) + this.mistypedCount(c))).replace('{type}', t(TYPE_LABEL[c.type])))}">!</span>`
+          : '') +
         `<span class="dg-filter" data-filter="${c.id}" title="${esc(t('Filter and sort this column'))}">▾</span>` +
         `</span>` +
         `<span class="dg-grip" data-grip="${c.id}" title="${esc(t('Drag to resize, double-click to fit the widest value'))}"></span>` +
@@ -1424,7 +1472,14 @@ export class Grid {
           // the data is what somebody actually has), and a `list` rule puts a
           // real dropdown arrow in the cell.
           const rule = dvRules.get(c.id)
-          const why = rule ? violationOf(rule, v) : null
+          // THE COLUMN'S TYPE IS ITS FIRST RULE. Typing "hello" into a Money
+          // column was accepted, painted right-aligned like a number, left out
+          // of SUM without a word, and the only signal anywhere on screen was
+          // a #VALUE! in a DIFFERENT column that happened to read it. The
+          // panel's own copy promises "anything that breaks it is marked
+          // instead" — so it is marked, here, with the same ring a validation
+          // rule draws and a title that says what the number did.
+          const why = rule ? violationOf(rule, v) : mistypedWhy(c, v)
           const dvCls = (why !== null ? ` ${INVALID_CLASS}` : '') + (rule && hasDropdown(rule) ? ' dv-list' : '')
           const dvArrow = rule && hasDropdown(rule) ? DROPDOWN_HTML : ''
           const dvTitle = why !== null ? ` title="${esc(why)}"` : ''
@@ -1469,6 +1524,29 @@ export class Grid {
   }
 
   
+  /**
+   * How many stored values in a numeric column are not numbers — a cache,
+   * cleared on every `doc` event, because the header is repainted on every
+   * scroll and a full-column scan per scroll is the wrong cost model.
+   * `Column.failed` is the import-time count of values that were BLANKED and
+   * whose originals live in the import step; this is the live count of values
+   * that are still there and still not numbers. The badge shows their sum.
+   */
+  private mistyped = new Map<string, number>()
+  private mistypedCount(c: Column): number {
+    if (!isNumericType(c.type) || c.formula) return 0
+    const hit = this.mistyped.get(c.id)
+    if (hit !== undefined) return hit
+    const d = this.sheet.data[c.id]
+    let n = 0
+    if (d) {
+      const rows = rowCount(this.sheet)
+      for (let r = 0; r < rows; r++) if (mistypedWhy(c, readCell(d, r)) !== null) n++
+    }
+    this.mistyped.set(c.id, n)
+    return n
+  }
+
   /** The formula stored at a canonical position, if any. */
   private formulaAtPos(row: number, col: number): string | undefined {
     const s = this.sheet
@@ -2946,8 +3024,15 @@ export class Grid {
         }
       }
       if (move) {
-        const d = move === 'down' ? [1, 0] : move === 'up' ? [-1, 0] : move === 'right' ? [0, 1] : [0, -1]
-        this.sel.move(d[0], d[1], {})
+        // THROUGH tab()/enter(), NOT A BARE move(). select.ts records a "Tab
+        // run" so that Enter after Widget⇥12⇥4.50 comes home to column A —
+        // the help card promises it — but that only ever ran for Tab pressed
+        // on a cell that was NOT being edited. Real entry is type-then-Tab,
+        // which lands here, and this was a plain directional move: no run
+        // recorded, no homing, and Enter after a row of typing sat in the last
+        // column typed. Measured: Gadget⇥3⏎ left the cursor on row 3 col B.
+        if (move === 'right' || move === 'left') this.sel.tab(move === 'left')
+        else this.sel.enter(move === 'up')
         this.scrollIntoView()
       }
       this.paint()
@@ -3300,7 +3385,10 @@ export class Grid {
       el.oncontextmenu = (e) => {
         e.preventDefault()
         if (!this.sel.ranges().some((rg) => contains(rg, row, ci))) {
-          this.sel.moveTo(row, ci); this.paint()
+          // announce, as the row-gutter and column-header menus already do: a
+          // right-click that moves the cursor left the name box and formula bar
+          // describing the cell it had left
+          this.sel.moveTo(row, ci); this.paint(); this.announce()
         }
         this.onContextMenu?.(row, ci, e.clientX, e.clientY)
       }
@@ -3425,8 +3513,15 @@ export class Grid {
       // leaves the cursor where it was makes you reach for the mouse between
       // every value, which is most of what data entry is.
       if (move) {
-        const d = move === 'down' ? [1, 0] : move === 'up' ? [-1, 0] : move === 'right' ? [0, 1] : [0, -1]
-        this.sel.move(d[0], d[1], {})
+        // THROUGH tab()/enter(), NOT A BARE move(). select.ts records a "Tab
+        // run" so that Enter after Widget⇥12⇥4.50 comes home to column A —
+        // the help card promises it — but that only ever ran for Tab pressed
+        // on a cell that was NOT being edited. Real entry is type-then-Tab,
+        // which lands here, and this was a plain directional move: no run
+        // recorded, no homing, and Enter after a row of typing sat in the last
+        // column typed. Measured: Gadget⇥3⏎ left the cursor on row 3 col B.
+        if (move === 'right' || move === 'left') this.sel.tab(move === 'left')
+        else this.sel.enter(move === 'up')
         this.scrollIntoView()
       }
       this.paint()
