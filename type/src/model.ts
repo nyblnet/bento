@@ -12,6 +12,7 @@
 // the container.
 
 import { normalize, shift as shiftMarks, type Mark } from './inline.ts';
+import { withoutCaps } from '../../kernel/src/docfields.ts';
 // value import is safe: xref.ts imports only TYPES from this module, precisely
 // so the core can call into it without a cycle
 import { shiftRefs } from './xref.ts';
@@ -424,9 +425,55 @@ export function copyIsReceiveOnly(collab: TypeDoc['collab'] | undefined): boolea
  * asserts that shape across every app that has a clipboard export.
  */
 export function docForExport(doc: TypeDoc): TypeDoc {
-  const { collab, ...rest } = doc as TypeDoc & { collab?: unknown };
-  void collab;
-  return rest as TypeDoc;
+  return withoutEmbeddedCaps(withoutCaps(doc));
+}
+
+/**
+ * An embedded document keeps its content, never its capabilities — at any depth.
+ *
+ * An `embed` block carries a copy of another Bento document (embed.ts), so that
+ * a reader can open the original. Its `collab` block is that document's sharing
+ * keys, and has no business inside ours. `withoutCaps` (kernel docfields.ts,
+ * the one shared list of capability fields) removes them from the document
+ * itself; this ALSO walks into bento/type's own embed blocks, because an
+ * embedded bento/type document can hold embeds of its own and the kernel helper
+ * is shallow. The walk follows bento/type's own nesting: the `body` of each
+ * embedded document, and the `embed` blocks within it.
+ *
+ * Pure — returns a new document where anything changed, never mutating the
+ * input, because one caller (docForExport) is handed the LIVE document.
+ */
+export function embedSafe<T>(doc: T, depth = 0): T {
+  if (!doc || typeof doc !== 'object') return doc;
+  return scrubEmbeds(withoutCaps(doc as object) as Record<string, unknown>, depth) as T;
+}
+
+/** The same walk for a document whose OWN collab is somebody else's business
+ *  (a share-copy builder decides that) — only its embeds are made safe. */
+export function withoutEmbeddedCaps<T>(doc: T): T {
+  if (!doc || typeof doc !== 'object') return doc;
+  return scrubEmbeds(doc as Record<string, unknown>, 0) as T;
+}
+
+/** Nesting deeper than this is not a real document. Past it an embed loses its
+ *  copy of the source rather than keeping one unscrubbed: fail closed. */
+const EMBED_DEPTH = 16;
+
+function scrubEmbeds(doc: Record<string, unknown>, depth: number): Record<string, unknown> {
+  const body = doc.body;
+  if (!Array.isArray(body)) return doc;
+  let changed = false;
+  const next = body.map((b: unknown) => {
+    const blk = b as { kind?: unknown; embed?: { doc?: unknown } } | null;
+    if (!blk || blk.kind !== 'embed' || !blk.embed || !blk.embed.doc || typeof blk.embed.doc !== 'object') return b;
+    changed = true;
+    if (depth >= EMBED_DEPTH) {
+      const { doc: _drop, ...embed } = blk.embed;
+      return { ...blk, embed };
+    }
+    return { ...blk, embed: { ...blk.embed, doc: embedSafe(blk.embed.doc, depth + 1) } };
+  });
+  return changed ? { ...doc, body: next } : doc;
 }
 
 export const uid = (p = 'b'): string => {
@@ -709,7 +756,12 @@ export function parseDoc(raw: string): ParseResult {
   if (threads.length) doc.comments = Object.fromEntries(threads.map(t => [t.id, t]));
   else delete doc.comments;
 
-  return { ok: true, doc, repaired };
+  // Every document entering bento/type — a file opened, Replace from JSON,
+  // loadDoc, a restored snapshot — comes in with its EMBEDS made safe: an embed
+  // stored before intake was scrubbed, or pasted in by hand, does not carry
+  // another document's sharing keys into the live document. The document's own
+  // collab is untouched; that is this file's.
+  return { ok: true, doc: withoutEmbeddedCaps(doc), repaired };
 }
 
 /** The document's text, in order — what gets measured, searched and diffed. */
