@@ -463,8 +463,8 @@ here rather than discovered later.
 | bridge reachable only from the document | every message checked: main frame + own origin (`BridgeSender`) | `allowedOriginRules` + `isMainFrame` | same |
 | first `begin` = open document, later = export | ✓ | ✓ | same |
 | the open document offered at boot via `launchQueue`, only to a page that asks | ✓ (`home/bridge.js`) | ✓ (`home/bridge.js`) | same |
-| a launch request it cannot meet is refused, never exported | ✓ | **not yet** — a read-only grant would prompt at the first autosave | differs |
-| a reload may claim the open document again | resets on main-frame commit | **not yet** | differs |
+| a launch request it cannot meet is refused, never exported | ✓ | ✓ — read-only grant or already handed out | same |
+| a reload may claim the open document again, and forgets the old page's Save-As copies | resets both on main-frame commit (`didCommit`) | resets both on main-frame `onPageStarted` | same |
 | an export can never address the open file | `exportName` + `targetsOpenDocument` | identical logic | same |
 | page-supplied filenames sanitised | `safeFileName` | `safeFileName` | same |
 | in-place write | `UIDocument.save(.forOverwriting)` | `openOutputStream(uri, "wt")` | same |
