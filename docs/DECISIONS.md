@@ -14,6 +14,42 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-05 — Android meets the `launchQueue` rules, and a reload also forgets its Save-As copies
+
+**Decision.** Android implements the two host rules from the entry below: a
+`begin` marked `launch: true` that it cannot meet — a read-only grant (the usual
+`ACTION_VIEW` from mail) or a document already handed out — is answered **no**,
+before the export branch; and a main-frame `onPageStarted` (WebView's
+equivalent of iOS's `didCommit`; fragment changes and `pushState` do not fire it)
+lets the new page claim the open document again.
+
+**The same hook forgets the old page's Save-As copies** — the second reset in
+the entry below, which both hosts make. On Android the copies are #595's
+`exportTargets`, keyed by the name a handle was vended under; a new page holds
+no such handle, so without the reset its first export vended under the same name
+would be written straight into the previous page's copy, without a picker. Found
+on Android first (case 4 below); iOS made the same reset in #635.
+
+**The symptom, measured rather than predicted** (emulator, Android 16, the
+#635 bridge, `setConsumer` called the way the kernel will). Without the refusal
+a read-only document does not prompt *at open*: `begin` only vends a name, so
+the page is handed an export handle (`deck.bento.html`) and the **first write**
+— the kernel's first autosave after any edit — opens a save dialog unprompted.
+Without the reset, a writable document's first ⌘S after a reload opens a
+picker instead of saving in place. With both, every case passed: read-only
+refuses (consumer never called, no picker, ⌘S still offers Save-As, original
+untouched); writable hands over `viewtest.bento.html` and a write through it
+lands in place; after a reload the consumer is handed the document again and
+⌘S saves in place; after a reload a read-only page's save asks again rather than
+writing the previous copy.
+
+**Guarded by** `scripts/test-home-bridge.ts` — four Android shape checks beside
+iOS's: the refusal exists, precedes the export branch, and the page-start hook
+resets both the hand-over and the remembered copies. All four fail against the
+pre-change `EditorActivity.kt`.
+
+---
+
 ## 2026-10-05 — A native host hands the page the file it opened, through `launchQueue`
 
 **Decision.** `home/bridge.js` (iOS and Android) defines `window.launchQueue`. When
@@ -8352,3 +8388,27 @@ it gets left open over the page.
 
 **Cost:** +1,234 B of shell (284,627 → 285,861, `ZOPFLI=0`). The deleted
 dialog and panel code is smaller than the kernel sheets that replace it.
+
+## 2026-09-26 — Spaces has two levels of transient message; phone targets are 44px
+
+**D3 in spaces: `status()` and `notice()`.**
+- The bar's status line stays the first level. It holds ambient state that is
+  true for a moment: "Edited", "Saved", "Editing", "Reading view".
+- `Editor.notice()` is the second level: a pill at the foot of the window,
+  `role=status`, above dialogs (`--z-toast` 1100), like slides' toast. It is
+  for messages the reader must not miss:
+  - a sync refusal (`syncNoticeText`);
+  - a read or import failure;
+  - a refused move;
+  - a copy or export written;
+  - a viewer preference that now applies to every page.
+
+Before this, both levels were the same 12px `--muted` line that fades in under
+two seconds. On a phone that line sits over the title strip. A future message
+picks its level by that test: if missing it would leave the reader wrong about
+their file, it is a notice. The kernel has no notice primitive yet. When one
+lands, this method is the only caller to move.
+
+**D5 in spaces:** under a coarse pointer the bar's buttons, the Live control,
+the page-tree rows and their ⋯, the format bar and every menu row are 44px
+(`--tap`). The bar was 40px.

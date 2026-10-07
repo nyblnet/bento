@@ -945,7 +945,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-about .sp-card-h { margin: 0 2px 8px; }
 /* the head and the promo line are the title of the dialog, not a section */
 .sp-ab-promo { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 6px 4px 2px; }
-.sp-ab-promo a { color: var(--blue); text-decoration: none; }
+.sp-ab-promo a { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); text-decoration: underline; text-underline-offset: 2px; }
 .sp-ab-promo a:hover { text-decoration: underline; }
 
 /* What is in this file. Four numbers, and then the sentence that explains
@@ -977,11 +977,15 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    outlined boxes there would be noise. In THIS card the same class has to read
    as a control against a white panel with no hover to help it, so the dialog
    gives every non-primary button its border back. Slides' about does exactly
-   this, for exactly this reason. */
-.sp-about .sp-btn { border-color: var(--line); background: var(--chrome); }
-.sp-about .sp-btn:hover { background: var(--chrome-2); }
-.sp-about .sp-primary { border-color: var(--ink); background: var(--ink); color: #fff; }
-.sp-about .sp-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
+   this, for exactly this reason.
+   EVERY dialog, not only About: Import's "Choose a folder…" and "Choose a
+   space…" and Export's "Close" rendered as bare words beside a filled primary,
+   with nothing to say they were buttons. And the primary's ink is the GROUND,
+   never `#fff` — on the dark theme's near-white fill `#fff` was invisible. */
+.bkd-card .sp-btn { border-color: var(--line); background: var(--chrome); }
+.bkd-card .sp-btn:hover { background: var(--chrome-2); }
+.bkd-card .sp-primary { border-color: var(--ink); background: var(--ink); color: var(--bg); }
+.bkd-card .sp-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
 
 .sp-ab-check {
   display: flex; align-items: center; gap: 7px;
@@ -1152,6 +1156,7 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   --tap: 44px;           /* D5: a coarse pointer's target */
   --fs-hint: 12px;
   --z-pop: 60;
+  --z-toast: 1100;       /* a notice, above a dialog on purpose */
 }
 
 /* ————— menus: the kernel's (kernel/src/ui/menu.css) —————
@@ -1510,10 +1515,20 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-bar-fold .sp-mark { display: none; }
 .sp-bar-fold .sp-group-history { display: none; }
 .sp-bar-fold .sp-split .sp-caret { display: none; }
-/* with the caret gone Save is one button again, not the left half of two */
+/* with the caret gone Save is one button again, not the left half of two —
+   and a SQUARE one: the icon centred, the padding even. It was a 66×40 slab
+   with the icon at its left and ~26px of empty fill on its right, because the
+   label's end padding (and the unsaved dot's slot) outlived the label. */
 .sp-bar-fold .sp-split > .sp-btn:first-child {
   border-start-end-radius: 8px; border-end-end-radius: 8px;
-  padding-inline-end: 14px;
+  padding-inline: 9px; justify-content: center;
+}
+/* once the word is gone, the unsaved dot is a BADGE on the corner of the icon
+   button — the slides treatment — not a slot that holds the button wide */
+.sp-bar-compact .sp-primary { position: relative; }
+.sp-bar-compact .sp-primary .sp-dirty {
+  position: absolute; top: 5px; inset-inline-end: 5px; margin: 0;
+  box-shadow: 0 0 0 2px var(--ink);
 }
 /* THE STATUS LINE LEAVES THE FLOW. It is a nowrap span, so a long message
    ("Reading view — press Esc or the eye to edit" is ~250px) would shove the
@@ -1534,9 +1549,29 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
    ellipsises when there is none. */
 .sp-status { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-/* Hit targets: a 30px button is a miss on a touch screen. */
+/* D3's second level (editor.ts notice): what the reader must not miss. The
+   inverse of the surface — ink fill, ground text — like slides' toast and the
+   kernel tooltip, above a dialog on purpose. */
+.sp-notice {
+  position: fixed; left: 50%; bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
+  transform: translate(-50%, 6px); z-index: var(--z-toast);
+  max-width: min(520px, calc(100vw - 32px)); padding: 9px 16px;
+  border-radius: 999px; background: var(--ink); color: var(--bg);
+  font-size: 13px; line-height: 1.35; text-align: center;
+  box-shadow: var(--shadow-pop); pointer-events: none;
+  opacity: 0; transition: opacity .18s ease, transform .18s ease;
+}
+.sp-notice.sp-on { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .sp-notice { transition: none; } }
+
+/* Hit targets: a 30px button is a miss on a touch screen. 44, not 40 (D5 —
+   HIG, and slides' phone bar): measured, five bar buttons were 40×40, the
+   Live button 35×29, a page row 28px tall and its ⋯ 20×20. */
 @media (pointer: coarse) {
-  .sp-bar .sp-btn { min-width: 40px; min-height: 40px; justify-content: center; }
+  .sp-bar .sp-btn, .sp-bar .sp-live { min-width: var(--tap); min-height: var(--tap); justify-content: center; }
+  .sp-treelink { min-height: var(--tap); padding-inline-end: 40px; }
+  .sp-treelink .sp-rowmore { width: 36px; height: var(--tap); inset-inline-end: 2px; }
+  .sp-fmt-btn { min-height: var(--tap); }
   .sp-dditem { padding-block: 11px; }
   /* D5: a menu row is a 44px target under a finger, like every other one */
   .sp-mn-pop .bkm-item { min-height: var(--tap); }
@@ -1668,10 +1703,15 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
   border-radius: 7px; cursor: pointer; user-select: none;
 }
 .sp-insp-sec:hover { background: var(--chrome-2); }
+/* a drawn disclosure caret, turning as the group opens — the ▾/▸ glyphs at
+   9px rendered as a bullet dot beside each heading, and read as a list */
 .sp-insp-sec::before {
-  content: '▾'; font-size: 9px; color: var(--muted); width: 9px;
+  content: ''; flex: none; width: 0; height: 0; margin: 0 2px;
+  border-inline: 4px solid transparent; border-top: 5px solid var(--muted);
+  transition: transform .12s ease;
 }
-.sp-insp-sec.sp-shut::before { content: '▸'; }
+.sp-insp-sec.sp-shut::before { transform: rotate(-90deg); }
+[dir='rtl'] .sp-insp-sec.sp-shut::before { transform: rotate(90deg); }
 .sp-insp-sub {
   margin-inline-start: auto; font-weight: 400; font-size: 11.5px;
   color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1967,14 +2007,19 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
    document, and a colleague reading a page two levels down the tree is not an
    event. Dots, not banners. */
 
+/* A bar button like every other: the 30px grid, no frame, the same ink. It was
+   35×29 with a 16px glyph, `--muted` ink (3.45:1) and the only border in the
+   bar, so it read as a different kind of control. The border comes back only
+   as the LIVE state below, where it means something. */
 .sp-live {
-  display: inline-flex; align-items: center; gap: 5px;
-  border: 1px solid var(--line); background: none; color: var(--muted);
-  border-radius: 8px; padding: 5px 8px; cursor: pointer; font: inherit; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 36px; height: var(--ctl-h);
+  border: 1px solid transparent; background: none; color: var(--ink-2);
+  border-radius: 8px; padding: 6px 9px; cursor: pointer; font: inherit; font-size: 13px; line-height: 1;
 }
 .sp-live:hover { background: var(--chrome-2); color: var(--ink); }
 .sp-live .sp-ico { display: inline-flex; }
-.sp-live .sp-ico svg { width: 17px; height: 17px; }
+.sp-live .sp-ico svg { width: 16px; height: 16px; }
 .sp-live-n:empty { display: none; }
 .sp-live-n { font-size: 12px; font-variant-numeric: tabular-nums; }
 /* LIVE is a state worth seeing at a glance, and OFF must not look broken —
@@ -2024,6 +2069,7 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
   padding: 7px 8px; border-radius: 7px; cursor: pointer;
 }
 .sp-paction:hover { background: var(--chrome-2); }
+.sp-paction-sep { height: 1px; background: var(--line); margin: 8px 4px 10px; }
 .sp-paction span { color: var(--muted); font-size: 12px; }
 
 /* THIS device's row in the People list: it is you, so it is not a target. */
@@ -2090,7 +2136,10 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 }
 .sp-cm-me {
   border: 0; background: none; font: inherit; font-size: 11px; text-transform: none;
-  letter-spacing: 0; color: var(--muted); cursor: pointer; padding: 0;
+  letter-spacing: 0; color: var(--muted); cursor: pointer;
+  /* a 49×13 target was a miss; the padding is the hit area, pulled back out
+     of the layout by the negative margin so the heading does not move */
+  padding: 6px 8px; margin: -6px -8px; border-radius: 6px;
 }
 .sp-cm-me:hover { color: var(--ink); }
 .sp-cm-entries { display: flex; flex-direction: column; gap: 8px; padding: 0 6px 8px; }
