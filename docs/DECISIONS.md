@@ -14,6 +14,42 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-05 — Android meets the `launchQueue` rules, and a reload also forgets its Save-As copies
+
+**Decision.** Android implements the two host rules from the entry below: a
+`begin` marked `launch: true` that it cannot meet — a read-only grant (the usual
+`ACTION_VIEW` from mail) or a document already handed out — is answered **no**,
+before the export branch; and a main-frame `onPageStarted` (WebView's
+equivalent of iOS's `didCommit`; fragment changes and `pushState` do not fire it)
+lets the new page claim the open document again.
+
+**The same hook forgets the old page's Save-As copies** — the second reset in
+the entry below, which both hosts make. On Android the copies are #595's
+`exportTargets`, keyed by the name a handle was vended under; a new page holds
+no such handle, so without the reset its first export vended under the same name
+would be written straight into the previous page's copy, without a picker. Found
+on Android first (case 4 below); iOS made the same reset in #635.
+
+**The symptom, measured rather than predicted** (emulator, Android 16, the
+#635 bridge, `setConsumer` called the way the kernel will). Without the refusal
+a read-only document does not prompt *at open*: `begin` only vends a name, so
+the page is handed an export handle (`deck.bento.html`) and the **first write**
+— the kernel's first autosave after any edit — opens a save dialog unprompted.
+Without the reset, a writable document's first ⌘S after a reload opens a
+picker instead of saving in place. With both, every case passed: read-only
+refuses (consumer never called, no picker, ⌘S still offers Save-As, original
+untouched); writable hands over `viewtest.bento.html` and a write through it
+lands in place; after a reload the consumer is handed the document again and
+⌘S saves in place; after a reload a read-only page's save asks again rather than
+writing the previous copy.
+
+**Guarded by** `scripts/test-home-bridge.ts` — four Android shape checks beside
+iOS's: the refusal exists, precedes the export branch, and the page-start hook
+resets both the hand-over and the remembered copies. All four fail against the
+pre-change `EditorActivity.kt`.
+
+---
+
 ## 2026-10-05 — A native host hands the page the file it opened, through `launchQueue`
 
 **Decision.** `home/bridge.js` (iOS and Android) defines `window.launchQueue`. When
@@ -6577,6 +6613,57 @@ mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
 
+## 2026-09-09 — a derived column is never an independent axis, and a view that ignores the filter is worse than no view
+
+**bento/dash keeps its 3D view.** The cut was proposed with numbers — 2,240
+lines across `viz3d.ts` and `gl.ts`, and a starter plot that looked like it said
+nothing — and declined by the maintainer: *"I think 3d is a wow feature of dash
+that excel doesn't have."* This entry records the decision and, more usefully,
+what the investigation behind it turned out to have been measuring.
+
+**The strongest argument for cutting was a DEFAULT-BINDING bug, not a property
+of three dimensions.** `defaultViz3d` bound the first three numeric columns in
+declaration order. On `sheet-pipeline` — the workbook every new user meets —
+those are Value, Probability and Weighted, and `weighted` is
+`formula: 'value * prob'`. So the first 3D plot anyone saw was x = Value,
+y = Probability, **z = Value × Probability**: a surface drawn as a cloud, in
+which the third dimension carried nothing the first two did not. The feature was
+being judged on a demo defect. *(Found by bento-team-lead.)*
+
+**The rule, which generalises past this view.** A column with a `formula` is a
+function of columns already on the sheet, so using one as an axis plots a
+variable against itself. Stored columns are preferred for x/y/z; a derived one
+may still colour or size the points, where being derived is informative rather
+than degenerate. It is a preference and not a ban — a sheet whose numeric
+columns are all computed is still better plotted than refused.
+
+**A preference alone was not enough, and that is the more interesting half.**
+The starter has only TWO stored measures, so the third axis fell to the derived
+column regardless: there is no honest scatter of that sheet to pick. When fewer
+than three independent measures exist and there are two categories to group by,
+the default is now 3D BARS — a category × category × measure grid, which is both
+truthful about the data and the thing a spreadsheet cannot draw. A degenerate
+scatter drawn ahead of a truthful grid was the default arguing against its own
+feature.
+
+**Two ordinary faults, both of the same family this repo keeps finding.**
+`draw3d` subscribed to `doc` and not `view`, so filtering changed the grid, the
+status bar, the footer and the 2D chart and left the plot showing every row —
+the same failure as the footer that ignored the filter, in the panel beside the
+one where it was fixed, because the fix went into `drawChart` and never crossed.
+And `overlaySvg` — axis titles, legend, and the count of rows dropped for having
+no value — had exactly one call site, inside the SVG fallback, so a machine that
+could NOT do WebGL2 got the labelled picture and every ordinary browser got a
+bare canvas. The dropped-row count is the load-bearing half: nulls are dropped
+rather than zeroed (correct — a zero is a crater, and craters look like
+findings), and the primary renderer never said so.
+
+**The view vector is projected inside `buildScene`, not at the call site**, for
+the reason `chart.ts` already gives: it applies to every bound column or to
+none. The builders zip x, y, z, colour and size by index; project one and not
+another and the plot pairs the wrong height with the wrong position, plausibly.
+
+
 ## 2026-09-13 — Broadcast is a special case of collaboration: the relay half
 
 **Decision.** A live show is not a second transport. An audience member is a
@@ -8301,3 +8388,76 @@ it gets left open over the page.
 
 **Cost:** +1,234 B of shell (284,627 → 285,861, `ZOPFLI=0`). The deleted
 dialog and panel code is smaller than the kernel sheets that replace it.
+
+## 2026-09-26 — Spaces has two levels of transient message; phone targets are 44px
+
+**D3 in spaces: `status()` and `notice()`.**
+- The bar's status line stays the first level. It holds ambient state that is
+  true for a moment: "Edited", "Saved", "Editing", "Reading view".
+- `Editor.notice()` is the second level: a pill at the foot of the window,
+  `role=status`, above dialogs (`--z-toast` 1100), like slides' toast. It is
+  for messages the reader must not miss:
+  - a sync refusal (`syncNoticeText`);
+  - a read or import failure;
+  - a refused move;
+  - a copy or export written;
+  - a viewer preference that now applies to every page.
+
+Before this, both levels were the same 12px `--muted` line that fades in under
+two seconds. On a phone that line sits over the title strip. A future message
+picks its level by that test: if missing it would leave the reader wrong about
+their file, it is a notice. The kernel has no notice primitive yet. When one
+lands, this method is the only caller to move.
+
+**D5 in spaces:** under a coarse pointer the bar's buttons, the Live control,
+the page-tree rows and their ⋯, the format bar and every menu row are 44px
+(`--tap`). The bar was 40px.
+
+## 2026-09-26 — The spaces top bar is slides' bar, and the fit is one algorithm
+
+The maintainer's complaint was that spaces' interface "is not fully following
+slides", and the chrome work before this barely touched the bar. Measured on
+the #565 build at 1440: padding 8/12 against slides' 8/14, gap 6 against 10,
+groups at 2 and 4 against 6, a bold 136×30 wordmark button against slides'
+15px/400 lockup, a 240px semibold title with an 8px corner against 220px,
+regular, 6px. Each of those is slides' value now, and
+`scripts/test-spaces-chrome.ts` reads the padding, the gap, the title floor and
+the phone width out of SLIDES' SOURCE and compares, so the two cannot part
+silently.
+
+**Language and Help are in the bar, as in slides.** The globe opens the list
+slides' globe shows (`localeChoices()`, the one in force ticked,
+`menuitemradio`), and choosing one rebuilds the chrome. Slides' last row,
+"Manage languages…", has no spaces counterpart because spaces has no language
+packs. When the bar folds, both move into ⋯ as rows. "Keyboard shortcuts" is no
+longer in ⋯ at widths where `?` is on screen: one home per command per width.
+
+**One fit, shaped for the kernel.** `spaces/src/topbar.ts`
+(`createTopbarFit`) is slides' `fitTopbar` with the app taken out: tier
+classes, the title, and the "a menu is open" test are options. The hand-copy it
+replaces had drifted in three ways (§3.2 of the chrome audit): a 110px title
+floor where slides uses 120, a fold on a squeezed title rather than on real
+overflow, and no phone rule. So spaces changed tier at 800/720/600 where slides
+changes at 1360/880/720. Now it follows slides' rules:
+- compact and tight step down while the bar overflows or the title is under
+  120px;
+- fold waits for true overflow;
+- at 700px or below the bar folds unconditionally.
+
+Spaces has fewer controls, so its measured thresholds are 900/800/700.
+
+**Below the fold's floor the bar scrolls** (≤700px). A folded spaces bar needs
+about 370px (measured: ⋯ ends at 366 plus 6px padding). The app root clips, so without this the excess was cut off with ⋯
+inside it. A scroll container clips both axes, so the bar's menus go
+`position: fixed` under `--sp-bar-bottom`, which the fit publishes. The bar
+takes no `z-index`, so it never becomes a ceiling for them (slides' hard-won
+detail 9).
+
+**This reverses one line of 2026-08-10:** a phone no longer gives up the
+wordmark. The mark stays in the corner, as slides' does, and it is a 44px
+target there because it is a button (D5). Undo and redo stay in ⋯ on a phone,
+as that entry ruled. The Pages button moves from before the mark to after the
+title, where slides puts its Slides button.
+
+A kernel line proposes `kernel/src/ui/topbar.ts`. When it lands, this file
+becomes an import and slides' `fitTopbar` its second caller.

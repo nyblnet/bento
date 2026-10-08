@@ -137,7 +137,11 @@ export class CollabUi {
     const b = document.createElement('button')
     b.type = 'button'
     b.className = 'sp-live'
-    b.innerHTML = `<span class="sp-ico">${ICONS.people}</span><span class="sp-live-n"></span>`
+    b.innerHTML = `<span class="sp-ico">${ICONS.people}</span><span class="sp-btnlabel"></span><span class="sp-live-n"></span>`
+    // The word, as slides' "Share" carries it: an icon of two heads is not a
+    // name for "share this space". It collapses with the bar's compact tier
+    // like every other label; the tooltip still says the state.
+    b.querySelector('.sp-btnlabel')!.textContent = t('Share')
     b.addEventListener('click', () => this.openPanel(b))
     this.btn = b
     this.sync()
@@ -420,6 +424,11 @@ export class CollabUi {
       // re-mints the room, so every copy already sent stops syncing for good.
       // Remove (above) is the scalpel; this is the amputation.
       if (iAmOwner) {
+        // SET APART, not only last: on a phone this sheet's last row is where
+        // the thumb lands, and a stray tap there asked a native confirm() to
+        // stand between the reader and revoking every copy they had sent. A
+        // rule and the danger ink make it read as what it is before the tap.
+        acts.append(el('div', 'sp-paction-sep'))
         acts.append(this.action(t('Reset access…'),
           t('Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.'),
           () => {

@@ -34,7 +34,7 @@ import { planImport, type SourceFile } from './markdown'
 import { extractSpace, planGraft } from './portable'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
-import { t, locale } from './i18n'
+import { t, locale, localeChoices, setLocale, applyDirection } from './i18n'
 import { openAbout } from './about'
 import { openGraphView } from './graph.ts'
 import {
@@ -46,6 +46,7 @@ import { startSharing } from '../../kernel/src/sync/online.ts'
 import * as shareModule from './share.ts'
 import { ICONS, type IconName } from './icons'
 import { barMenu, anchoredMenu, row, caption, extra, keys, type Menu } from './menus.ts'
+import { createTopbarFit, type TopbarFit } from './topbar.ts'
 import { createDialog, type Dialog } from '../../kernel/src/ui/dialog.ts'
 import '../../kernel/src/ui/dialog.css'
 import { createPanel, type Panel } from '../../kernel/src/ui/panel.ts'
@@ -393,10 +394,20 @@ export class Editor {
       { icon: 'graph', label: t('Graph'), run: () => this.openGraph() },
       { icon: 'print', label: t('Print or save as PDF'), kbd: keys('mod', 'P'), run: () => this.openPrint() },
       { icon: 'info', label: t('About this space'), run: () => this.openAbout() },
-      // A help screen only reachable by pressing the key it documents is a
-      // help screen for people who did not need it.
-      { icon: 'help', label: t('Keyboard shortcuts'), kbd: '?', run: () => this.openHelp() },
     ]
+
+    // In the bar's corner as in slides — the globe and the `?` — and in ⋯ only
+    // once the bar has folded them away. A help screen only reachable by
+    // pressing the key it documents is a help screen for people who did not
+    // need it, which is why `?` is a button at all.
+    const helpB = iconBtn('help', `${t('Keyboard shortcuts')} (?)`, () => this.openHelp())
+    helpB.classList.add('sp-help')
+    // slides' glyph — a bold `?`, the key it stands for — not a circled icon
+    helpB.innerHTML = '<b class="sp-help-q" aria-hidden="true">?</b>'
+    const lang = barMenu({
+      icon: ICONS.globe, label: '', tip: t('Language'), end: true, scroll: true, className: 'sp-lang',
+      fill: (m) => this.fillLanguages(m),
+    }).root
 
     const inlineSecondary = barActions.map((a) => {
       const b = iconBtn(a.icon, a.kbd ? `${a.label} (${a.kbd})` : a.label, a.run)
@@ -447,16 +458,27 @@ export class Editor {
         // unconditionally is what made ⋯ a duplicate of the visible row.
         if (folded) {
           for (const a of barActions) row(m, { icon: ICONS[a.icon], label: a.label, kbd: a.kbd, run: a.run })
+          // The globe's list, one tap further: a menu cannot hold a menu, so
+          // the row opens the same list as its own popup (a sheet on a phone).
+          const moreB = m.trigger
+          row(m, { icon: ICONS.globe, label: t('Language'), run: () => {
+            queueMicrotask(() => anchoredMenu(moreB, (lm) => this.fillLanguages(lm),
+              { label: t('Language'), sheet: this.isDrawer(), returnFocus: moreB }))
+          } })
+          row(m, { icon: ICONS.help, label: t('Keyboard shortcuts'), kbd: '?', run: () => this.openHelp() })
           m.separator()
           saveRows(m)
         }
       },
     }).root
 
-    // The live control sits BEFORE ⋯ and is replaced in place once the session
-    // exists (connectSync). A placeholder rather than a conditional build, so
-    // the bar's widths do not shift when a document turns out to be shared.
-    this.liveSlot = el('span', 'sp-live-slot')
+    // The live control is replaced in place once the session exists
+    // (connectSync). A placeholder rather than a conditional build, so the
+    // bar's widths do not shift when a document turns out to be shared — and
+    // on a REBUILD (a language change) the session already exists, so the
+    // button goes straight in. It used to stay a placeholder: switching
+    // language in About took the Share control out of the bar until reload.
+    this.liveSlot = this.collab ? this.collab.button() : el('span', 'sp-live-slot')
 
     // save is a split control, as in slides: the common action, and the
     // less-common ways of writing this document somewhere else
@@ -489,41 +511,45 @@ export class Editor {
       () => this.toggleInsp())
     inspB.classList.add('sp-insp-toggle')
 
+    // Slides' layout, group for group (chrome-unification §2.1): LEFT is the
+    // document (mark · title · history), then the insert tools — here the one
+    // ＋ Insert, which is right for a document — then the RIGHT group, doing
+    // things with it, ending in the language globe and `?` as slides' does.
+    // ⋯ closes the row: it is a home at every width here (slides has it only
+    // folded), and last is where slides' folded bar puts it.
+    const insertGroup = el('div', 'sp-group sp-group-insert')
+    insertGroup.append(insert)
     const right = el('div', 'sp-group sp-group-right')
-    right.append(insert, search, ...inlineSecondary, inspB, this.liveSlot, more, saveGroup)
+    right.append(search, ...inlineSecondary, inspB, this.liveSlot, saveGroup, lang, helpB, more)
 
-    // The status goes AFTER undo/redo, never before. It is transient text that
-    // grows from nothing to a whole sentence, and anything downstream of it in
-    // the flex flow gets shoved sideways every time it changes — measured at
-    // 36px on a plain edit and 246px entering reading view, which is more than
-    // a button's width, so undo lands where redo just was. Past the history
-    // group it grows into the slack the right group's margin-auto already
-    // holds, and nothing before it can move. Reported against slides as #300.
-    bar.append(pagesB, mark, title, history, this.statusEl, right)
+    // The status goes AFTER the history and the insert tools, never before.
+    // It is transient text that grows from nothing to a whole sentence, and
+    // anything downstream of it in the flex flow gets shoved sideways every
+    // time it changes — measured at 36px on a plain edit and 246px entering
+    // reading view, so undo landed where redo just was. Here it grows into the
+    // slack the right group's margin-auto already holds, and nothing before it
+    // can move. Reported against slides as #300.
+    //
+    // The Pages button (drawer widths only) follows the title, as slides'
+    // Slides button does: the corner is the suite's mark, at every width.
+    bar.append(mark, title, pagesB, history, insertGroup, this.statusEl, right)
 
     // Drive the fit now, and again whenever the bar's size or its CONTENT
-    // changes. The ResizeObserver is the primary width signal — it fires for
-    // every viewport change, including a phone rotating, where matchMedia
-    // change events are unreliable under a driven viewport. The MutationObserver
-    // catches the constant-width case: the people count appearing when someone
-    // joins, the "Saved" tag flashing, the update chip arriving. Each of those
-    // clipped the end of the bar under the old breakpoints.
+    // changes — topbar.ts, slides' algorithm with its tiers, its 120px title
+    // floor and its 700px phone. A rebuilt bar gets a fresh fit; the old one's
+    // observers and its window listener go with it.
     this.topbar = bar
-    this.barRO?.disconnect()
-    this.barRO = new ResizeObserver(() => this.fitTopbar())
-    this.barRO.observe(bar)
-    this.barMO?.disconnect()
-    this.barMO = new MutationObserver(() => this.fitTopbar())
-    this.barMO.observe(bar, {
-      childList: true, subtree: true, characterData: true,
-      // NOT 'class': fitTopbar's own tier flips are class changes on this very
-      // element, and observing them makes the fix for the loop (takeRecords)
-      // the only thing standing between here and a spin. Slides omits it for
-      // the same reason.
-      attributes: true, attributeFilter: ['style', 'hidden'],
+    this.barFit?.destroy()
+    this.barFit = createTopbarFit(bar, {
+      tiers: ['sp-bar-compact', 'sp-bar-tight', 'sp-bar-fold'],
+      title: () => bar.querySelector<HTMLElement>('.sp-doctitle'),
+      // Re-fitting starts by UNFOLDING, which would slam shut a menu somebody
+      // is reading — and ⋯'s contents depend on the tier, so rebuilding it
+      // mid-read would change it under them. The next resize runs it again.
+      busy: () => !!this.overlay || !!bar.querySelector('.bkm-open'),
+      bottomVar: '--sp-bar-bottom',
+      varHost: this.root,
     })
-    // …and once the bar is actually in the document and has a width to measure
-    queueMicrotask(() => this.fitTopbar())
 
     this.sidebar = el('nav', 'sp-side')
     this.sidebar.setAttribute('aria-label', t('Pages'))
@@ -718,7 +744,7 @@ export class Editor {
    *
    * This used to be `matchMedia('(max-width: 600px)')`, with a comment saying
    * the number was duplicated from the stylesheet on purpose. It is not needed
-   * at all now: fitTopbar puts the tier on the bar as a class, so the menu can
+   * at all now: the fit (topbar.ts) puts the tier on the bar as a class, so the menu can
    * ASK what is on screen instead of re-deriving it from a width and hoping
    * the two agree. When they disagreed the symptom was a menu offering Undo
    * while Undo sat in the bar two centimetres away.
@@ -728,44 +754,28 @@ export class Editor {
   }
 
   /**
-   * Size the topbar by MEASURING it, not by width breakpoints.
-   *
-   * A px guess cannot answer the question being asked. The same buttons need
-   * different room at the same viewport width depending on browser zoom, OS
-   * text scaling, and how long the labels are in the reader's language — eight
-   * catalogs ship inside every file, and "Insert" is 76px in English and
-   * nothing like that in German. The bar's own CONTENT changes width too, at a
-   * fixed viewport: the people count appears when somebody joins a session.
-   * Each of those cases clipped the end of the bar under the old 820/600
-   * breakpoints. Slides settled this first (#239); this is its pattern.
-   *
-   * Start from the widest layout, step down a tier while the bar still
-   * overflows its own box.
+   * The language list — the globe's, and ⋯'s once the bar has folded. The same
+   * rows slides' globe shows: every language this build carries, each in its
+   * own name, the one in force checked. Language follows the READER, never
+   * the file (PLATFORM §8): nothing here touches the document.
    */
-  private fitTopbar(): void {
-    const bar = this.topbar
-    if (!bar || !bar.isConnected) return
-    const tiers = ['sp-bar-compact', 'sp-bar-tight', 'sp-bar-fold']
-    // Re-fitting starts by UNFOLDING, which would slam shut a menu somebody is
-    // reading — and the ⋯ menu's contents depend on the tier, so rebuilding it
-    // mid-read would change it under them. The next resize runs this again.
-    if (this.overlay || bar.querySelector('.bkm-open')) return
-    // scrollWidth counts content sticking out of the padding box even with
-    // overflow visible, so this IS the clipped-controls condition. 1px of
-    // slack absorbs subpixel rounding at fractional zoom.
-    const overflow = () => bar.scrollWidth - bar.clientWidth > 1
-    // The title is the only shrinkable thing in the bar, so flexbox crushes it
-    // toward its floor before anything overflows. Waiting for hard overflow
-    // would mean full labels beside an unreadable document title.
-    const title = bar.querySelector<HTMLElement>('.sp-doctitle')
-    const cramped = () => overflow() || (!!title && title.getBoundingClientRect().width < 110)
-    bar.classList.remove(...tiers)
-    if (cramped()) bar.classList.add('sp-bar-compact')
-    if (cramped()) bar.classList.add('sp-bar-tight')
-    if (cramped()) bar.classList.add('sp-bar-fold')
-    // the class flips above queued mutation records of their own; drop them,
-    // or the observer re-runs this forever
-    this.barMO?.takeRecords()
+  private fillLanguages(m: Menu): void {
+    const now = locale()
+    for (const c of localeChoices()) {
+      const b = row(m, { label: c.label, selected: c.code === now, run: () => this.chooseLanguage(c.code) })
+      b.setAttribute('role', 'menuitemradio')
+      b.setAttribute('aria-checked', String(c.code === now))
+      b.lang = c.code
+      b.classList.toggle('sp-lang-on', c.code === now)
+    }
+  }
+
+  private chooseLanguage(code: string): void {
+    if (code === locale()) return
+    setLocale(code)
+    applyDirection()
+    // the chrome is built in the reader's language, so it is built again
+    this.build()
   }
 
   /**
@@ -814,12 +824,37 @@ export class Editor {
     // The relay refuses things the user can act on — too large, room full. For
     // the permanent codes their change stays in this copy and reaches nobody,
     // which they must be told rather than left to discover.
-    session.onNotice((n) => this.status(syncNoticeText(n)))
+    session.onNotice((n) => this.notice(syncNoticeText(n)))
     this.collab.tryJoin()
     // a document REPLACED under us (Replace-from-JSON, a restored version) may
     // be a different document with different credentials
     this.store.on('doc', () => this.collab?.tryJoin())
     if (this.liveSlot) this.liveSlot.replaceWith(this.collab.button())
+  }
+
+  /**
+   * THE SECOND LEVEL (D3): a message the reader must not miss — a refusal, a
+   * failure, an outcome that happened out of view (a copy written, the relay
+   * refusing a change). It was the same 12px `--muted` whisper in the bar as
+   * "Edited", which fades in under two seconds and on a phone sits over the
+   * title strip; "Every page opens wide on this screen from now on" is a
+   * sentence nobody could read before it left. A pill at the foot of the
+   * window, above everything (a dialog included), announced politely, as
+   * slides' toast is. The status line keeps the ambient first level.
+   */
+  notice(msg: string): void {
+    if (!msg) return
+    let n = document.querySelector<HTMLElement>('.sp-notice')
+    if (!n) {
+      n = el('div', 'sp-notice')
+      n.setAttribute('role', 'status')
+      n.setAttribute('aria-live', 'polite')
+      document.body.append(n)
+    }
+    n.textContent = msg
+    n.classList.add('sp-on')
+    clearTimeout((n as any)._t)
+    ;(n as any)._t = setTimeout(() => n?.classList.remove('sp-on'), 3600)
   }
 
   status(msg: string): void {
@@ -971,7 +1006,7 @@ export class Editor {
   private reparentPage(id: string, parent: string): void {
     if (id === parent) return
     for (let p: string | undefined = parent; p; p = this.store.index.page.get(p)?.parent) {
-      if (p === id) { this.status(t('A page cannot contain itself')); return }
+      if (p === id) { this.notice(t('A page cannot contain itself')); return }
     }
     this.store.commit(() => {
       const page = this.store.index.page.get(id)
@@ -1848,7 +1883,7 @@ export class Editor {
     const s = this.store
     const page = pageId ? s.index.page.get(pageId) : s.page
     if (!page || s.readOnly) return
-    if (isIssue(page)) { this.status(t('Already an issue')); return }
+    if (isIssue(page)) { this.notice(t('Already an issue')); return }
     const fields = fieldsOf(s.doc).filter((f) => ISSUE_FIELDS.includes(f.key))
     s.commit(() => {
       page.blocks.unshift(...fields.map((f) => propBlock(f, f.def ?? '', newBlock('prop').id)))
@@ -2778,8 +2813,7 @@ export class Editor {
   private session: import('./sync/session.ts').SyncSession | null = null
   private liveSlot!: HTMLElement
   private topbar: HTMLElement | null = null
-  private barRO: ResizeObserver | null = null
-  private barMO: MutationObserver | null = null
+  private barFit: TopbarFit | null = null
   private treeTimer: ReturnType<typeof setTimeout> | undefined
   private paintTreeSoon(): void {
     clearTimeout(this.treeTimer)
@@ -3670,7 +3704,7 @@ export class Editor {
             try {
               const prepared = await prepareImage(file)
               draft.image = await internAsset(s.doc, prepared.dataUri)
-            } catch { this.status(t('That file could not be read as an image')); return }
+            } catch { this.notice(t('That file could not be read as an image')); return }
             paintPick()
           })()
         })
@@ -3935,7 +3969,7 @@ export class Editor {
       const applyAll = (v: 'wide' | 'full' | undefined) => {
         setReaderWidth(v)
         this.paintPage()
-        this.status(v ? t('Every page opens wide on this screen from now on')
+        this.notice(v ? t('Every page opens wide on this screen from now on')
                       : t('Pages open at their normal width again'))
       }
       row(m, {
@@ -3963,7 +3997,7 @@ export class Editor {
     const s = this.store
     const page = s.index.page.get(pageId)
     if (!page) return
-    if (s.doc.pages.length <= 1) { this.status(t('A space needs at least one page')); return }
+    if (s.doc.pages.length <= 1) { this.notice(t('A space needs at least one page')); return }
     const inbound = (s.index.backlinks.get(pageId) ?? []).length
     const kids = s.doc.pages.filter((p) => p.parent === pageId).length
     const parts = [t('Delete “{name}”?', { name: page.title || t('Untitled') })]
@@ -4015,7 +4049,7 @@ export class Editor {
         ? { dataUri: await blobToDataUri(file), w: 0, h: 0, original: true, wasBytes: file.size }
         : await prepareImage(file)
     } catch {
-      this.status(t('That file could not be read as an image'))
+      this.notice(t('That file could not be read as an image'))
       return
     }
 
@@ -4122,7 +4156,7 @@ export class Editor {
     try {
       dataUri = await blobToDataUri(file)
     } catch {
-      this.status(t('That file could not be read'))
+      this.notice(t('That file could not be read'))
       return
     }
     const kind = (file as File).type?.startsWith('audio/') ? 'audio' : 'video'
@@ -4160,7 +4194,7 @@ export class Editor {
     // inline html, so it never passes through sanitize.ts at all — a
     // `javascript:` typed into this box would be written straight onto the
     // element. The allowlist is the test, never a `javascript:` blocklist.
-    if (!/^https?:\/\//i.test(url)) { this.status(t('That needs to be an http or https address')); return }
+    if (!/^https?:\/\//i.test(url)) { this.notice(t('That needs to be an http or https address')); return }
     const kind = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|weba)(\?|#|$)/i.test(url) ? 'audio' : 'video'
     this.writeMedia(blockId, insertAfter, (b) => { b.src = url; b.kind = kind })
     this.status('')
@@ -4200,7 +4234,7 @@ export class Editor {
         this.status(t('Reading image…'))
         let prepared
         try { prepared = await prepareImage(file) } catch {
-          this.status(t('That file could not be read as an image')); return
+          this.notice(t('That file could not be read as an image')); return
         }
         const ref = await internAsset(this.store.doc, prepared.dataUri)
         this.store.commit(() => { const b = this.store.block(blockId); if (b) b.poster = ref })
@@ -4234,7 +4268,7 @@ export class Editor {
         this.status(t('Reading image…'))
         let prepared
         try { prepared = await prepareImage(file) } catch {
-          this.status(t('That file could not be read as an image')); return
+          this.notice(t('That file could not be read as an image')); return
         }
         if (prepared.dataUri.length > IMAGE_EMBED_BUDGET) {
           const okay = confirm(t(
@@ -4396,20 +4430,20 @@ export class Editor {
    */
   async importSpace(file: File, under?: string): Promise<void> {
     const s = this.store
-    if (s.readOnly) { this.status(t('This file is open read-only')); return }
+    if (s.readOnly) { this.notice(t('This file is open read-only')); return }
     let text: string
-    try { text = await file.text() } catch { this.status(t('That file could not be read')); return }
+    try { text = await file.text() } catch { this.notice(t('That file could not be read')); return }
 
     const body = spaceBlockOf(text)
     if (body === 'encrypted') {
       // The password is not ours to ask for, and the honest instruction is the
       // one that works: open the file where the password already is.
-      this.status(t('That space is password-protected. Open it, then export the pages you want.'))
+      this.notice(t('That space is password-protected. Open it, then export the pages you want.'))
       return
     }
     const res = parseDoc(body ?? '')
     if (!res.ok) {
-      this.status(res.err === 'format'
+      this.notice(res.err === 'format'
         ? t('That file is not a bento/spaces document')
         : t('That file could not be read'))
       return
@@ -4518,7 +4552,7 @@ export class Editor {
           const out = extractSpace(s.doc, pick.value, { subtree: kids.checked, docId: uid('doc') })
           close()
           void this.onExportSpace?.(out.doc).then((ok) => {
-            if (ok) this.status(t('Exported {n} page(s) as a new space', { n: out.stats.pages }))
+            if (ok) this.notice(t('Exported {n} page(s) as a new space', { n: out.stats.pages }))
           })
         }, true),
         plainBtn(t('Close'), close),
@@ -4538,14 +4572,14 @@ export class Editor {
    */
   async importFiles(picked: PickedFile[], opts: { under?: string } = {}): Promise<void> {
     const s = this.store
-    if (s.readOnly) { this.status(t('This file is open read-only')); return }
+    if (s.readOnly) { this.notice(t('This file is open read-only')); return }
     const notes = picked.filter((p) => NOTE_EXT.test(p.path))
     if (!notes.length) {
       // A space is a legitimate thing to drop on the import, and it arrives by
       // the same gesture: one route in, whatever kind of notes they are.
       const space = picked.find((p) => SPACE_EXT.test(p.path))
       if (space) { await this.importSpace(space.file, opts.under); return }
-      this.status(t('No Markdown files in that selection'))
+      this.notice(t('No Markdown files in that selection'))
       return
     }
     if (notes.length > 500 &&
@@ -4556,7 +4590,7 @@ export class Editor {
     try {
       files = await Promise.all(notes.map(async (p) => ({ path: p.path, text: await p.file.text() })))
     } catch {
-      this.status(t('Those files could not be read'))
+      this.notice(t('Those files could not be read'))
       return
     }
 
@@ -5007,14 +5041,14 @@ export class Editor {
       ? await shareModule.inviteCopy(this.store.doc)
       : shareModule.readerCopy(this.store.doc)
     if (!out) {
-      this.status(kind === 'invite'
+      this.notice(kind === 'invite'
         ? t('Only the owner of this space can invite people')
         : t('This space has no live session to follow'))
       return
     }
     const ok = await this.onShareCopy?.(out, kind)
     if (ok) {
-      this.status(kind === 'invite'
+      this.notice(kind === 'invite'
         ? t('Editor copy saved — recipients join live with edit access')
         : t('Read-only copy saved — it follows the live session, view only'))
     }
@@ -5043,7 +5077,7 @@ export class Editor {
       // the extract's writer rather than the copy path: that one keeps no file
       // handle, which is what leaves you editing this space afterwards.
       onWriteCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
-      onStatus: (msg) => this.status(msg),
+      onStatus: (msg) => this.notice(msg),
       onUpdateInPlace: (rel) => this.onUpdateInPlace?.(rel) ?? Promise.resolve(null),
       // both self-update writes carry this space's CRDT state, as ⌘S does
       onBeforeWrite: () => shareModule.stampSync(this.store, this.session),
