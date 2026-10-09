@@ -32,6 +32,7 @@
 
 import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf, linkCard, commentsOn, pageAssetKeys } from './model.ts'
 import { SPECS, SPEC } from './blocks.ts'
+import { aliasesOf, nameKey } from './mentions.ts'
 import { sanitizeInline, textOf, inertBody, esc, UNWRAP } from './sanitize.ts'
 import { orphanAssets, humanBytes } from './assets.ts'
 import {
@@ -256,6 +257,47 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
     add({ code: 'no-such-home', severity: 'warning', path: 'home',
       message: `home names "${doc.home}", which is not a page in this space.`,
       fix: 'Set home to a real page id. Readers land on the first page instead, which may not be the one you wrote to be landed on.' })
+  }
+
+  // ---- names and aliases ---------------------------------------------------
+  // TWO PAGES CLAIMING ONE NAME is not an error and is not repaired: a file
+  // arrives already written, and the resolver has a deterministic answer for
+  // it (mentions.ts nameIndex — titles before aliases, then document order).
+  // But the answer is invisible from the outside, so `[[Projects]]` lands
+  // somewhere the author did not choose and nothing anywhere says why. This is
+  // that report: the one place this app tells you about a clash it resolved on
+  // your behalf.
+  //
+  // A page ALIASED to its own title is silently fine — `namesOf` de-duplicates
+  // it — so it is not reported. Two pages simply TITLED the same thing is also
+  // not reported: that is ordinary and the ids keep them apart everywhere
+  // except a `[[wikilink]]`, which is the one case worth a line.
+  {
+    const claims = new Map<string, Array<{ id: string; title: string; alias: boolean }>>()
+    for (const kind of [false, true]) {
+      for (const p of pages) {
+        if (!p || typeof p.id !== 'string') continue
+        const names = kind ? aliasesOf(p) : [String(p.title ?? '')]
+        for (const n of names) {
+          const k = nameKey(n)
+          if (!k) continue
+          const list = claims.get(k)
+          if (list) { if (!list.some((c) => c.id === p.id)) list.push({ id: p.id, title: String(p.title ?? ''), alias: kind }) }
+          else claims.set(k, [{ id: p.id, title: String(p.title ?? ''), alias: kind }])
+        }
+      }
+    }
+    for (const [k, list] of claims) {
+      if (list.length < 2 || !list.some((c) => c.alias)) continue
+      const winner = list[0]
+      for (const loser of list.slice(1)) {
+        add({
+          page: loser.id, code: 'alias-collision', severity: 'warning', path: 'aliases',
+          message: `More than one page answers to the name "${k}": ${list.map((c) => `"${c.title}"${c.alias ? ' (alias)' : ' (title)'}`).join(', ')}. A [[${k}]] link resolves to "${winner.title}".`,
+          fix: `Rename the alias on "${loser.title}", or remove it. A title always wins over an alias, and among aliases the first page in doc.pages wins — so the page an author meant is not necessarily the page they get.`,
+        })
+      }
+    }
   }
 
   // ---- the field schema ----------------------------------------------------
