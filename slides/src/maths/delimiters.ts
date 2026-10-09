@@ -144,15 +144,20 @@ function resolveRun(text: string, render: RenderFn, hold: (s: string) => string,
     const raw = m.slice(pre.length)
     return pre + (hint && (sure || MATHY.test(src)) ? mark(raw, hint(src, display)) : raw)
   }
-  let out = text.replace(/(^|[^\\])\$\$([^$]+?)\$\$/g, rule(true, true))
+  // An escaped \$ is a dollar sign, never a delimiter — not even a CLOSING one:
+  // formula bodies are read as tokens (any character but `$` and `\`, or a
+  // backslash pair), so `\$` is part of a body and only an unescaped `$` can
+  // close. Reading the body as "anything but `$`" let `$10, and \$x\$` close on
+  // the escaped dollar and treat `10, and \` as a formula.
+  let out = text.replace(/(^|[^\\])\$\$((?:[^$\\]|\\[\s\S])+?)\$\$/g, rule(true, true))
   // lookbehind, not a consumed prefix, so \(a\)\(b\) back to back both match
   out = out.replace(/(?<!\\)()\\\[([\s\S]+?)\\\]/g, rule(true, true))
   out = out.replace(/(?<!\\)()\\\(([\s\S]+?)\\\)/g, rule(false, true))
-  out = out.replace(/(^|[^\\$])\$(\S(?:[^$\n]*?\S)?)\$(?!\d)/g, rule(false, false))
+  out = out.replace(/(^|[^\\$])\$((?:[^$\\\s]|\\[^\n])(?:(?:[^$\\\n]|\\[^\n])*?(?:[^$\\\s]|\\[^\n]))?)\$(?!\d)/g, rule(false, false))
   // `$ x^2 $`: prose by design. What is left paired after the rules above
   // did not render; the maths-shaped ones with a space inside get a hint
   if (hint) {
-    out = out.replace(/(^|[^\\$])\$([^$\n]+?)\$(?!\d)/g, (m, pre: string, src: string) =>
+    out = out.replace(/(^|[^\\$])\$((?:[^$\\\n]|\\[^\n])+?)\$(?!\d)/g, (m, pre: string, src: string) =>
       /^\s|\s$/.test(src) && MATHY.test(src) ? pre + mark(m.slice(pre.length), hint(src, false, true)) : m)
   }
   return unescapeDelims(out)

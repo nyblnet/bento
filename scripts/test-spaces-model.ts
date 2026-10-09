@@ -726,7 +726,9 @@ for (const [label, input, err] of [
       // whatever the loop variable is called — spec, item, i. The BRACKET form
       // is what stays flagged, because that is the shape that has actually
       // shipped English three times.
-      if (/\.(label|hint)$/.test(e)) continue
+      // inserts.ts is swept the same way (`label:`/`hint:`/`tip:`), and a
+      // section's caption IS its family's label
+      if (/\.(label|hint|tip|caption)$/.test(e)) continue
       offenders.push(`${f}: t(${e.slice(0, 40)})`)
     }
   }
@@ -1007,7 +1009,10 @@ for (const [label, input, err] of [
   ok(/import \{[^}]*\bTAG_OF\b[^}]*\bLIST_OF\b[^}]*\} from '\.\/blocks'/.test(ren) &&
      !/const TAG_OF: Record/.test(ren) && !/const LIST_OF: Record/.test(ren),
     'render.ts derives its tag and list maps rather than repeating them')
-  ok(/const SLASH_ITEMS = MENU_SPECS/.test(ed), 'the / menu is the registry')
+  // the / menu is the registry, through the insert families (inserts.ts),
+  // which filter MENU_SPECS and are held to place every listed type
+  ok(/const sections = insertSections\(\)/.test(ed) && /import \{[^}]*\bMENU_SPECS\b[^}]*\} from '\.\/blocks\.ts'/.test(read('inserts.ts')),
+    'the / menu is the registry, through inserts.ts')
   ok(/const AUTOFORMAT = MD_SPECS/.test(ed), 'autoformat is the registry')
   ok(/SPEC\.get\(b\.type\)/.test(ab) && !/case 'bullet': out\.push/.test(ab),
     'markdown export is the registry, not a parallel switch')
@@ -3237,7 +3242,7 @@ function fsTable(f: string): string {
   const sweep = fs.readFileSync(new URL('../scripts/build-spaces-i18n.mjs', import.meta.url), 'utf8')
   const packed = fs.readFileSync(new URL('../spaces/src/i18n/packed.ts', import.meta.url), 'utf8')
 
-  ok(/blocks\.ts'\)/.test(sweep) && /label\|hint/.test(sweep),
+  ok(/'blocks\.ts', 'inserts\.ts'/.test(sweep) && /label\|hint/.test(sweep),
     'the key sweep reads block spec labels and hints, not only literal t() calls')
   for (const label of ['Bulleted list', 'Callout', 'Board or list', 'Video or audio']) {
     ok(packed.includes(JSON.stringify(label)),
@@ -3612,6 +3617,47 @@ function fsTable(f: string): string {
   }
   ok(new Set(VIEW_LAYOUTS.map((l) => nextLayout(l))).size === VIEW_LAYOUTS.length,
     'the cycle reaches every shape — none is stranded off it')
+}
+
+
+// ---- ONE BRANCH PER LAYOUT -------------------------------------------------
+// A rebase duplicated a whole `if (layout === 'table')` block into render.ts.
+// Both copies compiled, both were valid, and the FIRST one returned — so the
+// second, which is the one carrying #390's sortable headers and editable
+// cells, was unreachable. Click-to-sort and edit-in-place shipped to main and
+// silently did nothing; the table rendered, so nothing looked broken.
+//
+// It survived review twice. The rig that was supposed to cover #390 checked
+// editor.ts for the click WIRING, which exists and is correct — the handler
+// was fine, the markup it needed was never rendered. That is a source grep
+// answering a question about the wrong file.
+//
+// The same commit also duplicated a whole section of THIS rig, which was
+// caught and removed. So the class is: a rebase of a stacked branch onto a
+// squashed base silently duplicates a block. Count the dispatch branches;
+// duplicates are the thing to fail on, not any one of their contents.
+{
+  const fs = await import('node:fs')
+  const ren = fs.readFileSync(new URL('../spaces/src/render.ts', import.meta.url), 'utf8')
+
+  const seen = new Map<string, number>()
+  for (const [, word] of ren.matchAll(/layout === '([a-z]+)'/g)) {
+    seen.set(word, (seen.get(word) ?? 0) + 1)
+  }
+  const dupes = [...seen].filter(([, n]) => n > 1).map(([w, n]) => `${w}×${n}`)
+  ok(dupes.length === 0,
+    `each layout is dispatched from exactly ONE branch in render.ts${dupes.length ? ' — duplicated: ' + dupes.join(', ') : ''}`)
+
+  // …and the branch that survives is the one that can actually sort and edit.
+  // Deleting the wrong copy of a duplicate pair passes the count check above
+  // and loses the feature, so name what the surviving branch must contain.
+  // \b, not a bare substring: the first draft of this check was /sortCol/, and
+  // renaming the property to `sortColX` — which is exactly what deleting the
+  // wrong half of the pair looks like — left it GREEN. The sabotage found my
+  // assertion, not the code.
+  ok(/\bdataset\.sortCol\b/.test(ren),
+    'the surviving table branch renders sortable headers')
+  ok(seen.get('table') === 1, 'exactly one table branch, so that header markup is reachable')
 }
 
 

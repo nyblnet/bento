@@ -14,6 +14,15 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **The table sorts and edits again.** A rebase duplicated the whole
+  `layout === 'table'` branch in the renderer. Both copies compiled, and the
+  first one returned — so the second, the one carrying click-to-sort headers
+  and edit-in-place cells, was unreachable from the moment covers and the
+  gallery landed. The table still drew, so nothing looked broken; it was
+  simply read-only and unsortable. Measured in the built shell before the fix:
+  0 header buttons, 0 cell buttons, no sort attribute anywhere. After: 2 and 6,
+  and clicking a column header actually reorders the rows.
+
 - **The whole gallery card is the target, and a long title stops inflating its
   row.** In a shelf of covers the picture is what you point at, so the title's
   link now stretches over the card rather than the card holding a second one —
@@ -670,6 +679,22 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   "About bento/spaces — version, updates, licenses", and the Save row is
   "Duplicate as new space…". The translations are slides' own wherever slides
   has the same string.
+
+- **Insert is slides' insert group.** The single ＋ Insert menu is gone.
+  The bar now has one button per kind of thing: Text ▾, Image ▾, Table,
+  View ▾, Code and Comment. Chart and Embed appear on builds that have those
+  blocks. A kind with variants opens a small menu of them, for example
+  headings, lists, quote, callout, toggle and divider under Text, or Board,
+  List, Table view, Gallery and Canvas under View. Video and Audio are now
+  separate rows.
+  - **A new block goes after the one you are in**, not at the foot of the
+    page. The caret lands in it, and one undo removes it. With no caret it
+    goes at the end.
+  - **New page, Today's journal and New issue** moved to a ＋ ▾ beside the page
+    list's ＋, with their shortcuts. ＋ is still New page.
+  - The labels hide on a narrower window as slides' do. On a phone, the
+    whole group is in ⋯, under captions. The `/` menu lists the same families
+    in the same order, with the same captions.
 
 ## [0.1.0] — 2026-08-03
 

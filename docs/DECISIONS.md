@@ -187,6 +187,45 @@ the host should not launch another app on its say-so. http, https and mailto are
 what a link in a document means. A custom URL scheme is dropped rather than
 opened, the same choice Android makes.
 
+## 2026-09-09 — bento/type: comparing with another file is a VIEW, never a merge
+
+**Decision.** `type/src/compare.ts` points the existing redline engine at a
+SECOND FILE — the user picks or drops another `.bento.html` (or a bare `.json`
+document) and gets the same word-level redline the Snapshot flow gives. Two
+constraints are settled here, because both are easy to reverse by accident.
+
+**No accept/reject against a foreign base.** `redlineview.ts` gained a
+`resolvable` flag and the file comparison passes `false`. Against a SNAPSHOT,
+reject means "restore what this document said a moment ago", and the
+accept/reject arithmetic lands somewhere the author meant to be. Against
+somebody else's document it means adopting their text wholesale — that is a
+merge, and a merge is a different feature with different questions (whose ids
+win, what happens to comments and tracked changes). Comparing may not touch the
+document and may not reach the saved file, the same rule the theme and the
+locale follow. If a future session wants three-way merge, it is new work beside
+this, not a flag flipped on it.
+
+**The direction is named in the UI, every time.** `redline(before, after)` is
+not symmetric but its change COUNT is: swap the ends and you get the same number
+of cards, each saying the opposite of the truth, with nothing on screen able to
+tell you which. The other file is `before` and the live document is `after` —
+their text paints as `<del>`, yours as `<ins>` — and the panel heading names
+both ends rather than saying "7 changes".
+
+Degenerate cases are part of the feature rather than error handling around it:
+an identical file is ANSWERED and never painted as an empty redline (an empty
+list is indistinguishable from a comparison that silently failed); another Bento
+app's file names the app it actually is; a differing `docId` is legitimate and
+noted, not refused; `parseDoc` repairs are surfaced, because a repaired block id
+shows up in the redline as a change nobody made.
+
+**Pointers.** `type/src/comparedoc.ts` (the reading and the direction, no DOM),
+`type/src/compare.ts` (the surface), `showComparison` in `redlineview.ts`. Rig:
+`scripts/test-type-compare.ts`, whose fixture is the BUILT
+`type/dist-single/*.bento.html` when one is on disk, and which pins the
+orientation by change CONTENT rather than count — verified by swapping the two
+arguments and watching six checks go red while the count stayed at three.
+
 ---
 
 ## 2026-08-19 — Cross-app embedding: static render + source, never a second renderer
@@ -8345,6 +8384,71 @@ sees alone (a peer's sync op, a document stored before intake was scrubbed).
 A document's OWN `collab` is untouched by any of this; that is the file's.
 `test-type-embed.ts`, `test-type-share.ts` and `test-export-secrets.ts` pin it.
 
+## 2026-09-09 — bento/type: hanging punctuation that provably cannot move a line
+
+**Optical margin alignment ships, and it hangs punctuation in RENDERING SPACE
+only.** `type/src/micro.ts` wraps the protruding character in a
+`<span class="t-hang">` that is `position: relative` with a `left` offset. CSS
+2.1 §9.4.3 says a relatively positioned box is painted moved and affects the
+layout of no other box, so the mechanism cannot reflow a paragraph by
+construction.
+
+**That constraint is not caution, it is the format's promise.** Line breaking
+is the browser's, `paginate.ts` measures the line boxes it produces, and a
+saved file's page count is a promise already made to whoever printed it. This
+is also why the TeX approach is unavailable: pdfTeX's protrusion feeds the
+overhang back into the badness computation and legitimately changes breaks,
+which is the point there and disqualifying here.
+
+**The offset is the character's side bearing and never more.** The objective is
+stated as a number — minimise the deviation of each line's INK edge from the
+margin — and once stated, ink flush is its optimum: hanging further, the classic
+"half the quote in the margin" look, makes the stated measurement worse. The
+bearings are measured from the real face at the real size through a canvas
+(`actualBoundingBoxLeft/Right`), so changing the document's typeface changes the
+answer. Anything under a third of a pixel is dropped rather than paid for with a
+wrapper.
+
+**A wrapper CAN still reflow, and it did.** Browsers break text-shaping runs at
+element boundaries, so wrapping a character can cost a kern pair. On a 14-page
+fixture, wrapping the comma of "…including time-sheets," made the word stop
+fitting and moved the break back to the hyphen in "time-". So the pass VERIFIES
+per paragraph and unwraps any paragraph whose lines moved. On that fixture the
+guard fires on 13 of 126 paragraphs — this is a routine event, not a
+theoretical one, and a version of this feature without the check would ship
+reflows.
+
+**The check must be two-sided, and the one-sided version passed a real
+reflow.** Asking only whether the character that OPENED each line is still on
+that line is not enough: in the "time-sheets" case "receipts" was still on line
+1 afterwards, because the word had moved down onto it. The line count and every
+line top were unchanged too. A break is held only when the line's FIRST and its
+LAST character are both still on it. `boundariesHeld` is that decision, and
+`scripts/test-type-micro.ts` carries the case.
+
+**`doc.optical` defaults to ON, including for files written before it existed.**
+This is a deliberate exception to "an old file renders exactly as it did", taken
+under the rule that allows one when the new output is strictly better and said
+so. What an old file promises is its PAGINATION, and that is bit-identical:
+measured over a 14-page, 162-block, 362-line mixed document (headings, justified
+prose, lists, blockquotes, a table, footnotes, display maths), every line's
+content and every page start offset is identical with the feature on and off,
+while the ink deviation's RMS over the 188 justified lines that reach the margin
+falls from 0.664px to 0.569px, and on the lines it acts on from 1.415px to
+0.010px. Only `false` is stored; an explicit `true` normalises away.
+
+**What it does not do, and these are limits of the mechanism rather than of the
+effort.** An automatic hyphen from `hyphens: auto` has no character behind it,
+so there is nothing to wrap and nothing to hang — only an explicit hyphen the
+author typed hangs. Right-to-left text, table cells and formulas are skipped.
+Letters do not hang: moving every line's last letter out by its bearing is
+margin kerning, a separate feature with a different risk profile.
+
+**Print runs the same pass, in the print document.** `buildPrintDocument` stays
+a pure string function; `printDocument` applies the pass to the first page's
+flow and clones the result into the others, which are copies of the same flow at
+the same width. `printHtml()` — the scripted surface — therefore returns
+un-hung markup, by design.
 ## 2026-09-26 — Spaces adopts the kernel dialog and panel; spaces keeps panel persistence
 
 **Every modal in bento/spaces is `createDialog`** (kernel/src/ui/dialog.ts):
@@ -8645,6 +8749,56 @@ structure and puts in its own nouns. These are new strings, translated here:
 
 These are unchanged on purpose: "Remove password…" keeps its confirmation
 dialog, and "Properties" stays.
+
+## 2026-09-26 — spaces' insert tools are slides' insert group
+
+**The maintainer:** "I think having one Insert menu is the wrong shape." The
+design he approved replaces spaces' single "＋ Insert" menu with slides'
+shape. That menu had 21 rows mixing block insertion, new-page actions and a
+copy of `/`.
+
+- **One button per kind, a menu only where the kind has variants.** The kinds
+  are Text ▾, Image ▾, Table, Chart, View ▾, Code, Embed, then Comment, as
+  slides ends its group. Text holds the paragraph, headings, quote, callout,
+  toggle, the three lists and the divider. Image holds image, video, audio,
+  then a link card and a page card. View holds the layouts of a saved view,
+  then Canvas. Canvas is a surface you arrange by hand, not a view of the
+  issues, and it waits there for the diagram family.
+- **One table decides it: `spaces/src/inserts.ts`.** The bar group, the folded
+  ⋯ and the `/` menu all read it, so they cannot offer different families,
+  orders or names. A family whose block type the build lacks is left out, and
+  a family left with one member is a plain button. Chart and Embed therefore
+  appear on a build that has those blocks, and Code grows a menu the day maths
+  joins it, with no other change. The diagram block will be one entry.
+- **Where a new block goes is where you are working**, as slides places a new
+  element on the slide you are on. It goes after the block holding the caret
+  (or last clicked), as that block's sibling and after anything nested in it.
+  With no caret on the page it goes at the end. It is one commit, so one undo
+  takes it away, and the caret lands in it. A page card opens its picker
+  first, so Escape inserts nothing rather than a card pointing at no page.
+- **The bar's Comment** comments on the block holding the caret, or on the
+  page. Spaces has no free-position comments, so there is no armed mode as in
+  slides.
+- **Look and tiers are slides'.** The buttons are slides' `.ed-btn`: icon and
+  word, 30px, 6px apart. The menus are slides' Shape menu. Like every other
+  label, the words go at the compact tier. At the fold tier the whole group
+  moves into ⋯: each family with variants under its caption, a rule before a
+  run of one-member kinds, then Comment. Reading view hides the group.
+- **New pages leave Insert.** New page, Today's journal and New issue are on a
+  ＋ ▾ split at the head of the page list, with their shortcuts. ＋ alone is
+  still New page. A page is added to the space, not inserted into the page
+  you are on.
+- `/` and the gutter ＋ are unchanged as paths. `/` lists the same families
+  in the same order under the same names, with the same captions.
+
+Spaces' bar now folds at a wider window than slides' does. This is measured,
+not chosen: the group adds five icons to a right group that was already longer
+than slides'. `scripts/test-spaces-chrome.ts` reads slides' `.ed-btn`,
+`.ed-group`, `.ed-menu` and icon size from slides' source. It holds the insert
+buttons and menus to those values, and checks that every member lands after
+the caret's block and is undone in one step. It also checks that `/` agrees
+with the bar, that the tiers drop the words and fold the group, and that every
+command is still reachable from its new home.
 
 ## 2026-09-26 — Mermaid flowcharts: our own parser and layout, and labels are inert text
 
