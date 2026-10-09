@@ -57,6 +57,20 @@ if (!app) {
 }
 
 const version = JSON.parse(readFileSync(join(root, `${app.dir}/package.json`), 'utf8')).version
+
+// bento.page/import refuses to build on a slides shell older than
+// convert/src/deliver.ts MIN_SHELL_VERSION. A slides release below that floor
+// would ship a page that refuses the very release it shipped with, so it is
+// stopped here, before anything is built or signed.
+if (app.ownsSiteContent) {
+  const floor = /export const MIN_SHELL_VERSION = '([\d.]+)'/.exec(
+    readFileSync(join(root, 'convert/src/deliver.ts'), 'utf8'))?.[1]
+  if (!floor) { console.error('✗ convert/src/deliver.ts has no MIN_SHELL_VERSION'); process.exit(1) }
+  if (cmpVer(version, floor) < 0) {
+    console.error(`✗ ${app.appId} v${version} is below MIN_SHELL_VERSION ${floor} (convert/src/deliver.ts): bento.page/import would refuse this release`)
+    process.exit(1)
+  }
+}
 const shellSrc = join(root, `${app.dir}/dist-single/${app.shell}`)
 // Where the site is assembled. `site/` for a real release — publish-site.mjs
 // mirrors exactly that path — and `--out` for a rehearsal, so
@@ -363,9 +377,27 @@ if (app.ownsSiteContent) {
   mkdirSync(join(site, 'help'), { recursive: true })
   cpSync(join(root, 'site-src/help.html'), join(site, 'help/index.html'))
 
+  // /schema/slides.json (+ the version-pinned twin) and /llms.txt — the
+  // document schema and the agent index, at the URLs every saved deck's
+  // `$schema` key, the Tooling comment and AGENTS.md advertise. The schema
+  // is generated from the gate's tables (scripts/build-schema.mjs, pinned by
+  // CI); pinned twins of earlier versions stay published because the seed
+  // above restores them.
+  mkdirSync(join(site, 'schema'), { recursive: true })
+  for (const f of readdirSync(join(root, 'schema')).filter((f) => f.endsWith('.json'))) {
+    cpSync(join(root, 'schema', f), join(site, 'schema', f))
+  }
+  cpSync(join(root, 'site-src/llms.txt'), join(site, 'llms.txt'))
+
   // 404 — of course it's a deck (see build-404-deck.mjs + site-src/404.html).
   execFileSync('node', [join(root, 'scripts/build-404-deck.mjs'), join(site, '404.bento.html')], { stdio: 'inherit' })
   cpSync(join(root, 'site-src/404.html'), join(site, '404.html'))
+
+  // /import — drop a .pptx, get a .bento.html back, converted in the visitor's
+  // browser (convert/page + convert/src; nothing uploaded). Built into a single
+  // page with a hash-based CSP (scripts/build-import-page.mjs). No shell carries
+  // any of it: the converter lives on this page and nowhere else.
+  execFileSync('node', [join(root, 'scripts/build-import-page.mjs'), join(site, 'import/index.html')], { stdio: 'inherit' })
 
   // /q — "this QR code is a presentation" (deck lives in the URL fragment).
   execFileSync('node', [join(root, 'scripts/build-qr-page.mjs'), join(site, 'q/index.html')], { stdio: 'inherit' })

@@ -1,0 +1,140 @@
+{
+  "compact": true,
+  "title": "Three options",
+  "theme": {
+    "background": "#0F1720",
+    "color": "#F5F7FA"
+  },
+  "slides": [
+    {
+      "id": "options",
+      "elements": [
+        {
+          "id": "heading",
+          "type": "text",
+          "x": 96,
+          "y": 80,
+          "w": 1088,
+          "h": 80,
+          "html": "Three ways forward",
+          "fontSize": 48,
+          "fontWeight": 700
+        },
+        [
+          {
+            "type": "shape",
+            "shape": "rect",
+            "x": 96,
+            "y": 220,
+            "w": 340,
+            "h": 360,
+            "fill": "#1B2735",
+            "radius": 16
+          },
+          {
+            "type": "text",
+            "x": 120,
+            "y": 248,
+            "w": 292,
+            "h": 56,
+            "html": "Build",
+            "fontSize": 30,
+            "fontWeight": 700,
+            "align": "left"
+          },
+          {
+            "type": "text",
+            "x": 120,
+            "y": 320,
+            "w": 292,
+            "h": 220,
+            "html": "Own the engine; 8 KB; every construct we measured.",
+            "fontSize": 20,
+            "align": "left",
+            "valign": "top",
+            "opacity": 0.8
+          }
+        ],
+        [
+          {
+            "type": "shape",
+            "shape": "rect",
+            "x": 470,
+            "y": 220,
+            "w": 340,
+            "h": 360,
+            "fill": "#1B2735",
+            "radius": 16
+          },
+          {
+            "type": "text",
+            "x": 494,
+            "y": 248,
+            "w": 292,
+            "h": 56,
+            "html": "Buy",
+            "fontSize": 30,
+            "fontWeight": 700,
+            "align": "left"
+          },
+          {
+            "type": "text",
+            "x": 494,
+            "y": 320,
+            "w": 292,
+            "h": 220,
+            "html": "Keep the dependency; 64 KB; nothing to maintain.",
+            "fontSize": 20,
+            "align": "left",
+            "valign": "top",
+            "opacity": 0.8
+          }
+        ],
+        [
+          {
+            "type": "shape",
+            "shape": "rect",
+            "x": 844,
+            "y": 220,
+            "w": 340,
+            "h": 360,
+            "fill": "#1B2735",
+            "radius": 16
+          },
+          {
+            "type": "text",
+            "x": 868,
+            "y": 248,
+            "w": 292,
+            "h": 56,
+            "html": "Wait",
+            "fontSize": 30,
+            "fontWeight": 700,
+            "align": "left"
+          },
+          {
+            "type": "text",
+            "x": 868,
+            "y": 320,
+            "w": 292,
+            "h": 220,
+            "html": "Do nothing this cycle; revisit with real demand.",
+            "fontSize": 20,
+            "align": "left",
+            "valign": "top",
+            "opacity": 0.8
+          }
+        ],
+        {
+          "type": "shape",
+          "shape": "line",
+          "x": 96,
+          "y": 620,
+          "w": 1088,
+          "h": 2,
+          "fill": "#F7A600"
+        }
+      ]
+    }
+  ]
+}

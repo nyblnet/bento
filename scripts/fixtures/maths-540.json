@@ -1,0 +1,19 @@
+{
+ "about": "Issue #540 — the commands and environments maths-lite refused while Temml rendered them (the lead's probe, plus their neighbours). The rig requires every one to render (the hard must-render list); maths-set.json carries them too so the Temml identity gate covers them.",
+ "mustRender": [
+  "p \\land q", "p \\lor q", "x \\gets y", "\\top", "\\bot",
+  "A \\xrightarrow{f} B", "A \\xleftarrow{g} B", "A \\xleftrightarrow{h} B", "A \\xRightarrow{i} B",
+  "\\frac12", "x^\\frac12", "\\frac1{2}", "\\tfrac12", "\\dfrac12",
+  "a \\over b", "{a+1 \\over b}", "n \\choose k", "{n \\choose k}", "a \\atop b",
+  "\\cfrac{1}{1 + \\cfrac{1}{x}}", "\\genfrac{(}{)}{0pt}{}{n}{k}", "\\dbinom{n}{k}", "\\tbinom{n}{k}",
+  "\\dagger", "\\ddagger", "a \\nmid b", "a \\nparallel b", "\\square", "\\blacksquare", "\\checkmark",
+  "f \\colon A \\to B", "a \\leqslant b", "a \\geqslant b", "a \\lesssim b", "a \\gtrsim b",
+  "A \\varsubsetneq B", "A \\subsetneq B", "A \\supsetneq B", "A \\nsubseteq B",
+  "a \\bmod n", "a \\equiv b \\pmod{n}", "a \\equiv b \\pod{n}", "a \\equiv b \\mod{n}",
+  "\\sum_{\\substack{i < n \\\\ j < m}} a_{ij}", "\\left\\{ x \\middle| x > 0 \\right\\}",
+  "\\mathring{A}", "a \\mathbin{\\star} b", "a \\mathrel{\\sim} b", "\\mathop{\\rm Res} f", "\\mathord{+}",
+  "\\operatorname*{argmax}_x f(x)", "\\emph{note} x", "a \\hspace{1em} b", "a \\vspace{1em} b", "x_1, \\dotsc, x_n", "x_1 + \\dotsb + x_n",
+  "\\begin{multline} a + b \\\\ + c \\end{multline}", "\\begin{eqnarray} a &=& b \\\\ c &=& d \\end{eqnarray}",
+  "a = b \\tag{1}", "a = b \\notag", "a = b \\nonumber"
+ ]
+}

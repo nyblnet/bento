@@ -22,12 +22,12 @@
 //     undefined with the right code, not as a missing-part fetch attempt.
 
 import { Buffer } from 'node:buffer'
-import { parseXml } from '../../kernel/src/convert/xml.ts'
-import { Report } from '../../kernel/src/convert/report.ts'
-import type { InheritCtx } from '../../kernel/src/convert/types.ts'
+import { parseXml } from '../../convert/src/xml.ts'
+import { Report } from '../../convert/src/report.ts'
+import type { InheritCtx } from '../../convert/src/types.ts'
 import {
   parseRels, parseContentTypes, mimeFor, toBase64, AssetStore, imageFrom, _internals,
-} from '../../kernel/src/convert/media.ts'
+} from '../../convert/src/media.ts'
 
 let failures = 0
 let checks = 0

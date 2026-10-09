@@ -11,8 +11,9 @@
 // alphabetical and deliberate: load.ts (the loadability gate) runs among the
 // rest, and any child's non-zero exit fails the suite.
 
-import { readdirSync } from 'node:fs'
+import { readdirSync, readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -24,7 +25,23 @@ const rigs = readdirSync(dir)
 const failed: string[] = []
 for (const rig of rigs) {
   console.log(`\n== ${rig} ==`)
-  const r = spawnSync(process.execPath, [join(dir, rig)], { stdio: 'inherit' })
+  // A rig that reaches slides' untrusted-input gate cannot run under plain
+  // node: the gate's own imports are extensionless. Such a rig says `// @bundle`
+  // near its top and is bundled with the repo's esbuild first — the same move
+  // scripts/bento-check.mjs and the clipboard rig make.
+  let target = join(dir, rig)
+  let tmp = ''
+  if (/^\/\/ @bundle\b/m.test(readFileSync(target, 'utf8').slice(0, 2000))) {
+    tmp = mkdtempSync(join(tmpdir(), 'convert-rig-'))
+    const out = join(tmp, rig.replace(/\.ts$/, '.mjs'))
+    const b = spawnSync(join(dir, '../../slides/node_modules/.bin/esbuild'),
+      [target, '--bundle', '--platform=node', '--format=esm', '--log-level=error', `--outfile=${out}`],
+      { stdio: 'inherit' })
+    if (b.status !== 0) { failed.push(rig); rmSync(tmp, { recursive: true, force: true }); continue }
+    target = out
+  }
+  const r = spawnSync(process.execPath, [target], { stdio: 'inherit' })
+  if (tmp) rmSync(tmp, { recursive: true, force: true })
   if (r.status !== 0) failed.push(rig)
 }
 
