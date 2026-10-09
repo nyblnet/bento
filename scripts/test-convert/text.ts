@@ -20,15 +20,15 @@
 //   • a literal '<' in a:t must come out as &lt; — the raw-emit answer would
 //     open a tag (seen to fail with esc() bypassed: html gained '<script').
 
-import { parseXml, kid, kids, attr, NS } from '../../kernel/src/convert/xml.ts'
-import type { XElem } from '../../kernel/src/convert/xml.ts'
-import { Report } from '../../kernel/src/convert/report.ts'
-import type { ThemeCtx, InheritCtx } from '../../kernel/src/convert/types.ts'
+import { parseXml, kid, kids, attr, NS } from '../../convert/src/xml.ts'
+import type { XElem } from '../../convert/src/xml.ts'
+import { Report } from '../../convert/src/report.ts'
+import type { ThemeCtx, InheritCtx } from '../../convert/src/types.ts'
 import {
   effectivePhType, textDefaults, resolveFrame, labeledChain,
-} from '../../kernel/src/convert/inherit.ts'
-import { resolveColor } from '../../kernel/src/convert/theme.ts'
-import { textFrom, type TextDeps } from '../../kernel/src/convert/text.ts'
+} from '../../convert/src/inherit.ts'
+import { resolveColor } from '../../convert/src/theme.ts'
+import { textFrom, type TextDeps } from '../../convert/src/text.ts'
 
 let failures = 0
 let checks = 0

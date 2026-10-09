@@ -26,7 +26,7 @@
 
 import { NS, attr, intAttr, kid, kids, descendants, type XElem } from './xml.ts'
 import { EMU_PER_PX, type InheritCtx, type OutImage } from './types.ts'
-import type { ZipParts } from './zip.ts'
+import type { ZipParts } from '../../kernel/src/convert/zip.ts'
 
 // --- relationships -----------------------------------------------------------
 

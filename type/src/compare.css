@@ -1,0 +1,29 @@
+/* SPDX-License-Identifier: MIT */
+/* Copyright (c) 2026 The Bento authors */
+
+/* compare.ts — the "compare with another document" dialog.
+   Reuses the house chrome (.t-overlay + .t-dlg + .t-btn); this file adds only
+   the drop target, which nothing else in bento/type has. CHROME tokens only:
+   the dialog floats over the page and follows the reader's theme, so a
+   --paper token here would be a white box in the dark theme (the bug class
+   scripts/test-type-theme.mjs exists for). */
+
+.t-compare { width: min(460px, 100%); }
+.t-compare h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+
+.t-compare-drop {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  margin-top: 14px; padding: 22px 16px;
+  border: 1px dashed var(--line); border-radius: 10px;
+  background: var(--chrome-2); color: var(--muted);
+  font-size: 12.5px; text-align: center;
+}
+/* The whole point of a drop target is that it says when it has you. */
+.t-compare-drop.over {
+  border-style: solid; border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--ink);
+}
+/* Nothing inside may become the drag target itself, or moving the pointer
+   over the button fires dragleave and the zone flickers out from under it. */
+.t-compare-drop.over * { pointer-events: none; }

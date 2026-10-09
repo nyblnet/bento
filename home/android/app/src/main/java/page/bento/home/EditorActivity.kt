@@ -8,6 +8,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -34,6 +35,7 @@ import androidx.webkit.WebViewFeature
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.security.MessageDigest
+import java.util.concurrent.Executors
 
 /**
  * Hosts one open document in a WebView and bridges saving to the Storage Access
@@ -123,9 +125,41 @@ class EditorActivity : Activity() {
 
     private var replyProxy: JavaScriptReplyProxy? = null
 
-    /** An export whose bytes are held while the user chooses where it goes. */
-    private class PendingExport(val id: Int, val text: String)
+    /**
+     * An export whose bytes are held while the user chooses where it goes.
+     *
+     * ONE picker per name, however many writes arrive while it is open. Bento
+     * autosaves 2.5s after an edit, so a ⌘S and an autosave routinely land
+     * together; each used to launch its own picker and overwrite this slot, and
+     * the second picker to return found nothing pending and left the file it had
+     * just created at ZERO BYTES — while the first write's promise was never
+     * answered. Now later writes join the open request: the newest bytes win,
+     * and every id is answered with the one result. [name] is null for a
+     * download, which nothing is waiting on.
+     */
+    private class PendingExport(val name: String?, var text: String, val ids: MutableList<Int>)
     private var pendingExport: PendingExport? = null
+
+    /**
+     * Where each exported copy went, by the name its handle was vended under.
+     *
+     * A save from a read-only document ends at a picker, and Bento then HOLDS a
+     * handle to that copy — ⌘S and autosave write-back reuse it, exactly as they
+     * would on desktop. Without this map every one of those writes asked for a
+     * location again, so the user got a fresh picker after every edit. The grant
+     * from ACTION_CREATE_DOCUMENT lasts as long as this activity, which is as
+     * long as the page's handle does.
+     */
+    private val exportTargets = HashMap<String, Uri>()
+
+    /**
+     * Every write goes through this one thread, in arrival order. A copy is
+     * recorded in [exportTargets] the moment its picker returns, so the next
+     * autosave can be addressed to it before the first write has finished; two
+     * threads both truncating and writing one file is how a document ends up
+     * interleaved.
+     */
+    private val io = Executors.newSingleThreadExecutor()
 
     /** Stable per-document host: a truncated SHA-256 of the document's URI.
      *  Hex only, so it is always a valid host component. */
@@ -269,6 +303,27 @@ class EditorActivity : Activity() {
                     try { startActivity(Intent(Intent.ACTION_VIEW, u)) } catch (_: Exception) {}
                 }
                 return true
+            }
+
+            /**
+             * A new page holds no handles, so everything handed to the old one
+             * is forgotten here. onPageStarted fires for MAIN-FRAME navigations
+             * only — a fragment change or pushState is not one — which makes it
+             * the equivalent of iOS's didCommit.
+             *
+             * - The open document is the new page's to claim again. Without
+             *   this, a reload spent the first begin on the old page, and the
+             *   new page's first save (or its launchQueue handle) was taken for
+             *   an export and prompted for a destination.
+             * - Remembered copies are dropped too. They are keyed by the name a
+             *   handle was vended under, and the new page has no such handle: a
+             *   later export it happens to vend under the same name would
+             *   otherwise go straight into a file the user picked for the
+             *   previous page, without asking.
+             */
+            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                openDocumentVended = false
+                exportTargets.clear()
             }
         }
 
@@ -473,6 +528,17 @@ class EditorActivity : Activity() {
                 if (!openDocumentVended && canWriteInPlace) {
                     openDocumentVended = true
                     reply(id, true, docName)
+                } else if (m.optBoolean("launch", false)) {
+                    // The page asked for the file it was opened with (bridge.js
+                    // launchQueue) and this host cannot hand it over: the grant
+                    // is read-only — the usual case for a document from mail —
+                    // or it was already handed out. That is a NO, never an
+                    // export. Falling through would put a save dialog on screen
+                    // the moment the document opened; refused, the page keeps
+                    // today's path and its ⌘S behaves exactly as before.
+                    reply(id, false,
+                        if (!canWriteInPlace) "the open document is read-only here"
+                        else "the open document was already handed out")
                 } else {
                     // Either a copy/template/read-only export, or a document we
                     // hold no write grant on. Both must end at a picker, and
@@ -490,27 +556,51 @@ class EditorActivity : Activity() {
                 // getFile() and createWritable({keepExistingData}) need the bytes
                 // currently on disk. Only the OPEN document is readable — an
                 // export target is somewhere we were handed once and do not hold.
-                if (targetsOpenDocument(m.optString("name"))) {
-                    reply(id, true, bytes.toString(Charsets.UTF_8))
-                } else {
-                    reply(id, true, null)
+                val name = m.optString("name")
+                val copy = exportTargets[name]
+                when {
+                    targetsOpenDocument(name) -> reply(id, true, bytes.toString(Charsets.UTF_8))
+                    // A copy saved earlier this session: what is on disk now.
+                    // Queued behind any write still in flight, so a read never
+                    // sees a half-written file.
+                    copy != null -> io.execute {
+                        val text = try {
+                            contentResolver.openInputStream(copy)?.use { it.readBytes() }
+                                ?.toString(Charsets.UTF_8)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "copy read failed", e); null
+                        }
+                        runOnUiThread { reply(id, true, text) }
+                    }
+                    else -> reply(id, true, null)
                 }
             }
 
             "write" -> {
+                val name = m.optString("name")
                 val text = m.optString("text")
-                if (targetsOpenDocument(m.optString("name"))) {
-                    writeInPlace(id, text)
-                } else {
-                    beginExport(id, m.optString("name"), text)
+                val copy = exportTargets[name]
+                when {
+                    targetsOpenDocument(name) -> writeInPlace(id, text)
+                    copy != null -> io.execute {
+                        val err = writeBytes(copy, text.toByteArray())
+                        runOnUiThread { reply(id, err == null, err) }
+                    }
+                    else -> beginExport(id, name, text)
                 }
             }
 
             "download" -> {
                 // The readback half of the `<a download>` path — see
                 // startDownload(). No reply: nothing is waiting on it.
-                pendingExport = PendingExport(-1, m.optString("text"))
-                launchCreateDocument(safeFileName(m.optString("name")) ?: "download.html")
+                if (pendingExport != null) {
+                    // A picker is already open. Saying so beats dropping the
+                    // bytes, or swapping them for the save the picker was for.
+                    notify(getString(R.string.err_download))
+                } else {
+                    pendingExport = PendingExport(null, m.optString("text"), mutableListOf())
+                    launchCreateDocument(safeFileName(m.optString("name")) ?: "download.html")
+                }
             }
 
             else -> reply(id, false, "unknown op")
@@ -551,29 +641,52 @@ class EditorActivity : Activity() {
     private fun writeInPlace(id: Int, text: String) {
         val uri = docUri ?: return reply(id, false, "no document")
         val data = text.toByteArray()
-        Thread {
-            val err = try {
-                // "wt" TRUNCATES. Plain "w" leaves any bytes past the new length
-                // in place, so saving a document that got shorter would leave the
-                // tail of the previous version glued to the end of the new one —
-                // and for a Bento shell that tail contains a second, stale
-                // #bento-doc block.
-                contentResolver.openOutputStream(uri, "wt")?.use { it.write(data) }
-                    ?: "no output stream"
-                null
-            } catch (e: Exception) {
-                Log.w(TAG, "write failed", e); e.message ?: "write failed"
-            }
+        io.execute {
+            val err = writeBytes(uri, data)
             runOnUiThread {
                 if (err == null) bytes = data
                 reply(id, err == null, err)
             }
-        }.start()
+        }
     }
 
-    private fun beginExport(id: Int, name: String?, text: String) {
+    /**
+     * Write a whole document to [uri]; null on success, else what went wrong.
+     * Call on [io] only.
+     *
+     * "wt" TRUNCATES. Plain "w" leaves any bytes past the new length in place,
+     * so saving a document that got shorter would leave the tail of the previous
+     * version glued to the end of the new one — and for a Bento shell that tail
+     * contains a second, stale #bento-doc block.
+     *
+     * A null stream is a FAILURE. This used to read
+     * `openOutputStream(…)?.use { … } ?: "no output stream"` followed by `null`,
+     * which computed the error and then threw it away: a provider that handed
+     * back no stream was reported to the page as a successful save.
+     */
+    private fun writeBytes(uri: Uri, data: ByteArray): String? = try {
+        val out = contentResolver.openOutputStream(uri, "wt")
+        if (out == null) "no output stream" else { out.use { it.write(data) }; null }
+    } catch (e: Exception) {
+        Log.w(TAG, "write failed", e); e.message ?: "write failed"
+    }
+
+    private fun beginExport(id: Int, name: String, text: String) {
         val safe = safeFileName(name) ?: return reply(id, false, "unsafe name")
-        pendingExport = PendingExport(id, text)
+        val open = pendingExport
+        if (open != null) {
+            if (open.name == name) {
+                open.text = text
+                open.ids += id
+            } else {
+                // A different save while a picker is open. Refused out loud
+                // rather than queued behind a dialog the user cannot see is for
+                // a second file.
+                reply(id, false, "another save is waiting for a location")
+            }
+            return
+        }
+        pendingExport = PendingExport(name, text, mutableListOf(id))
         launchCreateDocument(safe)
     }
 
@@ -587,7 +700,7 @@ class EditorActivity : Activity() {
             startActivityForResult(intent, REQ_EXPORT)
         } catch (e: Exception) {
             val p = pendingExport; pendingExport = null
-            if (p != null && p.id >= 0) reply(p.id, false, "no picker available")
+            p?.ids?.forEach { reply(it, false, "no picker available") }
         }
     }
 
@@ -613,24 +726,24 @@ class EditorActivity : Activity() {
         // so. Reporting success would leave Bento believing a copy exists.
         if (p == null) return
         if (resultCode != RESULT_OK || target == null) {
-            if (p.id >= 0) reply(p.id, false, "cancelled")
+            p.ids.forEach { reply(it, false, "cancelled") }
             return
         }
 
+        // Recorded NOW, not when the write lands: an autosave that arrives in
+        // between must go to this copy, not open another picker. [io] keeps the
+        // two writes in order.
+        if (p.name != null) exportTargets[p.name] = target
+
         val payload = p.text.toByteArray()
-        Thread {
-            val err = try {
-                contentResolver.openOutputStream(target, "wt")?.use { it.write(payload) }
-                    ?: "no output stream"
-                null
-            } catch (e: Exception) {
-                Log.w(TAG, "export failed", e); e.message ?: "export failed"
-            }
+        io.execute {
+            val err = writeBytes(target, payload)
             runOnUiThread {
-                if (p.id >= 0) reply(p.id, err == null, err)
+                if (err != null && p.name != null) exportTargets.remove(p.name)
+                p.ids.forEach { reply(it, err == null, err) }
                 if (err != null) notify(getString(R.string.err_export))
             }
-        }.start()
+        }
     }
 
     /**
@@ -740,6 +853,9 @@ class EditorActivity : Activity() {
         // symptom.
         pendingFileChooser?.onReceiveValue(null)
         pendingFileChooser = null
+        // Queued writes still run to completion; nothing new is accepted. A save
+        // the user pressed just before leaving is a save that happens.
+        io.shutdown()
         // A WebView outlives its activity if anything still references it, and
         // it holds the whole document. Detach and destroy explicitly.
         if (this::web.isInitialized) {

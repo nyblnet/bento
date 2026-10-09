@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// THE SNAPSHOT REDLINE SURFACE — comparing the live document against a chosen
-// earlier revision, computed once per "Review changes…" click.
+// THE REDLINE SURFACE — comparing the live document against a chosen BASE,
+// computed once per "Review changes…" click.
+//
+// There are two bases now. A SNAPSHOT (`startReview`) is a revision of this
+// document, so the redline can be resolved — accept and reject mean something,
+// and `applyDecisions` commits. A COMPARISON (`showComparison`, driven by
+// compare.ts) is against another FILE, and is a VIEW only: see `resolvable`
+// below for why that is not the same feature with a flag.
 //
 // NOT review.ts. review.ts's tracked changes are live, per-edit, and always
 // current — driven by `ins`/`del` marks the document itself carries. This is
@@ -26,7 +32,7 @@
 
 import './redlineview.css';
 import { registerPanel, type FeatureContext } from './features.ts';
-import { redline, apply as applyRedline, describe, type ChangeSet } from './redline.ts';
+import { redline, apply as applyRedline, describe, type Change, type ChangeSet } from './redline.ts';
 import type { Block } from './model.ts';
 import { uid } from './model.ts';
 
@@ -42,6 +48,26 @@ let currentSet: ChangeSet | null = null;
 let baseBody: Block[] | null = null;
 let baseLabel = '';
 const decided = new Map<string, boolean>();
+
+/**
+ * WHERE THE BASE CAME FROM, which decides whether the redline is RESOLVABLE.
+ *
+ * A snapshot redline is resolvable: the base is a revision of THIS document,
+ * so "reject" means restore what this document said a moment ago, and the
+ * accept/reject arithmetic in `applyDecisions` lands somewhere the author
+ * meant to be. A comparison against ANOTHER FILE is not: rejecting there
+ * would mean adopting a different document's text wholesale, and comparing is
+ * a VIEW — the same rule the theme and the locale follow. So the buttons are
+ * not merely disabled in that mode, they are not offered, and `heading`/`note`
+ * say what is on screen instead.
+ *
+ * These are THUNKS, not strings. registerPanel's `label` learned the same
+ * lesson: a string resolved when the comparison starts is frozen at that
+ * locale, and the About picker rebuilds the workspace under it.
+ */
+let heading: (() => string) | null = null;
+let note: (() => string) | null = null;
+let resolvable = true;
 
 // Set on mount, so the two actions below (which don't themselves commit to the
 // store — computing a redline is a pure read) can still ask the panel to
@@ -70,6 +96,40 @@ export function startReview(ctx: FeatureContext): void {
   decided.clear();
   baseBody = base.body;
   baseLabel = base.label;
+  heading = null;
+  note = null;
+  resolvable = true;
+  ctx.showPanel('review');
+  repaint?.();
+}
+
+/**
+ * Show a redline whose base is NOT a snapshot of this document — today, another
+ * file the reader picked (compare.ts).
+ *
+ * The caller owns the diff and every word on screen; this only paints. That
+ * split is deliberate: the direction of a comparison is the one thing a reader
+ * cannot recover from the cards themselves (an insertion and a deletion look
+ * identical read backwards), so whoever chose the direction is also the one who
+ * writes the sentence naming it, rather than this file guessing from a label.
+ */
+export function showComparison(ctx: FeatureContext, o: {
+  base: { docId: string; body: Block[] };
+  set: ChangeSet;
+  /** the sentence naming the direction, e.g. “7 changes from “x.html” to this document” */
+  heading: () => string;
+  /** an optional caveat beneath it — a different docId, repairs made on read */
+  note?: () => string;
+  /** may the reader accept/reject? FALSE for anything that is only a view */
+  resolvable?: boolean;
+}): void {
+  currentSet = o.set;
+  baseBody = o.base.body;
+  baseLabel = '';
+  decided.clear();
+  heading = o.heading;
+  note = o.note ?? null;
+  resolvable = o.resolvable ?? false;
   ctx.showPanel('review');
   repaint?.();
 }
@@ -108,12 +168,26 @@ function paint(host: HTMLElement, ctx: FeatureContext): void {
   }
 
   const head = el('div', 't-hint');
-  head.textContent = currentSet.changes.length
-    ? `${currentSet.changes.length} change${currentSet.changes.length > 1 ? 's' : ''} since ${baseLabel}`
-    : `No changes since ${baseLabel}. Edit the document, then press Review again.`;
-  head.style.marginBottom = '9px';
+  head.textContent = heading ? heading()
+    : currentSet.changes.length
+      ? `${currentSet.changes.length} change${currentSet.changes.length > 1 ? 's' : ''} since ${baseLabel}`
+      : `No changes since ${baseLabel}. Edit the document, then press Review again.`;
+  head.style.marginBottom = note ? '4px' : '9px';
   host.appendChild(head);
+  if (note) {
+    const n = el('div', 't-hint t-redline-note');
+    n.textContent = note();
+    host.appendChild(n);
+  }
   if (!currentSet.changes.length) return;
+
+  // A view-only comparison stops here and shows the cards. Offering a disabled
+  // Accept would read as "not yet", when the truth is that this base is not
+  // something this document can be resolved against at all.
+  if (!resolvable) {
+    for (const c of currentSet.changes) host.appendChild(card(c));
+    return;
+  }
 
   const bar = el('div'); bar.style.cssText = 'display:flex;gap:6px;margin-bottom:9px';
   for (const [text, val] of [['Accept all', true], ['Reject all', false]] as const) {
@@ -129,12 +203,7 @@ function paint(host: HTMLElement, ctx: FeatureContext): void {
   host.appendChild(bar);
 
   for (const c of currentSet.changes) {
-    const card = el('div', 't-card');
-    if (decided.has(c.id)) card.classList.add('done');
-    const what = c.kind === 'text'
-      ? `${c.removed ? `<del>${esc(c.removed)}</del>` : ''}${c.added ? `<ins>${esc(c.added)}</ins>` : ''}`
-      : esc(describe(c));
-    card.innerHTML = `<div class="who">${esc(c.author)} · ${c.kind}</div><div class="what">${what}</div>`;
+    const box = card(c);
     const btns = el('div', 'btns');
     for (const [text, val] of [['Accept', true], ['Reject', false]] as const) {
       const b = el('button') as HTMLButtonElement;
@@ -147,9 +216,20 @@ function paint(host: HTMLElement, ctx: FeatureContext): void {
       });
       btns.appendChild(b);
     }
-    card.appendChild(btns);
-    host.appendChild(card);
+    box.appendChild(btns);
+    host.appendChild(box);
   }
+}
+
+/** One change, as the reviewer reads it — with no decision attached to it yet. */
+function card(c: Change): HTMLElement {
+  const box = el('div', 't-card');
+  if (decided.has(c.id)) box.classList.add('done');
+  const what = c.kind === 'text'
+    ? `${c.removed ? `<del>${esc(c.removed)}</del>` : ''}${c.added ? `<ins>${esc(c.added)}</ins>` : ''}`
+    : esc(describe(c));
+  box.innerHTML = `<div class="who">${esc(c.author)} · ${c.kind}</div><div class="what">${what}</div>`;
+  return box;
 }
 
 registerPanel({

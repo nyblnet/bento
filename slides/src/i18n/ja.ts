@@ -604,6 +604,8 @@ export const ja: Catalog = {
   "Remove {name} — revokes this device’s access; everyone else is unaffected": "{name} を削除 — このデバイスのアクセスを取り消します。他の人には影響しません",
   "Replace from JSON": "JSON から置き換え",
   "Replace from JSON…": "JSON から置き換え…",
+  "Import PowerPoint…": "PowerPoint を読み込む…",
+  "Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.": "bento.page の PowerPoint 読み込みページを新しいタブで開きます。.pptx を Bento のデッキに変換します。インターネット接続が必要です。",
   "Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.": "アクセスをリセットしますか？送信済みのすべてのコピーが同期を停止し、以後保存したコピーだけが参加できます。",
   "Reset access…": "アクセスをリセット…",
   "Save a copy…": "コピーを保存…",

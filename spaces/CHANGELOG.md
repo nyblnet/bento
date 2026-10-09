@@ -14,6 +14,15 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **The table sorts and edits again.** A rebase duplicated the whole
+  `layout === 'table'` branch in the renderer. Both copies compiled, and the
+  first one returned — so the second, the one carrying click-to-sort headers
+  and edit-in-place cells, was unreachable from the moment covers and the
+  gallery landed. The table still drew, so nothing looked broken; it was
+  simply read-only and unsortable. Measured in the built shell before the fix:
+  0 header buttons, 0 cell buttons, no sort attribute anywhere. After: 2 and 6,
+  and clicking a column header actually reorders the rows.
+
 - **The whole gallery card is the target, and a long title stops inflating its
   row.** In a shelf of covers the picture is what you point at, so the title's
   link now stretches over the card rather than the card holding a second one —
@@ -501,6 +510,215 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   link card, media, field, board, page link, canvas — are pinned with the
   reason, so the rig fails if one starts to qualify without the pin being
   lifted on purpose.
+- **A saved copy of a shared space rejoins its live session with its offline
+  edits.** ⌘S, Save a copy and both self-update writes now stamp the live
+  session's sync state into the file (`collab.sync`), as bento/slides always
+  has. Before, a copy edited away from the session reopened as if it had never
+  synced: its edits stayed in that copy and never reached anyone else, and an
+  edit to a paragraph somebody had also changed was overwritten by theirs.
+  Measured in two Chrome tabs: edit in one, save, edit the saved file offline,
+  edit in the other tab meanwhile, reopen — the old build ends with the two
+  tabs disagreeing; this one shows both edits in both tabs. View-only copies,
+  page extracts, Markdown and JSON exports, and "Duplicate as a new space…"
+  carry no sync state, and a file opened read-only is never re-stamped.
+- **⌘Z no longer undoes who a space is.** Undo restores a snapshot of the
+  whole document, and it used to bring that snapshot's identity back with the
+  content: edit something, then Stop sharing, and the next ⌘Z switched sharing
+  back on, silently rejoining the room you had just left. A key rotation could
+  be undone into the revoked key the same way, and a new docId or a read-only
+  mode reverted to whatever the snapshot held. Undo and redo now move content
+  only. The docId, the live-session credentials and the read-only and template
+  modes always stay as they are in the open space. Restoring a version, the
+  recovery banner, Replace from JSON and `bento.loadDoc` follow the same rule:
+  they replace the pages, title and theme, and never the space's identity.
+  Bento Slides had the same bug.
+- **A copy that cannot write never gets writer chrome.** Whether a copy may
+  write was decided by `collab.role !== 'reader'`, so the live-show
+  `'audience'` role — and any role added later — passed as a writer: an
+  audience copy opened editable, was labelled Editor in People, and made local
+  commits the relay then refused. It is an allowlist now (`copyCanWrite` in
+  `share.ts`, the same shape as bento/type's): no role field or `'writer'`
+  writes, anything else opens view-only. Every gate — the boot lock, the Share
+  popover, the People label — asks that one function. Plain files and legacy
+  rooms open exactly as before.
+- **Fixed: an edit made while the file was being written could be marked saved.**
+  Saving takes a moment — the file is reconnected, the space is written out,
+  the disk answers — and a word typed in that moment went into the space after
+  the file's copy had already been taken. When the write finished, the unsaved
+  dot went out anyway, so the file was missing the edit and nothing said so.
+  Now each save writes the space exactly as it was when that save began, and
+  the dot goes out only if nothing has changed since. Anything newer — your own
+  typing, a colleague's edit arriving live, an undo — keeps the dot on and goes
+  into the next save. Two saves in quick succession wait for each other instead
+  of writing the file at the same time, and so does "Update this file" in
+  About. A save that fails now says so ("Save failed — see console") instead of
+  leaving "Saving…" on screen, and the space stays unsaved.
+
+- **Restoring from this browser checks what it restores.** The recovery
+  banner's snapshot and every History entry are kept in the browser's storage,
+  which every local Bento file shares, so they are now treated like a file
+  that arrived from somewhere else, as Bento Slides already treats them. An
+  entry that names a different space, is not a bento/spaces document, was
+  written by a newer version, or is oversized is not restored: nothing
+  changes, and the entry is left where it is. Text in a restored entry is
+  cleaned the way an imported space's is. A bad entry never raises the
+  recovery banner in the first place. Reading copies and view-only copies
+  don't offer to restore at all.
+
+- **Every menu is the suite's menu now, and it behaves like one.** Insert, ⋯,
+  the save caret, the block and page ⋯ menus, a board's group, sort, filter and
+  source menus, a field's options, a code block's language and a callout's tone
+  are all built on the kernel's shared menu. You can walk every one of them with
+  the arrow keys and close it with Escape, and focus goes back to the button
+  that opened it. Opening one menu closes any other. Four things this fixes,
+  each measured in the built file:
+  - A menu closed with Escape left its click-away listener behind, and that
+    listener closed the NEXT thing you opened on your first click inside it:
+    Escape a block menu, press ⌘K, click in the search box, and the search
+    vanished.
+  - On a phone the ⋯ menu was 950px tall on an 844px screen. Its last three
+    rows, which are the only ways to save a copy or export on a phone, could
+    not be reached. It now ends inside the screen and scrolls.
+  - The Insert menu's last row ran off the bottom of a 1440×900 window. Insert
+    is one line per row now, with the Markdown shortcut (`#`, `1.`, `>`) on the
+    right. The descriptions stay on the `/` menu, where you learn them.
+  - With About or the shortcut sheet open, `[` collapsed the page list behind
+    it and `?` opened a second sheet on top. Nothing reaches the page under an
+    open dialog now.
+
+  On a phone, every anchored menu is a sheet at the bottom of the screen,
+  including the page ⋯ menu, which used to be a small popup over the drawer.
+  Rows are 44px tall under a finger. Shortcuts are right-aligned and written
+  in one order, ⌃⌥⇧⌘ (⌥⌘N, not ⌘⌥N). They are hidden where there is no
+  keyboard. Only menus whose rows have consequences keep a second line saying
+  what each row does (save a copy, archive, delete, page width). The overflow
+  button is ⋯, not ⋮, as in slides. A search, import or export dialog now
+  closes with Escape wherever the focus is, not only while it is inside the
+  card. The graph view puts focus in its card, not on the dimmed page behind it.
+
+- **Every dialog and both side panels are the suite's.** About, the keyboard
+  shortcuts, Search, Link to page, Link card, Import, the import reports,
+  Export page as a space, Print and the graph now use the kernel's dialog. Each
+  one keeps the keyboard inside it: Tab used to leave the import dialog on 23
+  presses out of 25. Escape closes any of them wherever the focus is. Each opens
+  on a real title (17px, D4) rather than a small grey caption, with the
+  corner, shadow and scrim slides uses.
+  - The shortcut sheet no longer draws a blue ring around itself when it opens.
+    Its shortcuts are written in one order, ⌃⌥⇧⌘.
+  - In Search and in Link to page, the arrow keys move through the results while
+    you keep typing, and Enter opens the highlighted one. Before, a result could
+    only be reached with Tab.
+
+  The page list and the properties panel are the kernel's side panel. You drag
+  the edge to resize, double-click it to reset, and use the chevron to close or
+  open. Below 820px each panel is a drawer over the page. Your widths and
+  open/closed choices are kept exactly as before, under the same keys. Opening
+  and closing the drawer on a phone never changes what a desktop remembers.
+
+- **The phone bar, the dialogs' buttons, and messages you must not miss.**
+  - **Phone targets.** Every control in the phone bar is a 44px target now.
+    Five of them were 40px and the Live button was 35×29. Page rows and their
+    ⋯ are 44px too; they were 28px and 20×20.
+  - **Save on a phone** is a square icon button. It used to be a 66×40 dark
+    slab with the icon at one end. The unsaved dot is a badge on its corner.
+  - **The Live button** sits on the same grid as the buttons beside it and has
+    no frame of its own.
+  - **Dialog buttons.** A secondary button in a dialog looks like a button:
+    Import's "Choose a folder…" and "Choose a space…" read as plain words
+    before. The primary button's text follows the theme, so it no longer
+    disappears in dark mode.
+  - **About's links** are darker, 4.5:1 or better. They were 3.23:1.
+  - **Messages you must not miss** now show as a notice at the foot of the
+    window, the way slides shows them. That covers:
+    - a change the relay refused;
+    - a file that could not be read;
+    - a page that cannot contain itself;
+    - "every page opens wide from now on";
+    - a copy that was written.
+
+    Before, these were the same small grey line in the bar as "Edited", and it
+    faded in under two seconds. "Edited" and "Saved" stay on the bar.
+  - **Small fixes.** The properties panel's section headings get a real
+    disclosure caret, where the old one rendered as a dot. The share panel sets
+    "Reset access…" apart from the rows above it.
+
+- **The top bar is slides' top bar.** Same padding (8/14) and spacing (10
+  between groups, 6 inside one), the same mark at the same size, a 220px title
+  in regular weight, and every button on the same 30px grid. The Save half is
+  slides' width with its caret; it stays the dark primary button. The unsaved
+  dot is a badge on Save's corner at every width. Language (the globe) and the
+  keyboard shortcuts (`?`) now sit in the bar's corner, as in slides. The globe
+  opens the same list of languages slides shows, with the current one ticked.
+  Choosing one rebuilds the chrome in that language. Share is labelled "Share".
+  ＋ Insert stays one menu, next to undo and redo where slides keeps its insert
+  tools, and ⋯ closes the row.
+  - **It narrows as slides' does.** Labels go first, then the word beside the
+    mark, then controls fold into ⋯. On a phone the bar always folds. Below
+    what even a folded bar needs (about 370px), it scrolls sideways instead of
+    cutting off ⋯, and its menus still open fully on screen. Before, spaces
+    dropped its labels only at 800px, where slides drops them at 1360.
+  - **On a phone** the mark stays in the corner as a 44px button to About, and
+    the Pages button follows the title. Language and Keyboard shortcuts are in
+    ⋯ once the bar has folded.
+  - **Fixed:** changing the language in About took the Share button out of the
+    bar until you reloaded.
+
+- **Everything that opens from the top bar is slides' too.** Menus, the Share
+  popover, the dialogs, the shortcut sheet, the notice pill and the update
+  chip now take slides' measurements: 30px menu rows in 13px regular type (the
+  Save menu 12.5px, as in slides), the icons in the same ink as the words,
+  hairline separators, a 4px gap under the button, slides' shadow, and in dark
+  mode slides' slightly lighter menu surface. The Save button and its caret are
+  slides' primary split, pixel for pixel, at every width.
+  - **The Save menu holds everything that acts on the file, in slides'
+    order.** Save a copy, Duplicate as a new space, the Markdown and page
+    exports, Encrypt with password (Change or Remove once set), then Version
+    history, Copy document JSON, Replace from JSON and Import Markdown. Most of
+    these used to be sections of the About dialog; About now holds what slides'
+    About holds — the version and updates, your appearance and language, the
+    file's numbers and the document's properties.
+  - **Encrypt with password asks twice**, in a dialog, instead of a single
+    browser prompt; Version history and Replace from JSON open as their own
+    dialogs.
+  - **⋯ appears only when the bar is too narrow**, as in slides, and then holds
+    the buttons the bar gave up followed by the Save menu. Its other rows moved
+    to where slides keeps their kind: New page, Today's journal and New issue
+    to the foot of ＋ Insert; Graph and Print to the bar beside Reading view;
+    "Make this page an issue" to the page's own ⋯ menu; About to the wordmark.
+  - **The Share popover is laid out as slides' is**: your name on one line,
+    People, the connection line in amber or green, Share a copy, then the
+    session controls — its actions plain one-line rows like the Save menu's.
+  - **An update found at launch shows slides' peach version chip** beside the
+    wordmark and says so once; clicking it opens About on a fresh check.
+  - **Every Save row and Share action says what it does** in its hover
+    tooltip, as slides' do, and a screen reader announces it as the row's
+    description. The
+    Save list scrolls under the bar on a short window instead of running off
+    it, menus cast a deeper shadow in dark mode, and a keyboard focus ring
+    in the accent colour marks where you are in the bar, menus and dialogs.
+
+- **The bar's labels are slides' labels.** The `?` button and its sheet are
+  "Shortcuts & tips", ⋯ is "More actions", Print is "Export PDF (print)", the
+  Save caret reads "Save as… — copy, new space, password", the wordmark reads
+  "About bento/spaces — version, updates, licenses", and the Save row is
+  "Duplicate as new space…". The translations are slides' own wherever slides
+  has the same string.
+
+- **Insert is slides' insert group.** The single ＋ Insert menu is gone.
+  The bar now has one button per kind of thing: Text ▾, Image ▾, Table,
+  View ▾, Code and Comment. Chart and Embed appear on builds that have those
+  blocks. A kind with variants opens a small menu of them, for example
+  headings, lists, quote, callout, toggle and divider under Text, or Board,
+  List, Table view, Gallery and Canvas under View. Video and Audio are now
+  separate rows.
+  - **A new block goes after the one you are in**, not at the foot of the
+    page. The caret lands in it, and one undo removes it. With no caret it
+    goes at the end.
+  - **New page, Today's journal and New issue** moved to a ＋ ▾ beside the page
+    list's ＋, with their shortcuts. ＋ is still New page.
+  - The labels hide on a narrower window as slides' do. On a phone, the
+    whole group is in ⋯, under captions. The `/` menu lists the same families
+    in the same order, with the same captions.
 
 ## [0.1.0] — 2026-08-03
 
