@@ -62,6 +62,10 @@ export const ICONS = {
   arrowUp: svg('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>'),
   arrowDown: svg('<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>'),
   close: svg('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'),
+  // slides' own glyphs (slides/src/icons.ts), for the commands that moved to
+  // the Save menu and the Share popover in slides' order and slides' look
+  history: svg('<circle cx="12" cy="12" r="8.5"/><polyline points="12 7 12 12 15.5 14"/>'),
+  broadcast: svg('<path d="M12 20V4"/><path d="M4.5 8.5a11 11 0 0 1 15 0"/><path d="M7.5 12.5a7 7 0 0 1 9 0"/><circle cx="12" cy="20" r="2" fill="currentColor" stroke="none"/>'),
   sync: svg('<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>'),
   comment: svg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
 
@@ -75,6 +79,9 @@ export const ICONS = {
   tag: svg('<path d="M20.59 13.41 12 22l-9-9V3h10l7.59 7.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>'),
   scale: svg('<path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7 2 14h6z"/><path d="M19 7l-3 7h6z"/><path d="M8 21h8"/>'),
   pen: svg('<path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><line x1="2" y1="2" x2="9.5" y2="9.5"/>'),
+  // slides' chart glyph (bars on an axis): the Chart insert. Not `graph`,
+  // which is the Graph view's network of pages, beside it in the bar.
+  chart: svg('<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>'),
   graph: svg('<circle cx="5" cy="18" r="2.5"/><circle cx="12" cy="5.5" r="2.5"/><circle cx="19" cy="16" r="2.5"/><line x1="6.6" y1="16.1" x2="10.4" y2="7.4"/><line x1="14.2" y1="7.3" x2="17.6" y2="13.6"/><line x1="7.5" y1="17.6" x2="16.5" y2="16.3"/>'),
   compass: svg('<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88"/>'),
   hash: svg('<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>'),
