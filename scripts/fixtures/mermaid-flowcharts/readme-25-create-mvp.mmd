@@ -1,0 +1,17 @@
+%% source: https://github.com/qwadratic/create-mvp/blob/HEAD/README.md (MIT)
+graph TD
+  goal.md --> build/effort.json
+  build/effort.json --> build/plan.json
+  goal.md --> build/plan.json
+  build/plan.json --> build/components.mk
+  build/plan.json --> build/life-engine.done
+  build/plan.json --> build/canvas-renderer.done
+  build/life-engine.done --> build/canvas-renderer.done
+  build/plan.json --> build/animation-app.done
+  build/life-engine.done --> build/animation-app.done
+  build/canvas-renderer.done --> build/animation-app.done
+  build/components.mk --> build/report.md
+  build/life-engine.done --> build/report.md
+  build/canvas-renderer.done --> build/report.md
+  build/animation-app.done --> build/report.md
+  build/report.md --> all
