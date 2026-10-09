@@ -2859,3 +2859,10 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
     min-width: var(--tap); min-height: var(--tap); justify-content: center;
   }
 }
+
+/* ————— page templates —————
+   One row in the Templates dialog: the icon beside the name rather than above
+   it. `.sp-result-ico` and `.sp-tree-ico` are both `display: flex` and expect a
+   flex PARENT; dropped into a plain span each became a block of its own. */
+.sp-tpl-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sp-tpl-name svg { width: 15px; height: 15px; display: block; color: var(--muted); }

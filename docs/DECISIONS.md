@@ -6695,6 +6695,120 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 
+## 2026-09-10 — spaces view filters: a FLAT condition list, and unknown operators show MORE
+
+## 2026-09-09 — PAGE → DECK emits a DOCUMENT, not a file, and says what it dropped
+
+`bento/spaces` can turn a page into a `bento/slides` presentation
+(`spaces/src/todeck.ts`, Save → Export page as slides…). Three things about it
+are settled and should not be relitigated without new facts.
+
+**It emits the deck's document JSON, not a `.bento.html` deck.** The stronger
+product moment is obviously the file, and it is not reachable from inside
+`spaces/`. A self-contained deck is a document spliced into a slides SHELL, and
+this app has exactly three ways to obtain one: bundle it (about half a megabyte
+of another app inside every space, forever, for a feature most spaces never
+use), fetch it (PLATFORM §1 — opening a document must not touch the network,
+and a build-time fetch would still need the release channel and its signature),
+or have the two apps produce a joint shell, which is a change in two zones this
+one may not edit. So the hand-off is the interchange path bento/slides already
+documents and already supports: "Replace from JSON…" in its About dialog, and
+`window.bento.loadDoc()` for a script. The Markdown exporter is the precedent —
+it writes another format faithfully and hands it over. **If a joint shell ever
+exists, this is the decision to revisit; nothing else about the exporter
+changes, because the document it produces is already the whole payload.**
+
+**A page has no speaker notes, and none are invented.** The tempting mapping is
+review comments → `slide.notes`: both are authored, both travel in the file,
+neither is shown to a reader. It was rejected. A comment is workspace, it is
+addressed to a named person, and a deck's notes travel in every copy of the
+deck — so the mapping would quietly disclose a remark its author never put in
+the document. What the notes carry instead is the export's own account of what
+did not survive the crossing, per slide. That is deliberate: the dialog's list
+is gone the moment it closes, and the presenter who opens the deck next week is
+the person who needs to know that the page had a video on it.
+
+**Loss is reported by CODE, translated at the call site.** `todeck.ts` returns
+`DeckNote {code, n, where}` and never an English sentence; `editor.ts` turns
+each code into its own literal `t()` call. This is the `LAYOUT_WORD` lesson
+applied before the fact — the i18n extractor sweeps `t()` calls with a literal
+argument, so `t(TEXT[code])` compiles, runs, reports 100% coverage and ships
+English in all eight locales. The copy written INTO the document stays English
+on purpose: a saved artefact's words are its author's, not its next reader's
+browser's.
+
+### The cross-zone coupling, and what actually guards it
+
+`spaces/` writes `bento/slides`' format while being forbidden to edit
+`slides/`. Two guards, and it is worth being precise about which failures each
+one catches, because the gap between them is real:
+
+- **A TYPE-ONLY import of `slides/src/model.ts`.** Erased at build time, so it
+  costs the spaces shell nothing, and a field renamed or narrowed over there is
+  a compile error here. It caught a missing required `modified` on the first
+  run.
+- **A rig that runs the emitted document through slides' OWN `parseDoc`, and
+  checks every key it writes against `slides/src/modelkeys.generated.ts`.** In
+  `scripts/test-spaces-model.ts`, importing from `slides/` to READ. Loadability
+  and unknown-key drift both go red here instead of in a browser.
+
+**Neither guard covers BEHAVIOUR**, and there is nothing on the slides side that
+knows this exporter exists. A renderer that stopped honouring `valign`, or a
+table that started sizing its rows differently, would pass both. That was
+accepted knowingly rather than solved, and it is written down so the next
+session does not discover it as a surprise. The measurement that does cover
+behaviour is manual: load the emitted deck into a built slides shell over
+`http://127.0.0.1` and run its `validate()`, which measures with the real
+renderer. Doing that found three defects the node rig could not: every element
+past slides' 96px margin convention, two text boxes overflowing by 10px and
+15px because the no-DOM width estimate was too generous for lists, and a table
+CLIPPED to three of its five rows because the element box was sized at 36px a
+row when a row draws at about 45. Only the third of those has a rig assertion
+now, and it is a derived bound rather than a measurement.
+**Decision.** `bento/spaces` `ViewFilter` gains two keys and no more: `where`, a
+FLAT array of `{key, op, v?}` clauses, and `any`, a boolean that ORs them
+instead of ANDing them. Eleven operators — `eq` `ne` `gt` `gte` `lt` `lte`
+`contains` `notContains` `empty` `notEmpty` `in` — plus five relative date
+windows for `in` (`today` `week` `month` `past` `future`). The engine is
+`spaces/src/query.ts`; `fields.ts` calls into it and is otherwise unchanged.
+
+**Why flat, and not a tree.** A nested group needs a UI that can show, build and
+unbuild a tree, and the filter popover is a bottom sheet on a phone. "Due this
+week AND not tagged draft" and "urgent OR overdue" are the shapes people
+actually ask for and both are flat. Nesting stays available later as another
+additive key, where widening a flat list into a tree afterwards would not be.
+
+**Why `any` reaches only `where`.** The result is `open AND is AND (where,
+combined by all-or-any)`. Letting `any` reach `is` or `open` would change what a
+file already on somebody's disk means, which no key may ever do.
+
+**Unknown operators show MORE rows, never fewer, and say so.** An operator this
+build cannot evaluate is reported by `unknownFilterOps` (the sibling of
+`unknownFilterKeys`) and treated as no constraint under AND — and as PASSING
+under `any`, because skipping a clause in an OR leaves fewer ways through and
+would hide rows for a rule nobody can read. Both directions are the same rule:
+a superset with a banner over it, never a silently wrong set. This follows the
+precedents already in `fields.ts` — `isOpenPhase` counts an unknown status as
+open, an empty `is` list is no constraint. An OLDER build meeting `where` does
+the same one level up: unknown key, superset, existing banner.
+
+**Dates never construct a Date from a string.** A `date` field holds
+`YYYY-MM-DD`, whose string order is its chronological order in every timezone,
+so comparison is string comparison. Windows are built from journal.ts's
+`todayISO`/`stepDay` — calendar arithmetic in the reader's own zone.
+`new Date('2026-01-01')` is UTC midnight by spec and therefore the previous day
+for half the world; it appears nowhere in query.ts. The week START is read from
+`Intl.Locale.weekInfo` (Monday fallback) and is VIEWER-scoped, never stored:
+the same file answers "this week" as Mon–Sun in Berlin and Sun–Sat in Chicago,
+the same rule the app already follows for language and date formatting.
+
+**No `eval`, no `new Function`** — a filter comes out of a mailed file exactly
+like block html, and calc.ts's argument carries over unchanged. Fixed operator
+table, typed values, returns a boolean.
+
+Coverage: 69 behavioural assertions in `scripts/test-spaces-model.ts` asserting
+on ROWS, including a compatibility block proving every pre-`where` filter shape
+still selects exactly its old rows; 13 sabotages, all caught.
 ## 2026-09-11 — spaces: Tab REFUSES on a block with nothing above it, visibly
 
 bento/spaces expresses nesting with one field: `Block.parent`, pointing at a
@@ -9007,6 +9121,60 @@ the caret's block and is undone in one step. It also checks that `/` agrees
 with the bar, that the tiers drop the words and fold the group, and that every
 command is still reachable from its new home.
 
+## 2026-09-09 — bento/spaces page templates live in `doc.templates`, not in flagged pages
+
+A page template is a saved page shape that new pages start from, and there were
+two honest places to put it. **A template could be a PAGE** carrying a flag and
+hidden from the sidebar — no new format shape, and it is editable with the page
+editor for free. **Or a SEPARATE COLLECTION**, `doc.templates`, which nothing
+that walks pages can see. The second was chosen, and the reason is a count.
+
+`doc.pages` is enumerated in roughly forty places in this app: search, the graph
+(`graph.ts`), backlinks and the tree (`buildIndex`), `issuesOf` and every board,
+table and gallery view in `fields.ts`, the Markdown export in `portable.ts`, the
+About counts, the agent API's `pages`/`stats`/`outline`/`validate`, the archive
+list, the print sheet, and the file-manager preview. A flagged page needs a gate
+at every one of them — and, the part that decides it, at every surface added
+AFTERWARDS by someone who has never heard of templates. This zone has already
+shipped that exact class twice: an allow-list applied BEFORE an indirection
+(`isRemote` on the string an author wrote rather than on the resolved asset,
+2026-08-28), and a source-grep assertion that passed straight through a live
+regression (#392). A separate collection cannot be forgotten by a surface that
+does not know it exists.
+
+**What the choice costs is real and is stated rather than hidden.** A template
+is not a page, so it is not searched, not in the graph, not back-linked, not
+printed, and not in the Markdown export — `extractSpace` walks pages. Grafting a
+subtree from another space brings that subtree's pages and brings NO templates.
+So `doc.templates` is document data that travels with the FILE and not with a
+subtree. A page-flag design would have grafted; it would also have leaked into
+all thirteen surfaces above, and one forgotten gate is a template appearing in a
+reader's search results or, worse, in an export they hand to somebody else.
+
+**Tokens expand ONCE, at instantiation, and the model stores the result.**
+bento/slides resolves `{{page}}`/`{{date}}` at RENDER time because a footer must
+re-number when slides move (`resolveFields`, v0.9.12). A template has no such
+need: the moment the page is made is the moment its date is decided, and a live
+field would mean a page whose text changed under its author overnight. So this
+is a string substitution at creation and the new page is an ORDINARY page — an
+older build reads it exactly as this one does, with no field system to
+understand. `{{date}}`, `{{date:iso}}`, `{{date:short}}`, `{{date+1:iso}}`,
+`{{time}}` and `{{title}}`; anything else stays literal, so a `{{mustache}}` in
+somebody's prose survives.
+
+**The date a journal template writes is the ENTRY'S date, never today's.**
+Backfilling Tuesday's note on Thursday must write Tuesday, or the feature lies
+on every entry except the one made on the day. `doc.journalTemplate` names the
+template new daily notes start from; absent means a blank entry, which is what
+every file written before this gets.
+
+Two prototype guards, both because the ids come out of a file somebody mailed
+you: `templateById` scans a list rather than indexing an object (so
+`journalTemplate:"constructor"` resolves to nothing), and the date-format lookup
+uses `Object.hasOwn` (so `{{date:constructor}}` is literal text rather than
+`Object`'s constructor stringified into the reader's page). Both are pinned by
+assertions in `scripts/test-spaces-model.ts` that were watched to fail under
+deliberate sabotage.
 ## 2026-09-26 — Mermaid flowcharts: our own parser and layout, and labels are inert text
 
 A diagram can carry Mermaid source, so a page round-trips through Markdown
@@ -9111,3 +9279,50 @@ shape-aware); diamond, hexagon, cylinder and the other closed outlines are
 `path` shapes, which `isLineLike` hands to the line/curve editor; and an edge
 or node label is a free text element, because nothing binds a label to its
 element.
+## 2026-09-26 — bento/spaces: the Markdown form of every block, and the syntax reserved for the rest
+
+**Decision.** Every spaces block type except `prop` now survives Markdown byte
+for byte: the JSON comes back with only its ids changed, and the next export is
+the same text. `scripts/test-spaces-md-strict.ts` holds that bar type by type,
+with 19 of 20 types passing. The forms, with the full table in
+`docs/spaces-agents.md` under "Markdown in and out":
+
+- toggle `<details>`/`<summary>`; image size `{width=60% w=640 h=300}`
+  (Pandoc attributes); media `<video>`/`<audio>` holding a link to the clip;
+  page link `[[Title]]` alone on a line; view and canvas as `bento-view` and
+  `bento-canvas` fences holding one JSON line; block ids as a trailing `{#id}`.
+- **A link card is a link plus a hidden marker**,
+  `[title](url) — desc <!-- bento:card site="…" image="…" -->`. This
+  EXTENDS 2026-08-22 ("in Markdown a link card is a link") without reversing
+  it. An unmarked lone link would turn every README line that is just a link
+  into a card. A fence would stop it being a link. A Pandoc `{.card …}`
+  would print on GitHub, and a `data:` thumbnail in it would be kilobytes of
+  visible text. A `data:` thumbnail over 512 bytes is left out, as a pinned
+  loss.
+- **A clip leaves as html, superseding 2026-08-22's "a clip exports as a
+  markdown LINK".** The link survives as the element's fallback content, so a
+  renderer that strips `<video>` shows exactly the old export, and one that
+  keeps it plays the clip. `autoplay` is written as `data-autoplay`, so an
+  exported file never makes another renderer obey what this app records and
+  refuses.
+- **Colour keeps its raw-html export.** `<span class="sp-fg-red">` renders as
+  clean text on GitHub and in Obsidian. Pandoc's `[x]{color=red}` would print
+  its brackets there. The importer also accepts `[x]{color=…}` and `{bg=…}`,
+  palette names only.
+- **Ids are written only where something points**, at a comment anchor or a
+  `#p/<page>/<block>` target, so a space with neither exports exactly as it
+  did before. That is asserted against a pinned pre-change export. On import
+  an id already used in the note, in the import or in the target space is
+  replaced, and ids matching an `Object.prototype` name are refused.
+
+**Import is an untrusted path, and none of this widened it.** No html
+attribute is copied by name. Urls pass the same allowlists as the editor, and
+fences go through `JSON.parse` and never `eval`. A fence cannot set `id`,
+`type`, `parent`, `html` or `comments`, and a malformed fence stays a code
+block. Block `html` still goes through `sanitizeInline` in the importer.
+
+**Reserved for features not yet on main** (math `$…$`/`$$…$$`, a
+`` ```mermaid `` fence, `` ```chart bar `` over a table or CSV,
+`![[Page]]`/`![[Page#Section]]`, GFM footnotes, `:::columns`/`:::hero`/`:::card`):
+the syntax is fixed in `docs/spaces-agents.md` so the branches that ship them
+agree with each other and with this importer.
