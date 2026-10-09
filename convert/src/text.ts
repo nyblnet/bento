@@ -32,7 +32,7 @@
 
 import { NS, kid, kids, attr, intAttr, textOf, type XElem } from './xml.ts'
 import {
-  EMU_PER_PX, METRIC_SUBSTITUTES,
+  EMU_PER_PX, METRIC_SUBSTITUTES, safeFace, cssFace,
   type InheritCtx, type OutText, type ThemeCtx,
 } from './types.ts'
 import type { TextDefaults, ResolvedFrame, ChainLink } from './inherit.ts'
@@ -93,7 +93,6 @@ function cnvIdOf(shape: XElem): string {
 }
 
 /** CSS font-family token: quote anything a bare identifier cannot say. */
-const cssFace = (name: string): string => (/[^A-Za-z0-9-]/.test(name) ? `'${name}'` : name)
 
 /** ST_TextAutonumberScheme → the literal a frozen list shows. Census carries
  *  only arabicPeriod (46), but alpha/roman are cheap enough to number right —
@@ -406,12 +405,18 @@ export function textFrom(sp: XElem, ctx: InheritCtx, deps: TextDeps): OutText | 
     return out
   }).join('<br>')
 
-  const sub = METRIC_SUBSTITUTES[dom.family]
+  // A typeface name is source-file text headed for CSS (types.ts safeFace).
+  const face = safeFace(dom.family)
+  if (dom.family && !face) {
+    ctx.report.add('dropped', 'font-name-unsafe', 'font',
+      'a typeface name contained characters that are not safe in CSS — the text uses a default face')
+  }
+  const sub = face ? METRIC_SUBSTITUTES[face] : undefined
   if (sub) {
     ctx.report.add('approximated', 'font-substituted', `font "${dom.family}"`,
       `'${dom.family}' is not embedded; emitted as a metric-compatible stack with '${sub}'`)
   }
-  const fontFamily = sub ? `${cssFace(dom.family)}, ${cssFace(sub)}, sans-serif` : `${cssFace(dom.family)}, sans-serif`
+  const fontFamily = !face ? 'sans-serif' : sub ? `${cssFace(face)}, ${cssFace(sub)}, sans-serif` : `${cssFace(face)}, sans-serif`
 
   const frame = deps.resolveFrame(sp, ctx)
   const id = `txt${cnvIdOf(sp)}`

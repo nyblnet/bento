@@ -30,9 +30,9 @@
 //     end on the SAME connector survives.
 
 import { Buffer } from 'node:buffer'
-import { convertPptx } from '../../kernel/src/convert/pptx.ts'
-import type { ConvertResult } from '../../kernel/src/convert/types.ts'
-import type { OutShape, OutText, OutImage } from '../../kernel/src/convert/types.ts'
+import { convertPptx } from '../../convert/src/pptx.ts'
+import type { ConvertResult } from '../../convert/src/types.ts'
+import type { OutShape, OutText, OutImage } from '../../convert/src/types.ts'
 import {
   fxMinimal, fxThemed, fxPlaceholder, fxGroup, fxBullets, fxSvg, fxConnectors, fxStructure,
   SVG_BYTES,

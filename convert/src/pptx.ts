@@ -33,7 +33,7 @@
 // as `s<n>-<spId>-t` immediately after its shape (later paints above), welded
 // by groupId. Ids are unique per slide only, by design (the morph idiom).
 
-import { readZip, type ZipParts } from './zip.ts'
+import { readZip, type ZipParts } from '../../kernel/src/convert/zip.ts'
 import {
   NS, parseXml, kid, kids, attr, intAttr, textOf, resolveAlternate, type XElem,
 } from './xml.ts'
@@ -46,7 +46,7 @@ import {
 import { textFrom, type TextDeps } from './text.ts'
 import { shapeFrom, groupChildren, type ShapeDeps, type GroupFrame } from './shapes.ts'
 import {
-  EMU_PER_PX, METRIC_SUBSTITUTES,
+  EMU_PER_PX, METRIC_SUBSTITUTES, safeFace, cssFace,
   type ConvertResult, type OutDoc, type OutSlide, type OutElement, type OutShape,
   type InheritCtx, type ThemeCtx,
 } from './types.ts'
@@ -255,13 +255,14 @@ function notesTextOf(notesXml: XElem): string {
 
 // --- misc --------------------------------------------------------------------
 
-const cssFace = (name: string): string => (/[^A-Za-z0-9-]/.test(name) ? `'${name}'` : name)
-
 /** The theme face as a CSS stack: the original first (a machine that has the
- *  real font uses it), its metric-compatible substitute second. */
+ *  real font uses it), its metric-compatible substitute second. A face that is
+ *  not safe to write into CSS (types.ts safeFace) is left out entirely. */
 function fontStack(face: string): string {
-  const sub = METRIC_SUBSTITUTES[face]
-  return sub ? `${cssFace(face)}, ${cssFace(sub)}, sans-serif` : `${cssFace(face)}, sans-serif`
+  const safe = safeFace(face)
+  if (!safe) return 'sans-serif'
+  const sub = METRIC_SUBSTITUTES[safe]
+  return sub ? `${cssFace(safe)}, ${cssFace(sub)}, sans-serif` : `${cssFace(safe)}, sans-serif`
 }
 
 function picFlipped(pic: XElem): boolean {

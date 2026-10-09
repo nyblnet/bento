@@ -51,7 +51,7 @@ const g = globalThis as unknown as Record<string, unknown>
 g.localStorage = shim
 g.window = g.window ?? { localStorage: shim, addEventListener() {}, setTimeout, clearTimeout }
 
-const { inviteCopy, readerCopy, stripCollabSecrets, isOwner, canWrite } = await import('../spaces/src/share.ts')
+const { inviteCopy, readerCopy, isOwner, canWrite } = await import('../spaces/src/share.ts')
 const { mintCollab } = await import('../kernel/src/sync/online.ts')
 import type { SpacesDoc } from '../spaces/src/model.ts'
 
@@ -157,12 +157,59 @@ ok(vc.sync === undefined, 'the stamped CRDT state is dropped — a viewer must n
 ok(!canWrite(viewer!), 'canWrite() reports false for it')
 
 // ---------------------------------------------------------------------------
-console.log('\nthe stripper')
+// The allowlist bar (security, 2026-10-04): build every copy builder from ONE
+// source carrying every known secret, an unknown future field and a JSON own
+// __proto__ key, and prove only the allowlist survives — nothing by name, and
+// nothing new by accident. (The whole-block default drop is docForExport's job,
+// pinned in scripts/test-export-secrets.ts.)
+console.log('\nevery builder, from one poisoned source')
 
-const dropped = JSON.parse(JSON.stringify(doc)) as SpacesDoc
-stripCollabSecrets(dropped)
-ok(dropped.collab === undefined,
-  'by default the whole block goes — room + key together ARE the read capability')
+// a real own __proto__ key: JSON.parse makes it an OWN property, not the chain.
+const poisoned = JSON.parse(JSON.stringify(doc)) as SpacesDoc
+const pc = JSON.parse(
+  '{"__proto__":{"polluted":true}}',
+) as Record<string, unknown>
+// keep the REAL ownerPriv (inviteCopy mints against it); poison everything else
+Object.assign(pc, poisoned.collab, {
+  writerPriv: 'WPRIV',
+  invite: { pub: 'SRC', priv: 'SRCPRIV', role: 'writer', sig: 's' },
+  audience: { invite: { priv: 'APRIV' } },
+  sync: { v: 2, tag: 'stamp' }, links: [{ url: 'https://pub' }],
+  futureSecret: 'LEAK',
+})
+poisoned.collab = pc as SpacesDoc['collab']
+
+const READER_KEYS = ['room', 'key', 'owner', 'writerPub', 'on', 'v', 'role']
+const INVITE_KEYS = ['room', 'key', 'owner', 'writerPub', 'on', 'v', 'sync', 'invite', 'role']
+const SECRETS = ['writerPriv', 'ownerPriv', 'audience', 'futureSecret', 'links']
+
+const rc = readerCopy(poisoned)!.collab as Record<string, unknown>
+const vic = (await inviteCopy(poisoned))!.collab as Record<string, unknown>
+
+ok(Object.keys(rc).every((k) => READER_KEYS.includes(k)),
+  `reader copy: ONLY reader-allowlist keys survive (${Object.keys(rc).sort().join(',')})`)
+ok(rc.role === 'reader', 'reader copy: role is forced to reader')
+ok(rc.sync === undefined, 'reader copy: the CRDT sync stamp is dropped')
+ok(Object.keys(vic).every((k) => INVITE_KEYS.includes(k)),
+  `invite copy: ONLY invite-allowlist keys survive (${Object.keys(vic).sort().join(',')})`)
+ok(vic.sync !== undefined, 'invite copy: keeps the sync stamp (it contributes)')
+ok((vic.invite as { pub: string }).pub !== 'SRC', 'invite copy: the delegation is FRESH, never the source invite')
+ok(vic.role === 'writer', 'invite copy: top-level role comes from the fresh writer invite (editor chrome)')
+for (const f of SECRETS) {
+  ok(!(f in rc), `reader copy drops ${f}`)
+  ok(!(f in vic), `invite copy drops ${f}`)
+}
+ok(!Object.hasOwn(rc, '__proto__') && !Object.hasOwn(vic, '__proto__'),
+  'neither copy carries a __proto__ own key')
+ok(({} as Record<string, unknown>).polluted === undefined,
+  'and the __proto__ source key polluted nothing (Object.hasOwn, not `in`)')
+
+// The planted bypass: a builder that rebuilds collab by SPREADING the source
+// keeps every secret. The exact-key-set check above is what turns that red —
+// proving it is not a vacuous check.
+const bypass = { ...pc, role: 'reader' } as Record<string, unknown>
+ok('writerPriv' in bypass && !Object.keys(bypass).every((k) => READER_KEYS.includes(k)),
+  'a spread-the-source bypass FAILS the reader key-set check (the check is not vacuous)')
 
 // Derived from the KERNEL type, not typed out here: a new private field added
 // to CollabCreds fails this until inviteCopy stops carrying it.
@@ -195,6 +242,60 @@ const memberDoc = JSON.parse(inviteText) as SpacesDoc
 ok(!isOwner(memberDoc), 'an invited copy does not read as the owner')
 ok((await inviteCopy(memberDoc)) === null, 'inviteCopy() refuses — it holds no key to root a chain in')
 ok(canWrite(memberDoc), '…but it can still write, which is the point of an invite')
+
+// ---------------------------------------------------------------------------
+console.log('\nwhich copies may write — an allowlist that fails closed')
+
+// share.ts used to ask `role !== 'reader'`, which answers "yes" for every role
+// invented after it. The kernel's 'audience' (a live-show member, receive-only
+// transport) is the one that exists today; the rest stand in for tomorrow's.
+// Every gate — canWrite, isReaderCopy, the boot lock in main.ts, the People
+// label in collabui.ts — answers through copyCanWrite, so this pins all of them.
+{
+  const { copyCanWrite, isReaderCopy } = await import('../spaces/src/share.ts')
+  const { Store } = await import('../spaces/src/store.ts')
+  const withCollab = (collab: unknown): SpacesDoc => ({ ...JSON.parse(JSON.stringify(doc)), collab }) as SpacesDoc
+  const room = { v: 2, on: true, room: c.room, key: c.key, owner: c.owner }
+  const writes = (d: SpacesDoc) => canWrite(d) && !isReaderCopy(d)
+  const locked = (d: SpacesDoc) => !canWrite(d) && isReaderCopy(d)
+
+  ok(writes(doc), 'an OWNER copy writes (no role field; marked by ownerPriv)')
+  ok(writes(memberDoc), 'an invited editor writes')
+  ok(writes(withCollab({ ...room, role: 'writer' })), "role 'writer' writes")
+  ok(writes(withCollab({ on: true, room: 'r1', key: 'K', writerPub: 'WP', writerPriv: 'WK' })),
+    'a LEGACY copy with no role field writes — every pre-role file is one')
+  const plain = withCollab(undefined)
+  delete plain.collab
+  ok(!isReaderCopy(plain), 'a plain file with NO collab is not locked — it opens editable exactly as before')
+
+  ok(locked(viewer!), "role 'reader' is read-only")
+  ok(locked(withCollab({ ...room, role: 'audience',
+    invite: { pub: 'IP', priv: 'IK', role: 'audience', sig: 'S' } })),
+    "role 'audience' is read-only — though it carries an invite, which is what made it read as an Editor")
+  ok(locked(withCollab({ ...room, role: 'presenter-of-tomorrow' })),
+    'a role nobody has taught this about fails CLOSED, not open')
+  ok(locked(withCollab({ ...room, role: 7 })), 'a non-string role is read-only')
+  ok(locked(withCollab({ ...room, role: null })), 'a null role is read-only — null is not absent')
+  ok(locked(withCollab(JSON.parse(`{"room":"w1","key":"K","role":"__proto__"}`))), "role '__proto__' is read-only")
+  ok(locked(withCollab(JSON.parse(`{"room":"w1","key":"K","role":"owner"}`))),
+    "role 'owner' is read-only — it is not a role value; ownership is a key, not a label")
+  // Inherited `role` must not answer for the file in either direction.
+  ok(!copyCanWrite(Object.assign(Object.create({ role: 'writer' }), { role: 'reader', room: 'w1', key: 'K' })),
+    'an own reader role is not overridden by an inherited writer one')
+
+  // The lock as main.ts derives it, and what it does to a commit.
+  const audienceDoc = withCollab({ ...room, role: 'audience' })
+  const s = new Store(audienceDoc)
+  if (audienceDoc.readonly || isReaderCopy(audienceDoc)) s.readOnly = true
+  const before = JSON.stringify(s.doc)
+  s.commit(() => { s.doc.title = 'changed by an audience' })
+  ok(s.readOnly && JSON.stringify(s.doc) === before && !s.dirty,
+    'an audience copy boots with a read-only store, and its commit is a no-op')
+  const ws = new Store(withCollab({ ...room, role: 'writer' }))
+  if (isReaderCopy(ws.doc)) ws.readOnly = true
+  ws.commit(() => { ws.doc.title = 'changed by a writer' })
+  ok(!ws.readOnly && ws.doc.title === 'changed by a writer', '…and a writer copy commits as before')
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)
