@@ -11,6 +11,9 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Long speaker notes scroll in presenter view.** Notes that are taller than
+  the space beside the current and next slides now get their own vertical
+  scrollbar instead of being cut off.
 - **Dollar amounts next to escaped dollars stay text.** In a line like
   "$10, and \$x\$", the first dollar could pair with an escaped one and the
   words between were treated as a formula: the editor flagged them as a
