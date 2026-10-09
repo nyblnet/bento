@@ -1,0 +1,15 @@
+%% source: https://mermaid.js.org/syntax/flowchart.html (MIT, mermaid-js/mermaid)
+flowchart LR
+    id1[This is the text in the box] --> id2(This is the text in the box)
+    id2 --> id3([This is the text in the box])
+    id3 --> id4[[This is the text in the box]]
+    id4 --> id5[(Database)]
+    id5 --> id6((This is the text in the circle))
+    id6 --> id7>This is the text in the box]
+    id7 --> id8{This is the text in the box}
+    id8 --> id9{{This is the text in the box}}
+    id9 --> id10[/This is the text in the box/]
+    id10 --> id11[\This is the text in the box\]
+    id11 --> A[/Christmas\]
+    A --> B[\Go shopping/]
+    B --> id12(((This is the text in the circle)))

@@ -14,6 +14,50 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-09-10 — bento/spaces footnotes: the reference is a TEXT TOKEN, and the number is derived
+
+**Decision.** A footnote in `bento/spaces` is `doc.footnotes` (a document-level
+map, label → inline html — bento/type's shape) plus the literal text `[^label]`
+inside a block's `html`. The number a reader sees is derived at render time from
+order of appearance, per page, and is never stored.
+
+**Why a text token rather than an anchor.** bento/type anchors a reference by
+character offset into a block's `text` runs, and can: it owns the run list and
+rewrites every offset in one place. A spaces block carries `html`, and an offset
+into html is a position in one particular serialization of a position — three
+things move it without changing a word of the prose: `canonicalize()` reorders
+mark nesting at every typing-run close, `sanitizeInline()` unwraps and strips on
+every read of untrusted html, and the CRDT merges `html` as one register, which
+an offset in a second register cannot merge with.
+
+The other candidate was an inline marker element (`<sup>`, or an `<a href="#fn/…">`
+with a new scheme in `HREF_OK`). Rejected because a new allowlist entry is a
+ONE-WAY DATA HAZARD, which sanitize.ts's own comment on `HREF_OK` already spells
+out: a reference written by this build would be STRIPPED, silently, by every
+build shipped before it, on the first edit that touched the block. A text token
+is round-tripped byte-for-byte by builds that already exist — verified by
+loading a footnoted document into a shell built from the previous release.
+
+**Why the number is derived.** Footnotes renumber on insertion, so a stored
+number is wrong the moment a sentence moves and nothing says so. Same rule as
+calc.ts's magic notes and slides' dynamic fields: store the token, derive the
+output. The label is therefore an identifier, not a number, exactly as in pandoc
+and Obsidian — which is also why the markdown round trip is the identity
+function on the reference half.
+
+**Consequences a future session should not treat as bugs.** (1) While a block is
+being EDITED the author sees `[^1]`, not a superscript — injecting marker markup
+into a contenteditable host puts it one keystroke from being committed into
+`html` (`host.innerHTML` is written to the model on every `input`), which loses
+the reference and stores a literal "1". The derived form is drawn in reading
+view, print and the file-manager still. (2) A dangling reference is still
+numbered and gets an empty row, because that is the authoring gesture and
+because what is missing is the note, not the reference. (3) An orphaned note is
+reported, never deleted. (4) `[^…]` inside a `code` block is not scanned.
+
+**Pointers.** `spaces/src/footnotes.ts` (the whole argument, at length),
+`spaces/CHANGELOG.md`, `docs/spaces-agents.md` §Footnotes, rigs in
+`scripts/test-spaces-model.ts` and `scripts/test-spaces-agent.ts`.
 ## 2026-10-05 — Android meets the `launchQueue` rules, and a reload also forgets its Save-As copies
 
 **Decision.** Android implements the two host rules from the entry below: a
@@ -6721,6 +6765,63 @@ past slides' 96px margin convention, two text boxes overflowing by 10px and
 CLIPPED to three of its five rows because the element box was sized at 36px a
 row when a row draws at about 45. Only the third of those has a rig assertion
 now, and it is a derived bound rather than a measurement.
+## 2026-09-12 — bento/spaces: procedural covers are a render-time default on two surfaces, and a document theme preset is not a thing this app can honestly offer
+
+**A page with no `cover` draws a generated one — never stored, never on paper,
+never in the thumbnail.** `spaces/src/procedural.ts` builds an SVG (gradient +
+one of six geometric figures) seeded by FNV-1a over the page id, so every reader
+of one file sees the same cover on the same page and a page keeps it across
+renames. Nothing is written: `cover` absent stays absent, an older build sees no
+cover, and a saved file does not change. A page with a usable cover of its own
+draws only that; a remote cover, which `coverSrc` already refuses, counts as
+none. The decision is one pure function (`proceduralCoverFor`) so the model
+rig pins every branch without a DOM; the browser pass is what proves the
+render.
+
+**Two surfaces, chosen structurally rather than by a field: the HOME page, and
+every coverless GALLERY card.** Not every page. A cover is a 150–320px
+full-bleed band that pushes the title down and lifts the icon into a disc; on a
+space of two hundred plain notes that is two hundred posters, and a journal
+entry under a banner is wrong however quiet the figure. The gallery already
+drew a procedural tint on its bare cards (the id-derived hue), so the card is a
+refinement of an accepted default; the home page is the one page the format
+itself names. A per-page opt-in would be a format field for a thing that is
+not document data — the reason the surfaces are structural.
+
+**Print and the preview draw nothing procedural.** Both pass `printing: true`
+and the decision returns '' under it: five centimetres of toner for artwork
+nobody chose, and the file-manager still is a render of the AUTHOR's document,
+which this is not in — and every saved file would otherwise grow by the SVG.
+
+**Restraint is by construction, and measured.** The gradient is the gallery's
+former CSS tint exactly (hue → hue+40°, 0.30/0.16 on a card; 0.44/0.26 on the
+page, where a white disc has to read against it); the figure sits on it at
+6–14% alpha at lightness 44. Everything is alpha over the surface's own ground
+(`--chrome-2`), which is how one SVG serves both themes. Rasterised over each
+ground across 400 ids: the card mark's worst case is 4.29:1 light / 3.28:1
+dark (from 6.55 / 4.13 with the tint alone — the figure costs about a point
+and stays above the 3:1 large-text line); the disc glyph is 9.94 / 9.30. The
+disc EDGE against the cover is 1.33–2.31 light and 1.91–3.53 dark; it was not
+chased to 3:1 because the only way there is a wash loud enough to be the thing
+this rule exists to refuse, and the glyph, not the boundary, is what identifies
+the control — the same bargain a real cover already makes over a pale photo.
+
+**Theme presets were asked for and NOT built, and the reason is the
+2026-08-22 entry above.** A preset would be a bundle of `doc.theme` values,
+and in this app `doc.theme.background/color/accent/fontFamily` are painted by
+NOTHING in the live app — only `preview.ts` reads the colours, only `measure`
+and `dir` reach the reading column. That was ruled, not forgotten: the reading
+surface is chrome and follows the reader, and "if it ever changes it changes
+with the FORMAT". So a "Dark" or "High contrast" document preset would change
+the thumbnail and nothing a reader can see, and a rig asserting "the preset
+wrote the resolved keys" would be green over a control that does nothing —
+the source-grep-over-a-dead-renderer failure this zone has recorded twice.
+Painting `doc.theme` onto the column reverses that ruling and pre-empts the
+open cross-app dark-mode question, and is not a change one app zone makes on
+its own. What is honest without a ruling is smaller and differently shaped:
+typography presets (`fontFamily`/`headingFamily`/`measure`, which ARE document
+data), which would first need the column to paint the font fields at all. Left
+for the ruling rather than shipped under the wrong name.
 ## 2026-09-09 — a derived column is never an independent axis, and a view that ignores the filter is worse than no view
 
 **bento/dash keeps its 3D view.** The cut was proposed with numbers — 2,240
@@ -6772,6 +6873,71 @@ none. The builders zip x, y, z, colour and size by index; project one and not
 another and the plot pairs the wrong height with the wrong position, plausibly.
 
 
+## 2026-09-10 — aliases resolve at LINK time; a word-boundary rule built for English is not a degradation in Japanese, it is a zero
+
+bento/spaces gained page **aliases** and **unlinked mentions** (`spaces/src/mentions.ts`).
+Four things were settled that a later session could otherwise contradict.
+
+**An alias is resolved where a name becomes a page id, and nowhere else.**
+`Page.aliases` is read by exactly one function — `nameIndex` — which the
+`[[…]]` resolver, ⌘K and the `[[` page picker all call. What gets written into
+the file is an ordinary `#p/<id>` href, so `buildIndex`'s backlinks, the graph,
+export, print and the CRDT never learn that aliases exist. The alternative,
+resolving at render time, would give every one of those a second way to name a
+page, and they would drift. If a future feature wants alias-aware behaviour,
+the answer is to call `nameIndex`, not to teach another module about the field.
+
+**All three surfaces or none.** An alias that reaches the resolver but not
+search is worse than no alias: you file something under the name you use for
+it, and then cannot find it by that name — which reads as the search being
+broken. Half an alias was the shape this nearly shipped in.
+
+**Collisions are reported, never repaired.** Two pages can claim one name
+because a file arrives already written. `nameIndex` settles it identically in
+every replica — a TITLE always beats an alias, then document order — and
+`validate()` reports `alias-collision` naming the page a `[[link]]` will
+actually reach. Repairing it would rename something the author wrote; saying
+nothing would leave a link landing somewhere nobody chose. This is the one
+place the app tells you about a clash it resolved on your behalf.
+
+**The word-boundary rule is the CJK decision, and it is not a tuning
+parameter.** Unlinked mentions match a page's names against every other page's
+prose, so a boundary rule is what keeps "Roadmap" out of "Roadmaps". The
+obvious spelling is `\b`, or its Unicode equivalent `(?<![\p{L}\p{N}_])`.
+Applied to Japanese that does not find fewer mentions — it finds NONE, ever,
+because every kana beside a name is a letter and the assertion never opens.
+This app ships ja, zh-Hans and zh-Hant; a rule with that property is a silent
+total failure in three of its nine locales, and it passes every test written in
+English.
+
+So a boundary is required only where the NAME's own edge character is a word
+character in a script that separates words, and the minimum scannable length is
+three code points for such a name and two for one containing Han, kana or
+Hangul. The stated cost, because it is real and someone will find it: a Han
+name also matches inside a longer Han compound (京都 inside 東京都). That is
+what every CJK-aware substring search in the world does, it is visible, and it
+is bounded; the alternative is a feature that does not exist for a third of the
+supported languages. `scripts/test-spaces-mentions.ts` asserts both halves.
+
+Two mechanical notes worth not rediscovering. The `v` regex flag expresses this
+boundary as one set difference and is NOT used: `v` is Safari 17 while this
+app's floor is Safari 16.4 (`DecompressionStream`, which the shell's own loader
+needs), and a regex the engine cannot COMPILE throws at construction — the cost
+of being wrong is a panel that throws on every page open, not a missing match.
+Measured, all four spellings of the boundary run within noise of each other, so
+the choice is the floor and nothing else. And the run-splitting scanner
+separates skipped regions with U+0000 rather than a space: with a space,
+`New<a>x</a>York` collapses to `New York` and the scanner reports a mention
+nobody wrote.
+
+**It is not the quadratic thing it sounds like.** "Every page's title against
+every page's text" is N×M; the reader's panel never computes that. Opening a
+page scans the document once for THAT page's names, so the cost is the size of
+the space and not the number of pages in it. Measured on a synthetic 1000-page,
+2.5MB space: 6.5ms to open a page, against 1.9ms for the backlink index the app
+already builds on every commit. The all-pairs answer exists for the agent
+surface (`bento.mentions()`) at ~1s on the same space, and is not on any paint
+path.
 ## 2026-09-13 — Broadcast is a special case of collaboration: the relay half
 
 **Decision.** A live show is not a second transport. An audience member is a
@@ -8868,3 +9034,108 @@ buttons and menus to those values, and checks that every member lands after
 the caret's block and is undone in one step. It also checks that `/` agrees
 with the bar, that the tiers drop the words and fold the group, and that every
 command is still reachable from its new home.
+
+## 2026-09-26 — Mermaid flowcharts: our own parser and layout, and labels are inert text
+
+A diagram can carry Mermaid source, so a page round-trips through Markdown
+(```` ```mermaid ```` renders on GitHub) and an agent can write one. The
+mermaid library is megabytes and nothing may be fetched at runtime (PLATFORM
+§1), so `spaces/src/diagram/` has its own reader: `mermaid.ts` (parser, element
+output, reverse) and `layout.ts` (a layered layout). Neither imports app code
+— the element types are structural copies of slides' — so either app can use
+them, and they are a candidate for the kernel beside the connector engine.
+Nothing calls them yet; the rig is `scripts/test-diagram-mermaid.ts`.
+
+**The target is slides' elements, not a picture.** Nodes are shape elements
+(rect, rounded and stadium by radius, ellipse, triangle, and fixed 100×100
+path templates for the rest), labels are text elements, and edges are
+line/path shapes with `from`/`to` ConnectorEnd refs (`side: 'auto'`). Each
+connector end is written exactly where slides' `syncConnectors` would put it,
+so an edited diagram does not jump on its first edit. Self-loops are the one
+exception: they pin sides, because with `auto` both ends would collapse to
+the node's centre. Slides has no edge labels, so an edge label is a text
+element beside the edge's middle. It does not follow the edge when a node
+moves.
+
+**It is lossy both ways, and says so.** Mermaid → elements invents positions.
+An optional `layout` sidecar (`{id: {x,y,w,h}}`, made by `diagramLayout`)
+makes hand-placed positions win, and new nodes are placed around them.
+Elements → mermaid drops positions, sizes and edge length (`--->`), and
+returns `lost: [{el, what}]` for everything else it cannot say: rotation,
+opacity, gradients, shadows, rich text, tips mermaid has no arrow for, edge
+colour, free text, unanchored lines, and element types. Node and subgraph
+colours survive as `style` statements.
+
+**Labels are text.** `<br>` is a line break and every other tag stays
+literal, escaped and inert. Mermaid would render `<b>`; we show it. The
+emitted source writes `<` and `>` as `#lt;`/`#gt;` so GitHub shows what we
+show. Style is limited to fill/stroke/color. Colours are validated (hex,
+rgb/hsl functions, and named colours by shape — letters only), so a style
+can never carry `url(…)` or a `;` into an element.
+
+**Subgraphs follow mermaid's two rules.**
+
+- **A subgraph none of whose members links outside it is laid out on its
+  own** and then takes part in its parent as a single node. It uses its own
+  `direction`, or the parent's turned (TB becomes LR, anything else becomes
+  TB); the turn is mermaid's, and it is why the docs' "two" draws sideways.
+- **A subgraph whose members DO link outside is a compound.** Its members
+  take part in the parent's layering and ordering, kept contiguous in every
+  layer. Sibling subgraphs keep one order in every layer, so each box is a
+  rectangle. Each box's left and right borders are single variables, solved
+  together with everything around them, so no node that is not a member
+  lands inside a box.
+  - A bend point belongs to the innermost subgraph holding both ends of its
+    edge, so edges between subgraphs bend in the space between the boxes.
+  - Mermaid ignores `direction` on such a subgraph. So do we, and we warn.
+  - An edge drawn to a compound box is laid out against one of its members,
+    so it is drawn straight.
+
+This replaced a first version that laid every subgraph out alone. That
+version could never let one subgraph stand beside another spanning
+subgraph, and it drew edges through other subgraphs: on the corpus, 14 edges
+ran through nodes and 5 through boxes, against 2 and 2 now. The rig ratchets
+both counts, labels sitting on other edges, and total connector length and
+area; they may only go down.
+
+**Edge labels step off other edges.** A label tries the layout's spot, then
+the other side of its edge, then positions further along it. The first spot
+that crosses no other edge and covers no node or label wins. In a crowded
+fan with nothing clear, the layout's spot stands.
+
+**Caps, not hangs.** 500 nodes, 2,000 edges, subgraphs 24 deep, and a budget
+for long-edge bends. Past a cap the rest is dropped with a warning. A
+statement that cannot be read is dropped whole, with a warning. Unsupported
+syntax (`click`, `linkStyle`, directives, other diagram types) produces a
+warning and never throws.
+
+## 2026-10-09 — Mermaid diagrams take the kernel diagram engine's types and geometry
+
+Supersedes one sentence of the 2026-09-26 Mermaid entry: the element types are
+no longer structural copies of slides'. Since the diagram-engine lift (#592,
+#616, #619), `spaces/src/diagram/` imports them from the kernel — `ShapeSpec`
+(shape.ts), `TipKind` (tips.ts), `Box`/`Pt`/`ConnectorSide` (geom.ts), all
+type-only — and computes with the kernel's own pure geometry:
+`connectorEndpoint` places every connector end (the exact call slides'
+`syncConnectors` makes) and `anchorsToPath` writes every curve. The module is
+still DOM-free and imports no app code. `ConnectorEnd` stays declared locally
+over `ConnectorSide`, because the kernel deliberately keeps that format type in
+slides; text elements are not in the kernel yet, so `DText` is still a copy.
+
+**Curves are written the way the curve editor writes them.** A bent connector's
+anchors are rounded to 0.01 BEFORE the Catmull-Rom handles are computed, as
+slides' `setPathAnchors` does, so its `d` is byte-for-byte what slides would
+write for the same anchors. Before, the handles were computed from unrounded
+anchors and could differ by 0.01; 13 corpus snapshots moved for that reason
+alone (no node, end or label moved). The rig now asserts
+`anchorsToPath(parseAnchors(d)) === d` for every bent connector, with a
+negative control, and checks connector ends against the kernel helper itself
+rather than a copy of its formula.
+
+**Still missing in the kernel, and not built here** (the kernel zone's):
+connector ends land on the BOUNDING BOX of every node, so an edge into a
+diamond, circle or hexagon stops short of the outline (`borderPoint` is not
+shape-aware); diamond, hexagon, cylinder and the other closed outlines are
+`path` shapes, which `isLineLike` hands to the line/curve editor; and an edge
+or node label is a free text element, because nothing binds a label to its
+element.

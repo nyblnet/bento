@@ -628,5 +628,41 @@
   },
   "tdGrantFolder": {
     "message": "Tallenna kaikki kansiossa ”$1” kysymättä…"
+  },
+  "saTitleCopy": {
+    "message": "Tallenna kopio"
+  },
+  "saTitleShare": {
+    "message": "Tallenna viety tiedosto"
+  },
+  "saName": {
+    "message": "Tiedoston nimi"
+  },
+  "saBeside": {
+    "message": "Tallenna tiedoston ”$1” viereen"
+  },
+  "saChoose": {
+    "message": "Valitse kansio…"
+  },
+  "saCancel": {
+    "message": "Peruuta"
+  },
+  "saExists": {
+    "message": "”$1” on jo olemassa. Tallenna uudelleen korvataksesi sen."
+  },
+  "saIsOriginal": {
+    "message": "Se on avoimen asiakirjan oma nimi – valitse toinen."
+  },
+  "saBadName": {
+    "message": "Käytä tiedostonimeä ilman kauttaviivoja."
+  },
+  "saLapsed": {
+    "message": "Kansion käyttöoikeus on vanhentunut. Valitse kansio tai uusi oikeus kirjastossa."
+  },
+  "saGone": {
+    "message": "Tämä tallennus ei enää odota. Sulje ikkuna ja tallenna uudelleen."
+  },
+  "saTaken": {
+    "message": "”$1” on jo olemassa. Valitse toinen nimi."
   }
 }

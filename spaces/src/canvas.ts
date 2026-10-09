@@ -62,6 +62,7 @@ import { descendantsOf, newBlock } from './model.ts'
 import { sanitizeInline } from './sanitize.ts'
 import { t } from './i18n.ts'
 import { ICONS } from './icons.ts'
+import { touchDragAsMouse } from './touch.ts'
 
 /** The surface's shape, width ÷ height. Wide, because the first thing anyone
  *  draws here is a row of steps. */
@@ -428,6 +429,11 @@ function wireCard(card: HTMLElement, body: HTMLElement, hooks: CanvasHooks): voi
   card.appendChild(grip)
 
   grip.addEventListener('mousedown', (down) => startDrag(down, card, body, id, hooks))
+  // AND A FINGER DRIVES THE SAME GESTURE. The mouse choice above is right and
+  // none of its reasoning is about input hardware, so a touch is replayed as
+  // the mouse stream it already handles rather than forked into a second drag
+  // with its own clamps and its own commit. See touch.ts.
+  touchDragAsMouse(grip)
 
   // THE KEYBOARD MOVES IT TOO. A surface reachable only by mouse is a surface
   // half this app's readers cannot use, and the same clamp and the same commit

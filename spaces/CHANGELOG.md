@@ -511,6 +511,125 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   notes, so a presenter opening it next week is told too. Speaker notes are
   otherwise NOT invented: mapping review comments onto them would move a remark
   addressed to a person into a file people present from.
+- **A page with no cover gets a procedural one — on the home page and on every
+  gallery card, and nowhere else.** A gradient plus a geometric figure (orbs,
+  bands, a dot lattice, rings, facets or waves), seeded from the page id, drawn
+  at render time and never written into the file: `cover` absent stays absent,
+  an older build sees no cover exactly as before, and a saved space does not
+  grow by a byte. The same id draws the same cover on every machine and every
+  reload; a page that gains a real cover shows that and nothing else, and a
+  page whose cover is removed gets its procedural one back. The gallery already
+  tinted its coverless cards on a hue from the id — this is that tint with a
+  figure on it, in the same two hues at the same alphas, over the theme's own
+  ground, so one SVG is right in light and in dark.
+
+  Home page and gallery only, on purpose. A cover is a full-bleed band that
+  pushes the title down and lifts the icon into a disc; on a space of two
+  hundred plain notes that is two hundred posters, and a journal entry under a
+  banner is wrong however restrained the artwork. The two surfaces chosen are
+  the two that already single a page out. Never on paper (5cm of toner for a
+  figure nobody chose) and never in the file-manager thumbnail (a still of the
+  author's document, and this is not in it).
+
+  Measured with real pixels, the SVG rasterised over the theme ground, across
+  400 ids covering all eight hues and all six figures: the card's letter-mark
+  keeps at least 4.29:1 in light and 3.28:1 in dark (34px bold; the figure
+  costs about a point against the plain tint, which sat at 6.55 and 4.13);
+  the icon on the home page's disc reads at 9.94:1 light / 9.30:1 dark. The
+  disc's EDGE against the cover is 1.33–2.31:1 in light and 1.91–3.53:1 in
+  dark — the disc is white-on-a-wash by design, as it is over a pale
+  photograph, and its shadow carries the boundary; the glyph is what has to
+  read. Shell +1,412 B.
+- **A finger can do the four things only a mouse could.** Reordering a block,
+  nesting a page in the tree, moving an issue card between columns and moving a
+  card on a canvas were all mouse-only: the first three are HTML5
+  drag-and-drop, which never fires from a touch, and the fourth listened for
+  `mousedown`. Two had a fallback (Move up / Move down in the block menu; tap a
+  card's status chip) and **the page tree had none** — nesting a page was
+  impossible on a phone by any route. Press and hold now starts the same drag,
+  and holding a card at the edge of a board or a list scrolls it along, since at
+  390px only one of six columns is on screen at a time.
+
+  A finger that MOVES is still scrolling. Nothing is captured until the press
+  has been held still, so a swipe that starts on a card scrolls the page exactly
+  as it did before.
+
+- **Pinch to zoom the graph.** One finger already panned it, but zoom was on the
+  scroll wheel alone — so on a phone the one view whose whole point is a crowded
+  picture could be shoved around and never scaled. Two fingers zoom about the
+  point between them and pan at the same time; the second finger also ends the
+  one-finger drag it interrupts, so the two gestures no longer fight.
+
+- **A menu taller than the window has items nobody can reach.** Measured on a
+  390×800 phone: Insert laid out 19 items 1000px tall, putting Table, Link to
+  the web, Image and Video or audio 253px below the screen with no gesture that
+  reaches them — the menu is positioned inside a fixed bar, so the page cannot
+  scroll to them. ⋯ lost its last five the same way. Both scroll now, and this
+  was never only a phone bug: on an 860px laptop window the last Insert item was
+  off the bottom too.
+
+- **A sideways swipe stops at the edge of what it is scrolling.** A board or a
+  wide table that runs out of content handed the rest of the gesture to the
+  browser, which on a phone is the back-navigation swipe. It ends where the
+  board does.
+
+- **A wide page stops giving away a third of a phone.** "Wide" is 80% of the
+  window, which is a sensible proportion on a desktop and 283px on a 390px
+  phone — with the block gutter's 26px that left a 257px column inside a 390px
+  screen. It takes the whole width below 850px and is unchanged above it
+  (measured at 1400px: 872px before and after). And the sharing button, alone
+  among the toolbar's controls, was 35×29 rather than the 40×40 every other one
+  gets on a touch screen.
+- **Callouts, quotes and captions survive a trip through Markdown.** Four
+  places where the exporter and the importer disagreed with each other, each
+  measured by exporting one block and reading it back:
+  - A **GitHub alert** — `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`,
+    `[!CAUTION]` — now imports as a callout of that tone, with everything in
+    the box (lists, code, a nested alert) as its body. The export already
+    wrote alerts; the importer read them back as a plain quote with `[!WARNING]`
+    as its first words. Alerts written by GitHub or Obsidian read the same way,
+    including Obsidian's lower-case tags, fold markers and text on the tag
+    line. Other tags (`[!info]`) stay a quote, word for word.
+  - A **quote with a line break** exported its second line without `> `, so a
+    blank line inside it came back as a quote followed by a loose paragraph.
+    Every line is marked now.
+  - An **image caption** leaves as the Markdown title, `![alt](src "caption")`.
+    The importer already read that title as the caption; the exporter was
+    dropping it. An image's size still does not survive — Markdown has no
+    place for it.
+  - A **divider** comes back as the same block the editor made.
+
+  `scripts/test-spaces-md-strict.ts` holds every block type to this bar: 13 of
+  the 20 now come back byte for byte (9 did before), and the other 7 — toggle,
+  link card, media, field, board, page link, canvas — are pinned with the
+  reason, so the rig fails if one starts to qualify without the pin being
+  lifted on purpose.
+- **Footnotes.** A mark in the prose, the note at the foot of the page — write
+  `[^1]` where the mark goes and the note appears as a numbered slot below the
+  page to write into. Notes print, export as `[^1]: the note.` and import back
+  the same way, so an Obsidian or Pandoc vault keeps its footnotes in both
+  directions rather than losing them silently on the way in.
+
+  **The number is never stored.** Footnotes are numbered by order of appearance
+  and the number is worked out when the page is drawn, the way a magic note's
+  answer and a slide's page number are: put a new reference above two existing
+  ones and they renumber to 2 and 3 with nothing in the file changing. Measured
+  in the built shell — `[^1]` renders as "2" while `block.html` still says
+  `[^1]`. A stored number would have been wrong from the first sentence anyone
+  moved, and nothing would have said so.
+
+  **The reference is text, not markup**, which is the whole reason it survives
+  editing: `[^1]` moves with the prose through a keystroke, a sanitize pass, a
+  canonicalisation and a merge exactly the way the word beside it does, because
+  there is no offset to keep in step and no attribute for the allowlist to have
+  an opinion about. It also means a build that predates this shows the sentence
+  with `[^1]` in it and hands the `footnotes` key back untouched — verified by
+  loading a footnoted document into a shell built from the previous release.
+
+  A reference whose note has been deleted still renders, numbered, into an
+  empty note; a note whose reference has gone is kept, never quietly dropped.
+  `bento.validate()` reports both (`dangling-footnote`, `orphan-footnote`) and
+  names the block. Costs 3,176 bytes on the shell.
 - **A saved copy of a shared space rejoins its live session with its offline
   edits.** ⌘S, Save a copy and both self-update writes now stamp the live
   session's sync state into the file (`collab.sync`), as bento/slides always
@@ -720,6 +839,53 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   - The labels hide on a narrower window as slides' do. On a phone, the
     whole group is in ⋯, under captions. The `/` menu lists the same families
     in the same order, with the same captions.
+- **A page can answer to more than one name.** "Also known as" in the page
+  panel takes a comma-separated list — "NYC, the Big Apple" on a page titled
+  New York — and every one of those names reaches the page from a
+  `[[wikilink]]`, from ⌘K search, and from the `[[` page picker. All three, on
+  purpose: an alias that links but cannot be searched means you file something
+  under the name you use for it and then cannot find it by that name, which
+  reads as the search being broken rather than the alias being half-built.
+
+  The alias is resolved where a name becomes a page id, so what gets written
+  into the file is an ordinary `#p/<id>` link — backlinks, the graph, export,
+  print and collaboration never learn that aliases exist. `aliases` is a new,
+  absent-by-default key; clearing the last one deletes it again, so a page that
+  had an alias and lost it is byte-identical to one that never had one, and an
+  older build round-trips the array untouched.
+
+  Two pages can claim one name, because a file arrives already written. The
+  resolver settles it the same way in every copy — a title always beats an
+  alias, then document order — and `bento.validate()` reports it as
+  `alias-collision`, naming which page a `[[link]]` will actually reach. It is
+  the one place this app tells you about a clash it resolved on your behalf.
+
+- **Unlinked mentions: "this page is named in six others you never linked."**
+  Under the backlinks, every place this page's title or aliases appear as plain
+  words somewhere else, each with the sentence it appears in and a button that
+  turns those exact words into a link.
+
+  Most of the work is in what it refuses to find. A title inside a code block
+  or a code span, inside a link you already made, inside a URL or a mail
+  address, or in the middle of a longer word is not a mention; nor is a block
+  that already links here; nor is the page's own text. Names shorter than three
+  characters are not scanned for at all, because a page called "It" mentions
+  everything.
+
+  **CJK was designed for, not discovered.** A word-boundary rule built for
+  English does not degrade in Japanese, it returns exactly zero — every kana
+  beside a name is a letter, so the boundary never opens. So a boundary is
+  required only where the name's own edge is a word character in a script that
+  separates words, and two Han characters count as a whole name where three
+  Latin ones are the floor. 私は東京に住んでいます mentions 東京. The cost of
+  that rule, stated because it is real: a Han name also matches inside a longer
+  Han compound.
+
+  And it is not the quadratic thing it sounds like. Reading a page scans the
+  document ONCE for that page's names, so the cost is the size of the space and
+  not the number of pages in it: measured on a synthetic 1000-page, 2.5MB
+  space, 6.5ms per page open, against 1.9ms for the backlink index the app
+  already built. A 100-page space is 1.3ms.
 
 ## [0.1.0] — 2026-08-03
 
