@@ -628,5 +628,38 @@
   },
   "tdGrantFolder": {
     "message": "“$1”의 모든 것을 묻지 않고 저장…"
+  },
+  "saTitleCopy": {
+    "message": "사본 저장"
+  },
+  "saTitleShare": {
+    "message": "내보낸 파일 저장"
+  },
+  "saName": {
+    "message": "파일 이름"
+  },
+  "saBeside": {
+    "message": "“$1” 옆에 저장"
+  },
+  "saChoose": {
+    "message": "폴더 선택…"
+  },
+  "saCancel": {
+    "message": "취소"
+  },
+  "saExists": {
+    "message": "“$1” 파일이 이미 있습니다. 바꾸려면 다시 저장하세요."
+  },
+  "saIsOriginal": {
+    "message": "열려 있는 문서와 같은 이름입니다. 다른 이름을 고르세요."
+  },
+  "saBadName": {
+    "message": "슬래시가 없는 파일 이름을 사용하세요."
+  },
+  "saLapsed": {
+    "message": "이 폴더에 대한 접근 권한이 만료되었습니다. 대신 폴더를 고르거나 라이브러리에서 갱신하세요."
+  },
+  "saGone": {
+    "message": "이 저장은 더 이상 대기 중이 아닙니다. 창을 닫고 다시 저장하세요."
   }
 }

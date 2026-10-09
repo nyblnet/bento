@@ -661,5 +661,38 @@
   },
   "tdGrantFolder": {
     "message": "Guardar todo en «$1» sin preguntar…"
+  },
+  "saTitleCopy": {
+    "message": "Guardar una copia"
+  },
+  "saTitleShare": {
+    "message": "Guardar el archivo exportado"
+  },
+  "saName": {
+    "message": "Nombre del archivo"
+  },
+  "saBeside": {
+    "message": "Guardar junto a «$1»"
+  },
+  "saChoose": {
+    "message": "Elegir una carpeta…"
+  },
+  "saCancel": {
+    "message": "Cancelar"
+  },
+  "saExists": {
+    "message": "«$1» ya existe. Vuelve a guardar para reemplazarlo."
+  },
+  "saIsOriginal": {
+    "message": "Ese es el nombre del propio documento abierto: elige otro."
+  },
+  "saBadName": {
+    "message": "Usa un nombre de archivo sin barras."
+  },
+  "saLapsed": {
+    "message": "El acceso a esta carpeta ha caducado. Elige otra carpeta o renuévalo en la biblioteca."
+  },
+  "saGone": {
+    "message": "Este guardado ya no está en espera. Cierra esta ventana y vuelve a guardar."
   }
 }

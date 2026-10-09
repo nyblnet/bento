@@ -734,5 +734,49 @@
   "tdGrantFolder": {
     "message": "Save everything in “$1” without asking…",
     "description": "Side panel button: grant the active document's folder. $1 folder name."
+  },
+  "saTitleCopy": {
+    "message": "Save a copy",
+    "description": "Save-as window title for “Save a copy…”."
+  },
+  "saTitleShare": {
+    "message": "Save the exported file",
+    "description": "Save-as window title for an export (view-only copy, presentation package, invite, template)."
+  },
+  "saName": {
+    "message": "File name",
+    "description": "Save-as window: label of the file name field."
+  },
+  "saBeside": {
+    "message": "Save next to “$1”",
+    "description": "Save-as window primary button: save into the open document's own folder. $1 is the open document's file name."
+  },
+  "saChoose": {
+    "message": "Choose a folder…",
+    "description": "Save-as window button: open a picker to choose where to save."
+  },
+  "saCancel": {
+    "message": "Cancel",
+    "description": "Save-as window: cancel button."
+  },
+  "saExists": {
+    "message": "“$1” is already there. Save again to replace it.",
+    "description": "Save-as window: the chosen name exists in the document's folder; a second click replaces it. $1 file name."
+  },
+  "saIsOriginal": {
+    "message": "That is the open document's own name — choose another.",
+    "description": "Save-as window: the person typed the open document's file name for the copy."
+  },
+  "saBadName": {
+    "message": "Use a file name without slashes.",
+    "description": "Save-as window: the typed name is empty or has a path in it."
+  },
+  "saLapsed": {
+    "message": "Access to this folder has lapsed. Choose a folder instead, or renew it in the library.",
+    "description": "Save-as window: the folder grant needs renewing and the browser did not renew it here."
+  },
+  "saGone": {
+    "message": "This save is no longer waiting. Close this window and save again.",
+    "description": "Save-as window: the request expired or the document closed."
   }
 }

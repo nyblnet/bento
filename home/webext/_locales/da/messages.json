@@ -628,5 +628,38 @@
   },
   "tdGrantFolder": {
     "message": "Gem alt i “$1” uden at spørge…"
+  },
+  "saTitleCopy": {
+    "message": "Gem en kopi"
+  },
+  "saTitleShare": {
+    "message": "Gem den eksporterede fil"
+  },
+  "saName": {
+    "message": "Filnavn"
+  },
+  "saBeside": {
+    "message": "Gem ved siden af “$1”"
+  },
+  "saChoose": {
+    "message": "Vælg en mappe …"
+  },
+  "saCancel": {
+    "message": "Annuller"
+  },
+  "saExists": {
+    "message": "“$1” findes allerede. Gem igen for at erstatte den."
+  },
+  "saIsOriginal": {
+    "message": "Det er det åbne dokuments eget navn – vælg et andet."
+  },
+  "saBadName": {
+    "message": "Brug et filnavn uden skråstreger."
+  },
+  "saLapsed": {
+    "message": "Adgangen til mappen er udløbet. Vælg en mappe i stedet, eller forny den i biblioteket."
+  },
+  "saGone": {
+    "message": "Denne gemning venter ikke længere. Luk vinduet, og gem igen."
   }
 }

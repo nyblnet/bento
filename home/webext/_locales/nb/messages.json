@@ -628,5 +628,38 @@
   },
   "tdGrantFolder": {
     "message": "Lagre alt i «$1» uten å spørre …"
+  },
+  "saTitleCopy": {
+    "message": "Lagre en kopi"
+  },
+  "saTitleShare": {
+    "message": "Lagre den eksporterte filen"
+  },
+  "saName": {
+    "message": "Filnavn"
+  },
+  "saBeside": {
+    "message": "Lagre ved siden av «$1»"
+  },
+  "saChoose": {
+    "message": "Velg en mappe …"
+  },
+  "saCancel": {
+    "message": "Avbryt"
+  },
+  "saExists": {
+    "message": "«$1» finnes allerede. Lagre igjen for å erstatte den."
+  },
+  "saIsOriginal": {
+    "message": "Det er navnet på dokumentet som er åpent – velg et annet."
+  },
+  "saBadName": {
+    "message": "Bruk et filnavn uten skråstreker."
+  },
+  "saLapsed": {
+    "message": "Tilgangen til mappen har utløpt. Velg en mappe i stedet, eller forny den i biblioteket."
+  },
+  "saGone": {
+    "message": "Denne lagringen venter ikke lenger. Lukk vinduet og lagre på nytt."
   }
 }

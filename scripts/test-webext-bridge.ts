@@ -33,13 +33,23 @@ function ok(cond: boolean, msg: string) {
 }
 
 /** A window just real enough to load the bridge into. */
-function load(opts: { version?: string; pathname?: string } = {}) {
+function load(opts: { version?: string; pathname?: string; reply?: Record<string, any> } = {}) {
   const nativeCalls: any[] = []
   const posted: any[] = []
+  const listeners: any[] = []
+  // The extension's answers, by op. `saveas` is answered "not a document" by
+  // default — the extension declining — so a copy or an export reaches the
+  // native picker the way it does with no extension at all.
+  const reply = { saveas: { ok: false, reason: 'not a document' }, ...opts.reply }
   const win: any = {
     location: { pathname: opts.pathname ?? '/Users/x/Decks/Q3.bento.html' },
-    addEventListener() {},
-    postMessage(msg: any) { posted.push(msg) },
+    addEventListener(type: string, f: any) { if (type === 'message') listeners.push(f) },
+    postMessage(msg: any) {
+      posted.push(msg)
+      if (msg?.dir === 'req' && msg.op in reply) {
+        setTimeout(() => { for (const f of listeners) f({ source: win, data: { __bento_tray__: true, dir: 'res', id: msg.id, result: reply[msg.op] } }) }, 0)
+      }
+    },
     showSaveFilePicker(o: any) { nativeCalls.push(o); return Promise.resolve({ __native: true }) },
     bento: opts.version ? { updates: { version: opts.version } } : undefined,
   }
@@ -161,6 +171,30 @@ for (const [version, trusted] of [
   await win.showSaveFilePicker({ id: 'bento-copy', suggestedName: 'copy.bento.html', startIn: real })
     .catch(() => {})
   ok(nativeCalls.length === 1, 'a copy reaches the native picker')
+}
+
+// ---- "Save a copy…" and exports: the extension's own window ----------------
+// saveas.js. The page asks; the extension's window answers with where the
+// person chose. Chosen → a handle that writes through the extension; cancelled
+// there → cancelled here (no second dialog); declined → the native picker.
+{
+  const { win, nativeCalls, posted } = load({ version: '1.0.15', reply: { saveas: { ok: true, token: 'tok-1', name: 'Q3 copy.bento.html' }, 'saveas.write': { ok: true, name: 'Q3 copy.bento.html', bytes: 5 } } })
+  const h = await win.showSaveFilePicker({ id: 'bento-copy', suggestedName: 'Q3.bento.html' })
+  const ask = posted.find((m) => m.op === 'saveas')
+  ok(nativeCalls.length === 0 && h?.name === 'Q3 copy.bento.html' && ask?.payload?.id === 'bento-copy' && ask?.payload?.name === 'Q3.bento.html', 'a copy the person placed in the extension\'s window returns its handle — no native dialog')
+  const w = await h.createWritable(); await w.write(new Blob(['hello'])); await w.close()
+  const wr = posted.find((m) => m.op === 'saveas.write')
+  ok(wr?.payload?.token === 'tok-1' && wr?.payload?.text === 'hello' && !('path' in (wr?.payload ?? {})), 'its writes carry the token and the bytes — never a path')
+}
+{
+  const { win, nativeCalls } = load({ version: '1.0.15', reply: { saveas: { ok: false, cancelled: true } } })
+  let err: any = null
+  await win.showSaveFilePicker({ id: 'bento-share', suggestedName: 'Q3-view.bento.html' }).catch((e: any) => { err = e })
+  ok(err?.name === 'AbortError' && nativeCalls.length === 0, 'cancelled in the window is AbortError — save.ts\'s "cancelled", and no second dialog')
+}
+{
+  const { win } = load({ version: '1.0.15' })
+  ok((win as any).__bentoHost.ops.includes('saveas'), 'the host announces saveas')
 }
 
 // ---- the host announces what it can do -------------------------------------

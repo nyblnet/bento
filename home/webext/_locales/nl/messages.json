@@ -628,5 +628,38 @@
   },
   "tdGrantFolder": {
     "message": "Alles in “$1” opslaan zonder vragen…"
+  },
+  "saTitleCopy": {
+    "message": "Kopie opslaan"
+  },
+  "saTitleShare": {
+    "message": "Geëxporteerd bestand opslaan"
+  },
+  "saName": {
+    "message": "Bestandsnaam"
+  },
+  "saBeside": {
+    "message": "Opslaan naast ‘$1’"
+  },
+  "saChoose": {
+    "message": "Kies een map…"
+  },
+  "saCancel": {
+    "message": "Annuleren"
+  },
+  "saExists": {
+    "message": "‘$1’ bestaat al. Sla opnieuw op om het te vervangen."
+  },
+  "saIsOriginal": {
+    "message": "Dat is de naam van het geopende document zelf — kies een andere."
+  },
+  "saBadName": {
+    "message": "Gebruik een bestandsnaam zonder schuine strepen."
+  },
+  "saLapsed": {
+    "message": "De toegang tot deze map is verlopen. Kies in plaats daarvan een map, of vernieuw de toegang in de bibliotheek."
+  },
+  "saGone": {
+    "message": "Deze opslag wacht niet meer. Sluit dit venster en sla opnieuw op."
   }
 }

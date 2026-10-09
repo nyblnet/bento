@@ -628,5 +628,38 @@
   },
   "tdGrantFolder": {
     "message": "I-save ang lahat sa “$1” nang hindi nagtatanong…"
+  },
+  "saTitleCopy": {
+    "message": "Mag-save ng kopya"
+  },
+  "saTitleShare": {
+    "message": "I-save ang na-export na file"
+  },
+  "saName": {
+    "message": "Pangalan ng file"
+  },
+  "saBeside": {
+    "message": "I-save katabi ng “$1”"
+  },
+  "saChoose": {
+    "message": "Pumili ng folder…"
+  },
+  "saCancel": {
+    "message": "Kanselahin"
+  },
+  "saExists": {
+    "message": "Mayroon nang “$1”. I-save muli para palitan ito."
+  },
+  "saIsOriginal": {
+    "message": "Iyan ang mismong pangalan ng bukas na dokumento — pumili ng iba."
+  },
+  "saBadName": {
+    "message": "Gumamit ng pangalan ng file na walang slash."
+  },
+  "saLapsed": {
+    "message": "Nag-expire na ang access sa folder na ito. Pumili na lang ng folder, o i-renew ito sa library."
+  },
+  "saGone": {
+    "message": "Hindi na naghihintay ang pag-save na ito. Isara ang window at mag-save muli."
   }
 }

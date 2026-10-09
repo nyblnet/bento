@@ -37,6 +37,7 @@ import { t } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
 import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads, downloadsUnusable, setDownloadsUnusable, defaultDeps as defaultFileGrantDeps } from './filegrant.js'
 import { recentOpened } from './db.js'
+import * as saveas from './saveas.js'
 
 /** Same-named files the extension knows at OTHER paths: opened documents and the library's last scan. */
 async function knownTwins(path) {
@@ -415,6 +416,58 @@ function offerAnswered(sender, msg) {
   return { ok: true }
 }
 
+// ---------------------------------------------------------------- save as
+//
+// "Save a copy…" and exports (saveas.js): the page's picker call, answered in
+// the extension's own window so it can open beside the document. The path is
+// the sender's, top frame only; the window is the only one that may answer.
+
+const saveasWaiting = new Map() // token → resolve(true|false)
+const SAVEAS_WAIT_MS = 170000
+
+/** The sender's own path — top frame only, like every store and save op. */
+const topPath = (sender) => (sender?.frameId === 0 ? pathFromSender(sender) : null)
+
+export function saveasDeps(sender, deps = {}) {
+  return {
+    db: deps.db ?? saveas.idb(),
+    now: deps.now ?? (() => Date.now()),
+    token: deps.token ?? (() => crypto.randomUUID()),
+    // the document's OWN folder, when a folder grant reaches it by route
+    folderOf: deps.folderOf ?? (async () => {
+      const r = await resolve(sender)
+      return r.ok && Array.isArray(r.rel) ? parentOf(r.dir, r.rel) : null
+    }),
+    openWindow: deps.openWindow ?? ((token) => new Promise((done) => {
+      saveasWaiting.set(token, done)
+      const url = new URL(chrome.runtime.getURL('src/saveas.html'))
+      url.searchParams.set('token', token)
+      chrome.windows.create({ url: url.href, type: 'popup', width: 480, height: 330, focused: true })
+        .catch(() => { saveasWaiting.delete(token); done(null) })
+      setTimeout(() => { if (saveasWaiting.get(token) === done) { saveasWaiting.delete(token); done(false) } }, SAVEAS_WAIT_MS)
+    })),
+  }
+}
+
+const isSaveasWindow = (sender) => sender?.id === chrome.runtime.id && typeof sender.url === 'string'
+  && sender.url.startsWith(chrome.runtime.getURL('src/saveas.html'))
+
+function saveasAnswered(sender, msg) {
+  if (!isSaveasWindow(sender)) return { ok: false, reason: 'not the save-as window' }
+  const done = saveasWaiting.get(msg.token)
+  if (done) { saveasWaiting.delete(msg.token); done(msg.chosen === true) }
+  return { ok: true }
+}
+
+function watchSaveasWindow(port) {
+  if (!isSaveasWindow(port.sender)) { port.disconnect(); return }
+  const token = port.name.slice('saveas:'.length)
+  port.onDisconnect.addListener(() => {
+    const done = saveasWaiting.get(token)
+    if (done) { saveasWaiting.delete(token); done(false) }
+  })
+}
+
 // `chrome` is absent when this module is loaded by the test rig, which imports
 // the logic above and never needs the listener.
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
@@ -434,6 +487,9 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'save.rebadge' ? (async () => { const tabs = await chrome.tabs.query({ url: 'file:///*.bento.html' }).catch(() => []); for (const tb of tabs) await badgeTab(tb.id, { url: tb.url, frameId: 0, tab: tb }); return { ok: true } })()
       : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
+      : msg?.op === 'saveas' ? saveas.ask(topPath(sender), msg.payload, saveasDeps(sender))
+      : msg?.op === 'saveas.write' ? saveas.write(topPath(sender), msg.payload, saveasDeps(sender))
+      : msg?.op === 'saveas.answered' ? Promise.resolve(saveasAnswered(sender, msg))
       : Promise.resolve({ ok: false, reason: 'unknown op' })
     run.then((r) => {
       sendResponse(r)
@@ -448,6 +504,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
 
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name.startsWith('filegrant:')) watchOfferWindow(port)
+    else if (port.name.startsWith('saveas:')) watchSaveasWindow(port)
   })
 
   // The worker restarts constantly; the badge has to survive that, and startup
@@ -462,6 +519,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   // would cost the `alarms` permission for a courtesy. Store installs are never
   // asked — `checkForUpdate` returns immediately for them.
   chrome.runtime.onStartup?.addListener(() => void checkForUpdate())
+  chrome.runtime.onStartup?.addListener(() => { void saveas.gc(saveasDeps(null)).catch(() => {}) })
   chrome.runtime.onInstalled?.addListener(() => void checkForUpdate())
   void reportLapsed()
 

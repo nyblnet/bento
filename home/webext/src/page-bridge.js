@@ -146,7 +146,7 @@
    * directions where "are you at least version N" does not.
    */
   Object.defineProperty(window, '__bentoHost', {
-    value: Object.freeze({ name: 'home/webext', ops: Object.freeze(['claim', 'write', 'backup']) }),
+    value: Object.freeze({ name: 'home/webext', ops: Object.freeze(['claim', 'write', 'backup', 'saveas']) }),
     writable: false, configurable: false, enumerable: false,
   })
 
@@ -217,6 +217,16 @@
       // file the author never asked to save — the exact interruption this path
       // exists to remove. `save.ts` catches the throw and downloads instead.
       return handleOver(opts.suggestedName, 'backup', { name: opts.suggestedName })
+    }
+    if (opts?.id === 'bento-copy' || opts?.id === 'bento-share') {
+      // "Save a copy…" and exports: the extension asks in its own window,
+      // which can open beside this document (saveas.js). Cancelled there is
+      // cancelled here; no answer at all is the browser's own picker.
+      const r = await ask('saveas', { id: opts.id, name: opts.suggestedName }, 180000)
+      if (r?.ok && typeof r.token === 'string') return handleOver(r.name, 'saveas.write', { token: r.token })
+      if (r?.cancelled) throw new DOMException('The user aborted a request.', 'AbortError')
+      if (native) return native(forNative(opts))
+      throw new DOMException('No file picker available', 'AbortError')
     }
     if (!wantsOpenFile(opts)) {
       if (native) return native(forNative(opts))

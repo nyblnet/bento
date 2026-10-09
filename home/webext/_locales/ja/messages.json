@@ -661,5 +661,38 @@
   },
   "tdGrantFolder": {
     "message": "「$1」内はすべて確認なしで保存…"
+  },
+  "saTitleCopy": {
+    "message": "コピーを保存"
+  },
+  "saTitleShare": {
+    "message": "書き出したファイルを保存"
+  },
+  "saName": {
+    "message": "ファイル名"
+  },
+  "saBeside": {
+    "message": "「$1」と同じ場所に保存"
+  },
+  "saChoose": {
+    "message": "フォルダを選択…"
+  },
+  "saCancel": {
+    "message": "キャンセル"
+  },
+  "saExists": {
+    "message": "「$1」はすでにあります。置き換えるにはもう一度保存してください。"
+  },
+  "saIsOriginal": {
+    "message": "開いているドキュメント自身の名前です。別の名前を選んでください。"
+  },
+  "saBadName": {
+    "message": "スラッシュを含まないファイル名にしてください。"
+  },
+  "saLapsed": {
+    "message": "このフォルダへのアクセスが切れています。フォルダを選ぶか、ライブラリで更新してください。"
+  },
+  "saGone": {
+    "message": "この保存は待機していません。ウィンドウを閉じて、もう一度保存してください。"
   }
 }

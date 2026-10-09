@@ -697,6 +697,13 @@ jobs:
         # the browser's own picker — never to nothing.
         run: node scripts/test-webext-filegrant.ts
 
+      - name: WebExtension save-as rig
+        # "Save a copy" and exports answered in the extension's own window, so
+        # they can land beside the document. The page supplies a name, never a
+        # place; a write lands only where the person chose and only for the
+        # document that asked; a beside-name is never a path or the original.
+        run: node scripts/test-webext-saveas.ts
+
       - name: WebExtension localisation rig
         # Every failure mode of a message catalogue is silent: a key the code
         # uses but English lacks renders as the key name, a locale missing a key
