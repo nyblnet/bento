@@ -134,6 +134,22 @@ console.log('\n— cancelling, and no window at all')
   ok(!r3.ok && !r3.cancelled && r3.reason === 'window unavailable', 'a window that could not open is NOT cancelled — the page falls to its own picker')
 }
 
+console.log('\n— one window per document')
+{
+  const open = new Set<string>()
+  let windows = 0
+  let release: any
+  const d = { ...depsFor(), busy: (p: string) => open.has(p), openWindow: (_t: string, p: string) => { windows++; open.add(p); return new Promise((r) => { release = () => { open.delete(p); r(false) } }) } }
+  const first = sa.ask(DOC, { id: 'bento-copy', name: 'x' }, d)
+  await new Promise((r) => setTimeout(r, 0))
+  const second: any = await Promise.race([sa.ask(DOC, { id: 'bento-share', name: 'y' }, d), new Promise((r) => setTimeout(() => r({ hung: true }), 200))])
+  ok(second.cancelled === true && windows === 1, 'a second ask from the same document while its window is open opens nothing')
+  const other = sa.ask(OTHER, { id: 'bento-copy', name: 'z' }, { ...d, openWindow: async () => { windows++; return false } })
+  await other
+  ok(windows === 2, 'another document still gets its own')
+  release(); await Promise.race([first, new Promise((r) => setTimeout(r, 200))])
+}
+
 console.log('\n— the sweep')
 {
   const d = depsFor()

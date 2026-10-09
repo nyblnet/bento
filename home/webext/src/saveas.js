@@ -79,13 +79,15 @@ export async function ask(path, payload, deps) {
   if (!path) return { ok: false, reason: 'not a document' }
   const purpose = PURPOSES[payload?.id]
   if (!purpose) return { ok: false, reason: 'not a save-as' }
+  // One window per document at a time: a page cannot stack them up.
+  if (deps.busy?.(path)) return { ok: false, cancelled: true }
   const original = path.split('/').pop()
   const name = suggestion(payload?.name, original)
   let dir = null
   try { dir = await deps.folderOf() } catch { dir = null }
   const token = deps.token()
   await deps.db.put(token, { path, purpose, name, dir, choice: null, at: deps.now() })
-  const answered = await deps.openWindow(token)
+  const answered = await deps.openWindow(token, path)
   const rec = await deps.db.get(token)
   if (!answered || !rec?.choice) {
     await deps.db.del(token)

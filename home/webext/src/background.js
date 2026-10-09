@@ -423,6 +423,7 @@ function offerAnswered(sender, msg) {
 // the sender's, top frame only; the window is the only one that may answer.
 
 const saveasWaiting = new Map() // token → resolve(true|false)
+const saveasPaths = new Set() // documents with a save-as window open
 const SAVEAS_WAIT_MS = 170000
 
 /** The sender's own path — top frame only, like every store and save op. */
@@ -438,7 +439,10 @@ export function saveasDeps(sender, deps = {}) {
       const r = await resolve(sender)
       return r.ok && Array.isArray(r.rel) ? parentOf(r.dir, r.rel) : null
     }),
-    openWindow: deps.openWindow ?? ((token) => new Promise((done) => {
+    busy: deps.busy ?? ((path) => saveasPaths.has(path)),
+    openWindow: deps.openWindow ?? ((token, path) => new Promise((resolve) => {
+      saveasPaths.add(path)
+      const done = (v) => { saveasPaths.delete(path); resolve(v) }
       saveasWaiting.set(token, done)
       const url = new URL(chrome.runtime.getURL('src/saveas.html'))
       url.searchParams.set('token', token)
