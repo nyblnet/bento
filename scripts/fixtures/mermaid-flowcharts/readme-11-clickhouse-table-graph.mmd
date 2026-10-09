@@ -1,0 +1,13 @@
+%% source: https://github.com/mbaksheev/clickhouse-table-graph/blob/HEAD/README.md (MIT)
+flowchart TB
+tree.mid_table@{ shape: rect, label: "tree.mid_table (ReplacingMergeTree)" } --> tree.mid_distributed@{ shape: st-rect, label: "tree.mid_distributed (Distributed)" }
+tree.mid_table@{ shape: rect, label: "tree.mid_table (ReplacingMergeTree)" } --> tree.target_table_mv@{ shape: hex, label: "tree.target_table_mv (MaterializedView)" }
+tree.mid_table_mv@{ shape: hex, label: "tree.mid_table_mv (MaterializedView)" } --> tree.mid_table@{ shape: rect, label: "tree.mid_table (ReplacingMergeTree)" }
+tree.base_table@{ shape: rounded, label: "tree.base_table (Null)" } --> tree.mid_table_mv@{ shape: hex, label: "tree.mid_table_mv (MaterializedView)" }
+tree.target_table_mv@{ shape: hex, label: "tree.target_table_mv (MaterializedView)" } --> tree.target_table@{ shape: rect, label: "tree.target_table (ReplacingMergeTree)" }
+tree.target_table@{ shape: rect, label: "tree.target_table (ReplacingMergeTree)" } --> tree.target_2_distributed@{ shape: st-rect, label: "tree.target_2_distributed (Distributed)" }
+tree.target_table@{ shape: rect, label: "tree.target_table (ReplacingMergeTree)" } --> tree.target_distributed@{ shape: st-rect, label: "tree.target_distributed (Distributed)" }
+tree.target_table_mv_2@{ shape: hex, label: "tree.target_table_mv_2 (MaterializedView)" } --> tree.target_table@{ shape: rect, label: "tree.target_table (ReplacingMergeTree)" }
+tree.another_base_table@{ shape: rounded, label: "tree.another_base_table (Null)" } --> tree.target_table_mv_2@{ shape: hex, label: "tree.target_table_mv_2 (MaterializedView)" }
+default.value_dict@{ shape:  win-pane, label: "default.value_dict (Dictionary)" } --> tree.target_table_mv_2@{ shape: hex, label: "tree.target_table_mv_2 (MaterializedView)" }
+style tree.mid_table stroke:#f4e022
