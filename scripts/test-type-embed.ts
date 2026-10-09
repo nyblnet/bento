@@ -91,5 +91,34 @@ console.log('\n— a file with no preview still embeds —');
   ok(e!.view.includes('Bento Slides'), 'and says which app it came from');
 }
 
+console.log('\n— embedded documents don\'t carry sharing keys —');
+{
+  // The source document's collab block is that document's sharing keys: the
+  // room's read key and, in a writer's or owner's copy, private keys and an
+  // invite. Embedding copies the source document into ours; it must arrive
+  // without them.
+  const ENVELOPE = { on: true, room: 'w123', key: 'READ-KEY', owner: 'OWNER-PUB', ownerPriv: 'OWNER-KEY',
+                     writerPub: 'WRITER-PUB', writerPriv: 'WRITER-KEY', invite: { pub: 'IP', priv: 'INVITE-KEY', role: 'writer', sig: 'S' } };
+  const SECRETS = ['READ-KEY', 'OWNER-KEY', 'WRITER-KEY', 'INVITE-KEY'];
+  const shell = (doc: object) => '<script id="bento-doc">' + JSON.stringify(doc) + '</script>';
+
+  const e = readArtifact(shell({ format: 'bento/slides', docId: 's9', title: 'Roadmap', collab: ENVELOPE }));
+  const blob = JSON.stringify(e!.doc);
+  for (const secret of SECRETS) ok(!blob.includes(secret), `the ${secret} does not survive intake`);
+  ok(!('collab' in (e!.doc as object)), 'the whole collab block is gone, not just its keys');
+  ok((e!.doc as { title?: string }).title === 'Roadmap', 'while the document itself is intact');
+  ok((e!.doc as { docId?: string }).docId === 's9', 'and docId is KEPT — it names the source, and is not a capability');
+
+  // NESTED: an embedded bento/type document can carry embeds of its own. The
+  // kernel's withoutCaps is shallow, so this is the case it alone would miss.
+  const inner = { format: 'bento/slides', docId: 'deck-1', collab: ENVELOPE };
+  const middle = { format: 'bento/type', docId: 'type-2', collab: ENVELOPE,
+                   body: [{ id: 'e', kind: 'embed', text: '', embed: { app: 'bento/slides', view: '<svg/>', doc: inner } }] };
+  const n = readArtifact(shell(middle));
+  const nblob = JSON.stringify(n!.doc);
+  ok(SECRETS.every(x => !nblob.includes(x)), 'an embed INSIDE an embedded document arrives without its keys too');
+  ok(nblob.includes('deck-1'), 'and the inner document is still there to open');
+}
+
 console.log(`\n${checks - bad}/${checks} checks passed`);
 if (bad) process.exit(1);

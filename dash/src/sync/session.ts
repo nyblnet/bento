@@ -23,7 +23,7 @@
 import type { Store, Patch } from '../store.ts'
 import type { DashDoc } from '../model.ts'
 import { DashSync, SYNC_V, committable, type Op, type SyncStateJSON } from './crdt.ts'
-import { collabOf, mintCollab, type CollabBlock } from './online.ts'
+import { collabOf, copyCanWrite, mintCollab, type CollabBlock } from './online.ts'
 import { lsGet, lsJson } from '../../../kernel/src/storage.ts'
 
 export interface PresenceInfo {
@@ -185,7 +185,7 @@ export class SyncSession {
   private async ensureCollab() {
     if (this.store.doc.collab) return
     const creds = await mintCollab()
-    if (!this.store.doc.collab) this.store.doc.collab = creds
+    if (!this.store.doc.collab) { this.store.doc.collab = creds; this.store.touch() }
   }
 
   // --- the patch tap --------------------------------------------------------
@@ -392,7 +392,9 @@ export class SyncSession {
     let pub: string | undefined
     let role: 'owner' | 'editor' | 'viewer' | undefined
     if (c) {
-      if (c.role === 'reader') role = 'viewer'
+      // a copy that cannot write is a Viewer whatever keys it carries — an
+      // audience copy holds an owner-signed invite, and was called an Editor
+      if (!copyCanWrite(c)) role = 'viewer'
       else if (c.v === 2 && c.ownerPriv) { role = 'owner'; pub = c.owner }
       else if (c.v === 2 && c.invite) {
         role = 'editor'

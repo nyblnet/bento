@@ -218,5 +218,159 @@ console.log('bento/spaces undo\n')
   ok(s.doc.pages.length === 4 && s.doc.assets?.k1 !== undefined, 'redo brings the import back intact')
 }
 
+// ---- undo moves CONTENT, never identity ------------------------------------
+//
+// Undo is snapshot-based: a doc entry restores the whole document. It used to
+// restore the snapshot's top-level fields too, so an edit followed by Stop
+// sharing, a duplicate's new identity or a sealed mode came back undone by the
+// next ⌘Z — silently rejoining a room the person had left, or pointing this
+// space at its ancestor's docId and room. store.ts FROM_LIVE keeps those keys
+// from the LIVE document for undo, redo and every replaceDoc. Slides had the
+// same bug (slides/src/restoregate.ts FROM_LIVE).
+//
+// Spaces' own Duplicate and reading-copy saves write a SEPARATE file and leave
+// the open document alone, so rows 2 and 3 move the live fields directly: what
+// is under test is the store's guarantee, whatever moves them.
+{
+  const shared = () => {
+    const d = load([page('a', 'A0'), page('b', 'B0')])
+    ;(d as Record<string, unknown>).collab = { v: 2, room: 'w-room1', key: 'k1', on: true }
+    return new Store(d)
+  }
+  const on = (s: Store) => (s.doc.collab as { on?: boolean } | undefined)?.on
+  const room = (s: Store) => (s.doc.collab as { room?: string } | undefined)?.room
+
+  // 1. Stop sharing — as kernel stopSharing does it on main today (its own
+  //    store.commit, so it is an undo step) …
+  {
+    const s = shared()
+    s.commit(() => { s.doc.pages[0].blocks[0].html = 'A1' })
+    s.commit(() => { (s.doc.collab as { on?: boolean }).on = false })
+    s.undo(); s.undo()
+    ok(textOf(s, 'a') === 'A0', 'stop sharing (as a commit): the edit before it still undoes')
+    ok(on(s) === false, 'stop sharing (as a commit): two ⌘Z later, sharing is still OFF')
+    s.redo(); s.redo()
+    ok(textOf(s, 'a') === 'A1' && on(s) === false, 'stop sharing (as a commit): redo keeps it OFF too')
+  }
+  // … and as it does once collab changes stop being undo steps (markShared).
+  {
+    const s = shared()
+    s.commit(() => { s.doc.pages[0].blocks[0].html = 'A1' })
+    ;(s.doc.collab as { on?: boolean }).on = false
+    s.setDirty(true)
+    s.undo()
+    ok(textOf(s, 'a') === 'A0' && on(s) === false, 'stop sharing (not a commit): ⌘Z reverts the edit, sharing stays OFF')
+    s.redo()
+    ok(textOf(s, 'a') === 'A1' && on(s) === false, 'stop sharing (not a commit): redo keeps it OFF')
+  }
+  // Rotate keys: the snapshot holds the revoked room/key.
+  {
+    const s = shared()
+    s.commit(() => { s.doc.pages[0].blocks[0].html = 'A1' })
+    s.doc.collab = { v: 2, room: 'w-room2', key: 'k2', on: true } as SpacesDoc['collab']
+    s.undo()
+    ok(room(s) === 'w-room2', 'rotate keys: ⌘Z never resurrects the revoked room')
+    s.redo()
+    ok(room(s) === 'w-room2', 'rotate keys: nor does redo')
+  }
+
+  // 2. Duplicate as a new space: a fresh docId and no credentials.
+  {
+    const s = shared()
+    s.commit(() => { s.doc.pages[0].blocks[0].html = 'A1' })
+    s.doc.docId = 'dup'
+    delete (s.doc as Record<string, unknown>).collab
+    s.undo()
+    ok(textOf(s, 'a') === 'A0', 'duplicate: the edit before it still undoes')
+    ok(s.doc.docId === 'dup', 'duplicate: ⌘Z keeps the duplicate\'s docId, not its ancestor\'s')
+    ok(s.doc.collab === undefined, 'duplicate: ⌘Z does not bring back the ancestor\'s room')
+    s.redo()
+    ok(s.doc.docId === 'dup' && s.doc.collab === undefined, 'duplicate: redo keeps the duplicate\'s identity')
+  }
+
+  // 3. A sealed reading copy / frozen mode, and the template mode.
+  {
+    const s = shared()
+    s.commit(() => { s.doc.pages[0].blocks[0].html = 'A1' })
+    s.doc.readonly = true
+    s.undo()
+    ok(textOf(s, 'a') === 'A0' && s.doc.readonly === true, 'readonly: ⌘Z reverts the edit, the mode stays')
+    s.redo()
+    ok(s.doc.readonly === true, 'readonly: redo keeps it')
+  }
+  {
+    const d = load([page('a', 'A0')])
+    d.template = true
+    const s = new Store(d)
+    s.commit(() => { s.doc.pages[0].blocks[0].html = 'A1' })
+    delete s.doc.template
+    s.undo()
+    ok(s.doc.template === undefined, 'template: ⌘Z does not turn the space back into a template (which re-mints docId on open)')
+    s.redo()
+    ok(s.doc.template === undefined, 'template: nor does redo')
+  }
+
+  // REDO in its own right. The redo rows above pass whatever restore does,
+  // because a redo entry is taken at undo time, when the live identity is
+  // already in place. The case that bites is the identity moving BETWEEN the
+  // undo and the redo: the redo entry then holds the OLD identity. Edit, ⌘Z,
+  // then the change, then ⌘⇧Z.
+  {
+    const s = shared()
+    s.commit(() => { s.doc.pages[0].blocks[0].html = 'A1' })
+    s.undo()
+    ;(s.doc.collab as { on?: boolean }).on = false
+    s.redo()
+    ok(textOf(s, 'a') === 'A1' && on(s) === false, 'redo after Stop sharing: the edit comes back, sharing stays OFF')
+  }
+  {
+    const s = shared()
+    s.commit(() => { s.doc.pages[0].blocks[0].html = 'A1' })
+    s.undo()
+    s.doc.docId = 'dup'
+    delete (s.doc as Record<string, unknown>).collab
+    s.redo()
+    ok(s.doc.docId === 'dup' && s.doc.collab === undefined, 'redo after Duplicate: docId and collab stay the duplicate\'s')
+  }
+  {
+    const s = shared()
+    s.commit(() => { s.doc.pages[0].blocks[0].html = 'A1' })
+    s.undo()
+    s.doc.readonly = true
+    s.redo()
+    ok(s.doc.readonly === true, 'redo after a readonly seal: the mode stays')
+  }
+
+  // 4. Every replaceDoc — version history, recovery, Replace from JSON,
+  //    bento.loadDoc — imports content, never identity.
+  {
+    const s = shared()
+    ;(s.doc.collab as { on?: boolean }).on = false // stopped after the version was taken
+    const foreign = load([page('z', 'Z0')])
+    foreign.docId = 'someone-else'
+    ;(foreign as Record<string, unknown>).collab = { v: 2, room: 'w-theirs', key: 'kx', on: true }
+    foreign.readonly = true
+    foreign.template = true
+    s.replaceDoc(foreign)
+    ok(textOf(s, 'z') === 'Z0', 'replaceDoc: the content is replaced')
+    ok(s.doc.docId === 'u' && room(s) === 'w-room1' && on(s) === false,
+      'replaceDoc: docId and collab (incl. its off switch) stay the live ones')
+    ok(s.doc.readonly === undefined && s.doc.template === undefined, 'replaceDoc: the file mode stays the live one')
+    s.undo()
+    ok(textOf(s, 'a') === 'A0' && s.doc.docId === 'u' && on(s) === false, 'replaceDoc: ⌘Z puts the content back, identity unmoved')
+  }
+
+  // CONTROL: content — including the design — still undoes.
+  {
+    const s = shared()
+    const was = JSON.stringify(s.doc.theme)
+    s.commit(() => { s.doc.title = 'Renamed'; s.doc.theme = { ...s.doc.theme, accent: '#123456' } })
+    s.undo()
+    ok(s.doc.title === 'U' && JSON.stringify(s.doc.theme) === was, 'control: title and theme are content, and undo')
+    s.redo()
+    ok(s.doc.title === 'Renamed' && s.doc.theme.accent === '#123456', 'control: and redo')
+  }
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)
