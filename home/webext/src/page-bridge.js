@@ -29,16 +29,17 @@
   const pending = new Map()
 
   /** One round trip to the isolated world, which relays to the extension. */
-  const ask = (op, payload) =>
+  const ask = (op, payload, timeoutMs = 5000) =>
     new Promise((resolve) => {
       const id = `${Date.now()}-${seq++}`
       pending.set(id, resolve)
       window.postMessage({ [CH]: true, dir: 'req', id, op, payload }, '*')
       // A host that never answers must not hang a save forever — the caller
-      // falls back to the native picker instead.
+      // falls back to the native picker instead. (A claim that is waiting on
+      // the extension's own window gets as long as a dialog takes.)
       setTimeout(() => {
         if (pending.delete(id)) resolve({ ok: false, reason: 'timeout' })
-      }, 5000)
+      }, timeoutMs)
     })
 
   window.addEventListener('message', (ev) => {
@@ -145,7 +146,7 @@
    * directions where "are you at least version N" does not.
    */
   Object.defineProperty(window, '__bentoHost', {
-    value: Object.freeze({ name: 'home/webext', ops: Object.freeze(['claim', 'write', 'backup']) }),
+    value: Object.freeze({ name: 'home/webext', ops: Object.freeze(['claim', 'write', 'backup', 'saveas']) }),
     writable: false, configurable: false, enumerable: false,
   })
 
@@ -183,8 +184,19 @@
           const blob = chunks.length === 1 && chunks[0] instanceof Blob ? chunks[0] : new Blob(chunks)
           const text = await blob.text()
           const res = await ask(op, { text, ...extra })
+          if (!res?.ok && res?.retry === 'native' && native) {
+            // The extension's door shut mid-save (Chrome prompted for a
+            // download). Finish THIS save the way the browser would with no
+            // extension — its own picker — rather than lose the bytes.
+            console.info('[bento/home]', op, 'fell back to the browser picker:', res.reason)
+            const h = await native(forNative({ suggestedName: name }))
+            const w = await h.createWritable()
+            await w.write(blob)
+            await w.close()
+            return
+          }
           if (!res?.ok) throw new DOMException(res?.reason || 'write failed', 'NotAllowedError')
-          console.info('[bento/home]', op, res.name ?? name, `(${res.bytes} bytes)`)
+          console.info('[bento/home]', op, res.name ?? name, `(${res.bytes} bytes${res.via ? `, via ${res.via}` : ''})`)
         },
       }
     },
@@ -193,6 +205,13 @@
     queryPermission: async () => 'granted',
     requestPermission: async () => 'granted',
     isSameEntry: async () => false,
+  })
+
+  // Save-as tokens this document holds; they end when it unloads (saveas.js drop).
+  const saveTokens = new Set()
+  window.addEventListener('pagehide', () => {
+    for (const token of saveTokens) window.postMessage({ [CH]: true, dir: 'req', id: `drop-${token}`, op: 'saveas.drop', payload: { token } }, '*')
+    saveTokens.clear()
   })
 
   window.showSaveFilePicker = async (opts = {}) => {
@@ -206,6 +225,23 @@
       // exists to remove. `save.ts` catches the throw and downloads instead.
       return handleOver(opts.suggestedName, 'backup', { name: opts.suggestedName })
     }
+    // Only in a person's gesture, like the browser's own picker: a document
+    // cannot open the extension's window unprompted to lure clicks.
+    // (`userActivation` is shared with the content script's world.)
+    const activated = window.navigator?.userActivation?.isActive === true
+    if ((opts?.id === 'bento-copy' || opts?.id === 'bento-share') && activated) {
+      // "Save a copy…" and exports: the extension asks in its own window,
+      // which can open beside this document (saveas.js). Cancelled there is
+      // cancelled here; no answer at all is the browser's own picker.
+      const r = await ask('saveas', { id: opts.id, name: opts.suggestedName }, 180000)
+      if (r?.ok && typeof r.token === 'string') {
+        saveTokens.add(r.token)
+        return handleOver(r.name, 'saveas.write', { token: r.token })
+      }
+      if (r?.cancelled) throw new DOMException('The user aborted a request.', 'AbortError')
+      if (native) return native(forNative(opts))
+      throw new DOMException('No file picker available', 'AbortError')
+    }
     if (!wantsOpenFile(opts)) {
       if (native) return native(forNative(opts))
       throw new DOMException('No file picker available', 'AbortError')
@@ -214,7 +250,11 @@
     // browser stamps and this page cannot forge. A local HTML file is untrusted
     // content, and one that could name its own target could name someone else's
     // deck in the granted folder.
-    const claim = await ask('claim')
+    let claim = await ask('claim')
+    // Nothing covers this file yet and the extension is asking the person,
+    // in its own window, whether it may from now on. Wait for that answer
+    // the way a native picker is waited for; a decline lands in the picker.
+    if (claim?.reason === 'setup' && claim.token) claim = await ask('claim', { token: claim.token }, 120000)
     if (!claim?.ok) {
       // Say WHY. Falling through to the native picker is the safe outcome, but
       // an unexplained dialog is indistinguishable from the extension not being

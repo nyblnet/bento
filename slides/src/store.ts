@@ -2,6 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 import { inLinearFlow } from './model'
 import type { BentoDoc, Slide, SlideElement } from './model'
+import { FROM_LIVE } from './restoregate'
 
 export type StoreEvent =
   | 'doc'        // any document mutation
@@ -59,6 +60,10 @@ export class Store {
 
   get slide(): Slide {
     return this.doc.slides[this.currentIndex]
+  }
+
+  slideById(slideId: string): Slide | undefined {
+    return this.doc.slides.find(slide => slide.id === slideId)
   }
 
   element(id: string): SlideElement | undefined {
@@ -167,7 +172,17 @@ export class Store {
     if (!entry) return
     const before = this.captureView()
     to.push({ doc: JSON.stringify(this.doc), view: before })
+    const live = this.doc // identity/capability is the open file's, not undoable
     this.doc = JSON.parse(entry.doc)
+    // Undo/redo move CONTENT, never identity: keep the live docId, collab and
+    // read-only mode (restoregate's FROM_LIVE) rather than the snapshot's, so
+    // Cmd-Z can't flip sharing back on, resurrect a pre-"Duplicate as new deck"
+    // docId, or drop a present-only save's mode. One shared list, no second copy.
+    for (const k of FROM_LIVE) {
+      const v = (live as unknown as Record<string, unknown>)[k]
+      if (v !== undefined) (this.doc as unknown as Record<string, unknown>)[k] = v
+      else delete (this.doc as unknown as Record<string, unknown>)[k]
+    }
     this.reconcileView(before, entry.view)
     this.setDirty(true)
     this.emit('doc')

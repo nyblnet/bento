@@ -44,6 +44,7 @@ import type { SpacesDoc, SpaceIndex } from './model.ts'
 import { buildTagIndex } from './tags.ts'
 import { ICONS } from './icons.ts'
 import { t } from './i18n.ts'
+import { enablePinchZoom } from './touch.ts'
 
 // ————— the graph itself ————————————————————————————————————————————————————
 
@@ -381,7 +382,7 @@ export function prefersReducedMotion(): boolean {
  * shell's inflated stylesheet taught (kernel/src/save.ts serializeBody).
  */
 const CSS = `
-.sp-overlay-graph { align-items: center; padding: 14px; padding-top: 14px; }
+
 .sp-graph {
   width: min(1180px, calc(100vw - 28px));
   height: min(820px, calc(100vh - 28px));
@@ -493,11 +494,9 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
   layoutGraph(g)
   const layoutMs = performance.now() - t0
 
-  const back = mk('div', 'sp-overlay sp-overlay-graph')
-  const card = mk('div', 'sp-card sp-graph')
-  card.setAttribute('role', 'dialog')
-  card.setAttribute('aria-modal', 'true')
-  card.setAttribute('aria-label', t('Graph'))
+  // The CONTENT only. The modal around it — scrim, trap, Escape, focus return —
+  // is the kernel's dialog, which the editor wraps this in.
+  const card = mk('div', 'sp-graph')
 
   const head = mk('div', 'sp-graph-head')
   head.append(mk('h2', 'sp-card-h', t('Graph')))
@@ -523,7 +522,6 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
     t('Click a page to open it · drag to move · scroll to zoom'))
 
   card.append(head, stage, foot)
-  back.append(card)
 
   // ——— camera ———
   let scale = 1
@@ -794,9 +792,25 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
     draw()
   }, { passive: false })
 
+  // ——— two fingers ———
+  //
+  // One finger already worked: the pointer path above is pointer events, and a
+  // touch drives those. ZOOM did not — it was `wheel` alone, and a phone has no
+  // wheel, so a crowded graph could be shoved around and never scaled. Fit was
+  // the only way to change magnification and it only ever gives you one.
+  //
+  // The second finger also has to CANCEL the one-finger drag it interrupts, or
+  // the pointer path keeps panning (or worse, keeps dragging a node) underneath
+  // the pinch and the two fight over the same picture.
+  canvas.addEventListener('touchstart', (e) => { if (e.touches.length > 1) drag = null }, { passive: true })
+  enablePinchZoom(canvas, {
+    get: () => ({ scale, panX, panY }),
+    set: (s, x, y) => { scale = s; panX = x; panY = y; draw() },
+    limits: [0.12, 5],
+  })
+
   fitBtn.addEventListener('click', () => { fit(); draw() })
   closeBtn.addEventListener('click', () => opts.close())
-  back.addEventListener('click', (e) => { if (e.target === back) opts.close() })
 
   // ——— theme + size, both of which move under us ———
   const ro = new ResizeObserver(() => resize())
@@ -831,11 +845,11 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
   // Each was checked through these rather than by looking at the screen:
   // `frames: 0` beside `reveal: 1` is the proof that a graph opened in a
   // background tab still arrives. Six numbers on a node thrown away at close.
-  ;(back as unknown as { __graph: unknown }).__graph = {
+  ;(card as unknown as { __graph: unknown }).__graph = {
     nodes: g.nodes.length, edges: g.edges.length, layoutMs, reduced,
     get reveal() { return reveal },
     get frames() { return frames },
   }
 
-  return { el: back, destroy, graph: g }
+  return { el: card, destroy, graph: g }
 }

@@ -324,7 +324,7 @@ export function starterDoc(): SpacesDoc {
           b('p', 'Sending someone this file sends them <strong>the whole space</strong> — every page, including the archived one. There is no per-page permission, because there is no server to enforce one. The file <em>is</em> the capability: whoever has it can read it and can edit it.'),
           b('h2', 'Working live'),
           b('p', 'Two tabs of the same space, or two people with the same file, edit it together: changes merge per character, and the file you save carries the state, so a copy edited on a plane rejoins as a fork rather than overwriting anybody. A coloured initial sits on the page each person is reading; click somebody in the people panel to go to where they are.'),
-          b('p', 'A space goes live only when it arrived carrying a session — a file that was saved or shared — or when you start one from the button beside ⋯. A fresh space and a template stay offline. That button says which of the three situations you are in, including the usual one, which is that nothing is shared at all.'),
+          b('p', 'A space goes live only when it arrived carrying a session — a file that was saved or shared — or when you start one from the Share button in the bar. A fresh space and a template stay offline. That button says which of the three situations you are in, including the usual one, which is that nothing is shared at all.'),
           b('p', 'The awkward part: a session is a room whose keys live in the file. Whoever holds a copy holds the room, and there are no accounts to take it back from them. <strong>Rotate keys</strong> is what revocation looks like here — it mints a new room and leaves the old copies talking to nobody.'),
           b('h2', 'Comments'),
           commented,

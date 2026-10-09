@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Why the host calls each "required reason" API. App Store Connect rejects an
+  upload that calls one of these without declaring it here (ITMS-91053), so
+  this file is a submission gate, not documentation.
+
+  Every entry below names the code that needs it. Reasons were checked against
+  Apple's own reference data on 2026-10-04 rather than written from memory.
+  When the host starts calling a new API in one of these categories, add the
+  reason here in the same change; when it stops, remove it — over-declaring is
+  a review question, not a safe default.
+
+  Collected data and tracking are empty on purpose: the host's only network call
+  is the signed release fetch in Releases.swift, a plain GET carrying no
+  identifiers.
+-->
+<plist version="1.0">
+<dict>
+  <key>NSPrivacyTracking</key>
+  <false/>
+  <key>NSPrivacyTrackingDomains</key>
+  <array/>
+  <key>NSPrivacyCollectedDataTypes</key>
+  <array/>
+  <key>NSPrivacyAccessedAPITypes</key>
+  <array>
+    <!--
+      UserDefaults. FolderGrants.swift keeps the security-scoped bookmarks of
+      folders the user added to search; Releases.swift keeps the per-app release
+      floor. Both are read and written by this app only.
+      CA92.1: "read and write information that is only accessible to the app
+      itself".
+    -->
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>CA92.1</string>
+      </array>
+    </dict>
+    <!--
+      File timestamps and sizes, two distinct uses, so two reasons.
+      C617.1, files inside the app container: Releases.swift reads the
+      modification dates of the cached release shells in Application Support to
+      pick the newest one when offline.
+      3B52.1, files the user granted through the document picker:
+      LibraryIndex.swift reads modification dates and sizes of documents in
+      folders the user added, to know which ones changed since they were indexed.
+      Neither is sent off the device.
+    -->
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>C617.1</string>
+        <string>3B52.1</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

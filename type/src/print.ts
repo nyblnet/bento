@@ -29,6 +29,8 @@ import { captionIndex, docLang, fillXrefsHtml } from './xref.ts';
 import { blockStyle } from './layout.ts';
 import { docStyleCss } from './docstyles.ts';
 import { embedHtml } from './embed.ts';
+import { applyOptical, opticalOn } from './micro.ts';
+import { fieldContext, fillFieldsHtml, pagination } from './fields.ts';
 
 export interface PrintOptions {
   /** running head text; omitted = the document title */
@@ -88,6 +90,7 @@ h2 { font-size: 15.5px; font-weight: 600; margin: 24px 0 8px; hyphens: none; }
 h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: #3a3d44; hyphens: none; }
 p { margin: 0 0 10px; text-align: justify; orphans: 2; widows: 2; text-wrap: pretty; }
 p + p { text-indent: 1.4em; margin-top: -10px; padding-top: 10px; }
+.t-hang { position: relative; }   /* optical margin alignment — see micro.ts */
 .t-figure { margin: 12px 0; text-align: center; break-inside: avoid; page-break-inside: avoid; }
 .t-figure img { max-width: 100%; height: auto; }
 .t-figure[data-align="left"] { text-align: left; }
@@ -186,7 +189,14 @@ function bodyHtml(doc: TypeDoc, lang: string): string {
   // The DOM pass (numberXrefs) and this string pass fill the SAME atoms from
   // the SAME index, which is what stops the printed numbering drifting from the
   // screen's — the drift this module exists to prevent.
-  return fillXrefsHtml(out.join('\n'), captionIndex(body, lang));
+  // Fields are filled by the SAME string pass, from the SAME measurements the
+  // editor took (fields.ts `pagination()` is set by the paginated hook, and
+  // print is generated from that very pass) — so `{{page}}` prints the page the
+  // field is actually on and cannot disagree with the screen. An UNBOUND field
+  // resolves to nothing here, span and all: paper must never show the
+  // machinery. See fields.ts's header.
+  return fillFieldsHtml(fillXrefsHtml(out.join('\n'), captionIndex(body, lang)),
+                        fieldContext(doc, pagination()));
 }
 
 /**
@@ -262,6 +272,20 @@ export function printDocument(doc: TypeDoc, metrics: Metrics, opts: PrintOptions
   win.document.write(html);
   win.document.close();
   const go = () => {
+    // Optical margin alignment, in the printed document — not in
+    // buildPrintDocument, which stays a pure string function. Every page here
+    // holds a COPY of the same flow at the same width, so the pass runs once on
+    // the first copy and the result is cloned into the others: identical input,
+    // identical output, and one pass instead of one per page. The offsets are
+    // relative positioning, so the page windows still frame exactly the lines
+    // the editor's pagination chose.
+    if (opticalOn(doc)) {
+      const bodies = Array.from(win.document.querySelectorAll<HTMLElement>('.t-body'));
+      if (bodies.length) {
+        applyOptical(bodies[0], true);
+        for (let i = 1; i < bodies.length; i++) bodies[i].innerHTML = bodies[0].innerHTML;
+      }
+    }
     win.focus();
     win.print();
     // leave it a moment: removing the frame during print cancels the job in

@@ -150,14 +150,59 @@ enum Releases {
         UserDefaults.standard.set(version, forKey: "bento.tray.release-floor.\(app.id)")
     }
 
+    // MARK: - What "+" can offer
+
+    /// How long "+" waits on a channel before treating it as unreachable.
+    /// Shorter than a download's, because the user is watching a spinner, and
+    /// for this question a slow channel is the same answer as an absent one.
+    private static let probeTimeout: TimeInterval = 8
+
+    /// The apps a new document can be made from right now, in `apps` order.
+    ///
+    /// An app is offered when its channel serves a release that VERIFIES — the
+    /// same signature, app-identity and rollback-floor checks `seed` makes — or
+    /// when a verified shell for it is already cached, so "New" keeps working
+    /// offline for an app used before. A 404, a bad signature and a timeout all
+    /// mean "not offered". Offering something `seed` would then refuse is the
+    /// failure this replaces.
+    ///
+    /// It replaces an aspirational list that offered every app and answered
+    /// "has not been released yet" for the unreleased ones — which put options
+    /// in front of the user, and of App Review, that did nothing. Reading the
+    /// channels at runtime keeps what that list was for: adding an app to `apps`
+    /// is still the whole integration, and an app now appears on its own the
+    /// day its channel goes live. See docs/DECISIONS.md.
+    ///
+    /// Probes run concurrently, so "+" waits for the slowest channel, not the
+    /// sum of them. This is still only the release channel and still only when
+    /// creating a document — the one thing this host fetches.
+    static func available() async -> [App] {
+        await withTaskGroup(of: (Int, Bool).self) { group in
+            for (i, app) in apps.enumerated() {
+                group.addTask { (i, await isAvailable(app)) }
+            }
+            var offered = [Bool](repeating: false, count: apps.count)
+            for await (i, yes) in group { offered[i] = yes }
+            return apps.enumerated().filter { offered[$0.offset] }.map(\.element)
+        }
+    }
+
+    private static func isAvailable(_ app: App) async -> Bool {
+        if let raw = try? await fetch(app.manifest, timeout: probeTimeout),
+           (try? release(from: String(decoding: raw, as: UTF8.self),
+                         for: app, notBefore: floor(for: app))) != nil {
+            return true
+        }
+        return anyCached(app) != nil
+    }
+
     // MARK: - The seed
 
     /// The current signed shell for `app`, from cache when we already have it.
     static func seed(for app: App) async throws -> Data {
-        // Only slides has a published channel today; spaces and dash 404. Say so
-        // rather than surfacing an HTTP code — the app list is aspirational on
-        // purpose (adding an app here is the whole integration), so an unreleased
-        // one is an expected answer, not a fault.
+        // "+" only offers apps whose channel verified a moment ago (`available`),
+        // so a 404 here means a channel went away in between. Say so plainly
+        // rather than surfacing an HTTP code.
         let envelope: Data
         do {
             envelope = try await fetch(app.manifest)
@@ -248,12 +293,12 @@ enum Releases {
 
     // MARK: - Net
 
-    private static func fetch(_ url: String) async throws -> Data {
+    private static func fetch(_ url: String, timeout limit: TimeInterval = timeout) async throws -> Data {
         guard url.hasPrefix("https://"), let u = URL(string: url) else {
             throw Failed(message: "the release server offered a non-HTTPS build")
         }
         var req = URLRequest(url: u, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
-                             timeoutInterval: timeout)
+                             timeoutInterval: limit)
         // ASK FOR BYTES, NOT A PAGE — and this header is LOAD-BEARING, not
         // belt-and-braces. Measured against the live server 2026-08-17:
         //

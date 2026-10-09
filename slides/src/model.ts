@@ -1355,6 +1355,70 @@ export function newDoc(): BentoDoc {
   }
 }
 
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+
+/**
+ * The keys without which an element of a type cannot render — the renderer
+ * throws, rather than defaulting, when one is missing (see untrusted.ts for
+ * why the frame numbers, svg and embed are NOT here). Both gates use it:
+ * untrusted.ts drops a pasted element that lacks one, parseDoc drops a file's.
+ */
+export const REQUIRED_ELEMENT_KEYS: Readonly<Record<string, readonly string[]>> = {
+  text: ['html'],
+  shape: ['shape', 'fill'],
+  image: ['src'],
+  chart: ['option'],
+  table: ['columns', 'rows'],
+  media: ['kind', 'src'],
+}
+
+/** Can this element render? An object with a string `type` and every key its
+ *  type requires. An element of a type this version does not know passes — a
+ *  newer file's element is kept and saved back untouched. */
+const renderableElement = (e: unknown): boolean =>
+  isRecord(e) && typeof e.type === 'string' &&
+  (REQUIRED_ELEMENT_KEYS[e.type] ?? []).every((k) => e[k] !== undefined && e[k] !== null)
+
+/**
+ * Fill the fields the format REQUIRES but a hand- or agent-written document
+ * may omit: `title`, `version`, `size`, `theme` (and its four colour/face
+ * keys), and on each slide `id`, `background`, `transition`, `elements` and
+ * `notes`. A document that omitted `theme` passed parseDoc and then crashed
+ * the shell at boot — `undefined.palette` — leaving the reader on the splash
+ * for good; a missing `size` did the same on `width`. Each value comes from the
+ * editor's own defaults (newDoc, emptySlide), and ONLY where the field is
+ * absent or the wrong type: a value that is there is never touched, and keys
+ * this version does not know ride through untouched (format additivity — a
+ * newer file keeps everything). A slide that is not an object is dropped,
+ * since no version writes one, and so is an element that cannot render (not
+ * an object, no `type`, or missing a key its type requires — the same rule the
+ * paste gate applies); false when no slide is left. In place.
+ */
+function fillRequired(doc: Record<string, unknown>): boolean {
+  const base = newDoc()
+  if (typeof doc.title !== 'string') doc.title = base.title
+  if (typeof doc.version !== 'number') doc.version = base.version
+  const size = doc.size as Record<string, unknown> | undefined
+  if (!isRecord(size) || !(Number(size.width) > 0) || !(Number(size.height) > 0)) doc.size = { ...base.size }
+  if (!isRecord(doc.theme)) doc.theme = { ...base.theme }
+  else {
+    const theme = doc.theme
+    for (const k of ['background', 'color', 'accent', 'fontFamily'] as const) {
+      if (typeof theme[k] !== 'string') theme[k] = base.theme[k]
+    }
+  }
+  doc.slides = (doc.slides as unknown[]).filter(isRecord)
+  for (const s of doc.slides as Record<string, unknown>[]) {
+    const blank = emptySlide()
+    if (typeof s.id !== 'string' || !s.id) s.id = blank.id
+    if (typeof s.background !== 'string') s.background = blank.background
+    if (typeof s.transition !== 'string') s.transition = blank.transition
+    s.elements = Array.isArray(s.elements) ? s.elements.filter(renderableElement) : []
+    if (typeof s.notes !== 'string') s.notes = blank.notes
+  }
+  return (doc.slides as unknown[]).length > 0
+}
+
 export function parseDoc(json: string): BentoDoc | null {
   try {
     const doc = JSON.parse(json)
@@ -1372,7 +1436,7 @@ export function parseDoc(json: string): BentoDoc | null {
         doc.docId = newDocId()
         delete doc.collab
       }
-      return doc as BentoDoc
+      return fillRequired(doc) ? (doc as BentoDoc) : null
     }
   } catch {
     /* fall through */

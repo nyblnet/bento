@@ -17,7 +17,8 @@ import './registry.ts';   // side-effect: every feature module registers itself
 import { i18nApi } from '../../kernel/src/i18n.ts';
 import { openAbout } from './about.ts';
 import { startTheme, setTheme, themeChoice, type ThemeChoice } from '../../kernel/src/theme.ts';
-import { parseDoc, emptyDoc, uid, wordCount, type TypeDoc } from './model.ts';
+import { parseDoc, emptyDoc, uid, wordCount, withoutEmbeddedCaps, type TypeDoc } from './model.ts';
+import { gateRestored } from './restoregate.ts';
 import { Store } from './store.ts';
 import { Editor } from './editor.ts';
 import { paginate, drawPages, type Metrics } from './paginate.ts';
@@ -238,6 +239,15 @@ const showAbout = () => openAbout({
       editor.render();
       schedule();
     } catch { alert(t('That JSON could not be read.')); }
+  },
+  // A version THIS BROWSER kept — gated, never trusted for identity. See
+  // restoregate.ts for why this is not onReplaceDoc.
+  onRestoreDoc: json => {
+    const doc = gateRestored(json, store.doc);
+    if (!doc) { alert(t('That saved version could not be restored.')); return; }
+    store.replace(doc);
+    editor.render();
+    schedule();
   },
 });
 byId('mark').addEventListener('click', showAbout);
@@ -923,7 +933,10 @@ function paintTitle() {
 }
 
 async function save(forcePicker = false) {
-  const result = await saveFile(store.doc, forcePicker);
+  // Embeds leave this file without their sharing keys even if one reached the
+  // live document by a path parseDoc never saw (a peer's sync op). The
+  // document's OWN collab is kept — it is this file's.
+  const result = await saveFile(withoutEmbeddedCaps(store.doc), forcePicker);
   if (result === 'cancelled') return;
   dirty = false;
   paintTitle();
