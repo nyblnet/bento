@@ -8719,3 +8719,34 @@ for long-edge bends. Past a cap the rest is dropped with a warning. A
 statement that cannot be read is dropped whole, with a warning. Unsupported
 syntax (`click`, `linkStyle`, directives, other diagram types) produces a
 warning and never throws.
+
+## 2026-10-09 — Mermaid diagrams take the kernel diagram engine's types and geometry
+
+Supersedes one sentence of the 2026-09-26 Mermaid entry: the element types are
+no longer structural copies of slides'. Since the diagram-engine lift (#592,
+#616, #619), `spaces/src/diagram/` imports them from the kernel — `ShapeSpec`
+(shape.ts), `TipKind` (tips.ts), `Box`/`Pt`/`ConnectorSide` (geom.ts), all
+type-only — and computes with the kernel's own pure geometry:
+`connectorEndpoint` places every connector end (the exact call slides'
+`syncConnectors` makes) and `anchorsToPath` writes every curve. The module is
+still DOM-free and imports no app code. `ConnectorEnd` stays declared locally
+over `ConnectorSide`, because the kernel deliberately keeps that format type in
+slides; text elements are not in the kernel yet, so `DText` is still a copy.
+
+**Curves are written the way the curve editor writes them.** A bent connector's
+anchors are rounded to 0.01 BEFORE the Catmull-Rom handles are computed, as
+slides' `setPathAnchors` does, so its `d` is byte-for-byte what slides would
+write for the same anchors. Before, the handles were computed from unrounded
+anchors and could differ by 0.01; 13 corpus snapshots moved for that reason
+alone (no node, end or label moved). The rig now asserts
+`anchorsToPath(parseAnchors(d)) === d` for every bent connector, with a
+negative control, and checks connector ends against the kernel helper itself
+rather than a copy of its formula.
+
+**Still missing in the kernel, and not built here** (the kernel zone's):
+connector ends land on the BOUNDING BOX of every node, so an edge into a
+diamond, circle or hexagon stops short of the outline (`borderPoint` is not
+shape-aware); diamond, hexagon, cylinder and the other closed outlines are
+`path` shapes, which `isLineLike` hands to the line/curve editor; and an edge
+or node label is a free text element, because nothing binds a label to its
+element.

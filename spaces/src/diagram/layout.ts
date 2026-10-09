@@ -5,7 +5,7 @@
 // Written for mermaid.ts; pure, DOM-free and deterministic: the same input
 // gives the same output byte for byte (no randomness, no Map-order surprises:
 // every iteration order is the input order). A kernel candidate, with
-// mermaid.ts: it has zero app imports.
+// mermaid.ts: it imports nothing but the kernel's geometry TYPES.
 //
 // SUBGRAPHS, the way mermaid treats them:
 //  · a subgraph none of whose members links outside it is laid out on its own
@@ -41,9 +41,10 @@
 //     across all its layers, makes the result legal;
 //  6. the direction (TB/BT/LR/RL) is a final transform of a TB layout.
 
+import type { Box, Pt } from '../../../kernel/src/geom.ts'
+export type { Box, Pt }
+
 export type Dir = 'TB' | 'BT' | 'LR' | 'RL'
-export interface Pt { x: number; y: number }
-export interface Box { x: number; y: number; w: number; h: number }
 
 /** A node to place. `parent` is the id of the cluster it sits in (null = root). */
 export interface LNode { id: string; w: number; h: number; parent: string | null }

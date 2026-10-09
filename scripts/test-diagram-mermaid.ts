@@ -16,8 +16,12 @@
 //      source in each file's first line) and the mermaid docs. Every one must
 //      lay out with NO overlapping nodes, every connector end must sit on a
 //      real element exactly where slides' syncConnectors would put it (or the
-//      diagram jumps on its first edit), and it must be byte-for-byte the
-//      same every run and match the committed snapshot.
+//      diagram jumps on its first edit) — checked with the kernel's own
+//      connectorEndpoint, the call syncConnectors makes — every curved
+//      connector's `d` must be the bytes slides' curve writer (setPathAnchors:
+//      round the anchors, then the kernel's anchorsToPath) gives for its
+//      anchors, and it must be byte-for-byte the same every run and match the
+//      committed snapshot.
 //   2b. ROUTING. No edge is drawn through a node it does not connect, or
 //      through a subgraph box holding neither of its ends; no edge label sits
 //      on another edge; no two edges share both ends unless the source says
@@ -46,6 +50,7 @@ import {
   mermaidToDiagram, diagramToMermaid, parseMermaid, diagramLayout, makeIds, validColor, LIMITS, PALETTE,
   type DElement, type DShape, type DText, type FlowAST,
 } from '../spaces/src/diagram/mermaid.ts'
+import { anchorsToPath, boxCenter, connectorEndpoint, parseAnchors, type ConnectorSide } from '../kernel/src/geom.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const FIX = join(root, 'scripts/fixtures/mermaid-flowcharts')
@@ -59,24 +64,14 @@ function ok(cond: unknown, msg: string) {
 }
 function section(t: string) { console.log(`\n${t}`) }
 
-// --- geometry helpers (independent copies of slides' formulas) -----------------
+// --- geometry helpers ---------------------------------------------------------
+// Where a connector end belongs is the KERNEL's connectorEndpoint — the exact
+// call slides' syncConnectors makes since the diagram-engine lift — not a copy
+// of its formula here, so this cannot drift from what the editor does.
 
 type Box = { x: number; y: number; w: number; h: number }
 type Pt = { x: number; y: number }
-const center = (b: Box): Pt => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 })
-/** slides/src/editor/lineedit.ts borderPoint */
-function borderPoint(b: Box, t: Pt): Pt {
-  const c = center(b), dx = t.x - c.x, dy = t.y - c.y
-  if (!dx && !dy) return c
-  const s = Math.min(dx ? b.w / 2 / Math.abs(dx) : Infinity, dy ? b.h / 2 / Math.abs(dy) : Infinity)
-  return { x: c.x + dx * s, y: c.y + dy * s }
-}
-function sideMid(b: Box, side: string): Pt {
-  if (side === 'top') return { x: b.x + b.w / 2, y: b.y }
-  if (side === 'bottom') return { x: b.x + b.w / 2, y: b.y + b.h }
-  if (side === 'left') return { x: b.x, y: b.y + b.h / 2 }
-  return { x: b.x + b.w, y: b.y + b.h / 2 }
-}
+const center = boxCenter
 /** a connector's two ends in slide coords: line = centre ± half-width along rotation;
  *  path = first and last on-curve points of `d`, mapped out of pathBox */
 function ends(e: DShape): [Pt, Pt] {
@@ -128,12 +123,22 @@ function attachFaults(els: DElement[]): string[] {
     const A = e.from && byId.get(e.from.el), B = e.to && byId.get(e.to.el)
     if (!A || !B || A.type !== 'shape' || B.type !== 'shape' || isConn(A) || isConn(B)) { bad.push(`${e.id}: dangling`); continue }
     const [a, b] = ends(e)
-    const wa = e.from!.side && e.from!.side !== 'auto' ? sideMid(A, e.from!.side) : borderPoint(A, center(B))
-    const wb = e.to!.side && e.to!.side !== 'auto' ? sideMid(B, e.to!.side) : borderPoint(B, center(A))
+    const wa = connectorEndpoint(A, e.from!.side as ConnectorSide | undefined, center(B))
+    const wb = connectorEndpoint(B, e.to!.side as ConnectorSide | undefined, center(A))
     if (Math.hypot(a.x - wa.x, a.y - wa.y) > 0.6) bad.push(`${e.id}: start ${JSON.stringify(a)} ≠ ${JSON.stringify(wa)}`)
     if (Math.hypot(b.x - wb.x, b.y - wb.y) > 0.6) bad.push(`${e.id}: end ${JSON.stringify(b)} ≠ ${JSON.stringify(wb)}`)
   }
   return bad
+}
+/** every curved connector is what slides' curve writer would write for its own
+ *  anchors (setPathAnchors: anchors rounded, then anchorsToPath) — so the first
+ *  edit in the curve editor rewrites nothing. Self-loops (pinned sides) are
+ *  hand-drawn cubics and exempt. */
+function curveFaults(els: DElement[]): string[] {
+  return els.filter(isConn)
+    .filter((e) => e.shape === 'path' && e.from?.side === 'auto' && e.to?.side === 'auto')
+    .filter((e) => anchorsToPath(parseAnchors(e.d ?? '')) !== e.d)
+    .map((e) => e.id)
 }
 /** label html is inert: nothing but escaped text and <br> */
 function htmlFaults(els: DElement[]): string[] {
@@ -265,6 +270,15 @@ section('negative controls')
   const dangling = structuredClone(els)
   ;(dangling.find((e) => e.id === 'A-B') as DShape).to = { el: 'nope', side: 'auto' }
   ok(attachFaults(dangling).length > 0, 'attach checker catches a dangling end')
+  const bent = mermaidToDiagram('flowchart TD\nA --> B --> C --> D\nA --> D', { w: 800, h: 600 }).elements
+  const curve = bent.find((e) => e.type === 'shape' && e.shape === 'path' && e.from) as DShape | undefined
+  ok(curve && !curveFaults(bent).length, 'curve baseline: a bent connector is the curve writer\'s bytes')
+  if (curve) {
+    // nudge ONE control handle by 0.01 — the size of the rounding slip this guards
+    let k = 0
+    curve.d = curve.d!.replace(/-?\d*\.?\d+/g, (v) => (k++ === 2 ? String(Math.round((+v + 0.01) * 100) / 100) : v))
+    ok(curveFaults(bent).length > 0, 'curve checker catches a control handle 0.01 off the writer\'s')
+  }
   const escaped = structuredClone(els)
   const t = escaped.find((e) => e.type === 'text') as DText
   t.html = '<img src=x onerror=alert(1)>'
@@ -389,7 +403,7 @@ for (const f of files) {
   if (!INVALID.has(f)) ok(!r.warnings.some((w) => /could not read/.test(w)), `${f}: every statement read (${r.warnings.filter((w) => /could not read/.test(w)).join('; ')})`)
   if (!INVALID.has(f)) ok(r.ast.nodes.length > 0, `${f}: has nodes`)
   const els = r.elements
-  for (const [name, faults] of [['overlap', overlapping(els)], ['attach', attachFaults(els)], ['groups', groupFaults(els)], ['html', htmlFaults(els)], ['ids', idFaults(els)]] as const)
+  for (const [name, faults] of [['overlap', overlapping(els)], ['attach', attachFaults(els)], ['groups', groupFaults(els)], ['html', htmlFaults(els)], ['ids', idFaults(els)], ['curves', curveFaults(els)]] as const)
     ok(!faults.length, `${f}: ${name} ${faults.slice(0, 3).join(', ')}`)
   const dbl = doubled(els, r.ast)
   ok(!dbl.length, `${f}: no two edges share both ends unless declared twice (${dbl.join(', ')})`)

@@ -4,8 +4,12 @@
 // Mermaid flowcharts ⇄ an editable diagram made of slides' own elements:
 // shape nodes, text labels, and line/path connectors whose ends are anchored
 // with slides' `from`/`to` ConnectorEnd refs (syncConnectors keeps them
-// attached afterwards). Pure and DOM-free, with zero app imports, so slides can
-// import it too — a kernel candidate, beside the connector engine.
+// attached afterwards). Pure and DOM-free. The element types are the kernel
+// diagram engine's (kernel/src/shape.ts ShapeSpec, tips.ts TipKind, geom.ts
+// Box/Pt/ConnectorSide), and connector ends and curves come from the kernel's
+// own geometry (connectorEndpoint, anchorsToPath) — the very calls slides'
+// syncConnectors and curve editor make. No app imports, so slides can import
+// it too: a kernel candidate, beside the connector engine.
 //
 // The official mermaid library is megabytes and nothing may be fetched at
 // runtime (PLATFORM §1), so this is our own reading of the flowchart grammar:
@@ -26,25 +30,25 @@
 //   · slides has no edge labels; an edge label is a text element beside the
 //     edge's middle, and it does not follow the edge when nodes move.
 
+import { anchorsToPath, boxCenter, connectorEndpoint, type ConnectorSide } from '../../../kernel/src/geom.ts'
+import type { ShapeSpec } from '../../../kernel/src/shape.ts'
+import type { TipKind } from '../../../kernel/src/tips.ts'
 import { layout, type Box, type Dir, type Pt, type LEdge } from './layout.ts'
 
-// --- slides' element shapes (structural copies of slides/src/model.ts) -------
+// --- the element shapes: the kernel diagram engine's types --------------------
+// A shape node or connector is the kernel's ShapeSpec (what kernel/src/shape.ts
+// renders) plus the element frame. The connector END is still slides' model
+// type (ConnectorEnd lives in slides/src/model.ts — the kernel keeps format
+// types out and exports only its side union), so it is declared here over the
+// kernel's ConnectorSide. Text elements are not in the kernel yet; DText stays a
+// structural copy of slides' TextElement.
 
-export type Tip = 'none' | 'arrow' | 'dot' | 'bar' | 'arrow-open' | 'triangle' | 'triangle-open' | 'diamond' | 'diamond-open' | 'square' | 'circle-open'
-export interface ConnectorEnd { el: string; side?: 'auto' | 'top' | 'right' | 'bottom' | 'left' }
+export type Tip = TipKind
+export interface ConnectorEnd { el: string; side?: ConnectorSide }
 interface Base { id: string; x: number; y: number; w: number; h: number; rotation: number; opacity: number; groupId?: string; role?: string }
-export interface DShape extends Base {
+export interface DShape extends Base, ShapeSpec {
   type: 'shape'
-  shape: 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'
-  fill: string
-  stroke: string
-  strokeWidth: number
   radius: number
-  strokeStyle?: 'solid' | 'dashed' | 'dotted'
-  lineStart?: Tip
-  lineEnd?: Tip
-  d?: string
-  pathBox?: [number, number, number, number]
   from?: ConnectorEnd
   to?: ConnectorEnd
 }
@@ -475,22 +479,18 @@ const PATHS: Partial<Record<NodeShape, string>> = {
 // how much of the node's width the label may use, and extra height
 const INNER: Partial<Record<NodeShape, number>> = { diamond: 0.75, hexagon: 0.7, 'lean-r': 0.7, 'lean-l': 0.7, 'trap-b': 0.7, 'trap-t': 0.7, odd: 0.85, subroutine: 0.84, tri: 0.5, circle: 0.72, dblcircle: 0.62 }
 
-function center(b: Box): Pt { return { x: b.x + b.w / 2, y: b.y + b.h / 2 } }
-/** slides' lineedit.borderPoint: where the ray from b's centre toward t leaves b */
-function border(b: Box, t: Pt): Pt {
-  const c = center(b), dx = t.x - c.x, dy = t.y - c.y
-  if (!dx && !dy) return c
-  const s = Math.min(dx ? b.w / 2 / Math.abs(dx) : Infinity, dy ? b.h / 2 / Math.abs(dy) : Infinity)
-  return { x: r2(c.x + dx * s), y: r2(c.y + dy * s) }
+const center = boxCenter
+/** Where syncConnectors puts a connector end on box b, toward t (kernel geom:
+ *  connectorEndpoint — today the bounding-box border, for every node kind). */
+function border(b: Box, t: Pt, side: ConnectorSide = 'auto'): Pt {
+  const p = connectorEndpoint(b, side, t)
+  return { x: r2(p.x), y: r2(p.y) }
 }
-/** slides' patheditor.anchorsToPath (Catmull-Rom → cubic), relative to (ox, oy) */
+/** A curve through pts, relative to (ox, oy), written the way slides'
+ *  setPathAnchors writes one: anchors rounded to 0.01 FIRST, then the kernel's
+ *  anchorsToPath (Catmull-Rom → cubic). So the bytes are the curve editor's own. */
 function smooth(pts: Pt[], ox: number, oy: number): string {
-  const P = (i: number) => pts[Math.max(0, Math.min(pts.length - 1, i))]
-  const f = (x: number, y: number) => `${r2(x - ox)} ${r2(y - oy)}`
-  let d = `M ${f(pts[0].x, pts[0].y)}`
-  for (let i = 0; i < pts.length - 1; i++)
-    d += ` C ${f(P(i).x + (P(i + 1).x - P(i - 1).x) / 6, P(i).y + (P(i + 1).y - P(i - 1).y) / 6)} ${f(P(i + 1).x - (P(i + 2).x - P(i).x) / 6, P(i + 1).y - (P(i + 2).y - P(i).y) / 6)} ${f(P(i + 1).x, P(i + 1).y)}`
-  return d
+  return anchorsToPath(pts.map((p) => ({ x: r2(p.x - ox), y: r2(p.y - oy) })))
 }
 const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>')
 
