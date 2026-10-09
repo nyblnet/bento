@@ -14,6 +14,42 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-10-05 — Android meets the `launchQueue` rules, and a reload also forgets its Save-As copies
+
+**Decision.** Android implements the two host rules from the entry below: a
+`begin` marked `launch: true` that it cannot meet — a read-only grant (the usual
+`ACTION_VIEW` from mail) or a document already handed out — is answered **no**,
+before the export branch; and a main-frame `onPageStarted` (WebView's
+equivalent of iOS's `didCommit`; fragment changes and `pushState` do not fire it)
+lets the new page claim the open document again.
+
+**The same hook forgets the old page's Save-As copies** — the second reset in
+the entry below, which both hosts make. On Android the copies are #595's
+`exportTargets`, keyed by the name a handle was vended under; a new page holds
+no such handle, so without the reset its first export vended under the same name
+would be written straight into the previous page's copy, without a picker. Found
+on Android first (case 4 below); iOS made the same reset in #635.
+
+**The symptom, measured rather than predicted** (emulator, Android 16, the
+#635 bridge, `setConsumer` called the way the kernel will). Without the refusal
+a read-only document does not prompt *at open*: `begin` only vends a name, so
+the page is handed an export handle (`deck.bento.html`) and the **first write**
+— the kernel's first autosave after any edit — opens a save dialog unprompted.
+Without the reset, a writable document's first ⌘S after a reload opens a
+picker instead of saving in place. With both, every case passed: read-only
+refuses (consumer never called, no picker, ⌘S still offers Save-As, original
+untouched); writable hands over `viewtest.bento.html` and a write through it
+lands in place; after a reload the consumer is handed the document again and
+⌘S saves in place; after a reload a read-only page's save asks again rather than
+writing the previous copy.
+
+**Guarded by** `scripts/test-home-bridge.ts` — four Android shape checks beside
+iOS's: the refusal exists, precedes the export branch, and the page-start hook
+resets both the hand-over and the remembered copies. All four fail against the
+pre-change `EditorActivity.kt`.
+
+---
+
 ## 2026-10-05 — A native host hands the page the file it opened, through `launchQueue`
 
 **Decision.** `home/bridge.js` (iOS and Android) defines `window.launchQueue`. When
@@ -6616,6 +6652,57 @@ mapped, 1 correctly absent, run by bento-team-slides.
 
 Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
 
+## 2026-09-09 — a derived column is never an independent axis, and a view that ignores the filter is worse than no view
+
+**bento/dash keeps its 3D view.** The cut was proposed with numbers — 2,240
+lines across `viz3d.ts` and `gl.ts`, and a starter plot that looked like it said
+nothing — and declined by the maintainer: *"I think 3d is a wow feature of dash
+that excel doesn't have."* This entry records the decision and, more usefully,
+what the investigation behind it turned out to have been measuring.
+
+**The strongest argument for cutting was a DEFAULT-BINDING bug, not a property
+of three dimensions.** `defaultViz3d` bound the first three numeric columns in
+declaration order. On `sheet-pipeline` — the workbook every new user meets —
+those are Value, Probability and Weighted, and `weighted` is
+`formula: 'value * prob'`. So the first 3D plot anyone saw was x = Value,
+y = Probability, **z = Value × Probability**: a surface drawn as a cloud, in
+which the third dimension carried nothing the first two did not. The feature was
+being judged on a demo defect. *(Found by bento-team-lead.)*
+
+**The rule, which generalises past this view.** A column with a `formula` is a
+function of columns already on the sheet, so using one as an axis plots a
+variable against itself. Stored columns are preferred for x/y/z; a derived one
+may still colour or size the points, where being derived is informative rather
+than degenerate. It is a preference and not a ban — a sheet whose numeric
+columns are all computed is still better plotted than refused.
+
+**A preference alone was not enough, and that is the more interesting half.**
+The starter has only TWO stored measures, so the third axis fell to the derived
+column regardless: there is no honest scatter of that sheet to pick. When fewer
+than three independent measures exist and there are two categories to group by,
+the default is now 3D BARS — a category × category × measure grid, which is both
+truthful about the data and the thing a spreadsheet cannot draw. A degenerate
+scatter drawn ahead of a truthful grid was the default arguing against its own
+feature.
+
+**Two ordinary faults, both of the same family this repo keeps finding.**
+`draw3d` subscribed to `doc` and not `view`, so filtering changed the grid, the
+status bar, the footer and the 2D chart and left the plot showing every row —
+the same failure as the footer that ignored the filter, in the panel beside the
+one where it was fixed, because the fix went into `drawChart` and never crossed.
+And `overlaySvg` — axis titles, legend, and the count of rows dropped for having
+no value — had exactly one call site, inside the SVG fallback, so a machine that
+could NOT do WebGL2 got the labelled picture and every ordinary browser got a
+bare canvas. The dropped-row count is the load-bearing half: nulls are dropped
+rather than zeroed (correct — a zero is a crater, and craters look like
+findings), and the primary renderer never said so.
+
+**The view vector is projected inside `buildScene`, not at the call site**, for
+the reason `chart.ts` already gives: it applies to every bound column or to
+none. The builders zip x, y, z, colour and size by index; project one and not
+another and the plot pairs the wrong height with the wrong position, plausibly.
+
+
 ## 2026-09-13 — Broadcast is a special case of collaboration: the relay half
 
 **Decision.** A live show is not a second transport. An audience member is a
@@ -8164,6 +8251,118 @@ size limit must be enforced DURING decompression, never after; the declared
 size in a container header is an attacker input, and the primitive, not the
 caller's preflight, must hold the ceiling.
 
+## 2026-10-04 — dash adopts the kernel SaveQueue; the queue also orders handle swaps
+
+Dash takes the kernel's `SaveQueue` (#579) directly, replacing #538's
+app-local approach, through `dash/src/saving.ts` — the same shape spaces took in
+#580. Recorded here because three of its rules are not obvious from the kernel's
+contract, and the second applies to every app.
+
+- **Every write to the open file, and every change of which file is open, goes
+  through one queue per store.** ⌘S, the Save menu, automatic write-back, the
+  in-place self-update, and a dropped file adopting its handle. The drop was
+  the surprise: the kernel's write reads its held handle AFTER the serializer
+  awaits, so a handle swap during an in-flight write sends the OLD document into
+  the NEW file. `afterPendingWrites` waits for the queue, then swaps in the
+  continuation, which runs before the next queued task starts (that task is
+  chained on `tail.catch`, a tick later); stale writes for the old document are
+  then discarded by the queue's identity check. The swap is deliberately not a
+  queued task, because the queue skips tasks whose document was replaced, and a
+  swap must never be skipped.
+- **The revision advances on every `doc` event and on `touch()`.** `touch()`
+  covers the writes that go straight onto the document without an event:
+  document properties, credential minting for a new workbook, and sharing
+  start/stop/rotate (which call `markUnsaved()`, itself a `touch()`, since #597).
+- **An in-place update marks the session `superseded` inside the queued write.**
+  This page is the old shell, so any later write would downgrade the file.
+  Setting the flag after the write resolves is one tick too late: the next
+  queued write has already started. The rig carries that as a control.
+- A ⌘S that DOWNLOADS (no in-place save) still clears the dot, but is not
+  adopted as the file's content. Exports (template, read-only copy) do not
+  touch the open handle and stay outside the queue.
+
+
+## 2026-09-26 — Spaces adopts the kernel menu; an anchored menu is the primitive mounted over its anchor
+
+**Every menu in bento/spaces is `createMenu` (kernel/src/ui/menu.ts), through
+one adapter, `spaces/src/menus.ts`.** That covers the topbar dropdowns (Insert,
+⋯, the save caret) and the nine anchored popovers that were menus: the block and
+page ⋯ menus, a view's group, sort, filter and source, a select field's options,
+a code block's language, a callout's tone, and "Add a property". Spaces' own
+`dropdown()`, `menuItem()`, `trapAndClose()` and every per-popover `mousedown`
+away-listener are deleted. `scripts/test-spaces-chrome.ts` asserts that the
+adapter is the only spaces file importing the kernel menu, and drives the
+built shell with trusted CDP input.
+
+**Why adopt the primitive, and not fix spaces' copies.** Measured on the built
+shell before the change:
+- No menu had arrow keys.
+- A popover closed by Escape left its away-listener on the document. That
+  listener closed the next overlay on its first mousedown, even a press inside
+  it. Escape a block menu, press ⌘K, click in the search card, and the search
+  closed.
+- The phone ⋯ menu was 950px tall in an 844px viewport, and its last three rows
+  were unreachable.
+- At 1440×900 the Insert menu ran 10px off the bottom of the window.
+
+The kernel's rig already proves Escape with focus return, arrows, `aria-expanded`,
+outside-press, mutual exclusion and a single delegated listener pair. Adopting
+the primitive gets all of it. Fixing four copies would have left four copies.
+
+**The anchored mode is composition, not a fork.** The kernel positions a menu
+under its own trigger in CSS. `anchoredMenu()` mounts the menu's wrapper
+`position: fixed` exactly over the anchor with the trigger hidden. It places the
+popup against the viewport with the rules the old `place()` used: flip above
+when there is more room, cap the height to the room available, clamp to the
+edges. Below the drawer breakpoint the popup is a bottom sheet. The primitive
+has no close callback, so the adapter observes the wrapper's `bkm-open` class.
+That is the one signal every close path shares: a row, Escape, an outside
+press, another menu opening. The observer tears the menu down, calls `onClose`
+exactly once, and returns focus to the anchor if focus was inside the menu.
+
+**What stays a popover, and why.** These keep spaces' `.sp-pop` and are not
+menus:
+- the `/` block filter, a combobox whose input keeps focus;
+- the icon grid;
+- a free-text field value;
+- the share panel;
+- a comment thread.
+
+They go through one helper, `float()`. It registers its Escape handler, its
+away-listener and its resize reflow in a teardown list that `closeOverlay()`
+always runs, so no path leaves a listener behind. A panel of controls announces
+`role="dialog"`, not `role="menu"`. The share panel and the thread said "menu"
+while holding a textarea.
+
+**A modal owns the keyboard.** The editor's keymap returns before reading any
+global shortcut while an `[aria-modal="true"]` element exists. Before this, `[`
+toggled the page list behind About (and persisted that choice), and `?` stacked
+a second modal.
+
+**The rulings applied here** (maintainer, 2026-09-25):
+- **D2:** a visible second line only where a row has a consequence (Save-as,
+  the page menu's archive, width and delete, "Make this page an issue");
+  command lists are one line.
+- **D5:** 44px menu rows under a coarse pointer.
+- **D7:** ⋯, not ⋮.
+- **D8:** shortcuts right-aligned in the UI face, in ⌃⌥⇧⌘ order, from one
+  helper (`keys()`); hidden where the pointer is coarse.
+
+The chrome scale uses the names of the shared token sheet. That sheet is not
+merged, so spaces does not depend on it; adopting it later deletes spaces'
+unthemed `:root` scale block.
+
+**Gaps the kernel menu has, written down for the kernel rather than forked
+here:**
+- an anchored mode with viewport-aware placement;
+- a close callback;
+- a right-aligned shortcut slot on a row;
+- `role` and `aria-checked` options for `menuitemcheckbox` and
+  `menuitemradio` rows (the adapter sets them after `item()` returns).
+
+**Cost:** +2,041 B of shell (282,586 → 284,627, both built with `ZOPFLI=0`).
+The kernel sheet carries rules spaces never needed (the scrolling bar, nested
+menus). The kernel file's own header predicted a slightly bigger shell.
 ## 2026-10-05 — An embed keeps the source document, never its capabilities (type)
 
 **An embedded document's `collab` block — that document's sharing keys — does
@@ -8250,3 +8449,353 @@ a pure string function; `printDocument` applies the pass to the first page's
 flow and clones the result into the others, which are copies of the same flow at
 the same width. `printHtml()` — the scripted surface — therefore returns
 un-hung markup, by design.
+## 2026-09-26 — Spaces adopts the kernel dialog and panel; spaces keeps panel persistence
+
+**Every modal in bento/spaces is `createDialog`** (kernel/src/ui/dialog.ts):
+About, the shortcut sheet, Search, Link to page, Link card, Import and its
+reports, Export page as a space, Print, and the graph. The graph's module now
+returns its content, and the editor wraps it. Spaces' `.sp-overlay`/`.sp-card`
+shell, its per-dialog Escape and Tab handlers, and About's hand-written focus
+trap are deleted. `scripts/test-spaces-chrome.ts` asserts that no spaces file
+builds a modal by hand.
+
+What this fixed, measured on the built shell:
+- Tab left the Import dialog 23 times in 25.
+- Escape worked only while focus was inside the card.
+- The shortcut sheet focused its own card and ringed the whole dialog.
+
+The dialog heading is the primitive's `.bkd-title` at 17px/650 (D4). Section
+captions keep the 11px uppercase style. About has no visible title: the suite's
+lockup heads it, as in slides, and the dialog is named by `aria-label`.
+
+**Both side panels are `createPanel`** (kernel/src/ui/panel.ts), with
+`drawerBelow: 820`. That is the per-app parameter D6 rules for; slides uses
+700. Spaces' two hand-copied resizers, chevrons and phone drawer rules are
+deleted.
+
+**Persistence stays in spaces.** The panels get no `storageKey`. The primitive
+persists `collapsed` in drawer mode too. A phone drawer shut by following a
+link would then become the desktop preference, and the page list would stay
+shut on every later desktop open. That is the bug `closeDrawer()` was written
+to prevent. Instead, the editor writes the keys readers already have
+(`bento-sp-pane`, `bento-sp-pane-closed`, `bento-sp-insp`,
+`bento-sp-insp-closed`), and only while a panel is a column. Nothing migrates,
+and no reader's layout resets. The primitive has no scrim, so spaces adds one
+behind an open drawer. A drawer you can shut only from the button that opened
+it gets left open over the page.
+
+**Kernel gaps, written down rather than forked:**
+- `createPanel` should not persist while it is a drawer.
+- `createPanel` needs an optional scrim.
+- The panel's chevron needs a localizable label. Spaces sets `title` and
+  `aria-label` after creation.
+
+**Cost:** +1,234 B of shell (284,627 → 285,861, `ZOPFLI=0`). The deleted
+dialog and panel code is smaller than the kernel sheets that replace it.
+
+## 2026-09-26 — Spaces has two levels of transient message; phone targets are 44px
+
+**D3 in spaces: `status()` and `notice()`.**
+- The bar's status line stays the first level. It holds ambient state that is
+  true for a moment: "Edited", "Saved", "Editing", "Reading view".
+- `Editor.notice()` is the second level: a pill at the foot of the window,
+  `role=status`, above dialogs (`--z-toast` 1100), like slides' toast. It is
+  for messages the reader must not miss:
+  - a sync refusal (`syncNoticeText`);
+  - a read or import failure;
+  - a refused move;
+  - a copy or export written;
+  - a viewer preference that now applies to every page.
+
+Before this, both levels were the same 12px `--muted` line that fades in under
+two seconds. On a phone that line sits over the title strip. A future message
+picks its level by that test: if missing it would leave the reader wrong about
+their file, it is a notice. The kernel has no notice primitive yet. When one
+lands, this method is the only caller to move.
+
+**D5 in spaces:** under a coarse pointer the bar's buttons, the Live control,
+the page-tree rows and their ⋯, the format bar and every menu row are 44px
+(`--tap`). The bar was 40px.
+
+## 2026-09-26 — The spaces top bar is slides' bar, and the fit is one algorithm
+
+The maintainer's complaint was that spaces' interface "is not fully following
+slides", and the chrome work before this barely touched the bar. Measured on
+the #565 build at 1440: padding 8/12 against slides' 8/14, gap 6 against 10,
+groups at 2 and 4 against 6, a bold 136×30 wordmark button against slides'
+15px/400 lockup, a 240px semibold title with an 8px corner against 220px,
+regular, 6px. Each of those is slides' value now, and
+`scripts/test-spaces-chrome.ts` reads the padding, the gap, the title floor and
+the phone width out of SLIDES' SOURCE and compares, so the two cannot part
+silently.
+
+**Language and Help are in the bar, as in slides.** The globe opens the list
+slides' globe shows (`localeChoices()`, the one in force ticked,
+`menuitemradio`), and choosing one rebuilds the chrome. Slides' last row,
+"Manage languages…", has no spaces counterpart because spaces has no language
+packs. When the bar folds, both move into ⋯ as rows. "Keyboard shortcuts" is no
+longer in ⋯ at widths where `?` is on screen: one home per command per width.
+
+**One fit, shaped for the kernel.** `spaces/src/topbar.ts`
+(`createTopbarFit`) is slides' `fitTopbar` with the app taken out: tier
+classes, the title, and the "a menu is open" test are options. The hand-copy it
+replaces had drifted in three ways (§3.2 of the chrome audit): a 110px title
+floor where slides uses 120, a fold on a squeezed title rather than on real
+overflow, and no phone rule. So spaces changed tier at 800/720/600 where slides
+changes at 1360/880/720. Now it follows slides' rules:
+- compact and tight step down while the bar overflows or the title is under
+  120px;
+- fold waits for true overflow;
+- at 700px or below the bar folds unconditionally.
+
+Spaces has fewer controls, so its measured thresholds are 900/800/700.
+
+**Below the fold's floor the bar scrolls** (≤700px). A folded spaces bar needs
+about 370px (measured: ⋯ ends at 366 plus 6px padding). The app root clips, so without this the excess was cut off with ⋯
+inside it. A scroll container clips both axes, so the bar's menus go
+`position: fixed` under `--sp-bar-bottom`, which the fit publishes. The bar
+takes no `z-index`, so it never becomes a ceiling for them (slides' hard-won
+detail 9).
+
+**This reverses one line of 2026-08-10:** a phone no longer gives up the
+wordmark. The mark stays in the corner, as slides' does, and it is a 44px
+target there because it is a button (D5). Undo and redo stay in ⋯ on a phone,
+as that entry ruled. The Pages button moves from before the mark to after the
+title, where slides puts its Slides button.
+
+A kernel line proposes `kernel/src/ui/topbar.ts`. When it lands, this file
+becomes an import and slides' `fitTopbar` its second caller.
+
+## 2026-09-26 — What opens from the spaces bar is slides': the Save menu holds the file's commands, ⋯ is fold-only
+
+**The maintainer's ruling:** "when I talk about the top bar, I mean everything
+about it." #567 matched the bar's own geometry; the menus, popovers and dialogs
+it opens still looked and were organised differently. Spaces' ⋯ had 13.5px/600
+`--ink` rows with no separators and a two-line row; the Save caret had three
+rows; the rest of the file's commands were scattered through ⋯ and About.
+
+**Look.** Every surface is measured against slides (#568's build) and set to
+its values through the kernel primitives' hooks, never a fork: the menu rows
+(13px/400 `--ink-2`, 16px icons in the same ink, `6px 9px` with a 1px
+transparent frame, 6px gap, 8px corners, 30px tall, 44px under 700px), the list
+(4px padding, 4px off the trigger, slides' shadow, 3px 2px separators), the
+Save menu at 12.5px, the Share popover (`.ed-share-pop` section for section),
+the dialogs (`.ed-about`: no frame, 20px in, 440 wide, slides' shadow and
+scrim; the shortcut sheet 700), the notice (`.ed-toast`), and the split Save
+button (#568's primary split). The values live in ONE block per surface in
+spaces/src/styles.css, and scripts/test-spaces-chrome.ts reads slides' menu
+numbers out of slides' stylesheet and holds the computed values to them. In
+dark, what opens from the bar uses slides' surface family (`--pop-bg`
+`#21262e`, `--pop-line`, `--pop-hover`), a step lighter than spaces' panels.
+
+**Where D-rulings and slides disagreed, the ruling won — and slides then
+moved to it (#573).** D2 makes Save and Share consequence menus: every row
+carries a visible second line (12px/1.35 `--muted`, 2px under the name), wired
+as the row's DESCRIPTION through `aria-describedby`, the name alone its
+accessible name — spaces' `menus.ts row()` and the Share actions do exactly
+what slides' `menuLabel` does. D4 dialog titles are 17px/650 in both; D8 help
+shortcuts are sans and right-aligned in both. The keyboard ring is the
+kernel's in both: 2px `--accent-ink`, OUTSIDE (+2px) on bar and dialog buttons,
+INSIDE (−2px) on rows in a list. The dark menu shadow is `0 8px 24px rgb(0 0 0
+/ .5)`; spaces carries it as a `--pop-shadow` token defined in both of its dark
+blocks, so dark chosen by the OS and dark picked in About both get it. The Save
+list is `min(264px, 100vw − 16px)` wide and scrolls in the room under the bar
+(`100dvh − --sp-bar-bottom − 12px`).
+
+**Organisation — slides' map, command for command:**
+
+- **Save ▾** holds everything that acts on the FILE, in slides' order: Save a
+  copy, Duplicate as a new space (was About), the exports (Markdown, page as a
+  space; the tour's page as slides), Encrypt with password / Change / Remove
+  (was About → Password, a `prompt()`; now slides' two-field dialog), a rule,
+  Version history (was About → History; now its own dialog), Copy document
+  JSON (was About), Replace from JSON (was About → Careful; own dialog), and
+  Import Markdown… (was ⋯ and About). Slides has no import; importing is the
+  document arriving as data, so it sits beside Replace from JSON, the one
+  command of that kind slides has. Slides' Copy compact JSON and Start from
+  scratch have no spaces equivalent and are not invented here.
+- **⋯ exists only once the bar has folded**, as slides' does, and holds what
+  slides' holds: the controls the bar gave up, in bar order, then the Save
+  list. This reverses the #563 reading that ⋯ was "a home at every width".
+- **Commands slides has no equivalent for go where slides puts one of their
+  kind.** New page, Today's journal, New issue: things you ADD, so the foot of
+  ＋ Insert after a rule — slides' insert group ends on Comment, its one tool
+  that is not an element (the tour's Templates… joins them). Graph: a VIEW, so
+  a bar button beside Reading view. Print or save as PDF: slides' PDF button,
+  so a bar button in the same place. "Make this page an issue": acts on ONE
+  page, so the page's own ⋯ menu, where slides keeps what acts on one slide.
+  About: the wordmark, its only route in slides.
+- **About holds what slides' About holds**: the head, updates, the viewer's
+  appearance and language, then the file's numbers and the document's
+  properties (the tour's Design picker stays: it is a document property).
+
+Nothing was deleted. The rig walks every bar button, every bar menu row, the
+page menu and every About button on the #567 shell, and asserts each is still
+reachable at the same width — under its own name or slides' name for it
+(Set a password… → Encrypt with password…).
+
+**Kernel defaults that differ from slides'** (proposed to the kernel as
+defaults, so slides can adopt the kernel menu without changing its look):
+offset 6 → 4, list padding 5 → 4, row padding `7px 9px` → `6px 9px`, row gap
+9 → 6, row frame 0 → 1px transparent, row radius 7 → 8, icon ink `--muted` →
+row ink, min-width 200 → 150, shadow `0 12px 32px /.16` → `0 8px 24px /.14`,
+separator margin `4px 6px` → `3px 2px`, no pressed state → `--line`, a dark
+shadow of `0 8px 24px rgb(0 0 0 / .5)`, `.bkm-hint` 12px/1.35 with 2px above and
+an `aria-describedby` wiring from the row; row text
+not nowrap (a start-anchored list then shrinks to its min-width and wraps
+names); a scrolling list lets its 1px separators shrink to nothing. Dialog:
+frame 1px → none, padding `20px 22px` → 20px, shadow and scrim to slides'.
+
+## 2026-09-26 — D2 revised for the Save menu: one-line rows, the description as a tooltip
+
+**The maintainer's ruling:** "We can make the save menu even closer to slides,
+all the extra text describing the entry can be mouseovers."
+
+This revises D2 (descriptions visible on consequential menus) for **Save ▾
+only**. Its rows go back to one line — 30px, 12.5px/400, slides' `.ed-save-menu
+.ed-btn` — and what each row does becomes its hover tooltip: the native `title`
+on the row, as slides' Save rows (slides #573 made the same change).
+
+Accessibility is kept, not traded: the same text stays the row's accessible
+DESCRIPTION through `aria-describedby`, pointing at a visually hidden element
+inside the row (`.sp-vh`, slides' `.ed-sr-only` rules), while `aria-label`
+keeps the command's name alone. With `aria-describedby` present, `title` is not
+also announced as the description.
+
+**Touch has no hover, and slides has nothing for it** — a tooltip simply never
+appears under a finger in either app. So on a phone or tablet the description
+is available only to a screen reader. That is recorded rather than filled with
+new UI here; if it matters, it is a suite question (both apps at once).
+
+**Share keeps its drawn second line** (the ruling named the Save menu), in both
+apps. Next to it the two popovers now differ in density: Save is a list of
+one-line commands, Share a stack of described buttons. Share was already a
+different object (framed buttons, a form, a status line), so the difference
+reads as two kinds of surface rather than one inconsistency.
+
+`scripts/test-spaces-chrome.ts` holds every Save row to one 30px line whose
+`title` equals its `aria-describedby` text, that element ≤ 1×1 and inside the
+row, and the name alone as `aria-label`.
+
+## 2026-09-26 — D2 revised for Share too: one-line actions, the description as a tooltip
+
+**The maintainer's ruling, confirmed directly:** "Yes, share should be 1 line
+as well." It reached spaces first as a relay from the slides session (slides
+#573, 36465bf1), and the maintainer then confirmed it directly; this entry
+records it as the maintainer's own ruling.
+
+Share's actions take exactly the Save rows' shape (the entry above): one line,
+with the description as the native `title` on the action, the name alone as
+`aria-label`, and the description again as a visually hidden element inside
+the action, referenced by `aria-describedby`. The popover sits at slides'
+250px. This supersedes the previous entry's "Share keeps its drawn second line".
+
+So no surface opened from the bar draws a second-line description any more,
+in either app; D2's visible descriptions survive only in menus that are not
+the bar's (the page menu's width choices, "Make this page an issue").
+`scripts/test-spaces-chrome.ts` holds Save and Share to the same row-shape
+assertion, and walks Insert, Save, Language and Share for anything drawn.
+The touch caveat of the entry above applies to Share as well.
+
+## 2026-09-26 — Share's actions are plain menu rows
+
+**The maintainer's ruling, confirmed directly:** "Yes it's what I asked for."
+It first came as a relay from slides #573 (cea2fa26), where the maintainer is
+reported to have said the Share panel "looks a lot cleaner without" the boxes.
+
+Share's actions are menu rows like Save's — slides' `.ed-btn` in a menu:
+12.5px, one 30px line, `6px 9px` inside a transparent 1px frame, a hover fill
+(`--pop-hover`) and nothing at rest. There is no ink-filled primary on
+"Invite to edit…" any more. Adjacent action rows touch; the popover's other
+sections (your name, People, the status line) keep its 7px gap, and the rule
+before the session controls keeps 7px either side as slides' does. The boxed
+buttons (a 2026-07-20 choice in slides, so actions would not read as text among
+the notes) are retired: the SHARE A COPY caption and the icons do that job.
+
+`scripts/test-spaces-chrome.ts` asserts no fill or frame at rest, no primary,
+the Save rows' size and padding, and adjacent actions touching.
+
+
+The session action is labelled **"Go live"**, slides' own string, with slides'
+translations copied verbatim into all eight catalogs — the maintainer: "Use
+Slides as the reference, so we should say Go live as well." (It read "Start
+live session".) bento/dash still says "Start live session"; that is dash's to
+align.
+
+## 2026-09-26 — spaces' bar labels are slides' labels
+
+**The maintainer's ruling:** "yes, let's go with the recommendation you came
+up with on the labels". The rule behind it is the standing one: slides is the
+reference for spaces' chrome in look, organisation and wording.
+
+Where slides has the same control, spaces now uses slides' string, and its
+eight translations are copied verbatim from `slides/src/i18n/`. Checked
+against slides at #573's head:
+
+- the `?` sheet, its button and the ⋯ row: "Keyboard shortcuts" → "Shortcuts & tips";
+- the ⋯ trigger: "More" → "More actions";
+- the Print button and its ⋯ row: "Print or save as PDF" → "Export PDF (print)".
+  The dialog it opens keeps its own title, "Print or save as PDF", because
+  the dialog is where that choice is made. Slides has no dialog at this step.
+
+Where slides' string names the app or the document, spaces keeps slides'
+structure and puts in its own nouns. These are new strings, translated here:
+
+- the Save caret: "Other ways to save" → "Save as… — copy, new space, password";
+- the wordmark: "About this space" → "About bento/spaces — version, updates,
+  licenses". It is now also the mark's `aria-label`, as in slides, because the
+  word beside the mark is hidden at the tight tier;
+- the Save row: "Duplicate as a new space…" → "Duplicate as new space…".
+
+These are unchanged on purpose: "Remove password…" keeps its confirmation
+dialog, and "Properties" stays.
+
+## 2026-09-26 — spaces' insert tools are slides' insert group
+
+**The maintainer:** "I think having one Insert menu is the wrong shape." The
+design he approved replaces spaces' single "＋ Insert" menu with slides'
+shape. That menu had 21 rows mixing block insertion, new-page actions and a
+copy of `/`.
+
+- **One button per kind, a menu only where the kind has variants.** The kinds
+  are Text ▾, Image ▾, Table, Chart, View ▾, Code, Embed, then Comment, as
+  slides ends its group. Text holds the paragraph, headings, quote, callout,
+  toggle, the three lists and the divider. Image holds image, video, audio,
+  then a link card and a page card. View holds the layouts of a saved view,
+  then Canvas. Canvas is a surface you arrange by hand, not a view of the
+  issues, and it waits there for the diagram family.
+- **One table decides it: `spaces/src/inserts.ts`.** The bar group, the folded
+  ⋯ and the `/` menu all read it, so they cannot offer different families,
+  orders or names. A family whose block type the build lacks is left out, and
+  a family left with one member is a plain button. Chart and Embed therefore
+  appear on a build that has those blocks, and Code grows a menu the day maths
+  joins it, with no other change. The diagram block will be one entry.
+- **Where a new block goes is where you are working**, as slides places a new
+  element on the slide you are on. It goes after the block holding the caret
+  (or last clicked), as that block's sibling and after anything nested in it.
+  With no caret on the page it goes at the end. It is one commit, so one undo
+  takes it away, and the caret lands in it. A page card opens its picker
+  first, so Escape inserts nothing rather than a card pointing at no page.
+- **The bar's Comment** comments on the block holding the caret, or on the
+  page. Spaces has no free-position comments, so there is no armed mode as in
+  slides.
+- **Look and tiers are slides'.** The buttons are slides' `.ed-btn`: icon and
+  word, 30px, 6px apart. The menus are slides' Shape menu. Like every other
+  label, the words go at the compact tier. At the fold tier the whole group
+  moves into ⋯: each family with variants under its caption, a rule before a
+  run of one-member kinds, then Comment. Reading view hides the group.
+- **New pages leave Insert.** New page, Today's journal and New issue are on a
+  ＋ ▾ split at the head of the page list, with their shortcuts. ＋ alone is
+  still New page. A page is added to the space, not inserted into the page
+  you are on.
+- `/` and the gutter ＋ are unchanged as paths. `/` lists the same families
+  in the same order under the same names, with the same captions.
+
+Spaces' bar now folds at a wider window than slides' does. This is measured,
+not chosen: the group adds five icons to a right group that was already longer
+than slides'. `scripts/test-spaces-chrome.ts` reads slides' `.ed-btn`,
+`.ed-group`, `.ed-menu` and icon size from slides' source. It holds the insert
+buttons and menus to those values, and checks that every member lands after
+the caret's block and is undone in one step. It also checks that `/` agrees
+with the bar, that the tiers drop the words and fold the group, and that every
+command is still reachable from its new home.
