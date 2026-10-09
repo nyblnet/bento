@@ -535,6 +535,125 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   all before this, at any width: ⇥ and ⇧⇥ were their only gesture, and a phone
   keyboard has neither. ⌘/ opens the menu from the keyboard, since the gutter is
   hover-revealed and ⇥ inside a block is indent.
+- **A page with no cover gets a procedural one — on the home page and on every
+  gallery card, and nowhere else.** A gradient plus a geometric figure (orbs,
+  bands, a dot lattice, rings, facets or waves), seeded from the page id, drawn
+  at render time and never written into the file: `cover` absent stays absent,
+  an older build sees no cover exactly as before, and a saved space does not
+  grow by a byte. The same id draws the same cover on every machine and every
+  reload; a page that gains a real cover shows that and nothing else, and a
+  page whose cover is removed gets its procedural one back. The gallery already
+  tinted its coverless cards on a hue from the id — this is that tint with a
+  figure on it, in the same two hues at the same alphas, over the theme's own
+  ground, so one SVG is right in light and in dark.
+
+  Home page and gallery only, on purpose. A cover is a full-bleed band that
+  pushes the title down and lifts the icon into a disc; on a space of two
+  hundred plain notes that is two hundred posters, and a journal entry under a
+  banner is wrong however restrained the artwork. The two surfaces chosen are
+  the two that already single a page out. Never on paper (5cm of toner for a
+  figure nobody chose) and never in the file-manager thumbnail (a still of the
+  author's document, and this is not in it).
+
+  Measured with real pixels, the SVG rasterised over the theme ground, across
+  400 ids covering all eight hues and all six figures: the card's letter-mark
+  keeps at least 4.29:1 in light and 3.28:1 in dark (34px bold; the figure
+  costs about a point against the plain tint, which sat at 6.55 and 4.13);
+  the icon on the home page's disc reads at 9.94:1 light / 9.30:1 dark. The
+  disc's EDGE against the cover is 1.33–2.31:1 in light and 1.91–3.53:1 in
+  dark — the disc is white-on-a-wash by design, as it is over a pale
+  photograph, and its shadow carries the boundary; the glyph is what has to
+  read. Shell +1,412 B.
+- **A finger can do the four things only a mouse could.** Reordering a block,
+  nesting a page in the tree, moving an issue card between columns and moving a
+  card on a canvas were all mouse-only: the first three are HTML5
+  drag-and-drop, which never fires from a touch, and the fourth listened for
+  `mousedown`. Two had a fallback (Move up / Move down in the block menu; tap a
+  card's status chip) and **the page tree had none** — nesting a page was
+  impossible on a phone by any route. Press and hold now starts the same drag,
+  and holding a card at the edge of a board or a list scrolls it along, since at
+  390px only one of six columns is on screen at a time.
+
+  A finger that MOVES is still scrolling. Nothing is captured until the press
+  has been held still, so a swipe that starts on a card scrolls the page exactly
+  as it did before.
+
+- **Pinch to zoom the graph.** One finger already panned it, but zoom was on the
+  scroll wheel alone — so on a phone the one view whose whole point is a crowded
+  picture could be shoved around and never scaled. Two fingers zoom about the
+  point between them and pan at the same time; the second finger also ends the
+  one-finger drag it interrupts, so the two gestures no longer fight.
+
+- **A menu taller than the window has items nobody can reach.** Measured on a
+  390×800 phone: Insert laid out 19 items 1000px tall, putting Table, Link to
+  the web, Image and Video or audio 253px below the screen with no gesture that
+  reaches them — the menu is positioned inside a fixed bar, so the page cannot
+  scroll to them. ⋯ lost its last five the same way. Both scroll now, and this
+  was never only a phone bug: on an 860px laptop window the last Insert item was
+  off the bottom too.
+
+- **A sideways swipe stops at the edge of what it is scrolling.** A board or a
+  wide table that runs out of content handed the rest of the gesture to the
+  browser, which on a phone is the back-navigation swipe. It ends where the
+  board does.
+
+- **A wide page stops giving away a third of a phone.** "Wide" is 80% of the
+  window, which is a sensible proportion on a desktop and 283px on a 390px
+  phone — with the block gutter's 26px that left a 257px column inside a 390px
+  screen. It takes the whole width below 850px and is unchanged above it
+  (measured at 1400px: 872px before and after). And the sharing button, alone
+  among the toolbar's controls, was 35×29 rather than the 40×40 every other one
+  gets on a touch screen.
+- **Callouts, quotes and captions survive a trip through Markdown.** Four
+  places where the exporter and the importer disagreed with each other, each
+  measured by exporting one block and reading it back:
+  - A **GitHub alert** — `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`,
+    `[!CAUTION]` — now imports as a callout of that tone, with everything in
+    the box (lists, code, a nested alert) as its body. The export already
+    wrote alerts; the importer read them back as a plain quote with `[!WARNING]`
+    as its first words. Alerts written by GitHub or Obsidian read the same way,
+    including Obsidian's lower-case tags, fold markers and text on the tag
+    line. Other tags (`[!info]`) stay a quote, word for word.
+  - A **quote with a line break** exported its second line without `> `, so a
+    blank line inside it came back as a quote followed by a loose paragraph.
+    Every line is marked now.
+  - An **image caption** leaves as the Markdown title, `![alt](src "caption")`.
+    The importer already read that title as the caption; the exporter was
+    dropping it. An image's size still does not survive — Markdown has no
+    place for it.
+  - A **divider** comes back as the same block the editor made.
+
+  `scripts/test-spaces-md-strict.ts` holds every block type to this bar: 13 of
+  the 20 now come back byte for byte (9 did before), and the other 7 — toggle,
+  link card, media, field, board, page link, canvas — are pinned with the
+  reason, so the rig fails if one starts to qualify without the pin being
+  lifted on purpose.
+- **Footnotes.** A mark in the prose, the note at the foot of the page — write
+  `[^1]` where the mark goes and the note appears as a numbered slot below the
+  page to write into. Notes print, export as `[^1]: the note.` and import back
+  the same way, so an Obsidian or Pandoc vault keeps its footnotes in both
+  directions rather than losing them silently on the way in.
+
+  **The number is never stored.** Footnotes are numbered by order of appearance
+  and the number is worked out when the page is drawn, the way a magic note's
+  answer and a slide's page number are: put a new reference above two existing
+  ones and they renumber to 2 and 3 with nothing in the file changing. Measured
+  in the built shell — `[^1]` renders as "2" while `block.html` still says
+  `[^1]`. A stored number would have been wrong from the first sentence anyone
+  moved, and nothing would have said so.
+
+  **The reference is text, not markup**, which is the whole reason it survives
+  editing: `[^1]` moves with the prose through a keystroke, a sanitize pass, a
+  canonicalisation and a merge exactly the way the word beside it does, because
+  there is no offset to keep in step and no attribute for the allowlist to have
+  an opinion about. It also means a build that predates this shows the sentence
+  with `[^1]` in it and hands the `footnotes` key back untouched — verified by
+  loading a footnoted document into a shell built from the previous release.
+
+  A reference whose note has been deleted still renders, numbered, into an
+  empty note; a note whose reference has gone is kept, never quietly dropped.
+  `bento.validate()` reports both (`dangling-footnote`, `orphan-footnote`) and
+  names the block. Costs 3,176 bytes on the shell.
 - **A saved copy of a shared space rejoins its live session with its offline
   edits.** ⌘S, Save a copy and both self-update writes now stamp the live
   session's sync state into the file (`collab.sync`), as bento/slides always
