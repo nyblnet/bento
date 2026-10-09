@@ -1,0 +1,8 @@
+%% source: https://github.com/rdapaz/mermaid_to_visio/blob/HEAD/README.md (MIT)
+graph TD
+    A[Client Application] --> B[Load Balancer]
+    B --> C[Web Server 1]
+    B --> D[Web Server 2]
+    C --> E[Database Primary]
+    D --> E
+    E --> F[Database Replica]

@@ -661,5 +661,41 @@
   },
   "tdGrantFolder": {
     "message": "“$1”中的所有内容不再询问直接保存……"
+  },
+  "saTitleCopy": {
+    "message": "保存副本"
+  },
+  "saTitleShare": {
+    "message": "保存导出的文件"
+  },
+  "saName": {
+    "message": "文件名"
+  },
+  "saBeside": {
+    "message": "保存到“$1”旁边"
+  },
+  "saChoose": {
+    "message": "选择文件夹…"
+  },
+  "saCancel": {
+    "message": "取消"
+  },
+  "saExists": {
+    "message": "“$1”已存在。再次保存即可替换。"
+  },
+  "saIsOriginal": {
+    "message": "这是已打开文档本身的名称——请换一个。"
+  },
+  "saBadName": {
+    "message": "请使用不含斜杠的文件名。"
+  },
+  "saLapsed": {
+    "message": "对此文件夹的访问已失效。请改为选择文件夹，或在资料库中续期。"
+  },
+  "saGone": {
+    "message": "此次保存已不再等待。请关闭此窗口后重新保存。"
+  },
+  "saTaken": {
+    "message": "“$1”已存在。请换一个名称。"
   }
 }

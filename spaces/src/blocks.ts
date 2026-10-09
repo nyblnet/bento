@@ -189,7 +189,12 @@ export const SPECS: BlockSpec[] = [
   {
     type: 'quote', label: 'Quote', hint: '>', icon: 'quote',
     tag: 'blockquote', text: true, md: [/^> $/],
-    toMd: (_b, text) => [`> ${text}`],
+    // `> ` on EVERY line, like the callout above. htmlToMd turns <br> into a
+    // newline, and a second line without its marker is a LAZY continuation:
+    // GitHub still draws it inside the quote, but it is the one spelling that
+    // stops at the next blank line — so `a<br><br>b` came back as a quote and a
+    // loose paragraph. A bare `>` keeps a blank line inside the box.
+    toMd: (_b, text) => text.split('\n').map((l) => (l ? `> ${l}` : '>')),
   },
   {
     type: 'code', label: 'Code', hint: '``` ', icon: 'code',
@@ -355,7 +360,16 @@ export const SPECS: BlockSpec[] = [
   {
     type: 'image', label: 'Image', hint: 'Embedded in the file', icon: 'image',
     tag: 'div', custom: true,
-    toMd: (b) => [`![${String(b.alt ?? '')}](${String(b.src ?? '')})`],
+    // The caption is the link TITLE — `![alt](src "caption")` — which the
+    // importer already read and this used to drop, so every captioned image
+    // lost its caption on the way out. Written verbatim (it is the same inline
+    // html both ways), with `"` and `\` escaped as CommonMark spells them in a
+    // title, and on one line: a newline would end the image.
+    toMd: (b) => {
+      const cap = String(b.caption ?? '').replace(/\s*\n\s*/g, ' ')
+      const title = cap ? ` "${cap.replace(/["\\]/g, '\\$&')}"` : ''
+      return [`![${String(b.alt ?? '')}](${String(b.src ?? '')}${title})`]
+    },
   },
   {
     type: 'media', label: 'Video or audio', hint: 'Plays in the page', icon: 'play',

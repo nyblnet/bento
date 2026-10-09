@@ -146,7 +146,7 @@
    * directions where "are you at least version N" does not.
    */
   Object.defineProperty(window, '__bentoHost', {
-    value: Object.freeze({ name: 'home/webext', ops: Object.freeze(['claim', 'write', 'backup']) }),
+    value: Object.freeze({ name: 'home/webext', ops: Object.freeze(['claim', 'write', 'backup', 'saveas']) }),
     writable: false, configurable: false, enumerable: false,
   })
 
@@ -207,6 +207,13 @@
     isSameEntry: async () => false,
   })
 
+  // Save-as tokens this document holds; they end when it unloads (saveas.js drop).
+  const saveTokens = new Set()
+  window.addEventListener('pagehide', () => {
+    for (const token of saveTokens) window.postMessage({ [CH]: true, dir: 'req', id: `drop-${token}`, op: 'saveas.drop', payload: { token } }, '*')
+    saveTokens.clear()
+  })
+
   window.showSaveFilePicker = async (opts = {}) => {
     if (wantsBackup(opts)) {
       // No `claim` round trip: the backup does not exist yet, so there is
@@ -217,6 +224,23 @@
       // file the author never asked to save — the exact interruption this path
       // exists to remove. `save.ts` catches the throw and downloads instead.
       return handleOver(opts.suggestedName, 'backup', { name: opts.suggestedName })
+    }
+    // Only in a person's gesture, like the browser's own picker: a document
+    // cannot open the extension's window unprompted to lure clicks.
+    // (`userActivation` is shared with the content script's world.)
+    const activated = window.navigator?.userActivation?.isActive === true
+    if ((opts?.id === 'bento-copy' || opts?.id === 'bento-share') && activated) {
+      // "Save a copy…" and exports: the extension asks in its own window,
+      // which can open beside this document (saveas.js). Cancelled there is
+      // cancelled here; no answer at all is the browser's own picker.
+      const r = await ask('saveas', { id: opts.id, name: opts.suggestedName }, 180000)
+      if (r?.ok && typeof r.token === 'string') {
+        saveTokens.add(r.token)
+        return handleOver(r.name, 'saveas.write', { token: r.token })
+      }
+      if (r?.cancelled) throw new DOMException('The user aborted a request.', 'AbortError')
+      if (native) return native(forNative(opts))
+      throw new DOMException('No file picker available', 'AbortError')
     }
     if (!wantsOpenFile(opts)) {
       if (native) return native(forNative(opts))

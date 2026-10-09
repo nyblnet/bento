@@ -661,5 +661,41 @@
   },
   "tdGrantFolder": {
     "message": "Salvar tudo em “$1” sem perguntar…"
+  },
+  "saTitleCopy": {
+    "message": "Salvar uma cópia"
+  },
+  "saTitleShare": {
+    "message": "Salvar o arquivo exportado"
+  },
+  "saName": {
+    "message": "Nome do arquivo"
+  },
+  "saBeside": {
+    "message": "Salvar ao lado de “$1”"
+  },
+  "saChoose": {
+    "message": "Escolher uma pasta…"
+  },
+  "saCancel": {
+    "message": "Cancelar"
+  },
+  "saExists": {
+    "message": "“$1” já existe. Salve de novo para substituí-lo."
+  },
+  "saIsOriginal": {
+    "message": "Esse é o nome do próprio documento aberto — escolha outro."
+  },
+  "saBadName": {
+    "message": "Use um nome de arquivo sem barras."
+  },
+  "saLapsed": {
+    "message": "O acesso a esta pasta expirou. Escolha uma pasta ou renove o acesso na biblioteca."
+  },
+  "saGone": {
+    "message": "Este salvamento não está mais aguardando. Feche esta janela e salve de novo."
+  },
+  "saTaken": {
+    "message": "“$1” já existe. Escolha outro nome."
   }
 }

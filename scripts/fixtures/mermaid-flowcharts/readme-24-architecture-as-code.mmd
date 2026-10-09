@@ -1,0 +1,40 @@
+%% source: https://github.com/finos/architecture-as-code/blob/HEAD/calm-widgets/README.md (Apache-2.0)
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
+flowchart TB
+classDef boundary fill:#f8fafc,stroke:#64748b,stroke-dasharray: 5 4,stroke-width:2px,color:#000;
+classDef node fill:#ffffff,stroke:#1f2937,stroke-width:1px,color:#000;
+classDef iface fill:#f1f5f9,stroke:#64748b,stroke-width:1px,font-size:10px,color:#000;
+classDef highlight fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,color:#000;
+
+        subgraph enterprise-bank["Enterprise Bank"]
+        direction TB
+                subgraph messaging-system["Messaging System"]
+                direction TB
+                    message-bus["Message Bus"]:::node
+                end
+                class messaging-system boundary
+                subgraph trading-system["Trading System"]
+                direction TB
+                    trade-svc["Trade Service"]:::node
+                    trading-db["Trading DB"]:::node
+                    trading-ui["Trading UI"]:::node
+                end
+                class trading-system boundary
+        end
+        class enterprise-bank boundary
+
+
+    trading-ui -->|Place Trade| trade-svc
+    trade-svc -->|Persist| trading-db
+    trade-svc -->|Publish Events| message-bus
+
+
+    class trade-svc highlight
+    class trading-ui highlight
+    class trading-db highlight
+    class message-bus highlight
+                        click message-bus "#message-bus" "Jump to Message Bus"
+                        click trade-svc "#trade-service" "Jump to Trade Service"
+                        click trading-db "#trading-db" "Jump to Trading DB"
+                        click trading-ui "#trading-ui" "Jump to Trading UI"
+
