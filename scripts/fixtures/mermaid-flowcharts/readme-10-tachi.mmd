@@ -1,0 +1,14 @@
+%% source: https://github.com/davidmatousek/tachi/blob/HEAD/examples/README.md (Apache-2.0)
+graph TD
+    STRIDE[STRIDE Methodology]
+
+    subgraph OWASP Classification Frameworks
+        Web[OWASP Top 10 Web 2025]
+        Agentic[OWASP Agentic Top 10 2026]
+        MCP[OWASP MCP Top 10 2025]
+    end
+
+    STRIDE -->|classifies web findings| Web
+    STRIDE -->|extends with AI agents| Agentic
+    STRIDE -->|extends with MCP agents| MCP
+    Agentic -.->|cross-references| MCP

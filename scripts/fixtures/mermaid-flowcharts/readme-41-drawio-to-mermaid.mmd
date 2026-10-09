@@ -1,0 +1,9 @@
+%% source: https://github.com/kornellewy/drawio_to_mermaid/blob/HEAD/README.md (MIT)
+flowchart TD
+    Nstart(("Start"))
+    Ndecision{"Continue?"}
+    Nyes("Process")
+    Nno("End")
+    Nstart --> Ndecision
+    Ndecision -- "Yes" --> Nyes
+    Ndecision -- "No" --> Nno
