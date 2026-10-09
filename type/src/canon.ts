@@ -47,13 +47,26 @@ function num(n: number): string {
   return String(n);
 }
 
-/** RFC 8785 string serialization: minimal escaping, NFC-normalized. */
+/**
+ * RFC 8785 string serialization: minimal escaping, NFC-normalized.
+ *
+ * LONE SURROGATES ARE ESCAPED, and that is not a detail. `JSON.parse('"\\ud800"')`
+ * succeeds, so a document really can carry an unpaired surrogate — and
+ * TextEncoder maps EVERY one of them to U+FFFD. Emitted literally, "a\uD800b",
+ * "a\uDC00b" and "a�b" would be three different documents sharing ONE
+ * digest, so a signature over any of them verifies against the other two. That
+ * is a collision, which is to say a forgery. Escaping them — what ES2019's
+ * well-formed JSON.stringify does, and what RFC 8785 §3.2.2.2 points at — keeps
+ * the map from documents to bytes injective. Well-formed pairs are still
+ * emitted literally; `for…of` yields those as one code point above 0xFFFF.
+ */
 function str(s: string): string {
   const t = s.normalize('NFC');
   let out = '"';
   for (const ch of t) {
     const c = ch.codePointAt(0) ?? 0;
-    if (ch === '"') out += '\\"';
+    if (c >= 0xd800 && c <= 0xdfff) out += '\\u' + c.toString(16).padStart(4, '0');
+    else if (ch === '"') out += '\\"';
     else if (ch === '\\') out += '\\\\';
     else if (c === 0x08) out += '\\b';
     else if (c === 0x0c) out += '\\f';
@@ -69,6 +82,17 @@ function str(s: string): string {
 /**
  * Canonical JSON. Keys sorted by UTF-16 code unit (RFC 8785 §3.2.3), volatile
  * fields dropped at EVERY level, no insignificant whitespace.
+ *
+ * KEYS ARE NORMALIZED BEFORE THEY ARE SORTED. Rule 1 at the top of this file
+ * normalizes text to NFC, and a key is text. Normalizing on the way out but
+ * sorting on the way in is the worst of both: "é" spelled U+00E9 sorts after
+ * "z" while the same key spelled U+0065 U+0301 sorts before it, so one document
+ * digests two ways depending on which keyboard produced the field name — the
+ * exact determinism failure rule 1 exists to prevent. Sorting the normalized
+ * form also makes the collision visible instead of silent: two keys that
+ * normalize alike would otherwise emit an object with DUPLICATE keys, in
+ * insertion order, which is neither valid JSON nor deterministic. That is
+ * refused rather than serialized.
  */
 export function canonicalize(value: unknown, { volatile = VOLATILE } = {}): string {
   const go = (v: unknown): string => {
@@ -79,10 +103,15 @@ export function canonicalize(value: unknown, { volatile = VOLATILE } = {}): stri
     if (Array.isArray(v)) return '[' + v.map(go).join(',') + ']';
     if (typeof v === 'object') {
       const o = v as Record<string, unknown>;
-      const keys = Object.keys(o)
-        .filter(k => !volatile.has(k) && o[k] !== undefined)
-        .sort();                                  // UTF-16 code-unit order
-      return '{' + keys.map(k => str(k) + ':' + go(o[k])).join(',') + '}';
+      const src = new Map<string, string>();      // normalized key -> as written
+      for (const k of Object.keys(o)) {
+        const n = k.normalize('NFC');
+        if (volatile.has(n) || o[k] === undefined) continue;
+        if (src.has(n)) throw new TypeError(`duplicate key after NFC normalization: ${n}`);
+        src.set(n, k);
+      }
+      const keys = [...src.keys()].sort();        // UTF-16 code-unit order
+      return '{' + keys.map(k => str(k) + ':' + go(o[src.get(k)!])).join(',') + '}';
     }
     throw new TypeError(`cannot canonicalize ${typeof v}`);
   };
@@ -124,9 +153,37 @@ export const exportPub = async (k: CryptoKeyPair): Promise<string> =>
   b64u(await crypto.subtle.exportKey('raw', k.publicKey));
 
 /**
- * Sign a revision, chaining to the previous signature.
+ * The bytes a signature is taken over.
  *
- * The signed text is `bento-type-sig.v1|<docId>|<content digest>|<prev sig or "">`.
+ *     bento-type-sig.v1|<docId>|<content digest>|<prev sig or "">|<name>
+ *
+ * THE NAME IS IN HERE, and it was not always. `name` is self-asserted — the
+ * signer chooses it and no crypto makes it true — but "self-asserted" has to
+ * mean asserted BY THE SIGNER, and while the name sat outside the signed text
+ * it was asserted by whoever held the file last: anyone could take a valid
+ * signature, rewrite `name` to somebody else's, and the Signatures panel would
+ * print that name beside a green ✓ valid. A claim the signature does not
+ * support is exactly what the panel warns about; it must not be one the panel
+ * itself manufactures. Bound in before bento/type's first release, so no
+ * shipped signature is invalidated.
+ *
+ * `at` is deliberately NOT in here. It is a self-asserted wall clock that can
+ * be backdated freely, the panel does not render it, and the model says it
+ * proves nothing — signing it would only lend it the credibility it must not
+ * have.
+ *
+ * docId and name are emitted through `str()` — quoted, escaped and
+ * NFC-normalized — because they are the two variable-length fields a document
+ * controls. Unquoted, a docId of `x|<digest>|<sig>` could shift every field
+ * right and make one signature's text collide with another's. The digests
+ * between them are fixed-alphabet base64url and cannot. Normalizing also means
+ * a name typed on a Mac verifies on Windows, which is rule 1 again.
+ */
+const sigText = (docId: string, content: string, prev: string, name: string) =>
+  `bento-type-sig.v1|${str(docId)}|${content}|${prev}|${str(name)}`;
+
+/**
+ * Sign a revision, chaining to the previous signature.
  *
  * Chaining is what buys ORDER without a trusted clock. A self-asserted
  * timestamp can be backdated freely, so it is carried for display and
@@ -142,7 +199,7 @@ export async function sign(
 ): Promise<Signature> {
   const content = await digest(doc);
   const prevSig = prev ? prev.sig : '';
-  const text = `bento-type-sig.v1|${doc.docId}|${content}|${prevSig}`;
+  const text = sigText(doc.docId, content, prevSig, name);
   const sig = b64u(await crypto.subtle.sign(SIG, key.privateKey, enc.encode(text)));
   return { alg: 'ES256', pub: await exportPub(key), name, content, prev: prevSig, sig };
 }
@@ -151,7 +208,7 @@ export async function verify(doc: { docId: string }, entry: Signature): Promise<
   const content = await digest(doc);
   if (content !== entry.content) return { ok: false, why: 'content-changed' };
   const pub = await crypto.subtle.importKey('raw', unb64u(entry.pub), EC, false, ['verify']);
-  const text = `bento-type-sig.v1|${doc.docId}|${entry.content}|${entry.prev}`;
+  const text = sigText(doc.docId, entry.content, entry.prev, entry.name ?? '');
   const ok = await crypto.subtle.verify(SIG, pub, unb64u(entry.sig), enc.encode(text));
   return { ok, why: ok ? null : 'bad-signature' };
 }

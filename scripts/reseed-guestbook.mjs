@@ -28,10 +28,10 @@
 // treat guestbook re-seeding as best-effort.
 
 import { existsSync, readFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spliceDoc, extractDoc } from './guestbook-deck.mjs'
+import { appHash, sameApp } from './lib/apphash.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const args = process.argv.slice(2)
@@ -43,12 +43,8 @@ const dry = args.includes('--dry')
 
 const warn = (m) => { console.warn(`⚠ guestbook re-seed skipped: ${m}`) }
 
-// App payload fingerprint — the deflate-b64 runtime blocks. Two decks with the
-// same hash embed the same shell (identical runtime), whatever their doc holds.
-const appHash = (html) => {
-  const blocks = [...html.matchAll(/type="bento\/deflate-b(?:64|86)"[^>]*>([^<]+)</g)].map((m) => m[1])
-  return blocks.length ? createHash('sha256').update(blocks.join('')).digest('hex') : null
-}
+// Two decks with the same appHash (scripts/lib/apphash.mjs) embed the same
+// shell, whatever their doc holds.
 
 const shellFile = opt('shell', null) ?? [
   join(root, 'site/releases/slides/Bento_Slides.bento.html'),
@@ -64,6 +60,9 @@ if (!adminKey) { warn('admin key file is empty'); process.exit(0) }
 const base = (opt('base', 'https://bento.page')).replace(/\/$/, '')
 const freshShell = readFileSync(shellFile, 'utf8')
 const freshHash = appHash(freshShell)
+// a shell with no payload blocks is not a shell to re-seed onto — and its null
+// hash would crash every message below
+if (freshHash === null) { warn(`${shellFile} carries no runtime payload blocks`); process.exit(0) }
 
 try {
   // 1 · the daemon's OWN current deck (carries the live room creds + walls seed)
@@ -72,7 +71,7 @@ try {
   const curHtml = await curResp.text()
   const curHash = appHash(curHtml)
 
-  if (curHash && curHash === freshHash) {
+  if (sameApp(curHash, freshHash)) {
     console.log(`✓ guestbook daemon already on the current shell (${freshHash.slice(0, 12)}…) — nothing to do`)
     process.exit(0)
   }

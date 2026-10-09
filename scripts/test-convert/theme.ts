@@ -14,8 +14,8 @@
 // produce a DIFFERENT bg1 than the standard one (the backwards-clrMap failure,
 // made visible instead of silent).
 
-import { parseXml } from '../../kernel/src/convert/xml.ts'
-import { parseTheme, resolveColor, resolveFillRef, resolveLnRef } from '../../kernel/src/convert/theme.ts'
+import { parseXml } from '../../convert/src/xml.ts'
+import { parseTheme, resolveColor, resolveFillRef, resolveLnRef } from '../../convert/src/theme.ts'
 
 let failures = 0
 let checks = 0

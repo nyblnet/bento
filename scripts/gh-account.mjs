@@ -8,12 +8,12 @@
 //
 // WHY THIS EXISTS. Three releases running, publish-site.mjs mirrored and
 // pushed the site and THEN `gh release create` failed: the release worktree
-// lived under a temp directory outside ~/devel, where the shell's chpwd hook selects
+// lived under a temp directory outside ~/personal, where the shell's chpwd hook selects
 // the WORK gh profile — a different account, no scope for this repo — and
 // gh's config follows the environment the script was launched from, not the
 // repo it is pointed at. Each time the lead created the release by hand from
-// ~/devel/bento. The account is now checked BEFORE the rsync: a mismatch
-// prints the exact command to run from a path under ~/devel and exits
+// ~/personal/bento. The account is now checked BEFORE the rsync: a mismatch
+// prints the exact command to run from a path under ~/personal and exits
 // non-zero with nothing published. Publishing the site and then failing the
 // release is the one order that must never happen — the update channel goes
 // live while the repo shows no release.
@@ -88,7 +88,7 @@ export function noOwnerMessage(dir) {
   return [
     `could not read the repository owner: ${dir} has no origin remote (a detached or copied checkout?).`,
     `  Nothing was published. The gh account check cannot run without knowing whose repo this is, and a check that skips is a check that does not exist.`,
-    `  Fix: run the publish from a checkout with an origin remote (any worktree under ~/devel), or set BENTO_RELEASE_OWNER=<github owner>.`,
+    `  Fix: run the publish from a checkout with an origin remote (any worktree under ~/personal), or set BENTO_RELEASE_OWNER=<github owner>.`,
   ].join('\n')
 }
 
@@ -99,7 +99,7 @@ export function mismatchMessage({ account, owner, repoRoot, cmd }) {
   return [
     `gh is authenticated as ${account ?? 'nobody'}; a release on this repo needs ${owner}.`,
     `  Nothing was published (this check runs before the site is mirrored).`,
-    `  The shell picks the gh profile by directory — run the publish from a path under ~/devel, not from a job or temp worktree:`,
+    `  The shell picks the gh profile by directory — run the publish from a path under ~/personal, not from a job or temp worktree:`,
     `    cd ${repoRoot} && ${cmd}`,
     `  (or: gh auth switch --user ${owner}, then re-run from here).`,
   ].join('\n')

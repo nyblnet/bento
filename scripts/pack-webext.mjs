@@ -258,8 +258,11 @@ if (manifest) {
   // the listing cannot answer.
   const srcText = payload.filter((p) => p.endsWith('.js'))
     .map((p) => readFileSync(join(SRC, p), 'utf8')).join('\n')
+  // A dotted permission names a capability inside an API, not a namespace:
+  // `downloads.ui` is used as `chrome.downloads.setUiOptions`.
+  const usedAs = { 'downloads.ui': 'chrome\\.downloads\\.setUiOptions' }
   for (const perm of manifest.permissions ?? []) {
-    if (!new RegExp(`chrome\\.${perm}\\b`).test(srcText) && perm !== 'storage') {
+    if (!new RegExp(usedAs[perm] ?? `chrome\\.${perm}\\b`).test(srcText) && perm !== 'storage') {
       fail(`permission "${perm}" is declared but never used in the shipped code`)
     }
   }

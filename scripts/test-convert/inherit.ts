@@ -20,13 +20,13 @@
 //   • sz is centipoints; lIns="0" is an explicit zero, not an absence.
 //   • a frame absent everywhere is zero + a report entry, never invented.
 
-import { parseXml, kid, kids, descendants, attr, NS } from '../../kernel/src/convert/xml.ts'
-import type { XElem } from '../../kernel/src/convert/xml.ts'
-import { Report } from '../../kernel/src/convert/report.ts'
-import type { ThemeCtx, InheritCtx } from '../../kernel/src/convert/types.ts'
+import { parseXml, kid, kids, descendants, attr, NS } from '../../convert/src/xml.ts'
+import type { XElem } from '../../convert/src/xml.ts'
+import { Report } from '../../convert/src/report.ts'
+import type { ThemeCtx, InheritCtx } from '../../convert/src/types.ts'
 import {
   placeholderChain, labeledChain, effectivePhType, resolveFrame, textDefaults, bodyInsets,
-} from '../../kernel/src/convert/inherit.ts'
+} from '../../convert/src/inherit.ts'
 
 let failures = 0
 let checks = 0
