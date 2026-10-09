@@ -203,6 +203,42 @@ Links are same-document fragments:
 
 `href` must match `^(https?:|mailto:|#p/)`. Anything else is stripped.
 
+## Footnotes
+
+A footnote reference is the literal text `[^label]` inside a block's `html`,
+and the notes live in one document-level table:
+
+```json
+{
+  "pages": [{ "id": "p1", "title": "Coffee", "blocks": [
+    { "id": "b8", "type": "p", "html": "Coffee grows in the tropics.[^1]" }
+  ] }],
+  "footnotes": { "1": "Between Cancer and Capricorn." }
+}
+```
+
+The reference is **text, not markup** — no tag, no attribute, nothing for the
+sanitizer to allow — so it survives every edit and every sanitize pass exactly
+the way the word beside it does, and a build that predates footnotes shows the
+sentence with `[^1]` in it and round-trips the `footnotes` key untouched.
+
+A label is `[A-Za-z0-9_-]{1,32}`. It is an **identifier, not a number**: notes
+are numbered by order of appearance and the number is derived when the page is
+drawn, so inserting a reference earlier on the page renumbers everything after
+it and nothing in the file changes. Never write a number into the model and
+never expect `[^1]` to render as 1.
+
+Numbering is **per page** — the page is what prints and what a reader reads.
+The section at the foot of a page is derived too: it is that page's references,
+in order, so there is no block to add and nothing to keep in step. A note's
+value is inline `html`, under the same allowlist as a block's.
+
+`[^label]` inside a `code` block is left alone. It is not scanned in one and
+never becomes a reference.
+
+Markdown import and export both speak `[^1]` and `[^1]: the note.`, so an
+Obsidian or Pandoc vault keeps its footnotes in both directions.
+
 ## The issue tracker
 
 **An issue is a page.** There is no issue type and no flag: a page carrying a
@@ -286,6 +322,12 @@ notifications, automation. The file is the team boundary and the capability.
 it lists the linker, with no maintenance. A space where pages only link *down*
 the tree wastes the one thing this format does that a folder of files cannot.
 
+**Give a page `aliases` when people call it more than one thing.** `aliases:
+["NYC", "the Big Apple"]` on a page titled New York makes all three names reach
+it from a `[[wikilink]]`, from ⌘K and from the `[[` picker — and makes prose
+that says "NYC" show up as an unlinked mention on that page. It costs one array
+and it is the cheapest way to make a space find things for its reader.
+
 ## `window.bento`
 
 ```js
@@ -295,6 +337,7 @@ bento.pages()                              // [{id, title, parent, archived, blo
 bento.getPage(id)                          // one page, with its blocks
 bento.search(q)                            // [{pageId, title, blockId}]
 bento.outline()                            // the whole space as a tree
+bento.mentions(pageId?)                    // where a page is named but not linked
 bento.validate()                           // what is wrong or suspect
 bento.stats()                              // pages, blocks, words, bytes, biggest assets
 bento.comments(query?)                     // review threads, flat, with a typed anchor
@@ -357,6 +400,13 @@ markup inside inline `html` (and markup that is dropped whole), hrefs outside th
 allowlist, images with no `alt`, no size, a missing `asset:` or a remote `src`,
 a `home` naming nothing, pages with no blocks, and assets nothing references.
 
+On footnotes it adds `dangling-footnote` (**warning**: a `[^label]` with no
+note behind it — the reference still renders, numbered, into an empty note),
+`orphan-footnote` (**info**: a note in `doc.footnotes` that nothing references,
+so it is never numbered and never printed — it is kept, never deleted) and
+`unreachable-footnote` (**warning**: a label outside the grammar above, which
+no `[^label]` can ever match).
+
 On the tracker it adds: `prop-html-stale` (a value whose readable `html` says
 something else — the check worth running after any hand edit),
 `unknown-field-value` and `unknown-field-key` (**info**, because that is how a
@@ -391,6 +441,31 @@ bento.outline()
 In sidebar order (depth-first). Headings carry their **block id**, so what comes
 back can be handed straight to `updateBlock` or `moveBlock`. `links` is what
 that page points at, which is the other half of the backlinks a reader sees.
+
+### `bento.mentions()`
+
+```js
+bento.mentions('p-abc')   // that page's unlinked mentions
+bento.mentions()          // every page's, as { pageId: Mention[] }
+// Mention: { pageId, fromPage, fromBlock, matched, htmlStart, htmlEnd, snippet }
+```
+
+Where a page's **title or aliases** appear as plain words in some other page
+without a link. `matched` is the text as it was actually written, and
+`htmlStart`/`htmlEnd` are offsets into `fromBlock`'s `html`, so a link can be
+spliced in exactly where the words are rather than found again by string search
+— which would hit the wrong occurrence when the name appears twice.
+
+It never reports a name inside a code block, a code span, a link that already
+exists, a URL or a mail address; nor in a block that already links to the
+target; nor in the page's own text; nor as part of a longer word. Names under
+three characters (two, for a name written in Han, kana or Hangul) are not
+scanned for at all.
+
+**READ ONLY on purpose.** Deciding that a sentence meant *that* page is a
+judgement, and an agent that rewrote a hundred blocks on a guess would be
+unreviewable. Link the ones you are sure of with `updateBlock`, and leave the
+rest to the panel, where a person can see the sentence before deciding.
 
 ### `bento.stats()`
 

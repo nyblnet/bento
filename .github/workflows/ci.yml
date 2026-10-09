@@ -228,13 +228,26 @@ jobs:
         # checked: the starter space is exported and read back, and no page may
         # come back with materially less text than it went in with, nor may a
         # single block vanish entirely. Block TYPES are deliberately not
-        # asserted — Markdown has no callout, toggle, media embed or board, so a
-        # callout leaving as a blockquote is the format being honest, not a bug.
+        # asserted here — Markdown has no toggle, media embed or board, so a toggle
+        # leaving as a bullet is the format being honest, not a bug (the strict
+        # rig below holds each type to its own bar).
         # (Bundled: the app's imports are extensionless.)
         run: |
           slides/node_modules/.bin/esbuild scripts/test-spaces-roundtrip.ts --bundle --platform=node --format=esm \
             --outfile="$RUNNER_TEMP/test-spaces-roundtrip.mjs"
           node "$RUNNER_TEMP/test-spaces-roundtrip.mjs"
+
+      - name: Spaces Markdown strict rig
+        # The round-trip rig above checks WORDS; this checks TYPES. Every
+        # registered block type is exported and read back, and must return as
+        # the same JSON (ids aside) and re-export to the same text — or be
+        # PINNED with the reason Markdown cannot carry it yet. A pinned type
+        # that starts to round-trip fails too, so closing a gap is a deliberate
+        # edit to the rig. (Bundled: the app's imports are extensionless.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-md-strict.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-md-strict.mjs"
+          node "$RUNNER_TEMP/test-spaces-md-strict.mjs"
 
       - name: Spaces model rig
         # Properties that fail SILENTLY, and that a shipped file cannot be
@@ -266,6 +279,27 @@ jobs:
         # under a modal, and phone menus that end inside the screen with 44px
         # rows. Needs the shell built above; a skip in CI is a failure.
         run: node scripts/test-spaces-chrome.ts
+
+      - name: spaces aliases and unlinked mentions
+        # The assertions that matter in this one are the NEGATIVES: a page
+        # title found inside a code block, an existing link, a bare URL or the
+        # middle of a longer word must all produce NO mention, and a title full
+        # of regex metacharacters must not throw. It also asserts that a name
+        # surrounded by kana matches, which a `\b`-style boundary silently
+        # never does — a rule built for English is a total failure in ja,
+        # zh-Hans and zh-Hant rather than a partial one.
+        run: node scripts/test-spaces-mentions.ts
+
+      - name: Mermaid flowchart ⇄ diagram rig
+        # spaces/src/diagram/: our own Mermaid flowchart parser and layered
+        # layout (the mermaid library is megabytes and nothing is fetched at
+        # runtime). Over a corpus of real README flowcharts: no overlapping
+        # nodes, every connector end exactly where slides' syncConnectors puts
+        # it, byte-identical snapshots, and mermaid → elements → mermaid
+        # semantically equal. Hostile input (caps, __proto__ ids, script in
+        # labels, pathological cycles) inside a time budget, and a size budget
+        # (needs slides' esbuild, installed above).
+        run: node scripts/test-diagram-mermaid.ts
 
       - name: spaces rig manifest
         # Bookkeeping, not a ninth run of the eight steps above. scripts/
@@ -696,6 +730,13 @@ jobs:
         # handle only when proven to be that file (name and bytes), and fail to
         # the browser's own picker — never to nothing.
         run: node scripts/test-webext-filegrant.ts
+
+      - name: WebExtension save-as rig
+        # "Save a copy" and exports answered in the extension's own window, so
+        # they can land beside the document. The page supplies a name, never a
+        # place; a write lands only where the person chose and only for the
+        # document that asked; a beside-name is never a path or the original.
+        run: node scripts/test-webext-saveas.ts
 
       - name: WebExtension localisation rig
         # Every failure mode of a message catalogue is silent: a key the code
@@ -1933,6 +1974,13 @@ jobs:
         # and strip any EMBEDDED document's envelope. Runs the real builders with
         # real keys through the ts hook, like the type rig above.
         run: node scripts/test-slides-share.ts
+
+      - name: Stylesheet brace balance
+        # Every tracked stylesheet's braces balance. A merge seam that eats one
+        # `}` leaves CSS that still builds — an unclosed `@media print {` makes
+        # every later rule print-only, and the app ships unstyled while tsc, the
+        # build and the shell gate all pass.
+        run: node scripts/test-css-balance.ts
 
       - name: Type chrome rig
         # Where controls live: nothing in two menus, no inserts in the

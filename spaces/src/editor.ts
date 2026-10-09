@@ -18,7 +18,9 @@ import * as collabUi from './collabui.ts'
 import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
+import { notesOnPage } from './footnotes.ts'
 import { wireCanvas, placeNewCard } from './canvas.ts'
+import { enableTouchDrag } from './touch.ts'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
 import { FormatBar } from './formatbar'
@@ -58,6 +60,9 @@ import '../../kernel/src/ui/dialog.css'
 import { createPanel, type Panel } from '../../kernel/src/ui/panel.ts'
 import '../../kernel/src/ui/panel.css'
 import { PropsPanel } from './props'
+import {
+  nameIndex, namesOf, mentionsOf, linkMention, type Mention,
+} from './mentions.ts'
 import {
   internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
 } from './assets'
@@ -566,6 +571,13 @@ export class Editor {
         this.props?.retarget()
       }, true)
     }
+
+    // A FINGER GETS THE DRAGS A MOUSE HAD. Blocks, page rows and issue cards
+    // are all `[draggable="true"]`, and HTML5 dnd never fires from a touch —
+    // so press-and-hold replays the same dnd events those handlers already
+    // listen for. One call, delegated at the root, so anything draggable this
+    // editor grows later is covered without a second edit. See touch.ts.
+    enableTouchDrag(this.root)
 
     this.paintTree()
     this.paintPage()
@@ -1086,10 +1098,36 @@ export class Editor {
     })
   }
 
+  /**
+   * Repaint if — and only if — this page's footnote NUMBERING has changed.
+   *
+   * DERIVE, DO NOT COMMIT: the same shape slides uses for linked charts and
+   * connectors. Nothing is written to the document here; the section at the
+   * foot of the page is a function of the references in the blocks, so the
+   * only thing that can be stale is the DOM. The signature is the ordered
+   * label list, which is exactly what the section and every marker are drawn
+   * from — so an unconditional repaint on blur would be a caret-losing
+   * flicker on every click, and no repaint at all would leave a note the
+   * author just referenced with nowhere to write it.
+   */
+  private syncFootnotes(): void {
+    const page = this.store.page
+    if (!page) return
+    const sig = notesOnPage(this.store.doc, page).order.join('\u001F')
+    if (sig === this.fnSig) return
+    this.fnSig = sig
+    this.paintPage()
+  }
+
+  private fnSig = ''
+
   // ---- the page -----------------------------------------------------------
   private paintPage(): void {
     const s = this.store
     const page = s.page
+    // the baseline `syncFootnotes` compares against — set here so switching
+    // pages can never leave the previous page's signature behind
+    this.fnSig = page ? notesOnPage(s.doc, page).order.join('\u001F') : ''
     // The bar holds a reference to the block host it is floating over, and this
     // is about to replace every one of them.
     this.format?.close()
@@ -1183,6 +1221,10 @@ export class Editor {
     this.main.append(view)
     this.wire(view)
     view.querySelector('.sp-page-inner')?.append(this.backlinks(page.id))
+    // Unlinked mentions sit BESIDE the backlinks and below them: "what links
+    // here" is a fact about the space, "what could have" is a suggestion, and
+    // a suggestion above a fact reads as one.
+    view.querySelector('.sp-page-inner')?.append(this.unlinked(page.id))
     // Comments are EDITOR-ONLY. The gate is here rather than in comments.ts
     // because this is the object that knows which view it is in — and the
     // renderer, which print and the reading view share, has never heard of
@@ -2282,7 +2324,48 @@ export class Editor {
           const clean = canonicalize(b.html)
           if (clean !== b.html) { b.html = clean; host.innerHTML = clean }
         }
+        // A FOOTNOTE REFERENCE TYPED INTO THIS BLOCK CHANGES THE PAGE.
+        //
+        // The section at the foot is derived from every block's references, so
+        // adding or deleting a `[^1]` renumbers the notes and adds or removes a
+        // row. Repainting on `input` would do it a keystroke sooner and take
+        // the caret with it — half of `[^1` is not a reference, so every one of
+        // those keystrokes is a signature change. Blur is the first moment the
+        // caret is not the thing being protected.
+        this.syncFootnotes()
       })
+    }
+
+    // FOOTNOTE BODIES. `data-edit-note` and not `data-edit`: the generic
+    // handler above writes its host's html to a BLOCK, and a note is not one.
+    // The label is the key into doc.footnotes and it is derived from the text —
+    // so a note is created by the first keystroke into an empty slot and the
+    // slot itself came from a `[^label]` somebody typed.
+    if (!s.readOnly && !this.reading) {
+      for (const body of view.querySelectorAll<HTMLElement>('[data-edit-note]')) {
+        const label = body.dataset.editNote!
+        body.addEventListener('input', () => {
+          if (this.painting) return
+          s.runEdit(`fn:${label}`, () => {
+            const table = (s.doc.footnotes ??= {})
+            table[label] = body.innerHTML
+          })
+        })
+        body.addEventListener('blur', () => {
+          if (this.painting) return
+          s.endRun()
+          const table = s.doc.footnotes
+          if (!table || !Object.hasOwn(table, label)) return
+          const clean = canonicalize(table[label])
+          // AN EMPTIED NOTE IS DELETED, not stored as ''. An empty string is a
+          // note that exists and says nothing, which reads to validate() as a
+          // satisfied reference and prints as a blank numbered line; deleting
+          // the key puts the reference back to dangling, which is the truth and
+          // is what the author just did.
+          if (!clean.trim()) delete table[label]
+          else if (clean !== table[label]) { table[label] = clean; body.innerHTML = clean }
+        })
+      }
     }
 
     for (const box of view.querySelectorAll<HTMLInputElement>('.sp-check')) {
@@ -2954,6 +3037,78 @@ export class Editor {
     return box
   }
 
+  /**
+   * WHAT COULD LINK HERE — this page's names, found as plain words elsewhere.
+   *
+   * Derived at paint like the backlinks above it, never stored: a count
+   * written into the file goes stale in somebody else's copy the moment they
+   * type. `mentionsOf` makes ONE pass over the document for THIS page's names,
+   * so the cost does not grow with the number of pages — see mentions.ts.
+   *
+   * A reader with nothing to link gets nothing at all: an empty "Unlinked
+   * mentions (0)" heading on every page is chrome that only ever says no.
+   */
+  private unlinked(pageId: string): HTMLElement {
+    const s = this.store
+    const box = el('section', 'sp-mentions')
+    let found: Mention[]
+    // A malformed page (a title that is somehow not a string, an `aliases`
+    // shape nobody anticipated) must cost the reader a panel, never the page.
+    try { found = mentionsOf(s.doc, s.index, pageId) } catch { return box }
+    if (!found.length) return box
+
+    box.append(el('h2', 'sp-backlinks-h', t('Unlinked mentions')))
+    const ul = el('ul', 'sp-backlink-list')
+    for (const m of found) {
+      const from = s.index.page.get(m.fromPage)
+      if (!from) continue
+      const li = document.createElement('li')
+      const a = document.createElement('a')
+      a.href = `#p/${from.id}`
+      a.textContent = from.title || t('Untitled')
+      a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(from.id) })
+      li.append(a, el('span', 'sp-snippet', m.snippet))
+      // The whole point of the panel: one click turns the words into the link
+      // somebody meant to make. Hidden in a locked/reader copy, where the
+      // mentions are still worth SEEING and the button would only fail.
+      if (!(this.store.readOnly || this.reading)) {
+        const btn = document.createElement('button')
+        btn.className = 'sp-btn sp-mention-link'
+        btn.type = 'button'
+        btn.textContent = t('Link')
+        btn.title = t('Turn these words into a link to this page')
+        btn.addEventListener('click', () => this.linkMentionNow(m, pageId))
+        li.append(btn)
+      }
+      ul.append(li)
+    }
+    box.append(ul)
+    return box
+  }
+
+  /**
+   * Turn one unlinked mention into a real link.
+   *
+   * The offsets were computed when the panel was painted, and the document may
+   * have moved since — a collaborator's op, an undo, an edit in another tab.
+   * `linkMention` returns null rather than splicing into a stale offset, and
+   * this repaints instead of writing, which re-derives the mention from the
+   * text as it now is. Silently writing the wrong span would corrupt a block.
+   */
+  private linkMentionNow(m: Mention, targetId: string): void {
+    const s = this.store
+    if (s.readOnly) return
+    const found = s.index.block.get(m.fromBlock)
+    const next = found ? linkMention(String(found.block.html ?? ''), m, targetId) : null
+    if (next === null) {
+      this.status(t('That text has changed — nothing was linked'))
+      this.paintPage()
+      return
+    }
+    s.commit(() => { const b = s.block(m.fromBlock); if (b) b.html = sanitizeInline(next) })
+    this.paintPage()
+  }
+
   // ---- editing ------------------------------------------------------------
   private blockAt(node: Node | null): { id: string; host: HTMLElement } | null {
     const host = (node instanceof HTMLElement ? node : node?.parentElement)?.closest<HTMLElement>('[data-edit]')
@@ -3592,6 +3747,13 @@ export class Editor {
         for (const p of s.doc.pages) {
           const hits: string[] = []
           if (p.title.toLowerCase().includes(q)) hits.push(p.title)
+          // ⌘K FINDS A PAGE BY ITS ALIASES. An alias that reaches the `[[…]]`
+          // resolver but not search is worse than no alias: you can link to
+          // the page by the name you use for it and then cannot find it by
+          // that name, which reads as the search being broken.
+          for (const alias of namesOf(p).slice(1)) {
+            if (alias.toLowerCase().includes(q)) hits.push(t('also called “{name}”', { name: alias }))
+          }
           for (const b of p.blocks) {
             const text = textOf(b.html)
             if (text.toLowerCase().includes(q)) hits.push(text)
@@ -3880,14 +4042,22 @@ export class Editor {
         const q = input.value.trim().toLowerCase()
         list.innerHTML = ''
         for (const p of s.doc.pages) {
-          if (q && !p.title.toLowerCase().includes(q)) continue
+          // `[[` FINDS A PAGE BY ITS ALIASES TOO — the third of the three
+          // places an alias has to reach (the resolver, ⌘K, here). Typing
+          // `[[NYC` must offer the page titled "New York", or the alias only
+          // works for text somebody imported and never for text you type.
+          const names = namesOf(p)
+          const alias = q ? names.slice(1).find((n) => n.toLowerCase().includes(q)) : undefined
+          if (q && !p.title.toLowerCase().includes(q) && !alias) continue
           const li = document.createElement('li')
           const b = document.createElement('button')
           b.className = 'sp-result'
           b.type = 'button'
           b.innerHTML =
             `<span class="sp-result-ico">${ICONS.page}</span>` +
-            `<span class="sp-result-txt"><strong>${escapeHtml(p.title || t('Untitled'))}</strong></span>`
+            `<span class="sp-result-txt"><strong>${escapeHtml(p.title || t('Untitled'))}</strong>` +
+            (alias ? `<span>${escapeHtml(t('also called “{name}”', { name: alias }))}</span>` : '') +
+            `</span>`
           b.addEventListener('click', () => choose(p.id, p.title || t('Untitled')))
           li.append(b)
           list.append(li)
@@ -4588,12 +4758,18 @@ export class Editor {
     for (const page of plan.pages) {
       for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
     }
+    for (const [label, body] of Object.entries(plan.footnotes)) {
+      plan.footnotes[label] = sanitizeInline(body)
+    }
 
     // ONE step: pages, images and fonts land together or not at all.
     s.commit(() => {
       s.doc.pages.push(...plan.pages)
       if (Object.keys(plan.assets).length) Object.assign((s.doc.assets ??= {}), plan.assets)
       if (plan.fonts.length) (s.doc.fonts ??= []).push(...plan.fonts)
+      // ADDITIONS ONLY here (unlike the Markdown path, whose plan starts from
+      // this table): planGraft returns what the host does not already hold.
+      if (Object.keys(plan.footnotes).length) Object.assign((s.doc.footnotes ??= {}), plan.footnotes)
     })
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
@@ -4728,15 +4904,18 @@ export class Editor {
       return
     }
 
-    // pages this space already has, so an incremental import links INTO it
-    const existing = new Map<string, string>()
-    for (const page of s.doc.pages) {
-      const key = page.title.trim().toLowerCase()
-      if (key && !existing.has(key)) existing.set(key, page.id)
-    }
+    // Pages this space already has, so an incremental import links INTO it —
+    // BY EVERY NAME they answer to. `nameIndex` carries titles and aliases and
+    // settles the ties, which is what makes `[[NYC]]` in an imported vault
+    // land on the page already titled "New York": aliases have to reach the
+    // resolver or they are an alias in name only.
+    const existing = nameIndex(s.doc).byName
     const plan = planImport(files, {
       rootTitle: t('Imported notes'),
       resolveExisting: (target) => existing.get(target),
+      // so an imported `[^1]` that would land on a note this space already has
+      // is renamed, in the plan, along with the references to it
+      existingNotes: s.doc.footnotes,
     })
 
     // ---- images ------------------------------------------------------------
@@ -4798,6 +4977,11 @@ export class Editor {
     for (const page of plan.pages) {
       for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
     }
+    // A NOTE IS INLINE HTML OUT OF SOMEBODY ELSE'S FILE and goes through the
+    // same gate as a block's, in the same pass, for the same reason.
+    for (const [label, body] of Object.entries(plan.footnotes)) {
+      plan.footnotes[label] = sanitizeInline(body)
+    }
 
     // The import already lands under exactly one root (planImport wraps a mixed
     // selection); re-homing that root is the whole of "add these under this
@@ -4808,7 +4992,15 @@ export class Editor {
       for (const page of plan.pages) if (!page.parent || !arrived.has(page.parent)) page.parent = under
     }
 
-    s.commit(() => { s.doc.pages.push(...plan.pages) })
+    s.commit(() => {
+      s.doc.pages.push(...plan.pages)
+      // `plan.footnotes` STARTED from this document's own table and had the
+      // imported notes merged into it, renaming collisions — so it is assigned
+      // whole rather than spread over the existing one. Absent stays absent
+      // when nothing has footnotes, so importing plain notes does not add an
+      // empty key to the file.
+      if (Object.keys(plan.footnotes).length) s.doc.footnotes = plan.footnotes
+    })
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
     this.status(t('Imported'))

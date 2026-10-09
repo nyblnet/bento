@@ -62,6 +62,10 @@ export class Store {
     return this.doc.slides[this.currentIndex]
   }
 
+  slideById(slideId: string): Slide | undefined {
+    return this.doc.slides.find(slide => slide.id === slideId)
+  }
+
   element(id: string): SlideElement | undefined {
     return this.slide.elements.find((e) => e.id === id)
   }

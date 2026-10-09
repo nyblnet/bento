@@ -50,7 +50,9 @@ const RIGS = [
   { name: 'undo',    file: 'scripts/test-spaces-undo.ts', bundle: true },
   { name: 'invite',  file: 'scripts/test-spaces-invite.ts', bundle: true },
   { name: 'roundtrip', file: 'scripts/test-spaces-roundtrip.ts', bundle: true },
+  { name: 'md-strict', file: 'scripts/test-spaces-md-strict.ts', bundle: true },
   { name: 'restore-gate', file: 'scripts/test-spaces-restore-gate.ts', bundle: true },
+  { name: 'mentions', file: 'scripts/test-spaces-mentions.ts' },
   { name: 'size',    file: 'scripts/test-spaces-size.mjs' },
   // Revision tracking has no timezone dependency; the browser rig needs the
   // built spaces shell and Playwright/Chrome (the CI browser job provides both).
