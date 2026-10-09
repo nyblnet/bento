@@ -49,6 +49,10 @@ import { pageToDeck, type DeckNote, type DeckNoteCode } from './todeck.ts'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
 } from './journal'
+import { applyTemplate, journalTemplate } from './templates.ts'
+import {
+  type TemplateHost, openTemplates, openNewPagePicker, savePageAsTemplate,
+} from './templateui.ts'
 import { canWriteInPlace, parseEnvelope } from '../../kernel/src/save.ts'
 import { offlineEnabled } from '../../kernel/src/net.ts'
 import { withoutCaps } from '../../kernel/src/docfields.ts'
@@ -896,7 +900,12 @@ export class Editor {
     // the foot of the bar's ＋ Insert, among the blocks, where a page is not a
     // thing you insert into the page you are on.
     const split = el('div', 'sp-newsplit')
-    const plus = iconBtn('plus', t('New page (⌘⌥N)'), () => this.newPage())
+    // Once the space HAS templates, ＋ offers them; with none it makes a blank
+    // page as it always did (openNewPagePicker returns false and the fallback
+    // runs). The caret beside it holds the other ways a page arrives.
+    const plus = iconBtn('plus', t('New page (⌘⌥N)'), () => {
+      if (!openNewPagePicker(this.templateHost, plus, () => this.newPage())) this.newPage()
+    })
     plus.classList.add('sp-newpage')
     this.newPageMenu?.destroy()
     this.newPageMenu = barMenu({
@@ -1061,6 +1070,14 @@ export class Editor {
     if (s.readOnly) return
     const plan = planJournal(s.doc, iso)
     if (plan.add.length) {
+      // THE ENTRY'S OWN DATE, not today's: stepping to tomorrow's note has to
+      // write tomorrow's date into it, or a template with {{date}} in it lies
+      // on every entry but the one made on the day. Inside the SAME commit as
+      // the pages, so ⌘Z still takes back "I opened today's journal" in one
+      // step. The Journal parent page, when it is new too, is never templated —
+      // it is furniture, not an entry.
+      const tpl = journalTemplate(s.doc)
+      if (tpl) applyTemplate(plan.page, tpl, { date: iso, locale: locale() }, true)
       s.commit(() => {
         for (const { page, after } of plan.add) {
           const at = after ? s.doc.pages.findIndex((p) => p.id === after) : -1
@@ -1078,6 +1095,34 @@ export class Editor {
     const cur = this.store.page
     if (!cur || !isJournal(cur)) return
     this.openJournal(stepDay(String(cur.journal), n))
+  }
+
+  /**
+   * The narrow contract src/templateui.ts gets — the store operations it
+   * needs, and nothing else. Rebuilt on every read so `page` is never a stale
+   * reference to a page that has since been deleted.
+   */
+  private get templateHost(): TemplateHost {
+    const s = this.store
+    return {
+      get doc() { return s.doc },
+      get readOnly() { return s.readOnly },
+      get page() { return s.page },
+      commit: (fn: () => void) => { s.commit(fn) },
+      goToPage: (id: string) => { s.goToPage(id) },
+      status: (msg: string) => { this.status(msg) },
+      afterCreate: () => {
+        this.repaint()
+        afterPaint(() => {
+          const h = this.main.querySelector<HTMLElement>('[data-page-title]')
+          h?.focus()
+          if (h) selectAll(h)
+        })
+      },
+      pageIcon: (icon: string | undefined) => pageIcon(icon),
+      dialog: (title, build) => { this.openOverlay(title, build) },
+      menu: (anchor, label, fill) => { this.menuAt(anchor, label, fill) },
+    }
   }
 
   newPage(parent?: string): void {
@@ -4547,6 +4592,11 @@ export class Editor {
           run: () => this.makeIssue(pageId) })
       }
 
+      if (!s.readOnly) {
+        row(m, { icon: ICONS.copy, label: t('Save as template'), hint: t('New pages can start as a copy of this one'),
+          run: () => savePageAsTemplate(this.templateHost, page) })
+      }
+
       // A thread about the PAGE — the second and last anchor. It is offered
       // where the page's own actions are, and only for the page in view,
       // because a thread is written into the page you are looking at.
@@ -5854,6 +5904,7 @@ export class Editor {
     row(m, { icon: ICONS.page, label: t('New page'), kbd: keys('alt', 'mod', 'N'), run: () => this.newPage() })
     row(m, { icon: ICONS.book, label: t("Today's journal"), kbd: keys('shift', 'mod', 'J'), run: () => this.openJournal() })
     row(m, { icon: ICONS.board, label: t('New issue'), kbd: keys('shift', 'mod', 'I'), run: () => this.newIssue() })
+    row(m, { icon: ICONS.copy, label: t('Templates…'), run: () => openTemplates(this.templateHost) })
   }
 
   private updateVersion: string | null = null

@@ -14,6 +14,8 @@
 // There is no server; a break here is permanent.
 
 import type { CollabCreds } from './sync/crdt.ts'
+// Type-only, and therefore erased: no runtime dependency, no import cycle.
+import type { PageTemplate } from './templates.ts'
 import { esc, externalHref } from './sanitize.ts'
 
 export const FORMAT = 'bento/spaces'
@@ -398,7 +400,19 @@ export interface SpacesDoc {
   footnotes?: Record<string, string>
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
   readonly?: boolean
+  /** WHOLE-FILE share export: re-mints docId on open. Not a page template —
+   *  see `templates` below, and src/templates.ts for why the two are separate. */
   template?: boolean
+  /**
+   * Page templates: saved page shapes new pages can start from.
+   *
+   * A SEPARATE COLLECTION, not pages carrying a flag — the reasoning, and what
+   * that costs, is in src/templates.ts. Additive: absent on every file written
+   * before this, and an older build round-trips it untouched.
+   */
+  templates?: PageTemplate[]
+  /** the template id new daily notes start from; absent ⇒ a blank entry */
+  journalTemplate?: string
   /**
    * Collaboration credentials (PLATFORM §2).
    *
@@ -596,9 +610,16 @@ export const newPage = (title = 'Untitled', extra: Partial<Page> = {}): Page =>
 export function docContentKey(doc: SpacesDoc): string {
   // `footnotes` is content: a note's text is somebody's writing and lives
   // nowhere else, so a recovery snapshot that ignored it would compare equal to
-  // a document whose notes had all been rewritten. Appended at the END so the
-  // key for a document with no footnotes changes shape once and never again.
-  return JSON.stringify([doc.title, doc.home, doc.pages, doc.footnotes])
+  // a document whose notes had all been rewritten.
+  //
+  // Templates are content too: saving one is an edit worth recovering after a
+  // crash, and without them here a session whose only change was "save this
+  // page as a template" would compare equal and lose it.
+  //
+  // ONE return. Each field arrived on its own branch with its own `return`
+  // line, and a merge that kept both left the second one dead — footnotes
+  // silently dropped out of recovery. New content fields are APPENDED here.
+  return JSON.stringify([doc.title, doc.home, doc.pages, doc.footnotes, doc.templates, doc.journalTemplate])
 }
 
 // ---- derived, NEVER stored -------------------------------------------------
