@@ -1,0 +1,5 @@
+%% source: https://github.com/mbaksheev/clickhouse-table-graph/blob/HEAD/README.md (MIT)
+flowchart TB
+test_db.target_table_mv@{ shape: hex, label: "test_db.target_table_mv (MaterializedView)" } --> test_db.target_table@{ shape: rect, label: "test_db.target_table (ReplacingMergeTree)" }
+test_db.input_table@{ shape: rounded, label: "test_db.input_table (Null)" } --> test_db.target_table_mv@{ shape: hex, label: "test_db.target_table_mv (MaterializedView)" }
+style test_db.input_table stroke:#f4e022
