@@ -4,6 +4,8 @@
 // capture the pristine document BEFORE any DOM mutation — the captured copy is
 // what gets re-serialized on save.
 
+import { SaveQueue } from '../../kernel/src/savequeue.ts'
+import { saveRevision } from './saving'
 import './styles.css'
 // AFTER styles.css: a design rule and the base rule it restyles often tie on
 // specificity, and the tie goes to the later sheet.
@@ -17,10 +19,11 @@ import {
   isEncryptionActive,
 } from '../../kernel/src/save.ts'
 import { putRecovery, getRecovery, clearRecovery, pruneOld, addVersion } from '../../kernel/src/autosave.ts'
-import { APP_VERSION } from '../../kernel/src/update.ts'
+import { APP_VERSION, applyUpdateInPlace } from '../../kernel/src/update.ts'
 import { t, locale, applyDirection } from './i18n'
 import { i18nApi } from '../../kernel/src/i18n.ts'
-import { parseDoc, docContentKey, uid, newPage, type SpacesDoc, type ParseResult } from './model'
+import { parseDoc, uid, newPage, type SpacesDoc, type ParseResult } from './model'
+import { recoveryOffered, restoreInto } from './restoregate'
 import {
   validateDoc, outlineDoc, statsDoc,
   planInsertBlocks, planUpdateBlock, planRemoveBlocks, planMoveBlock, planUpdatePage, planRemovePage,
@@ -29,6 +32,7 @@ import {
   type Plan, type PlanError, type IssueQuery, type CommentQuery,
 } from './agent'
 import { starterDoc } from './starter'
+import { mentionsOf, mentionIndex } from './mentions.ts'
 import { todayISO, isISO, journalFor } from './journal'
 import { textOf } from './sanitize'
 import { evaluate, format, pageContext } from './calc'
@@ -36,7 +40,7 @@ import { buildSpacePreview } from './preview'
 import { Store } from './store'
 import { Editor } from './editor'
 import { SyncSession } from './sync/session.ts'
-import { isReaderCopy } from './share.ts'
+import { isReaderCopy, stampSync } from './share.ts'
 import { downloadMarkdown, launchUpdateCheck } from './about'
 
 configureApp({
@@ -201,6 +205,7 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   document.getElementById('bento-splash')?.remove()
 
   const store = new Store(doc)
+  const saves = new SaveQueue({ getDocument: () => store.doc, getRevision: () => store.revision })
   // `doc.readonly` was declared in the format and read by NOTHING: a space
   // saved as a reading copy opened fully editable, so the one property the
   // sender chose was the one the file did not keep. It is not a security
@@ -210,7 +215,8 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   // `frozen` is the other, unrelated reason to lock: this build does not
   // understand the file and must not rewrite it.
   //
-  // `collab.role === 'reader'` is the THIRD, unrelated reason, and it is the
+  // A collab role that cannot write — 'reader', 'audience', or one this build
+  // does not know (share.ts copyCanWrite, an allowlist) — is the THIRD, unrelated reason, and it is the
   // only one of the three that keeps receiving: a view-only copy follows the
   // live session and can never send to it. The lock here is a courtesy to the
   // person holding it — the ENFORCEMENT is the relay, which pins a verified
@@ -265,6 +271,10 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     //
     // The status line was dead too: saveFile returns 'saved-as' down the
     // forcePicker path, never 'saved', so the confirmation never appeared.
+    //
+    // A copy of THIS space is this replica, so it carries the CRDT state like
+    // ⌘S does: opened later, it rejoins as a fork rather than a fresh adopt.
+    stampSync(store, session)
     void serializeAuto(store.doc)
       .then((html) => writeUpdatedFileAs(html, store.doc, { suffix: suffix === 'copy' ? 'copy' : suffix }))
       .then((ok) => { if (ok) editor.status(t('Copy saved — you are still editing the original')) })
@@ -314,23 +324,32 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   let lastVersionAt = 0
 
   async function doSave(): Promise<void> {
-    store.endRun()
-    editor.status(t('Saving…'))
-    const res = await saveFile(store.doc)
-    if (res === 'saved' || res === 'saved-as' || res === 'downloaded') {
-      // the document is on disk now — the dot goes out
-      store.dirty = false
-      editor.syncDirty()
+    // Every write of THIS file goes through `saves` (the in-place self-update
+    // too, below): the queue keeps two writes from overlapping on one handle,
+    // and saving.ts clears the dot only if nothing changed while the bytes were
+    // being written. The copies and share exports stay outside it on purpose —
+    // they write a DIFFERENT file and never keep its handle.
+    // collab.sync is stamped in the queue's prepare step: after any write
+    // ahead of this one, immediately before the snapshot is copied, so the
+    // state describes exactly the bytes that reach the file (#594).
+    const out = await saveRevision(store, saves, (snapshot) => saveFile(snapshot),
+      () => { stampSync(store, session); editor.status(t('Saving…')) })
+    if (out.kind === 'failed') {
+      console.error('bento/spaces: save failed', out.error)
+      editor.status(t('Save failed — see console'))
+      return
     }
-    if (res === 'saved' || res === 'saved-as' || res === 'downloaded') {
-      // A SAVE IS THE MOMENT WORTH KEEPING. The throttle below catches long
-      // editing runs, but the point somebody chose to write the file is the
-      // point they would most want back, so it is never throttled away.
-      // Encrypted spaces keep nothing here, for the reason putRecovery does not.
-      if (!isEncryptionActive()) { void addVersion(store.doc); lastVersionAt = Date.now() }
-    }
-    if (res === 'saved') {
-      void clearRecovery(store.doc.docId)
+    if (out.kind !== 'written') { editor.status(''); return }
+    // A SAVE IS THE MOMENT WORTH KEEPING. The throttle below catches long
+    // editing runs, but the point somebody chose to write the file is the
+    // point they would most want back, so it is never throttled away. The
+    // version is the snapshot that was WRITTEN, not whatever is on screen now.
+    // Encrypted spaces keep nothing here, for the reason putRecovery does not.
+    if (!isEncryptionActive()) { void addVersion(out.doc); lastVersionAt = Date.now() }
+    if (out.result === 'saved' && out.current) {
+      // Only when the disk holds what is on screen: after a stale write the
+      // recovery snapshot is the one copy of the newer edit.
+      void clearRecovery(out.doc.docId)
       // "Saved" is doing real work here: on a browser without file-system
       // access this was a NEW download, and saying so is the difference
       // between understanding that and losing track of which copy is current
@@ -338,6 +357,22 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     } else {
       editor.status('')
     }
+  }
+
+  /**
+   * The in-place self-update rewrites the SAME file ⌘S does, so it takes the
+   * same queue: without it an update and a save could be open on one handle at
+   * once, and whichever closed last would decide which shell the file ends up
+   * as. It writes the queue's snapshot, and — like a save — clears the dot only
+   * when that snapshot is still the document on screen.
+   */
+  editor.onUpdateInPlace = async (rel) => {
+    // stamped in prepare, beside the snapshot, exactly as ⌘S is
+    const saved = await saves.run(() => { store.endRun(); stampSync(store, session) },
+      (snapshot) => applyUpdateInPlace(rel, snapshot))
+    if (!saved?.value) return null
+    if (saved.isCurrent()) store.setDirty(false)
+    return saved.value
   }
 
   // A recovery snapshot is the ONLY backstop on browsers with no file-system
@@ -441,6 +476,18 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     validate: (target?: SpacesDoc) => validateDoc(target ?? store.doc),
     /** the whole space as a tree, for orienting in one call */
     outline: (target?: SpacesDoc) => outlineDoc(target ?? store.doc),
+    /**
+     * Where this space names a page without linking to it.
+     *
+     * With a page id, that page's unlinked mentions; with none, every page's,
+     * as `{ pageId: Mention[] }`. READ ONLY — it reports, it does not link.
+     * Deciding that a sentence meant the page is a judgement, and an agent
+     * that silently rewrote a hundred blocks' html on a guess would be
+     * unreviewable. Link them with `updateBlock`, or leave them for the panel.
+     */
+    mentions: (pageId?: string) => pageId
+      ? mentionsOf(store.doc, store.index, pageId)
+      : Object.fromEntries(mentionIndex(store.doc)),
     /** where the bytes are */
     stats: (target?: SpacesDoc) => statsDoc(target ?? store.doc),
     /**
@@ -577,7 +624,12 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
    * Never fatal, and never in the way: the result only changes a sentence in
    * the About dialog.
    */
-  void launchUpdateCheck().catch(() => { /* an unreachable server is not an error here */ })
+  // A found update also puts slides' peach chip beside the wordmark, and says
+  // so once — the one launch result a reader must not miss (D3's pill). "Up to
+  // date" stays a sentence in About, where slides' toast also repeats it.
+  void launchUpdateCheck()
+    .then((r) => { if (r?.status === 'update') editor.updateFound(r.release.version) })
+    .catch(() => { /* an unreachable server is not an error here */ })
 }
 
 function banner(text: string, actions: Array<[string, () => void]> = []): void {
@@ -602,15 +654,26 @@ function banner(text: string, actions: Array<[string, () => void]> = []): void {
   document.body.prepend(bar)
 }
 
-/** A snapshot that differs from the file we loaded means a crash lost work. */
+/**
+ * A snapshot that differs from the file we loaded means a crash lost work.
+ *
+ * The snapshot is FOREIGN INPUT (restoregate.ts): every file:// document shares
+ * this IndexedDB, so it is offered only when it passes the gate, and compared as
+ * it WOULD be restored. An entry that is not this space, not a document, or
+ * that gates down to what is already open never shows a banner at all — like
+ * slides' checkRecovery.
+ */
 async function offerRecovery(doc: SpacesDoc, store: Store, editor: Editor): Promise<void> {
+  if (store.readOnly) return // a reading copy, a view-only follower or a frozen file is never rewritten
   const snap = await getRecovery(doc.docId)
-  if (!snap) return
-  let saved: SpacesDoc
-  try { saved = JSON.parse(snap.json) as SpacesDoc } catch { return }
-  if (docContentKey(saved) === docContentKey(doc)) return
+  if (!snap || !recoveryOffered(snap.json, doc)) return
   banner(t('Unsaved changes from a previous session were found.'), [
-    [t('Restore'), () => { store.replaceDoc(saved); editor.repaint() }],
+    [t('Restore'), () => {
+      // re-gated against the space as it is NOW (restoreInto). A refusal
+      // applies nothing and keeps the entry; only Discard deletes it.
+      if (!restoreInto(store, snap.json)) { editor.status(t('That version could not be read')); return }
+      editor.repaint()
+    }],
     [t('Discard'), () => { void clearRecovery(doc.docId) }],
   ])
 }

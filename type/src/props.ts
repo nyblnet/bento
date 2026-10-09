@@ -455,6 +455,20 @@ function documentSection(host: HTMLElement, ctx: FeatureContext): void {
     ctx.refresh();
   });
   row(body, t('Track changes'), trk);
+
+  // ---- optical margins. A DOCUMENT property, beside the typeface, because it
+  // is how the page is set rather than how this reader likes to look at it.
+  const opt = el('input') as HTMLInputElement;
+  opt.type = 'checkbox';
+  opt.checked = doc.optical !== false;
+  opt.addEventListener('change', () => {
+    ctx.store.commit(d => { if (opt.checked) delete d.optical; else d.optical = false; });
+    ctx.refresh();
+  });
+  row(body, t('Optical margins'), opt);
+  const optNote = el('p', 't-note');
+  optNote.textContent = t('Punctuation hangs a little past the margin so the edge of the text reads straight. It never changes where lines break, so the page count is the same either way.');
+  body.appendChild(optNote);
   const note = el('p', 't-note');
   note.textContent = t('Off by default: most documents already carry their numbers in the heading text.');
   body.appendChild(note);

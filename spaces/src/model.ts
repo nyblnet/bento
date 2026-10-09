@@ -14,6 +14,8 @@
 // There is no server; a break here is permanent.
 
 import type { CollabCreds } from './sync/crdt.ts'
+// Type-only, and therefore erased: no runtime dependency, no import cycle.
+import type { PageTemplate } from './templates.ts'
 import { esc, externalHref } from './sanitize.ts'
 
 export const FORMAT = 'bento/spaces'
@@ -311,6 +313,29 @@ export interface Page {
    * falls back to the measure rather than to nothing.
    */
   width?: 'wide' | 'full'
+  /**
+   * Other names this page answers to — `[[NYC]]` and `[[New York]]` reaching
+   * the same page.
+   *
+   * A LINK-TIME notion, deliberately. An alias is resolved where a name
+   * becomes a page id (src/mentions.ts `nameIndex`, read by the `[[…]]`
+   * resolver, ⌘K and the page picker), so the link that gets written is an
+   * ordinary `#p/<id>` href and the backlink index, the graph, export and
+   * collaboration never learn that aliases exist. Nothing downstream has a
+   * second way to name a page.
+   *
+   * Additive: absent on every page written before this, and an ABSENT key is
+   * the default — clearing the last alias deletes the field rather than
+   * storing `[]`, so a page that never had one is byte-identical to a page
+   * that had one and lost it. A build that predates this round-trips the
+   * array untouched and simply does not resolve by it.
+   *
+   * Two pages may claim the same alias; nothing here prevents it, because a
+   * file arrives already written. `nameIndex` resolves it deterministically
+   * (titles before aliases, then document order) and validate() reports it —
+   * see `alias-collision` in agent.ts.
+   */
+  aliases?: string[]
   /** the one page daily entries hang from, so the sidebar stays a tree */
   journalHome?: boolean
   /** out of the sidebar, still searchable and linkable, and ENUMERATED at
@@ -364,9 +389,44 @@ export interface SpacesDoc {
    */
   designs?: Record<string, unknown>
   assets?: Record<string, string>
+  /**
+   * FOOTNOTES, by label → inline html. See src/footnotes.ts for the whole
+   * design; the two things that belong in the FORMAT's own file are these.
+   *
+   * DOC-LEVEL AND KEYED, which is bento/type's shape (type/src/model.ts) and
+   * is chosen for its reason: a note has to be able to outlive the paragraph
+   * that points at it, and keying it by label means moving a paragraph between
+   * pages carries the reference and nothing else.
+   *
+   * NO NUMBER IS STORED HERE OR ANYWHERE. Footnotes are numbered by order of
+   * appearance, so the number is a fact about the page and not about the note;
+   * it is derived at render time, the way calc.ts derives an answer and slides
+   * derives a page number. The LABEL is an identifier — `[^1]` is what pandoc
+   * and Obsidian store too, and it can perfectly well render as "3".
+   *
+   * The REFERENCE is the literal text `[^label]` inside a block's html: a text
+   * token, so it moves with the prose through every edit, sanitize pass,
+   * canonicalisation and CRDT merge, and so no allowlist in sanitize.ts had to
+   * change for it. An older build shows the sentence with `[^1]` in it and
+   * round-trips this key untouched — absent means no footnotes, which is the
+   * behaviour every build shipped before this one already has.
+   */
+  footnotes?: Record<string, string>
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
   readonly?: boolean
+  /** WHOLE-FILE share export: re-mints docId on open. Not a page template —
+   *  see `templates` below, and src/templates.ts for why the two are separate. */
   template?: boolean
+  /**
+   * Page templates: saved page shapes new pages can start from.
+   *
+   * A SEPARATE COLLECTION, not pages carrying a flag — the reasoning, and what
+   * that costs, is in src/templates.ts. Additive: absent on every file written
+   * before this, and an older build round-trips it untouched.
+   */
+  templates?: PageTemplate[]
+  /** the template id new daily notes start from; absent ⇒ a blank entry */
+  journalTemplate?: string
   /**
    * Collaboration credentials (PLATFORM §2).
    *
@@ -562,13 +622,24 @@ export const newPage = (title = 'Untitled', extra: Partial<Page> = {}): Page =>
 
 /** Content that matters for "did this change" — excludes volatile fields. */
 export function docContentKey(doc: SpacesDoc): string {
-  // The design is content: a crash right after choosing one must still offer
-  // the recovery. Appended only when present, so a document with no design
-  // keys exactly as it did before designs existed.
-  const d = doc as { design?: unknown; designs?: unknown }
-  return JSON.stringify(d.design === undefined && d.designs === undefined
-    ? [doc.title, doc.home, doc.pages]
-    : [doc.title, doc.home, doc.pages, d.design ?? null, d.designs ?? null])
+  // `footnotes` is content: a note's text is somebody's writing and lives
+  // nowhere else, so a recovery snapshot that ignored it would compare equal to
+  // a document whose notes had all been rewritten.
+  //
+  // Templates are content too: saving one is an edit worth recovering after a
+  // crash, and without them here a session whose only change was "save this
+  // page as a template" would compare equal and lose it.
+  //
+  // The design is content as well: a crash right after choosing one must still
+  // offer the recovery. It is appended ONLY when present, so a document with
+  // no design keys exactly as it did before designs existed.
+  //
+  // ONE return. Each field arrived on its own branch with its own `return`
+  // line, and a merge that kept both left the second one dead — footnotes
+  // silently dropped out of recovery. New content fields are APPENDED here.
+  const key: unknown[] = [doc.title, doc.home, doc.pages, doc.footnotes, doc.templates, doc.journalTemplate]
+  if (doc.design !== undefined || doc.designs !== undefined) key.push(doc.design ?? null, doc.designs ?? null)
+  return JSON.stringify(key)
 }
 
 // ---- derived, NEVER stored -------------------------------------------------

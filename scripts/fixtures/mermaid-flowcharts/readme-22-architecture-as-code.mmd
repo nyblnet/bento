@@ -1,0 +1,7 @@
+%% source: https://github.com/finos/architecture-as-code/blob/HEAD/calm-widgets/README.md (Apache-2.0)
+graph TD;
+load-balancer[Load Balancer]:::highlight;
+conference-website[Conference Website] -- Connects --> load-balancer[Load Balancer];
+load-balancer[Load Balancer] -- Connects --> attendees[Attendees Service];
+load-balancer[Load Balancer] -- Deployed In --> k8s-cluster[Kubernetes Cluster];
+classDef highlight fill:#f2bbae;

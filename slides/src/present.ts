@@ -1749,9 +1749,18 @@ interface NumberShape {
  * - Only `,` → grouping if there are several (`1,234,567`), or if a single one
  *   is followed by exactly three digits (`1,234`). Otherwise a decimal comma
  *   (`1,23`, `1,2345`).
- * - Only `.` → a decimal point, always. A deck writing `1.234` means
- *   one-point-two-three-four; reading it as grouping would break every
- *   three-decimal number to fix a rarer case.
+ * - Only `.` → a decimal point, with one exception. A single dot reads as a
+ *   decimal point, always: a deck writing `1.234` means
+ *   one-point-two-three-four, and reading it as grouping would break every
+ *   three-decimal number to fix a rarer case. The exception is a well-formed
+ *   group pattern, `-?\d{1,3}(\.\d{3}){2,}`, which needs at least two
+ *   separators and three digits in every group after the first, with an
+ *   optional leading minus: `1.250.000` and `-1.250.000` cannot be a decimal
+ *   point under any convention, so they group and settle as the author typed
+ *   them rather than as `1250.000`. Anything else with two or more dots,
+ *   like `1.2.3` or `192.168.1.1`, stays on the decimal path, because reading
+ *   those as groups would rewrite version strings and addresses into numbers
+ *   that look legitimate.
  */
 function readNumber(raw: string): NumberShape {
   const dots = (raw.match(/\./g) ?? []).length
@@ -1759,7 +1768,12 @@ function readNumber(raw: string): NumberShape {
   let point = ''
   if (dots && commas) point = raw.lastIndexOf('.') > raw.lastIndexOf(',') ? '.' : ','
   else if (commas) point = commas > 1 || /,\d{3}$/.test(raw) ? '' : ','
-  else if (dots) point = '.'
+  // Two or more dots group, but only when the token is a well-formed group pattern.
+  // `dots > 1` alone is too broad: it would read `1.2.3` as 123 and
+  // `192.168.1.1` as 19.216.811, which is a version string and an address
+  // being rewritten into plausible-looking numbers. Requiring three-digit
+  // groups after the first keeps those on the documented decimal path.
+  else if (dots) point = /^-?\d{1,3}(\.\d{3}){2,}$/.test(raw) ? '' : '.'
   const group = point === '.' ? (commas ? ',' : '')
     : point === ',' ? (dots ? '.' : '')
       : (commas ? ',' : dots ? '.' : '')
