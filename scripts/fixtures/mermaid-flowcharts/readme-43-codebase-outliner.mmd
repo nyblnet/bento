@@ -1,0 +1,18 @@
+%% source: https://github.com/maomaoc474/codebase-outliner/blob/HEAD/README.md (MIT)
+graph LR
+  subgraph Frontend
+    App["App.tsx"] --> API["services/api.ts"]
+    App --> Views["views/\n9 files"]
+    Views --> API
+  end
+
+  subgraph Backend
+    Start["index.ts"] --> Routes["routes/"]
+    Routes --> Services["services/"]
+    Services --> DB["database.ts"]
+  end
+
+  API -.->|"REST /api/*"| Start
+
+  style App fill:#e1f5fe
+  style Start fill:#e8f5e9

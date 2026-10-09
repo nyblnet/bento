@@ -29,6 +29,7 @@ import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHan
 import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
+import { estimatedFrames, fencedElements, splitFences } from './codefence'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
 import { boxCenter, connectorEndpoint, lineEndpoints, pathEndpoints, setLineEndpoints, setPathEndpoints } from './lineedit'
 import { ICONS } from '../icons'
@@ -38,6 +39,7 @@ import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, st
 import { injectFonts } from '../fonts'
 import { appConfig } from '../../../kernel/src/app.ts'
 import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, mintRoomKey, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { readerCopy, inviteCopy } from '../share'
 import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { stripEmbeddedEnvelopes } from '../envelope'
 import { compactJson } from '../compact'
@@ -1145,9 +1147,7 @@ export class Editor {
       this.toast(t('This deck has no live session to follow'))
       return
     }
-    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
-    clone.collab = { ...c, role: 'reader', on: true, sync: undefined }
-    stripCollabSecrets(clone, { keepRoom: true })
+    const clone = readerCopy(this.store.doc)
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'viewonly' })
       if (ok) this.toast(t('Read-only copy saved — it follows the live session, view only'))
@@ -1170,14 +1170,11 @@ export class Editor {
     }
     this.canvas.commitTextEdit()
     this.session?.stampInto(this.store.doc) // copies rejoin as true forks
-    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
-    // Strip FIRST, then delegate: the invite is the only private material an
-    // editor copy is allowed to carry. A v2 room is verified through the
-    // owner→invite→member chain, so a stray `writerPriv` (room-wide write key
-    // from a pre-v2 mint) would be a second, UNREVOKABLE way in.
-    stripCollabSecrets(clone, { keepRoom: true })
-    clone.collab!.invite = await mintInvite(c.ownerPriv, 'writer')
-    clone.collab!.on = true
+    // The invite is the only private material an editor copy may carry: the kernel
+    // allowlist (share.ts inviteCopy) drops every private half AND a legacy
+    // writerPriv, then attaches a FRESH owner-signed invite and takes the role from
+    // it — a v2 room is verified through the owner→invite→member chain.
+    const clone = await inviteCopy(this.store.doc, c.ownerPriv)
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'invite' })
       if (ok) this.toast(t('Editor copy saved — recipients join live with edit access'))
@@ -2479,10 +2476,20 @@ export class Editor {
       this.toast(made.length === 1 ? t('Pasted 1 slide') : t('Pasted {n} slides', { n: made.length }))
       return true
     }
-    // 3) plain text → a text element
+    // 3) plain text → a text element; a ``` fenced block in it → a Code
+    // element (with any text around it as text boxes above and below)
     if (text && text.trim()) {
-      const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
       const { width } = this.store.doc.size
+      const parts = splitFences(text.slice(0, 20000))
+      if (parts.some((p) => p.kind === 'code')) {
+        const src = defaultText({ html: '', color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 400), y: 120, w: 800 })
+        const made = fencedElements(src, parts, estimatedFrames(src, parts))
+        this.store.commit(() => this.store.slide.elements.push(...made))
+        this.store.select(made.map((e) => e.id))
+        this.toast(made.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: made.length }))
+        return true
+      }
+      const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
       const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
       this.store.commit(() => this.store.slide.elements.push(el))
       this.store.select([el.id])

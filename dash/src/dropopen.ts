@@ -53,6 +53,7 @@ import { importXlsx, installNames } from './xlsx.ts'
 import { parseDoc } from './model.ts'
 import { swapWorkbook, type WorkbookHost } from './recovery.ts'
 import { adoptFileHandle, hasFileHandle, isEncryptionActive } from '../../kernel/src/save.ts'
+import { afterPendingWrites } from './saving.ts'
 import { toast, forkTemplate, applyDocLock } from './saveui.ts'
 import { t } from './i18n.ts'
 
@@ -353,12 +354,25 @@ async function openWorkbook(host: DropHost, item: DataTransferItem | undefined, 
   // caller in recovery.ts needs this — those restore the SAME workbook, not a
   // foreign one.
   forkTemplate(res.doc)
-  if (!swapWorkbook(host, res.doc)) {
+  // THE SWAP AND THE HANDLE CHANGE WAIT FOR EVERY WRITE AHEAD OF THEM
+  // (saving.ts). An automatic save of the workbook being replaced may be
+  // mid-serialize, and it reads the held handle only after that await — so
+  // adopting B's handle under it wrote A's workbook into B, the file the user
+  // had just dropped. Both halves run in one continuation, before any later
+  // write can start, and any write of A still queued is discarded because the
+  // workbook it was for is gone.
+  const swapped = await afterPendingWrites(host.store, () => {
+    if (!swapWorkbook(host, res.doc)) return false
+    applyDocLock(res.doc, host.store)
+    if (writable) adoptFileHandle(handle as never)
+    else adoptFileHandle(null as never)
+    return true
+  })
+  if (!swapped) {
     host.notice(t('“{name}” has no table sheet to show, so it was not opened.', { name }))
     return
   }
-  applyDocLock(res.doc, host.store)
-  // AFTER the swap, and only on success: the handle decides where ⌘S writes,
+  // THE HANDLE, adopted above AFTER the swap and only on success: it decides where ⌘S writes,
   // so touching it earlier would aim the next save at a file whose contents are
   // not what is on screen.
   //
@@ -375,8 +389,6 @@ async function openWorkbook(host: DropHost, item: DataTransferItem | undefined, 
   // implementation is a bare assignment. The right fix is a `releaseFileHandle()`
   // beside it in kernel/src/save.ts; until that exists, this is the same
   // assignment spelled where the reason for it is written down.
-  if (writable) adoptFileHandle(handle as never)
-  else adoptFileHandle(null as never)
   toast(hasFileHandle()
     ? t('Opened “{name}” — ⌘S writes it back', { name })
     : t('Opened “{name}” — ⌘S will save a copy', { name }))

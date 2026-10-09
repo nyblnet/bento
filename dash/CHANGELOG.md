@@ -12,6 +12,42 @@ There is no server, so a break here would be permanent.
 
 The release that came out of watching somebody use 0.2.0.
 
+- **Portuguese.** dash's interface is available in Portuguese, the eighth
+  language beside English, Japanese, Simplified and Traditional Chinese,
+  Spanish, French, German and Italian. The translation rig now finds the
+  languages from the catalogs on disk instead of a fixed list, so it can no
+  longer report a set complete while a language it was never told about is
+  missing strings. The type label in a column header now stops short of the
+  column letter, which longer type names in Italian and Portuguese used to
+  overlap.
+
+- **Renaming a sheet renames it everywhere.** `=SUM(Pipeline!D1:D8)` names the
+  sheet by name, and renaming the tab used to leave it pointing at a sheet that
+  no longer existed — the starter workbook's own cross-sheet totals read
+  `#REF!` after the first rename. Now every formula, column expression and
+  defined name that named the sheet is respelled in the same edit, and one undo
+  takes the name and the formulas back together.
+
+- **Inserting or deleting rows moves the other sheets' references too.** A row
+  added inside Pipeline now widens `Pipeline!D1:D8` on Scratch to `D1:D9`,
+  exactly as it already moved Pipeline's own formulas; before, the range stayed
+  put and the total quietly summed eight of nine deals. A reference to a deleted
+  row becomes `#REF!` on every sheet, never the row that slid into its place.
+
+- **Enter after a Tab run comes home.** Type Widget⇥12⇥4.50⏎ and the cursor
+  lands on the next row's first column, not diagonally two columns over. The
+  selection model already knew how; the editor's commit never asked it, and a
+  document change mid-run forgot the run. A new rig drives the real editor.
+
+- **A word in a number column is marked, not hidden.** A dataset column typed
+  Number used to accept "hello" and say nothing; the total silently left it out
+  and a formula reading it gave `#VALUE!`. The cell now wears the same ring a
+  validation failure wears, with the reason on hover, and the column header
+  counts it.
+
+- **The formula bar follows a paste and a right-click.** Both moved the cursor
+  without re-reading the cell, so the bar described the value from before.
+
 - **Restoring unsaved changes or an old version keeps this workbook's own
   sharing room, keys and identity.** A restore brings back the CONTENT of a
   snapshot; the snapshot's copies of the docId, the room and its keys, and the
@@ -30,6 +66,25 @@ The release that came out of watching somebody use 0.2.0.
   role was checked as "anything but reader", so it offered its show ticket to
   the relay as write access and appeared as an Editor to everyone else. Only a
   writer copy now does either.
+
+- **An edit made while a save is writing is no longer marked saved.** Every
+  save — ⌘S, the automatic save to the file, Save a copy, Save as new workbook
+  and the in-place update — now goes through one queue that writes a snapshot
+  and clears the unsaved dot only if nothing changed while it was writing.
+  Before, the dot went out when the write finished, so a keystroke made in that
+  second was missing from the file and nothing said so.
+
+- **Dropping a workbook onto the window can no longer write the old one into
+  it.** An automatic save that was mid-write when the file was dropped used to
+  finish into the NEW file's handle. The swap now waits for it.
+
+- **After "Update this file", this window stops saving to it.** The page is
+  still the old version, and its next automatic save would have put the old
+  version back. ⌘S now says to reload first.
+
+- **Save a copy clears the unsaved dot** when the copy holds everything — it is
+  the file you carry on working in — and a failed copy says so instead of
+  failing silently.
 
 - **Sheet tabs along the bottom**, where every spreadsheet has kept them since
   Excel 5. They were a list inside the left panel; that panel is gone, and the
@@ -108,6 +163,43 @@ The release that came out of watching somebody use 0.2.0.
   preference carries over. Controls (buttons, inputs, chips) take the shared
   10px radius rather than dash's 7px, so a button looks the same here as in
   slides, spaces and type.
+- **A value too wide for its column can be read by hovering it.** Cells clip
+  with an ellipsis, and until now the rest of the value was simply gone — the
+  only way to recover it was to click the cell and read the formula bar, once
+  per cell, down a column you were trying to scan. Hovering now shows the whole
+  value.
+
+  Only where it is actually needed: whether a cell clips depends on the
+  rendered glyphs, the column width and the font the reader got, so it is
+  measured on hover rather than guessed when the grid is drawn. A value that
+  fits gets no tooltip, and dragging a column wider takes the tooltip away
+  again.
+
+- **The 3D view answers to the filter, says what it is showing, and no longer
+  opens on a plot of one column against itself.** Three faults, and the third
+  is the one that made the other two hard to see.
+
+  Filtering the sheet changed the grid, the status bar, the footer and the 2D
+  chart, and left the 3D plot drawing every row — filter the starter workbook
+  to one region and three readouts said "3 of 8 rows, £50,750" beside a picture
+  of all eight. It subscribes to view changes now, and reads the same vector the
+  footer totals do, so the plot cannot describe a different population from the
+  numbers beside it.
+
+  Axis titles, the colour legend and the count of rows dropped for having no
+  value existed, and were drawn only by the no-WebGL fallback — so the browser
+  that could not render in 3D got the labelled picture and every ordinary
+  browser got an unlabelled one. They are drawn over the plot now. The dropped
+  count is the part that matters: values with no number are left out rather than
+  plotted as zero, which is right, and until now nothing said so.
+
+  And the default binding took the first three numeric columns, which on the
+  starter workbook meant Value, Probability, and Weighted — a column defined as
+  Value × Probability. The third axis was a function of the other two, so the
+  cloud was a surface and told you nothing. A column with a formula is no longer
+  used as an axis while a stored one is available; and where a sheet has only
+  two independent measures, it opens as 3D bars over two categories instead,
+  which is both true to the data and the view a spreadsheet cannot draw.
 
 ## [0.2.0] — 2026-08-03
 

@@ -1,0 +1,7 @@
+%% source: https://github.com/csthink/dashmotion/blob/HEAD/README.md (MIT)
+flowchart TB
+    A[Receive ticket] --> B{Severity?}
+    B -->|P1| C[Page on-call]
+    B -->|P2| D[Create incident]
+    C --> E[Mitigate]
+    D --> E

@@ -628,5 +628,41 @@
   },
   "tdGrantFolder": {
     "message": "Spara allt i ”$1” utan att fråga…"
+  },
+  "saTitleCopy": {
+    "message": "Spara en kopia"
+  },
+  "saTitleShare": {
+    "message": "Spara den exporterade filen"
+  },
+  "saName": {
+    "message": "Filnamn"
+  },
+  "saBeside": {
+    "message": "Spara bredvid ”$1”"
+  },
+  "saChoose": {
+    "message": "Välj en mapp …"
+  },
+  "saCancel": {
+    "message": "Avbryt"
+  },
+  "saExists": {
+    "message": "”$1” finns redan. Spara igen för att ersätta den."
+  },
+  "saIsOriginal": {
+    "message": "Det är det öppna dokumentets eget namn – välj ett annat."
+  },
+  "saBadName": {
+    "message": "Använd ett filnamn utan snedstreck."
+  },
+  "saLapsed": {
+    "message": "Åtkomsten till mappen har gått ut. Välj en mapp i stället, eller förnya den i biblioteket."
+  },
+  "saGone": {
+    "message": "Den här sparningen väntar inte längre. Stäng fönstret och spara igen."
+  },
+  "saTaken": {
+    "message": "”$1” finns redan. Välj ett annat namn."
   }
 }

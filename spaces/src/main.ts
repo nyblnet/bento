@@ -29,6 +29,7 @@ import {
   type Plan, type PlanError, type IssueQuery, type CommentQuery,
 } from './agent'
 import { starterDoc } from './starter'
+import { mentionsOf, mentionIndex } from './mentions.ts'
 import { todayISO, isISO, journalFor } from './journal'
 import { textOf } from './sanitize'
 import { evaluate, format, pageContext } from './calc'
@@ -472,6 +473,18 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     validate: (target?: SpacesDoc) => validateDoc(target ?? store.doc),
     /** the whole space as a tree, for orienting in one call */
     outline: (target?: SpacesDoc) => outlineDoc(target ?? store.doc),
+    /**
+     * Where this space names a page without linking to it.
+     *
+     * With a page id, that page's unlinked mentions; with none, every page's,
+     * as `{ pageId: Mention[] }`. READ ONLY — it reports, it does not link.
+     * Deciding that a sentence meant the page is a judgement, and an agent
+     * that silently rewrote a hundred blocks' html on a guess would be
+     * unreviewable. Link them with `updateBlock`, or leave them for the panel.
+     */
+    mentions: (pageId?: string) => pageId
+      ? mentionsOf(store.doc, store.index, pageId)
+      : Object.fromEntries(mentionIndex(store.doc)),
     /** where the bytes are */
     stats: (target?: SpacesDoc) => statsDoc(target ?? store.doc),
     /**
@@ -608,7 +621,12 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
    * Never fatal, and never in the way: the result only changes a sentence in
    * the About dialog.
    */
-  void launchUpdateCheck().catch(() => { /* an unreachable server is not an error here */ })
+  // A found update also puts slides' peach chip beside the wordmark, and says
+  // so once — the one launch result a reader must not miss (D3's pill). "Up to
+  // date" stays a sentence in About, where slides' toast also repeats it.
+  void launchUpdateCheck()
+    .then((r) => { if (r?.status === 'update') editor.updateFound(r.release.version) })
+    .catch(() => { /* an unreachable server is not an error here */ })
 }
 
 function banner(text: string, actions: Array<[string, () => void]> = []): void {

@@ -73,11 +73,17 @@ function sweepKeys() {
   // `[]`, `>`, `---`, a code fence — is what you literally type, identical in
   // every locale, and demanding eight translations of `-` would be noise in
   // every catalog and a lie in each one.
-  const specSrc = readFileSync(join(srcDir, 'blocks.ts'), 'utf8')
+  //
+  // inserts.ts is the same kind of table: the insert families (the bar's
+  // insert group and the `/` menu's sections) carry `label`, `hint` and the
+  // button's `tip`, and every one reaches t() through a variable.
   const isSyntax = (v) => /^[#`\-\[\]>0-9.\s]+$/.test(v)
-  for (const m of specSrc.matchAll(/\b(?:label|hint):\s*(['"])((?:\\.|(?!\1).)*)\1/g)) {
-    const v = m[2].replace(/\\'/g, "'").replace(/\\"/g, '"')
-    if (v.length > 1 && !isSyntax(v)) keys.add(v)
+  for (const file of ['blocks.ts', 'inserts.ts']) {
+    const specSrc = readFileSync(join(srcDir, file), 'utf8')
+    for (const m of specSrc.matchAll(/\b(?:label|hint|tip):\s*(['"])((?:\\.|(?!\1).)*)\1/g)) {
+      const v = m[2].replace(/\\'/g, "'").replace(/\\"/g, '"')
+      if (v.length > 1 && !isSyntax(v)) keys.add(v)
+    }
   }
 
   return [...keys].sort()

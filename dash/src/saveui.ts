@@ -51,6 +51,7 @@
 // nobody honours is worse than no tier at all.
 
 import './saveui.css'
+import { afterPendingWrites, saveRevision, savingFor, type Acknowledge } from './saving.ts'
 import {
   saveFile, serializeAuto, writeUpdatedFileAs, canWriteInPlace, adoptFileHandle,
   isEncryptionActive, setEncryptionPassword,
@@ -71,6 +72,8 @@ export interface SaveMenuHost {
    * ⌘S does" is how the button and the keystroke drift apart.
    */
   save: () => void | Promise<void>
+  /** what a write that reached the open file owes the screen (saving.ts) */
+  ack: Acknowledge
 }
 
 /** A uuid, with the same fallback shape starter.ts uses for old runtimes. */
@@ -217,6 +220,15 @@ export function installSaveMenu(host: SaveMenuHost): void {
     menu.appendChild(b)
   }
 
+  /** An in-place update replaced this file's shell; this page must not write it. */
+  const refuseSuperseded = (): boolean => {
+    if (!savingFor(store).superseded) return false
+    toast(t('This file was updated. Reload to run the new version before saving again.'))
+    return true
+  }
+  const failed = (err: unknown): void =>
+    toast(t('Save failed — {why}').replace('{why}', err instanceof Error ? err.message : String(err)))
+
   const build = () => {
     menu.textContent = ''
 
@@ -226,8 +238,18 @@ export function installSaveMenu(host: SaveMenuHost): void {
     item(t('Save a copy…'), t('A second file you carry on working in — same workbook, same identity.'),
       async () => {
         if (!confirmBudget(store.doc)) return
-        const r = await saveFile(store.doc, true)
-        if (r !== 'cancelled') toast(t('Copy saved'))
+        if (refuseSuperseded()) return
+        // THE COPY BECOMES THE OPEN FILE: `saveFile(…, true)` keeps the picked
+        // handle, so the next ⌘S and the next automatic save go to it. That is
+        // a handle change, so it queues behind any write still in flight to
+        // the old one, and it acknowledges like ⌘S — it was not acknowledged
+        // at all before, so the dot stayed lit over a file that held every edit
+        // and write-back rewrote the copy it had just been handed.
+        const out = await saveRevision(store, (snap) => saveFile(snap, true),
+          (r) => r === 'saved' || r === 'saved-as' ? 'open-file' : r === 'downloaded' ? 'elsewhere' : 'nowhere',
+          host.ack)
+        if (out.kind === 'failed') return failed(out.error)
+        if (out.kind === 'done' && out.value !== 'cancelled') toast(t('Copy saved'))
       })
 
     item(t('Save as new workbook…'), t('A separate workbook — same data, new identity. Nothing links it back to this one.'),
@@ -239,23 +261,36 @@ export function installSaveMenu(host: SaveMenuHost): void {
         // `template: true`, so forking a template gave you another template —
         // a file that re-mints its identity on every open, which is the exact
         // opposite of "a separate workbook".
-        const next = duplicateWorkbook(store.doc, newDocId())
-        store.replaceDoc(next)
-        const r = await saveFile(store.doc, true)
-        if (r === 'cancelled') {
-          // THE FORK IS ALREADY IN MEMORY and the picker was closed, so the
-          // held handle still points at the ANCESTOR — a file this document is
-          // no longer a version of. ⌘S would overwrite it; automatic write-back
-          // (writeback.ts) would do the same thing 2.5s later with no gesture at
-          // all, which is how the original quietly becomes the fork. Releasing
-          // puts both back on the picker, which is merely inconvenient.
-          //
-          // The `null` cast is the same KERNEL GAP dropopen.ts names: nothing
-          // needed to RELEASE a handle until a document could stop belonging to
-          // its file, `adoptFileHandle` types its argument non-null, and the
-          // implementation is a bare assignment. The fix is a
-          // `releaseFileHandle()` beside it in kernel/src/save.ts.
+        if (refuseSuperseded()) return
+        // THE SWAP WAITS FOR EVERY WRITE AHEAD OF IT. An automatic save of the
+        // ancestor already in flight resolves its handle after its serializer
+        // awaits; releasing the handle and switching identity under it is how
+        // a fork's first save and the ancestor's last one cross. Any write of
+        // the ancestor still QUEUED is discarded once the identity changes.
+        //
+        // The handle is released FIRST and always, not only on cancel: the
+        // fork is not a version of the ancestor's file in any outcome. A
+        // successful save-as adopts the new handle; a download never had one.
+        //
+        // The `null` cast is the same KERNEL GAP dropopen.ts names: nothing
+        // needed to RELEASE a handle until a document could stop belonging to
+        // its file, `adoptFileHandle` types its argument non-null, and the
+        // implementation is a bare assignment. The fix is a
+        // `releaseFileHandle()` beside it in kernel/src/save.ts.
+        await afterPendingWrites(store, () => {
           adoptFileHandle(null as never)
+          store.replaceDoc(duplicateWorkbook(store.doc, newDocId()))
+        })
+        const out = await saveRevision(store, (snap) => saveFile(snap, true),
+          (r) => r === 'saved' || r === 'saved-as' ? 'open-file' : r === 'downloaded' ? 'download' : 'nowhere',
+          host.ack)
+        if (out.kind === 'failed') return failed(out.error)
+        if (out.kind !== 'done') return
+        if (out.value === 'cancelled') {
+          // THE FORK IS ALREADY IN MEMORY and the picker was closed. The held
+          // handle was released above, so ⌘S and write-back go back to the
+          // picker rather than overwriting the ancestor — which is how the
+          // original used to quietly become the fork.
           toast(t('This is now a new workbook — save it under a new name'))
         } else {
           toast(t('Saved as a new workbook'))

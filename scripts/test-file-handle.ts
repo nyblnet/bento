@@ -77,7 +77,7 @@ class FakeFSHandle {
 ;(globalThis as Record<string, unknown>).self = { origin: 'https://bento.page' }
 const ON_SCREEN = 'Q3-board.bento.html'
 
-const { reconnectHandle } = await import('../kernel/src/save.ts')
+const { reconnectHandle, consumeLaunchQueue, hasFileHandle, currentFileName, writeUpdatedFile, encodeDocBody, setEncryptionPassword, parseEnvelope, decryptEnvelope, adoptFileHandle, embeddedDocBlock } = await import('../kernel/src/save.ts')
 const DOC = { docId: 'd1', title: 'Q3' }
 const reset = () => store.clear()
 const has = () => store.has('d1')
@@ -181,6 +181,156 @@ const settle = () => new Promise((r) => setTimeout(r, 10))
   ok(/void persistHandle\(doc, handle\)/.test(body) && /void persistHandle\(doc, fileHandle\)/.test(body),
     'saveFile persists the handle on both the picked and the reconnected/adopted save')
   ok(/instanceof FileSystemFileHandle/.test(src), 'only a real FileSystemFileHandle is stored (host polyfill skipped)')
+}
+
+// --- embeddedDocBlock: the string-level #bento-doc extractor ------------------
+// It reads the block from file BYTES (so the launch check runs with no parser),
+// anchored by indexOf on the exact ` id="bento-doc"` attribute.
+console.log('\nembeddedDocBlock reads the #bento-doc body from file bytes')
+{
+  // the block body is opaque to the extractor (it is whatever bytes sit there), so
+  // an interior newline is possible; the boot DOM holds it as LF (HTML parsing
+  // normalises), a file on disk may hold it as CRLF. A multi-line body proves the
+  // normalise does real work — with single-line JSON, trim alone would hide it.
+  const body = '{"docId":"x",\n"title":"T"}'
+  const close = '</scr' + 'ipt>'
+  const file = (b: string) => `<!doctype html><head><script type="application/json" id="bento-doc">\n${b}\n${close}</head>`
+  ok(embeddedDocBlock(file(body)) === body, 'extracts the #bento-doc body')
+  ok(embeddedDocBlock(file(body.replace(/\n/g, '\r\n'))) === body,
+    'CRLF line endings (surrounding AND interior) normalise to the LF body — a CRLF file still compares equal')
+  // a data-id lookalike must NOT be mistaken for the real block (the old \bid regex did)
+  const lookalike = `<script data-id="bento-doc">\nDECOY\n${close}` + file(body)
+  ok(embeddedDocBlock(lookalike) === body, 'a data-id="bento-doc" lookalike is skipped; the real id block is read')
+  ok(embeddedDocBlock('<html>no block here</html>') === null, 'no block → null')
+}
+
+// --- launchQueue: a launched document holds a writable handle at boot ---------
+// A page opened in a native host or an installed PWA held NO handle until its
+// first Cmd-S, so autosave only snapshotted to IndexedDB and the file on disk
+// never changed. consumeLaunchQueue() adopts the handle the File Handling API
+// delivers, so autosave's `if (hasFileHandle())` path (editor.ts) writes the FILE
+// from the first edit. These drive the consumer against a fake launchQueue; the
+// module import itself is a no-op here (node has no window).
+console.log('\nlaunchQueue adopts the open document — and only it')
+{
+  const DOC = { docId: 'launch-doc', title: 'Secret Q3 numbers', format: 'bento/slides', slides: [] }
+  const MARKER = 'Secret Q3 numbers' // content that must never appear in an encrypted file
+  const BOOT = JSON.stringify(DOC) // the open document's #bento-doc body
+  const esc = (s: string) => s.replace(/</g, '\\u003c')
+  // the live page holds the open doc's #bento-doc (escaped, as a file does)
+  ;(globalThis as Record<string, unknown>).document = {
+    getElementById: (id: string) => (id === 'bento-doc' ? { textContent: '\n' + esc(BOOT) + '\n' } : null),
+  }
+  const fileWith = (body: string) =>
+    `<!doctype html><html><head><script type="application/json" id="bento-doc">\n${esc(body)}\n` +
+    `</scr` + `ipt></head><body></body></html>`
+  // a handle: getFile() yields its CURRENT file; createWritable() captures writes.
+  // fileBody null = unreadable (getFile throws); omit getFile = cannot be verified.
+  const handle = (fileBody: string | null, opts: { noGetFile?: boolean } = {}) => {
+    let got: Blob | null = null
+    const h: Record<string, unknown> = {
+      kind: 'file', name: ON_SCREEN, wrote: async () => (got ? await got.text() : ''),
+      async createWritable() { return { async write(b: Blob) { got = b }, async close() {} } },
+    }
+    if (!opts.noGetFile) h.getFile = async () => {
+      if (fileBody === null) throw new Error('unreadable')
+      return { text: async () => fileWith(fileBody) }
+    }
+    return h
+  }
+  let pending: unknown
+  const vend = async (files: unknown[] | null) => {
+    ;(globalThis as Record<string, unknown>).launchQueue = files === null ? undefined
+      : { setConsumer(fn: (p: unknown) => void) { pending = fn({ files }) } }
+    pending = undefined
+    consumeLaunchQueue()
+    await pending // the consumer reads the file and verifies BEFORE it adopts
+  }
+
+  ok(!hasFileHandle(), 'no handle before a launch (autosave would only snapshot — the bug)')
+  await vend(null);   ok(!hasFileHandle(), 'no launchQueue (plain tab / node) → nothing adopted, no throw')
+  await vend([]);     ok(!hasFileHandle(), 'a refused launch (empty files) adopts nothing')
+
+  // (c) with no handle, the write path writes NOTHING — it throws, touches no file
+  let threw = false
+  try { await writeUpdatedFile('<html>x') } catch { threw = true }
+  ok(threw && !hasFileHandle(), 'with no handle, writeUpdatedFile writes nothing (throws)')
+
+  // the WRONG-FILE guard: a host that vends a handle to a DIFFERENT document, or an
+  // unreadable one, or one that cannot be checked, must NOT be adopted — otherwise
+  // the first autosave would silently overwrite a file that is not this document.
+  await vend([handle('{"docId":"someone-elses","title":"Not yours"}')])
+  ok(!hasFileHandle(), 'a handle whose file is a DIFFERENT document is NOT adopted')
+  await vend([handle(null)])
+  ok(!hasFileHandle(), 'an unreadable handle is NOT adopted')
+  await vend([handle(BOOT, { noGetFile: true })])
+  ok(!hasFileHandle(), 'a handle that cannot be verified (no getFile) is NOT adopted')
+
+  // the open document: its file's #bento-doc equals the boot block → adopted
+  const open = handle(BOOT)
+  await vend([open])
+  ok(hasFileHandle(), 'the handle whose file IS this document is adopted')
+  ok(currentFileName() === ON_SCREEN, `and it is the open document (${currentFileName()})`)
+
+  // Then the REAL write path (what autosave invokes under hasFileHandle()) puts the
+  // document bytes on it — driven with encodeDocBody (the exact #bento-doc bytes;
+  // the HTML shell is DOM-only furniture, proven by the splice/preview rigs).
+  // (a) plaintext parses back to the edited document
+  setEncryptionPassword(null)
+  await writeUpdatedFile(await encodeDocBody(DOC as never))
+  ok(JSON.parse(await (open.wrote as () => Promise<string>)()).docId === DOC.docId,
+    'the first write parses back to the edited document')
+  // (b) with a password: a bento/enc envelope, no plaintext, decrypts back
+  setEncryptionPassword('hunter2')
+  await writeUpdatedFile(await encodeDocBody(DOC as never))
+  const bytes = await (open.wrote as () => Promise<string>)()
+  const env = parseEnvelope(bytes)
+  ok(!!env, 'with a password active the written bytes are a bento/enc envelope')
+  ok(!bytes.includes(MARKER), 'and carry NO plaintext — the title appears nowhere in the file')
+  const dec = env ? await decryptEnvelope(env, 'hunter2') : null
+  ok(!!dec && JSON.parse(dec).docId === DOC.docId, 'and decrypt back to the edited document with the password')
+  setEncryptionPassword(null)
+
+  // a second consume is harmless (setConsumer re-registration is caught)
+  await vend([open])
+  ok(hasFileHandle(), 'a second consume is harmless')
+
+  // THE RACE (security's condition): the consumer awaits getFile. If a Save As /
+  // "Duplicate as new deck" sets its own handle WHILE the check is pending, the
+  // launch must NOT snap the handle back to the launched file and overwrite it.
+  // A deferred getFile holds the check open across the adopt.
+  {
+    let release!: (v: { text: () => Promise<string> }) => void
+    const slow = {
+      kind: 'file', name: ON_SCREEN, // its file WOULD match — only the race must stop it
+      getFile: () => new Promise<{ text: () => Promise<string> }>((res) => { release = res }),
+      async createWritable() { return { async write() {}, async close() {} } },
+    }
+    let pending: unknown
+    ;(globalThis as Record<string, unknown>).launchQueue = { setConsumer(fn: (p: unknown) => void) { pending = fn({ files: [slow] }) } }
+    consumeLaunchQueue() // the consumer starts and awaits slow.getFile() — still pending
+    const saveAs = {
+      kind: 'file', name: 'Saved-As-elsewhere.bento.html',
+      async createWritable() { return { async write() {}, async close() {} } },
+    }
+    adoptFileHandle(saveAs as never) // the user does Save As during the await
+    release({ text: async () => fileWith(BOOT) }) // now getFile resolves and the file DOES match
+    await pending
+    ok(hasFileHandle() && currentFileName() === 'Saved-As-elsewhere.bento.html',
+      'a Save As during the pending check wins — the launch does not snap back and overwrite it')
+  }
+
+  delete (globalThis as Record<string, unknown>).document
+}
+
+// Source pin for the trigger the behavioural row stands in for: the editor
+// autosave calls writeUpdatedFile only under hasFileHandle() — which the adopted
+// launch handle satisfies, so the first autosave takes the file path, not the
+// IndexedDB snapshot.
+{
+  const ed = readFileSync(join(root, 'slides/src/editor/editor.ts'), 'utf8')
+  ok(/if \(hasFileHandle\(\)\) \{[\s\S]{0,200}?writeUpdatedFile\(/.test(ed),
+    'editor autosave calls writeUpdatedFile under hasFileHandle() — the trigger for the write above')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
