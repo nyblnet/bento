@@ -13,3 +13,15 @@
   opacity: .5;
   cursor: default;
 }
+
+/* The caveat under a comparison's heading — a different docId, or repairs made
+   while reading the other file. Quieter than the heading it qualifies, and it
+   must stay legible in both themes, so it borrows chrome tokens only (a
+   --paper token here would be a white box in the dark theme; see
+   scripts/test-type-theme.mjs for the bug class). */
+.t-redline-note {
+  margin-bottom: 9px;
+  padding-inline-start: 8px;
+  border-inline-start: 2px solid var(--line);
+  color: var(--muted);
+}

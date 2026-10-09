@@ -49,7 +49,7 @@ export function pathFromSender(sender) {
  * It is checked, not guessed. A wrong split point fails at the first missing
  * segment, and callers re-verify the file it lands on regardless.
  *
- * A folder name can repeat in a path (`/Users/andy/Decks/Decks/Q3.bento.html`),
+ * A folder name can repeat in a path (`/Users/you/Decks/Decks/Q3.bento.html`),
  * so every split point is tried; the caller decides what more than one hit
  * means.
  */

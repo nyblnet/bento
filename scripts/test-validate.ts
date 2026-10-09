@@ -44,6 +44,18 @@ ok(!starter.findings.some((f) => f.code === 'chart-key-ignored'),
   'the starter deck has no dead chart options')
 ok(!starter.findings.some((f) => f.code === 'font-not-embedded'),
   'the starter deck carries every typeface it names')
+// The starter deck NAMES the shell's two faces (fonts[].asset = 'builtin:…')
+// with no bytes in assets: a satisfied reference, not a missing asset. Only an
+// unknown built-in name is broken; an asset key with no bytes still is.
+ok(!starter.findings.some((f) => f.code === 'missing-asset'),
+  'the starter deck\'s built-in font references are not missing assets')
+{
+  const missing = (fonts: NonNullable<BentoDoc['fonts']>) =>
+    validateDoc({ ...starterDoc(), fonts, assets: {} }, { measure: false }).findings.filter((f) => f.code === 'missing-asset')
+  ok(missing([{ family: 'X', asset: 'builtin:nope' }]).length === 1, 'an unknown built-in font name is a missing-asset error')
+  ok(missing([{ family: 'X', asset: 'font-x' }]).length === 1, 'an asset key with no bytes is still the error it was')
+  ok(missing([{ family: 'Fraunces', asset: 'builtin:fraunces-900' }]).length === 0, 'a known built-in name satisfies the reference')
+}
 ok(!starter.findings.some((f) => f.code === 'overridden-enter-fx'),
   'the starter deck has no entrance animations the morph would override')
 ok(starter.measured === false, 'measured is false without a DOM rather than silently skipping')
