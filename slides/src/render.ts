@@ -4,11 +4,14 @@
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
 import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/net.ts'
-import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
-import { morphKey, paginates } from './model'
+import type { BentoDoc, EmbedElement, Slide, SlideElement, SvgElement, TableElement } from './model'
+import { morphKey, paginates, isWebUrl } from './model'
 import { chartSnapshotSvg } from './charts'
-import temml from 'temml'
+import { renderMath as mathsLite, mathError } from './maths/index.ts'
+import { resolveMathHtml } from './maths/delimiters.ts'
 import { renderCodeInto } from './code'
+import { formatDate } from './datefmt'
+import { cropImgStyle, isIdentityCrop } from './crop'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -22,6 +25,11 @@ export interface RenderOpts {
   liveMedia?: boolean
   /** dynamic-field values ({{page}} etc.) for this slide; auto-filled by renderSlide */
   fields?: FieldContext
+  /** EDITOR CANVAS only: mark a formula that did not render (dotted
+   *  underline + a title from this, given what went wrong — `\\foo`, or
+   *  "spaces" for `$ x^2 $`). Thumbnails, present, print and the static
+   *  preview never pass it, so the hint never leaves the editor. */
+  mathHint?: (what: string) => string
 }
 
 /** Values dynamic field tokens resolve against, computed per slide. */
@@ -53,7 +61,9 @@ const escapeFieldText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&
  * Resolve dynamic field tokens in text: {{page}}, {{pages}}, {{title}},
  * {{date}}, {{time}}, plus the document-property fields {{author}}, {{company}},
  * {{subject}}, {{event}}. page/pages take an optional zero-pad width — {{page:2}}
- * → "06". The MODEL stores the raw token; only rendered output is resolved, so
+ * → "06"; date/time take an optional PATTERN — {{date:M/D/YY}} pins the shape
+ * for every viewer (datefmt.ts), bare {{date}} follows the viewer's locale.
+ * The MODEL stores the raw token; only rendered output is resolved, so
  * inserting/removing slides re-numbers everything and editing doc properties
  * updates every slide automatically. Groundwork for the wider office suite.
  */
@@ -65,8 +75,8 @@ export function resolveFields(html: string, ctx?: FieldContext): string {
       case 'page': return pad(ctx.page, arg)
       case 'pages': return pad(ctx.pages, arg)
       case 'title': return escapeFieldText(ctx.title)
-      case 'date': return escapeFieldText(ctx.date.toLocaleDateString())
-      case 'time': return escapeFieldText(ctx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      case 'date': return escapeFieldText(arg?.trim() ? formatDate(ctx.date, arg.trim()) : ctx.date.toLocaleDateString())
+      case 'time': return escapeFieldText(arg?.trim() ? formatDate(ctx.date, arg.trim()) : ctx.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
       case 'author': return escapeFieldText(ctx.author)
       case 'company': return escapeFieldText(ctx.company)
       case 'subject': return escapeFieldText(ctx.subject)
@@ -137,6 +147,48 @@ function svgMarkup(el: SvgElement, doc: BentoDoc): string {
   return (el.asset ? doc.assets?.[el.asset] : el.markup) ?? ''
 }
 
+// --- embed -----------------------------------------------------
+
+/** The only url a live frame will load. Judged here as well as at the paste
+ *  boundary, because a deck opened from disk never passes through untrusted.ts. */
+
+/**
+ * May this embed get a live iframe right now?
+ *
+ * Two different kinds of offline, one answer. Bento's offline switch is a
+ * privacy promise ("nothing leaves this computer") and is asked through
+ * net.ts, the one place that knows it; a missing network is `navigator.onLine`.
+ * Both fall back to `view`, which is what makes the deck presentable on
+ * conference wifi and what keeps the switch honest. Pure, so the rig can
+ * inspect the decision without a DOM (scripts/test-embed.ts).
+ */
+export function liveFrameAllowed(el: EmbedElement): boolean {
+  if (el.live !== true || el.app !== 'web') return false
+  const url = typeof el.url === 'string' ? el.url.trim() : ''
+  if (!isWebUrl(url) || remoteSrcBlocked(url)) return false
+  const nav = typeof navigator !== 'undefined' ? navigator : undefined
+  return !nav || nav.onLine !== false
+}
+
+/**
+ * The live frame. Sandboxed with NO `allow-same-origin` and no top
+ * navigation: every deck is untrusted input, and a page of someone else's
+ * choosing gets a screen, never this document. `error` swaps back to the
+ * view underneath; the view is never removed, so a frame that fails to paint
+ * still leaves a picture.
+ */
+function liveFrame(el: EmbedElement, opts: RenderOpts): HTMLIFrameElement {
+  const frame = document.createElement('iframe')
+  frame.setAttribute('sandbox', 'allow-scripts allow-forms')
+  frame.referrerPolicy = 'no-referrer'
+  frame.title = el.url ?? ''
+  frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:transparent'
+    + (opts.liveMedia ? '' : ';pointer-events:none') // inert on the canvas, same reason as media
+  frame.addEventListener('error', () => frame.remove(), { once: true })
+  frame.src = el.url!.trim()
+  return frame
+}
+
 /**
  * Scope injected svg CSS to one element instance. svg <style> applies
  * document-wide, so unscoped rules from one diagram would leak into every
@@ -198,189 +250,12 @@ export function applyElementFrame(node: HTMLElement, el: SlideElement) {
   }
 }
 
-// Gradient ids must be unique per rendered instance: the same element renders
-// on the canvas, in sidebar thumbnails and in the present overlay, and svg
-// url(#…) references resolve document-wide.
-let gradSeq = 0
-
-/** Gradient line endpoints (objectBoundingBox units) for a CSS-convention
- *  angle: 0deg points up, 90deg points right. Shared with morph tweening. */
-export function gradientLineCoords(angle: number) {
-  const rad = ((angle ?? 180) * Math.PI) / 180
-  const dx = Math.sin(rad) / 2
-  const dy = -Math.cos(rad) / 2
-  return { x1: 0.5 - dx, y1: 0.5 - dy, x2: 0.5 + dx, y2: 0.5 + dy }
-}
-
-/** CSS linear-gradient() from a GradientFill. CSS angle convention matches the
- *  model (0deg = bottom->top, 90deg = left->right), so pass angle straight. */
-export function cssLinearGradient(g: NonNullable<ShapeElement['fillGradient']>): string {
-  const stops = g.stops
-    .map((s) => `${s.color} ${Math.round(Math.min(Math.max(s.at, 0), 1) * 100)}%`)
-    .join(', ')
-  return `linear-gradient(${g.angle}deg, ${stops})`
-}
-
-/** Materialize a GradientFill as a <defs> gradient; returns its url() ref. */
-function gradientRef(svg: SVGSVGElement, g: NonNullable<ShapeElement['fillGradient']>): string {
-  const id = `bento-grad-${gradSeq++}`
-  const defs = document.createElementNS(SVG_NS, 'defs')
-  const lin = document.createElementNS(SVG_NS, 'linearGradient')
-  lin.setAttribute('id', id)
-  const { x1, y1, x2, y2 } = gradientLineCoords(g.angle)
-  lin.setAttribute('x1', String(x1))
-  lin.setAttribute('y1', String(y1))
-  lin.setAttribute('x2', String(x2))
-  lin.setAttribute('y2', String(y2))
-  for (const s of g.stops) {
-    const stop = document.createElementNS(SVG_NS, 'stop')
-    stop.setAttribute('offset', String(Math.min(Math.max(s.at, 0), 1)))
-    stop.setAttribute('stop-color', s.color)
-    lin.appendChild(stop)
-  }
-  defs.appendChild(lin)
-  svg.appendChild(defs)
-  return `url(#${id})`
-}
-
-/** stroke-dasharray for the element's line style (undefined = solid). */
-function dashArray(el: ShapeElement, w: number): string | undefined {
-  if (el.strokeStyle === 'dashed') return `${Math.max(w * 2.4, 7)} ${Math.max(w * 1.8, 5)}`
-  if (el.strokeStyle === 'dotted') return `0.1 ${Math.max(w * 2.2, 5)}`
-  if (el.strokeStyle === 'solid') return undefined
-  if (el.strokeDash) return `${el.strokeDash} ${el.strokeDash}` // legacy numeric dash
-  return undefined
-}
-
-let markSeq = 0
-
-/** A line-tip marker in <defs>; sized in strokeWidth units, colored like the line. */
-function markerRef(svg: SVGSVGElement, kind: NonNullable<ShapeElement['lineStart']>, color: string, start: boolean): string | null {
-  if (kind === 'none') return null
-  const id = `bento-mark-${markSeq++}`
-  const marker = document.createElementNS(SVG_NS, 'marker')
-  marker.setAttribute('id', id)
-  marker.setAttribute('viewBox', '0 0 8 8')
-  marker.setAttribute('refY', '4')
-  marker.setAttribute('orient', start ? 'auto-start-reverse' : 'auto')
-  marker.setAttribute('markerWidth', '5.5')
-  marker.setAttribute('markerHeight', '5.5')
-  let tip: SVGElement
-  if (kind === 'arrow') {
-    tip = document.createElementNS(SVG_NS, 'path')
-    tip.setAttribute('d', 'M 0 0.4 L 7.6 4 L 0 7.6 Z')
-    marker.setAttribute('refX', '6.4')
-  } else if (kind === 'dot') {
-    tip = document.createElementNS(SVG_NS, 'circle')
-    tip.setAttribute('cx', '4')
-    tip.setAttribute('cy', '4')
-    tip.setAttribute('r', '2.6')
-    marker.setAttribute('refX', '4')
-  } else {
-    tip = document.createElementNS(SVG_NS, 'rect')
-    tip.setAttribute('x', '3.2')
-    tip.setAttribute('y', '0.4')
-    tip.setAttribute('width', '1.6')
-    tip.setAttribute('height', '7.2')
-    marker.setAttribute('refX', '4')
-  }
-  tip.setAttribute('fill', color)
-  marker.appendChild(tip)
-  let defs = svg.querySelector('defs')
-  if (!defs) {
-    defs = document.createElementNS(SVG_NS, 'defs')
-    svg.appendChild(defs)
-  }
-  defs.appendChild(marker)
-  return `url(#${id})`
-}
-
-export function shapeSvg(el: ShapeElement): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, 'svg')
-  const { w, h } = el
-  const sw = el.strokeWidth
-  const inset = sw / 2
-  svg.setAttribute('viewBox', `0 0 ${Math.max(w, 1)} ${Math.max(h, 1)}`)
-  svg.setAttribute('preserveAspectRatio', 'none')
-  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible'
-
-  let node: SVGElement
-  switch (el.shape) {
-    case 'path': {
-      // arbitrary vector data, stretched from its authored viewBox into the box
-      if (el.pathBox) svg.setAttribute('viewBox', el.pathBox.join(' '))
-      node = document.createElementNS(SVG_NS, 'path')
-      node.setAttribute('d', el.d ?? '')
-      if (sw > 0) node.setAttribute('vector-effect', 'non-scaling-stroke')
-      break
-    }
-    case 'rect': {
-      node = document.createElementNS(SVG_NS, 'rect')
-      node.setAttribute('x', String(inset))
-      node.setAttribute('y', String(inset))
-      node.setAttribute('width', String(Math.max(w - sw, 0)))
-      node.setAttribute('height', String(Math.max(h - sw, 0)))
-      if (el.radius) node.setAttribute('rx', String(el.radius))
-      break
-    }
-    case 'ellipse': {
-      node = document.createElementNS(SVG_NS, 'ellipse')
-      node.setAttribute('cx', String(w / 2))
-      node.setAttribute('cy', String(h / 2))
-      node.setAttribute('rx', String(Math.max(w / 2 - inset, 0)))
-      node.setAttribute('ry', String(Math.max(h / 2 - inset, 0)))
-      break
-    }
-    case 'triangle': {
-      node = document.createElementNS(SVG_NS, 'polygon')
-      node.setAttribute('points', `${w / 2},${inset} ${w - inset},${h - inset} ${inset},${h - inset}`)
-      break
-    }
-    case 'arrow': {
-      // right-pointing arrow: shaft + head, proportional to the box
-      node = document.createElementNS(SVG_NS, 'polygon')
-      const shaftH = h * 0.44
-      const headW = Math.min(w * 0.38, h)
-      const y0 = (h - shaftH) / 2
-      node.setAttribute(
-        'points',
-        `0,${y0} ${w - headW},${y0} ${w - headW},0 ${w},${h / 2} ${w - headW},${h} ${w - headW},${y0 + shaftH} 0,${y0 + shaftH}`,
-      )
-      break
-    }
-    case 'line': {
-      node = document.createElementNS(SVG_NS, 'line')
-      const lw = Math.max(sw, 2)
-      // inset the endpoints so tip decorations sit inside the element box
-      const tipPad = (k?: string) => (k && k !== 'none' ? lw * 2.6 : 0)
-      node.setAttribute('x1', String(tipPad(el.lineStart)))
-      node.setAttribute('y1', String(h / 2))
-      node.setAttribute('x2', String(w - tipPad(el.lineEnd)))
-      node.setAttribute('y2', String(h / 2))
-      node.setAttribute('stroke', el.fill)
-      node.setAttribute('stroke-width', String(lw))
-      node.setAttribute('stroke-linecap', el.strokeStyle === 'dashed' ? 'butt' : 'round')
-      const lineDash = dashArray(el, lw)
-      if (lineDash) node.setAttribute('stroke-dasharray', lineDash)
-      const mStart = el.lineStart ? markerRef(svg, el.lineStart, el.fill, true) : null
-      const mEnd = el.lineEnd ? markerRef(svg, el.lineEnd, el.fill, false) : null
-      if (mStart) node.setAttribute('marker-start', mStart)
-      if (mEnd) node.setAttribute('marker-end', mEnd)
-      svg.appendChild(node)
-      return svg
-    }
-  }
-  node.setAttribute('fill', el.fillGradient?.stops.length ? gradientRef(svg, el.fillGradient) : el.fill)
-  if (el.stroke && el.stroke !== 'transparent' && sw > 0) {
-    node.setAttribute('stroke', el.stroke)
-    node.setAttribute('stroke-width', String(sw))
-    const dash = dashArray(el, sw)
-    if (dash) node.setAttribute('stroke-dasharray', dash)
-    if (el.strokeStyle === 'dotted') node.setAttribute('stroke-linecap', 'round')
-  }
-  svg.appendChild(node)
-  return svg
-}
+// The shape renderer moved to the kernel (kernel/src/shape.ts) so bento/spaces
+// diagrams render shapes through one engine. Re-exported here so render.ts stays
+// the import site (present.ts imports gradientLineCoords; renderElement below uses
+// shapeSvg and cssLinearGradient) and the pixels are unchanged.
+import { cssLinearGradient, shapeSvg } from '../../kernel/src/shape.ts'
+export { cssLinearGradient, gradientLineCoords, shapeSvg } from '../../kernel/src/shape.ts'
 
 // --- math ($…$ → MathML) -----------------------------------------------------
 
@@ -390,16 +265,22 @@ export function shapeSvg(el: ShapeElement): SVGSVGElement {
  * format gains nothing to version: an older build opening a newer file shows
  * the literal `$E=mc^2$` — degraded, legible, and nothing is lost.
  *
- * MathML, not HTML+CSS, is what makes this affordable. Temml emits MathML and
- * the browser lays it out with its own math fonts; KaTeX would have to ship a
- * layout engine AND ~20 webfont faces (measured: +421KB against Temml's +64KB).
+ * MathML, not HTML+CSS, is what makes this affordable: the engine emits MathML
+ * and the browser lays it out with its own math fonts; KaTeX would have to
+ * ship a layout engine AND ~20 webfont faces (measured: +421KB). Temml did
+ * this at +64KB until 2026-09-15; src/maths does it at ~8KB and adds Typst.
  *
  * MUST run AFTER sanitizeHtml, never before: the sanitizer unwraps every tag
  * outside its allowlist and strips all attributes, so it would demolish the
  * MathML. Running after is also why the allowlist needs no widening — this
  * markup is GENERATED by us from LaTeX source, never accepted from the author.
- * Temml runs with trust off, so \href and friends are inert.
+ * The engine emits only attributes it constructs itself — no \href, no
+ * handlers, no author-supplied style — so trust is not a setting here.
  */
+// A small LRU (Map keeps insertion order): a deck's formulas are few and
+// re-rendered often; an unbounded cache would grow with every keystroke
+// while a formula is being typed.
+const MATH_CACHE_MAX = 256
 const mathCache = new Map<string, string>()
 
 /** Undo the entity escaping sanitizeHtml applied, so `x &lt; y` reaches TeX as `x < y`. */
@@ -450,37 +331,42 @@ function tagSymbols(mathml: string): string {
   return tpl.innerHTML
 }
 
+// Bento's own maths engine (src/maths, 2026-09-15; it replaced Temml — see
+// docs/DECISIONS.md). THE SYNTAX MARKER: `$typst: …$` (and `$$typst: …$$`)
+// is Typst maths — `typst:` immediately after the opening delimiter,
+// optional whitespace after the colon, case-sensitive; anything else is
+// LaTeX exactly as before. Nothing in the file format changes: the marker is
+// part of the text the author typed, and an older shell shows it as typed.
 function renderMath(src: string, display: boolean): string | null {
   const key = (display ? 'D' : 'I') + src
   const hit = mathCache.get(key)
-  if (hit !== undefined) return hit || null
+  if (hit !== undefined) { mathCache.delete(key); mathCache.set(key, hit); return hit || null }
   let out: string | null = null
   try {
-    out = tagSymbols(
-      temml.renderToString(decodeEntities(src), { displayMode: display, throwOnError: true, trust: false }),
-    )
+    const tex = decodeEntities(src)
+    const m = /^typst:\s*/.exec(tex)
+    // lenient (#551): an unknown command shows as its name, the rest renders
+    const ml = mathsLite(m ? tex.slice(m[0].length) : tex, { display, syntax: m ? 'typst' : 'latex', lenient: true })
+    out = ml ? tagSymbols(ml) : null // not valid maths — leave the author's text exactly as typed
   } catch {
-    out = null // not valid TeX — leave the author's text exactly as typed
+    out = null
   }
   mathCache.set(key, out ?? '')
+  if (mathCache.size > MATH_CACHE_MAX) mathCache.delete(mathCache.keys().next().value!)
   return out
 }
 
-export function resolveMath(html: string): string {
-  if (html.indexOf('$') < 0) return html
-  // $$…$$ first (display), then $…$ (inline). The inline form is deliberately
-  // fussy so ordinary prose survives: no whitespace just inside the delimiters
-  // and no digit straight after the closer, which is what keeps "it costs $5
-  // and $10" from parsing as math. A backslash-escaped \$ is a literal dollar.
-  let out = html.replace(/(^|[^\\])\$\$([^$]+?)\$\$/g, (m, pre: string, src: string) => {
-    const ml = renderMath(src, true)
-    return ml ? pre + ml : m
-  })
-  out = out.replace(/(^|[^\\$])\$(\S(?:[^$\n]*?\S)?)\$(?!\d)/g, (m, pre: string, src: string) => {
-    const ml = renderMath(src, false)
-    return ml ? pre + ml : m
-  })
-  return out.replace(/\\\$/g, '$') // the escape has done its job
+// Where the formulas are — the four delimiters, text runs only (#465), and
+// display formulas across line breaks (#540) — lives in maths/delimiters.ts,
+// DOM-free so its rigs drive the code itself.
+export function resolveMath(html: string, hint?: (what: string) => string): string {
+  return resolveMathHtml(html, renderMath, hint && ((src, display, spaced) => {
+    if (spaced) return hint('spaces')
+    const tex = decodeEntities(src)
+    const m = /^typst:\s*/.exec(tex)
+    const why = mathError(m ? tex.slice(m[0].length) : tex, { display, syntax: m ? 'typst' : 'latex' })
+    return why ? hint(why) : null
+  }))
 }
 
 /**
@@ -500,7 +386,7 @@ export function resolveMath(html: string): string {
  */
 const ALLOWED_TAGS = new Set([
   'B', 'I', 'U', 'BR', 'SPAN', 'DIV', 'P', 'STRONG', 'EM', 'S', 'CODE',
-  'UL', 'OL', 'LI', 'H1', 'H2',
+  'UL', 'OL', 'LI', 'H1', 'H2', 'A',
 ])
 
 /** Keep pasted/edited rich text down to a safe inline subset. */
@@ -513,12 +399,22 @@ export function sanitizeHtml(html: string): string {
       if (child.nodeType === Node.ELEMENT_NODE) {
         const elChild = child as HTMLElement
         if (!ALLOWED_TAGS.has(elChild.tagName)) {
-          // unwrap unknown elements, keep their text
+          // unwrap unknown elements, keep their text — walking what they held
+          // first, so lifted children are held to the same rule as siblings
+          walk(elChild)
           while (elChild.firstChild) node.insertBefore(elChild.firstChild, elChild)
           elChild.remove()
           continue
         }
+        // No attribute survives — except an anchor's href when it is a web
+        // URL (isWebUrl: http/https only, so javascript:/data: never land in
+        // a document). target/rel are decided at click time, never stored.
+        const href = elChild.tagName === 'A' ? elChild.getAttribute('href') : null
         for (const attr of Array.from(elChild.attributes)) elChild.removeAttribute(attr.name)
+        if (elChild.tagName === 'A') {
+          if (isWebUrl(href)) elChild.setAttribute('href', href)
+          else { walk(elChild); while (elChild.firstChild) node.insertBefore(elChild.firstChild, elChild); elChild.remove(); continue }
+        }
         walk(elChild)
       } else if (child.nodeType !== Node.TEXT_NODE) {
         child.remove()
@@ -722,8 +618,119 @@ export function svgHrefAllowed(value: string, tag = 'image'): boolean {
 
 /** Every `url(…)` target in a CSS-ish string, quotes and padding removed. */
 function urlTargets(value: string): string[] {
-  return Array.from(value.matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi))
+  return Array.from(cssDecodeIdentEscapes(value).matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi))
     .map((m) => m[2].replace(/[\u0000-\u0020]/g, '').toLowerCase())
+}
+
+
+/**
+ * CSS escapes that spell IDENTIFIER characters, decoded: `\75 ` is `u`, `\72`
+ * is `r`, `\l` is `l`. The browser decodes escapes inside an ident before it
+ * decides what the token is, so a check over the raw text has to read the
+ * letters the browser will read. Escapes for anything else (`\28` for a
+ * paren, `\22` for a quote) are left as they are: inside an ident they are
+ * just part of the name, never syntax, and decoding them here would invent
+ * syntax the browser never sees.
+ */
+function cssDecodeIdentEscapes(css: string): string {
+  return css.replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([^\n\r\f0-9a-fA-F])/g, (m, hexs: string | undefined, ch: string | undefined) => {
+    const c = hexs ? String.fromCodePoint(Math.min(parseInt(hexs, 16), 0x10ffff)) : ch!
+    return /^[-\w]$/.test(c) || c.codePointAt(0)! >= 0x80 ? c : m
+  })
+}
+
+/**
+ * The CSS functions an untrusted svg sheet or style value may call, as an
+ * ALLOWLIST, for the reason the at-rules below are one. A function that takes
+ * an image can fetch, and some take the address as a bare string with no
+ * `url(` in it; a list of the dangerous ones would be one browser release from
+ * incomplete. Everything a diagram draws with is here: colour, maths,
+ * transforms, gradients, filters, shapes, easing, grid sizing, font-face
+ * descriptors, custom properties. `url` is policed on its own (in-document
+ * `#` and `data:image/` targets only).
+ */
+const CSS_FN_ALLOWED = new Set([
+  'rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color', 'color-mix', 'light-dark',
+  'calc', 'min', 'max', 'clamp', 'round', 'mod', 'rem', 'abs', 'sign', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'pow', 'sqrt', 'hypot', 'log', 'exp',
+  'var', 'env',
+  'translate', 'translatex', 'translatey', 'translatez', 'translate3d', 'rotate', 'rotatex', 'rotatey', 'rotatez', 'rotate3d',
+  'scale', 'scalex', 'scaley', 'scalez', 'scale3d', 'skew', 'skewx', 'skewy', 'matrix', 'matrix3d', 'perspective',
+  'cubic-bezier', 'steps', 'linear',
+  'linear-gradient', 'radial-gradient', 'conic-gradient', 'repeating-linear-gradient', 'repeating-radial-gradient', 'repeating-conic-gradient',
+  '-webkit-linear-gradient', '-webkit-radial-gradient', '-webkit-repeating-linear-gradient', '-webkit-repeating-radial-gradient',
+  'blur', 'brightness', 'contrast', 'drop-shadow', 'grayscale', 'hue-rotate', 'invert', 'opacity', 'saturate', 'sepia',
+  'circle', 'ellipse', 'inset', 'polygon', 'path', 'rect', 'xywh', 'ray',
+  'counter', 'counters', 'minmax', 'repeat', 'fit-content', 'local', 'format', 'tech', 'selector',
+  'url',
+])
+
+/** A function call in CSS text: a name (letters, escapes, non-ASCII) then `(`.
+ *  `pre` is the character before it, so a caller can tell a call written
+ *  straight after a colon. */
+const CSS_FN_CALL = /(^|[^\w\\-])((?:[-\w]|\\[\s\S]|[^\x00-\x7f])+)\(/g
+
+/**
+ * Selector pseudo-classes and pseudo-elements that take an argument. After a
+ * colon, a name on THIS list is a selector (`:not(`, `::part(`), not a value;
+ * none of them can fetch. Every other call after a colon is a value
+ * (`fill:rgb(`, `width:calc(`) and is judged by CSS_FN_ALLOWED like any other.
+ * The text pass used to spare EVERY colon-preceded call, which left
+ * `prop:fn(` with no space to the CSSOM check alone — caught there in every
+ * browser, but this pass is meant to fail closed on its own.
+ */
+const CSS_PSEUDO_FNS = new Set([
+  'not', 'is', 'where', 'has', 'matches', '-webkit-any', '-moz-any',
+  'nth-child', 'nth-last-child', 'nth-of-type', 'nth-last-of-type', 'nth-col', 'nth-last-col',
+  'lang', 'dir', 'host', 'host-context', 'state', 'active-view-transition-type',
+  'slotted', 'part', 'cue', 'cue-region', 'highlight',
+  'view-transition-group', 'view-transition-image-pair', 'view-transition-old', 'view-transition-new',
+])
+
+/** May this sheet call `name`? `pre` is the character in front of it. */
+function cssCallAllowed(pre: string, name: string): boolean {
+  if (name.includes('\\')) return false
+  const n = name.toLowerCase()
+  return CSS_FN_ALLOWED.has(n) || (pre === ':' && CSS_PSEUDO_FNS.has(n))
+}
+
+/**
+ * Neutralise every function call a sheet may not make: RENAMED to one no
+ * browser implements, so the declaration it sits in is invalid and CSS drops
+ * it (the same fail-closed move as the at-rules). A name still holding an
+ * escape after decoding is refused on sight.
+ */
+function cssRefuseFunctions(css: string): string {
+  return css.replace(CSS_FN_CALL, (m, pre: string, name: string) =>
+    cssCallAllowed(pre, name) ? m : `${pre}bento-refused(`)
+}
+
+/** Does this CSS text carry a fetch — an off-list function, or a url() to
+ *  anything but `#…` / `data:image/…`? Escapes are decoded first. */
+function cssFetches(text: string): boolean {
+  const t = cssDecodeIdentEscapes(text)
+  if (urlTargets(t).some((u) => !(u.startsWith('#') || u.startsWith('data:image/')))) return true
+  return Array.from(t.matchAll(CSS_FN_CALL)).some((m) => !cssCallAllowed(m[1], m[2]))
+}
+
+/**
+ * The browser's own reading of a sheet, where there is a browser. A
+ * constructed CSSStyleSheet is parsed but never applied, so nothing in it
+ * loads, and its rules serialise CANONICALLY: escapes decoded, a bare-string
+ * image function written with `url(…)`. Every top-level rule's cssText (which
+ * carries its nested rules: @media, @supports, @layer, nesting) is checked for
+ * a fetch the text filter missed. There should never be one; if there is, the
+ * whole sheet is dropped rather than trusted. `null` = no CSSOM here (the node
+ * rigs), where the text filter, which fails closed on its own, is the answer.
+ */
+function cssomFindsFetch(css: string): boolean | null {
+  if (typeof CSSStyleSheet === 'undefined') return null
+  try {
+    const sheet = new CSSStyleSheet()
+    sheet.replaceSync(css)
+    return Array.from(sheet.cssRules).some((r) => cssFetches(r.cssText))
+  } catch {
+    return true // the browser would not parse it: keep none of it
+  }
 }
 
 /**
@@ -735,8 +742,21 @@ function urlTargets(value: string): string[] {
  *
  * Exported for `scripts/test-sanitize.ts`.
  */
-export function svgUrlRefsAllowed(value: string): boolean {
-  return urlTargets(value).every((t) => t.startsWith('#') || t.startsWith('data:image/'))
+export function svgUrlRefsAllowed(value: string, attr = ''): boolean {
+  const n = attr.toLowerCase()
+  const allowed = (t: string) => t.startsWith('#') || t.startsWith('data:image/')
+  // aria-* and data-* are text, never parsed as CSS: an accessible label that
+  // reads "f(x) = 2" is not a function call, so only a url() is looked at
+  if (n.startsWith('aria-') || n.startsWith('data-')) return urlTargets(value).every(allowed)
+  if (cssFetches(value)) return false
+  // `style` is a declaration block: where there is a browser, its own parse
+  // (on a detached element, which loads nothing) is checked too
+  if (n === 'style' && typeof document !== 'undefined') {
+    const probe = document.createElement('div')
+    probe.style.cssText = value
+    if (cssFetches(probe.style.cssText)) return false
+  }
+  return true
 }
 
 /**
@@ -791,10 +811,16 @@ export function sanitizeSvgCss(css: string): string {
     (/^-?[a-zA-Z][-\w]*$/.test(kw) && CSS_AT_ALLOWED.has(kw.toLowerCase())
       ? `${pre}@${kw}`
       : `${pre}@bento-refused `))
-  return atFiltered.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, _q: string, target: string) => {
+  // Function names are read the way the browser reads them — escapes decoded —
+  // before anything is judged, then every function off the allowlist is
+  // refused, then url() targets are checked on the decoded text.
+  const fnFiltered = cssRefuseFunctions(cssDecodeIdentEscapes(atFiltered))
+  const out = fnFiltered.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, _q: string, target: string) => {
     const v = String(target).replace(/[\u0000-\u0020]/g, '').toLowerCase()
     return v.startsWith('#') || v.startsWith('data:image/') ? m : 'none'
   })
+  // …and where there is a browser, its own parse is the last word
+  return cssomFindsFetch(out) === true ? '' : out
 }
 
 /**
@@ -855,7 +881,7 @@ export function sanitizeSvg(markup: string, scope: string): DocumentFragment {
           if (!svgAttrAllowed(target) || /(^|:)(href|style)$/.test(target)) { gone = true; break }
           continue
         }
-        if (!svgUrlRefsAllowed(attr.value) || (name === 'style' && /@import|expression\s*\(/i.test(attr.value))) {
+        if (!svgUrlRefsAllowed(attr.value, name) || (name === 'style' && /@import|expression\s*\(/i.test(attr.value))) {
           el.removeAttribute(attr.name)
           continue
         }
@@ -1059,7 +1085,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.style.lineHeight = String(el.lineHeight)
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
       inner.style.width = '100%'
-      inner.innerHTML = resolveMath(sanitizeHtml(resolveFields(el.html, opts.fields)))
+      inner.innerHTML = resolveMath(sanitizeHtml(resolveFields(el.html, opts.fields)), opts.mathHint)
       // layout placeholder: prompt while empty (editor), gone while presenting
       const isEmpty = !inner.textContent?.trim() && !el.html.includes('<img')
       if (el.placeholder && isEmpty) {
@@ -1086,7 +1112,16 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       if (imgSrc) img.src = imgSrc
       else img.dataset.bentoOffline = '1'
       img.draggable = false
-      img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
+      if (el.crop && !isIdentityCrop(el.crop)) {
+        // A crop: the frame clips and carries the radius; the picture inside
+        // is enlarged and offset by the one mapping in crop.ts (canvas,
+        // thumbnails, present, print and the preview all come through here).
+        node.style.overflow = 'hidden'
+        node.style.borderRadius = `${el.radius}px`
+        img.style.cssText = cropImgStyle(el.crop)
+      } else {
+        img.style.cssText = `width:100%;height:100%;object-fit:${el.fit};border-radius:${el.radius}px;display:block`
+      }
       node.appendChild(img)
       break
     }
@@ -1206,6 +1241,50 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
           svg.prepend(style)
         }
       }
+      break
+    }
+    case 'embed': {
+      // The view ALWAYS paints, by the svg element's own two
+      // paths: an inert data-URI <img> for thumbnails, sanitizeSvg live. An
+      // unknown `app` is rendered, not rejected: its view is still a picture.
+      // The live frame is layered on top only when liveFrameAllowed says so,
+      // and never in a thumbnail, which must not reach the network for a
+      // sidebar.
+      node.dataset.embed = '1'
+      node.style.overflow = 'hidden' // .bento-el is already positioned; the frame sits over the view
+      const markup = resolveAsset(doc, el.view ?? '')
+      let painted = false
+      if (markup) {
+        if (opts.svgAsImage) {
+          const img = document.createElement('img')
+          img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(markup)
+          img.draggable = false
+          img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block'
+          node.appendChild(img)
+          painted = true
+        } else {
+          node.appendChild(sanitizeSvg(markup, `[data-el-id="${CSS.escape(el.id)}"]`))
+          const svg = node.querySelector('svg')
+          if (svg) {
+            svg.style.width = '100%'
+            svg.style.height = '100%'
+            svg.style.display = 'block'
+            painted = true
+          }
+        }
+      }
+      if (!painted) {
+        // Never an empty box: a view that is missing or was refused still
+        // says what it is, and its source is still there to open elsewhere.
+        const ph = document.createElement('div')
+        ph.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#eef2f7;color:#93a2b6;font-size:14px'
+        ph.textContent = el.app === 'web' && el.url ? el.url : `⧉ ${el.app || 'embed'}`
+        node.appendChild(ph)
+      }
+      // ...and only on a LIVE surface (present mode passes liveMedia). The
+      // editor canvas re-renders on every edit; a frame there would navigate
+      // to the author's URL on each repaint, inert or not.
+      if (!opts.svgAsImage && opts.liveMedia && liveFrameAllowed(el)) node.appendChild(liveFrame(el, opts))
       break
     }
     case 'code': {

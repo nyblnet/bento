@@ -10,6 +10,7 @@
 // one decision.
 
 import { type SpacesDoc, type Page, type Block, loadsRemotely, assetValue, tableOf, linkCard, coverSrc } from './model'
+import { proceduralCoverSvg, proceduralCoverFor } from './procedural'
 import { sanitizeInline, inertBody, esc } from './sanitize'
 import { tokenize } from './highlight'
 import { t, locale } from './i18n'
@@ -24,6 +25,7 @@ import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
 import { renderCanvasHead, placeCard } from './canvas.ts'
 import { viewEmbed, anchorOf } from './embed.ts'
+import { markRefs, notesOnPage, noteOf, noteId, refId, type PageNotes } from './footnotes.ts'
 
 export interface RenderOpts {
   /** editable per-block hosts (the editor); false for reader/print */
@@ -62,6 +64,18 @@ export interface RenderOpts {
    * given, so nothing outside this file ever has to pass it.
    */
   embedChain?: readonly string[]
+  /**
+   * DERIVED, and set by `renderBlocks` for its own descent — never by a caller.
+   *
+   * Footnote numbering is a fact about a whole PAGE (order of appearance), and
+   * `renderBlock` draws one block, so the numbering has to arrive from above.
+   * It rides in the options rather than as a fifth parameter for the same
+   * reason `calc` does not: every intermediate would have to thread it.
+   */
+  footnotes?: PageNotes
+  /** the page whose numbering `footnotes` is — DOM ids are document-global and
+   *  print draws every page at once, so a label's ids are scoped by page */
+  footnoteScope?: string
 }
 
 // The tag and list maps come from the block registry (blocks.ts), so a new
@@ -82,6 +96,12 @@ export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}):
   // page you are ON is a cycle at depth zero. Seeded rather than mutated: the
   // caller's opts object is not ours to write to.
   if (!opts.embedChain) opts = { ...opts, embedChain: [page.id] }
+  // FOOTNOTE NUMBERING IS COMPUTED ONCE, HERE. It is order-of-appearance over
+  // the whole page, so no block can work it out on its own — and it is derived
+  // every paint rather than stored, so inserting a reference renumbers
+  // everything after it with nothing to keep in step (src/footnotes.ts).
+  const fnotes = notesOnPage(doc, page)
+  if (fnotes.order.length) opts = { ...opts, footnotes: fnotes, footnoteScope: page.id }
   // MAGIC NOTES' CONTEXT, accumulated as the pass goes. A name is defined by a
   // line and usable by the lines BELOW it — the same direction a person reads
   // in, and the reason this needs no second pass and cannot cycle.
@@ -665,7 +685,12 @@ function renderTable(b: Block, opts: RenderOpts): HTMLElement {
         // over the whole table. A cell says which block AND which cell it is.
         td.dataset.cell = b.id
       }
-      td.innerHTML = sanitizeInline(cell)
+      // the same either/or as inlineHost, for the same reason — a cell is an
+      // editable host too
+      const cleanCell = sanitizeInline(cell)
+      td.innerHTML = opts.editable || !opts.footnotes
+        ? cleanCell
+        : markRefs(cleanCell, opts.footnotes, opts.footnoteScope ?? '')
       tr.appendChild(td)
     })
     if (head) {
@@ -826,7 +851,17 @@ function inlineHost(b: Block, opts: RenderOpts): HTMLElement {
   // document's theme.dir — PLATFORM §8's two-layer rule
   inner.dir = 'auto'
   if (opts.editable) inner.contentEditable = 'true'
-  inner.innerHTML = sanitizeInline(b.html ?? '')
+  // MARKERS ARE DRAWN ONLY WHERE THEY CANNOT BE TYPED INTO. `host.innerHTML`
+  // is written straight to `Block.html` on every `input` event, so a `<sup>`
+  // injected into an editable host is one keystroke from being committed to the
+  // document — and the reference `[^1]` it replaced would be gone. While a
+  // block is editable the author sees and edits the token, exactly as they see
+  // and edit `budget * 0.3 =` (calc.ts). Reading view, print and the
+  // file-manager still are all `editable: false` and get the superscript.
+  const clean = sanitizeInline(b.html ?? '')
+  inner.innerHTML = opts.editable || !opts.footnotes
+    ? clean
+    : markRefs(clean, opts.footnotes, opts.footnoteScope ?? '')
   if (!b.html) inner.dataset.empty = '1'
   return inner
 }
@@ -1042,7 +1077,16 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   // 80% keeps a visible step at every size, and the 1500px cap keeps Wide from
   // becoming an unreadable line on a very large screen — at which point Full is
   // the thing to pick, deliberately.
-  else if (width === 'wide') inner.style.maxWidth = 'min(1500px, 80%)'
+  // …WITH A FLOOR, because a proportion has nothing to be a proportion OF on a
+  // phone. 80% of a 354px page is 283px, and the 26px the gutter takes there
+  // leaves a 257px column on a 390px screen — a third of the display given to
+  // margin on the setting whose entire purpose is "room for a board or a
+  // table", and reachable in one tap ("Use this width for every page" is a
+  // per-screen preference). `max(80%, 680px)` is the same 80% wherever 80% is
+  // at least 680px (a container of 850px and up) and the whole container below
+  // that, since a max-width wider than the box does nothing. Measured at 390px:
+  // column 257 → 328, the page's left margin 79 → 26.
+  else if (width === 'wide') inner.style.maxWidth = 'min(1500px, max(80%, 680px))'
   else if (doc.theme.measure) {
     // AND THE DEFAULT ITSELF GROWS. 720px is ~88 characters at 16px, which is
     // already at the long end — so this does not widen the line much; what it
@@ -1093,6 +1137,19 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
     img.setAttribute('aria-hidden', 'true')
     wrap.appendChild(img)
     art.appendChild(wrap)
+  } else {
+    // NO COVER: the HOME page gets a procedural one — a figure seeded from its
+    // id, never written to the document. The home page only, and never on
+    // paper or in the thumbnail; procedural.ts decides and argues both. A page
+    // whose cover is removed lands here again, which is the "gets it back" half.
+    const gen = proceduralCoverFor(page, doc, opts.printing === true)
+    if (gen) {
+      art.classList.add('sp-has-cover')
+      const wrap = document.createElement('div')
+      wrap.className = 'sp-cover sp-cover-gen'
+      wrap.innerHTML = gen
+      art.appendChild(wrap)
+    }
   }
 
   const h = document.createElement('h1')
@@ -1104,8 +1161,75 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   inner.appendChild(h)
 
   inner.appendChild(renderBlocks(page, doc, opts))
+  const feet = renderFootnotes(page, doc, opts)
+  if (feet) inner.appendChild(feet)
   art.appendChild(inner)
   return art
+}
+
+/**
+ * The notes at the foot of the page, or null when the page has none.
+ *
+ * DERIVED, LIKE THE NUMBERS. Nothing in the document says "put a footnote
+ * section here" — the section IS the page's references, in the order they
+ * appear, so deleting the last reference removes the section and no cleanup
+ * has to remember to.
+ *
+ * A REFERENCE WITH NO NOTE STILL GETS A ROW, and that is the whole authoring
+ * gesture: type `[^1]` in a sentence and an empty numbered slot appears down
+ * here to write the note into. It is also why a dangling reference cannot be
+ * silently lost — what validate() reports is the same thing the author is
+ * already looking at.
+ *
+ * In the editor the note body is an editable host; in reading view, print and
+ * the file-manager still it is inert. `data-edit-note`, deliberately NOT
+ * `data-edit`: that name means "this element's html IS a BLOCK's html", and the
+ * editor's generic input handler would write a note over a block.
+ */
+function renderFootnotes(page: Page, doc: SpacesDoc, opts: RenderOpts): HTMLElement | null {
+  const notes = notesOnPage(doc, page)
+  if (!notes.order.length) return null
+  const sec = document.createElement('section')
+  sec.className = 'sp-fnotes'
+  // A real landmark with a real name: on paper it is the block at the foot of
+  // the page, and to a screen reader it is the region the superscripts point at.
+  sec.setAttribute('aria-label', t('Footnotes'))
+
+  const ol = document.createElement('ol')
+  ol.className = 'sp-fnlist'
+  for (const label of notes.order) {
+    const li = document.createElement('li')
+    li.className = 'sp-fnote'
+    li.id = noteId(page.id, label)
+
+    // BACK TO THE SENTENCE. A footnote you cannot get back from costs the
+    // reader their place; in print the anchor is inert and harmless, so it is
+    // hidden by the stylesheet rather than conditioned on the surface here.
+    const back = document.createElement('a')
+    back.className = 'sp-fnback'
+    back.href = `#${refId(page.id, label)}`
+    back.textContent = '\u21A9'
+    back.setAttribute('aria-label', t('Back to the text'))
+    li.appendChild(back)
+
+    const body = document.createElement('span')
+    body.className = 'sp-fnbody'
+    body.dir = 'auto'
+    // The note came out of a file somebody mailed you, exactly like a block's
+    // html, and goes through the same allowlist.
+    body.innerHTML = sanitizeInline(noteOf(doc, label) ?? '')
+    if (opts.editable) {
+      body.contentEditable = 'true'
+      body.dataset.editNote = label
+      // `:empty::before`, the same idiom the canvas title uses — no companion
+      // `data-empty` flag to keep in step with what the author has typed
+      body.dataset.ph = t('Write the note')
+    }
+    li.appendChild(body)
+    ol.appendChild(li)
+  }
+  sec.appendChild(ol)
+  return sec
 }
 
 /** What a value reads as. Mirrors fields.ts propHtml, which writes the same
@@ -1115,29 +1239,6 @@ function shownValue(f: FieldSpec | undefined, value: unknown): string {
   if (f?.vt === 'select') return optionOf(f, value)?.label ?? String(value)
   if (f?.vt === 'labels') return Array.isArray(value) ? value.join(', ') : String(value)
   return String(value)
-}
-
-/**
- * A stable hue for a page with no cover.
- *
- * FNV-1a over the id, which is the same cheap hash assets.ts falls back to:
- * every reader of one file computes the same colour, and a page keeps its
- * colour when it is renamed.
- *
- * A CURATED SET, not 360 free hues. Free hue was measured drawing 61 and 54 in
- * the same grid — the same dirty chartreuse twice — and five cards as
- * peach/pink/pink/lavender/lavender: two near-duplicate pairs out of five. It
- * also lands on olive and mustard, which no amount of alpha rescues, and goes
- * muddy in the dark theme. Eight stops spaced around the wheel and chosen to
- * be distinguishable at 30% alpha on both grounds; neighbours in a grid differ
- * because the stops differ, not because the hash happened to spread.
- */
-const CARD_HUES = [210, 265, 320, 8, 32, 48, 152, 186]
-
-function hueOf(id: string): number {
-  let h = 0x811c9dc5
-  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
-  return CARD_HUES[h % CARD_HUES.length]
 }
 
 /**
@@ -1369,74 +1470,6 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     return a
   }
 
-  // TABLE — the shape a base is usually looked at in, and the one this app did
-  // not have. Columns are the fields the ROWS ACTUALLY CARRY, in the schema's
-  // declared order: a table of books should not carry an Estimate column
-  // because the vocabulary happens to contain one, and a page that has a field
-  // the others lack should not be the reason everyone gets an empty column.
-  if (layout === 'table') {
-    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => rows.some((r) => r.values.has(k)))
-    const wrap = document.createElement('div')
-    // its own scroller: a wide table must not make the PAGE scroll sideways
-    wrap.className = 'sp-view-tablewrap'
-    const table = document.createElement('table')
-    table.className = 'sp-view-table'
-    const thead = document.createElement('thead')
-    const hr = document.createElement('tr')
-    const th0 = document.createElement('th')
-    th0.textContent = t('Page')
-    hr.appendChild(th0)
-    for (const k of keys) {
-      const th = document.createElement('th')
-      th.textContent = fieldByKey(doc, k)?.label ?? k
-      hr.appendChild(th)
-    }
-    thead.appendChild(hr)
-    table.appendChild(thead)
-    const tb = document.createElement('tbody')
-    for (const r of rows) {
-      const tr = document.createElement('tr')
-      const td0 = document.createElement('td')
-      // the page itself, reached the same way a card reaches it
-      const a = document.createElement('a')
-      a.className = 'sp-view-cellink'
-      a.href = `#p/${r.page.id}`
-      a.dataset.page = r.page.id
-      a.textContent = r.page.title || t('Untitled')
-      td0.appendChild(a)
-      tr.appendChild(td0)
-      for (const k of keys) {
-        const td = document.createElement('td')
-        const f = fieldByKey(doc, k)
-        const v = r.values.get(k)
-        // THROUGH THE OPTION, so a select shows its label and its colour rather
-        // than the id the model stores — the same thing propHtml does for the
-        // header strip, and for the same reason: the id is not for reading.
-        const opt = optionOf(f, v)
-        if (opt) {
-          const chip = document.createElement('span')
-          chip.className = 'sp-prop-chip'
-          const dot = document.createElement('span')
-          dot.className = 'sp-prop-dot'
-          if (opt.color) dot.style.background = opt.color
-          chip.append(dot, document.createTextNode(opt.label))
-          td.appendChild(chip)
-        } else if (v !== undefined && v !== null && String(v) !== '') {
-          td.textContent = String(v)
-        } else {
-          td.className = 'sp-view-empty'
-          td.textContent = '—'
-        }
-        tr.appendChild(td)
-      }
-      tb.appendChild(tr)
-    }
-    table.appendChild(tb)
-    wrap.appendChild(table)
-    host.appendChild(wrap)
-    return
-  }
-
   // GALLERY — the shape that makes a reading list look like a reading list. A
   // board answers "what state is this in" and a table answers "what does it
   // say"; a gallery answers "which one is it", which for books, films, recipes
@@ -1471,10 +1504,10 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
         shot.appendChild(img)
       } else {
         shot.classList.add('sp-gcard-bare')
-        // deterministic, so a page keeps its colour across reloads, readers and
+        // deterministic, so a page keeps its cover across reloads, readers and
         // machines — the same reason ids are repaired from the id and never
-        // from Math.random
-        shot.style.setProperty('--h', String(hueOf(r.page.id)))
+        // from Math.random. The figure is procedural.ts's; the mark rides on it.
+        shot.innerHTML = proceduralCoverSvg(r.page.id, 'card')
         const mark = document.createElement('span')
         mark.className = 'sp-gcard-mark'
         pageMark(mark, r.page)

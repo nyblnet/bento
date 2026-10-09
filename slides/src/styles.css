@@ -24,7 +24,8 @@
   --line: #e3e8ef;
   --muted: #5b6472;
   --accent: #f7a600;
-  --accent-ink: #7a5200;
+  --accent-ink: #7a5200;     /* accent-coloured TEXT on the chrome's own surfaces */
+  --accent-on: #3a2a00;      /* text sitting ON the solid --accent fill */
   --blue: #5b8def;
   --field: #ffffff;          /* form-control surface — CHROME, not the slide */
   --surface: #ffffff;        /* panels, dialogs, menus */
@@ -43,7 +44,12 @@
   --line: #333a45;
   --muted: #8b95a4;
   --accent: #f7a600;
-  --accent-ink: #3a2a00;     /* text ON the accent, so it flips */
+  /* accent-coloured TEXT on dark chrome: lifted, as spaces does. It used to
+     be #3a2a00 (meant for text ON the orange) and every text use sat on the
+     dark surfaces instead — 1.09:1, invisible (spaces' chrome audit, 2026-09).
+     Text on the orange fill has its own token, and it does not flip. */
+  --accent-ink: #f0b74e;
+  --accent-on: #3a2a00;
   --blue: #7aa5f5;           /* lifted: #5b8def is unreadable on dark chrome */
   --field: #12151a;
   --surface: #21262e;
@@ -56,6 +62,12 @@
 
 :root {
   --radius: 10px;
+  /* Chrome text drawn OVER THE SLIDE (the comment labels) sits on the deck's
+     background, not the chrome's, so neither theme's ink is safe on its own:
+     a dark slide hid the light theme's brown, a light slide would hide the
+     dark theme's gold. A halo in the chrome's surface colour gives the text
+     its own ground on any slide. */
+  --over-slide-halo: 0 0 2px var(--surface), 0 0 2px var(--surface), 0 0 4px var(--surface);
 }
 
 * { box-sizing: border-box; }
@@ -169,7 +181,12 @@ option { background: var(--field); color: var(--ink); }
   z-index: 50;
 }
 
-.ed-logo { display: flex; align-items: center; gap: 7px; font-size: 15px; white-space: nowrap; }
+/* A <button> (it opens About), dressed as the wordmark: none of a button's
+   own fill, border or padding, and the bar's ink rather than the UA's. */
+.ed-logo {
+  display: flex; align-items: center; gap: 7px; font: inherit; font-size: 15px; white-space: nowrap;
+  color: var(--ink); background: none; border: 0; padding: 0; border-radius: 6px; cursor: pointer;
+}
 .ed-logo-mark { display: block; border-radius: 5px; }
 
 .ed-title {
@@ -214,7 +231,13 @@ option { background: var(--field); color: var(--ink); }
   width: 7px; height: 7px; border-radius: 50%;
   background: transparent; pointer-events: none;
 }
-.ed-dirty.on { background: var(--accent); }
+/* Save is ink-filled (D1), and in dark theme --ink is near-white: the amber dot
+   alone measured 1.7:1 on it. A ring in the brand navy (the logo mark's tile)
+   is dark in BOTH themes — on light it merges into the ink fill, on dark it
+   parts the dot from it. A --surface ring failed the other way: white beside
+   amber is 2.0:1 in light. Dot:ring and ring:fill both clear 3:1
+   (scripts/test-slides-topbar-browser.mjs). */
+.ed-dirty.on { background: var(--accent); box-shadow: 0 0 0 1.5px #16273e; }
 .ed-split > .ed-btn:first-child { position: relative; }
 
 .ed-group { display: flex; align-items: center; gap: 6px; }
@@ -269,6 +292,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   z-index: 50;
   min-width: 150px;
 }
+/* The light shadow is navy at 14%, which on the dark chrome is a navy smudge
+   on navy and lifts nothing off the page. Dark gets black, deeper — the same
+   move --slide-shadow makes for the canvas. */
+:root[data-theme="dark"] .ed-menu { box-shadow: 0 8px 24px rgb(0 0 0 / 0.5); }
 /* DIRECT child, not any descendant. Phone chrome demotes whole dropdown
    widgets (Share, Language) into the ⋯ menu, so a descendant selector opened
    their menus too — ⋯ came up with the entire language list already unrolled
@@ -308,6 +335,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-thumb:hover { border-color: #c9d2de; }
 .ed-thumb.active { border-color: var(--accent); }
+/* in the multi-selection: a tint and the accent ring; the active one keeps its ring */
+.ed-thumb.selected { border-color: var(--accent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.ed-thumb.selected::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--accent) 12%, transparent); pointer-events: none; }
+.ed-thumb.dragging { opacity: .5; }
 .ed-thumb.drop { border-color: var(--blue); }
 .ed-thumb-num {
   position: absolute;
@@ -477,6 +508,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .bento-slide { position: relative; overflow: hidden; }
 
 .bento-el { position: absolute; contain: layout style; }
+/* A web link inside text: underlined in the author's colour, a pointer only
+   in the show (the editor treats it as text — canvas.ts swallows the click). */
+.bento-el a[href] { color: inherit; text-decoration: underline; text-underline-offset: 0.12em; }
+.bento-present-overlay .bento-el a[href] { cursor: pointer; }
 
 /* Formulas are left on the browser's own `math` family ON PURPOSE — naming a
    maths font here fixes nothing and has been reverted three times. The
@@ -492,6 +527,16 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
    back to `math` — and it is deliberately NOT shipped: it is clean on macOS
    and still broken on Windows. Read docs/DECISIONS.md, 2026-08-25, before
    touching this; the rig is slides/probe/radical-join.html. */
+
+/* A formula that did not render, on the editor canvas only (render.ts
+   mathHint, #540): the author's text stays exactly as typed, a faint dotted
+   underline says it was meant as maths, and the title says why. */
+.bento-math-miss {
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 0.18em;
+  cursor: help;
+}
 
 .bento-el-text,
 .bento-el-code
@@ -525,6 +570,9 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   text-decoration: line-through;
   opacity: 0.75;
 }
+/* An unnumbered slide is in the show but continues the previous page number:
+   the sidebar shows that number, dimmed, with a trailing dot as the marker. */
+.ed-thumb-num.ed-num-unnumbered { opacity: 0.6; font-style: italic; }
 
 .ed-stage .bento-el { cursor: grab; }
 .ed-stage .bento-el:active { cursor: grabbing; }
@@ -557,6 +605,29 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   margin: 18px 0 8px;
 }
 .ed-section:first-child { margin-top: 2px; }
+
+/* layers list (editor/layers.ts): one compact row per element, top first */
+.ed-layers {
+  display: flex; flex-direction: column; gap: 1px; outline: none; margin-bottom: 6px;
+  /* a busy slide (the showcase title has 39 elements) must not push the Slide
+     controls a screen down: the list scrolls inside itself past ~12 rows */
+  max-height: 300px; overflow-y: auto;
+}
+.ed-layers:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: 6px; }
+.ed-layer {
+  display: flex; align-items: center; gap: 7px;
+  padding: 3px 6px; border-radius: 6px; font-size: 12px; line-height: 18px;
+  cursor: default; user-select: none; border: 1px solid transparent;
+}
+.ed-layer:hover { background: rgb(94 118 153 / 0.10); }
+.ed-layer.sel { background: rgb(94 118 153 / 0.18); border-color: rgb(94 118 153 / 0.35); }
+.ed-layer.grouped { padding-left: 20px; }
+.ed-layer.dragging { opacity: 0.4; }
+.ed-layer.drop-above { box-shadow: 0 -2px 0 0 var(--accent); }
+.ed-layer.drop-below { box-shadow: 0 2px 0 0 var(--accent); }
+.ed-layer-glyph { flex: none; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); font-size: 10px; font-weight: 700; }
+.ed-layer-glyph svg { width: 14px; height: 14px; }
+.ed-layer-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .ed-row {
   display: flex;
@@ -673,6 +744,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   align-items: center;
   justify-content: center;
 }
+/* D4: a dialog title is 17px/650 (the kernel's .bkd-title). Before, this was
+   the browser's h2 — 1.5em of 13px = 19.5px at 700 — in help, Version history
+   and every other .ed-about card. */
+.ed-about h2 { font-size: 17px; font-weight: 650; }
 .ed-about {
   /* 440 rather than 360: release notes ride inline in the manifest now, and a
      narrower box turned every bullet into two wrapped lines. The calc() keeps
@@ -844,11 +919,11 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   --r-background-color: #000;
   --r-main-color: #fff;
   --r-main-font-size: 32px;
-  --r-link-color: #f7a600;
+  --r-link-color: var(--accent);
   --r-link-color-hover: #ffc23e;
-  --r-selection-background-color: #f7a600;
+  --r-selection-background-color: var(--accent);
   --r-controls-color: rgb(255 255 255 / 0.6);
-  --r-progress-color: #f7a600;
+  --r-progress-color: var(--accent);
   --r-overlay-element-bg-color: 255, 255, 255;
   --r-overlay-element-fg-color: 0, 0, 0;
 }
@@ -864,6 +939,12 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .bento-present-overlay.laser-over-slide .bento-slide,
 .bento-present-overlay.laser-over-slide .bento-slide * { cursor: none !important; }
+/* While the laser is armed, dragging on the slide must never select text. */
+.bento-present-overlay.laser-enabled .bento-slide,
+.bento-present-overlay.laser-enabled .bento-slide * {
+  user-select: none;
+  -webkit-user-select: none;
+}
 .bento-laser-trail {
   position: absolute;
   inset: 0;
@@ -896,6 +977,17 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   transition: opacity 0.08s linear;
 }
 .bento-laser-dot.visible { opacity: 1; }
+.bento-laser-dot.bento-remote {
+  /* Frames arrive at ~30fps; a short linear tween (longer than one frame
+     interval so it always settles, short enough to add no lag) smooths the
+     last step — Excalidraw steps at 33ms with no tween at all, this is
+     strictly smoother. The LOCAL dot keeps its opacity-only transition: at
+     60fps a position tween would smear it behind the hand. */
+  transition:
+    left 0.045s linear,
+    top 0.045s linear,
+    opacity 0.08s linear;
+}
 .bento-present-overlay.reduce-motion .bento-laser-trail { display: none; }
 .bento-present-overlay.reduce-motion .bento-laser-dot { transition: none; }
 /* Reduced motion (M / speaker toggle / OS prefers-reduced-motion): JS fx are
@@ -938,7 +1030,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .bento-present-overlay .bento-el[data-link] { cursor: pointer; }
 .bento-present-overlay .bento-el[data-link]:hover {
-  outline: 2.5px solid var(--bento-accent, #f7a600);
+  outline: 2.5px solid var(--bento-accent, var(--accent));
   outline-offset: 3px;
   border-radius: 999px;
 }
@@ -959,6 +1051,9 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 
 /* --- help overlay + help button ------------------------------------------- */
 .ed-btn-help .ed-help-q { font-size: 15px; font-weight: 800; line-height: 1; }
+/* The glyph is narrower and shorter than a 16px icon, so without a floor the
+   button came out 28×29 beside 36×30 neighbours. */
+.ed-btn-help { min-width: 36px; min-height: 30px; justify-content: center; }
 .ed-help-box { width: 700px; max-width: 92vw; }
 /* two hand-placed columns so the (now longer) list stays short vertically */
 .ed-help-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 30px; align-items: start; }
@@ -971,10 +1066,12 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   color: var(--muted); margin: 0 0 6px;
 }
 .ed-help-row { display: grid; grid-template-columns: 128px 1fr; gap: 12px; align-items: baseline; padding: 3px 0; font-size: 13px; }
+/* D8: shortcuts in the interface face, not monospace, right-aligned against
+   what they do — the column reads as a list of keys, as a menu's does */
 .ed-help-row kbd {
-  font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: inherit; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
   background: var(--chrome-2); border: 1px solid var(--line);
-  border-radius: 5px; padding: 2px 6px; color: var(--ink); white-space: nowrap; justify-self: start;
+  border-radius: 5px; padding: 2px 6px; color: var(--ink); white-space: nowrap; justify-self: end;
 }
 .ed-help-tips { margin: 4px 0 0; padding-inline-start: 18px; font-size: 13px; line-height: 1.5; color: var(--ink); }
 .ed-help-tips li { margin: 3px 0; }
@@ -1146,6 +1243,9 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   padding: 5px 0;
   justify-content: center;
 }
+/* reveal verbs: caption + three text buttons sharing the row */
+.ed-reveal-row { display: flex; align-items: center; gap: 4px; margin: 3px 0; }
+.ed-reveal-row .ed-btn { flex: 1; min-width: 0; padding: 5px 4px; justify-content: center; font-size: 11px; }
 .ed-arrange-cap {
   flex: none;
   width: 46px;
@@ -1205,7 +1305,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   z-index: 12;
   pointer-events: none;
   background: var(--accent);
-  color: #3a2800;
+  color: var(--accent-on);
   font: 700 10.5px/1 -apple-system, 'Segoe UI', system-ui, sans-serif;
   padding: 5px 9px;
   border-radius: 999px;
@@ -1224,11 +1324,13 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent-ink);
+  text-shadow: var(--over-slide-halo);
 }
 .ed-comment-hl.pin {
   width: 0; height: 0;
   font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--accent-ink);
+  text-shadow: var(--over-slide-halo);
   white-space: nowrap;
   padding-left: 12px;
   padding-top: 2px;
@@ -1250,6 +1352,29 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-comment-marker.fresh { animation: ed-cmt-pop 0.45s ease-out; }
 
 .ed-comment-layer { position: absolute; inset: 0; pointer-events: none; z-index: 12; }
+
+/* reveal-step badges (editor/stepbadges.ts): editor-only chrome beside the
+   rendered slide, never inside it */
+.ed-step-layer { position: absolute; inset: 0; pointer-events: none; z-index: 12; }
+.ed-step-badge {
+  position: absolute;
+  pointer-events: auto;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border: 2px solid var(--surface);
+  border-radius: 10px;
+  background: #1e2a3a;
+  color: #fff;
+  font: 700 10px/15px inherit;
+  font-family: inherit;
+  text-align: center;
+  box-sizing: border-box;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgb(15 23 36 / 0.3);
+}
+.ed-step-badge.sel { background: var(--accent); color: var(--accent-on); }
+.ed-step-badge:hover { transform: scale(1.15); }
 .ed-comment-marker {
   position: absolute;
   pointer-events: auto;
@@ -1258,7 +1383,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   border: none;
   border-radius: 50% 50% 50% 3px;
   background: var(--accent);
-  color: #3a2800;
+  color: var(--accent-on);
   font: 700 10px/19px inherit;
   font-family: inherit;
   text-align: center;
@@ -1343,7 +1468,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   box-shadow: 0 12px 32px rgb(15 23 36 / 0.18);
   padding: 12px 14px;
   max-width: 420px;
-  max-height: 70vh;
+  max-height: calc(100vh - 16px);
   overflow-y: auto;
 }
 .ed-layoutpick-title {
@@ -1542,7 +1667,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-.sv-timer:hover { color: #f7a600; }
+.sv-timer:hover { color: var(--accent); }
 .sv-clock { font-size: 15px; color: #9fb0c3; }
 .sv-count { font-size: 15px; color: #9fb0c3; font-variant-numeric: tabular-nums; }
 .sv-ctrls { margin-left: auto; display: flex; align-items: center; gap: 6px; }
@@ -1562,7 +1687,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .sv-btn:hover:not([disabled]) { background: #2a323c; color: #fff; }
 .sv-btn[disabled] { opacity: 0.35; cursor: default; }
-.sv-btn.active { background: #f7a600; border-color: #f7a600; color: #14181d; }
+.sv-btn.active { background: var(--accent); border-color: var(--accent); color: #14181d; }
 .sv-main { display: flex; gap: 22px; padding: 14px 22px; align-items: flex-start; flex: 1; min-height: 0; }
 .sv-frame {
   position: relative;
@@ -1580,7 +1705,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-size: 14px;
   background: #1a2029;
 }
-.sv-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.sv-side { flex: 1; align-self: stretch; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 16px; }
 .sv-label {
   font-size: 10.5px;
   font-weight: 700;
@@ -1623,7 +1748,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   overflow: hidden;
 }
 .sv-thumb:hover { border-color: #4a5a72; }
-.sv-thumb.current { border-color: #f7a600; }
+.sv-thumb.current { border-color: var(--accent); }
 .sv-thumb .sv-frame { box-shadow: none; border-radius: 0; }
 .sv-thumb-n {
   position: absolute;
@@ -1639,7 +1764,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   line-height: 1.4;
   text-align: center;
 }
-.sv-thumb.current .sv-thumb-n { background: #f7a600; color: #14181d; }
+.sv-thumb.current .sv-thumb-n { background: var(--accent); color: #14181d; }
 .sv-grid {
   position: fixed;
   inset: 0;
@@ -1667,6 +1792,11 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   background: #000;
 }
 .bento-blackout[hidden] { display: none; }
+/* Reveal steps (fx.step): an element whose step has not come yet. Visibility,
+   not display — it keeps its box (nothing reflows when it appears), keeps
+   morph and layout measurements honest, and its entrance tween can start
+   from opacity 0 the moment the class comes off. Present-mode only. */
+.bento-present-overlay .bento-step-hidden { visibility: hidden !important; pointer-events: none; }
 
 /* transient confirmation pill in present mode (e.g. Reduced motion on/off) */
 .bento-present-toast {
@@ -1685,6 +1815,43 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   transition: opacity 0.25s ease;
 }
 .bento-present-toast.show { opacity: 1; }
+
+/* --- live broadcast, audience side ------------------------------------- */
+/* Follow chip: the viewer's toggle (browse ⇄ follow); disabled under lock. */
+.bento-follow-chip {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 61;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  background: rgb(20 30 45 / 0.82);
+  color: #fff;
+  font: 500 13px/1.2 system-ui, sans-serif;
+  padding: 7px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.bento-follow-chip:hover { opacity: 1; }
+.bento-follow-chip.following { border-color: var(--bento-accent, var(--accent)); }
+.bento-follow-chip[disabled] { cursor: default; opacity: 0.7; }
+/* Status card: waiting for the presenter / the show has ended / ticket dead. */
+.bento-show-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 61;
+  background: rgb(20 30 45 / 0.9);
+  color: #fff;
+  font: 500 16px/1.4 system-ui, sans-serif;
+  padding: 16px 24px;
+  border-radius: 12px;
+  max-width: 70vw;
+  text-align: center;
+  pointer-events: none;
+}
+.bento-show-card[hidden] { display: none; }
 
 /* --- live collaboration ----------------------------------------------- */
 .ed-avatars {
@@ -1778,22 +1945,16 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   color: #b8860b;
 }
 .ed-share-status.ok { color: #2e8b57; }
-.ed-share-btn {
-  justify-content: center;
-  font-size: 12.5px;
-  padding: 6px 10px;
-  white-space: normal;
-  text-align: center;
-  line-height: 1.35;
-}
-/* share actions read as BUTTONS at rest, not hover-reveal text */
-.ed-share-btn:not(.ed-btn-primary) {
-  background: var(--chrome);
-  border: 1px solid var(--line);
-}
-.ed-share-btn:not(.ed-btn-primary):hover { background: var(--chrome-2); }
-.ed-share-btn { width: 100%; justify-content: flex-start; text-align: start; }
+/* Share's actions are plain menu rows, the same as Save as: 12.5px, one line,
+   a hover fill and nothing at rest. They were boxed buttons (2026-07-20, so
+   they would not read as text among the panel's notes); the SHARE A COPY
+   heading and the icons do that now, and the boxes made the panel busier. */
+.ed-share-btn { width: 100%; justify-content: flex-start; text-align: start; font-size: 12.5px; }
 .ed-share-btn svg { flex: none; }
+/* the panel's 7px gap spaces its sections (name, people, status); between two
+   action rows it would make a list of rows look like a stack of chips —
+   adjacent rows touch, as they do in every other menu */
+.ed-share-pop > .ed-share-btn + .ed-share-btn { margin-block-start: -7px; }
 
 /* divider usable in any dropdown menu */
 .ed-menu-sep { height: 1px; background: var(--line); margin: 3px 2px; }
@@ -1803,14 +1964,18 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 /* Save is a split button: [ Save |▾] one visual unit. The caret button is
    NESTED inside the .ed-dropdown wrapper, so stretch through the wrapper. */
 .ed-split { display: inline-flex; align-items: stretch; }
+/* PRIMARY (maintainer ruling D1, both apps): saving is the act every session
+   ends with, so Save and its caret are one ink-filled unit — the same inverse
+   pairing as .ed-btn-primary (--surface on --ink: 14.5:1 light, 12.6:1 dark). */
 .ed-split > .ed-btn:first-child {
   border-start-start-radius: 8px;
   border-end-start-radius: 8px;
   border-start-end-radius: 0;
   border-end-end-radius: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--ink);
   border-inline-end: none;
-  background: var(--chrome);
+  background: var(--ink);
+  color: var(--surface);
 }
 .ed-split .ed-dropdown { display: flex; align-items: stretch; }
 .ed-split-caret {
@@ -1821,11 +1986,14 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   border-end-start-radius: 0;
   border-start-end-radius: 8px;
   border-end-end-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--chrome);
+  border: 1px solid var(--ink);
+  /* a hairline in the text colour divides the two halves on the ink */
+  border-inline-start-color: color-mix(in srgb, var(--surface) 35%, var(--ink));
+  background: var(--ink);
+  color: var(--surface);
   padding: 6px 7px;
 }
-.ed-split .ed-btn:hover { background: var(--chrome-2); }
+.ed-split .ed-btn:hover { background: var(--ink-2); border-color: var(--ink-2); }
 .ed-caret { font-size: 10px; line-height: 1; }
 
 /* quiet divider between share actions and advanced session controls */
@@ -1949,6 +2117,14 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .ed-share-me .who { font-weight: 600; }
 .ed-share-me .where { margin-inline-start: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* Your own row: the NAME stays whole and the key gives way. The shared
+   .ed-share-peer rules below do the opposite (a peer's "on slide 3" is short;
+   their name is what can run long), which cut "Guest (you)" to "Guest (y…"
+   beside a 20-character key. The key is a fingerprint you compare by its
+   start, and its full form is in the row's tooltip. A very long name still
+   yields at 65%. Doubled class: the peer rules come later in the file. */
+.ed-share-peer.ed-share-me .who { flex: none; max-width: 65%; }
+.ed-share-peer.ed-share-me .where { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: end; }
 .ed-share-peer {
   display: flex;
   align-items: center;
@@ -2063,6 +2239,9 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-title { flex: 0 1 220px; min-width: 48px; }
 .ed-topbar.ed-bar-compact .ed-btn > span { display: none; } /* icons + tooltips take over */
 .ed-topbar.ed-bar-compact .ed-btn.ed-btn-update > span { display: inline; } /* version chip is signal */
+/* the Save caret's ▾ is its only content, not a label — hiding it left an
+   empty 16px button */
+.ed-topbar.ed-bar-compact .ed-btn > span.ed-caret { display: inline; }
 /* …but NEVER inside an open dropdown/menu — those items are text; hiding
    their labels left icon-only mystery menus on phones. */
 .ed-topbar.ed-bar-compact .ed-menu .ed-btn > span,
@@ -2105,7 +2284,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .ed-topbar.ed-bar-fold .ed-split > .ed-btn:first-child {
   border-start-end-radius: 8px;
   border-end-end-radius: 8px;
-  border-inline-end: 1px solid var(--line);
+  border-inline-end: 1px solid var(--ink);
 }
 /* ⋯ carries the demoted buttons AND that list, so it can outgrow the
    screen in BOTH directions.
@@ -2167,7 +2346,11 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   }
   /* HIG touch targets — a 36px icon is a mis-tap on glass */
   .ed-topbar .ed-btn { min-width: 44px; min-height: 44px; justify-content: center; }
-  .ed-topbar .ed-menu .ed-btn { min-width: 0; } /* menu rows are text, not targets */
+  /* the wordmark is a button too (About), and on a phone it is the mark alone */
+  .ed-topbar .ed-logo { min-width: 44px; min-height: 44px; justify-content: center; }
+  /* menu rows are text, not targets — and read from the start edge; the
+     centring above is for the bar's icon buttons and used to leak in here */
+  .ed-topbar .ed-menu .ed-btn { min-width: 0; justify-content: flex-start; }
   .ed-title { flex: 0 1 220px; }
   .ed-phone-tools {
     display: flex;
@@ -2270,6 +2453,29 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 }
 .ed-save-menu { min-width: 190px; }
 .ed-save-menu .ed-btn { font-size: 12.5px; }
+/* D2 (revised 2026-09-26): Save as and Share keep one-line rows and put each
+   description in the tooltip, with the same text in a visually-hidden node for
+   aria-describedby (editor.ts menuLabel). The Save list keeps spaces' width
+   for the same list (240–264). */
+.ed-save-menu { width: min(264px, calc(100vw - 16px)); }
+/* A long list on a short window (phone landscape, a split screen) must not
+   run off the bottom with its last commands unreachable: it scrolls within
+   the space under the bar. Safe to make a scroll box (hard-won #10): nothing in
+   it floats. --ed-bar-bottom is published by editor.ts. */
+.ed-save-menu { max-height: calc(100dvh - var(--ed-bar-bottom, 56px) - 12px); overflow-y: auto; }
+/* present for assistive tech, absent for the eye */
+.ed-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* A designed keyboard ring, the kernel's (kernel/src/ui/menu.css .bkm-item):
+   --accent-ink, 2px. Bar and dialog buttons draw it OUTSIDE, on the surface
+   they sit on (inside, it would sit on Save's ink fill); rows in a menu draw
+   it INSIDE, where the list's own padding would clip it. :focus-visible, so
+   a pointer never sees it. */
+.ed-btn:focus-visible, .ed-logo:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.ed-menu .ed-btn:focus-visible { outline-offset: -2px; }
 /* when the adjacent panel is collapsed the chevron pins fully on-screen,
    docked to the edge like a drawer pull */
 .ed-sidebar.ed-collapsed + .ed-resizer .ed-panel-toggle {

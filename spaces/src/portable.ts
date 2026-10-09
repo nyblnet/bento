@@ -20,6 +20,7 @@
 import { type SpacesDoc, type Page, type Block, repairId, pageAssetKeys } from './model.ts'
 import { esc } from './sanitize.ts'
 import { isPageRef } from './embed.ts'
+import { allNotes, mergeNotes, renameRefs } from './footnotes.ts'
 
 /** An `<a href="#p/…">` in a block, however many attributes it carries. */
 const PAGE_LINK = /<a\s([^>]*?)href="#p\/([^"]*)"([^>]*)>([\s\S]*?)<\/a>/g
@@ -273,6 +274,9 @@ export interface GraftPlan {
   /** asset entries to add — already keyed so nothing in the host is overwritten */
   assets: Record<string, string>
   fonts: NonNullable<SpacesDoc['fonts']>
+  /** notes to ADD to the host's table — already deconflicted, and the arriving
+   *  references already rewritten to match (src/footnotes.ts) */
+  footnotes: Record<string, string>
   stats: GraftStats
 }
 
@@ -431,8 +435,38 @@ export function planGraft(
     for (const b of p.blocks) rewriteAssetRefs(b, keyMap)
   }
 
+  // FOOTNOTES FOLLOW THE PAGES THAT REFERENCE THEM, and they follow the same
+  // rule the asset keys above follow: a label already held by this space, with
+  // a DIFFERENT note behind it, is renamed and the arriving references are
+  // rewritten. Without this, grafting a page whose prose says `[^1]` would
+  // either answer with the host's own note or leave every reference dangling —
+  // and both are silent, which is the class of import loss this app has been
+  // bitten by before.
+  const footnotes: Record<string, string> = {}
+  const incomingNotes = Object.fromEntries(allNotes(incoming))
+  if (Object.keys(incomingNotes).length) {
+    const hostNotes = Object.fromEntries(allNotes(host))
+    const merged = { ...hostNotes }
+    const renames = mergeNotes(merged, incomingNotes, new Set(Object.keys(hostNotes)))
+    for (const [k, v] of Object.entries(merged)) {
+      if (!Object.hasOwn(hostNotes, k)) footnotes[k] = v
+    }
+    if (renames.size) {
+      for (const p of pages) {
+        for (const b of p.blocks) {
+          if (typeof b.html === 'string') b.html = renameRefs(b.html, renames)
+          if (Array.isArray(b.rows)) {
+            b.rows = (b.rows as unknown[]).map((r) =>
+              Array.isArray(r) ? r.map((c) => (typeof c === 'string' ? renameRefs(c, renames) : c)) : r) as string[][]
+          }
+        }
+      }
+    }
+  }
+
   return {
     pages,
+    footnotes,
     assets,
     fonts,
     stats: {

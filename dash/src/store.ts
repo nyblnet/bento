@@ -38,7 +38,12 @@ import { PROVENANCE_OPS } from './steps.ts'
 import type { CellOverride, Comment, View, Column, ColumnData, ColumnType, DashDoc, Measure, Sheet, Step, TableSheet, CanvasCell, CanvasSheet } from './model.ts'
 
 type Listener = () => void
-export type StoreEvent = 'doc' | 'view' | 'selection'
+/**
+ * 'unsaved' — the document changed in a way that is not an edit to its data
+ * and goes through no patch (sharing switched on or off, keys rotated), but
+ * the FILE must still be rewritten for it. See `markUnsaved`.
+ */
+export type StoreEvent = 'doc' | 'view' | 'selection' | 'unsaved'
 
 /** Idle that closes a run. Autosave debounces longer, so no snapshot lands mid-run. */
 const RUN_IDLE_MS = 600
@@ -996,7 +1001,17 @@ export class Store {
     return () => set.delete(fn)
   }
 
+  /**
+   * Advances on EVERY document change — committed, mid-run, remote, and the
+   * few writes that go straight onto the doc and call `touch()` (document
+   * properties, sharing credentials). The save queue compares it at
+   * acknowledgement time: a write may clear the unsaved dot only if this has
+   * not moved since its snapshot. View changes do not count.
+   */
+  revision = 0
+
   private emit(ev: StoreEvent): void {
+    if (ev === 'doc') this.revision++
     for (const fn of this.listeners.get(ev) ?? []) fn()
   }
 
@@ -1212,8 +1227,24 @@ export class Store {
     this.emit('view')
   }
 
+  /**
+   * The document changed OUTSIDE the patch vocabulary, and the file is now
+   * behind it. Not undoable, not a repaint — just "this needs saving".
+   *
+   * Exists for sharing. Starting, stopping and rotating write `doc.collab`
+   * directly (they are not edits to the workbook's data and must not sit in
+   * its undo history), and nothing told the unsaved dot. So a key ROTATION —
+   * which is revocation — could be closed without a warning and without the
+   * automatic save, and the file kept the keys that were meant to be dead.
+   */
+  markUnsaved(): void {
+    this.touch()
+    this.emit('unsaved')
+  }
+
   /** Model changed without a new undo entry (mid-run). */
   touch(): void {
+    this.revision++
     this.doc.modified = new Date().toISOString()
   }
 

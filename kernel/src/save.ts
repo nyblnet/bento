@@ -9,6 +9,7 @@
 
 import type { KernelDoc } from './doc.ts'
 import { appConfig } from './app.ts'
+import { sharedStorageOrigin } from './net.ts'
 
 const DATA_BLOCK_ID = 'bento-doc'
 // Split so the literal never appears in the bundle (it would terminate the
@@ -43,6 +44,29 @@ export function readEmbeddedDoc(): string | null {
   const block = document.getElementById(DATA_BLOCK_ID)
   const text = block?.textContent?.trim()
   return text || null
+}
+
+/**
+ * The `#bento-doc` body from an HTML string — the file as bytes, not the live
+ * DOM — so a handle's current file can be checked against the open document
+ * without a parser (it runs in the launch consumer AND in a node rig). This proves
+ * SAME DOCUMENT (an identical #bento-doc body), NOT same file: a copy re-saved with
+ * a different surrounding shell still matches, which is exactly what the launch
+ * check wants. Anchored by indexOf on the exact id attribute — double-quoted as the
+ * DOM serializes it, with a LEADING SPACE so it can never match a `data-id`
+ * lookalike — which is linear, where a regex over an unterminated `<script` is
+ * quadratic. CRLF is normalised so a file saved with CRLF line endings still
+ * compares equal. The body is <-escaped at write time so it can never itself
+ * contain the close tag. null if there is no block. */
+const DOC_BLOCK_ID_ATTR = ` id="${DATA_BLOCK_ID}"`
+export function embeddedDocBlock(html: string): string | null {
+  const at = html.indexOf(DOC_BLOCK_ID_ATTR)
+  if (at < 0) return null
+  const start = html.indexOf('>', at + DOC_BLOCK_ID_ATTR.length)
+  if (start < 0) return null
+  const end = html.indexOf(SCRIPT_CLOSE, start + 1)
+  if (end < 0) return null
+  return html.slice(start + 1, end).replace(/\r\n/g, '\n').trim() || null
 }
 
 /**
@@ -474,11 +498,18 @@ export async function decryptEnvelope(env: EncEnvelope, password: string): Promi
  * Encryption-aware serialization into an arbitrary shell — THE path for
  * saves and self-updates. Plain when no password is active.
  */
+/**
+ * The exact bytes that go INTO `#bento-doc`: the document JSON when no password
+ * is active, or the `bento/enc` envelope over that JSON when one is. This is the
+ * payload a save writes — the shell (serializeBody) is furniture around it — and
+ * it is DOM-free, so it is the seam a rig can drive the real write path with.
+ */
+export async function encodeDocBody(doc: KernelDoc): Promise<string> {
+  return encPassword ? encryptBody(JSON.stringify(doc), encPassword) : JSON.stringify(doc)
+}
+
 export async function serializeDocInto(shell: Document, doc: KernelDoc): Promise<string> {
-  const body = encPassword
-    ? await encryptBody(JSON.stringify(doc), encPassword)
-    : JSON.stringify(doc)
-  return serializeBody(shell, body, doc)
+  return serializeBody(shell, await encodeDocBody(doc), doc)
 }
 
 /** Encryption-aware serializeFile. */
@@ -498,6 +529,7 @@ type SaveResult = 'saved' | 'saved-as' | 'downloaded' | 'cancelled'
 
 interface FsFileHandle {
   createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }>
+  getFile?(): Promise<{ text(): Promise<string> }>
   name: string
 }
 
@@ -641,11 +673,119 @@ export function downloadFile(html: string, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
+// --- remembering the file handle across reopens -----------------------------
+//
+// Chrome's File System Access blocklist refuses ~/Documents, ~/Downloads, the
+// Desktop and the home folder as DIRECTORY grants, so a deck sitting directly in
+// one of them can never be covered by a bento/home folder grant and re-ran the
+// full save picker on every reopen. FILE handles are not blocked and are
+// structured-cloneable, so we remember the one a save produced (IndexedDB, keyed
+// by docId) and, on the first ⌘S after a reopen, re-request readwrite permission
+// INSIDE the save gesture — Chrome 122+ shows a small "Allow on every visit"
+// prompt instead of a picker. Only a real FileSystemFileHandle is stored: a host
+// polyfill (home/ios, home/webext) hands back its own handle, which is not one
+// and stays on the bridge path untouched.
+
+const HANDLE_DB = 'bento-handles'
+const HANDLE_STORE = 'handles'
+
+function handleDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(HANDLE_DB, 1)
+    req.onupgradeneeded = () => { req.result.createObjectStore(HANDLE_STORE) }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+async function idbHandle(op: 'get' | 'put' | 'delete', docId: string, val?: unknown): Promise<unknown> {
+  const db = await handleDb()
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(HANDLE_STORE, op === 'get' ? 'readonly' : 'readwrite')
+      const store = tx.objectStore(HANDLE_STORE)
+      const r = op === 'get' ? store.get(docId) : op === 'put' ? store.put(val, docId) : store.delete(docId)
+      r.onsuccess = () => resolve(op === 'get' ? r.result : undefined)
+      r.onerror = () => reject(r.error)
+    })
+  } finally { db.close() }
+}
+
+/** A FileSystemFileHandle with the permission methods (not in every lib.dom). */
+type PermHandle = FsFileHandle & {
+  queryPermission(d: { mode: 'readwrite' }): Promise<PermissionState>
+  requestPermission(d: { mode: 'readwrite' }): Promise<PermissionState>
+}
+const isRealHandle = (h: unknown): h is PermHandle =>
+  typeof FileSystemFileHandle !== 'undefined' && h instanceof FileSystemFileHandle
+
+/** Remember the handle a save produced so the next reopen can reconnect it.
+ *  Only ever reached from saveFile — a readonly player never saves, so its
+ *  handle is never stored — and only a real handle, never a host polyfill.
+ *
+ *  NOT on a shared-storage origin. Chrome gives every file:// document one
+ *  IndexedDB, so a stored handle is a live write capability any other local
+ *  deck could read and re-permission (docs/DECISIONS.md, security-review-pr519).
+ *  There a persistent grant has no identity to bind to, so it is not offered;
+ *  the per-session handle still works. Real web origins and real-origin host
+ *  apps (isolated storage) persist as normal. */
+async function persistHandle(doc: KernelDoc, handle: FsFileHandle): Promise<void> {
+  if (sharedStorageOrigin() || !doc.docId || !isRealHandle(handle)) return
+  try { await idbHandle('put', doc.docId, handle) } catch { /* best effort — a lost handle just means tomorrow's picker */ }
+}
+
+/**
+ * First ⌘S after a reopen: if we remember a handle for this docId, re-acquire
+ * permission inside the save gesture instead of showing the picker. Returns the
+ * handle when permission is granted, else null (the caller falls back to the
+ * picker). Exported for the rig.
+ *
+ * MUST run before the expensive serializeAuto so the user activation the save
+ * gesture carries is still fresh when requestPermission() prompts (Chrome keeps
+ * transient activation ~5 s across awaits; a ~1 s serialize would risk it).
+ */
+export async function reconnectHandle(doc: KernelDoc): Promise<FsFileHandle | null> {
+  // Never reconnect from shared storage. On a file:// origin the store is shared
+  // with every local deck, so an entry found here could have been planted by a
+  // malicious file — keyed to this docId and named to match the file on screen,
+  // which would make the name check below pass and re-permission a handle to a
+  // DIFFERENT file on the user's own ⌘S (security-review-pr519, finding 1). We
+  // also never write there (persistHandle), but refusing to READ is what closes
+  // the planted-entry path. Real, isolated origins reconnect as normal.
+  if (sharedStorageOrigin()) return null
+  if (!doc.docId) return null
+  let stored: unknown
+  try { stored = await idbHandle('get', doc.docId) } catch { return null }
+  if (!isRealHandle(stored)) return null // absent, or a host polyfill handle
+  // the remembered handle must be the file on screen: docId + name. isSameEntry
+  // needs a second handle we do not have on a bare file:// reopen, so the name
+  // check is the guard.
+  const onScreen = openedFileName()
+  if (onScreen && stored.name !== onScreen) return null // mismatch → picker, entry kept
+  try {
+    let perm = await stored.queryPermission({ mode: 'readwrite' })
+    if (perm !== 'granted') perm = await stored.requestPermission({ mode: 'readwrite' })
+    if (perm === 'granted') return stored
+    void idbHandle('delete', doc.docId) // denied → forget it, use the picker
+    return null
+  } catch { // NotFoundError (file moved/deleted) or any handle failure
+    void idbHandle('delete', doc.docId)
+    return null
+  }
+}
+
 /**
  * Save the document. Chrome/Edge: File System Access API (picker on first
- * save, silent rewrite after). Firefox/Safari: download a copy.
+ * save, silent rewrite after — and, since a remembered handle can reconnect,
+ * one permission prompt rather than a picker on the first save after a reopen).
+ * Firefox/Safari: download a copy.
  */
 export async function saveFile(doc: KernelDoc, forcePicker = false): Promise<SaveResult> {
+  // Reconnect a remembered handle BEFORE serializing: requestPermission() has to
+  // fire inside the fresh save gesture, and serializeAuto can take ~a second.
+  if (hasFsAccess() && !forcePicker && !fileHandle) {
+    const re = await reconnectHandle(doc)
+    if (re) fileHandle = re
+  }
   const html = await serializeAuto(doc)
   if (hasFsAccess()) {
     if (forcePicker || !fileHandle) {
@@ -655,9 +795,13 @@ export async function saveFile(doc: KernelDoc, forcePicker = false): Promise<Sav
       if (!handle) return 'cancelled'
       fileHandle = handle
       await writeHandle(handle, html)
+      void persistHandle(doc, handle)
       return 'saved-as'
     }
     await writeHandle(fileHandle, html)
+    // idempotent, and the one place the ADOPTED-handle path (a dropped file) is
+    // remembered too — it only matters once you have actually saved to it.
+    void persistHandle(doc, fileHandle)
     return 'saved'
   }
   downloadFile(html, suggestedFileName(doc))
@@ -683,6 +827,60 @@ export const currentFileName = () => fileHandle?.name ?? null
 export function adoptFileHandle(handle: FsFileHandle): void {
   fileHandle = handle
 }
+
+/**
+ * Consume the File Handling API's `window.launchQueue` at boot and adopt the
+ * handle it delivers for the open document — so a document opened in an installed
+ * PWA (`file_handlers`) or in a native host (home/bridge.js, which defines a
+ * `launchQueue` carrying the open file's handle) holds a writable handle from the
+ * FIRST edit, not only after the first ⌘S. Without this a reviewer who edits,
+ * leaves the app and reopens the file sees nothing saved — "saved in place" is the
+ * app's whole claim.
+ *
+ * The queue is the host's single trigger: `setConsumer` is what begins the one
+ * launch request (`launch: true`), and the host answers it with the open document
+ * and no picker — a host that cannot (a read-only document) refuses it and vends
+ * nothing, so we adopt only when a handle actually arrives. Persistence is not
+ * done here: a native host re-delivers every launch, and a real PWA handle is
+ * persisted by the ordinary save path (`persistHandle`, which skips host
+ * polyfills). Calling `setConsumer` more than once is the API's own error, so this
+ * is guarded to run once.
+ */
+export function consumeLaunchQueue(): void {
+  const w = globalThis as unknown as {
+    launchQueue?: { setConsumer?: (fn: (params: { files?: FsFileHandle[] }) => void) => void }
+  }
+  const lq = w.launchQueue
+  if (!lq || typeof lq.setConsumer !== 'function') return
+  // The open document's #bento-doc, captured now (boot, before any edit), CRLF
+  // normalised to match embeddedDocBlock. The handle we adopt must still hold THIS
+  // document: a host bug that vends the wrong file would otherwise have the first
+  // autosave silently overwrite it.
+  const booted = readEmbeddedDoc()?.replace(/\r\n/g, '\n') ?? null
+  try {
+    lq.setConsumer(async (params) => {
+      const handle = params?.files?.[0]
+      if (!handle || !booted || typeof handle.getFile !== 'function') return
+      try {
+        const text = await (await handle.getFile()).text()
+        // Adopt only if the file is still this document AND nothing claimed a handle
+        // while we awaited getFile: a Save As / "Duplicate as new deck" during that
+        // await sets its own handle, and snapping back to the launched file here
+        // would have autosave overwrite the file the user just moved to.
+        if (!hasFileHandle() && embeddedDocBlock(text) === booted) adoptFileHandle(handle)
+        // else: a different/unverifiable file, or a handle already held — leave it;
+        // ⌘S falls back to the picker.
+      } catch { /* unreadable handle → do not adopt */ }
+    })
+  } catch { /* setConsumer rejects a second registration — the first already won */ }
+}
+
+// At boot, in a browser context, claim the open document's handle. A module-level
+// call is deliberate: it keeps the seam in the kernel, so every app gets it with
+// no per-app change, and it is the consumer's job to begin the launch request.
+// node (rigs, tooling) has no `launchQueue`; a plain, non-installed tab has none
+// either — both no-op. The rig drives consumeLaunchQueue() directly.
+if (typeof window !== 'undefined') consumeLaunchQueue()
 
 /**
  * The name of the file this document is actually open AS, when knowable.
