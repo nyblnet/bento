@@ -286,6 +286,16 @@ jobs:
         # rows. Needs the shell built above; a skip in CI is a failure.
         run: node scripts/test-spaces-chrome.ts
 
+      - name: spaces aliases and unlinked mentions
+        # The assertions that matter in this one are the NEGATIVES: a page
+        # title found inside a code block, an existing link, a bare URL or the
+        # middle of a longer word must all produce NO mention, and a title full
+        # of regex metacharacters must not throw. It also asserts that a name
+        # surrounded by kana matches, which a `\b`-style boundary silently
+        # never does — a rule built for English is a total failure in ja,
+        # zh-Hans and zh-Hant rather than a partial one.
+        run: node scripts/test-spaces-mentions.ts
+
       - name: Mermaid flowchart ⇄ diagram rig
         # spaces/src/diagram/: our own Mermaid flowchart parser and layered
         # layout (the mermaid library is megabytes and nothing is fetched at
@@ -726,6 +736,13 @@ jobs:
         # handle only when proven to be that file (name and bytes), and fail to
         # the browser's own picker — never to nothing.
         run: node scripts/test-webext-filegrant.ts
+
+      - name: WebExtension save-as rig
+        # "Save a copy" and exports answered in the extension's own window, so
+        # they can land beside the document. The page supplies a name, never a
+        # place; a write lands only where the person chose and only for the
+        # document that asked; a beside-name is never a path or the original.
+        run: node scripts/test-webext-saveas.ts
 
       - name: WebExtension localisation rig
         # Every failure mode of a message catalogue is silent: a key the code
