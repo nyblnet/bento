@@ -671,6 +671,22 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   "Duplicate as new space…". The translations are slides' own wherever slides
   has the same string.
 
+- **Insert is slides' insert group.** The single ＋ Insert menu is gone.
+  The bar now has one button per kind of thing: Text ▾, Image ▾, Table,
+  View ▾, Code and Comment. Chart and Embed appear on builds that have those
+  blocks. A kind with variants opens a small menu of them, for example
+  headings, lists, quote, callout, toggle and divider under Text, or Board,
+  List, Table view, Gallery and Canvas under View. Video and Audio are now
+  separate rows.
+  - **A new block goes after the one you are in**, not at the foot of the
+    page. The caret lands in it, and one undo removes it. With no caret it
+    goes at the end.
+  - **New page, Today's journal and New issue** moved to a ＋ ▾ beside the page
+    list's ＋, with their shortcuts. ＋ is still New page.
+  - The labels hide on a narrower window as slides' do. On a phone, the
+    whole group is in ⋯, under captions. The `/` menu lists the same families
+    in the same order, with the same captions.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

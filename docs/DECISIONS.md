@@ -8645,3 +8645,53 @@ structure and puts in its own nouns. These are new strings, translated here:
 
 These are unchanged on purpose: "Remove password…" keeps its confirmation
 dialog, and "Properties" stays.
+
+## 2026-09-26 — spaces' insert tools are slides' insert group
+
+**The maintainer:** "I think having one Insert menu is the wrong shape." The
+design he approved replaces spaces' single "＋ Insert" menu with slides'
+shape. That menu had 21 rows mixing block insertion, new-page actions and a
+copy of `/`.
+
+- **One button per kind, a menu only where the kind has variants.** The kinds
+  are Text ▾, Image ▾, Table, Chart, View ▾, Code, Embed, then Comment, as
+  slides ends its group. Text holds the paragraph, headings, quote, callout,
+  toggle, the three lists and the divider. Image holds image, video, audio,
+  then a link card and a page card. View holds the layouts of a saved view,
+  then Canvas. Canvas is a surface you arrange by hand, not a view of the
+  issues, and it waits there for the diagram family.
+- **One table decides it: `spaces/src/inserts.ts`.** The bar group, the folded
+  ⋯ and the `/` menu all read it, so they cannot offer different families,
+  orders or names. A family whose block type the build lacks is left out, and
+  a family left with one member is a plain button. Chart and Embed therefore
+  appear on a build that has those blocks, and Code grows a menu the day maths
+  joins it, with no other change. The diagram block will be one entry.
+- **Where a new block goes is where you are working**, as slides places a new
+  element on the slide you are on. It goes after the block holding the caret
+  (or last clicked), as that block's sibling and after anything nested in it.
+  With no caret on the page it goes at the end. It is one commit, so one undo
+  takes it away, and the caret lands in it. A page card opens its picker
+  first, so Escape inserts nothing rather than a card pointing at no page.
+- **The bar's Comment** comments on the block holding the caret, or on the
+  page. Spaces has no free-position comments, so there is no armed mode as in
+  slides.
+- **Look and tiers are slides'.** The buttons are slides' `.ed-btn`: icon and
+  word, 30px, 6px apart. The menus are slides' Shape menu. Like every other
+  label, the words go at the compact tier. At the fold tier the whole group
+  moves into ⋯: each family with variants under its caption, a rule before a
+  run of one-member kinds, then Comment. Reading view hides the group.
+- **New pages leave Insert.** New page, Today's journal and New issue are on a
+  ＋ ▾ split at the head of the page list, with their shortcuts. ＋ alone is
+  still New page. A page is added to the space, not inserted into the page
+  you are on.
+- `/` and the gutter ＋ are unchanged as paths. `/` lists the same families
+  in the same order under the same names, with the same captions.
+
+Spaces' bar now folds at a wider window than slides' does. This is measured,
+not chosen: the group adds five icons to a right group that was already longer
+than slides'. `scripts/test-spaces-chrome.ts` reads slides' `.ed-btn`,
+`.ed-group`, `.ed-menu` and icon size from slides' source. It holds the insert
+buttons and menus to those values, and checks that every member lands after
+the caret's block and is undone in one step. It also checks that `/` agrees
+with the bar, that the tiers drop the words and fold the group, and that every
+command is still reachable from its new home.
