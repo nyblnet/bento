@@ -1,0 +1,85 @@
+{
+  "compact": true,
+  "title": "Quarterly review",
+  "theme": {
+    "background": "#0F1720",
+    "color": "#F5F7FA",
+    "accent": "#F7A600"
+  },
+  "slides": [
+    {
+      "elements": [
+        {
+          "type": "text",
+          "x": 96,
+          "y": 220,
+          "w": 1088,
+          "h": 120,
+          "html": "Quarterly review",
+          "fontSize": 72,
+          "fontWeight": 800
+        },
+        {
+          "type": "text",
+          "x": 96,
+          "y": 360,
+          "w": 1088,
+          "h": 60,
+          "html": "Q3 2026 · Platform team",
+          "fontSize": 28,
+          "opacity": 0.7
+        }
+      ]
+    },
+    {
+      "elements": [
+        {
+          "type": "text",
+          "x": 96,
+          "y": 80,
+          "w": 1088,
+          "h": 80,
+          "html": "What shipped",
+          "fontSize": 48,
+          "fontWeight": 700
+        },
+        {
+          "type": "text",
+          "x": 96,
+          "y": 200,
+          "w": 1088,
+          "h": 360,
+          "md": "- Live broadcast for presentations\n- Reveal steps within a slide\n- Files 86 KB smaller\n- A security fix worth updating for",
+          "fontSize": 30,
+          "align": "left",
+          "valign": "top"
+        }
+      ]
+    },
+    {
+      "elements": [
+        {
+          "type": "text",
+          "x": 96,
+          "y": 80,
+          "w": 1088,
+          "h": 80,
+          "html": "Next",
+          "fontSize": 48,
+          "fontWeight": 700
+        },
+        {
+          "type": "text",
+          "x": 96,
+          "y": 200,
+          "w": 1088,
+          "h": 300,
+          "md": "1. Image export\n2. Layer panel\n3. Maths engine",
+          "fontSize": 30,
+          "align": "left",
+          "valign": "top"
+        }
+      ]
+    }
+  ]
+}

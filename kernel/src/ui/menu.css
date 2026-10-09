@@ -1,0 +1,307 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+
+   THE SHARED MENU PRIMITIVE'S STYLES. See menu.ts for why this exists and what
+   each of the four apps contributed.
+
+   THIS IS THE FIRST CSS THE KERNEL HAS EVER SHIPPED. It reaches a build the way
+   every other kernel module does — an app imports it, and Vite folds it into the
+   one stylesheet that `scripts/postbuild-compress.mjs` then deflates into the
+   `#bento-rt-css` payload. Nothing in the build needed changing for that, but it
+   is worth stating plainly, because that script matches exactly ONE
+   `<style rel="stylesheet">` and has been fooled before by a `<style>` that was
+   really a JS string literal.
+
+   ————— VALUES ARE THE HOST APP'S, STRUCTURE AND BEHAVIOUR ARE SHARED —————
+
+   The four apps disagree about tokens: dash has `--line-strong`,
+   `--shadow-pop`, `--radius-lg` and `--hover`, which the other three lack, and
+   a `--radius` of 7px against their 10px. Resolving that is a maintainer's
+   ruling and it is tier 4 of this project, so this file does not pre-empt it.
+
+   They ALSO disagree about the theming MECHANISM, which matters more here and
+   is the reason this sheet imposes none:
+
+     slides   :root[data-theme="dark"]   + :root { color-scheme: only light }
+     type     :root[data-theme="dark"]
+     spaces   [data-theme="dark"] AND a prefers-color-scheme media query
+     dash     light-dark() + a media query — i.e. color-scheme, i.e. the OS
+
+   All four DO have a dark theme; `--ink: #e7eaf0` sits in three of the dark
+   blocks (slides:39, spaces:165, type:75). What differs is who decides.
+
+   A SHARED SHEET MUST NOT USE `light-dark()`. It resolves off `color-scheme`,
+   and slides sets `:root { color-scheme: only light }` deliberately
+   (styles.css:96) — without it, dark-mode phones render native form controls
+   dark while the app's ink stays dark ("blank" dropdowns), and Chrome on
+   Android may force-darken the page. Under `only light` every `light-dark()`
+   value pins to its LIGHT half forever, so a shared sheet built on it would
+   silently cost slides the dark theme it already has.
+
+   The fallback chains below sidestep the whole question: they CONSUME whatever
+   themed token the host app already defines, by whichever mechanism that app
+   themes it. That is why this one sheet survives four different theming
+   mechanisms without picking one, and it is why tier 1 does not have to wait
+   for the tier 4 ruling.
+
+   A NOTE FOR TIER 4, found here and not settled here. Menus are CHROME, and
+   chrome SHOULD follow the theme — every app already themes the token this
+   sheet consumes for it. The document must not. type draws that line
+   explicitly and correctly: `--paper` is the page, `--field` is "form-control
+   surface — CHROME, not paper", and only the second is a menu's business. The
+   shared token set should make that boundary explicit rather than inherit
+   whichever app's habit arrives first. kernel/src/theme.ts:17-18 already says
+   a theme is a viewer preference and the document does not invert; the token
+   names are where an app either honours that or quietly does not.
+
+   Instead every value reads through a `--bkm-*` property whose fallback chain
+   lands on whatever the host already defines. An app that defines
+   `--line-strong` (dash) gets its stronger edge; an app that does not (the
+   other three) falls through to `--line`. Adopting this primitive therefore
+   changes no app's appearance, which is what makes tier 1 safe to land before
+   the token question is settled. An app that wants something else sets
+   `--bkm-*` on its own root — type will need `--bkm-bg: var(--field)`, because
+   it paints menus on `--field` where the other three use `--surface`.
+
+   Two values could not be deferred, because a shared rule has to pick one:
+
+     the offset from the trigger   4px / 5px / 6px / 6px  →  6px
+     the stacking level            50 / 60 / 60 / 60      →  60
+
+   Both are the majority of the four, and both stay overridable. slides moves
+   2px and spaces 1px on adoption; that difference was never designed. */
+
+.bkm {
+  /* The wrapper is the positioning context. It must be `relative` and it must
+     not establish anything else — see the z-index note below. */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.bkm-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + var(--bkm-gap, 6px));
+  inset-inline-start: 0;
+  flex-direction: column;
+  min-width: var(--bkm-min-width, 200px);
+  padding: 5px;
+  /* `--field` is in the chain because type has no `--surface` — its chrome
+     surface token is `--field`, themed #ffffff → #12151a and commented "form-
+     control surface — CHROME, not paper". Without it this fell through to the
+     literal below, which is LIGHT-ONLY, so a type menu in dark mode would have
+     painted white under light ink. A hardcoded literal at the end of a themed
+     chain is a dark-mode bug waiting for the first app that misses the token,
+     which is why `scripts/test-ui-menu.ts` now asserts every chain here
+     resolves to a token each app actually defines, rather than trusting this
+     comment to be remembered. */
+  background: var(--bkm-bg, var(--surface, var(--field, #fff)));
+  border: 1px solid var(--bkm-border, var(--line-strong, var(--line, #e3e8ef)));
+  border-radius: var(--bkm-radius, var(--radius-lg, var(--radius, 10px)));
+  box-shadow: var(--bkm-shadow, var(--shadow-pop, 0 12px 32px rgb(20 30 45 / 0.16)));
+
+  /* ————— HARD-WON DETAIL 9, and the reason this primitive exists —————
+
+     `z-index` on the BAR that contains a menu is a CEILING, not just an order.
+     A topbar is a flex item of the app root, and a flex item honours `z-index`
+     even at `position: static` — so the value opens a stacking context that
+     caps every descendant. In slides the bar sat at 20 and this menu asked for
+     50; it was clamped to 20, and the phone panel drawers at 40 painted
+     straight over it. The menu rendered in full and every click landed on the
+     panel behind it. Raising THIS number can never fix that — only the
+     ceiling moves.
+
+     Diagnose it with `document.elementsFromPoint()`, which is how it was found:
+     the menu sat fourth in the stack under its own coordinates.
+
+     slides, spaces and dash each hit this independently and each wrote it down
+     in their own source. Type hit it and did not. This comment is the first
+     place that knowledge lives once rather than three times. */
+  z-index: var(--bkm-z, 60);
+}
+
+.bkm.bkm-open > .bkm-menu {
+  display: flex;
+}
+
+/* DIRECT child, not any descendant. Phone chrome demotes whole dropdown widgets
+   into a ⋯ menu, so a descendant selector opens their popups too — slides' ⋯
+   came up with the entire language list already unrolled inside it. Every
+   `.bkm-menu` is appended straight onto its own `.bkm`, so `>` is exact. */
+
+/* A menu hanging off a control near the inline-end edge grows AWAY from the
+   screen if it is start-anchored. Three of the four apps discovered this and
+   each wrote a bespoke selector for it — `.ed-topbar.ed-bar-fold .ed-menu`,
+   `.sp-dd:last-child .sp-ddmenu`, `.dx-data-dd > .dx-menu`. It is an option
+   here instead. */
+.bkm.bkm-end > .bkm-menu {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+}
+
+/* Never wider than the screen. dash's save menu is 260px and hangs off a button
+   in the right half of the bar; on a phone a start-anchored panel that wide
+   simply walks off the edge. */
+.bkm-menu {
+  max-width: calc(100vw - 16px);
+}
+
+/* ————— rows ————— */
+
+.bkm-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  font: inherit;
+  font-size: var(--bkm-font-size, 13px);
+  color: var(--bkm-ink, var(--ink-2, var(--ink, #1e2a3a)));
+  text-align: start;
+  background: transparent;
+  border: 0;
+  border-radius: var(--bkm-item-radius, 7px);
+  padding: 7px 9px;
+  cursor: pointer;
+}
+
+.bkm-item:hover {
+  background: var(--bkm-hover, var(--hover, var(--chrome-2, rgb(0 0 0 / 0.05))));
+}
+
+/* The keyboard has to leave as clear a trail as the mouse does. No app's menu
+   had arrow-key navigation at all, so none of them needed this; all four
+   inherit both at once. `:focus-visible` rather than `:focus` so a pointer user
+   never sees a ring they did not ask for. */
+.bkm-item:focus-visible {
+  outline: 2px solid var(--bkm-focus, var(--accent-ink, currentColor));
+  outline-offset: -2px;
+  background: var(--bkm-hover, var(--hover, var(--chrome-2, rgb(0 0 0 / 0.05))));
+}
+
+/* Present but not runnable — folded undo/redo on a phone. DISABLED, not hidden,
+   so the menu does not change shape as you edit. 0.35 is dash's figure for a
+   dead control and it is the one with a reason attached. */
+.bkm-item.bkm-off {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+.bkm-item.bkm-selected .bkm-text {
+  font-weight: 700;
+}
+
+.bkm-ico {
+  display: inline-flex;
+  color: var(--bkm-ico, var(--muted, #6b7789));
+  flex: none;
+}
+
+.bkm-ico svg {
+  display: block;
+}
+
+.bkm-body {
+  display: block;
+  min-width: 0;
+}
+
+/* A row that TEACHES rather than naming a command needs to WRAP. dash cut
+   "Typed columns — for volume, joins and charts" mid-phrase inside a 220px
+   menu, because the row inherited a one-line ellipsis meant for "Rename". A
+   truncated explanation of a central concept explains nothing and reads as a
+   bug. */
+.bkm-hint {
+  display: block;
+  font-size: var(--bkm-hint-size, 12px);
+  line-height: 1.35;
+  color: var(--muted, #6b7789);
+  white-space: normal;
+}
+
+.bkm-text {
+  display: block;
+}
+
+.bkm-sep {
+  height: 1px;
+  background: var(--bkm-border, var(--line, #e3e8ef));
+  margin: 4px 6px;
+}
+
+/* ————— HARD-WON DETAIL 10: a scrolling menu is a CLIPPING BOX —————
+
+   A menu that can outgrow the screen needs a `max-height`, and `overflow-y:
+   auto` cannot be had on its own: set either axis to a non-`visible` value and
+   the browser computes the OTHER to `auto` too. So the moment a menu scrolls,
+   it clips horizontally as well.
+
+   slides paid for this. Phone chrome demotes whole dropdown widgets (Share,
+   Language) into the ⋯ menu, and the share popover is 250px anchored to its
+   parent's end — inside a 200px menu it hung 55px off the left and 69px below,
+   both silently cut, and the properties panel underneath showed THROUGH the
+   gap, so the popover looked interleaved with the panel behind it.
+
+   A floating child can never escape a scroll container. So it stops floating:
+   a menu nested inside a scrolling menu renders as a SECTION of the list,
+   scrolling with it and taking its width. Nothing can be clipped because
+   nothing overhangs.
+
+   dash has two menus built this way today with nothing floating inside them
+   yet. Nothing stopped the next person putting something there; now this rule
+   does, for every app at once. */
+.bkm-menu.bkm-scroll {
+  max-height: var(--bkm-max-height, calc(100dvh - 96px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bkm-menu.bkm-scroll .bkm-menu {
+  position: static;
+  min-width: 0;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  box-shadow: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-block: 1px solid var(--bkm-border, var(--line, #e3e8ef));
+  margin-block: 3px;
+  padding-inline: 6px;
+}
+
+/* ————— a bar that scrolls —————
+
+   Below the fold's floor a topbar scrolls itself: fully folded slides' bar
+   still needs ~356px and an iPhone SE is 320px, so the excess was simply cut
+   off and ⋯ could not be reached at all. A scroll container clips BOTH axes
+   (see above), so a menu hanging off a button in that bar would now be cut off
+   by the bar itself. `fixed` takes it out of that clip. It costs nothing extra
+   to anchor, because a bar this narrow pins its menus to the end of the screen
+   rather than to their trigger anyway.
+
+   The one thing this cannot read from CSS is where the bar ENDS, because that
+   moves with the safe-area insets — the app publishes it as `--bkm-bar-bottom`
+   (slides already computes exactly this as `--ed-bar-bottom`). */
+.bkm-fixed.bkm-open > .bkm-menu {
+  position: fixed;
+  top: calc(var(--bkm-bar-bottom, 56px) + var(--bkm-gap, 6px));
+  inset-inline-end: max(6px, env(safe-area-inset-right), var(--tray-safe-right, 0px));
+  inset-inline-start: auto;
+}
+
+/* Touch targets. A menu row on a phone is a 44px target like everything else. */
+@media (max-width: 700px) {
+  .bkm-item {
+    padding-block: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Deliberately no open/close animation. Three of the four apps have none, the
+     fourth animates only its phone sheet, and a menu that fades is a menu whose
+     first click can land before it is there. Kept as an explicit note so the
+     absence reads as a decision rather than an oversight. */
+}

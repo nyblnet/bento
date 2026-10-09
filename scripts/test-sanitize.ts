@@ -199,6 +199,56 @@ for (const at of ['@media screen{.p{fill:red}}', '@supports (fill:red){.p{fill:r
 ok(sanitizeSvgCss('.p::before{content:"a@b"}') === '.p::before{content:"a@b"}',
   'an @ that does not start a token is not an at-rule')
 
+// The escaped-url and image-set families #519's follow-up closed. url( written
+// with escapes is decoded and cut by the text pass, so it can be judged here in
+// node.
+for (const spelling of ['\\75 rl', 'u\\72 l', '\\75\\72\\6c', '\\000075rl']) {
+  ok(sanitizeSvgCss(`.p{background-image:${spelling}(https://evil.example/x)}`).includes('background-image:none'),
+    `an escaped url() spelling — ${spelling}( — is rewritten to none by the text pass`)
+}
+ok(sanitizeSvgCss('@supports (color:red){.p{background-image:\\75 rl(https://evil.example/x)}}').includes('none'),
+  'and inside @supports it is cut the same way')
+ok(sanitizeSvgCss('.p{fill:url(#g)}') === '.p{fill:url(#g)}', 'url(#…) is left exactly alone')
+ok(sanitizeSvgCss('.p{background-image:url(data:image/png;base64,iVBORw0KGgo=)}').includes('data:image/'),
+  'and a data:image url is kept — the ban is on the network, not on pictures')
+ok(svgUrlRefsAllowed('background-image:\\75 rl(https://evil.example/x)', 'style') === false,
+  'the style="" gate refuses an escaped url()')
+ok(svgUrlRefsAllowed('fill:url(#g)', 'style') === true, 'and keeps url(#…) in a style attribute')
+
+// …and the image-set spellings the browser section measures, judged here too:
+// written straight after a property colon they used to slip the text pass and
+// rely on the CSSOM check alone. The text pass now refuses them on its own, so
+// even with no CSSOM (this node run) nothing that can fetch survives.
+for (const css of [
+  '.p{background-image:image-set("https://evil.example/a" 1x)}',
+  '.p{background-image:-webkit-image-set("https://evil.example/b" 1x)}',
+  '.p{background-image:image-se\\74 ("https://evil.example/c" 1x)}',
+  '.p{cursor:image-set("https://evil.example/d" 1x), auto}',
+  '@media all{.p{background-image:image-set("https://evil.example/e" 1x)}}',
+]) {
+  const out = sanitizeSvgCss(css)
+  ok(!/image-set\(/i.test(out) && out.includes('bento-refused('),
+    `image-set straight after a colon is refused by the text pass alone: ${css.slice(0, 44)}…`)
+}
+
+// A call written straight after a colon is a SELECTOR only if its name is a
+// pseudo-class/-element function; any other is a value, judged by the function
+// allowlist like a call anywhere else. The text pass used to spare every
+// colon-preceded call, leaving `prop:fn(` (no space) to the CSSOM check alone.
+// `bento-probe` stands in for any function off the allowlist.
+for (const sel of ['.a:not(.b){fill:red}', '.a:nth-child(2n+1):is(.b,.c){fill:red}', '.a:where(.b):has(.c){fill:red}',
+  '.a::part(x){fill:red}', '::view-transition-group(x){opacity:1}', '.a:lang(ja):dir(rtl){fill:red}']) {
+  ok(sanitizeSvgCss(sel) === sel, `selector functions after a colon are kept: ${sel.slice(0, sel.indexOf('{'))}`)
+}
+ok(sanitizeSvgCss('.p{fill:rgb(1,2,3);width:calc(1px + 2px)}') === '.p{fill:rgb(1,2,3);width:calc(1px + 2px)}',
+  'allowed value functions straight after a colon are kept')
+ok(sanitizeSvgCss('.p{fill:bento-probe(1)}').includes('fill:bento-refused('),
+  'an off-list function straight after a property colon is refused by the text pass')
+ok(sanitizeSvgCss('.p{fill: bento-probe(1)}').includes('bento-refused('),
+  '…as it already was with a space')
+ok(sanitizeSvgCss('.p{fill:not(1)}') === '.p{fill:not(1)}',
+  'a pseudo name used as a value is spared (it can fetch nothing, and CSS drops it as invalid)')
+
 // --- 2. the table, end to end ------------------------------------------------
 //
 // renderTableHtml is a string builder with no DOM in it, so the real output can
@@ -298,9 +348,10 @@ const CHROME = [
  * render.ts, so this is the shipping code path and not a re-implementation of
  * it. Written without backticks or `${` so it can live in a template literal.
  */
-const probeSource = (renderPath: string, modelPath: string) => `
-import { renderSlide } from ${JSON.stringify(renderPath)}
+const probeSource = (renderPath: string, modelPath: string, pastePath: string) => `
+import { renderSlide, sanitizeHtml, sanitizeSvgCss, svgUrlRefsAllowed } from ${JSON.stringify(renderPath)}
 import { newDoc } from ${JSON.stringify(modelPath)}
+import { clipboardToHtml } from ${JSON.stringify(pastePath)}
 
 const O = location.origin
 const pwned: number[] = []
@@ -316,6 +367,19 @@ function draw(markup: string, css?: string): HTMLElement {
   slide.elements = [{
     id: 'sv1', type: 'svg', x: 0, y: 0, w: 200, h: 200,
     rotation: 0, opacity: 1, markup, ...(css ? { css } : {}),
+  } as any]
+  const surface = renderSlide(slide, doc)
+  document.body.appendChild(surface)
+  return surface
+}
+
+/** The same path for an embed element's view. */
+function drawEmbed(view: string): HTMLElement {
+  const doc = newDoc()
+  const slide = doc.slides[0]
+  slide.elements = [{
+    id: 'em1', type: 'embed', x: 0, y: 0, w: 200, h: 200,
+    rotation: 0, opacity: 1, app: 'web', view,
   } as any]
   const surface = renderSlide(slide, doc)
   document.body.appendChild(surface)
@@ -358,6 +422,111 @@ if (location.pathname === '/meta.html') {
     check('3 — no <base> survives the walk', based.querySelectorAll('base').length === 0)
     check('3 — relative urls still resolve against this document', document.baseURI === baseBefore)
 
+    // --- 3b. links in text ---------------------------------------------------
+    // <a href> is allowed now (issue #421) — with a web URL only, and no
+    // other attribute. The three shapes that would matter: a javascript:
+    // href, an event handler on an allowed anchor, and a target that would
+    // let the page reach this window. All decided at click time in present.ts;
+    // none stored.
+    const linked = sanitizeHtml('<a href="https://bento.page/" onclick="window.__pwn(31)" target="_top" rel="opener">ok</a>' +
+      '<a href="javascript:window.__pwn(32)">bad</a><a href="data:text/html,x">bad2</a><a>plain</a>')
+    const box = document.createElement('div'); box.innerHTML = linked
+    const anchors = Array.from(box.querySelectorAll('a'))
+    check('3b — a web link keeps exactly its href and nothing else',
+      anchors.length === 1 && anchors[0].getAttribute('href') === 'https://bento.page/' && anchors[0].attributes.length === 1)
+    check('3b — javascript:/data:/attribute-less anchors are unwrapped to their text',
+      box.textContent === 'okbadbad2plain' && !linked.includes('javascript:') && !linked.includes('data:'))
+    // NOT clicked: a click on the surviving https anchor navigates the probe
+    // away and it reports nothing (the same trap the click loop below avoids).
+    // The handler cannot survive without the attribute, which is asserted.
+    check('3b — no handler attribute survives on the surviving anchor', !linked.includes('onclick') && !linked.includes('__pwn(31)'))
+
+    // --- 3c. nested markup is walked like top-level markup -----------------
+    // An allowed tag inside a tag the walk does not know, at any depth, is
+    // held to the same rule as one at the top level; a refused anchor's
+    // contents likewise. Control: the same child under an allowed parent.
+    const nested = sanitizeHtml(
+      '<section><b onclick="window.__pwn(41)">a</b></section>' +
+      '<foo><span style="position:fixed;inset:0">b</span></foo>' +
+      '<div><foo><bar><i onmouseover="window.__pwn(42)">c</i></bar></foo></div>' +
+      '<a href="javascript:window.__pwn(43)"><b onclick="window.__pwn(44)">d</b></a>' +
+      '<div><b onclick="window.__pwn(45)">e</b></div>')
+    const nbox = document.createElement('div'); nbox.innerHTML = nested
+    check('3c — nested markup is walked like top-level markup: no attribute survives at any depth',
+      !nbox.querySelector('[onclick],[onmouseover],[style]') && nbox.textContent === 'abcde')
+    document.body.appendChild(nbox)
+    for (const el of Array.from(nbox.querySelectorAll('b, i, span'))) {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    }
+    check('3c — and clicking or hovering the lifted elements runs nothing', ![41, 42, 44, 45].some((n) => pwned.includes(n)))
+
+    // --- 3d. the clipboard's html flavour, pasted into a live text box --------
+    // Discussion #503: a paste now prefers text/html. It goes through the SAME
+    // sanitizer (editor/paste.ts clipboardToHtml), so the hostile corpus above,
+    // arriving as a ClipboardEvent into a contentEditable box, comes out with
+    // no handler, no script, no style, and nothing runs when the pasted nodes
+    // are clicked or hovered. Chrome's copy quirks are handled first: meta and
+    // style elements go, and a <b style="font-weight:normal"> (Chrome's way
+    // of saying NOT bold inside a bold run) is unwrapped rather than becoming
+    // a real <b> once its attribute is stripped.
+    const box3d = document.createElement('div')
+    box3d.contentEditable = 'true'
+    document.body.appendChild(box3d)
+    box3d.focus()
+    const hostile = '<meta charset="utf-8"><style>b{color:red}</style>' +
+      '<b onclick="window.__pwn(51)" style="font-weight:700">bold</b> ' +
+      '<b style="font-weight:normal">notbold</b> ' +
+      '<i onmouseover="window.__pwn(52)">it</i>' +
+      '<script>window.__pwn(53)</scr' + 'ipt>' +
+      '<a href="javascript:window.__pwn(54)">j</a><a href="https://bento.page/" target="_top" onclick="window.__pwn(55)">ok</a>' +
+      '<section><u onclick="window.__pwn(56)">deep</u></section>' +
+      '<img src=x onerror="window.__pwn(57)">' +
+      '<span style="position:fixed;inset:0;background:url(' + O + '/beacon.png)">s</span>' +
+      // every shape a browser starts LOADING the moment a node joins a live
+      // document, each pointing at this rig's own server, with the handlers
+      // such a load would fire — the paste helper must let none of them run
+      // or fetch, because nothing it touches may ever join the live document
+      '<img src="' + O + '/paste-img.gif" onload="window.__pwn(61)">' +
+      '<img srcset="' + O + '/paste-srcset.gif 1x" src="' + O + '/paste-src2.gif">' +
+      '<picture><source srcset="' + O + '/paste-source.gif"><img src="' + O + '/paste-pic.gif"></picture>' +
+      '<video poster="' + O + '/paste-poster.gif" src="' + O + '/paste-video.mp4" onerror="window.__pwn(62)"></video>' +
+      '<audio src="' + O + '/paste-audio.mp3" onerror="window.__pwn(63)"></audio>' +
+      '<input type="image" src="' + O + '/paste-input.gif" onload="window.__pwn(64)">' +
+      '<noscript><img src="' + O + '/paste-noscript.gif"></noscript>' +
+      '<iframe src="' + O + '/paste-frame.html"></iframe>' +
+      '<object data="' + O + '/paste-object.svg"></object>' +
+      '<ul><li>one</li><li>two</li></ul>'
+    const dt3d = new DataTransfer()
+    dt3d.setData('text/html', hostile)
+    dt3d.setData('text/plain', 'plain fallback')
+    const inserted = clipboardToHtml(dt3d)
+    document.execCommand('insertHTML', false, inserted)
+    const kept = box3d.innerHTML
+    check('3d — the html flavour is used (bold, italic, underline and the list survive the paste)',
+      /<b>bold<\\/b>/.test(kept) && /<i>it<\\/i>/.test(kept) && /<u>deep<\\/u>/.test(kept) && /<ul><li>one<\\/li><li>two<\\/li><\\/ul>/.test(kept))
+    check('3d — Chrome\\'s "not bold" <b> is unwrapped, not promoted to bold', !/<b>notbold<\\/b>/.test(kept) && /notbold/.test(kept))
+    check('3d — no handler, script, style, img or meta survives the paste',
+      !box3d.querySelector('[onclick],[onmouseover],[onerror],[style],script,img,meta,style,link') && !kept.includes('__pwn') && !kept.includes('javascript:'))
+    const a3d = Array.from(box3d.querySelectorAll('a'))
+    check('3d — only the web link keeps its href, with no other attribute',
+      a3d.length === 1 && a3d[0].getAttribute('href') === 'https://bento.page/' && a3d[0].attributes.length === 1)
+    for (const el of Array.from(box3d.querySelectorAll('b, i, u, span, li'))) {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    }
+    check('3d — clicking or hovering the pasted nodes runs nothing', ![51, 52, 53, 54, 55, 56, 57].some((n) => pwned.includes(n)))
+    check('3d — no media element of any kind survives the paste', !box3d.querySelector('img,picture,source,video,audio,input,noscript,iframe,object'))
+    // the load handlers fire asynchronously: asserted again after the settle
+    // at the end (see "3d — the paste started no load" below), and the
+    // server's hit list is checked on the node side
+    const dtPlain = new DataTransfer()
+    dtPlain.setData('text/plain', 'just text')
+    check('3d — a clipboard with no html flavour hands over to the plain path', clipboardToHtml(dtPlain) === '')
+    const dtEmpty = new DataTransfer()
+    dtEmpty.setData('text/html', '<meta charset="utf-8"><style>x{}</style><script>window.__pwn(58)</scr' + 'ipt>')
+    check('3d — html that is nothing but junk hands over to the plain path too', clipboardToHtml(dtEmpty) === '' && !pwned.includes(58))
+
     // --- 4. network out of a self-contained file -------------------------------
     draw('<div>x</div><link rel="stylesheet" href="' + O + '/tracker.css">' +
       '<svg><style>@import url("' + O + '/imported.css");.q{fill:red}</sty' + 'le>' +
@@ -385,6 +554,89 @@ if (location.pathname === '/meta.html') {
     check('a diagram keeps @keyframes and @media — the allowlist is not a ban on CSS',
       (sheet.querySelector('style')?.textContent ?? '').includes('@keyframes bp-spin') &&
       (sheet.querySelector('style')?.textContent ?? '').includes('@media (min-width:1px)'))
+
+    // --- 4c. the css egress families the escaped-url / image-set fix closed ----
+    //
+    // sanitizeSvgCss is a two-layer filter: a text pass, then — where there is a
+    // browser — the browser's own parse (cssomFindsFetch) as the last word. Each
+    // layer stops these families on its own now: section 1 pins the text pass in
+    // node (including image-set written straight after a property colon, which
+    // the text pass used to spare and leave to the CSSOM check alone), and this
+    // block proves the end result in a real engine — sanitizeSvgCss run HERE,
+    // its output injected into a live <style>, while a local server logs
+    // whether anything reached out. A regression in either layer alone is caught
+    // by the other half of the rig.
+    //
+    // Every negative below is non-vacuous: the raw positive controls FETCH in
+    // this engine (url(), and image-set in both spellings — measured), so a zero
+    // on a sanitised row means the sanitiser stopped it, not that the engine
+    // never asks. A backslash is String.fromCharCode(92), never written
+    // literally — this code is inside probeSource's template literal, where a
+    // lone backslash collapses before the probe runs (see the @import rows).
+    const BS = String.fromCharCode(92)
+    const eBox = (seg: string): HTMLElement => {
+      const b = document.createElement('div'); b.id = 'eg-' + seg
+      b.style.width = '40px'; b.style.height = '40px'; b.style.display = 'block'
+      document.body.appendChild(b); return b
+    }
+    const eForce = (b: HTMLElement) => { void b.offsetHeight; b.getBoundingClientRect() }
+    // sanitiser OUTPUT injected live — exactly the text render.ts hands the
+    // document for an svg <style> or the model's css field. BOX → the box's id.
+    const egress = (seg: string, sheet: string) => {
+      const b = eBox(seg); const s = document.createElement('style')
+      s.textContent = sanitizeSvgCss(sheet.split('BOX').join('#' + b.id))
+      document.head.appendChild(s); eForce(b)
+    }
+    // positive control: the SAME shape, NOT sanitised — it must reach the server.
+    const egressRaw = (seg: string, sheet: string) => {
+      const b = eBox(seg); const s = document.createElement('style')
+      s.textContent = sheet.split('BOX').join('#' + b.id)
+      document.head.appendChild(s); eForce(b)
+    }
+    egressRaw('pos-url', 'BOX{background-image:url("' + O + '/eg-pos-url")}')
+    egressRaw('pos-imgset', 'BOX{background-image:image-set("' + O + '/eg-pos-imgset" 1x)}')
+    egress('neg', 'BOX{background-image:url("' + O + '/eg-neg")}')
+    egress('esc-u', 'BOX{background-image:' + BS + '75 rl("' + O + '/eg-esc-u")}')
+    egress('esc-r', 'BOX{background-image:u' + BS + '72 l("' + O + '/eg-esc-r")}')
+    egress('esc-all', 'BOX{background-image:' + BS + '75' + BS + '72' + BS + '6c("' + O + '/eg-esc-all")}')
+    egress('esc-hex', 'BOX{background-image:' + BS + '000075rl("' + O + '/eg-esc-hex")}')
+    egress('imgset', 'BOX{background-image:image-set("' + O + '/eg-imgset" 1x)}')
+    egress('wk-imgset', 'BOX{background-image:-webkit-image-set("' + O + '/eg-wk-imgset" 1x)}')
+    egress('imgset-escfn', 'BOX{background-image:image-se' + BS + '74 ("' + O + '/eg-imgset-escfn" 1x)}')
+    egress('cursor', 'BOX{cursor:image-set("' + O + '/eg-cursor" 1x), auto}')
+    egress('at-media', '@media all{BOX{background-image:image-set("' + O + '/eg-at-media" 1x)}}')
+    egress('at-supports', '@supports (color:red){BOX{background-image:' + BS + '75 rl("' + O + '/eg-at-supports")}}')
+    // the allowed shapes still draw: url(#…) and a data:image survive the filter.
+    check('css-egress — url(#grad) survives the css filter untouched',
+      sanitizeSvgCss('#x{fill:url(#grad)}').indexOf('url(#grad)') >= 0)
+    check('css-egress — a data:image background survives the css filter',
+      sanitizeSvgCss('#x{background-image:url(data:image/png;base64,iVBORw0KGgo=)}').indexOf('data:image/') >= 0)
+    // style="" is a declaration block: svgUrlRefsAllowed with the element.style
+    // oracle. In a browser the oracle re-parses and REFUSES image-set and the
+    // escaped url; the harmless declarations are kept.
+    check('css-egress — style="" image-set is refused',
+      svgUrlRefsAllowed('background-image:image-set("' + O + '/x" 1x)', 'style') === false)
+    check('css-egress — style="" an escaped url is refused',
+      svgUrlRefsAllowed('background-image:' + BS + '75 rl("' + O + '/x")', 'style') === false)
+    check('css-egress — style="" fill:red is kept', svgUrlRefsAllowed('fill:red', 'style') === true)
+    check('css-egress — style="" url(#grad) is kept', svgUrlRefsAllowed('fill:url(#g)', 'style') === true)
+    // belt: if the gate ever WRONGLY allowed one, WRITING it would fetch. The raw
+    // control proves a style="" background reaches the server in this engine.
+    {
+      const raw = eBox('attr-pos'); raw.style.cssText = 'background-image:url("' + O + '/eg-attr-pos")'; eForce(raw)
+      const gated = (seg: string, decl: string) => {
+        const b = eBox(seg); if (svgUrlRefsAllowed(decl, 'style')) b.style.cssText = decl; eForce(b)
+      }
+      gated('attr-imgset', 'background-image:image-set("' + O + '/eg-attr-imgset" 1x)')
+      gated('attr-esc', 'background-image:' + BS + '75 rl("' + O + '/eg-attr-esc")')
+    }
+    // markup spellings: an escaped url in a fill attribute and in the svg <style>.
+    // draw() is the full render path; the allowed paint-server and <image>
+    // fetches asserted elsewhere are the matching positive controls.
+    draw('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">' +
+      '<rect width="10" height="10" fill="' + BS + '75 rl(' + O + '/eg-m-fill)"/></svg>')
+    draw('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><sty' + 'le>' +
+      'rect{fill:' + BS + '75 rl(' + O + '/eg-m-style)}</sty' + 'le><rect width="10" height="10"/></svg>')
 
     // --- 5. SMIL retargeting ---------------------------------------------------
     const smil = draw('<svg><rect id="sm" width="10" height="10">' +
@@ -517,6 +769,18 @@ if (location.pathname === '/meta.html') {
     check('an unclosed tag still draws — text/html, not the fatal xml parser',
       !!sloppy.querySelector('svg') && !!sloppy.querySelector('circle'))
 
+    // The embed element's view is the same kind of author markup
+    // and goes through the same walk. Its whole purpose is to carry markup
+    // someone else produced, which makes it the most attractive place in the
+    // format to hide a script. (No backticks in this comment: it lives inside
+    // probeSource's template literal.)
+    const embedded = drawEmbed('<svg viewBox="0 0 20 20"><rect id="ev" width="10" height="10"/>' +
+      '<scr' + 'ipt>window.__pwn(91)</scr' + 'ipt><rect onload="window.__pwn(92)" width="1" height="1"/>' +
+      '<image href="' + O + '/embed-view.png" width="1" height="1"/></svg>')
+    check('9 — an embed view drops its <script> and on* handler and keeps the picture',
+      embedded.querySelectorAll('script').length === 0 && !embedded.querySelector('[onload]') &&
+      !!embedded.querySelector('.bento-el-embed svg rect#ev'))
+
     // Give every payload its chance: insertion alone is not the only trigger.
     // Measured on the pre-sanitizer build, where the difference showed: a
     // form-driven javascript: needs the submit button CLICKED, and an
@@ -545,7 +809,11 @@ if (location.pathname === '/meta.html') {
     check('the probe ran to the end (it threw: ' + String(err) + ')', false)
   }
 
-  setTimeout(() => {
+  setTimeout(async () => {
+    // a fence: one request of our own, answered in order after any load the
+    // paste might have started, so the node side's hit list is complete
+    try { await fetch(O + '/paste-fence', { cache: 'no-store' }) } catch {}
+    check('3d — after the settle, no load or error handler from the paste ran', ![61, 62, 63, 64].some((n) => pwned.includes(n)))
     check('nothing executed: ' + (pwned.length ? pwned.join(',') : 'clean'), pwned.length === 0)
     const pre = document.createElement('pre')
     pre.id = 'bento-results'
@@ -561,7 +829,7 @@ if (location.pathname === '/meta.html') {
 async function runBrowserSection(chrome: string) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-sanitize-'))
   const entry = path.join(tmp, 'probe.ts')
-  fs.writeFileSync(entry, probeSource(repoFile('slides/src/render.ts'), repoFile('slides/src/model.ts')))
+  fs.writeFileSync(entry, probeSource(repoFile('slides/src/render.ts'), repoFile('slides/src/model.ts'), repoFile('slides/src/editor/paste.ts')))
   execFileSync(repoFile('slides/node_modules/.bin/esbuild'), [
     entry, '--bundle', '--format=esm', '--outfile=' + path.join(tmp, 'probe.js'),
   ], { stdio: 'pipe' })
@@ -647,8 +915,39 @@ async function runBrowserSection(chrome: string) {
     ok(!hits.includes('/desc-img.png') && !hits.includes('/title-img.png'),
       '8 — nothing inside <desc> or <title> fetches either')
     ok(!hits.includes('/xlink.svg'), '7 — nor an xlink:href <use> pointing out of the document')
+    ok(hits.includes('/paste-fence'), '3d — the fence request arrived (the hit list is complete)')
+    const pasteLoads = hits.filter((h) => h.startsWith('/paste-') && h !== '/paste-fence')
+    ok(pasteLoads.length === 0, '3d — the paste helper started no load: img, srcset, picture/source, video poster/src, audio, input type=image, noscript img, iframe, object' + (pasteLoads.length ? ' — FETCHED ' + pasteLoads.join(' ') : ''))
     ok(hits.includes('/remote.png'), 'an <image href="http(s)://…"> still loads — that one is allowed on purpose')
     ok(hits.includes('/xlink-remote.png'), 'and so does the xlink:href spelling of it — the policy is not a ban on pictures')
+    ok(hits.includes('/embed-view.png'), '9 — an embed view is held to the svg policy, no stricter: its <image> loads too')
+
+    // 4c — the escaped-url / image-set css egress families (the #519 follow-up).
+    // Positive controls first: they prove the request path is live, so the zeros
+    // that follow are a boundary and not an artefact of the engine.
+    ok(hits.includes('/eg-pos-url'), '4c — a raw url() background fetches here (the css request path is live)')
+    ok(hits.includes('/eg-pos-imgset'), '4c — a raw image-set() background fetches here too (positive control)')
+    ok(hits.includes('/eg-attr-pos'), '4c — a raw style="" url() background fetches here (style-attr path is live)')
+    const cssEgress: Array<[string, string]> = [
+      ['neg', 'a plain external url()'],
+      ['esc-u', 'an escaped u — the \\75 rl( spelling of url('],
+      ['esc-r', 'an escaped r — the u\\72 l( spelling'],
+      ['esc-all', 'a fully escaped \\75\\72\\6c( spelling'],
+      ['esc-hex', 'the six-digit \\000075rl( spelling'],
+      ['imgset', 'image-set() straight after the colon (the CSSOM-pass case)'],
+      ['wk-imgset', '-webkit-image-set()'],
+      ['imgset-escfn', "image-set() with the function name itself escaped"],
+      ['cursor', 'image-set() carried on cursor'],
+      ['at-media', 'image-set() nested in @media'],
+      ['at-supports', 'an escaped url() nested in @supports'],
+      ['attr-imgset', 'image-set() in a style="" attribute'],
+      ['attr-esc', 'an escaped url() in a style="" attribute'],
+      ['m-fill', 'an escaped url() in a fill="" attribute'],
+      ['m-style', 'an escaped url() in the svg <style>'],
+    ]
+    for (const [seg, what] of cssEgress) {
+      ok(!hits.includes('/eg-' + seg), '4c — sanitised, no fetch: ' + what)
+    }
   } finally {
     server.close()
     fs.rmSync(tmp, { recursive: true, force: true })
