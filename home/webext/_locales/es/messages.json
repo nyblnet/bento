@@ -694,5 +694,8 @@
   },
   "saGone": {
     "message": "Este guardado ya no está en espera. Cierra esta ventana y vuelve a guardar."
+  },
+  "saTaken": {
+    "message": "«$1» ya existe. Elige otro nombre."
   }
 }

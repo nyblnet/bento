@@ -661,5 +661,8 @@
   },
   "saGone": {
     "message": "Denne gemning venter ikke længere. Luk vinduet, og gem igen."
+  },
+  "saTaken": {
+    "message": "“$1” findes allerede. Vælg et andet navn."
   }
 }

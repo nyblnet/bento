@@ -9,7 +9,7 @@
 // picker has nowhere better to start than Downloads.
 
 import { t, localize, initI18n } from './i18n.js'
-import { idb, readRecord, choose, besideName, EXT } from './saveas.js'
+import { idb, readRecord, choose, besideName, replaceDecision, EXT } from './saveas.js'
 import { startInFor } from './grantflow.js'
 
 const q = new URLSearchParams(location.search)
@@ -52,6 +52,9 @@ if (!rec) {
     besideBtn.textContent = t('saBeside', original)
   }
   let confirmReplace = null // the name the person was warned about
+  // Only a name the PERSON typed may replace a file: the suggestion is the
+  // page's, and the page must never be able to aim this window at a sibling.
+  const edited = () => file.value.trim() !== rec.name
   const nameOrSay = () => {
     const r = besideName(file.value, original)
     if (!r.ok) status.textContent = r.reason === 'is-original' ? t('saIsOriginal') : t('saBadName')
@@ -72,13 +75,14 @@ if (!rec) {
       }
       let exists = true
       try { await rec.dir.getFileHandle(name) } catch (e) { exists = e?.name !== 'NotFoundError' }
-      if (exists && confirmReplace !== name) {
-        confirmReplace = name
-        status.textContent = t('saExists', name)
+      const d = replaceDecision({ exists, edited: edited(), confirmed: confirmReplace === name })
+      if (d === 'refuse' || d === 'confirm') {
+        confirmReplace = d === 'confirm' ? name : null
+        status.textContent = d === 'confirm' ? t('saExists', name) : t('saTaken', name)
         besideBtn.disabled = false
         return
       }
-      if (await choose(token, { kind: 'beside', name }, db)) await answer(true)
+      if (await choose(token, { kind: 'beside', name, replace: d === 'replace' }, db)) await answer(true)
       else status.textContent = t('saGone')
     } catch (e) { status.textContent = e?.message || String(e) }
     besideBtn.disabled = false

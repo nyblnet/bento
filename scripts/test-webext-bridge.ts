@@ -33,7 +33,7 @@ function ok(cond: boolean, msg: string) {
 }
 
 /** A window just real enough to load the bridge into. */
-function load(opts: { version?: string; pathname?: string; reply?: Record<string, any> } = {}) {
+function load(opts: { version?: string; pathname?: string; reply?: Record<string, any>; activated?: boolean } = {}) {
   const nativeCalls: any[] = []
   const posted: any[] = []
   const listeners: any[] = []
@@ -42,6 +42,8 @@ function load(opts: { version?: string; pathname?: string; reply?: Record<string
   // native picker the way it does with no extension at all.
   const reply = { saveas: { ok: false, reason: 'not a document' }, ...opts.reply }
   const win: any = {
+    // a person's click is in progress unless a test says otherwise
+    navigator: { userActivation: { isActive: opts.activated ?? true } },
     location: { pathname: opts.pathname ?? '/Users/x/Decks/Q3.bento.html' },
     addEventListener(type: string, f: any) { if (type === 'message') listeners.push(f) },
     postMessage(msg: any) {
@@ -196,6 +198,12 @@ for (const [version, trusted] of [
   const { win } = load({ version: '1.0.15' })
   ok((win as any).__bentoHost.ops.includes('saveas'), 'the host announces saveas')
 }
+{
+  const { win, nativeCalls, posted } = load({ version: '1.0.15', activated: false, reply: { saveas: { ok: true, token: 't', name: 'n.bento.html' } } })
+  await win.showSaveFilePicker({ id: 'bento-copy', suggestedName: 'Q3.bento.html' }).catch(() => {})
+  ok(!posted.some((m) => m.op === 'saveas') && nativeCalls.length === 1, 'with no user activation the extension\'s window is never asked for — the browser\'s own picker decides, as it would without us')
+}
+
 
 // ---- the host announces what it can do -------------------------------------
 // `showSaveFilePicker` existing proves nothing — Chrome has it anyway, and a

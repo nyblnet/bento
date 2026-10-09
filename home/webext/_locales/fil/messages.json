@@ -661,5 +661,8 @@
   },
   "saGone": {
     "message": "Hindi na naghihintay ang pag-save na ito. Isara ang window at mag-save muli."
+  },
+  "saTaken": {
+    "message": "Mayroon nang “$1”. Pumili ng ibang pangalan."
   }
 }

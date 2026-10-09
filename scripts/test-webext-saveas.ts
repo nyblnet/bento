@@ -51,6 +51,7 @@ const memdb = () => {
   return { m, get: async (k: string) => m.get(k) ?? null, put: async (k: string, v: any) => { m.set(k, v) }, del: async (k: string) => { m.delete(k) }, all: async () => [...m.entries()] }
 }
 let clock = Date.UTC(2026, 9, 9)
+let shown = ''
 let n = 0
 const DOC = '/Users/you/Decks/Q3.bento.html'
 const OTHER = '/Users/you/Decks/Other.bento.html'
@@ -134,6 +135,60 @@ console.log('\n— cancelling, and no window at all')
   ok(!r3.ok && !r3.cancelled && r3.reason === 'window unavailable', 'a window that could not open is NOT cancelled — the page falls to its own picker')
 }
 
+console.log('\n— names that only look different, and invisible characters')
+{
+  ok(sa.besideName('Cafe\u0301 plan.bento.html', 'Caf\u00e9 plan.bento.html').reason === 'is-original', 'NFD vs NFC of the open document\'s name is the open document (APFS treats them as one file)')
+  for (const c of ['\u202e', '\u200b', '\u200e', '\u2066', '\ufeff'])
+    ok(sa.besideName(`report${c}lmth.bento.html`, 'Q3.bento.html').reason === 'bad-name', `a name carrying U+${c.codePointAt(0)!.toString(16).toUpperCase()} is refused`)
+}
+
+console.log('\n— a page cannot aim the window at an existing file')
+{
+  const dir = folder('Decks', { 'Q3.bento.html': 'ORIGINAL', 'Board.bento.html': 'BOARD', 'Board copy.bento.html': 'B2' })
+  const d = depsFor({ dir, person: async () => false })
+  await sa.ask(DOC, { id: 'bento-share', name: 'Board.bento.html' }, { ...d, openWindow: async (t: string) => { shown = (await d.db.get(t)).name; return false } })
+  ok(shown === 'Board copy 2.bento.html', `a suggestion naming an existing sibling arrives as a fresh name (${shown})`)
+  ok(sa.replaceDecision({ exists: true, edited: false, confirmed: true }) === 'refuse', 'the page\'s suggestion, untouched, is never replaced — even on a second click')
+  ok(sa.replaceDecision({ exists: true, edited: true, confirmed: false }) === 'confirm' && sa.replaceDecision({ exists: true, edited: true, confirmed: true }) === 'replace', 'a name the person typed is replaced only after a warning and a second click')
+  ok(sa.replaceDecision({ exists: false, edited: false, confirmed: false }) === 'ok', 'a free name just saves')
+  // and the write enforces it, whatever the record says
+  const d2 = depsFor({ dir, person: async (t, db) => sa.choose(t, { kind: 'beside', name: 'Board.bento.html' }, db) })
+  const r = await sa.ask(DOC, { id: 'bento-copy', name: 'x' }, d2)
+  ok((await sa.write(DOC, { token: r.token, text: 'EVIL' }, d2)).reason === 'exists' && dir.files['Board.bento.html'] === 'BOARD', 'a beside-write onto an existing file without the person\'s replace choice is refused at the write')
+  const d3 = depsFor({ dir, person: async (t, db) => sa.choose(t, { kind: 'beside', name: 'Board.bento.html', replace: true }, db) })
+  const r3 = await sa.ask(DOC, { id: 'bento-copy', name: 'x' }, d3)
+  ok((await sa.write(DOC, { token: r3.token, text: 'CHOSEN' }, d3)).ok && dir.files['Board.bento.html'] === 'CHOSEN', 'with it, the file is replaced')
+}
+{
+  // compared as FILES: a name the string check cannot see is still the open document
+  const dir = folder('Decks', { 'Cafe\u0301.bento.html': 'ORIGINAL' })
+  const docH = { isSameEntry: async () => true }
+  const there = await dir.getFileHandle('Cafe\u0301.bento.html')
+  ;(dir as any).getFileHandle = async (n: string, o: any = {}) => { const h: any = await (folder('x', dir.files) as any).getFileHandle(n, o); h.isSameEntry = async (x: any) => x === docH; return h }
+  const d = { ...depsFor({ dir, person: async (t: string, db: any) => sa.choose(t, { kind: 'beside', name: 'Other.bento.html', replace: true }, db) }), docHandle: async () => docH }
+  const r = await sa.ask('/Users/you/Decks/Odd.bento.html', { id: 'bento-copy', name: 'x' }, d)
+  const rec = await d.db.get(r.token)
+  await d.db.put(r.token, { ...rec, choice: { kind: 'beside', name: 'Cafe\u0301.bento.html', replace: true } })
+  ok((await sa.write('/Users/you/Decks/Odd.bento.html', { token: r.token, text: 'CLOBBER' }, d)).reason === 'is-original' && dir.files['Cafe\u0301.bento.html'] === 'ORIGINAL', 'a target that isSameEntry with the open document is refused, even with a replace choice')
+  void there
+}
+
+console.log('\n— lifetimes: an export is written once; a document\'s saves end with it')
+{
+  const dir = folder('Decks', { 'Q3.bento.html': 'ORIGINAL' })
+  const d = depsFor({ dir, person: async (t, db) => sa.choose(t, { kind: 'beside', name: 'Q3 view.bento.html' }, db) })
+  const r = await sa.ask(DOC, { id: 'bento-share', name: 'Q3 view.bento.html' }, d)
+  ok((await sa.write(DOC, { token: r.token, text: 'VIEW' }, d)).ok, 'an export writes')
+  ok((await sa.write(DOC, { token: r.token, text: 'FULL DOC' }, d)).reason === 'no such save' && dir.files['Q3 view.bento.html'] === 'VIEW', 'and its token is spent: nothing can later overwrite the view-only copy through it')
+  const dc = depsFor({ dir, person: async (t, db) => sa.choose(t, { kind: 'beside', name: 'Q3 copy.bento.html' }, db) })
+  const rc = await sa.ask(DOC, { id: 'bento-copy', name: 'x' }, dc)
+  await sa.write(DOC, { token: rc.token, text: 'C1' }, dc)
+  await sa.drop(OTHER, { token: rc.token }, dc)
+  ok(dc.db.m.has(rc.token), 'another document cannot drop this one\'s save')
+  await sa.drop(DOC, { token: rc.token }, dc)
+  ok(!dc.db.m.has(rc.token), 'the document unloading drops its save')
+}
+
 console.log('\n— one window per document')
 {
   const open = new Set<string>()
@@ -167,7 +222,7 @@ console.log('\n— the wiring')
   ok(/function saveasAnswered[\s\S]{0,120}isSaveasWindow\(sender\)/.test(bg), 'only the save-as window may answer')
   const win = readFileSync(join(SRC, 'saveas-window.js'), 'utf8')
   ok(/showSaveFilePicker\(\{[\s\S]{0,80}startIn,/.test(win) && /startIn = rec\.dir \?\? await startInFor\(rec\.path\)/.test(win), 'the picker opens in the document\'s folder, or the nearest one held')
-  ok(/exists && confirmReplace !== name/.test(win), 'an existing file beside the document is replaced only on a second, warned click')
+  ok(/replaceDecision\(\{ exists, edited: edited\(\), confirmed: confirmReplace === name \}\)/.test(win) && /kind: 'beside', name, replace: d === 'replace'/.test(win), 'the window decides with replaceDecision and records the person\'s replace choice (enforced again at write time, below)')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

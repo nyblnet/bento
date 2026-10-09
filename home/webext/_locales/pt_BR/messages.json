@@ -694,5 +694,8 @@
   },
   "saGone": {
     "message": "Este salvamento não está mais aguardando. Feche esta janela e salve de novo."
+  },
+  "saTaken": {
+    "message": "“$1” já existe. Escolha outro nome."
   }
 }

@@ -661,5 +661,8 @@
   },
   "saGone": {
     "message": "Denne lagringen venter ikke lenger. Lukk vinduet og lagre på nytt."
+  },
+  "saTaken": {
+    "message": "«$1» finnes allerede. Velg et annet navn."
   }
 }

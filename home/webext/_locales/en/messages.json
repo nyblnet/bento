@@ -778,5 +778,9 @@
   "saGone": {
     "message": "This save is no longer waiting. Close this window and save again.",
     "description": "Save-as window: the request expired or the document closed."
+  },
+  "saTaken": {
+    "message": "“$1” is already there. Choose a different name.",
+    "description": "Save-as window: the suggested name (not typed by the person) is already taken in that folder; it is never replaced. $1 file name."
   }
 }

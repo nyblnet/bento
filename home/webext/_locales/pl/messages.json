@@ -661,5 +661,8 @@
   },
   "saGone": {
     "message": "To zapisywanie już nie czeka. Zamknij okno i zapisz ponownie."
+  },
+  "saTaken": {
+    "message": "„$1” już istnieje. Wybierz inną nazwę."
   }
 }

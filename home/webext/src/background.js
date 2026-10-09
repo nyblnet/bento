@@ -439,6 +439,11 @@ export function saveasDeps(sender, deps = {}) {
       const r = await resolve(sender)
       return r.ok && Array.isArray(r.rel) ? parentOf(r.dir, r.rel) : null
     }),
+    // the document's own file, so "never the original" compares FILES, not names
+    docHandle: deps.docHandle ?? (async () => {
+      const r = await resolve(sender)
+      return r.ok ? r.handle : null
+    }),
     busy: deps.busy ?? ((path) => saveasPaths.has(path)),
     openWindow: deps.openWindow ?? ((token, path) => new Promise((resolve) => {
       saveasPaths.add(path)
@@ -494,6 +499,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'saveas' ? saveas.ask(topPath(sender), msg.payload, saveasDeps(sender))
       : msg?.op === 'saveas.write' ? saveas.write(topPath(sender), msg.payload, saveasDeps(sender))
       : msg?.op === 'saveas.answered' ? Promise.resolve(saveasAnswered(sender, msg))
+      : msg?.op === 'saveas.drop' ? saveas.drop(topPath(sender), msg.payload, saveasDeps(sender))
       : Promise.resolve({ ok: false, reason: 'unknown op' })
     run.then((r) => {
       sendResponse(r)

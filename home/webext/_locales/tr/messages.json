@@ -661,5 +661,8 @@
   },
   "saGone": {
     "message": "Bu kaydetme artık beklemiyor. Pencereyi kapatıp yeniden kaydedin."
+  },
+  "saTaken": {
+    "message": "“$1” zaten var. Başka bir ad seçin."
   }
 }

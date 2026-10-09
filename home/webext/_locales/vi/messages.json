@@ -661,5 +661,8 @@
   },
   "saGone": {
     "message": "Lần lưu này không còn chờ nữa. Đóng cửa sổ này và lưu lại."
+  },
+  "saTaken": {
+    "message": "“$1” đã có. Hãy chọn tên khác."
   }
 }

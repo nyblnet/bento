@@ -661,5 +661,8 @@
   },
   "saGone": {
     "message": "Deze opslag wacht niet meer. Sluit dit venster en sla opnieuw op."
+  },
+  "saTaken": {
+    "message": "‘$1’ bestaat al. Kies een andere naam."
   }
 }

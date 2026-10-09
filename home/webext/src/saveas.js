@@ -38,8 +38,13 @@
 //     replaced only after the person says so in the window.
 //   · Nothing is written until the page sends bytes, and only to the place
 //     the person chose.
-//   · The token stays valid for that tab's later writes: save.ts makes a
-//     "Save a copy…" target the next ⌘S, as the browser's own picker does.
+//   · A copy's token stays valid for that document's later writes: save.ts
+//     makes a "Save a copy…" target the next ⌘S, as the browser's own picker
+//     does. An export's is spent by its one write. Either ends when the
+//     document unloads (`drop`), or after KEEP_MS.
+//   · The suggestion never arrives aimed at an existing file (freshName); an
+//     existing file is replaced only for a name the person typed, after a
+//     warning, and that choice is checked again at write time.
 //
 // Pure: storage, folder resolution and the window come in as `deps`, so
 // scripts/test-webext-saveas.ts runs the real logic in node.
@@ -54,14 +59,56 @@ export const KEEP_MS = 24 * 3600 * 1000
  * `{ ok:false, reason }`. The compound extension is appended to a bare name,
  * as the browser's own picker does for `accept: ['.bento.html']`.
  */
+/**
+ * Characters a file name may not carry: path separators, controls, and the
+ * invisible FORMAT characters (bidi overrides and isolates, zero-width) — with
+ * those, "report\u202Elmth.bento.html" displays as something it is not.
+ */
+const BAD_CHARS = /[/\\\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/
+
+/** The same name as far as a file system may care: Unicode-normalised (NFC) and case-folded. */
+export const sameName = (a, b) => String(a).normalize('NFC').toLowerCase() === String(b).normalize('NFC').toLowerCase()
+
 export function besideName(proposed, original) {
   let n = String(proposed ?? '').trim()
   if (!n) return { ok: false, reason: 'empty' }
-  if (/[/\\\u0000-\u001f\u007f]/.test(n) || n === '.' || n === '..') return { ok: false, reason: 'bad-name' }
+  if (BAD_CHARS.test(n) || n === '.' || n === '..') return { ok: false, reason: 'bad-name' }
   if (!n.toLowerCase().endsWith(EXT)) n = n.replace(/\.html?$/i, '') + EXT
   if (n.length > 200) return { ok: false, reason: 'bad-name' }
-  if (original && n.toLowerCase() === String(original).toLowerCase()) return { ok: false, reason: 'is-original' }
+  if (original && sameName(n, original)) return { ok: false, reason: 'is-original' }
   return { ok: true, name: n }
+}
+
+/** Is there a file of this name in `dir`? */
+async function exists(dir, name) {
+  try { await dir.getFileHandle(name); return true } catch (e) { return e?.name !== 'NotFoundError' }
+}
+
+/**
+ * A name that is FREE in `dir`: the suggestion, or "<stem> copy", "<stem> copy 2"…
+ * The page chooses the suggestion, so it must never arrive aimed at a file
+ * that is already there: a hostile document could name a sibling deck and
+ * have two clicks replace it. Replacing is only ever for a name the PERSON typed.
+ */
+export async function freshName(dir, name, original) {
+  if (!dir || !(await exists(dir, name))) return name
+  const stem = name.slice(0, -EXT.length).replace(/ copy( \d+)?$/, '')
+  for (let i = 1; i < 100; i++) {
+    const n = `${stem} copy${i > 1 ? ` ${i}` : ''}${EXT}`
+    if (!sameName(n, original) && !(await exists(dir, n))) return n
+  }
+  return name
+}
+
+/**
+ * The window's rule for a beside-name that already exists: 'ok' (free),
+ * 'refuse' (the page's suggestion, untouched — never replaced), 'confirm'
+ * (the person typed it — warn first), 'replace' (warned, and they clicked again).
+ */
+export function replaceDecision({ exists: there, edited, confirmed }) {
+  if (!there) return 'ok'
+  if (!edited) return 'refuse'
+  return confirmed ? 'replace' : 'confirm'
 }
 
 /** The page's suggestion, made safe to SHOW (it is never used as a path). */
@@ -85,8 +132,9 @@ export async function ask(path, payload, deps) {
   const name = suggestion(payload?.name, original)
   let dir = null
   try { dir = await deps.folderOf() } catch { dir = null }
+  const shown = dir ? await freshName(dir, name, original) : name
   const token = deps.token()
-  await deps.db.put(token, { path, purpose, name, dir, choice: null, at: deps.now() })
+  await deps.db.put(token, { path, purpose, name: shown, dir, choice: null, at: deps.now() })
   const answered = await deps.openWindow(token, path)
   const rec = await deps.db.get(token)
   if (!answered || !rec?.choice) {
@@ -111,7 +159,17 @@ export async function write(path, payload, deps) {
       const ok = besideName(rec.choice.name, path.split('/').pop())
       if (!ok.ok) return { ok: false, reason: ok.reason }
       if (await rec.dir.queryPermission({ mode: 'readwrite' }) !== 'granted') return { ok: false, reason: 'folder grant needs renewing' }
-      h = await rec.dir.getFileHandle(ok.name, { create: true })
+      let there = null
+      try { there = await rec.dir.getFileHandle(ok.name) } catch (e) { if (e?.name !== 'NotFoundError') throw e }
+      if (there) {
+        // never the open document, compared as FILES (NFD vs NFC, case) when its handle is known
+        const doc = await deps.docHandle?.().catch(() => null)
+        if (doc && await there.isSameEntry(doc)) return { ok: false, reason: 'is-original' }
+        // an existing file is replaced only when the person chose to, in the window;
+        // later writes of a "Save a copy" (save.ts's next ⌘S target) are to our own file
+        if (!rec.written && rec.choice.replace !== true) return { ok: false, reason: 'exists' }
+      }
+      h = there ?? await rec.dir.getFileHandle(ok.name, { create: true })
     } else if (rec.choice.kind === 'handle') {
       h = rec.choice.handle
       if (await h.queryPermission({ mode: 'readwrite' }) !== 'granted') return { ok: false, reason: 'permission lapsed' }
@@ -121,11 +179,22 @@ export async function write(path, payload, deps) {
     const w = await h.createWritable()
     await w.write(payload.text)
     await w.close()
-    await deps.db.put(token, { ...rec, at: deps.now() })
+    // An export is written once: save.ts never makes it a later ⌘S target (that
+    // would overwrite a view-only or invite copy with the full document). A
+    // copy IS the next ⌘S target, so its record stays for this session.
+    if (rec.purpose === 'share') await deps.db.del(token)
+    else await deps.db.put(token, { ...rec, written: true, at: deps.now() })
     return { ok: true, name: h.name, bytes: payload.text.length }
   } catch (e) {
     return { ok: false, reason: `${e?.name}: ${e?.message}` }
   }
+}
+
+/** The document is going away: its saves end with it. Only the document that made them may drop them. */
+export async function drop(path, payload, deps) {
+  const rec = typeof payload?.token === 'string' ? await deps.db.get(payload.token) : null
+  if (rec && path && rec.path === path) await deps.db.del(payload.token)
+  return { ok: true }
 }
 
 /** Records older than KEEP_MS. */

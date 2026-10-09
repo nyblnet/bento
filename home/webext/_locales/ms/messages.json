@@ -661,5 +661,8 @@
   },
   "saGone": {
     "message": "Simpanan ini tidak lagi menunggu. Tutup tetingkap ini dan simpan sekali lagi."
+  },
+  "saTaken": {
+    "message": "“$1” sudah ada. Pilih nama lain."
   }
 }

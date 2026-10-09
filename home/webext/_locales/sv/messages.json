@@ -661,5 +661,8 @@
   },
   "saGone": {
     "message": "Den här sparningen väntar inte längre. Stäng fönstret och spara igen."
+  },
+  "saTaken": {
+    "message": "”$1” finns redan. Välj ett annat namn."
   }
 }
