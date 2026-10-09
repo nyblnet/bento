@@ -526,6 +526,56 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   (measured at 1400px: 872px before and after). And the sharing button, alone
   among the toolbar's controls, was 35×29 rather than the 40×40 every other one
   gets on a touch screen.
+- **Callouts, quotes and captions survive a trip through Markdown.** Four
+  places where the exporter and the importer disagreed with each other, each
+  measured by exporting one block and reading it back:
+  - A **GitHub alert** — `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`,
+    `[!CAUTION]` — now imports as a callout of that tone, with everything in
+    the box (lists, code, a nested alert) as its body. The export already
+    wrote alerts; the importer read them back as a plain quote with `[!WARNING]`
+    as its first words. Alerts written by GitHub or Obsidian read the same way,
+    including Obsidian's lower-case tags, fold markers and text on the tag
+    line. Other tags (`[!info]`) stay a quote, word for word.
+  - A **quote with a line break** exported its second line without `> `, so a
+    blank line inside it came back as a quote followed by a loose paragraph.
+    Every line is marked now.
+  - An **image caption** leaves as the Markdown title, `![alt](src "caption")`.
+    The importer already read that title as the caption; the exporter was
+    dropping it. An image's size still does not survive — Markdown has no
+    place for it.
+  - A **divider** comes back as the same block the editor made.
+
+  `scripts/test-spaces-md-strict.ts` holds every block type to this bar: 13 of
+  the 20 now come back byte for byte (9 did before), and the other 7 — toggle,
+  link card, media, field, board, page link, canvas — are pinned with the
+  reason, so the rig fails if one starts to qualify without the pin being
+  lifted on purpose.
+- **Footnotes.** A mark in the prose, the note at the foot of the page — write
+  `[^1]` where the mark goes and the note appears as a numbered slot below the
+  page to write into. Notes print, export as `[^1]: the note.` and import back
+  the same way, so an Obsidian or Pandoc vault keeps its footnotes in both
+  directions rather than losing them silently on the way in.
+
+  **The number is never stored.** Footnotes are numbered by order of appearance
+  and the number is worked out when the page is drawn, the way a magic note's
+  answer and a slide's page number are: put a new reference above two existing
+  ones and they renumber to 2 and 3 with nothing in the file changing. Measured
+  in the built shell — `[^1]` renders as "2" while `block.html` still says
+  `[^1]`. A stored number would have been wrong from the first sentence anyone
+  moved, and nothing would have said so.
+
+  **The reference is text, not markup**, which is the whole reason it survives
+  editing: `[^1]` moves with the prose through a keystroke, a sanitize pass, a
+  canonicalisation and a merge exactly the way the word beside it does, because
+  there is no offset to keep in step and no attribute for the allowlist to have
+  an opinion about. It also means a build that predates this shows the sentence
+  with `[^1]` in it and hands the `footnotes` key back untouched — verified by
+  loading a footnoted document into a shell built from the previous release.
+
+  A reference whose note has been deleted still renders, numbered, into an
+  empty note; a note whose reference has gone is kept, never quietly dropped.
+  `bento.validate()` reports both (`dangling-footnote`, `orphan-footnote`) and
+  names the block. Costs 3,176 bytes on the shell.
 - **A saved copy of a shared space rejoins its live session with its offline
   edits.** ⌘S, Save a copy and both self-update writes now stamp the live
   session's sync state into the file (`collab.sync`), as bento/slides always
