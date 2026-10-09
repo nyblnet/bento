@@ -50,6 +50,9 @@ if (!rec) {
   if (rec.dir) {
     besideBtn.hidden = false
     besideBtn.textContent = t('saBeside', original)
+  } else {
+    // the picker is the only way: make it the primary action
+    chooseBtn.classList.add('primary')
   }
   let confirmReplace = null // the name the person was warned about
   // Only a name the PERSON typed may replace a file: the suggestion is the
