@@ -33,6 +33,10 @@ import {
   cycleSort, nextLayout,
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
+import {
+  clausesOf, clauseSummary, isAny, opsFor, opLabel, numberOpLabel, windowLabel,
+  DATE_WINDOWS, type Clause, type QueryOp,
+} from './query.ts'
 import { planImport, type SourceFile } from './markdown'
 import { extractSpace, planGraft } from './portable'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
@@ -41,11 +45,17 @@ import { t, locale, localeChoices, setLocale, applyDirection } from './i18n'
 import { openAbout } from './about'
 import { saveRows, type DocHost } from './doccmds.ts'
 import { openGraphView } from './graph.ts'
+import { pageToDeck, type DeckNote, type DeckNoteCode } from './todeck.ts'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
 } from './journal'
+import { applyTemplate, journalTemplate } from './templates.ts'
+import {
+  type TemplateHost, openTemplates, openNewPagePicker, savePageAsTemplate,
+} from './templateui.ts'
 import { canWriteInPlace, parseEnvelope } from '../../kernel/src/save.ts'
 import { offlineEnabled } from '../../kernel/src/net.ts'
+import { withoutCaps } from '../../kernel/src/docfields.ts'
 import { startSharing } from '../../kernel/src/sync/online.ts'
 import * as shareModule from './share.ts'
 import { ICONS, type IconName } from './icons'
@@ -78,6 +88,14 @@ const AUTOFORMAT = MD_SPECS
 
 /** The four keys caret.ts answers for. A Set so the keymap's hot path is one lookup. */
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
+/**
+ * A page made into a slides deck, as it leaves the app (copied or downloaded).
+ * pageToDeck builds a FRESH deck that carries no capability block today, but
+ * a hand-out goes through the same stripper as every other one, so a deck
+ * that ever grew a `collab` could not take it onto the clipboard
+ * (scripts/test-export-secrets.ts: "a clipboard copy goes through a stripper").
+ */
+const deckForExport = <T extends object>(deck: T): T => withoutCaps(deck)
 /**
  * Below this width both side panels are DRAWERS over the page, not columns.
  * One number, handed to the kernel panel as `drawerBelow` (D6: the breakpoint
@@ -882,7 +900,12 @@ export class Editor {
     // the foot of the bar's ＋ Insert, among the blocks, where a page is not a
     // thing you insert into the page you are on.
     const split = el('div', 'sp-newsplit')
-    const plus = iconBtn('plus', t('New page (⌘⌥N)'), () => this.newPage())
+    // Once the space HAS templates, ＋ offers them; with none it makes a blank
+    // page as it always did (openNewPagePicker returns false and the fallback
+    // runs). The caret beside it holds the other ways a page arrives.
+    const plus = iconBtn('plus', t('New page (⌘⌥N)'), () => {
+      if (!openNewPagePicker(this.templateHost, plus, () => this.newPage())) this.newPage()
+    })
     plus.classList.add('sp-newpage')
     this.newPageMenu?.destroy()
     this.newPageMenu = barMenu({
@@ -1047,6 +1070,14 @@ export class Editor {
     if (s.readOnly) return
     const plan = planJournal(s.doc, iso)
     if (plan.add.length) {
+      // THE ENTRY'S OWN DATE, not today's: stepping to tomorrow's note has to
+      // write tomorrow's date into it, or a template with {{date}} in it lies
+      // on every entry but the one made on the day. Inside the SAME commit as
+      // the pages, so ⌘Z still takes back "I opened today's journal" in one
+      // step. The Journal parent page, when it is new too, is never templated —
+      // it is furniture, not an entry.
+      const tpl = journalTemplate(s.doc)
+      if (tpl) applyTemplate(plan.page, tpl, { date: iso, locale: locale() }, true)
       s.commit(() => {
         for (const { page, after } of plan.add) {
           const at = after ? s.doc.pages.findIndex((p) => p.id === after) : -1
@@ -1064,6 +1095,34 @@ export class Editor {
     const cur = this.store.page
     if (!cur || !isJournal(cur)) return
     this.openJournal(stepDay(String(cur.journal), n))
+  }
+
+  /**
+   * The narrow contract src/templateui.ts gets — the store operations it
+   * needs, and nothing else. Rebuilt on every read so `page` is never a stale
+   * reference to a page that has since been deleted.
+   */
+  private get templateHost(): TemplateHost {
+    const s = this.store
+    return {
+      get doc() { return s.doc },
+      get readOnly() { return s.readOnly },
+      get page() { return s.page },
+      commit: (fn: () => void) => { s.commit(fn) },
+      goToPage: (id: string) => { s.goToPage(id) },
+      status: (msg: string) => { this.status(msg) },
+      afterCreate: () => {
+        this.repaint()
+        afterPaint(() => {
+          const h = this.main.querySelector<HTMLElement>('[data-page-title]')
+          h?.focus()
+          if (h) selectAll(h)
+        })
+      },
+      pageIcon: (icon: string | undefined) => pageIcon(icon),
+      dialog: (title, build) => { this.openOverlay(title, build) },
+      menu: (anchor, label, fill) => { this.menuAt(anchor, label, fill) },
+    }
   }
 
   newPage(parent?: string): void {
@@ -1956,13 +2015,147 @@ export class Editor {
     })
   }
 
+  /** Add, remove or re-combine a view's typed conditions. */
+  private editClauses(blockId: string, edit: (list: Clause[]) => Clause[]): void {
+    this.editViewFilter(blockId, (f) => {
+      const next = edit(clausesOf(f))
+      // an empty list is DELETED, never stored: the same rule `is` and `open`
+      // follow, and what keeps a view conditioned and then cleared
+      // byte-identical to one nobody ever touched
+      if (next.length) f.where = next
+      else { delete f.where; delete f.any }
+      // `any` over one clause is a distinction without a difference, and a
+      // stored key that changes nothing is a key somebody has to explain
+      if (next.length < 2) delete f.any
+    })
+  }
+
   /**
-   * The filter picker: every option of every select field, as toggles.
+   * Build one condition: a field, an operator, a value.
    *
-   * Deliberately NOT a query builder — no operators, no and/or, no nesting.
-   * A list of values you can switch on is the whole of what a board needs, it
-   * fits a phone sheet, and it cannot grow a language that then has to be
-   * supported forever.
+   * A FORM, not a three-step menu chain. The three parts are one thought and
+   * picking them through three popovers is the interaction that makes a filter
+   * builder unusable — and the form is four native controls, which is what
+   * makes it fit a phone sheet without a layout of its own.
+   *
+   * The operator list follows the FIELD TYPE (query.ts `opsFor`), because "is
+   * more than" on a date and "is after" on a number are both questions nobody
+   * asks, and the value control follows the OPERATOR: options for a select, a
+   * window for `in`, a date picker for a date, nothing at all for `is empty`.
+   */
+  private openAddCondition(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    if (!s.block(blockId) || s.readOnly || this.reading) return
+    const fields = fieldsOf(s.doc)
+    this.popover(anchor, (pop) => {
+      pop.append(el('div', 'sp-pop-title', t('Add a condition')))
+
+      const wrap = (labelText: string, control: HTMLElement) => {
+        const row = el('div', 'sp-field')
+        row.append(el('label', 'sp-field-lbl', labelText), control)
+        return row
+      }
+      const opt = (sel: HTMLSelectElement, value: string, label: string) => {
+        const o = document.createElement('option')
+        o.value = value
+        o.textContent = label
+        sel.append(o)
+      }
+
+      const keySel = document.createElement('select')
+      keySel.className = 'sp-input'
+      opt(keySel, ':title', t('Title'))
+      for (const f of fields) opt(keySel, f.key, f.label)
+
+      const opSel = document.createElement('select')
+      opSel.className = 'sp-input'
+
+      const valBox = el('div', 'sp-field')
+      const valLbl = el('label', 'sp-field-lbl', t('Value'))
+
+      const fieldNow = () => fields.find((f) => f.key === keySel.value)
+      const buildOps = () => {
+        opSel.textContent = ''
+        const f = fieldNow()
+        for (const o of opsFor(f?.vt)) opt(opSel, o, f?.vt === 'number' ? numberOpLabel(o) : opLabel(o))
+      }
+      const buildValue = () => {
+        valBox.textContent = ''
+        const f = fieldNow()
+        const op = opSel.value
+        // `is empty` and `is not empty` are the two questions with no operand,
+        // so the control is ABSENT rather than disabled — a greyed box invites
+        // somebody to try to type in it
+        if (op === 'empty' || op === 'notEmpty') return
+        valBox.append(valLbl)
+        if (op === 'in') {
+          const sel = document.createElement('select')
+          sel.className = 'sp-input'
+          for (const w of DATE_WINDOWS) opt(sel, w, windowLabel(w))
+          valBox.append(sel)
+        } else if (f?.options?.length && (op === 'eq' || op === 'ne')) {
+          const sel = document.createElement('select')
+          sel.className = 'sp-input'
+          for (const o of f.options) opt(sel, o.id, o.label)
+          valBox.append(sel)
+        } else {
+          const input = document.createElement('input')
+          input.className = 'sp-input'
+          input.type = f?.vt === 'number' ? 'number' : f?.vt === 'date' ? 'date' : 'text'
+          valBox.append(input)
+        }
+      }
+      keySel.addEventListener('change', () => { buildOps(); buildValue() })
+      opSel.addEventListener('change', buildValue)
+      buildOps()
+      buildValue()
+
+      pop.append(wrap(t('Field'), keySel), wrap(t('Condition'), opSel), valBox)
+
+      const add = document.createElement('button')
+      add.type = 'button'
+      add.className = 'sp-btn sp-primary'
+      add.textContent = t('Add condition')
+      add.addEventListener('click', () => {
+        const op = opSel.value as QueryOp
+        const input = valBox.querySelector('select, input') as HTMLInputElement | HTMLSelectElement | null
+        const raw = input ? input.value : ''
+        // a condition with nothing in its box narrows nothing and would count
+        // for nothing on the chip — so it is not added at all rather than
+        // stored as a rule that does not apply
+        if (!input || raw !== '') {
+          const c: Clause = { key: keySel.value, op }
+          if (input) c.v = fieldNow()?.vt === 'number' && Number.isFinite(Number(raw)) ? Number(raw) : raw
+          this.editClauses(blockId, (list) => [...list, c])
+        }
+        this.closeOverlay()
+      })
+      pop.append(add)
+      // The popover's keyboard trap focuses the POP, which is right for a list
+      // of menu items and wrong for a form: you would arrive on a container and
+      // have to Tab three times to reach the box you opened this to fill in.
+      // Measured before this line: after clicking Add condition,
+      // `document.activeElement` was `div.sp-pop`, and typing put the text
+      // nowhere. The trap runs on its own tick, so this has to as well.
+      setTimeout(() => keySel.focus(), 0)
+    })
+  }
+
+  /**
+   * The filter picker: the options of every select field as toggles, and the
+   * typed conditions under them.
+   *
+   * IT USED TO BE TOGGLES ONLY, and the comment here said so as a decision:
+   * "deliberately NOT a query builder… it cannot grow a language that then has
+   * to be supported forever." Half of that stands and half of it did not
+   * survive contact with the app. What stands is the shape — a FLAT list of
+   * conditions, one all/any switch, no nesting, so the popover is still a list
+   * you read top to bottom on a phone. What did not is the scope: a view with
+   * five layouts over a filter that can only ask "which of these values" cannot
+   * ask what its own layouts exist for — a calendar over dates that cannot say
+   * "this week", a table over numbers that cannot say "more than". The
+   * value-toggle list stays FIRST and unchanged, because it is still the one
+   * question a board is asked most.
    */
   private openViewFilter(blockId: string, anchor: HTMLElement): void {
     const s = this.store
@@ -1995,9 +2188,30 @@ export class Editor {
         }
       }
       m.separator()
+      const conds = clausesOf(cur)
+      caption(m, t('Conditions'))
+      for (let i = 0; i < conds.length; i++) {
+        const at = i
+        // the row IS the remove control — a summary with a separate ✕ needs a
+        // layout of its own, and every other list in this menu is already one
+        // tap = one change
+        row(m, { icon: ICONS.trash, label: clauseSummary(s.doc, conds[at]), hint: t('Remove'),
+          run: () => this.editClauses(blockId, (list) => list.filter((_, j) => j !== at)) })
+      }
+      row(m, { icon: ICONS.plus, label: t('Add condition'), run: () => this.openAddCondition(blockId, anchor) })
+      if (conds.length > 1) {
+        const any = isAny(cur)
+        // ONE switch for the whole list. Per-clause and/or is a tree, and a tree
+        // needs a UI that can show one; this is the 90% and it reads in a line.
+        row(m, { icon: ICONS.toggle, label: any ? t('Match any condition') : t('Match all conditions'),
+          hint: t('Switch between all and any'),
+          run: () => this.editViewFilter(blockId, (f) => { if (any) delete f.any; else f.any = true }) })
+      }
+
+      m.separator()
       // unknown keys survive: this clears what this build put there
       row(m, { icon: ICONS.trash, label: t('Clear filter'),
-        run: () => this.editViewFilter(blockId, (f) => { delete f.is; delete f.open }) })
+        run: () => this.editViewFilter(blockId, (f) => { delete f.is; delete f.open; delete f.where; delete f.any }) })
     })
   }
 
@@ -4378,6 +4592,11 @@ export class Editor {
           run: () => this.makeIssue(pageId) })
       }
 
+      if (!s.readOnly) {
+        row(m, { icon: ICONS.copy, label: t('Save as template'), hint: t('New pages can start as a copy of this one'),
+          run: () => savePageAsTemplate(this.templateHost, page) })
+      }
+
       // A thread about the PAGE — the second and last anchor. It is offered
       // where the page's own actions are, and only for the page in view,
       // because a thread is written into the page you are looking at.
@@ -5037,6 +5256,95 @@ export class Editor {
   }
 
   /**
+   * PAGE → DECK.
+   *
+   * What this hands over is the deck's DOCUMENT JSON, not a `.bento.html`
+   * deck — src/todeck.ts explains why that is the honest scope from inside
+   * this app. So the dialog's job is to say what the artefact IS and what to
+   * do with it, and then to say, before anything is downloaded, exactly what
+   * of this page did not survive the crossing. A silent lossy export is the
+   * failure mode here; the summary is the feature.
+   */
+  openExportDeck(): void {
+    const s = this.store
+    this.openOverlay(t('Export a page as slides'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Export a page as slides')))
+
+      const what = document.createElement('p')
+      what.className = 'sp-note'
+      what.textContent = t('The page becomes a deck’s document. Open Bento Slides and use “Replace from JSON…” in its About dialog — or window.bento.loadDoc() from a script.')
+      card.append(what)
+
+      const pick = document.createElement('select')
+      pick.className = 'sp-select'
+      for (const { page, depth } of s.tree()) {
+        const o = document.createElement('option')
+        o.value = page.id
+        o.textContent = `${'· '.repeat(depth)}${page.title || t('Untitled')}`
+        if (page.id === s.pageId) o.selected = true
+        pick.append(o)
+      }
+      const pageRow = el('div', 'sp-row')
+      pageRow.append(el('span', '', t('Page')), pick)
+      card.append(pageRow)
+
+      const summary = document.createElement('p')
+      summary.className = 'sp-note'
+      const losses = document.createElement('ul')
+      losses.className = 'sp-note'
+      card.append(summary, losses)
+
+      // Built from the REAL export, not described in the abstract — the same
+      // choice openExportSpace makes, and for the same reason: the counts have
+      // to move as the choice does or they are decoration.
+      let out = pageToDeck(s.doc, pick.value)
+      const recount = (): void => {
+        out = pageToDeck(s.doc, pick.value)
+        summary.textContent = t('{n} slide(s).', { n: out.slides })
+        losses.textContent = ''
+        if (!out.notes.length) return
+        const head = document.createElement('li')
+        head.textContent = t('What did not come across as it stands:')
+        losses.append(head)
+        for (const n of out.notes) {
+          const li = document.createElement('li')
+          li.textContent = n.n > 1 ? `${deckNoteText(n)} (×${n.n})` : deckNoteText(n)
+          losses.append(li)
+        }
+      }
+      pick.addEventListener('change', recount)
+      recount()
+
+      const name = (): string =>
+        `${(s.doc.pages.find((p) => p.id === pick.value)?.title || 'deck').replace(/[^\w.-]+/g, '-')}.bento-slides.json`
+
+      const copyB = plainBtn(t('Copy the deck JSON'), () => {
+        navigator.clipboard?.writeText(JSON.stringify(deckForExport(out.doc), null, 2))
+          .then(() => { copyB.textContent = t('Copied') })
+          .catch(() => { copyB.textContent = t('Could not copy') })
+          .finally(() => { setTimeout(() => { copyB.textContent = t('Copy the deck JSON') }, 1800) })
+      })
+
+      const acts = el('div', 'sp-actions')
+      acts.append(
+        plainBtn(t('Download the deck JSON'), () => {
+          const blob = new Blob([JSON.stringify(deckForExport(out.doc), null, 2)], { type: 'application/json' })
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(blob)
+          a.download = name()
+          a.click()
+          URL.revokeObjectURL(a.href)
+          close()
+          this.status(t('Exported {n} slide(s) as a deck', { n: out.slides }))
+        }, true),
+        copyB,
+        plainBtn(t('Close'), close),
+      )
+      card.append(acts)
+    })
+  }
+
+  /**
    * Import, in ONE undoable step.
    *
    * Everything slow or asynchronous — reading files, decoding and re-encoding
@@ -5592,6 +5900,10 @@ export class Editor {
       // handle, which is what leaves you editing this space afterwards.
       writeCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
       importMarkdown: () => this.openImport(),
+      moreExports: (m) => {
+        row(m, { icon: ICONS.canvas, label: t('Export page as slides…'),
+          desc: t('The page as a bento/slides deck, ready to paste into Bento Slides'), run: () => this.openExportDeck() })
+      },
     }
   }
 
@@ -5600,6 +5912,7 @@ export class Editor {
     row(m, { icon: ICONS.page, label: t('New page'), kbd: keys('alt', 'mod', 'N'), run: () => this.newPage() })
     row(m, { icon: ICONS.book, label: t("Today's journal"), kbd: keys('shift', 'mod', 'J'), run: () => this.openJournal() })
     row(m, { icon: ICONS.board, label: t('New issue'), kbd: keys('shift', 'mod', 'I'), run: () => this.newIssue() })
+    row(m, { icon: ICONS.copy, label: t('Templates…'), run: () => openTemplates(this.templateHost) })
   }
 
   private updateVersion: string | null = null
@@ -5753,6 +6066,38 @@ function plainBtn(label: string, onClick: () => void, primary = false): HTMLButt
   b.textContent = label
   b.addEventListener('click', onClick)
   return b
+}
+
+/**
+ * One `DeckNote` in the reader's own language.
+ *
+ * A SWITCH OF LITERALS, deliberately, and not `t(TEXT[code])`. The i18n
+ * extractor sweeps `t()` calls whose argument is a LITERAL STRING out of the
+ * source; a lookup table would compile, run, report 100% coverage in the
+ * packer, and ship English in all eight locales — which has already happened
+ * once in this app, to the block menu labels. The document's own copy of these
+ * sentences lives in todeck.ts and is deliberately English: a saved artefact's
+ * words are its author's, not its next reader's browser's.
+ */
+function deckNoteText(n: DeckNote): string {
+  const code: DeckNoteCode = n.code
+  switch (code) {
+    case 'image-remote': return t('A picture that lives on the web was left out — a deck never fetches.')
+    case 'media-remote': return t('A clip that lives on the web was left out — a deck never fetches.')
+    case 'media-embedded': return t('A clip travelled as embedded bytes, so the deck is large.')
+    case 'link-flattened': return t('A link kept its words; a slide has nowhere to put the address.')
+    case 'pagelink': return t('A card that opened another page became its title.')
+    case 'toggle-open': return t('A fold is shown open — a slide cannot fold.')
+    case 'callout-plain': return t('A callout kept its words and its kind, in a plain panel.')
+    case 'canvas-flattened': return t('A canvas became a slide; the card sizes were chosen here.')
+    case 'table-split': return t('A table was too tall for one slide and continues on the next.')
+    case 'view-derived': return t('A board became a table of the rows it stood for.')
+    case 'unknown-block': return t('A block this build does not know became its text.')
+    case 'empty-block': return t('A block with nothing in it was left out.')
+    case 'rtl': return t('This space reads right-to-left; a deck has no such setting.')
+    case 'comments': return t('Review comments stayed behind, on purpose.')
+    case 'icon-glyph': return t('The page’s icon is one of this app’s own glyphs, not an emoji, and did not travel.')
+  }
 }
 
 // ---- dropped files ----------------------------------------------------------

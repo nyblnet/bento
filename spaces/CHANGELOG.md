@@ -486,6 +486,64 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **A page becomes a deck.** Save → **Export page as slides…** turns one page
+  into a `bento/slides` presentation: headings start slides, lists stay lists,
+  a table stays a table, a board becomes a table of the rows it stands for, and
+  a canvas becomes a slide with every card where you put it. The page's title,
+  icon and cover make the title slide; the space's theme becomes the deck's.
+  No hosted notes app can hand you a presentation you own outright, and this
+  one can, because both apps are the same repository.
+
+  **What it hands over is the deck's document JSON**, which you paste into
+  Bento Slides through its own "Replace from JSON…" — not a finished
+  `.bento.html`. A self-contained deck is a document spliced into a slides
+  SHELL, and the only ways for this app to have one are bundling half a
+  megabyte of another app into every space or fetching it, which is the one
+  thing opening a document must never do. The Markdown export sets the
+  precedent: write the other format faithfully and hand it over.
+
+  **Nothing is fetched, and nothing is dropped in silence.** Every picture
+  travels as its bytes, re-interned in the deck's own asset table; anything
+  that would still reach the network — including bytes hidden one `asset:`
+  indirection away, the hole closed on the reading side in 0.1.x — is left out
+  and said out loud. The dialog lists what did not come across before you
+  download anything, and the same list is written into the deck's speaker
+  notes, so a presenter opening it next week is told too. Speaker notes are
+  otherwise NOT invented: mapping review comments onto them would move a remark
+  addressed to a person into a file people present from.
+- **A view's filter can ask a real question.** It had two things to say — "show
+  me what is open" and "show me these values" — under five layouts that exist to
+  hold books, tasks and dates. "Published after 2020", "due this week", "not
+  tagged draft", "title contains onboarding" and "has no due date" were all
+  unaskable. A view now carries **conditions**: a field, an operator and a
+  value, built in the Filter popover and listed there in words.
+
+  Eleven operators, chosen per field type rather than collected. Numbers and
+  dates get `is more than` / `is at least` / `is less than` / `is at most`, and
+  two of them AND into a range. Dates also get relative windows — Today, This
+  week, This month, In the past (which is what "overdue" is), In the future —
+  resolved against **your own day in your own timezone**, and against your own
+  locale's week: the same file answers "this week" as Monday–Sunday in Berlin
+  and Sunday–Saturday in Chicago, because a week start is a reader's fact and
+  not a document's. Text gets `contains` / `does not contain`, matching what is
+  on the screen rather than what is stored underneath, so a status matches its
+  label. Everything gets `is` / `is not` and `is empty` / `is not empty` — the
+  question membership could never ask, because an unset value is the absence of
+  a value rather than one of its values. A condition can also ask about the page
+  **title**, which is not a property and no field name could reach.
+
+  Conditions are a flat list with one switch — **Match all** or **Match any** —
+  and no nesting, deliberately: a filter you cannot read at a glance is worse
+  than one that cannot ask everything, and the popover is a sheet on a phone.
+  The Filter chip counts them alongside the old two.
+
+  Nothing written before this changes. Every existing filter runs through
+  exactly the code it always did and selects exactly the rows it always did, and
+  a view whose conditions are all removed goes back to being byte-identical to
+  one nobody ever filtered. An **older build** opening a file with conditions
+  ignores them, shows a superset of the rows, and says so in the banner it
+  already had for a newer sort — and a **newer** operator meeting this build
+  does the same rather than hiding rows for a rule nobody can see.
 - **The arrow keys move between blocks, and within one first.** Every block is
   its own `contenteditable` host, which is what keeps a Selection block-scoped
   so splitting and merging can never re-mint an id — and the price, until now,
@@ -863,6 +921,32 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   - The labels hide on a narrower window as slides' do. On a phone, the
     whole group is in ⋯, under captions. The `/` menu lists the same families
     in the same order, with the same captions.
+- **Page templates, and a template for the daily note.** Open a page you would
+  like to reuse, and the page's ⋯ menu offers **Save as template**. From then on
+  the ＋ above the page list offers a blank page or any of your templates, and
+  the new page arrives with the blocks, the icon and the width of the one you
+  saved. With no templates saved the ＋ makes a blank page exactly as it always
+  did — the picker only appears once there is something in it.
+
+  The one that earns the feature is **Use for daily notes**: pick a template in
+  **Templates…**, in the ▾ beside that ＋, and every new journal entry starts
+  with your structure instead of an empty page. It is the most-used workflow in Obsidian and Logseq and it
+  was the only thing a daily note here could not do.
+
+  Write `{{date}}` anywhere in a template and each new page gets its own date
+  there — `{{date:iso}}` for `2026-03-14`, `{{date:short}}` for a tight space,
+  `{{date+1:iso}}` for tomorrow, plus `{{time}}` and `{{title}}`. Expanded ONCE,
+  when the page is made, so what lands in the file is ordinary text an older
+  build reads the same way. A journal entry gets the date it is FOR: backfilling
+  Tuesday's note on Thursday writes Tuesday.
+
+  Templates live in the document (`doc.templates`) rather than as hidden pages,
+  so they never appear in search, the graph, backlinks, the sidebar or the
+  Markdown export — and the flip side, stated plainly: they travel with the FILE
+  and not with a page you graft into another space. Additive as ever: a file
+  written before this has no templates key and opens unchanged, and turning the
+  daily-note setting off deletes the key rather than storing a default. Saving
+  or deleting a template is one ⌘Z.
 - **A page can answer to more than one name.** "Also known as" in the page
   panel takes a comma-separated list — "NYC, the Big Apple" on a page titled
   New York — and every one of those names reaches the page from a
