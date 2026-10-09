@@ -85,6 +85,8 @@ const FIX: Record<string, () => Fixture> = {
   media: () => ({ blocks: [b('media', '', { kind: 'audio', src: 'asset:tone', alt: 'A tone', controls: true })] }),
   link: () => ({ blocks: [b('link', '<a href="https://bento.page">Bento</a> — desc', { url: 'https://bento.page', title: 'Bento', desc: 'desc', site: 'bento.page' })] }),
   pagelink: () => ({ blocks: [b('pagelink', '', { page: 'other' })], extraPages: [{ id: 'other', title: 'Other page', blocks: [b('p', 'x')] }] }),
+  // `![[Other page]]` — Obsidian's transclusion, which GitHub shows as text
+  embed: () => ({ blocks: [b('embed', '<a href="#p/other">Other page</a>', { page: 'other' })], extraPages: [{ id: 'other', title: 'Other page', blocks: [b('p', 'x')] }] }),
   prop: () => ({ blocks: [propBlock(DEFAULT_FIELDS[0], 'doing', id())] }),
   table: () => {
     const t = b('table', '')
@@ -108,6 +110,12 @@ const PINNED: Record<string, string> = {
   prop: 'exports as `**Status:** In progress` and comes back a paragraph; the natural form is front matter (`status: doing`), and value id vs label needs the schema',
   view: 'exports as a title and a grouped issue list and comes back as p+p+bullet; needs a `bento-view` fence (its rows are other pages)',
   pagelink: 'exports as `→ [[Title]]` and comes back a paragraph holding a wikilink',
+  // The export is right (`![[Other page]]`, Obsidian's form). What a single
+  // note cannot do is resolve the title: that happens in planImport against
+  // the space's pages, which this per-note rig does not run — the same reason
+  // pagelink is pinned. Both move to the lossless side when import-time
+  // resolution is measured here (#562 does that for pagelink).
+  embed: 'exports as `![[Title]]` and comes back an embed whose page is the unresolved wikilink `#w/Title`',
   canvas: 'exports its name and cards as prose and comes back as paragraphs; card positions are lost (a `bento-canvas` fence or `{x= y=}` attributes)',
 }
 
