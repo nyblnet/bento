@@ -15,6 +15,7 @@ import { blockStyle } from './layout.ts';
 import { activeStyleId, ensureStyleSheet } from './docstyles.ts';
 import { citeInject, isCiteAtom, mergeInject, paintCitations, readCiteAtoms } from './cite.ts';
 import { displayMathHtml, inlineMathHtml, isMathMark } from './math.ts';
+import { fieldAtoms, fillFields, isFieldAtom, readFields } from './fields.ts';
 import { renderEmbed } from './embed.ts';
 
 export const TAG: Record<Block['kind'], string> = {
@@ -148,6 +149,11 @@ export function blockHtml(b: Block): string {
     new Map((b.notes ?? []).map(n => [n.at, noteMarker(n.id)])),
     refAtoms(b),
     citeInject(b),
+    // A FIELD is the fourth atom over the same text, and it is here rather than
+    // in the text for the reason fields.ts's header gives at length: resolving
+    // into `text` would put the DOM and the model at different lengths, and the
+    // caret is a model offset into that string.
+    fieldAtoms(b),
   );
   const html = toHtml(b.text, b.marks ?? [], atoms.size ? atoms : undefined,
                       mathRanges.length ? mathRanges : undefined);
@@ -312,6 +318,7 @@ export function renderBody(doc: TypeDoc, host: HTMLElement): void {
   numberNotes(host, doc);
   numberXrefs(host, doc);
   paintCitations(host, doc);
+  fillFields(host, doc);
 }
 
 /**
@@ -338,7 +345,8 @@ export function numberNotes(host: HTMLElement, _doc: TypeDoc): string[] {
  * nothing that has no place to go.
  */
 export function readBlock(el: HTMLElement, prev: Block): Block {
-  const { text, marks, atoms } = fromDom(el, el2 => isNoteAtom(el2) || isXrefAtom(el2) || isCiteAtom(el2));
+  const { text, marks, atoms } = fromDom(el,
+    el2 => isNoteAtom(el2) || isXrefAtom(el2) || isCiteAtom(el2) || isFieldAtom(el2));
   const out: Block = { ...prev, id: el.dataset.id || prev.id, text };
   const kind = el.dataset.kind as Block['kind'] | undefined;
   if (kind && kind in TAG) out.kind = kind;
@@ -351,5 +359,10 @@ export function readBlock(el: HTMLElement, prev: Block): Block {
   if (refs.length) out.refs = refs; else delete out.refs;
   const cites = readCiteAtoms(atoms);
   if (cites.length) out.cites = cites; else delete out.cites;
+  // Recovered from the ATOM, never from the text — which is why typing around
+  // a field cannot destroy it and why the resolved value never lands in the
+  // model. This one line is the whole of the "editing gotcha" in this app.
+  const fields = readFields(atoms);
+  if (fields.length) out.fields = fields; else delete out.fields;
   return out;
 }

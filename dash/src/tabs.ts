@@ -47,6 +47,7 @@ import type { Column, DashDoc, Sheet, TableSheet, CanvasSheet } from './model.ts
 import type { Patch, Store } from './store.ts'
 import type { Grid } from './grid.ts'
 import type { SetSheetProps } from './rowcol.ts'
+import { renameSheetRefs } from './a1.ts'
 
 /** Remembered per browser, never in the document: this is a viewer preference. */
 const LS_SHUT = 'bento-dash-tabs-shut'
@@ -92,6 +93,64 @@ export function renameSheetPatch(sheet: { id: string; name: string }, name: stri
   const n = name.trim()
   if (!n || n === sheet.name) return null
   return { op: 'setSheetProps', sheet: sheet.id, props: { name: n } }
+}
+
+/**
+ * The rename, AND every formula in the workbook that reached the sheet by its
+ * old name — one step, so no document ever exists in which the tab says one
+ * thing and `=SUM(Pipeline!D1:D8)` says another. That document did exist:
+ * renaming the starter's Pipeline tab left four `#REF!`s on Scratch, and a
+ * reader had no way to know the two events were the same event.
+ *
+ * Cell formulas on both kinds of sheet, column expressions and defined names
+ * are the three places a qualifier can be written. Each is rewritten through
+ * the op that owns it, so undo puts the name AND the formulas back together.
+ */
+export function renameSheetPatches(doc: DashDoc, sheet: { id: string; name: string }, name: string): Patch[] {
+  const head = renameSheetPatch(sheet, name)
+  if (!head) return []
+  const from = sheet.name
+  const to = head.props.name as string
+  const out: Patch[] = [head]
+  const fix = (f: unknown): string | null => {
+    if (typeof f !== 'string') return null
+    const next = renameSheetRefs(f, from, to)
+    return next === f ? null : next
+  }
+  for (const s of doc.sheets) {
+    if (s.kind === 'canvas') {
+      const cells: Record<string, CanvasSheet['cells'][string]> = {}
+      let n = 0
+      for (const [k, c] of Object.entries(s.cells)) {
+        const f = fix(c?.f)
+        if (f !== null) { cells[k] = { ...c, f }; n++ }
+      }
+      if (n) out.push({ op: 'setCanvasCells', sheet: s.id, cells })
+    } else if (s.kind === 'table') {
+      const t = s as TableSheet
+      for (const c of t.columns) {
+        const f = fix(c.formula)
+        if (f !== null) out.push({ op: 'setColumn', sheet: t.id, col: c.id, patch: { formula: f } })
+      }
+      const keys: string[] = []
+      const v: NonNullable<TableSheet['cells']>[string][] = []
+      for (const [k, c] of Object.entries(t.cells ?? {})) {
+        const f = fix(c?.f)
+        if (f !== null) { keys.push(k); v.push({ ...c, f }) }
+      }
+      if (keys.length) out.push({ op: 'setOverrides', sheet: t.id, keys, v })
+    }
+  }
+  if (doc.names) {
+    let changed = false
+    const names = { ...doc.names }
+    for (const [k, d] of Object.entries(doc.names)) {
+      const ref = fix(d?.ref)
+      if (ref !== null) { names[k] = { ...d, ref }; changed = true }
+    }
+    if (changed) out.push({ op: 'setDocProps', props: { names } })
+  }
+  return out
 }
 
 /**
@@ -841,8 +900,8 @@ export function mountTabs(host: TabsHost): Tabs {
       done = true
       renaming = false
       if (write) {
-        const p = renameSheetPatch(sheet, input.value)
-        if (p) commit(p)
+        const p = renameSheetPatches(store.doc, sheet, input.value)
+        if (p.length) commit(p)
       }
       refresh(true)
     }

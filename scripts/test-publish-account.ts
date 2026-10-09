@@ -11,7 +11,7 @@
 // inactive account is not mistaken for the active one); the rule refuses a
 // mismatched owner, nobody, and accepts the owner or a listed collaborator
 // case-insensitively; the message names the command to run from a path
-// under ~/devel. And the gate sits BEFORE the rsync in publish-site.mjs —
+// under ~/personal. And the gate sits BEFORE the rsync in publish-site.mjs —
 // the whole point: the site must never go live and the release then fail.
 
 import { readFileSync, mkdtempSync, rmSync, writeFileSync, cpSync } from 'node:fs'

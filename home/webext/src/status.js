@@ -93,6 +93,24 @@ export async function setLapsedBadge() {
   }
 }
 
+/**
+ * The badge FOR ONE TAB: its document cannot save in place yet. Per tab —
+ * Chrome shows a tab's own badge over the global one while that tab is
+ * active — so it says nothing about other documents, and clears itself
+ * when the document is covered. Same colour family as the lapsed badge,
+ * one shade lighter: attention, not alarm.
+ */
+export async function setTabBadge(tabId, uncovered) {
+  try {
+    if (typeof chrome === 'undefined' || !chrome.action?.setBadgeText || tabId == null) return
+    await chrome.action.setBadgeText({ tabId, text: uncovered ? '!' : '' })
+    if (uncovered) {
+      await chrome.action.setBadgeBackgroundColor?.({ tabId, color: '#F28C5A' })
+      await chrome.action.setTitle?.({ tabId, title: t('badgeNotSavingTip') })
+    }
+  } catch { /* the tab went away */ }
+}
+
 const NOTIFIED = 'lapsed-notified'
 
 /**

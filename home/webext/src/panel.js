@@ -12,6 +12,7 @@
 import { getGrants, putGrants, status, setLapsedBadge } from './status.js'
 import { t, localize, initI18n } from './i18n.js'
 import { listDocuments, describe, newDocument } from './library.js'
+import { inBlockedFolder, folderOf, grantFolderFor, grantFileFor } from './grantflow.js'
 
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => (
@@ -267,3 +268,67 @@ await initI18n()
 localize()
 await renderStatus()
 await renderDocs()
+
+
+// ---------------------------------------------------------------- this document
+//
+// The document in the ACTIVE tab: how it saves, in words — and, when nothing
+// covers it, the button that fixes that. The button runs the OS file picker
+// here, in the extension's own context and gesture, which is the only place
+// a handle may be taken and kept; the worker proves the picked file is the
+// one in the tab (bytes and mtime) before it is stored. This is the "why is
+// there no button for a double-clicked file" answer: there is, and it sits
+// beside the document.
+let tdPath = null
+async function renderThisDoc() {
+  const box = $('thisdoc')
+  let tab = null
+  try { [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }) } catch { tab = null }
+  const url = tab?.url ?? ''
+  if (!/^file:.*\.bento\.html$/i.test(url)) { box.hidden = true; tdPath = null; return }
+  let r = null
+  try { r = await chrome.runtime.sendMessage({ op: 'save.status', url }) } catch { r = null }
+  box.hidden = false
+  const name = decodeURIComponent(url.split('/').pop())
+  $('tdName').textContent = name
+  tdPath = r?.path ?? decodeURIComponent(new URL(url).pathname)
+  const dot = $('tdDot')
+  const btn = $('tdGrant')
+  if (r?.ok) {
+    dot.className = 'dot ok'
+    $('tdState').textContent = r.via === 'folder' ? t('tdViaFolder') : r.via === 'file' ? t('tdViaFile') : t('tdViaDownloads')
+    btn.hidden = true
+  } else {
+    dot.className = 'dot bad'
+    $('tdState').textContent = r?.reason === 'file grant needs renewing' ? t('needsReconnecting') : t('tdNotYet')
+    btn.hidden = false
+    // the folder when Chrome allows it — every sibling then saves too
+    const folder = folderOf(tdPath).split('/').filter(Boolean).pop() ?? ''
+    btn.textContent = inBlockedFolder(tdPath) ? t('tdGrant') : t('tdGrantFolder', folder)
+  }
+}
+$('tdGrant').addEventListener('click', async () => {
+  if (!tdPath) return
+  const btn = $('tdGrant')
+  btn.disabled = true
+  try {
+    $('tdState').textContent = '…'
+    const r = inBlockedFolder(tdPath) ? await grantFileFor(tdPath) : await grantFolderFor(tdPath)
+    if (!r.ok) {
+      $('tdState').textContent = r.reason === 'denied' ? t('fgDenied')
+        : r.reason === 'not-containing' ? t('fgNotContaining', r.name ?? '', folderOf(tdPath).split('/').pop())
+        : r.reason === 'cancelled' ? t('tdNotYet') : t('fgNotSame', tdPath.split('/').pop())
+      return
+    }
+    try { await chrome.runtime.sendMessage({ op: 'save.rebadge' }) } catch { /* fine */ }
+    await renderThisDoc()
+  } catch (e) {
+    console.info('[bento/home] grant failed:', e)
+    if (e?.name !== 'AbortError') $('tdState').textContent = `${e?.name ?? 'Error'}: ${e?.message || String(e)}`
+  } finally {
+    btn.disabled = false
+  }
+})
+void renderThisDoc()
+chrome.tabs.onActivated?.addListener(() => void renderThisDoc())
+chrome.tabs.onUpdated?.addListener((_id, info) => { if (info.url || info.status === 'complete') void renderThisDoc() })

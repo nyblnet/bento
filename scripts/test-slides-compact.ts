@@ -154,13 +154,14 @@ ok(((mc.slides as Obj[])[0].elements as Obj[]).every((e) => e.type !== 'text' ||
 
 console.log('\nthe gated loader and the surfaces\n')
 const loader = read('slides/src/compactload.ts')
-ok(/import \{ sanitizeSlide, withDropReport, withPathSegment[^}]*\} from '\.\/untrusted'/.test(loader) && /=> sanitizeSlide\(s\)/.test(loader) && /const doc = parseDoc\(JSON\.stringify\(ex\)\)/.test(loader), 'compactload.ts expands, runs sanitizeSlide on every slide (collecting drops), then parseDoc — the gate is the single point of validation')
-ok(/if \(!isCompact\(raw\)\) \{\s*const doc = parseDoc\(json\)/.test(loader), 'a full document takes the plain parseDoc path, as today')
+ok(/import \{ sanitizeSlide, withDropReport, withPathSegment[^}]*\} from '\.\/untrusted'/.test(loader) && /=> sanitizeSlide\(s\)/.test(loader) && /const base = parseDoc\(JSON\.stringify\(ex\)\)[\s\S]{0,300}sanitizeDoc\(base as unknown as Record<string, unknown>, o\.live\)/.test(loader), 'compactload.ts expands, runs sanitizeSlide on every slide (collecting drops), then parseDoc and the document gate — one gate, one point of validation')
+ok(/if \(!isCompact\(raw\)\) \{\s*const base = parseDoc\(json\)[\s\S]{0,120}sanitizeDoc\(base as unknown as Record<string, unknown>, o\.live\)/.test(loader),
+  'a full document passes the structural gate too (sanitizeDoc), not parseDoc alone')
 const main = read('slides/src/main.ts')
-ok(/const parsed = parseDocInputReport\(json\)/.test(main) && /return parsed\.report/.test(main) && /compact: \(\) => compactJson\(store\.doc\)/.test(main), 'window.bento.loadDoc accepts compact input and returns the load report; window.bento.compact() emits compact JSON')
+ok(/const parsed = parseDocInputReport\(json, \{ live: store\.doc \}\)/.test(main) && /return parsed\.report/.test(main) && /compact: \(\) => compactJson\(store\.doc\)/.test(main), 'window.bento.loadDoc accepts compact input and returns the load report; window.bento.compact() emits compact JSON')
 ok(/return serializeFile\(store\.doc\)/.test(main), 'window.bento.serialize() is unchanged — the file is full')
 const editor = read('slides/src/editor/editor.ts')
-ok(/const parsed = parseDocInputReport\(ta\.value\)/.test(editor) && /Loaded: \{dropped\} fields dropped, \{warnings\} warnings — see console/.test(editor), 'Replace from JSON… accepts compact input and summarises the report in a toast')
+ok(/const parsed = parseDocInputReport\(ta\.value, \{ live: this\.store\.doc \}\)/.test(editor) && /Loaded: \{dropped\} fields dropped, \{warnings\} warnings — see console/.test(editor), 'Replace from JSON… accepts compact input and summarises the report in a toast')
 ok(/t\('Copy compact JSON \(for agents\)'\)/.test(editor) && /this\.copyDocJson\(true\)/.test(editor) && /compact \? compactJson\(clone\)/.test(editor), 'the Save menu has Copy compact JSON, wired to compactJson')
 ok(!/compact/i.test(read('slides/src/save.ts')) && !/compactDoc|compactJson/.test(read('slides/src/model.ts')), 'save.ts and model.ts know nothing of compaction — the on-disk file cannot be compact')
 ok(!/compact/.test(read('slides/src/modelkeys.generated.ts')), 'no model key named compact — the flag is input, never stored')

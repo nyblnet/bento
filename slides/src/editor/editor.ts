@@ -29,8 +29,9 @@ import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHan
 import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
+import { estimatedFrames, fencedElements, splitFences } from './codefence'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
-import { borderPoint, boxCenter, lineEndpoints, pathEndpoints, setLineEndpoints, setPathEndpoints, sideMidpoint } from './lineedit'
+import { boxCenter, connectorEndpoint, lineEndpoints, pathEndpoints, setLineEndpoints, setPathEndpoints } from './lineedit'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
 import { stepOf } from '../steps'
@@ -38,11 +39,12 @@ import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, st
 import { injectFonts } from '../fonts'
 import { appConfig } from '../../../kernel/src/app.ts'
 import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, mintRoomKey, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { readerCopy, inviteCopy } from '../share'
 import { projectDoc, projectOp, type AudienceTicket } from '../audience'
 import { stripEmbeddedEnvelopes } from '../envelope'
 import { compactJson } from '../compact'
 import { parseDocInputReport } from '../compactload'
-import { gateRestored } from '../restoregate'
+import { gateRestored, guardOpenedDoc } from '../restoregate'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
 import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
@@ -85,6 +87,53 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
   { kind: 'path', label: 'Freeform', icon: ICONS.freeform, draw: 'free', tip: 'Draw by hand — the stroke smooths into an editable curve' },
   { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly', tip: 'Click to place corners; click the first point (or double-click) to close the shape' },
 ]
+
+/**
+ * The PowerPoint importer on the site (bento/convert's page, #589). A LINK,
+ * not a feature of this file: the conversion needs the network, and a saved
+ * deck never loads anything on its own, so the entry opens the page in a new
+ * tab and says so in its tooltip. Slides' release carries the site, so the
+ * entry and the page ship together.
+ */
+export const IMPORT_PPTX_URL = 'https://bento.page/import'
+
+/**
+ * May this copy write? An ALLOWLIST that fails closed: a deck with no live
+ * session, or one whose role is absent (owner and legacy writer copies) or
+ * 'writer'. Every other role — 'reader', 'audience', and any role a later
+ * version adds — is read-only here. It used to be `role !== 'reader'`, a
+ * denylist that answered yes for the broadcast 'audience' role, so an audience
+ * copy dropped onto a running editor got "Invite to edit…", "Reset access…"
+ * and an Editor label. (The relay refused its writes all along; this was the
+ * chrome, not the capability.)
+ */
+export function canWriteDeck(collab: { role?: string } | undefined): boolean {
+  return !collab || collab.role === undefined || collab.role === 'writer'
+}
+
+/**
+ * A menu row's label and its description (maintainer ruling D2, as revised
+ * 2026-09-26: "all the extra text describing the entry can be mouseovers").
+ * The row stays ONE 30px line; the description is its hover tooltip (the
+ * native `title`) and, because a tooltip is not announced reliably and never
+ * appears on a phone, also its accessible DESCRIPTION via aria-describedby on
+ * a visually-hidden node. The name keeps an element of its own and is the
+ * row's accessible NAME. The hidden node sits inside the label span so the
+ * bar's compact tier, which hides and restores `.ed-btn > span`, carries it
+ * along. An empty description adds nothing.
+ */
+let menuDescSeq = 0
+function menuLabel(label: string, desc: string, row: HTMLElement): HTMLSpanElement {
+  if (!desc) return Object.assign(document.createElement('span'), { textContent: label })
+  const span = document.createElement('span')
+  const name = Object.assign(document.createElement('span'), { className: 'ed-mi-name', textContent: label })
+  const note = Object.assign(document.createElement('span'), { className: 'ed-sr-only', textContent: desc, id: `ed-mi-desc-${++menuDescSeq}` })
+  span.append(name, note)
+  row.title = desc
+  row.setAttribute('aria-label', label)
+  row.setAttribute('aria-describedby', note.id)
+  return span
+}
 
 export class Editor {
   private canvas!: SlideCanvas
@@ -138,6 +187,10 @@ export class Editor {
     store.on('doc', () => this.syncThemeRefs())
     store.on('doc', () => this.syncFonts())
     this.syncFonts()
+    // A document that cannot write can ARRIVE in a running editor, not only boot
+    // in one — an audience or reader copy dropped onto it, or loaded by script.
+    // The build-time check never sees those, so the lock follows the document.
+    store.on('doc', () => { if (!store.readOnly && !canWriteDeck(store.doc.collab)) this.enterReaderMode() })
     document.addEventListener('bento:apply-layout', ((ev: CustomEvent) => {
       this.openLayoutPicker(ev.detail.anchor as HTMLElement, { kind: 'apply' })
     }) as EventListener)
@@ -250,12 +303,26 @@ export class Editor {
   // --- DOM ----------------------------------------------------------------
 
   private build() {
+    // Everything the previous build hung on window, document or the store dies
+    // with its DOM. build() runs again on every language switch, and each run
+    // used to add another resize listener, another ResizeObserver and eight
+    // outside-press listeners that kept the old bar alive and re-fitted it.
+    this.buildScope.abort()
+    this.buildScope = new AbortController()
+    for (const o of this.buildObservers) o.disconnect()
+    this.buildObservers = []
     this.root.innerHTML = ''
     this.root.className = 'ed-root'
 
     // topbar
     const bar = div('ed-topbar')
-    const logo = div('ed-logo')
+    // A real button: it opens About, so it takes focus, answers Enter/Space and
+    // has a name a screen reader can read (the visible word is hidden at the
+    // tight tier and on phones, leaving only the mark).
+    const logo = document.createElement('button')
+    logo.type = 'button'
+    logo.className = 'ed-logo'
+    logo.setAttribute('aria-label', t('About bento/slides — version, updates, licenses'))
     logo.innerHTML =
       `<svg class="ed-logo-mark" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">` +
       `<rect width="32" height="32" rx="7" fill="#16273E"/>` +
@@ -264,7 +331,6 @@ export class Editor {
       `<rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/>` +
       `</svg> <b>bento<span style="color:#FF9E8A">/</span>slides</b>`
     logo.title = t('About bento/slides — version, updates, licenses')
-    logo.style.cursor = 'pointer'
     logo.addEventListener('click', () => this.openAbout())
     const title = document.createElement('input')
     title.className = 'ed-title'
@@ -276,12 +342,13 @@ export class Editor {
       this.syncWindowTitle()
     })
     // remote/programmatic title changes reflect live (unless being typed in)
-    this.store.on('doc', () => {
+    const offTitle = this.store.on('doc', () => {
       if (document.activeElement !== title && title.value !== this.store.doc.title) {
         title.value = this.store.doc.title
         this.syncWindowTitle()
       }
     })
+    this.buildScope.signal.addEventListener('abort', offTitle)
 
     // The FILE this deck is open as — deliberately separate from the deck
     // title above, because the two drift apart constantly (rename the deck and
@@ -426,7 +493,7 @@ export class Editor {
       if ((e as AnimationEvent).animationName !== 'ed-runner-fade') return
       pill.classList.remove('ed-hint-pulse')
     })
-    const caret = btn('<span class="ed-caret">▴</span>', '', () => pill.classList.toggle('open'),
+    const caret = btn('<span class="ed-caret" aria-hidden="true">▴</span>', '', () => pill.classList.toggle('open'),
       t('More ways to present'))
     caret.classList.add('ed-pill-caret')
     const pmenu = div('ed-menu')
@@ -439,7 +506,7 @@ export class Editor {
     pill.append(showB, caret, pmenu)
     document.addEventListener('pointerdown', (ev) => {
       if (!pill.contains(ev.target as Node)) pill.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     // shared bottom-right cluster: [Slideshow pill] [zoom pill] — the canvas
     // appends its zoombar to canvasWrap; we adopt it into the cluster below.
     const corner = div('ed-corner-br')
@@ -491,15 +558,14 @@ export class Editor {
     // under CDP-driven viewport changes, and a phone ROTATING is exactly this
     // path); the plain resize listener is belt and braces on top. fitTopbar
     // is idempotent, so the overlap costs a few reads.
-    this.barRO?.disconnect()
+    const signal = this.buildScope.signal
     this.barRO = new ResizeObserver(() => this.fitTopbar())
     this.barRO.observe(bar)
-    window.addEventListener('resize', () => this.fitTopbar())
+    window.addEventListener('resize', () => this.fitTopbar(), { signal })
     // The bar's CONTENT changes width too, at a constant viewport (avatars
     // join, the update chip appears, the file chip fills in, the "Saved" tag
     // flashes), and each of these used to clip the end of the bar. fitTopbar
     // drops the records its own mutations queue, so this cannot loop.
-    this.barMO?.disconnect()
     this.barMO = new MutationObserver(() => this.fitTopbar())
     this.barMO.observe(bar, {
       childList: true, subtree: true, characterData: true,
@@ -513,8 +579,10 @@ export class Editor {
     // differ per device and change when the phone rotates.
     const publishBarBottom = () =>
       this.root.style.setProperty('--ed-bar-bottom', `${Math.round(bar.getBoundingClientRect().bottom)}px`)
-    new ResizeObserver(publishBarBottom).observe(bar)
-    window.addEventListener('resize', publishBarBottom)
+    const bottomRO = new ResizeObserver(publishBarBottom)
+    bottomRO.observe(bar)
+    window.addEventListener('resize', publishBarBottom, { signal })
+    this.buildObservers.push(this.barRO, this.barMO, bottomRO)
     publishBarBottom()
 
     this.wireDrawerDismiss()
@@ -524,7 +592,7 @@ export class Editor {
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
 
-    if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
+    if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
   }
 
   /** Live viewer: block user edits (store.readOnly), hide editing chrome, and
@@ -724,6 +792,10 @@ export class Editor {
   private topbar: HTMLElement | null = null
   private barRO: ResizeObserver | null = null
   private barMO: MutationObserver | null = null
+  /** Scope of one build(): aborted by the next, so the window/document/store
+   *  listeners the bar and its dropdowns register never outlive their DOM. */
+  private buildScope = new AbortController()
+  private buildObservers: (ResizeObserver | MutationObserver)[] = []
 
   /**
    * Size the topbar by MEASURING it, not by width breakpoints. Breakpoints
@@ -810,7 +882,7 @@ export class Editor {
   private closeOnOutsidePress(wrap: HTMLElement) {
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
   }
 
   /**
@@ -832,7 +904,7 @@ export class Editor {
       if (target instanceof Element && target.closest('.ed-topbar')) return
       if (!this.sidebar.contains(target)) this.closePanel('left')
       if (!this.props.contains(target)) this.closePanel('right')
-    }, true)
+    }, { capture: true, signal: this.buildScope.signal })
   }
 
   // --- Save dropdown: copy / new deck / template -----------------------------
@@ -840,7 +912,7 @@ export class Editor {
   private saveDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
     const menu = div('ed-menu ed-save-menu')
-    const trigger = btn('<span class="ed-caret">▾</span>', '', () => {
+    const trigger = btn('<span class="ed-caret" aria-hidden="true">▾</span>', '', () => {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) rebuild()
     }, t('Save as… — copy, new deck, password'))
@@ -852,7 +924,7 @@ export class Editor {
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     return wrap
   }
 
@@ -877,8 +949,7 @@ export class Editor {
       const b = document.createElement('button')
       b.className = 'ed-btn'
       if (icon) b.innerHTML = icon
-      b.appendChild(Object.assign(document.createElement('span'), { textContent: label }))
-      b.title = title
+      b.appendChild(menuLabel(label, title, b))
       b.addEventListener('click', () => {
         close()
         onClick()
@@ -927,6 +998,10 @@ export class Editor {
       item(ICONS.code, t('Replace from JSON…'),
         t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
         () => this.openReplaceJson())
+      // with the other import, where spaces has Import Markdown…
+      item(ICONS.importDoc, t('Import PowerPoint…'),
+        t('Opens the PowerPoint importer on bento.page in a new tab — it turns a .pptx into a Bento deck. Needs an internet connection.'),
+        () => { window.open(IMPORT_PPTX_URL, '_blank', 'noopener,noreferrer') })
       item(ICONS.template, t('Start from scratch…'),
         t('Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.'),
         () => this.startFromScratch())
@@ -1072,9 +1147,7 @@ export class Editor {
       this.toast(t('This deck has no live session to follow'))
       return
     }
-    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
-    clone.collab = { ...c, role: 'reader', on: true, sync: undefined }
-    stripCollabSecrets(clone, { keepRoom: true })
+    const clone = readerCopy(this.store.doc)
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'viewonly' })
       if (ok) this.toast(t('Read-only copy saved — it follows the live session, view only'))
@@ -1097,14 +1170,11 @@ export class Editor {
     }
     this.canvas.commitTextEdit()
     this.session?.stampInto(this.store.doc) // copies rejoin as true forks
-    const clone = JSON.parse(JSON.stringify(this.store.doc)) as import('../model').BentoDoc
-    // Strip FIRST, then delegate: the invite is the only private material an
-    // editor copy is allowed to carry. A v2 room is verified through the
-    // owner→invite→member chain, so a stray `writerPriv` (room-wide write key
-    // from a pre-v2 mint) would be a second, UNREVOKABLE way in.
-    stripCollabSecrets(clone, { keepRoom: true })
-    clone.collab!.invite = await mintInvite(c.ownerPriv, 'writer')
-    clone.collab!.on = true
+    // The invite is the only private material an editor copy may carry: the kernel
+    // allowlist (share.ts inviteCopy) drops every private half AND a legacy
+    // writerPriv, then attaches a FRESH owner-signed invite and takes the role from
+    // it — a v2 room is verified through the owner→invite→member chain.
+    const clone = await inviteCopy(this.store.doc, c.ownerPriv)
     try {
       const ok = await writeUpdatedFileAs(await serializeAuto(clone), clone, { suffix: 'invite' })
       if (ok) this.toast(t('Editor copy saved — recipients join live with edit access'))
@@ -1149,23 +1219,18 @@ export class Editor {
     applyB.className = 'ed-btn ed-btn-primary'
     applyB.textContent = t('Apply')
     applyB.addEventListener('click', () => {
-      // parseDoc + replaceDoc rather than window.bento.loadDoc (which is the
-      // same two calls) because the collab decision has to be made BEFORE the
-      // swap: replaceDoc's events reach the sync session synchronously, and it
-      // re-attaches to whatever `collab` the new document holds.
-      //
-      // The live session belongs to THIS document, not to the pasted text. The
-      // copy side sends no collab at all, so adopting the pasted one would
-      // either wipe the user's room credentials (paste of our own JSON) or
-      // silently move the deck into a room that came from somewhere else.
-      // Content is imported; identity and capability are not.
-      const parsed = parseDocInputReport(ta.value) // full or compact (src/compact.ts)
+      // The pasted text is foreign input, full or compact (src/compact.ts):
+      // the gate rebuilds it (restoregate.ts sanitizeDoc), and with `live` the
+      // identity and capability stay THIS document's — its docId (recovery
+      // and versions are keyed by it, on a store other local files share),
+      // its live session (the copy side sends no collab, so adopting the
+      // pasted one would wipe the room or move the deck into someone else's)
+      // and its file mode. Decided BEFORE the swap: replaceDoc's events reach
+      // the sync session synchronously and it re-attaches to whatever
+      // `collab` the new document holds. Content is imported; identity is not.
+      const parsed = parseDocInputReport(ta.value, { live: this.store.doc })
       if (parsed) {
-        const next = parsed.doc
-        const keep = this.store.doc.collab
-        if (keep) next.collab = keep
-        else delete next.collab
-        this.store.replaceDoc(next)
+        this.store.replaceDoc(parsed.doc)
         // the load report, summarised; the whole thing goes to the console
         // where an agent driving the page (or a person) can read the paths
         const r = parsed.report
@@ -1291,7 +1356,7 @@ export class Editor {
     wrap.append(this.shareB, panel)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     return wrap
   }
 
@@ -1304,12 +1369,13 @@ export class Editor {
       panel.appendChild(e)
       return e
     }
-    const action = (icon: string, label: string, primary: boolean, onClick: () => void, title = '') => {
+    // plain menu rows, as in Save as — the section heading and the icons mark
+    // them as commands; boxing each one only made the panel busier
+    const action = (icon: string, label: string, onClick: () => void, title = '') => {
       const b = document.createElement('button')
-      b.className = primary ? 'ed-btn ed-btn-primary ed-share-btn' : 'ed-btn ed-share-btn'
+      b.className = 'ed-btn ed-share-btn'
       if (icon) b.innerHTML = icon
-      b.appendChild(Object.assign(document.createElement('span'), { textContent: label }))
-      if (title) b.title = title
+      b.appendChild(menuLabel(label, title, b))
       b.addEventListener('click', onClick)
       panel.appendChild(b)
       return b
@@ -1356,7 +1422,7 @@ export class Editor {
     if (cme) {
       let myPub: string | undefined
       let myRole: 'owner' | 'editor' | 'viewer' | undefined
-      if (cme.role === 'reader') myRole = 'viewer'
+      if (!canWriteDeck(cme)) myRole = 'viewer'
       else if (cme.v === 2 && cme.ownerPriv) { myRole = 'owner'; myPub = cme.owner }
       else if (cme.v === 2 && cme.invite) {
         myRole = 'editor'
@@ -1461,24 +1527,24 @@ export class Editor {
 
     // SHARE ACTIONS — sharing IS files: each button saves a copy to send, and
     // turns the live session on. Labels stay short; the tooltips explain.
-    const canWrite = !!cme && cme.role !== 'reader'
+    const canWrite = !!cme && canWriteDeck(cme)
     if (canWrite) {
       const label = div('ed-share-label')
       label.textContent = t('Share a copy')
       panel.appendChild(label)
-      action(ICONS.share, t('Invite to edit…'), true, () => void this.inviteToEdit(),
+      action(ICONS.share, t('Invite to edit…'), () => void this.inviteToEdit(),
         t('Saves a copy to send. Whoever opens it edits this deck live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.'))
-      action(ICONS.eye, t('View-only copy…'), false, () => void this.saveReaderCopy(),
+      action(ICONS.eye, t('View-only copy…'), () => void this.saveReaderCopy(),
         t('A live viewer: follows every edit as it happens but can never change the deck — the relay enforces it.'))
-      action(ICONS.slideshow, t('Present-only file…'), false, () => void this.savePresentationPackage(),
+      action(ICONS.slideshow, t('Present-only file…'), () => void this.savePresentationPackage(),
         t('A sealed hand-out that opens straight into the show — no editor, no live connection.'))
-      action(ICONS.broadcast, t('Audience copy…'), false, () => void this.saveAudienceCopy(),
+      action(ICONS.broadcast, t('Audience copy…'), () => void this.saveAudienceCopy(),
         t('A hand-out for a live show: opens into the presentation and follows your slides while you are live. Never carries your speaker notes or comments.'))
       if (this.store.doc.collab?.audience) {
-        action(ICONS.broadcast, t('Issue new tickets…'), false, () => void this.issueNewTickets(),
+        action(ICONS.broadcast, t('Issue new tickets…'), () => void this.issueNewTickets(),
           t('Replaces the audience tickets: every audience copy saved so far stops working.'))
       }
-      action(ICONS.template, t('Template…'), false, () => void this.saveAsTemplate(),
+      action(ICONS.template, t('Template…'), () => void this.saveAsTemplate(),
         t('A reusable starter: everyone who opens it gets their own fresh, independent deck.'))
     } else {
       note(t('This is a view-only copy — it follows the live session but can’t change the deck.'))
@@ -1488,17 +1554,17 @@ export class Editor {
     if (canWrite) {
       panel.appendChild(div('ed-share-sep'))
       if (on) {
-        action(ICONS.stop, t('Stop sharing'), false, () => {
+        action(ICONS.stop, t('Stop sharing'), () => {
           if (!this.session) return
           stopSharing(this.session, this.store)
           this.wireOnlineStatus()
           this.renderSharePanel()
         }, t('Disconnect this deck from the live session. Copies keep their last state and can rejoin if you go live again.'))
       } else {
-        action(ICONS.live, t('Go live'), false, () => void this.goLive().then(() => this.renderSharePanel()),
+        action(ICONS.live, t('Go live'), () => void this.goLive().then(() => this.renderSharePanel()),
           t('Connect to the live session without saving a new copy — copies you sent earlier will meet you there.'))
       }
-      action(ICONS.key, t('Reset access…'), false, async () => {
+      action(ICONS.key, t('Reset access…'), async () => {
         if (!this.session) return
         if (!confirm(t('Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.'))) return
         await rotateKeys(this.session, this.store)
@@ -1734,7 +1800,7 @@ export class Editor {
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     return wrap
   }
 
@@ -1755,7 +1821,7 @@ export class Editor {
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     return wrap
   }
 
@@ -2227,7 +2293,7 @@ export class Editor {
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')
-    })
+    }, { signal: this.buildScope.signal })
     return wrap
   }
 
@@ -2410,10 +2476,20 @@ export class Editor {
       this.toast(made.length === 1 ? t('Pasted 1 slide') : t('Pasted {n} slides', { n: made.length }))
       return true
     }
-    // 3) plain text → a text element
+    // 3) plain text → a text element; a ``` fenced block in it → a Code
+    // element (with any text around it as text boxes above and below)
     if (text && text.trim()) {
-      const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
       const { width } = this.store.doc.size
+      const parts = splitFences(text.slice(0, 20000))
+      if (parts.some((p) => p.kind === 'code')) {
+        const src = defaultText({ html: '', color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 400), y: 120, w: 800 })
+        const made = fencedElements(src, parts, estimatedFrames(src, parts))
+        this.store.commit(() => this.store.slide.elements.push(...made))
+        this.store.select(made.map((e) => e.id))
+        this.toast(made.length === 1 ? t('Pasted 1 item') : t('Pasted {n} items', { n: made.length }))
+        return true
+      }
+      const esc = text.trim().slice(0, 4000).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
       const el = defaultText({ html: esc, color: readableInk(this.store.slide.background), x: Math.round(width / 2 - 300), y: 260, w: 600 })
       this.store.commit(() => this.store.slide.elements.push(el))
       this.store.select([el.id])
@@ -2522,11 +2598,10 @@ export class Editor {
       const [a, b] = isPath ? pathEnds! : lineEndpoints(c)
       const fromBox = c.from ? byId.get(c.from.el) : null
       const toBox = c.to ? byId.get(c.to.el) : null
-      // explicit side → pin to that side's midpoint; 'auto' → nearest border
-      const end = (box: SlideElement, side: 'auto' | 'top' | 'right' | 'bottom' | 'left' | undefined, toward: { x: number; y: number }) =>
-        side && side !== 'auto' ? sideMidpoint(box, side) : borderPoint(box, toward)
-      const na = fromBox ? end(fromBox, c.from?.side, toBox ? boxCenter(toBox) : b) : a
-      const nb = toBox ? end(toBox, c.to?.side, fromBox ? boxCenter(fromBox) : a) : b
+      // explicit side → pin to that side's midpoint; 'auto' → ride the border
+      // toward the other end (kernel geom: connectorEndpoint)
+      const na = fromBox ? connectorEndpoint(fromBox, c.from?.side, toBox ? boxCenter(toBox) : b) : a
+      const nb = toBox ? connectorEndpoint(toBox, c.to?.side, fromBox ? boxCenter(fromBox) : a) : b
       if (Math.hypot(na.x - a.x, na.y - a.y) > 0.5 || Math.hypot(nb.x - b.x, nb.y - b.y) > 0.5) {
         if (isPath) setPathEndpoints(c, na, nb)
         else setLineEndpoints(c, na, nb)
@@ -2771,6 +2846,10 @@ export class Editor {
     }
     const next = parseDoc(JSON.stringify(parsed))
     if (!next) { alert(t('{name} isn’t a Bento document.', { name: named })); return true }
+    // a file is guarded by value only — its own identity, and no key dropped,
+    // since it may come from a newer Bento (restoregate.ts guardOpenedDoc)
+    const neutralised = guardOpenedDoc(next)
+    if (neutralised.length) console.info('[bento] opened file: neutralised', neutralised)
 
     if (writable) adoptFileHandle(handle)
     this.openedAs = named
