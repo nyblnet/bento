@@ -226,8 +226,9 @@ body.dp-resizing { cursor: col-resize; user-select: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 4px light-dark(rgb(20 30 45 / 0.12), rgb(0 0 0 / 0.45));
+  box-shadow: 0 1px 4px rgb(20 30 45 / 0.12);
 }
+:root[data-theme="dark"] .dp-toggle { box-shadow: 0 1px 4px rgb(0 0 0 / 0.45); }
 .dp-toggle:hover { color: var(--ink); border-color: var(--line-strong); }
 /* shut: the chevron pins fully on-screen, docked to the edge like a drawer pull */
 .dp-resizer:has(+ .dp-panel.dp-shut) .dp-toggle {

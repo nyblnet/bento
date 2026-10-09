@@ -90,21 +90,33 @@ function rule(selector: string): string | null {
   return null
 }
 
-/** Every `--name: value;` declared anywhere in a :root block. */
-function tokens(): Map<string, string> {
+/**
+ * Every `--name: value;` in the :root blocks of ONE theme.
+ *
+ * Since 2026-09-12 the palette is a light :root plus a `:root[data-theme="dark"]`
+ * block, not light-dark() pairs — so reading "all :root blocks" into one map,
+ * as this used to, let the dark block overwrite the light values and handed
+ * every "light:" check below a dark number. Comments are stripped first: the
+ * selector capture sweeps up the comment above a block, and one that mentions
+ * `data-theme="dark"` would otherwise make the light block look dark.
+ */
+function tokens(theme: 'light' | 'dark' = 'light'): Map<string, string> {
   const out = new Map<string, string>()
-  for (const block of code.matchAll(/(^|\})\s*([^{}]*:root[^{}]*)\{([\s\S]*?)\n\}/gm)) {
+  const clean = code.replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const block of clean.matchAll(/(^|\})\s*([^{}]*:root[^{}]*)\{([\s\S]*?)\n\}/gm)) {
+    const isDark = /\[data-theme\s*=\s*["']?dark/.test(block[2])
+    if (isDark !== (theme === 'dark')) continue
     for (const m of block[3].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) out.set(m[1], m[2].trim())
   }
   return out
 }
 
-/** Both halves of a `light-dark(a, b)` token, as hex. */
+/** Both halves of a themed token — light from bare :root, dark from the dark block. */
 function pair(name: string): [string, string] {
-  const v = tokens().get(name)
-  if (!v) throw new Error(`${name} is not declared`)
-  const m = /^light-dark\(\s*([^,]+),\s*([^)]+)\)/.exec(v)
-  return m ? [m[1].trim(), m[2].trim()] : [v.trim(), v.trim()]
+  const l = tokens('light').get(name)
+  if (!l) throw new Error(`${name} is not declared`)
+  const d = tokens('dark').get(name) ?? l
+  return [l.trim(), d.trim()]
 }
 
 function luminance(hex: string): number {
@@ -129,9 +141,9 @@ console.log('\nthe dataset lies on a ground that is not its own paper')
   ok(scroll && /background:\s*var\(--desk\)/.test(scroll),
     'the scroller — everything around and below the sheet — is painted with --desk')
 
-  const t = tokens()
+  const t = tokens('light')
   ok(t.has('--desk'), '--desk is declared in the palette, with both of its halves')
-  ok(/^light-dark\(/.test(t.get('--desk') ?? ''),
+  ok(tokens('dark').has('--desk'),
     'and it varies by theme, so the desk is not a light-mode-only idea')
 
   // The measurement is the check. "A different token" is satisfied by a token
