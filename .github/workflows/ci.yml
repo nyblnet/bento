@@ -1934,6 +1934,13 @@ jobs:
         # real keys through the ts hook, like the type rig above.
         run: node scripts/test-slides-share.ts
 
+      - name: Stylesheet brace balance
+        # Every tracked stylesheet's braces balance. A merge seam that eats one
+        # `}` leaves CSS that still builds — an unclosed `@media print {` makes
+        # every later rule print-only, and the app ships unstyled while tsc, the
+        # build and the shell gate all pass.
+        run: node scripts/test-css-balance.ts
+
       - name: Type chrome rig
         # Where controls live: nothing in two menus, no inserts in the
         # overflow, and every element the chrome reaches for actually exists —
