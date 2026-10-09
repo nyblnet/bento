@@ -76,6 +76,21 @@ export interface BlockSpec {
    * what mdLayout() below works out.
    */
   mdQuoteChildren?: boolean
+  /**
+   * In markdown, this type is an html `<details>` element and its subtree
+   * sits between its `<summary>` and the closing `</details>` that mdLayout()
+   * places after the last descendant. The children are NOT indented further
+   * than the block itself: indenting a paragraph inside `<details>` would make
+   * GitHub read it as a nested list's continuation, or at four columns as code.
+   */
+  mdDetails?: boolean
+  /**
+   * In markdown, this type's children are written at ITS OWN indent, not one
+   * level in: they are delimited some other way (a `</details>`, a counted
+   * fence), and indenting them only invites a renderer to read them as a
+   * nested list or code.
+   */
+  mdLevelChildren?: boolean
   /** Rendered by a dedicated case in render.ts, not by tag + inline host. */
   custom?: boolean
   /** Carries editable inline html. False for divider, image, pagelink. */
@@ -113,6 +128,9 @@ export interface MdCtx {
    * context, exactly like the two questions above.
    */
   inline: (html: string) => string
+  /** a canvas's cards' positions, in order: `[x, y]`, or null for a card
+   *  with none (it takes a slot at read time) */
+  cardsOf?: (b: Block) => Array<[number, number] | null>
 }
 
 export const SPECS: BlockSpec[] = [
@@ -154,9 +172,20 @@ export const SPECS: BlockSpec[] = [
   },
   {
     type: 'toggle', label: 'Toggle', hint: 'Collapsible section', icon: 'toggle',
-    tag: 'div', text: true, custom: true, container: 'fold',
+    tag: 'div', text: true, custom: true, container: 'fold', mdDetails: true, mdLevelChildren: true,
     init: (b) => { if (b.open === undefined) b.open = true },
-    toMd: (_b, text, indent) => [`${indent}- ${text}`],
+    // A TOGGLE IS `<details>`, which GitHub, Obsidian and every browser render
+    // as the same fold — the one piece of html a Markdown reader already knows
+    // as "collapsible". `open` is written only when the block is open (the
+    // renderer reads an absent `open` as folded, and so does html). The
+    // summary is the block's text as inline MARKDOWN, so it reads back through
+    // the same converter as every other line; GitHub shows `**` literally in a
+    // summary, which is the price of one converter instead of two.
+    //
+    // The children follow as ordinary markdown and mdLayout() writes the
+    // closing `</details>` after the last of them. Exported as `- text` before
+    // this, and read back as a bullet: the fold and its state were lost.
+    toMd: (b, text, indent) => [`${indent}<details${b.open === true ? ' open' : ''}>`, `${indent}<summary>${text}</summary>`],
   },
   {
     type: 'callout', label: 'Callout', hint: 'A note, tip or warning', icon: 'callout',
@@ -246,7 +275,15 @@ export const SPECS: BlockSpec[] = [
   {
     type: 'pagelink', label: 'Link to page', hint: 'A card that opens a page', icon: 'link',
     tag: 'div', custom: true,
-    toMd: (b, _text, _indent, ctx) => [`→ [[${ctx.titleOf(String(b.page)) ?? '?'}]]`],
+    // `[[Title]]` ALONE ON ITS LINE: a wikilink, which Obsidian and Foam read
+    // as a link to that note, and which this app's importer reads back as a
+    // page card (markdown.ts). A title a wikilink cannot spell — one holding
+    // `[`, `]`, `|`, `#`, `^` or a newline — and a card to a missing page keep
+    // the old `→ [[…]]` form, which reads back as the paragraph it is.
+    toMd: (b, _text, _indent, ctx) => {
+      const title = ctx.titleOf(String(b.page))
+      return title && title.trim() === title && /^[^[\]|#^\n]+$/.test(title) ? [`[[${title}]]`] : [`→ [[${title ?? '?'}]]`]
+    },
   },
   {
     // A LINK TO SOMEWHERE ON THE WEB — the outward-facing sibling of pagelink.
@@ -267,18 +304,30 @@ export const SPECS: BlockSpec[] = [
     // link, so the default export would already be close — but `html` is a
     // fallback for old builds, and an export that reads it would silently
     // export nothing at all for a card an agent wrote fields-only.
+    //
+    // WHAT MAKES IT A CARD, and not a paragraph that happens to be one link, is
+    // a trailing html comment: `<!-- bento:card site="…" image="…" -->`.
+    // GitHub, Obsidian and every html renderer hide a comment, so the page
+    // reads as the link and its description and nothing else — where a Pandoc
+    // `{.card site=…}` would print as text after every card, and a data: image
+    // in it as kilobytes of it. An UNMARKED lone link is not read as a card:
+    // that would turn every README line that is just a link into one. The
+    // fields the visible line cannot say (site, icon, image; title and desc
+    // for a card with no url) ride in the comment. See cardComment().
     toMd: (b) => {
       const c = linkCard(b)
+      const meta = ` ${cardComment(b, c.url)}`
       // no url, no link: a card that is not clickable must not export as
       // something a reader will click
-      if (!c.url) return [[c.title, c.desc].filter(Boolean).join(' — ')]
-      const tail = c.desc ? ` — ${c.desc}` : ''
+      if (!c.url) return [[c.title, c.desc].filter(Boolean).join(' — ') + meta]
+      const tail = c.desc ? ` — ${c.desc.replace(/\s*\n\s*/g, ' ')}` : ''
       // `[` and `]` in a title end the link text early and leave the url as
-      // loose parenthesised prose; a url holding a space or a bracket needs the
-      // angle form, which is what <> is FOR in CommonMark
-      const label = c.title.replace(/([[\]])/g, '\\$1')
+      // loose parenthesised prose (and a backslash would escape the bracket
+      // after it); a url holding a space or a bracket needs the angle form,
+      // which is what <> is FOR in CommonMark
+      const label = c.title.replace(/\s*\n\s*/g, ' ').replace(/([\\[\]])/g, '\\$1')
       const href = /[\s()<>]/.test(c.url) ? `<${c.url}>` : c.url
-      return [`[${label}](${href})${tail}`]
+      return [`[${label}](${href})${tail}${meta}`]
     },
   },
   {
@@ -318,21 +367,30 @@ export const SPECS: BlockSpec[] = [
     // from the pages that follow. The rows are derived (the export applies the
     // same filter and sort the screen does), which is why they arrive through
     // the context rather than off the block.
-    toMd: (b, text, indent, ctx) => {
+    //
+    // A ```` ```bento-view ```` FENCE: the view's settings as one JSON line
+    // (fenceJson), which is what makes it a view again on the way back in —
+    // then THE ISSUES, as `//` lines the importer ignores — never `#`, which a
+    // tool splitting a file at its headings cuts on. The rows are derived
+    // (the export applies the same filter and sort the screen does), which is
+    // why they arrive through the context rather than off the block, and why
+    // they are regenerated rather than read back. Outside this app the fence is
+    // a code block: the settings and a readable list of the work.
+    toMd: (b, text, _indent, ctx) => {
       const rows = ctx.rowsOf(b)
-      const out = [`**${text || 'Issues'}**`, '']
-      if (!rows.length) return [...out, `${indent}_No issues._`]
+      const out = ['```bento-view', fenceJson(b, text)]
+      if (!rows.length) out.push('// No issues.')
       let group: string | undefined
       for (const r of rows) {
         // grouped exactly as the board groups, and a flat list when it is one
         if (r.group !== undefined && r.group !== group) {
           group = r.group
-          out.push('', `${indent}**${group}**`, '')
+          out.push(`// ${oneLine(group)}`)
         }
         const meta = r.fields ? ` — ${r.fields}` : ''
-        out.push(`${indent}- [${r.title}](#p/${r.id})${meta}`)
+        out.push(`//   - ${oneLine(r.title + meta)}`)
       }
-      return out
+      return [...out, '```']
     },
   },
   {
@@ -349,13 +407,18 @@ export const SPECS: BlockSpec[] = [
     // unknown type), the name must NOT duplicate them. A table's fallback has
     // to hold its cells' text and pays for it in bytes; a canvas's does not.
     type: 'canvas', label: 'Canvas', hint: 'Cards you place by hand', icon: 'canvas',
-    tag: 'div', text: true, custom: true, container: 'always',
+    tag: 'div', text: true, custom: true, container: 'always', mdLevelChildren: true,
     // THE NAME, then the cards — which arrive on their own, as the indented
     // lines of the blocks they are. A canvas is a picture and Markdown has no
     // pictures, so the honest export is the list of what is on it, in document
     // order. Positions are what does not survive, and saying so in the export
     // would be a comment in someone else's document.
-    toMd: (_b, text) => [`**${text || 'Canvas'}**`],
+    //
+    // A ```` ```bento-canvas ```` FENCE holding the canvas's settings and each
+    // card's position, in order (fenceJson); the cards follow it as their own
+    // lines, and the importer hands it the next `cards.length` blocks at its
+    // level. Outside this app: a code block, then the cards as text.
+    toMd: (b, text, _indent, ctx) => ['```bento-canvas', fenceJson(b, text, ctx.cardsOf?.(b)), '```'],
   },
   {
     type: 'image', label: 'Image', hint: 'Embedded in the file', icon: 'image',
@@ -365,10 +428,16 @@ export const SPECS: BlockSpec[] = [
     // lost its caption on the way out. Written verbatim (it is the same inline
     // html both ways), with `"` and `\` escaped as CommonMark spells them in a
     // title, and on one line: a newline would end the image.
+    //
+    // Its SIZE follows as a Pandoc attribute list, `{width=60% w=640 h=300}`:
+    // Pandoc and markdown-it-attrs read it, GitHub and Obsidian show it as
+    // literal text after the picture — the one visible cost, paid only by a
+    // sized image. Absent fields write nothing, so an unsized image exports
+    // exactly as it did before.
     toMd: (b) => {
       const cap = String(b.caption ?? '').replace(/\s*\n\s*/g, ' ')
       const title = cap ? ` "${cap.replace(/["\\]/g, '\\$&')}"` : ''
-      return [`![${String(b.alt ?? '')}](${String(b.src ?? '')}${title})`]
+      return [`![${String(b.alt ?? '')}](${String(b.src ?? '')}${title})${sizeAttrs(b)}`]
     },
   },
   {
@@ -379,29 +448,152 @@ export const SPECS: BlockSpec[] = [
     // what the file actually IS, so the default here only has to be the shape
     // that degrades usefully.
     init: (b) => { if (b.kind === undefined) b.kind = 'video' },
-    // MARKDOWN HAS NO VIDEO, and pretending otherwise loses the block.
+    // MARKDOWN HAS NO VIDEO, so a clip leaves as the html element every
+    // Markdown renderer that allows html already plays — `<video>` or
+    // `<audio>` — WITH A LINK INSIDE IT:
     //
-    // Three candidates, and only one of them is right in more than one place.
-    // `![](clip.mp4)` is IMAGE syntax: every renderer that has ever existed
-    // draws a broken-image glyph for it. A bare URL on its own line becomes a
-    // player on github.com and on nothing else, so it exports as a naked
-    // string everywhere a reader is likelier to open the file. A LINK is
-    // correct in all of them: it says what the thing is and where it is, and
-    // the one renderer that could do better still shows something you can
-    // click.
+    //   <video src="clip.mp4" controls loop title="The demo"><a href="clip.mp4">The demo</a></video>
+    //
+    // A renderer that plays media hides the link (it is the element's fallback
+    // content); a renderer that strips the tag keeps its content, which is
+    // the link this block used to export as. So it degrades to exactly the
+    // old export, and in Obsidian or a browser it plays.
+    //
+    // `autoplay` is written as `data-autoplay`: the block RECORDS it and this
+    // app never obeys it (mediaPlayback), and an exported file must not make
+    // some other renderer obey it on our behalf. The fields with no html
+    // attribute (the column percentage, the caption) ride as data-*;
+    // `width`/`height` are the intrinsic pixels, which is what those html
+    // attributes mean.
     //
     // The target is `src` verbatim, `asset:` and data: included, exactly as
-    // the image exporter already writes it. That link does not resolve outside
-    // the space — which is the truth about an embedded clip, and a truthful
-    // dead link beats a silently dropped block.
+    // the image exporter already writes it. That does not resolve outside the
+    // space — which is the truth about an embedded clip.
     toMd: (b) => {
-      const kind = String(b.kind ?? 'video') === 'audio' ? 'Audio' : 'Video'
-      const label = String(b.alt ?? '') || kind
+      const video = String(b.kind ?? 'video') !== 'audio'
+      const kind = video ? 'Video' : 'Audio'
       const src = String(b.src ?? '')
-      return [src ? `[${label}](${src})` : `_${kind}_`]
+      if (!src) return [`_${kind}_`]
+      const alt = String(b.alt ?? '')
+      const at = (k: string, v: unknown) => (typeof v === 'string' && v ? ` ${k}="${attrValue(v)}"` : '')
+      const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined)
+      const tag = video ? 'video' : 'audio'
+      let a = ` src="${attrValue(src)}"`
+      if (b.controls !== false) a += ' controls'
+      if (b.loop === true) a += ' loop'
+      if (b.muted === true) a += ' muted'
+      if (b.autoplay === true) a += ' data-autoplay'
+      a += at('poster', b.poster) + at('title', alt)
+      const w = num(b.w), h = num(b.h)
+      if (w !== undefined && h !== undefined && Number.isInteger(w) && Number.isInteger(h)) a += ` width="${w}" height="${h}"`
+      const width = num(b.width)
+      if (width !== undefined) a += ` data-width="${width}"`
+      a += at('data-caption', b.caption)
+      const label = (alt || kind).replace(/\s*\n\s*/g, ' ')
+      return [`<${tag}${a}><a href="${attrValue(src)}">${attrValue(label)}</a></${tag}>`]
     },
   },
 ]
+
+/**
+ * A block's size as a Pandoc attribute list, or '' when it has none.
+ *
+ * ONLY NUMBERS LEAVE. `width` is a percentage and `w`/`h` pixel counts; a
+ * field holding anything else — a string out of a hand-edited file — is not
+ * written, so nothing a file says can end the list early or add a key.
+ * `extra` is appended inside the braces (a block id, in a later family).
+ */
+export function sizeAttrs(b: Block, extra: string[] = []): string {
+  const num = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined
+  const parts = [...extra]
+  const width = num(b.width)
+  if (width !== undefined) parts.push(`width=${width}%`)
+  const w = num(b.w), h = num(b.h)
+  if (w !== undefined && h !== undefined && Number.isInteger(w) && Number.isInteger(h)) parts.push(`w=${w}`, `h=${h}`)
+  return parts.length ? `{${parts.join(' ')}}` : ''
+}
+
+/**
+ * A block id Markdown may carry: `{#id}` after the block's line. Ids are only
+ * WRITTEN for blocks something points at — a review thread anchored to the
+ * block, or a `#p/<page>/<block>` link — so a space with neither exports
+ * exactly as it always has, and the ids that do appear are the ones whose
+ * loss would orphan something.
+ */
+export const BLOCK_ID = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/
+/** The id goes on the FIRST line of these (a fence's info line, the
+ *  `<details>` tag), the LAST non-empty line of anything else. */
+const ID_ON_FIRST = new Set(['code', 'toggle', 'view', 'canvas'])
+/** A trailing `{#id}` would break these: a table row becomes a ragged row,
+ *  a `---` stops being a rule. Their ids are not written (a known loss). */
+export const NO_MD_ID = new Set(['table', 'divider'])
+
+export function withBlockId(b: Block, lines: string[]): string[] {
+  if (NO_MD_ID.has(b.type) || !BLOCK_ID.test(b.id) || b.id in Object.prototype) return lines
+  let k = ID_ON_FIRST.has(b.type) ? 0 : -1
+  if (k < 0) for (let j = lines.length - 1; j >= 0; j--) if (lines[j].replace(/^[>\s]*/, '')) { k = j; break }
+  if (k < 0) return lines
+  const out = [...lines]
+  out[k] = `${out[k]} {#${b.id}}`
+  return out
+}
+
+/** A readable `//` line inside a fence: one line, and never a fence of its own. */
+const oneLine = (s: string): string => s.replace(/\s*\n\s*/g, ' ').replace(/`/g, "'")
+
+/**
+ * A view's or a canvas's fence body: ONE JSON line. `name` is the block's text
+ * as inline markdown, `cards` a canvas's card positions, and every other key a
+ * field of the block — all of them, so a field a newer build adds round-trips.
+ * Fields named `name` or `cards` would collide and are not written.
+ */
+export function fenceJson(b: Block, text: string, cards?: Array<[number, number] | null>): string {
+  const out: Record<string, unknown> = { name: text }
+  for (const [k, v] of Object.entries(b)) {
+    if (['id', 'type', 'parent', 'html', 'comments', 'name', 'cards'].includes(k) || v === undefined) continue
+    out[k] = v
+  }
+  if (cards && cards.some((c) => c)) out.cards = cards
+  return JSON.stringify(out)
+}
+
+/** An html attribute value (and element text): `&`, `"`, `<`, `>` as
+ *  entities, one line. markdown.ts decodes exactly these four. */
+export const attrValue = (v: string): string =>
+  v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\s*\n\s*/g, ' ')
+
+/**
+ * A data: image larger than this is left out of a card's comment. It would be
+ * invisible on GitHub, but not in a plain editor, where a thumbnail's worth of
+ * base64 after every card is the whole screen. The loss is pinned in
+ * scripts/test-spaces-md-strict.ts.
+ */
+export const CARD_IMAGE_MD_BUDGET = 512
+
+/**
+ * A comment-safe attribute value. `&` first, so the others are unambiguous;
+ * `"` so the value cannot end early; `<` and `>` so no tag and no `-->` can
+ * form; and `--` because it is what ends a comment. Undone in reverse by
+ * markdown.ts cardFields().
+ */
+export const commentValue = (v: string): string =>
+  v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/--/g, '-&#45;').replace(/\s*\n\s*/g, ' ')
+
+/** The marker that makes a link line a link card, with the fields the line
+ *  itself cannot carry. Raw stored fields, never the derived fallbacks. */
+export function cardComment(b: Block, url: string): string {
+  const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
+  const parts: string[] = []
+  const put = (k: string, v: string) => { if (v) parts.push(`${k}="${commentValue(v)}"`) }
+  if (!url) { put('title', str(b.title)); put('desc', str(b.desc)) }
+  put('site', str(b.site))
+  put('icon', str(b.icon))
+  const image = str(b.image)
+  if (!(image.startsWith('data:') && image.length > CARD_IMAGE_MD_BUDGET)) put('image', image)
+  return `<!-- bento:card${parts.map((p) => ` ${p}`).join('')} -->`
+}
 
 /** The `:---:` rule row's four forms, which are the whole of what GFM can say
  *  about alignment — and the reason `colAlign` is per column, not per cell. */
@@ -562,7 +754,9 @@ export const LIST_OF: Record<string, 'ul' | 'ol'> =
  * this. This is the part with the edge cases, so this is the part that has to
  * be reachable from a test.
  */
-export function mdLayout(blocks: Block[]): Array<{ quote: string; indent: string; sep: string }> {
+export interface MdLine { quote: string; indent: string; sep: string; close: Array<{ quote: string; line: string }> }
+
+export function mdLayout(blocks: Block[]): MdLine[] {
   const byId = new Map(blocks.map((b) => [b.id, b]))
   // HOP-CAPPED: `parent` is a plain id in a file anyone can hand-edit, so two
   // blocks can name each other. The renderer is a pre-order pass and cannot
@@ -588,18 +782,37 @@ export function mdLayout(blocks: Block[]): Array<{ quote: string; indent: string
   const alert = (b: Block): string | undefined => owners(b).find(wraps)?.id
   const depth = (b: Block): number => owners(b).filter(wraps).length
 
-  return blocks.map((b, i) => {
+  const folds = (b: Block | undefined): boolean => !!b && SPEC.get(b.type)?.mdDetails === true
+  const out: MdLine[] = []
+  const at = new Map(blocks.map((b, i) => [b.id, i]))
+  blocks.forEach((b, i) => {
     const parent = b.parent ? byId.get(b.parent) : undefined
     // Inside a callout a child is the alert's BODY, not a nested list item.
     // Indenting it makes GitHub read it as a nested list — or, at four spaces,
-    // as a code block.
-    const indent = parent && !wraps(parent) ? '  ' : ''
+    // as a code block. Inside a `<details>` fold it sits at the fold's own
+    // indent, for the same reason. (Effective parent for the fold case: the
+    // fold's line is already laid out, because a parent is always earlier.)
+    const effParent = eff.get(b.id)
+    const level = (x: Block | undefined): boolean => !!x && SPEC.get(x.type)?.mdLevelChildren === true
+    const fold = effParent !== undefined && level(byId.get(effParent)) ? at.get(effParent) : undefined
+    const indent = fold !== undefined ? out[fold].indent : parent && !wraps(parent) ? '  ' : ''
     const next = blocks[i + 1]
     // "same alert" compares the alert the NEXT block is in against the alert
     // this one IS or is in, so a callout and its first child are joined, and so
     // are two children of one callout — but two adjacent callouts are not.
     const mine = wraps(b) ? b.id : alert(b)
     const sep = next && alert(next) && alert(next) === mine ? '> '.repeat(depth(next)).trimEnd() : ''
-    return { quote: '> '.repeat(depth(b)), indent, sep }
+    // EVERY FOLD WHOSE SUBTREE ENDS HERE closes here, innermost first: this
+    // block itself if it is a fold with no children, then each fold above it
+    // that the next block is not inside.
+    const nextOwners = next ? new Set(owners(next).map((o) => o.id)) : new Set<string>()
+    const close: MdLine['close'] = []
+    for (const f of [b, ...owners(b)]) {
+      if (!folds(f) || nextOwners.has(f.id)) continue
+      const q = '> '.repeat(depth(f))
+      close.push({ quote: q, line: '' }, { quote: q, line: `${out[at.get(f.id)!]?.indent ?? indent}</details>` })
+    }
+    out.push({ quote: '> '.repeat(depth(b)), indent, sep, close })
   })
+  return out
 }
