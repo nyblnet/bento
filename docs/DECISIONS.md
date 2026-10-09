@@ -6694,8 +6694,6 @@ so an entry missing at the cut cannot be added afterwards — the check has one
 chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
-Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
-
 
 ## 2026-09-11 — spaces: Tab REFUSES on a block with nothing above it, visibly
 
