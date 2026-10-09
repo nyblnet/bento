@@ -53,6 +53,7 @@ import { margins, blockStyle } from './layout.ts';
 import { docStyleCss } from './docstyles.ts';
 import { captionIndex, docLang, fillXrefsHtml } from './xref.ts';
 import { embedHtml } from './embed.ts';
+import { fieldContext, fillFieldsHtml, pagination } from './fields.ts';
 import { displayMathHtml } from './math.ts';
 
 /** Above this the preview is trimmed, then dropped to a title card. A preview
@@ -173,7 +174,11 @@ function flowHtml(body: Block[], doc: TypeDoc): string {
   // numbering, not the slice's — "Figure 3" must read 3 even when only its
   // caption's page made the cut, exactly as print.ts resolves against the
   // whole body for every page it draws.
-  return fillXrefsHtml(out.join(''), captionIndex(doc.body, docLang(doc)));
+  // Same two-pass fill as print.ts, and for the same reason: a thumbnail is
+  // read by someone who cannot run the app, so it must show values rather than
+  // `{{tokens}}` — and nothing at all for a field with no value.
+  return fillFieldsHtml(fillXrefsHtml(out.join(''), captionIndex(doc.body, docLang(doc))),
+                        fieldContext(doc, pagination()));
 }
 
 // ─────────────────────────────────────────────────── staticizing
