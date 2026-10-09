@@ -17,6 +17,7 @@
 // a list is asked for explicitly; this is where a bullet is typed.
 
 import { isWebUrl } from '../model.ts'
+import { insideOpenFence, textUpTo } from './codefence.ts'
 
 const INLINE: Array<{ re: RegExp; tag: string }> = [
   { re: /\*\*([^*\n]+)\*\*$/, tag: 'b' },
@@ -64,6 +65,11 @@ export function autoformatAtCaret(): boolean {
   if (!sel?.isCollapsed || !(sel.anchorNode instanceof Text)) return false
   const node = sel.anchorNode
   const off = sel.anchorOffset // capture — DOM mutation below resets the live selection
+  // inside an open ``` fence the text is code: no marker, bullet or link
+  // conversion, or `template` literals would lose their backticks before the
+  // commit turns the fence into a Code element (codefence.ts)
+  const root = node.parentElement?.closest<HTMLElement>('.bento-text-inner')
+  if (root && insideOpenFence(textUpTo(root, node, off))) return false
   const upto = node.data.slice(0, off)
 
   // "- " or "* " at line start → bullet glyph (contentEditable renders the
@@ -165,8 +171,13 @@ export function markdownToHtml(text: string): string {
   const PARK = ''
   const parked: string[] = []
   const park = (c: string) => PARK + (parked.push(c) - 1) + PARK
-  // formulas first, whole and escaped, so no marker rule reaches inside one
-  const withParked = text.split(FORMULA)
+  // fenced code before anything: kept literally, its ``` lines included, so no
+  // marker rule reaches inside it and the commit can turn it into a Code
+  // element (codefence.ts) instead of inline <code> fragments
+  const unfenced = text.replace(/^[ \t]*```[^\n]*\n[\s\S]*?\n[ \t]*```[ \t]*$/gm,
+    (block) => park(escapeHtml(block).replace(/\n/g, '<br>')))
+  // formulas next, whole and escaped, so no marker rule reaches inside one
+  const withParked = unfenced.split(FORMULA)
     .map((part, i) => (i % 2 ? park(escapeHtml(part)) : part.replace(/\\([*_~`-])/g, (_, c: string) => park(c))))
     .join('')
   const out = withParked

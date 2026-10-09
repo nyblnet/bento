@@ -17,6 +17,17 @@ pre-1.0.
   formula that failed to render. An escaped `\$` now never opens or closes a
   formula, inline or display, while an escaped dollar inside a formula still
   belongs to it.
+- **Turn text into code without leaving the text box.** Type a fenced block
+  — a line of three backticks (optionally with a language, like ```` ```js ````
+  or ```` ```python ````), your code, and a closing line of three backticks —
+  and when you finish editing it becomes a real Code element: highlighted,
+  with its language set, and able to morph between slides. If the box held
+  only the fence it turns into the Code element in place; text above or below
+  stays as text boxes stacked around it. Pasting fenced text works the same,
+  into a text box or straight onto the slide. Backticks inside the code are
+  kept as typed, and an unclosed fence stays plain text. You can also select
+  one or more lines and press `` ` `` to set them in code style; press it
+  again to undo that.
 - **Screen readers announce what each Save-as and Share command does.** The
   menus keep one-line rows with the description on hover, and the same text
   is now read out as the command's description; the Save-as list scrolls when
