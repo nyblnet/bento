@@ -1270,6 +1270,34 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   the file, a duplicate and an invite, and never with a view-only copy, Copy
   document JSON or a page export.
 
+- **A space you can hand to a reader.** "Save a reading copy…" (in Share)
+  writes a second file that opens as a **document** rather than as an editor:
+  the pages, the tree, ⌘K search and print, and none of the machinery for
+  changing them. The eye toggle is the same view for the file you are writing
+  in — it now takes the tools away rather than merely switching them off, and
+  every page carries a Previous / Next pair so a reader can go through a space
+  without hunting the sidebar.
+
+  What the copy leaves behind is the point, and it comes in three grades:
+
+  - **Cryptographic.** No `collab` block at all, so the copy holds no room, no
+    read key and no private signing key of any kind. Whoever you send it to
+    cannot read the room, write to it or join it, because the material a
+    connection must present is not in the file. Making the copy starts no live
+    session either.
+  - **Format-level.** Comment threads are gone from the bytes (page-level and
+    block-level, replies included), and so is the version history kept in the
+    file, and any field this build does not know.
+  - **Cosmetic.** The reading-copy setting itself. It states what the file is
+    and the app honours it; anyone can open the HTML and change it back. It is
+    intent, never a lock.
+
+  Old builds ignore the setting and open the space editable, which is the
+  correct degradation: the guarantees that matter are bytes that are not in the
+  file. A reading copy of a password-protected space is written encrypted with
+  the same password, and carries no file-manager preview. A view-only copy that
+  follows the live session still says so when it opens.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

@@ -9879,3 +9879,53 @@ field that does not count as an edit. The kernel key is a superset of the old
 one: theme, assets, fonts and undeclared keys now count as unsaved work. That
 is safe because the only comparison is snapshot against live after
 `keepLiveIdentity`, and no key is ever stored.
+
+## 2026-10-10 — bento/spaces reading copies: the kernel's package tier, and a guarantee is removal not a flag
+
+**Decision.** A space has TWO published shapes and no third. `doc.readonly` is a
+SEALED reading copy (no session, opens in the reader); `collab.role:'reader'` is
+a LIVE view-only copy (follows the room, cryptographically cannot write). Both
+already existed in the format; "Save a reading copy…" (Share) is the button that
+writes the first, and `spaces/src/reading.ts` is what it writes. A new
+"published" field would be a second spelling of `readonly` that old files answer
+only one of, so there is no fourth.
+
+**It is built by the kernel's copy table, tier `package`** — slides'
+presentation package, the same shape one app over. That row SETS `readonly`,
+DROPS the capability block (no projection), drops the in-file history, drops
+`template` and drops every top-level key this build does not declare. Not
+`reader`: that tier keeps `collabForReader`'s room + read key, which is a live
+viewer, the one thing a sealed copy must not be able to become. So there is no
+`delete collab` and no hand strip list anywhere in spaces — the copy is built
+without it. Comment threads (`Page.comments`, `Block.comments`) live inside
+pages, which every tier keeps as content, so `reading.ts` removes them itself:
+comments are workspace, not publication.
+
+**`readonly: true` comes from the kernel.** The package tier's `{set}` mode rule
+fires whether or not the source has the key (#666 — before it, a space with no
+`readonly` key, which is almost every space, would have come out of the package
+tier editable). `readingCopy` sets nothing by hand; `scripts/test-spaces-copytiers.ts`
+asserts the flag on a source with NO readonly key.
+
+**Which banner.** A live view-only copy can carry `readonly: true` too, so
+`main.ts` asks about the reader role FIRST (the ordering from the field-classes
+change) and only a `readonly` file with no reader role enters the sealed
+reading view.
+
+**The rule this exists to state.** `readonly` is INTENT and protects nothing —
+the document block is plaintext by design, so a recipient can clear it. What a
+reading copy guarantees is what is ABSENT from its bytes, and that holds
+whatever opens the file, including a build that predates the flag (which opens
+the space editable — the correct degradation). Any future work here must keep
+saying which of its guarantees are cryptographic (no collab at all), which
+format-level (no history, no comments, no undeclared key) and which cosmetic
+(`readonly` and the hidden chrome), and must never present the third as the
+first.
+
+**Encrypted spaces inherit, deliberately.** A reading copy is written through
+`serializeAuto`, so it stays encrypted with the same password and — via
+`previewAllowed` — carries no file-manager still.
+
+Assertions are on the SERIALIZED document: `scripts/test-spaces-reading.ts`
+(bytes) and `scripts/test-spaces-copytiers.ts` (the exact key set, against the
+hostile source, with three planted builders that must fail).
