@@ -115,8 +115,12 @@ const spacesDoc = (blocks: unknown[]) => ({
 {
   ok(SLIDES_SHAPE.parents === 'slides' && SLIDES_SHAPE.children === 'elements',
     'slides still means slides → elements')
-  ok([...SLIDES_SHAPE.skipDoc].sort().join(',') === 'collab,format,modified,slides,version',
-    'and its skip set is exactly what the shipped engine hardcoded')
+  // EXACT pin — any change to the skip set must be deliberate and land here.
+  // `revisions` and `trail` joined it with the field-classification ruling
+  // (kernel/src/docfields.ts, class 'history'): in-file version history is
+  // file-local and never synced. Everything else is the shipped engine's set.
+  ok([...SLIDES_SHAPE.skipDoc].sort().join(',') === 'collab,format,modified,revisions,slides,trail,version',
+    'and its skip set is exactly the shipped engine set plus the history class (revisions, trail)')
 }
 
 // ---- stamping WITHOUT the token history ------------------------------------

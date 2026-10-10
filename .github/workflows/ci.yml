@@ -101,9 +101,16 @@ jobs:
 
       - name: Typecheck kernel (standalone)
         # Apps also typecheck kernel transitively through their imports; this
-        # catches kernel-only errors under the kernel's own flags.
+        # catches kernel-only errors under the kernel's own flags. It ALSO
+        # evaluates kernel/src/docfields.typecheck.ts (included via "src"): the
+        # field-class table's type-level test, whose @ts-expect-error lines fail
+        # this step if a guard is weakened (no default cell, 'per-field' only in
+        # the mode row, every mode field has a rule).
         working-directory: slides
         run: node_modules/.bin/tsc -p ../kernel
+
+      - name: Field-classification rig
+        run: node scripts/test-field-class.ts
 
       - name: Typecheck convert (standalone)
         # convert/ is a library beside the apps (the CLI and bento.page/import
