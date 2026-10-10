@@ -203,8 +203,15 @@ H('a REFUSING host: nothing falls back to the shared origin')
   const id = await deviceIdentity('d5')
   ok(JSON.stringify([...ls]) === lsBefore, 'no new entry in localStorage — the private key is never written there')
   ok(cachedMemberPub('d5') === id.pub, 'the identity is kept for this page')
+  // the host goes SILENT while this page holds that unstored identity: a failed
+  // read carries on with it (no throw, no new key), so the connection doesn't stall
+  resetDocStoreForTest(fast()); mode = 'silent'
+  let kept: { pub: string } | null = null
+  try { kept = await deviceIdentity('d5') } catch { kept = null }
+  ok(kept?.pub === id.pub, 'a failed read with an identity already in use this page carries on with it')
+  ok(JSON.stringify([...ls]) === lsBefore, 'still nothing new in localStorage')
   // the host comes back: the SAME identity is offered again and stored
-  mode = 'ok'
+  resetDocStoreForTest(); mode = 'ok'
   const again = await deviceIdentity('d5')
   ok(again.pub === id.pub && stored('memberkey')?.pub === id.pub, 'next call offers the same identity to the host, which now stores it')
   // recovery refused (too large): off for that document, said once, nothing in IndexedDB
