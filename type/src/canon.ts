@@ -30,7 +30,17 @@ import type { Signature } from './model.ts';
 export interface ChainEntry { ok: boolean; why: string | null; linked: boolean; name: string }
 export interface ChainResult { ok: boolean; entries: ChainEntry[] }
 
-/** Fields that never enter a signature. Everything else is signed. */
+/**
+ * Fields that never enter a signature. Everything else is signed — including
+ * `revisions`, deliberately: signatures cover content AND history, so trimming
+ * history on a signed document is a re-sign by the signer, never a silent fold.
+ *
+ * This set answers ONE question — what may a signature not cover — and must
+ * not be reused to answer "what counts as unsaved work". A signature excludes
+ * itself, but losing a signature on crash recovery is still lost work. The
+ * recovery key has its own set (autosave.ts NOT_EDIT); reusing this one there
+ * is exactly how signatures became invisible to recovery.
+ */
 export const VOLATILE = new Set([
   'modified',      // touched by every save
   'sync',          // CRDT state, per-replica
@@ -94,7 +104,8 @@ function str(s: string): string {
  * insertion order, which is neither valid JSON nor deterministic. That is
  * refused rather than serialized.
  */
-export function canonicalize(value: unknown, { volatile = VOLATILE } = {}): string {
+export function canonicalize(value: unknown,
+  { volatile = VOLATILE }: { volatile?: ReadonlySet<string> } = {}): string {
   const go = (v: unknown): string => {
     if (v === null) return 'null';
     if (typeof v === 'boolean') return v ? 'true' : 'false';
