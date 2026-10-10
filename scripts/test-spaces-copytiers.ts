@@ -147,12 +147,11 @@ console.log('\nthe source: one field of every class, and every secret')
 // ---------------------------------------------------------------------------
 console.log('\nreader — "Share → view-only copy" (share.ts readerCopy)')
 const EXPECT_READER = sorted([...CONTENT, 'docId', 'collab', 'readonly'])
-// KERNEL GAP (reported with this rig): projectForCopy walks the SOURCE's keys,
-// so a {set} mode rule only fires when the source already carries the field. A
-// space with no `readonly` key at all — almost every space — yields a reader
-// copy with no `readonly` either. Pinned here as it is, so the day the kernel
-// sets an absent mode field this row goes red and the expectation is updated.
-const EXPECT_READER_NO_MODES = sorted([...CONTENT, 'docId', 'collab'])
+// THE ABSENT-FIELD CASE. A space with no `readonly` key at all — almost every
+// space — must still get `readonly:true` in a reader copy. This rig found that
+// projectForCopy only fired a {set} mode rule when the source already carried
+// the field (an editable "reader" copy); the kernel now applies every {set}
+// cell for the tier regardless (#666), and this row holds it there.
 function checkReader(out: SpacesDoc | null, label: string): boolean {
   const before = failures
   ok(!!out, `${label}: a copy is made`)
@@ -174,8 +173,8 @@ function checkReader(out: SpacesDoc | null, label: string): boolean {
   checkReader(readerCopy(source({ template: true, readonly: false })), 'reader of a template/editable source')
   {
     const bare = readerCopy(source()) as Obj
-    ok(same(keys(bare), EXPECT_READER_NO_MODES) && !('readonly' in bare),
-      `reader of a source with NO mode fields: readonly is not set (KERNEL GAP, see above) (${show(bare)})`)
+    ok(same(keys(bare), EXPECT_READER) && bare.readonly === true && !('template' in bare),
+      `reader of a source with NO mode fields: readonly is SET anyway (${show(bare)})`)
     ok(!('revisions' in bare) && !('trail' in bare) && !('futureField' in bare), 'reader of a source with no mode fields: still no history, no undeclared key')
     noSecrets(bare, 'reader of a source with no mode fields')
   }
@@ -284,8 +283,8 @@ console.log('\naudience / link / template — no spaces builder yet; the map as 
     template: sorted([...CONTENT, 'docId', 'template']),
   }
   for (const tier of ['audience', 'link', 'template'] as const) {
-    // both mode fields present in the source: see the KERNEL GAP note above
-    const o = projectForCopy(source({ readonly: true, template: false }), SPACES_FIELDS, tier, { projectAudience: audience }) as Obj
+    // NEITHER mode field in the source: the tier's {set} cells must fire anyway
+    const o = projectForCopy(source(), SPACES_FIELDS, tier, { projectAudience: audience }) as Obj
     ok(same(keys(o), want[tier]!), `${tier}: EXACT top-level keys (${show(o)})`)
     ok(!('revisions' in o) && !('trail' in o) && !('futureField' in o), `${tier}: no history, no undeclared key`)
     ok(tier === 'template' ? o.template === true && !('readonly' in o) : o.readonly === true && !('template' in o),
