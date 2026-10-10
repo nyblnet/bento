@@ -647,6 +647,10 @@ for (const [label, input, err] of [
   // precedent below, because `undefined` appears hundreds of times in editor.ts.
   ok(nextLayout(VIEW_LAYOUTS[VIEW_LAYOUTS.length - 1]) === 'board',
     'the shape after the last one is the board again')
+  // SEVEN, the maintainer's ceiling for the ring: calendar shipped first, the
+  // two charts follow it, and an eighth shape turns this control into a picker
+  ok(VIEW_LAYOUTS.join() === 'board,list,table,gallery,calendar,gantt,workload',
+    'the ring is the seven allowed shapes, calendar then the two charts')
   const toggleFn = ed.slice(ed.indexOf('private toggleViewLayout'),
     ed.indexOf('private openViewGroup'))
   ok(toggleFn.length > 0 && /'layout',\s*to === 'board' \? undefined :/.test(toggleFn),

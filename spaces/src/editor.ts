@@ -30,9 +30,10 @@ import { insertFamilies, insertSections, type InsertItem } from './inserts.ts'
 import {
   fieldByKey, fieldsOf, propHtml, propBlock, propBlockOf, isIssue, headerLength,
   reorderPages, columnMoves, ISSUE_FIELDS, withField, freeFieldKey, fieldTypeLabel, FIELD_TYPES,
-  cycleSort, nextLayout,
+  cycleSort, nextLayout, layoutOf,
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
+import { bucketField } from './workload.ts'
 import { nextSpan } from './calendar.ts'
 import {
   clausesOf, clauseSummary, isAny, opsFor, opLabel, numberOpLabel, windowLabel,
@@ -2022,8 +2023,8 @@ export class Editor {
 
   private toggleViewLayout(blockId: string): void {
     const b = this.store.block(blockId)
-    // Board -> list -> table -> gallery -> board, from fields.ts — the ONE
-    // place the cycle is written. It used to be written here and again in
+    // Board -> list -> table -> gallery -> calendar -> gantt -> workload ->
+    // board, from fields.ts — the ONE place the cycle is written. It used to be written here and again in
     // render.ts, and when the prototype-lookup bug was found only this copy was
     // hardened, so the button went on rendering
     // `function toString() { [native code] }` as its label from the other one.
@@ -2054,22 +2055,36 @@ export class Editor {
   /**
    * Which field the columns come from.
    *
-   * Only fields with declared options are offered. A board's columns ARE the
-   * option list — grouping by a free-text field would make one column per
-   * distinct string, which is a pivot table wearing a board's clothes.
+   * Only fields with declared options are offered for a BOARD. A board's
+   * columns ARE the option list — grouping by a free-text field would make one
+   * column per distinct string, which is a pivot table wearing a board's
+   * clothes.
+   *
+   * A WORKLOAD CHART IS THAT PIVOT TABLE, DELIBERATELY, so it offers person and
+   * text fields too: "how much is each person holding" is exactly one bar per
+   * distinct string, and that is the whole shape. Same key, same writer, one
+   * extra line — which is what it costs when a chart is a layout rather than a
+   * second block type with a vocabulary of its own.
    */
   private openViewGroup(blockId: string, anchor: HTMLElement): void {
     const s = this.store
     const b = s.block(blockId)
     if (!b || s.readOnly || this.reading) return
-    const now = String((b as { groupBy?: unknown }).groupBy ?? 'status')
-    const groupable = fieldsOf(s.doc).filter((f) => f.options?.length)
+    const shape = layoutOf((b as { layout?: unknown }).layout)
+    const bars = shape === 'workload'
+    const now = String((b as { groupBy?: unknown }).groupBy
+      ?? (bars ? (bucketField(s.doc)?.key ?? '') : 'status'))
+    const groupable = fieldsOf(s.doc).filter((f) =>
+      f.options?.length || (bars && (f.vt === 'person' || f.vt === 'text')))
+    // The DEFAULT for this shape is what absence already means, so choosing it
+    // clears the key rather than writing it down — the rule filter, source and
+    // sort all follow, and what keeps a view that was fiddled with and put back
+    // byte-identical to one nobody touched.
+    const dflt = bars ? bucketField(s.doc)?.key : 'status'
     this.menuAt(anchor, t('Group'), (m) => {
       for (const f of groupable) {
         row(m, { icon: ICONS.board, label: f.label, selected: f.key === now,
-          // `status` is the default the renderer assumes, so choosing it clears
-          // the key instead of writing what absence already means
-          run: () => this.editView(blockId, 'groupBy', f.key === 'status' ? undefined : f.key) })
+          run: () => this.editView(blockId, 'groupBy', f.key === dflt ? undefined : f.key) })
       }
       if (!groupable.length) extra(m, el('div', 'sp-fgroup', t('No field here has options to group by')))
     })
