@@ -11,6 +11,19 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Save a deck as PowerPoint, from a terminal.**
+  `node convert/cli.mjs deck.bento.html --to pptx` writes `deck.pptx`, with
+  speaker notes, links, tables, charts, pictures and hidden slides. It reports
+  what it approximated or left out, and on which slides: animations show
+  their final frame, Morph becomes a plain cut, formulas stay as their LaTeX
+  source, and code and embedded documents are not exported yet. It also says
+  which of the deck's own fonts to install, and `--report r.json` saves the
+  full report. It reads a saved deck or its document JSON. Every export is
+  checked before it is written, and a package PowerPoint would want to repair
+  is refused. Export is a library and a command-line tool rather than a
+  button in the app, so every shared file stays small and the app stays
+  focused.
+
 - **Long speaker notes scroll in presenter view.** Notes that are taller than
   the space beside the current and next slides now get their own vertical
   scrollbar instead of being cut off.

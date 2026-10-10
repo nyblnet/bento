@@ -56,10 +56,22 @@ for (const zone of ['slides/src', 'dash/src', 'spaces/src', 'type/src', 'kernel/
 console.log('the engine is DOM-free')
 const esbuild = path.join(root, 'slides/node_modules/.bin/esbuild')
 const DOM = /(?<![.\w$"'`])(document|window|DOMParser|XMLSerializer|localStorage|sessionStorage|navigator|HTMLElement|Image|FileReader|createElement)(?=\s*[.(\[])/g
-for (const entry of ['convert/src/pptx.ts', 'convert/src/limits.ts']) {
+for (const entry of ['convert/src/pptx.ts', 'convert/src/pptx-write/index.ts', 'convert/src/limits.ts']) {
   const r = spawnSync(esbuild, [path.join(root, entry), '--bundle', '--format=esm', '--minify', '--platform=neutral', '--log-level=error'], { encoding: 'utf8' })
   const hits = [...new Set([...(r.stdout ?? '').matchAll(DOM)].map(m => m[1]))]
   ok(r.status === 0 && r.stdout.length > 1000 && hits.length === 0, `${entry} and all it reaches use no DOM global (${hits.join(', ') || 'none'})`)
+}
+
+console.log('the PowerPoint writer stays off the import page')
+{
+  // bento.page/import bundles api.ts, never export.ts. These strings exist
+  // only in the writer (package parts PowerPoint requires), so finding one
+  // in the page's bundle means the writer leaked into it.
+  const r = spawnSync(esbuild, [path.join(root, 'convert/page/import-page.ts'), '--bundle', '--format=esm', '--minify',
+    '--platform=browser', '--log-level=error'], { encoding: 'utf8' })
+  const leaked = ['presProps', 'notesMaster', 'tableStyles'].filter((w) => (r.stdout ?? '').includes(w))
+  ok(r.status === 0 && r.stdout.length > 1000 && leaked.length === 0,
+    `the page bundle carries no part of the writer (${leaked.join(', ') || 'none found'})`)
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

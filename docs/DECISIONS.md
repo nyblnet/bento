@@ -10107,3 +10107,73 @@ and still green.
 Pointers: spaces/src/share.ts, spaces/src/editor.ts `confirmInviteHistory`,
 scripts/test-spaces-copytiers.ts (the invite-choice rows and the planted
 builder that ignores the option).
+
+## 2026-10-05 — PowerPoint export is a library and a command-line tool, never an app button
+
+**The decision.** Import came first (bento.page/import). Export ships as
+`convert/src/export.ts` and `bento convert deck.bento.html --to pptx`, not as
+a command inside slides, so every shared file stays small and the app stays
+focused. The writer (`convert/src/pptx-write/`, about 3,500 lines) never
+enters a shell. `scripts/test-convert/boundary.ts` fails if any app imports
+`convert/`, if the writer uses a DOM global, or if any part of the writer
+reaches the bento.page/import bundle. That last check was mutation-tested:
+a page that calls the writer is caught, and an unused re-export, which
+esbuild tree-shakes away, correctly passes.
+
+**Whose code it is.** The writer is built on the mappings contributed in
+#88 (cherry-picked with their author's authorship), with a first-party
+integrator and the package boilerplate PowerPoint needs.
+
+**Schema-valid is not PowerPoint-valid.** Every part of an early export
+passed the ECMA-376 transitional schemas, and PowerPoint for Mac still
+offered to repair the file. The missing pieces are parts the schema calls
+optional and the reader requires: `presProps.xml`, `viewProps.xml`,
+`tableStyles.xml`, a presentation→theme relationship, `p:notesStyle` in the
+notes master, and a notes master that owns its own theme part rather than
+sharing the slide master's. All are pinned by the rigs, and the shared
+harness (`scripts/test-convert/_export-harness.ts`, `packageProblems`) checks
+them for any export. The class is open-ended, so a change to the writer
+still ends with one exported deck opened in real PowerPoint.
+
+**Built for contributors.** Element writers follow one contract
+(`pptx-write/contract.ts`): one node or null, every loss reported, no app
+imports, no new dependencies, deterministic output. The two element types
+with no writer yet, `code` and `embed`, have stub writers that report
+themselves dropped. `scripts/test-convert/pptx-coverage.ts` reads the element
+types from slides' `SlideElement` union and fails when slides adds a type
+the exporter does not handle, or when a writer drops an element without
+reporting it. `convert/CONTRIBUTING.md` walks through writing one and lists
+the open tasks.
+
+## 2026-10-06 — PowerPoint export: one typeface per stack, a self-check on every export, a report that names slides
+
+Measured against an earlier converter built on a third-party PowerPoint
+library, on six real decks. Ours was already smaller (the starter deck
+exports at 61 KB against 9.4 MB, because nothing is rasterised and images are
+stored once). It was also more editable: gradients, connectors, custom paths
+and charts stay native, and hard shadows and strikethrough survive. These
+behaviours were taken from that converter; no code was taken:
+
+- **The report names slides.** `foldReport` (convert/src/report.ts) folds
+  the writer's per-slide entries to one line per kind of loss and keeps
+  where it happened ("slides 3, 5–7"). The CLI and the pages share it.
+- **Formulas and fonts are reported.** Formulas already exported as their
+  LaTeX source and now say so (`maths-as-source`). They are found by slides'
+  own scanner (`maths/delimiters.ts`), passed in by `export.ts` because the
+  writer imports no app. The deck's own fonts are named
+  (`fonts-not-embedded`), since the .pptx does not carry them.
+- **A self-check on every export** (`pptx-write/verify.ts`, the checks the
+  rigs used). A package with a broken relationship, an untyped part or a
+  missing required part is a writer bug, and the export refuses it rather
+  than handing PowerPoint a file to repair.
+- **Document JSON in, report JSON out** (`--report`).
+
+**One typeface per stack.** PowerPoint takes a single font name and
+substitutes silently when it is missing; it cannot fall through a CSS stack.
+Both converters wrote `ui-monospace`, which is a CSS generic and not a font.
+`typefaceOf` (`pptx-write/fonts.ts`) takes the stack's first family that is
+neither a CSS generic nor a font only one operating system ships ('SF Mono',
+'Menlo', 'Helvetica Neue', 'Segoe UI', …). slides' monospace stack therefore
+becomes Consolas, which Office installs on Windows and macOS. A stack of
+generics alone maps to a font every PowerPoint has (monospace → Courier New,
+sans-serif → Arial). The deck's own fonts are never skipped.
