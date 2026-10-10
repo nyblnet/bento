@@ -397,6 +397,22 @@ by hand.
 
 5. Autosave write-back and self-update, which route through the same function.
 
+## What the assistant may read on the web
+
+With "read web pages" allowed, the assistant reads a page only when its
+address is one the person typed in the conversation, or one a search returned
+during that request. It never reads an address the model composed or the
+document named. Redirects are followed one hop at a time, and each address is
+checked before it is requested. Where the browser hides a redirect's target,
+only an `http` → `https` upgrade of the same address is followed.
+
+The checks look at host NAMES, not the addresses they resolve to: a public
+name whose DNS answer is a private or local address passes them. An
+extension cannot resolve a name before fetching it, so the practical bound
+is the reading rule above. The only pages read are ones the person or a
+search chose, and what comes back reaches the document only through the
+page's own gated patch.
+
 ## Not this
 
 **Firefox** implements no File System Access API at all, and its extensions

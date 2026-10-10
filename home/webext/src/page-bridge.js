@@ -146,7 +146,7 @@
    * directions where "are you at least version N" does not.
    */
   Object.defineProperty(window, '__bentoHost', {
-    value: Object.freeze({ name: 'home/webext', ops: Object.freeze(['claim', 'write', 'backup', 'saveas']) }),
+    value: Object.freeze({ name: 'home/webext', ops: Object.freeze(['claim', 'write', 'backup', 'assistant', 'saveas', 'store']) }),
     writable: false, configurable: false, enumerable: false,
   })
 

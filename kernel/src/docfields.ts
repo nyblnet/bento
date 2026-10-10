@@ -281,6 +281,15 @@ export function projectForCopy<T extends object>(
           : (CLASS_RULES[cls][tier] as Rule)
     applyRule(out, key, v, rule, opts)
   }
+  // A {set} mode cell is a property of the TIER, not of the source: a reader copy
+  // is read-only and a template copy is a template whether or not the source
+  // carried the field at all. The walk above only visits the source's keys, and
+  // most documents have neither readonly nor template — so without this pass a
+  // doc with no `readonly` key produced an EDITABLE reader copy (fail-open).
+  for (const field of Object.keys(MODE_FIELD_RULES) as ModeField[]) {
+    const rule = MODE_FIELD_RULES[field][tier] as Rule
+    if (typeof rule === 'object' && 'set' in rule) out[field] = rule.set
+  }
   return out as T
 }
 
