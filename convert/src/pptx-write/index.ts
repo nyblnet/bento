@@ -48,7 +48,7 @@ import {
 import { textSp, type FieldValues, type TextElIn } from './text.ts'
 import { emu, parseColor, shapeNode, type ShapeIn } from './shapes.ts'
 import {
-  MediaStore, imagePic, svgPic, mediaPoster,
+  MediaStore, imagePic, svgPic, mediaPoster, rasterTargets, pictureSources,
   type ImageIn, type MediaCtx, type MediaIn, type SvgIn,
 } from './media.ts'
 import { tableFrame } from './tables.ts'
@@ -140,6 +140,11 @@ export interface ExportOpts {
    *  (the scanner is app code: slides' maths/delimiters.ts), so the caller
    *  passes it, like chartPalette. Absent = not reported. */
   formulasIn?: (html: string) => number
+  /** Turns a picture PowerPoint cannot take (WebP, AVIF, BMP, TIFF) into a
+   *  PNG data: URI, or null when it cannot. Decoding images needs a browser
+   *  (a canvas), and the writer has no DOM, so a host that has one passes it
+   *  (bento.page/convert does). Absent = such pictures are reported dropped. */
+  rasterise?: (dataUri: string) => Promise<string | null>
 }
 
 export interface PptxExport {
@@ -306,6 +311,20 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
 
   const palette = doc.theme.chartPalette?.length ? doc.theme.chartPalette : opts.chartPalette
   const assets = doc.assets ?? {}
+
+  // Pictures PowerPoint cannot take, each converted ONCE by the host's
+  // rasteriser before any slide is written, so imagePic stays synchronous.
+  // Whatever comes back must be a PNG data: URI; anything else counts as a
+  // failed conversion (reported as a drop where the picture was).
+  let converted: Map<string, string | null> | undefined
+  if (opts.rasterise) {
+    converted = new Map()
+    for (const src of rasterTargets(pictureSources(exported as never, assets))) {
+      let png: string | null = null
+      try { png = await opts.rasterise(src) } catch { png = null }
+      converted.set(src, typeof png === 'string' && /^data:image\/png[;,]/i.test(png) ? png : null)
+    }
+  }
   const store = new MediaStore() // ONE per export: byte-dedup is cross-slide
   const enc = new TextEncoder()
 
@@ -339,7 +358,7 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     const rels: RelEntry[] = []
     const nextRelId = (): string => `rId${++relSeq}`
     rels.push(slideLayoutRel(nextRelId()))
-    const mediaCtx: MediaCtx = { assets, store, rels, nextRelId, report }
+    const mediaCtx: MediaCtx = { assets, store, rels, nextRelId, report, converted }
 
     /** el.link → an allocated rel. Reported and null when the target does not
      *  resolve (#88's missing-link-target) — a dangling r:id is a repair

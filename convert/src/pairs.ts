@@ -117,6 +117,8 @@ export interface Env {
    *  expansion and gate). `provisional` lists the slide id of each text box
    *  left at a provisional height (nothing measured it). Null when the format
    *  check refuses it. */
+  /** a picture PowerPoint cannot take → PNG data: URI (needs a canvas) */
+  rasterise?(dataUri: string): Promise<string | null>
   loadDocJson?(json: string): { doc: BentoDoc; dropped: Array<{ path: string; reason: string }>; provisional?: string[] } | null
 }
 
@@ -177,9 +179,9 @@ export const CONVERSIONS: Conversion[] = [
       if (d.compact) return 'This is compact document JSON. Make it a deck first, then convert the deck.'
       return true
     },
-    async run(d) {
+    async run(d, env) {
       if (d.kind !== 'bento') throw new Error('not a Bento document')
-      const r = await bentoToPptx(d.text)
+      const r = await bentoToPptx(d.text, env.rasterise ? { rasterise: (u) => env.rasterise!(u) } : {})
       return {
         bytes: r.bytes, fileName: `${base(d.name)}.pptx`,
         mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',

@@ -22,6 +22,7 @@ import { detect, describe, optionsFor, nothingFor, LimitError, type Detected, ty
 import { fetchVerifiedShell, LIMITS } from '../src/api.ts'
 import { foldReport, type FidelityReport } from '../src/report.ts'
 import { loadDocJson } from './load-json.ts'
+import { rasteriseToPng } from './rasterise.ts'
 import { SAMPLE_DECK, SAMPLE_DECK_NAME } from './sample-deck.ts'
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
@@ -67,6 +68,7 @@ const env: Env = {
     return shell
   },
   loadDocJson,
+  rasterise: rasteriseToPng,
 }
 
 let current: Detected | null = null
@@ -166,6 +168,7 @@ const PLAIN: Record<string, string> = {
   'table-radius-dropped': 'Rounded table corners become square.',
   'line-tip-approximated': 'Some line ends are drawn with the closest PowerPoint arrowhead.',
   'value-removed': 'Values the bento/slides format does not allow were removed.',
+  'image-converted-png': 'WebP and similar pictures were converted to PNG for PowerPoint. They look the same; the file is a little larger.',
   'text-height-provisional': 'Some text boxes had no height, so they start one line tall. Select one in bento/slides and use Fit height to text.',
 }
 

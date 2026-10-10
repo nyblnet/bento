@@ -217,6 +217,10 @@ export class MediaStore {
 export interface MediaCtx {
   /** doc.assets — "asset:<key>" resolves here */
   assets: Record<string, string>
+  /** pictures the host's rasteriser converted before the slides were
+   *  written (see rasterTargets): original data: URI → PNG data: URI, or
+   *  null when the conversion failed. Absent = no rasteriser. */
+  converted?: Map<string, string | null>
   store: MediaStore
   /** the slide's rel list; this module pushes image rels into it */
   rels: RelEntry[]
@@ -307,8 +311,48 @@ const bentoName = (el: { id: string; morphId?: string }): string => `bento:${el.
  * stretch mapping SILENTLY; the report entry is the difference between an
  * approximation and a lie.
  */
+/** The source to write: the host's PNG when it converted this picture (and
+ *  that is reported), else the original. Null = the conversion failed, and
+ *  that is reported as the drop. */
+function convertedSrc(src: string, where: string, ctx: MediaCtx): string | null {
+  if (!ctx.converted?.has(src)) return src
+  const png = ctx.converted.get(src)
+  const mime = /^data:([^;,]+)/.exec(src)?.[1] ?? 'image'
+  if (!png) {
+    ctx.report.add('dropped', 'missing-image', where, `a ${mime} picture could not be converted to PNG; dropped`)
+    return null
+  }
+  ctx.report.add('approximated', 'image-converted-png', where,
+    `${mime} pictures were converted to PNG, which PowerPoint reads; they look the same, but the file is larger`)
+  return png
+}
+
+/** The data: URIs among these sources that PowerPoint cannot take but a
+ *  rasteriser could turn into PNG: raster images outside EXT_BY_MIME (webp,
+ *  avif, bmp, tiff…). SVG is excluded; it is placed as SVG. */
+export function rasterTargets(srcs: Iterable<string>): string[] {
+  const out = new Set<string>()
+  for (const src of srcs) {
+    const mime = /^data:([^;,]+)/i.exec(src)?.[1]?.toLowerCase()
+    if (mime && mime.startsWith('image/') && mime !== 'image/svg+xml' && !EXT_BY_MIME[mime]) out.add(src)
+  }
+  return [...out]
+}
+
+/** Every picture source an export may write: image elements and media
+ *  posters, resolved through the assets. */
+export function pictureSources(slides: Array<{ elements: Array<{ type?: string; src?: string; poster?: string }> }>, assets: Record<string, string>): string[] {
+  const out: string[] = []
+  for (const sl of slides) for (const el of sl.elements) {
+    const ref = el.type === 'image' ? el.src : el.type === 'media' ? el.poster : undefined
+    if (ref) out.push(resolveSrc(assets, ref))
+  }
+  return out
+}
+
 export function imagePic(el: ImageIn, shapeId: number, where: string, ctx: MediaCtx): XNode | null {
-  const src = resolveSrc(ctx.assets, el.src)
+  const src = convertedSrc(resolveSrc(ctx.assets, el.src), where, ctx)
+  if (src === null) return null
   if (!src) {
     ctx.report.add('dropped', 'missing-image', where, 'image source is empty or its asset reference is dangling')
     return null
@@ -325,7 +369,9 @@ export function imagePic(el: ImageIn, shapeId: number, where: string, ctx: Media
     if (!partName) {
       ctx.report.add('dropped', 'missing-image', where,
         decoded
-          ? `image format '${decoded.mime}' has no PowerPoint-safe extension; dropped`
+          ? (/^image\/(webp|avif|bmp|tiff?)$/i.test(decoded.mime)
+            ? `${decoded.mime} pictures need converting to PNG first, which this exporter cannot do on its own (bento.page/convert does it); dropped`
+            : `image format '${decoded.mime}' has no PowerPoint-safe extension; dropped`)
           : 'image data: URI is malformed; dropped')
       return null
     }
@@ -408,7 +454,7 @@ export function mediaPoster(el: MediaIn, shapeId: number, where: string, ctx: Me
   ctx.report.add('dropped', 'media-dropped', where,
     `${el.kind} not exported (M-export-0 has no playable-media pipeline)` +
       (el.poster ? '; its poster image stands in on the slide' : ''))
-  const poster = el.poster ? resolveSrc(ctx.assets, el.poster) : ''
+  const poster = el.poster ? convertedSrc(resolveSrc(ctx.assets, el.poster), where, ctx) : ''
   if (!poster) return null
   if (poster.startsWith('data:')) {
     const decoded = decodeDataUri(poster)
