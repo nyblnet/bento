@@ -39,6 +39,7 @@ import {
 } from './query.ts'
 import { planImport, type SourceFile } from './markdown'
 import { extractSpace, planGraft } from './portable'
+import { headingsOf } from './embed.ts'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale, localeChoices, setLocale, applyDirection } from './i18n'
@@ -1435,6 +1436,15 @@ export class Editor {
     // A page card is made whole or not at all: the picker comes FIRST, so the
     // one commit writes a card that points somewhere, and Escape inserts
     // nothing — never a card pointing at no page.
+    // …and so is an embed: its own picker (a page, or one section of it)
+    if (item.type === 'embed') {
+      this.insertEmbed(at?.id ?? page.id, (pageId, anchor) => {
+        const fresh = make()
+        this.embedFields(fresh, pageId, anchor)
+        put(fresh)
+      })
+      return
+    }
     if (item.type === 'pagelink') {
       this.openPagePicker(at?.id ?? page.id, null, (pageId) => {
         const fresh = make()
@@ -2514,8 +2524,35 @@ export class Editor {
     return true
   }
 
-  /** Attach behaviour to a freshly painted page. */
+  /**
+   * Attach behaviour to a freshly painted page.
+   *
+   * EMBEDDED CONTENT IS PARKED FOR THE DURATION, and that is not tidiness.
+   * Everything below sweeps the painted page by class or attribute — every
+   * `.sp-check`, every `.sp-b-code`, every table cell — and hangs a handler
+   * that commits through `store.block(id)`, which resolves ANY id in the
+   * document. An embed draws ANOTHER page's blocks inside this one, so without
+   * this a tick in an embedded checklist would commit to a page the editor is
+   * not showing, and a language chip would be appended into somebody else's
+   * paragraph. The renderer already strips `data-block-id` from that subtree;
+   * this closes the half that keys on classes instead.
+   *
+   * Detached and restored rather than filtered at each of the fifteen sweeps:
+   * one guarantee in one place cannot be forgotten by the sixteenth.
+   */
   private wire(view: HTMLElement): void {
+    const parked: Array<[HTMLElement, Comment]> = []
+    for (const body of view.querySelectorAll<HTMLElement>('.sp-embed-body')) {
+      const mark = document.createComment('embed')
+      body.replaceWith(mark)
+      parked.push([body, mark])
+    }
+    try { this.wireOwn(view) } finally {
+      for (const [body, mark] of parked) mark.replaceWith(body)
+    }
+  }
+
+  private wireOwn(view: HTMLElement): void {
     const s = this.store
 
     const title = view.querySelector<HTMLElement>('[data-page-title]')
@@ -4241,6 +4278,7 @@ export class Editor {
       // the "/" that opened the menu is a command, not content
       if (blk && (blk.html ?? '').trim() === '/') blk.html = ''
       if (item.type === 'pagelink') this.insertPageCard(blockId)
+      else if (item.type === 'embed') this.insertEmbed(blockId)
       else if (item.type === 'link') { this.setType(blockId, 'link'); this.openLinkCard(blockId) }
       else this.setType(blockId, item.type, item.init)
     }
@@ -4300,6 +4338,99 @@ export class Editor {
       })
       this.paintPage()
     })
+  }
+
+  /**
+   * THE ONE WRITER for an embed's target — the same rule as a link card's
+   * fields (applyLinkCard below), for the same reason.
+   *
+   * `html` is written alongside `page`, always, and it is a LINK to the target
+   * rather than a copy of anything: a build that has never heard of `embed`
+   * renders an unknown type's html (render.ts default case), so an older shell
+   * opening this file shows a link to the source page instead of a blank box.
+   * An embed written without it is a block that vanishes in last year's shell.
+   *
+   * A section returned to "the whole page" DELETES `anchor` rather than
+   * storing an empty one — a default is never bytes in the file (PLATFORM §3).
+   */
+  private applyEmbed(blockId: string, pageId: string, anchor?: string): void {
+    const s = this.store
+    s.commit(() => {
+      const b = s.block(blockId)
+      if (b) this.embedFields(b, pageId, anchor)
+    })
+    this.paintPage()
+  }
+
+  /** An embed's fields, written together: what it shows, and its readable `html`. */
+  private embedFields(b: Block, pageId: string, anchor?: string): void {
+    const target = this.store.index.page.get(pageId)
+    b.type = 'embed'
+    b.page = pageId
+    if (anchor) b.anchor = anchor
+    else delete b.anchor
+    b.html = `<a href="#p/${pageId}">${escapeHtml(target?.title || t('Untitled'))}</a>`
+  }
+
+  /**
+   * Choose what an embed shows: a page, or one section of it.
+   *
+   * ITS OWN PICKER rather than openPagePicker with a flag, because the list is
+   * a different list — every page AND every heading on it, so "show me the
+   * Rollout section of the plan" is one gesture instead of choose-then-hunt.
+   * The heading names come from embed.ts `headingsOf`, which is the same list
+   * `sectionOf` matches against, so a section you can pick here is a section
+   * that resolves.
+   */
+  private insertEmbed(blockId: string, then?: (pageId: string, anchor?: string) => void): void {
+    // the bar makes the block only once a page is chosen (insertItem); the /
+    // menu converts the block it was opened on
+    const pick = (pageId: string, anchor?: string) => then ? then(pageId, anchor) : this.applyEmbed(blockId, pageId, anchor)
+    const s = this.store
+    if (s.readOnly || this.reading) return
+    this.openOverlay(t('Embed a page'), (card, close) => {
+      const input = document.createElement('input')
+      input.className = 'sp-find'
+      input.placeholder = t('Find a page or a section…')
+      const list = el('ul', 'sp-results')
+      const row = (label: string, sub: string, then: () => void) => {
+        const li = document.createElement('li')
+        const b = document.createElement('button')
+        b.className = 'sp-result'
+        b.type = 'button'
+        b.innerHTML =
+          `<span class="sp-result-ico">${ICONS.page}</span>` +
+          `<span class="sp-result-txt"><strong>${escapeHtml(label)}</strong>` +
+          (sub ? `<span>${escapeHtml(sub)}</span>` : '') + '</span>'
+        b.addEventListener('click', () => { close(); then() })
+        li.append(b)
+        list.append(li)
+      }
+      const run = () => {
+        const q = input.value.trim().toLowerCase()
+        list.innerHTML = ''
+        for (const p of s.doc.pages) {
+          // A PAGE CANNOT EMBED ITSELF, so it is not offered. The renderer
+          // stops that loop safely either way; offering it would be offering a
+          // placeholder.
+          if (p.id === s.pageId) continue
+          const title = p.title || t('Untitled')
+          const heads = headingsOf(p).filter((h) => !q || h.text.toLowerCase().includes(q))
+          const hit = !q || title.toLowerCase().includes(q)
+          if (hit) row(title, t('The whole page'), () => pick(p.id))
+          for (const h of (hit ? headingsOf(p) : heads)) {
+            row(`${title} › ${h.text}`, t('That section only'),
+              () => pick(p.id, h.text))
+          }
+          if (list.childElementCount > 40) break
+        }
+        if (!list.childElementCount) list.append(el('li', 'sp-noresult', t('No page matches')))
+      }
+      input.addEventListener('input', run)
+      card.append(input, list)
+      run()
+      setTimeout(() => input.focus(), 0)
+    }, { top: true })
   }
 
   /**
