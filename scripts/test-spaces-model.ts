@@ -56,12 +56,16 @@ import {
   CLASS_OK, keepClasses,
 } from '../spaces/src/marks.ts'
 import { extractSpace, planGraft, subtreeIds } from '../spaces/src/portable.ts'
+import {
+  EMBED_MAX_DEPTH, isPageRef, anchorOf, sectionOf, headingsOf, viewEmbed, embedReaches,
+  parseEmbedLine, embedToMd, linkEmbeds,
+} from '../spaces/src/embed.ts'
+import { planUpdatePage, validateDoc } from '../spaces/src/agent.ts'
 import { pageToDeck } from '../spaces/src/todeck.ts'
 // CROSS-ZONE READ-ONLY: bento/slides' own load gate and its generated key list.
 // Nothing under slides/ is written by this rig or by the feature it covers.
 import { parseDoc as slidesParseDoc } from '../slides/src/model.ts'
 import { MODEL_KEYS } from '../slides/src/modelkeys.generated.ts'
-import { planUpdatePage } from '../spaces/src/agent.ts'
 import { tokenize, normLang, langLabel, CODE_LANGS } from '../spaces/src/highlight.ts'
 import { escText, externalHref } from '../spaces/src/sanitize.ts'
 import {
@@ -4194,6 +4198,505 @@ function fsTable(f: string): string {
   }
 }
 
+// ---- page designs (DECISIONS 2026-09-26) ----------------------------------
+// The author picks the design; the reader's theme picks between its two
+// palettes. A design is DATA — palettes, font names, switch words, numbers —
+// and one base stylesheet (designs.css) reads it. What must never break:
+// no `design` renders today's CSS untouched; each name selects its own
+// tokens; an unknown name falls back, round-trips and is named; returning to
+// the default deletes the key; and no author text ever becomes CSS.
+{
+  const D = await import('../spaces/src/designs.ts')
+  const { validateDoc } = await import('../spaces/src/agent.ts')
+  const { orphanAssets } = await import('../spaces/src/assets.ts')
+  const fsd = await import('node:fs')
+  const rdd = (f: string) => fsd.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+  const css = rdd('designs.css')
+  const base = (): SpacesDoc => {
+    const r = parseDoc(JSON.stringify({ format: FORMAT, version: 1, docId: 'dsg-doc', title: 'D', pages: [{ id: 'p1', title: 'P', blocks: [{ id: 'b1', type: 'p', html: 'hi' }] }] }))
+    if (!r.ok) throw new Error('fixture')
+    return r.doc
+  }
+
+  // ABSENT = TODAY. Nothing resolves, and nothing in designs.css can match a
+  // surface that carries no design attribute: every rule is keyed under one,
+  // except the :root block that only CAPTURES the chrome's own tokens.
+  const plain = base()
+  ok(D.resolveDesign(plain) === null, 'no `design` key resolves to no design (the untouched stylesheet)')
+  ok(!Object.hasOwn(plain, 'design'), 'a document without a design gains no key by being loaded')
+  const flat = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const selectors: string[] = []
+  for (const m of flat.matchAll(/([^{}]+)\{/g)) {
+    const s = m[1].trim()
+    if (!s || s.startsWith('@')) continue
+    // split at TOP-LEVEL commas only: `:is(a, b)` is one selector
+    let depth = 0, cur = ''
+    for (const ch of s) {
+      if (ch === '(') depth++
+      if (ch === ')') depth--
+      if (ch === ',' && depth === 0) { selectors.push(cur.trim()); cur = '' } else cur += ch
+    }
+    selectors.push(cur.trim())
+  }
+  const unscoped = selectors.filter((s) => !/\[data-sp-design\]|\[data-sd-[a-z0-9]+="[a-z0-9]+"\]/.test(s) && s !== ':root')
+  ok(selectors.length > 60 && unscoped.length === 0,
+    `every designs.css selector is scoped to a designed surface (${selectors.length} selectors; unscoped: ${unscoped.join(' | ') || 'none'})`)
+  const rootBlocks = [...flat.matchAll(/(^|\})\s*:root\s*\{([^}]*)\}/g)].map((m) => m[2])
+  ok(rootBlocks.length === 1 && rootBlocks[0].split(';').filter((d) => d.trim()).every((d) => /^\s*--sp-app-[a-z0-9-]+:\s*var\(--[a-z0-9-]+\)\s*$/.test(d)),
+    'the one unscoped :root block only captures chrome tokens (--sp-app-* = var(--…)) and styles nothing')
+  // The key as main had it before designs (footnotes, templates, the journal
+  // template): a document with no design must key EXACTLY that, byte for byte.
+  const docKeyOld = JSON.stringify([plain.title, plain.home, plain.pages, plain.footnotes, plain.templates, plain.journalTemplate])
+  ok(docContentKey(plain) === docKeyOld, 'a document with no design keys for recovery exactly as it did before designs existed')
+  {
+    const withNotes = base()
+    ;(withNotes as { footnotes?: Record<string, string> }).footnotes = { a: 'n' }
+    ;(withNotes as { journalTemplate?: string }).journalTemplate = 't1'
+    const k0 = docContentKey(withNotes)
+    D.setDesign(withNotes, 'almanac')
+    const k1 = docContentKey(withNotes)
+    ok(k1 !== k0 && JSON.parse(k1).length === 8 && JSON.parse(k1)[3].a === 'n' && JSON.parse(k1)[5] === 't1',
+      'choosing a design changes the content key, and footnotes and the journal template stay in it beside the design')
+    ;(withNotes as { designs?: unknown }).designs = { mine: { base: 'ledger' } }
+    ok(docContentKey(withNotes) !== k1, 'a custom design is content too')
+    D.setDesign(withNotes, null)
+    delete (withNotes as { designs?: unknown }).designs
+    ok(docContentKey(withNotes) === k0, 'returning to the default keys exactly as before the design was chosen')
+    // ONE return: a merge seam that leaves two makes the second dead code
+    const msrc = rdd('model.ts')
+    const fnBody = msrc.slice(msrc.indexOf('export function docContentKey'), msrc.indexOf('\n}\n', msrc.indexOf('export function docContentKey')))
+    const returns = fnBody.split('\n').filter((l) => /^\s*return\b/.test(l))
+    ok(returns.length === 1, `docContentKey has exactly ONE return statement (found ${returns.length})`)
+  }
+
+  // EACH NAME SELECTS ITS OWN SHEET: its name on the surface, its own tokens,
+  // and a CSS rule for every switch value it uses that differs from today.
+  const sigs = new Set<string>()
+  for (const name of D.BUILT_IN_NAMES) {
+    const doc = base()
+    D.setDesign(doc, name)
+    const r = D.resolveDesign(doc)
+    const st = r && D.designStyle(r)
+    ok(!!st && st.attrs['data-sp-design'] === name && r!.design === D.BUILT_INS[name], `design "${name}" resolves to its own entry and stamps data-sp-design="${name}"`)
+    if (st) sigs.add(JSON.stringify([st.attrs, st.vars]))
+  }
+  ok(sigs.size === D.BUILT_IN_NAMES.length, `the ${D.BUILT_IN_NAMES.length} built-ins put ${sigs.size} distinct token sets on the surface`)
+  ok(D.BUILT_IN_NAMES.length >= 6, 'six built-ins ship: ledger, almanac, studio, broadsheet, typescript, riso')
+  for (const k of D.PROP_KEYS) {
+    const rule = D.PROPS[k] as { kind: string; values?: readonly string[] }
+    if (rule.kind !== 'enum') { ok(css.includes(`var(--d-${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())})`), `designs.css reads the metric --d-${k}`); continue }
+    for (const v of rule.values!) {
+      if (v === D.PLAIN.props[k]) continue
+      ok(css.includes(`[data-sd-${k.toLowerCase()}="${v}"]`), `switch ${k}="${v}" has a rule in designs.css (a word with no rule is a switch that does nothing)`)
+    }
+  }
+  for (const k of D.PALETTE_KEYS) {
+    const v = `--dl-${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}`
+    ok(css.includes(`var(${v})`) && css.includes(`var(${v.replace('--dl-', '--dd-')})`), `palette role ${k} is read in both palettes`)
+  }
+  const darkBlocks = [...css.matchAll(/:root:not\(\[data-theme="light"\]\) \[data-sp-design\] \{([^}]*)\}|:root\[data-theme="dark"\] \[data-sp-design\] \{([^}]*)\}/g)].map((m) => (m[1] ?? m[2]).trim())
+  ok(darkBlocks.length === 2 && darkBlocks[0] === darkBlocks[1], 'the two dark mappings (OS dark, reader chose dark) are byte-identical')
+  ok(/@media screen and \(prefers-color-scheme: dark\)/.test(css) && /@media screen \{\s*:root\[data-theme="dark"\]/.test(css),
+    'both dark mappings are @media screen, so print gets the light palette')
+
+  // UNKNOWN FALLS BACK, ROUND-TRIPS, AND IS NAMED
+  const unk = base()
+  ;(unk as { design?: string }).design = 'nonesuch'
+  ok(D.resolveDesign(unk) === null, 'an unknown design name renders the default look')
+  const back = parseDoc(JSON.stringify(unk))
+  ok(back.ok && (back.doc as { design?: string }).design === 'nonesuch', 'an unknown design name survives a load/save round trip untouched')
+  ok(validateDoc(unk).findings.some((f) => f.code === 'unknown-design' && f.path === 'design'), 'validate() names an unknown design')
+  ok(validateDoc(plain).findings.every((f) => !/design/.test(f.code)), 'validate() says nothing about a document with no design')
+  const shadow = base()
+  ;(shadow as { designs?: unknown }).designs = { ledger: { base: 'studio' } }
+  D.setDesign(shadow, 'ledger')
+  ok(D.resolveDesign(shadow)?.design === D.BUILT_INS.ledger && validateDoc(shadow).findings.some((f) => f.code === 'design-shadows-builtin'),
+    'a doc-local design named like a built-in shadows nothing, and validate() says so')
+
+  // THE DEFAULT DELETES THE KEY
+  const dd = base()
+  D.setDesign(dd, 'almanac')
+  D.setDesign(dd, null)
+  ok(!Object.hasOwn(dd, 'design') && JSON.stringify(dd) === JSON.stringify(base()), 'returning to the default deletes `design` — byte-identical to never having chosen')
+  ok(/setDesign\(store\.doc, name\)/.test(rdd('designpanel.ts')) && /store\.commit\(\(\) => setDesign/.test(rdd('designpanel.ts')),
+    'the picker writes through setDesign inside ONE store.commit (one undo step)')
+
+  // CUSTOM DESIGNS: validated, not sanitized
+  const hostile = '</style><script>alert(1)</script>'
+  const cd = base()
+  ;(cd as { designs?: unknown }).designs = { mine: {
+    base: 'ledger', label: 'Mine',
+    light: { accent: hostile, paper: '#fffdf8', ink: 'red' },
+    fonts: { body: hostile, display: 'news', mono: 'asset:nope' },
+    props: { callout: hostile, radius: 999, size: 0.1, quote: 'pull', leading: '1.5' },
+  } }
+  D.setDesign(cd, 'mine')
+  const rc = D.resolveDesign(cd)!
+  ok(rc.custom && rc.design.light.accent === D.BUILT_INS.ledger.light.accent && rc.design.light.ink === D.BUILT_INS.ledger.light.ink,
+    'a colour that is not #rgb/#rrggbb falls back to the base design (hostile string, named colour)')
+  ok(rc.design.light.paper === '#fffdf8' && rc.design.fonts.display === 'news' && rc.design.props.quote === 'pull', 'the valid values of the same custom design are used')
+  ok(rc.design.fonts.body === D.BUILT_INS.ledger.fonts.body && rc.design.fonts.mono === D.BUILT_INS.ledger.fonts.mono, 'a font that is neither a listed name nor an embedded font asset falls back')
+  ok(rc.design.props.callout === D.BUILT_INS.ledger.props.callout && rc.design.props.radius === 0 && rc.design.props.size === 1 && rc.design.props.leading === D.BUILT_INS.ledger.props.leading,
+    'a switch outside its words, or a number outside its range (or not a number), falls back')
+  const st = D.designStyle(rc)
+  const every = [...Object.values(st.attrs), ...Object.values(st.vars), ...D.previewRules(rc).flatMap(([s, d]) => [s, ...Object.values(d)])]
+  ok(every.length > 60 && every.every((v) => !/[<>{};\\]/.test(v)),
+    'nothing a design puts on a surface or into the preview can carry "<", "{" or "}" — a hostile value never reaches CSS text')
+  const vf = validateDoc(cd).findings.filter((f) => f.code === 'bad-design-value').map((f) => f.path)
+  for (const p of ['designs.mine.light.accent', 'designs.mine.light.ink', 'designs.mine.fonts.body', 'designs.mine.fonts.mono', 'designs.mine.props.callout', 'designs.mine.props.radius', 'designs.mine.props.size', 'designs.mine.props.leading']) {
+    ok(vf.includes(p), `validate() names the dropped value at ${p}`)
+  }
+  ok(!/<script/i.test(JSON.stringify(D.previewRules(rc))), 'the preview rules of a hostile design hold no script text')
+
+  // FLOORS: no design may hide text
+  for (const [name, d] of Object.entries({ plain: D.PLAIN, ...D.BUILT_INS })) {
+    for (const mode of ['light', 'dark'] as const) {
+      const low = D.CONTRAST_FLOORS.filter(([f, b, m]) => D.contrast(d[mode][f], d[mode][b]) < m)
+      ok(low.length === 0, `${name} ${mode} clears every contrast floor${low.length ? ` (fails ${low.map(([f, b]) => f + '/' + b).join(', ')})` : ''}`)
+    }
+  }
+  const hide = base()
+  ;(hide as { designs?: unknown }).designs = { ghost: { light: { ink: '#ffffff', paper: '#ffffff', muted: '#fefefe' }, dark: { ink: '#14181e' } } }
+  D.setDesign(hide, 'ghost')
+  const rh = D.resolveDesign(hide)!
+  ok(D.contrast(rh.design.light.ink, rh.design.light.paper) >= 4.5 && D.contrast(rh.design.light.muted, rh.design.light.paper) >= 4.5 && D.contrast(rh.design.dark.ink, rh.design.dark.paper) >= 4.5,
+    'a palette that sets text equal to its ground is pulled back over the 4.5:1 floor')
+  ok(validateDoc(hide).findings.some((f) => f.code === 'design-contrast'), 'validate() names a colour dropped for contrast')
+  const fillFork = base()
+  ;(fillFork as { designs?: unknown }).designs = { teal: { base: 'almanac', dark: { accent: '#4fc2b1' }, props: { callout: 'fill' } } }
+  D.setDesign(fillFork, 'teal')
+  const rf = D.resolveDesign(fillFork)!
+  const fillOk = (p: { ink: string; paper: string; accent: string }) => D.contrast(p.ink, D.mixHex(p.accent, p.paper, D.FILL_MIX)) >= 4.5
+  ok(fillOk(rf.design.light) && fillOk(rf.design.dark), 'a filled callout keeps its ink over 4.5:1 on the fill (the dark teal fork measured 4.27 before this floor)')
+  ok(css.includes(`${D.FILL_MIX * 100}%, var(--bg))`), 'designs.css fills a callout with the same FILL_MIX the floor checks')
+  const toneCss = [...rdd('styles.css').matchAll(/--tone-(?:note|tip|important|warning|caution): (#[0-9a-f]{6});/g)].slice(0, 5).map((m) => m[1])
+  ok(JSON.stringify(toneCss) === JSON.stringify([...D.TONE_HUES]), 'designs.ts TONE_HUES are styles.css\'s tone hues')
+  const PR = D.PROPS as Record<string, { kind: string; min?: number }>
+  ok(PR.size.min! >= 0.85 && PR.leading.min! >= 1.3 && PR.titleSize.min! >= 1.4, 'size, line spacing and title floors hold (0.85, 1.3, 1.4em)')
+  ok(!/\b(display|visibility|opacity)\s*:/.test(flat.replace(/display:\s*(block|flex|inline-grid|inline-flex)/g, '')), 'designs.css never hides: no display:none, visibility or opacity')
+  ok([...flat.matchAll(/(?<![-\w])content:\s*([^;]+);/g)].every((m) => /^'[^']*'$/.test(m[1].trim())), 'every generated `content` in designs.css is a constant string, never author data')
+  ok(/\[data-sp-design\] :is\(\.sp-remote, \.sp-media-empty\) \{[^}]*--ink: var\(--sp-app-ink\)[^}]*color: var\(--sp-app-ink\)/.test(flat),
+    'the remote-content gate reads the CHROME\'s tokens inside a designed page')
+
+  // TONE IS MEANING: five callout tones stay five things in every design and mode
+  for (const [name, d] of Object.entries({ plain: D.PLAIN, ...D.BUILT_INS })) {
+    for (const mode of ['light', 'dark'] as const) {
+      const sig = D.toneSignature(d[mode], d.props.callout)
+      let min = Infinity
+      for (let i = 0; i < 5; i++) for (let j = i + 1; j < 5; j++) min = Math.min(min, D.rgbDistance(sig[i], sig[j]))
+      ok(min >= D.TONE_MIN_DISTANCE, `${name} ${mode}: the five callout tones are pairwise distinct as painted (${d.props.callout}; closest pair ${min.toFixed(0)} apart, floor ${D.TONE_MIN_DISTANCE})`)
+    }
+  }
+  ok(['note', 'tip', 'important', 'warning', 'caution'].every((t) => new RegExp(`\\[data-sp-design\\] \\{[^}]*--tone-${t}: var\\(--d-tone-${t}\\)`).test(flat)),
+    'the surface maps the five tone roles onto the tones every callout rule reads')
+  const one = base()
+  ;(one as { designs?: unknown }).designs = { mono: { base: 'studio', light: { toneNote: '#ff9e8a', toneTip: '#ff9e8a', toneImportant: '#ff9e8a', toneWarning: '#ff9e8a', toneCaution: '#ff9e8a' } } }
+  D.setDesign(one, 'mono')
+  ok(D.tonesDistinct(D.resolveDesign(one)!.design.light, 'fill') && validateDoc(one).findings.some((f) => f.code === 'design-contrast' && /toneTip/.test(f.path ?? '')),
+    'a custom design that paints all five tones one colour gets the base\'s five back, and validate() names it')
+
+  // fonts travel as assets
+  const fd = base()
+  fd.assets = { f1: 'data:font/woff2;base64,AAAA', img: 'data:image/png;base64,AAAA' }
+  ;(fd as { designs?: unknown }).designs = { face: { fonts: { body: 'asset:f1', display: 'asset:img' } } }
+  D.setDesign(fd, 'face')
+  const rfd = D.resolveDesign(fd)!
+  ok(rfd.design.fonts.body === 'asset:f1' && rfd.design.fonts.display === D.PLAIN.fonts.display, 'an embedded font asset is honoured; an image under a font role is refused')
+  ok(D.designStyle(rfd).vars['--d-body'].startsWith(`'bento-face-`), 'an embedded face gets a family name derived from its key, never from author text')
+  ok(!orphanAssets(fd).includes('f1'), 'a face a design uses is not an orphan asset')
+
+  // preview: inline styles, never a <style> with design values
+  const pv = rdd('preview.ts')
+  ok(/applyPreviewRules\(box, previewRules\(design\)\)/.test(pv) && !/previewSheet/.test(pv) && /style\.textContent = SHEET\(doc\)\n/.test(pv),
+    'preview.ts puts the design on as inline styles; its <style> holds only the fixed sheet')
+  ok(/style\.setProperty\(k, v\)/.test(rdd('designs.ts')), 'preview declarations go through the CSSOM, which re-parses every value')
+}
+
+// ---- TRANSCLUSION ----------------------------------------------------------
+//
+// An `embed` block shows another page LIVE. Everything asserted here is the
+// part that fails silently: a loop that would hang the renderer, a target that
+// is gone, a section name that matches nothing, and the two halves of the
+// Obsidian round trip — `![[Page]]` in, `![[Page]]` out. markdown.ts carried a
+// comment saying "there is no transclusion in the model" and quietly demoted
+// every embed in an imported vault to a plain link; this is what replaced it.
+{
+  const space = (): SpacesDoc => JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-embed', title: 'Space', home: 'A', theme: {},
+    pages: [
+      { id: 'A', title: 'Alpha', blocks: [
+        { id: 'a1', type: 'p', html: 'top of alpha' },
+        { id: 'a2', type: 'embed', page: 'B', html: '<a href="#p/B">Beta</a>' },
+      ] },
+      { id: 'B', title: 'Beta', blocks: [
+        { id: 'b1', type: 'p', html: 'intro' },
+        { id: 'b2', type: 'h2', html: 'Roll<b>out</b>' },
+        { id: 'b3', type: 'p', html: 'first step' },
+        { id: 'b4', type: 'h3', html: 'Details' },
+        { id: 'b5', type: 'p', html: 'the detail' },
+        { id: 'b6', type: 'h2', html: 'Risks' },
+        { id: 'b7', type: 'p', html: 'the risk' },
+      ] },
+    ],
+  }))
+
+  // ---- the section slice ---------------------------------------------------
+  const doc0 = space()
+  const beta = doc0.pages[1]
+  const roll = sectionOf(beta, 'rollout')
+  ok(roll !== null && roll.map((b) => b.id).join(',') === 'b2,b3,b4,b5',
+    'a section is its heading, its prose and its SUBheadings, stopping at the next h2')
+  ok(sectionOf(beta, 'Details')?.map((b) => b.id).join(',') === 'b4,b5',
+    'an h3 section stops at the next heading of the same or higher rank')
+  ok(sectionOf(beta, 'ROLL OUT') === null && sectionOf(beta, 'rollout') !== null,
+    'heading names match on their TEXT, tags stripped — and not on a name nobody wrote')
+  ok(sectionOf(beta, 'Nowhere') === null,
+    'a name that matches nothing returns null, never the whole page')
+
+  // A HEADING NAME OUT OF A MAILED FILE. `HEADINGS` is a plain object keyed on
+  // b.type, so `'toString' in HEADINGS` is true and would hand back a native
+  // function — the bug this app has shipped twice. Object.hasOwn is why these
+  // are misses rather than a rank of NaN.
+  for (const evil of ['toString', 'constructor', '__proto__', 'valueOf', 'hasOwnProperty']) {
+    ok(sectionOf(beta, evil) === null, `anchor ${JSON.stringify(evil)} finds no section`)
+    const poisoned: Page = { id: 'X', title: 'X', blocks: [{ id: 'x1', type: evil, html: 'Rollout' }] }
+    ok(sectionOf(poisoned, 'Rollout') === null,
+      `a block of type ${JSON.stringify(evil)} is not treated as a heading`)
+    ok(headingsOf(poisoned).length === 0,
+      `…and the picker does not offer it as one either`)
+  }
+
+  // THE PICKER AND THE RESOLVER AGREE. Every name the editor can offer is a
+  // name sectionOf finds — otherwise a section you chose reports as missing.
+  ok(headingsOf(beta).map((h) => h.text).join('|') === 'Rollout|Details|Risks',
+    'headingsOf lists every heading, in page order, as plain text')
+  ok(headingsOf(beta).every((h) => sectionOf(beta, h.text) !== null),
+    'and every one of them resolves — the picker cannot offer a dead section')
+
+  // ---- what one embed shows ------------------------------------------------
+  const whole = viewEmbed(doc0.pages[0].blocks[1], doc0, ['A'])
+  ok(whole.ok && whole.page.id === 'B' && whole.blocks.length === beta.blocks.length,
+    'an embed with no anchor shows the whole target page')
+  const narrowed = viewEmbed({ id: 'e', type: 'embed', page: 'B', anchor: 'Risks' }, doc0, ['A'])
+  ok(narrowed.ok && narrowed.blocks.map((b) => b.id).join(',') === 'b6,b7',
+    'an embed with an anchor shows that section and nothing else')
+  const noSec = viewEmbed({ id: 'e', type: 'embed', page: 'B', anchor: 'Ghost' }, doc0, ['A'])
+  ok(!noSec.ok && noSec.why === 'no-section',
+    'an anchor that matches nothing is REPORTED, not quietly widened to the whole page')
+
+  // ---- a dangling ref ------------------------------------------------------
+  const gone = viewEmbed({ id: 'e', type: 'embed', page: 'nope' }, doc0, ['A'])
+  ok(!gone.ok && gone.why === 'missing', 'a target that is not a page is a named miss')
+  ok(!viewEmbed({ id: 'e', type: 'embed' }, doc0, ['A']).ok,
+    'and an embed with no target at all does not throw')
+  for (const evil of ['toString', '__proto__', 'constructor', 'valueOf']) {
+    const v = viewEmbed({ id: 'e', type: 'embed', page: evil }, doc0, ['A'])
+    ok(!v.ok && v.why === 'missing' && v.page === undefined,
+      `page ${JSON.stringify(evil)} resolves to nothing, never to a native function`)
+  }
+
+  // ---- cycles --------------------------------------------------------------
+  //
+  // The renderer walks a chain of open pages; a target already on that chain
+  // is the loop, and it stops with a NAMED placeholder (the page is still
+  // returned, so the reader is told which one repeats) rather than a blank.
+  const loop = viewEmbed(doc0.pages[0].blocks[1], doc0, ['X', 'B', 'A'])
+  ok(!loop.ok && loop.why === 'cycle' && loop.page?.title === 'Beta',
+    'a target already open above this block is a cycle, and the placeholder can name it')
+  ok(!viewEmbed({ id: 'e', type: 'embed', page: 'A' }, doc0, ['A']).ok,
+    'a page embedding ITSELF is a cycle at depth zero')
+
+  // …and the shape a cycle check cannot see: a chain of DISTINCT pages.
+  const deep = viewEmbed(doc0.pages[0].blocks[1], doc0, ['P0', 'P1', 'P2', 'P3'])
+  ok(!deep.ok && deep.why === 'depth',
+    `an embed chain is not followed deeper than ${EMBED_MAX_DEPTH} pages`)
+  ok(viewEmbed(doc0.pages[0].blocks[1], doc0, ['P0', 'P1', 'P2']).ok,
+    '…and exactly at the cap it still renders, so the limit is off-by-none')
+
+  // The validator's question, which one render path cannot answer.
+  const cyc: SpacesDoc = space()
+  cyc.pages[1].blocks.push({ id: 'b8', type: 'embed', page: 'A' })
+  ok(embedReaches(cyc, 'A', 'B'), 'A embeds B embeds A is reported as a loop')
+  ok(!embedReaches(doc0, 'A', 'B'), 'and a one-way embed is not')
+  ok(embedReaches(cyc, 'A', 'A'), 'a page reaches itself trivially')
+  // TERMINATION on a document that already cycles: this runs on hand-edited
+  // files, and a loop check that hangs on a looping file is worse than none.
+  ok(!embedReaches(cyc, 'nobody', 'B'), 'the walk terminates on a cycling document')
+
+  // ---- backlinks -----------------------------------------------------------
+  // NO `html` ON THIS ONE, deliberately. Every embed the editor writes carries
+  // a fallback link, and the index's inline-link sweep would find THAT — so an
+  // embed with html cannot tell you whether the index understands embeds at
+  // all. An agent-written block is the one that can, and it is also the one
+  // that would silently have no backlink if it did not.
+  const bare: SpacesDoc = space()
+  bare.pages[0].blocks.push({ id: 'a9', type: 'embed', page: 'B' })
+  const ix = buildIndex(bare)
+  ok(ix.backlinks.get('B')?.some((s2) => s2.blockId === 'a9'),
+    'an embed with no fallback html still appears in "Linked from", as a pagelink does')
+  ok(!String(bare.pages[0].blocks.find((b) => b.id === 'a9')?.html ?? '').includes('#p/'),
+    '…and it really had no link in its html for the inline sweep to find')
+  ok(isPageRef({ id: 'x', type: 'embed', page: 'B' }) &&
+     isPageRef({ id: 'x', type: 'pagelink', page: 'B' }) &&
+     !isPageRef({ id: 'x', type: 'embed' }) && !isPageRef({ id: 'x', type: 'p', page: 'B' }),
+    'isPageRef is exactly "a block that names a page id"')
+
+  // ---- the default is never stored ----------------------------------------
+  ok(anchorOf({ id: 'x', type: 'embed', page: 'B' }) === undefined &&
+     anchorOf({ id: 'x', type: 'embed', page: 'B', anchor: '  ' }) === undefined &&
+     anchorOf({ id: 'x', type: 'embed', page: 'B', anchor: ' Risks ' }) === 'Risks',
+    'no anchor and a blank anchor are the same absent default; a real one is trimmed')
+
+  // ---- markdown IN ---------------------------------------------------------
+  ok(parseEmbedLine('![[Design notes]]')?.target === 'Design notes',
+    'a whole line of ![[Note]] is an embed')
+  const withSec = parseEmbedLine('![[Design notes#Rollout]]')
+  ok(withSec?.target === 'Design notes' && withSec?.anchor === 'Rollout',
+    '…and ![[Note#Section]] carries the section')
+  ok(parseEmbedLine('![[Note|shown]]')?.target === 'Note' &&
+     parseEmbedLine('![[Note|shown]]')?.anchor === undefined,
+    'an |alias has nothing to be the text of, so it is dropped rather than stored')
+  ok(parseEmbedLine('![[Note#^abc123]]')?.anchor === undefined,
+    'a ^block anchor lands on the page — this model has no block anchors')
+  ok(parseEmbedLine('see ![[Note]] here') === null && parseEmbedLine('[[Note]]') === null,
+    'an embed inside a sentence, and a plain wikilink, are not blocks')
+
+  const note = parseNote('# Plan\n\nsome prose\n\n![[Design notes#Rollout]]\n\n![[pic.png]]\n\nsee ![[Other]] inline\n', 'Plan')
+  const kinds = note.blocks.map((b) => b.type).join(',')
+  ok(kinds === 'p,embed,image,p', `a standalone embed line becomes an embed block (got ${kinds})`)
+  ok(note.blocks[1].anchor === 'Rollout' && note.blocks[1].page === undefined,
+    'the parser carries the section and NO page — no page ids exist at parse time')
+  ok(String(note.blocks[1].html).includes('#w/Design%20notes'),
+    '…it carries the same #w/ placeholder link every other block carries')
+  ok(note.blocks[2].type === 'image' && note.blocks[2].src === 'pic.png',
+    '![[picture.png]] is still an IMAGE — imageOf owns the extension list and runs first')
+  ok(String(note.blocks[3].html).includes('#w/Other'),
+    'and an inline ![[…]] is still a link inside its sentence')
+
+  // ---- markdown IN, resolved ----------------------------------------------
+  const plan = planImport([
+    { path: 'Vault/Plan.md', text: '# Plan\n\n![[Design notes#Rollout]]\n\n![[Missing note]]\n' },
+    { path: 'Vault/Design notes.md', text: '# Design notes\n\n## Rollout\n\nship it\n' },
+  ], { rootTitle: 'Vault' })
+  const planPage = plan.pages.find((p) => p.title === 'Plan')!
+  const design = plan.pages.find((p) => p.title === 'Design notes')!
+  const emb = planPage.blocks.find((b) => b.type === 'embed')
+  ok(emb !== undefined && emb.page === design.id,
+    'an imported embed points at the page its wikilink named')
+  ok(emb?.anchor === 'Rollout' && sectionOf(design, String(emb?.anchor)) !== null,
+    '…and its section resolves against the page that arrived')
+  ok(planPage.blocks.every((b) => b.type !== 'embed' || b.page !== undefined),
+    'no imported embed is left with a placeholder for a target')
+  const dead = planPage.blocks.find((b) => String(b.html ?? '').includes('[[Missing note]]'))
+  ok(dead !== undefined && dead.type === 'p',
+    'an embed of a note that was not in the import becomes the literal text the author typed')
+
+  // linkEmbeds on its own, since planImport is the only caller.
+  const pending: Page[] = [{ id: 'P', title: 'P', blocks: [
+    { id: 'e1', type: 'embed', html: '<a href="#p/B">Beta</a>', anchor: 'Risks' },
+    { id: 'e2', type: 'embed', html: '[[Nowhere]]', anchor: 'Risks' },
+  ] }]
+  const res = linkEmbeds(pending)
+  ok(res.linked === 1 && res.dropped === 1, 'linkEmbeds counts both outcomes')
+  ok(pending[0].blocks[0].page === 'B' && pending[0].blocks[0].anchor === 'Risks',
+    'a resolved embed takes its target from the html the wikilink sweep rewrote')
+  ok(pending[0].blocks[1].type === 'p' && pending[0].blocks[1].page === undefined &&
+     pending[0].blocks[1].anchor === undefined,
+    'an unresolved one becomes a paragraph and keeps no half-set fields')
+
+  // ---- markdown OUT, and the round trip ------------------------------------
+  const spec = SPEC.get('embed')!
+  const ctx = { titleOf: (id: string) => (id === 'B' ? 'Beta' : undefined), rowsOf: () => [], inline: (h: string) => h }
+  ok(spec.toMd!({ id: 'e', type: 'embed', page: 'B' }, '', '', ctx).join('') === '![[Beta]]',
+    'an embed exports as the ![[Page]] it was imported from')
+  ok(spec.toMd!({ id: 'e', type: 'embed', page: 'B', anchor: 'Risks' }, '', '', ctx).join('') === '![[Beta#Risks]]',
+    '…and carries its section with it')
+  ok(embedToMd(undefined, undefined) === '![[?]]',
+    'an embed whose target is gone exports as a visible ?, never as an empty ![[]]')
+
+  // THE FULL LOOP: export → parse → resolve → the same target and section.
+  const md = spec.toMd!({ id: 'e', type: 'embed', page: 'B', anchor: 'Risks' }, '', '', ctx).join('\n')
+  const back = planImport([
+    { path: 'V/Alpha.md', text: `# Alpha\n\n${md}\n` },
+    { path: 'V/Beta.md', text: '# Beta\n\n## Risks\n\nthe risk\n' },
+  ], { rootTitle: 'V' })
+  const alphaBack = back.pages.find((p) => p.title === 'Alpha')!
+  const betaBack = back.pages.find((p) => p.title === 'Beta')!
+  const round = alphaBack.blocks.find((b) => b.type === 'embed')
+  ok(round?.page === betaBack.id && round?.anchor === 'Risks',
+    'an embed survives export to Markdown and back with its target and its section')
+
+  // ---- extract and graft ---------------------------------------------------
+  const wide: SpacesDoc = JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-wide', title: 'Wide', home: 'R', theme: {},
+    pages: [
+      { id: 'R', title: 'Root', blocks: [
+        { id: 'r1', type: 'embed', page: 'K', anchor: 'Risks', html: '<a href="#p/K">Kid</a>' },
+        { id: 'r2', type: 'embed', page: 'Z', anchor: 'Risks', html: '<a href="#p/Z">Zed</a>' },
+      ] },
+      { id: 'K', title: 'Kid', parent: 'R', blocks: [{ id: 'k1', type: 'h2', html: 'Risks' }] },
+      { id: 'Z', title: 'Zed', blocks: [{ id: 'z1', type: 'p', html: 'away' }] },
+    ],
+  }))
+  const cutOut = extractSpace(wide, 'R', { docId: 'doc-cut', now: '2026-09-09T00:00:00.000Z' })
+  const cutRoot = cutOut.doc.pages[0]
+  ok(cutRoot.blocks[0].type === 'embed' && cutRoot.blocks[0].page === 'K',
+    'an embed whose target travelled still points at it')
+  ok(cutRoot.blocks[1].type === 'p' && cutRoot.blocks[1].page === undefined &&
+     cutRoot.blocks[1].anchor === undefined &&
+     String(cutRoot.blocks[1].html).includes('[[Zed]]'),
+    'an embed whose target stayed behind becomes the same honest text a pagelink becomes')
+
+  const host: SpacesDoc = JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-host', title: 'Host', home: 'H', theme: {},
+    pages: [
+      { id: 'H', title: 'Host home', blocks: [{ id: 'h1', type: 'p', html: '' }] },
+      // the host already owns 'V2', so the visitor's page of that id must be
+      // renumbered — which is the only way this exercises the remap at all
+      { id: 'V2', title: 'Host two', blocks: [{ id: 'h2', type: 'p', html: '' }] },
+    ],
+  }))
+  // an id COLLISION with the host, so the graft has to renumber and the embed
+  // has to follow it — the case a copied `page` would silently get wrong
+  const visitor: SpacesDoc = JSON.parse(JSON.stringify({
+    format: FORMAT, version: 1, docId: 'doc-vis', title: 'Visitor', home: 'H', theme: {},
+    pages: [
+      { id: 'H', title: 'Visitor home', blocks: [
+        { id: 'v1', type: 'embed', page: 'V2', anchor: 'Risks', html: '<a href="#p/V2">Two</a>' },
+      ] },
+      { id: 'V2', title: 'Two', parent: 'H', blocks: [{ id: 'v2', type: 'h2', html: 'Risks' }] },
+    ],
+  }))
+  const graft = planGraft(host, visitor, {})
+  const landed = graft.pages[0].blocks[0]
+  ok(graft.pages[0].id !== 'H', 'the grafted root was renumbered around the host id collision')
+  ok(landed.type === 'embed' && landed.page === graft.pages[1].id && landed.page !== 'V2',
+    'and its embed followed the renumbering instead of pointing at the visitor’s old id')
+  ok(landed.anchor === 'Risks', 'the section came with it')
+  const grafted: SpacesDoc = { ...host, pages: [...host.pages, ...graft.pages] }
+  ok(viewEmbed(landed, grafted, [graft.pages[0].id]).ok,
+    'the grafted embed RESOLVES in the document it landed in — the whole point of the remap')
+
+  // ---- validate ------------------------------------------------------------
+  const sick: SpacesDoc = space()
+  sick.pages[0].blocks.push({ id: 'a3', type: 'embed', page: 'nope' })
+  sick.pages[0].blocks.push({ id: 'a4', type: 'embed', page: 'B', anchor: 'Ghost' })
+  const sickCodes = validateDoc(sick).findings.map((i) => i.code)
+  ok(sickCodes.includes('broken-embed'), 'validate names an embed whose target is not a page')
+  ok(sickCodes.includes('no-section'), '…an anchor that matches no heading on the target')
+  ok(validateDoc(sick).findings.filter((i) => i.code === 'broken-embed')[0].severity === 'error',
+    'a dead embed is an error, not a note')
+
+  // The loop gets its OWN document, because a page that is on a cycle is
+  // reported as a cycle FIRST: a section name on a block whose whole embed is
+  // cut short is not the thing to tell the author about.
+  const looped: SpacesDoc = space()
+  looped.pages[1].blocks.push({ id: 'b9', type: 'embed', page: 'A', html: '<a href="#p/A">Alpha</a>' })
+  ok(validateDoc(looped).findings.some((i) => i.code === 'embed-cycle'),
+    '…and a loop, which renders as a stub nobody would notice')
+  ok(validateDoc(space()).findings.every((i) => !String(i.code).startsWith('embed') && i.code !== 'broken-embed'),
+    'and a healthy embed raises nothing at all')
+}
 
 // ---------------------------------------------------------------------------
 // PAGE → DECK (spaces/src/todeck.ts)

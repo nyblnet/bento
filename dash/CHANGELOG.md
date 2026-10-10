@@ -155,6 +155,14 @@ The release that came out of watching somebody use 0.2.0.
   and take unsaved edits with it; a `?` shortcut card generated from the key map
   itself; and ⇧Space selects the row, which had never worked.
 
+- **Dark theme works the way it does in every other Bento app.** Dash was
+  themed through a mechanism of its own — the only one of the four apps that
+  was — and it meant a stylesheet shared across the suite could not have
+  themed dash at all. The palette is unchanged, light and dark, value for
+  value; the switch underneath it is now the shared one. An existing theme
+  preference carries over. Controls (buttons, inputs, chips) take the shared
+  10px radius rather than dash's 7px, so a button looks the same here as in
+  slides, spaces and type.
 - **A value too wide for its column can be read by hovering it.** Cells clip
   with an ellipsis, and until now the rest of the value was simply gone — the
   only way to recover it was to click the cell and read the formula bar, once

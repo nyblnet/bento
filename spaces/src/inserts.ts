@@ -79,6 +79,10 @@ const TABLE: Array<Omit<InsertFamily, 'items'> & { items: Entry[] }> = [
       // what the dialog that fills it is called, and what it is
       { type: 'link', label: 'Link card', rule: true },
       'pagelink',
+      // another page's content, kept in step — beside the link to a page, its
+      // nearest kind. Not a bar button of its own: one more labelled button
+      // tips the bar out of slides' width at 1440 (the chrome rig measures it)
+      'embed',
     ],
   },
   {
@@ -113,11 +117,6 @@ const TABLE: Array<Omit<InsertFamily, 'items'> & { items: Entry[] }> = [
     id: 'code', label: 'Code', icon: 'code',
     tip: 'Add a code block',
     items: ['code', 'math'],
-  },
-  {
-    id: 'embed', label: 'Embed', icon: 'page',
-    tip: 'Add another page’s content, kept in step with it',
-    items: ['embed'],
   },
 ]
 

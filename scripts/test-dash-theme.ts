@@ -137,11 +137,19 @@ console.log('every var() a dash stylesheet reads is declared by one of them')
  */
 function rootVars(text: string): Map<string, string> {
   const out = new Map<string, string>()
+  // COMMENTS COME OUT FIRST, before any block is matched. The selector capture
+  // below runs from the previous `}` to the next `{`, which sweeps up any
+  // comment sitting above the block — and a comment that so much as MENTIONS
+  // `[data-theme="dark"]` then makes the light block look like the dark one and
+  // vanish. That happened: the header note above styles.css's :root gained the
+  // phrase while explaining the switch, and this rig reported eight "dash
+  // declares --ink" failures against a palette that was fully present.
+  const clean = text.replace(/\/\*[\s\S]*?\*\//g, '')
   // every light :root block in the file, not just the first — find.css adds two.
-  for (const block of text.matchAll(/(^|\})\s*([^{}]*:root[^{}]*)\{([\s\S]*?)\n\}/gm)) {
+  for (const block of clean.matchAll(/(^|\})\s*([^{}]*:root[^{}]*)\{([\s\S]*?)\n\}/gm)) {
     const selector = block[2]
     if (/\[data-theme\s*=\s*["']?dark/.test(selector)) continue
-    const body = block[3].replace(/\/\*[\s\S]*?\*\//g, '')
+    const body = block[3]
     for (const m of body.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) out.set(m[1], m[2].trim())
   }
   return out
@@ -167,6 +175,10 @@ const SHARED: Record<string, string> = {
   '--accent-ink': '--accent-ink',
   '--panel': '--chrome',
   '--hover': '--chrome-2',
+  // Since 2026-09-12. It was in DIVERGENCES below as dash's deliberate 7px
+  // control radius; it is a shared token now because kernel's stylesheet is
+  // about to own it with ONE value across four apps. See DECISIONS.md.
+  '--radius': '--radius',
 }
 
 /**
@@ -175,9 +187,6 @@ const SHARED: Record<string, string> = {
  * point of the list is the reason and not the exemption.
  */
 const DIVERGENCES: Record<string, string> = {
-  '--radius': 'slides has one radius (10px, its floating surfaces); dash splits the '
-    + 'scale into --radius / --radius-lg / --radius-xl, and --radius is the CONTROL '
-    + 'radius. Same numbers, different partition of them.',
   '--blue': 'dash declares it as an alias of --sel-ring (#2563eb, 5.17:1 on white) '
     + 'rather than slides\' #5b8def (3.23:1). Same job — focus and selection — and '
     + 'dash\'s value clears 4.5:1 where slides\' only clears 3:1.',
@@ -196,8 +205,18 @@ console.log('\nthe light palette is bento/slides\' palette')
     ok(lightValue(a) === lightValue(b),
       `${ours} is slides' ${theirs} — ${lightValue(a)} vs ${lightValue(b)}`)
   }
+  // AN ALLOWANCE HAS TO EARN ITS PLACE. This loop used to check only that the
+  // reason was long enough, so an entry for a token that had quietly come back
+  // into line stayed forever — the same rot as a NOT_RUN list of rigs that are
+  // in fact run, which cost #323 a day. --radius was exactly that after it took
+  // the shared value. Now: a listed token must (a) still exist on both sides
+  // and (b) still DIFFER, or the entry is a lie and the rig says so.
   for (const [name, why] of Object.entries(DIVERGENCES)) {
     ok(why.length > 40, `${name} diverges from slides for a written-down reason`)
+    const a = dash.get(name), b = slides.get(name)
+    if (a === undefined || b === undefined) continue   // an alias with no slides twin; the alias loop below covers it
+    ok(lightValue(a) !== lightValue(b),
+      `${name} actually still diverges (${lightValue(a)} vs ${lightValue(b)}) — if it has come back into line, delete its DIVERGENCES entry rather than keep an exemption nothing needs`)
   }
   // the aliases have to actually point at something, or a rule ported from
   // slides resolves to nothing and silently does nothing (failure 1 again)
@@ -303,25 +322,57 @@ console.log('\nfocus is indicated with one colour, and it is not the amber')
     'and every one of them is a file already on the known list')
 }
 
-// ============================================================ 5 · light-dark() is a colour
+// ============================================================ 5 · the dark block
 
-console.log('\nlight-dark() is only asked for colours')
-{
-  const vars = rootVars(allCss)
-  for (const [name, value] of vars) {
-    if (!value.startsWith('light-dark(')) continue
-    const [light] = pair(vars, name)
-    const looksLikeColour = /^(#|rgba?\(|hsla?\(|color-mix\(|var\(|oklch\(|transparent$|currentcolor$)/.test(light)
-    ok(looksLikeColour,
-      `${name} varies by theme and must therefore be a <color> — light-dark() cannot `
-      + `carry "${light}". It is a legal thing to WRITE in a custom property and an `
-      + `invalid thing to substitute anywhere, so the property silently takes its `
-      + `initial value. This is how every shadow in dash was "none". Vary the colour `
-      + `and keep the rest outside, as --shadow-pop does.`)
+/** Every `[data-theme="dark"]` block, name → raw value. The mirror of rootVars. */
+function darkVars(text: string): Map<string, string> {
+  const out = new Map<string, string>()
+  const clean = text.replace(/\/\*[\s\S]*?\*\//g, '')   // same reason as rootVars
+  for (const block of clean.matchAll(/(^|\})\s*([^{}]*:root[^{}]*)\{([\s\S]*?)\n\}/gm)) {
+    if (!/\[data-theme\s*=\s*["']?dark/.test(block[2])) continue
+    const body = block[3]
+    for (const m of body.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) out.set(m[1], m[2].trim())
   }
-  // the one token that DOES vary and is not a colour has to do it the long way
-  ok(/@media\s*\(prefers-color-scheme:\s*dark\)[^}]*--bar-opacity/s.test(css['styles.css']),
-    '--bar-opacity, a number, varies through a media query and not through light-dark()')
+  return out
+}
+
+console.log('\nthe dark palette is a block keyed off data-theme, and it mirrors the light one')
+{
+  // Dash themed through light-dark() pairs until 2026-09-12. The switch to a
+  // [data-theme="dark"] block was a TRANSFORM of 37 tokens across four files, plus one inline shadow,
+  // and a transform is exactly where one gets dropped: a token missing from the
+  // dark block does not error, it just stays light on a dark ground, and on a
+  // token like --line that reads as "the dark theme looks a bit off" for a
+  // long time. So the tokens that would be worst to lose are named.
+  const light = rootVars(allCss)
+  const dark = darkVars(allCss)
+  ok(dark.size >= 35, `the dark block carries the palette, not a fragment of it (${dark.size} tokens)`)
+  for (const name of ['--bg', '--panel', '--surface', '--hover', '--line', '--line-strong',
+    '--ink', '--ink-2', '--muted', '--sel', '--sel-ring', '--accent-ink', '--bar-opacity',
+    '--find-hit', '--find-cur', '--cmt', '--cmt-wash']) {
+    ok(dark.has(name), `${name} has a dark value — a themed token that fell out of the transform stays light on a dark ground`)
+  }
+  // The reverse: a token that exists ONLY in the dark block has no light value
+  // to fall back to, so in the light theme the property is simply unset. Every
+  // dark token must have a light twin on bare :root.
+  const orphans = [...dark.keys()].filter((n) => !light.has(n))
+  ok(orphans.length === 0, `every dark token has a light twin on :root${orphans.length ? ` — orphans: ${orphans.join(', ')}` : ''}`)
+  // And a dark twin that is byte-identical to its light value is a token that
+  // did not need theming — or a paste error. --accent is deliberately NOT in
+  // the dark block for exactly this reason.
+  const same = [...dark].filter(([n, v]) => light.get(n) === v).map(([n]) => n)
+  ok(same.length === 0, `no dark value merely repeats its light value${same.length ? ` — ${same.join(', ')}` : ''}`)
+
+  // The mechanism is the ATTRIBUTE, and only the attribute. A light-dark()
+  // declaration would resolve off color-scheme instead and split the palette
+  // across two switches; a prefers-color-scheme block would be a second opinion
+  // about the OS that theme.ts already resolves. Comments may mention both.
+  const decls = allCss.replace(/\/\*[\s\S]*?\*\//g, '')
+  ok(!/light-dark\(/.test(decls), 'no declaration uses light-dark() — the palette keys off data-theme alone')
+  ok(!/@media[^{]*prefers-color-scheme[^{]*\{[^}]*--/.test(decls),
+    'no custom property is set inside a prefers-color-scheme query — resolving the OS is theme.ts\'s job, and two resolvers disagree')
+  ok(/^\s*color-scheme:\s*light dark;/m.test(css['styles.css']),
+    'bare :root still declares `color-scheme: light dark` — for the splash and the browser furniture in the window before theme.ts runs')
 }
 
 // ============================================================ 6 · no colour hides in a query

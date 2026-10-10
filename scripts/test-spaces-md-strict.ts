@@ -30,7 +30,8 @@
 // A block type with no fixture fails as well: a type added to blocks.ts has to
 // be put on one side of this line or the other.
 import { toMarkdown } from '../spaces/src/about.ts'
-import { parseNote, planImport, resolvePageLinks } from '../spaces/src/markdown.ts'
+import { parseNote, planImport, resolvePageLinks, resolveWikilinks } from '../spaces/src/markdown.ts'
+import { linkEmbeds } from '../spaces/src/embed.ts'
 import { Store } from '../spaces/src/store.ts'
 import { SPECS, CALLOUT_TONES } from '../spaces/src/blocks.ts'
 import { DEFAULT_FIELDS, propBlock } from '../spaces/src/fields.ts'
@@ -85,6 +86,8 @@ const FIX: Record<string, () => Fixture> = {
   media: () => ({ blocks: [b('media', '', { kind: 'audio', src: 'asset:tone', alt: 'A tone', controls: true })] }),
   link: () => ({ blocks: [b('link', '<a href="https://bento.page">Bento</a> — desc', { url: 'https://bento.page', title: 'Bento', desc: 'desc', site: 'bento.page', icon: '🍱', image: 'asset:thumb' })] }),
   pagelink: () => ({ blocks: [b('pagelink', '', { page: 'other' })], extraPages: [{ id: 'other', title: 'Other page', blocks: [b('p', 'x')] }] }),
+  // `![[Other page]]` — Obsidian's transclusion, which GitHub shows as text
+  embed: () => ({ blocks: [b('embed', '<a href="#p/other">Other page</a>', { page: 'other' })], extraPages: [{ id: 'other', title: 'Other page', blocks: [b('p', 'x')] }] }),
   prop: () => ({ blocks: [propBlock(DEFAULT_FIELDS[0], 'doing', id())] }),
   table: () => {
     const t = b('table', '')
@@ -149,6 +152,10 @@ function trip(fx: Fixture): Trip {
   // done here against the fixture's own pages by title
   const byTitle = new Map([{ id: PAGE, title: TITLE }, ...extra].map((p) => [p.title.toLowerCase(), p.id]))
   resolvePageLinks(back, (target) => byTitle.get(target.toLowerCase()))
+  // …and the wikilinks in every block's html, then the embeds read their page
+  // back off it: planImport's two steps, in its order (markdown.ts)
+  for (const blk of back) if (blk.html) blk.html = resolveWikilinks(blk.html, (target) => byTitle.get(target.toLowerCase())).html
+  linkEmbeds([{ id: PAGE, title: TITLE, blocks: back } as Page])
   return { md, md2: exportOf(back), inJson: canon(strip(fx.blocks)), outJson: canon(strip(back)), back }
 }
 
