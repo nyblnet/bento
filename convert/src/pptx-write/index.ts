@@ -145,6 +145,12 @@ export interface ExportOpts {
    *  (a canvas), and the writer has no DOM, so a host that has one passes it
    *  (bento.page/convert does). Absent = such pictures are reported dropped. */
   rasterise?: (dataUri: string) => Promise<string | null>
+  /** Export interactive states too, as HIDDEN slides placed right after the
+   *  slide they belong to, with links into a state landing on it. In a
+   *  PowerPoint show, hidden slides are reached only by those links, and
+   *  Next/Previous skip them, much as bento's ←/→ skip states. Default off:
+   *  states are left out and links into one go to its parent. */
+  includeStates?: boolean
 }
 
 export interface PptxExport {
@@ -271,10 +277,15 @@ function appPropsXml(doc: ExportDoc): string {
 export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise<PptxExport> {
   const report = new Report()
 
-  const exported = doc.slides.filter((s) => !s.stateOf)
-  if (exported.length === 0) {
+  const linear = doc.slides.filter((s) => !s.stateOf)
+  if (linear.length === 0) {
     throw new Error('exportPptx: the deck has no linear slides (only interactive states) — nothing to export')
   }
+  // With includeStates, every slide in document order: slides keeps a state
+  // next to its parent, and a state whose parent is gone still has nowhere
+  // better to sit. Without, only the linear slides.
+  const states = doc.slides.filter((s) => !!s.stateOf)
+  const exported = opts.includeStates ? doc.slides.slice() : linear
   const omitted = doc.slides.length - exported.length
   // The deck's own fonts travel inside the .bento.html; a .pptx can embed
   // fonts too, but this writer does not, so say which ones need installing.
@@ -288,13 +299,19 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     report.add('dropped', 'state-slides-omitted', 'document',
       `${omitted} interactive state slide(s) omitted — a state is a click-reached variant, not a linear slide`)
   }
+  if (opts.includeStates && states.length) {
+    report.add('approximated', 'states-as-hidden-slides', 'document',
+      `${states.length} interactive state slide(s) exported as hidden slides after the slide they belong to: links reach them, and the show skips them`)
+  }
 
   // Slide id → exported slide number, with #88's degradation: a link into an
   // omitted state retargets to the state's visible parent.
   const slideNumbers = new Map<string, number>()
   exported.forEach((s, i) => slideNumbers.set(s.id, i + 1))
   for (const s of doc.slides) {
-    if (s.stateOf) {
+    // only a state that was LEFT OUT borrows its parent's number; an exported
+    // state (includeStates) keeps its own, so links into it land on it
+    if (s.stateOf && !slideNumbers.has(s.id)) {
       const parent = slideNumbers.get(s.stateOf)
       if (parent) slideNumbers.set(s.id, parent)
     }
@@ -346,7 +363,7 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     // Field values are author-typed strings that land verbatim in a:t —
     // scrubbed like every other author-text ingestion point.
     const fields: FieldValues = {
-      page: pageCounter, pages,
+      page: pageCounter, pptxSlide: num, pages,
       title: scrubC0(doc.title), date: now,
       author: scrubC0(meta.author ?? ''), company: scrubC0(meta.company ?? ''),
       subject: scrubC0(meta.subject ?? ''), event: scrubC0(meta.event ?? ''),
@@ -520,7 +537,7 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
 
     const part = slidePart(children, rels, {
       bg: bgNode(slide.background, doc.theme.background, report, where),
-      ...(slide.hidden ? { hidden: true } : {}),
+      ...(slide.hidden || slide.stateOf ? { hidden: true } : {}),
     })
     slideXml.push(part.xml)
     slideRels.push(part.rels)

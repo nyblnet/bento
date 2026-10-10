@@ -63,6 +63,11 @@ export interface TextElIn {
  *  (page = 1-based position among non-state slides). */
 export interface FieldValues {
   page: number
+  /** this slide's number as PowerPoint counts it (every slide, hidden ones
+   *  included). Where it differs from `page` (bento counts only shown
+   *  slides), {{page}} is written as fixed text, not a live slide-number
+   *  field, which PowerPoint would recompute to the wrong number. */
+  pptxSlide?: number
   pages: number
   title: string
   date: Date
@@ -278,6 +283,14 @@ function splitFields(text: string, ctx: FieldValues | undefined, onFrozen: (toke
     const arg = m[2]
     switch (m[1].toLowerCase()) {
       case 'page':
+        if (ctx.pptxSlide !== undefined && ctx.pptxSlide !== ctx.page) {
+          // PowerPoint would number this slide differently (a hidden slide
+          // or a state comes before it): a live field would show its number,
+          // not bento's, so the page is fixed text, reported as frozen
+          pieces.push({ kind: 'text', text: pad(ctx.page, arg) })
+          onFrozen('page')
+          break
+        }
         // the cached a:t honours the pad; the live field re-renders unpadded
         // the moment PowerPoint recomputes — an approximation, reported below
         pieces.push({ kind: 'fld', type: 'slidenum', cached: pad(ctx.page, arg), frozenPad: parseInt(arg ?? '', 10) > 0 })

@@ -31,6 +31,8 @@ export interface ExportOptions {
   /** a picture PowerPoint cannot take (WebP, …) → PNG data: URI, or null.
    *  Needs a browser; see ExportOpts.rasterise in pptx-write/index.ts. */
   rasterise?: (dataUri: string) => Promise<string | null>
+  /** export interactive states as hidden slides (ExportOpts.includeStates) */
+  includeStates?: boolean
 }
 
 export async function bentoToPptx(input: string, options: ExportOptions = {}): Promise<ExportResult> {
@@ -59,6 +61,7 @@ export async function docToPptx(json: string, options: ExportOptions = {}): Prom
     chartPalette: deriveChartPalette(doc.theme.accent),
     formulasIn: countFormulas,
     ...(options.rasterise ? { rasterise: options.rasterise } : {}),
+    ...(options.includeStates ? { includeStates: true } : {}),
   })
   return { bytes, title: doc.title, report, stats }
 }

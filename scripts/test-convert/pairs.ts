@@ -67,6 +67,19 @@ const pptx = await fxMinimal()
   ok(detect('x.json', enc.encode('{"a":')).kind === 'unknown', 'broken JSON is refused in words')
 }
 
+console.log('choices a pair takes')
+{
+  const flagFor = (doc: unknown) => (CONVERSIONS.find((c) => c.id === 'slides-to-pptx')!.flags ?? []).filter((f) => f.applies(detect('d.json', enc.encode(JSON.stringify(doc))))).map((f) => f.id)
+  const withState = { ...sample, slides: [...sample.slides, { ...sample.slides[0], id: 'st', stateOf: sample.slides[0].id }] }
+  ok(JSON.stringify(flagFor(sample)) === '[]' && JSON.stringify(flagFor(withState)) === '["states"]',
+    'the states choice is offered only for a deck that has states')
+  const c = CONVERSIONS.find((x) => x.id === 'slides-to-pptx')!
+  const d = detect('d.json', enc.encode(JSON.stringify(withState)))
+  const off = await c.run(d, env), on = await c.run(d, env, { states: true })
+  const n = (r: typeof off) => r.stats.find((s) => s.label === 'slides')!.value
+  ok(n(off) === 3 && n(on) === 4, `ticking it adds the state as a slide (${n(off)} → ${n(on)})`)
+}
+
 console.log('running each pair')
 {
   const d = detect('sample.json', enc.encode(SAMPLE_DECK))

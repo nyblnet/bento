@@ -101,7 +101,8 @@ async function take(name: string, bytes: Uint8Array) {
   options.innerHTML = opts.map((o, i) => `
     <label class="option${o.ok ? '' : ' off'}">
       <input type="radio" name="to" value="${esc(o.conversion.id)}"${o.ok ? '' : ' disabled'}${o.ok && i === opts.findIndex((x) => x.ok) ? ' checked' : ''}>
-      <span><b>${esc(o.conversion.label)}</b>${esc(o.ok ? o.conversion.hint : o.why)}</span>
+      <span><b>${esc(o.conversion.label)}</b>${esc(o.ok ? o.conversion.hint : o.why)}${o.ok ? (o.conversion.flags ?? []).filter((f) => f.applies(d)).map((f) => `
+        <span class="flag"><input type="checkbox" data-flag="${esc(o.conversion.id)}:${esc(f.id)}"> ${esc(f.label)}</span>`).join('') : ''}</span>
     </label>`).join('')
   choose.hidden = false
   convertBtn.disabled = !opts.some((o) => o.ok)
@@ -117,7 +118,9 @@ async function run() {
   reset()
   try {
     say(`Converting ${current.name}…`)
-    const r = await c.run(current, env)
+    const flags: Record<string, boolean> = {}
+    for (const box of options.querySelectorAll<HTMLInputElement>(`input[data-flag^="${c.id}:"]`)) flags[box.dataset.flag!.split(':')[1]] = box.checked
+    const r = await c.run(current, env, flags)
     status.hidden = true
     show(c, r.fileName, r.mime, r.bytes, r.report, r.stats, r.meta)
   } catch (err) {
@@ -168,6 +171,7 @@ const PLAIN: Record<string, string> = {
   'table-radius-dropped': 'Rounded table corners become square.',
   'line-tip-approximated': 'Some line ends are drawn with the closest PowerPoint arrowhead.',
   'value-removed': 'Values the bento/slides format does not allow were removed.',
+  'states-as-hidden-slides': 'Interactive states are hidden slides, right after the slide they belong to. Links still lead to them, and the show skips them.',
   'image-converted-png': 'WebP and similar pictures were converted to PNG for PowerPoint. They look the same; the file is a little larger.',
   'text-height-provisional': 'Some text boxes had no height, so they start one line tall. Select one in bento/slides and use Fit height to text.',
 }

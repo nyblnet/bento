@@ -143,7 +143,9 @@ export interface Conversion {
   accepts(d: Detected): boolean | string
   /** does it fetch the signed shell? (the only network the page ever uses) */
   network: boolean
-  run(d: Detected, env: Env): Promise<Converted>
+  /** yes/no choices this conversion takes, shown only where they apply */
+  flags?: Array<{ id: string; label: string; applies(d: Detected): boolean }>
+  run(d: Detected, env: Env, flags?: Record<string, boolean>): Promise<Converted>
 }
 
 const base = (name: string) => name.replace(/(\.bento)?\.(html?|json|pptx)$/i, '')
@@ -179,9 +181,17 @@ export const CONVERSIONS: Conversion[] = [
       if (d.compact) return 'This is compact document JSON. Make it a deck first, then convert the deck.'
       return true
     },
-    async run(d, env) {
+    flags: [{
+      id: 'states',
+      label: 'Include interactive states, as hidden slides that links lead to',
+      applies: (d) => d.kind === 'bento' && Array.isArray(d.doc.slides) && d.doc.slides.some((s) => !!(s as { stateOf?: unknown })?.stateOf),
+    }],
+    async run(d, env, flags = {}) {
       if (d.kind !== 'bento') throw new Error('not a Bento document')
-      const r = await bentoToPptx(d.text, env.rasterise ? { rasterise: (u) => env.rasterise!(u) } : {})
+      const r = await bentoToPptx(d.text, {
+        ...(env.rasterise ? { rasterise: (u: string) => env.rasterise!(u) } : {}),
+        ...(flags.states ? { includeStates: true } : {}),
+      })
       return {
         bytes: r.bytes, fileName: `${base(d.name)}.pptx`,
         mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
