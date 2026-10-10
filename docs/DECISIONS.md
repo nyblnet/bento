@@ -10000,3 +10000,27 @@ option on invites.
 Pointers: spaces/src/history.ts, scripts/test-spaces-history.ts,
 scripts/test-spaces-save-revisions.ts (the prepare rows and the main.ts pins),
 scripts/test-spaces-copytiers.ts (real revisions per tier).
+
+## 2026-10-10 — a spaces invite discloses its history and can leave it out
+
+**Decision.** The kernel's invite tier keeps the `history` class, and the
+maintainer's ruling makes that conditional: an invite may carry history only
+when the inviter is told so and can leave it out. So **Share → Invite to
+edit…** on a space that has any history field opens one kernel dialog first:
+"This copy includes the space’s version history.", a **Leave version history
+out** checkbox (unticked, default include), Cancel and Save invite…. A space
+with no history field gets no step.
+
+**Leaving it out is by class, not by name.** `inviteCopy(doc, { withHistory:
+false })` is the invite tier exactly, then every field `SPACES_FIELDS` classes
+`history` is removed (share.ts `HISTORY_CLASS`, typed through the kernel's
+`FieldsOfClass`). Today that is `revisions` and `trail`; a history field
+declared later is covered by the same choice without an edit. Nothing else
+in the copy changes: same collab projection, same fresh invite, same pages.
+This is the one post-projection edit an invite makes besides `collab.on`, and
+it only ever removes fields; the copy-tier rig's hand-strip sweep is unchanged
+and still green.
+
+Pointers: spaces/src/share.ts, spaces/src/editor.ts `confirmInviteHistory`,
+scripts/test-spaces-copytiers.ts (the invite-choice rows and the planted
+builder that ignores the option).

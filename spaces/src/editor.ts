@@ -6269,6 +6269,16 @@ export class Editor {
     // the way out would arm this space's session for a file that carries none
     // of its keys, which is a session nobody asked for.
     if (kind === 'reading') { await this.saveReadingCopy(); return }
+    // An invite KEEPS the space's version history (the kernel's invite rule),
+    // and history remembers text that was deleted. So when there is any, the
+    // inviter is told before the copy is made and may leave it out. A space
+    // with no history gets no extra step — nothing to disclose.
+    let withHistory = true
+    if (kind === 'invite' && shareModule.hasHistory(this.store.doc)) {
+      const choice = await this.confirmInviteHistory()
+      if (choice === null) return
+      withHistory = choice
+    }
     await this.goLive()
     // Committed first for the same reason slides commits its text edit: a
     // half-typed block that only exists in the DOM is not in the copy.
@@ -6278,7 +6288,7 @@ export class Editor {
     // (readerCopy clears it again — a viewer is not a fork.)
     shareModule.stampSync(this.store, this.session)
     const out = kind === 'invite'
-      ? await shareModule.inviteCopy(this.store.doc)
+      ? await shareModule.inviteCopy(this.store.doc, { withHistory })
       : shareModule.readerCopy(this.store.doc)
     if (!out) {
       this.notice(kind === 'invite'
@@ -6292,6 +6302,42 @@ export class Editor {
         ? t('Editor copy saved — recipients join live with edit access')
         : t('Read-only copy saved — it follows the live session, view only'))
     }
+  }
+
+  /**
+   * The one step before an invite of a space that has history: say that the
+   * copy carries it, and offer to leave it out (default: include). Resolves
+   * true = include, false = leave out, null = cancelled. A kernel dialog via
+   * openOverlay; the Save button is the user gesture the file picker needs.
+   */
+  private confirmInviteHistory(): Promise<boolean | null> {
+    return new Promise((resolve) => {
+      let answered = false
+      const done = (v: boolean | null) => { if (!answered) { answered = true; resolve(v) } }
+      const d = this.openOverlay(t('Invite to edit…').replace(/…$/, ''), (body, close) => {
+        body.append(el('p', 'sp-note', t('This copy includes the space’s version history.')))
+        const label = el('label', 'sp-ab-check')
+        const cb = el('input', 'sp-invite-leaveout')
+        cb.type = 'checkbox'
+        label.append(cb, document.createTextNode(' ' + t('Leave version history out')))
+        label.title = t('Versions include text that was deleted. This file keeps them either way.')
+        body.append(label)
+        const acts = el('div', 'sp-actions sp-dlg-actions')
+        const cancel = el('button', 'sp-btn', t('Cancel'))
+        cancel.type = 'button'
+        cancel.addEventListener('click', () => { done(null); close() })
+        const go = el('button', 'sp-btn sp-primary', t('Save invite…'))
+        go.type = 'button'
+        go.addEventListener('click', () => { done(!cb.checked); close() })
+        acts.append(cancel, go)
+        body.append(acts)
+        queueMicrotask(() => go.focus())
+      })
+      d.card.classList.add('sp-dlg-narrow')
+      // Escape, the scrim or another overlay: closing without an answer is a
+      // cancel. closeOverlay() runs overlayOff on every close path.
+      this.overlayOff.push(() => done(null))
+    })
   }
 
   /**
