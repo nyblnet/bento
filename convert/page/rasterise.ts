@@ -5,15 +5,29 @@
 // with the browser's own decoder and a canvas. The writer has no DOM, so the
 // page passes this in (ExportOpts.rasterise). Same pixels, PNG-encoded.
 //
-// Guards: the image is decoded from a data: URI only (the CSP's img-src allows
-// data:, and nothing is fetched); anything over 40 megapixels is refused
-// rather than drawn, so a hostile file cannot make the tab allocate a huge
-// canvas. A refusal returns null, and the writer reports the picture dropped.
+// Guards, in order:
+//   1. data: URIs only (the CSP's img-src allows data:, and nothing is fetched);
+//   2. the size is read from the header BEFORE anything decodes it
+//      (image-size.ts), and a header declaring more than 40 megapixels, or one
+//      that cannot be read, is refused: the browser's decoder never sees it;
+//   3. after decoding, the real size is checked again, before the canvas.
+// A refusal returns null, and the writer reports the picture dropped.
 
-const MAX_PIXELS = 40_000_000
+import { headerBytes, imageSize } from './image-size.ts'
+
+export const MAX_PIXELS = 40_000_000
+
+/** Whether a picture may be decoded at all: its header must be readable and
+ *  declare at most MAX_PIXELS. Exported for the rig. */
+export function mayDecode(dataUri: string): boolean {
+  if (!/^data:image\//i.test(dataUri)) return false
+  const head = headerBytes(dataUri)
+  const size = head && imageSize(head)
+  return !!size && size.width > 0 && size.height > 0 && size.width * size.height <= MAX_PIXELS
+}
 
 export async function rasteriseToPng(dataUri: string): Promise<string | null> {
-  if (!/^data:image\//i.test(dataUri)) return null
+  if (!mayDecode(dataUri)) return null
   const img = new Image()
   img.decoding = 'async'
   img.src = dataUri
