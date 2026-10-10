@@ -210,13 +210,21 @@ export const CLASS_RULES: {
  *  cannot express. ModeField is DERIVED from these keys (below), so classifying a
  *  third field 'mode' without adding its rules here fails tsc. */
 export const MODE_FIELD_RULES = {
+  // readonly is DROPPED from the template copy: instantiating a template does not
+  // clear readonly, so a template that carried it would make every instance
+  // read-only.
   readonly: {
     file: 'keep', duplicate: 'keep', invite: 'drop', reader: { set: true }, audience: { set: true },
-    package: { set: true }, link: { set: true }, template: 'keep', copyJSON: 'drop',
+    package: { set: true }, link: { set: true }, template: 'drop', copyJSON: 'drop',
   },
+  // template is kept ONLY by the owner's own round-trips and set by the template
+  // copy. parseDoc treats template:true as "this open IS a new document" (fresh
+  // docId, collab deleted), so any copy meant to stay in its room — invite,
+  // reader, audience, package, link — must never carry it, or it forks on open
+  // and silently loses the room.
   template: {
-    file: 'keep', duplicate: 'keep', invite: 'keep', reader: 'keep', audience: 'keep',
-    package: 'keep', link: 'keep', template: { set: true }, copyJSON: 'drop',
+    file: 'keep', duplicate: 'keep', invite: 'drop', reader: 'drop', audience: 'drop',
+    package: 'drop', link: 'drop', template: { set: true }, copyJSON: 'drop',
   },
 } satisfies Record<string, Record<Tier, Rule>>
 

@@ -70,17 +70,20 @@ const EXPECT: Record<Tier, string[]> = {
   file: ['docId', 'title', 'slides', 'collab', 'readonly', 'template', 'revisions', 'trail', 'modified', 'preview', 'autosave', 'mystery'].sort(),
   // owner's own copy, new identity: docId + collab reset (absent), mystery kept
   duplicate: ['title', 'slides', 'readonly', 'template', 'revisions', 'trail', 'modified', 'preview', 'autosave', 'mystery'].sort(),
-  // a file for another editor: collab projected, readonly dropped, template kept, history kept, unknown dropped
-  invite: ['docId', 'title', 'slides', 'collab', 'template', 'revisions', 'trail', 'modified', 'preview', 'autosave'].sort(),
-  // read-only live viewer: readonly forced true, collab reader-projected, history dropped, unknown dropped
-  reader: ['docId', 'title', 'slides', 'collab', 'readonly', 'template', 'modified', 'preview', 'autosave'].sort(),
-  audience: ['docId', 'title', 'slides', 'collab', 'readonly', 'template', 'modified', 'preview', 'autosave'].sort(),
-  // presentation package / player: collab dropped entirely
-  package: ['docId', 'title', 'slides', 'readonly', 'template', 'modified', 'preview', 'autosave'].sort(),
+  // a file for another editor: collab projected, readonly AND template dropped
+  // (template:true would make the invitee's open a roomless new doc), history kept, unknown dropped
+  invite: ['docId', 'title', 'slides', 'collab', 'revisions', 'trail', 'modified', 'preview', 'autosave'].sort(),
+  // read-only live viewer: readonly forced true, template dropped (would fork on open),
+  // collab reader-projected, history dropped, unknown dropped
+  reader: ['docId', 'title', 'slides', 'collab', 'readonly', 'modified', 'preview', 'autosave'].sort(),
+  audience: ['docId', 'title', 'slides', 'collab', 'readonly', 'modified', 'preview', 'autosave'].sort(),
+  // presentation package / player: collab dropped entirely, template dropped
+  package: ['docId', 'title', 'slides', 'readonly', 'modified', 'preview', 'autosave'].sort(),
   // published link: reader-like
-  link: ['docId', 'title', 'slides', 'collab', 'readonly', 'template', 'modified', 'preview', 'autosave'].sort(),
-  // template copy: template forced true, collab dropped, history dropped
-  template: ['docId', 'title', 'slides', 'readonly', 'template', 'modified', 'preview', 'autosave'].sort(),
+  link: ['docId', 'title', 'slides', 'collab', 'readonly', 'modified', 'preview', 'autosave'].sort(),
+  // template copy: template forced true, readonly DROPPED (instances must be editable),
+  // collab dropped, history dropped
+  template: ['docId', 'title', 'slides', 'template', 'modified', 'preview', 'autosave'].sort(),
   // Copy document JSON: content only — collab, modes, history, unknown all gone
   copyJSON: ['docId', 'title', 'slides', 'modified', 'preview', 'autosave'].sort(),
 }
@@ -97,10 +100,27 @@ console.log('\nthe two load-bearing mode rows')
   ok(reader.readonly === true, 'a READER copy is read-only — readonly forced true even though the live value is false')
   const tpl = projectForCopy(liveDoc(), MAP, 'template', OPTS) as Record<string, unknown>
   ok(tpl.template === true, 'a TEMPLATE copy stays a template — template forced true')
-  ok(tpl.readonly === false, 'a template copy keeps its live readonly (not forced), so it opens editable')
+  // the source here is read-only: a template carrying readonly would make every instance read-only
+  const roSrc = { ...liveDoc(), readonly: true }
+  const tplRo = projectForCopy(roSrc, MAP, 'template', OPTS) as Record<string, unknown>
+  ok(!('readonly' in tplRo), 'a template copy of a READ-ONLY doc drops readonly, so instances open editable')
   const inv = projectForCopy(liveDoc(), MAP, 'invite', OPTS) as Record<string, unknown>
   ok(!('readonly' in inv), 'an INVITE copy drops readonly (absent), so the editor is not locked')
-  ok(inv.template === false, 'and keeps the source template flag')
+}
+
+console.log('\ntemplate:true never rides a copy that must stay in its room')
+{
+  // parseDoc treats template:true as "this open IS a new document" (fresh docId,
+  // collab deleted). A source that IS a template is the case that would fork.
+  const tplSrc = { ...liveDoc(), template: true }
+  for (const tier of ['invite', 'reader', 'audience', 'package', 'link'] as Tier[]) {
+    const out = projectForCopy(tplSrc, MAP, tier, OPTS) as Record<string, unknown>
+    ok(!('template' in out), `${tier} copy of a template drops template — it keeps its room instead of forking on open`)
+  }
+  for (const tier of ['file', 'duplicate'] as Tier[]) {
+    const out = projectForCopy(tplSrc, MAP, tier, OPTS) as Record<string, unknown>
+    ok(out.template === true, `${tier} keeps the source template flag (the owner's own round-trip)`)
+  }
 }
 
 console.log('\ncapability is the only stripped class; secrets never ride a projected copy')
