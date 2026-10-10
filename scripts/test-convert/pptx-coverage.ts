@@ -45,6 +45,9 @@ const SAMPLE: Record<string, object> = {
   table: { type: 'table', columns: [{ w: 1 }], header: false, rows: [{ cells: [{ html: 'x' }] }], style: { radius: 0 } },
   // media exports its poster as a picture; playback itself is not written yet
   // (reported 'media-dropped' — a contributor task, see CONTRIBUTING.md)
+  code: { type: 'code', fontSize: 18, fontFamily: 'Menlo, monospace', align: 'left', valign: 'top',
+    lineHeight: 1.4, color: '#1E2A3A', content: 'let x = 1\nx += 1' },
+  embed: { type: 'embed', app: 'bento/dash', view: '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>' },
   media: { type: 'media', kind: 'video', src: 'data:video/mp4;base64,AAAA',
     poster: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' },
 }
@@ -52,11 +55,7 @@ const MAPPED = Object.keys(SAMPLE)
 
 /** Types with no writer yet. Each is a task a contributor can take; see
  *  convert/CONTRIBUTING.md. Their writers report them dropped. */
-const NOT_YET: Record<string, object> = {
-  code: { type: 'code', fontSize: 18, fontFamily: 'Menlo, monospace', align: 'left', valign: 'top',
-    lineHeight: 1.4, color: '#1E2A3A', content: 'let x = 1\nx += 1' },
-  embed: { type: 'embed', app: 'bento/dash', view: '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>' },
-}
+const NOT_YET: Record<string, object> = {}
 
 // --- what slides says exists -------------------------------------------------
 const model = fs.readFileSync(path.join(root, 'slides/src/model.ts'), 'utf8')
@@ -104,6 +103,6 @@ console.log('a type nobody has heard of')
     'an unknown future element type degrades to a report entry; the export still succeeds')
 }
 
-console.log(`\nopen for contributors: ${Object.keys(NOT_YET).join(', ')}`)
+console.log(`\nopen for contributors: ${Object.keys(NOT_YET).join(', ') || 'none — every element type exports'}`)
 console.log(`\n${checks - failures}/${checks} checks passed`)
 if (failures) process.exit(1)
