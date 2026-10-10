@@ -25,7 +25,8 @@
 // TRANSPORT. Runtime messaging is JSON, so bytes cross the relay↔worker hop
 // as base64, and a value over CHUNK bytes travels as numbered chunks under a
 // transaction id, committed in one step: a reader sees the old value or the
-// new one, never half. Every message re-derives the partition and holds no
+// new one, never half. A transfer that began before the value now committed
+// is refused as 'superseded', so a late write never replaces a newer one. Every message re-derives the partition and holds no
 // state between messages (the worker is evicted at will); chunks of a
 // transfer that never committed are swept by `gc`.
 //
@@ -127,7 +128,10 @@ export async function put(path, p, deps) {
   if (b64Len(p.data) > CHUNK) return { ok: false, reason: 'chunk too large' }
   if (p.i * CHUNK >= MAX_VALUE) return { ok: false, reason: 'too large' }
   await deps.db.put(cKey(path, p.name, p.tx, p.i), p.data)
-  await deps.db.put(`t${S}${path}${S}${p.name}${S}${p.tx}`, { at: deps.now() }) // for the stale sweep
+  // `start` (first chunk) orders transfers for commit; `at` (latest chunk) is for the stale sweep
+  const tk = `t${S}${path}${S}${p.name}${S}${p.tx}`
+  const t = await deps.db.get(tk)
+  await deps.db.put(tk, { start: t?.start ?? deps.now(), at: deps.now() })
   return { ok: true }
 }
 
@@ -143,6 +147,14 @@ export async function commit(path, p, deps) {
   }
   if (size > MAX_VALUE) { await dropTx(path, p.name, p.tx, deps); return { ok: false, reason: 'too large' } }
   const old = await deps.db.get(mKey(path, p.name))
+  // A LATE transfer — one that began before the value now committed, e.g. a
+  // write the page gave up waiting for and has since sent again — must not
+  // replace the newer value. Refused, and its chunks dropped; the newer one stands.
+  const begun = (await deps.db.get(`t${S}${path}${S}${p.name}${S}${p.tx}`))?.start
+  if (old && old.tx !== p.tx && begun != null && (old.at ?? 0) > begun) {
+    await dropTx(path, p.name, p.tx, deps)
+    return { ok: false, reason: 'superseded' }
+  }
   await deps.db.put(mKey(path, p.name), { tx: p.tx, n: p.n, size, at: deps.now() })
   await deps.db.del(`t${S}${path}${S}${p.name}${S}${p.tx}`)
   if (old && old.tx !== p.tx) await dropTx(path, p.name, old.tx, deps)
@@ -329,6 +341,15 @@ export async function gc(deps) {
     await deps.db.del(hKey(path))
     await deps.db.del(`x${S}${path}`)
     dropped.push({ path, why })
+  }
+  // Chunks no manifest points to and no live transfer owns: left when two
+  // commits interleaved (each dropped the value it read as old, not the other's).
+  const live = new Set((await deps.db.range(`t${S}`, `t${S}${END}`)).map(([k]) => k.slice(2)))
+  for (const [k] of await deps.db.range(`c${S}`, `c${S}${END}`)) {
+    const [, path, name, tx] = k.split(S)
+    if (live.has(`${path}${S}${name}${S}${tx}`)) continue
+    const m = await deps.db.get(mKey(path, name))
+    if (!m || m.tx !== tx) await deps.db.del(k)
   }
   for (const [k, v] of await deps.db.range(`t${S}`, `t${S}${END}`)) {
     if ((v?.at ?? 0) < now - STALE_TX_MS) {
