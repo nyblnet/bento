@@ -83,7 +83,7 @@ const win = {
 // ---- the stand-in extension ------------------------------------------------
 const CH = '__bento_tray__'
 const NAMES = new Set(['recovery', 'memberkey']) // what the real worker accepts
-let mode: 'ok' | 'refuse' | 'silent' = 'ok'
+let mode: 'ok' | 'refuse' | 'silent' | 'supersede' = 'ok'
 const store = new Map<string, Uint8Array>()
 const seen: Array<{ op: string; name?: string; bytesIsU8?: boolean }> = []
 win.addEventListener('message', (ev) => {
@@ -94,7 +94,9 @@ win.addEventListener('message', (ev) => {
   if (mode === 'silent') return
   let result: unknown
   if (d.op !== 'store.list' && !NAMES.has(String(p.name))) result = { ok: false, reason: 'bad name' }
-  else if (d.op === 'store.set') result = mode === 'refuse' ? { ok: false, reason: 'too large' } : (store.set(p.name!, p.bytes as Uint8Array), { ok: true })
+  else if (d.op === 'store.set') result = mode === 'refuse' ? { ok: false, reason: 'too large' }
+    : mode === 'supersede' ? { ok: false, reason: 'superseded' } // a newer write committed first
+    : (store.set(p.name!, p.bytes as Uint8Array), { ok: true })
   else if (d.op === 'store.get') result = { ok: true, bytes: store.get(p.name!) ?? null }
   else if (d.op === 'store.delete') result = (store.delete(p.name!), { ok: true })
   else if (d.op === 'store.list') result = { ok: true, names: [...store.keys()].sort() }
@@ -239,6 +241,17 @@ H('a SILENT host: no fallback, and a failed read never mints or writes a key')
   ok(await putRecovery(doc('d6') as never) === false, 'recovery: not stored this cycle')
   ok(!idbWrites.some((w) => w.endsWith('recovery')) && !recoveryOff('d6'), 'nothing in IndexedDB, and recovery stays on for the next cycle')
   ok(await getRecovery('d6') === null, 'getRecovery falls back to reading only, and returns nothing (no throw)')
+}
+
+H('a SUPERSEDED write (a newer one committed first) is not a refusal')
+{
+  // Two overlapping autosave writes: the host keeps the newer and answers the
+  // older 'superseded'. That must not switch recovery off — the document's
+  // newer copy is exactly what the host holds.
+  reset(); setHost(true); resetDocStoreForTest(); mode = 'supersede'
+  ok(await putRecovery(doc('d8') as never) === false, 'the superseded write reports not stored (this one lost to a newer)')
+  ok(!recoveryOff('d8'), 'recovery stays ON for the document')
+  ok(!idbWrites.some((w) => w.endsWith('recovery')), 'and nothing was written to IndexedDB')
 }
 
 H('only the two agreed names are used, and values travel as bytes')

@@ -24,10 +24,12 @@
 
 export type DocStoreName = 'recovery' | 'memberkey'
 
-/** What became of a write: the host STORED it, the host answered and REFUSED
- *  it (e.g. too large), or it never answered in time. A write that went
- *  unanswered may still complete on the host's side. */
-export type SetOutcome = 'stored' | 'refused' | 'unanswered'
+/** What became of a write: the host STORED it; the host answered and REFUSED
+ *  it (e.g. too large); a NEWER write to the same name was committed first, so
+ *  this older one was dropped (SUPERSEDED — the newer value is what's kept, so
+ *  this is not a refusal of the document); or it never answered in time. A
+ *  write that went unanswered may still complete on the host's side. */
+export type SetOutcome = 'stored' | 'refused' | 'superseded' | 'unanswered'
 
 export interface DocStore {
   /** The stored bytes, or null when the entry is absent. THROWS if the host
@@ -110,7 +112,10 @@ export class ExtensionBackend implements DocStore {
     const ms = this.t.setBase + this.t.setPerChunk * Math.ceil(bytes.length / CHUNK)
     const r = await this.ask('store.set', { name, bytes }, ms)
     if (r?.ok === true) return 'stored'
-    return r?.reason === TIMEOUT ? 'unanswered' : 'refused'
+    if (r?.reason === TIMEOUT) return 'unanswered'
+    // two overlapping writes: the host keeps the newer and drops this one
+    if (r?.reason === 'superseded') return 'superseded'
+    return 'refused'
   }
 
   async list(): Promise<DocStoreName[]> {
