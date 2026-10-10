@@ -43,9 +43,9 @@ import { headingsOf } from './embed.ts'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale, localeChoices, setLocale, applyDirection } from './i18n'
-import { openAbout } from './about'
-import { applyDesign, adoptDesign, type Resolved } from './designs.ts'
-import { openDesignPanel } from './designpanel'
+import { openAbout, downloadMarkdown } from './about'
+import { applyDesign, adoptDesign, resolveDesign, resolvePageDesign, type Resolved, type DesignPreview } from './designs.ts'
+import { openDesignPanel, fillPageDesignMenu, designLabel } from './designpanel'
 import { saveRows, type DocHost } from './doccmds.ts'
 import { openGraphView } from './graph.ts'
 import { pageToDeck, type DeckNote, type DeckNoteCode } from './todeck.ts'
@@ -296,6 +296,7 @@ export class Editor {
       pickMedia: (id) => void this.pickMedia(id),
       openIconPicker: (pageId, anchor) => this.openIconPicker(pageId, anchor),
       openAddProperty: (pageId, anchor) => this.openAddProperty(pageId, anchor),
+      openPageDesign: (pageId, anchor) => this.openPageDesign(pageId, anchor),
       pageIcon: (icon) => pageIcon(icon),
       openLinkCard: (id) => this.openLinkCard(id),
       addTableRow: (id, at) => this.addTableRow(id, at),
@@ -1168,27 +1169,60 @@ export class Editor {
    * The design the picker is showing on hover, or undefined for none.
    * A preview is never document data: it is painted, never committed.
    */
-  private designPreview: Resolved | null | undefined = undefined
+  private designPreview: DesignPreview | undefined = undefined
+  /** the page root renderPage built for the page in view */
+  private pageRoot: HTMLElement | null = null
 
   /**
-   * Put the document's design (or the one being previewed) on the reading
-   * surface. The surface is `.sp-main` and nothing else — the bar, both panels
-   * and every popover stay the reader's (DECISIONS, 2026-09-26).
+   * Put THE PAGE IN VIEW's design (or the one being previewed) on the reading
+   * surface. The surface is `.sp-main` and the page root inside it, and
+   * nothing else — the bar, both panels and every popover stay the reader's
+   * (DECISIONS, 2026-09-26). Both get the SAME resolved design, so the two
+   * nested roots can never disagree (designs.css matches by ancestor).
    */
-  syncDesign(): void {
-    applyDesign(this.main, this.store.doc, this.designPreview)
+  syncDesign(): Resolved | null {
+    const s = this.store
+    const r = resolvePageDesign(s.doc, s.page?.id, this.designPreview)
+    applyDesign(this.main, s.doc, r)
+    if (this.pageRoot?.isConnected) applyDesign(this.pageRoot, s.doc, r)
+    return r
   }
 
   /** Show a design on the page without writing it; `undefined` ends the preview. */
-  previewDesign(r: Resolved | null | undefined): void {
-    this.designPreview = r
+  previewDesign(pv: DesignPreview | undefined): void {
+    this.designPreview = pv
     this.syncDesign()
+  }
+
+  /**
+   * One page's design choices, as a menu — from the page ⋯ menu and from the
+   * properties panel's Design row (designpanel.ts fillPageDesignMenu). A
+   * kernel menu through menuAt, so Escape, a press outside and the arrow keys
+   * are the primitive's.
+   *
+   * THE PREVIEW ENDS WITH THE MENU, however the menu goes: a row, Escape, a
+   * press outside, another menu opening. `onClose` is the one callback that
+   * hears all of them (menus.ts anchoredMenu) — a hover preview that outlives
+   * its menu is a design on screen that is not in the file.
+   */
+  openPageDesign(pageId: string, anchor: HTMLElement): void {
+    const s = this.store
+    if (!s.index.page.get(pageId)) return
+    const end = () => this.previewDesign(undefined)
+    const m = this.menuAt(anchor, t('Design'), (mm) => fillPageDesignMenu(mm, {
+      store: s,
+      pageId,
+      preview: (pv) => this.previewDesign(pv),
+      openPanel: (id) => openDesignPanel(s, (pv) => this.previewDesign(pv), id),
+    }), { onClose: end })
+    // leaving the whole menu ends any preview, whichever row the pointer left from
+    m.menu.addEventListener('mouseleave', end)
   }
 
   private paintPage(): void {
     const s = this.store
     const page = s.page
-    this.syncDesign()
+    const design = this.syncDesign()
     // the baseline `syncFootnotes` compares against — set here so switching
     // pages can never leave the previous page's signature behind
     this.fnSig = page ? notesOnPage(s.doc, page).order.join('\u001F') : ''
@@ -1211,7 +1245,10 @@ export class Editor {
       titleOf: (id) => s.index.page.get(id)?.title,
       allowRemote: (src) => this.allowedRemote.has(src),
       readerWidth: readerWidth(),
+      // the same resolution the surface just took, preview included
+      design,
     })
+    this.pageRoot = view
     // the icon lives beside the title, where changing it is discoverable
     const inner = view.querySelector('.sp-page-inner')
     if (inner && !s.readOnly && !this.reading) {
@@ -4822,6 +4859,19 @@ export class Editor {
         run: () => applyAll(pref ? undefined : (current === 'full' ? 'full' : 'wide')),
       })
 
+      // THIS PAGE'S DESIGN — the author's choice, per page, beside the width
+      // (the other thing about how a page is set). The hint says what the page
+      // wears NOW, inherited or its own, so the row answers before it opens.
+      // Its choices open as their own menu, anchored where this one was.
+      {
+        const r = resolvePageDesign(s.doc, pageId)
+        const wears = designLabel(s.doc, r?.name ?? null)
+        const item = row(m, { icon: ICONS.palette, label: t('Design'),
+          hint: page.design !== undefined ? wears : t('Inherited · {name}', { name: wears }),
+          run: () => this.openPageDesign(pageId, anchor) })
+        item.setAttribute('aria-haspopup', 'menu')
+      }
+
       m.separator()
       row(m, { icon: ICONS.trash, label: t('Delete…'), hint: t('Links to it become dead'),
         run: () => this.deletePage(pageId) })
@@ -5628,8 +5678,11 @@ export class Editor {
       for (const page of plan.pages) if (!page.parent || !arrived.has(page.parent)) page.parent = under
     }
 
-    // ONE commit, so ⌘Z takes the pages, their footnotes AND any design they brought
-    let adopted: string | null = null
+    // ONE commit, so ⌘Z takes the pages, their footnotes AND any design they
+    // brought. A note's `design:` is already on ITS page (planImport); the
+    // space's own design is never touched by an import — only the registry
+    // entries the notes carried join it (designs.ts adoptDesign, called with no
+    // space-level name).
     s.commit(() => {
       s.doc.pages.push(...plan.pages)
       // `plan.footnotes` STARTED from this document's own table and had the
@@ -5638,8 +5691,9 @@ export class Editor {
       // when nothing has footnotes, so importing plain notes does not add an
       // empty key to the file.
       if (Object.keys(plan.footnotes).length) s.doc.footnotes = plan.footnotes
-      adopted = adoptDesign(s.doc, plan.design, plan.designs)
+      adoptDesign(s.doc, undefined, plan.designs)
     })
+    const designed = plan.pages.filter((p) => p.design !== undefined).length
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
     this.status(t('Imported'))
@@ -5662,7 +5716,7 @@ export class Editor {
         lines.push(t('{n} note name(s) appear more than once, so links naming them all went to the first.',
           { n: plan.stats.duplicateNames }))
       }
-      if (adopted) lines.push(t('The notes named a design, so this space now uses it.'))
+      if (designed) lines.push(t('{n} page(s) arrived with a design of their own.', { n: designed }))
       if (plan.stats.frontmatter) {
         lines.push(t('{n} page(s) had frontmatter, kept verbatim in a folded block.', { n: plan.stats.frontmatter }))
       }
@@ -5932,9 +5986,13 @@ export class Editor {
     const s = this.store
     const host = el('div', 'sp-printroot')
     host.style.direction = 'ltr'
-    // the document's design, in its LIGHT palette: the dark mapping is
-    // @media screen, so paper never matches it
-    applyDesign(host, s.doc)
+    // EACH PAGE PRINTS IN ITS OWN DESIGN, in its LIGHT palette (the dark
+    // mapping is @media screen, so paper never matches it). The ROOT carries
+    // NONE: renderPage stamps every page root with its own resolved design,
+    // and a design on the root would reach any page that has none of its own
+    // (designs.css matches by ancestor). The contents list is the space's, so
+    // it wears the space's design.
+    applyDesign(host, s.doc, null)
 
     const pages = opts.whole
       ? s.tree().map((n) => n.page).filter((p) => opts.archived || !p.archived)
@@ -5952,6 +6010,7 @@ export class Editor {
         ul.append(li)
       }
       toc.append(ul)
+      applyDesign(toc, s.doc, resolveDesign(s.doc))
       host.append(toc)
     }
 
@@ -6044,8 +6103,8 @@ export class Editor {
       onUpdateInPlace: (rel) => this.onUpdateInPlace?.(rel) ?? Promise.resolve(null),
       // both self-update writes carry this space's CRDT state, as ⌘S does
       onBeforeWrite: () => shareModule.stampSync(this.store, this.session),
-      previewDesign: (r) => this.previewDesign(r),
-      openDesignPanel: () => openDesignPanel(this.store, (r) => this.previewDesign(r)),
+      previewDesign: (pv) => this.previewDesign(pv),
+      openDesignPanel: () => openDesignPanel(this.store, (pv) => this.previewDesign(pv)),
     })
   }
 
@@ -6065,6 +6124,11 @@ export class Editor {
       writeCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
       importMarkdown: () => this.openImport(),
       moreExports: (m) => {
+        // THE PAGE IN VIEW as one note — the unit the importer reads back as
+        // one page, so a page's own design (`design:`) round-trips with it
+        const pageId = this.store.page?.id
+        row(m, { icon: ICONS.markdown, label: t('Export page as Markdown…'), desc: t('This page as one .md note'),
+          off: !pageId, run: () => { if (pageId) downloadMarkdown(this.store, pageId) } })
         row(m, { icon: ICONS.canvas, label: t('Export page as slides…'),
           desc: t('The page as a bento/slides deck, ready to paste into Bento Slides'), run: () => this.openExportDeck() })
       },

@@ -21,11 +21,13 @@ import { t } from './i18n'
 import type { Store } from './store'
 import type { SpacesDoc } from './model'
 import { internAsset, blobToDataUri, humanBytes } from './assets'
+import { row, caption, type Menu } from './menus.ts'
+import { ICONS } from './icons'
 import {
   BUILT_INS, BUILT_IN_NAMES, PLAIN, PALETTE_KEYS, FONT_ROLES, FONT_STACKS, PROPS, PROP_KEYS,
   resolveDesign, resolveData, localDesigns, localLabel, freshDesignName, setDesign, isBuiltIn,
-  fontAssetUri, parseColour,
-  type Resolved, type DesignData, type PaletteKey, type FontRole, type PropKey, type Design,
+  fontAssetUri, parseColour, resolvePageDesign, setPageDesign,
+  type DesignData, type DesignPreview, type PaletteKey, type FontRole, type PropKey, type Design,
 } from './designs.ts'
 
 /** A design's name as the picker shows it. Literals, so the i18n sweep sees them. */
@@ -193,7 +195,7 @@ function swatch(d: Design): HTMLElement {
 export interface DesignHooks {
   store: Store
   /** paint a design on the page without writing it; undefined ends the preview */
-  preview: (r: Resolved | null | undefined) => void
+  preview: (pv: DesignPreview | undefined) => void
   /** the About dialog closes itself before the panel opens over the page */
   openPanel: () => void
 }
@@ -231,8 +233,10 @@ export function designSection(h: DesignHooks): HTMLElement[] {
     const span = document.createElement('span')
     span.textContent = designHint(name)
     b.append(strong, span)
-    // PREVIEW ON HOVER AND ON FOCUS — a keyboard reader gets it too
-    const show = () => h.preview(r)
+    // PREVIEW ON HOVER AND ON FOCUS — a keyboard reader gets it too. What is
+    // previewed is the NAME tried at the space, so a page with a design of its
+    // own keeps it, exactly as it would if this were chosen.
+    const show = () => h.preview({ name })
     const hide = () => h.preview(undefined)
     b.addEventListener('mouseenter', show)
     b.addEventListener('focus', show)
@@ -282,29 +286,142 @@ export function designSection(h: DesignHooks): HTMLElement[] {
   const note = document.createElement('p')
   note.className = 'sp-note'
   note.textContent = t('The design travels with the file. Each reader’s light or dark setting picks between its two palettes.')
-  return [grid, acts, note]
+  // this is the SPACE's design; a page or a section can override it
+  const per = document.createElement('p')
+  per.className = 'sp-note'
+  per.textContent = t('A page can wear a design of its own, and a section’s passes to the pages inside it: choose it from the page’s ⋯ menu.')
+  return [grid, acts, note, per]
+}
+
+export interface PageDesignHooks {
+  store: Store
+  pageId: string
+  /** paint a design without writing it; undefined ends the preview */
+  preview: (pv: DesignPreview | undefined) => void
+  /** open the customise panel on THIS page's own design */
+  openPanel: (pageId: string) => void
 }
 
 /**
- * Make the current design one this document owns, as ONE undo step.
+ * One page's design choices, as the rows of a kernel menu: the page ⋯ menu and
+ * the properties panel both open these (editor.openPageDesign, through
+ * menuAt). The menu closes itself on a row, Escape or a press outside; the
+ * caller ends the preview in the menu's `onClose`, which fires on all of them.
  *
- * A doc-local design is edited in place; anything else — a built-in, or the
- * default — is FORKED: a new entry naming it as its base, with no overrides
- * yet, so the page does not change until a value does.
+ * THE FIRST ROW IS INHERIT, and it says what inheriting resolves to — "Same as
+ * parent · Ledger" — because an absent key is otherwise invisible and the
+ * question a reader is really asking is "what will this page look like".
+ * Choosing it DELETES the key (setPageDesign). Every other row names a design;
+ * each previews on hover and focus, and a click is ONE undo step.
+ *
+ * There is no "Default" row for a page: the format's value is a NAME, and the
+ * default look has none. A page shows the default when nothing above it names
+ * a design — or when it names one this build does not know.
  */
-function forkIfNeeded(store: Store): string {
-  const cur = resolveDesign(store.doc)
-  if (cur?.custom) return cur.name
-  const name = freshDesignName(store.doc)
-  const base = cur && isBuiltIn(cur.name) ? cur.name : undefined
-  const data: DesignData = {
-    label: base ? t('{name}, customised', { name: designLabel(store.doc, base) }) : t('Custom'),
-    ...(base ? { base } : {}),
+export function fillPageDesignMenu(m: Menu, h: PageDesignHooks): void {
+  const { store, pageId } = h
+  const doc = store.doc
+  const page = store.index.page.get(pageId)
+  if (!page) return
+  const own = page.design
+  const topLevel = !page.parent || !store.index.page.has(page.parent)
+  const inherited = resolvePageDesign(doc, pageId, undefined, true)
+  const locals = Object.keys(localDesigns(doc)).filter((n) => !isBuiltIn(n) && resolveDesign(doc, n))
+  const names: Array<string | null> = [null, ...BUILT_IN_NAMES, ...locals]
+  // a name this build does not know is still the page's choice: show it, so
+  // the reader can see why the page looks plain, and can move off it
+  if (typeof own === 'string' && own && !names.includes(own)) names.push(own)
+  m.menu.classList.add('sp-dsg-menu')
+  caption(m, t('Design'))
+  let showing: HTMLElement | null = null
+  for (const name of names) {
+    const r = name === null ? inherited : resolveDesign(doc, name)
+    const on = name === null ? own === undefined : own === name
+    // Two LITERAL calls for inherit, so the extractor sees both keys
+    const label = name === null ? (topLevel ? t('Same as space') : t('Same as parent'))
+      : r ? designLabel(doc, name) : name
+    const hint = name === null ? designLabel(doc, inherited?.name ?? null)
+      : r ? designHint(r.custom ? 'custom' : name)
+      : t('Not a design this build knows — shown in the default look')
+    const b = row(m, {
+      icon: '', label, hint, selected: on, off: store.readOnly,
+      run: () => {
+        h.preview(undefined)
+        const p = store.index.page.get(pageId)
+        // read LIVE: an undo while the menu is open changes the answer
+        if (!p || store.readOnly || (p.design ?? null) === name) return
+        // ONE undo step; inherit DELETES the key
+        store.commit(() => {
+          const q = store.index.page.get(pageId)
+          if (q) setPageDesign(q, name)
+        }, { structure: false })
+      },
+    })
+    b.classList.add('sp-dsg-item')
+    b.dataset.design = name ?? ''
+    b.setAttribute('role', 'menuitemradio')
+    b.setAttribute('aria-checked', String(on))
+    // the swatch sits where a row's icon does
+    const ico = b.querySelector('.bkm-ico') ?? b.insertBefore(document.createElement('span'), b.firstChild)
+    ico.className = 'bkm-ico'
+    ico.replaceChildren(swatch(r?.design ?? PLAIN))
+    // PREVIEW ON A REAL MOVE, not on mouseenter: the menu opens where the page
+    // menu was, so a row lands under a pointer that has not moved, and the
+    // browser reports that as an enter — measured, the page flipped to Riso
+    // the instant the menu opened. A move is a person pointing at a row.
+    const show = () => { if (showing !== b) { showing = b; h.preview({ page: pageId, name }) } }
+    b.addEventListener('mousemove', show)
+    b.addEventListener('focus', show)
+    b.addEventListener('mouseleave', () => { showing = null; h.preview(undefined) })
+  }
+  m.separator()
+  const custom = row(m, {
+    icon: ICONS.pen, label: t('Customise…'), hint: t('A design of this page’s own, kept in this space'), off: store.readOnly,
+    run: () => {
+      h.preview(undefined)
+      if (store.readOnly) return
+      forkIfNeeded(store, pageId)
+      h.openPanel(pageId)
+    },
+  })
+  custom.classList.add('sp-dsg-item')
+  custom.addEventListener('mousemove', () => { if (showing) { showing = null; h.preview(undefined) } })
+}
+
+/**
+ * Make the design at one scope — the space, or ONE page — a design this
+ * document owns, as ONE undo step, and return its name.
+ *
+ * A doc-local design that scope names ITSELF is edited in place. Anything
+ * else is FORKED into `doc.designs` and assigned to that scope: a built-in or
+ * the default becomes a new entry naming it as its base with no overrides
+ * yet, and a doc-local design the page only INHERITS is copied — customising
+ * one page must never restyle the section or space it inherits from.
+ */
+function forkIfNeeded(store: Store, pageId?: string): string {
+  const doc = store.doc
+  const page = pageId !== undefined ? store.index.page.get(pageId) : undefined
+  const ownName = page ? page.design : (doc as { design?: unknown }).design
+  const own = typeof ownName === 'string' ? resolveDesign(doc, ownName) : null
+  if (own?.custom) return own.name
+  const cur = page ? resolvePageDesign(doc, page.id) : resolveDesign(doc)
+  const name = freshDesignName(doc)
+  let data: DesignData
+  if (cur?.custom) {
+    data = { ...clone(localDesigns(doc)[cur.name] as DesignData), label: t('{name}, customised', { name: designLabel(doc, cur.name) }) }
+  } else {
+    const base = cur && isBuiltIn(cur.name) ? cur.name : undefined
+    data = {
+      label: base ? t('{name}, customised', { name: designLabel(doc, base) }) : t('Custom'),
+      ...(base ? { base } : {}),
+    }
   }
   store.commit(() => {
     const d = store.doc as { designs?: Record<string, unknown> }
     d.designs = { ...(d.designs && typeof d.designs === 'object' ? d.designs : {}), [name]: data }
-    setDesign(store.doc, name)
+    const p = pageId !== undefined ? store.index.page.get(pageId) : undefined
+    if (p) setPageDesign(p, name)
+    else setDesign(store.doc, name)
   }, { structure: false })
   return name
 }
@@ -318,7 +435,7 @@ let openPanelEl: HTMLElement | null = null
  * The customise panel: non-modal, over the inspector's side of the window,
  * so the page it is changing stays in view.
  */
-export function openDesignPanel(store: Store, preview: (r: Resolved | null | undefined) => void): void {
+export function openDesignPanel(store: Store, preview: (pv: DesignPreview | undefined) => void, pageId?: string): void {
   openPanelEl?.remove()
   const panel = document.createElement('aside')
   panel.className = 'sp-dsg-panel'
@@ -327,7 +444,13 @@ export function openDesignPanel(store: Store, preview: (r: Resolved | null | und
   document.body.append(panel)
   openPanelEl = panel
 
-  const name = () => resolveDesign(store.doc)?.custom ? resolveDesign(store.doc)!.name : null
+  // THE DESIGN THIS SCOPE NAMES ITSELF — the space's, or one page's — when it
+  // is one this document carries. Read live: an undo can take it away.
+  const name = (): string | null => {
+    const raw = pageId !== undefined ? store.index.page.get(pageId)?.design : (store.doc as { design?: unknown }).design
+    const r = typeof raw === 'string' ? resolveDesign(store.doc, raw) : null
+    return r?.custom ? r.name : null
+  }
   let draft: DesignData = {}
   const stored = () => {
     const n = name()
@@ -349,7 +472,9 @@ export function openDesignPanel(store: Store, preview: (r: Resolved | null | und
   /** Live: paint the draft without writing it. */
   const live = () => {
     const n = name()
-    if (n) preview({ name: n, design: resolveData(store.doc, n, draft), custom: true })
+    // the DRAFT stands in wherever this name resolves — this page, and every
+    // page that shares the design
+    if (n) preview({ draft: { name: n, design: resolveData(store.doc, n, draft), custom: true } })
   }
   /** Commit the draft as ONE undo step, keeping only what differs from the base. */
   const commit = () => {
@@ -397,7 +522,7 @@ export function openDesignPanel(store: Store, preview: (r: Resolved | null | und
     if (!n) {
       const p = document.createElement('p')
       p.className = 'sp-note'
-      p.textContent = t('This space no longer uses a design of its own.')
+      p.textContent = pageId !== undefined ? t('This page no longer uses a design of its own.') : t('This space no longer uses a design of its own.')
       panel.append(p)
       return
     }
@@ -521,8 +646,12 @@ export function openDesignPanel(store: Store, preview: (r: Resolved | null | und
           delete d.designs[n]
           if (!Object.keys(d.designs).length) delete d.designs
         }
-        // back to what it was forked from — or the default, which deletes `design`
-        setDesign(store.doc, base)
+        // EVERY reference goes back to what it was forked from — the space's
+        // and each page's — or, with no base, loses the key: the space to the
+        // default look, a page to inheriting. A reference left pointing at a
+        // deleted entry would render the default and read as a fault.
+        if ((store.doc as { design?: unknown }).design === n) setDesign(store.doc, base)
+        for (const p of store.doc.pages) if (p.design === n) setPageDesign(p, base)
       }, { structure: false })
       close()
     })

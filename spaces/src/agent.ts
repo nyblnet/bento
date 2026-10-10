@@ -595,10 +595,12 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
   // design's value. The document still opens and still looks designed — so
   // this is the only place an author finds out a colour was not used.
   for (const pr of designProblems(doc)) {
-    add({ code: pr.code, path: pr.path, message: pr.message,
+    add({ ...(pr.page ? { page: pr.page } : {}), code: pr.code, path: pr.path, message: pr.message,
       severity: pr.code === 'unknown-design-key' ? 'info' : 'warning',
       fix: pr.code === 'unknown-design'
-        ? `Set design to one of ${BUILT_IN_NAMES.join(', ')}, define it under designs, or delete the key for the default look.`
+        ? (pr.page
+          ? `Set this page's design to one of ${BUILT_IN_NAMES.join(', ')} or a name under designs, or delete the key so the page inherits its parent's.`
+          : `Set design to one of ${BUILT_IN_NAMES.join(', ')}, define it under designs, or delete the key for the default look.`)
         : pr.code === 'design-shadows-builtin' || pr.code === 'bad-design-name'
           ? 'Rename the entry (lowercase letters, digits, hyphens; not a built-in name) and point design at the new name.'
           : 'Write a value the rule accepts (see docs/spaces-agents.md, Designs), or delete the key to take the base design\'s.' })

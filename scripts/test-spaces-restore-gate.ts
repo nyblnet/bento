@@ -251,6 +251,13 @@ console.log('\na design is content, not identity\n')
   designedLive.design = 'ledger'
   const g2 = gateRestored(JSON.stringify(clone(live)), designedLive)
   ok(g2.ok && !Object.hasOwn(g2.doc, 'design'), 'restoring a snapshot with no design does not keep the live design (it is content, not identity)')
+  // A PAGE's design (per-page designs) is content too: it lives in `pages`,
+  // which the gate passes through and the content key already covers
+  const paged = clone(live) as SpacesDoc
+  ;(paged.pages[0] as { design?: string }).design = 'studio'
+  const g3 = gateRestored(JSON.stringify(paged), live)
+  ok(g3.ok && (g3.doc.pages[0] as { design?: string }).design === 'studio', 'the gate passes a page\'s own design through from the snapshot')
+  ok(recoveryOffered(JSON.stringify(paged), live), 'a snapshot that differs only by one page\'s design is offered for recovery')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
