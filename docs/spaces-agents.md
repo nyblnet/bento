@@ -617,7 +617,7 @@ bento.removeBlocks([ids])                  // → {ok:true, removed, missing, ad
 bento.moveBlock(id, {pageId?, afterId?, beforeId?, parent?})
 bento.updatePage(id, patch)                // → {ok:true, id} | {ok:false, err}
 bento.removePage(id, {descendants?})       // → {ok:true, removed, rehomed, links}
-bento.loadDoc(json)                        // replace the content (one undo step); docId, collab, readonly, template stay
+bento.loadDoc(json)                        // replace the content (one undo step); docId, collab, readonly, template and revisions stay
 
 bento.serialize()                          // the whole .bento.html file
 bento.undo() / bento.redo()
@@ -930,6 +930,14 @@ rather than vanishing quietly at save time.
 - **Never write a page with an empty `blocks` array.** Nothing in it can take a
   caret, so it is a page nobody can type in. Give it `[{ "type": "p", "html":
   "" }]` — `bento.newPage()` does exactly that.
+- `doc.revisions` is the space's **version history, kept inside the file**:
+  oldest first, each entry `{ id, at, label?, body }` where `body` is the change
+  from the entry before it. Leave it alone. Saving appends to it; only **Save ▾
+  → Versions in this file… → Clear history** removes it. `bento.loadDoc` keeps
+  the open space's history whatever the JSON you pass carries, so a whole-
+  document rewrite cannot delete it, and cannot plant one either. If you write
+  `#bento-doc` from outside the app, copy the field across unchanged; an entry
+  this build cannot read makes the whole list read-only (kept, never extended).
 - `readonly: true` marks a READING COPY: the file opens in the reader (no
   editing tools, no comment markers, a Previous/Next pair under each page) and
   `bento.readonly` is true, so every write returns `err: 'readonly'`. (A

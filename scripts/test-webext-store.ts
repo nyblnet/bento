@@ -103,6 +103,47 @@ console.log('\n— chunked values: committed whole or not at all')
   ok((await bg.storeOp('store.put', A, { name: 'memberkey', tx, i: 0, data: st.toB64(new Uint8Array(st.CHUNK + 1)) }, d)).reason === 'chunk too large', 'a chunk over CHUNK is refused')
 }
 
+console.log('\n— late and interleaved writes (a page that gave up waiting sends again)')
+{
+  const d = deps()
+  // a slow transfer begins, the page times out and sends a fresh value, which commits first
+  await bg.storeOp('store.put', A, { name: 'recovery', tx: 'tx-slow-0001', i: 0, data: enc('OLD ') }, d)
+  clock += 1000
+  ok((await bg.storeOp('store.set', A, { name: 'recovery', data: enc('NEW') }, d)).ok, 'the resend commits')
+  clock += 1000
+  await bg.storeOp('store.put', A, { name: 'recovery', tx: 'tx-slow-0001', i: 1, data: enc('VALUE') }, d)
+  const late = await bg.storeOp('store.commit', A, { name: 'recovery', tx: 'tx-slow-0001', n: 2 }, d)
+  ok(late.ok === false && late.reason === 'superseded', 'the late transfer, begun before the committed value, is refused as superseded')
+  ok(dec((await bg.storeOp('store.get', A, { name: 'recovery' }, d)).inline) === 'NEW', 'and the newer value stands')
+  ok(![...d.db.m.keys()].some((k) => k.includes('tx-slow-0001')), 'the refused transfer leaves no chunks')
+  clock += 1000
+  ok((await bg.storeOp('store.set', A, { name: 'recovery', data: enc('NEWER') }, d)).ok && dec((await bg.storeOp('store.get', A, { name: 'recovery' }, d)).inline) === 'NEWER', 'ordinary successive writes still replace each other')
+}
+{
+  // two commits that read the same "old" value: each drops that one, neither the other's
+  const d = deps()
+  await bg.storeOp('store.set', A, { name: 'recovery', data: enc('X') }, d)
+  const db = d.db
+  const realGet = db.get
+  let held: any = null
+  // make commit #1 read the manifest, then let commit #2 run to completion before #1 continues
+  for (const tx of ['tx-race-aaaa', 'tx-race-bbbb']) await bg.storeOp('store.put', A, { name: 'recovery', tx, i: 0, data: enc(tx) }, d)
+  let gate: any
+  const paused = new Promise((r) => { gate = r })
+  db.get = async (k: string) => { const v = await realGet(k); if (!held && k.startsWith('m\u0000') && k.endsWith('recovery')) { held = v; await paused } return v }
+  const first = bg.storeOp('store.commit', A, { name: 'recovery', tx: 'tx-race-aaaa', n: 1 }, d)
+  await new Promise((r) => setTimeout(r, 0))
+  db.get = realGet
+  await bg.storeOp('store.commit', A, { name: 'recovery', tx: 'tx-race-bbbb', n: 1 }, d)
+  gate()
+  await first
+  clock += 2 * 3600 * 1000
+  await st.gc(d)
+  const m = await db.get(`m\u0000${'/Users/you/Decks/Q3.bento.html'}\u0000recovery`)
+  const chunks = [...db.m.keys()].filter((k) => k.startsWith('c\u0000'))
+  ok(chunks.length === m.n && chunks.every((k) => k.includes(m.tx)), `after the sweep, only the committed value's chunks remain (${chunks.length})`)
+}
+
 console.log('\n— the sweep')
 {
   const DAY = 24 * 3600 * 1000

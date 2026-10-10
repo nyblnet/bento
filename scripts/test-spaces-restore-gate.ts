@@ -229,6 +229,11 @@ console.log('\nevery restore path uses the gate\n')
   ok(/restoreInto\(store, snap\.json\)/.test(offer), 'the banner\'s Restore goes through restoreInto')
   ok(/restoreInto\((h\.)?store, v\.json\)/.test(about), 'History\'s Restore goes through restoreInto')
   ok(!/JSON\.parse\((snap|v)\.json\)/.test(main + about), 'no raw JSON.parse of a stored entry remains')
+  // the in-file timeline (history.ts) is the document's own, but what it
+  // applies is still parsed, sanitized and given the live identity
+  const fileHist = about.slice(about.indexOf('function openFileHistory('), about.indexOf('function summary('))
+  ok(/restoreInto\(h\.store, JSON\.stringify\(next\)\)/.test(fileHist) && !/replaceDoc\(/.test(fileHist),
+    'Versions in this file restores through restoreInto, never a bare replaceDoc')
 }
 
 console.log('\na design is content, not identity\n')

@@ -58,6 +58,8 @@ const { docForExport, FORMAT } = await import('../spaces/src/model.ts')
 const { SPACES_FIELDS } = await import('../spaces/src/docclass.ts')
 const { projectForCopy, collabForReader, COLLAB_READER_KEEP, COLLAB_INVITE_KEEP } = await import('../kernel/src/docfields.ts')
 const { mintCollab } = await import('../kernel/src/sync/online.ts')
+const { recordRevision, revisionsOf, applyRevisions } = await import('../spaces/src/history.ts')
+const { validateRevision } = await import('../kernel/src/docfields.ts')
 import type { SpacesDoc } from '../spaces/src/model.ts'
 import type { Tier } from '../kernel/src/docfields.ts'
 
@@ -114,11 +116,41 @@ function source(extra: Obj = {}): SpacesDoc {
     design: 'almanac',
     journalTemplate: 't1',
     collab: clone(collab),
-    revisions: [{ id: 'r1', at: '2026-10-09T00:00:00Z', body: { pages: 'THE-WHOLE-SPACE' } }],
+    revisions: realRevisions(),
     trail: { '2026-10-09': { done: 3 } },
     futureField: 'FROM-A-NEWER-BUILD',
     ...extra,
   } as unknown as SpacesDoc
+}
+
+/**
+ * REAL in-file history, recorded by history.ts exactly as a save records it:
+ * three saves of a space that had a third page, then deleted it. Each entry is
+ * the kernel's Revision envelope; the deleted page's text survives only inside
+ * the history, which is what makes "does this copy carry it" a real question.
+ */
+// recorded ONCE (ids and times are minted) and cloned per source, so every
+// source() carries the same bytes. `var`: source() runs before this line.
+// eslint-disable-next-line no-var
+var REAL_REVISIONS: unknown[] | undefined
+function realRevisions(): unknown[] {
+  if (REAL_REVISIONS) return clone(REAL_REVISIONS)
+  const d = {
+    format: FORMAT, version: 1, docId: 'doc-source', title: 'Handbook', home: 'p1',
+    pages: [
+      { id: 'p1', title: 'Home', blocks: [{ id: 'b1', type: 'p', html: 'first draft' }] },
+      { id: 'p3', title: 'Gone', blocks: [{ id: 'b3', type: 'p', html: 'THE-WHOLE-SPACE deleted page text' }] },
+    ],
+    theme: { background: '#FFFFFF', color: '#1E2A3A', accent: '#F7A600', fontFamily: 'sans-serif', measure: 720 },
+    footnotes: { 1: 'an older note' },
+  } as unknown as SpacesDoc
+  recordRevision(d)
+  d.pages[0].blocks[0].html = 'second draft'
+  recordRevision(d)
+  d.pages.splice(1, 1)
+  recordRevision(d)
+  REAL_REVISIONS = clone(d.revisions as unknown[])
+  return clone(REAL_REVISIONS)
 }
 
 /** No capability secret anywhere in the serialized copy — a full-text scan. */
@@ -148,6 +180,45 @@ console.log('\nthe source: one field of every class, and every secret')
   ok(SPACES_FIELDS.revisions === 'history' && SPACES_FIELDS.trail === 'history', 'revisions and trail are classed history')
   ok(SPACES_FIELDS.collab === 'capability' && SPACES_FIELDS.docId === 'identity', 'collab is the capability, docId the identity')
   ok(SPACES_FIELDS.readonly === 'mode' && SPACES_FIELDS.template === 'mode', 'readonly and template are the modes')
+}
+
+// ---------------------------------------------------------------------------
+// REAL REVISIONS, per tier. The fixture's history is three genuine entries
+// recorded by history.ts (one of them holding a deleted page's text), so this
+// is the copy table applied to what a saved space actually carries — not a
+// placeholder. Copies handed to a reader drop it whole; the owner's own copies
+// and an invite keep it BYTE-FOR-BYTE, still readable and still restorable.
+console.log('\nreal in-file history (history.ts), tier by tier')
+{
+  const src = source()
+  const want = JSON.stringify(src.revisions)
+  const revs = src.revisions as unknown[]
+  ok(revs.length === 3 && revs.every((r) => validateRevision(r) && !Object.hasOwn(r as Obj, 'label')),
+    `the fixture's history is 3 kernel Revision envelopes with no label (${revs.length})`)
+  ok(revisionsOf(src).length === 3 && JSON.stringify(applyRevisions(revisionsOf(src), 0)).includes('THE-WHOLE-SPACE'),
+    'and it is readable: the oldest entry restores the page that was later deleted')
+  const kept: Array<[string, SpacesDoc]> = [
+    ['invite', (await inviteCopy(source()))!],
+    ['duplicate', duplicateAsNew(source(), 'doc-fresh')],
+    ['file', projectForCopy(source(), SPACES_FIELDS, 'file')],
+  ]
+  for (const [label, o] of kept) {
+    ok(JSON.stringify((o as Obj).revisions) === want, `${label}: KEEPS the revisions byte-for-byte`)
+    ok(revisionsOf(o).length === 3, `${label}: and they still read as history`)
+  }
+  const dropped: Array<[string, SpacesDoc]> = [
+    ['reader (view-only copy)', readerCopy(source())!],
+    ['Copy document JSON', docForExport(source())],
+    ['sealed reading copy (reading.ts, tier package)', readingCopy(source())],
+    ['link', projectForCopy(source(), SPACES_FIELDS, 'link')],
+    ['audience', projectForCopy(source(), SPACES_FIELDS, 'audience', { projectAudience: (c) => ({ ...collabForReader(c), role: 'audience' }) })],
+    ['template', projectForCopy(source(), SPACES_FIELDS, 'template')],
+    ['extract', extractSpace(source(), 'p1', { subtree: true, docId: 'doc-x' }).doc],
+  ]
+  for (const [label, o] of dropped) {
+    ok(!('revisions' in (o as Obj)), `${label}: DROPS the revisions`)
+    ok(!JSON.stringify(o).includes('THE-WHOLE-SPACE'), `${label}: the deleted page's text appears nowhere in it`)
+  }
 }
 
 // ---------------------------------------------------------------------------

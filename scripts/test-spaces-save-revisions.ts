@@ -217,5 +217,80 @@ console.log('\nmain.ts stamps inside the queue for both writes of this file')
   check(/stampSync\(store, session\)/.test(inPlace), '"Update this file" stamps in the queue\'s prepare too')
 }
 
+// ---- the in-file revision is recorded in prepare, inside the snapshot ------
+// history.ts recordOnSave runs in the same prepare step as the stamp, so the
+// revision describes exactly the bytes written and those bytes contain it.
+// Recording writes doc.revisions directly — never through commit — so it must
+// not advance the store's revision (the write is not stale), not raise the
+// unsaved dot, and not change the recovery key (docclass.ts SPACES_NOT_EDIT).
+console.log('\nthe in-file revision is recorded in prepare, inside the snapshot')
+{
+  const { recordOnSave, revisionsOf, applyRevisions, contentOf } = await import('../spaces/src/history.ts')
+  const { docContentKey } = await import('../spaces/src/model.ts')
+  const p = parseSpace(JSON.stringify({ format: 'bento/spaces', version: 1, docId: 'hist', title: 'Hist', pages: [{ id: 'p', title: 'Page', blocks: [{ id: 'b', type: 'p', html: 'one' }] }] }))
+  assert(p.ok)
+  const store = new SpacesStore(p.doc)
+  const queue = new SaveQueue({ getDocument: () => store.doc, getRevision: () => store.revision })
+  const written: any[] = []
+  const gates: Array<() => void> = []
+  const write = (snapshot: any) => new Promise<'saved'>((resolve) => {
+    written.push(JSON.parse(JSON.stringify(snapshot)))
+    gates.push(() => resolve('saved'))
+  })
+  const prepare = () => { recordOnSave(store) }
+  const tick = async () => { for (let i = 0; i < 5; i++) await Promise.resolve() }
+
+  store.commit(() => { store.doc.pages[0].blocks[0].html = 'two' })
+  const keyBefore = docContentKey(store.doc)
+  const revBefore = store.revision
+  const a = saveRevision(store, queue, write, prepare)
+  // queued behind `a`, asked for NOW — and an edit lands before it starts
+  const b = saveRevision(store, queue, write, prepare)
+  await tick()
+  check(written.length === 1 && revisionsOf(written[0]).length === 1,
+    'the snapshot the write receives contains the revision recorded in its prepare')
+  check(JSON.stringify(applyRevisions(revisionsOf(written[0]))) === JSON.stringify(contentOf(written[0])),
+    'and that revision restores exactly the content of the bytes written')
+  check(store.revision === revBefore && docContentKey(store.doc) === keyBefore,
+    'recording advanced no store revision and left the recovery key unchanged')
+  store.commit(() => { store.doc.pages[0].blocks[0].html = 'three' })   // lands while `a` is in flight
+  gates[0]()
+  const outA = await a
+  await tick()
+  check(outA.kind === 'written' && !outA.current, 'the first write is stale (an edit landed after its snapshot)')
+  check(written.length === 2 && revisionsOf(written[1]).length === 2,
+    'the save queued behind it recorded at its OWN start: its snapshot carries a second revision')
+  check(written[1] && JSON.stringify(applyRevisions(revisionsOf(written[1]))) === JSON.stringify(contentOf(written[1]))
+    && written[1].pages[0].blocks[0].html === 'three',
+    'and that revision describes the content as it was when the second write began ("three"), not when it was asked for')
+  gates[1]()
+  const outB = await b
+  check(outB.kind === 'written' && outB.current, 'recording in prepare does not make the write stale')
+  check(store.dirty === false, 'the dot goes out: recording a revision did not raise it')
+
+  // a save that changed nothing records nothing, and a read-only store never records
+  const c = saveRevision(store, queue, write, prepare)
+  await tick(); gates[2]?.()
+  await c
+  check(revisionsOf(store.doc).length === 2, 'a save with no change since the last revision records none')
+  store.readOnly = true
+  store.doc.pages[0].blocks[0].html = 'frozen edit'
+  check(recordOnSave(store) === null && revisionsOf(store.doc).length === 2, 'a read-only store never records (a frozen file round-trips byte-exact)')
+}
+
+// The wiring: ⌘S and "Update this file" record in the queue's prepare, beside
+// the stamp. Pinned like #594's rows — moving the call outside the queue (back
+// to before saveRevision, where #440 had it) fails here.
+console.log('\nmain.ts records the revision inside the queue for both writes of this file')
+{
+  const { readFileSync } = await import('node:fs')
+  const src = readFileSync(new URL('../spaces/src/main.ts', import.meta.url), 'utf8')
+  const doSave = src.match(/saveRevision\(store, saves,[\s\S]*?\)\)/)?.[0] ?? ''
+  check(/stampSync\(store, session\); recordOnSave\(store\)/.test(doSave), '⌘S records in the prepare step of saveRevision, beside stampSync')
+  const inPlace = src.match(/editor\.onUpdateInPlace = async[\s\S]*?saves\.run\(([\s\S]*?)applyUpdateInPlace/)?.[1] ?? ''
+  check(/stampSync\(store, session\); recordOnSave\(store\)/.test(inPlace), '"Update this file" records in the queue\'s prepare too')
+  check((src.match(/recordOnSave\(|recordRevision\(/g) ?? []).length === 2, 'and nowhere else in main.ts (no second, out-of-queue call)')
+}
+
 if (failures) { console.error(`\n${failures} save-race check(s) FAILED`); process.exit(1) }
 console.log('\nspaces save race: an edit made during a write stays unsaved until a write that holds it lands')

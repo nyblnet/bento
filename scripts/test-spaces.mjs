@@ -69,6 +69,7 @@ const RIGS = [
   { name: 'reading', file: 'scripts/test-spaces-reading.ts', bundle: true },
   { name: 'md-strict', file: 'scripts/test-spaces-md-strict.ts', bundle: true },
   { name: 'restore-gate', file: 'scripts/test-spaces-restore-gate.ts', bundle: true },
+  { name: 'history', file: 'scripts/test-spaces-history.ts', bundle: true },
   { name: 'mentions', file: 'scripts/test-spaces-mentions.ts' },
   { name: 'size',    file: 'scripts/test-spaces-size.mjs' },
   // Revision tracking has no timezone dependency; the browser rig needs the

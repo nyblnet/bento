@@ -28,6 +28,11 @@ import { ICONS } from './icons'
 import { row, type Menu } from './menus.ts'
 import { docForExport, parseDoc, uid, type SpacesDoc } from './model'
 import { restoreInto } from './restoregate'
+import {
+  revisionsOf, historyIsForeign, changesAt, restoredDoc, clearHistory, historyBytes,
+  tooLargeForHistory, type ChangeReport,
+} from './history.ts'
+import { humanBytes } from './assets'
 import { duplicateAsNew } from './share.ts'
 import type { Store } from './store'
 
@@ -72,6 +77,7 @@ export function saveRows(m: Menu, h: DocHost): void {
   // the document AS DATA — the timeline and the round trips
   m.separator()
   row(m, { icon: ICONS.history, label: t('Version history…'), desc: t('Versions are kept in this browser only — never in the file, never online. Restoring is undoable.'), run: () => openHistory(h) })
+  row(m, { icon: ICONS.history, label: t('Versions in this file…'), desc: t('Kept inside the file, one per save, so they travel with it. Restoring is undoable.'), run: () => openFileHistory(h) })
   row(m, { icon: ICONS.code, label: t('Copy document JSON'), desc: t('Plain JSON of every page — no live-session keys'),
     run: () => copyJson(h) })
   row(m, { icon: ICONS.code, label: t('Replace from JSON…'), desc: t('Replaces every page — ⌘Z undoes'),
@@ -82,7 +88,7 @@ export function saveRows(m: Menu, h: DocHost): void {
 /** The labels, in order — what the chrome rig holds the menu to. */
 export const SAVE_ORDER = [
   'Save a copy…', 'Duplicate as new space…', 'Export as Markdown…', 'Export page as a space…', 'Export page as Markdown…',
-  'Encrypt with password…', 'Version history…', 'Copy document JSON', 'Replace from JSON…', 'Import Markdown…',
+  'Encrypt with password…', 'Version history…', 'Versions in this file…', 'Copy document JSON', 'Replace from JSON…', 'Import Markdown…',
 ]
 
 // ---- the commands ---------------------------------------------------------
@@ -220,6 +226,126 @@ function openHistory(h: DocHost): void {
     render([])
     void listVersions(h.store.doc.docId).then(render).catch(() => { /* no store, no history */ })
   }))
+}
+
+/**
+ * The timeline INSIDE THE FILE (history.ts) — the one that travels. Read
+ * synchronously: it is a field of the document already in memory.
+ *
+ * A row's summary is DERIVED here, in the reader's language, from the patch;
+ * the file stores no sentence. Restore goes through the same gate as the
+ * browser-local timeline (restoregate.ts restoreInto): the version is the
+ * document's own, but what is applied is still parsed, sanitized and given the
+ * live identity, and replaceDoc checkpoints undo so ⌘Z walks it back.
+ */
+function openFileHistory(h: DocHost): void {
+  narrow(h.openOverlay(t('Versions in this file'), (body, close) => {
+    const list = el('div', 'sp-ab-versions')
+    const foot = el('div')
+    body.append(list, foot)
+    const render = (): void => {
+      list.textContent = ''
+      foot.textContent = ''
+      const doc = h.store.doc
+      const revs = revisionsOf(doc)
+      if (!revs.length) {
+        list.append(el('p', 'sp-note', historyIsForeign(doc)
+          ? t('This file carries a history this version cannot read. It is kept exactly as it arrived.')
+          : tooLargeForHistory(doc)
+            ? t('This space is too large to keep versions inside the file.')
+            : t('No versions yet — one is kept every time you save.')))
+      }
+      // newest first: "what I had before lunch" is nearer the top
+      for (let i = revs.length - 1; i >= 0; i--) {
+        const v = revs[i]
+        const when = new Date(v.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        const rep = changesAt(revs, i)
+        const item = el('div', 'sp-hist-row')
+        const b = el('button', 'sp-ab-version')
+        b.type = 'button'
+        b.append(el('span', 'sp-ab-when', when), el('span', 'sp-ab-vtag', v.label || summary(rep)), el('span', 'sp-ab-vdo', t('Restore')))
+        b.disabled = h.store.readOnly
+        b.addEventListener('click', () => {
+          if (h.store.readOnly) { h.notice(t('This file is open read-only')); return }
+          const next = restoredDoc(h.store.doc, i)
+          if (!next || !restoreInto(h.store, JSON.stringify(next))) { h.notice(t('That version could not be read')); return }
+          h.repaint()
+          close()
+          h.notice(t('Restored the version from {when} — ⌘Z undoes it', { when }))
+        })
+        const show = el('button', 'sp-hist-diff-btn', t('Changes'))
+        show.type = 'button'
+        show.setAttribute('aria-expanded', 'false')
+        let panel: HTMLElement | null = null
+        show.addEventListener('click', () => {
+          if (panel) { panel.remove(); panel = null; show.setAttribute('aria-expanded', 'false'); return }
+          panel = renderDiff(rep)
+          item.append(panel)
+          show.setAttribute('aria-expanded', 'true')
+        })
+        const head = el('div', 'sp-hist-head')
+        head.append(b, show)
+        item.append(head)
+        list.append(item)
+      }
+      const size = historyBytes(doc)
+      if (size && revs.length) foot.append(el('p', 'sp-note', t('History takes {size} of this file.', { size: humanBytes(size) })))
+      // said in the dialog and not only in the source: a deleted page is still
+      // in the file until the budget folds it away
+      foot.append(el('p', 'sp-note', t('Versions include text you have deleted. They travel in this file and in invites; reading copies, view-only copies and Copy document JSON leave them out.')))
+      if (!h.store.readOnly && revs.length) {
+        const confirmBox = el('div')
+        const clearBtn = button(t('Clear history…'), () => {
+          // IN FLOW, not a popover: the card scrolls (CLAUDE.md hard-won #10)
+          clearBtn.disabled = true
+          confirmBox.append(
+            el('p', 'sp-note', t('The past text goes with them, including anything you deleted. Save the file for it to take effect.')),
+            actions(button(t('Cancel'), () => { confirmBox.textContent = ''; clearBtn.disabled = false }), button(t('Clear history'), () => {
+              if (clearHistory(h.store.doc)) h.store.setDirty(true)
+              render()
+              h.notice(t('History removed. Save to write the file without it.'))
+            }, true)),
+          )
+        })
+        foot.append(actions(clearBtn), confirmBox)
+      }
+    }
+    render()
+  }))
+}
+
+/** The one-line summary for a revision, made in the reader's language. */
+function summary(rep: ChangeReport): string {
+  if (rep.first) return t('First version kept in this file')
+  if (rep.pagesChanged || rep.blocksChanged) return t('{p} page(s), {b} block(s) changed', { p: rep.pagesChanged, b: rep.blocksChanged })
+  if (rep.fieldsChanged.length) return t('Changes outside the pages — title, design, footnotes or templates')
+  return t('Nothing changed')
+}
+
+/**
+ * A change report, drawn — WORD granularity (history.ts), from the block's
+ * TEXT, never its markup. textContent throughout: this is the file's own text.
+ */
+function renderDiff(rep: ChangeReport): HTMLElement {
+  const box = el('div', 'sp-hist-diff')
+  if (!rep.pages.length) { box.append(el('p', 'sp-note', t('Nothing changed'))); return box }
+  for (const p of rep.pages.slice(0, 12)) {
+    const head = el('div', 'sp-hist-page', p.title || t('Untitled'))
+    if (p.kind === 'added') head.append(el('span', 'sp-hist-chip', t('New page')))
+    else if (p.kind === 'removed') head.append(el('span', 'sp-hist-chip', t('Deleted page')))
+    else if (p.wasTitled !== undefined) head.append(el('span', 'sp-hist-chip', t('Renamed from “{title}”', { title: p.wasTitled || t('Untitled') })))
+    box.append(head)
+    for (const b of p.blocks.slice(0, 20)) {
+      const line = el('p', 'sp-hist-line')
+      for (const part of b.parts) {
+        if (part.text) line.append(el(part.op === 'ins' ? 'ins' : part.op === 'del' ? 'del' : 'span', '', part.text))
+      }
+      if (!line.childNodes.length) line.append(el('span', 'sp-hist-empty', b.type))
+      box.append(line)
+    }
+    if (p.blocks.length > 20) box.append(el('span', 'sp-hist-chip', '…'))
+  }
+  return box
 }
 
 /**

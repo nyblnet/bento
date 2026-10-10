@@ -16,6 +16,7 @@
 import type { CollabCreds } from './sync/crdt.ts'
 // Type-only, and therefore erased: no runtime dependency, no import cycle.
 import type { PageTemplate } from './templates.ts'
+import type { SpacesRevision } from './history.ts'
 import { esc, externalHref } from './sanitize.ts'
 // A VALUE import, and the cycle it looks like is not one: embed.ts imports
 // only TYPES from here, and a type import is erased before anything runs.
@@ -473,13 +474,20 @@ export interface SpacesDoc {
    */
   collab?: CollabCreds
   /**
-   * In-file version history (kernel field class 'history', docfields.ts).
-   * Declared here, typed loosely, BEFORE the features that write them land, so
-   * the copy rules already classify them: kept by the file, a duplicate and an
-   * invite; dropped from every reader-tier copy and from Copy document JSON;
-   * never synced. Nothing in this build reads or writes either.
+   * In-file history (kernel field class 'history', docfields.ts): kept by the
+   * file, a duplicate and an invite; dropped from every reader-tier copy and
+   * from Copy document JSON; never synced.
+   *
+   * `revisions` is the space's VERSION HISTORY — oldest first, each entry the
+   * kernel's `Revision` envelope around the change from the one before it.
+   * The engine, its budget and the reasoning live in history.ts; every entry
+   * read from a file is validated there before anything folds it. Absent when
+   * there is none — never `revisions: []`. `import type`, so no runtime cycle.
+   *
+   * `trail` is declared for the tracker's burndown record; nothing in this
+   * build reads or writes it.
    */
-  revisions?: unknown[]
+  revisions?: SpacesRevision[]
   trail?: unknown
   [extra: string]: unknown
 }
@@ -668,7 +676,8 @@ export const newPage = (title = 'Untitled', extra: Partial<Page> = {}): Page =>
 export function docContentKey(doc: SpacesDoc): string {
   // The kernel's key (docfields.ts), over this app's field map: every declared
   // and undeclared top-level field that is PRESENT, sorted, except the
-  // capability (`collab` — a key is not an edit) and `modified`.
+  // capability (`collab` — a key is not an edit), `modified`, and `revisions`
+  // (recorded only into the bytes a save writes — docclass.ts SPACES_NOT_EDIT).
   //
   // So `footnotes` is in it (a note's text is somebody's writing and lives
   // nowhere else), the page templates and the journal template are in it
