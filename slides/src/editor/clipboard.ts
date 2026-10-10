@@ -8,9 +8,16 @@
 // fonts) travel inside the payload, so pasting into another deck brings the
 // pixels and typefaces along; asset-key collisions with different content are
 // remapped so nothing clobbers the target deck.
+//
+// Reading that channel is the untrusted direction — the clipboard is public,
+// and a payload on it need not have come from a Bento deck. parseClip rebuilds
+// what it finds through untrusted.ts before anything reaches the document, so
+// that a fragment the format cannot express never becomes part of one.
 
-import type { BentoDoc, Slide, SlideElement } from '../model'
+import type { BentoDoc, Slide, SlideElement, TextElement } from '../model'
 import { uid } from '../model'
+import { firstFamily } from '../fonts'
+import { LIMITS, sanitizeAssets, sanitizeElement, sanitizeFonts, sanitizeSlide } from '../untrusted'
 
 export interface ClipPayload {
   __bento: 'clip'
@@ -28,39 +35,101 @@ function assetKeysOf(els: SlideElement[]): Set<string> {
     if ((el.type === 'image' || el.type === 'media') && typeof el.src === 'string' && el.src.startsWith('asset:')) keys.add(el.src.slice(6))
     const a = (el as { asset?: string }).asset
     if (typeof a === 'string') keys.add(a) // svg elements reference an asset key
+    // embed: the view may live in doc.assets, and a paste that
+    // kept the reference and lost the picture would paint a hole
+    if (el.type === 'embed' && typeof el.view === 'string' && el.view.startsWith('asset:')) keys.add(el.view.slice(6))
   }
   return keys
 }
 
-function collectAssets(els: SlideElement[], doc: BentoDoc): Record<string, string> {
+function fontsFor(els: SlideElement[], doc: BentoDoc): NonNullable<BentoDoc['fonts']> {
+  const families = new Set(
+    els
+      .filter((el): el is TextElement => el.type === 'text')
+      .map((el) => firstFamily(el.fontFamily)),
+  )
+  return (doc.fonts ?? []).filter((font) => families.has(firstFamily(font.family)))
+}
+
+function collectAssets(els: SlideElement[], fonts: NonNullable<BentoDoc['fonts']>, doc: BentoDoc): Record<string, string> {
   const out: Record<string, string> = {}
-  for (const k of assetKeysOf(els)) if (doc.assets?.[k] != null) out[k] = doc.assets[k]
+  const keys = assetKeysOf(els)
+  for (const font of fonts) keys.add(font.asset)
+  for (const k of keys) if (doc.assets?.[k] != null) out[k] = doc.assets[k]
   return out
 }
 
 export function serializeElements(els: SlideElement[], doc: BentoDoc): string {
+  const fonts = fontsFor(els, doc)
   const payload: ClipPayload = {
     __bento: 'clip', kind: 'elements',
     elements: JSON.parse(JSON.stringify(els)),
-    assets: collectAssets(els, doc),
+    assets: collectAssets(els, fonts, doc),
+    fonts,
   }
   return JSON.stringify(payload)
 }
 
 export function serializeSlides(slides: Slide[], doc: BentoDoc): string {
   const els = slides.flatMap((s) => s.elements)
+  const fonts = fontsFor(els, doc)
   const payload: ClipPayload = {
     __bento: 'clip', kind: 'slides',
     slides: JSON.parse(JSON.stringify(slides)),
-    assets: collectAssets(els, doc),
-    fonts: doc.fonts, // carry typefaces so pasted slides keep their look
+    assets: collectAssets(els, fonts, doc),
+    fonts,
   }
   return JSON.stringify(payload)
 }
 
+/**
+ * Read a clip payload off the system clipboard — the ONE place foreign
+ * document fragments enter the deck, and so the place they are checked.
+ *
+ * Nothing about clipboard text says a Bento deck wrote it: any page with a
+ * Copy button can leave a `__bento:"clip"` payload there, and this used to
+ * hand whatever it contained to insertElements/insertSlides unread. So the
+ * payload is REBUILT through untrusted.ts — known kind, known element types,
+ * known keys, values of the right shape — and anything that does not conform
+ * is dropped rather than repaired.
+ *
+ * This is the model-shape layer, not the escaping layer: render.ts escapes and
+ * validates what it writes into markup on its own (it has to — a deck opened
+ * from disk never passes through here). What this adds is that the DOCUMENT
+ * never holds the value in the first place, which is the part every future
+ * renderer inherits for free.
+ *
+ * A payload with nothing left after the rebuild returns null, so the paste
+ * handler falls through to its plain-text branch: the JSON lands as a visible
+ * text element instead of silently doing nothing. That fallback is a poor fit
+ * for the SIZE ceiling — an over-budget but perfectly legitimate slide copy
+ * deserves "that paste is too large", not 4000 characters of raw JSON — so the
+ * ceiling is set where real payloads cannot reach it (LIMITS.clipText).
+ */
 export function parseClip(text: string): ClipPayload | null {
-  if (!text || text.length > 40_000_000) return null
-  try { const p = JSON.parse(text); return p && p.__bento === 'clip' ? p as ClipPayload : null } catch { return null }
+  if (!text || text.length > LIMITS.clipText) return null
+  let raw: unknown
+  try { raw = JSON.parse(text) } catch { return null }
+  if (!raw || typeof raw !== 'object') return null
+  const p = raw as Record<string, unknown>
+  if (p.__bento !== 'clip') return null
+  if (p.kind !== 'elements' && p.kind !== 'slides') return null
+
+  const payload: ClipPayload = {
+    __bento: 'clip', kind: p.kind,
+    assets: sanitizeAssets(p.assets),
+    fonts: sanitizeFonts(p.fonts),
+  }
+  if (p.kind === 'elements') {
+    if (!Array.isArray(p.elements) || p.elements.length > LIMITS.elements) return null
+    payload.elements = p.elements.map(sanitizeElement).filter((el): el is SlideElement => el !== null)
+    if (!payload.elements.length) return null
+  } else {
+    if (!Array.isArray(p.slides) || p.slides.length > LIMITS.slides) return null
+    payload.slides = p.slides.map(sanitizeSlide).filter((s): s is Slide => s !== null)
+    if (!payload.slides.length) return null
+  }
+  return payload
 }
 
 /** Merge payload assets into doc; on same-key-different-value, remap to a fresh key. */
@@ -75,6 +144,16 @@ function mergeAssets(payload: ClipPayload, doc: BentoDoc): Map<string, string> {
   return remap
 }
 
+/** Merge embedded-font records after their asset keys have been remapped. */
+function mergeFonts(payload: ClipPayload, doc: BentoDoc, remap: Map<string, string>) {
+  if (!payload.fonts?.length) return
+  doc.fonts = doc.fonts ?? []
+  for (const source of payload.fonts) {
+    if (doc.fonts.some((font) => font.family === source.family)) continue
+    doc.fonts.push({ ...source, asset: remap.get(source.asset) ?? source.asset })
+  }
+}
+
 function rewriteRefs(els: SlideElement[], remap: Map<string, string>) {
   if (!remap.size) return
   for (const el of els) {
@@ -83,12 +162,16 @@ function rewriteRefs(els: SlideElement[], remap: Map<string, string>) {
     }
     const a = (el as { asset?: string }).asset
     if (typeof a === 'string' && remap.has(a)) (el as { asset?: string }).asset = remap.get(a)
+    if (el.type === 'embed' && typeof el.view === 'string' && el.view.startsWith('asset:')) {
+      const k = el.view.slice(6); if (remap.has(k)) el.view = 'asset:' + remap.get(k)
+    }
   }
 }
 
 /** Insert pasted elements onto a slide with fresh ids, nudged so they're visible. */
 export function insertElements(payload: ClipPayload, doc: BentoDoc, slide: Slide): SlideElement[] {
   const remap = mergeAssets(payload, doc)
+  mergeFonts(payload, doc, remap)
   const els: SlideElement[] = (payload.elements ?? []).map((e) => ({
     ...(JSON.parse(JSON.stringify(e)) as SlideElement),
     id: uid(e.type[0]),
@@ -102,10 +185,7 @@ export function insertElements(payload: ClipPayload, doc: BentoDoc, slide: Slide
 /** Insert pasted slides at `at` with fresh slide ids; merge assets + fonts. */
 export function insertSlides(payload: ClipPayload, doc: BentoDoc, at: number): Slide[] {
   const remap = mergeAssets(payload, doc)
-  if (payload.fonts?.length) {
-    doc.fonts = doc.fonts ?? []
-    for (const f of payload.fonts) if (!doc.fonts.some((g) => g.family === f.family)) doc.fonts.push(f)
-  }
+  mergeFonts(payload, doc, remap)
   const slides: Slide[] = (payload.slides ?? []).map((s) => {
     const copy = JSON.parse(JSON.stringify(s)) as Slide
     copy.id = uid('slide')

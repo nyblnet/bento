@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GENERATED from home/assets/home-icon.svg by home/assets/make-icons.mjs.
+  Do not edit: run `node home/assets/make-icons.mjs` instead.
+
+  The navy frame is the BACKGROUND layer (@color/tray_navy) and the cream tray is
+  the foreground. That split is what an adaptive icon wants: the system
+  parallaxes the two against each other, and a frame drawn into the foreground
+  would slide away from its own edge.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#F0EBE0"
+        android:pathData="M37.39,26 H70.61 A11.39,11.39 0 0 1 82,37.39 V70.61 A11.39,11.39 0 0 1 70.61,82 H37.39 A11.39,11.39 0 0 1 26,70.61 V37.39 A11.39,11.39 0 0 1 37.39,26 Z" />
+    <path
+        android:fillColor="#5E7699"
+        android:pathData="M37.13,32.17 H41.1 A4.96,4.96 0 0 1 46.06,37.13 V70.87 A4.96,4.96 0 0 1 41.1,75.83 H37.13 A4.96,4.96 0 0 1 32.17,70.87 V37.13 A4.96,4.96 0 0 1 37.13,32.17 Z" />
+    <path
+        android:fillColor="#FF9E8A"
+        android:pathData="M54.99,32.17 H70.87 A4.96,4.96 0 0 1 75.83,37.13 V47.05 A4.96,4.96 0 0 1 70.87,52.02 H54.99 A4.96,4.96 0 0 1 50.03,47.05 V37.13 A4.96,4.96 0 0 1 54.99,32.17 Z" />
+    <path
+        android:fillColor="#16273E"
+        android:pathData="M54.99,55.98 H70.87 A4.96,4.96 0 0 1 75.83,60.95 V70.87 A4.96,4.96 0 0 1 70.87,75.83 H54.99 A4.96,4.96 0 0 1 50.03,70.87 V60.95 A4.96,4.96 0 0 1 54.99,55.98 Z" />
+</vector>

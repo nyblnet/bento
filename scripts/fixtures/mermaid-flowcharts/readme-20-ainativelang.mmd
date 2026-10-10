@@ -1,0 +1,7 @@
+%% source: https://github.com/sbhooley/ainativelang/blob/HEAD/README.md (Apache-2.0)
+flowchart LR
+A[AINL Source] --> B[Compiler]
+B --> C[Canonical Graph IR]
+C --> D[Runtime Engine]
+D --> E[Adapters / Tools / State]
+D --> F[Optional LLM Calls]

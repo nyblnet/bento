@@ -1,0 +1,62 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 The Bento authors
+ */
+/* --- the modal form that replaced window.prompt --------------------------- */
+/* Native prompts are unavailable in embedded webviews, sandboxed iframes and
+   any tab where the reader has blocked extra dialogs — see `askForm` in
+   main.ts. This is that dialog, styled to sit with .dx-pop rather than beside
+   it, because they are the same kind of object at different sizes. */
+.dx-ask-back {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--scrim);
+}
+.dx-ask {
+  width: min(30rem, 100%);
+  max-height: 100%;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-dialog);
+  padding: 18px 20px 14px;
+}
+.dx-ask-title { margin: 0 0 14px; font-size: 15px; font-weight: 600; }
+.dx-ask-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.dx-ask-row > span { font-size: 12px; color: var(--muted); }
+.dx-ask-in {
+  width: 100%;
+  padding: 7px 9px;
+  font: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+/* --blue, not --accent: the amber ring is 2.02:1 on white and misses the 3:1
+   WCAG 2.2 SC 1.4.11 asks of a focus indicator. See .dx-btn:focus-visible. */
+.dx-ask-in:focus-visible { outline: 2px solid var(--blue); outline-offset: -1px; }
+/* A formula is read character by character — an l and a 1 have to differ. */
+.dx-ask-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.dx-ask-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.dx-ask-err { margin: 0 0 10px; font-size: 12px; color: var(--err-ink); }
+.dx-ask-foot { display: flex; justify-content: flex-end; gap: 8px; }
+/* Scoped through .dx-ask-foot to out-rank styles.css's `.dx-ask-foot .dx-btn`
+   boxed rule, which is two classes and would otherwise repaint the primary as
+   an ordinary outlined button — the same specificity trap the .dx-dirty and
+   .dx-people-me notes in styles.css describe. */
+.dx-ask-foot .dx-ask-go { background: var(--accent); color: #1e2a3a; border-color: transparent; }
+.dx-ask-foot .dx-ask-go:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+.dx-ask-go:disabled { opacity: 0.35; cursor: not-allowed; }

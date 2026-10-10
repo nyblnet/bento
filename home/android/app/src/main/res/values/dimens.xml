@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- `the r token: 9px` in home/webext/src/ui.css. Radii are a big part of why two
+         surfaces read as the same family, so it is shared rather than guessed
+         per widget. -->
+    <dimen name="radius">9dp</dimen>
+    <dimen name="radius_small">5dp</dimen>
+    <!-- 48dp is the platform's minimum comfortable touch target. Framework
+         Buttons do not enforce it once you replace their background. -->
+    <dimen name="touch_min">48dp</dimen>
+</resources>

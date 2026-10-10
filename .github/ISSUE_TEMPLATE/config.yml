@@ -1,5 +1,19 @@
-blank_issues_enabled: true
+# Issues are for bugs. Everything else has a better home now that Discussions
+# is open — answers there are searchable, so they help the next person too.
+blank_issues_enabled: false
 contact_links:
+  - name: Question — how do I…?
+    url: https://github.com/nyblnet/bento/discussions/categories/q-a
+    about: Ask in Discussions → Q&A. Answers are searchable and help the next person.
+  - name: Idea or feature request
+    url: https://github.com/nyblnet/bento/discussions/categories/ideas
+    about: Start in Discussions → Ideas. Anything substantial gets an issue from there.
+  - name: Show what you built
+    url: https://github.com/nyblnet/bento/discussions/categories/show-and-tell
+    about: Decks, templates, or things built on the format.
+  - name: Planning to contribute code?
+    url: https://github.com/nyblnet/bento/issues/124
+    about: Check what's already in flight first, and say what you're planning.
   - name: Security vulnerability
     url: https://github.com/nyblnet/bento/blob/main/SECURITY.md
     about: Please report security issues privately — do not open a public issue.

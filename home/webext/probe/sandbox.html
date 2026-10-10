@@ -1,0 +1,240 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Probe — does a deck survive an opaque origin?</title>
+<style>
+  body { font: 15px/1.6 -apple-system, system-ui, sans-serif; max-width: 60rem; margin: 3vh auto; padding: 0 1.4rem; color: #1e2a3a; }
+  h1 { font-size: 20px; margin-bottom: .2rem; }
+  .sub { color: #586a80; margin-top: 0; }
+  .warn { background: #fff6e5; border: 1px solid #f0d9a8; border-radius: 8px; padding: .8rem 1rem; margin: 1rem 0; }
+  button, input[type=file] { font: inherit; }
+  button { padding: .5rem 1rem; border: 1px solid #c8d0dc; border-radius: 8px; background: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: 13.5px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #e6e2d8; vertical-align: top; }
+  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em; color: #8b9bb0; }
+  td.k { font: 12.5px ui-monospace, monospace; white-space: nowrap; }
+  .ok { color: #1d6b39; } .bad { color: #a3322a; } .same { color: #8b9bb0; }
+  .frames { display: flex; gap: 12px; margin-top: 1rem; }
+  .frames > div { flex: 1; }
+  iframe { width: 100%; height: 260px; border: 1px solid #e6e2d8; border-radius: 8px; background: #fff; }
+  .cap { font-size: 12px; color: #8b9bb0; margin-bottom: 4px; }
+  #verdict { margin-top: 1rem; padding: .9rem 1rem; border-radius: 8px; font-weight: 600; display: none; }
+  .pass { background: #e8f5ec; border: 1px solid #b7dcc3; color: #1d6b39; }
+  .fail { background: #fdeceb; border: 1px solid #f0c0bc; color: #a3322a; }
+  #log { background: #f5f7fa; border-radius: 8px; padding: .8rem; white-space: pre-wrap; font: 12px/1.45 ui-monospace, monospace; margin-top: 1rem; max-height: 260px; overflow: auto; }
+</style>
+
+<h1>Does a Bento document survive an <em>opaque origin</em>?</h1>
+<p class="sub">
+  The only isolation left to <b>bento/home</b> is running a document in
+  <code>&lt;iframe sandbox="allow-scripts"&gt;</code> — no <code>allow-same-origin</code>, so it
+  reaches no storage at all, home's or any other document's. The question is what
+  that costs the document.
+</p>
+
+<div class="warn">
+  Nothing is written to disk. The file is read into memory and loaded twice: once
+  <b>without</b> the sandbox (the control, so we can tell what the sandbox breaks
+  from what breaks anyway) and once <b>with</b> it.
+</div>
+
+<p><input type="file" id="file" accept=".html,text/html"> <button id="run" disabled>Run both</button></p>
+
+<div id="verdict"></div>
+<div id="results"></div>
+
+<div class="frames">
+  <div><div class="cap">control — same origin, full storage</div><iframe id="f-control"></iframe></div>
+  <div><div class="cap">sandboxed — opaque origin, no storage</div><iframe id="f-sandbox" sandbox="allow-scripts"></iframe></div>
+</div>
+
+<div id="log"></div>
+
+<script type="module">
+const logEl = document.getElementById('log')
+const log = (...a) => { logEl.textContent += a.join(' ') + '\n'; logEl.scrollTop = logEl.scrollHeight }
+
+let html = null
+const runs = { control: {}, sandbox: {} }
+
+document.getElementById('file').onchange = async (ev) => {
+  const f = ev.target.files?.[0]
+  if (!f) return
+  html = await f.text()
+  log(`loaded ${f.name} — ${(f.size / 1024).toFixed(0)}KB`)
+  document.getElementById('run').disabled = false
+}
+
+// ?src=… fetches a deck instead of picking one — so a run can be repeated
+// after an edit without re-choosing the file every time.
+{
+  const src = new URLSearchParams(location.search).get('src')
+  if (src) {
+    fetch(src)
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(r.status + ' ' + r.statusText))))
+      .then((t) => {
+        html = t
+        log(`fetched ${src} — ${(t.length / 1024).toFixed(0)}KB`)
+        document.getElementById('run').disabled = false
+        if (new URLSearchParams(location.search).has('auto')) document.getElementById('run').click()
+      })
+      .catch((e) => log('could not fetch ' + src + ': ' + e.message))
+  }
+}
+
+/**
+ * A harness injected at the very top of the document, before its own scripts.
+ *
+ * Necessary because an opaque-origin frame cannot be inspected from here at
+ * all — no contentDocument, no console. The document has to report on itself,
+ * so the probe adds a reporter rather than guessing from the outside.
+ *
+ * Built by concatenation so no literal script-close can appear in this file.
+ */
+function harness(tag) {
+  const OPEN = '<scr' + 'ipt>'
+  const CLOSE = '</scr' + 'ipt>'
+  return OPEN + `
+(function () {
+  var TAG = ${JSON.stringify(tag)};
+  var send = function (m) { try { m.tag = TAG; m.__probe = 1; parent.postMessage(m, '*') } catch (e) {} };
+  var probe = function (name, fn) {
+    try { send({ type: 'api', name: name, ok: true, detail: String(fn()) }) }
+    catch (e) { send({ type: 'api', name: name, ok: false, detail: e.name + ': ' + e.message }) }
+  };
+  send({ type: 'ctx', origin: String(location.origin), secure: !!self.isSecureContext });
+
+  // The APIs a Bento document actually reaches for. Each is a real feature:
+  // localStorage carries language/reduce-motion and the collab member key,
+  // IndexedDB carries autosave + version history, crypto mints docIds and
+  // signs collab writes.
+  probe('localStorage read',  function () { return 'ok, len=' + localStorage.length });
+  probe('localStorage write', function () { localStorage.setItem('__probe', '1'); return 'ok' });
+  probe('indexedDB present',  function () { return typeof indexedDB });
+  probe('indexedDB.open',     function () { var r = indexedDB.open('__probe', 1); return 'call ok (' + typeof r + ')' });
+  probe('crypto.randomUUID',  function () { return crypto.randomUUID().slice(0, 8) + '…' });
+  probe('crypto.subtle',      function () { return typeof crypto.subtle });
+  probe('caches',             function () { return typeof caches });
+
+  // Anything the document throws on its own, which is the real question:
+  // does it DEGRADE or does it die.
+  window.addEventListener('error', function (e) {
+    send({ type: 'error', detail: (e.message || 'error') + '  @' + (e.filename || '?').split('/').pop() + ':' + (e.lineno || 0) });
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason; send({ type: 'reject', detail: String((r && (r.message || r.name)) || r) });
+  });
+
+  // Did the app actually come up? Reported twice: once early, once late enough
+  // for a deflate-and-import boot to have finished.
+  var report = function (when) {
+    var b = window.bento;
+    send({
+      type: 'boot', when: when,
+      hasBento: !!b,
+      slides: (b && b.doc && b.doc.slides && b.doc.slides.length) || 0,
+      title: (b && b.doc && b.doc.title) || null,
+      appNodes: (document.getElementById('app') && document.getElementById('app').childElementCount) || 0,
+      surfaces: document.querySelectorAll('.bento-slide, .ed-stage-scale').length,
+      bodyText: (document.body ? document.body.innerText.slice(0, 90) : '')
+    });
+  };
+  setTimeout(function () { report('3s') }, 3000);
+  setTimeout(function () { report('8s') }, 8000);
+})();
+` + CLOSE
+}
+
+/** Put the harness first, so it is installed before the document's own boot. */
+function inject(src, tag) {
+  const m = /<head[^>]*>/i.exec(src)
+  return m ? src.slice(0, m.index + m[0].length) + harness(tag) + src.slice(m.index + m[0].length)
+           : harness(tag) + src
+}
+
+window.addEventListener('message', (ev) => {
+  const d = ev.data
+  if (!d || !d.__probe) return
+  const run = runs[d.tag]
+  if (!run) return
+  if (d.type === 'ctx') { run.origin = d.origin; run.secure = d.secure; log(`[${d.tag}] origin=${d.origin} secure=${d.secure}`) }
+  if (d.type === 'api') { (run.api ??= {})[d.name] = d; log(`[${d.tag}] ${d.ok ? 'ok  ' : 'FAIL'} ${d.name} — ${d.detail}`) }
+  if (d.type === 'error' || d.type === 'reject') {
+    (run.errors ??= []).push(d.detail)
+    log(`[${d.tag}] ${d.type.toUpperCase()} ${d.detail}`)
+  }
+  if (d.type === 'boot') {
+    run.boot = d
+    log(`[${d.tag}] boot@${d.when} bento=${d.hasBento} slides=${d.slides} surfaces=${d.surfaces} appNodes=${d.appNodes}`)
+    // The body text is where a shell that refused to start says WHY — the
+    // loader catches its own failure and prints it, so nothing reaches
+    // window.onerror and the run otherwise looks like a silent death.
+    if (!d.hasBento && d.bodyText) log(`[${d.tag}] page says: ${d.bodyText}`)
+    render()
+  }
+  render()
+})
+
+document.getElementById('run').onclick = () => {
+  document.getElementById('run').disabled = true
+  logEl.textContent = ''
+  runs.control = {}; runs.sandbox = {}
+  for (const tag of ['control', 'sandbox']) {
+    const blob = new Blob([inject(html, tag)], { type: 'text/html' })
+    // A blob URL inherits THIS origin — which is exactly why the sandbox
+    // attribute matters: with `sandbox` and no `allow-same-origin`, the frame
+    // is forced into a unique opaque origin regardless of where the blob came
+    // from. The control frame has no sandbox, so it keeps this origin.
+    document.getElementById('f-' + tag).src = URL.createObjectURL(blob)
+  }
+  log('both frames loading…\n')
+}
+
+const ROWS = ['localStorage read', 'localStorage write', 'indexedDB present', 'indexedDB.open',
+              'crypto.randomUUID', 'crypto.subtle', 'caches']
+
+function cell(d) {
+  if (!d) return '<td class="same">—</td>'
+  return `<td class="${d.ok ? 'ok' : 'bad'}">${d.ok ? '✓' : '✗'} ${escapeHtml(d.detail).slice(0, 60)}</td>`
+}
+const escapeHtml = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+
+function render() {
+  const c = runs.control, s = runs.sandbox
+  let out = `<table><tr><th>capability</th><th>control (same origin)</th><th>sandboxed (opaque)</th></tr>`
+  out += `<tr><td class="k">origin</td><td class="same">${escapeHtml(c.origin ?? '—')}</td><td class="same">${escapeHtml(s.origin ?? '—')}</td></tr>`
+  out += `<tr><td class="k">secure context</td><td class="same">${c.secure ?? '—'}</td><td class="same">${s.secure ?? '—'}</td></tr>`
+  for (const k of ROWS) out += `<tr><td class="k">${k}</td>${cell(c.api?.[k])}${cell(s.api?.[k])}</tr>`
+  const bootRow = (r) => r.boot
+    ? `<td class="${r.boot.hasBento ? 'ok' : 'bad'}">${r.boot.hasBento ? '✓ booted' : '✗ no window.bento'} · ${r.boot.slides} slides · ${r.boot.surfaces} surfaces</td>`
+    : '<td class="same">waiting…</td>'
+  out += `<tr><td class="k">app boot</td>${bootRow(c)}${bootRow(s)}</tr>`
+  const errRow = (r) => `<td class="${r.errors?.length ? 'bad' : 'ok'}">${r.errors?.length ? escapeHtml(r.errors.slice(0, 3).join(' · ')).slice(0, 120) : 'none'}</td>`
+  out += `<tr><td class="k">errors thrown</td>${errRow(c)}${errRow(s)}</tr>`
+  out += `</table>`
+  document.getElementById('results').innerHTML = out
+
+  if (c.boot?.when === '8s' && s.boot?.when === '8s') {
+    const el = document.getElementById('verdict')
+    const bothBooted = c.boot.hasBento && s.boot.hasBento
+    const sameSlides = c.boot.slides === s.boot.slides
+    const ok = bothBooted && sameSlides
+    el.className = ok ? 'pass' : 'fail'
+    el.style.display = 'block'
+    // Two very different failures hide behind "it did not boot", and calling
+    // them both fatal would be the wrong answer. Dying on a storage ACCESS is
+    // an unguarded call site — bounded, mechanical, fixable. Dying with no
+    // explanation is the one that says the shape does not work.
+    const said = s.boot.bodyText ?? ''
+    const storageDeath = /could not start/i.test(said) && /localStorage|IndexedDB|storage/i.test(said)
+    el.textContent = ok
+      ? `The document boots and renders in an opaque origin (${s.boot.slides} slides, same as the control). Storage is gone — see the table — but the runtime survives, so home CAN host documents this way.`
+      : storageDeath
+        ? `NOT fatal, but blocked: the shell refuses to start because something reads storage during boot — "${said.slice(0, 120)}". That is an unguarded call site, not an incapability. Guard the storage accessors and re-run this probe; the features that need storage (autosave, version history, collab identity) stay lost either way, and that is the real decision.`
+        : !s.boot.hasBento
+          ? 'The document does NOT come up in an opaque origin, and does not say why. Home cannot host documents this way.'
+          : `The document comes up but does not match the control (${s.boot.slides} vs ${c.boot.slides} slides). Read the errors before trusting it.`
+    document.getElementById('run').disabled = false
+  }
+}
+</script>

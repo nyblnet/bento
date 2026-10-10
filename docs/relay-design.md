@@ -1,9 +1,9 @@
 # bento relay — design
 
 *Design document, July 2026. Status: **proposed** — nothing built. The relay
-is a product in its own right, separate from `bento/vault` (see
-`vault-design.md`) and with its own release train. Today's collab relay
-(`server/sync-worker/`) is a narrower ancestor of this; the two converge —
+is a product in its own right, separate from `bento/vault` and with its own
+release train. Today's collab relay (`server/sync-worker/`) is a narrower
+ancestor of this; the two converge —
 see* Relationship to the collab relay *below.*
 
 ## What it is

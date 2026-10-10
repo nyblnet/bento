@@ -60,7 +60,7 @@ no plugin, no API. Two ways in:
   with filesystem access. Claude Code users get a packaged `bento-slides`
   skill (installable from this repo's plugin marketplace: `/plugin marketplace
   add nyblnet/bento`) that even downloads the latest Bento app by itself.
-- **Chat round-trip** for any chatbot: copy the document JSON out (*About →
+- **Chat round-trip** for any chatbot: copy the document JSON out (*Save →
   Copy document JSON*), let the assistant rewrite it, paste it back.
 
 **It works fully offline with local open-weight models** — point
@@ -130,6 +130,22 @@ locally so the signing key never leaves the maintainer's machine — see
 Contributions welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md). Found a
 security issue? See [SECURITY.md](SECURITY.md).
 
+## Community
+
+- **Questions and help** — [Discussions →
+  Q&A](https://github.com/nyblnet/bento/discussions/categories/q-a)
+- **Ideas and feature requests** — [Discussions →
+  Ideas](https://github.com/nyblnet/bento/discussions/categories/ideas)
+- **Built something with Bento?** — [Show and
+  tell](https://github.com/nyblnet/bento/discussions/categories/show-and-tell)
+- **Bugs** — [open an issue](https://github.com/nyblnet/bento/issues).
+  Security issues go through [SECURITY.md](SECURITY.md) instead, never a
+  public issue.
+
+Planning a substantial contribution? Check the pinned **What's in flight**
+issue and the open PRs first, and say what you're planning before you build it
+— see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Roadmap
 
 **bento/slides** is the first app — a PowerPoint alternative, shipping now.
@@ -142,6 +158,6 @@ existing file through the signed update channel.
 
 Bento is open source under the [MIT License](LICENSE) — all software here is
 MIT, © 2026 The Bento authors. Bundled runtime components (reveal.js,
-PptxGenJS, Moveable, Selecto) are MIT; the embedded typefaces (Fraunces, Instrument Sans)
+Moveable, Selecto) are MIT; the embedded typefaces (Fraunces, Instrument Sans)
 are OFL; gallery imagery is public-domain (see
 `scripts/gallery-photos/SOURCES.md`). Each component keeps its own license.

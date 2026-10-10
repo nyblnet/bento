@@ -1,0 +1,20 @@
+{
+  "name": "bento-type",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:single": "tsc -b && SINGLEFILE=1 vite build --outDir dist-single && mv dist-single/index.html dist-single/Bento_Type.bento.html && node ../scripts/postbuild-compress.mjs dist-single/Bento_Type.bento.html --generator bento-type --title \"bento/type\"",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@gfx/zopfli": "^1.0.15",
+    "@types/node": "^24.13.2",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.1",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}

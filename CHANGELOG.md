@@ -11,30 +11,1384 @@ pre-1.0.
 
 ## [Unreleased]
 
-- **Updating a file now suggests that file's own name.** When an update asks
-  where to save, the dialog is pre-filled with the name of the deck you have
-  open rather than one derived from its title — so a file called
-  `Q3-board.bento.html` no longer offers to save itself as
-  `Q3_Board_Review.bento.html`. The backup written alongside an in-place update
-  follows the same name. Where the save dialog opens is set by the browser and
-  can't be pointed at a folder by the page, but it now remembers the last place
-  you saved, so the second update onwards starts in the right directory.
-- **The starter deck is called “Bento Slides Showcase” again.** The lowercase
-  rebrand swept the deck's own title along with the app's, but a deck title is
-  a document name — it shows in the window title and becomes the suggested
-  filename — so it reads better in title case. The `bento/slides` wordmark is
-  unchanged.
-- **The screen stays awake while you present.** Phones and laptops used to dim
-  and lock partway through a talk if you left a slide up for a couple of
-  minutes. Bento now holds the screen on for the length of the show and lets go
-  when you exit — and takes the lock again if you switch away and come back.
+- **Save a deck as PowerPoint, from a terminal.**
+  `node convert/cli.mjs deck.bento.html --to pptx` writes `deck.pptx`, with
+  speaker notes, links, tables, charts, pictures and hidden slides. It reports
+  what it approximated or left out, and on which slides: animations show
+  their final frame, Morph becomes a plain cut, formulas stay as their LaTeX
+  source, and code and embedded documents are not exported yet. It also says
+  which of the deck's own fonts to install, and `--report r.json` saves the
+  full report. It reads a saved deck or its document JSON. Every export is
+  checked before it is written, and a package PowerPoint would want to repair
+  is refused. Export is a library and a command-line tool rather than a
+  button in the app, so every shared file stays small and the app stays
+  focused.
 
-- **Safari and Firefox are told the truth about saving.** Those browsers (and
-  every browser on iPhone and iPad) can't rewrite a file in place — Bento hands
-  back an updated copy instead. The editor used to say the opposite in its
-  tooltips and only admit it in a passing message *after* the first save. It now
-  says what will actually happen before any work is at stake, once per browser,
-  and the Save button describes the real behaviour.
+- **Long speaker notes scroll in presenter view.** Notes that are taller than
+  the space beside the current and next slides now get their own vertical
+  scrollbar instead of being cut off.
+- **Dollar amounts next to escaped dollars stay text.** In a line like
+  "$10, and \$x\$", the first dollar could pair with an escaped one and the
+  words between were treated as a formula: the editor flagged them as a
+  formula that failed to render. An escaped `\$` now never opens or closes a
+  formula, inline or display, while an escaped dollar inside a formula still
+  belongs to it.
+- **Copy several slides at once.** With several slides selected in the
+  sidebar, ⌘C (or Copy in the context menu) now copies all of them, in deck
+  order, ready to paste into any deck; it used to copy only the current
+  slide. Interactive states stay behind for now, since a pasted state would
+  arrive as an ordinary slide cut off from its parent. Thanks to tikurahul
+  (#615).
+- **Turn text into code without leaving the text box.** Type a fenced block
+  — a line of three backticks (optionally with a language, like ```` ```js ````
+  or ```` ```python ````), your code, and a closing line of three backticks —
+  and when you finish editing it becomes a real Code element: highlighted,
+  with its language set, and able to morph between slides. If the box held
+  only the fence it turns into the Code element in place; text above or below
+  stays as text boxes stacked around it. Pasting fenced text works the same,
+  into a text box or straight onto the slide. Backticks inside the code are
+  kept as typed, and an unclosed fence stays plain text. You can also select
+  one or more lines and press `` ` `` to set them in code style; press it
+  again to undo that.
+- **Screen readers announce what each Save-as and Share command does.** The
+  menus keep one-line rows with the description on hover, and the same text
+  is now read out as the command's description; the Save-as list scrolls when
+  a short window cannot hold it. The Share menu's actions are plain rows like
+  Save as, rather than a stack of boxed buttons. Dialog
+  titles are a little smaller (17px), keyboard shortcuts in the help sheet are
+  set in the interface font and line up on the right, and keyboard focus
+  draws a clear amber ring. Also fixed: the Save caret's ▾ vanished at
+  medium window widths, rows in the phone ⋯ menu were centred, and menus in
+  the dark theme cast a navy shadow that did not show.
+
+- **Save is the top bar's primary button; the bar's other buttons line up.**
+  Save and its save-as caret are now filled with the text colour, like the
+  primary buttons in dialogs, in light and dark themes. The amber
+  unsaved-changes dot has a dark ring so it still shows on the light fill of
+  the dark theme. The ? help button is now the same 36×30 as its neighbours
+  (it was 28×29). The bento/slides wordmark is a real button: it can be
+  reached with Tab, Enter opens About, screen readers name it, and on a phone
+  it is a 44px target. Switching the interface language no longer leaves the
+  old top bar's resize listener, size observer and menu listeners running
+  behind the new one. Found by spaces' top-bar parity check (#567).
+
+## [1.2.6] — 2026-10-04
+
+- **Open a PowerPoint deck in Bento: bento.page/import.** Drop a `.pptx` on
+  the page and get back a `.bento.html` deck you can edit and present. The
+  conversion runs in your browser and the deck is never uploaded. The page
+  fetches only the current signed slides release to build on, checks its
+  signature and fingerprint, and refuses anything that fails. Before you
+  download, it shows what was carried over, what was approximated and what
+  was left out. Tables and charts become marked placeholders for now.
+  The same conversion runs from a terminal as
+  `node convert/cli.mjs deck.pptx`.
+- **Save as → Import PowerPoint…** The Save-as menu has an entry next to
+  Replace from JSON that opens that importer (bento.page/import) in a new tab.
+  It needs an internet connection, and the entry's tooltip says so.
+- **Security: update this file. This release closes further issues found in
+  our own review.** None needs anything from you beyond updating. What each one
+  was is described here once people have had time to update.
+- **Undo can no longer reverse Stop sharing, Reset access or Duplicate as new
+  deck.** Undoing an edit made before one of those used to bring back the old
+  sharing settings, which could restore access you had just removed from a
+  collaborator. **If you have used Reset access on a shared deck, update and
+  then reset access again** to be sure the change stuck.
+- **A hand-written or AI-written deck no longer gets stuck on the loading
+  screen.** A document that left out a required part — the theme, the page
+  size, a slide's background, or an element's content — opened to the splash
+  screen and stayed there. It now opens: the missing parts take the editor's
+  defaults, anything that was given is kept, and an element with nothing to
+  show is left out.
+- **A view-only or audience copy opened inside the editor stays view-only.**
+  Dropping an audience copy (the hand-out for a live show) onto an open deck,
+  or loading one by script, used to offer "Invite to edit…", "Go live" and
+  "Reset access…" and call you an Editor; a read-only copy opened the same way
+  could be edited. Both are now locked, the same as when you open them
+  directly. The live session never accepted their changes; now the editor
+  agrees.
+- **Pictures a collaborator adds now appear in a read-only live copy.** Large
+  pictures travel through the live session separately from the deck, and a
+  read-only viewer showed them as blank boxes. They now load like everything
+  else.
+- **A copy edited offline catches up every tab opened later.** When a copy
+  you edited offline reconnected, its changes reached the collaborators online
+  at that moment; a tab opened afterwards on the same computer could miss them.
+  It now receives them too.
+
+## [1.2.5] — 2026-09-28
+
+- **Security: update this file. This release closes three security issues
+  found in our own review.** None needs anything from you beyond updating.
+  - **A slide could quietly phone home when opened.** A deck carrying a vector
+    drawing could, through a corner of the styling it is allowed to use, make
+    your browser fetch a web address the author chose the moment the slide was
+    shown — a silent read receipt with your IP and the time you opened it, the
+    very thing a self-contained file is meant not to do. No code ran and
+    nothing looked wrong on screen; every route that carries a drawing (a
+    mailed file, a paste, a live edit) could carry it. Drawing styles are now
+    checked by the browser's own parser instead of by pattern-matching, so the
+    disguises that slipped past — an address written with escape codes, or as
+    one of CSS's image functions — no longer do.
+  - **Another local file could hijack "Restore your unsaved changes."** On a
+    desktop browser, local files opened from disk share one storage area (the
+    same quirk behind the 1.2.2 fix). A malicious `.bento.html` opened from
+    disk could plant a fake recovery snapshot for one of your decks; the next
+    time you opened that deck, the "Restore your unsaved changes?" prompt would
+    offer it, and restoring it could move the deck into a live session the
+    attacker controlled — later edits syncing to them, their keys written into
+    your file on save. Restored snapshots now pass through the same safety
+    check as pasted JSON, and the deck's identity and live-session keys always
+    come from the real file, never from a snapshot.
+  - **A malformed Office file could freeze the tab.** Importing a crafted
+    `.pptx` or `.xlsx` (bento/slides' import page, bento/dash's spreadsheet
+    import) could exhaust memory and hang the browser: a tiny compressed part
+    that expands without bound. Imports now stop unpacking a part the moment it
+    grows past its declared size, so a decompression bomb is refused instead of
+    swallowing the tab.
+- **Orange text can be read in dark mode again.** The armed comment tool, the
+  tick beside your language, your own name in a comment thread and the labels
+  on slide and point comments were drawn in a dark brown meant for text on the
+  orange, on dark panels where it all but vanished. They now use a lighter
+  gold, and the comment labels on a slide carry a soft halo so they read on
+  any slide, light or dark, in either theme.
+
+## [1.2.4] — 2026-09-25
+
+- **Formulas that stayed as raw text now render.** 1.2.0 replaced the maths
+  engine with a smaller one of our own, and a whole set of everyday LaTeX fell
+  back to raw text: `\frac12`, `\over` and `\choose`, `\pmod`, `\middle|`,
+  `\colon`, `\xrightarrow`, `\substack`, `\cfrac`, `\operatorname*`, `\tag`,
+  `\hspace` and the other spacing commands, `\rm`/`\bf` switches, `gather`,
+  `split`, `multline` and `alignat`, and symbols like `\leqslant`, `\nmid`
+  and `\checkmark`. All of these render now. `\tag{1}` shows as a "(1)" label
+  after the formula, not pushed to the right margin, and `\notag` and
+  `\vspace` render as nothing. Formulas can also be written between `\( … \)`
+  (inline) and `\[ … \]` (display), the form ChatGPT, Claude and most
+  Markdown produce, and a `$$ … $$` or `\[ … \]` formula may run over several
+  lines of a text box. In the editor, a formula that still does not render
+  gets a faint dotted underline, with a tooltip naming the command it did not
+  know. The underline only appears while editing, never in the show, in print
+  or in the saved file. Pasting or editing a formula no longer drops the
+  backslash from `\_`. Reported in #540.
+- **Maths covers the rest of LaTeX; aligned and cases now line up as TeX sets
+  them.** After the fix for #540,
+  a check against the old engine's whole vocabulary found about a hundred
+  more commonly typed commands that still showed as raw text: long and
+  vertical arrows (`\Longrightarrow`, `\Uparrow`, `\rightleftharpoons`),
+  `\odot`, `\preceq`, `\triangleq`, `\varpi`, `\imath`, `\oiint`, `\coth`,
+  `\argmax`, card suits, `\pounds` and many more. Every one renders now, along
+  with `\hphantom`, `\smash`, `\llap`, `\sideset`, starred matrices,
+  `rcases`/`dcases`, `\fbox`, `\colorbox`, `\bcancel`, `\large`/`\small`,
+  `\bold`, `\Bbb` and `\textsc`, symbols typed directly (`∈`, `≤`), and
+  line breaks written straight into a display formula (`a = b \\ c = d`,
+  which chat assistants produce), now stacked on separate lines.
+  - **`aligned` now aligns.** The equals signs in an `aligned` block line up
+    and `cases` columns sit to the left, the way TeX sets them. Until now
+    every column was centred. **Existing decks that use `aligned` or `cases`
+    change alignment when they update to this version.**
+  - **One unknown command no longer loses the formula.** The rest renders
+    and the unknown command shows as its own name in red, so an audience sees
+    the maths, not a line of raw LaTeX. In the editor the formula still gets
+    the "Not rendered" hint naming the command.
+  - **Your own macros:** `\newcommand`, `\renewcommand`, `\def` and
+    `\DeclareMathOperator` work inside the formula that defines them.
+  - **Physics and chemistry:** the physics package (`\dv`, `\pdv`, `\abs`,
+    `\norm`, `\bra`, `\ket`, `\qty`, `\grad` and the rest) and mhchem's
+    `\ce{…}` and `\pu{…}` (formulas, charges, states, hydrates, reaction arrows
+    with labels, units, dashed bonds).
+  - **Tables in formulas get their lines back.** Since 1.2.0 an `array`'s
+    column bars (`|`, dashed `:`, double `||`) and its `\hline` /
+    `\hdashline` rules were silently dropped; they are drawn again, exactly
+    as before 1.2.0.
+  - **Commutative diagrams** (`\begin{CD} A @>f>> B … \end{CD}`), long
+    division (`\longdiv`), the actuarial angle (`\angl`) and `\reflectbox`.
+    Together with the above, every command and environment the pre-1.2.0
+    engine knew now renders.
+  - **Labelled arrows stretch to their label.** In Chrome, `\xrightarrow`,
+    `\xleftrightarrow`, `\xmapsto`, `\xlongequal`, the equilibrium arrows and
+    `\overrightarrow` used to keep their natural length under a long label or
+    a long base; they now span it. Screen readers still hear the arrow.
+- **Embedded fonts show up after "Replace from JSON".** Rahul Ravikumar (#516)
+  found that a deck loaded through Replace from JSON could keep showing
+  fallback fonts instead of the ones embedded in it (every time, for a font
+  used by code snippets) and fixed it by refreshing the fonts whenever the
+  document changes. Building on that, a font you remove from the deck now
+  disappears, undo and redo bring fonts back and forth, replacing a font's
+  file takes effect, and ordinary edits no longer re-apply every embedded
+  font.
+- **Collaborators stop flickering in and out.** A person whose tab was in the
+  background appeared to leave and rejoin about once a minute: a browser slows a
+  hidden tab's timers to roughly one tick a minute, so their "still here" beat
+  arrived later than the 13-second window that decided who was present. The
+  window is now long enough to cover a throttled tab, a tab sends its beat the
+  moment it comes back to the foreground, and a backgrounded collaborator now
+  shows as away rather than vanishing.
+- **A deck with lots of small images can be shared live.** Sharing sends big
+  pictures separately from the document, but only ones over about 64 KB — so a
+  deck with many smaller images (a wall of icons, say) could still add up to
+  more than a live session's frame could carry. Those now travel separately
+  too, largest first, once the pictures kept in the document pass a
+  quarter-megabyte together.
+- **A deck opened from the web or the Bento apps remembers where it is
+  saved.** Chrome will not let any app hold a standing grant to the Downloads
+  or Documents folders, so a deck kept there used to show the full save dialog
+  on every reopen. Bento now remembers the file itself: the first ⌘S after you
+  reopen asks once — Chrome offers "Allow on every visit" — and after that it
+  saves silently in place, like a deck that never left. Move or delete the
+  file and it simply asks again. This is for a deck opened from a real web
+  address or through the iOS, Android or browser-extension apps; a deck opened
+  straight from disk keeps asking each time, by the same rule that isolates
+  local files from each other.
+
+## [1.2.3] — 2026-09-19
+
+- **Select several slides in the sidebar and move them together.** ⌘/Ctrl-click
+  adds a slide to the selection, ⇧-click selects a range from the current one,
+  and dragging any selected slide moves the whole selection as a block, in its
+  order, as one undoable step; Delete removes the selection with the usual
+  warning about states and links. A slide's interactive states now travel with
+  it when it is dragged — before this a moved slide left its states behind,
+  nested under whatever slide was now before them. Asked for in discussion
+  #514.
+
+## [1.2.2] — 2026-09-19
+
+- **Security: update this file. Another local file could read this deck's
+  collaboration keys, and steer where it looks for updates.** On a desktop
+  browser, a deck opened straight from disk (a `file://` page) shares one
+  storage area with every other local Bento file the user opens — a quirk of
+  how browsers treat local files. A malicious `.bento.html` opened from disk
+  could read the auto-save store and lift a shared deck's room keys (read and
+  write access to that live session), and could plant the address this app
+  checks for updates, sync, and language packs so the next deck contacted a
+  server of its choosing (signed-update verification still blocked any
+  unsigned build). Auto-save now stores document content only — never the
+  collaboration keys — and those addresses are honoured only from a real web
+  origin, never a local file. **The iOS and Android apps were never affected**
+  — each document already runs in its own isolated origin. Affects desktop
+  browsers opening a local file, with or without the extension.
+
+- **A deck full of photos can be shared live again.** A deck whose pictures
+  were each under the sharing limit but together came to more than about a
+  megabyte could not be shared at all — the copy a joining collaborator
+  receives was sent as one oversize frame the relay refused. Each picture
+  already travelled separately when it changed; that copy now does the same,
+  so the deck shares no matter how many photos it holds.
+- **When a deck is too large to share live, the message says so.** A refused
+  whole-deck checkpoint used to read as "that change is too large (about 1 MB
+  max)", blaming an edit that was fine. It now says the deck is too large to
+  share in one piece, and the Share panel shows how many pictures are still
+  uploading while a live session catches up.
+- **Compress the pictures already in a deck.** 1.2.0 shrinks a photo as you
+  insert it; a deck made before that still carries its photos at full size.
+  About ▸ *Compress pictures in this deck…* runs every picture through the
+  same rules — 2560 px at most, photos re-encoded, screenshots and logos left
+  lossless — shows the measured total first ("3 pictures · 71.5 MB → 1.6 MB")
+  and applies it as one undoable step. A picture that is already a JPEG or
+  WebP within the cap is left alone, so running it twice changes nothing.
+  In a live session the new bytes are shared like any other change.
+- **"Joined" and "left" are said once per real arrival and departure.** A
+  collaborator who switched to another tab for a few minutes was announced
+  as leaving and joining once a minute, to everyone in the room, while
+  doing nothing: browsers slow a hidden tab's timers to once a minute, so
+  their presence heartbeat arrived late, the room dropped them, and the next
+  beat brought them back. A departure is now announced only once it has
+  lasted, and a return within a few minutes is not a new arrival. The avatar
+  strip still follows presence exactly; this changes only what gets said.
+- **Publishing a release checks the GitHub account first, so the site can no
+  longer go live while the release fails.**
+
+## [1.2.1] — 2026-09-17
+
+- **Pasting into a table cell lands once.** Edit a cell, leave it unchanged,
+  edit it again — each visit quietly added another set of keystroke and paste
+  handlers to the same cell, so a later paste landed once per visit (four
+  visits, four copies; the same could happen to a text box). Each edit now
+  takes its handlers with it when it ends. Found by the maintainer, copying
+  an asset code between cells.
+- **Pasting keeps the formatting.** Copy bold, italic or a list from one text
+  box and paste it into another, or into a table cell, and it arrives as it
+  was — the paste used to read only the plain-text copy and rebuild from
+  that. What arrives goes through the same checker as every other piece of
+  text: no styles, no scripts, no handlers, a link only if it is a web
+  address. Plain text pasted from elsewhere still converts its markdown.
+  Reported by Hermholtz (#503).
+- **A long bullet wraps under its text.** Typing `- ` makes a bullet as you
+  type; when you finish editing, those lines become a real list, so a bullet
+  that runs onto a second line indents that line under the first word, not
+  under the dot — and an indented `- ` nests. Lists you made from the
+  formatting bar are untouched. Reported by Hermholtz (#502).
+- **A typed bullet keeps its space.** Typing `- ` made the bullet, but the
+  next letter landed right against it — the space after the glyph was a
+  plain space at the end of the line, which the browser treats as nothing and
+  the next keystroke replaced. It is a non-breaking space now, for top-level
+  and indented bullets alike, typed or pasted. Reported by Hermholtz (#501).
+- **The Layers list stays put.** It sat at the top of the panel with nothing
+  selected and at the bottom once something was, so every click on the canvas
+  moved it; and it rebuilt itself on every frame of a drag, so it flickered
+  and lost its scroll while you moved things. It has one home now, first in
+  the panel whatever is selected, and it only redraws when the order, the
+  members or a label actually change — a move, a resize or a click never
+  touches it. Reported by the maintainer.
+
+## [1.2.0] — 2026-09-16
+
+- **A deck opens inside Teams and SharePoint again.** Their viewer refuses
+  the way 1.1.0's file started itself (a script loaded from a `blob:` URL).
+  The file now starts the way nothing refuses: the runtime is inserted as an
+  inline script first, and only if a policy turns that down does it fall
+  back to `new Function`, then to the blob import — measured in Teams with
+  seven variants. Inside such a viewer the frame has no storage, so
+  autosave and preferences do not persist there, and its policy blocks every
+  connection — so inside an embedded view the app makes no request at all:
+  no update check at launch, no language-pack listing, no live-session
+  socket; the About dialog says so. The deck itself opens, presents and
+  saves.
+- **Maths is Bento's own now, and it reads Typst.** Formulas in text used to
+  go through Temml, a 64 KB library that every saved deck carried. A small
+  engine of our own (slides/src/maths, about 8 KB) renders them instead, so
+  every file you save is about 78 KB smaller, and nothing in the file changes:
+  a formula is still the `$…$` source you typed. Measured against Temml on 91
+  formulas, from our own decks and from Temml's own list of supported
+  functions: 97.8% render pixel-identical, and the rest are places where
+  Temml drew nothing on Chrome — `\overline` and `\underline` now draw their
+  rule. New: Typst maths, asked for by thimotedupuch (#358) — write
+  `$typst: a/b$` (or `$$typst: …$$`) and the formula is read as Typst:
+  `sqrt(x)`, `sum_(i=1)^n`, `mat(a, b; c, d)`, `cases(…)`, `"if" x`. A plain
+  `$…$` is LaTeX as before. Not covered, for now: `\substack`, `\xrightarrow`,
+  chemistry (`\ce`), `\tag` and `\hline`; a formula using them shows as
+  typed, the way any TeX Temml refused always has.
+- **Slides export as images.** Save ▾ *Export slides as images…* writes
+  this slide, or every slide in the show, as PNG or JPEG at 1× or 2× — one
+  file per page, named after the deck (`My_Deck-page-01.png`), hidden slides
+  and interactive states left out the way a PDF leaves them out. Chromium
+  asks for a folder and writes the pages into it; other browsers get one
+  download per page; Safari can export the current slide. The picture is the
+  deck's own render — its fonts, gradients and shapes — with charts and media
+  as stills and web-linked images blank, since a file cannot fetch. No ZIP,
+  no second renderer: about four kilobytes of runtime. Asked for by den-sv
+  (#243, #261); the shape follows lazyeo's #306, kept to the thin half —
+  the heavier converter belongs to bento/convert.
+- **A Layers list.** The Slide panel now opens with *Layers*: every element
+  on the slide, top of the stack first, with a glyph and a short label (the
+  text's first words, or the kind). Click a row to select, shift-click to add,
+  drag a row to move it up or down the stack, or use ⌘↑ and ⌘↓ with the list
+  focused. With an element selected the same list closes its panel, so the
+  highlighted row is never far. Nothing new in the file: the list is a view
+  onto the order the four Order buttons (front, forward, backward, back) have
+  moved elements through since 1.0, and a row dropped somewhere lands exactly
+  where those buttons would put it. Asked for by Li Wei in discussion #371.
+- **A deck can be written the short way.** An AI agent writing a deck used
+  to spend most of its output on fields nobody chose — rotation 0, opacity 1,
+  the font stack, weight 400, centre, middle, line height 1.25, on every
+  element. A document marked `"compact": true` may leave all of that out and
+  gets it back on load, filled from the same defaults the editor uses when
+  you insert an element; `elements` may nest arrays, and an element without
+  an id gets one minted from its slide and position, the same every time.
+  *Save ▾ Copy compact JSON (for agents)* and `window.bento.compact()` hand
+  a deck back in that shape; *Replace from JSON…* and `loadDoc` take it. The
+  saved file is unchanged — always full, so nothing older is affected.
+  Measured: 12–14% off a designed deck's JSON, about 3× off a deck written
+  the compact way. Asked for, with a working proof of concept, by
+  benedictjohannes (#411, #422); the nested arrays and the flattening come
+  from that proof.
+- **The short way, round two: text sizes itself, markdown is accepted, and
+  a load says what it dropped.** In a compact document a text element may
+  leave `h` out (or say `"auto"`): the box is sized to its text on load,
+  with the deck's real fonts — the same measurement as *Fit height to text*.
+  A text element may carry `md` instead of `html` and it converts exactly as
+  pasted markdown does (bold, italic, code, strike, bullets and sub-bullets,
+  links). And `window.bento.loadDoc` now returns a report: every key the
+  safety check discarded, with its path and the reason (`/slides/0/elements/2/fontSze:
+  unknown key`), how many fields were filled in, and `validate()`'s findings
+  — so an agent's loop is load, read, fix, load again, instead of guessing
+  why a field vanished. *Replace from JSON…* summarises the same report in a
+  toast and logs it. Three agent-written decks are checked in and load clean
+  in CI.
+- **An agent can place a slide by layout and role.** In the compact form a
+  slide may say `"layout": "title-body"` and its elements carry a `role`
+  (`title`, `body`, `subtitle`, `kicker`, `quote`, `attribution`, `image`,
+  `card1`…) instead of coordinates and typography: the layout's frames and
+  type are used, the same way *Apply layout* fills a slide in the editor, and
+  slides born from the same layout still morph their chrome. Several `body`
+  paragraphs stack into the slot, each sized to its text; an element that
+  carries its own `x y w h` is placed as given. Four new built-in layouts —
+  *Three cards*, *Quote*, *Image left*, *Image right* — appear in the layout
+  picker for everyone, next to the five that were there. The file on disk is
+  unchanged: the layout is applied on load, and what is saved is the placed
+  slide.
+- **`bento check`: an agent can look at what it wrote.** `node
+  scripts/bento-check.mjs deck.bento.html` loads the deck in headless Chrome
+  and prints what the editor would otherwise keep to itself — text that
+  overflows its box (and by how many pixels), elements off the canvas, dead
+  links, effects that can never run — by slide, with element ids; `--png out/`
+  adds one PNG per slide through the same render path as *Export slides as
+  images*, and a contact sheet of the whole deck in one picture; `--json` for
+  scripts, `--fail-on warning` for a strict exit code. A document JSON works
+  as input too, checked inside the built shell. The other half of the agent
+  loop that `AGENTS.md` describes: write, check, fix, check again.
+- **The format has a schema, and every file says where it is.** A JSON
+  Schema for the bento/slides document is generated from the same tables the
+  app uses to check what it loads, so it cannot describe a deck the app would
+  refuse. It is published at `https://bento.page/schema/slides.json` (and a
+  version-pinned copy beside it), returned by `window.bento.schema()` in a
+  running file, listed in `https://bento.page/llms.txt` for AI agents, and
+  named in the Tooling comment at the top of every deck. A deck that carries
+  `"$schema"` at the top validates in any schema-aware editor; the app ignores
+  the key. Runtime cost: about 2.6 KB in the shell.
+- **A saved deck names its schema.** The first key of the saved JSON is now
+  `"$schema": "https://bento.page/schema/slides.json"` — 50 bytes, so a
+  reader with only the file in hand knows the format. Older versions keep the
+  key and write it back unchanged; nothing fetches it.
+- **Connectors for diagrams.** Three asks from xairy, in one go. A
+  *Curved connector* (#302): a curve that sticks to the elements at its ends
+  and re-routes when they move, like the straight Connector, and carries a
+  tip that points the way the curve arrives rather than along the chord; any
+  open curved line can take tips now. Seven more tip styles (#303): open
+  arrow, triangle, hollow triangle, diamond, hollow diamond, square, hollow
+  circle — a hollow head stops the line at its back edge, so nothing shows
+  through. A *Double arrow* shape (#304): the solid arrow with a head at both
+  ends; and a line has always taken an arrowhead at each end through its
+  start and end tips. Sticking (#301) has been in since 1.0.2. Old decks are
+  untouched: the original tips keep their exact geometry. A deck that uses
+  the new tips opens in 1.1.0 and older, but those shells draw a bar where a
+  new tip should be; a double arrow shows there as a single one.
+- **A picture can be moved and zoomed inside its frame.** Double-click an
+  image and the frame becomes a window onto the whole picture: drag to choose
+  which part shows, scroll or pinch to zoom in, Enter to keep it, Esc to put
+  it back. The Crop section of the image panel has the zoom as a number and a
+  way back to the whole picture. The crop is one small optional field on the
+  image; a deck opened in an older version shows the cover-fitted picture,
+  never a blank frame. Canvas, thumbnails, the show, print and file-manager
+  previews all show the same crop, and a morph between two cropped copies of
+  a picture glides between them. Asked for in discussion #319 by morreau.
+- **A pasted photo no longer costs megabytes.** Insert or paste a picture
+  and it is stored at slide resolution — the long edge capped at 2560 px,
+  crisp on a 4K projector — and photos are re-encoded as JPEG, so a phone
+  photo adds a few hundred KB to the file instead of three or four MB.
+  Screenshots, logos, charts and anything with transparency are only
+  downscaled, never made lossy, so text in them stays sharp; SVG and GIF are
+  left alone; and when re-encoding would not save at least a fifth, the
+  original bytes are kept. When the saving is worth mentioning a toast says
+  so ("Photo stored at 2560 px — 3.8 MB → 410 KB"). The picture panel shows
+  what is stored and offers *Replace file (original size)…* for the times
+  you want every pixel; *Shrink photos on insert* in the About dialog turns
+  it off for this browser. Nothing in an existing deck changes until you
+  insert something new. The file itself is untouched: a picture is still a
+  picture.
+- **An image can drop its aspect ratio, and the properties panel stays
+  where you left it.** Contributed by 1eevy (#372). Images gain a *Keep
+  aspect ratio* switch in the Fit & corners section, on by default: turn it
+  off and width and height resize independently (the image stretches to
+  fill); Shift is the one-drag exception in either direction, as it always
+  was. Turning it back on keeps the shape the image has at that moment. And
+  changing a control near the bottom of the properties panel no longer throws
+  the panel back to the top. The same PR proposed editable template pages
+  with locked furniture and a save-time asset compactor; the compactor's job
+  landed as #447/#476, and locked furniture is a design question for a
+  discussion rather than a change to how layouts work.
+- **A date can pin its format, and fields are one click away.** `{{date}}`
+  and `{{time}}` have resolved in text since 0.9.12, but they followed the
+  viewer's locale — an author could not say M/D/YY and have every viewer see
+  it — and nothing in the editor said the tokens existed. Now
+  `{{date:M/D/YY}}`, `{{date:D MMMM YYYY}}`, `{{time:h:mm a}}` pin the
+  shape (`YYYY YY MMMM MMM MM M DD D HH H hh h mm ss A a`; a word in
+  `[brackets]` stays literal; month names still come in the viewer's
+  language), and the Text panel gains a *Field* picker that drops a page
+  number, date, time, title or document property into the text — the date
+  and time entries show today in each shape so the choice is made by eye.
+  Bare `{{date}}` is unchanged. Asked for in discussion #381 by Jef Ducon.
+- **Every file is about 38 KB smaller.** The runtime's two compressed blocks
+  used to be base64; they are now base86 — 86 printable characters chosen so
+  the text can never close or comment out the block that carries it — which
+  is 6.25% denser (4 bytes in 5 characters instead of 3 in 4). Measured on
+  the release shell: 699,847 → 661,768 bytes. Older versions keep opening
+  their own files; this one still reads theirs. The new decoder is also
+  quicker than the old `atob` path (11 ms against 47 for the runtime).
+- **A deck opened in a background tab is ready when you switch to it.** The
+  compressed file used to finish starting in a later task and hold its
+  splash on a timer — in a tab that was not visible (or a viewer rendering
+  the file off-screen for a preview card) timers are throttled and frames
+  never come, so the editor sat behind the splash until the tab was looked
+  at. The runtime now unpacks and starts inside the file's own script,
+  before the page is even "loaded", and a hidden document drops the splash
+  the moment the editor exists; visible, the brand moment is held for at
+  most 0.8 s and never waits on its own fade.
+- **A web link whose address contains a dollar sign works again.** Since
+  links arrived, an address like `…/$a$b` had its two dollars read as a
+  formula and the link broke; formulas are now looked for in the text only,
+  never inside a tag.
+- **A pasted code snippet keeps its code.** The table the app uses to know
+  an element's fields had no entry for the code element, so a pasted or loaded
+  code block kept its box but lost its content, grammar and theme — an empty
+  snippet — and `validate()` did not know its fields. Found while building
+  the schema from that table; fixed.
+- **A plain Save drops unused images too.** 1.1.0 promised that a save
+  leaves out every image nothing in the deck refers to, and it did — on
+  every path except the one most people use. ⌘S and the Save button write
+  through a different route, and the clean-up never ran there, so a deleted
+  screenshot stayed in the file. It runs on every way of saving now.
+  Reported again, with a step-by-step, by charlycoste (#442, fixed in #476).
+- **Every language pack is complete.** The 22 downloadable packs had fallen
+  to 91% of the interface — the formatting bar, the context menu, the canvas
+  help, hidden slides, appearance, and the whole live-broadcast surface
+  showed in English. All 22 carry every string again.
+- **One brand yellow.** Ten places in the editor chrome — the speaker view's
+  timer, buttons and current thumbnail, the show's link, selection and
+  progress colours, the follow chip, and the path editor's anchor dots —
+  carried their own copy of the accent instead of reading the chrome's
+  `--accent` token. They read the token now; nothing looks different. The
+  slide-list highlight already did. The deck's own `theme.accent` is a
+  separate thing and stays separate: chrome does not recolour per deck.
+
+## [1.1.0] — 2026-09-14
+
+- **Security: update this file. Text in a deck could run code when clicked
+  or hovered.** Formatted text — a text box or a table cell — could carry
+  script inside an ordinary-looking tag that the checker skipped over, and it
+  ran when a reader clicked or moved the mouse across that text, in the editor
+  and in the show. A deck or a pasted clip from someone else was enough;
+  nothing looked wrong on screen. As with 1.0.16, anything running inside the
+  page inherits what the page holds — the live-session keys, the local
+  autosave copy, write access to the file where the browser grants it. Every
+  shell before 1.1.0 is affected. Text is now checked at every nesting depth
+  before it renders, and the check is proven by clicking, not by inspection.
+- **Live broadcast.** Contributed by Niemes (#293), and shaped together with
+  the collaboration work below. *Audience copy…* in the Share menu writes a hand-out
+  for a live show: whoever opens it lands straight in the presentation, and
+  while you are **Live** (a toggle in the speaker view, off every time you
+  present) their slide follows yours — transitions, morphs, black screen and
+  laser included — and the deck itself updates as you edit mid-talk. The copy
+  never carries your speaker notes or comments, in the file or on the wire.
+  **Lock** holds the audience on your slide; otherwise they can browse and
+  snap back. When you end the show the copy is a plain deck of what was
+  shown, and it receives nothing between shows: it holds a per-show key, not
+  the room key. *Issue new tickets…* makes every copy handed out so far stop
+  working. Built on the same end-to-end-encrypted collaboration room as
+  everything else — no second channel.
+- **A deck can shrink again.** Saving used to keep every image the file had
+  ever held: add pictures, delete every slide, save — and the "empty" deck was
+  still 20 MB, because deleting an element removed the reference and nothing
+  ever removed the bytes. A save now drops the assets nothing on any slide,
+  layout, font or code snippet refers to. Undo after a save still brings an
+  image back, and the next save keeps it.
+- **Code snippets take the deck's colours.** Rahul Ravikumar (#450) added an
+  optional code palette to the theme — one colour per kind of token (comments,
+  strings, numbers, keywords, calls, punctuation, diff added and removed) — so
+  a snippet can match the deck instead of the built-in scheme. A deck without
+  one renders exactly as before; the starter deck sets one.
+- **Code colours have an editor.** The Theme section gains a *Code colours*
+  group — one colour per kind of token (comments, strings, numbers, keywords,
+  calls, punctuation, diff added and removed) — so the palette Rahul Ravikumar
+  added in #450 no longer needs a JSON round-trip to change. A deck without one
+  shows the built-in scheme and keeps rendering exactly as before until you
+  change a colour; a deck with one gets a button back to the built-in scheme.
+- **Empty accent slots stay out of the way.** Accent 2–6 rows and quick-pick
+  swatches appear only when the deck actually sets that slot; a fresh deck no
+  longer shows six identical copies of accent 1. The format keeps all six.
+- **The layout picker stays on screen.** Johan Høgåsen-Hallesby (#425): with
+  a few custom layouts the picker opened above the top of the window and its
+  first row hid under the topbar. It now opens beside its button, keeps an
+  8px margin from every edge, and scrolls inside itself on a short window.
+- **A slide can stay in the show without taking a page number.** Toggle
+  *Unnumbered* in the Slide panel: the arrow keys reach the slide as usual,
+  but `{{page}}` on it continues the previous slide's number and the total
+  does not grow. Build a reveal as three morph steps and the footer reads 18
+  three times instead of 18, 19, 20 — or drop in a section card that should
+  not count. Asked for in discussion #282 by OuPDO, whose one-slide-per-step
+  decks already worked except for that number. Distinct from *Hide slide*,
+  which takes a slide out of the walk altogether.
+- **Reveal elements one at a time within a slide.** Give an element a *Reveal
+  step* in the Presenting section (1, 2, 3…): it is hidden when the slide
+  appears and shows on that press of →, running its entrance — a plain fade
+  if it has none — and ← hides it again; → moves to the next slide only once
+  every step is shown. Elements sharing a step appear together, and arriving
+  from the next slide lands with everything revealed, so stepping back
+  through a talk retraces it. One slide stays one slide: one page number, one
+  morph pairing, one speaker note. The speaker view counts the steps beside
+  the slide number, and an audience following a live broadcast follows the
+  steps too. A deck opened in an older version shows every element at once.
+  The other half of discussion #282, and the one its author wanted more.
+- **Reveals are one right-click away.** Select the elements, right-click,
+  *Reveal in order*: they are numbered top-to-bottom, then left-to-right, the
+  way a reader scans the slide — a bullet list builds down, a row of cards
+  builds across. *Reveal together* puts the selection on one step and
+  *Remove reveal* shows it with the slide again; the same three sit in the
+  panel's Presenting section, for one element or many. Every stepped element
+  wears a numbered badge on the canvas — click a badge to move that element
+  to the next step — and the badges are editor chrome only: thumbnails, the
+  show, print and file-manager previews never carry them. The `?` sheet names
+  the entry point. Measured on a fresh deck with no panel open: a reveal is
+  three clicks away (click, right-click, *Reveal in order*).
+- **Clickable links.** Give any element a *Web link* in the Presenting
+  section, or type `[caption](https://…)` in a text box, and clicking it
+  during the show opens the page in a new tab — never navigating the deck
+  away, never telling the page where it came from. Only `https://` and
+  `http://` count as links; anything else stays plain text. In the editor a
+  link is just text to edit. Offline mode keeps its promise: links are off
+  while it is on. Asked for by Hermholtz (#373, #374, #421).
+- **`*` makes a bullet, and bullets can indent.** Typing `* ` at the start
+  of a line makes a bullet like `- ` does, and two or more spaces before
+  either makes an indented sub-bullet — while typing and when pasting
+  markdown. (#255 and #368.)
+- **The `?` shortcut list is complete.** It now names black screen (`B`),
+  the all-slides grid (`G`), the side-panel toggles (`[` `]`), bold/italic/
+  underline, the zoom keys, and the arrow keys' two jobs. (#269.)
+- **Embed element.** Johan Høgåsen-Hallesby (#424, landed in #466): a slide can carry an embedded artifact in the shared
+  `bento/embed` shape: a static *view* that always paints, in any app and with
+  no extra code; an optional source document behind it; and, for a web page,
+  an opt-in live frame that loads only while online with offline mode off —
+  otherwise the captured view shows. Embedded documents are stripped of
+  envelope secrets at the shape gate, and a save keeps an embed's view and
+  source (the asset prune learned the new reference form).
+- **Files are about 86 KB smaller.** Every saved deck used to carry the two
+  built-in typefaces (Fraunces and Instrument Sans) as embedded font data —
+  the same bytes the app itself already ships, so they existed twice in every
+  file, and were most of a typical text deck's data. A deck now names those
+  faces instead, and any deck that embedded them is slimmed on its next save.
+  Other fonts you add are embedded exactly as before. A copy of the app older
+  than this one shows those two families in the system fallback until it
+  updates itself.
+- **A shared deck applies only changes the relay has verified came from a
+  writer.** The sync client no longer acts on a frame the relay did not vouch
+  for; nothing changes for anyone editing normally.
+- Groundwork with no visible change: the shared UI components every Bento app
+  will draw from (menu, side panel, dialog, tooltip, toggle), and — from Johan
+  Høgåsen-Hallesby (#423) — a build that runs its own release channel and
+  relay can now configure both without patching the kernel.
+
+## [1.0.19] — 2026-09-04
+
+- **Bento Slides works on a phone.** Eight changes land together, because
+  individually none of them was enough: a deck opened on a handset could be
+  looked at and rearranged, but not written.
+
+  **Text is editable by touch.** Opening a text box was bound to double-click,
+  and a double-click never reaches the canvas from a touchscreen — so on a
+  phone a deck was effectively read-only. Elements selected, moved and resized;
+  no word in them could be changed. A tap on the box a previous tap selected
+  now opens it, and on a table it opens the cell under your thumb. Mouse
+  behaviour is untouched: one click still selects, two still open.
+
+  **A formatting bar, which is also the only route to any of this on a phone.**
+  Select words inside an open box and a bar appears over them — bold, italic,
+  underline, strikethrough, code, title, heading, body, bulleted and numbered
+  lists, and clear formatting. Bold and italic previously existed with no
+  visible way to reach them (⌘B and markdown, neither mentioned anywhere in the
+  interface); lists and headings could not be made at all. They are real list
+  and heading tags in the document, sized proportionally, so a box keeps its
+  hierarchy when you resize it and the canvas, thumbnails, presenter and print
+  all agree.
+
+  Lists and headings are the only part of this batch that changes what a file
+  can contain, and they are additive like everything else in the format: a deck
+  using them opens in any earlier copy of Bento, which keeps every word and
+  simply shows the list without its bullets until that copy is updated. The new
+  tags carry no attributes of their own, by construction.
+
+  **Pinch to zoom, and two fingers to move the canvas.** A deck opens at
+  19–27% on a handset, so it always needs zooming, and the only way to zoom was
+  two small buttons in a corner. Pinch now drives the editor's own zoom,
+  anchored between your fingers rather than snapping back to the middle of the
+  slide, and the same gesture pans. The page itself still never zooms, and
+  one-finger selection and dragging are unchanged.
+
+  **Press and hold, or right-click, for a menu that belongs to the deck.**
+  There was no context menu, so a right-click produced the browser's own — Back,
+  Reload, View source — which is the wrong set of verbs for a slide and the
+  first gesture most people try. Now an element offers Edit text, Cut, Copy,
+  Duplicate, Bring to front, Send to back, Group and Delete; a thumbnail offers
+  New, Duplicate and Delete slide; the canvas offers Paste. Press and hold is
+  the same menu on a phone. The browser's own menu is deliberately left in place
+  where it is the better one — form fields, links, and text you are editing,
+  where the system carries spelling, dictation and look-up.
+
+  **The toolbar can be reached at 320px.** Fully folded the bar still needs
+  about 356px, and an iPhone SE — or any iPhone with Display Zoom on — is 320.
+  The surplus was simply cut off, which put the ⋯ button 36px past the edge of
+  the screen, taking Redo, Comment, Export PDF, Share, Language, Help and the
+  whole save-as list with it, none of which had another route on a phone. The
+  bar now scrolls, so a clipped button becomes a partly visible one.
+
+  **The panels get out of the way.** Below 700px the side panels are drawers
+  laid over the canvas rather than columns beside it. Tapping a thumbnail
+  navigated correctly and then left the drawer covering the slide it had just
+  moved to, so every slide change cost a second trip to the toggle. Picking a
+  slide now closes the list, and tapping the slide beside any open overlay
+  dismisses it. On a wide screen the panels are still columns and stay put.
+
+- **Code on a slide — and it morphs.** A slide can hold a code snippet, syntax
+  highlighted, and when the same snippet appears on two slides in a row the code
+  *travels* between them. A line that moved moves; a call that changed position
+  slides to where it went, and the lines it passes step out of its way. Nothing
+  blanks and redraws.
+
+  This is the deck's existing morph pointed at source code. Show a refactor as
+  three slides and an audience watches the edit happen rather than comparing two
+  static screenshots — the starter deck now walks through fifteen years of
+  JavaScript, callbacks to promises to `async`/`await`, and the code rearranges
+  itself at each step.
+
+  Symbols with no counterpart on the previous slide fade in, staggered, once the
+  movement is already under way, so a newly introduced line arrives as part of
+  the same beat instead of snapping in. A word whose *role* changes while its
+  text does not — `render(` becoming `.then(render)` — keeps its identity and
+  travels, because turning a call into a reference is a refactor, not a rename.
+
+  Highlighting is built in, covers 75 languages plus diffs and Markdown, and
+  costs a deck about 10 KB. It is deliberately the cheaper of two tiers: the
+  format keeps its seam for full grammars carried as per-deck assets, and
+  nothing here closes that door.
+
+- **A deck can set its own morph tempo.** The default 0.65 seconds is tuned for
+  the ordinary case — a title sliding in, a shape growing, a journey of several
+  hundred pixels. A code symbol moves about one line height, and at that tempo
+  the whole journey is over in roughly 300 ms: measurably an animation, watchably
+  a blink. A deck built around small, precise movement can now choose a slower
+  beat, and decks that say nothing are unchanged.
+
+  This one is a document setting (`present.morphSeconds`, clamped to 0.1–6
+  seconds) with no control in the panel yet — reachable today by editing the
+  deck's JSON through **Copy document JSON** / **Replace from JSON…**.
+
+- **Deck-wide brand colours.** The Slide panel gains a **Theme** section — a
+  background, a text colour and six accents — and every colour control now
+  offers those swatches above its picker. Pick one and the deck *remembers where
+  the colour came from*, so changing the theme later updates every element using
+  it, across every slide. Pick a custom colour instead and it stays exactly as
+  you set it: choosing by hand clears the link, because a colour you chose
+  deliberately should never be overwritten by a later theme edit.
+
+  The document keeps ordinary colour values throughout, exactly as before — the
+  reference sits alongside them rather than replacing them. So a deck saved with
+  a theme still opens correctly in any earlier copy of Bento, which simply sees
+  a normal deck of normal colours.
+
+- **The web demo says where your deck went.** bento.page always hands out a new
+  deck — that is what it is for — so anyone who saved from it and came back
+  later got a blank starter and reasonably read it as lost work. Their file was
+  on disk the whole time; nothing on screen said so.
+
+  Saving from the web now leaves a line naming the file it went to, and saying
+  that this page always starts a new deck. Coming back after a save says the
+  same thing before you start typing into a fresh one, with the name of the file
+  to open — and **Start a new deck anyway** is always there, because some
+  visitors do want a fresh one.
+
+  Two things genuinely do not survive that trip and are worth knowing: version
+  history and the recovery snapshot belong to the browser, not the file, so they
+  stay behind on bento.page when the deck moves to your disk.
+
+- **Every deck you save is smaller.** The runtime each file carries is now packed
+  harder — about 26 KB off a Bento Slides file, for nothing given up. It is the
+  same compression format as before, searched more thoroughly at build time, so
+  files you already saved keep working and an older copy of Bento still updates
+  itself against a new shell exactly as it did.
+
+- **Saving into any of several granted folders.** With the browser extension
+  installed, you can grant Bento more than one folder and a deck saves back to
+  whichever one it came from. Two decks that share a filename in different
+  folders both save correctly now; previously that ambiguity made Bento decline
+  the save. Granting a large folder no longer costs anything either, so a whole
+  home directory is as cheap as a single decks folder.
+
+- **The toolbar is centred on a phone, and the Save button has its outline
+  back.** At phone widths the deck title had 90px to sit in and now has 220px,
+  because the folded bar centres and gives the title the room it frees. The Save
+  button had lost its right-hand border and rounded corner below 700px, where
+  the caret beside it is hidden — so it read as an unfinished edge rather than a
+  button.
+
+- **Fix: several buttons were unreadable in dark mode.** White text on a
+  near-white button — the main action in a dialog, the toast that confirms a
+  save, the active chip in a settings row, and the ＋ between slides. The
+  colour of the text was fixed while the colour behind it followed the theme,
+  so what read cleanly in light turned into white-on-white as soon as the
+  interface went dark. The panel chevrons had a milder version of the same
+  thing. Text now always takes the opposite colour to whatever it sits on.
+
+
+- **Fix: audio and video played in a show even with Autoplay switched off.**
+  Set a clip's *Autoplay* to Off and it still started the moment its slide came
+  up — every time, in a saved file, on any browser. The only way to stop it was
+  to remove the clip.
+
+  The flag was written as an empty attribute rather than left off, and the
+  slideshow engine treats an attribute that is *present* as a yes, whatever it
+  says. Bento's own check read the value and was right; it simply never got
+  asked. Present since audio and video arrived.
+
+- **Fix: a fading slide painted over the morph behind it.** When a slide set to
+  *fade* handed off to a morph, the outgoing slide dissolved on top of the
+  animation — a 450 ms curtain over a 600 ms move — so the elements appeared to
+  jump straight to their new arrangement. They had been travelling the whole
+  time, underneath. Slides that hand off to a morph now cut instead.
+
+- **Fix: a formula's new symbols appeared instantly instead of fading in.** A
+  formula gaining a term showed that term snapping into place while every other
+  symbol glided. Bento's animation engine recognised HTML and SVG elements but
+  not MathML ones, so the fade was quietly written to the wrong place and never
+  reached the screen. Formula symbols now arrive on the same staggered beat as
+  everything else.
+
+- **Fix: the palette swatches had a border you could not see on a dark panel.**
+  The new theme swatches shipped with a border colour pinned to a light-mode
+  value while the panel behind it followed the interface theme — the same
+  mismatch the dark-mode fix above removes everywhere else. The border now
+  follows the theme too.
+
+- **Fix: the toast after saving an editor copy said only "Editor".** In seven of
+  the eight built-in languages the message that confirms an editor copy was
+  saved carried the translation of the neighbouring one-word "Editor" label
+  instead of its own sentence, so a German user saving an editor copy saw a
+  toast reading `Bearbeiter` and nothing else. All eight now say what actually
+  happened. Downloadable language packs were never affected.
+
+- **Fix: a diagram could restyle other diagrams on the same slide.** An SVG
+  element can carry its own `<style>` block, and those rules were applied to the
+  whole page rather than to the drawing they belong to. So a diagram that styled
+  `.dot` or `.label` silently restyled every other SVG beside it — colours,
+  strokes and dimming rules leaking between unrelated drawings, and the more
+  diagrams a slide carried the stranger it looked.
+
+  Nothing could escape further than that: a drawing's stylesheet has never been
+  able to load or run anything, and still cannot. This was one diagram reaching
+  another's appearance, not reaching out of the document.
+
+  Bento already scoped the stylesheet you write in the element panel; the one
+  that arrives inside pasted or imported SVG markup was never scoped at all.
+  Both go through the same scoping now, and a drawing's own rules still apply to
+  it in full.
+- **Fix: a two-finger pinch on a phone could move an element and save the move.**
+  Pinching to look closer at a slide would silently drag whatever was under
+  your fingers and commit that move to the document — no visible cause, and no
+  reason to reach for undo, so the deck was quietly wrong the next time you
+  opened it. Measured on a real deck: a title at (88, 122) landed at (566, 469)
+  after one pinch.
+
+  The first finger had already begun an ordinary drag. Multi-touch over the
+  canvas was then swallowed so the page would not zoom — but swallowing the
+  events did not end the drag that was already running underneath, and it
+  committed on release like any other. The pinch now takes the canvas and stops
+  that drag, which is the same change that made pinch-to-zoom possible.
+
+  Touch only, so phones and tablets, and it needed an element under your
+  fingers — which on a slide is the ordinary case.
+
+- **Filipino is now offered to people whose browser is set to Filipino.** The
+  pack was filed under `tl`, the ISO 639-1 code for Tagalog, but browsers,
+  Android, iOS and macOS all report Filipino as `fil` / `fil-PH` — so the pack
+  could never be picked up automatically and only appeared if you went looking
+  for it by hand. It is filed as `fil` now, with `tl` kept as an alias so a
+  system that does report the old code still lands on it, and so a file already
+  carrying the pack keeps working. Turkmen (`tk`) was checked at the same time
+  and needed no change: `tk-TM` is what a Turkmen system reports.
+- **Fix: a single click could leave an element stuck to the cursor, and the
+  click that freed it moved the element.** Click once to select something and it
+  would occasionally follow the pointer around the slide as though you were
+  dragging it. The click that finally released it committed the move, so the
+  element stayed where the pointer happened to be — a selection turning into an
+  edit, with nothing on screen to say so and no reason to reach for undo.
+
+  This one is not about phones. It is a race between how fast the click arrives
+  and how fast the machine can respond to it, so it bites slower hardware of any
+  kind: the person who reported it hit it roughly one click in five on an older
+  desktop and never once on a current laptop. If your deck has quietly lost its
+  layout and you have never pinched a phone screen, this is the more likely
+  cause. Measured on the same machine before and after: 22 of 24 clicks stuck,
+  then 0 of 24.
+
+## [1.0.18] — 2026-08-15
+
+- **Security: offline mode did not block everything it promised.** The switch
+  says "nothing leaves this computer", and five things still went out with it
+  on: a manual *Check for updates* called the release server, *Manage
+  languages…* downloaded the pack index and any pack you added, a deck's video
+  or image pointing at a web address still loaded from it, requests already
+  running were left to finish, and a second tab that was already in a live
+  session kept syncing edits.
+
+  The last two matter most. A remote image or video in a document is the
+  cheapest tracking beacon there is — it tells whoever hosts it that you opened
+  the file, and when — and offline mode is exactly what you would turn on
+  before opening a deck you did not write. The second tab was worse: real
+  document content kept moving.
+
+  Separately, where a browser blocks site data — a private window, or a
+  locked-down setup — the checkbox showed the switch on while nothing had been
+  stored, so it did nothing at all. It now holds for the session regardless and
+  says plainly that it will not survive a reload.
+
+  Offline mode now covers all of it: the network is reachable from exactly one
+  place in the code, flipping the switch cuts requests and connections that are
+  already open rather than only the next one, and a deck's remote images and
+  video are left unloaded. Reported privately, with a reproduction — and found
+  by watching real traffic after reading the code twice suggested there was
+  nothing wrong.
+
+- **Updating a file no longer interrupts you.** With Bento Tray installed and a
+  folder granted, "Update this file" now finishes without a single dialog. The
+  backup it leaves behind is saved **beside your document** instead of being
+  downloaded — so the copy you would roll back to sits next to the thing it
+  backs up, rather than in your downloads folder. Without the extension it is
+  still a download, exactly as before.
+
+  Two things caused the prompt. The backup was handed to the browser's download
+  machinery, which asks where to put things if you have told Chrome to; and an
+  update of a double-clicked file described itself to the extension as an
+  export, so the extension — correctly — refused to write it for you.
+
+- **Fix: Share opened cut in half on a narrow window.** Once the window is
+  narrow enough to fold the toolbar into ⋯, opening **Share** from that menu
+  drew the popover sliced down its left edge, with the properties panel showing
+  through the gap where the rest of it should have been. Share and Language now
+  open as a section of the ⋯ list itself — full width, scrolling with it,
+  nothing hanging over an edge to be cut off.
+
+  The ⋯ menu scrolls when it has more in it than fits on screen, and a box that
+  scrolls in one direction quietly clips the other whether you asked for that or
+  not. Anything floating inside it was always going to be trimmed. Wide windows
+  were never affected: the fold only happens when the toolbar runs out of room.
+
+- **The update card drops its peach stripe.** The "Version X is available" card
+  in About carried a thick accent rule down its leading edge — the only stripe
+  of its kind anywhere in the app, and a hard-coded colour, so it stayed peach
+  while everything around it moved into dark mode. It now has the same quiet
+  1px border as every other surface in the dialog and themes along with them.
+  The accent stays where it earns its place: on the button you press.
+
+## [1.0.17] — 2026-08-10
+
+- **Security: update this file. A deck could run code hidden in its own
+  content.** Ordinary-looking document content — an image, a shape, an embedded
+  drawing — could carry script that ran when the slide was drawn, or quietly
+  send the reader somewhere else. No unusual file was needed and nothing looked
+  wrong on screen.
+
+  That matters more here than in most applications, because a Bento file is not
+  a passive document: the page holding it also holds the live-session keys, the
+  local autosave copy, and — where the browser allows it — permission to write
+  back to the file on disk. Anything running inside the page inherits all of it.
+
+  Every path that turns author content into a page is now sanitised: the
+  renderer, the still image written for file-manager thumbnails, and the PDF
+  export. The iOS host no longer trusts a filename a document supplies, blob
+  fetches verify what they received, and new password-protected files use a
+  stronger key derivation.
+
+  **Two exports were also leaking.** "Copy document JSON" carried the live
+  room's private keys — while suggesting you paste the result into an AI chat —
+  and "Save as template…" wrote readable content out of a password-protected
+  deck. A third case kept a key in an invite copy that should not have had one.
+  All three now strip, through one list in one place rather than three
+  independent decisions.
+
+  **If you have already shared a live deck** — its JSON, or the file itself, to
+  a chat, a ticket or an agent — updating does not retract that. Use *Share →
+  Rotate keys*, which mints a new room and revokes the old one, then re-share
+  the new copy. If you published a template made from a password-protected
+  deck, treat its contents as disclosed: rotation cannot take back what the
+  template already wrote in the clear.
+
+  Found by auditing this repository rather than by a report, with an
+  independent adversarial review on each round, and every fix was checked to
+  fail against the previous build before being kept. The collaboration relay is
+  deliberately **not** part of this release — a relay deployment cannot be
+  undone by a file update, so it ships separately once its own regression is
+  resolved.
+
+- **A dark interface, if you want one.** *About → Appearance* offers Match my
+  system, Light or Dark. It follows your machine by default and changes as your
+  machine does, so a laptop that dims at sunset takes the editor with it.
+
+  **Your deck does not invert.** Dark dims the chrome around the slide; the
+  slide itself stays exactly as authored, because its background is your data
+  and someone proofing at midnight still needs to see what will be projected.
+  The presenter window stays dark in both themes — you present in a dark room.
+
+  The theme is a viewer preference, stored on your machine and never written
+  into the file, so it never travels to whoever you send a deck to. Same rule
+  the interface language and reduced motion already follow.
+
+- **Hide a slide from the show.** Toggle *Hide slide* in the Slide panel and it
+  stays in the deck, fully editable, but drops out of the walk: arrow keys pass
+  over it, PDF export leaves it out, and it is never picked as the file's
+  thumbnail. An element `link` still reaches it, which is the point — backup
+  numbers, an appendix, the detail slide you only open if somebody asks.
+
+  Hidden slides do not take a page number, so `{{page}}`/`{{pages}}` stay
+  contiguous for the audience: the same rule interactive states already follow,
+  rather than a second one to remember. If you prefer the office-suite
+  behaviour, where a hidden slide keeps its number so the visible ones do not
+  renumber while you toggle slides during rehearsal, turn on *Number hidden
+  slides* under Slideshow.
+
+  The sidebar shows what the audience would count — a hidden slide's number is
+  struck through, or replaced by a dash when it has none — because a slide you
+  have forgotten you hid is a slide you find out about mid-presentation.
+
+- **A deck that is being shared now says so before an agent reads it.** A file
+  with live collaboration switched on carries the keys to its own session —
+  that is what makes sharing work without accounts, and it means anything
+  receiving the file receives the room: a chat, a ticket, an agent harness.
+  Nothing about a document looks like a credential, so this was easy to do by
+  accident.
+
+  The agent guide and the packaged skill now open by checking for it and
+  saying so, and `window.bento.validate()` reports it as
+  `collab-secrets-present` — only when private key material is actually there,
+  so a read-only copy stays quiet. Removing the keys afterwards does not
+  retract them; if a shared deck has already gone somewhere, *Share → Rotate
+  keys* is the remedy.
+
+- **Fix: a live session could crash when two people created the same element at
+  the same moment.** Sharing an element id across slides is the morph idiom —
+  it is what id continuity is *for* — so two collaborators inserting one
+  concurrently is ordinary, not a collision. If one copy carried a property the
+  other did not (a shadow, a gradient fill, an outline, a group, a link), the
+  replica receiving the other's insert threw and the session stopped. Nothing
+  was lost from the file; the tab simply stopped keeping up. Same one-line
+  defect as the two before it in this engine — a debug string built eagerly
+  around a value that can legitimately be absent — and it is now pinned by a
+  test with a deterministic trigger rather than left to a random rig's depth.
+
+- **Fix: the end of the toolbar could be cut off the right edge.** Between
+  roughly 1200 and 1250 pixels wide, the buttons on the right ran past the
+  window while their labels were still showing — the bar collapsed to icons at
+  1200px, but it actually needed 1250px to fit. A fixed width was never going
+  to be right, because the same buttons need a different amount of room
+  depending on browser zoom, system text size, the language the interface is
+  in, and whether the update chip is showing. The bar now measures itself and
+  steps down through its tiers until it fits, whatever is in it.
+
+- **Fix: on a narrow window, the ⋯ menu could not be clicked.** With the
+  properties panel open, the menu opened and drew in full, but every click on
+  it landed on the panel behind instead. The toolbar sits in its own painting
+  layer, and that layer was ranked below the panel — so nothing the menu itself
+  could do would bring it forward. The toolbar now sits above the panels, where
+  a menu that escapes it belongs.
+
+- **Fix: choosing a custom slide size now reveals its width and height.** The
+  page-size picker rebuilt the properties panel before recording any custom
+  state, so a preset-sized deck immediately snapped back to its preset and the
+  two inputs never appeared. Custom mode now reveals the existing controls
+  without changing the document until a dimension is actually edited.
+
+- **Fix: the toolbar keeps its height as you resize the window.** Narrowing
+  past 760px used to shave 4px off it and then, below 700px, add 14px back for
+  touch-sized buttons — so the bar shrank and then grew while a window was
+  being dragged. It now narrows horizontally only, which is where the room was
+  needed anyway, and has two heights with a reason each: normal, and taller on
+  a phone where every button is a 44px target.
+
+## [1.0.16] — 2026-08-03
+
+- **Fix: the slide could open off-centre, pushed to one side and clipped.**
+  Most likely on a deck whose page is larger than the default — a 1600×900 deck
+  outgrows the editing canvas at zoom levels where a 1280×720 one still fits.
+  The canvas gained room to pan past the slide's edges in 1.0.14, and turning
+  that room on moved the slide within the scrollable area without moving the
+  view with it, so you were left looking at the empty margin beside your slide.
+  Clicking the zoom percentage snapped it back, because that was the one action
+  that re-centred. The view now stays put across any re-layout.
+
+## [1.0.15] — 2026-08-03
+
+- **Fix: removing a formatting option no longer disconnects the people you are
+  working with.** While a live session was running, taking something *away* —
+  switching a gradient fill back to solid, turning an outline off, ungrouping,
+  unlinking a chart from its table, clearing a click target — crashed everyone
+  else's copy of the deck. The person doing it saw nothing wrong; their
+  collaborators' sessions stopped applying changes.
+
+  Removing a property is sent as an instruction with no value attached, and one
+  line of diagnostic code assumed a value was always there. Adding things was
+  always safe, which is why this survived: the convergence tests only ever
+  added, so an op that takes a property away had never once occurred in 45,000
+  checks. They generate removals now.
+
+- **"Save a copy…" and share exports remember their own folder.** The save
+  picker used one identity for every kind of save, so it opened wherever you
+  last put a view-only copy even when you were saving your working file.
+  In-place saves, copies and share exports now each remember their own last
+  location.
+
+  Underneath, this makes the *intent* of a save visible to anything hosting
+  Bento — `tray/ios`, and browser hosts — which previously could not tell ⌘S
+  from "Save a copy…" at all, because both arrived with identical arguments.
+
+- **Fix: the topbar came back in the wrong order after the window narrowed and
+  widened again.** Below 700px the bar folds its buttons into two menus, and
+  unfolding put them back by a rule rather than by memory — everything except
+  Redo went into the right-hand group, immediately before Format. So Comment
+  migrated out of the insert tools it belongs to, and Save ended up sitting
+  after Help. Each button now returns to the group it was authored into, in the
+  order the bar was built with.
+
+- **Fix: a deck opens where the browser refuses it storage.** With site data
+  blocked, inside some embedded webviews, or in any sandboxed frame, a Bento
+  file showed *"This file could not start"* and nothing else — because reading
+  the `localStorage` property (not calling a method on it, merely reading it)
+  throws in those contexts, and the very first thing the app did was read your
+  saved language. One unreadable preference cost you the whole document.
+
+  Preferences now fall back to their defaults instead: the deck opens and
+  behaves as it would for a first-time visitor. Anything you change during the
+  session works normally; it just is not remembered.
+
+## [1.0.14] — 2026-08-02
+
+- **Pan the canvas by dragging, and past the slide's edges.** The scrollbars
+  were the only way to move a zoomed slide, which puts the control at the edge
+  of the screen while the work is in the middle of it. **Hold space and drag**
+  to pan — the gesture nearly every canvas tool uses — or drag with the middle
+  mouse button if yours has one. On a trackpad a two-finger scroll already
+  panned once you were zoomed in, and still does.
+
+  Scrolling also used to stop dead at the slide's edges, so at high zoom a
+  corner element could never be moved off the corner of the screen to work on
+  it. There is now half a screen of room beyond every edge once you zoom past
+  fit — enough for any point on the slide to reach the middle — and none at all
+  while the whole slide fits, so a view that needs no scrollbars still has
+  none. Asked for by gcgbarbosa.
+
+- **Fit a text box to its text, in one click.** A box that is too short lets its
+  content spill over whatever sits below it, and one that is too tall throws off
+  its alignment against everything beside it — neither is visible in the numbers.
+  The Typography panel now has a button that sets the box to exactly the height
+  its text needs, and tells you what that is before you press it.
+
+  Underneath is `window.bento.measure()`, which answers the question the format
+  could not: how tall is this string at this width, in this font? Ask it with a
+  spec and you can size a box *before* creating the element, which is what turns
+  generating a deck from guess-then-correct into laying it out right the first
+  time. Requested by thinkbig1979.
+
+- **Entrances and count-ups now run on morph slides.** Both were skipped
+  wholesale on any slide reached by `transition:"morph"`, which the authoring
+  guide actively encourages — so a headline statistic rendered as a static
+  number, and an element told to sweep in from the right got a small upward
+  nudge instead.
+
+  The rule is now per element. One that morphs in from the previous slide is
+  already in motion and still ignores both. One that is **new** to the slide has
+  nothing to fight, so it counts up, and enters the way you asked — direction,
+  duration and order included. Elements with no `fx.enter` keep the automatic
+  fade-and-rise, so nothing changes in a deck that did not ask for it.
+
+- **Fix: the built-in layouts fit the slide.** They were drawn for a 1600×900
+  stage while the default deck is 1280×720, so applying *Title* put the title
+  box 160 px off the right edge and *Title + content* overflowed the bottom by
+  88 px. They are now scaled to the deck's own page size, which also makes them
+  correct for the custom sizes the slide panel offers.
+
+- **Check a deck for what the runtime silently swallows.** Almost everything
+  that goes wrong in a generated deck fails quietly: a typo'd property is
+  ignored, a `dash-march` loop on a solid stroke animates nothing, a typeface
+  the file never carried falls back to something else, and text overflows its
+  box while the JSON looks perfect. `window.bento.validate()` reports all of it
+  in one structured pass, including text overflow measured against the real
+  renderer. It only reads — it never changes the document.
+
+  Its first run found dead configuration in our own starter deck: three charts
+  carrying a chart option the renderer has never read, and two entrance
+  animations that could never play. Requested by thinkbig1979.
+
+- **Fix: two gallery templates asked for a typeface they did not carry.** The
+  Orbital and Pixel Picnic templates set their text in Instrument Sans but
+  embedded no font at all, so every viewer without that typeface installed
+  silently got Helvetica Neue instead. They now carry the face — and only the
+  face they use, rather than every font the gallery has. The failure was
+  invisible to us for the worst possible reason: whoever builds a template is
+  the person most likely to have its typeface installed.
+
+- **The agent authoring guide describes what the runtime actually does.**
+  `agents.md` gained the download URL, the real `fx.loop` parameters (and the
+  `strokeStyle` a dash-march needs to be visible), the chart option keys
+  charts-lite honours, `morphId`, layouts and `role`, column arithmetic for the
+  1280×720 canvas, and an accurate account of embedded fonts. Every gap here
+  was found by an agent authoring a deck from the guide alone, and every one of
+  them failed silently. Reported in detail by thinkbig1979.
+
+## [1.0.13] — 2026-08-02
+
+- **Fix: fade, slide and zoom transitions animate again.** They had been
+  instant cuts. Reveal only mounts slides within `viewDistance`, which was set
+  to 1 — so the slide being moved *to* was not in the page, and a CSS
+  transition had nothing to animate into. Morph was unaffected, because that
+  is Bento's own animation rather than Reveal's. Found and fixed by James
+  London.
+
+- **Copy and paste keeps embedded typefaces intact.** Pasting elements into
+  another deck used to lose their embedded font entirely, and pasting slides
+  carried every face in the source deck while omitting the bytes they pointed
+  at. Both now carry exactly the faces in use, and a name collision keeps the
+  recipient's own bytes. Fixed by Kushida.
+
+- **Update notes now cover every version you skipped.** The About dialog
+  described only the newest release, so upgrading across two versions told you
+  nothing about the one in between — and 1.0.12 was barely a day old when this
+  release became necessary. It now spans the releases you missed.
+
+## [1.0.12] — 2026-08-01
+
+- **A laser pointer while you present.** Press **L** in the slideshow and the
+  cursor becomes a red dot trailing a short comet tail, for pointing at the
+  thing you are talking about. Press L again to put it away. It is presenter
+  equipment, not deck content: nothing about it is written into the file, so a
+  deck you point at is byte-identical to one you did not.
+
+- **Decks thumbnail properly on iPhone and iPad.** 1.0.11 taught files to draw
+  a picture of page one in Finder, and it worked everywhere except the platform
+  most likely to need it — iOS renders neither a page's JavaScript nor its
+  `<noscript>`, so a deck in Files stayed the same dark box. The preview is now
+  ordinary markup followed by a script that removes it before the browser paints
+  a frame, which the thumbnailer keeps and every reader never sees. Existing
+  decks pick this up the next time you save.
+
+- **Count-up numbers keep their thousands separators.** A number written
+  `1,234` counted up to `1.234` and stayed wrong once the animation finished;
+  `1,234,567` became `1.2340000`. Numbers now settle exactly as you typed them,
+  in your own convention — `1,234.5` and `1.234,5` both survive, and a sentence
+  ending in a number keeps its full stop.
+
+- **The tab tells you which file you are editing.** A deck's title and its file
+  name drift apart constantly — rename the deck and the file on disk keeps its
+  old name — and only one of them answers *what does ⌘S overwrite?* The tab and
+  a small chip beside the title now show the file, whenever the two differ.
+
+- **Save offers the file you are looking at.** Opening `Q3-board.bento.html`
+  and pressing ⌘S used to propose saving `Bento_Slides_Showcase.bento.html` —
+  the name was built from the deck's title, so an ordinary save quietly
+  suggested a *second* file beside the real one. It now offers the file you
+  actually opened. (Exports — share copies, templates — still name themselves;
+  those are deliberately new files.)
+
+- **Drop a deck onto an open editor to switch to it.** With a deck already open,
+  dragging another `.bento.html` in from Finder opens it in place of the current
+  one. On Chrome and Edge it arrives with permission to write back, so ⌘S saves
+  it without a dialog — which a deck opened by double-clicking cannot do, since
+  the browser gives such a page no way to write to its own file.
+
+- **Release notes in the About dialog get room to be read.** An available
+  update is now one card — version, what changed, and the two ways to take it —
+  and the notes are a real list inside their own scroll region rather than a
+  140px porthole in a dialog that was itself scrolling. The dialog is 440px
+  wide instead of 360 (capped to the viewport, so a 375px phone keeps its
+  gutters), which is enough that the five bullets a release carries fit whole
+  at any normal window height.
+
+- **Turkmen, taking the language packs to 22.** Contributed and reviewed by a
+  native speaker (Mekan Soltanov), and the only pack currently complete against
+  the whole interface. Install it from the globe menu → Manage languages.
+
+- **Save a copy, set a password or reach version history from a phone.** The
+  Save button's caret does not fit beside a 44px target, which left every file
+  operation behind it unreachable on a phone — save a copy, duplicate as a new
+  deck, the password actions, version history and the JSON round-trip. They now
+  sit at the bottom of the ⋯ menu.
+
+- **Fix: the current slide's thumbnail stays visible.** Walking a long deck with
+  the arrow keys scrolled the canvas but not the sidebar, so the highlighted
+  thumbnail wandered off-screen. Contributed by Yishen Tu.
+
+- **Fix: the auto-save tip pointed at the wrong menu.** It said version history
+  lived in About; it moved to the Save menu several releases ago.
+
+## [1.0.11] — 2026-07-27
+
+- **LaTeX maths in any text box, rendered as MathML.** Type `$E=mc^2$` and it
+  renders as a formula — `$$…$$` for a display equation on its own line. The
+  document stores exactly what you typed, so a deck with maths still opens in
+  an older copy of Bento: you'll see the plain `$E=mc^2$` rather than a broken
+  slide.
+
+- **Symbol-level formula morphing.** On a morph transition, a term that
+  crosses the equals sign is *seen to travel there* instead of the whole
+  formula crossfading. Give the element the same id on both slides and `$a + b
+  = c$` becomes `$a = c - b$` with the `b` moving across. The starter deck
+  demonstrates it.
+
+- **Twenty-one installable language packs, each hash-signed.** The globe menu
+  gains **Manage languages…** — install a language from the release channel or
+  remove one you don't need. Arabic, Hebrew, Hindi, Korean, Russian,
+  Ukrainian, Vietnamese and fourteen others are available without adding a
+  byte to files that don't use them. Each pack's fingerprint is signed
+  alongside the release, so installing a language is verified exactly like an
+  update.
+
+  Your choice lives in the browser, never in the document — a deck written in
+  Tokyo opens in French chrome for a French reader, and the deck itself is
+  unchanged either way.
+
+- **The editor is usable at 402px — the topbar folds instead of overflowing.**
+  The toolbar used to need about 680px of a 402px screen: it ran off the edge,
+  took the Save button with it, and because nothing clipped it, swiping the
+  toolbar dragged the whole canvas sideways. On a phone it now folds into two
+  menus — ＋ for inserting and ⋯ for everything occasional — leaving slides,
+  insert, undo, format, save and more, at proper touch size. The side panels
+  slide over the canvas instead of squeezing it, so the slide you're editing
+  is no longer the smallest thing on screen. Nothing changes on a laptop.
+
+  The save-as list — save a copy, duplicate as a new deck, the password
+  actions, version history and the JSON round-trip — sits at the bottom of ⋯ on
+  a phone, because the caret that opens it on a laptop doesn't fit beside a
+  touch-sized Save button.
+
+- **Decks carry a page-one preview, so Finder and Files thumbnail them
+  properly.** Every Bento file used to thumbnail as the same dark box, because
+  thumbnails are drawn without running a page's JavaScript and, until Bento
+  boots, every deck genuinely is the same bytes plus the same boot splash.
+  Saving now writes a still picture of page one into the file, which is what
+  those previews draw instead — so a folder of decks is finally something you
+  can read. It costs about 14 KB on a typical deck (under 2% of the file),
+  never more than 64 KB: a page with a big photograph keeps its layout and its
+  words and drops the photograph rather than carrying it twice. Nothing
+  changes when you open a deck normally — the picture is written for software
+  that can't run the file, and is never shown to a reader.
+
+- **Added an optional virtual laser pointer for presentations.** Press `L`, or
+  use the new `🟒` laser button in speaker view, to point at the audience slide.
+  The pointer stays local to the current show and leaves a short, smooth,
+  tapered trail as it moves.
+- **Chart labels and legends now honor their visual options.** The lightweight
+  chart renderer applies configured font sizes and weights to axis labels and
+  legends, respects legend spacing and placement, and measures CJK legend text
+  correctly so localized series names no longer overlap.
+
+  **A password-protected deck gets no preview at all.** A readable picture of
+  the title page sitting next to the encrypted document would give away exactly
+  what the password is there to protect, so encrypted decks keep the plain dark
+  thumbnail — and a deck that had a preview loses it the moment you set a
+  password.
+
+- **Deck-level toggles for slide number, progress bar and corner arrows.**
+  They live in a new **Slideshow** section of the slide panel. They're
+  deck-wide and travel in the file, so a deck you hand to someone else
+  presents the way you designed it.
+
+- **Release notes ride in the signed manifest, shown before and after
+  updating.** When an update is available the About dialog now lists the
+  headlines from that release inline, instead of only a version number and a
+  link off to GitHub — and because they travel in the signed manifest, they
+  can't be tampered with. After the update lands and you reload, Bento says
+  once which version you're now on, with a link to the full notes. It only
+  says it if you actually upgraded: someone opening a deck you sent them never
+  sees it.
+
+- **A Screen Wake Lock is held for the length of a presentation.** Phones and
+  laptops used to dim and lock partway through a talk if you left a slide up
+  for a couple of minutes. Bento now holds the screen on for the length of the
+  show and lets go when you exit — and takes the lock again if you switch away
+  and come back.
+
+- **Honest save messaging where the File System Access API is missing.** Those
+  browsers (and every browser on iPhone and iPad) can't rewrite a file in
+  place — Bento hands back an updated copy instead. The editor used to say the
+  opposite in its tooltips and only admit it in a passing message *after* the
+  first save. It now says what will actually happen before any work is at
+  stake, once per browser, and the Save button describes the real behaviour.
 
   Those browsers also now show that your work *is* being kept safe. Bento has
   always snapshotted the deck into the browser as you edit and offered it back
@@ -43,14 +1397,56 @@ pre-1.0.
   backed up, while still showing the file itself as out of date, because it is.
   (A password-protected deck is never snapshotted, so it stays quiet rather
   than promise a safety net it doesn't have.)
-- **See what's new before you update.** When an update is available, the About
-  dialog now offers a "What's new" link straight to that version's release
-  notes.
 
-- **Fix: the About dialog's update section overlapped the controls beneath it.**
-  Once an update was found, the extra heading and buttons collapsed into a
-  sliver and drew on top of the auto-check and offline switches. It now takes
-  the room it needs and the dialog scrolls.
+- **The update save dialog pre-fills the open file's own name.** It offers the
+  name of the deck you have open rather than one derived from its title — so a
+  file called `Q3-board.bento.html` no longer offers to save itself as
+  `Q3_Board_Review.bento.html`. The backup written alongside an in-place
+  update follows the same name. Where the save dialog opens is set by the
+  browser and can't be pointed at a folder by the page, but it now remembers
+  the last place you saved, so the second update onwards starts in the right
+  directory.
+
+- **The starter deck is called “Bento Slides Showcase” again.** The lowercase
+  rebrand swept the deck's own title along with the app's, but a deck title is
+  a document name — it shows in the window title and becomes the suggested
+  filename — so it reads better in title case. The `bento/slides` wordmark is
+  unchanged.
+
+- **Charts honour axis and legend text styles, and measure CJK correctly.**
+  The lightweight chart renderer applies configured font sizes and weights to
+  axis labels and legends, respects legend spacing and placement, and measures
+  CJK legend text correctly so localized series names no longer overlap.
+
+- **Fix: a formula you opened but didn't change now redraws when you finish.**
+  Editing a formula (or a `{{page}}`-style field) shows its raw source; leaving
+  without typing anything used to leave that source on the slide until
+  something else happened to repaint.
+
+- **Fix: Reveal's scroll view no longer activates below 435px.** Below about
+  435px wide, the presentation was quietly switching to a scrolling reading
+  layout instead of a slideshow — so swipe navigation stopped working and
+  hidden interactive slides became scrollable content.
+
+- **Fix: saves no longer accumulate an uncompressed copy of the stylesheet.**
+  Each save wrote a fresh, uncompressed copy of the app's stylesheet into the
+  file, which the next save then copied again — a deck saved ten times carried
+  ten of them and had put on a megabyte for nothing. The stylesheet belongs in
+  the compressed runtime payload, where it takes 27 KB and is written exactly
+  once; a file that already accumulated copies drops all of them the next time
+  you save it.
+
+- **Fix: the cartesian grid reserves room for the legend's real height.**
+  Charts that don't set their own margins now leave room for the legend at
+  whatever size it's set to, instead of assuming the default one.
+
+- **Fix: starter-deck axis labels back above the WCAG AA contrast floor.**
+  They were being drawn half-transparent against a dark panel.
+
+- **Fix: the About dialog's update section no longer overlaps the controls
+  below.** Once an update was found, the extra heading and buttons collapsed
+  into a sliver and drew on top of the auto-check and offline switches. It now
+  takes the room it needs and the dialog scrolls.
 
 ## [1.0.10] — 2026-07-25
 

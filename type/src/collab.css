@@ -1,0 +1,96 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   Live-collaboration chrome for bento/type — Share button, popover, presence
+   strip, toast. Tokens are the shared suite set from styles.css (--ink,
+   --chrome, --chrome-2, --line, --muted, --accent, --good, --bad, --warnc,
+   --field); this file adds none of its own so a themed rebuild never forks. */
+
+.tc-presence { display: flex; align-items: center; gap: 4px; }
+
+.tc-avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 2px solid var(--chrome);
+  color: #fff; font: 600 11px/1 system-ui, sans-serif;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; padding: 0;
+}
+.tc-avatar-more { background: var(--chrome-2); color: var(--ink-2); }
+
+.tc-wrap { position: relative; display: inline-flex; }
+
+/* `button.tc-share-btn` (not `.tc-share-btn`) — the button sits inside .t-bar,
+   whose own `.t-bar button` rule ties on specificity with a bare class
+   selector, and losing that tie would drop the border this button actually
+   needs (unlike its plain topbar siblings, it has live/connecting/off states
+   to show). The type-plus-class form outranks it outright. */
+button.tc-share-btn {
+  border: 1px solid var(--line); border-radius: 7px;
+  gap: 6px;
+}
+button.tc-share-btn::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted); flex: none;
+}
+button.tc-share-btn.connecting::before { background: var(--warnc); }
+button.tc-share-btn.live::before { background: var(--good); }
+
+.tc-pop {
+  display: none;
+  position: absolute; top: calc(100% + 6px); inset-inline-end: 0;
+  width: 270px; max-height: 70vh; overflow-y: auto;
+  background: var(--field); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 14px 40px rgb(0 0 0 / .22);
+  padding: 12px; z-index: 40;
+  font-size: 12.5px; color: var(--ink);
+}
+.tc-wrap.open .tc-pop { display: block; }
+
+.tc-name-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.tc-name-row label { color: var(--muted); font-size: 11.5px; }
+.tc-name-row input {
+  font: inherit; font-size: 12.5px; width: 120px;
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px;
+  background: var(--chrome); color: var(--ink);
+}
+
+.tc-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 10px 0 5px; }
+.tc-label:first-child { margin-top: 0; }
+
+.tc-peer, .tc-me {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  border: none; background: transparent; border-radius: 6px;
+  padding: 5px 6px; text-align: start; cursor: default; color: inherit; font: inherit;
+}
+.tc-peer { cursor: pointer; }
+.tc-peer:hover { background: var(--chrome-2); }
+.tc-peer .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.tc-peer .who, .tc-me .who { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-peer .where, .tc-me .where { color: var(--muted); font-size: 11px; flex: none; }
+.tc-me { opacity: .85; }
+
+.tc-peers { display: flex; flex-direction: column; margin-bottom: 4px; }
+
+.tc-status { font-weight: 600; margin: 8px 0; }
+.tc-status.ok { color: var(--good); }
+
+.tc-note { color: var(--muted); line-height: 1.5; margin: 6px 0; }
+
+.tc-sep { height: 1px; background: var(--line); margin: 10px 0; }
+
+.tc-btn {
+  display: block; width: 100%; text-align: start;
+  font: inherit; font-size: 12.5px; color: var(--ink);
+  background: transparent; border: 1px solid var(--line); border-radius: 7px;
+  padding: 7px 10px; margin-bottom: 6px; cursor: pointer;
+}
+.tc-btn:hover { background: var(--chrome-2); }
+.tc-btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.tc-btn-primary:hover { filter: brightness(1.04); }
+
+.tc-toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+  background: var(--ink); color: var(--chrome); padding: 9px 15px; border-radius: 8px;
+  font-size: 12.5px; box-shadow: 0 10px 34px rgb(0 0 0 / .35);
+  opacity: 0; transition: opacity .18s; pointer-events: none; z-index: 99;
+}
+.tc-toast.on { opacity: 1; }

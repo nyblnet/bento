@@ -6,11 +6,16 @@
 // Only three values are app-specific across the whole kernel: the id the
 // release manifest is signed with, the display name that appears in window
 // titles and save dialogs, and where updates are fetched from. Everything
-// else in the kernel is genuinely app-agnostic.
+// else in the kernel is genuinely app-agnostic. Two OPTIONAL values exist for
+// a fork that runs its own release channel and relay: the signing public key
+// and the default sync host. Absent, the platform defaults apply unchanged.
 //
 // Deliberately NOT a general "kernel init" — modules that need no config
-// (anim, autosave, charts) take none, so there is no import-order trap and
-// no false coupling for apps that skip a module.
+// (anim, charts) take none, so there is no import-order trap and no false
+// coupling for apps that skip a module. `autosave` is the one exception and
+// reads appConfig() LAZILY, inside openDb(), for exactly that reason: its
+// IndexedDB database is named per app, and resolving that at module scope
+// would make importing it before configureApp() throw.
 
 export interface AppConfig {
   /** Manifest `app` field this shell will accept — e.g. 'bento-slides'.
@@ -21,6 +26,16 @@ export interface AppConfig {
   appName: string
   /** Release manifest URL. Dev override: localStorage 'bento-update-url'. */
   manifestUrl: string
+  /** Release-signing PUBLIC key (P-256 JWK) that manifests and pack indexes
+   *  are verified against. Optional: absent, the kernel uses the platform key
+   *  embedded in update.ts. A fork that publishes its own signed channel sets
+   *  this so its shipped files never accept a manifest signed by another key
+   *  (appId already refuses another app; this refuses another PUBLISHER). */
+  publicKeyJwk?: { kty: 'EC'; crv: 'P-256'; x: string; y: string }
+  /** Default relay host for collaboration (wss://…). Optional: absent, the
+   *  kernel uses DEFAULT_SYNC_HOST in sync/online.ts. The localStorage
+   *  'bento-sync-url' dev override wins over both. */
+  syncHost?: string
 }
 
 let config: AppConfig | null = null
@@ -28,6 +43,40 @@ let config: AppConfig | null = null
 /** Called once at boot, before kernel modules are used. */
 export function configureApp(cfg: AppConfig): void {
   config = cfg
+  announceRuntime()
+}
+
+declare const __APP_VERSION__: string
+
+/**
+ * Tell a HOST which Bento runtime this document carries.
+ *
+ * A host that polyfills `showSaveFilePicker` (home/webext) must know whether
+ * this document is old enough to predate `pickerIdFor` (#213). Before that,
+ * every save — including "Save a copy…" — sent `bento-doc`, so acting on the id
+ * there overwrites the open document. The host therefore refuses to write in
+ * place unless the runtime says it is at least 1.0.15.
+ *
+ * It used to read that from `window.bento.updates.version`, which each app
+ * assembles by hand — and **bento/dash does not include `updates` at all**, so
+ * every ⌘S in Dash fell back to a destination prompt even with a folder
+ * granted. The bug is not that Dash forgot; it is that the signal lived in a
+ * per-app object at all. Every app calls `configureApp`, so the version is
+ * announced here, once, and the next app gets it without knowing this exists.
+ *
+ * Deliberately a plain string on `window`, not a getter or an object: a host
+ * reads it from the page's world through a content script, and the simplest
+ * possible value is the one least likely to be mangled crossing that boundary.
+ */
+function announceRuntime(): void {
+  try {
+    const v = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
+    Object.defineProperty(window, '__bentoRuntime', {
+      value: v, writable: false, configurable: true, enumerable: false,
+    })
+  } catch {
+    /* already defined (a second configureApp in tests), or no window at all */
+  }
 }
 
 /** The active app config. Throws if the app forgot to configure itself —

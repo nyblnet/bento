@@ -9,24 +9,25 @@
 import type { Store } from '../store'
 import { uid, type Comment } from '../model'
 import { t } from '../i18n'
+import { lsGet, lsSet } from '../../../kernel/src/storage.ts'
 
 /** The commenter's name, remembered per browser (localStorage, never sent
  *  anywhere); asked for on first use. */
 export function commentAuthor(): string | null {
-  let name = localStorage.getItem('bento-author')
+  let name = lsGet('bento-author')
   if (!name) {
     name = window.prompt(t('Your name (shown on comments):'))?.trim() || ''
     if (!name) return null
-    localStorage.setItem('bento-author', name)
+    lsSet('bento-author', name)
   }
   return name
 }
 
 /** Re-ask for the name; existing threads keep their original author. */
 export function changeCommentAuthor(): string | null {
-  const next = window.prompt(t('Your name (shown on new comments):'), localStorage.getItem('bento-author') ?? '')?.trim()
+  const next = window.prompt(t('Your name (shown on new comments):'), lsGet('bento-author') ?? '')?.trim()
   if (!next) return null
-  localStorage.setItem('bento-author', next)
+  lsSet('bento-author', next)
   return next
 }
 
@@ -124,7 +125,7 @@ export class CommentsUI {
       : typeof c.x === 'number' ? t('Comment · point ({x}, {y})', { x: c.x!, y: c.y! }) : t('Comment · slide')
     const me = document.createElement('button')
     me.className = 'ed-comment-me'
-    me.textContent = t('you: {name} ✎', { name: localStorage.getItem('bento-author') ?? '—' })
+    me.textContent = t('you: {name} ✎', { name: lsGet('bento-author') ?? '—' })
     me.title = t('Change the name used for your new comments and replies')
     me.addEventListener('click', () => {
       const next = changeCommentAuthor()

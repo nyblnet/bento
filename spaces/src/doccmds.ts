@@ -1,0 +1,382 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+//
+// THE DOCUMENT'S OWN COMMANDS — the Save menu, in slides' order.
+//
+// Slides keeps every command that acts on the file as a whole under Save's
+// caret: save a copy, duplicate as new, export, encrypt, then (after a rule)
+// version history and the JSON round trip. Spaces had the same commands in
+// three places — three rows under the caret, the rest in ⋯ and in the About
+// dialog's Password, History, "Take it elsewhere" and "Careful" sections — so
+// the question "how do I encrypt this?" had a different answer in each app.
+// Now the answer is the same: Save ▾. About keeps what slides' About keeps
+// (the version, updates, viewer preferences, the document's properties).
+//
+// One list for both homes: the caret on a wide bar, the foot of ⋯ once the bar
+// has folded, exactly as slides' buildSaveAsItems serves both.
+//
+// What slides has and spaces does not (Copy compact JSON, Start from scratch)
+// is not invented here; what spaces has and slides does not (Markdown in and
+// out, a page as its own space) sits in the slot of its KIND — exports with
+// the export, Import beside Replace from JSON, the two ways a document arrives.
+
+import { setEncryptionPassword, isEncryptionActive } from '../../kernel/src/save.ts'
+import { clearVersions, clearRecovery, listVersions, type Snapshot } from '../../kernel/src/autosave.ts'
+import type { Dialog } from '../../kernel/src/ui/dialog.ts'
+import { t } from './i18n'
+import { ICONS } from './icons'
+import { row, type Menu } from './menus.ts'
+import { docForExport, parseDoc, uid, type SpacesDoc } from './model'
+import { restoreInto } from './restoregate'
+import {
+  revisionsOf, historyIsForeign, changesAt, restoredDoc, clearHistory, historyBytes,
+  tooLargeForHistory, type ChangeReport,
+} from './history.ts'
+import { humanBytes } from './assets'
+import { duplicateAsNew } from './share.ts'
+import type { Store } from './store'
+
+export interface DocHost {
+  store: Store
+  openOverlay(title: string, build: (body: HTMLElement, close: () => void) => void, o?: { wide?: boolean; top?: boolean; className?: string }): Dialog
+  repaint(): void
+  notice(msg: string): void
+  saveCopy(): void
+  exportMarkdown(): void
+  exportSpace(): void
+  /** a DIFFERENT document written as its own file; keeps no handle */
+  writeCopy(doc: SpacesDoc): Promise<boolean>
+  importMarkdown(): void
+  /** extra export rows a build carries (the tour's page-as-slides), in order */
+  moreExports?: (m: Menu) => void
+}
+
+/**
+ * The rows, into `m`. One line each, as slides' Save menu: what a row does is
+ * its hover tooltip and its accessible description, not a second line — the
+ * maintainer's revision of D2 for this menu (DECISIONS 2026-09-26).
+ */
+export function saveRows(m: Menu, h: DocHost): void {
+  const ro = h.store.readOnly
+  row(m, { icon: ICONS.copy, label: t('Save a copy…'), desc: t('A second file — the original is left alone'), run: () => h.saveCopy() })
+  row(m, { icon: ICONS.plus, label: t('Duplicate as new space…'),
+    desc: t('Same pages, new identity — it never syncs with this one'),
+    run: () => duplicate(h) })
+  row(m, { icon: ICONS.markdown, label: t('Export as Markdown…'), desc: t('Every page, as one .md file'), run: () => h.exportMarkdown() })
+  row(m, { icon: ICONS.page, label: t('Export page as a space…'), desc: t('One page and what is under it, as its own file'), run: () => h.exportSpace() })
+  h.moreExports?.(m)
+  if (isEncryptionActive()) {
+    row(m, { icon: ICONS.lock, label: t('Change password…'), desc: t('Takes effect on the next save'), off: ro, run: () => openPassword(h) })
+    row(m, { icon: ICONS.lock, label: t('Remove password…'),
+      desc: t('The next save writes plain, readable JSON'), off: ro, run: () => openRemovePassword(h) })
+  } else {
+    row(m, { icon: ICONS.lock, label: t('Encrypt with password…'),
+      desc: t('No recovery — lose the password and the space is gone'), off: ro, run: () => openPassword(h) })
+  }
+
+  // the document AS DATA — the timeline and the round trips
+  m.separator()
+  row(m, { icon: ICONS.history, label: t('Version history…'), desc: t('Versions are kept in this browser only — never in the file, never online. Restoring is undoable.'), run: () => openHistory(h) })
+  row(m, { icon: ICONS.history, label: t('Versions in this file…'), desc: t('Kept inside the file, one per save, so they travel with it. Restoring is undoable.'), run: () => openFileHistory(h) })
+  row(m, { icon: ICONS.code, label: t('Copy document JSON'), desc: t('Plain JSON of every page — no live-session keys'),
+    run: () => copyJson(h) })
+  row(m, { icon: ICONS.code, label: t('Replace from JSON…'), desc: t('Replaces every page — ⌘Z undoes'),
+    off: ro, run: () => openReplaceJson(h) })
+  row(m, { icon: ICONS.markdown, label: t('Import Markdown…'), off: ro, desc: t('A folder of .md files becomes pages, with the folder tree and the [[wikilinks]] intact.'), run: () => h.importMarkdown() })
+}
+
+/** The labels, in order — what the chrome rig holds the menu to. */
+export const SAVE_ORDER = [
+  'Save a copy…', 'Duplicate as new space…', 'Export as Markdown…', 'Export page as a space…', 'Export page as Markdown…',
+  'Encrypt with password…', 'Version history…', 'Versions in this file…', 'Copy document JSON', 'Replace from JSON…', 'Import Markdown…',
+]
+
+// ---- the commands ---------------------------------------------------------
+
+/**
+ * A DUPLICATE, not a copy: a fresh docId and no collaboration credentials, so
+ * it can never sync with the space it came from. You keep editing this one —
+ * the writer holds no handle (portable.ts).
+ */
+function duplicate(h: DocHost): void {
+  // share.ts duplicateAsNew: the stamped `sync` goes with `collab`.
+  const clone: SpacesDoc = duplicateAsNew(h.store.doc, uid('doc'))
+  void h.writeCopy(clone)
+}
+
+/**
+ * The clipboard copy is a HAND-OUT: every field under `collab` is a bearer
+ * capability, so model.docForExport strips the block outright.
+ */
+function copyJson(h: DocHost): void {
+  const text = JSON.stringify(docForExport(h.store.doc), null, 2)
+  const p = navigator.clipboard?.writeText(text)
+  if (!p) { h.notice(t('Couldn’t access the clipboard')); return }
+  p.then(() => h.notice(t('Document JSON copied'))).catch(() => h.notice(t('Couldn’t access the clipboard')))
+}
+
+/** slides' 440px card, as its Version history and Replace from JSON */
+const narrow = (d: Dialog): void => { d.card.classList.add('sp-dlg-narrow') }
+
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] => {
+  const n = document.createElement(tag)
+  if (cls) n.className = cls
+  if (text) n.textContent = text
+  return n
+}
+const button = (label: string, fn: () => void, primary = false): HTMLButtonElement => {
+  const b = el('button', 'sp-btn' + (primary ? ' sp-primary' : ''), label)
+  b.type = 'button'
+  b.addEventListener('click', fn)
+  return b
+}
+const actions = (...kids: HTMLElement[]): HTMLElement => {
+  const d = el('div', 'sp-actions sp-dlg-actions')
+  d.append(...kids)
+  return d
+}
+
+/**
+ * Set or change the password — two fields, as slides asks, instead of a
+ * native prompt() that echoed nothing back and could not be confirmed.
+ * Plaintext snapshots written BEFORE encryption was turned on would defeat it,
+ * so both local stores are cleared; main.ts writes neither from here on.
+ */
+function openPassword(h: DocHost): void {
+  narrow(h.openOverlay(t('Encrypt with password…').replace(/…$/, ''), (body, close) => {
+    body.append(el('p', 'sp-note', t('The password cannot be recovered — if it is lost, the file is lost.')))
+    const field = (label: string) => {
+      const l = el('label', 'sp-ab-field')
+      l.append(el('span', '', label))
+      const i = el('input', 'sp-input')
+      i.type = 'password'
+      i.autocomplete = 'new-password'
+      l.append(i)
+      body.append(l)
+      return i
+    }
+    const a = field(t('Password'))
+    const b = field(t('Confirm password'))
+    const err = el('p', 'sp-note sp-dlg-err')
+    err.setAttribute('role', 'alert')
+    body.append(err)
+    const go = async () => {
+      if (!a.value) { err.textContent = t('Password'); a.focus(); return }
+      if (a.value !== b.value) { err.textContent = t('Passwords do not match'); b.focus(); return }
+      setEncryptionPassword(a.value)
+      await clearVersions(h.store.doc.docId)
+      await clearRecovery(h.store.doc.docId)
+      close()
+      h.notice(t('Password set. Save to write the space encrypted.'))
+    }
+    b.addEventListener('keydown', (e) => { if (e.key === 'Enter') void go() })
+    body.append(actions(button(t('Cancel'), close), button(t('Set password'), () => { void go() }, true)))
+    queueMicrotask(() => a.focus())
+  }))
+}
+
+function openRemovePassword(h: DocHost): void {
+  narrow(h.openOverlay(t('Remove the password?'), (body, close) => {
+    body.append(el('p', 'sp-note', t('The next save writes this space as plain, readable JSON — anybody who opens the file can read every page.')))
+    body.append(actions(button(t('Cancel'), close), button(t('Remove the password'), () => {
+      setEncryptionPassword(null)
+      close()
+      h.notice(t('Password removed. Save to write the space unencrypted.'))
+    }, true)))
+  }))
+}
+
+/**
+ * The local timeline, as its own dialog (slides' "Version history…"). It lives
+ * in this browser's IndexedDB — never in the file, never online — and the note
+ * says so, because a space carried to another machine does not bring it.
+ */
+function openHistory(h: DocHost): void {
+  narrow(h.openOverlay(t('Version history'), (body, close) => {
+    const list = el('div', 'sp-ab-versions')
+    body.append(list, el('p', 'sp-note', t('Versions are kept in this browser only — never in the file, never online. Restoring is undoable.')))
+    const render = (versions: Snapshot[]): void => {
+      list.textContent = ''
+      if (!versions.length) {
+        list.append(el('p', 'sp-note', isEncryptionActive()
+          ? t('This space is encrypted, so no versions are kept.')
+          : t('No versions yet — they build up as you write and save.')))
+        return
+      }
+      for (const [i, v] of versions.entries()) {
+        const when = new Date(v.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        const b = el('button', 'sp-ab-version')
+        b.type = 'button'
+        b.append(el('span', 'sp-ab-when', when), el('span', 'sp-ab-vtag', i === 0 ? t('most recent') : ''), el('span', 'sp-ab-vdo', t('Restore')))
+        b.addEventListener('click', () => {
+          // FOREIGN INPUT, gated as the recovery banner gates it (restoregate.ts):
+          // every file:// document shares this IndexedDB. A refusal applies
+          // nothing and leaves the entry where it is.
+          if (h.store.readOnly) { h.notice(t('This file is open read-only')); return }
+          // replaceDoc (inside restoreInto) checkpoints undo first, so ⌘Z walks
+          // this back — the same contract the recovery banner's Restore honours.
+          if (!restoreInto(h.store, v.json)) { h.notice(t('That version could not be read')); return }
+          h.repaint()
+          close()
+          h.notice(t('Restored the version from {when} — ⌘Z undoes it', { when }))
+        })
+        list.append(b)
+      }
+    }
+    render([])
+    void listVersions(h.store.doc.docId).then(render).catch(() => { /* no store, no history */ })
+  }))
+}
+
+/**
+ * The timeline INSIDE THE FILE (history.ts) — the one that travels. Read
+ * synchronously: it is a field of the document already in memory.
+ *
+ * A row's summary is DERIVED here, in the reader's language, from the patch;
+ * the file stores no sentence. Restore goes through the same gate as the
+ * browser-local timeline (restoregate.ts restoreInto): the version is the
+ * document's own, but what is applied is still parsed, sanitized and given the
+ * live identity, and replaceDoc checkpoints undo so ⌘Z walks it back.
+ */
+function openFileHistory(h: DocHost): void {
+  narrow(h.openOverlay(t('Versions in this file'), (body, close) => {
+    const list = el('div', 'sp-ab-versions')
+    const foot = el('div')
+    body.append(list, foot)
+    const render = (): void => {
+      list.textContent = ''
+      foot.textContent = ''
+      const doc = h.store.doc
+      const revs = revisionsOf(doc)
+      if (!revs.length) {
+        list.append(el('p', 'sp-note', historyIsForeign(doc)
+          ? t('This file carries a history this version cannot read. It is kept exactly as it arrived.')
+          : tooLargeForHistory(doc)
+            ? t('This space is too large to keep versions inside the file.')
+            : t('No versions yet — one is kept every time you save.')))
+      }
+      // newest first: "what I had before lunch" is nearer the top
+      for (let i = revs.length - 1; i >= 0; i--) {
+        const v = revs[i]
+        const when = new Date(v.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        const rep = changesAt(revs, i)
+        const item = el('div', 'sp-hist-row')
+        const b = el('button', 'sp-ab-version')
+        b.type = 'button'
+        b.append(el('span', 'sp-ab-when', when), el('span', 'sp-ab-vtag', v.label || summary(rep)), el('span', 'sp-ab-vdo', t('Restore')))
+        b.disabled = h.store.readOnly
+        b.addEventListener('click', () => {
+          if (h.store.readOnly) { h.notice(t('This file is open read-only')); return }
+          const next = restoredDoc(h.store.doc, i)
+          if (!next || !restoreInto(h.store, JSON.stringify(next))) { h.notice(t('That version could not be read')); return }
+          h.repaint()
+          close()
+          h.notice(t('Restored the version from {when} — ⌘Z undoes it', { when }))
+        })
+        const show = el('button', 'sp-hist-diff-btn', t('Changes'))
+        show.type = 'button'
+        show.setAttribute('aria-expanded', 'false')
+        let panel: HTMLElement | null = null
+        show.addEventListener('click', () => {
+          if (panel) { panel.remove(); panel = null; show.setAttribute('aria-expanded', 'false'); return }
+          panel = renderDiff(rep)
+          item.append(panel)
+          show.setAttribute('aria-expanded', 'true')
+        })
+        const head = el('div', 'sp-hist-head')
+        head.append(b, show)
+        item.append(head)
+        list.append(item)
+      }
+      const size = historyBytes(doc)
+      if (size && revs.length) foot.append(el('p', 'sp-note', t('History takes {size} of this file.', { size: humanBytes(size) })))
+      // said in the dialog and not only in the source: a deleted page is still
+      // in the file until the budget folds it away
+      foot.append(el('p', 'sp-note', t('Versions include text you have deleted. They travel in this file and in invites; reading copies, view-only copies and Copy document JSON leave them out.')))
+      if (!h.store.readOnly && revs.length) {
+        const confirmBox = el('div')
+        const clearBtn = button(t('Clear history…'), () => {
+          // IN FLOW, not a popover: the card scrolls (CLAUDE.md hard-won #10)
+          clearBtn.disabled = true
+          confirmBox.append(
+            el('p', 'sp-note', t('The past text goes with them, including anything you deleted. Save the file for it to take effect.')),
+            actions(button(t('Cancel'), () => { confirmBox.textContent = ''; clearBtn.disabled = false }), button(t('Clear history'), () => {
+              if (clearHistory(h.store.doc)) h.store.setDirty(true)
+              render()
+              h.notice(t('History removed. Save to write the file without it.'))
+            }, true)),
+          )
+        })
+        foot.append(actions(clearBtn), confirmBox)
+      }
+    }
+    render()
+  }))
+}
+
+/** The one-line summary for a revision, made in the reader's language. */
+function summary(rep: ChangeReport): string {
+  if (rep.first) return t('First version kept in this file')
+  if (rep.pagesChanged || rep.blocksChanged) return t('{p} page(s), {b} block(s) changed', { p: rep.pagesChanged, b: rep.blocksChanged })
+  if (rep.fieldsChanged.length) return t('Changes outside the pages — title, design, footnotes or templates')
+  return t('Nothing changed')
+}
+
+/**
+ * A change report, drawn — WORD granularity (history.ts), from the block's
+ * TEXT, never its markup. textContent throughout: this is the file's own text.
+ */
+function renderDiff(rep: ChangeReport): HTMLElement {
+  const box = el('div', 'sp-hist-diff')
+  if (!rep.pages.length) { box.append(el('p', 'sp-note', t('Nothing changed'))); return box }
+  for (const p of rep.pages.slice(0, 12)) {
+    const head = el('div', 'sp-hist-page', p.title || t('Untitled'))
+    if (p.kind === 'added') head.append(el('span', 'sp-hist-chip', t('New page')))
+    else if (p.kind === 'removed') head.append(el('span', 'sp-hist-chip', t('Deleted page')))
+    else if (p.wasTitled !== undefined) head.append(el('span', 'sp-hist-chip', t('Renamed from “{title}”', { title: p.wasTitled || t('Untitled') })))
+    box.append(head)
+    for (const b of p.blocks.slice(0, 20)) {
+      const line = el('p', 'sp-hist-line')
+      for (const part of b.parts) {
+        if (part.text) line.append(el(part.op === 'ins' ? 'ins' : part.op === 'del' ? 'del' : 'span', '', part.text))
+      }
+      if (!line.childNodes.length) line.append(el('span', 'sp-hist-empty', b.type))
+      box.append(line)
+    }
+    if (p.blocks.length > 20) box.append(el('span', 'sp-hist-chip', '…'))
+  }
+  return box
+}
+
+/**
+ * Paste-and-apply (the counterpart of Copy document JSON). The live session
+ * belongs to THIS document, not to the pasted text: content is imported,
+ * identity and capability are not.
+ */
+function openReplaceJson(h: DocHost): void {
+  narrow(h.openOverlay(t('Replace from JSON'), (body, close) => {
+    body.append(el('p', 'sp-note', t('Everything in this space is replaced by what you paste. ⌘Z undoes it, but only while this window stays open.')))
+    const ta = el('textarea', 'sp-ab-json')
+    ta.rows = 8
+    ta.placeholder = t('Paste document JSON here…')
+    body.append(ta)
+    const apply = button(t('Replace'), () => {
+      const res = parseDoc(ta.value)
+      if (!res.ok) {
+        ta.classList.add('sp-ab-bad')
+        apply.textContent = t('That is not a bento/spaces document')
+        setTimeout(() => { apply.textContent = t('Replace') }, 2000)
+        return
+      }
+      // The live session belongs to THIS document, not to the pasted text:
+      // replaceDoc keeps the live docId, collab and file mode itself
+      // (store.ts FROM_LIVE), for this and every other whole-document restore.
+      h.store.replaceDoc(res.doc)
+      h.repaint()
+      close()
+      h.notice(t('Document replaced — ⌘Z undoes'))
+    }, true)
+    body.append(actions(button(t('Cancel'), close), apply))
+    queueMicrotask(() => ta.focus())
+  }))
+}

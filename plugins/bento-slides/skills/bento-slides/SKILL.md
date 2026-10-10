@@ -40,8 +40,10 @@ curl -fsSL https://bento.page/releases/slides/Bento_Slides.bento.html -o "<Topic
 
 (Windows without curl: `iwr https://bento.page/releases/slides/Bento_Slides.bento.html -OutFile <Topic>.bento.html`.)
 
-Then verify the download contains `id="bento-doc"`, and **replace** that
-block's JSON (it ships with a showcase deck — discard it) with your document.
+Then verify the download contains `id="bento-doc"`, and write your document
+into that block. **The block is empty in the downloaded file** — a browser
+mints a showcase deck on first open, but on disk there is nothing to discard
+and nothing to copy from, so do not go looking for it.
 Rules for a fresh document:
 
 - **Fetch https://bento.page/agents.md BEFORE authoring** and start from its
@@ -53,15 +55,27 @@ Rules for a fresh document:
 - **Omit `docId` and `collab` entirely**: the app mints a fresh identity and
   dormant collaboration credentials on first open.
 
-When done, offer to open it (`open` / `xdg-open` / `start`) — the file boots
-straight into the editor with the finished deck. Aim for one pass from
-request to opened deck.
+When done, open it (`open` / `xdg-open` / `start`) — the file boots straight
+into the editor with the finished deck — and **look at every slide before you
+report done**. Text overflow, elements crowding each other, a heading that
+wrapped to three lines and a chart key the renderer dropped are all invisible
+in the JSON and obvious on screen. Author, render, check, fix; a deck nobody
+looked at is not finished.
 
 ## Workflow
 
 1. **Find the document.** Locate the `#bento-doc` block; parse its JSON. Note
    `doc.size` (canonical 1280×720), `doc.theme`, existing element `id`s, and
    whether `doc.template`/`doc.readonly` are set.
+
+   **Check `doc.collab` first.** If it carries `ownerPriv`, `writerPriv` or
+   `invite`, this deck's live-session keys are in the file you are about to read
+   — and anything that receives the file or its JSON can join that session and
+   write to it. That is by design: the file is the invitation. **Tell the user
+   before you continue**, because only they can decide, and they may not know
+   the deck is shared. Offer the alternative: a read-only copy, or *Share → Stop
+   sharing* on a duplicate. If it has already gone somewhere, the remedy is
+   *Share → Rotate keys* — removing the keys afterwards does not retract them.
 2. **Read the source material the user gave you** and classify each piece —
    is it a stat? a table? a process? a definition to expand? a photo?
 3. **Map material → feature (do NOT default to bullet text).** This is the

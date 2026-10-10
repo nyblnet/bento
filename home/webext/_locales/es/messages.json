@@ -1,0 +1,884 @@
+{
+  "appDesc": {
+    "message": "Guarda un documento de Bento en el archivo que abriste, sin preguntar dónde.",
+    "description": "Chrome Web Store listing description. 132 characters maximum — the store truncates."
+  },
+  "navAll": {
+    "message": "Todos los documentos"
+  },
+  "navFolders": {
+    "message": "Carpetas"
+  },
+  "navHelp": {
+    "message": "Ayuda y acerca de"
+  },
+  "navSettings": {
+    "message": "Ajustes"
+  },
+  "addFolder": {
+    "message": "+ Añadir una carpeta…"
+  },
+  "searchDocs": {
+    "message": "Buscar documentos"
+  },
+  "searchDocsSlash": {
+    "message": "Buscar documentos   /"
+  },
+  "sortTitle": {
+    "message": "Ordenar"
+  },
+  "sortRecent": {
+    "message": "Modificados recientemente"
+  },
+  "sortName": {
+    "message": "Nombre"
+  },
+  "sortFolder": {
+    "message": "Carpeta"
+  },
+  "newDocument": {
+    "message": "+ Nuevo documento"
+  },
+  "browseAll": {
+    "message": "Ver todos"
+  },
+  "reconnectFolders": {
+    "message": "Reconectar carpetas"
+  },
+  "primeIntro": {
+    "message": "Chrome preguntará ahora. Elige la opción del medio:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — una carpeta necesita reconectarse",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home necesita reconectarse",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome retiró el permiso de una carpeta. Hasta que se restaure, al guardar un documento se preguntará dónde ponerlo.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "reconnect": {
+    "message": "Reconectar"
+  },
+  "ctxOpenPanel": {
+    "message": "Abrir el panel de bento/home"
+  },
+  "panelEmpty": {
+    "message": "Aún no hay documentos de Bento en tus carpetas."
+  },
+  "noMatches": {
+    "message": "Nada coincide con «$1»"
+  },
+  "rowUnplacedTip": {
+    "message": "Abre una vez un documento de $1 desde el Finder y todo lo de esa carpeta se podrá abrir desde aquí."
+  },
+  "encrypted": {
+    "message": "Protegido con contraseña"
+  },
+  "notSavedYet": {
+    "message": "Aún sin guardar"
+  },
+  "fileAccessOffShort": {
+    "message": "El acceso a archivos locales está desactivado",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noFoldersYet": {
+    "message": "Aún no hay carpetas"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 carpeta necesita reconectarse",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "statusOneFolder": {
+    "message": "$1 carpeta · guarda en el sitio"
+  },
+  "statusFolders": {
+    "message": "$1 carpetas · guarda en el sitio"
+  },
+  "renewNotOffered": {
+    "message": "Chrome no ofreció restaurarla",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "renewTryAfterRestart": {
+    "message": "Inténtalo de nuevo tras reiniciar Chrome",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "fetchingLatest": {
+    "message": "Descargando el Bento más reciente…"
+  },
+  "created": {
+    "message": "$1 creado"
+  },
+  "panelUnplaced": {
+    "message": "Se puede leer <b>$1</b>$2, pero aún no abrirlo: Chrome no le dice a una extensión dónde está una carpeta en el disco. <b>Ver todos</b> los encuentra con un clic.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "andMore": {
+    "message": " y $1 más"
+  },
+  "agoJustNow": {
+    "message": "ahora mismo"
+  },
+  "agoMinutes": {
+    "message": "hace $1 min"
+  },
+  "agoHour": {
+    "message": "hace $1 hora"
+  },
+  "agoHours": {
+    "message": "hace $1 horas"
+  },
+  "agoDay": {
+    "message": "hace $1 día"
+  },
+  "agoDays": {
+    "message": "hace $1 días"
+  },
+  "searchScope": {
+    "message": "La búsqueda mira títulos, nombres de archivo, carpetas y el texto dentro de los documentos."
+  },
+  "folderEmpty": {
+    "message": "Aún no hay nada en esta carpeta"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ Nuevo documento</b> pone uno aquí."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home todavía no sabe dónde está $1 en el disco. Usa «Encontrar mis carpetas» o abre una vez un documento suyo desde el Finder.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "cardRenamedTip": {
+    "message": "$1 es un documento de Bento con otro nombre. Se abre desde aquí, pero al guardar preguntará dónde — guardar en el sitio solo reconoce archivos terminados en .bento.html."
+  },
+  "badgeRenamed": {
+    "message": "Se llama .html en vez de .bento.html — se abre desde aquí, pero al guardar preguntará dónde."
+  },
+  "menuOpen": {
+    "message": "Abrir"
+  },
+  "menuDuplicate": {
+    "message": "Duplicar"
+  },
+  "menuRename": {
+    "message": "Cambiar nombre…"
+  },
+  "menuCopyPath": {
+    "message": "Copiar ruta"
+  },
+  "duplicatedAs": {
+    "message": "Duplicado como $1"
+  },
+  "renamePrompt": {
+    "message": "Cambiar el nombre del documento"
+  },
+  "renamedTo": {
+    "message": "Renombrado a $1"
+  },
+  "pathCopied": {
+    "message": "Ruta copiada"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — aún sin abrir"
+  },
+  "setupTitle": {
+    "message": "Dos cosas y ya está"
+  },
+  "setupLead": {
+    "message": "Después de esto, ⌘S en un documento abierto con doble clic escribe directamente en el archivo — sin preguntar dónde, nunca."
+  },
+  "chooseFolder": {
+    "message": "Elegir una carpeta…"
+  },
+  "setupStep1": {
+    "message": "Elige la carpeta donde viven tus documentos"
+  },
+  "setupStep1Note": {
+    "message": "Una carpeta amplia suele bastar — cubre todo lo que hay dentro."
+  },
+  "setupStep2": {
+    "message": "Activa el acceso a archivos locales",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setupStep2Note": {
+    "message": "En <code>chrome://extensions</code> → bento/home → <b>Permitir acceso a URL de archivo</b>. Chrome no deja que una extensión lo active por sí misma.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>¿Actualizaste y esperabas ver tus carpetas?</b> Una extensión descomprimida se identifica por la ruta de su carpeta, así que cargar una copia nueva desde otra carpeta la convierte en otra extensión. Tus carpetas siguen concedidas a la anterior. Sustituye los archivos en la carpeta original y pulsa <b>Actualizar</b> en <code>chrome://extensions</code>.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>El acceso a archivos locales está desactivado</b> — hasta que se active, nada se guarda en el sitio. Activa <b>Permitir acceso a URL de archivo</b> en <code>chrome://extensions</code>.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 carpeta necesita reconectarse.</b> Reconéctala en <b>Ajustes</b> y elige la opción del medio — la única que dura.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> se puede listar pero aún no abrir — Chrome nunca le dice a una extensión dónde está una carpeta en el disco.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "findFolders": {
+    "message": "Encontrar mis carpetas"
+  },
+  "looking": {
+    "message": "Buscando…"
+  },
+  "findDeclined": {
+    "message": "<b>Sin problema.</b> Abre una vez un documento de $1 desde el Finder — esta página se dará cuenta."
+  },
+  "foundFolder": {
+    "message": "$1 carpeta encontrada"
+  },
+  "foundFolders": {
+    "message": "$1 carpetas encontradas"
+  },
+  "foundNothing": {
+    "message": "Nada en el historial todavía — abre un documento desde el Finder"
+  },
+  "setFoldersSub": {
+    "message": "Los documentos que están aquí se guardan directamente en su archivo, sin preguntar dónde. Una carpeta cubre todo lo que hay dentro."
+  },
+  "noneYet": {
+    "message": "Ninguna todavía."
+  },
+  "savesInPlace": {
+    "message": "guarda en el sitio"
+  },
+  "needsReconnecting": {
+    "message": "necesita reconectarse",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "reconnectTip": {
+    "message": "Chrome pedirá restaurar esta carpeta. Rechazarlo la quita, y después Chrome espera al menos un reinicio antes de volver a ofrecerlo.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "remove": {
+    "message": "Quitar"
+  },
+  "removeTip": {
+    "message": "Retira el acceso. Chrome puede seguir recordando el permiso, así que volver a añadir la carpeta quizá no vuelva a preguntar.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setAccessTitle": {
+    "message": "Acceso a archivos locales",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setAccessSub": {
+    "message": "Chrome no deja que una extensión active esto por sí misma, y sin ello nada funciona.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "stateOn": {
+    "message": "Activado"
+  },
+  "stateOff": {
+    "message": "Desactivado"
+  },
+  "stateUnknown": {
+    "message": "Desconocido"
+  },
+  "accessOnNote": {
+    "message": "bento/home puede leer las páginas que abriste desde el disco.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "accessOffNote": {
+    "message": "Abre chrome://extensions, busca bento/home y activa «Permitir acceso a URL de archivo».",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "accessUnknownNote": {
+    "message": "Este navegador no lo indica. Si al guardar sigue preguntando, compruébalo en chrome://extensions.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setVersionTitle": {
+    "message": "Versión"
+  },
+  "setVersionUnpacked": {
+    "message": "Esta copia se cargó descomprimida, así que Chrome nunca la actualizará."
+  },
+  "setVersionStore": {
+    "message": "Instalado desde la tienda, así que se actualiza solo."
+  },
+  "versionAvailable": {
+    "message": "$1 está disponible"
+  },
+  "versionUpToDate": {
+    "message": "al día según la última comprobación"
+  },
+  "versionManaged": {
+    "message": "lo mantiene al día el navegador"
+  },
+  "getIt": {
+    "message": "Obtener"
+  },
+  "checkNow": {
+    "message": "Comprobar ahora"
+  },
+  "autoCheckPref": {
+    "message": "<b>Buscar una versión nueva al iniciar el navegador.</b><br>Una petición a bento.page de un archivo estático. No envía identificadores, ni el número de versión, ni nada sobre tus documentos — la comparación se hace aquí. Desactivado no se pide nada nunca; <b>Comprobar ahora</b> sigue funcionando.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "expectedSha": {
+    "message": "SHA-256 esperado del zip: $1"
+  },
+  "setReachTitle": {
+    "message": "A qué puede llegar",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "setReachSub": {
+    "message": "Solo las carpetas de arriba, y solo el archivo desde el que se abrió una página. Nada se sube y nada se lee en ningún otro sitio.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 está disponible.</b> Esta copia se cargó descomprimida, así que Chrome nunca la actualizará."
+  },
+  "updateStep1": {
+    "message": "Descárgalo de GitHub"
+  },
+  "updateStep2": {
+    "message": "Sustituye los archivos <b>en la carpeta desde la que lo cargaste</b> — la misma carpeta, o Chrome lo tratará como otra extensión y tus carpetas concedidas no vendrán con él",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "updateStep3": {
+    "message": "Abre <code>chrome://extensions</code> y pulsa <b>Actualizar</b> en bento/home"
+  },
+  "fetchingApp": {
+    "message": "Descargando $1…"
+  },
+  "createdIn": {
+    "message": "$1 ($2) creado en $3"
+  },
+  "intoFolder": {
+    "message": "en $1"
+  },
+  "helpWhatTitle": {
+    "message": "Qué hace bento/home"
+  },
+  "helpWhatSub": {
+    "message": "Un documento de Bento es un archivo HTML que lleva su propio editor. Abierto directamente desde el disco, el navegador no le deja escribir sobre sí mismo — así que al guardar pregunta dónde ponerlo, cada vez. bento/home es lo que quita esa pregunta."
+  },
+  "tourSaveTitle": {
+    "message": "Guarda en el sitio"
+  },
+  "tourSaveBody": {
+    "message": "⌘S escribe directamente en el archivo que abriste, sin diálogo. El guardado automático y las actualizaciones van por el mismo camino."
+  },
+  "tourFindTitle": {
+    "message": "Encuentra tus documentos"
+  },
+  "tourFindBody": {
+    "message": "Todos los documentos de Bento de tus carpetas, con su título real y una imagen de su primera página. La búsqueda cubre lo que está escrito dentro."
+  },
+  "tourSwitchTitle": {
+    "message": "Cambia mientras trabajas"
+  },
+  "tourSwitchBody": {
+    "message": "Pulsa <kbd>Alt</kbd>+<kbd>B</kbd>, o haz clic derecho dentro de un documento, para tener un panel al lado."
+  },
+  "tourNewTitle": {
+    "message": "Crea uno nuevo"
+  },
+  "tourNewBody": {
+    "message": "<b>+ Nuevo documento</b> descarga la versión actual de Slides, Spaces o Dash y pone un documento nuevo en tu carpeta."
+  },
+  "helpNeedsTitle": {
+    "message": "Lo que necesita de ti"
+  },
+  "helpNeedsSub": {
+    "message": "Dos cosas, ambas fuera del alcance de esta extensión."
+  },
+  "helpFolder": {
+    "message": "Una carpeta"
+  },
+  "helpFolderGranted": {
+    "message": "$1 concedidas — los documentos dentro se guardan en el sitio"
+  },
+  "helpFolderNone": {
+    "message": "Aún sin elegir. Una carpeta amplia cubre todo lo que hay dentro."
+  },
+  "helpAccessOff": {
+    "message": "Desactivado. Activa <b>Permitir acceso a URL de archivo</b> en <code>chrome://extensions</code> — ninguna extensión puede activarlo por sí misma.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAccessUnknown": {
+    "message": "Este navegador no lo indica. Si al guardar sigue preguntando, compruébalo en <code>chrome://extensions</code>.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAccessOn": {
+    "message": "Activado — bento/home puede leer las páginas que abriste desde el disco.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpNeverTitle": {
+    "message": "Lo que nunca hace",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpNeverSub": {
+    "message": "Lee y escribe solo dentro de las carpetas de arriba, y solo el archivo desde el que se abrió una página — el navegador dice cuál es, así que un documento no puede nombrar el archivo de otro. Nada sobre tus documentos se sube a ningún sitio, y la extensión tampoco tiene servidor al que subirlo.",
+    "description": "REVIEW: explains a browser permission — a mistranslation costs the user their setup."
+  },
+  "helpAboutTitle": {
+    "message": "Acerca de"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · parte del proyecto Bento · licencia MIT"
+  },
+  "linkSource": {
+    "message": "Código en GitHub"
+  },
+  "linkIssues": {
+    "message": "Informar de un problema"
+  },
+  "linkReleases": {
+    "message": "Versiones"
+  },
+  "primeMiddle": {
+    "message": "la que dura"
+  },
+  "primeNote": {
+    "message": "Las otras dos también funcionan, pero Chrome vuelve a preguntar — la primera en cada reinicio, la última tras una espera."
+  },
+  "viewLayout": {
+    "message": "Cómo se muestran los documentos"
+  },
+  "viewIcons": {
+    "message": "Iconos"
+  },
+  "viewList": {
+    "message": "Lista"
+  },
+  "close": {
+    "message": "Cerrar"
+  },
+  "setLangTitle": {
+    "message": "Idioma"
+  },
+  "setLangSub": {
+    "message": "En qué idioma habla esta extensión. Normalmente sigue al navegador."
+  },
+  "langAutomatic": {
+    "message": "Automático: seguir el navegador"
+  },
+  "setLangNote": {
+    "message": "El nombre y la descripción de la propia extensión vienen del navegador y no cambian."
+  },
+  "aboutPromo": {
+    "message": "¿Nuevo en Bento? Encuentra plantillas, la galería y la guía de edición con IA en $1, o dale una estrella en $2."
+  },
+  "setThemeTitle": {
+    "message": "Apariencia"
+  },
+  "setThemeSub": {
+    "message": "La configuración del navegador es el valor predeterminado, no una obligación."
+  },
+  "themeAuto": {
+    "message": "Igual que el navegador"
+  },
+  "themeLight": {
+    "message": "Claro"
+  },
+  "themeDark": {
+    "message": "Oscuro"
+  },
+  "checking": {
+    "message": "Comprobando…"
+  },
+  "surveyTitle": {
+    "message": "Encuentra dónde están tus documentos"
+  },
+  "surveySub": {
+    "message": "El navegador sabe qué documentos de Bento has abierto. Puede decir en qué carpetas están."
+  },
+  "surveyDeclined": {
+    "message": "Sin problema: puedes añadir carpetas a mano."
+  },
+  "surveyAllCovered": {
+    "message": "Los $1 documentos que este navegador ha visto ya están en una carpeta añadida."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> documentos están fuera de todas las carpetas añadidas. $2 ya están cubiertos."
+  },
+  "surveyCovers": {
+    "message": "cubre $1"
+  },
+  "surveyAdd": {
+    "message": "Añadir esta carpeta…"
+  },
+  "surveyAdded": {
+    "message": "$1 añadida: los documentos ya están listos"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 añadida, pero los documentos no están ahí: abre uno desde Finder una vez."
+  },
+  "surveyOnlySeen": {
+    "message": "Así solo se encuentran los documentos abiertos en este navegador."
+  },
+  "setAsstTitle": {
+    "message": "Asistente"
+  },
+  "setAsstSub": {
+    "message": "Adónde se envía una conversación sobre un documento. La clave se queda en esta extensión: un documento solo ve la respuesta."
+  },
+  "asstProvider": {
+    "message": "Proveedor"
+  },
+  "asstProvBuiltin": {
+    "message": "Modelo integrado de Chrome (Gemini Nano), en este dispositivo"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (clave de AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Compatible con OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL base"
+  },
+  "asstModel": {
+    "message": "Modelo"
+  },
+  "asstKey": {
+    "message": "Clave de API"
+  },
+  "asstKeyOptional": {
+    "message": "Opcional para un servidor local como Ollama o LM Studio."
+  },
+  "asstSave": {
+    "message": "Guardar"
+  },
+  "asstSaved": {
+    "message": "Ajustes del asistente guardados"
+  },
+  "asstAccessDeclined": {
+    "message": "Se rechazó el acceso al sitio. Las solicitudes se envían igualmente, y funcionan cuando el servidor admite extensiones del navegador (CORS)."
+  },
+  "asstCheck": {
+    "message": "Comprobar conexión"
+  },
+  "asstChecking": {
+    "message": "Comprobando…"
+  },
+  "asstReachable": {
+    "message": "Accesible: $1 respondió."
+  },
+  "asstBuiltinReady": {
+    "message": "Listo en este dispositivo."
+  },
+  "asstBuiltinDownload": {
+    "message": "El modelo aún no está en este dispositivo. Pulsa «Descargar modelo» en los ajustes de la extensión bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Este Chrome no tiene modelo integrado. Elige otro proveedor en los ajustes de la extensión."
+  },
+  "asstOnDevice": {
+    "message": "este dispositivo"
+  },
+  "asstNotConfigured": {
+    "message": "El asistente aún no está configurado: abre los ajustes de la extensión bento/home."
+  },
+  "asstUnreachable": {
+    "message": "No se pudo conectar con $1. ¿Está en marcha el servidor y admite solicitudes de extensiones del navegador (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Esperando tu permiso en este dispositivo…"
+  },
+  "asstDenied": {
+    "message": "Se denegó el permiso en este dispositivo — no se cambió nada."
+  },
+  "asstAllowedTitle": {
+    "message": "Documentos con permiso para usar el asistente"
+  },
+  "asstAllowedSub": {
+    "message": "Cada documento pregunta una vez antes de su primera solicitud. Quita uno para que vuelva a preguntar."
+  },
+  "consentTitle": {
+    "message": "¿Permitir que este documento use tu asistente?"
+  },
+  "consentLead": {
+    "message": "Podrá enviar texto a $1 ($2) y leer las respuestas. Tu clave nunca se comparte con él."
+  },
+  "consentWeb": {
+    "message": "La lectura de páginas web está activada: también puede visitar páginas que indiques o que encuentre una búsqueda, y esos sitios ven la visita."
+  },
+  "consentRemember": {
+    "message": "Se recordará para este archivo. Puedes cambiarlo más tarde en los ajustes de la extensión."
+  },
+  "consentAllow": {
+    "message": "Permitir"
+  },
+  "consentDeny": {
+    "message": "Ahora no"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome está descargando el modelo. Vuelve a intentarlo cuando termine."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Descargar modelo"
+  },
+  "asstBuiltinProgress": {
+    "message": "Descargando el modelo… $1 %"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Unos 2–4 GB. Chrome necesita unos 22 GB libres en el disco y una red sin límite de datos; si no, informa de que el modelo no está disponible."
+  },
+  "asstContext": {
+    "message": "Ventana de contexto (tokens)"
+  },
+  "asstContextHint": {
+    "message": "Déjalo vacío para usar lo que indica el proveedor. Rellénalo para un servidor propio cuyo límite solo tú conoces."
+  },
+  "asstContextKnown": {
+    "message": "Ventana de contexto: $1 tokens"
+  },
+  "asstShowAll": {
+    "message": "Mostrar todos los modelos, no solo los de chat"
+  },
+  "asstOtherModelRow": {
+    "message": "Otro…"
+  },
+  "asstOtherModel": {
+    "message": "ID del modelo, exactamente como lo nombra el proveedor"
+  },
+  "asstBadModel": {
+    "message": "Eso no es un ID de modelo: solo letras, dígitos y . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Solo el esquema del mazo ya es demasiado grande para este modelo ($1 tokens; su ventana es de $2). Elige un modelo con una ventana mayor en los ajustes de la extensión."
+  },
+  "asstOutlineOnly": {
+    "message": "Solo el esquema cabe en la ventana de este modelo, así que puede cambiar palabras, notas y diapositivas, pero no posiciones ni estilos."
+  },
+  "asstNoDocument": {
+    "message": "El documento no entregó su contenido."
+  },
+  "asstSendsNotice": {
+    "message": "Envía el esquema del mazo y $1 a $2; los comentarios se quedan aquí."
+  },
+  "asstOnDeviceModel": {
+    "message": "el modelo en el dispositivo"
+  },
+  "asstFocusGeneric": {
+    "message": "los elementos seleccionados o la diapositiva abierta"
+  },
+  "asstSearch": {
+    "message": "Dejar que el modelo busque en la web"
+  },
+  "asstSearchNative": {
+    "message": "Esta ruta tiene su propia búsqueda web ($1); la consulta es lo único nuevo que sale."
+  },
+  "asstSearchNone": {
+    "message": "Este modelo no tiene búsqueda web propia: indica un punto de búsqueda abajo."
+  },
+  "asstRead": {
+    "message": "Lectura de páginas web"
+  },
+  "asstReadOn": {
+    "message": "Permitir leer páginas web…"
+  },
+  "asstReadOff": {
+    "message": "Dejar de leer páginas web"
+  },
+  "asstReadOnNote": {
+    "message": "El asistente puede leer las páginas que indiques o que encuentre una búsqueda. Cada sitio que lee ve la visita; lo que devuelve es texto, nunca instrucciones."
+  },
+  "asstReadOffNote": {
+    "message": "Desactivado. El asistente no puede leer páginas web; un clic aquí se lo pide al navegador una vez."
+  },
+  "asstSearchEndpoint": {
+    "message": "Punto de búsqueda"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Una instancia de SearXNG, o https://api.search.brave.com/ con su clave abajo. Solo se usa cuando el modelo no tiene búsqueda propia."
+  },
+  "asstSearchKey": {
+    "message": "Clave de búsqueda"
+  },
+  "placingFolder": {
+    "message": "Buscando «$1» en el disco…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome no dejó que la extensión leyera «$1» del disco para encontrarla (listados file:// rechazados)."
+  },
+  "placeTried": {
+    "message": "Se buscó «$1» en $2 lugares del disco: no está ahí."
+  },
+  "badgeNotAdded": {
+    "message": "no añadida"
+  },
+  "badgeNotAddedTip": {
+    "message": "Encontrado en el disco. Se abre, pero al guardar preguntará dónde: añade su carpeta para guardar en el sitio."
+  },
+  "folderFoundTip": {
+    "message": "Encontrada en el disco, no añadida: sus documentos se abren, pero guardar pregunta dónde."
+  },
+  "menuAddFolder": {
+    "message": "Añadir su carpeta para guardar en el sitio…"
+  },
+  "pickThisFolder": {
+    "message": "En el selector, elige la carpeta «$1»: Chrome tiene que ver que la eliges."
+  },
+  "pickedWrongFolder": {
+    "message": "«$1» no es la carpeta de este documento («$2»). Inténtalo de nuevo y elige esa."
+  },
+  "folderAlreadyAdded": {
+    "message": "«$1» ya está añadida."
+  },
+  "bentoFolderBtn": {
+    "message": "Crear una carpeta Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "En el diálogo, crea una carpeta nueva llamada «Bento» dentro de Documentos y elígela."
+  },
+  "bentoFolderMade": {
+    "message": "«$1» es tu carpeta Bento: los documentos nuevos van ahí y se guardan en el sitio."
+  },
+  "bentoFolderTip": {
+    "message": "Una carpeta dentro de Documentos que guarda en el sitio y recibe los documentos nuevos. Chrome no concede Documentos en sí."
+  },
+  "defaultFolder": {
+    "message": "los documentos nuevos van aquí"
+  },
+  "fgTitle": {
+    "message": "¿Guardar «$1» en el sitio a partir de ahora?"
+  },
+  "fgTitleLapsed": {
+    "message": "¿Reconectar «$1»?"
+  },
+  "fgLead": {
+    "message": "bento/home conserva el permiso para este único archivo, así que cada guardado escribe directamente en él. Elige el mismo archivo en el siguiente diálogo."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home ya tiene este archivo; el navegador quiere que lo confirmes otra vez."
+  },
+  "fgChoose": {
+    "message": "Elegir el archivo…"
+  },
+  "fgReconnect": {
+    "message": "Reconectar"
+  },
+  "fgOnce": {
+    "message": "Solo esta vez"
+  },
+  "fgNotSame": {
+    "message": "Ese no es el archivo que lo pidió («$1»). Elige ese, o cierra esta ventana."
+  },
+  "fgDenied": {
+    "message": "No se concedió el permiso."
+  },
+  "droppedGranted": {
+    "message": "Añadidos: $1 carpetas, $2 archivos."
+  },
+  "setFilesTitle": {
+    "message": "Archivos"
+  },
+  "setFilesSub": {
+    "message": "Documentos fuera de cualquier carpeta añadida que se guardan en el sitio por sí solos: elegidos una vez, o arrastrados a la biblioteca."
+  },
+  "dropNoHandle": {
+    "message": "«$1»: el navegador no entregó ningún identificador de archivo para esta acción."
+  },
+  "dropNotBento": {
+    "message": "«$1» no es un documento Bento (.bento.html): no se añadió."
+  },
+  "setDownloadsTitle": {
+    "message": "Descargas"
+  },
+  "setDownloadsSub": {
+    "message": "Los documentos de la carpeta Descargas pueden guardarse en el sitio a través de las descargas de Chrome, salvo que Chrome esté configurado para preguntar dónde guardar cada archivo, lo que convierte cada guardado en un diálogo."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome preguntó dónde guardar: guardar en Descargas está desactivado hasta que cambie ese ajuste"
+  },
+  "setDownloadsRetry": {
+    "message": "Reintentar"
+  },
+  "dropTwins": {
+    "message": "«$1»: $2 archivos del disco tienen exactamente estos bytes; añadido, pero no puede guardar en el sitio hasta que difieran."
+  },
+  "addFiles": {
+    "message": "Añadir archivos…"
+  },
+  "tdGrant": {
+    "message": "Guardar aquí sin preguntar…"
+  },
+  "tdViaFolder": {
+    "message": "guarda en el sitio: su carpeta está añadida"
+  },
+  "tdViaFile": {
+    "message": "guarda en el sitio: este archivo está añadido"
+  },
+  "tdViaDownloads": {
+    "message": "guarda en el sitio: está en Descargas"
+  },
+  "tdNotYet": {
+    "message": "pregunta dónde guardar, cada vez"
+  },
+  "badgeNotSavingTip": {
+    "message": "Este documento aún no puede guardar en el sitio: abre el panel de bento/home para arreglarlo."
+  },
+  "noticeOsBlocked": {
+    "message": "macOS impide al navegador acceder a $1, así que los documentos que hay ahí no se listan hasta que lo permitas: Ajustes del Sistema → Privacidad y seguridad → Archivos y carpetas → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "Ajustes del Sistema → Privacidad y seguridad → Archivos y carpetas"
+  },
+  "fgLeadFolder": {
+    "message": "Elige la carpeta «$1» en el siguiente diálogo y todos sus documentos se guardarán en el sitio a partir de ahora: este y sus vecinos."
+  },
+  "fgChooseFolder": {
+    "message": "Elegir la carpeta «$1»…"
+  },
+  "fgOnlyFile": {
+    "message": "Solo este archivo…"
+  },
+  "fgNotContaining": {
+    "message": "«$1» no contiene este documento: elige «$2» o una carpeta superior."
+  },
+  "tdGrantFolder": {
+    "message": "Guardar todo en «$1» sin preguntar…"
+  },
+  "saTitleCopy": {
+    "message": "Guardar una copia"
+  },
+  "saTitleShare": {
+    "message": "Guardar el archivo exportado"
+  },
+  "saName": {
+    "message": "Nombre del archivo"
+  },
+  "saBeside": {
+    "message": "Guardar junto a «$1»"
+  },
+  "saChoose": {
+    "message": "Elegir una carpeta…"
+  },
+  "saCancel": {
+    "message": "Cancelar"
+  },
+  "saExists": {
+    "message": "«$1» ya existe. Vuelve a guardar para reemplazarlo."
+  },
+  "saIsOriginal": {
+    "message": "Ese es el nombre del propio documento abierto: elige otro."
+  },
+  "saBadName": {
+    "message": "Usa un nombre de archivo sin barras."
+  },
+  "saLapsed": {
+    "message": "El acceso a esta carpeta ha caducado. Elige otra carpeta o renuévalo en la biblioteca."
+  },
+  "saGone": {
+    "message": "Este guardado ya no está en espera. Cierra esta ventana y vuelve a guardar."
+  },
+  "saTaken": {
+    "message": "«$1» ya existe. Elige otro nombre."
+  }
+}

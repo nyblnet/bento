@@ -1,0 +1,122 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+
+   THE SHARED SIDE-PANEL + RESIZER STYLES. See panel.ts for why this exists and
+   what each of the four apps contributed. Sibling of menu.css (tier 1); the
+   same two rules hold here and are not restated in full:
+
+   1. VALUES ARE THE HOST APP'S. Every colour and metric reads through a
+      `--bkp-*` property whose fallback chain lands on whatever token the host
+      already defines, so adoption changes no app's appearance and this sheet
+      commits to no theme mechanism. NEVER `light-dark()` — it resolves off
+      `color-scheme`, and slides sets `color-scheme: only light`, which would
+      pin every light-dark() value to its light half (menu.css explains at
+      length). The tier-1 theming guard — every colour chain must reach a token
+      each app both DEFINES and THEMES — is reproduced against this file in
+      scripts/test-ui-panel.ts.
+
+   2. Structure and behaviour are shared; only the look is the host's. */
+
+.bkp {
+  /* The panel is a flex column of the app's layout: the content, and the
+     resizer strip on its inner edge. Width is the one thing that animates, and
+     only when NOT dragging (see .bkp-noanim). */
+  position: relative;
+  display: flex;
+  flex: none;
+  width: var(--bkp-w, 236px);
+  min-height: 0;
+  background: var(--bkp-bg, var(--surface, var(--chrome, #fff)));
+  transition: width 0.14s ease;
+}
+.bkp-start { border-inline-end: 1px solid var(--bkp-border, var(--line, #e3e8ef)); }
+.bkp-end { border-inline-start: 1px solid var(--bkp-border, var(--line, #e3e8ef)); }
+
+/* The resizer sits between the content and the canvas. On a 'start' panel it
+   comes after the content in the DOM; on an 'end' panel, before — the source
+   order does that, so the strip is always on the inner edge either way. */
+.bkp-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* A panel scrolls its own content. hard-won detail 10: overflow on one axis
+     computes the other to `auto` too, so anything that floats inside a panel
+     (a menu, a popover) is clipped on BOTH axes — such a child must escape the
+     panel the way menu.css's phone rule does, not rely on overflowing it. */
+  overflow: auto;
+}
+
+.bkp-resizer {
+  position: relative;
+  flex: none;
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  /* the strip itself is invisible until hovered; the chevron is always there */
+}
+.bkp-resizer:hover { background: var(--bkp-resizer-hover, var(--line, #e3e8ef)); }
+body.bkp-resizing { cursor: col-resize; user-select: none; }
+
+/* WHILE DRAGGING, kill the width transition, or the panel animates a frame
+   behind the cursor. The class is added for the drag only. */
+.bkp-noanim { transition: none !important; }
+
+/* The collapse chevron lives ON the resizer, centred, and docks flush to the
+   screen edge when the panel is shut so it is still reachable. */
+.bkp-toggle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--bkp-border, var(--line, #e3e8ef));
+  border-radius: 8px;
+  background: var(--bkp-bg, var(--surface, var(--chrome, #fff)));
+  /* --muted, not a literal: the chevron colour must clear the contrast floor on
+     both the light and dark surface, which a fixed grey does not. */
+  color: var(--bkp-toggle-ink, var(--muted, #6b7789));
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bkp-toggle::before { content: ''; width: 0; height: 0; border-block: 4px solid transparent; }
+/* the arrow points toward the edge the panel would collapse into, and flips
+   when collapsed to point back — direction is logical, so it mirrors under RTL */
+.bkp-start .bkp-toggle::before { border-inline-start: 5px solid currentColor; }
+.bkp-end .bkp-toggle::before { border-inline-end: 5px solid currentColor; }
+.bkp-start.bkp-collapsed .bkp-toggle::before { border-inline: 0; border-inline-end: 5px solid currentColor; }
+.bkp-end.bkp-collapsed .bkp-toggle::before { border-inline: 0; border-inline-start: 5px solid currentColor; }
+
+/* ————— collapsed: the content is gone, the strip and its chevron remain —————
+   The panel shrinks to the strip width; the chevron docks flush against the
+   screen edge so it is still a target. */
+.bkp-collapsed {
+  width: var(--bkp-collapsed-w, 16px);
+}
+.bkp-collapsed > .bkp-content { display: none; }
+.bkp-collapsed > .bkp-resizer { cursor: default; }
+.bkp-collapsed > .bkp-resizer:hover { background: transparent; }
+
+/* ————— drawer: below the phone width the panel overlays the canvas —————
+   Set in JS (matchMedia against the configurable drawerBelow), not a fixed
+   media query, so the breakpoint is the app's to choose. Open, it floats over
+   the canvas; collapsed, it is off-screen entirely (the chevron aside). */
+.bkp-drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: var(--bkp-drawer-z, 40);
+  box-shadow: var(--bkp-drawer-shadow, 0 0 40px rgb(20 30 45 / 0.28));
+}
+.bkp-drawer.bkp-start { inset-inline-start: 0; }
+.bkp-drawer.bkp-end { inset-inline-end: 0; }
+/* a collapsed drawer leaves only its chevron on the edge */
+.bkp-drawer.bkp-collapsed {
+  box-shadow: none;
+  background: transparent;
+  border: 0;
+}

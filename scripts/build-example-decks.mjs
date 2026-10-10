@@ -134,11 +134,38 @@ const drift = (ax, ay, fx, fy, px = 0, py = 0) => {
   return `M0,0 L${pts.slice(1).join(' L')} Z`
 }
 
+/**
+ * The gallery faces a deck actually needs.
+ *
+ * `withFonts: true` takes every face; a LIST takes only the families named, so
+ * a deck that sets one typeface does not ship the bytes of another. Same rule
+ * the clipboard follows — carry exactly the faces in use.
+ *
+ * A face a deck NAMES but does not carry falls back silently: the text simply
+ * renders in the next entry of the stack, with no warning anywhere. Orbital and
+ * Picnic did that with Instrument Sans until 2026-08-02, which is why they now
+ * name what they need instead of relying on an all-or-nothing flag.
+ */
+const fontsFor = (want) => {
+  const families = want === true ? FONTS.fonts.map((f) => f.family) : want
+  const picked = FONTS.fonts.filter((f) => families.includes(f.family))
+  const missing = families.filter((fam) => !FONTS.fonts.some((f) => f.family === fam))
+  if (missing.length) throw new Error(`withFonts names unknown families: ${missing.join(', ')}`)
+  return {
+    fonts: picked,
+    assets: Object.fromEntries(picked.map((f) => [f.asset, FONTS.assets[f.asset]])),
+  }
+}
+
 const doc = (o) => ({
   format: 'bento/slides', version: 1, title: o.title,
   size: { width: 1280, height: 720 },
   theme: o.theme, template: true,
-  ...(o.withFonts ? { assets: { ...FONTS.assets, ...(o.assets ?? {}) }, fonts: [...FONTS.fonts, ...(o.fonts ?? [])] }
+  ...(o.withFonts
+    ? (() => {
+        const f = fontsFor(o.withFonts)
+        return { assets: { ...f.assets, ...(o.assets ?? {}) }, fonts: [...f.fonts, ...(o.fonts ?? [])] }
+      })()
     : (o.assets ? { assets: o.assets, ...(o.fonts ? { fonts: o.fonts } : {}) } : {})),
   ...(o.present ? { present: o.present } : {}),
   slides: o.slides, modified: new Date().toISOString(),
@@ -580,7 +607,7 @@ function deckOrbital() {
   })
 
   return doc({
-    title: 'Orbital — dark immersive template',
+    title: 'Orbital — dark immersive template', withFonts: ['Instrument Sans'],
     assets: {
       'ph-stars': photo('orbital-stars.jpg'),
       'ph-cubesats': photo('orbital-cubesats.jpg'), 'ph-jwst': photo('orbital-jwst.jpg'),
@@ -708,7 +735,7 @@ function deckPicnic() {
   })
 
   return doc({
-    title: 'Pixel Picnic — playful template',
+    title: 'Pixel Picnic — playful template', withFonts: ['Instrument Sans'],
     assets: { 'ph-fair': photo('picnic-fair.jpg'), 'ph-fairwide': photo('picnic-fairwide.jpg') },
     theme: { background: SUN, color: INK, accent: GUM, fontFamily: IN },
     slides: [s1, s2, s3, s3b, s4, s5],

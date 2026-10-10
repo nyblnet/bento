@@ -1,0 +1,851 @@
+{
+  "appDesc": {
+    "message": "Simpan dokumen Bento kembali ke berkas yang Anda buka, tanpa ditanya lokasi tujuan."
+  },
+  "navAll": {
+    "message": "Semua dokumen"
+  },
+  "navFolders": {
+    "message": "Folder"
+  },
+  "navHelp": {
+    "message": "Bantuan & tentang"
+  },
+  "navSettings": {
+    "message": "Setelan"
+  },
+  "addFolder": {
+    "message": "+ Tambahkan folder…"
+  },
+  "searchDocs": {
+    "message": "Cari dokumen"
+  },
+  "searchDocsSlash": {
+    "message": "Cari dokumen   /"
+  },
+  "sortTitle": {
+    "message": "Urutkan"
+  },
+  "sortRecent": {
+    "message": "Baru diubah"
+  },
+  "sortName": {
+    "message": "Nama"
+  },
+  "sortFolder": {
+    "message": "Folder"
+  },
+  "newDocument": {
+    "message": "+ Dokumen baru"
+  },
+  "browseAll": {
+    "message": "Jelajahi semua"
+  },
+  "reconnectFolders": {
+    "message": "Sambungkan ulang folder"
+  },
+  "primeIntro": {
+    "message": "Chrome akan bertanya sebentar lagi. Pilih opsi tengah:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — sebuah folder perlu disambungkan ulang"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home perlu disambungkan ulang"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome mencabut izin untuk sebuah folder. Sampai izin itu dipulihkan, setiap penyimpanan akan menanyakan lokasi tujuan."
+  },
+  "reconnect": {
+    "message": "Sambungkan ulang"
+  },
+  "ctxOpenPanel": {
+    "message": "Buka panel bento/home"
+  },
+  "panelEmpty": {
+    "message": "Belum ada dokumen Bento di folder Anda."
+  },
+  "noMatches": {
+    "message": "Tidak ada yang cocok dengan “$1”"
+  },
+  "rowUnplacedTip": {
+    "message": "Buka satu dokumen di $1 sekali lewat Finder, lalu semua isi folder itu bisa dibuka dari sini."
+  },
+  "encrypted": {
+    "message": "Dilindungi kata sandi"
+  },
+  "notSavedYet": {
+    "message": "Belum disimpan"
+  },
+  "fileAccessOffShort": {
+    "message": "Akses berkas lokal mati"
+  },
+  "noFoldersYet": {
+    "message": "Belum ada folder"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 folder perlu disambungkan ulang"
+  },
+  "statusOneFolder": {
+    "message": "$1 folder · menyimpan di tempat"
+  },
+  "statusFolders": {
+    "message": "$1 folder · menyimpan di tempat"
+  },
+  "renewNotOffered": {
+    "message": "Chrome tidak menawarkan pemulihannya"
+  },
+  "renewTryAfterRestart": {
+    "message": "Coba lagi setelah memulai ulang Chrome"
+  },
+  "fetchingLatest": {
+    "message": "Mengambil Bento terbaru…"
+  },
+  "created": {
+    "message": "$1 dibuat"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 bisa dibaca tetapi belum bisa dibuka — Chrome tidak memberi tahu ekstensi di mana sebuah folder berada di disk. <b>Jelajahi semua</b> menemukannya dengan sekali klik."
+  },
+  "andMore": {
+    "message": " dan $1 lainnya"
+  },
+  "agoJustNow": {
+    "message": "baru saja"
+  },
+  "agoMinutes": {
+    "message": "$1 mnt lalu"
+  },
+  "agoHour": {
+    "message": "$1 jam lalu"
+  },
+  "agoHours": {
+    "message": "$1 jam lalu"
+  },
+  "agoDay": {
+    "message": "$1 hari lalu"
+  },
+  "agoDays": {
+    "message": "$1 hari lalu"
+  },
+  "searchScope": {
+    "message": "Pencarian melihat judul, nama berkas, folder, dan kata-kata di dalam dokumen."
+  },
+  "folderEmpty": {
+    "message": "Belum ada apa pun di folder ini"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ Dokumen baru</b> menaruh satu yang baru di sini."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home belum tahu di mana $1 berada di disk. Gunakan “Temukan folder saya”, atau buka satu dokumen di dalamnya lewat Finder sekali."
+  },
+  "cardRenamedTip": {
+    "message": "$1 adalah dokumen Bento dengan nama lain. Ia terbuka dari sini, tetapi penyimpanan akan menanyakan lokasi tujuan — penyimpanan di tempat hanya mengenali berkas berakhiran .bento.html."
+  },
+  "badgeRenamed": {
+    "message": "Bernama .html, bukan .bento.html — ia terbuka dari sini, tetapi penyimpanan akan menanyakan lokasi tujuan."
+  },
+  "menuOpen": {
+    "message": "Buka"
+  },
+  "menuDuplicate": {
+    "message": "Duplikat"
+  },
+  "menuRename": {
+    "message": "Ganti nama…"
+  },
+  "menuCopyPath": {
+    "message": "Salin jalur"
+  },
+  "duplicatedAs": {
+    "message": "Diduplikat sebagai $1"
+  },
+  "renamePrompt": {
+    "message": "Ganti nama dokumen"
+  },
+  "renamedTo": {
+    "message": "Diganti namanya menjadi $1"
+  },
+  "pathCopied": {
+    "message": "Jalur disalin"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — belum dibuka"
+  },
+  "setupTitle": {
+    "message": "Dua hal dan Anda siap"
+  },
+  "setupLead": {
+    "message": "Setelah ini, ⌘S pada dokumen yang Anda buka dengan klik ganda akan menulis langsung kembali ke berkasnya — tak pernah lagi ditanya lokasi tujuan."
+  },
+  "chooseFolder": {
+    "message": "Pilih folder…"
+  },
+  "setupStep1": {
+    "message": "Pilih folder tempat dokumen Anda berada"
+  },
+  "setupStep1Note": {
+    "message": "Satu folder luas biasanya cukup — ia mencakup semua yang ada di dalamnya."
+  },
+  "setupStep2": {
+    "message": "Nyalakan akses berkas lokal"
+  },
+  "setupStep2Note": {
+    "message": "Di <code>chrome://extensions</code> → bento/home → <b>Izinkan akses ke URL file</b>. Chrome tidak mengizinkan ekstensi menyalakannya sendiri."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>Baru memperbarui dan mengira folder Anda ada di sini?</b> Ekstensi tidak terpaket dikenali dari jalur foldernya, jadi salinan baru yang dimuat dari folder lain adalah ekstensi yang berbeda. Folder Anda masih milik yang lama. Sebagai gantinya, ganti berkas di folder aslinya lalu tekan <b>Muat ulang</b> di <code>chrome://extensions</code>."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>Akses berkas lokal mati</b> — tidak ada yang disimpan di tempat sampai ia dinyalakan. Nyalakan <b>Izinkan akses ke URL file</b> di <code>chrome://extensions</code>."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 folder perlu disambungkan ulang.</b> Sambungkan ulang di <b>Setelan</b>, lalu pilih <b>Izinkan setiap kunjungan</b> — satu-satunya opsi yang bertahan."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> bisa didaftar tetapi belum bisa dibuka — Chrome tidak pernah memberi tahu ekstensi di mana sebuah folder berada di disk."
+  },
+  "findFolders": {
+    "message": "Temukan folder saya"
+  },
+  "looking": {
+    "message": "Mencari…"
+  },
+  "findDeclined": {
+    "message": "<b>Tidak masalah.</b> Sebagai gantinya, buka satu dokumen di $1 lewat Finder sekali — halaman ini akan menyadarinya."
+  },
+  "foundFolder": {
+    "message": "Menemukan $1 folder"
+  },
+  "foundFolders": {
+    "message": "Menemukan $1 folder"
+  },
+  "foundNothing": {
+    "message": "Belum ada apa pun di riwayat — buka satu dokumen lewat Finder"
+  },
+  "setFoldersSub": {
+    "message": "Dokumen di dalamnya disimpan langsung kembali ke berkasnya, tanpa ditanya lokasi tujuan. Sebuah folder mencakup semua yang ada di dalamnya."
+  },
+  "noneYet": {
+    "message": "Belum ada."
+  },
+  "savesInPlace": {
+    "message": "menyimpan di tempat"
+  },
+  "needsReconnecting": {
+    "message": "perlu disambungkan ulang"
+  },
+  "reconnectTip": {
+    "message": "Chrome akan meminta izin memulihkan folder ini. “Jangan izinkan” melepaskannya, dan setelah itu Chrome menunggu setidaknya satu kali mulai ulang sebelum bertanya lagi."
+  },
+  "remove": {
+    "message": "Hapus"
+  },
+  "removeTip": {
+    "message": "Mencabut akses. Chrome mungkin masih mengingat izinnya, jadi menambahkan folder itu kembali mungkin tidak bertanya lagi."
+  },
+  "setAccessTitle": {
+    "message": "Akses berkas lokal"
+  },
+  "setAccessSub": {
+    "message": "Chrome tidak mengizinkan ekstensi menyalakannya sendiri, dan tanpa ini tidak ada yang berfungsi."
+  },
+  "stateOn": {
+    "message": "Nyala"
+  },
+  "stateOff": {
+    "message": "Mati"
+  },
+  "stateUnknown": {
+    "message": "Tidak diketahui"
+  },
+  "accessOnNote": {
+    "message": "bento/home dapat membaca halaman yang Anda buka dari disk."
+  },
+  "accessOffNote": {
+    "message": "Buka chrome://extensions, cari bento/home, nyalakan “Izinkan akses ke URL file”."
+  },
+  "accessUnknownNote": {
+    "message": "Peramban ini tidak melaporkannya. Jika penyimpanan masih bertanya, periksa di chrome://extensions."
+  },
+  "setVersionTitle": {
+    "message": "Versi"
+  },
+  "setVersionUnpacked": {
+    "message": "Salinan ini dimuat tidak terpaket, jadi Chrome tidak akan pernah memperbaruinya."
+  },
+  "setVersionStore": {
+    "message": "Dipasang dari toko, jadi ia memperbarui dirinya sendiri."
+  },
+  "versionAvailable": {
+    "message": "$1 tersedia"
+  },
+  "versionUpToDate": {
+    "message": "terkini per pemeriksaan terakhir"
+  },
+  "versionManaged": {
+    "message": "dijaga tetap terkini oleh peramban"
+  },
+  "getIt": {
+    "message": "Ambil"
+  },
+  "checkNow": {
+    "message": "Periksa sekarang"
+  },
+  "autoCheckPref": {
+    "message": "<b>Periksa versi baru saat peramban dimulai.</b><br>Satu permintaan ke bento.page untuk sebuah berkas statis. Ia tidak mengirim pengenal, nomor versi, maupun apa pun tentang dokumen Anda — perbandingannya terjadi di sini. Matikan dan tidak ada yang pernah diminta; <b>Periksa sekarang</b> tetap berfungsi."
+  },
+  "expectedSha": {
+    "message": "SHA-256 yang diharapkan untuk berkas zip: $1"
+  },
+  "setReachTitle": {
+    "message": "Apa yang bisa dijangkau"
+  },
+  "setReachSub": {
+    "message": "Hanya folder di atas, dan hanya berkas asal sebuah halaman benar-benar dibuka. Tidak ada yang diunggah dan tidak ada yang dibaca di tempat lain."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 tersedia.</b> Salinan ini dimuat tidak terpaket, jadi Chrome tidak akan pernah memperbaruinya."
+  },
+  "updateStep1": {
+    "message": "Unduh dari GitHub"
+  },
+  "updateStep2": {
+    "message": "Ganti berkas <b>di folder tempat Anda memuatnya</b> — folder yang sama, atau Chrome menganggapnya ekstensi berbeda dan folder yang sudah diizinkan tidak ikut serta"
+  },
+  "updateStep3": {
+    "message": "Buka <code>chrome://extensions</code> lalu tekan <b>Muat ulang</b> pada bento/home"
+  },
+  "fetchingApp": {
+    "message": "Mengambil $1…"
+  },
+  "createdIn": {
+    "message": "Membuat $1 ($2) di $3"
+  },
+  "intoFolder": {
+    "message": "ke $1"
+  },
+  "helpWhatTitle": {
+    "message": "Apa yang dilakukan bento/home"
+  },
+  "helpWhatSub": {
+    "message": "Dokumen Bento adalah satu berkas HTML yang membawa editornya sendiri. Dibuka langsung dari disk, peramban tidak mengizinkannya menulis kembali ke dirinya sendiri — jadi setiap penyimpanan menanyakan lokasi tujuan. bento/home menghilangkan pertanyaan itu."
+  },
+  "tourSaveTitle": {
+    "message": "Simpan di tempat"
+  },
+  "tourSaveBody": {
+    "message": "⌘S menulis langsung kembali ke berkas yang Anda buka, tanpa dialog. Simpan otomatis dan pembaruan di tempat menempuh jalur yang sama."
+  },
+  "tourFindTitle": {
+    "message": "Temukan dokumen Anda"
+  },
+  "tourFindBody": {
+    "message": "Setiap dokumen Bento di folder Anda, dengan judul aslinya dan gambar halaman pertamanya. Pencarian mencakup apa yang tertulis di dalamnya."
+  },
+  "tourSwitchTitle": {
+    "message": "Berpindah sambil bekerja"
+  },
+  "tourSwitchBody": {
+    "message": "Tekan <kbd>Alt</kbd>+<kbd>B</kbd>, atau klik kanan di dalam dokumen, untuk panel di sebelahnya."
+  },
+  "tourNewTitle": {
+    "message": "Buat yang baru"
+  },
+  "tourNewBody": {
+    "message": "<b>+ Dokumen baru</b> mengambil rilis terkini Slides, Spaces, atau Dash dan menaruh dokumen baru di folder Anda."
+  },
+  "helpNeedsTitle": {
+    "message": "Apa yang dibutuhkan dari Anda"
+  },
+  "helpNeedsSub": {
+    "message": "Dua hal, keduanya di luar kuasa ekstensi ini untuk mengaturnya."
+  },
+  "helpFolder": {
+    "message": "Sebuah folder"
+  },
+  "helpFolderGranted": {
+    "message": "$1 diizinkan — dokumen di dalamnya disimpan di tempat"
+  },
+  "helpFolderNone": {
+    "message": "Belum dipilih. Satu folder luas mencakup semua yang ada di dalamnya."
+  },
+  "helpAccessOff": {
+    "message": "Mati. Nyalakan <b>Izinkan akses ke URL file</b> di <code>chrome://extensions</code> — tidak ada ekstensi yang bisa menyalakannya sendiri."
+  },
+  "helpAccessUnknown": {
+    "message": "Peramban ini tidak melaporkannya. Jika penyimpanan masih bertanya, periksa di <code>chrome://extensions</code>."
+  },
+  "helpAccessOn": {
+    "message": "Nyala — bento/home dapat membaca halaman yang Anda buka dari disk."
+  },
+  "helpNeverTitle": {
+    "message": "Apa yang tidak pernah dilakukannya"
+  },
+  "helpNeverSub": {
+    "message": "Ia hanya membaca dan menulis di dalam folder di atas, dan hanya berkas asal sebuah halaman benar-benar dibuka — peramban yang memberi tahu yang mana, sehingga sebuah dokumen tidak bisa menyebut berkas milik orang lain. Tidak ada apa pun tentang dokumen Anda yang diunggah ke mana pun, dan ekstensi ini tidak punya server untuk mengunggahnya."
+  },
+  "helpAboutTitle": {
+    "message": "Tentang"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · bagian dari proyek Bento · berlisensi MIT"
+  },
+  "linkSource": {
+    "message": "Sumber di GitHub"
+  },
+  "linkIssues": {
+    "message": "Laporkan masalah"
+  },
+  "linkReleases": {
+    "message": "Rilis"
+  },
+  "primeMiddle": {
+    "message": "yang bertahan"
+  },
+  "primeNote": {
+    "message": "Dua lainnya juga berfungsi, tetapi Chrome akan bertanya lagi — setiap kali mulai ulang untuk yang pertama, dan setelah menunggu untuk yang terakhir."
+  },
+  "viewLayout": {
+    "message": "Cara dokumen ditampilkan"
+  },
+  "viewIcons": {
+    "message": "Ikon"
+  },
+  "viewList": {
+    "message": "Daftar"
+  },
+  "close": {
+    "message": "Tutup"
+  },
+  "setLangTitle": {
+    "message": "Bahasa"
+  },
+  "setLangSub": {
+    "message": "Bahasa yang digunakan ekstensi ini. Biasanya mengikuti peramban."
+  },
+  "langAutomatic": {
+    "message": "Otomatis — ikuti peramban"
+  },
+  "setLangNote": {
+    "message": "Nama dan deskripsi ekstensi ini sendiri berasal dari peramban dan tidak berubah."
+  },
+  "aboutPromo": {
+    "message": "Baru di Bento? Temukan templat, galeri, dan panduan penyuntingan AI di $1 — atau beri bintang di $2."
+  },
+  "setThemeTitle": {
+    "message": "Tampilan"
+  },
+  "setThemeSub": {
+    "message": "Setelan peramban adalah default, bukan keharusan."
+  },
+  "themeAuto": {
+    "message": "Ikuti peramban"
+  },
+  "themeLight": {
+    "message": "Terang"
+  },
+  "themeDark": {
+    "message": "Gelap"
+  },
+  "checking": {
+    "message": "Memeriksa…"
+  },
+  "surveyTitle": {
+    "message": "Temukan di mana dokumen Anda berada"
+  },
+  "surveySub": {
+    "message": "Peramban tahu dokumen Bento mana yang pernah Anda buka. Ia bisa menyebut folder tempatnya."
+  },
+  "surveyDeclined": {
+    "message": "Tidak masalah — Anda bisa menambahkan folder secara manual."
+  },
+  "surveyAllCovered": {
+    "message": "Semua $1 dokumen yang pernah dilihat peramban ini sudah ada di folder yang Anda tambahkan."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumen berada di luar semua folder yang Anda tambahkan. $2 sudah tercakup."
+  },
+  "surveyCovers": {
+    "message": "mencakup $1"
+  },
+  "surveyAdd": {
+    "message": "Tambahkan folder ini…"
+  },
+  "surveyAdded": {
+    "message": "$1 ditambahkan — dokumen di dalamnya siap"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 ditambahkan, tetapi dokumennya tidak di sana — buka satu lewat Finder sekali."
+  },
+  "surveyOnlySeen": {
+    "message": "Cara ini hanya menemukan dokumen yang pernah dibuka di peramban ini."
+  },
+  "setAsstTitle": {
+    "message": "Asisten"
+  },
+  "setAsstSub": {
+    "message": "Ke mana obrolan tentang dokumen dikirim. Kuncinya tetap di ekstensi ini — dokumen hanya pernah melihat balasannya."
+  },
+  "asstProvider": {
+    "message": "Penyedia"
+  },
+  "asstProvBuiltin": {
+    "message": "Model bawaan Chrome (Gemini Nano) — di perangkat ini"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (kunci AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Kompatibel OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "URL dasar"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "Kunci API"
+  },
+  "asstKeyOptional": {
+    "message": "Opsional untuk server lokal seperti Ollama atau LM Studio."
+  },
+  "asstSave": {
+    "message": "Simpan"
+  },
+  "asstSaved": {
+    "message": "Setelan asisten disimpan"
+  },
+  "asstAccessDeclined": {
+    "message": "Akses situs ditolak. Permintaan tetap dikirim, dan berfungsi bila server mengizinkan ekstensi peramban (CORS)."
+  },
+  "asstCheck": {
+    "message": "Periksa koneksi"
+  },
+  "asstChecking": {
+    "message": "Memeriksa…"
+  },
+  "asstReachable": {
+    "message": "Terjangkau — $1 menjawab."
+  },
+  "asstBuiltinReady": {
+    "message": "Siap di perangkat ini."
+  },
+  "asstBuiltinDownload": {
+    "message": "Model belum ada di perangkat ini. Tekan “Unduh model” di setelan ekstensi bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Chrome ini tidak memiliki model bawaan. Pilih penyedia lain di setelan ekstensi."
+  },
+  "asstOnDevice": {
+    "message": "perangkat ini"
+  },
+  "asstNotConfigured": {
+    "message": "Asisten belum disiapkan — buka setelan ekstensi bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Tidak dapat menjangkau $1. Apakah server berjalan, dan apakah server mengizinkan permintaan dari ekstensi peramban (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Menunggu izin Anda — jawab pertanyaannya, lalu coba lagi."
+  },
+  "asstDenied": {
+    "message": "Dokumen ini tidak diizinkan memakai asisten."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumen yang diizinkan memakai asisten"
+  },
+  "asstAllowedSub": {
+    "message": "Setiap dokumen bertanya sekali sebelum permintaan pertamanya. Hapus salah satu agar ditanya lagi."
+  },
+  "consentTitle": {
+    "message": "Izinkan dokumen ini memakai asisten Anda?"
+  },
+  "consentLead": {
+    "message": "Dokumen ini akan dapat mengirim teks ke $1 ($2) dan membaca balasannya. Kunci Anda tidak pernah dibagikan kepadanya."
+  },
+  "consentWeb": {
+    "message": "Membaca halaman web aktif: asisten juga dapat mengunjungi halaman yang Anda sebutkan atau yang ditemukan pencarian, dan situs tersebut melihat kunjungannya."
+  },
+  "consentRemember": {
+    "message": "Diingat untuk berkas ini. Anda dapat mengubahnya nanti di setelan ekstensi."
+  },
+  "consentAllow": {
+    "message": "Izinkan"
+  },
+  "consentDeny": {
+    "message": "Jangan sekarang"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome sedang mengunduh model. Coba lagi setelah selesai."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Unduh model"
+  },
+  "asstBuiltinProgress": {
+    "message": "Mengunduh model… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Sekitar 2–4 GB. Chrome memerlukan kira-kira 22 GB ruang kosong di disk dan jaringan tanpa kuota terbatas; jika tidak, model dilaporkan tidak tersedia."
+  },
+  "asstContext": {
+    "message": "Jendela konteks (token)"
+  },
+  "asstContextHint": {
+    "message": "Kosongkan untuk memakai nilai yang dilaporkan penyedia. Isi untuk server yang Anda hosting sendiri dan hanya Anda yang tahu batasnya."
+  },
+  "asstContextKnown": {
+    "message": "Jendela konteks: $1 token"
+  },
+  "asstShowAll": {
+    "message": "Tampilkan semua model, bukan hanya yang untuk obrolan"
+  },
+  "asstOtherModelRow": {
+    "message": "Lainnya…"
+  },
+  "asstOtherModel": {
+    "message": "ID model, persis seperti yang dinamai penyedia"
+  },
+  "asstBadModel": {
+    "message": "Itu bukan ID model: hanya huruf, angka, dan . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Presentasi terlalu besar untuk model ini: permintaan membutuhkan sekitar $1 token dan model menerima $2. Pilih model dengan jendela lebih besar, atau perpendek presentasi."
+  },
+  "asstOutlineOnly": {
+    "message": "Hanya kerangka yang muat di jendela model ini; konten yang dipilih tidak dikirim seluruhnya."
+  },
+  "asstNoDocument": {
+    "message": "Dokumen tidak menyerahkan isinya."
+  },
+  "asstSendsNotice": {
+    "message": "Mengirim kerangka presentasi dan $1 ke $2; komentar tetap di sini."
+  },
+  "asstOnDeviceModel": {
+    "message": "model di perangkat ini"
+  },
+  "asstFocusGeneric": {
+    "message": "elemen yang dipilih atau slide yang terbuka"
+  },
+  "asstSearch": {
+    "message": "Izinkan model mencari di web"
+  },
+  "asstSearchNative": {
+    "message": "Rute ini punya pencarian web sendiri ($1); kueri adalah satu-satunya hal baru yang keluar."
+  },
+  "asstSearchNone": {
+    "message": "Model ini tidak punya pencarian web sendiri — tetapkan endpoint pencarian di bawah."
+  },
+  "asstRead": {
+    "message": "Membaca halaman web"
+  },
+  "asstReadOn": {
+    "message": "Izinkan membaca halaman web…"
+  },
+  "asstReadOff": {
+    "message": "Berhenti membaca halaman web"
+  },
+  "asstReadOnNote": {
+    "message": "Asisten dapat membaca halaman yang Anda sebutkan atau yang ditemukan pencarian. Setiap situs yang dibaca melihat kunjungannya; yang kembali adalah teks, bukan instruksi."
+  },
+  "asstReadOffNote": {
+    "message": "Nonaktif. Asisten tidak dapat membaca halaman web; klik di sini meminta peramban sekali."
+  },
+  "asstSearchEndpoint": {
+    "message": "Endpoint pencarian"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Instans SearXNG, atau https://api.search.brave.com/ dengan kuncinya di bawah. Hanya dipakai bila model tidak punya pencarian sendiri."
+  },
+  "asstSearchKey": {
+    "message": "Kunci pencarian"
+  },
+  "placingFolder": {
+    "message": "Mencari “$1” di disk…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome tidak mengizinkan ekstensi membaca “$1” dari disk untuk menemukannya (daftar file:// ditolak)."
+  },
+  "placeTried": {
+    "message": "Mencari “$1” di $2 tempat di disk — tidak ada."
+  },
+  "badgeNotAdded": {
+    "message": "belum ditambahkan"
+  },
+  "badgeNotAddedTip": {
+    "message": "Ditemukan di disk. Bisa dibuka, tetapi saat menyimpan akan ditanya ke mana — tambahkan foldernya agar tersimpan di tempat."
+  },
+  "folderFoundTip": {
+    "message": "Ditemukan di disk, belum ditambahkan: dokumennya bisa dibuka, tetapi menyimpan menanyakan ke mana."
+  },
+  "menuAddFolder": {
+    "message": "Tambahkan foldernya agar tersimpan di tempat…"
+  },
+  "pickThisFolder": {
+    "message": "Di pemilih, pilih folder “$1” — Chrome harus melihat Anda memilihnya."
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” bukan folder dokumen ini (“$2”). Coba lagi dan pilih yang itu."
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” sudah ditambahkan."
+  },
+  "bentoFolderBtn": {
+    "message": "Buat folder Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "Di dialog, buat folder baru bernama “Bento” di dalam Dokumen dan pilih folder itu."
+  },
+  "bentoFolderMade": {
+    "message": "“$1” adalah folder Bento Anda — dokumen baru masuk ke sana dan tersimpan di tempat."
+  },
+  "bentoFolderTip": {
+    "message": "Folder di dalam Dokumen yang menyimpan di tempat dan menerima dokumen baru. Chrome tidak akan memberikan Dokumen itu sendiri."
+  },
+  "defaultFolder": {
+    "message": "dokumen baru masuk ke sini"
+  },
+  "fgTitle": {
+    "message": "Simpan “$1” di tempat mulai sekarang?"
+  },
+  "fgTitleLapsed": {
+    "message": "Hubungkan kembali “$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home menyimpan izin hanya untuk berkas ini, sehingga setiap penyimpanan menulis langsung ke sana. Pilih berkas yang sama di dialog berikutnya."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home sudah memiliki berkas ini; peramban ingin Anda mengonfirmasinya lagi."
+  },
+  "fgChoose": {
+    "message": "Pilih berkas…"
+  },
+  "fgReconnect": {
+    "message": "Hubungkan kembali"
+  },
+  "fgOnce": {
+    "message": "Hanya kali ini"
+  },
+  "fgNotSame": {
+    "message": "Itu bukan berkas yang meminta (“$1”). Pilih yang itu, atau tutup jendela ini."
+  },
+  "fgDenied": {
+    "message": "Izin tidak diberikan."
+  },
+  "droppedGranted": {
+    "message": "Ditambahkan: $1 folder, $2 berkas."
+  },
+  "setFilesTitle": {
+    "message": "Berkas"
+  },
+  "setFilesSub": {
+    "message": "Dokumen di luar folder mana pun yang ditambahkan, yang tersimpan di tempat dengan sendirinya — dipilih sekali, atau dijatuhkan ke pustaka."
+  },
+  "dropNoHandle": {
+    "message": "“$1”: peramban tidak memberikan handle berkas untuk penjatuhan ini."
+  },
+  "dropNotBento": {
+    "message": "“$1” bukan dokumen Bento (.bento.html) — tidak ditambahkan."
+  },
+  "setDownloadsTitle": {
+    "message": "Unduhan"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumen di folder Unduhan dapat tersimpan di tempat melalui unduhan Chrome — kecuali Chrome disetel untuk menanyakan lokasi setiap berkas, yang mengubah setiap penyimpanan menjadi dialog."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome menanyakan lokasi penyimpanan — menyimpan ke Unduhan dimatikan sampai setelan itu berubah"
+  },
+  "setDownloadsRetry": {
+    "message": "Coba lagi"
+  },
+  "dropTwins": {
+    "message": "“$1”: $2 berkas di disk memiliki byte yang persis sama — ditambahkan, tetapi tidak bisa menyimpan di tempat sampai keduanya berbeda."
+  },
+  "addFiles": {
+    "message": "Tambahkan berkas…"
+  },
+  "tdGrant": {
+    "message": "Simpan di sini tanpa bertanya…"
+  },
+  "tdViaFolder": {
+    "message": "tersimpan di tempat — foldernya sudah ditambahkan"
+  },
+  "tdViaFile": {
+    "message": "tersimpan di tempat — berkas ini sudah ditambahkan"
+  },
+  "tdViaDownloads": {
+    "message": "tersimpan di tempat — ada di Unduhan"
+  },
+  "tdNotYet": {
+    "message": "selalu bertanya ke mana menyimpan"
+  },
+  "badgeNotSavingTip": {
+    "message": "Dokumen ini belum bisa menyimpan di tempat — buka panel bento/home untuk memperbaikinya."
+  },
+  "noticeOsBlocked": {
+    "message": "macOS menghalangi peramban mengakses $1, jadi dokumen di sana tidak ditampilkan sampai Anda mengizinkannya: System Settings → Privacy & Security → Files and Folders → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "System Settings → Privacy & Security → Files and Folders"
+  },
+  "fgLeadFolder": {
+    "message": "Pilih folder “$1” di dialog berikutnya dan setiap dokumen di dalamnya tersimpan di tempat mulai sekarang — yang ini dan tetangganya."
+  },
+  "fgChooseFolder": {
+    "message": "Pilih folder “$1”…"
+  },
+  "fgOnlyFile": {
+    "message": "Hanya berkas ini…"
+  },
+  "fgNotContaining": {
+    "message": "“$1” tidak memuat dokumen ini — pilih “$2”, atau folder di atasnya."
+  },
+  "tdGrantFolder": {
+    "message": "Simpan semua di “$1” tanpa bertanya…"
+  },
+  "saTitleCopy": {
+    "message": "Simpan salinan"
+  },
+  "saTitleShare": {
+    "message": "Simpan file ekspor"
+  },
+  "saName": {
+    "message": "Nama file"
+  },
+  "saBeside": {
+    "message": "Simpan di samping “$1”"
+  },
+  "saChoose": {
+    "message": "Pilih folder…"
+  },
+  "saCancel": {
+    "message": "Batal"
+  },
+  "saExists": {
+    "message": "“$1” sudah ada. Simpan lagi untuk menggantinya."
+  },
+  "saIsOriginal": {
+    "message": "Itu nama dokumen yang sedang terbuka — pilih nama lain."
+  },
+  "saBadName": {
+    "message": "Gunakan nama file tanpa garis miring."
+  },
+  "saLapsed": {
+    "message": "Akses ke folder ini sudah habis. Pilih folder lain, atau perbarui di pustaka."
+  },
+  "saGone": {
+    "message": "Penyimpanan ini tidak lagi menunggu. Tutup jendela ini lalu simpan lagi."
+  },
+  "saTaken": {
+    "message": "“$1” sudah ada. Pilih nama lain."
+  }
+}

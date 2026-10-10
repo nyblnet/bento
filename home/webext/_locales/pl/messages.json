@@ -1,0 +1,851 @@
+{
+  "appDesc": {
+    "message": "Zapisz dokument Bento z powrotem do otwartego pliku, bez pytania o miejsce docelowe."
+  },
+  "navAll": {
+    "message": "Wszystkie dokumenty"
+  },
+  "navFolders": {
+    "message": "Foldery"
+  },
+  "navHelp": {
+    "message": "Pomoc i informacje"
+  },
+  "navSettings": {
+    "message": "Ustawienia"
+  },
+  "addFolder": {
+    "message": "+ Dodaj folder…"
+  },
+  "searchDocs": {
+    "message": "Szukaj w dokumentach"
+  },
+  "searchDocsSlash": {
+    "message": "Szukaj w dokumentach   /"
+  },
+  "sortTitle": {
+    "message": "Sortuj"
+  },
+  "sortRecent": {
+    "message": "Ostatnio zmienione"
+  },
+  "sortName": {
+    "message": "Nazwa"
+  },
+  "sortFolder": {
+    "message": "Folder"
+  },
+  "newDocument": {
+    "message": "+ Nowy dokument"
+  },
+  "browseAll": {
+    "message": "Przeglądaj wszystkie"
+  },
+  "reconnectFolders": {
+    "message": "Połącz foldery ponownie"
+  },
+  "primeIntro": {
+    "message": "Chrome zaraz zapyta. Wybierz środkową opcję:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — folder wymaga ponownego połączenia"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home wymaga ponownego połączenia"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome cofnął uprawnienie do folderu. Dopóki nie zostanie przywrócone, każdy zapis będzie pytał o miejsce docelowe."
+  },
+  "reconnect": {
+    "message": "Połącz ponownie"
+  },
+  "ctxOpenPanel": {
+    "message": "Otwórz panel bento/home"
+  },
+  "panelEmpty": {
+    "message": "W Twoich folderach nie ma jeszcze dokumentów Bento."
+  },
+  "noMatches": {
+    "message": "Nic nie pasuje do „$1”"
+  },
+  "rowUnplacedTip": {
+    "message": "Otwórz raz dowolny dokument w $1 z Findera, a wszystko w tym folderze będzie można otwierać stąd."
+  },
+  "encrypted": {
+    "message": "Chroniony hasłem"
+  },
+  "notSavedYet": {
+    "message": "Jeszcze niezapisany"
+  },
+  "fileAccessOffShort": {
+    "message": "Dostęp do plików lokalnych jest wyłączony"
+  },
+  "noFoldersYet": {
+    "message": "Brak folderów"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 folder wymaga ponownego połączenia"
+  },
+  "statusOneFolder": {
+    "message": "$1 folder · zapis w miejscu"
+  },
+  "statusFolders": {
+    "message": "$1 foldery · zapis w miejscu"
+  },
+  "renewNotOffered": {
+    "message": "Chrome nie zaproponował przywrócenia"
+  },
+  "renewTryAfterRestart": {
+    "message": "Spróbuj ponownie po ponownym uruchomieniu Chrome"
+  },
+  "fetchingLatest": {
+    "message": "Pobieranie najnowszego Bento…"
+  },
+  "created": {
+    "message": "Utworzono $1"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 można odczytać, ale jeszcze nie otworzyć — Chrome nie mówi rozszerzeniu, gdzie folder znajduje się na dysku. <b>Przeglądaj wszystkie</b> znajdzie je jednym kliknięciem."
+  },
+  "andMore": {
+    "message": " i jeszcze $1"
+  },
+  "agoJustNow": {
+    "message": "przed chwilą"
+  },
+  "agoMinutes": {
+    "message": "$1 min temu"
+  },
+  "agoHour": {
+    "message": "$1 godz. temu"
+  },
+  "agoHours": {
+    "message": "$1 godz. temu"
+  },
+  "agoDay": {
+    "message": "$1 dzień temu"
+  },
+  "agoDays": {
+    "message": "$1 dni temu"
+  },
+  "searchScope": {
+    "message": "Wyszukiwanie obejmuje tytuły, nazwy plików, foldery i słowa wewnątrz dokumentów."
+  },
+  "folderEmpty": {
+    "message": "W tym folderze nic jeszcze nie ma"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ Nowy dokument</b> umieści tu nowy."
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home nie wie jeszcze, gdzie na dysku jest $1. Użyj „Znajdź moje foldery” albo otwórz raz z Findera dowolny dokument z tego folderu."
+  },
+  "cardRenamedTip": {
+    "message": "$1 to dokument Bento pod inną nazwą. Otworzy się stąd, ale zapis zapyta o miejsce docelowe — zapis w miejscu rozpoznaje tylko pliki kończące się na .bento.html."
+  },
+  "badgeRenamed": {
+    "message": "Nazwany .html zamiast .bento.html — otworzy się stąd, ale zapis zapyta o miejsce docelowe."
+  },
+  "menuOpen": {
+    "message": "Otwórz"
+  },
+  "menuDuplicate": {
+    "message": "Duplikuj"
+  },
+  "menuRename": {
+    "message": "Zmień nazwę…"
+  },
+  "menuCopyPath": {
+    "message": "Kopiuj ścieżkę"
+  },
+  "duplicatedAs": {
+    "message": "Zduplikowano jako $1"
+  },
+  "renamePrompt": {
+    "message": "Zmień nazwę dokumentu"
+  },
+  "renamedTo": {
+    "message": "Zmieniono nazwę na $1"
+  },
+  "pathCopied": {
+    "message": "Skopiowano ścieżkę"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — jeszcze nieotwarty"
+  },
+  "setupTitle": {
+    "message": "Dwie rzeczy i gotowe"
+  },
+  "setupLead": {
+    "message": "Potem ⌘S w dokumencie otwartym podwójnym kliknięciem zapisuje prosto do pliku — nigdy więcej pytania o miejsce docelowe."
+  },
+  "chooseFolder": {
+    "message": "Wybierz folder…"
+  },
+  "setupStep1": {
+    "message": "Wybierz folder, w którym trzymasz dokumenty"
+  },
+  "setupStep1Note": {
+    "message": "Zwykle wystarczy jeden szeroki folder — obejmuje wszystko, co jest w środku."
+  },
+  "setupStep2": {
+    "message": "Włącz dostęp do plików lokalnych"
+  },
+  "setupStep2Note": {
+    "message": "W <code>chrome://extensions</code> → bento/home → <b>Zezwalaj na dostęp do adresów URL plików</b>. Chrome nie pozwala rozszerzeniu włączyć tego samodzielnie."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>Aktualizacja, a foldery miały tu być?</b> Rozpakowane rozszerzenie jest identyfikowane po ścieżce folderu, więc nowa kopia wczytana z innego folderu to inne rozszerzenie. Twoje foldery nadal należą do starego. Zamiast tego podmień pliki w pierwotnym folderze i naciśnij <b>Załaduj ponownie</b> w <code>chrome://extensions</code>."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>Dostęp do plików lokalnych jest wyłączony</b> — nic nie zapisze się w miejscu, dopóki go nie włączysz. Włącz <b>Zezwalaj na dostęp do adresów URL plików</b> w <code>chrome://extensions</code>."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 folder wymaga ponownego połączenia.</b> Połącz go ponownie w <b>Ustawieniach</b> i wybierz <b>Zezwalaj przy każdej wizycie</b> — jedyną opcję, która się utrzymuje."
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> można wyświetlić na liście, ale jeszcze nie otworzyć — Chrome nigdy nie mówi rozszerzeniu, gdzie folder znajduje się na dysku."
+  },
+  "findFolders": {
+    "message": "Znajdź moje foldery"
+  },
+  "looking": {
+    "message": "Szukanie…"
+  },
+  "findDeclined": {
+    "message": "<b>Nic nie szkodzi.</b> Zamiast tego otwórz raz z Findera dowolny dokument w $1 — ta strona to zauważy."
+  },
+  "foundFolder": {
+    "message": "Znaleziono $1 folder"
+  },
+  "foundFolders": {
+    "message": "Znaleziono $1 foldery"
+  },
+  "foundNothing": {
+    "message": "W historii nic jeszcze nie ma — otwórz jeden dokument z Findera"
+  },
+  "setFoldersSub": {
+    "message": "Dokumenty w tych folderach zapisują się prosto do pliku, bez pytania o miejsce. Folder obejmuje wszystko, co jest w środku."
+  },
+  "noneYet": {
+    "message": "Jeszcze żadnego."
+  },
+  "savesInPlace": {
+    "message": "zapis w miejscu"
+  },
+  "needsReconnecting": {
+    "message": "wymaga ponownego połączenia"
+  },
+  "reconnectTip": {
+    "message": "Chrome zapyta o przywrócenie tego folderu. „Nie zezwalaj” go porzuca, a potem Chrome czeka co najmniej do ponownego uruchomienia, zanim zapyta znowu."
+  },
+  "remove": {
+    "message": "Usuń"
+  },
+  "removeTip": {
+    "message": "Odbiera dostęp. Chrome może nadal pamiętać uprawnienie, więc ponowne dodanie folderu może nie wywołać pytania."
+  },
+  "setAccessTitle": {
+    "message": "Dostęp do plików lokalnych"
+  },
+  "setAccessSub": {
+    "message": "Chrome nie pozwala rozszerzeniu włączyć tego samodzielnie, a bez tego nic nie działa."
+  },
+  "stateOn": {
+    "message": "Włączony"
+  },
+  "stateOff": {
+    "message": "Wyłączony"
+  },
+  "stateUnknown": {
+    "message": "Nieznany"
+  },
+  "accessOnNote": {
+    "message": "bento/home może czytać strony otwarte z dysku."
+  },
+  "accessOffNote": {
+    "message": "Otwórz chrome://extensions, znajdź bento/home i włącz „Zezwalaj na dostęp do adresów URL plików”."
+  },
+  "accessUnknownNote": {
+    "message": "Ta przeglądarka tego nie zgłasza. Jeśli zapis nadal pyta, sprawdź to w chrome://extensions."
+  },
+  "setVersionTitle": {
+    "message": "Wersja"
+  },
+  "setVersionUnpacked": {
+    "message": "Ta kopia została wczytana jako rozpakowana, więc Chrome nigdy jej nie zaktualizuje."
+  },
+  "setVersionStore": {
+    "message": "Zainstalowana ze sklepu, więc aktualizuje się sama."
+  },
+  "versionAvailable": {
+    "message": "Dostępna jest wersja $1"
+  },
+  "versionUpToDate": {
+    "message": "aktualna według ostatniego sprawdzenia"
+  },
+  "versionManaged": {
+    "message": "utrzymywana w aktualności przez przeglądarkę"
+  },
+  "getIt": {
+    "message": "Pobierz"
+  },
+  "checkNow": {
+    "message": "Sprawdź teraz"
+  },
+  "autoCheckPref": {
+    "message": "<b>Sprawdzaj nową wersję przy uruchomieniu przeglądarki.</b><br>Jedno żądanie do bento.page o plik statyczny. Nie wysyła identyfikatorów, numeru wersji ani niczego o Twoich dokumentach — porównanie odbywa się tutaj. Wyłącz, a nic nigdy nie zostanie pobrane; <b>Sprawdź teraz</b> nadal działa."
+  },
+  "expectedSha": {
+    "message": "Oczekiwana suma SHA-256 pliku zip: $1"
+  },
+  "setReachTitle": {
+    "message": "Do czego to sięga"
+  },
+  "setReachSub": {
+    "message": "Tylko do folderów powyżej i tylko do pliku, z którego strona faktycznie została otwarta. Nic nie jest wysyłane i nic nie jest czytane gdzie indziej."
+  },
+  "updateAvailable": {
+    "message": "<b>Dostępna jest wersja bento/home $1.</b> Ta kopia została wczytana jako rozpakowana, więc Chrome nigdy jej nie zaktualizuje."
+  },
+  "updateStep1": {
+    "message": "Pobierz ją z GitHuba"
+  },
+  "updateStep2": {
+    "message": "Podmień pliki <b>w folderze, z którego ją wczytałeś</b> — w tym samym, inaczej Chrome uzna to za inne rozszerzenie i przyznane foldery nie przejdą razem z nim"
+  },
+  "updateStep3": {
+    "message": "Otwórz <code>chrome://extensions</code> i naciśnij <b>Załaduj ponownie</b> przy bento/home"
+  },
+  "fetchingApp": {
+    "message": "Pobieranie $1…"
+  },
+  "createdIn": {
+    "message": "Utworzono $1 ($2) w $3"
+  },
+  "intoFolder": {
+    "message": "do $1"
+  },
+  "helpWhatTitle": {
+    "message": "Co robi bento/home"
+  },
+  "helpWhatSub": {
+    "message": "Dokument Bento to jeden plik HTML, który niesie własny edytor. Otwarty prosto z dysku nie może zapisać sam do siebie — więc zapis za każdym razem pyta o miejsce docelowe. bento/home usuwa to pytanie."
+  },
+  "tourSaveTitle": {
+    "message": "Zapis w miejscu"
+  },
+  "tourSaveBody": {
+    "message": "⌘S zapisuje prosto do otwartego pliku, bez okna dialogowego. Autozapis i aktualizacje w miejscu idą tą samą drogą."
+  },
+  "tourFindTitle": {
+    "message": "Znajdź swoje dokumenty"
+  },
+  "tourFindBody": {
+    "message": "Każdy dokument Bento w Twoich folderach, z prawdziwym tytułem i obrazkiem pierwszej strony. Wyszukiwanie obejmuje też to, co jest w nich napisane."
+  },
+  "tourSwitchTitle": {
+    "message": "Przełączaj w trakcie pracy"
+  },
+  "tourSwitchBody": {
+    "message": "Naciśnij <kbd>Alt</kbd>+<kbd>B</kbd> albo kliknij prawym przyciskiem w dokumencie, aby otworzyć panel obok."
+  },
+  "tourNewTitle": {
+    "message": "Utwórz nowy"
+  },
+  "tourNewBody": {
+    "message": "<b>+ Nowy dokument</b> pobiera bieżące wydanie Slides, Spaces lub Dash i umieszcza nowy dokument w Twoim folderze."
+  },
+  "helpNeedsTitle": {
+    "message": "Czego potrzebuje od Ciebie"
+  },
+  "helpNeedsSub": {
+    "message": "Dwóch rzeczy, których to rozszerzenie samo nie może załatwić."
+  },
+  "helpFolder": {
+    "message": "Folder"
+  },
+  "helpFolderGranted": {
+    "message": "przyznano: $1 — dokumenty w nich zapisują się w miejscu"
+  },
+  "helpFolderNone": {
+    "message": "Jeszcze nie wybrano. Jeden szeroki folder obejmuje wszystko, co jest w środku."
+  },
+  "helpAccessOff": {
+    "message": "Wyłączony. Włącz <b>Zezwalaj na dostęp do adresów URL plików</b> w <code>chrome://extensions</code> — żadne rozszerzenie nie może włączyć tego samo."
+  },
+  "helpAccessUnknown": {
+    "message": "Ta przeglądarka tego nie zgłasza. Jeśli zapis nadal pyta, sprawdź to w <code>chrome://extensions</code>."
+  },
+  "helpAccessOn": {
+    "message": "Włączony — bento/home może czytać strony otwarte z dysku."
+  },
+  "helpNeverTitle": {
+    "message": "Czego nigdy nie robi"
+  },
+  "helpNeverSub": {
+    "message": "Czyta i zapisuje tylko wewnątrz powyższych folderów i tylko plik, z którego strona faktycznie została otwarta — przeglądarka mówi który, więc dokument nie może wskazać cudzego pliku. Nic o Twoich dokumentach nie jest nigdzie wysyłane, a rozszerzenie nie ma serwera, na który mogłoby je wysłać."
+  },
+  "helpAboutTitle": {
+    "message": "Informacje"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · część projektu Bento · licencja MIT"
+  },
+  "linkSource": {
+    "message": "Źródła na GitHubie"
+  },
+  "linkIssues": {
+    "message": "Zgłoś problem"
+  },
+  "linkReleases": {
+    "message": "Wydania"
+  },
+  "primeMiddle": {
+    "message": "ta, która się utrzymuje"
+  },
+  "primeNote": {
+    "message": "Pozostałe dwie też działają, ale Chrome zapyta znowu — pierwsza przy każdym uruchomieniu, ostatnia po odczekaniu."
+  },
+  "viewLayout": {
+    "message": "Sposób wyświetlania dokumentów"
+  },
+  "viewIcons": {
+    "message": "Ikony"
+  },
+  "viewList": {
+    "message": "Lista"
+  },
+  "close": {
+    "message": "Zamknij"
+  },
+  "setLangTitle": {
+    "message": "Język"
+  },
+  "setLangSub": {
+    "message": "W jakim języku mówi to rozszerzenie. Zwykle podąża za przeglądarką."
+  },
+  "langAutomatic": {
+    "message": "Automatycznie — podążaj za przeglądarką"
+  },
+  "setLangNote": {
+    "message": "Nazwa i opis samego rozszerzenia pochodzą z przeglądarki i się nie zmieniają."
+  },
+  "aboutPromo": {
+    "message": "Pierwszy raz w Bento? Szablony, galerię i przewodnik po edycji z AI znajdziesz na $1 — albo daj gwiazdkę na $2."
+  },
+  "setThemeTitle": {
+    "message": "Wygląd"
+  },
+  "setThemeSub": {
+    "message": "Ustawienie przeglądarki jest domyślne, a nie obowiązkowe."
+  },
+  "themeAuto": {
+    "message": "Tak jak przeglądarka"
+  },
+  "themeLight": {
+    "message": "Jasny"
+  },
+  "themeDark": {
+    "message": "Ciemny"
+  },
+  "checking": {
+    "message": "Sprawdzanie…"
+  },
+  "surveyTitle": {
+    "message": "Znajdź, gdzie są Twoje dokumenty"
+  },
+  "surveySub": {
+    "message": "Przeglądarka wie, które dokumenty Bento otwierałeś. Może powiedzieć, w których folderach są."
+  },
+  "surveyDeclined": {
+    "message": "Nic nie szkodzi — foldery możesz dodać ręcznie."
+  },
+  "surveyAllCovered": {
+    "message": "Wszystkie $1 dokumentów widzianych przez tę przeglądarkę są już w dodanym folderze."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> dokumentów jest poza wszystkimi dodanymi folderami. $2 są już objęte."
+  },
+  "surveyCovers": {
+    "message": "obejmuje $1"
+  },
+  "surveyAdd": {
+    "message": "Dodaj ten folder…"
+  },
+  "surveyAdded": {
+    "message": "Dodano $1 — dokumenty w nim są gotowe"
+  },
+  "surveyAddedElsewhere": {
+    "message": "Dodano $1, ale dokumentów tam nie ma — otwórz jeden z Findera."
+  },
+  "surveyOnlySeen": {
+    "message": "W ten sposób znajdziesz tylko dokumenty otwarte w tej przeglądarce."
+  },
+  "setAsstTitle": {
+    "message": "Asystent"
+  },
+  "setAsstSub": {
+    "message": "Dokąd trafia rozmowa o dokumencie. Klucz zostaje w tym rozszerzeniu — dokument widzi tylko odpowiedź."
+  },
+  "asstProvider": {
+    "message": "Dostawca"
+  },
+  "asstProvBuiltin": {
+    "message": "Wbudowany model Chrome (Gemini Nano) — na tym urządzeniu"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (klucz AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "Zgodny z OpenAI (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "Bazowy adres URL"
+  },
+  "asstModel": {
+    "message": "Model"
+  },
+  "asstKey": {
+    "message": "Klucz API"
+  },
+  "asstKeyOptional": {
+    "message": "Opcjonalny dla lokalnego serwera, np. Ollama lub LM Studio."
+  },
+  "asstSave": {
+    "message": "Zapisz"
+  },
+  "asstSaved": {
+    "message": "Ustawienia asystenta zapisane"
+  },
+  "asstAccessDeclined": {
+    "message": "Odmówiono dostępu do witryny. Żądania i tak są wysyłane i działają, gdy serwer dopuszcza rozszerzenia przeglądarki (CORS)."
+  },
+  "asstCheck": {
+    "message": "Sprawdź połączenie"
+  },
+  "asstChecking": {
+    "message": "Sprawdzanie…"
+  },
+  "asstReachable": {
+    "message": "Osiągalny — $1 odpowiedział."
+  },
+  "asstBuiltinReady": {
+    "message": "Gotowy na tym urządzeniu."
+  },
+  "asstBuiltinDownload": {
+    "message": "Modelu nie ma jeszcze na tym urządzeniu. Naciśnij „Pobierz model” w ustawieniach rozszerzenia bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "Ten Chrome nie ma wbudowanego modelu. Wybierz innego dostawcę w ustawieniach rozszerzenia."
+  },
+  "asstOnDevice": {
+    "message": "to urządzenie"
+  },
+  "asstNotConfigured": {
+    "message": "Asystent nie jest jeszcze skonfigurowany — otwórz ustawienia rozszerzenia bento/home."
+  },
+  "asstUnreachable": {
+    "message": "Nie udało się połączyć z $1. Czy serwer działa i dopuszcza żądania z rozszerzeń przeglądarki (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "Oczekiwanie na Twoją zgodę — odpowiedz na pytanie i spróbuj ponownie."
+  },
+  "asstDenied": {
+    "message": "Ten dokument nie ma zgody na korzystanie z asystenta."
+  },
+  "asstAllowedTitle": {
+    "message": "Dokumenty z dostępem do asystenta"
+  },
+  "asstAllowedSub": {
+    "message": "Każdy dokument pyta raz, przed pierwszym żądaniem. Usuń któryś, aby zapytał ponownie."
+  },
+  "consentTitle": {
+    "message": "Zezwolić temu dokumentowi na korzystanie z Twojego asystenta?"
+  },
+  "consentLead": {
+    "message": "Będzie mógł wysyłać tekst do $1 ($2) i czytać odpowiedzi. Twój klucz nigdy nie jest mu udostępniany."
+  },
+  "consentWeb": {
+    "message": "Czytanie stron jest włączone: może też odwiedzać strony, które podasz lub które znajdzie wyszukiwanie, a te witryny widzą wizytę."
+  },
+  "consentRemember": {
+    "message": "Zapamiętane dla tego pliku. Możesz to zmienić później w ustawieniach rozszerzenia."
+  },
+  "consentAllow": {
+    "message": "Zezwól"
+  },
+  "consentDeny": {
+    "message": "Nie teraz"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome pobiera model. Spróbuj ponownie, gdy pobieranie się zakończy."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "Pobierz model"
+  },
+  "asstBuiltinProgress": {
+    "message": "Pobieranie modelu… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "Około 2–4 GB. Chrome potrzebuje około 22 GB wolnego miejsca na dysku i sieci bez limitu danych; w przeciwnym razie zgłasza, że model jest niedostępny."
+  },
+  "asstContext": {
+    "message": "Okno kontekstu (tokeny)"
+  },
+  "asstContextHint": {
+    "message": "Zostaw puste, aby użyć wartości podanej przez dostawcę. Wypełnij dla własnego serwera, którego limit znasz tylko Ty."
+  },
+  "asstContextKnown": {
+    "message": "Okno kontekstu: $1 tokenów"
+  },
+  "asstShowAll": {
+    "message": "Pokaż wszystkie modele, nie tylko te do czatu"
+  },
+  "asstOtherModelRow": {
+    "message": "Inny…"
+  },
+  "asstOtherModel": {
+    "message": "Identyfikator modelu dokładnie taki, jak nazywa go dostawca"
+  },
+  "asstBadModel": {
+    "message": "To nie jest identyfikator modelu: tylko litery, cyfry i . _ : / -"
+  },
+  "asstWindow": {
+    "message": "Prezentacja jest za duża dla tego modelu: żądanie potrzebuje około $1 tokenów, a model przyjmuje $2. Wybierz model z większym oknem lub skróć prezentację."
+  },
+  "asstOutlineOnly": {
+    "message": "W oknie tego modelu zmieścił się tylko konspekt; zaznaczona treść nie została wysłana w całości."
+  },
+  "asstNoDocument": {
+    "message": "Dokument nie przekazał swojej treści."
+  },
+  "asstSendsNotice": {
+    "message": "Wysyła konspekt prezentacji i $1 do $2; komentarze zostają tutaj."
+  },
+  "asstOnDeviceModel": {
+    "message": "model na tym urządzeniu"
+  },
+  "asstFocusGeneric": {
+    "message": "zaznaczone elementy lub otwarty slajd"
+  },
+  "asstSearch": {
+    "message": "Pozwól modelowi szukać w sieci"
+  },
+  "asstSearchNative": {
+    "message": "Ta trasa ma własne wyszukiwanie ($1); zapytanie to jedyna nowa rzecz, która wychodzi."
+  },
+  "asstSearchNone": {
+    "message": "Ten model nie ma własnego wyszukiwania — podaj punkt wyszukiwania poniżej."
+  },
+  "asstRead": {
+    "message": "Czytanie stron WWW"
+  },
+  "asstReadOn": {
+    "message": "Zezwól na czytanie stron WWW…"
+  },
+  "asstReadOff": {
+    "message": "Przestań czytać strony WWW"
+  },
+  "asstReadOnNote": {
+    "message": "Asystent może czytać strony, które podasz lub które znajdzie wyszukiwanie. Każda czytana witryna widzi wizytę; to, co wraca, jest tekstem, nigdy poleceniami."
+  },
+  "asstReadOffNote": {
+    "message": "Wyłączone. Asystent nie może czytać stron WWW; kliknięcie tutaj pyta przeglądarkę raz."
+  },
+  "asstSearchEndpoint": {
+    "message": "Punkt wyszukiwania"
+  },
+  "asstSearchEndpointHint": {
+    "message": "Instancja SearXNG lub https://api.search.brave.com/ z kluczem poniżej. Używane tylko, gdy model nie ma własnego wyszukiwania."
+  },
+  "asstSearchKey": {
+    "message": "Klucz wyszukiwania"
+  },
+  "placingFolder": {
+    "message": "Szukanie „$1” na dysku…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome nie pozwolił rozszerzeniu odczytać „$1” z dysku, aby go znaleźć (listy file:// odrzucone)."
+  },
+  "placeTried": {
+    "message": "Szukano „$1” w $2 miejscach na dysku — nie ma go tam."
+  },
+  "badgeNotAdded": {
+    "message": "niedodany"
+  },
+  "badgeNotAddedTip": {
+    "message": "Znaleziony na dysku. Otwiera się, ale zapis zapyta gdzie — dodaj jego folder, aby zapisywać w miejscu."
+  },
+  "folderFoundTip": {
+    "message": "Znaleziony na dysku, niedodany: dokumenty się otwierają, ale zapis pyta gdzie."
+  },
+  "menuAddFolder": {
+    "message": "Dodaj jego folder, aby zapisywać w miejscu…"
+  },
+  "pickThisFolder": {
+    "message": "W oknie wyboru wskaż folder „$1” — Chrome musi widzieć, że go wybierasz."
+  },
+  "pickedWrongFolder": {
+    "message": "„$1” to nie folder tego dokumentu („$2”). Spróbuj ponownie i wybierz tamten."
+  },
+  "folderAlreadyAdded": {
+    "message": "„$1” jest już dodany."
+  },
+  "bentoFolderBtn": {
+    "message": "Utwórz folder Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "W oknie utwórz w Dokumentach nowy folder o nazwie „Bento” i wybierz go."
+  },
+  "bentoFolderMade": {
+    "message": "„$1” to Twój folder Bento — nowe dokumenty trafiają tam i zapisują się w miejscu."
+  },
+  "bentoFolderTip": {
+    "message": "Folder w Dokumentach, który zapisuje w miejscu i przyjmuje nowe dokumenty. Samych Dokumentów Chrome nie udostępni."
+  },
+  "defaultFolder": {
+    "message": "nowe dokumenty trafiają tutaj"
+  },
+  "fgTitle": {
+    "message": "Zapisywać „$1” w miejscu od teraz?"
+  },
+  "fgTitleLapsed": {
+    "message": "Połączyć ponownie „$1”?"
+  },
+  "fgLead": {
+    "message": "bento/home zachowuje uprawnienie do tego jednego pliku, więc każdy zapis trafia prosto do niego. W następnym oknie wybierz ten sam plik."
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home ma już ten plik; przeglądarka chce, abyś potwierdził go ponownie."
+  },
+  "fgChoose": {
+    "message": "Wybierz plik…"
+  },
+  "fgReconnect": {
+    "message": "Połącz ponownie"
+  },
+  "fgOnce": {
+    "message": "Tylko tym razem"
+  },
+  "fgNotSame": {
+    "message": "To nie jest plik, który pytał („$1”). Wybierz tamten albo zamknij to okno."
+  },
+  "fgDenied": {
+    "message": "Uprawnienie nie zostało przyznane."
+  },
+  "droppedGranted": {
+    "message": "Dodano: $1 folderów, $2 plików."
+  },
+  "setFilesTitle": {
+    "message": "Pliki"
+  },
+  "setFilesSub": {
+    "message": "Dokumenty spoza dodanych folderów, które same zapisują się w miejscu — wybrane raz lub upuszczone w bibliotece."
+  },
+  "dropNoHandle": {
+    "message": "„$1”: przeglądarka nie przekazała uchwytu pliku dla tego upuszczenia."
+  },
+  "dropNotBento": {
+    "message": "„$1” nie jest dokumentem Bento (.bento.html) — nie dodano."
+  },
+  "setDownloadsTitle": {
+    "message": "Pobrane"
+  },
+  "setDownloadsSub": {
+    "message": "Dokumenty w folderze Pobrane mogą zapisywać się w miejscu przez pobieranie Chrome — chyba że Chrome jest ustawiony, aby pytać, gdzie zapisać każdy plik, co zamienia każdy zapis w okno dialogowe."
+  },
+  "setDownloadsOff": {
+    "message": "Chrome zapytał, gdzie zapisać — zapis w Pobranych jest wyłączony, dopóki to ustawienie się nie zmieni"
+  },
+  "setDownloadsRetry": {
+    "message": "Spróbuj ponownie"
+  },
+  "dropTwins": {
+    "message": "„$1”: $2 plików na dysku ma dokładnie te bajty — dodano, ale nie zapisze w miejscu, dopóki się nie rozjadą."
+  },
+  "addFiles": {
+    "message": "Dodaj pliki…"
+  },
+  "tdGrant": {
+    "message": "Zapisuj tutaj bez pytania…"
+  },
+  "tdViaFolder": {
+    "message": "zapisuje w miejscu — folder jest dodany"
+  },
+  "tdViaFile": {
+    "message": "zapisuje w miejscu — ten plik jest dodany"
+  },
+  "tdViaDownloads": {
+    "message": "zapisuje w miejscu — jest w Pobranych"
+  },
+  "tdNotYet": {
+    "message": "pyta, gdzie zapisać, za każdym razem"
+  },
+  "badgeNotSavingTip": {
+    "message": "Ten dokument nie może jeszcze zapisywać w miejscu — otwórz panel bento/home, aby to naprawić."
+  },
+  "noticeOsBlocked": {
+    "message": "macOS nie wpuszcza przeglądarki do $1, więc dokumenty stamtąd nie są wyświetlane, dopóki na to nie zezwolisz: Ustawienia systemowe → Prywatność i ochrona → Pliki i foldery → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "Ustawienia systemowe → Prywatność i ochrona → Pliki i foldery"
+  },
+  "fgLeadFolder": {
+    "message": "Wybierz w następnym oknie folder „$1”, a od teraz każdy dokument w nim zapisze się w miejscu — ten i sąsiednie."
+  },
+  "fgChooseFolder": {
+    "message": "Wybierz folder „$1”…"
+  },
+  "fgOnlyFile": {
+    "message": "Tylko ten plik…"
+  },
+  "fgNotContaining": {
+    "message": "„$1” nie zawiera tego dokumentu — wybierz „$2” lub folder wyżej."
+  },
+  "tdGrantFolder": {
+    "message": "Zapisuj wszystko w „$1” bez pytania…"
+  },
+  "saTitleCopy": {
+    "message": "Zapisz kopię"
+  },
+  "saTitleShare": {
+    "message": "Zapisz wyeksportowany plik"
+  },
+  "saName": {
+    "message": "Nazwa pliku"
+  },
+  "saBeside": {
+    "message": "Zapisz obok „$1”"
+  },
+  "saChoose": {
+    "message": "Wybierz folder…"
+  },
+  "saCancel": {
+    "message": "Anuluj"
+  },
+  "saExists": {
+    "message": "„$1” już istnieje. Zapisz ponownie, aby go zastąpić."
+  },
+  "saIsOriginal": {
+    "message": "To nazwa otwartego dokumentu — wybierz inną."
+  },
+  "saBadName": {
+    "message": "Użyj nazwy pliku bez ukośników."
+  },
+  "saLapsed": {
+    "message": "Dostęp do tego folderu wygasł. Wybierz folder albo odnów dostęp w bibliotece."
+  },
+  "saGone": {
+    "message": "To zapisywanie już nie czeka. Zamknij okno i zapisz ponownie."
+  },
+  "saTaken": {
+    "message": "„$1” już istnieje. Wybierz inną nazwę."
+  }
+}

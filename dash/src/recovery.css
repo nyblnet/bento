@@ -1,0 +1,107 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   The two surfaces that appear around OPENING a workbook: the unsaved-work
+   banner (recovery.ts) and the drop target (dropopen.ts).
+
+   ONE STYLESHEET FOR BOTH, prefixed `dxr-`, because they are one moment in the
+   product — "this file, and what else could be in it" — and because dropopen.ts
+   already imports recovery.ts for the workbook swap, so the import chain
+   guarantees these rules are present wherever either surface can appear.
+
+   Colours come from styles.css's tokens and nothing here states a hex. That is
+   the house rule (saveui.css says it too) and it is what makes both of these
+   correct on the dark ground without a second copy of the palette. */
+
+/* ————— the unsaved-work banner ————— */
+
+/* Fixed and centred OVER THE GRID rather than inside the layout: the app body
+   is a flex column with the virtualised grid claiming the remaining height, so
+   a banner spliced into it would resize the sheet — and a grid that jumps on
+   boot is indistinguishable from one that is repainting badly.
+
+   106px is measured, not guessed: the top bar's bottom edge sits at 61.8px and
+   the formula bar's at 98.3px at 1280px wide. At 56px — slides' number, and
+   what this started at — the banner covered the formula input, which is the one
+   control someone might want WHILE deciding whether to restore. Narrower
+   windows make those two bands shorter, never taller, so the banner drifts
+   further over the grid and never back under the chrome. */
+.dxr-bar {
+  position: fixed;
+  top: 106px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;                 /* over the grid and the panels, under a modal */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(94vw, 620px);
+  padding: 9px 10px 9px 14px;
+  background: var(--toast-bg);
+  color: var(--toast-ink);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--fs-ui);
+}
+.dxr-msg { flex: 1 1 auto; min-width: 0; line-height: 1.35; }
+
+/* The buttons sit on the inverted slab, so they cannot inherit .dx-btn's
+   surface — on the light ground that is a white button on a near-black bar,
+   which reads as the primary action whichever one it is. */
+.dxr-btn {
+  flex: 0 0 auto;
+  background: transparent;
+  color: inherit;
+  border-color: color-mix(in srgb, currentColor 38%, transparent);
+}
+.dxr-btn:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
+.dxr-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  /* NOT --ink: the amber is 2.02:1 on white (styles.css palette note), so the
+     ink on top of it is pinned to the dark value on both grounds. */
+  color: #1e2a3a;
+  font-weight: 600;
+}
+.dxr-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+.dxr-x { padding: 4px 7px; line-height: 1; }
+
+@media (max-width: 560px) {
+  /* Wraps rather than scrolls or clips — the buttons are the point of the bar
+     and a phone must not push Restore off its end. */
+  .dxr-bar { flex-wrap: wrap; top: 96px; }
+  .dxr-msg { flex: 1 0 100%; }
+}
+
+/* ————— the drop target ————— */
+
+/* Covers the whole window, and is pointer-transparent so it can never eat the
+   drag it is describing: the drag events are handled on the document in the
+   capture phase, and an overlay that intercepted them would break the very
+   gesture it is drawn for. */
+.dxr-drop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim);
+}
+.dxr-drop-card {
+  padding: 22px 26px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-dialog);
+  text-align: center;
+  max-width: min(90vw, 420px);
+}
+.dxr-drop-card strong { display: block; font-size: 15px; margin-bottom: 4px; }
+.dxr-drop-card span { color: var(--muted); font-size: var(--fs-small); line-height: 1.4; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .dxr-bar, .dxr-drop { animation: dxr-in 140ms ease-out; }
+  @keyframes dxr-in { from { opacity: 0 } to { opacity: 1 } }
+}

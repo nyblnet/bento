@@ -1,14 +1,14 @@
 # bento/spaces
 
-A Notion/notes-like Bento app: one HTML file that is the document, the viewer
-and the editor. **This is currently a SCAFFOLD** — it is on-platform and it
-works end to end, but the app itself is deliberately minimal (a flat list of
-text blocks) so that the kernel seam is legible and the real app can be grown
-from a known-good starting point.
+A notes/wiki app where **one HTML file is a whole space**: a tree of pages, the
+reader that displays them, and the editor that writes them. No account, no
+server, no sidecar folder — you can mail it, and the person who receives it can
+read and edit it with nothing installed.
 
-If you are an agent picking up spaces work: read `AGENTS.md`,
-`docs/PLATFORM.md` and `docs/PARALLEL-WORK.md` first. `spaces/` is your
-ownership zone; `kernel/` is not (kernel changes are serialized).
+Agents: `docs/spaces-agents.md` is the working guide (published at
+`bento.page/spaces/agents.md`). Before changing anything here read `AGENTS.md`,
+`docs/PLATFORM.md` and `docs/PARALLEL-WORK.md`. `spaces/` is this app's
+ownership zone; `kernel/` is not — kernel changes are serialized.
 
 ## Run it
 
@@ -19,36 +19,237 @@ npm run dev            # dev server (port 5196 via .claude/launch.json)
 npm run build:single   # → dist-single/Bento_Spaces.bento.html (the product)
 ```
 
-## What's wired (the reference for any new Bento app)
+## The format
 
-- **Self-contained single-file build** — the same vite + `postbuild-compress`
-  pipeline as slides, passing the splice conformance gate
-  (`node scripts/shell-gate.mjs spaces/dist-single/Bento_Spaces.bento.html`).
-- **`configureApp()`** — app id, display name, and the app's own update
-  manifest path (`releases/spaces/manifest.json`).
-- **Self-save** — `saveFile()` (File System Access, download fallback);
-  ⌘S and the Save button. The serialized file keeps its compressed runtime.
-- **Autosave + recovery** — kernel IndexedDB store keyed by `docId`, with a
-  restore/discard banner when the last session ended unsaved.
-- **i18n** — the kernel engine via a local facade; catalogs are empty for now,
-  which is fine because English strings are the keys.
-- **AI round-trip** — `window.bento` exposes `doc`, `serialize()`,
-  `loadDoc(json)`.
-- **Format discipline** — `parseDoc` validates `format === 'bento/spaces'`,
-  mints a `docId` when absent, preserves unknown fields, and rejects other
-  apps' documents.
+`bento/spaces` version 1. Additive and permanent: every future version opens
+files this one wrote, and unknown fields survive a round trip untouched. There
+is no server to migrate a file that someone has had on a disk for three years.
 
-## What is deliberately NOT wired yet
+```jsonc
+{
+  "format": "bento/spaces", "version": 1,
+  "docId": "…",                     // minted once, never regenerated
+  "home": "p-intro",
+  "pages": [                        // FLAT, pre-order; nesting is `parent`
+    { "id": "p-intro", "title": "Introduction", "icon": "…",
+      "blocks": [                   // FLAT, pre-order; nesting is `parent`
+        { "id": "b1", "type": "p", "html": "Hello <b>world</b>." }
+      ] }
+  ]
+}
+```
 
-- **Collaboration.** No CRDT/relay. `docs/PLATFORM.md` §10 permits shipping
-  without collab rather than with a half-secure version. The sync engine is
-  currently slides-shaped (see `docs/DECISIONS.md`); genericizing it is its
-  own project.
-- **Password encryption UI.** The kernel writes `bento/enc` envelopes and this
-  app detects them, but there is no unlock prompt yet — an encrypted file
-  reports rather than pretending.
-- **Rich text, nested blocks, embeds, references.** The block model is one
-  flat `{id, text}` list. Grow it ADDITIVELY: every future version must still
-  open documents this one wrote.
-- **Update UI.** `configureApp` declares the manifest path, but nothing checks
-  for updates yet, and no spaces release has been cut.
+Three decisions worth knowing before editing the model:
+
+- **Both arrays are flat and in pre-order.** A child always follows its parent,
+  so one forward pass rebuilds the tree. Nested arrays would make every
+  operation recursive and every CRDT node ambiguous.
+- **Block properties are flat on the block** (`done`, `open`, `src`, `lang`),
+  not inside a `props` object. `type` is an open string: an unrecognised type
+  round-trips and falls back to rendering its `html`.
+- **`html` is inline-only** — `b i u s em strong code a span mark sub sup br`.
+  Block structure is `type`, never markup. `src/sanitize.ts` unwraps anything
+  else at load, and matches `href` against `getAttribute('href')` rather than
+  `.href`, because the resolved property hides `javascript:` behind a base URL.
+
+A `code` block's `html` is its source as **plain text**, html-escaped. Syntax
+colour is applied when the page is drawn (`src/highlight.ts` → `paintCode` in
+`src/render.ts`) and never enters the document, so the same block is the same
+bytes whether or not the reading build knows the language — and an unknown
+`lang` is preserved verbatim rather than normalised away.
+
+Ids are unique across the whole document and are never reused — links,
+backlinks and future collaboration key on them. A duplicate is repaired
+deterministically **from the bytes** (`repairId`), so two readers of one file
+always agree on every id. `scripts/test-spaces-model.ts` pins that, plus the
+load contract and format additivity.
+
+## The parts
+
+| File | What it owns |
+|---|---|
+| `src/model.ts` | the format, `buildIndex()` (tree, backlinks), id repair |
+| `src/mentions.ts` | page **aliases** (the one place a name becomes a page id) and **unlinked mentions** — the matching rule, and everything it refuses to match |
+| `src/sanitize.ts` | the inline allowlist — the only thing between a file someone mailed you and script execution |
+| `src/store.ts` | undo, and the **typing run** |
+| `src/journal.ts` | daily notes — the date is `page.journal`, never the title |
+| `src/templates.ts` | page templates — `doc.templates`, a collection and NOT flagged pages, and the one-time `{{date}}` expansion |
+| `src/templateui.ts` | the three surfaces for them: save this page, pick one from the ＋, and the manager |
+| `src/calc.ts` | magic notes — the evaluator behind a line ending in `=`. No eval, ever |
+| `src/render.ts` | model → DOM, shared by the editor, reading view and print |
+| `src/highlight.ts` | the code lexer — text → `{kind, a, b}` ranges, no DOM, no strings |
+| `src/markdown.ts` | markdown → blocks, the folder tree → the page tree, `[[wikilinks]]` → `#p/` links. Pure and DOM-free, so the import is tested in node |
+| `src/editor.ts` | topbar, sidebar, block menu, `[[` picker, ⌘K, ⌘F, archive |
+| `src/props.ts` | the right-hand properties panel — what a block and a page can be, and the one thing it must not cost: the page's width |
+| `src/collabui.ts` | who else is here — presence in the tree, the people panel, the live control |
+| `src/comments.ts` | review threads — markers in the end margin, the thread popover, the tree badge |
+| `src/sync/session.ts` | the five answers the kernel cannot work out: what "empty" means, where a reader lands, what presence reports |
+| `src/agent.ts` | the agent surface — `validate()`, `outline()`, `stats()`, and the patch verbs behind `window.bento` |
+| `src/assets.ts` | content-addressed images and clips, and the image downscale |
+| `src/assets.ts` | content-addressed images and the downscale |
+| `src/portable.ts` | the two exits: a page out as its own space, another space in under a page |
+| `src/todeck.ts` | a page out as a **`bento/slides` document** — the mapping, and what it says it dropped. Pure and DOM-free |
+| `src/about.ts` | updates, language, password, exports |
+| `src/i18n/` | per-locale catalogs; `packed.ts` is generated and is what ships |
+
+### The typing run
+
+Slides sidesteps commit granularity because canvas text commits on blur. A
+notes app may never blur — so a **run** is consecutive input in one block with
+no structural op between. It takes one checkpoint at its first input and
+mutates in place after that. It closes on idle, on the caret leaving the block,
+on any structural change, on save, and on `replaceDoc`.
+
+One run = one undo entry = later, one collaboration text batch. This single
+policy sets undo granularity, autosave churn, the dirty flag and the future op
+rate, which is why it lives in the store rather than in the editor.
+
+### Getting notes in
+
+Drop a folder of `.md` files on the window, or use Pages → import. Each file
+becomes a page, folders become the page tree, and `[[wikilinks]]` are resolved
+**after every page exists**, by file name first and page title second — a
+target outside the import stays as the literal `[[Name]]` rather than silently
+un-linking. The parse (`src/markdown.ts`) is pure and DOM-free; the browser
+half (`editor.ts importFiles`) reads image bytes, runs `sanitizeInline` over
+every block, and commits the whole import in ONE step. Frontmatter is kept
+verbatim in a marked block — the reasoning is in `docs/DECISIONS.md`.
+
+An image referenced by a relative path is resolved against the files that were
+actually selected; when it is not there, the block becomes text quoting the
+path, because a browser cannot open `../attachments/x.png` and a broken `<img>`
+would be a lie about what is in the file.
+
+### Getting notes out again, and back in
+
+`src/portable.ts` is both exits, pure and DOM-free like `markdown.ts`, so the
+round trip is asserted in node rather than clicked through.
+
+**Out:** `extractSpace(doc, pageId, {subtree, docId})` returns a complete
+`bento/spaces` document holding one page and, if asked, its subtree. It carries
+a **fresh `docId`** and **no `collab` at all** — an extract that kept either
+would be a fork of the space it came from, and opening it would join that room
+and sync three pages over two hundred. Only the assets those pages reference
+travel (fonts excepted — the theme names them, so every page references them).
+A link out of the extracted set becomes the literal `[[Page title]]`, the same
+thing an unresolvable wikilink becomes on the way in, so it is honest, still
+searchable, and resolves again if the two halves are ever reunited.
+
+**In:** `planGraft(host, incoming, {under})` nests another space's pages under a
+page of this one. An arriving id is KEPT when this space does not use it and
+only a collision is renamed — through `repairId`, the same derivation-from-the-
+bytes the load path uses, for the same reason. Links inside the import follow
+the rename; a link naming a page that was not in the file becomes text rather
+than a live link onto whatever host page holds that id. Assets are
+content-addressed, so a shared image merges to nothing; a key holding DIFFERENT
+bytes (which the store cannot produce, but a hand-written file can) mints a
+`~n` variant instead of overwriting the host's image. The whole graft is ONE
+`store.commit`, so it is one ⌘Z.
+
+The imported file is UNTRUSTED and gets no side door: its document block is
+read from an inert `DOMParser` document, `parseDoc` decides whether it is a
+space (refusing rather than degrading), and `sanitizeInline` runs over every
+arriving block before any of it reaches the document.
+
+### A page as a deck
+
+**Save → Export page as slides…** turns one page into a `bento/slides`
+DOCUMENT, which you paste into Bento Slides through its own "Replace from
+JSON…" (or `window.bento.loadDoc()`). It is not a `.bento.html` deck: a
+self-contained deck is a document spliced into a slides SHELL, this app has no
+shell but its own, and the two ways to get one are bundling half a megabyte of
+another app into every space or fetching it — which PLATFORM §1 forbids. So the
+hand-off is the interchange path slides already documents, exactly as the
+Markdown exporter hands over Markdown.
+
+`src/todeck.ts` is the whole of it, pure and DOM-free so the mapping is asserted
+in node. What it does:
+
+| in a page | on a slide |
+|---|---|
+| `h1`, `h2` | start a new slide, and become its title |
+| `divider` | starts a new slide with no title |
+| `h3` | a bold lead-in inside the body |
+| `p`, `quote`, `prop` | a text box; a quote gets an accent rule |
+| `bullet`, `number`, `todo` | one text box holding a real `<ul>`/`<ol>`, nesting kept, `☐`/`☑` for a to-do |
+| `code` | monospace text on a tinted panel (no highlighting — the grammar lives in assets a deck has none of) |
+| `callout`, `toggle` | a tinted panel; a callout keeps its tone as a label, a toggle is shown open |
+| `table` | a real slides table — column weights, per-column alignment, header — continued on further slides when it is too tall |
+| `view` (board or list) | a table of the rows it stands for, same source, filter, sort and grouping as the screen |
+| `canvas` | its own slide, each card placed where the author put it (percentages in, percentages out) |
+| `image`, `media` | its own slide, bytes embedded |
+| `link`, `pagelink` | the words, and the address as a second line — a slide has no inline link |
+| the page's title, icon, cover | the title slide; a cover becomes a full-bleed background under a scrim |
+| the theme | the deck's background, ink, accent and faces |
+
+**Nothing is fetched and nothing dangles.** Every picture is resolved through
+the asset table to its bytes and re-interned in the DECK's own `assets`;
+anything that would still reach the network — including bytes hidden one
+`asset:` indirection away — is left out. **Speaker notes are not invented**: a
+page has no such concept, and mapping review comments onto them would move a
+remark addressed to a person into a file people present from. What the notes
+carry instead is the export's own account of what did not come across, the same
+list the dialog shows before you download anything.
+
+The deck is `bento/slides`, which is another app's format and another zone's
+file. Nothing under `slides/` is edited for this; what holds the two together is
+a TYPE-ONLY import of `slides/src/model.ts` (so a renamed field is a compile
+error here) and a rig that runs the emitted document through slides' own
+`parseDoc` and checks every key it writes against slides' generated key list.
+Behaviour is not covered by anything on the slides side. That is a real cost and
+it is written down rather than papered over.
+
+### Links are fragments
+
+`#p/<id>`, and navigation is `history.pushState(null, '', '#p/id')`. Measured:
+from a `file://` opaque origin, `pushState` with a **fragment** is legal while
+`pushState` with a **path** throws `SecurityError`. That is the whole reason
+pages are one document rather than one file each.
+
+## Platform guarantees this app honours
+
+- **Splice contract** — `#bento-doc` stays plaintext with a stable id; the file
+  survives DOMParser → splice → `outerHTML`. Gated by
+  `node scripts/shell-gate.mjs spaces/dist-single/Bento_Spaces.bento.html`, the
+  same check the release runs before signing.
+- **No network to open, edit, read or save.** Updates are the only fetch, and
+  they are opt-out.
+- **Autosave + recovery** in a per-app IndexedDB database (`bento-spaces-…`);
+  encrypted spaces are never snapshotted to disk in plaintext.
+- **Signed self-update** against `releases/spaces/manifest.json`, with this
+  app's own release notes (`spaces/CHANGELOG.md` — never another app's).
+- **i18n** with English strings as keys; `scripts/build-spaces-i18n.mjs
+  --check` fails the build if the packed table is stale or a core catalog is
+  incomplete, because a catalog ships inside every saved file and cannot be
+  corrected without a release.
+
+## Not built yet
+
+- **Fine-grained sharing.** There is a people panel, presence in the page tree
+  and a live session, but no per-person roles or invite links yet — the file is
+  still the capability, so anyone you send it to can edit.
+- **Embeds.** Deliberate: the format is permanent, so a block type ships when
+  its model is right, not when its UI is ready.
+
+  Tables and databases DID ship, as two separate things, which is the whole of
+  working/design/spaces-design.md §2.6. A **table** is content — a `table` block whose
+  `rows` are inline html, with no formulas and nothing that recalculates
+  (`tableOf`/`writeTable` in `src/model.ts`, the pipe-table export in
+  `src/blocks.ts`). A **database** is the tracker: `doc.fields` is the schema, a
+  `prop` block is a value, and a `view` block is a board or a list of them
+  (`src/fields.ts`). Recalculation is bento/dash's, and cross-app data arrives
+  as a snapshot with provenance, never as a nested runtime.
+- **Fetched link previews.** A `link` block is a card for an address on the
+  web, and every field in it is typed by the author and stored. Nothing is
+  fetched — not at render and not in the editor: reading a url's OpenGraph tags
+  means a cross-origin HTML body, which needs a server, which is the component
+  this format does not have. See `docs/DECISIONS.md`.
+- **Comments on a text RANGE.** A thread anchors to a block or to a page. A
+  range inside a block needs an offset pair that survives the concurrent edit
+  that moved it, and the format is permanent — so the anchor ships when its
+  model is right.
+
+- **Tables and embeds.** Deliberate: the format is permanent, so a block type
+  ships when its model is right, not when its UI is ready. (Databases DID ship —
+  as the tracker: `doc.fields` is the schema, a `prop` block is a value, and a
+  `view` block is a board or a list of them. `src/fields.ts` is the core.)

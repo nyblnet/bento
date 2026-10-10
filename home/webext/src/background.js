@@ -1,0 +1,947 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+//
+// The extension side: the only place that holds the folder grant and the only
+// place that writes.
+//
+// MEASURED (docs/DECISIONS.md, 2026-08-02): one `showDirectoryPicker` grant
+// survives IndexedDB and a reload — still `granted` with no gesture, and
+// re-grantable with one click when it lapses — and covers files INSIDE the
+// folder that were never picked. That is what lets a deck opened by
+// double-clicking be written without a destination prompt, which no web page
+// can do for itself.
+//
+// TWO RULES SHAPE THIS FILE.
+//
+// 1. NO STATE BETWEEN MESSAGES. An MV3 service worker is evicted whenever the
+//    browser feels like it, and a save serialises the whole deck first —
+//    encryption, preview, ~900KB — so an eviction can easily land between
+//    "which file is this?" and "write it". Anything held in memory across that
+//    gap produces a failed save that looks random and reproduces on nobody's
+//    machine. So every message re-resolves from the grant; nothing is cached.
+//
+// 2. THE PAGE DOES NOT GET TO SAY WHICH FILE IT IS. `sender.url` is set by the
+//    browser, not by the content script, so it cannot be forged by the document
+//    — whereas anything in the message payload can. A local HTML file is
+//    untrusted content; if it could name its own target it could name somebody
+//    else's deck in the granted folder and overwrite it. The path comes from
+//    the sender, and a payload path is ignored even if present.
+
+// The ONLY import here. status.js owns what the UI is told, and the badge is
+// UI — duplicating the "is anything lapsed?" rule would let the icon and the
+// popup disagree about the same folders.
+import { setLapsedBadge, setTabBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
+import { checkForUpdate } from './update.js'
+import { t, initI18n } from './i18n.js'
+import { pathFromSender, locateIn } from './route.js'
+import {
+  CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PORT, ID_PREFIX, docKeyOf, validMessages, validSchema, validTurn, validCheck, activeConfig,
+  modelsKey, builtinContext, models as listRoutes, select as selectRoute, runTurn,
+  describe as describeAssistant, check as checkAssistant, run as runAssistant,
+} from './assistant.js'
+import { learnPrefix, noteOpened, prefixes as knownPrefixes } from './db.js'
+import * as docstore from './store.js'
+import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads, downloadsUnusable, setDownloadsUnusable, defaultDeps as defaultFileGrantDeps } from './filegrant.js'
+import { recentOpened } from './db.js'
+import * as saveas from './saveas.js'
+
+/** Same-named files the extension knows at OTHER paths: opened documents and the library's last scan. */
+async function knownTwins(path) {
+  const name = path.split('/').pop()
+  const out = new Set()
+  try { for (const p of Object.keys(await recentOpened())) if (p !== path && p.split('/').pop() === name) out.add(p) } catch { /* none */ }
+  try {
+    const scanned = (await chrome.storage.local.get('lastScan'))?.lastScan
+    if (Array.isArray(scanned)) for (const p of scanned) if (p !== path && p.split('/').pop() === name) out.add(p)
+  } catch { /* none */ }
+  return [...out]
+}
+
+// Re-exported: these moved to route.js so the PAGES can place a path too,
+// but they are still part of this module's tested surface.
+export { pathFromSender, locateIn }
+
+/** Refresh the badge, and tell the user once per session if a grant lapsed. */
+const reportLapsed = async () => notifyIfLapsed(await setLapsedBadge())
+
+/** The grants, read through the shared store. */
+const readGrants = getGrants
+
+/** Every file of this name in the granted tree. Depth-limited: a Decks folder
+ *  is not a filesystem, and an unbounded walk on a mistakenly-granted home
+ *  directory would hang the save the user is waiting on.
+ *
+ *  KEPT AS A FALLBACK ONLY. `locateIn` handles every path whose grant name
+ *  appears in it, which is all of them in the ordinary case; this covers what
+ *  it cannot place — a symlinked route, say, where the path the browser reports
+ *  does not spell the directory the handle actually points at. */
+export async function findByName(dir, name, depth = 0, found = []) {
+  if (depth > 4 || found.length > 1) return found
+  for await (const [entryName, handle] of dir.entries()) {
+    if (handle.kind === 'file' && entryName === name) found.push(handle)
+    else if (handle.kind === 'directory' && !entryName.startsWith('.')) {
+      await findByName(handle, name, depth + 1, found)
+    }
+    if (found.length > 1) break // ambiguous is already an answer
+  }
+  return found
+}
+
+/**
+ * Resolve the writable handle for a sender's own file, or say why not.
+ *
+ * ACROSS EVERY GRANT. Each is tried by ROUTE (`locateIn`) rather than by
+ * search, so trying several costs a few lookups each and a grant's size stops
+ * mattering — granting a whole home directory is as cheap as granting one decks
+ * folder, which is what makes "everywhere" a reasonable thing to offer.
+ *
+ * A file reachable through two grants is normal once folders can nest
+ * (~/Documents and ~/Documents/Decks), and it is the SAME file by two routes,
+ * not an ambiguity — `isSameEntry` is the thing that can tell those apart, so
+ * it decides. Two genuinely different files can only happen if the browser
+ * reported a path that leads to both, which it cannot; if it somehow does, that
+ * is the case to decline.
+ *
+ * A LAPSED grant is reported distinctly from an absent one, because they need
+ * opposite things from the user: one click to renew, or a folder to pick. Only
+ * reported when NO grant could serve the file — with several folders, one
+ * lapsing must not mask the others.
+ */
+export async function resolve(sender, deps = {}) {
+  const grants = deps.readGrants ?? readGrants
+  const search = deps.findByName ?? findByName
+  const locate = deps.locateIn ?? locateIn
+
+  const path = pathFromSender(sender)
+  if (!path) return { ok: false, reason: 'not a local file' }
+
+  const all = await grants()
+  if (!all.length) return { ok: false, reason: 'no folder granted' }
+
+  const name = path.split('/').pop() || ''
+  if (!name) return { ok: false, reason: 'no file name' }
+
+  let lapsed = 0
+  const found = []
+  for (const dir of all) {
+    // queryPermission only — never prompt from here. A service worker has no
+    // user gesture, so a request would be refused, and a save is the wrong
+    // moment to discover that. The options page is where granting happens.
+    if (await dir.queryPermission({ mode: 'readwrite' }) !== 'granted') { lapsed++; continue }
+    for (const hit of await locate(dir, path)) found.push({ dir, ...hit })
+    // Only fall back to enumerating when the route found nothing in this grant.
+    if (!found.length) {
+      for (const file of await search(dir, name)) found.push({ dir, file, rel: null })
+    }
+  }
+
+  if (!found.length) {
+    return {
+      ok: false,
+      reason: lapsed
+        ? 'folder grant needs renewing'
+        : 'not in the granted folder',
+    }
+  }
+  if (found.length > 1) {
+    // The same file reached twice through nested grants is fine; two different
+    // files are not, and only isSameEntry can tell them apart.
+    const [first, ...rest] = found
+    for (const other of rest) {
+      if (!(await first.file.isSameEntry(other.file))) {
+        return { ok: false, reason: `${name} is ambiguous across the granted folders` }
+      }
+    }
+    found.length = 1
+  }
+
+  const { dir, file } = found[0]
+  const hits = [file]
+
+  // The candidate shares the sender's FILE NAME. That is not the same as being
+  // the sender's file, and treating it as such destroys documents:
+  //
+  //   grant = ~/Documents, which holds ~/Documents/Clients/Q3.bento.html
+  //   the user opens a working copy at ~/Desktop/Q3.bento.html
+  //   -> exactly one hit, so a save wrote the Desktop deck over the Clients one
+  //      and never wrote the file being edited.
+  //
+  // The ambiguity guard above cannot catch that: the sender's own copy is
+  // OUTSIDE the grant, so it is not a second hit. No attacker is required.
+  //
+  // `resolve()` on the directory gives the candidate's path segments relative to
+  // the grant, so the sender's absolute path must end with them. An earlier
+  // comment here claimed the two "cannot be compared directly" — that is true of
+  // the directory handle, which knows no path, but not of a resolved child.
+  const rel = await dir.resolve(hits[0])
+  if (!rel || !rel.length) return { ok: false, reason: 'not inside the granted folder' }
+  const suffix = `/${rel.join('/')}`
+  // The subtraction that makes a document list clickable. Both halves exist
+  // only here: `path` is absolute and browser-stamped, `suffix` is the same
+  // file's route from the grant root, so what remains is where the granted
+  // folder actually lives. Nothing else in the extension can learn this — a
+  // directory handle has no path — and without it the popup can list documents
+  // but not open them.
+  //
+  // Deliberately AFTER the identity check below is set up but before it
+  // returns: only recorded on the success path, so a mismatched candidate never
+  // teaches us a wrong prefix. Failures are swallowed; a save must not break
+  // because a convenience could not be cached.
+  if (path.endsWith(suffix)) {
+    try { await learnPrefix(dir.name, path.slice(0, -suffix.length)) } catch { /* nice-to-have */ }
+  }
+  if (!path.endsWith(suffix)) {
+    return { ok: false, reason: `${name} in the granted folder is a different file` }
+  }
+
+  return { ok: true, name, handle: hits[0], within: suffix, dir, rel }
+}
+
+/**
+ * The directory a resolved file actually sits in.
+ *
+ * `rel` is the file's path segments relative to the grant root, so its parent is
+ * the grant walked down every segment but the last. Re-walked from the grant
+ * rather than remembered, for the same reason as everything else here: a service
+ * worker can be evicted between two messages.
+ */
+async function parentOf(dir, rel) {
+  let cur = dir
+  for (const seg of rel.slice(0, -1)) cur = await cur.getDirectoryHandle(seg)
+  return cur
+}
+
+/**
+ * Is `proposed` a name this sender is allowed to create beside itself?
+ *
+ * The page supplies it, so it is untrusted, and it is about to become a
+ * filename in somebody's folder. Rather than sanitising toward safety — which
+ * invites arguments about what was missed — this only accepts names that are
+ * transparently derived from the sender's OWN file: same base, our extension,
+ * and nothing in between but the characters a version string is made of.
+ *
+ * A separator therefore cannot survive, so no name can escape the directory,
+ * and the sender can only ever write near itself. `!== own` is the one that
+ * matters most: without it the "backup" is the original.
+ */
+export function backupNameFor(own, proposed) {
+  if (typeof proposed !== 'string' || proposed.length > 128) return null
+  if (!/^[A-Za-z0-9._-]+$/.test(proposed)) return null // no / \ .. NUL, no spaces
+  if (!/\.bento\.html$/i.test(proposed)) return null
+  if (proposed === own) return null
+  const base = own.replace(/\.bento\.html$/i, '')
+  return proposed.startsWith(`${base}.`) ? proposed : null
+}
+
+/**
+ * Write a rollback copy beside the sender's own file.
+ *
+ * NEW AUTHORITY, deliberately narrow. Every other op writes a file that already
+ * exists and that the sender IS; this one creates a file. The blast radius is
+ * held down from both ends: the name must be derived from the sender's own
+ * (`backupNameFor`), and an existing file is never overwritten. So the worst a
+ * hostile document can do is leave one predictably-named copy of ITSELF in a
+ * folder the author granted — which is what the feature does when it works.
+ */
+export async function backup(sender, text, name, deps) {
+  const r = await resolve(sender, deps)
+  if (!r.ok) return { ok: false, reason: r.reason }
+
+  const safe = backupNameFor(r.name, name)
+  if (!safe) return { ok: false, reason: 'not a backup name for this file' }
+
+  try {
+    const parent = await parentOf(r.dir, r.rel)
+    // Create-only. `getFileHandle` without `create` throws NotFoundError when
+    // the name is free — that throw is the success case, and anything else
+    // means something is already there and is not ours to replace.
+    let taken = true
+    try { await parent.getFileHandle(safe) } catch (e) { taken = e?.name !== 'NotFoundError' }
+    if (taken) return { ok: false, reason: `${safe} already exists` }
+
+    const h = await parent.getFileHandle(safe, { create: true })
+    const w = await h.createWritable()
+    await w.write(text)
+    await w.close()
+    return { ok: true, name: safe, bytes: text.length }
+  } catch (e) {
+    return { ok: false, reason: `${e.name}: ${e.message}` }
+  }
+}
+
+/** Can this sender's file be written in place? Resolves; writes nothing. */
+/**
+ * Where a save for this sender goes, in order: a FOLDER grant (resolve), a
+ * FILE grant for that one document, the DOWNLOADS folder through the
+ * downloads API. Each is checked from scratch on every message; nothing is
+ * carried. `via` says which, for the page's console and the badge.
+ */
+export async function resolveAny(sender, deps = {}) {
+  const r = await resolve(sender, deps)
+  if (r.ok) return { ...r, via: 'folder' }
+  const path = pathFromSender(sender)
+  if (!path) return r
+  // each further door fails soft: no store, no downloads API, no answer — the
+  // save falls to the picker, never to an exception
+  const fgDeps = deps.filegrant ?? { ...defaultFileGrantDeps(), otherCopies: (p) => knownTwins(p) }
+  const fg = await (deps.resolveFileGrant ?? resolveFileGrant)(path, fgDeps).catch(() => ({ ok: false, reason: 'none' }))
+  if (fg.ok) return { ok: true, name: path.split('/').pop(), handle: fg.handle, key: fg.key, via: 'file' }
+  // the Downloads door, unless this Chrome prompts for every download (then
+  // it was switched off the first time it prompted; Settings says so)
+  const unusable = await (deps.downloadsUnusable ?? downloadsUnusable)(deps.filegrant).catch(() => false)
+  const dir = unusable ? null : await (deps.downloadsDir ?? downloadsDir)(deps.filegrant).catch(() => null)
+  const rel = downloadsRelative(path, dir)
+  if (rel) return { ok: true, name: path.split('/').pop(), rel, via: 'downloads' }
+  return { ok: false, reason: fg.reason === 'lapsed' ? 'file grant needs renewing' : r.reason, path }
+}
+
+export async function claim(sender, deps) {
+  const r = await resolveAny(sender, deps)
+  return r.ok ? { ok: true, name: r.name, via: r.via } : { ok: false, reason: r.reason }
+}
+
+/** Write the sender's own file. Re-resolves, so no state is carried. */
+export async function write(sender, text, deps = {}) {
+  const r = await resolveAny(sender, deps)
+  if (!r.ok) return { ok: false, reason: r.reason }
+  try {
+    if (r.via === 'downloads') {
+      const bytes = await (deps.writeViaDownloads ?? writeViaDownloads)(r.rel, text, deps.filegrant)
+      return { ok: true, bytes, via: r.via }
+    }
+    const w = await r.handle.createWritable()
+    await w.write(text)
+    await w.close()
+    return { ok: true, bytes: text.length, via: r.via }
+  } catch (e) {
+    // a file grant whose file is gone is no grant: forget it
+    if (r.via === 'file' && e?.name === 'NotFoundError') await (deps.dropFileGrant ?? dropFileGrant)(r.key, deps.filegrant).catch(() => {})
+    // Chrome prompted for the download: this door is shut for good in this
+    // Chrome, THIS save finishes through the browser's own picker (the page
+    // is told to), and the next one is offered a file grant instead.
+    if (r.via === 'downloads' && e?.name === 'DownloadsPrompted') {
+      await (deps.setDownloadsUnusable ?? setDownloadsUnusable)(true, deps.filegrant).catch(() => {})
+      return { ok: false, reason: 'Chrome asks where to save each download', retry: 'native' }
+    }
+    return { ok: false, reason: `${e.name}: ${e.message}` }
+  }
+}
+
+// ---------------------------------------------------------------- DocStore
+//
+// The document's sidecar data, in this origin (store.js). The PATH is the
+// sender's, derived here; nothing in the payload can name another one.
+
+const STORE_OPS = {
+  'store.get': docstore.get, 'store.chunk': docstore.chunk, 'store.put': docstore.put,
+  'store.commit': docstore.commit, 'store.set': docstore.set, 'store.list': docstore.list,
+  'store.delete': docstore.remove,
+}
+let storeDeps = null
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
+export function docstoreDeps() {
+  if (!storeDeps) {
+    storeDeps = {
+      db: docstore.idbAdapter(),
+      now: () => Date.now(),
+      txid: () => crypto.randomUUID(),
+      sha256: async (bytes) => hex(await crypto.subtle.digest('SHA-256', bytes)),
+      // the extension reads the file ITSELF (it has file access): the page's
+      // account of its own content is never what a carry is decided on
+      fileBlockHash: async (path) => {
+        const r = await fetch(`file://${path.split('/').map(encodeURIComponent).join('/')}`)
+        return r.ok ? docstore.blockHash(await r.text(), storeDeps) : null
+      },
+      // "gone" only as a grant whose location is proven sees it
+      gone: async (path) => {
+        const at = await knownPrefixes()
+        const grants = (await getGrants()).map((dir) => ({ dir, prefix: at[dir.name] })).filter((g) => g.prefix)
+        return docstore.goneVia(path, grants)
+      },
+    }
+  }
+  return storeDeps
+}
+
+/**
+ * A moved document's recovery may follow it (store.js `carry`). Decided once
+ * per path per worker lifetime, and BEFORE the page's first store op is
+ * answered, so the page never reads an empty partition that is about to fill.
+ */
+const carriedBy = new WeakMap() // deps → Map(path → Promise): one store, one decision per path
+export function ensureCarried(path, deps = docstoreDeps()) {
+  if (!path) return Promise.resolve(null)
+  if (!carriedBy.has(deps)) carriedBy.set(deps, new Map())
+  const carried = carriedBy.get(deps)
+  if (!carried.has(path)) {
+    carried.set(path, docstore.carry(path, deps).then((r) => {
+      if (r?.carried) console.info('[bento/home] recovery followed a moved document from', r.carried, 'to', path)
+      return r
+    }, () => null))
+  }
+  return carried.get(path)
+}
+
+export async function storeOp(op, sender, payload, deps = docstoreDeps()) {
+  const fn = STORE_OPS[op]
+  if (!fn) return { ok: false, reason: 'unknown op' }
+  // Top frame only, here too: the content scripts never run in a sub-frame,
+  // but a partition is too valuable to rest on that alone.
+  const path = sender?.frameId === 0 ? pathFromSender(sender) : null
+  if (path) await ensureCarried(path, deps)
+  return fn(path, payload ?? {}, deps)
+}
+
+/** After the extension wrote the sender's file: which document it now holds (store.js recordSaved). */
+function noteSaved(sender, text) {
+  const path = sender?.frameId === 0 ? pathFromSender(sender) : null
+  if (path) void docstore.recordSaved(path, text, docstoreDeps()).catch(() => {})
+}
+
+// ---------------------------------------------------------------- assistant
+//
+// The chat's extension half. Rules and rationale in assistant.js; this is the
+// wiring: storage, the per-document consent prompt, and the port a streaming
+// turn rides on. Everything below reads WHICH document from the sender the
+// browser stamped, never from the payload.
+
+const storageGet = async (key) => (await chrome.storage.local.get(key))?.[key]
+
+/** The saved configuration, defaults filled; the built-in model is the default when Chrome has one. */
+export async function loadAssistantConfig() {
+  return activeConfig(await storageGet(CONFIG_KEY), typeof globalThis.LanguageModel !== 'undefined')
+}
+
+/** Documents that have been allowed, keyed by `docKeyOf`. */
+const allowedDocs = async () => (await storageGet(ALLOWED_KEY)) || {}
+
+let i18nReady = null
+/** The environment assistant.js runs against: the real fetch, the real Prompt API, translated reasons. */
+async function assistantEnv() {
+  // The worker's `t` follows the browser's language unless a choice was saved;
+  // reasons are shown to the user by the page, so they honour the choice too.
+  if (!i18nReady) i18nReady = initI18n().catch(() => {})
+  await i18nReady
+  return {
+    fetch: globalThis.fetch.bind(globalThis),
+    LanguageModel: globalThis.LanguageModel,
+    permissions: chrome.permissions,
+    t,
+    // The raw reply, in the service-worker inspector only — never stored.
+    log: (...a) => console.info(...a),
+    // The listing Settings cached for this provider+endpoint, for the window.
+    models: async (cfg) => (await storageGet(MODELS_KEY))?.[modelsKey(cfg)]?.models,
+    // The built-in model's quota: read once, kept — a session is created to
+    // read it, and the number does not change under a downloaded model.
+    builtinTokens: async () => {
+      const kept = await storageGet(BUILTIN_KEY)
+      if (kept?.tokens) return kept.tokens
+      const tokens = await builtinContext(globalThis.LanguageModel)
+      if (tokens) await chrome.storage.local.set({ [BUILTIN_KEY]: { at: Date.now(), tokens } })
+      return tokens
+    },
+  }
+}
+
+/**
+ * The consent prompt: one small window per document that asks, answered by a
+ * message from that window (src/consent.js). The window itself keeps a port
+ * open with a heartbeat so this worker is not evicted while the user reads.
+ *
+ * In memory only, on purpose: an eviction mid-prompt loses the request that
+ * was waiting, and NOTHING else — the answer is persisted from the consent
+ * page's message on its own, so the next request from that document simply
+ * goes through. Failing towards "ask again" is the right direction here.
+ */
+const consentPending = new Map() // docKey → { nonce, promise, resolve }
+
+function askConsent(docKey, host, model) {
+  const open = consentPending.get(docKey)
+  if (open) return open.promise
+  const nonce = crypto.randomUUID()
+  let resolve
+  const promise = new Promise((r) => { resolve = r })
+  consentPending.set(docKey, { nonce, promise, resolve })
+  const url = new URL(chrome.runtime.getURL('src/consent.html'))
+  url.searchParams.set('doc', docKey)
+  // The built-in model has no host; the window says "this device" instead.
+  url.searchParams.set('host', host || t('asstOnDevice'))
+  url.searchParams.set('model', model)
+  url.searchParams.set('nonce', nonce)
+  chrome.windows.create({ url: url.href, type: 'popup', width: 480, height: 340, focused: true })
+    .catch(() => { consentPending.delete(docKey); resolve(false) })
+  return promise
+}
+
+/**
+ * Has this document been allowed — asking if not. `waitMs` bounds the wait for
+ * callers that must answer inside the page's request timeout (`check`); a
+ * streaming turn has already been accepted and can wait for the person.
+ */
+async function ensureConsent(docKey, host, model, waitMs = 0) {
+  const allowed = await allowedDocs()
+  if (allowed[docKey]) return true
+  const answer = askConsent(docKey, host, model)
+  if (!waitMs) return answer
+  return Promise.race([answer, new Promise((r) => setTimeout(() => r(null), waitMs))])
+}
+
+/**
+ * The consent window's heartbeat port. Its messages keep this worker alive
+ * while the person reads; its disconnect is the window closing without an
+ * answer, which is a "not now" — otherwise the request would wait forever
+ * and every later ask would join it.
+ */
+export function watchConsentWindow(port) {
+  if (!isConsentPage(port.sender)) { port.disconnect(); return }
+  const nonce = port.name.slice('bento-consent:'.length)
+  port.onMessage.addListener(() => { /* the heartbeat; receiving it is the point */ })
+  port.onDisconnect.addListener(() => {
+    for (const [docKey, open] of consentPending) {
+      if (open.nonce === nonce) { consentPending.delete(docKey); open.resolve(false) }
+    }
+  })
+}
+
+/** The consent page answered. Only that page may say so. */
+function isConsentPage(sender) {
+  return sender?.id === chrome.runtime.id
+    && typeof sender.url === 'string'
+    && sender.url.startsWith(chrome.runtime.getURL('src/consent.html'))
+}
+
+export async function recordConsent(sender, msg) {
+  if (!isConsentPage(sender)) return { ok: false, reason: 'not the consent page' }
+  const docKey = typeof msg.doc === 'string' ? msg.doc : ''
+  const allow = msg.allow === true
+  if (allow && docKey) {
+    const allowed = await allowedDocs()
+    allowed[docKey] = { host: String(msg.host ?? ''), at: Date.now() }
+    await chrome.storage.local.set({ [ALLOWED_KEY]: allowed })
+  }
+  const open = consentPending.get(docKey)
+  if (open && open.nonce === msg.nonce) { consentPending.delete(docKey); open.resolve(allow) }
+  return { ok: true }
+}
+
+/**
+ * The options page at a section. `openOptionsPage()` cannot carry a hash,
+ * and opening the library four times should not leave four copies of it —
+ * so an open library tab is focused and sent to the hash; otherwise one is
+ * created at it.
+ */
+export async function openSettings(hash) {
+  const base = chrome.runtime.getURL('src/home.html')
+  const [open] = await chrome.tabs.query({ url: `${base}*` }).catch(() => [])
+  if (open) {
+    await chrome.tabs.update(open.id, { active: true, url: `${base}${hash}` })
+    await chrome.windows.update(open.windowId, { focused: true }).catch(() => {})
+  } else {
+    await chrome.tabs.create({ url: `${base}${hash}` })
+  }
+}
+
+/** `assistant.describe` / `assistant.check` / `assistant.settings.open`, over sendMessage. */
+export async function assistantOp(op, sender, payload) {
+  const env = await assistantEnv()
+  const cfg = await loadAssistantConfig()
+  if (op === 'assistant.describe') return describeAssistant(cfg, env)
+  if (op === 'assistant.models') return { ok: true, models: await listRoutes(await storageGet(CONFIG_KEY), env) }
+  if (op === 'assistant.select') {
+    const r = await selectRoute(await storageGet(CONFIG_KEY), payload, env)
+    if (!r.ok) return r
+    await chrome.storage.local.set({ [CONFIG_KEY]: r.store })
+    return { ok: true }
+  }
+  if (op === 'assistant.settings.open') {
+    await openSettings(payload?.section === 'assistant' ? '#assistant' : '#settings')
+    return { ok: true }
+  }
+  if (op === 'assistant.check') {
+    const docKey = docKeyOf(sender)
+    if (!docKey) return { ok: false, reason: 'not a document' }
+    const d = await describeAssistant(cfg, env)
+    if (!d.configured) return { ok: false, reason: t('asstNotConfigured') }
+    // The page gives this 5s; a person reading a prompt takes longer. Ask,
+    // wait a little, and if the answer is still pending say so — the next
+    // check after they answer goes straight through.
+    // Machine codes beside the words: the page keys on `code` (re-runs the
+    // check when the document regains focus; shows a refusal card), never
+    // on localized text.
+    const allowed = await ensureConsent(docKey, d.host, d.model, 3500)
+    if (allowed === null) return { ok: false, code: 'consent-pending', reason: t('asstWaitConsent') }
+    if (!allowed) return { ok: false, code: 'consent-denied', reason: t('asstDenied') }
+    return checkAssistant(cfg, env)
+  }
+  return { ok: false, reason: 'unknown op' }
+}
+
+/**
+ * A streaming turn. One port per turn, opened by relay.js for the page:
+ * `res` and then `evt` frames flow back over it, an abort arrives on it, and
+ * the tab closing disconnects it — which is what binds a request to the tab
+ * that made it. Nothing here can reach a stream another tab started.
+ *
+ * Every message on the port also resets the worker's idle timer, which a
+ * long reply read through fetch alone would not.
+ */
+export function serveAssistantPort(port) {
+  const docKey = docKeyOf(port.sender)
+  let ac = null
+  let alive = true
+  // The page's answers the turn is waiting for, by op: `assistant.document`
+  // (the material) and `assistant.check` (a dry run of a patch).
+  const awaiting = new Map()
+  const post = (m) => { if (alive) { try { port.postMessage(m) } catch { alive = false } } }
+  port.onDisconnect.addListener(() => { alive = false; ac?.abort(); for (const r of awaiting.values()) r(null); awaiting.clear() })
+  /** Ask the page over this port and wait for its answer to the same op and turn id. */
+  const askPage = (kind, extra, timeoutMs = 15000) => new Promise((resolve) => {
+    awaiting.set(kind, resolve)
+    post({ dir: 'evt', id: ac?.id, kind, ...extra })
+    setTimeout(() => { if (awaiting.get(kind) === resolve) { awaiting.delete(kind); resolve(null) } }, timeoutMs)
+  })
+  port.onMessage.addListener((m) => {
+    if (m?.op === 'assistant.abort') { ac?.abort(); return }
+    if (m?.op === 'assistant.document' || m?.op === 'assistant.check') {
+      const r = awaiting.get(m.op)
+      if (r && typeof m.id === 'string' && ac?.id === m.id) { awaiting.delete(m.op); r(m.payload) }
+      return
+    }
+    if (m?.op !== 'assistant.send' && m?.op !== 'assistant.turn') return
+    const id = m.id
+    const respond = (result) => post({ dir: 'res', id, result })
+    if (typeof id !== 'string' || !id.startsWith(ID_PREFIX)) return respond({ ok: false, reason: 'bad id' })
+    if (!docKey) return respond({ ok: false, reason: 'not a document' })
+    if (ac) return respond({ ok: false, reason: 'busy' })
+    const isTurn = m.op === 'assistant.turn'
+    const messages = isTurn ? null : validMessages(m.payload)
+    const turn = isTurn ? validTurn(m.payload) : null
+    if (!messages && !turn) return respond({ ok: false, reason: 'bad request' })
+    const schema = isTurn ? undefined : validSchema(m.payload)
+    ac = new AbortController()
+    ac.id = id
+    void (async () => {
+      const env = await assistantEnv()
+      const cfg = await loadAssistantConfig()
+      const d = await describeAssistant(cfg, env)
+      if (!d.configured) return respond({ ok: false, reason: t('asstNotConfigured') })
+      // Accepted. Consent may take as long as the person needs: the page's
+      // request timeout covers only this reply, not the stream. Nothing of
+      // the document is asked for until the answer is yes.
+      respond({ ok: true })
+      const emit = (kind, extra) => post({ dir: 'evt', id, kind, ...extra })
+      if (!(await ensureConsent(docKey, d.host, d.model))) return emit('assistant.error', { code: 'consent-denied', reason: t('asstDenied') })
+      if (ac.signal.aborted) return
+      if (!isTurn) return runAssistant(cfg, messages, emit, ac.signal, env, schema)
+      // The turn: the deck is pulled from the page only now, over this port.
+      const io = {
+        document: () => askPage('assistant.document', {}),
+        check: async (ops) => validCheck(await askPage('assistant.check', { ops })),
+      }
+      await runTurn(cfg, turn, io, emit, ac.signal, env)
+    })()
+  })
+}
+
+// ---------------------------------------------------------------- the offer
+//
+// A ⌘S that nothing covers is the moment to ask, once: the page's `claim`
+// gets { ok:false, reason:'setup', token } while a small window
+// (src/filegrant.html) asks the person to pick the file; the page then waits
+// on `claim { token }` as long as the window is open. In memory only, like
+// the assistant's consent: an eviction loses one pending save (the page falls
+// to its picker), and the window's own storing survives regardless.
+const offers = new Map() // token → { path, resolve, promise }
+
+async function offerFileGrant(path, lapsed) {
+  const open = [...offers.values()].find((o) => o.path === path)
+  if (open) return open
+  const token = crypto.randomUUID()
+  let resolve
+  const promise = new Promise((r) => { resolve = r })
+  const entry = { path, resolve, promise, token }
+  offers.set(token, entry)
+  const url = new URL(chrome.runtime.getURL('src/filegrant.html'))
+  url.searchParams.set('path', path)
+  url.searchParams.set('token', token)
+  if (lapsed) url.searchParams.set('lapsed', '1')
+  chrome.windows.create({ url: url.href, type: 'popup', width: 480, height: 320, focused: true })
+    .catch(() => { offers.delete(token); resolve(false) })
+  return entry
+}
+
+/**
+ * How a document at this url would save — for the extension's OWN pages
+ * (the side panel showing the active tab's state). Only they may name a url:
+ * a content script's answer comes from its browser-stamped sender.
+ */
+async function saveStatus(sender, url) {
+  const ours = sender?.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''))
+  if (!ours || typeof url !== 'string') return { ok: false, reason: 'not an extension page' }
+  const r = await resolveAny({ url, frameId: 0 })
+  return r.ok ? { ok: true, via: r.via, name: r.name } : { ok: false, reason: r.reason, path: pathFromSender({ url, frameId: 0 }) }
+}
+
+/**
+ * A badge on the toolbar icon FOR THIS TAB when the document in it cannot
+ * save in place yet — the cue that the side panel has a button for that.
+ * Per tab, so it says nothing about other documents.
+ */
+async function badgeTab(tabId, sender) {
+  if (tabId == null) return
+  let covered = false
+  try { covered = (await resolveAny(sender)).ok } catch { covered = false }
+  await setTabBadge(tabId, !covered)
+}
+
+/** `claim` with the offer: what the page's first phase gets. */
+export async function claimOrOffer(sender, payload, deps) {
+  // second phase: the page waiting on a window it was told about
+  if (typeof payload?.token === 'string') {
+    const o = offers.get(payload.token)
+    if (!o) return { ok: false, reason: 'no such offer' }
+    const chosen = await o.promise
+    if (!chosen) return { ok: false, reason: 'declined' }
+    const r = await resolveAny(sender, deps)
+    return r.ok ? { ok: true, name: r.name, via: r.via } : { ok: false, reason: r.reason }
+  }
+  const r = await resolveAny(sender, deps)
+  if (r.ok) return { ok: true, name: r.name, via: r.via }
+  const path = pathFromSender(sender)
+  if (!path || !(await isFileAccessOn())) return { ok: false, reason: r.reason }
+  if (await declined(path)) return { ok: false, reason: r.reason }
+  const o = await offerFileGrant(path, r.reason === 'file grant needs renewing')
+  return { ok: false, reason: 'setup', token: o.token }
+}
+
+const isFileAccessOn = () => new Promise((res) => {
+  try { chrome.extension.isAllowedFileSchemeAccess((v) => res(!!v)) } catch { res(false) }
+})
+
+/** The offer window's port: its disconnect is the window closing without an answer. */
+function watchOfferWindow(port) {
+  const ours = port.sender?.id === chrome.runtime.id && typeof port.sender.url === 'string' && port.sender.url.startsWith(chrome.runtime.getURL('src/filegrant.html'))
+  if (!ours) { port.disconnect(); return }
+  const token = port.name.slice('filegrant:'.length)
+  port.onDisconnect.addListener(() => {
+    const o = offers.get(token)
+    if (o) { offers.delete(token); o.resolve(false) }
+  })
+}
+
+/** The window answered (it stored the grant itself, or recorded the decline). */
+function offerAnswered(sender, msg) {
+  const ours = sender?.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL('src/filegrant.html'))
+  if (!ours) return { ok: false, reason: 'not the offer window' }
+  const o = offers.get(msg.token)
+  if (o) { offers.delete(msg.token); o.resolve(msg.chosen === true) }
+  return { ok: true }
+}
+
+// ---------------------------------------------------------------- save as
+//
+// "Save a copy…" and exports (saveas.js): the page's picker call, answered in
+// the extension's own window so it can open beside the document. The path is
+// the sender's, top frame only; the window is the only one that may answer.
+
+const saveasWaiting = new Map() // token → resolve(true|false)
+const saveasPaths = new Set() // documents with a save-as window open
+const SAVEAS_WAIT_MS = 170000
+
+/** The sender's own path — top frame only, like every store and save op. */
+const topPath = (sender) => (sender?.frameId === 0 ? pathFromSender(sender) : null)
+
+export function saveasDeps(sender, deps = {}) {
+  return {
+    db: deps.db ?? saveas.idb(),
+    now: deps.now ?? (() => Date.now()),
+    token: deps.token ?? (() => crypto.randomUUID()),
+    // the document's OWN folder, when a folder grant reaches it by route
+    folderOf: deps.folderOf ?? (async () => {
+      const r = await resolve(sender)
+      return r.ok && Array.isArray(r.rel) ? parentOf(r.dir, r.rel) : null
+    }),
+    // the document's own file, so "never the original" compares FILES, not names
+    docHandle: deps.docHandle ?? (async () => {
+      const r = await resolve(sender)
+      return r.ok ? r.handle : null
+    }),
+    busy: deps.busy ?? ((path) => saveasPaths.has(path)),
+    openWindow: deps.openWindow ?? ((token, path) => new Promise((resolve) => {
+      saveasPaths.add(path)
+      const done = (v) => { saveasPaths.delete(path); resolve(v) }
+      saveasWaiting.set(token, done)
+      const url = new URL(chrome.runtime.getURL('src/saveas.html'))
+      url.searchParams.set('token', token)
+      chrome.windows.create({ url: url.href, type: 'popup', width: 480, height: 330, focused: true })
+        .catch(() => { saveasWaiting.delete(token); done(null) })
+      setTimeout(() => { if (saveasWaiting.get(token) === done) { saveasWaiting.delete(token); done(false) } }, SAVEAS_WAIT_MS)
+    })),
+  }
+}
+
+const isSaveasWindow = (sender) => sender?.id === chrome.runtime.id && typeof sender.url === 'string'
+  && sender.url.startsWith(chrome.runtime.getURL('src/saveas.html'))
+
+function saveasAnswered(sender, msg) {
+  if (!isSaveasWindow(sender)) return { ok: false, reason: 'not the save-as window' }
+  const done = saveasWaiting.get(msg.token)
+  if (done) { saveasWaiting.delete(msg.token); done(msg.chosen === true) }
+  return { ok: true }
+}
+
+function watchSaveasWindow(port) {
+  if (!isSaveasWindow(port.sender)) { port.disconnect(); return }
+  const token = port.name.slice('saveas:'.length)
+  port.onDisconnect.addListener(() => {
+    const done = saveasWaiting.get(token)
+    if (done) { saveasWaiting.delete(token); done(false) }
+  })
+}
+
+// `chrome` is absent when this module is loaded by the test rig, which imports
+// the logic above and never needs the listener.
+if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    // `hello` is a claim by another name: it resolves the sender against the
+    // grants, which is what teaches `db.learnPrefix` where that folder lives,
+    // and writes nothing. Opening a document is the moment to learn its folder
+    // — waiting for a save meant a fresh install listed documents it could not
+    // open.
+    // Every opened document is remembered by path (db.js noteOpened) so the
+    // library lists it whether or not any grant or scan covers it.
+    if (msg?.op === 'hello') { const p = pathFromSender(sender); if (p) { void noteOpened(p).catch(() => {}); void badgeTab(sender.tab?.id, sender) } }
+    const run = msg?.op === 'hello' ? claim(sender)
+      : msg?.op === 'claim' ? claimOrOffer(sender, msg.payload)
+      : msg?.op === 'filegrant.answered' ? Promise.resolve(offerAnswered(sender, msg))
+      : msg?.op === 'save.status' ? saveStatus(sender, msg.url)
+      : msg?.op === 'save.rebadge' ? (async () => { const tabs = await chrome.tabs.query({ url: 'file:///*.bento.html' }).catch(() => []); for (const tb of tabs) await badgeTab(tb.id, { url: tb.url, frameId: 0, tab: tb }); return { ok: true } })()
+      : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '').then((r) => { if (r?.ok) noteSaved(sender, msg.payload?.text ?? ''); return r })
+      : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
+      : msg?.op === 'assistant.consent' ? recordConsent(sender, msg)
+      : typeof msg?.op === 'string' && msg.op.startsWith('assistant.') ? assistantOp(msg.op, sender, msg.payload)
+      : msg?.op === 'saveas' ? saveas.ask(topPath(sender), msg.payload, saveasDeps(sender))
+      : msg?.op === 'saveas.write' ? saveas.write(topPath(sender), msg.payload, saveasDeps(sender))
+      : msg?.op === 'saveas.answered' ? Promise.resolve(saveasAnswered(sender, msg))
+      : msg?.op === 'saveas.drop' ? saveas.drop(topPath(sender), msg.payload, saveasDeps(sender))
+      : typeof msg?.op === 'string' && msg.op.startsWith('store.') ? storeOp(msg.op, sender, msg.payload)
+      : Promise.resolve({ ok: false, reason: 'unknown op' })
+    run.then((r) => {
+      sendResponse(r)
+      // A lapsed grant is otherwise invisible until a save has ALREADY fallen
+      // back to a picker. Badging the toolbar icon moves that discovery onto
+      // the thing the fix hangs off, and does it whether the save succeeded or
+      // not — one folder can lapse while another still works.
+      void reportLapsed()
+    }, (e) => sendResponse({ ok: false, reason: String(e?.message || e) }))
+    return true // async response
+  })
+
+  chrome.runtime.onConnect.addListener((port) => {
+    if (port.name === PORT) serveAssistantPort(port)
+    else if (port.name.startsWith('bento-consent:')) watchConsentWindow(port)
+    else if (port.name.startsWith('filegrant:')) watchOfferWindow(port)
+    else if (port.name.startsWith('saveas:')) watchSaveasWindow(port)
+  })
+
+  // The worker restarts constantly; the badge has to survive that, and startup
+  // is also when a browser restart would have dropped a grant — so it is the
+  // one moment where telling the user is worth an interruption, since it is
+  // before they have tried to save anything.
+  chrome.runtime.onStartup?.addListener(() => void reportLapsed())
+  chrome.runtime.onInstalled?.addListener(() => void reportLapsed())
+
+  // Whether an unpacked install is behind. Startup only, plus a manual check in
+  // Settings: a browser session is the natural granularity, and a daily alarm
+  // would cost the `alarms` permission for a courtesy. Store installs are never
+  // asked — `checkForUpdate` returns immediately for them.
+  chrome.runtime.onStartup?.addListener(() => void checkForUpdate())
+  chrome.runtime.onStartup?.addListener(() => { void saveas.gc(saveasDeps(null)).catch(() => {}) })
+  // DocStore's sweep: partitions of files that are gone or untouched for a
+  // month, and transfers that never committed. Once per browser session.
+  chrome.runtime.onStartup?.addListener(() => { void docstore.gc(docstoreDeps()).catch(() => {}) })
+  chrome.runtime.onInstalled?.addListener(() => void checkForUpdate())
+  void reportLapsed()
+
+  /**
+   * The toolbar icon opens the LIBRARY, not a popup.
+   *
+   * Two surfaces, two jobs. The page is for browsing and managing — folders,
+   * search, rename, settings — and wants room and a tab that stays. The panel
+   * is for switching documents while you are working in one, and wants to sit
+   * beside that document rather than vanish when you click into it.
+   *
+   * `onClicked` only fires when no `default_popup` is declared: setting one
+   * makes the click open the popup and this listener never run. So the manifest
+   * has no popup, and the panel is reached by its own gestures below.
+   *
+   * An existing tab is FOCUSED rather than duplicated. Opening the library four
+   * times should not leave four copies of it.
+   */
+  chrome.action.onClicked.addListener(async () => {
+    const url = chrome.runtime.getURL('src/home.html')
+    const [open] = await chrome.tabs.query({ url })
+    if (open) {
+      await chrome.tabs.update(open.id, { active: true })
+      await chrome.windows.update(open.windowId, { focused: true })
+    } else {
+      await chrome.tabs.create({ url })
+    }
+  })
+
+  /**
+   * The panel, from a keyboard shortcut.
+   *
+   * `sidePanel.open()` must be called SYNCHRONOUSLY inside the gesture that
+   * triggered it — Chrome 116+, which is this extension's floor exactly. An
+   * `await` before it, even a trivial one, loses the gesture and the call is
+   * refused. So nothing is read first; the panel decides what to show once it
+   * is up.
+   */
+  chrome.commands?.onCommand.addListener((command, tab) => {
+    if (command !== 'open-panel') return
+    chrome.sidePanel.open(tab?.windowId != null
+      ? { windowId: tab.windowId }
+      : { windowId: chrome.windows.WINDOW_ID_CURRENT })
+  })
+
+  // And from a right-click inside a document, which is where wanting it
+  // actually happens. Same synchronous rule.
+  /**
+   * A fresh install opens the welcome view once.
+   *
+   * `reason === 'install'` only — an UPDATE must not steal a tab, and a browser
+   * that reloads an unpacked extension fires this every time. The first
+   * question after installing is "what did I just install and what does it need
+   * from me", and the toolbar icon answers none of that until someone clicks it.
+   */
+  chrome.runtime.onInstalled.addListener(({ reason }) => {
+    if (reason !== 'install') return
+    void chrome.tabs.create({ url: `${chrome.runtime.getURL('src/home.html')}#welcome` })
+  })
+
+  chrome.runtime.onInstalled.addListener(() => {
+    chrome.contextMenus?.removeAll(() => {
+      chrome.contextMenus.create({
+        id: 'bento-home-panel',
+        title: t('ctxOpenPanel'),
+        contexts: ['page'],
+        documentUrlPatterns: ['file:///*'],
+      })
+    })
+  })
+  chrome.contextMenus?.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === 'bento-home-panel' && tab?.windowId != null) {
+      chrome.sidePanel.open({ windowId: tab.windowId })
+    }
+  })
+
+  // The notification's only button, and clicking the notification body itself —
+  // both mean "fix it", so both lead to the same place.
+  chrome.notifications?.onButtonClicked?.addListener((id) => {
+    if (id === 'bento-home-lapsed') void openReconnectUi()
+  })
+  chrome.notifications?.onClicked?.addListener((id) => {
+    if (id === 'bento-home-lapsed') void openReconnectUi()
+  })
+}

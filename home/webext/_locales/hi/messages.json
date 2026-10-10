@@ -1,0 +1,851 @@
+{
+  "appDesc": {
+    "message": "किसी Bento दस्तावेज़ को उसी फ़ाइल में वापस सहेजें जिसे आपने खोला था, बिना जगह पूछे।"
+  },
+  "navAll": {
+    "message": "सभी दस्तावेज़"
+  },
+  "navFolders": {
+    "message": "फ़ोल्डर"
+  },
+  "navHelp": {
+    "message": "मदद और परिचय"
+  },
+  "navSettings": {
+    "message": "सेटिंग"
+  },
+  "addFolder": {
+    "message": "+ फ़ोल्डर जोड़ें…"
+  },
+  "searchDocs": {
+    "message": "दस्तावेज़ खोजें"
+  },
+  "searchDocsSlash": {
+    "message": "दस्तावेज़ खोजें   /"
+  },
+  "sortTitle": {
+    "message": "क्रमबद्ध करें"
+  },
+  "sortRecent": {
+    "message": "हाल में बदले गए"
+  },
+  "sortName": {
+    "message": "नाम"
+  },
+  "sortFolder": {
+    "message": "फ़ोल्डर"
+  },
+  "newDocument": {
+    "message": "+ नया दस्तावेज़"
+  },
+  "browseAll": {
+    "message": "सभी देखें"
+  },
+  "reconnectFolders": {
+    "message": "फ़ोल्डर फिर से जोड़ें"
+  },
+  "primeIntro": {
+    "message": "Chrome अभी पूछेगा। बीच वाला विकल्प चुनें:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — एक फ़ोल्डर को फिर से जोड़ना है"
+  },
+  "notifyLapsedTitle": {
+    "message": "bento/home को फिर से जोड़ना है"
+  },
+  "notifyLapsedBody": {
+    "message": "Chrome ने एक फ़ोल्डर की अनुमति वापस ले ली। जब तक वह बहाल नहीं होती, हर बार सहेजने पर पूछा जाएगा कि फ़ाइल कहाँ रखनी है।"
+  },
+  "reconnect": {
+    "message": "फिर से जोड़ें"
+  },
+  "ctxOpenPanel": {
+    "message": "bento/home पैनल खोलें"
+  },
+  "panelEmpty": {
+    "message": "आपके फ़ोल्डरों में अभी कोई Bento दस्तावेज़ नहीं है।"
+  },
+  "noMatches": {
+    "message": "“$1” से कुछ भी मेल नहीं खाता"
+  },
+  "rowUnplacedTip": {
+    "message": "$1 का कोई एक दस्तावेज़ Finder से एक बार खोल लें, फिर उस फ़ोल्डर की हर चीज़ यहीं से खुलने लगेगी।"
+  },
+  "encrypted": {
+    "message": "पासवर्ड से सुरक्षित"
+  },
+  "notSavedYet": {
+    "message": "अभी सहेजा नहीं गया"
+  },
+  "fileAccessOffShort": {
+    "message": "स्थानीय फ़ाइल पहुँच बंद है"
+  },
+  "noFoldersYet": {
+    "message": "अभी कोई फ़ोल्डर नहीं"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 फ़ोल्डर को फिर से जोड़ना है"
+  },
+  "statusOneFolder": {
+    "message": "$1 फ़ोल्डर · वहीं पर सहेजता है"
+  },
+  "statusFolders": {
+    "message": "$1 फ़ोल्डर · वहीं पर सहेजते हैं"
+  },
+  "renewNotOffered": {
+    "message": "Chrome ने उसे बहाल करने की पेशकश नहीं की"
+  },
+  "renewTryAfterRestart": {
+    "message": "Chrome को फिर से चालू करके दोबारा कोशिश करें"
+  },
+  "fetchingLatest": {
+    "message": "नवीनतम Bento लाया जा रहा है…"
+  },
+  "created": {
+    "message": "$1 बनाया गया"
+  },
+  "panelUnplaced": {
+    "message": "<b>$1</b>$2 पढ़ा तो जा सकता है पर अभी खोला नहीं जा सकता — Chrome किसी एक्सटेंशन को यह नहीं बताता कि फ़ोल्डर डिस्क पर कहाँ है। <b>सभी देखें</b> उन्हें एक ही क्लिक में ढूँढ़ लेता है।"
+  },
+  "andMore": {
+    "message": " और $1 अन्य"
+  },
+  "agoJustNow": {
+    "message": "अभी-अभी"
+  },
+  "agoMinutes": {
+    "message": "$1 मिनट पहले"
+  },
+  "agoHour": {
+    "message": "$1 घंटा पहले"
+  },
+  "agoHours": {
+    "message": "$1 घंटे पहले"
+  },
+  "agoDay": {
+    "message": "$1 दिन पहले"
+  },
+  "agoDays": {
+    "message": "$1 दिन पहले"
+  },
+  "searchScope": {
+    "message": "खोज शीर्षक, फ़ाइल नाम, फ़ोल्डर और दस्तावेज़ों के भीतर के शब्दों को देखती है।"
+  },
+  "folderEmpty": {
+    "message": "इस फ़ोल्डर में अभी कुछ नहीं है"
+  },
+  "folderEmptyHint": {
+    "message": "<b>+ नया दस्तावेज़</b> यहाँ एक नया रख देता है।"
+  },
+  "cardUnplacedTip": {
+    "message": "bento/home को अभी नहीं पता कि $1 डिस्क पर कहाँ है। “मेरे फ़ोल्डर ढूँढ़ें” का उपयोग करें, या उसमें का कोई दस्तावेज़ Finder से एक बार खोलें।"
+  },
+  "cardRenamedTip": {
+    "message": "$1 दूसरे नाम वाला एक Bento दस्तावेज़ है। यह यहीं से खुलता है, पर सहेजने पर जगह पूछी जाएगी — वहीं पर सहेजना केवल .bento.html से समाप्त होने वाली फ़ाइलों को पहचानता है।"
+  },
+  "badgeRenamed": {
+    "message": ".bento.html के बजाय .html नाम है — यह यहीं से खुलता है, पर सहेजने पर जगह पूछी जाएगी।"
+  },
+  "menuOpen": {
+    "message": "खोलें"
+  },
+  "menuDuplicate": {
+    "message": "प्रतिलिपि बनाएँ"
+  },
+  "menuRename": {
+    "message": "नाम बदलें…"
+  },
+  "menuCopyPath": {
+    "message": "पथ कॉपी करें"
+  },
+  "duplicatedAs": {
+    "message": "$1 के रूप में प्रतिलिपि बनी"
+  },
+  "renamePrompt": {
+    "message": "दस्तावेज़ का नाम बदलें"
+  },
+  "renamedTo": {
+    "message": "नाम बदलकर $1 किया गया"
+  },
+  "pathCopied": {
+    "message": "पथ कॉपी हो गया"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — अभी खोला नहीं गया"
+  },
+  "setupTitle": {
+    "message": "दो काम और आप तैयार"
+  },
+  "setupLead": {
+    "message": "इसके बाद, डबल-क्लिक से खोले गए दस्तावेज़ में ⌘S सीधे उसी फ़ाइल में लिखता है — जगह कभी नहीं पूछी जाएगी।"
+  },
+  "chooseFolder": {
+    "message": "फ़ोल्डर चुनें…"
+  },
+  "setupStep1": {
+    "message": "वह फ़ोल्डर चुनें जिसमें आपके दस्तावेज़ रहते हैं"
+  },
+  "setupStep1Note": {
+    "message": "आमतौर पर एक बड़ा फ़ोल्डर काफ़ी है — उसके भीतर की हर चीज़ इसमें आ जाती है।"
+  },
+  "setupStep2": {
+    "message": "स्थानीय फ़ाइल पहुँच चालू करें"
+  },
+  "setupStep2Note": {
+    "message": "<code>chrome://extensions</code> → bento/home → <b>फ़ाइल URL तक पहुँच की अनुमति दें</b>। Chrome किसी एक्सटेंशन को इसे स्वयं चालू करने नहीं देता।"
+  },
+  "setupUpgradeNote": {
+    "message": "<b>अपग्रेड किया और सोचा कि आपके फ़ोल्डर यहीं होंगे?</b> अनपैक्ड एक्सटेंशन उसके फ़ोल्डर पथ से पहचाना जाता है, इसलिए किसी दूसरे फ़ोल्डर से लोड की गई नई प्रति एक अलग एक्सटेंशन है। आपके फ़ोल्डर अब भी पुराने वाले से जुड़े हैं। इसके बजाय मूल फ़ोल्डर की फ़ाइलें बदलें और <code>chrome://extensions</code> में <b>पुनः लोड करें</b> दबाएँ।"
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>स्थानीय फ़ाइल पहुँच बंद है</b> — जब तक यह चालू नहीं होती, कुछ भी वहीं पर नहीं सहेजा जाएगा। <code>chrome://extensions</code> में <b>फ़ाइल URL तक पहुँच की अनुमति दें</b> चालू करें।"
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 फ़ोल्डर को फिर से जोड़ना है।</b> <b>सेटिंग</b> में उसे फिर से जोड़ें और <b>हर बार अनुमति दें</b> चुनें — यही एकमात्र विकल्प है जो टिकता है।"
+  },
+  "noticeUnplaced": {
+    "message": "<b>$1</b> सूची में दिख तो सकता है पर अभी खोला नहीं जा सकता — Chrome किसी एक्सटेंशन को कभी नहीं बताता कि फ़ोल्डर डिस्क पर कहाँ है।"
+  },
+  "findFolders": {
+    "message": "मेरे फ़ोल्डर ढूँढ़ें"
+  },
+  "looking": {
+    "message": "खोजा जा रहा है…"
+  },
+  "findDeclined": {
+    "message": "<b>कोई बात नहीं।</b> इसके बजाय $1 का कोई दस्तावेज़ Finder से एक बार खोल लें — यह पेज भाँप लेगा।"
+  },
+  "foundFolder": {
+    "message": "$1 फ़ोल्डर मिला"
+  },
+  "foundFolders": {
+    "message": "$1 फ़ोल्डर मिले"
+  },
+  "foundNothing": {
+    "message": "इतिहास में अभी कुछ नहीं — Finder से एक दस्तावेज़ खोलें"
+  },
+  "setFoldersSub": {
+    "message": "इनमें रखे दस्तावेज़ सीधे उसी फ़ाइल में सहेजे जाते हैं, जगह पूछे बिना। एक फ़ोल्डर उसके भीतर की हर चीज़ को समेटता है।"
+  },
+  "noneYet": {
+    "message": "अभी कोई नहीं।"
+  },
+  "savesInPlace": {
+    "message": "वहीं पर सहेजता है"
+  },
+  "needsReconnecting": {
+    "message": "फिर से जोड़ना है"
+  },
+  "reconnectTip": {
+    "message": "Chrome इस फ़ोल्डर को बहाल करने के लिए पूछेगा। “अनुमति न दें” उसे छोड़ देता है, और उसके बाद Chrome दोबारा पूछने से पहले कम से कम एक बार पुनःआरंभ की प्रतीक्षा करता है।"
+  },
+  "remove": {
+    "message": "हटाएँ"
+  },
+  "removeTip": {
+    "message": "पहुँच वापस ले लेता है। Chrome अनुमति याद रख सकता है, इसलिए फ़ोल्डर दोबारा जोड़ने पर शायद कुछ न पूछा जाए।"
+  },
+  "setAccessTitle": {
+    "message": "स्थानीय फ़ाइल पहुँच"
+  },
+  "setAccessSub": {
+    "message": "Chrome किसी एक्सटेंशन को इसे स्वयं चालू करने नहीं देता, और इसके बिना कुछ भी काम नहीं करता।"
+  },
+  "stateOn": {
+    "message": "चालू"
+  },
+  "stateOff": {
+    "message": "बंद"
+  },
+  "stateUnknown": {
+    "message": "अज्ञात"
+  },
+  "accessOnNote": {
+    "message": "bento/home डिस्क से खोले गए पेज पढ़ सकता है।"
+  },
+  "accessOffNote": {
+    "message": "chrome://extensions खोलें, bento/home ढूँढ़ें, “फ़ाइल URL तक पहुँच की अनुमति दें” चालू करें।"
+  },
+  "accessUnknownNote": {
+    "message": "यह ब्राउज़र इसकी जानकारी नहीं देता। यदि सहेजने पर अब भी पूछा जाए, तो chrome://extensions में देखें।"
+  },
+  "setVersionTitle": {
+    "message": "संस्करण"
+  },
+  "setVersionUnpacked": {
+    "message": "यह प्रति अनपैक्ड रूप में लोड की गई थी, इसलिए Chrome इसे कभी अपडेट नहीं करेगा।"
+  },
+  "setVersionStore": {
+    "message": "स्टोर से इंस्टॉल किया गया, इसलिए यह स्वयं अपडेट होता है।"
+  },
+  "versionAvailable": {
+    "message": "$1 उपलब्ध है"
+  },
+  "versionUpToDate": {
+    "message": "पिछली जाँच के अनुसार नवीनतम"
+  },
+  "versionManaged": {
+    "message": "ब्राउज़र इसे नवीनतम रखता है"
+  },
+  "getIt": {
+    "message": "प्राप्त करें"
+  },
+  "checkNow": {
+    "message": "अभी जाँचें"
+  },
+  "autoCheckPref": {
+    "message": "<b>ब्राउज़र शुरू होने पर नया संस्करण जाँचें।</b><br>एक स्थिर फ़ाइल के लिए bento.page को एक अनुरोध। यह न कोई पहचानकर्ता भेजता है, न संस्करण संख्या, और न आपके दस्तावेज़ों के बारे में कुछ — तुलना यहीं होती है। इसे बंद कर दें तो कभी कोई अनुरोध नहीं जाएगा; <b>अभी जाँचें</b> तब भी काम करता है।"
+  },
+  "expectedSha": {
+    "message": "zip का अपेक्षित SHA-256: $1"
+  },
+  "setReachTitle": {
+    "message": "यह कहाँ तक पहुँच सकता है"
+  },
+  "setReachSub": {
+    "message": "केवल ऊपर के फ़ोल्डर, और केवल वही फ़ाइल जिससे कोई पेज वास्तव में खोला गया था। कुछ भी अपलोड नहीं होता और कहीं और कुछ भी नहीं पढ़ा जाता।"
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 उपलब्ध है।</b> यह प्रति अनपैक्ड रूप में लोड की गई थी, इसलिए Chrome इसे कभी अपडेट नहीं करेगा।"
+  },
+  "updateStep1": {
+    "message": "इसे GitHub से डाउनलोड करें"
+  },
+  "updateStep2": {
+    "message": "फ़ाइलें <b>उसी फ़ोल्डर में</b> बदलें <b>जिससे आपने इसे लोड किया था</b> — वही फ़ोल्डर, वरना Chrome इसे अलग एक्सटेंशन मानेगा और दी गई अनुमतियों वाले फ़ोल्डर साथ नहीं आएँगे"
+  },
+  "updateStep3": {
+    "message": "<code>chrome://extensions</code> खोलें और bento/home पर <b>पुनः लोड करें</b> दबाएँ"
+  },
+  "fetchingApp": {
+    "message": "$1 लाया जा रहा है…"
+  },
+  "createdIn": {
+    "message": "$3 में $1 ($2) बनाया गया"
+  },
+  "intoFolder": {
+    "message": "$1 में"
+  },
+  "helpWhatTitle": {
+    "message": "bento/home क्या करता है"
+  },
+  "helpWhatSub": {
+    "message": "एक Bento दस्तावेज़ एक ही HTML फ़ाइल है जो अपना संपादक साथ लिए चलती है। सीधे डिस्क से खोलने पर ब्राउज़र उसे स्वयं में वापस लिखने नहीं देता — इसलिए हर बार सहेजने पर पूछा जाता है कि कहाँ रखें। bento/home वही सवाल हटा देता है।"
+  },
+  "tourSaveTitle": {
+    "message": "वहीं पर सहेजें"
+  },
+  "tourSaveBody": {
+    "message": "⌘S बिना किसी डायलॉग के सीधे उसी फ़ाइल में लिखता है जिसे आपने खोला था। स्वतः सहेजना और वहीं पर होने वाले अपडेट भी उसी रास्ते जाते हैं।"
+  },
+  "tourFindTitle": {
+    "message": "अपने दस्तावेज़ ढूँढ़ें"
+  },
+  "tourFindBody": {
+    "message": "आपके फ़ोल्डरों का हर Bento दस्तावेज़, उसके असली शीर्षक और पहले पन्ने की तस्वीर के साथ। खोज उनके भीतर लिखी बातों तक जाती है।"
+  },
+  "tourSwitchTitle": {
+    "message": "काम करते-करते बदलें"
+  },
+  "tourSwitchBody": {
+    "message": "बगल में पैनल के लिए <kbd>Alt</kbd>+<kbd>B</kbd> दबाएँ, या दस्तावेज़ के भीतर दायाँ-क्लिक करें।"
+  },
+  "tourNewTitle": {
+    "message": "नया बनाएँ"
+  },
+  "tourNewBody": {
+    "message": "<b>+ नया दस्तावेज़</b> Slides, Spaces या Dash का मौजूदा रिलीज़ लाकर आपके फ़ोल्डर में एक नया दस्तावेज़ रख देता है।"
+  },
+  "helpNeedsTitle": {
+    "message": "इसे आपसे क्या चाहिए"
+  },
+  "helpNeedsSub": {
+    "message": "दो चीज़ें, और दोनों ही इस एक्सटेंशन के बस की नहीं हैं।"
+  },
+  "helpFolder": {
+    "message": "एक फ़ोल्डर"
+  },
+  "helpFolderGranted": {
+    "message": "$1 की अनुमति है — उनके भीतर के दस्तावेज़ वहीं पर सहेजे जाते हैं"
+  },
+  "helpFolderNone": {
+    "message": "अभी चुना नहीं गया। एक बड़ा फ़ोल्डर उसके भीतर की हर चीज़ को समेट लेता है।"
+  },
+  "helpAccessOff": {
+    "message": "बंद। <code>chrome://extensions</code> में <b>फ़ाइल URL तक पहुँच की अनुमति दें</b> चालू करें — कोई भी एक्सटेंशन इसे स्वयं चालू नहीं कर सकता।"
+  },
+  "helpAccessUnknown": {
+    "message": "यह ब्राउज़र इसकी जानकारी नहीं देता। यदि सहेजने पर अब भी पूछा जाए, तो <code>chrome://extensions</code> में देखें।"
+  },
+  "helpAccessOn": {
+    "message": "चालू — bento/home डिस्क से खोले गए पेज पढ़ सकता है।"
+  },
+  "helpNeverTitle": {
+    "message": "यह कभी क्या नहीं करता"
+  },
+  "helpNeverSub": {
+    "message": "यह केवल ऊपर के फ़ोल्डरों के भीतर पढ़ता-लिखता है, और केवल वही फ़ाइल जिससे कोई पेज वास्तव में खोला गया था — कौन-सी, यह ब्राउज़र बताता है, इसलिए कोई दस्तावेज़ किसी और की फ़ाइल का नाम नहीं ले सकता। आपके दस्तावेज़ों के बारे में कुछ भी कहीं अपलोड नहीं होता, और इस एक्सटेंशन के पास उन्हें अपलोड करने के लिए कोई सर्वर है ही नहीं।"
+  },
+  "helpAboutTitle": {
+    "message": "परिचय"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · Bento परियोजना का हिस्सा · MIT लाइसेंस"
+  },
+  "linkSource": {
+    "message": "GitHub पर स्रोत"
+  },
+  "linkIssues": {
+    "message": "समस्या की शिकायत करें"
+  },
+  "linkReleases": {
+    "message": "रिलीज़"
+  },
+  "primeMiddle": {
+    "message": "वह जो टिकता है"
+  },
+  "primeNote": {
+    "message": "बाकी दोनों भी काम करते हैं, पर Chrome दोबारा पूछता है — पहले वाले के लिए हर बार पुनःआरंभ पर, और आख़िरी वाले के लिए कुछ प्रतीक्षा के बाद।"
+  },
+  "viewLayout": {
+    "message": "दस्तावेज़ कैसे दिखें"
+  },
+  "viewIcons": {
+    "message": "आइकन"
+  },
+  "viewList": {
+    "message": "सूची"
+  },
+  "close": {
+    "message": "बंद करें"
+  },
+  "setLangTitle": {
+    "message": "भाषा"
+  },
+  "setLangSub": {
+    "message": "यह एक्सटेंशन किस भाषा में बोलता है। सामान्यतः यह ब्राउज़र का अनुसरण करता है।"
+  },
+  "langAutomatic": {
+    "message": "स्वचालित — ब्राउज़र का अनुसरण करें"
+  },
+  "setLangNote": {
+    "message": "एक्सटेंशन का अपना नाम और विवरण ब्राउज़र से आते हैं और बदलते नहीं।"
+  },
+  "aboutPromo": {
+    "message": "Bento में नए हैं? टेम्पलेट, गैलरी और AI संपादन गाइड $1 पर मिलेंगे — या $2 पर स्टार दें।"
+  },
+  "setThemeTitle": {
+    "message": "रूप-रंग"
+  },
+  "setThemeSub": {
+    "message": "ब्राउज़र की सेटिंग डिफ़ॉल्ट है, अनिवार्य नहीं।"
+  },
+  "themeAuto": {
+    "message": "ब्राउज़र के अनुसार"
+  },
+  "themeLight": {
+    "message": "हल्का"
+  },
+  "themeDark": {
+    "message": "गहरा"
+  },
+  "checking": {
+    "message": "जाँच हो रही है…"
+  },
+  "surveyTitle": {
+    "message": "पता लगाएँ कि आपके दस्तावेज़ कहाँ हैं"
+  },
+  "surveySub": {
+    "message": "ब्राउज़र जानता है कि आपने कौन-से Bento दस्तावेज़ खोले हैं। वह बता सकता है कि वे किन फ़ोल्डरों में हैं।"
+  },
+  "surveyDeclined": {
+    "message": "कोई बात नहीं — आप फ़ोल्डर हाथ से भी जोड़ सकते हैं।"
+  },
+  "surveyAllCovered": {
+    "message": "इस ब्राउज़र ने जो $1 दस्तावेज़ देखे हैं, वे सभी पहले से जोड़े गए फ़ोल्डर में हैं।"
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> दस्तावेज़ आपके जोड़े हर फ़ोल्डर से बाहर हैं। $2 पहले से शामिल हैं।"
+  },
+  "surveyCovers": {
+    "message": "$1 शामिल"
+  },
+  "surveyAdd": {
+    "message": "यह फ़ोल्डर जोड़ें…"
+  },
+  "surveyAdded": {
+    "message": "$1 जोड़ा गया — इसके दस्तावेज़ तैयार हैं"
+  },
+  "surveyAddedElsewhere": {
+    "message": "$1 जोड़ा गया, पर दस्तावेज़ उसमें नहीं हैं — Finder से एक बार कोई एक खोलें।"
+  },
+  "surveyOnlySeen": {
+    "message": "इस तरह केवल वही दस्तावेज़ मिलते हैं जो इस ब्राउज़र में खोले गए हों।"
+  },
+  "setAsstTitle": {
+    "message": "सहायक"
+  },
+  "setAsstSub": {
+    "message": "किसी दस्तावेज़ के बारे में चैट कहाँ भेजी जाती है। कुंजी इसी एक्सटेंशन में रहती है — दस्तावेज़ को केवल जवाब दिखता है।"
+  },
+  "asstProvider": {
+    "message": "प्रदाता"
+  },
+  "asstProvBuiltin": {
+    "message": "Chrome का अंतर्निहित मॉडल (Gemini Nano) — इसी डिवाइस पर"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (AI Studio कुंजी)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "OpenAI-संगत (OpenAI, OpenRouter, Ollama, LM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "आधार URL"
+  },
+  "asstModel": {
+    "message": "मॉडल"
+  },
+  "asstKey": {
+    "message": "API कुंजी"
+  },
+  "asstKeyOptional": {
+    "message": "Ollama या LM Studio जैसे स्थानीय सर्वर के लिए वैकल्पिक।"
+  },
+  "asstSave": {
+    "message": "सहेजें"
+  },
+  "asstSaved": {
+    "message": "सहायक की सेटिंग सहेजी गईं"
+  },
+  "asstAccessDeclined": {
+    "message": "साइट पहुँच अस्वीकार की गई। अनुरोध फिर भी भेजे जाते हैं, और तब काम करते हैं जब सर्वर ब्राउज़र एक्सटेंशन की अनुमति देता है (CORS)।"
+  },
+  "asstCheck": {
+    "message": "कनेक्शन जाँचें"
+  },
+  "asstChecking": {
+    "message": "जाँच हो रही है…"
+  },
+  "asstReachable": {
+    "message": "पहुँच में है — $1 ने जवाब दिया।"
+  },
+  "asstBuiltinReady": {
+    "message": "इस डिवाइस पर तैयार है।"
+  },
+  "asstBuiltinDownload": {
+    "message": "मॉडल अभी इस डिवाइस पर नहीं है। bento/home एक्सटेंशन की सेटिंग में “मॉडल डाउनलोड करें” दबाएँ।"
+  },
+  "asstBuiltinUnsupported": {
+    "message": "इस Chrome में अंतर्निहित मॉडल नहीं है। एक्सटेंशन की सेटिंग में कोई और प्रदाता चुनें।"
+  },
+  "asstOnDevice": {
+    "message": "यह डिवाइस"
+  },
+  "asstNotConfigured": {
+    "message": "सहायक अभी सेट नहीं हुआ है — bento/home एक्सटेंशन की सेटिंग खोलें।"
+  },
+  "asstUnreachable": {
+    "message": "$1 तक नहीं पहुँचा जा सका। क्या सर्वर चल रहा है, और क्या वह ब्राउज़र एक्सटेंशन के अनुरोधों की अनुमति देता है (CORS)?"
+  },
+  "asstWaitConsent": {
+    "message": "आपकी अनुमति की प्रतीक्षा है — संकेत का जवाब दें, फिर दोबारा कोशिश करें।"
+  },
+  "asstDenied": {
+    "message": "इस दस्तावेज़ को सहायक इस्तेमाल करने की अनुमति नहीं है।"
+  },
+  "asstAllowedTitle": {
+    "message": "सहायक इस्तेमाल करने की अनुमति वाले दस्तावेज़"
+  },
+  "asstAllowedSub": {
+    "message": "हर दस्तावेज़ अपने पहले अनुरोध से पहले एक बार पूछता है। दोबारा पूछे जाने के लिए किसी को हटाएँ।"
+  },
+  "consentTitle": {
+    "message": "इस दस्तावेज़ को आपका सहायक इस्तेमाल करने दें?"
+  },
+  "consentLead": {
+    "message": "यह $1 ($2) को टेक्स्ट भेज सकेगा और जवाब पढ़ सकेगा। आपकी कुंजी इसके साथ कभी साझा नहीं की जाती।"
+  },
+  "consentWeb": {
+    "message": "वेब पेज पढ़ना चालू है: यह उन पेजों पर भी जा सकता है जिनका आप नाम लें या जो खोज में मिलें, और वे साइटें विज़िट देखती हैं।"
+  },
+  "consentRemember": {
+    "message": "इस फ़ाइल के लिए याद रखा जाएगा। आप इसे बाद में एक्सटेंशन की सेटिंग में बदल सकते हैं।"
+  },
+  "consentAllow": {
+    "message": "अनुमति दें"
+  },
+  "consentDeny": {
+    "message": "अभी नहीं"
+  },
+  "asstBuiltinDownloading": {
+    "message": "Chrome मॉडल डाउनलोड कर रहा है। पूरा होने पर दोबारा कोशिश करें।"
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "मॉडल डाउनलोड करें"
+  },
+  "asstBuiltinProgress": {
+    "message": "मॉडल डाउनलोड हो रहा है… $1%"
+  },
+  "asstBuiltinRequirements": {
+    "message": "लगभग 2–4 GB। Chrome को डिस्क पर लगभग 22 GB खाली जगह और बिना डेटा-सीमा वाला नेटवर्क चाहिए, वरना वह मॉडल को अनुपलब्ध बताता है।"
+  },
+  "asstContext": {
+    "message": "संदर्भ विंडो (टोकन)"
+  },
+  "asstContextHint": {
+    "message": "प्रदाता द्वारा बताए मान के लिए खाली छोड़ें। ऐसे स्व-होस्टेड सर्वर के लिए भरें जिसकी सीमा केवल आप जानते हैं।"
+  },
+  "asstContextKnown": {
+    "message": "संदर्भ विंडो: $1 टोकन"
+  },
+  "asstShowAll": {
+    "message": "सभी मॉडल दिखाएँ, केवल चैट वाले नहीं"
+  },
+  "asstOtherModelRow": {
+    "message": "अन्य…"
+  },
+  "asstOtherModel": {
+    "message": "मॉडल ID, ठीक वैसे जैसे प्रदाता उसे नाम देता है"
+  },
+  "asstBadModel": {
+    "message": "यह मॉडल ID नहीं है: केवल अक्षर, अंक और . _ : / -"
+  },
+  "asstWindow": {
+    "message": "डेक इस मॉडल के लिए बहुत बड़ा है: अनुरोध को लगभग $1 टोकन चाहिए और मॉडल $2 लेता है। बड़ी विंडो वाला मॉडल चुनें, या डेक छोटा करें।"
+  },
+  "asstOutlineOnly": {
+    "message": "इस मॉडल की विंडो में केवल रूपरेखा समाई; चयनित सामग्री पूरी नहीं भेजी गई।"
+  },
+  "asstNoDocument": {
+    "message": "दस्तावेज़ ने अपनी सामग्री नहीं सौंपी।"
+  },
+  "asstSendsNotice": {
+    "message": "डेक की रूपरेखा और $1 को $2 पर भेजता है; टिप्पणियाँ यहीं रहती हैं।"
+  },
+  "asstOnDeviceModel": {
+    "message": "इस डिवाइस का मॉडल"
+  },
+  "asstFocusGeneric": {
+    "message": "चयनित तत्व या खुली स्लाइड"
+  },
+  "asstSearch": {
+    "message": "मॉडल को वेब पर खोजने दें"
+  },
+  "asstSearchNative": {
+    "message": "इस रूट की अपनी वेब खोज है ($1); केवल प्रश्न ही नई चीज़ है जो बाहर जाती है।"
+  },
+  "asstSearchNone": {
+    "message": "इस मॉडल की अपनी वेब खोज नहीं है — नीचे एक खोज एंडपॉइंट सेट करें।"
+  },
+  "asstRead": {
+    "message": "वेब पेज पढ़ना"
+  },
+  "asstReadOn": {
+    "message": "वेब पेज पढ़ने की अनुमति दें…"
+  },
+  "asstReadOff": {
+    "message": "वेब पेज पढ़ना बंद करें"
+  },
+  "asstReadOnNote": {
+    "message": "सहायक वे पेज पढ़ सकता है जिनका आप नाम लें या जो खोज में मिलें। हर पढ़ी गई साइट विज़िट देखती है; जो लौटता है वह टेक्स्ट है, कभी निर्देश नहीं।"
+  },
+  "asstReadOffNote": {
+    "message": "बंद। सहायक वेब पेज नहीं पढ़ सकता; यहाँ एक क्लिक ब्राउज़र से एक बार पूछता है।"
+  },
+  "asstSearchEndpoint": {
+    "message": "खोज एंडपॉइंट"
+  },
+  "asstSearchEndpointHint": {
+    "message": "एक SearXNG इंस्टेंस, या नीचे की कुंजी के साथ https://api.search.brave.com/। केवल तब उपयोग होता है जब मॉडल की अपनी खोज न हो।"
+  },
+  "asstSearchKey": {
+    "message": "खोज कुंजी"
+  },
+  "placingFolder": {
+    "message": "डिस्क पर “$1” खोजा जा रहा है…"
+  },
+  "placeNoDisk": {
+    "message": "Chrome ने एक्सटेंशन को “$1” खोजने के लिए डिस्क से पढ़ने नहीं दिया (file:// सूचियाँ अस्वीकृत)।"
+  },
+  "placeTried": {
+    "message": "डिस्क पर $2 जगहों में “$1” खोजा — वहाँ नहीं है।"
+  },
+  "badgeNotAdded": {
+    "message": "जोड़ा नहीं गया"
+  },
+  "badgeNotAddedTip": {
+    "message": "डिस्क पर मिला। खुलता है, पर सहेजते समय पूछेगा कहाँ — उसी जगह सहेजने के लिए इसका फ़ोल्डर जोड़ें।"
+  },
+  "folderFoundTip": {
+    "message": "डिस्क पर मिला, जोड़ा नहीं गया: इसके दस्तावेज़ खुलते हैं, पर सहेजना पूछता है कहाँ।"
+  },
+  "menuAddFolder": {
+    "message": "उसी जगह सहेजने के लिए इसका फ़ोल्डर जोड़ें…"
+  },
+  "pickThisFolder": {
+    "message": "चयनकर्ता में “$1” फ़ोल्डर चुनें — Chrome को आपको उसे चुनते देखना होगा।"
+  },
+  "pickedWrongFolder": {
+    "message": "“$1” इस दस्तावेज़ का फ़ोल्डर नहीं है (“$2”)। फिर से कोशिश करें और वही चुनें।"
+  },
+  "folderAlreadyAdded": {
+    "message": "“$1” पहले से जोड़ा हुआ है।"
+  },
+  "bentoFolderBtn": {
+    "message": "एक Bento फ़ोल्डर बनाएँ…"
+  },
+  "bentoFolderHow": {
+    "message": "डायलॉग में Documents के अंदर “Bento” नाम का नया फ़ोल्डर बनाएँ और उसे चुनें।"
+  },
+  "bentoFolderMade": {
+    "message": "“$1” आपका Bento फ़ोल्डर है — नए दस्तावेज़ वहाँ जाते हैं और उसी जगह सहेजे जाते हैं।"
+  },
+  "bentoFolderTip": {
+    "message": "Documents के अंदर एक फ़ोल्डर जो उसी जगह सहेजता है और नए दस्तावेज़ लेता है। Chrome स्वयं Documents नहीं देगा।"
+  },
+  "defaultFolder": {
+    "message": "नए दस्तावेज़ यहाँ आते हैं"
+  },
+  "fgTitle": {
+    "message": "अब से “$1” उसी जगह सहेजें?"
+  },
+  "fgTitleLapsed": {
+    "message": "“$1” फिर से जोड़ें?"
+  },
+  "fgLead": {
+    "message": "bento/home केवल इस एक फ़ाइल की अनुमति रखता है, इसलिए हर बार सहेजना सीधे उसी में लिखता है। अगले डायलॉग में वही फ़ाइल चुनें।"
+  },
+  "fgLeadLapsed": {
+    "message": "bento/home के पास यह फ़ाइल पहले से है; ब्राउज़र चाहता है कि आप इसे फिर पुष्टि करें।"
+  },
+  "fgChoose": {
+    "message": "फ़ाइल चुनें…"
+  },
+  "fgReconnect": {
+    "message": "फिर से जोड़ें"
+  },
+  "fgOnce": {
+    "message": "बस इस बार"
+  },
+  "fgNotSame": {
+    "message": "यह वह फ़ाइल नहीं है जिसने पूछा था (“$1”)। वही चुनें, या यह विंडो बंद करें।"
+  },
+  "fgDenied": {
+    "message": "अनुमति नहीं दी गई।"
+  },
+  "droppedGranted": {
+    "message": "जोड़े गए: $1 फ़ोल्डर, $2 फ़ाइलें।"
+  },
+  "setFilesTitle": {
+    "message": "फ़ाइलें"
+  },
+  "setFilesSub": {
+    "message": "जोड़े गए किसी भी फ़ोल्डर के बाहर के दस्तावेज़ जो अपने आप उसी जगह सहेजते हैं — एक बार चुने गए, या लाइब्रेरी में खींचकर छोड़े गए।"
+  },
+  "dropNoHandle": {
+    "message": "“$1”: ब्राउज़र ने इस ड्रॉप के लिए कोई फ़ाइल हैंडल नहीं दिया।"
+  },
+  "dropNotBento": {
+    "message": "“$1” Bento दस्तावेज़ (.bento.html) नहीं है — जोड़ा नहीं गया।"
+  },
+  "setDownloadsTitle": {
+    "message": "डाउनलोड"
+  },
+  "setDownloadsSub": {
+    "message": "डाउनलोड फ़ोल्डर के दस्तावेज़ Chrome के डाउनलोड के ज़रिए उसी जगह सहेज सकते हैं — जब तक Chrome हर फ़ाइल के लिए सहेजने की जगह पूछने पर सेट न हो, जिससे हर सहेजना एक डायलॉग बन जाता है।"
+  },
+  "setDownloadsOff": {
+    "message": "Chrome ने पूछा कहाँ सहेजें — वह सेटिंग बदलने तक डाउनलोड में सहेजना बंद है"
+  },
+  "setDownloadsRetry": {
+    "message": "फिर कोशिश करें"
+  },
+  "dropTwins": {
+    "message": "“$1”: डिस्क पर $2 फ़ाइलों में ठीक यही बाइट्स हैं — जोड़ा गया, पर जब तक वे अलग न हों, उसी जगह सहेज नहीं सकता।"
+  },
+  "addFiles": {
+    "message": "फ़ाइलें जोड़ें…"
+  },
+  "tdGrant": {
+    "message": "बिना पूछे यहीं सहेजें…"
+  },
+  "tdViaFolder": {
+    "message": "उसी जगह सहेजता है — इसका फ़ोल्डर जोड़ा हुआ है"
+  },
+  "tdViaFile": {
+    "message": "उसी जगह सहेजता है — यह फ़ाइल जोड़ी हुई है"
+  },
+  "tdViaDownloads": {
+    "message": "उसी जगह सहेजता है — यह डाउनलोड में है"
+  },
+  "tdNotYet": {
+    "message": "हर बार पूछता है कहाँ सहेजें"
+  },
+  "badgeNotSavingTip": {
+    "message": "यह दस्तावेज़ अभी उसी जगह सहेज नहीं सकता — इसे ठीक करने के लिए bento/home पैनल खोलें।"
+  },
+  "noticeOsBlocked": {
+    "message": "macOS ब्राउज़र को $1 से दूर रख रहा है, इसलिए वहाँ के दस्तावेज़ तब तक सूचीबद्ध नहीं होते जब तक आप अनुमति न दें: System Settings → Privacy & Security → Files and Folders → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "System Settings → Privacy & Security → Files and Folders"
+  },
+  "fgLeadFolder": {
+    "message": "अगले डायलॉग में “$1” फ़ोल्डर चुनें — अब से उसमें हर दस्तावेज़ उसी जगह सहेजा जाएगा: यह और इसके पड़ोसी।"
+  },
+  "fgChooseFolder": {
+    "message": "“$1” फ़ोल्डर चुनें…"
+  },
+  "fgOnlyFile": {
+    "message": "केवल यह फ़ाइल…"
+  },
+  "fgNotContaining": {
+    "message": "“$1” में यह दस्तावेज़ नहीं है — “$2” या उसके ऊपर का कोई फ़ोल्डर चुनें।"
+  },
+  "tdGrantFolder": {
+    "message": "“$1” में सब कुछ बिना पूछे सहेजें…"
+  },
+  "saTitleCopy": {
+    "message": "एक कॉपी सहेजें"
+  },
+  "saTitleShare": {
+    "message": "निर्यात की गई फ़ाइल सहेजें"
+  },
+  "saName": {
+    "message": "फ़ाइल का नाम"
+  },
+  "saBeside": {
+    "message": "“$1” के बगल में सहेजें"
+  },
+  "saChoose": {
+    "message": "फ़ोल्डर चुनें…"
+  },
+  "saCancel": {
+    "message": "रद्द करें"
+  },
+  "saExists": {
+    "message": "“$1” पहले से मौजूद है। बदलने के लिए फिर से सहेजें।"
+  },
+  "saIsOriginal": {
+    "message": "यह खुले दस्तावेज़ का ही नाम है — कोई दूसरा चुनें।"
+  },
+  "saBadName": {
+    "message": "बिना स्लैश वाला फ़ाइल नाम इस्तेमाल करें।"
+  },
+  "saLapsed": {
+    "message": "इस फ़ोल्डर की पहुँच खत्म हो गई है। इसके बजाय कोई फ़ोल्डर चुनें, या लाइब्रेरी में इसे नवीनीकृत करें।"
+  },
+  "saGone": {
+    "message": "यह सहेजना अब प्रतीक्षा में नहीं है। यह विंडो बंद करें और फिर से सहेजें।"
+  },
+  "saTaken": {
+    "message": "“$1” पहले से मौजूद है। कोई दूसरा नाम चुनें।"
+  }
+}

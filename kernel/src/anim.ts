@@ -88,12 +88,54 @@ function xformOf(el: HTMLElement | SVGElement): XForm {
   return x
 }
 
+/**
+ * A CSS transform does NOTHING to a non-replaced INLINE element. The browser
+ * accepts the declaration, `style.transform` reads it back verbatim, and the
+ * box moves zero pixels — no error, no warning, no clue.
+ *
+ * That makes it invisible to the obvious test. Reading back style.transform
+ * returns exactly what a perfect tween would have written, so an animation can
+ * report full health — correct offsets, hundreds of frames, progress reaching
+ * 1 — while painting absolutely nothing. It cost eight rounds of "it does not
+ * animate" against measurements insisting it did, and only
+ * getBoundingClientRect could ever have settled it.
+ *
+ * So the engine says it out loud instead. Once per element and capped, because
+ * a deck full of them must not drown the console.
+ *
+ * Two exemptions, both genuinely transformable despite an inline `display`:
+ * SVG children (transform is an SVG attribute concept there) and REPLACED
+ * elements such as <img> and <video>.
+ */
+const REPLACED = new Set(['IMG', 'VIDEO', 'CANVAS', 'IFRAME', 'EMBED', 'OBJECT', 'SVG'])
+const inlineWarned = new WeakSet<Element>()
+let inlineWarnings = 0
+
+function warnIfUntransformable(el: HTMLElement | SVGElement) {
+  if (inlineWarnings >= 5 || inlineWarned.has(el)) return
+  inlineWarned.add(el)
+  if (typeof SVGElement !== 'undefined' && el instanceof SVGElement) return
+  if (REPLACED.has(el.tagName.toUpperCase())) return
+  if (typeof getComputedStyle !== 'function') return
+  let display: string
+  try { display = getComputedStyle(el).display } catch { return }
+  if (display !== 'inline') return
+  inlineWarnings++
+  console.warn(
+    '[bento/anim] This element is display:inline, so the browser IGNORES the '
+    + 'transform and it will not move — even though style.transform reads back '
+    + 'correctly. Give it display:inline-block (or block) to animate it.',
+    el,
+  )
+}
+
 function writeXform(el: HTMLElement | SVGElement) {
   const x = xformOf(el)
   const parts: string[] = []
   if (x.x || x.y) parts.push(`translate(${x.x}px, ${x.y}px)`)
   if (x.baseRotate) parts.push(x.baseRotate)
   if (x.scaleX !== 1 || x.scaleY !== 1) parts.push(`scale(${x.scaleX}, ${x.scaleY})`)
+  if (parts.length) warnIfUntransformable(el)
   el.style.transform = parts.join(' ')
 }
 
@@ -256,7 +298,15 @@ export class Tween {
     this.started = true
     const t = this.target
     const from = this.from ?? {}
-    const isEl = t instanceof HTMLElement || t instanceof SVGElement
+    // MathML counts. <mi>/<mn>/<mo> are MathMLElement — neither HTMLElement
+    // nor SVGElement — so naming only those two silently routed every formula
+    // symbol into the plain-object branch below, where `opacity` became a JS
+    // property on the node and no style was ever written. The symbols still
+    // MOVED, because morphMathSymbols writes style.transform itself rather
+    // than going through a channel, so only the fade was missing: new terms in
+    // a formula appeared instantly while new code tokens faded in beside them.
+    // Any Element carrying a style object is animatable.
+    const isEl = t instanceof Element && 'style' in t
     for (const [key, toVal] of Object.entries(this.vars)) {
       if (CONTROL.has(key) || toVal === undefined) continue
       this.channels.add(key)

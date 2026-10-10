@@ -9,11 +9,29 @@
 
 import type { KernelDoc } from './doc.ts'
 import { appConfig } from './app.ts'
+import { sharedStorageOrigin } from './net.ts'
 
 const DATA_BLOCK_ID = 'bento-doc'
 // Split so the literal never appears in the bundle (it would terminate the
 // inline <script> that carries this very code inside a built Bento file).
 const SCRIPT_CLOSE = '</scr' + 'ipt>'
+
+/**
+ * DOM the runtime injects at boot and that must NEVER reach a saved file.
+ *
+ * capturePristine() clones the live document, and the compressed shell's
+ * loader has already inflated the app stylesheet into a <style> by then (see
+ * scripts/postbuild-compress.mjs). Serializing the clone as-is wrote that
+ * ~100KB of CSS back as PLAINTEXT — and the next boot inflated the payload and
+ * appended another copy, so every save grew the file by another 100KB, forever.
+ * The CSS ships deflated in the #bento-rt-css payload for a reason; the saved
+ * file must carry it exactly once, compressed.
+ *
+ * So: anything injected before the pristine capture carries this attribute and
+ * is stripped from every serialized shell. The kernel does not care what the
+ * node is — only that the app declared it runtime-owned.
+ */
+const TRANSIENT_SELECTOR = '[data-bento-transient]'
 
 let pristine: Document | null = null
 
@@ -28,9 +46,99 @@ export function readEmbeddedDoc(): string | null {
   return text || null
 }
 
+/**
+ * The `#bento-doc` body from an HTML string — the file as bytes, not the live
+ * DOM — so a handle's current file can be checked against the open document
+ * without a parser (it runs in the launch consumer AND in a node rig). This proves
+ * SAME DOCUMENT (an identical #bento-doc body), NOT same file: a copy re-saved with
+ * a different surrounding shell still matches, which is exactly what the launch
+ * check wants. Anchored by indexOf on the exact id attribute — double-quoted as the
+ * DOM serializes it, with a LEADING SPACE so it can never match a `data-id`
+ * lookalike — which is linear, where a regex over an unterminated `<script` is
+ * quadratic. CRLF is normalised so a file saved with CRLF line endings still
+ * compares equal. The body is <-escaped at write time so it can never itself
+ * contain the close tag. null if there is no block. */
+const DOC_BLOCK_ID_ATTR = ` id="${DATA_BLOCK_ID}"`
+export function embeddedDocBlock(html: string): string | null {
+  const at = html.indexOf(DOC_BLOCK_ID_ATTR)
+  if (at < 0) return null
+  const start = html.indexOf('>', at + DOC_BLOCK_ID_ATTR.length)
+  if (start < 0) return null
+  const end = html.indexOf(SCRIPT_CLOSE, start + 1)
+  if (end < 0) return null
+  return html.slice(start + 1, end).replace(/\r\n/g, '\n').trim() || null
+}
+
+/**
+ * Extra plaintext blocks the app wants written into every saved shell —
+ * language packs today (docs/i18n-packs.md), whatever else later. The kernel
+ * stays ignorant of what they mean: it is told an id, a type and a JSON body,
+ * and guarantees only that they survive a save the same way #bento-doc does.
+ *
+ * The full set is re-declared on every serialize, so dropping one from the
+ * list removes it from the next saved file — that is how "remove from this
+ * file" works without a second API.
+ */
+export interface ShellBlock {
+  id: string
+  type: string
+  /** JSON text; `<` is escaped on write exactly as the doc block's is */
+  body: string
+  attrs?: Record<string, string>
+}
+let shellBlocks: () => ShellBlock[] = () => []
+let managedTypes: string[] = []
+
+/**
+ * Register the provider consulted on every serialize, and the block types it
+ * OWNS. Call once, at boot.
+ *
+ * The types are declared rather than inferred from what the provider returns,
+ * because the empty list is meaningful: "this file should carry no language
+ * pack" has to clear the blocks the file arrived with, and a set derived from
+ * the blocks about to be written would be empty exactly then — leaving the
+ * last removed pack in the file (it would come back on the next open).
+ */
+export function registerShellBlocks(fn: () => ShellBlock[], types: string[]): void {
+  shellBlocks = fn
+  managedTypes = types
+}
+
+/** Every extra block currently in THIS document (as loaded from disk). */
+export function readShellBlocks(type: string): Array<{ id: string; body: string; el: Element }> {
+  return Array.from(document.querySelectorAll(`script[type="${type}"]`)).map((el) => ({
+    id: el.id,
+    body: (el.textContent ?? '').trim(),
+    el,
+  }))
+}
+
 /** Serialize a raw data-block body into an app shell. */
-function serializeBody(shell: Document, body: string, title: string): string {
+function serializeBody(shell: Document, body: string, doc: KernelDoc): string {
   const clone = shell.cloneNode(true) as Document
+
+  // Runtime-injected DOM is not part of the shell (see TRANSIENT_SELECTOR).
+  for (const el of Array.from(clone.querySelectorAll(TRANSIENT_SELECTOR))) el.remove()
+
+  // Re-declare the app's extra blocks: drop every one of a managed type, then
+  // write the current set back. Removing a language from the file is therefore
+  // just "stop listing it" — no deletion path to get wrong. The clear-set is
+  // the DECLARED types, never the types about to be written: an empty write
+  // set still has to clear (that is what removing the file's last pack looks
+  // like).
+  const wanted = shellBlocks()
+  for (const type of new Set([...managedTypes, ...wanted.map((b) => b.type)])) {
+    for (const stale of Array.from(clone.querySelectorAll(`script[type="${type}"]`))) stale.remove()
+  }
+  for (const b of wanted) {
+    const el = clone.createElement('script')
+    el.setAttribute('type', b.type)
+    el.id = b.id
+    for (const [k, v] of Object.entries(b.attrs ?? {})) el.setAttribute(k, v)
+    // same <-escape as the doc block: these can never contain "</script>"
+    el.textContent = '\n' + b.body.replace(/</g, '\\u003c') + '\n'
+    clone.head.appendChild(el)
+  }
 
   let block = clone.getElementById(DATA_BLOCK_ID)
   if (!block) {
@@ -42,8 +150,10 @@ function serializeBody(shell: Document, body: string, title: string): string {
   // <-escape so the JSON can never contain "</script>" and break the file.
   block.textContent = '\n' + body.replace(/</g, '\\u003c') + '\n'
 
+  writePreview(clone, body, doc)
+
   const titleEl = clone.querySelector('title')
-  if (titleEl) titleEl.textContent = title + ' — ' + appConfig().appName
+  if (titleEl) titleEl.textContent = doc.title + ' — ' + appConfig().appName
 
   const html = '<!DOCTYPE html>\n' + clone.documentElement.outerHTML
   // Belt-and-braces: an unescaped close tag anywhere in generated output would
@@ -54,6 +164,214 @@ function serializeBody(shell: Document, body: string, title: string): string {
   return html
 }
 
+// --- static first-page preview (file-manager thumbnails) ---------------------
+//
+// THE PROBLEM. A Bento file is one HTML document, and thumbnailers — iOS
+// Files, macOS QuickLook/Finder, the bento/home app — render HTML with
+// JavaScript DISABLED (verified: `qlmanage -t` renders <noscript> content).
+// Until our runtime boots, every deck genuinely IS the same bytes plus the
+// boot splash, so every deck thumbnailed as the same dark box.
+//
+// THE FIX. At save time we write a STATIC rendering of page one into the file
+// and park it inside a `<noscript>`. That element's contents are rendered only
+// when scripting is off, which is exactly the population we are addressing:
+// a real reader never sees it — not for a frame — so there is no flash to
+// suppress, no interaction with the splash's `.done`/`bsAuto` dismissal, and
+// nothing for print or present to exclude. When a thumbnailer runs scripts
+// after all, the preview is simply never rendered and we are back to today's
+// behaviour: a regression is not possible, only an improvement.
+//
+// It is shell FURNITURE, not document data: nothing here enters `#bento-doc`,
+// no format field is added, and a file saved by an older build (which has no
+// preview) opens identically.
+//
+// The kernel knows nothing about how any app draws a page. It owns the
+// placement, the replace-don't-append rule, the encryption veto and the
+// output-safety check; the app hands back a ready-made element.
+
+const PREVIEW_ATTR = 'data-bento-preview'
+
+/** Builds the app's static first-page rendering. Return null for "no preview". */
+export type PreviewProvider = (doc: KernelDoc) => HTMLElement | null
+
+let previewProvider: PreviewProvider | null = null
+
+/** Register the app's first-page renderer. Call once, at boot. Optional — an
+ *  app that registers nothing simply saves files without a preview. */
+export function registerPreview(fn: PreviewProvider): void {
+  previewProvider = fn
+}
+
+/**
+ * May this saved file carry a plaintext preview of its first page?
+ *
+ * NO for an encrypted deck, and this is the single most important rule here.
+ * The whole point of the `bento/enc` envelope is that the content is
+ * unreadable on disk without the password; rendering page one in plaintext
+ * beside the ciphertext would hand an attacker the title slide — usually the
+ * most disclosive page in the deck — and would do it silently, because the
+ * owner would never see the markup they were shipping. A missing thumbnail is
+ * the correct, expected cost of encrypting a file.
+ *
+ * Two independent tests, because they fail independently: the in-memory
+ * password flag covers the live session, and re-parsing the body covers any
+ * path that hands us an already-encrypted block without the flag set.
+ *
+ * Pure and exported so `scripts/test-preview.ts` can exercise it directly —
+ * the surrounding DOM work is not unit-testable in node, this decision is.
+ */
+export function previewAllowed(body: string, encrypted = isEncryptionActive()): boolean {
+  return !encrypted && parseEnvelope(body) === null
+}
+
+// Built by concatenation for the usual reason (AGENTS.md #1): these literals
+// must never appear in a Bento bundle, which is itself inline script.
+// Note the close forms carry no ">": an HTML parser ends a script element at
+// `</script` followed by whitespace, `/` or `>`, so `</script foo>` closes it
+// just as surely as the tidy form does.
+const SCRIPT_OPEN = '<scr' + 'ipt'
+const SCRIPT_CLOSE_START = '</scr' + 'ipt'
+const NOSCRIPT_CLOSE = '</nosc' + 'ript'
+const STYLE_OPEN = '<sty' + 'le'
+const STYLE_CLOSE_START = '</sty' + 'le'
+
+/**
+ * The preview's one stylesheet, and nothing hiding inside it.
+ *
+ * `<style>` is a RAW TEXT element: its content is not escaped on the way out, so
+ * whatever a provider puts in it is written to the file verbatim. Every app's
+ * preview has one (slides and dash hoist repeated declarations into it, spaces
+ * writes a sheet), and every one of them builds declarations out of AUTHOR
+ * data — colours, fonts, sizes. A single `</style>` in one of those values ends
+ * the element early and everything after it is live markup in the reader's DOM,
+ * outside `#bento-doc`, at parse time, before the remover runs.
+ *
+ * A flat "refuse any `<style`" would be simpler and would refuse EVERY preview,
+ * so the rule is shaped like the tokenizer instead: at most one style element,
+ * no `<` anywhere in its text (the breakout attempt is itself a `<`), and no
+ * second opener or stray closer anywhere around it. That last clause is what
+ * catches the tidy version of the attack, which re-opens a style after the
+ * markup it smuggled in and leaves the tag counts balanced.
+ */
+function styleIsInert(lower: string): boolean {
+  const open = lower.indexOf(STYLE_OPEN)
+  if (open < 0) return !lower.includes(STYLE_CLOSE_START)
+  if (lower.slice(0, open).includes(STYLE_CLOSE_START)) return false
+  const gt = lower.indexOf('>', open)
+  if (gt < 0) return false
+  const end = lower.indexOf(STYLE_CLOSE_START, gt)
+  if (end < 0) return false
+  const rest = lower.slice(end + STYLE_CLOSE_START.length)
+  return !lower.slice(gt + 1, end).includes('<') &&
+    !rest.includes(STYLE_OPEN) && !rest.includes(STYLE_CLOSE_START)
+}
+
+/**
+ * Refuse any preview markup that could unbalance the file.
+ *
+ * The preview is generated from user content, so it is not shaped by us. A
+ * `<script>`/`</script>` in it would break the open/close balance the frozen
+ * splice contract (and `scripts/shell-gate.mjs`) depends on. `</noscript>` is
+ * still refused although the preview no longer lives in a `<noscript>`: it
+ * costs nothing, and a document written by an older Bento may still carry one.
+ *
+ * This check got MORE load-bearing when the preview left `<noscript>`. It is no
+ * longer inert markup that only a scripting-less renderer ever parses — it now
+ * lands in the live DOM of every reader's page until the remover runs.
+ *
+ * The app sanitizes its own output; this is the kernel refusing to take its
+ * word for it. Dropping the preview costs a thumbnail. Emitting it anyway could
+ * brick the file — or, through the preview's own stylesheet, put live markup in
+ * the reader's DOM; see styleIsInert for the half escaping cannot reach.
+ *
+ * Exported for `scripts/test-preview.ts`, like previewAllowed.
+ */
+export function previewIsSafe(html: string): boolean {
+  const lower = html.toLowerCase()
+  if (lower.includes(SCRIPT_OPEN) || lower.includes(SCRIPT_CLOSE_START) || lower.includes(NOSCRIPT_CLOSE)) return false
+  return styleIsInert(lower)
+}
+
+/**
+ * Deletes the preview, and itself, the instant the parser reaches it.
+ *
+ * Parser-BLOCKING on purpose: a classic inline script placed immediately after
+ * the preview runs before the parser continues, so the browser never paints a
+ * frame containing it. That is what makes this free for readers.
+ *
+ * It is written as a string rather than built from a template because it must
+ * stay one line and contain no `</script>`.
+ */
+const PREVIEW_REMOVER =
+  `(function(){var a=document.querySelectorAll('[${PREVIEW_ATTR}]');` +
+  `for(var i=a.length;i--;){var n=a[i];if(n.parentNode)n.parentNode.removeChild(n)}})()`
+
+function writePreview(clone: Document, body: string, doc: KernelDoc): void {
+  // REPLACE, NEVER APPEND. `capturePristine()` snapshots the document as it
+  // was loaded, so the shell we are cloning already carries the preview the
+  // PREVIOUS save wrote; appending would stack a new one on every ⌘S until the
+  // file was mostly stale previews. Removing unconditionally — before deciding
+  // whether to write a new one — is also how a preview correctly DISAPPEARS
+  // when a plaintext deck gains a password, or when an app stops providing
+  // one. Both of those are silent leaks if the removal is conditional.
+  // The selector is deliberately attribute-only: it must sweep the host AND the
+  // remover script beside it, and it must still find previews written by an
+  // older Bento, which parked them in a <noscript>.
+  for (const stale of Array.from(clone.querySelectorAll(`[${PREVIEW_ATTR}]`))) stale.remove()
+
+  if (!previewProvider || !previewAllowed(body)) return
+
+  let el: HTMLElement | null = null
+  try {
+    el = previewProvider(doc)
+  } catch (err) {
+    // A preview is a nicety; a failed save is not. Never let rendering page
+    // one take the file down with it.
+    console.warn('bento: first-page preview failed, saving without one', err)
+    return
+  }
+  if (!el) return
+
+  // ORDINARY MARKUP, NOT <noscript>, AND A PARSER-BLOCKING REMOVER.
+  //
+  // `<noscript>` was the obvious home and it is wrong here. It renders only
+  // where scripting is DISABLED, and iOS — the platform this feature exists for
+  // — satisfies neither half of that: probed with a page whose inline script
+  // repaints it, the iOS thumbnailer renders neither the script's result nor
+  // the <noscript>, so a deck thumbnailed as its boot splash no matter what we
+  // put in the noscript.
+  //
+  // Since that thumbnailer runs no script, plain markup survives for it. And
+  // since every real reader DOES run script, a parser-blocking inline remover
+  // placed immediately after deletes the preview before the browser paints a
+  // frame containing it. Both audiences get the right answer with no flash and
+  // no compromise — which the <noscript> version could not manage.
+  //
+  // A reader with scripting genuinely off keeps the preview on screen, exactly
+  // as before: without scripts the deck cannot render at all, so a still of
+  // page one is the best available answer rather than a regression.
+  const host = clone.createElement('div')
+  host.setAttribute(PREVIEW_ATTR, '1')
+  host.appendChild(clone.importNode(el, true))
+  if (!previewIsSafe(host.innerHTML)) {
+    console.warn('bento: first-page preview rejected as unsafe, saving without one')
+    return
+  }
+  const remover = clone.createElement('script')
+  remover.setAttribute(PREVIEW_ATTR, '1')
+  remover.textContent = PREVIEW_REMOVER
+
+  // Straight after the splash it replaces, so a thumbnailer reaches it before
+  // the ~550KB of compressed payload at the end of the body. The remover goes
+  // immediately after the host: any markup between them is markup the parser
+  // could paint first.
+  const splash = clone.getElementById('bento-splash')
+  const parent = splash?.parentNode ?? clone.body ?? clone.documentElement
+  const after = splash?.parentNode ? splash.nextSibling : null
+  parent.insertBefore(host, after)
+  parent.insertBefore(remover, host.nextSibling)
+}
+
 /**
  * Serialize `doc` into an arbitrary app shell (a parsed Bento HTML document).
  * Used with the boot-time pristine copy on every save, and by the self-update
@@ -61,7 +379,7 @@ function serializeBody(shell: Document, body: string, title: string): string {
  * PLAIN output — encryption-aware callers use serializeDocInto/serializeAuto.
  */
 export function serializeWith(shell: Document, doc: KernelDoc): string {
-  return serializeBody(shell, JSON.stringify(doc), doc.title)
+  return serializeBody(shell, JSON.stringify(doc), doc)
 }
 
 /** The full .bento.html file content with `doc` embedded (plain). */
@@ -87,7 +405,23 @@ export interface EncEnvelope {
   data: string
 }
 
-const ENC_ITERATIONS = 300_000
+/**
+ * PBKDF2 rounds for NEW envelopes only.
+ *
+ * A .bento.html is offline at-rest storage: the ciphertext sits in a file that
+ * gets mailed, synced and backed up, so an attacker guesses passwords at their
+ * own pace with no rate limit anywhere. 300k was half of current guidance
+ * (OWASP: 600k for PBKDF2-HMAC-SHA256), and it is the cheapest possible thing
+ * to fix — one number, and the cost lands on a keypress the user already waits
+ * through.
+ *
+ * READING IS UNAFFECTED, deliberately: the count travels in the envelope (`it`)
+ * and `decryptEnvelope` derives with THAT number, never this one. Every deck
+ * encrypted by an older build keeps opening with its own 300k, and re-saving it
+ * re-encrypts at the new count. A file that stops opening would be far worse
+ * than a weak KDF, so `scripts/test-preview.ts` pins a real 300k envelope.
+ */
+const ENC_ITERATIONS = 600_000
 
 const eb64 = {
   enc(bytes: Uint8Array): string {
@@ -164,11 +498,18 @@ export async function decryptEnvelope(env: EncEnvelope, password: string): Promi
  * Encryption-aware serialization into an arbitrary shell — THE path for
  * saves and self-updates. Plain when no password is active.
  */
+/**
+ * The exact bytes that go INTO `#bento-doc`: the document JSON when no password
+ * is active, or the `bento/enc` envelope over that JSON when one is. This is the
+ * payload a save writes — the shell (serializeBody) is furniture around it — and
+ * it is DOM-free, so it is the seam a rig can drive the real write path with.
+ */
+export async function encodeDocBody(doc: KernelDoc): Promise<string> {
+  return encPassword ? encryptBody(JSON.stringify(doc), encPassword) : JSON.stringify(doc)
+}
+
 export async function serializeDocInto(shell: Document, doc: KernelDoc): Promise<string> {
-  const body = encPassword
-    ? await encryptBody(JSON.stringify(doc), encPassword)
-    : JSON.stringify(doc)
-  return serializeBody(shell, body, doc.title)
+  return serializeBody(shell, await encodeDocBody(doc), doc)
 }
 
 /** Encryption-aware serializeFile. */
@@ -188,6 +529,7 @@ type SaveResult = 'saved' | 'saved-as' | 'downloaded' | 'cancelled'
 
 interface FsFileHandle {
   createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }>
+  getFile?(): Promise<{ text(): Promise<string> }>
   name: string
 }
 
@@ -210,20 +552,105 @@ const hasFsAccess = () => typeof (window as any).showSaveFilePicker === 'functio
  */
 export const canWriteInPlace = () => hasFsAccess()
 
+/**
+ * What a save is FOR. The three cases want different files in different places,
+ * and until now the picker could not tell them apart.
+ *
+ * · `in-place` — ⌘S. Overwrite the document being edited.
+ * · `copy`     — "Save a copy…". A second file, chosen by the author.
+ * · `share`    — a suffixed export: view-only, presentation package, invite,
+ *                template. Deliberately a new file, and never the ⌘S target.
+ * · `backup`   — the rollback copy a self-update leaves behind. Belongs BESIDE
+ *                the document it backs up, and is the one save the author never
+ *                asked for, so it is also the one that must never interrupt.
+ */
+export type SavePurpose = 'in-place' | 'copy' | 'share' | 'backup'
+
+/**
+ * The picker `id` for a purpose — and, incidentally, the only signal a HOST has
+ * about what it is being asked to do.
+ *
+ * Browsers remember the last directory used per `id`, so distinct ids are worth
+ * having on their own: exports and working files usually live in different
+ * places, and one shared id made the picker open wherever you last put a
+ * view-only copy.
+ *
+ * The other reason is not incidental. A host that polyfills
+ * `showSaveFilePicker` (home/ios over UIDocument, home/webext over a directory
+ * grant) sees ONLY the options bag. `saveFile(doc, forcePicker)` used to reach
+ * this function with byte-identical arguments for ⌘S and for "Save a copy…",
+ * so a host could not distinguish them — and one that guessed wrong overwrote
+ * the open document instead of copying it. Measured, in a browser extension,
+ * 2026-08-02. Intent has to be explicit in the call, because it cannot be
+ * recovered from anything else in it.
+ */
+export const pickerIdFor = (purpose: SavePurpose): string =>
+  purpose === 'in-place' ? 'bento-doc'
+    : purpose === 'copy' ? 'bento-copy'
+      : purpose === 'backup' ? 'bento-backup'
+        : 'bento-share'
+
+/**
+ * Is a HOST polyfilling the picker — home/ios, home/webext — rather than the
+ * browser's own?
+ *
+ * The kernel cannot infer this. `showSaveFilePicker` exists either way, and a
+ * host that declines a request is indistinguishable from one that is not there:
+ * both end in the native dialog. So a host that can do more than the bare
+ * contract announces itself, and this is the only thing the kernel reads.
+ *
+ * It gates exactly one decision — see `writeBackupBeside`. Nothing else may
+ * branch on it: every in-place path must keep working when it is false, because
+ * that is the plain-browser case and it is the majority one.
+ *
+ * PRESENCE IS NOT ENOUGH, so this asks about a named capability. A host that
+ * announced itself but did not recognise `bento-backup` would pass the request
+ * through to the native picker — producing exactly the dialog this exists to
+ * remove, and only for people who installed the host. Decks outlive host
+ * versions in both directions; neither side may assume the other is current.
+ */
+export const hostCan = (op: string): boolean => {
+  const host = (window as any).__bentoHost
+  return !!host && Array.isArray(host.ops) && host.ops.includes(op)
+    && typeof (window as any).showSaveFilePicker === 'function'
+}
+
 async function pickHandle(
-  doc: KernelDoc, suffix = '', suggestedName?: string,
+  doc: KernelDoc, suffix = '', suggestedName?: string, purpose: SavePurpose = 'in-place',
 ): Promise<FsFileHandle | null> {
   try {
+    // The name to offer is the file the user is ALREADY looking at, when we know
+    // it. suggestedFileName() derives from doc.title, and the two drift apart
+    // constantly — a deck called "Bento Slides Showcase" living in
+    // Q3-board.bento.html offered to save as Bento_Slides_Showcase.bento.html,
+    // so an ordinary ⌘S silently proposed a SECOND file beside the real one.
+    // A suffixed export (share copies) still names itself, hence the suffix
+    // check: those are deliberately new files.
+    const openedName = suffix ? null : openedFileName()
     return await (window as any).showSaveFilePicker({
-      suggestedName: suggestedName ?? suggestedFileName(doc, suffix),
+      suggestedName: suggestedName ?? openedName ?? suggestedFileName(doc, suffix),
       // startIn takes a HANDLE, never a path — the API gives no way to point a
       // picker at an arbitrary directory, by design. With a handle we land in
       // the open file's own folder; without one, `id` is the fallback: the
       // browser remembers the last directory used under this id, so the second
       // update onwards opens where the first one saved.
       ...(fileHandle ? { startIn: fileHandle } : {}),
-      id: 'bento-doc',
-      types: [{ description: appConfig().appName, accept: { 'text/html': ['.html'] } }],
+      id: pickerIdFor(purpose),
+      // `.bento.html`, NOT `.html`, and the compound extension is the point.
+      //
+      // `suggestedFileName` has always produced `.bento.html`, but the picker
+      // accepted `.html` — so an author who edited the name to "Q3" got
+      // `Q3.html`, and a document named that is a second-class citizen
+      // everywhere the convention is what identifies us: home/webext injects
+      // its save bridge on `file:///*.bento.html`, so such a file opens fine
+      // and then asks where to save, and home/ios matches the same way.
+      //
+      // Bento was manufacturing the exception and then being asked to cope with
+      // it. Accepting only the compound extension means the browser appends it
+      // to a bare name, which is what everybody meant. Compound suffixes are
+      // explicitly legal here (`.tar.gz` is the spec's own example) and the
+      // limit is 16 characters against this one's 11.
+      types: [{ description: appConfig().appName, accept: { 'text/html': ['.bento.html'] } }],
     })
   } catch (err: any) {
     if (err?.name === 'AbortError') return null
@@ -246,21 +673,135 @@ export function downloadFile(html: string, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
+// --- remembering the file handle across reopens -----------------------------
+//
+// Chrome's File System Access blocklist refuses ~/Documents, ~/Downloads, the
+// Desktop and the home folder as DIRECTORY grants, so a deck sitting directly in
+// one of them can never be covered by a bento/home folder grant and re-ran the
+// full save picker on every reopen. FILE handles are not blocked and are
+// structured-cloneable, so we remember the one a save produced (IndexedDB, keyed
+// by docId) and, on the first ⌘S after a reopen, re-request readwrite permission
+// INSIDE the save gesture — Chrome 122+ shows a small "Allow on every visit"
+// prompt instead of a picker. Only a real FileSystemFileHandle is stored: a host
+// polyfill (home/ios, home/webext) hands back its own handle, which is not one
+// and stays on the bridge path untouched.
+
+const HANDLE_DB = 'bento-handles'
+const HANDLE_STORE = 'handles'
+
+function handleDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(HANDLE_DB, 1)
+    req.onupgradeneeded = () => { req.result.createObjectStore(HANDLE_STORE) }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+async function idbHandle(op: 'get' | 'put' | 'delete', docId: string, val?: unknown): Promise<unknown> {
+  const db = await handleDb()
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(HANDLE_STORE, op === 'get' ? 'readonly' : 'readwrite')
+      const store = tx.objectStore(HANDLE_STORE)
+      const r = op === 'get' ? store.get(docId) : op === 'put' ? store.put(val, docId) : store.delete(docId)
+      r.onsuccess = () => resolve(op === 'get' ? r.result : undefined)
+      r.onerror = () => reject(r.error)
+    })
+  } finally { db.close() }
+}
+
+/** A FileSystemFileHandle with the permission methods (not in every lib.dom). */
+type PermHandle = FsFileHandle & {
+  queryPermission(d: { mode: 'readwrite' }): Promise<PermissionState>
+  requestPermission(d: { mode: 'readwrite' }): Promise<PermissionState>
+}
+const isRealHandle = (h: unknown): h is PermHandle =>
+  typeof FileSystemFileHandle !== 'undefined' && h instanceof FileSystemFileHandle
+
+/** Remember the handle a save produced so the next reopen can reconnect it.
+ *  Only ever reached from saveFile — a readonly player never saves, so its
+ *  handle is never stored — and only a real handle, never a host polyfill.
+ *
+ *  NOT on a shared-storage origin. Chrome gives every file:// document one
+ *  IndexedDB, so a stored handle is a live write capability any other local
+ *  deck could read and re-permission (docs/DECISIONS.md, security-review-pr519).
+ *  There a persistent grant has no identity to bind to, so it is not offered;
+ *  the per-session handle still works. Real web origins and real-origin host
+ *  apps (isolated storage) persist as normal. */
+async function persistHandle(doc: KernelDoc, handle: FsFileHandle): Promise<void> {
+  if (sharedStorageOrigin() || !doc.docId || !isRealHandle(handle)) return
+  try { await idbHandle('put', doc.docId, handle) } catch { /* best effort — a lost handle just means tomorrow's picker */ }
+}
+
+/**
+ * First ⌘S after a reopen: if we remember a handle for this docId, re-acquire
+ * permission inside the save gesture instead of showing the picker. Returns the
+ * handle when permission is granted, else null (the caller falls back to the
+ * picker). Exported for the rig.
+ *
+ * MUST run before the expensive serializeAuto so the user activation the save
+ * gesture carries is still fresh when requestPermission() prompts (Chrome keeps
+ * transient activation ~5 s across awaits; a ~1 s serialize would risk it).
+ */
+export async function reconnectHandle(doc: KernelDoc): Promise<FsFileHandle | null> {
+  // Never reconnect from shared storage. On a file:// origin the store is shared
+  // with every local deck, so an entry found here could have been planted by a
+  // malicious file — keyed to this docId and named to match the file on screen,
+  // which would make the name check below pass and re-permission a handle to a
+  // DIFFERENT file on the user's own ⌘S (security-review-pr519, finding 1). We
+  // also never write there (persistHandle), but refusing to READ is what closes
+  // the planted-entry path. Real, isolated origins reconnect as normal.
+  if (sharedStorageOrigin()) return null
+  if (!doc.docId) return null
+  let stored: unknown
+  try { stored = await idbHandle('get', doc.docId) } catch { return null }
+  if (!isRealHandle(stored)) return null // absent, or a host polyfill handle
+  // the remembered handle must be the file on screen: docId + name. isSameEntry
+  // needs a second handle we do not have on a bare file:// reopen, so the name
+  // check is the guard.
+  const onScreen = openedFileName()
+  if (onScreen && stored.name !== onScreen) return null // mismatch → picker, entry kept
+  try {
+    let perm = await stored.queryPermission({ mode: 'readwrite' })
+    if (perm !== 'granted') perm = await stored.requestPermission({ mode: 'readwrite' })
+    if (perm === 'granted') return stored
+    void idbHandle('delete', doc.docId) // denied → forget it, use the picker
+    return null
+  } catch { // NotFoundError (file moved/deleted) or any handle failure
+    void idbHandle('delete', doc.docId)
+    return null
+  }
+}
+
 /**
  * Save the document. Chrome/Edge: File System Access API (picker on first
- * save, silent rewrite after). Firefox/Safari: download a copy.
+ * save, silent rewrite after — and, since a remembered handle can reconnect,
+ * one permission prompt rather than a picker on the first save after a reopen).
+ * Firefox/Safari: download a copy.
  */
 export async function saveFile(doc: KernelDoc, forcePicker = false): Promise<SaveResult> {
+  // Reconnect a remembered handle BEFORE serializing: requestPermission() has to
+  // fire inside the fresh save gesture, and serializeAuto can take ~a second.
+  if (hasFsAccess() && !forcePicker && !fileHandle) {
+    const re = await reconnectHandle(doc)
+    if (re) fileHandle = re
+  }
   const html = await serializeAuto(doc)
   if (hasFsAccess()) {
     if (forcePicker || !fileHandle) {
-      const handle = await pickHandle(doc)
+      // forcePicker is only ever "Save a copy…"; a first save of an unsaved
+      // document is in-place by intent even though it must also pick.
+      const handle = await pickHandle(doc, '', undefined, forcePicker ? 'copy' : 'in-place')
       if (!handle) return 'cancelled'
       fileHandle = handle
       await writeHandle(handle, html)
+      void persistHandle(doc, handle)
       return 'saved-as'
     }
     await writeHandle(fileHandle, html)
+    // idempotent, and the one place the ADOPTED-handle path (a dropped file) is
+    // remembered too — it only matters once you have actually saved to it.
+    void persistHandle(doc, fileHandle)
     return 'saved'
   }
   downloadFile(html, suggestedFileName(doc))
@@ -268,6 +809,78 @@ export async function saveFile(doc: KernelDoc, forcePicker = false): Promise<Sav
 }
 
 export const currentFileName = () => fileHandle?.name ?? null
+
+/**
+ * Adopt a handle obtained outside the save picker — today, a file dropped onto
+ * the editor via `DataTransferItem.getAsFileSystemHandle()`.
+ *
+ * Why this exists: a deck double-clicked from disk opens on `file://` with NO
+ * handle, so every ⌘S re-runs the picker and the user re-navigates to a file
+ * they are already looking at. A drop yields a real handle, so adopting it
+ * turns that document into one Bento can rewrite in place.
+ *
+ * The caller MUST have obtained readwrite permission first — this only records
+ * the handle. It is deliberately not exported through `window.bento`: adopting
+ * a handle silently redirects where ⌘S writes, which is a user gesture, never
+ * something a script should do behind their back.
+ */
+export function adoptFileHandle(handle: FsFileHandle): void {
+  fileHandle = handle
+}
+
+/**
+ * Consume the File Handling API's `window.launchQueue` at boot and adopt the
+ * handle it delivers for the open document — so a document opened in an installed
+ * PWA (`file_handlers`) or in a native host (home/bridge.js, which defines a
+ * `launchQueue` carrying the open file's handle) holds a writable handle from the
+ * FIRST edit, not only after the first ⌘S. Without this a reviewer who edits,
+ * leaves the app and reopens the file sees nothing saved — "saved in place" is the
+ * app's whole claim.
+ *
+ * The queue is the host's single trigger: `setConsumer` is what begins the one
+ * launch request (`launch: true`), and the host answers it with the open document
+ * and no picker — a host that cannot (a read-only document) refuses it and vends
+ * nothing, so we adopt only when a handle actually arrives. Persistence is not
+ * done here: a native host re-delivers every launch, and a real PWA handle is
+ * persisted by the ordinary save path (`persistHandle`, which skips host
+ * polyfills). Calling `setConsumer` more than once is the API's own error, so this
+ * is guarded to run once.
+ */
+export function consumeLaunchQueue(): void {
+  const w = globalThis as unknown as {
+    launchQueue?: { setConsumer?: (fn: (params: { files?: FsFileHandle[] }) => void) => void }
+  }
+  const lq = w.launchQueue
+  if (!lq || typeof lq.setConsumer !== 'function') return
+  // The open document's #bento-doc, captured now (boot, before any edit), CRLF
+  // normalised to match embeddedDocBlock. The handle we adopt must still hold THIS
+  // document: a host bug that vends the wrong file would otherwise have the first
+  // autosave silently overwrite it.
+  const booted = readEmbeddedDoc()?.replace(/\r\n/g, '\n') ?? null
+  try {
+    lq.setConsumer(async (params) => {
+      const handle = params?.files?.[0]
+      if (!handle || !booted || typeof handle.getFile !== 'function') return
+      try {
+        const text = await (await handle.getFile()).text()
+        // Adopt only if the file is still this document AND nothing claimed a handle
+        // while we awaited getFile: a Save As / "Duplicate as new deck" during that
+        // await sets its own handle, and snapping back to the launched file here
+        // would have autosave overwrite the file the user just moved to.
+        if (!hasFileHandle() && embeddedDocBlock(text) === booted) adoptFileHandle(handle)
+        // else: a different/unverifiable file, or a handle already held — leave it;
+        // ⌘S falls back to the picker.
+      } catch { /* unreadable handle → do not adopt */ }
+    })
+  } catch { /* setConsumer rejects a second registration — the first already won */ }
+}
+
+// At boot, in a browser context, claim the open document's handle. A module-level
+// call is deliberate: it keeps the seam in the kernel, so every app gets it with
+// no per-app change, and it is the consumer's job to begin the launch request.
+// node (rigs, tooling) has no `launchQueue`; a plain, non-installed tab has none
+// either — both no-op. The rig drives consumeLaunchQueue() directly.
+if (typeof window !== 'undefined') consumeLaunchQueue()
 
 /**
  * The name of the file this document is actually open AS, when knowable.
@@ -313,13 +926,18 @@ export async function writeUpdatedFile(html: string): Promise<void> {
 export async function writeUpdatedFileAs(
   html: string,
   doc: KernelDoc,
-  opts: { suffix?: string; keepHandle?: boolean; suggestedName?: string } = {},
+  opts: { suffix?: string; keepHandle?: boolean; suggestedName?: string; purpose?: SavePurpose } = {},
 ): Promise<boolean> {
   if (!hasFsAccess()) {
     downloadFile(html, opts.suggestedName ?? suggestedFileName(doc, opts.suffix))
     return true
   }
-  const handle = await pickHandle(doc, opts.suffix, opts.suggestedName)
+  // `share` is the right default — every caller but one is an export. The
+  // exception is the self-update, which is overwriting the open document and
+  // must say so: a host reads only the picker id, and `bento-share` tells it
+  // "a new file the author will choose", so it correctly declines and the
+  // author gets a dialog for the one save that should never need one.
+  const handle = await pickHandle(doc, opts.suffix, opts.suggestedName, opts.purpose ?? 'share')
   if (!handle) return false
   // Share/export artifacts must NOT become the ⌘S target — otherwise the next
   // save would overwrite e.g. a view-only copy with the FULL document (owner
@@ -327,4 +945,48 @@ export async function writeUpdatedFileAs(
   if (opts.keepHandle) fileHandle = handle
   await writeHandle(handle, html)
   return true
+}
+
+/**
+ * Leave the rollback copy an in-place update depends on.
+ *
+ * WHY THIS IS NOT JUST `downloadFile`. It was, and the backup landed in
+ * ~/Downloads: detached from the document it backs up, one per update, and — for
+ * anyone with Chrome's "ask where to save each file" enabled — behind a save
+ * dialog. Reported 2026-08-14 against 1.0.16. That is the wrong outcome twice
+ * over: an update that rewrites the file in place, silently, ended with the one
+ * prompt in the flow being for a file the author never asked for, and the
+ * rollback it produced was somewhere they would have to go hunting for.
+ *
+ * With a host, the backup goes where it belongs — beside the original, inside
+ * the folder already granted. The host derives the directory itself, from the
+ * sender's own resolved path; `name` is only ever validated against that, never
+ * trusted as a path. See home/webext/src/background.js `backup`.
+ *
+ * Without a host this stays a download, because the alternative is a picker and
+ * a picker is strictly worse than the status quo for the majority case.
+ *
+ * Never throws: a backup that fails must not take the update down with it. The
+ * caller decides what to tell the author, which is why the outcome comes back
+ * as a value.
+ */
+export async function writeBackupBeside(html: string, name: string): Promise<'beside' | 'downloaded'> {
+  if (hostCan('backup')) {
+    try {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: name,
+        id: pickerIdFor('backup'),
+        types: [{ description: appConfig().appName, accept: { 'text/html': ['.bento.html'] } }],
+      })
+      if (handle) {
+        await writeHandle(handle, html)
+        return 'beside'
+      }
+    } catch {
+      // Declined, cancelled, or the grant lapsed. Fall through — a backup in
+      // Downloads is a worse place, not a lost one.
+    }
+  }
+  downloadFile(html, name)
+  return 'downloaded'
 }

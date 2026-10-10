@@ -1,0 +1,181 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Probe — runner side</title>
+<style>
+  body { font: 15px/1.6 -apple-system, system-ui, sans-serif; max-width: 44rem; margin: 4vh auto; padding: 0 1.4rem; color: #1e2a3a; }
+  h1 { font-size: 19px; margin-bottom: .2rem; }
+  .sub { color: #586a80; margin-top: 0; }
+  button { font: inherit; padding: .5rem 1rem; border: 1px solid #c8d0dc; border-radius: 8px; background: #fff; cursor: pointer; margin-right: .4rem; }
+  button:hover:not(:disabled) { background: #f5f7fa; }
+  button:disabled { opacity: .5; cursor: default; }
+  #log { background: #f5f7fa; border-radius: 8px; padding: .9rem; white-space: pre-wrap; font: 12.5px/1.5 ui-monospace, monospace; margin-top: 1rem; }
+  .verdict { margin-top: 1rem; padding: .9rem 1rem; border-radius: 8px; font-weight: 600; display: none; }
+  .pass { background: #e8f5ec; border: 1px solid #b7dcc3; color: #1d6b39; }
+  .fail { background: #fdeceb; border: 1px solid #f0c0bc; color: #a3322a; }
+  .danger { border-color: #e0a9a4; color: #a3322a; }
+  #copy { margin-top: .8rem; }
+</style>
+
+<h1>Runner side — <span id="origin"></span></h1>
+<p class="sub">
+  This page is a <em>different origin</em> from the one that picked the file. It can
+  see nothing of that page's storage. The only thing it has is whatever arrived by
+  <code>postMessage</code>.
+</p>
+
+<div id="controls" style="display:none">
+  <button id="ask">Ask for write access here</button>
+  <button id="read" disabled>Read the file</button>
+  <button id="write" class="danger" disabled>Write it back (byte-identical)</button>
+</div>
+
+<div id="verdict" class="verdict"></div>
+<div id="log">Waiting for a handle…</div>
+<button id="copy" style="display:none">Copy the report</button>
+
+<script type="module">
+const logEl = document.getElementById('log')
+const lines = []
+logEl.textContent = ''
+
+/** Whoever launched us — an opener, or an embedding frame's parent. */
+const launcher = window.opener || (window.parent !== window ? window.parent : null)
+
+// Everything logged here is echoed to the launcher, so the whole run can be
+// read in one window. The two pages are on different origins by construction,
+// so this is the only way either can see the other's side of the story.
+const log = (...a) => {
+  const s = a.join(' ')
+  lines.push(s)
+  logEl.textContent += s + '\n'
+  try { launcher?.postMessage({ type: 'log', line: s }, '*') } catch { /* gone */ }
+}
+
+document.getElementById('origin').textContent = location.origin
+
+let handle = null
+let bytes = null
+
+function verdict(ok, text) {
+  const el = document.getElementById('verdict')
+  el.className = 'verdict ' + (ok ? 'pass' : 'fail')
+  el.textContent = text
+  el.style.display = 'block'
+  lines.push('')
+  lines.push((ok ? 'VERDICT (pass): ' : 'VERDICT (fail): ') + text)
+  document.getElementById('copy').style.display = 'inline-block'
+  try { launcher?.postMessage({ type: 'verdict', ok, text }, '*') } catch { /* gone */ }
+}
+
+// A message whose payload cannot be DESERIALISED here does not arrive as a
+// `message` at all — the target fires `messageerror` instead, with no data.
+// That is the difference between "the plumbing is broken" and "this browser
+// refuses to hand a file handle to another origin", and it is the whole reason
+// this probe can give a decisive answer instead of a shrug.
+window.addEventListener('messageerror', (ev) => {
+  log('\nMESSAGEERROR from ' + ev.origin)
+  log('  A message arrived but could not be deserialised in this origin.')
+  verdict(false,
+    'This browser refuses to deserialise the payload cross-origin. A FileSystemFileHandle cannot be delegated to another origin by postMessage — per-document runner origins cannot work this way.')
+})
+
+window.addEventListener('message', async (ev) => {
+  // Log EVERYTHING, so a control message proves the plumbing independently of
+  // whether the handle survives.
+  if (ev.data?.type === 'ping') {
+    log('CONTROL  plain object arrived from ' + ev.origin + ' — the channel works.')
+    log('         (so if no handle follows, it is the HANDLE that was refused)')
+    return
+  }
+  if (ev.data?.type !== 'handle') { log('(message: ' + JSON.stringify(ev.data).slice(0, 80) + ')'); return }
+  handle = ev.data.handle
+  log('RECEIVED from ' + ev.origin)
+  log('  arrived as        : ' + Object.prototype.toString.call(handle))
+  log('  instanceof FSFH   : ' + (typeof FileSystemFileHandle !== 'undefined' && handle instanceof FileSystemFileHandle))
+  log('  .name             : ' + (handle?.name ?? '(none)'))
+  log('  .kind             : ' + (handle?.kind ?? '(none)'))
+
+  if (!handle || typeof handle.queryPermission !== 'function') {
+    verdict(false, 'The handle did not survive as a usable FileSystemFileHandle. Per-document origins are not viable this way.')
+    return
+  }
+  // Permissions are per-ORIGIN, so 'prompt' here is expected and fine — it
+  // means one extra click, not a dead end. 'denied' would be the dead end.
+  const q = await handle.queryPermission({ mode: 'readwrite' })
+  log('  queryPermission   : ' + q + '   (no gesture yet)')
+  log('\nThe handle crossed intact. Now the question that matters:')
+  log('can THIS origin obtain write access to it?')
+  document.getElementById('controls').style.display = 'block'
+  if (q === 'granted') log('\n(already granted — press Read, then Write)')
+})
+
+document.getElementById('ask').onclick = async () => {
+  try {
+    const p = await handle.requestPermission({ mode: 'readwrite' })
+    log('\nrequestPermission (in a click) → ' + p)
+    if (p === 'granted') {
+      document.getElementById('read').disabled = false
+      document.getElementById('write').disabled = false
+      log('Write access granted to this origin. Read and write to confirm it is real.')
+    } else if (p === 'denied') {
+      verdict(false, 'This origin was refused write access without a prompt. A handle cannot be delegated across origins.')
+    } else {
+      log('Still "prompt" — the browser did not ask, or the dialog was dismissed.')
+    }
+  } catch (e) {
+    log('requestPermission threw: ' + e.name + ': ' + e.message)
+    verdict(false, 'requestPermission is not usable on a handle received cross-origin (' + e.name + ').')
+  }
+}
+
+document.getElementById('read').onclick = async () => {
+  try {
+    const f = await handle.getFile()
+    bytes = new Uint8Array(await f.arrayBuffer())
+    log('\ngetFile() OK  ' + f.name + '  ' + f.size + ' bytes')
+    log('first 48 chars: ' + JSON.stringify(new TextDecoder().decode(bytes.slice(0, 48))))
+  } catch (e) {
+    log('getFile() threw: ' + e.name + ': ' + e.message)
+    verdict(false, 'The handle carries permission but cannot read (' + e.name + ').')
+  }
+}
+
+document.getElementById('write').onclick = async () => {
+  if (!bytes) { log('Read the file first — the write is a byte-identical round trip.'); return }
+  try {
+    const w = await handle.createWritable()
+    await w.write(bytes)
+    await w.close()
+    const after = await handle.getFile()
+    const ok = after.size === bytes.length
+    log('\ncreateWritable + write + close OK')
+    log('size before ' + bytes.length + ' → after ' + after.size + (ok ? '  (identical)' : '  MISMATCH'))
+    verdict(ok,
+      ok
+        ? 'A handle CAN be delegated to another origin and used to write. Per-document runner origins are viable.'
+        : 'The write completed but the file changed size — investigate before trusting this.')
+  } catch (e) {
+    log('createWritable/write threw: ' + e.name + ': ' + e.message)
+    verdict(false, 'This origin can read but NOT write through the delegated handle (' + e.name + '). Silent save would not work.')
+  }
+}
+
+document.getElementById('copy').onclick = async () => {
+  const report = [
+    'bento/home probe — cross-origin handle delegation',
+    'ua: ' + navigator.userAgent,
+    'sender origin → this origin: (see below)',
+    '', ...lines,
+  ].join('\n')
+  try { await navigator.clipboard.writeText(report); document.getElementById('copy').textContent = 'Copied' }
+  catch { log('\n(clipboard blocked — select the log above and copy it manually)') }
+}
+
+// Tell whoever launched us that we exist — they hold the handle until they
+// hear it. Announcing to an embedding parent as well as an opener is what makes
+// the channel testable from a frame: without it a sender has to guess when this
+// document is listening, and a message posted too early is simply lost, which
+// looks exactly like a refusal.
+if (launcher) launcher.postMessage({ type: 'ready' }, '*')
+else log('Opened directly. Start from the parent page on port 5301 instead.')
+</script>

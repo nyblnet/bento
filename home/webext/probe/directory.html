@@ -1,0 +1,171 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Probe — does a directory grant survive, and cover files inside it?</title>
+<style>
+  body { font: 15px/1.6 -apple-system, system-ui, sans-serif; max-width: 46rem; margin: 4vh auto; padding: 0 1.4rem; color: #1e2a3a; }
+  h1 { font-size: 20px; margin-bottom: .2rem; }
+  .sub { color: #586a80; margin-top: 0; }
+  .warn { background: #fff6e5; border: 1px solid #f0d9a8; border-radius: 8px; padding: .8rem 1rem; margin: 1rem 0; }
+  .step { margin: 1rem 0; padding-left: .9rem; border-left: 3px solid #f7a600; }
+  b { color: #7a5200; }
+  button { font: inherit; padding: .5rem 1rem; border: 1px solid #c8d0dc; border-radius: 8px; background: #fff; cursor: pointer; }
+  button:hover:not(:disabled) { background: #f5f7fa; }
+  button:disabled { opacity: .5; cursor: default; }
+  #log { background: #f5f7fa; border-radius: 8px; padding: .9rem; white-space: pre-wrap; font: 12.5px/1.5 ui-monospace, monospace; margin-top: 1rem; }
+  #verdict { margin-top: 1rem; padding: .9rem 1rem; border-radius: 8px; font-weight: 600; display: none; }
+  .pass { background: #e8f5ec; border: 1px solid #b7dcc3; color: #1d6b39; }
+  .fail { background: #fdeceb; border: 1px solid #f0c0bc; color: #a3322a; }
+  code { background: #eef1f5; padding: 1px 4px; border-radius: 4px; font-size: 12.5px; }
+</style>
+
+<h1>Does one directory grant cover every file inside it — across sessions?</h1>
+<p class="sub">
+  This is the premise the whole extension approach rests on. If a stored directory
+  handle re-grants with one click and then hands out <em>writable</em> file handles
+  with no further prompts, a Bento host can save any deck in your Decks folder —
+  including one you opened by double-clicking, which no web page can ever do.
+  If it prompts per file, the idea is worth much less.
+</p>
+
+<div class="warn">
+  <b>Pick a scratch folder.</b> Step 3 creates <code>bento-probe.txt</code> inside it
+  and writes a line to it. Nothing else is touched, and it tells you before it writes.
+</div>
+
+<div class="step">
+  <b>Step 1.</b> Grant a folder, once.<br>
+  <button id="pick">Choose a folder…</button>
+</div>
+
+<div class="step">
+  <b>Step 2.</b> <b>Reload this page</b> (⌘R). The handle is read back from IndexedDB
+  and its state is reported without prompting.
+</div>
+
+<div class="step">
+  <b>Step 3.</b> Re-grant with one click, then write a file <em>inside</em> the folder —
+  the file itself was never picked.<br>
+  <button id="grant" disabled>Re-grant</button>
+  <button id="write" disabled>Create and write bento-probe.txt</button>
+  <button id="again" disabled>Write a second file (no new prompt?)</button>
+</div>
+
+<div id="verdict"></div>
+<div id="log">…</div>
+
+<script type="module">
+const logEl = document.getElementById('log')
+logEl.textContent = ''
+const log = (...a) => { logEl.textContent += a.join(' ') + '\n' }
+const verdict = (ok, text) => {
+  const el = document.getElementById('verdict')
+  el.className = ok ? 'pass' : 'fail'
+  el.textContent = text
+  el.style.display = 'block'
+}
+
+// --- the smallest IndexedDB that can hold a handle --------------------------
+const db = () => new Promise((res, rej) => {
+  const r = indexedDB.open('bento-dir-probe', 1)
+  r.onupgradeneeded = () => r.result.createObjectStore('h')
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error)
+})
+const put = async (v) => { const d = await db(); return new Promise((res, rej) => {
+  const t = d.transaction('h', 'readwrite'); t.objectStore('h').put(v, 'dir')
+  t.oncomplete = res; t.onerror = () => rej(t.error) }) }
+const get = async () => { const d = await db(); return new Promise((res, rej) => {
+  const t = d.transaction('h', 'readonly'); const q = t.objectStore('h').get('dir')
+  q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error) }) }
+
+let dir = null
+
+document.getElementById('pick').onclick = async () => {
+  try {
+    dir = await window.showDirectoryPicker({ mode: 'readwrite' })
+    await put(dir)
+    log('GRANTED  ' + dir.name)
+    log('         stored in IndexedDB (structured clone of a DIRECTORY handle)')
+    log('         permission now: ' + await dir.queryPermission({ mode: 'readwrite' }))
+    log('\n>>> Now RELOAD the page. That is the part that matters. <<<')
+  } catch (e) { log('PICK FAILED  ' + e.name + ': ' + e.message) }
+}
+
+// --- on load: what survived? ------------------------------------------------
+;(async () => {
+  try {
+    dir = await get()
+    if (!dir) { log('No folder stored yet — do step 1.'); return }
+    log('RESTORED ' + dir.name + '  (kind=' + dir.kind + ')')
+    const q = await dir.queryPermission({ mode: 'readwrite' })
+    log('         queryPermission, no gesture: ' + q)
+    document.getElementById('grant').disabled = false
+    if (q === 'granted') {
+      log('\nStill granted outright — no click needed. Go to step 3.')
+      document.getElementById('write').disabled = false
+    } else {
+      log('\nReset to "' + q + '". Step 3 tests whether ONE click restores it.')
+    }
+  } catch (e) { log('RESTORE FAILED  ' + e.name + ': ' + e.message) }
+})()
+
+document.getElementById('grant').onclick = async () => {
+  try {
+    const p = await dir.requestPermission({ mode: 'readwrite' })
+    log('\nrequestPermission (one click) → ' + p)
+    if (p === 'granted') {
+      document.getElementById('write').disabled = false
+      log('Directory is writable again. Now the real question: files inside it.')
+    } else {
+      verdict(false, 'The stored directory could not be re-granted. A host cannot keep folder access across sessions this way.')
+    }
+  } catch (e) {
+    log('requestPermission threw: ' + e.name + ': ' + e.message)
+    verdict(false, 'A stored directory handle cannot be re-granted (' + e.name + ').')
+  }
+}
+
+/** Create a file INSIDE the granted folder and write to it. */
+async function writeInside(name, body, label) {
+  log(`\n[${label}] getFileHandle('${name}', {create:true}) …`)
+  const fh = await dir.getFileHandle(name, { create: true })
+  // The point: this file was never picked. If the directory grant covers it,
+  // no prompt appears and the permission is already 'granted'.
+  const perm = await fh.queryPermission({ mode: 'readwrite' })
+  log(`[${label}] the FILE's permission, unprompted: ${perm}`)
+  const w = await fh.createWritable()
+  await w.write(body)
+  await w.close()
+  const back = await (await fh.getFile()).text()
+  log(`[${label}] wrote and read back ${back.length} bytes: ${JSON.stringify(back.slice(0, 40))}`)
+  return perm
+}
+
+document.getElementById('write').onclick = async () => {
+  try {
+    const perm = await writeInside('bento-probe.txt', `written by the bento directory probe\n`, 'file 1')
+    document.getElementById('again').disabled = false
+    if (perm === 'granted') {
+      log('\nThe file inherited the folder grant — no prompt of its own.')
+      log('Press the third button to confirm a SECOND file needs no prompt either.')
+    } else {
+      verdict(false, `A file inside the granted folder reports "${perm}" rather than granted — the grant does not cover its contents usefully.`)
+    }
+  } catch (e) {
+    log('write failed: ' + e.name + ': ' + e.message)
+    verdict(false, 'Could not create or write a file inside the granted folder (' + e.name + ').')
+  }
+}
+
+document.getElementById('again').onclick = async () => {
+  try {
+    const perm = await writeInside('bento-probe-2.txt', 'second file\n', 'file 2')
+    verdict(perm === 'granted',
+      perm === 'granted'
+        ? 'One folder grant covers every file inside it, and survives a reload with a single click. A host can save any deck in that folder — including ones opened by double-clicking. This is the premise the extension needs, and it holds.'
+        : `The second file reports "${perm}" — the grant is not blanket, so a host would prompt per file.`)
+  } catch (e) {
+    log('second write failed: ' + e.name + ': ' + e.message)
+    verdict(false, 'A second file inside the folder could not be written (' + e.name + ').')
+  }
+}
+</script>

@@ -1,0 +1,851 @@
+{
+  "appDesc": {
+    "message": "احفظ مستند Bento مرة أخرى في الملف الذي فتحته، دون سؤال عن الوجهة."
+  },
+  "navAll": {
+    "message": "كل المستندات"
+  },
+  "navFolders": {
+    "message": "المجلدات"
+  },
+  "navHelp": {
+    "message": "المساعدة ونبذة"
+  },
+  "navSettings": {
+    "message": "الإعدادات"
+  },
+  "addFolder": {
+    "message": "+ إضافة مجلد…"
+  },
+  "searchDocs": {
+    "message": "البحث في المستندات"
+  },
+  "searchDocsSlash": {
+    "message": "البحث في المستندات   /"
+  },
+  "sortTitle": {
+    "message": "الترتيب"
+  },
+  "sortRecent": {
+    "message": "المعدَّلة حديثًا"
+  },
+  "sortName": {
+    "message": "الاسم"
+  },
+  "sortFolder": {
+    "message": "المجلد"
+  },
+  "newDocument": {
+    "message": "+ مستند جديد"
+  },
+  "browseAll": {
+    "message": "تصفح الكل"
+  },
+  "reconnectFolders": {
+    "message": "إعادة ربط المجلدات"
+  },
+  "primeIntro": {
+    "message": "سيسألك Chrome بعد قليل. اختر الخيار الأوسط:"
+  },
+  "actionTitle": {
+    "message": "bento/home"
+  },
+  "actionTitleLapsed": {
+    "message": "bento/home — أحد المجلدات يحتاج إلى إعادة ربط"
+  },
+  "notifyLapsedTitle": {
+    "message": "يحتاج bento/home إلى إعادة ربط"
+  },
+  "notifyLapsedBody": {
+    "message": "سحب Chrome الإذن الممنوح لمجلد. وإلى أن يُستعاد، سيسألك كل حفظ عن مكان وضع الملف."
+  },
+  "reconnect": {
+    "message": "إعادة الربط"
+  },
+  "ctxOpenPanel": {
+    "message": "فتح لوحة bento/home"
+  },
+  "panelEmpty": {
+    "message": "لا توجد بعد مستندات Bento في مجلداتك."
+  },
+  "noMatches": {
+    "message": "لا شيء يطابق «$1»"
+  },
+  "rowUnplacedTip": {
+    "message": "افتح أي مستند في $1 مرة واحدة من Finder، فيصبح كل ما في ذلك المجلد قابلًا للفتح من هنا."
+  },
+  "encrypted": {
+    "message": "محمي بكلمة مرور"
+  },
+  "notSavedYet": {
+    "message": "لم يُحفظ بعد"
+  },
+  "fileAccessOffShort": {
+    "message": "الوصول إلى الملفات المحلية معطَّل"
+  },
+  "noFoldersYet": {
+    "message": "لا توجد مجلدات بعد"
+  },
+  "foldersNeedReconnect": {
+    "message": "$1 مجلد يحتاج إلى إعادة ربط"
+  },
+  "statusOneFolder": {
+    "message": "$1 مجلد · يحفظ في مكانه"
+  },
+  "statusFolders": {
+    "message": "$1 مجلدات · تحفظ في مكانها"
+  },
+  "renewNotOffered": {
+    "message": "لم يعرض Chrome استعادته"
+  },
+  "renewTryAfterRestart": {
+    "message": "أعد المحاولة بعد إعادة تشغيل Chrome"
+  },
+  "fetchingLatest": {
+    "message": "جارٍ جلب أحدث إصدار من Bento…"
+  },
+  "created": {
+    "message": "أُنشئ $1"
+  },
+  "panelUnplaced": {
+    "message": "يمكن قراءة <b>$1</b>$2 لكن لا يمكن فتحه بعد — لا يخبر Chrome أي امتداد بموضع المجلد على القرص. يمكن لـ<b>تصفح الكل</b> إيجادها بنقرة واحدة."
+  },
+  "andMore": {
+    "message": " و$1 غيرها"
+  },
+  "agoJustNow": {
+    "message": "الآن"
+  },
+  "agoMinutes": {
+    "message": "قبل $1 دقيقة"
+  },
+  "agoHour": {
+    "message": "قبل $1 ساعة"
+  },
+  "agoHours": {
+    "message": "قبل $1 ساعات"
+  },
+  "agoDay": {
+    "message": "قبل $1 يوم"
+  },
+  "agoDays": {
+    "message": "قبل $1 أيام"
+  },
+  "searchScope": {
+    "message": "يبحث النظام في العناوين وأسماء الملفات والمجلدات وفي الكلمات داخل المستندات."
+  },
+  "folderEmpty": {
+    "message": "لا شيء في هذا المجلد بعد"
+  },
+  "folderEmptyHint": {
+    "message": "يضع <b>+ مستند جديد</b> واحدًا جديدًا هنا."
+  },
+  "cardUnplacedTip": {
+    "message": "لا يعرف bento/home بعد أين يقع $1 على القرص. استخدم «ابحث عن مجلداتي»، أو افتح أي مستند فيه من Finder مرة واحدة."
+  },
+  "cardRenamedTip": {
+    "message": "$1 مستند Bento باسم آخر. يُفتح من هنا، لكن الحفظ سيسأل عن وجهة — فالحفظ في المكان لا يتعرف إلا على الملفات المنتهية بـ‎.bento.html."
+  },
+  "badgeRenamed": {
+    "message": "مسمّى ‎.html بدل ‎.bento.html — يُفتح من هنا، لكن الحفظ سيسأل عن وجهة."
+  },
+  "menuOpen": {
+    "message": "فتح"
+  },
+  "menuDuplicate": {
+    "message": "تكرار"
+  },
+  "menuRename": {
+    "message": "إعادة تسمية…"
+  },
+  "menuCopyPath": {
+    "message": "نسخ المسار"
+  },
+  "duplicatedAs": {
+    "message": "تم التكرار باسم $1"
+  },
+  "renamePrompt": {
+    "message": "إعادة تسمية المستند"
+  },
+  "renamedTo": {
+    "message": "أُعيدت التسمية إلى $1"
+  },
+  "pathCopied": {
+    "message": "نُسخ المسار"
+  },
+  "folderNotOpenedYet": {
+    "message": "$1 — لم يُفتح بعد"
+  },
+  "setupTitle": {
+    "message": "أمران وتكون جاهزًا"
+  },
+  "setupLead": {
+    "message": "بعد ذلك، يكتب ⌘S في مستند فتحته بنقرة مزدوجة مباشرةً إلى الملف نفسه — دون أي سؤال عن الوجهة، أبدًا."
+  },
+  "chooseFolder": {
+    "message": "اختيار مجلد…"
+  },
+  "setupStep1": {
+    "message": "اختر المجلد الذي توجد فيه مستنداتك"
+  },
+  "setupStep1Note": {
+    "message": "مجلد واحد واسع يكفي عادةً — فهو يشمل كل ما بداخله."
+  },
+  "setupStep2": {
+    "message": "فعّل الوصول إلى الملفات المحلية"
+  },
+  "setupStep2Note": {
+    "message": "في <code>chrome://extensions</code> ← bento/home ← <b>السماح بالوصول إلى عناوين URL للملفات</b>. لا يسمح Chrome لأي امتداد بتفعيل هذا بنفسه."
+  },
+  "setupUpgradeNote": {
+    "message": "<b>هل رقّيت وتوقعت أن تجد مجلداتك هنا؟</b> يُعرَّف الامتداد غير المحزوم بمسار مجلده، لذا فإن نسخة جديدة محمَّلة من مجلد آخر تُعد امتدادًا مختلفًا. مجلداتك ما زالت ممنوحة للنسخة القديمة. بدلًا من ذلك، استبدل الملفات في المجلد الأصلي واضغط <b>إعادة التحميل</b> في <code>chrome://extensions</code>."
+  },
+  "noticeFileAccessOff": {
+    "message": "<b>الوصول إلى الملفات المحلية معطَّل</b> — لن يُحفظ شيء في مكانه حتى يُفعَّل. فعّل <b>السماح بالوصول إلى عناوين URL للملفات</b> في <code>chrome://extensions</code>."
+  },
+  "noticeLapsed": {
+    "message": "<b>$1 مجلد يحتاج إلى إعادة ربط.</b> أعد ربطه من <b>الإعدادات</b>، واختر <b>السماح في كل زيارة</b> — وهو الخيار الوحيد الذي يدوم."
+  },
+  "noticeUnplaced": {
+    "message": "يمكن إدراج <b>$1</b> لكن لا يمكن فتحه بعد — لا يخبر Chrome أي امتداد أبدًا بموضع المجلد على القرص."
+  },
+  "findFolders": {
+    "message": "ابحث عن مجلداتي"
+  },
+  "looking": {
+    "message": "جارٍ البحث…"
+  },
+  "findDeclined": {
+    "message": "<b>لا بأس.</b> بدلًا من ذلك افتح أي مستند في $1 من Finder مرة واحدة — ستلاحظ هذه الصفحة ذلك."
+  },
+  "foundFolder": {
+    "message": "عُثر على $1 مجلد"
+  },
+  "foundFolders": {
+    "message": "عُثر على $1 مجلدات"
+  },
+  "foundNothing": {
+    "message": "لا شيء في السجل بعد — افتح مستندًا واحدًا من Finder"
+  },
+  "setFoldersSub": {
+    "message": "المستندات الموجودة فيها تُحفظ مباشرةً إلى ملفاتها دون سؤال عن الوجهة. والمجلد يشمل كل ما بداخله."
+  },
+  "noneYet": {
+    "message": "لا شيء بعد."
+  },
+  "savesInPlace": {
+    "message": "يحفظ في مكانه"
+  },
+  "needsReconnecting": {
+    "message": "يحتاج إلى إعادة ربط"
+  },
+  "reconnectTip": {
+    "message": "سيطلب Chrome الإذن لاستعادة هذا المجلد. «عدم السماح» يُسقطه، وبعدها ينتظر Chrome إعادة تشغيل على الأقل قبل أن يسأل مجددًا."
+  },
+  "remove": {
+    "message": "إزالة"
+  },
+  "removeTip": {
+    "message": "يسحب الوصول. قد يظل Chrome متذكرًا الإذن، لذا قد لا يسأل مرة أخرى عند إعادة إضافة المجلد."
+  },
+  "setAccessTitle": {
+    "message": "الوصول إلى الملفات المحلية"
+  },
+  "setAccessSub": {
+    "message": "لا يسمح Chrome لأي امتداد بتفعيل هذا بنفسه، ولا يعمل شيء بدونه."
+  },
+  "stateOn": {
+    "message": "مفعَّل"
+  },
+  "stateOff": {
+    "message": "معطَّل"
+  },
+  "stateUnknown": {
+    "message": "غير معروف"
+  },
+  "accessOnNote": {
+    "message": "يستطيع bento/home قراءة الصفحات التي فتحتها من القرص."
+  },
+  "accessOffNote": {
+    "message": "افتح chrome://extensions، وابحث عن bento/home، وفعّل «السماح بالوصول إلى عناوين URL للملفات»."
+  },
+  "accessUnknownNote": {
+    "message": "لا يبلّغ هذا المتصفح عن الحالة. إذا ظل الحفظ يسأل، فتحقق من ذلك في chrome://extensions."
+  },
+  "setVersionTitle": {
+    "message": "الإصدار"
+  },
+  "setVersionUnpacked": {
+    "message": "حُمِّلت هذه النسخة غير محزومة، لذا لن يحدّثها Chrome أبدًا."
+  },
+  "setVersionStore": {
+    "message": "مثبَّت من المتجر، لذا يحدّث نفسه."
+  },
+  "versionAvailable": {
+    "message": "$1 متاح"
+  },
+  "versionUpToDate": {
+    "message": "محدَّث حتى آخر فحص"
+  },
+  "versionManaged": {
+    "message": "يبقيه المتصفح محدَّثًا"
+  },
+  "getIt": {
+    "message": "احصل عليه"
+  },
+  "checkNow": {
+    "message": "افحص الآن"
+  },
+  "autoCheckPref": {
+    "message": "<b>ابحث عن إصدار جديد عند بدء تشغيل المتصفح.</b><br>طلب واحد إلى bento.page لملف ثابت. لا يرسل أي معرّفات ولا رقم إصدار ولا شيئًا عن مستنداتك — فالمقارنة تجري هنا. عطّله فلن يُطلب شيء أبدًا؛ ويظل <b>افحص الآن</b> يعمل."
+  },
+  "expectedSha": {
+    "message": "قيمة SHA-256 المتوقعة للملف المضغوط: $1"
+  },
+  "setReachTitle": {
+    "message": "ما الذي يصل إليه"
+  },
+  "setReachSub": {
+    "message": "المجلدات أعلاه فقط، والملف الذي فُتحت منه الصفحة فعليًا فقط. لا يُرفع شيء ولا يُقرأ شيء في أي مكان آخر."
+  },
+  "updateAvailable": {
+    "message": "<b>bento/home $1 متاح.</b> حُمِّلت هذه النسخة غير محزومة، لذا لن يحدّثها Chrome أبدًا."
+  },
+  "updateStep1": {
+    "message": "نزّله من GitHub"
+  },
+  "updateStep2": {
+    "message": "استبدل الملفات <b>في المجلد الذي حمّلته منه</b> — المجلد نفسه، وإلا عدّه Chrome امتدادًا مختلفًا ولن تنتقل معه المجلدات الممنوحة"
+  },
+  "updateStep3": {
+    "message": "افتح <code>chrome://extensions</code> واضغط <b>إعادة التحميل</b> على bento/home"
+  },
+  "fetchingApp": {
+    "message": "جارٍ جلب $1…"
+  },
+  "createdIn": {
+    "message": "أُنشئ $1 ($2) في $3"
+  },
+  "intoFolder": {
+    "message": "في $1"
+  },
+  "helpWhatTitle": {
+    "message": "ما الذي يفعله bento/home"
+  },
+  "helpWhatSub": {
+    "message": "مستند Bento هو ملف HTML واحد يحمل محرّره معه. وعند فتحه مباشرةً من القرص لا يسمح له المتصفح بالكتابة إلى نفسه — فيسألك الحفظ في كل مرة عن مكان وضعه. وbento/home هو ما يزيل هذا السؤال."
+  },
+  "tourSaveTitle": {
+    "message": "الحفظ في المكان"
+  },
+  "tourSaveBody": {
+    "message": "يكتب ⌘S مباشرةً إلى الملف الذي فتحته، دون أي مربع حوار. والحفظ التلقائي والتحديثات في المكان تسلك الطريق نفسه."
+  },
+  "tourFindTitle": {
+    "message": "اعثر على مستنداتك"
+  },
+  "tourFindBody": {
+    "message": "كل مستند Bento في مجلداتك، بعنوانه الحقيقي وصورة لصفحته الأولى. ويشمل البحث ما هو مكتوب داخلها."
+  },
+  "tourSwitchTitle": {
+    "message": "بدّل وأنت تعمل"
+  },
+  "tourSwitchBody": {
+    "message": "اضغط <kbd>Alt</kbd>+<kbd>B</kbd>، أو انقر بالزر الأيمن داخل مستند، لتظهر لوحة إلى جانبه."
+  },
+  "tourNewTitle": {
+    "message": "أنشئ مستندًا جديدًا"
+  },
+  "tourNewBody": {
+    "message": "يجلب <b>+ مستند جديد</b> الإصدار الحالي من Slides أو Spaces أو Dash ويضع مستندًا جديدًا في مجلدك."
+  },
+  "helpNeedsTitle": {
+    "message": "ما يحتاجه منك"
+  },
+  "helpNeedsSub": {
+    "message": "أمران، وكلاهما خارج قدرة هذا الامتداد على ترتيبه."
+  },
+  "helpFolder": {
+    "message": "مجلد"
+  },
+  "helpFolderGranted": {
+    "message": "$1 ممنوح — المستندات داخلها تُحفظ في مكانها"
+  },
+  "helpFolderNone": {
+    "message": "لم يُختر بعد. مجلد واحد واسع يشمل كل ما بداخله."
+  },
+  "helpAccessOff": {
+    "message": "معطَّل. فعّل <b>السماح بالوصول إلى عناوين URL للملفات</b> في <code>chrome://extensions</code> — فلا يستطيع أي امتداد تفعيل هذا بنفسه."
+  },
+  "helpAccessUnknown": {
+    "message": "لا يبلّغ هذا المتصفح عن الحالة. إذا ظل الحفظ يسأل، فتحقق من ذلك في <code>chrome://extensions</code>."
+  },
+  "helpAccessOn": {
+    "message": "مفعَّل — يستطيع bento/home قراءة الصفحات التي فتحتها من القرص."
+  },
+  "helpNeverTitle": {
+    "message": "ما لا يفعله أبدًا"
+  },
+  "helpNeverSub": {
+    "message": "يقرأ ويكتب داخل المجلدات أعلاه فقط، وفي الملف الذي فُتحت منه الصفحة فعليًا فقط — والمتصفح هو من يحدد أيّها، فلا يستطيع مستند أن يسمّي ملف شخص آخر. ولا يُرفع أي شيء عن مستنداتك إلى أي مكان، ولا يملك الامتداد خادمًا يرفعها إليه أصلًا."
+  },
+  "helpAboutTitle": {
+    "message": "نبذة"
+  },
+  "helpAboutSub": {
+    "message": "bento/home $1 · جزء من مشروع Bento · مرخّص برخصة MIT"
+  },
+  "linkSource": {
+    "message": "المصدر على GitHub"
+  },
+  "linkIssues": {
+    "message": "الإبلاغ عن مشكلة"
+  },
+  "linkReleases": {
+    "message": "الإصدارات"
+  },
+  "primeMiddle": {
+    "message": "الخيار الذي يدوم"
+  },
+  "primeNote": {
+    "message": "الخياران الآخران يعملان أيضًا، لكن Chrome يسأل من جديد — عند كل إعادة تشغيل بالنسبة للأول، وبعد انتظار بالنسبة للأخير."
+  },
+  "viewLayout": {
+    "message": "طريقة عرض المستندات"
+  },
+  "viewIcons": {
+    "message": "أيقونات"
+  },
+  "viewList": {
+    "message": "قائمة"
+  },
+  "close": {
+    "message": "إغلاق"
+  },
+  "setLangTitle": {
+    "message": "اللغة"
+  },
+  "setLangSub": {
+    "message": "اللغة التي يتحدث بها هذا الامتداد. يتبع المتصفح عادةً."
+  },
+  "langAutomatic": {
+    "message": "تلقائي — اتّبع المتصفح"
+  },
+  "setLangNote": {
+    "message": "اسم الامتداد نفسه ووصفه يأتيان من المتصفح ولا يتغيران."
+  },
+  "aboutPromo": {
+    "message": "جديد على Bento؟ ستجد القوالب والمعرض ودليل التحرير بالذكاء الاصطناعي على $1 — أو ضع نجمة على $2."
+  },
+  "setThemeTitle": {
+    "message": "المظهر"
+  },
+  "setThemeSub": {
+    "message": "إعداد المتصفح هو الافتراضي، وليس إلزاميًا."
+  },
+  "themeAuto": {
+    "message": "حسب المتصفح"
+  },
+  "themeLight": {
+    "message": "فاتح"
+  },
+  "themeDark": {
+    "message": "داكن"
+  },
+  "checking": {
+    "message": "جارٍ التحقق…"
+  },
+  "surveyTitle": {
+    "message": "اعثر على موضع مستنداتك"
+  },
+  "surveySub": {
+    "message": "يعرف المتصفح أي مستندات Bento فتحتها، ويمكنه تحديد المجلدات التي تحتويها."
+  },
+  "surveyDeclined": {
+    "message": "لا بأس — يمكنك إضافة المجلدات يدويًا."
+  },
+  "surveyAllCovered": {
+    "message": "كل المستندات الـ$1 التي رآها هذا المتصفح موجودة بالفعل في مجلد أضفته."
+  },
+  "surveyUncovered": {
+    "message": "<b>$1</b> مستندًا خارج كل المجلدات التي أضفتها، و$2 مشمولة بالفعل."
+  },
+  "surveyCovers": {
+    "message": "يشمل $1"
+  },
+  "surveyAdd": {
+    "message": "أضف هذا المجلد…"
+  },
+  "surveyAdded": {
+    "message": "تمت إضافة $1 — المستندات بداخله جاهزة"
+  },
+  "surveyAddedElsewhere": {
+    "message": "تمت إضافة $1، لكن المستندات ليست فيه — افتح واحدًا من Finder مرة واحدة."
+  },
+  "surveyOnlySeen": {
+    "message": "لا يمكن العثور بهذه الطريقة إلا على المستندات التي فُتحت في هذا المتصفح."
+  },
+  "setAsstTitle": {
+    "message": "المساعد"
+  },
+  "setAsstSub": {
+    "message": "إلى أين تُرسَل المحادثة حول مستند. يبقى المفتاح في هذا الامتداد — لا يرى المستند سوى الرد."
+  },
+  "asstProvider": {
+    "message": "المزوّد"
+  },
+  "asstProvBuiltin": {
+    "message": "نموذج Chrome المدمج (Gemini Nano) — على هذا الجهاز"
+  },
+  "asstProvGemini": {
+    "message": "Google Gemini (مفتاح AI Studio)"
+  },
+  "asstProvAnthropic": {
+    "message": "Anthropic (Claude)"
+  },
+  "asstProvOpenai": {
+    "message": "متوافق مع OpenAI (OpenAI وOpenRouter وOllama وLM Studio…)"
+  },
+  "asstBaseUrl": {
+    "message": "عنوان URL الأساسي"
+  },
+  "asstModel": {
+    "message": "النموذج"
+  },
+  "asstKey": {
+    "message": "مفتاح API"
+  },
+  "asstKeyOptional": {
+    "message": "اختياري لخادم محلي مثل Ollama أو LM Studio."
+  },
+  "asstSave": {
+    "message": "حفظ"
+  },
+  "asstSaved": {
+    "message": "حُفظت إعدادات المساعد"
+  },
+  "asstAccessDeclined": {
+    "message": "رُفض الوصول إلى الموقع. تُرسَل الطلبات مع ذلك، وتعمل عندما يسمح الخادم بامتدادات المتصفح (CORS)."
+  },
+  "asstCheck": {
+    "message": "التحقق من الاتصال"
+  },
+  "asstChecking": {
+    "message": "جارٍ التحقق…"
+  },
+  "asstReachable": {
+    "message": "يمكن الوصول — أجاب $1."
+  },
+  "asstBuiltinReady": {
+    "message": "جاهز على هذا الجهاز."
+  },
+  "asstBuiltinDownload": {
+    "message": "النموذج ليس على هذا الجهاز بعد. اضغط «تنزيل النموذج» في إعدادات امتداد bento/home."
+  },
+  "asstBuiltinUnsupported": {
+    "message": "لا يوجد نموذج مدمج في Chrome هذا. اختر مزوّدًا آخر في إعدادات الامتداد."
+  },
+  "asstOnDevice": {
+    "message": "هذا الجهاز"
+  },
+  "asstNotConfigured": {
+    "message": "لم يُعدّ المساعد بعد — افتح إعدادات امتداد bento/home."
+  },
+  "asstUnreachable": {
+    "message": "تعذّر الوصول إلى $1. هل الخادم يعمل، وهل يسمح بالطلبات من امتدادات المتصفح (CORS)؟"
+  },
+  "asstWaitConsent": {
+    "message": "بانتظار إذنك — أجب عن السؤال ثم حاول مجددًا."
+  },
+  "asstDenied": {
+    "message": "لا يُسمح لهذا المستند باستخدام المساعد."
+  },
+  "asstAllowedTitle": {
+    "message": "المستندات المسموح لها باستخدام المساعد"
+  },
+  "asstAllowedSub": {
+    "message": "يسأل كل مستند مرة واحدة قبل طلبه الأول. أزل مستندًا ليُسأل من جديد."
+  },
+  "consentTitle": {
+    "message": "السماح لهذا المستند باستخدام مساعدك؟"
+  },
+  "consentLead": {
+    "message": "سيتمكن من إرسال نص إلى $1 ($2) وقراءة الردود. لا يُشارَك مفتاحك معه أبدًا."
+  },
+  "consentWeb": {
+    "message": "قراءة صفحات الويب مفعّلة: يمكنه أيضًا زيارة الصفحات التي تذكرها أو التي يجدها البحث، وترى تلك المواقع الزيارة."
+  },
+  "consentRemember": {
+    "message": "سيُتذكَّر لهذا الملف. يمكنك تغيير ذلك لاحقًا في إعدادات الامتداد."
+  },
+  "consentAllow": {
+    "message": "السماح"
+  },
+  "consentDeny": {
+    "message": "ليس الآن"
+  },
+  "asstBuiltinDownloading": {
+    "message": "يحمّل Chrome النموذج. حاول مجددًا عند اكتماله."
+  },
+  "asstBuiltinDownloadBtn": {
+    "message": "تنزيل النموذج"
+  },
+  "asstBuiltinProgress": {
+    "message": "جارٍ تنزيل النموذج… $1٪"
+  },
+  "asstBuiltinRequirements": {
+    "message": "نحو 2–4 غيغابايت. يحتاج Chrome إلى نحو 22 غيغابايت خالية على القرص وشبكة غير محدودة البيانات، وإلا أبلغ أن النموذج غير متاح."
+  },
+  "asstContext": {
+    "message": "نافذة السياق (رموز)"
+  },
+  "asstContextHint": {
+    "message": "اتركه فارغًا لاستخدام ما يبلّغ عنه المزوّد. املأه لخادم تستضيفه بنفسك ولا يعرف حدّه سواك."
+  },
+  "asstContextKnown": {
+    "message": "نافذة السياق: $1 رمز"
+  },
+  "asstShowAll": {
+    "message": "إظهار كل النماذج، لا نماذج المحادثة فقط"
+  },
+  "asstOtherModelRow": {
+    "message": "أخرى…"
+  },
+  "asstOtherModel": {
+    "message": "معرّف النموذج كما يسمّيه المزوّد تمامًا"
+  },
+  "asstBadModel": {
+    "message": "هذا ليس معرّف نموذج: أحرف وأرقام و . _ : / - فقط."
+  },
+  "asstWindow": {
+    "message": "العرض أكبر من أن يتّسع له هذا النموذج: يحتاج الطلب نحو $1 رمزًا ويقبل النموذج $2. اختر نموذجًا بنافذة أوسع أو اختصر العرض."
+  },
+  "asstOutlineOnly": {
+    "message": "لم يتّسع في نافذة هذا النموذج سوى المخطط؛ لم يُرسَل المحتوى المحدد كاملًا."
+  },
+  "asstNoDocument": {
+    "message": "لم يسلّم المستند محتواه."
+  },
+  "asstSendsNotice": {
+    "message": "يرسل مخطط العرض و$1 إلى $2؛ تبقى التعليقات هنا."
+  },
+  "asstOnDeviceModel": {
+    "message": "النموذج على هذا الجهاز"
+  },
+  "asstFocusGeneric": {
+    "message": "العناصر المحددة أو الشريحة المفتوحة"
+  },
+  "asstSearch": {
+    "message": "السماح للنموذج بالبحث في الويب"
+  },
+  "asstSearchNative": {
+    "message": "لهذا المسار بحث ويب خاص به ($1)؛ الاستعلام هو الشيء الجديد الوحيد الذي يخرج."
+  },
+  "asstSearchNone": {
+    "message": "ليس لهذا النموذج بحث ويب خاص به — حدّد نقطة بحث أدناه."
+  },
+  "asstRead": {
+    "message": "قراءة صفحات الويب"
+  },
+  "asstReadOn": {
+    "message": "السماح بقراءة صفحات الويب…"
+  },
+  "asstReadOff": {
+    "message": "إيقاف قراءة صفحات الويب"
+  },
+  "asstReadOnNote": {
+    "message": "يمكن للمساعد قراءة الصفحات التي تذكرها أو التي يجدها البحث. يرى كل موقع يقرؤه الزيارة؛ وما يعود نصٌّ وليس تعليمات أبدًا."
+  },
+  "asstReadOffNote": {
+    "message": "متوقف. لا يستطيع المساعد قراءة صفحات الويب؛ نقرة هنا تسأل المتصفح مرة واحدة."
+  },
+  "asstSearchEndpoint": {
+    "message": "نقطة البحث"
+  },
+  "asstSearchEndpointHint": {
+    "message": "نسخة SearXNG، أو https://api.search.brave.com/ مع مفتاحها أدناه. تُستخدم فقط عندما لا يملك النموذج بحثًا خاصًا."
+  },
+  "asstSearchKey": {
+    "message": "مفتاح البحث"
+  },
+  "placingFolder": {
+    "message": "جارٍ البحث عن ”$1“ على القرص…"
+  },
+  "placeNoDisk": {
+    "message": "لم يسمح Chrome للامتداد بقراءة ”$1“ من القرص للعثور عليه (رُفضت قوائم file://)."
+  },
+  "placeTried": {
+    "message": "بُحث عن ”$1“ في $2 موضعًا على القرص — ليس هناك."
+  },
+  "badgeNotAdded": {
+    "message": "غير مضاف"
+  },
+  "badgeNotAddedTip": {
+    "message": "عُثر عليه على القرص. يفتح، لكن الحفظ سيسأل عن المكان — أضف مجلده ليُحفظ في مكانه."
+  },
+  "folderFoundTip": {
+    "message": "عُثر عليه على القرص ولم يُضف: تفتح مستنداته، لكن الحفظ يسأل عن المكان."
+  },
+  "menuAddFolder": {
+    "message": "إضافة مجلده ليُحفظ في مكانه…"
+  },
+  "pickThisFolder": {
+    "message": "في المحدِّد اختر المجلد ”$1“ — يجب أن يراك Chrome تختاره."
+  },
+  "pickedWrongFolder": {
+    "message": "”$1“ ليس مجلد هذا المستند (”$2“). حاول مجددًا واختر ذاك."
+  },
+  "folderAlreadyAdded": {
+    "message": "”$1“ مضاف بالفعل."
+  },
+  "bentoFolderBtn": {
+    "message": "إنشاء مجلد Bento…"
+  },
+  "bentoFolderHow": {
+    "message": "في مربع الحوار أنشئ مجلدًا جديدًا باسم ”Bento“ داخل المستندات واختره."
+  },
+  "bentoFolderMade": {
+    "message": "”$1“ هو مجلد Bento الخاص بك — تذهب المستندات الجديدة إليه وتُحفظ في مكانها."
+  },
+  "bentoFolderTip": {
+    "message": "مجلد داخل المستندات يحفظ في مكانه ويستقبل المستندات الجديدة. لن يمنح Chrome مجلد المستندات نفسه."
+  },
+  "defaultFolder": {
+    "message": "المستندات الجديدة تأتي هنا"
+  },
+  "fgTitle": {
+    "message": "حفظ ”$1“ في مكانه من الآن فصاعدًا؟"
+  },
+  "fgTitleLapsed": {
+    "message": "إعادة ربط ”$1“؟"
+  },
+  "fgLead": {
+    "message": "يحتفظ bento/home بالإذن لهذا الملف وحده، فيكتب كل حفظ فيه مباشرة. اختر الملف نفسه في مربع الحوار التالي."
+  },
+  "fgLeadLapsed": {
+    "message": "لدى bento/home هذا الملف بالفعل؛ يريد المتصفح أن تؤكده مجددًا."
+  },
+  "fgChoose": {
+    "message": "اختيار الملف…"
+  },
+  "fgReconnect": {
+    "message": "إعادة الربط"
+  },
+  "fgOnce": {
+    "message": "هذه المرة فقط"
+  },
+  "fgNotSame": {
+    "message": "هذا ليس الملف الذي طلب (”$1“). اختر ذاك، أو أغلق هذه النافذة."
+  },
+  "fgDenied": {
+    "message": "لم يُمنح الإذن."
+  },
+  "droppedGranted": {
+    "message": "أُضيف: $1 مجلدات، $2 ملفات."
+  },
+  "setFilesTitle": {
+    "message": "الملفات"
+  },
+  "setFilesSub": {
+    "message": "مستندات خارج أي مجلد مضاف تُحفظ في مكانها بنفسها — اختيرت مرة، أو أُفلتت في المكتبة."
+  },
+  "dropNoHandle": {
+    "message": "”$1“: لم يسلّم المتصفح مقبض ملف لهذا الإفلات."
+  },
+  "dropNotBento": {
+    "message": "”$1“ ليس مستند Bento ‏(.bento.html) — لم يُضف."
+  },
+  "setDownloadsTitle": {
+    "message": "التنزيلات"
+  },
+  "setDownloadsSub": {
+    "message": "يمكن للمستندات في مجلد التنزيلات أن تُحفظ في مكانها عبر تنزيلات Chrome — إلا إذا كان Chrome مضبوطًا ليسأل عن مكان حفظ كل ملف، مما يحوّل كل حفظ إلى مربع حوار."
+  },
+  "setDownloadsOff": {
+    "message": "سأل Chrome عن مكان الحفظ — الحفظ في التنزيلات متوقف حتى يتغير ذلك الإعداد"
+  },
+  "setDownloadsRetry": {
+    "message": "حاول مجددًا"
+  },
+  "dropTwins": {
+    "message": "”$1“: $2 ملفات على القرص لها هذه البايتات بالضبط — أُضيف، لكنه لا يستطيع الحفظ في مكانه حتى تختلف."
+  },
+  "addFiles": {
+    "message": "إضافة ملفات…"
+  },
+  "tdGrant": {
+    "message": "الحفظ هنا دون سؤال…"
+  },
+  "tdViaFolder": {
+    "message": "يُحفظ في مكانه — مجلده مضاف"
+  },
+  "tdViaFile": {
+    "message": "يُحفظ في مكانه — هذا الملف مضاف"
+  },
+  "tdViaDownloads": {
+    "message": "يُحفظ في مكانه — إنه في التنزيلات"
+  },
+  "tdNotYet": {
+    "message": "يسأل عن مكان الحفظ في كل مرة"
+  },
+  "badgeNotSavingTip": {
+    "message": "لا يستطيع هذا المستند الحفظ في مكانه بعد — افتح لوحة bento/home لإصلاح ذلك."
+  },
+  "noticeOsBlocked": {
+    "message": "يمنع macOS المتصفح من $1، لذا لا تُدرج المستندات هناك حتى تسمح بذلك: إعدادات النظام → الخصوصية والأمن → الملفات والمجلدات → Google Chrome."
+  },
+  "noticeOsBlockedPath": {
+    "message": "إعدادات النظام → الخصوصية والأمن → الملفات والمجلدات"
+  },
+  "fgLeadFolder": {
+    "message": "اختر المجلد ”$1“ في مربع الحوار التالي، وسيُحفظ كل مستند فيه في مكانه من الآن — هذا المستند وجيرانه."
+  },
+  "fgChooseFolder": {
+    "message": "اختيار المجلد ”$1“…"
+  },
+  "fgOnlyFile": {
+    "message": "هذا الملف فقط…"
+  },
+  "fgNotContaining": {
+    "message": "”$1“ لا يحتوي هذا المستند — اختر ”$2“ أو مجلدًا أعلى منه."
+  },
+  "tdGrantFolder": {
+    "message": "حفظ كل ما في ”$1“ دون سؤال…"
+  },
+  "saTitleCopy": {
+    "message": "حفظ نسخة"
+  },
+  "saTitleShare": {
+    "message": "حفظ الملف المُصدَّر"
+  },
+  "saName": {
+    "message": "اسم الملف"
+  },
+  "saBeside": {
+    "message": "حفظ بجانب “$1”"
+  },
+  "saChoose": {
+    "message": "اختيار مجلد…"
+  },
+  "saCancel": {
+    "message": "إلغاء"
+  },
+  "saExists": {
+    "message": "“$1” موجود بالفعل. احفظ مرة أخرى لاستبداله."
+  },
+  "saIsOriginal": {
+    "message": "هذا هو اسم المستند المفتوح نفسه — اختر اسمًا آخر."
+  },
+  "saBadName": {
+    "message": "استخدم اسم ملف بلا شرطات مائلة."
+  },
+  "saLapsed": {
+    "message": "انتهى الوصول إلى هذا المجلد. اختر مجلدًا بدلًا من ذلك، أو جدّده من المكتبة."
+  },
+  "saGone": {
+    "message": "لم يعد هذا الحفظ قيد الانتظار. أغلق هذه النافذة واحفظ مرة أخرى."
+  },
+  "saTaken": {
+    "message": "“$1” موجود بالفعل. اختر اسمًا مختلفًا."
+  }
+}

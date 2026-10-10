@@ -1,0 +1,98 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   The column menu — the value checklist and the condition builder.
+
+   Vite concatenates every IMPORTED stylesheet into one <style>, so this file
+   must be imported from filterui.ts and never linked, and nothing here may
+   depend on landing after styles.css in the cascade: order follows the module
+   graph, not intent. So every colour is a var() (they resolve where they are
+   used) and everything here is scoped under `.dfx`, which styles.css does not
+   know about — no rule below can reach a menu that is not this one. */
+
+/* The menu is `.dx-pop .dfx`: it inherits the floating-surface style (surface,
+   --line-strong border, shadow) and only widens it. A checklist needs to show
+   a value like "Closed — won (Q3)" without wrapping every row. */
+.dx-pop.dfx { min-width: 264px; max-width: 320px; }
+
+/* Section headings. Sentence-case, muted, the same weight as .dx-pop-row's
+   label text — a filter menu with four bold headings reads as a dialog, and
+   this is a menu. */
+.dfx-h {
+  font-size: var(--fs-micro);
+  color: var(--muted);
+  padding: 6px 9px 2px;
+}
+
+/* What is filtering this column RIGHT NOW, said where the question is asked.
+   The status bar under the grid says how many rows survived; it does not say
+   which column did it, and with three filters composed that is the thing the
+   reader cannot work out from the screen. */
+.dfx-live {
+  font-size: var(--fs-micro);
+  padding: 5px 9px;
+  margin: 0 5px 3px;
+  border-radius: var(--radius);
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dfx-q { margin: 0 5px 4px; }
+
+/* THE LIST SCROLLS AND THE MENU DOES NOT. A menu tall enough for forty values
+   is taller than a laptop viewport, and a popover that runs off the bottom of
+   the screen takes the Apply button with it. 8.5 rows, so that the half row at
+   the cut says "there is more" without a scrollbar having to appear. */
+.dfx-list {
+  max-height: 187px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 5px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.dfx-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 6px;
+  border-radius: var(--radius);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+.dfx-item:hover { background: var(--hover); }
+/* One line per value, and the overflow is elided rather than wrapped: forty
+   values each two lines tall is a list nobody can scan. The full text is in
+   the cell, which is on screen behind this menu. */
+.dfx-item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dfx-item input { margin: 0; flex: 0 0 auto; accent-color: var(--blue); }
+
+/* (Select all) sits OUTSIDE the scroller, so it cannot scroll away from the
+   list it commands. */
+.dfx-all { margin: 0 5px 4px; font-weight: 600; }
+
+.dfx-note,
+.dfx-none {
+  font-size: var(--fs-micro);
+  color: var(--muted);
+  padding: 5px 9px 2px;
+  line-height: 1.35;
+}
+
+.dfx-and { font-size: var(--fs-micro); color: var(--muted); padding: 2px 9px; }
+
+.dx-pop.dfx select.dx-pop-in,
+.dx-pop.dfx input.dx-pop-in.dfx-a,
+.dx-pop.dfx input.dx-pop-in.dfx-b { margin: 0 5px 4px; }
+
+/* `hidden` on a flex child does nothing without this: `display: flex` on the
+   parent re-establishes display on every child and beats the UA's
+   `[hidden] { display: none }`. The operand box for "is empty" would otherwise
+   stay on screen — the exact defect this menu exists to stop repeating: a
+   control that accepts input and ignores it. */
+.dx-pop.dfx [hidden] { display: none !important; }

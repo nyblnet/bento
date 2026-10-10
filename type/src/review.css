@@ -1,0 +1,48 @@
+/* SPDX-License-Identifier: MIT */
+/* Copyright (c) 2026 The Bento authors */
+
+/* review.ts — the compact nav bar in the Review tab, and the display-mode
+   CSS that makes "No markup" / "Original" a pure repaint. Variables reused
+   from styles.css's root palette (--ink/--muted/--line/--chrome-2/--accent),
+   never redeclared: a second copy would drift from the theme the moment
+   either side changed. */
+
+.t-trk-nav {
+  display: flex; align-items: center; gap: 4px;
+  margin-bottom: 8px;
+}
+.t-trk-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: transparent; color: var(--ink);
+  cursor: pointer;
+}
+.t-trk-icon:hover { background: var(--chrome-2); }
+.t-trk-icon:active { background: var(--line); }
+.t-trk-count {
+  flex: 1 1 auto; text-align: center;
+  font-size: 11.5px; color: var(--muted);
+}
+/* the change the caret is on (or heading toward) — same "on" vocabulary
+   .t-card already uses elsewhere in this app, so it reads as one language */
+.t-card.on { border-color: var(--accent); }
+
+/* ─────────────────────────────────────────────────────── display modes
+   `<ins>`/`<del>` carry `.t-trk` (inline.ts openTag) wherever they render —
+   canvas, print, anywhere. These two classes on <html> are mutually
+   exclusive (review.ts applyTrackView) and never both present; 'all markup'
+   is the absence of either, which is why it needs no rule here at all —
+   .t-paper ins.t-trk / del.t-trk in styles.css already ARE that view. */
+
+/* No markup: reads as if every change were already accepted. */
+:root.t-track-final .t-paper ins.t-trk {
+  text-decoration: none; color: inherit; opacity: 1;
+}
+:root.t-track-final .t-paper del.t-trk { display: none; }
+
+/* Original: reads as if every change were rejected. */
+:root.t-track-original .t-paper del.t-trk {
+  text-decoration: none; color: inherit; opacity: 1;
+}
+:root.t-track-original .t-paper ins.t-trk { display: none; }

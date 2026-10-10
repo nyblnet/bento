@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">bento/home</string>
+    <string name="tagline">Documents that save themselves</string>
+    <string name="open_with_label">Edit with bento/home</string>
+
+    <string name="open_document">Open…</string>
+    <string name="new_document">New</string>
+    <string name="empty_hint">No documents yet.\n\nOpen a .bento.html file — or any self-contained HTML document — and it will save itself back to where it lives.</string>
+
+    <string name="forget">Remove</string>
+    <string name="forget_explain">Remove this from the list? The document itself is not deleted — this app just gives back its access to it.</string>
+
+    <string name="err_open">That document could not be opened.</string>
+    <string name="err_create">The new document could not be written.</string>
+    <string name="err_export">That copy could not be saved.</string>
+    <string name="err_download">That download could not be saved.</string>
+    <string name="err_webview_old">This device’s WebView is too old to save documents. Update Android System WebView from the Play Store.</string>
+
+    <string name="notice_read_only">This document was opened read-only, so saves will ask where to put a copy. To edit it in place, open it from bento/home’s own “Open…” button instead.</string>
+
+    <string name="search_hint">Search documents and their contents</string>
+    <string name="folders">Folders</string>
+    <string name="add_folder">Add folder…</string>
+    <string name="folders_title">Indexed folders</string>
+    <string name="folder_forget_explain">Stop indexing this folder? The documents are not deleted — this app just gives back its access and forgets what it found.</string>
+    <string name="status_no_folders">Add a folder to search inside your documents, not just their names.</string>
+    <plurals name="status_indexed">
+        <item quantity="one">%1$d document indexed across %2$d folder(s)</item>
+        <item quantity="other">%1$d documents indexed across %2$d folder(s)</item>
+    </plurals>
+    <string name="empty_search">Nothing matches “%1$s”.</string>
+    <string name="empty_library">No Bento documents found in the folders you added.</string>
+    <string name="err_scan">Those folders could not be read.</string>
+    <string name="warn_scan_truncated">Stopped after examining %1$d files. Some documents in these folders are not indexed — try adding a narrower folder.</string>
+    <string name="new_document_title">What kind of document?</string>
+    <string name="err_create_fetch">The new document could not be created: %1$s</string>
+    <string name="err_offline">the release server could not be reached, and nothing is cached yet</string>
+    <string name="view_as_grid">Show as grid</string>
+    <string name="view_as_list">Show as list</string>
+    <string name="theme_toggle">Change theme</string>
+    <string name="theme_system">Theme: follow the system</string>
+    <string name="theme_light">Theme: light</string>
+    <string name="theme_dark">Theme: dark</string>
+    <string name="open_selected">Open</string>
+    <string name="detail_none">Pick a document to see it here.</string>
+</resources>
