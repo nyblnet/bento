@@ -47,7 +47,7 @@ import { parseDocInputReport } from '../compactload'
 import { gateRestored, guardOpenedDoc } from '../restoregate'
 import { lsGet, lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { shrinkImageFile, shrinkEnabled, setShrinkEnabled, shrinkNote, fmtBytes, type ShrinkResult } from './shrink'
-import { deletePlan, expand, moveBlock, parents, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
+import { deletePlan, expand, moveBlock, parents as selParents, range as selRange, toggle as selToggle } from './slidesel'
 import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
@@ -3189,7 +3189,7 @@ export class Editor {
           const slides = this.selectedSlides()
           void navigator.clipboard?.writeText?.(serializeSlides(slides, this.store.doc)).catch(() => {})
           if (slides.length > 1) {
-            this.toast(t('Slides copied — ⌘V in any deck to paste it'))
+            this.toast(t('Slides copied — ⌘V in any deck to paste them'))
           } else {
             this.toast(t('Slide copied — ⌘V in any deck to paste it'))
           }
@@ -3280,7 +3280,7 @@ export class Editor {
     if (this.thumbSel.length) {
       // Ideally we use `expand` but paste is not `unit` aware at the moment.
       // Should really be done as a follow up.
-      const indexes = parents(this.store.doc.slides, this.thumbSel)
+      const indexes = selParents(this.store.doc.slides, this.thumbSel)
       const selected = []
       for (const i of indexes) {
         const slide = this.store.doc.slides[i]
