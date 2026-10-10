@@ -32,7 +32,7 @@
 // popup disagree about the same folders.
 import { setLapsedBadge, setTabBadge, notifyIfLapsed, openReconnectUi, getGrants } from './status.js'
 import { checkForUpdate } from './update.js'
-import { learnPrefix, noteOpened } from './db.js'
+import { learnPrefix, noteOpened, prefixes as knownPrefixes } from './db.js'
 import { t } from './i18n.js'
 import { pathFromSender, locateIn } from './route.js'
 import * as docstore from './store.js'
@@ -333,28 +333,64 @@ const STORE_OPS = {
   'store.delete': docstore.remove,
 }
 let storeDeps = null
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
 export function docstoreDeps() {
   if (!storeDeps) {
     storeDeps = {
       db: docstore.idbAdapter(),
       now: () => Date.now(),
       txid: () => crypto.randomUUID(),
-      // a file is still there if file:// answers for it (the extension can read file://)
-      exists: async (path) => {
-        const r = await fetch(`file://${path.split('/').map(encodeURIComponent).join('/')}`, { method: 'HEAD' })
-        return r.ok
+      sha256: async (bytes) => hex(await crypto.subtle.digest('SHA-256', bytes)),
+      // the extension reads the file ITSELF (it has file access): the page's
+      // account of its own content is never what a carry is decided on
+      fileBlockHash: async (path) => {
+        const r = await fetch(`file://${path.split('/').map(encodeURIComponent).join('/')}`)
+        return r.ok ? docstore.blockHash(await r.text(), storeDeps) : null
+      },
+      // "gone" only as a grant whose location is proven sees it
+      gone: async (path) => {
+        const at = await knownPrefixes()
+        const grants = (await getGrants()).map((dir) => ({ dir, prefix: at[dir.name] })).filter((g) => g.prefix)
+        return docstore.goneVia(path, grants)
       },
     }
   }
   return storeDeps
 }
+
+/**
+ * A moved document's recovery may follow it (store.js `carry`). Decided once
+ * per path per worker lifetime, and BEFORE the page's first store op is
+ * answered, so the page never reads an empty partition that is about to fill.
+ */
+const carriedBy = new WeakMap() // deps → Map(path → Promise): one store, one decision per path
+export function ensureCarried(path, deps = docstoreDeps()) {
+  if (!path) return Promise.resolve(null)
+  if (!carriedBy.has(deps)) carriedBy.set(deps, new Map())
+  const carried = carriedBy.get(deps)
+  if (!carried.has(path)) {
+    carried.set(path, docstore.carry(path, deps).then((r) => {
+      if (r?.carried) console.info('[bento/home] recovery followed a moved document from', r.carried, 'to', path)
+      return r
+    }, () => null))
+  }
+  return carried.get(path)
+}
+
 export async function storeOp(op, sender, payload, deps = docstoreDeps()) {
   const fn = STORE_OPS[op]
   if (!fn) return { ok: false, reason: 'unknown op' }
   // Top frame only, here too: the content scripts never run in a sub-frame,
   // but a partition is too valuable to rest on that alone.
   const path = sender?.frameId === 0 ? pathFromSender(sender) : null
+  if (path) await ensureCarried(path, deps)
   return fn(path, payload ?? {}, deps)
+}
+
+/** After the extension wrote the sender's file: which document it now holds (store.js recordSaved). */
+function noteSaved(sender, text) {
+  const path = sender?.frameId === 0 ? pathFromSender(sender) : null
+  if (path) void docstore.recordSaved(path, text, docstoreDeps()).catch(() => {})
 }
 
 // ---------------------------------------------------------------- the offer
@@ -530,7 +566,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'filegrant.answered' ? Promise.resolve(offerAnswered(sender, msg))
       : msg?.op === 'save.status' ? saveStatus(sender, msg.url)
       : msg?.op === 'save.rebadge' ? (async () => { const tabs = await chrome.tabs.query({ url: 'file:///*.bento.html' }).catch(() => []); for (const tb of tabs) await badgeTab(tb.id, { url: tb.url, frameId: 0, tab: tb }); return { ok: true } })()
-      : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
+      : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '').then((r) => { if (r?.ok) noteSaved(sender, msg.payload?.text ?? ''); return r })
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
       : msg?.op === 'saveas' ? saveas.ask(topPath(sender), msg.payload, saveasDeps(sender))
       : msg?.op === 'saveas.write' ? saveas.write(topPath(sender), msg.payload, saveasDeps(sender))

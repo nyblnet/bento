@@ -2,8 +2,9 @@
 // Copyright (c) 2026 The Bento authors
 //
 // DocStore, the extension backend: what a document keeps beside itself —
-// recovery, version history, keys — stored in THIS extension's origin
-// rather than the page's.
+// its CRASH RECOVERY and its collab MEMBER KEY, nothing else — stored in THIS
+// extension's origin rather than the page's. (Version history lives in the
+// file itself: maintainer ruling, 2026-10-10.)
 //
 // WHY HERE. Every document opened from disk shares one storage origin
 // (docs/DECISIONS.md, 2026-10-04), so a page-side store is a store every
@@ -17,10 +18,9 @@
 //
 // The kernel's DocStore interface (agreed 2026-09-26) is four operations,
 // bytes both ways: get(name) → bytes|null, set(name, bytes), list(prefix) →
-// names, delete(name). Names are plain purposes (`recovery`, `ver/<seq>`,
-// `memberkey`); values are opaque — stored blindly, never parsed. No
-// encryption on this path: the partition is the isolation (the page-side
-// fallback, where the origin is shared, is where keys and HMAC names live).
+// names, delete(name). The names are exactly NAMES; values are opaque —
+// stored blindly, never parsed. No encryption on this path: the partition is
+// the isolation.
 //
 // TRANSPORT. Runtime messaging is JSON, so bytes cross the relay↔worker hop
 // as base64, and a value over CHUNK bytes travels as numbered chunks under a
@@ -29,30 +29,50 @@
 // state between messages (the worker is evicted at will); chunks of a
 // transfer that never committed are swept by `gc`.
 //
-// RETENTION mirrors the page store (kernel autosave.ts): `recovery` is a
-// single entry by construction; `ver/*` keeps the newest VERSIONS_MAX and
-// nothing older than MAX_AGE_DAYS. A partition whose file no longer exists
-// is dropped, and so is one untouched for MAX_AGE_DAYS. A moved or renamed
-// file therefore starts with an empty partition: it loses local history,
-// never content (the file itself is the source of truth).
+// A MOVED FILE (security ruling 2026-10-10, handoffs/…docstore-carryover).
+// The partition is the path, so a moved or renamed document opens with an
+// empty one. Its recovery may FOLLOW it — once — and only when all of this
+// holds, every part checked by the extension, none taken from the page:
+//   · the new file's #bento-doc block hashes to the hash recorded when the
+//     extension last WROTE the old file (`recordSaved`, at every save it
+//     performs) — the same saved document, moved; a different file, or one
+//     edited elsewhere since, does not match and nothing carries;
+//   · the old path is GONE, as seen through the extension's own folder grant
+//     (`deps.gone`): where the old folder is not granted, or the answer is
+//     anything but a definite not-found, nothing carries;
+//   · the recovery was written in the last CARRY_DAYS;
+//   · exactly one old partition qualifies.
+// It MOVES (re-keyed, the old entry deleted), so two files can never both
+// claim it. The MEMBER KEY NEVER CARRIES: a moved honest file re-enrols
+// through its own invite chain, and nothing here can tell a genuine file from
+// one that copied its docId. Whatever carries reaches the page through the
+// kernel's restore gate like any other recovery.
 //
-// Pure: the IndexedDB adapter and the file-exists probe come in as `deps`,
-// so scripts/test-webext-store.ts drives the real code in node.
+// RETENTION. `recovery` and `memberkey` are single entries by construction.
+// A partition untouched for MAX_AGE_DAYS is dropped. One whose file is gone is
+// kept only while it could still carry (recovery younger than CARRY_DAYS),
+// then dropped; "gone" is the grant's answer, never a guess.
+//
+// Pure: the IndexedDB adapter, the hash, the file reader and the grant walk
+// come in as `deps`, so scripts/test-webext-store.ts drives the real code.
 
 /** Bytes per chunk on the relay↔worker hop (before base64). */
 export const CHUNK = 3 * 1024 * 1024
 /** Largest value one name may hold. */
 export const MAX_VALUE = 64 * 1024 * 1024
-export const VERSIONS_MAX = 20
+/** The only names a document may keep here. */
+export const NAMES = Object.freeze(['recovery', 'memberkey'])
+/** A partition untouched this long is dropped. */
 export const MAX_AGE_DAYS = 30
+/** A recovery older than this never follows a moved file. */
+export const CARRY_DAYS = 7
 const DAY = 24 * 3600 * 1000
 /** A transfer that never committed is swept after this long. */
 const STALE_TX_MS = 3600 * 1000
 
-/** Names and prefixes: plain purposes, no climbing, no separators of ours. */
-export const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/
-export const validName = (n) => typeof n === 'string' && NAME_RE.test(n) && !n.split('/').includes('..')
-export const validPrefix = (p) => p === '' || (typeof p === 'string' && /^[A-Za-z0-9._/-]{1,200}$/.test(p) && !p.split('/').includes('..'))
+/** Names: exactly NAMES. Prefixes for list: any string, matched against NAMES. */
+export const validName = (n) => typeof n === 'string' && NAMES.includes(n)
+export const validPrefix = (p) => typeof p === 'string' && p.length <= 200 && !p.includes('\u0000')
 export const validTx = (t) => typeof t === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(t)
 
 const S = '\u0000'
@@ -126,7 +146,6 @@ export async function commit(path, p, deps) {
   await deps.db.put(mKey(path, p.name), { tx: p.tx, n: p.n, size, at: deps.now() })
   await deps.db.del(`t${S}${path}${S}${p.name}${S}${p.tx}`)
   if (old && old.tx !== p.tx) await dropTx(path, p.name, old.tx, deps)
-  if (p.name.startsWith('ver/')) await retain(path, deps)
   return { ok: true }
 }
 
@@ -164,22 +183,125 @@ async function dropTx(path, name, tx, deps) {
   await deps.db.del(`t${S}${path}${S}${name}${S}${tx}`)
 }
 
-/** `ver/*` in one partition: the newest VERSIONS_MAX, none older than MAX_AGE_DAYS. */
-export async function retain(path, deps) {
-  const lo = mKey(path, 'ver/')
-  const vers = (await deps.db.range(lo, `${lo}${END}`)).map(([k, v]) => ({ name: k.slice(mKey(path, '').length), at: v.at }))
-  vers.sort((a, b) => b.at - a.at)
-  const cutoff = deps.now() - MAX_AGE_DAYS * DAY
-  for (const [i, v] of vers.entries()) {
-    if (i >= VERSIONS_MAX || v.at < cutoff) await remove(path, { name: v.name }, deps)
+// ---------------------------------------------------------------- moved files
+
+const SCRIPT_CLOSE = '</' + 'script>'
+const DOC_ATTR = ' id="bento-doc"'
+/**
+ * The #bento-doc body of an HTML file, exactly as kernel/src/save.ts
+ * `embeddedDocBlock` reads it (anchored on the id attribute, CRLF normalised,
+ * trimmed), so the hash here and the kernel's notion of "same document" agree.
+ */
+export function docBlock(html) {
+  const at = html.indexOf(DOC_ATTR)
+  if (at < 0) return null
+  const start = html.indexOf('>', at + DOC_ATTR.length)
+  if (start < 0) return null
+  const end = html.indexOf(SCRIPT_CLOSE, start + 1)
+  if (end < 0) return null
+  return html.slice(start + 1, end).replace(/\r\n/g, '\n').trim() || null
+}
+
+/** sha-256 (hex) of the block's UTF-8 bytes, or null when there is no block. */
+export async function blockHash(html, deps) {
+  const block = docBlock(String(html ?? ''))
+  return block == null ? null : deps.sha256(new TextEncoder().encode(block))
+}
+
+const hKey = (path) => `h${S}${path}`
+
+/**
+ * The extension just WROTE this file: remember which document it now holds.
+ * Called from the worker's own save path with the bytes it wrote — never with
+ * anything the page says about itself.
+ */
+export async function recordSaved(path, html, deps) {
+  if (!path) return
+  const hash = await blockHash(html, deps)
+  if (hash) await deps.db.put(hKey(path), { hash, at: deps.now() })
+  else await deps.db.del(hKey(path))
+}
+
+/** Move one entry (manifest + chunks) from one partition to another; the old one is deleted. */
+async function moveEntry(from, to, name, deps) {
+  const m = await deps.db.get(mKey(from, name))
+  if (!m) return false
+  for (let i = 0; i < m.n; i++) {
+    const c = await deps.db.get(cKey(from, name, m.tx, i))
+    if (c == null) return false
   }
+  for (let i = 0; i < m.n; i++) await deps.db.put(cKey(to, name, m.tx, i), await deps.db.get(cKey(from, name, m.tx, i)))
+  await deps.db.put(mKey(to, name), { ...m, at: deps.now() })
+  await deps.db.del(mKey(from, name))
+  await dropTx(from, name, m.tx, deps)
+  return true
 }
 
 /**
- * The sweep: partitions whose file is gone, partitions untouched for
- * MAX_AGE_DAYS, and chunks of transfers that never committed. `exists(path)`
- * answers whether the file is still there (a file:// probe in the worker).
- * Returns what it dropped, for the log and the rig.
+ * A document opened at `path`: if its partition is empty, may a moved
+ * document's recovery follow it? Returns what happened, for the log and the
+ * rig: { carried: oldPath } or { carried: null, why }.
+ */
+export async function carry(path, deps) {
+  if (!path) return { carried: null, why: 'not a document' }
+  const own = await deps.db.range(`m${S}${path}${S}`, `m${S}${path}${S}${END}`)
+  if (own.length) return { carried: null, why: 'has its own' }
+  let hash = null
+  try { hash = await deps.fileBlockHash(path) } catch { hash = null }
+  if (!hash) return { carried: null, why: 'no block' }
+  const cutoff = deps.now() - CARRY_DAYS * DAY
+  const eligible = []
+  for (const [k, v] of await deps.db.range(`h${S}`, `h${S}${END}`)) {
+    const old = k.slice(2)
+    if (old === path || v?.hash !== hash) continue
+    const rec = await deps.db.get(mKey(old, 'recovery'))
+    if (!rec || !(rec.at >= cutoff)) continue
+    let state = 'unknown'
+    try { state = await deps.gone(old) } catch { state = 'unknown' }
+    if (state !== 'gone') continue
+    eligible.push(old)
+  }
+  if (!eligible.length) return { carried: null, why: 'nothing matches' }
+  if (eligible.length > 1) return { carried: null, why: 'ambiguous' }
+  const [old] = eligible
+  // recovery ONLY. The member key stays behind with the old partition and is swept.
+  if (!(await moveEntry(old, path, 'recovery', deps))) return { carried: null, why: 'incomplete' }
+  await deps.db.put(hKey(path), { ...(await deps.db.get(hKey(old))), at: deps.now() })
+  await deps.db.del(hKey(old))
+  await deps.db.put(`x${S}${path}`, { from: old, at: deps.now() })
+  return { carried: old }
+}
+
+/**
+ * Is `path` definitely gone? Asked through a folder grant whose location the
+ * extension has PROVEN (db prefixes): walk from it; a NotFoundError on the way
+ * is 'gone', reaching the file is 'present', anything else — no grant covers
+ * it, permission lapsed, an unexpected error — is 'unknown'. Never a file://
+ * probe: a folder the browser may not read (macOS privacy, say) looks exactly
+ * like a missing one.
+ */
+export async function goneVia(path, grants) {
+  for (const { dir, prefix } of grants) {
+    if (!prefix || !path.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`)) continue
+    const rel = path.slice(prefix.length).split('/').filter(Boolean)
+    if (!rel.length) continue
+    try {
+      if (await dir.queryPermission({ mode: 'read' }) !== 'granted') continue
+      let cur = dir
+      for (const seg of rel.slice(0, -1)) cur = await cur.getDirectoryHandle(seg)
+      await cur.getFileHandle(rel[rel.length - 1])
+      return 'present'
+    } catch (e) {
+      if (e?.name === 'NotFoundError') return 'gone'
+    }
+  }
+  return 'unknown'
+}
+
+/**
+ * The sweep: partitions untouched for MAX_AGE_DAYS; partitions whose file is
+ * gone and whose recovery is too old to carry; and chunks of transfers that
+ * never committed. Returns what it dropped, for the log and the rig.
  */
 export async function gc(deps) {
   const now = deps.now()
@@ -190,14 +312,23 @@ export async function gc(deps) {
   }
   const dropped = []
   for (const [path, newest] of parts) {
-    const old = newest < now - MAX_AGE_DAYS * DAY
-    let gone = false
-    if (!old) { try { gone = !(await deps.exists(path)) } catch { gone = false } }
-    if (!old && !gone) continue
+    let why = newest < now - MAX_AGE_DAYS * DAY ? 'age' : null
+    if (!why) {
+      let state = 'unknown'
+      try { state = await deps.gone(path) } catch { state = 'unknown' }
+      if (state === 'gone') {
+        const rec = await deps.db.get(mKey(path, 'recovery'))
+        // still a carry candidate: keep it until it is too old to follow
+        if (!(rec && rec.at >= now - CARRY_DAYS * DAY)) why = 'gone'
+      }
+    }
+    if (!why) continue
     for (const [k] of await deps.db.range(`m${S}${path}${S}`, `m${S}${path}${S}${END}`)) {
       await remove(path, { name: k.slice(mKey(path, '').length) }, deps)
     }
-    dropped.push({ path, why: old ? 'age' : 'gone' })
+    await deps.db.del(hKey(path))
+    await deps.db.del(`x${S}${path}`)
+    dropped.push({ path, why })
   }
   for (const [k, v] of await deps.db.range(`t${S}`, `t${S}${END}`)) {
     if ((v?.at ?? 0) < now - STALE_TX_MS) {

@@ -1785,7 +1785,7 @@ document.addEventListener('visibilitychange', () => {
 // Before ANY painting: a saved language choice has to be in hand, or the page
 // renders in the browser's language and visibly re-renders a moment later.
 await initI18n()
-// The extension's storage holds documents' version history (store.js).
+// The extension's storage holds documents' crash recovery (store.js).
 // `unlimitedStorage` in the manifest exempts it from quota and eviction;
 // persist() is the belt to that, for browsers that honour only the request.
 try { void navigator.storage?.persist?.() } catch { /* not offered */ }

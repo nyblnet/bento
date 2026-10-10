@@ -262,7 +262,7 @@ if (manifest) {
   // `downloads.ui` is used as `chrome.downloads.setUiOptions`.
   const usedAs = { 'downloads.ui': 'chrome\\.downloads\\.setUiOptions' }
   // unlimitedStorage has no API of its own: it is "used" when the extension
-  // keeps documents' version history in IndexedDB (store.js, bento-docstore),
+  // keeps documents' crash recovery in IndexedDB (store.js, bento-docstore),
   // which is what the quota exemption is for.
   const usedWithoutApi = { storage: true, unlimitedStorage: /indexedDB\.open\(dbName/.test(srcText) }
   for (const perm of manifest.permissions ?? []) {

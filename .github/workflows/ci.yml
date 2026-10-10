@@ -745,11 +745,12 @@ jobs:
         run: node scripts/test-webext-saveas.ts
 
       - name: WebExtension DocStore rig
-        # A document's recovery, version history and keys live in the
-        # extension's origin, partitioned by the file path the browser reports.
-        # One document must never reach another's entries, a payload must never
-        # name a partition, bytes must survive the base64 and chunked paths, and
-        # a half-sent value must never be visible.
+        # A document's crash recovery and member key live in the extension's
+        # origin, partitioned by the file path the browser reports. One document
+        # must never reach another's entries, a payload must never name a
+        # partition, and a moved file's recovery follows it only when the old
+        # path is gone (seen through a grant) and the content hash matches; the
+        # member key never follows.
         run: node scripts/test-webext-store.ts
 
       - name: WebExtension localisation rig
