@@ -2266,6 +2266,11 @@ jobs:
         # out of the text around it), select + ` wraps lines in <code>, pasted
         # fences convert, and an unclosed fence stays text.
         run: node scripts/test-slides-code-fence-browser.mjs
+      - name: Copy several slides in Chromium
+        # Two selected thumbnails → ⌘C copies both, in order; a Shift-click
+        # range across a parent copies parents only, never its states; plural
+        # and singular toasts.
+        run: node scripts/test-slides-copy-slides-browser.mjs
 
   spaces-save-browser:
     runs-on: ubuntu-latest
