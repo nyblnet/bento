@@ -9839,3 +9839,93 @@ definitions (and no other page's), held by the roundtrip rig.
 
 **Cost.** Shell 364,703 → 368,299 B (+3,596), ten new strings in nine languages
 (one retired: the import no longer adopts a space-level design).
+
+## 2026-10-10 — bento/spaces adopts the kernel's field classes for every copy
+
+Spaces is the first app to build its copies through the kernel's copy table
+(`kernel/src/docfields.ts` `projectForCopy`). Its map is
+`spaces/src/docclass.ts` (`SPACES_FIELDS`), named to stay clear of
+`fields.ts`, which is page properties. The map is exhaustive over the keys
+`SpacesDoc` DECLARES: the type has an `[extra: string]` index signature, so
+`keyof SpacesDoc` is `string` and a plain `Record<keyof SpacesDoc, …>` would
+check nothing. The map strips the index signature first, then `satisfies` it.
+`revisions` and `trail` are declared as optional, loosely typed fields before
+the features that write them land, so they are already classed `history`.
+
+Builders and tiers: the view-only copy is `reader`; "Invite to edit" is
+`invite`; Copy document JSON (`docForExport`) is `copyJSON`; "Duplicate as new
+space" is `duplicate`; "Save a copy" is `file`. Spaces has no audience, link or
+whole-file template builder yet. The only things a builder still adds itself
+are the ones the table has no rule for: the new docId on a duplicate,
+`collab.on = true` on a share copy, and the extract's own changes below.
+
+**The page extract ("Export page as a space") is `duplicate` minus two
+fields.** It is a new identity holding a few pages, not the space. So it drops
+`template` (as it already did: template re-mints the docId it was just given)
+and the `history` class, because history records the whole space, including
+the pages left out. No kernel tier fits a partial new-identity copy. If one is
+added, the extract moves onto it.
+
+**A view-only copy can now carry `readonly: true`.** The banner checks the
+collab role BEFORE `readonly`, so the copy still says it follows the live
+session. The kernel sets a mode only when the source document already has the
+field (`projectForCopy` walks the source's keys), so a space with no
+`readonly` key gets a reader copy without one. That is a kernel issue and
+is reported there. `scripts/test-spaces-copytiers.ts` records the current
+behaviour so the fix shows up as a red row.
+
+**Recovery uses the kernel's `docContentKey`** with `modified` as the only
+field that does not count as an edit. The kernel key is a superset of the old
+one: theme, assets, fonts and undeclared keys now count as unsaved work. That
+is safe because the only comparison is snapshot against live after
+`keepLiveIdentity`, and no key is ever stored.
+
+## 2026-10-10 — bento/spaces reading copies: the kernel's package tier, and a guarantee is removal not a flag
+
+**Decision.** A space has TWO published shapes and no third. `doc.readonly` is a
+SEALED reading copy (no session, opens in the reader); `collab.role:'reader'` is
+a LIVE view-only copy (follows the room, cryptographically cannot write). Both
+already existed in the format; "Save a reading copy…" (Share) is the button that
+writes the first, and `spaces/src/reading.ts` is what it writes. A new
+"published" field would be a second spelling of `readonly` that old files answer
+only one of, so there is no fourth.
+
+**It is built by the kernel's copy table, tier `package`** — slides'
+presentation package, the same shape one app over. That row SETS `readonly`,
+DROPS the capability block (no projection), drops the in-file history, drops
+`template` and drops every top-level key this build does not declare. Not
+`reader`: that tier keeps `collabForReader`'s room + read key, which is a live
+viewer, the one thing a sealed copy must not be able to become. So there is no
+`delete collab` and no hand strip list anywhere in spaces — the copy is built
+without it. Comment threads (`Page.comments`, `Block.comments`) live inside
+pages, which every tier keeps as content, so `reading.ts` removes them itself:
+comments are workspace, not publication.
+
+**`readonly: true` comes from the kernel.** The package tier's `{set}` mode rule
+fires whether or not the source has the key (#666 — before it, a space with no
+`readonly` key, which is almost every space, would have come out of the package
+tier editable). `readingCopy` sets nothing by hand; `scripts/test-spaces-copytiers.ts`
+asserts the flag on a source with NO readonly key.
+
+**Which banner.** A live view-only copy can carry `readonly: true` too, so
+`main.ts` asks about the reader role FIRST (the ordering from the field-classes
+change) and only a `readonly` file with no reader role enters the sealed
+reading view.
+
+**The rule this exists to state.** `readonly` is INTENT and protects nothing —
+the document block is plaintext by design, so a recipient can clear it. What a
+reading copy guarantees is what is ABSENT from its bytes, and that holds
+whatever opens the file, including a build that predates the flag (which opens
+the space editable — the correct degradation). Any future work here must keep
+saying which of its guarantees are cryptographic (no collab at all), which
+format-level (no history, no comments, no undeclared key) and which cosmetic
+(`readonly` and the hidden chrome), and must never present the third as the
+first.
+
+**Encrypted spaces inherit, deliberately.** A reading copy is written through
+`serializeAuto`, so it stays encrypted with the same password and — via
+`previewAllowed` — carries no file-manager still.
+
+Assertions are on the SERIALIZED document: `scripts/test-spaces-reading.ts`
+(bytes) and `scripts/test-spaces-copytiers.ts` (the exact key set, against the
+hostile source, with three planted builders that must fail).

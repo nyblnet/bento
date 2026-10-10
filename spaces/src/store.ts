@@ -15,7 +15,7 @@ type Scope = 'doc' | 'page'
 
 import { type SpacesDoc, type Page, type Block, buildIndex, type SpaceIndex, homePage } from './model'
 import { buildTagIndex, type TagIndex } from './tags.ts'
-import { FROM_LIVE } from '../../kernel/src/docfields.ts'
+import { FROM_LIVE, keepLiveIdentity as keepLive } from '../../kernel/src/docfields.ts'
 
 type Listener = () => void
 type Event = 'doc' | 'page' | 'tree' | 'selection' | 'dirty'
@@ -54,14 +54,11 @@ const UNDO_BUDGET = 24 * 1024 * 1024
 export { FROM_LIVE }
 
 /** Overwrite `next`'s FROM_LIVE keys with `live`'s — including deleting one the
- *  live document does not have. Mutates and returns `next`. */
+ *  live document does not have. Mutates and returns `next`. The kernel's
+ *  keepLiveIdentity does the work, so this app and the kernel cannot disagree
+ *  about what "kept live" means. */
 function keepLiveIdentity(live: SpacesDoc, next: SpacesDoc): SpacesDoc {
-  const from = live as Record<string, unknown>
-  const to = next as Record<string, unknown>
-  for (const k of FROM_LIVE) {
-    if (from[k] !== undefined) to[k] = from[k]
-    else delete to[k]
-  }
+  keepLive(next as Record<string, unknown>, live as Record<string, unknown>)
   return next
 }
 

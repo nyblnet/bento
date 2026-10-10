@@ -951,7 +951,8 @@ for (const [label, input, err] of [
   ok(/const barActions: BarAction\[\]/.test(ed), 'the bar actions are declared as one typed list')
   ok(!/const menuActions: BarAction\[\]/.test(ed), '…and there is no second, ⋯-only list any more (its rows moved to Insert, Save, the bar and the page menu)')
   ok(/barActions\.map\(/.test(ed), '…the inline row is built from the bar list')
-  ok(/for \(const a of barActions\) row\(m,/.test(ed), '…and folded ⋯ is built from the same list')
+  // (a sealed reading copy skips the eye inside that loop — still the one list)
+  ok(/for \(const a of barActions\) \{?\s*(if \(this\.sealed && a\.icon === 'eye'\) continue\s*)?row\(m,/.test(ed), '…and folded ⋯ is built from the same list')
   ok(/saveList\(m\)/.test(ed) && /fill: saveList/.test(ed), '…and ends on the Save list, the same function the caret fills from')
 
   // WHICH TIER a rule lives in is the thing worth pinning — but the tiers are
@@ -1365,7 +1366,8 @@ function fsTable(f: string): string {
   //    later save wrote to the copy while the original stayed frozen at the
   //    moment it was taken. The code even carried a comment claiming the
   //    kernel did the opposite.
-  ok(/writeUpdatedFileAs\(html, store\.doc/.test(main),
+  // (the copy is the kernel copy table's 'file' tier of store.doc — every field)
+  ok(/writeUpdatedFileAs\(html, (store\.doc|copy)\b/.test(main) && /const copy = projectForCopy\(store\.doc, SPACES_FIELDS, 'file'\)/.test(main),
     'a copy is written through writeUpdatedFileAs (keepHandle defaults false)')
   // EVERY file, not just main.ts. The first version of this check read main.ts
   // alone and passed while about.ts kept its own "Save a copy…" button calling
@@ -4530,10 +4532,17 @@ function fsTable(f: string): string {
   const rootBlocks = [...flat.matchAll(/(^|\})\s*:root\s*\{([^}]*)\}/g)].map((m) => m[2])
   ok(rootBlocks.length === 1 && rootBlocks[0].split(';').filter((d) => d.trim()).every((d) => /^\s*--sp-app-[a-z0-9-]+:\s*var\(--[a-z0-9-]+\)\s*$/.test(d)),
     'the one unscoped :root block only captures chrome tokens (--sp-app-* = var(--…)) and styles nothing')
-  // The key as main had it before designs (footnotes, templates, the journal
-  // template): a document with no design must key EXACTLY that, byte for byte.
-  const docKeyOld = JSON.stringify([plain.title, plain.home, plain.pages, plain.footnotes, plain.templates, plain.journalTemplate])
-  ok(docContentKey(plain) === docKeyOld, 'a document with no design keys for recovery exactly as it did before designs existed')
+  // A document with no design must key EXACTLY as it would if the field had
+  // never been invented: the key is the kernel's (docfields.ts docContentKey),
+  // which SKIPS an absent field rather than padding it — so the same document
+  // with `design: undefined` set (a key that is there and says nothing) keys
+  // byte for byte the same, and neither key mentions design at all.
+  {
+    const padded = { ...plain, design: undefined, designs: undefined } as SpacesDoc
+    const k = docContentKey(plain)
+    ok(k === docContentKey(padded) && !/"designs?"/.test(k),
+      'a document with no design keys for recovery exactly as it did before designs existed')
+  }
   {
     const withNotes = base()
     ;(withNotes as { footnotes?: Record<string, string> }).footnotes = { a: 'n' }
@@ -4541,7 +4550,8 @@ function fsTable(f: string): string {
     const k0 = docContentKey(withNotes)
     D.setDesign(withNotes, 'almanac')
     const k1 = docContentKey(withNotes)
-    ok(k1 !== k0 && JSON.parse(k1).length === 8 && JSON.parse(k1)[3].a === 'n' && JSON.parse(k1)[5] === 't1',
+    const o1 = JSON.parse(k1) as Record<string, unknown>
+    ok(k1 !== k0 && o1.design === 'almanac' && (o1.footnotes as Record<string, string>)?.a === 'n' && o1.journalTemplate === 't1',
       'choosing a design changes the content key, and footnotes and the journal template stay in it beside the design')
     ;(withNotes as { designs?: unknown }).designs = { mine: { base: 'ledger' } }
     ok(docContentKey(withNotes) !== k1, 'a custom design is content too')

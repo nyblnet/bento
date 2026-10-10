@@ -942,4 +942,9 @@ export const zh_Hans: Catalog = {
   "This page no longer uses a design of its own.": "此页面不再使用自己的设计。",
   "{n} page(s) arrived with a design of their own.": "{n} 个页面带着自己的设计导入。",
   "A page can wear a design of its own, and a section’s passes to the pages inside it: choose it from the page’s ⋯ menu.": "页面可以使用自己的设计，分区的设计会传给其中的页面：在页面的 ⋯ 菜单中选择。",
+  "A sealed file for someone who will only read it: the pages with no editing tools, no comment threads, and none of this space’s keys — it never joins the live session.": "交给只阅读的人的封存文件：只有页面，没有编辑工具，没有评论线程，也不含本空间的任何密钥 — 它永远不会加入实时会话。",
+  "Next": "下一页",
+  "Previous": "上一页",
+  "Reading copy saved — it opens as a document, with no keys and no comments": "阅读副本已保存 — 它作为文档打开，不含密钥和评论",
+  "Save a reading copy…": "保存阅读副本…",
 }
