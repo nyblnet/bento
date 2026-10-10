@@ -112,7 +112,7 @@ function richElements(): SlideElement[] {
       id: 'text-1', html: '<b>Bold</b> &amp; fine', fontFamily: "'Acme', sans-serif",
       letterSpacing: 1.5, role: 'title', placeholder: 'Click to add title',
       // color(srgb …) is what a deck converted from a design tool actually
-      // carries — the longest colour notation in OneMarket, at 45 characters
+      // carries — the longest colour notation seen in a real deck, 45 characters
       color: 'color(srgb 0.156863 0.188235 0.227451 / 0.55)',
       colorGradient: { angle: 90, stops: [{ at: 0, color: '#FFFFFF' }, { at: 1, color: 'rgba(0,0,0,0.5)' }] },
       textStroke: { width: 2, color: '#000000', fill: 'none' },
@@ -122,8 +122,8 @@ function richElements(): SlideElement[] {
     defaultShape('path', {
       id: 'shape-1', d: 'M0,0 C10,10 20,-5 30,0 Z', pathBox: [0, 0, 30, 10],
       // an svg paint may reference a gradient/filter in the document's own
-      // markup, quotes and all: OneMarket_Commercial_Architecture slide 21,
-      // element `topo-0`. Dropping it left render.ts writing fill="undefined",
+      // markup, quotes and all, as a real deck did. Dropping it left
+      // render.ts writing fill="undefined",
       // which paints the shape BLACK.
       fill: 'url("#core-glow")',
       strokeStyle: 'dashed', lineStart: 'arrow', lineEnd: 'dot', strokeDash: 6,
