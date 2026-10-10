@@ -932,6 +932,85 @@ async function browser(chrome: string, html: string): Promise<void> {
       if (!('Export page as Markdown…' in now)) lost.push('Export page as Markdown… (new member unreachable)')
       ok(lost.length === 0, `at ${w}px every command reachable before is reachable now (${BEFORE[w].length} checked${lost.length ? '; LOST: ' + lost.join(', ') : ''})`)
     }
+
+    // ——— TAG CHIPS × FOOTNOTE MARKERS: the ORDER in render.ts ———
+    // inlineHost and table cells set their content with the footnote
+    // either/or (raw html while editable, `markRefs` <sup><a> markers
+    // otherwise) and only THEN call `decorateTags`. The reverse order shipped
+    // in September: the footnote `innerHTML =` replaced the host's children and
+    // wiped every chip drawn before it. A source check cannot tell those two
+    // orders apart from a refactor that keeps both calls, so this is measured
+    // in the rendered DOM: the reading view must carry BOTH a chip and a
+    // marker; the editor must draw the chip but keep `[^1]` as typed; and what
+    // a trusted keystroke commits must carry NO chip markup.
+    console.log('\n  tag chips × footnote markers\n')
+    await open(false)
+    const TF_PAGE = 'tfpage', TF_P = 'tfpara', TF_T = 'tftable'
+    const loaded = await js<boolean>(`(() => {
+      const d = JSON.parse(JSON.stringify(window.bento.doc))
+      d.pages = [{ id: ${JSON.stringify(TF_PAGE)}, title: 'Tags and footnotes', blocks: [
+        { id: ${JSON.stringify(TF_P)}, type: 'p', html: 'See the plan #launch and the note[^1].' },
+        { id: ${JSON.stringify(TF_T)}, type: 'table', rows: [['Item', 'Note'], ['Launch', '#launch and[^1]']] },
+      ] }]
+      d.footnotes = { '1': 'The note.' }
+      return window.bento.loadDoc(JSON.stringify(d))
+    })()`)
+    await sleep(400)
+    ok(loaded, 'the tags × footnotes fixture loads through window.bento.loadDoc')
+    const PHOST = `document.querySelector('[data-block-id="${TF_P}"] [data-edit="${TF_P}"]')`
+    const CHOST = `document.querySelector('[data-block-id="${TF_T}"] td[data-r="1"][data-c="1"]')`
+    // what a host draws, read from the DOM: chips, footnote markers, whether
+    // the raw token is still there, and whether the host is editable
+    const shape = (host: string) => js<any>(`(() => { const h = ${host}; if (!h) return null; return {
+      chips: [...h.querySelectorAll('a.sp-tag')].map(a => a.dataset.tag + '=' + a.textContent),
+      markers: [...h.querySelectorAll('sup > a')].map(a => ({ n: a.textContent, chip: a.classList.contains('sp-tag') || !!a.dataset.tag })),
+      raw: h.textContent.includes('[^1]'), editable: h.isContentEditable } })()`)
+
+    // 1 — reading view (editable: false): a chip AND a marker, in both hosts
+    await tap(TRIG('Reading view'))
+    await sleep(300)
+    ok(await js<boolean>(`!!document.querySelector('.sp-reading')`), 'the reading view is on (the eye on the bar)')
+    for (const [what, host] of [['paragraph', PHOST], ['table cell', CHOST]] as const) {
+      const s = await shape(host)
+      ok(!!s && !s.editable && s.chips.includes('launch=#launch'),
+        `reading view, ${what}: the #launch tag chip is drawn (${JSON.stringify(s?.chips)})`)
+      ok(!!s && s.markers.length === 1 && s.markers[0].n === '1' && !s.markers[0].chip && !s.raw,
+        `reading view, ${what}: the footnote is a sup > a marker "1", not a chip, and no raw [^1] is left (${JSON.stringify(s?.markers)})`)
+    }
+    await tap(TRIG('Reading view'))
+    await sleep(300)
+    ok(await js<boolean>(`!document.querySelector('.sp-reading')`), 'the reading view is off again')
+
+    // 2, 3 — the editor: chip drawn, token raw, and the commit chip-free
+    const docBlock = (id: string) => js<any>(`(() => window.bento.doc.pages.find(p => p.id === ${JSON.stringify(TF_PAGE)})?.blocks.find(b => b.id === ${JSON.stringify(id)}))()`)
+    const chipFree = (h: unknown): h is string => typeof h === 'string' && !/sp-tag|data-tag/.test(h)
+    for (const [what, host] of [['paragraph', PHOST], ['table cell', CHOST]] as const) {
+      const s = await shape(host)
+      ok(!!s && s.editable && s.chips.includes('launch=#launch'),
+        `editing, ${what}: the #launch chip is drawn in the editable host (${JSON.stringify(s?.chips)})`)
+      ok(!!s && s.markers.length === 0 && s.raw,
+        `editing, ${what}: the footnote stays its raw [^1] token, no marker (${JSON.stringify(s?.markers)})`)
+      // focus with a trusted click, park the caret at the host's very end
+      // (outside every chip), type one trusted character, blur
+      await tap(host)
+      await js(`(() => { const h = ${host}; h.focus(); const r = document.createRange(); r.selectNodeContents(h); r.collapse(false); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); return 1 })()`)
+      await key('Z')
+      await js(`document.activeElement?.blur?.(); 1`)
+      await sleep(300)
+    }
+    const pb = await docBlock(TF_P)
+    ok(chipFree(pb?.html) && /Z$/.test(pb.html) && pb.html.includes('[^1]') && pb.html.includes('#launch'),
+      `the paragraph's COMMITTED html took the keystroke, carries no chip markup, and keeps [^1] and #launch as text (${JSON.stringify(pb?.html)})`)
+    const tb = await docBlock(TF_T)
+    const cell = tb?.rows?.[1]?.[1]
+    ok(chipFree(cell) && /Z$/.test(cell) && cell.includes('[^1]') && cell.includes('#launch'),
+      `the table cell's COMMITTED html took the keystroke, carries no chip markup, and keeps [^1] and #launch as text (${JSON.stringify(cell)})`)
+    ok(chipFree(tb?.html), `the table's fallback html carries no chip markup either (${JSON.stringify(tb?.html)})`)
+    // after the blur settle, the editor still draws the chip in both hosts
+    for (const [what, host] of [['paragraph', PHOST], ['table cell', CHOST]] as const) {
+      const s = await shape(host)
+      ok(!!s && s.chips.includes('launch=#launch') && s.raw, `after blur, ${what}: the chip is redrawn and the [^1] token is still raw`)
+    }
     ws.close()
   } finally {
     try { child.kill('SIGKILL') } catch { /* gone */ }

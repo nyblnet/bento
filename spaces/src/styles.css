@@ -494,6 +494,29 @@ option { background: var(--field); color: var(--ink); }
 /* the accent at a tint a paragraph can be read through, and an explicit ink:
    `mark`'s UA default is black on yellow, which is not this document's ink */
 .sp-body mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 .08em; }
+
+/* THE #TAG CHIP.
+   Drawn at render into content that is often contenteditable, and taken back
+   out of whatever the editor commits (tags.ts). So it must stay INLINE and
+   selectable-through: no `display: inline-block`, no `contenteditable=false`,
+   no `user-select: none`. A caret has to be able to walk into it and a
+   backspace has to delete one character, because inside the editor this is a
+   word somebody is still typing. Everything here is paint. */
+.sp-tag {
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: 4px; padding: 0 .22em; cursor: pointer;
+  text-decoration: none; white-space: nowrap;
+}
+.sp-tag:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.sp-tag-kids { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.sp-tag-chip {
+  font: inherit; font-size: 13px; cursor: pointer;
+  color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 0; border-radius: 999px; padding: 3px 10px;
+}
+.sp-tag-chip:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.sp-tag-count { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
 /* No blanket link colour here. There was one — `.sp-body a { color: var(--blue) }`
    — and it never painted a single prose link: `.sp-page a` sets the ink at the
    same specificity and later in the sheet, so it won every time. What the rule
@@ -2712,6 +2735,62 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }
 
+/* ---- the calendar layout -------------------------------------------------
+   A GRID OF SEVEN COLUMNS, and the number of ROWS is never asserted here: a
+   month is four, five or six weeks depending on the month and on where the
+   reader's week starts, so `grid-auto-rows` lets the cells the renderer emitted
+   decide. `repeat(6, …)` would clip a six-week month's last week silently. */
+.sp-cal-hint { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+.sp-cal-bar { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; }
+.sp-cal-month { font-weight: 600; font-size: 14px; min-width: 8.5em; text-align: center; }
+.sp-cal-step { padding: 2px 8px; }
+.sp-cal-grid {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px; background: var(--line); border: 1px solid var(--line);
+  border-radius: 8px; overflow: hidden; margin-bottom: 4px;
+}
+.sp-cal-wd {
+  background: var(--chrome); color: var(--muted);
+  font-size: 11px; font-weight: 600; text-align: center; padding: 5px 2px;
+}
+.sp-cal-cell {
+  background: var(--surface); min-height: 76px; padding: 4px 5px 6px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+/* the neighbouring months' days are drawn, not hollowed out: a grid whose
+   corners are holes reads as broken, and an entry on the 1st of next month is
+   what somebody looking at the last week of this one wants to see */
+.sp-cal-out { background: var(--chrome-2, var(--chrome)); }
+.sp-cal-out .sp-cal-num { opacity: .45; }
+.sp-cal-today { box-shadow: inset 0 0 0 2px var(--accent, var(--edge)); }
+.sp-cal-today .sp-cal-num { color: var(--accent, var(--ink)); font-weight: 700; }
+.sp-cal-num { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sp-cal-entry {
+  display: block; font-size: 12px; line-height: 1.3; color: var(--ink);
+  text-decoration: none; background: var(--chrome); border-radius: 4px;
+  padding: 2px 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sp-cal-entry:hover { background: var(--edge, var(--chrome)); text-decoration: underline; }
+.sp-cal-day { margin: 0 0 14px; }
+.sp-cal-dayhead {
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  padding-bottom: 4px; margin-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.sp-cal-undated { margin-top: 14px; }
+.sp-cal-undated-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.sp-cal-undated-list .sp-cal-entry { max-width: 220px; }
+/* A PHONE CANNOT SHOW SEVEN READABLE COLUMNS of entries, but it can show the
+   shape of the month. The cells shrink and the entries become dots-with-a-tail
+   rather than disappearing — an empty-looking calendar is worse than a cramped
+   one, because it is wrong. */
+@media (max-width: 640px) {
+  .sp-cal-cell { min-height: 54px; padding: 3px 2px 4px; }
+  .sp-cal-entry { font-size: 10px; padding: 1px 3px; }
+}
+@media print {
+  /* the arrows navigate nothing on paper */
+  .sp-cal-bar .sp-cal-step { display: none; }
+}
 /* ————— the block format row —————
    Lives at the top of the block menu, which is a bottom SHEET on a phone, so
    this is the same markup at both widths and the touch targets are sized for

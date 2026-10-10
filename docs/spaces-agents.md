@@ -133,6 +133,7 @@ unique ids the first time.
 | `embed` | `page`, `anchor`, `html` | a live view of another page, or one section of it — see **Embeds** |
 | `link` | `url`, `title`, `desc`, `site`, `icon`, `image`, `html` | a card linking OUT of the space — see **Link cards** |
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
+| `view` | `layout`, `span`, `groupBy`, `html` | a board, list, table, gallery or calendar of this space's pages |
 | `view` | `layout`, `groupBy`, `sort`, `source`, `filter`, `html` | a board or list of this space's issues |
 
 `type` is a **string**, not a closed set: an unknown type survives a round trip
@@ -451,6 +452,50 @@ list**: `{ "type": "view", "layout": "board", "groupBy": "status",
 "html": "Issues by status" }`. Put it on a page of its own — a page carrying a
 view is laid out wide.
 
+`layout` is one of `list`, `table`, `gallery`, `calendar` — **or absent, which
+means a board.** Never write `"layout": "board"`: absence is what every view
+written before layouts existed carries, and a stored `"board"` is a byte
+difference that says nothing.
+
+A **calendar** lays the view's pages out by date, and has two shapes: a month
+grid (`span` absent) and a chronological timeline (`span: "timeline"`, newest
+first). Which date a page sits on is a **fixed rule, not a setting** — its
+`journal` date if it has one, otherwise the first `date`-typed field in the
+schema it carries a real `YYYY-MM-DD` value for. A page the rule finds no date
+for is listed under "No date" rather than dropped, and a value that is
+digit-shaped but not a real day (`2026-13-99`) counts as no date rather than
+being rolled into some other day. Month names, weekday names and the first day
+of the week come from the reader's locale at display time; nothing formatted is
+ever stored.
+A view's `source` says which pages it holds: `{ "has": "<fieldKey>" }`,
+`{ "under": "<pageId>" }`, or `{ "tag": "<tagKey>" }`. Absent means the
+backlog. The tag key is **lower-case** and reaches nested tags, so
+`{"tag":"project"}` also holds the pages carrying `#project/bento`.
+
+### Tags
+
+Write `#tag` in a block's `html` — that is the whole storage. **There is no
+`tags` field on a page and you must not invent one**: the index is derived from
+the prose every time it is asked for, exactly as backlinks are, so a stored
+list would be a second copy that goes wrong the first time anything edits
+`html` without knowing tags exist. Nothing to maintain, nothing to keep in
+step.
+
+What is and is not a tag, since a `#` means several things:
+
+| written | read as |
+|---|---|
+| `#recipe`, `#work-in-progress`, `#レシピ` | a tag |
+| `#project/bento` | ONE nested tag, also counted under `project` |
+| `# Title` | a Markdown heading — a tag never has a space after the hash |
+| `#42`, `#404` | an issue number, not a tag |
+| `#fff`, `#f7a600` | a CSS colour, not a tag |
+| `C#`, `a#b` | a `#` inside a word |
+| `<code>#include</code>` | code |
+| `https://x.example/p#top` | a URL fragment |
+| `<a href="#p/abc">…</a>` | a page link — the href is an attribute, never text |
+
+Tags are case-folded for matching and keep the casing you typed for display.
 ### Narrowing a view
 
 `filter` is optional and every key inside it is too. **Absent means everything**,
@@ -510,6 +555,8 @@ notifications, automation. The file is the team boundary and the capability.
 | an aside, or detail most readers skip | `toggle` with its body as `parent` children | folds away, and always PRINTS expanded |
 | a warning the reader must not miss | `callout` with the `tone` that fits | it is boxed, named and legible in print and without colour vision — but three per page and none of them registers |
 | anything you would print | remember toggles print open and archived pages are excluded | |
+
+| a topic that recurs across pages | an inline `#tag` in the sentence | the index, ⌘K's `#` mode, a view sourced on it and the graph all derive from it |
 
 **The most-missed feature is backlinks.** They are derived — link to a page and
 it lists the linker, with no maintenance. A space where pages only link *down*

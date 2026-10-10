@@ -6695,6 +6695,118 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 
+## 2026-09-09 — a calendar is ONE layout with two shapes, and its date is a rule
+
+bento/spaces gained a fifth view layout, `calendar`. Three choices in it are
+the kind a later session would otherwise re-open and settle differently.
+
+**A month grid and a timeline are ONE entry in the layout cycle, not two.**
+They are not peers of board/list/table/gallery. Those four answer four
+different questions; these two answer one question — *when?* — at two
+densities, and both densities are real in this app: journal entries are daily
+and dense, a reading list's dates are sparse across years. A month grid is
+useless on the second (thirty-six mostly-empty months to page through) and a
+timeline cannot show the shape of a week. So both ship, behind ONE cycle entry,
+with the choice on a second button that appears only while the calendar is on.
+
+The reason it is not six entries is that the layout control is a CYCLE, and a
+cycle's cost is linear: every added shape is one more click for everybody who
+did not want it, in both directions. The precedent for the alternative was
+already in the file — `groupBy` is a board-only parameter with its own button,
+hidden for every other shape — so this is the existing answer to "one shape,
+one parameter" rather than a new mechanism. `span` is a STRING (`timeline`,
+absent = month) and not a boolean, because `week` and `year` are the obvious
+next two and a boolean cannot be widened afterwards.
+
+**Which date a page sits on is FIXED and stated, not configured.** The rule is:
+`page.journal` when it is a real ISO date, else the first `date`-typed field in
+schema order the page carries a real value for, else no date. A `dateBy` key on
+the view would be a permanent format field bought to express a preference
+nobody has asked for; the format's own rule is that every key ships forever
+into files on other people's disks. What the UI owes instead is HONESTY, so the
+view prints the rule above the grid.
+
+**A page with no date is SHOWN, in its own bucket.** This is the half that
+would be tempting to skip. A calendar that silently holds fewer pages than the
+count beside its own title is a view lying about what it contains — and the
+pages it drops are precisely the ones somebody forgot to date, which is the
+thing they most need to see. Same reasoning for a digit-shaped non-date
+(`2026-13-99`): it is undated, never rolled forward into a real day it is not,
+because every Date-based formatter will do that silently and confidently.
+
+**Dates are built from COMPONENTS and formatted through Intl, never parsed.**
+`new Date('2026-01-01')` is UTC midnight by spec and is the previous day for
+every reader west of Greenwich; journal.ts already carried this argument and
+the calendar is where it bites hardest, because a whole grid shifts by one
+column. The one place UTC is correct is subtracting two calendar dates, where
+`Date.UTC` is what makes a day exactly a day across a daylight-saving boundary.
+Month names, weekday names and the reader's FIRST DAY OF THE WEEK all come from
+`Intl` — the last of those shifts the grid rather than relabelling it, so a
+hand-written table gets the columns wrong in half the world as well as being
+untranslatable (the extractor sweeps `t()` literals, so `t(MONTHS[m])` reaches
+no catalog while the packer reports 100%).
+
+Measured in a built shell rather than asserted: February 2026 draws 28 cells in
+four rendered rows in a Sunday-first locale and 35 in five in a Monday-first
+one, August 2026 draws 42 in six, September 35 in five. The cell count is
+derived from the month AND the reader; a fixed 35 silently loses the last days
+of a six-week month, which is the classic failure of every calendar grid.
+---
+
+## 2026-09-10 — bento/spaces: a tag is the `#` in the prose, and nothing else
+
+**Decided by** bento-team-spaces, on `spaces-tags`.
+
+**A tag has exactly one storage location: the text of the block.** There is no
+`Page.tags` array, and adding one later would be a regression rather than an
+optimisation. The index (`spaces/src/tags.ts buildTagIndex`) is derived at read
+time, invalidated by `store.reindex()` like `SpaceIndex`, and built lazily
+because `touch()` reindexes on every keystroke of a typing run.
+
+The argument is the one `buildIndex` already made for backlinks, and it is
+about who else writes `html`: an agent calling `updateBlock`, a Markdown
+import, a remote collaborator's CRDT op, a hand-edited `#bento-doc`. None of
+them knows tags exist. A derived index is simply wrong for a moment and then
+right; a stored array is wrong permanently, and nothing in a format with no
+server can reconcile it.
+
+It also makes **format additivity free rather than argued**, which was measured
+rather than assumed: a build of the previous release renders a tagged paragraph
+as ordinary prose, byte-identical html, no text lost — because a tag adds no
+field, no attribute and no block type. The chip is drawn at render into the
+DOM and taken back out of anything the editor commits (`readInline`), so the
+model never learns it happened; the same move `wireCode` makes for syntax
+colour.
+
+**`#project/bento` is ONE nested tag.** Decided now because the timing is the
+whole argument: if this build read it as the flat tag `project` followed by the
+text `/bento`, adding nesting afterwards would silently change the meaning of
+text already sitting in files on other people's disks — the one-way hazard
+sanitize.ts records for the href allowlist. A parent nobody wrote gets no index
+entry of its own; what nesting buys is that a query for `#project` reaches it.
+
+**What is NOT a tag** is the expensive half, and every clause has a case in
+`scripts/test-spaces-model.ts` that runs the parser: a `#` must open a word (so
+`C#`, `a#b` and every URL fragment are out), must be followed immediately by a
+tag character (so `# Title`, the Markdown heading, is out — and markdown.ts's
+own reader requires that same space), must not be all digits (`#42`, `#404`),
+and must not be a bare CSS hex colour (`#fff`, `#f7a600`). Inline `<code>` and
+`<a>` are skipped structurally by both readers, which is what makes this app's
+own `#p/` page links impossible to misread: an href is an attribute, never
+text.
+
+**The chip carries no `href`.** Two reasons, and the second is the safety net:
+inventing a `#t/` fragment form would be the one-way hazard above, and an `<a>`
+with no href is exactly what `sanitizeInline` UNWRAPS — so a chip that ever did
+leak into `Block.html` is removed by the canonicalizer that already runs on
+blur, leaving the text. The feature fails back to plain prose rather than into
+the format.
+
+**Related, found while doing this:** `unknownSourceKeys` existed in `fields.ts`
+and nothing called it, so a view whose `source` a build cannot read fell back to
+the backlog silently while its header still named the source. `render.ts` says
+so now. Builds already shipped cannot be told, so a view sourced on a tag reads
+as Issues on them — stated in the changelog rather than glossed.
 ## 2026-09-12 — bento/dash keys its theme off `data-theme`, like the other three apps
 
 **The divergence the maintainer asked dash to fix was a MECHANISM, not a

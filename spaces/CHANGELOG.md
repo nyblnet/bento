@@ -14,6 +14,40 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **`#tag` in the prose, and everything that follows from it.** Type `#recipe`
+  in a sentence and it renders as a clickable chip; the chip opens a tag sheet
+  listing every page carrying it. Tags reach ⌘K (a query starting with `#`
+  lists tags and how much of the space each covers), a view's **source** (a
+  base can be "everything tagged #recipe", chosen from the Pages · button),
+  and the graph (two pages sharing a tag draw an edge, capped at eight pages
+  per tag — past that a tag is a category, not a relationship).
+
+  **A tag is stored exactly once, in the words.** There is no `page.tags`
+  array and there must not be one: the index is derived from `html` every time
+  something asks, the same way backlinks already are, so it can never disagree
+  with what is written. The consequence worth having is that this costs the
+  FILE nothing — measured against a build of the previous release, a tagged
+  paragraph renders there as ordinary prose, byte-identical, with no chip and
+  no lost text.
+
+  `#project/bento` is one **nested** tag, and it counts under `#project` too —
+  settled now rather than later, because reading it as the flat tag `project`
+  first would silently change the meaning of text already in files when
+  nesting arrived. The tag sheet walks up and down that hierarchy.
+
+  What is deliberately NOT a tag, each one tested by running the parser:
+  `# Title` (a Markdown heading — a tag has no space after the hash), `#42`
+  and `#404` (issue numbers), `#fff` and `#f7a600` (CSS colours), `C#` and
+  `a#b` (a hash inside a word), a `#` in `<code>`, a URL fragment such as
+  `https://x.example/p#top`, and this app's own `#p/` page links.
+
+- **A view whose source this build cannot read now says so.** `unknownSourceKeys`
+  existed and nothing called it, so a view selecting its pages in a way the
+  build does not understand silently fell back to the backlog and showed a
+  different set of pages while its header still named the source. It shows a
+  line now, the way an unreadable filter already did. Known limitation, stated
+  because it cannot be fixed retroactively: builds shipped before this one
+  still degrade silently, so a view sourced on a tag reads as Issues there.
 - **The table sorts and edits again.** A rebase duplicated the whole
   `layout === 'table'` branch in the renderer. Both copies compiled, and the
   first one returned — so the second, the one carrying click-to-sort headers
@@ -486,6 +520,35 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **A view can be a CALENDAR.** The fifth shape on the one layout button —
+  board, list, table, gallery, calendar — and the one that answers *when*. It
+  has two forms behind a second button: a month grid, and a timeline that reads
+  newest first. Two forms rather than two entries in the cycle, because they are
+  one question at two densities (a month grid is useless on dates spread over
+  years, and a timeline cannot show you the shape of a week), and because the
+  layout control is a cycle whose cost is one click for everybody every time
+  they pass a shape they did not want.
+
+  **Which date a page sits on is a rule, not a setting, and the view says the
+  rule out loud**: its journal date if it is a journal entry, otherwise the
+  first date field in the schema it carries a real date for. A page with neither
+  is listed under "No date" — visible, because a calendar quietly holding fewer
+  pages than the count beside its own title is a view lying about what it
+  contains, and the pages it would drop are exactly the ones somebody forgot to
+  date. A value that is digit-shaped but not a day (`2026-13-99`) is no date
+  rather than a confident wrong one.
+
+  Month names, weekday names and **which day the week starts on** all come from
+  the reader's own locale, so the same file is a Sunday-first 2026年9月 in Tokyo
+  and a Monday-first September 2026 in London. Nothing formatted is ever stored.
+  Measured in a built shell: February 2026 draws 28 cells in four rows, August
+  2026 draws 42 in six, September 35 in five — the count is derived from the
+  month and the reader, never assumed.
+
+  `layout: "calendar"` and `span: "timeline"` are additive: verified against a
+  build that has never heard of either, which renders the board and round-trips
+  both keys untouched. And `board`/`month` stay the ABSENT keys — a view cycled
+  all the way round, span and all, is byte-identical to one nobody touched.
 - **A page can show another page: transclusion.** The new `embed` block draws a
   live view of another page — or of one heading's section of it, chosen by name
   — attributed to its source and clickable through to it. It stores a

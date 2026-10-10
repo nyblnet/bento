@@ -12,15 +12,17 @@
 import { type SpacesDoc, type Page, type Block, loadsRemotely, assetValue, tableOf, linkCard, coverSrc } from './model'
 import { proceduralCoverSvg, proceduralCoverFor } from './procedural'
 import { sanitizeInline, inertBody, esc } from './sanitize'
+import { decorateTags } from './tags.ts'
 import { tokenize } from './highlight'
 import { t, locale } from './i18n'
 import { TAG_OF, LIST_OF, SPEC, TONE, mediaPlayback } from './blocks'
 import {
   fieldByKey, fieldsOf, optionOf, viewRows, headerLength, propBlockOf,
-  passesFilter, filterCount, unknownFilterKeys,
+  passesFilter, filterCount, unknownFilterKeys, unknownSourceKeys,
   sortRows, unknownSortKeys, sortDirOf, layoutOf, nextLayout,
   type ViewSort, type FieldSpec, type ViewLayout,
 } from './fields'
+import { renderCalendar, spanOf, nextSpan } from './calendar.ts'
 import { unknownFilterOps } from './query.ts'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
@@ -704,6 +706,7 @@ function renderTable(b: Block, opts: RenderOpts): HTMLElement {
       td.innerHTML = opts.editable || !opts.footnotes
         ? cleanCell
         : markRefs(cleanCell, opts.footnotes, opts.footnoteScope ?? '')
+      decorateTags(td)
       tr.appendChild(td)
     })
     if (head) {
@@ -875,6 +878,12 @@ function inlineHost(b: Block, opts: RenderOpts): HTMLElement {
   inner.innerHTML = opts.editable || !opts.footnotes
     ? clean
     : markRefs(clean, opts.footnotes, opts.footnoteScope ?? '')
+  // TAG CHIPS GO ON AFTER the footnote either/or above, never before: that
+  // `innerHTML =` replaces the host's children, so chips drawn first were
+  // wiped (the September integration bug). Chips skip <a>, so a footnote
+  // marker is never decorated, and tags.ts readInline strips chips back out
+  // of whatever an editable host commits.
+  decorateTags(inner)
   if (!b.html) inner.dataset.empty = '1'
   return inner
 }
@@ -1291,6 +1300,7 @@ function pageMark(host: HTMLElement, page: Page): void {
  */
 function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpts): void {
   const layout = String((b as { layout?: unknown }).layout ?? 'board')
+  const calSpan = (b as { span?: unknown }).span
   const groupKey = String((b as { groupBy?: unknown }).groupBy ?? 'status')
   const field = fieldByKey(doc, groupKey)
   const filter = (b as { filter?: unknown }).filter
@@ -1355,13 +1365,26 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // fields.ts answers "which shape is this" and "what comes next".
     const LAYOUT_LABEL: Record<ViewLayout, string> = {
       board: t('Board'), list: t('List'), table: t('Table'), gallery: t('Gallery'),
+      calendar: t('Calendar'),
     }
     const NEXT_LABEL: Record<ViewLayout, string> = {
       board: t('Show as a list'), list: t('Show as a table'),
-      table: t('Show as a gallery'), gallery: t('Show as a board'),
+      table: t('Show as a gallery'), gallery: t('Show as a calendar'),
+      calendar: t('Show as a board'),
     }
     const layoutB = btn('viewLayout', LAYOUT_LABEL[here], NEXT_LABEL[here])
     layoutB.dataset.next = nextLayout(here)
+
+    // THE CALENDAR'S SECOND SHAPE, on the pattern `groupBy` already set: a
+    // parameter of ONE layout gets its own control, shown only while that
+    // layout is on, rather than a sixth entry in a cycle everybody has to click
+    // through. Whole sentences again, for the reason three lines up.
+    const spanB = here === 'calendar'
+      ? btn('viewSpan',
+        spanOf(calSpan) === 'timeline' ? t('Timeline') : t('Month'),
+        spanOf(calSpan) === 'timeline' ? t('Show a month at a time') : t('Show a timeline'))
+      : undefined
+    if (spanB) spanB.dataset.next = nextSpan(calSpan)
 
     // GROUP BY. Only fields with declared options: a board's columns ARE the
     // option list, so grouping by a free-text field would make one column per
@@ -1388,18 +1411,41 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // WHICH PAGES. Named after what it answers rather than "Source", because
     // the question in the reader's head is "what is in this?" — and it says the
     // answer, not the word, when there is one.
-    const src = (b as { source?: { has?: unknown; under?: unknown } }).source
+    const src = (b as { source?: { has?: unknown; under?: unknown; tag?: unknown } }).source
     const hasKey = typeof src?.has === 'string' ? src.has : ''
     const underId = typeof src?.under === 'string' ? src.under : ''
+    const tagKey = typeof src?.tag === 'string' ? src.tag : ''
     const srcLabel = hasKey ? (fieldByKey(doc, hasKey)?.label ?? hasKey)
       : underId ? (doc.pages.find((p) => p.id === underId)?.title || t('Untitled'))
-        : t('Issues')
+        // the tag SAYS ITSELF — no lookup, and the hash is what makes it read
+        // as a tag rather than as a page somebody happened to call "recipe"
+        : tagKey ? '#' + tagKey
+          : t('Issues')
     const sourceB = btn('viewSource', `${t('Pages')} · ${srcLabel}`,
-      t('Choose which pages this view holds'), !!(hasKey || underId))
+      t('Choose which pages this view holds'), !!(hasKey || underId || tagKey))
 
-    head.append(layoutB, sourceB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
+    head.append(layoutB, ...(spanB ? [spanB] : []), sourceB,
+      ...(asList ? [] : [groupB]), sortB, openB, filterB)
   }
   host.appendChild(head)
+
+  // A SOURCE this build cannot evaluate is the WORST of the three, and it had
+  // no warning at all until now — `unknownSourceKeys` existed in fields.ts and
+  // nothing called it. An unreadable filter over-shows; an unreadable SOURCE
+  // means the view silently falls back to the backlog and shows a completely
+  // different set of pages, with the header still naming the source it cannot
+  // apply. Measured against a build of `main`: a view sourced on a tag renders
+  // as Issues there, and says nothing.
+  //
+  // That build is already shipped and cannot be told. What this fixes is
+  // forward: the FOURTH selector, whenever somebody adds one, degrades loudly.
+  const unknownSrc = unknownSourceKeys((b as { source?: unknown }).source)
+  if (unknownSrc.length) {
+    const note = document.createElement('p')
+    note.className = 'sp-view-empty'
+    note.textContent = t('This view chooses its pages in a way this build does not understand, so it is showing the backlog instead.')
+    host.appendChild(note)
+  }
 
   // A rule this build cannot evaluate means the view shows MORE than its author
   // asked for. Additivity keeps the rule; honesty says so.
@@ -1696,6 +1742,24 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     table.appendChild(tb)
     wrap.appendChild(table)
     host.appendChild(wrap)
+    return
+  }
+
+  // CALENDAR — the shape that answers "when". Its own file: the arithmetic is
+  // the part of this app most likely to be wrong east of UTC, and it wanted a
+  // rig that can import it without a DOM. `layoutOf`, not the raw string, so a
+  // block claiming `layout:"toString"` cannot reach this branch and everything
+  // a newer build might name falls through to the board.
+  if (layoutOf(layout) === 'calendar') {
+    renderCalendar(host, {
+      doc,
+      rows,
+      blockId: b.id,
+      span: spanOf(calSpan),
+      locale: locale(),
+      editable: opts.editable,
+      card: (r) => card(r.page, r.values),
+    })
     return
   }
 
