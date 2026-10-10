@@ -261,8 +261,9 @@ if (manifest) {
   // A dotted permission names a capability inside an API, not a namespace:
   // `downloads.ui` is used as `chrome.downloads.setUiOptions`.
   const usedAs = { 'downloads.ui': 'chrome\\.downloads\\.setUiOptions' }
+  const usedWithoutApi = { storage: true }
   for (const perm of manifest.permissions ?? []) {
-    if (!new RegExp(usedAs[perm] ?? `chrome\\.${perm}\\b`).test(srcText) && perm !== 'storage') {
+    if (!new RegExp(usedAs[perm] ?? `chrome\\.${perm}\\b`).test(srcText) && !usedWithoutApi[perm]) {
       fail(`permission "${perm}" is declared but never used in the shipped code`)
     }
   }

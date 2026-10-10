@@ -13,6 +13,7 @@ export * from '../../../kernel/src/sync/crdt.ts'
 
 import { SyncEngine, shape } from '../../../kernel/src/sync/crdt.ts'
 import type { DocShape } from '../../../kernel/src/sync/crdt.ts'
+import { DOC_MAPS } from '../docmaps.ts'
 
 /**
  * bento/spaces: the document holds `pages`, a page holds `blocks`.
@@ -28,8 +29,19 @@ import type { DocShape } from '../../../kernel/src/sync/crdt.ts'
  * pre-order array and the parent value, and cycle repair stays a pure function
  * of the document. Trying to sync the tree as a hierarchy would put two sources
  * of truth in the file.
+ *
+ * `DOC_MAPS` (docmaps.ts) are the doc-level keys merged PER KEY rather than as
+ * one value: today `periods`, so two people defining different periods in one
+ * week both keep theirs. `assets` and `blobs` are per-key for every app already.
+ *
+ * `trail` and `revisions` are not synced at all — the kernel's shape() skips
+ * every history-class field, so each replica keeps its own record.
+ *
+ * The list is docmaps.ts's, not a second copy: `model.ts parseDoc` folds dotted
+ * keys back using the same names, and two copies of that list is exactly how
+ * the hazard and its mitigation drift apart.
  */
-export const SPACES_SHAPE: DocShape = shape('pages', 'blocks')
+export const SPACES_SHAPE: DocShape = shape('pages', 'blocks', 'html', DOC_MAPS)
 
 /** The engine bound to bento/spaces. */
 export class SyncState extends SyncEngine {

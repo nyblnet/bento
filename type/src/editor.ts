@@ -19,6 +19,7 @@
 //     model, so it is suppressed and every ⌘Z goes through the store.
 
 import { renderBody, renderBlock, readBlock, isNoteAtom, TAG } from './render.ts';
+import { fillFields } from './fields.ts';
 import { toggleMark, activeAt, setFont, fontAcross, type MarkType, type FontAttrs } from './inline.ts';
 import { isList, uid, MAX_LIST_LEVEL, type Block, type TypeDoc } from './model.ts';
 import type { Store } from './store.ts';
@@ -189,7 +190,14 @@ export class Editor {
       // every keystroke, and renderBody rebuilds every paragraph in the
       // document — on a long contract that is a visible stall per character.
       const fresh = renderBlock(tracked);
+      // Derived content in the fresh block has to be filled, or it renders as
+      // its placeholder: `blockHtml` emits a field atom UNRESOLVED and the
+      // filler puts the value in (fields.ts, mirroring numberXrefs). renderBody
+      // does that for a whole-document render; this path replaces one block and
+      // never reaches it, so a field in a TRACKED document flashed back to its
+      // own name on every keystroke in that paragraph.
       el.replaceWith(fresh);
+      fillFields(fresh, this.store.doc);
       if (caretAt !== undefined) this.setCaret({ id: c.id, at: caretAt });
     }
     this.onChange?.();

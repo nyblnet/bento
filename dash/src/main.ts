@@ -28,6 +28,7 @@ import {
   canWriteInPlace, downloadFile, suggestedFileName, openedFileName, registerPreview,
   currentFileName,
 } from '../../kernel/src/save.ts'
+import { startTheme } from '../../kernel/src/theme.ts'
 import { putRecovery, pruneOld } from '../../kernel/src/autosave.ts'
 import { FileWriteBack } from './writeback.ts'
 import { APP_VERSION } from '../../kernel/src/update.ts'
@@ -47,6 +48,7 @@ import { installPrint, openPrintDialog } from './print.ts'
 import './ask.css'
 import { openColumnMenu } from './filterui.ts'
 import { installSaveMenu, adoptOpenedDoc, toast } from './saveui.ts'
+import { savingFor, saveRevision, type Acknowledge } from './saving.ts'
 import { dismissSplash, dismissSplashNow } from './splash.ts'
 import { t, i18nApi } from './i18n.ts'
 import {
@@ -162,6 +164,15 @@ configureApp({
 })
 
 capturePristine()
+
+// Theme: AFTER capturePristine, BEFORE the first paint — slides' two lines,
+// for slides' two reasons. capturePristine clones the LIVE document and every
+// save re-serializes that clone, so `data-theme` on <html> must not exist yet
+// or a viewer's preference travels inside every file they save (dash measured
+// exactly that once, which is why it used to theme through a transient <style>
+// instead — see settings.ts). And before the paint, because applying it later
+// renders the workspace light and then flips it, which reads as a bug.
+startTheme()
 
 // The file-manager thumbnail. Registered BEFORE any save can happen: a save
 // that ran first would write a shell with no preview in it, and the next
@@ -1023,10 +1034,20 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     kindBtn.textContent = viz.kind[0].toUpperCase() + viz.kind.slice(1)
     const scene = buildScene(sheet, viz, sheet.id === shownId
       ? (grid.computed as Map<string, unknown[]>)
-      : (recalc(sheet, store.doc.modified).values as Map<string, unknown[]>))
+      : (recalc(sheet, store.doc.modified).values as Map<string, unknown[]>),
+      // THE VIEW VECTOR — the same one the footer totals and the 2D chart read.
+      // Its absence is why this plot ignored the filter completely.
+      store.order[sheet.id] ?? null)
     vizDown = mountViz3d(chartBody, scene)
   }
   store.on('doc', () => { if (viz) draw3d() })
+  // FILTERING AND SORTING ARE VIEW STATE: `store.view()` emits `view` and never
+  // `doc`, because they must not dirty the file. `drawChart` has been on both
+  // since that was found; `draw3d` was on `doc` alone, so a filter changed the
+  // grid, the status bar, the footer and the 2D chart, and left the 3D plot
+  // showing every row — beside three readouts that had already corrected
+  // themselves. Same subscription, same reason, ten lines further down.
+  store.on('view', () => { if (viz) draw3d() })
   app.querySelector('[data-act="viz3d"]')!.addEventListener('click', () => {
     const sheet = dataset('viz3d')
     if (!sheet) return
@@ -1279,9 +1300,25 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
   // writes exactly what ⌘S writes. Stamping is dash's to add on both paths at
   // once; the dep exists in writeback.ts so that change is one line here.
   const writeBack = new FileWriteBack()
+  const saving = savingFor(store)
+  // What every write that reached the open file owes the screen. `clean` is
+  // called only when the bytes written are the revision on screen — see
+  // saving.ts; clearing on resolve is the race this replaced.
+  const ack: Acknowledge = {
+    adopt: (d) => writeBack.adopt(d),
+    clean: () => { dirty = false; dirtyEl.hidden = true; dirtyEl.title = '' },
+  }
   let wbTag: HTMLElement | null = null
   async function runWriteBack(): Promise<void> {
-    const { notice } = await writeBack.run(store.doc, store.readOnly)
+    if (saving.superseded) return
+    // Through the queue, on the snapshot. write-back's own `lastWritten`
+    // records the bytes it wrote, so it adopts itself — `adopt` here would
+    // also reset its failure state, which is its own to manage.
+    const out = await saveRevision(store, (snap) => writeBack.run(snap, store.readOnly),
+      (r) => r.outcome.kind === 'wrote' ? 'open-file' : 'nowhere',
+      { adopt: () => {}, clean: ack.clean })
+    if (out.kind !== 'done') return
+    const { notice } = out.value
     if (!notice) return
     if (notice.say === 'failed') {
       // INTERRUPTS, unlike a success. The file on disk is now older than the
@@ -1294,11 +1331,10 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
         .replace('{why}', notice.why))
       return
     }
-    // The bytes are on disk. Clearing the dot here is the whole point: it is
-    // the same claim ⌘S makes, and it is now true without one.
-    dirty = false
-    dirtyEl.hidden = true
-    dirtyEl.title = ''
+    // The bytes are on disk. Clearing the dot is the whole point — and it
+    // was done above by `saveRevision`, ONLY if no edit landed while they were
+    // being written. An edit that did keeps the dot on and the next cycle
+    // writes it.
     if (notice.say === 'recovered') toast(t('Saved to the file — automatic saving is working again.'))
     wbTag ??= app.querySelector<HTMLElement>('.dx-wb')
     if (!wbTag) return
@@ -1337,6 +1373,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     showingSheet: () => grid.showingId(),
     showSheet: (id: string) => grid.setSheet(id),
     onDirty: markDirty,
+    ack,
     // so Offline mode can HANG UP an open relay socket, not merely refuse the
     // next connection — a switch that leaves the current one running is not one
     sync,
@@ -1451,6 +1488,7 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     button: app.querySelector<HTMLElement>('[data-act="save"]')!,
     store,
     save: doSave,
+    ack,
   })
   const undoBtn = app.querySelector<HTMLButtonElement>('[data-act="undo"]')!
   const redoBtn = app.querySelector<HTMLButtonElement>('[data-act="redo"]')!
@@ -1989,25 +2027,33 @@ function boot(doc: DashDoc, repaired: number, frozen?: 'policy' | 'version', sav
     // A throw was invisible too: an unhandled rejection in the console of an
     // app the user is not looking at the console of. A revoked permission, a
     // deleted file and a full disk all arrive this way.
-    let r: Awaited<ReturnType<typeof saveFile>>
-    try {
-      r = await saveFile(store.doc)
-    } catch (err) {
+    if (saving.superseded) {
+      toast(t('This file was updated. Reload to run the new version before saving again.'))
+      return
+    }
+    // Through the queue (saving.ts): the snapshot is what is written, and the
+    // dot goes out only if it is still what is on screen when the write lands.
+    // `adopt` — these bytes ARE the file now, so write-back must not rewrite
+    // them, and a manual save through the same handle clears any standing
+    // "automatic saving failed" warning — happens for an in-place write ONLY.
+    // A DOWNLOAD wrote a copy to Downloads and left the open file stale, so
+    // adopting it would tell the next cycle the file is current when it is the
+    // one thing that is not.
+    const out = await saveRevision(store, (snap) => saveFile(snap),
+      (r) => r === 'saved' || r === 'saved-as' ? 'open-file' : r === 'downloaded' ? 'download' : 'nowhere',
+      ack)
+    if (out.kind === 'failed') {
+      const err = out.error
       toast(t('Save failed — {why}').replace('{why}', err instanceof Error ? err.message : String(err)))
       return
     }
+    if (out.kind === 'superseded') {
+      toast(t('This file was updated. Reload to run the new version before saving again.'))
+      return
+    }
+    if (out.kind !== 'done') return
+    const r = out.value
     if (r === 'cancelled') return          // they closed the picker; they know
-    dirty = false
-    dirtyEl.hidden = true
-    dirtyEl.title = ''
-    // These bytes ARE the file now, so write-back must not immediately rewrite
-    // them — and a manual save that succeeded through the same handle clears
-    // any standing "automatic saving failed" warning, which would otherwise sit
-    // there contradicting the toast that is about to appear. Not for a
-    // DOWNLOAD: that wrote a copy to Downloads and left the open file stale, so
-    // adopting it would tell the next cycle the file is current when it is the
-    // one thing that is not.
-    if (r !== 'downloaded') writeBack.adopt(store.doc)
     const name = currentFileName()
     if (r === 'downloaded') {
       toast(t('This browser cannot write files in place, so a copy was saved to your Downloads. The file open here is unchanged.'))

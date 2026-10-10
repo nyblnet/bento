@@ -28,7 +28,10 @@ import { tableOf, TABLE_MAX_COLS, TABLE_MAX_ROWS } from './model'
 import { CALLOUT_TONES, SPEC } from './blocks'
 import { toneLabel } from './render'
 import { CODE_LANGS, normLang } from './highlight'
+import { aliasesOf } from './mentions.ts'
 import { t } from './i18n'
+import { resolvePageDesign } from './designs.ts'
+import { designLabel } from './designpanel'
 
 /**
  * What the panel needs from the editor.
@@ -53,6 +56,8 @@ export interface PropsHost {
   openIconPicker(pageId: string, anchor: HTMLElement): void
   /** the editor owns popovers; the panel only says which page wants one */
   openAddProperty(pageId: string, anchor: HTMLElement): void
+  /** this page's design choices — the same menu the page ⋯ menu opens */
+  openPageDesign(pageId: string, anchor: HTMLElement): void
   /** the editor owns the icon set and the emoji fallback */
   pageIcon(icon: string | undefined): string
   openLinkCard(id: string): void
@@ -340,6 +345,21 @@ export class PropsPanel {
       this.app.repaint()
     }))
 
+    // THIS PAGE'S DESIGN — a button that opens the page menu's own choices,
+    // not a <select>: an option in a native dropdown cannot be hovered for a
+    // preview, and the preview is the point. It reads what the page wears
+    // NOW, inherited or its own.
+    {
+      const r = resolvePageDesign(s.doc, page.id)
+      const wears = designLabel(s.doc, r?.name ?? null)
+      const b = mk('button', 'sp-btn sp-insp-dsg',
+        page.design !== undefined ? wears : t('Inherited · {name}', { name: wears }))
+      b.type = 'button'
+      b.setAttribute('aria-haspopup', 'menu')
+      b.addEventListener('click', (e) => { e.preventDefault(); this.app.openPageDesign(page.id, b) })
+      this.row(t('Design'), b)
+    }
+
     this.row(t('Archived'), this.toggle(page.archived === true, (v) => {
       if (s.readOnly) return
       s.commit(() => {
@@ -350,6 +370,45 @@ export class PropsPanel {
       })
       this.app.repaint()
     }))
+
+    // OTHER NAMES THIS PAGE ANSWERS TO — one comma-separated field, because
+    // that is how it reads back ("New York, NYC, the Big Apple") and a
+    // list-of-chips editor for a field most pages never use is a lot of
+    // surface for nothing.
+    //
+    // The ABSENT key is the default and clearing the field restores it: a page
+    // that had an alias and lost it must be byte-identical to one that never
+    // had one, or every space that ever opened this panel grows an `aliases:
+    // []` nobody asked for.
+    if (!this.app.locked()) {
+      const aliases = mk('input', 'sp-insp-text') as HTMLInputElement
+      aliases.type = 'text'
+      aliases.value = aliasesOf(page).join(', ')
+      aliases.placeholder = t('NYC, the Big Apple')
+      aliases.title = t('Names that also reach this page from [[links]], search and the page picker')
+      // `change`, not `input`: one commit per edit, so this is exactly one ⌘Z.
+      aliases.addEventListener('change', () => {
+        if (s.readOnly) return
+        const next: string[] = []
+        const seen = new Set<string>()
+        for (const raw of aliases.value.split(',')) {
+          const n = raw.trim()
+          if (!n || seen.has(n.toLowerCase())) continue
+          seen.add(n.toLowerCase())
+          next.push(n)
+        }
+        s.commit(() => {
+          const p = s.index.page.get(page.id)
+          if (!p) return
+          if (next.length) p.aliases = next
+          else delete p.aliases
+        }, { scope: 'doc' })
+        this.app.repaint()
+      })
+      this.row(t('Also known as'), aliases)
+    } else if (aliasesOf(page).length) {
+      this.row(t('Also known as'), mk('span', 'sp-insp-val', aliasesOf(page).join(', ')))
+    }
 
     if (typeof page.journal === 'string') {
       this.row(t('Journal date'), mk('span', 'sp-mono', page.journal))

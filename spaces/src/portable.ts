@@ -18,7 +18,12 @@
 
 // `.ts` extensions ON PURPOSE: node resolves this module directly for the rig.
 import { type SpacesDoc, type Page, type Block, repairId, pageAssetKeys } from './model.ts'
+import { designAssetKeys, designSource } from './designs.ts'
 import { esc } from './sanitize.ts'
+import { isPageRef } from './embed.ts'
+import { allNotes, mergeNotes, renameRefs } from './footnotes.ts'
+import { projectForCopy } from '../../kernel/src/docfields.ts'
+import { SPACES_FIELDS } from './docclass.ts'
 
 /** An `<a href="#p/…">` in a block, however many attributes it carries. */
 const PAGE_LINK = /<a\s([^>]*?)href="#p\/([^"]*)"([^>]*)>([\s\S]*?)<\/a>/g
@@ -142,7 +147,8 @@ export function subtreeIds(doc: SpacesDoc, rootId: string, subtree = true): stri
  *
  * Everything the format guarantees survives: unknown top-level fields, unknown
  * per-page fields and unknown block types are all carried through untouched
- * (PLATFORM §3). Exactly three things are deliberately NOT:
+ * (PLATFORM §3). The kernel's copy table builds it (tier 'duplicate',
+ * docclass.ts). Exactly four things are deliberately NOT carried:
  *
  *   · `collab` — every credential in it. The room, the read key, the writer and
  *     owner private keys and the invite chain are the capability to read and
@@ -151,6 +157,7 @@ export function subtreeIds(doc: SpacesDoc, rootId: string, subtree = true): stri
  *     for reader copies; an extract is a different document, so it keeps none.
  *   · `template` — it re-mints `docId` on every open (model.ts), and a document
  *     that was just given a deliberate identity must keep it.
+ *   · the in-file history (`revisions`, `trail`): it records the whole space.
  *   · assets nobody in the extract references. An export that carries the whole
  *     document's images is a copy with pages hidden, not an extract — and the
  *     images are the only thing in a space with real weight.
@@ -173,6 +180,17 @@ export function extractSpace(
     inSet.has(id) ? { id } : { text: titleOf.get(id) ?? id }
 
   for (const p of pages) {
+    // A DESIGN INHERITED FROM A PAGE THAT DOES NOT TRAVEL is pinned on the page
+    // that wore it, BEFORE its parent is cut: a Ledger section's child exported
+    // on its own must still look like Ledger, and the section is not in the
+    // file to inherit from. A design the page sets itself, or takes from the
+    // space (whose `design` travels in the clone below), needs nothing.
+    // Only a page whose PARENT is cut: one inside the extract inherits from a
+    // page that did travel, pinned or not.
+    if (p.design === undefined && (p.id === rootId || !p.parent || !inSet.has(p.parent))) {
+      const src = designSource(doc, p.id)
+      if (src.from === 'ancestor' && src.pageId && !inSet.has(src.pageId) && typeof src.name === 'string') p.design = src.name
+    }
     // the root becomes the home page of its own document, so it has no parent;
     // a child whose parent did not travel is re-homed onto the root rather than
     // left dangling (parseDoc drops such a parent anyway — doing it here keeps
@@ -185,13 +203,21 @@ export function extractSpace(
         b.html = r.html
         unlinked += r.cut
       }
-      if (b.type === 'pagelink' && typeof b.page === 'string' && !inSet.has(b.page)) {
+      if (isPageRef(b) && !inSet.has(String(b.page))) {
         // a pagelink IS its target; with the target gone there is no block left
-        // to be, so it becomes the same honest text an inline link becomes
+        // to be, so it becomes the same honest text an inline link becomes.
+        //
+        // AN EMBED IS THE SAME BLOCK-SHAPED REFERENCE and takes the same
+        // treatment — more urgently, if anything: a pagelink whose target
+        // stayed behind is a chip that does nothing, while an embed whose
+        // target stayed behind is a page's worth of CONTENT that silently is
+        // not in the extract. `anchor` goes with it; a section name is
+        // meaningless once there is no page to find it on.
         unlinked++
         b.type = 'p'
-        b.html = literalLink(titleOf.get(b.page) ?? b.page, '')
+        b.html = literalLink(titleOf.get(String(b.page)) ?? String(b.page), '')
         delete b.page
+        delete b.anchor
       }
     }
   }
@@ -207,6 +233,9 @@ export function extractSpace(
   // Dropping it changes how the extract LOOKS, which an export must not do.
   const fonts = (doc.fonts ?? []).filter((f) => (doc.assets ?? {})[f.asset] !== undefined)
   for (const f of fonts) used.add(f.asset)
+  // …and so is a face the space's DESIGN embeds: `design`/`designs` travel
+  // with the clone below, so the bytes they name must travel too
+  for (const k of designAssetKeys(doc)) used.add(k)
   const assets: Record<string, string> = {}
   for (const k of used) {
     const v = (doc.assets ?? {})[k]
@@ -214,7 +243,11 @@ export function extractSpace(
   }
 
   const out: SpacesDoc = {
-    ...clone(doc),
+    // the kernel's copy table, tier 'duplicate' (docfields.ts): a new
+    // identity, so docId and collab are RESET (omitted) — every credential in
+    // collab is the capability to the WHOLE space — and the rest travels,
+    // undeclared keys included
+    ...projectForCopy(clone(doc), SPACES_FIELDS, 'duplicate'),
     docId: opts.docId,
     title: titleOf.get(rootId) || doc.title,
     pages,
@@ -228,8 +261,15 @@ export function extractSpace(
   }
   if (!Object.keys(assets).length) delete out.assets
   if (!fonts.length) delete out.fonts
-  delete out.collab
+  // Two things the duplicate tier keeps and an EXTRACT must not, because an
+  // extract is a few pages of a space, not the space:
+  //   · `template` — it re-mints docId on every open, and this file was just
+  //     given a deliberate identity (the kernel's duplicate tier keeps it,
+  //     since a duplicated template is still the owner's template);
+  //   · the in-file history (class 'history': revisions, trail) — it records
+  //     the WHOLE space, so carrying it would hand over the pages left out.
   delete out.template
+  for (const [k, cls] of Object.entries(SPACES_FIELDS)) if (cls === 'history') delete out[k]
 
   return {
     doc: out,
@@ -264,6 +304,9 @@ export interface GraftPlan {
   /** asset entries to add — already keyed so nothing in the host is overwritten */
   assets: Record<string, string>
   fonts: NonNullable<SpacesDoc['fonts']>
+  /** notes to ADD to the host's table — already deconflicted, and the arriving
+   *  references already rewritten to match (src/footnotes.ts) */
+  footnotes: Record<string, string>
   stats: GraftStats
 }
 
@@ -349,15 +392,21 @@ export function planGraft(
         dropped += r.cut
         relinked += r.changed
       }
-      if (b.type === 'pagelink' && typeof b.page === 'string') {
-        if (arrived.has(b.page)) {
-          const next = idMap.get(b.page) ?? b.page
-          if (next !== b.page) { b.page = next; relinked++ }
+      // Both kinds of page reference, by the one predicate — an embed grafted
+      // into another space that kept pointing at the ORIGINAL space's page id
+      // would render "that page is not here" in a document where the page
+      // demonstrably is.
+      if (isPageRef(b)) {
+        const ref = String(b.page)
+        if (arrived.has(ref)) {
+          const next = idMap.get(ref) ?? ref
+          if (next !== ref) { b.page = next; relinked++ }
         } else {
           dropped++
           b.type = 'p'
-          b.html = literalLink(titleOf.get(b.page) ?? b.page, '')
+          b.html = literalLink(titleOf.get(ref) ?? ref, '')
           delete b.page
+          delete b.anchor
         }
       }
     }
@@ -416,8 +465,38 @@ export function planGraft(
     for (const b of p.blocks) rewriteAssetRefs(b, keyMap)
   }
 
+  // FOOTNOTES FOLLOW THE PAGES THAT REFERENCE THEM, and they follow the same
+  // rule the asset keys above follow: a label already held by this space, with
+  // a DIFFERENT note behind it, is renamed and the arriving references are
+  // rewritten. Without this, grafting a page whose prose says `[^1]` would
+  // either answer with the host's own note or leave every reference dangling —
+  // and both are silent, which is the class of import loss this app has been
+  // bitten by before.
+  const footnotes: Record<string, string> = {}
+  const incomingNotes = Object.fromEntries(allNotes(incoming))
+  if (Object.keys(incomingNotes).length) {
+    const hostNotes = Object.fromEntries(allNotes(host))
+    const merged = { ...hostNotes }
+    const renames = mergeNotes(merged, incomingNotes, new Set(Object.keys(hostNotes)))
+    for (const [k, v] of Object.entries(merged)) {
+      if (!Object.hasOwn(hostNotes, k)) footnotes[k] = v
+    }
+    if (renames.size) {
+      for (const p of pages) {
+        for (const b of p.blocks) {
+          if (typeof b.html === 'string') b.html = renameRefs(b.html, renames)
+          if (Array.isArray(b.rows)) {
+            b.rows = (b.rows as unknown[]).map((r) =>
+              Array.isArray(r) ? r.map((c) => (typeof c === 'string' ? renameRefs(c, renames) : c)) : r) as string[][]
+          }
+        }
+      }
+    }
+  }
+
   return {
     pages,
+    footnotes,
     assets,
     fonts,
     stats: {

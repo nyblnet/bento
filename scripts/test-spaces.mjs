@@ -39,23 +39,50 @@ const esbuild = join(root, 'slides/node_modules/.bin/esbuild')
 // The timezone lists are not decoration. A date test that only runs in one
 // timezone has not been run: Kiritimati is UTC+14 and Lord Howe is a half-hour
 // DST offset, which is where "add 86,400,000 ms" stops being "add a day".
-const TZS_JOURNAL = ['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Australia/Lord_Howe']
+// Niue is UTC-11, the far western end, and it is the mirror of Kiritimati: a
+// date built by parsing an ISO string (UTC midnight) is the PREVIOUS day there
+// and the SAME day at +14, so one timezone alone cannot tell a correct
+// implementation from a broken one.
+const TZS_JOURNAL = ['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Pacific/Niue', 'Australia/Lord_Howe']
 const TZS_CALC = ['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Pacific/Kiritimati']
+// The trail's key is a LOCAL day. Kiritimati (UTC+14) and Niue (UTC-11) bracket
+// every hour where "which day is it" has two answers, which is the whole bug
+// class here.
+const TZS_TRAIL = ['UTC', 'Europe/Berlin', 'Pacific/Kiritimati', 'Pacific/Niue']
 
 const RIGS = [
-  { name: 'model',   file: 'scripts/test-spaces-model.ts' },
+  // The model rig carries the CALENDAR layout's arithmetic now — month grids,
+  // day counts, "which month does this open on" — which is date code and
+  // therefore timezone code. CI still runs this rig once, in one timezone; the
+  // one-line change to that step is queued on the board rather than made here,
+  // because ci.yml is the standing conflict magnet and five sibling branches
+  // are in flight. Until it lands, THIS is where the matrix lives.
+  { name: 'model',   file: 'scripts/test-spaces-model.ts', tzs: TZS_JOURNAL },
   { name: 'agent',   file: 'scripts/test-spaces-agent.ts' },
   { name: 'journal', file: 'scripts/test-spaces-journal.ts', tzs: TZS_JOURNAL },
   { name: 'calc',    file: 'scripts/test-spaces-calc.ts', tzs: TZS_CALC },
+  // Same reason as journal and calc: every number this rig asserts is a date
+  // or a sum derived from one, and a date bug that only shows east of UTC is
+  // exactly what a one-timezone run cannot see.
+  { name: 'gantt',   file: 'scripts/test-spaces-gantt.ts', tzs: TZS_JOURNAL },
+  { name: 'caret',   file: 'scripts/test-spaces-caret.ts' },
+  { name: 'trail',   file: 'scripts/test-spaces-trail.ts', tzs: TZS_TRAIL, bundle: true },
   { name: 'undo',    file: 'scripts/test-spaces-undo.ts', bundle: true },
   { name: 'invite',  file: 'scripts/test-spaces-invite.ts', bundle: true },
+  { name: 'copytiers', file: 'scripts/test-spaces-copytiers.ts', bundle: true },
   { name: 'roundtrip', file: 'scripts/test-spaces-roundtrip.ts', bundle: true },
+  { name: 'reading', file: 'scripts/test-spaces-reading.ts', bundle: true },
+  { name: 'md-strict', file: 'scripts/test-spaces-md-strict.ts', bundle: true },
   { name: 'restore-gate', file: 'scripts/test-spaces-restore-gate.ts', bundle: true },
+  { name: 'history', file: 'scripts/test-spaces-history.ts', bundle: true },
+  { name: 'mentions', file: 'scripts/test-spaces-mentions.ts' },
   { name: 'size',    file: 'scripts/test-spaces-size.mjs' },
   // Revision tracking has no timezone dependency; the browser rig needs the
   // built spaces shell and Playwright/Chrome (the CI browser job provides both).
   { name: 'save-revisions', file: 'scripts/test-spaces-save-revisions.ts' },
   { name: 'save-browser', file: 'scripts/test-spaces-save-browser.mjs' },
+  // drives the BUILT shell in Chrome; self-skips outside CI without one
+  { name: 'chrome',  file: 'scripts/test-spaces-chrome.ts' },
 ]
 
 // A rig that exists but is not listed here would never run locally, and the

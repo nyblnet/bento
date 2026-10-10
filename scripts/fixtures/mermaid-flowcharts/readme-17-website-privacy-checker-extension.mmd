@@ -1,0 +1,25 @@
+%% source: https://github.com/Advait251206/Website-Privacy-Checker-Extension/blob/HEAD/README.md (MIT)
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#E0F2F1', 'edgeLabelBackground':'#FFFFFF', 'tertiaryColor': '#E8F5E9', 'lineColor': '#00796B', 'nodeBorder': '#00796B' }}}%%
+flowchart TD
+    classDef main fill:#E0F2F1,stroke:#00796B,stroke-width:2px,color:#004D40;
+    classDef process fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#5D4037;
+    classDef check fill:#EDE7F6,stroke:#5E35B1,stroke-width:2px,color:#311B92;
+    
+    A["🌐 Web Page Loads"]:::main --> B["💉 Content Script Injection (content.js)"]:::main
+    B --> C["🕵️ DOM & Form Privacy Scan"]:::check
+    
+    A --> D["⚙️ Service Worker Monitoring (background.js)"]:::main
+    D --> E["📡 WebRequest Tracker Detection"]:::check
+    
+    C & E --> F["🧠 Trust Score Calculator Engine (popup.js)"]:::process
+    
+    F --> G["🛡️ SSL Check (+20 pts)"]:::process
+    F --> H["📜 Privacy Policy Scan (+20 pts)"]:::process
+    F --> I["🍪 Cookies & Tracker Filter (+30 pts)"]:::process
+    F --> J["🔒 Insecure Form Audit (+30 pts)"]:::process
+    
+    G & H & I & J --> K["📊 UI Popup Rendering (popup.html)"]:::main
+
+    class A,B,D,K main;
+    class C,E check;
+    class F,G,H,I,J process;

@@ -8,6 +8,7 @@
 // downscaled before it travels, visibly and reversibly.
 
 import { pageAssetKeys, type SpacesDoc } from './model.ts'
+import { designAssetKeys } from './designs.ts'
 
 /** Longest edge kept when downscaling. Above this, detail is invisible in a
  *  text column and costs megabytes. */
@@ -98,6 +99,8 @@ export function orphanAssets(doc: SpacesDoc): string[] {
     }
   }
   for (const f of doc.fonts ?? []) used.add(f.asset)
+  // a face a doc-local design embeds is referenced from the design, not a block
+  for (const k of designAssetKeys(doc)) used.add(k)
   return Object.keys(doc.assets ?? {}).filter((k) => !used.has(k))
 }
 

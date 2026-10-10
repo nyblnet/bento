@@ -10,19 +10,34 @@
 // one decision.
 
 import { type SpacesDoc, type Page, type Block, loadsRemotely, assetValue, tableOf, linkCard, coverSrc } from './model'
+import { proceduralCoverSvg, proceduralCoverFor } from './procedural'
 import { sanitizeInline, inertBody, esc } from './sanitize'
+import { decorateTags } from './tags.ts'
 import { tokenize } from './highlight'
 import { t, locale } from './i18n'
 import { TAG_OF, LIST_OF, SPEC, TONE, mediaPlayback } from './blocks'
 import {
   fieldByKey, fieldsOf, optionOf, viewRows, headerLength, propBlockOf,
-  passesFilter, filterCount, unknownFilterKeys,
+  passesFilter, filterCount, unknownFilterKeys, unknownSourceKeys,
   sortRows, unknownSortKeys, sortDirOf, layoutOf, nextLayout,
-  type ViewSort, type FieldSpec, type ViewLayout,
+  type ViewSort, type FieldSpec, type ViewLayout, type IssueRow,
 } from './fields'
+import { ganttModel } from './gantt.ts'
+import { workloadModel, workloadOption, bucketField } from './workload.ts'
+import { todayISO } from './journal.ts'
+// THE SHARED CHART ENGINE, from the kernel and not from this app. dash already
+// imports it from outside slides, so this is a settled cross-app path rather
+// than a new one — and it is read-only: kernel/src is a serialized zone.
+import { chartSnapshotSvg } from '../../kernel/src/charts.ts'
+import { renderCalendar, spanOf, nextSpan } from './calendar.ts'
+import { unknownFilterOps } from './query.ts'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
+import { applyDesign, resolvePageDesign, type Resolved } from './designs.ts'
 import { renderCanvasHead, placeCard } from './canvas.ts'
+import { viewEmbed, anchorOf } from './embed.ts'
+import { markRefs, notesOnPage, noteOf, noteId, refId, type PageNotes } from './footnotes.ts'
+import { renderChartBlock } from './charts.ts'
 
 export interface RenderOpts {
   /** editable per-block hosts (the editor); false for reader/print */
@@ -50,6 +65,40 @@ export interface RenderOpts {
    * it would travel to the next person the file is mailed to.
    */
   allowRemote?: (src: string) => boolean
+  /**
+   * The pages already open above this render, host page first — the embed
+   * cycle and depth guard (embed.ts `viewEmbed`).
+   *
+   * NOT a document field and not module state: it is a fact about one render
+   * pass, and two surfaces render at once (the editor canvas and the still
+   * preview), so a shared counter between them would be a race that only shows
+   * up in a saved thumbnail. `renderBlocks` seeds it with the page it was
+   * given, so nothing outside this file ever has to pass it.
+   */
+  embedChain?: readonly string[]
+  /**
+   * DERIVED, and set by `renderBlocks` for its own descent — never by a caller.
+   *
+   * Footnote numbering is a fact about a whole PAGE (order of appearance), and
+   * `renderBlock` draws one block, so the numbering has to arrive from above.
+   * It rides in the options rather than as a fifth parameter for the same
+   * reason `calc` does not: every intermediate would have to thread it.
+   */
+  footnotes?: PageNotes
+  /** the page whose numbering `footnotes` is — DOM ids are document-global and
+   *  print draws every page at once, so a label's ids are scoped by page */
+  footnoteScope?: string
+  /**
+   * The design the PAGE ROOT carries (renderPage only). Absent = this page's
+   * own resolved design (designs.ts resolvePageDesign); `null` = none, for a
+   * caller that styles the result itself (the static preview's inline rules).
+   *
+   * Only a page ROOT ever carries one. Everything rendered INSIDE a page — a
+   * gallery card, a view's rows, a page card, a transclusion embed — is built
+   * by renderBlocks under the host's root and so wears the HOST's design: the
+   * design is the page you are on, not the page a card points at.
+   */
+  design?: Resolved | null
 }
 
 // The tag and list maps come from the block registry (blocks.ts), so a new
@@ -66,6 +115,16 @@ export interface RenderOpts {
  */
 export function renderBlocks(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): DocumentFragment {
   const frag = document.createDocumentFragment()
+  // The embed guard starts here, with the page being drawn, so an embed of the
+  // page you are ON is a cycle at depth zero. Seeded rather than mutated: the
+  // caller's opts object is not ours to write to.
+  if (!opts.embedChain) opts = { ...opts, embedChain: [page.id] }
+  // FOOTNOTE NUMBERING IS COMPUTED ONCE, HERE. It is order-of-appearance over
+  // the whole page, so no block can work it out on its own — and it is derived
+  // every paint rather than stored, so inserting a reference renumbers
+  // everything after it with nothing to keep in step (src/footnotes.ts).
+  const fnotes = notesOnPage(doc, page)
+  if (fnotes.order.length) opts = { ...opts, footnotes: fnotes, footnoteScope: page.id }
   // MAGIC NOTES' CONTEXT, accumulated as the pass goes. A name is defined by a
   // line and usable by the lines BELOW it — the same direction a person reads
   // in, and the reason this needs no second pass and cannot cycle.
@@ -373,6 +432,11 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       return el
     }
 
+    case 'embed': {
+      renderEmbed(el, b, doc, opts)
+      return el
+    }
+
     case 'link': {
       // A CARD DRAWN ENTIRELY FROM THE FILE.
       //
@@ -534,6 +598,16 @@ export function renderBlock(b: Block, doc: SpacesDoc, opts: RenderOpts = {}, cal
       return el
     }
 
+    case 'chart': {
+      // A CHART OF THE TRAIL, not of the pages — see blocks.ts and charts.ts
+      // for why that makes it a block rather than a view layout. `todayISO()`
+      // is the reader's own wall-clock day: the today point is DERIVED from
+      // live state, every earlier day is read from the record.
+      el.classList.add('sp-chart')
+      renderChartBlock(el, b, doc, todayISO(), { editable: opts.editable === true })
+      return el
+    }
+
     case 'callout': {
       const raw = String(b.tone ?? 'note')
       const known = TONE.has(raw) ? raw : 'note'
@@ -644,7 +718,13 @@ function renderTable(b: Block, opts: RenderOpts): HTMLElement {
         // over the whole table. A cell says which block AND which cell it is.
         td.dataset.cell = b.id
       }
-      td.innerHTML = sanitizeInline(cell)
+      // the same either/or as inlineHost, for the same reason — a cell is an
+      // editable host too
+      const cleanCell = sanitizeInline(cell)
+      td.innerHTML = opts.editable || !opts.footnotes
+        ? cleanCell
+        : markRefs(cleanCell, opts.footnotes, opts.footnoteScope ?? '')
+      decorateTags(td)
       tr.appendChild(td)
     })
     if (head) {
@@ -656,6 +736,73 @@ function renderTable(b: Block, opts: RenderOpts): HTMLElement {
   table.appendChild(body)
   wrap.appendChild(table)
   return wrap
+}
+
+/**
+ * An embed: the source page's own blocks, drawn here.
+ *
+ * THREE THINGS THIS DOES THAT ARE NOT DECORATION.
+ *
+ * It is ATTRIBUTED and clickable. A block of someone else's page dropped into
+ * yours with no seam is a lie about where the words live, and the reader who
+ * wants to fix a typo has nowhere to go. The header names the source page and
+ * links to it, and the section when there is one.
+ *
+ * It is NEVER EDITABLE, whatever the host surface is. The blocks belong to
+ * another page; an editable host here would write a keystroke into `html` on a
+ * block the editor is not showing, and the change would appear to happen
+ * nowhere. `editable: false` on the nested render is the whole of that.
+ *
+ * And it carries NO `data-block-id`. The editor's paint sweeps every
+ * `[data-block-id]` under the page and hangs a drag gutter, a checkbox
+ * handler, a language chip on each — all keyed to `store.block(id)`, which
+ * resolves ANY id in the document. A checkbox ticked inside an embed would
+ * have committed to the source page from a surface that was not showing it.
+ * Stripping the hook is one line and closes the whole class.
+ */
+function renderEmbed(el: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpts): void {
+  const box = document.createElement('div')
+  box.className = 'sp-embed'
+  const view = viewEmbed(b, doc, opts.embedChain ?? [])
+
+  const head = document.createElement(view.page ? 'a' : 'div')
+  head.className = 'sp-embed-src'
+  const anchor = anchorOf(b)
+  if (view.page) {
+    ;(head as HTMLAnchorElement).href = `#p/${view.page.id}`
+    head.textContent = anchor ? `${view.page.title} › ${anchor}` : view.page.title
+    head.setAttribute('aria-label', t('Embedded from {page}', { page: view.page.title }))
+  } else {
+    head.textContent = anchor ? `[[?#${anchor}]]` : '[[?]]'
+    head.classList.add('sp-dead')
+  }
+  box.appendChild(head)
+
+  if (!view.ok) {
+    const note = document.createElement('p')
+    note.className = 'sp-embed-note'
+    note.textContent =
+      view.why === 'cycle' ? t('This embed is inside itself — the loop stops here.')
+        : view.why === 'depth' ? t('Embeds are not followed deeper than this.')
+          : view.why === 'no-section' ? t('No section named {name} on this page.', { name: view.anchor ?? '' })
+            : t('This embed points at a page that is not here.')
+    box.appendChild(note)
+    el.appendChild(box)
+    return
+  }
+
+  const body = document.createElement('div')
+  body.className = 'sp-embed-body'
+  body.appendChild(renderBlocks({ ...view.page, blocks: view.blocks }, doc, {
+    ...opts,
+    editable: false,
+    embedChain: [...(opts.embedChain ?? []), view.page.id],
+  }))
+  for (const node of body.querySelectorAll<HTMLElement>('[data-block-id]')) {
+    delete node.dataset.blockId
+  }
+  box.appendChild(body)
+  el.appendChild(box)
 }
 
 /**
@@ -738,7 +885,23 @@ function inlineHost(b: Block, opts: RenderOpts): HTMLElement {
   // document's theme.dir — PLATFORM §8's two-layer rule
   inner.dir = 'auto'
   if (opts.editable) inner.contentEditable = 'true'
-  inner.innerHTML = sanitizeInline(b.html ?? '')
+  // MARKERS ARE DRAWN ONLY WHERE THEY CANNOT BE TYPED INTO. `host.innerHTML`
+  // is written straight to `Block.html` on every `input` event, so a `<sup>`
+  // injected into an editable host is one keystroke from being committed to the
+  // document — and the reference `[^1]` it replaced would be gone. While a
+  // block is editable the author sees and edits the token, exactly as they see
+  // and edit `budget * 0.3 =` (calc.ts). Reading view, print and the
+  // file-manager still are all `editable: false` and get the superscript.
+  const clean = sanitizeInline(b.html ?? '')
+  inner.innerHTML = opts.editable || !opts.footnotes
+    ? clean
+    : markRefs(clean, opts.footnotes, opts.footnoteScope ?? '')
+  // TAG CHIPS GO ON AFTER the footnote either/or above, never before: that
+  // `innerHTML =` replaces the host's children, so chips drawn first were
+  // wiped (the September integration bug). Chips skip <a>, so a footnote
+  // marker is never decorated, and tags.ts readInline strips chips back out
+  // of whatever an editable host commits.
+  decorateTags(inner)
   if (!b.html) inner.dataset.empty = '1'
   return inner
 }
@@ -917,6 +1080,13 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   const art = document.createElement('article')
   art.className = 'sp-page'
   art.style.direction = 'ltr'
+  // EACH PAGE ROOT CARRIES ITS OWN RESOLVED DESIGN. Print puts every page of a
+  // space side by side under one root that carries none, so each keeps its
+  // own; the editor's surface carries the SAME resolved design as the page it
+  // shows, so the two can never disagree. designs.css matches ancestors by
+  // attribute, so two roots with DIFFERENT designs must never nest — which is
+  // why nothing inside a page is ever rendered through here.
+  applyDesign(art, doc, opts.design !== undefined ? opts.design : resolvePageDesign(doc, page.id))
 
   const inner = document.createElement('div')
   inner.className = 'sp-page-inner'
@@ -954,7 +1124,16 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   // 80% keeps a visible step at every size, and the 1500px cap keeps Wide from
   // becoming an unreadable line on a very large screen — at which point Full is
   // the thing to pick, deliberately.
-  else if (width === 'wide') inner.style.maxWidth = 'min(1500px, 80%)'
+  // …WITH A FLOOR, because a proportion has nothing to be a proportion OF on a
+  // phone. 80% of a 354px page is 283px, and the 26px the gutter takes there
+  // leaves a 257px column on a 390px screen — a third of the display given to
+  // margin on the setting whose entire purpose is "room for a board or a
+  // table", and reachable in one tap ("Use this width for every page" is a
+  // per-screen preference). `max(80%, 680px)` is the same 80% wherever 80% is
+  // at least 680px (a container of 850px and up) and the whole container below
+  // that, since a max-width wider than the box does nothing. Measured at 390px:
+  // column 257 → 328, the page's left margin 79 → 26.
+  else if (width === 'wide') inner.style.maxWidth = 'min(1500px, max(80%, 680px))'
   else if (doc.theme.measure) {
     // AND THE DEFAULT ITSELF GROWS. 720px is ~88 characters at 16px, which is
     // already at the long end — so this does not widen the line much; what it
@@ -1005,6 +1184,19 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
     img.setAttribute('aria-hidden', 'true')
     wrap.appendChild(img)
     art.appendChild(wrap)
+  } else {
+    // NO COVER: the HOME page gets a procedural one — a figure seeded from its
+    // id, never written to the document. The home page only, and never on
+    // paper or in the thumbnail; procedural.ts decides and argues both. A page
+    // whose cover is removed lands here again, which is the "gets it back" half.
+    const gen = proceduralCoverFor(page, doc, opts.printing === true)
+    if (gen) {
+      art.classList.add('sp-has-cover')
+      const wrap = document.createElement('div')
+      wrap.className = 'sp-cover sp-cover-gen'
+      wrap.innerHTML = gen
+      art.appendChild(wrap)
+    }
   }
 
   const h = document.createElement('h1')
@@ -1016,8 +1208,75 @@ export function renderPage(page: Page, doc: SpacesDoc, opts: RenderOpts = {}): H
   inner.appendChild(h)
 
   inner.appendChild(renderBlocks(page, doc, opts))
+  const feet = renderFootnotes(page, doc, opts)
+  if (feet) inner.appendChild(feet)
   art.appendChild(inner)
   return art
+}
+
+/**
+ * The notes at the foot of the page, or null when the page has none.
+ *
+ * DERIVED, LIKE THE NUMBERS. Nothing in the document says "put a footnote
+ * section here" — the section IS the page's references, in the order they
+ * appear, so deleting the last reference removes the section and no cleanup
+ * has to remember to.
+ *
+ * A REFERENCE WITH NO NOTE STILL GETS A ROW, and that is the whole authoring
+ * gesture: type `[^1]` in a sentence and an empty numbered slot appears down
+ * here to write the note into. It is also why a dangling reference cannot be
+ * silently lost — what validate() reports is the same thing the author is
+ * already looking at.
+ *
+ * In the editor the note body is an editable host; in reading view, print and
+ * the file-manager still it is inert. `data-edit-note`, deliberately NOT
+ * `data-edit`: that name means "this element's html IS a BLOCK's html", and the
+ * editor's generic input handler would write a note over a block.
+ */
+function renderFootnotes(page: Page, doc: SpacesDoc, opts: RenderOpts): HTMLElement | null {
+  const notes = notesOnPage(doc, page)
+  if (!notes.order.length) return null
+  const sec = document.createElement('section')
+  sec.className = 'sp-fnotes'
+  // A real landmark with a real name: on paper it is the block at the foot of
+  // the page, and to a screen reader it is the region the superscripts point at.
+  sec.setAttribute('aria-label', t('Footnotes'))
+
+  const ol = document.createElement('ol')
+  ol.className = 'sp-fnlist'
+  for (const label of notes.order) {
+    const li = document.createElement('li')
+    li.className = 'sp-fnote'
+    li.id = noteId(page.id, label)
+
+    // BACK TO THE SENTENCE. A footnote you cannot get back from costs the
+    // reader their place; in print the anchor is inert and harmless, so it is
+    // hidden by the stylesheet rather than conditioned on the surface here.
+    const back = document.createElement('a')
+    back.className = 'sp-fnback'
+    back.href = `#${refId(page.id, label)}`
+    back.textContent = '\u21A9'
+    back.setAttribute('aria-label', t('Back to the text'))
+    li.appendChild(back)
+
+    const body = document.createElement('span')
+    body.className = 'sp-fnbody'
+    body.dir = 'auto'
+    // The note came out of a file somebody mailed you, exactly like a block's
+    // html, and goes through the same allowlist.
+    body.innerHTML = sanitizeInline(noteOf(doc, label) ?? '')
+    if (opts.editable) {
+      body.contentEditable = 'true'
+      body.dataset.editNote = label
+      // `:empty::before`, the same idiom the canvas title uses — no companion
+      // `data-empty` flag to keep in step with what the author has typed
+      body.dataset.ph = t('Write the note')
+    }
+    li.appendChild(body)
+    ol.appendChild(li)
+  }
+  sec.appendChild(ol)
+  return sec
 }
 
 /** What a value reads as. Mirrors fields.ts propHtml, which writes the same
@@ -1027,29 +1286,6 @@ function shownValue(f: FieldSpec | undefined, value: unknown): string {
   if (f?.vt === 'select') return optionOf(f, value)?.label ?? String(value)
   if (f?.vt === 'labels') return Array.isArray(value) ? value.join(', ') : String(value)
   return String(value)
-}
-
-/**
- * A stable hue for a page with no cover.
- *
- * FNV-1a over the id, which is the same cheap hash assets.ts falls back to:
- * every reader of one file computes the same colour, and a page keeps its
- * colour when it is renamed.
- *
- * A CURATED SET, not 360 free hues. Free hue was measured drawing 61 and 54 in
- * the same grid — the same dirty chartreuse twice — and five cards as
- * peach/pink/pink/lavender/lavender: two near-duplicate pairs out of five. It
- * also lands on olive and mustard, which no amount of alpha rescues, and goes
- * muddy in the dark theme. Eight stops spaced around the wheel and chosen to
- * be distinguishable at 30% alpha on both grounds; neighbours in a grid differ
- * because the stops differ, not because the hash happened to spread.
- */
-const CARD_HUES = [210, 265, 320, 8, 32, 48, 152, 186]
-
-function hueOf(id: string): number {
-  let h = 0x811c9dc5
-  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
-  return CARD_HUES[h % CARD_HUES.length]
 }
 
 /**
@@ -1082,12 +1318,13 @@ function pageMark(host: HTMLElement, page: Page): void {
  */
 function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpts): void {
   const layout = String((b as { layout?: unknown }).layout ?? 'board')
+  const calSpan = (b as { span?: unknown }).span
   const groupKey = String((b as { groupBy?: unknown }).groupBy ?? 'status')
   const field = fieldByKey(doc, groupKey)
   const filter = (b as { filter?: unknown }).filter
   const sort = (b as { sort?: unknown }).sort
   const all = viewRows(doc, (b as { source?: unknown }).source)
-  const rows = sortRows(doc, all.filter((r) => passesFilter(doc, r.values, filter)), sort)
+  const rows = sortRows(doc, all.filter((r) => passesFilter(doc, r.values, filter, r.page)), sort)
 
   const head = document.createElement('div')
   head.className = 'sp-view-head'
@@ -1130,7 +1367,12 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // hardened and its comment said the label was safe; the label is rendered
     // here, and this half had not been.
     const here = layoutOf(layout)
-    const asList = here !== 'board'
+    // WHICH SHAPES HAVE BUCKETS. A list, a table and a gallery have no columns,
+    // so "the field the columns come from" is not a question they can be asked.
+    // A workload chart's BARS are buckets — it is the same question with the
+    // same key and the same answer, which is the whole reason it is a layout
+    // here rather than a block with a vocabulary of its own.
+    const grouped = here === 'board' || here === 'workload'
     // Three WHOLE sentences rather than one with the shape interpolated into
     // it. "Show as a {what}" reads fine in English and breaks in half the
     // catalogs, where the article and the adjective agree with the noun's
@@ -1146,19 +1388,42 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // fields.ts answers "which shape is this" and "what comes next".
     const LAYOUT_LABEL: Record<ViewLayout, string> = {
       board: t('Board'), list: t('List'), table: t('Table'), gallery: t('Gallery'),
+      calendar: t('Calendar'), gantt: t('Timeline'), workload: t('Workload'),
     }
     const NEXT_LABEL: Record<ViewLayout, string> = {
       board: t('Show as a list'), list: t('Show as a table'),
-      table: t('Show as a gallery'), gallery: t('Show as a board'),
+      table: t('Show as a gallery'), gallery: t('Show as a calendar'),
+      calendar: t('Show as a timeline'), gantt: t('Show as a workload chart'),
+      workload: t('Show as a board'),
     }
     const layoutB = btn('viewLayout', LAYOUT_LABEL[here], NEXT_LABEL[here])
     layoutB.dataset.next = nextLayout(here)
 
+    // THE CALENDAR'S SECOND SHAPE, on the pattern `groupBy` already set: a
+    // parameter of ONE layout gets its own control, shown only while that
+    // layout is on, rather than a sixth entry in a cycle everybody has to click
+    // through. Whole sentences again, for the reason three lines up.
+    const spanB = here === 'calendar'
+      ? btn('viewSpan',
+        spanOf(calSpan) === 'timeline' ? t('Timeline') : t('Month'),
+        spanOf(calSpan) === 'timeline' ? t('Show a month at a time') : t('Show a timeline'))
+      : undefined
+    if (spanB) spanB.dataset.next = nextSpan(calSpan)
+
     // GROUP BY. Only fields with declared options: a board's columns ARE the
     // option list, so grouping by a free-text field would make one column per
     // distinct string and call it a board.
-    const groupB = btn('viewGroup', field ? `${t('Group')} · ${field.label}` : t('Group'),
-      t('Choose the field the columns come from'))
+    // The button must name the field the view is ACTUALLY bucketed by, which
+    // for a workload chart with no stored `groupBy` is the person field and not
+    // `status` — saying "Group · Status" over a chart of people would be the
+    // control and the picture disagreeing, which is worse than no control.
+    const shown = here === 'workload' && !Object.hasOwn(b as object, 'groupBy')
+      ? bucketField(doc) : field
+    const groupB = btn('viewGroup', shown ? `${t('Group')} · ${shown.label}` : t('Group'),
+      here === 'workload'
+        ? t('Choose the field the bars come from')
+        : t('Choose the field the columns come from'))
+    groupB.dataset.shape = here
 
     const sortKey = (Array.isArray(sort) ? sort : [])[0] as ViewSort | undefined
     const sortField = sortKey && fieldByKey(doc, sortKey.key)
@@ -1179,22 +1444,47 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // WHICH PAGES. Named after what it answers rather than "Source", because
     // the question in the reader's head is "what is in this?" — and it says the
     // answer, not the word, when there is one.
-    const src = (b as { source?: { has?: unknown; under?: unknown } }).source
+    const src = (b as { source?: { has?: unknown; under?: unknown; tag?: unknown } }).source
     const hasKey = typeof src?.has === 'string' ? src.has : ''
     const underId = typeof src?.under === 'string' ? src.under : ''
+    const tagKey = typeof src?.tag === 'string' ? src.tag : ''
     const srcLabel = hasKey ? (fieldByKey(doc, hasKey)?.label ?? hasKey)
       : underId ? (doc.pages.find((p) => p.id === underId)?.title || t('Untitled'))
-        : t('Issues')
+        // the tag SAYS ITSELF — no lookup, and the hash is what makes it read
+        // as a tag rather than as a page somebody happened to call "recipe"
+        : tagKey ? '#' + tagKey
+          : t('Issues')
     const sourceB = btn('viewSource', `${t('Pages')} · ${srcLabel}`,
-      t('Choose which pages this view holds'), !!(hasKey || underId))
+      t('Choose which pages this view holds'), !!(hasKey || underId || tagKey))
 
-    head.append(layoutB, sourceB, ...(asList ? [] : [groupB]), sortB, openB, filterB)
+    head.append(layoutB, ...(spanB ? [spanB] : []), sourceB,
+      ...(grouped ? [groupB] : []), sortB, openB, filterB)
   }
   host.appendChild(head)
 
+  // A SOURCE this build cannot evaluate is the WORST of the three, and it had
+  // no warning at all until now — `unknownSourceKeys` existed in fields.ts and
+  // nothing called it. An unreadable filter over-shows; an unreadable SOURCE
+  // means the view silently falls back to the backlog and shows a completely
+  // different set of pages, with the header still naming the source it cannot
+  // apply. Measured against a build of `main`: a view sourced on a tag renders
+  // as Issues there, and says nothing.
+  //
+  // That build is already shipped and cannot be told. What this fixes is
+  // forward: the FOURTH selector, whenever somebody adds one, degrades loudly.
+  const unknownSrc = unknownSourceKeys((b as { source?: unknown }).source)
+  if (unknownSrc.length) {
+    const note = document.createElement('p')
+    note.className = 'sp-view-empty'
+    note.textContent = t('This view chooses its pages in a way this build does not understand, so it is showing the backlog instead.')
+    host.appendChild(note)
+  }
+
   // A rule this build cannot evaluate means the view shows MORE than its author
   // asked for. Additivity keeps the rule; honesty says so.
-  const unknown = unknownFilterKeys(filter)
+  // ...and the same rule one level down: an OPERATOR from a newer build is a
+  // rule that was not applied, which is the same superset with the same banner.
+  const unknown = [...unknownFilterKeys(filter), ...unknownFilterOps(filter)]
   if (unknown.length) {
     const note = document.createElement('p')
     note.className = 'sp-view-empty'
@@ -1281,71 +1571,26 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     return a
   }
 
-  // TABLE — the shape a base is usually looked at in, and the one this app did
-  // not have. Columns are the fields the ROWS ACTUALLY CARRY, in the schema's
-  // declared order: a table of books should not carry an Estimate column
-  // because the vocabulary happens to contain one, and a page that has a field
-  // the others lack should not be the reason everyone gets an empty column.
-  if (layout === 'table') {
-    const keys = fieldsOf(doc).map((f) => f.key).filter((k) => rows.some((r) => r.values.has(k)))
-    const wrap = document.createElement('div')
-    // its own scroller: a wide table must not make the PAGE scroll sideways
-    wrap.className = 'sp-view-tablewrap'
-    const table = document.createElement('table')
-    table.className = 'sp-view-table'
-    const thead = document.createElement('thead')
-    const hr = document.createElement('tr')
-    const th0 = document.createElement('th')
-    th0.textContent = t('Page')
-    hr.appendChild(th0)
-    for (const k of keys) {
-      const th = document.createElement('th')
-      th.textContent = fieldByKey(doc, k)?.label ?? k
-      hr.appendChild(th)
-    }
-    thead.appendChild(hr)
-    table.appendChild(thead)
-    const tb = document.createElement('tbody')
-    for (const r of rows) {
-      const tr = document.createElement('tr')
-      const td0 = document.createElement('td')
-      // the page itself, reached the same way a card reaches it
-      const a = document.createElement('a')
-      a.className = 'sp-view-cellink'
-      a.href = `#p/${r.page.id}`
-      a.dataset.page = r.page.id
-      a.textContent = r.page.title || t('Untitled')
-      td0.appendChild(a)
-      tr.appendChild(td0)
-      for (const k of keys) {
-        const td = document.createElement('td')
-        const f = fieldByKey(doc, k)
-        const v = r.values.get(k)
-        // THROUGH THE OPTION, so a select shows its label and its colour rather
-        // than the id the model stores — the same thing propHtml does for the
-        // header strip, and for the same reason: the id is not for reading.
-        const opt = optionOf(f, v)
-        if (opt) {
-          const chip = document.createElement('span')
-          chip.className = 'sp-prop-chip'
-          const dot = document.createElement('span')
-          dot.className = 'sp-prop-dot'
-          if (opt.color) dot.style.background = opt.color
-          chip.append(dot, document.createTextNode(opt.label))
-          td.appendChild(chip)
-        } else if (v !== undefined && v !== null && String(v) !== '') {
-          td.textContent = String(v)
-        } else {
-          td.className = 'sp-view-empty'
-          td.textContent = '—'
-        }
-        tr.appendChild(td)
-      }
-      tb.appendChild(tr)
-    }
-    table.appendChild(tb)
-    wrap.appendChild(table)
-    host.appendChild(wrap)
+  // GANTT — one bar per page, from its start to its due date. A layout and not
+  // a `chart` block; the argument is in gantt.ts.
+  //
+  // `layoutOf`, not the raw string: a `layout` out of a mailed file can be
+  // anything, and this branch must never be entered by a value that only looks
+  // like one of ours.
+  if (layoutOf(layout) === 'gantt') {
+    renderGantt(host, doc, rows, groupKey)
+    return
+  }
+
+  // WORKLOAD — the same rows, added up per bucket. The only shape here whose
+  // marks are not pages, which is exactly the objection gantt.ts answers.
+  if (layoutOf(layout) === 'workload') {
+    // `groupBy` ABSENT falls through to workload.ts's own default (the person
+    // field), because absent has always meant "the sensible default for this
+    // shape" and a board's default is not a chart's. A block that STORES a
+    // groupBy gets what it stored, in every layout.
+    renderWorkload(host, doc, rows,
+      Object.hasOwn(b as object, 'groupBy') ? groupKey : undefined)
     return
   }
 
@@ -1383,10 +1628,10 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
         shot.appendChild(img)
       } else {
         shot.classList.add('sp-gcard-bare')
-        // deterministic, so a page keeps its colour across reloads, readers and
+        // deterministic, so a page keeps its cover across reloads, readers and
         // machines — the same reason ids are repaired from the id and never
-        // from Math.random
-        shot.style.setProperty('--h', String(hueOf(r.page.id)))
+        // from Math.random. The figure is procedural.ts's; the mark rides on it.
+        shot.innerHTML = proceduralCoverSvg(r.page.id, 'card')
         const mark = document.createElement('span')
         mark.className = 'sp-gcard-mark'
         pageMark(mark, r.page)
@@ -1556,6 +1801,24 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     return
   }
 
+  // CALENDAR — the shape that answers "when". Its own file: the arithmetic is
+  // the part of this app most likely to be wrong east of UTC, and it wanted a
+  // rig that can import it without a DOM. `layoutOf`, not the raw string, so a
+  // block claiming `layout:"toString"` cannot reach this branch and everything
+  // a newer build might name falls through to the board.
+  if (layoutOf(layout) === 'calendar') {
+    renderCalendar(host, {
+      doc,
+      rows,
+      blockId: b.id,
+      span: spanOf(calSpan),
+      locale: locale(),
+      editable: opts.editable,
+      card: (r) => card(r.page, r.values),
+    })
+    return
+  }
+
   if (layout === 'list') {
     const ul = document.createElement('ul')
     ul.className = 'sp-view-list'
@@ -1614,4 +1877,257 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     board.appendChild(col)
   }
   host.appendChild(board)
+}
+
+// --- charts ------------------------------------------------------------------
+//
+// TWO SHAPES, ONE HOST. Both `gantt` and `workload` are `view` LAYOUTS rather
+// than a new block type; the argument is in gantt.ts and is not repeated here.
+// What belongs here is how they are PAINTED, and the one rule both follow:
+//
+//   THE PICTURE IS SVG WITH PRESENTATION ATTRIBUTES, NOT CSS CLASSES.
+//
+// Not a style preference. This app draws the same block on four surfaces — the
+// editor, the reading view, PAPER, and the file-manager still (preview.ts) —
+// and the still carries its OWN small stylesheet, deliberately, because
+// QuickLook's renderer is a conservative one. A bar coloured by a `.sp-gt-bar`
+// rule in styles.css is a bar that is invisible in a thumbnail and, on paper,
+// is at the mercy of the browser's "do not print backgrounds" default. Colour,
+// geometry and size travel INSIDE the element, so the four surfaces cannot
+// disagree, and `@media print` has nothing left to get wrong.
+
+/** A colour a `fill=` attribute will certainly accept, or nothing. Same test
+ *  preview.ts makes, and for the same reason: the theme comes out of a file. */
+const flatColor = (v: unknown): string | null => {
+  const s = typeof v === 'string' ? v.trim() : ''
+  return /^#[0-9a-f]{3,8}$/i.test(s) || /^rgb/i.test(s) ? s : null
+}
+
+const svgEl = (name: string, attrs: Record<string, string | number>): SVGElement => {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', name)
+  for (const k of Object.keys(attrs)) el.setAttribute(k, String(attrs[k]))
+  return el
+}
+
+const GRID = '#E3E8EF'
+const MUTED = '#5B6472'
+const DANGER = '#E5484D'
+const INK = '#1E2A3A'
+
+/** Logical drawing size. The svg scales to its container through the viewBox,
+ *  so these are proportions, not pixels on anybody's screen. */
+const GT = { w: 960, name: 210, padR: 14, head: 28, row: 26, bar: 12 }
+
+/** As many characters as fit the name column at 12px. Measuring is not
+ *  available here (the block is painted before layout) and a `<title>` child
+ *  carries the whole name anyway, so a cheap cut with an ellipsis beats a
+ *  clipPath that silently swallows half a word. */
+const cut = (s: string, n = 28): string => (s.length <= n ? s : `${s.slice(0, n - 1)}…`)
+
+function renderGantt(host: HTMLElement, doc: SpacesDoc, rows: IssueRow[], groupKey: string): void {
+  const m = ganttModel(doc, rows, todayISO(), groupKey)
+
+  if (m.noDateField) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty'
+    p.textContent = t('A timeline needs a date field. Add one and it appears here.')
+    host.appendChild(p)
+    return
+  }
+  if (!m.bars.length) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty'
+    p.textContent = m.undated
+      ? t('No page here has a date yet.')
+      : t('No issues match this filter.')
+    host.appendChild(p)
+    return
+  }
+
+  const accent = flatColor((doc.theme as { accent?: unknown } | undefined)?.accent) ?? '#5B8DEF'
+  const x0 = GT.name
+  const tw = GT.w - GT.name - GT.padR
+  const h = GT.head + m.bars.length * GT.row + 10
+
+  const wrap = document.createElement('div')
+  // its own scroller, exactly as the table layout has: a schedule with thirty
+  // rows is tall, never wide, but a phone is 320px and the name column plus a
+  // month of track does not fit in it. The PAGE must not scroll sideways.
+  wrap.className = 'sp-gt-wrap'
+  const svg = svgEl('svg', {
+    viewBox: `0 0 ${GT.w} ${h}`, width: GT.w, height: h,
+    role: 'img', 'aria-label': t('Timeline'),
+  })
+  svg.setAttribute('style', `width:100%;height:auto;display:block;min-width:${Math.round(GT.w / 1.5)}px`)
+
+  // gridlines and their labels
+  for (const tick of m.ticks) {
+    const x = x0 + tick.x * tw
+    svg.appendChild(svgEl('line', { x1: x, y1: GT.head - 8, x2: x, y2: h - 6, stroke: GRID, 'stroke-width': 1 }))
+    const lab = svgEl('text', { x: x + 3, y: GT.head - 12, fill: MUTED, 'font-size': 11 })
+    lab.textContent = tick.label
+    svg.appendChild(lab)
+  }
+
+  // TODAY. Only when it is inside the span — gantt.ts refuses to stretch the
+  // chart to reach it, and a marker clamped to the edge would read as "today is
+  // the last day of this project". When it is outside, the note below says so
+  // in words, which is a thing a line cannot say.
+  if (m.todayX !== null) {
+    const x = x0 + m.todayX * tw
+    svg.appendChild(svgEl('line', {
+      x1: x, y1: GT.head - 10, x2: x, y2: h - 6,
+      stroke: INK, 'stroke-width': 1.5, opacity: 0.45,
+    }))
+    const lab = svgEl('text', { x: x + 4, y: h - 1, fill: INK, opacity: 0.55, 'font-size': 10 })
+    lab.textContent = t('Today')
+    svg.appendChild(lab)
+  }
+
+  m.bars.forEach((b, i) => {
+    const cy = GT.head + i * GT.row + GT.row / 2
+    const fill = flatColor(b.color) ?? accent
+
+    // The NAME is a link, and it is an svg <a>, so the whole picture is one
+    // element on every surface. The editor's delegated handler matches on
+    // closest('a') + an href starting `#p/`, which an SVGAElement satisfies;
+    // the preview strips href along with every other runtime attribute, so the
+    // still shows the same words without being clickable, which is correct.
+    const a = svgEl('a', { href: `#p/${b.pageId}` })
+    const name = svgEl('text', { x: 0, y: cy + 4, fill: INK, 'font-size': 12 })
+    name.textContent = cut(b.title || t('Untitled'))
+    const full = svgEl('title', {})
+    full.textContent = b.title || t('Untitled')
+    name.appendChild(full)
+    a.appendChild(name)
+    svg.appendChild(a)
+
+    // the row's own track, so a bar in the middle of a wide span still reads as
+    // a position on a line rather than as a rectangle floating in space
+    svg.appendChild(svgEl('line', {
+      x1: x0, y1: cy, x2: x0 + tw, y2: cy, stroke: GRID, 'stroke-width': 1, opacity: 0.7,
+    }))
+
+    let mark: SVGElement
+    if (b.milestone) {
+      // A DIAMOND, because a date with no duration is not a bar. This is what
+      // every issue written before `start` existed looks like — see the field
+      // comment in fields.ts; it is the installed base, not an edge case.
+      const cx = x0 + b.x * tw
+      const r = 6
+      mark = svgEl('path', {
+        d: `M${cx} ${cy - r}L${cx + r} ${cy}L${cx} ${cy + r}L${cx - r} ${cy}Z`,
+        fill, stroke: b.overdue ? DANGER : 'none', 'stroke-width': b.overdue ? 1.5 : 0,
+      })
+    } else {
+      mark = svgEl('rect', {
+        x: x0 + b.x * tw, y: cy - GT.bar / 2,
+        // a one-day task is one day wide, never zero — but a one-day task in a
+        // ten-year span rounds to a third of a pixel, so the floor is the one
+        // place the model's fraction is overridden and it is a VISIBILITY floor
+        width: Math.max(3, b.w * tw), height: GT.bar, rx: 3,
+        fill,
+        stroke: b.invalid || b.overdue ? DANGER : 'none',
+        'stroke-width': b.invalid || b.overdue ? 1.5 : 0,
+        'stroke-dasharray': b.invalid ? '3 2' : '',
+      })
+    }
+    const why = svgEl('title', {})
+    // The dates as the FILE holds them — ISO, unambiguous in every locale, and
+    // the thing somebody fixing a wrong row needs to see. The axis is localized
+    // because it is a label; this is a value.
+    why.textContent = b.invalid
+      ? t('{a} to {b} — the end is before the start', { a: b.to, b: b.from })
+      : b.milestone ? `${b.title} · ${b.from}` : `${b.title} · ${b.from} → ${b.to}`
+    mark.appendChild(why)
+    svg.appendChild(mark)
+  })
+
+  wrap.appendChild(svg)
+  host.appendChild(wrap)
+
+  // WHAT THE PICTURE COULD NOT SAY. Every one of these is a count that would
+  // otherwise be a silent difference between the chart and the document, which
+  // is the whole failure mode of drawing a picture of somebody else's numbers.
+  const notes: string[] = []
+  if (m.dropped) notes.push(t('{n} more not shown', { n: String(m.dropped) }))
+  if (m.undated) notes.push(t('{n} with no date', { n: String(m.undated) }))
+  if (m.todayX === null) notes.push(t('Today is outside this range'))
+  // "{n} end before they start" reads wrong at n=1 in English and needs a
+  // plural rule in half the catalogs; t() has no plural machinery and should
+  // not grow one for a footnote. A noun phrase is correct at every n in every
+  // one of the eight languages, which is the cheaper answer.
+  const bad = m.bars.filter((b) => b.invalid).length
+  if (bad) notes.push(t('{n} with the end before the start', { n: String(bad) }))
+  if (notes.length) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty sp-gt-note'
+    p.textContent = notes.join(' · ')
+    host.appendChild(p)
+  }
+}
+
+function renderWorkload(host: HTMLElement, doc: SpacesDoc, rows: IssueRow[], groupKey?: string): void {
+  const m = workloadModel(doc, rows, groupKey, t('Unassigned'),
+    (n) => t('Other ({n})', { n: String(n) }))
+
+  if (!m.sum) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty'
+    p.textContent = t('A workload chart adds up a number field. This space has none.')
+    host.appendChild(p)
+    return
+  }
+  if (!m.bars.length) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty'
+    p.textContent = t('No issues match this filter.')
+    host.appendChild(p)
+    return
+  }
+
+  const accent = flatColor((doc.theme as { accent?: unknown } | undefined)?.accent) ?? '#5B8DEF'
+  const wrap = document.createElement('div')
+  wrap.className = 'sp-wl-wrap'
+  // THE SHARED ENGINE, kernel/src/charts.ts — this app draws no chart of its
+  // own. `chartSnapshotSvg` and not `mountChart`: the live path exists for
+  // slides' present mode, where a chart is hovered and zoomed; here the same
+  // markup has to survive being printed and being handed to a thumbnailer that
+  // runs no script, and a still does that by being a still.
+  wrap.innerHTML = chartSnapshotSvg({ w: 720, h: 320, option: workloadOption(m, accent) })
+  const svg = wrap.querySelector('svg')
+  // the engine asks for height:100% (it is sized by its host in slides); in a
+  // flowing column that is zero, so the aspect comes from the viewBox instead
+  if (svg) svg.setAttribute('style', 'width:100%;height:auto;display:block;min-width:420px')
+  host.appendChild(wrap)
+
+  // THE NUMBERS, IN WORDS, BESIDE THE PICTURE. Three jobs at once and it is the
+  // cheapest way to do any of them: the axis labels are truncated to fit, a
+  // chart is unreadable to a screen reader, and a bar's height is not a value
+  // anybody can quote. Rendered from the SAME model the chart is, so the two
+  // can never disagree.
+  const list = document.createElement('p')
+  list.className = 'sp-wl-legend'
+  for (const b of m.bars) {
+    const chip = document.createElement('span')
+    chip.className = 'sp-issue-chip'
+    const dot = document.createElement('span')
+    dot.className = 'sp-prop-dot'
+    dot.style.background = flatColor(b.color) ?? accent
+    chip.append(dot, document.createTextNode(`${b.label} · ${b.total}`))
+    list.appendChild(chip)
+  }
+  host.appendChild(list)
+
+  const notes: string[] = []
+  if (m.folded) notes.push(t('{n} more grouped as Other', { n: String(m.folded) }))
+  if (m.ignored) notes.push(t('{n} left out: not a number', { n: String(m.ignored) }))
+  const blank = m.bars.reduce((s, b) => s + b.blank, 0)
+  if (blank) notes.push(t('{n} with no estimate', { n: String(blank) }))
+  if (notes.length) {
+    const p = document.createElement('p')
+    p.className = 'sp-view-empty sp-gt-note'
+    p.textContent = notes.join(' · ')
+    host.appendChild(p)
+  }
 }

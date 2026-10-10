@@ -17,7 +17,7 @@ import './registry.ts';   // side-effect: every feature module registers itself
 import { i18nApi } from '../../kernel/src/i18n.ts';
 import { openAbout } from './about.ts';
 import { startTheme, setTheme, themeChoice, type ThemeChoice } from '../../kernel/src/theme.ts';
-import { parseDoc, emptyDoc, uid, wordCount, type TypeDoc } from './model.ts';
+import { parseDoc, emptyDoc, uid, wordCount, withoutEmbeddedCaps, type TypeDoc } from './model.ts';
 import { gateRestored } from './restoregate.ts';
 import { Store } from './store.ts';
 import { Editor } from './editor.ts';
@@ -933,7 +933,10 @@ function paintTitle() {
 }
 
 async function save(forcePicker = false) {
-  const result = await saveFile(store.doc, forcePicker);
+  // Embeds leave this file without their sharing keys even if one reached the
+  // live document by a path parseDoc never saw (a peer's sync op). The
+  // document's OWN collab is kept — it is this file's.
+  const result = await saveFile(withoutEmbeddedCaps(store.doc), forcePicker);
   if (result === 'cancelled') return;
   dirty = false;
   paintTitle();

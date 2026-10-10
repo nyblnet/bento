@@ -24,6 +24,32 @@ pre-1.0.
   button in the app, so every shared file stays small and the app stays
   focused.
 
+- **Long speaker notes scroll in presenter view.** Notes that are taller than
+  the space beside the current and next slides now get their own vertical
+  scrollbar instead of being cut off.
+- **Dollar amounts next to escaped dollars stay text.** In a line like
+  "$10, and \$x\$", the first dollar could pair with an escaped one and the
+  words between were treated as a formula: the editor flagged them as a
+  formula that failed to render. An escaped `\$` now never opens or closes a
+  formula, inline or display, while an escaped dollar inside a formula still
+  belongs to it.
+- **Copy several slides at once.** With several slides selected in the
+  sidebar, ⌘C (or Copy in the context menu) now copies all of them, in deck
+  order, ready to paste into any deck; it used to copy only the current
+  slide. Interactive states stay behind for now, since a pasted state would
+  arrive as an ordinary slide cut off from its parent. Thanks to tikurahul
+  (#615).
+- **Turn text into code without leaving the text box.** Type a fenced block
+  — a line of three backticks (optionally with a language, like ```` ```js ````
+  or ```` ```python ````), your code, and a closing line of three backticks —
+  and when you finish editing it becomes a real Code element: highlighted,
+  with its language set, and able to morph between slides. If the box held
+  only the fence it turns into the Code element in place; text above or below
+  stays as text boxes stacked around it. Pasting fenced text works the same,
+  into a text box or straight onto the slide. Backticks inside the code are
+  kept as typed, and an unclosed fence stays plain text. You can also select
+  one or more lines and press `` ` `` to set them in code style; press it
+  again to undo that.
 - **Screen readers announce what each Save-as and Share command does.** The
   menus keep one-line rows with the description on hover, and the same text
   is now read out as the command's description; the Save-as list scrolls when

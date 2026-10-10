@@ -14,13 +14,18 @@
 //
 // docContentKey stays HERE, not in the kernel, for the same reason slides
 // keeps its own: "what counts as content" is a per-app model question the
-// kernel must never see. UNLIKE slides, bento/type already has a canonical,
-// volatile-field-excluding serialization built for the signature chain —
-// canon.ts's `canonicalize`, which drops exactly the fields that churn
-// without a real edit (modified, sync, collab, preview, signatures,
-// autosave — see canon.ts's VOLATILE set). Reusing it means there is only
-// ONE notion of "same content" in this app, not two that could quietly
-// drift apart.
+// kernel must never see. It reuses canon.ts's `canonicalize` for the
+// SERIALIZATION — canonical key order, NFC, volatile fields dropped at every
+// level — but NOT canon.ts's VOLATILE set, and that distinction is the whole
+// point of `NOT_EDIT` below.
+//
+// This file used to reuse VOLATILE too, on the argument that "one notion of
+// same content" beats two that could drift. But they are not one notion.
+// VOLATILE answers "what may a SIGNATURE not cover?", and a signature must
+// exclude itself. NOT_EDIT answers "what may the recovery snapshot hold that
+// is NOT work the file on disk lacks?" — and a signature is work. Sharing the
+// set made every signature invisible to recovery: sign, crash before anything
+// wrote the file, reload, and the snapshot holding it was silently discarded.
 //
 // Feature registration: this module is wired through the feature registry
 // (features.ts registerReady), not main.ts — see registry.ts for the one
@@ -35,7 +40,7 @@ import {
 } from '../../kernel/src/autosave.ts';
 import { canonicalize } from './canon.ts';
 import { registerReady, type FeatureContext } from './features.ts';
-import type { TypeDoc } from './model.ts';
+import { withoutEmbeddedCaps, type TypeDoc } from './model.ts';
 import { gateRestored } from './restoregate.ts';
 import { t } from './i18n.ts';
 
@@ -43,17 +48,30 @@ export { putRecovery, getRecovery, clearRecovery, addVersion, listVersions, prun
 export type { Snapshot };
 
 /**
- * The content that actually matters for "did this change" — everything
- * except the volatile fields canon.ts already knows to exclude (see its
- * VOLATILE set: modified, sync, collab, preview, signatures, autosave).
+ * What a recovery snapshot may differ in WITHOUT holding any unsaved work.
  *
- * Reusing `canonicalize` rather than hand-picking fields (as slides does)
- * means a new content field added to TypeDoc later is covered automatically
- * — the same fail-safe reasoning canon.ts documents for the signature chain
- * applies here for free.
+ * Bookkeeping — a save stamps `modified`, a save rewrites the cached
+ * `preview`, autosave tags its own `autosave`. These three are the set kernel
+ * agreed to use for a shared NOT_EDIT when it adds a shared docContentKey
+ * (not on main as of this commit), so type lines up if it ever moves onto that
+ * helper. Capability — `collab`, and the CRDT `sync` state
+ * that lives inside it — churns on every round-trip and is never something to
+ * offer back.
+ *
+ * Deliberately NOT here: `signatures`, `comments`, `revisions`. Each is work an
+ * author did that the file on disk can lack, so each must trip the banner.
+ * This is a denylist on purpose, for the reason canon.ts gives for its own: a
+ * field added to TypeDoc later is counted as work by default, and the failure
+ * that default buys is an extra Restore banner rather than lost work.
  */
+export const NOT_EDIT: ReadonlySet<string> = new Set([
+  'modified', 'preview', 'autosave',   // bookkeeping
+  'collab', 'sync',                    // capability
+]);
+
+/** The content that matters for "is the snapshot different from the file". */
 export function docContentKey(doc: TypeDoc): string {
-  return canonicalize(doc);
+  return canonicalize(doc, { volatile: NOT_EDIT });
 }
 
 /**
@@ -90,11 +108,14 @@ async function runAutosave(ctx: FeatureContext): Promise<void> {
   // put a legible copy on disk beside a file whose whole purpose is that it
   // is not legible. See canSnapshot() above.
   if (!canSnapshot()) return;
-  const stored = await putRecovery(doc);
+  // A snapshot lands in IndexedDB, which on file:// any local page can read —
+  // so embeds go in without another document's sharing keys.
+  const safe = withoutEmbeddedCaps(doc);
+  const stored = await putRecovery(safe);
   if (!stored) return; // no usable IndexedDB here (private browsing, some file:// contexts)
   if (Date.now() - lastVersionAt > VERSION_THROTTLE_MS) {
     lastVersionAt = Date.now();
-    await addVersion(doc);
+    await addVersion(safe);
   }
 }
 

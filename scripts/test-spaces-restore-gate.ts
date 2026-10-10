@@ -220,12 +220,49 @@ console.log('\nevery restore path uses the gate\n')
 {
   const root = process.cwd()
   const main = readFileSync(join(root, 'spaces/src/main.ts'), 'utf8')
-  const about = readFileSync(join(root, 'spaces/src/about.ts'), 'utf8')
+  // History lives under Save ▾ (doccmds.ts, which reaches the store as h.store)
+  // since the bar-parity move; About is read too so neither file can regress.
+  const about = readFileSync(join(root, 'spaces/src/about.ts'), 'utf8') +
+    readFileSync(join(root, 'spaces/src/doccmds.ts'), 'utf8')
   const offer = main.slice(main.indexOf('async function offerRecovery('), main.indexOf('async function offerRecovery(') + 1400)
   ok(/recoveryOffered\(snap\.json, doc\)/.test(offer), 'the recovery check gates before offering')
   ok(/restoreInto\(store, snap\.json\)/.test(offer), 'the banner\'s Restore goes through restoreInto')
-  ok(/restoreInto\(store, v\.json\)/.test(about), 'History\'s Restore goes through restoreInto')
+  ok(/restoreInto\((h\.)?store, v\.json\)/.test(about), 'History\'s Restore goes through restoreInto')
   ok(!/JSON\.parse\((snap|v)\.json\)/.test(main + about), 'no raw JSON.parse of a stored entry remains')
+  // the in-file timeline (history.ts) is the document's own, but what it
+  // applies is still parsed, sanitized and given the live identity
+  const fileHist = about.slice(about.indexOf('function openFileHistory('), about.indexOf('function summary('))
+  ok(/restoreInto\(h\.store, JSON\.stringify\(next\)\)/.test(fileHist) && !/replaceDoc\(/.test(fileHist),
+    'Versions in this file restores through restoreInto, never a bare replaceDoc')
+}
+
+console.log('\na design is content, not identity\n')
+{
+  // `design` / `designs` (spaces/src/designs.ts) are NOT on FROM_LIVE: a
+  // restore brings the snapshot's design back, and a snapshot that differs
+  // only by its design still raises the recovery banner.
+  const { FROM_LIVE } = await import('../kernel/src/docfields.ts')
+  const fl = FROM_LIVE as readonly string[]
+  ok(!fl.includes('design') && !fl.includes('designs'), 'design and designs are not on FROM_LIVE')
+  const live = liveA()
+  const snap = clone(live) as SpacesDoc & { design?: string; designs?: Record<string, unknown> }
+  snap.design = 'mine'
+  snap.designs = { mine: { base: 'riso', label: 'Mine' } }
+  const g = gateRestored(JSON.stringify(snap), live)
+  ok(g.ok && (g.doc as typeof snap).design === 'mine' && JSON.stringify((g.doc as typeof snap).designs) === JSON.stringify(snap.designs),
+    'the gate passes design and designs through from the snapshot')
+  ok(recoveryOffered(JSON.stringify(snap), live), 'a snapshot that differs only by its design is offered for recovery')
+  const designedLive = clone(live) as SpacesDoc & { design?: string }
+  designedLive.design = 'ledger'
+  const g2 = gateRestored(JSON.stringify(clone(live)), designedLive)
+  ok(g2.ok && !Object.hasOwn(g2.doc, 'design'), 'restoring a snapshot with no design does not keep the live design (it is content, not identity)')
+  // A PAGE's design (per-page designs) is content too: it lives in `pages`,
+  // which the gate passes through and the content key already covers
+  const paged = clone(live) as SpacesDoc
+  ;(paged.pages[0] as { design?: string }).design = 'studio'
+  const g3 = gateRestored(JSON.stringify(paged), live)
+  ok(g3.ok && (g3.doc.pages[0] as { design?: string }).design === 'studio', 'the gate passes a page\'s own design through from the snapshot')
+  ok(recoveryOffered(JSON.stringify(paged), live), 'a snapshot that differs only by one page\'s design is offered for recovery')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

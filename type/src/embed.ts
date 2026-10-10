@@ -26,7 +26,7 @@
 // every renderer in every file to cover the matrix, and version skew between
 // the embedded copy and the real app.
 
-import { uid, type Block } from './model.ts';
+import { uid, embedSafe, type Block } from './model.ts';
 import { t } from './i18n.ts';
 import { registerTool, type FeatureContext } from './features.ts';
 
@@ -203,7 +203,12 @@ export async function insertEmbed(ctx: FeatureContext): Promise<void> {
  * the file, already static, already safe to show without running anything —
  * so an embed of a saved Bento file costs no new rendering anywhere.
  */
-const DOC_BLOCK = /<script[^>]*\bid=["']bento-doc["'][^>]*>([\s\S]*?)<\/script>/i;
+// Exported because compare.ts reads a bento/type document out of a saved shell
+// the same way. The splice contract this pattern encodes (PLATFORM §2 —
+// plaintext JSON at a known id, in every Bento file ever written) must have
+// exactly ONE spelling in this app; two copies of the regex would be two
+// independent bets on the same contract, and only one of them would get fixed.
+export const DOC_BLOCK = /<script[^>]*\bid=["']bento-doc["'][^>]*>([\s\S]*?)<\/script>/i;
 const PREVIEW = /data-bento-preview[^>]*>[\s\S]*?(<svg[\s\S]*?<\/svg>)/i;
 
 export function readArtifact(html: string): EmbedData | null {
@@ -227,7 +232,13 @@ export function readArtifact(html: string): EmbedData | null {
   // to show without running anything.
   const still = PREVIEW.exec(html);
   const view = still && safeView(still[1]) ? still[1] : fallbackView(app);
-  return { app, view, doc: parsed };
+  // The source document rides along so a reader can open the original — but
+  // never its capabilities. embedSafe (model.ts) removes the CAP_FIELDS of the
+  // shared kernel list (kernel/src/docfields.ts) — today `collab`: the source
+  // room's read key and any private keys a writer's or owner's copy holds —
+  // and does the same inside any embeds that document carries. docId is kept:
+  // it names the source so a reader can open it, and is not a capability.
+  return { app, view, doc: embedSafe(parsed) };
 }
 
 /** When a file carries no preview, the embed still says what it is. */
@@ -237,11 +248,19 @@ const fallbackView = (app: string): string =>
   + `<text x="160" y="94" text-anchor="middle" font-family="system-ui" font-size="13"`
   + ` fill="#5b6675">${(APPS[app] ?? app).replace(/[<&>]/g, '')}</text></svg>`;
 
-async function pickFile(): Promise<File | null> {
+/**
+ * The house file picker.
+ *
+ * `accept` is a parameter rather than a constant because compare.ts wants the
+ * same gesture for `.json` too — a bare document, the interchange unit chat
+ * AIs can actually hand back. The default is unchanged, so an embed still
+ * offers only Bento shells.
+ */
+export async function pickFile(accept = '.html,text/html'): Promise<File | null> {
   return new Promise(resolve => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.html,text/html';
+    input.accept = accept;
     input.addEventListener('change', () => resolve(input.files?.[0] ?? null), { once: true });
     input.click();
   });

@@ -30,6 +30,8 @@ import type { SpacesDoc, Page, Block } from './model'
 // not follow an extensionless import. Vite is unaffected — the same fix main
 // already carries for i18n/packed.
 import { t } from './i18n.ts'
+import { buildTagIndex, pageHasTag } from './tags.ts'
+import { passesClauses, clauseCount, type Clause } from './query.ts'
 
 /** What a field holds. Deliberately few: every one costs an editor and a
  *  permanent commitment, and a tracker needs exactly these. */
@@ -122,6 +124,28 @@ export const DEFAULT_FIELDS: FieldSpec[] = [
   { key: 'assignee', label: 'Assignee', vt: 'person' },
   { key: 'estimate', label: 'Estimate', vt: 'number' },
   { key: 'labels', label: 'Labels', vt: 'labels' },
+  /**
+   * START and DUE, in that order, because a schedule has two ends.
+   *
+   * `start` is NEW — the tracker shipped with `due` and nothing else, which is
+   * enough for a deadline and not enough for a bar. Adding it is additive in
+   * the ordinary way (a page that has never carried one has no `prop` block for
+   * it, and absent still means unset), but it has one consequence worth naming
+   * out loud rather than discovering:
+   *
+   *   EVERY ISSUE IN EVERY FILE ALREADY WRITTEN HAS A DUE DATE AND NO START.
+   *
+   * So "absent start" is not an edge case, it is the entire installed base, and
+   * a Gantt that drew it as a zero-width bar would render every existing
+   * tracker as a column of hairlines. It draws a MILESTONE DIAMOND at the due
+   * date instead — a date with no duration, which is what the file actually
+   * says. gantt.ts carries the rule at the site that implements it.
+   *
+   * Not in ISSUE_FIELDS: a new issue is seeded with status, priority, assignee
+   * and estimate, and dates appear when somebody sets one — the same as `due`
+   * has always behaved, and the same as `labels` and `project`.
+   */
+  { key: 'start', label: 'Start', vt: 'date' },
   { key: 'due', label: 'Due', vt: 'date' },
   { key: 'project', label: 'Project', vt: 'text' },
 ]
@@ -218,11 +242,17 @@ export function headerLength(page: Page): number {
  * empty object, so a view someone filtered and then unfiltered is byte-identical
  * to one that was never filtered.
  *
- * Deliberately two keys. A filter language is a thing that grows without limit
- * and can never shrink — every operator here is in files on other people's
- * disks the moment it ships — so this is the smallest pair that answers the two
- * questions a tracker is actually asked: "show me this label" and "show me what
- * is still open".
+ * It began as two keys, and that was the right size for a board: "show me this
+ * label" and "show me what is still open". It was also the whole of what a view
+ * could ask, on five layouts — so "books published after 2020", "tasks due this
+ * week", "pages not tagged draft" and "title contains X" were all unexpressible.
+ * `where` is the third key and the answer; its language, its operators and the
+ * reasoning behind the shape live in query.ts, which is where a filter language
+ * that grows should live rather than in the middle of the schema.
+ *
+ * The first two keys are UNCHANGED, in meaning and in combination: a file
+ * written before `where` existed evaluates through exactly the code it always
+ * did, and `any` narrows nothing but the new list.
  */
 export interface ViewFilter {
   /**
@@ -233,10 +263,14 @@ export interface ViewFilter {
   is?: Record<string, string[]>
   /** only issues whose phase is neither done nor cancelled */
   open?: boolean
+  /** typed conditions — ranges, dates, text, absence. See query.ts. */
+  where?: Clause[]
+  /** the `where` list is ORed rather than ANDed. Reaches no other key. */
+  any?: boolean
 }
 
 /** Filter keys this build can evaluate. */
-const FILTER_KEYS = new Set(['is', 'open'])
+const FILTER_KEYS = new Set(['is', 'open', 'where', 'any'])
 
 /**
  * Filter keys from a NEWER build.
@@ -272,8 +306,18 @@ export const isOpenPhase = (f: FieldSpec | undefined, value: unknown): boolean =
   return g !== 'done' && g !== 'cancelled'
 }
 
-/** Does one issue pass a view's filter? */
-export function passesFilter(doc: SpacesDoc, values: Map<string, unknown>, filter: unknown): boolean {
+/**
+ * Does one issue pass a view's filter?
+ *
+ * `page` and `today` are OPTIONAL and additive, in the same way the format is:
+ * every existing call site keeps working and keeps answering what it answered.
+ * `page` is what lets a condition ask about the title, which is not a prop
+ * block and so is reachable through no field key; `today` is injected so a rig
+ * is not at the mercy of a clock.
+ */
+export function passesFilter(
+  doc: SpacesDoc, values: Map<string, unknown>, filter: unknown, page?: Page, today?: string,
+): boolean {
   if (!filter || typeof filter !== 'object') return true
   const f = filter as ViewFilter
   if (f.open) {
@@ -292,14 +336,22 @@ export function passesFilter(doc: SpacesDoc, values: Map<string, unknown>, filte
       if (!want.some((w) => mine.includes(String(w)))) return false
     }
   }
-  return true
+  // The typed conditions are ANDed with everything above, whatever `any` says:
+  // `any` was added with `where` and reaches only `where`. Making it reach `is`
+  // or `open` would change what a file already on somebody's disk means.
+  return passesClauses(doc, values, filter, page, today)
 }
 
 /** How many things a filter narrows by — what the Filter button counts. */
 export const filterCount = (filter: unknown): number => {
   const f = (filter ?? {}) as ViewFilter
   const is = f.is && typeof f.is === 'object' ? f.is : {}
-  return (f.open ? 1 : 0) + Object.keys(is).filter((k) => (is[k] ?? []).length).length
+  return (f.open ? 1 : 0)
+    + Object.keys(is).filter((k) => (is[k] ?? []).length).length
+    // a half-built condition counts for nothing, exactly as an empty `is` list
+    // does — the chip says how much the view is narrowed, not how many rows the
+    // popover happens to be showing
+    + clauseCount(filter)
 }
 
 /**
@@ -438,11 +490,26 @@ export interface ViewSource {
   has?: string
   /** pages nested anywhere under this page */
   under?: string
+  /**
+   * pages whose PROSE carries this `#tag` (or anything nested under it)
+   *
+   * The third selector, and it earns its place on the same test the other two
+   * pass: it says something about a page that nothing else in this format can
+   * say. `has` asks about a declared field, `under` about the tree — both are
+   * structure somebody set up in advance. A tag is written mid-sentence, in
+   * the middle of writing something else, which is the only kind of
+   * classification most notes ever get.
+   *
+   * The KEY is stored, lower-cased — a filter that matched casing would break
+   * the moment somebody wrote `#Recipe` once. Nested tags include their
+   * children: `tag: 'project'` selects `#project/bento` too.
+   */
+  tag?: string
 }
 
 export const unknownSourceKeys = (src: unknown): string[] =>
   !src || typeof src !== 'object' ? []
-    : Object.keys(src as Record<string, unknown>).filter((k) => k !== 'has' && k !== 'under')
+    : Object.keys(src as Record<string, unknown>).filter((k) => k !== 'has' && k !== 'under' && k !== 'tag')
 
 /** Is this page anywhere below `root`? Cycle-safe, like the tree walk. */
 function isUnder(doc: SpacesDoc, page: Page, root: string): boolean {
@@ -467,12 +534,19 @@ export function viewRows(doc: SpacesDoc, source?: unknown): IssueRow[] {
   const src = (source && typeof source === 'object' ? source : {}) as ViewSource
   const has = typeof src.has === 'string' ? src.has : ''
   const under = typeof src.under === 'string' ? src.under : ''
-  if (!has && !under) return issuesOf(doc)
+  const tag = typeof src.tag === 'string' ? src.tag : ''
+  if (!has && !under && !tag) return issuesOf(doc)
+
+  // Derived here rather than passed in, so `viewRows` keeps the one-argument
+  // shape every caller already has — including the node rigs, which have no
+  // store to take an index from. Built ONLY when a tag is actually asked for.
+  const tix = tag ? buildTagIndex(doc) : null
 
   const out: IssueRow[] = []
   for (const page of doc.pages) {
     if (page.archived) continue
     if (under && !isUnder(doc, page, under)) continue
+    if (tix && !pageHasTag(tix, page.id, tag)) continue
     const values = valuesOf(page)
     if (has && !values.has(has)) continue
     out.push({ page, values })
@@ -638,7 +712,22 @@ export function cycleSort(sort: unknown, key: string): ViewSort[] | undefined {
  * and source already follow. `nextLayout` returns the word; the caller that
  * WRITES is the one that turns 'board' back into a deletion.
  */
-export const VIEW_LAYOUTS = ['board', 'list', 'table', 'gallery'] as const
+/**
+ * `gantt` and `workload` join the cycle rather than becoming a second block
+ * type. The argument is in gantt.ts, at length, because every chart this app
+ * grows after them inherits it. The half that belongs HERE is the one this
+ * function already guarantees: `layoutOf` maps a word it does not know to
+ * `board`, so a build that predates these two meets `layout:"gantt"`, draws a
+ * board of the same pages, and writes the key back untouched.
+ *
+ * SEVEN IS THE CEILING FOR A CYCLE BUTTON. One control and one word beats a
+ * menu at three or four; this branch argued six was already the limit, and the
+ * maintainer ruled seven (calendar landed first, then these two). An EIGHTH
+ * shape converts this control into a picker rather than extending the ring.
+ * Written down here because the next person to add a layout will read this
+ * line and not the changelog.
+ */
+export const VIEW_LAYOUTS = ['board', 'list', 'table', 'gallery', 'calendar', 'gantt', 'workload'] as const
 export type ViewLayout = (typeof VIEW_LAYOUTS)[number]
 
 /**
@@ -656,7 +745,7 @@ export function layoutOf(raw: unknown): ViewLayout {
   return (VIEW_LAYOUTS as readonly string[]).includes(s) ? (s as ViewLayout) : 'board'
 }
 
-/** The next shape in the cycle: board → list → table → gallery → board. */
+/** The next shape: board → list → table → gallery → calendar → gantt → workload → board. */
 export function nextLayout(raw: unknown): ViewLayout {
   const here = layoutOf(raw)
   return VIEW_LAYOUTS[(VIEW_LAYOUTS.indexOf(here) + 1) % VIEW_LAYOUTS.length]

@@ -8,6 +8,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -303,6 +304,27 @@ class EditorActivity : Activity() {
                 }
                 return true
             }
+
+            /**
+             * A new page holds no handles, so everything handed to the old one
+             * is forgotten here. onPageStarted fires for MAIN-FRAME navigations
+             * only — a fragment change or pushState is not one — which makes it
+             * the equivalent of iOS's didCommit.
+             *
+             * - The open document is the new page's to claim again. Without
+             *   this, a reload spent the first begin on the old page, and the
+             *   new page's first save (or its launchQueue handle) was taken for
+             *   an export and prompted for a destination.
+             * - Remembered copies are dropped too. They are keyed by the name a
+             *   handle was vended under, and the new page has no such handle: a
+             *   later export it happens to vend under the same name would
+             *   otherwise go straight into a file the user picked for the
+             *   previous page, without asking.
+             */
+            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                openDocumentVended = false
+                exportTargets.clear()
+            }
         }
 
         web.webChromeClient = TrayChromeClient()
@@ -506,6 +528,17 @@ class EditorActivity : Activity() {
                 if (!openDocumentVended && canWriteInPlace) {
                     openDocumentVended = true
                     reply(id, true, docName)
+                } else if (m.optBoolean("launch", false)) {
+                    // The page asked for the file it was opened with (bridge.js
+                    // launchQueue) and this host cannot hand it over: the grant
+                    // is read-only — the usual case for a document from mail —
+                    // or it was already handed out. That is a NO, never an
+                    // export. Falling through would put a save dialog on screen
+                    // the moment the document opened; refused, the page keeps
+                    // today's path and its ⌘S behaves exactly as before.
+                    reply(id, false,
+                        if (!canWriteInPlace) "the open document is read-only here"
+                        else "the open document was already handed out")
                 } else {
                     // Either a copy/template/read-only export, or a document we
                     // hold no write grant on. Both must end at a picker, and

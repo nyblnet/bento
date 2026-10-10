@@ -14,7 +14,21 @@
 // There is no server; a break here is permanent.
 
 import type { CollabCreds } from './sync/crdt.ts'
+// Type-only, and therefore erased: no runtime dependency, no import cycle.
+import type { PageTemplate } from './templates.ts'
+import type { SpacesRevision } from './history.ts'
 import { esc, externalHref } from './sanitize.ts'
+// A VALUE import, and the cycle it looks like is not one: embed.ts imports
+// only TYPES from here, and a type import is erased before anything runs.
+import { isPageRef } from './embed.ts'
+import { projectForCopy, docContentKey as kernelContentKey } from '../../kernel/src/docfields.ts'
+import { SPACES_FIELDS, SPACES_NOT_EDIT } from './docclass.ts'
+// A LEAF module (no imports at all), which is what lets the parser call into
+// it: the dotted-key fold has to run before anything else sees the document.
+import { foldDottedMapKeys } from './docmaps.ts'
+// Type-only, and therefore erased: no runtime dependency, no import cycle.
+import type { Trail } from './trail.ts'
+import type { Periods } from './periods.ts'
 
 export const FORMAT = 'bento/spaces'
 export const FORMAT_VERSION = 1
@@ -105,8 +119,26 @@ export interface Block {
   /** intrinsic px at insert: holds the aspect box while the image decodes */
   w?: number
   h?: number
-  /** pagelink: the target page id */
+  /**
+   * pagelink, embed: the target page id.
+   *
+   * ONE FIELD FOR BOTH, because both mean the identical thing — "this block
+   * refers to that page" — and every sweep in the app that follows a page
+   * reference (backlinks, extract, graft, validate, the graph) then extends by
+   * a name in one condition instead of growing a second concept it could
+   * forget. embed.ts `isPageRef` is that condition.
+   */
   page?: string
+  /**
+   * embed: the heading inside the target page to show, instead of all of it.
+   *
+   * Absent = the whole page, which is the common case and therefore the case
+   * that stores no bytes. Matched by NAME, case- and whitespace-insensitively,
+   * never by position: a section moved up the page is still that section, and
+   * an index would silently show the wrong one. A name that matches nothing is
+   * reported, never quietly widened back to the whole page.
+   */
+  anchor?: string
 
   /**
    * table: the cells, row-major, each one INLINE HTML.
@@ -311,6 +343,40 @@ export interface Page {
    * falls back to the measure rather than to nothing.
    */
   width?: 'wide' | 'full'
+  /**
+   * Other names this page answers to — `[[NYC]]` and `[[New York]]` reaching
+   * the same page.
+   *
+   * A LINK-TIME notion, deliberately. An alias is resolved where a name
+   * becomes a page id (src/mentions.ts `nameIndex`, read by the `[[…]]`
+   * resolver, ⌘K and the page picker), so the link that gets written is an
+   * ordinary `#p/<id>` href and the backlink index, the graph, export and
+   * collaboration never learn that aliases exist. Nothing downstream has a
+   * second way to name a page.
+   *
+   * Additive: absent on every page written before this, and an ABSENT key is
+   * the default — clearing the last alias deletes the field rather than
+   * storing `[]`, so a page that never had one is byte-identical to a page
+   * that had one and lost it. A build that predates this round-trips the
+   * array untouched and simply does not resolve by it.
+   *
+   * Two pages may claim the same alias; nothing here prevents it, because a
+   * file arrives already written. `nameIndex` resolves it deterministically
+   * (titles before aliases, then document order) and validate() reports it —
+   * see `alias-collision` in agent.ts.
+   */
+  aliases?: string[]
+  /**
+   * This page's own design (DECISIONS 2026-09-26, per-page addendum): a
+   * built-in name or a key of `doc.designs`, exactly as `doc.design` is.
+   *
+   * ABSENT = INHERIT: the nearest ancestor's, then the space's, then today's
+   * look — so setting one on a section restyles its whole subtree. Returning
+   * to inherit DELETES the key. An unknown name renders the DEFAULT look (it
+   * does not fall through to the parent's), round-trips untouched, and is
+   * named by validate(). Older builds ignore it and show the space's design.
+   */
+  design?: string
   /** the one page daily entries hang from, so the sidebar stays a tree */
   journalHome?: boolean
   /** out of the sidebar, still searchable and linkable, and ENUMERATED at
@@ -349,10 +415,59 @@ export interface SpacesDoc {
   /** the page shown on open; absent ⇒ pages[0] */
   home?: string
   theme: Theme
+  /**
+   * The page design the AUTHOR chose (DECISIONS 2026-09-26): a built-in name
+   * (designs.ts BUILT_INS) or a key of `designs`. ABSENT = the default look,
+   * and returning to the default DELETES the key. An unknown name renders the
+   * default and round-trips untouched. A page's own `Page.design` (or its
+   * nearest ancestor's) overrides this — designs.ts resolvePageDesign.
+   */
+  design?: string
+  /**
+   * Designs this document carries itself, by name: overrides on a built-in
+   * base, every value validated before use (designs.ts resolveData). A name
+   * that is also a built-in's is never used.
+   */
+  designs?: Record<string, unknown>
   assets?: Record<string, string>
+  /**
+   * FOOTNOTES, by label → inline html. See src/footnotes.ts for the whole
+   * design; the two things that belong in the FORMAT's own file are these.
+   *
+   * DOC-LEVEL AND KEYED, which is bento/type's shape (type/src/model.ts) and
+   * is chosen for its reason: a note has to be able to outlive the paragraph
+   * that points at it, and keying it by label means moving a paragraph between
+   * pages carries the reference and nothing else.
+   *
+   * NO NUMBER IS STORED HERE OR ANYWHERE. Footnotes are numbered by order of
+   * appearance, so the number is a fact about the page and not about the note;
+   * it is derived at render time, the way calc.ts derives an answer and slides
+   * derives a page number. The LABEL is an identifier — `[^1]` is what pandoc
+   * and Obsidian store too, and it can perfectly well render as "3".
+   *
+   * The REFERENCE is the literal text `[^label]` inside a block's html: a text
+   * token, so it moves with the prose through every edit, sanitize pass,
+   * canonicalisation and CRDT merge, and so no allowlist in sanitize.ts had to
+   * change for it. An older build shows the sentence with `[^1]` in it and
+   * round-trips this key untouched — absent means no footnotes, which is the
+   * behaviour every build shipped before this one already has.
+   */
+  footnotes?: Record<string, string>
   fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
   readonly?: boolean
+  /** WHOLE-FILE share export: re-mints docId on open. Not a page template —
+   *  see `templates` below, and src/templates.ts for why the two are separate. */
   template?: boolean
+  /**
+   * Page templates: saved page shapes new pages can start from.
+   *
+   * A SEPARATE COLLECTION, not pages carrying a flag — the reasoning, and what
+   * that costs, is in src/templates.ts. Additive: absent on every file written
+   * before this, and an older build round-trips it untouched.
+   */
+  templates?: PageTemplate[]
+  /** the template id new daily notes start from; absent ⇒ a blank entry */
+  journalTemplate?: string
   /**
    * Collaboration credentials (PLATFORM §2).
    *
@@ -364,6 +479,33 @@ export interface SpacesDoc {
    * `import type` is erased, so this adds no runtime dependency.
    */
   collab?: CollabCreds
+  /**
+   * In-file history (kernel field class 'history', docfields.ts): kept by the
+   * file, a duplicate and an invite; dropped from every reader-tier copy and
+   * from Copy document JSON; never synced.
+   *
+   * `revisions` is the space's VERSION HISTORY — oldest first, each entry the
+   * kernel's `Revision` envelope around the change from the one before it.
+   * The engine, its budget and the reasoning live in history.ts; every entry
+   * read from a file is validated there before anything folds it. Absent when
+   * there is none — never `revisions: []`. `import type`, so no runtime cycle.
+   *
+   * `trail` is THE RECORD: what was true on a day, for the tracker's burndown,
+   * burnup and cumulative-flow charts (trail.ts). Written while editing, never
+   * on open; each replica keeps its own. A row holds COUNTS and nothing else —
+   * no page ids, no assignee breakdown, no per-issue anything: that is a budget
+   * rule and a privacy rule at once, written here so a later session does not
+   * add the surveillance shape as the obvious next step.
+   */
+  revisions?: SpacesRevision[]
+  trail?: Trail
+  /**
+   * The windows the charts are about (periods.ts) — CONTENT, not history: a
+   * period is something a person decided, referenced by a chart block, undone
+   * by ⌘Z and synced (per key, `DOC_MAPS`). Totals only, never page ids.
+   * Absent until a period is started; deleted rather than emptied.
+   */
+  periods?: Periods
   [extra: string]: unknown
 }
 
@@ -380,15 +522,16 @@ export interface SpacesDoc {
  * chat window. bento/slides had this same bug, fixed it, and wrote a rig to
  * stop it coming back — the rig only ever looked at slides/.
  *
- * DERIVED BY REMOVING, not by listing what to keep: a private field added to
- * CollabCreds later is stripped by this without anyone remembering to.
- * `room` and `key` go too — together they ARE the read capability, and a room
- * id is the thing the relay keys on.
+ * BUILT FROM EMPTY by the kernel's copy table (docfields.ts projectForCopy,
+ * tier 'copyJSON', this app's map in docclass.ts): `collab` is a capability
+ * and is dropped whole — `room` and `key` too, since together they ARE the
+ * read capability. The modes (readonly, template), the in-file history and
+ * any top-level key this build does not declare are dropped as well: the
+ * clipboard is a hand-out, and an undeclared key is exactly the field nobody
+ * has decided is safe to hand out. Content and the docId travel.
  */
 export function docForExport(doc: SpacesDoc): SpacesDoc {
-  const { collab, ...rest } = doc as SpacesDoc & { collab?: unknown }
-  void collab
-  return rest as SpacesDoc
+  return projectForCopy(doc, SPACES_FIELDS, 'copyJSON')
 }
 
 export const uid = (p = 'b'): string => {
@@ -453,6 +596,16 @@ export function parseDoc(json: string): ParseResult {
     return { ok: false, err: 'json', detail: (e as Error).message }
   }
   if (!isObj(raw)) return { ok: false, err: 'shape', detail: 'the document block is not a JSON object' }
+
+  // A PEER RUNNING AN OLDER SHAPE writes a doc-level map entry as a literal
+  // top-level key: it receives `set k="periods.pd-1"`, cannot resolve
+  // `periods` as a map, and stores the dotted name verbatim — which additivity
+  // would then preserve forever. Folding it back is cheap, deterministic and
+  // self-healing, and it repairs files that were damaged before this existed.
+  // Done HERE rather than in a kernel handshake: the hazard belongs to any
+  // future doc-level map, and six lines in a file this app owns beat a change
+  // to shared machinery every app depends on.
+  foldDottedMapKeys(raw)
 
   if (raw.format !== FORMAT) {
     return {
@@ -548,7 +701,22 @@ export const newPage = (title = 'Untitled', extra: Partial<Page> = {}): Page =>
 
 /** Content that matters for "did this change" — excludes volatile fields. */
 export function docContentKey(doc: SpacesDoc): string {
-  return JSON.stringify([doc.title, doc.home, doc.pages])
+  // The kernel's key (docfields.ts), over this app's field map: every declared
+  // and undeclared top-level field that is PRESENT, sorted, except the
+  // capability (`collab` — a key is not an edit), `modified`, and `revisions`
+  // (recorded only into the bytes a save writes — docclass.ts SPACES_NOT_EDIT).
+  //
+  // So `footnotes` is in it (a note's text is somebody's writing and lives
+  // nowhere else), the page templates and the journal template are in it
+  // (saving one is an edit worth recovering after a crash), and so are
+  // `design`/`designs` (a crash right after choosing one must still offer the
+  // recovery). An ABSENT field is skipped, never null-padded, so a document
+  // with no design keys exactly as it would with the field never invented.
+  //
+  // ONE return. Each field once arrived on its own branch with its own
+  // `return` line, and a merge that kept both left the second one dead —
+  // footnotes silently dropped out of recovery.
+  return kernelContentKey(doc, SPACES_FIELDS, SPACES_NOT_EDIT)
 }
 
 // ---- derived, NEVER stored -------------------------------------------------
@@ -702,8 +870,14 @@ export function buildIndex(doc: SpacesDoc): SpaceIndex {
           pushInto(backlinks, linkTarget(m[1], page), { pageId: p.id, blockId: b.id })
         }
       }
-      if (b.type === 'pagelink' && typeof b.page === 'string') {
-        pushInto(backlinks, b.page, { pageId: p.id, blockId: b.id })
+      // AN EMBED IS A REFERENCE, so it backlinks exactly as a pagelink does.
+      // "Linked from" is how an author finds out who depends on a page before
+      // rewriting it, and an embed is the strongest dependency in the model —
+      // the page it names is not merely mentioned, it is being SHOWN
+      // somewhere else. Leaving embeds out would make the one reference you
+      // most need to be warned about the one the panel does not list.
+      if (isPageRef(b)) {
+        pushInto(backlinks, String(b.page), { pageId: p.id, blockId: b.id })
       }
     }
   }
