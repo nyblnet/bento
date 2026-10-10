@@ -942,4 +942,9 @@ export const it: Catalog = {
   "This page no longer uses a design of its own.": "Questa pagina non usa più un design proprio.",
   "{n} page(s) arrived with a design of their own.": "{n} pagina/e sono arrivate con un design proprio.",
   "A page can wear a design of its own, and a section’s passes to the pages inside it: choose it from the page’s ⋯ menu.": "Una pagina può avere un design proprio, e quello di una sezione passa alle pagine che contiene: sceglilo dal menu ⋯ della pagina.",
+  "A sealed file for someone who will only read it: the pages with no editing tools, no comment threads, and none of this space’s keys — it never joins the live session.": "Un file sigillato per chi lo leggerà soltanto: le pagine senza strumenti di modifica, senza thread di commenti e senza nessuna delle chiavi di questo spazio — non si unisce mai alla sessione dal vivo.",
+  "Next": "Successivo",
+  "Previous": "Precedente",
+  "Reading copy saved — it opens as a document, with no keys and no comments": "Copia di lettura salvata — si apre come un documento, senza chiavi né commenti",
+  "Save a reading copy…": "Salva una copia di lettura…",
 }

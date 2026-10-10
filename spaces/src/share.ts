@@ -37,8 +37,16 @@ import { projectForCopy } from '../../kernel/src/docfields.ts'
 import type { SpacesDoc } from './model.ts'
 import { SPACES_FIELDS } from './docclass.ts'
 
-/** A share export's filename suffix — also what the UI calls the copy. */
-export type ShareKind = 'invite' | 'viewonly'
+/**
+ * A share export's filename suffix — also what the UI calls the copy.
+ *
+ * `reading` is the SEALED one and is built in reading.ts, not here: it keeps no
+ * room (the kernel's `package` tier), so it is not a question about which
+ * collaboration fields survive. It is named in this union because the three of
+ * them are one menu and one write path, and a fourth kind added elsewhere would
+ * type-check against neither.
+ */
+export type ShareKind = 'invite' | 'viewonly' | 'reading'
 
 /** A deep clone, so nothing done to a copy can reach the open document. */
 const clone = (doc: SpacesDoc): SpacesDoc => JSON.parse(JSON.stringify(doc)) as SpacesDoc

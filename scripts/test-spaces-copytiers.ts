@@ -11,7 +11,8 @@
 // WHAT THIS PROVES. Every copy of a space that leaves the open document is built
 // by the kernel's copy table (kernel/src/docfields.ts projectForCopy) over this
 // app's exhaustive field map (spaces/src/docclass.ts). This rig runs each REAL
-// builder — share.ts readerCopy / inviteCopy / duplicateAsNew, portable.ts
+// builder — share.ts readerCopy / inviteCopy / duplicateAsNew, reading.ts
+// readingCopy (the SEALED reading copy, tier 'package'), portable.ts
 // extractSpace, model.ts docForExport (Copy document JSON) and the 'file' tier
 // main.ts writes "Save a copy…" through — against ONE source carrying every
 // class of field: content, identity, both modes, a full collab with every
@@ -24,6 +25,10 @@
 //   · reader / Copy JSON (and audience / link / template, which spaces has no
 //     builder for yet): no history, no undeclared key, no capability secret;
 //     readonly SET on a reader copy, template dropped from it
+//   · sealed reading copy (package): NO collab at all — not even the room and
+//     read key a live viewer keeps; readonly SET even on a source with no
+//     readonly key (the kernel's package tier sets it, #666); no history, no
+//     undeclared key, no template, no comment thread
 //   · invite: no undeclared key; history KEPT; the modes dropped
 //   · duplicate / file: the undeclared key and the history KEPT
 //
@@ -48,6 +53,7 @@ g.window = g.window ?? { localStorage: shim, addEventListener() {}, setTimeout, 
 
 const { inviteCopy, readerCopy, duplicateAsNew } = await import('../spaces/src/share.ts')
 const { extractSpace } = await import('../spaces/src/portable.ts')
+const { readingCopy, stripComments } = await import('../spaces/src/reading.ts')
 const { docForExport, FORMAT } = await import('../spaces/src/model.ts')
 const { SPACES_FIELDS } = await import('../spaces/src/docclass.ts')
 const { projectForCopy, collabForReader, COLLAB_READER_KEEP, COLLAB_INVITE_KEEP } = await import('../kernel/src/docfields.ts')
@@ -198,6 +204,70 @@ function checkReader(out: SpacesDoc | null, label: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+console.log('\nsealed reading copy — "Share → Save a reading copy…" (reading.ts readingCopy, tier package)')
+{
+  const EXPECT_SEALED = sorted([...CONTENT, 'docId', 'readonly'])
+  const ROOM = (collab as Obj).room as string
+  const KEY = (collab as Obj).key as string
+  // the hostile source, with comment threads planted at both anchors
+  const withComments = (d: SpacesDoc): SpacesDoc => {
+    const o = clone(d)
+    ;(o.pages[0] as Obj).comments = [{ id: 'c1', author: 'A', at: 'x', text: 'PAGE-COMMENT-CANARY' }]
+    ;(o.pages[0].blocks[0] as Obj).comments = [{ id: 'c2', author: 'B', at: 'x', text: 'BLOCK-COMMENT-CANARY' }]
+    return o
+  }
+  function checkSealed(out: SpacesDoc, label: string): boolean {
+    const before = failures
+    const o = out as Obj
+    const text = JSON.stringify(o)
+    ok(!('collab' in o), `${label}: NO collab key at all — not even the reader subset`)
+    ok(!text.includes(ROOM) && !text.includes(KEY), `${label}: neither the room id nor the read key appears anywhere`)
+    ok(o.readonly === true, `${label}: readonly:true (opens in the reading view)`)
+    ok(!('revisions' in o) && !('trail' in o) && !text.includes('THE-WHOLE-SPACE'), `${label}: no history`)
+    ok(!('futureField' in o), `${label}: the undeclared key is dropped`)
+    ok(!('template' in o), `${label}: no template`)
+    ok(same(keys(o), EXPECT_SEALED), `${label}: EXACT top-level keys (${show(o)})`)
+    ok(!text.includes('COMMENT-CANARY'), `${label}: no comment thread, page- or block-level`)
+    noSecrets(o, label)
+    return failures === before
+  }
+  // the fixture carries NO readonly key: the package tier must set it anyway
+  const bare = source() as Obj
+  ok(!('readonly' in bare), 'premise: the hostile source has NO readonly key')
+  checkSealed(readingCopy(withComments(source())), 'sealed (source with no readonly key)')
+  checkSealed(readingCopy(withComments(source({ template: true }))), 'sealed of a template source')
+  checkSealed(readingCopy(withComments(source({ readonly: false }))), 'sealed of a source with readonly:false')
+  const src = withComments(source())
+  const snap = JSON.stringify(src)
+  readingCopy(src)
+  ok(JSON.stringify(src) === snap, 'sealed: the open document is untouched')
+
+  // NOT VACUOUS: three planted builders, each one of the ways this could
+  // regress, must each FAIL the same checks.
+  const planted: Array<[string, (d: SpacesDoc) => SpacesDoc]> = [
+    // the app-side step forgotten: comment threads live inside pages, which
+    // every tier keeps, so only stripComments takes them out
+    ['forgets the comment threads', (d) => projectForCopy(clone(d), SPACES_FIELDS, 'package')],
+    // the live viewer's tier: collab survives as collabForReader's room + key
+    ['keeps collab (tier reader)', (d) => {
+      const o = projectForCopy(clone(d), SPACES_FIELDS, 'reader'); stripComments(o); return o
+    }],
+    // no table at all: the shape #435 had, minus its collab strip
+    ['skips projectForCopy', (d) => {
+      const o = clone(d); o.readonly = true; stripComments(o); return o
+    }],
+  ]
+  for (const [name, build] of planted) {
+    const f0 = failures, c0 = checks
+    console.log(`    (planted builder that ${name} — these rows MUST fail:)`)
+    const passed = checkSealed(build(withComments(source())), 'planted')
+    const red = failures - f0
+    failures = f0; checks = c0
+    ok(!passed && red >= 1, `a sealed builder that ${name} FAILS these checks (${red} rows red)`)
+  }
+}
+
+// ---------------------------------------------------------------------------
 console.log('\ninvite — "Share → invite to edit" (share.ts inviteCopy)')
 {
   const EXPECT = sorted([...CONTENT, 'docId', 'collab', 'revisions', 'trail'])
@@ -314,6 +384,15 @@ console.log('\nevery builder routes through projectForCopy (source)')
   ok(/projectForCopy\(clone\(doc\), SPACES_FIELDS, 'reader'\)/.test(body(share, 'readerCopy')), 'readerCopy → tier reader')
   ok(/projectForCopy\(clone\(doc\), SPACES_FIELDS, 'invite', \{ invite \}\)/.test(body(share, 'inviteCopy')), 'inviteCopy → tier invite, with the freshly minted invite')
   ok(/projectForCopy\(clone\(doc\), SPACES_FIELDS, 'duplicate'\)/.test(body(share, 'duplicateAsNew')), 'duplicateAsNew → tier duplicate')
+  ok(/projectForCopy\(clone\(doc\), SPACES_FIELDS, 'package'\)/.test(body(rd('reading.ts'), 'readingCopy')), 'readingCopy → tier package')
+  {
+    // a METHOD, so located by its own signature rather than body()'s `function`
+    const ed = rd('editor.ts')
+    const i = ed.indexOf('private async saveReadingCopy(')
+    const m = i < 0 ? '' : ed.slice(i, ed.indexOf('\n  }\n', i))
+    ok(/const out = readingCopy\(this\.store\.doc\)/.test(m) && /onShareCopy\?\.\(out, 'reading'\)/.test(m),
+      '"Save a reading copy…" writes readingCopy\'s output, and nothing else')
+  }
   ok(/projectForCopy\(clone\(doc\), SPACES_FIELDS, 'duplicate'\)/.test(body(portable, 'extractSpace')), 'extractSpace → tier duplicate')
   ok(/return projectForCopy\(doc, SPACES_FIELDS, 'copyJSON'\)/.test(body(model, 'docForExport')), 'docForExport → tier copyJSON')
   ok(/docForExport\(h\.store\.doc\)/.test(body(cmds, 'copyJson')), 'Copy document JSON writes docForExport\'s output')

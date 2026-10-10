@@ -361,9 +361,20 @@ export class CollabUi {
       // "connecting" that reads as "off" sends people to fix a session that is
       // already dialling; a view-only copy that reads as "off" sends them to
       // press Start, which is the one thing that cannot help.
+      // THE ONE EXPORT EVERY COPY CAN MAKE, so it is built once and offered
+      // in every branch below — offline included. A reading copy carries no
+      // room and no read key (reading.ts, the kernel's `package` tier), so it
+      // needs no capability this copy might not hold, and it starts no session.
+      const readingAct = () => this.action(ICONS.book, t('Save a reading copy…'),
+        t('A sealed file for someone who will only read it: the pages with no editing tools, no comment threads, and none of this space’s keys — it never joins the live session.'),
+        () => { close(); this.host.shareCopy('reading') })
+
       if (st === 'offline') {
         pop.append(el('div', 'sp-pnote', t('Offline mode is on — nothing leaves this computer.')))
         pop.append(el('div', 'sp-pnote', t('Windows on this computer still sync; turn offline mode off in About to work with someone elsewhere.')))
+        const only = el('div', 'sp-pacts')
+        only.append(readingAct())
+        pop.append(only)
         return
       }
       const status = el('div', 'sp-pstatus')
@@ -380,11 +391,14 @@ export class CollabUi {
       }
       pop.append(status)
 
-      // A view-only copy holds no signing key, so there is nothing here it
-      // could do. Saying why is the point: the relay refuses its writes, and a
-      // person who does not know that will keep trying.
+      // A view-only copy holds no signing key, so there is nothing else here
+      // it could do. Saying why is the point: the relay refuses its writes, and
+      // a person who does not know that will keep trying.
       if (!canWrite(doc)) {
         pop.append(el('div', 'sp-pnote', t('This is a view-only copy — it follows the live session but can’t change this space.')))
+        const only = el('div', 'sp-pacts')
+        only.append(readingAct())
+        pop.append(only)
         return
       }
 
@@ -394,10 +408,13 @@ export class CollabUi {
           : t('Nothing leaves this file until you start a session.')))
       }
 
-      // SHARING IS FILES. Each of these saves a copy to send, and turns the
-      // live session on — there is no separate start-a-session step.
+      // SHARING IS FILES. Each of these saves a copy to send; the two that make
+      // a LIVE copy turn the session on as they go, so there is no separate
+      // start-a-session step. The reading copy is first because it is the one
+      // that hands over nothing — and it is the only one that starts nothing.
       pop.append(el('div', 'sp-share-label', t('Share a copy')))
       const acts = el('div', 'sp-pacts')
+      acts.append(readingAct())
       acts.append(this.action(ICONS.people, t('Invite to edit…'),
         t('Saves a copy to send. Whoever opens it edits this space live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.'),
         () => { close(); this.host.shareCopy('invite') }))

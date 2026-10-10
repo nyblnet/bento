@@ -951,7 +951,8 @@ for (const [label, input, err] of [
   ok(/const barActions: BarAction\[\]/.test(ed), 'the bar actions are declared as one typed list')
   ok(!/const menuActions: BarAction\[\]/.test(ed), '…and there is no second, ⋯-only list any more (its rows moved to Insert, Save, the bar and the page menu)')
   ok(/barActions\.map\(/.test(ed), '…the inline row is built from the bar list')
-  ok(/for \(const a of barActions\) row\(m,/.test(ed), '…and folded ⋯ is built from the same list')
+  // (a sealed reading copy skips the eye inside that loop — still the one list)
+  ok(/for \(const a of barActions\) \{?\s*(if \(this\.sealed && a\.icon === 'eye'\) continue\s*)?row\(m,/.test(ed), '…and folded ⋯ is built from the same list')
   ok(/saveList\(m\)/.test(ed) && /fill: saveList/.test(ed), '…and ends on the Save list, the same function the caret fills from')
 
   // WHICH TIER a rule lives in is the thing worth pinning — but the tiers are

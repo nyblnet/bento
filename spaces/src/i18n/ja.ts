@@ -942,4 +942,9 @@ export const ja: Catalog = {
   "This page no longer uses a design of its own.": "このページは独自のデザインを使わなくなりました。",
   "{n} page(s) arrived with a design of their own.": "{n} 件のページが独自のデザイン付きで取り込まれました。",
   "A page can wear a design of its own, and a section’s passes to the pages inside it: choose it from the page’s ⋯ menu.": "ページは独自のデザインを持てます。セクションのデザインはその中のページに引き継がれます。ページの ⋯ メニューから選んでください。",
+  "A sealed file for someone who will only read it: the pages with no editing tools, no comment threads, and none of this space’s keys — it never joins the live session.": "読むだけの人に渡す封をしたファイル：編集ツールもコメントスレッドもなく、このスペースの鍵も一切含みません — ライブセッションに参加することはありません。",
+  "Next": "次へ",
+  "Previous": "前へ",
+  "Reading copy saved — it opens as a document, with no keys and no comments": "読むためのコピーを保存しました — 鍵もコメントもない、読むためのドキュメントとして開きます",
+  "Save a reading copy…": "読むためのコピーを保存…",
 }
