@@ -18,19 +18,54 @@
 //     still recognises this device;
 //   - a key the browser already held is adopted (same pubkey, same People
 //     entry), and its private half removed from localStorage;
-//   - a host that refuses or never answers falls back to the old storage;
+//   - while the host is present, NOTHING falls back to the shared origin: a
+//     host that refuses or never answers leaves no new private key in
+//     localStorage and no new recovery copy in IndexedDB; a failed read never
+//     mints a key (the device's identity can't change behind a slow host);
+//   - a refused recovery turns recovery off for that document, said once;
 //   - only the two agreed names are ever used, and values travel as bytes.
 //
 // Mutations (verified by editing kernel/src and re-running; each fails by exit
 // code): drop the per-file docId check in getRecovery; keep the private key in
-// localStorage on adoption; drop the public-key mirror.
+// localStorage on adoption; drop the public-key mirror; restore the shared-
+// origin fallback on a failed member-key read.
 
-// ---- browser surface: localStorage, and a window that posts messages -------
+// ---- browser surface: localStorage, IndexedDB, a window that posts ---------
 const ls = new Map<string, string>()
 ;(globalThis as { localStorage?: unknown }).localStorage = {
   getItem: (k: string) => (ls.has(k) ? ls.get(k)! : null),
   setItem: (k: string, v: string) => { ls.set(k, String(v)) },
   removeItem: (k: string) => { ls.delete(k) },
+}
+// A recording IndexedDB, enough for autosave.ts: every write to an object store
+// is logged, so a fallback into the shared origin can be SEEN, not assumed.
+const idb = new Map<string, unknown>()
+const idbWrites: string[] = []
+const later = <T>(r: { result?: T; onsuccess?: () => void }, v: T) => { setTimeout(() => { r.result = v; r.onsuccess?.() }, 0); return r }
+;(globalThis as { indexedDB?: unknown }).indexedDB = {
+  open: () => {
+    const db = {
+      objectStoreNames: { contains: () => true },
+      createObjectStore: () => ({ createIndex() {} }),
+      close() {},
+      transaction: () => {
+        const t: { oncomplete?: () => void; objectStore: (s: string) => unknown } = {
+          objectStore: (s: string) => ({
+            put: (v: { docId: string }) => { idbWrites.push(`put ${s}`); idb.set(`${s}:${v.docId}`, v); return later({}, v.docId) },
+            add: () => { idbWrites.push(`add ${s}`); return later({}, 1) },
+            get: (k: string) => later({}, idb.get(`${s}:${k}`)),
+            getAll: () => later({}, [...idb].filter(([k]) => k.startsWith(`${s}:`)).map(([, v]) => v)),
+            delete: (k: string) => { idb.delete(`${s}:${k}`); return later({}, undefined) },
+          }),
+        }
+        setTimeout(() => t.oncomplete?.(), 0)
+        return t
+      },
+    }
+    const req: { result?: unknown; onupgradeneeded?: () => void; onsuccess?: () => void } = { result: db }
+    setTimeout(() => { req.onupgradeneeded?.(); req.onsuccess?.() }, 0)
+    return req
+  },
 }
 type Listener = (ev: { data: unknown; source: unknown }) => void
 const listeners = new Set<Listener>()
@@ -59,7 +94,7 @@ win.addEventListener('message', (ev) => {
   if (mode === 'silent') return
   let result: unknown
   if (d.op !== 'store.list' && !NAMES.has(String(p.name))) result = { ok: false, reason: 'bad name' }
-  else if (d.op === 'store.set') result = mode === 'refuse' ? { ok: false, reason: 'refused' } : (store.set(p.name!, p.bytes as Uint8Array), { ok: true })
+  else if (d.op === 'store.set') result = mode === 'refuse' ? { ok: false, reason: 'too large' } : (store.set(p.name!, p.bytes as Uint8Array), { ok: true })
   else if (d.op === 'store.get') result = { ok: true, bytes: store.get(p.name!) ?? null }
   else if (d.op === 'store.delete') result = (store.delete(p.name!), { ok: true })
   else if (d.op === 'store.list') result = { ok: true, names: [...store.keys()].sort() }
@@ -76,29 +111,32 @@ const setHost = (on: boolean) => {
 const { register } = await import('node:module')
 register('./lib/ts-resolve-hooks.mjs', import.meta.url)
 
+const { configureApp } = await import('../kernel/src/app.ts')
+configureApp({ appId: 'bento-rig', appName: 'Rig', manifestUrl: 'https://example.invalid/m.json' })
 const { docStore, resetDocStoreForTest, ExtensionBackend } = await import('../kernel/src/docstore.ts')
-const { putRecovery, getRecovery, clearRecovery } = await import('../kernel/src/autosave.ts')
+const { putRecovery, getRecovery, clearRecovery, recoveryOff, onRecoveryOff } = await import('../kernel/src/autosave.ts')
 // One module instance; the member-key cache is per docId, and every row uses
 // its own docId, so no row sees another's cached identity.
-const online = await import('../kernel/src/sync/online.ts')
-const freshOnline = async () => online
+const { deviceIdentity, cachedMemberPub } = await import('../kernel/src/sync/online.ts')
 
 let checks = 0, failures = 0
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.log(`  FAIL  ${m}`) } else console.log(`  ok    ${m}`) }
 const H = (s: string) => console.log(`\n=== ${s} ===`)
 const doc = (docId: string, title = 'A deck') => ({ docId, title, slides: [{ id: 's1', note: 'unsaved work' }], collab: { key: 'K' } })
 const dec = new TextDecoder()
+const enc = new TextEncoder()
 const stored = (name: string) => { const b = store.get(name); return b ? JSON.parse(dec.decode(b)) : null }
-const reset = () => { store.clear(); ls.clear(); seen.length = 0; mode = 'ok' }
+const reset = () => { store.clear(); ls.clear(); idb.clear(); idbWrites.length = 0; seen.length = 0; mode = 'ok' }
+const fast = () => new ExtensionBackend({ firstProbe: 40, get: 40, setBase: 40, setPerChunk: 0, small: 40 })
 
 H('no host: nothing changes')
 {
   reset(); setHost(false); resetDocStoreForTest()
   ok(docStore() === null, 'no __bentoHost store capability → no DocStore')
-  const { deviceIdentity } = await freshOnline()
   const id = await deviceIdentity('d-nohost')
   const raw = JSON.parse(ls.get('bento-member-d-nohost') ?? 'null')
   ok(raw?.pub === id.pub && raw?.priv === id.priv, 'the member key stays whole in localStorage, as before')
+  ok(await putRecovery(doc('d-nohost') as never) === true && idbWrites.includes('put recovery'), 'recovery goes to IndexedDB, as before')
   ok(seen.length === 0, 'nothing is sent to a host that is not there')
 }
 
@@ -110,26 +148,29 @@ H('recovery round-trips through the host, for THIS document only')
   const held = stored('recovery')
   ok(held?.docId === 'd1' && typeof held?.json === 'string' && held.json.includes('unsaved work'), 'the host holds this document\'s recovery copy')
   ok(!held?.json.includes('"collab"'), 'the recovery copy is content-only, as before')
+  ok(!idbWrites.includes('put recovery'), 'and nothing was written to IndexedDB')
   const back = await getRecovery('d1')
   ok(back?.docId === 'd1' && back.json === held.json, 'getRecovery returns it')
   ok(await getRecovery('some-other-doc') === null, 'a DIFFERENT document at this path gets nothing (the entry is per file)')
   await clearRecovery('d1')
   ok(!store.has('recovery'), 'clearRecovery removes it from the host')
+  // migration: an old copy this origin holds from before the host is still readable
+  idb.set('recovery:d1old', { docId: 'd1old', at: 1, title: 't', json: '{}' })
+  ok((await getRecovery('d1old'))?.docId === 'd1old', 'an older copy left in IndexedDB is still read (migration)')
 }
 
 H('member key: the private half lives in the host; localStorage keeps only the pubkey')
 {
   reset(); setHost(true); resetDocStoreForTest()
-  const { deviceIdentity } = await freshOnline()
   const id = await deviceIdentity('d2')
   const held = stored('memberkey')
   ok(held?.docId === 'd2' && held.pub === id.pub && held.priv === id.priv, 'the host holds the full member key, tagged with its document')
   const mirror = JSON.parse(ls.get('bento-member-d2') ?? 'null')
-  ok(mirror?.pub === id.pub, 'localStorage still names this device\'s pubkey (presence and People views read it)')
+  ok(mirror?.pub === id.pub, 'localStorage still names this device\'s pubkey (the People views read it)')
   ok(mirror && !('priv' in mirror), 'and holds NO private key')
-  // a later page: the host already holds this document's key from before, and
-  // this browser's localStorage has nothing — the identity comes back from the host
-  store.set('memberkey', new TextEncoder().encode(JSON.stringify({ docId: 'd2b', pub: 'HELD-PUB', priv: 'HELD-PRIV' })))
+  ok(cachedMemberPub('d2') === id.pub, 'presence can read the pubkey this page resolved')
+  // a later page: the host already holds this document's key, localStorage has nothing
+  store.set('memberkey', enc.encode(JSON.stringify({ docId: 'd2b', pub: 'HELD-PUB', priv: 'HELD-PRIV' })))
   const id2 = await deviceIdentity('d2b')
   ok(id2.pub === 'HELD-PUB' && id2.priv === 'HELD-PRIV', 'a later page gets its identity back from the host')
   ok(JSON.parse(ls.get('bento-member-d2b') ?? 'null')?.pub === 'HELD-PUB', 'and re-publishes the pubkey for the readers')
@@ -138,9 +179,7 @@ H('member key: the private half lives in the host; localStorage keeps only the p
 H('a key this browser already held is adopted, and its private half leaves localStorage')
 {
   reset(); setHost(true); resetDocStoreForTest()
-  const { deviceIdentity } = await freshOnline()
-  const old = { pub: 'OLD-PUB', priv: 'OLD-PRIV' }
-  ls.set('bento-member-d3', JSON.stringify(old))
+  ls.set('bento-member-d3', JSON.stringify({ pub: 'OLD-PUB', priv: 'OLD-PRIV' }))
   const id = await deviceIdentity('d3')
   ok(id.pub === 'OLD-PUB' && id.priv === 'OLD-PRIV', 'the same identity: this device keeps its People entry')
   ok(stored('memberkey')?.priv === 'OLD-PRIV', 'the host now holds the private key')
@@ -151,40 +190,58 @@ H('a key this browser already held is adopted, and its private half leaves local
 H('a host entry for another document is never used')
 {
   reset(); setHost(true); resetDocStoreForTest()
-  store.set('memberkey', new TextEncoder().encode(JSON.stringify({ docId: 'someone-else', pub: 'X-PUB', priv: 'X-PRIV' })))
-  const { deviceIdentity } = await freshOnline()
+  store.set('memberkey', enc.encode(JSON.stringify({ docId: 'someone-else', pub: 'X-PUB', priv: 'X-PRIV' })))
   const id = await deviceIdentity('d4')
   ok(id.pub !== 'X-PUB', 'a key tagged for another document is not adopted')
   ok(stored('memberkey')?.docId === 'd4', 'this document\'s own key replaces it')
 }
 
-H('a host that refuses, or never answers, falls back to the old storage')
+H('a REFUSING host: nothing falls back to the shared origin')
 {
   reset(); setHost(true); resetDocStoreForTest(); mode = 'refuse'
-  const a = await freshOnline()
-  const id = await a.deviceIdentity('d5')
-  const raw = JSON.parse(ls.get('bento-member-d5') ?? 'null')
-  ok(raw?.priv === id.priv, 'refused: the member key is kept whole in localStorage')
-  ok(await putRecovery(doc('d5') as never) === false || !store.has('recovery'), 'refused: recovery is not claimed as held by the host')
+  const lsBefore = JSON.stringify([...ls])
+  const id = await deviceIdentity('d5')
+  ok(JSON.stringify([...ls]) === lsBefore, 'no new entry in localStorage — the private key is never written there')
+  ok(cachedMemberPub('d5') === id.pub, 'the identity is kept for this page')
+  // the host comes back: the SAME identity is offered again and stored
+  mode = 'ok'
+  const again = await deviceIdentity('d5')
+  ok(again.pub === id.pub && stored('memberkey')?.pub === id.pub, 'next call offers the same identity to the host, which now stores it')
+  // recovery refused (too large): off for that document, said once, nothing in IndexedDB
+  mode = 'refuse'
+  let told = 0
+  const off = onRecoveryOff(() => { told++ })
+  ok(await putRecovery(doc('d5') as never) === false, 'a refused recovery reports not stored')
+  await putRecovery(doc('d5') as never)
+  off()
+  ok(recoveryOff('d5') && told === 1, 'recovery is turned off for that document, and the app is told once')
+  ok(!idbWrites.some((w) => w.endsWith('recovery')), 'and nothing was written to IndexedDB')
+}
 
-  reset(); setHost(true); resetDocStoreForTest(new ExtensionBackend(40)); mode = 'silent'
-  const b = await freshOnline()
-  const t = Date.now()
-  const id2 = await b.deviceIdentity('d6')
-  ok(Date.now() - t < 2000, 'silent: the wait is bounded (no hang)')
-  ok(JSON.parse(ls.get('bento-member-d6') ?? 'null')?.priv === id2.priv, 'silent: the member key is kept whole in localStorage')
-  ok(await getRecovery('d6') === null, 'silent: getRecovery falls back and returns nothing (no throw)')
+H('a SILENT host: no fallback, and a failed read never mints or writes a key')
+{
+  reset(); setHost(true); resetDocStoreForTest(fast()); mode = 'silent'
+  // this device already has an identity: the host stored it on an earlier page,
+  // and localStorage carries only its pubkey
+  ls.set('bento-member-d6', JSON.stringify({ pub: 'MY-PUB' }))
+  let threw = false
+  try { await deviceIdentity('d6') } catch { threw = true }
+  ok(threw, 'the read fails the attempt (the caller retries) instead of inventing a key')
+  ok(JSON.parse(ls.get('bento-member-d6') ?? 'null')?.pub === 'MY-PUB' && !ls.get('bento-member-d6')!.includes('priv'),
+    'the device\'s pubkey is unchanged and no private key was written')
+  ok(await putRecovery(doc('d6') as never) === false, 'recovery: not stored this cycle')
+  ok(!idbWrites.some((w) => w.endsWith('recovery')) && !recoveryOff('d6'), 'nothing in IndexedDB, and recovery stays on for the next cycle')
+  ok(await getRecovery('d6') === null, 'getRecovery falls back to reading only, and returns nothing (no throw)')
 }
 
 H('only the two agreed names are used, and values travel as bytes')
 {
-  ok(seen.every((s) => s.op === 'store.list' || s.name === 'recovery' || s.name === 'memberkey'),
-    `names used: ${[...new Set(seen.map((s) => s.name))].join(', ') || '(none)'}`)
   reset(); setHost(true); resetDocStoreForTest()
   await putRecovery(doc('d7') as never)
-  const { deviceIdentity } = await freshOnline()
   await deviceIdentity('d7')
   const sets = seen.filter((s) => s.op === 'store.set')
+  ok(seen.every((s) => s.op === 'store.list' || s.name === 'recovery' || s.name === 'memberkey'),
+    `names used: ${[...new Set(seen.map((s) => s.name))].join(', ')}`)
   ok(sets.length >= 2 && sets.every((s) => s.bytesIsU8), 'every store.set carries a Uint8Array')
   ok((await docStore()!.list()).join(',') === 'memberkey,recovery', 'list returns exactly the two entries')
 }

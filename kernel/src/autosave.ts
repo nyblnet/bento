@@ -193,16 +193,46 @@ function contentOnly(doc: KernelDoc): string {
  * that is exactly where a shared deck tends to be opened. Claiming a backstop
  * that isn't there would be worse than saying nothing.
  */
+/** Documents whose recovery copy the host refused (e.g. too large) in this page. */
+const recoveryRefused = new Set<string>()
+const recoveryOffListeners = new Set<(docId: string, reason: string) => void>()
+
+/** Has crash recovery been switched off for this document in this page? True
+ *  after the per-document store refused its recovery copy (too large, say). */
+export function recoveryOff(docId: string): boolean {
+  return recoveryRefused.has(docId)
+}
+
+/** Be told, once per document, that its crash recovery is off — so the app can
+ *  say so instead of implying a backstop that isn't there. Returns unsubscribe. */
+export function onRecoveryOff(fn: (docId: string, reason: string) => void): () => void {
+  recoveryOffListeners.add(fn)
+  return () => { recoveryOffListeners.delete(fn) }
+}
+
 export async function putRecovery(doc: KernelDoc): Promise<boolean> {
   const snap: Snapshot = { docId: doc.docId, at: Date.now(), title: doc.title, json: contentOnly(doc) }
   // Under a host with a per-document store (docstore.ts), the recovery copy
   // lives THERE — out of the storage origin every local file shares — and any
-  // copy this origin still holds is removed. A host that fails falls back to
-  // the store below, which is exactly where this lived before.
+  // copy this origin still holds is removed. While that host is present the
+  // copy NEVER falls back to this origin: a host that doesn't answer in time
+  // may still be writing (the next autosave cycle writes again), and one that
+  // refuses (too large) turns recovery off for the document, said once.
   const ds = docStore()
-  if (ds && await setJSON(ds, 'recovery', snap)) {
-    void tx(RECOVERY, 'readwrite', (s) => s.delete(doc.docId))
-    return true
+  if (ds) {
+    if (recoveryRefused.has(doc.docId)) return false
+    const out = await setJSON(ds, 'recovery', snap)
+    if (out === 'stored') {
+      void tx(RECOVERY, 'readwrite', (s) => s.delete(doc.docId))
+      return true
+    }
+    if (out === 'refused') {
+      recoveryRefused.add(doc.docId)
+      const reason = 'the extension declined to keep a recovery copy of this document'
+      console.info('[bento] crash recovery is off for this document:', reason)
+      for (const fn of recoveryOffListeners) { try { fn(doc.docId, reason) } catch { /* a listener's problem */ } }
+    }
+    return false
   }
   const key = await tx(RECOVERY, 'readwrite', (s) => s.put(snap))
   return key != null

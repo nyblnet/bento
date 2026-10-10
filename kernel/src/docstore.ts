@@ -24,17 +24,43 @@
 
 export type DocStoreName = 'recovery' | 'memberkey'
 
+/** What became of a write: the host STORED it, the host answered and REFUSED
+ *  it (e.g. too large), or it never answered in time. A write that went
+ *  unanswered may still complete on the host's side. */
+export type SetOutcome = 'stored' | 'refused' | 'unanswered'
+
 export interface DocStore {
   /** The stored bytes, or null when the entry is absent. THROWS if the host
-   *  could not answer, so a caller can tell "nothing kept" from "host down". */
+   *  did not answer or refused, so a caller can tell "nothing kept" apart. */
   get(name: DocStoreName): Promise<Uint8Array | null>
-  /** Whether the host stored it. */
-  set(name: DocStoreName, bytes: Uint8Array): Promise<boolean>
-  /** Names present for this document. THROWS if the host could not answer. */
+  set(name: DocStoreName, bytes: Uint8Array): Promise<SetOutcome>
+  /** Names present for this document. THROWS if the host did not answer. */
   list(): Promise<DocStoreName[]>
   /** Whether the host removed it (true also when it was already absent). */
   delete(name: DocStoreName): Promise<boolean>
 }
+// While a host with this store is present, callers do NOT fall back to the
+// storage origin every local file shares when a request fails: a host that
+// didn't answer in time may still complete the write. See autosave.ts and
+// sync/online.ts deviceIdentity.
+
+/** How long to wait, by kind of request (ms). */
+export interface DocStoreTimeouts {
+  /** Until the host has answered once. The first request of a page also waits
+   *  on the host reading this document's file from disk, on a worker that may
+   *  be starting cold. */
+  firstProbe: number
+  get: number
+  /** A write: a base, plus a share per transfer chunk (large values travel as
+   *  several runtime round trips and a commit). */
+  setBase: number
+  setPerChunk: number
+  /** list / delete. */
+  small: number
+}
+export const DEFAULT_TIMEOUTS: DocStoreTimeouts = { firstProbe: 15_000, get: 60_000, setBase: 10_000, setPerChunk: 2_000, small: 10_000 }
+/** The transfer chunk the extension relay uses for a large value. */
+const CHUNK = 3 * 1024 * 1024
 
 const CH = '__bento_tray__'
 // Distinct from the extension's own page-bridge ids, which share the channel.
@@ -42,15 +68,19 @@ const ID_PREFIX = 'bento-docstore-'
 let seq = 0
 
 type HostResult = { ok?: boolean; reason?: string; bytes?: unknown; names?: unknown } | undefined
+const TIMEOUT = 'timeout'
 
 /** The extension-backed store. One round trip per call; a host that never
- *  answers resolves as a failure after `timeoutMs` instead of hanging. */
+ *  answers resolves as a failure after a bounded wait instead of hanging. */
 export class ExtensionBackend implements DocStore {
-  // an explicit field, not a parameter property: node rigs run strip-only TS
-  private readonly timeoutMs: number
-  constructor(timeoutMs = 4000) { this.timeoutMs = timeoutMs }
+  // explicit fields, not parameter properties: node rigs run strip-only TS
+  private readonly t: DocStoreTimeouts
+  private answered = false
+  constructor(timeouts: Partial<DocStoreTimeouts> = {}) { this.t = { ...DEFAULT_TIMEOUTS, ...timeouts } }
 
-  private ask(op: string, payload: object): Promise<HostResult> {
+  private ask(op: string, payload: object, ms: number): Promise<HostResult> {
+    // until the host has answered once, every request may be the slow first one
+    const wait = this.answered ? ms : Math.max(ms, this.t.firstProbe)
     return new Promise((resolve) => {
       const id = `${ID_PREFIX}${Date.now()}-${seq++}`
       const onMessage = (ev: MessageEvent) => {
@@ -58,36 +88,39 @@ export class ExtensionBackend implements DocStore {
         if (ev.source !== window || !d || d[CH] !== true || d.dir !== 'res' || d.id !== id) return
         window.removeEventListener('message', onMessage)
         clearTimeout(timer)
+        this.answered = true
         resolve(d.result as HostResult)
       }
       const timer = setTimeout(() => {
         window.removeEventListener('message', onMessage)
-        resolve({ ok: false, reason: 'timeout' })
-      }, this.timeoutMs)
+        resolve({ ok: false, reason: TIMEOUT })
+      }, wait)
       window.addEventListener('message', onMessage)
       window.postMessage({ [CH]: true, dir: 'req', id, op, payload }, '*')
     })
   }
 
   async get(name: DocStoreName): Promise<Uint8Array | null> {
-    const r = await this.ask('store.get', { name })
+    const r = await this.ask('store.get', { name }, this.t.get)
     if (!r?.ok) throw new Error(`DocStore get ${name}: ${r?.reason ?? 'no answer'}`)
     return r.bytes instanceof Uint8Array ? r.bytes : null
   }
 
-  async set(name: DocStoreName, bytes: Uint8Array): Promise<boolean> {
-    const r = await this.ask('store.set', { name, bytes })
-    return r?.ok === true
+  async set(name: DocStoreName, bytes: Uint8Array): Promise<SetOutcome> {
+    const ms = this.t.setBase + this.t.setPerChunk * Math.ceil(bytes.length / CHUNK)
+    const r = await this.ask('store.set', { name, bytes }, ms)
+    if (r?.ok === true) return 'stored'
+    return r?.reason === TIMEOUT ? 'unanswered' : 'refused'
   }
 
   async list(): Promise<DocStoreName[]> {
-    const r = await this.ask('store.list', { prefix: '' })
+    const r = await this.ask('store.list', { prefix: '' }, this.t.small)
     if (!r?.ok || !Array.isArray(r.names)) throw new Error(`DocStore list: ${r?.reason ?? 'no answer'}`)
     return r.names.filter((n): n is DocStoreName => n === 'recovery' || n === 'memberkey')
   }
 
   async delete(name: DocStoreName): Promise<boolean> {
-    const r = await this.ask('store.delete', { name })
+    const r = await this.ask('store.delete', { name }, this.t.small)
     return r?.ok === true
   }
 }
@@ -123,7 +156,7 @@ export async function getJSON<T>(store: DocStore, name: DocStoreName): Promise<T
   try { return JSON.parse(dec.decode(bytes)) as T } catch { return null }
 }
 
-/** Store a JSON value; whether the host stored it. */
-export function setJSON(store: DocStore, name: DocStoreName, value: unknown): Promise<boolean> {
+/** Store a JSON value. */
+export function setJSON(store: DocStore, name: DocStoreName, value: unknown): Promise<SetOutcome> {
   return store.set(name, enc.encode(JSON.stringify(value)))
 }
