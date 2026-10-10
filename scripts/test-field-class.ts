@@ -144,11 +144,32 @@ console.log('\nthe unknown-key rule: file + duplicate only')
   }
 }
 
-console.log('\nprojectForCopy builds from empty — a field absent from the live doc is never invented')
+console.log('\nprojectForCopy builds from empty — nothing is invented except a tier\'s {set} mode cell')
 {
   const bare = { docId: 'D', title: 'only' }
   const out = projectForCopy(bare, MAP, 'reader', OPTS)
-  ok(same(keysOf(out), ['docId', 'title']), 'only the present fields appear; no readonly/collab fabricated')
+  ok(same(keysOf(out), ['docId', 'readonly', 'title']),
+    'only the present fields appear, plus readonly (the reader tier sets it) — no collab fabricated')
+}
+
+console.log('\na {set} mode cell fires even when the SOURCE has no such field')
+{
+  // Most real documents carry neither readonly nor template. The set cells are
+  // a property of the tier, so they must not depend on the source having the
+  // key — a doc with no readonly must still yield a READ-ONLY reader copy.
+  const noModes = () => { const d = liveDoc() as Record<string, unknown>; delete d.readonly; delete d.template; return d }
+  for (const tier of ['reader', 'audience', 'package', 'link'] as Tier[]) {
+    const out = projectForCopy(noModes(), MAP, tier, OPTS) as Record<string, unknown>
+    ok(out.readonly === true, `${tier} copy of a doc with NO readonly key is still read-only`)
+    ok(!('template' in out), `${tier} copy invents no template`)
+  }
+  const tpl = projectForCopy(noModes(), MAP, 'template', OPTS) as Record<string, unknown>
+  ok(tpl.template === true, 'template copy of a doc with NO template key is still a template')
+  ok(!('readonly' in tpl), 'and invents no readonly')
+  for (const tier of ['file', 'duplicate', 'invite', 'copyJSON'] as Tier[]) {
+    const out = projectForCopy(noModes(), MAP, tier, OPTS) as Record<string, unknown>
+    ok(!('readonly' in out) && !('template' in out), `${tier} invents no mode field (no set cell there)`)
+  }
 }
 
 console.log('\ndocContentKey: counts content + history, excludes capability + bookkeeping, skips absent')
