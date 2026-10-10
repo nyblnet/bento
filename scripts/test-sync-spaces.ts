@@ -282,6 +282,34 @@ console.log('')
 // chosen. STRICT=1 turns them into assertions — flip it in CI the moment the
 // decisions land, and this rig becomes their enforcement.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// page.design is a page property REGISTER, like width or cover: it travels,
+// concurrent choices converge on one, and "Same as parent" (the key DELETED)
+// travels as a deletion — never as a stored empty value.
+// ---------------------------------------------------------------------------
+{
+  const pd = (d: Doc, id: string) => (d.pages.find((p) => p.id === id) as { design?: unknown } | undefined)?.design
+  const a = new Replica('pd-a', baseDoc())
+  const b = new Replica('pd-b', clone(a.doc))
+  const setOn = (r: Replica, v: string | null) => r.mutate((d) => {
+    const p = d.pages.find((x) => x.id === 'p2') as { design?: unknown }
+    if (v === null) delete p.design
+    else p.design = v
+  })
+  b.receive(setOn(a, 'ledger'))
+  ok(pd(b.doc, 'p2') === 'ledger', 'a page design chosen on one replica arrives on the other')
+  const opsA = setOn(a, 'studio')
+  const opsB = setOn(b, 'riso')
+  a.receive(opsB)
+  b.receive(opsA)
+  ok(pd(a.doc, 'p2') === pd(b.doc, 'p2') && ['studio', 'riso'].includes(String(pd(a.doc, 'p2'))),
+    `two concurrent page-design choices converge on one of them (${String(pd(a.doc, 'p2'))})`)
+  b.receive(setOn(a, null))
+  ok(!Object.hasOwn(b.doc.pages.find((p) => p.id === 'p2')!, 'design') && pd(a.doc, 'p2') === undefined,
+    '"Same as parent" (the key deleted) arrives as a deletion — no key is left behind')
+  ok(JSON.stringify(a.doc) === JSON.stringify(b.doc), 'both replicas end byte-identical')
+}
+
 const STRICT = process.env.STRICT === '1'
 if (STRICT) {
   ok(worst.dupBlockId === 0, `no merge produced the same block id on two pages (worst ${worst.dupBlockId})`)

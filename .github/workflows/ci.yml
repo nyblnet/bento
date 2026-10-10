@@ -101,9 +101,16 @@ jobs:
 
       - name: Typecheck kernel (standalone)
         # Apps also typecheck kernel transitively through their imports; this
-        # catches kernel-only errors under the kernel's own flags.
+        # catches kernel-only errors under the kernel's own flags. It ALSO
+        # evaluates kernel/src/docfields.typecheck.ts (included via "src"): the
+        # field-class table's type-level test, whose @ts-expect-error lines fail
+        # this step if a guard is weakened (no default cell, 'per-field' only in
+        # the mode row, every mode field has a rule).
         working-directory: slides
         run: node_modules/.bin/tsc -p ../kernel
+
+      - name: Field-classification rig
+        run: node scripts/test-field-class.ts
 
       - name: Typecheck convert (standalone)
         # convert/ is a library beside the apps (the CLI and bento.page/import
@@ -208,6 +215,18 @@ jobs:
           for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati Australia/Lord_Howe; do
             echo "--- $tz"
             TZ=$tz node scripts/test-spaces-journal.ts
+          done
+
+      - name: Spaces timeline and workload rig (several timezones)
+        # A chart is a picture of data that came out of a file somebody mailed
+        # you, and every way it can be wrong is a way it stays silent about it:
+        # a bar in the wrong month still looks like a bar. Half of what this rig
+        # asserts is a date, so it runs in five timezones for the reasons
+        # journal.ts records — including a half-hour DST offset.
+        run: |
+          for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati Australia/Lord_Howe; do
+            echo "--- $tz"
+            TZ=$tz node scripts/test-spaces-gantt.ts
           done
 
       - name: Magic notes evaluator (several timezones)
@@ -760,6 +779,14 @@ jobs:
         # $1 leaves a hole in a translated sentence. All of them are visible
         # only to someone who reads that language.
         run: node scripts/test-webext-i18n.ts
+
+      - name: WebExtension assistant rig
+        # The Assistant is extension-only: the page holds no key, so what the
+        # extension ACCEPTS decides the feature. A frame from an iframe on a
+        # slide, a page the user never allowed, an abort naming another tab's
+        # turn, a describe or an error that echoes the key or the endpoint —
+        # every one of those is silent in a browser and loud here.
+        run: node scripts/test-webext-assistant.ts
 
       - name: Save-intent rig
         # A host polyfilling showSaveFilePicker sees only the options bag, and

@@ -6695,6 +6695,194 @@ chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
 
+
+## 2026-09-10 — a chart in bento/spaces is a `view` LAYOUT, not a `chart` block
+
+Two shapes landed together — a timeline (`layout:"gantt"`) and a workload chart
+(`layout:"workload"`) — and the question they forced is where a chart lives in
+this app at all. Nothing in the format held one before. The answer binds every
+chart that comes after, so it is written here rather than only in the source.
+
+**They are layouts.** Three reasons, in the order they should be weighed.
+
+1. **The input vocabulary already exists and cannot be duplicated cheaply.**
+   Both shapes need `source` (which pages), `filter` (which of them), `sort` (in
+   what order) and `groupBy` (bucketed how). A `chart` block would have to grow
+   four keys carrying those same four meanings. The format is permanent and
+   there is no server, so that is not a duplication that gets tidied later — it
+   is two vocabularies for one question, in every file ever saved. `fields.ts`
+   already refuses to grow a second ordering mechanism beside `sort` for exactly
+   this reason.
+
+2. **The degradation is measurably better, and it was measured.** `layoutOf()`
+   maps an unrecognised layout to `board`. A shell built from the previous
+   release, shown `{"type":"view","layout":"gantt"}`, renders a board of the
+   same pages, keeps `layout:"gantt"` through a save, and keeps the new `start`
+   prop blocks too — checked in a browser against a real `origin/main` build,
+   not inferred. A `chart` block would have fallen to the unknown-type path and
+   rendered its `html`: one line of text where a schedule was.
+
+3. **The honest counter-argument loses on scope, and is recorded so it can be
+   re-opened.** A Gantt genuinely is a layout of pages — one page, one bar. A
+   workload chart genuinely is an AGGREGATE: it has fewer marks than rows, and
+   no mark is a page. If those two had wanted different homes the right answer
+   would have been to say so. They do not, because the aggregation is a property
+   of the OUTPUT while every input key keeps the meaning it already had —
+   `groupBy` is "the field the buckets come from", which is what it means on a
+   board too. A board with summed columns is what a workload chart is.
+
+**What this decision does NOT cover, and what should be a block.** A chart of
+data that is not pages — a `table` block's numbers, say. It has no `source`, no
+`filter` and no rows, and shares nothing with a view but the engine. When that
+arrives it should be its own block type, and this entry is not a precedent
+against it.
+
+**The engine is the kernel's, read-only.** `kernel/src/charts.ts`, imported the
+way dash already imports it from outside slides. Measured cost of pulling the
+engine into the spaces shell: **+6.2KB** compressed for charts-lite and anim.ts
+together, against a shell of ~278KB.
+
+**Six is the ceiling for the one cycling layout button.** One control and one
+word beats a menu at three or four shapes; at six, five clicks to cross the ring
+is already the worse trade. A seventh shape should convert that control into a
+picker rather than extend the cycle.
+
+### Two consequences of adding `start` to the default schema
+
+**Absent `start` is the installed base, not an edge case.** The tracker shipped
+with `due` and nothing else, so every issue in every file already written has a
+due date and no start. Drawing those as zero-width bars would render every
+existing tracker as a column of hairlines. They draw as a **milestone diamond**
+at the one date the author gave — a date with no duration, which is what the
+file says. The symmetric case (a start with no due) is a diamond too.
+
+**A picture of somebody else's numbers must not be quietly wrong.** Each
+bad-data case is decided, not left to arithmetic: a due date before the start is
+drawn between the two dates that are really in the file and FLAGGED, never
+silently swapped (a swap draws a confident schedule nobody typed, and looks
+correct); a malformed date is an absent date; a negative or non-numeric estimate
+is excluded from the sum AND counted, because a −3 absorbed into a bar makes
+somebody look lighter than the work they hold; and an oversized view draws a
+capped, deterministically ordered chart that says how many rows it did not draw.
+
+**Dates are integer day numbers computed arithmetically (days-from-civil), with
+no `Date` constructed for any comparison.** The rig runs under five timezones,
+and that matrix earned its keep in this change: a sabotage replacing the
+arithmetic with `new Date(y, m-1, d)` passed every assertion under `TZ=UTC` and
+failed under `TZ=Pacific/Kiritimati`. A one-timezone run cannot see that class
+of bug at all, from the inside.
+## 2026-09-09 — a calendar is ONE layout with two shapes, and its date is a rule
+
+bento/spaces gained a fifth view layout, `calendar`. Three choices in it are
+the kind a later session would otherwise re-open and settle differently.
+
+**A month grid and a timeline are ONE entry in the layout cycle, not two.**
+They are not peers of board/list/table/gallery. Those four answer four
+different questions; these two answer one question — *when?* — at two
+densities, and both densities are real in this app: journal entries are daily
+and dense, a reading list's dates are sparse across years. A month grid is
+useless on the second (thirty-six mostly-empty months to page through) and a
+timeline cannot show the shape of a week. So both ship, behind ONE cycle entry,
+with the choice on a second button that appears only while the calendar is on.
+
+The reason it is not six entries is that the layout control is a CYCLE, and a
+cycle's cost is linear: every added shape is one more click for everybody who
+did not want it, in both directions. The precedent for the alternative was
+already in the file — `groupBy` is a board-only parameter with its own button,
+hidden for every other shape — so this is the existing answer to "one shape,
+one parameter" rather than a new mechanism. `span` is a STRING (`timeline`,
+absent = month) and not a boolean, because `week` and `year` are the obvious
+next two and a boolean cannot be widened afterwards.
+
+**Which date a page sits on is FIXED and stated, not configured.** The rule is:
+`page.journal` when it is a real ISO date, else the first `date`-typed field in
+schema order the page carries a real value for, else no date. A `dateBy` key on
+the view would be a permanent format field bought to express a preference
+nobody has asked for; the format's own rule is that every key ships forever
+into files on other people's disks. What the UI owes instead is HONESTY, so the
+view prints the rule above the grid.
+
+**A page with no date is SHOWN, in its own bucket.** This is the half that
+would be tempting to skip. A calendar that silently holds fewer pages than the
+count beside its own title is a view lying about what it contains — and the
+pages it drops are precisely the ones somebody forgot to date, which is the
+thing they most need to see. Same reasoning for a digit-shaped non-date
+(`2026-13-99`): it is undated, never rolled forward into a real day it is not,
+because every Date-based formatter will do that silently and confidently.
+
+**Dates are built from COMPONENTS and formatted through Intl, never parsed.**
+`new Date('2026-01-01')` is UTC midnight by spec and is the previous day for
+every reader west of Greenwich; journal.ts already carried this argument and
+the calendar is where it bites hardest, because a whole grid shifts by one
+column. The one place UTC is correct is subtracting two calendar dates, where
+`Date.UTC` is what makes a day exactly a day across a daylight-saving boundary.
+Month names, weekday names and the reader's FIRST DAY OF THE WEEK all come from
+`Intl` — the last of those shifts the grid rather than relabelling it, so a
+hand-written table gets the columns wrong in half the world as well as being
+untranslatable (the extractor sweeps `t()` literals, so `t(MONTHS[m])` reaches
+no catalog while the packer reports 100%).
+
+Measured in a built shell rather than asserted: February 2026 draws 28 cells in
+four rendered rows in a Sunday-first locale and 35 in five in a Monday-first
+one, August 2026 draws 42 in six, September 35 in five. The cell count is
+derived from the month AND the reader; a fixed 35 silently loses the last days
+of a six-week month, which is the classic failure of every calendar grid.
+---
+
+## 2026-09-10 — bento/spaces: a tag is the `#` in the prose, and nothing else
+
+**Decided by** bento-team-spaces, on `spaces-tags`.
+
+**A tag has exactly one storage location: the text of the block.** There is no
+`Page.tags` array, and adding one later would be a regression rather than an
+optimisation. The index (`spaces/src/tags.ts buildTagIndex`) is derived at read
+time, invalidated by `store.reindex()` like `SpaceIndex`, and built lazily
+because `touch()` reindexes on every keystroke of a typing run.
+
+The argument is the one `buildIndex` already made for backlinks, and it is
+about who else writes `html`: an agent calling `updateBlock`, a Markdown
+import, a remote collaborator's CRDT op, a hand-edited `#bento-doc`. None of
+them knows tags exist. A derived index is simply wrong for a moment and then
+right; a stored array is wrong permanently, and nothing in a format with no
+server can reconcile it.
+
+It also makes **format additivity free rather than argued**, which was measured
+rather than assumed: a build of the previous release renders a tagged paragraph
+as ordinary prose, byte-identical html, no text lost — because a tag adds no
+field, no attribute and no block type. The chip is drawn at render into the
+DOM and taken back out of anything the editor commits (`readInline`), so the
+model never learns it happened; the same move `wireCode` makes for syntax
+colour.
+
+**`#project/bento` is ONE nested tag.** Decided now because the timing is the
+whole argument: if this build read it as the flat tag `project` followed by the
+text `/bento`, adding nesting afterwards would silently change the meaning of
+text already sitting in files on other people's disks — the one-way hazard
+sanitize.ts records for the href allowlist. A parent nobody wrote gets no index
+entry of its own; what nesting buys is that a query for `#project` reaches it.
+
+**What is NOT a tag** is the expensive half, and every clause has a case in
+`scripts/test-spaces-model.ts` that runs the parser: a `#` must open a word (so
+`C#`, `a#b` and every URL fragment are out), must be followed immediately by a
+tag character (so `# Title`, the Markdown heading, is out — and markdown.ts's
+own reader requires that same space), must not be all digits (`#42`, `#404`),
+and must not be a bare CSS hex colour (`#fff`, `#f7a600`). Inline `<code>` and
+`<a>` are skipped structurally by both readers, which is what makes this app's
+own `#p/` page links impossible to misread: an href is an attribute, never
+text.
+
+**The chip carries no `href`.** Two reasons, and the second is the safety net:
+inventing a `#t/` fragment form would be the one-way hazard above, and an `<a>`
+with no href is exactly what `sanitizeInline` UNWRAPS — so a chip that ever did
+leak into `Block.html` is removed by the canonicalizer that already runs on
+blur, leaving the text. The feature fails back to plain prose rather than into
+the format.
+
+**Related, found while doing this:** `unknownSourceKeys` existed in `fields.ts`
+and nothing called it, so a view whose `source` a build cannot read fell back to
+the backlog silently while its header still named the source. `render.ts` says
+so now. Builds already shipped cannot be told, so a view sourced on a tag reads
+as Issues on them — stated in the changelog rather than glossed.
 ## 2026-09-12 — bento/dash keys its theme off `data-theme`, like the other three apps
 
 **The divergence the maintainer asked dash to fix was a MECHANISM, not a
@@ -9375,3 +9563,279 @@ block. Block `html` still goes through `sanitizeInline` in the importer.
 `![[Page]]`/`![[Page#Section]]`, GFM footnotes, `:::columns`/`:::hero`/`:::card`):
 the syntax is fixed in `docs/spaces-agents.md` so the branches that ship them
 agree with each other and with this importer.
+
+## 2026-09-26 — bento/spaces: the author picks the design; the reader's theme picks its palette
+
+**The maintainer's ruling, and what it replaces.** Designs are selectable in the
+document. The author picks the design; the reader's light/dark setting picks
+between that design's two palettes; the app chrome stays the reader's. This
+reverses the second half of the 2026-08-22 entry ("bento/spaces goes dark, and
+its reading column goes with it"), which concluded:
+
+> So in spaces the reading surface IS chrome and it follows the reader.
+
+That was the right call while the column had nothing of the author's to show —
+`doc.theme`'s colours were painted only by the thumbnail. It is superseded now
+that a design exists. What survives from it: the theme is still a viewer
+preference and never document data, the three-state light/dark rule, and dark
+being `@media screen` so paper is light. `kernel/src/theme.ts` already said "the
+document does not invert… a slide's background is document data the author
+chose"; spaces now joins slides there.
+
+**Format (additive).** `doc.design`: a built-in name or a key of `doc.designs`.
+ABSENT is the default look, and returning to the default DELETES the key
+(`designs.ts setDesign`), so a space that tried a design and went back is
+byte-identical to one that never did. An unknown name renders the default,
+round-trips untouched, and `validate()` reports `unknown-design`. Document-wide
+for now; the resolver takes a name rather than reading a fixed field, so a
+later `Page.design` resolves through the same function and overrides it
+without a format change.
+
+**A design is data, not a stylesheet** (the maintainer's follow-up: designs are
+an open set, built-in and custom). Two palettes of thirteen colour roles, four
+font roles, and a closed set of switches (`designs.ts PROPS`). ONE base
+stylesheet, `spaces/src/designs.css`, reads the custom properties and data
+attributes `applyDesign()` writes onto the reading surface (`.sp-main`, and the
+print root). Every rule is keyed under `[data-sp-design]` or a `data-sd-*`
+attribute, which is what makes "no design" the untouched stylesheet — the model
+rig parses the file and asserts it. Adding a built-in is a data entry. Switches
+added so far: `headStyle headCase label labelInk h2 dropCap callout quote table
+numerals check tile shadow justify divider bullet`, plus the metrics
+`size leading titleSize titleWeight titleTracking titleLeading headWeight radius
+rule`.
+
+**Six built-ins**, each from a publishing tradition and differing in structure,
+not palette: Ledger (the financial report / Swiss grid), Almanac (the literary
+quarterly), Studio (the Bento mark as layout grammar — the tile), Broadsheet
+(the newspaper), Typescript (the manuscript / RFC), Riso (the risograph zine).
+Almanac's accent is #b07800 rather than the prototype's #c98a0b: the drop cap
+and a done box are marks that carry meaning, and #c98a0b measured 2.56:1 on its
+paper.
+
+**Custom designs are tier 1 and the whole story: token-only.** `doc.designs`
+holds overrides on a built-in base. Every value is VALIDATED, never sanitized:
+a colour must be `#rgb`/`#rrggbb`, a font a name from `FONT_STACKS` or
+`asset:<key>` naming a `data:font/…` asset, a switch one of its words, a number
+inside its range. A failure is dropped to the base's value and named by
+`validate()`. No author text becomes CSS: stacks are the module's own strings,
+an embedded face gets a family name derived from its asset key and is loaded
+through the FontFace API (no `@font-face` text), and attribute values are
+PROPS words. A doc-local name that is also a built-in's shadows nothing.
+
+**Raw author CSS does not ship.** Deliberately not built, and the security
+review of the same day kept it that way: a stylesheet in a mailed file can
+fetch (tracking) and can overlay Save or the password gate. Revisiting it means
+its own field, its own sanitizer and its own review — never `designs.ts`, whose
+guarantee is that nothing in it is free text.
+
+**No design may hide text** (security review, finding 3: `design`/`designs` are
+ordinary CRDT registers, so any writer in a live space can restyle every
+reader's page — accepted, because a writer can already edit the words). The
+floors, stated in the validator: text, secondary text and accent text on paper,
+text on wells, text on the accent and on the tile all ≥ 4.5:1; a tile cell
+against the ink chosen for it ≥ 4.5:1; a FILLED callout's ink over the fill mix
+≥ 4.5:1 (a teal fork measured 4.27:1 in dark before this floor); size ≥ 0.85,
+line spacing ≥ 1.3, title ≥ 1.4em. There is no display, visibility or opacity
+switch, and the only generated `content` is constant decoration. A custom value
+that breaks a floor falls back; an ink the author did not set is re-chosen for
+a ground they did, so a dark accent is kept rather than refused.
+
+**Tone is meaning.** The first cut had a `tones: accent` switch that gave all
+five callout tones the design's one colour; Studio, Almanac and Typescript drew
+five identical boxes, the Note reading "the blue one" in coral. Measured in
+pixels, one distinct fill or label ink out of five in each. The switch is gone:
+the five tones are palette roles (`toneNote … toneCaution`) that every design
+names in its own register, and the validator holds them pairwise apart as
+PAINTED — the fill for a filled callout, the hue (rule, start bar, shadow)
+otherwise — at an sRGB distance of at least 24; a custom design that collapses
+them gets its base's five back. Measured after: five distinct fills or tone
+edges and five distinct label inks in every design and mode where the style
+colours them.
+
+**Consent stays chrome** (finding 1). The remote-content gate sits inside the
+column, so it reads the CHROME's tokens (captured at `:root` as `--sp-app-*`
+before any surface re-points them) and its own type. Measured in pixels with
+the design tokens overwritten to ink = paper: the gate stays 12.59:1 light and
+11.5:1 dark, identical to an honest design.
+
+**Nothing of a design goes into a `<style>` that reaches the shell** (finding
+2). The static preview draws the design — a thumbnail is the document's face —
+in its LIGHT palette, as inline styles written through `style.setProperty`, so
+the CSSOM re-parses every value; the preview's `<style>` holds only its fixed
+sheet. A custom design carrying `</style><script>` in its label, a colour, a
+font and two switches saved to a shell that passed `shell-gate.mjs` and ran
+nothing on reopen.
+
+**Markdown.** The export opens with `design: <name>`, plus a one-line
+`designs: {…}` JSON (valid YAML flow syntax, so no YAML parser) when the design
+is the space's own. Front matter holding only those keys is consumed on
+import; any other front matter keeps the old rule and is kept verbatim. An
+import adopts the design only into a space that has none.
+
+**Fonts: system stacks ship; the real faces are measured, not chosen.** Zero
+font bytes in this change. The intended faces, latin-subset woff2, cheapest of
+variable vs the minimum static weights: Ledger 137,504 B (Schibsted Grotesk
+variable 97,024 + JetBrains Mono variable 40,480); Almanac 271,072 B (Fraunces
+variable 149,092 + Source Serif 4 statics 121,980 — its variable file is
+252,108); Studio 76,868 B (Bricolage Grotesque variable). Total 485,444 B,
+about 647 KB as base64 — 2.4× today's whole 271,810 B shell. Broadsheet,
+Typescript and Riso were drawn for faces machines already have. The options,
+for the maintainer: every face in every shell (+~650 KB each); system stacks
+only (this change); or the author drops a font file in, which lands as an
+asset in that one document (built — Customise → Add a font file).
+
+**Open for security, not settled here.** An embedded face can remap glyphs, so
+a writer could make displayed text differ from stored text. It gives a writer
+nothing they cannot do by editing, but display and data diverging is a new
+shape; the consent gate is pinned to the system stack either way.
+
+**Guarded.** `scripts/test-spaces-model.ts` (design section, 1057 checks in
+all) and `scripts/test-spaces-roundtrip.ts` (Markdown front matter). Sabotaged
+and seen to fail, each at its own assertion: an unscoped rule in designs.css;
+every built-in resolving to Ledger; an unknown name resolving to something; the
+unknown-design finding removed; `design` stripped at load; the importer
+ignoring `design:`; the default writing `design: undefined`; the hex check
+removed; the contrast floors removed; the five tones collapsed to the accent in every
+built-in; the custom-design tone check removed; the surface no longer mapping
+the tone roles.
+
+**Cost.** Shell 271,810 → 300,835 B (+29,025, 10.7%); about 12 KB of it is 115
+new UI strings in nine languages.
+
+### Addendum, same day — a page can set its own design
+
+**The maintainer's ask ("go"): designs per page as well as per space.** The
+claim above — "the resolver takes a name… so a later `Page.design` resolves
+through the same function" — held for the LOOKUP and nothing else, and two traps
+were waiting. `resolveDesign(doc, name = doc.design)` reads the SPACE's design
+when handed `undefined`, so "this page names nothing" silently meant "the
+space's" wherever a caller passed an absent key straight through; the page
+resolver passes `null`. And designs.css matches by ANCESTOR attribute at equal
+specificity, so two design roots NESTED with different designs do not resolve
+to the nearer one: source order decides, and a switch only one of them sets
+leaks into the other. #559 put the space's design on the print root and every
+page inside it; with per-page designs that is a nesting. Measured (sabotage
+below): with the print root carrying the space's Almanac, Almanac's drop cap
+appeared on the Studio and Ledger pages in print.
+
+**Format (additive).** `page.design`: the same kind of value as `doc.design`
+(a built-in or a key of `doc.designs`). ABSENT = inherit; choosing "Same as
+parent" DELETES the key (`designs.ts setPageDesign`). Older builds ignore it and
+show the space's design; parseDoc keeps it like any unknown page field.
+
+**Precedence, nearest first: the page's own, the nearest ancestor's, the
+space's, today's look** (`designs.ts designSource` / `resolvePageDesign`, the
+one place a page's look is decided — the surface, the page root, print and the
+thumbnail all ask it). So a design on a section restyles its subtree. **The
+nearest KEY decides, even an unknown one:** a page naming a design this build
+does not know renders the DEFAULT look — it does not fall through to its
+parent's — and so do the pages under it. Falling through would make a typo, or
+a newer build's built-in, look like a deliberate choice of the section's.
+validate() names it as `unknown-design` with the page's id. There is no
+"Default" choice for a page: the format's value is a name, and the default has
+none.
+
+**No two design roots nest with different designs — the invariant that replaces
+scoping.** Rather than rewrite designs.css into `@scope (…) to (…)` blocks (the
+only CSS that gives nearest-root isolation; newest in Firefox, and a browser
+without it would drop every design rule), the structure guarantees it:
+
+- `renderPage` stamps its page ROOT (`article.sp-page`) with that page's
+  resolved design, and it is the only place in render.ts that stamps one.
+- The editor puts the SAME resolved design on `.sp-main` and on the page root
+  inside it (`editor.syncDesign`), preview included, so the one nesting that
+  exists is always identical.
+- The print root carries NONE; each page root carries its own, and the contents
+  list the space's.
+- Everything rendered inside a page — gallery cards, view rows, page cards, and
+  a transclusion embed (#428: `renderEmbed` draws the other page's blocks
+  through renderBlocks, never renderPage) — is built under the host's root and
+  so wears the HOST's design: the design is the page you are ON, not the page a
+  card or an embed points at.
+
+The model rig asserts each of those in source; the browser checks measure them.
+
+**Picker.** The page ⋯ menu gains **Design** (its hint says what the page wears
+now, "Inherited · Almanac" or its own), and the properties panel a Design row;
+both open one KERNEL menu (`editor.openPageDesign` → `menuAt`, filled by
+`designpanel.ts fillPageDesignMenu`). The hover preview ends in that menu's
+`onClose` (menus.ts anchoredMenu), the one callback that fires however the
+menu goes — a row, Escape, a press outside, another menu opening — so a preview
+can never outlive its menu. First row: "Same as
+parent" ("Same as space" at the top level) with what it resolves to. Hover
+previews exactly — `DesignPreview` tries a name at one page or at the space and
+resolves the page in view through the same precedence, so hovering a SPACE
+design over a page with its own design correctly changes nothing. The preview
+starts on a pointer MOVE, not mouseenter: the menu opens where the page menu
+was and a row lands under a still pointer, which the browser reports as an
+enter (measured: the page flipped to Riso the instant the menu opened).
+Choosing is one undo step. **Customise…** forks into `doc.designs` and assigns
+the fork to THIS page only — including when the page merely inherits a custom
+design, which is copied, so customising one page never restyles its section.
+Removing a custom design sends every reference to it (the space's and each
+page's) back to its base, or deletes the key.
+
+**Export page as a space** pins a design a page inherited from an ancestor that
+does not travel onto the extracted page whose parent was cut, so the extract
+looks as it did.
+
+**Markdown — one file exports, a note imports.** The export is ONE file
+("Every page, as one .md file"), and it imports as ONE page: its headings come
+back as blocks, not pages — true before this and unchanged. So per-page designs
+round-trip through the note-per-page unit: **Export page as Markdown…** (new,
+under Save ▾ — one line, its description the tooltip, as slides' Save rows —
+the maintainer's ruling, since Save is where every export lives; it exports the
+page in view, footnote definitions included) writes `design:` only when that page sets one ITSELF (an inherited
+design is not written — the note would pin a look the page never chose), plus
+the one `designs:` entry it names. The whole-space file writes the space's
+`design:` and a `designs:` line carrying every custom design the space OR ANY
+PAGE names. On import, a note's `design:` lands on THAT note's page, the carried
+entries join the registry (never over a name in use), and **the space's own
+design is no longer adopted** — reversing #559's "an import adopts the design
+into a space that has none": an import adds pages; it restyles only them.
+Front-matter handling only; no Markdown body parsing changed.
+
+**Collab.** `page.design` is an ordinary page-property register in the kernel
+engine, like `width` or `cover`; inherit travels as a deletion. Guarded in
+`scripts/test-sync-spaces.ts`.
+
+**Static preview** wears the HOME page's resolved design (its own, its
+section's, then the space's), still as inline styles through the CSSOM.
+
+**The popover click-away fix this was first written with is gone.** On its
+original base every popover's mousedown-away listener outlived its popover, so
+opening Design from the page menu was dismissed by its first click. By the
+time this landed, main had moved every menu and popover onto the kernel menu
+and `float()` (one delegated listener pair, every listener taken back on close),
+which fixes the same bug at its root; there was nothing left to patch.
+
+**Guarded, each sabotaged and seen to fail.** Model rig (per-page section): the
+ancestor walk cut (9 assertions fail), the space consulted before the page (12),
+inherit writing `''` instead of deleting (1), an unknown name falling through
+to the parent (3), the print root stamped with the space's design (1), a gallery
+card stamped with its own page's design (1). Roundtrip rig: the importer not
+setting `page.design` (4), a page note writing its INHERITED design (4). In the
+browser (headless Chrome over 127.0.0.1, uniquely named builds): on a Studio
+page, a gallery of Ledger pages measured Studio (radius 14px, cell
+rgb(94,118,153), Avenir) and the only design root inside `.sp-main` was its own
+page root; with the card sabotage it measured Ledger (radius 0, rgb(39,67,214))
+with five nested roots. In print media each page root carried its own design
+(Studio Avenir, Ledger Helvetica Neue, Almanac Iowan; the Studio callout the
+print hairline), no drop cap outside Almanac; with the root stamped, the drop
+cap leaked onto Studio and Ledger.
+
+**Ported onto main after the kernel menus, transclusion and footnotes
+landed.** The picker became a kernel menu (above), the Markdown note moved to
+Save ▾, and the host-design rule now has a real embed to hold: the model rig
+asserts `renderEmbed` reaches the other page only through renderBlocks, and in
+the browser (headless Chrome over 127.0.0.1, a uniquely named build) a Studio
+page embedding a Riso page had exactly two design roots inside `.sp-main`, both
+Studio, none inside the embed, and the embedded paragraph computed Studio's
+Avenir Next. The preview's close paths were measured with a sabotage: with the
+menu's `onClose` removed, Escape left the page in the hovered Riso and a press
+outside left it in the keyboard-focused Ledger; with it, both returned to the
+page's own design. A single page's note carries that page's footnote
+definitions (and no other page's), held by the roundtrip rig.
+
+**Cost.** Shell 364,703 → 368,299 B (+3,596), ten new strings in nine languages
+(one retired: the import no longer adopts a space-level design).

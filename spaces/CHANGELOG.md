@@ -14,6 +14,77 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
 
 ## [Unreleased]
 
+- **A timeline and a workload chart, as view layouts.** The one layout control
+  cycles through two more shapes. `gantt` draws a bar per page from its start
+  date to its due date, with today marked and overdue work outlined; `workload`
+  adds up the estimates per assignee and draws a bar chart. Both read the view's
+  existing `source`, `filter`, `sort` and `groupBy`, so "the workload for this
+  project, open only" is expressible with no key of its own.
+
+  **They are layouts and not a new `chart` block**, and that choice is argued in
+  `spaces/src/gantt.ts` because every chart this app grows will inherit it. The
+  measurable half: a shell built from the previous release, shown a view block
+  with `layout:"gantt"`, renders a BOARD of the same pages, keeps the key
+  through a save, and keeps the new `start` values too — checked against a real
+  build, not asserted. A `chart` block would have fallen to the unknown-type
+  path and drawn one line of text where a schedule was.
+
+- **A `start` date field.** The tracker shipped with `Due` and nothing else,
+  which is enough for a deadline and not for a bar. It is optional and appears
+  when set, like `Due` and `Labels` — but it has a consequence worth stating:
+  every issue in every file already written has a due date and NO start, so
+  absent-start is the whole installed base rather than an edge case. Those draw
+  as a **milestone diamond** at the due date — a date with no duration, which is
+  what the file actually says — not as a zero-width bar.
+
+- **What the pictures refuse to do quietly.** A chart is a picture of numbers
+  out of a file somebody mailed you, so each wrong-data case is decided and
+  asserted rather than left to arithmetic: a due date before the start is drawn
+  between the two dates that are really there and FLAGGED, never silently
+  swapped; a malformed date is an absent date; a negative or non-numeric
+  estimate is excluded from the sum and counted, because a −3 absorbed into a
+  bar makes somebody look lighter than the work they hold; and a 10,000-page
+  view draws a capped, ordered chart that says how many it did not draw. Every
+  date is compared as an integer day number computed arithmetically, with no
+  `Date` involved, so the answer is the same in Kiritimati and in Niue.
+
+  Both charts print, and both survive into the file-manager thumbnail: colour
+  and geometry travel as presentation attributes inside the SVG rather than in
+  `styles.css`, which the still's own stylesheet is not.
+- **`#tag` in the prose, and everything that follows from it.** Type `#recipe`
+  in a sentence and it renders as a clickable chip; the chip opens a tag sheet
+  listing every page carrying it. Tags reach ⌘K (a query starting with `#`
+  lists tags and how much of the space each covers), a view's **source** (a
+  base can be "everything tagged #recipe", chosen from the Pages · button),
+  and the graph (two pages sharing a tag draw an edge, capped at eight pages
+  per tag — past that a tag is a category, not a relationship).
+
+  **A tag is stored exactly once, in the words.** There is no `page.tags`
+  array and there must not be one: the index is derived from `html` every time
+  something asks, the same way backlinks already are, so it can never disagree
+  with what is written. The consequence worth having is that this costs the
+  FILE nothing — measured against a build of the previous release, a tagged
+  paragraph renders there as ordinary prose, byte-identical, with no chip and
+  no lost text.
+
+  `#project/bento` is one **nested** tag, and it counts under `#project` too —
+  settled now rather than later, because reading it as the flat tag `project`
+  first would silently change the meaning of text already in files when
+  nesting arrived. The tag sheet walks up and down that hierarchy.
+
+  What is deliberately NOT a tag, each one tested by running the parser:
+  `# Title` (a Markdown heading — a tag has no space after the hash), `#42`
+  and `#404` (issue numbers), `#fff` and `#f7a600` (CSS colours), `C#` and
+  `a#b` (a hash inside a word), a `#` in `<code>`, a URL fragment such as
+  `https://x.example/p#top`, and this app's own `#p/` page links.
+
+- **A view whose source this build cannot read now says so.** `unknownSourceKeys`
+  existed and nothing called it, so a view selecting its pages in a way the
+  build does not understand silently fell back to the backlog and showed a
+  different set of pages while its header still named the source. It shows a
+  line now, the way an unreadable filter already did. Known limitation, stated
+  because it cannot be fixed retroactively: builds shipped before this one
+  still degrade silently, so a view sourced on a tag reads as Issues there.
 - **The table sorts and edits again.** A rebase duplicated the whole
   `layout === 'table'` branch in the renderer. Both copies compiled, and the
   first one returned — so the second, the one carrying click-to-sort headers
@@ -486,6 +557,35 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
 
+- **A view can be a CALENDAR.** The fifth shape on the one layout button —
+  board, list, table, gallery, calendar — and the one that answers *when*. It
+  has two forms behind a second button: a month grid, and a timeline that reads
+  newest first. Two forms rather than two entries in the cycle, because they are
+  one question at two densities (a month grid is useless on dates spread over
+  years, and a timeline cannot show you the shape of a week), and because the
+  layout control is a cycle whose cost is one click for everybody every time
+  they pass a shape they did not want.
+
+  **Which date a page sits on is a rule, not a setting, and the view says the
+  rule out loud**: its journal date if it is a journal entry, otherwise the
+  first date field in the schema it carries a real date for. A page with neither
+  is listed under "No date" — visible, because a calendar quietly holding fewer
+  pages than the count beside its own title is a view lying about what it
+  contains, and the pages it would drop are exactly the ones somebody forgot to
+  date. A value that is digit-shaped but not a day (`2026-13-99`) is no date
+  rather than a confident wrong one.
+
+  Month names, weekday names and **which day the week starts on** all come from
+  the reader's own locale, so the same file is a Sunday-first 2026年9月 in Tokyo
+  and a Monday-first September 2026 in London. Nothing formatted is ever stored.
+  Measured in a built shell: February 2026 draws 28 cells in four rows, August
+  2026 draws 42 in six, September 35 in five — the count is derived from the
+  month and the reader, never assumed.
+
+  `layout: "calendar"` and `span: "timeline"` are additive: verified against a
+  build that has never heard of either, which renders the board and round-trips
+  both keys untouched. And `board`/`month` stay the ABSENT keys — a view cycled
+  all the way round, span and all, is byte-identical to one nobody touched.
 - **A page can show another page: transclusion.** The new `embed` block draws a
   live view of another page — or of one heading's section of it, chosen by name
   — attributed to its source and clickable through to it. It stores a
@@ -1103,6 +1203,55 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   them, so what survives is the anchor they re-attach by. And a table or a
   divider never carries an id, because the attribute would break the row or
   the rule.
+
+- **A space can have a design.** About → Design offers six: **Ledger** (a
+  grotesque grid, figures in a monospace, cobalt rules), **Almanac** (an
+  editorial serif, a drop cap, marigold for its accent), **Studio** (the
+  Bento tile — a canvas or a gallery becomes navy with slate, coral and cream
+  compartments), **Broadsheet** (a news serif under double rules, justified,
+  with pull quotes), **Typescript** (a typewritten manuscript) and **Riso** (a
+  two-ink risograph zine). Hover one to see it on the page; clicking it is one
+  undo step. The design travels in the file; each reader's light or dark
+  setting picks between the design's two palettes, and the app's own bar and
+  panels stay the reader's. It prints (in its light palette) and it is what a
+  file manager's thumbnail shows. A file with no design looks exactly as it did.
+
+  **Customise…** makes the current design the space's own and opens a panel
+  beside the page: colours for light and dark, a face for headings, body,
+  labels and code — including a font file you drop in, which is embedded like
+  a picture — and the layout switches (callouts, quotes, tables, rules, drop
+  cap, tiles…). Every value is checked before it is used, and a colour that
+  would leave text under 4.5:1 is not used. Every design keeps the five
+  callout tones (note, tip, important, warning, caution) five distinct
+  colours of its own; a custom design that paints them alike gets its base's
+  five back.
+
+  The Markdown export now opens with the design as front matter (`design:
+  almanac`), and importing it into a space without a design brings the design
+  along. Format: an optional `design` name and an optional `designs` map; an
+  older build shows the default look and keeps both. The designs use fonts
+  already on the reader's machine — nothing is fetched. Shell 271,810 →
+  300,835 B (+29,025; roughly 12 KB of that is the picker and panel's 115
+  new strings in nine languages).
+
+- **A page can have its own design, and a section passes its design down.**
+  Each page's ⋯ menu — and the properties panel — has **Design**: "Same as
+  parent" (or "Same as space" at the top), showing what that comes to, then
+  every design. Hover one to see it on the page; choosing is one undo step,
+  and going back to "Same as parent" leaves the file exactly as it was. Set
+  one on a section and every page inside it takes it, unless a page sets its
+  own. **Customise…** from there makes a design of that page's own, kept in
+  the space, without touching the section or the rest of the space.
+  Everything shown inside a page — gallery cards, boards, page cards, another
+  page embedded in it — takes the design of the page you are on, not the page
+  it points at. Printing the whole space prints each page in its own design;
+  the file's thumbnail shows the home page's. **Save ▾ → Export page as
+  Markdown…** writes the page you are on as one note, with its footnotes and
+  with `design:` in its front matter when the page chose one itself, and
+  importing notes puts each note's design back on its own page — an import no
+  longer changes the space's own design. Format: an optional `design` on a
+  page; an older build shows the space's design and keeps it. Shell 364,703 →
+  368,299 B (+3,596).
 
 ## [0.1.0] — 2026-08-03
 
