@@ -18,7 +18,9 @@ import * as collabUi from './collabui.ts'
 import { syncNoticeText } from './syncnotice.ts'
 import { Store } from './store'
 import { renderPage, toneLabel, paintCode } from './render'
+import { notesOnPage } from './footnotes.ts'
 import { wireCanvas, placeNewCard } from './canvas.ts'
+import { enableTouchDrag } from './touch.ts'
 import { CODE_LANGS, langLabel, normLang } from './highlight'
 import { canonicalize, escText, sanitizeInline, textOf } from './sanitize'
 import { FormatBar } from './formatbar'
@@ -31,19 +33,30 @@ import {
   cycleSort, nextLayout,
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
+import {
+  clausesOf, clauseSummary, isAny, opsFor, opLabel, numberOpLabel, windowLabel,
+  DATE_WINDOWS, type Clause, type QueryOp,
+} from './query.ts'
 import { planImport, type SourceFile } from './markdown'
 import { extractSpace, planGraft } from './portable'
+import { headingsOf } from './embed.ts'
 import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale, localeChoices, setLocale, applyDirection } from './i18n'
 import { openAbout } from './about'
 import { saveRows, type DocHost } from './doccmds.ts'
 import { openGraphView } from './graph.ts'
+import { pageToDeck, type DeckNote, type DeckNoteCode } from './todeck.ts'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
 } from './journal'
+import { applyTemplate, journalTemplate } from './templates.ts'
+import {
+  type TemplateHost, openTemplates, openNewPagePicker, savePageAsTemplate,
+} from './templateui.ts'
 import { canWriteInPlace, parseEnvelope } from '../../kernel/src/save.ts'
 import { offlineEnabled } from '../../kernel/src/net.ts'
+import { withoutCaps } from '../../kernel/src/docfields.ts'
 import { startSharing } from '../../kernel/src/sync/online.ts'
 import * as shareModule from './share.ts'
 import { ICONS, type IconName } from './icons'
@@ -55,6 +68,15 @@ import { createPanel, type Panel } from '../../kernel/src/ui/panel.ts'
 import '../../kernel/src/ui/panel.css'
 import { PropsPanel } from './props'
 import {
+  SEAT_SEL, seatsIn, lineBoxes, caretBox, onEdgeLine, stepSeat, tableStep, nearestByX,
+  placeCaretAtX, caretToStart, caretToEndOf, atEndOf,
+} from './caret'
+import { indentTarget, canOutdent } from './nesting'
+import { blockFormatRow } from './blockbar'
+import {
+  nameIndex, namesOf, mentionsOf, linkMention, type Mention,
+} from './mentions.ts'
+import {
   internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
 } from './assets'
 
@@ -65,6 +87,16 @@ const CTRL = navigator.platform.toLowerCase().includes('mac') ? 'metaKey' : 'ctr
 // trigger that no menu mentions.
 const AUTOFORMAT = MD_SPECS
 
+/** The four keys caret.ts answers for. A Set so the keymap's hot path is one lookup. */
+const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
+/**
+ * A page made into a slides deck, as it leaves the app (copied or downloaded).
+ * pageToDeck builds a FRESH deck that carries no capability block today, but
+ * a hand-out goes through the same stripper as every other one, so a deck
+ * that ever grew a `collab` could not take it onto the clipboard
+ * (scripts/test-export-secrets.ts: "a clipboard copy goes through a stripper").
+ */
+const deckForExport = <T extends object>(deck: T): T => withoutCaps(deck)
 /**
  * Below this width both side panels are DRAWERS over the page, not columns.
  * One number, handed to the kernel panel as `drawerBelow` (D6: the breakpoint
@@ -144,6 +176,15 @@ export class Editor {
   private painting = false
   /** reading view: the document without the machinery for changing it */
   private reading = false
+  /**
+   * The column ↑/↓ are aiming for, in viewport px, or null.
+   *
+   * Held across CONSECUTIVE vertical steps and dropped by anything else — a
+   * horizontal key, a click, and also a vertical step we hand to the browser,
+   * because inside one host the browser keeps its own goal column and two
+   * memories of the same thing is how they start to disagree.
+   */
+  private goalX: number | null = null
   /**
    * Remote image urls this READER has agreed to load, this session only.
    *
@@ -563,11 +604,26 @@ export class Editor {
       }, true)
     }
 
+    // A FINGER GETS THE DRAGS A MOUSE HAD. Blocks, page rows and issue cards
+    // are all `[draggable="true"]`, and HTML5 dnd never fires from a touch —
+    // so press-and-hold replays the same dnd events those handlers already
+    // listen for. One call, delegated at the root, so anything draggable this
+    // editor grows later is covered without a second edit. See touch.ts.
+    enableTouchDrag(this.root)
+
     this.paintTree()
     this.paintPage()
     this.syncHistoryButtons()
     this.syncDirty()
     document.addEventListener('keydown', (e) => this.onKey(e), true)
+    // A POINTER ENDS THE VERTICAL RUN. Found in the browser, not by reading the
+    // code: the goal column was cleared by every key except ↑ and ↓ and by
+    // nothing else, so after clicking somewhere new the first ↓ still aimed at
+    // the column of the run before it — measured entering a table three times
+    // at three different columns and landing in the first one every time.
+    const dropGoal = () => { this.goalX = null }
+    document.addEventListener('mousedown', dropGoal, true)
+    document.addEventListener('touchstart', dropGoal, { capture: true, passive: true })
 
     // Dropping notes anywhere on the app imports them — the sidebar, the
     // topbar, the grey around the page. The page's own drop handler takes
@@ -845,7 +901,12 @@ export class Editor {
     // the foot of the bar's ＋ Insert, among the blocks, where a page is not a
     // thing you insert into the page you are on.
     const split = el('div', 'sp-newsplit')
-    const plus = iconBtn('plus', t('New page (⌘⌥N)'), () => this.newPage())
+    // Once the space HAS templates, ＋ offers them; with none it makes a blank
+    // page as it always did (openNewPagePicker returns false and the fallback
+    // runs). The caret beside it holds the other ways a page arrives.
+    const plus = iconBtn('plus', t('New page (⌘⌥N)'), () => {
+      if (!openNewPagePicker(this.templateHost, plus, () => this.newPage())) this.newPage()
+    })
     plus.classList.add('sp-newpage')
     this.newPageMenu?.destroy()
     this.newPageMenu = barMenu({
@@ -1010,6 +1071,14 @@ export class Editor {
     if (s.readOnly) return
     const plan = planJournal(s.doc, iso)
     if (plan.add.length) {
+      // THE ENTRY'S OWN DATE, not today's: stepping to tomorrow's note has to
+      // write tomorrow's date into it, or a template with {{date}} in it lies
+      // on every entry but the one made on the day. Inside the SAME commit as
+      // the pages, so ⌘Z still takes back "I opened today's journal" in one
+      // step. The Journal parent page, when it is new too, is never templated —
+      // it is furniture, not an entry.
+      const tpl = journalTemplate(s.doc)
+      if (tpl) applyTemplate(plan.page, tpl, { date: iso, locale: locale() }, true)
       s.commit(() => {
         for (const { page, after } of plan.add) {
           const at = after ? s.doc.pages.findIndex((p) => p.id === after) : -1
@@ -1029,6 +1098,34 @@ export class Editor {
     this.openJournal(stepDay(String(cur.journal), n))
   }
 
+  /**
+   * The narrow contract src/templateui.ts gets — the store operations it
+   * needs, and nothing else. Rebuilt on every read so `page` is never a stale
+   * reference to a page that has since been deleted.
+   */
+  private get templateHost(): TemplateHost {
+    const s = this.store
+    return {
+      get doc() { return s.doc },
+      get readOnly() { return s.readOnly },
+      get page() { return s.page },
+      commit: (fn: () => void) => { s.commit(fn) },
+      goToPage: (id: string) => { s.goToPage(id) },
+      status: (msg: string) => { this.status(msg) },
+      afterCreate: () => {
+        this.repaint()
+        afterPaint(() => {
+          const h = this.main.querySelector<HTMLElement>('[data-page-title]')
+          h?.focus()
+          if (h) selectAll(h)
+        })
+      },
+      pageIcon: (icon: string | undefined) => pageIcon(icon),
+      dialog: (title, build) => { this.openOverlay(title, build) },
+      menu: (anchor, label, fill) => { this.menuAt(anchor, label, fill) },
+    }
+  }
+
   newPage(parent?: string): void {
     const page = newPage(t('Untitled'))
     if (parent) page.parent = parent
@@ -1041,10 +1138,36 @@ export class Editor {
     })
   }
 
+  /**
+   * Repaint if — and only if — this page's footnote NUMBERING has changed.
+   *
+   * DERIVE, DO NOT COMMIT: the same shape slides uses for linked charts and
+   * connectors. Nothing is written to the document here; the section at the
+   * foot of the page is a function of the references in the blocks, so the
+   * only thing that can be stale is the DOM. The signature is the ordered
+   * label list, which is exactly what the section and every marker are drawn
+   * from — so an unconditional repaint on blur would be a caret-losing
+   * flicker on every click, and no repaint at all would leave a note the
+   * author just referenced with nowhere to write it.
+   */
+  private syncFootnotes(): void {
+    const page = this.store.page
+    if (!page) return
+    const sig = notesOnPage(this.store.doc, page).order.join('\u001F')
+    if (sig === this.fnSig) return
+    this.fnSig = sig
+    this.paintPage()
+  }
+
+  private fnSig = ''
+
   // ---- the page -----------------------------------------------------------
   private paintPage(): void {
     const s = this.store
     const page = s.page
+    // the baseline `syncFootnotes` compares against — set here so switching
+    // pages can never leave the previous page's signature behind
+    this.fnSig = page ? notesOnPage(s.doc, page).order.join('\u001F') : ''
     // The bar holds a reference to the block host it is floating over, and this
     // is about to replace every one of them.
     this.format?.close()
@@ -1138,6 +1261,10 @@ export class Editor {
     this.main.append(view)
     this.wire(view)
     view.querySelector('.sp-page-inner')?.append(this.backlinks(page.id))
+    // Unlinked mentions sit BESIDE the backlinks and below them: "what links
+    // here" is a fact about the space, "what could have" is a suggestion, and
+    // a suggestion above a fact reads as one.
+    view.querySelector('.sp-page-inner')?.append(this.unlinked(page.id))
     // Comments are EDITOR-ONLY. The gate is here rather than in comments.ts
     // because this is the object that knows which view it is in — and the
     // renderer, which print and the reading view share, has never heard of
@@ -1285,6 +1412,15 @@ export class Editor {
     // A page card is made whole or not at all: the picker comes FIRST, so the
     // one commit writes a card that points somewhere, and Escape inserts
     // nothing — never a card pointing at no page.
+    // …and so is an embed: its own picker (a page, or one section of it)
+    if (item.type === 'embed') {
+      this.insertEmbed(at?.id ?? page.id, (pageId, anchor) => {
+        const fresh = make()
+        this.embedFields(fresh, pageId, anchor)
+        put(fresh)
+      })
+      return
+    }
     if (item.type === 'pagelink') {
       this.openPagePicker(at?.id ?? page.id, null, (pageId) => {
         const fresh = make()
@@ -1889,13 +2025,147 @@ export class Editor {
     })
   }
 
+  /** Add, remove or re-combine a view's typed conditions. */
+  private editClauses(blockId: string, edit: (list: Clause[]) => Clause[]): void {
+    this.editViewFilter(blockId, (f) => {
+      const next = edit(clausesOf(f))
+      // an empty list is DELETED, never stored: the same rule `is` and `open`
+      // follow, and what keeps a view conditioned and then cleared
+      // byte-identical to one nobody ever touched
+      if (next.length) f.where = next
+      else { delete f.where; delete f.any }
+      // `any` over one clause is a distinction without a difference, and a
+      // stored key that changes nothing is a key somebody has to explain
+      if (next.length < 2) delete f.any
+    })
+  }
+
   /**
-   * The filter picker: every option of every select field, as toggles.
+   * Build one condition: a field, an operator, a value.
    *
-   * Deliberately NOT a query builder — no operators, no and/or, no nesting.
-   * A list of values you can switch on is the whole of what a board needs, it
-   * fits a phone sheet, and it cannot grow a language that then has to be
-   * supported forever.
+   * A FORM, not a three-step menu chain. The three parts are one thought and
+   * picking them through three popovers is the interaction that makes a filter
+   * builder unusable — and the form is four native controls, which is what
+   * makes it fit a phone sheet without a layout of its own.
+   *
+   * The operator list follows the FIELD TYPE (query.ts `opsFor`), because "is
+   * more than" on a date and "is after" on a number are both questions nobody
+   * asks, and the value control follows the OPERATOR: options for a select, a
+   * window for `in`, a date picker for a date, nothing at all for `is empty`.
+   */
+  private openAddCondition(blockId: string, anchor: HTMLElement): void {
+    const s = this.store
+    if (!s.block(blockId) || s.readOnly || this.reading) return
+    const fields = fieldsOf(s.doc)
+    this.popover(anchor, (pop) => {
+      pop.append(el('div', 'sp-pop-title', t('Add a condition')))
+
+      const wrap = (labelText: string, control: HTMLElement) => {
+        const row = el('div', 'sp-field')
+        row.append(el('label', 'sp-field-lbl', labelText), control)
+        return row
+      }
+      const opt = (sel: HTMLSelectElement, value: string, label: string) => {
+        const o = document.createElement('option')
+        o.value = value
+        o.textContent = label
+        sel.append(o)
+      }
+
+      const keySel = document.createElement('select')
+      keySel.className = 'sp-input'
+      opt(keySel, ':title', t('Title'))
+      for (const f of fields) opt(keySel, f.key, f.label)
+
+      const opSel = document.createElement('select')
+      opSel.className = 'sp-input'
+
+      const valBox = el('div', 'sp-field')
+      const valLbl = el('label', 'sp-field-lbl', t('Value'))
+
+      const fieldNow = () => fields.find((f) => f.key === keySel.value)
+      const buildOps = () => {
+        opSel.textContent = ''
+        const f = fieldNow()
+        for (const o of opsFor(f?.vt)) opt(opSel, o, f?.vt === 'number' ? numberOpLabel(o) : opLabel(o))
+      }
+      const buildValue = () => {
+        valBox.textContent = ''
+        const f = fieldNow()
+        const op = opSel.value
+        // `is empty` and `is not empty` are the two questions with no operand,
+        // so the control is ABSENT rather than disabled — a greyed box invites
+        // somebody to try to type in it
+        if (op === 'empty' || op === 'notEmpty') return
+        valBox.append(valLbl)
+        if (op === 'in') {
+          const sel = document.createElement('select')
+          sel.className = 'sp-input'
+          for (const w of DATE_WINDOWS) opt(sel, w, windowLabel(w))
+          valBox.append(sel)
+        } else if (f?.options?.length && (op === 'eq' || op === 'ne')) {
+          const sel = document.createElement('select')
+          sel.className = 'sp-input'
+          for (const o of f.options) opt(sel, o.id, o.label)
+          valBox.append(sel)
+        } else {
+          const input = document.createElement('input')
+          input.className = 'sp-input'
+          input.type = f?.vt === 'number' ? 'number' : f?.vt === 'date' ? 'date' : 'text'
+          valBox.append(input)
+        }
+      }
+      keySel.addEventListener('change', () => { buildOps(); buildValue() })
+      opSel.addEventListener('change', buildValue)
+      buildOps()
+      buildValue()
+
+      pop.append(wrap(t('Field'), keySel), wrap(t('Condition'), opSel), valBox)
+
+      const add = document.createElement('button')
+      add.type = 'button'
+      add.className = 'sp-btn sp-primary'
+      add.textContent = t('Add condition')
+      add.addEventListener('click', () => {
+        const op = opSel.value as QueryOp
+        const input = valBox.querySelector('select, input') as HTMLInputElement | HTMLSelectElement | null
+        const raw = input ? input.value : ''
+        // a condition with nothing in its box narrows nothing and would count
+        // for nothing on the chip — so it is not added at all rather than
+        // stored as a rule that does not apply
+        if (!input || raw !== '') {
+          const c: Clause = { key: keySel.value, op }
+          if (input) c.v = fieldNow()?.vt === 'number' && Number.isFinite(Number(raw)) ? Number(raw) : raw
+          this.editClauses(blockId, (list) => [...list, c])
+        }
+        this.closeOverlay()
+      })
+      pop.append(add)
+      // The popover's keyboard trap focuses the POP, which is right for a list
+      // of menu items and wrong for a form: you would arrive on a container and
+      // have to Tab three times to reach the box you opened this to fill in.
+      // Measured before this line: after clicking Add condition,
+      // `document.activeElement` was `div.sp-pop`, and typing put the text
+      // nowhere. The trap runs on its own tick, so this has to as well.
+      setTimeout(() => keySel.focus(), 0)
+    })
+  }
+
+  /**
+   * The filter picker: the options of every select field as toggles, and the
+   * typed conditions under them.
+   *
+   * IT USED TO BE TOGGLES ONLY, and the comment here said so as a decision:
+   * "deliberately NOT a query builder… it cannot grow a language that then has
+   * to be supported forever." Half of that stands and half of it did not
+   * survive contact with the app. What stands is the shape — a FLAT list of
+   * conditions, one all/any switch, no nesting, so the popover is still a list
+   * you read top to bottom on a phone. What did not is the scope: a view with
+   * five layouts over a filter that can only ask "which of these values" cannot
+   * ask what its own layouts exist for — a calendar over dates that cannot say
+   * "this week", a table over numbers that cannot say "more than". The
+   * value-toggle list stays FIRST and unchanged, because it is still the one
+   * question a board is asked most.
    */
   private openViewFilter(blockId: string, anchor: HTMLElement): void {
     const s = this.store
@@ -1928,9 +2198,30 @@ export class Editor {
         }
       }
       m.separator()
+      const conds = clausesOf(cur)
+      caption(m, t('Conditions'))
+      for (let i = 0; i < conds.length; i++) {
+        const at = i
+        // the row IS the remove control — a summary with a separate ✕ needs a
+        // layout of its own, and every other list in this menu is already one
+        // tap = one change
+        row(m, { icon: ICONS.trash, label: clauseSummary(s.doc, conds[at]), hint: t('Remove'),
+          run: () => this.editClauses(blockId, (list) => list.filter((_, j) => j !== at)) })
+      }
+      row(m, { icon: ICONS.plus, label: t('Add condition'), run: () => this.openAddCondition(blockId, anchor) })
+      if (conds.length > 1) {
+        const any = isAny(cur)
+        // ONE switch for the whole list. Per-clause and/or is a tree, and a tree
+        // needs a UI that can show one; this is the 90% and it reads in a line.
+        row(m, { icon: ICONS.toggle, label: any ? t('Match any condition') : t('Match all conditions'),
+          hint: t('Switch between all and any'),
+          run: () => this.editViewFilter(blockId, (f) => { if (any) delete f.any; else f.any = true }) })
+      }
+
+      m.separator()
       // unknown keys survive: this clears what this build put there
       row(m, { icon: ICONS.trash, label: t('Clear filter'),
-        run: () => this.editViewFilter(blockId, (f) => { delete f.is; delete f.open }) })
+        run: () => this.editViewFilter(blockId, (f) => { delete f.is; delete f.open; delete f.where; delete f.any }) })
     })
   }
 
@@ -1979,6 +2270,27 @@ export class Editor {
   private openBlockMenu(id: string, anchor: HTMLElement): void {
     if (this.store.readOnly || this.reading) return
     this.menuAt(anchor, t('Block options'), (m) => {
+      // FIRST, above the actions: the block's own format. blockbar.ts records
+      // why these are here and not in the selection toolbar.
+      const page = this.store.page
+      const blk = this.store.block(id)
+      if (page && blk) {
+        extra(m, blockFormatRow({
+          type: String(blk.type ?? 'p'),
+          canIndent: indentTarget(page.blocks, id).ok,
+          canOutdent: canOutdent(effectiveParents(page), id),
+          indentRefusal: t('a block nests under the one above it'),
+          setType: (type) => { m.close(); this.setType(id, type) },
+          // NOT closed first when the gesture is refused: `indent` answers with
+          // the reason, and closing the menu would take the disabled control
+          // away at the moment it is explaining itself.
+          indent: (deeper) => {
+            const allowed = deeper ? indentTarget(page.blocks, id).ok : canOutdent(effectiveParents(page), id)
+            if (allowed) m.close()
+            this.indent(id, deeper)
+          },
+        }))
+      }
       for (const a of this.blockActions(id)) {
         row(m, { icon: ICONS[a.icon], label: a.label, kbd: a.kbd, off: a.off, run: a.run })
       }
@@ -2188,8 +2500,35 @@ export class Editor {
     return true
   }
 
-  /** Attach behaviour to a freshly painted page. */
+  /**
+   * Attach behaviour to a freshly painted page.
+   *
+   * EMBEDDED CONTENT IS PARKED FOR THE DURATION, and that is not tidiness.
+   * Everything below sweeps the painted page by class or attribute — every
+   * `.sp-check`, every `.sp-b-code`, every table cell — and hangs a handler
+   * that commits through `store.block(id)`, which resolves ANY id in the
+   * document. An embed draws ANOTHER page's blocks inside this one, so without
+   * this a tick in an embedded checklist would commit to a page the editor is
+   * not showing, and a language chip would be appended into somebody else's
+   * paragraph. The renderer already strips `data-block-id` from that subtree;
+   * this closes the half that keys on classes instead.
+   *
+   * Detached and restored rather than filtered at each of the fifteen sweeps:
+   * one guarantee in one place cannot be forgotten by the sixteenth.
+   */
   private wire(view: HTMLElement): void {
+    const parked: Array<[HTMLElement, Comment]> = []
+    for (const body of view.querySelectorAll<HTMLElement>('.sp-embed-body')) {
+      const mark = document.createComment('embed')
+      body.replaceWith(mark)
+      parked.push([body, mark])
+    }
+    try { this.wireOwn(view) } finally {
+      for (const [body, mark] of parked) mark.replaceWith(body)
+    }
+  }
+
+  private wireOwn(view: HTMLElement): void {
     const s = this.store
 
     const title = view.querySelector<HTMLElement>('[data-page-title]')
@@ -2237,7 +2576,48 @@ export class Editor {
           const clean = canonicalize(b.html)
           if (clean !== b.html) { b.html = clean; host.innerHTML = clean }
         }
+        // A FOOTNOTE REFERENCE TYPED INTO THIS BLOCK CHANGES THE PAGE.
+        //
+        // The section at the foot is derived from every block's references, so
+        // adding or deleting a `[^1]` renumbers the notes and adds or removes a
+        // row. Repainting on `input` would do it a keystroke sooner and take
+        // the caret with it — half of `[^1` is not a reference, so every one of
+        // those keystrokes is a signature change. Blur is the first moment the
+        // caret is not the thing being protected.
+        this.syncFootnotes()
       })
+    }
+
+    // FOOTNOTE BODIES. `data-edit-note` and not `data-edit`: the generic
+    // handler above writes its host's html to a BLOCK, and a note is not one.
+    // The label is the key into doc.footnotes and it is derived from the text —
+    // so a note is created by the first keystroke into an empty slot and the
+    // slot itself came from a `[^label]` somebody typed.
+    if (!s.readOnly && !this.reading) {
+      for (const body of view.querySelectorAll<HTMLElement>('[data-edit-note]')) {
+        const label = body.dataset.editNote!
+        body.addEventListener('input', () => {
+          if (this.painting) return
+          s.runEdit(`fn:${label}`, () => {
+            const table = (s.doc.footnotes ??= {})
+            table[label] = body.innerHTML
+          })
+        })
+        body.addEventListener('blur', () => {
+          if (this.painting) return
+          s.endRun()
+          const table = s.doc.footnotes
+          if (!table || !Object.hasOwn(table, label)) return
+          const clean = canonicalize(table[label])
+          // AN EMPTIED NOTE IS DELETED, not stored as ''. An empty string is a
+          // note that exists and says nothing, which reads to validate() as a
+          // satisfied reference and prints as a blank numbered line; deleting
+          // the key puts the reference back to dangling, which is the truth and
+          // is what the author just did.
+          if (!clean.trim()) delete table[label]
+          else if (clean !== table[label]) { table[label] = clean; body.innerHTML = clean }
+        })
+      }
     }
 
     for (const box of view.querySelectorAll<HTMLInputElement>('.sp-check')) {
@@ -2909,6 +3289,78 @@ export class Editor {
     return box
   }
 
+  /**
+   * WHAT COULD LINK HERE — this page's names, found as plain words elsewhere.
+   *
+   * Derived at paint like the backlinks above it, never stored: a count
+   * written into the file goes stale in somebody else's copy the moment they
+   * type. `mentionsOf` makes ONE pass over the document for THIS page's names,
+   * so the cost does not grow with the number of pages — see mentions.ts.
+   *
+   * A reader with nothing to link gets nothing at all: an empty "Unlinked
+   * mentions (0)" heading on every page is chrome that only ever says no.
+   */
+  private unlinked(pageId: string): HTMLElement {
+    const s = this.store
+    const box = el('section', 'sp-mentions')
+    let found: Mention[]
+    // A malformed page (a title that is somehow not a string, an `aliases`
+    // shape nobody anticipated) must cost the reader a panel, never the page.
+    try { found = mentionsOf(s.doc, s.index, pageId) } catch { return box }
+    if (!found.length) return box
+
+    box.append(el('h2', 'sp-backlinks-h', t('Unlinked mentions')))
+    const ul = el('ul', 'sp-backlink-list')
+    for (const m of found) {
+      const from = s.index.page.get(m.fromPage)
+      if (!from) continue
+      const li = document.createElement('li')
+      const a = document.createElement('a')
+      a.href = `#p/${from.id}`
+      a.textContent = from.title || t('Untitled')
+      a.addEventListener('click', (e) => { e.preventDefault(); s.goToPage(from.id) })
+      li.append(a, el('span', 'sp-snippet', m.snippet))
+      // The whole point of the panel: one click turns the words into the link
+      // somebody meant to make. Hidden in a locked/reader copy, where the
+      // mentions are still worth SEEING and the button would only fail.
+      if (!(this.store.readOnly || this.reading)) {
+        const btn = document.createElement('button')
+        btn.className = 'sp-btn sp-mention-link'
+        btn.type = 'button'
+        btn.textContent = t('Link')
+        btn.title = t('Turn these words into a link to this page')
+        btn.addEventListener('click', () => this.linkMentionNow(m, pageId))
+        li.append(btn)
+      }
+      ul.append(li)
+    }
+    box.append(ul)
+    return box
+  }
+
+  /**
+   * Turn one unlinked mention into a real link.
+   *
+   * The offsets were computed when the panel was painted, and the document may
+   * have moved since — a collaborator's op, an undo, an edit in another tab.
+   * `linkMention` returns null rather than splicing into a stale offset, and
+   * this repaints instead of writing, which re-derives the mention from the
+   * text as it now is. Silently writing the wrong span would corrupt a block.
+   */
+  private linkMentionNow(m: Mention, targetId: string): void {
+    const s = this.store
+    if (s.readOnly) return
+    const found = s.index.block.get(m.fromBlock)
+    const next = found ? linkMention(String(found.block.html ?? ''), m, targetId) : null
+    if (next === null) {
+      this.status(t('That text has changed — nothing was linked'))
+      this.paintPage()
+      return
+    }
+    s.commit(() => { const b = s.block(m.fromBlock); if (b) b.html = sanitizeInline(next) })
+    this.paintPage()
+  }
+
   // ---- editing ------------------------------------------------------------
   private blockAt(node: Node | null): { id: string; host: HTMLElement } | null {
     const host = (node instanceof HTMLElement ? node : node?.parentElement)?.closest<HTMLElement>('[data-edit]')
@@ -3001,6 +3453,19 @@ export class Editor {
     // so without it the save dialog opened every time someone struck text out.
     if (mod && e.key.toLowerCase() === 's' && !e.shiftKey) { e.preventDefault(); this.onSave?.(); return }
     if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); this.openPrint(); return }
+    // ⌘/ — the block menu, and THE ONLY KEYBOARD ROUTE TO IT. The menu hangs
+    // off the gutter grip, the gutter is hover-revealed, and Tab inside a
+    // block is indent — so without this key the block format row, and with it
+    // every list, heading and indent control, is reachable by pointer only.
+    if (mod && e.key === '/') {
+      const at = this.focused() ?? this.cellAt(document.activeElement)
+      const grip = at
+        ? this.main.querySelector<HTMLElement>(
+          `[data-block-id="${CSS.escape(at.id)}"] > .sp-gutter > .sp-ghost[draggable]`)
+        : null
+      if (at) { e.preventDefault(); this.openBlockMenu(at.id, grip ?? this.main) }
+      return
+    }
     if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); this.openFind(); return }
     if (mod && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); this.newPage(); return }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); this.openJournal(); return }
@@ -3043,6 +3508,17 @@ export class Editor {
     const inCell = this.cellAt(document.activeElement)
     if (inCell && !s.readOnly && !this.reading) {
       if (this.tableKey(e, inCell)) return
+    }
+
+    // ARROWS COME AFTER `tableKey` AND BEFORE `focused()`. After, because the
+    // table owns ⏎ and ⇥ inside a cell and must get first refusal on every
+    // key; before, because `focused()` looks for `[data-edit]` and a cell is
+    // deliberately not one — so caret navigation would never run in a table at
+    // all if it sat below. It handles the cell case itself.
+    if (ARROWS.has(e.key)) {
+      if (this.caretNav(e, inCell)) return
+    } else if (!mod) {
+      this.goalX = null
     }
 
     const cur = this.focused()
@@ -3175,7 +3651,116 @@ export class Editor {
     })
   }
 
-  /** Tab sets `parent` to the previous sibling — one field write. */
+  /**
+   * ↑ ↓ ← → across blocks. True when it handled the key.
+   *
+   * The rules, in the order they are asked:
+   *
+   *  - A held Shift or ⌥ is a SELECTION or a word jump; both are the browser's
+   *    and neither should jump a block. A non-collapsed selection likewise.
+   *  - ← and → only do anything at the very edge of the seat; everywhere else
+   *    the browser is already right.
+   *  - ↑ and ↓ only do anything on the seat's edge VISUAL LINE, which is why
+   *    caret.ts measures boxes rather than counting characters: a wrapped
+   *    paragraph is several lines and the first ↓ in it means the second line.
+   *  - The goal column is remembered across consecutive vertical steps, so
+   *    down-through-a-short-line-and-out comes back near the original x.
+   */
+  private caretNav(e: KeyboardEvent, inCell: ReturnType<Editor['cellAt']>): boolean {
+    if (e.shiftKey || e.altKey || (e as any)[CTRL]) { this.goalX = null; return false }
+    const active = document.activeElement as HTMLElement | null
+    const host = active?.closest<HTMLElement>(SEAT_SEL) ?? null
+    if (!host || !this.main.contains(host)) return false
+    const sel = getSelection()
+    if (!sel || !sel.rangeCount || !sel.isCollapsed) { this.goalX = null; return false }
+
+    const seats = seatsIn(this.main)
+    const i = seats.indexOf(host)
+    if (i < 0) return false
+    const dir: -1 | 1 = e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 1
+    const vertical = e.key === 'ArrowUp' || e.key === 'ArrowDown'
+
+    if (!vertical) {
+      this.goalX = null
+      // at the edge, ← leaves for the END of the seat before and → for the
+      // START of the seat after — which is exactly what the caret would have
+      // done had the page been one editable rather than many
+      if (dir < 0 ? !atStart(host) : !atEndOf(host)) return false
+      const j = stepSeat(seats.length, i, dir)
+      if (j < 0) return false
+      e.preventDefault()
+      const next = seats[j]
+      next.focus()
+      if (dir < 0) caretToEndOf(next); else caretToStart(next)
+      return true
+    }
+
+    const caret = caretBox(host)
+    if (!caret) return false
+    if (!onEdgeLine(caret, lineBoxes(host), dir)) { this.goalX = null; return false }
+    const x = this.goalX ?? caret.left
+
+    // INSIDE A TABLE the grid is the truth, not document order: cells are
+    // row-major in the DOM, so the seat before (1,2) is (1,1) and stepping to
+    // it would walk sideways along the row the reader was trying to leave.
+    if (inCell) {
+      const b = this.store.block(inCell.id)
+      const shape = b ? tableOf(b) : null
+      const to = shape ? tableStep(inCell, shape, dir) : null
+      if (to) {
+        e.preventDefault()
+        this.goalX = x
+        const td = this.main.querySelector<HTMLElement>(
+          `[data-cell="${CSS.escape(inCell.id)}"][data-r="${to.r}"][data-c="${to.c}"]`)
+        if (td) { placeCaretAtX(td, x, dir < 0 ? 'last' : 'first'); return true }
+      }
+      // off the top or the bottom of the grid: out of the table altogether,
+      // past every one of its other cells
+      const out = this.outOfTable(seats, i, dir, inCell.id)
+      if (out < 0) return false
+      e.preventDefault()
+      this.goalX = x
+      placeCaretAtX(seats[out], x, dir < 0 ? 'last' : 'first')
+      return true
+    }
+
+    let j = stepSeat(seats.length, i, dir)
+    if (j < 0) return false
+    // ENTERING a table from outside lands on whichever cell of the entry row
+    // the goal column is over, not on the first one in the DOM
+    const cellId = seats[j].dataset.cell
+    if (cellId !== undefined) {
+      const row = seats.filter((sea) => sea.dataset.cell === cellId
+        && sea.dataset.r === seats[j].dataset.r)
+      const pick = nearestByX(row.map((sea) => sea.getBoundingClientRect()), x)
+      if (pick >= 0) j = seats.indexOf(row[pick])
+    }
+    e.preventDefault()
+    this.goalX = x
+    placeCaretAtX(seats[j], x, dir < 0 ? 'last' : 'first')
+    return true
+  }
+
+  /** The first seat after (dir 1) or before (dir -1) every cell of one table. */
+  private outOfTable(seats: HTMLElement[], from: number, dir: -1 | 1, tableId: string): number {
+    for (let j = from + dir; j >= 0 && j < seats.length; j += dir) {
+      if (seats[j].dataset.cell !== tableId) return j
+    }
+    return -1
+  }
+
+  /**
+   * Tab sets `parent` to the previous sibling — one field write.
+   *
+   * AND WHEN THERE IS NO PREVIOUS SIBLING IT SAYS SO. This loop used to fall
+   * off its own end and return, so Tab on the first item of a list — the most
+   * common list gesture there is — did nothing, showed nothing and explained
+   * nothing. nesting.ts holds the argument for refusing rather than inventing
+   * an indent level; what belongs here is that a refusal has to be VISIBLE, in
+   * the status line the app already has (a second transient-message mechanism
+   * in one app is one too many — collabui.ts) and as a nudge on the block, so
+   * the answer arrives where the reader is looking.
+   */
   private indent(id: string, deeper: boolean): void {
     const s = this.store
     const page = s.page
@@ -3183,6 +3768,20 @@ export class Editor {
     const i = page.blocks.findIndex((x) => x.id === id)
     const b = page.blocks[i]
     if (!b) return
+    if (deeper) {
+      const aim = indentTarget(page.blocks, id)
+      if (!aim.ok) {
+        if (aim.why === 'first') {
+          this.status(t('A block nests under the one above it — this one has nothing above it'))
+          this.nudge(id)
+        }
+        return
+      }
+    } else if (!canOutdent(effectiveParents(page), id)) {
+      this.status(t('This block is not nested'))
+      this.nudge(id)
+      return
+    }
     s.commit(() => {
       if (!deeper) {
         // by the EFFECTIVE parent (model.ts), not by whatever `parent` names:
@@ -3204,6 +3803,25 @@ export class Editor {
     })
     this.paintPage()
     this.focusBlock(id)
+  }
+
+  /**
+   * A refused gesture, shown where the reader is looking.
+   *
+   * The status line carries the WORDS and this carries the pointer: the block
+   * you aimed at is the one that twitches, so a message in the topbar is not
+   * left to be connected to a keystroke by guesswork. Purely a class the
+   * stylesheet animates — nothing here touches the model, so a refusal can
+   * never end up in the file or in an undo step.
+   */
+  private nudge(id: string): void {
+    const node = this.main.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`)
+    if (!node) return
+    node.classList.remove('sp-nudge')
+    // reflow between the two writes, or the class never leaves and re-arrives
+    void node.offsetWidth
+    node.classList.add('sp-nudge')
+    setTimeout(() => node.classList.remove('sp-nudge'), 400)
   }
 
   setType(id: string, type: string, variant?: (b: Block) => void): void {
@@ -3316,6 +3934,7 @@ export class Editor {
       [t('Writing'), [
         ['↵', t('A new block')],
         [`Tab / ${M('shift')}Tab`, t('Indent, or move back out')],
+        [M('mod', '/'), t('Block options — type, list, indent')],
         ['/', t('The block menu, on an empty line')],
         ['[[', t('Link to another page')],
         [`${M('mod', 'Z')} / ${M('shift', 'mod', 'Z')}`, t('Undo, redo')],
@@ -3330,6 +3949,8 @@ export class Editor {
         [M('mod', 'K'), t('Link the selected words')],
       ]],
       [t('Getting around'), [
+        ['↑ ↓', t('Between blocks, and between the lines of one')],
+        ['← →', t('Off the edge of a block, into the next')],
         [M('mod', 'K'), t('Search all pages, with nothing selected')],
         [M('mod', 'F'), t('Find and replace')],
         [M('alt', 'mod', 'N'), t('New page')],
@@ -3547,6 +4168,13 @@ export class Editor {
         for (const p of s.doc.pages) {
           const hits: string[] = []
           if (p.title.toLowerCase().includes(q)) hits.push(p.title)
+          // ⌘K FINDS A PAGE BY ITS ALIASES. An alias that reaches the `[[…]]`
+          // resolver but not search is worse than no alias: you can link to
+          // the page by the name you use for it and then cannot find it by
+          // that name, which reads as the search being broken.
+          for (const alias of namesOf(p).slice(1)) {
+            if (alias.toLowerCase().includes(q)) hits.push(t('also called “{name}”', { name: alias }))
+          }
           for (const b of p.blocks) {
             const text = textOf(b.html)
             if (text.toLowerCase().includes(q)) hits.push(text)
@@ -3626,6 +4254,7 @@ export class Editor {
       // the "/" that opened the menu is a command, not content
       if (blk && (blk.html ?? '').trim() === '/') blk.html = ''
       if (item.type === 'pagelink') this.insertPageCard(blockId)
+      else if (item.type === 'embed') this.insertEmbed(blockId)
       else if (item.type === 'link') { this.setType(blockId, 'link'); this.openLinkCard(blockId) }
       else this.setType(blockId, item.type, item.init)
     }
@@ -3685,6 +4314,99 @@ export class Editor {
       })
       this.paintPage()
     })
+  }
+
+  /**
+   * THE ONE WRITER for an embed's target — the same rule as a link card's
+   * fields (applyLinkCard below), for the same reason.
+   *
+   * `html` is written alongside `page`, always, and it is a LINK to the target
+   * rather than a copy of anything: a build that has never heard of `embed`
+   * renders an unknown type's html (render.ts default case), so an older shell
+   * opening this file shows a link to the source page instead of a blank box.
+   * An embed written without it is a block that vanishes in last year's shell.
+   *
+   * A section returned to "the whole page" DELETES `anchor` rather than
+   * storing an empty one — a default is never bytes in the file (PLATFORM §3).
+   */
+  private applyEmbed(blockId: string, pageId: string, anchor?: string): void {
+    const s = this.store
+    s.commit(() => {
+      const b = s.block(blockId)
+      if (b) this.embedFields(b, pageId, anchor)
+    })
+    this.paintPage()
+  }
+
+  /** An embed's fields, written together: what it shows, and its readable `html`. */
+  private embedFields(b: Block, pageId: string, anchor?: string): void {
+    const target = this.store.index.page.get(pageId)
+    b.type = 'embed'
+    b.page = pageId
+    if (anchor) b.anchor = anchor
+    else delete b.anchor
+    b.html = `<a href="#p/${pageId}">${escapeHtml(target?.title || t('Untitled'))}</a>`
+  }
+
+  /**
+   * Choose what an embed shows: a page, or one section of it.
+   *
+   * ITS OWN PICKER rather than openPagePicker with a flag, because the list is
+   * a different list — every page AND every heading on it, so "show me the
+   * Rollout section of the plan" is one gesture instead of choose-then-hunt.
+   * The heading names come from embed.ts `headingsOf`, which is the same list
+   * `sectionOf` matches against, so a section you can pick here is a section
+   * that resolves.
+   */
+  private insertEmbed(blockId: string, then?: (pageId: string, anchor?: string) => void): void {
+    // the bar makes the block only once a page is chosen (insertItem); the /
+    // menu converts the block it was opened on
+    const pick = (pageId: string, anchor?: string) => then ? then(pageId, anchor) : this.applyEmbed(blockId, pageId, anchor)
+    const s = this.store
+    if (s.readOnly || this.reading) return
+    this.openOverlay(t('Embed a page'), (card, close) => {
+      const input = document.createElement('input')
+      input.className = 'sp-find'
+      input.placeholder = t('Find a page or a section…')
+      const list = el('ul', 'sp-results')
+      const row = (label: string, sub: string, then: () => void) => {
+        const li = document.createElement('li')
+        const b = document.createElement('button')
+        b.className = 'sp-result'
+        b.type = 'button'
+        b.innerHTML =
+          `<span class="sp-result-ico">${ICONS.page}</span>` +
+          `<span class="sp-result-txt"><strong>${escapeHtml(label)}</strong>` +
+          (sub ? `<span>${escapeHtml(sub)}</span>` : '') + '</span>'
+        b.addEventListener('click', () => { close(); then() })
+        li.append(b)
+        list.append(li)
+      }
+      const run = () => {
+        const q = input.value.trim().toLowerCase()
+        list.innerHTML = ''
+        for (const p of s.doc.pages) {
+          // A PAGE CANNOT EMBED ITSELF, so it is not offered. The renderer
+          // stops that loop safely either way; offering it would be offering a
+          // placeholder.
+          if (p.id === s.pageId) continue
+          const title = p.title || t('Untitled')
+          const heads = headingsOf(p).filter((h) => !q || h.text.toLowerCase().includes(q))
+          const hit = !q || title.toLowerCase().includes(q)
+          if (hit) row(title, t('The whole page'), () => pick(p.id))
+          for (const h of (hit ? headingsOf(p) : heads)) {
+            row(`${title} › ${h.text}`, t('That section only'),
+              () => pick(p.id, h.text))
+          }
+          if (list.childElementCount > 40) break
+        }
+        if (!list.childElementCount) list.append(el('li', 'sp-noresult', t('No page matches')))
+      }
+      input.addEventListener('input', run)
+      card.append(input, list)
+      run()
+      setTimeout(() => input.focus(), 0)
+    }, { top: true })
   }
 
   /**
@@ -3835,14 +4557,22 @@ export class Editor {
         const q = input.value.trim().toLowerCase()
         list.innerHTML = ''
         for (const p of s.doc.pages) {
-          if (q && !p.title.toLowerCase().includes(q)) continue
+          // `[[` FINDS A PAGE BY ITS ALIASES TOO — the third of the three
+          // places an alias has to reach (the resolver, ⌘K, here). Typing
+          // `[[NYC` must offer the page titled "New York", or the alias only
+          // works for text somebody imported and never for text you type.
+          const names = namesOf(p)
+          const alias = q ? names.slice(1).find((n) => n.toLowerCase().includes(q)) : undefined
+          if (q && !p.title.toLowerCase().includes(q) && !alias) continue
           const li = document.createElement('li')
           const b = document.createElement('button')
           b.className = 'sp-result'
           b.type = 'button'
           b.innerHTML =
             `<span class="sp-result-ico">${ICONS.page}</span>` +
-            `<span class="sp-result-txt"><strong>${escapeHtml(p.title || t('Untitled'))}</strong></span>`
+            `<span class="sp-result-txt"><strong>${escapeHtml(p.title || t('Untitled'))}</strong>` +
+            (alias ? `<span>${escapeHtml(t('also called “{name}”', { name: alias }))}</span>` : '') +
+            `</span>`
           b.addEventListener('click', () => choose(p.id, p.title || t('Untitled')))
           li.append(b)
           list.append(li)
@@ -3991,6 +4721,11 @@ export class Editor {
       if (!s.readOnly && !isIssue(page)) {
         row(m, { icon: ICONS.tag, label: t('Make this page an issue'), hint: t('Adds status, priority, assignee, estimate'),
           run: () => this.makeIssue(pageId) })
+      }
+
+      if (!s.readOnly) {
+        row(m, { icon: ICONS.copy, label: t('Save as template'), hint: t('New pages can start as a copy of this one'),
+          run: () => savePageAsTemplate(this.templateHost, page) })
       }
 
       // A thread about the PAGE — the second and last anchor. It is offered
@@ -4538,12 +5273,18 @@ export class Editor {
     for (const page of plan.pages) {
       for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
     }
+    for (const [label, body] of Object.entries(plan.footnotes)) {
+      plan.footnotes[label] = sanitizeInline(body)
+    }
 
     // ONE step: pages, images and fonts land together or not at all.
     s.commit(() => {
       s.doc.pages.push(...plan.pages)
       if (Object.keys(plan.assets).length) Object.assign((s.doc.assets ??= {}), plan.assets)
       if (plan.fonts.length) (s.doc.fonts ??= []).push(...plan.fonts)
+      // ADDITIONS ONLY here (unlike the Markdown path, whose plan starts from
+      // this table): planGraft returns what the host does not already hold.
+      if (Object.keys(plan.footnotes).length) Object.assign((s.doc.footnotes ??= {}), plan.footnotes)
     })
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
@@ -4646,6 +5387,95 @@ export class Editor {
   }
 
   /**
+   * PAGE → DECK.
+   *
+   * What this hands over is the deck's DOCUMENT JSON, not a `.bento.html`
+   * deck — src/todeck.ts explains why that is the honest scope from inside
+   * this app. So the dialog's job is to say what the artefact IS and what to
+   * do with it, and then to say, before anything is downloaded, exactly what
+   * of this page did not survive the crossing. A silent lossy export is the
+   * failure mode here; the summary is the feature.
+   */
+  openExportDeck(): void {
+    const s = this.store
+    this.openOverlay(t('Export a page as slides'), (card, close) => {
+      card.append(el('h2', 'sp-card-h', t('Export a page as slides')))
+
+      const what = document.createElement('p')
+      what.className = 'sp-note'
+      what.textContent = t('The page becomes a deck’s document. Open Bento Slides and use “Replace from JSON…” in its About dialog — or window.bento.loadDoc() from a script.')
+      card.append(what)
+
+      const pick = document.createElement('select')
+      pick.className = 'sp-select'
+      for (const { page, depth } of s.tree()) {
+        const o = document.createElement('option')
+        o.value = page.id
+        o.textContent = `${'· '.repeat(depth)}${page.title || t('Untitled')}`
+        if (page.id === s.pageId) o.selected = true
+        pick.append(o)
+      }
+      const pageRow = el('div', 'sp-row')
+      pageRow.append(el('span', '', t('Page')), pick)
+      card.append(pageRow)
+
+      const summary = document.createElement('p')
+      summary.className = 'sp-note'
+      const losses = document.createElement('ul')
+      losses.className = 'sp-note'
+      card.append(summary, losses)
+
+      // Built from the REAL export, not described in the abstract — the same
+      // choice openExportSpace makes, and for the same reason: the counts have
+      // to move as the choice does or they are decoration.
+      let out = pageToDeck(s.doc, pick.value)
+      const recount = (): void => {
+        out = pageToDeck(s.doc, pick.value)
+        summary.textContent = t('{n} slide(s).', { n: out.slides })
+        losses.textContent = ''
+        if (!out.notes.length) return
+        const head = document.createElement('li')
+        head.textContent = t('What did not come across as it stands:')
+        losses.append(head)
+        for (const n of out.notes) {
+          const li = document.createElement('li')
+          li.textContent = n.n > 1 ? `${deckNoteText(n)} (×${n.n})` : deckNoteText(n)
+          losses.append(li)
+        }
+      }
+      pick.addEventListener('change', recount)
+      recount()
+
+      const name = (): string =>
+        `${(s.doc.pages.find((p) => p.id === pick.value)?.title || 'deck').replace(/[^\w.-]+/g, '-')}.bento-slides.json`
+
+      const copyB = plainBtn(t('Copy the deck JSON'), () => {
+        navigator.clipboard?.writeText(JSON.stringify(deckForExport(out.doc), null, 2))
+          .then(() => { copyB.textContent = t('Copied') })
+          .catch(() => { copyB.textContent = t('Could not copy') })
+          .finally(() => { setTimeout(() => { copyB.textContent = t('Copy the deck JSON') }, 1800) })
+      })
+
+      const acts = el('div', 'sp-actions')
+      acts.append(
+        plainBtn(t('Download the deck JSON'), () => {
+          const blob = new Blob([JSON.stringify(deckForExport(out.doc), null, 2)], { type: 'application/json' })
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(blob)
+          a.download = name()
+          a.click()
+          URL.revokeObjectURL(a.href)
+          close()
+          this.status(t('Exported {n} slide(s) as a deck', { n: out.slides }))
+        }, true),
+        copyB,
+        plainBtn(t('Close'), close),
+      )
+      card.append(acts)
+    })
+  }
+
+  /**
    * Import, in ONE undoable step.
    *
    * Everything slow or asynchronous — reading files, decoding and re-encoding
@@ -4678,15 +5508,26 @@ export class Editor {
       return
     }
 
-    // pages this space already has, so an incremental import links INTO it
-    const existing = new Map<string, string>()
+    // Pages this space already has, so an incremental import links INTO it —
+    // BY EVERY NAME they answer to. `nameIndex` carries titles and aliases and
+    // settles the ties, which is what makes `[[NYC]]` in an imported vault
+    // land on the page already titled "New York": aliases have to reach the
+    // resolver or they are an alias in name only.
+    const existing = nameIndex(s.doc).byName
+    // every id the space already uses, so a `{#id}` in a note never lands on
+    // a second block (or a page) with the same id
+    const usedIds = new Set<string>()
     for (const page of s.doc.pages) {
-      const key = page.title.trim().toLowerCase()
-      if (key && !existing.has(key)) existing.set(key, page.id)
+      usedIds.add(page.id)
+      for (const b of page.blocks) usedIds.add(b.id)
     }
     const plan = planImport(files, {
       rootTitle: t('Imported notes'),
       resolveExisting: (target) => existing.get(target),
+      // so an imported `[^1]` that would land on a note this space already has
+      // is renamed, in the plan, along with the references to it
+      existingNotes: s.doc.footnotes,
+      idTaken: (id) => usedIds.has(id),
     })
 
     // ---- images ------------------------------------------------------------
@@ -4748,6 +5589,11 @@ export class Editor {
     for (const page of plan.pages) {
       for (const b of page.blocks) if (b.html) b.html = sanitizeInline(b.html)
     }
+    // A NOTE IS INLINE HTML OUT OF SOMEBODY ELSE'S FILE and goes through the
+    // same gate as a block's, in the same pass, for the same reason.
+    for (const [label, body] of Object.entries(plan.footnotes)) {
+      plan.footnotes[label] = sanitizeInline(body)
+    }
 
     // The import already lands under exactly one root (planImport wraps a mixed
     // selection); re-homing that root is the whole of "add these under this
@@ -4758,7 +5604,15 @@ export class Editor {
       for (const page of plan.pages) if (!page.parent || !arrived.has(page.parent)) page.parent = under
     }
 
-    s.commit(() => { s.doc.pages.push(...plan.pages) })
+    s.commit(() => {
+      s.doc.pages.push(...plan.pages)
+      // `plan.footnotes` STARTED from this document's own table and had the
+      // imported notes merged into it, renaming collisions — so it is assigned
+      // whole rather than spread over the existing one. Absent stays absent
+      // when nothing has footnotes, so importing plain notes does not add an
+      // empty key to the file.
+      if (Object.keys(plan.footnotes).length) s.doc.footnotes = plan.footnotes
+    })
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
     this.status(t('Imported'))
@@ -5177,6 +6031,10 @@ export class Editor {
       // handle, which is what leaves you editing this space afterwards.
       writeCopy: (out) => this.onExportSpace?.(out) ?? Promise.resolve(false),
       importMarkdown: () => this.openImport(),
+      moreExports: (m) => {
+        row(m, { icon: ICONS.canvas, label: t('Export page as slides…'),
+          desc: t('The page as a bento/slides deck, ready to paste into Bento Slides'), run: () => this.openExportDeck() })
+      },
     }
   }
 
@@ -5185,6 +6043,7 @@ export class Editor {
     row(m, { icon: ICONS.page, label: t('New page'), kbd: keys('alt', 'mod', 'N'), run: () => this.newPage() })
     row(m, { icon: ICONS.book, label: t("Today's journal"), kbd: keys('shift', 'mod', 'J'), run: () => this.openJournal() })
     row(m, { icon: ICONS.board, label: t('New issue'), kbd: keys('shift', 'mod', 'I'), run: () => this.newIssue() })
+    row(m, { icon: ICONS.copy, label: t('Templates…'), run: () => openTemplates(this.templateHost) })
   }
 
   private updateVersion: string | null = null
@@ -5338,6 +6197,38 @@ function plainBtn(label: string, onClick: () => void, primary = false): HTMLButt
   b.textContent = label
   b.addEventListener('click', onClick)
   return b
+}
+
+/**
+ * One `DeckNote` in the reader's own language.
+ *
+ * A SWITCH OF LITERALS, deliberately, and not `t(TEXT[code])`. The i18n
+ * extractor sweeps `t()` calls whose argument is a LITERAL STRING out of the
+ * source; a lookup table would compile, run, report 100% coverage in the
+ * packer, and ship English in all eight locales — which has already happened
+ * once in this app, to the block menu labels. The document's own copy of these
+ * sentences lives in todeck.ts and is deliberately English: a saved artefact's
+ * words are its author's, not its next reader's browser's.
+ */
+function deckNoteText(n: DeckNote): string {
+  const code: DeckNoteCode = n.code
+  switch (code) {
+    case 'image-remote': return t('A picture that lives on the web was left out — a deck never fetches.')
+    case 'media-remote': return t('A clip that lives on the web was left out — a deck never fetches.')
+    case 'media-embedded': return t('A clip travelled as embedded bytes, so the deck is large.')
+    case 'link-flattened': return t('A link kept its words; a slide has nowhere to put the address.')
+    case 'pagelink': return t('A card that opened another page became its title.')
+    case 'toggle-open': return t('A fold is shown open — a slide cannot fold.')
+    case 'callout-plain': return t('A callout kept its words and its kind, in a plain panel.')
+    case 'canvas-flattened': return t('A canvas became a slide; the card sizes were chosen here.')
+    case 'table-split': return t('A table was too tall for one slide and continues on the next.')
+    case 'view-derived': return t('A board became a table of the rows it stood for.')
+    case 'unknown-block': return t('A block this build does not know became its text.')
+    case 'empty-block': return t('A block with nothing in it was left out.')
+    case 'rtl': return t('This space reads right-to-left; a deck has no such setting.')
+    case 'comments': return t('Review comments stayed behind, on purpose.')
+    case 'icon-glyph': return t('The page’s icon is one of this app’s own glyphs, not an emoji, and did not travel.')
+  }
 }
 
 // ---- dropped files ----------------------------------------------------------

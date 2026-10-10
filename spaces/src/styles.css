@@ -777,7 +777,10 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 /* A WIDE TABLE SCROLLS. The measure belongs to the document, so a six-column
    table must not widen the prose column on a phone — it gets its own scroller
    and the paragraph above it keeps its line length. */
-.sp-tb-wrap { overflow-x: auto; position: relative; }
+/* `overscroll-behavior-x` for the reason spelled out on `.sp-board`: a
+   sideways swipe that runs out of table must stop, not become the browser's
+   back gesture. */
+.sp-tb-wrap { overflow-x: auto; overscroll-behavior-x: contain; position: relative; }
 .sp-tb {
   width: 100%; border-collapse: collapse; table-layout: fixed;
   font-size: 15px; line-height: 1.5;
@@ -823,6 +826,33 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 }
 .sp-pagecard:hover { background: var(--chrome); }
 .sp-pagecard.sp-dead { color: var(--muted); font-style: italic; font-weight: 400; }
+
+/* ————— embeds (transclusion) —————
+   A QUOTATION, DRAWN AS ONE. The rule down the left edge and the inset are the
+   blockquote's, not the page card's: what is inside came from somewhere else
+   and is being shown here, which is exactly what a quote mark has always meant.
+   The card border was tried and read as a widget — a thing to press rather than
+   a passage to read.
+
+   The source line is the ATTRIBUTION and sits above the content, small and
+   quiet, because it is a citation and not a heading. It is also the way back to
+   the page, so it keeps a hover state; a citation nobody can click is how a
+   reader ends up searching the sidebar for the page they are already looking at. */
+.sp-b-embed { margin: 10px 0; }
+.sp-embed { border-inline-start: 3px solid var(--line); padding-inline-start: 14px; }
+.sp-embed-src {
+  display: block; font-size: 12px; color: var(--muted);
+  text-decoration: none; margin-bottom: 4px;
+}
+a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
+.sp-embed-src.sp-dead { font-style: italic; }
+/* The nested page's own blocks keep their spacing, minus the first and last
+   margins — an embed that opens with a blank line looks like a rendering bug. */
+.sp-embed-body > :first-child { margin-block-start: 0; }
+.sp-embed-body > :last-child { margin-block-end: 0; }
+/* A NAMED PLACEHOLDER, never a blank: a cycle, a depth stop and a missing page
+   each say which one they are, in the reader's language. */
+.sp-embed-note { color: var(--muted); font-style: italic; font-size: 13px; margin: 0; }
 
 /* ————— link cards (outward) —————
    Deliberately the page card's sibling: same border, radius and hover, so the
@@ -883,6 +913,19 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
 .sp-backlink-list a { font-weight: 600; text-decoration: none; color: var(--ink); }
 .sp-backlink-list a:hover { text-decoration: underline; }
 .sp-snippet { color: var(--muted); margin-inline-start: 8px; }
+
+/* Unlinked mentions: the same list as the backlinks, one step quieter, with
+   the Link button only visible on hover/focus so a page with thirty of them
+   is not thirty buttons shouting. Focus-within keeps it reachable by keyboard,
+   where hover does not exist at all. */
+.sp-mentions { padding-top: 16px; margin-top: 22px; }
+.sp-mentions:empty { display: none; }
+.sp-mentions .sp-backlink-list li { display: flex; align-items: baseline; gap: 6px; }
+.sp-mentions .sp-snippet { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-mention-link { flex: none; padding: 1px 8px; font-size: 12px; opacity: 0; transition: opacity 0.12s; }
+.sp-mentions li:hover .sp-mention-link,
+.sp-mentions li:focus-within .sp-mention-link { opacity: 1; }
+@media (hover: none) { .sp-mention-link { opacity: 1; } }
 
 /* ————— dialogs: the kernel's (kernel/src/ui/dialog.css) —————
    Every modal is `createDialog`. Its look comes through `--bkd-*`, set on the
@@ -1413,7 +1456,8 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   body.sp-printing .sp-printroot { display: block; }
   .sp-printroot .sp-page { break-after: page; }
   .sp-printroot .sp-page:last-child { break-after: auto; }
-  .sp-printroot .sp-pageicon, .sp-printroot .sp-backlinks { display: none; }
+  .sp-printroot .sp-pageicon, .sp-printroot .sp-backlinks,
+  .sp-printroot .sp-mentions { display: none; }
   @page { margin: 18mm 16mm; }
 }
 
@@ -1702,6 +1746,19 @@ button.sp-callout-chip:hover { text-decoration: underline; text-underline-offset
   .sp-mkbd { display: none; }
 }
 
+/* WHILE A FINGER IS DRAGGING. The press that starts a touch drag is also the
+   press that arms text selection on iOS and Android, and a card whose title is
+   being selected mid-drag paints a blue smear across the gesture. touch.ts
+   clears the selection when the hold fires; this stops a new one starting. */
+body.sp-touchdrag, body.sp-touchdrag * { -webkit-user-select: none; user-select: none; }
+/* AND SCROLL SNAPPING STANDS DOWN WHILE IT LASTS. The board's
+   `scroll-snap-type: x proximity` is right for a thumb flicking between
+   columns and wrong for the 12px-per-frame creep that carries a held card
+   towards an off-screen column: each step lands inside the proximity of the
+   snap point it just left and is pulled straight back. Measured before this
+   rule, with the finger parked at the board's right edge for 1400ms:
+   scrollLeft 0 → 0. */
+body.sp-touchdrag .sp-board { scroll-snap-type: none; }
 
 /* ————— find & replace on a small screen —————
    Measured at a 575px viewport: the bar laid out 644px wide and started at
@@ -2004,6 +2061,14 @@ button.sp-prop-val:hover { background: var(--surface); border-color: var(--edge)
 .sp-board {
   display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px;
   scroll-snap-type: x proximity;
+  /* …AND THE SWIPE STOPS AT ITS OWN EDGE. `overflow-x: auto` keeps the board's
+     columns out of the document, but by default a touch scroll that reaches
+     the end of a scroller CHAINS to its ancestors — and on a phone the
+     outermost ancestor is the browser's own back-navigation gesture. Measured
+     at 390px: the board holds 1452px of columns in a 257px box, so a reader
+     swiping through five columns hits that end on nearly every gesture.
+     Containment ends the scroll where the board does. */
+  overscroll-behavior-x: contain;
 }
 .sp-col {
   flex: 0 0 232px; min-width: 232px; scroll-snap-align: start;
@@ -2069,7 +2134,7 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
    the rest as data: tabular figures, a quiet rule under the head, and no
    vertical lines — a grid of boxes is a spreadsheet, and this is a list of
    documents that happens to have columns. */
-.sp-view-tablewrap { overflow-x: auto; margin: 0 0 4px; }
+.sp-view-tablewrap { overflow-x: auto; overscroll-behavior-x: contain; margin: 0 0 4px; }
 .sp-view-table {
   border-collapse: collapse; width: 100%; font-size: 13.5px;
   font-variant-numeric: tabular-nums;
@@ -2387,6 +2452,9 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
   box-shadow: inset 0 0 0 1px rgb(var(--shade) / .08);
 }
 .sp-cover-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* A PROCEDURAL cover (procedural.ts): the figure fills the same box, over the
+   same ground — `slice` crops it to whatever the band's aspect is. */
+.sp-gen { display: block; width: 100%; height: 100%; }
 /* The lift is what makes it read as a cover rather than as a banner sitting on
    top of a document: the title rises INTO the picture's lower edge, which is
    the arrangement everyone recognises. A scrim under the title would fight the
@@ -2445,14 +2513,14 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
   display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 .sp-gcard-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
-/* A CARD WITH NO COVER IS NOT A HOLE. Its own hue, derived from the page id, so
-   a gallery nobody has given pictures to still reads as a set of distinct
-   things. `hsl` with an alpha keeps it a tint in both themes rather than a
-   colour that glows on the dark one. */
-.sp-gcard-bare {
-  background:
-    linear-gradient(150deg, hsl(var(--h, 210) 62% 62% / .30), hsl(calc(var(--h, 210) * 1deg + 40deg) 62% 58% / .16));
-}
+/* A CARD WITH NO COVER IS NOT A HOLE. Its own figure, derived from the page id
+   (procedural.ts — the tint this rule used to draw, plus a pattern), so a
+   gallery nobody has given pictures to still reads as a set of distinct
+   things. Alpha over the ground keeps it a tint in both themes rather than a
+   colour that glows on the dark one. The mark sits above the figure. */
+.sp-gcard-bare { position: relative; }
+.sp-gcard-bare .sp-gen { position: absolute; inset: 0; }
+.sp-gcard-bare .sp-gcard-mark { position: relative; }
 /* --ink-2, not --muted: a grey letter on a 30% tint was the same value as the
    tint in the dark theme. */
 .sp-gcard-mark { font-size: 34px; line-height: 1; color: var(--ink-2, var(--ink)); font-weight: 600; }
@@ -2641,6 +2709,111 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }
 
+/* ————— the block format row —————
+   Lives at the top of the block menu, which is a bottom SHEET on a phone, so
+   this is the same markup at both widths and the touch targets are sized for
+   the smaller of them (44px is the floor a thumb needs; the row wraps rather
+   than scrolls, because a scroll container inside a popover clips the other
+   axis too). blockbar.ts records why these controls are not in the selection
+   toolbar. */
+.sp-blockbar {
+  display: flex; flex-wrap: wrap; gap: 2px; align-items: center;
+  padding: 2px 2px 6px; margin-bottom: 4px; border-bottom: 1px solid var(--line);
+}
+.sp-blockbar-gap { flex: 1 1 auto; min-width: 4px; }
+.sp-blockbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  /* 28, not 30: eight type buttons plus their gaps have to fit one row of a
+     260px popover (8×28 + 7×2 = 238 ≤ 248 of usable width), so the row breaks
+     between the types and the two nesting controls rather than orphaning the
+     quote button on a line of its own. Measured in the built shell. */
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px;
+  background: none; color: var(--ink-2); cursor: pointer;
+}
+.sp-blockbtn svg { width: 17px; height: 17px; }
+.sp-blockbtn:hover { background: var(--chrome-2); color: var(--ink); }
+.sp-blockbtn.sp-sel { background: var(--chrome-2); color: var(--accent); }
+/* aria-disabled, NOT disabled: the control has to stay focusable so a keyboard
+   can reach the label that explains why it is off (blockbar.ts). So the opacity
+   is the only thing that changes — clicks still land, and land on the code that
+   says why. */
+.sp-blockbtn.sp-off { opacity: .38; }
+@media (pointer: coarse) {
+  .sp-blockbar { gap: 4px; padding-bottom: 8px; }
+  .sp-blockbtn { width: 44px; height: 44px; }
+  .sp-blockbtn svg { width: 20px; height: 20px; }
+}
+
+/* A refused gesture, at the block it was aimed at. The words are in the status
+   line; this is the pointer. Motion only — no layout, so it cannot reflow the
+   prose under the caret. */
+@media (prefers-reduced-motion: no-preference) {
+  .sp-nudge { animation: sp-nudge .34s ease; }
+  @keyframes sp-nudge {
+    0%, 100% { transform: none }
+    25% { transform: translateX(3px) }
+    60% { transform: translateX(-2px) }
+  }
+}
+/* ---------------------------------------------------------------------------
+   FOOTNOTES (src/footnotes.ts)
+
+   The marker is a superscript number and the notes are a numbered list at the
+   foot of the page. Both are DERIVED — nothing here has a document field
+   behind it — so the styling only has to do two jobs: keep the marker from
+   disturbing the line it sits in, and keep the notes quieter than the prose
+   they belong to.
+   --------------------------------------------------------------------------- */
+/* THE MARKER MUST NOT CHANGE THE LINE HEIGHT. `vertical-align: super` on a
+   normal-size box grows the line box, and a paragraph with one footnote in it
+   then sits taller than the one above it — visible as a stutter down a page of
+   prose. `line-height: 0` on the raised box is what stops that. */
+.sp-fnref { font-size: 0.72em; line-height: 0; vertical-align: super; }
+.sp-fnref a {
+  color: var(--accent-ink); text-decoration: none; padding: 0 1px; border-radius: 3px;
+}
+.sp-fnref a:hover, .sp-fnref a:focus-visible { background: var(--chrome-2); }
+
+.sp-fnotes {
+  margin: 40px 0 0; padding-top: 14px; border-top: 1px solid var(--line);
+  font-size: 14px; color: var(--muted);
+}
+.sp-fnlist { margin: 0; padding-inline-start: 22px; }
+.sp-fnote { margin: 0 0 6px; }
+.sp-fnote::marker { color: var(--accent-ink); }
+.sp-fnbody { display: inline; }
+.sp-fnbody[data-ph]:empty::before {
+  content: attr(data-ph); color: var(--ph); pointer-events: none;
+}
+.sp-fnbody[contenteditable="true"]:focus {
+  outline: none; box-shadow: 0 0 0 2px var(--chrome-2); border-radius: 3px;
+}
+/* THE WAY BACK. Quiet until you want it — a column of arrows down the notes
+   reads as decoration, and the arrow is only ever wanted once you have
+   finished reading the note it belongs to. */
+.sp-fnback {
+  color: var(--ph); text-decoration: none; margin-inline-end: 6px; font-size: 12px;
+}
+.sp-fnote:hover .sp-fnback, .sp-fnback:focus-visible { color: var(--accent-ink); }
+
+@media print {
+  /* WHERE FOOTNOTES LAND ON PAPER: at the foot of the PAGE OF THE DOCUMENT,
+     not of the sheet. CSS `float: footnote` is the typographic answer and no
+     browser implements it (it is Paged Media, and print-to-PDF from Chrome,
+     Safari and Firefox all ignore it) — so a "real" footnote here would be one
+     that silently did not print, which is the single outcome this feature
+     cannot have. A page of a space is one flow under one heading and the
+     section already sits at the end of it: endnotes per page, which is what a
+     multi-page handout wants anyway. Kept whole across a sheet break, because
+     a note split down the middle is worse than one that starts lower. */
+  .sp-fnotes { break-inside: avoid; color: #000; border-top-color: #999; }
+  .sp-fnote { break-inside: avoid; }
+  /* the arrow is navigation, and paper has none */
+  .sp-fnback { display: none !important; }
+  /* an accent marker on a monochrome printer is a grey smudge at 7px */
+  .sp-fnref a { color: #000; background: none !important; }
+}
+
 /* ————— SLIDES PARITY: the keyboard ring —————
    slides #573 (and the kernel's .bkm-item): 2px --accent-ink. Bar and dialog
    buttons draw it OUTSIDE, on the surface they sit on (inside, it would vanish
@@ -2686,3 +2859,10 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
     min-width: var(--tap); min-height: var(--tap); justify-content: center;
   }
 }
+
+/* ————— page templates —————
+   One row in the Templates dialog: the icon beside the name rather than above
+   it. `.sp-result-ico` and `.sp-tree-ico` are both `display: flex` and expect a
+   flex PARENT; dropped into a plain span each became a block of its own. */
+.sp-tpl-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sp-tpl-name svg { width: 15px; height: 15px; display: block; color: var(--muted); }
