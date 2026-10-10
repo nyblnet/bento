@@ -84,9 +84,26 @@ callout tones must stay distinct — `design-contrast` if they collapse). A valu
 `design-contrast`. There is no free CSS anywhere in a design. A name that is
 also a built-in's is never used (`design-shadows-builtin`).
 
-The Markdown export opens with the design as front matter —
-`design: harbour` plus a one-line `designs: {…}` JSON for a carried design —
-and importing that file into a space with no design adopts it.
+**A page can name its own design** with the same kind of value:
+`{ "id": "p-…", "title": "Q3 figures", "design": "ledger", … }`. Absent means
+inherit: a page wears its own design, else its nearest ancestor's, else the
+space's `design`, else the default look — so a design on a section restyles
+its whole subtree. Leave the key out to inherit (never `""` or `null`). An
+unknown name renders the DEFAULT look on that page (it does not fall through
+to the parent's), is kept, and `validate()` reports `unknown-design` with that
+page's id. Custom designs a page uses live in the space's `"designs"` like any
+other. Embedded content — a gallery card, a view's rows, a page card, an
+`embed` block showing another page — wears the design of the page it is shown
+ON, not the page it points at.
+
+The Markdown export opens with the design as front matter. The whole-space
+file says `design: <space's design>` plus a one-line `designs: {…}` JSON
+carrying every custom design the space or any page names; a single page's note
+("Export page as Markdown…") says `design:` only when that page sets one
+itself — an inherited design is not written. Import reads `design:` back onto
+EACH note's own page and adds the carried `designs:` entries to the space's
+registry (never over a name the space already uses); it does not change the
+space's own `design`.
 
 **Both arrays are flat and in pre-order; nesting is a `parent` field.** A child
 always follows its parent, which is what lets one forward pass rebuild the
@@ -116,6 +133,7 @@ unique ids the first time.
 | `embed` | `page`, `anchor`, `html` | a live view of another page, or one section of it — see **Embeds** |
 | `link` | `url`, `title`, `desc`, `site`, `icon`, `image`, `html` | a card linking OUT of the space — see **Link cards** |
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
+| `view` | `layout`, `groupBy`, `source`, `filter`, `sort`, `html` | a board, list, table, gallery, timeline or workload chart of this space's pages |
 | `view` | `layout`, `span`, `groupBy`, `html` | a board, list, table, gallery or calendar of this space's pages |
 | `view` | `layout`, `groupBy`, `sort`, `source`, `filter`, `html` | a board or list of this space's issues |
 
@@ -400,6 +418,7 @@ document-level** — `doc.fields`, absent means the built-in seven.
     { "key": "assignee", "label": "Assignee", "vt": "person" },
     { "key": "estimate", "label": "Estimate", "vt": "number" },
     { "key": "labels",   "label": "Labels",   "vt": "labels" },
+    { "key": "start",    "label": "Start",    "vt": "date"   },
     { "key": "due",      "label": "Due",      "vt": "date"   },
     { "key": "project",  "label": "Project",  "vt": "text"   }
   ],
@@ -435,6 +454,25 @@ list**: `{ "type": "view", "layout": "board", "groupBy": "status",
 "html": "Issues by status" }`. Put it on a page of its own — a page carrying a
 view is laid out wide.
 
+`layout` is one of `board` (the default, and the ABSENT key — never write
+`"board"`), `list`, `table`, `gallery`, `gantt` and `workload`. **A chart is a
+layout here, not a block type**, so every shape reads the same four keys and a
+build that predates a shape draws a board of the same pages rather than a
+fallback line of text.
+
+- **`gantt`** draws one bar per page, from its `start` date to its `due` date,
+  with today marked and overdue work outlined. A page with only ONE of the two
+  dates gets a **milestone diamond** at the date it has — which is what every
+  issue written before `start` existed looks like, so do not add a made-up
+  `start` to "fix" one. A page with neither is left out and counted.
+- **`workload`** adds up the first `vt:"number"` field in the schema per bucket
+  and draws a bar chart. The bucket is `groupBy`; absent, it is the first
+  `vt:"person"` field. A negative or non-numeric estimate is excluded and
+  reported rather than summed — do not write one expecting it to subtract.
+
+Both honour `source` and `filter`, so "the workload for this project" is
+`{ "layout": "workload", "source": { "under": "<page id>" }, "filter": { "open": true } }`
+and needs no key of its own.
 `layout` is one of `list`, `table`, `gallery`, `calendar` — **or absent, which
 means a board.** Never write `"layout": "board"`: absence is what every view
 written before layouts existed carries, and a stored `"board"` is a byte

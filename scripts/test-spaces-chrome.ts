@@ -927,6 +927,9 @@ async function browser(chrome: string, html: string): Promise<void> {
       // …and the new homes are what reach them: the pages from the page list
       for (const c of ['New page', "Today's journal", 'New issue']) if (!/^page list/.test(now[c] ?? '')) lost.push(`${c} (not on the page list's ＋ ▾: ${now[c]})`)
       for (const c of ['Audio', 'Gallery', 'List', 'Table view', 'Comment']) if (!(c in now)) lost.push(`${c} (new member unreachable)`)
+      // per-page designs: the page's Design row, and its note under Save ▾
+      if (!('Design' in now)) lost.push('Design (new member unreachable)')
+      if (!('Export page as Markdown…' in now)) lost.push('Export page as Markdown… (new member unreachable)')
       ok(lost.length === 0, `at ${w}px every command reachable before is reachable now (${BEFORE[w].length} checked${lost.length ? '; LOST: ' + lost.join(', ') : ''})`)
     }
 

@@ -1054,7 +1054,9 @@ export interface ImportStats {
 
 export interface ImportPlan {
   pages: Page[]
-  /** the first design a note named in its front matter (path order) */
+  /** the first design a note named in its front matter (path order). Each
+   *  note's own is ALSO on its page as `page.design`, which is what the
+   *  editor uses; this stays for callers that want one space-level name. */
   design?: string
   /** designs the notes carried, first writer wins per name */
   designs?: Record<string, unknown>
@@ -1213,6 +1215,10 @@ export function planImport(
     }
     page.blocks.push(...note.blocks)
     if (note.design !== undefined && design === undefined) design = note.design
+    // A NOTE'S `design:` IS ITS PAGE'S (per-page designs): set on this page
+    // exactly as written, even a name this build does not know — it renders
+    // the default look, round-trips, and validate() names it.
+    if (note.design !== undefined) page.design = note.design
     for (const [k, v] of Object.entries(note.designs ?? {})) if (!Object.hasOwn(designs, k)) designs[k] = v
     if (note.footnotes) {
       // PER FILE, while it is still known which blocks are this file's — after

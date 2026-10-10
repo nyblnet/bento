@@ -2208,6 +2208,27 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 .sp-view-list { list-style: none; margin: 0; padding: 0; }
 .sp-view-list li { margin: 0 0 6px; }
 
+/* CHARTS: the timeline and the workload chart.
+   Almost nothing here. Both pictures are svg carrying their own colour and
+   geometry as PRESENTATION ATTRIBUTES (render.ts says why), so this file owns
+   only the box around them — which is exactly what makes them print, and what
+   makes them survive into the file-manager still, whose stylesheet is not this
+   one. A rule here that the picture depended on would be a rule the thumbnail
+   never sees. */
+.sp-gt-wrap, .sp-wl-wrap { overflow-x: auto; margin: 0 0 6px; }
+.sp-gt-note { margin: 2px 0 0; font-size: 12.5px; }
+.sp-wl-legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+
+/* Print: the scroller is a screen affordance and paper has no scrollbar, so it
+   becomes an ordinary box — otherwise a timeline wider than the page is
+   silently guillotined, which is the same class of bug as a board printing as
+   a cut-off row of columns (below). `min-width` goes with it for the same
+   reason: it is there to keep labels legible on a phone. */
+@media print {
+  .sp-gt-wrap, .sp-wl-wrap { overflow: visible; }
+  .sp-gt-wrap svg, .sp-wl-wrap svg { min-width: 0 !important; break-inside: avoid; }
+}
+
 /* Print: a board is columns of cards on screen and a LIST on paper — a
    horizontal scroller cannot be printed, and cutting it off would silently
    drop issues. */
@@ -2974,6 +2995,12 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
 .sp-dsg-cols { display: grid; grid-template-columns: 1fr 48px 48px; gap: 4px 8px; align-items: center; font-size: 13px; }
 .sp-dsg-cols > span { color: var(--ink-2); }
 .sp-dsg-cols > span:nth-child(2), .sp-dsg-cols > span:nth-child(3) { font-size: 11.5px; color: var(--muted); text-align: center; }
+/* one page's design choices (page ⋯ menu, properties panel): the swatch sits
+   where a menu item's icon does, so the rows read as the page menu's own */
+.bkm-menu.sp-dsg-menu { min-width: 250px; }
+.sp-dsg-item .bkm-ico { align-items: center; }
+.sp-dsg-item .sp-dsg-sw b { height: 16px; }
+.sp-insp-dsg { max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-dsg-cols input[type='color'] { width: 44px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--field); }
 @media (max-width: 720px) { .sp-dsg-panel { top: auto; height: 62vh; inset-inline: 8px; width: auto; } }
 @media print { .sp-dsg-panel { display: none !important; } }
