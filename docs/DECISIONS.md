@@ -10230,3 +10230,31 @@ bento's page. Elsewhere, after a hidden slide or a state, it is fixed text,
 reported as `text-field-frozen`. This was already wrong after any hidden
 slide before states existed.
 
+
+## 2026-10-10 — Slides: the unsaved dot answers for one revision, and every write of the open file queues
+
+Slides adopts the kernel's `SaveQueue` on the same terms as spaces (2026-09-28
+entry above) and dash. Auto-save's write-back, ⌘S, Save a copy and About's
+"Update this file" all wrote the open file and then cleared the dirty flag
+unconditionally, so an edit made while a write was in flight was shown as
+saved and never reached disk; auto-save and ⌘S could also write at once.
+The rule, owned by `slides/src/saving.ts`:
+
+- **One queue per editor** for every write that uses or adopts the open
+  file's handle. Share exports (invite, view-only, present-only, audience,
+  template) write OTHER files and never retain the handle, so they stay outside it.
+- **The dot clears only if `isCurrent()` holds when the write resolves.**
+  `Store.revision` advances on every `'doc'` event and every
+  `setDirty(true)` (a remote op marks dirty while already dirty), and undo,
+  redo and `replaceDoc` swap the document object, which also fails the check.
+- **The CRDT stamp is taken in the queue's prepare step**, so a write
+  queued behind another carries the live session's state as of its own start.
+- **Unchanged:** an encrypted deck is still never snapshotted to IndexedDB
+  and its write-back stays encrypted (`serializeAuto` on the snapshot);
+  "Backed up in this browser" is still said only when the IndexedDB snapshot
+  really stored and no file write-back happened. Auto-save says "Saved" only
+  when the dot actually went out.
+
+Guards: `scripts/test-slides-save-revisions.ts` (the rule, through
+`saveRevision`, plus the editor wiring) and `scripts/test-slides-save-browser.mjs`
+(the packaged editor through the shared `scripts/lib/savequeue-browser.mjs`).
