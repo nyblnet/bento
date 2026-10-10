@@ -42,7 +42,9 @@ export function brokenRels(parts: Parts): string[] {
     const baseDir = name === '_rels/.rels' ? '' : name.slice(0, name.indexOf('/_rels/'))
     for (const rel of kids(parseXml(dec.decode(data)), NS.rel, 'Relationship')) {
       if (attr(rel, 'TargetMode') === 'External') continue
-      const target = resolvePath(baseDir, attr(rel, 'Target') ?? '')
+      // a target starting with '/' is relative to the package root (OPC)
+      const raw = attr(rel, 'Target') ?? ''
+      const target = raw.startsWith('/') ? resolvePath('', raw.slice(1)) : resolvePath(baseDir, raw)
       if (!parts.has(target)) broken.push(`${name} -> ${target}`)
     }
   }
@@ -85,7 +87,8 @@ export function packageProblems(parts: Parts): string[] {
     const overrides = new Set(kids(ct, NS.ct, 'Override').map((o) => attr(o, 'PartName')))
     const defaults = new Set(kids(ct, NS.ct, 'Default').map((d) => (attr(d, 'Extension') ?? '').toLowerCase()))
     for (const name of parts.keys()) {
-      if (name === '[Content_Types].xml') continue
+      // folder entries ('ppt/') are not parts; some zip writers add them
+      if (name === '[Content_Types].xml' || name.endsWith('/')) continue
       const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
       if (!overrides.has(`/${name}`) && !defaults.has(ext)) out.push(`${name} has no content type`)
     }
