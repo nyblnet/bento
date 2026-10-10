@@ -1638,6 +1638,45 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
 .sp-ab-vdo { margin-inline-start: auto; color: var(--muted); }
 .sp-ab-version:hover .sp-ab-vdo, .sp-ab-version:focus-visible .sp-ab-vdo { color: var(--blue); }
 
+/* Versions in this file (doccmds.ts openFileHistory, history.ts). The row is
+   the same .sp-ab-version with a "Changes" button beside it; the word diff
+   hangs UNDER the row, because prose needs the card's full width. Colours are
+   the shared --c-green/--c-red tokens both themes define. */
+.sp-hist-row { display: flex; flex-direction: column; }
+.sp-hist-head { display: flex; align-items: center; gap: 4px; }
+.sp-hist-head .sp-ab-version { flex: 1 1 auto; min-width: 0; }
+.sp-hist-head .sp-ab-when { white-space: nowrap; }
+/* the summary WRAPS rather than truncating: in the 440px card a derived
+   sentence is the whole point of the row, and an ellipsis hid it */
+.sp-hist-head .sp-ab-vtag { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.sp-ab-version:disabled { cursor: default; }
+.sp-ab-version:disabled:hover { background: transparent; border-color: transparent; }
+.sp-ab-version:disabled .sp-ab-vdo { display: none; }
+.sp-hist-diff-btn {
+  flex: 0 0 auto; padding: 6px 9px; border: 1px solid transparent;
+  border-radius: 8px; background: transparent; color: var(--muted);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.sp-hist-diff-btn:hover { background: var(--chrome-2); border-color: var(--line); color: var(--ink); }
+.sp-hist-diff-btn:focus-visible { border-color: var(--blue); outline: none; }
+.sp-hist-diff-btn[aria-expanded='true'] { color: var(--blue); }
+.sp-hist-diff {
+  margin: 2px 0 10px; padding: 8px 10px; border-inline-start: 2px solid var(--line);
+  background: var(--chrome); border-radius: 0 8px 8px 0;
+  max-height: 320px; overflow-y: auto;
+}
+.sp-hist-page { font-size: 12px; font-weight: 600; margin: 6px 0 2px; }
+.sp-hist-page:first-child { margin-top: 0; }
+.sp-hist-chip {
+  display: inline-block; margin-inline-start: 6px; padding: 0 6px;
+  border-radius: 999px; background: var(--chrome-2); color: var(--muted);
+  font-size: 11px; font-weight: 400;
+}
+.sp-hist-line { margin: 0 0 4px; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); overflow-wrap: anywhere; }
+.sp-hist-line ins { text-decoration: none; background: color-mix(in srgb, var(--c-green) 16%, transparent); color: var(--c-green); }
+.sp-hist-line del { background: color-mix(in srgb, var(--c-red) 14%, transparent); color: var(--c-red); }
+.sp-hist-empty { color: var(--muted); font-style: italic; }
+
 /* The new-property form inside the add-property popover: a name, a type and a
    button, on one line until the popover is too narrow for it. */
 .sp-newprop { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 6px 6px; }

@@ -9879,3 +9879,74 @@ field that does not count as an edit. The kernel key is a superset of the old
 one: theme, assets, fonts and undeclared keys now count as unsaved work. That
 is safe because the only comparison is snapshot against live after
 `keepLiveIdentity`, and no key is ever stored.
+
+## 2026-10-10 — bento/spaces keeps version history inside the file, on the kernel's Revision envelope
+
+**Decision.** `doc.revisions` (spaces/src/history.ts) is the space's own
+timeline, carried in the file. It was first built against bento/type's local
+`Revision` shape (#440, never merged) and is rebuilt here on the kernel's
+shared envelope and field classes. Six things are settled, any of which a later
+session could otherwise contradict.
+
+**1. The entry is the kernel's `Revision<Body>`** (kernel/src/docfields.ts):
+`{ id, at, label?, body }`. Spaces' body is a per-page, id-keyed PATCH against
+the entry before it (`doc` / `unset` for top-level fields, `order`, and per page
+`meta` / `put` / `order` / `gone`). `label` is absent unless a person typed one.
+The summary on screen is derived from the patch when the dialog opens, so the
+file stores no sentence in its author's UI language. Every entry read from a
+file passes `validateRevision` plus the app's body check. If any entry fails,
+the whole list counts as foreign: it is kept, and never recorded onto, pruned or
+cleared.
+
+**2. What a revision covers comes from the field map, not a hand list.** It is
+every field `SPACES_FIELDS` classes `content`, minus the asset pool (bytes are
+never duplicated: a revision keeps `asset:<key>`), the not-edit fields
+(`modified`) and the encoding tags (`format`, `version`). Today that is title,
+home, theme, footnotes, fonts, templates, journalTemplate, design, designs,
+policy and pages. A content field added to the map later joins history with no
+change to history.ts. Identity, mode, capability and history fields can never
+be rolled back by a restore.
+
+**3. The budget is the kernel fold module's defaults, implemented here for
+now.** `HISTORY_MAX` = 60, `HISTORY_BUDGET` = 128 KB. Over either, the oldest
+two entries fold into one, re-derived from the state they produce, so every
+surviving entry still restores exactly. A space whose content alone is over
+budget keeps none (tier 3), and the dialog says so. `pruneRevisions` is the seam:
+when the kernel's fold module lands after DocStore, the swap replaces that one
+function.
+
+**4. A revision is recorded inside the save queue's prepare step,** beside
+`stampSync`, after any write ahead of it and immediately before the snapshot is
+copied. It therefore describes exactly the bytes written, and those bytes
+contain it. ⌘S and "Update this file" both do this. Recording writes the field
+directly, never through `commit`, so the store revision does not move and the
+write is not stale. `revisions` is also in `SPACES_NOT_EDIT`, which keeps it
+out of the recovery key. The kernel's default counts history as unsaved work.
+That default is right for history made between saves (type's typed revisions,
+a signature), but spaces only ever writes a revision into the bytes a save is
+writing. Counting it would raise the recovery banner on every file reopened
+after a download-save. `trail` is not exempted; its own feature decides.
+
+**5. History is a log, so the store keeps the live list.** Undo snapshots omit
+every `history`-class field, and every whole-document restore (undo/redo,
+`replaceDoc`: version restore, recovery, Replace from JSON, `bento.loadDoc`)
+puts back the live value. Without this, ⌘Z after a save un-recorded that save's
+revision, and pasting Copy document JSON's output (which drops history by the
+copy table) deleted it. A restore from the in-file timeline goes through the
+restore gate (`restoreInto`): parsed, block html sanitized, identity kept live,
+undoable. A revision's `body.doc` only ever applies covered fields, so a crafted
+entry cannot carry a docId, room or mode.
+
+**6. Copies follow the kernel table; there are no hand strips.** The file, a
+duplicate and an invite keep history. A reader copy, package, link, audience,
+template and Copy document JSON drop it. The page extract drops the history
+class as before. An encrypted space keeps history inside the `bento/enc`
+envelope, and nothing goes to IndexedDB.
+
+**Not in this change:** migrating the legacy IndexedDB timeline into
+`doc.revisions` (the kernel's fold-in helper, later), and a "leave history out"
+option on invites.
+
+Pointers: spaces/src/history.ts, scripts/test-spaces-history.ts,
+scripts/test-spaces-save-revisions.ts (the prepare rows and the main.ts pins),
+scripts/test-spaces-copytiers.ts (real revisions per tier).

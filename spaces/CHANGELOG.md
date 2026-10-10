@@ -1270,6 +1270,24 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   the file, a duplicate and an invite, and never with a view-only copy, Copy
   document JSON or a page export.
 
+- **Version history inside the file.** Every save records what changed in the
+  document itself, so the history travels with the file to another machine and
+  to anyone you send it to. The browser-local timeline is unchanged; **Save ▾ →
+  Versions in this file…** sits beside it. Each version shows a one-line
+  summary, made in your language when the list opens, and a **Changes** view of
+  the words that went and the words that arrived. **Restore** brings back
+  everything the space had then: its pages, title, home page, theme, design,
+  footnotes and page templates. It is an ordinary edit, so `⌘Z` takes it back,
+  and it never changes which document this is, who it is shared with, or the
+  history itself. A save costs a few hundred bytes, not a copy of the space;
+  history is capped at 128 KB and sixty versions, and past that the oldest
+  versions fold together. A password-protected space keeps history too, inside
+  the encryption. History remembers text you deleted, and the dialog says so:
+  invites and the file carry it, while view-only copies, Copy document JSON and
+  a page exported as its own space leave it out. **Clear history** removes it.
+  Pasting document JSON over the space no longer touches the history, and
+  neither does undo.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

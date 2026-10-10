@@ -16,6 +16,7 @@ type Scope = 'doc' | 'page'
 import { type SpacesDoc, type Page, type Block, buildIndex, type SpaceIndex, homePage } from './model'
 import { buildTagIndex, type TagIndex } from './tags.ts'
 import { FROM_LIVE, keepLiveIdentity as keepLive } from '../../kernel/src/docfields.ts'
+import { SPACES_FIELDS } from './docclass.ts'
 
 type Listener = () => void
 type Event = 'doc' | 'page' | 'tree' | 'selection' | 'dirty'
@@ -59,7 +60,32 @@ export { FROM_LIVE }
  *  about what "kept live" means. */
 function keepLiveIdentity(live: SpacesDoc, next: SpacesDoc): SpacesDoc {
   keepLive(next as Record<string, unknown>, live as Record<string, unknown>)
+  keepLiveHistory(live, next)
   return next
+}
+
+/**
+ * The fields the kernel's map classes 'history' (docclass.ts: `revisions`,
+ * `trail`). They are a LOG of the space, not its content, so — like identity —
+ * every whole-document restore keeps the LIVE value, and undo snapshots omit
+ * them (they would be up to 128 KB per entry, identical in nearly every one).
+ *
+ * Without this, three ordinary actions silently rewrote the file's history:
+ * ⌘Z after a save un-recorded the revision that save wrote; "Replace from
+ * JSON" with the output of Copy document JSON (which drops history by the
+ * copy table) deleted it outright; and restoring a version or a recovery
+ * snapshot rolled the list back to whatever it was when that copy was taken.
+ * Read from the map, so a history field added later is kept the same way.
+ */
+const HISTORY_KEYS: readonly string[] = Object.entries(SPACES_FIELDS)
+  .filter(([, cls]) => cls === 'history').map(([k]) => k)
+
+function keepLiveHistory(live: SpacesDoc, next: SpacesDoc): void {
+  const n = next as Record<string, unknown>, l = live as Record<string, unknown>
+  for (const k of HISTORY_KEYS) {
+    if (Object.hasOwn(l, k) && l[k] !== undefined) n[k] = l[k]
+    else delete n[k]
+  }
 }
 
 /**
@@ -283,8 +309,10 @@ export class Store {
   // ---- history ------------------------------------------------------------
   private snapshot(): string {
     // assets are excluded: they are the largest thing in the document and never
-    // change during an ordinary edit, so snapshotting them 100 times is waste
-    const { assets: _assets, ...rest } = this.doc
+    // change during an ordinary edit, so snapshotting them 100 times is waste.
+    // History fields are excluded too, and restored from live (keepLiveHistory)
+    const { assets: _assets, ...rest } = this.doc as Record<string, unknown>
+    for (const k of HISTORY_KEYS) delete rest[k]
     return JSON.stringify(rest)
   }
 

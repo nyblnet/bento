@@ -41,6 +41,7 @@ import { Store } from './store'
 import { Editor } from './editor'
 import { SyncSession } from './sync/session.ts'
 import { isReaderCopy, stampSync } from './share.ts'
+import { recordOnSave } from './history.ts'
 import { projectForCopy } from '../../kernel/src/docfields.ts'
 import { SPACES_FIELDS } from './docclass.ts'
 import { downloadMarkdown, launchUpdateCheck } from './about'
@@ -340,8 +341,15 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     // collab.sync is stamped in the queue's prepare step: after any write
     // ahead of this one, immediately before the snapshot is copied, so the
     // state describes exactly the bytes that reach the file (#594).
+    //
+    // The in-file revision is recorded in the SAME step for the same reason
+    // (history.ts): it describes exactly the bytes written, and those bytes
+    // contain it. It writes doc.revisions directly — not through commit — so
+    // the store's revision does not move and this write is not made stale.
+    // Unconditional on encryption: revisions live inside #bento-doc, so the
+    // envelope encrypts them with the pages (unlike addVersion below).
     const out = await saveRevision(store, saves, (snapshot) => saveFile(snapshot),
-      () => { stampSync(store, session); editor.status(t('Saving…')) })
+      () => { stampSync(store, session); recordOnSave(store); editor.status(t('Saving…')) })
     if (out.kind === 'failed') {
       console.error('bento/spaces: save failed', out.error)
       editor.status(t('Save failed — see console'))
@@ -375,8 +383,8 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
    * when that snapshot is still the document on screen.
    */
   editor.onUpdateInPlace = async (rel) => {
-    // stamped in prepare, beside the snapshot, exactly as ⌘S is
-    const saved = await saves.run(() => { store.endRun(); stampSync(store, session) },
+    // stamped and recorded in prepare, beside the snapshot, exactly as ⌘S is
+    const saved = await saves.run(() => { store.endRun(); stampSync(store, session); recordOnSave(store) },
       (snapshot) => applyUpdateInPlace(rel, snapshot))
     if (!saved?.value) return null
     if (saved.isCurrent()) store.setDirty(false)
