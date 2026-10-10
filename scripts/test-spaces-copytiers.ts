@@ -51,7 +51,7 @@ const g = globalThis as unknown as Record<string, unknown>
 g.localStorage = shim
 g.window = g.window ?? { localStorage: shim, addEventListener() {}, setTimeout, clearTimeout }
 
-const { inviteCopy, readerCopy, duplicateAsNew } = await import('../spaces/src/share.ts')
+const { inviteCopy, readerCopy, duplicateAsNew, HISTORY_CLASS, hasHistory } = await import('../spaces/src/share.ts')
 const { extractSpace } = await import('../spaces/src/portable.ts')
 const { readingCopy, stripComments } = await import('../spaces/src/reading.ts')
 const { docForExport, FORMAT } = await import('../spaces/src/model.ts')
@@ -222,6 +222,64 @@ console.log('\nreal in-file history (history.ts), tier by tier')
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// THE INVITE'S HISTORY CHOICE (the maintainer's history ruling): an invite
+// keeps history only when the inviter was told and could leave it out. The
+// default keeps the history class byte-for-byte; "Leave version history out"
+// is the invite tier minus every field classed 'history' — read from the map
+// (share.ts HISTORY_CLASS), never named by hand — and NOTHING else changes.
+console.log('\ninvite — "Leave version history out" (share.ts inviteCopy { withHistory })')
+type InviteBuilder = (d: SpacesDoc, o: { withHistory?: boolean }) => Promise<SpacesDoc | null>
+/** Everything but the history class and the freshly-minted invite keys. */
+const sansHistory = (o: Obj): string => {
+  const x = clone(o)
+  for (const k of HISTORY_CLASS) delete x[k]
+  const c = x.collab as Obj | undefined
+  if (c) { delete c.invite }
+  return JSON.stringify(Object.fromEntries(Object.entries(x).sort(([a], [b]) => a.localeCompare(b))))
+}
+async function checkInviteChoice(build: InviteBuilder, label: string): Promise<boolean> {
+  const before = failures
+  const src = source()
+  const keep = (await build(source(), {}))! as Obj
+  const keepExplicit = (await build(source(), { withHistory: true }))! as Obj
+  const out = (await build(source(), { withHistory: false }))! as Obj
+  ok(JSON.stringify(keep.revisions) === JSON.stringify(src.revisions) && JSON.stringify(keep.trail) === JSON.stringify((src as Obj).trail),
+    `${label}: the DEFAULT invite keeps revisions and trail byte-for-byte`)
+  ok(JSON.stringify(keepExplicit.revisions) === JSON.stringify(src.revisions), `${label}: withHistory:true is the same as the default`)
+  ok(!('revisions' in out) && !('trail' in out), `${label}: "leave out" — no revisions, no trail`)
+  ok(!JSON.stringify(out).includes('THE-WHOLE-SPACE'), `${label}: "leave out" — the deleted page's text appears nowhere`)
+  ok(sansHistory(out) === sansHistory(keep), `${label}: "leave out" — everything else identical to the default invite (collab minus its fresh invite keys included)`)
+  ok((out.collab as Obj)?.role === 'writer' && (out.collab as Obj)?.on === true && !!(out.collab as Obj)?.invite,
+    `${label}: "leave out" is still a live writer invite`)
+  noSecrets(out, `${label} (leave out)`, true)
+  return failures === before
+}
+{
+  ok(JSON.stringify([...HISTORY_CLASS].sort()) === JSON.stringify(Object.keys(SPACES_FIELDS).filter((k) => (SPACES_FIELDS as Record<string, string>)[k] === 'history').sort()),
+    `HISTORY_CLASS is the map's history class (${HISTORY_CLASS.join(', ')})`)
+  ok(hasHistory(source()) && !hasHistory({ ...source(), revisions: undefined, trail: undefined } as SpacesDoc),
+    'hasHistory: true with revisions or trail, false with neither (the notice shows only then)')
+  await checkInviteChoice(inviteCopy, 'invite')
+  // NOT VACUOUS: a builder that ignores the option must fail these rows
+  const ignoring: InviteBuilder = (d) => inviteCopy(d)
+  const f0 = failures, c0 = checks
+  console.log('    (planted builder that ignores the option — these rows MUST fail:)')
+  const passed = await checkInviteChoice(ignoring, 'planted')
+  const red = failures - f0
+  failures = f0; checks = c0
+  ok(!passed && red >= 2, `an invite builder that ignores "leave version history out" FAILS these checks (${red} rows red)`)
+  // the editor hands the inviter's choice to the builder
+  const { readFileSync, existsSync } = await import('node:fs')
+  const { dirname, join, resolve } = await import('node:path')
+  let root = resolve(process.cwd())
+  while (!existsSync(join(root, 'spaces/src/docclass.ts')) && dirname(root) !== root) root = dirname(root)
+  const ed = readFileSync(join(root, 'spaces/src/editor.ts'), 'utf8')
+  const sc = ed.slice(ed.indexOf('private async shareCopy('), ed.indexOf('private confirmInviteHistory('))
+  ok(/hasHistory\(this\.store\.doc\)[\s\S]*confirmInviteHistory\(\)[\s\S]*inviteCopy\(this\.store\.doc, \{ withHistory \}\)/.test(sc),
+    'the Share → Invite step asks only when the space has history, and passes the answer to inviteCopy')
+}
+
 console.log('\nreader — "Share → view-only copy" (share.ts readerCopy)')
 const EXPECT_READER = sorted([...CONTENT, 'docId', 'collab', 'readonly'])
 // THE ABSENT-FIELD CASE. A space with no `readonly` key at all — almost every

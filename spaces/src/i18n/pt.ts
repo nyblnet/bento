@@ -966,4 +966,8 @@ export const pt: Catalog = {
   "Clear history…": "Limpar o histórico…",
   "First version kept in this file": "Primeira versão guardada neste ficheiro",
   "Changes outside the pages — title, design, footnotes or templates": "Alterações fora das páginas — título, design, notas de rodapé ou modelos",
+  "This copy includes the space’s version history.": "Esta cópia inclui o histórico de versões do espaço.",
+  "Leave version history out": "Deixar de fora o histórico de versões",
+  "Versions include text that was deleted. This file keeps them either way.": "As versões incluem texto que foi apagado. Este ficheiro guarda-as em qualquer caso.",
+  "Save invite…": "Guardar convite…",
 }
