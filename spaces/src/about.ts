@@ -22,28 +22,31 @@
 //     panel, every confirmation) opens IN FLOW as a block of the list, and the
 //     card scrolls to it. A 250px popover anchored inside a scrolling menu is
 //     the bug that cost this project a day in slides' phone chrome.
-//   · `.sp-overlay` carries z-index 60, which is a CEILING on every descendant
-//     rather than merely an order. Nothing in this dialog tries to escape it,
-//     and nothing added later can be made to by raising its own z-index.
+//   · The kernel dialog's scrim carries a z-index (1000, above every menu),
+//     and that is a CEILING on every descendant rather than merely an order.
+//     Nothing in this dialog tries to escape it, and nothing added later can
+//     be made to by raising its own z-index.
 
 import {
-  checkForUpdates, applyUpdate, applyUpdateInPlace, canUpdateInPlace,
+  checkForUpdates, applyUpdate, canUpdateInPlace,
   autoCheckEnabled, setAutoCheck, compareVersions,
-  APP_VERSION, type ReleaseInfo, type UpdateCheck,
+  APP_VERSION, type ReleaseInfo, type UpdateCheck, type InPlaceOutcome,
 } from '../../kernel/src/update.ts'
 import {
-  setEncryptionPassword, isEncryptionActive,
   canWriteInPlace, openedFileName,
 } from '../../kernel/src/save.ts'
-import { clearVersions, clearRecovery, listVersions, type Snapshot } from '../../kernel/src/autosave.ts'
+import { createDialog, type Dialog } from '../../kernel/src/ui/dialog.ts'
+import '../../kernel/src/ui/dialog.css'
 import { t, localeChoices, locale, setLocale } from './i18n'
 import { appearanceSection } from './appearance'
+import { designSection } from './designpanel'
+import { designFrontMatter, type Resolved } from './designs.ts'
 import { esc, textOf } from './sanitize'
-import { docForExport } from './model'
 import { htmlToMd } from './marks.ts'
+import { definitionLines } from './footnotes.ts'
 import { humanBytes } from './assets'
-import { SPEC, mdLayout, type MdCtx } from './blocks'
-import { parseDoc, uid } from './model'
+import { SPEC, mdLayout, withBlockId, type MdCtx } from './blocks'
+import { effectiveParents } from './model'
 import {
   issuesOf, passesFilter, sortRows, fieldByKey, optionOf, fieldsOf,
 } from './fields'
@@ -53,28 +56,29 @@ import type { Block, SpacesDoc } from './model'
 export interface AboutHooks {
   store: Store
   onRepaint: () => void
-  /**
-   * "Save a copy…", supplied by the caller.
-   *
-   * NOT saveFile(doc, true) here. That path assigns the picked handle to the
-   * kernel's in-place handle, so every later ⌘S writes to the copy — the bug
-   * fixed in the topbar's copy button, which this second button then kept
-   * alive because the guard only read main.ts. One implementation, two
-   * buttons, and the assertion now reads every file.
-   */
-  onSaveCopy: () => void
-  /** open the importer — the way IN, opposite the ways out below */
-  onImport?: () => void
-  /** take ONE page out as a space of its own */
-  onExportSpace?: () => void
-  /**
-   * Write a DIFFERENT document out as its own file, leaving this one open.
-   * The same writer the page extract uses (keepHandle false), so a duplicate
-   * never becomes the ⌘S target.
-   */
-  onWriteCopy?: (doc: SpacesDoc) => Promise<boolean>
   /** the editor's status line, for the confirmations that outlive the dialog */
   onStatus?: (message: string) => void
+  /** open on a fresh update check — the update chip's click, as in slides */
+  runCheck?: boolean
+  /**
+   * "Update this file" — the kernel's applyUpdateInPlace, run through main.ts's
+   * save queue. NOT called directly from here: it rewrites the same file ⌘S
+   * does, so the two must never be open on one handle at once, and only the
+   * queue's acknowledgement may say the disk holds what is on screen.
+   * null = nothing was written (cancelled, or the space was swapped).
+   */
+  onUpdateInPlace: (release: ReleaseInfo) => Promise<InPlaceOutcome | null>
+  /**
+   * Called immediately before "Download updated copy" writes THIS document
+   * into a new shell — stamps the live session's CRDT state (share.ts
+   * stampSync), so the updated file rejoins as a fork exactly as a ⌘S-saved
+   * one does. "Update this file" is stamped inside the save queue instead.
+   */
+  onBeforeWrite?: () => void
+  /** paint a design on the page without writing it (the picker's hover) */
+  previewDesign?: (r: Resolved | null | undefined) => void
+  /** the non-modal customise panel, opened over the page */
+  openDesignPanel?: () => void
 }
 
 /**
@@ -93,35 +97,27 @@ let lastAutoCheck: UpdateCheck | null = null
  * Nothing about the reader or the document goes out with the request — it is a
  * plain GET of a signed manifest — and the dialog says so where the switch is.
  */
-export async function launchUpdateCheck(): Promise<void> {
-  if (!autoCheckEnabled()) return
+export async function launchUpdateCheck(): Promise<UpdateCheck | null> {
+  if (!autoCheckEnabled()) return null
   lastAutoCheck = await checkForUpdates()
+  return lastAutoCheck
 }
 
 export function openAbout(hooks: AboutHooks): void {
-  const { store, onRepaint, onSaveCopy, onImport, onExportSpace, onWriteCopy, onStatus } = hooks
+  const { store, onRepaint, onUpdateInPlace, onBeforeWrite, previewDesign, openDesignPanel } = hooks
   const doc = store.doc
-  const returnFocus = document.activeElement as HTMLElement | null
 
-  const back = document.createElement('div')
-  back.className = 'sp-overlay sp-overlay-about'
+  // THE KERNEL'S DIALOG (kernel/src/ui/dialog.ts) is the shell; `card` is its
+  // content. The primitive took the three things this file used to hand-roll —
+  // a capture-phase document Escape (a <select> steals focus, so an Escape on
+  // the card itself stopped working), the Tab trap, focus returned to the
+  // opener — and adds the scrim above every menu. No visible title, as in
+  // slides: the suite's lockup below IS the heading, and the dialog is named
+  // for a screen reader instead.
   const card = document.createElement('div')
-  card.className = 'sp-card sp-about'
-  card.setAttribute('role', 'dialog')
-  card.setAttribute('aria-modal', 'true')
-  card.setAttribute('aria-label', t('About this space'))
-
-  const close = () => {
-    back.remove()
-    document.removeEventListener('keydown', onKey, true)
-    returnFocus?.focus?.()
-  }
-  // Capture-phase and on the DOCUMENT, as slides does: a dialog whose Escape
-  // handler hangs off its own element stops working the moment focus leaves it
-  // — which a <select> dropdown does on every platform.
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') { e.stopPropagation(); close() }
-  }
+  card.className = 'sp-about'
+  let dlg: Dialog | null = null
+  const close = () => dlg?.close()
 
   // ---- small builders ----------------------------------------------------
   const h = (text: string) => {
@@ -182,7 +178,6 @@ export function openAbout(hooks: AboutHooks): void {
     l.append(cb, document.createTextNode(' ' + label))
     return l
   }
-  const say = (message: string) => { onStatus?.(message) }
 
   // ---- what this is ------------------------------------------------------
   // The same head slides uses: the suite's mark, the app, the version, and a
@@ -292,6 +287,18 @@ export function openAbout(hooks: AboutHooks): void {
   props.append(row(t('Document id'), mono(doc.docId)))
   if (doc.modified) props.append(row(t('Last saved'), mono(shortStamp(doc.modified))))
 
+  // ---- design ------------------------------------------------------------
+  // The AUTHOR's choice, so it sits with the document's own properties and
+  // not with the reader's theme and language further down (DECISIONS,
+  // 2026-09-26). Built in designpanel.ts; this costs one import and one call.
+  if (previewDesign && openDesignPanel) {
+    section(t('Design'), ...designSection({
+      store,
+      preview: previewDesign,
+      openPanel: () => { close(); openDesignPanel() },
+    }))
+  }
+
   // ---- updates -----------------------------------------------------------
   const upSec = section(t('Updates'))
   const upStatus = document.createElement('div')
@@ -377,7 +384,7 @@ export function openAbout(hooks: AboutHooks): void {
         inPlace.disabled = true
         inPlace.textContent = t('Verifying…')
         try {
-          const written = await applyUpdateInPlace(rel, store.doc)
+          const written = await onUpdateInPlace(rel)
           if (written) {
             box.replaceChildren(updatedCard(rel, written.backup))
           } else {
@@ -402,6 +409,7 @@ export function openAbout(hooks: AboutHooks): void {
         try {
           // the update writes a NEW file and leaves this one untouched, so a
           // bad update is undone by deleting the download
+          onBeforeWrite?.()
           await applyUpdate(rel, store.doc)
           get.textContent = t('Downloaded ✓')
           box.append(note(t('This window keeps running v{v} until you open the downloaded file.', { v: APP_VERSION })))
@@ -432,8 +440,11 @@ export function openAbout(hooks: AboutHooks): void {
           ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
           : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION }),
     ))
+    // No `store.dirty = false` here any more: whether the disk holds this exact
+    // document is the save queue's to say, and it already said so when the
+    // update was written (main.ts onUpdateInPlace). An edit typed since then is
+    // NOT on disk, and clearing the dot for it would be the race all over again.
     done.append(actions(button(t('Reload into new version'), () => {
-      store.dirty = false // disk already holds this exact document
       location.reload()
     }, true)))
     return done
@@ -466,255 +477,12 @@ export function openAbout(hooks: AboutHooks): void {
     note(t('Language follows whoever opens the file. It is never written into the document.')),
   )
 
-  // ---- password ----------------------------------------------------------
-  const pwSec = section(t('Password'))
-  const pwNote = note(isEncryptionActive()
-    ? t('This space is encrypted. Saves stay encrypted.')
-    : t('A password encrypts the document inside the file. There is no recovery — lose it and the space is gone.'))
-  pwSec.append(pwNote)
-
-  const setPw = async (): Promise<void> => {
-    const pw = prompt(t('Choose a password. There is no way to recover it.'))
-    if (!pw) return
-    setEncryptionPassword(pw)
-    // Plaintext snapshots written BEFORE encryption was turned on would defeat
-    // the encryption the author just enabled. Both stores: the version timeline
-    // and the single recovery snapshot. From here on main.ts writes neither.
-    await clearVersions(doc.docId)
-    await clearRecovery(doc.docId)
-    pwNote.textContent = t('Password set. Save to write the space encrypted.')
-    say(t('Password set. Save to write the space encrypted.'))
-  }
-
-  const pwActions = actions()
-  if (isEncryptionActive()) {
-    pwActions.append(button(t('Change password…'), () => { void setPw() }))
-    pwActions.append(danger(t('Remove password…'), pwSec, {
-      what: t('Remove the password?'),
-      why: t('The next save writes this space as plain, readable JSON — anybody who opens the file can read every page.'),
-      go: t('Remove the password'),
-      run: () => {
-        setEncryptionPassword(null)
-        pwNote.textContent = t('Password removed. Save to write the space unencrypted.')
-        say(t('Password removed. Save to write the space unencrypted.'))
-      },
-    }))
-  } else {
-    pwActions.append(button(t('Set a password…'), () => { void setPw() }))
-  }
-  pwSec.append(pwActions)
-
-  // ---- the way in ---------------------------------------------------------
-  // Beside the ways out on purpose: a format that can only be left is a
-  // format nobody arrives in.
-  if (onImport) {
-    section(
-      t('Bring notes in'),
-      actions(button(t('Import Markdown…'), () => { close(); onImport() })),
-      note(t('A folder of .md files becomes pages, with the folder tree and the [[wikilinks]] intact.')),
-      // Said HERE because this is where somebody looks for it, and because the
-      // same dialog claims below that a space is never a dead end. A promise
-      // made in one direction only is half a promise.
-      note(t('Another bento/spaces file can arrive the same way, nested under any page.')),
-    )
-  }
-
-  // ---- ways out ----------------------------------------------------------
-  // ---- the local timeline --------------------------------------------------
-  //
-  // Undo dies with the tab and the recovery snapshot only ever holds the last
-  // few seconds, so before this section the honest answer to "give me back what
-  // I wrote this morning" was that there wasn't one. The timeline lives in this
-  // browser's IndexedDB — never in the file, never online — which is why the
-  // note says so plainly: a space carried to another machine does not bring its
-  // history, and that is a property worth stating rather than discovering.
-  //
-  // Rendered ASYNC into a placeholder. Reading IndexedDB cannot be allowed to
-  // hold up the dialog opening, and a space with no versions yet is the common
-  // case on a first run — it says so rather than showing an empty box.
-  const histSec = section(t('History'))
-  const histBody = document.createElement('div')
-  histBody.className = 'sp-ab-versions'
-  histSec.append(histBody)
-  histSec.append(note(t('Versions are kept in this browser only — never in the file, never online. Restoring is undoable.')))
-
-  const renderVersions = (versions: Snapshot[]): void => {
-    histBody.textContent = ''
-    if (!versions.length) {
-      histBody.append(note(isEncryptionActive()
-        ? t('This space is encrypted, so no versions are kept.')
-        : t('No versions yet — they build up as you write and save.')))
-      return
-    }
-    for (const [i, v] of versions.entries()) {
-      const when = new Date(v.at).toLocaleString([], {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-      })
-      const b = document.createElement('button')
-      b.type = 'button'
-      b.className = 'sp-ab-version'
-      const left = document.createElement('span')
-      left.className = 'sp-ab-when'
-      left.textContent = when
-      const tag = document.createElement('span')
-      tag.className = 'sp-ab-vtag'
-      tag.textContent = i === 0 ? t('most recent') : ''
-      const doIt = document.createElement('span')
-      doIt.className = 'sp-ab-vdo'
-      doIt.textContent = t('Restore')
-      b.append(left, tag, doIt)
-      b.addEventListener('click', () => {
-        let restored: SpacesDoc
-        try { restored = JSON.parse(v.json) as SpacesDoc } catch {
-          say(t('That version could not be read')); return
-        }
-        // replaceDoc checkpoints undo first, so ⌘Z walks this back — the same
-        // contract the recovery banner's Restore already honours.
-        store.replaceDoc(restored)
-        onRepaint()
-        close()
-        say(t('Restored the version from {when} — ⌘Z undoes it', { when }))
-      })
-      histBody.append(b)
-    }
-  }
-  renderVersions([])
-  void listVersions(doc.docId).then(renderVersions).catch(() => { /* no store, no history */ })
-
-  const outSec = section(t('Take it elsewhere'))
-  const copyJson = button(t('Copy document JSON'), () => {
-    // The clipboard copy is a HAND-OUT. Every field under `collab` is a bearer
-    // capability — the room, the read key and the private halves that grant
-    // writing and revoking — so the copy strips the block outright, the way
-    // the page extract does. It used to copy the live document whole.
-    //
-    // Through model.docForExport, not a local clone-and-delete: this landed on
-    // main independently while this dialog was being rebuilt, and two strippers
-    // for one rule is how the two of them start to disagree. The shared one
-    // also strips by REMOVING, so a private field added to the credentials
-    // later is covered without either call site being touched.
-    navigator.clipboard?.writeText(JSON.stringify(docForExport(store.doc), null, 2))
-      .then(() => { copyJson.textContent = t('Copied ✓'); say(t('Document JSON copied')) })
-      .catch(() => { copyJson.textContent = t('Couldn’t access the clipboard') })
-      .finally(() => { setTimeout(() => { copyJson.textContent = t('Copy document JSON') }, 1800) })
-  })
-  outSec.append(actions(
-    copyJson,
-    button(t('Export as Markdown'), () => downloadMarkdown(store)),
-    ...(onExportSpace ? [button(t('Export page as a space…'), () => { close(); onExportSpace() })] : []),
-    button(t('Save a copy…'), () => { close(); onSaveCopy() }),
-    ...(onWriteCopy ? [button(t('Duplicate as a new space…'), () => {
-      // A DUPLICATE, not a copy: a fresh docId and no collaboration
-      // credentials, so it can never sync with the space it came from. You
-      // keep editing this one — the writer holds no handle (portable.ts).
-      const clone = JSON.parse(JSON.stringify(store.doc)) as SpacesDoc
-      clone.docId = uid('doc')
-      delete clone.collab
-      clone.modified = new Date().toISOString()
-      close()
-      void onWriteCopy(clone)
-    })] : []),
-  ))
-  outSec.append(note(t('A space is never a dead end: the whole document is plain JSON in this file, and every page exports as Markdown.')))
-
-  // ---- the two that cannot be taken back -----------------------------------
-  // Its own section, its own weight, and every action here says what it will
-  // do before it does it. Replace-from-JSON is the one control in this dialog
-  // that can lose a document.
-  if (!store.readOnly) {
-    const risky = section(t('Careful'))
-    risky.classList.add('sp-ab-risky')
-    risky.append(danger(t('Replace from JSON…'), risky, {
-      what: t('Replace every page from pasted JSON?'),
-      why: t('Everything in this space is replaced by what you paste. ⌘Z undoes it, but only while this window stays open.'),
-      go: t('Replace'),
-      form: replaceForm,
-    }))
-    risky.append(note(t('The counterpart of Copy document JSON: edit a space in another tool, then bring it back.')))
-  }
-
-  /**
-   * The paste box, IN FLOW.
-   *
-   * Not a popover, and not a second overlay: the card scrolls, so a floating
-   * child of it would be clipped on both axes (CLAUDE.md #10). It is a block
-   * of the list that pushes the rest down, and the card scrolls to it.
-   */
-  function replaceForm(host: HTMLElement, dismiss: () => void): HTMLElement {
-    const wrap = document.createElement('div')
-    const ta = document.createElement('textarea')
-    ta.className = 'sp-ab-json'
-    ta.rows = 7
-    ta.placeholder = t('Paste document JSON here…')
-    const apply = button(t('Replace'), () => {
-      const res = parseDoc(ta.value)
-      if (!res.ok) {
-        ta.classList.add('sp-ab-bad')
-        apply.textContent = t('That is not a bento/spaces document')
-        setTimeout(() => { apply.textContent = t('Replace') }, 2000)
-        return
-      }
-      // The live session belongs to THIS document, not to the pasted text.
-      // Content is imported; identity and capability are not — adopting the
-      // pasted `collab` would either wipe the room credentials or silently
-      // move this space into somebody else's room.
-      const keep = store.doc.collab
-      if (keep) res.doc.collab = keep
-      else delete res.doc.collab
-      store.replaceDoc(res.doc)
-      onRepaint()
-      close()
-      say(t('Document replaced — ⌘Z undoes'))
-    })
-    apply.classList.add('sp-ab-go')
-    wrap.append(ta, actions(apply, button(t('Cancel'), dismiss)))
-    host.append(wrap)
-    ta.focus()
-    return wrap
-  }
-
-  /**
-   * A weightier control: it states the consequence, then asks again.
-   *
-   * The confirmation is a BLOCK, not a `confirm()` and not a popover — see the
-   * header. The button that finally does the thing is the second one you
-   * press, and it is labelled with the verb rather than "OK".
-   */
-  function danger(
-    label: string,
-    host: HTMLElement,
-    opts: {
-      what: string
-      why: string
-      go?: string
-      run?: () => void
-      form?: (host: HTMLElement, dismiss: () => void) => HTMLElement
-    },
-  ): HTMLElement {
-    let open: HTMLElement | null = null
-    const b = button(label, () => {
-      if (open) { open.remove(); open = null; b.setAttribute('aria-expanded', 'false'); return }
-      const panel = document.createElement('div')
-      panel.className = 'sp-ab-confirm'
-      const what = document.createElement('strong')
-      what.textContent = opts.what
-      panel.append(what, note(opts.why))
-      const dismiss = () => { panel.remove(); open = null; b.setAttribute('aria-expanded', 'false'); b.focus() }
-      if (opts.form) opts.form(panel, dismiss)
-      else {
-        const go = button(opts.go ?? label, () => { opts.run?.(); dismiss() })
-        go.classList.add('sp-ab-go')
-        panel.append(actions(go, button(t('Cancel'), dismiss)))
-      }
-      host.append(panel)
-      open = panel
-      b.setAttribute('aria-expanded', 'true')
-      panel.scrollIntoView({ block: 'nearest' })
-    })
-    b.classList.add('sp-ab-danger')
-    b.setAttribute('aria-expanded', 'false')
-    return b
-  }
+  // ---- this file, and the document -------------------------------------
+  // After the viewer's preferences, as slides orders its About: what the app
+  // is and whether it is current first, then how YOU see it, then the file.
+  // (Password, history, the JSON round trip, import and the ways out are the
+  // document's own commands and live under Save ▾ now — doccmds.ts.)
+  card.append(sec1, props)
 
   // ---- fine print ---------------------------------------------------------
   const fine = document.createElement('p')
@@ -727,26 +495,18 @@ export function openAbout(hooks: AboutHooks): void {
   foot.append(button(t('Close'), close, true))
   card.append(foot)
 
-  // ---- focus ---------------------------------------------------------------
-  // Trapped, because this is a modal: Tab off either end wraps rather than
-  // walking into an editor the reader cannot see.
-  card.addEventListener('keydown', (e) => {
-    if (e.key !== 'Tab') return
-    const f = [...card.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input:not([disabled]), select, textarea')]
-      .filter((el) => el.offsetParent !== null)
-    if (!f.length) return
-    const first = f[0]
-    const last = f[f.length - 1]
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+  // The picker's hover paints a design without writing it; however the dialog
+  // closes (Escape, the scrim, Close, Customise…), that preview is cleared.
+  dlg = createDialog({
+    label: t('About this space'), content: card,
+    onClose: () => previewDesign?.(undefined),
   })
-
-  back.append(card)
-  back.addEventListener('mousedown', (e) => { if (e.target === back) close() })
-  document.addEventListener('keydown', onKey, true)
-  document.body.append(back)
+  dlg.card.classList.add('sp-dlg', 'sp-dlg-about')
+  dlg.open()
+  // the one control the dialog opens FOR, not the logo link the trap would pick
   checkBtn.focus()
+  // the chip means "there is an update": show it, as slides' About does
+  if (hooks.runCheck || lastAutoCheck?.status === 'update') void runCheck()
 }
 
 /**
@@ -820,6 +580,17 @@ export function toMarkdown(store: Store): string {
     // one type whose text is not a single string. A table with its own inline
     // rules would be the second place `**bold**` is decided.
     inline: htmlToMd,
+    // a canvas's cards are the blocks it owns, in order — by the one parent
+    // rule (model.ts effectiveParents), the same one the canvas renders by
+    cardsOf: (b: Block) => {
+      const page = store.doc.pages.find((p) => p.blocks.includes(b))
+      if (!page) return []
+      const eff = effectiveParents(page)
+      return page.blocks.filter((c) => eff.get(c.id) === b.id).map((c) => {
+        const x = (c as { x?: unknown }).x, y = (c as { y?: unknown }).y
+        return typeof x === 'number' && typeof y === 'number' && Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null
+      })
+    },
     // DERIVED THE SAME WAY THE SCREEN DERIVES IT — same filter, same sort, same
     // grouping — so the file you download is the board you were looking at. A
     // second traversal here is how an export starts quietly disagreeing with
@@ -831,7 +602,7 @@ export function toMarkdown(store: Store): string {
       const field = fieldByKey(doc, groupKey)
       const rows = sortRows(
         doc,
-        issuesOf(doc).filter((r) => passesFilter(doc, r.values, (b as { filter?: unknown }).filter)),
+        issuesOf(doc).filter((r) => passesFilter(doc, r.values, (b as { filter?: unknown }).filter, r.page)),
         (b as { sort?: unknown }).sort)
       // the board's column order, so an export reads top-to-bottom the way the
       // board reads left-to-right
@@ -865,6 +636,15 @@ export function toMarkdown(store: Store): string {
   // neither was ever visited. Store.tree() carries the visited set and surfaces
   // what a cycle orphans, and this now inherits both. Measured before the fix:
   // 13 pages in the file, 11 in the export.
+  // THE BLOCKS SOMETHING POINTS AT — a review thread's anchor, or the target
+  // of a `#p/<page>/<block>` link anywhere in the space (a table cell and a
+  // caption included, hence the whole serialised page list). Only these carry
+  // `{#id}` in the export (blocks.ts withBlockId).
+  const anchored = new Set<string>()
+  for (const page of store.doc.pages) {
+    for (const b of page.blocks) if (Array.isArray(b.comments) && b.comments.length) anchored.add(b.id)
+  }
+  for (const m of JSON.stringify(store.doc.pages).matchAll(/#p\/[^"\\/]+\/([A-Za-z][A-Za-z0-9_-]{0,63})/g)) anchored.add(m[1])
   const walk = () => {
     for (const { page, depth } of store.tree()) {
       out.push(`${'#'.repeat(Math.min(depth + 1, 6))} ${page.title}`, '')
@@ -873,13 +653,14 @@ export function toMarkdown(store: Store): string {
       // registry in one pass (blocks.ts mdLayout).
       const layout = mdLayout(page.blocks)
       page.blocks.forEach((b, i) => {
-        const { quote, indent, sep } = layout[i]
+        const { quote, indent, sep, close } = layout[i]
         const text = htmlToMd(b.html ?? '')
         // From the block registry, so a new type exports correctly the moment
         // it is declared. An UNKNOWN type — a file written by a newer build —
         // falls through to its text, which is the honest default.
         const spec = SPEC.get(b.type)
-        const lines = spec?.toMd ? spec.toMd(b, text, indent, ctx) : [text]
+        const own = (spec?.toMd ? spec.toMd(b, text, indent, ctx) : [text]).flatMap((l) => l.split('\n'))
+        const lines = anchored.has(b.id) ? withBlockId(b, own) : own
         // PER LINE, not per returned element. A spec returns ELEMENTS, and an
         // element can hold newlines: a code block's body is one multi-line
         // string, and htmlToMd turns <br> into a newline in ordinary text. Any
@@ -891,12 +672,26 @@ export function toMarkdown(store: Store): string {
         // An empty line inside a quote must be a bare '>', never '> ' and never
         // blank: a blank line closes the blockquote.
         out.push(...lines.flatMap((l) => l.split('\n')).map((l) => (l ? quote + l : quote.trimEnd())))
+        // the `</details>` of every fold that ends at this block (blocks.ts)
+        for (const c of close) out.push(c.line ? c.quote + c.line : c.quote.trimEnd())
         out.push(sep)
       })
+      // FOOTNOTE DEFINITIONS, AFTER THE PAGE THEY BELONG TO.
+      //
+      // Per page, not once at the end, because markdown scopes a definition to
+      // its file and the export is ONE file: a `[^1]` on page nine answered by
+      // page one's note would be a wrong footnote rather than a missing one.
+      // The references themselves need nothing here — `[^1]` is already the
+      // text in `html`, so htmlToMd carries it out unchanged, which is the
+      // whole point of the anchor being a text token (src/footnotes.ts).
+      const defs = definitionLines(store.doc, page, htmlToMd)
+      if (defs.length) { out.push(...defs, '') }
     }
   }
   walk()
-  return out.join('\n').replace(/\n{3,}/g, '\n\n')
+  // The design leads, as front matter, so the Markdown carries the look with
+  // it (designs.ts designFrontMatter). Nothing is written when there is none.
+  return [...designFrontMatter(store.doc), ...out].join('\n').replace(/\n{3,}/g, '\n\n')
 }
 
 /**

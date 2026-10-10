@@ -52,6 +52,42 @@ document into the empty block.
 }
 ```
 
+### Designs
+
+`"design": "almanac"` sets how the pages look. Leave it **out** for the default
+look — never write `""` or `null`. Built-ins: `ledger`, `almanac`, `studio`,
+`broadsheet`, `typescript`, `riso`. The author picks the design; each reader's
+light/dark setting picks between the design's two palettes. An unknown name
+renders the default look, is kept, and `validate()` reports `unknown-design`.
+
+A space can carry its own design in `"designs"`, as overrides on a built-in:
+
+```jsonc
+"design": "harbour",
+"designs": { "harbour": {
+  "label": "Harbour", "base": "almanac",
+  "light": { "accent": "#0f6e63", "paper": "#f3f1ea" },   // #rgb or #rrggbb only
+  "dark":  { "accent": "#4fc2b1" },
+  "fonts": { "body": "news", "display": "asset:<key>" },   // a name, or an embedded font
+  "props": { "callout": "fill", "quote": "bar", "radius": 4 }
+} }
+```
+
+**Every value is validated, never interpreted.** Colours must be hex; `fonts`
+take a name (`system grotesk humanist condensed transitional oldstyle news mono
+typewriter rounded`) or `asset:<key>` naming a `data:font/…` asset; `props`
+take the words and ranges listed in `spaces/src/designs.ts` `PROPS`. Palette
+roles: `paper ink muted rule soft accent accentInk onAccent tile tileInk cell1
+cell2 cell3 toneNote toneTip toneImportant toneWarning toneCaution` (the five
+callout tones must stay distinct — `design-contrast` if they collapse). A value that fails is dropped to the base design's and reported as
+`bad-design-value`; a colour that would put text under 4.5:1 is dropped as
+`design-contrast`. There is no free CSS anywhere in a design. A name that is
+also a built-in's is never used (`design-shadows-builtin`).
+
+The Markdown export opens with the design as front matter —
+`design: harbour` plus a one-line `designs: {…}` JSON for a carried design —
+and importing that file into a space with no design adopts it.
+
 **Both arrays are flat and in pre-order; nesting is a `parent` field.** A child
 always follows its parent, which is what lets one forward pass rebuild the
 tree. Do not nest arrays inside arrays.
@@ -77,9 +113,12 @@ unique ids the first time.
 | `divider` | — | `<hr>` |
 | `image` | `src` (see below), `alt`, `caption`, `width` (10–100 **%**), `w`/`h` (intrinsic px) | `<figure>` |
 | `pagelink` | `page` | a card linking to another page |
+| `embed` | `page`, `anchor`, `html` | a live view of another page, or one section of it — see **Embeds** |
 | `link` | `url`, `title`, `desc`, `site`, `icon`, `image`, `html` | a card linking OUT of the space — see **Link cards** |
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
 | `view` | `layout`, `groupBy`, `source`, `filter`, `sort`, `html` | a board, list, table, gallery, timeline or workload chart of this space's pages |
+| `view` | `layout`, `span`, `groupBy`, `html` | a board, list, table, gallery or calendar of this space's pages |
+| `view` | `layout`, `groupBy`, `sort`, `source`, `filter`, `html` | a board or list of this space's issues |
 
 `type` is a **string**, not a closed set: an unknown type survives a round trip
 and renders its `html` as a fallback. Properties are **flat on the block** —
@@ -107,6 +146,38 @@ Write `html` too: it is what a build that predates this type renders, exactly
 as it is for `prop`. A `javascript:` or `data:` url renders as a dead card that
 keeps its title rather than as a link — `validate()` reports both that and a
 remote `image`. Use `pagelink`, not this, for a page inside the space.
+
+### Embeds
+
+An `embed` block shows another page **live**. It stores a reference and never a
+copy: the source page is the truth, and editing it changes every embed of it.
+
+```jsonc
+{ "id": "b9", "type": "embed",
+  "page": "p-design",                  // the target page id, exactly as pagelink means it
+  "anchor": "Rollout",                 // OPTIONAL — one heading on that page, matched by NAME
+  "html": "<a href=\"#p/p-design\">Design notes</a>" }
+```
+
+Write `html` too, for the reason `link` and `prop` do: it is what a build that
+predates this type renders, so an older shell shows a link to the source page
+instead of a blank.
+
+`anchor` names an `h1`/`h2`/`h3` on the target, case- and
+whitespace-insensitively, and the section runs to the next heading of the same
+or higher rank — so an h2 takes its h3s with it. Leave it out for the whole
+page; **a name that matches nothing is reported by `validate()`, never quietly
+widened back to the whole page.**
+
+Two limits, both deliberate and both visible to the reader rather than silent:
+a page cannot embed itself or anything that leads back to it (the loop renders
+as a named placeholder), and an embed chain is followed at most **three** pages
+deep. `validate()` reports both, plus a target that is not a page.
+
+An embed produces a **backlink** on its target, exactly as a `pagelink` does —
+it is the strongest reference in the model, since the page it names is being
+shown somewhere else. In Markdown it is Obsidian's `![[Page]]` / `![[Page#Section]]`,
+in both directions: a vault's embeds import as embeds and export as themselves.
 
 ### Callouts
 
@@ -203,6 +274,105 @@ Links are same-document fragments:
 
 `href` must match `^(https?:|mailto:|#p/)`. Anything else is stripped.
 
+## Footnotes
+
+A footnote reference is the literal text `[^label]` inside a block's `html`,
+and the notes live in one document-level table:
+
+```json
+{
+  "pages": [{ "id": "p1", "title": "Coffee", "blocks": [
+    { "id": "b8", "type": "p", "html": "Coffee grows in the tropics.[^1]" }
+  ] }],
+  "footnotes": { "1": "Between Cancer and Capricorn." }
+}
+```
+
+The reference is **text, not markup** — no tag, no attribute, nothing for the
+sanitizer to allow — so it survives every edit and every sanitize pass exactly
+the way the word beside it does, and a build that predates footnotes shows the
+sentence with `[^1]` in it and round-trips the `footnotes` key untouched.
+
+A label is `[A-Za-z0-9_-]{1,32}`. It is an **identifier, not a number**: notes
+are numbered by order of appearance and the number is derived when the page is
+drawn, so inserting a reference earlier on the page renumbers everything after
+it and nothing in the file changes. Never write a number into the model and
+never expect `[^1]` to render as 1.
+
+Numbering is **per page** — the page is what prints and what a reader reads.
+The section at the foot of a page is derived too: it is that page's references,
+in order, so there is no block to add and nothing to keep in step. A note's
+value is inline `html`, under the same allowlist as a block's.
+
+`[^label]` inside a `code` block is left alone. It is not scanned in one and
+never becomes a reference.
+
+Markdown import and export both speak `[^1]` and `[^1]: the note.`, so an
+Obsidian or Pandoc vault keeps its footnotes in both directions.
+## Markdown in and out
+
+"Download as Markdown" writes every page as one `.md` file, and "Import
+Markdown" reads `.md` files, a folder of them or an Obsidian vault. For every
+block type except `prop`, a block that goes out comes back as the same block,
+with the same JSON apart from its id and the same text on the next export
+(`scripts/test-spaces-md-strict.ts` holds that bar type by type). You can
+write these forms by hand or generate them, and they are what this app reads.
+
+The rule behind every choice: **use a syntax other Markdown tools already
+read**, so the file still makes sense on GitHub, in Obsidian and in a plain
+editor. Invent syntax only where nothing exists, and then use a fenced block,
+which everything else shows as code.
+
+| block | Markdown |
+|---|---|
+| `p`, `h1`–`h3`, lists, `todo`, `quote`, `code`, `divider` | CommonMark / GFM, as you would write it |
+| `table` | a GFM pipe table; an empty header row means `header: false` |
+| `callout` | a GitHub alert, `> [!WARNING]`, with the body inside the blockquote |
+| `toggle` | `<details open>` (or `<details>` when folded), `<summary>text</summary>`, the children, then `</details>` |
+| `image` | `![alt](src "caption"){width=60% w=640 h=300}`. The size is a Pandoc attribute list: `width` is the column percentage (10–100), and `w`/`h` are the intrinsic pixels, both or neither |
+| `link` | `[title](url) — description <!-- bento:card site="…" icon="…" image="…" -->`. The comment makes the line a card, and every renderer hides it. A lone link without it stays a paragraph |
+| `media` | `<video src="…" controls loop muted poster="…" title="alt" width="…" height="…" data-width="…" data-caption="…" data-autoplay><a href="…">alt</a></video>`, or `<audio …>` |
+| `pagelink` | `[[Page title]]` alone on its line |
+| `view` | a fence `` ```bento-view `` holding ONE JSON line, `{"name":"Issues","layout":"board","groupBy":"status"}`, which may be followed by `//` lines (ignored) |
+| `canvas` | a fence `` ```bento-canvas `` holding `{"name":"Map","ratio":1.6,"cards":[[40,60],null]}`, then the cards as the next blocks at the same level, one per `cards` entry |
+| `prop` | `**Status:** In progress`, which comes back as a paragraph. Fields will move to front matter |
+
+Inline marks: `**bold**`, `*italic*`, `***both***`, `~~strike~~`,
+`` `code` ``, `==highlight==`, and `<u>`, `<sub>` and `<sup>` as raw html.
+A palette colour is raw `<span class="sp-fg-red">` or
+`<mark class="sp-bg-yellow">`, and on import the Pandoc forms
+`[words]{color=red}` and `[words]{bg=yellow}` also work. Only the nine
+palette names count: gray, brown, orange, yellow, green, blue, purple, pink
+and red.
+
+**Block ids.** ` {#id}` at the end of a block's line (for a fence, on its
+opening line; for a toggle, on the `<details>` line) gives the block that id.
+The exporter writes one only on blocks that something points at: a comment
+thread, or a `#p/<page>/<block>` link. On import an id that is already used,
+in the note, in the import or in the space, is replaced with a fresh one.
+Tables and dividers never carry an id.
+
+**Everything imported is untrusted.** Links, clip sources, posters and card
+thumbnails go through the same allowlists as the editor: `https:`, `http:` and
+`mailto:` for links; `asset:`, an inline file of the right kind or `http(s)`
+for media; and never `javascript:`, svg data or a relative path for a player.
+No attribute is copied from html by name. Fences are read with `JSON.parse`,
+and a fence cannot set `id`, `type`, `parent`, `html` or `comments`.
+
+### Reserved syntax, for features not yet on main
+
+These features exist only on unmerged branches. When they land, their
+Markdown form is this one, so every branch reads the same file the same way:
+
+| feature | Markdown | why |
+|---|---|---|
+| math | `$…$` inline, `$$…$$` on its own lines for a display block | what GitHub, Obsidian, Pandoc and KaTeX-based tools read |
+| diagram | a `` ```mermaid `` fence holding the source | GitHub and Obsidian render it, and it is a `code` block with `lang: "mermaid"` today, so nothing changes in the format |
+| chart | `` ```chart bar `` (or `line`, `pie` …), holding a GFM table or CSV of the data | everything else shows the data as a readable table. The chart type is the word after `chart` |
+| transclusion | `![[Page]]`, or `![[Page#Section]]` for part of a page, alone on its line | Obsidian's embed. `![[picture.png]]` stays an image |
+| footnotes | `[^1]` in the text and `[^1]: the note.` below | GFM footnotes, which GitHub renders |
+| layout | `:::columns`, `:::hero` and `:::card` fenced divs, closed by `:::` | Pandoc and markdown-it-container read them, and anything else shows the markers as text around readable content |
+
 ## The issue tracker
 
 **An issue is a page.** There is no issue type and no flag: a page carrying a
@@ -286,6 +456,92 @@ fallback line of text.
 Both honour `source` and `filter`, so "the workload for this project" is
 `{ "layout": "workload", "source": { "under": "<page id>" }, "filter": { "open": true } }`
 and needs no key of its own.
+`layout` is one of `list`, `table`, `gallery`, `calendar` — **or absent, which
+means a board.** Never write `"layout": "board"`: absence is what every view
+written before layouts existed carries, and a stored `"board"` is a byte
+difference that says nothing.
+
+A **calendar** lays the view's pages out by date, and has two shapes: a month
+grid (`span` absent) and a chronological timeline (`span: "timeline"`, newest
+first). Which date a page sits on is a **fixed rule, not a setting** — its
+`journal` date if it has one, otherwise the first `date`-typed field in the
+schema it carries a real `YYYY-MM-DD` value for. A page the rule finds no date
+for is listed under "No date" rather than dropped, and a value that is
+digit-shaped but not a real day (`2026-13-99`) counts as no date rather than
+being rolled into some other day. Month names, weekday names and the first day
+of the week come from the reader's locale at display time; nothing formatted is
+ever stored.
+A view's `source` says which pages it holds: `{ "has": "<fieldKey>" }`,
+`{ "under": "<pageId>" }`, or `{ "tag": "<tagKey>" }`. Absent means the
+backlog. The tag key is **lower-case** and reaches nested tags, so
+`{"tag":"project"}` also holds the pages carrying `#project/bento`.
+
+### Tags
+
+Write `#tag` in a block's `html` — that is the whole storage. **There is no
+`tags` field on a page and you must not invent one**: the index is derived from
+the prose every time it is asked for, exactly as backlinks are, so a stored
+list would be a second copy that goes wrong the first time anything edits
+`html` without knowing tags exist. Nothing to maintain, nothing to keep in
+step.
+
+What is and is not a tag, since a `#` means several things:
+
+| written | read as |
+|---|---|
+| `#recipe`, `#work-in-progress`, `#レシピ` | a tag |
+| `#project/bento` | ONE nested tag, also counted under `project` |
+| `# Title` | a Markdown heading — a tag never has a space after the hash |
+| `#42`, `#404` | an issue number, not a tag |
+| `#fff`, `#f7a600` | a CSS colour, not a tag |
+| `C#`, `a#b` | a `#` inside a word |
+| `<code>#include</code>` | code |
+| `https://x.example/p#top` | a URL fragment |
+| `<a href="#p/abc">…</a>` | a page link — the href is an attribute, never text |
+
+Tags are case-folded for matching and keep the casing you typed for display.
+### Narrowing a view
+
+`filter` is optional and every key inside it is too. **Absent means everything**,
+and so does an absent key — a view with no `filter` shows every row, forever.
+Write no `filter` key at all rather than an empty object.
+
+```json
+{ "type": "view", "layout": "table", "filter": {
+    "open": true,
+    "is": { "labels": ["ui"] },
+    "where": [
+      { "key": "due",    "op": "in",       "v": "past" },
+      { "key": ":title", "op": "contains", "v": "onboarding" }
+    ]
+} }
+```
+
+- `open` — only rows whose status phase is neither `done` nor `cancelled`.
+- `is` — `{ fieldKey: [values] }`, membership; a row passes a key if it holds
+  any of the listed values. **An empty list is no constraint**, not "nothing
+  passes".
+- `where` — a flat list of conditions, ANDed. Set `"any": true` alongside it to
+  OR them instead; `any` reaches `where` only, and `open`/`is` always AND.
+- Each condition is `{ key, op, v? }`. `key` is a field key, or `":title"` for
+  the page title.
+
+| `op` | means | `v` |
+|---|---|---|
+| `eq` / `ne` | exact match on the STORED value; membership for a list-valued field | string or number |
+| `gt` `gte` `lt` `lte` | numeric for a `number` field, otherwise text — and a `date` field's `YYYY-MM-DD` sorts chronologically as text | string or number |
+| `contains` / `notContains` | case-insensitive substring of the READABLE value (a select's label, a labels list joined) | string |
+| `empty` / `notEmpty` | the value is unset — absent, `""` or `[]` | — omit `v` |
+| `in` | a date within a window resolved against the READER's today | `"today"` `"week"` `"month"` `"past"` `"future"` |
+
+Two conditions on one number make a range. `"past"` on a due date is "overdue".
+Relative windows are stored as the WORD and resolved when the view is drawn, in
+the reader's own timezone and week — a stored `{"op":"lt","v":"2026-09-10"}`
+would be right on the day you wrote it and wrong every day after.
+
+An operator a build cannot evaluate is **not applied and reported**, so the view
+shows a superset with a banner over it rather than the wrong rows. That is the
+same trade the format makes everywhere: never silently narrow.
 
 **Not in this format, deliberately**: teams, per-user permissions,
 notifications, automation. The file is the team boundary and the capability.
@@ -298,14 +554,23 @@ notifications, automation. The file is the team boundary and the capability.
 | a topic that belongs *under* another | `parent` on the page | the tree is the navigation |
 | a reference to another page | an inline `#p/` link | it produces a backlink on the target automatically, at no cost |
 | a list of sub-pages | one `pagelink` block each | a visible card beats a bare link for a hub page |
+| one page's material that belongs on another too | an `embed`, narrowed with `anchor` | the source stays the single copy — a pasted duplicate is what goes stale |
 | steps someone will tick off | `todo` | state lives in the document, so it survives sharing |
 | an aside, or detail most readers skip | `toggle` with its body as `parent` children | folds away, and always PRINTS expanded |
 | a warning the reader must not miss | `callout` with the `tone` that fits | it is boxed, named and legible in print and without colour vision — but three per page and none of them registers |
 | anything you would print | remember toggles print open and archived pages are excluded | |
 
+| a topic that recurs across pages | an inline `#tag` in the sentence | the index, ⌘K's `#` mode, a view sourced on it and the graph all derive from it |
+
 **The most-missed feature is backlinks.** They are derived — link to a page and
 it lists the linker, with no maintenance. A space where pages only link *down*
 the tree wastes the one thing this format does that a folder of files cannot.
+
+**Give a page `aliases` when people call it more than one thing.** `aliases:
+["NYC", "the Big Apple"]` on a page titled New York makes all three names reach
+it from a `[[wikilink]]`, from ⌘K and from the `[[` picker — and makes prose
+that says "NYC" show up as an unlinked mention on that page. It costs one array
+and it is the cheapest way to make a space find things for its reader.
 
 ## `window.bento`
 
@@ -316,6 +581,7 @@ bento.pages()                              // [{id, title, parent, archived, blo
 bento.getPage(id)                          // one page, with its blocks
 bento.search(q)                            // [{pageId, title, blockId}]
 bento.outline()                            // the whole space as a tree
+bento.mentions(pageId?)                    // where a page is named but not linked
 bento.validate()                           // what is wrong or suspect
 bento.stats()                              // pages, blocks, words, bytes, biggest assets
 bento.comments(query?)                     // review threads, flat, with a typed anchor
@@ -334,7 +600,7 @@ bento.removeBlocks([ids])                  // → {ok:true, removed, missing, ad
 bento.moveBlock(id, {pageId?, afterId?, beforeId?, parent?})
 bento.updatePage(id, patch)                // → {ok:true, id} | {ok:false, err}
 bento.removePage(id, {descendants?})       // → {ok:true, removed, rehomed, links}
-bento.loadDoc(json)                        // replace everything (one undo step)
+bento.loadDoc(json)                        // replace the content (one undo step); docId, collab, readonly, template stay
 
 bento.serialize()                          // the whole .bento.html file
 bento.undo() / bento.redo()
@@ -373,10 +639,19 @@ findings.filter(f => f.severity === 'error')
 Each finding is `{code, severity, message, fix, page?, block?, path?}`. It
 reports duplicate and missing ids, a page inside its own subtree (which is the
 one way a page becomes unreachable), parents naming nothing, `#p/` links and
-`pagelink` cards pointing at pages that do not exist, unknown block types, block
+`pagelink` cards and `embed` blocks pointing at pages that do not exist
+(`broken-embed`), embeds that loop back to their own page (`embed-cycle`) and
+embed anchors that name no heading (`no-section`), unknown block types, block
 markup inside inline `html` (and markup that is dropped whole), hrefs outside the
 allowlist, images with no `alt`, no size, a missing `asset:` or a remote `src`,
 a `home` naming nothing, pages with no blocks, and assets nothing references.
+
+On footnotes it adds `dangling-footnote` (**warning**: a `[^label]` with no
+note behind it — the reference still renders, numbered, into an empty note),
+`orphan-footnote` (**info**: a note in `doc.footnotes` that nothing references,
+so it is never numbered and never printed — it is kept, never deleted) and
+`unreachable-footnote` (**warning**: a label outside the grammar above, which
+no `[^label]` can ever match).
 
 On the tracker it adds: `prop-html-stale` (a value whose readable `html` says
 something else — the check worth running after any hand edit),
@@ -412,6 +687,31 @@ bento.outline()
 In sidebar order (depth-first). Headings carry their **block id**, so what comes
 back can be handed straight to `updateBlock` or `moveBlock`. `links` is what
 that page points at, which is the other half of the backlinks a reader sees.
+
+### `bento.mentions()`
+
+```js
+bento.mentions('p-abc')   // that page's unlinked mentions
+bento.mentions()          // every page's, as { pageId: Mention[] }
+// Mention: { pageId, fromPage, fromBlock, matched, htmlStart, htmlEnd, snippet }
+```
+
+Where a page's **title or aliases** appear as plain words in some other page
+without a link. `matched` is the text as it was actually written, and
+`htmlStart`/`htmlEnd` are offsets into `fromBlock`'s `html`, so a link can be
+spliced in exactly where the words are rather than found again by string search
+— which would hit the wrong occurrence when the name appears twice.
+
+It never reports a name inside a code block, a code span, a link that already
+exists, a URL or a mail address; nor in a block that already links to the
+target; nor in the page's own text; nor as part of a longer word. Names under
+three characters (two, for a name written in Han, kana or Hangul) are not
+scanned for at all.
+
+**READ ONLY on purpose.** Deciding that a sentence meant *that* page is a
+judgement, and an agent that rewrote a hundred blocks on a guess would be
+unreviewable. Link the ones you are sure of with `updateBlock`, and leave the
+rest to the panel, where a person can see the sentence before deciding.
 
 ### `bento.stats()`
 
@@ -617,5 +917,9 @@ rather than vanishing quietly at save time.
   — the file round-trips byte-exact and edits are refused.
 - A remote image `src` shows a placeholder until the reader asks for it. Embed
   the bytes as an `asset:` instead — see **Images** above.
-- There is no collaboration yet. Two people editing two copies get two files
-  and no merge.
+- A shared space (its `collab` names a room) syncs between open copies, and a
+  saved copy carries its sync state in `collab.sync` so it can rejoin the
+  session later as a fork. Leave `collab` alone. An edit written into
+  `#bento-doc` from outside the app is not in that state, so it is not reliably
+  carried to the other copies when the file next joins — edit a shared space
+  through `window.bento` in the open file instead.

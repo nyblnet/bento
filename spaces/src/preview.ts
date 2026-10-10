@@ -42,10 +42,19 @@
 // So the preview is the one surface in this app that stays the author's in
 // both themes, exactly as a thumbnail of a document should. If that ever
 // changes it has to change with the FORMAT, not with a media query.
+//
+// AND IT DRAWS THE DOCUMENT'S DESIGN (2026-09-26). A thumbnail is the
+// document's face, and a space set in Almanac that thumbnails as the default
+// look is lying about itself. The design is the AUTHOR's, so it belongs here
+// for the same reason `doc.theme` does — and it is drawn in its LIGHT palette,
+// because there is still no reader to ask. designs.ts `previewRules` supplies
+// it as flat values — no custom properties, no color-mix() — and they go on as
+// INLINE styles through the CSSOM, never into the <style> block below.
 
 import type { SpacesDoc, Page } from './model'
 import { renderPage } from './render'
 import { homePage } from './model'
+import { resolveDesign, previewRules, applyPreviewRules } from './designs.ts'
 
 /** Above this the preview is trimmed, then dropped to a title card. A preview
  *  is a courtesy; it must never be why a file is large. */
@@ -221,6 +230,11 @@ function wrap(inner: HTMLElement, doc: SpacesDoc): HTMLElement {
   style.textContent = SHEET(doc)
   box.appendChild(style)
   box.appendChild(inner)
+  // THE DESIGN GOES ON AS INLINE STYLES, NEVER INTO THE <style> ABOVE: this
+  // node is written into the saved shell, and author-chosen values must not
+  // become raw text inside a style element there (designs.ts previewRules).
+  const design = resolveDesign(doc)
+  if (design) applyPreviewRules(box, previewRules(design))
   return box
 }
 

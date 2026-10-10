@@ -41,8 +41,10 @@
 // on the first frame, which is the same picture, immediately.
 
 import type { SpacesDoc, SpaceIndex } from './model.ts'
+import { buildTagIndex } from './tags.ts'
 import { ICONS } from './icons.ts'
 import { t } from './i18n.ts'
+import { enablePinchZoom } from './touch.ts'
 
 // ————— the graph itself ————————————————————————————————————————————————————
 
@@ -77,6 +79,8 @@ export interface GraphEdge {
   links: number
   /** true when one is the other's parent in the page tree */
   tree: boolean
+  /** true when the two pages carry a tag in common */
+  tag: boolean
 }
 
 export interface Graph {
@@ -93,6 +97,10 @@ export interface Graph {
  * than one with one, and a linear map makes the hub a disc that swallows its
  * own neighbourhood. Floor 4 so an orphan is still a thing you can click.
  */
+/** Past this many pages a tag stops being a relationship and starts being a
+ *  category. See buildGraph. */
+export const TAG_EDGE_MAX = 8
+
 export const nodeRadius = (deg: number): number => Math.min(4 + 3.1 * Math.sqrt(deg), 20)
 
 /** Golden-angle spiral: even, deterministic, and not a grid. */
@@ -142,7 +150,7 @@ export function buildGraph(doc: SpacesDoc, index: SpaceIndex): Graph {
     const k = key(a, b)
     const hit = seen.get(k)
     if (hit !== undefined) return edges[hit]
-    const e: GraphEdge = { a: Math.min(a, b), b: Math.max(a, b), links: 0, tree: false }
+    const e: GraphEdge = { a: Math.min(a, b), b: Math.max(a, b), links: 0, tree: false, tag: false }
     seen.set(k, edges.length)
     edges.push(e)
     return e
@@ -170,10 +178,33 @@ export function buildGraph(doc: SpacesDoc, index: SpaceIndex): Graph {
     edgeFor(a, b).tree = true
   }
 
+  // …and shared TAGS, which are the only relationship in this format that
+  // somebody states without meaning to state it. Two pages both tagged
+  // `#recipe` are related; neither links to the other and neither is the
+  // other's parent, so before this the graph drew them as strangers.
+  //
+  // CAPPED, and the cap is the whole design. A tag on n pages is n(n-1)/2
+  // edges — `#note` on twenty pages is 190 lines, which is not a picture of
+  // anything. Past the cap the tag is saying "these are notes", not "these two
+  // specifically", and the tag sheet is the right way to read it. Below it,
+  // co-tagging is exactly the weak association a graph is for.
+  const tix = buildTagIndex(doc)
+  for (const entry of tix.tags.values()) {
+    if (entry.pages.length < 2 || entry.pages.length > TAG_EDGE_MAX) continue
+    for (let i = 0; i < entry.pages.length; i++) {
+      for (let j = i + 1; j < entry.pages.length; j++) {
+        const a = at.get(entry.pages[i])
+        const b = at.get(entry.pages[j])
+        if (a === undefined || b === undefined || a === b) continue
+        edgeFor(a, b).tag = true
+      }
+    }
+  }
+
   for (const e of edges) {
     nodes[e.a].deg++
     nodes[e.b].deg++
-    const w = e.links + (e.tree ? 1 : 0)
+    const w = e.links + (e.tree ? 1 : 0) + (e.tag ? 1 : 0)
     nodes[e.a].weight += w
     nodes[e.b].weight += w
   }
@@ -351,7 +382,7 @@ export function prefersReducedMotion(): boolean {
  * shell's inflated stylesheet taught (kernel/src/save.ts serializeBody).
  */
 const CSS = `
-.sp-overlay-graph { align-items: center; padding: 14px; padding-top: 14px; }
+
 .sp-graph {
   width: min(1180px, calc(100vw - 28px));
   height: min(820px, calc(100vh - 28px));
@@ -463,11 +494,9 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
   layoutGraph(g)
   const layoutMs = performance.now() - t0
 
-  const back = mk('div', 'sp-overlay sp-overlay-graph')
-  const card = mk('div', 'sp-card sp-graph')
-  card.setAttribute('role', 'dialog')
-  card.setAttribute('aria-modal', 'true')
-  card.setAttribute('aria-label', t('Graph'))
+  // The CONTENT only. The modal around it — scrim, trap, Escape, focus return —
+  // is the kernel's dialog, which the editor wraps this in.
+  const card = mk('div', 'sp-graph')
 
   const head = mk('div', 'sp-graph-head')
   head.append(mk('h2', 'sp-card-h', t('Graph')))
@@ -493,7 +522,6 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
     t('Click a page to open it · drag to move · scroll to zoom'))
 
   card.append(head, stage, foot)
-  back.append(card)
 
   // ——— camera ———
   let scale = 1
@@ -764,9 +792,25 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
     draw()
   }, { passive: false })
 
+  // ——— two fingers ———
+  //
+  // One finger already worked: the pointer path above is pointer events, and a
+  // touch drives those. ZOOM did not — it was `wheel` alone, and a phone has no
+  // wheel, so a crowded graph could be shoved around and never scaled. Fit was
+  // the only way to change magnification and it only ever gives you one.
+  //
+  // The second finger also has to CANCEL the one-finger drag it interrupts, or
+  // the pointer path keeps panning (or worse, keeps dragging a node) underneath
+  // the pinch and the two fight over the same picture.
+  canvas.addEventListener('touchstart', (e) => { if (e.touches.length > 1) drag = null }, { passive: true })
+  enablePinchZoom(canvas, {
+    get: () => ({ scale, panX, panY }),
+    set: (s, x, y) => { scale = s; panX = x; panY = y; draw() },
+    limits: [0.12, 5],
+  })
+
   fitBtn.addEventListener('click', () => { fit(); draw() })
   closeBtn.addEventListener('click', () => opts.close())
-  back.addEventListener('click', (e) => { if (e.target === back) opts.close() })
 
   // ——— theme + size, both of which move under us ———
   const ro = new ResizeObserver(() => resize())
@@ -801,11 +845,11 @@ export function openGraphView(opts: GraphViewOpts): GraphView {
   // Each was checked through these rather than by looking at the screen:
   // `frames: 0` beside `reveal: 1` is the proof that a graph opened in a
   // background tab still arrives. Six numbers on a node thrown away at close.
-  ;(back as unknown as { __graph: unknown }).__graph = {
+  ;(card as unknown as { __graph: unknown }).__graph = {
     nodes: g.nodes.length, edges: g.edges.length, layoutMs, reduced,
     get reveal() { return reveal },
     get frames() { return frames },
   }
 
-  return { el: back, destroy, graph: g }
+  return { el: card, destroy, graph: g }
 }

@@ -64,6 +64,17 @@ function sheetOf(cols: Record<string, unknown[]>, types: Record<string, ColumnTy
   }
 }
 
+/** `sheetOf` with formulas declared on named columns — a DERIVED column. */
+function sheetWithFormulas(
+  cols: Record<string, unknown[]>,
+  formulas: Record<string, string>,
+  types: Record<string, ColumnType> = {},
+): TableSheet {
+  const sh = sheetOf(cols, types)
+  for (const c of sh.columns) if (formulas[c.id]) c.formula = formulas[c.id]
+  return sh
+}
+
 /** Every float the GPU would read, checked for NaN/Infinity. */
 function sceneFinite(s: Scene): boolean {
   const fin = (a: Float32Array | undefined) => {
@@ -568,6 +579,96 @@ function gridRows(skip: Array<[number, number]> = []) {
   ok(defaultViz3d(cats)?.kind === 'bars', 'two categories and a measure default to 3D bars')
   ok(defaultViz3d(sheetOf({ a: ['x'] }, { a: 'text' })) === null,
     'and a sheet with nothing to plot gets NULL rather than a forced wrong view')
+
+  // ---- a DERIVED column is never an independent axis
+  //
+  // The starter workbook is the case this exists for. Its numeric columns in
+  // declaration order are Value, Probability and Weighted, and Weighted is
+  // `formula: 'value * prob'` — so the default binding was x = Value,
+  // y = Probability, z = Value × Probability, on the one dataset every new user
+  // meets. The plot was a surface drawn as a cloud, and it read as an argument
+  // against three dimensions rather than against this function.
+  // The starter's actual shape: three text columns and a date, Value and
+  // Probability stored, Weighted computed from both.
+  const starterish = sheetWithFormulas(
+    { region: ['N'], owner: ['P'], stage: ['Won'], value: [10], prob: [0.5], weighted: [5] },
+    { weighted: 'value * prob' },
+    { region: 'text', owner: 'text', stage: 'text', value: 'money', prob: 'percent', weighted: 'money' },
+  )
+  const sb = defaultViz3d(starterish)!
+  ok(sb.z !== 'weighted',
+    'the starter shape no longer plots Value x Probability as its Z axis — a column that IS x*y carries no third dimension')
+  ok(sb.kind === 'bars',
+    'it gets 3D BARS instead: with only two stored measures there is no honest scatter, and a category x category x measure grid is both truthful and the thing a spreadsheet cannot draw')
+  ok(sb.x === 'region' && sb.y === 'owner' && sb.z === 'value' && sb.agg === 'sum',
+    'and the grid is the reading a pipeline actually has — who is selling how much, where')
+
+  // Preferring stored columns still has to BITE where a scatter is right.
+  const threeStored = sheetWithFormulas(
+    { a: [1], b: [2], c: [3], d: [4] },
+    { b: 'a*2' },
+    {},
+  )
+  const ts = defaultViz3d(threeStored)!
+  ok(ts.kind === 'scatter' && ts.x === 'a' && ts.y === 'c' && ts.z === 'd',
+    'three STORED measures take the axes in order, stepping over the computed one between them')
+  ok(ts.color === 'b',
+    'and the computed column colours the points, where being derived is informative rather than degenerate')
+
+  // Not a ban — a preference. Three formula columns are still better plotted
+  // than refused, or the rule would turn a working view into nothing at all.
+  const allDerived = sheetWithFormulas(
+    { a: [1], b: [2], c: [3] },
+    { a: 'x+1', b: 'x+2', c: 'x+3' },
+  )
+  ok(defaultViz3d(allDerived)?.kind === 'scatter',
+    'a sheet whose numeric columns are ALL computed still gets a scatter — stored is preferred, not required, or the rule would refuse a view that works')
+
+  // Order within each group is preserved, so the rule cannot reshuffle a sheet
+  // that had no derived columns to begin with.
+  const plain = defaultViz3d(sheetOf({ p: [1], q: [2], r: [3] }))!
+  ok(plain.x === 'p' && plain.y === 'q' && plain.z === 'r',
+    'a sheet with no computed columns binds exactly as it did before — declaration order, untouched')
+}
+
+// ================================================== the view vector (a filter)
+//
+// `buildScene` took the whole sheet and nothing else, so the plot ignored the
+// filter completely. Measured in the built shell before the fix, on the starter
+// workbook filtered to Region = North: grid 3 rows, status bar "3 of 8 rows",
+// footer £50,750 — and all EIGHT points still in the plot, beside three
+// readouts that had already corrected themselves.
+{
+  const sheet = sheetOf({ x: [1, 2, 3, 4], y: [1, 2, 3, 4], z: [10, 20, 30, 40] })
+  const bind: Viz3dBinding = { kind: 'scatter', x: 'x', y: 'y', z: 'z' }
+
+  const all = buildScene(sheet, bind)
+  ok(vertCount(meshOf(all, 'points')) === 4, 'with no view vector every row is plotted')
+
+  const view = buildScene(sheet, bind, undefined, [0, 2])
+  ok(vertCount(meshOf(view, 'points')) === 2,
+    'with a view vector ONLY the rows it names are plotted — the whole bug, in one number')
+  ok(view.rows === 2, 'and `rows` counts the view, so the overlay describes the population on screen')
+  ok(view.axes[2].max === 30 && view.axes[2].min === 10,
+    'the axes are scaled to the VISIBLE rows — a filtered plot must not keep the old range')
+
+  // A SORT is a permutation: same rows, different order. Geometry is a set of
+  // points, so the extents cannot move — only a FILTER changes what is drawn.
+  const sorted = buildScene(sheet, bind, undefined, [3, 1, 2, 0])
+  ok(vertCount(meshOf(sorted, 'points')) === 4 && sorted.axes[2].max === 40,
+    'a sort is a permutation, so every extent is unchanged')
+
+  // EVERY bound column or none. Projecting x and not z would pair the wrong
+  // height with the wrong position — plausible, and wrong.
+  const c = buildScene(sheet, { ...bind, color: 'z' }, undefined, [0, 1])
+  ok(c.legend?.kind === 'ramp' && c.legend.max === 20,
+    'the colour column is projected through the same vector as the axes')
+
+  const none = buildScene(sheet, bind, undefined, [])
+  ok(!!none.empty && /filter/.test(none.empty),
+    'a filter that matches nothing says so, and does not claim the sheet is empty')
+  ok(none.rows === 4,
+    'while still reporting how many rows the sheet HAS — "0 of 4" is the honest reading')
 }
 
 // ====================================================== formula columns ride in

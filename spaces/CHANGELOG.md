@@ -51,6 +51,48 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   Both charts print, and both survive into the file-manager thumbnail: colour
   and geometry travel as presentation attributes inside the SVG rather than in
   `styles.css`, which the still's own stylesheet is not.
+- **`#tag` in the prose, and everything that follows from it.** Type `#recipe`
+  in a sentence and it renders as a clickable chip; the chip opens a tag sheet
+  listing every page carrying it. Tags reach ⌘K (a query starting with `#`
+  lists tags and how much of the space each covers), a view's **source** (a
+  base can be "everything tagged #recipe", chosen from the Pages · button),
+  and the graph (two pages sharing a tag draw an edge, capped at eight pages
+  per tag — past that a tag is a category, not a relationship).
+
+  **A tag is stored exactly once, in the words.** There is no `page.tags`
+  array and there must not be one: the index is derived from `html` every time
+  something asks, the same way backlinks already are, so it can never disagree
+  with what is written. The consequence worth having is that this costs the
+  FILE nothing — measured against a build of the previous release, a tagged
+  paragraph renders there as ordinary prose, byte-identical, with no chip and
+  no lost text.
+
+  `#project/bento` is one **nested** tag, and it counts under `#project` too —
+  settled now rather than later, because reading it as the flat tag `project`
+  first would silently change the meaning of text already in files when
+  nesting arrived. The tag sheet walks up and down that hierarchy.
+
+  What is deliberately NOT a tag, each one tested by running the parser:
+  `# Title` (a Markdown heading — a tag has no space after the hash), `#42`
+  and `#404` (issue numbers), `#fff` and `#f7a600` (CSS colours), `C#` and
+  `a#b` (a hash inside a word), a `#` in `<code>`, a URL fragment such as
+  `https://x.example/p#top`, and this app's own `#p/` page links.
+
+- **A view whose source this build cannot read now says so.** `unknownSourceKeys`
+  existed and nothing called it, so a view selecting its pages in a way the
+  build does not understand silently fell back to the backlog and showed a
+  different set of pages while its header still named the source. It shows a
+  line now, the way an unreadable filter already did. Known limitation, stated
+  because it cannot be fixed retroactively: builds shipped before this one
+  still degrade silently, so a view sourced on a tag reads as Issues there.
+- **The table sorts and edits again.** A rebase duplicated the whole
+  `layout === 'table'` branch in the renderer. Both copies compiled, and the
+  first one returned — so the second, the one carrying click-to-sort headers
+  and edit-in-place cells, was unreachable from the moment covers and the
+  gallery landed. The table still drew, so nothing looked broken; it was
+  simply read-only and unsortable. Measured in the built shell before the fix:
+  0 header buttons, 0 cell buttons, no sort attribute anywhere. After: 2 and 6,
+  and clicking a column header actually reorders the rows.
 
 - **The whole gallery card is the target, and a long title stops inflating its
   row.** In a shelf of covers the picture is what you point at, so the title's
@@ -514,6 +556,683 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   Japanese readers see 2026年8月6日木曜日, German readers Donnerstag, 6. August
   2026, from the same file. `bento.journal()` opens today's for an agent, and
   `bento.journal('2026-08-06')` any day's.
+
+- **A view can be a CALENDAR.** The fifth shape on the one layout button —
+  board, list, table, gallery, calendar — and the one that answers *when*. It
+  has two forms behind a second button: a month grid, and a timeline that reads
+  newest first. Two forms rather than two entries in the cycle, because they are
+  one question at two densities (a month grid is useless on dates spread over
+  years, and a timeline cannot show you the shape of a week), and because the
+  layout control is a cycle whose cost is one click for everybody every time
+  they pass a shape they did not want.
+
+  **Which date a page sits on is a rule, not a setting, and the view says the
+  rule out loud**: its journal date if it is a journal entry, otherwise the
+  first date field in the schema it carries a real date for. A page with neither
+  is listed under "No date" — visible, because a calendar quietly holding fewer
+  pages than the count beside its own title is a view lying about what it
+  contains, and the pages it would drop are exactly the ones somebody forgot to
+  date. A value that is digit-shaped but not a day (`2026-13-99`) is no date
+  rather than a confident wrong one.
+
+  Month names, weekday names and **which day the week starts on** all come from
+  the reader's own locale, so the same file is a Sunday-first 2026年9月 in Tokyo
+  and a Monday-first September 2026 in London. Nothing formatted is ever stored.
+  Measured in a built shell: February 2026 draws 28 cells in four rows, August
+  2026 draws 42 in six, September 35 in five — the count is derived from the
+  month and the reader, never assumed.
+
+  `layout: "calendar"` and `span: "timeline"` are additive: verified against a
+  build that has never heard of either, which renders the board and round-trips
+  both keys untouched. And `board`/`month` stay the ABSENT keys — a view cycled
+  all the way round, span and all, is byte-identical to one nobody touched.
+- **A page can show another page: transclusion.** The new `embed` block draws a
+  live view of another page — or of one heading's section of it, chosen by name
+  — attributed to its source and clickable through to it. It stores a
+  REFERENCE and never a copy, so the source page stays the single copy of the
+  words and every embed of it changes when it does.
+
+  This closes a hole in the Obsidian import that nothing reported. `markdown.ts`
+  had parsed `![[Page]]` since the importer was written and carried a comment
+  saying "an embed of a note is just a link to it, because there is no
+  transclusion in the model" — so a vault arrived with every embed silently
+  demoted to a plain link. A whole line of `![[Page]]` or `![[Page#Section]]`
+  is now an embed, and exports back as itself; an `![[…]]` inside a sentence is
+  still a link, because a block cannot live in the middle of one.
+
+  What the reader is never shown is a blank box. A loop (A embeds B embeds A)
+  renders as a named placeholder that says which page repeats, an embed chain
+  is followed at most three pages deep, a target that has been deleted says so,
+  and an `anchor` that matches no heading says THAT rather than quietly falling
+  back to the whole page. `validate()` names all four (`broken-embed`,
+  `embed-cycle`, `no-section`). An embed also appears in "Linked from" like a
+  page link does — it is the strongest reference in the model, and the one you
+  most want to be warned about before rewriting a page — and it survives being
+  extracted or grafted into another space, where a target that did not travel
+  becomes the same honest `[[Name]]` text a page link becomes.
+- **A page becomes a deck.** Save → **Export page as slides…** turns one page
+  into a `bento/slides` presentation: headings start slides, lists stay lists,
+  a table stays a table, a board becomes a table of the rows it stands for, and
+  a canvas becomes a slide with every card where you put it. The page's title,
+  icon and cover make the title slide; the space's theme becomes the deck's.
+  No hosted notes app can hand you a presentation you own outright, and this
+  one can, because both apps are the same repository.
+
+  **What it hands over is the deck's document JSON**, which you paste into
+  Bento Slides through its own "Replace from JSON…" — not a finished
+  `.bento.html`. A self-contained deck is a document spliced into a slides
+  SHELL, and the only ways for this app to have one are bundling half a
+  megabyte of another app into every space or fetching it, which is the one
+  thing opening a document must never do. The Markdown export sets the
+  precedent: write the other format faithfully and hand it over.
+
+  **Nothing is fetched, and nothing is dropped in silence.** Every picture
+  travels as its bytes, re-interned in the deck's own asset table; anything
+  that would still reach the network — including bytes hidden one `asset:`
+  indirection away, the hole closed on the reading side in 0.1.x — is left out
+  and said out loud. The dialog lists what did not come across before you
+  download anything, and the same list is written into the deck's speaker
+  notes, so a presenter opening it next week is told too. Speaker notes are
+  otherwise NOT invented: mapping review comments onto them would move a remark
+  addressed to a person into a file people present from.
+- **A view's filter can ask a real question.** It had two things to say — "show
+  me what is open" and "show me these values" — under five layouts that exist to
+  hold books, tasks and dates. "Published after 2020", "due this week", "not
+  tagged draft", "title contains onboarding" and "has no due date" were all
+  unaskable. A view now carries **conditions**: a field, an operator and a
+  value, built in the Filter popover and listed there in words.
+
+  Eleven operators, chosen per field type rather than collected. Numbers and
+  dates get `is more than` / `is at least` / `is less than` / `is at most`, and
+  two of them AND into a range. Dates also get relative windows — Today, This
+  week, This month, In the past (which is what "overdue" is), In the future —
+  resolved against **your own day in your own timezone**, and against your own
+  locale's week: the same file answers "this week" as Monday–Sunday in Berlin
+  and Sunday–Saturday in Chicago, because a week start is a reader's fact and
+  not a document's. Text gets `contains` / `does not contain`, matching what is
+  on the screen rather than what is stored underneath, so a status matches its
+  label. Everything gets `is` / `is not` and `is empty` / `is not empty` — the
+  question membership could never ask, because an unset value is the absence of
+  a value rather than one of its values. A condition can also ask about the page
+  **title**, which is not a property and no field name could reach.
+
+  Conditions are a flat list with one switch — **Match all** or **Match any** —
+  and no nesting, deliberately: a filter you cannot read at a glance is worse
+  than one that cannot ask everything, and the popover is a sheet on a phone.
+  The Filter chip counts them alongside the old two.
+
+  Nothing written before this changes. Every existing filter runs through
+  exactly the code it always did and selects exactly the rows it always did, and
+  a view whose conditions are all removed goes back to being byte-identical to
+  one nobody ever filtered. An **older build** opening a file with conditions
+  ignores them, shows a superset of the rows, and says so in the banner it
+  already had for a newer sort — and a **newer** operator meeting this build
+  does the same rather than hiding rows for a rule nobody can see.
+- **The arrow keys move between blocks, and within one first.** Every block is
+  its own `contenteditable` host, which is what keeps a Selection block-scoped
+  so splitting and merging can never re-mint an id — and the price, until now,
+  was that the browser's own caret movement stopped dead at a block boundary.
+  ↑ and ↓ did nothing at all; ← and → did nothing at the edges. There was no
+  arrow handling in the editor whatsoever.
+
+  ↓ from the first line of a wrapped paragraph means its second line, not the
+  next block, so the question asked is not "which block is this" but "is the
+  caret on the edge VISUAL line of its host" — measured off the caret's own
+  rectangle against the host's line boxes, never counted in characters, because
+  where a line wraps depends on the font, the width, the language and the marks.
+  The goal column is kept across consecutive vertical steps, so down onto a
+  short line and down again comes back out near the original x, and a pointer
+  ends the run. ← at the start of a block goes to the end of the one before and
+  → at the end to the start of the next. It crosses callouts, toggles and canvas
+  cards for free — they render in document order — and a table is stepped by its
+  GRID, because cells are row-major in the DOM and column-major on the screen;
+  entering one from above or below lands in the column the goal column is over,
+  not in the first cell. The table's own ⇥ and ⏎ are untouched.
+
+- **Tab on a block with nothing above it now says so.** A space expresses
+  nesting with one field — `Block.parent`, pointing at a preceding sibling — so
+  the first block at its level has nothing to nest under. `indent()` walked
+  backwards looking for one, found none, and returned in silence: no indent, no
+  feedback, no explanation, which reads as a broken app rather than as a gesture
+  that does not apply. It refuses out loud now, in the status line and with a
+  nudge on the block itself, and the indent control shows the reason before the
+  key is pressed.
+
+  The alternative was to allow it by storing an indent LEVEL, the way Google
+  Docs does. That is a permanent format addition and a SECOND way to express
+  nesting, which the renderer, the markdown export, the outline, the graph and
+  the CRDT would each have to reconcile forever; a silent Tab is worth an
+  afternoon and a duplicate nesting model is worth every future version. Notion,
+  Workflowy, Bear and Logseq all refuse the same case, because they all nest by
+  parenthood too. Nothing about the format changed. ⇧Tab still outdents — and
+  now explains itself when there is nothing to outdent from — and Tab still
+  commits a showing calc answer before it considers indenting at all.
+
+- **Bullets, numbers, to-dos, quotes, headings, indent and outdent have a
+  control.** There were none: the formatting bar is inline-only and appears on a
+  SELECTION, which is the wrong trigger for "make this a bullet" — you want that
+  with a caret and nothing selected. So the block's own format is a row at the
+  top of the block menu, the one the gutter grip opens and the one that is
+  already a bottom sheet on a phone. Indent and outdent existed on no surface at
+  all before this, at any width: ⇥ and ⇧⇥ were their only gesture, and a phone
+  keyboard has neither. ⌘/ opens the menu from the keyboard, since the gutter is
+  hover-revealed and ⇥ inside a block is indent.
+- **A page with no cover gets a procedural one — on the home page and on every
+  gallery card, and nowhere else.** A gradient plus a geometric figure (orbs,
+  bands, a dot lattice, rings, facets or waves), seeded from the page id, drawn
+  at render time and never written into the file: `cover` absent stays absent,
+  an older build sees no cover exactly as before, and a saved space does not
+  grow by a byte. The same id draws the same cover on every machine and every
+  reload; a page that gains a real cover shows that and nothing else, and a
+  page whose cover is removed gets its procedural one back. The gallery already
+  tinted its coverless cards on a hue from the id — this is that tint with a
+  figure on it, in the same two hues at the same alphas, over the theme's own
+  ground, so one SVG is right in light and in dark.
+
+  Home page and gallery only, on purpose. A cover is a full-bleed band that
+  pushes the title down and lifts the icon into a disc; on a space of two
+  hundred plain notes that is two hundred posters, and a journal entry under a
+  banner is wrong however restrained the artwork. The two surfaces chosen are
+  the two that already single a page out. Never on paper (5cm of toner for a
+  figure nobody chose) and never in the file-manager thumbnail (a still of the
+  author's document, and this is not in it).
+
+  Measured with real pixels, the SVG rasterised over the theme ground, across
+  400 ids covering all eight hues and all six figures: the card's letter-mark
+  keeps at least 4.29:1 in light and 3.28:1 in dark (34px bold; the figure
+  costs about a point against the plain tint, which sat at 6.55 and 4.13);
+  the icon on the home page's disc reads at 9.94:1 light / 9.30:1 dark. The
+  disc's EDGE against the cover is 1.33–2.31:1 in light and 1.91–3.53:1 in
+  dark — the disc is white-on-a-wash by design, as it is over a pale
+  photograph, and its shadow carries the boundary; the glyph is what has to
+  read. Shell +1,412 B.
+- **A finger can do the four things only a mouse could.** Reordering a block,
+  nesting a page in the tree, moving an issue card between columns and moving a
+  card on a canvas were all mouse-only: the first three are HTML5
+  drag-and-drop, which never fires from a touch, and the fourth listened for
+  `mousedown`. Two had a fallback (Move up / Move down in the block menu; tap a
+  card's status chip) and **the page tree had none** — nesting a page was
+  impossible on a phone by any route. Press and hold now starts the same drag,
+  and holding a card at the edge of a board or a list scrolls it along, since at
+  390px only one of six columns is on screen at a time.
+
+  A finger that MOVES is still scrolling. Nothing is captured until the press
+  has been held still, so a swipe that starts on a card scrolls the page exactly
+  as it did before.
+
+- **Pinch to zoom the graph.** One finger already panned it, but zoom was on the
+  scroll wheel alone — so on a phone the one view whose whole point is a crowded
+  picture could be shoved around and never scaled. Two fingers zoom about the
+  point between them and pan at the same time; the second finger also ends the
+  one-finger drag it interrupts, so the two gestures no longer fight.
+
+- **A menu taller than the window has items nobody can reach.** Measured on a
+  390×800 phone: Insert laid out 19 items 1000px tall, putting Table, Link to
+  the web, Image and Video or audio 253px below the screen with no gesture that
+  reaches them — the menu is positioned inside a fixed bar, so the page cannot
+  scroll to them. ⋯ lost its last five the same way. Both scroll now, and this
+  was never only a phone bug: on an 860px laptop window the last Insert item was
+  off the bottom too.
+
+- **A sideways swipe stops at the edge of what it is scrolling.** A board or a
+  wide table that runs out of content handed the rest of the gesture to the
+  browser, which on a phone is the back-navigation swipe. It ends where the
+  board does.
+
+- **A wide page stops giving away a third of a phone.** "Wide" is 80% of the
+  window, which is a sensible proportion on a desktop and 283px on a 390px
+  phone — with the block gutter's 26px that left a 257px column inside a 390px
+  screen. It takes the whole width below 850px and is unchanged above it
+  (measured at 1400px: 872px before and after). And the sharing button, alone
+  among the toolbar's controls, was 35×29 rather than the 40×40 every other one
+  gets on a touch screen.
+- **Callouts, quotes and captions survive a trip through Markdown.** Four
+  places where the exporter and the importer disagreed with each other, each
+  measured by exporting one block and reading it back:
+  - A **GitHub alert** — `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`,
+    `[!CAUTION]` — now imports as a callout of that tone, with everything in
+    the box (lists, code, a nested alert) as its body. The export already
+    wrote alerts; the importer read them back as a plain quote with `[!WARNING]`
+    as its first words. Alerts written by GitHub or Obsidian read the same way,
+    including Obsidian's lower-case tags, fold markers and text on the tag
+    line. Other tags (`[!info]`) stay a quote, word for word.
+  - A **quote with a line break** exported its second line without `> `, so a
+    blank line inside it came back as a quote followed by a loose paragraph.
+    Every line is marked now.
+  - An **image caption** leaves as the Markdown title, `![alt](src "caption")`.
+    The importer already read that title as the caption; the exporter was
+    dropping it. An image's size still does not survive — Markdown has no
+    place for it.
+  - A **divider** comes back as the same block the editor made.
+
+  `scripts/test-spaces-md-strict.ts` holds every block type to this bar: 13 of
+  the 20 now come back byte for byte (9 did before), and the other 7 — toggle,
+  link card, media, field, board, page link, canvas — are pinned with the
+  reason, so the rig fails if one starts to qualify without the pin being
+  lifted on purpose.
+- **Footnotes.** A mark in the prose, the note at the foot of the page — write
+  `[^1]` where the mark goes and the note appears as a numbered slot below the
+  page to write into. Notes print, export as `[^1]: the note.` and import back
+  the same way, so an Obsidian or Pandoc vault keeps its footnotes in both
+  directions rather than losing them silently on the way in.
+
+  **The number is never stored.** Footnotes are numbered by order of appearance
+  and the number is worked out when the page is drawn, the way a magic note's
+  answer and a slide's page number are: put a new reference above two existing
+  ones and they renumber to 2 and 3 with nothing in the file changing. Measured
+  in the built shell — `[^1]` renders as "2" while `block.html` still says
+  `[^1]`. A stored number would have been wrong from the first sentence anyone
+  moved, and nothing would have said so.
+
+  **The reference is text, not markup**, which is the whole reason it survives
+  editing: `[^1]` moves with the prose through a keystroke, a sanitize pass, a
+  canonicalisation and a merge exactly the way the word beside it does, because
+  there is no offset to keep in step and no attribute for the allowlist to have
+  an opinion about. It also means a build that predates this shows the sentence
+  with `[^1]` in it and hands the `footnotes` key back untouched — verified by
+  loading a footnoted document into a shell built from the previous release.
+
+  A reference whose note has been deleted still renders, numbered, into an
+  empty note; a note whose reference has gone is kept, never quietly dropped.
+  `bento.validate()` reports both (`dangling-footnote`, `orphan-footnote`) and
+  names the block. Costs 3,176 bytes on the shell.
+- **A saved copy of a shared space rejoins its live session with its offline
+  edits.** ⌘S, Save a copy and both self-update writes now stamp the live
+  session's sync state into the file (`collab.sync`), as bento/slides always
+  has. Before, a copy edited away from the session reopened as if it had never
+  synced: its edits stayed in that copy and never reached anyone else, and an
+  edit to a paragraph somebody had also changed was overwritten by theirs.
+  Measured in two Chrome tabs: edit in one, save, edit the saved file offline,
+  edit in the other tab meanwhile, reopen — the old build ends with the two
+  tabs disagreeing; this one shows both edits in both tabs. View-only copies,
+  page extracts, Markdown and JSON exports, and "Duplicate as a new space…"
+  carry no sync state, and a file opened read-only is never re-stamped.
+- **⌘Z no longer undoes who a space is.** Undo restores a snapshot of the
+  whole document, and it used to bring that snapshot's identity back with the
+  content: edit something, then Stop sharing, and the next ⌘Z switched sharing
+  back on, silently rejoining the room you had just left. A key rotation could
+  be undone into the revoked key the same way, and a new docId or a read-only
+  mode reverted to whatever the snapshot held. Undo and redo now move content
+  only. The docId, the live-session credentials and the read-only and template
+  modes always stay as they are in the open space. Restoring a version, the
+  recovery banner, Replace from JSON and `bento.loadDoc` follow the same rule:
+  they replace the pages, title and theme, and never the space's identity.
+  Bento Slides had the same bug.
+- **A copy that cannot write never gets writer chrome.** Whether a copy may
+  write was decided by `collab.role !== 'reader'`, so the live-show
+  `'audience'` role — and any role added later — passed as a writer: an
+  audience copy opened editable, was labelled Editor in People, and made local
+  commits the relay then refused. It is an allowlist now (`copyCanWrite` in
+  `share.ts`, the same shape as bento/type's): no role field or `'writer'`
+  writes, anything else opens view-only. Every gate — the boot lock, the Share
+  popover, the People label — asks that one function. Plain files and legacy
+  rooms open exactly as before.
+- **Fixed: an edit made while the file was being written could be marked saved.**
+  Saving takes a moment — the file is reconnected, the space is written out,
+  the disk answers — and a word typed in that moment went into the space after
+  the file's copy had already been taken. When the write finished, the unsaved
+  dot went out anyway, so the file was missing the edit and nothing said so.
+  Now each save writes the space exactly as it was when that save began, and
+  the dot goes out only if nothing has changed since. Anything newer — your own
+  typing, a colleague's edit arriving live, an undo — keeps the dot on and goes
+  into the next save. Two saves in quick succession wait for each other instead
+  of writing the file at the same time, and so does "Update this file" in
+  About. A save that fails now says so ("Save failed — see console") instead of
+  leaving "Saving…" on screen, and the space stays unsaved.
+
+- **Restoring from this browser checks what it restores.** The recovery
+  banner's snapshot and every History entry are kept in the browser's storage,
+  which every local Bento file shares, so they are now treated like a file
+  that arrived from somewhere else, as Bento Slides already treats them. An
+  entry that names a different space, is not a bento/spaces document, was
+  written by a newer version, or is oversized is not restored: nothing
+  changes, and the entry is left where it is. Text in a restored entry is
+  cleaned the way an imported space's is. A bad entry never raises the
+  recovery banner in the first place. Reading copies and view-only copies
+  don't offer to restore at all.
+
+- **Every menu is the suite's menu now, and it behaves like one.** Insert, ⋯,
+  the save caret, the block and page ⋯ menus, a board's group, sort, filter and
+  source menus, a field's options, a code block's language and a callout's tone
+  are all built on the kernel's shared menu. You can walk every one of them with
+  the arrow keys and close it with Escape, and focus goes back to the button
+  that opened it. Opening one menu closes any other. Four things this fixes,
+  each measured in the built file:
+  - A menu closed with Escape left its click-away listener behind, and that
+    listener closed the NEXT thing you opened on your first click inside it:
+    Escape a block menu, press ⌘K, click in the search box, and the search
+    vanished.
+  - On a phone the ⋯ menu was 950px tall on an 844px screen. Its last three
+    rows, which are the only ways to save a copy or export on a phone, could
+    not be reached. It now ends inside the screen and scrolls.
+  - The Insert menu's last row ran off the bottom of a 1440×900 window. Insert
+    is one line per row now, with the Markdown shortcut (`#`, `1.`, `>`) on the
+    right. The descriptions stay on the `/` menu, where you learn them.
+  - With About or the shortcut sheet open, `[` collapsed the page list behind
+    it and `?` opened a second sheet on top. Nothing reaches the page under an
+    open dialog now.
+
+  On a phone, every anchored menu is a sheet at the bottom of the screen,
+  including the page ⋯ menu, which used to be a small popup over the drawer.
+  Rows are 44px tall under a finger. Shortcuts are right-aligned and written
+  in one order, ⌃⌥⇧⌘ (⌥⌘N, not ⌘⌥N). They are hidden where there is no
+  keyboard. Only menus whose rows have consequences keep a second line saying
+  what each row does (save a copy, archive, delete, page width). The overflow
+  button is ⋯, not ⋮, as in slides. A search, import or export dialog now
+  closes with Escape wherever the focus is, not only while it is inside the
+  card. The graph view puts focus in its card, not on the dimmed page behind it.
+
+- **Every dialog and both side panels are the suite's.** About, the keyboard
+  shortcuts, Search, Link to page, Link card, Import, the import reports,
+  Export page as a space, Print and the graph now use the kernel's dialog. Each
+  one keeps the keyboard inside it: Tab used to leave the import dialog on 23
+  presses out of 25. Escape closes any of them wherever the focus is. Each opens
+  on a real title (17px, D4) rather than a small grey caption, with the
+  corner, shadow and scrim slides uses.
+  - The shortcut sheet no longer draws a blue ring around itself when it opens.
+    Its shortcuts are written in one order, ⌃⌥⇧⌘.
+  - In Search and in Link to page, the arrow keys move through the results while
+    you keep typing, and Enter opens the highlighted one. Before, a result could
+    only be reached with Tab.
+
+  The page list and the properties panel are the kernel's side panel. You drag
+  the edge to resize, double-click it to reset, and use the chevron to close or
+  open. Below 820px each panel is a drawer over the page. Your widths and
+  open/closed choices are kept exactly as before, under the same keys. Opening
+  and closing the drawer on a phone never changes what a desktop remembers.
+
+- **The phone bar, the dialogs' buttons, and messages you must not miss.**
+  - **Phone targets.** Every control in the phone bar is a 44px target now.
+    Five of them were 40px and the Live button was 35×29. Page rows and their
+    ⋯ are 44px too; they were 28px and 20×20.
+  - **Save on a phone** is a square icon button. It used to be a 66×40 dark
+    slab with the icon at one end. The unsaved dot is a badge on its corner.
+  - **The Live button** sits on the same grid as the buttons beside it and has
+    no frame of its own.
+  - **Dialog buttons.** A secondary button in a dialog looks like a button:
+    Import's "Choose a folder…" and "Choose a space…" read as plain words
+    before. The primary button's text follows the theme, so it no longer
+    disappears in dark mode.
+  - **About's links** are darker, 4.5:1 or better. They were 3.23:1.
+  - **Messages you must not miss** now show as a notice at the foot of the
+    window, the way slides shows them. That covers:
+    - a change the relay refused;
+    - a file that could not be read;
+    - a page that cannot contain itself;
+    - "every page opens wide from now on";
+    - a copy that was written.
+
+    Before, these were the same small grey line in the bar as "Edited", and it
+    faded in under two seconds. "Edited" and "Saved" stay on the bar.
+  - **Small fixes.** The properties panel's section headings get a real
+    disclosure caret, where the old one rendered as a dot. The share panel sets
+    "Reset access…" apart from the rows above it.
+
+- **The top bar is slides' top bar.** Same padding (8/14) and spacing (10
+  between groups, 6 inside one), the same mark at the same size, a 220px title
+  in regular weight, and every button on the same 30px grid. The Save half is
+  slides' width with its caret; it stays the dark primary button. The unsaved
+  dot is a badge on Save's corner at every width. Language (the globe) and the
+  keyboard shortcuts (`?`) now sit in the bar's corner, as in slides. The globe
+  opens the same list of languages slides shows, with the current one ticked.
+  Choosing one rebuilds the chrome in that language. Share is labelled "Share".
+  ＋ Insert stays one menu, next to undo and redo where slides keeps its insert
+  tools, and ⋯ closes the row.
+  - **It narrows as slides' does.** Labels go first, then the word beside the
+    mark, then controls fold into ⋯. On a phone the bar always folds. Below
+    what even a folded bar needs (about 370px), it scrolls sideways instead of
+    cutting off ⋯, and its menus still open fully on screen. Before, spaces
+    dropped its labels only at 800px, where slides drops them at 1360.
+  - **On a phone** the mark stays in the corner as a 44px button to About, and
+    the Pages button follows the title. Language and Keyboard shortcuts are in
+    ⋯ once the bar has folded.
+  - **Fixed:** changing the language in About took the Share button out of the
+    bar until you reloaded.
+
+- **Everything that opens from the top bar is slides' too.** Menus, the Share
+  popover, the dialogs, the shortcut sheet, the notice pill and the update
+  chip now take slides' measurements: 30px menu rows in 13px regular type (the
+  Save menu 12.5px, as in slides), the icons in the same ink as the words,
+  hairline separators, a 4px gap under the button, slides' shadow, and in dark
+  mode slides' slightly lighter menu surface. The Save button and its caret are
+  slides' primary split, pixel for pixel, at every width.
+  - **The Save menu holds everything that acts on the file, in slides'
+    order.** Save a copy, Duplicate as a new space, the Markdown and page
+    exports, Encrypt with password (Change or Remove once set), then Version
+    history, Copy document JSON, Replace from JSON and Import Markdown. Most of
+    these used to be sections of the About dialog; About now holds what slides'
+    About holds — the version and updates, your appearance and language, the
+    file's numbers and the document's properties.
+  - **Encrypt with password asks twice**, in a dialog, instead of a single
+    browser prompt; Version history and Replace from JSON open as their own
+    dialogs.
+  - **⋯ appears only when the bar is too narrow**, as in slides, and then holds
+    the buttons the bar gave up followed by the Save menu. Its other rows moved
+    to where slides keeps their kind: New page, Today's journal and New issue
+    to the foot of ＋ Insert; Graph and Print to the bar beside Reading view;
+    "Make this page an issue" to the page's own ⋯ menu; About to the wordmark.
+  - **The Share popover is laid out as slides' is**: your name on one line,
+    People, the connection line in amber or green, Share a copy, then the
+    session controls — its actions plain one-line rows like the Save menu's.
+  - **An update found at launch shows slides' peach version chip** beside the
+    wordmark and says so once; clicking it opens About on a fresh check.
+  - **Every Save row and Share action says what it does** in its hover
+    tooltip, as slides' do, and a screen reader announces it as the row's
+    description. The
+    Save list scrolls under the bar on a short window instead of running off
+    it, menus cast a deeper shadow in dark mode, and a keyboard focus ring
+    in the accent colour marks where you are in the bar, menus and dialogs.
+
+- **The bar's labels are slides' labels.** The `?` button and its sheet are
+  "Shortcuts & tips", ⋯ is "More actions", Print is "Export PDF (print)", the
+  Save caret reads "Save as… — copy, new space, password", the wordmark reads
+  "About bento/spaces — version, updates, licenses", and the Save row is
+  "Duplicate as new space…". The translations are slides' own wherever slides
+  has the same string.
+
+- **Insert is slides' insert group.** The single ＋ Insert menu is gone.
+  The bar now has one button per kind of thing: Text ▾, Image ▾, Table,
+  View ▾, Code and Comment. Chart and Embed appear on builds that have those
+  blocks. A kind with variants opens a small menu of them, for example
+  headings, lists, quote, callout, toggle and divider under Text, or Board,
+  List, Table view, Gallery and Canvas under View. Video and Audio are now
+  separate rows.
+  - **A new block goes after the one you are in**, not at the foot of the
+    page. The caret lands in it, and one undo removes it. With no caret it
+    goes at the end.
+  - **New page, Today's journal and New issue** moved to a ＋ ▾ beside the page
+    list's ＋, with their shortcuts. ＋ is still New page.
+  - The labels hide on a narrower window as slides' do. On a phone, the
+    whole group is in ⋯, under captions. The `/` menu lists the same families
+    in the same order, with the same captions.
+- **Page templates, and a template for the daily note.** Open a page you would
+  like to reuse, and the page's ⋯ menu offers **Save as template**. From then on
+  the ＋ above the page list offers a blank page or any of your templates, and
+  the new page arrives with the blocks, the icon and the width of the one you
+  saved. With no templates saved the ＋ makes a blank page exactly as it always
+  did — the picker only appears once there is something in it.
+
+  The one that earns the feature is **Use for daily notes**: pick a template in
+  **Templates…**, in the ▾ beside that ＋, and every new journal entry starts
+  with your structure instead of an empty page. It is the most-used workflow in Obsidian and Logseq and it
+  was the only thing a daily note here could not do.
+
+  Write `{{date}}` anywhere in a template and each new page gets its own date
+  there — `{{date:iso}}` for `2026-03-14`, `{{date:short}}` for a tight space,
+  `{{date+1:iso}}` for tomorrow, plus `{{time}}` and `{{title}}`. Expanded ONCE,
+  when the page is made, so what lands in the file is ordinary text an older
+  build reads the same way. A journal entry gets the date it is FOR: backfilling
+  Tuesday's note on Thursday writes Tuesday.
+
+  Templates live in the document (`doc.templates`) rather than as hidden pages,
+  so they never appear in search, the graph, backlinks, the sidebar or the
+  Markdown export — and the flip side, stated plainly: they travel with the FILE
+  and not with a page you graft into another space. Additive as ever: a file
+  written before this has no templates key and opens unchanged, and turning the
+  daily-note setting off deletes the key rather than storing a default. Saving
+  or deleting a template is one ⌘Z.
+- **A page can answer to more than one name.** "Also known as" in the page
+  panel takes a comma-separated list — "NYC, the Big Apple" on a page titled
+  New York — and every one of those names reaches the page from a
+  `[[wikilink]]`, from ⌘K search, and from the `[[` page picker. All three, on
+  purpose: an alias that links but cannot be searched means you file something
+  under the name you use for it and then cannot find it by that name, which
+  reads as the search being broken rather than the alias being half-built.
+
+  The alias is resolved where a name becomes a page id, so what gets written
+  into the file is an ordinary `#p/<id>` link — backlinks, the graph, export,
+  print and collaboration never learn that aliases exist. `aliases` is a new,
+  absent-by-default key; clearing the last one deletes it again, so a page that
+  had an alias and lost it is byte-identical to one that never had one, and an
+  older build round-trips the array untouched.
+
+  Two pages can claim one name, because a file arrives already written. The
+  resolver settles it the same way in every copy — a title always beats an
+  alias, then document order — and `bento.validate()` reports it as
+  `alias-collision`, naming which page a `[[link]]` will actually reach. It is
+  the one place this app tells you about a clash it resolved on your behalf.
+
+- **Unlinked mentions: "this page is named in six others you never linked."**
+  Under the backlinks, every place this page's title or aliases appear as plain
+  words somewhere else, each with the sentence it appears in and a button that
+  turns those exact words into a link.
+
+  Most of the work is in what it refuses to find. A title inside a code block
+  or a code span, inside a link you already made, inside a URL or a mail
+  address, or in the middle of a longer word is not a mention; nor is a block
+  that already links here; nor is the page's own text. Names shorter than three
+  characters are not scanned for at all, because a page called "It" mentions
+  everything.
+
+  **CJK was designed for, not discovered.** A word-boundary rule built for
+  English does not degrade in Japanese, it returns exactly zero — every kana
+  beside a name is a letter, so the boundary never opens. So a boundary is
+  required only where the name's own edge is a word character in a script that
+  separates words, and two Han characters count as a whole name where three
+  Latin ones are the floor. 私は東京に住んでいます mentions 東京. The cost of
+  that rule, stated because it is real: a Han name also matches inside a longer
+  Han compound.
+
+  And it is not the quadratic thing it sounds like. Reading a page scans the
+  document ONCE for that page's names, so the cost is the size of the space and
+  not the number of pages in it: measured on a synthetic 1000-page, 2.5MB
+  space, 6.5ms per page open, against 1.9ms for the backlink index the app
+  already built. A 100-page space is 1.3ms.
+
+- **A toggle leaves as `<details>` and comes back a toggle.** It used to export
+  as `- text` and return as a bullet, with its fold state gone and its contents
+  loose. Now it is `<details open>` or `<details>`, then `<summary>`, then its
+  contents as ordinary Markdown, then `</details>`. GitHub, Obsidian and any
+  browser draw that as the same fold. The importer also reads `<details>` as
+  GitHub READMEs write it: the summary on its own indented line, on one line
+  with its body, or never closed. It takes one fact from the tag, whether it
+  says `open`, and copies nothing else from it, so an `onclick` or `ontoggle`
+  on it reaches nothing. A space with no toggles exports exactly as before, and
+  the rig now checks that byte for byte.
+
+- **An image keeps its size through Markdown.** The width you dragged, and the
+  pixel size that holds its space while it loads, now follow the image as a
+  Pandoc attribute list: `![alt](src "caption"){width=60% w=640 h=300}`.
+  Pandoc and markdown-it-attrs read that. GitHub and Obsidian show the braces
+  as text after the picture, which only happens on a sized image. Only numbers
+  are written and only validated numbers are read back: a width between 10% and
+  100%, and both pixel sizes or neither. Any other key or value is ignored and
+  the image is kept.
+
+- **A link card comes back a link card.** It still leaves as a link,
+  `[title](url) — description`, followed by a comment,
+  `<!-- bento:card site="…" image="…" -->`. GitHub, Obsidian and browsers
+  hide the comment, so the page reads as the link and nothing else. The comment
+  is what marks the line as a card, so a README line that happens to be a lone
+  link stays a paragraph. It also carries the fields the visible line cannot:
+  site, icon and thumbnail, plus title and description for a card with no
+  address. Every field is checked on the way back in. The address must be
+  http, https or mailto, and anything else is dropped. The thumbnail must be an
+  embedded picture: no remote address and no svg. The other fields are stored
+  as plain text. One loss is deliberate: a thumbnail embedded as more than 512
+  bytes of data is not written into the Markdown, because in a plain editor it
+  would be a screen of base64 after every card.
+
+- **A video or audio clip comes back a clip.** It exported as a Markdown link
+  and returned as a paragraph, losing controls, loop, muted, poster, size and
+  caption. It now leaves as `<video>` or `<audio>` carrying those fields, with
+  a link to the clip inside it. Obsidian and browsers play it. A renderer that
+  strips the tag keeps the link, which is exactly what the old export was.
+  Autoplay is written as `data-autoplay`, so the file never makes another
+  renderer start the clip; this app records autoplay and never obeys it. The
+  importer also reads clips as READMEs write them, including a `<source>` child
+  and a tag spread over several lines. Nothing is copied from the tag by name.
+  The source must be an embedded clip or an http(s) address, and the poster an
+  embedded raster picture or an http(s) address. Anything else, such as a
+  `javascript:` source or a relative path, arrives as its label and the address
+  as plain code text, never as a player.
+
+- **Every inline mark survives Markdown, and Pandoc's colour spans come in.**
+  Bold with italic (`***both***`, the way the exporter writes the pair)
+  came back wrongly nested and now comes back as written. Colour still leaves as
+  `<span class="sp-fg-red">`, which GitHub and Obsidian show as clean text, and
+  a highlight still leaves as `==x==`. The importer now also reads
+  `[words]{color=red}` and `[words]{bg=yellow}`, but only for the nine palette
+  colours. A name outside the palette, or any other key, leaves the span as the
+  text it was.
+
+- **Page links, boards and canvases come back as themselves.** A page link
+  leaves as `[[Title]]` on its own line. Obsidian reads that as a link to the
+  note, and the importer turns it back into a page card for the page with that
+  title, whether it came in the same import or is already in the space. A link
+  to no page stays the text it was. A board leaves as a
+  ```` ```bento-view ```` fence: its settings on one JSON line, then its issues
+  as readable `//` lines, which the importer ignores and the next export writes
+  again. A canvas leaves as a ```` ```bento-canvas ```` fence holding its
+  settings and each card's position, with the cards following as their own
+  lines, so the positions survive. The fences are read with a JSON parser into
+  the block's own fields. No id, type, parent, text or comments can be set that
+  way, and a fence that does not parse stays the code block it looks like.
+
+- **A block something points at keeps its id through Markdown.** A block
+  with a review thread, or one a `#p/page/block` link targets, now exports
+  with ` {#id}` after its line. That is Pandoc's heading-attribute spelling,
+  which markdown-it-attrs also reads after any block. The importer gives the
+  block that id back. Blocks nothing points at carry no id, so most exports
+  do not change at all. Ids stay unique. A block copied in another editor
+  with its id keeps its words and gets a fresh id. Two notes in one import
+  cannot share an id, and neither can a note and the space it is imported
+  into; the later holder is renamed and its children follow it. Only plain
+  identifiers are taken, and never a name like `constructor`. Two limits:
+  the threads themselves do not travel, because Markdown has nowhere to put
+  them, so what survives is the anchor they re-attach by. And a table or a
+  divider never carries an id, because the attribute would break the row or
+  the rule.
+
+- **A space can have a design.** About → Design offers six: **Ledger** (a
+  grotesque grid, figures in a monospace, cobalt rules), **Almanac** (an
+  editorial serif, a drop cap, marigold for its accent), **Studio** (the
+  Bento tile — a canvas or a gallery becomes navy with slate, coral and cream
+  compartments), **Broadsheet** (a news serif under double rules, justified,
+  with pull quotes), **Typescript** (a typewritten manuscript) and **Riso** (a
+  two-ink risograph zine). Hover one to see it on the page; clicking it is one
+  undo step. The design travels in the file; each reader's light or dark
+  setting picks between the design's two palettes, and the app's own bar and
+  panels stay the reader's. It prints (in its light palette) and it is what a
+  file manager's thumbnail shows. A file with no design looks exactly as it did.
+
+  **Customise…** makes the current design the space's own and opens a panel
+  beside the page: colours for light and dark, a face for headings, body,
+  labels and code — including a font file you drop in, which is embedded like
+  a picture — and the layout switches (callouts, quotes, tables, rules, drop
+  cap, tiles…). Every value is checked before it is used, and a colour that
+  would leave text under 4.5:1 is not used. Every design keeps the five
+  callout tones (note, tip, important, warning, caution) five distinct
+  colours of its own; a custom design that paints them alike gets its base's
+  five back.
+
+  The Markdown export now opens with the design as front matter (`design:
+  almanac`), and importing it into a space without a design brings the design
+  along. Format: an optional `design` name and an optional `designs` map; an
+  older build shows the default look and keeps both. The designs use fonts
+  already on the reader's machine — nothing is fetched. Shell 271,810 →
+  300,835 B (+29,025; roughly 12 KB of that is the picker and panel's 115
+  new strings in nine languages).
 
 ## [0.1.0] — 2026-08-03
 

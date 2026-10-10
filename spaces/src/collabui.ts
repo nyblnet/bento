@@ -99,6 +99,7 @@ export interface CollabUiHost {
 }
 
 export class CollabUi {
+  private static descSeq = 0
   private host: CollabUiHost
   private btn: HTMLButtonElement | null = null
   private known = new Map<string, string>()
@@ -137,7 +138,11 @@ export class CollabUi {
     const b = document.createElement('button')
     b.type = 'button'
     b.className = 'sp-live'
-    b.innerHTML = `<span class="sp-ico">${ICONS.people}</span><span class="sp-live-n"></span>`
+    b.innerHTML = `<span class="sp-ico">${ICONS.people}</span><span class="sp-btnlabel"></span><span class="sp-live-n"></span>`
+    // The word, as slides' "Share" carries it: an icon of two heads is not a
+    // name for "share this space". It collapses with the bar's compact tier
+    // like every other label; the tooltip still says the state.
+    b.querySelector('.sp-btnlabel')!.textContent = t('Share')
     b.addEventListener('click', () => this.openPanel(b))
     this.btn = b
     this.sync()
@@ -237,7 +242,10 @@ export class CollabUi {
     const doc = this.host.store.doc
     const c = doc.collab
     if (!c) return {}
-    if (c.role === 'reader') return { role: 'viewer' }
+    // Any copy that cannot write is a Viewer whatever else it carries — an
+    // audience copy holds an owner-signed INVITE (its show ticket), and the
+    // invite branch below would otherwise have called it an Editor.
+    if (isReaderCopy(doc)) return { role: 'viewer' }
     if (isOwner(doc)) return { role: 'owner', pub: c.owner }
     if (c.v === 2 && c.invite) {
       let pub: string | undefined
@@ -254,7 +262,11 @@ export class CollabUi {
 
   private openPanel(anchor: HTMLElement): void {
     this.host.popover(anchor, (pop, close) => {
-      pop.classList.add('sp-people')
+      // SLIDES' SHARE POPOVER, section for section (.ed-share-pop): your name
+      // on one line, PEOPLE, the connection line, SHARE A COPY, the actions as
+      // framed buttons with the first one primary, then — set apart — the
+      // session controls. It hangs from the Share button's end, as slides'.
+      pop.classList.add('sp-people', 'sp-pop-end')
       const store = this.host.store
       const doc = store.doc
       const st = this.state()
@@ -267,12 +279,10 @@ export class CollabUi {
       // mistake as the button: another window of this file is a person in this
       // space, and the panel claimed there was nobody while their dot was
       // visible in the tree two inches away.
-      pop.append(el('div', 'sp-pop-title', peers.length ? t('People in this space') : t('Share this space')))
-
       // YOUR NAME, first — it is the thing that shows up on everyone else's
       // screen, and the only field here that is about you rather than them.
-      const row = el('label', 'sp-field')
-      row.append(el('span', 'sp-field-lbl', t('Your name')))
+      const row = el('label', 'sp-share-name')
+      row.append(el('span', '', t('Your name')))
       const name = document.createElement('input')
       name.type = 'text'
       name.className = 'sp-input'
@@ -292,6 +302,7 @@ export class CollabUi {
       // this panel two people can verify out of band, so it is rendered the
       // same way bento/slides renders it — a code grouped differently in each
       // app is a code they cannot compare over a call.
+      if (mine.role || peers.length) pop.append(el('div', 'sp-share-label', t('People')))
       if (mine.role) {
         const meRow = el('div', 'sp-pitem sp-pme')
         let myName = t('Guest')
@@ -385,11 +396,12 @@ export class CollabUi {
 
       // SHARING IS FILES. Each of these saves a copy to send, and turns the
       // live session on — there is no separate start-a-session step.
+      pop.append(el('div', 'sp-share-label', t('Share a copy')))
       const acts = el('div', 'sp-pacts')
-      acts.append(this.action(t('Invite to edit…'),
+      acts.append(this.action(ICONS.people, t('Invite to edit…'),
         t('Saves a copy to send. Whoever opens it edits this space live with you (end-to-end encrypted); you stay the owner and can remove them from the People list.'),
         () => { close(); this.host.shareCopy('invite') }))
-      acts.append(this.action(t('View-only copy…'),
+      acts.append(this.action(ICONS.eye, t('View-only copy…'),
         t('A live viewer: follows every edit as it happens but can never change this space — the relay enforces it.'),
         () => { close(); this.host.shareCopy('viewonly') }))
 
@@ -397,7 +409,8 @@ export class CollabUi {
         // Reconnecting WITHOUT saving another copy. Without this the only way
         // back into a session you had stopped was to save a copy, which is how
         // one space becomes four files.
-        acts.append(this.action(t('Start live session'), t('Connect to the live session without saving a new copy — copies you sent earlier will meet you there.'), () => {
+        acts.append(el('div', 'sp-paction-sep'))
+        acts.append(this.action(ICONS.broadcast, t('Go live'), t('Connect to the live session without saving a new copy — copies you sent earlier will meet you there.'), () => {
           close()
           void this.host.goLive().then(() => {
             this.sync(); this.host.paintTree()
@@ -405,7 +418,8 @@ export class CollabUi {
           })
         }))
       } else {
-        acts.append(this.action(t('Stop sharing'), t('This copy goes offline; the others carry on'), () => {
+        acts.append(el('div', 'sp-paction-sep'))
+        acts.append(this.action(ICONS.broadcast, t('Stop sharing'), t('This copy goes offline; the others carry on'), () => {
           close()
           stopSharing(this.host.session, store)
           this.sync(); this.host.paintTree()
@@ -417,7 +431,11 @@ export class CollabUi {
       // re-mints the room, so every copy already sent stops syncing for good.
       // Remove (above) is the scalpel; this is the amputation.
       if (iAmOwner) {
-        acts.append(this.action(t('Reset access…'),
+        // SET APART, not only last: on a phone this sheet's last row is where
+        // the thumb lands, and a stray tap there asked a native confirm() to
+        // stand between the reader and revoking every copy they had sent. A
+        // rule and the danger ink make it read as what it is before the tap.
+        acts.append(this.action(ICONS.lock, t('Reset access…'),
           t('Mints brand-new keys. Every previously sent copy stops syncing for good; share fresh copies afterwards.'),
           () => {
             if (!confirm(t('Reset access? Every copy you’ve sent stops syncing; only copies saved after this can join.'))) return
@@ -432,12 +450,30 @@ export class CollabUi {
     })
   }
 
-  private action(label: string, hint: string, run: () => void): HTMLElement {
+  /**
+   * One share action: a plain menu row, as slides' (#573) — icon and name on
+   * one line, a hover fill and nothing at rest, no filled primary. What it does is the hover tooltip (`title`) and the
+   * button's accessible description through a visually hidden span — the Save
+   * menu's row shape, extended to Share by the maintainer (DECISIONS
+   * 2026-09-26).
+   */
+  private action(icon: string, label: string, hint: string, run: () => void): HTMLElement {
     const b = document.createElement('button')
     b.type = 'button'
     b.className = 'sp-paction'
-    b.append(el('strong', '', label))
-    if (hint) b.append(el('span', '', hint))
+    const ico = el('span', 'sp-paction-ico')
+    ico.innerHTML = icon
+    const body = el('span', 'sp-paction-body')
+    body.append(el('span', 'sp-paction-name', label))
+    if (hint) {
+      const d = el('span', 'sp-vh', hint)
+      d.id = `sp-pdesc-${++CollabUi.descSeq}`
+      body.append(d)
+      b.title = hint
+      b.setAttribute('aria-label', label)
+      b.setAttribute('aria-describedby', d.id)
+    }
+    b.append(ico, body)
     b.addEventListener('click', run)
     return b
   }
