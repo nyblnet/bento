@@ -310,7 +310,11 @@ export class Store {
   private snapshot(): string {
     // assets are excluded: they are the largest thing in the document and never
     // change during an ordinary edit, so snapshotting them 100 times is waste.
-    // History fields are excluded too, and restored from live (keepLiveHistory)
+    // History fields are excluded too, and restored from live (keepLiveHistory).
+    // That includes `trail`: a row is an OBSERVATION written outside any
+    // commit, so an undo that restored it could put a stale row over a newer
+    // one. `periods` is content, NOT excluded: starting a period is something a
+    // person did, inside a commit, and ⌘Z takes it back like any other edit.
     const { assets: _assets, ...rest } = this.doc as Record<string, unknown>
     for (const k of HISTORY_KEYS) delete rest[k]
     return JSON.stringify(rest)

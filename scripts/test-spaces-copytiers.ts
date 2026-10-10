@@ -60,6 +60,9 @@ const { projectForCopy, collabForReader, COLLAB_READER_KEEP, COLLAB_INVITE_KEEP 
 const { mintCollab } = await import('../kernel/src/sync/online.ts')
 const { recordRevision, revisionsOf, applyRevisions } = await import('../spaces/src/history.ts')
 const { validateRevision } = await import('../kernel/src/docfields.ts')
+const { recordTrail } = await import('../spaces/src/observe.ts')
+const { startPeriod } = await import('../spaces/src/periods.ts')
+const { trailOf } = await import('../spaces/src/trail.ts')
 import type { SpacesDoc } from '../spaces/src/model.ts'
 import type { Tier } from '../kernel/src/docfields.ts'
 
@@ -98,7 +101,7 @@ const collab = {
 const OWNER_PRIV = (collab as Obj).ownerPriv as string
 
 /** Content fields of the fixture — everything the map classes 'content'. */
-const CONTENT = ['format', 'version', 'title', 'home', 'pages', 'theme', 'modified', 'assets', 'footnotes', 'design', 'journalTemplate']
+const CONTENT = ['format', 'version', 'title', 'home', 'pages', 'theme', 'modified', 'assets', 'footnotes', 'design', 'journalTemplate', 'periods']
 function source(extra: Obj = {}): SpacesDoc {
   return {
     format: FORMAT, version: 1,
@@ -117,7 +120,8 @@ function source(extra: Obj = {}): SpacesDoc {
     journalTemplate: 't1',
     collab: clone(collab),
     revisions: realRevisions(),
-    trail: { '2026-10-09': { done: 3 } },
+    trail: realTrail(),
+    periods: realPeriods(),
     futureField: 'FROM-A-NEWER-BUILD',
     ...extra,
   } as unknown as SpacesDoc
@@ -152,6 +156,38 @@ function realRevisions(): unknown[] {
   REAL_REVISIONS = clone(d.revisions as unknown[])
   return clone(REAL_REVISIONS)
 }
+
+/**
+ * A REAL trail and a REAL period, recorded by observe.ts and periods.ts exactly
+ * as editing records them: a tracker whose status options are named so their
+ * ids are unmistakable in a copy's text (`trailmark-*`). A row holds counts per
+ * option id and nothing else, so the option id IS the marker — if any of it
+ * reaches a copy, a full-text scan finds it.
+ */
+// eslint-disable-next-line no-var
+var REAL_TRACKER: { trail: unknown; periods: unknown } | undefined
+function tracked(): { trail: unknown; periods: unknown } {
+  if (REAL_TRACKER) return clone(REAL_TRACKER)
+  const issue = (id: string, status: string, est: number) => ({
+    id, title: `Issue ${id}`, blocks: [
+      { id: `${id}-s`, type: 'prop', key: 'status', value: status, html: `Status: ${status}` },
+      { id: `${id}-e`, type: 'prop', key: 'estimate', value: est, html: `Estimate: ${est}` },
+    ],
+  })
+  const d = {
+    format: FORMAT, version: 1, docId: 'doc-source', title: 'Tracker', home: 'i1',
+    pages: [issue('i1', 'trailmark-open', 3), issue('i2', 'trailmark-open', 5), issue('i3', 'trailmark-shut', 2)],
+    theme: { background: '#FFFFFF', color: '#1E2A3A', accent: '#F7A600', fontFamily: 'sans-serif', measure: 720 },
+  } as unknown as SpacesDoc
+  startPeriod(d, 'pd-rig', { label: 'Sprint 12', from: '2026-10-07', to: '2026-10-20', today: '2026-10-07' })
+  recordTrail(d, { today: '2026-10-08' })
+  ;(d.pages[0].blocks[0] as Obj).value = 'trailmark-shut'
+  recordTrail(d, { today: '2026-10-09' })
+  REAL_TRACKER = { trail: clone(d.trail), periods: clone(d.periods) }
+  return clone(REAL_TRACKER)
+}
+function realTrail(): unknown { return tracked().trail }
+function realPeriods(): unknown { return tracked().periods }
 
 /** No capability secret anywhere in the serialized copy — a full-text scan. */
 function noSecrets(o: object, label: string, allowFreshInvite = false) {
@@ -218,6 +254,46 @@ console.log('\nreal in-file history (history.ts), tier by tier')
   for (const [label, o] of dropped) {
     ok(!('revisions' in (o as Obj)), `${label}: DROPS the revisions`)
     ok(!JSON.stringify(o).includes('THE-WHOLE-SPACE'), `${label}: the deleted page's text appears nowhere in it`)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// A REAL TRAIL, per tier, and the PERIODS beside it. The trail is history:
+// the owner's own copies and an invite keep it byte-for-byte; every copy handed
+// to a reader drops it whole, and no `trailmark-*` option id (the only thing a
+// row can name) survives anywhere in one. `periods` is content: every copy
+// keeps it, so a chart block in a kept page never names a period that is gone.
+console.log('\nreal trail (observe.ts) and periods (periods.ts), tier by tier')
+{
+  const src = source()
+  const wantTrail = JSON.stringify(src.trail)
+  const wantPeriods = JSON.stringify(src.periods)
+  ok(Object.keys(trailOf(src)).length === 3 && wantTrail.includes('trailmark-open'),
+    `the fixture's trail is 3 real recorded rows keyed by option id (${Object.keys(trailOf(src)).join(',')})`)
+  ok(wantPeriods.includes('Sprint 12') && !wantPeriods.includes('trailmark'),
+    "the fixture's period is real, and holds totals only — no option ids, no page ids")
+  const kept: Array<[string, SpacesDoc]> = [
+    ['invite', (await inviteCopy(source()))!],
+    ['duplicate', duplicateAsNew(source(), 'doc-fresh')],
+    ['file', projectForCopy(source(), SPACES_FIELDS, 'file')],
+  ]
+  for (const [label, o] of kept) {
+    ok(JSON.stringify((o as Obj).trail) === wantTrail, `${label}: KEEPS the trail byte-for-byte`)
+    ok(JSON.stringify((o as Obj).periods) === wantPeriods, `${label}: keeps the periods`)
+  }
+  const dropped: Array<[string, SpacesDoc]> = [
+    ['reader (view-only copy)', readerCopy(source())!],
+    ['Copy document JSON', docForExport(source())],
+    ['sealed reading copy (reading.ts, tier package)', readingCopy(source())],
+    ['link', projectForCopy(source(), SPACES_FIELDS, 'link')],
+    ['audience', projectForCopy(source(), SPACES_FIELDS, 'audience', { projectAudience: (c) => ({ ...collabForReader(c), role: 'audience' }) })],
+    ['template', projectForCopy(source(), SPACES_FIELDS, 'template')],
+    ['extract', extractSpace(source(), 'p1', { subtree: true, docId: 'doc-x' }).doc],
+  ]
+  for (const [label, o] of dropped) {
+    ok(!('trail' in (o as Obj)), `${label}: DROPS the trail`)
+    ok(!JSON.stringify(o).includes('trailmark'), `${label}: no recorded option id appears anywhere in it`)
+    ok(JSON.stringify((o as Obj).periods) === wantPeriods, `${label}: keeps the periods (content)`)
   }
 }
 
@@ -476,6 +552,18 @@ console.log('\nevery builder routes through projectForCopy (source)')
     const s = rd(f)
     if (/delete [\w.]+\.collab\b/.test(s)) handStrip.push(`${f}: delete .collab`)
     if (/collabFor(Reader|Invite)\(/.test(s)) handStrip.push(`${f}: collabFor*`)
+    // and no HISTORY field is stripped by name: the class drops it, from the
+    // map, so a copy rule added later covers it without anyone remembering.
+    // (extractSpace's class-derived drop names no field, and passes.) The ONE
+    // exemption is each field's own engine, which owns "Clear history" /
+    // clearing the record: history.ts for revisions, trail.ts for trail.
+    const OWN: Record<string, string> = { revisions: 'history.ts', trail: 'trail.ts' }
+    for (const k of Object.keys(SPACES_FIELDS).filter((k) => (SPACES_FIELDS as Record<string, string>)[k] === 'history')) {
+      if (OWN[k] === f) continue
+      const lit = new RegExp(`delete [\\w.]+(\\.${k}\\b|\\[['"]${k}['"]\\])|\\b${k}: _\\w*\\s*[,}]`)
+      if (lit.test(s)) handStrip.push(`${f}: strips ${k} by name`)
+    }
+    if (/\bstripRecord\(/.test(s)) handStrip.push(`${f}: stripRecord`)
     // editor.ts strips a bento/SLIDES deck (pageToDeck), not a space: the one
     // withoutCaps allowed, and it is pinned by name
     const caps = [...s.matchAll(/withoutCaps\(/g)].length

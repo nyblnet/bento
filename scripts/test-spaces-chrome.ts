@@ -193,10 +193,12 @@ ok(LISTED.length >= 15 && LISTED.includes('p') && !LISTED.includes('prop'), `the
 // Embed sits in Image ▾ beside Link to page (interim, 2026-10-09: a bar
 // button of its own tipped the bar out of slides' width at 1440), so it is in
 // the Image family's members below, not here.
-// what the group should show on THIS build: Chart where that
-// block exists, and a Code menu once maths joins it
+// The chart of progress sits in View ▾ behind a rule for the same reason
+// (interim, 2026-10-10): a Chart button of its own tipped the bar out of
+// slides' width at 1440 — measured, it went compact. What the group should
+// show on THIS build: a Code menu once maths joins it.
 const has = (t: string) => LISTED.includes(t)
-const WANT_GROUP = ['Text ▾', 'Image ▾', 'Table', ...(has('chart') ? ['Chart'] : []), 'View ▾', has('math') ? 'Code ▾' : 'Code', 'Comment']
+const WANT_GROUP = ['Text ▾', 'Image ▾', 'Table', 'View ▾', has('math') ? 'Code ▾' : 'Code', 'Comment']
 // slides' numbers for its insert buttons and their group, read from its stylesheet
 const SLIDES_INS = {
   groupGap: decl(block('.ed-group'), 'gap'),

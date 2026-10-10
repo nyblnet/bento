@@ -104,12 +104,14 @@ const FIX: Record<string, () => Fixture> = {
     return { blocks: [c, b('p', 'card one', { parent: c.id, x: 40, y: 60 }), b('p', 'card two', { parent: c.id, x: 300, y: 120 }),
       three, b('bullet', 'its own child', { parent: three.id }), b('p', 'card four, placed by slot', { parent: c.id }), b('p', 'after the canvas')] }
   },
+  chart: () => ({ blocks: [b('chart', 'Burndown — Sprint 12 (1–14 Sept)', { kind: 'burndown', period: 'pd-1' })] }),
 }
 
 // THE PINS — the types Markdown cannot yet carry, each with why. The reason is
 // the design brief's own row, so a reader of a failure knows what closing it
 // would take. Removing a pin is the deliberate edit this rig asks for.
 const PINNED: Record<string, string> = {
+  chart: 'exports as the sentence the block carries (`**Burndown — Sprint 12**`) and comes back a paragraph: Markdown has no chart, and the record it draws (doc.trail, doc.periods) is document-level, not in the page',
   prop: 'exports as `**Status:** In progress` and comes back a paragraph; the natural form is front matter (`status: doing`), and value id vs label needs the schema',
 }
 

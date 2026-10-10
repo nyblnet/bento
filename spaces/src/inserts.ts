@@ -90,11 +90,11 @@ const TABLE: Array<Omit<InsertFamily, 'items'> & { items: Entry[] }> = [
     tip: 'Add a table — edit the cells in place',
     items: ['table'],
   },
-  {
-    id: 'chart', label: 'Chart', icon: 'chart',
-    tip: 'Add a chart of the issues in this space',
-    items: ['chart'],
-  },
+  // THE CHART FAMILY was planned here as a bar button of its own. Interim
+  // (2026-10-10), exactly as Embed sits in Image ▾: one more button tips the
+  // bar out of slides' width at 1440, so the chart of progress rides in View ▾
+  // instead, behind a rule — it charts the same issues the views show. When
+  // the bar has room, it comes back as a family with id 'chart'.
   {
     id: 'view', label: 'View', icon: 'board',
     tip: 'Add a view of the issues in this space — a board, a list, a table or a gallery',
@@ -106,6 +106,9 @@ const TABLE: Array<Omit<InsertFamily, 'items'> & { items: Entry[] }> = [
       view({ layout: 'calendar', label: 'Calendar', hint: 'Issues on their dates' }),
       view({ layout: 'gantt', label: 'Timeline', hint: 'Issues across time' }),
       view({ layout: 'workload', label: 'Workload', hint: 'Issues by person' }),
+      // the issues over TIME, from the record the file keeps of itself
+      // (charts.ts): not a view of the pages, so a rule sets it apart
+      { type: 'chart', rule: true },
       // not a view of the issues but a surface you arrange by hand — the
       // diagram family will be its home when it exists
       { type: 'canvas', rule: true },

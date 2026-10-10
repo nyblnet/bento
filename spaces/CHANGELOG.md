@@ -1316,6 +1316,22 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   Pasting document JSON over the space no longer touches the history, and
   neither does undo.
 
+- **Burndown, burnup and cumulative flow.** A tracker could always say what is
+  open today and never what was open last Tuesday. Now the space keeps a small
+  record of itself, one row of counts per day you work in it, and a new
+  **Chart of progress** block (Insert → View ▾) draws it over a period —
+  "New two-week period from today" starts one and records the scope as it
+  stands. A day nobody worked in the file is drawn as a gap, labelled *Not
+  recorded*, never filled in; a thinned older reading draws dashed. Today's
+  point always comes from the issues as they are now, and editing them never
+  rewrites an earlier day. The record holds counts only — no page names, no
+  people — and it is written while you edit, never when you merely open the
+  file. It is capped at 32 KB beside history's 128 KB; past that the oldest
+  days thin to weekly, then monthly. Like version history it stays with your
+  own copies and invites, and leaves reading copies, view-only copies, Copy
+  document JSON and exported pages; each collaborator's file keeps its own.
+  ⌘Z never erases it, and neither does pasting document JSON.
+
 ## [0.1.0] — 2026-08-03
 
 First release.
