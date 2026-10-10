@@ -494,6 +494,7 @@ export const es: Catalog = {
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "Crea un gráfico a partir de una tabla y queda vinculado — edita la tabla y el gráfico se actualiza.",
   "Your work auto-saves; restore earlier versions from Save → Version history.": "Tu trabajo se guarda automáticamente; restaura versiones anteriores en Guardar → Historial de versiones.",
   "Slide copied — ⌘V in any deck to paste it": "Diapositiva copiada — ⌘V en cualquier presentación para pegarla",
+  "Slides copied — ⌘V in any deck to paste them": "Diapositivas copiadas — ⌘V en cualquier presentación para pegarlas",
   "📺 Use a second screen for notes": "📺 Usar una segunda pantalla para las notas",
   "Second screen ready — press S for speaker notes": "Segunda pantalla lista — pulsa S para las notas del ponente",
   "Only one screen detected — notes will open in a window (S)": "Solo se detectó una pantalla — las notas se abrirán en una ventana (S)",
