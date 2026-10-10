@@ -25,7 +25,10 @@
    most of the window: not a dark interface, and a re-introduction of the
    floating-card look that was deliberately removed.
 
-   So in spaces the reading surface IS chrome, and it follows the reader.
+   So in spaces the reading surface IS chrome, and it follows the reader —
+   UNTIL THE DOCUMENT HAS A DESIGN (DECISIONS, 2026-09-26). Then the author's
+   design owns the surface and the reader's theme picks between its two
+   palettes; designs.css does that, and nothing in this file changes for it.
    `doc.theme.background/color/accent` still exist in the format and are still
    the DOCUMENT's own colours — but the only thing that paints them is the
    static file-manager preview (preview.ts), which renders with scripting off,
@@ -491,6 +494,29 @@ option { background: var(--field); color: var(--ink); }
 /* the accent at a tint a paragraph can be read through, and an explicit ink:
    `mark`'s UA default is black on yellow, which is not this document's ink */
 .sp-body mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 .08em; }
+
+/* THE #TAG CHIP.
+   Drawn at render into content that is often contenteditable, and taken back
+   out of whatever the editor commits (tags.ts). So it must stay INLINE and
+   selectable-through: no `display: inline-block`, no `contenteditable=false`,
+   no `user-select: none`. A caret has to be able to walk into it and a
+   backspace has to delete one character, because inside the editor this is a
+   word somebody is still typing. Everything here is paint. */
+.sp-tag {
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: 4px; padding: 0 .22em; cursor: pointer;
+  text-decoration: none; white-space: nowrap;
+}
+.sp-tag:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.sp-tag-kids { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.sp-tag-chip {
+  font: inherit; font-size: 13px; cursor: pointer;
+  color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 0; border-radius: 999px; padding: 3px 10px;
+}
+.sp-tag-chip:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.sp-tag-count { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
 /* No blanket link colour here. There was one — `.sp-body a { color: var(--blue) }`
    — and it never painted a single prose link: `.sp-page a` sets the ink at the
    same specificity and later in the sheet, so it won every time. What the rule
@@ -2182,6 +2208,27 @@ button.sp-issue-set:hover { background: var(--chrome-2); border-color: var(--edg
 .sp-view-list { list-style: none; margin: 0; padding: 0; }
 .sp-view-list li { margin: 0 0 6px; }
 
+/* CHARTS: the timeline and the workload chart.
+   Almost nothing here. Both pictures are svg carrying their own colour and
+   geometry as PRESENTATION ATTRIBUTES (render.ts says why), so this file owns
+   only the box around them — which is exactly what makes them print, and what
+   makes them survive into the file-manager still, whose stylesheet is not this
+   one. A rule here that the picture depended on would be a rule the thumbnail
+   never sees. */
+.sp-gt-wrap, .sp-wl-wrap { overflow-x: auto; margin: 0 0 6px; }
+.sp-gt-note { margin: 2px 0 0; font-size: 12.5px; }
+.sp-wl-legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+
+/* Print: the scroller is a screen affordance and paper has no scrollbar, so it
+   becomes an ordinary box — otherwise a timeline wider than the page is
+   silently guillotined, which is the same class of bug as a board printing as
+   a cut-off row of columns (below). `min-width` goes with it for the same
+   reason: it is there to keep labels legible on a phone. */
+@media print {
+  .sp-gt-wrap, .sp-wl-wrap { overflow: visible; }
+  .sp-gt-wrap svg, .sp-wl-wrap svg { min-width: 0 !important; break-inside: avoid; }
+}
+
 /* Print: a board is columns of cards on screen and a LIST on paper — a
    horizontal scroller cannot be printed, and cutting it off would silently
    drop issues. */
@@ -2709,6 +2756,62 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-cv-grip, .sp-canvas-btn { display: none !important; }
 }
 
+/* ---- the calendar layout -------------------------------------------------
+   A GRID OF SEVEN COLUMNS, and the number of ROWS is never asserted here: a
+   month is four, five or six weeks depending on the month and on where the
+   reader's week starts, so `grid-auto-rows` lets the cells the renderer emitted
+   decide. `repeat(6, …)` would clip a six-week month's last week silently. */
+.sp-cal-hint { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+.sp-cal-bar { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; }
+.sp-cal-month { font-weight: 600; font-size: 14px; min-width: 8.5em; text-align: center; }
+.sp-cal-step { padding: 2px 8px; }
+.sp-cal-grid {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px; background: var(--line); border: 1px solid var(--line);
+  border-radius: 8px; overflow: hidden; margin-bottom: 4px;
+}
+.sp-cal-wd {
+  background: var(--chrome); color: var(--muted);
+  font-size: 11px; font-weight: 600; text-align: center; padding: 5px 2px;
+}
+.sp-cal-cell {
+  background: var(--surface); min-height: 76px; padding: 4px 5px 6px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+/* the neighbouring months' days are drawn, not hollowed out: a grid whose
+   corners are holes reads as broken, and an entry on the 1st of next month is
+   what somebody looking at the last week of this one wants to see */
+.sp-cal-out { background: var(--chrome-2, var(--chrome)); }
+.sp-cal-out .sp-cal-num { opacity: .45; }
+.sp-cal-today { box-shadow: inset 0 0 0 2px var(--accent, var(--edge)); }
+.sp-cal-today .sp-cal-num { color: var(--accent, var(--ink)); font-weight: 700; }
+.sp-cal-num { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sp-cal-entry {
+  display: block; font-size: 12px; line-height: 1.3; color: var(--ink);
+  text-decoration: none; background: var(--chrome); border-radius: 4px;
+  padding: 2px 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sp-cal-entry:hover { background: var(--edge, var(--chrome)); text-decoration: underline; }
+.sp-cal-day { margin: 0 0 14px; }
+.sp-cal-dayhead {
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  padding-bottom: 4px; margin-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.sp-cal-undated { margin-top: 14px; }
+.sp-cal-undated-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.sp-cal-undated-list .sp-cal-entry { max-width: 220px; }
+/* A PHONE CANNOT SHOW SEVEN READABLE COLUMNS of entries, but it can show the
+   shape of the month. The cells shrink and the entries become dots-with-a-tail
+   rather than disappearing — an empty-looking calendar is worse than a cramped
+   one, because it is wrong. */
+@media (max-width: 640px) {
+  .sp-cal-cell { min-height: 54px; padding: 3px 2px 4px; }
+  .sp-cal-entry { font-size: 10px; padding: 1px 3px; }
+}
+@media print {
+  /* the arrows navigate nothing on paper */
+  .sp-cal-bar .sp-cal-step { display: none; }
+}
 /* ————— the block format row —————
    Lives at the top of the block menu, which is a bottom SHEET on a phone, so
    this is the same markup at both widths and the touch targets are sized for
@@ -2866,3 +2969,38 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
    flex PARENT; dropped into a plain span each became a block of its own. */
 .sp-tpl-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sp-tpl-name svg { width: 15px; height: 15px; display: block; color: var(--muted); }
+
+/* ————— the design picker and the customise panel —————
+   CHROME: the app's controls for choosing a design, drawn in the app's
+   tokens. The designs themselves live in designs.css and never reach here —
+   the panel sits on <body>, outside the reading surface. */
+.sp-dsg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 2px 4px 8px; }
+.sp-dsg-choice strong { display: flex; align-items: center; gap: 7px; }
+.sp-dsg-sw { display: inline-flex; flex: 0 0 auto; border-radius: 4px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+.sp-dsg-sw b { width: 9px; height: 14px; display: block; }
+.sp-dsg-panel {
+  position: fixed; z-index: 55; top: 58px; bottom: 12px; inset-inline-end: 12px;
+  width: min(340px, calc(100vw - 24px)); overflow: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 12px 34px rgb(var(--shade) / .2); padding: 10px 12px 12px;
+}
+.sp-dsg-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sp-dsg-sub { font-size: 12px; font-weight: 600; color: var(--muted); margin: 14px 0 6px; }
+.sp-dsg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 13px; }
+.sp-dsg-row > span { color: var(--ink-2); }
+.sp-dsg-row .sp-select, .sp-dsg-row .sp-input { max-width: 58%; }
+.sp-dsg-range { display: inline-flex; align-items: center; gap: 6px; }
+.sp-dsg-range input { width: 120px; }
+.sp-dsg-range output { min-width: 38px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.sp-dsg-cols { display: grid; grid-template-columns: 1fr 48px 48px; gap: 4px 8px; align-items: center; font-size: 13px; }
+.sp-dsg-cols > span { color: var(--ink-2); }
+.sp-dsg-cols > span:nth-child(2), .sp-dsg-cols > span:nth-child(3) { font-size: 11.5px; color: var(--muted); text-align: center; }
+/* one page's design choices (page ⋯ menu, properties panel): the swatch sits
+   where a menu item's icon does, so the rows read as the page menu's own */
+.bkm-menu.sp-dsg-menu { min-width: 250px; }
+.sp-dsg-item .bkm-ico { align-items: center; }
+.sp-dsg-item .sp-dsg-sw b { height: 16px; }
+.sp-insp-dsg { max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-dsg-cols input[type='color'] { width: 44px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--field); }
+@media (max-width: 720px) { .sp-dsg-panel { top: auto; height: 62vh; inset-inline: 8px; width: auto; } }
+@media print { .sp-dsg-panel { display: none !important; } }

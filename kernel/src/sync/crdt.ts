@@ -132,7 +132,10 @@ export const shape = (
   text = 'html',
   maps: readonly string[] = [],
 ): DocShape => {
-  const skipDoc = new Set([parents, 'modified', 'collab', 'format', 'version'])
+  // 'revisions'/'trail' are in-file version history (docfields.ts class 'history'):
+  // file-local, never synced — each replica keeps its own timeline. (PR2 turns
+  // skipDoc into a content-class allowlist so unknown fields don't sync either.)
+  const skipDoc = new Set([parents, 'modified', 'collab', 'format', 'version', 'revisions', 'trail'])
   // `assets` and `blobs` are per-key for every app and always have been —
   // unioned rather than defaulted so an app naming its own map cannot drop them.
   return { parents, children, text, skipDoc, maps: new Set(['assets', 'blobs', ...maps]) }

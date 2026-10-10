@@ -42,10 +42,23 @@
 // So the preview is the one surface in this app that stays the author's in
 // both themes, exactly as a thumbnail of a document should. If that ever
 // changes it has to change with the FORMAT, not with a media query.
+//
+// AND IT DRAWS THE DOCUMENT'S DESIGN (2026-09-26). A thumbnail is the
+// document's face, and a space set in Almanac that thumbnails as the default
+// look is lying about itself. The design is the AUTHOR's, so it belongs here
+// for the same reason `doc.theme` does — and it is drawn in its LIGHT palette,
+// because there is still no reader to ask. designs.ts `previewRules` supplies
+// it as flat values — no custom properties, no color-mix() — and they go on as
+// INLINE styles through the CSSOM, never into the <style> block below.
+//
+// WHICH design: the HOME page's, resolved (designs.ts resolvePageDesign) — the
+// still IS the home page, so it wears what that page wears on screen, its own
+// design or its section's before the space's.
 
 import type { SpacesDoc, Page } from './model'
 import { renderPage } from './render'
 import { homePage } from './model'
+import { resolvePageDesign, previewRules, applyPreviewRules } from './designs.ts'
 
 /** Above this the preview is trimmed, then dropped to a title card. A preview
  *  is a courtesy; it must never be why a file is large. */
@@ -128,6 +141,16 @@ const SHEET = (doc: SpacesDoc): string => {
     `.bp th,.bp td{border:1px solid #E3E8EF;padding:6px 9px;text-align:start;`,
     `vertical-align:top;word-break:break-word}`,
     `.bp th{background:#F5F7FA;font-weight:600}`,
+    // A CHART IS AN <svg> AND THE STILL KEEPS IT. It carries its own colours
+    // and geometry as presentation attributes (render.ts), so nothing about the
+    // picture depends on a rule in styles.css — which is the point, because
+    // styles.css is not loaded here. The engine asks for `height:100%` from its
+    // slides host; in this flowing column that is zero, so the aspect comes
+    // back from the viewBox.
+    // `!important` because the picture's own inline style carries a min-width
+    // that keeps its labels legible on a phone, and a thumbnail is narrower than
+    // any phone — inline loses to nothing else.
+    `.bp svg{max-width:100%;height:auto;display:block;min-width:0!important}`,
   ].join('')
 }
 
@@ -203,7 +226,7 @@ function titleCard(doc: SpacesDoc): HTMLElement {
   return col
 }
 
-function wrap(inner: HTMLElement, doc: SpacesDoc): HTMLElement {
+function wrap(inner: HTMLElement, doc: SpacesDoc, page: Page): HTMLElement {
   const box = document.createElement('div')
   // z-index above the splash (9999) and the loader's failure card (99999)
   box.className = 'bp'
@@ -211,6 +234,11 @@ function wrap(inner: HTMLElement, doc: SpacesDoc): HTMLElement {
   style.textContent = SHEET(doc)
   box.appendChild(style)
   box.appendChild(inner)
+  // THE DESIGN GOES ON AS INLINE STYLES, NEVER INTO THE <style> ABOVE: this
+  // node is written into the saved shell, and author-chosen values must not
+  // become raw text inside a style element there (designs.ts previewRules).
+  const design = resolvePageDesign(doc, page.id)
+  if (design) applyPreviewRules(box, previewRules(design))
   return box
 }
 
@@ -235,13 +263,15 @@ export function buildSpacePreview(doc: SpacesDoc): HTMLElement | null {
       forceOpen: true,
       printing: true,
       titleOf: (id) => doc.pages.find((p) => p.id === id)?.title,
+      // no design on the root: the still is styled by wrap(), inline
+      design: null,
     })
     const col = document.createElement('div')
     col.className = 'bp-col'
     while (rendered.firstChild) col.appendChild(rendered.firstChild)
     staticize(col, keepImages, doc)
-    const built = wrap(col, doc)
+    const built = wrap(col, doc, page)
     if (byteLength(built) <= PREVIEW_BUDGET) return built
   }
-  return wrap(titleCard(doc), doc)
+  return wrap(titleCard(doc), doc, page)
 }
