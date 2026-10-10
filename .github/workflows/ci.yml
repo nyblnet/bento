@@ -219,6 +219,18 @@ jobs:
             --outfile="$RUNNER_TEMP/test-spaces-restore-gate.mjs"
           node "$RUNNER_TEMP/test-spaces-restore-gate.mjs"
 
+      - name: Spaces in-file history rig
+        # doc.revisions (spaces/src/history.ts): every entry is the kernel's
+        # Revision envelope with the patch under body; what it covers is the
+        # field map's content class minus assets (footnotes, design, templates
+        # included); restore(N) is byte-identical to what was saved at N and
+        # goes through the restore gate; history is a log undo never un-records.
+        # (Bundled: store.ts imports './model' extensionless.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-history.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-history.mjs"
+          node "$RUNNER_TEMP/test-spaces-history.mjs"
+
       - name: Spaces agent-surface rig
         # agent.ts is ~900 lines and shipped with no coverage at all: two of the
         # five defects an adversarial review found in round 2 lived here,

@@ -68,6 +68,15 @@ export const SPACES_FIELDS = {
 const _modeOk: ModeFieldsOk<typeof SPACES_FIELDS> = true
 void _modeOk
 
-/** Content that changes without anyone editing — excluded from the recovery
- *  key so an autosave of an untouched space is not a phantom edit. */
-export const SPACES_NOT_EDIT: ReadonlySet<string> = new Set(['modified'])
+/** Fields that change without anyone editing — excluded from the recovery
+ *  key so an autosave of an untouched space is not a phantom edit.
+ *
+ *  `revisions` is here although the kernel's default counts history as
+ *  unsaved work. That default exists for history a person makes BETWEEN saves
+ *  (type's typed revisions, a signature), which only a recovery snapshot can
+ *  keep. Spaces records a revision only inside a save's prepare step, into
+ *  the bytes that save writes (history.ts) — so it is never unsaved work, and
+ *  counting it would raise the recovery banner on every file reopened after a
+ *  download-save, whose recovery snapshot predates the revision. `trail` is
+ *  NOT listed: when it is written is its feature's call. */
+export const SPACES_NOT_EDIT: ReadonlySet<string> = new Set(['modified', 'revisions'])
