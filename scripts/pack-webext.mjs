@@ -261,10 +261,7 @@ if (manifest) {
   // A dotted permission names a capability inside an API, not a namespace:
   // `downloads.ui` is used as `chrome.downloads.setUiOptions`.
   const usedAs = { 'downloads.ui': 'chrome\\.downloads\\.setUiOptions' }
-  // unlimitedStorage has no API of its own: it is "used" when the extension
-  // keeps documents' crash recovery in IndexedDB (store.js, bento-docstore),
-  // which is what the quota exemption is for.
-  const usedWithoutApi = { storage: true, unlimitedStorage: /indexedDB\.open\(dbName/.test(srcText) }
+  const usedWithoutApi = { storage: true }
   for (const perm of manifest.permissions ?? []) {
     if (!new RegExp(usedAs[perm] ?? `chrome\\.${perm}\\b`).test(srcText) && !usedWithoutApi[perm]) {
       fail(`permission "${perm}" is declared but never used in the shipped code`)
