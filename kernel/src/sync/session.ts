@@ -32,7 +32,7 @@ import {
 // every consumer meets them through the session.
 export type { BlobRef, CollabCreds, SyncDoc }
 import { putBlob, getBlob, dataUriToBytes, bytesToDataUri, encodedSize, MAX_BLOB } from './blobs.ts'
-import { mintCollab } from './online.ts'
+import { mintCollab, cachedMemberPub } from './online.ts'
 import { lsGet, lsJson } from '../storage.ts'
 
 /**
@@ -817,7 +817,9 @@ export class SyncSession {
       else if (c.v === 2 && c.ownerPriv) { role = 'owner'; pub = c.owner }
       else if (c.v === 2 && c.invite) {
         role = 'editor'
-        pub = lsJson<{ pub?: string } | null>(`bento-member-${this.store.doc.docId}`, null)?.pub
+        // the identity this page resolved first; the stored pubkey otherwise
+        pub = cachedMemberPub(this.store.doc.docId) ??
+          lsJson<{ pub?: string } | null>(`bento-member-${this.store.doc.docId}`, null)?.pub
       } else if (c.writerPriv) { role = 'editor'; pub = c.writerPub }
     }
     const where = this.host.presence()
