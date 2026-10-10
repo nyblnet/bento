@@ -907,6 +907,9 @@ async function browser(chrome: string, html: string): Promise<void> {
         for (const r of tr.parentElement.querySelector(':scope > .bkm-menu').querySelectorAll('.bkm-item')) add('menu', r.querySelector('.bkm-text')?.textContent || '')
         esc(); await sleep(60)
       }
+      // the Share popover's actions (a popover of rows, not a kernel menu)
+      const live = bar.querySelector('.sp-live')
+      if (live && vis(live)) { live.click(); await sleep(120); for (const r of document.querySelectorAll('.sp-pop .sp-paction-name')) add('share', r.textContent); esc(); await sleep(80) }
       const more = document.querySelector('.sp-treelink.sp-here .sp-rowmore')
       if (more) { more.click(); await sleep(80); const m = [...document.querySelectorAll('.sp-mn-anchored .bkm-menu')].pop(); if (m) for (const r of m.querySelectorAll('.bkm-item')) add('page menu', r.querySelector('.bkm-text')?.textContent || ''); esc(); await sleep(60) }
       // the page list's ＋ ▾ (a drawer on a phone: open it from the bar first)
@@ -930,6 +933,8 @@ async function browser(chrome: string, html: string): Promise<void> {
       // per-page designs: the page's Design row, and its note under Save ▾
       if (!('Design' in now)) lost.push('Design (new member unreachable)')
       if (!('Export page as Markdown…' in now)) lost.push('Export page as Markdown… (new member unreachable)')
+      // the sealed reading copy, from the Share popover
+      if (now['Save a reading copy…'] !== 'share') lost.push(`Save a reading copy… (not in Share: ${now['Save a reading copy…']})`)
       ok(lost.length === 0, `at ${w}px every command reachable before is reachable now (${BEFORE[w].length} checked${lost.length ? '; LOST: ' + lost.join(', ') : ''})`)
     }
 

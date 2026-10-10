@@ -66,6 +66,7 @@ const RIGS = [
   { name: 'invite',  file: 'scripts/test-spaces-invite.ts', bundle: true },
   { name: 'copytiers', file: 'scripts/test-spaces-copytiers.ts', bundle: true },
   { name: 'roundtrip', file: 'scripts/test-spaces-roundtrip.ts', bundle: true },
+  { name: 'reading', file: 'scripts/test-spaces-reading.ts', bundle: true },
   { name: 'md-strict', file: 'scripts/test-spaces-md-strict.ts', bundle: true },
   { name: 'restore-gate', file: 'scripts/test-spaces-restore-gate.ts', bundle: true },
   { name: 'history', file: 'scripts/test-spaces-history.ts', bundle: true },
