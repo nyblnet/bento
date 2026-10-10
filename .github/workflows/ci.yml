@@ -763,6 +763,15 @@ jobs:
         # document that asked; a beside-name is never a path or the original.
         run: node scripts/test-webext-saveas.ts
 
+      - name: WebExtension DocStore rig
+        # A document's crash recovery and member key live in the extension's
+        # origin, partitioned by the file path the browser reports. One document
+        # must never reach another's entries, a payload must never name a
+        # partition, and a moved file's recovery follows it only when the old
+        # path is gone (seen through a grant) and the content hash matches; the
+        # member key never follows.
+        run: node scripts/test-webext-store.ts
+
       - name: WebExtension localisation rig
         # Every failure mode of a message catalogue is silent: a key the code
         # uses but English lacks renders as the key name, a locale missing a key

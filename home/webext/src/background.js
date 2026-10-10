@@ -39,7 +39,8 @@ import {
   modelsKey, builtinContext, models as listRoutes, select as selectRoute, runTurn,
   describe as describeAssistant, check as checkAssistant, run as runAssistant,
 } from './assistant.js'
-import { learnPrefix, noteOpened } from './db.js'
+import { learnPrefix, noteOpened, prefixes as knownPrefixes } from './db.js'
+import * as docstore from './store.js'
 import { resolveFileGrant, dropFileGrant, declined, downloadsDir, downloadsRelative, writeViaDownloads, downloadsUnusable, setDownloadsUnusable, defaultDeps as defaultFileGrantDeps } from './filegrant.js'
 import { recentOpened } from './db.js'
 import * as saveas from './saveas.js'
@@ -324,6 +325,77 @@ export async function write(sender, text, deps = {}) {
     }
     return { ok: false, reason: `${e.name}: ${e.message}` }
   }
+}
+
+// ---------------------------------------------------------------- DocStore
+//
+// The document's sidecar data, in this origin (store.js). The PATH is the
+// sender's, derived here; nothing in the payload can name another one.
+
+const STORE_OPS = {
+  'store.get': docstore.get, 'store.chunk': docstore.chunk, 'store.put': docstore.put,
+  'store.commit': docstore.commit, 'store.set': docstore.set, 'store.list': docstore.list,
+  'store.delete': docstore.remove,
+}
+let storeDeps = null
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
+export function docstoreDeps() {
+  if (!storeDeps) {
+    storeDeps = {
+      db: docstore.idbAdapter(),
+      now: () => Date.now(),
+      txid: () => crypto.randomUUID(),
+      sha256: async (bytes) => hex(await crypto.subtle.digest('SHA-256', bytes)),
+      // the extension reads the file ITSELF (it has file access): the page's
+      // account of its own content is never what a carry is decided on
+      fileBlockHash: async (path) => {
+        const r = await fetch(`file://${path.split('/').map(encodeURIComponent).join('/')}`)
+        return r.ok ? docstore.blockHash(await r.text(), storeDeps) : null
+      },
+      // "gone" only as a grant whose location is proven sees it
+      gone: async (path) => {
+        const at = await knownPrefixes()
+        const grants = (await getGrants()).map((dir) => ({ dir, prefix: at[dir.name] })).filter((g) => g.prefix)
+        return docstore.goneVia(path, grants)
+      },
+    }
+  }
+  return storeDeps
+}
+
+/**
+ * A moved document's recovery may follow it (store.js `carry`). Decided once
+ * per path per worker lifetime, and BEFORE the page's first store op is
+ * answered, so the page never reads an empty partition that is about to fill.
+ */
+const carriedBy = new WeakMap() // deps → Map(path → Promise): one store, one decision per path
+export function ensureCarried(path, deps = docstoreDeps()) {
+  if (!path) return Promise.resolve(null)
+  if (!carriedBy.has(deps)) carriedBy.set(deps, new Map())
+  const carried = carriedBy.get(deps)
+  if (!carried.has(path)) {
+    carried.set(path, docstore.carry(path, deps).then((r) => {
+      if (r?.carried) console.info('[bento/home] recovery followed a moved document from', r.carried, 'to', path)
+      return r
+    }, () => null))
+  }
+  return carried.get(path)
+}
+
+export async function storeOp(op, sender, payload, deps = docstoreDeps()) {
+  const fn = STORE_OPS[op]
+  if (!fn) return { ok: false, reason: 'unknown op' }
+  // Top frame only, here too: the content scripts never run in a sub-frame,
+  // but a partition is too valuable to rest on that alone.
+  const path = sender?.frameId === 0 ? pathFromSender(sender) : null
+  if (path) await ensureCarried(path, deps)
+  return fn(path, payload ?? {}, deps)
+}
+
+/** After the extension wrote the sender's file: which document it now holds (store.js recordSaved). */
+function noteSaved(sender, text) {
+  const path = sender?.frameId === 0 ? pathFromSender(sender) : null
+  if (path) void docstore.recordSaved(path, text, docstoreDeps()).catch(() => {})
 }
 
 // ---------------------------------------------------------------- assistant
@@ -744,7 +816,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'filegrant.answered' ? Promise.resolve(offerAnswered(sender, msg))
       : msg?.op === 'save.status' ? saveStatus(sender, msg.url)
       : msg?.op === 'save.rebadge' ? (async () => { const tabs = await chrome.tabs.query({ url: 'file:///*.bento.html' }).catch(() => []); for (const tb of tabs) await badgeTab(tb.id, { url: tb.url, frameId: 0, tab: tb }); return { ok: true } })()
-      : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '')
+      : msg?.op === 'write' ? write(sender, msg.payload?.text ?? '').then((r) => { if (r?.ok) noteSaved(sender, msg.payload?.text ?? ''); return r })
       : msg?.op === 'backup' ? backup(sender, msg.payload?.text ?? '', msg.payload?.name)
       : msg?.op === 'assistant.consent' ? recordConsent(sender, msg)
       : typeof msg?.op === 'string' && msg.op.startsWith('assistant.') ? assistantOp(msg.op, sender, msg.payload)
@@ -752,6 +824,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       : msg?.op === 'saveas.write' ? saveas.write(topPath(sender), msg.payload, saveasDeps(sender))
       : msg?.op === 'saveas.answered' ? Promise.resolve(saveasAnswered(sender, msg))
       : msg?.op === 'saveas.drop' ? saveas.drop(topPath(sender), msg.payload, saveasDeps(sender))
+      : typeof msg?.op === 'string' && msg.op.startsWith('store.') ? storeOp(msg.op, sender, msg.payload)
       : Promise.resolve({ ok: false, reason: 'unknown op' })
     run.then((r) => {
       sendResponse(r)
@@ -784,6 +857,9 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   // asked — `checkForUpdate` returns immediately for them.
   chrome.runtime.onStartup?.addListener(() => void checkForUpdate())
   chrome.runtime.onStartup?.addListener(() => { void saveas.gc(saveasDeps(null)).catch(() => {}) })
+  // DocStore's sweep: partitions of files that are gone or untouched for a
+  // month, and transfers that never committed. Once per browser session.
+  chrome.runtime.onStartup?.addListener(() => { void docstore.gc(docstoreDeps()).catch(() => {}) })
   chrome.runtime.onInstalled?.addListener(() => void checkForUpdate())
   void reportLapsed()
 
