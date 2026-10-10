@@ -31,7 +31,10 @@ export interface ExportOptions {
   /** a picture PowerPoint cannot take (WebP, …) → PNG data: URI, or null.
    *  Needs a browser; see ExportOpts.rasterise in pptx-write/index.ts. */
   rasterise?: (dataUri: string) => Promise<string | null>
-  /** export interactive states as hidden slides (ExportOpts.includeStates) */
+  /** export interactive states as hidden slides (ExportOpts.includeStates).
+   *  DEFAULT TRUE (maintainer's ruling, 2026-10-10): a deck's states come
+   *  along unless this is set false; then they are left out and links into
+   *  one go to its parent. */
   includeStates?: boolean
 }
 
@@ -61,7 +64,7 @@ export async function docToPptx(json: string, options: ExportOptions = {}): Prom
     chartPalette: deriveChartPalette(doc.theme.accent),
     formulasIn: countFormulas,
     ...(options.rasterise ? { rasterise: options.rasterise } : {}),
-    ...(options.includeStates ? { includeStates: true } : {}),
+    includeStates: options.includeStates ?? true,
   })
   return { bytes, title: doc.title, report, stats }
 }

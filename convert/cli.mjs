@@ -23,8 +23,9 @@
 // refuses the network entirely and requires `--shell`.
 //
 // EXPORT (--to pptx) reads a saved deck's #bento-doc block and writes a .pptx.
-// It needs no network. --states adds interactive states as hidden slides that
-// links lead to (default: left out, links go to the parent). It refuses an encrypted deck, a raw compact document and
+// It needs no network. Interactive states come along as hidden slides that
+// links lead to; --no-states leaves them out (links then go to the parent).
+// It refuses an encrypted deck, a raw compact document and
 // non-slides files, each with what to do instead. Export is a library and this
 // command, never a button in the app: the writer stays out of every shell.
 //
@@ -55,7 +56,7 @@ process.on('warning', (w) => {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const USAGE = `usage:
   bento convert <deck.pptx> [-o out.bento.html] [--shell path | --offline] [--report r.json]
-  bento convert <deck.bento.html|doc.json> --to pptx [-o out.pptx] [--states] [--report r.json]`
+  bento convert <deck.bento.html|doc.json> --to pptx [-o out.pptx] [--no-states] [--report r.json]`
 
 function die(msg, code = 1) {
   process.stderr.write(`bento convert: ${msg}\n`)
@@ -65,13 +66,16 @@ function die(msg, code = 1) {
 // --- arguments ---------------------------------------------------------------
 const argv = process.argv.slice(2)
 if (argv[0] === 'convert') argv.shift()
-const opts = { out: null, to: null, shell: null, offline: false, input: null, report: null, states: false }
+const opts = { out: null, to: null, shell: null, offline: false, input: null, report: null, states: true }
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   const val = () => (i + 1 < argv.length ? argv[++i] : die(`${a} needs a value\n${USAGE}`, 2))
   if (a === '-o' || a === '--out') opts.out = val()
   else if (a === '--to') opts.to = val()
   else if (a === '--report') opts.report = val()
+  else if (a === '--no-states') opts.states = false
+  // --states was the opt-in before states became the default; kept so
+  // existing scripts still run, and does nothing now
   else if (a === '--states') opts.states = true
   else if (a === '--shell') opts.shell = val()
   else if (a === '--offline') opts.offline = true

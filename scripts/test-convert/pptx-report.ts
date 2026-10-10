@@ -99,6 +99,17 @@ const text = (id: string, html: string) => ({
   ok(!none.report.entries.some((x) => x.code === 'fonts-not-embedded'), 'no own fonts, no entry')
 }
 {
+  // the library's own default (maintainer's ruling): states come along
+  const withState = JSON.parse(docWith([text('t1', 'Hello')]))
+  withState.slides.push({ id: 's2-detail', stateOf: 's2', background: '#ffffff', elements: [] })
+  const json = JSON.stringify(withState)
+  const def = await bentoToPptx(json), off = await bentoToPptx(json, { includeStates: false })
+  ok(def.stats.slides === 3 && def.report.entries.some((e) => e.code === 'states-as-hidden-slides'),
+    `bentoToPptx includes states by default (${def.stats.slides} slides)`)
+  ok(off.stats.slides === 2 && off.report.entries.some((e) => e.code === 'state-slides-omitted'),
+    `includeStates: false leaves them out (${off.stats.slides} slides)`)
+}
+{
   let msg = ''
   try { await bentoToPptx('{"format": "bento/slides", ') } catch (e) { msg = (e as Error).message }
   ok(/does not parse/.test(msg), `broken JSON is refused in plain words (${msg})`)

@@ -10258,3 +10258,21 @@ The rule, owned by `slides/src/saving.ts`:
 Guards: `scripts/test-slides-save-revisions.ts` (the rule, through
 `saveRevision`, plus the editor wiring) and `scripts/test-slides-save-browser.mjs`
 (the packaged editor through the shared `scripts/lib/savequeue-browser.mjs`).
+
+## 2026-10-10 — PowerPoint export includes interactive states by default
+
+Maintainer's ruling: a deck's interactive states come along by default, as
+hidden slides right after the slide they belong to, with links into a state
+landing on it. The default lives in `bentoToPptx` (`includeStates ?? true`),
+the conversion table (the page's checkbox starts ticked), and the CLI. The
+CLI's opt-out is `--no-states`; the old opt-in `--states` is still accepted
+as a no-op so existing scripts keep running. Leaving states out is the old
+behaviour: links into a state go to its parent. Either way, the report says
+which way it went (`states-as-hidden-slides` or `state-slides-omitted`).
+
+The low-level writer, `exportPptx`, still takes the option explicitly (off
+when absent), so its rig keeps covering both paths. Rows pin the default at
+each level: the library, the table, the CLI and the page's rendering. A
+first mutation run showed the library's own default was untested, because
+every caller passed the option, so a library-level row was added.
+

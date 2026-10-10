@@ -38,7 +38,7 @@ const hidden = (r: Exported, n: number) => /<p:sld\b[^>]*\bshow="0"/.test(partTe
 const textOf = (r: Exported, n: number) => [...partText(r.parts, `ppt/slides/slide${n}.xml`).matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join('')
 const slideCount = (r: Exported) => [...r.parts.keys()].filter((k) => /^ppt\/slides\/slide\d+\.xml$/.test(k)).length
 
-console.log('default: states left out')
+console.log('the writer with the option off (bentoToPptx, the CLI and the page default it on): states left out')
 {
   const r = await exportDeck(doc())
   ok(r.problems.length === 0 && slideCount(r) === 2, `2 slides (${slideCount(r)})`)

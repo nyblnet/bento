@@ -30,14 +30,15 @@ pre-1.0.
   tables, charts, pictures and hidden slides come across, and now code
   blocks too (as editable text in Consolas, indentation kept) and embedded
   documents (as a picture of what they show). WebP pictures are converted to
-  PNG on bento.page/convert. Interactive states can come along as hidden
-  slides that their links lead to. After each conversion you get a list of
+  PNG on bento.page/convert. Interactive states come along as hidden slides
+  that their links lead to (untick the box on the page, or pass `--no-states`,
+  to leave them out). After each conversion you get a list of
   what was approximated or left out, and on which slides: animations show
   their final frame, Morph becomes a plain cut, formulas stay as their LaTeX
   source, and code loses its syntax colours. Page numbers stay right after
   hidden slides. Every export is checked before it is written, so you never
   get a file PowerPoint wants to repair. From a terminal:
-  `node convert/cli.mjs deck.bento.html --to pptx` (with `--states` and
+  `node convert/cli.mjs deck.bento.html --to pptx` (with `--no-states` and
   `--report r.json`). Export is a page, a library and a command-line tool
   rather than a button in the app, so every shared file stays small and the
   app stays focused.

@@ -74,10 +74,13 @@ console.log('choices a pair takes')
   ok(JSON.stringify(flagFor(sample)) === '[]' && JSON.stringify(flagFor(withState)) === '["states"]',
     'the states choice is offered only for a deck that has states')
   const c = CONVERSIONS.find((x) => x.id === 'slides-to-pptx')!
+  ok(c.flags!.find((f) => f.id === 'states')!.default === true, 'the states choice starts ticked (maintainer\'s ruling)')
   const d = detect('d.json', enc.encode(JSON.stringify(withState)))
-  const off = await c.run(d, env), on = await c.run(d, env, { states: true })
+  const plain = await c.run(d, env), off = await c.run(d, env, { states: false })
   const n = (r: typeof off) => r.stats.find((s) => s.label === 'slides')!.value
-  ok(n(off) === 3 && n(on) === 4, `ticking it adds the state as a slide (${n(off)} → ${n(on)})`)
+  ok(n(plain) === 4 && n(off) === 3, `states come along unless unticked (${n(plain)} with, ${n(off)} unticked)`)
+  ok(plain.report.entries.some((e) => e.code === 'states-as-hidden-slides') && off.report.entries.some((e) => e.code === 'state-slides-omitted'),
+    'the report says which way it went')
 }
 
 console.log('running each pair')
