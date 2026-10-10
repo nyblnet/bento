@@ -32,8 +32,11 @@
 
 import { type SpacesDoc, type Page, type Block, buildIndex, isRemote, newBlock, newPage, uid, descendantsOf, linkCard, commentsOn, pageAssetKeys } from './model.ts'
 import { SPECS, SPEC } from './blocks.ts'
+import { aliasesOf, nameKey } from './mentions.ts'
 import { sanitizeInline, textOf, inertBody, esc, UNWRAP } from './sanitize.ts'
 import { orphanAssets, humanBytes } from './assets.ts'
+import { isPageRef, anchorOf, sectionOf, embedReaches } from './embed.ts'
+import { danglingRefs, orphanNotes, LABEL_OK } from './footnotes.ts'
 import {
   type FieldSpec, ISSUE_FIELDS, fieldsOf, fieldByKey, optionOf, propBlock, propHtml, valuesOf, isIssue, headerLength,
 } from './fields.ts'
@@ -258,6 +261,47 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
       fix: 'Set home to a real page id. Readers land on the first page instead, which may not be the one you wrote to be landed on.' })
   }
 
+  // ---- names and aliases ---------------------------------------------------
+  // TWO PAGES CLAIMING ONE NAME is not an error and is not repaired: a file
+  // arrives already written, and the resolver has a deterministic answer for
+  // it (mentions.ts nameIndex — titles before aliases, then document order).
+  // But the answer is invisible from the outside, so `[[Projects]]` lands
+  // somewhere the author did not choose and nothing anywhere says why. This is
+  // that report: the one place this app tells you about a clash it resolved on
+  // your behalf.
+  //
+  // A page ALIASED to its own title is silently fine — `namesOf` de-duplicates
+  // it — so it is not reported. Two pages simply TITLED the same thing is also
+  // not reported: that is ordinary and the ids keep them apart everywhere
+  // except a `[[wikilink]]`, which is the one case worth a line.
+  {
+    const claims = new Map<string, Array<{ id: string; title: string; alias: boolean }>>()
+    for (const kind of [false, true]) {
+      for (const p of pages) {
+        if (!p || typeof p.id !== 'string') continue
+        const names = kind ? aliasesOf(p) : [String(p.title ?? '')]
+        for (const n of names) {
+          const k = nameKey(n)
+          if (!k) continue
+          const list = claims.get(k)
+          if (list) { if (!list.some((c) => c.id === p.id)) list.push({ id: p.id, title: String(p.title ?? ''), alias: kind }) }
+          else claims.set(k, [{ id: p.id, title: String(p.title ?? ''), alias: kind }])
+        }
+      }
+    }
+    for (const [k, list] of claims) {
+      if (list.length < 2 || !list.some((c) => c.alias)) continue
+      const winner = list[0]
+      for (const loser of list.slice(1)) {
+        add({
+          page: loser.id, code: 'alias-collision', severity: 'warning', path: 'aliases',
+          message: `More than one page answers to the name "${k}": ${list.map((c) => `"${c.title}"${c.alias ? ' (alias)' : ' (title)'}`).join(', ')}. A [[${k}]] link resolves to "${winner.title}".`,
+          fix: `Rename the alias on "${loser.title}", or remove it. A title always wins over an alias, and among aliases the first page in doc.pages wins — so the page an author meant is not necessarily the page they get.`,
+        })
+      }
+    }
+  }
+
   // ---- the field schema ----------------------------------------------------
   // Only a DECLARED `doc.fields` can be wrong; a document without one gets
   // DEFAULT_FIELDS, which is code.
@@ -305,7 +349,7 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
       add({ page: p.id, code: 'no-blocks', severity: 'error', path: 'blocks',
         message: `Page "${p.title}" has no blocks, so there is nothing in it to put a caret in — it cannot be typed into.`,
         fix: 'Give it at least one block, e.g. { "type": "p", "html": "" }.' })
-    } else if (!blocks.some((b) => textOf(b.html).trim() || b.type === 'image' || b.type === 'media' || b.type === 'pagelink' || b.type === 'link' || b.type === 'divider')) {
+    } else if (!blocks.some((b) => textOf(b.html).trim() || b.type === 'image' || b.type === 'media' || b.type === 'pagelink' || b.type === 'embed' || b.type === 'link' || b.type === 'divider')) {
       add({ page: p.id, code: 'empty-page', severity: 'info',
         message: `Page "${p.title}" has blocks but no content.`,
         fix: 'Write something, or remove the page. A deliberately blank page (an inbox, a stub) is fine — this is only a note.' })
@@ -390,6 +434,31 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
           add({ ...at, code: 'broken-link', severity: 'error', path: 'page',
             message: `A pagelink card points at "${target || '(nothing)'}", which is not a page — it renders as "(missing page)".`,
             fix: 'Set page to a real page id, or remove the block.' })
+        }
+      }
+
+      // AN EMBED IS A PAGELINK THAT SHOWS ITS TARGET, so it can go wrong in
+      // three ways instead of one — and every one of them is silent to a
+      // reader who never saw the page it was supposed to be showing.
+      if (b.type === 'embed') {
+        const target = typeof b.page === 'string' ? b.page : ''
+        const anchor = anchorOf(b)
+        if (!target || !pageIx.has(target)) {
+          add({ ...at, code: 'broken-embed', severity: 'error', path: 'page',
+            message: `An embed points at "${target || '(nothing)'}", which is not a page — it renders as a note saying so instead of the content.`,
+            fix: 'Set page to a real page id, or remove the block.' })
+        } else if (embedReaches(doc, p.id, target)) {
+          // NAMED, not merely counted: the renderer stops the loop safely (a
+          // placeholder where the repeat would be), so this is not a crash
+          // waiting to happen — it is content the author believes is on the
+          // page and that nobody will ever see.
+          add({ ...at, code: 'embed-cycle', severity: 'error', path: 'page',
+            message: `This embed of "${pageIx.get(target)?.title ?? target}" leads back to this page, so the loop is cut short and the rest of the embed is not shown.`,
+            fix: 'Point the embed at a page that does not embed this one, or narrow it to a section with anchor.' })
+        } else if (anchor && !sectionOf(pageIx.get(target)!, anchor)) {
+          add({ ...at, code: 'no-section', severity: 'warning', path: 'anchor',
+            message: `No heading named "${anchor}" on "${pageIx.get(target)?.title ?? target}" — the embed shows a note instead of that section.`,
+            fix: 'Match anchor to a heading on that page, or remove anchor to embed the whole page.' })
         }
       }
 
@@ -539,6 +608,40 @@ export function validateDoc(doc: SpacesDoc): ValidateResult {
       fix: `Delete these keys to shrink the file: ${orphans.slice(0, 8).join(', ')}${orphans.length > 8 ? ', …' : ''}` })
   }
 
+  // ---- footnotes -----------------------------------------------------------
+  // BOTH HALVES ARE REPORTED AND NEITHER IS AN ERROR, because neither loses a
+  // word: a dangling reference still shows the `[^1]` the author typed and a
+  // note nothing points at is still the note they wrote. What they lose is the
+  // CONNECTION, and a connection is exactly the thing an author cannot see is
+  // missing by reading the page. Neither can throw — every lookup here goes
+  // through footnotes.ts, which uses Object.hasOwn and tolerates a
+  // `"footnotes": "yes"` out of a hand-edited file.
+  for (const d of danglingRefs(doc)) {
+    add({ page: d.pageId, block: d.blockId, code: 'dangling-footnote', severity: 'warning', path: 'footnotes',
+      message: `A footnote reference [^${d.label}] has no note behind it, so it renders as the literal text "[^${d.label}]" instead of a number.`,
+      fix: `Add "${d.label}" to doc.footnotes, or delete the [^${d.label}] from the text.` })
+  }
+  const loose = orphanNotes(doc)
+  if (loose.length) {
+    // ONE finding, like the orphan assets above and for the same reason: the
+    // actionable fact is the total plus the labels, not a row each.
+    add({ code: 'orphan-footnote', severity: 'info', path: 'footnotes',
+      message: `${loose.length} footnote(s) in doc.footnotes are referenced by nothing, so they are never numbered and never printed: ${loose.slice(0, 8).join(', ')}${loose.length > 8 ? ', …' : ''}`,
+      fix: 'Put a [^label] back in the text, or delete the key from doc.footnotes.' })
+  }
+  const rawNotes = (doc as { footnotes?: unknown }).footnotes
+  if (rawNotes && typeof rawNotes === 'object' && !Array.isArray(rawNotes)) {
+    // A label outside the token grammar can never be REFERENCED — `[^a b]`
+    // does not match — so the note is unreachable however many times it is
+    // written into the prose. Silent, and only findable from here.
+    const bad = Object.keys(rawNotes as object).filter((k) => !LABEL_OK.test(k))
+    if (bad.length) {
+      add({ code: 'unreachable-footnote', severity: 'warning', path: 'footnotes',
+        message: `${bad.length} footnote label(s) are outside the reference grammar (letters, digits, "_" and "-", up to 32), so no [^label] can ever point at them: ${bad.slice(0, 5).map((b) => JSON.stringify(b)).join(', ')}`,
+        fix: 'Rename the key to a plain label and update the [^label] in the text.' })
+    }
+  }
+
   const counts: Record<Severity, number> = { error: 0, warning: 0, info: 0 }
   for (const f of findings) counts[f.severity]++
   return { ok: counts.error === 0, counts, findings }
@@ -600,7 +703,9 @@ export function outlineDoc(doc: SpacesDoc): OutlineResult {
       if (b.type === 'h1' || b.type === 'h2' || b.type === 'h3') {
         headings.push({ id: b.id, level: Number(b.type.slice(1)) as 1 | 2 | 3, text })
       }
-      if (b.type === 'pagelink' && typeof b.page === 'string' && !links.includes(b.page)) links.push(b.page)
+      // pagelink AND embed: both name a page, and an outline that listed only
+      // the first would under-report exactly the dependency that hurts most.
+      if (isPageRef(b) && !links.includes(String(b.page))) links.push(String(b.page))
       for (const m of (b.html ?? '').matchAll(/href\s*=\s*["']#p\/([^"']+)["']/g)) {
         if (!links.includes(m[1])) links.push(m[1])
       }

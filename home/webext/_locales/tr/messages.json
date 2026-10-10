@@ -811,5 +811,41 @@
   },
   "tdGrantFolder": {
     "message": "“$1” içindeki her şeyi sormadan kaydet…"
+  },
+  "saTitleCopy": {
+    "message": "Kopya kaydet"
+  },
+  "saTitleShare": {
+    "message": "Dışa aktarılan dosyayı kaydet"
+  },
+  "saName": {
+    "message": "Dosya adı"
+  },
+  "saBeside": {
+    "message": "“$1” dosyasının yanına kaydet"
+  },
+  "saChoose": {
+    "message": "Klasör seç…"
+  },
+  "saCancel": {
+    "message": "İptal"
+  },
+  "saExists": {
+    "message": "“$1” zaten var. Değiştirmek için yeniden kaydedin."
+  },
+  "saIsOriginal": {
+    "message": "Bu, açık belgenin kendi adı — başka bir ad seçin."
+  },
+  "saBadName": {
+    "message": "Eğik çizgi içermeyen bir dosya adı kullanın."
+  },
+  "saLapsed": {
+    "message": "Bu klasöre erişimin süresi doldu. Bunun yerine bir klasör seçin ya da kütüphaneden yenileyin."
+  },
+  "saGone": {
+    "message": "Bu kaydetme artık beklemiyor. Pencereyi kapatıp yeniden kaydedin."
+  },
+  "saTaken": {
+    "message": "“$1” zaten var. Başka bir ad seçin."
   }
 }

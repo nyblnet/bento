@@ -811,5 +811,41 @@
   },
   "tdGrantFolder": {
     "message": "Zapisuj wszystko w „$1” bez pytania…"
+  },
+  "saTitleCopy": {
+    "message": "Zapisz kopię"
+  },
+  "saTitleShare": {
+    "message": "Zapisz wyeksportowany plik"
+  },
+  "saName": {
+    "message": "Nazwa pliku"
+  },
+  "saBeside": {
+    "message": "Zapisz obok „$1”"
+  },
+  "saChoose": {
+    "message": "Wybierz folder…"
+  },
+  "saCancel": {
+    "message": "Anuluj"
+  },
+  "saExists": {
+    "message": "„$1” już istnieje. Zapisz ponownie, aby go zastąpić."
+  },
+  "saIsOriginal": {
+    "message": "To nazwa otwartego dokumentu — wybierz inną."
+  },
+  "saBadName": {
+    "message": "Użyj nazwy pliku bez ukośników."
+  },
+  "saLapsed": {
+    "message": "Dostęp do tego folderu wygasł. Wybierz folder albo odnów dostęp w bibliotece."
+  },
+  "saGone": {
+    "message": "To zapisywanie już nie czeka. Zamknij okno i zapisz ponownie."
+  },
+  "saTaken": {
+    "message": "„$1” już istnieje. Wybierz inną nazwę."
   }
 }

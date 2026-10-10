@@ -844,5 +844,41 @@
   },
   "tdGrantFolder": {
     "message": "Tout enregistrer dans « $1 » sans demander…"
+  },
+  "saTitleCopy": {
+    "message": "Enregistrer une copie"
+  },
+  "saTitleShare": {
+    "message": "Enregistrer le fichier exporté"
+  },
+  "saName": {
+    "message": "Nom du fichier"
+  },
+  "saBeside": {
+    "message": "Enregistrer à côté de « $1 »"
+  },
+  "saChoose": {
+    "message": "Choisir un dossier…"
+  },
+  "saCancel": {
+    "message": "Annuler"
+  },
+  "saExists": {
+    "message": "« $1 » existe déjà. Enregistrez de nouveau pour le remplacer."
+  },
+  "saIsOriginal": {
+    "message": "C’est le nom du document ouvert lui-même : choisissez-en un autre."
+  },
+  "saBadName": {
+    "message": "Utilisez un nom de fichier sans barres obliques."
+  },
+  "saLapsed": {
+    "message": "L’accès à ce dossier a expiré. Choisissez plutôt un dossier, ou renouvelez-le dans la bibliothèque."
+  },
+  "saGone": {
+    "message": "Cet enregistrement n’est plus en attente. Fermez cette fenêtre et enregistrez de nouveau."
+  },
+  "saTaken": {
+    "message": "« $1 » existe déjà. Choisissez un autre nom."
   }
 }

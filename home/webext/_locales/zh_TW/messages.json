@@ -844,5 +844,41 @@
   },
   "tdGrantFolder": {
     "message": "「$1」中的所有內容不再詢問直接儲存……"
+  },
+  "saTitleCopy": {
+    "message": "儲存副本"
+  },
+  "saTitleShare": {
+    "message": "儲存匯出的檔案"
+  },
+  "saName": {
+    "message": "檔案名稱"
+  },
+  "saBeside": {
+    "message": "儲存到「$1」旁邊"
+  },
+  "saChoose": {
+    "message": "選擇資料夾…"
+  },
+  "saCancel": {
+    "message": "取消"
+  },
+  "saExists": {
+    "message": "「$1」已存在。再次儲存即可取代。"
+  },
+  "saIsOriginal": {
+    "message": "這是已開啟文件本身的名稱——請換一個。"
+  },
+  "saBadName": {
+    "message": "請使用不含斜線的檔名。"
+  },
+  "saLapsed": {
+    "message": "對此資料夾的存取已失效。請改為選擇資料夾，或在資料庫中續期。"
+  },
+  "saGone": {
+    "message": "此次儲存已不再等待。請關閉此視窗後重新儲存。"
+  },
+  "saTaken": {
+    "message": "「$1」已存在。請換一個名稱。"
   }
 }

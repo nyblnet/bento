@@ -1,0 +1,29 @@
+%% source: https://github.com/Sheetaa/flowchestra/blob/HEAD/README.md (MIT)
+flowchart TD
+    begin((Start)) --> prepare[Prepare Code]
+    prepare --> ai_review[AI Review]
+    
+    ai_review --> security[Security Check]
+    ai_review --> performance[Performance Check]
+    ai_review --> code_style[Code Style]
+    
+    security --> aggregate[Aggregate Results]
+    performance --> aggregate
+    code_style --> aggregate
+    
+    aggregate --> human_review{{Human Review}}
+    
+    human_review -->|approve| summarize[Generate Summary]
+    human_review -->|reject| prepare
+    
+    summarize --> finish((End))
+    
+    classDef startend fill:#2ecc71,stroke:#27ae60,color:#fff
+    classDef primary fill:#2980b9,stroke:#2980b9,color:#fff
+    classDef subagent fill:#85c1e9,stroke:#85c1e9,color:#000
+    classDef human fill:#f39c12,stroke:#f39c12,color:#000
+    
+    class begin,finish startend
+    class ai_review primary
+    class prepare,security,performance,code_style,aggregate,summarize subagent
+    class human_review human

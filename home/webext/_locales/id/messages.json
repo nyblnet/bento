@@ -811,5 +811,41 @@
   },
   "tdGrantFolder": {
     "message": "Simpan semua di “$1” tanpa bertanya…"
+  },
+  "saTitleCopy": {
+    "message": "Simpan salinan"
+  },
+  "saTitleShare": {
+    "message": "Simpan file ekspor"
+  },
+  "saName": {
+    "message": "Nama file"
+  },
+  "saBeside": {
+    "message": "Simpan di samping “$1”"
+  },
+  "saChoose": {
+    "message": "Pilih folder…"
+  },
+  "saCancel": {
+    "message": "Batal"
+  },
+  "saExists": {
+    "message": "“$1” sudah ada. Simpan lagi untuk menggantinya."
+  },
+  "saIsOriginal": {
+    "message": "Itu nama dokumen yang sedang terbuka — pilih nama lain."
+  },
+  "saBadName": {
+    "message": "Gunakan nama file tanpa garis miring."
+  },
+  "saLapsed": {
+    "message": "Akses ke folder ini sudah habis. Pilih folder lain, atau perbarui di pustaka."
+  },
+  "saGone": {
+    "message": "Penyimpanan ini tidak lagi menunggu. Tutup jendela ini lalu simpan lagi."
+  },
+  "saTaken": {
+    "message": "“$1” sudah ada. Pilih nama lain."
   }
 }

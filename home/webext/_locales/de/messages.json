@@ -844,5 +844,41 @@
   },
   "tdGrantFolder": {
     "message": "Alles in „$1“ ohne Nachfrage speichern …"
+  },
+  "saTitleCopy": {
+    "message": "Kopie speichern"
+  },
+  "saTitleShare": {
+    "message": "Exportierte Datei speichern"
+  },
+  "saName": {
+    "message": "Dateiname"
+  },
+  "saBeside": {
+    "message": "Neben „$1“ speichern"
+  },
+  "saChoose": {
+    "message": "Ordner wählen …"
+  },
+  "saCancel": {
+    "message": "Abbrechen"
+  },
+  "saExists": {
+    "message": "„$1“ ist schon vorhanden. Erneut speichern, um es zu ersetzen."
+  },
+  "saIsOriginal": {
+    "message": "Das ist der Name des geöffneten Dokuments – bitte einen anderen wählen."
+  },
+  "saBadName": {
+    "message": "Bitte einen Dateinamen ohne Schrägstriche verwenden."
+  },
+  "saLapsed": {
+    "message": "Der Zugriff auf diesen Ordner ist abgelaufen. Wählen Sie stattdessen einen Ordner oder erneuern Sie ihn in der Bibliothek."
+  },
+  "saGone": {
+    "message": "Dieses Speichern wartet nicht mehr. Fenster schließen und erneut speichern."
+  },
+  "saTaken": {
+    "message": "„$1“ ist schon vorhanden. Bitte einen anderen Namen wählen."
   }
 }

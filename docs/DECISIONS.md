@@ -14,6 +14,50 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-09-10 — bento/spaces footnotes: the reference is a TEXT TOKEN, and the number is derived
+
+**Decision.** A footnote in `bento/spaces` is `doc.footnotes` (a document-level
+map, label → inline html — bento/type's shape) plus the literal text `[^label]`
+inside a block's `html`. The number a reader sees is derived at render time from
+order of appearance, per page, and is never stored.
+
+**Why a text token rather than an anchor.** bento/type anchors a reference by
+character offset into a block's `text` runs, and can: it owns the run list and
+rewrites every offset in one place. A spaces block carries `html`, and an offset
+into html is a position in one particular serialization of a position — three
+things move it without changing a word of the prose: `canonicalize()` reorders
+mark nesting at every typing-run close, `sanitizeInline()` unwraps and strips on
+every read of untrusted html, and the CRDT merges `html` as one register, which
+an offset in a second register cannot merge with.
+
+The other candidate was an inline marker element (`<sup>`, or an `<a href="#fn/…">`
+with a new scheme in `HREF_OK`). Rejected because a new allowlist entry is a
+ONE-WAY DATA HAZARD, which sanitize.ts's own comment on `HREF_OK` already spells
+out: a reference written by this build would be STRIPPED, silently, by every
+build shipped before it, on the first edit that touched the block. A text token
+is round-tripped byte-for-byte by builds that already exist — verified by
+loading a footnoted document into a shell built from the previous release.
+
+**Why the number is derived.** Footnotes renumber on insertion, so a stored
+number is wrong the moment a sentence moves and nothing says so. Same rule as
+calc.ts's magic notes and slides' dynamic fields: store the token, derive the
+output. The label is therefore an identifier, not a number, exactly as in pandoc
+and Obsidian — which is also why the markdown round trip is the identity
+function on the reference half.
+
+**Consequences a future session should not treat as bugs.** (1) While a block is
+being EDITED the author sees `[^1]`, not a superscript — injecting marker markup
+into a contenteditable host puts it one keystroke from being committed into
+`html` (`host.innerHTML` is written to the model on every `input`), which loses
+the reference and stores a literal "1". The derived form is drawn in reading
+view, print and the file-manager still. (2) A dangling reference is still
+numbered and gets an empty row, because that is the authoring gesture and
+because what is missing is the note, not the reference. (3) An orphaned note is
+reported, never deleted. (4) `[^…]` inside a `code` block is not scanned.
+
+**Pointers.** `spaces/src/footnotes.ts` (the whole argument, at length),
+`spaces/CHANGELOG.md`, `docs/spaces-agents.md` §Footnotes, rigs in
+`scripts/test-spaces-model.ts` and `scripts/test-spaces-agent.ts`.
 ## 2026-10-05 — Android meets the `launchQueue` rules, and a reload also forgets its Save-As copies
 
 **Decision.** Android implements the two host rules from the entry below: a
@@ -6650,8 +6694,269 @@ so an entry missing at the cut cannot be added afterwards — the check has one
 chance to run and it is cheap. Reconciliation for this cycle: 41 commits, 40
 mapped, 1 correctly absent, run by bento-team-slides.
 
-Claude-Session: https://claude.ai/code/session_01Jcfdy8A69nonyATtm8vRy8
 
+## 2026-09-12 — bento/dash keys its theme off `data-theme`, like the other three apps
+
+**The divergence the maintainer asked dash to fix was a MECHANISM, not a
+palette.** Ten token names are shared across all four apps; dash differed on
+nine of their values. That was the symptom. Measured in a browser with one
+gesture per app: slides, spaces and type all theme off `:root[data-theme="dark"]`
+and none respond to `color-scheme` alone; dash themed off `light-dark()` — which
+resolves against `color-scheme` — and setting `data-theme="dark"` on it did
+NOTHING. Three apps on one switch and one on another.
+
+**Why it matters more than a palette difference:** kernel's shared stylesheet
+(UI primitives, tier 4) can only key off `data-theme`, because slides pins
+`color-scheme: only light` for a documented reason (dark-mode phones render
+native form controls dark against dark ink — blank dropdowns). A shared sheet
+built that way could not have themed dash at all. So dash conforms; keeping its
+dark palette, which is good, as a mechanical transform into a dark block.
+
+**Dash's `light-dark()` was a reasoned choice, and this entry exists so nobody
+reverts it from the old reasoning.** Its stylesheet gave two arguments. One: a
+token's two values on ONE line, with no second copy to drift — a real advantage
+and the honest cost of this change, mitigated by giving the dark block the
+same order and section markers as `:root`, and a rig check that fails on any
+dark token without a light twin. Two: "`data-theme` on `<html>` is cloned into
+every saved file by `capturePristine()`" — a bug dash had MEASURED
+(`bento.serialize()` returned `<html data-theme="light">`). That is answered by
+ORDER, not by a different mechanism: `startTheme()` runs after
+`capturePristine()` and before the first paint, which slides already documents
+at its call site. Re-measured after this change: live root `data-theme="dark"`,
+serialized `<html lang="en">`. The old comment also said slides "has none to
+copy"; it has had a dark block since #285.
+
+**`--radius` was NOT drift, and the record should say so.** It was reported to
+the lead as "7px, no reasoning anywhere". Wrong: dash's rig listed it as a
+deliberate three-step scale (control / floating surface / dialog) with 7px as
+the control step. It takes the shared 10px anyway, because a shared token
+should mean one thing across four apps and kernel's sheet is about to own it;
+`--radius-lg` and `--radius-xl` are dash's own and keep the scale where dash
+still needs it. A documented choice was overridden for a stated reason, not
+undone by mistake — and the rig's DIVERGENCES loop now fails on any exemption
+for a token that has come back into line, so a stale allowance cannot outlive
+its reason again.
+
+**What this entry does NOT decide:** whether the sheet itself inverts. Dash's
+`--bg` is themed and its comment reads "the page, and the sheet itself" — so on
+a grid the paper goes dark, where bento/type keeps its page white because a
+contract will be printed. That is defensible for a grid and undecided for the
+platform. `--bg` is left exactly as it was, themed and commented, so the
+question stays visible until the maintainer rules on it.
+
+## 2026-09-10 — spaces view filters: a FLAT condition list, and unknown operators show MORE
+
+## 2026-09-09 — PAGE → DECK emits a DOCUMENT, not a file, and says what it dropped
+
+`bento/spaces` can turn a page into a `bento/slides` presentation
+(`spaces/src/todeck.ts`, Save → Export page as slides…). Three things about it
+are settled and should not be relitigated without new facts.
+
+**It emits the deck's document JSON, not a `.bento.html` deck.** The stronger
+product moment is obviously the file, and it is not reachable from inside
+`spaces/`. A self-contained deck is a document spliced into a slides SHELL, and
+this app has exactly three ways to obtain one: bundle it (about half a megabyte
+of another app inside every space, forever, for a feature most spaces never
+use), fetch it (PLATFORM §1 — opening a document must not touch the network,
+and a build-time fetch would still need the release channel and its signature),
+or have the two apps produce a joint shell, which is a change in two zones this
+one may not edit. So the hand-off is the interchange path bento/slides already
+documents and already supports: "Replace from JSON…" in its About dialog, and
+`window.bento.loadDoc()` for a script. The Markdown exporter is the precedent —
+it writes another format faithfully and hands it over. **If a joint shell ever
+exists, this is the decision to revisit; nothing else about the exporter
+changes, because the document it produces is already the whole payload.**
+
+**A page has no speaker notes, and none are invented.** The tempting mapping is
+review comments → `slide.notes`: both are authored, both travel in the file,
+neither is shown to a reader. It was rejected. A comment is workspace, it is
+addressed to a named person, and a deck's notes travel in every copy of the
+deck — so the mapping would quietly disclose a remark its author never put in
+the document. What the notes carry instead is the export's own account of what
+did not survive the crossing, per slide. That is deliberate: the dialog's list
+is gone the moment it closes, and the presenter who opens the deck next week is
+the person who needs to know that the page had a video on it.
+
+**Loss is reported by CODE, translated at the call site.** `todeck.ts` returns
+`DeckNote {code, n, where}` and never an English sentence; `editor.ts` turns
+each code into its own literal `t()` call. This is the `LAYOUT_WORD` lesson
+applied before the fact — the i18n extractor sweeps `t()` calls with a literal
+argument, so `t(TEXT[code])` compiles, runs, reports 100% coverage and ships
+English in all eight locales. The copy written INTO the document stays English
+on purpose: a saved artefact's words are its author's, not its next reader's
+browser's.
+
+### The cross-zone coupling, and what actually guards it
+
+`spaces/` writes `bento/slides`' format while being forbidden to edit
+`slides/`. Two guards, and it is worth being precise about which failures each
+one catches, because the gap between them is real:
+
+- **A TYPE-ONLY import of `slides/src/model.ts`.** Erased at build time, so it
+  costs the spaces shell nothing, and a field renamed or narrowed over there is
+  a compile error here. It caught a missing required `modified` on the first
+  run.
+- **A rig that runs the emitted document through slides' OWN `parseDoc`, and
+  checks every key it writes against `slides/src/modelkeys.generated.ts`.** In
+  `scripts/test-spaces-model.ts`, importing from `slides/` to READ. Loadability
+  and unknown-key drift both go red here instead of in a browser.
+
+**Neither guard covers BEHAVIOUR**, and there is nothing on the slides side that
+knows this exporter exists. A renderer that stopped honouring `valign`, or a
+table that started sizing its rows differently, would pass both. That was
+accepted knowingly rather than solved, and it is written down so the next
+session does not discover it as a surprise. The measurement that does cover
+behaviour is manual: load the emitted deck into a built slides shell over
+`http://127.0.0.1` and run its `validate()`, which measures with the real
+renderer. Doing that found three defects the node rig could not: every element
+past slides' 96px margin convention, two text boxes overflowing by 10px and
+15px because the no-DOM width estimate was too generous for lists, and a table
+CLIPPED to three of its five rows because the element box was sized at 36px a
+row when a row draws at about 45. Only the third of those has a rig assertion
+now, and it is a derived bound rather than a measurement.
+**Decision.** `bento/spaces` `ViewFilter` gains two keys and no more: `where`, a
+FLAT array of `{key, op, v?}` clauses, and `any`, a boolean that ORs them
+instead of ANDing them. Eleven operators — `eq` `ne` `gt` `gte` `lt` `lte`
+`contains` `notContains` `empty` `notEmpty` `in` — plus five relative date
+windows for `in` (`today` `week` `month` `past` `future`). The engine is
+`spaces/src/query.ts`; `fields.ts` calls into it and is otherwise unchanged.
+
+**Why flat, and not a tree.** A nested group needs a UI that can show, build and
+unbuild a tree, and the filter popover is a bottom sheet on a phone. "Due this
+week AND not tagged draft" and "urgent OR overdue" are the shapes people
+actually ask for and both are flat. Nesting stays available later as another
+additive key, where widening a flat list into a tree afterwards would not be.
+
+**Why `any` reaches only `where`.** The result is `open AND is AND (where,
+combined by all-or-any)`. Letting `any` reach `is` or `open` would change what a
+file already on somebody's disk means, which no key may ever do.
+
+**Unknown operators show MORE rows, never fewer, and say so.** An operator this
+build cannot evaluate is reported by `unknownFilterOps` (the sibling of
+`unknownFilterKeys`) and treated as no constraint under AND — and as PASSING
+under `any`, because skipping a clause in an OR leaves fewer ways through and
+would hide rows for a rule nobody can read. Both directions are the same rule:
+a superset with a banner over it, never a silently wrong set. This follows the
+precedents already in `fields.ts` — `isOpenPhase` counts an unknown status as
+open, an empty `is` list is no constraint. An OLDER build meeting `where` does
+the same one level up: unknown key, superset, existing banner.
+
+**Dates never construct a Date from a string.** A `date` field holds
+`YYYY-MM-DD`, whose string order is its chronological order in every timezone,
+so comparison is string comparison. Windows are built from journal.ts's
+`todayISO`/`stepDay` — calendar arithmetic in the reader's own zone.
+`new Date('2026-01-01')` is UTC midnight by spec and therefore the previous day
+for half the world; it appears nowhere in query.ts. The week START is read from
+`Intl.Locale.weekInfo` (Monday fallback) and is VIEWER-scoped, never stored:
+the same file answers "this week" as Mon–Sun in Berlin and Sun–Sat in Chicago,
+the same rule the app already follows for language and date formatting.
+
+**No `eval`, no `new Function`** — a filter comes out of a mailed file exactly
+like block html, and calc.ts's argument carries over unchanged. Fixed operator
+table, typed values, returns a boolean.
+
+Coverage: 69 behavioural assertions in `scripts/test-spaces-model.ts` asserting
+on ROWS, including a compatibility block proving every pre-`where` filter shape
+still selects exactly its old rows; 13 sabotages, all caught.
+## 2026-09-11 — spaces: Tab REFUSES on a block with nothing above it, visibly
+
+bento/spaces expresses nesting with one field: `Block.parent`, pointing at a
+preceding sibling. Every reader downstream treats that as structural — the
+renderer's indent, the markdown export's list levels, the outline, the graph,
+`mergeBack` re-homing orphans, the CRDT's per-node diff. There is no second
+representation and there never has been.
+
+So "indent the first item" is not a hard case, it is a case with no answer, and
+`editor.ts indent()` fell off the end of its backwards walk and returned. That
+was correct and completely silent: no indent, no feedback, no explanation. A
+control that does nothing and says nothing is worse than a missing one, because
+the reader concludes the app is broken rather than that the gesture does not
+apply. That silence was the bug, and it is what this fixes.
+
+**The considered alternative was an indent LEVEL**, which is what Google Docs
+stores and what would make Tab always "work". Rejected, and the deciding
+argument is permanence rather than taste: the format is additive and forever, so
+a level field would be a SECOND way to express nesting that every future reader
+must reconcile — what a `level: 2` block with a `parent` means, which wins, what
+the markdown export emits for an orphan at level 2, what two replicas do when
+one sets `parent` and the other sets `level`. A silent Tab costs an afternoon;
+a duplicate nesting model costs every version of the reader from here on.
+Notion, Workflowy, Bear and Logseq all refuse the same case, because they all
+nest by parenthood too.
+
+The refusal is now spoken: the status line says the rule, the block nudges, and
+the indent control in the block menu carries the reason as its label before the
+key is pressed. `spaces/src/nesting.ts` holds the argument and the pure
+resolution; `scripts/test-spaces-caret.ts` asserts the first item, the only
+block, the first child of a container and a block absent from the page —
+deliberately, because a Tab test written against the SECOND list item passes
+against the broken code exactly as happily as against the fixed code, which is
+how this shipped in the first place. NO FORMAT CHANGE.
+
+**Also settled here: where block controls live.** Not in the formatting bar —
+that appears on a SELECTION and is inline-only, and "make this a bullet" is
+something you do with a caret and nothing selected. They are a row at the top of
+the block menu (gutter grip, and a bottom sheet on a phone), which is per-block
+by construction and already the home of every other whole-block action. ⌘/ is
+its keyboard route, because the gutter is hover-revealed and ⇥ inside a block is
+indent.
+## 2026-09-12 — bento/spaces: procedural covers are a render-time default on two surfaces, and a document theme preset is not a thing this app can honestly offer
+
+**A page with no `cover` draws a generated one — never stored, never on paper,
+never in the thumbnail.** `spaces/src/procedural.ts` builds an SVG (gradient +
+one of six geometric figures) seeded by FNV-1a over the page id, so every reader
+of one file sees the same cover on the same page and a page keeps it across
+renames. Nothing is written: `cover` absent stays absent, an older build sees no
+cover, and a saved file does not change. A page with a usable cover of its own
+draws only that; a remote cover, which `coverSrc` already refuses, counts as
+none. The decision is one pure function (`proceduralCoverFor`) so the model
+rig pins every branch without a DOM; the browser pass is what proves the
+render.
+
+**Two surfaces, chosen structurally rather than by a field: the HOME page, and
+every coverless GALLERY card.** Not every page. A cover is a 150–320px
+full-bleed band that pushes the title down and lifts the icon into a disc; on a
+space of two hundred plain notes that is two hundred posters, and a journal
+entry under a banner is wrong however quiet the figure. The gallery already
+drew a procedural tint on its bare cards (the id-derived hue), so the card is a
+refinement of an accepted default; the home page is the one page the format
+itself names. A per-page opt-in would be a format field for a thing that is
+not document data — the reason the surfaces are structural.
+
+**Print and the preview draw nothing procedural.** Both pass `printing: true`
+and the decision returns '' under it: five centimetres of toner for artwork
+nobody chose, and the file-manager still is a render of the AUTHOR's document,
+which this is not in — and every saved file would otherwise grow by the SVG.
+
+**Restraint is by construction, and measured.** The gradient is the gallery's
+former CSS tint exactly (hue → hue+40°, 0.30/0.16 on a card; 0.44/0.26 on the
+page, where a white disc has to read against it); the figure sits on it at
+6–14% alpha at lightness 44. Everything is alpha over the surface's own ground
+(`--chrome-2`), which is how one SVG serves both themes. Rasterised over each
+ground across 400 ids: the card mark's worst case is 4.29:1 light / 3.28:1
+dark (from 6.55 / 4.13 with the tint alone — the figure costs about a point
+and stays above the 3:1 large-text line); the disc glyph is 9.94 / 9.30. The
+disc EDGE against the cover is 1.33–2.31 light and 1.91–3.53 dark; it was not
+chased to 3:1 because the only way there is a wash loud enough to be the thing
+this rule exists to refuse, and the glyph, not the boundary, is what identifies
+the control — the same bargain a real cover already makes over a pale photo.
+
+**Theme presets were asked for and NOT built, and the reason is the
+2026-08-22 entry above.** A preset would be a bundle of `doc.theme` values,
+and in this app `doc.theme.background/color/accent/fontFamily` are painted by
+NOTHING in the live app — only `preview.ts` reads the colours, only `measure`
+and `dir` reach the reading column. That was ruled, not forgotten: the reading
+surface is chrome and follows the reader, and "if it ever changes it changes
+with the FORMAT". So a "Dark" or "High contrast" document preset would change
+the thumbnail and nothing a reader can see, and a rig asserting "the preset
+wrote the resolved keys" would be green over a control that does nothing —
+the source-grep-over-a-dead-renderer failure this zone has recorded twice.
+Painting `doc.theme` onto the column reverses that ruling and pre-empts the
+open cross-app dark-mode question, and is not a change one app zone makes on
+its own. What is honest without a ruling is smaller and differently shaped:
+typography presets (`fontFamily`/`headingFamily`/`measure`, which ARE document
+data), which would first need the column to paint the font fields at all. Left
+for the ruling rather than shipped under the wrong name.
 ## 2026-09-09 — a derived column is never an independent axis, and a view that ignores the filter is worse than no view
 
 **bento/dash keeps its 3D view.** The cut was proposed with numbers — 2,240
@@ -6703,6 +7008,71 @@ none. The builders zip x, y, z, colour and size by index; project one and not
 another and the plot pairs the wrong height with the wrong position, plausibly.
 
 
+## 2026-09-10 — aliases resolve at LINK time; a word-boundary rule built for English is not a degradation in Japanese, it is a zero
+
+bento/spaces gained page **aliases** and **unlinked mentions** (`spaces/src/mentions.ts`).
+Four things were settled that a later session could otherwise contradict.
+
+**An alias is resolved where a name becomes a page id, and nowhere else.**
+`Page.aliases` is read by exactly one function — `nameIndex` — which the
+`[[…]]` resolver, ⌘K and the `[[` page picker all call. What gets written into
+the file is an ordinary `#p/<id>` href, so `buildIndex`'s backlinks, the graph,
+export, print and the CRDT never learn that aliases exist. The alternative,
+resolving at render time, would give every one of those a second way to name a
+page, and they would drift. If a future feature wants alias-aware behaviour,
+the answer is to call `nameIndex`, not to teach another module about the field.
+
+**All three surfaces or none.** An alias that reaches the resolver but not
+search is worse than no alias: you file something under the name you use for
+it, and then cannot find it by that name — which reads as the search being
+broken. Half an alias was the shape this nearly shipped in.
+
+**Collisions are reported, never repaired.** Two pages can claim one name
+because a file arrives already written. `nameIndex` settles it identically in
+every replica — a TITLE always beats an alias, then document order — and
+`validate()` reports `alias-collision` naming the page a `[[link]]` will
+actually reach. Repairing it would rename something the author wrote; saying
+nothing would leave a link landing somewhere nobody chose. This is the one
+place the app tells you about a clash it resolved on your behalf.
+
+**The word-boundary rule is the CJK decision, and it is not a tuning
+parameter.** Unlinked mentions match a page's names against every other page's
+prose, so a boundary rule is what keeps "Roadmap" out of "Roadmaps". The
+obvious spelling is `\b`, or its Unicode equivalent `(?<![\p{L}\p{N}_])`.
+Applied to Japanese that does not find fewer mentions — it finds NONE, ever,
+because every kana beside a name is a letter and the assertion never opens.
+This app ships ja, zh-Hans and zh-Hant; a rule with that property is a silent
+total failure in three of its nine locales, and it passes every test written in
+English.
+
+So a boundary is required only where the NAME's own edge character is a word
+character in a script that separates words, and the minimum scannable length is
+three code points for such a name and two for one containing Han, kana or
+Hangul. The stated cost, because it is real and someone will find it: a Han
+name also matches inside a longer Han compound (京都 inside 東京都). That is
+what every CJK-aware substring search in the world does, it is visible, and it
+is bounded; the alternative is a feature that does not exist for a third of the
+supported languages. `scripts/test-spaces-mentions.ts` asserts both halves.
+
+Two mechanical notes worth not rediscovering. The `v` regex flag expresses this
+boundary as one set difference and is NOT used: `v` is Safari 17 while this
+app's floor is Safari 16.4 (`DecompressionStream`, which the shell's own loader
+needs), and a regex the engine cannot COMPILE throws at construction — the cost
+of being wrong is a panel that throws on every page open, not a missing match.
+Measured, all four spellings of the boundary run within noise of each other, so
+the choice is the floor and nothing else. And the run-splitting scanner
+separates skipped regions with U+0000 rather than a space: with a space,
+`New<a>x</a>York` collapses to `New York` and the scanner reports a mention
+nobody wrote.
+
+**It is not the quadratic thing it sounds like.** "Every page's title against
+every page's text" is N×M; the reader's panel never computes that. Opening a
+page scans the document once for THAT page's names, so the cost is the size of
+the space and not the number of pages in it. Measured on a synthetic 1000-page,
+2.5MB space: 6.5ms to open a page, against 1.9ms for the backlink index the app
+already builds on every commit. The all-pairs answer exists for the agent
+surface (`bento.mentions()`) at ~1s on the same space, and is not on any paint
+path.
 ## 2026-09-13 — Broadcast is a special case of collaboration: the relay half
 
 **Decision.** A live show is not a second transport. An audience member is a
@@ -8799,3 +9169,209 @@ buttons and menus to those values, and checks that every member lands after
 the caret's block and is undone in one step. It also checks that `/` agrees
 with the bar, that the tiers drop the words and fold the group, and that every
 command is still reachable from its new home.
+
+## 2026-09-09 — bento/spaces page templates live in `doc.templates`, not in flagged pages
+
+A page template is a saved page shape that new pages start from, and there were
+two honest places to put it. **A template could be a PAGE** carrying a flag and
+hidden from the sidebar — no new format shape, and it is editable with the page
+editor for free. **Or a SEPARATE COLLECTION**, `doc.templates`, which nothing
+that walks pages can see. The second was chosen, and the reason is a count.
+
+`doc.pages` is enumerated in roughly forty places in this app: search, the graph
+(`graph.ts`), backlinks and the tree (`buildIndex`), `issuesOf` and every board,
+table and gallery view in `fields.ts`, the Markdown export in `portable.ts`, the
+About counts, the agent API's `pages`/`stats`/`outline`/`validate`, the archive
+list, the print sheet, and the file-manager preview. A flagged page needs a gate
+at every one of them — and, the part that decides it, at every surface added
+AFTERWARDS by someone who has never heard of templates. This zone has already
+shipped that exact class twice: an allow-list applied BEFORE an indirection
+(`isRemote` on the string an author wrote rather than on the resolved asset,
+2026-08-28), and a source-grep assertion that passed straight through a live
+regression (#392). A separate collection cannot be forgotten by a surface that
+does not know it exists.
+
+**What the choice costs is real and is stated rather than hidden.** A template
+is not a page, so it is not searched, not in the graph, not back-linked, not
+printed, and not in the Markdown export — `extractSpace` walks pages. Grafting a
+subtree from another space brings that subtree's pages and brings NO templates.
+So `doc.templates` is document data that travels with the FILE and not with a
+subtree. A page-flag design would have grafted; it would also have leaked into
+all thirteen surfaces above, and one forgotten gate is a template appearing in a
+reader's search results or, worse, in an export they hand to somebody else.
+
+**Tokens expand ONCE, at instantiation, and the model stores the result.**
+bento/slides resolves `{{page}}`/`{{date}}` at RENDER time because a footer must
+re-number when slides move (`resolveFields`, v0.9.12). A template has no such
+need: the moment the page is made is the moment its date is decided, and a live
+field would mean a page whose text changed under its author overnight. So this
+is a string substitution at creation and the new page is an ORDINARY page — an
+older build reads it exactly as this one does, with no field system to
+understand. `{{date}}`, `{{date:iso}}`, `{{date:short}}`, `{{date+1:iso}}`,
+`{{time}}` and `{{title}}`; anything else stays literal, so a `{{mustache}}` in
+somebody's prose survives.
+
+**The date a journal template writes is the ENTRY'S date, never today's.**
+Backfilling Tuesday's note on Thursday must write Tuesday, or the feature lies
+on every entry except the one made on the day. `doc.journalTemplate` names the
+template new daily notes start from; absent means a blank entry, which is what
+every file written before this gets.
+
+Two prototype guards, both because the ids come out of a file somebody mailed
+you: `templateById` scans a list rather than indexing an object (so
+`journalTemplate:"constructor"` resolves to nothing), and the date-format lookup
+uses `Object.hasOwn` (so `{{date:constructor}}` is literal text rather than
+`Object`'s constructor stringified into the reader's page). Both are pinned by
+assertions in `scripts/test-spaces-model.ts` that were watched to fail under
+deliberate sabotage.
+## 2026-09-26 — Mermaid flowcharts: our own parser and layout, and labels are inert text
+
+A diagram can carry Mermaid source, so a page round-trips through Markdown
+(```` ```mermaid ```` renders on GitHub) and an agent can write one. The
+mermaid library is megabytes and nothing may be fetched at runtime (PLATFORM
+§1), so `spaces/src/diagram/` has its own reader: `mermaid.ts` (parser, element
+output, reverse) and `layout.ts` (a layered layout). Neither imports app code
+— the element types are structural copies of slides' — so either app can use
+them, and they are a candidate for the kernel beside the connector engine.
+Nothing calls them yet; the rig is `scripts/test-diagram-mermaid.ts`.
+
+**The target is slides' elements, not a picture.** Nodes are shape elements
+(rect, rounded and stadium by radius, ellipse, triangle, and fixed 100×100
+path templates for the rest), labels are text elements, and edges are
+line/path shapes with `from`/`to` ConnectorEnd refs (`side: 'auto'`). Each
+connector end is written exactly where slides' `syncConnectors` would put it,
+so an edited diagram does not jump on its first edit. Self-loops are the one
+exception: they pin sides, because with `auto` both ends would collapse to
+the node's centre. Slides has no edge labels, so an edge label is a text
+element beside the edge's middle. It does not follow the edge when a node
+moves.
+
+**It is lossy both ways, and says so.** Mermaid → elements invents positions.
+An optional `layout` sidecar (`{id: {x,y,w,h}}`, made by `diagramLayout`)
+makes hand-placed positions win, and new nodes are placed around them.
+Elements → mermaid drops positions, sizes and edge length (`--->`), and
+returns `lost: [{el, what}]` for everything else it cannot say: rotation,
+opacity, gradients, shadows, rich text, tips mermaid has no arrow for, edge
+colour, free text, unanchored lines, and element types. Node and subgraph
+colours survive as `style` statements.
+
+**Labels are text.** `<br>` is a line break and every other tag stays
+literal, escaped and inert. Mermaid would render `<b>`; we show it. The
+emitted source writes `<` and `>` as `#lt;`/`#gt;` so GitHub shows what we
+show. Style is limited to fill/stroke/color. Colours are validated (hex,
+rgb/hsl functions, and named colours by shape — letters only), so a style
+can never carry `url(…)` or a `;` into an element.
+
+**Subgraphs follow mermaid's two rules.**
+
+- **A subgraph none of whose members links outside it is laid out on its
+  own** and then takes part in its parent as a single node. It uses its own
+  `direction`, or the parent's turned (TB becomes LR, anything else becomes
+  TB); the turn is mermaid's, and it is why the docs' "two" draws sideways.
+- **A subgraph whose members DO link outside is a compound.** Its members
+  take part in the parent's layering and ordering, kept contiguous in every
+  layer. Sibling subgraphs keep one order in every layer, so each box is a
+  rectangle. Each box's left and right borders are single variables, solved
+  together with everything around them, so no node that is not a member
+  lands inside a box.
+  - A bend point belongs to the innermost subgraph holding both ends of its
+    edge, so edges between subgraphs bend in the space between the boxes.
+  - Mermaid ignores `direction` on such a subgraph. So do we, and we warn.
+  - An edge drawn to a compound box is laid out against one of its members,
+    so it is drawn straight.
+
+This replaced a first version that laid every subgraph out alone. That
+version could never let one subgraph stand beside another spanning
+subgraph, and it drew edges through other subgraphs: on the corpus, 14 edges
+ran through nodes and 5 through boxes, against 2 and 2 now. The rig ratchets
+both counts, labels sitting on other edges, and total connector length and
+area; they may only go down.
+
+**Edge labels step off other edges.** A label tries the layout's spot, then
+the other side of its edge, then positions further along it. The first spot
+that crosses no other edge and covers no node or label wins. In a crowded
+fan with nothing clear, the layout's spot stands.
+
+**Caps, not hangs.** 500 nodes, 2,000 edges, subgraphs 24 deep, and a budget
+for long-edge bends. Past a cap the rest is dropped with a warning. A
+statement that cannot be read is dropped whole, with a warning. Unsupported
+syntax (`click`, `linkStyle`, directives, other diagram types) produces a
+warning and never throws.
+
+## 2026-10-09 — Mermaid diagrams take the kernel diagram engine's types and geometry
+
+Supersedes one sentence of the 2026-09-26 Mermaid entry: the element types are
+no longer structural copies of slides'. Since the diagram-engine lift (#592,
+#616, #619), `spaces/src/diagram/` imports them from the kernel — `ShapeSpec`
+(shape.ts), `TipKind` (tips.ts), `Box`/`Pt`/`ConnectorSide` (geom.ts), all
+type-only — and computes with the kernel's own pure geometry:
+`connectorEndpoint` places every connector end (the exact call slides'
+`syncConnectors` makes) and `anchorsToPath` writes every curve. The module is
+still DOM-free and imports no app code. `ConnectorEnd` stays declared locally
+over `ConnectorSide`, because the kernel deliberately keeps that format type in
+slides; text elements are not in the kernel yet, so `DText` is still a copy.
+
+**Curves are written the way the curve editor writes them.** A bent connector's
+anchors are rounded to 0.01 BEFORE the Catmull-Rom handles are computed, as
+slides' `setPathAnchors` does, so its `d` is byte-for-byte what slides would
+write for the same anchors. Before, the handles were computed from unrounded
+anchors and could differ by 0.01; 13 corpus snapshots moved for that reason
+alone (no node, end or label moved). The rig now asserts
+`anchorsToPath(parseAnchors(d)) === d` for every bent connector, with a
+negative control, and checks connector ends against the kernel helper itself
+rather than a copy of its formula.
+
+**Still missing in the kernel, and not built here** (the kernel zone's):
+connector ends land on the BOUNDING BOX of every node, so an edge into a
+diamond, circle or hexagon stops short of the outline (`borderPoint` is not
+shape-aware); diamond, hexagon, cylinder and the other closed outlines are
+`path` shapes, which `isLineLike` hands to the line/curve editor; and an edge
+or node label is a free text element, because nothing binds a label to its
+element.
+## 2026-09-26 — bento/spaces: the Markdown form of every block, and the syntax reserved for the rest
+
+**Decision.** Every spaces block type except `prop` now survives Markdown byte
+for byte: the JSON comes back with only its ids changed, and the next export is
+the same text. `scripts/test-spaces-md-strict.ts` holds that bar type by type,
+with 19 of 20 types passing. The forms, with the full table in
+`docs/spaces-agents.md` under "Markdown in and out":
+
+- toggle `<details>`/`<summary>`; image size `{width=60% w=640 h=300}`
+  (Pandoc attributes); media `<video>`/`<audio>` holding a link to the clip;
+  page link `[[Title]]` alone on a line; view and canvas as `bento-view` and
+  `bento-canvas` fences holding one JSON line; block ids as a trailing `{#id}`.
+- **A link card is a link plus a hidden marker**,
+  `[title](url) — desc <!-- bento:card site="…" image="…" -->`. This
+  EXTENDS 2026-08-22 ("in Markdown a link card is a link") without reversing
+  it. An unmarked lone link would turn every README line that is just a link
+  into a card. A fence would stop it being a link. A Pandoc `{.card …}`
+  would print on GitHub, and a `data:` thumbnail in it would be kilobytes of
+  visible text. A `data:` thumbnail over 512 bytes is left out, as a pinned
+  loss.
+- **A clip leaves as html, superseding 2026-08-22's "a clip exports as a
+  markdown LINK".** The link survives as the element's fallback content, so a
+  renderer that strips `<video>` shows exactly the old export, and one that
+  keeps it plays the clip. `autoplay` is written as `data-autoplay`, so an
+  exported file never makes another renderer obey what this app records and
+  refuses.
+- **Colour keeps its raw-html export.** `<span class="sp-fg-red">` renders as
+  clean text on GitHub and in Obsidian. Pandoc's `[x]{color=red}` would print
+  its brackets there. The importer also accepts `[x]{color=…}` and `{bg=…}`,
+  palette names only.
+- **Ids are written only where something points**, at a comment anchor or a
+  `#p/<page>/<block>` target, so a space with neither exports exactly as it
+  did before. That is asserted against a pinned pre-change export. On import
+  an id already used in the note, in the import or in the target space is
+  replaced, and ids matching an `Object.prototype` name are refused.
+
+**Import is an untrusted path, and none of this widened it.** No html
+attribute is copied by name. Urls pass the same allowlists as the editor, and
+fences go through `JSON.parse` and never `eval`. A fence cannot set `id`,
+`type`, `parent`, `html` or `comments`, and a malformed fence stays a code
+block. Block `html` still goes through `sanitizeInline` in the importer.
+
+**Reserved for features not yet on main** (math `$…$`/`$$…$$`, a
+`` ```mermaid `` fence, `` ```chart bar `` over a table or CSV,
+`![[Page]]`/`![[Page#Section]]`, GFM footnotes, `:::columns`/`:::hero`/`:::card`):
+the syntax is fixed in `docs/spaces-agents.md` so the branches that ship them
+agree with each other and with this importer.

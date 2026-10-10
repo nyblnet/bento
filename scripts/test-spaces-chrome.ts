@@ -190,10 +190,13 @@ const blocksSrc = read('blocks.ts')
 const specAt = [...blocksSrc.matchAll(/\btype: '(\w+)', label: '/g)]
 const LISTED = specAt.filter((m, i) => !/unlisted: true/.test(blocksSrc.slice(m.index, specAt[i + 1]?.index ?? blocksSrc.length))).map((m) => m[1])
 ok(LISTED.length >= 15 && LISTED.includes('p') && !LISTED.includes('prop'), `the registry's listed block types can be read from blocks.ts (${LISTED.join(', ')})`)
-// what the group should show on THIS build: Chart and Embed where those
-// blocks exist, and a Code menu once maths joins it
+// Embed sits in Image ▾ beside Link to page (interim, 2026-10-09: a bar
+// button of its own tipped the bar out of slides' width at 1440), so it is in
+// the Image family's members below, not here.
+// what the group should show on THIS build: Chart where that
+// block exists, and a Code menu once maths joins it
 const has = (t: string) => LISTED.includes(t)
-const WANT_GROUP = ['Text ▾', 'Image ▾', 'Table', ...(has('chart') ? ['Chart'] : []), 'View ▾', has('math') ? 'Code ▾' : 'Code', ...(has('embed') ? ['Embed'] : []), 'Comment']
+const WANT_GROUP = ['Text ▾', 'Image ▾', 'Table', ...(has('chart') ? ['Chart'] : []), 'View ▾', has('math') ? 'Code ▾' : 'Code', 'Comment']
 // slides' numbers for its insert buttons and their group, read from its stylesheet
 const SLIDES_INS = {
   groupGap: decl(block('.ed-group'), 'gap'),
@@ -480,7 +483,7 @@ async function browser(chrome: string, html: string): Promise<void> {
     }
     ok(menuOff.length === 0 && barCaps.length === WANT_GROUP.filter((g) => g.endsWith('▾')).length, `Text ▾, Image ▾ and View ▾ are slides' Shape menu: ${SLIDES_MENU.pad} inside, ≥ ${SLIDES_INS.menuMin} wide, 30px rows at ${SLIDES_INS.font}, inside the window (${menuOff.join('; ') || barCaps.join(', ')})`)
     ok(JSON.stringify(famRows.Text) === JSON.stringify(['Text', 'Heading 1', 'Heading 2', 'Heading 3', 'Quote', 'Callout', 'Toggle', 'Bulleted list', 'Numbered list', 'To-do', 'Divider']) &&
-      JSON.stringify(famRows.Image) === JSON.stringify(['Image', 'Video', 'Audio', 'Link card', 'Link to page']) &&
+      JSON.stringify(famRows.Image) === JSON.stringify(['Image', 'Video', 'Audio', 'Link card', 'Link to page', ...(has('embed') ? ['Embed a page'] : [])]) &&
       JSON.stringify(famRows.View?.slice(0, 4)) === JSON.stringify(['Board', 'List', 'Table view', 'Gallery']) && famRows.View?.at(-1) === 'Canvas',
       `the families hold the approved members, in order (Text: ${famRows.Text?.join(', ')} | Image: ${famRows.Image?.join(', ')} | View: ${famRows.View?.join(', ')})`)
 

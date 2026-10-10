@@ -1,0 +1,58 @@
+%% source: https://github.com/finos/architecture-as-code/blob/HEAD/calm-widgets/README.md (Apache-2.0)
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
+flowchart TB
+classDef boundary fill:#f8fafc,stroke:#64748b,stroke-dasharray: 5 4,stroke-width:2px,color:#000;
+classDef node fill:#ffffff,stroke:#1f2937,stroke-width:1px,color:#000;
+classDef iface fill:#f1f5f9,stroke:#64748b,stroke-width:1px,font-size:10px,color:#000;
+classDef highlight fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,color:#000;
+
+        subgraph enterprise-bank["Enterprise Bank"]
+        direction TB
+                subgraph messaging-system["Messaging System"]
+                direction TB
+                    message-bus["Message Bus"]:::node
+                        message-bus__iface__trade-events-topic["◻ Trade Events Topic"]:::iface
+                end
+                class messaging-system boundary
+                subgraph trading-system["Trading System"]
+                direction TB
+                    trade-svc["Trade Service"]:::node
+                        trade-svc__iface__api["◻ API: /trades"]:::iface
+                        trade-svc__iface__jdbc["◻ JDBC: trading-db"]:::iface
+                        trade-svc__iface__events["◻ Topic: trade.events"]:::iface
+                    trading-db["Trading DB"]:::node
+                        trading-db__iface__sql["◻ SQL Interface"]:::iface
+                    trading-ui["Trading UI"]:::node
+                        trading-ui__iface__web-ui["◻ Web Interface"]:::iface
+                end
+                class trading-system boundary
+        end
+        class enterprise-bank boundary
+
+
+    trading-ui__iface__web-ui -->|Place Trade| trade-svc__iface__api
+    trade-svc__iface__jdbc -->|Persist| trading-db__iface__sql
+    trade-svc__iface__events -->|Publish Events| message-bus__iface__trade-events-topic
+
+    trading-ui -.- trading-ui__iface__web-ui
+    trade-svc -.- trade-svc__iface__api
+    trade-svc -.- trade-svc__iface__jdbc
+    trade-svc -.- trade-svc__iface__events
+    trading-db -.- trading-db__iface__sql
+    message-bus -.- message-bus__iface__trade-events-topic
+
+    class trade-svc highlight
+    class trading-ui highlight
+    class trading-db highlight
+    class message-bus highlight
+                        click message-bus "#message-bus" "Jump to Message Bus"
+                            click message-bus__iface__trade-events-topic "#message-bus__iface__trade-events-topic" "Jump to ◻ Trade Events Topic"
+                                        click trade-svc "#trade-service" "Jump to Trade Service"
+                            click trade-svc__iface__api "#trade-service-api" "Jump to ◻ API: /trades"
+                            click trade-svc__iface__jdbc "#trade-service-storage" "Jump to ◻ JDBC: trading-db"
+                            click trade-svc__iface__events "#trade-service-events" "Jump to ◻ Topic: trade.events"
+                        click trading-db "#trading-db" "Jump to Trading DB"
+                            click trading-db__iface__sql "#trading-db__iface__sql" "Jump to ◻ SQL Interface"
+                                click trading-ui "#trading-ui" "Jump to Trading UI"
+                            click trading-ui__iface__web-ui "#trading-ui__iface__web-ui" "Jump to ◻ Web Interface"
+

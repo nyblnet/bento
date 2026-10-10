@@ -1,0 +1,17 @@
+%% source: https://github.com/chevere/workflow/blob/HEAD/README.md (Apache-2.0)
+graph TB;
+    ja("`ja`");
+    j1("`j1`");
+    j2("`j2`");
+    jb("`jb
+*if* res(ja)
+*ifNot* var(var)`");
+    j3("`j3`");
+    j4("`j4`");
+
+    j1-->|"j1->id @ j2(n:)
+j1->name @ j2(m:)"|j2;
+    ja-->jb;
+    jb-->|"jb @ j3(a:)"|j3;
+    j2-->|"j2 @ j4(i:)"|j4;
+    j3-->|"j3 @ j4(j:)"|j4;

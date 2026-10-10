@@ -811,5 +811,41 @@
   },
   "tdGrantFolder": {
     "message": "Lưu mọi thứ trong “$1” mà không hỏi…"
+  },
+  "saTitleCopy": {
+    "message": "Lưu một bản sao"
+  },
+  "saTitleShare": {
+    "message": "Lưu tệp đã xuất"
+  },
+  "saName": {
+    "message": "Tên tệp"
+  },
+  "saBeside": {
+    "message": "Lưu cạnh “$1”"
+  },
+  "saChoose": {
+    "message": "Chọn thư mục…"
+  },
+  "saCancel": {
+    "message": "Hủy"
+  },
+  "saExists": {
+    "message": "“$1” đã có. Lưu lần nữa để thay thế."
+  },
+  "saIsOriginal": {
+    "message": "Đó là tên của chính tài liệu đang mở — hãy chọn tên khác."
+  },
+  "saBadName": {
+    "message": "Dùng tên tệp không có dấu gạch chéo."
+  },
+  "saLapsed": {
+    "message": "Quyền truy cập thư mục này đã hết hạn. Hãy chọn thư mục khác, hoặc gia hạn trong thư viện."
+  },
+  "saGone": {
+    "message": "Lần lưu này không còn chờ nữa. Đóng cửa sổ này và lưu lại."
+  },
+  "saTaken": {
+    "message": "“$1” đã có. Hãy chọn tên khác."
   }
 }

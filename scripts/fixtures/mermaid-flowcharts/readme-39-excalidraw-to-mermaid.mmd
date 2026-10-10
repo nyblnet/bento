@@ -1,0 +1,15 @@
+%% source: https://github.com/moona3k/excalidraw-to-mermaid/blob/HEAD/README.md (MIT)
+graph LR
+    A(CloudFront)
+    B(React SPA)
+    C(REST API)
+    D(Redis)
+    E(Stripe API)
+    F(PostgreSQL)
+    G(S3)
+    A --> B
+    B -->|REST calls| C
+    C -.->|cache| D
+    C -->|payments| E
+    C -->|queries| F
+    F -.->|uploads| G
