@@ -966,4 +966,8 @@ export const fr: Catalog = {
   "Clear history…": "Effacer l’historique…",
   "First version kept in this file": "Première version conservée dans ce fichier",
   "Changes outside the pages — title, design, footnotes or templates": "Modifications hors des pages — titre, design, notes de bas de page ou modèles",
+  "This copy includes the space’s version history.": "Cette copie inclut l’historique des versions de l’espace.",
+  "Leave version history out": "Ne pas inclure l’historique des versions",
+  "Versions include text that was deleted. This file keeps them either way.": "Les versions contiennent du texte supprimé. Ce fichier les conserve dans tous les cas.",
+  "Save invite…": "Enregistrer l’invitation…",
 }

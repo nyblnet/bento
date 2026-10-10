@@ -966,4 +966,8 @@ export const zh_Hans: Catalog = {
   "Clear history…": "清除历史…",
   "First version kept in this file": "此文件中保存的第一个版本",
   "Changes outside the pages — title, design, footnotes or templates": "页面之外的改动——标题、设计、脚注或模板",
+  "This copy includes the space’s version history.": "此副本包含空间的版本历史。",
+  "Leave version history out": "不包含版本历史",
+  "Versions include text that was deleted. This file keeps them either way.": "版本中包含已删除的文字。无论如何，此文件都会保留它们。",
+  "Save invite…": "保存邀请…",
 }
