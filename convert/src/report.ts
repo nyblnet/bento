@@ -70,3 +70,55 @@ export class Report {
     return { entries, counts, provenance: Object.fromEntries(this.prov) }
   }
 }
+
+/** One line for a person: a (verdict, code) with every place it happened. */
+export interface FoldedEntry {
+  verdict: Verdict
+  code: string
+  detail: string
+  count: number
+  /** "slides 3, 5–7", "the whole deck", or both joined; '' when unknown */
+  where: string
+}
+
+/**
+ * The report as a person reads it. The writers record each loss per slide, so
+ * one kind of loss can appear on a dozen slides; this folds it to one line
+ * per (verdict, code), dropped first, and keeps WHERE: "slides 3, 5–7".
+ * Carried entries are left out (they are not losses). Shared by the CLI and
+ * every page, so they cannot word it differently.
+ */
+export function foldReport(report: FidelityReport): FoldedEntry[] {
+  const groups = new Map<string, { e: FidelityEntry; count: number; slides: Set<number>; other: Set<string> }>()
+  for (const e of report.entries) {
+    if (e.verdict === 'carried') continue
+    const key = `${e.verdict}\u0000${e.code}`
+    const g = groups.get(key) ?? { e, count: 0, slides: new Set<number>(), other: new Set<string>() }
+    g.count += e.count
+    const m = /^slide (\d+)\b/.exec(e.where)
+    if (m) g.slides.add(Number(m[1]))
+    else if (e.where) g.other.add(e.where === 'document' ? 'the whole deck' : e.where)
+    groups.set(key, g)
+  }
+  const rank: Record<string, number> = { dropped: 0, approximated: 1 }
+  return [...groups.values()]
+    .map(({ e, count, slides, other }) => ({
+      verdict: e.verdict, code: e.code, detail: e.detail, count,
+      where: [slideRange([...slides]), ...other].filter(Boolean).join('; '),
+    }))
+    .sort((a, b) => (rank[a.verdict] ?? 2) - (rank[b.verdict] ?? 2))
+}
+
+/** [3, 5, 6, 7] → "slides 3, 5–7"; [4] → "slide 4"; [] → "". */
+export function slideRange(nums: number[]): string {
+  const s = [...new Set(nums)].sort((a, b) => a - b)
+  if (!s.length) return ''
+  const runs: string[] = []
+  for (let i = 0; i < s.length; i++) {
+    let j = i
+    while (j + 1 < s.length && s[j + 1] === s[j] + 1) j++
+    runs.push(j > i + 1 ? `${s[i]}–${s[j]}` : j === i + 1 ? `${s[i]}, ${s[j]}` : `${s[i]}`)
+    i = j
+  }
+  return `${s.length === 1 ? 'slide' : 'slides'} ${runs.join(', ')}`
+}
