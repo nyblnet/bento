@@ -39,6 +39,8 @@ import { createDialog, type Dialog } from '../../kernel/src/ui/dialog.ts'
 import '../../kernel/src/ui/dialog.css'
 import { t, localeChoices, locale, setLocale } from './i18n'
 import { appearanceSection } from './appearance'
+import { designSection } from './designpanel'
+import { designFrontMatter, type Resolved } from './designs.ts'
 import { esc, textOf } from './sanitize'
 import { htmlToMd } from './marks.ts'
 import { definitionLines } from './footnotes.ts'
@@ -73,6 +75,10 @@ export interface AboutHooks {
    * one does. "Update this file" is stamped inside the save queue instead.
    */
   onBeforeWrite?: () => void
+  /** paint a design on the page without writing it (the picker's hover) */
+  previewDesign?: (r: Resolved | null | undefined) => void
+  /** the non-modal customise panel, opened over the page */
+  openDesignPanel?: () => void
 }
 
 /**
@@ -98,7 +104,7 @@ export async function launchUpdateCheck(): Promise<UpdateCheck | null> {
 }
 
 export function openAbout(hooks: AboutHooks): void {
-  const { store, onRepaint, onUpdateInPlace, onBeforeWrite } = hooks
+  const { store, onRepaint, onUpdateInPlace, onBeforeWrite, previewDesign, openDesignPanel } = hooks
   const doc = store.doc
 
   // THE KERNEL'S DIALOG (kernel/src/ui/dialog.ts) is the shell; `card` is its
@@ -280,6 +286,18 @@ export function openAbout(hooks: AboutHooks): void {
   props.append(titleRow)
   props.append(row(t('Document id'), mono(doc.docId)))
   if (doc.modified) props.append(row(t('Last saved'), mono(shortStamp(doc.modified))))
+
+  // ---- design ------------------------------------------------------------
+  // The AUTHOR's choice, so it sits with the document's own properties and
+  // not with the reader's theme and language further down (DECISIONS,
+  // 2026-09-26). Built in designpanel.ts; this costs one import and one call.
+  if (previewDesign && openDesignPanel) {
+    section(t('Design'), ...designSection({
+      store,
+      preview: previewDesign,
+      openPanel: () => { close(); openDesignPanel() },
+    }))
+  }
 
   // ---- updates -----------------------------------------------------------
   const upSec = section(t('Updates'))
@@ -477,7 +495,12 @@ export function openAbout(hooks: AboutHooks): void {
   foot.append(button(t('Close'), close, true))
   card.append(foot)
 
-  dlg = createDialog({ label: t('About this space'), content: card })
+  // The picker's hover paints a design without writing it; however the dialog
+  // closes (Escape, the scrim, Close, Customise…), that preview is cleared.
+  dlg = createDialog({
+    label: t('About this space'), content: card,
+    onClose: () => previewDesign?.(undefined),
+  })
   dlg.card.classList.add('sp-dlg', 'sp-dlg-about')
   dlg.open()
   // the one control the dialog opens FOR, not the logo link the trap would pick
@@ -666,7 +689,9 @@ export function toMarkdown(store: Store): string {
     }
   }
   walk()
-  return out.join('\n').replace(/\n{3,}/g, '\n\n')
+  // The design leads, as front matter, so the Markdown carries the look with
+  // it (designs.ts designFrontMatter). Nothing is written when there is none.
+  return [...designFrontMatter(store.doc), ...out].join('\n').replace(/\n{3,}/g, '\n\n')
 }
 
 /**

@@ -52,6 +52,42 @@ document into the empty block.
 }
 ```
 
+### Designs
+
+`"design": "almanac"` sets how the pages look. Leave it **out** for the default
+look — never write `""` or `null`. Built-ins: `ledger`, `almanac`, `studio`,
+`broadsheet`, `typescript`, `riso`. The author picks the design; each reader's
+light/dark setting picks between the design's two palettes. An unknown name
+renders the default look, is kept, and `validate()` reports `unknown-design`.
+
+A space can carry its own design in `"designs"`, as overrides on a built-in:
+
+```jsonc
+"design": "harbour",
+"designs": { "harbour": {
+  "label": "Harbour", "base": "almanac",
+  "light": { "accent": "#0f6e63", "paper": "#f3f1ea" },   // #rgb or #rrggbb only
+  "dark":  { "accent": "#4fc2b1" },
+  "fonts": { "body": "news", "display": "asset:<key>" },   // a name, or an embedded font
+  "props": { "callout": "fill", "quote": "bar", "radius": 4 }
+} }
+```
+
+**Every value is validated, never interpreted.** Colours must be hex; `fonts`
+take a name (`system grotesk humanist condensed transitional oldstyle news mono
+typewriter rounded`) or `asset:<key>` naming a `data:font/…` asset; `props`
+take the words and ranges listed in `spaces/src/designs.ts` `PROPS`. Palette
+roles: `paper ink muted rule soft accent accentInk onAccent tile tileInk cell1
+cell2 cell3 toneNote toneTip toneImportant toneWarning toneCaution` (the five
+callout tones must stay distinct — `design-contrast` if they collapse). A value that fails is dropped to the base design's and reported as
+`bad-design-value`; a colour that would put text under 4.5:1 is dropped as
+`design-contrast`. There is no free CSS anywhere in a design. A name that is
+also a built-in's is never used (`design-shadows-builtin`).
+
+The Markdown export opens with the design as front matter —
+`design: harbour` plus a one-line `designs: {…}` JSON for a carried design —
+and importing that file into a space with no design adopts it.
+
 **Both arrays are flat and in pre-order; nesting is a `parent` field.** A child
 always follows its parent, which is what lets one forward pass rebuild the
 tree. Do not nest arrays inside arrays.
@@ -80,6 +116,7 @@ unique ids the first time.
 | `embed` | `page`, `anchor`, `html` | a live view of another page, or one section of it — see **Embeds** |
 | `link` | `url`, `title`, `desc`, `site`, `icon`, `image`, `html` | a card linking OUT of the space — see **Link cards** |
 | `prop` | `key`, `value`, `html` | one field value — see **The issue tracker** |
+| `view` | `layout`, `span`, `groupBy`, `html` | a board, list, table, gallery or calendar of this space's pages |
 | `view` | `layout`, `groupBy`, `sort`, `source`, `filter`, `html` | a board or list of this space's issues |
 
 `type` is a **string**, not a closed set: an unknown type survives a round trip
@@ -398,6 +435,50 @@ list**: `{ "type": "view", "layout": "board", "groupBy": "status",
 "html": "Issues by status" }`. Put it on a page of its own — a page carrying a
 view is laid out wide.
 
+`layout` is one of `list`, `table`, `gallery`, `calendar` — **or absent, which
+means a board.** Never write `"layout": "board"`: absence is what every view
+written before layouts existed carries, and a stored `"board"` is a byte
+difference that says nothing.
+
+A **calendar** lays the view's pages out by date, and has two shapes: a month
+grid (`span` absent) and a chronological timeline (`span: "timeline"`, newest
+first). Which date a page sits on is a **fixed rule, not a setting** — its
+`journal` date if it has one, otherwise the first `date`-typed field in the
+schema it carries a real `YYYY-MM-DD` value for. A page the rule finds no date
+for is listed under "No date" rather than dropped, and a value that is
+digit-shaped but not a real day (`2026-13-99`) counts as no date rather than
+being rolled into some other day. Month names, weekday names and the first day
+of the week come from the reader's locale at display time; nothing formatted is
+ever stored.
+A view's `source` says which pages it holds: `{ "has": "<fieldKey>" }`,
+`{ "under": "<pageId>" }`, or `{ "tag": "<tagKey>" }`. Absent means the
+backlog. The tag key is **lower-case** and reaches nested tags, so
+`{"tag":"project"}` also holds the pages carrying `#project/bento`.
+
+### Tags
+
+Write `#tag` in a block's `html` — that is the whole storage. **There is no
+`tags` field on a page and you must not invent one**: the index is derived from
+the prose every time it is asked for, exactly as backlinks are, so a stored
+list would be a second copy that goes wrong the first time anything edits
+`html` without knowing tags exist. Nothing to maintain, nothing to keep in
+step.
+
+What is and is not a tag, since a `#` means several things:
+
+| written | read as |
+|---|---|
+| `#recipe`, `#work-in-progress`, `#レシピ` | a tag |
+| `#project/bento` | ONE nested tag, also counted under `project` |
+| `# Title` | a Markdown heading — a tag never has a space after the hash |
+| `#42`, `#404` | an issue number, not a tag |
+| `#fff`, `#f7a600` | a CSS colour, not a tag |
+| `C#`, `a#b` | a `#` inside a word |
+| `<code>#include</code>` | code |
+| `https://x.example/p#top` | a URL fragment |
+| `<a href="#p/abc">…</a>` | a page link — the href is an attribute, never text |
+
+Tags are case-folded for matching and keep the casing you typed for display.
 ### Narrowing a view
 
 `filter` is optional and every key inside it is too. **Absent means everything**,
@@ -457,6 +538,8 @@ notifications, automation. The file is the team boundary and the capability.
 | an aside, or detail most readers skip | `toggle` with its body as `parent` children | folds away, and always PRINTS expanded |
 | a warning the reader must not miss | `callout` with the `tone` that fits | it is boxed, named and legible in print and without colour vision — but three per page and none of them registers |
 | anything you would print | remember toggles print open and archived pages are excluded | |
+
+| a topic that recurs across pages | an inline `#tag` in the sentence | the index, ⌘K's `#` mode, a view sourced on it and the graph all derive from it |
 
 **The most-missed feature is backlinks.** They are derived — link to a page and
 it lists the linker, with no maintenance. A space where pages only link *down*

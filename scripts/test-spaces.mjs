@@ -39,11 +39,21 @@ const esbuild = join(root, 'slides/node_modules/.bin/esbuild')
 // The timezone lists are not decoration. A date test that only runs in one
 // timezone has not been run: Kiritimati is UTC+14 and Lord Howe is a half-hour
 // DST offset, which is where "add 86,400,000 ms" stops being "add a day".
-const TZS_JOURNAL = ['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Australia/Lord_Howe']
+// Niue is UTC-11, the far western end, and it is the mirror of Kiritimati: a
+// date built by parsing an ISO string (UTC midnight) is the PREVIOUS day there
+// and the SAME day at +14, so one timezone alone cannot tell a correct
+// implementation from a broken one.
+const TZS_JOURNAL = ['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Pacific/Niue', 'Australia/Lord_Howe']
 const TZS_CALC = ['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Pacific/Kiritimati']
 
 const RIGS = [
-  { name: 'model',   file: 'scripts/test-spaces-model.ts' },
+  // The model rig carries the CALENDAR layout's arithmetic now — month grids,
+  // day counts, "which month does this open on" — which is date code and
+  // therefore timezone code. CI still runs this rig once, in one timezone; the
+  // one-line change to that step is queued on the board rather than made here,
+  // because ci.yml is the standing conflict magnet and five sibling branches
+  // are in flight. Until it lands, THIS is where the matrix lives.
+  { name: 'model',   file: 'scripts/test-spaces-model.ts', tzs: TZS_JOURNAL },
   { name: 'agent',   file: 'scripts/test-spaces-agent.ts' },
   { name: 'journal', file: 'scripts/test-spaces-journal.ts', tzs: TZS_JOURNAL },
   { name: 'calc',    file: 'scripts/test-spaces-calc.ts', tzs: TZS_CALC },
