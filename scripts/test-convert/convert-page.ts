@@ -93,6 +93,8 @@ console.log('bento.page/import still works')
   ok(/<meta http-equiv="refresh" content="0; url=\/convert\?from=pptx">/.test(redirect), 'it sends the browser to /convert?from=pptx at once')
   ok(/<a href="\/convert\?from=pptx">/.test(redirect), 'and links there for a browser that ignores refresh')
   ok(/content="default-src 'none'; base-uri 'none'; form-action 'none'"/.test(redirect), "its CSP allows nothing to load (default-src 'none')")
+  ok(/data-flag="\$\{esc\(o\.conversion\.id\)\}:\$\{esc\(f\.id\)\}"\$\{f\.default \? ' checked' : ''\}/.test(fs.readFileSync(path.join(root, 'convert/page/convert-page.ts'), 'utf8')),
+    'a choice that defaults on (interactive states) renders ticked')
   ok(/from'\) === 'pptx'/.test(fs.readFileSync(path.join(root, 'convert/page/convert-page.ts'), 'utf8')),
     '/convert reads ?from=pptx and greets an /import visitor with the import wording')
 }

@@ -131,17 +131,22 @@ console.log('the report, and document JSON in')
   ok(/morph-not-exported \(slide 1\)/.test(j.err), 'each report line names the slides it happened on')
 }
 
-console.log('--states')
+console.log('interactive states: on by default, --no-states leaves them out')
 {
   const base = docOf(fs.readFileSync(imported, 'utf8'))
   base.slides.push({ ...base.slides[0], id: 'st', stateOf: base.slides[0].id, notes: 'state' })
   const f = path.join(tmp, 'states.bento.html')
   fs.writeFileSync(f, deckWith(base))
   const count = async (p: string) => [...(await readZip(new Uint8Array(fs.readFileSync(p)))).keys()].filter((k) => /^ppt\/slides\/slide\d+\.xml$/.test(k)).length
-  run([f, '--to', 'pptx', '-o', path.join(tmp, 'no-states.pptx')])
-  const r = run([f, '--to', 'pptx', '--states', '-o', path.join(tmp, 'states.pptx')])
-  const a = await count(path.join(tmp, 'no-states.pptx')), b = await count(path.join(tmp, 'states.pptx'))
-  ok(r.code === 0 && b === a + 1 && /states-as-hidden-slides/.test(r.err), `--states adds the state as a hidden slide (${a} → ${b} slides)`)
+  const def = run([f, '--to', 'pptx', '-o', path.join(tmp, 'default.pptx')])
+  const off = run([f, '--to', 'pptx', '--no-states', '-o', path.join(tmp, 'no-states.pptx')])
+  const alias = run([f, '--to', 'pptx', '--states', '-o', path.join(tmp, 'alias.pptx')])
+  const a = await count(path.join(tmp, 'no-states.pptx')), b = await count(path.join(tmp, 'default.pptx'))
+  ok(def.code === 0 && b === a + 1 && /states-as-hidden-slides/.test(def.err) && !/state-slides-omitted/.test(def.err),
+    `by default the state comes along as a hidden slide, and the report says so (${b} slides)`)
+  ok(off.code === 0 && /state-slides-omitted/.test(off.err) && !/states-as-hidden-slides/.test(off.err),
+    `--no-states leaves it out, and the report says so (${a} slides)`)
+  ok(alias.code === 0 && await count(path.join(tmp, 'alias.pptx')) === b, '--states is still accepted (a no-op now), so existing scripts keep working')
 }
 
 console.log('export refusals, each saying what to do')

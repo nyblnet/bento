@@ -148,8 +148,10 @@ export interface ExportOpts {
   /** Export interactive states too, as HIDDEN slides placed right after the
    *  slide they belong to, with links into a state landing on it. In a
    *  PowerPoint show, hidden slides are reached only by those links, and
-   *  Next/Previous skip them, much as bento's ←/→ skip states. Default off:
-   *  states are left out and links into one go to its parent. */
+   *  Next/Previous skip them, much as bento's ←/→ skip states. Off here (the
+   *  writer takes it explicitly); bentoToPptx, the CLI and the page turn it
+   *  ON by default. Off: states are left out and links into one go to its
+   *  parent. */
   includeStates?: boolean
 }
 

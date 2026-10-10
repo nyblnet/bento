@@ -102,7 +102,7 @@ async function take(name: string, bytes: Uint8Array) {
     <label class="option${o.ok ? '' : ' off'}">
       <input type="radio" name="to" value="${esc(o.conversion.id)}"${o.ok ? '' : ' disabled'}${o.ok && i === opts.findIndex((x) => x.ok) ? ' checked' : ''}>
       <span><b>${esc(o.conversion.label)}</b>${esc(o.ok ? o.conversion.hint : o.why)}${o.ok ? (o.conversion.flags ?? []).filter((f) => f.applies(d)).map((f) => `
-        <span class="flag"><input type="checkbox" data-flag="${esc(o.conversion.id)}:${esc(f.id)}"> ${esc(f.label)}</span>`).join('') : ''}</span>
+        <span class="flag"><input type="checkbox" data-flag="${esc(o.conversion.id)}:${esc(f.id)}"${f.default ? ' checked' : ''}> ${esc(f.label)}</span>`).join('') : ''}</span>
     </label>`).join('')
   choose.hidden = false
   convertBtn.disabled = !opts.some((o) => o.ok)

@@ -70,7 +70,11 @@ starter deck uses nearly every element type.
    report** that comes back with the bytes, with the slides it happened on.
 
 Two options change what is exported. `includeStates` adds interactive
-states as hidden slides that links lead to (the CLI's `--states`).
+states as hidden slides that links lead to. It is ON by default in
+`bentoToPptx`, the CLI and the page; `includeStates: false`, the CLI's
+`--no-states` or unticking the page's box leaves them out, with links to a
+state going to its parent instead. (The low-level `exportPptx` takes it
+explicitly.)
 `rasterise` lets a host with a browser turn pictures PowerPoint cannot take
 (WebP, AVIF, BMP) into PNG; bento.page/convert passes one, and the CLI
 reports such pictures dropped.
