@@ -37,6 +37,7 @@ import './comments.ts';
 // is what makes an eighty-change document usable.
 import './review.ts';
 import './redlineview.ts';  // snapshot redlining — own panel host, see its header
+import './compare.ts';      // the same redline against another FILE — a view, never a merge
 // auto-save + crash recovery: a debounced IndexedDB snapshot, a restore
 // banner on boot when it disagrees with the loaded file, and version
 // history (About dialog). See autosave.ts's header for the full design.
@@ -44,3 +45,14 @@ import './autosave.ts';
 // the static first-page render written into every saved file, for readers
 // (thumbnailers) that run no script — see preview.ts's header.
 import './preview.ts';
+// optical margin alignment (hanging punctuation) — see micro.ts's header for
+// why it can be added to a document whose pagination is already a promise.
+import './micro.ts';
+// fields and mail merge: {{tokens}} resolved at render (never in the model),
+// and one complete .bento.html per row of a bound sheet. merge.ts imports
+// fields.ts, so this one line mounts both — see fields.ts's header.
+import './merge.ts';
+// live cells: a field whose value is a cell of a sheet this document embeds,
+// addressed by row label and column heading — see live.ts's header for why not
+// by cell reference.
+import './live.ts';

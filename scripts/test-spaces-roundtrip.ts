@@ -14,11 +14,10 @@
 // and this is the path OUT — the sentence people are asked to trust when they
 // decide whether to keep a year of notes in one HTML file.
 //
-// WHAT IT DOES NOT CHECK, deliberately: block TYPES. Markdown has no callout,
-// no toggle, no media embed, no board. A callout leaves as a blockquote, a
-// toggle as a bullet, a link card as `[title](url)`, an image as `![alt](ref)`.
-// Asserting type-for-type round-tripping would be asserting that Markdown is
-// something it is not, and would fail on every honest export.
+// WHAT IT DOES NOT CHECK, deliberately: block TYPES. Markdown has no toggle,
+// no media embed, no board: a toggle leaves as a bullet, a link card as
+// `[title](url)`. Type-for-type is test-spaces-md-strict.ts's bar, per block,
+// with the types Markdown cannot carry pinned there by name.
 //
 // WHAT IT DOES CHECK is the thing that would actually hurt: WORDS. If a
 // paragraph, a table cell or a list item goes into the exporter and does not
@@ -44,7 +43,8 @@
 // less than one with a stated blind spot.
 import { starterDoc } from '../spaces/src/starter.ts'
 import { toMarkdown } from '../spaces/src/about.ts'
-import { parseNote } from '../spaces/src/markdown.ts'
+import { parseNote, planImport } from '../spaces/src/markdown.ts'
+import { adoptDesign } from '../spaces/src/designs.ts'
 import { Store } from '../spaces/src/store.ts'
 
 let checks = 0
@@ -138,6 +138,75 @@ if (lostBy.length) {
 // exactly the kind the sentence promises against.
 ok(/\[[^\]]+\]\(https?:\/\/[^)]+\)/.test(md), 'a link card exports with its address intact')
 ok(/!\[[^\]]+\]\([^)]+\)/.test(md), 'an image exports with its alt text and reference')
+
+// #TAG, IN AND OUT. A tag lives in the prose and nowhere else, so it costs the
+// exporter nothing — which is precisely the claim that has to be measured
+// rather than assumed. Two things could break it and both are silent: an
+// exporter that escaped the hash for Markdown's sake (`\#recipe`), and a
+// parser that read a line beginning `#recipe` as an ATX heading and ate the
+// word. Either one loses the classification of every note in the space.
+{
+  const st = new Store(starterDoc())
+  const page = st.doc.pages[0]
+  page.blocks.push(
+    { id: 'tg1', type: 'p', html: 'a note about #recipe and #project/bento' } as never,
+    { id: 'tg2', type: 'p', html: '#leading tag at the start of a line' } as never,
+  )
+  st.reindex()
+  ok(st.tags.tags.get('recipe')?.pages.includes(page.id) === true,
+    'the tag index finds a tag written into a page')
+
+  const out = toMarkdown(st as never)
+  ok(out.includes('#recipe') && out.includes('#project/bento'),
+    'Markdown export emits the hash unescaped — `#recipe`, not `\\#recipe`')
+
+  const back = parseNote(out.slice(out.indexOf('#leading')), 'x')
+  ok(back.blocks[0]?.type === 'p',
+    'a line that BEGINS with a tag reads back as a paragraph, never a heading')
+  ok(String(back.blocks[0]?.html ?? '').includes('#leading'),
+    '…with the tag still in it')
+}
+
+// ---- the design rides in the front matter ---------------------------------
+// "Selectable in the page Markdown": `design:` names it, and a design the
+// space carries itself travels as one `designs:` line. A space with no design
+// exports exactly as before — no front matter at all.
+{
+  ok(md.startsWith('# '), 'a space with no design exports with no front matter')
+
+  const withDesign = starterDoc() as unknown as Record<string, unknown>
+  withDesign.design = 'almanac'
+  const mdA = toMarkdown(new Store(withDesign as never) as never)
+  ok(mdA.startsWith('---\ndesign: almanac\n---\n'), 'a built-in design leads the export as `design: almanac` front matter')
+  const noteA = parseNote(mdA, 'x')
+  ok(noteA.design === 'almanac', 'the importer reads `design` back out of the front matter')
+  ok(noteA.frontmatter === undefined, 'front matter holding only the design is consumed, not kept as a folded yaml block')
+
+  const custom = starterDoc() as unknown as Record<string, unknown>
+  const harbour = { label: 'Harbour', base: 'almanac', light: { accent: '#0f6e63' }, props: { callout: 'fill' } }
+  custom.designs = { harbour, unused: { base: 'riso' } }
+  custom.design = 'harbour'
+  const mdC = toMarkdown(new Store(custom as never) as never)
+  const noteC = parseNote(mdC, 'x')
+  ok(noteC.design === 'harbour' && JSON.stringify(noteC.designs) === JSON.stringify({ harbour }),
+    'a design the space carries round-trips through Markdown value for value (and only the one in use travels)')
+  const plan = planImport([{ path: 'space.md', text: mdC }], { rootTitle: 'Imported' })
+  const into = starterDoc() as unknown as Record<string, unknown>
+  const adopted = adoptDesign(into as never, plan.design, plan.designs)
+  ok(adopted === 'harbour' && into.design === 'harbour' && JSON.stringify((into.designs as Record<string, unknown>).harbour) === JSON.stringify(harbour),
+    'importing that Markdown into a space with no design adopts the design it carried')
+  const already = starterDoc() as unknown as Record<string, unknown>
+  already.design = 'ledger'
+  ok(adoptDesign(already as never, plan.design, plan.designs) === null && already.design === 'ledger',
+    'an import never restyles a space that already has a design')
+
+  const odd = starterDoc() as unknown as Record<string, unknown>
+  odd.design = 'from: a newer build'
+  const noteO = parseNote(toMarkdown(new Store(odd as never) as never), 'x')
+  ok(noteO.design === 'from: a newer build', 'a design name this build does not know still round-trips through the front matter')
+  const obsidian = parseNote('---\ntags: [a]\ndesign: ledger\n---\n# Note\n\nbody', 'x')
+  ok(obsidian.design === 'ledger' && obsidian.frontmatter === 'tags: [a]\ndesign: ledger', 'front matter with other keys is still kept verbatim')
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

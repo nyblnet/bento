@@ -31,6 +31,20 @@ export function resolveFontSrc(doc: BentoDoc, asset: string): string | undefined
 }
 
 /**
+ * The src an @font-face may use: EMBEDDED bytes (a `data:` URI) or nothing. A
+ * font in a self-contained file is always its own bytes, so there is no
+ * legitimate external src; anything else — an address in the asset table,
+ * whatever route put it there (a paste, a script, the file itself) — would be
+ * fetched the moment text in that family renders. Such a face is skipped and
+ * the family falls back to the system stack. Checked here, where every face
+ * is written, so no load path can bypass it. Exact prefix, no trimming:
+ * leading whitespace does not make it a data URI.
+ */
+export function embeddedFontSrc(src: string | undefined): string {
+  return typeof src === 'string' && /^data:/i.test(src) ? src : ''
+}
+
+/**
  * At save: a deck that embeds bytes IDENTICAL to a built-in face is rewritten
  * to name the face instead, and the bytes leave the file. Byte equality, not
  * family name — a deck carrying its own Fraunces cut keeps it. Returns the
@@ -84,7 +98,7 @@ const injected = new WeakMap<HTMLStyleElement, string[]>()
  * touch the stylesheet, so unrelated edits never restart font loading. */
 export function injectFonts(doc: BentoDoc) {
   const faces = (doc.fonts ?? []).map(f => ({
-    family: f.family, src: resolveFontSrc(doc, f.asset) ?? '',
+    family: f.family, src: embeddedFontSrc(resolveFontSrc(doc, f.asset)),
     weight: f.weight ?? 'normal', style: f.style ?? 'normal',
   }))
   const signature = faces.flatMap(f => [f.family, f.src, f.weight, f.style])

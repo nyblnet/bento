@@ -118,5 +118,26 @@ ok(markdownToHtml('see \\(\\frac{a}{b}\\) and $a\\_1$') === 'see \\(\\frac{a}{b}
 ok(markdownToHtml('$a < b$ **bold**') === '$a &lt; b$ <b>bold</b>', 'a parked formula is still HTML-escaped, and markdown outside it still works')
 ok(resolve(markdownToHtml('\\[\\sum_i x_i\\]')) === display('\\sum_i x_i'), 'pasted, then rendered: the whole round trip')
 
+// --- an escaped \$ never opens or closes a formula ---------------------------
+// Prices beside escaped dollars: `$10, and \$x\$` used to pair the first `$`
+// with the ESCAPED one and treat `10, and \` as a formula (convert hit it in a
+// pptx report). The real engine happened to refuse that source, so the prose
+// survived by luck; a stand-in renderer that accepts ANY source shows the
+// pairing decision itself, which is what must be right.
+console.log('\nescaped dollars and prices\n')
+{
+  const stub = (src: string) => `<math>${src}</math>`
+  const any = (html: string) => resolveMathHtml(html, stub)
+  ok(any('$10, and \\$x\\$') === '$10, and $x$', 'a price, then escaped dollars: no formula (the escaped $ cannot close one)')
+  ok(any('pay $3 or \\$4 today') === 'pay $3 or $4 today', 'a price and an escaped price: both dollars')
+  ok(any('\\$5 to \\$10') === '$5 to $10', 'two escaped prices: dollars, no formula between them')
+  ok(any('it costs $5 and $10') === 'it costs $5 and $10', 'two plain prices: still no formula (digit after the closer)')
+  ok(any('$x$ costs \\$5') === '<math>x</math> costs $5', 'a formula, then an escaped price: the formula renders, the price stays')
+  ok(any('$a \\$ b$') === '<math>a \\$ b</math>', 'an escaped $ INSIDE a formula is part of its body')
+  ok(any('$$a\\$$ then $$b$$') === '$$a$$ then <math>b</math>', 'display: an escaped $ cannot close $$…$$ either')
+  ok(any('$$\\$5 + x$$') === '<math>\\$5 + x</math>', 'display: an escaped $ inside the body is kept')
+  ok(hinted('$10, and \\$x\\$') === '$10, and $x$', 'the editor\'s hint marks nothing: there is no formula to have failed')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

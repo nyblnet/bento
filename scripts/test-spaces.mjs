@@ -57,10 +57,20 @@ const RIGS = [
   { name: 'agent',   file: 'scripts/test-spaces-agent.ts' },
   { name: 'journal', file: 'scripts/test-spaces-journal.ts', tzs: TZS_JOURNAL },
   { name: 'calc',    file: 'scripts/test-spaces-calc.ts', tzs: TZS_CALC },
+  { name: 'caret',   file: 'scripts/test-spaces-caret.ts' },
   { name: 'undo',    file: 'scripts/test-spaces-undo.ts', bundle: true },
   { name: 'invite',  file: 'scripts/test-spaces-invite.ts', bundle: true },
   { name: 'roundtrip', file: 'scripts/test-spaces-roundtrip.ts', bundle: true },
+  { name: 'md-strict', file: 'scripts/test-spaces-md-strict.ts', bundle: true },
+  { name: 'restore-gate', file: 'scripts/test-spaces-restore-gate.ts', bundle: true },
+  { name: 'mentions', file: 'scripts/test-spaces-mentions.ts' },
   { name: 'size',    file: 'scripts/test-spaces-size.mjs' },
+  // Revision tracking has no timezone dependency; the browser rig needs the
+  // built spaces shell and Playwright/Chrome (the CI browser job provides both).
+  { name: 'save-revisions', file: 'scripts/test-spaces-save-revisions.ts' },
+  { name: 'save-browser', file: 'scripts/test-spaces-save-browser.mjs' },
+  // drives the BUILT shell in Chrome; self-skips outside CI without one
+  { name: 'chrome',  file: 'scripts/test-spaces-chrome.ts' },
 ]
 
 // A rig that exists but is not listed here would never run locally, and the

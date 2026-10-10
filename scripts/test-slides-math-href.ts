@@ -42,7 +42,10 @@ console.log('the source\n')
 ok(/export function resolveMath\(html: string, hint\?[^)]*\)[^{]*\{\s*return resolveMathHtml\(html, renderMath,/.test(render), 'render.ts resolveMath hands the html to resolveMathHtml')
 ok(/const parts = html\.split\(\/\(<\[\^>\]\*>\)\/\)/.test(delims) && /parts\.map\(\(p, i\) => \(i % 2 \? p : resolveRun\(/.test(delims), 'resolveMathHtml splits on tags and hands only the text runs to resolveRun')
 ok(!/html\.replace\(/.test(delims), 'no rule runs over the whole HTML')
-ok(delims.includes("/(^|[^\\\\$])\\$(\\S(?:[^$\\n]*?\\S)?)\\$(?!\\d)/g"), 'the fussy inline rule is unchanged (no whitespace inside, no digit after)')
+// the body is read as tokens since an escaped \$ stopped closing a formula
+// (test-slides-math-delims.ts runs that); the fussiness is the same
+ok(delims.includes("/(^|[^\\\\$])\\$((?:[^$\\\\\\s]|\\\\[^\\n])(?:(?:[^$\\\\\\n]|\\\\[^\\n])*?(?:[^$\\\\\\s]|\\\\[^\\n]))?)\\$(?!\\d)/g"),
+  'the fussy inline rule is unchanged (no whitespace at the edges, no digit after; an escaped \\$ never closes)')
 
 console.log('\nthe behaviour, with the real split and a stand-in renderer\n')
 // the stand-in: any source becomes a <math> stub — what matters is WHERE the
