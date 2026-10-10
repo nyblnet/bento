@@ -165,6 +165,19 @@ jobs:
             --outfile="$RUNNER_TEMP/test-spaces-invite.mjs"
           node "$RUNNER_TEMP/test-spaces-invite.mjs"
 
+      - name: Spaces copy-tier rig
+        # Every copy of a space is built by the kernel's copy table
+        # (docfields.ts projectForCopy) over spaces' exhaustive field map. This
+        # runs each real builder against one source carrying every class of
+        # field, every collab secret, in-file history and an undeclared key, and
+        # asserts the EXACT top-level key set each emits: no history or unknown
+        # key in a reader copy or Copy JSON, history kept in an invite, both
+        # kept in a duplicate. (Bundled: share.ts imports the kernel transport.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-copytiers.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-copytiers.mjs"
+          node "$RUNNER_TEMP/test-spaces-copytiers.mjs"
+
       - name: Spaces undo rig
         # Every checkpoint used to stringify the WHOLE document: measured on a
         # 200-page, 2.5 MB handbook, fifty edits left an undo depth of NINE,

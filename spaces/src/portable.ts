@@ -22,6 +22,8 @@ import { designAssetKeys, designSource } from './designs.ts'
 import { esc } from './sanitize.ts'
 import { isPageRef } from './embed.ts'
 import { allNotes, mergeNotes, renameRefs } from './footnotes.ts'
+import { projectForCopy } from '../../kernel/src/docfields.ts'
+import { SPACES_FIELDS } from './docclass.ts'
 
 /** An `<a href="#p/…">` in a block, however many attributes it carries. */
 const PAGE_LINK = /<a\s([^>]*?)href="#p\/([^"]*)"([^>]*)>([\s\S]*?)<\/a>/g
@@ -145,7 +147,8 @@ export function subtreeIds(doc: SpacesDoc, rootId: string, subtree = true): stri
  *
  * Everything the format guarantees survives: unknown top-level fields, unknown
  * per-page fields and unknown block types are all carried through untouched
- * (PLATFORM §3). Exactly three things are deliberately NOT:
+ * (PLATFORM §3). The kernel's copy table builds it (tier 'duplicate',
+ * docclass.ts). Exactly four things are deliberately NOT carried:
  *
  *   · `collab` — every credential in it. The room, the read key, the writer and
  *     owner private keys and the invite chain are the capability to read and
@@ -154,6 +157,7 @@ export function subtreeIds(doc: SpacesDoc, rootId: string, subtree = true): stri
  *     for reader copies; an extract is a different document, so it keeps none.
  *   · `template` — it re-mints `docId` on every open (model.ts), and a document
  *     that was just given a deliberate identity must keep it.
+ *   · the in-file history (`revisions`, `trail`): it records the whole space.
  *   · assets nobody in the extract references. An export that carries the whole
  *     document's images is a copy with pages hidden, not an extract — and the
  *     images are the only thing in a space with real weight.
@@ -239,7 +243,11 @@ export function extractSpace(
   }
 
   const out: SpacesDoc = {
-    ...clone(doc),
+    // the kernel's copy table, tier 'duplicate' (docfields.ts): a new
+    // identity, so docId and collab are RESET (omitted) — every credential in
+    // collab is the capability to the WHOLE space — and the rest travels,
+    // undeclared keys included
+    ...projectForCopy(clone(doc), SPACES_FIELDS, 'duplicate'),
     docId: opts.docId,
     title: titleOf.get(rootId) || doc.title,
     pages,
@@ -253,8 +261,15 @@ export function extractSpace(
   }
   if (!Object.keys(assets).length) delete out.assets
   if (!fonts.length) delete out.fonts
-  delete out.collab
+  // Two things the duplicate tier keeps and an EXTRACT must not, because an
+  // extract is a few pages of a space, not the space:
+  //   · `template` — it re-mints docId on every open, and this file was just
+  //     given a deliberate identity (the kernel's duplicate tier keeps it,
+  //     since a duplicated template is still the owner's template);
+  //   · the in-file history (class 'history': revisions, trail) — it records
+  //     the WHOLE space, so carrying it would hand over the pages left out.
   delete out.template
+  for (const [k, cls] of Object.entries(SPACES_FIELDS)) if (cls === 'history') delete out[k]
 
   return {
     doc: out,

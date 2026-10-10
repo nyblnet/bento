@@ -33,8 +33,9 @@
 // client and the deployed worker drift apart.
 
 import { mintInvite } from '../../kernel/src/sync/online.ts'
-import { collabForReader, collabForInvite } from '../../kernel/src/docfields.ts'
+import { projectForCopy } from '../../kernel/src/docfields.ts'
 import type { SpacesDoc } from './model.ts'
+import { SPACES_FIELDS } from './docclass.ts'
 
 /** A share export's filename suffix — also what the UI calls the copy. */
 export type ShareKind = 'invite' | 'viewonly'
@@ -95,12 +96,16 @@ export function canWrite(doc: SpacesDoc): boolean {
 export async function inviteCopy(doc: SpacesDoc): Promise<SpacesDoc | null> {
   const c = doc.collab
   if (!c?.room || !c.key || !isOwner(doc)) return null
-  const out = clone(doc)
-  // allowlist (kernel docfields): keeps room/read-key/public keys + sync, drops
-  // every private half AND anything unknown; the fresh invite and the top-level
-  // role come from mintInvite, never from the source.
   const invite = await mintInvite(c.ownerPriv!, 'writer')
-  out.collab = { ...collabForInvite(c, invite), on: true } as SpacesDoc['collab']
+  // Built FROM EMPTY by the kernel's copy table, tier 'invite' (docfields.ts):
+  // collab goes through collabForInvite — room/read-key/public keys + sync, the
+  // FRESH invite and the role from it, never the source's private halves or
+  // anything unknown under it. The modes are dropped (template:true would make
+  // the invitee's open a roomless new space), the history travels, and any
+  // top-level key this build does not declare stays behind.
+  const out = projectForCopy(clone(doc), SPACES_FIELDS, 'invite', { invite })
+  // the one thing a space adds: the copy is live from the moment it opens
+  if (out.collab) out.collab.on = true
   return out
 }
 
@@ -121,10 +126,16 @@ export async function inviteCopy(doc: SpacesDoc): Promise<SpacesDoc | null> {
 export function readerCopy(doc: SpacesDoc): SpacesDoc | null {
   const c = doc.collab
   if (!c?.room || !c.key) return null
-  const out = clone(doc)
-  // allowlist (kernel docfields): keeps room/read-key/public keys, forces
-  // role:'reader', drops every private half, the sync stamp AND anything unknown.
-  out.collab = { ...collabForReader(c), on: true } as SpacesDoc['collab']
+  // Built FROM EMPTY by the kernel's copy table, tier 'reader' (docfields.ts):
+  // collab goes through collabForReader — room/read-key/public keys, role
+  // forced to 'reader', every private half, the sync stamp and anything
+  // unknown under it dropped. `readonly` is SET (the copy is a reading copy
+  // even to a build that knows no roles), `template` is dropped (it would
+  // fork the copy out of its room on open), and the in-file history and any
+  // top-level key this build does not declare stay behind.
+  const out = projectForCopy(clone(doc), SPACES_FIELDS, 'reader')
+  // the one thing a space adds: the copy is live from the moment it opens
+  if (out.collab) out.collab.on = true
   return out
 }
 
@@ -179,9 +190,11 @@ export function stampSync(
  * its own when it is first opened, exactly as a new space does.
  */
 export function duplicateAsNew(doc: SpacesDoc, docId: string, now = new Date().toISOString()): SpacesDoc {
-  const out = clone(doc)
+  // the kernel's copy table, tier 'duplicate': docId and collab are RESET
+  // (omitted) and everything else — modes, history, undeclared keys — is the
+  // owner's own and travels. The caller mints the new identity.
+  const out = projectForCopy(clone(doc), SPACES_FIELDS, 'duplicate')
   out.docId = docId
-  delete out.collab
   out.modified = now
   return out
 }
@@ -189,8 +202,10 @@ export function duplicateAsNew(doc: SpacesDoc, docId: string, now = new Date().t
 /**
  * Is this copy a live viewer — one that follows the session read-only?
  *
- * Distinct from `doc.readonly`, which is a SEALED reading copy with no session
- * at all. Both lock the editor; only this one keeps receiving.
+ * Distinct from `doc.readonly` alone, which is a SEALED reading copy with no
+ * session at all. Both lock the editor; only this one keeps receiving. (A
+ * view-only copy carries `readonly: true` too — the kernel's copy table sets
+ * it — so a role this decides on is asked before the mode is.)
  */
 export function isReaderCopy(doc: SpacesDoc): boolean {
   // Every collab copy that is not an allowlisted writer — 'reader', 'audience',

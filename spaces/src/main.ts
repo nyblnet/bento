@@ -41,6 +41,8 @@ import { Store } from './store'
 import { Editor } from './editor'
 import { SyncSession } from './sync/session.ts'
 import { isReaderCopy, stampSync } from './share.ts'
+import { projectForCopy } from '../../kernel/src/docfields.ts'
+import { SPACES_FIELDS } from './docclass.ts'
 import { downloadMarkdown, launchUpdateCheck } from './about'
 
 configureApp({
@@ -238,10 +240,13 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
   const session = new SyncSession(store)
   editor.connectSync(session)
 
-  if (!frozen && doc.readonly) {
-    banner(t('This is a reading copy. It opens for reading; nothing you do here changes the file.'))
-  } else if (!frozen && isReaderCopy(doc)) {
+  // A view-only copy is asked about FIRST: the kernel's copy table marks it
+  // `readonly` as well (share.ts readerCopy), so a build that knows no roles
+  // still opens it locked — but it follows the session, and the banner says so.
+  if (!frozen && isReaderCopy(doc)) {
     banner(t('This is a view-only copy — it follows the live session but can’t change this space.'))
+  } else if (!frozen && doc.readonly) {
+    banner(t('This is a reading copy. It opens for reading; nothing you do here changes the file.'))
   }
   if (frozen) {
     banner(frozen === 'version'
@@ -275,8 +280,11 @@ function boot(doc: SpacesDoc, repaired: string[], frozen?: 'policy' | 'version')
     // A copy of THIS space is this replica, so it carries the CRDT state like
     // ⌘S does: opened later, it rejoins as a fork rather than a fresh adopt.
     stampSync(store, session)
-    void serializeAuto(store.doc)
-      .then((html) => writeUpdatedFileAs(html, store.doc, { suffix: suffix === 'copy' ? 'copy' : suffix }))
+    // tier 'file' of the kernel's copy table: the owner's own whole file,
+    // every field kept — taken through the table so no copy path is outside it
+    const copy = projectForCopy(store.doc, SPACES_FIELDS, 'file')
+    void serializeAuto(copy)
+      .then((html) => writeUpdatedFileAs(html, copy, { suffix: suffix === 'copy' ? 'copy' : suffix }))
       .then((ok) => { if (ok) editor.status(t('Copy saved — you are still editing the original')) })
   }
   /**
