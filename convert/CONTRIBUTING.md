@@ -23,10 +23,11 @@ convert/
     index.ts           walks the deck, allocates ids, assembles the package
     contract.ts        the element-writer contract (read this first)
     text.ts shapes.ts media.ts tables.ts charts.ts   one writer per element type
-    code.ts embed.ts   writers not written yet (stubs)
+    code.ts embed.ts   writers on the contract (code → text, embed → its picture)
     parts.ts           the package skeleton: presentation, masters, layouts, theme, notes
   src/xmlout.ts        builds XML as plain data, escapes everything
-  page/                bento.page/import
+  src/pairs.ts         the conversion table bento.page/convert offers
+  page/                bento.page/convert (one page, every pair in pairs.ts)
 scripts/test-convert/  the rigs (tests); files starting with _ are helpers
 ```
 
@@ -66,7 +67,13 @@ starter deck uses nearly every element type.
    writes the package with `parts.ts`: presentation, master, layout, theme,
    notes, and the property parts PowerPoint expects.
 5. Everything the writers could not carry exactly is in the **fidelity
-   report** that comes back with the bytes.
+   report** that comes back with the bytes, with the slides it happened on.
+
+Two options change what is exported. `includeStates` adds interactive
+states as hidden slides that links lead to (the CLI's `--states`).
+`rasterise` lets a host with a browser turn pictures PowerPoint cannot take
+(WebP, AVIF, BMP) into PNG; bento.page/convert passes one, and the CLI
+reports such pictures dropped.
 
 ## The writer contract
 
@@ -127,25 +134,31 @@ the runner picks it up and CI runs it.
 purpose once (delete the line that does the thing) and watch the rig go red.
 A check that never failed hasn't been shown to work.
 
-## Walkthrough: writing the `code` writer
+## Walkthrough: a better `bar` line end
 
-1. Open `pptx-write/code.ts`. `CodeElIn` lists the fields you get. The stub
-   reports the element dropped and returns `null`.
-2. Look at `textSp` in `text.ts`. It builds a text box (`p:sp` with
-   `p:txBody`) from a frame, paragraphs and run properties. `emu()` in
-   `shapes.ts` converts px to PowerPoint units.
-3. Build a text box at the element's frame: one paragraph per line of
-   `content`, in the element's font (fall back to `Consolas`), size, colour
-   and alignment. Keep leading spaces: indentation is the point of code.
-4. Syntax colours are optional in a first version. If you leave them out,
-   report it: `ctx.report.add('approximated', 'code-colours-flattened',
-   ctx.where, 'code shows in one colour; syntax highlighting is not exported')`.
-5. In `scripts/test-convert/pptx-coverage.ts`, move `code` from `NOT_YET`
-   to `SAMPLE`/`MAPPED`. The rig now requires one shape and a clean package.
-6. Add `scripts/test-convert/pptx-code.ts` with your own checks: lines become
-   paragraphs, leading spaces survive, `<` and `&` in code are escaped, an
-   empty `content` doesn't crash.
-7. Run `node scripts/test-convert.ts` and the typecheck. Then **open the
+A line can end in an arrow, a dot or a `bar` (a short flat tick across the
+line). PowerPoint's arrowheads have no bar, so today the writer draws a
+diamond and says so (`line-tip-approximated`). This walks through replacing
+that with something closer.
+
+1. Open `pptx-write/shapes.ts` and find `tipType`. It maps a Bento tip to a
+   PowerPoint arrowhead for `a:headEnd`/`a:tailEnd`. `'bar'` falls through to
+   `'diamond'` and a report entry.
+2. Decide what "closer" means and try it in real PowerPoint first. One idea:
+   end the line with no arrowhead and draw the bar as a short extra line at
+   the end point, perpendicular to the line. `shapeNode` builds a `p:sp`;
+   `emu()` converts px; the line's endpoints follow from its frame and
+   rotation (see the header of `shapes.ts`).
+3. If you add a shape, the writer contract still holds: one top-level node
+   per element. Wrap the line and its bar in a group (`p:grpSp`), or keep
+   the diamond and improve its size. Whatever you choose, change the report
+   entry to say what PowerPoint now shows, or remove it if nothing is lost.
+4. Add `scripts/test-convert/pptx-line-tips.ts` with your own checks, built
+   on `./_export-harness.ts`: a bar at either end, at both, on a rotated
+   line, and a clean package every time.
+5. **Prove your checks can fail**: break your code on purpose once and watch
+   the rig go red.
+6. Run `node scripts/test-convert.ts` and the typecheck. Then **open the
    result in PowerPoint**, the one check no rig can do. Say in your PR which
    app and version you opened it in (PowerPoint for Mac or Windows, Keynote,
    LibreOffice, Google Slides).
@@ -157,13 +170,11 @@ Each task is self-contained and has a rig to extend. Tasks marked
 
 | task | where | notes |
 |---|---|---|
-| **Export `code` elements** · good first issue | `pptx-write/code.ts` | the walkthrough above |
-| **Export `embed` elements** · good first issue | `pptx-write/embed.ts` | every embed has an SVG `view`; `svgPic` in `media.ts` already places SVG. Report `approximated` (`embed-static`): the picture travels, the live document doesn't |
-| **Line tip `bar`** · good first issue | `pptx-write/shapes.ts` | a `bar` line end exports as a diamond today (`line-tip-approximated`); find the closest real PowerPoint end, or draw it |
+| **Line tip `bar`** · good first issue | `pptx-write/shapes.ts` | the walkthrough above; a `bar` line end exports as a diamond today (`line-tip-approximated`) |
 | **Playable audio and video** | `pptx-write/media.ts` | today only a video's poster exports (`media-dropped`). PowerPoint embeds media as a `p:pic` with a media relationship and timing |
 | **Morph transitions** | `pptx-write/index.ts`, `parts.ts` | PowerPoint's Morph is an extension (`p159:morph` inside `mc:AlternateContent`); slides currently cut (`morph-not-exported`). Bento morphs pair elements by id, so the pairing is already in the deck |
-| **Picture fallback for SVG** | `pptx-write/media.ts` | PowerPoint 2016 shows SVG as a blank frame without a PNG fallback (`svg-no-raster-fallback`). Rasterising needs a renderer: open an issue to discuss before writing code |
-| **Export compact documents** | `src/export.ts` | `bentoToPptx` refuses `compact: true` files; slides' compact loader shows how they expand |
+| **Picture fallback for SVG** | `pptx-write/media.ts` | PowerPoint 2016 shows SVG as a blank frame without a PNG fallback (`svg-no-raster-fallback`). The `rasterise` option already gives the writer a renderer where a host has one, but a PNG beside every SVG makes files much larger: open an issue to discuss before writing code |
+| **Export compact documents** | `src/export.ts` | `bentoToPptx` refuses `compact: true` files. `page/load-json.ts` already expands them for the page (slides' expander and gate, no DOM); the CLI could do the same |
 | **One `bento` command** | `bin/` (new) | a small dispatcher so `bento convert …` and `bento check …` are one tool |
 
 ## Before you open a pull request
