@@ -335,6 +335,11 @@ console.log('custGeom (path shapes)')
   const packed = emit(shape({ shape: 'path', d: 'M0 0a5 5 0 0110 0', pathBox: [0, 0, 10, 5] }), b)
   const geo = (sp: XElem) => JSON.stringify(kid(kid(spPr(sp), NS.a, 'custGeom')!, NS.a, 'pathLst'))
   ok(geo(spread) === geo(packed) && !codes(b).includes('path-approximated'), 'run-together arc flags ("0110 0") read as 0, 1, then 10 0')
+  // and where the flags run into a decimal: "00.5.5" is flags 0, 0, then .5 .5
+  const c = new Report(), d = new Report()
+  const spread2 = emit(shape({ shape: 'path', d: 'M0 0 a.5 .5 0 0 0 .5 .5', pathBox: [0, 0, 1, 1] }), c)
+  const packed2 = emit(shape({ shape: 'path', d: 'M0 0a.5.5 0 00.5.5', pathBox: [0, 0, 1, 1] }), d)
+  ok(geo(spread2) === geo(packed2) && !codes(d).includes('path-approximated'), 'flags run into a decimal ("00.5.5") read as 0, 0, then .5 .5')
 }
 {
   // the side of the centre matters on any arc that is not a half circle:

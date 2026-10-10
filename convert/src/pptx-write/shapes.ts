@@ -310,6 +310,9 @@ function effectsOf(el: ShapeIn, report: Report, where: string): XNode | null {
  */
 export function arcToCubics(x1: number, y1: number, rx: number, ry: number, phiDeg: number,
   largeArc: number, sweep: number, x2: number, y2: number): number[][] | null {
+  // a non-finite input (path data misread upstream) draws a line, and the
+  // caller's coordinate guard then stops the parse if the endpoint is bad too
+  if (![x1, y1, rx, ry, phiDeg, x2, y2].every(Number.isFinite)) return null
   if (x1 === x2 && y1 === y2) return []
   rx = Math.abs(rx); ry = Math.abs(ry)
   if (rx === 0 || ry === 0) return null
@@ -337,6 +340,7 @@ export function arcToCubics(x1: number, y1: number, rx: number, ry: number, phiD
   let delta = angle((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry)
   if (!sweep && delta > 0) delta -= 2 * Math.PI
   else if (sweep && delta < 0) delta += 2 * Math.PI
+  if (!Number.isFinite(delta) || !Number.isFinite(cx) || !Number.isFinite(cy)) return null
   const n = Math.max(1, Math.ceil(Math.abs(delta) / (Math.PI / 2) - 1e-9))
   const step = delta / n
   const k = (4 / 3) * Math.tan(step / 4)
@@ -403,7 +407,8 @@ function custGeomNode(el: ShapeIn, report: Report, where: string): XNode {
   // coordinate after it. Take the first digit and leave the rest queued.
   const flag = (): number => {
     const t = tokens[i]
-    if (t !== undefined && /^[01]\d/.test(t)) { tokens[i] = t.slice(1); return Number(t[0]) }
+    // "00.267" tokenises as one decimal: flags 0 and 0, then x .267
+    if (t !== undefined && t.length > 1 && /^[01]/.test(t)) { tokens[i] = t.slice(1); return Number(t[0]) }
     return num()
   }
   const isNum = () => i < tokens.length && !/^[A-Za-z]$/.test(tokens[i])
