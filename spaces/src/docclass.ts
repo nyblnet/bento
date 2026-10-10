@@ -61,6 +61,13 @@ export const SPACES_FIELDS = {
   fonts: 'content',
   templates: 'content',
   journalTemplate: 'content',
+  // content, not history: a period is something a person DECIDED (a sprint's
+  // window and committed scope), named by a chart block in a page, undone by
+  // ⌘Z, and synced per key. Classing it history would drop it from a reader
+  // copy while the chart block that names it stays — a dangling reference —
+  // and would stop collaborators sharing the sprint. It holds totals at one
+  // instant (base), never page ids and never a series; the series is `trail`.
+  periods: 'content',
 } satisfies Record<DeclaredKeys<SpacesDoc>, FieldClass>
 
 /** tsc fails here if the fields classed 'mode' stop being exactly the kernel's
@@ -77,6 +84,10 @@ void _modeOk
  *  keep. Spaces records a revision only inside a save's prepare step, into
  *  the bytes that save writes (history.ts) — so it is never unsaved work, and
  *  counting it would raise the recovery banner on every file reopened after a
- *  download-save, whose recovery snapshot predates the revision. `trail` is
- *  NOT listed: when it is written is its feature's call. */
+ *  download-save, whose recovery snapshot predates the revision.
+ *
+ *  `trail` is NOT listed, and must not be: it is written WHILE EDITING, on the
+ *  'doc' event (main.ts recordToday), outside any save. A row recorded since
+ *  the last save is unsaved work only a recovery snapshot can keep, which is
+ *  exactly the case the kernel's default exists for. */
 export const SPACES_NOT_EDIT: ReadonlySet<string> = new Set(['modified', 'revisions'])

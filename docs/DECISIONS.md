@@ -10001,6 +10001,89 @@ Pointers: spaces/src/history.ts, scripts/test-spaces-history.ts,
 scripts/test-spaces-save-revisions.ts (the prepare rows and the main.ts pins),
 scripts/test-spaces-copytiers.ts (real revisions per tier).
 
+## 2026-10-10 — spaces: the trail (doc.trail), periods, and the three progress charts, on the field classes
+
+Rebuilds the never-merged #445 on main's field classes and in-file history
+(#671). Three decisions from #445 carry over unchanged in substance and are
+recorded here because they never reached this log; two are new.
+
+**1. A record is not a derivation.** `calc.ts` stores no answer, `fields.ts
+viewRows` keeps no copy of the rows, `model.ts tableOf` normalises at read
+time. The rule underneath is narrower than "everything derives": *never store
+what the current document already implies; do store an observation it cannot
+reproduce.* No recomputation over today's pages answers "how many points were
+open on 3 September", so `doc.trail` — `YYYY-MM-DD` (or `<series>/YYYY-MM-DD`)
+→ counts per status option id — is a stored observation, in the same class as
+`page.created`, `Comment.at` and `doc.revisions`. The falsifiable half: the
+chart's TODAY point is derived from live state; only strictly earlier days are
+read from the trail, and only today's key is ever written (`backfill` refuses
+to overwrite). A missing day is drawn as a gap, never interpolated, carried
+forward or zeroed; thinning SELECTS a bucket's last row and stamps the span it
+stands for, never averages. A row holds counts and nothing else — no page ids,
+no assignee breakdown — a budget rule and a privacy rule at once. Rejected:
+deriving burndown from `doc.revisions` (pruned oldest-first, keyed to saves not
+days, and "Clear history" would silently empty every chart).
+
+**2. The host follows the data source.** Gantt and workload read pages live, so
+they are view layouts. Burndown, burnup and CFD read pre-aggregated counts, so a
+view's `filter` would look like it narrowed them and would not; they are a
+`chart` BLOCK, and their scope is frozen onto a `doc.periods` entry at commit.
+They draw their own SVG rather than `kernel/src/charts.ts`, measured: charts-lite
+maps an absent datum to zero, has no stacking, and has no per-segment dashing.
+
+**3. trail is HISTORY class; periods is CONTENT.** (New, replacing #445's hand
+`stripRecord` and its per-key sync of the trail.)
+- `trail` is classed `history` in `SPACES_FIELDS`, so the kernel's copy table
+  keeps it in the file, a duplicate and an invite and drops it from reader,
+  sealed reading, link, audience, template and Copy-JSON copies and the page
+  extract. No builder strips it by name; copytiers' sweep now fails on a
+  history field stripped by name outside its own engine module. It is never
+  synced: the kernel's `shape()` skips history fields, so each replica records
+  what it saw. #445 synced it per key; under the history class two files of one
+  room each hold their own truthful record, which is what file-local means.
+- `periods` is classed `content`. A period is something a person decided (a
+  window and a committed scope), a chart block names it by id, ⌘Z takes it back,
+  and collaborators share the sprint. As history it would be dropped from a
+  reader copy while the block naming it stayed — a dangling reference — and it
+  would not sync. It holds totals at one instant (`base`), never page ids or a
+  series, so carrying it to a reader discloses one aggregate count, not cadence.
+  It stays a per-key CRDT map (`DOC_MAPS` = `['periods']`, docmaps.ts) so two
+  people starting different periods both keep theirs; a dotted `periods.<id>`
+  written by an older peer is folded back at parse.
+- A chart in a copy that has the period but not the trail (not editable, no
+  `trail` key) says "This copy does not include the day-by-day record" instead
+  of drawing every day as *Not recorded*, which would claim nobody worked.
+
+**4. The trail records while editing, so it counts as unsaved work.** Today's
+row is written on the store's `doc` event, outside any commit and never on
+open; a read-only store (reader, reading copy, frozen file) never writes.
+Because rows land between saves, `trail` is NOT in `SPACES_NOT_EDIT`: a row
+recorded since the last save raises the recovery key, the kernel's default.
+(`revisions` is exempt only because spaces writes it inside a save's prepare.)
+The store keeps history-class fields live across undo, redo and `replaceDoc`,
+which is right for the trail: ⌘Z never erases a row, and Replace from JSON with
+Copy-JSON output never wipes it.
+
+**5. The trail has its own budget, beside history's.** `TRAIL_BUDGET` = 32 KB
+and `TRAIL_MAX` = 400 rows (trail.ts), beside `HISTORY_BUDGET` = 128 KB: at
+most 160 KB of record, the joint ceiling ruled acceptable. This supersedes
+#445's single proportional budget (`clamp(25% of content, 64–256 KB)`, trail
+yielding to history), which never merged. Past the budget the oldest rows thin
+to weekly, then monthly, then drop with `cut` on the oldest survivor; a live
+period's days are never thinned. A real fixture (500 days of edits and saves)
+asserts both budgets and the joint ceiling.
+
+**Interim chrome:** the block sits in Insert → View ▾ behind a rule, not as a
+Chart button of its own — a button tipped the bar out of slides' width at 1440,
+the same reason Embed sits in Image ▾.
+
+**Known gap, not fixed here:** a recovery restore goes through `replaceDoc`,
+which keeps the live trail, so rows that exist only in a crash-recovery
+snapshot (recorded on a day the file was never saved) are not brought back.
+Today's row is re-observed on the next edit; earlier unsaved days are lost.
+
+Pointers: spaces/src/trail.ts, observe.ts, periods.ts, charts.ts, docmaps.ts,
+docclass.ts; scripts/test-spaces-trail.ts, scripts/test-spaces-copytiers.ts.
 ## 2026-10-10 — a spaces invite discloses its history and can leave it out
 
 **Decision.** The kernel's invite tier keeps the `history` class, and the

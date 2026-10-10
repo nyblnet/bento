@@ -23,6 +23,12 @@ import { esc, externalHref } from './sanitize.ts'
 import { isPageRef } from './embed.ts'
 import { projectForCopy, docContentKey as kernelContentKey } from '../../kernel/src/docfields.ts'
 import { SPACES_FIELDS, SPACES_NOT_EDIT } from './docclass.ts'
+// A LEAF module (no imports at all), which is what lets the parser call into
+// it: the dotted-key fold has to run before anything else sees the document.
+import { foldDottedMapKeys } from './docmaps.ts'
+// Type-only, and therefore erased: no runtime dependency, no import cycle.
+import type { Trail } from './trail.ts'
+import type { Periods } from './periods.ts'
 
 export const FORMAT = 'bento/spaces'
 export const FORMAT_VERSION = 1
@@ -484,11 +490,22 @@ export interface SpacesDoc {
    * read from a file is validated there before anything folds it. Absent when
    * there is none — never `revisions: []`. `import type`, so no runtime cycle.
    *
-   * `trail` is declared for the tracker's burndown record; nothing in this
-   * build reads or writes it.
+   * `trail` is THE RECORD: what was true on a day, for the tracker's burndown,
+   * burnup and cumulative-flow charts (trail.ts). Written while editing, never
+   * on open; each replica keeps its own. A row holds COUNTS and nothing else —
+   * no page ids, no assignee breakdown, no per-issue anything: that is a budget
+   * rule and a privacy rule at once, written here so a later session does not
+   * add the surveillance shape as the obvious next step.
    */
   revisions?: SpacesRevision[]
-  trail?: unknown
+  trail?: Trail
+  /**
+   * The windows the charts are about (periods.ts) — CONTENT, not history: a
+   * period is something a person decided, referenced by a chart block, undone
+   * by ⌘Z and synced (per key, `DOC_MAPS`). Totals only, never page ids.
+   * Absent until a period is started; deleted rather than emptied.
+   */
+  periods?: Periods
   [extra: string]: unknown
 }
 
@@ -579,6 +596,16 @@ export function parseDoc(json: string): ParseResult {
     return { ok: false, err: 'json', detail: (e as Error).message }
   }
   if (!isObj(raw)) return { ok: false, err: 'shape', detail: 'the document block is not a JSON object' }
+
+  // A PEER RUNNING AN OLDER SHAPE writes a doc-level map entry as a literal
+  // top-level key: it receives `set k="periods.pd-1"`, cannot resolve
+  // `periods` as a map, and stores the dotted name verbatim — which additivity
+  // would then preserve forever. Folding it back is cheap, deterministic and
+  // self-healing, and it repairs files that were damaged before this existed.
+  // Done HERE rather than in a kernel handshake: the hazard belongs to any
+  // future doc-level map, and six lines in a file this app owns beat a change
+  // to shared machinery every app depends on.
+  foldDottedMapKeys(raw)
 
   if (raw.format !== FORMAT) {
     return {
