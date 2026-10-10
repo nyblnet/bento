@@ -111,8 +111,8 @@ const PROTO = '__proto__'
 export const LIMITS = {
   /** ids, group tags, asset keys, a slide's `background` shorthand */
   scalar: 200,
-  /** one colour notation. The longest in a real deck (OneMarket, 21 slides,
-   *  ~1400 colour-typed values) is 45: `color(srgb 0.156863 0.188235 … / 0.55)`.
+  /** one colour notation. The longest seen in a real deck (one converted from
+   *  a design tool) is 45: `color(srgb 0.156863 0.188235 … / 0.55)`.
    *  render.ts:cssColor caps at 48 — it FALLS BACK past that, this DROPS, so a
    *  little more headroom here costs a degraded colour rather than a lost one. */
   color: 64,
@@ -201,9 +201,9 @@ const color = (max = LIMITS.color): Check => tag((v) => {
 /**
  * An svg PAINT (`fill` / `stroke`): a colour, or a reference to a gradient or
  * filter defined inside this document's own markup. The quoted form is what
- * real files carry — OneMarket_Commercial_Architecture slide 21, element
- * `topo-0`, paints `fill: url("#core-glow")`, and the pre-change validator
- * dropped it (CSS_BREAKOUT rejects `"`), leaving render.ts:shapeSvg to write
+ * real files carry — a shape in a real deck paints `fill: url("#core-glow")`,
+ * and the pre-change validator dropped it (CSS_BREAKOUT rejects `"`),
+ * leaving render.ts:shapeSvg to write
  * `fill="undefined"` and paint the shape BLACK. Only a bare fragment id is
  * allowed: `url(https://evil/track.svg#g)` is a network fetch the paste never
  * asked for, and it is a colour rule that would otherwise wave it through.
