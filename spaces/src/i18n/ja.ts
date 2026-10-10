@@ -992,4 +992,8 @@ export const ja: Catalog = {
   "This chart has no period yet — a chart needs a window to draw.": "このグラフにはまだ期間がありません — グラフには対象期間が必要です。",
   "This chart's period is gone.": "このグラフの期間は失われました。",
   "{id} (unknown)": "{id}（不明）",
+  "This copy includes the space’s version history.": "このコピーには、スペースのバージョン履歴が含まれます。",
+  "Leave version history out": "バージョン履歴を含めない",
+  "Versions include text that was deleted. This file keeps them either way.": "バージョンには削除された本文も含まれます。このファイルにはどちらの場合も残ります。",
+  "Save invite…": "招待を保存…",
 }

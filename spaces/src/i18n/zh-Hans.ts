@@ -992,4 +992,8 @@ export const zh_Hans: Catalog = {
   "This chart has no period yet — a chart needs a window to draw.": "此图表尚无周期 — 图表需要一个时间窗口才能绘制。",
   "This chart's period is gone.": "此图表的周期已不存在。",
   "{id} (unknown)": "{id}（未知）",
+  "This copy includes the space’s version history.": "此副本包含空间的版本历史。",
+  "Leave version history out": "不包含版本历史",
+  "Versions include text that was deleted. This file keeps them either way.": "版本中包含已删除的文字。无论如何，此文件都会保留它们。",
+  "Save invite…": "保存邀请…",
 }

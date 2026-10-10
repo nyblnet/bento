@@ -992,4 +992,8 @@ export const it: Catalog = {
   "This chart has no period yet — a chart needs a window to draw.": "Questo grafico non ha ancora un periodo — un grafico ha bisogno di una finestra da disegnare.",
   "This chart's period is gone.": "Il periodo di questo grafico non esiste più.",
   "{id} (unknown)": "{id} (sconosciuto)",
+  "This copy includes the space’s version history.": "Questa copia include la cronologia delle versioni dello spazio.",
+  "Leave version history out": "Escludi la cronologia delle versioni",
+  "Versions include text that was deleted. This file keeps them either way.": "Le versioni includono testo eliminato. Questo file le conserva in ogni caso.",
+  "Save invite…": "Salva l’invito…",
 }

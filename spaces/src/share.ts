@@ -33,7 +33,7 @@
 // client and the deployed worker drift apart.
 
 import { mintInvite } from '../../kernel/src/sync/online.ts'
-import { projectForCopy } from '../../kernel/src/docfields.ts'
+import { projectForCopy, type FieldsOfClass } from '../../kernel/src/docfields.ts'
 import type { SpacesDoc } from './model.ts'
 import { SPACES_FIELDS } from './docclass.ts'
 
@@ -101,7 +101,29 @@ export function canWrite(doc: SpacesDoc): boolean {
  * Returns null when this copy is not the owner: a member copy cannot mint an
  * invite, because it does not hold the key the chain is rooted in.
  */
-export async function inviteCopy(doc: SpacesDoc): Promise<SpacesDoc | null> {
+/** The fields the map classes 'history' (`revisions`, `trail`), READ from
+ *  SPACES_FIELDS — never a hand list, so a history field added later is
+ *  covered by the invite's "Leave version history out" the day it is declared. */
+export type HistoryField = FieldsOfClass<typeof SPACES_FIELDS, 'history'>
+export const HISTORY_CLASS: readonly HistoryField[] = (Object.keys(SPACES_FIELDS) as Array<keyof typeof SPACES_FIELDS>)
+  .filter((k): k is HistoryField => SPACES_FIELDS[k] === 'history')
+
+/** Does this space carry any history an invite would hand over? */
+export function hasHistory(doc: SpacesDoc): boolean {
+  return HISTORY_CLASS.some((k) => (doc as Record<string, unknown>)[k] !== undefined)
+}
+
+export interface InviteOpts {
+  /**
+   * Keep the history class in the copy — the kernel's invite rule, and the
+   * default. `false` is the inviter's "Leave version history out": the copy is
+   * the invite tier exactly, minus every field classed 'history'. History
+   * remembers text that was deleted, and an invite is a file for someone else.
+   */
+  withHistory?: boolean
+}
+
+export async function inviteCopy(doc: SpacesDoc, opts: InviteOpts = {}): Promise<SpacesDoc | null> {
   const c = doc.collab
   if (!c?.room || !c.key || !isOwner(doc)) return null
   const invite = await mintInvite(c.ownerPriv!, 'writer')
@@ -114,6 +136,8 @@ export async function inviteCopy(doc: SpacesDoc): Promise<SpacesDoc | null> {
   const out = projectForCopy(clone(doc), SPACES_FIELDS, 'invite', { invite })
   // the one thing a space adds: the copy is live from the moment it opens
   if (out.collab) out.collab.on = true
+  // the inviter chose to leave history out: drop it by CLASS, not by name
+  if (opts.withHistory === false) for (const k of HISTORY_CLASS) delete (out as Record<string, unknown>)[k]
   return out
 }
 

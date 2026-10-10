@@ -20,6 +20,12 @@ pre-1.0.
   formula that failed to render. An escaped `\$` now never opens or closes a
   formula, inline or display, while an escaped dollar inside a formula still
   belongs to it.
+- **Copy several slides at once.** With several slides selected in the
+  sidebar, ⌘C (or Copy in the context menu) now copies all of them, in deck
+  order, ready to paste into any deck; it used to copy only the current
+  slide. Interactive states stay behind for now, since a pasted state would
+  arrive as an ordinary slide cut off from its parent. Thanks to tikurahul
+  (#615).
 - **Turn text into code without leaving the text box.** Type a fenced block
   — a line of three backticks (optionally with a language, like ```` ```js ````
   or ```` ```python ````), your code, and a closing line of three backticks —

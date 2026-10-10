@@ -961,7 +961,7 @@ export const de: Catalog = {
   "{p} page(s), {b} block(s) changed": "{p} Seite(n), {b} Block/Blöcke geändert",
   "Versions in this file…": "Versionen in dieser Datei…",
   "Kept inside the file, one per save, so they travel with it. Restoring is undoable.": "In der Datei aufbewahrt, eine pro Speichern, und reisen mit ihr. Wiederherstellen lässt sich rückgängig machen.",
-  "This space is too large to keep versions inside the file.": "Dieser Bereich ist zu groß, um Versionen in der Datei aufzubewahren.",
+  "This space is too large to keep versions inside the file.": "Dieser Space ist zu groß, um Versionen in der Datei aufzubewahren.",
   "Versions include text you have deleted. They travel in this file and in invites; reading copies, view-only copies and Copy document JSON leave them out.": "Versionen enthalten auch Text, den du gelöscht hast. Sie reisen in dieser Datei und in Einladungen mit; Lesekopien, Nur-Ansehen-Kopien und „Dokument-JSON kopieren“ lassen sie weg.",
   "Clear history…": "Verlauf löschen…",
   "First version kept in this file": "Erste in dieser Datei aufbewahrte Version",
@@ -992,4 +992,8 @@ export const de: Catalog = {
   "This chart has no period yet — a chart needs a window to draw.": "Dieses Diagramm hat noch keinen Zeitraum — ein Diagramm braucht ein Zeitfenster.",
   "This chart's period is gone.": "Der Zeitraum dieses Diagramms existiert nicht mehr.",
   "{id} (unknown)": "{id} (unbekannt)",
+  "This copy includes the space’s version history.": "Diese Kopie enthält den Versionsverlauf des Space.",
+  "Leave version history out": "Versionsverlauf weglassen",
+  "Versions include text that was deleted. This file keeps them either way.": "Versionen enthalten auch gelöschten Text. Diese Datei behält sie in jedem Fall.",
+  "Save invite…": "Einladung speichern…",
 }

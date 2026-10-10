@@ -1331,6 +1331,12 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   own copies and invites, and leaves reading copies, view-only copies, Copy
   document JSON and exported pages; each collaborator's file keeps its own.
   ⌘Z never erases it, and neither does pasting document JSON.
+- **Invites say they carry the history, and can leave it out.** When a space
+  has version history, **Share → Invite to edit…** now asks first: "This copy
+  includes the space’s version history." Ticking **Leave version history out**
+  saves the invite with no versions, so the deleted text in them stays behind;
+  the file you are editing keeps all of them either way. The default is to
+  include it. A space with no history goes straight to saving, as before.
 
 ## [0.1.0] — 2026-08-03
 
