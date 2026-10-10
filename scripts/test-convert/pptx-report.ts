@@ -82,10 +82,9 @@ const text = (id: string, html: string) => ({
   const m = r ? foldReport(r.report).find((e) => e.code === 'maths-as-source') : undefined
   ok(!!m && m.where === 'slide 2', `a formula is reported, on its slide (${m ? m.where : 'NOT REPORTED'})`)
   // The counter IS slides' scanner, so it agrees with the app by construction:
-  // prices are prose, an escaped \$ is literal. (Together in one run, the
-  // scanner pairs "$10, and \$" as a formula — the app's behaviour, filed
-  // with slides, and mirrored here rather than second-guessed.)
-  for (const p of ['It costs $5 and $10', 'and \\$x\\$ is literal']) {
+  // prices are prose, an escaped \$ is literal, and (since slides fixed the
+  // pairing) a price beside an escaped dollar is prose too.
+  for (const p of ['It costs $5 and $10', 'and \\$x\\$ is literal', 'It costs $5 and $10, and \\$x\\$ is literal']) {
     const prose = await bentoToPptx(docWith([text('t1', p)]))
     ok(!prose.report.entries.some((e) => e.code === 'maths-as-source'), `prose is not reported as a formula: ${JSON.stringify(p)}`)
   }
