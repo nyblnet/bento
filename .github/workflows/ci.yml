@@ -178,6 +178,21 @@ jobs:
             --outfile="$RUNNER_TEMP/test-spaces-copytiers.mjs"
           node "$RUNNER_TEMP/test-spaces-copytiers.mjs"
 
+      - name: Spaces reading-copy rig
+        # "Save a reading copy…" is the file you hand to somebody who will not
+        # edit it, and its whole value is in what the bytes do NOT contain. So
+        # this asserts on the serialized document, not on "the strip function
+        # ran": no room, no read key, no owner/writer/invite private key
+        # anywhere in the text, no comment thread (page-level, block-level or
+        # reply), no history, and the readonly flag set. Prev/Next follows the
+        # tree's order. (The field-by-field key set and the mutation controls
+        # are the copy-tier rig's.) (Bundled: share.ts imports the kernel
+        # transport.)
+        run: |
+          slides/node_modules/.bin/esbuild scripts/test-spaces-reading.ts --bundle --platform=node --format=esm \
+            --outfile="$RUNNER_TEMP/test-spaces-reading.mjs"
+          node "$RUNNER_TEMP/test-spaces-reading.mjs"
+
       - name: Spaces undo rig
         # Every checkpoint used to stringify the WHOLE document: measured on a
         # 200-page, 2.5 MB handbook, fifty edits left an undo depth of NINE,
