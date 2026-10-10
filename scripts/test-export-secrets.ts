@@ -57,6 +57,15 @@ function ok(cond: boolean, msg: string) {
  * matching cannot be thrown by a `{` that lives inside a message, a comment or
  * a template. Offsets stay 1:1 with the original, which is what gets sliced.
  */
+/** A call to the kernel copy table with the tier `re` names, in CODE: the tier
+ *  is a string literal (which mask() blanks), so the match is taken on the raw
+ *  body and must begin where the masked body still reads `projectForCopy(` —
+ *  a comment or string quoting the call does not count. */
+function tableCall(body: string, re: RegExp): boolean {
+  const m = re.exec(body)
+  return !!m && mask(body).startsWith('projectForCopy(', m.index)
+}
+
 function mask(src: string): string {
   const out = src.split('')
   const blank = (i: number) => { if (src[i] !== '\n') out[i] = ' ' }
@@ -394,6 +403,25 @@ for (const app of CLIP_APPS) {
   const body = src.slice(src.indexOf('export function docForExport'))
   // A docForExport that delegates to the kernel's shared scrubber is checked
   // THROUGH it: the rule is how capabilities leave, not which file spells it.
+  // A docForExport built by the kernel's COPY TABLE (projectForCopy, tier
+  // 'copyJSON', over the app's field map) is checked by RUNNING it: that path
+  // builds from empty, so "removing" is the wrong question — what must hold is
+  // that the table drops the capability class for copyJSON, the app's map
+  // classes collab as that class, and the projection really has no collab.
+  const table = /projectForCopy\(doc, (\w+), 'copyJSON'\)/.exec(body.slice(0, 200))
+  if (table) {
+    const mapName = table[1]
+    const from = new RegExp(`import \\{[^}]*\\b${mapName}\\b[^}]*\\} from '\\./([\\w-]+\\.ts)'`).exec(src)
+    ok(!!from, `${app}/src/model.ts: docForExport's field map (${mapName}) is imported from the app`)
+    const kernel = await import('../kernel/src/docfields.ts')
+    const map = from ? (await import(`../${app}/src/${from[1]}`))[mapName] as Record<string, string> : {}
+    ok(kernel.CLASS_RULES.capability.copyJSON === 'drop', `${app}: the kernel copy table DROPS the capability class from copyJSON`)
+    ok(map.collab === 'capability', `${app}: the app's field map classes collab as capability`)
+    const out = kernel.projectForCopy({ title: 't', collab: { room: 'r', key: 'K', ownerPriv: 'P' } }, map as never, 'copyJSON') as Record<string, unknown>
+    ok(!('collab' in out) && !JSON.stringify(out).includes('ownerPriv'),
+      `${app}/src/model.ts: docForExport (the copy table, copyJSON) carries no collab at all`)
+    continue
+  }
   const delegated = /withoutCaps\(/.test(body.slice(0, 160)) && /from '\.\.\/\.\.\/kernel\/src\/docfields\.ts'/.test(src)
   const stripper = delegated ? read('kernel/src/docfields.ts').slice(read('kernel/src/docfields.ts').indexOf('export function withoutCaps')) : body
   ok(/\.\.\.rest|delete .*collab|const \{ collab|delete out\[k\]/.test(stripper.slice(0, 400)),
@@ -492,14 +520,28 @@ for (const app of ['spaces', 'type', 'slides']) {
   ok(!/stripCollabSecrets/.test(src), `${rel}: the delete-based stripper is gone — the kernel allowlist replaces it`)
   const inviteFn = mask(exportedBody(src, 'inviteCopy'))
   const readerFn = mask(exportedBody(src, 'readerCopy'))
-  ok(/collabForInvite\(/.test(inviteFn), `${rel}: inviteCopy routes through collabForInvite`)
-  ok(/collabForReader\(/.test(readerFn), `${rel}: readerCopy routes through collabForReader`)
+  // Routed directly, or through the kernel's COPY TABLE with the matching tier —
+  // projectForCopy projects collab through collabForInvite / collabForReader
+  // (CLASS_RULES.capability, pinned just below the loop).
+  ok(/collabForInvite\(/.test(inviteFn) || tableCall(exportedBody(src, 'inviteCopy'), /projectForCopy\([^;]*'invite', \{ invite \}\)/),
+    `${rel}: inviteCopy routes through collabForInvite`)
+  ok(/collabForReader\(/.test(readerFn) || tableCall(exportedBody(src, 'readerCopy'), /projectForCopy\([^;]*'reader'\)/),
+    `${rel}: readerCopy routes through collabForReader`)
   ok(/mintInvite\(/.test(inviteFn), `${rel}: inviteCopy still mints a SCOPED invite`)
   // the bypass: rebuilding collab by spreading ANY source expression (`{ ...c }`,
   // `{ ...doc.collab }`, `{ ...out.collab }`) instead of the kernel helper carries
   // every secret. The only spread allowed is of a collabFor* projection.
   ok(!/\{\s*\.\.\.(?!collabFor)/.test(inviteFn) && !/\{\s*\.\.\.(?!collabFor)/.test(readerFn),
     `${rel}: neither builder rebuilds collab by spreading the source — only a collabFor* projection`)
+}
+
+// A builder routed through the copy table is only as good as the table's
+// capability cells: reader and invite must project through the allowlists.
+{
+  const { CLASS_RULES } = await import('../kernel/src/docfields.ts')
+  const cap = CLASS_RULES.capability as Record<string, unknown>
+  ok(JSON.stringify(cap.reader) === '{"allowlist":"reader"}' && JSON.stringify(cap.invite) === '{"allowlist":"invite"}',
+    'kernel copy table: the reader and invite tiers project collab through the allowlists (collabForReader / collabForInvite)')
 }
 
 // type's call site: collab.ts must build every copy through share.ts.
@@ -569,7 +611,7 @@ for (const app of ['spaces', 'type', 'slides']) {
     const src = read(rel)
     for (const fn of fns) {
       const b = mask(exportedBody(src, fn))
-      const routed = /collabFor(Reader|Invite)\(/.test(b)
+      const routed = /collabFor(Reader|Invite)\(/.test(b) || tableCall(exportedBody(src, fn), /projectForCopy\([^;]*'(reader|invite)'/)
       const spread = /\{\s*\.\.\.(?!collabFor)/.test(b)
       if (!b || !routed || spread) { bypasses++; console.log(`      (bypass: ${rel} ${fn})`) }
     }

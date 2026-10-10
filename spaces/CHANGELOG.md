@@ -1253,6 +1253,23 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   page; an older build shows the space's design and keeps it. Shell 364,703 →
   368,299 B (+3,596).
 
+- **Every copy of a space is built by one shared table.** The view-only copy,
+  the editor invite, Copy document JSON, Duplicate as new space, Export page as
+  a space and Save a copy now take their fields from the copy rules every Bento
+  app shares, and each field of a space is declared in exactly one class, so a
+  new field cannot reach a copy until somebody says what it is. What changes
+  for a reader: a view-only copy of a space that has a reading-copy setting is
+  marked read-only in the file, so it also opens locked in a build that knows
+  nothing about sharing roles (and still says it follows the live session); a
+  top-level field this build does not know stays out of a view-only copy, an
+  invite and Copy document JSON, and is kept by the file, Save a copy and
+  Duplicate; Copy document JSON no longer carries the reading-copy or template
+  settings; an invite no longer carries them either, so a template space's
+  invite cannot open as a new space outside the session. Version history kept
+  in the file (not in this build yet) is already classified: it travels with
+  the file, a duplicate and an invite, and never with a view-only copy, Copy
+  document JSON or a page export.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

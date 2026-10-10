@@ -9839,3 +9839,43 @@ definitions (and no other page's), held by the roundtrip rig.
 
 **Cost.** Shell 364,703 → 368,299 B (+3,596), ten new strings in nine languages
 (one retired: the import no longer adopts a space-level design).
+
+## 2026-10-10 — bento/spaces adopts the kernel's field classes for every copy
+
+Spaces is the first app to build its copies through the kernel's copy table
+(`kernel/src/docfields.ts` `projectForCopy`). Its map is
+`spaces/src/docclass.ts` (`SPACES_FIELDS`), named to stay clear of
+`fields.ts`, which is page properties. The map is exhaustive over the keys
+`SpacesDoc` DECLARES: the type has an `[extra: string]` index signature, so
+`keyof SpacesDoc` is `string` and a plain `Record<keyof SpacesDoc, …>` would
+check nothing. The map strips the index signature first, then `satisfies` it.
+`revisions` and `trail` are declared as optional, loosely typed fields before
+the features that write them land, so they are already classed `history`.
+
+Builders and tiers: the view-only copy is `reader`; "Invite to edit" is
+`invite`; Copy document JSON (`docForExport`) is `copyJSON`; "Duplicate as new
+space" is `duplicate`; "Save a copy" is `file`. Spaces has no audience, link or
+whole-file template builder yet. The only things a builder still adds itself
+are the ones the table has no rule for: the new docId on a duplicate,
+`collab.on = true` on a share copy, and the extract's own changes below.
+
+**The page extract ("Export page as a space") is `duplicate` minus two
+fields.** It is a new identity holding a few pages, not the space. So it drops
+`template` (as it already did: template re-mints the docId it was just given)
+and the `history` class, because history records the whole space, including
+the pages left out. No kernel tier fits a partial new-identity copy. If one is
+added, the extract moves onto it.
+
+**A view-only copy can now carry `readonly: true`.** The banner checks the
+collab role BEFORE `readonly`, so the copy still says it follows the live
+session. The kernel sets a mode only when the source document already has the
+field (`projectForCopy` walks the source's keys), so a space with no
+`readonly` key gets a reader copy without one. That is a kernel issue and
+is reported there. `scripts/test-spaces-copytiers.ts` records the current
+behaviour so the fix shows up as a red row.
+
+**Recovery uses the kernel's `docContentKey`** with `modified` as the only
+field that does not count as an edit. The kernel key is a superset of the old
+one: theme, assets, fonts and undeclared keys now count as unsaved work. That
+is safe because the only comparison is snapshot against live after
+`keepLiveIdentity`, and no key is ever stored.
