@@ -145,6 +145,10 @@ export interface ExportOpts {
 export interface PptxExport {
   bytes: Uint8Array
   report: FidelityReport
+  /** what landed in the package, for a host to show: slides, objects that
+   *  stay editable in PowerPoint (shapes, text, connectors, tables, charts),
+   *  and pictures (images, SVG, media posters) */
+  stats: { slides: number; editable: number; pictures: number }
 }
 
 // --- helpers ------------------------------------------------------------------
@@ -312,6 +316,7 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
   const extraOverrides: ContentTypeOverride[] = []
   let chartCount = 0
   let pageCounter = 0
+  const stats = { slides: exported.length, editable: 0, pictures: 0 }
 
   for (let si = 0; si < exported.length; si++) {
     const slide = exported[si]
@@ -369,7 +374,11 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     const children: XChild[] = []
     let shapeId = 2 // the spTree preamble owns id 1 (parts.ts)
     const emit = (node: XNode | null): void => {
-      if (node) { children.push(node); shapeId++ }
+      if (!node) return
+      children.push(node)
+      shapeId++
+      if (node.name === 'p:pic') stats.pictures++
+      else stats.editable++
     }
 
     for (const el of slide.elements) {
@@ -569,5 +578,5 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
   const problems = packageProblems(new Map(entries.map((e) => [e.name, e.data])))
   if (problems.length) throw new Error(`the PowerPoint package failed its self-check (a bug in the writer): ${problems.join('; ')}`)
   const bytes = await writeZip(entries, opts.at ? { at: opts.at } : {})
-  return { bytes, report: report.build() }
+  return { bytes, report: report.build(), stats }
 }

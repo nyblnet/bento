@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// Build bento.page/import — the public .pptx → .bento.html page.
+// Build bento.page/convert — the one conversion page, many formats to many.
 //
-//   node scripts/build-import-page.mjs <out/index.html>
+//   node scripts/build-convert-page.mjs <out/index.html>
 //
-// Bundles convert/page/import-page.ts (which runs the same convert/src/api.ts
-// as the CLI) and inlines it into site-src/import.html, then writes a Content
+// Bundles convert/page/convert-page.ts (which runs the same convert/src as the
+// CLI) and inlines it into site-src/convert.html, then writes a Content
 // Security Policy built from the SHA-256 of the exact inline script and style.
+// bento.page/import is a static redirect here (site-src/import.html), copied
+// by release.mjs; it carries no script at all.
 //
 // THE CSP IS THE PRIVACY PROMISE, ENFORCED. The page says the file never leaves
 // the device. `connect-src 'self'` makes that the browser's rule rather than
@@ -29,13 +31,13 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const out = process.argv[2]
-if (!out) { console.error('usage: build-import-page.mjs <out/index.html>'); process.exit(2) }
+if (!out) { console.error('usage: build-convert-page.mjs <out/index.html>'); process.exit(2) }
 
 const esbuild = path.join(root, 'slides/node_modules/.bin/esbuild')
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-import-page-'))
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-convert-page-'))
 const bundle = path.join(tmp, 'page.js')
 const built = spawnSync(esbuild, [
-  path.join(root, 'convert/page/import-page.ts'), '--bundle', '--format=esm', '--minify',
+  path.join(root, 'convert/page/convert-page.ts'), '--bundle', '--format=esm', '--minify',
   '--platform=browser', '--target=es2022', '--log-level=error', `--outfile=${bundle}`,
 ], { encoding: 'utf8' })
 if (built.status !== 0) { console.error(built.stderr); process.exit(1) }
@@ -47,9 +49,9 @@ fs.rmSync(tmp, { recursive: true, force: true })
 const CLOSE = '</' + 'script'
 if (js.toLowerCase().includes(CLOSE)) js = js.replace(/<\/(script)/gi, '<\\/$1')
 
-let html = fs.readFileSync(path.join(root, 'site-src/import.html'), 'utf8')
+let html = fs.readFileSync(path.join(root, 'site-src/convert.html'), 'utf8')
 const style = /<style>([\s\S]*?)<\/style>/.exec(html)?.[1]
-if (style === undefined) { console.error('site-src/import.html has no <style> block'); process.exit(1) }
+if (style === undefined) { console.error('site-src/convert.html has no <style> block'); process.exit(1) }
 const sha = (s) => `'sha256-${createHash('sha256').update(s, 'utf8').digest('base64')}'`
 
 const csp = [
@@ -68,8 +70,8 @@ const csp = [
 // head (CSP included) into the output, so the inline script was no longer the
 // script that had been hashed and the page's own CSP would have blocked it.
 html = html
-  .replace('<!--IMPORT_CSP-->', () => `<meta http-equiv="Content-Security-Policy" content="${csp}">`)
-  .replace('<!--IMPORT_SCRIPT-->', () => `<script type="module">${js}</script>`)
+  .replace('<!--CONVERT_CSP-->', () => `<meta http-equiv="Content-Security-Policy" content="${csp}">`)
+  .replace('<!--CONVERT_SCRIPT-->', () => `<script type="module">${js}</script>`)
 
 // Belt: the page must carry exactly one CSP, and the script it runs must be the
 // one the CSP names. Cheap, and it is precisely the check that would have
@@ -82,4 +84,4 @@ if (inline !== js || !csp.includes(sha(inline)))
 
 fs.mkdirSync(path.dirname(out), { recursive: true })
 fs.writeFileSync(out, html)
-console.log(`import page: ${out} (${Math.round(html.length / 1024)}KB, script ${Math.round(js.length / 1024)}KB)`)
+console.log(`convert page: ${out} (${Math.round(html.length / 1024)}KB, script ${Math.round(js.length / 1024)}KB)`)

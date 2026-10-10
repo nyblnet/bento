@@ -393,11 +393,14 @@ if (app.ownsSiteContent) {
   execFileSync('node', [join(root, 'scripts/build-404-deck.mjs'), join(site, '404.bento.html')], { stdio: 'inherit' })
   cpSync(join(root, 'site-src/404.html'), join(site, '404.html'))
 
-  // /import — drop a .pptx, get a .bento.html back, converted in the visitor's
-  // browser (convert/page + convert/src; nothing uploaded). Built into a single
-  // page with a hash-based CSP (scripts/build-import-page.mjs). No shell carries
-  // any of it: the converter lives on this page and nowhere else.
-  execFileSync('node', [join(root, 'scripts/build-import-page.mjs'), join(site, 'import/index.html')], { stdio: 'inherit' })
+  // /convert — one page for every conversion (convert/page + convert/src;
+  // nothing uploaded), built into a single page with a hash-based CSP
+  // (scripts/build-convert-page.mjs). No shell carries any of it.
+  execFileSync('node', [join(root, 'scripts/build-convert-page.mjs'), join(site, 'convert/index.html')], { stdio: 'inherit' })
+  // /import — kept as a static, script-free redirect to /convert?from=pptx:
+  // the slides menu entry and the release announcement link to it.
+  mkdirSync(join(site, 'import'), { recursive: true })
+  cpSync(join(root, 'site-src/import.html'), join(site, 'import/index.html'))
 
   // /q — "this QR code is a presentation" (deck lives in the URL fragment).
   execFileSync('node', [join(root, 'scripts/build-qr-page.mjs'), join(site, 'q/index.html')], { stdio: 'inherit' })

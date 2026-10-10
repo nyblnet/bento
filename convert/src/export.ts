@@ -18,6 +18,7 @@ export interface ExportResult {
   bytes: Uint8Array
   title: string
   report: FidelityReport
+  stats: { slides: number; editable: number; pictures: number }
 }
 
 /**
@@ -48,11 +49,11 @@ export async function docToPptx(json: string): Promise<ExportResult> {
   // The deck's chart palette: what the app would give a new chart. The writer
   // cannot derive it (it never imports an app), so it is passed in here.
   // doc.theme.chartPalette still wins inside the writer when the deck has one.
-  const { bytes, report } = await exportPptx(doc as unknown as ExportDoc, {
+  const { bytes, report, stats } = await exportPptx(doc as unknown as ExportDoc, {
     chartPalette: deriveChartPalette(doc.theme.accent),
     formulasIn: countFormulas,
   })
-  return { bytes, title: doc.title, report }
+  return { bytes, title: doc.title, report, stats }
 }
 
 /** The document in a .bento.html, or document JSON as given. JSON is
