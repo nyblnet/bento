@@ -395,6 +395,20 @@ export interface SpacesDoc {
   /** the page shown on open; absent ⇒ pages[0] */
   home?: string
   theme: Theme
+  /**
+   * The page design the AUTHOR chose (DECISIONS 2026-09-26): a built-in name
+   * (designs.ts BUILT_INS) or a key of `designs`. ABSENT = the default look,
+   * and returning to the default DELETES the key. An unknown name renders the
+   * default and round-trips untouched. Document-wide today; a per-page
+   * `Page.design` would resolve through the same function and override it.
+   */
+  design?: string
+  /**
+   * Designs this document carries itself, by name: overrides on a built-in
+   * base, every value validated before use (designs.ts resolveData). A name
+   * that is also a built-in's is never used.
+   */
+  designs?: Record<string, unknown>
   assets?: Record<string, string>
   /**
    * FOOTNOTES, by label → inline html. See src/footnotes.ts for the whole
@@ -637,10 +651,16 @@ export function docContentKey(doc: SpacesDoc): string {
   // crash, and without them here a session whose only change was "save this
   // page as a template" would compare equal and lose it.
   //
+  // The design is content as well: a crash right after choosing one must still
+  // offer the recovery. It is appended ONLY when present, so a document with
+  // no design keys exactly as it did before designs existed.
+  //
   // ONE return. Each field arrived on its own branch with its own `return`
   // line, and a merge that kept both left the second one dead — footnotes
   // silently dropped out of recovery. New content fields are APPENDED here.
-  return JSON.stringify([doc.title, doc.home, doc.pages, doc.footnotes, doc.templates, doc.journalTemplate])
+  const key: unknown[] = [doc.title, doc.home, doc.pages, doc.footnotes, doc.templates, doc.journalTemplate]
+  if (doc.design !== undefined || doc.designs !== undefined) key.push(doc.design ?? null, doc.designs ?? null)
+  return JSON.stringify(key)
 }
 
 // ---- derived, NEVER stored -------------------------------------------------

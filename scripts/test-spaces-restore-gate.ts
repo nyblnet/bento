@@ -231,5 +231,27 @@ console.log('\nevery restore path uses the gate\n')
   ok(!/JSON\.parse\((snap|v)\.json\)/.test(main + about), 'no raw JSON.parse of a stored entry remains')
 }
 
+console.log('\na design is content, not identity\n')
+{
+  // `design` / `designs` (spaces/src/designs.ts) are NOT on FROM_LIVE: a
+  // restore brings the snapshot's design back, and a snapshot that differs
+  // only by its design still raises the recovery banner.
+  const { FROM_LIVE } = await import('../kernel/src/docfields.ts')
+  const fl = FROM_LIVE as readonly string[]
+  ok(!fl.includes('design') && !fl.includes('designs'), 'design and designs are not on FROM_LIVE')
+  const live = liveA()
+  const snap = clone(live) as SpacesDoc & { design?: string; designs?: Record<string, unknown> }
+  snap.design = 'mine'
+  snap.designs = { mine: { base: 'riso', label: 'Mine' } }
+  const g = gateRestored(JSON.stringify(snap), live)
+  ok(g.ok && (g.doc as typeof snap).design === 'mine' && JSON.stringify((g.doc as typeof snap).designs) === JSON.stringify(snap.designs),
+    'the gate passes design and designs through from the snapshot')
+  ok(recoveryOffered(JSON.stringify(snap), live), 'a snapshot that differs only by its design is offered for recovery')
+  const designedLive = clone(live) as SpacesDoc & { design?: string }
+  designedLive.design = 'ledger'
+  const g2 = gateRestored(JSON.stringify(clone(live)), designedLive)
+  ok(g2.ok && !Object.hasOwn(g2.doc, 'design'), 'restoring a snapshot with no design does not keep the live design (it is content, not identity)')
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)
