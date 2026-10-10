@@ -1234,6 +1234,25 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   300,835 B (+29,025; roughly 12 KB of that is the picker and panel's 115
   new strings in nine languages).
 
+- **A page can have its own design, and a section passes its design down.**
+  Each page's ⋯ menu — and the properties panel — has **Design**: "Same as
+  parent" (or "Same as space" at the top), showing what that comes to, then
+  every design. Hover one to see it on the page; choosing is one undo step,
+  and going back to "Same as parent" leaves the file exactly as it was. Set
+  one on a section and every page inside it takes it, unless a page sets its
+  own. **Customise…** from there makes a design of that page's own, kept in
+  the space, without touching the section or the rest of the space.
+  Everything shown inside a page — gallery cards, boards, page cards, another
+  page embedded in it — takes the design of the page you are on, not the page
+  it points at. Printing the whole space prints each page in its own design;
+  the file's thumbnail shows the home page's. **Save ▾ → Export page as
+  Markdown…** writes the page you are on as one note, with its footnotes and
+  with `design:` in its front matter when the page chose one itself, and
+  importing notes puts each note's design back on its own page — an import no
+  longer changes the space's own design. Format: an optional `design` on a
+  page; an older build shows the space's design and keeps it. Shell 364,703 →
+  368,299 B (+3,596).
+
 ## [0.1.0] — 2026-08-03
 
 First release.

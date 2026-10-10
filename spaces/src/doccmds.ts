@@ -81,7 +81,7 @@ export function saveRows(m: Menu, h: DocHost): void {
 
 /** The labels, in order — what the chrome rig holds the menu to. */
 export const SAVE_ORDER = [
-  'Save a copy…', 'Duplicate as new space…', 'Export as Markdown…', 'Export page as a space…',
+  'Save a copy…', 'Duplicate as new space…', 'Export as Markdown…', 'Export page as a space…', 'Export page as Markdown…',
   'Encrypt with password…', 'Version history…', 'Copy document JSON', 'Replace from JSON…', 'Import Markdown…',
 ]
 

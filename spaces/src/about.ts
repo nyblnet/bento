@@ -40,7 +40,7 @@ import '../../kernel/src/ui/dialog.css'
 import { t, localeChoices, locale, setLocale } from './i18n'
 import { appearanceSection } from './appearance'
 import { designSection } from './designpanel'
-import { designFrontMatter, type Resolved } from './designs.ts'
+import { designFrontMatter, type DesignPreview } from './designs.ts'
 import { esc, textOf } from './sanitize'
 import { htmlToMd } from './marks.ts'
 import { definitionLines } from './footnotes.ts'
@@ -76,7 +76,7 @@ export interface AboutHooks {
    */
   onBeforeWrite?: () => void
   /** paint a design on the page without writing it (the picker's hover) */
-  previewDesign?: (r: Resolved | null | undefined) => void
+  previewDesign?: (pv: DesignPreview | undefined) => void
   /** the non-modal customise panel, opened over the page */
   openDesignPanel?: () => void
 }
@@ -572,7 +572,7 @@ function shortStamp(iso: string): string {
  * The renderer already emits semantic tags, so the mapping is direct — which
  * is the payoff for having refused divs-with-classes in the first place.
  */
-export function toMarkdown(store: Store): string {
+export function toMarkdown(store: Store, opts: { page?: string } = {}): string {
   const out: string[] = []
   const ctx: MdCtx = {
     titleOf: (id) => store.index.page.get(id)?.title,
@@ -645,8 +645,11 @@ export function toMarkdown(store: Store): string {
     for (const b of page.blocks) if (Array.isArray(b.comments) && b.comments.length) anchored.add(b.id)
   }
   for (const m of JSON.stringify(store.doc.pages).matchAll(/#p\/[^"\\/]+\/([A-Za-z][A-Za-z0-9_-]{0,63})/g)) anchored.add(m[1])
+  // ONE PAGE is a note: that page alone, as a top-level heading, which is the
+  // unit the importer reads back as one page (markdown.ts parseNote).
+  const one = opts.page !== undefined ? store.index.page.get(opts.page) : undefined
   const walk = () => {
-    for (const { page, depth } of store.tree()) {
+    for (const { page, depth } of one ? [{ page: one, depth: 0 }] : store.tree()) {
       out.push(`${'#'.repeat(Math.min(depth + 1, 6))} ${page.title}`, '')
       // Indent, blockquote markers and what separates one block from the next
       // are properties of the TREE, not of a block, so they come from the
@@ -691,7 +694,9 @@ export function toMarkdown(store: Store): string {
   walk()
   // The design leads, as front matter, so the Markdown carries the look with
   // it (designs.ts designFrontMatter). Nothing is written when there is none.
-  return [...designFrontMatter(store.doc), ...out].join('\n').replace(/\n{3,}/g, '\n\n')
+  // A page's note names only a design that page sets ITSELF; the whole-space
+  // file names the space's and carries the registry every page draws on.
+  return [...designFrontMatter(store.doc, one?.id), ...out].join('\n').replace(/\n{3,}/g, '\n\n')
 }
 
 /**
@@ -706,11 +711,12 @@ export function toMarkdown(store: Store): string {
  * cannot spell is now a rig failure.
  */
 
-export function downloadMarkdown(store: Store): void {
-  const blob = new Blob([toMarkdown(store)], { type: 'text/markdown' })
+export function downloadMarkdown(store: Store, pageId?: string): void {
+  const page = pageId !== undefined ? store.index.page.get(pageId) : undefined
+  const blob = new Blob([toMarkdown(store, { page: page?.id })], { type: 'text/markdown' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = `${(store.doc.title || 'space').replace(/[^\w.-]+/g, '-')}.md`
+  a.download = `${((page ? page.title : store.doc.title) || (page ? 'page' : 'space')).replace(/[^\w.-]+/g, '-')}.md`
   a.click()
   URL.revokeObjectURL(a.href)
 }
