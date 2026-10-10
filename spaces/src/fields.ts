@@ -30,6 +30,7 @@ import type { SpacesDoc, Page, Block } from './model'
 // not follow an extensionless import. Vite is unaffected — the same fix main
 // already carries for i18n/packed.
 import { t } from './i18n.ts'
+import { buildTagIndex, pageHasTag } from './tags.ts'
 import { passesClauses, clauseCount, type Clause } from './query.ts'
 
 /** What a field holds. Deliberately few: every one costs an editor and a
@@ -467,11 +468,26 @@ export interface ViewSource {
   has?: string
   /** pages nested anywhere under this page */
   under?: string
+  /**
+   * pages whose PROSE carries this `#tag` (or anything nested under it)
+   *
+   * The third selector, and it earns its place on the same test the other two
+   * pass: it says something about a page that nothing else in this format can
+   * say. `has` asks about a declared field, `under` about the tree — both are
+   * structure somebody set up in advance. A tag is written mid-sentence, in
+   * the middle of writing something else, which is the only kind of
+   * classification most notes ever get.
+   *
+   * The KEY is stored, lower-cased — a filter that matched casing would break
+   * the moment somebody wrote `#Recipe` once. Nested tags include their
+   * children: `tag: 'project'` selects `#project/bento` too.
+   */
+  tag?: string
 }
 
 export const unknownSourceKeys = (src: unknown): string[] =>
   !src || typeof src !== 'object' ? []
-    : Object.keys(src as Record<string, unknown>).filter((k) => k !== 'has' && k !== 'under')
+    : Object.keys(src as Record<string, unknown>).filter((k) => k !== 'has' && k !== 'under' && k !== 'tag')
 
 /** Is this page anywhere below `root`? Cycle-safe, like the tree walk. */
 function isUnder(doc: SpacesDoc, page: Page, root: string): boolean {
@@ -496,12 +512,19 @@ export function viewRows(doc: SpacesDoc, source?: unknown): IssueRow[] {
   const src = (source && typeof source === 'object' ? source : {}) as ViewSource
   const has = typeof src.has === 'string' ? src.has : ''
   const under = typeof src.under === 'string' ? src.under : ''
-  if (!has && !under) return issuesOf(doc)
+  const tag = typeof src.tag === 'string' ? src.tag : ''
+  if (!has && !under && !tag) return issuesOf(doc)
+
+  // Derived here rather than passed in, so `viewRows` keeps the one-argument
+  // shape every caller already has — including the node rigs, which have no
+  // store to take an index from. Built ONLY when a tag is actually asked for.
+  const tix = tag ? buildTagIndex(doc) : null
 
   const out: IssueRow[] = []
   for (const page of doc.pages) {
     if (page.archived) continue
     if (under && !isUnder(doc, page, under)) continue
+    if (tix && !pageHasTag(tix, page.id, tag)) continue
     const values = valuesOf(page)
     if (has && !values.has(has)) continue
     out.push({ page, values })
@@ -667,7 +690,7 @@ export function cycleSort(sort: unknown, key: string): ViewSort[] | undefined {
  * and source already follow. `nextLayout` returns the word; the caller that
  * WRITES is the one that turns 'board' back into a deletion.
  */
-export const VIEW_LAYOUTS = ['board', 'list', 'table', 'gallery'] as const
+export const VIEW_LAYOUTS = ['board', 'list', 'table', 'gallery', 'calendar'] as const
 export type ViewLayout = (typeof VIEW_LAYOUTS)[number]
 
 /**
@@ -685,7 +708,7 @@ export function layoutOf(raw: unknown): ViewLayout {
   return (VIEW_LAYOUTS as readonly string[]).includes(s) ? (s as ViewLayout) : 'board'
 }
 
-/** The next shape in the cycle: board → list → table → gallery → board. */
+/** The next shape: board → list → table → gallery → calendar → board. */
 export function nextLayout(raw: unknown): ViewLayout {
   const here = layoutOf(raw)
   return VIEW_LAYOUTS[(VIEW_LAYOUTS.indexOf(here) + 1) % VIEW_LAYOUTS.length]

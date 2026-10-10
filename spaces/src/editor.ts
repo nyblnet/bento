@@ -33,6 +33,7 @@ import {
   cycleSort, nextLayout,
   type DropAim, type FieldSpec, type ViewFilter, type ViewSort,
 } from './fields'
+import { nextSpan } from './calendar.ts'
 import {
   clausesOf, clauseSummary, isAny, opsFor, opLabel, numberOpLabel, windowLabel,
   DATE_WINDOWS, type Clause, type QueryOp,
@@ -44,9 +45,15 @@ import { countOutsideTags, replaceOutsideTags } from './findreplace'
 import { asksForAnswer, evaluate, format, pageContext } from './calc'
 import { t, locale, localeChoices, setLocale, applyDirection } from './i18n'
 import { openAbout } from './about'
+import { applyDesign, adoptDesign, type Resolved } from './designs.ts'
+import { openDesignPanel } from './designpanel'
 import { saveRows, type DocHost } from './doccmds.ts'
 import { openGraphView } from './graph.ts'
 import { pageToDeck, type DeckNote, type DeckNoteCode } from './todeck.ts'
+import {
+  redecorateTags, readInline, matchTags, pagesWithTag, tagList, keysUnder, ancestorsOf,
+  type TagEntry,
+} from './tags.ts'
 import {
   todayISO, stepDay, journalLabel, journalShort, isJournal, planJournal,
 } from './journal'
@@ -303,7 +310,7 @@ export class Editor {
     })
     this.store.on('tree', () => this.paintTree())
     this.store.on('page', () => { this.paintPage(); this.paintTree() })
-    this.store.on('doc', () => { this.status(t('Edited')); this.syncHistoryButtons(); this.syncDirty() })
+    this.store.on('doc', () => { this.status(t('Edited')); this.syncHistoryButtons(); this.syncDirty(); this.syncDesign() })
     // A REMOTE change moves the unsaved dot without claiming you made it —
     // 'doc' paints "Edited", 'dirty' paints only the dot. See store.setDirty.
     this.store.on('dirty', () => this.syncDirty())
@@ -1162,9 +1169,31 @@ export class Editor {
   private fnSig = ''
 
   // ---- the page -----------------------------------------------------------
+  /**
+   * The design the picker is showing on hover, or undefined for none.
+   * A preview is never document data: it is painted, never committed.
+   */
+  private designPreview: Resolved | null | undefined = undefined
+
+  /**
+   * Put the document's design (or the one being previewed) on the reading
+   * surface. The surface is `.sp-main` and nothing else — the bar, both panels
+   * and every popover stay the reader's (DECISIONS, 2026-09-26).
+   */
+  syncDesign(): void {
+    applyDesign(this.main, this.store.doc, this.designPreview)
+  }
+
+  /** Show a design on the page without writing it; `undefined` ends the preview. */
+  previewDesign(r: Resolved | null | undefined): void {
+    this.designPreview = r
+    this.syncDesign()
+  }
+
   private paintPage(): void {
     const s = this.store
     const page = s.page
+    this.syncDesign()
     // the baseline `syncFootnotes` compares against — set here so switching
     // pages can never leave the previous page's signature behind
     this.fnSig = page ? notesOnPage(s.doc, page).order.join('\u001F') : ''
@@ -1692,6 +1721,8 @@ export class Editor {
       fb?.addEventListener('click', () => this.openViewFilter(v.dataset.blockId!, fb))
       const lb = v.querySelector<HTMLElement>('[data-view-layout]')
       lb?.addEventListener('click', () => this.toggleViewLayout(v.dataset.blockId!))
+      const spb = v.querySelector<HTMLElement>('[data-view-span]')
+      spb?.addEventListener('click', () => this.toggleViewSpan(v.dataset.blockId!))
       const gb = v.querySelector<HTMLElement>('[data-view-group]')
       gb?.addEventListener('click', () => this.openViewGroup(v.dataset.blockId!, gb))
       const sb = v.querySelector<HTMLElement>('[data-view-sort]')
@@ -1887,7 +1918,7 @@ export class Editor {
    * list and back is byte-identical to one that was never touched, and a file
    * written before this control existed stays that way.
    */
-  private editView(blockId: string, key: 'layout' | 'groupBy' | 'sort' | 'source', value: unknown): void {
+  private editView(blockId: string, key: 'layout' | 'groupBy' | 'sort' | 'source' | 'span', value: unknown): void {
     const s = this.store
     const b = s.block(blockId)
     if (!b || s.readOnly || this.reading) return
@@ -1917,7 +1948,7 @@ export class Editor {
     const s = this.store
     const b = s.block(blockId)
     if (!b) return
-    const set = (src: { has?: string; under?: string } | undefined) => this.editView(blockId, 'source', src)
+    const set = (src: { has?: string; under?: string; tag?: string } | undefined) => this.editView(blockId, 'source', src)
     this.menuAt(anchor, t('Which pages'), (m) => {
       caption(m, t('Which pages'))
       row(m, { icon: ICONS.board, label: t('Issues'), hint: t('Every page with a status'), run: () => set(undefined) })
@@ -1936,6 +1967,19 @@ export class Editor {
         row(m, { icon: ICONS.page, label: here.title || t('Untitled'), hint: t('Pages nested under this one'),
           run: () => set({ under: here.id }) })
       }
+
+      // The tags the space ACTUALLY HAS, most-used first — never a free-text
+      // box. A tag that has not been written selects nothing, and a picker
+      // that let you ask for one would be a view that is empty for a reason
+      // you cannot see. Capped, because this is a menu, not the tag index.
+      const tags = tagList(s.tags).slice(0, 12)
+      if (tags.length) {
+        caption(m, t('Tagged'))
+        for (const e of tags) {
+          row(m, { icon: ICONS.tag, label: '#' + e.label, hint: t('Pages carrying this tag'),
+            run: () => set({ tag: e.key }) })
+        }
+      }
     })
   }
 
@@ -1953,6 +1997,21 @@ export class Editor {
     // 'board' back into a deletion is the writer's job, and this is the writer.
     const to = nextLayout((b as { layout?: unknown } | undefined)?.layout)
     this.editView(blockId, 'layout', to === 'board' ? undefined : to)
+  }
+
+  /**
+   * MONTH ⇄ TIMELINE, the calendar's own second shape.
+   *
+   * A parameter of one layout, like `groupBy` — not a sixth entry in the layout
+   * cycle, whose cost is one click for everybody every time they pass it. Same
+   * writer discipline as every other view key: `month` is the DEFAULT, so it is
+   * stored as an ABSENT key and a view toggled to the timeline and back is
+   * byte-identical to one nobody touched.
+   */
+  private toggleViewSpan(blockId: string): void {
+    const b = this.store.block(blockId)
+    const to = nextSpan((b as { span?: unknown } | undefined)?.span)
+    this.editView(blockId, 'span', to === 'month' ? undefined : to)
   }
 
   /**
@@ -2562,7 +2621,9 @@ export class Editor {
         delete host.dataset.empty
         s.runEdit(id, () => {
           const b = s.block(id)
-          if (b) b.html = host.innerHTML
+          // readInline, NOT innerHTML: a render drew `#tag` chips into this
+          // host and the model must never learn they happened (tags.ts).
+          if (b) b.html = readInline(host)
         })
         this.autoformat(id, host)
         this.ghost(id, host)
@@ -2576,6 +2637,11 @@ export class Editor {
           const clean = canonicalize(b.html)
           if (clean !== b.html) { b.html = clean; host.innerHTML = clean }
         }
+        // Chips settle on BLUR, never during a run: redrawing them per
+        // keystroke would replace the nodes the caret is standing in. Blur is
+        // also when a chip that grew (a caret at its end is INSIDE the <a>, so
+        // typing there appends to it) is taken apart and re-read.
+        redecorateTags(host)
         // A FOOTNOTE REFERENCE TYPED INTO THIS BLOCK CHANGES THE PAGE.
         //
         // The section at the foot is derived from every block's references, so
@@ -2857,6 +2923,13 @@ export class Editor {
     view.addEventListener('click', (e) => {
       const a = (e.target as HTMLElement).closest('a')
       if (!a) return
+      // A tag chip is an <a> with no href (tags.ts explains why it has none),
+      // so it is caught HERE, before the href test — and caught by the same
+      // listener, because the whole point of a chip is that it behaves like
+      // the link it visually is, inside a contenteditable where the browser
+      // would follow nothing anyway.
+      const tag = a.dataset.tag
+      if (tag) { e.preventDefault(); this.openTag(tag); return }
       const href = a.getAttribute('href') ?? ''
       if (!href.startsWith('#p/')) return
       // through the same resolver as the address bar, so a block anchor
@@ -3034,7 +3107,7 @@ export class Editor {
           if (!b) return
           const t = tableOf(b)
           if (!t.rows[r]) return
-          t.rows[r][c] = td.innerHTML
+          t.rows[r][c] = readInline(td)
           writeTable(b, t)
         })
       })
@@ -3049,6 +3122,7 @@ export class Editor {
         t.rows[r][c] = clean
         writeTable(b, t)
         td.innerHTML = clean
+        redecorateTags(td)
       })
     }
 
@@ -4164,6 +4238,12 @@ export class Editor {
         const q = input.value.trim().toLowerCase()
         results.innerHTML = ''
         if (!q) return
+        // `#` SWITCHES THE QUESTION. Full text already finds `#recipe` — it is
+        // literally in the prose — but it finds it the way it finds any other
+        // word: a list of pages that happen to contain the string. A leading
+        // hash asks the other question, "which tags exist", and answers with
+        // the tag and how much of the space carries it.
+        if (q.startsWith('#')) { runTags(q.slice(1)); return }
         let n = 0
         for (const p of s.doc.pages) {
           const hits: string[] = []
@@ -4198,6 +4278,26 @@ export class Editor {
         at = 0
         mark()
       }
+      const runTags = (want: string) => {
+        const hits = matchTags(s.tags, want)
+        if (!hits.length) {
+          results.append(el('li', 'sp-noresult', t('No tags match')))
+          return
+        }
+        for (const e of hits.slice(0, 30)) {
+          const li = document.createElement('li')
+          const a = document.createElement('button')
+          a.className = 'sp-result'
+          const n = pagesWithTag(s.doc, s.tags, e.key).length
+          a.innerHTML =
+            `<span class="sp-result-ico">${ICONS.tag}</span>` +
+            `<span class="sp-result-txt"><strong>#${escapeHtml(e.label)}</strong>` +
+            `<span>${escapeHtml(t('{n} pages', { n: String(n) }))}</span></span>`
+          a.addEventListener('click', () => { close(); this.openTag(e.key) })
+          li.append(a)
+          results.append(li)
+        }
+      }
       // THE ARROWS MOVE THE HIGHLIGHT, the query keeps the focus — the / menu's
       // pattern. They did nothing here: a result was reachable only by Tab,
       // which walks past it into the rest of the card.
@@ -4221,6 +4321,76 @@ export class Editor {
       card.append(input, results)
     }, { top: true })
   }
+
+  /**
+   * THE TAG INDEX, reachable from the tag itself.
+   *
+   * A chip you cannot click is decoration; the whole reason to write `#recipe`
+   * rather than the word "recipe" is that the tag is a way BACK to everything
+   * else carrying it. So the chip, ⌘K's `#` mode and the graph all land here.
+   *
+   * Everything on this sheet is derived on open, from `store.tags`, which is
+   * itself derived from the prose. Nothing here is stored, so a tag that stops
+   * being written stops existing, with no orphaned entry to garbage-collect —
+   * which is the whole argument for not keeping a `page.tags` array.
+   *
+   * NESTED TAGS get a row of their own at the top. `#project` shows the pages
+   * that carry `#project/bento` too (that is what nesting means), and naming
+   * the children is what stops that from looking like a bug.
+   */
+  openTag(key: string): void {
+    const s = this.store
+    this.openOverlay(t('Tag'), (card, close) => {
+      const entry = s.tags.tags.get(key)
+      const label = entry?.label ?? key
+      card.append(el('h2', 'sp-card-h', '#' + label))
+
+      // UP and DOWN, both as chips, because a hierarchy nobody can walk is a
+      // naming convention rather than a hierarchy. `#project` is the case that
+      // makes the up half necessary: if only `#project/bento` was ever
+      // written, `#project` has no entry of its own, appears in no ⌘K listing
+      // and would be reachable from nothing at all — while still being a
+      // perfectly good thing to ask a view for.
+      const rel = [...ancestorsOf(key), ...keysUnder(s.tags, key).filter((k) => k !== key)]
+      if (rel.length) {
+        const row = el('div', 'sp-tag-kids')
+        for (const k of rel) {
+          const b = el('button', 'sp-tag-chip', '#' + (s.tags.tags.get(k)?.label ?? k))
+          b.addEventListener('click', () => { close(); this.openTag(k) })
+          row.append(b)
+        }
+        card.append(row)
+      }
+
+      const pages = pagesWithTag(s.doc, s.tags, key)
+      card.append(el('p', 'sp-tag-count', t('{n} pages', { n: String(pages.length) })))
+      const ul = el('ul', 'sp-results')
+      for (const page of pages) {
+        const li = document.createElement('li')
+        const a = document.createElement('button')
+        a.className = 'sp-result'
+        // The snippet is the FIRST block on that page that actually carries the
+        // tag — not the first block of the page. "Why is this page here" is the
+        // question a tag index has to answer, and the page's opening line
+        // usually does not.
+        const ref = (entry?.refs ?? []).find((r) => r.pageId === page.id)
+        const snip = textOf(s.index.block.get(ref?.blockId ?? '')?.block.html).slice(0, 120)
+        a.innerHTML =
+          `<span class="sp-result-ico">${ICONS.page}</span>` +
+          `<span class="sp-result-txt"><strong>${escapeHtml(page.title || t('Untitled'))}` +
+          (page.archived ? ` <em class="sp-arch">${t('archived')}</em>` : '') + `</strong>` +
+          `<span>${escapeHtml(snip)}</span></span>`
+        a.addEventListener('click', () => { close(); s.goToPage(page.id) })
+        li.append(a)
+        ul.append(li)
+      }
+      if (!pages.length) ul.append(el('li', 'sp-noresult', t('Nothing found')))
+      card.append(ul)
+    })
+  }
+
+  /** Every tag in the space, for the ⌘K empty state and anything else asking. */
+  allTags(): TagEntry[] { return tagList(this.store.tags) }
 
   /**
    * The block menu, anchored where you are.
@@ -5604,6 +5774,8 @@ export class Editor {
       for (const page of plan.pages) if (!page.parent || !arrived.has(page.parent)) page.parent = under
     }
 
+    // ONE commit, so ⌘Z takes the pages, their footnotes AND any design they brought
+    let adopted: string | null = null
     s.commit(() => {
       s.doc.pages.push(...plan.pages)
       // `plan.footnotes` STARTED from this document's own table and had the
@@ -5612,6 +5784,7 @@ export class Editor {
       // when nothing has footnotes, so importing plain notes does not add an
       // empty key to the file.
       if (Object.keys(plan.footnotes).length) s.doc.footnotes = plan.footnotes
+      adopted = adoptDesign(s.doc, plan.design, plan.designs)
     })
     if (plan.pages[0]) s.goToPage(plan.pages[0].id)
     this.repaint()
@@ -5635,6 +5808,7 @@ export class Editor {
         lines.push(t('{n} note name(s) appear more than once, so links naming them all went to the first.',
           { n: plan.stats.duplicateNames }))
       }
+      if (adopted) lines.push(t('The notes named a design, so this space now uses it.'))
       if (plan.stats.frontmatter) {
         lines.push(t('{n} page(s) had frontmatter, kept verbatim in a folded block.', { n: plan.stats.frontmatter }))
       }
@@ -5904,6 +6078,9 @@ export class Editor {
     const s = this.store
     const host = el('div', 'sp-printroot')
     host.style.direction = 'ltr'
+    // the document's design, in its LIGHT palette: the dark mapping is
+    // @media screen, so paper never matches it
+    applyDesign(host, s.doc)
 
     const pages = opts.whole
       ? s.tree().map((n) => n.page).filter((p) => opts.archived || !p.archived)
@@ -6013,6 +6190,8 @@ export class Editor {
       onUpdateInPlace: (rel) => this.onUpdateInPlace?.(rel) ?? Promise.resolve(null),
       // both self-update writes carry this space's CRDT state, as ⌘S does
       onBeforeWrite: () => shareModule.stampSync(this.store, this.session),
+      previewDesign: (r) => this.previewDesign(r),
+      openDesignPanel: () => openDesignPanel(this.store, (r) => this.previewDesign(r)),
     })
   }
 

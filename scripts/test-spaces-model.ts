@@ -42,7 +42,13 @@ import {
   passesFilter, filterCount, unknownFilterKeys, phaseField, isOpenPhase, reorderPages,
   sortRows, unknownSortKeys, sortDirOf, cycleSort, type IssueRow,
   VIEW_LAYOUTS, layoutOf, nextLayout,
+  viewRows, unknownSourceKeys,
 } from '../spaces/src/fields.ts'
+import {
+  CAL_SPANS, spanOf, nextSpan, dateOf, dateFieldsOf, splitByDate, dateHint,
+  monthGrid, monthOf, monthLabel, stepMonth, daysApart, defaultMonth,
+  firstWeekday, weekdayNames, timelineDays,
+} from '../spaces/src/calendar.ts'
 import {
   unknownFilterOps, clauseCount, clauseSummary, windowRange, opsFor,
 } from '../spaces/src/query.ts'
@@ -76,8 +82,12 @@ import {
 } from '../spaces/src/canvas.ts'
 import type { Block, Page } from '../spaces/src/model.ts'
 import {
-  buildGraph, layoutGraph, stepLayout, nodeRadius, graphBounds,
+  buildGraph, layoutGraph, stepLayout, nodeRadius, graphBounds, TAG_EDGE_MAX,
 } from '../spaces/src/graph.ts'
+import {
+  parseTags, ancestorsOf, buildTagIndex, keysUnder, pagesWithTag, pageHasTag,
+  tagList, matchTags,
+} from '../spaces/src/tags.ts'
 import {
   type PageTemplate, applyTemplate, expandTokens, instantiateBlocks, journalTemplate,
   makeTemplate, putTemplate, removeTemplate, setJournalTemplate, templateById, templatesOf,
@@ -589,8 +599,25 @@ for (const [label, input, err] of [
   const ed = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
 
   ok(/export function viewRows\(/.test(fields), 'a view selects its rows through one function')
-  ok(/if \(!has && !under\) return issuesOf\(doc\)/.test(fields),
-    '…and with no source it is still the backlog, so old view blocks are unchanged')
+  // BEHAVIOURAL, not a source grep. This assertion used to read
+  // /if \(!has && !under\) return issuesOf\(doc\)/ against fields.ts, which is
+  // a test of how the line is SPELLED: adding a third selector (`tag`) kept
+  // every behaviour it was defending and turned it red anyway. Ask viewRows.
+  {
+    const sdoc = JSON.parse(doc({
+      pages: [
+        { id: 'v', title: 'Board', blocks: [{ id: 'vb', type: 'view' }] },
+        { id: 'i1', title: 'One', blocks: [{ id: 's1', type: 'prop', key: 'status', value: 'todo' }] },
+        { id: 'i2', title: 'Two', blocks: [{ id: 's2', type: 'prop', key: 'status', value: 'done' }] },
+        { id: 'n1', title: 'Prose', blocks: [{ id: 'x1', type: 'p', html: 'no fields' }] },
+      ],
+    }))
+    const back = JSON.stringify(issuesOf(sdoc).map((r) => r.page.id))
+    ok(back === '["i1","i2"]', 'the fixture has a backlog to compare against')
+    ok(JSON.stringify(viewRows(sdoc, undefined).map((r) => r.page.id)) === back
+      && JSON.stringify(viewRows(sdoc, {}).map((r) => r.page.id)) === back,
+      '…and with no source it is still the backlog, so old view blocks are unchanged')
+  }
   ok(/viewRows\(doc, \(b as \{ source\?: unknown \}\)\.source\)/.test(render),
     'the renderer asks for the block\'s own source rather than the issues')
 
@@ -604,8 +631,12 @@ for (const [label, input, err] of [
     .split('.sp-view-tablewrap')[1]?.slice(0, 120) ?? ''),
     '…and scrolls inside itself, so a wide table never scrolls the page sideways')
 
-  // Cycling all the way round must leave the block as it started. The cycle
-  // ends at GALLERY now, so it is the last shape that clears the key.
+  // Cycling all the way round must leave the block as it started. Asked of the
+  // LAST shape rather than of a shape named here: the cycle has grown twice
+  // (gallery, then calendar) and both times this line was the thing that had to
+  // be edited to say a different word. Reading the last entry off the tuple
+  // asks the question that actually matters — whatever ends the cycle clears
+  // the key — and keeps asking it at the sixth shape.
   //
   // Asked of the CYCLE, not of the source. This assertion used to read
   // /gallery: undefined/ against editor.ts, which is a test of how the line is
@@ -614,7 +645,8 @@ for (const [label, input, err] of [
   // it green. So the shape question goes to nextLayout, and the writer question
   // goes to the writer's own body — not to the whole file, on the `coverFn`
   // precedent below, because `undefined` appears hundreds of times in editor.ts.
-  ok(nextLayout('gallery') === 'board', 'the shape after the last one is the board again')
+  ok(nextLayout(VIEW_LAYOUTS[VIEW_LAYOUTS.length - 1]) === 'board',
+    'the shape after the last one is the board again')
   const toggleFn = ed.slice(ed.indexOf('private toggleViewLayout'),
     ed.indexOf('private openViewGroup'))
   ok(toggleFn.length > 0 && /'layout',\s*to === 'board' \? undefined :/.test(toggleFn),
@@ -689,7 +721,7 @@ for (const [label, input, err] of [
   const ed2 = fs.readFileSync(new URL('../spaces/src/editor.ts', import.meta.url), 'utf8')
   const props2 = fs.readFileSync(new URL('../spaces/src/props.ts', import.meta.url), 'utf8')
   ok(/layout === 'gallery'/.test(render), 'a view can be a gallery')
-  ok(nextLayout('table') === 'gallery' && nextLayout('gallery') === 'board',
+  ok(nextLayout('table') === 'gallery' && VIEW_LAYOUTS.includes('gallery'),
     '…reachable from the one layout control, which cycles through it')
   ok(/resolveSrc\(coverSrc\(r\.page\), doc\)/.test(render),
     '…and a card asks coverSrc for the picture, so a remote cover is refused there too')
@@ -3909,6 +3941,758 @@ function fsTable(f: string): string {
     'the cycle reaches every shape — none is stranded off it')
 }
 
+
+// ---- the CALENDAR layout ---------------------------------------------------
+// WHAT THIS PROVES, and every check below is BEHAVIOURAL — the functions are
+// imported and run. A source grep over render.ts would have passed while the
+// grid was empty, which is the class of failure this zone has measured twice.
+//
+//   1. The grid has the right NUMBER OF CELLS. Four, five and six week months
+//      all exist, and the reader's first day of the week moves the boundary —
+//      February 2026 is exactly four weeks starting Sunday and five starting
+//      Monday. A hard-coded 35 loses the last days of a six-week month with no
+//      symptom but a missing entry.
+//   2. Every date is built from COMPONENTS, so the answer is the same at UTC+14
+//      and UTC-11. This file is run under both.
+//   3. Nothing is DROPPED. A page the rule finds no date for is in `undated`,
+//      never gone.
+//   4. Untrusted input cannot reach `Object.prototype` through any of it.
+{
+  const calDoc = (fields: unknown[] = DEFAULT_FIELDS as unknown[]): SpacesDoc =>
+    ({ fields, pages: [] } as unknown as SpacesDoc)
+  const crow = (id: string, journal?: string, values: Record<string, unknown> = {}): IssueRow =>
+    ({
+      page: { id, title: id, blocks: [], ...(journal ? { journal } : {}) } as unknown as Page,
+      values: new Map(Object.entries(values)),
+    })
+
+  // --- the shape cycle, on the layout cycle's own discipline ---------------
+  ok((VIEW_LAYOUTS as readonly string[]).includes('calendar'), 'a view can be a calendar')
+  ok(layoutOf('calendar') === 'calendar' && nextLayout('gallery') === 'calendar',
+    '…reachable from the ONE layout control, which cycles through it')
+  ok(CAL_SPANS[0] === 'month' && spanOf(undefined) === 'month',
+    'month is the ABSENT key, so a view nobody toggled carries no span at all')
+  ok(nextSpan('month') === 'timeline' && nextSpan('timeline') === 'month',
+    'the two shapes toggle, and the toggle closes')
+  for (const evil of ['toString', 'constructor', 'valueOf', 'hasOwnProperty', '__proto__']) {
+    ok((CAL_SPANS as readonly string[]).includes(spanOf(evil)),
+      `span:${JSON.stringify(evil)} resolves to a real shape (${spanOf(evil)}), never a native function`)
+    ok((CAL_SPANS as readonly string[]).includes(nextSpan(evil)),
+      '…and what follows it is a shape too, so data-next is never a function body')
+  }
+  ok(spanOf('quarter') === 'month', 'a span from a NEWER build falls back to the month grid')
+
+  // --- WHICH DATE ----------------------------------------------------------
+  const cdoc = calDoc()
+  ok(dateOf(cdoc, crow('a', '2026-08-06')) === '2026-08-06',
+    'a journal entry is dated by its journal date')
+  ok(dateOf(cdoc, crow('b', undefined, { due: '2026-08-09' })) === '2026-08-09',
+    '…a page without one falls to the first date FIELD it carries a value for')
+  ok(dateOf(cdoc, crow('c', '2026-08-06', { due: '2027-01-01' })) === '2026-08-06',
+    '…and the journal date wins when a page has both')
+  ok(dateOf(cdoc, crow('e')) === '', 'a page with neither has NO date rather than a guessed one')
+  // 2026-13-99 is digit-shaped and is not a day; every Date-based formatter
+  // rolls it into some OTHER real date, which is the confident wrong answer
+  ok(dateOf(cdoc, crow('f', undefined, { due: '2026-13-99' })) === '',
+    'a digit-shaped non-date is undated, never rolled over into a day it is not')
+  ok(dateOf(cdoc, crow('g', undefined, { due: 20260809 })) === '',
+    '…and a number in a date field is undated too, rather than stringified into one')
+  {
+    // the rule is "the first date field WITH A VALUE", not "the first date
+    // field": a page with an empty Due and a filled Published is dated by
+    // Published, or the rule would drop it for carrying the wrong empty box
+    const two = calDoc([
+      { key: 'due', label: 'Due', vt: 'date' },
+      { key: 'pub', label: 'Published', vt: 'date' },
+    ])
+    ok(dateOf(two, crow('h', undefined, { due: '', pub: '2026-03-04' })) === '2026-03-04',
+      'an EMPTY date field is skipped for the next one, not treated as the answer')
+    ok(dateFieldsOf(two).length === 2, 'the hint names every date field the schema declares')
+  }
+
+  // --- NOTHING IS DROPPED --------------------------------------------------
+  {
+    const rows = [crow('a', '2026-08-06'), crow('b', '2026-08-06'),
+      crow('c', undefined, { due: '2026-08-09' }), crow('d'), crow('e')]
+    const split = splitByDate(cdoc, rows)
+    ok(split.days.get('2026-08-06')?.length === 2, 'two pages on one day share a cell')
+    ok(split.undated.length === 2, 'the undated pages are KEPT, in their own bucket')
+    const seen = [...split.days.values()].reduce((n, v) => n + v.length, 0) + split.undated.length
+    ok(seen === rows.length,
+      `every row the view holds is somewhere in the calendar (${seen}/${rows.length})`)
+  }
+  {
+    // the day keys come out of a document someone sent you. A plain object
+    // would read `days['__proto__']` back as the prototype and `days['toString']`
+    // as a native function; a Map has no prototype keys to collide with.
+    const evil = splitByDate(calDoc([{ key: 'due', label: 'Due', vt: 'date' }]),
+      [crow('x', '2026-08-06'), crow('y')])
+    ok(evil.days.get('__proto__') === undefined && evil.days.get('toString') === undefined,
+      'the day index reaches Object.prototype for nothing')
+    ok(evil.days.size === 1, '…and holds exactly the days it was given')
+  }
+
+  // --- THE GRID, counted ---------------------------------------------------
+  // Sunday-first and Monday-first are different grids for the same month, so
+  // the count is asked of both explicitly rather than of whatever this machine
+  // happens to be set to.
+  for (const [ym, loc, want, why] of [
+    // Feb 2026 has 28 days and 1 Feb 2026 is a SUNDAY: exactly four weeks in a
+    // Sunday-first locale, and five in a Monday-first one. The one month where
+    // a grid can be 28 cells at all.
+    ['2026-02', 'en-US', 28, 'a 28-day month starting on the first weekday is FOUR weeks'],
+    ['2026-02', 'en-GB', 35, '…and FIVE weeks when the same month starts on the last one'],
+    // 1 Aug 2026 is a Saturday: six weeks whichever end the week starts.
+    ['2026-08', 'en-GB', 42, 'a month that spills past five weeks gets SIX, never a clipped five'],
+    ['2026-08', 'en-US', 42, '…in a Sunday-first locale too'],
+    // 1 Sep 2026 is a Tuesday: the ordinary five.
+    ['2026-09', 'en-GB', 35, 'and the ordinary month is five'],
+  ] as const) {
+    const cells = monthGrid(ym, loc)
+    ok(cells.length === want, `${why} — ${ym}/${loc} is ${cells.length} cells`)
+    ok(cells.length % 7 === 0, `…and ${ym}/${loc} is whole weeks`)
+  }
+  {
+    // EVERY DAY OF THE MONTH IS PRESENT EXACTLY ONCE. The cell count being
+    // right is necessary and not sufficient — an off-by-one in the lead would
+    // give 35 correct-looking cells with the 31st missing and the 30th twice.
+    for (const ym of ['2026-01', '2026-02', '2024-02', '2026-08', '2026-09', '2026-12']) {
+      const inMonth = monthGrid(ym, 'en-GB').filter((c) => c.inMonth).map((c) => c.iso)
+      const days = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)), 0).getDate()
+      const want = Array.from({ length: days }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`)
+      ok(inMonth.join(',') === want.join(','),
+        `${ym}: all ${days} days present, once each, in order`)
+    }
+    ok(monthGrid('2024-02', 'en-GB').filter((c) => c.inMonth).length === 29,
+      'a leap February has 29 days, from the calendar rather than from a table')
+    ok(monthGrid('2026-02', 'en-GB').filter((c) => c.inMonth).length === 28,
+      '…and a non-leap one has 28')
+  }
+  {
+    // the grid is CONTIGUOUS: every cell is the day after the one before it,
+    // across the month boundaries at both ends
+    const cells = monthGrid('2026-08', 'en-GB')
+    let contiguous = true
+    for (let i = 1; i < cells.length; i++) {
+      if (daysApart(cells[i - 1].iso, cells[i].iso) !== 1) contiguous = false
+    }
+    ok(contiguous, 'the grid is one unbroken run of days, leading and trailing weeks included')
+    ok(cells[0].inMonth === false && cells[cells.length - 1].inMonth === false,
+      '…and the days outside the month are marked as such rather than blanked out')
+  }
+  {
+    // EVERY GRID STARTS ON THE READER'S FIRST WEEKDAY, and ends the day before
+    // it. Added after a sabotage run: replacing the component-built date with
+    // `new Date(`${ym}-01T00:00:00Z`)` — the exact UTC-parse bug journal.ts
+    // exists to warn about — slid the whole grid one day west of Greenwich, and
+    // the day-coverage checks above ALL PASSED, because a uniform shift still
+    // contains every day of the month exactly once. It just puts them in the
+    // wrong columns. The weekday of the first cell is the invariant a shifted
+    // grid cannot satisfy; the day list is not.
+    const dow = (iso: string): number => {
+      const [y, m, d] = iso.split('-').map(Number)
+      return new Date(y, m - 1, d).getDay()
+    }
+    for (const [ym, loc] of [
+      ['2026-02', 'en-US'], ['2026-02', 'en-GB'], ['2026-08', 'en-US'],
+      ['2026-08', 'en-GB'], ['2026-09', 'ja'], ['2026-12', 'de'], ['2024-02', 'pt'],
+    ] as const) {
+      const cells = monthGrid(ym, loc)
+      ok(dow(cells[0].iso) === firstWeekday(loc),
+        `${ym}/${loc}: the grid begins on the reader’s own first weekday`)
+      ok(dow(cells[cells.length - 1].iso) === (firstWeekday(loc) + 6) % 7,
+        `…and ends on the day before it, so no week is half-drawn`)
+      const days = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)), 0).getDate()
+      ok(cells.some((c) => c.iso === `${ym}-01`)
+        && cells.some((c) => c.iso === `${ym}-${String(days).padStart(2, '0')}`),
+        `…and holds both ends of ${ym} rather than clipping one`)
+    }
+  }
+  ok(monthGrid('2026-13', 'en-GB').length === 0 && monthGrid('nonsense', 'en-GB').length === 0,
+    'a month that is not a month draws no grid rather than a garbage one')
+
+  // --- FIRST DAY OF THE WEEK, and the column headings ----------------------
+  ok(firstWeekday('en-US') === 0, 'the week starts on Sunday in en-US')
+  ok(firstWeekday('en-GB') === 1, '…and on Monday in en-GB')
+  for (const loc of ['en-US', 'en-GB', 'ja', 'de', 'pt', 'zh-Hans']) {
+    const names = weekdayNames(loc)
+    ok(names.length === 7 && new Set(names).size === 7,
+      `${loc}: seven distinct weekday names, from Intl rather than a hand-written map`)
+  }
+  // FROM INTL, not from a table of English words. Sabotaging the formatter into
+  // a hardcoded ['Sun','Mon',…] passed every check above — seven distinct names
+  // is true of an English array too. Comparing across scripts is what makes the
+  // difference visible, and it is the same failure the extractor sweep
+  // punishes: a hand-written weekday map reaches no catalog and ships English
+  // to all eight locales while the packer reports 100%.
+  // AS SETS, not as ordered lists. The first draft compared `join(',')` and the
+  // `ja` half of it passed under the sabotage FOR THE WRONG REASON: ja starts
+  // its week on Sunday and en-GB on Monday, so two identical English arrays
+  // come back rotated and compare unequal. The set has no rotation to hide in.
+  const sameNames = (a: string, b: string): boolean =>
+    [...new Set(weekdayNames(a))].sort().join(',') === [...new Set(weekdayNames(b))].sort().join(',')
+  ok(!sameNames('ja', 'en-GB'),
+    'the weekday names are the READER’S, not English translated by nobody')
+  ok(!sameNames('de', 'en-GB'),
+    '…in every script, not only the ones that do not use the Latin alphabet')
+  {
+    // the headings are ROTATED with the week, not merely translated: getting
+    // this wrong labels the columns correctly and puts every entry one column
+    // out, which looks right until you check a date
+    const us = weekdayNames('en-US'), gb = weekdayNames('en-GB')
+    ok(us[0] === gb[6] && us[1] === gb[0],
+      'a Sunday-first locale gets the same seven names ROTATED, not relabelled')
+    const first = monthGrid('2026-02', 'en-US')[0]
+    ok(first.iso === '2026-02-01' && new Date(2026, 1, 1).getDay() === 0,
+      '…and the grid starts on the reader’s own first weekday')
+  }
+  ok(/2026/.test(monthLabel('2026-08', 'en-GB')) && monthLabel('2026-08', 'en-GB') !== '2026-08',
+    'the month is named through Intl, so it is the reader’s own word and never stored')
+  ok(monthLabel('2026-08', 'ja') !== monthLabel('2026-08', 'de'),
+    '…and two readers of one file see two different words for one stored date')
+
+  // --- MONTH ARITHMETIC ----------------------------------------------------
+  ok(stepMonth('2026-12', 1) === '2027-01' && stepMonth('2026-01', -1) === '2025-12',
+    'stepping past December carries the year')
+  ok(stepMonth('2026-08', 6) === '2027-02' && stepMonth('2026-08', -8) === '2025-12',
+    '…in both directions, by any number of months')
+  ok(monthOf('2026-08-06') === '2026-08' && monthOf('2026-13-99') === '',
+    'a non-date belongs to no month')
+
+  // --- DAYS APART, the one place UTC is right ------------------------------
+  ok(daysApart('2026-08-06', '2026-08-07') === 1, 'one day apart is one')
+  ok(daysApart('2026-08-07', '2026-08-06') === -1, '…and signed')
+  ok(daysApart('2026-02-28', '2026-03-01') === 1, 'February rolls into March')
+  ok(daysApart('2024-02-28', '2024-03-01') === 2, '…with the leap day in between when there is one')
+  ok(daysApart('2025-12-31', '2026-01-01') === 1, 'and the year boundary is one day, not 365')
+  // THE DST TRAP, stated as an assertion rather than as a comment. In
+  // Europe/Berlin 29 March 2026 is 23 hours long and 25 October is 25; in
+  // America/Los_Angeles it is 8 March and 1 November. Local-midnight
+  // subtraction gives 0.958 and 1.042 days there and rounds to the wrong
+  // answer. Both pairs are checked in every timezone this rig runs under.
+  for (const [a, b] of [['2026-03-28', '2026-03-30'], ['2026-10-24', '2026-10-26'],
+    ['2026-03-07', '2026-03-09'], ['2026-10-31', '2026-11-02']] as const) {
+    ok(daysApart(a, b) === 2,
+      `${a} → ${b} is exactly 2 days across a DST boundary (TZ=${process.env.TZ ?? 'system'})`)
+  }
+
+  // --- WHICH MONTH IT OPENS ON ---------------------------------------------
+  ok(defaultMonth(['2026-08-06', '2026-09-02'], '2026-08-20') === '2026-08',
+    'the grid opens on TODAY’S month when anything falls in it')
+  ok(defaultMonth(['2019-04-02', '2019-04-30'], '2026-08-20') === '2019-04',
+    '…and on the data’s own month when nothing does, rather than an empty grid')
+  ok(defaultMonth([], '2026-08-20') === '2026-08', 'an empty view opens on this month')
+  // 20 August → 1 June is 80 days back and → 1 November is 73 days on, so the
+  // FUTURE one is nearer. Written with the numbers checked rather than assumed:
+  // the first draft of this line asserted June because June "looks" closer on
+  // the page, and the rig caught it.
+  ok(defaultMonth(['2026-06-01', '2026-11-01'], '2026-08-20') === '2026-11',
+    'the NEAREST dated row decides, and it can be the one in the future')
+  ok(defaultMonth(['2026-06-01', '2026-12-25'], '2026-08-20') === '2026-06',
+    '…or the one in the past, when that is the nearer')
+  ok(defaultMonth(['2026-08-10', '2026-08-30'], '2026-08-20') === '2026-08',
+    '…and a tie goes to the later of the two')
+  ok(defaultMonth(['nonsense', '2019-04-02'], '2026-08-20') === '2019-04',
+    'a junk value in the list is ignored rather than deciding the month')
+
+  // --- THE TIMELINE --------------------------------------------------------
+  {
+    const rows = [crow('a', '2026-01-02'), crow('b', '2026-08-06'), crow('c', '2026-03-04')]
+    const days = timelineDays(splitByDate(cdoc, rows).days)
+    ok(days.join(',') === '2026-08-06,2026-03-04,2026-01-02',
+      'the timeline reads NEWEST FIRST, whatever order the pages are in')
+  }
+
+  // --- THE HINT ------------------------------------------------------------
+  // It has to SAY the rule, because the rule is fixed rather than chosen. And
+  // it goes through t() as a literal with an interpolated list — a sentence
+  // assembled from fragments does not survive the eight catalogs.
+  ok(/Due/.test(dateHint(calDoc())), 'the view says out loud which date it used')
+  ok(dateHint(calDoc([{ key: 'x', label: 'X', vt: 'text' }])) === 'Dated by the journal date.',
+    '…and says so differently when the schema declares no date field at all')
+  ok(dateHint(calDoc([{ key: 'due', vt: 'date' }])).includes('due'),
+    'a schema entry with no label falls back to its key rather than printing undefined')
+}
+
+// ---- 22. inline #tags ------------------------------------------------------
+// WHAT THIS PROVES, and the order matters: the expensive failure here is not
+// "a tag was missed", it is "a `#` that is NOT a tag became one". A parser
+// that reads every code sample, every URL fragment and every internal page
+// link as a tag turns the index into noise on the first real document, and
+// there is no server to re-run afterwards.
+//
+// Every case below is exercised by CALLING the parser, never by grepping the
+// source for a guard — the layout-cycle bug two sections up is what that costs.
+{
+  // --- the positives: a hash-word is a tag ---
+  const tags = (html: string) => parseTags(html).map((h) => h.key)
+
+  ok(tags('planning a <b>meal</b> #recipe today').join() === 'recipe',
+    'a tag mid-sentence is found')
+  ok(tags('#recipe at the start').join() === 'recipe', 'a tag at the start of a block is found')
+  ok(tags('two #apples and #pears').join() === 'apples,pears', 'two tags in one line')
+  ok(tags('trailing dot #recipe.').join() === 'recipe', 'the sentence-ending full stop is not part of the tag')
+  ok(tags('(#recipe) and "#soup"').join() === 'recipe,soup', 'brackets and quotes open a tag')
+  ok(tags('#рецепт and #レシピ').join() === 'рецепт,レシピ',
+    'a tag is not ASCII — this app ships eight catalogs')
+  ok(tags('#work-in-progress').join() === 'work-in-progress', 'hyphens are tag characters')
+  ok(tags('#work- done').join() === 'work', 'a TRAILING hyphen belongs to the sentence')
+  ok(tags('#Recipe and #recipe').join() === 'recipe,recipe',
+    'the KEY is case-folded, so one tag written two ways is one tag')
+  ok(parseTags('#Recipe').map((h) => h.label).join() === 'Recipe',
+    '…while the LABEL keeps the casing that was actually typed')
+
+  // --- the negatives: every `#` that means something else ---
+  // Each of these is a real thing that appears in a note, and each one is a
+  // separate rule in TAG_SCAN. They are asserted one at a time so a regression
+  // names the case it broke rather than "tags are wrong".
+  const none = (html: string, why: string) =>
+    ok(parseTags(html).length === 0, `NOT a tag: ${why} — ${JSON.stringify(html)}`)
+
+  // These three would ALL be tags in plain prose — `#include`, `#recipe` and
+  // `#production` are perfectly good hash-words. That is the point: they prove
+  // the `<code>` exclusion, where `#!/bin/sh` and `--grep #42` would have
+  // passed anyway on the punctuation and numeric rules and proved nothing.
+  none('<code>#include &lt;stdio.h&gt;</code>', 'a `#` in inline code')
+  none('<code>#recipe</code> is the literal text', 'a would-be tag inside inline code')
+  none('run <code>gi\u0074 log --grep #production</code> here', 'inline code mid-sentence')
+  none('<a href="#p/abc123">Recipes</a>', 'the app\'s own #p/ page link (href is an attribute, not text)')
+  none('<a href="#p/abc/b7">a block link</a>', 'the two-segment #p/page/block form')
+  none('<a href="https://x.example/#top">a fragment link</a>', 'a URL fragment inside a link')
+  // The three above are carried by tag-STRIPPING (the href never becomes
+  // text). This one is carried by the `<a>` exclusion itself: a link whose own
+  // TEXT is a hash-word — which is what an autolinked url looks like — and the
+  // one case where keeping link text would put a tag in the index that the
+  // renderer refuses to chip.
+  none('<a href="https://x.example/t">#p/abc123</a>', 'a link whose visible TEXT is a hash-word')
+  none('<a href="#p/abc">#recipe</a>', 'a page link labelled with a hash-word')
+  none('see https://x.example/page#section for more', 'a bare URL fragment in prose')
+  none('see https://x.example/#top now', 'a bare URL fragment whose hash follows a slash')
+  none('# Title', 'a Markdown ATX heading — `#` plus a space')
+  none('## Deeper', 'a Markdown h2')
+  none('###### six', 'a Markdown h6')
+  none('the language C# is fine', 'a `#` INSIDE a word')
+  none('a#b', 'a `#` between two word characters')
+  none('closes #42 today', 'an issue number')
+  none('a #404 page', 'another issue number')
+  none('#1', 'a bare digit')
+  none('the accent is #fff', 'a three-digit CSS hex colour')
+  none('the accent is #f7a600', 'a six-digit CSS hex colour')
+  none('the accent is #f7a600cc', 'an eight-digit CSS hex colour with alpha')
+  none('nothing here: # ', 'a lone hash')
+  none('#!', 'a hash before punctuation')
+
+  // MARKDOWN ROUND TRIP. The heading rule here and markdown.ts's own reader
+  // must AGREE about what a heading is, or `#recipe` pasted as Markdown
+  // becomes an h1 while the tag index still counts it as a tag.
+  {
+    const note = parseNote('#recipe stew\n\n# Real heading\n\nsee #project/bento\n', 'n')
+    const kinds = note.blocks.map((b) => b.type).join()
+    ok(kinds.startsWith('p,h1,p') || kinds.startsWith('p,h1'),
+      `a line beginning #tag imports as a PARAGRAPH, and # + space as a heading (${kinds})`)
+    const first = note.blocks[0]
+    ok((first.html ?? '').includes('#recipe'),
+      'and the tag survives the import as the text it was')
+    ok(parseTags(first.html).map((h) => h.key).join() === 'recipe',
+      '…so the imported block indexes the same tag it was written with')
+    // OUT again: html → markdown must give the hash back, unescaped.
+    ok(htmlToMd('a #recipe and #project/bento') === 'a #recipe and #project/bento',
+      'markdown EXPORT emits `#tag` verbatim — in, out, byte for byte')
+  }
+
+  // A tag that LOOKS like a colour but is nested is still a tag: the hex test
+  // is deliberately scoped to flat keys, so `#fff/ideas` is not swallowed.
+  ok(tags('#fff/ideas').join() === 'fff/ideas', 'the hex-colour rule does not eat a NESTED tag')
+
+  // --- nesting ---
+  ok(tags('#project/bento is going well').join() === 'project/bento', 'a nested tag is ONE tag')
+  ok(tags('#a/b/c').join() === 'a/b/c', 'nesting goes as deep as it is written')
+  ok(ancestorsOf('project/bento/ui').join() === 'project,project/bento',
+    'every ancestor of a nested tag, shallowest first')
+  ok(ancestorsOf('recipe').length === 0, 'a flat tag has no ancestors')
+
+  // --- word breaks: the two readers must agree ---
+  // `#re<b>cipe</b>` is TWO text nodes in the DOM, so the string reader has to
+  // break the word in the same place. If it closed the gap instead it would
+  // read `recipe` where the chip renderer draws `re`, and the index would
+  // claim a tag nobody can see.
+  ok(tags('#re<b>cipe</b>').join() === 're',
+    'an inline mark inside a tag BREAKS it, exactly as the DOM walker sees it')
+  ok(tags('<b>#recipe</b>').join() === 'recipe', 'a tag wholly inside a mark is intact')
+
+  // --- entities ---
+  ok(tags('a &amp; #recipe').join() === 'recipe', 'an entity before a tag decodes to a valid opener')
+  ok(tags('&lt;p&gt; #recipe').join() === 'recipe',
+    'entities decode AFTER tags are stripped, so &lt;p&gt; cannot become markup')
+  ok(tags('&nbsp;#recipe').join() === 'recipe', 'a non-breaking space opens a tag')
+
+  // --- the index ---
+  const tdoc = {
+    format: FORMAT, version: 1, docId: 'd1', title: 'T', theme: {},
+    pages: [
+      { id: 'p1', title: 'Stew', blocks: [
+        { id: 'b1', type: 'p', html: 'a #Recipe for winter' },
+        { id: 'b2', type: 'p', html: 'also #recipe and #project/bento' },
+      ] },
+      { id: 'p2', title: 'Soup', blocks: [
+        { id: 'b3', type: 'p', html: 'another #recipe' },
+      ] },
+      { id: 'p3', title: 'Notes', blocks: [
+        { id: 'b4', type: 'p', html: 'no tags here' },
+        // a table that arrived WITHOUT html — the same silent hole buildIndex
+        // documents for backlinks, and it must not reopen for tags
+        { id: 'b5', type: 'table', rows: [['x', 'see #recipe'], ['y', 'z']] },
+      ] },
+      { id: 'p4', title: 'Archived', archived: true, blocks: [
+        { id: 'b6', type: 'p', html: '#recipe in the archive' },
+      ] },
+    ],
+  } as unknown as SpacesDoc
+  // Captured BEFORE anything indexes it. A sabotage that made buildTagIndex
+  // write a `tags` array onto each page went GREEN against a `before` taken
+  // after the first index build — the mutation was already in both sides.
+  const pristine = JSON.stringify(tdoc)
+  const tix = buildTagIndex(tdoc)
+
+  ok(tix.tags.get('recipe')?.label === 'Recipe',
+    'the label is the FIRST occurrence in document order — deterministic across readers')
+  ok(tix.tags.get('recipe')?.refs.length === 5,
+    'every occurrence is a ref, including a repeat in the same page and a table cell')
+  ok(tix.tags.get('recipe')?.pages.join() === 'p1,p2,p3,p4',
+    'pages are deduped and in document order')
+  ok(tix.tags.get('recipe')?.pages.length === 4 && tix.tags.get('project/bento')?.pages.length === 1,
+    'a nested tag is its own entry')
+  ok(!tix.tags.has('project'),
+    'a PARENT nobody wrote has no entry of its own — the index records what is written')
+  ok(keysUnder(tix, 'project').join() === 'project/bento',
+    '…but it is reachable: keysUnder finds what is nested below it')
+  ok(pagesWithTag(tdoc, tix, 'project').map((p) => p.id).join() === 'p1',
+    'a view on #project therefore includes the page that only carries #project/bento')
+  ok(pageHasTag(tix, 'p1', 'project') && !pageHasTag(tix, 'p2', 'project'),
+    'pageHasTag answers the same question per page')
+  ok(pageHasTag(tix, 'p1', 'PROJECT'), 'and it folds case, like every other tag lookup')
+  ok(tix.byPage.get('p1')?.join() === 'recipe,project/bento',
+    'byPage lists a page\'s tags once each, in first-seen order')
+  ok((tix.byPage.get('p3') ?? []).join() === 'recipe',
+    'a table with rows and no html still contributes its cell tags')
+  ok(tix.tags.get('recipe')?.pages.includes('p4') === true,
+    'an ARCHIVED page is indexed — the archive is out of the way, not deleted')
+
+  ok(tagList(tix)[0].key === 'recipe', 'tagList is most-used first')
+  ok(matchTags(tix, 'ecip').map((e) => e.key).join() === 'recipe',
+    'matchTags is a substring search over keys — what ⌘K\'s # mode runs')
+  ok(matchTags(tix, 'zzz').length === 0, 'and it finds nothing when there is nothing')
+
+  // --- a view sourced on a tag ---
+  ok(unknownSourceKeys({ tag: 'recipe' }).length === 0,
+    '`tag` is a source key this build understands')
+  ok(unknownSourceKeys({ galaxy: 1 }).join() === 'galaxy',
+    '…and a key from a NEWER build is still reported')
+  {
+    const rows = viewRows(tdoc, { tag: 'recipe' })
+    ok(rows.map((r) => r.page.id).join() === 'p1,p2,p3',
+      'a view sourced on #recipe holds the pages that carry it — archived excluded, as every view is')
+    ok(viewRows(tdoc, { tag: 'project' }).map((r) => r.page.id).join() === 'p1',
+      'and a view on a parent tag reaches its children')
+    ok(viewRows(tdoc, { tag: 'nosuchtag' }).length === 0, 'an unwritten tag selects nothing')
+  }
+
+  // --- the graph ---
+  // Two pages that share a tag are related even though neither links to the
+  // other and neither is the other's parent. That relationship exists ONLY in
+  // the prose, which is why it had to be drawn from the same index.
+  {
+    const gdoc = {
+      format: FORMAT, version: 1, docId: 'g1', title: 'G', theme: {},
+      pages: [
+        { id: 'g1', title: 'Stew', blocks: [{ id: 'x1', type: 'p', html: 'winter #recipe' }] },
+        { id: 'g2', title: 'Soup', blocks: [{ id: 'x2', type: 'p', html: 'quick #recipe' }] },
+        { id: 'g3', title: 'Alone', blocks: [{ id: 'x3', type: 'p', html: 'nothing' }] },
+      ],
+    } as unknown as SpacesDoc
+    const g = buildGraph(gdoc, buildIndex(gdoc))
+    const tagEdges = g.edges.filter((e) => e.tag)
+    ok(tagEdges.length === 1 && tagEdges[0].links === 0 && tagEdges[0].tree === false,
+      'a shared tag draws ONE undirected edge, with no link and no tree behind it')
+    ok(g.nodes[tagEdges[0].a].deg === 1 && g.nodes[tagEdges[0].b].deg === 1,
+      '…and it counts toward both pages\' connectedness, so the dots grow')
+    ok(g.nodes.find((n) => n.title === 'Alone')?.deg === 0,
+      'a page with no tag stays an orphan')
+
+    // THE CAP. Past TAG_EDGE_MAX pages a tag is a category, not a
+    // relationship, and n(n-1)/2 lines is not a picture of anything.
+    const many = {
+      format: FORMAT, version: 1, docId: 'g2', title: 'G', theme: {},
+      pages: Array.from({ length: TAG_EDGE_MAX + 1 }, (_, i) => ({
+        id: 'm' + i, title: 'M' + i, blocks: [{ id: 'y' + i, type: 'p', html: 'a #note here' }],
+      })),
+    } as unknown as SpacesDoc
+    ok(buildGraph(many, buildIndex(many)).edges.length === 0,
+      `a tag on ${TAG_EDGE_MAX + 1} pages draws NOTHING — one over the cap`)
+    const atCap = JSON.parse(JSON.stringify(many)) as SpacesDoc
+    atCap.pages.pop()
+    ok(buildGraph(atCap, buildIndex(atCap)).edges.length === (TAG_EDGE_MAX * (TAG_EDGE_MAX - 1)) / 2,
+      `…and exactly at ${TAG_EDGE_MAX} it still draws every pair`)
+  }
+
+  // --- FORMAT ADDITIVITY, measured rather than assumed ---
+  // The claim is that a tag costs the file NOTHING, so a build that predates
+  // this one renders a tagged paragraph as ordinary prose. The way to measure
+  // it is that the document is byte-identical before and after the index runs,
+  // and that the block's html is still just the words.
+  {
+    tagList(buildTagIndex(tdoc))
+    pagesWithTag(tdoc, buildTagIndex(tdoc), 'recipe')
+    pageHasTag(buildTagIndex(tdoc), 'p1', 'recipe')
+    ok(JSON.stringify(tdoc) === pristine,
+      'building the index MUTATES NOTHING — the tag is only ever in the prose')
+    ok(!Object.hasOwn(tdoc.pages[0] as object, 'tags'),
+      '…and specifically: no page gains a `tags` array that could disagree with the prose')
+    ok(tdoc.pages[0].blocks[0].html === 'a #Recipe for winter',
+      'and the stored html is the sentence, with no tag markup in it at all')
+  }
+  {
+    // The one that would actually break an older build: nothing this feature
+    // touches introduces a field. A round trip through parseDoc keeps the
+    // document identical, which is the same test additivity uses above.
+    const r = parseDoc(JSON.stringify(tdoc))
+    ok(r.ok && JSON.stringify(r.doc.pages) === JSON.stringify(tdoc.pages),
+      'a tagged document round-trips through parseDoc unchanged')
+  }
+
+  // --- pathological input ---
+  ok(parseTags('#' + 'a'.repeat(500)).length === 0, 'an absurdly long key is not indexed')
+  ok(parseTags(undefined).length === 0 && parseTags('').length === 0,
+    'absent and empty html are not an error')
+  ok(buildTagIndex({ pages: [] } as unknown as SpacesDoc).tags.size === 0,
+    'a document with no pages yields an empty index')
+  ok(buildTagIndex({} as unknown as SpacesDoc).tags.size === 0,
+    'and a document with no `pages` at all does not throw')
+  {
+    // prototype keys, the same class of bug as layoutOf above: a Map is used
+    // rather than an object precisely so `#__proto__` cannot reach one
+    const evil = buildTagIndex({
+      pages: [{ id: 'p1', title: 'x', blocks: [{ id: 'b1', type: 'p', html: '#__proto__ #constructor' }] }],
+    } as unknown as SpacesDoc)
+    ok(evil.tags.get('__proto__')?.pages.join() === 'p1',
+      '#__proto__ is an ordinary tag in a Map, not a way to reach Object.prototype')
+    ok(({} as Record<string, unknown>).polluted === undefined, 'and nothing was polluted')
+  }
+}
+
+// ---- page designs (DECISIONS 2026-09-26) ----------------------------------
+// The author picks the design; the reader's theme picks between its two
+// palettes. A design is DATA — palettes, font names, switch words, numbers —
+// and one base stylesheet (designs.css) reads it. What must never break:
+// no `design` renders today's CSS untouched; each name selects its own
+// tokens; an unknown name falls back, round-trips and is named; returning to
+// the default deletes the key; and no author text ever becomes CSS.
+{
+  const D = await import('../spaces/src/designs.ts')
+  const { validateDoc } = await import('../spaces/src/agent.ts')
+  const { orphanAssets } = await import('../spaces/src/assets.ts')
+  const fsd = await import('node:fs')
+  const rdd = (f: string) => fsd.readFileSync(new URL(`../spaces/src/${f}`, import.meta.url), 'utf8')
+  const css = rdd('designs.css')
+  const base = (): SpacesDoc => {
+    const r = parseDoc(JSON.stringify({ format: FORMAT, version: 1, docId: 'dsg-doc', title: 'D', pages: [{ id: 'p1', title: 'P', blocks: [{ id: 'b1', type: 'p', html: 'hi' }] }] }))
+    if (!r.ok) throw new Error('fixture')
+    return r.doc
+  }
+
+  // ABSENT = TODAY. Nothing resolves, and nothing in designs.css can match a
+  // surface that carries no design attribute: every rule is keyed under one,
+  // except the :root block that only CAPTURES the chrome's own tokens.
+  const plain = base()
+  ok(D.resolveDesign(plain) === null, 'no `design` key resolves to no design (the untouched stylesheet)')
+  ok(!Object.hasOwn(plain, 'design'), 'a document without a design gains no key by being loaded')
+  const flat = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const selectors: string[] = []
+  for (const m of flat.matchAll(/([^{}]+)\{/g)) {
+    const s = m[1].trim()
+    if (!s || s.startsWith('@')) continue
+    // split at TOP-LEVEL commas only: `:is(a, b)` is one selector
+    let depth = 0, cur = ''
+    for (const ch of s) {
+      if (ch === '(') depth++
+      if (ch === ')') depth--
+      if (ch === ',' && depth === 0) { selectors.push(cur.trim()); cur = '' } else cur += ch
+    }
+    selectors.push(cur.trim())
+  }
+  const unscoped = selectors.filter((s) => !/\[data-sp-design\]|\[data-sd-[a-z0-9]+="[a-z0-9]+"\]/.test(s) && s !== ':root')
+  ok(selectors.length > 60 && unscoped.length === 0,
+    `every designs.css selector is scoped to a designed surface (${selectors.length} selectors; unscoped: ${unscoped.join(' | ') || 'none'})`)
+  const rootBlocks = [...flat.matchAll(/(^|\})\s*:root\s*\{([^}]*)\}/g)].map((m) => m[2])
+  ok(rootBlocks.length === 1 && rootBlocks[0].split(';').filter((d) => d.trim()).every((d) => /^\s*--sp-app-[a-z0-9-]+:\s*var\(--[a-z0-9-]+\)\s*$/.test(d)),
+    'the one unscoped :root block only captures chrome tokens (--sp-app-* = var(--…)) and styles nothing')
+  // The key as main had it before designs (footnotes, templates, the journal
+  // template): a document with no design must key EXACTLY that, byte for byte.
+  const docKeyOld = JSON.stringify([plain.title, plain.home, plain.pages, plain.footnotes, plain.templates, plain.journalTemplate])
+  ok(docContentKey(plain) === docKeyOld, 'a document with no design keys for recovery exactly as it did before designs existed')
+  {
+    const withNotes = base()
+    ;(withNotes as { footnotes?: Record<string, string> }).footnotes = { a: 'n' }
+    ;(withNotes as { journalTemplate?: string }).journalTemplate = 't1'
+    const k0 = docContentKey(withNotes)
+    D.setDesign(withNotes, 'almanac')
+    const k1 = docContentKey(withNotes)
+    ok(k1 !== k0 && JSON.parse(k1).length === 8 && JSON.parse(k1)[3].a === 'n' && JSON.parse(k1)[5] === 't1',
+      'choosing a design changes the content key, and footnotes and the journal template stay in it beside the design')
+    ;(withNotes as { designs?: unknown }).designs = { mine: { base: 'ledger' } }
+    ok(docContentKey(withNotes) !== k1, 'a custom design is content too')
+    D.setDesign(withNotes, null)
+    delete (withNotes as { designs?: unknown }).designs
+    ok(docContentKey(withNotes) === k0, 'returning to the default keys exactly as before the design was chosen')
+    // ONE return: a merge seam that leaves two makes the second dead code
+    const msrc = rdd('model.ts')
+    const fnBody = msrc.slice(msrc.indexOf('export function docContentKey'), msrc.indexOf('\n}\n', msrc.indexOf('export function docContentKey')))
+    const returns = fnBody.split('\n').filter((l) => /^\s*return\b/.test(l))
+    ok(returns.length === 1, `docContentKey has exactly ONE return statement (found ${returns.length})`)
+  }
+
+  // EACH NAME SELECTS ITS OWN SHEET: its name on the surface, its own tokens,
+  // and a CSS rule for every switch value it uses that differs from today.
+  const sigs = new Set<string>()
+  for (const name of D.BUILT_IN_NAMES) {
+    const doc = base()
+    D.setDesign(doc, name)
+    const r = D.resolveDesign(doc)
+    const st = r && D.designStyle(r)
+    ok(!!st && st.attrs['data-sp-design'] === name && r!.design === D.BUILT_INS[name], `design "${name}" resolves to its own entry and stamps data-sp-design="${name}"`)
+    if (st) sigs.add(JSON.stringify([st.attrs, st.vars]))
+  }
+  ok(sigs.size === D.BUILT_IN_NAMES.length, `the ${D.BUILT_IN_NAMES.length} built-ins put ${sigs.size} distinct token sets on the surface`)
+  ok(D.BUILT_IN_NAMES.length >= 6, 'six built-ins ship: ledger, almanac, studio, broadsheet, typescript, riso')
+  for (const k of D.PROP_KEYS) {
+    const rule = D.PROPS[k] as { kind: string; values?: readonly string[] }
+    if (rule.kind !== 'enum') { ok(css.includes(`var(--d-${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())})`), `designs.css reads the metric --d-${k}`); continue }
+    for (const v of rule.values!) {
+      if (v === D.PLAIN.props[k]) continue
+      ok(css.includes(`[data-sd-${k.toLowerCase()}="${v}"]`), `switch ${k}="${v}" has a rule in designs.css (a word with no rule is a switch that does nothing)`)
+    }
+  }
+  for (const k of D.PALETTE_KEYS) {
+    const v = `--dl-${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}`
+    ok(css.includes(`var(${v})`) && css.includes(`var(${v.replace('--dl-', '--dd-')})`), `palette role ${k} is read in both palettes`)
+  }
+  const darkBlocks = [...css.matchAll(/:root:not\(\[data-theme="light"\]\) \[data-sp-design\] \{([^}]*)\}|:root\[data-theme="dark"\] \[data-sp-design\] \{([^}]*)\}/g)].map((m) => (m[1] ?? m[2]).trim())
+  ok(darkBlocks.length === 2 && darkBlocks[0] === darkBlocks[1], 'the two dark mappings (OS dark, reader chose dark) are byte-identical')
+  ok(/@media screen and \(prefers-color-scheme: dark\)/.test(css) && /@media screen \{\s*:root\[data-theme="dark"\]/.test(css),
+    'both dark mappings are @media screen, so print gets the light palette')
+
+  // UNKNOWN FALLS BACK, ROUND-TRIPS, AND IS NAMED
+  const unk = base()
+  ;(unk as { design?: string }).design = 'nonesuch'
+  ok(D.resolveDesign(unk) === null, 'an unknown design name renders the default look')
+  const back = parseDoc(JSON.stringify(unk))
+  ok(back.ok && (back.doc as { design?: string }).design === 'nonesuch', 'an unknown design name survives a load/save round trip untouched')
+  ok(validateDoc(unk).findings.some((f) => f.code === 'unknown-design' && f.path === 'design'), 'validate() names an unknown design')
+  ok(validateDoc(plain).findings.every((f) => !/design/.test(f.code)), 'validate() says nothing about a document with no design')
+  const shadow = base()
+  ;(shadow as { designs?: unknown }).designs = { ledger: { base: 'studio' } }
+  D.setDesign(shadow, 'ledger')
+  ok(D.resolveDesign(shadow)?.design === D.BUILT_INS.ledger && validateDoc(shadow).findings.some((f) => f.code === 'design-shadows-builtin'),
+    'a doc-local design named like a built-in shadows nothing, and validate() says so')
+
+  // THE DEFAULT DELETES THE KEY
+  const dd = base()
+  D.setDesign(dd, 'almanac')
+  D.setDesign(dd, null)
+  ok(!Object.hasOwn(dd, 'design') && JSON.stringify(dd) === JSON.stringify(base()), 'returning to the default deletes `design` — byte-identical to never having chosen')
+  ok(/setDesign\(store\.doc, name\)/.test(rdd('designpanel.ts')) && /store\.commit\(\(\) => setDesign/.test(rdd('designpanel.ts')),
+    'the picker writes through setDesign inside ONE store.commit (one undo step)')
+
+  // CUSTOM DESIGNS: validated, not sanitized
+  const hostile = '</style><script>alert(1)</script>'
+  const cd = base()
+  ;(cd as { designs?: unknown }).designs = { mine: {
+    base: 'ledger', label: 'Mine',
+    light: { accent: hostile, paper: '#fffdf8', ink: 'red' },
+    fonts: { body: hostile, display: 'news', mono: 'asset:nope' },
+    props: { callout: hostile, radius: 999, size: 0.1, quote: 'pull', leading: '1.5' },
+  } }
+  D.setDesign(cd, 'mine')
+  const rc = D.resolveDesign(cd)!
+  ok(rc.custom && rc.design.light.accent === D.BUILT_INS.ledger.light.accent && rc.design.light.ink === D.BUILT_INS.ledger.light.ink,
+    'a colour that is not #rgb/#rrggbb falls back to the base design (hostile string, named colour)')
+  ok(rc.design.light.paper === '#fffdf8' && rc.design.fonts.display === 'news' && rc.design.props.quote === 'pull', 'the valid values of the same custom design are used')
+  ok(rc.design.fonts.body === D.BUILT_INS.ledger.fonts.body && rc.design.fonts.mono === D.BUILT_INS.ledger.fonts.mono, 'a font that is neither a listed name nor an embedded font asset falls back')
+  ok(rc.design.props.callout === D.BUILT_INS.ledger.props.callout && rc.design.props.radius === 0 && rc.design.props.size === 1 && rc.design.props.leading === D.BUILT_INS.ledger.props.leading,
+    'a switch outside its words, or a number outside its range (or not a number), falls back')
+  const st = D.designStyle(rc)
+  const every = [...Object.values(st.attrs), ...Object.values(st.vars), ...D.previewRules(rc).flatMap(([s, d]) => [s, ...Object.values(d)])]
+  ok(every.length > 60 && every.every((v) => !/[<>{};\\]/.test(v)),
+    'nothing a design puts on a surface or into the preview can carry "<", "{" or "}" — a hostile value never reaches CSS text')
+  const vf = validateDoc(cd).findings.filter((f) => f.code === 'bad-design-value').map((f) => f.path)
+  for (const p of ['designs.mine.light.accent', 'designs.mine.light.ink', 'designs.mine.fonts.body', 'designs.mine.fonts.mono', 'designs.mine.props.callout', 'designs.mine.props.radius', 'designs.mine.props.size', 'designs.mine.props.leading']) {
+    ok(vf.includes(p), `validate() names the dropped value at ${p}`)
+  }
+  ok(!/<script/i.test(JSON.stringify(D.previewRules(rc))), 'the preview rules of a hostile design hold no script text')
+
+  // FLOORS: no design may hide text
+  for (const [name, d] of Object.entries({ plain: D.PLAIN, ...D.BUILT_INS })) {
+    for (const mode of ['light', 'dark'] as const) {
+      const low = D.CONTRAST_FLOORS.filter(([f, b, m]) => D.contrast(d[mode][f], d[mode][b]) < m)
+      ok(low.length === 0, `${name} ${mode} clears every contrast floor${low.length ? ` (fails ${low.map(([f, b]) => f + '/' + b).join(', ')})` : ''}`)
+    }
+  }
+  const hide = base()
+  ;(hide as { designs?: unknown }).designs = { ghost: { light: { ink: '#ffffff', paper: '#ffffff', muted: '#fefefe' }, dark: { ink: '#14181e' } } }
+  D.setDesign(hide, 'ghost')
+  const rh = D.resolveDesign(hide)!
+  ok(D.contrast(rh.design.light.ink, rh.design.light.paper) >= 4.5 && D.contrast(rh.design.light.muted, rh.design.light.paper) >= 4.5 && D.contrast(rh.design.dark.ink, rh.design.dark.paper) >= 4.5,
+    'a palette that sets text equal to its ground is pulled back over the 4.5:1 floor')
+  ok(validateDoc(hide).findings.some((f) => f.code === 'design-contrast'), 'validate() names a colour dropped for contrast')
+  const fillFork = base()
+  ;(fillFork as { designs?: unknown }).designs = { teal: { base: 'almanac', dark: { accent: '#4fc2b1' }, props: { callout: 'fill' } } }
+  D.setDesign(fillFork, 'teal')
+  const rf = D.resolveDesign(fillFork)!
+  const fillOk = (p: { ink: string; paper: string; accent: string }) => D.contrast(p.ink, D.mixHex(p.accent, p.paper, D.FILL_MIX)) >= 4.5
+  ok(fillOk(rf.design.light) && fillOk(rf.design.dark), 'a filled callout keeps its ink over 4.5:1 on the fill (the dark teal fork measured 4.27 before this floor)')
+  ok(css.includes(`${D.FILL_MIX * 100}%, var(--bg))`), 'designs.css fills a callout with the same FILL_MIX the floor checks')
+  const toneCss = [...rdd('styles.css').matchAll(/--tone-(?:note|tip|important|warning|caution): (#[0-9a-f]{6});/g)].slice(0, 5).map((m) => m[1])
+  ok(JSON.stringify(toneCss) === JSON.stringify([...D.TONE_HUES]), 'designs.ts TONE_HUES are styles.css\'s tone hues')
+  const PR = D.PROPS as Record<string, { kind: string; min?: number }>
+  ok(PR.size.min! >= 0.85 && PR.leading.min! >= 1.3 && PR.titleSize.min! >= 1.4, 'size, line spacing and title floors hold (0.85, 1.3, 1.4em)')
+  ok(!/\b(display|visibility|opacity)\s*:/.test(flat.replace(/display:\s*(block|flex|inline-grid|inline-flex)/g, '')), 'designs.css never hides: no display:none, visibility or opacity')
+  ok([...flat.matchAll(/(?<![-\w])content:\s*([^;]+);/g)].every((m) => /^'[^']*'$/.test(m[1].trim())), 'every generated `content` in designs.css is a constant string, never author data')
+  ok(/\[data-sp-design\] :is\(\.sp-remote, \.sp-media-empty\) \{[^}]*--ink: var\(--sp-app-ink\)[^}]*color: var\(--sp-app-ink\)/.test(flat),
+    'the remote-content gate reads the CHROME\'s tokens inside a designed page')
+
+  // TONE IS MEANING: five callout tones stay five things in every design and mode
+  for (const [name, d] of Object.entries({ plain: D.PLAIN, ...D.BUILT_INS })) {
+    for (const mode of ['light', 'dark'] as const) {
+      const sig = D.toneSignature(d[mode], d.props.callout)
+      let min = Infinity
+      for (let i = 0; i < 5; i++) for (let j = i + 1; j < 5; j++) min = Math.min(min, D.rgbDistance(sig[i], sig[j]))
+      ok(min >= D.TONE_MIN_DISTANCE, `${name} ${mode}: the five callout tones are pairwise distinct as painted (${d.props.callout}; closest pair ${min.toFixed(0)} apart, floor ${D.TONE_MIN_DISTANCE})`)
+    }
+  }
+  ok(['note', 'tip', 'important', 'warning', 'caution'].every((t) => new RegExp(`\\[data-sp-design\\] \\{[^}]*--tone-${t}: var\\(--d-tone-${t}\\)`).test(flat)),
+    'the surface maps the five tone roles onto the tones every callout rule reads')
+  const one = base()
+  ;(one as { designs?: unknown }).designs = { mono: { base: 'studio', light: { toneNote: '#ff9e8a', toneTip: '#ff9e8a', toneImportant: '#ff9e8a', toneWarning: '#ff9e8a', toneCaution: '#ff9e8a' } } }
+  D.setDesign(one, 'mono')
+  ok(D.tonesDistinct(D.resolveDesign(one)!.design.light, 'fill') && validateDoc(one).findings.some((f) => f.code === 'design-contrast' && /toneTip/.test(f.path ?? '')),
+    'a custom design that paints all five tones one colour gets the base\'s five back, and validate() names it')
+
+  // fonts travel as assets
+  const fd = base()
+  fd.assets = { f1: 'data:font/woff2;base64,AAAA', img: 'data:image/png;base64,AAAA' }
+  ;(fd as { designs?: unknown }).designs = { face: { fonts: { body: 'asset:f1', display: 'asset:img' } } }
+  D.setDesign(fd, 'face')
+  const rfd = D.resolveDesign(fd)!
+  ok(rfd.design.fonts.body === 'asset:f1' && rfd.design.fonts.display === D.PLAIN.fonts.display, 'an embedded font asset is honoured; an image under a font role is refused')
+  ok(D.designStyle(rfd).vars['--d-body'].startsWith(`'bento-face-`), 'an embedded face gets a family name derived from its key, never from author text')
+  ok(!orphanAssets(fd).includes('f1'), 'a face a design uses is not an orphan asset')
+
+  // preview: inline styles, never a <style> with design values
+  const pv = rdd('preview.ts')
+  ok(/applyPreviewRules\(box, previewRules\(design\)\)/.test(pv) && !/previewSheet/.test(pv) && /style\.textContent = SHEET\(doc\)\n/.test(pv),
+    'preview.ts puts the design on as inline styles; its <style> holds only the fixed sheet')
+  ok(/style\.setProperty\(k, v\)/.test(rdd('designs.ts')), 'preview declarations go through the CSSOM, which re-parses every value')
+}
 
 // ---- TRANSCLUSION ----------------------------------------------------------
 //
