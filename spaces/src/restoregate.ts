@@ -36,7 +36,8 @@
 
 import { parseDoc, docContentKey, type SpacesDoc } from './model.ts'
 import { sanitizeInline } from './sanitize.ts'
-import { FROM_LIVE, type Store } from './store.ts'
+import type { Store } from './store.ts'
+import { keepLiveIdentity } from '../../kernel/src/docfields.ts'
 
 /**
  * The largest snapshot the gate will parse, in UTF-16 code units of JSON.
@@ -82,12 +83,7 @@ export function gateRestored(json: unknown, live: SpacesDoc):
     for (const b of page.blocks) if (typeof b.html === 'string' && b.html) b.html = sanitizeInline(b.html)
   }
 
-  const from = live as Record<string, unknown>
-  const to = doc as Record<string, unknown>
-  for (const k of FROM_LIVE) {
-    if (from[k] !== undefined) to[k] = from[k]
-    else delete to[k]
-  }
+  keepLiveIdentity(doc as Record<string, unknown>, live as Record<string, unknown>)
   return { ok: true, doc }
 }
 

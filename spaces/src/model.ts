@@ -20,6 +20,8 @@ import { esc, externalHref } from './sanitize.ts'
 // A VALUE import, and the cycle it looks like is not one: embed.ts imports
 // only TYPES from here, and a type import is erased before anything runs.
 import { isPageRef } from './embed.ts'
+import { projectForCopy, docContentKey as kernelContentKey } from '../../kernel/src/docfields.ts'
+import { SPACES_FIELDS, SPACES_NOT_EDIT } from './docclass.ts'
 
 export const FORMAT = 'bento/spaces'
 export const FORMAT_VERSION = 1
@@ -470,6 +472,15 @@ export interface SpacesDoc {
    * `import type` is erased, so this adds no runtime dependency.
    */
   collab?: CollabCreds
+  /**
+   * In-file version history (kernel field class 'history', docfields.ts).
+   * Declared here, typed loosely, BEFORE the features that write them land, so
+   * the copy rules already classify them: kept by the file, a duplicate and an
+   * invite; dropped from every reader-tier copy and from Copy document JSON;
+   * never synced. Nothing in this build reads or writes either.
+   */
+  revisions?: unknown[]
+  trail?: unknown
   [extra: string]: unknown
 }
 
@@ -486,15 +497,16 @@ export interface SpacesDoc {
  * chat window. bento/slides had this same bug, fixed it, and wrote a rig to
  * stop it coming back — the rig only ever looked at slides/.
  *
- * DERIVED BY REMOVING, not by listing what to keep: a private field added to
- * CollabCreds later is stripped by this without anyone remembering to.
- * `room` and `key` go too — together they ARE the read capability, and a room
- * id is the thing the relay keys on.
+ * BUILT FROM EMPTY by the kernel's copy table (docfields.ts projectForCopy,
+ * tier 'copyJSON', this app's map in docclass.ts): `collab` is a capability
+ * and is dropped whole — `room` and `key` too, since together they ARE the
+ * read capability. The modes (readonly, template), the in-file history and
+ * any top-level key this build does not declare are dropped as well: the
+ * clipboard is a hand-out, and an undeclared key is exactly the field nobody
+ * has decided is safe to hand out. Content and the docId travel.
  */
 export function docForExport(doc: SpacesDoc): SpacesDoc {
-  const { collab, ...rest } = doc as SpacesDoc & { collab?: unknown }
-  void collab
-  return rest as SpacesDoc
+  return projectForCopy(doc, SPACES_FIELDS, 'copyJSON')
 }
 
 export const uid = (p = 'b'): string => {
@@ -654,24 +666,21 @@ export const newPage = (title = 'Untitled', extra: Partial<Page> = {}): Page =>
 
 /** Content that matters for "did this change" — excludes volatile fields. */
 export function docContentKey(doc: SpacesDoc): string {
-  // `footnotes` is content: a note's text is somebody's writing and lives
-  // nowhere else, so a recovery snapshot that ignored it would compare equal to
-  // a document whose notes had all been rewritten.
+  // The kernel's key (docfields.ts), over this app's field map: every declared
+  // and undeclared top-level field that is PRESENT, sorted, except the
+  // capability (`collab` — a key is not an edit) and `modified`.
   //
-  // Templates are content too: saving one is an edit worth recovering after a
-  // crash, and without them here a session whose only change was "save this
-  // page as a template" would compare equal and lose it.
+  // So `footnotes` is in it (a note's text is somebody's writing and lives
+  // nowhere else), the page templates and the journal template are in it
+  // (saving one is an edit worth recovering after a crash), and so are
+  // `design`/`designs` (a crash right after choosing one must still offer the
+  // recovery). An ABSENT field is skipped, never null-padded, so a document
+  // with no design keys exactly as it would with the field never invented.
   //
-  // The design is content as well: a crash right after choosing one must still
-  // offer the recovery. It is appended ONLY when present, so a document with
-  // no design keys exactly as it did before designs existed.
-  //
-  // ONE return. Each field arrived on its own branch with its own `return`
-  // line, and a merge that kept both left the second one dead — footnotes
-  // silently dropped out of recovery. New content fields are APPENDED here.
-  const key: unknown[] = [doc.title, doc.home, doc.pages, doc.footnotes, doc.templates, doc.journalTemplate]
-  if (doc.design !== undefined || doc.designs !== undefined) key.push(doc.design ?? null, doc.designs ?? null)
-  return JSON.stringify(key)
+  // ONE return. Each field once arrived on its own branch with its own
+  // `return` line, and a merge that kept both left the second one dead —
+  // footnotes silently dropped out of recovery.
+  return kernelContentKey(doc, SPACES_FIELDS, SPACES_NOT_EDIT)
 }
 
 // ---- derived, NEVER stored -------------------------------------------------

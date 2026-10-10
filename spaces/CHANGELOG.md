@@ -1253,6 +1253,51 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   page; an older build shows the space's design and keeps it. Shell 364,703 →
   368,299 B (+3,596).
 
+- **Every copy of a space is built by one shared table.** The view-only copy,
+  the editor invite, Copy document JSON, Duplicate as new space, Export page as
+  a space and Save a copy now take their fields from the copy rules every Bento
+  app shares, and each field of a space is declared in exactly one class, so a
+  new field cannot reach a copy until somebody says what it is. What changes
+  for a reader: a view-only copy of a space that has a reading-copy setting is
+  marked read-only in the file, so it also opens locked in a build that knows
+  nothing about sharing roles (and still says it follows the live session); a
+  top-level field this build does not know stays out of a view-only copy, an
+  invite and Copy document JSON, and is kept by the file, Save a copy and
+  Duplicate; Copy document JSON no longer carries the reading-copy or template
+  settings; an invite no longer carries them either, so a template space's
+  invite cannot open as a new space outside the session. Version history kept
+  in the file (not in this build yet) is already classified: it travels with
+  the file, a duplicate and an invite, and never with a view-only copy, Copy
+  document JSON or a page export.
+
+- **A space you can hand to a reader.** "Save a reading copy…" (in Share)
+  writes a second file that opens as a **document** rather than as an editor:
+  the pages, the tree, ⌘K search and print, and none of the machinery for
+  changing them. The eye toggle is the same view for the file you are writing
+  in — it now takes the tools away rather than merely switching them off, and
+  every page carries a Previous / Next pair so a reader can go through a space
+  without hunting the sidebar.
+
+  What the copy leaves behind is the point, and it comes in three grades:
+
+  - **Cryptographic.** No `collab` block at all, so the copy holds no room, no
+    read key and no private signing key of any kind. Whoever you send it to
+    cannot read the room, write to it or join it, because the material a
+    connection must present is not in the file. Making the copy starts no live
+    session either.
+  - **Format-level.** Comment threads are gone from the bytes (page-level and
+    block-level, replies included), and so is the version history kept in the
+    file, and any field this build does not know.
+  - **Cosmetic.** The reading-copy setting itself. It states what the file is
+    and the app honours it; anyone can open the HTML and change it back. It is
+    intent, never a lock.
+
+  Old builds ignore the setting and open the space editable, which is the
+  correct degradation: the guarantees that matter are bytes that are not in the
+  file. A reading copy of a password-protected space is written encrypted with
+  the same password, and carries no file-manager preview. A view-only copy that
+  follows the live session still says so when it opens.
+
 ## [0.1.0] — 2026-08-03
 
 First release.

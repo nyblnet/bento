@@ -942,4 +942,9 @@ export const zh_Hant: Catalog = {
   "This page no longer uses a design of its own.": "此頁面不再使用自己的設計。",
   "{n} page(s) arrived with a design of their own.": "{n} 個頁面帶著自己的設計匯入。",
   "A page can wear a design of its own, and a section’s passes to the pages inside it: choose it from the page’s ⋯ menu.": "頁面可以使用自己的設計，分區的設計會傳給其中的頁面：在頁面的 ⋯ 選單中選擇。",
+  "A sealed file for someone who will only read it: the pages with no editing tools, no comment threads, and none of this space’s keys — it never joins the live session.": "交給只閱讀的人的封存檔案：只有頁面，沒有編輯工具，沒有評論討論串，也不含本空間的任何金鑰 — 它永遠不會加入即時工作階段。",
+  "Next": "下一頁",
+  "Previous": "上一頁",
+  "Reading copy saved — it opens as a document, with no keys and no comments": "閱讀副本已儲存 — 它會以文件形式開啟，不含金鑰與評論",
+  "Save a reading copy…": "儲存閱讀副本…",
 }
