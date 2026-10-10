@@ -48,7 +48,7 @@ import {
 import { textSp, type FieldValues, type TextElIn } from './text.ts'
 import { emu, parseColor, shapeNode, type ShapeIn } from './shapes.ts'
 import {
-  MediaStore, imagePic, svgPic, mediaPoster,
+  MediaStore, imagePic, svgPic, mediaPoster, rasterTargets, pictureSources,
   type ImageIn, type MediaCtx, type MediaIn, type SvgIn,
 } from './media.ts'
 import { tableFrame } from './tables.ts'
@@ -140,11 +140,26 @@ export interface ExportOpts {
    *  (the scanner is app code: slides' maths/delimiters.ts), so the caller
    *  passes it, like chartPalette. Absent = not reported. */
   formulasIn?: (html: string) => number
+  /** Turns a picture PowerPoint cannot take (WebP, AVIF, BMP, TIFF) into a
+   *  PNG data: URI, or null when it cannot. Decoding images needs a browser
+   *  (a canvas), and the writer has no DOM, so a host that has one passes it
+   *  (bento.page/convert does). Absent = such pictures are reported dropped. */
+  rasterise?: (dataUri: string) => Promise<string | null>
+  /** Export interactive states too, as HIDDEN slides placed right after the
+   *  slide they belong to, with links into a state landing on it. In a
+   *  PowerPoint show, hidden slides are reached only by those links, and
+   *  Next/Previous skip them, much as bento's ←/→ skip states. Default off:
+   *  states are left out and links into one go to its parent. */
+  includeStates?: boolean
 }
 
 export interface PptxExport {
   bytes: Uint8Array
   report: FidelityReport
+  /** what landed in the package, for a host to show: slides, objects that
+   *  stay editable in PowerPoint (shapes, text, connectors, tables, charts),
+   *  and pictures (images, SVG, media posters) */
+  stats: { slides: number; editable: number; pictures: number }
 }
 
 // --- helpers ------------------------------------------------------------------
@@ -262,10 +277,15 @@ function appPropsXml(doc: ExportDoc): string {
 export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise<PptxExport> {
   const report = new Report()
 
-  const exported = doc.slides.filter((s) => !s.stateOf)
-  if (exported.length === 0) {
+  const linear = doc.slides.filter((s) => !s.stateOf)
+  if (linear.length === 0) {
     throw new Error('exportPptx: the deck has no linear slides (only interactive states) — nothing to export')
   }
+  // With includeStates, every slide in document order: slides keeps a state
+  // next to its parent, and a state whose parent is gone still has nowhere
+  // better to sit. Without, only the linear slides.
+  const states = doc.slides.filter((s) => !!s.stateOf)
+  const exported = opts.includeStates ? doc.slides.slice() : linear
   const omitted = doc.slides.length - exported.length
   // The deck's own fonts travel inside the .bento.html; a .pptx can embed
   // fonts too, but this writer does not, so say which ones need installing.
@@ -279,13 +299,19 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     report.add('dropped', 'state-slides-omitted', 'document',
       `${omitted} interactive state slide(s) omitted — a state is a click-reached variant, not a linear slide`)
   }
+  if (opts.includeStates && states.length) {
+    report.add('approximated', 'states-as-hidden-slides', 'document',
+      `${states.length} interactive state slide(s) exported as hidden slides after the slide they belong to: links reach them, and the show skips them`)
+  }
 
   // Slide id → exported slide number, with #88's degradation: a link into an
   // omitted state retargets to the state's visible parent.
   const slideNumbers = new Map<string, number>()
   exported.forEach((s, i) => slideNumbers.set(s.id, i + 1))
   for (const s of doc.slides) {
-    if (s.stateOf) {
+    // only a state that was LEFT OUT borrows its parent's number; an exported
+    // state (includeStates) keeps its own, so links into it land on it
+    if (s.stateOf && !slideNumbers.has(s.id)) {
       const parent = slideNumbers.get(s.stateOf)
       if (parent) slideNumbers.set(s.id, parent)
     }
@@ -302,6 +328,20 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
 
   const palette = doc.theme.chartPalette?.length ? doc.theme.chartPalette : opts.chartPalette
   const assets = doc.assets ?? {}
+
+  // Pictures PowerPoint cannot take, each converted ONCE by the host's
+  // rasteriser before any slide is written, so imagePic stays synchronous.
+  // Whatever comes back must be a PNG data: URI; anything else counts as a
+  // failed conversion (reported as a drop where the picture was).
+  let converted: Map<string, string | null> | undefined
+  if (opts.rasterise) {
+    converted = new Map()
+    for (const src of rasterTargets(pictureSources(exported as never, assets))) {
+      let png: string | null = null
+      try { png = await opts.rasterise(src) } catch { png = null }
+      converted.set(src, typeof png === 'string' && /^data:image\/png[;,]/i.test(png) ? png : null)
+    }
+  }
   const store = new MediaStore() // ONE per export: byte-dedup is cross-slide
   const enc = new TextEncoder()
 
@@ -312,6 +352,7 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
   const extraOverrides: ContentTypeOverride[] = []
   let chartCount = 0
   let pageCounter = 0
+  const stats = { slides: exported.length, editable: 0, pictures: 0 }
 
   for (let si = 0; si < exported.length; si++) {
     const slide = exported[si]
@@ -322,7 +363,7 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     // Field values are author-typed strings that land verbatim in a:t —
     // scrubbed like every other author-text ingestion point.
     const fields: FieldValues = {
-      page: pageCounter, pages,
+      page: pageCounter, pptxSlide: num, pages,
       title: scrubC0(doc.title), date: now,
       author: scrubC0(meta.author ?? ''), company: scrubC0(meta.company ?? ''),
       subject: scrubC0(meta.subject ?? ''), event: scrubC0(meta.event ?? ''),
@@ -334,7 +375,7 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     const rels: RelEntry[] = []
     const nextRelId = (): string => `rId${++relSeq}`
     rels.push(slideLayoutRel(nextRelId()))
-    const mediaCtx: MediaCtx = { assets, store, rels, nextRelId, report }
+    const mediaCtx: MediaCtx = { assets, store, rels, nextRelId, report, converted }
 
     /** el.link → an allocated rel. Reported and null when the target does not
      *  resolve (#88's missing-link-target) — a dangling r:id is a repair
@@ -369,7 +410,11 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
     const children: XChild[] = []
     let shapeId = 2 // the spTree preamble owns id 1 (parts.ts)
     const emit = (node: XNode | null): void => {
-      if (node) { children.push(node); shapeId++ }
+      if (!node) return
+      children.push(node)
+      shapeId++
+      if (node.name === 'p:pic') stats.pictures++
+      else stats.editable++
     }
 
     for (const el of slide.elements) {
@@ -492,7 +537,7 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
 
     const part = slidePart(children, rels, {
       bg: bgNode(slide.background, doc.theme.background, report, where),
-      ...(slide.hidden ? { hidden: true } : {}),
+      ...(slide.hidden || slide.stateOf ? { hidden: true } : {}),
     })
     slideXml.push(part.xml)
     slideRels.push(part.rels)
@@ -569,5 +614,5 @@ export async function exportPptx(doc: ExportDoc, opts: ExportOpts = {}): Promise
   const problems = packageProblems(new Map(entries.map((e) => [e.name, e.data])))
   if (problems.length) throw new Error(`the PowerPoint package failed its self-check (a bug in the writer): ${problems.join('; ')}`)
   const bytes = await writeZip(entries, opts.at ? { at: opts.at } : {})
-  return { bytes, report: report.build() }
+  return { bytes, report: report.build(), stats }
 }

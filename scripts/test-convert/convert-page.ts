@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// bento.page/import rig: the BUILT page keeps the promise it prints.
+// bento.page/convert rig: the BUILT page keeps the promise it prints, and
+// bento.page/import still lands there.
 //
 // The page says the file never leaves the device. The enforcement is its
 // Content Security Policy — `connect-src 'self'` means the browser itself
@@ -32,9 +33,9 @@ function ok(cond: boolean, msg: string) {
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-import-rig-'))
-const out = path.join(tmp, 'import/index.html')
-const b = spawnSync(process.execPath, [path.join(root, 'scripts/build-import-page.mjs'), out], { encoding: 'utf8' })
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bento-convert-rig-'))
+const out = path.join(tmp, 'convert/index.html')
+const b = spawnSync(process.execPath, [path.join(root, 'scripts/build-convert-page.mjs'), out], { encoding: 'utf8' })
 ok(b.status === 0 && fs.existsSync(out), `the page builds (exit ${b.status}${b.stderr ? ': ' + b.stderr.trim() : ''})`)
 const html = fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : ''
 const sha = (s: string) => `'sha256-${createHash('sha256').update(s, 'utf8').digest('base64')}'`
@@ -62,9 +63,9 @@ const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]
 ok(scripts.length === 1 && !/\bsrc=/.test(scripts[0][1]), `one inline script, no src (${scripts.length})`)
 const js = scripts[0]?.[2] ?? ''
 ok(is('script-src', [sha(js)]), 'script-src is exactly the hash of the inline script')
-const styles = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)]
+const styles = [...html.replace(js, '').matchAll(/<style>([\s\S]*?)<\/style>/g)]
 ok(styles.length === 1 && is('style-src', [sha(styles[0][1])]), 'one <style>, and style-src is exactly its hash')
-ok(!/\sstyle="/.test(html), 'no inline style attributes (the hashed policy would drop them)')
+ok(!/\sstyle="/.test(html.replace(js, '')), 'no inline style attributes (the hashed policy would drop them)')
 ok(!/\son[a-z]+=/i.test(html.replace(js, '')), 'no inline event handlers')
 
 console.log('what it loads')
@@ -80,6 +81,21 @@ ok(urls.every(u => u === 'https://bento.page/releases/slides/manifest.json'),
   `the script's only absolute URL is the bento.page manifest (${urls.join(' ') || 'none'})`)
 ok(!/\b(XMLHttpRequest|WebSocket|EventSource|sendBeacon|RTCPeerConnection)\b/.test(js), 'no second network API in the bundle')
 ok(/nothing is uploaded|never leaves/i.test(markup), 'the page says so in words')
+
+console.log('what the page offers')
+ok(/id="sample"/.test(markup) && /A little more portable/.test(js), 'the sample deck is built in (nothing fetched for it)')
+ok(/<a [^>]*href="\/slides\/"/.test(markup), 'the header links the editor, like the rest of bento.page')
+
+console.log('bento.page/import still works')
+{
+  const redirect = fs.readFileSync(path.join(root, 'site-src/import.html'), 'utf8')
+  ok(!/<script/i.test(redirect), 'the /import page runs no script at all')
+  ok(/<meta http-equiv="refresh" content="0; url=\/convert\?from=pptx">/.test(redirect), 'it sends the browser to /convert?from=pptx at once')
+  ok(/<a href="\/convert\?from=pptx">/.test(redirect), 'and links there for a browser that ignores refresh')
+  ok(/content="default-src 'none'; base-uri 'none'; form-action 'none'"/.test(redirect), "its CSP allows nothing to load (default-src 'none')")
+  ok(/from'\) === 'pptx'/.test(fs.readFileSync(path.join(root, 'convert/page/convert-page.ts'), 'utf8')),
+    '/convert reads ?from=pptx and greets an /import visitor with the import wording')
+}
 
 fs.rmSync(tmp, { recursive: true, force: true })
 console.log(`\n${checks - failures}/${checks} checks passed`)

@@ -11,18 +11,29 @@ pre-1.0.
 
 ## [Unreleased]
 
-- **Save a deck as PowerPoint, from a terminal.**
-  `node convert/cli.mjs deck.bento.html --to pptx` writes `deck.pptx`, with
-  speaker notes, links, tables, charts, pictures and hidden slides. It reports
-  what it approximated or left out, and on which slides: animations show
+- **One page for PowerPoint, in and out: bento.page/convert.** Drop a
+  `.pptx` to open it as a bento/slides deck, or drop a bento/slides deck (or
+  its document JSON) to save it as PowerPoint. The page detects what you
+  dropped and offers what it can become; there's a sample deck to try. As
+  before, nothing is uploaded: the conversion runs in your browser, and the
+  page only downloads the signed bento/slides release when it makes a deck.
+  bento.page/import now opens this page, so its links keep working.
+
+- **Saving as PowerPoint keeps more of your deck.** Speaker notes, links,
+  tables, charts, pictures and hidden slides come across, and now code
+  blocks too (as editable text in Consolas, indentation kept) and embedded
+  documents (as a picture of what they show). WebP pictures are converted to
+  PNG on bento.page/convert. Interactive states can come along as hidden
+  slides that their links lead to. After each conversion you get a list of
+  what was approximated or left out, and on which slides: animations show
   their final frame, Morph becomes a plain cut, formulas stay as their LaTeX
-  source, and code and embedded documents are not exported yet. It also says
-  which of the deck's own fonts to install, and `--report r.json` saves the
-  full report. It reads a saved deck or its document JSON. Every export is
-  checked before it is written, and a package PowerPoint would want to repair
-  is refused. Export is a library and a command-line tool rather than a
-  button in the app, so every shared file stays small and the app stays
-  focused.
+  source, and code loses its syntax colours. Page numbers stay right after
+  hidden slides. Every export is checked before it is written, so you never
+  get a file PowerPoint wants to repair. From a terminal:
+  `node convert/cli.mjs deck.bento.html --to pptx` (with `--states` and
+  `--report r.json`). Export is a page, a library and a command-line tool
+  rather than a button in the app, so every shared file stays small and the
+  app stays focused.
 
 - **Long speaker notes scroll in presenter view.** Notes that are taller than
   the space beside the current and next slides now get their own vertical

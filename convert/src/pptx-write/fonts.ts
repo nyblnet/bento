@@ -29,7 +29,8 @@ const GENERIC: Record<string, string> = {
 }
 
 /**
- * System fonts that ship with ONE operating system and not with Office. A
+ * Fonts a PowerPoint machine is unlikely to have: system fonts that ship with
+ * ONE operating system and not with Office, and commercial coding fonts. A
  * browser falls through a stack to the next family it has; PowerPoint takes
  * one name and substitutes when it is missing. So naming 'SF Mono' (macOS
  * only) gives Windows PowerPoint a proportional stand-in, while the stack's
@@ -43,6 +44,9 @@ const ONE_PLATFORM = new Set([
   'roboto', 'roboto mono', 'ubuntu', 'ubuntu mono', 'cantarell', 'oxygen', 'fira sans',
   'noto sans', 'noto color emoji', 'liberation mono', 'liberation sans', 'liberation serif',
   'dejavu sans', 'dejavu sans mono', 'dejavu serif', 'droid sans', 'droid sans mono',
+  // commercial coding fonts no OS or Office installs; slides' own monospace
+  // stack names 'Berkeley Mono' before 'Consolas'
+  'berkeley mono', 'operator mono', 'monolisa', 'pragmata pro', 'input mono', 'dank mono',
 ])
 
 const families = (stack: string): string[] =>

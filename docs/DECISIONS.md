@@ -10177,3 +10177,56 @@ neither a CSS generic nor a font only one operating system ships ('SF Mono',
 becomes Consolas, which Office installs on Windows and macOS. A stack of
 generics alone maps to a font every PowerPoint has (monospace → Courier New,
 sans-serif → Arial). The deck's own fonts are never skipped.
+
+## 2026-10-10 — One conversion page, a table of pairs; every slides element exports
+
+**bento.page/convert replaces separate import and export pages.**
+`convert/src/pairs.ts` is the whole model: `detect()` says what a dropped
+file is (by content: a zip that is a .pptx, a .bento.html of any app,
+document JSON), and `CONVERSIONS` lists what each input can become. Pairs
+today: .pptx → deck; slides deck or JSON → .pptx; slides document JSON
+(compact or full) → deck. A pair that applies but cannot run says why
+(compact JSON → .pptx: "make it a deck first"). Another app's file, or a
+password-protected one, is told so plainly. A new format is a new row,
+never a new page. bento.page/import is a static, script-free redirect to
+/convert?from=pptx, because the slides menu and the 1.2.4 announcement link
+to it.
+
+**The page's guarantees are the import page's.** A CSP is built from the
+sha256 of the one inline script and style: `connect-src 'self'`, no
+`unsafe-inline`. The signed manifest and the shell it pins are the only
+requests, made only for a pair that builds a deck. No app shell carries any
+converter: `scripts/test-convert/boundary.ts` now inflates each BUILT
+shell's runtime (base-86) and fails on converter strings. A first version
+of that check read nothing and passed, so it now also requires that the
+runtime was actually read.
+
+**Document JSON on the page skips text measurement.** slides' own loader
+fits text boxes that a compact document left without a height by rendering
+them. On this page the renderer's inline styles are blocked by the page's
+own CSP, the deck's fonts aren't loaded, and it would add about 300 KB. So
+`convert/page/load-json.ts` runs the same expansion and gate without it, and
+reports each box left at a provisional height (`text-height-provisional`).
+
+**Every slides element type now exports** (maintainer's ruling, 2026-10-10;
+behaviours taken from an earlier library-based converter, none of its code):
+- `code` becomes editable text in Consolas, one line per source line.
+  Indentation is kept: spaces that would collapse become no-break spaces,
+  tabs expand to 8-column stops, and single spaces stay ordinary so copied
+  code pastes cleanly. Lost syntax colours are reported.
+- `embed` becomes a picture of its SVG view, reported as static. An embed
+  with no SVG view is reported dropped.
+- WebP, AVIF, BMP and TIFF pictures become PNG through `ExportOpts.rasterise`.
+  A host with a browser passes it (the page uses a canvas, data: URIs only,
+  at most 40 megapixels); the CLI has none and reports them dropped.
+- Interactive states, as an option (`includeStates`, `--states`, a checkbox
+  on the page), export as hidden slides right after their parent, with links
+  into a state landing on it.
+
+**Page numbers where PowerPoint counts differently.** bento numbers only
+shown slides; PowerPoint's live slide-number field counts hidden slides too.
+So `{{page}}` stays a live field only where PowerPoint's count equals
+bento's page. Elsewhere, after a hidden slide or a state, it is fixed text,
+reported as `text-field-frozen`. This was already wrong after any hidden
+slide before states existed.
+

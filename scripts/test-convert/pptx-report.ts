@@ -57,6 +57,7 @@ for (const [stack, want] of [
   ['Georgia, serif', 'Georgia'],
   ['serif', 'Times New Roman'],
   ['Menlo', 'Menlo'],
+  ["ui-monospace, 'SFMono-Regular', 'Berkeley Mono', 'Menlo', 'Consolas', monospace", 'Consolas'],
   ['', 'Arial'],
 ] as Array<[string, string]>) ok(typefaceOf(stack) === want, `${JSON.stringify(stack)} → ${want} (got ${typefaceOf(stack)})`)
 

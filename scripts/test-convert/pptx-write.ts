@@ -399,6 +399,15 @@ console.log('negative controls')
     noStyle.set('ppt/notesMasters/notesMaster1.xml', new TextEncoder().encode(
       partText(parts, 'ppt/notesMasters/notesMaster1.xml').replace(/<p:notesStyle>[\s\S]*<\/p:notesStyle>/, '')))
     ok(packageProblems(noStyle).some((p) => /notesStyle/.test(p)), 'NEGATIVE: the harness catches a notes master without notesStyle')
+    // not problems: a zip folder entry, and a rel target written from the
+    // package root ('/ppt/…'), which OPC allows and other writers use
+    const folder = new Map([...parts.entries()].flatMap(([k, v]) => k === 'ppt/presentation.xml' ? [['ppt/', new Uint8Array()], [k, v]] : [[k, v]])) as typeof parts
+    ok(packageProblems(folder).length === 0, 'a zip folder entry is not taken for an untyped part')
+    const abs = new Map(parts)
+    abs.set('ppt/_rels/presentation.xml.rels', new TextEncoder().encode(
+      partText(parts, 'ppt/_rels/presentation.xml.rels').replace(/Target="slides\/slide1\.xml"/, 'Target="/ppt/slides/slide1.xml"')))
+    ok(/Target="\/ppt\/slides\/slide1\.xml"/.test(partText(abs, 'ppt/_rels/presentation.xml.rels')) && packageProblems(abs).length === 0,
+      'a rel target from the package root resolves')
     const untyped = new Map(parts)
     untyped.set('ppt/stray.bin', new Uint8Array([1]))
     ok(packageProblems(untyped).some((p) => /stray\.bin has no content type/.test(p)), 'NEGATIVE: the harness catches an untyped part')

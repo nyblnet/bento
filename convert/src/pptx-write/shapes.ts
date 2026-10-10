@@ -302,13 +302,73 @@ function effectsOf(el: ShapeIn, report: Report, where: string): XNode | null {
 // --- geometry ----------------------------------------------------------------
 
 /**
- * a:custGeom from the SVG path subset bento emits (M/L/H/V/C/Q/Z, absolute
- * and relative; S/T resolved exactly via control-point reflection). Path
+ * An SVG elliptical arc as cubic Béziers (SVG 1.1 implementation notes F.6:
+ * endpoint to centre parameterisation, then one cubic per quarter turn or
+ * less, k = 4/3·tan(Δθ/4)). Exact to well under a pixel at slide scale.
+ * Returns [c1x, c1y, c2x, c2y, x, y] per segment; [] for a zero-length arc;
+ * null when a radius is 0 (the spec draws a straight line).
+ */
+export function arcToCubics(x1: number, y1: number, rx: number, ry: number, phiDeg: number,
+  largeArc: number, sweep: number, x2: number, y2: number): number[][] | null {
+  // a non-finite input (path data misread upstream) draws a line, and the
+  // caller's coordinate guard then stops the parse if the endpoint is bad too
+  if (![x1, y1, rx, ry, phiDeg, x2, y2].every(Number.isFinite)) return null
+  if (x1 === x2 && y1 === y2) return []
+  rx = Math.abs(rx); ry = Math.abs(ry)
+  if (rx === 0 || ry === 0) return null
+  const phi = (phiDeg * Math.PI) / 180
+  const cos = Math.cos(phi), sin = Math.sin(phi)
+  const dx = (x1 - x2) / 2, dy = (y1 - y2) / 2
+  const x1p = cos * dx + sin * dy
+  const y1p = -sin * dx + cos * dy
+  // radii too small for the endpoints are scaled up (F.6.6)
+  const lambda = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry)
+  if (lambda > 1) { const k = Math.sqrt(lambda); rx *= k; ry *= k }
+  const num = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p
+  const den = rx * rx * y1p * y1p + ry * ry * x1p * x1p
+  let coef = Math.sqrt(Math.max(0, num / den))
+  if (largeArc === sweep) coef = -coef
+  const cxp = (coef * rx * y1p) / ry
+  const cyp = (-coef * ry * x1p) / rx
+  const cx = cos * cxp - sin * cyp + (x1 + x2) / 2
+  const cy = sin * cxp + cos * cyp + (y1 + y2) / 2
+  const angle = (ux: number, uy: number, vx: number, vy: number) => {
+    const a = Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy)
+    return a
+  }
+  const theta1 = angle(1, 0, (x1p - cxp) / rx, (y1p - cyp) / ry)
+  let delta = angle((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry)
+  if (!sweep && delta > 0) delta -= 2 * Math.PI
+  else if (sweep && delta < 0) delta += 2 * Math.PI
+  if (!Number.isFinite(delta) || !Number.isFinite(cx) || !Number.isFinite(cy)) return null
+  const n = Math.max(1, Math.ceil(Math.abs(delta) / (Math.PI / 2) - 1e-9))
+  const step = delta / n
+  const k = (4 / 3) * Math.tan(step / 4)
+  const out: number[][] = []
+  // a point on the ellipse at parameter t, and its derivative
+  const P = (t: number) => [cx + rx * Math.cos(t) * cos - ry * Math.sin(t) * sin, cy + rx * Math.cos(t) * sin + ry * Math.sin(t) * cos]
+  const D = (t: number) => [-rx * Math.sin(t) * cos - ry * Math.cos(t) * sin, -rx * Math.sin(t) * sin + ry * Math.cos(t) * cos]
+  for (let j = 0; j < n; j++) {
+    const t1 = theta1 + j * step, t2 = t1 + step
+    const [ax, ay] = P(t1), [bx, by] = P(t2)
+    const [dax, day] = D(t1), [dbx, dby] = D(t2)
+    out.push([ax + k * dax, ay + k * day, bx - k * dbx, by - k * dby, bx, by])
+  }
+  // land exactly on the requested endpoint
+  out[out.length - 1][4] = x2; out[out.length - 1][5] = y2
+  return out
+}
+
+/**
+ * a:custGeom from SVG path data (M/L/H/V/C/S/Q/T/A/Z, absolute and
+ * relative; S/T resolved exactly via control-point reflection, arcs as exact
+ * cubics via arcToCubics). Path
  * coordinates are ST_AdjCoordinate — INTEGERS — so the path space is scaled
  * to EMU (px * 9525): sub-pixel curve detail survives the integer floor.
- * Arcs (A) have no custGeom primitive; they degrade to a straight line to
- * the arc's endpoint and the report says so — as does any command letter
- * outside the vocabulary, which additionally stops the parse (continuing
+ * Arcs (A) have no custGeom primitive of the same shape (arcTo is
+ * centre-relative); they become cubic Béziers, which is exact enough to be
+ * no loss. Any command letter outside the vocabulary is reported and stops
+ * the parse (continuing
  * past an unknown command means guessing at its argument count, and a
  * miscounted queue turns every coordinate after it into garbage).
  */
@@ -318,7 +378,15 @@ function custGeomNode(el: ShapeIn, report: Report, where: string): XNode {
   const ph = Math.max(emu(bh), 1)
   const px = (v: number) => Math.round((v - bx) * EMU_PER_PX)
   const py = (v: number) => Math.round((v - by) * EMU_PER_PX)
-  const pt = (X: number, Y: number): XNode => x('a:pt', { x: px(X), y: py(Y) })
+  // A coordinate that is not a finite number (a path that runs out of
+  // arguments, or one this parser misreads) ends the parse at the last good
+  // segment and is reported, never written: xmlout refuses NaN, and one bad
+  // path must not cost the whole export.
+  class BadCoordinate extends Error {}
+  const pt = (X: number, Y: number): XNode => {
+    if (!Number.isFinite(X) || !Number.isFinite(Y)) throw new BadCoordinate()
+    return x('a:pt', { x: px(X), y: py(Y) })
+  }
 
   const segs: XChild[] = []
   let approx = false
@@ -333,9 +401,20 @@ function custGeomNode(el: ShapeIn, report: Report, where: string): XNode {
   let pcx: number | null = null, pcy = 0 // previous cubic ctrl2 (for S)
   let pqx: number | null = null, pqy = 0 // previous quad ctrl (for T)
   const num = () => Number(tokens[i++])
+  // An arc flag is ONE digit, 0 or 1, and SVG lets flags run together with
+  // what follows ("a.4.4 0 00-.1-.2" is flags 0 and 0, then x -.1): a minifier
+  // writes them that way, and reading "00" as one number shifted every
+  // coordinate after it. Take the first digit and leave the rest queued.
+  const flag = (): number => {
+    const t = tokens[i]
+    // "00.267" tokenises as one decimal: flags 0 and 0, then x .267
+    if (t !== undefined && t.length > 1 && /^[01]/.test(t)) { tokens[i] = t.slice(1); return Number(t[0]) }
+    return num()
+  }
   const isNum = () => i < tokens.length && !/^[A-Za-z]$/.test(tokens[i])
 
   let stopped = false
+  try {
   while (i < tokens.length && !stopped) {
     const cmd = tokens[i++]
     const rel = cmd === cmd.toLowerCase()
@@ -424,12 +503,13 @@ function custGeomNode(el: ShapeIn, report: Report, where: string): XNode {
         break
       case 'A':
         while (isNum()) {
-          num(); num(); num(); num(); num() // rx ry rot large-arc sweep: unused
+          const rx = num(), ry = num(), rot = num(), large = flag(), sw = flag()
           const X = num() + (rel ? cx : 0)
           const Y = num() + (rel ? cy : 0)
-          segs.push(x('a:lnTo', undefined, [pt(X, Y)]))
+          const curves = arcToCubics(cx, cy, rx, ry, rot, large, sw, X, Y)
+          if (curves === null) segs.push(x('a:lnTo', undefined, [pt(X, Y)])) // zero radius: a line, per the spec
+          else for (const [a1, b1, a2, b2, a3, b3] of curves) segs.push(x('a:cubicBezTo', undefined, [pt(a1, b1), pt(a2, b2), pt(a3, b3)]))
           cx = X; cy = Y
-          approx = true
         }
         break
       case 'Z':
@@ -442,13 +522,17 @@ function custGeomNode(el: ShapeIn, report: Report, where: string): XNode {
     if (!keepsCubic) pcx = null
     if (!keepsQuad) pqx = null
   }
+  } catch (e) {
+    if (!(e instanceof BadCoordinate)) throw e
+    stopped = true
+  }
   if (junk) {
     approx = true
     stopped = true
   }
   if (approx || stopped) {
     report.add('approximated', 'path-approximated', where,
-      'path uses commands outside the M/L/H/V/C/S/Q/T/Z subset; arcs flattened to lines')
+      'path data could not be fully read; the shape is drawn up to the point it stopped')
   }
   // A pathLst with zero commands is a repair dialog; an unusable d degrades
   // to the element's box outline (visible, selectable, honestly reported).

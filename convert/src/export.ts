@@ -18,6 +18,7 @@ export interface ExportResult {
   bytes: Uint8Array
   title: string
   report: FidelityReport
+  stats: { slides: number; editable: number; pictures: number }
 }
 
 /**
@@ -26,7 +27,15 @@ export interface ExportResult {
  * takes no passwords), a raw compact document (an authoring shape the app
  * expands on load), and anything that is not bento/slides.
  */
-export async function bentoToPptx(input: string): Promise<ExportResult> {
+export interface ExportOptions {
+  /** a picture PowerPoint cannot take (WebP, …) → PNG data: URI, or null.
+   *  Needs a browser; see ExportOpts.rasterise in pptx-write/index.ts. */
+  rasterise?: (dataUri: string) => Promise<string | null>
+  /** export interactive states as hidden slides (ExportOpts.includeStates) */
+  includeStates?: boolean
+}
+
+export async function bentoToPptx(input: string, options: ExportOptions = {}): Promise<ExportResult> {
   const raw = readInput(input)
   if (raw?.format === 'bento/enc')
     throw new Error('this deck is password-protected — open it in Bento and use Save ▾ Save a copy without a password first')
@@ -34,7 +43,7 @@ export async function bentoToPptx(input: string): Promise<ExportResult> {
     throw new Error('this is a compact authoring document — open it in Bento once and save it, then export the saved file')
   if (raw?.format !== 'bento/slides')
     throw new Error(`this is a ${String(raw?.format ?? 'non-Bento')} file; only bento/slides decks export to PowerPoint`)
-  return docToPptx(JSON.stringify(raw))
+  return docToPptx(JSON.stringify(raw), options)
 }
 
 /**
@@ -42,17 +51,19 @@ export async function bentoToPptx(input: string): Promise<ExportResult> {
  * slides' own parseDoc first, so the writer only ever sees a document the app
  * itself would open.
  */
-export async function docToPptx(json: string): Promise<ExportResult> {
+export async function docToPptx(json: string, options: ExportOptions = {}): Promise<ExportResult> {
   const doc = parseDoc(json)
   if (!doc) throw new Error('the deck did not pass the format check')
   // The deck's chart palette: what the app would give a new chart. The writer
   // cannot derive it (it never imports an app), so it is passed in here.
   // doc.theme.chartPalette still wins inside the writer when the deck has one.
-  const { bytes, report } = await exportPptx(doc as unknown as ExportDoc, {
+  const { bytes, report, stats } = await exportPptx(doc as unknown as ExportDoc, {
     chartPalette: deriveChartPalette(doc.theme.accent),
     formulasIn: countFormulas,
+    ...(options.rasterise ? { rasterise: options.rasterise } : {}),
+    ...(options.includeStates ? { includeStates: true } : {}),
   })
-  return { bytes, title: doc.title, report }
+  return { bytes, title: doc.title, report, stats }
 }
 
 /** The document in a .bento.html, or document JSON as given. JSON is

@@ -17,7 +17,7 @@ import { parseXml, kids, kid, attr, NS, type XElem } from '../../convert/src/xml
 import { serialize, x } from '../../convert/src/xmlout.ts'
 import { PML_XMLNS } from '../../convert/src/pptx-write/parts.ts'
 import { Report } from '../../convert/src/report.ts'
-import {
+import { arcToCubics,
   emu, xfrmNode, parseColor, solidFill, cssAngleToOoxml, shapeNode, type ShapeIn,
 } from '../../convert/src/pptx-write/shapes.ts'
 
@@ -314,14 +314,56 @@ console.log('custGeom (path shapes)')
   const el = shape({ shape: 'path', d: 'M0 0 A5 5 0 0 1 10 0 L10 5', pathBox: [0, 0, 10, 5] })
   const sp = emit(el, r)
   const path = kid(kid(kid(spPr(sp), NS.a, 'custGeom')!, NS.a, 'pathLst')!, NS.a, 'path')!
-  ok(codes(r).includes('path-approximated'), 'NEGATIVE: an arc command reports path-approximated')
-  const firstLn = kids(path, NS.a, 'lnTo')[0]
-  const pt = kid(firstLn, NS.a, 'pt')!
-  ok(attr(pt, 'x') === '95250' && attr(pt, 'y') === '0', 'NEGATIVE: the arc degrades to a line to its ENDPOINT — parseable geometry, not garbage')
+  // A5 5 0 0 1 10 0 from (0,0) is a half circle about (5,0): two quarter
+  // cubics, through (5,-5) (positive sweep, y down), ending exactly on (10,0)
+  ok(!codes(r).includes('path-approximated'), 'an arc is drawn exactly, so nothing is reported')
+  const cubs = kids(path, NS.a, 'cubicBezTo')
+  ok(cubs.length === 2, `a half-circle arc becomes two quarter-turn cubics (${cubs.length})`)
+  const end = (c: XElem) => kids(c, NS.a, 'pt')[2]
+  ok(attr(end(cubs[0]), 'x') === String(emu(5)) && attr(end(cubs[0]), 'y') === String(-emu(5)), `it passes through the top of the circle (${attr(end(cubs[0]), 'x')}, ${attr(end(cubs[0]), 'y')})`)
+  ok(attr(end(cubs[1]), 'x') === String(emu(10)) && attr(end(cubs[1]), 'y') === '0', 'and lands exactly on the arc endpoint')
   const nums = path.children.filter((c) => typeof c !== 'string')
     .flatMap((c) => kids(c as XElem, NS.a, 'pt'))
     .flatMap((p) => [attr(p, 'x'), attr(p, 'y')])
   ok(nums.every((n) => n !== undefined && /^-?\d+$/.test(n)), 'NEGATIVE: every emitted coordinate is a plain integer (no NaN leaked)')
+}
+{
+  // a minifier writes arc flags run together: "0 01" is flags 0, 1 — read as
+  // one number they shifted every coordinate after them (and crashed export)
+  const a = new Report(), b = new Report()
+  const spread = emit(shape({ shape: 'path', d: 'M0 0 A5 5 0 0 1 10 0', pathBox: [0, 0, 10, 5] }), a)
+  const packed = emit(shape({ shape: 'path', d: 'M0 0a5 5 0 0110 0', pathBox: [0, 0, 10, 5] }), b)
+  const geo = (sp: XElem) => JSON.stringify(kid(kid(spPr(sp), NS.a, 'custGeom')!, NS.a, 'pathLst'))
+  ok(geo(spread) === geo(packed) && !codes(b).includes('path-approximated'), 'run-together arc flags ("0110 0") read as 0, 1, then 10 0')
+  // and where the flags run into a decimal: "00.5.5" is flags 0, 0, then .5 .5
+  const c = new Report(), d = new Report()
+  const spread2 = emit(shape({ shape: 'path', d: 'M0 0 a.5 .5 0 0 0 .5 .5', pathBox: [0, 0, 1, 1] }), c)
+  const packed2 = emit(shape({ shape: 'path', d: 'M0 0a.5.5 0 00.5.5', pathBox: [0, 0, 1, 1] }), d)
+  ok(geo(spread2) === geo(packed2) && !codes(d).includes('path-approximated'), 'flags run into a decimal ("00.5.5") read as 0, 0, then .5 .5')
+}
+{
+  // the side of the centre matters on any arc that is not a half circle:
+  // A10 10 0 0 1 10 10 from (0,0) is a quarter turn about (0,10), not (10,0)
+  const curves = arcToCubics(0, 0, 10, 10, 0, 0, 1, 10, 10)!
+  const [c] = curves
+  const mid = [0.125 * 0 + 0.375 * c[0] + 0.375 * c[2] + 0.125 * c[4], 0.125 * 0 + 0.375 * c[1] + 0.375 * c[3] + 0.125 * c[5]]
+  const dist = (x: number, y: number) => Math.hypot(mid[0] - x, mid[1] - y)
+  ok(curves.length === 1 && Math.abs(dist(0, 10) - 10) < 0.05 && Math.abs(dist(10, 0) - 10) > 1,
+    `a quarter arc curves about the right centre (midpoint ${mid.map((v) => v.toFixed(2))}, ${dist(0, 10).toFixed(3)} from (0,10))`)
+  // the same endpoints with sweep 0 turn the other way, about (10,0)
+  const [d] = arcToCubics(0, 0, 10, 10, 0, 0, 0, 10, 10)!
+  const m2 = [0.375 * d[0] + 0.375 * d[2] + 0.125 * d[4], 0.375 * d[1] + 0.375 * d[3] + 0.125 * d[5]]
+  ok(Math.abs(Math.hypot(m2[0] - 10, m2[1]) - 10) < 0.05 && Math.abs(Math.hypot(m2[0], m2[1] - 10) - 10) > 1,
+    `with sweep 0 it curves about the other centre (midpoint ${m2.map((v) => v.toFixed(2))})`)
+}
+{
+  // a path that runs out of arguments must not cost the whole export
+  const r = new Report()
+  const sp = emit(shape({ shape: 'path', d: 'M0 0 L10 0 C1 2 3', pathBox: [0, 0, 10, 5] }), r)
+  const path = kid(kid(kid(spPr(sp), NS.a, 'custGeom')!, NS.a, 'pathLst')!, NS.a, 'path')!
+  const nums = path.children.filter((c) => typeof c !== 'string').flatMap((c) => kids(c as XElem, NS.a, 'pt')).flatMap((p) => [attr(p, 'x'), attr(p, 'y')])
+  ok(codes(r).includes('path-approximated') && kids(path, NS.a, 'lnTo').length === 1 && nums.every((n) => /^-?\d+$/.test(n ?? '')),
+    'a truncated path keeps its good segments, is reported, and writes no NaN')
 }
 {
   const r = new Report()

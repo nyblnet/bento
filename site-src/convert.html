@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--CONVERT_CSP-->
+<title>Convert a file — bento.page</title>
+<meta name="description" content="Open a PowerPoint deck in bento/slides, or save a bento/slides deck as PowerPoint. Converted on your device — nothing is uploaded.">
+<link rel="canonical" href="https://bento.page/convert">
+<meta name="theme-color" content="#0D1B2E">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="bento">
+<meta property="og:url" content="https://bento.page/convert">
+<meta property="og:title" content="Convert to and from bento">
+<meta property="og:description" content="PowerPoint in, PowerPoint out. Converted on your device — nothing is uploaded.">
+<meta property="og:image" content="https://bento.page/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2316273E'/%3E%3Crect x='5' y='5' width='7' height='22' rx='2.5' fill='%235E7699'/%3E%3Crect x='14' y='5' width='13' height='10' rx='2.5' fill='%23FF9E8A'/%3E%3Crect x='14' y='17' width='13' height='10' rx='2.5' fill='%23F0EBE0'/%3E%3C/svg%3E">
+<style>
+:root{
+  --ink:#0D1B2E; --panel:#16273E; --panel2:#1B2F49; --line:rgba(182,193,210,.16);
+  --text:rgba(196,206,221,.92); --dim:rgba(182,193,210,.62); --white:#F4F6F9;
+  --peach:#FF9E8A; --peach2:#ED8266; --steel:#5E7699; --bone:#F0EBE0; --bad:#FF8A8A;
+  --in:'Instrument Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --fr:Fraunces,Georgia,'Times New Roman',serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--ink);color:var(--text);font-family:var(--in);line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--peach)}
+button{font:inherit}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+header{border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:16px;height:60px}
+.mark{display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--white);font-weight:800;font-size:19.5px}
+.mark .sub{color:var(--dim);font-weight:500}
+.spacer{flex:1}
+.nav{color:var(--dim);text-decoration:none;font-weight:600;font-size:14px}
+h1{font-family:var(--fr);color:var(--white);font-size:clamp(28px,5vw,40px);line-height:1.15;margin:48px 0 12px}
+.lede{font-size:17px;margin-bottom:24px}
+.private{display:flex;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:28px;font-size:14.5px}
+.private strong{color:var(--white)}
+.step{display:flex;align-items:baseline;gap:10px;color:var(--white);font-size:15px;font-weight:700;margin:28px 0 12px}
+.step .num{color:var(--peach);font-size:12.5px;font-weight:800;letter-spacing:.08em}
+#drop{display:block;border:2px dashed var(--line);border-radius:16px;padding:40px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+#drop.over,#drop:hover{border-color:var(--peach);background:rgba(255,158,138,.05)}
+#drop strong{display:block;color:var(--white);font-size:18px;margin-bottom:6px}
+#drop input{position:absolute;width:1px;height:1px;opacity:0}
+#drop:focus-within{outline:2px solid var(--peach);outline-offset:3px}
+.hint{color:var(--dim);font-size:13.5px}
+.sample{margin-top:10px;font-size:13.5px;color:var(--dim)}
+.linkbtn{background:none;border:0;color:var(--peach);cursor:pointer;text-decoration:underline;text-underline-offset:3px;padding:2px}
+#source{margin-top:16px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+#source strong{color:var(--white);word-break:break-all}
+#source p{color:var(--dim);font-size:13.5px}
+#options{display:grid;gap:10px}
+.option{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);cursor:pointer}
+.option:has(input:checked){border-color:var(--peach)}
+.option input{accent-color:var(--peach);margin-top:5px;width:16px;height:16px;flex:none}
+.option b{color:var(--white);display:block}
+.option span{color:var(--dim);font-size:13.5px}
+.option.off{cursor:default;opacity:.62}
+.flag{display:flex;align-items:center;gap:8px;margin-top:8px;color:var(--text);font-size:13.5px}
+.flag input{accent-color:var(--peach);width:15px;height:15px}
+.btn{display:inline-block;background:var(--peach);color:var(--ink);font-weight:800;text-decoration:none;padding:12px 20px;border-radius:10px;border:0;cursor:pointer;margin:6px 0 4px}
+.btn:hover{background:var(--peach2)}
+.btn:disabled{background:var(--panel2);color:var(--dim);cursor:default}
+#convert{margin-top:16px}
+#status{margin:22px 0;padding:12px 16px;border-radius:10px;background:var(--panel)}
+#status[data-kind=error]{color:var(--bad);border:1px solid rgba(255,138,138,.35)}
+#result{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+#result h2{color:var(--white);font-size:19px;margin-bottom:4px;word-break:break-all}
+.meta{color:var(--dim);font-size:13.5px;margin:6px 0}
+.stats{display:flex;flex-wrap:wrap;gap:12px 28px;margin:16px 0}
+.stats div{display:flex;flex-direction:column}
+.stats strong{color:var(--white);font-size:26px;font-weight:700;line-height:1.2}
+.stats span{color:var(--dim);font-size:12.5px}
+.report{list-style:none;margin:12px 0 18px}
+.report li{padding:8px 0;border-top:1px solid var(--line);font-size:14.5px}
+.tag{display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:2px 7px;border-radius:5px;margin-right:6px;background:var(--panel2);color:var(--bone)}
+.dropped .tag{color:var(--bad)}
+.where,.n{color:var(--dim)}
+.nudge{margin-top:14px;padding:12px 14px;border-radius:10px;background:var(--panel2);font-size:14px}
+.nudge strong{color:var(--white)}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
+footer{border-top:1px solid var(--line);margin-top:56px;padding:22px 0;color:var(--dim);font-size:13px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <a class="mark" href="/">
+      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#16273E"/><rect x="5" y="5" width="7" height="22" rx="2.5" fill="#5E7699"/><rect x="14" y="5" width="13" height="10" rx="2.5" fill="#FF9E8A"/><rect x="14" y="17" width="13" height="10" rx="2.5" fill="#F0EBE0"/></svg>
+      bento<span class="sub">/convert</span>
+    </a>
+    <div class="spacer"></div>
+    <a class="nav" href="/slides/">Open the editor</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1 id="title">Convert to and from bento</h1>
+  <p class="lede" id="lede">Open a PowerPoint deck in bento/slides, or save a bento/slides deck as PowerPoint. Drop a file and choose what to make of it.</p>
+
+  <p class="private"><span aria-hidden="true">🔒</span><span><strong>Your file never leaves this device.</strong>
+    Conversion runs entirely in this browser tab. Nothing is uploaded, and this page runs no analytics.
+    When it makes a bento/slides deck, it downloads the latest bento/slides app and its signed release record, so that the app it puts your deck into is verified as genuine. Nothing else is downloaded.</span></p>
+
+  <h2 class="step"><span class="num">1</span> Choose a file</h2>
+  <label id="drop">
+    <strong id="drop-title">Drop a file here, or choose one</strong>
+    <span class="hint" id="drop-hint">A PowerPoint deck (.pptx), a bento/slides deck (.bento.html), or a deck’s document JSON. Up to <span id="limit">100 MB</span>.</span>
+    <input id="file" type="file" accept=".pptx,.html,.htm,.json,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/html,application/json">
+  </label>
+  <p class="sample">Just looking? <button type="button" class="linkbtn" id="sample">Try it with a sample deck</button></p>
+  <div id="source" hidden><strong id="source-title"></strong><p id="source-meta"></p></div>
+
+  <section id="choose" hidden>
+    <h2 class="step"><span class="num">2</span> Choose what to make</h2>
+    <div id="options" role="radiogroup" aria-label="Convert to"></div>
+    <button type="button" class="btn" id="convert" disabled>Convert</button>
+  </section>
+
+  <div id="status" role="status" aria-live="polite" hidden></div>
+  <section id="result" aria-live="polite" hidden></section>
+
+  <p class="hint">Every conversion comes with a list of what changed and on which slides, so you know what to check before you share it.</p>
+</main>
+
+<footer><div class="wrap">bento — self-contained office documents · <a href="/help">Help</a> · <a href="https://github.com/nyblnet/bento">Source</a></div></footer>
+<!--CONVERT_SCRIPT-->
+</body>
+</html>

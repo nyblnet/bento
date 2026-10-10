@@ -1,23 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// `embed` elements → PowerPoint. NOT YET WRITTEN: today an embed (a bento/dash
-// chart, a bento/type page, a web page) is reported as dropped and nothing is
-// emitted. This file is the place to write it; convert/CONTRIBUTING.md has the
-// walkthrough.
+// `embed` elements → a picture of their static view.
 //
-// Every embed carries a static render in `view`: raw <svg> markup, or
-// "asset:<key>" naming the asset that holds it. That is what PowerPoint should
-// show. svgPic in media.ts already turns svg markup into a picture with the
-// right package wiring, so a first version can hand it the view and report
-// 'approximated' ('embed-static'): the slide shows the picture, but the live
-// document behind it does not travel. A web embed (app 'web') with no view
-// stays dropped.
-//
-// When it emits something, move 'embed' from NOT_YET to MAPPED in
-// scripts/test-convert/pptx-coverage.ts, and add its own checks there.
+// Every embed (a bento/dash chart, a bento/type page, a web page) carries a
+// static render in `view`: raw <svg> markup, or "asset:<key>" naming the asset
+// that holds it. That is what PowerPoint shows, placed by svgPic (media.ts)
+// with the same package wiring as any SVG. Reported as 'approximated'
+// ('embed-static'): the picture travels; the live document behind it, and
+// any live web frame, do not. An embed with no view (a web embed that never
+// rendered one) has nothing to show and is reported dropped.
 
 import type { ElementWriter, ElFrame } from './contract.ts'
+import { svgPic } from './media.ts'
 
 /** The fields of slides' EmbedElement a writer reads (restated from
  *  slides/src/model.ts; the writer never imports an app). */
@@ -31,7 +26,20 @@ export interface EmbedElIn extends ElFrame {
   url?: string
 }
 
-export const writeEmbed: ElementWriter<EmbedElIn> = (_el, ctx) => {
-  ctx.report.add('dropped', 'element-unsupported', ctx.where, "element type 'embed' has no pptx mapping")
-  return null
+const appName = (app: string) => (app === 'web' ? 'web page' : `${app} document`)
+
+export const writeEmbed: ElementWriter<EmbedElIn> = (el, ctx) => {
+  const view = typeof el.view === 'string' ? el.view.trim() : ''
+  const asset = view.startsWith('asset:') ? view.slice('asset:'.length) : undefined
+  const markup = asset ? ctx.media.assets[asset] ?? '' : view
+  if (!/^<svg[\s>]/i.test(markup.trimStart())) {
+    ctx.report.add('dropped', 'embed-no-view', ctx.where,
+      `an embedded ${appName(el.app)} has no picture to show, so it is left out`)
+    return null
+  }
+  const node = svgPic({ id: el.id, x: el.x, y: el.y, w: el.w, h: el.h, rotation: el.rotation, opacity: el.opacity, markup },
+    ctx.shapeId, ctx.where, ctx.media)
+  if (node) ctx.report.add('approximated', 'embed-static', ctx.where,
+    `an embedded ${appName(el.app)} shows as a picture; its live content and source do not travel`)
+  return node
 }
