@@ -99,6 +99,12 @@ jobs:
         # Typing runs and remote changes invalidate in-flight saves even while dirty.
         run: node scripts/test-spaces-save-revisions.ts
 
+      - name: Slides save revisions
+        # An edit, panel keystroke, remote op or undo during a write keeps the
+        # deck dirty; writes queue; the CRDT stamp is taken as each one starts;
+        # ⌘S, auto-save and Update this file all write through the queue.
+        run: node scripts/test-slides-save-revisions.ts
+
       - name: Typecheck kernel (standalone)
         # Apps also typecheck kernel transitively through their imports; this
         # catches kernel-only errors under the kernel's own flags. It ALSO
@@ -2305,6 +2311,11 @@ jobs:
         # range across a parent copies parents only, never its states; plural
         # and singular toasts.
         run: node scripts/test-slides-copy-slides-browser.mjs
+      - name: Save queue in Chromium
+        # Real ⌘S and auto-save with the file write held open: an edit made
+        # during a write stays dirty, writes never overlap, the dot goes out
+        # only when the deck on screen is the one on disk.
+        run: node scripts/test-slides-save-browser.mjs
 
   spaces-save-browser:
     runs-on: ubuntu-latest

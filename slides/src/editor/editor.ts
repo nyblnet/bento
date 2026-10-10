@@ -26,6 +26,8 @@ import { startPresentation } from '../present'
 // in this file writes a real file for a person, so all of them must inherit an
 // active password. serializeAuto is the only encryption-aware serializer.
 import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, hostCan, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, suggestedFileName, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+import { createSaveQueue, saveRevision } from '../saving'
+import type { SaveQueue } from '../../../kernel/src/savequeue.ts'
 import { noteSavedFromWeb } from './returngate'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
@@ -2616,6 +2618,13 @@ export class Editor {
   private autosaveTimer = 0
   private lastVersionAt = 0
   private lastBackupAt = 0
+  /** Every write to the open file's handle — ⌘S, Save a copy, auto-save and
+   *  Update this file — goes through this one queue (saving.ts). Lazy: the
+   *  store arrives as a constructor parameter, after field initialisers run. */
+  private saveQueueInst: SaveQueue<import('../model').BentoDoc> | null = null
+  private get saveQueue(): SaveQueue<import('../model').BentoDoc> {
+    return this.saveQueueInst ??= createSaveQueue(this.store)
+  }
 
   private wireAutosave() {
     if (this.store.doc.readonly) return // player file — nothing to autosave
@@ -2645,15 +2654,23 @@ export class Editor {
       if (Date.now() - this.lastVersionAt > 120_000) { this.lastVersionAt = Date.now(); await addVersion(doc) }
     }
     // Silent file write-back once we hold a writable handle (Chrome/Edge).
+    // Through the save queue: it waits behind a ⌘S already writing, writes a
+    // snapshot taken as it starts, and the dot goes out only if no edit landed
+    // while the bytes were on their way — the old unconditional
+    // setDirty(false) here marked such an edit saved, and it never reached disk.
     if (hasFileHandle()) {
-      try {
-        this.session?.stampInto(doc)
-        await writeUpdatedFile(await serializeAuto(doc))
-        this.store.setDirty(false)
+      const out = await saveRevision(this.store, this.saveQueue,
+        async (snapshot) => { await writeUpdatedFile(await serializeAuto(snapshot)); return 'saved' as const },
+        () => this.session?.stampInto(this.store.doc))
+      if (out.kind === 'discarded') return // another deck was opened meanwhile
+      if (out.kind === 'written') {
         markFileSaved() // the packs went out with those bytes too
-        this.flashSaved()
+        // "Saved" only when the dot actually went out; an edit made during the
+        // write stays dirty and its own 'doc' event has already re-armed us
+        if (out.current) this.flashSaved()
         return
-      } catch { /* keep dirty; the IndexedDB snapshot is the backstop */ }
+      }
+      // failed: keep dirty; the IndexedDB snapshot is the backstop
     }
     // No handle (Safari/Firefox/iOS) or the write failed: the file on disk is
     // STALE and the deck stays dirty — saying "Saved" here would be a lie. But
@@ -3073,13 +3090,23 @@ export class Editor {
 
   async save(forcePicker: boolean) {
     this.canvas.commitTextEdit()
-    // shared docs persist their CRDT state so the saved copy can rejoin
-    // as a true fork later (offline edits merge both ways)
-    this.session?.stampInto(this.store.doc)
+    // Through the save queue (saving.ts): serialised with auto-save and
+    // Update this file, written from a snapshot taken as the write starts, and
+    // the dot goes out only if nothing changed while the bytes were on their
+    // way. Shared decks stamp their CRDT state in the queue's prepare step, so
+    // the saved copy can rejoin as a true fork later (offline edits merge both
+    // ways) and a save queued behind another carries the state of its own start.
+    const out = await saveRevision(this.store, this.saveQueue,
+      (snapshot) => saveFile(snapshot, forcePicker),
+      () => this.session?.stampInto(this.store.doc))
+    if (out.kind === 'discarded' || out.kind === 'cancelled') return
+    if (out.kind === 'failed') {
+      console.error(out.error)
+      this.toast(t('Save failed — see console'))
+      return
+    }
+    const result = out.result
     try {
-      const result = await saveFile(this.store.doc, forcePicker)
-      if (result === 'cancelled') return
-      this.store.setDirty(false)
       // the file name is knowable from here on — put it in the tab and the chip
       this.syncWindowTitle()
       // staged language packs are in the bytes now — stop calling them pending
@@ -3589,7 +3616,7 @@ export class Editor {
         }
         const actions = div('ed-about-actions')
         const fail = (err: any) => { status.textContent = t('Update failed: {m}', { m: String(err?.message ?? err) }) }
-        const done = (outcome: InPlaceOutcome) => {
+        const done = (outcome: InPlaceOutcome & { current: boolean }) => {
           status.textContent = ''
           const after = div('ed-about-update')
           status.appendChild(after)
@@ -3610,7 +3637,10 @@ export class Editor {
           reloadB.className = 'ed-btn ed-btn-primary'
           reloadB.textContent = t('Reload into new version')
           reloadB.addEventListener('click', () => {
-            this.store.setDirty(false) // disk already holds this exact document
+            // The disk holds the deck as it was when the update was WRITTEN.
+            // Only then is the dot honest to clear; an edit made since stays
+            // dirty, so the page's unload guard still asks before it is lost.
+            if (outcome.current) this.store.setDirty(false)
             // Hand a note to the version we are about to become. sessionStorage
             // because the lifetime is exactly right: it survives this reload and
             // dies with the tab. See noticeIfJustUpdated.
@@ -3645,12 +3675,14 @@ export class Editor {
         inPlaceB.addEventListener('click', async () => {
           inPlaceB.disabled = true
           inPlaceB.textContent = t('Verifying…')
-          try {
-            this.session?.stampInto(this.store.doc)
-            const written = await applyUpdateInPlace(release, this.store.doc)
-            if (written) done(written)
-            else { inPlaceB.disabled = false; inPlaceB.textContent = t('Update this file…') }
-          } catch (err: any) { fail(err) }
+          // the same handle ⌘S and auto-save write, so the same queue: it never
+          // overlaps them, and it writes the snapshot taken as it starts
+          const out = await saveRevision(this.store, this.saveQueue,
+            async (snapshot) => (await applyUpdateInPlace(release, snapshot)) ?? 'cancelled',
+            () => this.session?.stampInto(this.store.doc))
+          if (out.kind === 'written') done({ ...out.result, current: out.current })
+          else if (out.kind === 'failed') fail(out.error)
+          else { inPlaceB.disabled = false; inPlaceB.textContent = t('Update this file…') }
         })
         actions.appendChild(inPlaceB)
 

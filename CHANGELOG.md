@@ -11,6 +11,13 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **An edit made while the deck is saving is no longer marked saved.** Saving
+  takes a moment, and an edit made in that moment — by you, or by someone in a
+  live session — used to be shown as saved while the file on disk was still
+  missing it. The unsaved-changes dot now goes out only when the file holds
+  exactly what is on screen; otherwise it stays on and the next save (or
+  auto-save) writes the edit. ⌘S, auto-save and "Update this file" also wait
+  for each other instead of writing the file at the same time.
 - **One page for PowerPoint, in and out: bento.page/convert.** Drop a
   `.pptx` to open it as a bento/slides deck, or drop a bento/slides deck (or
   its document JSON) to save it as PowerPoint. The page detects what you

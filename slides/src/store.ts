@@ -32,6 +32,11 @@ export class Store {
   currentIndex = 0
   selection: string[] = []
   dirty = false
+  /** Advances on EVERY mutation — a local edit, a panel keystroke inside one
+   *  undo group, a remote op — even while already dirty. The save queue
+   *  (saving.ts) clears the dirty flag only if this has not moved since the
+   *  bytes it wrote were taken. Never decreases; never saved. */
+  revision = 0
   /** editor-only: which showOnHover set the canvas previews (never saved) */
   hoverPreview: string | null = null
 
@@ -55,6 +60,7 @@ export class Store {
   }
 
   emit(event: StoreEvent) {
+    if (event === 'doc') this.revision++
     this.listeners.get(event)?.forEach((fn) => fn())
   }
 
@@ -192,6 +198,8 @@ export class Store {
   }
 
   setDirty(dirty: boolean) {
+    // Remote apply marks dirty even when already dirty — that is a mutation too.
+    if (dirty) this.revision++
     if (this.dirty === dirty) return
     this.dirty = dirty
     this.emit('dirty')
