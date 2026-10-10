@@ -17,6 +17,7 @@
 
 import type { KernelDoc } from './doc.ts'
 import { appConfig } from './app.ts'
+import { docStore, getJSON, setJSON } from './docstore.ts'
 
 /**
  * One database PER APP.
@@ -193,16 +194,40 @@ function contentOnly(doc: KernelDoc): string {
  * that isn't there would be worse than saying nothing.
  */
 export async function putRecovery(doc: KernelDoc): Promise<boolean> {
-  const key = await tx(RECOVERY, 'readwrite', (s) =>
-    s.put({ docId: doc.docId, at: Date.now(), title: doc.title, json: contentOnly(doc) } as Snapshot))
+  const snap: Snapshot = { docId: doc.docId, at: Date.now(), title: doc.title, json: contentOnly(doc) }
+  // Under a host with a per-document store (docstore.ts), the recovery copy
+  // lives THERE — out of the storage origin every local file shares — and any
+  // copy this origin still holds is removed. A host that fails falls back to
+  // the store below, which is exactly where this lived before.
+  const ds = docStore()
+  if (ds && await setJSON(ds, 'recovery', snap)) {
+    void tx(RECOVERY, 'readwrite', (s) => s.delete(doc.docId))
+    return true
+  }
+  const key = await tx(RECOVERY, 'readwrite', (s) => s.put(snap))
   return key != null
 }
 
 export async function getRecovery(docId: string): Promise<Snapshot | null> {
+  const ds = docStore()
+  if (ds) {
+    try {
+      // the entry is per FILE, so check it is this document's before using it
+      const held = await getJSON<Snapshot>(ds, 'recovery')
+      if (held && held.docId === docId) return held
+    } catch { /* host unavailable: fall back to this origin's store */ }
+  }
   return (await tx<Snapshot>(RECOVERY, 'readonly', (s) => s.get(docId))) ?? null
 }
 
 export async function clearRecovery(docId: string): Promise<void> {
+  const ds = docStore()
+  if (ds) {
+    try {
+      const held = await getJSON<Snapshot>(ds, 'recovery')
+      if (!held || held.docId === docId) await ds.delete('recovery')
+    } catch { /* host unavailable: nothing to clear there */ }
+  }
   await tx(RECOVERY, 'readwrite', (s) => s.delete(docId))
 }
 

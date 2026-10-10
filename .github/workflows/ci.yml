@@ -805,6 +805,13 @@ jobs:
         # a host polyfill), reconnect BEFORE serialize so activation stays fresh.
         run: node scripts/test-file-handle.ts
 
+      - name: DocStore (per-document storage under the extension)
+        # Under bento/home, the crash-recovery copy and the member key's private
+        # half live in the extension's per-document store; localStorage keeps
+        # only the public key its readers need. No host, or a host that refuses
+        # or never answers: the old storage, unchanged.
+        run: node scripts/test-docstore.ts
+
       - name: Guarded storage rig
         # localStorage's absence is hostile: reading the PROPERTY throws, so
         # `if (localStorage)` is itself the crash and one bare read at module

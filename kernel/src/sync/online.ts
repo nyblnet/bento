@@ -13,6 +13,7 @@
 import type { Op, SyncStateJSON } from './crdt.ts'
 import type { Frame, HostStore, RefusalCode, SyncDoc, SyncSession, Transport } from './session.ts'
 import { lsGet, lsSet } from '../storage.ts'
+import { docStore, getJSON, setJSON } from '../docstore.ts'
 import { carryThroughRotation } from '../docfields.ts'
 import { offlineEnabled } from '../update.ts'
 // Every request in the app goes through the one chokepoint (kernel/src/net.ts)
@@ -92,17 +93,59 @@ export async function mintInvite(ownerPrivB64: string, role: 'writer' | 'comment
   return { pub: kp.pub, priv: kp.priv, role, ...(exp ? { exp } : {}), sig }
 }
 
-/** This device's member identity for a doc — minted once, kept in localStorage,
- *  NEVER in the file (the file travels; a device key must not). */
+/** Member identities this page has resolved, by docId (one host round trip per
+ *  document per page, not one per connect). */
+const memberCache = new Map<string, { pub: string; priv: string }>()
+
+/** This device's member identity for a doc — minted once, NEVER in the file
+ *  (the file travels; a device key must not).
+ *
+ *  Under a host with a per-document store (docstore.ts), the PRIVATE key lives
+ *  there, out of the storage origin every local file shares. localStorage keeps
+ *  only the PUBLIC key under the same name, because the presence beat and the
+ *  apps' People views read `bento-member-<docId>`.pub to recognise this device —
+ *  and a pubkey is public anyway. The first time, a full key this browser
+ *  already holds is ADOPTED (the device keeps its People entry) and its private
+ *  half removed from that origin. Without a host, or if the host fails, the
+ *  whole key stays in localStorage as before. */
 export async function deviceIdentity(docId: string): Promise<{ pub: string; priv: string }> {
+  const hit = memberCache.get(docId)
+  if (hit) return hit
+  const remember = (id: { pub: string; priv: string }) => { memberCache.set(docId, id); return id }
   const k = `bento-member-${docId}`
-  try {
-    const saved = lsGet(k)
-    if (saved) return JSON.parse(saved)
-  } catch { /* storage unavailable → ephemeral identity */ }
+  /** a FULL identity from localStorage — a pub-only mirror is not one */
+  const saved = (): { pub: string; priv: string } | null => {
+    try {
+      const s = lsGet(k)
+      const v = s ? JSON.parse(s) as { pub?: string; priv?: string } : null
+      return v?.pub && v.priv ? { pub: v.pub, priv: v.priv } : null
+    } catch { return null }
+  }
+  const mirrorPub = (pub: string) => { lsSet(k, JSON.stringify({ pub })) }
+  const ds = docStore()
+  if (ds) {
+    try {
+      // the entry is per FILE, so check it is this document's before using it
+      const held = await getJSON<{ docId?: string; pub?: string; priv?: string }>(ds, 'memberkey')
+      if (held?.docId === docId && held.pub && held.priv) {
+        mirrorPub(held.pub)
+        return remember({ pub: held.pub, priv: held.priv })
+      }
+      const id = saved() ?? await mintKeypair()
+      if (await setJSON(ds, 'memberkey', { docId, pub: id.pub, priv: id.priv })) {
+        mirrorPub(id.pub) // the private half leaves this origin
+        return remember(id)
+      }
+      // the host refused: keep this identity where it always lived
+      lsSet(k, JSON.stringify(id))
+      return remember(id)
+    } catch { /* host unavailable: the store below */ }
+  }
+  const prior = saved()
+  if (prior) return remember(prior)
   const id = await mintKeypair()
   lsSet(k, JSON.stringify(id))
-  return id
+  return remember(id)
 }
 
 /** Auth material for the relay connection. Exactly one shape applies:
