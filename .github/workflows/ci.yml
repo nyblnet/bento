@@ -2316,6 +2316,12 @@ jobs:
         # during a write stays dirty, writes never overlap, the dot goes out
         # only when the deck on screen is the one on disk.
         run: node scripts/test-slides-save-browser.mjs
+      - name: Ghost Cut in Chromium
+        # ⇧⌘X fades the selection by CSS (shadowed elements too) and copies it;
+        # a ghost is never selected and the pointer passes through it; Esc
+        # restores; paste moves it to the pointer in one undo step, across
+        # slides, without two elements sharing an id on one slide.
+        run: node scripts/test-slides-ghost-cut-browser.mjs
 
   spaces-save-browser:
     runs-on: ubuntu-latest

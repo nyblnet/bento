@@ -11,11 +11,11 @@ pre-1.0.
 
 ## [Unreleased]
 
-- **Optional Ghost Cut for moving elements.** When enabled, Ctrl/Cmd+X
-  ghosts selected elements, Ctrl/Cmd+V moves them as a single undoable
-  operation, and Escape cancels. Disabled by default; the preference is
-  stored locally in the browser.
-
+- **Ghost Cut: move elements with ⇧⌘X (Ctrl+Shift+X).** The selection fades
+  where it stands instead of disappearing; paste moves it to the pointer — on
+  this slide or another — keeping it the same element, in one undoable step.
+  Escape puts it back. It is also copied, so pasting in another deck works as
+  after ⌘C. Plain ⌘X is unchanged. Thanks to senthan-07 (#679).
 - **An edit made while the deck is saving is no longer marked saved.** Saving
   takes a moment, and an edit made in that moment — by you, or by someone in a
   live session — used to be shown as saved while the file on disk was still

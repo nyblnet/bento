@@ -472,6 +472,7 @@ export const pt: Catalog = {
   "Editing": "Edição",
   "Undo · redo": "Desfazer · refazer",
   "Copy · paste — elements, or the whole slide when nothing is selected": "Copiar · colar — elementos, ou o slide inteiro quando nada estiver selecionado",
+  "Ghost cut — the selection fades until you paste to move it; Esc cancels": "Recorte fantasma: a seleção fica esmaecida até você colar para movê-la; Esc cancela",
   "Duplicate selection": "Duplicar seleção",
   "Group · ungroup": "Agrupar · desagrupar",
   "Comment mode": "Modo de comentário",
@@ -946,6 +947,4 @@ export const pt: Catalog = {
   "{n} pictures still uploading…": "{n} imagens a enviar…",
   "Not rendered: {what}": "Não renderizada: {what}",
   "no space just inside the $ signs": "sem espaço logo dentro dos sinais $",
-  "Enable Ghost Cut (Ctrl/Cmd+X moves elements; Esc cancels)": "Ativar Ghost Cut (Ctrl/Cmd+X move os elementos; Esc cancela)",
-  "When enabled, Ctrl/Cmd+X ghosts selected elements until Ctrl/Cmd+V moves them. Escape cancels.": "Quando ativado, Ctrl/Cmd+X torna os elementos selecionados semitransparentes até que Ctrl/Cmd+V os mova. Escape cancela.",
 }

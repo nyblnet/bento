@@ -480,6 +480,7 @@ export const zhHant: Catalog = {
   "Editing": "編輯",
   "Undo · redo": "復原 · 重做",
   "Copy · paste — elements, or the whole slide when nothing is selected": "複製 · 貼上 — 元素，或在未選取任何內容時複製整張投影片",
+  "Ghost cut — the selection fades until you paste to move it; Esc cancels": "幽靈剪下 — 選取內容變為半透明，貼上時移動；Esc 取消",
   "Duplicate selection": "複製所選",
   "Group · ungroup": "群組 · 取消群組",
   "Comment mode": "評論模式",
@@ -948,6 +949,4 @@ export const zhHant: Catalog = {
   "{n} pictures still uploading…": "{n} 張圖片上傳中…",
   "Not rendered: {what}": "未能呈現：{what}",
   "no space just inside the $ signs": "$ 符號內側不要緊貼空格",
-  "Enable Ghost Cut (Ctrl/Cmd+X moves elements; Esc cancels)": "啟用幽靈剪下（Ctrl/Cmd+X 移動元素；Esc 取消）",
-  "When enabled, Ctrl/Cmd+X ghosts selected elements until Ctrl/Cmd+V moves them. Escape cancels.": "啟用後，按 Ctrl/Cmd+X 會讓選取的元素變成半透明，按 Ctrl/Cmd+V 將其移動。按 Escape 取消。",
 }

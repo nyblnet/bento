@@ -480,6 +480,7 @@ export const ja: Catalog = {
   "Editing": "編集",
   "Undo · redo": "元に戻す・やり直し",
   "Copy · paste — elements, or the whole slide when nothing is selected": "コピー・貼り付け — 要素、または何も選択していないときはスライド全体",
+  "Ghost cut — the selection fades until you paste to move it; Esc cancels": "ゴーストカット — 貼り付けで移動するまで選択範囲を半透明に表示。Esc で取り消し",
   "Duplicate selection": "選択を複製",
   "Group · ungroup": "グループ化・解除",
   "Comment mode": "コメントモード",
@@ -948,6 +949,4 @@ export const ja: Catalog = {
   "{n} pictures still uploading…": "画像{n}枚をアップロード中…",
   "Not rendered: {what}": "表示できません: {what}",
   "no space just inside the $ signs": "$ 記号のすぐ内側に空白を入れないでください",
-  "Enable Ghost Cut (Ctrl/Cmd+X moves elements; Esc cancels)": "Ghost Cutを有効にする（Ctrl/Cmd+Xで要素を移動、Escでキャンセル）",
-  "When enabled, Ctrl/Cmd+X ghosts selected elements until Ctrl/Cmd+V moves them. Escape cancels.": "有効にすると、Ctrl/Cmd+Xで選択した要素が半透明になり、Ctrl/Cmd+Vで移動します。Escapeでキャンセルできます。",
 }

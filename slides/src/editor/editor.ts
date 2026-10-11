@@ -57,11 +57,6 @@ import { PresenceToasts } from './presencetoasts'
 
 const i18nT = t
 
-type GhostCutState = {
-  slideId: string
-  ids: string[]
-}
-
 /** Per-BROWSER, not per-deck: whether the "this browser can't rewrite files"
  *  notice has been acknowledged. It is a property of the browser. */
 const SAVE_NOTICE_KEY = 'bento-save-notice'
@@ -141,16 +136,6 @@ function menuLabel(label: string, desc: string, row: HTMLElement): HTMLSpanEleme
   row.setAttribute('aria-describedby', note.id)
   return span
 }
-// Optional: enable/disable Ghost Cut via settings
-const GHOST_CUT_PREF = 'bento-ghost-cut'
-
-function ghostCutEnabled(): boolean {
-  return lsGet(GHOST_CUT_PREF) === 'on'
-}
-
-function setGhostCutEnabled(enabled: boolean): void {
-  lsSet(GHOST_CUT_PREF, enabled ? 'on' : 'off')
-}
 
 export class Editor {
   private canvas!: SlideCanvas
@@ -176,7 +161,6 @@ export class Editor {
   private session: import('../sync/session').SyncSession | null = null
   private updateFound: string | null = null
   private lastAutoCheck: import('../update').UpdateCheck | null = null
-  private ghostCut: GhostCutState | null = null
   /** side panel widths (px) — user-resizable, persisted per browser */
   private panelW = { left: 188, right: 236 }
 
@@ -188,18 +172,9 @@ export class Editor {
     this.wireKeyboard()
     // a slide-list change makes the sidebar selection's indices stale: drop it
     // (a drag re-selects the moved block by id right after its commit)
-    store.on('slides', () => {
-      this.thumbSel = []
-      this.rebuildSidebar()
-    })
-    store.on('current', () => {
-      this.highlightSidebar()
-      this.syncGhostCutCanvas()
-    })
-    store.on('doc', () => {
-      this.scheduleThumbs()
-      this.pruneGhostCut()
-    })
+    store.on('slides', () => { this.thumbSel = []; this.rebuildSidebar() })
+    store.on('current', () => this.highlightSidebar())
+    store.on('doc', () => this.scheduleThumbs())
     store.on('dirty', () => {
       this.dirtyDot.classList.toggle('on', store.dirty)
     })
@@ -2452,76 +2427,27 @@ export class Editor {
 
   // --- paste: external objects + cross-deck elements/slides ---------------------
 
-  private syncGhostCutCanvas() {
-    const ids = this.ghostCut?.slideId === this.store.slide.id ? this.ghostCut.ids : []
-    this.canvas.setGhostCutIds(ids)
-  }
-
-  private pruneGhostCut() {
-    const ghost = this.ghostCut
-    if (!ghost) return
-    const slide = this.store.doc.slides.find((s) => s.id === ghost.slideId)
-    if (!slide) { this.cancelGhostCut(); return }
-    const live = new Set(slide.elements.map((e) => e.id))
-    const ids = ghost.ids.filter((id) => live.has(id))
-    if (!ids.length) { this.cancelGhostCut(); return }
-    if (ids.length !== ghost.ids.length) {
-      this.ghostCut = { ...ghost, ids }
-      this.syncGhostCutCanvas()
-    }
-  }
-
-  private cancelGhostCut() {
-    if (!this.ghostCut) return
-    this.ghostCut = null
-    this.canvas.setGhostCutIds([])
-  }
-
-  private startGhostCut() {
-    if (this.store.readOnly) return
-    const ids = this.store.selectedElements.map((e) => e.id)
-    if (!ids.length) return
-    this.ghostCut = { slideId: this.store.slide.id, ids }
-    this.store.select([])
-    this.syncGhostCutCanvas()
-  }
-
-  private completeGhostCutMove(): boolean {
-    const ghost = this.ghostCut
-    if (!ghost) return false
-    const source = this.store.doc.slides.find((s) => s.id === ghost.slideId)
-    if (!source) { this.cancelGhostCut(); return true }
-    const ids = new Set(ghost.ids)
-    const moving = source.elements.filter((e) => ids.has(e.id))
-    if (!moving.length) { this.cancelGhostCut(); return true }
-    const minX = Math.min(...moving.map((e) => e.x))
-    const minY = Math.min(...moving.map((e) => e.y))
-    const maxX = Math.max(...moving.map((e) => e.x + e.w))
-    const maxY = Math.max(...moving.map((e) => e.y + e.h))
-    const pointer = this.canvas.lastPointerOnSlide()
-    const fallback = {
-      x: Math.round((this.store.doc.size.width - (maxX - minX)) / 2),
-      y: Math.round((this.store.doc.size.height - (maxY - minY)) / 2),
-    }
-    const target = pointer ?? fallback
-    const dx = target.x - minX
-    const dy = target.y - minY
-    const targetSlide = this.store.slide
-
-    this.ghostCut = null
-    this.canvas.setGhostCutIds([])
+  /** ⌘V after ⇧⌘X: move the ghosted elements to the pointer (or leave them
+   *  where they are), onto the current slide — one undo step, ids kept. */
+  private moveGhost() {
+    const g = this.canvas.ghost!
+    this.canvas.setGhost(null)
+    const source = this.store.doc.slides.find((s) => s.id === g.slideId)
+    const moving = source?.elements.filter((e) => g.ids.includes(e.id)) ?? [] // only what still exists
+    if (!source || !moving.length) return
+    const target = this.store.slide
+    const at = this.canvas.pointerOnSlide()
+    const dx = at ? at.x - Math.min(...moving.map((e) => e.x)) : 0
+    const dy = at ? at.y - Math.min(...moving.map((e) => e.y)) : 0
     this.store.commit(() => {
-      for (const el of moving) {
-        el.x = Math.round((el.x + dx) * 10) / 10
-        el.y = Math.round((el.y + dy) * 10) / 10
-      }
-      if (source !== targetSlide) {
-        source.elements = source.elements.filter((e) => !ids.has(e.id))
-        targetSlide.elements.push(...moving)
-      }
+      for (const el of moving) { el.x = Math.round(el.x + dx); el.y = Math.round(el.y + dy) }
+      if (source === target) return
+      source.elements = source.elements.filter((e) => !moving.includes(e))
+      // slides share ids on purpose (morph); two on ONE slide would collide
+      for (const el of moving) if (target.elements.some((e) => e.id === el.id)) el.id = uid(el.type[0])
+      target.elements.push(...moving)
     })
     this.store.select(moving.map((e) => e.id))
-    return true
   }
 
   private wirePaste() {
@@ -2536,11 +2462,7 @@ export class Editor {
       if (this.presenting) return
       const a = document.activeElement as HTMLElement | null
       if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return // text edit owns it
-      if (this.ghostCut) {
-        ev.preventDefault()
-        this.completeGhostCutMove()
-        return
-      }
+      if (this.canvas.ghost) { ev.preventDefault(); this.moveGhost(); return }
       const dt = ev.clipboardData
       if (!dt) return
       // 1) an image from the OS clipboard (screenshot, copied picture…)
@@ -3104,6 +3026,7 @@ export class Editor {
       [`${mod}S`, t('Save')],
       [`${mod}Z · ${mod}⇧Z`, t('Undo · redo')],
       [`${mod}C · ${mod}V`, t('Copy · paste — elements, or the whole slide when nothing is selected')],
+      [`${mod}⇧X`, t('Ghost cut — the selection fades until you paste to move it; Esc cancels')],
       [`${mod}D`, t('Duplicate selection')],
       [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
       [`${mod}B · ${mod}I · ${mod}U`, t('Bold · italic · underline while editing text')],
@@ -3288,7 +3211,6 @@ export class Editor {
       }
       if (mod && ev.key.toLowerCase() === 'g') {
         ev.preventDefault()
-        this.cancelGhostCut()
         const els = this.store.selectedElements
         if (ev.shiftKey) this.panel.ungroup(els)
         else this.panel.group(els)
@@ -3296,29 +3218,33 @@ export class Editor {
       }
       if (mod && ev.key.toLowerCase() === 'z') {
         ev.preventDefault()
-        this.cancelGhostCut()
         ev.shiftKey ? this.store.redo() : this.store.undo()
         return
       }
       if (mod && ev.key.toLowerCase() === 'y') {
         ev.preventDefault()
-        this.cancelGhostCut()
         this.store.redo()
         return
       }
       if (mod && ev.key.toLowerCase() === 'd') {
         ev.preventDefault()
-        this.cancelGhostCut()
         this.duplicateSelection()
         return
       }
-      if (mod && ev.key.toLowerCase() === 'x' && ghostCutEnabled()) {
+      // Ghost Cut: the selection fades where it stands and ⌘V MOVES it (same
+      // ids, one undo step); Esc cancels. Also copied, so pasting elsewhere
+      // works as after ⌘C. Plain ⌘X is unchanged.
+      if (mod && ev.shiftKey && ev.key.toLowerCase() === 'x') {
         ev.preventDefault()
-        this.startGhostCut()
+        if (!this.store.selection.length || this.store.readOnly) return
+        this.copySelection()
+        const ids = [...this.store.selection]
+        this.store.select([])
+        this.canvas.setGhost({ slideId: this.store.slide.id, ids })
         return
       }
       if (mod && ev.key.toLowerCase() === 'c') {
-        this.cancelGhostCut()
+        this.canvas.ghost = null // a fresh copy is what ⌘V should paste now
         // Copy to BOTH the in-app clipboard (fast, same session) and the system
         // clipboard as a Bento payload (works across decks/tabs). Elements when
         // any are selected; otherwise the current slide.
@@ -3338,11 +3264,6 @@ export class Editor {
       // ⌘V is handled by the document 'paste' listener (wirePaste) so it can
       // also receive images and cross-deck payloads.
       if (ev.key === 'Delete' || ev.key === 'Backspace') {
-        if (this.ghostCut) {
-          ev.preventDefault()
-          this.cancelGhostCut()
-          return
-        }
         if (this.store.selection.length) {
           ev.preventDefault()
           this.deleteSelection()
@@ -3383,17 +3304,11 @@ export class Editor {
         return
       }
       if (ev.key === 'Escape') {
-        if (this.ghostCut) {
-          this.cancelGhostCut()
-        } else if (this.thumbSel.length) {
-          this.setThumbSel([])
-        } else if (this.canvas.isDrawing) {
-          this.canvas.cancelDraw()
-        } else if (this.canvas.isPathEditing) {
-          this.canvas.stopPathEdit(true)
-        } else {
-          this.store.select([])
-        }
+        if (this.canvas.ghost) { this.canvas.setGhost(null); return }
+        if (this.thumbSel.length) this.setThumbSel([])
+        if (this.canvas.isDrawing) this.canvas.cancelDraw()
+        else if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
+        else this.store.select([])
         return
       }
       if (ev.key === 'PageDown') {
@@ -3885,24 +3800,6 @@ export class Editor {
     compressBtn.addEventListener('click', () => { void this.compressDeckPictures(compressBtn, compressNote, overlay) })
     compressRow.append(compressBtn, compressNote)
     box.appendChild(compressRow)
-
-    // Optional: enable/disable Ghost Cut via settings
-    const ghostCutRow = document.createElement('label')
-    ghostCutRow.className = 'ed-about-auto'
-    const ghostCutCb = document.createElement('input')
-    ghostCutCb.type = 'checkbox'
-    ghostCutCb.checked = ghostCutEnabled()
-    ghostCutCb.addEventListener('change', () => {
-      setGhostCutEnabled(ghostCutCb.checked)
-    })
-    ghostCutRow.append(
-      ghostCutCb,
-      document.createTextNode(' ' + t('Enable Ghost Cut (Ctrl/Cmd+X moves elements; Esc cancels)')),
-    )
-    ghostCutRow.title = t(
-      'When enabled, Ctrl/Cmd+X ghosts selected elements until Ctrl/Cmd+V moves them. Escape cancels.',
-    )
-    box.appendChild(ghostCutRow)
 
     // the hard no-network switch: blocks update checks AND online
     // collaboration for this browser. Same-machine tab sync is not
