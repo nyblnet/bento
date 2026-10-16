@@ -20,7 +20,8 @@
 
 import type { Block, TypeDoc } from './model.ts';
 import { copyIsReceiveOnly } from './model.ts';
-import { FROM_LIVE } from '../../kernel/src/docfields.ts';
+import { FROM_LIVE, applyRestore, type RestoreDirection } from '../../kernel/src/docfields.ts';
+import { RESTORE_RULES } from './restorerules.ts';
 
 type Snap =
   | { kind: 'doc'; doc: TypeDoc }
@@ -123,7 +124,8 @@ export class Store {
    * one undo step, which is how a typed word is one press of ⌘Z rather than
    * five. Any commit without a run, or with a different one, closes the group.
    */
-  commit(fn: (doc: TypeDoc) => void, opts: { scope?: Scope; run?: string; system?: boolean } = {}): void {
+  commit(fn: (doc: TypeDoc) => void,
+         opts: { scope?: Scope; run?: string; system?: boolean; undoable?: boolean } = {}): void {
     // A receive-only copy takes no USER edits — the relay would drop them, so
     // they would live only here and quietly diverge this file from the room it
     // claims to follow. `system` is for the sync session's own bookkeeping
@@ -133,8 +135,12 @@ export class Store {
     if (this.#locked && !opts.system) return;
     const scope = opts.scope ?? 'doc';
     const run = opts.run ?? null;
-    if (run === null || run !== this.#run) this.#push(this.#snap(scope));
-    this.#run = run;
+    // `undoable: false` is for HISTORY writes (⋯ → Snapshot): they are a record,
+    // not an edit, so ⌘Z must not take them back. Safe only because a
+    // document-level undo keeps history LIVE (#apply below): undoing an
+    // earlier edit restores the content of before it, never the history.
+    if (opts.undoable !== false && (run === null || run !== this.#run)) this.#push(this.#snap(scope));
+    this.#run = opts.undoable === false ? this.#run : run;
     fn(this.#doc);
     this.#emit();
   }
@@ -154,6 +160,19 @@ export class Store {
   touch(): void { this.#emit(); }
 
   /** Replace the whole document — loading a file, or restoring a revision. */
+  /**
+   * Restore a whole document, as ONE undoable step, in a direction:
+   *   'back'     a version from About's version history
+   *   'recover'  the crash-recovery banner's snapshot (a newer copy of this doc)
+   * See restorerules.ts. A paste is not a restore — it uses replace().
+   */
+  restore(doc: TypeDoc, direction: RestoreDirection): void {
+    this.#push({ kind: 'doc', doc: clone(this.#doc) });
+    this.#run = null;
+    this.#doc = applyRestore(this.#doc, doc, direction, RESTORE_RULES[direction]);
+    this.#emit();
+  }
+
   replace(doc: TypeDoc): void {
     this.#push({ kind: 'doc', doc: clone(this.#doc) });
     this.#run = null;
@@ -164,9 +183,10 @@ export class Store {
   #apply(s: Snap): Snap {
     if (s.kind === 'doc') {
       const inverse: Snap = { kind: 'doc', doc: clone(this.#doc) };
-      const live = this.#doc;
-      this.#doc = s.doc;
-      keepLiveIdentity(this.#doc, live);
+      // Going BACK (undo or redo): content follows the snapshot, history stays
+      // live, identity/mode/capability stay live (restorerules.ts). So undo
+      // can never discard a revision, and comments undo like any edit.
+      this.#doc = applyRestore(this.#doc, s.doc, 'back', RESTORE_RULES.back);
       return inverse;
     }
     // A block snapshot restores that block in place. If the block is gone (a

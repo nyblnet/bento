@@ -79,10 +79,15 @@ let repaint: (() => void) | null = null;
 /** ⋯ → Snapshot: record the document as it stands now, the base a later Review compares against. */
 export function takeSnapshot(ctx: FeatureContext): void {
   const label = `Revision ${ctx.store.doc.revisions.length + 1}`;
+  // A Snapshot is a RECORD, not an edit: it is signed history, so ⌘Z must not
+  // take it back (an undo that removed one would silently change what every
+  // signature covers). Off the undo stack — safe because a document-level undo
+  // keeps history live (store.ts #apply), so undoing an earlier edit never
+  // removes a revision either.
   ctx.store.commit(d => {
     d.revisions.push({ id: uid('rev'), at: new Date().toISOString(), label,
                        body: JSON.parse(JSON.stringify(d.body)) });
-  });
+  }, { undoable: false });
   ctx.toast(`${label} recorded — edit, then Review`);
 }
 

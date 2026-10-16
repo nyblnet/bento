@@ -248,7 +248,9 @@ const showAbout = () => openAbout({
   onRestoreDoc: json => {
     const doc = gateRestored(json, store.doc);
     if (!doc) { alert(t('That saved version could not be restored.')); return; }
-    store.replace(doc);
+    // Going BACK to an older version: its content returns, but history stays
+    // live, so restoring never discards revisions made since (restorerules.ts).
+    store.restore(doc, 'back');
     editor.render();
     schedule();
   },
@@ -841,12 +843,15 @@ document.getElementById('sign')!.addEventListener('click', async () => {
   // later signature commits to history under the same salt (canon.ts).
   if (!store.doc.historySalt) {
     const salt = newHistorySalt();
-    store.commit(d => { d.historySalt = salt; });
+    store.commit(d => { d.historySalt = salt; }, { undoable: false });
   }
   const prev = store.doc.signatures[store.doc.signatures.length - 1] ?? null;
   const entry = await signDoc(store.doc, key, { name, prev });
   entry.at = new Date().toISOString();
-  store.commit(d => { d.signatures.push(entry); });
+  // NOT undoable (ruling 7): a signature leaves only by its signer's or the
+  // owner's removal, never by ⌘Z — and a 'back' restore keeps signatures live
+  // (restorerules.ts), so an undo step here would only be a step that does nothing.
+  store.commit(d => { d.signatures.push(entry); }, { undoable: false });
   markDirty(); showTab('sigs'); await paintSigs();
   toast('Signed');
 });
