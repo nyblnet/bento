@@ -2450,6 +2450,27 @@ jobs:
         # beside the caret has no ring-blue in it; the text does not move.
         run: node scripts/test-slides-caret-ring-browser.mjs
 
+  type-cantopen-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix type
+          npm run build:single --prefix type
+      - name: The can't-open message shows the file's details as text
+        run: node scripts/test-type-cantopen-browser.mjs
+
   spaces-save-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15

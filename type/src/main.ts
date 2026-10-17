@@ -85,13 +85,26 @@ if (parsed.ok) {
 } else {
   // NEVER silently start a new document over a file we could not read — the
   // spaces load contract (model.ts). Say what happened and stop.
-  document.body.innerHTML =
-    `<div style="max-width:44rem;margin:12vh auto;padding:0 2rem;font:15px/1.6 system-ui;color:#e6e9ef">
-       <h1 style="font-size:20px">This file could not be opened</h1>
-       <p>${parsed.detail}</p>
-       <p style="color:#8d95a3">Nothing has been changed. Close this tab rather than saving over it.</p>
-     </div>`;
-  throw new Error(`bento/type: ${parsed.detail}`);
+  //
+  // Built with textContent, never markup: `detail` carries text FROM THE FILE
+  // (an unknown format's own name, a JSON parser's message quoting the bytes),
+  // so it is shown as text whatever it contains. Guarded by
+  // scripts/test-type-cantopen-browser.mjs.
+  const card = document.createElement('div');
+  card.style.cssText = 'max-width:44rem;margin:12vh auto;padding:0 2rem;font:15px/1.6 system-ui;color:#e6e9ef';
+  const line = (tag: string, text: string, style = '') => {
+    const el = document.createElement(tag);
+    el.textContent = text;
+    if (style) el.style.cssText = style;
+    card.append(el);
+  };
+  line('h1', 'This file could not be opened', 'font-size:20px');
+  line('p', parsed.detail);
+  line('p', 'Nothing has been changed. Close this tab rather than saving over it.', 'color:#8d95a3');
+  document.body.replaceChildren(card);
+  // A FIXED message: whatever reports this error may not treat it as text, and
+  // the detail (which quotes the file) is already on screen above.
+  throw new Error(`bento/type: the document could not be read (${parsed.err})`);
 }
 
 // ───────────────────────────────────────────────────────────────── chrome
