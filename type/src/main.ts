@@ -17,7 +17,7 @@ import './registry.ts';   // side-effect: every feature module registers itself
 import { i18nApi } from '../../kernel/src/i18n.ts';
 import { openAbout } from './about.ts';
 import { startTheme, setTheme, themeChoice, type ThemeChoice } from '../../kernel/src/theme.ts';
-import { parseDoc, emptyDoc, uid, wordCount, withoutEmbeddedCaps, type TypeDoc } from './model.ts';
+import { parseDoc, emptyDoc, uid, wordCount, withoutEmbeddedCaps, FORMAT, type TypeDoc } from './model.ts';
 import { gateRestored } from './restoregate.ts';
 import { Store } from './store.ts';
 import { keepLiveHistory } from './docclass.ts';
@@ -102,7 +102,17 @@ if (parsed.ok) {
   line('p', parsed.detail);
   line('p', 'Nothing has been changed. Close this tab rather than saving over it.', 'color:#8d95a3');
   document.body.replaceChildren(card);
-  // A FIXED message: whatever reports this error may not treat it as text, and
+  // Tell the shell loader this was a deliberate refusal, not a failed start
+  // (its contract: { doc } running, { locked } at a password gate, { refused }
+  // painted its own refusal). Without it the loader counts the throw below as
+  // a path that failed, tries the next, and paints "This file could not
+  // start" over this message. bento/type has no password gate, so an
+  // encrypted file lands here too. Guarded by
+  // scripts/test-type-cantopen-browser.mjs.
+  (window as unknown as { bento: unknown }).bento = { format: FORMAT, refused: true };
+  // The throw stays: it is how a module stops here, before the editor below
+  // is built over this message, and a throw after a published refusal still
+  // counts as started. A FIXED message: whatever reports this error may not treat it as text, and
   // the detail (which quotes the file) is already on screen above.
   throw new Error(`bento/type: the document could not be read (${parsed.err})`);
 }
