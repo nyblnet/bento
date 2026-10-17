@@ -293,6 +293,7 @@ function buildViewPanel(host: HTMLElement, ctx: FeatureContext): void {
   const label = document.createElement('span');
   label.textContent = t('Display');
   const sel = document.createElement('select');
+  sel.className = 't-select';
   const OPTIONS: Array<[TrackView, string]> = [
     ['all', t('All markup')],
     ['final', t('No markup')],

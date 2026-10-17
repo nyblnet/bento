@@ -68,6 +68,7 @@
   --muted: #5b6472;
   --accent: #f7a600;
   --accent-ink: #7a5200;
+  --accent-text: #7a5200;     /* accent-coloured TEXT on chrome (slides' --accent-ink) */
   --blue: #5b8def;
   --field: #ffffff;          /* form-control surface — CHROME, not paper */
   --grid-dot: #d5dbe4;
@@ -88,6 +89,7 @@
   --muted: #8b95a4;
   --accent: #f7a600;
   --accent-ink: #3a2a00;      /* text ON the accent, so it flips */
+  --accent-text: #f0b74e;     /* accent-coloured TEXT on chrome (slides' --accent-ink) */
   --blue: #7aa5f5;            /* lifted: #5b8def is too dark to read here */
   --field: #12151a;
   --grid-dot: #2b313b;
@@ -142,8 +144,7 @@ html, body {
 .t-props .t-row > :last-child { flex: 0 0 auto; }
 .t-toggles { display: flex; gap: 2px; margin: 6px 0; flex-wrap: wrap; }
 .t-toggles .t-btn { min-width: 30px; min-height: 28px; padding: 4px 7px; }
-.t-field { width: 68px; font: inherit; font-size: 12.5px; color: var(--ink);
-  background: var(--field); border: 1px solid var(--line); border-radius: 7px; padding: 4px 6px; }
+.t-field { width: 68px; }
 .t-field-wide { width: 130px; }
 .t-props .t-note { margin: 4px 0 8px; }
 .t-side { background: var(--chrome); border-inline-end: 1px solid var(--line); overflow: auto; }
@@ -277,11 +278,49 @@ html, body {
 .t-primary { background: var(--ink); color: var(--chrome); padding: 6px 12px; }
 .t-primary:hover { background: var(--ink-2); }
 
-.t-select {
-  font: inherit; font-size: 13px; color: var(--ink-2);
-  background: var(--field); border: 1px solid var(--line);
-  border-radius: 8px; padding: 5px 8px; cursor: pointer;
+/* ————— THE FIELD — one look for every text field, select and textarea ———————
+   The suite's reference: dash, spaces and type copy this block as it stands.
+   Every chrome field gets it with no class to remember, so a new field cannot
+   come out in the browser's own dress — the grey inset 2px border, square
+   corners, and in dark theme a #3b3b3b fill nobody chose (five of slides'
+   fields had exactly that, each with its own rule that forgot one property).
+
+   :where() keeps the specificity at ZERO, so a context rule that only sizes a
+   field (width, flex, font-weight) layers on top without restating the look,
+   and a field that is deliberately not a box (the ghost title, the password
+   gate's own card) overrides it with an ordinary class. The ring sits ON the
+   border (offset -1px), so no scroll container can clip it. Checkboxes,
+   radios, ranges and file pickers keep their native controls. Guarded by
+   scripts/test-slides-fields-browser.mjs.
+
+   bento/type: copied from slides as it stands (docs/DECISIONS.md 2026-10-17,
+   "the suite's one field look"). One token is mapped: slides' --accent-ink is
+   accent-coloured TEXT on chrome, which type calls --accent-text, because
+   type's --accent-ink is text ON the accent (dark in dark theme, so the ring
+   would vanish). Guarded here by scripts/test-type-fields-browser.mjs. */
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='hidden']), select, textarea) {
+  box-sizing: border-box;
+  height: 26px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
 }
+:where(textarea) { height: auto; padding: 6px 8px; line-height: 1.5; resize: vertical; }
+:where(input[type='color']) {
+  box-sizing: border-box;
+  height: 26px;
+  padding: 1px 2px;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+:where(input, select, textarea):focus-visible { outline: 2px solid var(--accent-text); outline-offset: -1px; }
+
+.t-select { cursor: pointer; }
 
 /* the ⋯ menu — secondary actions, off the bar but one click away */
 .t-menuwrap { position: relative; }
@@ -541,12 +580,7 @@ html, body {
 ::highlight(t-find-cur) { background-color: var(--find-cur); color: var(--find-ink); }
 
 .t-find { display: grid; gap: 7px; }
-.t-find input[type="text"] {
-  width: 100%; font: inherit; font-size: 12px; padding: 5px 7px;
-  border: 1px solid var(--line); border-radius: 6px;
-  background: var(--field); color: var(--ink);
-}
-.t-find input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.t-find input[type="text"] { width: 100%; }
 .t-find-opts { display: flex; gap: 12px; font-size: 11.5px; color: var(--muted); }
 .t-find-opts label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .t-find-bar { display: flex; align-items: center; gap: 5px; }
@@ -583,11 +617,7 @@ html, body {
 .t-xref-pick { width: min(440px, 100%); }
 .t-xref-pick h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
 .t-xref-style { margin-bottom: 10px; }
-.t-xref-style select {
-  width: 100%; font: inherit; font-size: 12.5px; padding: 5px 6px;
-  background: var(--field); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 6px;
-}
+.t-xref-style select { width: 100%; }
 .t-xref-list { display: flex; flex-direction: column; gap: 3px; }
 .t-xref-list button {
   display: flex; gap: 8px; align-items: baseline; text-align: start;
@@ -678,13 +708,7 @@ html, body {
   padding: 6px; max-width: min(440px, calc(100vw - 16px));
   box-shadow: 0 12px 32px rgb(20 30 45 / .22), 0 2px 8px rgb(20 30 45 / .12);
 }
-.t-link-url {
-  font: inherit; font-size: 13px;
-  color: var(--ink); background: var(--field);
-  border: 1px solid var(--line); border-radius: 8px;
-  padding: 6px 8px; width: 240px; min-width: 0;
-}
-.t-link-url:focus { border-color: var(--blue); outline: none; }
+.t-link-url { width: 240px; min-width: 0; }
 .t-link-pop .t-btn { padding: 6px 8px; }
 .t-link-ok { color: var(--ink); font-weight: 600; }
 .t-link-rm { color: var(--bad); }
@@ -763,12 +787,7 @@ html, body {
   display: flex; align-items: center; gap: 7px;
   color: var(--ink-2); font-size: 12px; margin-bottom: 5px; cursor: pointer;
 }
-.t-input {
-  font: inherit; font-size: 12px; color: var(--ink);
-  background: var(--field); border: 1px solid var(--line);
-  border-radius: 7px; padding: 4px 6px; width: 68px; min-width: 0;
-}
-.t-input:focus { border-color: var(--blue); outline: none; }
+.t-input { width: 68px; min-width: 0; }
 .t-dlg .t-input { width: 90px; }
 /* ————— comments —————
    The layer is a SIBLING of .t-deco, not a child: drawPages() calls
@@ -812,11 +831,7 @@ html, body {
 
 /* the reply box, shared by the margin card and the panel item */
 .acts { margin-top: 6px; }
-.acts textarea {
-  width: 100%; resize: vertical; font: inherit; font-size: 11.5px;
-  color: var(--ink); background: var(--field);
-  border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
-}
+.acts textarea { width: 100%; }
 .acts .btns { display: flex; gap: 5px; margin-top: 5px; }
 .acts .btns button {
   flex: 1; font: inherit; font-size: 11px; padding: 3px 6px; cursor: pointer;
@@ -864,11 +879,7 @@ html, body {
 
 /* ————— the Sources panel ————— */
 .t-cite-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
-.t-cite-style {
-  flex: 1 1 100%; font: inherit; font-size: 12px; padding: 4px 6px;
-  color: var(--ink); background: var(--field);
-  border: 1px solid var(--line); border-radius: 6px;
-}
+.t-cite-style { flex: 1 1 100%; }
 .t-cite-btn, .t-cite-mini {
   font: inherit; font-size: 11.5px; padding: 4px 8px; cursor: pointer;
   color: var(--ink-2); background: var(--chrome);
@@ -892,12 +903,8 @@ html, body {
 .t-cite-ref .r { word-break: break-word; }
 
 /* ————— the import and picker dialogs ————— */
-.t-cite-paste, .t-cite-search {
-  width: 100%; font: inherit; font-size: 12.5px; padding: 6px 8px; margin-top: 8px;
-  color: var(--ink); background: var(--field);
-  border: 1px solid var(--line); border-radius: 8px;
-}
-.t-cite-paste { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+.t-cite-paste, .t-cite-search { width: 100%; margin-top: 8px; }
+.t-cite-paste { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .t-cite-pick { max-height: 46vh; overflow: auto; margin-top: 8px; }
 .t-cite-row {
   display: flex; gap: 8px; align-items: flex-start; padding: 6px 7px;
@@ -1021,13 +1028,7 @@ html, body {
 .t-math-bad { text-decoration: underline dotted var(--bad); text-underline-offset: 4px; }
 
 /* ————— the Math panel ————— */
-.t-mathsrc {
-  width: 100%; box-sizing: border-box; resize: vertical;
-  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--ink); background: var(--field);
-  border: 1px solid var(--line); border-radius: 6px; padding: 6px 7px;
-}
-.t-mathsrc:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.t-mathsrc { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .t-mathprev {
   display: flex; align-items: center; justify-content: center;
   min-height: 52px; margin: 8px 0; padding: 10px 8px; overflow-x: auto;

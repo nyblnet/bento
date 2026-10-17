@@ -47,11 +47,7 @@ button.tc-share-btn.live::before { background: var(--good); }
 
 .tc-name-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .tc-name-row label { color: var(--muted); font-size: 11.5px; }
-.tc-name-row input {
-  font: inherit; font-size: 12.5px; width: 120px;
-  border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px;
-  background: var(--chrome); color: var(--ink);
-}
+.tc-name-row input { width: 120px; }
 
 .tc-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 10px 0 5px; }
 .tc-label:first-child { margin-top: 0; }

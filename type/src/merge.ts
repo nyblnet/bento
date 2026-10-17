@@ -443,6 +443,7 @@ export async function openMerge(ctx: FeatureContext): Promise<void> {
       const lab = document.createElement('span');
       lab.textContent = t('Sheet');
       const sel = document.createElement('select');
+      sel.className = 't-select';
       src.sheets.forEach((s, i) => {
         const o = document.createElement('option');
         o.value = String(i);
