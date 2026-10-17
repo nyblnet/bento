@@ -28,6 +28,7 @@ import './math.ts';      // mathematics: inline formulas and display equations
 export {};
 import './link.ts';
 import './toc.ts';        // section numbering + table of contents
+import './fieldwire.ts';  // fields' page numbers + "Turn {{…}} tokens into fields" (after toc)
 // comments — margin notes on a range of text, with replies and resolution.
 // Anchors ride inline.ts `shift`, so they move exactly as marks and footnote
 // anchors do; nothing here can reach print (see the header of comments.ts).

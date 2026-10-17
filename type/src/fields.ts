@@ -92,7 +92,7 @@
 // author can still rename the column.
 
 import { t } from './i18n.ts';
-import { registerMenuItem, registerPaginated, registerTool, type FeatureContext } from './features.ts';
+import { registerTool, type FeatureContext } from './features.ts';
 // TYPES ONLY from model.ts, and that is load-bearing rather than tidy: model.ts
 // imports `shiftFields` and `readFieldRefs` from HERE (the same arrangement it
 // has with xref.ts), so a value import back would be a real evaluation-time
@@ -459,28 +459,20 @@ export function setPagination(pages: number | undefined, at: Map<string, number>
 }
 
 /**
- * toc.ts's `pageOfY`, fetched LAZILY — and the laziness is load-bearing.
+ * After each pagination pass: which page every field sits on. Wired from
+ * fieldwire.ts, NOT here, and that placement is load-bearing.
  *
  * model.ts imports this module, so anything this module imports at the top
  * joins model.ts's own import graph. toc.ts calls `registerBlockDecorator` at
- * MODULE SCOPE, so a static import here closes the cycle
+ * MODULE SCOPE, so importing toc here closes the cycle
  * model → fields → toc → render → model and toc runs against a half-evaluated
  * render.ts: measured, `Cannot access 'registerBlockDecorator' before
- * initialization`, at import time, in every build. Deferring the import to the
- * first pagination pass breaks the cycle in time rather than in structure — and
- * the alternative, a second copy of "which page is this y on", is exactly what
- * would let a field and a table of contents disagree about page 7.
+ * initialization`, at import time, in every build. Taking `pageOfY` as an
+ * ARGUMENT keeps one copy of "which page is this y on" (a second copy is
+ * exactly what would let a field and a table of contents disagree about page
+ * 7) without this module importing toc at all.
  */
-let PAGE_OF_Y: Promise<typeof import('./toc.ts')> | null = null;
-const tocModule = () => (PAGE_OF_Y ??= import('./toc.ts'));
-
-registerPaginated((ctx, metrics, paper) => {
-  const m = metrics as Metrics;
-  if (!m?.pages?.length) return;
-  void tocModule().then(({ pageOfY }) => measure(ctx, m, paper, pageOfY));
-});
-
-function measure(
+export function measure(
   ctx: FeatureContext,
   m: Metrics,
   paper: HTMLElement,
@@ -702,22 +694,3 @@ registerTool({
   run: openFieldPicker,
 });
 
-registerMenuItem({
-  id: 'fields-from-tokens',
-  label: () => t('Turn {{…}} tokens into fields'),
-  order: 61,
-  run: ctx => {
-    // Imported lazily so this module stays free of a value-level cycle with
-    // model.ts, which imports `shiftFields` from here.
-    void import('./model.ts').then(({ spliceText }) => {
-      let n = 0;
-      ctx.store.breakRun();
-      ctx.store.commit(d => { n = bindTokens(d, spliceText); });
-      ctx.editor.render();
-      ctx.refresh();
-      ctx.toast(n
-        ? t('{n} field(s) created from tokens').replace('{n}', String(n))
-        : t('No {{…}} tokens found in this document'));
-    });
-  },
-});
