@@ -791,6 +791,10 @@ async function pickHandle(
 }
 
 async function writeHandle(handle: FsFileHandle, html: string) {
+  // Yeild to the event loop before Disk I/O.
+  // On Linux + Wayland its important to give the compositor a chance to
+  // commit pending frames, before Disk I/O.
+  await new Promise((r) => setTimeout(r, 0))
   const writable = await handle.createWritable()
   await writable.write(new Blob([html], { type: 'text/html' }))
   await writable.close()

@@ -10,7 +10,8 @@ import {
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultCode, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   paginates, inLinearFlow,
-  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
+  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement
+} from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
 import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, sandboxed, setAutoCheck, setOffline } from '../update'
@@ -3142,6 +3143,11 @@ export class Editor {
 
   async save(forcePicker: boolean) {
     this.canvas.commitTextEdit()
+    // If the user explicitly `Save`s, restart the auto-save timer.
+    if (this.autosaveTimer) {
+      clearTimeout(this.autosaveTimer)
+      this.autosaveTimer = 0
+    }
     // Through the save queue (saving.ts): serialised with auto-save and
     // Update this file, written from a snapshot taken as the write starts, and
     // the dot goes out only if nothing changed while the bytes were on their
@@ -3171,26 +3177,42 @@ export class Editor {
       this.syncWindowTitle()
       // staged language packs are in the bytes now — stop calling them pending
       markFileSaved()
-      // record a recovery baseline + a version checkpoint at each manual save
-      if (!isEncryptionActive()) { void putRecovery(this.store.doc); void addVersion(this.store.doc); this.lastVersionAt = Date.now() }
+      this.toast(result === 'downloaded'
+        ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
+        : t('Saved'))
       // Saving is the opt-in: a named, saved deck is "live by default" from
       // now on (the recipient of a copy already joins on open). Connect this
       // session too so author and recipient meet without another click.
       this.session?.enableSharing()
       this.tryJoin()
-      // A save from the WEB changes what this page is: the deck now lives in a
-      // file, and this URL will hand out a fresh starter next time. Said here,
-      // persistently, so the next visit is not a surprise — and deliberately
-      // NOT as a block, because this tab keeps working and keeps writing.
-      noteSavedFromWeb(currentFileName() ?? suggestedFileName(this.store.doc), {
-        fsAccess: canWriteInPlace(), canWrite: hostCan('write'),
-      })
-      this.toast(result === 'downloaded'
-        ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
-        : t('Saved'))
+      // Offload recovery baseline, version checkpoint, and web notes to idle/timeout
+      // so the UI and Wayland compositor can process input and paints immediately.
+      const doc = this.store.doc
+      Editor.scheduleTask(() => {
+        if (!isEncryptionActive()) {
+          void putRecovery(doc)
+          void addVersion(doc)
+          this.lastVersionAt = Date.now()
+        }
+        // A save from the WEB changes what this page is: the deck now lives in a
+        // file, and this URL will hand out a fresh starter next time. Said here,
+        // persistently, so the next visit is not a surprise — and deliberately
+        // NOT as a block, because this tab keeps working and keeps writing.
+        noteSavedFromWeb(currentFileName() ?? suggestedFileName(doc), {
+          fsAccess: canWriteInPlace(), canWrite: hostCan('write'),
+        })
+      }, 200)
     } catch (err) {
       console.error(err)
       this.toast(t('Save failed — see console'))
+    }
+  }
+
+  private static scheduleTask(task: () => void, timeout: number) {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(task, { timeout: timeout })
+    } else {
+      setTimeout(task, 0);
     }
   }
 
@@ -3284,10 +3306,10 @@ export class Editor {
         // clipboard as a Bento payload (works across decks/tabs). Elements when
         // any are selected; otherwise the current slide.
         if (this.store.selection.length) {
-          void navigator.clipboard?.writeText?.(serializeElements(this.store.selectedElements, this.store.doc)).catch(() => {})
+          void navigator.clipboard?.writeText?.(serializeElements(this.store.selectedElements, this.store.doc)).catch(() => { })
         } else {
           const slides = this.selectedSlides()
-          void navigator.clipboard?.writeText?.(serializeSlides(slides, this.store.doc)).catch(() => {})
+          void navigator.clipboard?.writeText?.(serializeSlides(slides, this.store.doc)).catch(() => { })
           if (slides.length > 1) {
             this.toast(t('Slides copied — ⌘V in any deck to paste them'))
           } else {
@@ -3403,7 +3425,7 @@ export class Editor {
     const text = this.store.selection.length
       ? serializeElements(this.store.selectedElements, this.store.doc)
       : serializeSlides(this.selectedSlides(), this.store.doc)
-    void navigator.clipboard?.writeText?.(text).catch(() => {})
+    void navigator.clipboard?.writeText?.(text).catch(() => { })
   }
 
   // --- context menu -------------------------------------------------------
@@ -3640,10 +3662,10 @@ export class Editor {
       sandboxed()
         ? t('Updates are not checked inside an embedded view — open the file in a browser tab to check.')
         : this.lastAutoCheck?.status === 'current'
-        ? t("Checked automatically at launch — you're on the latest version (v{v}).", { v: APP_VERSION })
-        : this.lastAutoCheck?.status === 'error'
-          ? t("Launch check couldn't reach the release server ({m}). Check manually below.", { m: this.lastAutoCheck.message })
-          : t('This file carries its own app — it works offline, forever, as is.')
+          ? t("Checked automatically at launch — you're on the latest version (v{v}).", { v: APP_VERSION })
+          : this.lastAutoCheck?.status === 'error'
+            ? t("Launch check couldn't reach the release server ({m}). Check manually below.", { m: this.lastAutoCheck.message })
+            : t('This file carries its own app — it works offline, forever, as is.')
 
     const row = div('ed-about-row')
     const checkB = document.createElement('button')
@@ -3678,8 +3700,8 @@ export class Editor {
         // again. `notes` is the fallback for a manifest that predates the field.
         const skipped = release.notesFrom
           ? Object.keys(release.notesFrom)
-              .filter((v) => compareVersions(v, APP_VERSION) > 0)
-              .sort((a, b) => compareVersions(b, a))
+            .filter((v) => compareVersions(v, APP_VERSION) > 0)
+            .sort((a, b) => compareVersions(b, a))
           : []
         if (skipped.length) {
           const lines = skipped.flatMap((v) =>
