@@ -3176,8 +3176,10 @@ export class Editor {
       // Saving is the opt-in: a named, saved deck is "live by default" from
       // now on (the recipient of a copy already joins on open). Connect this
       // session too so author and recipient meet without another click.
-      this.session?.enableSharing()
-      this.tryJoin()
+      if (sharingOn(this.store)) {
+        this.session?.enableSharing()
+        this.tryJoin()
+      }
       // A save from the WEB changes what this page is: the deck now lives in a
       // file, and this URL will hand out a fresh starter next time. Said here,
       // persistently, so the next visit is not a surprise — and deliberately
