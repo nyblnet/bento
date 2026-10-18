@@ -33,7 +33,7 @@
 // the content scaled non-uniformly. It is not usable for the one renderer this
 // feature exists to serve.
 
-import { renderSlide } from './render'
+import { renderSlide, resolveAsset } from './render'
 import { PREVIEW_BUDGET, type BentoDoc, type Slide, inLinearFlow } from './model'
 
 /** Elements that must never reach a static preview (active or external). */
@@ -215,11 +215,24 @@ function titleCard(doc: BentoDoc): HTMLElement {
 /** Split a style attribute into declarations. Not `split(';')`: a data: URI
  *  carries its own semicolons (`;charset=utf-8,`) inside url(). */
 function splitDecls(css: string): string[] {
+  if (!css.includes('(') && !css.includes('"') && !css.includes("'")) {
+    return css.split(';').map((d) => d.trim()).filter(Boolean)
+  }
   const out: string[] = []
   let depth = 0, quote = '', start = 0
   for (let i = 0; i < css.length; i++) {
     const c = css[i]
-    if (quote) { if (c === quote && css[i - 1] !== '\\') quote = '' ; continue }
+    if (quote) {
+      const nextQuote = css.indexOf(quote, i)
+      if (nextQuote === -1) break
+      if (css[nextQuote - 1] === '\\') {
+        i = nextQuote
+        continue
+      }
+      quote = ''
+      i = nextQuote
+      continue
+    }
     if (c === '"' || c === "'") quote = c
     else if (c === '(') depth++
     else if (c === ')') depth--
@@ -292,10 +305,14 @@ function imagesToBackgrounds(root: HTMLElement) {
  */
 function hoistRepeats(root: HTMLElement) {
   const parsed = Array.from(root.querySelectorAll<HTMLElement>('[style]'))
-    .map((el) => ({ el, decls: splitDecls(el.getAttribute('style') ?? '') }))
+    .map((el) => {
+      const decls = splitDecls(el.getAttribute('style') ?? '')
+      const props = decls.map(propOf)
+      return { el, decls, props }
+    })
 
-  const movable = ({ decls }: { decls: string[] }, i: number) => {
-    const props = decls.map(propOf)
+  const movable = ({ decls, props }: { decls: string[]; props: string[] }, i: number) => {
+    if (decls[i].length > 4096) return false
     const p = props[i]
     // A `<` in a declaration must stay inline. The stylesheet is raw text, so a
     // hoisted `</style>` would close it early and the rest would parse as live
@@ -367,7 +384,47 @@ function slim(built: HTMLElement) {
   hoistRepeats(built)
 }
 
-const byteLength = (el: HTMLElement) => new TextEncoder().encode(el.outerHTML).length
+const encoder = new TextEncoder()
+const byteLength = (el: HTMLElement) => encoder.encode(el.outerHTML).length
+
+/**
+ * Fast-fail heuristic for Tier 1: If the distinct image, media, or svg assets
+ * on the slide exceed the byte budget, don't bother with Tier 1 previews at all.
+ */
+function slideAssetsExceedBudget(slide: Slide, doc: BentoDoc, budget: number): boolean {
+  let size = 0
+  const bg = slide.background || doc.theme?.background
+  if (bg && (bg.includes('data:') || bg.includes('url('))) {
+    size += bg.length
+    if (size > budget) return true
+  }
+  const seen = new Set<string>()
+  for (const el of slide.elements ?? []) {
+    if (el.type === 'image' && el.src) {
+      const src = resolveAsset(doc, el.src)
+      if (src && !seen.has(src)) {
+        seen.add(src)
+        size += src.length
+        if (size > budget) return true
+      }
+    } else if (el.type === 'svg') {
+      const markup = el.asset ? (doc.assets?.[el.asset] ?? '') : (el.markup ?? '')
+      if (markup && !seen.has(markup)) {
+        seen.add(markup)
+        size += markup.length
+        if (size > budget) return true
+      }
+    } else if (el.type === 'media') {
+      const poster = el.poster ? resolveAsset(doc, el.poster) : ''
+      if (poster && !seen.has(poster)) {
+        seen.add(poster)
+        size += poster.length
+        if (size > budget) return true
+      }
+    }
+  }
+  return false
+}
 
 /**
  * Build the static preview of the deck's first page, or null when there is
@@ -388,7 +445,14 @@ export function buildSlidePreview(doc: BentoDoc): HTMLElement | null {
   const slide = doc.slides.find(inLinearFlow) ?? doc.slides[0]
   if (!slide) return null
 
-  for (const keepImages of [true, false]) {
+  // If the first page carries raster payloads or complex SVGs that already
+  // exceed the byte budget, Tier 1 (keepImages: true) will always fail.
+  // Fast-fail directly to Tier 2 to avoid rendering multi-megabyte DOMs,
+  // running splitDecls/hoistRepeats on giant base64 payloads, and outerHTML encoding.
+  const canFitImages = !slideAssetsExceedBudget(slide, doc, PREVIEW_BUDGET - 2048)
+  const tiers = canFitImages ? [true, false] : [false]
+
+  for (const keepImages of tiers) {
     const page = renderSlide(slide, doc, { svgAsImage: true, hidePlaceholders: true })
     staticize(page, doc, keepImages)
     if (!keepImages) page.style.background = flatBackground(slide.background) ?? doc.theme.background
