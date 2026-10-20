@@ -1544,6 +1544,12 @@ jobs:
         # repairs, each with a control that a well-formed placement survives.
         run: node scripts/test-dash-placement.ts
 
+      - name: dash placed-refs rig
+        # A1 into a table placed on a grid reads the table (header names,
+        # values, calculated columns, totals) through the real workbook recalc,
+        # each row against an unplaced control.
+        run: node scripts/test-dash-placed-refs.ts
+
       - name: dash i18n rig
         # A core catalog ships inside every saved workbook and cannot be patched
         # without a release, so drift has to fail here rather than in the field:

@@ -66,7 +66,9 @@ import {
   type CellRef, type RangeRef, type ShiftScope,
 } from './a1.ts'
 import { readCell } from './store.ts'
-import type { CanvasCell, CanvasSheet, DefinedName, Sheet, TableSheet } from './model.ts'
+import type { CanvasCell, CanvasSheet, DashDoc, DefinedName, Sheet, TableSheet } from './model.ts'
+import { judgePlacements, type Judged } from './placement.ts'
+import { overlaySource, type PlacedRead } from './placedsource.ts'
 
 /** A position, plus the sheet it is on when the reference named one. */
 export type ScopedRef = CellRef & { sheet?: string }
@@ -1585,6 +1587,26 @@ export function workbookSources(
   // hundred-thousand-row datasets pays a set of strings and nothing else.
   const namesFor = (shadow?: ReadonlySet<string>): NameScope =>
     documentNames(doc.names, shadow)
+  // The table's computed columns: the caller's cache, else a real recalc, and
+  // only when something reads them. One definition for both places a table is
+  // read from — its own sheet, and a grid it is placed on.
+  // Memoised per table, so a placed table read from its own sheet AND from its
+  // grid recalculates once, not twice.
+  const compMemo = new Map<string, { v: Map<string, Vec> | undefined }>()
+  const compFor = (t: TableSheet) => (): Map<string, Vec> | undefined => {
+    let m = compMemo.get(t.id)
+    if (!m) {
+      m = { v: computed?.(t) ?? (t.columns.some((c) => c.formula) ? recalc(t, doc.modified).values : undefined) }
+      compMemo.set(t.id, m)
+    }
+    return m.v
+  }
+  const judged = doc.sheets ? judgePlacements(doc as DashDoc).honoured : new Map<string, Judged>()
+  const placedReads = (gridId: string): PlacedRead[] =>
+    [...judged.values()].filter((j) => j.at.on === gridId).map((j) => {
+      const comp = compFor(j.table)
+      return { judged: j, source: tableCellSource(j.table, comp), vectors: () => columnVectors(j.table, comp) }
+    })
   return (doc.sheets ?? []).map((s): SheetSource => {
     if (s.kind === 'table') {
       const t = s as TableSheet
@@ -1603,9 +1625,7 @@ export function workbookSources(
       // only because `tableCellSource` resolves this LAZILY — a workbook of
       // 100k-row datasets pays nothing for the ones no formula reaches, which
       // is nearly all of them, and pays once for the ones it does.
-      const comp = () => computed?.(t) ?? (t.columns.some((c) => c.formula)
-        ? recalc(t, doc.modified).values
-        : undefined)
+      const comp = compFor(t)
       const shadow = new Set<string>()
       for (const c of t.columns) {
         shadow.add(c.id.toLowerCase())
@@ -1622,11 +1642,12 @@ export function workbookSources(
     }
     if (s.kind === 'canvas') {
       // A spreadsheet has no columns to shadow anything: nothing is named but
-      // the cells, and a cell address can never be a defined name.
+      // the cells, and a cell address can never be a defined name. Tables
+      // placed on it are read in place of the cells under them (placedsource.ts).
       return {
         id: s.id,
         name: s.name,
-        source: canvasCellSource(s as CanvasSheet),
+        source: overlaySource(canvasCellSource(s as CanvasSheet), placedReads(s.id)),
         names: namesFor(),
         kind: 'spreadsheet',
       }
