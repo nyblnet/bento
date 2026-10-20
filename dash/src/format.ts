@@ -17,7 +17,7 @@
 // punctuate it. Getting this backwards either freezes one reader's separators
 // into everyone else's file, or lets the author's chosen precision drift.
 
-import type { Column, ColumnType } from './model.ts'
+import type { Column, ColumnKind, ColumnType } from './model.ts'
 import { locale } from './i18n.ts'
 
 /**
@@ -119,13 +119,29 @@ export function formatNumber(n: number, fmt: string): string {
 }
 
 /** Format one value for display. Never mutates, never throws. */
-export function formatValue(v: unknown, col: Pick<Column, 'type' | 'format'>): string {
+export function formatValue(v: unknown, col: Pick<Column, 'type' | 'format'> & { kind?: Column['kind'] }): string {
   if (v == null || v === '') return ''
+  if (Array.isArray(v)) return v.filter((x) => x != null && x !== '').map(String).join(', ')
   const t: ColumnType = col.type
   if (t === 'bool') return v ? '✓' : ''
   if (t === 'date') return String(v)
   if (t === 'text' || t === 'enum') return String(v)
-
+  // The Airtable layer: a list (tags, attachments, a lookup's values) reads as
+  // its items joined, whatever the base type says; a link's display is
+  // resolved by links.ts, since a rid means nothing without its table.
+  if (Array.isArray(v)) return v.filter((x) => x != null && x !== '').map(String).join(', ')
+  if (col.kind === 'rating') {
+    const n = Math.max(0, Math.round(Number(v)))
+    return Number.isFinite(n) ? '★'.repeat(Math.min(n, 10)) : String(v)
+  }
+  if (col.kind === 'duration') {
+    const secs = Number(v)
+    if (!Number.isFinite(secs)) return String(v)
+    const sign = secs < 0 ? '-' : ''
+    const a = Math.abs(Math.round(secs))
+    const h = Math.floor(a / 3600), m = Math.floor((a % 3600) / 60), s2 = a % 60
+    return `${sign}${h}:${String(m).padStart(2, '0')}:${String(s2).padStart(2, '0')}`
+  }
   const n = typeof v === 'number' ? v : Number(v)
   if (!Number.isFinite(n)) return String(v)
 
@@ -152,4 +168,23 @@ export const alignFor = (t: ColumnType): 'left' | 'right' =>
 export const TYPE_LABEL: Record<ColumnType, string> = {
   text: 'Text', number: 'Number', money: 'Money',
   percent: 'Percent', date: 'Date', bool: 'Yes/No', enum: 'Category',
+}
+
+/** The label for a field kind of the Airtable layer. */
+export const KIND_LABEL: Record<ColumnKind, string> = {
+  link: 'Link', lookup: 'Lookup', rollup: 'Rollup', multi: 'Tags',
+  attachment: 'Attachment', url: 'URL', email: 'Email', phone: 'Phone',
+  rating: 'Rating', duration: 'Duration',
+}
+
+/**
+ * The label a column's type control shows — its kind's when it has one, its
+ * type's otherwise, and NEVER undefined: a file from a newer build may carry a
+ * type or kind this build has never heard of, and a missing label is exactly
+ * what stopped the previous build from opening such a file at all.
+ */
+export function typeLabel(col: { type: string; kind?: string }): string {
+  return (col.kind && (KIND_LABEL as Record<string, string>)[col.kind])
+    || (TYPE_LABEL as Record<string, string>)[col.type]
+    || col.kind || col.type || 'Text'
 }

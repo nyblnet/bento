@@ -46,6 +46,32 @@ export type KnownOp =
 export type ColumnType = 'text' | 'number' | 'money' | 'percent' | 'date' | 'bool' | 'enum'
 
 /**
+ * The Airtable layer's field kinds (docs/dash-unified.md) — carried BESIDE a
+ * base `type`, never instead of one.
+ *
+ * MEASURED, which is why: the first draft added these to `ColumnType`, and a
+ * build from the day before could not open the file at all — its header looks
+ * the type up in a label table, got `undefined`, and the boot died on
+ * `.replace` ("This file could not start"). A column that keeps a base type
+ * every build knows (`text` for a link, a lookup, tags, an attachment or a
+ * URL; `number` for a rollup, a rating or a duration) opens in that build as
+ * exactly that, and only a build that knows `kind` gives it the new meaning.
+ */
+export type ColumnKind =
+  | 'link' | 'lookup' | 'rollup' | 'multi' | 'attachment'
+  | 'url' | 'email' | 'phone' | 'rating' | 'duration'
+
+/** The base type a kind is stored under, so an older build reads it sensibly. */
+export const KIND_BASE: Record<ColumnKind, ColumnType> = {
+  link: 'text', lookup: 'text', multi: 'text', attachment: 'text',
+  url: 'text', email: 'text', phone: 'text',
+  rollup: 'number', rating: 'number', duration: 'number',
+}
+
+/** How a rollup folds the linked values into one. */
+export type RollupAgg = 'sum' | 'avg' | 'count' | 'min' | 'max' | 'counta' | 'concat' | 'and' | 'or'
+
+/**
  * A column.
  *
  * PROPERTIES ARE FLAT, not nested under a `props` object, and that is a
@@ -87,6 +113,26 @@ export interface Column {
    *  answer's clothes. */
   failed?: number
   w?: number
+  // --- the Airtable layer: all flat, all optional (see the FLAT note above) ---
+  /** The field kind, beside `type` — see `ColumnKind`. */
+  kind?: ColumnKind
+  /** `link`: the table whose rows this column links to (its sheet id). Each
+   *  cell is an ARRAY of that table's rids, in the existing `raw` encoding. */
+  to?: string
+  /** `link` on the TARGET side: the owning link column this one mirrors. Its
+   *  values are DERIVED, never stored — one stored side cannot diverge from
+   *  itself under collaboration; two could. Editing it writes the owner. */
+  inverseOf?: { table: string; col: string }
+  /** `lookup`/`rollup`: the link column (on this table) to follow. */
+  via?: string
+  /** `lookup`/`rollup`: the column on the linked table to read. */
+  field?: string
+  /** `rollup`: how the linked values fold into one. */
+  agg?: RollupAgg
+  /** `enum`/`multi`: the choices, in display order. */
+  options?: string[]
+  /** `rating`: the top of the scale (default 5). */
+  max?: number
   [extra: string]: unknown
 }
 

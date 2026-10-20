@@ -1538,6 +1538,12 @@ jobs:
         # dead end wearing a live button.
         run: node scripts/test-dash-recovery.ts
 
+      - name: dash links rig
+        # Linked records, lookups and rollups: the mirror side is DERIVED from
+        # the one stored side, edits on either side write the owner, and
+        # lookup chains that read themselves are reported as cycles.
+        run: node scripts/test-dash-links.ts
+
       - name: dash i18n rig
         # A core catalog ships inside every saved workbook and cannot be patched
         # without a release, so drift has to fail here rather than in the field:
