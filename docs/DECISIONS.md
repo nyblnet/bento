@@ -11400,3 +11400,27 @@ not yet saved is already a secret. The payload is a bare boolean, fire-and-forge
 and not deduplicated: the host can only ADD blanking, so a missed `true` is the
 only failure and a redundant post costs nothing. Hosts that don't declare
 `'seal'` are sent nothing.
+
+## dash: grid rows and columns move cells; a growing table inserts whole rows
+
+2026-10-20. Inserting and deleting rows and columns on a grid (`shiftCanvas`)
+moves the cells, the sizes, every formula and defined name in the workbook that
+points at the grid, and the tables placed on it, all as ONE undo step. A cut
+that would go through a table (an insert between its rows, a delete that takes
+part of it) is refused: a table's rows are added and removed from the table.
+
+A table that grows into occupied cells inserts WHOLE sheet rows below itself,
+rather than shifting only the cells under its own columns, which Excel does and
+which splits any range straddling the table's edge. Everything below moves as
+a unit and every reference moves with it by the ordinary insert rules.
+
+SYNC, measured: the engine's default arm ships a whole-state snapshot for a
+patch it cannot express, and that snapshot does NOT carry a cell move (it is
+engine state, and the engine never saw the move). A replica got the rewritten
+formulas but not the moved cells, and a concurrent edit left the two diverged
+for good. So `shiftCanvas` is expressed as the position writes it amounts to.
+Every replica converges. Intent under concurrency stays coarse: a write made at
+an old address concurrently with the shift lands at that address. A real shift
+op, or row/column identity as datasets have, is the engine change that would fix
+intent. Rule for later work: anything that moves a position must be expressed as
+ops, never left to the snapshot arm.

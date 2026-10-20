@@ -1544,6 +1544,17 @@ jobs:
         # repairs, each with a control that a well-formed placement survives.
         run: node scripts/test-dash-placement.ts
 
+      - name: dash gridshift rig
+        # Insert/delete rows and columns on a grid: cells, sizes, every formula
+        # and name in the workbook, and placed tables move together; undo is
+        # exact; a cut through a table is refused; a growing table makes room.
+        run: node scripts/test-dash-gridshift.ts
+
+      - name: dash gridshift sync rig
+        # A row insert reaches another replica, and a concurrent edit still
+        # converges — measured, because the snapshot fallback did neither.
+        run: node scripts/test-dash-gridshift-sync.ts
+
       - name: dash i18n rig
         # A core catalog ships inside every saved workbook and cannot be patched
         # without a release, so drift has to fail here rather than in the field:

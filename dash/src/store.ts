@@ -28,6 +28,7 @@
 // agent API. That is why this lands at commit one: retrofitting op-minting
 // means rewriting the store.
 
+import { applyCanvasShift, type CanvasShift } from './gridshift.ts'
 import { t } from './i18n.ts'
 import { applySheetProps } from './rowcol.ts'
 // The one definition of "what counts as a number" — import's. A second
@@ -227,6 +228,8 @@ export type Patch =
    * survives JSON, which is what a collaborator receives.
    */
   | { op: 'setCanvasCells'; sheet: string; cells: Record<string, CanvasCell | null> }
+  /** Insert (count > 0) or delete (count < 0) grid rows/columns — gridshift.ts. */
+  | CanvasShift
   /**
    * Column widths and row heights on a SPREADSHEET sheet.
    *
@@ -499,6 +502,11 @@ export function applyPatch(doc: DashDoc, p: Patch): { inverse: Patch; touched: T
         inverse: { op: 'setCanvasCells', sheet: p.sheet, cells: was },
         touched: { sheet: p.sheet },
       }
+    }
+
+    case 'shiftCanvas': {
+      const inverse = applyCanvasShift(canvas(doc, p.sheet), p)
+      return { inverse, touched: { sheet: p.sheet, structural: true } }
     }
 
     case 'setCanvasSizes': {

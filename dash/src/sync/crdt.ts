@@ -152,6 +152,7 @@
 // `setSheetProps` refuses `undefined` on purpose — and the CRDT must be able
 // to.)
 
+import { applyCanvasShift } from '../gridshift.ts'
 import { applyPatch, readCell, type Patch } from '../store.ts'
 import { APPEARANCE_FIELDS } from '../model.ts'
 import type { CanvasCell, CanvasSheet, CellOverride, Column, ColumnData, DashDoc, Sheet, TableSheet } from '../model.ts'
@@ -987,6 +988,45 @@ export class DashSync {
         })
         break
       }
+      case 'shiftCanvas': {
+        // A row/column insert or delete MOVES cells, and a register keyed by
+        // address is a claim about a position — so the move is expressed as
+        // what it does to positions: the addresses it empties and the ones it
+        // fills, diffed here against the pre-state like any other write.
+        //
+        // MEASURED, not assumed: this used to fall through to `unsynced`, and
+        // the whole-state snapshot that ships carried none of the move (the
+        // engine never recorded it), so a replica received the rewritten
+        // formulas but not the moved cells — and under a concurrent edit the
+        // two replicas DIVERGED for good (scripts/test-dash-gridshift-sync.ts).
+        //
+        // As cell writes every replica CONVERGES. What stays coarse is intent
+        // under concurrency: a write a collaborator made at an old address
+        // concurrently with the shift lands at that address, not where the
+        // shift moved its row. A true shift op (or row/column identity, as
+        // datasets have) is the engine change that would fix intent; until
+        // then convergent-and-coarse beats divergent.
+        const sheet = canvasOf(doc, p.sheet)
+        if (!sheet) break
+        const after = clone({ ...sheet, cells: sheet.cells ?? {} }) as CanvasSheet
+        applyCanvasShift(after, p)
+        const cells: Record<string, CanvasCell | null> = {}
+        for (const k of Object.keys(sheet.cells ?? {})) if (!(k in after.cells)) cells[k] = null
+        for (const [k, c] of Object.entries(after.cells)) {
+          if (JSON.stringify(sheet.cells?.[k]) !== JSON.stringify(c)) cells[k] = c
+        }
+        if (Object.keys(cells).length) this.localOne(doc, { op: 'setCanvasCells', sheet: p.sheet, cells }, ops)
+        const sizes = (which: 'cols' | 'rows') => {
+          const was = sheet[which] ?? {}, now = after[which] ?? {}
+          const out: Record<string, number | null> = {}
+          for (const k of Object.keys(was)) if (!(k in now)) out[k] = null
+          for (const [k, v] of Object.entries(now)) if (was[k] !== v) out[k] = v
+          return Object.keys(out).length ? out : undefined
+        }
+        const cols = sizes('cols'), rows = sizes('rows')
+        if (cols || rows) this.localOne(doc, { op: 'setCanvasSizes', sheet: p.sheet, ...(cols ? { cols } : {}), ...(rows ? { rows } : {}) }, ops)
+        break
+      }
       case 'setCanvasSizes': {
         const n = shNode(p.sheet)
         const keys: string[] = []
@@ -1149,7 +1189,11 @@ export class DashSync {
       default:
         // applySteps / refreshBinding (the store refuses both today), or a
         // patch op a future build minted. Never silently dropped: the session
-        // ships a whole-state snapshot, which is slower and always correct.
+        // ships a whole-state snapshot. That is correct for an edit the
+        // engine's REGISTERS can describe, and NOT for one that moves cells:
+        // the snapshot is engine state, and the engine never saw the move
+        // (measured — see case 'shiftCanvas'). Anything that moves a position
+        // must be expressed as ops above, not left to this arm.
         this.unsynced = true
         break
     }
@@ -2932,7 +2976,8 @@ export function committable(doc: DashDoc, p: Patch): boolean {
     // through the same door as every other refusal: you cannot edit what is
     // not there.
     case 'setCanvasCells':
-    case 'setCanvasSizes': {
+    case 'setCanvasSizes':
+    case 'shiftCanvas': {
       const s = doc.sheets.find((x) => x.id === p.sheet)
       return !!s && s.kind === 'canvas'
     }
