@@ -69,6 +69,7 @@ import { readCell } from './store.ts'
 import type { CanvasCell, CanvasSheet, DashDoc, DefinedName, Sheet, TableSheet } from './model.ts'
 import { judgePlacements, type Judged } from './placement.ts'
 import { overlaySource, type PlacedRead } from './placedsource.ts'
+import { desugar, tableIndex } from './structured.ts'
 
 /** A position, plus the sheet it is on when the reference named one. */
 export type ScopedRef = CellRef & { sheet?: string }
@@ -163,6 +164,13 @@ export interface SheetSource {
    * the caller declined to pass. See `ERR_SHEET`.
    */
   detached?: boolean
+  /**
+   * OPTIONAL. Desugar structured references (`Sales[Amount]`) in a formula at
+   * `row` of this sheet into A1, from where every table is RIGHT NOW. Applied
+   * once per formula before it is bound; the document keeps what was written.
+   * See structured.ts.
+   */
+  structured?(src: string, row: number): string
 }
 
 // --- what the `1` of `A1` counts --------------------------------------------
@@ -881,7 +889,7 @@ export function recalcWorkbook(sheets: SheetSource[], now?: string): Map<string,
   const formulas = new Map<string, { at: number; row: number; col: number; src: string }>()
   sheets.forEach((s, i) => {
     for (const f of formulasOf(s.source)) {
-      formulas.set(node(i, f.row, f.col), { at: i, row: f.row, col: f.col, src: f.src })
+      formulas.set(node(i, f.row, f.col), { at: i, row: f.row, col: f.col, src: s.structured ? s.structured(f.src, f.row) : f.src })
     }
   })
 
@@ -1602,6 +1610,9 @@ export function workbookSources(
     return m.v
   }
   const judged = doc.sheets ? judgePlacements(doc as DashDoc).honoured : new Map<string, Judged>()
+  const tables = tableIndex({ sheets: doc.sheets ?? [] } as DashDoc, judged)
+  const structuredOn = (sheetId: string) => (src: string, row: number): string =>
+    desugar(tables, src, { sheetId, row })
   const placedReads = (gridId: string): PlacedRead[] =>
     [...judged.values()].filter((j) => j.at.on === gridId).map((j) => {
       const comp = compFor(j.table)
@@ -1636,6 +1647,7 @@ export function workbookSources(
         name: t.name,
         source: tableCellSource(t, comp),
         vectors: () => columnVectors(t, comp),
+        structured: structuredOn(t.id),
         kind: 'dataset',
         names: namesFor(shadow),
       }
@@ -1648,6 +1660,7 @@ export function workbookSources(
         id: s.id,
         name: s.name,
         source: overlaySource(canvasCellSource(s as CanvasSheet), placedReads(s.id)),
+        structured: structuredOn(s.id),
         names: namesFor(),
         kind: 'spreadsheet',
       }

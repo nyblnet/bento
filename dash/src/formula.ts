@@ -65,7 +65,15 @@ export const isErr = (v: unknown): v is FormulaError => v instanceof FormulaErro
 
 type Tok =
   | { t: 'num'; v: number } | { t: 'str'; v: string } | { t: 'id'; v: string }
-  | { t: 'op'; v: string } | { t: 'punc'; v: string }
+  | { t: 'op'; v: string } | { t: 'punc'; v: string } | { t: 'err'; v: string }
+
+/**
+ * Excel's error LITERALS — `=IFERROR(#N/A, 0)`, `=IF(A1>0, A1, #N/A)`, and what
+ * a structured reference with no address desugars to (structured.ts). Without
+ * this `#N/A` lexed as the name `N` and came back `#NAME? unknown name "N"`,
+ * an error about the formula's spelling instead of the value it asked for.
+ */
+const ERR_LIT = /^#(?:NULL!|DIV\/0!|VALUE!|REF!|NAME\?|NUM!|N\/A|SPILL!|CALC!)/i
 
 function lex(src: string): Tok[] {
   const out: Tok[] = []
@@ -96,6 +104,10 @@ function lex(src: string): Tok[] {
         s += src[j++]
       }
       out.push({ t: 'str', v: s }); i = j + 1; continue
+    }
+    if (c === '#') {
+      const m = ERR_LIT.exec(src.slice(i))
+      if (m) { out.push({ t: 'err', v: m[0].toUpperCase() }); i += m[0].length; continue }
     }
     // [Bracketed Name] — the only way to reference a column whose name has spaces
     if (c === '[') {
@@ -142,6 +154,7 @@ function parse(src: string): Node {
     if (!tk) return { k: 'lit', v: ERR.value('empty expression') }
     if (tk.t === 'num') return { k: 'lit', v: tk.v }
     if (tk.t === 'str') return { k: 'lit', v: tk.v }
+    if (tk.t === 'err') return { k: 'lit', v: new FormulaError(tk.v) }
     if (tk.t === 'op' && tk.v === '-') return { k: 'neg', e: primary() }
     if (tk.t === 'op' && tk.v === '+') return primary()
     if (tk.t === 'punc' && tk.v === '(') {

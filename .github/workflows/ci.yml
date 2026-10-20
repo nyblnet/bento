@@ -1550,6 +1550,12 @@ jobs:
         # each row against an unplaced control.
         run: node scripts/test-dash-placed-refs.ts
 
+      - name: dash structured-refs rig
+        # Excel's table syntax (Sales[Amount], Sales[@Qty], Sales[#Totals]) gives
+        # the same answers placed and unplaced, follows a moved table, and
+        # resolves what has no address to an error IFERROR can catch.
+        run: node scripts/test-dash-structured.ts
+
       - name: dash i18n rig
         # A core catalog ships inside every saved workbook and cannot be patched
         # without a release, so drift has to fail here rather than in the field:

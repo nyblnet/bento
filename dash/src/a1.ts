@@ -309,6 +309,21 @@ export function mapNames(src: string, map: MapName): string {
   return rewrite(src, null, map)
 }
 
+/** A structured reference: the table word, the text inside its outer brackets,
+ *  and the whole reference as written (to hand back when it is not ours). */
+type MapStruct = (table: string, spec: string, text: string) => string
+
+/**
+ * Walk `src` and hand every STRUCTURED reference — `Sales[Amount]`,
+ * `Sales[@Amount]`, `Sales[[#Totals],[Amount]]` — to `map`, splicing its return
+ * in place. Everything else, quoted text included, is copied as written. The
+ * same walk as `mapRefs`, so the two can never disagree about where a string
+ * literal ends.
+ */
+export function mapStructured(src: string, map: MapStruct): string {
+  return rewrite(src, null, undefined, undefined, undefined, map)
+}
+
 /** A sheet a source named, and the text that followed the `!`. */
 export interface SheetQualifier {
   sheet: string
@@ -396,8 +411,18 @@ function rewrite(
   mapName?: MapName,
   onQualifier?: (sheet: string, after: string) => void,
   renameSheet?: { from: string; to: string },
+  mapStruct?: MapStruct,
 ): string {
   const n = src.length
+  /** The index after the `]` matching the `[` at `j`, nesting counted; -1 if unclosed. */
+  const bracketEnd = (j: number): number => {
+    let depth = 0
+    for (let p = j; p < n; p++) {
+      if (src[p] === '[') depth++
+      else if (src[p] === ']' && --depth === 0) return p + 1
+    }
+    return -1
+  }
   const skipSpace = (j: number): number => {
     while (j < n && (src[j] === ' ' || src[j] === '\t' || src[j] === '\n' || src[j] === '\r')) j++
     return j
@@ -565,9 +590,20 @@ function rewrite(
         i = w
         continue
       }
-      // `(` = a call, `[` = a structured reference. Both are followed by a
-      // name that is frequently cell-shaped (LOG10, Table1); translating one
-      // corrupts the formula.
+      // `[` = a structured reference, `Sales[Amount]`. Handed to whoever asked
+      // for them WHOLE — the table and its bracketed spec, nested brackets
+      // included — and never translated as a cell, since the name is
+      // frequently cell-shaped (Table1).
+      if (src[k] === '[' && mapStruct) {
+        const close = bracketEnd(k)
+        if (close > 0) {
+          out += mapStruct(text, src.slice(k + 1, close - 1), src.slice(i, close))
+          i = close
+          continue
+        }
+      }
+      // `(` = a call. Followed by a name that is frequently cell-shaped
+      // (LOG10); translating one corrupts the formula.
       if (src[k] === '(' || src[k] === '[') {
         out += text
         i = j
