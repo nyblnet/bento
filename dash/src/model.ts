@@ -20,6 +20,8 @@
 // beats dictionary-columnar is an opaque deflate blob that forfeits PLATFORM §7
 // and reships the whole column on every edit under collab.
 
+import { validatePlacements } from './placement.ts'
+
 export const FORMAT = 'bento/dash'
 export const FORMAT_VERSION = 1
 
@@ -291,6 +293,14 @@ export interface TableSheet {
   steps: Step[]
   /** Derived sheet: the source sheet id. */
   from?: string
+  /**
+   * Where this table sits on a grid: header row at (r, c), 0-based, on the
+   * canvas sheet `on`. ABSENT = the table fills its own sheet, which is every
+   * Dataset written before placement existed — so there is no migration.
+   * One flat register under collab: a move is one write. See placement.ts and
+   * docs/dash-unified.md.
+   */
+  placed?: { on: string; r: number; c: number }
   [extra: string]: unknown
 }
 
@@ -686,7 +696,7 @@ export const docBudget = (canWriteInPlace: boolean): number =>
 // --- Parsing -------------------------------------------------------------
 
 export interface Repair {
-  what: 'sheet-id' | 'column-id' | 'duplicate-id' | 'missing-id' | 'doc-id'
+  what: 'sheet-id' | 'column-id' | 'duplicate-id' | 'missing-id' | 'doc-id' | 'placement'
   id: string
   became: string
 }
@@ -901,6 +911,13 @@ export function parseDoc(json: string): ParseResult {
   const docId = typeof raw.docId === 'string' && raw.docId ? raw.docId : newDocId()
   if (docId !== raw.docId) repairs.push({ what: 'doc-id', id: '', became: docId })
   const doc = { ...raw, format: FORMAT, version, docId, sheets } as unknown as DashDoc
+  // A placement that cannot be honoured is dropped, and the table fills its own
+  // sheet — what an older build shows for it anyway. NOT for a frozen file: a
+  // newer build may place tables where this one cannot, and repairing would
+  // rewrite what it understands. `isTab` covers the frozen case at render.
+  if (!frozen) {
+    for (const p of validatePlacements(doc)) repairs.push({ what: 'placement', id: p.id, became: p.problem })
+  }
   return frozen ? { ok: true, doc, repairs, frozen } : { ok: true, doc, repairs }
 }
 

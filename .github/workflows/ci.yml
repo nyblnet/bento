@@ -1538,6 +1538,12 @@ jobs:
         # dead end wearing a live button.
         run: node scripts/test-dash-recovery.ts
 
+      - name: dash placement rig
+        # Tables placed inside a grid (docs/dash-unified.md): the rectangle a
+        # table covers, which part of which table a grid cell is, and the parse
+        # repairs, each with a control that a well-formed placement survives.
+        run: node scripts/test-dash-placement.ts
+
       - name: dash i18n rig
         # A core catalog ships inside every saved workbook and cannot be patched
         # without a release, so drift has to fail here rather than in the field:
