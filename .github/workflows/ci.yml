@@ -1556,6 +1556,12 @@ jobs:
         # resolves what has no address to an error IFERROR can catch.
         run: node scripts/test-dash-structured.ts
 
+      - name: dash tableize rig
+        # Format as table / Convert to range IN PLACE: patches applied with the
+        # store's own applyPatch, then the whole workbook recalculated — every
+        # formula pointing in gives the same answer before, during and after.
+        run: node scripts/test-dash-tableize.ts
+
       - name: dash i18n rig
         # A core catalog ships inside every saved workbook and cannot be patched
         # without a release, so drift has to fail here rather than in the field:

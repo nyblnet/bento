@@ -108,6 +108,7 @@ export interface PromoteFinding {
     | 'empty-column' | 'blank-rows' | 'date-ambiguous' | 'coerce-failed'
     | 'formula-lifted' | 'formula-per-cell' | 'formula-dropped' | 'formula-error'
     | 'copy-not-move' | 'column-formula-flattened' | 'overrides-flattened'
+    | 'hidden-cells-replaced'
   column?: string
   message: string
 }
