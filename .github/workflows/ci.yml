@@ -1538,6 +1538,11 @@ jobs:
         # dead end wearing a live button.
         run: node scripts/test-dash-recovery.ts
 
+      - name: dash views rig
+        # Kanban, calendar and gallery are projections of the grid's own
+        # filtered, sorted rows; moving a card or a record writes one cell.
+        run: node scripts/test-dash-views.ts
+
       - name: dash i18n rig
         # A core catalog ships inside every saved workbook and cannot be patched
         # without a release, so drift has to fail here rather than in the field:

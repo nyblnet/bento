@@ -54,9 +54,9 @@ import './story.css'
 import { anim } from '../../kernel/src/anim.ts'
 import { chartSnapshotSvg, mountChart } from '../../kernel/src/charts.ts'
 import { optionFor, type ChartBinding } from './chart.ts'
-import { buildOrder, type ColumnFilter, type Predicate } from './filter.ts'
+import { buildOrder, toFilters, fromFilters, type ColumnFilter } from './filter.ts'
 import { buildScene, mountViz3d, type Viz3dBinding } from './viz3d.ts'
-import type { DashDoc, TableSheet, Story, StoryStep, StoredFilter, StoredPredicate, StoryCamera, SortKey } from './model.ts'
+import type { DashDoc, TableSheet, Story, StoryStep, StoryCamera, SortKey } from './model.ts'
 import { readCell, type Store } from './store.ts'
 import { t } from './i18n.ts'
 
@@ -180,44 +180,9 @@ export function writeStory(store: Store, story: Story | null): void {
 // --- filters: the JSON bridge ------------------------------------------------
 
 /** Stored → live. Returns null for an op this build cannot evaluate. */
-export function toPredicate(p: StoredPredicate): Predicate | null {
-  switch (p.op) {
-    case 'equals': case 'notEquals':
-    case 'greater': case 'less': case 'greaterOrEqual': case 'lessOrEqual':
-      return { op: p.op, v: (p as { v: unknown }).v } as Predicate
-    case 'contains': case 'notContains': case 'startsWith': case 'endsWith':
-      return { op: p.op, v: String((p as { v: unknown }).v ?? '') } as Predicate
-    case 'between':
-      return { op: 'between', lo: (p as { lo: unknown }).lo, hi: (p as { hi: unknown }).hi }
-    case 'isBlank': case 'notBlank':
-      return { op: p.op }
-    case 'isOneOf': {
-      const values = (p as { values?: unknown }).values
-      return { op: 'isOneOf', set: new Set(Array.isArray(values) ? values : []) }
-    }
-    case 'topN': case 'bottomN': {
-      const n = Number((p as { n?: unknown }).n)
-      return Number.isFinite(n) ? { op: p.op, n } : null
-    }
-    default:
-      // Kept in the document by `normalizeStep`'s spread, not applied here.
-      return null
-  }
-}
-
-/** Live → stored. The `Set` is the only thing that actually changes shape. */
-export function fromPredicate(p: Predicate): StoredPredicate {
-  if (p.op === 'isOneOf') return { op: 'isOneOf', values: [...p.set] }
-  return p as unknown as StoredPredicate
-}
-
-export const toFilters = (stored: StoredFilter[] | undefined): ColumnFilter[] =>
-  (stored ?? [])
-    .map((f) => ({ col: f.col, pred: toPredicate(f.pred) }))
-    .filter((f): f is ColumnFilter => f.pred !== null)
-
-export const fromFilters = (live: ColumnFilter[]): StoredFilter[] =>
-  live.map((f) => ({ col: f.col, pred: fromPredicate(f.pred) }))
+// Stored ⇄ live filters moved to filter.ts (views read them without the
+// story's chart and 3D imports); re-exported here so callers are unchanged.
+export { toPredicate, fromPredicate, toFilters, fromFilters } from './filter.ts'
 
 // --- deriving a step ---------------------------------------------------------
 

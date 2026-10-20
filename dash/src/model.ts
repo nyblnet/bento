@@ -291,6 +291,34 @@ export interface TableSheet {
   steps: Step[]
   /** Derived sheet: the source sheet id. */
   from?: string
+  /** Saved views of this table — grid, kanban, gallery, calendar, form. See
+   *  `TableView`. Not `doc.views`, which are dashboards and keep their name. */
+  tableViews?: TableView[]
+  /** The id of the view showing now; absent = the plain grid. */
+  view?: string
+  [extra: string]: unknown
+}
+
+/**
+ * A saved way of looking at one table (docs/dash-unified.md) — Airtable's
+ * views. Every kind is a projection of the SAME rows: dragging a kanban card
+ * writes its `by` column, nothing else. Flat, like every other format object.
+ */
+export interface TableView {
+  id: string
+  name: string
+  /** A kind this build does not know is kept and shown as a grid. */
+  kind: 'grid' | 'kanban' | 'gallery' | 'calendar' | 'form' | (string & {})
+  filter?: StoredFilter[]
+  sort?: SortKey[]
+  /** grid: column ids grouped by, outermost first */
+  group?: string[]
+  /** column ids this view does not show */
+  hidden?: string[]
+  /** kanban: the category column the lanes are; calendar: the date column */
+  by?: string
+  /** gallery: the attachment column for the card image */
+  cover?: string
   [extra: string]: unknown
 }
 
