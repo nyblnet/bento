@@ -590,6 +590,23 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   display: inline-block;
 }
 
+/* Cursors should not be visible at all, unless we are in presentation mode.
+   `position:absolute`, is being used to create a new stacking context.
+   That way, when the cursor is being rendered, we don't end up moving the
+   content which is being animated below.
+ */
+.bento-el-code .cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: none;
+  animation: blink 0.5s step-end infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
 /* A hidden slide is still an ordinary, editable slide — it is just out of the
    show. Dimmed rather than greyed out, and the number struck through, so the
    sidebar reads as "this one will be skipped" without looking broken. */

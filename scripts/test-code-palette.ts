@@ -59,7 +59,7 @@ const codeRows = theme.slice(theme.indexOf('for (const scope of CODE_SCOPES)'))
 ok(!/ref:|setRef\(|paletteSwatches\(/.test(codeRows), 'code colours are plain literals — no palette reference wiring')
 
 console.log('\nthe renderer\n')
-ok(/codePalette\?\.\[token\.scopes\[0\]\] \?\? DEFAULT_CODE_COLORS\[token\.scopes\[0\] \?\? 'x'\]/.test(read('slides/src/code.ts')),
+ok(/codePalette\?\.\[(?:child)\.scopes\[0\]\] \?\? DEFAULT_CODE_COLORS\[(?:child)\.scopes\[0\] \?\? 'x'\]/.test(read('slides/src/code.ts')),
   'code.ts colours a token from the deck\'s palette, else the built-in scheme')
 
 console.log('\nempty accent slots stay out of the panel\n')

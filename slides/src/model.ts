@@ -76,6 +76,8 @@ export interface ElementBase {
      * `scale` is the far end of the zoom (e.g. 1.06), `duration` in seconds.
      */
     ken?: { dir?: 'drift' | 'out' | 'in'; scale?: number; duration?: number }
+    /* TypeWriter animation */
+    typeWriter ?: boolean
     /** continuous looping animation */
     loop?:
       | { type: 'dash-march'; distance?: number; duration?: number }
@@ -598,6 +600,11 @@ export interface BentoDoc {
      * around them wants a slower beat. Clamped on read.
      */
     morphSeconds?: number
+    /**
+     * The duration for the TypeWriter effect. Absent = 0.08 seconds is tuned
+     * to simulate
+     */
+    typeWriterSeconds?: number
   }
   /** shared assets (raw SVG markup or data URIs), referenced by key */
   assets?: Record<string, string>

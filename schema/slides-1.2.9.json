@@ -2310,7 +2310,8 @@
             },
             "slideNumber": {
               "type": "boolean"
-            }
+            },
+            "typeWriterSeconds": {}
           },
           "additionalProperties": false
         },

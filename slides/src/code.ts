@@ -15,7 +15,7 @@
 // what makes a moved line travel.
 
 import type { BentoDoc, CodeElement } from './model.ts'
-import { HeckelDiff, type Match, type Insert, type Delete } from './diff.ts'
+import { HeckelDiff, Token, type Match, type Insert, type Delete } from './diff.ts'
 
 /**
  * 8 Colors, not four hundred scopes — the zero-cost tier. When the
@@ -100,30 +100,58 @@ export function renderCodeInto(pre: HTMLElement, el: CodeElement, doc: BentoDoc)
   const states = diffFor(doc, morphKey)
   const slideStates = states.get(slideIdx)
   if (!slideStates) return false
+  const isTyping = el.fx?.typeWriter !== undefined
+  if (isTyping) {
+    // Add the cursor that we can animate.
+    const cursor = document.createElement('span')
+    cursor.style.transition = `transform 0.08s ease-out`
+    cursor.textContent = '\u258E'
+    cursor.classList.add('cursor')
+    pre.appendChild(cursor)
+  }
   for (const state of slideStates) {
     if (state.kind === 'empty') continue
     // Empty is typed { kind: string }, so kind checks cannot discriminate the
     // union — narrow by hand once it is excluded.
     const st = state as Match | Insert | Delete
     const token = st.kind === 'match' ? st.current : st.token
-    const span = document.createElement('span')
-    span.dataset.sym = token.morphId()
-    span.textContent = token.content
-    // Marks a token the morph may MOVE — styles.css gives these
-    // display:inline-block, because a transform does NOTHING to a non-replaced
-    // inline element (accepted, read back verbatim, zero pixels of movement).
-    // Newline and whitespace tokens must stay inline: a newline inside an
-    // atomic inline-level box stops breaking the line under white-space:pre.
-    // diff.ts fromTok has already split multiline tokens, so ink never
-    // carries a newline here.
-    if (/\S/.test(token.content)) span.dataset.tok = ''
-    // Derive the color from the codePalette if it exists.
-    // Otherwise, gracefully fallback to the default colors.
-    const color = codePalette?.[token.scopes[0]] ?? DEFAULT_CODE_COLORS[token.scopes[0] ?? 'x']
-    if (color) span.style.color = color
-    const kind = token.scopes[0]
-    if (kind === 'k' || kind === 'f') span.style.fontWeight = '600'
-    pre.appendChild(span)
+    // Build additonal tokens to represent typing if necessary.
+    const tokens = (isTyping) ? typeWriterTokens(el, token) : [token]
+    for (const child of tokens) {
+      const span = document.createElement('span')
+      span.dataset.sym = child.morphId()
+      span.textContent = child.content
+      // Marks a token the morph may MOVE — styles.css gives these
+      // display:inline-block, because a transform does NOTHING to a non-replaced
+      // inline element (accepted, read back verbatim, zero pixels of movement).
+      // Newline and whitespace tokens must stay inline: a newline inside an
+      // atomic inline-level box stops breaking the line under white-space:pre.
+      // diff.ts fromTok has already split multiline tokens, so ink never
+      // carries a newline here.
+      if (/\S/.test(child.content)) span.dataset.tok = ''
+      // Derive the color from the codePalette if it exists.
+      // Otherwise, gracefully fallback to the default colors.
+      const color = codePalette?.[child.scopes[0]] ?? DEFAULT_CODE_COLORS[child.scopes[0] ?? 'x']
+      if (color) span.style.color = color
+      const kind = child.scopes[0]
+      if (kind === 'k' || kind === 'f') span.style.fontWeight = '600'
+      pre.appendChild(span)
+    }
   }
   return pre.childNodes.length > 0
+}
+
+/** Builds TypeWriter tokens if the right effect is defined on the element. */
+function typeWriterTokens(el: CodeElement, token: Token): Array<Token> {
+  if (el.fx?.typeWriter === undefined) return [token]
+  // Split tokens further if necessary. Especially useful in the context of languages
+  // where a token will capture more than one word. Use a capturing group to make sure
+  // don't lose the delimiters.
+  const tokens = token.content.split(/(\W+)/)
+  return tokens.map((t, i) => {
+    const split = new Token(t, token.scopes, token.lineNumber, token.offset)
+    // This should be stable for morphing.
+    split.setMorphId(`${token.morphId()}-${i}`)
+    return split
+  })
 }

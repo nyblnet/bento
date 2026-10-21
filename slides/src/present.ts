@@ -23,8 +23,11 @@ import { offlineEnabled } from './update'
 import { countPlan } from './countnumber'
 
 const MORPH_DURATION_DEFAULT = 0.65
+const TYPE_WRITER_DURATION_DEFAULT = 0.08
 /** Set per-deck by doc.present.morphSeconds; clamped to something sane. */
 let MORPH_DURATION = MORPH_DURATION_DEFAULT
+/** Set per-deck by doc.present.typeWriterSeconds; clamped to something sane. */
+let TYPE_WRITER_DURATION = TYPE_WRITER_DURATION_DEFAULT
 const MORPH_EASE = 'power2.inOut'
 
 export interface PresentSession {
@@ -80,7 +83,7 @@ export function startPresentation(
   } = {},
 ): PresentSession {
   MORPH_DURATION = Math.min(6, Math.max(0.1, doc.present?.morphSeconds ?? MORPH_DURATION_DEFAULT))
-
+  TYPE_WRITER_DURATION = Math.min(1, Math.max(0.08, doc.present?.typeWriterSeconds ?? TYPE_WRITER_DURATION_DEFAULT))
   const overlay = document.createElement('div')
   overlay.className = 'bento-present-overlay'
   overlay.style.setProperty('--bento-accent', doc.theme.accent)
@@ -1644,8 +1647,10 @@ function enterSpec(kind: EnterKind, enterDur?: number) {
  */
 function runEnterFx(slide: Slide, section: HTMLElement, only?: Set<string>, revealing = false, atStep = 0) {
   const entering = fxNodes(slide, section)
+    // Note: When mixing typing + morph, you won't get the full typing effect (with split tokens).
+    // This is because subsequent morphs still need to be preserved.
     // reveal-set members are shown/hidden by hover, never by entrance tweens
-    .filter(([el]) => (el.fx!.enter || el.fx!.countUp || (revealing && only?.has(el.id))) && !el.showOnHover)
+    .filter(([el]) => (el.fx!.enter || el.fx!.countUp || el.fx!.typeWriter || (revealing && only?.has(el.id))) && !el.showOnHover)
     .filter(([el]) => (only ? only.has(el.id) : shownAt(el, atStep)))
     .sort((a, b) => (a[0].fx!.order ?? 0) - (b[0].fx!.order ?? 0))
   // Delay derives from fx.order when set (equal order ⇒ elements enter
@@ -1673,6 +1678,7 @@ function runEnterFx(slide: Slide, section: HTMLElement, only?: Set<string>, reve
       )
     }
     if (fx.countUp) runCountUp(node)
+    if (fx.typeWriter) runTypeWriter(node)
   })
   settleGuarantee(entering.map(([el, node]) => [node, el]))
 }
@@ -1738,6 +1744,55 @@ function runCountUp(node: HTMLElement) {
     ease: 'power2.out',
     onUpdate() { inner.textContent = plan(state.p) },
   })
+}
+
+/** Animate every token in the code element using the type writer effect. */
+function runTypeWriter(node: HTMLElement) {
+  const inner = node.querySelector<HTMLElement>('.bento-text-inner') ?? node
+  const cursor = inner.querySelector<HTMLElement>('.cursor')
+  const symbols = Array.from(inner.querySelectorAll<HTMLElement>('[data-sym]'))
+  animateSymbol(cursor, symbols, 0, TYPE_WRITER_DURATION)
+}
+
+function animateSymbol(cursor: HTMLElement|null, symbols: Array<HTMLElement>, index: number, duration: number) {
+  if (index < 0 || index > symbols.length) return
+  if (index == 0) {
+    // First frame
+    if (cursor) {
+      // Show the cursor
+      cursor.style.display = 'inline-block'
+    }
+    symbols.forEach(s => s.style.opacity = '0')
+  }
+  const symbol = symbols[index]
+  if (symbol) {
+    anim.fromTo(symbol, { opacity: 0 }, {
+      opacity: 1,
+      duration: duration,
+      delay: 0,
+      ease: 'ease-out',
+      onComplete: () => {
+        if (cursor) {
+          const x = symbol.offsetLeft + symbol.offsetWidth
+          const y = symbol.offsetTop
+          cursor.style.transform = `translate(${x}px, ${y}px)`
+        }
+        animateSymbol(cursor, symbols, index + 1, duration)
+      }
+    })
+  } else {
+    // Hide the cursor after the animation is complete.
+    if (cursor) {
+      anim.fromTo(cursor, { opacity: 1 }, {
+        opacity: 0,
+        duration: duration,
+        ease: 'ease-out',
+        onComplete: () => {
+          cursor.style.display = 'none'
+        }
+      })
+    }
+  }
 }
 
 /** Re-parse inline svg elements so their CSS animations replay on entry. */
@@ -2019,16 +2074,24 @@ function morphMathSymbols(
   // line, and a line that snaps in while its neighbours glide reads as a redraw
   // rather than an edit. Fading them in, staggered and starting once the travel
   // is under way, makes the two motions one beat.
+  // NOTE: Pay attention when the target SlideElement is using TypeWriter.
+  // The animation for fresh elements should use animateSymbols.
   const fresh = Array.from(to.querySelectorAll<HTMLElement>('[data-sym]'))
     .filter((s) => !fromAt.has(s.dataset.sym!))
-  fresh.forEach((s, i) => {
-    anim.fromTo(s, { opacity: 0 }, {
-      opacity: 1,
-      duration: 0.3,
-      delay: MORPH_DURATION * 0.4 + Math.min(i, 30) * 0.015,
-      ease: 'power2.out',
+  if (b.fx?.typeWriter === true) {
+    const cursor = to.querySelector<HTMLElement>('.cursor')
+    animateSymbol(cursor, fresh, 0, TYPE_WRITER_DURATION)
+  } else {
+    fresh.forEach((s, i) => {
+      anim.fromTo(s, { opacity: 0 }, {
+        opacity: 1,
+        duration: 0.3,
+        delay: MORPH_DURATION * 0.4 + Math.min(i, 30) * 0.015,
+        ease: 'power2.out',
+      })
     })
-  })
+  }
+
 
   // Scaffolding that is new this step arrives on the SAME beat as the fresh
   // tokens — but via `color`, never `opacity`.
@@ -2163,12 +2226,22 @@ function runMorph(
   const toSlide = doc.slides[toIdx]
   const activeSet = toSlide?.hover?.type === 'reveal' ? (toSlide.hover.default ?? null) : null
   const entering: Array<[HTMLElement, number]> = []
+  const typing: Array<HTMLElement> = []
   for (const n of toEls.values()) {
     const id = n.dataset.flipId!
     if (fromEls.has(id)) continue
     const m = toModel.get(id)
+    if (m?.fx?.typeWriter) {
+      // Typewrite elements that are unmatched stay hidden
+      // We extract the underlying symbols, and animate them.
+      typing.push(...n.querySelectorAll<HTMLElement>('[data-sym]'))
+      continue
+    }
     if (m?.showOnHover && m.showOnHover !== activeSet) continue // hover-revealed, stays hidden
     entering.push([n, m?.opacity ?? 1])
+  }
+  if (typing.length) {
+    animateSymbol(toSection.querySelector<HTMLElement>('.cursor'), typing, 0, TYPE_WRITER_DURATION)
   }
   if (entering.length) {
     const spread = Math.min(0.45, entering.length * 0.03)

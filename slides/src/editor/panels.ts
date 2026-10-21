@@ -757,7 +757,7 @@ export class PropsPanel {
     const setFx = (patch: Partial<NonNullable<SlideElement['fx']>>) =>
       this.mutate(el.id, (e) => {
         const fx = { ...(e.fx ?? {}), ...patch }
-        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop && !fx.step) delete e.fx
+        if (!fx.enter && !fx.countUp && !fx.ambient && !fx.loop && !fx.step && !fx.typeWriter) delete e.fx
         else e.fx = fx
       }, true)
 
@@ -812,7 +812,6 @@ export class PropsPanel {
         ken.duration ?? (dir === 'drift' ? 26 : 2.5), 0.1,
         (v, fin) => { if (fin) setKen({ duration: Math.max(v, 0.1) }) }))
     }
-
     // continuous loop animation
     const loop = el.fx?.loop
     this.row('Loop animation', this.select(
@@ -857,6 +856,18 @@ export class PropsPanel {
         speedHint.textContent = t('Tip: on the canvas, scroll a point to make the element dwell there or rush past it.')
         this.host.appendChild(speedHint)
       }
+    }
+
+    // typewriter for code snippets
+    if (el.type === 'code') {
+      this.row(
+        t('Type Writer'),
+        this.select(
+          ['off', 'on'],
+          el.fx?.typeWriter ? 'on' : 'off',
+          (v) => setFx({ typeWriter: v === 'on' ? true : undefined })
+        )
+      )
     }
 
     // hover-reveal set membership

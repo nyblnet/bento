@@ -24,7 +24,7 @@ export const MODEL_KEYS = {
       "embed": ["app", "backdropFilter", "blend", "blur", "doc", "fx", "group", "groupId", "h", "id", "link", "live", "morphId", "opacity", "role", "rotation", "shadow", "showOnHover", "themeRefs", "type", "url", "view", "w", "x", "y"],
       "code": ["align", "backdropFilter", "blend", "blur", "color", "content", "fontFamily", "fontSize", "fx", "grammarAssetId", "grammarName", "group", "groupId", "h", "id", "lineHeight", "link", "morphId", "opacity", "role", "rotation", "shadow", "showOnHover", "themeAssetId", "themeName", "themeRefs", "type", "valign", "w", "x", "y"],
     },
-    "fx": ["ambient", "countUp", "enter", "enterDur", "ken", "loop", "order", "step"],
+    "fx": ["ambient", "countUp", "enter", "enterDur", "ken", "loop", "order", "step", "typeWriter"],
     "fxKen": ["dir", "duration", "scale"],
     "fxLoop": ["delay", "distance", "duration", "ease", "path", "speeds", "type"],
     "shadow": ["blur", "color", "x", "y"],
@@ -39,7 +39,7 @@ export const MODEL_KEYS = {
     "theme": ["accent", "background", "chartPalette", "codePalette", "color", "fontFamily", "headingFamily", "palette", "table"],
     "themePalette": ["accent2", "accent3", "accent4", "accent5", "accent6", "bg2", "folHlink", "hlink", "tx2"],
     "themeCodePalette": ["a", "c", "d", "f", "k", "n", "p", "s"],
-    "present": ["controls", "morphSeconds", "numberHidden", "progress", "slideNumber"],
+    "present": ["controls", "morphSeconds", "numberHidden", "progress", "slideNumber", "typeWriterSeconds"],
     "font": ["asset", "family", "style", "weight"],
   } as const
 
