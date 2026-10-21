@@ -471,7 +471,6 @@ export const zhHans: Catalog = {
   "Crash recovery is off for this document — it’s too large to keep a backup copy. Save often.": "此文档的崩溃恢复已关闭 — 文件太大，无法保留备份。请经常保存。",
   "✓ valid": "✓ 有效",
   "✕ the content has changed since this was signed": "✕ 签名后内容已被更改",
-  "⚠ not linked to the previous signature": "⚠ 未与上一个签名关联",
   "✕ invalid signature": "✕ 签名无效",
   "after {name}": "在 {name} 之后",
   "History matches what was signed": "历史记录与签名时一致",

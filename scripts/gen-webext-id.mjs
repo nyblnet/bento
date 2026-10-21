@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// The extension's copy of the bento/id statement code, GENERATED from the
+// The extension's copy of kernel's bento/connect code (statements, recovery), GENERATED from the
 // kernel reference by stripping TypeScript types — never hand-edited.
 //
 //   node scripts/gen-webext-id.mjs          # write home/webext/src/id/gen/*.js
@@ -23,7 +23,7 @@ import { stripTypeScriptTypes } from 'node:module'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(root, 'home/webext/src/id/gen')
 // The entry points; every module they import from kernel/src comes with them.
-const ENTRY = ['statements.ts', 'address.ts']
+const ENTRY = ['statements.ts', 'address.ts', 'recovery.ts']
 const VALUE_IMPORT = /^import (?!type )[^;]*?from '\.\/([a-z0-9-]+)\.ts'/gm
 
 export function generate() {

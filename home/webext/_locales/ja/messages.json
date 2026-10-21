@@ -880,5 +880,92 @@
   },
   "saTaken": {
     "message": "「$1」はすでにあります。別の名前を選んでください。"
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "共有やライブドキュメントのためのあなたの ID です。このブラウザに保存され、設定時にパスキーと復元コードを作るので、あとで取り戻せます。"
+  },
+  "setIdNone": {
+    "message": "このブラウザにはまだ Bento ID がありません。"
+  },
+  "setIdCreate": {
+    "message": "Bento ID を作成…"
+  },
+  "setIdLocal": {
+    "message": "このブラウザで Bento ID を設定しました。次はメールアドレスの確認です。"
+  },
+  "idSetupTitle": {
+    "message": "Bento ID を作成"
+  },
+  "idSetupLead": {
+    "message": "Bento ID によって、共有相手はそれがあなただとわかります。設定時にパスキーと復元コードを作るので、別のデバイスでも取り戻せます。"
+  },
+  "idSetupLight": {
+    "message": "ブラウザ拡張機能では、鍵はこのブラウザのプロファイルに保存されます。拡張機能を削除すると消えるので、パスキーと復元コードは大切に保管してください。"
+  },
+  "idSetupLabel": {
+    "message": "このブラウザの名前"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "パスキーを設定"
+  },
+  "idWorking": {
+    "message": "パスキーを待っています…"
+  },
+  "idDeriving": {
+    "message": "復元コードを作成しています（$1/2）…"
+  },
+  "idCodeTitle": {
+    "message": "復元コード"
+  },
+  "idCodeLead": {
+    "message": "書き留めるか印刷して、安全な場所に保管してください。表示されるのは今回だけで、パスキーを失くしたときに取り戻す手段になります。"
+  },
+  "idCodeConfirm": {
+    "message": "保管したことを確認するため、コードを入力してください"
+  },
+  "idCodePrint": {
+    "message": "印刷"
+  },
+  "idCodeSaved": {
+    "message": "保管しました"
+  },
+  "idCodeMismatch": {
+    "message": "上に表示されたコードと違います。確認してもう一度お試しください。"
+  },
+  "idCodeTypo": {
+    "message": "コードに入力ミスがあります。文字が間違っているか、欠けています。"
+  },
+  "idNoPrf": {
+    "message": "このパスキーでは他のデバイスで Bento ID のロックを解除できないため、この復元コードが唯一の取り戻す手段です。"
+  },
+  "idNoCode": {
+    "message": "このデバイスでは復元コードを作れないため、パスキーが唯一の取り戻す手段です。パスキーを失くすと、この Bento ID も失われます。復元コードはあとで別のデバイスで作成できます。"
+  },
+  "idDoneTitle": {
+    "message": "Bento ID を設定しました"
+  },
+  "idDoneLead": {
+    "message": "このブラウザで使えるようになりました。次はメールアドレスの確認です。"
+  },
+  "idDone": {
+    "message": "完了"
+  },
+  "idErrCancelled": {
+    "message": "パスキーの要求がキャンセルされたか、時間切れになりました。このウィンドウを前面にしたまま、もう一度お試しください。"
+  },
+  "idErrPermission": {
+    "message": "パスキーには bento.page へのアクセスが必要です。Chrome に確認されたら許可して、もう一度お試しください。"
+  },
+  "idErrFailed": {
+    "message": "問題が発生し、何も保存されませんでした。もう一度お試しください。"
+  },
+  "idErrNoWayBack": {
+    "message": "何も設定されていません。このパスキーでは Bento ID のロックを解除できず、このデバイスでは復元コードも作れないため、取り戻す手段がなくなってしまいます。"
   }
 }

@@ -605,6 +605,10 @@ export class CommentsUI {
     const sheet = this.sheet()
     const open = unresolvedCount(sheet)
     const all = sheetComments(sheet).length
+    // THE PILL IS A LIST NOW, not the way in: adding a comment is the toolbar's
+    // Comment tool (⌘⌥M), as in slides and spaces. With nothing to list it
+    // stands down instead of floating over the grid as a second entry point.
+    this.pill.hidden = all === 0
     this.pill.classList.toggle('dxc-pill-on', open > 0)
     this.pill.textContent = open ? `💬 ${open}` : '💬'
     this.pill.title = all

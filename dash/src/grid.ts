@@ -19,18 +19,19 @@
 // is only honest if changing the type is one click away, so the header carries
 // the type as a control, not a label.
 
-import { formatValue, alignFor, TYPE_LABEL } from './format.ts'
+import { formatValue, alignFor, TYPE_LABEL, AGG_SHORT } from './format.ts'
 import type { CanvasCell, CanvasSheet, CellOverride, Column, ColumnType, Sheet, TableSheet } from './model.ts'
 import { appearanceCss } from './cellfmt.ts'
 import { readCell, type Patch, type Store } from './store.ts'
 import { recalc, isErr, type Vec } from './formula.ts'
 import {
-  Selection, keyToAction, applyMotion, contains, tsvFromRange, parseTsv,
+  Selection, keyToAction, applyMotion, contains, normalize, tsvFromRange, parseTsv,
   fillCells, type Box, type FillCell, type FillMode, type Range,
 } from './select.ts'
 import { buildOrder, type ColumnFilter } from './filter.ts'
 import { evaluateRules, type CellStyle } from './condfmt.ts'
 import { colToLetters, formatRef, parseRef } from './a1.ts'
+import { acceptsRef, refText, type Pos } from './pointref.ts'
 import { t } from './i18n.ts'
 import { resizeColumn, autoFitWidth, hiddenSet, readFrozen, insertRowsAt } from './rowcol.ts'
 import {
@@ -38,6 +39,10 @@ import {
   shiftSheetFormulas, shiftDefinedNames, workbookSources,
 } from './cellformula.ts'
 import { mountFind, type FindUI, type Hit } from './find.ts'
+import { coerceInput, enteredForm, enteredNumber, isTextFormat, DATE_PATTERN } from './cellprops.ts'
+import { readEntryNumber } from './import.ts'
+import { viewerDecimal } from './format.ts'
+import { cellFormulaProblem } from './cellformula.ts'
 // The data-validation stylesheet is imported HERE rather than in datavalid.ts,
 // because this is the file that emits the markup it styles and because
 // datavalid.ts is also read by xlsx.ts, whose rig runs in node with no css
@@ -447,29 +452,21 @@ export const canvasType = (v: unknown): ColumnType =>
   typeof v === 'number' ? 'number' : typeof v === 'boolean' ? 'bool' : 'text'
 
 /**
- * What the user typed, as a stored value.
+ * What the user typed, as a stored value — `canvasCellEdit`'s value, alone.
  *
- * DELIBERATELY NARROW. A number only when the whole field is one, and a boolean
- * only for the two words; everything else is text, including `2026-01-01` (the
- * table path stores dates as strings too) and `50%`. Excel would turn `50%`
- * into 0.5 wearing a percent format, which means typing invents a FORMAT — and
- * this pass does not write formats (that is the next one). Storing the text is
- * the answer that cannot be wrong about what the author meant.
- *
- * `1,200` is 1200: a thousands separator is how people type numbers into
- * spreadsheets, and `coerceForColumn` already strips them on the table side.
+ * This used to be its own, DELIBERATELY NARROW reader: a number only when the
+ * whole field was bare digits, so `15%`, `$5` and `2026-03-04` were all stored
+ * as text, on the argument that turning `50%` into 0.5 "invents a format".
+ * Review finding 3.1 measured what that cost: the formula engine then read the
+ * TEXT "15%" as 15, so `=SUM` over 10, $5 and 15% said 30 where every other
+ * spreadsheet says 15.15. Typing now goes through cellprops.ts `coerceInput`,
+ * whose header states the rules (a MARK makes a format; an unambiguous date is
+ * read; `3/4/2026` is still refused).
  */
-const NUMERIC = /^[-+]?(?:\d+|\d{1,3}(?:,\d{3})+)?(?:\.\d+)?(?:[eE][-+]?\d+)?$/
 export function canvasValue(text: string): unknown {
   const s = text.trim()
   if (s === '') return ''
-  if (/^true$/i.test(s)) return true
-  if (/^false$/i.test(s)) return false
-  // the regex admits `.` and `+` alone, which `Number` reads as NaN/0 — so the
-  // digit test is separate rather than folded into an even hairier pattern
-  if (!/\d/.test(s) || !NUMERIC.test(s)) return s
-  const n = Number(s.replace(/,/g, ''))
-  return Number.isFinite(n) ? n : s
+  return coerceInput(undefined, s)?.v ?? s
 }
 
 /**
@@ -486,13 +483,40 @@ export function canvasValue(text: string): unknown {
  * everything but `f`. And a value and a formula are alternatives — writing one
  * drops the other, because a file that carries a number beside the formula that
  * produced it can carry a number that disagrees with it.
+ *
+ * The rules for what a typed field IS — percent, currency, accounting
+ * negatives, dates, the apostrophe, the Text format — are cellprops.ts's
+ * `coerceInput`, which this is now a name for.
  */
 export function canvasCellEdit(prev: CanvasCell | undefined, text: string): CanvasCell | null {
-  const { v: _v, f: _f, ...rest } = prev ?? {}
-  const s = text.trim()
-  if (s === '') return Object.keys(rest).length ? rest : null
-  if (isFormula(s)) return { ...rest, f: s }
-  return { ...rest, v: canvasValue(s) }
+  return coerceInput(prev, text)
+}
+
+/**
+ * Writing an already-TYPED value (a paste from this grid, a fill): a number or
+ * a boolean is stored as it is, never printed and re-read — printing 1.234 and
+ * reading it back as a German typist would is 1234. Strings go through typing.
+ */
+export function canvasCellPut(prev: CanvasCell | undefined, val: unknown): CanvasCell | null {
+  if (typeof val === 'number' || typeof val === 'boolean') {
+    const { v: _v, f: _f, ...rest } = prev ?? {}
+    return { ...rest, v: val }
+  }
+  return coerceInput(prev, val == null ? '' : String(val))
+}
+
+/**
+ * Why a typed spreadsheet formula is REFUSED, in the reader's language — or
+ * null when it parses. Exported for the rig; the two editors are its callers.
+ */
+export function formulaRefusal(src: string): string | null {
+  const p = cellFormulaProblem(src)
+  if (!p) return null
+  if (p.code === 'unclosed') return t('There’s a problem with this formula: a bracket is opened and never closed.')
+  if (p.code === 'incomplete') {
+    return t('There’s a problem with this formula: it ends after “{near}”, where a value is missing.', { near: p.near })
+  }
+  return t('There’s a problem with this formula: “{near}” cannot go there.', { near: p.near })
 }
 
 /** Clearing a cell — the same rule, with no text to store. */
@@ -516,7 +540,9 @@ export function canvasShown(cell: CanvasCell | undefined, v: unknown): string {
 }
 
 export const canvasAlign = (cell: CanvasCell | undefined, v: unknown): string =>
-  cell?.align ?? alignFor(canvasType(v))
+  cell?.align ?? (cell?.format === DATE_PATTERN && typeof v === 'string'
+    ? 'right'                  // a date is a quantity of days: it sits with the numbers
+    : alignFor(canvasType(v)))
 
 export class Grid {
   private host: HTMLElement
@@ -624,6 +650,10 @@ export class Grid {
       store: this.store, grid: this, el: this.host, coerce: coerceForColumn,
     })
     this.store.on('doc', () => {
+      // The next edit ends the copy marks, as in every spreadsheet: what the
+      // ants outline is "what a paste would bring", and an edit (a paste
+      // included) is the moment that stops being a promise worth drawing.
+      this.copyMark = null
       // A canvas sheet has no order vector and no columns to count — its extent
       // comes out of its own keys, and `paintCanvas` sizes the selection from
       // it. All this listener owes it is "the cells changed, look again".
@@ -884,6 +914,10 @@ export class Grid {
     this.noteEl = this.host.querySelector('.dg-note')!
     this.descEl = this.host.querySelector('.dg-a11y')!
     this.scroller.addEventListener('scroll', () => this.paint(), { passive: true })
+    // Point mode claims a click on a cell BEFORE the cell's own mousedown sees
+    // it (capture), because that handler moves the selection and the blur it
+    // causes commits the formula half-typed.
+    this.scroller.addEventListener('mousedown', (e) => this.pointMouse(e), true)
     // A CLIPPED CELL HAD NO WAY TO BE READ. `.dg-cell` is
     // `overflow:hidden; text-overflow:ellipsis`, so a value wider than its
     // column ends in an ellipsis and the rest is simply gone. Measured on the
@@ -988,7 +1022,7 @@ export class Grid {
       const filtered = this.filters.some((f) => f.col === c.id)
       const fz = this.freeze(ci)
       // `aria-sort` IS THE SORT INDICATOR for anyone not looking at the ▲.
-      // Every dataset column is sortable (clicking the name sorts it), and
+      // Every dataset column is sortable (from the ▾ menu), and
       // `none` is ARIA's word for "sortable, not currently sorted" — omitting
       // it entirely would say the column cannot be sorted at all. The sorted
       // one is read off `this.sorts`, not `this.sort`, so a shift-click's
@@ -1006,8 +1040,7 @@ export class Grid {
       // and with only one of the two the eye keeps losing which column it is
       // in on a wide sheet — the header is the only thing still on screen once
       // the cursor has scrolled away.
-      const box = this.sel.bounds()
-      const on = ci >= box.left && ci <= box.right ? ' dg-h-on' : ''
+      const on = this.colLit(ci) ? ' dg-h-on' : ''
       return `<div class="dg-cell dg-h${filtered ? ' dg-filtered' : ''}${on}${fz.cls}" ` +
         `role="columnheader" aria-colindex="${ariaColIndex(ci)}" tabindex="-1"${sortAttr}${label} ` +
         `style="${fz.st}width:${c.w ?? 130}px" data-col="${c.id}" data-ci="${ci}">` +
@@ -1134,7 +1167,7 @@ export class Grid {
       // is deliberately left alone; only the label is repaired, because a
       // footer reading "[object Object] £97,050" is not a statement about
       // anything.
-      const label = typeof spec === 'string' ? spec : 'fx'
+      const label = typeof spec === 'string' ? t(AGG_SHORT[spec]) : 'fx'
       const hint = out === null
         // The dash is not an error and must not read as one. It says the
         // population is empty, which is a fact about the VIEW — so the hint
@@ -1382,6 +1415,8 @@ export class Grid {
     // A repaint detaches the arrow the menu was dropped from, and the menu is
     // mounted on the body — so it would hang there over a grid that has moved.
     closeListMenu()
+    // A paint rebuilds the rows, and the pointed-at highlight with them.
+    this.point = null
     // Captured BEFORE any innerHTML is replaced: afterwards the previously
     // focused node is detached and `contains` answers false for it, so this is
     // the only moment the question "did the grid have focus?" can be asked.
@@ -1538,7 +1573,7 @@ export class Grid {
     }
     this.paintEmptyGrid(gridN * ROW_H)
     this.head.innerHTML = this.header()
-    this.table.innerHTML = body.join('') + this.outline()
+    this.table.innerHTML = body.join('') + this.outline() + this.antsHtml((b) => this.datasetRect(b))
     // `totalsRow()` returns '' when the sheet declares no totals, but the
     // element keeps its 2px top rule and its 20px of height — so a sheet with
     // no totals drew a heavy line across the grid under nothing at all. Hide
@@ -1819,6 +1854,11 @@ export class Grid {
     el.hidden = false
   }
 
+  /** The value under the cursor — the properties panel's format sample. */
+  cursorValue(): unknown {
+    return this.valueAt(this.sel.cursor.row, this.sel.cursor.col)
+  }
+
   /** Value at a VISIBLE position — what the clipboard and the status bar read. */
   private valueAt(row: number, ci: number): unknown {
     if (this.canvas) return this.cvValueAt(row, ci)
@@ -1893,22 +1933,37 @@ export class Grid {
       : [])
   }
 
-  /** Write the formula bar's contents into the active cell. */
-  setActiveCell(text: string): void {
+  /**
+   * Write the formula bar's contents into the active cell.
+   *
+   * Answers why it REFUSED, or null when it wrote (or had nothing to do). The
+   * one refusal is a spreadsheet formula that does not parse — the same check
+   * the in-cell editor makes, so the bar is not the door that lets `=A11+` in.
+   */
+  setActiveCell(text: string): string | null {
     // On a SPREADSHEET a leading `=` is a cell formula, full stop. The dataset
     // path sends it to the COLUMN's expression because that is where a dataset
     // keeps one; here there is no column to own it, which is the whole reason
     // this kind exists — `=SUM(A1:A5)` under a block of numbers had nowhere to
     // land.
     if (this.canvas) {
-      if (this.store.readOnly) return
+      if (this.store.readOnly) return null
       const cur = this.sel.cursor
       const key = canvasKey(cur.row, cur.col)
       const had = this.canvas.cells[key]
+      if (isFormula(text.trim()) && !isTextFormat(had?.format)) {
+        const why = formulaRefusal(text.trim())
+        if (why !== null) return why
+      }
       const next = canvasCellEdit(had, text)
       if (next !== null || had !== undefined) this.writeCanvas({ [key]: next })
-      return
+      return null
     }
+    this.setActiveDatasetCell(text)
+    return null
+  }
+
+  private setActiveDatasetCell(text: string): void {
     const s = this.sheet
     const c = cols(s)[this.sel.cursor.col]
     if (!c || this.store.readOnly) return
@@ -1953,10 +2008,71 @@ export class Grid {
    * one of them forgets to set `clip.cut` and pastes a copy instead.
    */
   copyToClipboard(cut: boolean): void {
-    void navigator.clipboard?.writeText(this.copyTsv())
-    if (!cut) return
-    if (this.clip) this.clip.cut = true
-    this.clearSelection()
+    navigator.clipboard?.writeText(this.copyTsv()).catch(() => { /* a browser that refuses the clipboard still gets the internal clip */ })
+    const box = this.sel.bounds()
+    if (cut) {
+      if (this.clip) this.clip.cut = true
+      this.clearSelection()
+    }
+    // THE MARCHING ANTS. Set AFTER a cut's clear, whose own doc event would
+    // otherwise count as "the next edit" and take them straight down again.
+    this.copyMark = { sheet: this.sheetId, box }
+    this.paint()
+  }
+
+  /**
+   * What was last copied, outlined with a dashed "marching ants" border until
+   * Escape, the next edit, a paste, or a view change, as in Excel, Sheets and
+   * Numbers. Without it ⌘C changed nothing on screen and the only proof that
+   * anything had been copied was pasting it somewhere.
+   */
+  private copyMark: { sheet: string; box: Box } | null = null
+
+  /** Is something marked as copied? (the rig's and Escape's question) */
+  hasCopyMark(): boolean { return this.copyMark !== null }
+
+  clearCopyMark(): boolean {
+    if (!this.copyMark) return false
+    this.copyMark = null
+    this.paint()
+    return true
+  }
+
+  /** The ants, as a box over the rows; `place` turns a Box into geometry. */
+  private antsHtml(place: (b: Box) => { left: number; top: number; width: number; height: number } | null): string {
+    const m = this.copyMark
+    if (!m || m.sheet !== this.sheetId) return ''
+    const g = place(m.box)
+    if (!g) return ''
+    return `<div class="dg-ants" aria-hidden="true" style="left:${g.left}px;top:${g.top}px;width:${g.width}px;height:${g.height}px"></div>`
+  }
+
+  /** A visible-position box → its rectangle on the dataset sizer. */
+  private datasetRect(b: Box): { left: number; top: number; width: number; height: number } | null {
+    const vis = cols(this.sheet)
+    if (!vis.length) return null
+    const w = (i: number) => vis[i]?.w ?? 130
+    let left = GUTTER_W
+    for (let i = 0; i < b.left; i++) left += w(i)
+    let width = 0
+    for (let i = b.left; i <= b.right && i < vis.length; i++) width += w(i)
+    return { left, top: b.top * ROW_H, width, height: (b.bottom - b.top + 1) * ROW_H }
+  }
+
+  /** The same for a spreadsheet, whose rows and columns each have a size. */
+  private canvasRect(b: Box): { left: number; top: number; width: number; height: number } | null {
+    const s = this.canvas
+    if (!s) return null
+    const n = Math.max(b.bottom + 1, this.sel.rows)
+    const rs = this.rowSizes(s, n)
+    const lefts = this.colLefts(s, Math.max(b.right + 1, 1))
+    const left = lefts[b.left]
+    const top = rs.top(b.top)
+    return {
+      left, top,
+      width: lefts[b.right + 1] - left,
+      height: rs.top(b.bottom) + rs.height(b.bottom) - top,
+    }
   }
 
   copyTsv(): string {
@@ -2335,7 +2451,7 @@ export class Grid {
     const c = vis[cur.col]
     const ref = c ? `${colToLetters(cur.col)}${cur.row + 1}` : ''
     const v = this.valueAt(cur.row, cur.col)
-    const raw = v == null ? '' : isErr(v) ? String(v) : String(v)
+    const raw = v == null ? '' : isErr(v) ? String(v) : c ? datasetEntered(v, c) : String(v)
     const summary = this.selectionSummary()
     // The formula bar shows the SOURCE when there is one — a per-cell formula
     // first, then the column's expression, then the value. A bar that shows the
@@ -2352,6 +2468,7 @@ export class Grid {
   /** The full keyboard set, routed through select.ts's typed actions. */
   handleKey(e: KeyboardEvent): boolean {
     if (this.editing || this.cvEditing) return false
+    if (e.key === 'Escape' && !e.metaKey && !e.ctrlKey && !e.altKey && this.clearCopyMark()) return true
     const a = keyToAction(e)
     if (!a) return false
     if (a.kind === 'edit') return this.editActive()
@@ -2363,6 +2480,16 @@ export class Grid {
     if (a.kind === 'paste') return false          // the document paste listener has the data
     if (a.kind === 'undo') { this.store.undo(); return true }
     if (a.kind === 'redo') { this.store.redo(); return true }
+    // TAB AT THE SHEET'S EDGE LEAVES THE GRID. Inside, Tab is the next cell —
+    // the data-entry run — but at the last column (or Shift+Tab at the first)
+    // there is no next cell, and swallowing the key there made the grid a
+    // keyboard trap: nothing after it (the panel, the sheet tabs) could be
+    // reached with Tab at all. Returning false hands the key to the browser,
+    // which moves focus on, as it would out of any other control.
+    if (a.kind === 'tab' && !this.sel.isRange()) {
+      const next = this.sel.cursor.col + (a.back ? -1 : 1)
+      if (next < 0 || next >= this.sel.cols) return false
+    }
 
     const moved = applyMotion(this.sel, a, {
       page: Math.max(1, Math.floor(this.scroller.clientHeight / ROW_H) - 1),
@@ -2694,8 +2821,8 @@ export class Grid {
     if (!s) return ''
     const cell = s.cells[canvasKey(row, col)]
     if (typeof cell?.f === 'string') return cell.f
-    const v = cell && 'v' in cell ? cell.v : null
-    return v == null ? '' : String(v)
+    // the ENTERED form (`100%`, `$300.50`), not the stored 1 — finding 2.8
+    return enteredForm(cell)
   }
 
   private paintCanvas(s: CanvasSheet, hadFocus = false): void {
@@ -2801,7 +2928,7 @@ export class Grid {
     const surface = this.table.parentElement!
     surface.style.backgroundImage = ''
     this.head.innerHTML = this.canvasHeader(c0, c1, lefts, padLeft, box)
-    this.table.innerHTML = body.join('') + this.canvasOutline(rs, lefts, ext)
+    this.table.innerHTML = body.join('') + this.canvasOutline(rs, lefts, ext) + this.antsHtml((b) => this.canvasRect(b))
     this.foot.hidden = true
     this.foot.innerHTML = ''
     this.foot.removeAttribute('aria-rowindex')
@@ -2822,12 +2949,12 @@ export class Grid {
    *  spreadsheet's columns are not typed and cannot be — see the header note. */
   private canvasHeader(
     c0: number, c1: number, lefts: number[], padLeft: number,
-    box: { left: number; right: number },
+    _box: { left: number; right: number },
   ): string {
     const pad = padLeft > 0 ? `<div class="dg-cell dg-pad" style="width:${padLeft}px"></div>` : ''
     let out = `<div class="dg-cell dg-corner" role="columnheader" aria-colindex="1" tabindex="-1" data-all="1" title="${esc(t('Select every cell in the sheet'))}"></div>${pad}`
     for (let c = c0; c < c1; c++) {
-      const on = c >= box.left && c <= box.right ? ' dg-h-on' : ''
+      const on = this.colLit(c) ? ' dg-h-on' : ''
       // NO `aria-sort`: a spreadsheet's columns are not sortable, and `none`
       // would say they are but are not sorted, which is a different claim.
       out += `<div class="dg-cell dg-h dg-ch${on}" role="columnheader" aria-colindex="${ariaColIndex(c)}" tabindex="-1" data-ci="${c}" style="width:${lefts[c + 1] - lefts[c]}px">` +
@@ -2884,12 +3011,13 @@ export class Grid {
         document.addEventListener('mouseup', up)
       }
     }
-    this.head.querySelectorAll<HTMLElement>('.dg-letter').forEach((el) => {
-      el.onclick = () => {
-        const ci = Number(el.closest<HTMLElement>('[data-ci]')?.dataset.ci)
-        if (!Number.isFinite(ci)) return
-        this.sel.selectCol(ci)
-        this.paint(); this.announce()
+    // The whole letter cell selects the column, shift extends, ⌘ adds — the
+    // same gesture as a dataset header (see `wire`).
+    this.head.querySelectorAll<HTMLElement>('.dg-h[data-ci]').forEach((el) => {
+      el.onmousedown = (e) => {
+        if (e.button !== 0) return
+        if ((e.target as HTMLElement).dataset.cgrip !== undefined) return
+        this.headerSelect(Number(el.dataset.ci), e)
       }
     })
     const corner = this.head.querySelector<HTMLElement>('.dg-corner')
@@ -2961,6 +3089,7 @@ export class Grid {
       const ci = Number(el.dataset.ci)
       el.onmousedown = (e) => {
         if (e.button !== 0) return
+        e.preventDefault?.()   // keep focusGrid's focus — see the dataset cell's mousedown
         if (e.shiftKey) this.sel.extendTo(row, ci)
         else this.sel.moveTo(row, ci)
         this.paint(); this.announce(); this.focusGrid()
@@ -3044,11 +3173,21 @@ export class Grid {
       // deliberately so — the two editors differ only in what a cell IS.
       if (write && !isFormula(typed)) {
         const rule = canvasRuleAt(canvasRules(this.canvas ?? s), row, col)
-        const why = this.refusal(rule, canvasValue(typed))
+        const why = this.refusal(rule, coerceInput((this.canvas ?? s).cells[key], typed)?.v ?? '')
+        if (why !== null) { this.refuse(cell, why); return }
+      }
+      // A formula that does not PARSE is refused, not committed (finding 3.4).
+      // `=A11+` used to land and show #VALUE!, which reads as "A11 holds
+      // something odd" when the fault is the typing. Excel stops at "There's a
+      // problem with this formula"; Sheets keeps the editor open with the
+      // error beside it. So does this, and Escape abandons the edit.
+      if (write && isFormula(typed.trim()) && !isTextFormat((this.canvas ?? s).cells[key]?.format)) {
+        const why = formulaRefusal(typed.trim())
         if (why !== null) { this.refuse(cell, why); return }
       }
       cell.classList.remove('dv-refused')
       cell.removeAttribute('title')
+      this.dropRefusalTip()
       done = true
       this.cvEditing = null
       const text = typed
@@ -3085,6 +3224,7 @@ export class Grid {
     cell.onblur = () => finish(true)
     cell.onkeydown = (e) => {
       e.stopPropagation()
+      if (this.pointKey(e)) return
       if (e.key === 'Enter') { e.preventDefault(); finish(true, e.shiftKey ? 'up' : 'down'); return }
       if (e.key === 'Tab') { e.preventDefault(); finish(true, e.shiftKey ? 'left' : 'right'); return }
       if (e.key === 'Escape') { e.preventDefault(); finish(false) }
@@ -3123,8 +3263,7 @@ export class Grid {
         // A pasted value is already typed when it came from this grid; text
         // from another application arrives as a string and is read the same way
         // a typed cell is, so `1,200` from Numbers means what it does here.
-        const text = val == null ? '' : String(val)
-        const next = canvasCellEdit(had, text)
+        const next = canvasCellPut(had, val)
         if (next !== null || had !== undefined) cells[key] = next
       })
     })
@@ -3212,7 +3351,27 @@ export class Grid {
     cell.classList.add('dv-refused')
     cell.title = why
     if (this.descEl) this.descEl.textContent = why
+    // VISIBLE, under the cell. A title is a tooltip nobody hovers for while
+    // typing, and a red outline alone says "no" without saying why — the
+    // reader was left pressing Enter at a cell that would not take it.
+    this.dropRefusalTip()
+    const tip = document.createElement('div')
+    tip.className = 'dg-refuse-tip'
+    tip.setAttribute('role', 'alert')
+    tip.textContent = `${why} ${t('Press Esc to cancel.')}`
+    const r = cell.getBoundingClientRect()
+    tip.style.left = `${Math.round(r.left)}px`
+    tip.style.top = `${Math.round(r.bottom + 4)}px`
+    document.body.appendChild(tip)
+    this.refuseTip = tip
     cell.focus()
+  }
+
+  private refuseTip: HTMLElement | null = null
+
+  private dropRefusalTip(): void {
+    this.refuseTip?.remove()
+    this.refuseTip = null
   }
 
   private wire(): void {
@@ -3243,24 +3402,29 @@ export class Grid {
         document.addEventListener('mouseup', up)
       }
     }
-    this.head.querySelectorAll<HTMLElement>('.dg-name').forEach((el) => {
-      el.onclick = () => {
-        const col = el.closest<HTMLElement>('[data-col]')?.dataset.col
-        if (col) this.toggleSort(col)
+    // A HEADER CLICK SELECTS THE COLUMN. It used to SORT, which is the opposite
+    // of what Excel, Sheets, Numbers and Airtable all do, and the selection
+    // stayed on the old rectangle, which after the sort covered different rows.
+    // Sorting is a command now (the ▾ menu and the right-click menu), never a
+    // side effect of aiming at a column. Shift extends, ⌘/Ctrl adds.
+    this.head.querySelectorAll<HTMLElement>('.dg-h[data-ci]').forEach((el) => {
+      el.onmousedown = (e) => {
+        if (e.button !== 0) return
+        // the grip, the type chip, the ▾ and an open rename have their own jobs
+        if ((e.target as HTMLElement).closest('[data-grip], [data-retype], [data-filter], .dg-rename')) return
+        this.headerSelect(Number(el.dataset.ci), e)
       }
     })
-    // select a whole column by its letter, the whole sheet by the corner
-    this.head.querySelectorAll<HTMLElement>('.dg-letter').forEach((el) => {
-      el.onclick = () => {
-        // `closest`, not `parentElement`: the letter sits inside a strip now,
-        // and reading `ci` off the immediate parent gave NaN the moment the
-        // header grew a second line.
-        const ci = Number(el.closest<HTMLElement>('[data-ci]')?.dataset.ci)
-        if (!Number.isFinite(ci)) return
-        this.sel.selectCol(ci)
-        this.paint(); this.announce()
-      }
-    })
+    // Double-click the NAME renames the column in place (Airtable's gesture).
+    // On the header ROW, which outlives every paint, rather than on the name
+    // node, which a paint between the two clicks would replace.
+    this.head.ondblclick = (e) => {
+      const name = (e.target as HTMLElement | null)?.closest?.('.dg-name')
+      const col = name?.closest<HTMLElement>('[data-col]')?.dataset.col
+      if (!col || this.canvas) return
+      e.stopPropagation()
+      this.renameColumnInPlace(col)
+    }
     // THE COLUMN GUTTER, right-clicked. On the WHOLE header cell and not just
     // the letter strip: the reader aiming at "this column" aims at the name,
     // the type badge or the letter without distinguishing between them, and a
@@ -3390,6 +3554,7 @@ export class Grid {
       const ci = Number(el.dataset.ci)
       el.onmousedown = (e) => {
         if (e.button !== 0) return
+        e.preventDefault?.()   // keep focusGrid's focus — see the dataset cell's mousedown
         this.sel.moveTo(row, ci)
         this.paint(); this.announce(); this.focusGrid()
       }
@@ -3400,6 +3565,13 @@ export class Grid {
       const ci = Number(el.dataset.ci)
       el.onmousedown = (e) => {
         if (e.button !== 0) return
+        // OURS, NOT THE BROWSER'S: focusGrid() below puts focus on the cursor
+        // cell, and the browser's own mousedown focus step runs AFTER this
+        // handler — on a node paint() may just have replaced. On CI's Linux
+        // Chromium that left activeElement at BODY after every click, so the
+        // next Tab walked to the top bar instead of the next cell. Cancelling
+        // the default keeps the focus we set (and stops a drag selecting text).
+        e.preventDefault?.()   // (rigs drive this with a plain object)
         if (e.shiftKey) this.sel.extendTo(row, ci)
         else this.sel.moveTo(row, ci)
         this.paint(); this.announce()
@@ -3443,30 +3615,154 @@ export class Grid {
    * Sorting is VIEW state. It sorts the order vector and never the data, so it
    * takes no checkpoint, sets no dirty flag and produces no op.
    */
-  private toggleSort(colId: string): void {
-    const dir = this.sort?.col === colId && this.sort.dir === 'asc' ? 'desc' : 'asc'
-    this.sort = { col: colId, dir }
-    // Shift-click accumulates keys; a plain click replaces them. filter.ts's
-    // buildOrder does the multi-key comparison and sinks blanks in BOTH
-    // directions, which the hand-rolled single-key sort here did not.
-    this.sorts = [{ col: colId, dir }]
-    this.applyView()
-  }
-
-  /** Add or replace a sort key without clearing the others — shift-click. */
+  /** Add or replace a sort key without clearing the others. filter.ts's
+   *  buildOrder does the multi-key comparison and sinks blanks both ways. */
   addSort(colId: string, dir: 'asc' | 'desc'): void {
-    this.sorts = this.sorts.filter((k) => k.col !== colId).concat({ col: colId, dir })
-    this.sort = { col: colId, dir }
-    this.applyView()
+    this.keepRows(() => {
+      this.sorts = this.sorts.filter((k) => k.col !== colId).concat({ col: colId, dir })
+      this.sort = { col: colId, dir }
+      this.applyView()
+    })
   }
 
   setFilter(colId: string, f: ColumnFilter | null): void {
-    this.filters = this.filters.filter((x) => x.col !== colId)
-    if (f) this.filters.push(f)
-    this.applyView()
+    this.keepRows(() => {
+      this.filters = this.filters.filter((x) => x.col !== colId)
+      if (f) this.filters.push(f)
+      this.applyView()
+    })
   }
 
-  clearView(): void { this.filters = []; this.sorts = []; this.sort = null; this.applyView() }
+  clearView(): void {
+    this.keepRows(() => { this.filters = []; this.sorts = []; this.sort = null; this.applyView() })
+  }
+
+  /**
+   * A VIEW CHANGE MUST NOT MOVE THE SELECTION ONTO OTHER ROWS.
+   *
+   * The selection is held in VISIBLE positions (select.ts says why), so a sort
+   * or filter that reorders the rows underneath it left the highlight on the
+   * same screen rectangle, which now covered different records: the review
+   * sorted by Owner and the selection sat over rows nobody had picked. Here the
+   * selected ROWS are followed by identity instead:
+   *   • whole columns stay whole columns (they cover every row either way);
+   *   • single-row ranges, cells included, move to wherever their row went;
+   *   • a taller block cannot stay a block once its rows scatter, so it
+   *     collapses to the cursor cell, which follows its row.
+   * A row the new view hides takes the cursor to the top. The copy marks go:
+   * they described positions that no longer hold what was copied.
+   */
+  private keepRows(change: () => void): void {
+    if (this.canvas) { change(); return }
+    const s = this.sheet
+    const rows0 = this.sel.rows
+    const ridOf = (v: number): number => ridAt(this.store, s, v)
+    const ranges = this.sel.ranges().map(normalize)
+    const whole = ranges.every((b) => b.top === 0 && b.bottom >= rows0 - 1)
+    const thin = ranges.every((b) => b.top === b.bottom)
+    const rangeRids = ranges.map((b) => ridOf(b.top))
+    const curRid = ridOf(this.sel.cursor.row)
+    const cur = { ...this.sel.cursor }
+    this.copyMark = null
+    change()
+    this.sel.resize(this.selRows(), cols(s).length)
+    const order = this.store.order[s.id]
+    const posOf = (rid: number): number => {
+      if (rid < 0) return -1
+      const r = dataRow(s, rid)
+      if (r < 0) return -1
+      return order ? order.indexOf(r) : r
+    }
+    if (whole) {
+      const all = ranges.map((b) => ({ anchor: { row: 0, col: b.left }, head: { row: this.sel.rows - 1, col: b.right } }))
+      this.sel.moveTo(0, ranges[0].left)
+      this.sel.active = all[all.length - 1]
+      this.sel.extra = all.slice(0, -1)
+      this.sel.cursor = this.sel.clamp(Math.max(0, posOf(curRid)), cur.col)
+    } else if (thin && rangeRids.every((r) => posOf(r) >= 0)) {
+      const moved = ranges.map((b, i) => {
+        const row = posOf(rangeRids[i])
+        return { anchor: { row, col: b.left }, head: { row, col: b.right } }
+      })
+      const at = posOf(curRid)
+      this.sel.moveTo(at >= 0 ? at : moved[moved.length - 1].anchor.row, cur.col)
+      this.sel.active = moved[moved.length - 1]
+      this.sel.extra = moved.slice(0, -1)
+    } else {
+      const at = posOf(curRid)
+      this.sel.moveTo(at >= 0 ? at : 0, cur.col)
+    }
+    this.paint()
+    this.announce()
+  }
+
+  /**
+   * A header mousedown: select the column (plain), extend to it (shift), add
+   * it (⌘/Ctrl). Shared by both sheet kinds.
+   */
+  private headerSelect(ci: number, e: MouseEvent): void {
+    if (!Number.isFinite(ci)) return
+    const was = JSON.stringify([this.sel.ranges(), this.sel.cursor])
+    if (e.shiftKey) this.sel.extendCol(ci)
+    else if (e.metaKey || e.ctrlKey) this.sel.addCol(ci)
+    else this.sel.selectCol(ci)
+    // NO REPAINT WHEN NOTHING CHANGED. The second click of a double-click
+    // lands on a column the first one already selected; repainting there
+    // replaced the header under the pointer between mousedown and mouseup, so
+    // the dblclick went to the header ROW and the rename never opened.
+    if (JSON.stringify([this.sel.ranges(), this.sel.cursor]) === was) { this.focusGrid(); return }
+    this.paint(); this.announce(); this.focusGrid()
+  }
+
+  /** Does any selected range cover visible column `ci`? (the lit headers) —
+   *  per range, not the bounding box, or ⌘-clicking B then E lit C and D. */
+  private colLit(ci: number): boolean {
+    return this.sel.ranges().some((r) => {
+      const b = normalize(r)
+      return ci >= b.left && ci <= b.right
+    })
+  }
+
+  /**
+   * Rename a dataset column ON the grid: the name becomes a field, Enter or a
+   * click away commits ONE `setColumn` (one undo step, the same patch the
+   * panel's Name field writes), Escape puts the old name back untouched.
+   */
+  private renameColumnInPlace(colId: string): void {
+    if (this.store.readOnly || this.canvas) return
+    const cell = this.head.querySelector<HTMLElement>(`.dg-h[data-col="${colId}"]`)
+    const label = cell?.querySelector<HTMLElement>('.dg-name')
+    const col = this.sheet.columns.find((c) => c.id === colId)
+    if (!cell || !label || !col) return
+    const input = document.createElement('input')
+    input.className = 'dg-rename'
+    input.value = col.name
+    input.spellcheck = false
+    input.setAttribute('aria-label', t('Column name'))
+    label.replaceWith(input)
+    input.focus()
+    input.select()
+    let done = false
+    const finish = (write: boolean): void => {
+      if (done) return
+      done = true
+      const v = input.value.trim()
+      const sheetId = this.sheetId
+      if (write && v && v !== col.name) {
+        this.store.commit({ op: 'setColumn', sheet: sheetId, col: colId, patch: { name: v } })
+      } else this.paint()
+      this.focusGrid()
+    }
+    input.addEventListener('blur', () => finish(true))
+    input.addEventListener('mousedown', (e) => e.stopPropagation())
+    input.addEventListener('dblclick', (e) => e.stopPropagation())
+    input.addEventListener('keydown', (e) => {
+      // the grid owns bare keys otherwise, and a typed letter would land in a cell
+      e.stopPropagation()
+      if (e.key === 'Enter') { e.preventDefault(); finish(true) }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false) }
+    })
+  }
 
   /**
    * Open a cell for editing.
@@ -3496,7 +3792,7 @@ export class Grid {
     const src = this.formulaAtPos(dataRow(s, rid), s.columns.findIndex((c) => c.id === colId))
     cell.textContent = seed !== undefined ? seed
       : src !== undefined ? src
-        : (raw == null ? '' : String(raw))
+        : datasetEntered(raw, col)   // the entered form, not the stored number (2.8)
     cell.focus()
     const range = document.createRange()
     range.selectNodeContents(cell)
@@ -3517,6 +3813,7 @@ export class Grid {
       }
       cell.classList.remove('dv-refused')
       cell.removeAttribute('title')
+      this.dropRefusalTip()
       done = true
       this.editing = null
       const text = typed
@@ -3578,10 +3875,202 @@ export class Grid {
       // the event reaches the document the "is something being edited?" guard
       // there no longer sees an editor — and Enter moved the cursor twice.
       e.stopPropagation()
+      if (this.pointKey(e)) return
       if (e.key === 'Enter') { e.preventDefault(); finish(true, e.shiftKey ? 'up' : 'down'); return }
       if (e.key === 'Tab') { e.preventDefault(); finish(true, e.shiftKey ? 'left' : 'right'); return }
       if (e.key === 'Escape') { e.preventDefault(); finish(false) }
     }
+  }
+
+  // --- POINT MODE ------------------------------------------------------------
+  //
+  // While a formula is being typed and the caret sits where an operand goes
+  // (pointref.ts `acceptsRef`), clicking a cell or pressing an arrow key puts
+  // that cell's ADDRESS into the formula instead of committing it — Excel's,
+  // Sheets' and Numbers' most basic formula gesture. Shift (click or arrow)
+  // grows it to a range, a drag draws one, and a second click REPLACES the
+  // address just inserted rather than appending another. Any other key ends
+  // the pointing and the address stays as typed text. Clicking another sheet's
+  // tab inserts `Sheet!A1`, and the arrows then walk that sheet.
+  //
+  // The editor is never repainted while pointing — a paint rebuilds the rows
+  // and would take the contentEditable cell with it — so the range highlight
+  // is one box laid over the sizer by hand, and goes with the next paint.
+
+  private point: {
+    cell: HTMLElement
+    /** where the inserted address sits in the editor's text */
+    start: number
+    end: number
+    /** VISIBLE positions on this sheet; plain positions on `sheet` */
+    anchor: Pos
+    head: Pos
+    sheet?: { id: string; name: string }
+  } | null = null
+
+  /** Is a formula edit waiting for a reference? (tabs.ts asks before switching) */
+  isPointing(): boolean { return this.pointable() !== null }
+
+  /** The editing cell, when its caret is somewhere an address can go. */
+  private pointable(): HTMLElement | null {
+    if (!this.editing && !this.cvEditing) return null
+    const cell = this.table.querySelector<HTMLElement>('.dg-editing')
+    if (!cell) return null
+    const c = this.caretIn(cell)
+    if (!c) return null
+    const p = this.point
+    if (p && p.cell === cell && c.end === p.end && (c.start === p.start || c.start === c.end)) return cell
+    if (c.start !== c.end) return null
+    return acceptsRef((cell.textContent ?? '').slice(0, c.start)) ? cell : null
+  }
+
+  /** The editor's selection as text offsets, or null when it is elsewhere. */
+  private caretIn(cell: HTMLElement): { start: number; end: number } | null {
+    const sel = getSelection()
+    if (!sel || !sel.rangeCount) return null
+    const r = sel.getRangeAt(0)
+    if (!cell.contains(r.startContainer) || !cell.contains(r.endContainer)) return null
+    const pre = document.createRange()
+    pre.selectNodeContents(cell)
+    pre.setEnd(r.startContainer, r.startOffset)
+    const start = pre.toString().length
+    pre.setEnd(r.endContainer, r.endOffset)
+    return { start, end: pre.toString().length }
+  }
+
+  /** The address of a visible rectangle on THIS sheet, as a formula spells it. */
+  private refFor(a: Pos, b: Pos): string {
+    if (this.canvas) return refText(a, b)
+    // A dataset formula addresses the FILE's rows and columns (cellformula.ts
+    // `tableCellSource`): hidden columns count, and a sorted view's row 1 is
+    // not the file's row 1. So the clicked visible cell is translated first.
+    const s = this.sheet
+    const vis = cols(s)
+    const canon = (p: Pos): Pos => {
+      const r = this.canonicalRow(p.row)
+      const c = s.columns.indexOf(vis[p.col])
+      return { row: r < 0 ? rowCount(s) : r, col: c < 0 ? p.col : c }
+    }
+    return refText(canon(a), canon(b))
+  }
+
+  /** Insert (or replace) the pointed-at address. False when nothing is pointable. */
+  private pointTo(anchor: Pos, head: Pos, sheet?: { id: string; name: string }): boolean {
+    const cell = this.pointable()
+    if (!cell) return false
+    const c = this.caretIn(cell)!
+    const p = this.point && this.point.cell === cell && c.end === this.point.end ? this.point : null
+    const start = p ? p.start : c.start
+    const end = p ? p.end : c.end
+    const ref = sheet ? refText(anchor, head, sheet.name) : this.refFor(anchor, head)
+    const text = cell.textContent ?? ''
+    cell.textContent = text.slice(0, start) + ref + text.slice(end)
+    const at = start + ref.length
+    const node = cell.firstChild ?? cell
+    const range = document.createRange()
+    range.setStart(node, at)
+    range.collapse(true)
+    getSelection()?.removeAllRanges()
+    getSelection()?.addRange(range)
+    this.point = { cell, start, end: at, anchor, head, sheet }
+    this.drawPoint()
+    return true
+  }
+
+  /** The coloured box over the pointed-at range (this sheet only). */
+  private drawPoint(): void {
+    this.table.querySelector('.dg-point')?.remove()
+    const p = this.point
+    if (!p || p.sheet) return
+    const box: Box = {
+      top: Math.min(p.anchor.row, p.head.row), bottom: Math.max(p.anchor.row, p.head.row),
+      left: Math.min(p.anchor.col, p.head.col), right: Math.max(p.anchor.col, p.head.col),
+    }
+    const g = this.canvas ? this.canvasRect(box) : this.datasetRect(box)
+    if (!g) return
+    const el = document.createElement('div')
+    el.className = 'dg-point'
+    el.setAttribute('aria-hidden', 'true')
+    el.style.cssText = `left:${g.left}px;top:${g.top}px;width:${g.width}px;height:${g.height}px`
+    this.table.appendChild(el)
+  }
+
+  private endPoint(): void {
+    if (!this.point) return
+    this.point = null
+    this.table.querySelector('.dg-point')?.remove()
+  }
+
+  /**
+   * A key pressed inside a cell editor: an arrow while pointable points, and
+   * anything else that is not a bare modifier ends the pointing. True when the
+   * key was consumed.
+   */
+  private pointKey(e: KeyboardEvent): boolean {
+    const step: Record<string, [number, number]> = {
+      ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1],
+    }
+    const d = step[e.key]
+    if (d && !e.metaKey && !e.ctrlKey && !e.altKey && this.pointable()) {
+      e.preventDefault()
+      const p = this.point
+      const from = p ? p.head : { ...this.sel.cursor }
+      const rows = p?.sheet ? Infinity : this.sel.rows
+      const colsN = p?.sheet ? Infinity : this.sel.cols
+      const next = {
+        row: Math.max(0, Math.min(rows - 1, from.row + d[0])),
+        col: Math.max(0, Math.min(colsN - 1, from.col + d[1])),
+      }
+      this.pointTo(e.shiftKey ? (p?.anchor ?? from) : next, next, p?.sheet)
+      return true
+    }
+    if (!['Shift', 'Meta', 'Control', 'Alt'].includes(e.key)) this.endPoint()
+    return false
+  }
+
+  /** A mousedown anywhere on the body, CAPTURE phase: point instead of commit. */
+  private pointMouse(e: MouseEvent): void {
+    if (e.button !== 0) return
+    const editor = this.pointable()
+    if (!editor) return
+    const tgt = (e.target as HTMLElement | null)?.closest?.('.dg-cell[data-ci]') as HTMLElement | null
+    const rowEl = tgt?.closest<HTMLElement>('.dg-row[data-row]')
+    if (!tgt || !rowEl || tgt === editor || !this.table.contains(tgt)) return
+    // preventDefault keeps focus (and the caret) in the editor: without it the
+    // editor blurs, and blur is a commit.
+    e.preventDefault()
+    e.stopPropagation()
+    const at = (el: HTMLElement, row: HTMLElement): Pos => ({ row: Number(row.dataset.row), col: Number(el.dataset.ci) })
+    const pos = at(tgt, rowEl)
+    const p = this.point
+    const anchor = e.shiftKey && p && !p.sheet ? p.anchor : pos
+    this.pointTo(anchor, pos)
+    const move = (m: MouseEvent): void => {
+      const x = (m.target as HTMLElement | null)?.closest?.('.dg-cell[data-ci]') as HTMLElement | null
+      const xr = x?.closest<HTMLElement>('.dg-row[data-row]')
+      if (!x || !xr || x === editor) return
+      const h = at(x, xr)
+      if (this.point && h.row === this.point.head.row && h.col === this.point.head.col) return
+      this.pointTo(anchor, h)
+    }
+    const up = (): void => {
+      document.removeEventListener('mousemove', move)
+      document.removeEventListener('mouseup', up)
+    }
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', up)
+  }
+
+  /**
+   * Another sheet's tab, clicked while pointing: `Sheet!A1` goes in and the
+   * edit stays open on this sheet. True when the click was consumed.
+   */
+  pointToSheet(id: string): boolean {
+    if (!this.pointable()) return false
+    if (id === this.sheetId) return true
+    const sh = this.store.doc.sheets.find((x) => x.id === id)
+    if (!sh) return false
+    return this.pointTo({ row: 0, col: 0 }, { row: 0, col: 0 }, { id, name: sh.name })
   }
 
   /**
@@ -3670,12 +4159,31 @@ export function coerceForColumn(text: string, type: ColumnType): unknown {
   const s = text.trim()
   if (s === '') return null
   if (type === 'number' || type === 'money' || type === 'percent') {
-    const n = Number(s.replace(/[,\s£$€¥%]/g, ''))
-    if (!Number.isFinite(n)) return s        // keep what they typed rather than
-    return type === 'percent' && s.includes('%') ? n / 100 : n  // silently zeroing
+    // import.ts's reader, as the spreadsheet kind uses: `£1,234.50`, `(5)`,
+    // and `12,5 %` to a German reader all mean what they say, and text that is
+    // not a whole number (`12abc`) is kept rather than read as its digits.
+    // A `%` divides by 100 in ANY numeric column — `15%` is 0.15 wherever it
+    // is typed — and a bare `15` in a percent column stays 15, as before.
+    const r = readEntryNumber(s, { prefer: viewerDecimal() })
+    return r ? r.n : s                      // keep what they typed rather than silently zeroing
   }
   if (type === 'bool') return /^(y|yes|true|1|✓)$/i.test(s)
   return s
+}
+
+/**
+ * A dataset cell's value in the form somebody would TYPE it — what the
+ * formula bar and the cell editor show (finding 2.8: a Percent column's 1 read
+ * `1` in the bar while the cell read 100%). The column's type says percent or
+ * money; `coerceForColumn` reads the result back to the same value.
+ */
+export function datasetEntered(v: unknown, col: Pick<Column, 'type' | 'format'>): string {
+  if (v == null) return ''
+  if (typeof v === 'number') {
+    const kind = col.type === 'percent' ? 'percent' : col.type === 'money' ? 'currency' : 'plain'
+    return enteredNumber(v, kind, col.format)
+  }
+  return String(v)
 }
 
 /** Where a data bar starts, as a percentage — negatives run left of the axis. */

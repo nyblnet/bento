@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 publish = false
-description = "bento/id agent core for the desktop host (Windows, Linux): the signed statements, key storage and the agent contract"
+description = "bento/connect agent core for the desktop host (Windows, Linux): the signed statements, key storage and the agent contract"
 
 [dependencies]
 p256 = { version = "0.13", features = ["ecdsa"] }
@@ -19,13 +19,18 @@ unicode-normalization = "0.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 tss-esapi = { version = "7", optional = true }
-secret-service = { version = "5", features = ["rt-async-io-crypto-rust"], optional = true }
 
 [features]
 # the Linux TPM key store (needs libtss2)
 tpm = ["dep:tss-esapi"]
-# the Linux no-TPM key store (freedesktop Secret Service)
-keyring = ["dep:secret-service"]
+# the Linux no-TPM key store: the DISTRIBUTION libsecret (thin in-tree FFI)
+keyring = []
+# security keys through the DISTRIBUTION libfido2 (>= 1.12), Linux only
+fido = []
+# TEST-ONLY mutants for the PRF interop rig (fido-rig.sh): each must make
+# tests/fido_interop.rs FAIL. Never enabled in a shipped build.
+rig-mutant-double-hash = ["fido"]
+rig-mutant-raw-hash = ["fido"]
 # the in-memory software key store: tests and rigs only, never a shipped path
 test-store = []
 

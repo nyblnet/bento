@@ -515,7 +515,13 @@ export function colourControl(
   input.type = 'color'
   input.value = /^#[0-9a-f]{6}$/i.test(value) ? value : fallback
   input.disabled = readOnly
-  if (!value) wrap.classList.add('dc-colour-off')
+  // UNSET is an empty well (cellprops.css), never the fallback colour: the
+  // fallback is only where the OS picker opens. Said in words too, for anyone
+  // not reading the swatch.
+  if (!value) {
+    wrap.classList.add('dc-colour-off')
+    input.title = t('Not set')
+  }
   // `change`, never `input`: a drag through the OS colour wheel fires input on
   // every pixel, and every one of those would be an undo step.
   input.addEventListener('change', () => onChange(input.value))

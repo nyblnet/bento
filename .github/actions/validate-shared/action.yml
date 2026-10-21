@@ -1,0 +1,127 @@
+# validate, shared slice: The shared surface (scripts/, site tooling, i18n packs): checks that span every app. Runs LAST, after every shell is built.
+#
+# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# action as steps INSIDE that one job, on the same runner, after the slices
+# listed before it there — so what earlier slices installed and built is on
+# disk here. A failing step here fails `validate` and blocks the merge.
+#
+# Add a new rig's step to the slice of the zone that owns the rig, at the
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
+
+name: validate-shared
+description: validate, shared slice (runs inside the required validate job)
+runs:
+  using: composite
+  steps:
+    - name: Language coverage
+      # Core catalogs ship inside every saved file and cannot be corrected
+      # without a release, so they must be complete. Packs are downloadable
+      # and re-publishable on their own, so they get a floor and a report.
+      shell: bento-step {0}
+      run: node scripts/test-i18n-coverage.mjs
+
+    - name: Language packs build and index cleanly
+      # Emits every pack and builds the index payload WITHOUT signing (--dry
+      # writes nothing and needs no key — signing stays local, see the header).
+      # Catches a malformed pack catalog (missing label, duplicate language,
+      # wrong app) here rather than mid-release.
+      shell: bento-step {0}
+      run: |
+        node scripts/build-i18n.mjs --packs "$RUNNER_TEMP/packs"
+        node scripts/sign-packs.mjs "$RUNNER_TEMP/packs" --dry
+
+    - name: Shell sizes
+      # TWO MECHANISMS, DELIBERATELY. This one and the advisory PR build-size
+      # comment (.github/workflows/pr-build-size*.yml) answer different
+      # questions, and deleting either as "duplicate measurement" loses a
+      # class of regression:
+      #
+      #   this step  — ABSOLUTE and PERSISTENT. A shell with enforce:true has
+      #     a ceiling and FAILS here; a shell with enforce:false prints its
+      #     drift from a committed `reference` and never fails. It is the only
+      #     thing that sees SLOW drift — forty merged commits at 300 B each,
+      #     where every single PR looked fine on its own.
+      #   the PR comment — RELATIVE and PER-PR. It reports this PR against its
+      #     own base and never fails. It is the only thing that attributes a
+      #     jump to the change that caused it, and it is blind to accumulated
+      #     drift.
+      #
+      # Neither subsumes the other. Rationale in docs/DECISIONS.md.
+      #
+      # Placed after ALL THREE builds on purpose: the rig skips a shell that
+      # is not built, so while this sat in the spaces section it silently
+      # measured nothing for dash. bento/spaces has NO CEILING as of
+      # 2026-08-24 (the maintainer's call; at 98.6% it had started deciding
+      # which fixes were affordable) — the step still prints its size and
+      # drift, it just no longer fails on it.
+      shell: bento-step {0}
+      run: node scripts/test-spaces-size.mjs
+
+    - name: App registry rig
+      # scripts/apps.mjs drives what a release builds, stages and signs. A
+      # release SIGNS, and the key never reaches CI, so the pipeline itself
+      # cannot be tested here — but the registry drifting from the tree can,
+      # and a wrong appId is silent: shipped shells verify it against their
+      # own configureApp() id and just stop updating.
+      shell: bento-step {0}
+      run: node scripts/test-release-apps.mjs
+
+    - name: Publish deletion-gate rig
+      # A publish assembles site/ for ONE app and mirrors it authoritatively.
+      # Measured: a spaces-shaped site/ deleted 47 live files — the signed
+      # shell, the manifest, all 22 packs — with every other gate green,
+      # because those gates are `if (existsSync(...))` and skip when the
+      # artifact is missing. Shipped files cannot recover from that.
+      shell: bento-step {0}
+      run: node scripts/test-publish-gate.mjs
+
+    - name: publish account gate — the release account is checked before the site goes live
+      # publish-site.mjs mirrored and pushed the site and THEN failed to
+      # create the GitHub release, three releases running, because gh was
+      # the work profile (a job/temp worktree). The gate runs before rsync;
+      # this rig pins the rule and the order.
+      shell: bento-step {0}
+      run: node scripts/test-publish-account.ts
+
+    - name: app payload fingerprint — a shell with no payload never passes the publish gates
+      # publish-site's shell-consistency gate hashed the shell and every deck
+      # to null when its matcher went stale, and null === null passed it while
+      # it checked nothing. One shared helper; null is "cannot tell", never a match.
+      shell: bento-step {0}
+      run: node scripts/test-apphash.ts
+
+    - name: every rig is actually run
+      # A rig nobody runs is worse than no rig, and it fails flatteringly: the
+      # file is there, the checks in it are good, git log shows it being
+      # maintained, and anyone counting coverage counts it. It just never
+      # executes, so nothing goes red and nothing says so. Five rigs landed in
+      # one afternoon — write-back, print, frontier, a11y, appearance — each
+      # written by a different agent told to write one, none of them knowing
+      # where this list lives; all five passed on disk and none were here.
+      # Also checks the reverse, since a step pointing at a deleted script
+      # fails every push for a reason unrelated to the change that triggered
+      # it, and prints the deliberate-exemption list on every run so it stays
+      # something people look at rather than somewhere failures go to hide.
+      shell: bento-step {0}
+      run: node scripts/test-ci-registered.ts
+
+    - name: Stylesheet brace balance
+      # Every tracked stylesheet's braces balance. A merge seam that eats one
+      # `}` leaves CSS that still builds — an unclosed `@media print {` makes
+      # every later rule print-only, and the app ships unstyled while tsc, the
+      # build and the shell gate all pass.
+      shell: bento-step {0}
+      run: node scripts/test-css-balance.ts
+
+    - name: A rig that skips under CI fails its step
+      # The positive control for bento-step (scripts/ci/): the exact skip lines
+      # rigs printed on main are flagged and lines merely about skipping are
+      # not; a step whose rig skips exits non-zero, end to end, including the
+      # encrypted-title rig with jsdom hidden; only the allowlisted rigs may
+      # skip, each with a reason, and each entry's rig still prints the line;
+      # and every rig step in every CI file runs through the wrapper.
+      shell: bento-step {0}
+      run: node scripts/test-ci-skips.mjs

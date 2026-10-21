@@ -45,9 +45,9 @@ import {
   viewRows, unknownSourceKeys,
 } from '../spaces/src/fields.ts'
 import {
-  CAL_SPANS, spanOf, nextSpan, dateOf, dateFieldsOf, splitByDate, dateHint,
+  CAL_SPANS, spanOf, nextSpan, spanButton, dateOf, dateFieldsOf, dateOrderOf, splitByDate, dateHint,
   monthGrid, monthOf, monthLabel, stepMonth, daysApart, defaultMonth,
-  firstWeekday, weekdayNames, timelineDays,
+  firstWeekday, weekdayNames, agendaDays,
 } from '../spaces/src/calendar.ts'
 import {
   unknownFilterOps, clauseCount, clauseSummary, windowRange, opsFor,
@@ -428,9 +428,10 @@ for (const [label, input, err] of [
   // as slides keeps them; About no longer holds either
   const about = fs.readFileSync(new URL('../spaces/src/doccmds.ts', import.meta.url), 'utf8')
 
-  // the debounce body must stand down when encryption is on
-  const guarded = /if \(isEncryptionActive\(\)\) return[\s\S]{0,200}?putRecovery/.test(main)
-  ok(guarded, 'main.ts skips the recovery snapshot while a space is encrypted')
+  // the debounce body must stand down while the body is sealed: a password OR
+  // the identity seal (isBodySealed; isEncryptionActive is only the password)
+  const guarded = /if \(isBodySealed\(\)\) return[\s\S]{0,200}?putRecovery/.test(main)
+  ok(guarded, 'main.ts skips the recovery snapshot while a space is sealed (password or identity seal)')
 
   // and turning encryption ON must remove what was written before it
   ok(/clearVersions\(/.test(about) && /clearRecovery\(/.test(about),
@@ -445,8 +446,10 @@ for (const [label, input, err] of [
   ok(/addVersion\(/.test(main), 'main.ts writes a version timeline at all')
   const throttled = /Date\.now\(\) - lastVersionAt > VERSION_EVERY_MS[\s\S]{0,120}?addVersion/.test(main)
   ok(throttled, '…on a throttle while editing, so one session cannot spend the cap')
-  const saveGuarded = /if \(!isEncryptionActive\(\)\) \{ void addVersion/.test(main)
-  ok(saveGuarded, '…and the SAVE path checks encryption itself, having no early return above it')
+  const saveGuarded = /if \(!isBodySealed\(\)\) \{ void addVersion/.test(main)
+  ok(saveGuarded, '…and the SAVE path checks the seal itself, having no early return above it')
+  ok(!/isEncryptionActive/.test(main.replace(/\/\/.*$/gm, '')),
+    'main.ts asks isBodySealed everywhere: no plaintext-to-disk guard reads the password-only flag')
 
   // The restore has to go through replaceDoc: it is the one path that
   // checkpoints undo first, which is what makes the note "Restoring is
@@ -1829,8 +1832,11 @@ function fsTable(f: string): string {
     'the width is the READER\'s — localStorage under the key readers already have, never the document')
   ok(!/storageKey:/.test(ed.slice(ed.indexOf('private makePanel('), ed.indexOf('private syncScrim('))),
     '…written by the editor, not the primitive, so a phone drawer never persists a desktop preference')
-  ok(/if \(!this\.isDrawer\(\)\) \{\s*\n\s*try \{\s*\n\s*localStorage\.setItem\(o\.widthKey/.test(ed),
-    '…and only while the panel is a column')
+  // gated on the mode the CHANGE came from: the onChange that fires as the
+  // viewport crosses out of drawer width carries the drawer's state, and must
+  // not be written (test-spaces-chrome drives the behaviour)
+  ok(/if \(!drawer && !crossed\) \{\s*\n\s*desk = p\.collapsed\s*\n\s*try \{\s*\n\s*localStorage\.setItem\(o\.widthKey/.test(ed),
+    '…and only for a change made while the panel was already a column')
 
   const tabRule = kcss.slice(kcss.indexOf('.bkp-toggle {'), kcss.indexOf('}', kcss.indexOf('.bkp-toggle {')))
   ok(tabRule.length > 20 && !/opacity:\s*0\b/.test(tabRule), 'the collapse chevron is visible without hovering')
@@ -3990,12 +3996,42 @@ function fsTable(f: string): string {
   }
   ok(spanOf('quarter') === 'month', 'a span from a NEWER build falls back to the month grid')
 
+  // --- AGENDA, not Timeline (maintainer, 2026-10-20) -----------------------
+  // The calendar's second shape is called "Agenda" on screen because the gantt
+  // layout is "Timeline". The STORED value stays 'timeline': files already
+  // carry it, and renaming it would open every one of them as a month grid.
+  ok(spanButton('timeline').label === 'Agenda',
+    `the span button reads "Agenda" in the calendar's second shape (got ${JSON.stringify(spanButton('timeline').label)})`)
+  ok(spanButton('timeline').title === 'Show a month at a time',
+    '…and its tooltip says what the click shows next, the month grid')
+  ok(spanButton(undefined).label === 'Month' && spanButton(undefined).title === 'Show an agenda',
+    'the month grid\'s button reads "Month" and offers "Show an agenda"')
+  ok(!/timeline/i.test(spanButton('timeline').label + spanButton('timeline').title + spanButton('month').title),
+    'no word of the span button says "timeline" — that name is the gantt layout\'s')
+  ok(nextSpan(undefined) === 'timeline' && CAL_SPANS.includes('timeline' as never),
+    'toggling to the agenda still STORES span: \'timeline\' — the format did not change')
+
   // --- WHICH DATE ----------------------------------------------------------
   const cdoc = calDoc()
   ok(dateOf(cdoc, crow('a', '2026-08-06')) === '2026-08-06',
     'a journal entry is dated by its journal date')
   ok(dateOf(cdoc, crow('b', undefined, { due: '2026-08-09' })) === '2026-08-09',
-    '…a page without one falls to the first date FIELD it carries a value for')
+    '…a page with only a Due sits on its DUE day')
+  // A CALENDAR PREFERS DUE (maintainer, 2026-10-20). DEFAULT_FIELDS lists
+  // Start before Due and still does — the property strip keeps that order —
+  // so schema order alone would put a task with both on its START day.
+  ok(dateFieldsOf(cdoc).map((f) => f.key).join() === 'start,due',
+    'the fixture is the real trap: the default schema declares Start BEFORE Due')
+  ok(dateOf(cdoc, crow('sd', undefined, { start: '2026-08-03', due: '2026-08-14' })) === '2026-08-14',
+    'a page with BOTH a Start and a Due sits on its DUE day, not its start')
+  ok(dateOf(cdoc, crow('so', undefined, { start: '2026-08-03' })) === '2026-08-03',
+    '…a page with only a Start sits on its START day')
+  ok(dateOf(cdoc, crow('sj', '2026-08-01', { start: '2026-08-03', due: '2026-08-14' })) === '2026-08-01',
+    '…a journal page sits on its JOURNAL date, ahead of Due and Start')
+  ok(dateOf(cdoc, crow('sx', undefined, { start: '2026-08-03', due: '2026-13-99' })) === '2026-08-03',
+    '…and an INVALID Due beside a valid Start falls through to the START day')
+  ok(dateOrderOf(cdoc).map((f) => f.key).join() === 'due,start',
+    'the calendar reads Due first, then Start')
   ok(dateOf(cdoc, crow('c', '2026-08-06', { due: '2027-01-01' })) === '2026-08-06',
     '…and the journal date wins when a page has both')
   ok(dateOf(cdoc, crow('e')) === '', 'a page with neither has NO date rather than a guessed one')
@@ -4016,6 +4052,17 @@ function fsTable(f: string): string {
     ok(dateOf(two, crow('h', undefined, { due: '', pub: '2026-03-04' })) === '2026-03-04',
       'an EMPTY date field is skipped for the next one, not treated as the answer')
     ok(dateFieldsOf(two).length === 2, 'the hint names every date field the schema declares')
+    // Due is preferred wherever the schema puts it; the OTHER date fields keep
+    // schema order behind it
+    const three = calDoc([
+      { key: 'pub', label: 'Published', vt: 'date' },
+      { key: 'start', label: 'Start', vt: 'date' },
+      { key: 'due', label: 'Due', vt: 'date' },
+    ])
+    ok(dateOrderOf(three).map((f) => f.key).join() === 'due,pub,start',
+      'Due moves to the front from anywhere in the schema; the rest keep schema order')
+    ok(dateOf(three, crow('i', undefined, { pub: '2026-03-04', due: '2026-05-06' })) === '2026-05-06',
+      '…so a page with a Published and a Due sits on its Due')
   }
 
   // --- NOTHING IS DROPPED --------------------------------------------------
@@ -4203,12 +4250,12 @@ function fsTable(f: string): string {
   ok(defaultMonth(['nonsense', '2019-04-02'], '2026-08-20') === '2019-04',
     'a junk value in the list is ignored rather than deciding the month')
 
-  // --- THE TIMELINE --------------------------------------------------------
+  // --- THE AGENDA ----------------------------------------------------------
   {
     const rows = [crow('a', '2026-01-02'), crow('b', '2026-08-06'), crow('c', '2026-03-04')]
-    const days = timelineDays(splitByDate(cdoc, rows).days)
+    const days = agendaDays(splitByDate(cdoc, rows).days)
     ok(days.join(',') === '2026-08-06,2026-03-04,2026-01-02',
-      'the timeline reads NEWEST FIRST, whatever order the pages are in')
+      'the agenda reads NEWEST FIRST, whatever order the pages are in')
   }
 
   // --- THE HINT ------------------------------------------------------------
@@ -4216,6 +4263,8 @@ function fsTable(f: string): string {
   // it goes through t() as a literal with an interpolated list — a sentence
   // assembled from fragments does not survive the eight catalogs.
   ok(/Due/.test(dateHint(calDoc())), 'the view says out loud which date it used')
+  ok(dateHint(calDoc()) === 'Dated by the journal date, then Due, Start.',
+    `the hint states the REAL order, Due before Start (got ${JSON.stringify(dateHint(calDoc()))})`)
   ok(dateHint(calDoc([{ key: 'x', label: 'X', vt: 'text' }])) === 'Dated by the journal date.',
     '…and says so differently when the schema declares no date field at all')
   ok(dateHint(calDoc([{ key: 'due', vt: 'date' }])).includes('due'),

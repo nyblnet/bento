@@ -1,0 +1,51 @@
+# CI, home-android: this zone's own jobs — validate, never release (see ci.yml's header).
+#
+# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
+# merge; a job here reports beside it, exactly as it did when it lived in
+# ci.yml. Keep each job's id unchanged — the id IS the check name.
+#
+# Each job checks out and builds what it needs for itself. Add this zone's
+# new jobs here, at the end; never in ci.yml.
+
+name: CI (home-android)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
+  # the tip, every commit on main keeps its own run.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# No bento-step default here (see the other ci-<zone>.yml files): this job runs
+# Gradle, which prints SKIPPED as an ordinary task outcome, not a rig skip.
+
+jobs:
+  home-android-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      # RecoveryTest cross-checks Bouncy Castle's Argon2id against Node's native
+      # one on random cases every run (security §35), and never skips without it.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Android host unit tests
+        # The JVM rigs for home/android: which web origin a document may run
+        # under (a different file at a path a document used before must never
+        # read its storage), the signed new-document verifier, and the Kotlin
+        # port of the document index against home/fixtures. They need no
+        # emulator, and until this job nothing ran them — the corpus note in
+        # .github/actions/validate-home/action.yml said "the Kotlin port under Gradle" of a step that did not exist.
+        # The runner image ships the Android SDK (ANDROID_HOME); the wrapper is
+        # pinned at 8.14.3 because AGP 8 cannot run on Gradle 9.6+.
+        working-directory: home/android
+        run: ./gradlew --no-daemon testDebugUnitTest

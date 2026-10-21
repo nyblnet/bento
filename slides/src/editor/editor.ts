@@ -10,8 +10,7 @@ import {
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultCode, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   paginates, inLinearFlow,
-  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement
-} from '../model'
+  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
 import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, sandboxed, setAutoCheck, setOffline } from '../update'
@@ -26,7 +25,7 @@ import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
 // active password. serializeAuto is the only encryption-aware serializer.
-import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, hostCan, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, suggestedFileName, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, hostCan, isBodySealed, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, suggestedFileName, writeUpdatedFile, writeUpdatedFileAs } from '../save'
 import { createSaveQueue, saveRevision } from '../saving'
 import type { SaveQueue } from '../../../kernel/src/savequeue.ts'
 import { noteSavedFromWeb } from './returngate'
@@ -2651,11 +2650,11 @@ export class Editor {
    * A host with a per-document store (bento/home) refused this deck's recovery
    * copy, so from now on there is NO crash backstop for it. Say so, once, where
    * the save status shows, and stop the unsaved dot's tooltip claiming the work
-   * is "kept in this browser". Never for an encrypted deck: those are never
-   * snapshotted, so there was no backstop to lose.
+   * is "kept in this browser". Never for a sealed deck (a password, or the
+   * identity seal): those are never snapshotted, so there was no backstop to lose.
    */
   private noticeRecoveryOff(docId: string) {
-    if (docId !== this.store.doc.docId || isEncryptionActive() || this.recoveryOffSaid.has(docId)) return
+    if (docId !== this.store.doc.docId || isBodySealed() || this.recoveryOffSaid.has(docId)) return
     this.recoveryOffSaid.add(docId)
     this.lastBackupAt = 0
     this.dirtyDot.title = canWriteInPlace()
@@ -2673,10 +2672,11 @@ export class Editor {
   private async runAutosave() {
     const doc = this.store.doc
     if (doc.readonly) return
-    // Never write an encrypted deck's plaintext to IndexedDB; its file
-    // write-back below stays encrypted via serializeAuto.
+    // Never write a sealed deck's plaintext to IndexedDB (sealed = a password
+    // OR the identity seal); its file write-back below stays sealed via
+    // serializeAuto.
     let snapshotted = false
-    if (!isEncryptionActive()) {
+    if (!isBodySealed()) {
       // only true if it REALLY stored — see putRecovery; no IndexedDB (Safari
       // private browsing, some file:// contexts) must not read as "backed up"
       snapshotted = await putRecovery(doc)
@@ -2728,6 +2728,15 @@ export class Editor {
 
   private async checkRecovery() {
     const doc = this.store.doc
+    // A sealed document never offers or keeps an unsealed snapshot: anything
+    // stored for this docId came from an earlier session that was not sealed,
+    // so it is deleted (this docId only), never shown. Boot has already set the
+    // seal (a password at the gate, the identity seal before the app ran).
+    if (isBodySealed()) {
+      await clearRecovery(doc.docId)
+      await clearVersions(doc.docId)
+      return
+    }
     const snap = await getRecovery(doc.docId)
     if (!snap) return
     // A snapshot is foreign input (restoregate.ts): offered only if it is a
@@ -2972,7 +2981,8 @@ export class Editor {
 
   /** Browse and restore the locally-kept auto-save timeline for this deck. */
   private async openVersionHistory() {
-    const versions = await listVersions(this.store.doc.docId)
+    // a sealed document has no timeline here (checkRecovery deleted any)
+    const versions = isBodySealed() ? [] : await listVersions(this.store.doc.docId)
     document.querySelector('.ed-about-overlay')?.remove()
     const overlay = div('ed-about-overlay')
     const box = div('ed-about ed-version-box')
@@ -3143,11 +3153,6 @@ export class Editor {
 
   async save(forcePicker: boolean) {
     this.canvas.commitTextEdit()
-    // If the user explicitly `Save`s, restart the auto-save timer.
-    if (this.autosaveTimer) {
-      clearTimeout(this.autosaveTimer)
-      this.autosaveTimer = 0
-    }
     // Through the save queue (saving.ts): serialised with auto-save and
     // Update this file, written from a snapshot taken as the write starts, and
     // the dot goes out only if nothing changed while the bytes were on their
@@ -3177,42 +3182,28 @@ export class Editor {
       this.syncWindowTitle()
       // staged language packs are in the bytes now — stop calling them pending
       markFileSaved()
-      this.toast(result === 'downloaded'
-        ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
-        : t('Saved'))
+      // record a recovery baseline + a version checkpoint at each manual save
+      if (!isBodySealed()) { void putRecovery(this.store.doc); void addVersion(this.store.doc); this.lastVersionAt = Date.now() }
       // Saving is the opt-in: a named, saved deck is "live by default" from
       // now on (the recipient of a copy already joins on open). Connect this
       // session too so author and recipient meet without another click.
-      this.session?.enableSharing()
-      this.tryJoin()
-      // Offload recovery baseline, version checkpoint, and web notes to idle/timeout
-      // so the UI and Wayland compositor can process input and paints immediately.
-      const doc = this.store.doc
-      Editor.scheduleTask(() => {
-        if (!isEncryptionActive()) {
-          void putRecovery(doc)
-          void addVersion(doc)
-          this.lastVersionAt = Date.now()
-        }
-        // A save from the WEB changes what this page is: the deck now lives in a
-        // file, and this URL will hand out a fresh starter next time. Said here,
-        // persistently, so the next visit is not a surprise — and deliberately
-        // NOT as a block, because this tab keeps working and keeps writing.
-        noteSavedFromWeb(currentFileName() ?? suggestedFileName(doc), {
-          fsAccess: canWriteInPlace(), canWrite: hostCan('write'),
-        })
-      }, 200)
+      if (sharingOn(this.store)) {
+        this.session?.enableSharing()
+        this.tryJoin()
+      }
+      // A save from the WEB changes what this page is: the deck now lives in a
+      // file, and this URL will hand out a fresh starter next time. Said here,
+      // persistently, so the next visit is not a surprise — and deliberately
+      // NOT as a block, because this tab keeps working and keeps writing.
+      noteSavedFromWeb(currentFileName() ?? suggestedFileName(this.store.doc), {
+        fsAccess: canWriteInPlace(), canWrite: hostCan('write'),
+      })
+      this.toast(result === 'downloaded'
+        ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
+        : t('Saved'))
     } catch (err) {
       console.error(err)
       this.toast(t('Save failed — see console'))
-    }
-  }
-
-  private static scheduleTask(task: () => void, timeout: number) {
-    if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(task, { timeout: timeout })
-    } else {
-      setTimeout(task, 0);
     }
   }
 
@@ -3306,10 +3297,10 @@ export class Editor {
         // clipboard as a Bento payload (works across decks/tabs). Elements when
         // any are selected; otherwise the current slide.
         if (this.store.selection.length) {
-          void navigator.clipboard?.writeText?.(serializeElements(this.store.selectedElements, this.store.doc)).catch(() => { })
+          void navigator.clipboard?.writeText?.(serializeElements(this.store.selectedElements, this.store.doc)).catch(() => {})
         } else {
           const slides = this.selectedSlides()
-          void navigator.clipboard?.writeText?.(serializeSlides(slides, this.store.doc)).catch(() => { })
+          void navigator.clipboard?.writeText?.(serializeSlides(slides, this.store.doc)).catch(() => {})
           if (slides.length > 1) {
             this.toast(t('Slides copied — ⌘V in any deck to paste them'))
           } else {
@@ -3425,7 +3416,7 @@ export class Editor {
     const text = this.store.selection.length
       ? serializeElements(this.store.selectedElements, this.store.doc)
       : serializeSlides(this.selectedSlides(), this.store.doc)
-    void navigator.clipboard?.writeText?.(text).catch(() => { })
+    void navigator.clipboard?.writeText?.(text).catch(() => {})
   }
 
   // --- context menu -------------------------------------------------------
@@ -3662,10 +3653,10 @@ export class Editor {
       sandboxed()
         ? t('Updates are not checked inside an embedded view — open the file in a browser tab to check.')
         : this.lastAutoCheck?.status === 'current'
-          ? t("Checked automatically at launch — you're on the latest version (v{v}).", { v: APP_VERSION })
-          : this.lastAutoCheck?.status === 'error'
-            ? t("Launch check couldn't reach the release server ({m}). Check manually below.", { m: this.lastAutoCheck.message })
-            : t('This file carries its own app — it works offline, forever, as is.')
+        ? t("Checked automatically at launch — you're on the latest version (v{v}).", { v: APP_VERSION })
+        : this.lastAutoCheck?.status === 'error'
+          ? t("Launch check couldn't reach the release server ({m}). Check manually below.", { m: this.lastAutoCheck.message })
+          : t('This file carries its own app — it works offline, forever, as is.')
 
     const row = div('ed-about-row')
     const checkB = document.createElement('button')
@@ -3700,8 +3691,8 @@ export class Editor {
         // again. `notes` is the fallback for a manifest that predates the field.
         const skipped = release.notesFrom
           ? Object.keys(release.notesFrom)
-            .filter((v) => compareVersions(v, APP_VERSION) > 0)
-            .sort((a, b) => compareVersions(b, a))
+              .filter((v) => compareVersions(v, APP_VERSION) > 0)
+              .sort((a, b) => compareVersions(b, a))
           : []
         if (skipped.length) {
           const lines = skipped.flatMap((v) =>

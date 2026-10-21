@@ -65,6 +65,7 @@ import type { ColumnType, TableSheet } from './model.ts'
 import type { ColumnFilter, Predicate } from './filter.ts'
 import { BLANK_KEY, buildOrder, distinctValues, matchKey } from './filter.ts'
 import { readCell, type Store } from './store.ts'
+import { listLabel } from './format.ts'
 import {
   autoFitWidth, setHidden, freezeAt, readFrozen, resizeColumn,
 } from './rowcol.ts'
@@ -505,7 +506,9 @@ export function openColumnMenu(o: ColumnMenuOpts): HTMLElement | null {
       const k = matchKey(v)
       // keyed, not `v === null`: the blank box is the one entry whose label is
       // not its value, and BLANK_KEY is the single spelling of which one it is
-      const label = k === BLANK_KEY ? t('(Blanks)') : String(v)
+      // AS THE COLUMN SHOWS IT: £4,300 in a money column, never the stored
+      // 4300 (format.ts `listLabel` says why, and why Yes/No stays as stored).
+      const label = k === BLANK_KEY ? t('(Blanks)') : listLabel(v, col)
       return `<label class="dfx-item"><input type="checkbox" data-k="${esc(k)}"` +
         `${ticked.has(k) ? ' checked' : ''}><span>${esc(label)}</span></label>`
     }).join('')
@@ -591,7 +594,7 @@ export function openColumnMenu(o: ColumnMenuOpts): HTMLElement | null {
 
   const repaintList = (): void => {
     shown = distinctValues(get, o.colId, rows, LIST_CAP,
-      { rows: base ?? undefined, match: query || undefined })
+      { rows: base ?? undefined, match: query || undefined, display: (v) => listLabel(v, col) })
     for (const v of shown.values) known.set(matchKey(v), v)
     listEl.innerHTML = listHtml()
     noteEl.innerHTML = noteHtml()

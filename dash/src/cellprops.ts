@@ -35,11 +35,17 @@
 //    not. In a cell explicitly formatted Number/Currency/Percent the author
 //    HAS said it is a quantity, so there `01234` is 1234.
 //
-// 4. DASH NEVER INFERS A DATE FROM TYPING. `1/2` is the text "1/2", not the
-//    2nd of January and not the 1st of February — nothing on screen would say
-//    which, and that guess is the one that renamed a third of the human
-//    genome. Dates arrive by APPLYING the Date format, which parses only
-//    unambiguous spellings (rule 8) and leaves anything else alone.
+// 4. DASH NEVER GUESSES A DATE FROM TYPING — and reads the ones that need no
+//    guess. `1/2` and `3/4/2026` stay the text they were, not the 2nd of
+//    January and not the 1st of February — nothing on screen would say which,
+//    and that guess is the one that renamed a third of the human genome. But
+//    `2026-03-04` (ISO) and `Mar 4 2026` / `4 March 2026` (a named month) can
+//    only mean one day, and refusing THOSE was not caution, it was a
+//    spreadsheet that could not take a date (review finding 3.2): typing one
+//    stores the canonical `YYYY-MM-DD` and stamps the Date format, as rule 5
+//    stamps a percent. A slash date stays text even when its day is over 12
+//    (`readEnteredDate` says why). In a cell already formatted Date, every
+//    unambiguous spelling is read (rule 8).
 //
 // 5. A MARK MAKES A FORMAT; a separator does not. Typing `50%` into an
 //    unformatted cell stores 0.5 and stamps `0%`; typing `$1,200.50` stores
@@ -47,7 +53,15 @@
 //    NOTHING — a comma is how a person types a number, whereas a `%` or a
 //    currency symbol is a statement about what the number MEANS. A format is
 //    only ever stamped on a cell that had none; typing never overwrites a
-//    format somebody chose.
+//    format somebody chose. `(5)` is -5 (accounting), and `€3,50` is 3.5 —
+//    the digits are read by import.ts's `readEntryNumber`, the same shapes a
+//    CSV is read with, and a field that fits BOTH conventions (`1,234`) goes
+//    the way the VIEWER's own locale writes decimals.
+//
+//    This is what typing does on a spreadsheet since review finding 3.1. It
+//    was written here, tested, and never wired: grid.ts kept its own narrower
+//    `canvasValue`, so `15%` was stored as the TEXT "15%" and the formula
+//    engine then read that text as 15.
 //
 // 6. A FORMAT CHANGE NEVER RESCALES A NUMBER. Applying Percent to 50 shows
 //    5000%, as it does everywhere else, because the alternative — quietly
@@ -86,7 +100,8 @@
 
 import './cellprops.css'
 import { t } from './i18n.ts'
-import { alignFor, formatValue } from './format.ts'
+import { formatValue, readPattern, typedNumber, viewerDecimal } from './format.ts'
+import { readEntryNumber, type EntryNumber } from './import.ts'
 import { formatRef } from './a1.ts'
 import { isFormula } from './cellformula.ts'
 import {
@@ -110,8 +125,12 @@ export type { CellRange, Pos }
 export const TEXT_PATTERN = '@'
 /** The one date pattern dash writes. ISO, because rule 8 stores ISO. */
 export const DATE_PATTERN = 'yyyy-mm-dd'
+/** The one time pattern dash writes: 24-hour, the same canonical-text idea as
+ *  Date — a time is stored as `HH:MM` (or `HH:MM:SS`) TEXT, never a fraction
+ *  of a day nobody can read in the file. */
+export const TIME_PATTERN = 'hh:mm'
 
-export type FormatKind = 'general' | 'number' | 'currency' | 'percent' | 'date' | 'text'
+export type FormatKind = 'general' | 'number' | 'currency' | 'percent' | 'date' | 'time' | 'text'
 
 export interface FormatChoice {
   kind: FormatKind
@@ -167,6 +186,7 @@ export function buildPattern(c: FormatChoice): string | undefined {
     case 'general': return undefined
     case 'text': return TEXT_PATTERN
     case 'date': return DATE_PATTERN
+    case 'time': return TIME_PATTERN
     case 'percent': return `${digitsFor(dp, c.group)}%`
     case 'currency': return `${c.symbol}${digitsFor(dp, c.group)}`
     case 'number': return digitsFor(dp, c.group)
@@ -176,6 +196,10 @@ export function buildPattern(c: FormatChoice): string | undefined {
 /** Is this the Text format? The one question rule 1 asks of a cell. */
 export const isTextFormat = (fmt: unknown): boolean =>
   typeof fmt === 'string' && fmt.trim() === TEXT_PATTERN
+
+/** An hour token and no digit placeholder. Asked BEFORE `looksLikeDate`, whose
+ *  `m{1,4}` would otherwise claim `hh:mm` for a date by its minutes. */
+const looksLikeTime = (f: string): boolean => /h/i.test(f) && !/[#0]/.test(f) && !/[yd]/i.test(f)
 
 const looksLikeDate = (f: string): boolean =>
   /[ymd]/i.test(f) && !/[#0]/.test(f) && /y{2,4}|d{1,2}|m{1,4}/i.test(f)
@@ -191,6 +215,7 @@ export function classifyFormat(fmt: string | undefined): FormatChoice {
   const f = (fmt ?? '').trim()
   if (!f) return { ...DEFAULT_CHOICE }
   if (f === TEXT_PATTERN) return { ...DEFAULT_CHOICE, kind: 'text' }
+  if (looksLikeTime(f)) return { ...DEFAULT_CHOICE, kind: 'time' }
   if (looksLikeDate(f)) return { ...DEFAULT_CHOICE, kind: 'date' }
 
   const pct = f.includes('%')
@@ -217,22 +242,13 @@ export const isCustomPattern = (fmt: string | undefined): boolean => {
 
 // --- reading what was typed -------------------------------------------------
 
-/** Grouped, or plain, with an optional exponent. Signs and marks are peeled first. */
-const NUMERIC = /^(?:\d+|\d{1,3}(?:,\d{3})+)?(?:\.\d+)?(?:[eE][-+]?\d+)?$/
-/** Symbols worth peeling. A prefix a person would type, not every glyph in Unicode. */
-const SYMBOLS = /^[$£€¥₹₽₩₪₺]\s?|^[A-Z]{0,3}\$\s?/
-
-export interface TypedNumber {
-  n: number
-  /** the field carried a `%` — the value has ALREADY been divided by 100 */
-  pct: boolean
-  /** the field carried a currency symbol, verbatim */
-  symbol: string
-  /** decimals actually typed, so a stamped format can match what was written */
-  dp: number
-  /** the field carried a thousands separator */
-  group: boolean
-}
+/**
+ * What a typed field reads as — import.ts's `EntryNumber`. The reading is
+ * import's, not a second parser: one set of digit shapes decides what `1,234`,
+ * `3,50`, `$5`, `(5)` and `15%` mean, whether they were typed, pasted,
+ * imported or met by a formula.
+ */
+export type TypedNumber = EntryNumber
 
 /**
  * Read a typed field as a number, or answer null.
@@ -240,50 +256,13 @@ export interface TypedNumber {
  * `strict` is rule 3: with it, a leading zero disqualifies the field (an
  * unformatted cell keeps `01234` as text); without it — the cell is explicitly
  * numeric — the zeros are dropped and the number is read.
+ *
+ * The decimal convention is the VIEWER's when the field alone cannot say
+ * (`1,234` is 1234 to a British typist and 1.234 to a German one); `3,50`
+ * reads 3.5 to everybody, as it does on import. See `readEntryNumber`.
  */
 export function readTypedNumber(text: string, opts: { strict?: boolean } = {}): TypedNumber | null {
-  let s = text.trim()
-  if (!s) return null
-
-  // (1,200) is -1200: accounting notation, and the only bracket form worth it
-  let neg = false
-  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1).trim() }
-
-  let symbol = ''
-  const sym = s.match(SYMBOLS)
-  if (sym) { symbol = sym[0]; s = s.slice(sym[0].length).trim() }
-
-  if (s.startsWith('-')) { neg = !neg; s = s.slice(1).trim() }
-  else if (s.startsWith('+')) s = s.slice(1).trim()
-
-  // the symbol may sit after the sign — `-$5` as well as `$-5`
-  if (!symbol) {
-    const sym2 = s.match(SYMBOLS)
-    if (sym2) { symbol = sym2[0]; s = s.slice(sym2[0].length).trim() }
-  }
-
-  let pct = false
-  if (s.endsWith('%')) { pct = true; s = s.slice(0, -1).trim() }
-
-  if (!/\d/.test(s) || !NUMERIC.test(s)) return null
-  // rule 3: `0` and `0.5` are numbers; `007` is a label somebody kept the zeros on
-  if (opts.strict && /^0\d/.test(s)) return null
-
-  const bare = s.replace(/,/g, '')
-  let n = Number(bare)
-  if (!Number.isFinite(n)) return null
-  if (neg) n = -n
-  if (pct) n /= 100
-
-  const dot = bare.indexOf('.')
-  const eAt = bare.search(/[eE]/)
-  return {
-    n,
-    pct,
-    symbol,
-    dp: dot < 0 ? 0 : (eAt < 0 ? bare.length : eAt) - dot - 1,
-    group: s.includes(','),
-  }
+  return readEntryNumber(text, { strict: opts.strict, prefer: viewerDecimal() })
 }
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
@@ -334,6 +313,44 @@ export function readTypedDate(text: string): string | null {
   return null
 }
 
+/**
+ * A date read from TYPING into a cell with no format — rule 4's narrower set.
+ *
+ * ISO (`2026-03-04`, `2026/3/4`) and a named month (`Mar 4 2026`,
+ * `4 March 2026`) and nothing else. `readTypedDate` also accepts a slash date
+ * whose day is over 12 (`13/2/2026`), which is right when somebody has SAID the
+ * cell is a date — but from bare typing it would make `13/2/2026` a date and
+ * `12/2/2026`, one row up, the text it has to stay. One column, two kinds, and
+ * which is which decided by the day of the month: the refusal is kept whole.
+ */
+export function readEnteredDate(text: string): string | null {
+  const s = text.trim()
+  if (/^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$/.test(s)) return null
+  return readTypedDate(s)
+}
+
+/**
+ * A time of day, canonical `HH:MM` (or `HH:MM:SS`), or null.
+ *
+ * Accepts `14:30`, `9:05`, `2:30 pm`, `2:30PM`, `14:30:15`. Unlike a date there
+ * is no day/month ambiguity to refuse — only an out-of-range hour or minute.
+ */
+export function readTypedTime(text: string): string | null {
+  const m = text.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]\.?m\.?)?$/i)
+  if (!m) return null
+  let h = +m[1]
+  const min = +m[2]
+  const sec = m[3] === undefined ? null : +m[3]
+  if (m[4]) {
+    if (h < 1 || h > 12) return null
+    const pm = /^p/i.test(m[4])
+    h = (h % 12) + (pm ? 12 : 0)
+  }
+  if (h > 23 || min > 59 || (sec !== null && sec > 59)) return null
+  const two = (n: number): string => String(n).padStart(2, '0')
+  return `${two(h)}:${two(min)}${sec === null ? '' : `:${two(sec)}`}`
+}
+
 // --- the two rules, as functions --------------------------------------------
 
 /** A cell with nothing in it at all is not a cell — sparseness, kept here too. */
@@ -372,7 +389,20 @@ export function coerceInput(prev: CanvasCell | undefined, text: string): CanvasC
 
   // rule 3: strict (leading zeros are a label) unless the cell says it is a quantity
   const num = readTypedNumber(s, { strict: !numeric })
-  if (!num) return { ...rest, v: s }
+  if (!num) {
+    // rule 4: a date is read from typing only where nobody could misread it
+    // (in a Date cell any unambiguous spelling; in a blank one the narrower set
+    // `readEnteredDate` allows; in a cell somebody formatted as a NUMBER, none —
+    // typing never overwrites a format somebody chose, rule 5)
+    if (choice?.kind === 'date') {
+      const d = readTypedDate(s)
+      if (d) return { ...rest, v: d }
+    } else if (!has) {
+      const d = readEnteredDate(s)
+      if (d) return { ...rest, v: d, format: DATE_PATTERN }
+    }
+    return { ...rest, v: s }
+  }
 
   // A bare number in a PERCENT cell is percent points — Excel's rule, and the
   // one everybody has muscle memory for: 50 in a percent cell is 50%.
@@ -381,7 +411,7 @@ export function coerceInput(prev: CanvasCell | undefined, text: string): CanvasC
 
   // rule 5: a MARK makes a format, a separator does not
   if (num.pct) {
-    return { ...rest, v: num.n, format: buildPattern({ ...DEFAULT_CHOICE, kind: 'percent', dp: Math.max(0, num.dp - 2), group: false }) }
+    return { ...rest, v: num.n, format: buildPattern({ ...DEFAULT_CHOICE, kind: 'percent', dp: num.dp, group: false }) }
   }
   if (num.symbol) {
     return {
@@ -427,6 +457,11 @@ export function recastForFormat(prev: CanvasCell | undefined, fmt: string | unde
     const d = readTypedDate(v)
     return d ? { cell: { ...base, v: d }, refused: false } : { cell: base, refused: true }
   }
+  if (kind === 'time') {
+    if (typeof v !== 'string') return { cell: base, refused: typeof v === 'number' }
+    const tm = readTypedTime(v)
+    return tm ? { cell: { ...base, v: tm }, refused: false } : { cell: base, refused: true }
+  }
   if (kind === 'number' || kind === 'currency' || kind === 'percent') {
     if (typeof v === 'number') return { cell: base, refused: false }   // rule 6: never rescaled
     if (typeof v !== 'string') return { cell: base, refused: true }
@@ -434,6 +469,67 @@ export function recastForFormat(prev: CanvasCell | undefined, fmt: string | unde
     return num ? { cell: { ...base, v: num.n }, refused: false } : { cell: base, refused: true }
   }
   return { cell: orNull(base), refused: false }
+}
+
+/**
+ * What the formula bar (and the cell editor) shows for a VALUE cell: the form
+ * somebody would type to put that value there — finding 2.8.
+ *
+ * Not the display (`$1,200.50` rounds; `12%` hides `12.5%`) and not the raw
+ * stored number (`1` for a cell that reads `100%`, which then re-commits as
+ * 100%·100 the moment somebody presses Enter on it in a percent cell). The
+ * rule is a ROUND TRIP: `coerceInput(cell, enteredForm(cell))` stores the same
+ * value again, so opening a cell and pressing Enter never changes it.
+ *
+ *   • a percent cell shows its value ×100 with a `%`, at full precision;
+ *   • a currency cell shows its symbol and at least the format's decimals;
+ *   • any other number is written in the viewer's own decimal separator,
+ *     ungrouped — the separator `readTypedNumber` will read it back with;
+ *   • text that would NOT read back as itself (`'15%` kept as text, a legacy
+ *     file's "2026-03-04" that was never made a date) wears the apostrophe that
+ *     keeps it text, which is also how a reader can see that it IS text.
+ *
+ * A formula cell is not this function's business: the bar shows its source.
+ */
+export function enteredForm(cell: CanvasCell | undefined): string {
+  const v = cell?.v
+  if (v === undefined || v === null || v === '') return ''
+  if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE'
+  const fmt = typeof cell?.format === 'string' ? cell.format : undefined
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) return String(v)
+    const kind = fmt ? classifyFormat(fmt).kind : 'general'
+    return enteredNumber(v, kind === 'percent' ? 'percent' : kind === 'currency' ? 'currency' : 'plain', fmt)
+  }
+  const s = String(v)
+  if (isTextFormat(fmt)) return s
+  // would typing `s` back into this cell store `s`? if not, it needs the apostrophe
+  const { v: _v, f: _f, ...rest } = cell ?? {}
+  const back = coerceInput(rest, s)
+  return back && back.v === s && back.f === undefined && back.format === rest.format ? s : `'${s}`
+}
+
+/**
+ * A NUMBER in its entered form — `enteredForm`'s numeric half, shared with the
+ * dataset kind, whose column (not the cell) says percent or money.
+ *
+ *   percent   ×100 with a `%`, at full precision — `100%` for a stored 1
+ *   currency  the pattern's own symbol, and at least its decimals — `$300.50`
+ *   plain     the number, ungrouped, in the viewer's decimal separator
+ */
+export function enteredNumber(v: number, kind: 'percent' | 'currency' | 'plain', fmt?: string): string {
+  if (!Number.isFinite(v)) return String(v)
+  if (kind === 'percent') {
+    const shown = Number((v * 100).toPrecision(15))
+    // full precision, but never the binary noise of ×100 (0.07·100)
+    return `${typedNumber(shown / 100 === v ? shown : v * 100)}%`
+  }
+  if (kind === 'currency') {
+    const p = readPattern(fmt)
+    const body = typedNumber(Math.abs(v), p.dp ?? 0)
+    return `${v < 0 ? '-' : ''}${p.prefix}${body}${p.suffix}`
+  }
+  return typedNumber(v)
 }
 
 // --- selections, as A1 keys -------------------------------------------------
@@ -588,9 +684,16 @@ export interface CellPropsHost {
   /** something the last edit needs to say — a refusal count, usually */
   message?: string
   say(msg: string): void
+  /** rebuild the panel without a commit — Custom… opening, mostly */
+  rerender(): void
+  /** the value the cursor cell SHOWS — a formula's result, not its absent `v` */
+  value?: unknown
 }
 
-const FORMAT_KINDS: FormatKind[] = ['general', 'number', 'currency', 'percent', 'date', 'text']
+/** The presets a SPREADSHEET cell offers — every kind there is, since the cell
+ *  is where this kind of sheet decides what a value IS. */
+export const CELL_KINDS: readonly FormatKind[] =
+  ['general', 'number', 'currency', 'percent', 'date', 'time', 'text']
 
 /**
  * A LITERAL translation call per preset, rather than one over a lookup table.
@@ -607,13 +710,186 @@ const kindLabel = (k: FormatKind): string =>
       : k === 'currency' ? t('Currency')
         : k === 'percent' ? t('Percent')
           : k === 'date' ? t('Date')
-            : t('Text')
+            : k === 'time' ? t('Time')
+              : t('Text')
 
 /** A quantity for the preview when the cell is empty — something with a shape. */
 const SAMPLE = 1234.5
+/** …and a moment, for the two presets that print one. */
+const SAMPLE_DATE = '2026-03-05'
+const SAMPLE_TIME = '14:30'
 
 const valueType = (v: unknown): ColumnType =>
   typeof v === 'number' ? 'number' : typeof v === 'boolean' ? 'bool' : 'text'
+
+// ═══ ONE NUMBER-FORMAT CONTROL ═════════════════════════════════════════════
+//
+// Both kinds of sheet used to show three controls for one idea: a preset
+// dropdown, a raw Pattern field and a "Shows as" box on a spreadsheet; a cell
+// Pattern AND a column Format on a dataset, each with its own placeholder.
+// They are one control now, drawn by this one builder on both kinds:
+//
+//   Number format  [preset ▾]       General, Number, Currency, Percent, … Custom…
+//   (Decimals / Thousands separator / Symbol — only for the numeric presets)
+//   Pattern        [#,##0.00 "kg"]  — ONLY while the preset is Custom…
+//                   £1,234.50       — a live sample, printed, not a field
+//
+// and, on a dataset, an "Apply to" choice above it — this column or these
+// cells — because there the column owns the format and a cell may override it.
+// No model field changed: the column still writes `format`, a cell override
+// still writes its own `format`, a spreadsheet cell still writes its own.
+
+/** What the preset select can stand on besides a FormatKind. */
+export type FormatOption = FormatKind | 'inherit'
+
+export interface NumberFormatCtx {
+  host: HTMLElement
+  kit: PanelKit
+  /** the pattern stored in the CURRENT scope; absent = General (or inherit) */
+  fmt: string | undefined
+  /** the presets this scope offers, in order. Custom… is always appended. */
+  kinds: readonly FormatOption[]
+  /** the pattern a cell inherits when it has none (dataset, cells scope) */
+  inherited?: string
+  /** dataset only: the scope switch */
+  scope?: { value: 'column' | 'cells'; set(v: 'column' | 'cells'): void }
+  /** the sample, printed with a candidate pattern */
+  preview(fmt: string | undefined): { text: string; sample: boolean }
+  /** identifies the selection, so "Custom…" stays open across a rebuild */
+  key: string
+  locale?: string
+  readOnly: boolean
+  /** `undefined` clears the field in this scope */
+  write(next: string | undefined): void
+  rerender(): void
+}
+
+/** Which selection has Custom… open with no custom pattern stored yet. */
+let customOpen: string | null = null
+/** …and whether the Pattern field it reveals should take the focus. */
+let focusPattern = false
+
+/** What the preset select shows for a stored pattern, in a given scope. */
+export function formatOptionFor(
+  fmt: string | undefined, kinds: readonly FormatOption[],
+): FormatOption | 'custom' {
+  if (!fmt) return kinds.includes('inherit') ? 'inherit' : 'general'
+  if (isCustomPattern(fmt)) return 'custom'
+  const k = classifyFormat(fmt).kind
+  return kinds.includes(k) ? k : 'custom'
+}
+
+export function buildNumberFormat(ctx: NumberFormatCtx): void {
+  const { host, kit, fmt, kinds, readOnly } = ctx
+  const w = (next: string | undefined): void => { if (!readOnly) ctx.write(next) }
+
+  if (ctx.scope) {
+    const sc = ctx.scope
+    const scopeSel = kit.select(
+      [['column', t('This column')] as const, ['cells', t('These cells')] as const],
+      sc.value, (v) => sc.set(v as 'column' | 'cells'))
+    scopeSel.disabled = readOnly
+    scopeSel.dataset.dpField = 'format-scope'
+    kit.row(host, t('Apply to'), scopeSel)
+  }
+
+  const stored = formatOptionFor(fmt, kinds)
+  if (stored === 'custom' && customOpen === ctx.key) customOpen = null
+  const shown = customOpen === ctx.key ? 'custom' : stored
+  // A cell inheriting its column's pattern starts every preset from THAT
+  // pattern's decimals and symbol — "Number" on a £#,##0 column means 0dp.
+  const basis = fmt ?? ctx.inherited
+  const was = classifyFormat(basis)
+  const choice: FormatChoice = {
+    ...was,
+    ...(basis && was.kind === 'currency' ? {} : { symbol: localeSymbol(ctx.locale) }),
+  }
+
+  const options: Array<readonly [string, string]> = [
+    ...kinds.map((k) => [k, k === 'inherit' ? t('Same as column') : kindLabel(k)] as const),
+    ['custom', t('Custom…')] as const,
+  ]
+  const sel = kit.select(options, shown, (v) => {
+    if (v === 'custom') { customOpen = ctx.key; focusPattern = true; ctx.rerender(); return }
+    customOpen = null
+    if (v === 'inherit' || v === 'general') { w(undefined); ctx.rerender(); return }
+    const kind = v as FormatKind
+    // No pattern yet: the preset's own defaults. A pattern already: keep the
+    // decimals its author chose — switching Currency to Number must not
+    // silently re-round a column somebody set to 3dp.
+    w(buildPattern({ ...choice, ...(basis ? {} : defaultsFor(kind)), kind }))
+    ctx.rerender()
+  })
+  sel.disabled = readOnly
+  sel.dataset.dpField = 'number-format'
+  kit.row(host, t('Number format'), sel)
+
+  const preset = shown === 'number' || shown === 'currency' || shown === 'percent' ? shown : null
+  if (preset) {
+    const dp = kit.number(choice.dp, 1, (v) =>
+      w(buildPattern({ ...choice, kind: preset, dp: Math.max(0, Math.min(9, Math.round(v))) })))
+    dp.min = '0'
+    dp.max = '9'
+    dp.disabled = readOnly
+    kit.row(host, t('Decimals'), dp)
+
+    const grp = kit.check(choice.group, (v) => w(buildPattern({ ...choice, kind: preset, group: v })))
+    grp.disabled = readOnly
+    kit.row(host, t('Thousands separator'), grp)
+
+    if (preset === 'currency') {
+      const sym = kit.text(choice.symbol, (v) =>
+        w(buildPattern({ ...choice, kind: preset, symbol: v.trim() || choice.symbol })))
+      sym.disabled = readOnly
+      sym.classList.add('dp-narrow')
+      kit.row(host, t('Symbol'), sym)
+    }
+  }
+
+  // THE ESCAPE HATCH — revealed only for Custom…, where it is the whole control.
+  if (shown === 'custom') {
+    const pat = kit.text(fmt ?? '', (v) => {
+      const next = v.trim()
+      if (next === (fmt ?? '')) return
+      w(next || undefined)
+    })
+    pat.placeholder = basis ?? '#,##0.00'
+    pat.classList.add('dp-mono')
+    pat.disabled = readOnly
+    pat.dataset.dpField = 'pattern'
+    kit.row(host, t('Pattern'), pat)
+    if (focusPattern) {
+      focusPattern = false
+      // Selected, so typing REPLACES the preset's pattern it opened on and
+      // an arrow key edits it instead.
+      queueMicrotask(() => { if (pat.isConnected) { pat.focus(); pat.select() } })
+    }
+  }
+
+  // The live sample: what the pattern DOES, against this cell's own value. A
+  // printed line under the control, not a field — it is an answer, not a
+  // question, and a bordered box here read as a third control.
+  const p = ctx.preview(basis)
+  const line = document.createElement('div')
+  line.className = 'dp-row dp-row-sample'
+  const out = document.createElement('span')
+  out.className = p.sample ? 'dc-sample dc-sample-eg' : 'dc-sample'
+  out.title = t('Sample')
+  out.textContent = p.text
+  line.append(document.createElement('span'), out)
+  host.appendChild(line)
+}
+
+/** The sample for a spreadsheet cell: its own value, or a shape for the preset. */
+export function cellPreview(
+  value: unknown, fmt: string | undefined,
+): { text: string; sample: boolean } {
+  const empty = value === undefined || value === null || value === ''
+  const kind = classifyFormat(fmt).kind
+  const v = !empty ? value
+    : kind === 'date' ? SAMPLE_DATE : kind === 'time' ? SAMPLE_TIME : SAMPLE
+  return { text: formatValue(v, { type: valueType(v), format: fmt }), sample: empty }
+}
 
 /**
  * The Cell section: what this cell IS, and what it looks like.
@@ -639,82 +915,22 @@ export function buildCellProps(ctx: CellPropsHost): void {
   // --- number format --------------------------------------------------------
 
   const fmt = typeof cell?.format === 'string' ? cell.format : undefined
-  const custom = isCustomPattern(fmt)
-  const choice: FormatChoice = {
-    ...classifyFormat(fmt),
-    ...(fmt ? {} : { symbol: localeSymbol(ctx.locale) }),
-  }
-  if (!fmt) choice.kind = 'general'
-
-  const write = (next: string | undefined): void => {
-    if (readOnly) return
-    const r = formatPatch(sheet, keys, next)
-    if (r.patch) ctx.commit(r.patch)
-    ctx.say(r.refused
-      ? t('{n} value(s) could not be read as this format, and were left as they are.')
-        .replace('{n}', String(r.refused))
-      : '')
-  }
-
-  const kinds: Array<readonly [string, string]> = [
-    ...FORMAT_KINDS.map((k) => [k, kindLabel(k)] as const),
-    ...(custom ? [['custom', t('Custom')] as const] : []),
-  ]
-  const kindSel = kit.select(kinds, custom ? 'custom' : choice.kind, (v) => {
-    if (v === 'custom') return            // a hand-written pattern is not ours to respell
-    const kind = v as FormatKind
-    // A cell that had no format takes the preset's own defaults; one that had
-    // a format keeps the decimals its author chose.
-    write(buildPattern({ ...choice, ...(fmt ? {} : defaultsFor(kind)), kind }))
+  buildNumberFormat({
+    host, kit, fmt, kinds: CELL_KINDS,
+    preview: (f) => cellPreview(ctx.value !== undefined ? ctx.value : cell?.v, f),
+    key: `${sheet.id}!${cursorKey}`,
+    locale: ctx.locale,
+    readOnly,
+    rerender: ctx.rerender,
+    write: (next) => {
+      const r = formatPatch(sheet, keys, next)
+      if (r.patch) ctx.commit(r.patch)
+      ctx.say(r.refused
+        ? t('{n} value(s) could not be read as this format, and were left as they are.')
+          .replace('{n}', String(r.refused))
+        : '')
+    },
   })
-  kindSel.disabled = readOnly
-  kit.row(host, t('Format'), kindSel)
-
-  const numeric = !custom &&
-    (choice.kind === 'number' || choice.kind === 'currency' || choice.kind === 'percent')
-
-  if (numeric) {
-    const dp = kit.number(choice.dp, 1, (v) =>
-      write(buildPattern({ ...choice, dp: Math.max(0, Math.min(9, Math.round(v))) })))
-    dp.min = '0'
-    dp.max = '9'
-    dp.disabled = readOnly
-    kit.row(host, t('Decimals'), dp)
-
-    const grp = kit.check(choice.group, (v) => write(buildPattern({ ...choice, group: v })))
-    grp.disabled = readOnly
-    kit.row(host, t('Thousands separator'), grp)
-
-    if (choice.kind === 'currency') {
-      const sym = kit.text(choice.symbol, (v) =>
-        write(buildPattern({ ...choice, symbol: v.trim() || choice.symbol })))
-      sym.disabled = readOnly
-      sym.classList.add('dp-narrow')
-      kit.row(host, t('Symbol'), sym)
-    }
-  }
-
-  // THE ESCAPE HATCH, and it is not a lesser control: format.ts accepts any
-  // Excel-ish pattern and the presets are only the six people ask for by name.
-  const pat = kit.text(fmt ?? '', (v) => {
-    const next = v.trim()
-    if (next === (fmt ?? '')) return
-    write(next || undefined)
-  })
-  pat.placeholder = '#,##0.00'
-  pat.classList.add('dp-mono')
-  pat.disabled = readOnly
-  kit.row(host, t('Pattern'), pat)
-
-  // What the pattern DOES, against this cell's own value. The one control that
-  // answers "why does my number look like that" without a save and a reload.
-  const shownVal = cell?.v === undefined || cell.v === '' ? SAMPLE : cell.v
-  const prev = document.createElement('div')
-  prev.className = 'dc-preview'
-  prev.textContent = formatValue(shownVal, { type: valueType(shownVal), format: fmt })
-  if (cell?.v === undefined || cell.v === '') prev.classList.add('dc-preview-sample')
-  prev.style.textAlign = (cell?.align as string | undefined) ?? alignFor(valueType(shownVal))
-  kit.row(host, t('Shows as'), prev)
 
   if (isTextFormat(fmt)) {
     kit.note(host, t('Text cells keep exactly what is typed — leading zeros, slashes, and an = that is not a formula.'))
@@ -731,7 +947,7 @@ export function buildCellProps(ctx: CellPropsHost): void {
 
   // ONE section builder, drawn identically on the dataset kind — see
   // cellfmt.ts. This kind's own contribution above it is the FORMAT block,
-  // which is where its cell types are decided and is meaningless on a dataset.
+  // which is where its cell types are decided.
   buildAppearanceSection({ host, kit, cell: cell as Appearance | undefined, readOnly, write: style })
 
   if (ctx.message) kit.note(host, ctx.message)

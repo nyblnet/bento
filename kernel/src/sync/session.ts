@@ -35,6 +35,7 @@ export type { BlobRef, CollabCreds, SyncDoc }
 import { putBlob, getBlob, dataUriToBytes, bytesToDataUri, encodedSize, MAX_BLOB } from './blobs.ts'
 import { mintCollab, cachedMemberPub } from './online.ts'
 import { lsGet, lsJson } from '../storage.ts'
+import { copy } from '../documentvalue.ts'
 
 /**
  * The store the session drives, reduced to what it actually touches.
@@ -1132,7 +1133,7 @@ export class SyncSession {
   stampInto(doc: SyncDoc) {
     if (!doc.collab || doc.collab.on === false) return
     this.flush()
-    doc.collab.sync = JSON.parse(JSON.stringify(this.state.toJSON()))
+    doc.collab.sync = copy(this.state.toJSON())
   }
 
   // --- plumbing -------------------------------------------------------------

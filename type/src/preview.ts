@@ -46,6 +46,7 @@
 
 import { registerPreview, isBodySealed } from '../../kernel/src/save.ts';
 import type { Block, TypeDoc } from './model.ts';
+import { safeFontFamily, readPage } from './model.ts';
 import { registerReady } from './features.ts';
 import { groupBlocks, blockHtml, renderBody, TAG } from './render.ts';
 import { paginate } from './paginate.ts';
@@ -69,12 +70,6 @@ const FONT_STACK_FALLBACK = '"Iowan Old Style","Palatino Linotype",Palatino,Geor
 
 // ─────────────────────────────────────────────────── measuring page one
 
-/** A CSS font stack value is user data (docs pick their own typeface) and
- *  reaches a `<div style="…">` attribute here, not a stylesheet — quoting
- *  matters less than making sure it cannot end the attribute early. */
-function cssFontFamily(family: string): string {
-  return family.replace(/["<>]/g, '');
-}
 
 /**
  * Which blocks of `doc.body` land on page one, in document order.
@@ -94,12 +89,14 @@ function firstPageBlocks(doc: TypeDoc): Block[] {
   // this node can never reach a save, but the convention costs nothing to
   // honour and guards against a future caller that clones the live document.
   host.setAttribute('data-bento-transient', '');
-  const m = margins(doc.page);
+  const pg = readPage(doc.page as never);         // numbers only (see frame())
+  const m = margins(pg);
   host.style.cssText =
     `position:fixed;left:-99999px;top:0;visibility:hidden;pointer-events:none;` +
-    `--page-w:${doc.page.width}px;--page-h:${doc.page.height}px;` +
-    `--mar-x:${doc.page.marginX}px;--mar-t:${m.top}px;--mar-b:${m.bottom}px;` +
-    (doc.type?.family ? `--doc-family:${cssFontFamily(doc.type.family)};` : '') +
+    `--page-w:${pg.width}px;--page-h:${pg.height}px;` +
+    `--mar-x:${pg.marginX}px;--mar-t:${m.top}px;--mar-b:${m.bottom}px;` +
+    // a font stack by grammar (model.ts safeFontFamily), never a stripped string
+    (safeFontFamily(doc.type?.family) ? `--doc-family:${safeFontFamily(doc.type?.family)};` : '') +
     (doc.type?.size ? `--doc-size:${doc.type.size}px;` : '');
   document.body.appendChild(host);
   try {
@@ -234,8 +231,10 @@ function flat(v: unknown): string | null {
  *  extract of styles.css: it renders the document honestly at a glance and is
  *  not trying to be pixel-identical to the editor (same call spaces makes). */
 function sheet(doc: TypeDoc): string {
-  const family = doc.type?.family ? cssFontFamily(doc.type.family) : FONT_STACK_FALLBACK;
-  const size = doc.type?.size ?? 17;
+  // a SYNCED value never passed parseDoc, so both are checked here as well
+  const family = safeFontFamily(doc.type?.family) ?? FONT_STACK_FALLBACK;
+  const sz = doc.type?.size;
+  const size = typeof sz === 'number' && Number.isFinite(sz) ? sz : 17;
   // `theme` is not a declared TypeDoc field (there is no document theme in
   // this format yet) — read defensively through the model's own additivity
   // escape hatch in case a future field or a hand-edited file carries one.
@@ -266,7 +265,11 @@ function sheet(doc: TypeDoc): string {
     `.typ-embed svg{max-width:100%;height:auto}`,
     `.typ-card{padding:64px 32px;text-align:center;color:#5b6472}`,
     `.typ-card b{display:block;font-size:28px;color:${ink};margin:12px 0 6px}`,
-  ].join('');
+  ].join('')
+    // this sheet is SERIALIZED into every saved file's preview markup, and a
+    // <style>'s text serializes raw: a `<` could begin `</style>` and plant
+    // markup that runs before the preview remover. CSS never needs a raw `<`.
+    .replace(/</g, '\\3c ');
 }
 
 function frame(inner: HTMLElement, doc: TypeDoc): HTMLElement {
@@ -275,7 +278,9 @@ function frame(inner: HTMLElement, doc: TypeDoc): HTMLElement {
   const style = document.createElement('style');
   style.textContent = sheet(doc);
   box.appendChild(style);
-  const p = doc.page;
+  // numbers only: these style attributes are SERIALIZED into the saved file,
+  // and a synced page never passed parseDoc (a `;…url(…)` needs no `<`)
+  const p = readPage(doc.page as never);
   const wrap = document.createElement('div');
   wrap.setAttribute('style',
     `width:${p.width}px;transform-origin:0 0;transform:none;` +

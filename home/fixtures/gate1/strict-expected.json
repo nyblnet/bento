@@ -1,0 +1,4 @@
+{
+  "skeleton": "<!DOCTYPE html>\n<html lang=\"en\"><head>\n<meta charset=\"UTF-8\">\n<title><!--TITLE--></title>\n<style>body{margin:0}</style>\n<!--DOC-->\n<script type=\"bento/deflate-b86\" id=\"bento-rt-css\" data-len=\"4\">CSS1</script>\n<script type=\"bento/deflate-b86\" id=\"bento-rt\" data-len=\"3\">RT1</script>\n</head><body>\n<!--PREVIEW-->\n<script>load1()</script>\n</body></html>\n",
+  "remover": "<script data-bento-preview=\"1\">(function(){var a=document.querySelectorAll('[data-bento-preview]');for(var i=0;i<a.length;i++)a[i].remove()})()</script>"
+}

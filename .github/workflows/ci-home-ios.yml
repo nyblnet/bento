@@ -1,0 +1,79 @@
+# CI, home-ios: this zone's own jobs — validate, never release (see ci.yml's header).
+#
+# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
+# merge; a job here reports beside it, exactly as it did when it lived in
+# ci.yml. Keep each job's id unchanged — the id IS the check name.
+#
+# Each job checks out and builds what it needs for itself. Add this zone's
+# new jobs here, at the end; never in ci.yml.
+
+name: CI (home-ios)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
+  # the tip, every commit on main keeps its own run.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  home-ios-swift:
+    # The home/ios Swift rigs need CryptoKit, Security and LocalAuthentication,
+    # so on the ubuntu validate job they print SKIPPED and pass. Here they run
+    # for real, and a rig that reports SKIPPED FAILS the step, so a missing
+    # toolchain can never pass quietly.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Toolchain
+        run: sw_vers && xcrun swiftc --version
+      - name: Swift rigs (a skip fails)
+        shell: bash
+        run: |
+          set -o pipefail
+          rigs=(
+            test-tray-releases.mjs
+            test-home-origin.mjs
+            test-home-docstore-ios.mjs
+            test-home-id-keys.mjs
+            test-home-id-statements.mjs
+            test-home-id-agent.mjs
+            test-home-id-recovery.mjs
+            test-home-spotlight.mjs
+          )
+          for rig in "${rigs[@]}"; do
+            echo "::group::$rig"
+            node "scripts/$rig" | tee "$RUNNER_TEMP/rig.out"
+            echo "::endgroup::"
+            if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::$rig skipped on macOS"; exit 1; fi
+          done
+
+  home-ios-simulator:
+    # Builds the iOS app and drives it on a simulator: the app-switcher snapshot
+    # iOS writes to disk shows nothing of a sealed document. The rig reads back
+    # the snapshots iOS itself wrote; a skip fails here too.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Toolchain
+        run: |
+          brew install xcodegen
+          sw_vers && xcodebuild -version && xcrun simctl list runtimes
+      - name: Snapshot cover (a skip fails)
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/test-home-snapshot-cover.mjs | tee "$RUNNER_TEMP/rig.out"
+          if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::snapshot cover skipped on macOS"; exit 1; fi

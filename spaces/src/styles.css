@@ -1624,12 +1624,12 @@ a.sp-embed-src:hover { color: var(--ink); text-decoration: underline; }
    padding: every editing control was still on screen, merely inert, which
    reads as a broken editor rather than as a document. What leaves is anything
    whose only purpose is CHANGING the space; what stays is everything a reader
-   uses — the page tree, ⌘K search, Graph, print, and the eye to come back.
+   uses — the page tree, ⌘K search, Graph, print, and the eye to come back
+   (the floating Reading view button, which is how a reader leaves).
    `!important` throughout because these are one-line overrides of the layout
    rules that build each control, not a competition of specificity. (The insert
    group already leaves, with the insert group's own rules below.) */
 .sp-app.sp-reading .sp-group-history,
-.sp-app.sp-reading .sp-insp-toggle,
 .sp-app.sp-reading .bkp-end,
 .sp-app.sp-reading .sp-fmt,
 .sp-app.sp-reading .sp-newsplit,
@@ -2129,23 +2129,12 @@ body.sp-col-resizing { cursor: col-resize; user-select: none; }
    does not hold two panels and a page. The kernel panel does that itself
    (`drawerBelow`, editor.ts DRAWER_BELOW). */
 
-/* THE BUTTON IS SHOWN AT EVERY WIDTH, and this is a correction.
-   It was hidden above the breakpoint on the reasoning that the chevron on the
-   resizer strip is already the control, and that a second one would be the
-   duplication `.sp-panel-toggle` avoids. That argument holds for the PAGE LIST,
-   which is open by default: its chevron sits on the visible edge of a visible
-   panel. This panel is closed by default — deliberately, so it costs the
-   reading column nothing — which leaves a 5px strip as the only affordance.
-   Measured at 2560px: a 5×1353 target at x=2555, hard against the screen edge,
-   for a panel that is 0px wide. Reported as "how can I show the right panel?",
-   which is the question a control nobody can find produces. */
-.sp-insp-toggle { display: inline-flex; }
-/* …AND NOT EVEN THERE ONCE THE BAR HAS FOLDED. Measured at 375px: the 40px
-   button took the document title from 70px to 26px. fitTopbar hands out the
-   tier as a class precisely so a control can ask "is there room for me" rather
-   than re-derive a breakpoint; below the fold this one lives in the ⋯ menu, the
-   same place undo/redo and the other ways to save go. */
-.sp-bar-fold .sp-insp-toggle { display: none; }
+/* THE BAR HAS NO PROPERTIES BUTTON (maintainer, 2026-10-20). It had one at
+   every width because a closed panel's only affordance was once a 5px strip
+   against the screen edge. The kernel panel's chevron now docks flush to that
+   edge when the panel is shut (`.bkp-end.bkp-collapsed .bkp-toggle` above), so
+   the panel is reached as slides' is — its chevron, `]` — and, once the bar has
+   folded, from the Properties row in ⋯. test-spaces-chrome measures all three. */
 
 /* A disabled action is shown, not hidden: "move up" missing from the top block
    is a menu that changes shape, and a menu that changes shape is one you have
@@ -3122,6 +3111,38 @@ body.sp-canvas-dragging { user-select: none; cursor: grabbing; }
   .sp-newsplit > .sp-newpage, .sp-newsplit .sp-newmenu > .sp-btn {
     min-width: var(--tap); min-height: var(--tap); justify-content: center;
   }
+}
+
+/* ————— the Reading view pill —————
+   Slides' Slideshow pill (.ed-present-pill, .ed-pill-main): a surface pill on
+   a hairline, its soft shadow, 600 weight, the chrome tint on hover — in the
+   corner slides gives it, bottom-END (inset-inline-end, so RTL mirrors it),
+   14px in from the page's edge and above the safe area. `.sp-corner` is a
+   zero-width box after the page, so `inset-inline-end` measures from the
+   page's own edge, never from under the properties panel. The page's 40vh
+   bottom padding is what lets the last line scroll clear of it. */
+.sp-corner { position: relative; flex: 0 0 0; width: 0; min-width: 0; }
+.sp-corner > .sp-readfab {
+  position: absolute; z-index: 11;
+  inset-inline-end: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  box-shadow: 0 4px 14px rgb(20 30 45 / 0.10);
+  padding-block: 6px; padding-inline: 14px; font-weight: 600; color: var(--ink-2);
+}
+.sp-corner > .sp-readfab:hover { background: var(--chrome); }
+.sp-corner > .sp-readfab.sp-on { background: var(--chrome-2); color: var(--ink); box-shadow: 0 4px 14px rgb(20 30 45 / 0.10), inset 0 0 0 1px var(--line); }
+@media (pointer: coarse), (max-width: 700px) {
+  .sp-corner > .sp-readfab { min-height: var(--tap); }
+}
+@media print { .sp-corner { display: none !important; } }
+
+/* the page list's header: Graph beside ＋ ▾ */
+.sp-side-acts { display: inline-flex; align-items: center; gap: 2px; }
+.sp-graphbtn { padding-inline: 6px; color: var(--muted); }
+.sp-graphbtn:hover { color: var(--ink); }
+@media (pointer: coarse), (max-width: 700px) {
+  .sp-graphbtn { min-width: var(--tap); min-height: var(--tap); justify-content: center; }
 }
 
 /* ————— page templates —————

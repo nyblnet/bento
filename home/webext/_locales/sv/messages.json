@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "”$1” finns redan. Välj ett annat namn."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Din identitet för delning och livedokument. Den finns i den här webbläsaren; konfigurationen skapar en nyckel och en återställningskod så att du kan få tillbaka den."
+  },
+  "setIdNone": {
+    "message": "Inget Bento ID i den här webbläsaren ännu."
+  },
+  "setIdCreate": {
+    "message": "Skapa ditt Bento ID …"
+  },
+  "setIdLocal": {
+    "message": "Ditt Bento ID är konfigurerat i den här webbläsaren. Nästa steg är att verifiera din e-post."
+  },
+  "idSetupTitle": {
+    "message": "Skapa ditt Bento ID"
+  },
+  "idSetupLead": {
+    "message": "Ditt Bento ID är hur de du delar med vet att det är du. Konfigurationen skapar en nyckel och en återställningskod så att du kan få tillbaka det på en annan enhet."
+  },
+  "idSetupLight": {
+    "message": "I webbläsartillägget finns dina nycklar i den här webbläsarprofilen. Tar du bort tillägget raderas de, så förvara din nyckel och återställningskod väl."
+  },
+  "idSetupLabel": {
+    "message": "Namn på den här webbläsaren"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Konfigurera en nyckel"
+  },
+  "idWorking": {
+    "message": "Väntar på din nyckel …"
+  },
+  "idDeriving": {
+    "message": "Skapar din återställningskod ($1 av 2) …"
+  },
+  "idCodeTitle": {
+    "message": "Din återställningskod"
+  },
+  "idCodeLead": {
+    "message": "Skriv ner den eller skriv ut den och förvara den säkert. Den visas bara den här gången och är din väg tillbaka om du tappar bort din nyckel."
+  },
+  "idCodeConfirm": {
+    "message": "Skriv koden för att bekräfta att du har den"
+  },
+  "idCodePrint": {
+    "message": "Skriv ut"
+  },
+  "idCodeSaved": {
+    "message": "Jag har sparat den"
+  },
+  "idCodeMismatch": {
+    "message": "Det är inte koden ovan. Kontrollera den och försök igen."
+  },
+  "idCodeTypo": {
+    "message": "Koden har ett skrivfel: ett tecken är fel eller saknas."
+  },
+  "idNoPrf": {
+    "message": "Din nyckel kan inte låsa upp ditt Bento ID på andra enheter, så den här återställningskoden är din enda väg tillbaka."
+  },
+  "idNoCode": {
+    "message": "Den här enheten kan inte skapa en återställningskod, så din nyckel är din enda väg tillbaka: tappar du bort den förlorar du det här Bento ID:t. Du kan skapa en återställningskod senare på en annan enhet."
+  },
+  "idDoneTitle": {
+    "message": "Ditt Bento ID är konfigurerat"
+  },
+  "idDoneLead": {
+    "message": "Det är klart i den här webbläsaren. Nästa steg är att verifiera din e-postadress."
+  },
+  "idDone": {
+    "message": "Klar"
+  },
+  "idErrCancelled": {
+    "message": "Begäran om nyckeln avbröts eller tog för lång tid. Håll det här fönstret överst och försök igen."
+  },
+  "idErrPermission": {
+    "message": "Din nyckel behöver åtkomst till bento.page. Tillåt det när Chrome frågar och försök igen."
+  },
+  "idErrFailed": {
+    "message": "Något gick fel och inget sparades. Försök igen."
+  },
+  "idErrNoWayBack": {
+    "message": "Inget konfigurerades: din nyckel kan inte låsa upp ditt Bento ID och den här enheten kan inte skapa en återställningskod, så det skulle inte finnas någon väg tillbaka."
   }
 }

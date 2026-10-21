@@ -14,7 +14,7 @@
 //
 //   npm run build:sealtest --prefix slides && node scripts/test-sealed-boot.mjs
 
-import { openSealed, savedFile, scanIndexedDB } from './lib/sealed-boot.mjs'
+import { openSealed, savedFile, scanIndexedDB, storeRefusals } from './lib/sealed-boot.mjs'
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const MARK = 'ZZSEALEDMARK' + Date.now()
@@ -49,9 +49,27 @@ try {
     ok(!file.includes('data-bento-preview'), 'no first-page preview')
     ok(!fileName.includes(MARK), `the filename is neutral, not the title (${fileName})`)
     const idb = await scanIndexedDB(page, MARK)
-    console.log(`  info  IndexedDB records carrying the content after an edit, sealed: ${idb.length ? idb.join(', ') : 'none'}`)
+    ok(idb.length === 0, `no plaintext in IndexedDB after a sealed edit (${idb.join(', ') || 'none'}): the app's guard, or the kernel store's backstop`)
     ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors[0] : ''}`)
     await context.close()
+  }
+
+  console.log('\nthe backstop is visible to the rigs: an app leaning on it fails close()')
+  {
+    // Which branch runs depends on the app's guards: today slides' are not yet
+    // switched, so its sealed edit reaches the store and is REFUSED there. Once
+    // its guards switch, nothing reaches the store. Either way close() must agree
+    // with the counter: that is what keeps each app's guard mutants red.
+    const s = await openSealed(browser, 'slides')
+    await markDocument(s.page)
+    const n = await storeRefusals(s.page)
+    const threw = await s.close().then(() => null, (e) => e.message)
+    console.log(`  info  the kernel store refused ${n} plaintext call(s) on a sealed slides edit`)
+    ok(n > 0 ? /leaned on the kernel store's backstop/.test(threw ?? '') : threw === null,
+      n > 0 ? 'refusals > 0, so close() throws: the missing guard fails the rig' : 'no refusals, so close() passes')
+    const t = await openSealed(browser, 'slides', { allowStoreRefusals: true })
+    await markDocument(t.page)
+    ok(await t.close().then(() => true, () => false), 'with { allowStoreRefusals: true }, close() does not throw')
   }
 
   console.log('\na fixed document, across a reload (for recovery rows keyed by docId)')
@@ -59,7 +77,9 @@ try {
     const base = await openSealed(browser, 'slides', { sealed: false })
     const doc = await base.page.evaluate((m) => ({ ...structuredClone(window.bento.doc), title: m }), MARK)
     await base.context.close()
-    const { page, context, reload } = await openSealed(browser, 'slides', { doc })
+    // allowStoreRefusals: this row tests the helper's fixed-document mechanics,
+    // not slides' guards (its own rig asserts those)
+    const { page, context, reload } = await openSealed(browser, 'slides', { doc, allowStoreRefusals: true })
     const first = await page.evaluate(() => ({ id: window.bento.doc.docId, title: window.bento.doc.title }))
     ok(first.id === doc.docId && first.title === MARK, 'the fixed document booted, sealed, with its own docId')
     await reload() // re-installs the handoff and re-proves the seal, or throws
@@ -74,7 +94,7 @@ try {
     await markDocument(plain.page)
     ok((await scanIndexedDB(plain.page, MARK)).length > 0, 'the unsealed session leaves the marker in IndexedDB')
     const docId = await plain.page.evaluate(() => window.bento.doc.docId)
-    const sealedPage = await openSealed(browser, 'slides', { context: plain.context, url: plain.url })
+    const sealedPage = await openSealed(browser, 'slides', { context: plain.context, url: plain.url, allowStoreRefusals: true })
     ok((await scanIndexedDB(sealedPage.page, MARK)).length > 0, 'a sealed page on the same context sees the same storage')
     ok(await sealedPage.page.evaluate(() => !!globalThis.__bentoTestSealProbe), 'and it is sealed (the handoff is per page)')
     await plain.reload()

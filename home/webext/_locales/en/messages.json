@@ -1026,5 +1026,121 @@
   "saTaken": {
     "message": "“$1” is already there. Choose a different name.",
     "description": "Save-as window: the suggested name (not typed by the person) is already taken in that folder; it is never replaced. $1 file name."
+  },
+  "setIdTitle": {
+    "message": "Bento ID",
+    "description": "Library settings: section title."
+  },
+  "setIdSub": {
+    "message": "Your identity for sharing and live documents. It lives in this browser; setting it up makes a passkey and a recovery code so you can get it back.",
+    "description": "Library settings: section subtitle."
+  },
+  "setIdNone": {
+    "message": "No Bento ID on this browser yet.",
+    "description": "Library settings: no Bento ID set up."
+  },
+  "setIdCreate": {
+    "message": "Create your Bento ID…",
+    "description": "Library settings: button that opens the setup page."
+  },
+  "setIdLocal": {
+    "message": "Your Bento ID is set up on this browser. Verifying your email comes next.",
+    "description": "Library settings: a Bento ID exists but is not yet verified."
+  },
+  "idSetupTitle": {
+    "message": "Create your Bento ID",
+    "description": "Setup page title."
+  },
+  "idSetupLead": {
+    "message": "Your Bento ID is how the people you share with know it's you. Setting it up makes a passkey and a recovery code, so you can get it back on another device.",
+    "description": "Setup page: what this is."
+  },
+  "idSetupLight": {
+    "message": "In the browser extension, your keys are kept in this browser profile. Removing the extension deletes them, so keep your passkey and recovery code safe.",
+    "description": "Setup page: the light-tier caveat, stated before setup."
+  },
+  "idSetupLabel": {
+    "message": "Name for this browser",
+    "description": "Setup page: label of the device-name field."
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome",
+    "description": "Setup page: default device name."
+  },
+  "idSetupGo": {
+    "message": "Set up a passkey",
+    "description": "Setup page: primary button. Chrome then asks to allow bento.page and to create a passkey."
+  },
+  "idWorking": {
+    "message": "Waiting for your passkey…",
+    "description": "Setup page: status while the passkey dialogs are open."
+  },
+  "idDeriving": {
+    "message": "Making your recovery code ($1 of 2)…",
+    "description": "Setup page: status during each of the two key derivations. $1 is 1 or 2."
+  },
+  "idCodeTitle": {
+    "message": "Your recovery code",
+    "description": "Recovery code step: title."
+  },
+  "idCodeLead": {
+    "message": "Write it down or print it, and keep it somewhere safe. It's shown only this once, and it's your way back if you lose your passkey.",
+    "description": "Recovery code step: instructions."
+  },
+  "idCodeConfirm": {
+    "message": "Type the code to confirm you have it",
+    "description": "Recovery code step: label of the confirmation field."
+  },
+  "idCodePrint": {
+    "message": "Print",
+    "description": "Recovery code step: print button."
+  },
+  "idCodeSaved": {
+    "message": "I've saved it",
+    "description": "Recovery code step: confirm button."
+  },
+  "idCodeMismatch": {
+    "message": "That isn't the code shown above. Check it and try again.",
+    "description": "Recovery code step: the typed code is valid but different."
+  },
+  "idCodeTypo": {
+    "message": "That code has a typo: a character is wrong or missing.",
+    "description": "Recovery code step: the typed code fails its check symbol."
+  },
+  "idNoPrf": {
+    "message": "Your passkey can't unlock your Bento ID on other devices, so this recovery code is your only way back.",
+    "description": "Recovery code step: the passkey has no PRF support."
+  },
+  "idNoCode": {
+    "message": "This device can't make a recovery code, so your passkey is your only way back: if you lose it, you lose this Bento ID. You can make a recovery code later on another device.",
+    "description": "Done step: no recovery code could be made (not enough memory). Must say plainly that losing the passkey loses the Bento ID (security, #829)."
+  },
+  "idDoneTitle": {
+    "message": "Your Bento ID is set up",
+    "description": "Done step: title."
+  },
+  "idDoneLead": {
+    "message": "It's ready on this browser. Verifying your email address comes next.",
+    "description": "Done step: what happens next."
+  },
+  "idDone": {
+    "message": "Done",
+    "description": "Done step: close button."
+  },
+  "idErrCancelled": {
+    "message": "The passkey request was cancelled or timed out. Keep this window in front and try again.",
+    "description": "Setup error: the passkey ceremony was cancelled, timed out or lost focus."
+  },
+  "idErrPermission": {
+    "message": "Your passkey needs access to bento.page. Allow it when Chrome asks, then try again.",
+    "description": "Setup error: the bento.page permission was refused."
+  },
+  "idErrFailed": {
+    "message": "Something went wrong, and nothing was saved. Try again.",
+    "description": "Setup error: anything else."
+  },
+  "idErrNoWayBack": {
+    "message": "Nothing was set up: your passkey can't unlock your Bento ID and this device can't make a recovery code, so there would be no way back.",
+    "description": "Setup error: neither recovery path is available."
   }
 }

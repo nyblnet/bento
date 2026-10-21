@@ -47,8 +47,8 @@
 // callers, so they cannot drift apart again.
 
 import './recovery.css'
-import { getRecovery, clearRecovery, recoveryLooksOlder, type Snapshot } from '../../kernel/src/autosave.ts'
-import { isEncryptionActive } from '../../kernel/src/save.ts'
+import { getRecovery, clearRecovery, clearVersions, recoveryLooksOlder, type Snapshot } from '../../kernel/src/autosave.ts'
+import { isBodySealed } from '../../kernel/src/save.ts'
 import { planReplace } from './about.ts'
 import { parseDoc, type DashDoc } from './model.ts'
 import type { Store } from './store.ts'
@@ -134,7 +134,7 @@ export interface DecideInput {
   snapshot: Snapshot | null
   /** the workbook that actually loaded from the file */
   doc: DashDoc
-  /** a password is held this session — `isEncryptionActive()` at the call site */
+  /** the body is sealed on disk, by a password or the identity seal — `isBodySealed()` at the call site */
   encrypted: boolean
   /** the store refuses commits (frozen doc, or a `readonly` copy) */
   readOnly: boolean
@@ -285,9 +285,14 @@ export function recoveryOffNotice(store: Store, say: (message: string) => void):
 
 export async function mountRecovery(host: WorkbookHost): Promise<NoOfferReason | 'offered'> {
   const doc = host.store.doc
-  // Rule 2, enforced before the read as well as inside `decide`: an encrypted
-  // session has no business touching this store at all.
-  if (isEncryptionActive()) return 'encrypted'
+  // Rule 2, enforced before the read as well as inside `decide`: a sealed
+  // body never offers a plaintext copy, and never keeps one. Copies this
+  // browser kept for THIS workbook in an earlier, unsealed session are
+  // deleted; every other workbook's copies are untouched.
+  if (isBodySealed()) {
+    try { await Promise.all([clearRecovery(doc.docId), clearVersions(doc.docId)]) } catch { /* store unavailable: nothing kept there */ }
+    return 'encrypted'
+  }
   let snapshot: Snapshot | null = null
   try { snapshot = await getRecovery(doc.docId) } catch { return 'none' }
   const d = decide({ snapshot, doc, encrypted: false, readOnly: host.store.readOnly })

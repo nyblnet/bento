@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// bento/id — the recovery code and the key blobs, a port of
+// bento/connect — the recovery code and the key blobs, a port of
 // kernel/src/recovery.ts (identity-design §2f, security §28). Every value is
 // DETERMINISTIC in kernel/fixtures/recovery-v1.json, so this port reproduces the
 // exact bytes end to end; tests/recovery.rs runs every row.
@@ -30,6 +30,69 @@ pub const ARGON2_TAG_LEN: usize = 32;
 pub const SALT_LEN: usize = 16;
 pub const CODE_BYTES: usize = 10;
 
+/// Free memory Argon2id insists on beyond its own working set.
+pub const MEMORY_HEADROOM_KIB: u64 = 64 * 1024;
+
+#[cfg(test)]
+thread_local! {
+    /// Unit tests only: pretend this much memory is available (KiB). Not in
+    /// any build but `cargo test` of this crate (security, #823 review).
+    static AVAILABLE_OVERRIDE_KIB: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// Physical memory available to THIS process right now, in KiB, where the
+/// platform says. Linux: /proc/meminfo MemAvailable, capped by every cgroup v2
+/// ancestor's (memory.max − memory.current) — Flatpak, Snap and containers set
+/// those, and MemAvailable ignores them. Windows: GlobalMemoryStatusEx (owed
+/// with the Windows store). Elsewhere: unknown (None).
+pub fn available_memory_kib() -> Option<u64> {
+    #[cfg(test)]
+    if let Some(v) = AVAILABLE_OVERRIDE_KIB.with(|c| c.get()) {
+        return Some(v);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let info = std::fs::read_to_string("/proc/meminfo").ok()?;
+        let line = info.lines().find(|l| l.starts_with("MemAvailable:"))?;
+        let mem: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
+        let cg = std::fs::read_to_string("/proc/self/cgroup").ok();
+        return Some(match cg.as_deref().and_then(cgroup_v2_path) {
+            Some(path) => mem.min(cgroup_free_kib(std::path::Path::new("/sys/fs/cgroup"), &path).unwrap_or(u64::MAX)),
+            None => mem,
+        });
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
+/// The unified (v2) hierarchy path from /proc/self/cgroup ("0::/a/b").
+#[cfg(any(target_os = "linux", test))]
+fn cgroup_v2_path(proc_cgroup: &str) -> Option<String> {
+    proc_cgroup.lines().find_map(|l| l.strip_prefix("0::")).map(|p| p.trim().to_string())
+}
+
+/// The tightest (memory.max − memory.current) from `path` up to the root of
+/// the cgroup v2 mount, in KiB; None when no ancestor sets a limit.
+#[cfg(any(target_os = "linux", test))]
+fn cgroup_free_kib(root: &std::path::Path, path: &str) -> Option<u64> {
+    let mut best: Option<u64> = None;
+    let mut dir = root.join(path.trim_start_matches('/'));
+    loop {
+        let max = std::fs::read_to_string(dir.join("memory.max")).ok();
+        let cur = std::fs::read_to_string(dir.join("memory.current")).ok();
+        if let (Some(max), Some(cur)) = (max, cur) {
+            if let (Ok(max), Ok(cur)) = (max.trim().parse::<u64>(), cur.trim().parse::<u64>()) {
+                let free = max.saturating_sub(cur) / 1024;
+                best = Some(best.map_or(free, |b| b.min(free)));
+            }
+        }
+        if dir == root || !dir.pop() || !dir.starts_with(root) {
+            break;
+        }
+    }
+    best
+}
+
 /// Raw Argon2id with explicit parameters, an optional secret and associated
 /// data (the RFC 9106 §5.3 vector needs both). Our derivations use `argon2id`.
 pub fn argon2id_raw(
@@ -53,15 +116,40 @@ pub fn argon2id_raw(
         Some(s) => Argon2::new_with_secret(s, Algorithm::Argon2id, Version::V0x13, params).map_err(|e| e.to_string())?,
         None => Argon2::new(Algorithm::Argon2id, Version::V0x13, params),
     };
+    // FAIL CLOSED ON LOW MEMORY. A Rust allocation failure ABORTS the process
+    // rather than returning an error (home-android saw the same with
+    // OutOfMemoryError: catching it did not fail closed). And a fallible
+    // reservation is NOT enough on its own (measured: with overcommit a 4 TiB
+    // try_reserve SUCCEEDS, and the process is SIGKILLed later when the pages are
+    // touched). So: check the AVAILABLE physical memory first (need + headroom),
+    // then reserve fallibly and hand the buffer to the crate, which allocates
+    // nothing itself.
+    let blocks = a.params().block_count();
+    let need_kib = blocks as u64; // one Argon2 block = 1 KiB
+    if let Some(avail) = available_memory_kib() {
+        if avail < need_kib + MEMORY_HEADROOM_KIB {
+            return Err(format!("not enough free memory for Argon2id: need {need_kib} KiB + {MEMORY_HEADROOM_KIB} KiB headroom, {avail} KiB available"));
+        }
+    }
+    let mut memory: Vec<argon2::Block> = Vec::new();
+    memory
+        .try_reserve_exact(blocks)
+        .map_err(|_| format!("not enough memory for Argon2id ({} KiB)", blocks))?;
+    memory.resize(blocks, argon2::Block::default());
     let mut out = Zeroizing::new(vec![0u8; tag_len]);
-    a.hash_password_into(password, salt, &mut out).map_err(|e| e.to_string())?;
+    let r = a.hash_password_into_with_memory(password, salt, &mut out, &mut memory);
+    // the working memory held password-derived state: wipe it
+    for b in memory.iter_mut() {
+        *b = argon2::Block::default();
+    }
+    r.map_err(|e| e.to_string())?;
     Ok(out)
 }
 
 /// Argon2id with OUR parameters (v0x13, p=1, 64 MiB, t=3, 32 bytes).
-pub fn argon2id(password: &[u8], salt: &[u8]) -> Secret {
+/// Err when the 64 MiB cannot be reserved: refuse cleanly, never abort.
+pub fn argon2id(password: &[u8], salt: &[u8]) -> Result<Secret, String> {
     argon2id_raw(password, salt, None, None, ARGON2_MEMORY_KIB, ARGON2_PASSES, ARGON2_PARALLELISM, ARGON2_TAG_LEN)
-        .expect("fixed Argon2id parameters are valid")
 }
 
 // --- the recovery code: 80 bits, Crockford base32, with a check symbol ----------
@@ -151,13 +239,13 @@ fn hkdf(ikm: &[u8], salt: &[u8], info: &str) -> Secret {
 }
 
 /// HKDF-SHA-256(Argon2id(code, salt), empty, "bento/id/rc-wrap/v1").
-pub fn recovery_wrap_key(code: &[u8], salt: &[u8]) -> Secret {
+pub fn recovery_wrap_key(code: &[u8], salt: &[u8]) -> Result<Secret, String> {
     assert_eq!((code.len(), salt.len()), (CODE_BYTES, SALT_LEN));
-    hkdf(&argon2id(code, salt), &[], "bento/id/rc-wrap/v1")
+    Ok(hkdf(&argon2id(code, salt)?, &[], "bento/id/rc-wrap/v1"))
 }
 
 /// What the client sends the directory: Argon2id(code, salt_v).
-pub fn recovery_verifier(code: &[u8], salt_v: &[u8]) -> Secret {
+pub fn recovery_verifier(code: &[u8], salt_v: &[u8]) -> Result<Secret, String> {
     assert_eq!((code.len(), salt_v.len()), (CODE_BYTES, SALT_LEN));
     argon2id(code, salt_v)
 }
@@ -328,4 +416,44 @@ pub fn pepper_seal(wrap_key: &[u8], iv: &[u8], inner: &[u8], account_pub: &str) 
 
 pub fn pepper_open(wrap_key: &[u8], iv: &[u8], outer: &[u8], account_pub: &str) -> Option<Secret> {
     gcm_open(wrap_key, iv, &format!("bento/id/rc-pepper/v1.{}", account_tag(account_pub)), outer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn argon2id_refuses_cleanly_when_memory_is_short() {
+        // kernel/home-android finding: low memory must FAIL CLOSED with an Err,
+        // never abort or get the process killed. Simulated: 64 MiB needed + 64
+        // MiB headroom, only 100 MiB "available".
+        AVAILABLE_OVERRIDE_KIB.with(|c| c.set(Some(100 * 1024)));
+        let r = argon2id(b"pw", &[0u8; 16]);
+        AVAILABLE_OVERRIDE_KIB.with(|c| c.set(None));
+        let e = r.err().expect("refused");
+        assert!(e.contains("not enough free memory"), "{e}");
+        // control: with enough available, it runs
+        AVAILABLE_OVERRIDE_KIB.with(|c| c.set(Some(1024 * 1024)));
+        assert!(argon2id(b"pw", &[0u8; 16]).is_ok());
+        AVAILABLE_OVERRIDE_KIB.with(|c| c.set(None));
+    }
+
+    #[test]
+    fn cgroup_limits_cap_available_memory() {
+        // A fake cgroup v2 tree: the leaf sets no limit, its parent allows 512
+        // MiB with 480 MiB used, the grandparent is unlimited ("max").
+        let root = std::env::temp_dir().join(format!("bento-cg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let leaf = root.join("user.slice/app.scope/leaf");
+        std::fs::create_dir_all(&leaf).unwrap();
+        let w = |d: &std::path::Path, f: &str, v: &str| std::fs::write(d.join(f), v).unwrap();
+        w(&root.join("user.slice"), "memory.max", "max\n");
+        w(&root.join("user.slice"), "memory.current", "1000\n");
+        w(&root.join("user.slice/app.scope"), "memory.max", &format!("{}\n", 512u64 << 20));
+        w(&root.join("user.slice/app.scope"), "memory.current", &format!("{}\n", 480u64 << 20));
+        assert_eq!(cgroup_free_kib(&root, "/user.slice/app.scope/leaf"), Some(32 * 1024), "the parent's limit binds");
+        assert_eq!(cgroup_v2_path("12:pids:/x\n0::/user.slice/app.scope/leaf\n").as_deref(), Some("/user.slice/app.scope/leaf"));
+        assert_eq!(cgroup_free_kib(&root, "/nonexistent"), None);
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

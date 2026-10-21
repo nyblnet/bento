@@ -30,7 +30,7 @@ const { emptyDoc, parseDoc, docForExport } = await import('../type/src/model.ts'
 const { mintCollab } = await import('../kernel/src/sync/online.ts')
 const { mergeDoc } = await import('../type/src/merge.ts')
 const { newThread, writeThreads } = await import('../type/src/comments.ts')
-const { sign, newKey, newHistorySalt, verifyChain } = await import('../type/src/canon.ts')
+const { sign, newKey, newHistorySalt, verifyAll, sigId } = await import('../type/src/canon.ts')
 const { TYPE_FIELDS, HISTORY_CLASS, keepLiveHistory } = await import('../type/src/docclass.ts')
 const { Store } = await import('../type/src/store.ts')
 import type { TypeDoc } from '../type/src/model.ts'
@@ -236,7 +236,7 @@ async function full(): Promise<{ doc: TypeDoc; ownerPriv: string }> {
                    body: [{ id: 'p1', kind: 'para', text: DRAFT }] }]
   writeThreads(d, [newThread(d.body[0], 0, 7, 'Bob', NOTE)])
   d.historySalt = newHistorySalt()   // the first signature mints it, in the document
-  d.signatures = [await sign(d, await newKey(), { name: 'Alice', prev: null })]
+  { const sg = await sign(d, await newKey(), { name: 'Alice', prev: null }); d.signatures = { [sigId(d.docId, sg)]: sg } }
   ;(d as Record<string, unknown>).futureField = FUTURE
   const r = parseDoc(JSON.stringify(d))
   if (!r.ok) throw new Error('FULL fixture did not parse')
@@ -261,7 +261,7 @@ H('the FULL fixture really carries everything a leak would show')
 const F = await full()
 ok(has(F.doc, DRAFT), 'the source holds a whole earlier draft in revisions')
 ok(has(F.doc, NOTE), 'the source holds an internal comment thread (it survived parseDoc)')
-ok(F.doc.signatures.length === 1, 'the source holds a real signature')
+ok(Object.keys(F.doc.signatures).length === 1, 'the source holds a real signature')
 ok(typeof F.doc.historySalt === 'string' && F.doc.historySalt.length === 22,
    'and the history salt that signature committed under (it survived parseDoc)')
 ok(has(F.doc, FUTURE), 'the source holds a field this build does not declare')
@@ -274,11 +274,11 @@ H('a VIEW-ONLY copy carries no history (tier reader)')
   ok(!has(r, NOTE), 'no internal comment')
   // Signatures travel WITH a view-only copy now (canon.ts v2): each signs the
   // content plus a salted commitment to the history, so the copy — no drafts,
-  // no salt — verifies them. Run through the real verifyChain on the COPY.
-  ok(r.signatures?.length === 1, 'the signature travels with the view-only copy')
+  // no salt — verifies them. Run through the real verifyAll on the COPY.
+  ok(Object.keys(r.signatures ?? {}).length === 1, 'the signature travels with the view-only copy')
   ok(!('historySalt' in r), 'but the history salt does not — without it the commitment reveals nothing')
   {
-    const v = await verifyChain(r as never, r.signatures)
+    const v = await verifyAll(r as never, r.signatures)
     ok(v.ok && v.entries[0].ok && v.entries[0].why === null,
       'and it VERIFIES on the copy: the content attested is exactly what the copy holds')
     ok(v.entries[0].history === 'not-included',
@@ -304,7 +304,7 @@ H('Copy document JSON carries no history and no credentials (tier copyJSON)')
   const j = docForExport(F.doc)
   ok(!has(j, DRAFT) && !has(j, NOTE), 'no draft, no comment')
   ok(!('historySalt' in j), 'no history salt')
-  ok(j.signatures?.length === 1, 'the signature is content now, so it travels as text too')
+  ok(Object.keys(j.signatures ?? {}).length === 1, 'the signature is content now, so it travels as text too')
   ok(!('collab' in j), 'no collaboration block at all')
   ok(!has(j, FUTURE), 'no undeclared field')
   ok(j.body[0].text === F.doc.body[0].text && j.docId === F.doc.docId, 'content and identity intact')
@@ -320,7 +320,7 @@ H('mail merge: every letter is a new document with no history (the \'merge\' tie
   ok(a.docId !== F.doc.docId && b.docId !== F.doc.docId, 'neither reuses the source document\'s identity')
   for (const [n, m] of [['first', a], ['second', b]] as const) {
     ok(!has(m, DRAFT) && !has(m, NOTE), `the ${n} letter carries no draft and no comment`)
-    ok(!m.signatures.length && !m.revisions.length, `the ${n} letter carries no signatures and no revisions`)
+    ok(!Object.keys(m.signatures).length && !m.revisions.length, `the ${n} letter carries no signatures and no revisions`)
     ok(!('collab' in m), `the ${n} letter carries no collaboration block`)
   }
   const B = await bare()
@@ -367,7 +367,7 @@ H('mail merge: an EMBEDDED document\'s keys never reach a letter')
 H('an INVITE keeps history by default, and leaves it out when asked (tier invite)')
 {
   const keep = await inviteCopy(F.doc, F.ownerPriv)
-  ok(has(keep, DRAFT) && has(keep, NOTE) && keep.signatures.length === 1,
+  ok(has(keep, DRAFT) && has(keep, NOTE) && Object.keys(keep.signatures).length === 1,
     'by default the invitee gets the history — the kernel\'s invite rule')
   ok(!('ownerPriv' in (keep.collab as object)), 'but never the owner key')
   ok(keep.collab?.on === true, 'and joins live')

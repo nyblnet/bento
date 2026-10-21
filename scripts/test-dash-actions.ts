@@ -104,7 +104,7 @@ console.log('the table and the toolbar agree')
     //   2. the helper          barBtn('chart', …)
     //   3. assigned property   dataset.act = 'help'   (help.ts's ? button)
     for (const m of src.matchAll(/data-act=["']([a-z0-9-]+)["']/g)) inBar.add(m[1])
-    for (const m of src.matchAll(/\bbarBtn\(\s*['"]([a-z0-9-]+)['"]/g)) inBar.add(m[1])
+    for (const m of src.matchAll(/\b(?:barBtn|iconBtn)\(\s*['"]([a-z0-9-]+)['"]/g)) inBar.add(m[1])
     for (const m of src.matchAll(/dataset\.act\s*=\s*['"]([a-z0-9-]+)['"]/g)) inBar.add(m[1])
   }
   ok(inBar.size >= 12, `found the bar's actions in the source (${inBar.size})`)
@@ -162,13 +162,16 @@ console.log('\nthe matrix')
   // WRITTEN OUT, not derived. A check that asked the table what the table says
   // would pass no matter what the table said; these are the answers a reader of
   // docs/dash-sheet-kinds.md would give, independently.
-  const dataset: ActionId[] = ['formula', 'chart', 'viz3d', 'pivot', 'story', 'export']
+  // comment: an anchor is a dataset cell (column id + row id), so it is
+  // dataset-scoped like the rest of this row
+  const dataset: ActionId[] = ['formula', 'chart', 'viz3d', 'pivot', 'story', 'export', 'comment']
   const workbook: ActionId[] = [
     'dashboard', 'undo', 'redo', 'import', 'import-xlsx', 'export-xlsx',
     // Print is workbook-scoped: the dialog prints EITHER kind, and its default
     // scope is the sheet on screen whatever that sheet is.
     'print',
-    'save', 'about', 'settings', 'help',
+    // (Settings left the bar for About's footer and ⋯ — it is not a bar action)
+    'save', 'about', 'help',
   ]
   ok(dataset.every((a) => actionApplies(a, 'table')),
     'every dataset action runs on a dataset')

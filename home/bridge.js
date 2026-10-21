@@ -235,13 +235,34 @@
   ;(() => {
     const caps = Array.isArray(window.__bentoHostCaps) ? window.__bentoHostCaps.slice() : []
     try { delete window.__bentoHostCaps } catch (_) {}
-    if (window !== window.top || caps.indexOf('store') < 0) return
+    if (window !== window.top) return
+    // Only what this file can relay; a host naming something else adds nothing.
+    const offered = ['store', 'seal'].filter((c) => caps.indexOf(c) >= 0)
+    if (!offered.length) return
 
     const prev = window.__bentoHost && Array.isArray(window.__bentoHost.ops) ? window.__bentoHost.ops : []
-    const ops = Object.freeze(Array.from(new Set(prev.concat(['store']))))
+    const ops = Object.freeze(Array.from(new Set(prev.concat(offered))))
     Object.defineProperty(window, '__bentoHost', {
       value: Object.freeze({ ops }), writable: false, enumerable: true, configurable: false,
     })
+    const CH = '__bento_tray__'
+
+    // 'seal': the page tells the host whether the open document is sealed
+    // (password or identity), whenever that changes, so the host can keep the
+    // document out of its own surfaces (the app-switcher snapshot) before the
+    // sealed file is even saved. Fire-and-forget: {sealed: boolean}, nothing
+    // comes back. The host may only ADD protection on this signal; it never
+    // lifts protection for a file it knows is sealed because a page said so.
+    if (offered.indexOf('seal') >= 0) {
+      window.addEventListener('message', (ev) => {
+        const d = ev.data
+        if (ev.source !== window || !d || d[CH] !== true || d.dir !== 'req' || d.op !== 'seal.state') return
+        const p = d.payload || {}
+        if (typeof p.sealed !== 'boolean') return
+        call('seal.state', { sealed: p.sealed }).catch(() => {})
+      })
+    }
+    if (offered.indexOf('store') < 0) return
 
     // THE NATIVE CONTRACT, identical on every host. Requests arrive through the
     // ordinary call() channel as {id, op, name} (plus b64 for store.set). The
@@ -256,7 +277,6 @@
     //                             | 'unavailable' (the host could not do it)
     // The partition is the document's identity as the HOST derived it; nothing
     // in a request names it. scripts/test-home-docstore.mjs holds a host to this.
-    const CH = '__bento_tray__'
     const KNOWN = { 'store.get': 1, 'store.set': 1, 'store.list': 1, 'store.delete': 1 }
     // Both transports carry strings, so bytes travel as base64 — and are turned
     // back into a Uint8Array HERE, in the page's own realm, because the kernel

@@ -1,0 +1,4 @@
+# OpenSK needs nightly (subtle's "nightly" feature); pinned to OpenSK's own
+# toolchain. Test-only: the shipped agent builds on stable.
+[toolchain]
+channel = "nightly-2026-06-03"

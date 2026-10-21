@@ -95,9 +95,9 @@ fn derivations() {
     let f = fixture();
     let d = &f["derivations"];
     let (code, salt, salt_v) = (unhex(s(d, "code")), unhex(s(d, "salt")), unhex(s(d, "saltV")));
-    assert_eq!(hex(&rc::argon2id(&code, &salt)), s(d, "argon2_A"), "A = Argon2id(code bytes, salt)");
-    assert_eq!(hex(&rc::recovery_wrap_key(&code, &salt)), s(d, "wrapKey"), "wrap key = HKDF(A, empty, rc-wrap)");
-    assert_eq!(hex(&rc::recovery_verifier(&code, &salt_v)), s(d, "verifier"), "verifier = Argon2id(code, salt_v)");
+    assert_eq!(hex(&rc::argon2id(&code, &salt).unwrap()), s(d, "argon2_A"), "A = Argon2id(code bytes, salt)");
+    assert_eq!(hex(&rc::recovery_wrap_key(&code, &salt).unwrap()), s(d, "wrapKey"), "wrap key = HKDF(A, empty, rc-wrap)");
+    assert_eq!(hex(&rc::recovery_verifier(&code, &salt_v).unwrap()), s(d, "verifier"), "verifier = Argon2id(code, salt_v)");
     assert_ne!(s(d, "verifier"), s(d, "argon2_A"));
     assert_eq!(hex(&rc::prf_kek(&unhex(s(&d["prf"], "output")), &unhex(s(&d["prf"], "salt")))), s(d, "prfKek"));
 }
@@ -127,13 +127,13 @@ fn whole_blobs_end_to_end() {
     assert_eq!(rc::open_prf_blob(&blob(&b["prf"]["unruled"]), &prf, &cred, acct, Some(kx_pub), KxMode::A).err(), Some("length"));
 
     let r = &b["recovery"]["inputs"];
-    let wk = rc::recovery_wrap_key(&unhex(s(r, "code")), &unhex(s(r, "salt")));
+    let wk = rc::recovery_wrap_key(&unhex(s(r, "code")), &unhex(s(r, "salt"))).unwrap();
     let riv = unhex(s(r, "iv"));
     assert_eq!(hex(&rc::seal_recovery_inner(&wk, &riv, acct, &only, KxMode::Unruled)), s(&b["recovery"], "inner"), "recovery inner re-seals");
     let inner = unhex(s(&b["recovery"], "inner"));
     assert_eq!(hex(&rc::open_recovery_inner(&inner, &wk, &riv, acct, None, KxMode::Unruled).unwrap().account[..]), s(k, "accountD"));
     let other = rc::parse_recovery_code(s(&f["codes"][1], "printed")).unwrap();
-    let wk2 = rc::recovery_wrap_key(&other[..], &unhex(s(r, "salt")));
+    let wk2 = rc::recovery_wrap_key(&other[..], &unhex(s(r, "salt"))).unwrap();
     assert_eq!(rc::open_recovery_inner(&inner, &wk2, &riv, acct, None, KxMode::Unruled).err(), Some("decrypt"), "another code cannot open it");
     assert_eq!(rc::open_recovery_inner(&inner, &wk, &riv, kx_pub, None, KxMode::Unruled).err(), Some("decrypt"), "aad binds the account");
 
@@ -141,7 +141,7 @@ fn whole_blobs_end_to_end() {
     let (vk, wkey) = rc::pepper_keys(&unhex(s(pp, "secret")), acct);
     assert_eq!((hex(&vk), hex(&wkey)), (s(pp, "verifyKey").to_string(), s(pp, "wrapKey").to_string()));
     let d = &f["derivations"];
-    let verifier = rc::recovery_verifier(&unhex(s(d, "code")), &unhex(s(d, "saltV")));
+    let verifier = rc::recovery_verifier(&unhex(s(d, "code")), &unhex(s(d, "saltV"))).unwrap();
     assert_eq!(hex(&rc::pepper_verifier_tag(&vk, &verifier)), s(pp, "verifierTag"));
     let piv = unhex(s(pp, "iv"));
     assert_eq!(hex(&rc::pepper_seal(&wkey, &piv, &inner, acct)), s(pp, "outer"));
@@ -169,3 +169,4 @@ fn normaliser_is_unicode_17_or_later() {
     let (major, _, _) = unicode_normalization::UNICODE_VERSION;
     assert!(major >= 17, "unicode-normalization data is {:?}", unicode_normalization::UNICODE_VERSION);
 }
+

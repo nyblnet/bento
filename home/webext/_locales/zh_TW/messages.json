@@ -880,5 +880,92 @@
   },
   "saTaken": {
     "message": "「$1」已存在。請換一個名稱。"
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "用於共享和即時文件的身分。它儲存在這個瀏覽器中；設定時會建立一個密碼金鑰和一組復原碼，讓你可以找回它。"
+  },
+  "setIdNone": {
+    "message": "這個瀏覽器中還沒有 Bento ID。"
+  },
+  "setIdCreate": {
+    "message": "建立 Bento ID…"
+  },
+  "setIdLocal": {
+    "message": "你的 Bento ID 已在這個瀏覽器中設定完成。下一步是驗證你的電子郵件。"
+  },
+  "idSetupTitle": {
+    "message": "建立 Bento ID"
+  },
+  "idSetupLead": {
+    "message": "透過 Bento ID，與你共享的人能確認是你本人。設定時會建立一個密碼金鑰和一組復原碼，讓你能在其他裝置上找回它。"
+  },
+  "idSetupLight": {
+    "message": "在瀏覽器擴充功能中，你的金鑰儲存在這個瀏覽器設定檔裡。移除擴充功能會刪除它們，請妥善保管密碼金鑰和復原碼。"
+  },
+  "idSetupLabel": {
+    "message": "此瀏覽器的名稱"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "設定密碼金鑰"
+  },
+  "idWorking": {
+    "message": "正在等待你的密碼金鑰…"
+  },
+  "idDeriving": {
+    "message": "正在產生復原碼（第 $1 步，共 2 步）…"
+  },
+  "idCodeTitle": {
+    "message": "你的復原碼"
+  },
+  "idCodeLead": {
+    "message": "請抄下或列印出來，存放在安全的地方。它只會顯示這一次，如果你遺失了密碼金鑰，它就是找回的方法。"
+  },
+  "idCodeConfirm": {
+    "message": "輸入復原碼，確認你已保存"
+  },
+  "idCodePrint": {
+    "message": "列印"
+  },
+  "idCodeSaved": {
+    "message": "我已保存"
+  },
+  "idCodeMismatch": {
+    "message": "這不是上方顯示的復原碼。請檢查後再試一次。"
+  },
+  "idCodeTypo": {
+    "message": "復原碼有輸入錯誤：有字元錯誤或缺漏。"
+  },
+  "idNoPrf": {
+    "message": "你的密碼金鑰無法在其他裝置上解鎖 Bento ID，因此這組復原碼是你唯一的找回方式。"
+  },
+  "idNoCode": {
+    "message": "此裝置無法產生復原碼，因此密碼金鑰是你唯一的找回方式：一旦遺失，這個 Bento ID 也會遺失。你可以稍後在其他裝置上產生復原碼。"
+  },
+  "idDoneTitle": {
+    "message": "Bento ID 已設定完成"
+  },
+  "idDoneLead": {
+    "message": "它已在這個瀏覽器中可用。下一步是驗證你的電子郵件地址。"
+  },
+  "idDone": {
+    "message": "完成"
+  },
+  "idErrCancelled": {
+    "message": "密碼金鑰要求已取消或逾時。請讓此視窗保持在前景，然後再試一次。"
+  },
+  "idErrPermission": {
+    "message": "密碼金鑰需要存取 bento.page。Chrome 詢問時請允許，然後再試一次。"
+  },
+  "idErrFailed": {
+    "message": "發生問題，沒有儲存任何內容。請再試一次。"
+  },
+  "idErrNoWayBack": {
+    "message": "沒有完成設定：你的密碼金鑰無法解鎖 Bento ID，而此裝置也無法產生復原碼，這樣將無法找回。"
   }
 }

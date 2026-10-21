@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// bento/id — the signed statements, a port of kernel/src/statements.ts.
+// bento/connect — the signed statements, a port of kernel/src/statements.ts.
 //
 // The family rules (from the reference, unchanged): dot-joined printable-ASCII
 // text signed over its EXACT bytes; every field is a closed dot-free token or

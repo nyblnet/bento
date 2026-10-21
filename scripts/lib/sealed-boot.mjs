@@ -12,9 +12,11 @@
 // guard check against a document that was never sealed passes vacuously.
 //
 //   import { openSealed, scanIndexedDB } from './lib/sealed-boot.mjs'
-//   const { page, reload } = await openSealed(browser, 'slides', { doc })   // doc optional
+//   const { page, reload, close } = await openSealed(browser, 'slides', { doc })   // doc optional
 //   ...edit the document, wait out the autosave debounce...
 //   assert.deepEqual(await scanIndexedDB(page, MARKER), [])
+//   await close()   // THROWS if the kernel store had to refuse a plaintext write:
+//                   // the app's own guard is missing (use close(), not context.close())
 //
 // Every rig that uses it should also run its edit on an UNSEALED page
 // (openSealed(browser, app, { sealed: false })) and see the marker land in
@@ -37,15 +39,20 @@ export const TEST_KDOC = Array.from({ length: 32 }, (_, i) => (i * 7 + 3) & 0xff
 
 /**
  * The test shell for an app, by explicit path. Never a release (dist-single)
- * shell. build:sealtest deletes dist-sealtest/ before it compiles, so a build
- * that fails leaves NO shell rather than the previous one: a mutation that does
- * not compile can't be scored against stale code (type and dash both hit this).
+ * shell. build:sealtest deletes dist-sealtest/ before it compiles and writes
+ * dist-sealtest/.complete only after its last step, so a build that fails at ANY
+ * step leaves nothing this accepts: a mutation that does not build can't be
+ * scored against stale or half-built code (type, dash and security all hit this).
  */
 export function sealtestShell(app) {
   const rel = SHELLS[app]
   if (!rel) throw new Error(`sealed-boot: no such app ${app}`)
   const url = new URL(`../../${rel}`, import.meta.url)
   if (!existsSync(url)) throw new Error(`sealed-boot: no ${rel}. Run npm run build:sealtest --prefix ${app}, and check its exit code: a failed build leaves no shell`)
+  // build:sealtest touches .complete as its LAST step, after postbuild-compress:
+  // a build that failed after vite wrote the shell leaves a shell but no marker
+  // (security measured one: an uncompressed shell that failed a row spuriously)
+  if (!existsSync(new URL('.complete', url))) throw new Error(`sealed-boot: ${rel} is from a build:sealtest that did not finish (no .complete marker). Rebuild, and check its exit code`)
   return url
 }
 
@@ -82,7 +89,8 @@ export function sealtestShellWith(app, doc) {
  *   openSealed(browser, app, { context: first.context, url: first.url })
  * boots the SAME document SEALED on the same storage, which must refuse it.
  */
-export async function openSealed(browser, app, { sealed = true, kdoc = TEST_KDOC, doc, url, context, viewport = { width: 1280, height: 900 } } = {}) {
+export async function openSealed(browser, app, { sealed = true, kdoc = TEST_KDOC, doc, url, context, allowStoreRefusals = false, viewport = { width: 1280, height: 900 } } = {}) {
+  const ownContext = !context
   if (!context) {
     context = await browser.newContext({ viewport })
     await context.route(/^https?:/, (route) => route.abort())
@@ -96,8 +104,23 @@ export async function openSealed(browser, app, { sealed = true, kdoc = TEST_KDOC
   url ??= (doc === undefined ? sealtestShell(app) : sealtestShellWith(app, doc)).href
   await page.goto(url)
   await provenState(page, app, sealed)
-  const reload = async () => { await page.reload(); await provenState(page, app, sealed) }
-  return { context, page, errors, url, reload }
+  // The kernel store refuses plaintext while sealed, as a BACKSTOP. An app's
+  // own guard must stop the call first, so any refusal is a missing guard: a
+  // sealed page fails here before it reloads or closes, unless the rig opts out
+  // with { allowStoreRefusals: true } for a row that tests the backstop itself.
+  const settle = async () => {
+    if (!sealed || allowStoreRefusals) return
+    const n = await storeRefusals(page)
+    if (n !== 0) throw new Error(`sealed-boot: ${app} leaned on the kernel store's backstop ${n} time(s): one of its own plaintext guards is missing`)
+  }
+  const reload = async () => { await settle(); await page.reload(); await provenState(page, app, sealed) }
+  const close = async () => { try { await settle() } finally { if (ownContext) await context.close(); else await page.close() } }
+  return { context, page, errors, url, reload, close, settle }
+}
+
+/** How many plaintext reads or writes the kernel store has refused on this (sealed) page. */
+export async function storeRefusals(page) {
+  return page.evaluate(() => globalThis.__bentoTestSealProbe?.storeRefusals?.() ?? 0)
 }
 
 /** Wait for boot, then prove the seal state matches `sealed`; throw otherwise. */

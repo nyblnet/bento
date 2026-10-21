@@ -29,7 +29,7 @@ import { todayISO } from './journal.ts'
 // imports it from outside slides, so this is a settled cross-app path rather
 // than a new one — and it is read-only: kernel/src is a serialized zone.
 import { chartSnapshotSvg } from '../../kernel/src/charts.ts'
-import { renderCalendar, spanOf, nextSpan } from './calendar.ts'
+import { renderCalendar, spanOf, nextSpan, spanButton } from './calendar.ts'
 import { unknownFilterOps } from './query.ts'
 import { answer, feed, freshContext, type CalcCtx } from './calc.ts'
 import { ICONS, type IconName } from './icons'
@@ -1403,10 +1403,13 @@ function renderView(host: HTMLElement, b: Block, doc: SpacesDoc, opts: RenderOpt
     // parameter of ONE layout gets its own control, shown only while that
     // layout is on, rather than a sixth entry in a cycle everybody has to click
     // through. Whole sentences again, for the reason three lines up.
+    // The words come from calendar.ts `spanButton`: the second shape is
+    // "Agenda" on screen and `span: 'timeline'` in the file, because "Timeline"
+    // is the gantt layout's name (LAYOUT_LABEL above) and the stored value is
+    // format.
+    const spanWords = spanButton(calSpan)
     const spanB = here === 'calendar'
-      ? btn('viewSpan',
-        spanOf(calSpan) === 'timeline' ? t('Timeline') : t('Month'),
-        spanOf(calSpan) === 'timeline' ? t('Show a month at a time') : t('Show a timeline'))
+      ? btn('viewSpan', spanWords.label, spanWords.title)
       : undefined
     if (spanB) spanB.dataset.next = nextSpan(calSpan)
 

@@ -1,0 +1,161 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   The pivot field editor, in the properties panel. Co-located with
+   pivotfields.ts. Tokens come from styles.css and panels.css and are never
+   redefined here; fields wear THE FIELD (styles.css) with no class to remember. */
+
+.dpf-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--dp-radius, 6px);
+  background: var(--field);
+  margin: 0 0 4px;
+}
+
+.dpf-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  cursor: grab;
+  border-bottom: 1px solid var(--grid-line, var(--line));
+}
+.dpf-field:last-child { border-bottom: 0; }
+.dpf-field:hover { background: var(--hover, var(--panel)); }
+.dpf-field input { margin: 0; flex: 0 0 auto; accent-color: var(--ink); }
+.dpf-field-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dpf-used .dpf-field-name { font-weight: 600; }
+.dpf-field-type {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+/* An area: a drop zone that holds chips, then an "Add field…" picker. */
+.dpf-well {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 34px;
+  padding: 4px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--dp-radius, 6px);
+  margin: 0 0 4px;
+}
+.dpf-over,
+.dpf-list.dpf-over {
+  border-color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.dpf-empty {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 2px 4px;
+}
+
+.dpf-chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 4px 0 8px;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  border-radius: var(--dp-radius, 6px);
+  background: var(--surface, var(--bg));
+  cursor: grab;
+}
+.dpf-chip.dpf-missing { border-color: var(--accent); }
+.dpf-chip-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dpf-of { color: var(--muted); flex: 0 0 auto; }
+.dpf-agg { flex: 0 0 auto; width: auto; max-width: 110px; }
+.dpf-add { width: 100%; }
+
+.dpf-x,
+.dpf-filter-btn {
+  font: inherit;
+  font-size: 11.5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  border-radius: var(--dp-radius, 6px);
+  cursor: pointer;
+  padding: 1px 6px;
+  flex: 0 0 auto;
+}
+.dpf-filter-btn { border-color: var(--line); color: var(--ink-2, var(--ink)); }
+.dpf-x:hover,
+.dpf-filter-btn:hover { background: var(--panel); color: var(--ink); }
+
+.dpf-check {
+  flex: 1 0 100%;
+  display: flex;
+  flex-direction: column;
+  max-height: 180px;
+  overflow: auto;
+  margin: 2px 0 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+  cursor: default;
+}
+.dpf-check-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.dpf-check-item input { margin: 0; accent-color: var(--ink); }
+.dpf-check-all { font-weight: 600; }
+.dpf-note { color: var(--muted); font-size: 11px; padding: 2px 0; }
+
+/* ————— the pivot SHEET: the pivot drawn where the grid was ————— */
+.dx-pivotview {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.dx-pivotview[hidden] { display: none; }
+.dx-pivotview-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 2px 8px;
+  flex: 0 0 auto;
+}
+.dx-pivotview-title { font-weight: 650; font-size: 14px; }
+.dx-pivotview-src { color: var(--muted); font-size: 12px; }
+.dx-pivotview-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dx-pivotview-body > .dxp { flex: 1 1 auto; }

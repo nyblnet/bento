@@ -65,7 +65,14 @@ fn wipe_with_a_locked_keyring_never_reports_success_while_keys_remain() {
     s.create_device_key().unwrap();
     s.store_account(&[3u8; 32]).unwrap();
     assert_eq!(s.count_items().unwrap(), 2);
-    s.lock_collection().unwrap();
+    // Lock the default collection (test-only): the Secret Service's own Lock
+    // method over D-Bus, on the default alias the store writes to.
+    let st = std::process::Command::new("gdbus")
+        .args(["call", "--session", "--dest", "org.freedesktop.secrets", "--object-path", "/org/freedesktop/secrets",
+               "--method", "org.freedesktop.Secret.Service.Lock", "[\"/org/freedesktop/secrets/aliases/default\"]"])
+        .status()
+        .unwrap();
+    assert!(st.success(), "Secret Service Lock");
     match s.wipe() {
         // either it unlocked and removed everything…
         Ok(()) => assert_eq!(s.count_items().unwrap(), 0, "wipe said Ok, so nothing may remain"),

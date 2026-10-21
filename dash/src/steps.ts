@@ -758,8 +758,8 @@ function stepLimit(frame: Frame, step: { n?: unknown; offset?: unknown }, at: nu
 // where two implementations diverge and where the divergence is invisible.
 //
 // The five hot ones are open-coded because a group-by over ten million rows
-// cannot afford `evaluate` per group; they reproduce formula.ts's coercion
-// (`num`) EXACTLY rather than approximately, and scripts/test-dash-steps.ts
+// cannot afford `evaluate` per group; they reproduce formula.ts's range reading
+// (`rangeNumber`) EXACTLY rather than approximately, and scripts/test-dash-steps.ts
 // cross-checks every one of them against `evaluate` on adversarial data. If
 // that rig ever fails, this fast path is wrong and formula.ts is right.
 //
@@ -767,19 +767,16 @@ function stepLimit(frame: Frame, step: { n?: unknown; offset?: unknown }, at: nu
 // through `evaluate` and costs nothing to support, which is the whole argument
 // for having one expression language instead of two.
 
-/** formula.ts's `num`, reproduced (it is not exported). Non-numeric → null.
- *  The blank cases are handled by the CALLER, matching formula.ts's split
- *  between `num` (a blank is 0, because `=A1+1` on an empty cell is 1) and
- *  `numbersIn` (a blank is absent, because AVERAGE over three numbers and seven
- *  empty cells is the mean of three). Getting that split wrong is a wrong
- *  answer in exact proportion to how sparse the column is. */
+/** What one cell of a column contributes to an aggregate — formula.ts's
+ *  `rangeNumber` (rule 1 above its `num`): a NUMBER, or nothing. Text is
+ *  skipped even when it looks like a number, and so are booleans, because a
+ *  column handed to SUM is a RANGE, and that is what Excel does with one. This
+ *  used to reproduce `num`, which read the text "50%" as 50 — the arithmetic
+ *  half of review finding 3.1. The blank cases are handled by the CALLER
+ *  (formula.ts `numbersIn`: a blank is absent, because AVERAGE over three
+ *  numbers and seven empty cells is the mean of three). */
 function fnum(v: Cell): number | null {
-  if (isErr(v)) return null
-  if (v == null || v === '') return 0
-  if (typeof v === 'number') return v
-  if (typeof v === 'boolean') return v ? 1 : 0
-  const n = Number(String(v).replace(/[,\s£$€¥%]/g, ''))
-  return Number.isFinite(n) ? n : null
+  return typeof v === 'number' ? v : null
 }
 
 /** Aggregate names this file open-codes, lowercased. */

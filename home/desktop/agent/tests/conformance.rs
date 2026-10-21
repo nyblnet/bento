@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 //
-// The desktop agent against the bento/id conformance vectors
+// The desktop agent against the bento/connect conformance vectors
 // (kernel/fixtures/identity-v1.json), mirroring scripts/test-statements.ts:
 // every row's verdict AND reason, the builder round-trip and three tamperings of
 // every accepted row, the attack rows' presence, the derivations, low-S, the

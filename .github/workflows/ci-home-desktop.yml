@@ -1,0 +1,97 @@
+# CI, home-desktop: this zone's own jobs — validate, never release (see ci.yml's header).
+#
+# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
+# merge; a job here reports beside it, exactly as it did when it lived in
+# ci.yml. Keep each job's id unchanged — the id IS the check name.
+#
+# Each job checks out and builds what it needs for itself. Add this zone's
+# new jobs here, at the end; never in ci.yml.
+
+name: CI (home-desktop)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
+  # the tip, every commit on main keeps its own run.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  home-desktop-agent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Desktop agent against the bento/id vectors
+        # home/desktop/agent is the Windows/Linux identity agent core. Its
+        # statements port must reach every verdict AND reason in
+        # kernel/fixtures/identity-v1.json (re-read every run, never pinned), plus
+        # builder round-trips, three tamperings per accepted row, spendCalled
+        # on every cns row, and the frozen display table. A missing fixture
+        # fails; it never skips.
+        working-directory: home/desktop/agent
+        run: cargo test
+      - name: Desktop agent TPM rigs (two software TPMs)
+        # The Linux key store against a real TPM 2.0 (swtpm): the routine key
+        # signs inside the TPM; the consent key and the sealed account key need
+        # the PIN on every use (a wrong PIN is the TPM's own AUTH_FAIL); the key
+        # files are useless on a SECOND TPM (cannot be copied off the machine);
+        # and a second connection without the PIN gets neither, while the
+        # routine key stays usable, which is the stated desktop residual.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libtss2-dev swtpm swtpm-tools >/dev/null
+          ./tpm-rig.sh
+      - name: Desktop agent no-TPM keyring rigs (gnome-keyring)
+        # On a Linux machine without a usable TPM the agent falls back to the
+        # Secret Service. Against a real gnome-keyring in a D-Bus session: the
+        # routine key signs and verifies; there is no consent key, so consent is
+        # refused (AAL3 routed elsewhere); wipe removes the keys; and the stated
+        # exposure is asserted: a second connection reads the account key with
+        # no prompt once the keyring is unlocked.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get install -y -qq gnome-keyring dbus libsecret-1-dev >/dev/null
+          ./keyring-rig.sh
+      - name: Desktop agent supply chain (cargo-deny, test-only crates absent)
+        # The SHIPPED agent's graph: a permissive-only licence allow-list,
+        # RustSec advisories, crates.io-only sources; and the test-only virtual
+        # authenticator (agent-testkit / OpenSK) must not be in it. Each check
+        # has a positive control (an LGPL crate, the testkit as a normal
+        # dependency) that must be refused.
+        working-directory: home/desktop/agent
+        run: |
+          cargo install -q cargo-deny --locked --version 0.18.9
+          ./supply-chain-check.sh
+      - name: Desktop agent PRF interop rig (virtual security key)
+        # One virtual FIDO2 key (Google OpenSK, Apache-2.0, test-only, over
+        # uhid), an independent WebAuthn client (Yubico python-fido2, BSD-2,
+        # hash-pinned) and the agent's libfido2 layer must produce the SAME PRF
+        # output for the same credential; two mutant builds (double hash, raw
+        # input hash) must each fail that comparison.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get install -y -qq libfido2-dev python3-cryptography python3-venv >/dev/null
+          # uhid (the virtual key's transport) moves between the runner kernels'
+          # packages: in linux-modules-extra on 6.17 Azure kernels, in the base
+          # linux-modules (always installed) on 7.0. Install -extra only when the
+          # running kernel has one; the rig's `modprobe uhid` still fails loudly
+          # if the module is missing.
+          if apt-cache show "linux-modules-extra-$(uname -r)" >/dev/null 2>&1; then
+            sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)" >/dev/null
+          fi
+          # python-fido2 1.2.0, hash-pinned, in a venv: the rig runs Python
+          # isolated (-I), which ignores a user-site install. The venv sees
+          # apt's cryptography (system site) but always installs its own pinned
+          # fido2 (--ignore-installed), whatever else is on the machine.
+          printf 'fido2==1.2.0 --hash=sha256:f7c8ee62e359aa980a45773f9493965bb29ede1b237a9218169dbfe60c80e130\n' > "$RUNNER_TEMP/fido2-req.txt"
+          python3 -m venv --system-site-packages "$RUNNER_TEMP/rigvenv"
+          "$RUNNER_TEMP/rigvenv/bin/python" -m pip install --ignore-installed --no-deps --require-hashes -r "$RUNNER_TEMP/fido2-req.txt"
+          export BENTO_RIG_PYTHON="$RUNNER_TEMP/rigvenv/bin/python"
+          rustup toolchain install nightly-2026-06-03 --profile minimal
+          ./fido-rig.sh

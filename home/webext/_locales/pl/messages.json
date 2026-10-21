@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "„$1” już istnieje. Wybierz inną nazwę."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Twoja tożsamość do udostępniania i dokumentów na żywo. Jest w tej przeglądarce; konfiguracja tworzy klucz dostępu i kod odzyskiwania, dzięki którym ją odzyskasz."
+  },
+  "setIdNone": {
+    "message": "W tej przeglądarce nie ma jeszcze Bento ID."
+  },
+  "setIdCreate": {
+    "message": "Utwórz Bento ID…"
+  },
+  "setIdLocal": {
+    "message": "Twój Bento ID jest skonfigurowany w tej przeglądarce. Następny krok to potwierdzenie adresu e-mail."
+  },
+  "idSetupTitle": {
+    "message": "Utwórz Bento ID"
+  },
+  "idSetupLead": {
+    "message": "Dzięki Bento ID osoby, z którymi coś udostępniasz, wiedzą, że to Ty. Konfiguracja tworzy klucz dostępu i kod odzyskiwania, by można go było odzyskać na innym urządzeniu."
+  },
+  "idSetupLight": {
+    "message": "W rozszerzeniu przeglądarki Twoje klucze są przechowywane w tym profilu przeglądarki. Usunięcie rozszerzenia je kasuje, więc dobrze przechowuj klucz dostępu i kod odzyskiwania."
+  },
+  "idSetupLabel": {
+    "message": "Nazwa tej przeglądarki"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Skonfiguruj klucz dostępu"
+  },
+  "idWorking": {
+    "message": "Czekam na Twój klucz dostępu…"
+  },
+  "idDeriving": {
+    "message": "Tworzenie kodu odzyskiwania ($1 z 2)…"
+  },
+  "idCodeTitle": {
+    "message": "Twój kod odzyskiwania"
+  },
+  "idCodeLead": {
+    "message": "Zapisz go lub wydrukuj i przechowuj w bezpiecznym miejscu. Jest pokazywany tylko ten jeden raz i jest Twoją drogą powrotu, jeśli stracisz klucz dostępu."
+  },
+  "idCodeConfirm": {
+    "message": "Wpisz kod, aby potwierdzić, że go masz"
+  },
+  "idCodePrint": {
+    "message": "Drukuj"
+  },
+  "idCodeSaved": {
+    "message": "Zapisałem(-am) go"
+  },
+  "idCodeMismatch": {
+    "message": "To nie jest kod pokazany powyżej. Sprawdź go i spróbuj ponownie."
+  },
+  "idCodeTypo": {
+    "message": "Kod zawiera literówkę: jeden znak jest błędny lub go brakuje."
+  },
+  "idNoPrf": {
+    "message": "Twój klucz dostępu nie może odblokować Bento ID na innych urządzeniach, więc ten kod odzyskiwania jest Twoją jedyną drogą powrotu."
+  },
+  "idNoCode": {
+    "message": "To urządzenie nie może utworzyć kodu odzyskiwania, więc klucz dostępu jest Twoją jedyną drogą powrotu: jeśli go stracisz, stracisz ten Bento ID. Kod odzyskiwania możesz utworzyć później na innym urządzeniu."
+  },
+  "idDoneTitle": {
+    "message": "Twój Bento ID jest skonfigurowany"
+  },
+  "idDoneLead": {
+    "message": "Jest gotowy w tej przeglądarce. Następny krok to potwierdzenie adresu e-mail."
+  },
+  "idDone": {
+    "message": "Gotowe"
+  },
+  "idErrCancelled": {
+    "message": "Prośba o klucz dostępu została anulowana lub wygasła. Trzymaj to okno na wierzchu i spróbuj ponownie."
+  },
+  "idErrPermission": {
+    "message": "Twój klucz dostępu potrzebuje dostępu do bento.page. Zezwól, gdy Chrome zapyta, i spróbuj ponownie."
+  },
+  "idErrFailed": {
+    "message": "Coś poszło nie tak i nic nie zostało zapisane. Spróbuj ponownie."
+  },
+  "idErrNoWayBack": {
+    "message": "Nic nie zostało skonfigurowane: klucz dostępu nie może odblokować Bento ID, a to urządzenie nie może utworzyć kodu odzyskiwania, więc nie byłoby drogi powrotu."
   }
 }

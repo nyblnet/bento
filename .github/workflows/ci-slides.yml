@@ -1,0 +1,214 @@
+# CI, slides: this zone's own jobs — validate, never release (see ci.yml's header).
+#
+# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
+# merge; a job here reports beside it, exactly as it did when it lived in
+# ci.yml. Keep each job's id unchanged — the id IS the check name.
+#
+# Each job checks out and builds what it needs for itself. Add this zone's
+# new jobs here, at the end; never in ci.yml.
+
+name: CI (slides)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
+  # the tip, every commit on main keeps its own run.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    # Every step fails if a rig in it reports a skip CI does not allow
+    # (scripts/lib/ci-skips.mjs). No job here sets a working-directory, which
+    # this relative path relies on.
+    shell: bash scripts/ci/bento-step {0}
+
+jobs:
+  slides-font-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        # WebKit too, for the gate-1 oracle: a Chromium-only oracle missed a bypass
+        # that a WebKit oracle found.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium webkit
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone documents
+        run: |
+          npm ci --prefix slides
+          npm run build:single --prefix slides
+          npm run build:sealtest --prefix slides
+      - name: The sealed TEST document in Chromium
+        # bento/id §E (security §31): the shared helper boots the build:sealtest
+        # shell with the identity seal set before the app's own boot, proves it
+        # took, and the saved file carries an identity-sealed envelope, a
+        # neutral <title> and filename, no preview, and no plaintext; the
+        # unsealed control shows the same checks can see a leak.
+        run: node scripts/test-sealed-boot.mjs
+      - name: Release pins in Chromium
+        # bento/connect K4 (security §18/§36): this build's pins come from its
+        # own bytes, a real file its ⌘S saved, and it boots under them while its
+        # UI is driven, with only the loader's two designed refusals. What
+        # release.mjs requires before it signs, checked on every PR.
+        run: node scripts/derive-pins.mjs slides/dist-single/Bento_Slides.bento.html
+      - name: The pinned-CSP boot check refuses doctored copies in Chromium
+        # K4: the boot check excuses only the loader's two fallbacks, from a
+        # line AND column inside its own text. An injected <script> in <head>
+        # or on the loader's own lines is reported, and the rig checks WHICH
+        # refusal was excused, not just how many. A wrong loader pin never boots.
+        run: node scripts/test-csp-boot-browser.mjs
+      - name: Gate 1 against a browser oracle in Chromium
+        # K5 (security): a differential fuzz can't see a bug the reference and a
+        # port SHARE, and both the "/" attribute separator and the length-changing
+        # case fold were shared. So genuine files are mutated the ways scanners
+        # split, and every mutant gate1 calls GENUINE is loaded with NO CSP, in
+        # Chromium AND WebKit: exactly the loader and the remover may run. A fixed seed, plus a short
+        # random run whose seed is printed for replay. Any failure is written to
+        # home/fixtures/gate1/oracle-failures/ as a corpus row.
+        run: node scripts/test-gate1-oracle.mjs
+      - name: A sealed slides deck keeps its content out of IndexedDB in Chromium
+        # The autosave and ⌘S checkpoints write no recovery copy or version for
+        # a deck sealed by identity; the password menu stays keyed to the
+        # password; the unsealed control shows the scan sees a leak.
+        run: node scripts/test-slides-sealed-guards-browser.mjs
+      - name: Exercise the packaged documents in Chromium
+        # Real UI and serialization, offline; delayed mock writes expose save races.
+        run: |
+          node scripts/test-slides-font-lifecycle-browser.mjs
+      - name: Write chrome follows the copy's role in Chromium
+        # canWriteDeck is an allowlist that fails closed: an audience, reader or
+        # unknown-role copy arriving in a running editor (dropped, loadDoc) gets
+        # no write actions and is locked; owner and writer copies keep theirs.
+        run: node scripts/test-slides-audience-gate-browser.mjs
+      - name: PowerPoint converter links in Chromium
+        # Save as → Import PowerPoint… (/convert?from=pptx) and Export for
+        # PowerPoint… (/convert), in that order after Replace from JSON…, each
+        # opens only its URL in a new tab with no opener, and says it needs
+        # the network.
+        run: node scripts/test-slides-import-link-browser.mjs
+      - name: The unsupported-browser notice names the app in Chromium
+        # Each app's shell, built with the flags its own build:single passes,
+        # says what it is ("a bento/slides presentation", …) — it said "a
+        # bento/dash spreadsheet" in every app.
+        run: node scripts/test-shell-unsupported-notice-browser.mjs
+      - name: Under-specified documents boot in Chromium
+        # parseDoc fills required fields only where absent and drops elements
+        # that cannot render; unknown keys and element types survive (additivity).
+        run: node scripts/test-slides-minimal-doc-browser.mjs
+      - name: A table with no style opens in Chromium
+        # A full document whose table omits `style` (absent, null, a string)
+        # loads by file, loadDoc and Replace from JSON, gets the theme's table
+        # style, and selecting it opens the table panel without a page error.
+        run: node scripts/test-slides-table-nostyle-browser.mjs
+      - name: Top bar in Chromium
+        # 30px row and 44px phone targets, the wordmark as a named button, Save
+        # primary in both themes, and N language rebuilds leaving one set of
+        # window/document listeners and bar observers.
+        run: node scripts/test-slides-topbar-browser.mjs
+      - name: One field look in Chromium
+        # Every chrome text field, select and textarea (each element kind's
+        # panel, About, the save-as dialogs, Share, comments) has the shared
+        # field look and amber focus ring in both themes, never the UA's dress.
+        run: node scripts/test-slides-fields-browser.mjs
+      - name: A password-protected deck opens in Chromium
+        # One password gate and no loader failure card (1.2.0–1.2.8 showed
+        # three gates under "every loader path was refused"); wrong then right
+        # password; the same with only the blob import allowed; the ⌘S re-save
+        # and the self-update re-splice open again.
+        run: node scripts/test-slides-encrypted-open-browser.mjs
+      - name: The saved preview keeps pictures that fit in Chromium
+        # An image used twice is held once (hoisted), a 62 KB image that fits
+        # keeps tier 1, and a page whose assets exceed the budget takes the fast
+        # path straight to tinted boxes.
+        run: node scripts/test-slides-preview-tiers-browser.mjs
+      - name: The loader reads what the app published in Chromium
+        # Toy shells from the real postbuild: an app that is running, locked at
+        # a gate, or refused (and threw) runs ONCE and gets no loader card; only
+        # an app that published nothing does. Every path, blob only, import.meta.
+        run: node scripts/test-shell-loader-published-browser.mjs
+      - name: Top bar holds still in Chromium
+        # #546: a real auto-save "Saved" flash and a file-chip change (rename to
+        # the file's name, then undo) leave Undo/Redo exactly where they were,
+        # on the desktop and the folded phone bar.
+        run: node scripts/test-slides-topbar-stable-browser.mjs
+      - name: Chrome rulings in Chromium
+        # D2 menu descriptions (readable both themes, ARIA-wired, scroll on a
+        # short window), D4 dialog titles, D8 help shortcuts, the compact Save
+        # caret, phone menu rows, the designed focus ring, dark menu shadow.
+        run: node scripts/test-slides-chrome-rulings-browser.mjs
+      - name: Code in a text box in Chromium
+        # Real typing: a ``` fence becomes a Code element (in place, or split
+        # out of the text around it), select + ` wraps lines in <code>, pasted
+        # fences convert, and an unclosed fence stays text.
+        run: node scripts/test-slides-code-fence-browser.mjs
+      - name: Copy several slides in Chromium
+        # Two selected thumbnails → ⌘C copies both, in order; a Shift-click
+        # range across a parent copies parents only, never its states; plural
+        # and singular toasts.
+        run: node scripts/test-slides-copy-slides-browser.mjs
+      - name: Rounded tables in Chromium
+        # A rounded table whose rows outgrow its box shows its last row (#494),
+        # keeps rounded corners on its real bottom, and a short one still
+        # fills its box; tables without a radius are unchanged.
+        run: node scripts/test-slides-table-radius-browser.mjs
+      - name: Paste position in Chromium
+        # ⌘C then ⌘V onto another slide keeps the element's position; onto the
+        # source slide it steps +20 and cascades (#569).
+        run: node scripts/test-slides-paste-position-browser.mjs
+      - name: Save queue in Chromium
+        # Real ⌘S and auto-save with the file write held open: an edit made
+        # during a write stays dirty, writes never overlap, the dot goes out
+        # only when the deck on screen is the one on disk.
+        run: node scripts/test-slides-save-browser.mjs
+      - name: Recovery-off notice in Chromium
+        # Under a per-document store host that refuses the recovery copy, the
+        # save status says crash recovery is off (approved wording), once, held
+        # long enough to read; the dot stops claiming a backup; a host that
+        # keeps the copy gets no message; never for an encrypted deck.
+        run: node scripts/test-slides-recovery-off-browser.mjs
+      - name: Save a copy and the older-snapshot banner in Chromium
+        # "Save a copy…" says "Copy saved — you are still editing the original",
+        # keeps the chip, title and dot on the original, and the next ⌘S writes
+        # the original with no picker; an older recovery snapshot gets the
+        # warning banner (Keep the file is the default and deletes nothing), a
+        # newer one the plain banner that claims nothing.
+        run: node scripts/test-slides-save-copy-browser.mjs
+      - name: Ghost Cut in Chromium
+        # ⇧⌘X fades the selection by CSS (shadowed elements too) and copies it;
+        # a ghost is never selected and the pointer passes through it; Esc
+        # restores; paste moves it to the pointer in one undo step, across
+        # slides, without two elements sharing an id on one slide.
+        run: node scripts/test-slides-ghost-cut-browser.mjs
+      - name: Bullet indent in Chromium
+        # Tab / Shift+Tab nest and un-nest list items (and typed bullets) while
+        # editing, with the caret kept and ⌘Z right after; the panel's Indent /
+        # Outdent do the same; committed, one undo step; Tab outside a list —
+        # a plain box, a table cell — is unchanged.
+        run: node scripts/test-slides-bullet-indent-browser.mjs
+      - name: Leaving an inline code run in Chromium
+        # A text box that already ends a line in `code` (reopened, pasted):
+        # typing at the end of that line is plain text, at the box's end or
+        # before a line break; opening and closing a box changes nothing.
+        run: node scripts/test-slides-code-run-exit-browser.mjs
+      - name: Connectors route on every slide in Chromium
+        # #493: a deck saved or loaded with stale connector endpoints opens with
+        # every slide's connectors on their elements' borders (thumbnail too),
+        # without dirtying the deck or making an undo step.
+        run: node scripts/test-slides-connectors-browser.mjs
+      - name: Caret at the start of a line in Chromium
+        # #547: with the caret at a text box's left edge, nothing paints over
+        # it — the editing ring is an outline held off the box, Moveable's
+        # leftover lines are hidden for the edit, and a screenshot of the strip
+        # beside the caret has no ring-blue in it; the text does not move.
+        run: node scripts/test-slides-caret-ring-browser.mjs
