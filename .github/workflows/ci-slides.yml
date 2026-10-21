@@ -132,6 +132,11 @@ jobs:
         # keeps tier 1, and a page whose assets exceed the budget takes the fast
         # path straight to tinted boxes.
         run: node scripts/test-slides-preview-tiers-browser.mjs
+      - name: Saving never costs an edit its recovery copy in Chromium
+        # A dismissed save leaves the edit's pending auto-save running (so its
+        # recovery copy is written); a save that succeeds records a recovery
+        # baseline and a version from the idle-time checkpoint.
+        run: node scripts/test-slides-save-recovery-browser.mjs
       - name: The loader reads what the app published in Chromium
         # Toy shells from the real postbuild: an app that is running, locked at
         # a gate, or refused (and threw) runs ONCE and gets no loader card; only

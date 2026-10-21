@@ -3182,8 +3182,18 @@ export class Editor {
       this.syncWindowTitle()
       // staged language packs are in the bytes now — stop calling them pending
       markFileSaved()
-      // record a recovery baseline + a version checkpoint at each manual save
-      if (!isBodySealed()) { void putRecovery(this.store.doc); void addVersion(this.store.doc); this.lastVersionAt = Date.now() }
+      // The save wrote everything there was, so a pending auto-save would only
+      // write it again. Cancelled ONLY here, after a save that left nothing
+      // unsaved: a cancelled or failed save returns above with the timer still
+      // running (it is the edit's crash-recovery copy), and an edit made while
+      // the bytes were on their way keeps the deck dirty and keeps its timer.
+      if (!this.store.dirty) {
+        clearTimeout(this.autosaveTimer)
+        this.autosaveTimer = 0
+      }
+      this.toast(result === 'downloaded'
+        ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
+        : t('Saved'))
       // Saving is the opt-in: a named, saved deck is "live by default" from
       // now on (the recipient of a copy already joins on open). Connect this
       // session too so author and recipient meet without another click.
@@ -3191,20 +3201,33 @@ export class Editor {
         this.session?.enableSharing()
         this.tryJoin()
       }
-      // A save from the WEB changes what this page is: the deck now lives in a
-      // file, and this URL will hand out a fresh starter next time. Said here,
-      // persistently, so the next visit is not a surprise — and deliberately
-      // NOT as a block, because this tab keeps working and keeps writing.
-      noteSavedFromWeb(currentFileName() ?? suggestedFileName(this.store.doc), {
-        fsAccess: canWriteInPlace(), canWrite: hostCan('write'),
-      })
-      this.toast(result === 'downloaded'
-        ? t('This browser can’t rewrite files in place — a fresh copy went to Downloads')
-        : t('Saved'))
+      // The recovery baseline, the version checkpoint and the web note run when
+      // the page is idle, so the toast and the next paint are not held behind
+      // two IndexedDB writes (a large deck stalled the compositor on Wayland).
+      // The seal is asked when they run, not now: a deck sealed meanwhile
+      // writes nothing.
+      const doc = this.store.doc
+      Editor.whenIdle(() => {
+        // record a recovery baseline + a version checkpoint at each manual save
+        if (!isBodySealed()) { void putRecovery(doc); void addVersion(doc); this.lastVersionAt = Date.now() }
+        // A save from the WEB changes what this page is: the deck now lives in a
+        // file, and this URL will hand out a fresh starter next time. Said here,
+        // persistently, so the next visit is not a surprise — and deliberately
+        // NOT as a block, because this tab keeps working and keeps writing.
+        noteSavedFromWeb(currentFileName() ?? suggestedFileName(doc), {
+          fsAccess: canWriteInPlace(), canWrite: hostCan('write'),
+        })
+      }, 200)
     } catch (err) {
       console.error(err)
       this.toast(t('Save failed — see console'))
     }
+  }
+
+  /** Run `task` when the page is idle, and at most `timeout` ms later. */
+  private static whenIdle(task: () => void, timeout: number) {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(() => task(), { timeout })
+    else setTimeout(task, 0)
   }
 
   // --- keyboard ------------------------------------------------------------------
