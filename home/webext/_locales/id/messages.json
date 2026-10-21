@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "“$1” sudah ada. Pilih nama lain."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Identitas Anda untuk berbagi dan dokumen langsung. Tersimpan di browser ini; penyiapan membuat kunci sandi dan kode pemulihan agar Anda bisa mendapatkannya kembali."
+  },
+  "setIdNone": {
+    "message": "Belum ada Bento ID di browser ini."
+  },
+  "setIdCreate": {
+    "message": "Buat Bento ID Anda…"
+  },
+  "setIdLocal": {
+    "message": "Bento ID Anda sudah disiapkan di browser ini. Berikutnya, verifikasi email Anda."
+  },
+  "idSetupTitle": {
+    "message": "Buat Bento ID Anda"
+  },
+  "idSetupLead": {
+    "message": "Bento ID membuat orang yang berbagi dengan Anda tahu bahwa itu memang Anda. Penyiapan membuat kunci sandi dan kode pemulihan, agar Anda bisa mendapatkannya kembali di perangkat lain."
+  },
+  "idSetupLight": {
+    "message": "Di ekstensi browser, kunci Anda disimpan di profil browser ini. Menghapus ekstensi akan menghapusnya, jadi simpan kunci sandi dan kode pemulihan Anda dengan aman."
+  },
+  "idSetupLabel": {
+    "message": "Nama untuk browser ini"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Siapkan kunci sandi"
+  },
+  "idWorking": {
+    "message": "Menunggu kunci sandi Anda…"
+  },
+  "idDeriving": {
+    "message": "Membuat kode pemulihan Anda ($1 dari 2)…"
+  },
+  "idCodeTitle": {
+    "message": "Kode pemulihan Anda"
+  },
+  "idCodeLead": {
+    "message": "Tulis atau cetak, lalu simpan di tempat aman. Kode ini hanya ditampilkan sekali ini, dan menjadi jalan kembali jika Anda kehilangan kunci sandi."
+  },
+  "idCodeConfirm": {
+    "message": "Ketik kode untuk memastikan Anda menyimpannya"
+  },
+  "idCodePrint": {
+    "message": "Cetak"
+  },
+  "idCodeSaved": {
+    "message": "Sudah saya simpan"
+  },
+  "idCodeMismatch": {
+    "message": "Itu bukan kode yang ditampilkan di atas. Periksa dan coba lagi."
+  },
+  "idCodeTypo": {
+    "message": "Kode itu salah ketik: ada karakter yang salah atau kurang."
+  },
+  "idNoPrf": {
+    "message": "Kunci sandi Anda tidak dapat membuka Bento ID di perangkat lain, jadi kode pemulihan ini satu-satunya jalan kembali."
+  },
+  "idNoCode": {
+    "message": "Perangkat ini tidak dapat membuat kode pemulihan, jadi kunci sandi Anda satu-satunya jalan kembali: jika hilang, Bento ID ini juga hilang. Anda bisa membuat kode pemulihan nanti di perangkat lain."
+  },
+  "idDoneTitle": {
+    "message": "Bento ID Anda sudah siap"
+  },
+  "idDoneLead": {
+    "message": "Sudah siap di browser ini. Berikutnya, verifikasi alamat email Anda."
+  },
+  "idDone": {
+    "message": "Selesai"
+  },
+  "idErrCancelled": {
+    "message": "Permintaan kunci sandi dibatalkan atau waktunya habis. Biarkan jendela ini di depan dan coba lagi."
+  },
+  "idErrPermission": {
+    "message": "Kunci sandi Anda memerlukan akses ke bento.page. Izinkan saat Chrome meminta, lalu coba lagi."
+  },
+  "idErrFailed": {
+    "message": "Terjadi masalah dan tidak ada yang disimpan. Coba lagi."
+  },
+  "idErrNoWayBack": {
+    "message": "Tidak ada yang disiapkan: kunci sandi Anda tidak dapat membuka Bento ID dan perangkat ini tidak dapat membuat kode pemulihan, jadi tidak akan ada jalan kembali."
   }
 }

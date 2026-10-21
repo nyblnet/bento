@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "Mayroon nang “$1”. Pumili ng ibang pangalan."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Ang iyong pagkakakilanlan para sa pagbabahagi at mga live na dokumento. Nasa browser na ito ito; gumagawa ang setup ng passkey at recovery code para mabawi mo ito."
+  },
+  "setIdNone": {
+    "message": "Wala pang Bento ID sa browser na ito."
+  },
+  "setIdCreate": {
+    "message": "Gumawa ng Bento ID…"
+  },
+  "setIdLocal": {
+    "message": "Naka-set up na ang iyong Bento ID sa browser na ito. Susunod, i-verify ang iyong email."
+  },
+  "idSetupTitle": {
+    "message": "Gumawa ng Bento ID"
+  },
+  "idSetupLead": {
+    "message": "Sa iyong Bento ID, nalalaman ng mga kabahagi mo na ikaw talaga iyon. Gumagawa ang setup ng passkey at recovery code para mabawi mo ito sa ibang device."
+  },
+  "idSetupLight": {
+    "message": "Sa browser extension, nakatago ang iyong mga key sa profile ng browser na ito. Kapag inalis ang extension, mabubura ang mga ito, kaya ingatan ang iyong passkey at recovery code."
+  },
+  "idSetupLabel": {
+    "message": "Pangalan ng browser na ito"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Mag-set up ng passkey"
+  },
+  "idWorking": {
+    "message": "Hinihintay ang iyong passkey…"
+  },
+  "idDeriving": {
+    "message": "Ginagawa ang iyong recovery code ($1 sa 2)…"
+  },
+  "idCodeTitle": {
+    "message": "Ang iyong recovery code"
+  },
+  "idCodeLead": {
+    "message": "Isulat o i-print ito at itago sa ligtas na lugar. Ngayon lang ito ipapakita, at ito ang daan mo pabalik kung mawala ang iyong passkey."
+  },
+  "idCodeConfirm": {
+    "message": "I-type ang code para kumpirmahing naitago mo ito"
+  },
+  "idCodePrint": {
+    "message": "I-print"
+  },
+  "idCodeSaved": {
+    "message": "Naitago ko na"
+  },
+  "idCodeMismatch": {
+    "message": "Hindi iyan ang code na ipinakita sa itaas. Suriin at subukang muli."
+  },
+  "idCodeTypo": {
+    "message": "May mali sa pag-type ang code: may maling karakter o may kulang."
+  },
+  "idNoPrf": {
+    "message": "Hindi kayang i-unlock ng iyong passkey ang Bento ID sa ibang device, kaya ang recovery code na ito ang tanging daan pabalik."
+  },
+  "idNoCode": {
+    "message": "Hindi makagawa ng recovery code ang device na ito, kaya ang iyong passkey ang tanging daan pabalik: kapag nawala ito, mawawala rin ang Bento ID na ito. Puwede kang gumawa ng recovery code mamaya sa ibang device."
+  },
+  "idDoneTitle": {
+    "message": "Naka-set up na ang iyong Bento ID"
+  },
+  "idDoneLead": {
+    "message": "Handa na ito sa browser na ito. Susunod, i-verify ang iyong email address."
+  },
+  "idDone": {
+    "message": "Tapos na"
+  },
+  "idErrCancelled": {
+    "message": "Nakansela o nag-time out ang kahilingan sa passkey. Panatilihing nasa harap ang window na ito at subukang muli."
+  },
+  "idErrPermission": {
+    "message": "Kailangan ng iyong passkey ng access sa bento.page. Payagan ito kapag nagtanong ang Chrome, saka subukang muli."
+  },
+  "idErrFailed": {
+    "message": "May nagkaproblema at walang nai-save. Subukang muli."
+  },
+  "idErrNoWayBack": {
+    "message": "Walang na-set up: hindi kayang i-unlock ng iyong passkey ang Bento ID at hindi makagawa ng recovery code ang device na ito, kaya walang magiging daan pabalik."
   }
 }

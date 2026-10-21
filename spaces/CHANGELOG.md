@@ -1375,6 +1375,36 @@ Versions follow `0.MINOR.PATCH` while pre-1.0.
   recovery is off for this space — it’s too large to keep a backup copy. Save
   often." It says so once per space, and never for an encrypted space, which
   never keeps a recovery copy.
+- **A slimmer top bar, closer to bento/slides'.** Reading view is now a
+  floating button at the page's bottom-right corner (bottom-left in
+  right-to-left languages), where slides keeps its Slideshow button. It stays
+  there in reading view, so it is also the way back; Esc still works. Graph
+  moved to the page list's header, beside ＋. Properties left the bar: open it
+  with `]`, with the panel's own arrow at the window's edge, or, on a phone,
+  from ⋯. Search stays in the bar.
+- **A sealed space keeps no readable copy in this browser.** A space sealed
+  by a password or by the identity seal writes no crash-recovery copy and no
+  version, and shows no recovery-off notice. Opening a sealed space never
+  offers a readable copy an earlier unsealed session left in this browser, and
+  deletes that space's copies. Neutral title while sealed,
+  matching the saved file's title: the tab reads "bento/spaces", from the
+  password prompt on.
+- **Using spaces at phone width no longer shuts the panels on the desktop.**
+  Widening the window past the phone breakpoint used to save the phone
+  drawers' state as your desktop choice, so the page list and the properties
+  panel stayed shut on every later wide load. A phone drawer opening or
+  closing now never changes the desktop layout, and widening the window
+  brings back the layout you last chose there. `[`, `]` and the panel
+  chevrons at desktop width are remembered as before.
+- **The calendar's second shape is called Agenda, and calendars go by Due.**
+  The calendar's Month button now switches to **Agenda**. It used to say
+  "Timeline", the same name as the timeline layout, which is a different
+  picture. Files are unchanged: an agenda is still saved as
+  `span: "timeline"`, so existing views open exactly as before. A page with
+  both a Start and a Due date now sits on its Due day. A page with only a
+  Start still sits on its Start day, and a journal entry still sits on its own
+  date. The line above the grid states the order, for example "Dated by the
+  journal date, then Due, Start."
 
 ## [0.1.0] — 2026-08-03
 

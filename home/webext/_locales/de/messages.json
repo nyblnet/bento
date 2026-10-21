@@ -880,5 +880,92 @@
   },
   "saTaken": {
     "message": "„$1“ ist schon vorhanden. Bitte einen anderen Namen wählen."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Ihre Identität zum Teilen und für Live-Dokumente. Sie liegt in diesem Browser; bei der Einrichtung entstehen ein Passkey und ein Wiederherstellungscode, mit denen Sie sie zurückbekommen."
+  },
+  "setIdNone": {
+    "message": "In diesem Browser gibt es noch keine Bento ID."
+  },
+  "setIdCreate": {
+    "message": "Bento ID erstellen …"
+  },
+  "setIdLocal": {
+    "message": "Ihre Bento ID ist in diesem Browser eingerichtet. Als Nächstes bestätigen Sie Ihre E-Mail-Adresse."
+  },
+  "idSetupTitle": {
+    "message": "Bento ID erstellen"
+  },
+  "idSetupLead": {
+    "message": "Mit Ihrer Bento ID erkennen die Menschen, mit denen Sie teilen, dass Sie es sind. Bei der Einrichtung entstehen ein Passkey und ein Wiederherstellungscode, damit Sie sie auf einem anderen Gerät zurückbekommen."
+  },
+  "idSetupLight": {
+    "message": "In der Browsererweiterung liegen Ihre Schlüssel in diesem Browserprofil. Wird die Erweiterung entfernt, sind sie gelöscht – bewahren Sie Passkey und Wiederherstellungscode also gut auf."
+  },
+  "idSetupLabel": {
+    "message": "Name für diesen Browser"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Passkey einrichten"
+  },
+  "idWorking": {
+    "message": "Warte auf Ihren Passkey …"
+  },
+  "idDeriving": {
+    "message": "Wiederherstellungscode wird erstellt ($1 von 2) …"
+  },
+  "idCodeTitle": {
+    "message": "Ihr Wiederherstellungscode"
+  },
+  "idCodeLead": {
+    "message": "Schreiben Sie ihn auf oder drucken Sie ihn aus und bewahren Sie ihn sicher auf. Er wird nur dieses eine Mal angezeigt und ist Ihr Weg zurück, falls Sie Ihren Passkey verlieren."
+  },
+  "idCodeConfirm": {
+    "message": "Geben Sie den Code ein, um zu bestätigen, dass Sie ihn haben"
+  },
+  "idCodePrint": {
+    "message": "Drucken"
+  },
+  "idCodeSaved": {
+    "message": "Ich habe ihn gespeichert"
+  },
+  "idCodeMismatch": {
+    "message": "Das ist nicht der oben angezeigte Code. Prüfen Sie ihn und versuchen Sie es erneut."
+  },
+  "idCodeTypo": {
+    "message": "Der Code enthält einen Tippfehler: Ein Zeichen ist falsch oder fehlt."
+  },
+  "idNoPrf": {
+    "message": "Ihr Passkey kann Ihre Bento ID auf anderen Geräten nicht entsperren, daher ist dieser Wiederherstellungscode Ihr einziger Weg zurück."
+  },
+  "idNoCode": {
+    "message": "Dieses Gerät kann keinen Wiederherstellungscode erstellen. Ihr Passkey ist daher Ihr einziger Weg zurück: Verlieren Sie ihn, verlieren Sie diese Bento ID. Einen Wiederherstellungscode können Sie später auf einem anderen Gerät erstellen."
+  },
+  "idDoneTitle": {
+    "message": "Ihre Bento ID ist eingerichtet"
+  },
+  "idDoneLead": {
+    "message": "Sie ist in diesem Browser bereit. Als Nächstes bestätigen Sie Ihre E-Mail-Adresse."
+  },
+  "idDone": {
+    "message": "Fertig"
+  },
+  "idErrCancelled": {
+    "message": "Die Passkey-Anfrage wurde abgebrochen oder ist abgelaufen. Lassen Sie dieses Fenster im Vordergrund und versuchen Sie es erneut."
+  },
+  "idErrPermission": {
+    "message": "Ihr Passkey braucht Zugriff auf bento.page. Erlauben Sie ihn, wenn Chrome fragt, und versuchen Sie es erneut."
+  },
+  "idErrFailed": {
+    "message": "Etwas ist schiefgegangen, und nichts wurde gespeichert. Versuchen Sie es erneut."
+  },
+  "idErrNoWayBack": {
+    "message": "Nichts wurde eingerichtet: Ihr Passkey kann Ihre Bento ID nicht entsperren und dieses Gerät kann keinen Wiederherstellungscode erstellen – es gäbe keinen Weg zurück."
   }
 }

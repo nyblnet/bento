@@ -880,5 +880,92 @@
   },
   "saTaken": {
     "message": "«$1» esiste già. Scegli un altro nome."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "La tua identità per condividere e per i documenti dal vivo. Vive in questo browser; la configurazione crea una passkey e un codice di recupero per riaverla."
+  },
+  "setIdNone": {
+    "message": "Ancora nessun Bento ID in questo browser."
+  },
+  "setIdCreate": {
+    "message": "Crea il tuo Bento ID…"
+  },
+  "setIdLocal": {
+    "message": "Il tuo Bento ID è configurato in questo browser. Il prossimo passo è verificare la tua email."
+  },
+  "idSetupTitle": {
+    "message": "Crea il tuo Bento ID"
+  },
+  "idSetupLead": {
+    "message": "Il tuo Bento ID è il modo in cui le persone con cui condividi sanno che sei tu. La configurazione crea una passkey e un codice di recupero, per riaverlo su un altro dispositivo."
+  },
+  "idSetupLight": {
+    "message": "Nell’estensione del browser, le tue chiavi sono conservate in questo profilo del browser. Rimuovere l’estensione le cancella, quindi custodisci bene passkey e codice di recupero."
+  },
+  "idSetupLabel": {
+    "message": "Nome di questo browser"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Configura una passkey"
+  },
+  "idWorking": {
+    "message": "In attesa della tua passkey…"
+  },
+  "idDeriving": {
+    "message": "Creazione del codice di recupero ($1 di 2)…"
+  },
+  "idCodeTitle": {
+    "message": "Il tuo codice di recupero"
+  },
+  "idCodeLead": {
+    "message": "Scrivilo o stampalo e conservalo in un posto sicuro. Viene mostrato solo questa volta ed è il tuo modo per tornare se perdi la passkey."
+  },
+  "idCodeConfirm": {
+    "message": "Digita il codice per confermare di averlo"
+  },
+  "idCodePrint": {
+    "message": "Stampa"
+  },
+  "idCodeSaved": {
+    "message": "L’ho salvato"
+  },
+  "idCodeMismatch": {
+    "message": "Non è il codice mostrato sopra. Controllalo e riprova."
+  },
+  "idCodeTypo": {
+    "message": "Il codice contiene un errore: un carattere è sbagliato o manca."
+  },
+  "idNoPrf": {
+    "message": "La tua passkey non può sbloccare il tuo Bento ID su altri dispositivi, quindi questo codice di recupero è il tuo unico modo per tornare."
+  },
+  "idNoCode": {
+    "message": "Questo dispositivo non può creare un codice di recupero, quindi la tua passkey è il tuo unico modo per tornare: se la perdi, perdi questo Bento ID. Potrai creare un codice di recupero più tardi su un altro dispositivo."
+  },
+  "idDoneTitle": {
+    "message": "Il tuo Bento ID è configurato"
+  },
+  "idDoneLead": {
+    "message": "È pronto in questo browser. Il prossimo passo è verificare il tuo indirizzo email."
+  },
+  "idDone": {
+    "message": "Fine"
+  },
+  "idErrCancelled": {
+    "message": "La richiesta della passkey è stata annullata o è scaduta. Tieni questa finestra in primo piano e riprova."
+  },
+  "idErrPermission": {
+    "message": "La tua passkey ha bisogno di accedere a bento.page. Consentilo quando Chrome lo chiede, poi riprova."
+  },
+  "idErrFailed": {
+    "message": "Qualcosa è andato storto e non è stato salvato nulla. Riprova."
+  },
+  "idErrNoWayBack": {
+    "message": "Non è stato configurato nulla: la tua passkey non può sbloccare il tuo Bento ID e questo dispositivo non può creare un codice di recupero, quindi non ci sarebbe modo di tornare."
   }
 }

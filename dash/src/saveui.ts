@@ -58,7 +58,8 @@ import {
   isEncryptionActive, setEncryptionPassword,
 } from '../../kernel/src/save.ts'
 import { clearRecovery, clearVersions } from '../../kernel/src/autosave.ts'
-import { duplicateWorkbook } from './about.ts'
+import { duplicateWorkbook, openVersionHistory, openReplaceJson, copyDocJson, type AboutHooks } from './about.ts'
+import { ICONS, menuLabel } from './icons.ts'
 import { docBytes, docBudget, type DashDoc } from './model.ts'
 import type { Store } from './store.ts'
 import { t } from './i18n.ts'
@@ -75,6 +76,10 @@ export interface SaveMenuHost {
   save: () => void | Promise<void>
   /** what a write that reached the open file owes the screen (saving.ts) */
   ack: Acknowledge
+  /** About's hooks — version history and Replace from JSON open from here */
+  about: AboutHooks
+  /** "Start from scratch…" — main.ts owns the grid it must keep on its feet */
+  startFromScratch: () => void
 }
 
 /** A uuid, with the same fallback shape starter.ts uses for old runtimes. */
@@ -165,14 +170,16 @@ export function applyDocLock(doc: DashDoc, store: Store): void {
   if (doc.readonly) store.readOnly = true
 }
 
-/**
- * Hang the save menu off the app's Save button.
- *
- * The Save button keeps its own click handler; this only adds the caret beside
- * it. That is deliberate — the most-used control in the header is not rewired
- * to add four occasional ones.
- */
-export function installSaveMenu(host: SaveMenuHost): void {
+export interface SaveMenu {
+  /**
+   * Build the Save-as list into another container — ⋯ on a phone, where the
+   * caret that opens it does not fit beside Save (slides' fillPhoneSaveAs).
+   * One list, two homes; it reflects live state, so it is built per open.
+   */
+  fill(into: HTMLElement, close: () => void): void
+}
+
+export function installSaveMenu(host: SaveMenuHost): SaveMenu {
   const { button, store } = host
 
   const wrap = document.createElement('span')
@@ -183,8 +190,8 @@ export function installSaveMenu(host: SaveMenuHost): void {
   const caret = document.createElement('button')
   caret.className = 'dx-btn dxs-caret'
   caret.type = 'button'
-  caret.textContent = '▾'
-  caret.title = t('Save as… — copy, new workbook, template, read-only, password')
+  caret.innerHTML = '<span class="dxs-caret-g" aria-hidden="true">▾</span>'
+  caret.title = t('Save as… — copy, new workbook, template, password, history, JSON')
   caret.setAttribute('aria-label', caret.title)
 
   const menu = document.createElement('div')
@@ -196,8 +203,8 @@ export function installSaveMenu(host: SaveMenuHost): void {
     const opening = !wrap.classList.contains('dxs-open')
     wrap.classList.toggle('dxs-open', opening)
     // Rebuilt on every open because it reflects live state — a read-only file
-    // offers nothing, and the labels name the file we would actually write.
-    if (opening) build()
+    // offers less, and the password row says which way it would go.
+    if (opening) { menu.textContent = ''; build(menu, close) }
   })
   document.addEventListener('pointerdown', (ev) => {
     if (!wrap.contains(ev.target as Node)) close()
@@ -206,20 +213,29 @@ export function installSaveMenu(host: SaveMenuHost): void {
     if (ev.key === 'Escape') close()
   })
 
-  const item = (label: string, why: string, run: () => void | Promise<void>) => {
+  /**
+   * One row: icon and name on ONE line; what it does is the hover tooltip and
+   * the accessible description (maintainer ruling D2 — "all the extra text
+   * describing the entry can be mouseovers"). It used to be a second line of
+   * small print under every item, which made the menu twice the height of
+   * slides' for the same commands.
+   */
+  const item = (into: HTMLElement, done: () => void, icon: string, label: string, why: string,
+    run: () => void | Promise<void>, opts: { readOnlyOk?: boolean } = {}): void => {
     const b = document.createElement('button')
-    b.className = 'dxs-item'
+    b.className = 'dx-btn dxs-item'
     b.type = 'button'
-    b.appendChild(Object.assign(document.createElement('span'), { textContent: label }))
-    b.appendChild(Object.assign(document.createElement('small'), { textContent: why }))
-    if (store.readOnly) {
+    b.innerHTML = icon
+    b.append(menuLabel(label, why, b))
+    if (store.readOnly && !opts.readOnlyOk) {
       b.disabled = true
       b.title = t('This workbook is open read-only, so this build will not write it.')
     } else {
-      b.addEventListener('click', () => { close(); void run() })
+      b.addEventListener('click', () => { done(); void run() })
     }
-    menu.appendChild(b)
+    into.appendChild(b)
   }
+  const sep = (into: HTMLElement) => into.appendChild(Object.assign(document.createElement('div'), { className: 'dxs-sep dx-menu-sep' }))
 
   /** An in-place update replaced this file's shell; this page must not write it. */
   const refuseSuperseded = (): boolean => {
@@ -230,13 +246,10 @@ export function installSaveMenu(host: SaveMenuHost): void {
   const failed = (err: unknown): void =>
     toast(t('Save failed — {why}').replace('{why}', err instanceof Error ? err.message : String(err)))
 
-  const build = () => {
-    menu.textContent = ''
-
-    item(t('Save'), t('Write this workbook back to its own file.'),
-      () => host.save())
-
-    item(t('Save a copy…'), t('A backup of this workbook for yourself — same workbook, same live session.'),
+  // FILE operations only, as in slides: everything that goes to OTHER PEOPLE —
+  // the reading copy, an invite, a view-only follower — lives in Share.
+  const build = (into: HTMLElement, done: () => void) => {
+    item(into, done, ICONS.copy, t('Save a copy…'), t('A backup of this workbook for yourself — same workbook, same live session.'),
       async () => {
         if (!confirmBudget(store.doc)) return
         if (refuseSuperseded()) return
@@ -250,15 +263,11 @@ export function installSaveMenu(host: SaveMenuHost): void {
         if (out.kind === 'done' && out.value !== 'cancelled') toast(t('Copy saved — you are still editing the original'))
       })
 
-    item(t('Save as new workbook…'), t('A separate workbook — same data, new identity. Nothing links it back to this one.'),
+    item(into, done, ICONS.plus, t('Save as new workbook…'), t('A separate workbook — same data, new identity. Nothing links it back to this one.'),
       async () => {
         if (!confirmBudget(store.doc)) return
         // ONE implementation of the fork, in about.ts, which is where the rig
-        // that proves it lives (scripts/test-dash-about.ts). This was a second
-        // copy of the same three lines and it had already drifted: it kept
-        // `template: true`, so forking a template gave you another template —
-        // a file that re-mints its identity on every open, which is the exact
-        // opposite of "a separate workbook".
+        // that proves it lives (scripts/test-dash-about.ts).
         if (refuseSuperseded()) return
         // THE SWAP WAITS FOR EVERY WRITE AHEAD OF IT. An automatic save of the
         // ancestor already in flight resolves its handle after its serializer
@@ -267,14 +276,11 @@ export function installSaveMenu(host: SaveMenuHost): void {
         // the ancestor still QUEUED is discarded once the identity changes.
         //
         // The handle is released FIRST and always, not only on cancel: the
-        // fork is not a version of the ancestor's file in any outcome. A
-        // successful save-as adopts the new handle; a download never had one.
+        // fork is not a version of the ancestor's file in any outcome.
         //
         // The `null` cast is the same KERNEL GAP dropopen.ts names: nothing
         // needed to RELEASE a handle until a document could stop belonging to
-        // its file, `adoptFileHandle` types its argument non-null, and the
-        // implementation is a bare assignment. The fix is a
-        // `releaseFileHandle()` beside it in kernel/src/save.ts.
+        // its file, and `adoptFileHandle` types its argument non-null.
         await afterPendingWrites(store, () => {
           adoptFileHandle(null as never)
           store.replaceDoc(duplicateWorkbook(store.doc, newDocId()))
@@ -286,18 +292,15 @@ export function installSaveMenu(host: SaveMenuHost): void {
         if (out.kind !== 'done') return
         if (out.value === 'cancelled') {
           // THE FORK IS ALREADY IN MEMORY and the picker was closed. The held
-          // handle was released above, so ⌘S and write-back go back to the
-          // picker rather than overwriting the ancestor — which is how the
-          // original used to quietly become the fork.
+          // handle was released above, so ⌘S goes back to the picker rather
+          // than overwriting the ancestor.
           toast(t('This is now a new workbook — save it under a new name'))
         } else {
           toast(t('Saved as a new workbook'))
         }
       })
 
-    menu.appendChild(Object.assign(document.createElement('div'), { className: 'dxs-sep' }))
-
-    item(t('Save as template…'), t('A starting point: every open of it becomes a fresh workbook of its own.'),
+    item(into, done, ICONS.template, t('Save as template…'), t('A starting point: every open of it becomes a fresh workbook of its own.'),
       async () => {
         if (!confirmBudget(store.doc)) return
         const next = clone(store.doc)
@@ -311,49 +314,56 @@ export function installSaveMenu(host: SaveMenuHost): void {
           t('Template saved — every open of it starts a fresh workbook'))
       })
 
-    item(t('Save read-only copy…'), t('A locked copy for handing out: it opens, it does not edit.'),
-      async () => {
-        if (!confirmBudget(store.doc)) return
-        const next = clone(store.doc)
-        next.readonly = true
-        delete next.collab
-        await writeExport(next, 'viewonly',
-          t('Read-only copy saved — it opens locked'))
-      })
-
-    menu.appendChild(Object.assign(document.createElement('div'), { className: 'dxs-sep' }))
-
     // The password. Nothing is written here — it sets the standing instruction
     // that every path above then honours through `serializeAuto`.
     if (isEncryptionActive()) {
-      item(t('Remove password…'), t('The next save writes the workbook in the clear.'), () => {
+      item(into, done, ICONS.lock, t('Remove password…'), t('The next save writes the workbook in the clear.'), () => {
         if (!confirm(t('Remove the password? The next save writes the workbook in the clear.'))) return
         setEncryptionPassword(null)
         toast(t('Password removed. Save to write the workbook unencrypted.'))
       })
     } else {
-      item(t('Set a password…'), t('Encrypts the workbook inside the file. There is no recovery — lose it and the data is gone.'), () => {
+      item(into, done, ICONS.lock, t('Set a password…'), t('Encrypts the workbook inside the file. There is no recovery — lose it and the data is gone.'), () => {
         const pw = prompt(t('Choose a password. There is no way to recover it.'))
         if (!pw) return
         setEncryptionPassword(pw)
         // Snapshots written BEFORE this moment are plaintext copies of the very
-        // thing now being encrypted, sitting in IndexedDB. Both stores: the
-        // single recovery snapshot and the whole version timeline.
+        // thing now being encrypted, sitting in IndexedDB. Both stores.
         void clearRecovery(store.doc.docId)
         void clearVersions(store.doc.docId)
         toast(t('Password set. Save to write the workbook encrypted, and keep the password somewhere safe.'))
       })
     }
+
+    // THE DOCUMENT AS DATA — history and the AI/JSON round trip, with the
+    // other file operations, as in slides (they were in the About dialog).
+    sep(into)
+    item(into, done, ICONS.history, t('Version history…'),
+      t('Restore an earlier auto-saved version of this workbook (kept locally in this browser).'),
+      () => openVersionHistory(host.about), { readOnlyOk: true })
+    item(into, done, ICONS.code, t('Copy document JSON'),
+      t('Copies this workbook as plain JSON — content only, no live-session keys. Edit it in another tool, then bring it back with Replace from JSON.'),
+      async () => {
+        const size = await copyDocJson(store.doc)
+        toast(size ? t('Copied — {size} of JSON.', { size }) : t('This browser refused clipboard access.'))
+      }, { readOnlyOk: true })
+    item(into, done, ICONS.code, t('Replace from JSON…'),
+      t('Paste edited document JSON to replace this workbook’s content.'),
+      () => openReplaceJson(host.about))
+    item(into, done, ICONS.blank, t('Start from scratch…'),
+      t('Replace every sheet with one blank sheet. Keeps the workbook’s name, theme and live session — ⌘Z undoes.'),
+      () => host.startFromScratch())
   }
 
-  build()
+  return { fill: (into, done) => build(into, done) }
 }
 
 /**
  * Write a share export: a NEW file, chosen by the user, that never becomes the
- * ⌘S target (rule 1 at the top of this file — no `keepHandle`).
+ * ⌘S target (rule 1 at the top of this file — no `keepHandle`). Every copy for
+ * someone else goes through here, encryption-aware (`serializeAuto`).
  */
-async function writeExport(doc: DashDoc, suffix: string, done: string): Promise<void> {
+export async function writeExport(doc: DashDoc, suffix: string, done: string): Promise<void> {
   try {
     const ok = await writeUpdatedFileAs(await serializeAuto(doc), doc, { suffix })
     if (ok) toast(done)

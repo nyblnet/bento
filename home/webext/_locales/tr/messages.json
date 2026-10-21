@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "“$1” zaten var. Başka bir ad seçin."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Paylaşım ve canlı belgeler için kimliğiniz. Bu tarayıcıda durur; kurulum, onu geri alabilmeniz için bir geçiş anahtarı ve bir kurtarma kodu oluşturur."
+  },
+  "setIdNone": {
+    "message": "Bu tarayıcıda henüz bir Bento ID yok."
+  },
+  "setIdCreate": {
+    "message": "Bento ID oluştur…"
+  },
+  "setIdLocal": {
+    "message": "Bento ID'niz bu tarayıcıda kuruldu. Sıradaki adım e-postanızı doğrulamak."
+  },
+  "idSetupTitle": {
+    "message": "Bento ID oluşturun"
+  },
+  "idSetupLead": {
+    "message": "Bento ID'niz, paylaştığınız kişilerin sizin olduğunuzu bilmesini sağlar. Kurulum, başka bir cihazda geri alabilmeniz için bir geçiş anahtarı ve bir kurtarma kodu oluşturur."
+  },
+  "idSetupLight": {
+    "message": "Tarayıcı uzantısında anahtarlarınız bu tarayıcı profilinde tutulur. Uzantıyı kaldırmak onları siler; geçiş anahtarınızı ve kurtarma kodunuzu güvende tutun."
+  },
+  "idSetupLabel": {
+    "message": "Bu tarayıcının adı"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Geçiş anahtarı kur"
+  },
+  "idWorking": {
+    "message": "Geçiş anahtarınız bekleniyor…"
+  },
+  "idDeriving": {
+    "message": "Kurtarma kodunuz oluşturuluyor ($1/2)…"
+  },
+  "idCodeTitle": {
+    "message": "Kurtarma kodunuz"
+  },
+  "idCodeLead": {
+    "message": "Bir yere yazın veya yazdırın ve güvenli bir yerde saklayın. Yalnızca bu kez gösterilir ve geçiş anahtarınızı kaybederseniz geri dönüş yolunuz budur."
+  },
+  "idCodeConfirm": {
+    "message": "Kodu sizde olduğunu doğrulamak için yazın"
+  },
+  "idCodePrint": {
+    "message": "Yazdır"
+  },
+  "idCodeSaved": {
+    "message": "Kaydettim"
+  },
+  "idCodeMismatch": {
+    "message": "Bu, yukarıda gösterilen kod değil. Kontrol edip yeniden deneyin."
+  },
+  "idCodeTypo": {
+    "message": "Bu kodda bir yazım hatası var: bir karakter yanlış ya da eksik."
+  },
+  "idNoPrf": {
+    "message": "Geçiş anahtarınız Bento ID'nizin kilidini başka cihazlarda açamaz; bu kurtarma kodu tek geri dönüş yolunuz."
+  },
+  "idNoCode": {
+    "message": "Bu cihaz kurtarma kodu oluşturamıyor; geçiş anahtarınız tek geri dönüş yolunuz. Onu kaybederseniz bu Bento ID'yi de kaybedersiniz. Daha sonra başka bir cihazda kurtarma kodu oluşturabilirsiniz."
+  },
+  "idDoneTitle": {
+    "message": "Bento ID'niz kuruldu"
+  },
+  "idDoneLead": {
+    "message": "Bu tarayıcıda hazır. Sıradaki adım e-posta adresinizi doğrulamak."
+  },
+  "idDone": {
+    "message": "Bitti"
+  },
+  "idErrCancelled": {
+    "message": "Geçiş anahtarı isteği iptal edildi veya süresi doldu. Bu pencereyi önde tutup yeniden deneyin."
+  },
+  "idErrPermission": {
+    "message": "Geçiş anahtarınızın bento.page erişimine ihtiyacı var. Chrome sorduğunda izin verin ve yeniden deneyin."
+  },
+  "idErrFailed": {
+    "message": "Bir şeyler ters gitti ve hiçbir şey kaydedilmedi. Yeniden deneyin."
+  },
+  "idErrNoWayBack": {
+    "message": "Hiçbir şey kurulmadı: geçiş anahtarınız Bento ID'nizin kilidini açamıyor ve bu cihaz kurtarma kodu oluşturamıyor, dolayısıyla geri dönüş yolu olmazdı."
   }
 }

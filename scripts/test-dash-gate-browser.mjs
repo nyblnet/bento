@@ -23,6 +23,10 @@ const shell = readFileSync(shellPath, 'utf8')
 const BLOCK = /(<script type="application\/bento\+json" id="bento-doc">)([\s\S]*?)(<\/script>)/
 if (!BLOCK.test(shell)) throw new Error('#bento-doc not found in the built shell')
 const withBlock = (text) => shell.replace(BLOCK, (_, a, _b, c) => a + text.replace(/</g, '\\u003c') + c)
+// a file saved by an older shell can carry its real title in <title>; the gate
+// must not show it (neutral title while sealed, matching the saved file's title)
+const REAL_TITLE = 'Q3 board pack — bento/dash'
+const withTitle = (html) => html.replace(/<title>[^<]*<\/title>/, `<title>${REAL_TITLE}</title>`)
 
 // The kernel's envelope (kernel/src/save.ts encryptBody): PBKDF2-SHA-256 then
 // AES-GCM-256, standard base64. A low iteration count keeps the rig fast;
@@ -51,7 +55,7 @@ try {
   await ctx.route(/^https?:/, (r) => r.abort())
 
   console.log('an encrypted workbook')
-  writeFileSync(tmp, withBlock(await envelope(WORKBOOK, 'hunter2')))
+  writeFileSync(tmp, withTitle(withBlock(await envelope(WORKBOOK, 'hunter2'))))
   {
     const p = await ctx.newPage(); const errors = []
     p.on('pageerror', (e) => errors.push(e.message))
@@ -60,6 +64,7 @@ try {
     const b = await p.evaluate(() => ({ format: window.bento?.format, locked: window.bento?.locked, doc: !!window.bento?.doc }))
     ok(b.format === 'bento/dash' && b.locked === true && !b.doc, `at the gate, window.bento is { format: 'bento/dash', locked: true } with no doc — ${JSON.stringify(b)}`)
     ok(await p.evaluate(predicate), 'so the loader\'s mounted check (doc OR locked) is TRUE while the gate is up')
+    ok(await p.evaluate(() => document.title) === 'bento/dash', `at the gate the tab says only "bento/dash", not the file's own <title> — got "${await p.evaluate(() => document.title)}"`)
     await p.fill('.dx-gate input[type="password"]', 'wrong')
     await p.click('.dx-unlock')
     await p.waitForFunction(() => /Wrong password/.test(document.querySelector('.dx-err')?.textContent ?? ''))
@@ -69,6 +74,7 @@ try {
     await p.waitForFunction(() => window.bento?.doc, null, { timeout: 15000 })
     const after = await p.evaluate(() => ({ title: window.bento.doc.title, locked: window.bento.locked }))
     ok(after.title === 'Locked workbook' && after.locked === undefined, `the right password opens the workbook and replaces the locked marker — ${JSON.stringify(after)}`)
+    ok(await p.evaluate(() => document.title) === 'bento/dash', `unlocked, the password still seals it: the tab still says only "bento/dash" — got "${await p.evaluate(() => document.title)}"`)
     ok(!errors.some((e) => /loader path/.test(e)), `no "every loader path was refused" error${errors.length ? ' — ' + errors.join('; ') : ''}`)
     await p.close()
   }
@@ -92,6 +98,7 @@ try {
     await p.goto(tmp.href)
     await p.waitForFunction(() => window.bento?.doc, null, { timeout: 10000 })
     ok(await p.evaluate(() => window.bento.locked === undefined && window.bento.doc.title === 'Locked workbook'), 'a plain file boots straight to its doc, never locked')
+    ok(await p.evaluate(() => document.title) === 'Locked workbook — bento/dash', `CONTROL: a plain file's tab shows its title — "${await p.evaluate(() => document.title)}"`)
     await p.close()
   }
 } finally {

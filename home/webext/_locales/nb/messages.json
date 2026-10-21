@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "«$1» finnes allerede. Velg et annet navn."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Identiteten din for deling og livedokumenter. Den ligger i denne nettleseren; oppsettet lager en tilgangsnøkkel og en gjenopprettingskode, så du kan få den tilbake."
+  },
+  "setIdNone": {
+    "message": "Det finnes ingen Bento ID i denne nettleseren ennå."
+  },
+  "setIdCreate": {
+    "message": "Opprett Bento ID …"
+  },
+  "setIdLocal": {
+    "message": "Bento ID-en din er satt opp i denne nettleseren. Neste steg er å bekrefte e-posten din."
+  },
+  "idSetupTitle": {
+    "message": "Opprett Bento ID"
+  },
+  "idSetupLead": {
+    "message": "Bento ID-en din er hvordan de du deler med vet at det er deg. Oppsettet lager en tilgangsnøkkel og en gjenopprettingskode, så du kan få den tilbake på en annen enhet."
+  },
+  "idSetupLight": {
+    "message": "I nettleserutvidelsen ligger nøklene dine i denne nettleserprofilen. Fjerner du utvidelsen, slettes de, så ta godt vare på tilgangsnøkkelen og gjenopprettingskoden."
+  },
+  "idSetupLabel": {
+    "message": "Navn på denne nettleseren"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Sett opp en tilgangsnøkkel"
+  },
+  "idWorking": {
+    "message": "Venter på tilgangsnøkkelen din …"
+  },
+  "idDeriving": {
+    "message": "Lager gjenopprettingskoden din ($1 av 2) …"
+  },
+  "idCodeTitle": {
+    "message": "Gjenopprettingskoden din"
+  },
+  "idCodeLead": {
+    "message": "Skriv den ned eller skriv den ut, og oppbevar den et trygt sted. Den vises bare denne ene gangen og er veien tilbake hvis du mister tilgangsnøkkelen."
+  },
+  "idCodeConfirm": {
+    "message": "Skriv inn koden for å bekrefte at du har den"
+  },
+  "idCodePrint": {
+    "message": "Skriv ut"
+  },
+  "idCodeSaved": {
+    "message": "Jeg har tatt vare på den"
+  },
+  "idCodeMismatch": {
+    "message": "Det er ikke koden ovenfor. Sjekk den og prøv igjen."
+  },
+  "idCodeTypo": {
+    "message": "Koden har en skrivefeil: et tegn er feil eller mangler."
+  },
+  "idNoPrf": {
+    "message": "Tilgangsnøkkelen din kan ikke låse opp Bento ID-en din på andre enheter, så denne gjenopprettingskoden er den eneste veien tilbake."
+  },
+  "idNoCode": {
+    "message": "Denne enheten kan ikke lage en gjenopprettingskode, så tilgangsnøkkelen er den eneste veien tilbake: mister du den, mister du denne Bento ID-en. Du kan lage en gjenopprettingskode senere på en annen enhet."
+  },
+  "idDoneTitle": {
+    "message": "Bento ID-en din er satt opp"
+  },
+  "idDoneLead": {
+    "message": "Den er klar i denne nettleseren. Neste steg er å bekrefte e-postadressen din."
+  },
+  "idDone": {
+    "message": "Ferdig"
+  },
+  "idErrCancelled": {
+    "message": "Forespørselen om tilgangsnøkkel ble avbrutt eller gikk ut på tid. Hold dette vinduet foran og prøv igjen."
+  },
+  "idErrPermission": {
+    "message": "Tilgangsnøkkelen trenger tilgang til bento.page. Tillat det når Chrome spør, og prøv igjen."
+  },
+  "idErrFailed": {
+    "message": "Noe gikk galt, og ingenting ble lagret. Prøv igjen."
+  },
+  "idErrNoWayBack": {
+    "message": "Ingenting ble satt opp: tilgangsnøkkelen din kan ikke låse opp Bento ID-en, og denne enheten kan ikke lage en gjenopprettingskode, så det ville ikke vært noen vei tilbake."
   }
 }

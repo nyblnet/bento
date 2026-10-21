@@ -1,0 +1,168 @@
+# validate, home-webext slice: home/webext: the browser extension's package and rigs.
+#
+# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# action as steps INSIDE that one job, on the same runner, after the slices
+# listed before it there — so what earlier slices installed and built is on
+# disk here. A failing step here fails `validate` and blocks the merge.
+#
+# Add a new rig's step to the slice of the zone that owns the rig, at the
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
+
+name: validate-home-webext
+description: validate, home-webext slice (runs inside the required validate job)
+runs:
+  using: composite
+  steps:
+    - name: WebExtension package rig
+      # Validates the store package without writing it: every file the
+      # manifest names exists, every icon is the size it claims, no unexpected
+      # file is about to ship (probe/ is four capability probes — harmless to
+      # us, alarming to a reviewer), and no permission is declared but unused.
+      # A listing rejected for a missing 128px icon costs days of review.
+      shell: bento-step {0}
+      run: node scripts/pack-webext.mjs --check
+
+    - name: WebExtension background rig
+      # The half that WRITES, and previously the untested half. Two properties
+      # it must hold: the target file comes from sender.url (browser-stamped)
+      # and never from the page, and nothing is carried between messages,
+      # because an MV3 service worker is evicted mid-save and state across that
+      # gap fails intermittently on nobody's machine but the user's.
+      shell: bento-step {0}
+      run: node scripts/test-webext-background.ts
+
+    - name: WebExtension bridge rig
+      # home/webext decides, per save, whether to write in place or hand back
+      # to the browser's own picker. Wrong in the permissive direction it
+      # overwrites the open document with no dialog — which it did once. The
+      # decision is pure logic over an options bag, so it is checkable here
+      # rather than by reloading an extension and pressing Cmd-S.
+      shell: bento-step {0}
+      run: node scripts/test-webext-bridge.ts
+
+    - name: WebExtension route rig
+      # Turning an absolute path into "where this granted folder lives", from
+      # paths the extension did not choose — browser history, for files that
+      # may have moved or never been in a grant at all. Getting it wrong does
+      # not produce a broken link; it records a folder at the wrong place and
+      # every document in it silently opens something else. So it must prove,
+      # never guess: the route resolves inside the grant AND dir.resolve()
+      # agrees with the path's own tail.
+      shell: bento-step {0}
+      run: node scripts/test-webext-route.ts
+
+    - name: WebExtension document-library rig
+      # The popup is a document browser, and everything in it is DERIVED from
+      # files on disk: the title out of the document block, the thumbnail out
+      # of the preview block, the openable path out of a learned prefix. Each
+      # is a parse against a format that moves, and each fails quietly — a row
+      # showing a filename instead of a title, or a blank square. Nothing
+      # throws, so nothing reports it.
+      #
+      # Runs AFTER the slides build on purpose: it reads the real shell, and
+      # with a document spliced in at the real offset. Hand-written fixtures
+      # would have passed the bug this replaces, where a metadata reader hunted
+      # for the document block's CLOSING tag and so found nothing in any
+      # document carrying an image.
+      shell: bento-step {0}
+      run: node scripts/test-webext-library.ts
+
+    - name: WebExtension release-trust rig
+      # Creating a document downloads an app shell and writes it to the user's
+      # disk, where they later double-click it — executable HTML they go on to
+      # trust. So the manifest's signature is checked against the key compiled
+      # into the extension, and the download against the digest that signature
+      # covers. Signature over the pin, pin over the bytes.
+      #
+      # It also reads a REAL manifest captured from the release origin, which
+      # is the check that could not be faked into passing: the shipped code
+      # read `url` off the top level of a SIGNED ENVELOPE that has no top-level
+      # url, so the + button had never worked in any version — and the rig
+      # agreed, because its fixture was written to the shape the code wanted.
+      shell: bento-step {0}
+      run: node scripts/test-webext-release.ts
+
+    - name: WebExtension update-notice rig
+      # Store installs update themselves; one loaded unpacked never will, and
+      # Chrome ignores update_url for a development install. So the GitHub
+      # route has to be told — and told in exactly one direction: a store user
+      # must never see a notice they cannot act on, and must not even cost a
+      # request. Every failure mode here is silent by nature.
+      shell: bento-step {0}
+      run: node scripts/test-webext-update.ts
+
+    - name: WebExtension placement rig
+      # A granted folder has no path; the library can only open a document
+      # by its file:// URL. Placement GUESSES paths and PROVES one by bytes
+      # and by the grant itself — the property that matters is that a wrong
+      # guess (same name, other bytes; same bytes, a copy elsewhere) is never
+      # recorded. Also the title card drawn for a document with no preview.
+      shell: bento-step {0}
+      run: node scripts/test-webext-place.ts
+
+    - name: WebExtension file-grant rig
+      # Saving in place for a document outside every granted folder: a
+      # per-file handle the extension holds, the downloads API for Downloads,
+      # the one-time offer. Each must write only the sender's own file, use a
+      # handle only when proven to be that file (name and bytes), and fail to
+      # the browser's own picker — never to nothing.
+      shell: bento-step {0}
+      run: node scripts/test-webext-filegrant.ts
+
+    - name: WebExtension save-as rig
+      # "Save a copy" and exports answered in the extension's own window, so
+      # they can land beside the document. The page supplies a name, never a
+      # place; a write lands only where the person chose and only for the
+      # document that asked; a beside-name is never a path or the original.
+      shell: bento-step {0}
+      run: node scripts/test-webext-saveas.ts
+
+    - name: WebExtension DocStore rig
+      # A document's crash recovery and member key live in the extension's
+      # origin, partitioned by the file path the browser reports. One document
+      # must never reach another's entries, a payload must never name a
+      # partition, and a moved file's recovery follows it only when the old
+      # path is gone (seen through a grant) and the content hash matches; the
+      # member key never follows.
+      shell: bento-step {0}
+      run: node scripts/test-webext-store.ts
+
+    - name: WebExtension Bento ID setup rig
+      # Creating a Bento ID: the device certificate verifies under kernel's
+      # verifier; the passkey and recovery blobs open with kernel's openers to
+      # the account key; the recovery code and the raw scalar appear nowhere in
+      # the stored record; both keys are non-extractable; no PRF means no blob,
+      # and with no way back at all, setup refuses.
+      shell: bento-step {0}
+      run: node scripts/test-webext-connect.ts
+
+    - name: WebExtension bento/connect rig
+      # The extension's identity code must be the kernel reference, unaltered
+      # (a generated type-strip, checked current), and pass kernel's own rigs
+      # for identity-v1.json and recovery-v1.json with the same row counts.
+      # The vendored Argon2id (@noble/hashes) must match its pinned file
+      # hashes, RFC 9106 and every recovery vector, agree with Node's native
+      # Argon2id, zero its block array, and fail closed on allocation failure.
+      shell: bento-step {0}
+      run: node scripts/test-webext-id.ts
+
+    - name: WebExtension localisation rig
+      # Every failure mode of a message catalogue is silent: a key the code
+      # uses but English lacks renders as the key name, a locale missing a key
+      # falls back so a German page carries English sentences, and a dropped
+      # $1 leaves a hole in a translated sentence. All of them are visible
+      # only to someone who reads that language.
+      shell: bento-step {0}
+      run: node scripts/test-webext-i18n.ts
+
+    - name: WebExtension assistant rig
+      # The Assistant is extension-only: the page holds no key, so what the
+      # extension ACCEPTS decides the feature. A frame from an iframe on a
+      # slide, a page the user never allowed, an abort naming another tab's
+      # turn, a describe or an error that echoes the key or the endpoint —
+      # every one of those is silent in a browser and loud here.
+      shell: bento-step {0}
+      run: node scripts/test-webext-assistant.ts

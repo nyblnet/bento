@@ -417,7 +417,7 @@ console.log('\n10. encrypted spaces: in the envelope, never in IndexedDB (source
   ok(!/autosave|indexedDB|putRecovery|addVersion|localStorage/.test(hsrc.replace(/\/\/.*$/gm, '')),
     'history.ts touches no browser storage — revisions live only in the document')
   const doSave = main.slice(main.indexOf('async function doSave('), main.indexOf('editor.onUpdateInPlace'))
-  ok(/recordOnSave\(store\)/.test(doSave) && !/isEncryptionActive\(\)[^\n]*recordOnSave/.test(doSave),
+  ok(/recordOnSave\(store\)/.test(doSave) && !/(isEncryptionActive|isBodySealed)\(\)[^\n]*recordOnSave/.test(doSave),
     'the save records unconditionally — an encrypted space keeps history, inside #bento-doc\'s envelope')
 }
 

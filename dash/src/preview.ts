@@ -48,7 +48,7 @@
 // `scripts/test-dash-preview.ts` exercises. The DOM appears once, in
 // `buildSheetPreview`, which is the only function the kernel calls.
 
-import { isEncryptionActive } from '../../kernel/src/save.ts'
+import { isBodySealed } from '../../kernel/src/save.ts'
 import { formatValue, alignFor, TYPE_LABEL } from './format.ts'
 import { readCell } from './store.ts'
 import { hiddenSet } from './rowcol.ts'
@@ -500,7 +500,7 @@ function cardMarkup(doc: DashDoc, p: Palette): string {
  * password.
  */
 export function previewMarkup(doc: DashDoc): string | null {
-  if (isEncryptionActive()) return null
+  if (isBodySealed()) return null
   const sheet = doc.sheets?.[0]
   if (!sheet) return null
   const p = paletteOf(doc)

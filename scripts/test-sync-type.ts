@@ -274,7 +274,7 @@ console.log('\n=== what that looks like on one paragraph ===');
     page: { width: 816, height: 1056, marginX: 104, marginTop: 104, marginBottom: 104 },
     body: [{ id: 'p1', kind: 'para', text: TEXT,
              marks: [{ t: 'b', from: TEXT.indexOf(TERM), to: TEXT.indexOf(TERM) + TERM.length }] } as Block],
-    footnotes: {}, revisions: [], signatures: [],
+    footnotes: {}, revisions: [], signatures: {},
   } as unknown as Doc);
 
   const A = new Replica('alice', mk());
@@ -329,7 +329,7 @@ console.log('\n=== what that looks like on one paragraph ===');
     .filter(o => o.op === 'set' && !o.el && !o.sl).map(o => o.k);
   const COMMENT = { c1: { id: 'c1', text: 'check clause 4', author: 'Bob', at: 'x', replies: [],
                           anchor: { block: 'p1', from: 0, to: 7 } } };
-  const SIG = [{ alg: 'ES256', pub: 'P', name: 'Alice', content: 'C', prev: '', sig: 'S' }];
+  const SIG = { k1: { alg: 'ES256', pub: 'P', name: 'Alice', content: 'C', prev: '', sig: 'S' } };
 
   H('with the map bound, what a type replica emits');
   {
@@ -342,12 +342,12 @@ console.log('\n=== what that looks like on one paragraph ===');
     const ops = A.diff(before as never, dA as never, { text: true });
     const keys = docKeys(ops);
     ok(keys.includes('comments'), 'comments IS emitted — synced to the room (ruling 2026-10-15)');
-    ok(keys.includes('signatures'), 'signatures IS emitted — as before binding');
+    ok(keys.some(k => k.startsWith('signatures.')), 'signatures IS emitted — each one as its own key (ruling 7)');
     ok(!keys.includes('revisions'), 'revisions is NOT emitted — each replica keeps its own timeline');
     ok(!keys.some(k => k === 'mystery' || k.startsWith('mystery.')),
       'an UNDECLARED key is NOT emitted — the allowlist, not the denylist');
     const hist = ['revisions', 'comments', 'signatures'];
-    ok(keys.filter(k => hist.includes(k.split('.')[0])).every(k => k === 'comments' || k === 'signatures'),
+    ok(keys.filter(k => hist.includes(k.split('.')[0])).every(k => k === 'comments' || k.startsWith('signatures.')),
       'no history key other than comments and signatures leaves this replica');
     B.apply(dB as never, ops);
     ok(JSON.stringify(dB.comments) === JSON.stringify(COMMENT), 'a bound peer receives the comment');
@@ -383,6 +383,49 @@ console.log('\n=== what that looks like on one paragraph ===');
     ok(dO2.mystery === 'from old', 'the bound peer\'s silence on an undeclared key is not a delete');
     ok(JSON.stringify(dO2.comments) === JSON.stringify(COMMENT), 'and the comment survives the round trip');
   }
+  H('RULING 7: concurrent signers both survive, on both replicas (row 1)');
+  {
+    // Two real engines, one document, each signing at the same moment. With
+    // the old whole-list register one signature was silently lost (measured:
+    // both replicas held only Bob's). Keyed by SigId, each is its own key.
+    const A = new TypeSync('a'); const B = new TypeSync('b');
+    const dA = mk(); const dB = clone(dA); A.adopt(dA as never); B.adopt(dB as never);
+    const bA = clone(dA), bB = clone(dB);
+    const sa = { alg: 'ES256', pub: 'PA', name: 'Alice', content: 'C', history: 'H', prev: '', sig: 'SA' };
+    const sb = { alg: 'ES256', pub: 'PB', name: 'Bob', content: 'C', history: 'H', prev: '', sig: 'SB' };
+    (dA.signatures as Record<string, unknown>).idAlice = sa;
+    (dB.signatures as Record<string, unknown>).idBob = sb;
+    const oA = A.diff(bA as never, dA as never, { text: true }), oB = B.diff(bB as never, dB as never, { text: true });
+    A.apply(dA as never, oB); B.apply(dB as never, oA);
+    const names = (d: Record<string, unknown>) => Object.values(d.signatures as object).map((x: any) => x.name).sort().join('+');
+    ok(names(dA) === 'Alice+Bob' && names(dB) === 'Alice+Bob',
+      `both signatures survive on BOTH replicas (alice holds ${names(dA)}, bob holds ${names(dB)})`);
+    ok(['idAlice', 'idBob'].every(k => JSON.stringify((dA.signatures as any)[k]) === JSON.stringify(k === 'idAlice' ? sa : sb)
+                                   && JSON.stringify((dB.signatures as any)[k]) === JSON.stringify(k === 'idAlice' ? sa : sb)),
+      'each under its own key, byte for byte, on both');
+  }
+
+  H('RULING 7: a SigId arriving as a remote map sub-key is inert when it is a prototype or dotted name (row 9)');
+  {
+    const A = new TypeSync('a'); const B = new TypeSync('b');
+    const dA = mk(); const dB = clone(dA); A.adopt(dA as never); B.adopt(dB as never);
+    const bA = clone(dA);
+    const sigs = dA.signatures as Record<string, unknown>;
+    const entry = { alg: 'ES256', pub: 'P', name: 'X', content: 'C', history: 'H', prev: '', sig: 'S' };
+    Object.defineProperty(sigs, '__proto__', { value: entry, enumerable: true, configurable: true, writable: true });
+    sigs['constructor'] = entry;
+    sigs['a.b'] = entry;
+    sigs['ok-id'] = entry;
+    const ops = A.diff(bA as never, dA as never, { text: true });
+    B.apply(dB as never, ops);
+    const got = dB.signatures as Record<string, unknown>;
+    ok(Object.getPrototypeOf(got) === Object.prototype || Object.getPrototypeOf(got) === null,
+      "a '__proto__' SigId never swaps the receiving map's prototype");
+    ok(!Object.hasOwn(got, '__proto__') && !Object.hasOwn(got, 'constructor'), 'prototype names are not installed as signatures');
+    ok(!Object.hasOwn(got, 'a') && !(got as any).a?.b, "a dotted SigId is never split into a nested path");
+    ok(Object.hasOwn(got, 'ok-id'), 'while an ordinary SigId arrives as one key');
+  }
+
   void DOC_NODE;
 }
 

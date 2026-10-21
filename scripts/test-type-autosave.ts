@@ -28,7 +28,9 @@ import { fileURLToPath } from 'node:url'
 import { configureApp } from '../kernel/src/app.ts'
 import { setEncryptionPassword, setIdentitySeal, isBodySealed } from '../kernel/src/save.ts'
 import { docContentKey, canSnapshot, recoveryBanner } from '../type/src/autosave.ts'
-import { sign, newKey, verifyChain, newHistorySalt } from '../type/src/canon.ts'
+import { sign, newKey, verifyAll, sigId, newHistorySalt } from '../type/src/canon.ts'
+const one = (d: { docId: string }, x: any) => ({ [sigId(d.docId, x)]: x })
+const vals = (m: Record<string, any>) => Object.values(m ?? {})
 import { RESTORE_RULES } from '../type/src/restorerules.ts'
 import { validateRestoreRules } from '../kernel/src/docfields.ts'
 import { emptyDoc, uid, type TypeDoc } from '../type/src/model.ts'
@@ -133,7 +135,7 @@ H('work the file on disk lacks is unsaved work — even when no text changed')
   // snapshot hold work the file lacks?" — and a signature is exactly that.
   const base = doc()
   const signed: TypeDoc = JSON.parse(JSON.stringify(base))
-  signed.signatures = [{ alg: 'ES256', pub: 'P', name: 'Alice', content: 'C', prev: '', sig: 'S' } as any]
+  signed.signatures = { k1: { alg: 'ES256', pub: 'P', name: 'Alice', content: 'C', prev: '', sig: 'S' } as any }
   ok(docContentKey(base) !== docContentKey(signed),
     'a signature added since the last write changes the content key')
 
@@ -157,13 +159,13 @@ H('THE CRASH CASE: sign, crash before the file is written, reload')
   const live = doc()
   const snapshot: TypeDoc = JSON.parse(JSON.stringify(live))
   snapshot.modified = '2099-01-01T00:00:00.000Z'
-  snapshot.signatures = [{ alg: 'ES256', pub: 'P', name: 'Alice', content: 'C', prev: '', sig: 'S' } as any]
+  snapshot.signatures = { k1: { alg: 'ES256', pub: 'P', name: 'Alice', content: 'C', prev: '', sig: 'S' } as any }
 
   const recovered = gateRestored(JSON.stringify(snapshot), live)
   ok(recovered !== null, 'the snapshot passes the restore gate')
   ok(docContentKey(recovered!) !== docContentKey(live),
     'the Restore banner is OFFERED — the snapshot holds a signature the file lacks')
-  ok(recovered!.signatures.length === 1 && recovered!.signatures[0].name === 'Alice',
+  ok(vals(recovered!.signatures).length === 1 && vals(recovered!.signatures)[0].name === 'Alice',
     'and restoring it brings the signature back, not just the banner')
   ok(recovered!.docId === live.docId, 'while identity still comes from the live file, never the snapshot')
 
@@ -208,8 +210,8 @@ H('a recovery snapshot with NO signatures never pairs its revisions with the liv
   const live = doc()
   live.revisions = [{ id: 'r1', at: '2026-01-01T00:00:00.000Z', label: 'Revision 1',
                       body: JSON.parse(JSON.stringify(live.body)) }]
-  live.signatures = [{ alg: 'ES256', pub: 'P', name: 'Bob', content: 'C', prev: '', sig: 'S' } as any]
-  ok(live.signatures.length === 1 && live.signatures[0].name === 'Bob',
+  live.signatures = { k1: { alg: 'ES256', pub: 'P', name: 'Bob', content: 'C', prev: '', sig: 'S' } as any }
+  ok(vals(live.signatures).length === 1 && vals(live.signatures)[0].name === 'Bob',
     'the FILE really is signed (Bob) — so "no signatures after restore" is a result, not a fixture')
 
   // The crashed session held a NEWER revision and no signatures at all — and
@@ -226,9 +228,9 @@ H('a recovery snapshot with NO signatures never pairs its revisions with the liv
   store.replace(gated!)
   ok(store.doc.revisions.length === 2 && store.doc.revisions[1].id === 'r2',
     'the restore takes the snapshot\'s revisions')
-  ok(Array.isArray(store.doc.signatures) && store.doc.signatures.length === 0,
+  ok(store.doc.signatures !== null && typeof store.doc.signatures === 'object' && vals(store.doc.signatures).length === 0,
     'and NO signatures — the snapshot\'s unsigned state, not an absent field')
-  ok(!JSON.stringify(store.doc.signatures ?? []).includes('Bob'),
+  ok(!JSON.stringify(store.doc.signatures ?? {}).includes('Bob'),
     'the file\'s signatures are never paired with the snapshot\'s revisions')
 }
 
@@ -284,18 +286,18 @@ H('crash recovery brings content AND history back TOGETHER (recover)')
   const k = await newKey()
   const file = doc()
   file.revisions = [rev('r1', 'a'), rev('r2', 'b'), rev('r3', 'c')]
-  file.signatures = [await sign(file, k, { name: 'Alice' })]
+  file.signatures = one(file, await sign(file, k, { name: 'Alice' }))
   const snap = JSON.parse(JSON.stringify(file)) as TypeDoc
   snap.revisions = [rev('r3', 'c')]                                     // trimmed…
-  snap.signatures = [await sign({ ...snap, signatures: [] }, k, { name: 'Alice' })]  // …and re-signed
+  snap.signatures = one(snap, await sign({ ...snap, signatures: {} }, k, { name: 'Alice' }))  // …and re-signed
 
   const store = new Store(JSON.parse(JSON.stringify(file)))
   const gated = gateRestored(JSON.stringify(snap), store.doc)!
   store.restore(gated, 'recover')
   ok(store.doc.revisions.map(r => r.id).join() === 'r3', 'the TRIMMED list comes back from the snapshot')
-  ok(store.doc.signatures.length === 1 && store.doc.signatures[0].sig === snap.signatures[0].sig,
+  ok(vals(store.doc.signatures).length === 1 && vals(store.doc.signatures)[0].sig === vals(snap.signatures)[0].sig,
     'with the signature made over it — revisions and signatures are never split')
-  const v = await verifyChain(store.doc, store.doc.signatures)
+  const v = await verifyAll(store.doc, store.doc.signatures)
   ok(v.ok && v.entries[0].ok, 'so the re-signed signature VERIFIES after recovery')
   ok(store.doc.docId === file.docId, 'identity still comes from the live file')
   ok(store.undo() && store.doc.revisions.map(r => r.id).join() === 'r3',
@@ -392,9 +394,9 @@ H('restoring an older version of a SIGNED document reports changed, and does not
   const older = JSON.parse(JSON.stringify(store.doc)) as TypeDoc
   store.commit(d => { d.body[0].text = 'Payment is due within 60 days.' })
   const signed = await sign(store.doc, k, { name: 'Alice' })
-  store.commit(d => { d.signatures.push(signed) })
+  store.commit(d => { d.signatures[sigId(d.docId, signed)] = signed })
   store.restore(older, 'back')
-  const v = await verifyChain(store.doc, store.doc.signatures)
+  const v = await verifyAll(store.doc, store.doc.signatures)
   ok(v.entries.length === 1 && !v.entries[0].ok,
     'the live signature is kept and honestly reads changed — the content it signed is not what is open')
 }
@@ -444,12 +446,12 @@ H('Sign is not undoable (ruling 7)')
   const store = new Store(doc())
   store.commit(d => { d.body[0].text = 'Payment is due within 60 days.' })
   const signed = await sign(store.doc, k, { name: 'Alice' })
-  store.commit(d => { d.signatures.push(signed) }, { undoable: false })
+  store.commit(d => { d.signatures[sigId(d.docId, signed)] = signed }, { undoable: false })
   ok(store.undo(), 'undo takes back the edit made BEFORE signing')
-  ok(store.doc.signatures.length === 1 && store.doc.signatures[0].sig === signed.sig,
+  ok(vals(store.doc.signatures).length === 1 && vals(store.doc.signatures)[0].sig === signed.sig,
     'and the signature stays — ⌘Z never removes one')
   const main = readFileSync(fileURLToPath(new URL('../type/src/main.ts', import.meta.url)), 'utf8')
-  ok(/store\.commit\(d => \{ d\.signatures\.push\(entry\); \}, \{ undoable: false \}\)/.test(main),
+  ok(/store\.commit\(d => \{ d\.signatures\[id\] = entry; \}, \{ undoable: false \}\)/.test(main),
     'the Sign button really commits with undoable: false')
   ok(/store\.commit\(d => \{ d\.historySalt = salt; \}, \{ undoable: false \}\)/.test(main),
     'and so does minting the history salt')

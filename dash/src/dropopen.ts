@@ -52,7 +52,7 @@
 import { importXlsx, installNames } from './xlsx.ts'
 import { parseDoc } from './model.ts'
 import { swapWorkbook, type WorkbookHost } from './recovery.ts'
-import { adoptFileHandle, hasFileHandle, isEncryptionActive } from '../../kernel/src/save.ts'
+import { adoptFileHandle, hasFileHandle, isBodySealed } from '../../kernel/src/save.ts'
 import { afterPendingWrites } from './saving.ts'
 import { toast, forkTemplate, applyDocLock } from './saveui.ts'
 import { t } from './i18n.ts'
@@ -285,10 +285,11 @@ async function openXlsx(host: DropHost, file: File): Promise<void> {
  */
 async function openWorkbook(host: DropHost, item: DataTransferItem | undefined, file: File): Promise<void> {
   const name = file.name
-  // The held password belongs to the workbook that is open, not to this one. A
-  // swap would leave it applied, and the first ⌘S would encrypt somebody else's
-  // workbook with a password they never chose for it.
-  if (isEncryptionActive()) {
+  // The held seal — a password, or the identity seal's key, which is derived
+  // from THIS document's key — belongs to the workbook that is open, not to this
+  // one. A swap would leave it applied, and the first ⌘S would seal somebody
+  // else's workbook under a key that is not theirs.
+  if (isBodySealed()) {
     host.notice(t('This window has an encrypted workbook open. Open “{name}” in a new window instead.', { name }))
     return
   }

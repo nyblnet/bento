@@ -20,7 +20,7 @@
 import { configureApp } from '../kernel/src/app.ts'
 import {
   setIdentitySeal, isBodySealed, isEncryptionActive, setEncryptionPassword, encodeDocBody,
-  parseEnvelope, previewAllowed, openIdentitySealed, decryptEnvelope, suggestedFileName,
+  parseEnvelope, previewAllowed, openIdentitySealed, decryptEnvelope, suggestedFileName, capturePristine,
 } from '../kernel/src/save.ts'
 
 let failures = 0
@@ -109,6 +109,37 @@ ok(parseEnvelope(await encodeDocBody(doc)) === null, 'saves are plaintext again'
 let threw = false
 try { setIdentitySeal(new Uint8Array(16)) } catch { threw = true }
 ok(threw && !isBodySealed(), 'a document key that is not 32 bytes is refused, and seals nothing')
+
+console.log('\nthe host is told the seal state (security §30.6), on every change, before any save')
+{
+  const posts: unknown[] = []
+  const g = globalThis as Record<string, unknown>
+  g.window = { postMessage: (m: unknown) => posts.push(m) }
+  g.document = { cloneNode: () => ({}) }
+  const last = () => (posts.at(-1) as { payload?: { sealed?: unknown } } | undefined)?.payload?.sealed
+  // a host that does NOT declare 'seal' hears nothing
+  g.__bentoHost = { ops: ['store'] }
+  setEncryptionPassword('x'); setEncryptionPassword(null)
+  ok(posts.length === 0, "a host without 'seal' is sent nothing")
+  g.__bentoHost = { ops: ['store', 'seal'] }
+  capturePristine()
+  ok(posts.length === 1 && last() === false, 'boot: sealed=false for a plain document')
+  setEncryptionPassword('correct horse')
+  ok(last() === true, 'a password SET (not yet saved): sealed=true, at once')
+  setEncryptionPassword(null)
+  ok(last() === false, 'the password removed: sealed=false')
+  setIdentitySeal(kdoc)
+  ok(last() === true, 'the identity seal on: sealed=true')
+  setIdentitySeal(null)
+  ok(last() === false, 'the identity seal off: sealed=false')
+  const m = posts[1] as Record<string, unknown> & { payload: Record<string, unknown> }
+  ok(m.__bento_tray__ === true && m.dir === 'req' && m.op === 'seal.state' && typeof m.payload.sealed === 'boolean' && Object.keys(m.payload).length === 1,
+    "the message is the relay's shape, and the payload a bare boolean")
+  setEncryptionPassword('a'); setEncryptionPassword('b')
+  ok(posts.length === 7, 'not deduplicated: an unchanged state is posted again (a missed true is the only failure)')
+  setEncryptionPassword(null)
+  delete g.window; delete g.document; delete g.__bentoHost
+}
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

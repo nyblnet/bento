@@ -299,9 +299,12 @@ section('canMorph refuses what the renderer would draw as a lie')
   const narrow = stepOption(sheet, step({ filters: [{ col: 'region', pred: { op: 'contains', v: 'th' } }] }))!
   ok(canMorph(alignOptions(wide, narrow)), 'bars morph across a filter: a null renders as a zero-height rect, which is what absent looks like')
 
-  const lineWide = optionFor(sheet, { x: 'region', series: ['amount'], kind: 'line', aggregate: 'sum' })
+  // `allowLine`: Region has no order, so chart.ts refuses a line through it
+  // unless the author asked for one. This block is about how a line MORPHS, so
+  // it asks.
+  const lineWide = optionFor(sheet, { x: 'region', series: ['amount'], kind: 'line', aggregate: 'sum', allowLine: true })
   const lineNarrow = optionFor(sheet, {
-    x: 'region', series: ['amount'], kind: 'line', aggregate: 'sum',
+    x: 'region', series: ['amount'], kind: 'line', aggregate: 'sum', allowLine: true,
   }, viewColumns(sheet, stepOrder(sheet, step({ filters: [{ col: 'region', pred: { op: 'contains', v: 'th' } }] })), ['region', 'amount']))
   const la = alignOptions(lineWide as Opt, lineNarrow as Opt)
   ok(la.introduced, 'the same filter introduces gaps on a line chart')

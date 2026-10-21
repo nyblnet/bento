@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "“$1” findes allerede. Vælg et andet navn."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Din identitet til deling og livedokumenter. Den ligger i denne browser; opsætningen laver en adgangsnøgle og en gendannelseskode, så du kan få den tilbage."
+  },
+  "setIdNone": {
+    "message": "Der er endnu ingen Bento ID i denne browser."
+  },
+  "setIdCreate": {
+    "message": "Opret dit Bento ID …"
+  },
+  "setIdLocal": {
+    "message": "Dit Bento ID er sat op i denne browser. Næste skridt er at bekræfte din e-mail."
+  },
+  "idSetupTitle": {
+    "message": "Opret dit Bento ID"
+  },
+  "idSetupLead": {
+    "message": "Dit Bento ID er måden, de personer du deler med, ved, at det er dig. Opsætningen laver en adgangsnøgle og en gendannelseskode, så du kan få det tilbage på en anden enhed."
+  },
+  "idSetupLight": {
+    "message": "I browserudvidelsen ligger dine nøgler i denne browserprofil. Fjerner du udvidelsen, slettes de, så pas godt på din adgangsnøgle og gendannelseskode."
+  },
+  "idSetupLabel": {
+    "message": "Navn til denne browser"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Opsæt en adgangsnøgle"
+  },
+  "idWorking": {
+    "message": "Venter på din adgangsnøgle …"
+  },
+  "idDeriving": {
+    "message": "Laver din gendannelseskode ($1 af 2) …"
+  },
+  "idCodeTitle": {
+    "message": "Din gendannelseskode"
+  },
+  "idCodeLead": {
+    "message": "Skriv den ned eller udskriv den, og opbevar den et sikkert sted. Den vises kun denne ene gang og er din vej tilbage, hvis du mister din adgangsnøgle."
+  },
+  "idCodeConfirm": {
+    "message": "Skriv koden for at bekræfte, at du har den"
+  },
+  "idCodePrint": {
+    "message": "Udskriv"
+  },
+  "idCodeSaved": {
+    "message": "Jeg har gemt den"
+  },
+  "idCodeMismatch": {
+    "message": "Det er ikke koden ovenfor. Tjek den, og prøv igen."
+  },
+  "idCodeTypo": {
+    "message": "Koden har en slåfejl: et tegn er forkert eller mangler."
+  },
+  "idNoPrf": {
+    "message": "Din adgangsnøgle kan ikke låse dit Bento ID op på andre enheder, så denne gendannelseskode er din eneste vej tilbage."
+  },
+  "idNoCode": {
+    "message": "Denne enhed kan ikke lave en gendannelseskode, så din adgangsnøgle er din eneste vej tilbage: mister du den, mister du dette Bento ID. Du kan lave en gendannelseskode senere på en anden enhed."
+  },
+  "idDoneTitle": {
+    "message": "Dit Bento ID er sat op"
+  },
+  "idDoneLead": {
+    "message": "Det er klar i denne browser. Næste skridt er at bekræfte din e-mailadresse."
+  },
+  "idDone": {
+    "message": "Færdig"
+  },
+  "idErrCancelled": {
+    "message": "Anmodningen om adgangsnøglen blev annulleret eller udløb. Hold dette vindue forrest, og prøv igen."
+  },
+  "idErrPermission": {
+    "message": "Din adgangsnøgle skal have adgang til bento.page. Tillad det, når Chrome spørger, og prøv igen."
+  },
+  "idErrFailed": {
+    "message": "Noget gik galt, og intet blev gemt. Prøv igen."
+  },
+  "idErrNoWayBack": {
+    "message": "Intet blev sat op: din adgangsnøgle kan ikke låse dit Bento ID op, og denne enhed kan ikke lave en gendannelseskode, så der ville ikke være nogen vej tilbage."
   }
 }

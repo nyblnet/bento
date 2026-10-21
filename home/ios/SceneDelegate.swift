@@ -26,7 +26,36 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // The index is only as good as its last pass, and documents change
         // outside this app — that is the point of opening them in place.
         LibraryIndex.shared.reindex()
+        #if DEBUG
+        // scripts/test-home-snapshot-cover.mjs: open this file at launch
+        if let path = ProcessInfo.processInfo.environment["BENTO_RIG_OPEN"] {
+            DispatchQueue.main.async { [weak self] in self?.open(URL(fileURLWithPath: path)) }
+        }
+        #endif
     }
+
+    // The app-switcher snapshot is written to disk: a sealed document is covered
+    // before it's taken (see SnapshotCover). Not on the Mac, where window
+    // previews aren't saved and a scene resigns active whenever focus moves.
+    func sceneWillResignActive(_ scene: UIScene) {
+        #if !targetEnvironment(macCatalyst)
+        if let w = window, SnapshotCover.needed(in: w) { SnapshotCover.show(over: w) }
+        #endif
+    }
+
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        if let w = window { SnapshotCover.hide(from: w) }
+    }
+
+    #if DEBUG
+    /// scripts/test-home-snapshot-cover.mjs: what the window shows as it goes to
+    /// the background, the moment the system takes its snapshot
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        guard let path = ProcessInfo.processInfo.environment["BENTO_RIG_SNAPSHOT"], let w = window else { return }
+        let image = UIGraphicsImageRenderer(bounds: w.bounds).image { _ in _ = w.drawHierarchy(in: w.bounds, afterScreenUpdates: false) }
+        try? image.pngData()?.write(to: URL(fileURLWithPath: path))
+    }
+    #endif
 
     /// A result tapped in system Spotlight. The identifier is the one donated in
     /// `LibraryIndex.donate`, so it resolves through the index rather than being

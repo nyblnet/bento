@@ -356,76 +356,34 @@ body.dp-resizing { cursor: col-resize; user-select: none; }
 }
 .dp-row .dp-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 
-/* ————— THE CHECKBOX IS A FIELD, LIKE EVERY OTHER CONTROL —————
-   A native checkbox is 13px of box in a 26px row, and it ended 97px short of
-   the line every other control in the panel ends on: a column of fields with
-   one speck floating in it. Both of the obvious repairs are worse. Pushing it
-   to the RIGHT edge (slides' `space-between`) buys the right edge by giving up
-   the left one, so the state indicator no longer starts where every value in
-   the panel starts. Leaving it small and starting it on the left — what this
-   file did until now — is the speck.
+/* ————— THE CHECKBOX IS BARE, AS IN SLIDES —————
+   It used to be drawn as a FIELD: a 26px bordered box the width of the control
+   column with a 14px tick box inside it. Measured in review, that read as an
+   empty text field — six of them down the Appearance and Column sections, worse
+   in dark — and the one thing the eye looks for in a checkbox, the box, was the
+   smallest thing in the row. Slides draws a bare 16px checkbox (`.ed-toggle`),
+   and that is what this is now: the box alone, on the control column's START
+   line, so it still begins where every value in the panel begins.
 
-   So it becomes a field: the same 26px box, the same border, the same radius,
-   the same two edges, with the state drawn as a 14px box INSIDE it on the
-   panel's content line. `row()` (panels.ts) already builds every row as a
-   `<label>`, so the whole field was a hit target the moment it had a size —
-   110px × 26px instead of 13 × 13, and no markup or script to add.
+   THE ROW, NOT THE BOX, IS THE HIT TARGET. `row()` (panels.ts) builds every row
+   as a `<label>`, so clicking the label toggles it — the large target the field
+   version bought, kept without drawing a field.
 
-   THE CHECKED STATE PAINTS IN --ink, NOT THE AMBER. Same argument tabs.css
-   makes for the active-tab rule: the brand amber is 2.02:1 on white, under the
-   3:1 that a non-text indicator has to hold, and it is the ONLY thing saying
-   whether this option is on. Ink is 14.51:1 light and 13.75:1 dark against the
-   field, so one mark carries it on both grounds. (The old rule set
-   `accent-color: var(--accent)`, i.e. it painted the state at 2.02:1.) */
+   The checked fill is slides' slate, not the brand amber: the amber is 2.02:1 on
+   white, under the 3:1 a non-text indicator has to hold, and it is the only
+   thing saying whether this option is on. */
 .dp-row input[type='checkbox'] {
-  appearance: none;
-  -webkit-appearance: none;
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  height: var(--dp-row);
+  justify-self: start;
+  width: 16px;
+  height: 16px;
   margin: 0;
-  padding: 0 6px;
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--line);
-  border-radius: var(--dp-radius);
-  background: var(--surface);
+  accent-color: #5e7699;
   cursor: pointer;
 }
-/* the box itself — 14px, on the same content line as an input's first glyph */
-.dp-row input[type='checkbox']::before {
-  content: '';
-  box-sizing: border-box;
-  width: 14px;
-  height: 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  background: var(--surface);
-}
-.dp-row input[type='checkbox']:checked::before {
-  border-color: var(--ink);
-  background: var(--ink);
-}
-/* the tick, knocked out of the filled box in the field's own surface colour */
-.dp-row input[type='checkbox']:checked::after {
-  content: '';
-  position: absolute;
-  left: 11px;
-  top: 50%;
-  width: 4px;
-  height: 8px;
-  margin-top: -5px;
-  border: 2px solid var(--surface);
-  border-block-start: 0;
-  border-inline-start: 0;
-  transform: rotate(43deg);
-}
-.dp-row input[type='checkbox']:hover { border-color: var(--line-strong); }
+.dp-row input[type='checkbox']:disabled { cursor: default; }
 .dp-row input[type='checkbox']:focus-visible {
-  outline: none;
-  border-color: var(--blue);
-  box-shadow: 0 0 0 1px var(--blue);
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 
 .dp-row-ro { cursor: default; }

@@ -41,11 +41,15 @@ import {
   insertRowsAt, deleteRowsAt, insertColumn, deleteColumn, setHidden,
 } from './rowcol.ts'
 import type { Store, Patch } from './store.ts'
-import type { Column, TableSheet } from './model.ts'
+import type { Column, ColumnType, TableSheet } from './model.ts'
+import { TYPE_LABEL } from './format.ts'
 import type { Grid } from './grid.ts'
 import {
   blankCondFmtRule, condFmtPatch, describeCondFmtRule, readCondFmt, readOperand,
 } from './condfmtui.ts'
+
+/** The types a new column can be given — the panel's list, in its order. */
+const COLUMN_TYPES: ColumnType[] = ['text', 'number', 'money', 'percent', 'date', 'bool', 'enum']
 
 /** Local, because gridmenu.ts must not import main.ts — see the note above. */
 function esc(s: string): string {
@@ -60,7 +64,10 @@ function esc(s: string): string {
 export interface MenuHooks {
   askForm(opts: {
     title: string
-    fields: Array<{ key: string; label: string; value?: string; placeholder?: string; mono?: boolean }>
+    fields: Array<{
+      key: string; label: string; value?: string; placeholder?: string; mono?: boolean
+      options?: Array<readonly [string, string]>
+    }>
     hint?: string
     submit?: string
     check?: (values: Record<string, string>) => string | null
@@ -301,13 +308,20 @@ function askInsertColumn(store: Store, grid: Grid, at: number, hooks: MenuHooks)
   const sheet = grid.sheet
   void hooks.askForm({
     title: t('New column'),
-    fields: [{ key: 'name', label: t('Column name'), value: t('New column') }],
+    // THE TYPE IS CHOSEN UP FRONT, as Airtable's add-field dialog does. A
+    // name-only dialog made every new column Text and left the reader to find
+    // the type chip afterwards to say what the column actually holds.
+    fields: [
+      { key: 'name', label: t('Column name'), value: t('New column') },
+      { key: 'type', label: t('Type'), value: 'text', options: COLUMN_TYPES.map((tp) => [tp, t(TYPE_LABEL[tp])] as const) },
+    ],
     submit: t('Insert'),
   }).then((got) => {
     if (!got) return
     const id = `c-${Math.floor(Date.now() % 1e8).toString(36)}`
+    const type = (COLUMN_TYPES as string[]).includes(got.type) ? got.type as ColumnType : 'text'
     store.commit([
-      ...insertColumn(sheet, at, { id, name: got.name.trim() || t('New column'), type: 'text' }),
+      ...insertColumn(sheet, at, { id, name: got.name.trim() || t('New column'), type }),
       ...grid.shiftFormulas('col', at, 1),
     ])
   })

@@ -1,0 +1,71 @@
+# validate, home slice: home/: rigs shared by every native host and the extension (launch handle, per-document store, legacy-origin inspector, tray mark, document-index corpus).
+#
+# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# action as steps INSIDE that one job, on the same runner, after the slices
+# listed before it there — so what earlier slices installed and built is on
+# disk here. A failing step here fails `validate` and blocks the merge.
+#
+# Add a new rig's step to the slice of the zone that owns the rig, at the
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
+
+name: validate-home
+description: validate, home slice (runs inside the required validate job)
+runs:
+  using: composite
+  steps:
+    - name: home launch handle rig
+      # A page in a native host held no file handle until its first save, so
+      # autosave never wrote the file. home/bridge.js now hands it over through
+      # launchQueue — lazily, so documents from older runtimes keep their first
+      # silent save — and a launch request the host cannot meet is refused,
+      # never turned into an export. Runs the real bridge against a fake host.
+      shell: bento-step {0}
+      run: node scripts/test-home-launch.mjs
+
+    - name: home per-document store rig
+      # The shared bridge relays the kernel's per-document store
+      # (kernel/src/docstore.ts) to a native host, which keeps the recovery
+      # copy and the member key out of the page's own web storage. Driven end
+      # to end here: the real bridge, the real kernel client, a fake host. It
+      # proves the store appears ONLY when the native side declares it — a
+      # store advertised and then refused would lose the member key on every
+      # reload — and that bytes round-trip as a Uint8Array the kernel accepts.
+      shell: bento-step {0}
+      run: node scripts/test-home-docstore.mjs
+
+    - name: home legacy-origin inspector rig
+      # Before an Android document adopts the storage it used under the old
+      # per-path origins, an inspector page reports which documents own data
+      # there. This runs that script as it ships (extracted from
+      # DocumentOrigin.kt) against kernel-shaped storage: every app's autosave
+      # attributed, bento-handles by key, and anything it cannot tie to a
+      # document — including bento-blobcache, which holds plaintext media —
+      # refusing adoption. The JVM tests cover the decision; only this covers
+      # the script.
+      shell: bento-step {0}
+      run: node scripts/test-home-inspector.mjs
+
+    - name: tray mark is one source
+      # tray-icon.svg is the only drawing of the mark. Everything else is
+      # generated from it: the Android launcher vectors (which have no <rect>,
+      # so each rounded corner becomes opaque path data nobody would diff), and
+      # the iOS asset catalog — the mark plus the four brand colours the app's
+      # chrome reads by name. A hex value retyped into Swift is a value that can
+      # disagree with the logo while looking almost right, which is the kind of
+      # wrong nothing notices. This fails if any of it drifts.
+      shell: bento-step {0}
+      run: node home/assets/make-icons.mjs --check
+
+    - name: document index conformance corpus
+      # home/fixtures/ is the corpus all three hosts answer — the JS reference
+      # here, the Kotlin port under Gradle, the Swift port in the rig above.
+      # This is the JS side of it, and it is the reference the other two are
+      # diffed against, so a break here is a break in the thing they agree
+      # with. It went unregistered and then unnoticed: the tray→home rename
+      # left it importing ../tray/doc-index.mjs, and a rig nobody runs cannot
+      # report its own import failure.
+      shell: bento-step {0}
+      run: node scripts/test-doc-index.mjs

@@ -471,7 +471,6 @@ export const ja: Catalog = {
   "Crash recovery is off for this document — it’s too large to keep a backup copy. Save often.": "この文書のクラッシュ復旧はオフです — 大きすぎてバックアップを保存できません。こまめに保存してください。",
   "✓ valid": "✓ 有効",
   "✕ the content has changed since this was signed": "✕ 署名後に内容が変更されています",
-  "⚠ not linked to the previous signature": "⚠ 前の署名とつながっていません",
   "✕ invalid signature": "✕ 無効な署名",
   "after {name}": "{name} の後",
   "History matches what was signed": "履歴は署名時のものと一致しています",

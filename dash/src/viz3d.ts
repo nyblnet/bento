@@ -61,6 +61,7 @@ import {
 import type { Column, TableSheet } from './model.ts'
 import { readCell } from './store.ts'
 import { isErr } from './formula.ts'
+import { t } from './i18n.ts'
 
 // --- colour -----------------------------------------------------------------
 
@@ -189,6 +190,16 @@ export function dirToView(view: Mat4, d: Vec3): Vec3 {
 // --- the scene --------------------------------------------------------------
 
 export type Viz3dKind = 'scatter' | 'surface' | 'bars' | 'globe'
+
+/** What each kind is called, as a heading — English, translated at render. */
+export const VIZ_TITLE: Record<Viz3dKind, string> = {
+  scatter: '3D scatter', surface: '3D surface', bars: '3D bars', globe: 'Globe',
+}
+
+/** …and on the kind button, which cycles through them. */
+export const VIZ_KIND_LABEL: Record<Viz3dKind, string> = {
+  scatter: 'Scatter', surface: 'Surface', bars: 'Bars', globe: 'Globe',
+}
 export type Agg = 'sum' | 'avg' | 'count' | 'min' | 'max'
 
 /**
@@ -700,11 +711,11 @@ export function buildScene(
 ): Scene {
   const all = sheet.rids.reduce((a, [, c]) => a + c, 0)
   const rows = view ? view.length : all
-  if (all === 0) return emptyScene(binding.kind, 'this sheet has no rows yet')
+  if (all === 0) return emptyScene(binding.kind, t('this sheet has no rows yet'))
   // A filter that matches nothing is not the same statement as an empty sheet,
   // and saying "no rows yet" over a live filter would send the reader looking
   // for data that is right there.
-  if (rows === 0) return emptyScene(binding.kind, 'the filter leaves no rows to plot', all)
+  if (rows === 0) return emptyScene(binding.kind, t('the filter leaves no rows to plot'), all)
 
   const nameOf = (id?: string): string =>
     id ? (sheet.columns.find((c) => c.id === id)?.name ?? id) : ''
@@ -731,7 +742,7 @@ type NameFn = (id?: string) => string
 function buildScatter(b: Viz3dBinding, rows: number, col: ColFn, nameOf: NameFn): Scene {
   const cx = col(b.x), cy = col(b.y), cz = col(b.z)
   if (!cx || !cy || !cz) {
-    return emptyScene('scatter', 'a 3D scatter needs three numeric columns — pick X, Y and Z', rows)
+    return emptyScene('scatter', t('a 3D scatter needs three numeric columns — pick X, Y and Z'), rows)
   }
   const xs = cx.map(num), ys = cy.map(num), zs = cz.map(num)
 
@@ -747,7 +758,7 @@ function buildScatter(b: Viz3dBinding, rows: number, col: ColFn, nameOf: NameFn)
   const keep: number[] = []
   for (let i = 0; i < rows; i++) if (xs[i] !== null && ys[i] !== null && zs[i] !== null) keep.push(i)
   if (!keep.length) {
-    return emptyScene('scatter', 'no row has a number in all three of X, Y and Z', rows)
+    return emptyScene('scatter', t('no row has a number in all three of X, Y and Z'), rows)
   }
 
   const sx = scaler(xs), sy = scaler(ys), sz = scaler(zs)
@@ -835,7 +846,9 @@ function buildGrid(b: Viz3dBinding, rows: number, col: ColFn, nameOf: NameFn, su
   const agg = b.agg ?? (surface ? 'avg' : 'sum')
   const cz = col(b.z)
   if (!cx || !cy || (!cz && agg !== 'count')) {
-    return emptyScene(kind, `${surface ? 'a surface' : '3D bars'} needs two axis columns and a value column`, rows)
+    return emptyScene(kind, surface
+      ? t('a surface needs two axis columns and a value column')
+      : t('3D bars need two axis columns and a value column'), rows)
   }
   const cap = surface ? AXIS_MAX_SURFACE : AXIS_MAX_BARS
   const bins = Math.max(2, Math.min(cap, b.bins ?? DEFAULT_BINS))
@@ -843,16 +856,16 @@ function buildGrid(b: Viz3dBinding, rows: number, col: ColFn, nameOf: NameFn, su
   const ay = categorise(cy, bins, cap)
   const nx = ax.labels.length
   const ny = ay.labels.length
-  if (nx < 1 || ny < 1) return emptyScene(kind, 'the axis columns are empty', rows)
+  if (nx < 1 || ny < 1) return emptyScene(kind, t('the axis columns are empty'), rows)
   if (surface && (nx < 2 || ny < 2)) {
     // One row or one column of samples is a line, not a surface, and the quad
     // loop would emit nothing at all — say so rather than draw an empty box.
-    return emptyScene(kind, 'a surface needs at least two distinct values on each axis', rows)
+    return emptyScene(kind, t('a surface needs at least two distinct values on each axis'), rows)
   }
 
   const zs = cz ? cz.map(num) : null
   const g = aggregateGrid(nx, ny, ax.slot, ay.slot, zs, agg)
-  if (!g.used) return emptyScene(kind, 'no row falls on both axes with a value', rows)
+  if (!g.used) return emptyScene(kind, t('no row falls on both axes with a value'), rows)
 
   const present: Array<number | null> = []
   for (let c = 0; c < nx * ny; c++) present.push(g.present[c] ? g.v[c] : null)
@@ -958,7 +971,7 @@ const GLOBE_LIFT = 1.012
 
 function buildGlobe(b: Viz3dBinding, rows: number, col: ColFn, nameOf: NameFn): Scene {
   const clat = col(b.lat), clon = col(b.lon)
-  if (!clat || !clon) return emptyScene('globe', 'a globe needs a latitude and a longitude column', rows)
+  if (!clat || !clon) return emptyScene('globe', t('a globe needs a latitude and a longitude column'), rows)
   const lats = clat.map(num)
   const lons = clon.map(num)
 
@@ -1195,7 +1208,7 @@ export function fallbackSvg(scene: Scene, w = 640, h = 420, opts: FallbackOpts =
   const bg = opts.background ?? '#0E1420'
   const ink = opts.ink ?? '#C7D0DE'
   const head = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="100%" height="100%" ` +
-    `role="img" aria-label="${esc(scene.empty ?? `3D ${scene.kind}`)}" style="display:block">` +
+    `role="img" aria-label="${esc(scene.empty ?? t(VIZ_TITLE[scene.kind]))}" style="display:block">` +
     `<rect width="${w}" height="${h}" fill="${esc(bg)}"/>`
   const tail = '</svg>'
 
@@ -1204,7 +1217,7 @@ export function fallbackSvg(scene: Scene, w = 640, h = 420, opts: FallbackOpts =
     // WebGL2 must learn that the view exists and why it is not showing data.
     return head +
       `<text x="${w / 2}" y="${h / 2}" fill="${esc(ink)}" font-family="system-ui,sans-serif" ` +
-      `font-size="14" text-anchor="middle" opacity="0.85">${esc(scene.empty ?? 'nothing to draw')}</text>` +
+      `font-size="14" text-anchor="middle" opacity="0.85">${esc(scene.empty ?? t('nothing to draw'))}</text>` +
       tail
   }
 

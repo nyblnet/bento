@@ -47,7 +47,7 @@
   cursor: pointer;
 }
 .dx-tab-btn:hover { background: var(--hover); color: var(--ink); }
-.dx-tab-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.dx-tab-btn:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
 .dx-tab-add { font-size: 12px; }
 .dx-tab-hide { margin-left: auto; opacity: 0.7; }
 .dx-tab-show { display: none; }
@@ -110,7 +110,7 @@
   white-space: nowrap;
 }
 .dx-tab:hover { background: var(--hover); color: var(--ink); }
-.dx-tab:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.dx-tab:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
 
 /* ————— THE ACTIVE TAB —————
    ONE signal, carried by the ink, plus a 2px rule in the same colour.
@@ -189,9 +189,12 @@
    what keeps a reader from thinking they renamed something. */
 .dx-tab-word {
   flex: 0 0 auto;
-  font-size: 9.5px;
+  /* 11px is the floor for words a reader is meant to read: at 9.5px this
+     passed contrast and still could not be read (review 9.1). The caption
+     is set by the caps, weight and rule, not by being tiny. */
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
   padding-inline-start: 6px;
@@ -218,9 +221,9 @@
 
 .dx-tab-kind {
   flex: 0 0 auto;
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 1px 4px;
   border-radius: 4px;

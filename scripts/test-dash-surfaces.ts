@@ -214,8 +214,10 @@ const setHeads = setCard.querySelectorAll('h2').map((n) => n.textContent)
 closeAll()
 
 {
-  ok(aboutHeads.join('|') === 'This file|Document properties|Version history|Take it elsewhere',
-    `About holds the file's own four sections and no others (got: ${aboutHeads.join(' · ')})`)
+  // Version history and the JSON round trip moved to the Save menu (slides'
+  // arrangement — they are operations on the document as a FILE).
+  ok(aboutHeads.join('|') === 'This file|Document properties',
+    `About holds the file's own two sections and no others (got: ${aboutHeads.join(' · ')})`)
   ok(setHeads.join('|') === 'Settings|Language|Appearance|Updates',
     `Settings holds the reader's own preferences and no others (got: ${setHeads.join(' · ')})`)
   ok(!aboutHeads.some((h) => setHeads.includes(h)),
@@ -243,7 +245,7 @@ closeAll()
   // a standing instruction about how every save from here on is written, which
   // is what the Save menu is a list of. It must be in exactly one place.
   const menu = src('saveui.ts')
-  ok(/item\(t\('Set a password…'\)/.test(menu) && /item\(t\('Remove password…'\)/.test(menu),
+  ok(/ICONS\.lock, t\('Set a password…'\)/.test(menu) && /ICONS\.lock, t\('Remove password…'\)/.test(menu),
     'the password is an item in the Save menu, beside the other decisions about how this file gets written')
   ok(!aboutText.includes('password') && !setText.includes('password'),
     'and it is not in either dialog as well — one door, or they drift')
@@ -263,14 +265,36 @@ closeAll()
     'About no longer offers "Save a copy…" — the Save menu owns saving, under that exact label')
   ok(!aboutText.includes('Duplicate as new workbook'),
     'nor a second spelling of the identity fork')
-  ok(aboutText.includes('Copy document JSON') && aboutText.includes('Replace from JSON'),
-    'what stayed is the thing that is not a save at all: the document as text, for an AI or another tool')
+  // …and the document as text went the same way, as in slides: Version
+  // history, Copy document JSON and Replace from JSON are Save-menu rows that
+  // open about.ts's own (tested) implementations.
+  ok(!aboutText.includes('Copy document JSON') && !aboutText.includes('Version history'),
+    'About no longer carries the JSON round trip or the version list — one door each')
+  {
+    const m = src('saveui.ts')
+    ok(/t\('Version history…'\)[\s\S]{0,200}?openVersionHistory\(/.test(m)
+      && /t\('Copy document JSON'\)[\s\S]{0,300}?copyDocJson\(/.test(m)
+      && /t\('Replace from JSON…'\)[\s\S]{0,200}?openReplaceJson\(/.test(m),
+      'the Save menu opens them, through about.ts\'s implementations rather than copies of them')
+  }
   ok(/beside Save/.test(aboutText),
     'and the reader who came looking for a copy is told where it went')
   const menu = src('saveui.ts')
-  ok(/import \{ duplicateWorkbook \} from '\.\/about\.ts'/.test(menu)
+  ok(/import \{ duplicateWorkbook\b[^}]*\} from '\.\/about\.ts'/.test(menu)
     && /duplicateWorkbook\(store\.doc, newDocId\(\)\)/.test(menu),
     'the fork has ONE implementation — the tested one in about.ts — and the menu calls it')
+}
+
+// The two dialogs the Save menu opens stand on their own.
+{
+  const v = await open(() => about.openVersionHistory(hooks))
+  ok(v.getAttribute('aria-label') === 'Version history' && /No versions kept yet/.test(v.textContent),
+    'Version history… opens its own dialog, with the local timeline (empty here)')
+  closeAll()
+  const r = await open(() => about.openReplaceJson(hooks))
+  ok(r.querySelectorAll('textarea').length === 1 && /Replace workbook/.test(r.textContent),
+    'Replace from JSON… opens straight onto the paste box')
+  closeAll()
 }
 
 // ============================================================ the ways in

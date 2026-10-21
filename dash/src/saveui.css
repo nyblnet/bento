@@ -11,18 +11,20 @@
 
 .dxs-wrap { position: relative; display: inline-flex; align-items: stretch; }
 
-/* THE PAIR IS BOXED while the rest of the bar's buttons are ghosts, which is
-   exactly slides' arrangement (.ed-split / .ed-split-caret take
-   `1px solid var(--line)` on `var(--chrome)` while .ed-btn is transparent).
-   Save is the one control in the bar that has to be findable without being
-   read, and a filled box beside eleven ghosts is how it is. */
+/* PRIMARY (maintainer ruling D1, slides and spaces): saving is the act every
+   session ends with, so Save and its caret are one INK-FILLED unit — the
+   inverse of the surface it sits on (--surface on --ink), which is the one
+   pairing that survives a theme flip. It was a light outlined button here. */
 .dxs-wrap > .dx-btn:first-child,
 .dxs-caret {
-  border-color: var(--line);
-  background: var(--chrome);
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--surface);
 }
 .dxs-wrap > .dx-btn:first-child:hover,
-.dxs-caret:hover { background: var(--chrome-2); }
+.dxs-caret:hover { background: var(--ink-2); border-color: var(--ink-2); }
+.dxs-wrap > .dx-btn:first-child .dx-i { color: inherit; }
+.dxs-caret { border-inline-start-color: color-mix(in srgb, var(--surface) 35%, var(--ink)); }
 
 /* The caret sits FLUSH against the Save button so the pair reads as one
    control. It is its own button rather than a click zone inside Save, because a
@@ -49,7 +51,11 @@
   top: calc(100% + 6px);
   right: 0;
   z-index: 60;
-  min-width: 260px;
+  width: min(264px, calc(100vw - 16px));
+  /* a long list on a short window scrolls under the bar rather than running
+     off the bottom (nothing in it floats, so a scroll box is safe here) */
+  max-height: calc(100dvh - var(--dx-bar-bottom, 56px) - 12px);
+  overflow-y: auto;
   /* capped at the viewport: this menu hangs off a button in the right half of
      the bar, and on a phone a 260px start-anchored panel walks off the screen */
   max-width: calc(100vw - 16px);
@@ -60,31 +66,24 @@
   box-shadow: var(--shadow-pop);
   display: none;
 }
-.dxs-wrap.dxs-open .dxs-menu { display: block; }
+.dxs-wrap.dxs-open .dxs-menu { display: flex; flex-direction: column; gap: 1px; }
 
-.dxs-item {
-  display: block;
+/* Rows are the bar's menu rows: icon and name on ONE line, a hover fill and
+   nothing at rest. The description is the tooltip (D2) — never small print. */
+.dxs-menu .dxs-item {
+  display: flex;
   width: 100%;
-  text-align: left;
+  justify-content: flex-start;
+  text-align: start;
+  font-size: 12.5px;
   padding: 6px 9px;
   border: 0;
-  border-radius: var(--radius);
   background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: var(--fs-ui);
-  cursor: pointer;
+  color: var(--ink-2);
 }
-.dxs-item:hover:not(:disabled) { background: var(--hover); }
-/* 0.35 — slides' one figure for a dead control; see .dx-btn[disabled] */
+.dxs-menu .dxs-item:hover:not(:disabled) { background: var(--hover); }
+.dxs-menu .dxs-item .dx-i { color: var(--muted); }
 .dxs-item:disabled { opacity: 0.35; cursor: default; }
-.dxs-item small {
-  display: block;
-  color: var(--muted);
-  font-size: var(--fs-small);
-  line-height: 1.35;
-  margin-top: 1px;
-}
 .dxs-sep { height: 1px; margin: 4px 6px; background: var(--line); }
 
 /* Toast: the only feedback these actions have. A share export leaves the open

@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "“$1” đã có. Hãy chọn tên khác."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Danh tính của bạn để chia sẻ và dùng tài liệu trực tiếp. Nó nằm trong trình duyệt này; khi thiết lập sẽ tạo một khóa truy cập và một mã khôi phục để bạn lấy lại."
+  },
+  "setIdNone": {
+    "message": "Trình duyệt này chưa có Bento ID."
+  },
+  "setIdCreate": {
+    "message": "Tạo Bento ID…"
+  },
+  "setIdLocal": {
+    "message": "Bento ID của bạn đã được thiết lập trên trình duyệt này. Bước tiếp theo là xác minh email."
+  },
+  "idSetupTitle": {
+    "message": "Tạo Bento ID"
+  },
+  "idSetupLead": {
+    "message": "Bento ID giúp những người bạn chia sẻ biết đó đúng là bạn. Khi thiết lập sẽ tạo một khóa truy cập và một mã khôi phục, để bạn lấy lại trên thiết bị khác."
+  },
+  "idSetupLight": {
+    "message": "Trong tiện ích trình duyệt, khóa của bạn được giữ trong hồ sơ trình duyệt này. Gỡ tiện ích sẽ xóa chúng, vì vậy hãy giữ khóa truy cập và mã khôi phục cẩn thận."
+  },
+  "idSetupLabel": {
+    "message": "Tên cho trình duyệt này"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Thiết lập khóa truy cập"
+  },
+  "idWorking": {
+    "message": "Đang chờ khóa truy cập của bạn…"
+  },
+  "idDeriving": {
+    "message": "Đang tạo mã khôi phục ($1/2)…"
+  },
+  "idCodeTitle": {
+    "message": "Mã khôi phục của bạn"
+  },
+  "idCodeLead": {
+    "message": "Ghi lại hoặc in ra và cất ở nơi an toàn. Mã chỉ hiện lần này, và là cách để bạn quay lại nếu mất khóa truy cập."
+  },
+  "idCodeConfirm": {
+    "message": "Nhập mã để xác nhận bạn đã lưu"
+  },
+  "idCodePrint": {
+    "message": "In"
+  },
+  "idCodeSaved": {
+    "message": "Tôi đã lưu"
+  },
+  "idCodeMismatch": {
+    "message": "Đó không phải mã hiển thị ở trên. Hãy kiểm tra và thử lại."
+  },
+  "idCodeTypo": {
+    "message": "Mã có lỗi gõ: một ký tự bị sai hoặc thiếu."
+  },
+  "idNoPrf": {
+    "message": "Khóa truy cập của bạn không mở được Bento ID trên thiết bị khác, nên mã khôi phục này là cách duy nhất để quay lại."
+  },
+  "idNoCode": {
+    "message": "Thiết bị này không tạo được mã khôi phục, nên khóa truy cập là cách duy nhất để quay lại: nếu mất nó, bạn sẽ mất Bento ID này. Bạn có thể tạo mã khôi phục sau trên một thiết bị khác."
+  },
+  "idDoneTitle": {
+    "message": "Bento ID đã được thiết lập"
+  },
+  "idDoneLead": {
+    "message": "Đã sẵn sàng trên trình duyệt này. Bước tiếp theo là xác minh địa chỉ email."
+  },
+  "idDone": {
+    "message": "Xong"
+  },
+  "idErrCancelled": {
+    "message": "Yêu cầu khóa truy cập đã bị hủy hoặc hết hạn. Giữ cửa sổ này ở phía trước và thử lại."
+  },
+  "idErrPermission": {
+    "message": "Khóa truy cập cần quyền truy cập bento.page. Hãy cho phép khi Chrome hỏi, rồi thử lại."
+  },
+  "idErrFailed": {
+    "message": "Đã xảy ra lỗi và chưa có gì được lưu. Hãy thử lại."
+  },
+  "idErrNoWayBack": {
+    "message": "Chưa thiết lập gì: khóa truy cập của bạn không mở được Bento ID và thiết bị này không tạo được mã khôi phục, nên sẽ không có cách quay lại."
   }
 }

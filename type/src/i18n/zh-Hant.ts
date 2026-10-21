@@ -471,7 +471,6 @@ export const zhHant: Catalog = {
   "Crash recovery is off for this document — it’s too large to keep a backup copy. Save often.": "此文件的當機復原已關閉 — 檔案太大，無法保留備份。請經常儲存。",
   "✓ valid": "✓ 有效",
   "✕ the content has changed since this was signed": "✕ 簽署後內容已被變更",
-  "⚠ not linked to the previous signature": "⚠ 未與上一個簽署連結",
   "✕ invalid signature": "✕ 簽署無效",
   "after {name}": "在 {name} 之後",
   "History matches what was signed": "歷程與簽署時一致",

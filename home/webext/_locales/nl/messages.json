@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "‘$1’ bestaat al. Kies een andere naam."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Je identiteit voor delen en live documenten. Die staat in deze browser; bij het instellen worden een toegangssleutel en een herstelcode gemaakt, zodat je hem terugkrijgt."
+  },
+  "setIdNone": {
+    "message": "Nog geen Bento ID in deze browser."
+  },
+  "setIdCreate": {
+    "message": "Je Bento ID maken…"
+  },
+  "setIdLocal": {
+    "message": "Je Bento ID is ingesteld in deze browser. Hierna bevestig je je e-mailadres."
+  },
+  "idSetupTitle": {
+    "message": "Je Bento ID maken"
+  },
+  "idSetupLead": {
+    "message": "Aan je Bento ID zien de mensen met wie je deelt dat jij het bent. Bij het instellen worden een toegangssleutel en een herstelcode gemaakt, zodat je hem op een ander apparaat terugkrijgt."
+  },
+  "idSetupLight": {
+    "message": "In de browserextensie staan je sleutels in dit browserprofiel. Als je de extensie verwijdert, zijn ze weg; bewaar je toegangssleutel en herstelcode dus goed."
+  },
+  "idSetupLabel": {
+    "message": "Naam voor deze browser"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Een toegangssleutel instellen"
+  },
+  "idWorking": {
+    "message": "Wachten op je toegangssleutel…"
+  },
+  "idDeriving": {
+    "message": "Je herstelcode wordt gemaakt ($1 van 2)…"
+  },
+  "idCodeTitle": {
+    "message": "Je herstelcode"
+  },
+  "idCodeLead": {
+    "message": "Schrijf hem op of druk hem af en bewaar hem op een veilige plek. Hij wordt alleen nu getoond en is je weg terug als je je toegangssleutel kwijtraakt."
+  },
+  "idCodeConfirm": {
+    "message": "Typ de code om te bevestigen dat je hem hebt"
+  },
+  "idCodePrint": {
+    "message": "Afdrukken"
+  },
+  "idCodeSaved": {
+    "message": "Ik heb hem bewaard"
+  },
+  "idCodeMismatch": {
+    "message": "Dat is niet de code hierboven. Controleer hem en probeer het opnieuw."
+  },
+  "idCodeTypo": {
+    "message": "Die code bevat een typfout: er klopt een teken niet of er ontbreekt er een."
+  },
+  "idNoPrf": {
+    "message": "Je toegangssleutel kan je Bento ID op andere apparaten niet ontgrendelen, dus deze herstelcode is je enige weg terug."
+  },
+  "idNoCode": {
+    "message": "Dit apparaat kan geen herstelcode maken, dus je toegangssleutel is je enige weg terug: raak je hem kwijt, dan ben je deze Bento ID kwijt. Je kunt later op een ander apparaat een herstelcode maken."
+  },
+  "idDoneTitle": {
+    "message": "Je Bento ID is ingesteld"
+  },
+  "idDoneLead": {
+    "message": "Hij is klaar in deze browser. Hierna bevestig je je e-mailadres."
+  },
+  "idDone": {
+    "message": "Klaar"
+  },
+  "idErrCancelled": {
+    "message": "Het verzoek om je toegangssleutel is geannuleerd of verlopen. Houd dit venster op de voorgrond en probeer het opnieuw."
+  },
+  "idErrPermission": {
+    "message": "Je toegangssleutel heeft toegang tot bento.page nodig. Sta dat toe als Chrome erom vraagt en probeer het opnieuw."
+  },
+  "idErrFailed": {
+    "message": "Er ging iets mis en er is niets opgeslagen. Probeer het opnieuw."
+  },
+  "idErrNoWayBack": {
+    "message": "Er is niets ingesteld: je toegangssleutel kan je Bento ID niet ontgrendelen en dit apparaat kan geen herstelcode maken, dus er zou geen weg terug zijn."
   }
 }

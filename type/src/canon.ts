@@ -26,6 +26,7 @@
 // same idea made exact enough to sign.
 
 import type { Signature } from './model.ts';
+import { sha256 } from './sha256.ts';
 import { TYPE_FIELDS } from './docclass.ts';
 
 /**
@@ -39,8 +40,15 @@ import { TYPE_FIELDS } from './docclass.ts';
  *   not-included  a READER-TIER copy (readonly) never carries history; neutral
  */
 export type HistoryState = 'matches' | 'changed' | 'missing' | 'not-included';
-export interface ChainEntry { ok: boolean; why: string | null; linked: boolean; name: string; history: HistoryState }
-export interface ChainResult { ok: boolean; entries: ChainEntry[] }
+/** One signature, verified ON ITS OWN (ruling 7): no other signature can make
+ *  it invalid. `after` is the SigId of the signature it says it follows, when
+ *  this copy holds that one — ordering information, never validity. */
+export interface SigEntry {
+  id: string; sig: Signature;
+  ok: boolean; why: string | null; history: HistoryState;
+  after: string | null;
+}
+export interface SigResult { ok: boolean; entries: SigEntry[] }
 
 /**
  * Fields that never enter a signature. Everything else is signed — including
@@ -287,6 +295,46 @@ const sigText = (docId: string, content: string, history: string, prev: string, 
   `bento-type-sig.v2|${str(docId)}|${content}|${history}|${prev}|${str(name)}`;
 
 /**
+ * A signature's id (ruling 7): derived from WHAT WAS SIGNED, never from the
+ * signature bytes.
+ *
+ *     SigId = base64url(sha256("bento-type-sigid.v1|" + pub + "|" + signed text))
+ *
+ * ECDSA is malleable — (r, n−s) is a second valid signature over the same text
+ * (measured: WebCrypto accepts it) — so an id taken from the bytes would let
+ * anyone mint a fresh key for a signature already on the document. This one is
+ * the same for every copy of the same act of signing, including a malleated
+ * one, on every replica. An entry stored under any other key is INVALID:
+ * verify recomputes it. Synchronous (sha256.ts) because parseDoc derives it
+ * while converting an old file. `pub` is base64url, so it cannot contain the
+ * separator.
+ */
+export function sigId(docId: string, s: Pick<Signature, 'pub' | 'content' | 'history' | 'prev' | 'name'>): string {
+  const text = sigText(docId, s.content, s.history, s.prev ?? '', s.name ?? '');
+  return b64u(sha256(enc.encode(`bento-type-sigid.v1|${s.pub}|${text}`)));
+}
+
+/**
+ * LOW-S (ruling 7). P-256's group order n; a signature's s is canonical when
+ * s ≤ n/2. WebCrypto emits either half at random, so sign() folds a high s to
+ * n − s (an equally valid signature over the same text), and verify() REJECTS
+ * a high s — one canonical encoding per signature.
+ */
+const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+const HALF_N = N >> 1n;
+const toBig = (b: Uint8Array) => b.reduce((acc, x) => (acc << 8n) | BigInt(x), 0n);
+const fromBig = (v: bigint) => { const o = new Uint8Array(32); for (let i = 31; i >= 0; i--) { o[i] = Number(v & 0xffn); v >>= 8n; } return o; };
+/** Exported for the rig: is this raw r||s signature in canonical low-S form? */
+export const isLowS = (raw: Uint8Array): boolean => raw.length === 64 && toBig(raw.slice(32)) <= HALF_N;
+function lowS(raw: Uint8Array): Uint8Array {
+  const s = toBig(raw.slice(32));
+  if (s <= HALF_N) return raw;
+  const out = new Uint8Array(64);
+  out.set(raw.slice(0, 32)); out.set(fromBig(N - s), 32);
+  return out;
+}
+
+/**
  * Sign a revision, chaining to the previous signature.
  *
  * Chaining is what buys ORDER without a trusted clock. A self-asserted
@@ -309,15 +357,17 @@ type Signable = { docId: string; revisions?: unknown; historySalt?: string; read
 export async function sign(
   doc: Signable,
   key: CryptoKeyPair,
-  { name = '', prev = null }: { name?: string; prev?: { sig: string } | null } = {},
+  { name = '', prev = null }: { name?: string; prev?: string | null } = {},
 ): Promise<Signature> {
   if (!doc.historySalt) throw new Error('sign: the document has no historySalt — mint one first');
   const content = await digest(doc);
   const history = await historyCommitment(doc.revisions, doc.historySalt);
-  const prevSig = prev ? prev.sig : '';
-  const text = sigText(doc.docId, content, history, prevSig, name);
-  const sig = b64u(await crypto.subtle.sign(SIG, key.privateKey, enc.encode(text)));
-  return { alg: 'ES256', pub: await exportPub(key), name, content, history, prev: prevSig, sig };
+  // `prev` is the SigId of the signature this one follows (ordering only, ruling
+  // 7). It is signed, so it cannot be re-pointed after the fact.
+  const prevId = prev ?? '';
+  const text = sigText(doc.docId, content, history, prevId, name);
+  const raw = lowS(new Uint8Array(await crypto.subtle.sign(SIG, key.privateKey, enc.encode(text))));
+  return { alg: 'ES256', pub: await exportPub(key), name, content, history, prev: prevId, sig: b64u(raw) };
 }
 
 /**
@@ -339,9 +389,16 @@ export async function verify(doc: Signable, entry: Signature):
   const content = await digest(doc);
   if (content !== entry.content) return { ok: false, why: 'content-changed', history };
   if (typeof entry.history !== 'string') return { ok: false, why: 'bad-signature', history };
-  const pub = await crypto.subtle.importKey('raw', unb64u(entry.pub), EC, false, ['verify']);
+  let raw: Uint8Array;
+  try { raw = unb64u(entry.sig); } catch { return { ok: false, why: 'bad-signature', history }; }
+  // one canonical encoding: a high-S copy is a second spelling of a signature,
+  // and is not accepted as one (ruling 7)
+  if (!isLowS(raw)) return { ok: false, why: 'bad-signature', history };
+  let pub: CryptoKey;
+  try { pub = await crypto.subtle.importKey('raw', unb64u(entry.pub), EC, false, ['verify']); }
+  catch { return { ok: false, why: 'bad-signature', history }; }
   const text = sigText(doc.docId, entry.content, entry.history, entry.prev, entry.name ?? '');
-  const ok = await crypto.subtle.verify(SIG, pub, unb64u(entry.sig), enc.encode(text));
+  const ok = await crypto.subtle.verify(SIG, pub, raw as BufferSource, enc.encode(text));
   return { ok, why: ok ? null : 'bad-signature', history };
 }
 
@@ -354,17 +411,67 @@ async function historyState(doc: Signable, entry: Signature): Promise<HistorySta
   return mine === entry.history ? 'matches' : 'changed';
 }
 
-/** Verify a whole chain: every signature valid, and correctly linked. */
-export async function verifyChain(doc: Signable, chain: Signature[]): Promise<ChainResult> {
-  const out: ChainEntry[] = [];
-  let expectedPrev = '';
-  for (const entry of chain) {
-    const r = await verify(doc, entry);
-    const linked = entry.prev === expectedPrev;
-    out.push({ ...r, linked, name: entry.name });
-    expectedPrev = entry.sig;
+/**
+ * The display order (ruling 7): by `prev`, which is ordering information only.
+ * A signature comes after the one it follows when this copy holds that one;
+ * otherwise it starts a run of its own. Signatures that follow the same one (a
+ * fork, which concurrent signing produces routinely) and runs that start
+ * together are ordered by `at`, then by key, then by id, so every replica
+ * shows the same order. `prev` resolves by SigId, or for a signature made
+ * before ids existed, by the earlier signature's bytes.
+ */
+export function signatureOrder(sigs: Readonly<Record<string, Signature>>): Array<{ id: string; after: string | null }> {
+  const ids = Object.keys(sigs);
+  const bySigBytes = new Map(ids.map(id => [sigs[id].sig, id] as const));
+  const afterOf = (id: string): string | null => {
+    const p = sigs[id].prev;
+    if (!p) return null;
+    if (p !== id && Object.hasOwn(sigs, p)) return p;
+    const legacy = bySigBytes.get(p);
+    return legacy !== undefined && legacy !== id ? legacy : null;
+  };
+  const cmp = (x: string, y: string) => {
+    const a = sigs[x], b = sigs[y];
+    return (a.at ?? '').localeCompare(b.at ?? '') || a.pub.localeCompare(b.pub) || x.localeCompare(y);
+  };
+  const kids = new Map<string | null, string[]>();
+  for (const id of ids) { const k = afterOf(id); if (!kids.has(k)) kids.set(k, []); kids.get(k)!.push(id); }
+  const out: Array<{ id: string; after: string | null }> = [];
+  const seen = new Set<string>();
+  const walk = (id: string) => {
+    if (seen.has(id)) return;
+    seen.add(id); out.push({ id, after: afterOf(id) });
+    for (const k of (kids.get(id) ?? []).sort(cmp)) walk(k);
+  };
+  for (const root of (kids.get(null) ?? []).sort(cmp)) walk(root);
+  // a malformed file can make a cycle with no root; show those too, never drop one
+  for (const id of ids.sort(cmp)) if (!seen.has(id)) walk(id);
+  return out;
+}
+
+/** The signature a new one follows: the last in display order, or none. */
+export function latestSignature(sigs: Readonly<Record<string, Signature>>): string | null {
+  const order = signatureOrder(sigs);
+  return order.length ? order[order.length - 1].id : null;
+}
+
+/**
+ * Verify every signature, each ON ITS OWN (ruling 7). An entry is valid when
+ * its key is its own derived SigId, its s is low, the signature verifies over
+ * its own fields, and the copy's content is what was signed. A fork, or a
+ * `prev` this copy does not hold, never makes one invalid.
+ */
+export async function verifyAll(doc: Signable, sigs: Readonly<Record<string, Signature>>): Promise<SigResult> {
+  const entries: SigEntry[] = [];
+  for (const { id, after } of signatureOrder(sigs)) {
+    const s = sigs[id];
+    const r = await verify(doc, s);
+    let derived = '';
+    try { derived = sigId(doc.docId, s); } catch { /* malformed: not its own id */ }
+    const ok = r.ok && derived === id;
+    entries.push({ id, sig: s, ok, why: r.ok && !ok ? 'bad-id' : r.why, history: r.history, after });
   }
-  return { ok: out.every(r => r.ok && r.linked), entries: out };
+  return { ok: entries.every(e => e.ok), entries };
 }
 
 /**

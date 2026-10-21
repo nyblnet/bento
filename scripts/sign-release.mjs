@@ -61,6 +61,16 @@ if (notesFromRaw) {
   try { notesFrom = JSON.parse(notesFromRaw) }
   catch { console.error('sign-release: --notes-from is not valid JSON'); process.exit(1) }
 }
+// The release's PINS (K4, security §36): its code-block hashes and CSP script
+// hashes, from scripts/derive-pins.mjs. ADDITIVE: shipped shells' update check
+// reads only app/version/sha256/url and ignores everything else.
+const pinsPath = opt('pins', '')
+let pins = null
+if (pinsPath) {
+  try { pins = JSON.parse(readFileSync(pinsPath, 'utf8')) }
+  catch { console.error('sign-release: --pins is not a readable JSON file'); process.exit(1) }
+  if (pins?.v !== 1 || !pins.blocks?.loader || !Array.isArray(pins.scriptSrc)) { console.error('sign-release: --pins is not a v1 pins object'); process.exit(1) }
+}
 const keyPath = opt('key', defaultKeyPath())
 const outPath = opt('out', join(dirname(shellPath), 'manifest.json'))
 
@@ -74,6 +84,7 @@ const payload = JSON.stringify({
   url,
   ...(notes ? { notes } : {}),
   ...(notesFrom ? { notesFrom } : {}),
+  ...(pins ? { pins } : {}),
   at: new Date().toISOString(),
 })
 

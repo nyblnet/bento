@@ -323,7 +323,8 @@ const ESC: Record<string, string> = {
 // immediately. Text needs & < > ; an attribute value needs the quotes as well,
 // because those are what end it.
 const esc = (s: string) => s.replace(/[&<>]/g, c => ESC[c]);
-const escAttr = (s: string) => s.replace(/[&<>"']/g, c => ESC[c]);
+/** For a double- OR single-quoted attribute value: every quote is escaped. */
+export const escAttr = (s: string) => s.replace(/[&<>"']/g, c => ESC[c]);
 
 /**
  * An href safe to put in the document's HTML.

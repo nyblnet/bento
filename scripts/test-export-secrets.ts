@@ -519,7 +519,10 @@ function exportedBody(src: string, name: string): string {
 // reintroduce neither the delete-stripper nor a spread-the-source bypass. (dash's
 // builders live in sync/online.ts — its own guard is below. The cross-app sweep
 // that no builder in ANY app bypasses the allowlist follows it.)
-for (const app of ['spaces', 'type', 'slides']) {
+// dash joined 2026-10-20: its Share popover's whole-document copies live in
+// dash/src/share.ts (behaviour: scripts/test-dash-share.ts); the collab-block
+// builders in sync/online.ts keep their own guard below.
+for (const app of ['spaces', 'type', 'slides', 'dash']) {
   const rel = `${app}/src/share.ts`
   const src = read(rel)
   ok(!/stripCollabSecrets/.test(src), `${rel}: the delete-based stripper is gone — the kernel allowlist replaces it`)
@@ -610,6 +613,7 @@ for (const app of ['spaces', 'type', 'slides']) {
     ['type/src/share.ts', ['readerCopy', 'inviteCopy']],
     ['slides/src/share.ts', ['readerCopy', 'inviteCopy']],
     ['dash/src/sync/online.ts', ['readerCopy', 'inviteCopy']],
+    ['dash/src/share.ts', ['readerCopy', 'inviteCopy']],
   ]
   let bypasses = 0
   for (const [rel, fns] of BUILDERS) {

@@ -37,6 +37,8 @@ import CryptoKit
 final class EditorViewController: UIViewController, WKScriptMessageHandler, WKURLSchemeHandler,
                                   WKNavigationDelegate, WKDownloadDelegate, WKUIDelegate {
     private let document: BentoDocument
+    /// the open document's saved body is sealed (bento/enc): the app switcher must not show it
+    var isSealed: Bool { SnapshotCover.isSealed(document.html) }
     private var webView: WKWebView!
 
     /// Has the open document been handed to the web app yet? Bento only reaches
@@ -689,14 +691,23 @@ final class EditorViewController: UIViewController, WKScriptMessageHandler, WKUR
             let text = (m["text"] as? String) ?? ""
             let name = (m["name"] as? String) ?? ""
             if targetsOpenDocument(name) {
-                document.html = Data(text.utf8)
-                // updateChangeCount + autosave is the sanctioned path: it
-                // coordinates with iCloud and file coordination rather than
-                // writing behind UIDocument's back.
-                document.updateChangeCount(.done)
-                document.save(to: document.fileURL, for: .forOverwriting) { [weak self] ok in
-                    if ok, let self, let h = self.originHint { OriginStore.shared.refreshHint(h, for: self.document.fileURL) }
-                    self?.reply(id, ok: ok, value: ok ? nil : "write failed")
+                let bytes = Data(text.utf8)
+                let sealed = BentoIndex.isEncrypted(Array(String(decoding: bytes.prefix(BentoIndex.headBytes), as: UTF8.self).utf16))
+                // a sealed file's index entry goes BEFORE the write; the change
+                // count is set inside, so autosave can't write first
+                LibraryIndex.shared.beforeSave(document.fileURL, sealed: sealed) { [weak self] in
+                    guard let self else { return }
+                    self.document.html = bytes
+                    // updateChangeCount + autosave is the sanctioned path: it
+                    // coordinates with iCloud and file coordination rather than
+                    // writing behind UIDocument's back.
+                    self.document.updateChangeCount(.done)
+                    self.document.save(to: self.document.fileURL, for: .forOverwriting) { [weak self] ok in
+                        // the library and Spotlight see this save now, not at the next walk
+                        if ok, let url = self?.document.fileURL { LibraryIndex.shared.refresh(url) }
+                        if ok, let self, let h = self.originHint { OriginStore.shared.refreshHint(h, for: self.document.fileURL) }
+                        self?.reply(id, ok: ok, value: ok ? nil : "write failed")
+                    }
                 }
             } else {
                 switch exports.write(name: name, text: text, id: id) {

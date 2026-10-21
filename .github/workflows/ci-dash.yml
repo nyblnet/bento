@@ -1,0 +1,159 @@
+# CI, dash: this zone's own jobs — validate, never release (see ci.yml's header).
+#
+# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
+# merge; a job here reports beside it, exactly as it did when it lived in
+# ci.yml. Keep each job's id unchanged — the id IS the check name.
+#
+# Each job checks out and builds what it needs for itself. Add this zone's
+# new jobs here, at the end; never in ci.yml.
+
+name: CI (dash)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
+  # the tip, every commit on main keeps its own run.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    # Every step fails if a rig in it reports a skip CI does not allow
+    # (scripts/lib/ci-skips.mjs). No job here sets a working-directory, which
+    # this relative path relies on.
+    shell: bash scripts/ci/bento-step {0}
+
+jobs:
+  dash-fields-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix dash
+          npm run build:single --prefix dash
+      - name: The pivot and chart tools finish what they start
+        # The pivot opens from its tab with a field editor (drag and pick),
+        # distinct counts and filters compute and survive a save; the Grand
+        # total is reachable; the chart is of the selection, refuses a line
+        # through Region unless asked, puts £ on its axis and undoes its title;
+        # 3D sits behind a dev flag; the filter checklist shows £4,300.
+        run: node scripts/test-dash-pivotchart-browser.mjs
+      - name: dash first run — boot, audit locale, formula dialog, keyboard
+        # A stored x-pseudo or malformed language tag still boots; swept
+        # strings (Total, SUM/AVG, chart kind, xlsx/CSV notices) answer to the
+        # audit locale; the formula dialog errors as you type; new sheets are
+        # Sheet3; Tab walks top bar → grid → panel → tabs with the ring, F6
+        # walks regions, Tab leaves the grid at its last column.
+        run: node scripts/test-dash-firstrun-browser.mjs
+      - name: Every dash field wears the suite's one field look
+        # Slides' rig, ported: every text field, select and textarea on 17
+        # surfaces, light and dark, has the 1px --line border, --field fill,
+        # 6px radius and 26px height, and the --accent-ink focus ring; each
+        # surface must show fields in its own container, and a planted
+        # browser-dressed field must be flagged.
+        run: node scripts/test-dash-fields-browser.mjs
+      - name: The dash properties panel shows only what applies
+        # Per column type on a dataset, Number format / Total / Formula appear
+        # only where they apply, with no money or formula placeholders; one
+        # Number format control on both sheet kinds (Custom… reveals the
+        # pattern, Apply to writes a cell override); unset colour wells paint
+        # the field's own fill, measured from pixels with a set-colour
+        # positive control, light and dark; bare checkboxes; a formula over
+        # Money is Money and one column never mixes grouping.
+        run: node scripts/test-dash-panel-context-browser.mjs
+      - name: The grid's core gestures, with a real mouse and keyboard
+        # A header click selects the column and never sorts (sort lives in ▾,
+        # and the selection follows its row); double-click renames in place;
+        # Add a column picks the type; the type chip reads at 11px; ⌘C draws
+        # marching ants; point mode inserts references (dataset and
+        # spreadsheet, other sheets by tab); Escape closes Story and Pivot.
+        run: node scripts/test-dash-gestures-browser.mjs
+      - name: Typing into a spreadsheet cell reads what was meant
+        # The review's keystrokes: 10, $5, 15% then =SUM and =G13*G15 must say
+        # 15.15 and 1.5 (they said 30 and 150). ISO and named-month dates are
+        # dates, 3/4/2026 stays text, the formula bar shows 100% not 1, and
+        # =A11+ is refused in the cell and the bar with the reason shown.
+        run: node scripts/test-dash-entryparse-browser.mjs
+      - name: Release pins in Chromium
+        # bento/connect K4 (security §18/§36): this build's pins come from its
+        # own bytes, a real file its ⌘S saved, and it boots under them while its
+        # UI is driven, with only the loader's two designed refusals. What
+        # release.mjs requires before it signs, checked on every PR.
+        run: node scripts/derive-pins.mjs dash/dist-single/Bento_Dash.bento.html
+
+  dash-gate-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix dash
+          npm run build:single --prefix dash
+          npm run build:sealtest --prefix dash
+      - name: An encrypted or unopenable dash file opens to its gate
+        # window.bento = { format, locked: true } before the password gate and
+        # the refusal page, so the shell's loader counts the app as mounted
+        # instead of re-running it and failing over the gate; unlocking
+        # replaces it with the real workbook.
+        run: node scripts/test-dash-gate-browser.mjs
+      - name: A sealed dash workbook writes no plaintext of itself
+        # bento/connect §E on the shared sealed TEST document: recovery snapshots,
+        # the version timeline, the preview, recovery read-back and drop-open
+        # all ask isBodySealed(); neutral title while sealed, matching the saved
+        # file's title. Each row has an unsealed control that shows the leak.
+        run: node scripts/test-dash-sealed-browser.mjs
+
+  dash-chrome-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone document
+        run: |
+          npm ci --prefix dash
+          npm run build:single --prefix dash
+      - name: dash's shell matches slides' and spaces'
+        # The bar's house order (mark · title · undo/redo · tools · Comment ·
+        # Share · Save · 🌐 · ?), no version text or settings button, an
+        # ink-filled Save; one-line Save ▾ rows with Version history, the JSON
+        # round trip and Start from scratch; a Share popover that connects
+        # NOTHING until Go live (every WebSocket is recorded — none at boot or
+        # on an edit, one on Go live, one when a saved shared file reopens);
+        # 🌐 switching language without a reload; and at 320/360/390px the
+        # document never scrolls sideways while ⋯ carries About, Settings,
+        # Language, Help and Share.
+        run: node scripts/test-dash-chrome-browser.mjs

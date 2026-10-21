@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "“$1” sudah ada. Pilih nama lain."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Identiti anda untuk berkongsi dan dokumen langsung. Ia berada dalam pelayar ini; persediaan mencipta kunci laluan dan kod pemulihan supaya anda boleh mendapatkannya semula."
+  },
+  "setIdNone": {
+    "message": "Belum ada Bento ID dalam pelayar ini."
+  },
+  "setIdCreate": {
+    "message": "Cipta Bento ID anda…"
+  },
+  "setIdLocal": {
+    "message": "Bento ID anda telah disediakan dalam pelayar ini. Seterusnya, sahkan e-mel anda."
+  },
+  "idSetupTitle": {
+    "message": "Cipta Bento ID anda"
+  },
+  "idSetupLead": {
+    "message": "Bento ID membolehkan orang yang anda berkongsi tahu bahawa itu memang anda. Persediaan mencipta kunci laluan dan kod pemulihan supaya anda boleh mendapatkannya semula pada peranti lain."
+  },
+  "idSetupLight": {
+    "message": "Dalam sambungan pelayar, kunci anda disimpan dalam profil pelayar ini. Membuang sambungan akan memadamkannya, jadi simpan kunci laluan dan kod pemulihan anda dengan selamat."
+  },
+  "idSetupLabel": {
+    "message": "Nama untuk pelayar ini"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Sediakan kunci laluan"
+  },
+  "idWorking": {
+    "message": "Menunggu kunci laluan anda…"
+  },
+  "idDeriving": {
+    "message": "Mencipta kod pemulihan anda ($1 daripada 2)…"
+  },
+  "idCodeTitle": {
+    "message": "Kod pemulihan anda"
+  },
+  "idCodeLead": {
+    "message": "Tulis atau cetak, dan simpan di tempat yang selamat. Ia hanya dipaparkan kali ini, dan ia jalan kembali anda jika anda kehilangan kunci laluan."
+  },
+  "idCodeConfirm": {
+    "message": "Taip kod untuk mengesahkan anda menyimpannya"
+  },
+  "idCodePrint": {
+    "message": "Cetak"
+  },
+  "idCodeSaved": {
+    "message": "Saya sudah menyimpannya"
+  },
+  "idCodeMismatch": {
+    "message": "Itu bukan kod yang dipaparkan di atas. Semak dan cuba lagi."
+  },
+  "idCodeTypo": {
+    "message": "Kod itu ada salah taip: satu aksara salah atau tiada."
+  },
+  "idNoPrf": {
+    "message": "Kunci laluan anda tidak dapat membuka Bento ID pada peranti lain, jadi kod pemulihan ini satu-satunya jalan kembali."
+  },
+  "idNoCode": {
+    "message": "Peranti ini tidak dapat mencipta kod pemulihan, jadi kunci laluan anda satu-satunya jalan kembali: jika hilang, Bento ID ini juga hilang. Anda boleh mencipta kod pemulihan kemudian pada peranti lain."
+  },
+  "idDoneTitle": {
+    "message": "Bento ID anda telah disediakan"
+  },
+  "idDoneLead": {
+    "message": "Ia sedia dalam pelayar ini. Seterusnya, sahkan alamat e-mel anda."
+  },
+  "idDone": {
+    "message": "Selesai"
+  },
+  "idErrCancelled": {
+    "message": "Permintaan kunci laluan dibatalkan atau tamat masa. Pastikan tetingkap ini di hadapan dan cuba lagi."
+  },
+  "idErrPermission": {
+    "message": "Kunci laluan anda memerlukan akses ke bento.page. Benarkan apabila Chrome bertanya, kemudian cuba lagi."
+  },
+  "idErrFailed": {
+    "message": "Ada yang tidak kena dan tiada apa-apa disimpan. Cuba lagi."
+  },
+  "idErrNoWayBack": {
+    "message": "Tiada apa-apa disediakan: kunci laluan anda tidak dapat membuka Bento ID dan peranti ini tidak dapat mencipta kod pemulihan, jadi tiada jalan kembali."
   }
 }
