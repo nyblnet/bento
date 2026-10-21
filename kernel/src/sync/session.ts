@@ -1131,7 +1131,7 @@ export class SyncSession {
    * documents carry it (never-shared files stay clean).
    */
   stampInto(doc: SyncDoc) {
-    if (!doc.collab || doc.collab.on === false || !this.shareEligible()) return
+    if (!doc.collab || doc.collab.on === false) return
     this.flush()
     doc.collab.sync = copy(this.state.toJSON())
   }

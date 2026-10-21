@@ -20,10 +20,6 @@ const object = (v: unknown): v is Record<string, unknown> =>
 
 /** A structural deep copy: containers cloned, primitive leaves shared. */
 export function copy<T>(v: T): T {
-  if (typeof structuredClone === 'function') {
-    // Native deep copy implementation. Much much faster.
-    return structuredClone(v)
-  }
   if (Array.isArray(v)) return v.map(copy) as T
   if (object(v)) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, copy(x)])) as T
   return v
