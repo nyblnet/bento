@@ -311,8 +311,10 @@ function hoistRepeats(root: HTMLElement) {
       return { el, decls, props }
     })
 
+  // No length limit here: a long declaration is exactly what hoisting is for.
+  // An image used twice on the page is the same multi-kilobyte url() twice, and
+  // hoisting it is what makes the page pay for it once.
   const movable = ({ decls, props }: { decls: string[]; props: string[] }, i: number) => {
-    if (decls[i].length > 4096) return false
     const p = props[i]
     // A `<` in a declaration must stay inline. The stylesheet is raw text, so a
     // hoisted `</style>` would close it early and the rest would parse as live
@@ -449,7 +451,10 @@ export function buildSlidePreview(doc: BentoDoc): HTMLElement | null {
   // exceed the byte budget, Tier 1 (keepImages: true) will always fail.
   // Fast-fail directly to Tier 2 to avoid rendering multi-megabyte DOMs,
   // running splitDecls/hoistRepeats on giant base64 payloads, and outerHTML encoding.
-  const canFitImages = !slideAssetsExceedBudget(slide, doc, PREVIEW_BUDGET - 2048)
+  // Compared against the budget itself: every distinct asset counted appears
+  // at least once in a tier-1 page, so their sum is a lower bound on its size,
+  // and only a sum OVER the budget proves tier 1 cannot fit.
+  const canFitImages = !slideAssetsExceedBudget(slide, doc, PREVIEW_BUDGET)
   const tiers = canFitImages ? [true, false] : [false]
 
   for (const keepImages of tiers) {

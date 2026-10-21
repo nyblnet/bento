@@ -127,6 +127,11 @@ jobs:
         # password; the same with only the blob import allowed; the ⌘S re-save
         # and the self-update re-splice open again.
         run: node scripts/test-slides-encrypted-open-browser.mjs
+      - name: The saved preview keeps pictures that fit in Chromium
+        # An image used twice is held once (hoisted), a 62 KB image that fits
+        # keeps tier 1, and a page whose assets exceed the budget takes the fast
+        # path straight to tinted boxes.
+        run: node scripts/test-slides-preview-tiers-browser.mjs
       - name: The loader reads what the app published in Chromium
         # Toy shells from the real postbuild: an app that is running, locked at
         # a gate, or refused (and threw) runs ONCE and gets no loader card; only
