@@ -137,6 +137,11 @@ dependencies {
     // nothing from Material and would only inherit the inflation requirements.
     implementation("com.google.android.material:material:1.12.0")
 
+    // Argon2id for the recovery code (security §35). Pinned exactly; Gradle
+    // dependency verification (gradle/verification-metadata.xml) fails the
+    // build if the artifact's sha256 ever differs.
+    implementation("org.bouncycastle:bcprov-jdk18on:1.86")
+
     // bento/connect (phase-1 plan A1): BiometricPrompt with a CryptoObject, so the
     // consent key signs only inside an authentication the person just gave.
     implementation("androidx.biometric:biometric:1.1.0")

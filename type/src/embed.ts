@@ -26,6 +26,7 @@
 // every renderer in every file to cover the matrix, and version skew between
 // the embedded copy and the real app.
 
+import { sanitizeEmbedSvg, sanitizeEmbedSvgHtml } from './svgsafe.ts';
 import { uid, embedSafe, type Block } from './model.ts';
 import { t } from './i18n.ts';
 import { registerTool, type FeatureContext } from './features.ts';
@@ -113,15 +114,19 @@ export function renderEmbed(b: Block): HTMLElement {
   }
   if (e.w) host.style.setProperty('--embed-w', `${e.w}px`);
 
-  const view = safeView(e.view);
-  if (view === null) {
+  // The ALLOWLIST walk (svgsafe.ts) alone decides what of the picture is kept,
+  // and the result is IMPORTED as nodes, never re-parsed from a string. (Not
+  // gated on safeView: that pattern check also refuses a same-document
+  // `<use href="#…">`, so in front of the walk it blanked benign diagrams.)
+  const svg = sanitizeEmbedSvg(e.view);
+  if (svg === null) {
     // An embed whose picture was refused still says what it is and still
     // carries its source, so a person can open it in the app that made it.
     host.append(placeholder(t('This embed could not be displayed safely.')));
   } else {
     const box = document.createElement('div');
     box.className = 't-embed-view';
-    box.innerHTML = view;
+    box.appendChild(document.importNode(svg, true));
     host.appendChild(box);
   }
 
@@ -153,7 +158,10 @@ function placeholder(text: string): HTMLElement {
 export function embedHtml(b: Block): string {
   const e = embedOf(b);
   if (!e) return '';
-  const view = safeView(e.view);
+  // The allowlist walk wherever there is a DOM — the editor's page, print and
+  // the preview all render through this string. In node (no DOM, nothing
+  // reaches a browser from there) safeView's refusal stands in.
+  const view = typeof DOMParser === 'undefined' ? safeView(e.view) : sanitizeEmbedSvgHtml(e.view);
   const cap = `From ${APPS[e.app] ?? e.app}`;
   return `<figure class="t-embed" data-id="${esc(b.id)}" data-atomic="1">`
     + (view === null ? `<div class="t-embed-missing">${esc('This embed could not be displayed safely.')}</div>`

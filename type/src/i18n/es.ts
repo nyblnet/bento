@@ -471,7 +471,6 @@ export const es: Catalog = {
   "Crash recovery is off for this document — it’s too large to keep a backup copy. Save often.": "La recuperación tras fallos está desactivada para este documento: es demasiado grande para guardar una copia de seguridad. Guarda a menudo.",
   "✓ valid": "✓ válida",
   "✕ the content has changed since this was signed": "✕ el contenido ha cambiado desde que se firmó",
-  "⚠ not linked to the previous signature": "⚠ no está enlazada con la firma anterior",
   "✕ invalid signature": "✕ firma no válida",
   "after {name}": "después de {name}",
   "History matches what was signed": "El historial coincide con lo firmado",

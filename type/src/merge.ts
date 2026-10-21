@@ -306,7 +306,7 @@ export function mergeDoc(template: TypeDoc, row: Record<string, string>,
   // has its own stable identity from the moment it is written.
   out.docId = newDocId();
   // TypeDoc declares these as required arrays; the tier dropped what they held.
-  out.signatures = [];
+  out.signatures = {};
   out.revisions = [];
   // The template's last-saved stamp says nothing true about a new letter.
   delete out.modified;

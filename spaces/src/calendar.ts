@@ -2,10 +2,10 @@
 // Copyright (c) 2026 The Bento authors
 // The CALENDAR layout: a view laid out by date.
 //
-// ONE ENTRY IN THE CYCLE, TWO SHAPES BEHIND IT. A month grid and a timeline are
+// ONE ENTRY IN THE CYCLE, TWO SHAPES BEHIND IT. A month grid and an agenda are
 // genuinely different pictures — a grid answers "what is this week like" and
 // fails completely on data spread over years (thirty-six mostly-empty months to
-// page through), while a timeline answers "what happened, in order" and cannot
+// page through), while an agenda answers "what happened, in order" and cannot
 // show you a shape of a month at all. Both are needed, because this app holds
 // both kinds of dated page: journals are dense and daily, a reading list's
 // dates are sparse and span years.
@@ -14,7 +14,7 @@
 // different questions; these two answer ONE question ("when?") at two
 // densities. And the layout control is a CYCLE, whose cost is linear: a sixth
 // shape makes getting back to the board from the middle worse than the shape is
-// worth. So the cycle gains one entry, `calendar`, and the month/timeline
+// worth. So the cycle gains one entry, `calendar`, and the month/agenda
 // choice is a second control that appears only while you are in it — exactly
 // how `groupBy` already works, a board-only parameter with its own button that
 // the renderer hides for every other shape.
@@ -23,16 +23,23 @@
 //
 //   1. `page.journal`, when it is a real ISO date. The page IS a day; nothing
 //      about that is ambiguous.
-//   2. otherwise the first `date`-typed field IN SCHEMA ORDER that this page
-//      carries a real ISO value for. Not "the first date field" — a page with
-//      an empty Due and a filled Published is dated by Published, or the rule
-//      would drop it for carrying the wrong empty box.
-//   3. otherwise it has NO DATE, and it is shown saying so. Never dropped: a
+//   2. otherwise `due`, when the schema declares it as a date field and this
+//      page carries a real ISO value for it. A CALENDAR PREFERS DUE (maintainer,
+//      2026-10-20): a task with both a Start and a Due belongs on the day it is
+//      due — that is the question a calendar of work is opened to answer. The
+//      property strip still shows Start before Due; DEFAULT_FIELDS is not
+//      reordered for this, the calendar alone reads Due first.
+//   3. otherwise the remaining `date`-typed fields IN SCHEMA ORDER, the first
+//      this page carries a real ISO value for. Not "the first date field" — a
+//      page with an empty Due and a filled Published is dated by Published, or
+//      the rule would drop it for carrying the wrong empty box.
+//   4. otherwise it has NO DATE, and it is shown saying so. Never dropped: a
 //      view that silently holds fewer pages than its own count is the failure
 //      this whole file exists to avoid.
 //
 // The rule is not configurable and the UI says what it is, in words, above the
-// grid. A `dateBy` key would be a permanent format field bought to express a
+// grid — and that sentence is built from `dateOrderOf`, the SAME list `dateOf`
+// walks, so the words cannot drift from the behaviour. A `dateBy` key would be a permanent format field bought to express a
 // preference nobody has yet asked for.
 //
 // TIMEZONES. Every date here is built from COMPONENTS in the reader's own
@@ -65,8 +72,16 @@ import { t } from './i18n.ts'
 /**
  * The shapes the calendar layout can take, and the order its button cycles.
  *
+ * THE SECOND SHAPE IS CALLED "AGENDA" AND STORED AS `'timeline'`. The UI was
+ * renamed (maintainer, 2026-10-20) because the gantt layout is also labelled
+ * "Timeline", and two buttons with one word for two pictures is a guess for
+ * the reader. The STORED value did not change and never will: files written
+ * since the calendar shipped carry `span: "timeline"`, the format is additive,
+ * and a rename of the value would make every one of them open as a month grid.
+ * Only the label and tooltip (`spanButton`) say "agenda".
+ *
  * `month` is the ABSENT key, exactly as `board` is for the layout itself: a
- * view toggled to the timeline and back is byte-identical to one nobody
+ * view toggled to the agenda and back is byte-identical to one nobody
  * touched. A STRING rather than a boolean because `week` and `year` are the
  * obvious next two, and widening a boolean afterwards cannot be done at all.
  */
@@ -88,10 +103,25 @@ export function spanOf(raw: unknown): CalSpan {
   return (CAL_SPANS as readonly string[]).includes(s) ? (s as CalSpan) : 'month'
 }
 
-/** The next shape: month → timeline → month. */
+/** The next shape: month → agenda (stored `'timeline'`) → month. */
 export function nextSpan(raw: unknown): CalSpan {
   const here = spanOf(raw)
   return CAL_SPANS[(CAL_SPANS.indexOf(here) + 1) % CAL_SPANS.length]
+}
+
+/**
+ * The span button's words: what shape this is, and what a click shows next.
+ *
+ * Here rather than inline in render.ts so the rig can read them without a DOM.
+ * LITERALS inside the function, never a module-level table: the extractor
+ * sweeps `t()` literals, and a `t()` in a module const is frozen at import,
+ * before the reader's locale is known. "Agenda", not "Timeline" — that word
+ * belongs to the gantt layout (see CAL_SPANS).
+ */
+export function spanButton(raw: unknown): { label: string; title: string } {
+  return spanOf(raw) === 'timeline'
+    ? { label: t('Agenda'), title: t('Show a month at a time') }
+    : { label: t('Month'), title: t('Show an agenda') }
 }
 
 // ---- which date ------------------------------------------------------------
@@ -99,6 +129,20 @@ export function nextSpan(raw: unknown): CalSpan {
 /** Every `date`-typed field the schema declares, in its declared order. */
 export const dateFieldsOf = (doc: SpacesDoc): FieldSpec[] =>
   fieldsOf(doc).filter((f) => f.vt === 'date')
+
+/**
+ * The date fields a calendar reads, IN THE ORDER IT READS THEM: `due` first
+ * when the schema declares it as a date, then every other date field in schema
+ * order. The journal date is ahead of all of them and is not a field.
+ *
+ * ONE function for both `dateOf` and `dateHint`, so the sentence above the grid
+ * is the rule rather than a description of it that could fall out of step.
+ */
+export function dateOrderOf(doc: SpacesDoc): FieldSpec[] {
+  const all = dateFieldsOf(doc)
+  const due = all.filter((f) => f.key === 'due')
+  return [...due, ...all.filter((f) => f.key !== 'due')]
+}
 
 /**
  * The date this row sits on — `''` when it has none.
@@ -112,7 +156,7 @@ export const dateFieldsOf = (doc: SpacesDoc): FieldSpec[] =>
 export function dateOf(doc: SpacesDoc, row: IssueRow): string {
   const j = row.page.journal
   if (typeof j === 'string' && isISO(j)) return j
-  for (const f of dateFieldsOf(doc)) {
+  for (const f of dateOrderOf(doc)) {
     const v = row.values.get(f.key)
     if (typeof v === 'string' && isISO(v)) return v
   }
@@ -316,7 +360,7 @@ export function monthGrid(ym: string, loc?: string): CalCell[] {
 }
 
 /**
- * The days a timeline lists, NEWEST FIRST.
+ * The days an agenda lists, NEWEST FIRST.
  *
  * One direction, chosen rather than configured. Newest-first is the order this
  * app already reads dated pages in (`journalsOf`), the dominant dated content
@@ -324,7 +368,7 @@ export function monthGrid(ym: string, loc?: string): CalCell[] {
  * recent one — a five-year journal opened oldest-first is five years of
  * scrolling to reach today.
  */
-export const timelineDays = (days: Map<string, IssueRow[]>): string[] =>
+export const agendaDays = (days: Map<string, IssueRow[]>): string[] =>
   [...days.keys()].sort((a, b) => b.localeCompare(a))
 
 // ---- what the header says --------------------------------------------------
@@ -339,7 +383,7 @@ export const timelineDays = (days: Map<string, IssueRow[]>): string[] =>
  * across the eight catalogs.
  */
 export function dateHint(doc: SpacesDoc): string {
-  const fields = dateFieldsOf(doc)
+  const fields = dateOrderOf(doc)
   if (!fields.length) return t('Dated by the journal date.')
   return t('Dated by the journal date, then {fields}.', {
     fields: fields.map((f) => (typeof f.label === 'string' && f.label ? f.label : f.key)).join(', '),
@@ -374,7 +418,7 @@ export interface CalendarCtx {
   locale?: string
   /** false in reading view, on paper, and in a locked space */
   editable?: boolean
-  /** the view's own card builder, so a timeline entry is the same card a list draws */
+  /** the view's own card builder, so an agenda entry is the same card a list draws */
   card: (row: IssueRow) => HTMLElement
   /** for the rigs — what "today" is, so a fixture is not a different test tomorrow */
   today?: string
@@ -415,7 +459,8 @@ export function renderCalendar(host: HTMLElement, ctx: CalendarCtx): void {
 
   const draw = (): void => {
     body.replaceChildren()
-    if (ctx.span === 'timeline') drawTimeline(body, ctx, split)
+    // 'timeline' is the STORED name of the agenda shape — see CAL_SPANS
+    if (ctx.span === 'timeline') drawAgenda(body, ctx, split)
     else drawMonth(body, ctx, split, today, draw)
     drawUndated(body, ctx, split)
   }
@@ -481,10 +526,10 @@ function drawMonth(
   body.appendChild(grid)
 }
 
-function drawTimeline(body: HTMLElement, ctx: CalendarCtx, split: DateSplit): void {
+function drawAgenda(body: HTMLElement, ctx: CalendarCtx, split: DateSplit): void {
   const line = document.createElement('div')
   line.className = 'sp-cal-line'
-  for (const iso of timelineDays(split.days)) {
+  for (const iso of agendaDays(split.days)) {
     const day = document.createElement('div')
     day.className = 'sp-cal-day'
     const h = document.createElement('div')

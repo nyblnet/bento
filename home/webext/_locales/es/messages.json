@@ -880,5 +880,92 @@
   },
   "saTaken": {
     "message": "«$1» ya existe. Elige otro nombre."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Tu identidad para compartir y para documentos en directo. Vive en este navegador; al configurarla se crean una llave de acceso y un código de recuperación para recuperarla."
+  },
+  "setIdNone": {
+    "message": "Todavía no hay ningún Bento ID en este navegador."
+  },
+  "setIdCreate": {
+    "message": "Crear tu Bento ID…"
+  },
+  "setIdLocal": {
+    "message": "Tu Bento ID está configurado en este navegador. Lo siguiente es verificar tu correo electrónico."
+  },
+  "idSetupTitle": {
+    "message": "Crear tu Bento ID"
+  },
+  "idSetupLead": {
+    "message": "Tu Bento ID es cómo las personas con las que compartes saben que eres tú. Al configurarlo se crean una llave de acceso y un código de recuperación, para recuperarlo en otro dispositivo."
+  },
+  "idSetupLight": {
+    "message": "En la extensión del navegador, tus claves se guardan en este perfil del navegador. Si quitas la extensión, se borran, así que guarda bien tu llave de acceso y tu código de recuperación."
+  },
+  "idSetupLabel": {
+    "message": "Nombre de este navegador"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Configurar una llave de acceso"
+  },
+  "idWorking": {
+    "message": "Esperando tu llave de acceso…"
+  },
+  "idDeriving": {
+    "message": "Creando tu código de recuperación ($1 de 2)…"
+  },
+  "idCodeTitle": {
+    "message": "Tu código de recuperación"
+  },
+  "idCodeLead": {
+    "message": "Anótalo o imprímelo y guárdalo en un lugar seguro. Solo se muestra esta vez y es tu forma de volver si pierdes tu llave de acceso."
+  },
+  "idCodeConfirm": {
+    "message": "Escribe el código para confirmar que lo tienes"
+  },
+  "idCodePrint": {
+    "message": "Imprimir"
+  },
+  "idCodeSaved": {
+    "message": "Ya lo he guardado"
+  },
+  "idCodeMismatch": {
+    "message": "Ese no es el código que se muestra arriba. Revísalo e inténtalo de nuevo."
+  },
+  "idCodeTypo": {
+    "message": "Ese código tiene un error: falta un carácter o hay uno incorrecto."
+  },
+  "idNoPrf": {
+    "message": "Tu llave de acceso no puede desbloquear tu Bento ID en otros dispositivos, así que este código de recuperación es tu única forma de volver."
+  },
+  "idNoCode": {
+    "message": "Este dispositivo no puede crear un código de recuperación, así que tu llave de acceso es tu única forma de volver: si la pierdes, pierdes este Bento ID. Podrás crear un código de recuperación más adelante en otro dispositivo."
+  },
+  "idDoneTitle": {
+    "message": "Tu Bento ID está configurado"
+  },
+  "idDoneLead": {
+    "message": "Ya está listo en este navegador. Lo siguiente es verificar tu dirección de correo electrónico."
+  },
+  "idDone": {
+    "message": "Hecho"
+  },
+  "idErrCancelled": {
+    "message": "La solicitud de la llave de acceso se canceló o caducó. Mantén esta ventana delante e inténtalo de nuevo."
+  },
+  "idErrPermission": {
+    "message": "Tu llave de acceso necesita acceso a bento.page. Permítelo cuando Chrome lo pida e inténtalo de nuevo."
+  },
+  "idErrFailed": {
+    "message": "Algo ha fallado y no se ha guardado nada. Inténtalo de nuevo."
+  },
+  "idErrNoWayBack": {
+    "message": "No se ha configurado nada: tu llave de acceso no puede desbloquear tu Bento ID y este dispositivo no puede crear un código de recuperación, así que no habría forma de volver."
   }
 }

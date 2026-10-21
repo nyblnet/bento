@@ -1,0 +1,60 @@
+# CI, home-desktop: this zone's own jobs — validate, never release (see ci.yml's header).
+#
+# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
+# merge; a job here reports beside it, exactly as it did when it lived in
+# ci.yml. Keep each job's id unchanged — the id IS the check name.
+#
+# Each job checks out and builds what it needs for itself. Add this zone's
+# new jobs here, at the end; never in ci.yml.
+
+name: CI (home-desktop)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
+  # the tip, every commit on main keeps its own run.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  home-desktop-agent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Desktop agent against the bento/id vectors
+        # home/desktop/agent is the Windows/Linux identity agent core. Its
+        # statements port must reach every verdict AND reason in
+        # kernel/fixtures/identity-v1.json (re-read every run, never pinned), plus
+        # builder round-trips, three tamperings per accepted row, spendCalled
+        # on every cns row, and the frozen display table. A missing fixture
+        # fails; it never skips.
+        working-directory: home/desktop/agent
+        run: cargo test
+      - name: Desktop agent TPM rigs (two software TPMs)
+        # The Linux key store against a real TPM 2.0 (swtpm): the routine key
+        # signs inside the TPM; the consent key and the sealed account key need
+        # the PIN on every use (a wrong PIN is the TPM's own AUTH_FAIL); the key
+        # files are useless on a SECOND TPM (cannot be copied off the machine);
+        # and a second connection without the PIN gets neither, while the
+        # routine key stays usable, which is the stated desktop residual.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libtss2-dev swtpm swtpm-tools >/dev/null
+          ./tpm-rig.sh
+      - name: Desktop agent no-TPM keyring rigs (gnome-keyring)
+        # On a Linux machine without a usable TPM the agent falls back to the
+        # Secret Service. Against a real gnome-keyring in a D-Bus session: the
+        # routine key signs and verifies; there is no consent key, so consent is
+        # refused (AAL3 routed elsewhere); wipe removes the keys; and the stated
+        # exposure is asserted: a second connection reads the account key with
+        # no prompt once the keyring is unlocked.
+        working-directory: home/desktop/agent
+        run: |
+          sudo apt-get install -y -qq gnome-keyring dbus >/dev/null
+          ./keyring-rig.sh

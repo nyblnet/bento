@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:single": "tsc -b && SINGLEFILE=1 vite build --outDir dist-single && mv dist-single/index.html dist-single/Bento_Dash.bento.html && node ../scripts/postbuild-compress.mjs dist-single/Bento_Dash.bento.html --generator bento-dash --title \"bento/dash\"",
-    "build:sealtest": "rm -rf dist-sealtest && tsc -b && SINGLEFILE=1 BENTO_TEST_SEAL=1 vite build --outDir dist-sealtest && mv dist-sealtest/index.html dist-sealtest/Bento_Dash.bento.html && node ../scripts/postbuild-compress.mjs dist-sealtest/Bento_Dash.bento.html --generator bento-dash --title \"bento/dash\"",
+    "build:sealtest": "rm -rf dist-sealtest && tsc -b && SINGLEFILE=1 BENTO_TEST_SEAL=1 vite build --outDir dist-sealtest && mv dist-sealtest/index.html dist-sealtest/Bento_Dash.bento.html && node ../scripts/postbuild-compress.mjs dist-sealtest/Bento_Dash.bento.html --generator bento-dash --title \"bento/dash\" && touch dist-sealtest/.complete",
     "preview": "vite preview"
   },
   "devDependencies": {

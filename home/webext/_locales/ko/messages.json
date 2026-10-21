@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "“$1” 파일이 이미 있습니다. 다른 이름을 고르세요."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "공유와 실시간 문서를 위한 내 ID입니다. 이 브라우저에 저장되며, 설정할 때 패스키와 복구 코드를 만들어 나중에 되찾을 수 있습니다."
+  },
+  "setIdNone": {
+    "message": "이 브라우저에는 아직 Bento ID가 없습니다."
+  },
+  "setIdCreate": {
+    "message": "Bento ID 만들기…"
+  },
+  "setIdLocal": {
+    "message": "이 브라우저에 Bento ID가 설정되었습니다. 다음은 이메일 확인입니다."
+  },
+  "idSetupTitle": {
+    "message": "Bento ID 만들기"
+  },
+  "idSetupLead": {
+    "message": "Bento ID로 공유 상대는 그것이 나라는 것을 알 수 있습니다. 설정할 때 패스키와 복구 코드를 만들어 다른 기기에서도 되찾을 수 있습니다."
+  },
+  "idSetupLight": {
+    "message": "브라우저 확장 프로그램에서는 키가 이 브라우저 프로필에 보관됩니다. 확장 프로그램을 삭제하면 키도 지워지므로 패스키와 복구 코드를 잘 보관하세요."
+  },
+  "idSetupLabel": {
+    "message": "이 브라우저의 이름"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "패스키 설정"
+  },
+  "idWorking": {
+    "message": "패스키를 기다리는 중…"
+  },
+  "idDeriving": {
+    "message": "복구 코드를 만드는 중($1/2)…"
+  },
+  "idCodeTitle": {
+    "message": "복구 코드"
+  },
+  "idCodeLead": {
+    "message": "적어 두거나 인쇄해서 안전한 곳에 보관하세요. 이번 한 번만 표시되며, 패스키를 잃어버렸을 때 되찾는 방법입니다."
+  },
+  "idCodeConfirm": {
+    "message": "보관했는지 확인하기 위해 코드를 입력하세요"
+  },
+  "idCodePrint": {
+    "message": "인쇄"
+  },
+  "idCodeSaved": {
+    "message": "보관했습니다"
+  },
+  "idCodeMismatch": {
+    "message": "위에 표시된 코드가 아닙니다. 확인하고 다시 시도하세요."
+  },
+  "idCodeTypo": {
+    "message": "코드에 오타가 있습니다. 문자가 틀렸거나 빠졌습니다."
+  },
+  "idNoPrf": {
+    "message": "이 패스키로는 다른 기기에서 Bento ID를 잠금 해제할 수 없으므로 이 복구 코드가 유일하게 되찾는 방법입니다."
+  },
+  "idNoCode": {
+    "message": "이 기기에서는 복구 코드를 만들 수 없으므로 패스키가 유일하게 되찾는 방법입니다. 패스키를 잃어버리면 이 Bento ID도 잃게 됩니다. 복구 코드는 나중에 다른 기기에서 만들 수 있습니다."
+  },
+  "idDoneTitle": {
+    "message": "Bento ID가 설정되었습니다"
+  },
+  "idDoneLead": {
+    "message": "이 브라우저에서 사용할 준비가 되었습니다. 다음은 이메일 주소 확인입니다."
+  },
+  "idDone": {
+    "message": "완료"
+  },
+  "idErrCancelled": {
+    "message": "패스키 요청이 취소되었거나 시간이 초과되었습니다. 이 창을 앞에 둔 채 다시 시도하세요."
+  },
+  "idErrPermission": {
+    "message": "패스키에는 bento.page 접근 권한이 필요합니다. Chrome이 물으면 허용한 뒤 다시 시도하세요."
+  },
+  "idErrFailed": {
+    "message": "문제가 발생해 아무것도 저장되지 않았습니다. 다시 시도하세요."
+  },
+  "idErrNoWayBack": {
+    "message": "아무것도 설정되지 않았습니다. 이 패스키로는 Bento ID를 잠금 해제할 수 없고 이 기기에서는 복구 코드도 만들 수 없어, 되찾을 방법이 없게 됩니다."
   }
 }

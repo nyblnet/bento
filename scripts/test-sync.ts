@@ -554,5 +554,45 @@ const castCount = (d: Doc) =>
   ok(!r.changed && A.fingerprint() === before, 'v1 snapshot ignored by mergeSnapshot')
 }
 
+{
+  // A FIRST-SAVED file must carry its CRDT state, or a colleague's offline
+  // edit on top of it is LOST. session.attach() restores collab.sync when the
+  // file has it; without it the file joins as a never-synced adopt, whose null
+  // registers [0,''] lose to every real op, and the replica's Lamport clock
+  // starts near zero. So the colleague's causally LATER edit carries a lower
+  // stamp than the author's OLDER ones, and loses (measured on #792, which
+  // skipped stampInto for a deck that wasn't yet share-eligible: its first save).
+  console.log('a first-saved file must carry its sync state, or a later offline edit is lost…')
+  const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v))
+  const field = (d: Doc) => (d.slides[0].elements[0] as { x: number })
+  const scenario = (stamped: boolean) => {
+    // A: a never-shared deck, a field edited five times, then the FIRST save
+    const docA = baseDoc()
+    const A = new SyncState('A'); A.adopt(docA)
+    const logA: Op[] = []
+    for (let i = 1; i <= 5; i++) {
+      const before = clone(docA); field(docA).x = 100 + i
+      logA.push(...A.diff(before, docA, { text: true }))
+    }
+    const file = { doc: clone(docA), sync: stamped ? clone(A.toJSON()) : null }
+    // B opens that file OFFLINE, as session.attach() does, and edits on top of it
+    const docB = clone(file.doc)
+    const B = file.sync ? SyncState.fromJSON('B', file.sync) : new SyncState('B')
+    B.adopt(docB)
+    const before = clone(docB); field(docB).x = 999
+    const opsB = B.diff(before, docB, { text: true })
+    // they meet
+    A.apply(docA, opsB)
+    B.apply(docB, logA)
+    return { a: field(docA).x, b: field(docB).x }
+  }
+  const kept = scenario(true)
+  ok(kept.a === 999 && kept.b === 999, "with collab.sync (what stampInto writes): the colleague's later edit wins on both")
+  // the control that makes the row above mean something: the same scenario
+  // WITHOUT the stamp must show the loss, or this rig can't see the bug
+  const lost = scenario(false)
+  ok(lost.a === lost.b && lost.a === 105, 'control: WITHOUT collab.sync the later edit is lost (both converge on the older 105)')
+}
+
 console.log(failures === 0 ? `\nALL PASS (${checks} checks)` : `\n${failures} FAILURES of ${checks} checks`)
 process.exit(failures ? 1 : 0)

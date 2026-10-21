@@ -471,7 +471,6 @@ export const de: Catalog = {
   "Crash recovery is off for this document — it’s too large to keep a backup copy. Save often.": "Die Absturzwiederherstellung ist für dieses Dokument deaktiviert – es ist zu groß für eine Sicherungskopie. Speichern Sie häufig.",
   "✓ valid": "✓ gültig",
   "✕ the content has changed since this was signed": "✕ der Inhalt wurde seit der Signatur geändert",
-  "⚠ not linked to the previous signature": "⚠ nicht mit der vorherigen Signatur verknüpft",
   "✕ invalid signature": "✕ ungültige Signatur",
   "after {name}": "nach {name}",
   "History matches what was signed": "Der Verlauf stimmt mit dem Signierten überein",

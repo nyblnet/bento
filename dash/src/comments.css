@@ -13,22 +13,7 @@
    palette header states the rule: reach for a token, and if none fits add one
    THERE with both of its values rather than writing a hex where it is used. */
 
-:root {
-  /* THE ONE NEW PAIR, AND IT WANTS MOVING. A comment marker cannot be
-     `--accent`: amber already means "the app did something here" — a filtered
-     header, a formula chip, `dg-noted`'s override bar — and a comment means
-     "a person said something here", which is a different claim about the same
-     cell. Violet is the only hue in dash that is not already spoken for.
-     These two lines belong in styles.css :root beside --err-ink; they are here
-     only because this file may not edit that one. */
-  --cmt: #7c3aed;
-  --cmt-wash: #f5f0ff;
-}
-
-:root[data-theme="dark"] {
-  --cmt: #a78bfa;
-  --cmt-wash: #2a2140;
-}
+/* --cmt / --cmt-ink / --cmt-wash are the ACCENT now — see styles.css. */
 
 /* ————— the marker —————
    A corner triangle: Excel's placement, Sheets' placement, and the one shape
@@ -120,7 +105,7 @@
   font-variant-numeric: tabular-nums;
 }
 .dxc-pill:hover { color: var(--ink); border-color: var(--cmt); }
-.dxc-pill.dxc-pill-on { color: var(--cmt); border-color: var(--cmt); background: var(--cmt-wash); }
+.dxc-pill.dxc-pill-on { color: var(--cmt-ink); border-color: var(--cmt); background: var(--cmt-wash); }
 
 /* ————— the popover ————— */
 
@@ -227,8 +212,9 @@
   cursor: pointer;
 }
 .dxc-pop .dxc-btn:hover { background: var(--hover); border-color: var(--muted); }
-.dxc-pop .dxc-primary { border-color: var(--cmt); color: var(--cmt); }
-.dxc-pop .dxc-primary:hover { background: var(--cmt-wash); }
+/* the primary is slides' ink-filled one, not a second accent */
+.dxc-pop .dxc-primary { border-color: var(--ink); background: var(--ink); color: var(--surface); }
+.dxc-pop .dxc-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
 .dxc-pop .dxc-danger:hover { color: var(--err-ink); border-color: var(--err-ink); }
 
 /* ————— the list ————— */
@@ -255,7 +241,7 @@
   color: inherit;
 }
 .dxc-pop .dxc-item:hover { background: var(--hover); }
-.dxc-where { font-size: 11px; color: var(--cmt); }
+.dxc-where { font-size: 11px; color: var(--cmt-ink); }
 .dxc-item.dxc-done .dxc-where { color: var(--muted); }
 .dxc-line {
   font-size: 12.5px;
@@ -265,3 +251,4 @@
   white-space: nowrap;
 }
 .dxc-item.dxc-done .dxc-line { color: var(--muted); text-decoration: line-through; }
+.dxc-pill[hidden] { display: none; }

@@ -32,20 +32,20 @@
 // so a panel that assigned to a column would be an edit with no inverse.
 
 import './panels.css'
-import { t, locale } from './i18n.ts'
+import { t, intlLocale } from './i18n.ts'
 import { lsJson, lsSet } from '../../kernel/src/storage.ts'
-import { TYPE_LABEL } from './format.ts'
-import { buildCellProps, type CellRange, type PanelKit } from './cellprops.ts'
+import { TYPE_LABEL, AGG_WORD, formatValue } from './format.ts'
+import { buildCellProps, buildNumberFormat, type CellRange, type PanelKit } from './cellprops.ts'
 import {
-  appearancePatch, buildAppearanceSection, describeOverrideSelection, effectiveFormat,
+  appearancePatch, buildAppearanceSection, describeOverrideSelection,
   overrideFormatPatch, overrideKeys, type Appearance, type AppearanceEdit,
 } from './cellfmt.ts'
 import {
   buildValidationSection, canvasEntryAt, canvasRulePatch, canvasRules, columnRule,
   countViolations, columnRulePatch, boxRef, type DataRule,
 } from './datavalid.ts'
-import { mountTabs, renameSheetPatches } from './tabs.ts'
-import { inferComputedType } from './computedtype.ts'
+import { mountTabs, renameSheetPatches, type SheetViews } from './tabs.ts'
+import { inferComputedType, retypePatch } from './computedtype.ts'
 import { buildCondFmtSection, condFmtPatch, readCondFmt } from './condfmtui.ts'
 import { toast } from './saveui.ts'
 import type { CanvasSheet, Column, ColumnType, TableSheet } from './model.ts'
@@ -164,6 +164,23 @@ export interface PanelsHost {
   grid: Grid
   /** the `.dx-body` element — panels wrap whatever is already inside it */
   body: HTMLElement
+  /** sheets shown in place of the grid (a pivot) — handed on to the tab strip */
+  views?: SheetViews
+}
+
+/**
+ * Something other than the grid's selection that owns the panel for now — a
+ * pivot's field editor while the pivot is up, a chart's editor while the chart
+ * is being worked on. Slides' panel does the same thing by element type: select
+ * a chart and the panel is the chart's.
+ *
+ * `build` draws into the panel with the same row builders every section uses,
+ * and is called again on every document event, so it reads the document fresh
+ * each time rather than holding onto what it drew.
+ */
+export interface PanelOverride {
+  key: string
+  build(host: HTMLElement, kit: PanelKit): void
 }
 
 export interface Panels {
@@ -181,6 +198,10 @@ export interface Panels {
    * which boots with the panel shut, by design.
    */
   reveal(title: string): void
+  /** Hand the panel to something other than the grid, or give it back (null). */
+  setOverride(o: PanelOverride | null): void
+  /** Who has the panel, or null for the grid. */
+  override(): string | null
 }
 
 export function mountPanels(host: PanelsHost): Panels {
@@ -222,7 +243,7 @@ export function mountPanels(host: PanelsHost): Panels {
   // the other half of that move is wired; the alternative (a second call in
   // main.ts) mounts the strip TWICE if this line is ever forgotten, which is
   // exactly the shape of bug two people editing one screen produce.
-  mountTabs({ store, grid, body })
+  mountTabs({ store, grid, body, views: host.views })
 
   // --- widths and collapse, both remembered ---------------------------------
 
@@ -357,10 +378,23 @@ export function mountPanels(host: PanelsHost): Panels {
    */
   let cellMessage = ''
 
+  /**
+   * The dataset Number format's "Apply to" choice, while the reader is on the
+   * column they chose it for. UI state, never the document's.
+   */
+  let fmtScope: { key: string; v: 'column' | 'cells' } | null = null
+
   // --- the properties panel -------------------------------------------------
+
+  let owner: PanelOverride | null = null
 
   function renderProps(): void {
     right.textContent = ''
+    if (owner) {
+      owner.build(right, KIT)
+      applyAccordion(right)
+      return
+    }
     const sheet = currentSheet()
     if (!sheet) {
       // A SPREADSHEET IS NOT A MISSING TABLE, and it is not an EMPTY panel
@@ -378,8 +412,10 @@ export function mountPanels(host: PanelsHost): Panels {
           ranges: grid.sel.ranges() as CellRange[],
           cursor: grid.sel.cursor,
           readOnly: ro(),
-          locale: locale(),
+          locale: intlLocale(),
           commit,
+          rerender: () => render(true),
+          value: grid.cursorValue(),
           message: cellMessage,
           say: (m) => {
             // Shown until the next edit or the next selection — a refusal is
@@ -410,27 +446,24 @@ export function mountPanels(host: PanelsHost): Panels {
   }
 
   /**
-   * The Cell section on a DATASET — the gap this closes.
+   * The Cell section on a DATASET.
    *
-   * The spreadsheet kind has had one since cellprops.ts landed; this kind had
-   * nothing, so ⌘B and the panel both did different things depending on which
-   * tab you were on. The Appearance rows below are literally the same builder
-   * (cellfmt.ts `buildAppearanceSection`) the spreadsheet draws, so the two
-   * cannot drift again.
+   * The Appearance rows below are literally the same builder (cellfmt.ts
+   * `buildAppearanceSection`) the spreadsheet draws, so the two cannot drift.
    *
-   * WHAT IS DELIBERATELY DIFFERENT is the two rows above it, and they are the
-   * type boundary made visible rather than merely respected:
+   * TYPE is READ-ONLY here and says which column decides it. On a dataset the
+   * column owns the type — that is what earns the column formula, the import
+   * refusal and the chart binding — so the cell cannot have its own.
    *
-   *   * TYPE is READ-ONLY here and says which column decides it. On a dataset
-   *     the column owns the type — that is what earns the column formula, the
-   *     import refusal and the chart binding — so the cell cannot have its own.
-   *     Showing it greyed beside the cell's own appearance is the honest way to
-   *     say "this you may change, that you may not"; an absent row would leave
-   *     a reader wondering whether the panel simply forgot.
-   *   * PATTERN is display only. Typing one here stamps how this cell PRINTS
-   *     and never re-reads the value, which is the opposite of what the same
-   *     control does on a spreadsheet (there it is a type declaration and rules
-   *     6–8 recast). The note says so, because the two controls look identical.
+   * NUMBER FORMAT is the one control both kinds share (cellprops.ts
+   * `buildNumberFormat`), with an "Apply to" switch only this kind has: the
+   * COLUMN's pattern (`Column.format`) or the selected cells' own override.
+   * It used to be two controls in two sections — a cell "Pattern" here and a
+   * column "Format" under Column — and both showed on every column, Text
+   * included, with a money placeholder. Now it is drawn only for the types
+   * whose values print through the number path (`PRINTS_AS_TYPED` is the
+   * other side of that line), plus one escape: a pattern already sitting on a
+   * Text column is shown, with the warning, so it can be cleared.
    */
   function buildDatasetCellSection(sheet: TableSheet): void {
     section(right, t('Cell'))
@@ -450,25 +483,47 @@ export function mountPanels(host: PanelsHost): Panels {
       describeOverrideSelection(keys, `${col.name} ${grid.sel.cursor.row + 1}`))
     readonlyRow(right, t('Type'), t(TYPE_LABEL[col.type]))
 
-    const own = typeof cell?.format === 'string' ? cell.format : ''
-    const pat = text(own, (v) => {
-      const next = v.trim()
-      if (next === own) return
-      const p = overrideFormatPatch(sheet, keys, next || undefined)
-      if (p) commit(p)
-    })
-    // The COLUMN's pattern as the placeholder: what this cell prints with
-    // today, when it has said nothing of its own.
-    pat.placeholder = effectiveFormat(sheet, cursorKey) ?? '#,##0.00'
-    pat.classList.add('dp-mono')
-    pat.disabled = ro()
-    row(right, t('Pattern'), pat)
-    note(right, t('The column decides what these cells ARE. A pattern here only changes how they print.'))
-    // …and on a column that prints its values as they are, "how they print" is
-    // nothing at all. Read from the CELL's own pattern, not the effective one:
-    // the placeholder above shows the column's, and warning about a pattern the
-    // reader did not type here would send them to the wrong field.
-    patternInertNote(right, col.type, own)
+    const own = typeof cell?.format === 'string' && cell.format ? cell.format : undefined
+    const colFmt = typeof col.format === 'string' && col.format ? col.format : undefined
+    const numeric = !PRINTS_AS_TYPED.has(col.type)
+    if (numeric || own || colFmt) {
+      // The scope a reader picked survives the rebuild that follows every
+      // commit; otherwise it follows the cell — a cell with its own pattern
+      // opens on "These cells", any other on "This column".
+      const scopeKey = `${sheet.id}\u001f${col.id}`
+      const scope = fmtScope?.key === scopeKey ? fmtScope.v : own ? 'cells' : 'column'
+      const fmt = scope === 'cells' ? own : colFmt
+      buildNumberFormat({
+        host: right,
+        kit: KIT,
+        fmt,
+        kinds: !numeric ? (scope === 'cells' ? ['inherit'] : ['general'])
+          : scope === 'cells' ? ['inherit', 'number', 'currency', 'percent']
+            : ['general', 'number', 'currency', 'percent'],
+        inherited: scope === 'cells' ? colFmt : undefined,
+        scope: {
+          value: scope,
+          set: (next) => { fmtScope = { key: scopeKey, v: next }; render(true) },
+        },
+        preview: (f) => datasetPreview(col, f),
+        key: `${scopeKey}\u001f${scope}`,
+        locale: intlLocale(),
+        readOnly: ro(),
+        rerender: () => render(true),
+        write: (next) => {
+          if (scope === 'cells') {
+            const p = overrideFormatPatch(sheet, keys, next)
+            if (p) commit(p)
+            return
+          }
+          if (next === colFmt) return
+          // `undefined` clears it: JSON.stringify drops the key, so the file
+          // comes back exactly as it was before anyone chose a format.
+          commit({ op: 'setColumn', sheet: sheet.id, col: col.id, patch: { format: next } })
+        },
+      })
+      patternInertNote(right, col.type, own ?? colFmt ?? '')
+    }
 
     buildAppearanceSection({
       host: right,
@@ -482,6 +537,21 @@ export function mountPanels(host: PanelsHost): Panels {
     })
   }
 
+  /** The cell's own value (or a shape, when it is empty) printed with `fmt`. */
+  function datasetPreview(col: Column, fmt: string | undefined): { text: string; sample: boolean } {
+    const v = grid.cursorValue()
+    const empty = typeof v !== 'number' || !Number.isFinite(v)
+    return { text: formatValue(empty ? 1234.5 : v, { type: col.type, format: fmt }), sample: empty }
+  }
+
+  /**
+   * The Column section: what applies to EVERY type, and then only what applies
+   * to this one. A Text column shows no Total (there is nothing to add up) and
+   * no column shows an empty Formula field with somebody else's expression as
+   * its placeholder — the Formula row is for a COMPUTED column, which is made
+   * with ＋ Formula; on any other column it was a field that, typed into,
+   * silently threw the column's stored values away.
+   */
   function buildColumnSection(sheet: TableSheet): void {
     section(right, t('Column'))
     const col = currentColumn(sheet)
@@ -506,47 +576,30 @@ export function mountPanels(host: PanelsHost): Panels {
       },
     ))
 
-    // The Excel-style pattern (format.ts readPattern): a currency prefix,
-    // thousands grouping and a fixed number of decimals. The GLYPHS stay the
-    // viewer's, so this really is only "what to show".
-    const fmt = text(typeof col.format === 'string' ? col.format : '', (v) => {
-      const next = v.trim()
-      if (next === (col.format ?? '')) return
-      // `undefined` clears it: JSON.stringify drops the key, so the file comes
-      // back exactly as it was before anyone typed a pattern. (Over a wire that
-      // spelling would arrive as a no-op — the hazard rowcol.ts documents for
-      // `hidden` — which is a live concern the day dash gets collab.)
-      commit({ op: 'setColumn', sheet: sheet.id, col: col.id, patch: { format: next || undefined } })
-    })
-    fmt.placeholder = '£#,##0.00'
-    row(right, t('Format'), fmt)
-    patternInertNote(right, col.type, typeof col.format === 'string' ? col.format : '')
-
-    // One expression for the WHOLE column. Editing it here beats the prompt()
-    // the grid falls back to, because you can see the column while you type.
-    const formula = text(typeof col.formula === 'string' ? col.formula : '', (v) => {
-      const next = v.trim()
-      if (next === (col.formula ?? '')) return
-      if (!next) {
-        commit({ op: 'setColumn', sheet: sheet.id, col: col.id, patch: { formula: undefined } })
-        return
-      }
-      // The same rule main.ts's formula dialog follows, for the same reason: a
-      // column whose expression now returns text must stop claiming NUMBER, and
-      // a type chosen by hand in the dropdown two rows up must not be undone by
-      // an unrelated edit here. See computedtype.ts.
-      const before = inferComputedType(sheet, col.formula ?? '', col.id)
-      const after = inferComputedType(sheet, next, col.id)
-      commit({
-        op: 'setColumn', sheet: sheet.id, col: col.id,
-        patch: col.type === before.type && after.type !== col.type
-          ? { formula: next, type: after.type }
-          : { formula: next },
+    // One expression for the WHOLE column — shown for a computed column only.
+    if (typeof col.formula === 'string' && col.formula) {
+      const formula = text(col.formula, (v) => {
+        const next = v.trim()
+        if (next === (col.formula ?? '')) return
+        if (!next) {
+          commit({ op: 'setColumn', sheet: sheet.id, col: col.id, patch: { formula: undefined } })
+          return
+        }
+        // The same rule main.ts's formula dialog follows, for the same reason: a
+        // column whose expression now returns text must stop claiming NUMBER, and
+        // a type chosen by hand in the dropdown two rows up must not be undone by
+        // an unrelated edit here. See computedtype.ts.
+        const before = inferComputedType(sheet, col.formula ?? '', col.id)
+        const after = inferComputedType(sheet, next, col.id)
+        commit({
+          op: 'setColumn', sheet: sheet.id, col: col.id,
+          patch: retypePatch(col, before, after, next),
+        })
       })
-    })
-    formula.placeholder = t('Value * Probability')
-    formula.classList.add('dp-mono')
-    row(right, t('Formula'), formula)
+      formula.classList.add('dp-mono')
+      formula.dataset.dpField = 'formula'
+      row(right, t('Formula'), formula)
+    }
 
     row(right, t('Width'), number(col.w ?? 130, 10, (v) => {
       // resizeColumn clamps and rounds — a width is a drag's output, so out of
@@ -554,18 +607,23 @@ export function mountPanels(host: PanelsHost): Panels {
       commit(resizeColumn(sheet, col.id, v))
     }))
 
+    // A total adds numbers up. Shown for the number types — and on any other
+    // column only while one is already set, so it can still be switched off.
     const agg = sheet.totals?.[col.id]
-    const aggValue = totalsChoice(agg)
-    const aggSel = select(
-      [['none', t('none')] as const, ...AGGS.map((a) => [a, t(a)] as const),
-        ...(aggValue === 'custom' ? [['custom', t('custom formula')] as const] : [])],
-      aggValue,
-      (v) => {
-        if (v === 'custom') return              // a hand-written {f} is not ours to rewrite
-        commit(totalsPatch(sheet, col.id, v === 'none' ? null : v as TotalsAgg))
-      },
-    )
-    row(right, t('Total'), aggSel)
+    if (!PRINTS_AS_TYPED.has(col.type) || agg !== undefined) {
+      const aggValue = totalsChoice(agg)
+      const aggSel = select(
+        [['none', t('None')] as const, ...AGGS.map((a) => [a, t(AGG_WORD[a])] as const),
+          ...(aggValue === 'custom' ? [['custom', t('custom formula')] as const] : [])],
+        aggValue,
+        (v) => {
+          if (v === 'custom') return              // a hand-written {f} is not ours to rewrite
+          commit(totalsPatch(sheet, col.id, v === 'none' ? null : v as TotalsAgg))
+        },
+      )
+      aggSel.dataset.dpField = 'total'
+      row(right, t('Total'), aggSel)
+    }
 
     const frozen = readFrozen(sheet)
     const upTo = visibleColumns(sheet).findIndex((c) => c.id === col.id) + 1
@@ -754,7 +812,7 @@ export function mountPanels(host: PanelsHost): Panels {
       `${escHtml(label)}${v === cur ? ' ✓' : ''}</button>`
     const el = popAt(rect,
       `<div class="dx-pop-row">${escHtml(col.name)}</div>` +
-      AGGS.map((a) => item(a, t(a))).join('') +
+      AGGS.map((a) => item(a, t(AGG_WORD[a]))).join('') +
       (cur === 'custom' ? item('custom', t('custom formula')) : '') +
       `<div class="dx-pop-sep"></div>` +
       item('none', t('No total')))
@@ -912,7 +970,13 @@ export function mountPanels(host: PanelsHost): Panels {
     }
   }
 
-  return { toggle, refresh: () => render(true), reveal }
+  function setOverride(o: PanelOverride | null): void {
+    if ((owner?.key ?? null) === (o?.key ?? null) && owner === o) return
+    owner = o
+    render(true)
+  }
+
+  return { toggle, refresh: () => render(true), reveal, setOverride, override: () => owner?.key ?? null }
 }
 
 // --- a popover, placed against a rect ---------------------------------------

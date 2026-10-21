@@ -74,7 +74,7 @@ import type { DocShape } from '../../../kernel/src/sync/crdt.ts';
  */
 const SYNC_HISTORY = ['comments'] as const;
 
-export const TYPE_SHAPE: DocShape = shape('body', null, 'text', ['footnotes'],
+export const TYPE_SHAPE: DocShape = shape('body', null, 'text', ['footnotes', 'signatures'],
   TYPE_FIELDS, historySyncKeys(TYPE_FIELDS, SYNC_HISTORY));
 
 /** The engine bound to bento/type. */

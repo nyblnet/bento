@@ -47,7 +47,7 @@
 import { openDialog } from './dialog.ts'
 import { openSettings, updateWaiting, type SettingsHooks } from './settings.ts'
 import { APP_VERSION } from '../../kernel/src/update.ts'
-import { canWriteInPlace, isEncryptionActive, openedFileName } from '../../kernel/src/save.ts'
+import { canWriteInPlace, isBodySealed, openedFileName } from '../../kernel/src/save.ts'
 import { addVersion, listVersions } from '../../kernel/src/autosave.ts'
 // CIRCULAR, DELIBERATELY, and safe: recovery.ts imports `planReplace` from
 // here. Both directions are used only inside function bodies — nothing at
@@ -188,7 +188,7 @@ let lastVersionAt = 0
  * remembers it for `putRecovery`; this is the second store and the same rule.
  */
 export async function rememberVersion(doc: DashDoc): Promise<void> {
-  if (isEncryptionActive()) return
+  if (isBodySealed()) return
   if (Date.now() - lastVersionAt < VERSION_EVERY_MS) return
   lastVersionAt = Date.now()
   await addVersion(doc)
@@ -298,7 +298,37 @@ export function openAbout(hooks: AboutHooks): void {
   // race silently overwrites the winner.
   card.append(note(t('Properties travel in the file. The title is edited in the top bar.')))
 
-  // --- version history ------------------------------------------------------
+  // VERSION HISTORY AND THE JSON ROUND TRIP MOVED TO THE SAVE MENU, as slides
+  // moved them: they are operations on the document as a FILE, and slides'
+  // Save ▾ is where both apps keep those. About keeps what the workbook IS.
+  card.append(note(t('Copies, version history and the document as JSON: the ▾ beside Save.')))
+
+  // --- the footer -----------------------------------------------------------
+  // The way ACROSS, beside the way out. About and Settings are two halves of
+  // one question people ask in one breath ("what is this thing / how do I make
+  // it speak French"), and a reader who guessed wrong should be one click from
+  // right rather than back in the top bar hunting.
+  const toSettings = d.button(t('Settings'), () => openSettings(hooks))
+  toSettings.title = t('Settings — language, appearance and updates')
+  // …and it carries the update dot, because the badge that brought the reader
+  // to ⓘ has to lead somewhere. The release itself is offered in Settings.
+  if (updateWaiting()) toSettings.classList.add('dx-update-badge')
+  const foot = d.actions(toSettings, d.button(t('Close'), close))
+  foot.classList.add('dx-about-foot')
+  card.append(foot)
+  d.mount()
+}
+
+// --- version history and the document as JSON ----------------------------------
+//
+// Opened from the Save ▾ menu (saveui.ts), where slides keeps the same three
+// commands. Each is its own small dialog rather than a section of About.
+
+/** The local timeline: restore an earlier auto-saved version. */
+export function openVersionHistory(hooks: AboutHooks): void {
+  const { store } = hooks
+  const d = openDialog(t('Version history'))
+  const { card, note, close } = d
   card.append(d.h(t('Version history')))
   const versions = document.createElement('div')
   versions.className = 'dx-about-vers'
@@ -337,131 +367,102 @@ export function openAbout(hooks: AboutHooks): void {
           return
         }
         close()
-        // THE SAME OFFER THE RECOVERY BANNER MAKES, from the same function.
-        // This was a `confirm()` reading "this cannot be undone" — which was a
-        // second answer to a question the app had already answered one way, and
-        // the weaker one: it asks BEFORE, when the reader cannot yet see what
-        // they would be agreeing to, instead of handing them a way back AFTER,
-        // when they can.
+        // THE SAME OFFER THE RECOVERY BANNER MAKES, from the same function —
+        // a way back AFTER, when the reader can see what they agreed to.
         offerUndoRestore(hooks, before, t('Restored the version from {when}.', { when: stamp }))
       })
       return b
     }))
   })
-
-  // --- ways out -------------------------------------------------------------
-  //
-  // TWO BUTTONS NOW, not five. This section used to carry "Save a copy…" and
-  // "Duplicate as new workbook…" as well, both of which the Save menu already
-  // offers — "Save a copy…" under the identical label, and the fork as "Save as
-  // new workbook…". Two doors to one action in one app is how they drift, and
-  // these two had: the menu's fork kept `template: true` and About's did not.
-  // The Save menu keeps them (it is where a reader looks for a file to come out
-  // of the app, and it handles the released file handle and the size
-  // confirmation properly); what stayed here is the thing that is NOT a save at
-  // all — the document as text, for an AI or another tool.
-  card.append(d.h(t('Take it elsewhere')))
-  const outNote = note(t('The whole workbook is plain JSON inside this file — copy it into any tool or AI, and bring the edited JSON back.'))
-  const replaceBtn = d.button(t('Replace from JSON…'), () => openPaste())
-  // Loads a document into the running app, which is the one thing a frozen
-  // workbook must not do — see replaceWorkbook. Disabled rather than silently
-  // refused; the read-only note at the top of the dialog says why.
-  replaceBtn.disabled = store.readOnly
-  card.append(d.actions(
-    d.button(t('Copy document JSON'), () => {
-      // stripped — this lands on a clipboard and then, often, in a chat window
-      void navigator.clipboard?.writeText(JSON.stringify(docForExport(store.doc), null, 2))
-        .then(() => { outNote.textContent = t('Copied — {size} of JSON.', { size: bytes(stats.bytes) }) })
-        .catch(() => { outNote.textContent = t('This browser refused clipboard access.') })
-    }),
-    replaceBtn,
-  ))
-  card.append(outNote)
-  card.append(note(t('A copy, a template or a read-only copy: the ▾ beside Save.')))
-
-  /** The paste panel. A textarea, not `prompt()`: this is a whole workbook. */
-  function openPaste(): void {
-    if (store.readOnly) { outNote.textContent = t('This workbook is open read-only.'); return }
-    if (card.querySelector('.dx-about-paste')) return
-    const ta = document.createElement('textarea')
-    ta.className = 'dx-about-paste'
-    ta.spellcheck = false
-    ta.placeholder = t('Paste bento/dash document JSON here')
-    const go = d.button(t('Replace workbook'), () => {
-      if (!ta.value.trim()) { ta.focus(); return }
-      const res = parseDoc(ta.value)
-      if (!res.ok) {
-        outNote.textContent = t('That is not a bento/dash workbook: {why}',
-          { why: 'detail' in res ? res.detail : res.err })
-        return
-      }
-      // Undo does NOT reach across this. Store.replaceDoc empties both stacks,
-      // so unlike slides there is no ⌘Z back — say so before, not after.
-      if (!confirm(t('Replace this workbook with the pasted JSON? This cannot be undone.'))) return
-      // THE ROOM BELONGS TO THIS FILE, NOT TO THE PASTED TEXT. Content is
-      // replaced; the collaboration credentials are this workbook's and stay.
-      //
-      // Both directions were wrong, and #338 turned the first from rare into
-      // routine by stripping `collab` out of "Copy document JSON":
-      //
-      //   · a STRIPPED paste — now the ordinary AI round trip — carried no
-      //     credentials, so replacing silently ENDED the live session. Measured:
-      //     sharing on / room `w-abc` before, sharing off / room gone after,
-      //     with nothing on screen saying so while peers kept editing.
-      //   · a paste carrying SOMEBODY ELSE'S credentials silently JOINED their
-      //     room. Measured: my room became `w-THEIRS` and my next edit went out
-      //     under their key, with them holding the owner key that can revoke.
-      //
-      // The line is the one #338 draws itself — a saved FILE carrying its own
-      // capability is the design, and pasted text is not a file. So a dropped
-      // or opened workbook still adopts its own room; this does not.
-      //
-      // Not folded into `replaceWorkbook`: the Save menu's fork goes through it
-      // too and mints fresh credentials ON PURPOSE.
-      const keep = (store.doc as { collab?: unknown }).collab
-      const merged = keep === undefined
-        ? res.doc
-        : { ...res.doc, collab: keep } as DashDoc
-      if (!replaceWorkbook(hooks, merged)) {
-        outNote.textContent = t('That workbook has no table sheet to show.')
-        return
-      }
-      close()
-    })
-    const bar = d.actions(go, d.button(t('Cancel'), () => { ta.remove(); bar.remove() }))
-    // BEFORE the footer, not appended to the card: `append` puts it after the
-    // Close button, which means the panel opens below everything and the click
-    // reads as "nothing happened".
-    card.insertBefore(ta, foot)
-    // SAY WHAT IT KEEPS. The paste replaces the content and not the room, which
-    // is the right answer in both directions but is invisible either way — and
-    // a live session quietly ending or quietly moving is exactly the class of
-    // thing this app states rather than leaves to be discovered.
-    if ((store.doc as { collab?: { on?: boolean } }).collab?.on) {
-      card.insertBefore(
-        note(t('Sharing stays with this workbook: the pasted JSON replaces the content, not the live session or its keys.')),
-        foot,
-      )
-    }
-    card.insertBefore(bar, foot)
-    ta.focus()
-    ta.scrollIntoView({ block: 'nearest' })
-  }
-
-  // --- the footer -----------------------------------------------------------
-  // The way ACROSS, beside the way out. About and Settings are two halves of
-  // one question people ask in one breath ("what is this thing / how do I make
-  // it speak French"), and a reader who guessed wrong should be one click from
-  // right rather than back in the top bar hunting.
-  const toSettings = d.button(t('Settings'), () => openSettings(hooks))
-  toSettings.title = t('Settings — language, appearance and updates')
-  // …and it carries the update dot, because the badge that brought the reader
-  // to ⓘ has to lead somewhere. The release itself is offered in Settings.
-  if (updateWaiting()) toSettings.classList.add('dx-update-badge')
-  const foot = d.actions(toSettings, d.button(t('Close'), close))
+  const foot = d.actions(d.button(t('Close'), close))
   foot.classList.add('dx-about-foot')
   card.append(foot)
   d.mount()
+}
+
+/**
+ * "Copy document JSON": the workbook as text, for an AI or another tool.
+ * STRIPPED (`docForExport`) — this lands on a clipboard and then, often, in a
+ * chat window, so no collaboration key rides along. Resolves to the size
+ * copied, or null when the browser refused the clipboard.
+ */
+export async function copyDocJson(doc: DashDoc): Promise<string | null> {
+  const text = JSON.stringify(docForExport(doc), null, 2)
+  try {
+    if (!navigator.clipboard) return null
+    await navigator.clipboard.writeText(text)
+    return bytes(text.length)
+  } catch {
+    return null
+  }
+}
+
+/** "Replace from JSON…": paste a whole workbook back in. */
+export function openReplaceJson(hooks: AboutHooks): void {
+  const { store } = hooks
+  const d = openDialog(t('Replace from JSON…'))
+  const { card, note, close } = d
+  card.append(d.h(t('Replace from JSON…')))
+  const outNote = note(t('The whole workbook is plain JSON inside this file — copy it into any tool or AI, and bring the edited JSON back.'))
+  card.append(outNote)
+  const ta = document.createElement('textarea')
+  ta.className = 'dx-about-paste'
+  ta.spellcheck = false
+  ta.placeholder = t('Paste bento/dash document JSON here')
+  ta.disabled = store.readOnly
+  card.append(ta)
+  // SAY WHAT IT KEEPS: the paste replaces the content and not the room.
+  if ((store.doc as { collab?: { on?: boolean } }).collab?.on) {
+    card.append(note(t('Sharing stays with this workbook: the pasted JSON replaces the content, not the live session or its keys.')))
+  }
+  if (store.readOnly) card.append(note(t('This workbook is open read-only.')))
+  const go = d.button(t('Replace workbook'), () => {
+    // Loads a document into the running app, which is the one thing a frozen
+    // workbook must not do — see replaceWorkbook.
+    if (store.readOnly) { outNote.textContent = t('This workbook is open read-only.'); return }
+    if (!ta.value.trim()) { ta.focus(); return }
+    const res = parseDoc(ta.value)
+    if (!res.ok) {
+      outNote.textContent = t('That is not a bento/dash workbook: {why}',
+        { why: 'detail' in res ? res.detail : res.err })
+      return
+    }
+    // Undo does NOT reach across this. Store.replaceDoc empties both stacks,
+    // so unlike slides there is no ⌘Z back — say so before, not after.
+    if (!confirm(t('Replace this workbook with the pasted JSON? This cannot be undone.'))) return
+    // THE ROOM BELONGS TO THIS FILE, NOT TO THE PASTED TEXT. Content is
+    // replaced; the collaboration credentials are this workbook's and stay.
+    //
+    // Both directions were wrong, and #338 turned the first from rare into
+    // routine by stripping `collab` out of "Copy document JSON":
+    //
+    //   · a STRIPPED paste — now the ordinary AI round trip — carried no
+    //     credentials, so replacing silently ENDED the live session.
+    //   · a paste carrying SOMEBODY ELSE'S credentials silently JOINED their
+    //     room, with them holding the owner key that can revoke.
+    //
+    // The line is the one #338 draws itself — a saved FILE carrying its own
+    // capability is the design, and pasted text is not a file. So a dropped
+    // or opened workbook still adopts its own room; this does not.
+    //
+    // Not folded into `replaceWorkbook`: the Save menu's fork goes through it
+    // too and mints fresh credentials ON PURPOSE.
+    const keep = (store.doc as { collab?: unknown }).collab
+    const merged = keep === undefined
+      ? res.doc
+      : { ...res.doc, collab: keep } as DashDoc
+    if (!replaceWorkbook(hooks, merged)) {
+      outNote.textContent = t('That workbook has no table sheet to show.')
+      return
+    }
+    close()
+  })
+  go.disabled = store.readOnly
+  const foot = d.actions(go, d.button(t('Cancel'), close))
+  foot.classList.add('dx-about-foot')
+  card.append(foot)
+  d.mount()
+  if (!store.readOnly) ta.focus()
 }
 
 /**

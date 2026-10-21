@@ -1,52 +1,44 @@
 /* SPDX-License-Identifier: MIT
    Copyright (c) 2026 The Bento authors
-   The Cell section of the properties panel — three controls panels.css has no
+   The Cell section of the properties panel — the controls panels.css has no
    shape for, and nothing else. Everything that CAN be a `.dp-row` is one: two
    stylesheets describing the same row is how a panel starts to look like two
    panels.
 
-   THE CORNERS COME FROM panels.css, not from the app's --radius. These three
-   controls sit in a column of `.dp-row` fields, and the panel's control radius
-   is 6px (slides') where dash's app-wide --radius is 7px — so a preview at 7
-   beside a pattern field at 6 was a one-pixel disagreement repeated down the
-   Cell section. --dp-radius is declared on `.dp-panel`, so it is the same
-   number the field above is using, by construction rather than by copying. */
+   THE CORNERS COME FROM panels.css, not from the app's --radius: --dp-radius
+   is declared on `.dp-panel`, so a control here uses the same number the field
+   above it does, by construction rather than by copying. */
 
-/* ————— the format preview —————
-   A value, printed the way the chosen pattern prints it. It FILLS the control
-   column that panels.css lays out (`--dp-ctl`) rather than restating 110px, so
-   the section keeps its column when the panel narrows and stacks — a hard 110px
-   here was a second definition of the same measurement, and the two would drift
-   the first time either moved. Monospace-tabular, so switching decimals moves
-   the digits you are looking at rather than the whole string. */
-.dc-preview {
-  width: 100%;
+/* ————— the number-format sample —————
+   A value, printed the way the chosen format prints it. It is an ANSWER, not a
+   control, so it draws no box: the bordered "Shows as" field it replaces read
+   as a third format control beside the preset and the pattern. Monospace-
+   tabular, so changing the decimals moves the digits you are looking at rather
+   than the whole string. */
+.dc-sample {
   min-width: 0;
-  min-height: var(--dp-row, 26px);
-  padding: 3px 7px;
-  border: 1px solid var(--line);
-  border-radius: var(--dp-radius);
-  background: var(--wash);
-  color: var(--ink);
+  color: var(--ink-2);
   font-variant-numeric: tabular-nums;
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 18px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* the cell is empty, so this is a SAMPLE — it must not read as the cell's value */
-.dc-preview-sample { color: var(--muted); font-style: italic; }
+/* the cell is empty, so this is an EXAMPLE — it must not read as the cell's value */
+.dc-sample-eg { color: var(--muted); font-style: italic; }
 
 /* ————— colour, with an off state —————
-   `<input type="color">` always holds a colour, so "no background" cannot be
-   said by the swatch. The × is the off switch; the diagonal slash is what says
-   the swatch is not in effect, since the input still paints its fallback. */
+   `<input type="color">` always holds a colour, so "no colour" cannot be said
+   by the swatch — it used to paint its FALLBACK (a grey ink, a cream fill) at
+   40% under a faint slash, and an unformatted cell read as formatted in review.
+   So an unset well is EMPTY: the swatch is painted transparent and the well
+   shows only the field's own fill, struck through. The × is the off switch. */
 .dc-colour {
   display: flex;
   align-items: center;
   gap: 4px;
-  width: 100%;                          /* the control column — see .dc-preview */
+  width: 100%;                          /* the control column */
   min-width: 0;
 }
 /* The box is THE FIELD's colour well (styles.css); this only sizes. */
@@ -57,15 +49,23 @@
 }
 .dc-colour input[type='color']:disabled { cursor: default; opacity: 0.5; }
 
-/* Not set: the swatch is showing a DEFAULT, not the cell's colour, and it has
-   to say so — otherwise every unstyled cell looks like it was painted. */
+/* Not set: an EMPTY well. `!important` because the engine paints the swatch
+   from the input's value with a style of its own, and only an important author
+   declaration outranks it. */
 .dc-colour-off input[type='color'] {
-  opacity: 0.4;
-  /* an IMAGE over the field's own fill: the `background` shorthand used to
+  /* an IMAGE over the field's own fill: the `background` shorthand would
      reset the fill to transparent along with drawing the strike */
   background-image:
     linear-gradient(to top right,
-      transparent calc(50% - 1px), var(--line-strong) 50%, transparent calc(50% + 1px));
+      transparent calc(50% - 0.75px), var(--muted) 50%, transparent calc(50% + 0.75px));
+}
+.dc-colour-off input[type='color']::-webkit-color-swatch {
+  background: transparent !important;
+  border-color: transparent;
+}
+.dc-colour-off input[type='color']::-moz-color-swatch {
+  background: transparent !important;
+  border-color: transparent;
 }
 
 .dc-clear {

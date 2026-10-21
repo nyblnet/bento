@@ -25,7 +25,7 @@ import { startPresentation } from '../present'
 // serializeFile (plain output) is deliberately NOT imported here: every path
 // in this file writes a real file for a person, so all of them must inherit an
 // active password. serializeAuto is the only encryption-aware serializer.
-import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, hostCan, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, suggestedFileName, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, hostCan, isBodySealed, isEncryptionActive, openedFileName, saveFile, serializeAuto, setEncryptionPassword, suggestedFileName, writeUpdatedFile, writeUpdatedFileAs } from '../save'
 import { createSaveQueue, saveRevision } from '../saving'
 import type { SaveQueue } from '../../../kernel/src/savequeue.ts'
 import { noteSavedFromWeb } from './returngate'
@@ -2650,11 +2650,11 @@ export class Editor {
    * A host with a per-document store (bento/home) refused this deck's recovery
    * copy, so from now on there is NO crash backstop for it. Say so, once, where
    * the save status shows, and stop the unsaved dot's tooltip claiming the work
-   * is "kept in this browser". Never for an encrypted deck: those are never
-   * snapshotted, so there was no backstop to lose.
+   * is "kept in this browser". Never for a sealed deck (a password, or the
+   * identity seal): those are never snapshotted, so there was no backstop to lose.
    */
   private noticeRecoveryOff(docId: string) {
-    if (docId !== this.store.doc.docId || isEncryptionActive() || this.recoveryOffSaid.has(docId)) return
+    if (docId !== this.store.doc.docId || isBodySealed() || this.recoveryOffSaid.has(docId)) return
     this.recoveryOffSaid.add(docId)
     this.lastBackupAt = 0
     this.dirtyDot.title = canWriteInPlace()
@@ -2672,10 +2672,11 @@ export class Editor {
   private async runAutosave() {
     const doc = this.store.doc
     if (doc.readonly) return
-    // Never write an encrypted deck's plaintext to IndexedDB; its file
-    // write-back below stays encrypted via serializeAuto.
+    // Never write a sealed deck's plaintext to IndexedDB (sealed = a password
+    // OR the identity seal); its file write-back below stays sealed via
+    // serializeAuto.
     let snapshotted = false
-    if (!isEncryptionActive()) {
+    if (!isBodySealed()) {
       // only true if it REALLY stored — see putRecovery; no IndexedDB (Safari
       // private browsing, some file:// contexts) must not read as "backed up"
       snapshotted = await putRecovery(doc)
@@ -2727,6 +2728,15 @@ export class Editor {
 
   private async checkRecovery() {
     const doc = this.store.doc
+    // A sealed document never offers or keeps an unsealed snapshot: anything
+    // stored for this docId came from an earlier session that was not sealed,
+    // so it is deleted (this docId only), never shown. Boot has already set the
+    // seal (a password at the gate, the identity seal before the app ran).
+    if (isBodySealed()) {
+      await clearRecovery(doc.docId)
+      await clearVersions(doc.docId)
+      return
+    }
     const snap = await getRecovery(doc.docId)
     if (!snap) return
     // A snapshot is foreign input (restoregate.ts): offered only if it is a
@@ -2971,7 +2981,8 @@ export class Editor {
 
   /** Browse and restore the locally-kept auto-save timeline for this deck. */
   private async openVersionHistory() {
-    const versions = await listVersions(this.store.doc.docId)
+    // a sealed document has no timeline here (checkRecovery deleted any)
+    const versions = isBodySealed() ? [] : await listVersions(this.store.doc.docId)
     document.querySelector('.ed-about-overlay')?.remove()
     const overlay = div('ed-about-overlay')
     const box = div('ed-about ed-version-box')
@@ -3172,7 +3183,7 @@ export class Editor {
       // staged language packs are in the bytes now — stop calling them pending
       markFileSaved()
       // record a recovery baseline + a version checkpoint at each manual save
-      if (!isEncryptionActive()) { void putRecovery(this.store.doc); void addVersion(this.store.doc); this.lastVersionAt = Date.now() }
+      if (!isBodySealed()) { void putRecovery(this.store.doc); void addVersion(this.store.doc); this.lastVersionAt = Date.now() }
       // Saving is the opt-in: a named, saved deck is "live by default" from
       // now on (the recipient of a copy already joins on open). Connect this
       // session too so author and recipient meet without another click.

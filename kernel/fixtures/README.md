@@ -23,6 +23,13 @@ bytes end to end. Reference: `kernel/src/recovery.ts`. Rig:
 - **Argon2id first.** Check your Argon2id against the `rfc9106` row (RFC 9106
   §5.3, with its own parameters) before trusting it. Then use OUR parameters:
   version 0x13, p = 1, m = 64 MiB, t = 3, a 32-byte tag, 16-byte salts.
+- **Check the memory BEFORE allocating; don't count on catching the failure.**
+  On Android, catching `OutOfMemoryError` around Argon2id does NOT fail closed.
+  On a 48 MiB heap, the runtime's own threads hit the OOM and the process
+  died. Measure the remaining heap first and refuse unless it covers the
+  65,536 blocks plus headroom (each 1 KiB block costs 1,040 bytes on ART).
+  iOS and desktop have their own memory behaviour, but the rule is the same:
+  decide first, then allocate. (home-android, measured)
 - **The code is 17 symbols: 16 data symbols and a check symbol**, printed
   `XXXX-XXXX-XXXX-XXXX-C`. Data symbols are Crockford base32 (no I, L, O, U).
   The check is the 80-bit value mod 37, with `* ~ $ = U` for 32 to 36. Every one

@@ -89,6 +89,7 @@ import {
 import {
   internAsset, prepareImage, humanBytes, IMAGE_EMBED_BUDGET, MEDIA_EMBED_BUDGET, blobToDataUri,
 } from './assets'
+import { setTabTitle } from './tabtitle.ts'
 
 const CTRL = navigator.platform.toLowerCase().includes('mac') ? 'metaKey' : 'ctrlKey'
 
@@ -380,7 +381,7 @@ export class Editor {
     title.setAttribute('aria-label', t('Space name'))
     title.addEventListener('input', () => {
       this.store.runEdit('__title', () => { this.store.doc.title = title.value })
-      document.title = `${title.value} — bento/spaces`
+      setTabTitle(title.value)
     })
     this.statusEl = el('span', 'sp-status')
 
@@ -426,10 +427,15 @@ export class Editor {
     //   · About is reached from the wordmark, as in slides.
     //
     // A command slides has no equivalent for goes where slides would put one
-    // of its kind (DECISIONS 2026-09-26): Graph is a view, so it is a bar
-    // button beside Reading view; "Make this page an issue" acts on one page,
-    // so it is in the page's own menu; Import Markdown… is the document
-    // arriving as data, so it sits under Save beside Replace from JSON.
+    // of its kind (DECISIONS 2026-09-26): "Make this page an issue" acts on
+    // one page, so it is in the page's own menu; Import Markdown… is the
+    // document arriving as data, so it sits under Save beside Replace from JSON.
+    //
+    // THE BAR CARRIES LESS THAN IT DID (maintainer, 2026-10-20): Reading view
+    // is a floating button at the page's bottom-end corner, where slides keeps
+    // its Slideshow pill; Properties is the inspector's own chevron, `]` and,
+    // folded, a row in ⋯; Graph is a view of the TREE, so it sits in the page
+    // list's header. Search stays.
     type BarAction = {
       icon: IconName
       label: string
@@ -438,12 +444,6 @@ export class Editor {
       keep?: (b: HTMLButtonElement) => void
     }
     const barActions: BarAction[] = [
-      { icon: 'eye', label: t('Reading view'),
-        run: () => this.toggleReading(),
-        // named so a sealed copy can take it away: there is no editing to go
-        // back to, so the eye is absent rather than inert (styles.css)
-        keep: (b) => { this.readB = b; b.classList.add('sp-readtoggle') } },
-      { icon: 'graph', label: t('Graph'), run: () => this.openGraph() },
       { icon: 'print', label: t('Export PDF (print)'), kbd: keys('mod', 'P'), run: () => this.openPrint() },
     ]
 
@@ -497,10 +497,7 @@ export class Editor {
           m.separator()
         }
         if (!this.sealed) row(m, { icon: ICONS.panelRight, label: t('Properties'), kbd: ']', run: () => this.toggleInsp() })
-        for (const a of barActions) {
-          if (this.sealed && a.icon === 'eye') continue
-          row(m, { icon: ICONS[a.icon], label: a.label, kbd: a.kbd, run: a.run })
-        }
+        for (const a of barActions) row(m, { icon: ICONS[a.icon], label: a.label, kbd: a.kbd, run: a.run })
         // The globe's list, one tap further: a menu cannot hold a menu, so
         // the row opens the same list as its own popup (a sheet on a phone).
         const moreB = m.trigger
@@ -550,9 +547,6 @@ export class Editor {
     history.append(this.undoB, this.redoB)
     const saveGroup = el('div', 'sp-split')
     saveGroup.append(saveB, saveMore)
-    const inspB = iconBtn('panelRight', t('Properties — show or hide this block’s settings'),
-      () => this.toggleInsp())
-    inspB.classList.add('sp-insp-toggle')
 
     // Slides' layout, group for group (chrome-unification §2.1): LEFT is the
     // document (mark · title · history), then the insert tools — here the one
@@ -561,7 +555,7 @@ export class Editor {
     // ⋯ closes the row once the bar has folded — only then, as in slides — and
     // last is where slides' folded bar puts it.
     const right = el('div', 'sp-group sp-group-right')
-    right.append(search, ...inlineSecondary, inspB, this.liveSlot, saveGroup, lang, helpB, more)
+    right.append(search, ...inlineSecondary, this.liveSlot, saveGroup, lang, helpB, more)
 
     // The status goes AFTER the history and the insert tools, never before.
     // It is transient text that grows from nothing to a whole sentence, and
@@ -615,7 +609,20 @@ export class Editor {
       widthKey: 'bento-sp-insp', closedKey: 'bento-sp-insp-closed',
       show: t('Show properties (])'), hide: t('Hide properties (])'),
     })
-    body.append(this.pagesPanel.root, this.main, this.inspPanel.root)
+    // READING VIEW FLOATS, as slides' Slideshow pill does: the same pill, in
+    // the same corner — bottom-END of the page (slides' bottom-right; spaces
+    // has no zoombar to share it with). The corner is a zero-width box after
+    // the page, so the pill hangs off the page's own edge and moves with the
+    // properties panel instead of covering it. It is the way back out of
+    // reading view as well as in, so it stays there; a SEALED copy has no
+    // editing to go back to, so there it is absent (styles.css).
+    const corner = el('div', 'sp-corner')
+    this.readB = labelBtn(ICONS.eye, t('Reading view'), t('Reading view'), () => this.toggleReading())
+    this.readB.classList.add('sp-readfab', 'sp-readtoggle')
+    this.readB.setAttribute('aria-pressed', String(this.reading))
+    if (this.reading) this.readB.classList.add('sp-on')
+    corner.append(this.readB)
+    body.append(this.pagesPanel.root, this.main, corner, this.inspPanel.root)
     this.root.append(bar, body)
 
     // WHICH BLOCK THE PANEL MEANS. Capture-phase on the page, because the
@@ -736,7 +743,8 @@ export class Editor {
    *     page list shut on the desktop, for good — the bug `closeDrawer` exists
    *     to prevent. So no `storageKey`: the editor writes the reader's own keys
    *     (`bento-sp-pane`, `bento-sp-insp` and their `-closed`) and only when the
-   *     panel is a column. The keys are the ones every reader already has, so
+   *     change was made to a column (not merely when the viewport now is one —
+   *     see `wasDrawer` below). The keys are the ones every reader already has, so
    *     nothing is migrated and nobody's layout resets.
    *   · The SCRIM behind a drawer (the primitive has none): a drawer you can
    *     only shut from the button that opened it is one people leave open over
@@ -756,10 +764,34 @@ export class Editor {
     p.setWidth(o.width)
     p.resizer.title = t('Drag to resize · double-click to reset')
     const chev = p.resizer.querySelector<HTMLElement>('.bkp-toggle')
+    // GATED ON THE MODE THE CHANGE CAME FROM, not on the viewport now. Asking
+    // only "is this a column?" let a phone drawer's state leak into the desktop
+    // keys: crossing out of drawer width, the primitive fires onChange with the
+    // drawer's collapsed state still in force (it boots shut, and the scrim or
+    // a followed page shuts it again), the media query already says column, and
+    // that state was written as the reader's desktop choice — measured: a 390
+    // session, any drawer close or none at all, then a resize to 1440, left
+    // `bento-sp-pane-closed` and `bento-sp-insp-closed` at '1' and both columns
+    // shut on every later load. So the panel remembers which mode it was last
+    // in and the desktop preference (`desk`), writes only a change made AS a
+    // column, and on the way back out of drawer width restores `desk` rather
+    // than keeping the drawer's state.
+    let wasDrawer = this.isDrawer()
+    let desk = o.collapsed
     const sync = () => {
       const label = p.collapsed ? o.show : o.hide
       if (chev) { chev.title = label; chev.setAttribute('aria-label', label) }
-      if (!this.isDrawer()) {
+      const drawer = this.isDrawer()
+      const crossed = drawer !== wasDrawer
+      wasDrawer = drawer
+      if (crossed && !drawer && p.collapsed !== desk) {
+        // back to a column: put the desktop preference back. collapse/expand
+        // fires onChange again, and that pass (no crossing now) writes it.
+        if (desk) p.collapse(); else p.expand()
+        return
+      }
+      if (!drawer && !crossed) {
+        desk = p.collapsed
         try {
           localStorage.setItem(o.widthKey, String(p.width))
           // '0' is OPEN and '1' is shut, for both panels: the page list reads
@@ -966,7 +998,14 @@ export class Editor {
       fill: (m) => this.pageRows(m),
     })
     split.append(plus, this.newPageMenu.root)
-    head.append(split)
+    // GRAPH IS A VIEW OF THE TREE, so it sits on the tree's header (maintainer,
+    // 2026-10-20) — beside ＋ ▾, and still there in reading view, where ＋ ▾
+    // is not: a reader uses the graph to find their way.
+    const graphB = iconBtn('graph', t('Graph'), () => { this.closeDrawer(); this.openGraph() })
+    graphB.classList.add('sp-graphbtn')
+    const acts = el('div', 'sp-side-acts')
+    acts.append(graphB, split)
+    head.append(acts)
     this.sidebar.append(head)
 
     const list = el('ul', 'sp-tree')
@@ -2087,12 +2126,13 @@ export class Editor {
   }
 
   /**
-   * MONTH ⇄ TIMELINE, the calendar's own second shape.
+   * MONTH ⇄ AGENDA, the calendar's own second shape (stored as `span:
+   * 'timeline'` — the agenda's on-disk name; see calendar.ts CAL_SPANS).
    *
    * A parameter of one layout, like `groupBy` — not a sixth entry in the layout
    * cycle, whose cost is one click for everybody every time they pass it. Same
    * writer discipline as every other view key: `month` is the DEFAULT, so it is
-   * stored as an ABSENT key and a view toggled to the timeline and back is
+   * stored as an ABSENT key and a view toggled to the agenda and back is
    * byte-identical to one nobody touched.
    */
   private toggleViewSpan(blockId: string): void {

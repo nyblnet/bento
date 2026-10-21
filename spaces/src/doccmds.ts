@@ -20,7 +20,8 @@
 // out, a page as its own space) sits in the slot of its KIND — exports with
 // the export, Import beside Replace from JSON, the two ways a document arrives.
 
-import { setEncryptionPassword, isEncryptionActive } from '../../kernel/src/save.ts'
+import { setEncryptionPassword, isEncryptionActive, isBodySealed } from '../../kernel/src/save.ts'
+import { setTabTitle } from './tabtitle.ts'
 import { clearVersions, clearRecovery, listVersions, type Snapshot } from '../../kernel/src/autosave.ts'
 import type { Dialog } from '../../kernel/src/ui/dialog.ts'
 import { t } from './i18n'
@@ -65,6 +66,8 @@ export function saveRows(m: Menu, h: DocHost): void {
   row(m, { icon: ICONS.markdown, label: t('Export as Markdown…'), desc: t('Every page, as one .md file'), run: () => h.exportMarkdown() })
   row(m, { icon: ICONS.page, label: t('Export page as a space…'), desc: t('One page and what is under it, as its own file'), run: () => h.exportSpace() })
   h.moreExports?.(m)
+  // isEncryptionActive, not isBodySealed: this is the PASSWORD UI. Change and
+  // remove act on a password, and an identity-sealed space has none.
   if (isEncryptionActive()) {
     row(m, { icon: ICONS.lock, label: t('Change password…'), desc: t('Takes effect on the next save'), off: ro, run: () => openPassword(h) })
     row(m, { icon: ICONS.lock, label: t('Remove password…'),
@@ -164,6 +167,7 @@ function openPassword(h: DocHost): void {
       if (!a.value) { err.textContent = t('Password'); a.focus(); return }
       if (a.value !== b.value) { err.textContent = t('Passwords do not match'); b.focus(); return }
       setEncryptionPassword(a.value)
+      setTabTitle(h.store.doc.title)
       await clearVersions(h.store.doc.docId)
       await clearRecovery(h.store.doc.docId)
       close()
@@ -180,6 +184,7 @@ function openRemovePassword(h: DocHost): void {
     body.append(el('p', 'sp-note', t('The next save writes this space as plain, readable JSON — anybody who opens the file can read every page.')))
     body.append(actions(button(t('Cancel'), close), button(t('Remove the password'), () => {
       setEncryptionPassword(null)
+      setTabTitle(h.store.doc.title)
       close()
       h.notice(t('Password removed. Save to write the space unencrypted.'))
     }, true)))
@@ -198,6 +203,7 @@ function openHistory(h: DocHost): void {
     const render = (versions: Snapshot[]): void => {
       list.textContent = ''
       if (!versions.length) {
+        // isEncryptionActive, not isBodySealed: this note names the password.
         list.append(el('p', 'sp-note', isEncryptionActive()
           ? t('This space is encrypted, so no versions are kept.')
           : t('No versions yet — they build up as you write and save.')))
@@ -225,7 +231,9 @@ function openHistory(h: DocHost): void {
       }
     }
     render([])
-    void listVersions(h.store.doc.docId).then(render).catch(() => { /* no store, no history */ })
+    // a sealed space lists nothing: any entry for it is a plaintext copy an
+    // unsealed session left, which boot deletes (main.ts offerRecovery)
+    if (!isBodySealed()) void listVersions(h.store.doc.docId).then(render).catch(() => { /* no store, no history */ })
   }))
 }
 

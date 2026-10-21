@@ -847,5 +847,92 @@
   },
   "saTaken": {
     "message": "”$1” on jo olemassa. Valitse toinen nimi."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Henkilöllisyytesi jakamista ja reaaliaikaisia asiakirjoja varten. Se on tässä selaimessa; käyttöönotto luo pääsyavaimen ja palautuskoodin, joilla saat sen takaisin."
+  },
+  "setIdNone": {
+    "message": "Tässä selaimessa ei ole vielä Bento ID:tä."
+  },
+  "setIdCreate": {
+    "message": "Luo Bento ID…"
+  },
+  "setIdLocal": {
+    "message": "Bento ID on otettu käyttöön tässä selaimessa. Seuraavaksi vahvistat sähköpostiosoitteesi."
+  },
+  "idSetupTitle": {
+    "message": "Luo Bento ID"
+  },
+  "idSetupLead": {
+    "message": "Bento ID:n avulla ne, joiden kanssa jaat, tietävät että kyse on sinusta. Käyttöönotto luo pääsyavaimen ja palautuskoodin, joilla saat sen takaisin toisella laitteella."
+  },
+  "idSetupLight": {
+    "message": "Selainlaajennuksessa avaimesi säilytetään tässä selainprofiilissa. Laajennuksen poistaminen poistaa ne, joten pidä pääsyavaimesi ja palautuskoodisi tallessa."
+  },
+  "idSetupLabel": {
+    "message": "Tämän selaimen nimi"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Ota pääsyavain käyttöön"
+  },
+  "idWorking": {
+    "message": "Odotetaan pääsyavaintasi…"
+  },
+  "idDeriving": {
+    "message": "Luodaan palautuskoodia ($1/2)…"
+  },
+  "idCodeTitle": {
+    "message": "Palautuskoodisi"
+  },
+  "idCodeLead": {
+    "message": "Kirjoita se ylös tai tulosta se ja säilytä turvallisessa paikassa. Se näytetään vain tämän kerran, ja se on tiesi takaisin, jos menetät pääsyavaimesi."
+  },
+  "idCodeConfirm": {
+    "message": "Kirjoita koodi vahvistaaksesi, että se on tallessa"
+  },
+  "idCodePrint": {
+    "message": "Tulosta"
+  },
+  "idCodeSaved": {
+    "message": "Olen tallentanut sen"
+  },
+  "idCodeMismatch": {
+    "message": "Tämä ei ole yllä näkyvä koodi. Tarkista se ja yritä uudelleen."
+  },
+  "idCodeTypo": {
+    "message": "Koodissa on kirjoitusvirhe: merkki on väärä tai puuttuu."
+  },
+  "idNoPrf": {
+    "message": "Pääsyavaimesi ei voi avata Bento ID:täsi muilla laitteilla, joten tämä palautuskoodi on ainoa tiesi takaisin."
+  },
+  "idNoCode": {
+    "message": "Tämä laite ei voi luoda palautuskoodia, joten pääsyavain on ainoa tiesi takaisin: jos menetät sen, menetät tämän Bento ID:n. Voit luoda palautuskoodin myöhemmin toisella laitteella."
+  },
+  "idDoneTitle": {
+    "message": "Bento ID on otettu käyttöön"
+  },
+  "idDoneLead": {
+    "message": "Se on valmis tässä selaimessa. Seuraavaksi vahvistat sähköpostiosoitteesi."
+  },
+  "idDone": {
+    "message": "Valmis"
+  },
+  "idErrCancelled": {
+    "message": "Pääsyavainpyyntö peruttiin tai se vanhentui. Pidä tämä ikkuna edessä ja yritä uudelleen."
+  },
+  "idErrPermission": {
+    "message": "Pääsyavaimesi tarvitsee pääsyn sivustoon bento.page. Salli se, kun Chrome kysyy, ja yritä uudelleen."
+  },
+  "idErrFailed": {
+    "message": "Jokin meni pieleen, eikä mitään tallennettu. Yritä uudelleen."
+  },
+  "idErrNoWayBack": {
+    "message": "Mitään ei otettu käyttöön: pääsyavaimesi ei voi avata Bento ID:täsi eikä tämä laite voi luoda palautuskoodia, joten takaisin ei olisi mitään tietä."
   }
 }

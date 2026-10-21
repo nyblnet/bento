@@ -1,0 +1,33 @@
+/* SPDX-License-Identifier: MIT
+   Copyright (c) 2026 The Bento authors
+   The chart editor's series list, in the properties panel. Slides' series row
+   (.ed-series-row) is the reference: a colour, the name, a remove. */
+
+.dce-series {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  font-size: 12.5px;
+}
+.dce-series-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dce-colour { width: 34px; flex: 0 0 auto; }
+.dce-rm {
+  font: inherit;
+  font-size: 11.5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 1px 6px;
+}
+.dce-rm:hover:not(:disabled) { background: var(--panel); color: var(--ink); }
+.dce-rm:disabled { opacity: .35; cursor: default; }
+.dce-add { width: 100%; margin: 4px 0 2px; }

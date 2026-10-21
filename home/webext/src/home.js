@@ -19,6 +19,7 @@ import { learnPrefix, prefixes, recentOpened, GRANT, get, put } from './db.js'
 import { placeFolder, scanDisk, fileUrl, blockedFolders } from './place.js'
 import { listFileGrants, addFileGrant, dropFileGrant, handleIsPath, downloadsUnusable, setDownloadsUnusable } from './filegrant.js'
 import { startInFor } from './grantflow.js'
+import { loadSelf, publicView } from './id/keystore.js'
 import { checkForUpdate, pendingUpdate, isSelfManaged, autoCheckEnabled, setAutoCheck } from './update.js'
 import {
   CONFIG_KEY, ALLOWED_KEY, MODELS_KEY, BUILTIN_KEY, PROVIDERS, normalizeConfig, builtinAvailability,
@@ -1662,6 +1663,29 @@ async function renderSettings() {
   tsel.addEventListener('change', () => { globalThis.bentoTheme?.set(tsel.value) })
   trow.appendChild(tsel)
   theme.appendChild(trow)
+
+  // --- Bento ID (bento/connect). Shown only in an UNPACKED install until the
+  // directory exists: setup works on this device, but a Bento ID can't yet be
+  // verified or used anywhere, and a store user shouldn't be offered a dead end.
+  let devInstall = false
+  try { devInstall = (await chrome.management.getSelf())?.installType === 'development' } catch { devInstall = false }
+  if (devInstall) {
+    const idSec = section(t('setIdTitle'), t('setIdSub'))
+    const self = publicView(await loadSelf().catch(() => null))
+    const p = document.createElement('p')
+    p.className = 'dim'
+    if (!self) {
+      p.textContent = t('setIdNone')
+      const btn = document.createElement('button')
+      btn.className = 'btn'
+      btn.textContent = t('setIdCreate')
+      btn.addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('src/setup.html') }))
+      idSec.append(p, btn)
+    } else {
+      p.textContent = t('setIdLocal')
+      idSec.append(p)
+    }
+  }
 
   // --- the assistant: where a chat about a deck goes, and which decks may ask
   const asst = section(t('setAsstTitle'), t('setAsstSub'))

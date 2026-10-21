@@ -1,0 +1,346 @@
+# validate, spaces slice: bento/spaces: install, typecheck, shell + splice gate, and the spaces rigs.
+#
+# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# action as steps INSIDE that one job, on the same runner, after the slices
+# listed before it there — so what earlier slices installed and built is on
+# disk here. A failing step here fails `validate` and blocks the merge.
+#
+# Add a new rig's step to the slice of the zone that owns the rig, at the
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
+
+name: validate-spaces
+description: validate, spaces slice (runs inside the required validate job)
+runs:
+  using: composite
+  steps:
+    - name: Spaces save revisions
+      # Typing runs and remote changes invalidate in-flight saves even while dirty.
+      shell: bento-step {0}
+      run: node scripts/test-spaces-save-revisions.ts
+
+    # spaces: a second app proving the kernel seam — same pipeline, same gate.
+    - name: Install (spaces)
+      working-directory: spaces
+      shell: bento-step {0}
+      run: npm ci
+
+    - name: Typecheck (spaces)
+      working-directory: spaces
+      shell: bento-step {0}
+      run: node_modules/.bin/tsc -b
+
+    - name: Build single-file shell (spaces)
+      working-directory: spaces
+      shell: bento-step {0}
+      run: npm run build:single
+
+    - name: Splice conformance gate (spaces)
+      shell: bento-step {0}
+      run: node scripts/shell-gate.mjs spaces/dist-single/Bento_Spaces.bento.html
+
+    - name: Spaces i18n packed table is current
+      # The per-locale catalogs are the source of truth; packed.ts is
+      # generated and is what ships inside every saved file. A core catalog
+      # cannot be corrected without a release, so an incomplete one fails the
+      # build rather than shipping a half-translated interface.
+      shell: bento-step {0}
+      run: node scripts/build-spaces-i18n.mjs --check
+
+    - name: Spaces invite rig
+      # "Invite someone…" was `saveAs('copy')`, which serializes store.doc —
+      # so everyone invited to a space received `collab.ownerPriv`, the room's
+      # ROOT key: they could write, and they could revoke the person who
+      # invited them. Nothing about the copy looked wrong. This runs the real
+      # share functions against real WebCrypto keys and asserts on the bytes:
+      # the owner private key appears NOWHERE in an invite, the invite is a
+      # separate keypair that the owner actually signed (verified the way the
+      # relay verifies it), and a view-only copy holds no signing key at all.
+      # (Bundled: the kernel transport uses parameter properties, which node's
+      # strip-only TypeScript loader refuses.)
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-spaces-invite.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-spaces-invite.mjs"
+        node "$RUNNER_TEMP/test-spaces-invite.mjs"
+
+    - name: Spaces copy-tier rig
+      # Every copy of a space is built by the kernel's copy table
+      # (docfields.ts projectForCopy) over spaces' exhaustive field map. This
+      # runs each real builder against one source carrying every class of
+      # field, every collab secret, in-file history and an undeclared key, and
+      # asserts the EXACT top-level key set each emits: no history or unknown
+      # key in a reader copy or Copy JSON, history kept in an invite, both
+      # kept in a duplicate. (Bundled: share.ts imports the kernel transport.)
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-spaces-copytiers.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-spaces-copytiers.mjs"
+        node "$RUNNER_TEMP/test-spaces-copytiers.mjs"
+
+    - name: Spaces reading-copy rig
+      # "Save a reading copy…" is the file you hand to somebody who will not
+      # edit it, and its whole value is in what the bytes do NOT contain. So
+      # this asserts on the serialized document, not on "the strip function
+      # ran": no room, no read key, no owner/writer/invite private key
+      # anywhere in the text, no comment thread (page-level, block-level or
+      # reply), no history, and the readonly flag set. Prev/Next follows the
+      # tree's order. (The field-by-field key set and the mutation controls
+      # are the copy-tier rig's.) (Bundled: share.ts imports the kernel
+      # transport.)
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-spaces-reading.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-spaces-reading.mjs"
+        node "$RUNNER_TEMP/test-spaces-reading.mjs"
+
+    - name: Spaces undo rig
+      # Every checkpoint used to stringify the WHOLE document: measured on a
+      # 200-page, 2.5 MB handbook, fifty edits left an undo depth of NINE,
+      # because nine snapshots exhaust the 24 MB budget. A typing run now
+      # records only its PAGE. That is fast and deep — and it is only correct
+      # while the mutation touched nothing else, so `doc` stays the default
+      # and this rig covers the cases where a wrong scope silently loses
+      # work: mixed scopes, interleaved undo/redo, and two pages edited in
+      # turn. (Bundled: store.ts imports './model' extensionless.)
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-spaces-undo.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-spaces-undo.mjs"
+        node "$RUNNER_TEMP/test-spaces-undo.mjs"
+
+    - name: Spaces restore-gate rig
+      # The recovery snapshot and every History entry live in IndexedDB, which
+      # every file:// document shares, so restore is foreign input. Like
+      # slides' restore gate: an entry naming another space is refused, it
+      # never brings collab/readonly/template, block html is sanitized, and
+      # junk, frozen, __proto__ and oversized entries apply nothing.
+      # (Bundled: store.ts imports './model' extensionless.)
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-spaces-restore-gate.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-spaces-restore-gate.mjs"
+        node "$RUNNER_TEMP/test-spaces-restore-gate.mjs"
+
+    - name: Spaces restore directions rig (several timezones)
+      # Every whole-document restore resolves through the kernel's
+      # applyRestore over one rule set (spaces/src/store.ts RESTORE_RULES):
+      # undo/redo, version restore, Replace from JSON and loadDoc go 'back'
+      # (history kept live), the recovery banner goes 'recover' (revisions
+      # follow the snapshot, the trail unions by day without counting a day
+      # twice). Undo keeps the asset pool its checkpoints omit. The trail
+      # hook does day arithmetic on labels, hence the timezone loop.
+      # (Bundled: store.ts imports './model' extensionless.)
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-spaces-restore.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-spaces-restore.mjs"
+        for tz in UTC Europe/Berlin Pacific/Kiritimati Pacific/Niue; do
+          echo "--- $tz"
+          TZ=$tz node "$RUNNER_TEMP/test-spaces-restore.mjs"
+        done
+
+    - name: Spaces in-file history rig
+      # doc.revisions (spaces/src/history.ts): every entry is the kernel's
+      # Revision envelope with the patch under body; what it covers is the
+      # field map's content class minus assets (footnotes, design, templates
+      # included); restore(N) is byte-identical to what was saved at N and
+      # goes through the restore gate; history is a log undo never un-records.
+      # (Bundled: store.ts imports './model' extensionless.)
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-spaces-history.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-spaces-history.mjs"
+        node "$RUNNER_TEMP/test-spaces-history.mjs"
+
+    - name: Spaces agent-surface rig
+      # agent.ts is ~900 lines and shipped with no coverage at all: two of the
+      # five defects an adversarial review found in round 2 lived here,
+      # including a walk over author-supplied parent links that never
+      # returned. What this pins is what makes the surface trustworthy —
+      # validate() SILENT on documents that are correct but unusual (a false
+      # positive teaches an agent to ignore warnings), every write verb
+      # refusing what it cannot honour, no verb producing a document the app
+      # itself could not produce, and every walk terminating. The termination
+      # probes run in child processes with timeouts, because a hang cannot be
+      # reported by the process it hangs.
+      shell: bento-step {0}
+      run: node scripts/test-spaces-agent.ts
+
+    - name: Spaces journal rig (several timezones)
+      # Every part of a daily note that can be wrong is wrong QUIETLY and on
+      # someone else's machine: "today" in UTC is the wrong day for hours at
+      # a time outside Greenwich, adding 86,400,000 ms is not adding a day on
+      # the two DST boundaries, and `new Date('2026-08-06')` is UTC midnight
+      # by spec. A date test that only ever runs in one timezone has not been
+      # run — so this runs in five, including a half-hour DST offset.
+      shell: bento-step {0}
+      run: |
+        for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati Australia/Lord_Howe; do
+          echo "--- $tz"
+          TZ=$tz node scripts/test-spaces-journal.ts
+        done
+
+    - name: Spaces timeline and workload rig (several timezones)
+      # A chart is a picture of data that came out of a file somebody mailed
+      # you, and every way it can be wrong is a way it stays silent about it:
+      # a bar in the wrong month still looks like a bar. Half of what this rig
+      # asserts is a date, so it runs in five timezones for the reasons
+      # journal.ts records — including a half-hour DST offset.
+      shell: bento-step {0}
+      run: |
+        for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati Australia/Lord_Howe; do
+          echo "--- $tz"
+          TZ=$tz node scripts/test-spaces-gantt.ts
+        done
+
+    - name: Magic notes evaluator (several timezones)
+      # Two failure modes, and the second is what would make the feature worse
+      # than not having it: a WRONG answer (silent, confident, in somebody's
+      # notes), and an answer where there should be none — "Meet Ana at 3" is
+      # a sentence. The parser must consume the whole line or return nothing.
+      # Dates run in several timezones for the reasons journal.ts records.
+      shell: bento-step {0}
+      run: |
+        for tz in UTC Europe/Berlin America/Los_Angeles Pacific/Kiritimati; do
+          echo "--- $tz"
+          TZ=$tz node scripts/test-spaces-calc.ts
+        done
+
+    - name: Trail, periods and progress charts (several timezones)
+      # A trail row's key is a LOCAL day, so the whole bug class here is the
+      # one the journal rig exists for. Kiritimati (UTC+14) and Niue (UTC-11)
+      # bracket every hour where "which day is it" has two answers. The rest
+      # of the rig is behavioural: it writes rows, draws the charts, and
+      # asserts that a gap draws as a gap and never as a zero.
+      # (Bundled: it reaches store.ts, whose imports are extensionless.)
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-spaces-trail.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-spaces-trail.mjs"
+        for tz in UTC Europe/Berlin Pacific/Kiritimati Pacific/Niue; do
+          echo "--- $tz"
+          TZ=$tz node "$RUNNER_TEMP/test-spaces-trail.mjs"
+        done
+
+    - name: Spaces Markdown round-trip rig
+      # The About dialog promises, in eight languages, that "a space is never
+      # a dead end … every page exports as Markdown". This is that sentence,
+      # checked: the starter space is exported and read back, and no page may
+      # come back with materially less text than it went in with, nor may a
+      # single block vanish entirely. Block TYPES are deliberately not
+      # asserted here — Markdown has no toggle, media embed or board, so a toggle
+      # leaving as a bullet is the format being honest, not a bug (the strict
+      # rig below holds each type to its own bar).
+      # (Bundled: the app's imports are extensionless.)
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-spaces-roundtrip.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-spaces-roundtrip.mjs"
+        node "$RUNNER_TEMP/test-spaces-roundtrip.mjs"
+
+    - name: Spaces Markdown strict rig
+      # The round-trip rig above checks WORDS; this checks TYPES. Every
+      # registered block type is exported and read back, and must return as
+      # the same JSON (ids aside) and re-export to the same text — or be
+      # PINNED with the reason Markdown cannot carry it yet. A pinned type
+      # that starts to round-trip fails too, so closing a gap is a deliberate
+      # edit to the rig. (Bundled: the app's imports are extensionless.)
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-spaces-md-strict.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-spaces-md-strict.mjs"
+        node "$RUNNER_TEMP/test-spaces-md-strict.mjs"
+
+    - name: Spaces model rig
+      # Properties that fail SILENTLY, and that a shipped file cannot be
+      # talked out of once it exists:
+      #   · the load contract — an unreadable document must never be replaced
+      #     by an empty one;
+      #   · format additivity, and id repair derived from the BYTES, so two
+      #     readers of one file agree on every id (links key on them);
+      #   · untrusted html is parsed INERT — a detached div still loads what
+      #     it creates, which made the sanitizer its own vector on the OPEN
+      #     path;
+      #   · opening a document touches no network, so a mailed space cannot
+      #     carry a tracking pixel;
+      #   · an encrypted space is never snapshotted to IndexedDB in the clear;
+      #   · find and replace quote ONE number — what is counted is what
+      #     changes.
+      # The last four are source assertions: the behaviour needs a DOM, a
+      # failing request, IndexedDB and a clock, but every one of those
+      # mistakes is made in the source.
+      shell: bento-step {0}
+      run: node scripts/test-spaces-model.ts
+
+    - name: spaces caret + nesting
+      # Which seat an arrow key lands in, and what Tab resolves to. Caret
+      # MOVEMENT needs a browser; the arithmetic under it does not, and the
+      # arithmetic is where Tab-on-the-first-list-item was silently wrong.
+      shell: bento-step {0}
+      run: node scripts/test-spaces-caret.ts
+
+    - name: Spaces chrome rig
+      # Every spaces menu is the kernel's createMenu (through
+      # spaces/src/menus.ts). This drives the BUILT shell with trusted CDP
+      # input and asserts what spaces used to get wrong invisibly: arrow keys
+      # in every menu, Escape with focus return, one menu open at a time, no
+      # listener left on the document by a menu closed with Escape (one used
+      # to close the NEXT overlay on its first click), no global shortcut
+      # under a modal, and phone menus that end inside the screen with 44px
+      # rows; and that a phone drawer, however it is shut, never becomes the
+      # desktop panel preference once the window widens again. Needs the
+      # shell built above; a skip in CI is a failure.
+      shell: bento-step {0}
+      run: node scripts/test-spaces-chrome.ts
+
+    - name: spaces aliases and unlinked mentions
+      # The assertions that matter in this one are the NEGATIVES: a page
+      # title found inside a code block, an existing link, a bare URL or the
+      # middle of a longer word must all produce NO mention, and a title full
+      # of regex metacharacters must not throw. It also asserts that a name
+      # surrounded by kana matches, which a `\b`-style boundary silently
+      # never does — a rule built for English is a total failure in ja,
+      # zh-Hans and zh-Hant rather than a partial one.
+      shell: bento-step {0}
+      run: node scripts/test-spaces-mentions.ts
+
+    - name: Mermaid flowchart ⇄ diagram rig
+      # spaces/src/diagram/: our own Mermaid flowchart parser and layered
+      # layout (the mermaid library is megabytes and nothing is fetched at
+      # runtime). Over a corpus of real README flowcharts: no overlapping
+      # nodes, every connector end exactly where slides' syncConnectors puts
+      # it, byte-identical snapshots, and mermaid → elements → mermaid
+      # semantically equal. Hostile input (caps, __proto__ ids, script in
+      # labels, pathological cycles) inside a time budget, and a size budget
+      # (needs slides' esbuild, installed above).
+      shell: bento-step {0}
+      run: node scripts/test-diagram-mermaid.ts
+
+    - name: spaces rig manifest
+      # Bookkeeping, not a ninth run of the eight steps above. scripts/
+      # test-spaces.mjs is the local entry point for the spaces suite (two of
+      # those rigs cannot be handed to node directly, and running one by hand
+      # produces a stack trace that reads like a broken product); this asserts
+      # its list is still complete in both directions — every test-spaces-*
+      # file on disk is listed there, and every rig it lists has a step in
+      # this workflow. Both omissions are invisible: an unlisted rig never
+      # runs locally, an unregistered one never runs here, and neither looks
+      # like anything but green. test-spaces.mjs itself was unregistered from
+      # the day it was written, which is how this check came to exist.
+      shell: bento-step {0}
+      run: node scripts/test-spaces.mjs --manifest
+
+    - name: the spaces binding of the sync session
+      # Only what bento/spaces answers DIFFERENTLY, because three of the five
+      # host answers are not slides' answers and each one is invisible until
+      # two people are live: a repair id that must be DERIVED (a spare blank
+      # slide is one click to delete; a spare page is a phantom), a view that
+      # clamps by page identity to the nearest surviving ANCESTOR rather than
+      # to home, and a remote op that must not raise this app's 'doc' event —
+      # which paints "Edited" and would credit a colleague's typing to you.
+      # The last section is two real sessions over a real BroadcastChannel.
+      shell: bento-step {0}
+      run: node --no-warnings scripts/test-sync-spaces-session.ts

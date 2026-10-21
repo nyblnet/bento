@@ -880,5 +880,92 @@
   },
   "saTaken": {
     "message": "« $1 » existe déjà. Choisissez un autre nom."
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "Votre identité pour partager et pour les documents en direct. Elle vit dans ce navigateur ; la configuration crée une clé d’accès et un code de récupération pour la retrouver."
+  },
+  "setIdNone": {
+    "message": "Aucun Bento ID dans ce navigateur pour l’instant."
+  },
+  "setIdCreate": {
+    "message": "Créer votre Bento ID…"
+  },
+  "setIdLocal": {
+    "message": "Votre Bento ID est configuré dans ce navigateur. Prochaine étape : vérifier votre adresse e-mail."
+  },
+  "idSetupTitle": {
+    "message": "Créer votre Bento ID"
+  },
+  "idSetupLead": {
+    "message": "Votre Bento ID permet aux personnes avec qui vous partagez de savoir que c’est bien vous. La configuration crée une clé d’accès et un code de récupération, pour le retrouver sur un autre appareil."
+  },
+  "idSetupLight": {
+    "message": "Dans l’extension du navigateur, vos clés sont conservées dans ce profil de navigateur. Supprimer l’extension les efface : gardez votre clé d’accès et votre code de récupération en lieu sûr."
+  },
+  "idSetupLabel": {
+    "message": "Nom de ce navigateur"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "Configurer une clé d’accès"
+  },
+  "idWorking": {
+    "message": "En attente de votre clé d’accès…"
+  },
+  "idDeriving": {
+    "message": "Création de votre code de récupération ($1 sur 2)…"
+  },
+  "idCodeTitle": {
+    "message": "Votre code de récupération"
+  },
+  "idCodeLead": {
+    "message": "Notez-le ou imprimez-le et gardez-le en lieu sûr. Il n’est affiché que cette fois, et c’est votre moyen de revenir si vous perdez votre clé d’accès."
+  },
+  "idCodeConfirm": {
+    "message": "Saisissez le code pour confirmer que vous l’avez"
+  },
+  "idCodePrint": {
+    "message": "Imprimer"
+  },
+  "idCodeSaved": {
+    "message": "Je l’ai enregistré"
+  },
+  "idCodeMismatch": {
+    "message": "Ce n’est pas le code affiché ci-dessus. Vérifiez-le et réessayez."
+  },
+  "idCodeTypo": {
+    "message": "Ce code contient une faute de frappe : un caractère est erroné ou manquant."
+  },
+  "idNoPrf": {
+    "message": "Votre clé d’accès ne peut pas déverrouiller votre Bento ID sur d’autres appareils : ce code de récupération est votre seul moyen de revenir."
+  },
+  "idNoCode": {
+    "message": "Cet appareil ne peut pas créer de code de récupération : votre clé d’accès est donc votre seul moyen de revenir. Si vous la perdez, vous perdez ce Bento ID. Vous pourrez créer un code de récupération plus tard sur un autre appareil."
+  },
+  "idDoneTitle": {
+    "message": "Votre Bento ID est configuré"
+  },
+  "idDoneLead": {
+    "message": "Il est prêt dans ce navigateur. Prochaine étape : vérifier votre adresse e-mail."
+  },
+  "idDone": {
+    "message": "Terminé"
+  },
+  "idErrCancelled": {
+    "message": "La demande de clé d’accès a été annulée ou a expiré. Gardez cette fenêtre au premier plan et réessayez."
+  },
+  "idErrPermission": {
+    "message": "Votre clé d’accès a besoin d’accéder à bento.page. Autorisez-le quand Chrome le demande, puis réessayez."
+  },
+  "idErrFailed": {
+    "message": "Un problème est survenu et rien n’a été enregistré. Réessayez."
+  },
+  "idErrNoWayBack": {
+    "message": "Rien n’a été configuré : votre clé d’accès ne peut pas déverrouiller votre Bento ID et cet appareil ne peut pas créer de code de récupération, il n’y aurait donc aucun moyen de revenir."
   }
 }

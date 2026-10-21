@@ -215,6 +215,32 @@ ok(svgUrlRefsAllowed('background-image:\\75 rl(https://evil.example/x)', 'style'
   'the style="" gate refuses an escaped url()')
 ok(svgUrlRefsAllowed('fill:url(#g)', 'style') === true, 'and keeps url(#…) in a style attribute')
 
+// Three more spellings. An IDENTITY escape of a non-hex character: CSS reads
+// `u\rl(` as plain `url(` (the backslash just quotes the r), so it is decoded
+// like the hex forms and the fetch is cut to none.
+ok(sanitizeSvgCss('.p{background-image:u\\rl(https://evil.example/x)}').includes('background-image:none'),
+  'an identity-escaped url() spelling — u\\rl( — is decoded and rewritten to none')
+ok(svgUrlRefsAllowed('background-image:u\\rl(https://evil.example/x)', 'style') === false,
+  'and the style="" gate refuses it')
+// A comment between the letters: CSS ends a token at a comment, so u/**/rl( is
+// the ident `u` and then a call to `rl(` — not url( at all (the browser section
+// measures that the raw form fetches nothing). `rl` is off the function
+// allowlist, so it is refused by name all the same.
+{
+  const out = sanitizeSvgCss('.p{background-image:u/**/rl(https://evil.example/x)}')
+  ok(out.includes('bento-refused(') && !/rl\(https/i.test(out), `a comment-split u/**/rl( is refused by name (${out})`)
+}
+ok(svgUrlRefsAllowed('background-image:u/**/rl(https://evil.example/x)', 'style') === false,
+  'and the style="" gate refuses it')
+// behavior: (old IE's .htc binding) fetches through a url() — which is cut like
+// any other, so nothing it names is ever requested; a bare value names nothing.
+for (const prop of ['behavior', '-ms-behavior']) {
+  ok(sanitizeSvgCss(`.p{${prop}:url(https://evil.example/x.htc)}`) === `.p{${prop}:none}`,
+    `${prop}: with an external url() keeps no url — rewritten to none`)
+  ok(svgUrlRefsAllowed(`${prop}:url(https://evil.example/x.htc)`, 'style') === false,
+    `and the style="" gate refuses ${prop}: with a url()`)
+}
+
 // …and the image-set spellings the browser section measures, judged here too:
 // written straight after a property colon they used to slip the text pass and
 // rely on the CSSOM check alone. The text pass now refuses them on its own, so
@@ -606,6 +632,21 @@ if (location.pathname === '/meta.html') {
     egress('cursor', 'BOX{cursor:image-set("' + O + '/eg-cursor" 1x), auto}')
     egress('at-media', '@media all{BOX{background-image:image-set("' + O + '/eg-at-media" 1x)}}')
     egress('at-supports', '@supports (color:red){BOX{background-image:' + BS + '75 rl("' + O + '/eg-at-supports")}}')
+    // regression pins (security §36a): identity escapes, a comment-split name,
+    // behavior:, an escaped @import. Each spelling is ALSO injected raw, so the
+    // zero on its sanitised row is a boundary: a refused function leaves the
+    // address text in place, so only the request log can tell neutralised from
+    // fetching. Where the raw spelling itself fetches nothing in this engine
+    // (the comment split, behavior:), the hit list says so and that row's
+    // control is the plain url() above.
+    const pin = (seg: string, sheet: string) => { egressRaw('raw-' + seg, sheet.split('SEG').join('raw-' + seg)); egress(seg, sheet.split('SEG').join(seg)) }
+    pin('id-esc', 'BOX{background-image:u' + BS + 'rl("' + O + '/eg-SEG")}')
+    pin('id-esc-all', 'BOX{background-image:' + BS + 'u' + BS + 'r' + BS + 'l("' + O + '/eg-SEG")}')
+    pin('id-esc-upper', 'BOX{background-image:U' + BS + 'RL("' + O + '/eg-SEG")}')
+    pin('comment-split', 'BOX{background-image:u/**/rl("' + O + '/eg-SEG")}')
+    pin('behavior', 'BOX{behavior:url("' + O + '/eg-SEG")}')
+    pin('imgset-id-esc', 'BOX{background-image:image-se' + BS + 't("' + O + '/eg-SEG" 1x)}')
+    pin('import-id-esc', '@im' + BS + 'port "' + O + '/eg-SEG";BOX{fill:red}')
     // the allowed shapes still draw: url(#…) and a data:image survive the filter.
     check('css-egress — url(#grad) survives the css filter untouched',
       sanitizeSvgCss('#x{fill:url(#grad)}').indexOf('url(#grad)') >= 0)
@@ -629,6 +670,9 @@ if (location.pathname === '/meta.html') {
       }
       gated('attr-imgset', 'background-image:image-set("' + O + '/eg-attr-imgset" 1x)')
       gated('attr-esc', 'background-image:' + BS + '75 rl("' + O + '/eg-attr-esc")')
+      gated('attr-id-esc', 'background-image:u' + BS + 'rl("' + O + '/eg-attr-id-esc")')
+      gated('attr-comment-split', 'background-image:u/**/rl("' + O + '/eg-attr-comment-split")')
+      gated('attr-behavior', 'behavior:url("' + O + '/eg-attr-behavior")')
     }
     // markup spellings: an escaped url in a fill attribute and in the svg <style>.
     // draw() is the full render path; the allowed paint-server and <image>
@@ -947,6 +991,27 @@ async function runBrowserSection(chrome: string) {
     ]
     for (const [seg, what] of cssEgress) {
       ok(!hits.includes('/eg-' + seg), '4c — sanitised, no fetch: ' + what)
+    }
+    // the regression pins: the raw spelling first (does THIS engine fetch it?),
+    // then the sanitised one, which must not. `fetches` records what was
+    // measured for the raw form; a spelling that fetches raw makes its own zero
+    // meaningful, one that does not leans on the plain-url() control above.
+    const pins: Array<[string, string, boolean]> = [
+      ['id-esc', 'an identity-escaped u\\rl( (CSS reads plain url()', true],
+      ['id-esc-all', 'a fully identity-escaped \\u\\r\\l(', true],
+      ['id-esc-upper', 'an upper-case U\\RL(', true],
+      ['comment-split', 'a comment-split u/**/rl( (two tokens, not url()', false],
+      ['behavior', 'behavior:url() (an .htc binding; Chrome has no behavior)', false],
+      ['imgset-id-esc', 'image-set() with an identity escape in its name', true],
+      ['import-id-esc', '@im\\port (an identity-escaped @import)', true],
+    ]
+    for (const [seg, what, fetches] of pins) {
+      const raw = hits.includes('/eg-raw-' + seg)
+      ok(raw === fetches, `4c pin — raw, unsanitised, ${fetches ? 'DOES fetch' : 'fetches nothing in this engine'}: ${what}`)
+      ok(!hits.includes('/eg-' + seg), '4c pin — sanitised, no fetch: ' + what)
+    }
+    for (const seg of ['attr-id-esc', 'attr-comment-split', 'attr-behavior']) {
+      ok(!hits.includes('/eg-' + seg), '4c pin — style="" gate, no fetch: ' + seg.slice(5))
     }
   } finally {
     server.close()

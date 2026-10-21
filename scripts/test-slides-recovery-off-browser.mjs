@@ -99,13 +99,13 @@ console.log('\na host that keeps it (the control)\n')
   ok(r.first.sets >= 1 && r.second.notices === 0 && r.first.text !== NOTICE, `no recovery-off message (${r.second.notices})`)
 }
 
-console.log('\nnever for an encrypted deck\n')
+console.log('\nnever for a sealed deck (a password or the identity seal)\n')
 {
   const src = readFileSync(new URL('../slides/src/editor/editor.ts', import.meta.url), 'utf8')
   const fn = src.slice(src.indexOf('private noticeRecoveryOff('), src.indexOf('private noticeRecoveryOff(') + 700)
   ok(/onRecoveryOff\(\(docId\) => this\.noticeRecoveryOff\(docId\)\)/.test(src), 'the editor listens to the kernel\'s onRecoveryOff')
-  ok(/if \(docId !== this\.store\.doc\.docId \|\| isEncryptionActive\(\) \|\| this\.recoveryOffSaid\.has\(docId\)\) return/.test(fn),
-    'the notice refuses an encrypted deck, another deck, and a second telling')
+  ok(/if \(docId !== this\.store\.doc\.docId \|\| isBodySealed\(\) \|\| this\.recoveryOffSaid\.has\(docId\)\) return/.test(fn),
+    'the notice refuses a sealed deck, another deck, and a second telling')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

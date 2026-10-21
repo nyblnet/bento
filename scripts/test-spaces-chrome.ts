@@ -213,6 +213,34 @@ const SLIDES_INS = {
 }
 ok(Object.values(SLIDES_INS).every(Boolean), `slides' insert-button values can be read from its source (${JSON.stringify(SLIDES_INS)})`)
 
+// THE READING VIEW PILL IS SLIDES' SLIDESHOW PILL (maintainer, 2026-10-20).
+// Reading view left the bar for a floating button, shaped and placed as
+// slides' `.ed-present-pill` in `.ed-corner-br`: the numbers are read out of
+// slides' stylesheet and the browser half holds the computed pill to them.
+const pillB = block('.ed-present-pill'), pillMain = /\n\.ed-present-pill \.ed-pill-main \{([\s\S]*?)\n\}/.exec(slidesCss)?.[1] ?? ''
+const cornerB = block('.ed-corner-br')
+const SLIDES_PILL = {
+  radius: decl(pillB, 'border-radius'),
+  border: decl(pillB, 'border'),
+  shadow: decl(pillB, 'box-shadow'),
+  weight: decl(pillMain, 'font-weight'),
+  padY: decl(pillMain, 'padding-block'),
+  // inset-inline-end: max(14px, …) / bottom: max(14px, …)
+  end: /max\((\d+px)/.exec(decl(cornerB, 'inset-inline-end') ?? '')?.[1],
+  bottom: /max\((\d+px)/.exec(decl(cornerB, 'bottom') ?? '')?.[1],
+  hover: /var\((--[a-z0-9-]+)\)/.exec(/\n\.ed-present-pill \.ed-btn:hover \{ background:\s*([^;]+);/.exec(slidesCss)?.[1] ?? '')?.[1],
+}
+ok(Object.values(SLIDES_PILL).every(Boolean), `slides' Slideshow pill values can be read from its stylesheet (${JSON.stringify(SLIDES_PILL)})`)
+const readFab = /\.sp-corner > \.sp-readfab \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+ok(/inset-inline-end:/.test(readFab) && !/\b(left|right):/.test(readFab),
+  'the Reading view pill sits at the bottom-END corner by a logical inset, so RTL mirrors it as slides\' does')
+ok(new RegExp(`\\.sp-corner > \\.sp-readfab:hover \\{ background: var\\(${SLIDES_PILL.hover}\\)`).test(css),
+  `its hover is slides' pill hover, var(${SLIDES_PILL.hover})`)
+ok(/\.sp-app\.sp-sealed \.sp-readtoggle,/.test(css) && /classList\.add\('sp-readfab', 'sp-readtoggle'\)/.test(editor),
+  'a SEALED reading copy hides the pill: it carries .sp-readtoggle, which the sealed rule removes')
+ok(!/icon: 'eye'|icon: 'graph'|sp-insp-toggle/.test(editor) && !/sp-insp-toggle/.test(css),
+  'the bar builds no Reading view, Graph or Properties button any more, and no rule styles one')
+
 // ————— browser half ————————————————————————————————————————————————————————
 console.log('\nthe built shell, driven with trusted input\n')
 const CHROME = [process.env.BENTO_CHROME, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -736,6 +764,122 @@ async function browser(chrome: string, html: string): Promise<void> {
     ok(afterNav.w === 0 && !afterNav.scrim && afterNav.stored === null,
       `following a page shuts the drawer and its scrim, and writes nothing to the desktop preference (${JSON.stringify(afterNav)})`)
 
+    // ——— a phone drawer is not the desktop preference ———
+    // The row above could never see this bug: it reads the key while still at
+    // 390. The write happened on the way OUT — crossing back to column width,
+    // the panel primitive fires onChange with the drawer's state still in
+    // force, and the editor used to persist whatever that was as the reader's
+    // desktop choice (measured: every close path, and no drawer at all, left
+    // both -closed keys at '1' and both columns shut on the next 1440 load).
+    // So each case: desktop prefs set at 1440 → a 390 load → open the drawer →
+    // close it one way → resize the LIVE page to 1440 → reload at 1440.
+    {
+      const metrics = async (phone: boolean) => {
+        await send('Emulation.setDeviceMetricsOverride', phone
+          ? { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }
+          : { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
+        await send('Emulation.setTouchEmulationEnabled', { enabled: phone, maxTouchPoints: phone ? 5 : 1 })
+      }
+      // a reload that KEEPS localStorage (open() clears it — the point here is
+      // what survives)
+      const load = async () => {
+        await send('Page.navigate', { url: `http://127.0.0.1:${port}/s.html` })
+        for (let i = 0; i < 100; i++) { await sleep(100); if (await js('!!(window.bento && window.bento.doc && document.querySelector(".sp-bar"))').catch(() => false)) break }
+        await js('document.activeElement?.blur?.(); 1')
+        await sleep(400)
+      }
+      // EVERYTHING THIS SECTION CHANGES IS PUT BACK at its end: the reader's
+      // storage and the viewport. Left behind, the '0' it writes for the
+      // properties panel opened the inspector on the next open() (which clears
+      // storage only AFTER the load), and the 1440 reachability walk lost the
+      // "Show properties" chevron it requires.
+      const SNAP = `JSON.stringify(Object.fromEntries(Object.keys(localStorage).sort().map(k => [k, localStorage.getItem(k)])))`
+      const before = await js<string>(SNAP)
+      const PANES = `(() => { const open = (s) => !document.querySelector(s).closest('.bkp').classList.contains('bkp-collapsed'); return { pages: open('.sp-side'), insp: open('.sp-insp'), pane: localStorage.getItem('bento-sp-pane-closed'), ins: localStorage.getItem('bento-sp-insp-closed') } })()`
+      const BAR = (label: string) => `[...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith(${JSON.stringify(label)}) && b.getBoundingClientRect().width > 0)`
+      const toggle = async (panel: 'pages' | 'insp') => {
+        const label = panel === 'pages' ? 'Pages' : 'Properties'
+        if (await at(BAR(label))) return tap(BAR(label))
+        await js('document.activeElement?.blur?.(); 1')
+        await key(panel === 'pages' ? '[' : ']', 0, panel === 'pages' ? 'BracketLeft' : 'BracketRight', panel === 'pages' ? 219 : 221)
+      }
+      const closers: Record<string, (panel: 'pages' | 'insp') => Promise<unknown>> = {
+        'the dimmed backdrop': async (panel) => {
+          const x = panel === 'pages' ? 385 : 5
+          const hit = await js<string>(`document.elementFromPoint(${x}, 600)?.className ?? ''`)
+          if (!/sp-scrim/.test(hit)) throw new Error(`the tap at x=${x} would land on "${hit}", not the scrim`)
+          await click(x, 600)
+        },
+        'following a page': async () => tap(`[...document.querySelectorAll('.sp-side a.sp-treelink:not(.sp-here)')].find(a => a.getBoundingClientRect().width > 0)`),
+        'its key': async (panel) => { await js('document.activeElement?.blur?.(); 1'); await key(panel === 'pages' ? '[' : ']', 0, panel === 'pages' ? 'BracketLeft' : 'BracketRight', panel === 'pages' ? 219 : 221) },
+        'nothing (left open)': async () => {},
+      }
+      // No "its bar button" case: with a drawer open the scrim covers the bar
+      // (measured: elementFromPoint at the Pages button is .sp-scrim, and the
+      // Properties button is folded into ⋯ at 390), so a tap there IS the
+      // backdrop case. Escape does not shut a drawer at all.
+      const cases: [panel: 'pages' | 'insp', how: string, pane: '0' | '1', ins: '0' | '1'][] = [
+        ['pages', 'the dimmed backdrop', '0', '0'],
+        ['pages', 'following a page', '0', '0'],
+        ['pages', 'its key', '0', '0'],
+        // the drawer left OPEN over a desktop preference of SHUT: the resize
+        // must restore shut, not write the drawer's open
+        ['pages', 'nothing (left open)', '1', '1'],
+        ['insp', 'the dimmed backdrop', '0', '0'],
+        ['insp', 'its key', '0', '0'],
+        ['insp', 'nothing (left open)', '1', '1'],
+      ]
+      for (const [panel, how, pane, ins] of cases) {
+        await metrics(false); await load()
+        await js(`localStorage.setItem('bento-sp-pane-closed', '${pane}'); localStorage.setItem('bento-sp-insp-closed', '${ins}'); 1`)
+        await metrics(true); await load()
+        await toggle(panel)
+        const opened = await js<any>(PANES)
+        await closers[how](panel)
+        const shut = await js<any>(PANES)
+        const leftOpen = how.startsWith('nothing')
+        // positive control: the drawer really opened, and really shut (or stayed open)
+        ok(opened[panel] && shut[panel] === leftOpen && shut.pane === pane && shut.ins === ins,
+          `390, ${panel === 'pages' ? 'page list' : 'properties'} drawer opened and ${leftOpen ? 'left open' : `shut by ${how}`}; the desktop keys are untouched at phone width (${JSON.stringify({ opened: opened[panel], shut })})`)
+        await metrics(false); await sleep(400)
+        const live = await js<any>(PANES)
+        await load()
+        const reload = await js<any>(PANES)
+        const want = { pages: pane === '0', insp: ins === '0', pane, ins }
+        const same = (s: any) => s.pages === want.pages && s.insp === want.insp && s.pane === pane && s.ins === ins
+        ok(same(live) && same(reload),
+          `…then 1440: the desktop keys still read ${pane}/${ins} and both columns are as the reader left them on the desktop, live after the resize and after a reload (${JSON.stringify({ live, reload })})`)
+      }
+
+      // …and the DESKTOP controls still persist: a column change is the
+      // reader's choice and must survive a reload
+      await metrics(false); await load()
+      await js(`localStorage.setItem('bento-sp-pane-closed', '0'); localStorage.setItem('bento-sp-insp-closed', '0'); 1`)
+      await load()
+      await js('document.activeElement?.blur?.(); 1')
+      await key('[', 0, 'BracketLeft', 219)
+      await tap(`document.querySelector('.sp-insp').closest('.bkp').querySelector('.bkp-toggle')`)
+      const desk = await js<any>(PANES)
+      await load()
+      const deskReload = await js<any>(PANES)
+      ok(!desk.pages && !desk.insp && desk.pane === '1' && desk.ins === '1' && !deskReload.pages && !deskReload.insp,
+        `at 1440, \`[\` and the properties chevron shut their columns, write '1', and the reload keeps both shut (${JSON.stringify({ desk, deskReload })})`)
+      await js('document.activeElement?.blur?.(); 1')
+      await key('[', 0, 'BracketLeft', 219)
+      await tap(`document.querySelector('.sp-insp').closest('.bkp').querySelector('.bkp-toggle')`)
+      await load()
+      const back = await js<any>(PANES)
+      ok(back.pages && back.insp && back.pane === '0' && back.ins === '0',
+        `…and reopening them is remembered the same way (${JSON.stringify(back)})`)
+
+      await js(`localStorage.clear(); for (const [k, v] of Object.entries(${before})) localStorage.setItem(k, v); 1`)
+      await metrics(true); await load()
+      const after = await js<string>(SNAP)
+      const restored = await js<any>(`({ w: innerWidth, insp: document.querySelector('.sp-insp').closest('.bkp').classList.contains('bkp-collapsed'), pages: document.querySelector('.sp-side').closest('.bkp').classList.contains('bkp-collapsed') })`)
+      ok(after === before && restored.w === 390 && restored.insp && restored.pages,
+        `the drawer-preference rows leave storage and the 390 viewport as they found them, both drawers shut (${after === before ? 'storage identical' : `${before} → ${after}`}; ${JSON.stringify(restored)})`)
+    }
+
     // ——— the top bar is slides' bar ———
     await open(false)
     const BAR = `document.querySelector('.sp-bar')`
@@ -899,6 +1043,10 @@ async function browser(chrome: string, html: string): Promise<void> {
       const out = {}
       const add = (where, label) => { label = name(label); if (label && !out[label]) out[label] = where }
       const bar = document.querySelector('.sp-bar')
+      // the floating Reading view pill, and the panels' own chevrons
+      const fab = document.querySelector('.sp-readfab')
+      if (fab && vis(fab)) add('fab', fab.getAttribute('aria-label'))
+      for (const c of document.querySelectorAll('.bkp-toggle')) if (vis(c)) add('panel', c.getAttribute('aria-label'))
       for (const b of bar.querySelectorAll('button')) if (vis(b) && !b.closest('.bkm-menu')) {
         add('bar', b.getAttribute('aria-label') || b.title || b.textContent)
         // an insert button is also known by its word ("Table" beside "Add a table — …")
@@ -920,6 +1068,7 @@ async function browser(chrome: string, html: string): Promise<void> {
       if (!vis(document.querySelector('.sp-side .sp-newmenu > .bkm-trigger') || document.body)) [...bar.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') || '').startsWith('Pages'))?.click()
       await sleep(250)
       const nt = document.querySelector('.sp-side .sp-newmenu > .bkm-trigger')
+      for (const b of document.querySelectorAll('.sp-side-head button')) if (vis(b) && !b.closest('.bkm-menu')) add('page list', b.getAttribute('aria-label'))
       if (nt && vis(nt)) { add('page list', nt.getAttribute('aria-label')); nt.click(); await sleep(80); for (const r of nt.parentElement.querySelectorAll(':scope > .bkm-menu .bkm-item')) add('page list menu', r.querySelector('.bkm-text')?.textContent || ''); esc(); await sleep(60) }
       document.querySelector('.sp-mark').click(); await sleep(250)
       const d = [...document.querySelectorAll('[aria-modal="true"]')].pop()
@@ -930,7 +1079,15 @@ async function browser(chrome: string, html: string): Promise<void> {
     for (const w of [1440, 390]) {
       await open(w < 700)
       const now = await js<Record<string, string>>(WALK)
-      const lost = BEFORE[w].filter((c) => !((ALIAS[c] ?? c) in now))
+      // Properties left the bar (2026-10-20): where the panel is a column its
+      // own chevron is the control, as in slides; folded, ⋯ keeps the row
+      const aliasAt = (c: string) => (w >= 700 && c === 'Properties') ? 'Show properties' : (ALIAS[c] ?? c)
+      const lost = BEFORE[w].filter((c) => !(aliasAt(c) in now))
+      // …and the new homes are what reach them (maintainer, 2026-10-20)
+      if (now['Reading view'] !== 'fab') lost.push(`Reading view (not the floating pill: ${now['Reading view']})`)
+      if (now['Graph'] !== 'page list') lost.push(`Graph (not on the page list's header: ${now['Graph']})`)
+      if (w < 700 && now['Properties'] !== 'menu') lost.push(`Properties (not in ⋯: ${now['Properties']})`)
+      if (w >= 700 && now['Show properties'] !== 'panel') lost.push(`Properties (not the panel chevron: ${now['Show properties']})`)
       // …and the new homes are what reach them: the pages from the page list
       for (const c of ['New page', "Today's journal", 'New issue']) if (!/^page list/.test(now[c] ?? '')) lost.push(`${c} (not on the page list's ＋ ▾: ${now[c]})`)
       for (const c of ['Audio', 'Gallery', 'List', 'Table view', 'Comment']) if (!(c in now)) lost.push(`${c} (new member unreachable)`)
@@ -940,6 +1097,104 @@ async function browser(chrome: string, html: string): Promise<void> {
       // the sealed reading copy, from the Share popover
       if (now['Save a reading copy…'] !== 'share') lost.push(`Save a reading copy… (not in Share: ${now['Save a reading copy…']})`)
       ok(lost.length === 0, `at ${w}px every command reachable before is reachable now (${BEFORE[w].length} checked${lost.length ? '; LOST: ' + lost.join(', ') : ''})`)
+    }
+
+    // ——— THE BAR CARRIES LESS (maintainer, 2026-10-20) ———
+    // Reading view is a floating pill in slides' Slideshow corner, Properties
+    // is the panel's chevron, `]` and (folded) ⋯, Graph is on the page list's
+    // header, Search stays. Each home is pressed with trusted input.
+    const FAB = `document.querySelector('.sp-readfab')`
+    const BAR_HAS = `(() => { const names = [...document.querySelectorAll('.sp-bar button')].filter(b => !b.closest('.bkm-menu')).map(b => (b.getAttribute('aria-label') || '').split(' (')[0].split(' — ')[0]); return { reading: names.includes('Reading view'), graph: names.includes('Graph'), props: names.includes('Properties'), search: names.includes('Search all pages') } })()`
+    const MORE_ROWS = `(() => { const m = ${OPEN}; return m ? [...m.querySelectorAll('.bkm-item .bkm-text')].map(x => x.textContent.trim()) : null })()`
+    // where the pill sits, how it is drawn, and whether a press lands on it
+    const FABAT = `(() => { const b = ${FAB}; if (!b) return null; const r = b.getBoundingClientRect(); const main = document.querySelector('.sp-main').getBoundingClientRect(); const top = document.elementsFromPoint(r.x + r.width / 2, r.y + r.height / 2)[0]; const c = getComputedStyle(b);
+      return { w: Math.round(r.width), h: Math.round(r.height), end: Math.round(main.right - r.right), bottom: Math.round(innerHeight - r.bottom), onScreen: r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, topmost: !!top && (top === b || b.contains(top)),
+        radius: c.borderTopLeftRadius, border: c.borderTopWidth + ' ' + c.borderTopStyle, shadow: c.boxShadow, weight: c.fontWeight, padY: c.paddingTop, label: b.getAttribute('aria-label'), tip: b.title, pressed: b.getAttribute('aria-pressed'), icon: !!b.querySelector('svg') } })()`
+    for (const w of [1440, 390]) {
+      await open(w < 700)
+      const has = await js<any>(BAR_HAS)
+      ok(!has.reading && !has.graph && !has.props && has.search,
+        `at ${w}px the bar no longer carries Reading view, Graph or Properties — and Search stays (${JSON.stringify(has)})`)
+
+      // Reading view: the pill, in and back out
+      const f0 = await js<any>(FABAT)
+      const pillOff: string[] = []
+      if (!f0) pillOff.push('no pill')
+      else {
+        if (f0.radius !== '999px' || !/999px/.test(SLIDES_PILL.radius ?? '')) pillOff.push(`radius ${f0.radius} ≠ ${SLIDES_PILL.radius}`)
+        if (f0.border !== `${/(\d+px)/.exec(SLIDES_PILL.border ?? '')?.[1]} solid`) pillOff.push(`border ${f0.border} ≠ ${SLIDES_PILL.border}`)
+        const cs = nums(f0.shadow).split(','), ss = nums(SLIDES_PILL.shadow).split(',')
+        if (cs.slice(0, 4).join() !== ss.slice(3, 7).join() || cs.slice(4, 7).join() !== ss.slice(0, 3).join()) pillOff.push(`shadow ${f0.shadow} ≠ ${SLIDES_PILL.shadow}`)
+        if (f0.weight !== SLIDES_PILL.weight) pillOff.push(`weight ${f0.weight} ≠ ${SLIDES_PILL.weight}`)
+        if (f0.end !== parseInt(SLIDES_PILL.end ?? '') || f0.bottom !== parseInt(SLIDES_PILL.bottom ?? '')) pillOff.push(`corner ${f0.end}/${f0.bottom} ≠ ${SLIDES_PILL.end}/${SLIDES_PILL.bottom}`)
+        if (w >= 700 && f0.padY !== SLIDES_PILL.padY) pillOff.push(`padding ${f0.padY} ≠ ${SLIDES_PILL.padY}`)
+        if (w < 700 && f0.h < 44) pillOff.push(`a ${f0.h}px target on a phone`)
+        if (!f0.icon || f0.label !== 'Reading view' || f0.tip !== 'Reading view') pillOff.push(`eye/label/tooltip ${f0.icon}/${f0.label}/${f0.tip}`)
+      }
+      ok(pillOff.length === 0, `at ${w}px Reading view is slides' Slideshow pill, in its bottom-end corner (${pillOff.join('; ') || `${f0.w}×${f0.h}, ${f0.end}px from the page's end, ${f0.bottom}px up`})`)
+      ok(!!f0 && f0.onScreen && f0.topmost && f0.pressed === 'false', `at ${w}px the pill is on screen and topmost at its centre (${JSON.stringify({ on: f0?.onScreen, top: f0?.topmost, pressed: f0?.pressed })})`)
+      await tap(FAB)
+      await sleep(300)
+      const f1 = await js<any>(FABAT)
+      const inRead = await js<boolean>(`!!document.querySelector('.sp-app.sp-reading')`)
+      ok(inRead && !!f1 && f1.onScreen && f1.topmost && f1.pressed === 'true',
+        `at ${w}px pressing the pill opens reading view, and the pill stays on screen, pressable and pressed — the way back out (${JSON.stringify({ inRead, on: f1?.onScreen, top: f1?.topmost, pressed: f1?.pressed })})`)
+      await tap(FAB)
+      await sleep(300)
+      ok(!(await js<boolean>(`!!document.querySelector('.sp-app.sp-reading')`)) && (await js<string>(`(${FAB}).getAttribute('aria-pressed')`)) === 'false',
+        `at ${w}px pressing it again leaves reading view`)
+      // …Esc leaves it too, as before
+      await tap(FAB); await sleep(200)
+      await js(`document.activeElement?.blur?.(); 1`)
+      await key('Escape', 0, 'Escape'); await sleep(200)
+      ok(!(await js<boolean>(`!!document.querySelector('.sp-app.sp-reading')`)), `at ${w}px Esc still leaves reading view`)
+      // …and a sealed copy has no pill (the class the sealed boot sets)
+      const sealedPill = await js<string>(`(() => { const a = document.querySelector('.sp-app'); a.classList.add('sp-sealed'); const d = getComputedStyle(${FAB}).display; a.classList.remove('sp-sealed'); return d })()`)
+      ok(sealedPill === 'none', `at ${w}px a sealed reading copy shows no pill (display ${sealedPill})`)
+
+      // Graph: on the page list's header, and it opens the graph
+      if (w < 700) await tap(`[...document.querySelectorAll('.sp-bar button')].find(b => (b.getAttribute('aria-label') || '').startsWith('Pages'))`)
+      await sleep(250)
+      const GB = `[...document.querySelectorAll('.sp-side-head button')].find(b => b.getAttribute('aria-label') === 'Graph')`
+      const gb = await js<any>(`(() => { const b = ${GB}; if (!b) return null; const r = b.getBoundingClientRect(); const top = document.elementsFromPoint(r.x + r.width / 2, r.y + r.height / 2)[0]; return { tip: b.title, w: Math.round(r.width), h: Math.round(r.height), topmost: !!top && (top === b || b.contains(top)), beside: !!b.closest('.sp-side-acts')?.querySelector('.sp-newsplit') } })()`)
+      ok(!!gb && gb.tip === 'Graph' && gb.topmost && gb.beside && (w >= 700 || gb.h >= 44),
+        `at ${w}px Graph is an icon button on the page list's header, beside ＋ ▾, with its tooltip${w < 700 ? ', a 44px target in the drawer' : ''} (${JSON.stringify(gb)})`)
+      await tap(GB)
+      await sleep(400)
+      const graph = await js<any>(`(() => { const d = [...document.querySelectorAll('.sp-dlg-graph')].find(d => d.getBoundingClientRect().height > 0); return { title: d?.querySelector('.sp-card-h')?.textContent ?? null, canvas: !!d?.querySelector('canvas'), drawer: document.querySelector('.sp-side').closest('.bkp').getBoundingClientRect().width } })()`)
+      ok(graph.title === 'Graph' && graph.canvas && (w >= 700 || graph.drawer === 0),
+        `at ${w}px pressing it opens the graph view${w < 700 ? ', the drawer shut behind it' : ''} (${JSON.stringify(graph)})`)
+      await key('Escape', 0, 'Escape'); await sleep(250)
+      await js(`window.bento.graph(); 1`); await sleep(300)
+      const api = await js<string | null>(`(() => { const d = [...document.querySelectorAll('.sp-dlg-graph')].find(d => d.getBoundingClientRect().height > 0); return d?.querySelector('.sp-card-h')?.textContent ?? null })()`)
+      ok(api === 'Graph', `at ${w}px bento.graph() still opens it (${api})`)
+      await key('Escape', 0, 'Escape'); await sleep(250)
+
+      // Properties: ⋯ on a phone; `]` and the chevron where the panel is a column
+      const INSP = `document.querySelector('.sp-insp').closest('.bkp')`
+      if (w < 700) {
+        await tap(TRIG('More actions'))
+        const rows = await js<string[] | null>(MORE_ROWS)
+        ok(!!rows && rows.includes('Properties') && !rows.includes('Reading view') && !rows.includes('Graph'),
+          `at ${w}px ⋯ keeps Properties and lists neither Reading view (the pill) nor Graph (the page list) (${rows?.filter((r) => /Properties|Reading|Graph|PDF/.test(r)).join(', ')})`)
+        await tap(`[...(${OPEN}).querySelectorAll('.bkm-item')].find(b => b.querySelector('.bkm-text')?.textContent.trim() === 'Properties')`)
+        await sleep(400)
+        const pw = await js<number>(`(${INSP}).getBoundingClientRect().width`)
+        ok(pw > 200, `at ${w}px ⋯ → Properties opens the properties drawer (${pw}px)`)
+      } else {
+        await js(`document.activeElement?.blur?.(); 1`)
+        const p0 = await js<number>(`(${INSP}).getBoundingClientRect().width`)
+        await key(']', 0, 'BracketRight', 221); await sleep(350)
+        const p1 = await js<number>(`(${INSP}).getBoundingClientRect().width`)
+        await key(']', 0, 'BracketRight', 221); await sleep(350)
+        const p2 = await js<number>(`(${INSP}).getBoundingClientRect().width`)
+        ok(p0 === 0 && p1 > 200 && p2 === 0, `at ${w}px \`]\` opens and shuts the properties panel (${p0} → ${p1} → ${p2}px)`)
+        const chev = await js<any>(`(() => { const c = (${INSP}).querySelector('.bkp-toggle'); const r = c.getBoundingClientRect(); const top = document.elementsFromPoint(r.x + r.width / 2, r.y + r.height / 2)[0]; return { label: c.getAttribute('aria-label'), right: Math.round(innerWidth - r.right), topmost: !!top && (top === c || c.contains(top)) } })()`)
+        ok(chev.label === 'Show properties (])' && Math.abs(chev.right) <= 6 && chev.topmost, `at ${w}px the shut panel's chevron is docked at the edge and pressable (${JSON.stringify(chev)})`)
+        await tap(`(${INSP}).querySelector('.bkp-toggle')`); await sleep(350)
+        const p3 = await js<number>(`(${INSP}).getBoundingClientRect().width`)
+        ok(p3 > 200, `at ${w}px pressing that chevron opens the properties panel (${p3}px)`)
+      }
     }
 
     // ——— TAG CHIPS × FOOTNOTE MARKERS: the ORDER in render.ts ———
@@ -976,9 +1231,9 @@ async function browser(chrome: string, html: string): Promise<void> {
       raw: h.textContent.includes('[^1]'), editable: h.isContentEditable } })()`)
 
     // 1 — reading view (editable: false): a chip AND a marker, in both hosts
-    await tap(TRIG('Reading view'))
+    await tap(`document.querySelector('.sp-readfab')`)
     await sleep(300)
-    ok(await js<boolean>(`!!document.querySelector('.sp-reading')`), 'the reading view is on (the eye on the bar)')
+    ok(await js<boolean>(`!!document.querySelector('.sp-reading')`), 'the reading view is on (the floating eye)')
     for (const [what, host] of [['paragraph', PHOST], ['table cell', CHOST]] as const) {
       const s = await shape(host)
       ok(!!s && !s.editable && s.chips.includes('launch=#launch'),
@@ -986,7 +1241,7 @@ async function browser(chrome: string, html: string): Promise<void> {
       ok(!!s && s.markers.length === 1 && s.markers[0].n === '1' && !s.markers[0].chip && !s.raw,
         `reading view, ${what}: the footnote is a sup > a marker "1", not a chip, and no raw [^1] is left (${JSON.stringify(s?.markers)})`)
     }
-    await tap(TRIG('Reading view'))
+    await tap(`document.querySelector('.sp-readfab')`)
     await sleep(300)
     ok(await js<boolean>(`!document.querySelector('.sp-reading')`), 'the reading view is off again')
 
@@ -1020,6 +1275,49 @@ async function browser(chrome: string, html: string): Promise<void> {
       const s = await shape(host)
       ok(!!s && s.chips.includes('launch=#launch') && s.raw, `after blur, ${what}: the chip is redrawn and the [^1] token is still raw`)
     }
+
+    // ——— CALENDAR "AGENDA" vs GANTT "TIMELINE" (maintainer, 2026-10-20) ———
+    // The calendar's second shape was labelled "Timeline", the same word as the
+    // gantt layout. Its button now reads "Agenda"; the gantt keeps "Timeline";
+    // and the toggle still STORES `span: 'timeline'`, because that is the
+    // format every existing file carries. Measured in the rendered head and in
+    // the committed block, after a trusted click.
+    console.log('\n  calendar agenda vs gantt timeline\n')
+    await open(false)
+    const CA_PAGE = 'capage', CA_CAL = 'cacal', CA_GANTT = 'cagantt'
+    const caLoaded = await js<boolean>(`(() => {
+      const d = JSON.parse(JSON.stringify(window.bento.doc))
+      d.pages = [{ id: ${JSON.stringify(CA_PAGE)}, title: 'Calendar and timeline', blocks: [
+        { id: ${JSON.stringify(CA_CAL)}, type: 'view', layout: 'calendar', html: 'Cal' },
+        { id: ${JSON.stringify(CA_GANTT)}, type: 'view', layout: 'gantt', html: 'Plan' },
+      ] }]
+      return window.bento.loadDoc(JSON.stringify(d))
+    })()`)
+    await sleep(400)
+    ok(caLoaded, 'the calendar × gantt fixture loads through window.bento.loadDoc')
+    const viewHead = (id: string) => js<any>(`(() => { const v = document.querySelector('.sp-view[data-block-id="${id}"]'); if (!v) return null;
+      const s = v.querySelector('[data-view-span]'), l = v.querySelector('[data-view-layout]');
+      return { span: s ? { text: s.textContent, title: s.title } : null, layout: l?.textContent ?? null } })()`)
+    const calBlock = () => js<any>(`(() => window.bento.doc.pages.find(p => p.id === ${JSON.stringify(CA_PAGE)})?.blocks.find(b => b.id === ${JSON.stringify(CA_CAL)}))()`)
+    const g = await viewHead(CA_GANTT)
+    ok(g?.layout === 'Timeline' && g?.span === null,
+      `the gantt layout is still labelled "Timeline", with no span button (${JSON.stringify(g)})`)
+    const m0 = await viewHead(CA_CAL)
+    ok(m0?.layout === 'Calendar' && m0?.span?.text === 'Month' && m0?.span?.title === 'Show an agenda',
+      `a fresh calendar reads "Month" and offers "Show an agenda" (${JSON.stringify(m0)})`)
+    await tap(`document.querySelector('.sp-view[data-block-id="${CA_CAL}"] [data-view-span]')`)
+    await sleep(300)
+    const m1 = await viewHead(CA_CAL)
+    ok(m1?.span?.text === 'Agenda' && m1?.span?.title === 'Show a month at a time',
+      `after one click the span button reads "Agenda", never "Timeline" (${JSON.stringify(m1)})`)
+    const cb = await calBlock()
+    ok(cb?.span === 'timeline',
+      `…and the block STORES span: 'timeline', the unchanged format value (${JSON.stringify(cb?.span)})`)
+    await tap(`document.querySelector('.sp-view[data-block-id="${CA_CAL}"] [data-view-span]')`)
+    await sleep(300)
+    const cb2 = await calBlock()
+    ok(cb2 && !('span' in cb2) && (await viewHead(CA_CAL))?.span?.text === 'Month',
+      `a second click returns to the month grid and removes the key (${JSON.stringify(cb2?.span)})`)
     ws.close()
   } finally {
     try { child.kill('SIGKILL') } catch { /* gone */ }

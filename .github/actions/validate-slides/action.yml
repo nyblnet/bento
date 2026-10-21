@@ -1,0 +1,578 @@
+# validate, slides slice: bento/slides: typecheck, the single-file shell and its splice gate, and the slides rigs.
+#
+# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# action as steps INSIDE that one job, on the same runner, after the slices
+# listed before it there — so what earlier slices installed and built is on
+# disk here. A failing step here fails `validate` and blocks the merge.
+#
+# Add a new rig's step to the slice of the zone that owns the rig, at the
+# end. Every `run:` needs `shell: bento-step {0}`: GitHub refuses a composite
+# step with no shell, and bento-step (scripts/ci/) fails the step if a rig
+# reports a skip CI does not allow (scripts/lib/ci-skips.mjs). A step here
+# counts as registered for scripts/test-ci-registered.ts.
+
+name: validate-slides
+description: validate, slides slice (runs inside the required validate job)
+runs:
+  using: composite
+  steps:
+    - name: i18n packed table is current
+      # The per-locale catalogs are the source of truth; slides/src/i18n/
+      # packed.ts is generated from them and is what actually ships. A stale
+      # packed.ts would silently ship yesterday's translations.
+      shell: bento-step {0}
+      run: node scripts/build-i18n.mjs --check
+
+    - name: Slides Portuguese is pt-BR; the theme picker has its own words
+      # No European-Portuguese markers (ficheiro, guardar for save,
+      # diapositivo, separador, ecrã, tu forms…) in slides' pt catalog, and the
+      # Appearance picker uses "Light mode"/"Dark mode", never the "Light"
+      # font weight ("Fino").
+      shell: bento-step {0}
+      run: node scripts/test-slides-pt-br.mjs
+
+    - name: Typecheck
+      working-directory: slides
+      shell: bento-step {0}
+      run: node_modules/.bin/tsc -b
+
+    - name: Slides save revisions
+      # An edit, panel keystroke, remote op or undo during a write keeps the
+      # deck dirty; writes queue; the CRDT stamp is taken as each one starts;
+      # ⌘S, auto-save and Update this file all write through the queue.
+      shell: bento-step {0}
+      run: node scripts/test-slides-save-revisions.ts
+
+    - name: Slides count-up number rig
+      # #584 ruling: a single dot is a decimal point (12.500), only a
+      # well-formed group with two or more separators is thousands
+      # (1.250.000 settles as authored and counts up grouped).
+      shell: bento-step {0}
+      run: node scripts/test-slides-countup-number.ts
+
+    - name: Build single-file shell
+      working-directory: slides
+      shell: bento-step {0}
+      run: npm run build:single
+
+    - name: Splice conformance gate
+      shell: bento-step {0}
+      run: node scripts/shell-gate.mjs slides/dist-single/Bento_Slides.bento.html
+
+    - name: The gate refuses a sealed TEST shell
+      # Positive control for the gate's no-test-seal check (security §31): the
+      # build:sealtest shell carries the sealed test document's key handoff,
+      # inside its deflated runtime, and must be refused for it; the release
+      # shell from the same source must pass.
+      working-directory: slides
+      shell: bento-step {0}
+      run: |
+        npm run build:sealtest
+        node ../scripts/test-seal-gate.mjs
+
+    - name: Code-morph identity engine
+      # HeckelDiff decides which token on slide N is the same token as on
+      # slide N-1; every wrong answer is a token that jumps, tears, or steals
+      # another token's journey on screen. Regressions for the three pairing
+      # bugs found in review ride along.
+      shell: bento-step {0}
+      run: node scripts/test-codediff.ts
+
+    - name: sidebar multi-select — a block move keeps order and carries states
+      # Discussion #514. The unit is a parent with its states; the old
+      # single-index splice left states behind, which this rig shows.
+      shell: bento-step {0}
+      run: node scripts/test-slides-multiselect.ts
+
+    - name: presence toasts — said once per real arrival and departure
+      # A hidden tab's heartbeat arrives once a minute, the room drops the
+      # peer and the next beat brings them back: "left" / "joined" every
+      # minute for everyone else. The grace and the quiet window are what
+      # keep that silent; this rig runs them on a manual clock.
+      shell: bento-step {0}
+      run: node scripts/test-slides-presence-toasts.ts
+
+    - name: Media autoplay rig
+      # An author set a clip's Autoplay to Off and it played anyway, every
+      # show, since media shipped in v0.9.16. render.ts wrote
+      # data-autoplay="" when off — PRESENT but empty — and Reveal decides
+      # autoplay with hasAttribute(), so it played what our own value-based
+      # selector correctly ignored. The property pinned here is that an
+      # autoplay-off element carries NO such attribute, because its presence
+      # is read by code we do not own. Measured on rendered DOM: the
+      # difference between assigning '' and not assigning is invisible to a
+      # grep. Self-skips without Chrome.
+      shell: bento-step {0}
+      run: node scripts/test-media-autoplay.ts
+
+    - name: Embed element rig
+      # The `embed` element (docs/DECISIONS.md 2026-08-19 shape): the static
+      # view always paints through the svg sanitiser; a live sandboxed frame
+      # exists only online with the offline switch off, and drops back to
+      # the view on error. Node half plus headless Chrome with a request log.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-embed.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-embed.mjs"
+        node --no-warnings "$RUNNER_TEMP/test-embed.mjs"
+
+    - name: File-open / boot document gate rig
+      # Opening a foreign .bento.html and booting a directly-opened file run
+      # bare parseDoc -> render + injectFonts with no structural gate, exposing
+      # the document-level egress the element sanitiser never sees: a
+      # slide.background url(), an -face src from an external asset value,
+      # a weight/style src-breakout. Positive controls (raw) fetch; the opened
+      # document reaches the request log zero times; unknown keys/props from a
+      # NEWER deck survive (format additivity). Browser half needs Chrome.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-fileopen-gate.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-fileopen-gate.mjs"
+        node "$RUNNER_TEMP/test-fileopen-gate.mjs"
+
+    - name: Untrusted-markup sanitizer rig
+      # Every deck is untrusted input somebody may open, paste or receive over
+      # collab, and script in that page owns the collab keys, the plaintext
+      # autosave store and the write handle to the file on disk. An audit
+      # measured `<svg onload>`, a rect `onclick`, `<img onerror>` in a
+      # foreignObject and `<form action="javascript:">` all executing.
+      #
+      # The sanitizer is an ALLOWLIST, so what this pins is the DEFAULT: the
+      # first version was a denylist that passed 40 checks with the critical
+      # still open, because the rig tested call sites with source regexes
+      # instead of the policy. These checks drive the real walk, and the
+      # browser half needs Chrome — it self-skips where there is none, so the
+      # node half still gates.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-sanitize.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-sanitize.mjs"
+        node "$RUNNER_TEMP/test-sanitize.mjs"
+
+    - name: Replace-from-JSON document gate rig
+      # The document text that arrives through window.bento.loadDoc and
+      # "Replace from JSON…" is foreign input, full or compact. It passes the
+      # structural gate (restoregate.ts sanitizeDoc): the open deck keeps its
+      # identity (docId, collab, readonly), unknown keys/props are dropped, and
+      # the document-level egress surfaces the element sanitiser never sees —
+      # slide.background url(), an @font-face src resolved from an external
+      # asset value, a weight/style src-breakout — are neutralised. Positive
+      # controls (raw, un-gated) fetch; the gated document reaches the request
+      # log zero times. Browser half needs Chrome; it self-skips otherwise.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-replace-json-gate.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-replace-json-gate.mjs"
+        node "$RUNNER_TEMP/test-replace-json-gate.mjs"
+
+    - name: Export-secrets rig
+      # "Copy document JSON" shipped the room's owner private key while the
+      # tooltip recommended pasting it into an AI chat, and "Save as
+      # template…" wrote plaintext out of a password-protected deck. Both are
+      # invisible in the product: the file looks right. This scans the source
+      # for the two shapes — an export that forgets to strip collab secrets,
+      # and a user-facing path that reaches serializeFile instead of
+      # serializeAuto — so a NEW export path cannot reintroduce either.
+      shell: bento-step {0}
+      run: node scripts/test-export-secrets.ts
+
+    - name: bento check rig (browser)
+      # scripts/bento-check.mjs is the closing half of an agent's loop: load
+      # a deck in headless Chrome and report what validate() finds, with
+      # element ids and paths, plus one PNG per slide through #480's render
+      # path and a contact sheet. The rig drives it as a child process on
+      # the built shell: a deck with an overflowing box and an off-canvas
+      # rect names both; --json, --png, exit codes; a compact document is
+      # refused in plain words on a shell without compact input. Self-skips
+      # only OUTSIDE CI where Chrome or the shell is missing.
+      shell: bento-step {0}
+      run: node scripts/test-bento-check.ts
+
+    - name: Model key tables match the format
+      # slides/src/modelkeys.generated.ts is derived from model.ts and drives
+      # validate()'s unknown-key check. A stale copy would report real
+      # properties as unknown, and an agent acting on that deletes working
+      # configuration — so the generated file is committed and pinned here.
+      shell: bento-step {0}
+      run: node scripts/build-modelkeys.mjs --check
+
+    - name: Schema is current
+      # schema/slides.json is generated from the gate's tables
+      # (slides/src/schema.ts via scripts/build-schema.mjs) and published at
+      # bento.page/schema/slides.json; a stale file would describe a format
+      # the runtime does not accept, so the committed copy is pinned here.
+      shell: bento-step {0}
+      run: node scripts/build-schema.mjs --check
+
+    - name: Document schema rig
+      # one source (file == buildSchema == window.bento.schema()); schema
+      # keys == gate keys per type; the starter deck validates and a typo
+      # does not; $schema is stripped on load and accepted by the 1.1.0 and
+      # main parseDoc (frozen); the URL is never fetched.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-schema.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-schema.mjs"
+        node "$RUNNER_TEMP/test-slides-schema.mjs"
+
+    - name: Document validation rig
+      # validate() is only useful if it is trusted: the rig proves the starter
+      # deck and a realistic chart stay silent, and that a deliberately broken
+      # deck trips every check.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-validate.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-validate.mjs"
+        node "$RUNNER_TEMP/test-validate.mjs"
+
+    - name: Theme token gate
+      # Every failure this catches is INVISIBLE in the light theme, which is
+      # the one the author is looking at. A chrome surface pinned to white
+      # keeps its light background in dark and puts light text on it — the
+      # properties panel measured 1.21:1 against a 4.5 floor before this gate
+      # existed. It also stops a document token being themed (which would
+      # invert the deck) and the light palette forking from spaces and type.
+      shell: bento-step {0}
+      run: node scripts/test-slides-theme.mjs
+
+    - name: Brand palette rig
+      # themeRefs record where a colour came from so a deck can be re-branded.
+      # Three properties must hold or the feature is a liability: the
+      # derivation must be IDEMPOTENT (it runs on the doc event — one that
+      # never settles is a hang, not a wrong colour), stripping the new fields
+      # must leave every rendered value identical (every shipped shell reads
+      # the literals and always will), and an unresolvable reference must
+      # change nothing rather than writing undefined.
+      shell: bento-step {0}
+      run: node scripts/test-theme.ts
+
+    - name: Built-in layout geometry rig
+      # The built-ins are drawn against 1600x900 while the model default is
+      # 1280x720, so they used to hang 200px off the right edge of a default
+      # deck. Nothing structural could see it — the fix is arithmetic, and so
+      # is the regression.
+      shell: bento-step {0}
+      run: node scripts/test-layouts.ts
+
+    - name: slides asset-pruning rig
+      # doc.assets was append-only: delete every slide, save, and the "empty"
+      # deck was still 20 MB (#442). A save now writes a copy with the
+      # unreferenced assets dropped. Weighted toward "kept", one case per
+      # reference form, because dropping too much is the worse failure — an
+      # image gone from a file with nothing on screen to say so.
+      shell: bento-step {0}
+      run: node scripts/test-slides-assets.ts
+
+    - name: Slides built-in fonts rig
+      # The shell carries two faces; a deck names them (builtin:…) instead
+      # of embedding 86 KB the file already has. At save a deck embedding
+      # byte-identical bytes is rewritten to name them; a different font
+      # keeps its bytes; the live document is untouched; measured saving.
+      shell: bento-step {0}
+      run: node scripts/test-slides-fonts.ts
+
+    - name: Slides code colours rig
+      # theme.codePalette's editor: one row per token scope from one list
+      # (code.ts CODE_SCOPES), built-in colour shown when the deck has
+      # none, the field written only on a change; plain literals, not
+      # palette references. And accent 2–6 rows/swatches only for slots
+      # the deck carries (six identical peach swatches were not choices).
+      shell: bento-step {0}
+      run: node scripts/test-code-palette.ts
+
+    - name: Slides pagination rig
+      # Three ways a slide declines a page number (state, hidden, unnumbered)
+      # and only one of them stays in the walk; every surface — page fields,
+      # presenter counter, sidebar — asks the same predicate, and a build of
+      # morph steps reads "18, 18, 18" rather than "18, 19, 20" (#282).
+      shell: bento-step {0}
+      run: node scripts/test-slides-pagination.ts
+
+    - name: Slides reveal-steps rig
+      # fx.step, "animate on click": → reveals the next step before it
+      # leaves the slide, ← hides it; backward arrival is fully revealed;
+      # gaps are pressed through; the audience follows the presenter's
+      # step. Decisions in slides/src/steps.ts, DOM-free (#282, option 2).
+      shell: bento-step {0}
+      run: node scripts/test-slides-steps.ts
+
+    - name: Maths engine rig
+      # slides/src/maths replaced Temml (2026-09-15): never-throws contract;
+      # the 91-formula reference set matches Temml's FROZEN trees on ≥95%
+      # (scripts/fixtures/maths-reference.json; every mismatch must be a
+      # listed residual); Typst ≡ LaTeX on the shared tree; every emitted
+      # attribute is the engine's own; the symbol table has no duplicates.
+      shell: bento-step {0}
+      run: node scripts/test-maths-lite.ts
+
+    - name: Reveal authoring rig
+      # Reading order (top-to-bottom, then left-to-right, rows by vertical
+      # overlap) is deterministic; the verbs continue the slide's sequence;
+      # the badge cycle never reaches 0; and the badge layer is editor
+      # chrome that render/present/preview do not know.
+      shell: bento-step {0}
+      run: node scripts/test-slides-reveal-ui.ts
+
+    - name: Date/time field patterns rig
+      # {{date:M/D/YY}} / {{time:h:mm a}} pin a shape for every viewer
+      # (datefmt.ts): token precedence, [bracketed] literals, 12-hour
+      # tokens, locale month names; every panel preset formats; render.ts
+      # routes the argument. Bare {{date}} stays viewer-locale (#381).
+      shell: bento-step {0}
+      run: node scripts/test-slides-fields.ts
+
+    - name: Typed bullets become lists rig
+      # editor/bullets.ts bulletsToLists: glyph lines become real <ul><li>
+      # at commit (hanging indent), nesting by indent, untouched otherwise,
+      # idempotent; both paste handlers read the clipboard through
+      # editor/paste.ts (the html flavour, sanitized) -- #502, #503.
+      shell: bento-step {0}
+      run: node scripts/test-slides-bullets.ts
+
+    - name: Inline-edit listeners rig
+      # Every keydown/input/paste/blur listener a text-box or cell edit
+      # attaches carries that edit's AbortSignal, and both commits abort it —
+      # a node re-edited without a re-render used to stack listeners and
+      # paste N times.
+      shell: bento-step {0}
+      run: node scripts/test-slides-edit-listeners.ts
+
+    - name: Live-session notice wording rig
+      # A refused whole-deck snapshot (SyncNotice.snapshot, #509) is worded as
+      # the deck, never as a change or an image; the Share popover polls
+      # pendingBlobUploads() only while open; strings in every core catalog.
+      shell: bento-step {0}
+      run: node scripts/test-slides-sync-notice.ts
+
+    - name: Shell loader and carrier rig
+      # base86 payloads (scripts/lib/b86.mjs) round-trip and can never
+      # contain </script, <!--, -->, ]]> or ${; the loader inflates
+      # synchronously and runs the runtime as an inline classic script
+      # FIRST (mounted before DOMContentLoaded, as the uncompressed build
+      # is), probes and waits on nothing, falls to new Function then blob
+      # only on a refusal, installs Trusted Types policies lazily, and
+      # records window.bento.loader. The gate goes red on a hand-edited
+      # payload. The browser half drives headless Chrome with a real
+      # background tab: mounted before DCL hidden, splash gone within 50 ms
+      # of the mount there. Needs slides/node_modules and the built shell.
+      shell: bento-step {0}
+      run: node scripts/test-shell-loader.ts
+
+    - name: Maths in links rig
+      # resolveMath transforms text runs only: a `$` inside an href never
+      # pairs with one in the text, so a link whose address carries a
+      # dollar sign keeps its href (pre-existing since #465).
+      shell: bento-step {0}
+      run: node scripts/test-slides-math-href.ts
+
+    - name: Maths delimiters rig
+      # #540: \(…\) and \[…\] beside $…$ and $$…$$, escapes literal,
+      # "$5 and $10" still prose; display maths may span <br>/<div>/<p>
+      # line breaks and nothing else; the editor-only "Not rendered" hint;
+      # paste and commit keep a formula's backslashes. Real engine, DOM-free.
+      shell: bento-step {0}
+      run: node scripts/test-slides-math-delims.ts
+
+    - name: Code fence rig
+      # ``` fences in a text box: which text is a fence (closed only), the
+      # language aliases, autoformat's open-fence guard, and the elements a
+      # fenced box becomes (identity on the first part, no duplicate morph key).
+      shell: bento-step {0}
+      run: node scripts/test-slides-code-fence.ts
+
+    - name: Maths coverage rig
+      # #551: maths-lite against Temml's WHOLE vocabulary (1,237 commands and
+      # environments, frozen offline): no covered command may fall back to
+      # raw text, the rendering and tree-identical counts may not drop below
+      # the recorded floor, and every commonly typed formula renders. The
+      # check a fixed sample could not make, which is how #540 slipped by.
+      shell: bento-step {0}
+      run: node scripts/test-maths-coverage.ts
+
+    - name: Accent contrast rig
+      # The accent as text reads in both themes: every --accent-ink text use
+      # is audited against the surface behind it and reaches 4.5:1; text on
+      # the orange fill uses --accent-on; labels drawn over the slide carry a
+      # surface halo. Dark --accent-ink was #3a2a00 on dark chrome — 1.09:1.
+      shell: bento-step {0}
+      run: node scripts/test-slides-accent-contrast.ts
+
+    - name: Compact document rig
+      # The agent authoring form (#422): compactDoc/expandDoc are inverses
+      # on the starter deck, expansion equals the editor's insert helpers
+      # field for field, nested arrays flatten, ids mint deterministically,
+      # the loader gates the expanded doc, the file on disk stays full.
+      shell: bento-step {0}
+      run: node scripts/test-slides-compact.ts
+
+    - name: Agent-deck corpus rig
+      # scripts/fixtures/agent-decks/*.json — compact decks written the way
+      # agents write them (md, omitted h, nested arrays) — load through the
+      # real loader with zero dropped keys and zero validate() errors; a
+      # deliberately wrong deck reports every drop at its path with a reason.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-agent-decks.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-agent-decks.mjs"
+        node "$RUNNER_TEMP/test-slides-agent-decks.mjs"
+
+    - name: Compact layouts and roles rig
+      # A compact slide names a layout and its elements carry roles: the
+      # layout's frames through model.ts applyLayout (the editor's own
+      # path), ids kept so same-layout slides morph, unknown roles fall
+      # back and are reported, explicit geometry wins, bodies stack, and
+      # AGENTS.md's layout table is checked against the code.
+      shell: bento-step {0}
+      run: node scripts/test-slides-compact-layouts.ts
+
+    - name: Gate parity rig (the load-report collector changes no decision)
+      # main's untrusted.ts frozen from git at rig time and bundled beside
+      # the branch's; every checked-in deck plus a hostile corpus goes
+      # through both with the collector OFF and the outputs must be
+      # byte-identical. Security-reviewed hunk (#486).
+      shell: bento-step {0}
+      run: |
+        git fetch --no-tags --depth=1 origin main
+        node scripts/test-gate-parity.ts
+
+    - name: Layers panel rig
+      # editor/layerrows.ts, DOM-free: rows top-first, labels per type,
+      # group indent, moveInPaintOrder == the Order buttons (front/back/±1,
+      # a group moves as one, a no-op returns the same array), highlight
+      # follows the selection; render/present never see the list (#371).
+      shell: bento-step {0}
+      run: node scripts/test-slides-layers.ts
+
+    - name: Export slides as images rig
+      # exportimages.ts decisions (DOM-free): the page set is the print set
+      # (hidden/state out, deck order), names pad NN and use the kernel's
+      # own title sanitiser, JPEG matte/PNG none, 1x/2x integer sizes; and
+      # the editor half renders via renderSlide with no PREVIEW_BUDGET tier.
+      shell: bento-step {0}
+      run: node scripts/test-slides-export-images.ts
+
+    - name: Connectors rig
+      # #302/#303/#304: one tip catalogue (tips.ts) behind the model, the
+      # gate, the panel and the markers; per-tip insets (hollow tips stop the
+      # stroke at the head); the double arrow's polygon is symmetric; a
+      # curve's end tangent and the re-route that moves only its end points;
+      # the straight connector's 1.0.2 functions byte-identical.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-connectors.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-slides-connectors.mjs"
+        node --no-warnings "$RUNNER_TEMP/test-slides-connectors.mjs"
+
+    - name: Image crop rig
+      # crop.ts: {x, y, scale} → the one CSS mapping every surface uses;
+      # the frame can never show empty space; the shape gate admits the
+      # field and refuses wrong shapes; one image branch in render.ts;
+      # present tweens a crop only when both sides carry one (#319).
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-crop.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-crop.mjs"
+        node "$RUNNER_TEMP/test-slides-crop.mjs"
+
+    - name: Photos shrink at insert rig
+      # editor/shrink.ts decisions, DOM-free: photo vs graphic (lossy vs
+      # lossless), the ≥20% keep rule, the 2560 px cap, svg/gif untouched,
+      # every insert path routed, model.ts untouched. The encode itself is
+      # measured in Chrome (PR #).
+      shell: bento-step {0}
+      run: node scripts/test-slides-shrink.ts
+
+    - name: Compress pictures in this deck rig
+      # editor/compressdeck.ts planning half, DOM-free: image elements only,
+      # an asset once however many elements share it, SVG/GIF/media/fonts
+      # never; applyCompress writes in place and drops the replaced asset's
+      # blob reference; the editor dry-runs first and commits once.
+      shell: bento-step {0}
+      run: node scripts/test-slides-compress-deck.ts
+
+    - name: Image aspect-ratio lock rig
+      # keepAspectRatio (#372): absent = locked, so old files resize as
+      # before; Shift is the one-drag exception either way; re-locking
+      # deletes the field and keeps the current shape; unlocking sets
+      # fit:'fill'. Also holds the set-aside parts of #372 out of the tree.
+      shell: bento-step {0}
+      run: node scripts/test-slides-aspect-lock.ts
+
+    - name: Web links and bullets rig
+      # A link is one thing in four places — isWebUrl — and every surface
+      # that lets a URL in or out asks it: the shape gate, the text
+      # sanitizer, the markdown converters, and the show before it opens a
+      # NEW tab with noopener,noreferrer. javascript:/data: are text.
+      # Bullets from "- " and "* ", indented sub-bullets. (#421, #255, #368)
+      shell: bento-step {0}
+      run: node scripts/test-slides-links.ts
+
+    - name: Audience projection rig
+      # Live broadcast: the handout, the join snapshot and every streamed op
+      # go through slides/src/audience.ts, which keeps back speaker notes
+      # and review comments and nothing else. Runs the negative control
+      # first — with the boundary emptied the rig must go red, or it is
+      # checking nothing.
+      shell: bento-step {0}
+      run: |
+        if node scripts/test-audience-projection.ts --mutate > /dev/null 2>&1; then
+          echo 'negative control passed with the boundary removed'; exit 1; fi
+        node scripts/test-audience-projection.ts
+
+    - name: Audience embed rig
+      # An embed's document can carry another deck's envelope (collab +
+      # docId); the handout, the live snapshot and every live op the real
+      # engine emits must arrive without it. Negative control first.
+      shell: bento-step {0}
+      run: |
+        if node scripts/test-audience-embed.ts --mutate > /dev/null 2>&1; then
+          echo 'negative control passed with the envelope rule emptied'; exit 1; fi
+        node scripts/test-audience-embed.ts
+
+    - name: Broadcast follow-mode rig
+      # The audience side's decisions (slides/src/follow.ts): nav by slide
+      # ID with the index only as fallback — an insert mid-talk moves nobody;
+      # follow is the viewer's, lock is the presenter's and wins; laser
+      # samples rate-limited at the source with pen-up always sent.
+      shell: bento-step {0}
+      run: node scripts/test-broadcast-follow.ts
+
+    - name: slides store rig
+      # The editor's undo/redo, selection and whole-deck replacement, at the
+      # store level rather than through the DOM. Bundled first for the same
+      # reason the spaces rigs are: store.ts imports './model' without an
+      # extension, which node's strip-only TypeScript loader will not follow,
+      # so run by hand it fails with ERR_MODULE_NOT_FOUND and looks like a
+      # broken product. It had never been registered here.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slide-store.ts --bundle --platform=node --format=esm \
+          --outfile="$RUNNER_TEMP/test-slide-store.mjs"
+        node "$RUNNER_TEMP/test-slide-store.mjs"
+
+    - name: Slides share-copy rig
+      # The view-only and editor copies (slides/src/share.ts) carry only the
+      # kernel allowlist — no private key, a fresh invite, no sync on a reader —
+      # and strip any EMBEDDED document's envelope. Runs the real builders with
+      # real keys through the ts hook, like the type rig above.
+      shell: bento-step {0}
+      run: node scripts/test-slides-share.ts
+
+    - name: Clipboard embedded-font rig
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-clipboard.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-clipboard.mjs"
+        node "$RUNNER_TEMP/test-clipboard.mjs"
+
+    - name: Restore gate rig
+      # A snapshot kept in the browser (recovery banner, Version history) is
+      # foreign input: gated like a pasted clip, and it never brings its own
+      # docId, live-session credentials or file mode.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-restore-gate.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-restore-gate.mjs"
+        node "$RUNNER_TEMP/test-slides-restore-gate.mjs"
+
+    - name: Slides sync allowlist rig
+      # Slides binds its field-class map (slides/src/docclass.ts) into
+      # SLIDES_SHAPE: every key that synced before is still content, a
+      # non-content or unknown doc key mints no op, non-content is refused
+      # inbound, and an unknown key from a peer is applied but never echoed.
+      shell: bento-step {0}
+      run: node scripts/test-slides-sync-allowlist.ts

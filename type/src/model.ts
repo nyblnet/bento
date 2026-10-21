@@ -14,6 +14,7 @@
 import { normalize, shift as shiftMarks, type Mark } from './inline.ts';
 import { withoutCaps, projectForCopy } from '../../kernel/src/docfields.ts';
 import { TYPE_FIELDS } from './docclass.ts';
+import { sigId } from './canon.ts';
 // value import is safe: xref.ts imports only TYPES from this module, precisely
 // so the core can call into it without a cycle
 import { shiftRefs } from './xref.ts';
@@ -219,6 +220,43 @@ export const LETTER: PageSpec = {
   width: 816, height: 1056, marginX: 104, marginTop: 104, marginBottom: 104,
 };
 
+/**
+ * A font stack a document may carry, by GRAMMAR: a comma-separated list of
+ * names, each quoted ("Iowan Old Style", 'Iowan Old Style') or bare (Georgia,
+ * serif), made of letters, digits, spaces, hyphens, dots and underscores.
+ * Anything else is REFUSED (undefined), never trimmed into shape: nothing that
+ * could end a CSS declaration or rule (`;` `{` `}`), a string, or an HTML
+ * element (`<` `>`) can pass. Every consumer interpolates this into CSS —
+ * print and the preview into HTML strings — and a SYNCED value never passes
+ * parseDoc, so the consumers call it too, not only parseDoc.
+ */
+export function safeFontFamily(v: unknown): string | undefined {
+  if (typeof v !== 'string' || v.length > 300) return undefined;
+  const NAME = /^(?:"[A-Za-z0-9 ._-]+"|'[A-Za-z0-9 ._-]+'|[A-Za-z0-9][A-Za-z0-9 ._-]*)$/;
+  const parts = v.split(',').map(p => p.trim());
+  return parts.every(p => NAME.test(p)) ? parts.join(', ') : undefined;
+}
+
+/** Page geometry from a file — or from a synced doc, which never passed
+ *  parseDoc: print and the preview call this too. NUMBERS, or the default. Every consumer
+ *  interpolates these into CSS (print into an HTML string), so a string here
+ *  could end the element it is written into. Unknown keys ride along. */
+export function readPage(raw: Record<string, unknown>): PageSpec {
+  const num = (v: unknown, lo: number, hi: number): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : undefined;
+  const out = { ...LETTER, ...raw } as PageSpec & Record<string, unknown>;
+  out.width = num(raw.width, 100, 20000) ?? LETTER.width;
+  out.height = num(raw.height, 100, 20000) ?? LETTER.height;
+  out.marginX = num(raw.marginX, 0, 5000) ?? LETTER.marginX;
+  out.marginTop = num(raw.marginTop, 0, 5000) ?? LETTER.marginTop;
+  out.marginBottom = num(raw.marginBottom, 0, 5000) ?? LETTER.marginBottom;
+  for (const k of ['marginLeft', 'marginRight'] as const) {
+    const v = num(raw[k], 0, 5000);
+    if (v === undefined) delete out[k]; else out[k] = v;
+  }
+  return out;
+}
+
 export interface Signature {
   alg: 'ES256';
   /** raw P-256 public key, base64url — the identity. The name is only a claim. */
@@ -231,7 +269,9 @@ export interface Signature {
    *  historyCommitment). Reveals nothing about the revisions without the
    *  document's historySalt, so it travels in view-only copies. */
   history: string;
-  /** the signature this one commits to, chaining the order */
+  /** the SigId (canon.ts sigId) of the signature this one follows — ORDERING
+   *  only (ruling 7): a signature is valid on its own, whatever this says. A
+   *  signature made before ids existed holds the earlier signature's bytes. */
   prev: string;
   sig: string;
   /** self-asserted wall clock. Display only — order comes from `prev`. */
@@ -332,7 +372,12 @@ export interface TypeDoc {
   /** 128-bit, base64url. Salts the history commitment every signature carries.
    *  Minted at first sign, NEVER rotated, never synced (canon.ts newHistorySalt). */
   historySalt?: string;
-  signatures: Signature[];
+  /**
+   * Keyed by SigId (canon.ts sigId: derived from what was signed), so each
+   * signature syncs as its OWN key and concurrent signers both survive (ruling
+   * 7). An entry under any key but its own SigId is invalid.
+   */
+  signatures: Record<string, Signature>;
   /**
    * Is the document recording edits as tracked changes?
    *
@@ -521,6 +566,10 @@ function scrubEmbeds(doc: Record<string, unknown>, depth: number): Record<string
   return changed ? { ...doc, body: next } : doc;
 }
 
+/** A footnote id a FILE may carry: what uid() mints and nothing that could
+ *  leave an attribute. Render escapes ids too — a synced op never passes here. */
+const NOTE_ID = /^[A-Za-z0-9_.:-]{1,80}$/;
+
 export const uid = (p = 'b'): string => {
   const r = globalThis.crypto?.randomUUID?.();
   return r ? `${p}-${r.slice(0, 8)}` : `${p}-${Math.random().toString(36).slice(2, 10)}`;
@@ -532,7 +581,7 @@ export function emptyDoc(): TypeDoc {
     format: FORMAT, version: VERSION, docId: newDocId(),
     title: 'Untitled', page: { ...LETTER },
     body: [{ id: uid(), kind: 'para', text: '' }],
-    footnotes: {}, revisions: [], signatures: [],
+    footnotes: {}, revisions: [], signatures: {},
   };
 }
 
@@ -560,6 +609,33 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
  * the redline aligns blocks by id, and two parties whose copies disagree would
  * see phantom changes.
  */
+/**
+ * The `signatures` map, from whatever the file holds (ruling 7).
+ *  - the per-signature map: kept as it is, entries that are not objects
+ *    dropped; a key that is not its entry's own SigId is left for verify to
+ *    report as invalid, never silently re-keyed;
+ *  - an OLD array (before ruling 7): each entry keyed by its derived SigId,
+ *    once, here — the same act of signing gets the same key on every replica;
+ *  - absent or anything else: none.
+ * The docId is the FILE's: a SigId commits to it.
+ */
+function readSignatures(raw: unknown, docId: string): Record<string, Signature> {
+  const out: Record<string, Signature> = {};
+  const usable = (v: unknown): v is Signature =>
+    isObj(v) && typeof v.pub === 'string' && typeof v.sig === 'string';
+  if (Array.isArray(raw)) {
+    for (const v of raw) {
+      if (!usable(v)) continue;
+      let id: string;
+      try { id = sigId(docId, v); } catch { continue; }
+      if (!Object.hasOwn(out, id)) out[id] = v;
+    }
+  } else if (isObj(raw)) {
+    for (const [k, v] of Object.entries(raw)) if (usable(v)) out[k] = v;
+  }
+  return out;
+}
+
 export function parseDoc(raw: string): ParseResult {
   const trimmed = raw.trim();
   if (!trimmed) return { ok: false, err: 'empty' };
@@ -597,7 +673,7 @@ export function parseDoc(raw: string): ParseResult {
                                                  && typeof m.to === 'number' && typeof m.t === 'string'), text.length)
       : undefined;
     const notes = Array.isArray(b.notes)
-      ? (b.notes as NoteRef[]).filter(n => isObj(n) && typeof n.id === 'string' && typeof n.at === 'number')
+      ? (b.notes as NoteRef[]).filter(n => isObj(n) && typeof n.id === 'string' && NOTE_ID.test(n.id) && typeof n.at === 'number')
           .map(n => ({ id: n.id, at: Math.max(0, Math.min(n.at, text.length)) }))
           .sort((x, y) => x.at - y.at)
       : undefined;
@@ -737,7 +813,7 @@ export function parseDoc(raw: string): ParseResult {
 
   const footnotes: Record<string, string> = {};
   if (isObj(json.footnotes)) {
-    for (const [k, v] of Object.entries(json.footnotes)) if (typeof v === 'string') footnotes[k] = v;
+    for (const [k, v] of Object.entries(json.footnotes)) if (typeof v === 'string' && NOTE_ID.test(k)) footnotes[k] = v;
   }
   // a reference to a note that is not there would render as a marker with
   // nothing behind it — drop the reference, keep the text
@@ -794,12 +870,21 @@ export function parseDoc(raw: string): ParseResult {
     version: typeof json.version === 'number' ? json.version : VERSION,
     docId: typeof json.docId === 'string' && json.docId ? json.docId : newDocId(),
     title: typeof json.title === 'string' ? json.title : 'Untitled',
-    page: isObj(json.page) ? { ...LETTER, ...(json.page as object) } as PageSpec : { ...LETTER },
+    page: isObj(json.page) ? readPage(json.page) : { ...LETTER },
     body, footnotes,
     revisions: Array.isArray(json.revisions) ? json.revisions as Revision[] : [],
     ...(json.track === true ? { track: true } : {}),
-    signatures: Array.isArray(json.signatures) ? json.signatures as Signature[] : [],
+    signatures: readSignatures(json.signatures, typeof json.docId === 'string' ? json.docId : ''),
   };
+  // the document's default type: a filtered family and a size in range, or none
+  // (both are interpolated into CSS by every consumer — see readPage)
+  if (isObj(json.type)) {
+    const ty: { family?: string; size?: number } = {};
+    const f = safeFontFamily(json.type.family); if (f) ty.family = f;
+    const sz = json.type.size;
+    if (typeof sz === 'number' && Number.isFinite(sz) && sz >= 6 && sz <= 96) ty.size = sz;
+    if (Object.keys(ty).length) doc.type = ty; else delete doc.type;
+  } else delete doc.type;
   if (Object.keys(styles).length) doc.styles = styles; else delete doc.styles;
   // A salt is 16 bytes, base64url without padding: exactly 22 characters. Anything
   // else is not a salt — dropped, so its signatures report the history MISSING

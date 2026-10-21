@@ -18,7 +18,7 @@
 // into everyone else's file, or lets the author's chosen precision drift.
 
 import type { Column, ColumnType } from './model.ts'
-import { locale } from './i18n.ts'
+import { intlLocale } from './i18n.ts'
 
 /**
  * Viewer-scoped, never in the document.
@@ -38,7 +38,46 @@ let viewerLocale: string | undefined
 
 export const setViewerLocale = (l: string | undefined): void => { viewerLocale = l }
 
-const forNumbers = (): string | undefined => viewerLocale ?? locale()
+const forNumbers = (): string | undefined => viewerLocale ?? intlLocale()
+
+/**
+ * The VIEWER's decimal separator — '.' or ','. What a typist means by `1,234`
+ * (import.ts `readEntryNumber` asks this to break a tie only a single value
+ * can have), and the separator the formula bar writes a number back with, so
+ * that what it shows is what the same person would type to get it again.
+ */
+export function viewerDecimal(): '.' | ',' {
+  try {
+    const part = new Intl.NumberFormat(forNumbers()).formatToParts(1.5).find((p) => p.type === 'decimal')
+    return part?.value === ',' ? ',' : '.'
+  } catch {
+    return '.'
+  }
+}
+
+/**
+ * A number written the way a person would TYPE it, in the viewer's own
+ * separators: no grouping, as many digits as the value needs (15 significant,
+ * or 17 when 15 would not read back as the same double), and at least `minDp`
+ * decimals. The formula bar's half of "show what was entered".
+ */
+export function typedNumber(n: number, minDp = 0): string {
+  let digits = 15
+  if (Number(n.toPrecision(15)) !== n) digits = 17
+  const fmt = (sig: number) => new Intl.NumberFormat(forNumbers(), {
+    useGrouping: false,
+    maximumSignificantDigits: sig,
+  }).format(n)
+  let out = fmt(digits)
+  if (minDp > 0) {
+    // pad to the format's decimals: `$300.5` under `$#,##0.00` reads `$300.50`
+    const dec = viewerDecimal()
+    const at = out.indexOf(dec)
+    const have = at < 0 ? 0 : out.length - at - 1
+    if (have < minDp) out = (at < 0 ? out + dec : out) + '0'.repeat(minDp - have)
+  }
+  return out
+}
 
 /**
  * What an Excel-style pattern means, and the ONE place that decides it.
@@ -137,12 +176,37 @@ export function formatValue(v: unknown, col: Pick<Column, 'type' | 'format'>): s
   const rawDp = p.dp ?? (t === 'money' ? 2 : isPct ? 0 : shown % 1 === 0 ? 0 : 2)
   const dp = Math.max(0, Math.min(100, rawDp))
 
-  const group = p.group || (!col.format && (t === 'money' || Math.abs(shown) >= 10_000))
+  // GROUPING IS A PROPERTY OF THE COLUMN, never of one value. A plain number
+  // used to group from 10,000 up, so one column printed `8600` beside `24,800`.
+  // With no pattern, Money groups (as currency always does) and a plain number
+  // does not — Excel's, Sheets' and Numbers' General, and the only rule that
+  // cannot print a year as 2,026. A pattern with `#,##0` groups everything.
+  const group = p.group || (!col.format && t === 'money')
   // A percent COLUMN prints a `%` even with no pattern saying so, which
   // `assemble` cannot know from the pattern alone — so the sign is appended
   // here when the type, rather than the pattern, is what asked for it.
   const out = assemble(shown, p, dp, group)
   return isPct && !p.pct && !p.suffix ? `${out}%` : out
+}
+
+/**
+ * A value as a LIST shows it — a filter checklist, the pivot's filter list.
+ *
+ * A quantity prints the way its column prints it: a money column's box says
+ * £4,300 because the cell above it says £4,300, and a checklist that said 4300
+ * asked the reader to translate between two spellings of one number on one
+ * screen. Everything else prints as stored. `formatValue` is NOT used for those
+ * on purpose: it prints `false` in a Yes/No column as '' — the empty label the
+ * "(Blanks)" box owns — and a list must never offer two boxes that read alike.
+ */
+export function listLabel(v: unknown, col: Pick<Column, 'type' | 'format'> | undefined): string {
+  if (v == null) return ''
+  const t = col?.type
+  if (col && (t === 'number' || t === 'money' || t === 'percent')) {
+    const n = typeof v === 'number' ? v : Number(v)
+    if (Number.isFinite(n) && String(v).trim() !== '') return formatValue(n, col)
+  }
+  return String(v)
 }
 
 /** Right-align anything that is a quantity; left-align anything that is a word. */
@@ -152,4 +216,17 @@ export const alignFor = (t: ColumnType): 'left' | 'right' =>
 export const TYPE_LABEL: Record<ColumnType, string> = {
   text: 'Text', number: 'Number', money: 'Money',
   percent: 'Percent', date: 'Date', bool: 'Yes/No', enum: 'Category',
+}
+
+/** A column total, as the Total picker and the totals menu name it. English
+ *  here, translated at render time — the model words (`avg`) are not words a
+ *  reader should have to decode. */
+export const AGG_WORD: Record<'sum' | 'avg' | 'count' | 'min' | 'max', string> = {
+  sum: 'Sum', avg: 'Average', count: 'Count', min: 'Minimum', max: 'Maximum',
+}
+
+/** …and as the footer cell labels its own number, where there is room for a
+ *  short word only. Same keys, the catalogs' short forms ("Mittelw."). */
+export const AGG_SHORT: Record<'sum' | 'avg' | 'count' | 'min' | 'max', string> = {
+  sum: 'sum', avg: 'avg', count: 'count', min: 'min', max: 'max',
 }

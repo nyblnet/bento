@@ -651,8 +651,8 @@ console.log('\n9. the recovery banner\'s words, and the recovery-off notice\n')
   ok(enc.length === 0, 'an encrypted space: nothing (it was never snapshotted)')
 
   const main = readFileSync(join(process.cwd(), 'spaces/src/main.ts'), 'utf8')
-  ok(/wireRecoveryOff\(\{\s*docId: \(\) => store\.doc\.docId,\s*encrypted: isEncryptionActive,\s*say: \(msg\) => editor\.status\(msg, 8000\),?\s*\}\)/.test(main),
-    'main.ts registers the notice for the open space, encryption-aware, in the save status for 8s')
+  ok(/wireRecoveryOff\(\{\s*docId: \(\) => store\.doc\.docId,\s*encrypted: isBodySealed,\s*say: \(msg\) => editor\.status\(msg, 8000\),?\s*\}\)/.test(main),
+    'main.ts registers the notice for the open space, seal-aware (isBodySealed), in the save status for 8s')
   ok(/const spec = recoveryBanner\(snap, store\.doc\)[\s\S]{0,1200}?banner\(spec\.text, spec\.buttons\.map\(\(b\) => \[b\.label, run\[b\.action\], b\.primary, b\.focus\]\)\)/.test(main),
     'the recovery banner shows what recoveryBanner says, primary and focus and all')
   ok(/keep: \(\) => \{\}/.test(main), '"Keep the file" deletes nothing')

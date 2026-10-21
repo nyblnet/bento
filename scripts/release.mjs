@@ -35,7 +35,8 @@
 // rebuild producing different bytes than what was signed.)
 
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spliceDoc } from './guestbook-deck.mjs'
@@ -170,6 +171,19 @@ if (app.agents && existsSync(join(root, app.agents))) {
 // scripts/shell-gate.mjs (shared with CI, which runs it on every PR build).
 gateShell(join(site, `releases/${app.dir}/${app.shell}`))
 
+// PINS GATE (K4, security §18 / §36). Derive the release's pins from its OWN
+// bytes, a real file it saved, and boot it under them while driving its UI.
+// Any mismatch, any executable inline script in a saved file other than the
+// pinned loader and remover, or any refusal beyond the loader's two designed
+// fallbacks exits non-zero, and nothing below is signed. It needs Playwright
+// and Chromium (PLAYWRIGHT_MODULE, CHROME_PATH). Without them the pins can't be
+// checked, so the release stops there too: there's no unchecked path.
+const pinsDir = mkdtempSync(join(tmpdir(), 'bento-pins-'))
+const pinsPath = join(pinsDir, 'pins.json')
+const stagedShell = join(site, `releases/${app.dir}/${app.shell}`)
+console.log('• deriving and checking the release pins (derive-pins.mjs)…')
+execFileSync('node', [join(root, 'scripts/derive-pins.mjs'), stagedShell, '--out', pinsPath], { stdio: 'inherit' })
+
 const key = opt('key', null)
 
 /**
@@ -293,8 +307,31 @@ const signArgs = [
 ]
 if (notes) signArgs.push('--notes', notes)
 if (notesFrom) signArgs.push('--notes-from', JSON.stringify(notesFrom))
+signArgs.push('--pins', pinsPath)
 if (key) signArgs.push('--key', key)
 execFileSync('node', signArgs, { stdio: 'inherit' })
+
+// THE RELEASE HISTORY (K4): the published history plus this release, signed
+// with the same key. The held history came in with the seed from the live
+// tree, and sign-history verifies its signature before building on it. The
+// FIRST history is seeded by backfilling every earlier signed release from the
+// live repository's git history, each shell checked against its own manifest.
+{
+  const historyPath = join(site, `releases/${app.dir}/history.json`)
+  const historyArgs = [join(root, 'scripts/sign-history.mjs'), '--app', app.appId, '--version', version,
+    '--shell', stagedShell, '--pins', pinsPath, '--out', historyPath]
+  if (existsSync(historyPath)) historyArgs.push('--held', historyPath)
+  else if (existsSync(join(published, '.git'))) {
+    const seed = join(pinsDir, 'seed.json')
+    console.log('• first release history: backfilling every earlier signed release (backfill-history.mjs)…')
+    execFileSync('node', [join(root, 'scripts/backfill-history.mjs'), '--site', published, '--dir', app.dir, '--app', app.appId, '--out', seed], { stdio: 'inherit' })
+    historyArgs.push('--seed', seed)
+  } else {
+    console.log('⚠ no published history and no live repository to backfill from: the history starts at this release')
+  }
+  if (key) historyArgs.push('--key', key)
+  execFileSync('node', historyArgs, { stdio: 'inherit' })
+}
 
 // Language packs, for the apps that have a signed channel. build-i18n.mjs and
 // sign-packs.mjs are slides-hardcoded end to end (docs/i18n-packs.md), so an

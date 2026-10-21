@@ -18,6 +18,23 @@
 import type { KernelDoc } from './doc.ts'
 import { appConfig } from './app.ts'
 import { docStore, getJSON, setJSON } from './docstore.ts'
+import { isBodySealed, noteStoreRefusal } from './save.ts'
+
+/**
+ * The BACKSTOP (security): while the body is sealed, by a password or the
+ * identity seal, this store neither keeps nor offers a plaintext copy. Every app
+ * already guards its own calls; this is the one place they all go through, so an
+ * app that misses one of its sites still cannot write or offer plaintext.
+ * Deleting stays allowed (clearRecovery, clearVersions): the purge of copies left
+ * from an earlier unsealed session depends on it. Each refusal is counted
+ * (save.ts noteStoreRefusal), and the sealed-test rigs fail on any, so an app
+ * that relies on this instead of its own guard still fails its own rig.
+ */
+function sealedRefusal(): boolean {
+  if (!isBodySealed()) return false
+  noteStoreRefusal()
+  return true
+}
 
 /**
  * One database PER APP.
@@ -75,6 +92,29 @@ function open(name: string): Promise<IDBDatabase | null> {
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => resolve(null)
+    req.onblocked = () => resolve(null)
+  })
+}
+
+/**
+ * Open a database ONLY if it already exists. indexedDB.open() creates a
+ * missing one, and the sealed purge runs on every sealed boot: in a browser
+ * that never had the legacy database it would leave an empty one behind, a new
+ * side effect whose name alone says something (security). So when the open has
+ * to create it (an upgrade from version 0), abort that upgrade: the browser
+ * then discards the database it was creating, and this resolves null.
+ */
+function openExisting(name: string): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') { resolve(null); return }
+    let req: IDBOpenDBRequest
+    try { req = indexedDB.open(name) } catch { resolve(null); return }
+    let created = false
+    req.onupgradeneeded = (e) => {
+      if (e.oldVersion === 0) { created = true; req.transaction?.abort() }
+    }
+    req.onsuccess = () => { if (created) { req.result.close(); resolve(null) } else resolve(req.result) }
+    req.onerror = (e) => { e.preventDefault(); resolve(null) } // the abort lands here
     req.onblocked = () => resolve(null)
   })
 }
@@ -211,6 +251,7 @@ export function onRecoveryOff(fn: (docId: string, reason: string) => void): () =
 }
 
 export async function putRecovery(doc: KernelDoc): Promise<boolean> {
+  if (sealedRefusal()) return false
   const snap: Snapshot = { docId: doc.docId, at: Date.now(), title: doc.title, json: contentOnly(doc) }
   // Under a host with a per-document store (docstore.ts), the recovery copy
   // lives THERE — out of the storage origin every local file shares — and any
@@ -239,6 +280,7 @@ export async function putRecovery(doc: KernelDoc): Promise<boolean> {
 }
 
 export async function getRecovery(docId: string): Promise<Snapshot | null> {
+  if (sealedRefusal()) return null
   const ds = docStore()
   if (ds) {
     try {
@@ -278,21 +320,58 @@ export async function clearRecovery(docId: string): Promise<void> {
     } catch { /* host unavailable: nothing to clear there */ }
   }
   await tx(RECOVERY, 'readwrite', (s) => s.delete(docId))
+  if (isBodySealed()) await purgeLegacy(docId, RECOVERY)
 }
 
 /** Delete every version-history snapshot for a docId. Used when a deck is
  *  encrypted: the plaintext snapshots written before encryption was enabled must
  *  not linger in IndexedDB (they'd defeat the encryption the user just turned on). */
 export async function clearVersions(docId: string): Promise<void> {
-  const all = await listVersions(docId)
+  const all = await versionsOf(docId) // NOT listVersions: it reads nothing while sealed, and this must still delete
   await Promise.all(all.map((v) => tx(VERSIONS, 'readwrite', (s) => s.delete(v.id!))))
+  if (isBodySealed()) await purgeLegacy(docId, VERSIONS)
+}
+
+/**
+ * The sealed purge reaches the LEGACY shared database too (security). Shells
+ * shipped before the per-app scoping go on writing to 'bento-autosave' forever,
+ * so a document's plaintext from before it was sealed can sit there long after
+ * this app's own copy is gone, until pruneOld ages it out. While the body is
+ * sealed, purging a document deletes its rows there as well: that document
+ * only, by docId. Outside a seal, clearRecovery/clearVersions leave the legacy
+ * database alone, as before.
+ */
+async function purgeLegacy(docId: string, store: typeof RECOVERY | typeof VERSIONS): Promise<void> {
+  let name: string
+  try { name = dbName() } catch { return }
+  if (name === LEGACY_DB_NAME) return // already purged above
+  const legacy = await openExisting(LEGACY_DB_NAME)
+  if (!legacy) return
+  try {
+    await new Promise<void>((resolve) => {
+      let t: IDBTransaction
+      try { t = legacy.transaction(store, 'readwrite') } catch { resolve(); return }
+      const os = t.objectStore(store)
+      if (store === RECOVERY) os.delete(docId)
+      else {
+        const cur = os.index('docId').openCursor(IDBKeyRange.only(docId))
+        cur.onsuccess = () => { const c = cur.result; if (c) { c.delete(); c.continue() } }
+      }
+      t.oncomplete = () => resolve()
+      t.onerror = () => resolve()
+      t.onabort = () => resolve()
+    })
+  } finally {
+    legacy.close()
+  }
 }
 
 export async function addVersion(doc: KernelDoc): Promise<void> {
+  if (sealedRefusal()) return
   await tx(VERSIONS, 'readwrite', (s) =>
     s.add({ docId: doc.docId, at: Date.now(), title: doc.title, json: contentOnly(doc) } as Snapshot))
   // prune to the newest MAX_VERSIONS for this doc
-  const all = await listVersions(doc.docId)
+  const all = await versionsOf(doc.docId)
   if (all.length > MAX_VERSIONS) {
     const doomed = all.slice(MAX_VERSIONS)
     await Promise.all(doomed.map((v) => tx(VERSIONS, 'readwrite', (s) => s.delete(v.id!))))
@@ -300,6 +379,13 @@ export async function addVersion(doc: KernelDoc): Promise<void> {
 }
 
 export async function listVersions(docId: string): Promise<Snapshot[]> {
+  if (sealedRefusal()) return []
+  return versionsOf(docId)
+}
+
+/** Every version snapshot for a docId, newest first, whatever the seal: for
+ *  this module's own pruning and purging, never handed to an app. */
+async function versionsOf(docId: string): Promise<Snapshot[]> {
   const db = await openDb()
   if (!db) return []
   return new Promise((resolve) => {

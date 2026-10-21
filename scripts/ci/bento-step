@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The Bento authors
+# The shell every CI rig step runs under: `shell: bento-step {0}`.
+#
+# It runs the step's script exactly as `shell: bash` would (bash, -e, pipefail,
+# no profile), shows its output as it goes, and then FAILS THE STEP if any line
+# reads as a rig reporting a skip, unless scripts/lib/ci-skips.mjs allowlists
+# that skip. A rig that skips exits 0, so without this its step is green while
+# it checked nothing. The reasoning, and the allowlist, are in ci-skips.mjs.
+set -uo pipefail
+script="$1"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+out="$(mktemp)"
+bash --noprofile --norc -eo pipefail "$script" 2>&1 | tee "$out"
+status=${PIPESTATUS[0]}
+if [ "$status" -ne 0 ]; then rm -f "$out"; exit "$status"; fi
+node "$here/skip-check.mjs" "$script" "$out"
+status=$?
+rm -f "$out"
+exit "$status"

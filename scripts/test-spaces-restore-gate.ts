@@ -227,7 +227,7 @@ console.log('\nevery restore path uses the gate\n')
   // since the bar-parity move; About is read too so neither file can regress.
   const about = readFileSync(join(root, 'spaces/src/about.ts'), 'utf8') +
     readFileSync(join(root, 'spaces/src/doccmds.ts'), 'utf8')
-  const offer = main.slice(main.indexOf('async function offerRecovery('), main.indexOf('async function offerRecovery(') + 1400)
+  const offer = main.slice(main.indexOf('async function offerRecovery('), main.indexOf('async function offerRecovery(') + 2400)
   ok(/recoveryOffered\(snap\.json, doc, snap\.at\)/.test(offer), 'the recovery check gates before offering (timed by the snapshot)')
   ok(/recoverInto\(store, snap\)/.test(offer), 'the banner\'s Restore goes through recoverInto (restoreInto, \'recover\')')
   ok(/restoreVersion\((h\.)?store, v\.json\)/.test(about), 'History\'s Restore goes through restoreVersion (restoreInto, \'back\')')

@@ -880,5 +880,92 @@
   },
   "saTaken": {
     "message": "“$1”已存在。请换一个名称。"
+  },
+  "setIdTitle": {
+    "message": "Bento ID"
+  },
+  "setIdSub": {
+    "message": "用于共享和实时文档的身份。它保存在这个浏览器中；设置时会创建一个通行密钥和一个恢复码，让你可以找回它。"
+  },
+  "setIdNone": {
+    "message": "这个浏览器中还没有 Bento ID。"
+  },
+  "setIdCreate": {
+    "message": "创建 Bento ID…"
+  },
+  "setIdLocal": {
+    "message": "你的 Bento ID 已在这个浏览器中设置好。下一步是验证你的电子邮件。"
+  },
+  "idSetupTitle": {
+    "message": "创建 Bento ID"
+  },
+  "idSetupLead": {
+    "message": "通过 Bento ID，与你共享的人能确认是你本人。设置时会创建一个通行密钥和一个恢复码，让你能在其他设备上找回它。"
+  },
+  "idSetupLight": {
+    "message": "在浏览器扩展中，你的密钥保存在这个浏览器配置文件里。移除扩展会删除它们，请妥善保管通行密钥和恢复码。"
+  },
+  "idSetupLabel": {
+    "message": "此浏览器的名称"
+  },
+  "idSetupLabelDefault": {
+    "message": "Chrome"
+  },
+  "idSetupGo": {
+    "message": "设置通行密钥"
+  },
+  "idWorking": {
+    "message": "正在等待你的通行密钥…"
+  },
+  "idDeriving": {
+    "message": "正在生成恢复码（第 $1 步，共 2 步）…"
+  },
+  "idCodeTitle": {
+    "message": "你的恢复码"
+  },
+  "idCodeLead": {
+    "message": "请记下或打印出来，存放在安全的地方。它只显示这一次，如果你丢失了通行密钥，它就是找回的方法。"
+  },
+  "idCodeConfirm": {
+    "message": "输入恢复码，确认你已保存"
+  },
+  "idCodePrint": {
+    "message": "打印"
+  },
+  "idCodeSaved": {
+    "message": "我已保存"
+  },
+  "idCodeMismatch": {
+    "message": "这不是上方显示的恢复码。请检查后重试。"
+  },
+  "idCodeTypo": {
+    "message": "恢复码有输入错误：有字符错误或缺失。"
+  },
+  "idNoPrf": {
+    "message": "你的通行密钥无法在其他设备上解锁 Bento ID，因此这个恢复码是你唯一的找回方式。"
+  },
+  "idNoCode": {
+    "message": "此设备无法生成恢复码，因此通行密钥是你唯一的找回方式：一旦丢失，这个 Bento ID 也会丢失。你可以稍后在其他设备上生成恢复码。"
+  },
+  "idDoneTitle": {
+    "message": "Bento ID 已设置好"
+  },
+  "idDoneLead": {
+    "message": "它已在这个浏览器中可用。下一步是验证你的电子邮件地址。"
+  },
+  "idDone": {
+    "message": "完成"
+  },
+  "idErrCancelled": {
+    "message": "通行密钥请求已取消或超时。请让此窗口保持在前台，然后重试。"
+  },
+  "idErrPermission": {
+    "message": "通行密钥需要访问 bento.page。Chrome 询问时请允许，然后重试。"
+  },
+  "idErrFailed": {
+    "message": "出了点问题，没有保存任何内容。请重试。"
+  },
+  "idErrNoWayBack": {
+    "message": "没有完成设置：你的通行密钥无法解锁 Bento ID，而此设备也无法生成恢复码，这样将无法找回。"
   }
 }

@@ -1,0 +1,96 @@
+# CI, spaces: this zone's own jobs — validate, never release (see ci.yml's header).
+#
+# These jobs are NOT the required check. Only `validate` (ci.yml) gates a
+# merge; a job here reports beside it, exactly as it did when it lived in
+# ci.yml. Keep each job's id unchanged — the id IS the check name.
+#
+# Each job checks out and builds what it needs for itself. Add this zone's
+# new jobs here, at the end; never in ci.yml.
+
+name: CI (spaces)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # The same rule as ci.yml, whose comment explains it: PR runs collapse onto
+  # the tip, every commit on main keeps its own run.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    # Every step fails if a rig in it reports a skip CI does not allow
+    # (scripts/lib/ci-skips.mjs). No job here sets a working-directory, which
+    # this relative path relies on.
+    shell: bash scripts/ci/bento-step {0}
+
+jobs:
+  spaces-save-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser test runtime
+        # Pinned outside app packages: browser automation is not shipped in documents.
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Build the tested standalone documents
+        run: |
+          npm ci --prefix spaces
+          npm run build:single --prefix spaces
+          npm run build:sealtest --prefix spaces
+      - name: Exercise the packaged documents in Chromium
+        # Real UI and serialization, offline; delayed mock writes expose save races.
+        run: |
+          node scripts/test-spaces-save-browser.mjs
+      - name: A sealed space writes nothing readable (spaces, Chromium)
+        # The build:sealtest shell booted identity-sealed through the shared
+        # helper, plus a password space: no recovery snapshot or version in
+        # IndexedDB (also across a reload), no preview and no plaintext in the
+        # saved file, a neutral tab title, no recovery-off notice. The unsealed
+        # control shows each check can see a leak.
+        run: node scripts/test-spaces-sealed-browser.mjs
+      - name: One field look in Chromium (spaces)
+        # Port of slides' fields rig: every chrome text field, select and
+        # textarea (inspector incl. "Also known as", dialogs, view popovers,
+        # pickers, Share, comments, a designed space, the password gate) has
+        # the shared field look and amber focus ring in light, dark and
+        # OS-dark, never the UA's dress. "Also known as" shipped in it.
+        run: node scripts/test-spaces-fields-browser.mjs
+      - name: An encrypted space opens (one password gate, no loader failure)
+        run: node scripts/test-spaces-encrypted-browser.mjs
+      - name: Spaces recovery banner and recovery-off notice in Chromium
+        # An older recovery snapshot gets the warning with "Keep the file" the
+        # focused default (keeping deletes nothing; "Restore anyway" restores);
+        # a newer or equal one the plain banner that claims nothing; a host
+        # that refuses the recovery copy gets the notice once, held to read;
+        # pt and de show slides' words. Planted in bento-spaces-autosave.
+        run: node scripts/test-spaces-recovery-browser.mjs
+      - name: bento/id privacy notice and web deletion page (build rules + Chromium)
+        # A publishing build refuses any page still carrying a __PLACEHOLDER__;
+        # the deletion page's CSP pins its exact inline script and style and
+        # lets it reach only the directory. In Chromium with the API mocked:
+        # the start → code → done flow, its refusals, and that it never says
+        # whether an address exists.
+        run: node scripts/test-id-pages-browser.mjs
+      - name: bento.page passkey association files never publish a placeholder
+        # scripts/well-known.mjs fills /.well-known/apple-app-site-association
+        # and assetlinks.json from site-src/well-known/ once the Apple team id
+        # and the Play signing fingerprint exist. It writes only what it was
+        # given, refuses a malformed value, and never emits a placeholder: the
+        # platforms cache these files, so a wrong one is worse than none.
+        run: node scripts/test-well-known.ts
+      - name: Release pins in Chromium
+        # bento/connect K4 (security §18/§36): this build's pins come from its
+        # own bytes, a real file its ⌘S saved, and it boots under them while its
+        # UI is driven, with only the loader's two designed refusals. What
+        # release.mjs requires before it signs, checked on every PR.
+        run: node scripts/derive-pins.mjs spaces/dist-single/Bento_Spaces.bento.html

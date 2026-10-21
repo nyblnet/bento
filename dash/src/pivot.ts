@@ -75,9 +75,9 @@
 // The engine half is pure and runs in node; the DOM half is at the bottom.
 
 import './pivot.css'
-import type { Column, ColumnData, Sheet, TableSheet } from './model.ts'
+import type { Column, ColumnData, Sheet, StoredPredicate, TableSheet } from './model.ts'
 import { readCell } from './store.ts'
-import { buildOrder, isBlank, type ColumnFilter, type Get } from './filter.ts'
+import { buildOrder, isBlank, type ColumnFilter, type Get, type Predicate } from './filter.ts'
 import { formatValue } from './format.ts'
 import { t } from './i18n.ts'
 
@@ -92,6 +92,63 @@ export const AGG_FNS: AggFn[] = ['sum', 'avg', 'count', 'min', 'max', 'median', 
 export const AGG_LABEL: Record<AggFn, string> = {
   sum: 'Sum', avg: 'Average', count: 'Count', min: 'Min', max: 'Max',
   median: 'Median', countDistinct: 'Distinct',
+}
+
+/**
+ * One entry in the pivot's Filters area, in the form that survives JSON. `pred`
+ * absent = "(All)". `pred` may also be a live filter.ts `Predicate` (a `Set`
+ * checklist) for a caller that built one in memory — `liveFilters` reads both.
+ */
+export interface PivotFilter {
+  col: string
+  pred?: StoredPredicate | Predicate
+  [extra: string]: unknown
+}
+
+/**
+ * Stored filters → the live ones `buildOrder` evaluates.
+ *
+ * Entries with no predicate are the "(All)" case and drop out; a predicate op
+ * this build cannot evaluate drops out too — KEPT in the document by the spread
+ * in `readPivotSpec`, refused here, the additive rule `toPredicate` in story.ts
+ * follows. A copy of that bridge rather than an import of it, because story.ts
+ * is a DOM module and this half of the file runs in node.
+ */
+export function liveFilters(filters: readonly PivotFilter[] | undefined): ColumnFilter[] {
+  const out: ColumnFilter[] = []
+  for (const f of filters ?? []) {
+    if (!isObj(f) || typeof f.col !== 'string' || !isObj(f.pred)) continue
+    const p = f.pred as Record<string, unknown>
+    switch (p.op) {
+      case 'isOneOf': {
+        const set = p.set instanceof Set ? p.set
+          : new Set(Array.isArray(p.values) ? p.values : [])
+        out.push({ col: f.col, pred: { op: 'isOneOf', set } })
+        break
+      }
+      case 'equals': case 'notEquals': case 'greater': case 'less':
+      case 'greaterOrEqual': case 'lessOrEqual':
+        out.push({ col: f.col, pred: { op: p.op, v: p.v } as Predicate })
+        break
+      case 'contains': case 'notContains': case 'startsWith': case 'endsWith':
+        out.push({ col: f.col, pred: { op: p.op, v: String(p.v ?? '') } as Predicate })
+        break
+      case 'between':
+        out.push({ col: f.col, pred: { op: 'between', lo: p.lo, hi: p.hi } })
+        break
+      case 'isBlank': case 'notBlank':
+        out.push({ col: f.col, pred: { op: p.op } })
+        break
+      case 'topN': case 'bottomN': {
+        const n = Number(p.n)
+        if (Number.isFinite(n)) out.push({ col: f.col, pred: { op: p.op, n } })
+        break
+      }
+      default:
+        break
+    }
+  }
+  return out
 }
 
 export interface PivotValue {
@@ -118,8 +175,20 @@ export interface PivotSpec {
   /** column fields, outermost first */
   cols: string[]
   values: PivotValue[]
-  /** the pivot's OWN filters — document state, unlike the grid's (filter.ts:3) */
-  filters?: ColumnFilter[]
+  /**
+   * The pivot's OWN filters — document state, unlike the grid's (filter.ts:3).
+   *
+   * STORED IN THE JSON SPELLING (`PivotFilter`): a checklist is `values`, an
+   * array, because filter.ts's live `Set` serializes as `{}` and would come back
+   * from the file matching NOTHING — model.ts's `StoredFilter` rule, and the
+   * spelling a story step already uses. A live `ColumnFilter` is accepted too,
+   * so a caller holding one need not convert it.
+   *
+   * An entry with NO `pred` is a field sitting in the editor's Filters area with
+   * every value allowed — Excel's "(All)". It filters nothing, and it is kept so
+   * the field stays where the author put it.
+   */
+  filters?: PivotFilter[]
   /** default true */
   subtotals?: boolean
   /** default true */
@@ -594,12 +663,23 @@ export function runPivot(sheet: TableSheet, spec: PivotSpec, opts: PivotOpts = {
   // The pivot's OWN filters, through filter.ts — one implementation of "less
   // than 10", not two. `topN` works here too, and ranks the whole source.
   let rows: number[]
-  if (spec.filters?.length) {
+  // Filters on a column that is gone are dropped and REPORTED, like a row or a
+  // column field: filtering on nothing would admit no rows at all, and a pivot
+  // of nothing beside a sentence that does not say why is the empty-axis lie.
+  const filters = liveFilters(spec.filters).filter((f) => {
+    if (has(f.col)) return true
+    findings.push({
+      kind: 'missing-column',
+      detail: `the filter field "${f.col}" names a column this sheet no longer has, so it is not filtering`,
+    })
+    return false
+  })
+  if (filters.length) {
     const get: Get = (c, row) => {
       const cv = comp(c)
       return cv ? cv[row] ?? null : readCell(col(c), row)
     }
-    rows = buildOrder(n, get, spec.filters, [])
+    rows = buildOrder(n, get, filters, [])
   } else {
     rows = Array.from({ length: n }, (_, i) => i)
   }
@@ -1109,7 +1189,11 @@ export function mountPivot(host: HTMLElement, res: PivotResult, opts: PivotViewO
         td.title = t('no rows')
       } else {
         td.title = t('{n} source rows').replace('{n}', String(cell.rows))
-        if (cell.skipped) {
+        // A COUNT reads every value, number or not — "Count of Owner" counts
+        // names, and marking each of its cells "values are not numbers and were
+        // not counted" says the opposite of what happened. Only the functions
+        // that do arithmetic can be short.
+        if (cell.skipped && c.value.fn !== 'count' && c.value.fn !== 'countDistinct') {
           // Never folded into the number and never hidden: this is `Column.failed`
           // (model.ts:87) at the aggregate level.
           td.classList.add('dxp-skipped')

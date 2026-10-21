@@ -48,13 +48,16 @@ const INCLUDE = [
   /^manifest\.json$/,
   /^icons\/[^/]+\.(png|svg)$/,
   /^src\/[^/]+\.(js|html|css)$/,
-  // bento/id: the agent's modules, and the statement code generated from kernel
-  // (scripts/gen-webext-id.mjs) — one level for src/id, one for src/id/gen
+  // bento/connect: the agent's modules, the code generated from kernel
+  // (scripts/gen-webext-id.mjs), and the vendored Argon2id with its licence
   /^src\/id\/(gen\/)?[^/]+\.js$/,
+  /^src\/id\/vendor\/noble-hashes\/([^/]+\.js|LICENSE)$/,
   /^_locales\/[a-zA-Z_]+\/messages\.json$/,
 ]
 /** Present on purpose, deliberately NOT shipped. */
-const EXCLUDE = [/^probe\//, /^README\.md$/, /^STORE\.md$/]
+const EXCLUDE = [/^probe\//, /^README\.md$/, /^STORE\.md$/,
+  // the vendored files' pin list: checked by scripts/test-webext-id.ts, not shipped
+  /^src\/id\/vendor\/[^/]+\/VENDOR\.json$/]
 
 const problems = []
 const fail = (m) => problems.push(m)

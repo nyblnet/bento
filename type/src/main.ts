@@ -25,7 +25,7 @@ import { Editor } from './editor.ts';
 import { paginate, drawPages, type Metrics } from './paginate.ts';
 import { takeSnapshot, startReview } from './redlineview.ts';
 import { printDocument, buildPrintDocument } from './print.ts';
-import { sign as signDoc, verifyChain, newKey, newHistorySalt, exportPub, historyDisplay, type HistoryLine } from './canon.ts';
+import { sign as signDoc, verifyAll, sigId, latestSignature, newKey, newHistorySalt, exportPub, historyDisplay, type HistoryLine } from './canon.ts';
 
 // Tell the kernel who this app is — must precede any kernel module use
 // (window title suffix, save-picker label, update manifest).
@@ -872,13 +872,16 @@ document.getElementById('sign')!.addEventListener('click', async () => {
     const salt = newHistorySalt();
     store.commit(d => { d.historySalt = salt; }, { undoable: false });
   }
-  const prev = store.doc.signatures[store.doc.signatures.length - 1] ?? null;
+  // follows the latest signature in display order — ORDERING only (ruling 7)
+  const prev = latestSignature(store.doc.signatures);
   const entry = await signDoc(store.doc, key, { name, prev });
+  const id = sigId(store.doc.docId, entry);
   entry.at = new Date().toISOString();
   // NOT undoable (ruling 7): a signature leaves only by its signer's or the
   // owner's removal, never by ⌘Z — and a 'back' restore keeps signatures live
   // (restorerules.ts), so an undo step here would only be a step that does nothing.
-  store.commit(d => { d.signatures.push(entry); }, { undoable: false });
+  // its OWN key, so a concurrent signer's lands beside it rather than over it
+  store.commit(d => { d.signatures[id] = entry; }, { undoable: false });
   markDirty(); showTab('sigs'); await paintSigs();
   toast('Signed');
 });
@@ -898,7 +901,7 @@ async function paintSigs() {
   const box = document.getElementById('sigsPanel')!;
   const sigs = store.doc.signatures;
   box.replaceChildren();
-  if (!sigs.length) {
+  if (!Object.keys(sigs).length) {
     const h = el('div', 't-hint');
     h.innerHTML = `Nothing signed yet.<br><br>A signature covers the document's <b>content</b> —
       not its timestamp, not which theme you are using — so re-saving never breaks one, but
@@ -907,17 +910,18 @@ async function paintSigs() {
     box.appendChild(h);
     return;
   }
-  const res = await verifyChain(store.doc, sigs);
+  const res = await verifyAll(store.doc, sigs);
   const mine = await devicePub();
-  sigs.forEach((s, i) => {
-    const r = res.entries[i];
+  res.entries.forEach(r => {
+    const s = r.sig;
     const card = el('div', 't-card');
     // ATTESTATION — checked for every signature: is it valid, and is the
     // content what was signed?
-    const state = r.ok && r.linked ? `<span class="t-ok">${esc(t('✓ valid'))}</span>`
-      : (!r.ok && r.why === 'content-changed'
+    // Each signature stands on its own (ruling 7): which one it follows is
+    // ordering, shown below, and never makes it invalid.
+    const state = r.ok ? `<span class="t-ok">${esc(t('✓ valid'))}</span>`
+      : (r.why === 'content-changed'
         ? `<span class="t-bad">${esc(t('✕ the content has changed since this was signed'))}</span>`
-        : !r.linked ? `<span class="t-warn">${esc(t('⚠ not linked to the previous signature'))}</span>`
         : `<span class="t-bad">${esc(t('✕ invalid signature'))}</span>`);
     // HISTORY — shown as a state only where this replica can know it (ruling
     // (8), canon.ts historyDisplay); someone else's reads neutral.
@@ -930,13 +934,13 @@ async function paintSigs() {
       `<div class="what" style="font-weight:600">${esc(s.name || 'unnamed')}</div>` +
       `<div class="t-fp">${fingerprint(s.pub)}</div>` +
       `<div class="who" style="margin:5px 0 0">${state}` +
-      `${i > 0 ? ` · ${esc(t('after {name}', { name: sigs[i - 1].name || 'previous' }))}` : ''}</div>` +
+      `${r.after ? ` · ${esc(t('after {name}', { name: sigs[r.after].name || 'previous' }))}` : ''}</div>` +
       hist;
     box.appendChild(card);
   });
   // two names on one key is exactly what a signature cannot prove
   const byKey = new Map<string, Set<string>>();
-  for (const s of sigs) {
+  for (const s of Object.values(sigs)) {
     if (!byKey.has(s.pub)) byKey.set(s.pub, new Set());
     byKey.get(s.pub)!.add(s.name || 'unnamed');
   }
