@@ -102,3 +102,23 @@ runs:
       # entries removed for documents a walk no longer finds. Apple only.
       shell: bento-step {0}
       run: node scripts/test-home-spotlight.mjs
+
+    - name: home/ios gate-1 rig
+      # bento/connect gate 1 in Swift against home/fixtures/gate1: the signed
+      # history, the served path (one release must match every block), the
+      # strict file:// fallback, anti-rollback and the CSP, plus a differential
+      # fuzz against kernel/src/gate1.ts. Apple only.
+      shell: bento-step {0}
+      run: node scripts/test-home-gate1.mjs
+
+    - name: home/ios release history rig
+      # The history gate 1 checks against: the bundled floor, anti-rollback on
+      # refresh, a held copy re-verified on every read. Apple only.
+      shell: bento-step {0}
+      run: node scripts/test-home-release-history.mjs
+
+    - name: iOS release-history build check rig
+      # A release build fails closed unless every published app's current
+      # signed history is bundled; a debug build only warns.
+      shell: bento-step {0}
+      run: node scripts/test-check-ios-release-history.mjs

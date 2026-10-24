@@ -95,7 +95,7 @@ const dir = mkdtempSync(join(tmpdir(), 'bento-releases-'))
 writeFileSync(join(dir, 'main.swift'), MAIN)
 const bin = join(dir, 'verifier')
 try {
-  execFileSync('swiftc', ['-O', '-o', bin, join(ROOT, 'home/ios/Releases.swift'), join(dir, 'main.swift')],
+  execFileSync('swiftc', ['-O', '-o', bin, join(ROOT, 'home/ios/Releases.swift'), join(ROOT, 'home/ios/ReleaseKeys.swift'), join(dir, 'main.swift')],
     { stdio: 'pipe' })
 } catch (e) {
   console.error('swiftc failed:\n' + (e.stderr?.toString() ?? e.message))

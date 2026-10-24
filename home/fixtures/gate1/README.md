@@ -15,7 +15,7 @@ disagrees with any declared verdict.
 | host | rig |
 |---|---|
 | reference (JS, kernel/src/gate1.ts) | `node scripts/test-gate1.ts` |
-| `home/ios` (Swift) | to build |
+| `home/ios` (Swift) | `node scripts/test-home-gate1.mjs` (corpus, a differential fuzz against this reference, and a WebKit oracle); `node scripts/test-home-gate1-host.mjs` (in the app, on a simulator) |
 | `home/android` (Kotlin) | to build |
 | `home/desktop` (Rust) | `cargo test` in `home/desktop/gate1` |
 

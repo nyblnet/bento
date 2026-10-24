@@ -48,6 +48,8 @@ jobs:
             test-home-id-agent.mjs
             test-home-id-recovery.mjs
             test-home-spotlight.mjs
+            test-home-gate1.mjs
+            test-home-release-history.mjs
           )
           for rig in "${rigs[@]}"; do
             echo "::group::$rig"
@@ -77,3 +79,11 @@ jobs:
           set -o pipefail
           node scripts/test-home-snapshot-cover.mjs | tee "$RUNNER_TEMP/rig.out"
           if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::snapshot cover skipped on macOS"; exit 1; fi
+      - name: Gate 1 in the app (a skip fails)
+        # The editor serves a genuine document under its release's pinned CSP,
+        # and an unknown one as before; read back on a simulator, attack rows included.
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/test-home-gate1-host.mjs | tee "$RUNNER_TEMP/rig.out"
+          if grep -q 'SKIPPED' "$RUNNER_TEMP/rig.out"; then echo "::error::gate 1 host skipped on macOS"; exit 1; fi
