@@ -4,5 +4,7 @@
     <application>
         <activity android:name=".RecoveryProbeActivity" android:exported="true"
             android:theme="@style/Theme.Tray" />
+        <activity android:name=".Gate1OracleActivity" android:exported="true"
+            android:theme="@style/Theme.Tray" />
     </application>
 </manifest>

@@ -70,8 +70,8 @@ object Releases {
     /** Release signing PUBLIC key, copied from `kernel/src/update.ts`. The
      *  private half lives offline with the maintainer. Rotating it orphans every
      *  previously shipped file, so the key is guarded rather than rotated. */
-    private const val KEY_X = "GMHSKwWcAoJVq-Dz1ZxWZM6TXATWIKbaQBpjoTystH8"
-    private const val KEY_Y = "flFNzbdXCmJN8RQYCeG71rBZnnbN-MCEnp1EbCLFrj0"
+    internal const val KEY_X = "GMHSKwWcAoJVq-Dz1ZxWZM6TXATWIKbaQBpjoTystH8"
+    internal const val KEY_Y = "flFNzbdXCmJN8RQYCeG71rBZnnbN-MCEnp1EbCLFrj0"
 
     private const val TIMEOUT = 20_000
 
@@ -312,7 +312,7 @@ object Releases {
 
     // ------------------------------------------------------------------- net
 
-    private fun get(url: String): ByteArray {
+    internal fun get(url: String): ByteArray {
         if (!url.startsWith("https://")) throw Failed("the release server offered a non-HTTPS build")
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = TIMEOUT

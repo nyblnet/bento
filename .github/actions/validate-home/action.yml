@@ -69,3 +69,11 @@ runs:
       # report its own import failure.
       shell: bento-step {0}
       run: node scripts/test-doc-index.mjs
+
+    - name: gate 1 oracle in Android WebView
+      # Gate1.kt's GENUINE verdicts loaded in Android's own WebView, which must
+      # run only the release's loader and remover; and Gate1.kt diffed against
+      # the reference on kernel's mutants. Needs an emulator or device, so it
+      # skips here (scripts/lib/ci-skips.mjs); run it locally against one.
+      shell: bento-step {0}
+      run: node scripts/test-home-android-gate1-oracle.mjs

@@ -11882,3 +11882,87 @@ own rig run against the extension's copy.
   clearing. Measured: libsecret's clear silently skips items in a locked
   keyring, so the re-count is what keeps a wipe from reporting success while
   keys remain.
+
+## 2026-10-21 — bento/connect on Android: gate 1 when serving a document (A2)
+
+The Android editor serves the document's bytes itself, so before serving it
+asks gate 1 (`Gate1.kt`, a port of `kernel/src/gate1.ts`, served path only)
+whether those bytes are one genuine release's.
+
+- **The history.** Each app's signed release history
+  (`releases/<app>/history.json`) is BUNDLED in the APK at build time, from the
+  published site clone (`BENTO_SITE_DIR`, never a URL fetched at build time).
+  It is verified under the release key on first read like any fetched copy, and
+  acts as the floor: acceptHistory only moves forward from it, and a newer
+  bundle (an app update) is adopted only as such a forward move. Refreshes ride
+  ONLY on contacts the person starts: a New document, or "Check for updates"
+  in the documents screen's ⋮ menu. Opening a document never phones home
+  (vault). Reinstalling an older app resets the floor (accepted).
+  Release builds FAIL CLOSED (`checkBundledHistoriesRelease`): for every app
+  with a published manifest, a history must be bundled, verify under the
+  release key (read from `Releases.kt`, its one home), and be at least as new
+  as the manifest. Otherwise the build fails with "no published release history
+  for <app>; publish a release first". Debug builds only warn. Release builds
+  trust the release key alone (`src/release/HistoryKeys.kt`). Debug builds also
+  trust one throwaway test key, absent from the release APK's dex (checked).
+- **The decision.** The bytes are tried against EVERY held app's history, never
+  chosen from the document's `format`. A sealed document says `bento/enc` and
+  a never-saved shell says nothing, but gate 1 is about the runtime. GENUINE
+  serves every response for the document with the release's hash-pinned CSP
+  (`hostPolicy`, byte-identical to the reference). UNKNOWN is served exactly as
+  before, with no CSP, and never borrows one. The bytes and their verdict are
+  published together, so a response can't pair one file's bytes with another's
+  CSP. A save in place re-decides for the new bytes.
+- **The scanner reads start tags as the HTML tokenizer does** (`parseStartTag`,
+  mirroring the reference at #825's head). Whitespace or "/" separates
+  attributes, a quoted value ends one, a leading "=" belongs to a name, and the
+  first duplicate wins. A `<script>` tag with a "/" or a duplicate is refused
+  outright. Case is folded ASCII-only and length-preserving, never with
+  `lowercase()`, which turns 'İ' into two units and shifts every offset after
+  it. Blocks and markup come from ONE walk in document order, never a search
+  for "<script": in `<meta<style><script>…` a browser sees one tag named
+  `meta<style` and then a real script (home-ios's WebKit oracle). Raw-text
+  elements are skipped to their real end tag, and a start tag named outside
+  `[a-z][a-z0-9-]*` is UNKNOWN. End tags are read with the start tag's
+  attribute reader (`</p a="><b c='">` ends at its second ">"), and an end tag
+  carrying attributes or an odd name is UNKNOWN (#834). Every held history is
+  tried, and exactly one must match (`verifyServedHeld`, #842). Planted faults
+  confirm the corpus catches the fold, the separator, the name rule and the
+  end-tag rule.
+- **Measured against the REAL release (slides 1.2.10, its published signed
+  history, the release key).** With that history staged, the release-build
+  check passes and `assembleRelease` bundles it. On the emulator, with ONLY the
+  bundled real history held:
+  - the published fresh shell (empty document block, names no app) is GENUINE;
+  - the same file after a ⌘S save in place is GENUINE;
+  - one byte changed in the loader is UNKNOWN.
+
+  The real history only verifies under the release key, so these can't be the
+  debug test key at work. `Gate1Test` pins the same: the corpus's real release
+  key equals the key `Releases.kt` carries, and the app id is `bento-slides`,
+  never the directory name.
+- **Measured on the emulator.** A history signed with the debug key, pinning a
+  slides build and a file that build saved through ⌘S:
+  - the genuine file boots normally under the pinned CSP, and an injected
+    inline script is blocked (a CSP violation fires);
+  - the same file with one byte changed in the loader is served without a CSP,
+    and the injected script runs;
+  - the genuine file with no history held is served without a CSP.
+
+  The one refusal during the genuine boot is the loader's designed inline
+  attempt; it then boots through `blob:`.
+
+- **An oracle in Android's own WebView** (`scripts/test-home-android-gate1-oracle.mjs`,
+  security). It lifts kernel's mutant generator verbatim from
+  `test-gate1-oracle.mjs`, so the two can't drift, and runs the same fixed seed
+  plus a printed random one. A debug-only Activity gives Gate1.kt's verdict for
+  every mutant, and loads every GENUINE one in a WebView with no CSP. With the
+  glued-tag and end-tag operators (50 end-tag mutants in the last run): 500
+  mutants, Gate1.kt agreeing with the reference on all of them, and all 67
+  GENUINE files running only the loader and remover. The controls
+  confirm the oracle sees an extra script and an executing data block. It
+  needs an emulator, so CI skips it, with the reason recorded in
+  `scripts/lib/ci-skips.mjs`.
+
+Identity is not exposed yet: the verdict is held for the agent bridge (stage 4,
+after security's run of A2).

@@ -1,5 +1,14 @@
 import java.util.Properties
 
+import java.util.Base64
+import java.security.AlgorithmParameters
+import java.security.spec.ECGenParameterSpec
+import java.security.spec.ECParameterSpec
+import java.security.KeyFactory
+import java.security.spec.ECPublicKeySpec
+import java.security.spec.ECPoint
+import java.math.BigInteger
+import java.security.Signature
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -32,6 +41,8 @@ val keystoreProps = Properties().apply {
  */
 abstract class StageTrayAssets : DefaultTask() {
     @get:InputFiles abstract val bridge: ConfigurableFileCollection
+    /** Each app's SIGNED release history, from the published site clone (bento/connect A2, vault). */
+    @get:InputFiles @get:Optional abstract val histories: ConfigurableFileCollection
     @get:OutputDirectory abstract val outputDir: DirectoryProperty
 
     @TaskAction
@@ -40,13 +51,95 @@ abstract class StageTrayAssets : DefaultTask() {
         out.deleteRecursively()
         out.mkdirs()
         bridge.singleFile.copyTo(out.resolve("bridge.js"), overwrite = true)
+        // releases/<app>/history.json → assets/history/<app>.json. Verified on
+        // first read like a fetched copy (ReleaseHistory); it's only the floor.
+        for (f in histories.files) if (f.isFile) f.copyTo(out.resolve("history/${f.parentFile.name}.json"), overwrite = true)
     }
 }
 
+/**
+ * The published site, where each app's signed history lives: BENTO_SITE_DIR, or
+ * the sibling clone release.mjs uses. Never a URL fetched at build time.
+ */
+val siteDir: File = System.getenv("BENTO_SITE_DIR")?.let { file(it) } ?: rootProject.file("../../../bento-site")
+val bentoApps = listOf("slides", "spaces", "dash")
+
 val stageAssets = tasks.register<StageTrayAssets>("stageTrayAssets") {
     bridge.from(rootProject.file("../bridge.js"))
+    histories.from(bentoApps.map { siteDir.resolve("releases/$it/history.json") }.filter { it.isFile })
     outputDir.set(layout.buildDirectory.dir("staged-assets"))
 }
+
+/**
+ * RELEASE builds fail closed (vault, security): for every app with a published
+ * manifest, the bundled history must exist, verify under the release key, and
+ * be at least as new as that manifest. A release APK without one would leave
+ * every document UNKNOWN. The key is read from Releases.kt, its one home.
+ */
+abstract class CheckBundledHistories : DefaultTask() {
+    @get:Input abstract val site: Property<String>
+    @get:Input abstract val apps: ListProperty<String>
+    @get:InputFile abstract val releasesKt: RegularFileProperty
+    @get:Input abstract val strict: Property<Boolean>
+
+    @TaskAction
+    fun check() {
+        val src = releasesKt.get().asFile.readText()
+        fun key(n: String) = Regex("""const val $n = "([A-Za-z0-9_-]+)"""").find(src)?.groupValues?.get(1)
+            ?: throw GradleException("cannot read $n from Releases.kt")
+        val dec = Base64.getUrlDecoder()
+        val params = AlgorithmParameters.getInstance("EC").apply {
+            init(ECGenParameterSpec("secp256r1")) }.getParameterSpec(ECParameterSpec::class.java)
+        val pub = KeyFactory.getInstance("EC").generatePublic(ECPublicKeySpec(
+            ECPoint(BigInteger(1, dec.decode(key("KEY_X"))), BigInteger(1, dec.decode(key("KEY_Y")))), params))
+        fun der(raw: ByteArray): ByteArray {
+            fun int(b: ByteArray): ByteArray { var i = 0; while (i < b.size - 1 && b[i] == 0.toByte()) i++
+                var v = b.copyOfRange(i, b.size); if (v[0].toInt() and 0x80 != 0) v = byteArrayOf(0) + v
+                return byteArrayOf(0x02, v.size.toByte()) + v }
+            val body = int(raw.copyOfRange(0, 32)) + int(raw.copyOfRange(32, 64))
+            return byteArrayOf(0x30, body.size.toByte()) + body
+        }
+        fun ver(s: String) = s.split(".").map { it.toInt() }
+        fun cmp(a: String, b: String): Int { val x = ver(a); val y = ver(b); for (i in 0..2) if (x[i] != y[i]) return x[i] - y[i]; return 0 }
+        val root = File(site.get())
+        val problems = ArrayList<String>()
+        if (!root.isDirectory) problems += "no published site at ${root.path}: set BENTO_SITE_DIR to the bento-site clone"
+        else for (app in apps.get()) {
+            val manifest = root.resolve("releases/$app/manifest.json")
+            if (!manifest.isFile) continue
+            val mPayload = (groovy.json.JsonSlurper().parseText(manifest.readText()) as Map<*, *>)["payload"] as String
+            val mVersion = (groovy.json.JsonSlurper().parseText(mPayload) as Map<*, *>)["version"] as String
+            val hist = root.resolve("releases/$app/history.json")
+            if (!hist.isFile) { problems += "no published release history for $app; publish a release first"; continue }
+            val env = groovy.json.JsonSlurper().parseText(hist.readText()) as Map<*, *>
+            val payload = env["payload"] as String
+            val ok = Signature.getInstance("SHA256withECDSA").run {
+                initVerify(pub); update(payload.toByteArray(Charsets.UTF_8))
+                verify(der(Base64.getMimeDecoder().decode(env["sig"] as String))) }
+            if (!ok) { problems += "the published release history for $app does not verify under the release key"; continue }
+            @Suppress("UNCHECKED_CAST")
+            val releases = (groovy.json.JsonSlurper().parseText(payload) as Map<*, *>)["releases"] as List<Map<*, *>>
+            val newest = releases.firstOrNull()?.get("version") as String?
+            if (newest == null || cmp(newest, mVersion) < 0)
+                problems += "the release history for $app ends at $newest, older than its published manifest ($mVersion); publish the history with the release"
+        }
+        if (problems.isEmpty()) return
+        val msg = "bundled release histories:\n  " + problems.joinToString("\n  ")
+        if (strict.get()) throw GradleException(msg) else logger.warn("WARNING (debug build only) $msg")
+    }
+}
+
+fun checkHistories(name: String, strictCheck: Boolean) = tasks.register<CheckBundledHistories>(name) {
+    site.set(siteDir.path)
+    apps.set(bentoApps)
+    // TEST ONLY: -PhistoryCheckKeySource=<file with KEY_X/KEY_Y> lets the passing
+    // path be exercised without the release key's private half. Harmless if
+    // misused: the APK verifies its bundled history under its own pinned keys.
+    releasesKt.set(file((findProperty("historyCheckKeySource") as String?) ?: "src/main/java/page/bento/home/Releases.kt"))
+    strict.set(strictCheck)
+}
+val checkHistoriesRelease = checkHistories("checkBundledHistoriesRelease", true)
+val checkHistoriesDebug = checkHistories("checkBundledHistoriesDebug", false)
 
 android {
     namespace = "page.bento.home"
@@ -104,6 +197,21 @@ androidComponents {
         variant.sources.assets?.addGeneratedSourceDirectory(stageAssets, StageTrayAssets::outputDir)
     }
 }
+
+// The JVM rigs read conformance corpora outside this project (home/fixtures,
+// kernel/fixtures). Declared as inputs, so a corpus change re-runs the tests
+// instead of Gradle calling them up to date and replaying the old result.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.file("../fixtures")).withPropertyName("homeFixtures").optional()
+    inputs.dir(rootProject.file("../../kernel/fixtures")).withPropertyName("kernelFixtures").optional()
+}
+
+// The history check runs before any APK or bundle is assembled: strict for
+// release, a visible warning for debug.
+tasks.matching { it.name.startsWith("assembleRelease") || it.name.startsWith("bundleRelease") }
+    .configureEach { dependsOn(checkHistoriesRelease) }
+tasks.matching { it.name == "assembleDebug" || it.name == "installDebug" }
+    .configureEach { dependsOn(checkHistoriesDebug) }
 
 dependencies {
     // The ONLY dependency, and it earns its place twice over:
