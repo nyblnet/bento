@@ -316,6 +316,7 @@ const fx = shape(MODEL_KEYS.fx, {
   order: num(-1e4, 1e4),
   step: num(0, 1e4),
   countUp: bool,
+  typeWriter: bool,
   ambient: oneOf('kenburns'),
   ken: shape(MODEL_KEYS.fxKen, {
     dir: oneOf('drift', 'out', 'in'), scale: num(0, 100), duration: num(0, 3600),

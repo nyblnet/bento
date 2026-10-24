@@ -211,6 +211,11 @@ jobs:
         # typing at the end of that line is plain text, at the box's end or
         # before a line break; opening and closing a box changes nothing.
         run: node scripts/test-slides-code-run-exit-browser.mjs
+      - name: The code typewriter types in the show and nowhere else in Chromium
+        # Stable token ids (a plain→typewriter morph types only the new text),
+        # no cursor in the editor, a capped run, and M or leaving the slide
+        # settles it at once.
+        run: node scripts/test-slides-typewriter-browser.mjs
       - name: Connectors route on every slide in Chromium
         # #493: a deck saved or loaded with stale connector endpoints opens with
         # every slide's connectors on their elements' borders (thumbnail too),

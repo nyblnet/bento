@@ -102,6 +102,7 @@ export function buildSchema(version: string): JsonSchema {
     present: obj(MODEL_KEYS.present, {
       numberHidden: { type: 'boolean' }, slideNumber: { type: 'boolean' }, controls: { type: 'boolean' }, progress: { type: 'boolean' },
       morphSeconds: { type: 'number', minimum: 0, maximum: 60 },
+      typeWriterSeconds: { type: 'number', minimum: 0.08, maximum: 1, description: 'typewriter: seconds per character (absent = 0.08)' },
     }),
     slides: { type: 'array', minItems: 1, maxItems: LIMITS.slides, items: { $ref: '#/$defs/slide' } },
     layouts: { type: 'array', maxItems: LIMITS.slides, items: { $ref: '#/$defs/slide' }, description: 'slide templates' },

@@ -590,20 +590,17 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   display: inline-block;
 }
 
-/* Cursors should not be visible at all, unless we are in presentation mode.
-   `position:absolute`, is being used to create a new stacking context.
-   That way, when the cursor is being rendered, we don't end up moving the
-   content which is being animated below.
- */
-.bento-el-code .cursor {
+/* The typewriter's cursor (present.ts runTypeWriter). It exists only while a
+   run does, so no other surface ever renders one. Absolute, so standing on a
+   token moves nothing the morph measured. */
+.bento-code-cursor {
   position: absolute;
   top: 0;
   left: 0;
-  display: none;
-  animation: blink 0.5s step-end infinite;
+  pointer-events: none;
+  animation: bento-code-cursor-blink 1s step-end infinite;
 }
-
-@keyframes blink {
+@keyframes bento-code-cursor-blink {
   50% { opacity: 0; }
 }
 
