@@ -162,6 +162,11 @@ jobs:
         # range across a parent copies parents only, never its states; plural
         # and singular toasts.
         run: node scripts/test-slides-copy-slides-browser.mjs
+      - name: Clicking a slide never moves the list under the pointer in Chromium
+        # With the current slide scrolled out of view, a click on a visible
+        # thumb (plain, hidden, parent, state) leaves the list and the thumb
+        # where they were; keyboard navigation still reveals the current slide.
+        run: node scripts/test-slides-sidebar-click-browser.mjs
       - name: Rounded tables in Chromium
         # A rounded table whose rows outgrow its box shows its last row (#494),
         # keeps rounded corners on its real bottom, and a short one still

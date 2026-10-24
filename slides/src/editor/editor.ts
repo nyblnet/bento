@@ -154,6 +154,8 @@ export class Editor {
   /** Name of a deck opened by DROP when no writable handle came with it. */
   private openedAs?: string
   private thumbTimer = 0
+  /** The slide the list last scrolled into view (highlightSidebar). */
+  private thumbRevealed = -1
   private presenting = false
   private updatesB!: HTMLElement
   private avatarsBox!: HTMLElement
@@ -2103,7 +2105,17 @@ export class Editor {
       n.classList.toggle('selected', selected.has(idx))
       if (isActive) active = n
     })
-    active?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    // Bring the current slide into view only when it CHANGED. This also runs
+    // for a selection change and after a rebuild, with the current slide where
+    // it was — and a click on a thumb clears the selection BEFORE it moves the
+    // current slide, so revealing then scrolled the list to the slide being
+    // LEFT (often off-screen), and the click landed with a different thumb
+    // under the pointer. Keyboard and show navigation still reveal: they
+    // change the current slide.
+    if (active && this.store.currentIndex !== this.thumbRevealed) {
+      active.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }
+    if (active) this.thumbRevealed = this.store.currentIndex
   }
 
   private scheduleThumbs() {
