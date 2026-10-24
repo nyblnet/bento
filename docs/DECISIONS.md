@@ -11882,3 +11882,36 @@ own rig run against the extension's copy.
   clearing. Measured: libsecret's clear silently skips items in a locked
   keyring, so the re-count is what keeps a wipe from reporting success while
   keys remain.
+
+## 2026-10-21 — bento/connect H2: the desktop host's trust store, origins and arming (home/desktop/host, home/desktop/hostcore)
+
+- **The security rules live in a crate with no webview** (`home/desktop/hostcore`),
+  so every one is unit-tested on any machine; the Tauri app (`home/desktop/host`)
+  only wires them to events.
+- **Trust store.** The signed `releases/<app>/history.json` files are bundled at
+  build time (`build.rs` embeds every `*history*.json` under `releases/`, or
+  `BENTO_HISTORIES_DIR`). Embedding is not trusting: each is verified against the
+  pinned release key on first read. The release key is pinned in ONE place
+  (`hostcore::trust::RELEASE_KEY`); a rotation is an app update pinning only the
+  new key. The newest verified history per app is kept in the data directory as
+  the anti-rollback floor; gate 1's `accept_history` decides every replacement,
+  and histories are refreshed only by a user action. A document is genuine only
+  if exactly one release across every app's history matches every block.
+- **Gate 1 runs at every serve, on exactly the bytes served**, and a load arms
+  from that verdict: a reload after a save, or a watchdog-recreated webview,
+  always arms from a fresh verdict on what it actually received.
+- **Arming is a two-step handshake.** A finished load of the document mints a
+  capability and a nonce, PENDING; the shim echoes the nonce and the host arms
+  only if no newer load has started. Every load start revokes. Per-load state
+  resets in the same step that mints.
+- **No Tauri capability file ships.** Page script reaches no core or plugin
+  command; the host's own two commands are gated by the per-load secret.
+- **Envelope documents (format `bento/enc`, password or identity-sealed)** take a
+  path-only origin plus an epoch that rotates when the file is replaced by
+  something the host did not write (Unix: device and inode; the Windows file ID
+  is owed with the Windows host). Never a wipe, never a prompt.
+- **Neutral title while sealed, matching the saved file's title** (§30): the
+  window title of an envelope document is the app name.
+- **The rigs are part of the host**: the `rig` feature (never shipped) adds the
+  probe, a dead drop and a report sink; `rig/check.py` asserts every row, and a
+  deliberately broken capability check fails rigs 2 and 6.
