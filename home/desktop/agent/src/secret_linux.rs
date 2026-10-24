@@ -253,10 +253,11 @@ impl SecretStore {
     /// Mint the routine device key in software and store it. There is no
     /// consent key here (AAL3 is routed elsewhere).
     pub fn create_device_key(&self) -> Result<[u8; 65], StoreError> {
-        let key = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
+        // The OS random source; an RNG failure is an error, never a panic.
+        let key = <SigningKey as p256::elliptic_curve::Generate>::try_generate().map_err(|e| StoreError::Unavailable(format!("random: {e}")))?;
         let d = Zeroizing::new(key.to_bytes().to_vec());
         self.write(&KeyRole::Device, &d)?;
-        Ok(key.verifying_key().to_encoded_point(false).as_bytes().try_into().unwrap())
+        Ok(key.verifying_key().to_sec1_point(false).as_bytes().try_into().unwrap())
     }
 
     /// Store the account key's scalar. Readable by any same-user process.
@@ -314,7 +315,7 @@ impl KeyStore for SecretStore {
         match self.read(role)? {
             Some(d) => {
                 let key = SigningKey::from_slice(&d).map_err(|e| StoreError::Unavailable(e.to_string()))?;
-                Ok(Some(key.verifying_key().to_encoded_point(false).as_bytes().try_into().unwrap()))
+                Ok(Some(key.verifying_key().to_sec1_point(false).as_bytes().try_into().unwrap()))
             }
             None => Ok(None),
         }

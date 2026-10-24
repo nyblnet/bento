@@ -7,7 +7,7 @@ publish = false
 description = "bento/connect agent core for the desktop host (Windows, Linux): the signed statements, key storage and the agent contract"
 
 [dependencies]
-p256 = { version = "0.13", features = ["ecdsa"] }
+p256 = { version = "0.14", features = ["ecdsa", "getrandom"] }
 sha2 = "0.10"
 base64 = "0.22"
 zeroize = "1"

@@ -286,7 +286,7 @@ pub mod memory {
     }
     impl KeyStore for MemoryStore {
         fn public_key(&self, role: &KeyRole) -> Result<Option<[u8; 65]>, StoreError> {
-            Ok(self.keys.get(&k(role)).map(|s| s.verifying_key().to_encoded_point(false).as_bytes().try_into().unwrap()))
+            Ok(self.keys.get(&k(role)).map(|s| s.verifying_key().to_sec1_point(false).as_bytes().try_into().unwrap()))
         }
         fn sign(&mut self, role: &KeyRole, msg: &[u8], prompt: Option<&Prompt>) -> Result<[u8; 64], StoreError> {
             if let Some(p) = prompt {

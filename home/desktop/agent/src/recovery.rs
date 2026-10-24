@@ -14,7 +14,7 @@ use crate::{b64u, statements::KxMode};
 use aes_gcm::{aead::{Aead, KeyInit, Payload}, Aes256Gcm, Nonce};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
-use p256::elliptic_curve::sec1::ToEncodedPoint;
+use p256::elliptic_curve::sec1::ToSec1Point;
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
@@ -290,7 +290,7 @@ pub fn pack_scalars(keys: &BlobKeys, mode: KxMode) -> Secret {
 /// double-and-add: both branch on the secret.
 fn public_of(d: &[u8]) -> Option<String> {
     let sk = p256::SecretKey::from_slice(d).ok()?;
-    Some(b64u::enc(sk.public_key().to_encoded_point(false).as_bytes()))
+    Some(b64u::enc(sk.public_key().to_sec1_point(false).as_bytes()))
 }
 
 /// Check a blob's plaintext before anything uses it: the right length for the
