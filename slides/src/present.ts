@@ -798,15 +798,15 @@ export function startPresentation(
     }
     return -1
   }
-  const svSlide = (idx: number, w: number): HTMLElement => {
+  const svSlide = (idx: number, w?: number): HTMLElement => {
     const frame = document.createElement('div')
     frame.className = 'sv-frame'
-    const scale = w / doc.size.width
-    frame.style.width = `${w}px`
-    frame.style.height = `${doc.size.height * scale}px`
+    frame.style.setProperty('--sv-doc-w', `${doc.size.width}px`)
+    frame.style.aspectRatio = `${doc.size.width} / ${doc.size.height}`
+    if (w) frame.style.width = `${w}px`
     if (idx >= 0) {
       const inner = document.createElement('div')
-      inner.style.cssText = `transform:scale(${scale});transform-origin:0 0`
+      inner.className = 'sv-scale'
       inner.appendChild(renderSlide(doc.slides[idx], doc, { hidePlaceholders: true }))
       frame.appendChild(inner)
     } else {
@@ -963,9 +963,9 @@ export function startPresentation(
     const nxtBox = d.querySelector('.sv-nextbox')
     if (!curBox || !nxtBox) return
     curBox.innerHTML = ''
-    curBox.appendChild(d.importNode(svSlide(cur, 660), true))
+    curBox.appendChild(d.importNode(svSlide(cur), true))
     nxtBox.innerHTML = ''
-    nxtBox.appendChild(d.importNode(svSlide(nxt, 300), true))
+    nxtBox.appendChild(d.importNode(svSlide(nxt), true))
     const notes = d.querySelector('.sv-notes')
     if (notes) notes.textContent = doc.slides[cur]?.notes || t('— no notes for this slide —')
     updateSpeakerControls()
