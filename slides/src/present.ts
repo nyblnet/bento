@@ -27,6 +27,7 @@ const MORPH_DURATION_DEFAULT = 0.65
 /** Set per-deck by doc.present.morphSeconds; clamped to something sane. */
 let MORPH_DURATION = MORPH_DURATION_DEFAULT
 const MORPH_EASE = 'power2.inOut'
+const MORPH_SPRING = 'spring'
 const TYPE_WRITER_DURATION_DEFAULT = 0.08
 /** Seconds per typed character, per-deck by doc.present.typeWriterSeconds. */
 let TYPE_WRITER_DURATION = TYPE_WRITER_DURATION_DEFAULT
@@ -2214,7 +2215,7 @@ function morphMathSymbols(
   anim.to(state, {
     p: 1,
     duration: MORPH_DURATION,
-    ease: MORPH_EASE,
+    ease: MORPH_SPRING,
     onUpdate() {
       const p = state.p
       // undo the box tween's scale so the symbol delta stays in model units

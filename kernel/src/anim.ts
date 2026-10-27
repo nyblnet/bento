@@ -8,8 +8,8 @@
 //     motionPath: { path }  (translate along an SVG path, relative),
 //     plain numeric props on non-element targets (countUp state objects)
 //   vars: duration (s), delay (s), ease ('none'|'linear'|'power1..3.in/out/
-//         inOut'|'sine.inOut'), repeat (-1 = forever), yoyo, transformOrigin,
-//         onUpdate, onComplete
+//         inOut'|'sine.inOut'|'spring'), repeat (-1 = forever), yoyo,
+//         transformOrigin, onUpdate, onComplete
 //   anim.killTweensOf(target | targets), anim.getTweensOf(target) → .progress()
 //   anim.setTimeScale(n) and manual clock (anim.manual/tick) for tests.
 //
@@ -33,6 +33,10 @@ const EASES: Record<string, EaseFn> = {
   'sine.in': (t) => 1 - Math.cos((t * Math.PI) / 2),
   'sine.out': (t) => Math.sin((t * Math.PI) / 2),
   'sine.inOut': (t) => -(Math.cos(Math.PI * t) - 1) / 2,
+  // Underdamped harmonic spring: f(0)=0, f'(0)≈0, crosses 1 at t≈0.60,
+  // Overshoots gently (~1.8% at t≈0.78), and settles to f(1)=1, f'(1)=0.
+  // We only overshoot gently, given `overflow:hidden` elements tend to get clipped during animations.
+  'spring': (t) => 1 - (1 - t) ** 2 * (Math.cos(Math.PI * t) + 0.625 * Math.sin(Math.PI * t)),
 }
 
 // --- color + number interpolation --------------------------------------------
