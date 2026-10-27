@@ -1680,6 +1680,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .sv-btn[disabled] { opacity: 0.35; cursor: default; }
 .sv-btn.active { background: var(--accent); border-color: var(--accent); color: #14181d; }
 .sv-main { display: flex; gap: 22px; padding: 14px 22px; align-items: flex-start; flex: 1; min-height: 0; }
+.sv-current { flex: 3; min-width: 0; }
 .sv-frame {
   position: relative;
   overflow: hidden;
@@ -1687,6 +1688,13 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   border-radius: 8px;
   box-shadow: 0 8px 28px rgb(0 0 0 / 0.5);
   flex: none;
+  container-type: inline-size;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+.sv-scale {
+  transform: scale(tan(atan2(100cqw, var(--sv-doc-w, 1600px))));
+  transform-origin: 0 0;
 }
 .sv-frame.end {
   display: flex;
@@ -1696,7 +1704,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   font-size: 14px;
   background: #1a2029;
 }
-.sv-side { flex: 1; align-self: stretch; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 16px; }
+.sv-side { flex: 2; align-self: stretch; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 16px; }
 .sv-label {
   font-size: 10.5px;
   font-weight: 700;
@@ -1710,7 +1718,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
   flex: 1;
   overflow-y: auto;
   white-space: pre-wrap;
-  font-size: 16px;
+  font-size: 24px;
   line-height: 1.65;
   color: #e9edf3;
   user-select: text;
