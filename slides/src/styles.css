@@ -40,6 +40,7 @@
   --danger-tint: rgb(180 35 42 / 0.12);
   --tip-key-bg: rgb(255 255 255 / 0.1); /* a shortcut chip on the tooltip */
   --preview-card: #ffffff;   /* the card a shadow preview is drawn under — light in both themes */
+  --morph: #0f8f86;         /* morph pairing (layer badge, ghost + curve): teal, 4.5:1 on white */
   --blue-label: #3a6fd8;     /* fill under white 11px text (measure labels): 4.7:1, --blue was 3.3:1 */
   --grid-dot: #d5dbe4;       /* the canvas dot grid behind the stage */
   --chip: rgb(255 255 255 / 0.85);   /* translucent label over a thumbnail */
@@ -76,6 +77,7 @@
   --tip-edge: var(--line);   /* …and here its fill IS the dark chrome: give it an edge */
   --danger: #f08a8f;
   --danger-tint: rgb(240 138 143 / 0.14);
+  --morph: #2dd4bf;
   --blue-label: var(--blue); /* dark text on the lifted blue */
   --grid-dot: #2b313b;
   --chip: rgb(24 28 34 / 0.85);
@@ -3240,3 +3242,29 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
    view (keyboard paging, a reveal) lands below it, not under it */
 .ed-sidebar { scroll-padding-top: 56px; }
 .ed-props { scroll-padding-top: 52px; }
+
+/* ————— COMMAND PALETTE (editor/commands.ts) — ⌘K ————————————————————————— */
+.ed-cmdk-overlay {
+  position: fixed; inset: 0; z-index: 1500; background: rgb(15 23 36 / 0.25);
+  display: flex; justify-content: center; align-items: flex-start; padding-top: 14vh;
+}
+.ed-cmdk {
+  width: min(520px, calc(100vw - 24px)); background: var(--surface); color: var(--ink);
+  border-radius: 12px; box-shadow: 0 18px 50px rgb(15 23 36 / 0.3); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.ed-cmdk-input {
+  font: 15px system-ui, sans-serif; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); outline: none;
+}
+.ed-cmdk-list { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
+.ed-cmdk-list li {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px;
+  font-size: 13px; cursor: pointer;
+}
+.ed-cmdk-list li[aria-selected="true"] { background: var(--chrome-2); }
+.ed-cmdk-list .ed-cmdk-empty { color: var(--muted); cursor: default; }
+.ed-cmdk-list kbd {
+  font: 11px system-ui, sans-serif; padding: 1px 6px; min-width: 18px; text-align: center;
+  color: var(--muted); background: var(--chrome); border: 1px solid var(--line); border-radius: 4px;
+}
