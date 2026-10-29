@@ -484,6 +484,17 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
   radius: num(0, 1e5), d: pathData,
   pathBox: tag((v) => (Array.isArray(v) && v.length === 4 ? list(4, num(-1e6, 1e6))(v) : DROP), { type: 'array', minItems: 4, maxItems: 4, items: { type: 'number' } }),
   from: connectorEnd, to: connectorEnd,
+  // a boolean's operands are whole shapes, sanitized as any pasted element is;
+  // one bad operand drops the operand list (and with it only re-editing — the
+  // computed d above still draws)
+  bool: shape(['op', 'shapes'], {
+    op: oneOf('union', 'subtract', 'intersect', 'exclude'),
+    shapes: tag((v) => {
+      if (!Array.isArray(v) || v.length < 2 || v.length > LIMITS.elements) return DROP
+      const out = v.map((el, i) => within(String(i), () => sanitizeElement(el)))
+      return out.every((el) => el?.type === 'shape') ? out : DROP
+    }, { type: 'array', minItems: 2, maxItems: LIMITS.elements, items: { $ref: '#/$defs/element' } }),
+  }, ['op', 'shapes']),
   // image / svg / media
   src: mediaRef, poster: mediaRef, asset: cssValue(),
   fit: oneOf('contain', 'cover', 'fill'), keepAspectRatio: bool,
