@@ -1063,4 +1063,13 @@ export const ja: Catalog = {
   "Elevated": "浮き上がり",
   "Glow": "グロー",
   "Rename a layer or a group in the Layers list": "レイヤーリストでレイヤーやグループの名前を変更",
+  "Union": "合体",
+  "Subtract": "型抜き",
+  "Intersect": "交差",
+  "Exclude": "中マド",
+  "Combine shapes": "図形を結合",
+  "Flatten": "平坦化",
+  "Release shapes": "図形を解除",
+  "Boolean": "ブーリアン",
+  "Nothing would be left of these shapes": "これらの図形は何も残りません",
 }

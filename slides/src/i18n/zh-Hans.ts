@@ -1063,4 +1063,13 @@ export const zhHans: Catalog = {
   "Elevated": "悬浮",
   "Glow": "光晕",
   "Rename a layer or a group in the Layers list": "在图层列表中重命名图层或组",
+  "Union": "联集",
+  "Subtract": "减去",
+  "Intersect": "交集",
+  "Exclude": "排除重叠",
+  "Combine shapes": "组合形状",
+  "Flatten": "拼合",
+  "Release shapes": "释放形状",
+  "Boolean": "布尔",
+  "Nothing would be left of these shapes": "这些形状将不留下任何内容",
 }

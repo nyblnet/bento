@@ -10,7 +10,7 @@ import {
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultCode, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   paginates, inLinearFlow,
-  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
+  type ChartElement, type ShapeKind, type ShapeElement, type Slide, type SlideElement, type TableElement } from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
 import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, sandboxed, setAutoCheck, setOffline } from '../update'
@@ -58,6 +58,7 @@ import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
+import { BOOL_OPS, boolOperands, boolUi, combine, flatten, release } from './booleans'
 
 const i18nT = t
 
@@ -398,6 +399,25 @@ export class Editor {
     const commentB = btn(ICONS.comment, t('Comment'), () => this.canvas.toggleCommentMode(),
       t('Comment (C) — click an element or a spot on the slide'))
     insert.appendChild(commentB)
+    // Vector booleans, Penpot's contextual bar: present only while two or more
+    // closed shapes are selected — never greyed out, simply not there.
+    const boolBar = div('ed-bool')
+    boolBar.setAttribute('role', 'group')
+    boolBar.setAttribute('aria-label', t('Combine shapes'))
+    for (const op of BOOL_OPS) {
+      const ui = boolUi(op)
+      const b = btn(ui.icon, '', () => combine(this.store, this.store.selectedElements, op), `${ui.label} (${ui.key})`)
+      b.dataset.bool = op
+      b.setAttribute('aria-label', ui.label)
+      boolBar.appendChild(b)
+    }
+    const syncBool = () => { boolBar.hidden = this.store.readOnly || !boolOperands(this.store, this.store.selectedElements) }
+    syncBool()
+    for (const e of ['selection', 'doc', 'current'] as const) {
+      const off = this.store.on(e, syncBool)
+      this.buildScope.signal.addEventListener('abort', off)
+    }
+    insert.appendChild(boolBar)
 
     const actions = div('ed-group ed-group-right')
     // the update chip sits beside the wordmark and exists ONLY when an
@@ -3357,6 +3377,11 @@ export class Editor {
         this.canvas.toggleCommentMode()
         return
       }
+      // ⌥⇧U/S/I/E — by code: on a Mac, Option turns the key into another letter
+      if (!mod && ev.altKey && ev.shiftKey) {
+        const op = BOOL_OPS.find((o) => boolUi(o).code === ev.code)
+        if (op && combine(this.store, this.store.selectedElements, op)) { ev.preventDefault(); return }
+      }
       if (mod && ev.key.toLowerCase() === 'g') {
         ev.preventDefault()
         const els = this.store.selectedElements
@@ -3694,6 +3719,17 @@ export class Editor {
       grouped
         ? { label: t('Ungroup'), hint: '⇧⌘G', run: () => this.panel.ungroup(els) }
         : { label: t('Group'), hint: '⌘G', disabled: els.length < 2, run: () => this.panel.group(els) },
+      ...(boolOperands(this.store, els)
+        ? ['sep' as const, ...BOOL_OPS.map((op) => {
+          const ui = boolUi(op)
+          return { label: ui.label, hint: ui.key, run: () => { combine(this.store, els, op) } }
+        })]
+        : []),
+      ...(one?.type === 'shape' && one.bool
+        ? ['sep' as const,
+          { label: t('Flatten'), run: () => flatten(this.store, one as ShapeElement) },
+          { label: t('Release shapes'), run: () => release(this.store, one as ShapeElement) }]
+        : []),
       'sep',
       // Reveal (fx.step) from the menu — the one place a user who has never
       // opened the Presenting section will find it. In order = reading order.

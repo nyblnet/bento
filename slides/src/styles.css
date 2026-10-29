@@ -3240,3 +3240,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
    view (keyboard paging, a reveal) lands below it, not under it */
 .ed-sidebar { scroll-padding-top: 56px; }
 .ed-props { scroll-padding-top: 52px; }
+
+/* Vector booleans in the insert tools: shown only while 2+ closed shapes are
+   selected, set off from the insert buttons by a hairline. */
+.ed-bool { display: flex; align-items: center; gap: 2px; padding-inline-start: 6px; margin-inline-start: 4px; border-inline-start: 1px solid var(--line); }
+.ed-topbar.ed-bar-fold .ed-bool { border: 0; padding: 0; margin: 0; }
+.ed-bool[hidden] { display: none; }

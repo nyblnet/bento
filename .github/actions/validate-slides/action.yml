@@ -590,3 +590,11 @@ runs:
       # inbound, and an unknown key from a peer is applied but never echoed.
       shell: bento-step {0}
       run: node scripts/test-slides-sync-allowlist.ts
+
+    - name: Vector booleans rig
+      # slides/src/vector-bool.ts, DOM-free: union/subtract/intersect/exclude of
+      # overlapping, disjoint, nested, abutting, rotated and elliptical shapes
+      # cover the area the arithmetic says — by wound area (holes wind opposite,
+      # so an old shell's nonzero fill draws them) and by evenodd over the d.
+      shell: bento-step {0}
+      run: node scripts/test-slides-vector-bool.ts

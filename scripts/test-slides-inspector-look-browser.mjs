@@ -104,10 +104,11 @@ try {
       ok(k.n === 10 && k.rows === 1, `one element: align and order, on one line (${k.n} tools, ${k.rows} line)`)
       await pick(['a', 'b']); await p.waitForTimeout(200)
       k = await kit()
-      ok(k.n === 13, `two: match width/height and Group join (${k.n})`)
+      // a, b and c are shapes, so the four vector booleans join too (vector-bool.ts)
+      ok(k.n === 17, `two: match width/height, Group and the four booleans join (${k.n})`)
       await pick(['a', 'b', 'c']); await p.waitForTimeout(200)
       k = await kit()
-      ok(k.n === 15, `three: even gaps join them (${k.n})`)
+      ok(k.n === 19, `three: even gaps join them (${k.n})`)
       await pick(['a']); await p.waitForTimeout(200)
       const inside = await p.evaluate(() => {
         const m = [...document.querySelectorAll('.ed-props .ed-mini')].find((x) => x.querySelector('span')?.textContent === 'X')

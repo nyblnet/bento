@@ -1069,4 +1069,13 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Elevated": ["浮き上がり","悬浮","懸浮","Elevada","Élevée","Erhöht","Rialzata","Elevada"],
   "Glow": ["グロー","光晕","光暈","Resplandor","Halo","Leuchten","Bagliore","Brilho"],
   "Rename a layer or a group in the Layers list": ["レイヤーリストでレイヤーやグループの名前を変更","在图层列表中重命名图层或组","在圖層清單中重新命名圖層或群組","Cambiar el nombre de una capa o un grupo en la lista de capas","Renommer un calque ou un groupe dans la liste des calques","Eine Ebene oder Gruppe in der Ebenenliste umbenennen","Rinominare un livello o un gruppo nell’elenco dei livelli","Renomear uma camada ou um grupo na lista de camadas"],
+  "Union": ["合体","联集","聯集","Unir","Union","Vereinigen","Unione","União"],
+  "Subtract": ["型抜き","减去","減去","Restar","Soustraire","Subtrahieren","Sottrai","Subtrair"],
+  "Intersect": ["交差","交集","交集","Intersecar","Intersection","Schnittmenge","Intersezione","Interseção"],
+  "Exclude": ["中マド","排除重叠","排除重疊","Excluir superposición","Exclure la superposition","Überlappung ausschließen","Escludi sovrapposizione","Excluir sobreposição"],
+  "Combine shapes": ["図形を結合","组合形状","組合形狀","Combinar formas","Combiner les formes","Formen kombinieren","Combina forme","Combinar formas"],
+  "Flatten": ["平坦化","拼合","拼合","Acoplar","Aplatir","Reduzieren","Appiattisci","Achatar"],
+  "Release shapes": ["図形を解除","释放形状","釋放形狀","Liberar formas","Libérer les formes","Formen freigeben","Rilascia forme","Liberar formas"],
+  "Boolean": ["ブーリアン","布尔","布林","Booleana","Booléenne","Boolesch","Booleana","Booleana"],
+  "Nothing would be left of these shapes": ["これらの図形は何も残りません","这些形状将不留下任何内容","這些形狀將不留下任何內容","No quedaría nada de estas formas","Il ne resterait rien de ces formes","Von diesen Formen bliebe nichts übrig","Di queste forme non resterebbe nulla","Não sobraria nada destas formas"],
 }

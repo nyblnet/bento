@@ -2,6 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 // Position, size, alignment and stacking order of the selection.
 import type { PropsPanel } from '../panels'
+import { BOOL_OPS, boolOperands, boolUi, combine } from '../booleans'
 import type { SlideElement, ShapeElement } from '../../model'
 import { section, row, labeledSelect, mini } from './fields'
 import { t } from '../../i18n'
@@ -95,6 +96,12 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
       iconBtn(ICONS.matchH, t('Same height as the first selected (2 or more)'), () => matchSize(p, els, 'h')),
     )] : []),
     ...(groupBtn ? [kind(groupBtn)] : []),
+    ...(boolOperands(p.store, els)
+      ? [kind(...BOOL_OPS.map((op) => {
+        const ui = boolUi(op)
+        return iconBtn(ui.icon, `${ui.label} (${ui.key})`, () => combine(p.store, els, op))
+      }))]
+      : []),
   )
   if (els.length !== 1) return
   const el = els[0]

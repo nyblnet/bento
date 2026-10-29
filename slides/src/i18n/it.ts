@@ -1063,4 +1063,13 @@ export const it: Catalog = {
   "Elevated": "Rialzata",
   "Glow": "Bagliore",
   "Rename a layer or a group in the Layers list": "Rinominare un livello o un gruppo nell’elenco dei livelli",
+  "Union": "Unione",
+  "Subtract": "Sottrai",
+  "Intersect": "Intersezione",
+  "Exclude": "Escludi sovrapposizione",
+  "Combine shapes": "Combina forme",
+  "Flatten": "Appiattisci",
+  "Release shapes": "Rilascia forme",
+  "Boolean": "Booleana",
+  "Nothing would be left of these shapes": "Di queste forme non resterebbe nulla",
 }

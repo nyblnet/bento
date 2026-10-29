@@ -1063,4 +1063,13 @@ export const de: Catalog = {
   "Elevated": "Erhöht",
   "Glow": "Leuchten",
   "Rename a layer or a group in the Layers list": "Eine Ebene oder Gruppe in der Ebenenliste umbenennen",
+  "Union": "Vereinigen",
+  "Subtract": "Subtrahieren",
+  "Intersect": "Schnittmenge",
+  "Exclude": "Überlappung ausschließen",
+  "Combine shapes": "Formen kombinieren",
+  "Flatten": "Reduzieren",
+  "Release shapes": "Formen freigeben",
+  "Boolean": "Boolesch",
+  "Nothing would be left of these shapes": "Von diesen Formen bliebe nichts übrig",
 }

@@ -8,9 +8,30 @@ import { optLabel, parseColor, combineColor } from './controls'
 import { row, labeledSelect, toggle, section, field, mini } from './fields'
 import { t } from '../../i18n'
 import { fillKind, colorAlpha, gradientRows } from './color'
+import { segmented } from './fields'
+import { BOOL_OPS, boolUi, flatten, release, setOp } from '../booleans'
 
-/** What only some shapes have: line tips, a second arrow head. */
+/** What only some shapes have: line tips, a second arrow head, a boolean's operation. */
 export function buildShapeProps(p: PropsPanel, el: ShapeElement) {
+  if (el.bool) {
+    // Switching recomputes from the kept operands; Flatten forgets them, Release gives them back.
+    const ops = segmented(BOOL_OPS, el.bool.op, (op) => {
+      if (!setOp(p.store, el, op as typeof BOOL_OPS[number])) p.toast(t('Nothing would be left of these shapes'))
+    }, Object.fromEntries(BOOL_OPS.map((op) => [op, boolUi(op).label])))
+    ops.classList.add('ed-bool-ops')
+    row(p, 'Boolean', ops)
+    const act = (label: string, run: () => void) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-btn'
+      b.textContent = label
+      b.addEventListener('click', run)
+      return b
+    }
+    field(p,
+      act(t('Flatten'), () => flatten(p.store, el)),
+      act(t('Release shapes'), () => release(p.store, el)))
+  }
   // Tips: lines, and open paths (a curved line or connector, #302). The
   // options are tips.ts's catalogue — display labels localized, values the
   // model's words. A closed path (polygon) has no ends to tip.
