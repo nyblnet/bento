@@ -35,6 +35,37 @@ jobs:
         # fails; it never skips.
         working-directory: home/desktop/agent
         run: cargo test
+      - name: Desktop host security core (trust store, origins, arming)
+        # home/desktop/hostcore: the bundled signed histories verify against the
+        # pinned key only (the corpus test key is refused without the rig
+        # feature) and the newest becomes the anti-rollback floor; per-document
+        # origins (96-bit, host-side docId, envelopes path-only with a change
+        # detector); and the per-load capability's arming rules (§19d/§19e).
+        working-directory: home/desktop/hostcore
+        run: cargo test
+      - name: Desktop host rigs on WebKitGTK (security §19d–§19h, rig 8)
+        # The host built with the rig feature against the gate-1 corpus history,
+        # two multi-window scenarios under a virtual display: capability per
+        # load and per webview (key-only and peer-capability embeds refused, an
+        # own-capability control accepted), generation-bound arming, the
+        # navigation bounce, the pinned CSP (and a no-CSP control), Tauri core
+        # commands refused, save in place re-verified, one web process per
+        # document, and no cross-document BroadcastChannel or IndexedDB with a
+        # same-document control. A timeout or a missing report fails.
+        working-directory: home/desktop/host
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libxdo-dev xvfb xauth dbus-x11 >/dev/null
+          dbus-run-session -- xvfb-run -a ./rig/run.sh "$RUNNER_TEMP/h2-rig"
+      - name: Desktop host release check (the bundled history is the current published one)
+        # Fetches each published app's signed history, manifest and shell from
+        # bento.page; verifies them with the PINNED RELEASE KEY ONLY; requires
+        # the history's newest release to be the published manifest's (same
+        # sha256, same pins); the shell reads genuine, a one-byte change
+        # unknown; then builds the host without the rig feature and asserts no
+        # rig command and no corpus test key is in the binary.
+        working-directory: home/desktop/host
+        run: ./release-check.sh
       - name: Desktop gate 1 against the conformance corpus
         # home/desktop/gate1 is the desktop host's Rust port of kernel/src/gate1.ts
         # (bento/connect K5): is this file's runtime a genuine Bento release? It

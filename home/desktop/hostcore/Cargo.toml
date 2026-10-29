@@ -1,0 +1,20 @@
+[package]
+name = "bento-hostcore"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "The desktop host's security core: trust store, per-document origins, capability arming. No webview."
+publish = false
+
+[features]
+# Rigs only: also trust the conformance corpus's throwaway test key. Never in a
+# shipped build (the supply-chain check asserts it).
+rig-test-key = []
+
+[dependencies]
+bento-gate1 = { path = "../gate1" }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+getrandom = "0.3"
+
+[workspace]
