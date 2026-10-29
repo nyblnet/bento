@@ -30,6 +30,7 @@ import { StepBadges } from './stepbadges'
 import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
+import { drawFrameOverlay } from './frameoverlay'
 
 /** How far a finger may travel and still count as a tap rather than a drag.
  *  10px matches what a thumb does on glass while trying to hold still. */
@@ -1218,6 +1219,7 @@ export class SlideCanvas {
     else if (lineLike) { this.lineEditor.attach(one!.id); this.bezierEditor.detach() }
     else { this.lineEditor.detach(); this.bezierEditor.detach() }
     const handled = curve || lineLike
+    drawFrameOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active)
     const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes()
     // snap against slide bounds/center and every non-selected element
     const others = this.surface

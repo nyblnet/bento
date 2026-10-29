@@ -127,6 +127,8 @@ Every element carries the common `ElementBase` fields, plus type-specific ones.
 | `group?` | `string` | Semantic group tag — hover focus + multi-element present behaviours target it. |
 | `groupId?` | `string` | *Editor* grouping (select/move as one). Distinct from `group`. |
 | `groupName?` | `string` | The group's name in the editor's layer list, carried by every member (a group is no object of its own). Display only; ungrouping or regrouping drops it. |
+| `parentId?` | `string` | The auto-layout frame this element sits in (see [Frames](#frames-auto-layout)). Its `x/y/w/h` are still written in full. |
+| `sizing?` | `{w?, h?: 'fixed'\|'fill'}` | Inside a frame: `fill` takes the frame's free space on that axis. Absent = fixed. |
 | `name?` | `string` | The author's name for the element in the editor's layer list. Display only — never a key; unset, the list names it by kind or by its text. |
 | `showOnHover?` | `string` | In-slide hover reveal: visible only while an element whose `group` equals this value is hovered (with `slide.hover.type='reveal'`). |
 | `role?` | `string` | Layout role (`title`/`subtitle`/`body`/`kicker` by convention) — drives cross-layout content moves. Free-form. |
@@ -270,6 +272,35 @@ A slide with `stateOf: "<parent-id>"` is a hidden variant of its parent:
 State slides live adjacent to their parent in `slides[]` and render nested in
 the editor sidebar. A clickable trigger should be a padded transparent hit
 rect, not the label text itself.
+
+---
+
+## Frames (auto layout)
+
+A **frame** is an ordinary `rect` shape carrying `layout`; the elements whose
+`parentId` names it are laid out inside it — Figma's auto layout, Penpot's
+flex/grid.
+
+| `layout` field | Type | Notes |
+|---|---|---|
+| `dir` | `'row'\|'col'\|'grid'` | Main axis, or a grid of equal cells. |
+| `gap` | `number` | Between children (px). |
+| `pad` | `[top, right, bottom, left]` | Padding inside the frame (px). |
+| `justify?` | `'start'\|'center'\|'end'\|'space-between'` | Main axis. Default `start`. |
+| `align?` | `'start'\|'center'\|'end'\|'stretch'` | Cross axis. Default `start`. |
+| `cols?` | `number` | Grid columns. Default 2. |
+| `clip?` | `boolean` | Children are clipped to the frame. |
+| `hug?` | `boolean` | The frame sizes itself to its children. |
+
+**The layout is derived and written back.** `slides/src/layout.ts` computes
+each child's `x/y/w/h` (and the frame's size when it hugs) and writes them into
+the model, the way connectors are routed: never an undo step, and every replica
+derives the same boxes. So a renderer, the morph, an export or a shell that
+predates frames reads plain positioned elements and draws the same picture —
+it only misses `clip`, and keeps the frame's last laid-out geometry when a
+child is moved. Order along the main axis is the children's current position,
+so dragging a child past a sibling reorders it. A `parentId` that names no frame
+is dropped.
 
 ---
 

@@ -117,6 +117,8 @@ const tables = {
   tableCell: uniq(keysOf('TableCell')),
   gradient: uniq(keysOf('GradientFill')),
   imageCrop: uniq(keysOf('ImageCrop')),
+  frameLayout: uniq(keysOf('FrameLayout')),
+  sizing: uniq(keysOf('ElementSizing')),
   // the document's own nested objects — the schema (schema.ts) describes the
   // top level from these, so a field added to the theme reaches the schema
   // the same way a field added to an element does

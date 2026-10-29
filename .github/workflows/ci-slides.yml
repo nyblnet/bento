@@ -322,3 +322,9 @@ jobs:
         run: node scripts/test-slides-help-sheet-browser.mjs
       - name: Laser fades when released in Chromium
         run: node scripts/test-slides-laser-release-browser.mjs
+      - name: Auto-layout frames in Chromium
+        # ⇧A wraps the selection in a frame in one undo step; moving the frame
+        # moves its children; the inspector gap re-lays them; padding and gap
+        # bands on canvas; children under the frame in Layers; clip; delete
+        # unparents; undo restores the slide exactly.
+        run: node scripts/test-slides-frames-browser.mjs

@@ -375,6 +375,11 @@
           "minimum": 0,
           "maximum": 1
         },
+        "parentId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
         "placeholder": {
           "type": "string",
           "maxLength": 4000
@@ -396,6 +401,26 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "sizing": {
+          "type": "object",
+          "properties": {
+            "h": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            },
+            "w": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            }
+          },
+          "additionalProperties": false
         },
         "textStroke": {
           "$ref": "#/$defs/prop-textStroke"
@@ -590,6 +615,67 @@
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
         },
+        "layout": {
+          "type": "object",
+          "properties": {
+            "align": {
+              "type": "string",
+              "enum": [
+                "start",
+                "center",
+                "end",
+                "stretch"
+              ]
+            },
+            "clip": {
+              "type": "boolean"
+            },
+            "cols": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 64
+            },
+            "dir": {
+              "type": "string",
+              "enum": [
+                "row",
+                "col",
+                "grid"
+              ]
+            },
+            "gap": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "hug": {
+              "type": "boolean"
+            },
+            "justify": {
+              "type": "string",
+              "enum": [
+                "start",
+                "center",
+                "end",
+                "space-between"
+              ]
+            },
+            "pad": {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 4,
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "dir",
+            "gap",
+            "pad"
+          ]
+        },
         "lineEnd": {
           "type": "string",
           "enum": [
@@ -639,6 +725,11 @@
           "minimum": 0,
           "maximum": 1
         },
+        "parentId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
         "pathBox": {
           "type": "array",
           "minItems": 4,
@@ -680,6 +771,26 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "sizing": {
+          "type": "object",
+          "properties": {
+            "h": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            },
+            "w": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            }
+          },
+          "additionalProperties": false
         },
         "stroke": {
           "type": "string",
@@ -840,6 +951,11 @@
           "minimum": 0,
           "maximum": 1
         },
+        "parentId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
         "radius": {
           "type": "number",
           "minimum": 0,
@@ -862,6 +978,26 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "sizing": {
+          "type": "object",
+          "properties": {
+            "h": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            },
+            "w": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            }
+          },
+          "additionalProperties": false
         },
         "src": {
           "type": "string",
@@ -973,6 +1109,11 @@
           "minimum": 0,
           "maximum": 1
         },
+        "parentId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
         "role": {
           "type": "string",
           "maxLength": 200,
@@ -990,6 +1131,26 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "sizing": {
+          "type": "object",
+          "properties": {
+            "h": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            },
+            "w": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            }
+          },
+          "additionalProperties": false
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -1103,6 +1264,11 @@
         "option": {
           "$ref": "#/$defs/prop-option"
         },
+        "parentId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
         "preset": {
           "type": "string",
           "maxLength": 200,
@@ -1125,6 +1291,26 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "sizing": {
+          "type": "object",
+          "properties": {
+            "h": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            },
+            "w": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            }
+          },
+          "additionalProperties": false
         },
         "source": {
           "$ref": "#/$defs/prop-source"
@@ -1353,6 +1539,11 @@
           "minimum": 0,
           "maximum": 1
         },
+        "parentId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
         "role": {
           "type": "string",
           "maxLength": 200,
@@ -1373,6 +1564,26 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "sizing": {
+          "type": "object",
+          "properties": {
+            "h": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            },
+            "w": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            }
+          },
+          "additionalProperties": false
         },
         "style": {
           "$ref": "#/$defs/prop-style"
@@ -1497,6 +1708,11 @@
           "minimum": 0,
           "maximum": 1
         },
+        "parentId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
         "poster": {
           "type": "string",
           "maxLength": 33554432,
@@ -1524,6 +1740,26 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "sizing": {
+          "type": "object",
+          "properties": {
+            "h": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            },
+            "w": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            }
+          },
+          "additionalProperties": false
         },
         "src": {
           "type": "string",
@@ -1645,6 +1881,11 @@
           "minimum": 0,
           "maximum": 1
         },
+        "parentId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
         "role": {
           "type": "string",
           "maxLength": 200,
@@ -1662,6 +1903,26 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "sizing": {
+          "type": "object",
+          "properties": {
+            "h": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            },
+            "w": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            }
+          },
+          "additionalProperties": false
         },
         "themeRefs": {
           "$ref": "#/$defs/prop-themeRefs"
@@ -1804,6 +2065,11 @@
           "minimum": 0,
           "maximum": 1
         },
+        "parentId": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^\"'<>{};]*$"
+        },
         "role": {
           "type": "string",
           "maxLength": 200,
@@ -1821,6 +2087,26 @@
           "type": "string",
           "maxLength": 200,
           "pattern": "^[^\"'<>{};]*$"
+        },
+        "sizing": {
+          "type": "object",
+          "properties": {
+            "h": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            },
+            "w": {
+              "type": "string",
+              "enum": [
+                "fixed",
+                "fill"
+              ]
+            }
+          },
+          "additionalProperties": false
         },
         "themeAssetId": {
           "type": "string",

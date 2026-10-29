@@ -32,6 +32,7 @@ import { validateDoc, type ValidateOpts } from './validate'
 import { buildSchema } from './schema'
 import { resolveThemeRefs } from './palette'
 import { routeAllConnectors } from './connectors'
+import { layoutAll } from './layout'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
 import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
@@ -161,6 +162,7 @@ function bootWith(doc: BentoDoc, docIsFresh = false) {
   // The editor re-routes on edits, but nothing routed a slide nobody touched,
   // and a player or audience file never meets the editor at all. Derived, not
   // an edit: it does not dirty the deck or make an undo step.
+  layoutAll(doc) // frames first: connectors anchor to the laid-out boxes
   routeAllConnectors(doc)
   if (doc.collab?.role === 'audience') audienceMode(doc)
   else if (doc.readonly) playerMode(doc)

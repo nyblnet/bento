@@ -25,6 +25,7 @@ import { buildShapeProps, buildShapeFill, buildShapeStroke } from './inspector/s
 import { buildImageProps, buildMediaProps, buildCodeProps, buildEmbedProps } from './inspector/media'
 import { buildChartProps } from './inspector/chart'
 import { buildTableProps } from './inspector/table'
+import { buildAutoLayout, wrapInFrame } from './inspector/layout'
 import { buildShadow, buildBlur } from './inspector/effects'
 
 export class PropsPanel {
@@ -300,6 +301,7 @@ export class PropsPanel {
     if (el.type === 'shape') { buildShapeFill(this, el); buildShapeStroke(this, el) }
     buildShadow(this, el)
     buildBlur(this, el)
+    buildAutoLayout(this, el)
     buildLayoutRole(this, el)
     buildPresentingProps(this, el)
     buildMorphProps(this, el)
@@ -389,6 +391,9 @@ export class PropsPanel {
     }
     this.host.querySelector(':scope > .ed-tabs-band')!.after(bar, how)
   }
+
+  /** ⇧A — wrap the selection in an auto-layout frame (inspector/layout.ts). */
+  addAutoLayout(els: SlideElement[]) { wrapInFrame(this, els) }
 
   group(els: SlideElement[]) {
     if (els.length < 2) return

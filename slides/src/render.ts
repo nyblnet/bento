@@ -3,6 +3,7 @@
 // Shared model → DOM renderer. One code path draws slides everywhere:
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
+import { frameClip } from './layout'
 import { offlineEnabled, isRemoteUrl, remoteSrcBlocked } from '../../kernel/src/net.ts'
 import type { BentoDoc, EmbedElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey, paginates, isWebUrl } from './model'
@@ -981,7 +982,14 @@ export function renderSlide(slide: Slide, doc: BentoDoc, opts: RenderOpts = {}):
   surface.style.height = `${doc.size.height}px`
   surface.style.background = slide.background
   const fields = opts.fields ?? fieldContext(doc, slide)
-  for (const el of slide.elements) surface.appendChild(renderElement(el, doc, { ...opts, fields }))
+  const byId = new Map(slide.elements.map((e) => [e.id, e]))
+  for (const el of slide.elements) {
+    const node = renderElement(el, doc, { ...opts, fields })
+    // a child of a clipping frame (layout.ts) shows only what lies inside it
+    const clip = frameClip(el, byId)
+    if (clip) node.style.clipPath = clip
+    surface.appendChild(node)
+  }
   return surface
 }
 

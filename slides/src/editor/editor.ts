@@ -38,6 +38,7 @@ import { estimatedFrames, fencedElements, splitFences } from './codefence'
 import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
 import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
 import { routeAllConnectors } from '../connectors'
+import { layoutAll } from '../layout'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
 import { stepOf } from '../steps'
@@ -2681,7 +2682,10 @@ export class Editor {
    *  same endpoints from the element boxes (mirrors syncLinkedCharts); see
    *  connectors.ts routeConnectors. Boot routes the whole deck once (main.ts). */
   private syncConnectors() {
-    if (routeAllConnectors(this.store.doc)) this.canvas.render()
+    // auto layout first (layout.ts): a connector anchored to a frame child
+    // must route to where the frame put it. Both derive, neither commits.
+    const laid = layoutAll(this.store.doc)
+    if (routeAllConnectors(this.store.doc) || laid) this.canvas.render()
   }
 
   // --- auto-save + crash recovery -----------------------------------------------
@@ -3357,6 +3361,11 @@ export class Editor {
         this.canvas.toggleCommentMode()
         return
       }
+      if (!mod && ev.shiftKey && !ev.altKey && ev.key.toLowerCase() === 'a' && this.store.selectedElements.length) {
+        ev.preventDefault()
+        this.panel.addAutoLayout(this.store.selectedElements)
+        return
+      }
       if (mod && ev.key.toLowerCase() === 'g') {
         ev.preventDefault()
         const els = this.store.selectedElements
@@ -3694,6 +3703,7 @@ export class Editor {
       grouped
         ? { label: t('Ungroup'), hint: '⇧⌘G', run: () => this.panel.ungroup(els) }
         : { label: t('Group'), hint: '⌘G', disabled: els.length < 2, run: () => this.panel.group(els) },
+      { label: t('Add auto layout'), hint: '⇧A', disabled: !els.length, run: () => this.panel.addAutoLayout(els) },
       'sep',
       // Reveal (fx.step) from the menu — the one place a user who has never
       // opened the Presenting section will find it. In order = reading order.

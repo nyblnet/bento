@@ -3240,3 +3240,18 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
    view (keyboard paging, a reveal) lands below it, not under it */
 .ed-sidebar { scroll-padding-top: 56px; }
 .ed-props { scroll-padding-top: 52px; }
+
+/* Auto layout (inspector/layout.ts): the 3×3 alignment box, Penpot's */
+.ed-align-matrix {
+  box-sizing: border-box; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;
+  width: 66px; height: 66px; padding: 4px; background: var(--field); border: 1px solid var(--line); border-radius: 6px;
+}
+.ed-align-matrix button { padding: 0; border: 0; border-radius: 3px; background: none; cursor: pointer; display: grid; place-items: center; }
+.ed-align-matrix button::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
+.ed-align-matrix button:hover { background: var(--chrome); }
+.ed-align-matrix button[aria-pressed='true']::after { width: 10px; height: 10px; border-radius: 2px; background: var(--accent, #3b82f6); }
+/* the frame's padding and gaps on canvas (canvas.ts frameOverlay), Figma's pink */
+.ed-frame-band { position: absolute; background: rgba(236, 72, 153, 0.16); pointer-events: auto; z-index: 5; }
+.ed-frame-band:hover { background: rgba(236, 72, 153, 0.32); }
+.ed-frame-band[data-axis='x'] { cursor: ew-resize; }
+.ed-frame-band[data-axis='y'] { cursor: ns-resize; }
