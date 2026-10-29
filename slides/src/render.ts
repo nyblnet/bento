@@ -981,7 +981,8 @@ export function renderSlide(slide: Slide, doc: BentoDoc, opts: RenderOpts = {}):
   surface.style.height = `${doc.size.height}px`
   surface.style.background = slide.background
   const fields = opts.fields ?? fieldContext(doc, slide)
-  for (const el of slide.elements) surface.appendChild(renderElement(el, doc, { ...opts, fields }))
+  // a hidden element (Layers' eye) is drawn nowhere: canvas, thumbnails, the show, print
+  for (const el of slide.elements) if (!el.hidden) surface.appendChild(renderElement(el, doc, { ...opts, fields }))
   return surface
 }
 

@@ -54,6 +54,11 @@ export type LayerRow = {
   groupId?: string
   /** the group's name, when the author gave it one */
   groupName?: string
+  /** Layers' padlock and eye (the element's `locked` / `hidden`) */
+  locked?: boolean
+  hidden?: boolean
+  /** morphs from an element on the slide before (badge ↔) */
+  paired?: boolean
 }
 
 const LABEL_MAX = 24
@@ -90,9 +95,10 @@ export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s)
 }
 
 /** Rows top-first. */
-export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): LayerRow[] {
+export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string, paired?: ReadonlySet<string>): LayerRow[] {
   const rows: LayerRow[] = slide.elements.map((el, index) => ({
     id: el.id, index, type: el.type, label: labelFor(el, tr), grouped: !!el.groupId, groupId: el.groupId, groupName: el.groupName,
+    locked: !!el.locked, hidden: !!el.hidden, paired: !!paired?.has(el.id),
   }))
   return rows.reverse()
 }
@@ -127,12 +133,13 @@ export function highlighted(rows: readonly LayerRow[], selection: readonly strin
 }
 
 /** What the rows depend on, as one comparable string — ids in paint order,
- *  labels and groups. Position, size, colour and every other property are
- *  deliberately absent: a drag frame must not touch the list. */
-export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): { order: string; labels: string } {
-  const rows = layerRows(slide, tr)
+ *  labels, groups and the row's flags (lock, eye, morph badge). Position,
+ *  size, colour and every other property are deliberately absent: a drag
+ *  frame must not touch the list. */
+export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string, paired?: ReadonlySet<string>): { order: string; labels: string } {
+  const rows = layerRows(slide, tr, paired)
   return {
-    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}`).join('\u001e'),
+    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}\u001f${+!!r.locked}${+!!r.hidden}${+!!r.paired}`).join('\u001e'),
     labels: rows.map((r) => r.label).join('\u001e'),
   }
 }

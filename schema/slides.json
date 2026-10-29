@@ -339,6 +339,9 @@
           "minimum": 0,
           "maximum": 1000000
         },
+        "hidden": {
+          "type": "boolean"
+        },
         "html": {
           "type": "string",
           "maxLength": 65536
@@ -360,6 +363,9 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
+        },
+        "locked": {
+          "type": "boolean"
         },
         "morphId": {
           "type": "string",
@@ -585,6 +591,9 @@
           "minimum": 2,
           "maximum": 2
         },
+        "hidden": {
+          "type": "boolean"
+        },
         "id": {
           "type": "string",
           "maxLength": 200,
@@ -624,6 +633,9 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
+        },
+        "locked": {
+          "type": "boolean"
         },
         "morphId": {
           "type": "string",
@@ -815,6 +827,9 @@
           "minimum": 0,
           "maximum": 1000000
         },
+        "hidden": {
+          "type": "boolean"
+        },
         "id": {
           "type": "string",
           "maxLength": 200,
@@ -825,6 +840,9 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
+        },
+        "locked": {
+          "type": "boolean"
         },
         "morphId": {
           "type": "string",
@@ -947,6 +965,9 @@
           "minimum": 0,
           "maximum": 1000000
         },
+        "hidden": {
+          "type": "boolean"
+        },
         "id": {
           "type": "string",
           "maxLength": 200,
@@ -954,6 +975,9 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
+        },
+        "locked": {
+          "type": "boolean"
         },
         "markup": {
           "type": "string",
@@ -1078,6 +1102,9 @@
           "minimum": 0,
           "maximum": 1000000
         },
+        "hidden": {
+          "type": "boolean"
+        },
         "id": {
           "type": "string",
           "maxLength": 200,
@@ -1085,6 +1112,9 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
+        },
+        "locked": {
+          "type": "boolean"
         },
         "morphId": {
           "type": "string",
@@ -1331,6 +1361,9 @@
         "header": {
           "type": "boolean"
         },
+        "hidden": {
+          "type": "boolean"
+        },
         "id": {
           "type": "string",
           "maxLength": 200,
@@ -1338,6 +1371,9 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
+        },
+        "locked": {
+          "type": "boolean"
         },
         "morphId": {
           "type": "string",
@@ -1462,6 +1498,9 @@
           "minimum": 0,
           "maximum": 1000000
         },
+        "hidden": {
+          "type": "boolean"
+        },
         "id": {
           "type": "string",
           "maxLength": 200,
@@ -1476,6 +1515,9 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
+        },
+        "locked": {
+          "type": "boolean"
         },
         "loop": {
           "type": "boolean"
@@ -1620,6 +1662,9 @@
           "minimum": 0,
           "maximum": 1000000
         },
+        "hidden": {
+          "type": "boolean"
+        },
         "id": {
           "type": "string",
           "maxLength": 200,
@@ -1629,6 +1674,9 @@
           "$ref": "#/$defs/prop-link"
         },
         "live": {
+          "type": "boolean"
+        },
+        "locked": {
           "type": "boolean"
         },
         "morphId": {
@@ -1777,6 +1825,9 @@
           "minimum": 0,
           "maximum": 1000000
         },
+        "hidden": {
+          "type": "boolean"
+        },
         "id": {
           "type": "string",
           "maxLength": 200,
@@ -1789,6 +1840,9 @@
         },
         "link": {
           "$ref": "#/$defs/prop-link"
+        },
+        "locked": {
+          "type": "boolean"
         },
         "morphId": {
           "type": "string",

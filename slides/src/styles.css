@@ -3268,3 +3268,35 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   font: 11px system-ui, sans-serif; padding: 1px 6px; min-width: 18px; text-align: center;
   color: var(--muted); background: var(--chrome); border: 1px solid var(--line); border-radius: 4px;
 }
+
+/* ————— CANVAS FEEDBACK (editor/hud.ts) — modifier line, transform pill ——————— */
+.ed-modhint {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6;
+  max-width: calc(100% - 220px); padding: 4px 10px; border-radius: 999px; pointer-events: none;
+  font: 500 11.5px/1.4 system-ui, sans-serif; color: var(--tip-ink); background: var(--tip-bg);
+  box-shadow: 0 0 0 1px var(--tip-edge), 0 4px 14px rgb(0 0 0 / 0.2); text-align: center;
+}
+.ed-modhint[hidden], .ed-hud[hidden] { display: none; }
+.ed-hud {
+  position: fixed; z-index: 10000; padding: 2px 7px; border-radius: 999px; pointer-events: none;
+  font: 600 11px/1.5 system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap;
+  color: var(--surface); background: var(--blue-label);
+}
+
+/* Layers' padlock: a locked element is click-through on the canvas */
+.ed-stage-scale .ed-locked { pointer-events: none; }
+
+/* ————— MORPH PAIRING (editor/morph.ts) — layer badge, canvas ghost ——————————— */
+.ed-morph-ghost { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 5; }
+.ed-morph-ghost rect, .ed-morph-ghost path { fill: none; stroke: var(--morph); }
+.ed-layer-morph { color: var(--morph); font-weight: 700; font-size: 11px; margin-inline-start: auto; }
+.ed-layer-act {
+  display: none; flex: none; width: 20px; height: 20px; padding: 3px; border: 0; border-radius: 4px;
+  background: none; color: var(--muted); cursor: pointer;
+}
+.ed-layer-morph + .ed-layer-act, .ed-layer-label + .ed-layer-act { margin-inline-start: auto; }
+.ed-layer-act svg { width: 14px; height: 14px; }
+.ed-layer:hover .ed-layer-act, .ed-layer:focus-within .ed-layer-act, .ed-layer-act.on { display: inline-flex; }
+.ed-layer-act:hover { background: var(--chrome-2); color: var(--ink); }
+.ed-layer.is-hidden .ed-layer-label, .ed-layer.is-hidden .ed-layer-glyph { opacity: 0.45; }
+.ed-morph-preview { width: 100%; accent-color: var(--morph); }

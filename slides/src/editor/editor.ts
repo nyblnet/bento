@@ -626,6 +626,7 @@ export class Editor {
     const offs = (['doc', 'selection', 'current'] as const).map((e) => this.store.on(e, () => this.panel.layers.refresh()))
     this.buildScope.signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
     this.panel.onListIndent = (dir) => { this.canvas.indentList(dir) }
+    this.panel.onMorphPreview = (t) => this.canvas.previewMorph(t)
 
     if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
   }
@@ -3427,6 +3428,7 @@ export class Editor {
         const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0
         this.store.commit(() => {
           for (const el of this.store.selectedElements) {
+            if (el.locked) continue
             el.x += dx
             el.y += dy
           }

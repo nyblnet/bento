@@ -140,6 +140,20 @@ export interface ElementBase {
    * meaning. See `palette.ts`.
    */
   themeRefs?: Record<string, string>
+  /**
+   * Locked: the canvas will not pick, drag or nudge it — a click passes
+   * through to what lies beneath, and a marquee leaves it out. It is still
+   * listed in Layers, where it can be selected and unlocked. Editor-only:
+   * nothing renders differently. Absent = unlocked.
+   */
+  locked?: true
+  /**
+   * Hidden: not drawn anywhere — the canvas, thumbnails, the show, print and
+   * the file preview. Listed in Layers, dimmed, so it can be shown again.
+   * A shell that predates this key DRAWS a hidden element (it ignores the
+   * key); that is the cost of keeping the format additive.
+   */
+  hidden?: true
 }
 
 export interface ShadowSpec {

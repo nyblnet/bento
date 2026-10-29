@@ -128,6 +128,8 @@ Every element carries the common `ElementBase` fields, plus type-specific ones.
 | `groupId?` | `string` | *Editor* grouping (select/move as one). Distinct from `group`. |
 | `groupName?` | `string` | The group's name in the editor's layer list, carried by every member (a group is no object of its own). Display only; ungrouping or regrouping drops it. |
 | `name?` | `string` | The author's name for the element in the editor's layer list. Display only — never a key; unset, the list names it by kind or by its text. |
+| `locked?` | `true` | *Editor only.* The canvas will not pick, drag or nudge it — a click passes through to what lies beneath, a marquee leaves it out. Still listed, and selectable, in Layers. Absent = unlocked. |
+| `hidden?` | `true` | Not drawn anywhere: canvas, thumbnails, the show, print, the file preview. Listed (dimmed) in Layers so it can be shown again. **A shell that predates this key draws a hidden element** — it ignores the key; that is the price of keeping the format additive. |
 | `showOnHover?` | `string` | In-slide hover reveal: visible only while an element whose `group` equals this value is hovered (with `slide.hover.type='reveal'`). |
 | `role?` | `string` | Layout role (`title`/`subtitle`/`body`/`kicker` by convention) — drives cross-layout content moves. Free-form. |
 
