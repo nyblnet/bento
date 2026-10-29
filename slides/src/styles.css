@@ -40,6 +40,7 @@
   --danger-tint: rgb(180 35 42 / 0.12);
   --tip-key-bg: rgb(255 255 255 / 0.1); /* a shortcut chip on the tooltip */
   --preview-card: #ffffff;   /* the card a shadow preview is drawn under — light in both themes */
+  --morph: #0f8f86;         /* morph pairing (layer badge, ghost + curve): teal, 4.5:1 on white */
   --blue-label: #3a6fd8;     /* fill under white 11px text (measure labels): 4.7:1, --blue was 3.3:1 */
   --grid-dot: #d5dbe4;       /* the canvas dot grid behind the stage */
   --chip: rgb(255 255 255 / 0.85);   /* translucent label over a thumbnail */
@@ -76,6 +77,7 @@
   --tip-edge: var(--line);   /* …and here its fill IS the dark chrome: give it an edge */
   --danger: #f08a8f;
   --danger-tint: rgb(240 138 143 / 0.14);
+  --morph: #2dd4bf;
   --blue-label: var(--blue); /* dark text on the lifted blue */
   --grid-dot: #2b313b;
   --chip: rgb(24 28 34 / 0.85);
@@ -3276,3 +3278,60 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-frame-band:hover { background: rgba(236, 72, 153, 0.32); }
 .ed-frame-band[data-axis='x'] { cursor: ew-resize; }
 .ed-frame-band[data-axis='y'] { cursor: ns-resize; }
+/* ————— COMMAND PALETTE (editor/commands.ts) — ⌘K ————————————————————————— */
+.ed-cmdk-overlay {
+  position: fixed; inset: 0; z-index: 1500; background: rgb(15 23 36 / 0.25);
+  display: flex; justify-content: center; align-items: flex-start; padding-top: 14vh;
+}
+.ed-cmdk {
+  width: min(520px, calc(100vw - 24px)); background: var(--surface); color: var(--ink);
+  border-radius: 12px; box-shadow: 0 18px 50px rgb(15 23 36 / 0.3); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.ed-cmdk-input {
+  font: 15px system-ui, sans-serif; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); outline: none;
+}
+.ed-cmdk-list { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow-y: auto; }
+.ed-cmdk-list li {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px;
+  font-size: 13px; cursor: pointer;
+}
+.ed-cmdk-list li[aria-selected="true"] { background: var(--chrome-2); }
+.ed-cmdk-list .ed-cmdk-empty { color: var(--muted); cursor: default; }
+.ed-cmdk-list kbd {
+  font: 11px system-ui, sans-serif; padding: 1px 6px; min-width: 18px; text-align: center;
+  color: var(--muted); background: var(--chrome); border: 1px solid var(--line); border-radius: 4px;
+}
+
+/* ————— CANVAS FEEDBACK (editor/hud.ts) — modifier line, transform pill ——————— */
+.ed-modhint {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6;
+  max-width: calc(100% - 220px); padding: 4px 10px; border-radius: 999px; pointer-events: none;
+  font: 500 11.5px/1.4 system-ui, sans-serif; color: var(--tip-ink); background: var(--tip-bg);
+  box-shadow: 0 0 0 1px var(--tip-edge), 0 4px 14px rgb(0 0 0 / 0.2); text-align: center;
+}
+.ed-modhint[hidden], .ed-hud[hidden] { display: none; }
+.ed-hud {
+  position: fixed; z-index: 10000; padding: 2px 7px; border-radius: 999px; pointer-events: none;
+  font: 600 11px/1.5 system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap;
+  color: var(--surface); background: var(--blue-label);
+}
+
+/* Layers' padlock: a locked element is click-through on the canvas */
+.ed-stage-scale .ed-locked { pointer-events: none; }
+
+/* ————— MORPH PAIRING (editor/morph.ts) — layer badge, canvas ghost ——————————— */
+.ed-morph-ghost { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 5; }
+.ed-morph-ghost rect, .ed-morph-ghost path { fill: none; stroke: var(--morph); }
+.ed-layer-morph { color: var(--morph); font-weight: 700; font-size: 11px; margin-inline-start: auto; }
+.ed-layer-act {
+  display: none; flex: none; width: 20px; height: 20px; padding: 3px; border: 0; border-radius: 4px;
+  background: none; color: var(--muted); cursor: pointer;
+}
+.ed-layer-morph + .ed-layer-act, .ed-layer-label + .ed-layer-act { margin-inline-start: auto; }
+.ed-layer-act svg { width: 14px; height: 14px; }
+.ed-layer:hover .ed-layer-act, .ed-layer:focus-within .ed-layer-act, .ed-layer-act.on { display: inline-flex; }
+.ed-layer-act:hover { background: var(--chrome-2); color: var(--ink); }
+.ed-layer.is-hidden .ed-layer-label, .ed-layer.is-hidden .ed-layer-glyph { opacity: 0.45; }
+.ed-morph-preview { width: 100%; accent-color: var(--morph); }

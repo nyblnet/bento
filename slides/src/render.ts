@@ -983,7 +983,9 @@ export function renderSlide(slide: Slide, doc: BentoDoc, opts: RenderOpts = {}):
   surface.style.background = slide.background
   const fields = opts.fields ?? fieldContext(doc, slide)
   const byId = new Map(slide.elements.map((e) => [e.id, e]))
+  // a hidden element (Layers' eye) is drawn nowhere: canvas, thumbnails, the show, print
   for (const el of slide.elements) {
+    if (el.hidden) continue
     const node = renderElement(el, doc, { ...opts, fields })
     // a child of a clipping frame (layout.ts) shows only what lies inside it
     const clip = frameClip(el, byId)

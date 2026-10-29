@@ -8,6 +8,7 @@ import { t } from '../../i18n'
 import { UNPAIR } from './controls'
 import type { StepPatch } from '../reveal'
 import { stepOf } from '../../steps'
+import { morphSource } from '../morph'
 
 /**
  * Morph section. The morph key is `morphId ?? id`: by default an element
@@ -71,6 +72,23 @@ export function buildMorphProps(p: PropsPanel, el: SlideElement) {
   }
 
   p.host.appendChild(warn)
+
+  // Scrub through the morph on the canvas — from the slide before (0%) to this
+  // one (100%). Nothing is written; letting go puts the slide back.
+  if (morphSource(p.store.doc, p.store.slide)) {
+    const range = document.createElement('input')
+    range.type = 'range'
+    range.min = '0'
+    range.max = '100'
+    range.value = '100'
+    range.className = 'ed-morph-preview'
+    range.setAttribute('aria-label', t('Morph preview'))
+    range.addEventListener('input', () => p.onMorphPreview?.(Number(range.value) / 100))
+    const restore = () => { range.value = '100'; p.onMorphPreview?.(null) }
+    range.addEventListener('pointerup', restore)
+    range.addEventListener('blur', restore)
+    row(p, 'Preview', range)
+  }
 
   const hint = document.createElement('p')
   // an override in force is STATE, and stays in view; otherwise it is help

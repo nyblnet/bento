@@ -23,6 +23,10 @@ export interface LayersHost {
   renameGroup: (groupId: string, name: string) => void
   /** a read-only document offers no renaming */
   readOnly?: () => boolean
+  /** flip an element's `locked` or `hidden`, as one undo step */
+  toggle?: (id: string, key: 'locked' | 'hidden') => void
+  /** ids on this slide that morph from an element on the slide before */
+  paired?: () => ReadonlySet<string>
 }
 
 /** the element kinds' glyphs, shared with the inspector's context line */
@@ -67,12 +71,12 @@ export class LayersUI {
    *  nothing for a move/resize, label text for a content edit, the rows for
    *  an order or membership change; the highlight always, in place. */
   refresh() {
-    const next = rowSignature(this.host.slide(), t)
+    const next = rowSignature(this.host.slide(), t, this.host.paired?.())
     const diff = signatureDiff(this.sig, next)
     this.sig = next
     if (diff === 'same') { this.highlight(); return }
     if (diff === 'labels') {
-      for (const r of layerRows(this.host.slide(), t)) {
+      for (const r of layerRows(this.host.slide(), t, this.host.paired?.())) {
         const node = this.rowNode(r.id)
         const label = node?.querySelector<HTMLElement>('.ed-layer-label')
         if (node && label && label.textContent !== r.label) { label.textContent = r.label; node.title = r.label }
@@ -150,7 +154,7 @@ export class LayersUI {
 
   /** Selection changed: classes only, no DOM churn. */
   private highlight() {
-    const rows = layerRows(this.host.slide(), t)
+    const rows = layerRows(this.host.slide(), t, this.host.paired?.())
     const lit = highlighted(rows, this.host.selection())
     const sel = new Set(this.host.selection())
     for (const n of this.list.children) {
@@ -172,7 +176,7 @@ export class LayersUI {
     const pending = this.renaming
     pending?.drop()
     this.list.innerHTML = ''
-    const rows = layerRows(this.host.slide(), t)
+    const rows = layerRows(this.host.slide(), t, this.host.paired?.())
     const lit = highlighted(rows, this.host.selection())
     if (!rows.length) {
       const empty = document.createElement('p')
@@ -189,7 +193,7 @@ export class LayersUI {
       }
       if (r.groupId && this.folded.has(r.groupId)) continue
       const row = document.createElement('div')
-      row.className = 'ed-layer' + (lit.has(r.id) ? ' sel' : '') + (r.grouped ? ' grouped' : '')
+      row.className = 'ed-layer' + (lit.has(r.id) ? ' sel' : '') + (r.grouped ? ' grouped' : '') + (r.hidden ? ' is-hidden' : '')
       row.dataset.id = r.id
       row.draggable = true
       row.setAttribute('role', 'option')
@@ -210,6 +214,14 @@ export class LayersUI {
         mark.title = r.comp === 'main' ? t('Main component — its copies follow it') : t('Component copy — follows its main')
         row.appendChild(mark)
       }
+      if (r.paired) {
+        const badge = document.createElement('span')
+        badge.className = 'ed-layer-morph'
+        badge.textContent = '↔'
+        badge.title = t('Morphs from the slide before')
+        row.appendChild(badge)
+      }
+      if (this.host.toggle && !this.host.readOnly?.()) row.append(this.flagButton(r, 'locked'), this.flagButton(r, 'hidden'))
       row.title = r.label
       row.addEventListener('click', (ev) => this.onClick(ev, r))
       label.addEventListener('dblclick', (ev) => { ev.stopPropagation(); this.rename(r.id) })
@@ -311,6 +323,22 @@ export class LayersUI {
       this.dropOn(id, above ? members[0] : members[members.length - 1], above)
     })
     return row
+  }
+
+  /** A row's padlock or eye: shown on hover, and always while it is on. */
+  private flagButton(r: LayerRow, key: 'locked' | 'hidden'): HTMLElement {
+    const on = !!r[key]
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = `ed-layer-act ed-layer-${key}` + (on ? ' on' : '')
+    b.innerHTML = key === 'locked' ? ICONS.lock : ICONS.eye
+    const label = key === 'locked' ? (on ? t('Unlock') : t('Lock')) : (on ? t('Show') : t('Hide'))
+    b.title = label
+    b.setAttribute('aria-label', label)
+    b.setAttribute('aria-pressed', String(on))
+    b.draggable = false
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); this.host.toggle!(r.id, key) })
+    return b
   }
 
   private dropAbove(ev: DragEvent, row: HTMLElement): boolean {

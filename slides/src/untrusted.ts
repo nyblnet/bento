@@ -463,6 +463,8 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
   groupId: cssValue(), showOnHover: cssValue(),
   // the author's names in the layer list — display text, only ever set as textContent
   name: str(LIMITS.prose), groupName: str(LIMITS.prose),
+  // Layers' lock and eye: true or absent
+  locked: bool, hidden: bool,
   // a slide id, or an http(s) URL — the same test the renderer and the show apply
   link: tag((v) => (isWebUrl(v) ? v : cssValue()(v)), { type: 'string', maxLength: LIMITS.prose, description: 'slide id or http(s) URL' }),
   x: num(-1e6, 1e6), y: num(-1e6, 1e6), w: num(0, 1e6), h: num(0, 1e6),

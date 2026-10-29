@@ -131,6 +131,8 @@ Every element carries the common `ElementBase` fields, plus type-specific ones.
 | `parentId?` | `string` | The auto-layout frame this element sits in (see [Frames](#frames-auto-layout)). Its `x/y/w/h` are still written in full. |
 | `sizing?` | `{w?, h?: 'fixed'\|'fill'}` | Inside a frame: `fill` takes the frame's free space on that axis. Absent = fixed. |
 | `name?` | `string` | The author's name for the element in the editor's layer list. Display only — never a key; unset, the list names it by kind or by its text. |
+| `locked?` | `true` | *Editor only.* The canvas will not pick, drag or nudge it — a click passes through to what lies beneath, a marquee leaves it out. Still listed, and selectable, in Layers. Absent = unlocked. |
+| `hidden?` | `true` | Not drawn anywhere: canvas, thumbnails, the show, print, the file preview. Listed (dimmed) in Layers so it can be shown again. **A shell that predates this key draws a hidden element** — it ignores the key; that is the price of keeping the format additive. |
 | `showOnHover?` | `string` | In-slide hover reveal: visible only while an element whose `group` equals this value is hovered (with `slide.hover.type='reveal'`). |
 | `role?` | `string` | Layout role (`title`/`subtitle`/`body`/`kicker` by convention) — drives cross-layout content moves. Free-form. |
 | `themeRefs?` | `Record<string, string>` | Where a literal came from, by property path (`fill`, `shadow.color`, `radius`): a palette slot (`accent1`, `accent1 -20%`) or a design token (`$name`, see `theme.tokens`). The literal always stays in place; the ref only lets the source re-derive it. |

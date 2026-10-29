@@ -60,6 +60,11 @@ export type LayerRow = {
   frame?: 'row' | 'col' | 'grid'
   /** how many frames deep the element sits (0 = on the slide) */
   depth?: number
+  /** Layers' padlock and eye (the element's `locked` / `hidden`) */
+  locked?: boolean
+  hidden?: boolean
+  /** morphs from an element on the slide before (badge ↔) */
+  paired?: boolean
 }
 
 const LABEL_MAX = 24
@@ -96,11 +101,12 @@ export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s)
 }
 
 /** Rows top-first. */
-export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): LayerRow[] {
+export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string, paired?: ReadonlySet<string>): LayerRow[] {
   const rows: LayerRow[] = slide.elements.map((el, index) => ({
     id: el.id, index, type: el.type, label: labelFor(el, tr), grouped: !!el.groupId, groupId: el.groupId, groupName: el.groupName,
     ...(el.type === 'shape' && el.layout ? { frame: el.layout.dir } : {}),
     ...(el.component ? { comp: el.component.main ? 'main' as const : 'copy' as const } : {}),
+    locked: !!el.locked, hidden: !!el.hidden, paired: !!paired?.has(el.id),
   }))
   const top = rows.reverse()
   // A frame's children list under their frame, whatever their paint index,
@@ -149,12 +155,13 @@ export function highlighted(rows: readonly LayerRow[], selection: readonly strin
 }
 
 /** What the rows depend on, as one comparable string — ids in paint order,
- *  labels and groups. Position, size, colour and every other property are
- *  deliberately absent: a drag frame must not touch the list. */
-export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): { order: string; labels: string } {
-  const rows = layerRows(slide, tr)
+ *  labels, groups and the row's flags (lock, eye, morph badge). Position,
+ *  size, colour and every other property are deliberately absent: a drag
+ *  frame must not touch the list. */
+export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string, paired?: ReadonlySet<string>): { order: string; labels: string } {
+  const rows = layerRows(slide, tr, paired)
   return {
-    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}\u001f${r.frame ?? ''}\u001f${r.depth ?? 0}\u001f${r.comp ?? ''}`).join('\u001e'),
+    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}\u001f${r.frame ?? ''}\u001f${r.depth ?? 0}\u001f${r.comp ?? ''}\u001f${+!!r.locked}${+!!r.hidden}${+!!r.paired}`).join('\u001e'),
     labels: rows.map((r) => r.label).join('\u001e'),
   }
 }

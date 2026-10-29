@@ -44,6 +44,7 @@ import { routeAllConnectors } from '../connectors'
 import { layoutAll } from '../layout'
 import { ICONS } from '../icons'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
+import { MOD, dispatch, openPalette, titleFor, type Command } from './commands'
 import { stepOf } from '../steps'
 import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, stageForFile, unstageFromFile } from '../packs'
 import { injectFonts } from '../fonts'
@@ -437,14 +438,14 @@ export class Editor {
         this.toast(t('Up to date — v{v}', { v: APP_VERSION }))
       }
     }, 1500)
-    const undoB = btn(ICONS.undo, '', () => this.store.undo(), t('Undo (⌘Z)'))
-    const redoB = btn(ICONS.redo, '', () => this.store.redo(), t('Redo (⇧⌘Z)'))
+    const undoB = btn(ICONS.undo, '', () => this.store.undo(), titleFor(this.commands, 'undo'))
+    const redoB = btn(ICONS.redo, '', () => this.store.redo(), titleFor(this.commands, 'redo'))
     const saveB = btn(ICONS.save, t('Save'), () => this.save(false), canWriteInPlace()
       ? t('Save — rewrite this file in place (⌘S)')
       : t('Save — download an updated copy (⌘S). This browser can’t rewrite the open file.'))
     saveB.appendChild(this.dirtyDot) // the amber unsaved-changes dot lives ON Save
     const pdfB = btn(ICONS.pdf, '', () => this.exportPdf(), t('Export PDF (print)'))
-    const helpB = btn('<b class="ed-help-q">?</b>', '', () => this.openHelp(), t('Shortcuts & tips (?)'))
+    const helpB = btn('<b class="ed-help-q">?</b>', '', () => this.openHelp(), titleFor(this.commands, 'help'))
     helpB.classList.add('ed-btn-help')
     this.avatarsBox = div('ed-avatars')
     // Intuitive grouping: LEFT = the document (identity · title · save-state ·
@@ -642,6 +643,7 @@ export class Editor {
     const offs = (['doc', 'selection', 'current'] as const).map((e) => this.store.on(e, () => this.panel.layers.refresh()))
     this.buildScope.signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
     this.panel.onListIndent = (dir) => { this.canvas.indentList(dir) }
+    this.panel.onMorphPreview = (t) => this.canvas.previewMorph(t)
 
     if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
   }
@@ -3202,6 +3204,7 @@ export class Editor {
       ['[ · ]', t('Collapse · expand the side panels')],
       ['C', t('Comment mode')],
       ['?', t('This help')],
+      [`${mod}K`, t('Command palette — search every action by name')],
     ])
     section(colL, t('Canvas'), [
       [`⇧-${t('click')}`, t('Add an element to the selection, or take it out')],
@@ -3370,6 +3373,65 @@ export class Editor {
 
   // --- keyboard ------------------------------------------------------------------
 
+  /**
+   * Every keyed action, in dispatch order (commands.ts). `inField` ones run
+   * while a text field has focus; the rest wait until it does not, and not
+   * while a picture is being cropped (crop mode owns Enter/Esc/Delete).
+   */
+  private commandList?: Command[]
+  get commands(): Command[] {
+    if (this.commandList) return this.commandList
+    const sel = () => this.store.selectedElements
+    const key = (ev: KeyboardEvent) => ev.key.toLowerCase()
+    const canvasFree = () => !this.canvas.isCropEditing
+    const list: Command[] = [
+      { id: 'save', label: 'Save', keys: `${MOD}S`, scope: 'always', inField: true, match: (ev, mod) => mod && key(ev) === 's', run: () => this.save(false) },
+      { id: 'zoom-in', label: 'Zoom in', keys: `${MOD}+`, scope: 'canvas', inField: true, match: (ev, mod) => mod && (ev.key === '=' || ev.key === '+'), run: () => this.canvas.zoomIn() },
+      { id: 'zoom-out', label: 'Zoom out', keys: `${MOD}−`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '-', run: () => this.canvas.zoomOut() },
+      { id: 'zoom-fit', label: 'Fit the slide', keys: `${MOD}0`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '0', run: () => this.canvas.zoomReset() },
+      { id: 'present', label: 'Present', keys: 'F5', scope: 'always', inField: true, match: (ev) => ev.key === 'F5', run: (ev) => this.present(!ev?.shiftKey) },
+      { id: 'palette', label: 'Command palette', keys: `${MOD}K`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && key(ev) === 'k', run: () => openPalette(this.commands) },
+      { id: 'help', label: 'Shortcuts & tips', keys: '?', scope: 'always', when: canvasFree, match: (ev, mod) => !mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey)), run: () => this.openHelp() },
+      { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
+      { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => canvasFree() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
+      { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => canvasFree() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
+      { id: 'auto-layout', label: 'Add auto layout', keys: '⇧A', scope: 'canvas', when: () => canvasFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => this.panel.addAutoLayout(sel()) },
+      // ⌥ changes ev.key on macOS (⌥K is ˚), so the physical key decides
+      { id: 'component', label: 'Create component', keys: `⌥${MOD}K`, scope: 'canvas', when: () => canvasFree() && sel().length > 0, match: (ev, mod) => mod && ev.altKey && ev.code === 'KeyK', run: () => this.createComponent() },
+      { id: 'redo', label: 'Redo', keys: `⇧${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && ((ev.shiftKey && key(ev) === 'z') || key(ev) === 'y'), run: () => this.store.redo() },
+      { id: 'undo', label: 'Undo', keys: `${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && key(ev) === 'z', run: () => this.store.undo() },
+      { id: 'duplicate', label: 'Duplicate', keys: `${MOD}D`, scope: 'canvas', when: canvasFree, match: (ev, mod) => mod && key(ev) === 'd', run: () => this.duplicateSelection() },
+      // Ghost Cut: the selection fades where it stands and ⌘V MOVES it (same
+      // ids, one undo step); Esc cancels. Also copied, so pasting elsewhere
+      // works as after ⌘C. Plain ⌘X is unchanged.
+      { id: 'ghost-cut', label: 'Cut to move', keys: `⇧${MOD}X`, scope: 'canvas', when: canvasFree, match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'x', run: () => {
+        if (!this.store.selection.length || this.store.readOnly) return
+        this.copySelection()
+        const ids = [...this.store.selection]
+        this.store.select([])
+        this.canvas.setGhost({ slideId: this.store.slide.id, ids })
+      } },
+      { id: 'toggle-left', label: 'Show or hide the slide list', keys: '[', scope: 'always', when: canvasFree, match: (ev) => ev.key === '[', run: () => this.togglePanel('left') },
+      { id: 'toggle-right', label: 'Show or hide the Format panel', keys: ']', scope: 'always', when: canvasFree, match: (ev) => ev.key === ']', run: () => this.togglePanel('right') },
+      { id: 'next-slide', label: 'Next slide', keys: 'PageDown', scope: 'canvas', when: canvasFree, match: (ev) => ev.key === 'PageDown', run: () => this.store.goToLinear(1) },
+      { id: 'prev-slide', label: 'Previous slide', keys: 'PageUp', scope: 'canvas', when: canvasFree, match: (ev) => ev.key === 'PageUp', run: () => this.store.goToLinear(-1) },
+      // palette only: what the topbar inserts, and its other one-click actions
+      { id: 'insert-text', label: 'Add a text box', scope: 'canvas', run: () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 120 + Math.random() * 200 }), true) },
+      { id: 'insert-image', label: 'Add an image', scope: 'canvas', run: () => this.pickImage() },
+      { id: 'insert-table', label: 'Add a table', scope: 'canvas', run: () => this.canvas.insert(this.newTable()) },
+      { id: 'insert-chart', label: 'Add a chart', scope: 'canvas', run: () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))) },
+      { id: 'insert-code', label: 'Add a code snippet', scope: 'canvas', run: () => this.canvas.insert(defaultCode({ color: readableInk(this.store.slide.background) }), true) },
+      { id: 'copy', label: 'Copy', keys: `${MOD}C`, scope: 'canvas', when: () => sel().length > 0, run: () => this.copySelection() },
+      { id: 'delete', label: 'Delete', keys: '⌫', scope: 'canvas', when: () => sel().length > 0, run: () => this.deleteSelection() },
+      { id: 'slideshow', label: 'Slideshow', scope: 'always', run: () => this.present(false, true) },
+      { id: 'export-pdf', label: 'Export PDF (print)', scope: 'always', run: () => this.exportPdf() },
+      { id: 'speaker', label: 'Speaker view', scope: 'always', run: () => this.openSpeakerView() },
+      { id: 'about', label: 'About bento/slides', scope: 'always', run: () => this.openAbout() },
+    ]
+    return (this.commandList = list)
+  }
+
+
   private wireKeyboard() {
     document.addEventListener('keydown', (ev) => {
       if (this.presenting) return
@@ -3378,91 +3440,12 @@ export class Editor {
         ev.target instanceof Element &&
         ev.target.closest('input, textarea, select, [contenteditable="true"]') != null
 
-      if (mod && ev.key.toLowerCase() === 's') {
-        ev.preventDefault()
-        this.save(false)
-        return
-      }
-      if (mod && (ev.key === '=' || ev.key === '+')) {
-        ev.preventDefault()
-        this.canvas.zoomIn()
-        return
-      }
-      if (mod && ev.key === '-') {
-        ev.preventDefault()
-        this.canvas.zoomOut()
-        return
-      }
-      if (mod && ev.key === '0') {
-        ev.preventDefault()
-        this.canvas.zoomReset()
-        return
-      }
-      if (ev.key === 'F5') {
-        ev.preventDefault()
-        this.present(!ev.shiftKey)
-        return
-      }
+      if (dispatch(this.commands, ev, inField)) return
       if (inField) return
       // Crop mode owns the keyboard: Enter/Esc are its (cropedit.ts), and a
       // Delete meant for the picture being cropped must not remove it.
       if (this.canvas.isCropEditing) return
 
-      if (!mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey))) {
-        ev.preventDefault()
-        this.openHelp()
-        return
-      }
-      if (!mod && ev.key.toLowerCase() === 'c') {
-        ev.preventDefault()
-        this.canvas.toggleCommentMode()
-        return
-      }
-      if (!mod && ev.shiftKey && !ev.altKey && ev.key.toLowerCase() === 'a' && this.store.selectedElements.length) {
-        ev.preventDefault()
-        this.panel.addAutoLayout(this.store.selectedElements)
-        return
-      }
-      // ⌥ changes ev.key on macOS (⌥K is ˚), so the physical key decides
-      if (mod && ev.altKey && ev.code === 'KeyK') {
-        ev.preventDefault()
-        this.createComponent()
-        return
-      }
-      if (mod && ev.key.toLowerCase() === 'g') {
-        ev.preventDefault()
-        const els = this.store.selectedElements
-        if (ev.shiftKey) this.panel.ungroup(els)
-        else this.panel.group(els)
-        return
-      }
-      if (mod && ev.key.toLowerCase() === 'z') {
-        ev.preventDefault()
-        ev.shiftKey ? this.store.redo() : this.store.undo()
-        return
-      }
-      if (mod && ev.key.toLowerCase() === 'y') {
-        ev.preventDefault()
-        this.store.redo()
-        return
-      }
-      if (mod && ev.key.toLowerCase() === 'd') {
-        ev.preventDefault()
-        this.duplicateSelection()
-        return
-      }
-      // Ghost Cut: the selection fades where it stands and ⌘V MOVES it (same
-      // ids, one undo step); Esc cancels. Also copied, so pasting elsewhere
-      // works as after ⌘C. Plain ⌘X is unchanged.
-      if (mod && ev.shiftKey && ev.key.toLowerCase() === 'x') {
-        ev.preventDefault()
-        if (!this.store.selection.length || this.store.readOnly) return
-        this.copySelection()
-        const ids = [...this.store.selection]
-        this.store.select([])
-        this.canvas.setGhost({ slideId: this.store.slide.id, ids })
-        return
-      }
       if (mod && ev.key.toLowerCase() === 'c') {
         this.canvas.ghost = null // a fresh copy is what ⌘V should paste now
         // Copy to BOTH the in-app clipboard (fast, same session) and the system
@@ -3509,18 +3492,11 @@ export class Editor {
         const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0
         this.store.commit(() => {
           for (const el of this.store.selectedElements) {
+            if (el.locked) continue
             el.x += dx
             el.y += dy
           }
         })
-        return
-      }
-      if (ev.key === '[') {
-        this.togglePanel('left')
-        return
-      }
-      if (ev.key === ']') {
-        this.togglePanel('right')
         return
       }
       if (ev.key === 'Escape') {
@@ -3530,15 +3506,6 @@ export class Editor {
         else if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
         else this.store.select([])
         return
-      }
-      if (ev.key === 'PageDown') {
-        ev.preventDefault()
-        this.store.goToLinear(1)
-        return
-      }
-      if (ev.key === 'PageUp') {
-        ev.preventDefault()
-        this.store.goToLinear(-1)
       }
     })
   }

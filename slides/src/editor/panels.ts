@@ -6,6 +6,7 @@
 
 import type { Store } from '../store'
 import { uid, type Slide, type SlideElement } from '../model'
+import { morphPairs } from './morph'
 
 import { revealInOrder, revealTogether, removeReveal } from './reveal'
 
@@ -33,6 +34,9 @@ export class PropsPanel {
   /** Indent (+1) / outdent (−1) bullets — set by the editor to the canvas,
    *  which knows whether a text box is open and where its caret is. */
   onListIndent: ((dir: 1 | -1) => void) | null = null
+  /** Morph preview on the canvas: 0..1 of the way in, null restores — set
+   *  by the editor to the canvas, which owns the rendered nodes. */
+  onMorphPreview: ((t: number | null) => void) | null = null
 
   constructor(
     readonly host: HTMLElement,
@@ -206,6 +210,13 @@ export class PropsPanel {
         else delete el.groupName
       }
     }),
+    toggle: (id, key) => this.store.commit(() => {
+      const el = this.store.element(id)
+      if (!el) return
+      if (el[key]) delete el[key]
+      else el[key] = true
+    }),
+    paired: () => morphPairs(this.store.doc, this.store.slide),
   })
 
   /**

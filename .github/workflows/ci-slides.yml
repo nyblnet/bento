@@ -333,3 +333,11 @@ jobs:
         # offset and its overrides; Detach stops it. A number token binds from
         # the field's dot, follows edits and mode switches, detaches from its pill.
         run: node scripts/test-slides-components-browser.mjs
+      - name: Command palette in Chromium
+        # ⌘K opens, filters, runs, closes; the keys that moved into the command
+        # list still work, and not while typing in a field.
+        run: node scripts/test-slides-command-palette-browser.mjs
+      - name: Canvas feedback in Chromium
+        # The modifier line, the transform pill, morph pairing (badge, ghost,
+        # preview) and Layers' padlock and eye.
+        run: node scripts/test-slides-hud-browser.mjs

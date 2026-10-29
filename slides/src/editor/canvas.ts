@@ -31,6 +31,8 @@ import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 import { drawFrameOverlay } from './frameoverlay'
+import { TransformHud, hudNum, mountModHint } from './hud'
+import { applyMorphPreview, morphGhost } from './morph'
 
 /** How far a finger may travel and still count as a tap rather than a drag.
  *  10px matches what a thumb does on glass while trying to hold still. */
@@ -125,6 +127,7 @@ export class SlideCanvas {
     this.stage.appendChild(this.scaleHost)
     this.scroller.appendChild(this.stage)
     wrap.appendChild(this.scroller)
+    mountModHint(wrap, this.scroller, () => this.store.selection.length)
     this.buildZoomBar()
     // pinch / ctrl+wheel zooms like every design tool
     this.scroller.addEventListener('wheel', (ev) => {
@@ -222,7 +225,7 @@ export class SlideCanvas {
     this.selecto = new Selecto({
       container: this.scroller,
       dragContainer: this.scroller,
-      selectableTargets: ['.bento-el'],
+      selectableTargets: ['.bento-el:not(.ed-locked)'],
       selectByClick: true,
       selectFromInside: false,
       toggleContinueSelect: 'shift',
@@ -1094,8 +1097,11 @@ export class SlideCanvas {
         if (node.dataset.showOnHover !== active) node.style.display = 'none'
       }
     }
+    const locked = new Set(slide.elements.filter((e) => e.locked).map((e) => e.id))
     for (const node of next.querySelectorAll<HTMLElement>('[data-el-id]')) {
       if (this.isGhost(node.dataset.elId!)) node.classList.add('bento-el-ghost-cut')
+      // locked (Layers' padlock): clicks pass through to what lies beneath
+      if (locked.has(node.dataset.elId!)) node.classList.add('ed-locked')
     }
     this.renderSetBar(sets)
     if (this.surface) this.surface.replaceWith(next)
@@ -1210,7 +1216,7 @@ export class SlideCanvas {
     // A single selected line/curve/connector is edited with endpoint handles
     // (LineEditor), not Moveable's box — grab an end and drag it.
     const sel = this.store.selectedElements
-    const one = sel.length === 1 && !this.editing && !this.pathEditor.active && !this.cropEditor?.active ? sel[0] : null
+    const one = sel.length === 1 && !sel[0].locked && !this.editing && !this.pathEditor.active && !this.cropEditor?.active ? sel[0] : null
     // Curves get true bezier handles (BezierEditor); lines and straight polygons
     // keep endpoint/anchor handles (LineEditor).
     const curve = !!one && isCurve(one)
@@ -1220,7 +1226,7 @@ export class SlideCanvas {
     else { this.lineEditor.detach(); this.bezierEditor.detach() }
     const handled = curve || lineLike
     drawFrameOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active)
-    const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes()
+    const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes().filter((n) => !n.classList.contains('ed-locked'))
     // snap against slide bounds/center and every non-selected element
     const others = this.surface
       ? [this.surface, ...Array.from(this.surface.querySelectorAll<HTMLElement>('.bento-el'))].filter(
@@ -1241,6 +1247,26 @@ export class SlideCanvas {
     this.updateTableHandles()
     this.stepBadges?.refresh()
     this.scheduleMeasure()
+    this.drawMorphGhost(handled ? null : sel.length === 1 && !this.editing ? sel[0] : null)
+  }
+
+  // --- morph pairing (morph.ts) ---------------------------------------------
+
+  private morphLayer: SVGSVGElement | null = null
+
+  /** The selected element's frame on the slide it morphs from, dashed, and
+   *  the curve it travels — only on a morph slide, only for a paired element. */
+  private drawMorphGhost(el: SlideElement | null) {
+    this.morphLayer?.remove()
+    this.morphLayer = el ? morphGhost(this.store.doc, this.store.slide, el, this.scale) : null
+    if (this.morphLayer) this.scaleHost.appendChild(this.morphLayer)
+  }
+
+  /** Show the slide `t` of the way through its morph in (0..1); null puts
+   *  every node back by re-rendering. The Animate tab's Preview drives it. */
+  previewMorph(t: number | null) {
+    if (t === null || !this.surface) { this.render(); return }
+    applyMorphPreview(this.surface, this.store.doc, this.store.slide, t)
   }
 
   // --- column resize handles (single selected table) --------------------------
@@ -1334,6 +1360,8 @@ export class SlideCanvas {
     this.store.select(sel.includes(id) ? sel.filter((s) => !kin.includes(s)) : [...sel, ...kin.filter((k) => !sel.includes(k))])
   }
 
+  private hud = new TransformHud()
+
   private wireMoveable() {
     const mv = this.moveable
     // start positions per target — Shift axis-locks against these
@@ -1374,12 +1402,17 @@ export class SlideCanvas {
       const p = axisLock(e.target as HTMLElement, e.left, e.top, e)
       e.target.style.left = `${p.left}px`
       e.target.style.top = `${p.top}px`
+      this.hud.show(`X ${hudNum(p.left)}  Y ${hudNum(p.top)}`, e.clientX, e.clientY)
     })
-    mv.on('dragGroup', (e) => e.events.forEach((ev) => {
-      const p = axisLock(ev.target as HTMLElement, ev.left, ev.top, ev)
-      ev.target.style.left = `${p.left}px`
-      ev.target.style.top = `${p.top}px`
-    }))
+    mv.on('dragGroup', (e) => {
+      e.events.forEach((ev) => {
+        const p = axisLock(ev.target as HTMLElement, ev.left, ev.top, ev)
+        ev.target.style.left = `${p.left}px`
+        ev.target.style.top = `${p.top}px`
+      })
+      const [dx, dy] = e.events[0]?.dist ?? [0, 0]
+      this.hud.show(`Δ ${hudNum(dx)}, ${hudNum(dy)}`, e.clientX, e.clientY)
+    })
     // Shift while resizing keeps the aspect ratio; Alt/Option scales from
     // the center (both live per move, combinable)
     const resizeCenters = new Map<HTMLElement, { cx: number; cy: number }>()
@@ -1424,6 +1457,7 @@ export class SlideCanvas {
     mv.on('resize', (e) => {
       syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
       applyResize(e.target as HTMLElement, e.width, e.height, e.drag.left, e.drag.top, e.inputEvent as MouseEvent)
+      this.hud.show(`${hudNum(e.width)} × ${hudNum(e.height)}`, e.clientX, e.clientY)
     })
     mv.on('resizeGroupStart', (e) => e.events.forEach((ev) => noteResizeStart(ev.target as HTMLElement)))
     mv.on('resizeGroup', (e) => e.events.forEach((ev) => {
@@ -1448,6 +1482,7 @@ export class SlideCanvas {
     mv.on('rotate', (e) => {
       mv.throttleRotate = (e.inputEvent as MouseEvent | undefined)?.shiftKey ? 15 : 1
       e.target.style.transform = `rotate(${e.rotation}deg)`
+      this.hud.show(`${hudNum(((e.rotation % 360) + 360) % 360)}°`, e.clientX, e.clientY)
     })
     mv.on('rotateGroup', (e) => e.events.forEach((ev) => {
       ev.target.style.transform = ev.transform
@@ -1483,6 +1518,7 @@ export class SlideCanvas {
     // handler) that Moveable did not take as a drag — or whose drag changed
     // nothing, e.g. a jitter that snapped straight back — was a click: it digs.
     const end = ({ isDrag }: { isDrag: boolean }) => {
+      this.hud.hide()
       const alt = this.altPress
       this.altPress = null
       const changed = isDrag && commitFrames()
@@ -1492,6 +1528,7 @@ export class SlideCanvas {
     // dead zone. Inside it the press was a ⌘-click: the copies are dropped,
     // the nudged originals put back, and the click selects exactly.
     const endDrag = (e: { isDrag: boolean; clientX: number; clientY: number }) => {
+      this.hud.hide()
       if (this.pendingCopy && Math.hypot(e.clientX - pressAt.x, e.clientY - pressAt.y) <= CLICK_SLOP) {
         this.pendingCopy = null
         this.altPress = null
