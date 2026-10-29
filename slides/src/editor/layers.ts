@@ -196,8 +196,9 @@ export class LayersUI {
       row.setAttribute('aria-selected', lit.has(r.id) ? 'true' : 'false')
       const glyph = document.createElement('span')
       glyph.className = 'ed-layer-glyph'
-      glyph.innerHTML = GLYPH[r.type] ?? ''
-      if (!GLYPH[r.type]) glyph.textContent = r.type.charAt(0).toUpperCase()
+      glyph.innerHTML = r.frame ? ICONS[({ row: 'frameRow', col: 'frameCol', grid: 'frameGrid' } as const)[r.frame]] : GLYPH[r.type] ?? ''
+      if (!r.frame && !GLYPH[r.type]) glyph.textContent = r.type.charAt(0).toUpperCase()
+      if (r.depth) row.style.paddingInlineStart = `${8 + r.depth * 16}px` // inside a frame
       const label = document.createElement('span')
       label.className = 'ed-layer-label'
       label.textContent = r.label

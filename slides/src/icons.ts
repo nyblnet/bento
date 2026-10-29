@@ -93,6 +93,12 @@ export const ICONS = {
   alignRight: svg('<path d="M21 6H3"/><path d="M21 12H9"/><path d="M21 18H7"/>'),
   valignTop: svg('<path d="M3 3h18"/><rect x="6" y="7" width="12" height="6" rx="1.5"/>'),
   valignMiddle: svg('<path d="M3 12h3"/><path d="M18 12h3"/><rect x="6" y="9" width="12" height="6" rx="1.5"/>'),
+  // auto layout frames (layout.ts): row, column, grid
+  frameRow: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v14"/><path d="M15 5v14"/>'),
+  frameCol: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/>'),
+  frameGrid: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/><path d="M3 12h18"/>'),
+  gap: svg('<rect x="3" y="6" width="6" height="12" rx="1"/><rect x="15" y="6" width="6" height="12" rx="1"/><path d="M12 9v6"/>'),
+  padding: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/>'),
   valignBottom: svg('<path d="M3 21h18"/><rect x="6" y="11" width="12" height="6" rx="1.5"/>'),
 } as const
 
