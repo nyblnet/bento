@@ -341,3 +341,8 @@ jobs:
         # The modifier line, the transform pill, morph pairing (badge, ghost,
         # preview) and Layers' padlock and eye.
         run: node scripts/test-slides-hud-browser.mjs
+      - name: Vector booleans in Chromium
+        # The contextual bar for 2+ closed shapes; Subtract makes one path in the
+        # bottom slot with a real hole; one undo; the op switch; Release after a
+        # move; ⌥⇧I; Flatten; `bool` survives a reload.
+        run: node scripts/test-slides-booleans-browser.mjs

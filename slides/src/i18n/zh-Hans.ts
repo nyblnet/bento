@@ -1137,4 +1137,13 @@ export const zhHans: Catalog = {
   "Hide": "隐藏",
   "Morph preview": "变形预览",
   "Preview": "预览",
+  "Union": "联集",
+  "Subtract": "减去",
+  "Intersect": "交集",
+  "Exclude": "排除重叠",
+  "Combine shapes": "组合形状",
+  "Flatten": "拼合",
+  "Release shapes": "释放形状",
+  "Boolean": "布尔",
+  "Nothing would be left of these shapes": "这些形状将不留下任何内容",
 }

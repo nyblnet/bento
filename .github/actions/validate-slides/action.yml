@@ -604,3 +604,10 @@ runs:
       # unbinds; a copy follows its main, keeps its offset and its overrides.
       shell: bento-step {0}
       run: node scripts/test-slides-tokens.ts
+    - name: Vector booleans rig
+      # slides/src/vector-bool.ts, DOM-free: union/subtract/intersect/exclude of
+      # overlapping, disjoint, nested, abutting, rotated and elliptical shapes
+      # cover the area the arithmetic says — by wound area (holes wind opposite,
+      # so an old shell's nonzero fill draws them) and by evenodd over the d.
+      shell: bento-step {0}
+      run: node scripts/test-slides-vector-bool.ts

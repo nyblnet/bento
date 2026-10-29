@@ -1137,4 +1137,13 @@ export const ja: Catalog = {
   "Hide": "非表示",
   "Morph preview": "モーフのプレビュー",
   "Preview": "プレビュー",
+  "Union": "合体",
+  "Subtract": "型抜き",
+  "Intersect": "交差",
+  "Exclude": "中マド",
+  "Combine shapes": "図形を結合",
+  "Flatten": "平坦化",
+  "Release shapes": "図形を解除",
+  "Boolean": "ブーリアン",
+  "Nothing would be left of these shapes": "これらの図形は何も残りません",
 }

@@ -321,6 +321,15 @@ export interface ShapeElement extends ElementBase {
   to?: ConnectorEnd
   /** rect only: this shape is a frame and lays out its children (layout.ts) */
   layout?: FrameLayout
+  /**
+   * A vector boolean (union, subtract, intersect, exclude). The element itself
+   * is an ordinary `path` whose `d`/`pathBox` hold the COMPUTED outline, so a
+   * shell that predates booleans draws it exactly; these operands (in slide
+   * coordinates, bottom first, as they were when combined) ride along only so
+   * the editor can change the operation or give the shapes back. Absent = a
+   * plain path. See vector-bool.ts.
+   */
+  bool?: { op: 'union' | 'subtract' | 'intersect' | 'exclude'; shapes: ShapeElement[] }
 }
 
 /** One anchored end of a connector. `side:'auto'` picks the nearest border. */

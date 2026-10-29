@@ -169,6 +169,13 @@ plus `fill`, `stroke`, `strokeWidth`, `radius` (rect corner). Options:
   `none | arrow | dot | bar`.
 - **path** shapes carry `d?` (SVG path data) authored in the `pathBox?`
   viewBox `[x, y, w, h]`.
+- `bool?`: `{ op: union | subtract | intersect | exclude, shapes: ShapeElement[] }`
+  — a **vector boolean**. The element is an ordinary `path` whose `d`/`pathBox`
+  ARE the computed outline (contours wound by nesting depth, so the default
+  nonzero fill draws the holes), and every reader draws that. `shapes` are the
+  operands, bottom first, in slide coordinates as they stood when combined —
+  kept only so an editor can change the operation or release them. A reader
+  that ignores `bool` loses nothing but re-editing.
 
 ### `image`
 

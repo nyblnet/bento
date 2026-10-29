@@ -71,6 +71,11 @@ export const ICONS = {
   group: svg('<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect width="7" height="5" x="7" y="7" rx="1"/><rect width="7" height="5" x="10" y="12" rx="1"/>'),
   // the Arrange kit (panels.ts arrangeRows): an edge or axis, and the blocks against it
   ungroup: svg('<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect width="5" height="5" x="6" y="6" rx="1"/><rect width="5" height="5" x="13" y="13" rx="1"/>'),
+  // vector booleans: two overlapping squares, what each operation keeps filled
+  boolUnion: svg('<path d="M3 3h12v6h6v12H9v-6H3z" fill="currentColor" stroke-width="1.5"/>'),
+  boolSubtract: svg('<path d="M3 3h12v6H9v6H3z" fill="currentColor" stroke-width="1.5"/><rect x="9" y="9" width="12" height="12" stroke-width="1.5" stroke-dasharray="2 2"/>'),
+  boolIntersect: svg('<rect x="3" y="3" width="12" height="12" stroke-width="1.5"/><rect x="9" y="9" width="12" height="12" stroke-width="1.5"/><rect x="9" y="9" width="6" height="6" fill="currentColor" stroke="none"/>'),
+  boolExclude: svg('<path d="M3 3h12v12H3z M9 9h12v12H9z" fill="currentColor" fill-rule="evenodd" stroke-width="1.5"/>'),
   arrLeft: svg('<path d="M4 3v18"/><rect x="7" y="6" width="12" height="4" rx="1"/><rect x="7" y="14" width="7" height="4" rx="1"/>'),
   arrCenterX: svg('<path d="M12 3v18"/><rect x="5" y="6" width="14" height="4" rx="1"/><rect x="8" y="14" width="8" height="4" rx="1"/>'),
   arrRight: svg('<path d="M20 3v18"/><rect x="5" y="6" width="12" height="4" rx="1"/><rect x="10" y="14" width="7" height="4" rx="1"/>'),

@@ -1137,4 +1137,13 @@ export const zhHant: Catalog = {
   "Hide": "隱藏",
   "Morph preview": "變形預覽",
   "Preview": "預覽",
+  "Union": "聯集",
+  "Subtract": "減去",
+  "Intersect": "交集",
+  "Exclude": "排除重疊",
+  "Combine shapes": "組合形狀",
+  "Flatten": "拼合",
+  "Release shapes": "釋放形狀",
+  "Boolean": "布林",
+  "Nothing would be left of these shapes": "這些形狀將不留下任何內容",
 }

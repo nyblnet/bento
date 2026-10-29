@@ -10,7 +10,7 @@ import {
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultCode, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
   instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   paginates, inLinearFlow,
-  type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
+  type ChartElement, type ShapeKind, type ShapeElement, type Slide, type SlideElement, type TableElement } from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
 import type { InPlaceOutcome } from '../update'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, compareVersions, offlineEnabled, sandboxed, setAutoCheck, setOffline } from '../update'
@@ -63,6 +63,7 @@ import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
+import { BOOL_OPS, boolOperands, boolUi, combine, flatten, release } from './booleans'
 
 const i18nT = t
 
@@ -415,6 +416,25 @@ export class Editor {
     const commentB = btn(ICONS.comment, t('Comment'), () => this.canvas.toggleCommentMode(),
       t('Comment (C) — click an element or a spot on the slide'))
     insert.appendChild(commentB)
+    // Vector booleans, Penpot's contextual bar: present only while two or more
+    // closed shapes are selected — never greyed out, simply not there.
+    const boolBar = div('ed-bool')
+    boolBar.setAttribute('role', 'group')
+    boolBar.setAttribute('aria-label', t('Combine shapes'))
+    for (const op of BOOL_OPS) {
+      const ui = boolUi(op)
+      const b = btn(ui.icon, '', () => combine(this.store, this.store.selectedElements, op), `${ui.label} (${ui.key})`)
+      b.dataset.bool = op
+      b.setAttribute('aria-label', ui.label)
+      boolBar.appendChild(b)
+    }
+    const syncBool = () => { boolBar.hidden = this.store.readOnly || !boolOperands(this.store, this.store.selectedElements) }
+    syncBool()
+    for (const e of ['selection', 'doc', 'current'] as const) {
+      const off = this.store.on(e, syncBool)
+      this.buildScope.signal.addEventListener('abort', off)
+    }
+    insert.appendChild(boolBar)
 
     const actions = div('ed-group ed-group-right')
     // the update chip sits beside the wordmark and exists ONLY when an
@@ -3395,6 +3415,8 @@ export class Editor {
       { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
       { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => canvasFree() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
       { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => canvasFree() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
+      // ⌥⇧U/S/I/E — by code: on a Mac, Option turns the key into another letter
+      ...BOOL_OPS.map((op): Command => ({ id: `bool-${op}`, label: boolUi(op).label, keys: boolUi(op).key, scope: 'canvas', when: () => canvasFree() && !!boolOperands(this.store, sel()), match: (ev, mod) => !mod && ev.altKey && ev.shiftKey && ev.code === boolUi(op).code, run: () => { combine(this.store, sel(), op) } })),
       { id: 'auto-layout', label: 'Add auto layout', keys: '⇧A', scope: 'canvas', when: () => canvasFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => this.panel.addAutoLayout(sel()) },
       // ⌥ changes ev.key on macOS (⌥K is ˚), so the physical key decides
       { id: 'component', label: 'Create component', keys: `⌥${MOD}K`, scope: 'canvas', when: () => canvasFree() && sel().length > 0, match: (ev, mod) => mod && ev.altKey && ev.code === 'KeyK', run: () => this.createComponent() },
@@ -3737,6 +3759,17 @@ export class Editor {
       els.some((e) => e.component)
         ? { label: t('Detach component'), run: () => this.detachComponent() }
         : { label: t('Create component'), hint: '⌥⌘K', disabled: !els.length, run: () => this.createComponent() },
+      ...(boolOperands(this.store, els)
+        ? ['sep' as const, ...BOOL_OPS.map((op) => {
+          const ui = boolUi(op)
+          return { label: ui.label, hint: ui.key, run: () => { combine(this.store, els, op) } }
+        })]
+        : []),
+      ...(one?.type === 'shape' && one.bool
+        ? ['sep' as const,
+          { label: t('Flatten'), run: () => flatten(this.store, one as ShapeElement) },
+          { label: t('Release shapes'), run: () => release(this.store, one as ShapeElement) }]
+        : []),
       'sep',
       // Reveal (fx.step) from the menu — the one place a user who has never
       // opened the Presenting section will find it. In order = reading order.

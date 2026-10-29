@@ -1137,4 +1137,13 @@ export const es: Catalog = {
   "Hide": "Ocultar",
   "Morph preview": "Vista previa de la transformación",
   "Preview": "Vista previa",
+  "Union": "Unir",
+  "Subtract": "Restar",
+  "Intersect": "Intersecar",
+  "Exclude": "Excluir superposición",
+  "Combine shapes": "Combinar formas",
+  "Flatten": "Acoplar",
+  "Release shapes": "Liberar formas",
+  "Boolean": "Booleana",
+  "Nothing would be left of these shapes": "No quedaría nada de estas formas",
 }

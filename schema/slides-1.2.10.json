@@ -605,6 +605,33 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "bool": {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "enum": [
+                "union",
+                "subtract",
+                "intersect",
+                "exclude"
+              ]
+            },
+            "shapes": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 5000,
+              "items": {
+                "$ref": "#/$defs/element"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "shapes"
+          ]
+        },
         "component": {
           "type": "object",
           "properties": {
