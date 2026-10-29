@@ -28,6 +28,7 @@ import { isRemoteUrl } from '../../kernel/src/net.ts'
 import { measureElements, measureTables } from './measure.ts'
 import { BUILTIN_FONTS } from './fonts.ts'
 import { eachRef, keepAlpha, paletteOf, parseThemeRef, resolveRef, _readPath } from './palette.ts'
+import { tokenName } from './tokens.ts'
 
 export type Severity = 'error' | 'warning' | 'info'
 
@@ -212,6 +213,12 @@ export function validateDoc(doc: BentoDoc, opts: ValidateOpts = {}): ValidateRes
     const palette = paletteOf(doc)
     eachRef(doc, ({ slide, element, path, token }) => {
       const at = { slide: slide.id, ...(element ? { element: element.id } : {}) }
+      const name = tokenName(token)
+      if (name) {
+        if (!doc.theme.tokens?.set[name]) add({ ...at, code: 'token-unknown', severity: 'warning', path: `themeRefs.${path}`,
+          message: `There is no token "${name}" in theme.tokens, so this value will not follow it. Add the token, or drop the reference.` })
+        return
+      }
       const parsed = parseThemeRef(token)
       if (!parsed) {
         add({ ...at, code: 'theme-ref-malformed', severity: 'warning', path: `themeRefs.${path}`,

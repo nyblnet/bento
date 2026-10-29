@@ -18,6 +18,9 @@ import { CHART_PRESETS } from '../charts'
 import { cssColor, renderSlide, renderThumbnail } from '../render'
 import { openExportImagesDialog } from './exportimages'
 import { paletteSignature, resolveThemeRefs } from '../palette'
+import { syncTokenRefs, tokenSignature } from '../tokens'
+import { detach, makeComponent, syncComponents } from '../components'
+import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
@@ -156,6 +159,8 @@ export class Editor {
   /** the side column's two views: slide thumbnails, and the current slide's layers */
   private thumbs!: HTMLElement
   private sideLayers!: HTMLElement
+  private sideTokens!: HTMLElement
+  private tokensPane!: TokensPane
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
   private fileChip?: HTMLElement
@@ -200,6 +205,16 @@ export class Editor {
     store.on('doc', () => this.syncLinkedCharts())
     store.on('doc', () => this.syncConnectors())
     store.on('doc', () => this.syncThemeRefs())
+    // seeded with the document as it opened: at boot nothing has "moved", so a
+    // literal edited in an older shell keeps its value (and loses its binding)
+    this.tokenSig = tokenSignature(store.doc)
+    syncComponents(store.doc, this.componentMains)
+    store.on('doc', () => this.syncTokens())
+    store.on('doc', () => this.syncComponents())
+    this.tokensPane = new TokensPane(store)
+    this.tokensPane.mount(this.sideTokens)
+    store.on('doc', () => this.tokensPane.refresh())
+    store.on('current', () => this.tokensPane.refresh())
     store.on('doc', () => this.syncFonts())
     this.syncFonts()
     // A document that cannot write can ARRIVE in a running editor, not only boot
@@ -500,7 +515,8 @@ export class Editor {
     // list used to sit at the top of the inspector, on every tab.
     this.thumbs = div('ed-thumbs')
     this.sideLayers = div('ed-side-layers')
-    this.sidebar.append(this.sideTabs(), this.thumbs, this.sideLayers)
+    this.sideTokens = div('ed-side-tokens')
+    this.sidebar.append(this.sideTabs(), this.thumbs, this.sideLayers, this.sideTokens)
     const canvasWrap = div('ed-canvas-wrap')
     // presenting lives in ONE split pill beside the zoom control: the main
     // half starts the fullscreen show; its menu holds tab-fill and speaker view.
@@ -1940,7 +1956,7 @@ export class Editor {
       this.sidebar.dataset.view = view
       for (const b of bar.children) b.setAttribute('aria-selected', String((b as HTMLElement).dataset.view === view))
     }
-    for (const [view, label] of [['slides', t('Slides')], ['layers', t('Layers')]] as const) {
+    for (const [view, label] of [['slides', t('Slides')], ['layers', t('Layers')], ['tokens', t('Tokens')]] as const) {
       const b = document.createElement('button')
       b.type = 'button'
       b.setAttribute('role', 'tab')
@@ -1949,7 +1965,8 @@ export class Editor {
       b.addEventListener('click', () => { show(view); lsSet('bento-side-view', view) })
       bar.appendChild(b)
     }
-    show(lsGet('bento-side-view') === 'layers' ? 'layers' : 'slides')
+    const saved = lsGet('bento-side-view')
+    show(saved === 'layers' || saved === 'tokens' ? saved : 'slides')
     // the inspector's band (panels.ts mountTabs): sticky, edge to edge
     const band = div('ed-tabs-band ed-side-band')
     band.appendChild(bar)
@@ -2643,6 +2660,45 @@ export class Editor {
     }
   }
 
+  private tokenSig = ''
+  /** Bound literals follow their tokens; a literal edited by hand drops its
+   *  binding (tokens.ts). Derive-not-commit, like syncThemeRefs. */
+  private syncTokens() {
+    const sig = tokenSignature(this.store.doc)
+    const moved = sig !== this.tokenSig
+    this.tokenSig = sig
+    if (syncTokenRefs(this.store.doc, moved)) {
+      this.canvas.render()
+      this.scheduleThumbs()
+    }
+  }
+
+  /** Each main's last-seen signature, so a copy's disagreement reads as a
+   *  hand edit unless its main moved (components.ts). */
+  private componentMains = new Map<string, string>()
+  private syncComponents() {
+    if (syncComponents(this.store.doc, this.componentMains)) {
+      this.canvas.render()
+      this.scheduleThumbs()
+    }
+  }
+
+  /** The selection becomes a component's main (⌘⌥K). */
+  createComponent() {
+    const els = this.store.selectedElements
+    if (!els.length || els.some((e) => e.component)) return
+    this.store.commit(() => {
+      const live = els.map((e) => this.store.element(e.id)!).filter(Boolean)
+      makeComponent(live, uid('comp'), live[0].groupId && live.every((e) => e.groupId === live[0].groupId) ? live[0].groupId! : uid('g'))
+    })
+  }
+
+  /** The selection stops following its component; a main's copies keep their values. */
+  detachComponent() {
+    const ids = new Set(this.store.selectedElements.map((e) => e.id))
+    this.store.commit(() => detach(this.store.slide.elements.filter((e) => ids.has(e.id))))
+  }
+
   /**
    * Re-inject custom font bundles when applicable.
    */
@@ -3140,6 +3196,7 @@ export class Editor {
       [`${mod}⇧X`, t('Cut to move — the selection fades until you paste it in its new place; Esc cancels')],
       [`${mod}D`, t('Duplicate selection')],
       [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
+      [`${mod}⌥K`, t('Create component — copies inserted from the Tokens view follow it')],
       [`${mod}B · ${mod}I · ${mod}U`, t('Bold · italic · underline while editing text')],
       [t('Text ▸ Field'), t('Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}')],
       ['[ · ]', t('Collapse · expand the side panels')],
@@ -3364,6 +3421,12 @@ export class Editor {
       if (!mod && ev.shiftKey && !ev.altKey && ev.key.toLowerCase() === 'a' && this.store.selectedElements.length) {
         ev.preventDefault()
         this.panel.addAutoLayout(this.store.selectedElements)
+        return
+      }
+      // ⌥ changes ev.key on macOS (⌥K is ˚), so the physical key decides
+      if (mod && ev.altKey && ev.code === 'KeyK') {
+        ev.preventDefault()
+        this.createComponent()
         return
       }
       if (mod && ev.key.toLowerCase() === 'g') {
@@ -3704,6 +3767,9 @@ export class Editor {
         ? { label: t('Ungroup'), hint: '⇧⌘G', run: () => this.panel.ungroup(els) }
         : { label: t('Group'), hint: '⌘G', disabled: els.length < 2, run: () => this.panel.group(els) },
       { label: t('Add auto layout'), hint: '⇧A', disabled: !els.length, run: () => this.panel.addAutoLayout(els) },
+      els.some((e) => e.component)
+        ? { label: t('Detach component'), run: () => this.detachComponent() }
+        : { label: t('Create component'), hint: '⌥⌘K', disabled: !els.length, run: () => this.createComponent() },
       'sep',
       // Reveal (fx.step) from the menu — the one place a user who has never
       // opened the Presenting section will find it. In order = reading order.

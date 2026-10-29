@@ -79,6 +79,7 @@ the string `</script>` can never appear and terminate the block.
 | `fontFamily` | `string` | Default font stack. |
 | `chartPalette?` | `string[]` | Ordered series colors for new charts. Absent = derived from `accent`. |
 | `table?` | `Partial<TableStyle>` | Defaults for newly inserted tables. Omitted properties use the standard table style; existing tables retain their own `style`. |
+| `tokens?` | `DesignTokens` | Design tokens: `{ modes?: string[], mode?: string, set: { [name]: { type: 'color' \| 'number', values: { [mode]: value } } } }`. Values are keyed by mode (`'default'` when `modes` is absent); `mode` is the active one. An element binds a property to a token with `themeRefs[path] = '$name'` — the literal stays on the element, exactly as with palette slots, and editing a token or switching `mode` rewrites every bound literal. A literal changed by hand (in any shell) loses its binding and keeps its value. Names match `[A-Za-z][\w.-]*`. |
 
 ---
 
@@ -132,6 +133,8 @@ Every element carries the common `ElementBase` fields, plus type-specific ones.
 | `name?` | `string` | The author's name for the element in the editor's layer list. Display only — never a key; unset, the list names it by kind or by its text. |
 | `showOnHover?` | `string` | In-slide hover reveal: visible only while an element whose `group` equals this value is hovered (with `slide.hover.type='reveal'`). |
 | `role?` | `string` | Layout role (`title`/`subtitle`/`body`/`kicker` by convention) — drives cross-layout content moves. Free-form. |
+| `themeRefs?` | `Record<string, string>` | Where a literal came from, by property path (`fill`, `shadow.color`, `radius`): a palette slot (`accent1`, `accent1 -20%`) or a design token (`$name`, see `theme.tokens`). The literal always stays in place; the ref only lets the source re-derive it. |
+| `component?` | `{ id, key, main?, over? }` | Component membership (Penpot's main/copy model, no element type of its own). Elements sharing `id` form one component; the set with `main: true` is the main, every other set (one per `groupId`) is a copy. `key` pairs a copy element with its counterpart in the main. A copy re-derives every property from the main except identity (`id`, `groupId`, `name`, `groupName`, `morphId`), its position offset, and the keys listed in `over` — the properties edited on that copy by hand. An older shell sees ordinary grouped elements. |
 
 The element `type` discriminant is one of: `text`, `shape`, `image`, `svg`,
 `chart`, `table`, `media`.

@@ -44,6 +44,8 @@ import type { Slide, SlideElement } from '../model.ts'
 
 export type LayerRow = {
   id: string
+  /** component membership: ◆ the main, ◇ a copy (components.ts) */
+  comp?: 'main' | 'copy'
   /** paint index in slide.elements (0 = bottom) */
   index: number
   type: SlideElement['type']
@@ -98,6 +100,7 @@ export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => st
   const rows: LayerRow[] = slide.elements.map((el, index) => ({
     id: el.id, index, type: el.type, label: labelFor(el, tr), grouped: !!el.groupId, groupId: el.groupId, groupName: el.groupName,
     ...(el.type === 'shape' && el.layout ? { frame: el.layout.dir } : {}),
+    ...(el.component ? { comp: el.component.main ? 'main' as const : 'copy' as const } : {}),
   }))
   const top = rows.reverse()
   // A frame's children list under their frame, whatever their paint index,
@@ -151,7 +154,7 @@ export function highlighted(rows: readonly LayerRow[], selection: readonly strin
 export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): { order: string; labels: string } {
   const rows = layerRows(slide, tr)
   return {
-    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}\u001f${r.frame ?? ''}\u001f${r.depth ?? 0}`).join('\u001e'),
+    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}\u001f${r.frame ?? ''}\u001f${r.depth ?? 0}\u001f${r.comp ?? ''}`).join('\u001e'),
     labels: rows.map((r) => r.label).join('\u001e'),
   }
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // Shapes: fill and stroke.
+import { tokenBind } from './tokenbind'
 import type { PropsPanel } from '../panels'
 import type { ShapeElement, LineEnding } from '../../model'
 import { TIPS } from '../../tips'
@@ -96,7 +97,7 @@ export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
   style.setAttribute('aria-label', t('Line style'))
   const grid = document.createElement('div')
   grid.className = 'ed-grid2'
-  grid.append(mini(t('Width'), el.strokeWidth, (v, fin) =>
-    p.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin), undefined, { min: 0 }), style)
+  grid.append(tokenBind(p, mini(t('Width'), el.strokeWidth, (v, fin) =>
+    p.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin), undefined, { min: 0 }), el, 'strokeWidth'), style)
   p.host.appendChild(grid)
 }

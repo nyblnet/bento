@@ -237,7 +237,7 @@
         "type": "string"
       },
       "maxProperties": 64,
-      "description": "property path → palette token"
+      "description": "property path → palette slot, or $token name"
     },
     "prop-textStroke": {
       "type": "object",
@@ -302,6 +302,38 @@
         },
         "colorGradient": {
           "$ref": "#/$defs/prop-colorGradient"
+        },
+        "component": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "main": {
+              "const": true
+            },
+            "over": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[^\"'<>{};]*$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "key"
+          ]
         },
         "fontFamily": {
           "type": "string",
@@ -566,6 +598,38 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1000
+        },
+        "component": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "main": {
+              "const": true
+            },
+            "over": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[^\"'<>{};]*$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "key"
+          ]
         },
         "d": {
           "type": "string",
@@ -893,6 +957,38 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "component": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "main": {
+              "const": true
+            },
+            "over": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[^\"'<>{};]*$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "key"
+          ]
+        },
         "crop": {
           "$ref": "#/$defs/prop-crop"
         },
@@ -1057,6 +1153,38 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "component": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "main": {
+              "const": true
+            },
+            "over": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[^\"'<>{};]*$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "key"
+          ]
+        },
         "css": {
           "type": "string",
           "maxLength": 131072
@@ -1216,6 +1344,38 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1000
+        },
+        "component": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "main": {
+              "const": true
+            },
+            "over": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[^\"'<>{};]*$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "key"
+          ]
         },
         "fx": {
           "$ref": "#/$defs/prop-fx"
@@ -1492,6 +1652,38 @@
         "columns": {
           "$ref": "#/$defs/prop-columns"
         },
+        "component": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "main": {
+              "const": true
+            },
+            "over": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[^\"'<>{};]*$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "key"
+          ]
+        },
         "fx": {
           "$ref": "#/$defs/prop-fx"
         },
@@ -1639,6 +1831,38 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1000
+        },
+        "component": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "main": {
+              "const": true
+            },
+            "over": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[^\"'<>{};]*$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "key"
+          ]
         },
         "controls": {
           "type": "boolean"
@@ -1831,6 +2055,38 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "component": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "main": {
+              "const": true
+            },
+            "over": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[^\"'<>{};]*$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "key"
+          ]
+        },
         "doc": {
           "$ref": "#/$defs/prop-doc"
         },
@@ -1992,6 +2248,38 @@
           "type": "string",
           "maxLength": 64,
           "description": "CSS colour; no url()"
+        },
+        "component": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[^\"'<>{};]*$"
+            },
+            "main": {
+              "const": true
+            },
+            "over": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[^\"'<>{};]*$"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "key"
+          ]
         },
         "content": {
           "type": "string",
@@ -2326,7 +2614,7 @@
             "type": "string"
           },
           "maxProperties": 64,
-          "description": "property path → palette token"
+          "description": "property path → palette slot, or $token name"
         },
         "transition": {
           "type": "string",
@@ -2544,6 +2832,58 @@
         },
         "table": {
           "$ref": "#/$defs/tableStyle"
+        },
+        "tokens": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "the active mode; absent = the first"
+            },
+            "modes": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "string",
+                "maxLength": 64
+              }
+            },
+            "set": {
+              "type": "object",
+              "maxProperties": 500,
+              "description": "token name → {type, values: mode → value}; bound with themeRefs \"$name\"",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "values"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "color",
+                      "number"
+                    ]
+                  },
+                  "values": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "number"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "set"
+          ]
         }
       },
       "additionalProperties": false,
