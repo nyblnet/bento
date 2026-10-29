@@ -7,7 +7,7 @@ import { section, row, labeledSelect, toggle, opBtn } from './fields'
 import { t } from '../../i18n'
 import { CHART_PRESETS } from '../../charts'
 import { color } from './color'
-import { SCRUB, unitHandle } from './controls'
+import { SCRUB, unitHandle, numeric } from './controls'
 
 /** Edit the live chart option in place; final=false while typing. */
 export function editOption(p: PropsPanel, id: string, fn: (o: Record<string, any>) => void, final = true) {
@@ -147,7 +147,8 @@ export function editOption(p: PropsPanel, id: string, fn: (o: Record<string, any
     wrap.className = 'ed-axis-range'
     const mk = (key: 'min' | 'max', ph: string) => {
       const inp = document.createElement('input')
-      inp.type = 'number'; inp.placeholder = ph
+      inp.placeholder = ph
+      numeric(inp)
       inp.value = typeof ax?.[key] === 'number' ? String(ax[key]) : ''
       const commit = (final: boolean) => editOption(p, el.id, (o) => {
         const a = Array.isArray(o.yAxis) ? o.yAxis[ai] : o.yAxis
@@ -155,7 +156,8 @@ export function editOption(p: PropsPanel, id: string, fn: (o: Record<string, any
         if (raw === '' || Number.isNaN(parseFloat(raw))) delete a[key]
         else a[key] = parseFloat(raw)
       }, final)
-      inp.addEventListener('input', () => commit(false))
+      // live only while the entry is a plain number: `+12` means nothing until Enter
+      inp.addEventListener('input', () => { if (/^-?\d*\.?\d+$/.test(inp.value.trim())) commit(false) })
       inp.addEventListener('change', () => commit(true))
       inp.addEventListener(SCRUB, () => commit(false))
       return inp

@@ -96,42 +96,73 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
     )] : []),
     ...(groupBtn ? [kind(groupBtn)] : []),
   )
-  if (els.length !== 1) return
-  const el = els[0]
+  const single = els.length === 1 ? els[0] : null
 
   const layer = document.createElement('div')
   layer.className = 'ed-grid2 ed-grid-wide'
-  const blend = labeledSelect(
-    [['normal', t('Normal')], ['multiply', t('Multiply')], ['screen', t('Screen')], ['overlay', t('Overlay')],
-      ['darken', t('Darken')], ['lighten', t('Lighten')], ['difference', t('Difference')], ['exclusion', t('Exclusion')]],
-    el.blend || 'normal',
-    (v) => p.mutate(el.id, (e) => {
-      if (v === 'normal') delete e.blend
-      else e.blend = v
-    }, true))
-  blend.title = t('Blend mode')
-  blend.setAttribute('aria-label', t('Blend mode'))
-  const opacity = mini('%', Math.round(el.opacity * 100), (v, fin) =>
-    p.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1), fin), undefined, { min: 0, max: 100 })
+  if (single) {
+    const el = single
+    const blend = labeledSelect(
+      [['normal', t('Normal')], ['multiply', t('Multiply')], ['screen', t('Screen')], ['overlay', t('Overlay')],
+        ['darken', t('Darken')], ['lighten', t('Lighten')], ['difference', t('Difference')], ['exclusion', t('Exclusion')]],
+      el.blend || 'normal',
+      (v) => p.mutate(el.id, (e) => {
+        if (v === 'normal') delete e.blend
+        else e.blend = v
+      }, true))
+    blend.title = t('Blend mode')
+    blend.setAttribute('aria-label', t('Blend mode'))
+    layer.append(blend)
+  }
+  const opacity = measure(p, els, 'opacity', '%', { min: 0, max: 100, scale: 100 })
   opacity.title = t('Opacity')
   opacity.querySelector('input')!.setAttribute('aria-label', opacity.title) // not '%'
-  layer.append(blend, opacity)
+  layer.append(opacity)
   block.appendChild(layer)
 
   const geo = document.createElement('div')
   geo.className = 'ed-grid2'
   geo.append(
-    mini(t('W'), el.w, (v, fin) => p.setNum(el.id, 'w', Math.max(v, 1), fin), undefined, { min: 1 }),
-    mini(t('H'), el.h, (v, fin) => p.setNum(el.id, 'h', Math.max(v, 1), fin), undefined, { min: 1 }),
-    mini(t('X'), el.x, (v, fin) => p.setNum(el.id, 'x', v, fin)),
-    mini(t('Y'), el.y, (v, fin) => p.setNum(el.id, 'y', v, fin)),
-    mini(t('Angle'), el.rotation, (v, fin) => p.setNum(el.id, 'rotation', v, fin), ICONS.rotate),
+    measure(p, els, 'w', t('W'), { min: 1 }),
+    measure(p, els, 'h', t('H'), { min: 1 }),
+    measure(p, els, 'x', t('X')),
+    measure(p, els, 'y', t('Y')),
+    measure(p, els, 'rotation', t('Angle'), { icon: ICONS.rotate, unit: '°' }),
   )
-  if (el.type === 'shape' && el.shape === 'rect') {
+  if (single?.type === 'shape' && single.shape === 'rect') {
+    const el = single
     geo.append(mini(t('Corner radius'), el.radius ?? 0, (v, fin) =>
       p.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin), ICONS.radius, { min: 0 }))
   }
   block.appendChild(geo)
+}
+
+type Measure = 'x' | 'y' | 'w' | 'h' | 'rotation' | 'opacity'
+
+/**
+ * One measure of the selection, for one element or many. When the elements
+ * agree it is an ordinary field; when they differ it shows Mixed, and an edit
+ * is RELATIVE: a scrub (which starts from 0) or a typed `+12` moves every
+ * element by that much from its own value, while a plain typed value sets
+ * them all. Limits hold per element, not on the field — a Mixed W scrubbed
+ * left shrinks each box down to its own 1px. One undo step per edit.
+ */
+function measure(p: PropsPanel, els: SlideElement[], key: Measure, label: string,
+  o: { min?: number; max?: number; scale?: number; icon?: string; unit?: string } = {}): HTMLElement {
+  const k = o.scale ?? 1
+  const vals = els.map((e) => e[key] * k)
+  const mixed = vals.some((v) => Math.abs(v - vals[0]) > 1e-9)
+  const hold = (v: number) => Math.min(o.max ?? Infinity, Math.max(o.min ?? -Infinity, v))
+  const wrap = mini(label, mixed ? NaN : vals[0], (v, final) => {
+    const rel = input.dataset.rel
+    const delta = mixed ? (final ? (rel === undefined ? null : parseFloat(rel)) : v) : null
+    p.edit(() => els.forEach((e, i) => {
+      const el = p.store.element(e.id)
+      if (el) el[key] = hold(delta === null ? v : vals[i] + delta) / k
+    }), final)
+  }, o.icon, mixed ? { unit: o.unit } : { min: o.min, max: o.max, unit: o.unit })
+  const input = wrap.querySelector('input')!
+  return wrap
 }
 
 /** Same width/height for the whole selection — first selected is the reference. */

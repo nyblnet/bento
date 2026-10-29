@@ -4,6 +4,7 @@
 import { type BentoDoc, uid } from '../../model'
 import { t } from '../../i18n'
 import { ICONS } from '../../icons'
+import { evalNumber } from './numexpr'
 
 // Hover help for panel rows, keyed by the RAW English label (translated at
 // render). A missing entry means no tooltip — better silence than an echo.
@@ -154,11 +155,19 @@ export const SCRUB = 'ed-scrub'
  * tool has: 2px per step, Shift ×10, Alt ×0.1. A press that does not move is
  * an ordinary label click and focuses the field for typing.
  *
+ * Past the 3px dead zone the pointer is LOCKED (hidden, unbounded), as in
+ * Figma: a drag no longer dies at the edge of the screen. Locked, the pointer
+ * reports movement, not position, so the drag runs on its own accumulated x.
+ * A refused lock (no user activation, an embedding that forbids it) changes
+ * nothing: the drag carries on with the visible pointer.
+ *
  * The field holds focus for the length of the drag. That is what makes this
  * work at all: the panel defers its rebuild while a field is focused
  * (isActiveEditFocus), so the label being dragged is not torn out from under
  * the pointer, and edit()'s burst stays open, so the whole drag is ONE undo
- * step. Blurring on release lets the deferred rebuild catch up.
+ * step. Blurring on release lets the deferred rebuild catch up. The release's
+ * `change` says it ended a scrub (`endedScrub`), so a multi-selection can
+ * apply the drag as a delta to each element instead of one value to all.
  */
 export function scrub(handle: HTMLElement, input: HTMLInputElement) {
   handle.classList.add('ed-scrub')
@@ -168,15 +177,25 @@ export function scrub(handle: HTMLElement, input: HTMLInputElement) {
     let changed = false // a drag that never moved the value is no edit, and no undo step
     const step = parseFloat(input.step) || 1
     const x0 = ev.clientX
+    let x = x0 // the drag's own x: the pointer's, or accumulated movement while locked
+    let px = x0
     let last = x0 // where the value was last stepped from
     let moved = false
+    const locked = () => document.pointerLockElement === handle
     const move = (e: PointerEvent) => {
-      if (!moved && Math.abs(e.clientX - x0) < 3) return
-      if (!moved) { moved = true; input.focus(); document.body.classList.add('ed-scrubbing') }
+      x += locked() ? e.movementX : e.clientX - px
+      px = e.clientX
+      if (!moved && Math.abs(x - x0) < 3) return
+      if (!moved) {
+        moved = true
+        input.focus()
+        document.body.classList.add('ed-scrubbing')
+        try { void (handle.requestPointerLock() as unknown as Promise<void> | undefined)?.catch?.(() => {}) } catch { /* refused: drag unlocked */ }
+      }
       // Stepped from the LAST position, not the press: held at a limit, the
       // drag does not bank the overshoot, so turning back moves the value at
       // once instead of after a dead zone as long as the overshoot was.
-      const steps = Math.trunc((e.clientX - last) / 2)
+      const steps = Math.trunc((x - last) / 2)
       if (!steps) return
       last += steps * 2
       const k = step * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1)
@@ -190,14 +209,15 @@ export function scrub(handle: HTMLElement, input: HTMLInputElement) {
       input.dispatchEvent(new Event(SCRUB))
     }
     // pointercancel (the OS took the pointer) ends the drag like a release:
-    // the cursor class and the edit burst must not stick
+    // the cursor class, the lock and the edit burst must not stick
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
+      if (locked()) document.exitPointerLock()
       if (!moved) return
       document.body.classList.remove('ed-scrubbing')
-      if (changed) input.dispatchEvent(new Event('change'))
+      if (changed) input.dispatchEvent(new CustomEvent('change', { detail: 'scrub' }))
       // The click that ends a drag is not a label click: it must not refocus
       // the field (focus would keep ⌘Z in the field's own text undo). Caught
       // on window, because a press on the label released over the field is
@@ -211,6 +231,65 @@ export function scrub(handle: HTMLElement, input: HTMLInputElement) {
     window.addEventListener('pointerup', up)
     window.addEventListener('pointercancel', up)
   })
+}
+
+/** True for the `change` a scrub fires on release. */
+export const endedScrub = (e: Event) => (e as CustomEvent).detail === 'scrub'
+
+/**
+ * Make an <input> a numeric field that takes arithmetic (numexpr.ts): a text
+ * field, since a number field rejects `/` and `*` as typed, given back what
+ * the number field gave for free — role spinbutton with its aria values, and
+ * ↑/↓ stepping (Shift ×10, Alt ×0.1). `min`/`max`/`step` stay ordinary
+ * attributes (they reflect on any input), so `bound()` and scrub read them as
+ * before.
+ *
+ * The entry is evaluated in a CAPTURE listener, which at the target runs
+ * before every ordinary `change` listener: those read a plain number in
+ * `value` as they always did. Junk restores the last value and the change
+ * goes no further. A relative entry (`+12`, `*2`) and a scrub leave their
+ * delta in `dataset.rel` for a multi-selection to apply per element.
+ */
+export function numeric(input: HTMLInputElement, unit?: string): HTMLInputElement {
+  input.type = 'text'
+  input.inputMode = 'decimal'
+  input.autocomplete = 'off'
+  input.spellcheck = false
+  input.classList.add('ed-num')
+  input.setAttribute('role', 'spinbutton')
+  if (unit) input.dataset.unit = unit
+  let prev = input.value
+  const aria = () => {
+    if (input.value !== '') input.setAttribute('aria-valuenow', input.value)
+    else input.removeAttribute('aria-valuenow')
+    for (const k of ['min', 'max'] as const) if (input[k] !== '') input.setAttribute(`aria-value${k}`, input[k])
+  }
+  aria()
+  input.addEventListener('focus', () => { prev = input.value })
+  input.addEventListener('change', (e) => {
+    delete input.dataset.rel
+    if (endedScrub(e)) { input.dataset.rel = String((parseFloat(input.value) || 0) - (parseFloat(prev) || 0)); prev = input.value; aria(); return }
+    if (input.value.trim() === '') { prev = ''; aria(); return } // cleared: the field's own meaning (auto, unset)
+    const r = evalNumber(input.value, parseFloat(prev) || 0)
+    if (!r) { input.value = prev; e.stopImmediatePropagation(); return }
+    const v = bound(input, r.v)
+    input.value = String(Math.round(v * 1000) / 1000)
+    if (r.rel !== undefined) input.dataset.rel = String(v - (parseFloat(prev) || 0))
+    prev = input.value
+    aria()
+  }, true)
+  input.addEventListener(SCRUB, aria)
+  input.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+    e.preventDefault()
+    e.stopPropagation() // the editor's arrows nudge the selection
+    const k = (parseFloat(input.step) || 1) * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1)
+    const digits = Math.max(0, Math.ceil(-Math.log10(k) - 1e-9))
+    const v = bound(input, (parseFloat(input.value) || 0) + (e.key === 'ArrowUp' ? k : -k))
+    input.value = v.toFixed(digits).replace(/\.0+$/, '')
+    input.dispatchEvent(new Event('change'))
+  })
+  return input
 }
 
 /**
@@ -244,6 +323,21 @@ export function roving(group: HTMLElement, role: 'radio' | 'tab') {
     list[j].focus()
     list[j].click()
   })
+}
+
+/** A tab strip's selected pill, drawn once and SLID to the chosen tab
+ *  (styles.css .ed-tabs-pill). It follows aria-selected, so the strip's own
+ *  code stays as it is; until it can measure, the selected tab paints its own. */
+export function slidingPill(bar: HTMLElement) {
+  const place = () => {
+    const on = bar.querySelector<HTMLElement>(':scope > [aria-selected="true"]')
+    if (!on?.offsetWidth) return
+    bar.style.setProperty('--pill-x', `${on.offsetLeft}px`)
+    bar.style.setProperty('--pill-w', `${on.offsetWidth}px`)
+    bar.classList.add('ed-tabs-pill')
+  }
+  new MutationObserver(place).observe(bar, { subtree: true, attributeFilter: ['aria-selected'] })
+  new ResizeObserver(place).observe(bar)
 }
 
 /** An opacity % field as 0..1; empty or junk reads as opaque, 0 stays 0. */

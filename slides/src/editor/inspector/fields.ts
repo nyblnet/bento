@@ -5,7 +5,7 @@ import { PropsPanel } from '../panels'
 import { ICONS } from '../../icons'
 import { lsJson, lsSet } from '../../../../kernel/src/storage.ts'
 import { t } from '../../i18n'
-import { ROW_TIPS, scrub, bound, SCRUB, optLabel, SEG_ICONS, roving } from './controls'
+import { ROW_TIPS, scrub, bound, SCRUB, optLabel, SEG_ICONS, roving, numeric } from './controls'
 
 /** Native <select> with distinct value/label pairs (for model-word values). */
 export function labeledSelect(pairs: Array<[string, string]>, value: string, onChange: (v: string) => void): HTMLSelectElement {
@@ -79,7 +79,7 @@ export function field(p: PropsPanel, ...controls: HTMLElement[]): HTMLElement {
   // rows without an entry get no tooltip — never a useless label echo
   const tip = ROW_TIPS[label]
   if (tip && !input.title) row.title = t(tip)
-  if (input instanceof HTMLInputElement && input.type === 'number') scrub(span, input)
+  if (input instanceof HTMLInputElement && input.classList.contains('ed-num')) scrub(span, input)
   row.append(span, input)
   p.host.appendChild(row)
   return row
@@ -87,7 +87,7 @@ export function field(p: PropsPanel, ...controls: HTMLElement[]): HTMLElement {
 
 /** A numeric field with its label inside it, Penpot's way. `icon` draws an
  *  icon there instead and makes the label the hint. */
-export function mini(label: string, value: number, onChange: (v: number, final: boolean) => void, icon?: string, range?: { min?: number; max?: number }): HTMLElement {
+export function mini(label: string, value: number, onChange: (v: number, final: boolean) => void, icon?: string, range?: { min?: number; max?: number; unit?: string }): HTMLElement {
   const wrap = document.createElement('label')
   wrap.className = 'ed-mini'
   const span = document.createElement('span')
@@ -105,11 +105,14 @@ export function mini(label: string, value: number, onChange: (v: number, final: 
     wrap.style.setProperty('--lab', `${Math.ceil(m.measureText(label).width)}px`)
   }
   const input = document.createElement('input')
-  input.type = 'number'
   input.setAttribute('aria-label', label) // the label/hint; a unit-labelled caller names it properly
-  input.value = String(Math.round(value * 10) / 10)
+  // NaN = the selection disagrees: the field shows Mixed until it is given a value
+  if (Number.isNaN(value)) input.placeholder = t('Mixed')
+  else input.value = String(Math.round(value * 10) / 10)
   if (range?.min !== undefined) input.min = String(range.min)
   if (range?.max !== undefined) input.max = String(range.max)
+  if (range?.unit) wrap.dataset.unit = range.unit
+  numeric(input, range?.unit)
   input.addEventListener('change', () => {
     const v = parseFloat(input.value)
     if (Number.isNaN(v)) return
@@ -125,11 +128,11 @@ export function mini(label: string, value: number, onChange: (v: number, final: 
 
   export function number(value: number, step: number, onEdit: (v: number, final: boolean) => void, range?: { min?: number; max?: number }): HTMLElement {
   const input = document.createElement('input')
-  input.type = 'number'
   input.step = String(step)
   input.value = String(value)
   if (range?.min !== undefined) input.min = String(range.min)
   if (range?.max !== undefined) input.max = String(range.max)
+  numeric(input)
   const send = (final: boolean) => {
     const v = parseFloat(input.value)
     if (Number.isNaN(v)) return
