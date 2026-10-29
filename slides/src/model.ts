@@ -140,6 +140,24 @@ export interface ElementBase {
    * meaning. See `palette.ts`.
    */
   themeRefs?: Record<string, string>
+  /**
+   * Component membership (Penpot's main/copy model, no element type of its
+   * own). Every element of a component shares `id`; `key` pairs an element
+   * of a copy with its counterpart in the main; `main` marks the main's
+   * elements. A copy re-derives every property from the main except its
+   * position offset, identity and the keys listed in `over` (its own local
+   * overrides). An older shell sees ordinary grouped elements. See components.ts.
+   */
+  component?: { id: string; key: string; main?: true; over?: string[] }
+}
+
+/** Design tokens (`theme.tokens`); values are keyed by mode, 'default' when the deck has none. */
+export interface DesignTokens {
+  /** mode names, in order; absent = the single mode 'default' */
+  modes?: string[]
+  /** the active mode; absent = the first */
+  mode?: string
+  set: Record<string, { type: 'color' | 'number'; values: Record<string, string | number> }>
 }
 
 export interface ShadowSpec {
@@ -582,6 +600,14 @@ export interface BentoDoc {
       // diff: deletions / removals
       d?: string,
     }
+    /**
+     * Design tokens: named values an element property can be bound to through
+     * `themeRefs` with a `$name` token. Same contract as the palette: the
+     * literal stays on the element, the ref records where it came from, and
+     * editing a token (or switching `mode`) rewrites every bound literal. A
+     * reader that knows nothing of tokens sees ordinary literals. See tokens.ts.
+     */
+    tokens?: DesignTokens
   }
   /** present-mode chrome; decks with built-in chrome can turn Reveal's off */
   present?: {

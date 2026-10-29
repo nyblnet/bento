@@ -43,6 +43,7 @@ import { stripEnvelope } from './envelope'
 import type { Slide, SlideElement } from './model'
 import { isWebUrl, REQUIRED_ELEMENT_KEYS } from './model'
 import { parseThemeRef } from './palette.ts'
+import { tokenName } from './tokens.ts'
 import { MODEL_KEYS } from './modelkeys.generated'
 import { TIP_KINDS } from './tips'
 
@@ -444,14 +445,19 @@ const themeRefs: Check = tag((v) => {
     const segs = key.split('.')
     if (!segs.length || !segs.every((sg) => /^[A-Za-z_$][A-Za-z0-9_$]*$|^\d+$/.test(sg))) continue
     if (segs.some((sg) => sg === PROTO || sg === 'constructor' || sg === 'prototype')) continue
-    if (!parseThemeRef(token)) continue
+    if (!parseThemeRef(token) && !tokenName(token)) continue
     out[key] = token
   }
   return Object.keys(out).length ? out : DROP
-}, { type: 'object', additionalProperties: { type: 'string' }, maxProperties: LIMITS.themeRefs, description: 'property path → palette token' })
+}, { type: 'object', additionalProperties: { type: 'string' }, maxProperties: LIMITS.themeRefs, description: 'property path → palette slot, or $token name' })
 
 export const ELEMENT_CHECKS: Record<string, Check> = {
   themeRefs,
+  // component membership: ids and keys are lookups, `over` names this element's own keys
+  component: shape(['id', 'key', 'main', 'over'], {
+    id: cssValue(), key: cssValue(), main: tag((v) => (v === true ? v : DROP), { const: true }),
+    over: list(LIMITS.themeRefs, cssValue(64)),
+  }, ['id', 'key']),
   // identity + geometry
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),
   groupId: cssValue(), showOnHover: cssValue(),

@@ -125,6 +125,7 @@ const tables = {
   theme: uniq(nestedKeys('BentoDoc', ['theme'])),
   themePalette: uniq(nestedKeys('BentoDoc', ['theme', 'palette'])),
   themeCodePalette: uniq(nestedKeys('BentoDoc', ['theme', 'codePalette'])),
+  themeTokens: uniq(keysOf('DesignTokens')),
   present: uniq(nestedKeys('BentoDoc', ['present'])),
   font: uniq(nestedKeys('BentoDoc', ['fonts'])),
 }
