@@ -1063,4 +1063,11 @@ export const zhHans: Catalog = {
   "Elevated": "悬浮",
   "Glow": "光晕",
   "Rename a layer or a group in the Layers list": "在图层列表中重命名图层或组",
+  "Mixed": "混合",
+  "Saturation and brightness": "饱和度和亮度",
+  "Hue": "色相",
+  "Color model": "颜色模式",
+  "Color value": "颜色值",
+  "Pick a color from the screen": "从屏幕取色",
+  "On this slide": "本幻灯片",
 }

@@ -1063,4 +1063,11 @@ export const de: Catalog = {
   "Elevated": "Erhöht",
   "Glow": "Leuchten",
   "Rename a layer or a group in the Layers list": "Eine Ebene oder Gruppe in der Ebenenliste umbenennen",
+  "Mixed": "Gemischt",
+  "Saturation and brightness": "Sättigung und Helligkeit",
+  "Hue": "Farbton",
+  "Color model": "Farbmodell",
+  "Color value": "Farbwert",
+  "Pick a color from the screen": "Farbe vom Bildschirm aufnehmen",
+  "On this slide": "Auf dieser Folie",
 }

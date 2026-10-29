@@ -765,7 +765,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   box-shadow: 0 1px 2px rgb(0 0 0 / .18);
 }
 .ed-tabs button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
-.ed-row input[type='number'], .ed-row select, .ed-row input[type='color'] { width: 110px; }
+.ed-row input.ed-num, .ed-row select, .ed-row input[type='color'] { width: 110px; }
 /* Segmented control (panels.ts segmented()): a few options, all visible, one
    click. Wears THE FIELD's box so it sits in a row like any other field. Icon
    segments are field-width; word segments take the row's full width, on a
@@ -2863,7 +2863,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 /* Coordinates, sizes and JSON are LTR content whatever the interface language:
    a base-RTL context renders "-5" as "5-" and reorders a JSON line's brackets.
    Panel prose and every text field the user writes words into are untouched. */
-[dir="rtl"] .ed-row input[type='number'],
+[dir="rtl"] .ed-row input.ed-num,
 [dir="rtl"] .ed-mini input,
 [dir="rtl"] .ed-axis-range input,
 [dir="rtl"] .ed-about-json,
@@ -3197,6 +3197,71 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-props input[type='number'] { min-width: 0; -moz-appearance: textfield; appearance: textfield; }
 .ed-props input[type='number']::-webkit-inner-spin-button,
 .ed-props input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+/* numeric fields take arithmetic (controls.ts numeric()): digits never jitter while scrubbing */
+.ed-props input.ed-num { min-width: 0; font-variant-numeric: tabular-nums; }
+.ed-props input.ed-num::placeholder { color: var(--muted); font-style: italic; }
+/* a unit inside the field's far end (° on angles), muted, never in the way */
+.ed-mini[data-unit]::after {
+  content: attr(data-unit); position: absolute; inset-inline-end: 7px; top: 50%; transform: translateY(-50%);
+  font-size: 11px; color: var(--muted); pointer-events: none;
+}
+.ed-mini[data-unit] input { padding-inline-end: 18px; }
+
+/* a translucent colour's swatch: the colour top-left, the colour over a
+   checkerboard bottom-right — the opacity shows, not just the hue */
+.ed-color > input[type='color'].ed-see-through {
+  /* images only: the field keeps its own fill (the one field look, test-slides-fields) */
+  background-image: linear-gradient(var(--see), var(--see)), repeating-conic-gradient(#c8ccd2 0 25%, #fff 0 50%);
+  background-size: auto, 8px 8px;
+}
+.ed-color > input[type='color'].ed-see-through::-webkit-color-swatch { clip-path: polygon(0 0, 100% 0, 0 100%); }
+.ed-color > input[type='color'].ed-see-through::-moz-color-swatch { clip-path: polygon(0 0, 100% 0, 0 100%); }
+
+/* the colour popover (inspector/colorpopover.ts) */
+.ed-cpop {
+  position: fixed; z-index: 60; box-sizing: border-box; width: 248px; padding: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / .28);
+  animation: ed-cpop-in 120ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes ed-cpop-in { from { opacity: 0; transform: scale(.96); } }
+.ed-cpop-sv {
+  position: relative; height: 150px; border-radius: 6px; cursor: crosshair; touch-action: none;
+  background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, var(--hue));
+}
+.ed-cpop-sv:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.ed-cpop-sv > span {
+  position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / .45); pointer-events: none;
+}
+.ed-cpop input[type='range'] { -webkit-appearance: none; appearance: none; width: 100%; height: 12px; margin: 0; border-radius: 6px; }
+.ed-cpop-hue { background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+.ed-cpop-alpha {
+  background: linear-gradient(to right, transparent, var(--c, #000)), repeating-conic-gradient(#c8ccd2 0 25%, #fff 0 50%) 0 0 / 8px 8px;
+}
+.ed-cpop input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 0 0 1px rgb(0 0 0 / .45);
+}
+.ed-cpop input[type='range']::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 0 0 1px rgb(0 0 0 / .45); }
+.ed-cpop-line { display: flex; gap: 4px; align-items: center; }
+.ed-cpop-line select { flex: none; width: 64px; }
+.ed-cpop-text { flex: 1 1 0; min-width: 0; font-variant-numeric: tabular-nums; }
+.ed-cpop-swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.ed-cpop-swatch { aspect-ratio: 1; width: auto; height: auto; padding: 0; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.ed-cpop-swatch:hover { box-shadow: 0 0 0 2px var(--accent-ink); }
+
+/* tab strips: the selected pill SLIDES to the chosen tab (controls.ts slidingPill) */
+.ed-tabs { position: relative; }
+.ed-tabs button { position: relative; z-index: 1; }
+.ed-tabs.ed-tabs-pill::before {
+  content: ''; position: absolute; top: 3px; bottom: 3px; left: 0; box-sizing: border-box;
+  width: var(--pill-w); transform: translateX(var(--pill-x));
+  background: var(--tab-on); border: 1px solid var(--tab-on-line); border-radius: 6px; box-shadow: 0 1px 2px rgb(0 0 0 / .18);
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), width 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ed-tabs.ed-tabs-pill button[aria-selected='true'] { background: none; border-color: transparent; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .ed-tabs.ed-tabs-pill::before, .ed-cpop { transition: none; animation: none; } }
 
 /* the layer list takes focus on every row click (keyboard order works from
    there), and a 2px frame round the whole list on each click read as

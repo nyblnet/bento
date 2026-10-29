@@ -1063,4 +1063,11 @@ export const ja: Catalog = {
   "Elevated": "浮き上がり",
   "Glow": "グロー",
   "Rename a layer or a group in the Layers list": "レイヤーリストでレイヤーやグループの名前を変更",
+  "Mixed": "混在",
+  "Saturation and brightness": "彩度と明度",
+  "Hue": "色相",
+  "Color model": "カラーモデル",
+  "Color value": "カラー値",
+  "Pick a color from the screen": "画面から色を取得",
+  "On this slide": "このスライド",
 }

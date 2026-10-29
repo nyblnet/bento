@@ -1061,4 +1061,11 @@ export const pt: Catalog = {
   "Elevated": "Elevada",
   "Glow": "Brilho",
   "Rename a layer or a group in the Layers list": "Renomear uma camada ou um grupo na lista de camadas",
+  "Mixed": "Misto",
+  "Saturation and brightness": "Saturação e brilho",
+  "Hue": "Matiz",
+  "Color model": "Modelo de cor",
+  "Color value": "Valor da cor",
+  "Pick a color from the screen": "Capturar uma cor da tela",
+  "On this slide": "Neste slide",
 }

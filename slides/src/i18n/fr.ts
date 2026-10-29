@@ -1063,4 +1063,11 @@ export const fr: Catalog = {
   "Elevated": "Élevée",
   "Glow": "Halo",
   "Rename a layer or a group in the Layers list": "Renommer un calque ou un groupe dans la liste des calques",
+  "Mixed": "Mixte",
+  "Saturation and brightness": "Saturation et luminosité",
+  "Hue": "Teinte",
+  "Color model": "Modèle de couleur",
+  "Color value": "Valeur de la couleur",
+  "Pick a color from the screen": "Prélever une couleur à l’écran",
+  "On this slide": "Sur cette diapositive",
 }

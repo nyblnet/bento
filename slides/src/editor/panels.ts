@@ -16,7 +16,7 @@ import { isMacOS } from '../screens'
 import { t } from '../i18n'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { buildSlidePanel } from './inspector/slide'
-import { roving } from './inspector/controls'
+import { roving, slidingPill } from './inspector/controls'
 import { layerBlock, buildLayoutRole } from './inspector/arrange'
 import { section, opBtn } from './inspector/fields'
 import { revealRow, buildPresentingProps, buildMorphProps, applySteps } from './inspector/animate'
@@ -61,6 +61,8 @@ export class PropsPanel {
    * color, fx options) appear immediately instead of after focus leaves.
    */
   isActiveEditFocus(): boolean {
+    // the colour popover lives on <body>; while it is open a field is mid-edit
+    if (document.querySelector('.ed-cpop')) return true
     const a = document.activeElement as HTMLElement | null
     if (!a || !this.host.contains(a)) return false
     if (a.tagName === 'TEXTAREA' || a.isContentEditable) return true
@@ -174,6 +176,7 @@ export class PropsPanel {
     // the pill sits in a full-width band of the panel's own surface: sticky,
     // it covers what scrolls under it edge to edge instead of floating over it
     roving(bar, 'tab')
+    slidingPill(bar)
     const band = document.createElement('div')
     band.className = 'ed-tabs-band'
     band.appendChild(bar)

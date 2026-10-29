@@ -1063,4 +1063,11 @@ export const zhHant: Catalog = {
   "Elevated": "懸浮",
   "Glow": "光暈",
   "Rename a layer or a group in the Layers list": "在圖層清單中重新命名圖層或群組",
+  "Mixed": "混合",
+  "Saturation and brightness": "飽和度和亮度",
+  "Hue": "色相",
+  "Color model": "顏色模式",
+  "Color value": "顏色值",
+  "Pick a color from the screen": "從螢幕取色",
+  "On this slide": "本投影片",
 }

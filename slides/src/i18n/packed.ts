@@ -1069,4 +1069,11 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Elevated": ["浮き上がり","悬浮","懸浮","Elevada","Élevée","Erhöht","Rialzata","Elevada"],
   "Glow": ["グロー","光晕","光暈","Resplandor","Halo","Leuchten","Bagliore","Brilho"],
   "Rename a layer or a group in the Layers list": ["レイヤーリストでレイヤーやグループの名前を変更","在图层列表中重命名图层或组","在圖層清單中重新命名圖層或群組","Cambiar el nombre de una capa o un grupo en la lista de capas","Renommer un calque ou un groupe dans la liste des calques","Eine Ebene oder Gruppe in der Ebenenliste umbenennen","Rinominare un livello o un gruppo nell’elenco dei livelli","Renomear uma camada ou um grupo na lista de camadas"],
+  "Mixed": ["混在","混合","混合","Mixto","Mixte","Gemischt","Misto","Misto"],
+  "Saturation and brightness": ["彩度と明度","饱和度和亮度","飽和度和亮度","Saturación y brillo","Saturation et luminosité","Sättigung und Helligkeit","Saturazione e luminosità","Saturação e brilho"],
+  "Hue": ["色相","色相","色相","Tono","Teinte","Farbton","Tonalità","Matiz"],
+  "Color model": ["カラーモデル","颜色模式","顏色模式","Modelo de color","Modèle de couleur","Farbmodell","Modello colore","Modelo de cor"],
+  "Color value": ["カラー値","颜色值","顏色值","Valor del color","Valeur de la couleur","Farbwert","Valore colore","Valor da cor"],
+  "Pick a color from the screen": ["画面から色を取得","从屏幕取色","從螢幕取色","Tomar un color de la pantalla","Prélever une couleur à l’écran","Farbe vom Bildschirm aufnehmen","Preleva un colore dallo schermo","Capturar uma cor da tela"],
+  "On this slide": ["このスライド","本幻灯片","本投影片","En esta diapositiva","Sur cette diapositive","Auf dieser Folie","In questa slide","Neste slide"],
 }

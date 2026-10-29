@@ -20,6 +20,7 @@ import { openExportImagesDialog } from './exportimages'
 import { paletteSignature, resolveThemeRefs } from '../palette'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
+import { slidingPill } from './inspector/controls'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { mountNotesPane } from './notespane'
 import { mountHints } from './hints'
@@ -1949,6 +1950,7 @@ export class Editor {
       bar.appendChild(b)
     }
     show(lsGet('bento-side-view') === 'layers' ? 'layers' : 'slides')
+    slidingPill(bar)
     // the inspector's band (panels.ts mountTabs): sticky, edge to edge
     const band = div('ed-tabs-band ed-side-band')
     band.appendChild(bar)
