@@ -140,6 +140,42 @@ export interface ElementBase {
    * meaning. See `palette.ts`.
    */
   themeRefs?: Record<string, string>
+  /**
+   * The auto-layout frame this element sits in (a shape carrying `layout`).
+   * Its x/y/w/h are still written in full: layout.ts DERIVES them from the
+   * frame and writes them into the model, as connectors are routed, so a
+   * reader that knows nothing of frames sees an ordinary positioned element.
+   */
+  parentId?: string
+  /** Inside a frame: 'fill' takes the frame's free space on that axis; absent = fixed. */
+  sizing?: ElementSizing
+}
+
+export interface ElementSizing {
+  w?: 'fixed' | 'fill'
+  h?: 'fixed' | 'fill'
+}
+
+/**
+ * Auto layout (Figma's, Penpot's flex/grid): a frame lays out the elements
+ * whose `parentId` names it. Order along the main axis is the children's
+ * current position, so dragging one past a sibling reorders it.
+ */
+export interface FrameLayout {
+  dir: 'row' | 'col' | 'grid'
+  gap: number
+  /** top, right, bottom, left */
+  pad: [number, number, number, number]
+  /** main axis */
+  justify?: 'start' | 'center' | 'end' | 'space-between'
+  /** cross axis; 'stretch' fills it */
+  align?: 'start' | 'center' | 'end' | 'stretch'
+  /** grid only: columns (default 2) */
+  cols?: number
+  /** children are clipped to the frame */
+  clip?: boolean
+  /** the frame sizes itself to its children */
+  hug?: boolean
 }
 
 export interface ShadowSpec {
@@ -251,6 +287,8 @@ export interface ShapeElement extends ElementBase {
    */
   from?: ConnectorEnd
   to?: ConnectorEnd
+  /** rect only: this shape is a frame and lays out its children (layout.ts) */
+  layout?: FrameLayout
 }
 
 /** One anchored end of a connector. `side:'auto'` picks the nearest border. */

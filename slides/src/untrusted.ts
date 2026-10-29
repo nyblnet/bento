@@ -484,6 +484,15 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
   radius: num(0, 1e5), d: pathData,
   pathBox: tag((v) => (Array.isArray(v) && v.length === 4 ? list(4, num(-1e6, 1e6))(v) : DROP), { type: 'array', minItems: 4, maxItems: 4, items: { type: 'number' } }),
   from: connectorEnd, to: connectorEnd,
+  // auto layout (layout.ts): a frame's rules, and a child's link to its frame
+  layout: shape(MODEL_KEYS.frameLayout, {
+    dir: oneOf('row', 'col', 'grid'), gap: num(0, 1e5),
+    pad: tag((v) => (Array.isArray(v) && v.length === 4 ? list(4, num(0, 1e5))(v) : DROP), { type: 'array', minItems: 4, maxItems: 4, items: { type: 'number' } }),
+    justify: oneOf('start', 'center', 'end', 'space-between'), align: oneOf('start', 'center', 'end', 'stretch'),
+    cols: num(1, 64), clip: bool, hug: bool,
+  }, ['dir', 'gap', 'pad']),
+  parentId: cssValue(),
+  sizing: shape(MODEL_KEYS.sizing, { w: oneOf('fixed', 'fill'), h: oneOf('fixed', 'fill') }),
   // image / svg / media
   src: mediaRef, poster: mediaRef, asset: cssValue(),
   fit: oneOf('contain', 'cover', 'fill'), keepAspectRatio: bool,

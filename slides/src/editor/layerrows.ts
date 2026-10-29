@@ -54,6 +54,10 @@ export type LayerRow = {
   groupId?: string
   /** the group's name, when the author gave it one */
   groupName?: string
+  /** an auto-layout frame (layout.ts): its direction, for the row's icon */
+  frame?: 'row' | 'col' | 'grid'
+  /** how many frames deep the element sits (0 = on the slide) */
+  depth?: number
 }
 
 const LABEL_MAX = 24
@@ -93,8 +97,23 @@ export function labelFor(el: SlideElement, tr: (s: string) => string = (s) => s)
 export function layerRows(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): LayerRow[] {
   const rows: LayerRow[] = slide.elements.map((el, index) => ({
     id: el.id, index, type: el.type, label: labelFor(el, tr), grouped: !!el.groupId, groupId: el.groupId, groupName: el.groupName,
+    ...(el.type === 'shape' && el.layout ? { frame: el.layout.dir } : {}),
   }))
-  return rows.reverse()
+  const top = rows.reverse()
+  // A frame's children list under their frame, whatever their paint index,
+  // as every design tool's layer tree does. No frames, no change.
+  const frames = new Set(rows.filter((r) => r.frame).map((r) => r.id))
+  if (!frames.size) return top
+  const parentOf = new Map(slide.elements.map((e) => [e.id, e.parentId && frames.has(e.parentId) ? e.parentId : undefined]))
+  const out: LayerRow[] = []
+  const visit = (r: LayerRow, depth: number) => {
+    if (out.includes(r) || depth > 32) return
+    out.push(depth ? { ...r, depth } : r)
+    if (r.frame) for (const c of top) if (parentOf.get(c.id) === r.id) visit(c, depth + 1)
+  }
+  for (const r of top) if (!parentOf.get(r.id)) visit(r, 0)
+  for (const r of top) if (!out.some((o) => o.id === r.id)) out.push(r) // a parent cycle: list it flat
+  return out
 }
 
 /**
@@ -132,7 +151,7 @@ export function highlighted(rows: readonly LayerRow[], selection: readonly strin
 export function rowSignature(slide: Pick<Slide, 'elements'>, tr?: (s: string) => string): { order: string; labels: string } {
   const rows = layerRows(slide, tr)
   return {
-    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}`).join('\u001e'),
+    order: rows.map((r) => `${r.id}\u001f${r.type}\u001f${r.groupId ?? ''}\u001f${r.groupName ?? ''}\u001f${r.frame ?? ''}\u001f${r.depth ?? 0}`).join('\u001e'),
     labels: rows.map((r) => r.label).join('\u001e'),
   }
 }

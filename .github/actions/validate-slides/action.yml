@@ -590,3 +590,11 @@ runs:
       # inbound, and an unknown key from a peer is applied but never echoed.
       shell: bento-step {0}
       run: node scripts/test-slides-sync-allowlist.ts
+
+    - name: Auto-layout solver rig
+      # layout.ts: row/column/grid, gap, padding, fill, hug (nested inner-first),
+      # space-between, reorder by position, clip insets, dangling parentId dropped,
+      # a slide with no frames untouched, a second run is a fixed point; the
+      # layer tree lists children under their frame.
+      shell: bento-step {0}
+      run: node scripts/test-slides-layout.ts
