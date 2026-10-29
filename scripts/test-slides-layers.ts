@@ -19,7 +19,7 @@
 // 'rows'); the list has one home — the side column's Layers view, mounted
 // once, never in the inspector — and the editor drives its refresh.
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { excerpt, labelFor, layerRows, moveInPaintOrder, highlighted, rowSignature, signatureDiff } from '../slides/src/editor/layerrows.ts'
@@ -122,7 +122,8 @@ console.log('\nsignature — what a drag must not touch\n')
 
 console.log('\neditor-only\n')
 ok(!/ed-layer|layers\.ts|LayersUI/.test(read('slides/src/render.ts')) && !/ed-layer|LayersUI/.test(read('slides/src/present.ts')), 'render.ts and present.ts know nothing of the list — thumbnails, the show, print and preview cannot carry it')
-const panels = read('slides/src/editor/panels.ts')
+// the inspector is panels.ts plus its sections under inspector/
+const panels = [read('slides/src/editor/panels.ts'), ...readdirSync(join(root, 'slides/src/editor/inspector')).map((f) => read(`slides/src/editor/inspector/${f}`))].join('\n')
 {
   // one home: the side column's Layers view, mounted once; the inspector never carries it
   const editor = read('slides/src/editor/editor.ts')

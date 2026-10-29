@@ -47,7 +47,7 @@ const modelKinds = [...union.matchAll(/'([a-z-]+)'/g)].map((m) => m[1])
 ok(modelKinds.join() === TIP_KINDS.join(), `the model's LineEnding union is the catalogue, in order (${TIP_KINDS.length} kinds)`)
 const gate = read('slides/src/untrusted.ts')
 ok(/lineStart: oneOf\(\.\.\.TIP_KINDS\), lineEnd: oneOf\(\.\.\.TIP_KINDS\)/.test(gate), 'the shape gate admits exactly the catalogue')
-const panels = read('slides/src/editor/panels.ts')
+const panels = read('slides/src/editor/inspector/shape.ts')
 const editor = read('slides/src/editor/editor.ts')
 const lineedit = read('slides/src/connectors.ts') // the routing moved here (#493)
 ok(/TIPS\.map\(\(tip\) => \[tip\.kind, (?:t|optLabel)\(tip\.label\)\]\)/.test(panels), 'the panel lists the catalogue — model words as values, translated labels for display')
@@ -83,7 +83,7 @@ ok(!/arrow2/.test(model) && !/arrow2/.test(gate) && !/'arrow2'/.test(render), 'n
 const kinds = /export type ShapeKind = ([^\n]+)/.exec(model)![1]
 ok(kinds === "'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'", 'ShapeKind is exactly what 1.1.0 knows (no new kinds — a shipped shell throws on one)')
 ok(/kind: 'arrow', label: 'Double arrow', icon: ICONS\.arrow2, heads: 2/.test(editor) && /defaultShape\(item\.kind, item\.heads \? \{ heads: item\.heads \} : \{\}\)/.test(editor), 'the Shape menu makes a Double arrow as {shape: arrow, heads: 2}')
-ok(/this\.row\('Double-headed', this\.toggle\(el\.heads === 2/.test(panels) && /if \(on\) s\.heads = 2; else delete s\.heads/.test(panels), 'the panel toggle writes heads: 2 and deletes it when off')
+ok(/row\(p, 'Double-headed', toggle\(el\.heads === 2/.test(panels) && /if \(on\) s\.heads = 2; else delete s\.heads/.test(panels), 'the panel toggle writes heads: 2 and deletes it when off')
 // mirror the polygon exactly as render.ts computes it
 const w = 300, h = 120
 const shaftH = h * 0.44, headW = Math.min(w * 0.3, h), y0 = (h - shaftH) / 2

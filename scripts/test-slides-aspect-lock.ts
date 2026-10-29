@@ -48,16 +48,17 @@ ok(/const locked = el\?\.type === 'image'/.test(sync), 'a shape or text box is n
 console.log('\nthe panel\n')
 const panels = read('slides/src/editor/panels.ts')
 // the whole method, however long the Picture section grows: up to the next method
-const imgStart = panels.indexOf('private buildImageProps')
-const img = panels.slice(imgStart, panels.indexOf('\n  private ', imgStart + 1))
-ok(/this\.row\('Keep aspect ratio', this\.toggle\(\(el as ImageElement\)\.keepAspectRatio !== false/.test(img), 'the toggle reads absent as on')
+const media = read('slides/src/editor/inspector/media.ts')
+const imgStart = media.indexOf('export function buildImageProps')
+const img = media.slice(imgStart, media.indexOf('\nexport function ', imgStart + 1))
+ok(/row\(p, 'Keep aspect ratio', toggle\(\(el as ImageElement\)\.keepAspectRatio !== false/.test(img), 'the toggle reads absent as on')
 ok(/if \(on\) delete e\.keepAspectRatio/.test(img), 're-locking DELETES the field — never writes true, so a re-locked file equals an untouched one')
 ok(/else \{ e\.keepAspectRatio = false; e\.fit = 'fill' \}/.test(img), 'unlocking writes false and fit:\'fill\' so the stretch shows')
 ok(!/e\.w =|e\.h =/.test(img.slice(img.indexOf("'Keep aspect ratio'"))), 'the toggle never moves or resizes the frame — re-locking keeps the current shape')
-ok(/'Keep aspect ratio': '/.test(panels), 'the row has a tooltip')
+ok(/'Keep aspect ratio': '/.test(read('slides/src/editor/inspector/controls.ts')), 'the row has a tooltip')
 
 console.log('\nthe panel keeps its scroll\n')
-const rebuild = panels.slice(panels.indexOf('private rebuild(force = false)'), panels.indexOf('CLOSED_BY_DEFAULT'))
+const rebuild = panels.slice(panels.indexOf('rebuild(force = false)'), panels.indexOf('CLOSED_BY_DEFAULT'))
 ok(/const scrollTop = force \? 0 : this\.host\.scrollTop/.test(rebuild), 'a doc edit remembers the scroll; a selection/slide switch (force) starts at the top')
 // The Layers list restores its OWN scroll between the two (#507) — a
 // different value; the panel's must still be the last thing set.

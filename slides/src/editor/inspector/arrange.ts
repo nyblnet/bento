@@ -1,0 +1,199 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+// Position, size, alignment and stacking order of the selection.
+import type { PropsPanel } from '../panels'
+import type { SlideElement, ShapeElement } from '../../model'
+import { section, row, labeledSelect, mini } from './fields'
+import { t } from '../../i18n'
+import { optLabel } from './controls'
+import { isMacOS } from '../../screens'
+import { ICONS } from '../../icons'
+
+  export function buildLayoutRole(p: PropsPanel, el: SlideElement) {
+  // What the box IS to the slide's layout — its own section, said in
+  // words: a bare 'Layout role' dropdown among the text settings told
+  // nobody what it did.
+  section(p, t('Layout'))
+  const why = document.createElement('p')
+  why.className = 'ed-hint ed-keep' // the section's whole point: shown, not folded behind '?'
+  why.textContent = t('Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.')
+  p.host.appendChild(why)
+  row(p, 'Layout role', labeledSelect(
+    (['none', 'title', 'subtitle', 'body', 'kicker'] as const).map((r): [string, string] => [r, optLabel(r)]),
+    el.role ?? 'none',
+    (v) => p.mutate(el.id, (e) => {
+      if (v === 'none') delete e.role
+      else e.role = v
+    }, true)))
+}
+
+/** The block above the sections, as Penpot heads its Design tab: the align
+ *  and order toolbars, blend mode with opacity, then the measures — the
+ *  labels inside the fields. */
+export function layerBlock(p: PropsPanel, els: SlideElement[]) {
+  const block = document.createElement('div')
+  block.className = 'ed-layer-block'
+  block.dataset.tab = 'format'
+  p.host.appendChild(block)
+  const iconBtn = (icon: string, hint: string, onClick: () => void) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'ed-btn ed-tool'
+    b.innerHTML = icon
+    b.title = hint
+    b.setAttribute('aria-label', hint.replace(/\s*\(.*\)$/, ''))
+    b.addEventListener('click', onClick)
+    return b
+  }
+  const bar = (...buttons: HTMLElement[]) => {
+    const row = document.createElement('div')
+    row.className = 'ed-toolbar'
+    row.append(...buttons)
+    block.appendChild(row)
+    return row
+  }
+  // Controls the selection cannot use are left out, not greyed: matching
+  // sizes needs two elements, even gaps three.
+  const mod = isMacOS() ? '⌘' : 'Ctrl+'
+  const grouped = els.some((e) => e.groupId)
+  const allSame = els.length > 1 && els.every((e) => e.groupId && e.groupId === els[0].groupId)
+  const groupBtn = els.length > 1 || grouped
+    ? (allSame || (grouped && els.length === 1)
+      ? iconBtn(ICONS.ungroup, `${t('Ungroup')} (⇧${mod}G)`, () => p.ungroup(els))
+      : iconBtn(ICONS.group, `${t('Group')} (${mod}G)`, () => p.group(els)))
+    : null
+  // One toolbar, Penpot's: align | order | spacing | group, a hairline
+  // between the kinds; it wraps at a kind's edge when the panel is narrow.
+  const kind = (...buttons: HTMLElement[]) => {
+    const k = document.createElement('div')
+    k.className = 'ed-toolbar-kind'
+    k.style.setProperty('--n', String(buttons.length))
+    k.append(...buttons)
+    return k
+  }
+  bar(
+    kind(
+      iconBtn(ICONS.arrLeft, t('Align left'), () => align(p, els, 'left')),
+      iconBtn(ICONS.arrCenterX, t('Align centers'), () => align(p, els, 'centerX')),
+      iconBtn(ICONS.arrRight, t('Align right'), () => align(p, els, 'right')),
+      iconBtn(ICONS.arrTop, t('Align top'), () => align(p, els, 'top')),
+      iconBtn(ICONS.arrMiddleY, t('Align middles'), () => align(p, els, 'middleY')),
+      iconBtn(ICONS.arrBottom, t('Align bottom'), () => align(p, els, 'bottom')),
+    ),
+    kind(
+      iconBtn(ICONS.toFront, t('Bring to front'), () => p.reorder(els, 'front')),
+      iconBtn(ICONS.forward, t('Bring forward'), () => step(p, els, +1)),
+      iconBtn(ICONS.backward, t('Send backward'), () => step(p, els, -1)),
+      iconBtn(ICONS.toBack, t('Send to back'), () => p.reorder(els, 'back')),
+    ),
+    ...(els.length >= 2 ? [kind(
+      ...(els.length >= 3 ? [
+        iconBtn(ICONS.distX, t('Space evenly across (3 or more)'), () => distribute(p, els, 'x')),
+        iconBtn(ICONS.distY, t('Space evenly down (3 or more)'), () => distribute(p, els, 'y')),
+      ] : []),
+      iconBtn(ICONS.matchW, t('Same width as the first selected (2 or more)'), () => matchSize(p, els, 'w')),
+      iconBtn(ICONS.matchH, t('Same height as the first selected (2 or more)'), () => matchSize(p, els, 'h')),
+    )] : []),
+    ...(groupBtn ? [kind(groupBtn)] : []),
+  )
+  if (els.length !== 1) return
+  const el = els[0]
+
+  const layer = document.createElement('div')
+  layer.className = 'ed-grid2 ed-grid-wide'
+  const blend = labeledSelect(
+    [['normal', t('Normal')], ['multiply', t('Multiply')], ['screen', t('Screen')], ['overlay', t('Overlay')],
+      ['darken', t('Darken')], ['lighten', t('Lighten')], ['difference', t('Difference')], ['exclusion', t('Exclusion')]],
+    el.blend || 'normal',
+    (v) => p.mutate(el.id, (e) => {
+      if (v === 'normal') delete e.blend
+      else e.blend = v
+    }, true))
+  blend.title = t('Blend mode')
+  blend.setAttribute('aria-label', t('Blend mode'))
+  const opacity = mini('%', Math.round(el.opacity * 100), (v, fin) =>
+    p.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1), fin), undefined, { min: 0, max: 100 })
+  opacity.title = t('Opacity')
+  opacity.querySelector('input')!.setAttribute('aria-label', opacity.title) // not '%'
+  layer.append(blend, opacity)
+  block.appendChild(layer)
+
+  const geo = document.createElement('div')
+  geo.className = 'ed-grid2'
+  geo.append(
+    mini(t('W'), el.w, (v, fin) => p.setNum(el.id, 'w', Math.max(v, 1), fin), undefined, { min: 1 }),
+    mini(t('H'), el.h, (v, fin) => p.setNum(el.id, 'h', Math.max(v, 1), fin), undefined, { min: 1 }),
+    mini(t('X'), el.x, (v, fin) => p.setNum(el.id, 'x', v, fin)),
+    mini(t('Y'), el.y, (v, fin) => p.setNum(el.id, 'y', v, fin)),
+    mini(t('Angle'), el.rotation, (v, fin) => p.setNum(el.id, 'rotation', v, fin), ICONS.rotate),
+  )
+  if (el.type === 'shape' && el.shape === 'rect') {
+    geo.append(mini(t('Corner radius'), el.radius ?? 0, (v, fin) =>
+      p.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin), ICONS.radius, { min: 0 }))
+  }
+  block.appendChild(geo)
+}
+
+/** Same width/height for the whole selection — first selected is the reference. */
+export function matchSize(p: PropsPanel, els: SlideElement[], dim: 'w' | 'h') {
+  if (els.length < 2) return
+  const ref = els[0][dim]
+  p.edit(() => { for (const el of els) el[dim] = ref }, true)
+}
+
+/** Single element aligns to the slide; a multi-selection aligns to its own bounds. */
+export function align(p: PropsPanel, els: SlideElement[], edge: 'left' | 'centerX' | 'right' | 'top' | 'middleY' | 'bottom') {
+  const { width, height } = p.store.doc.size
+  const box = els.length === 1
+    ? { x0: 0, y0: 0, x1: width, y1: height }
+    : {
+        x0: Math.min(...els.map((e) => e.x)),
+        y0: Math.min(...els.map((e) => e.y)),
+        x1: Math.max(...els.map((e) => e.x + e.w)),
+        y1: Math.max(...els.map((e) => e.y + e.h)),
+      }
+  p.edit(() => {
+    for (const el of els) {
+      if (edge === 'left') el.x = box.x0
+      if (edge === 'right') el.x = box.x1 - el.w
+      if (edge === 'centerX') el.x = (box.x0 + box.x1) / 2 - el.w / 2
+      if (edge === 'top') el.y = box.y0
+      if (edge === 'bottom') el.y = box.y1 - el.h
+      if (edge === 'middleY') el.y = (box.y0 + box.y1) / 2 - el.h / 2
+    }
+  }, true)
+}
+
+/** Even gaps between elements, first and last stay put. */
+export function distribute(p: PropsPanel, els: SlideElement[], axis: 'x' | 'y') {
+  if (els.length < 3) return
+  const size = axis === 'x' ? 'w' : 'h'
+  const sorted = [...els].sort((a, b) => a[axis] - b[axis])
+  const first = sorted[0]
+  const last = sorted[sorted.length - 1]
+  const span = last[axis] + last[size] - first[axis]
+  const total = sorted.reduce((s, e) => s + e[size], 0)
+  const gap = (span - total) / (sorted.length - 1)
+  p.edit(() => {
+    let cursor = first[axis] + first[size] + gap
+    for (const el of sorted.slice(1, -1)) {
+      el[axis] = cursor
+      cursor += el[size] + gap
+    }
+  }, true)
+}
+
+/** Move the selection one step up/down the paint order (adjacent swap). */
+export function step(p: PropsPanel, els: SlideElement[], dir: 1 | -1) {
+  const ids = new Set(els.map((e) => e.id))
+  p.store.commit(() => {
+    const arr = p.store.slide.elements
+    const idxs = arr.map((e, i) => (ids.has(e.id) ? i : -1)).filter((i) => i >= 0)
+    const ordered = dir > 0 ? [...idxs].reverse() : idxs
+    for (const i of ordered) {
+      const j = i + dir
+      if (j < 0 || j >= arr.length || ids.has(arr[j].id)) continue
+      ;[arr[i], arr[j]] = [arr[j], arr[i]]
+    }
+  })
+}
