@@ -322,3 +322,8 @@ jobs:
         run: node scripts/test-slides-help-sheet-browser.mjs
       - name: Laser fades when released in Chromium
         run: node scripts/test-slides-laser-release-browser.mjs
+      - name: Components and design tokens in Chromium
+        # ⌥⌘K makes a main; Insert drops a copy that follows it, keeps its own
+        # offset and its overrides; Detach stops it. A number token binds from
+        # the field's dot, follows edits and mode switches, detaches from its pill.
+        run: node scripts/test-slides-components-browser.mjs

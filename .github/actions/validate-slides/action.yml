@@ -590,3 +590,10 @@ runs:
       # inbound, and an unknown key from a peer is applied but never echoed.
       shell: bento-step {0}
       run: node scripts/test-slides-sync-allowlist.ts
+
+    - name: Design tokens and components rig
+      # slides/src/tokens.ts + components.ts, DOM-free: binding writes value and
+      # ref; token edits and mode switches rewrite bound literals; a hand edit
+      # unbinds; a copy follows its main, keeps its offset and its overrides.
+      shell: bento-step {0}
+      run: node scripts/test-slides-tokens.ts

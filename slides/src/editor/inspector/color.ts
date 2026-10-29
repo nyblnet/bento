@@ -9,6 +9,7 @@ import { ICONS } from '../../icons'
 import type { Slide } from '../../model'
 import { setColor, paletteOf, refAt, PALETTE_SLOTS, slotIsSet } from '../../palette'
 import { cssColor } from '../../render'
+import { bindToken, tokenName, tokenValue } from '../../tokens'
 
 /** Solid | Gradient, one click. */
 export function fillKind(value: 'solid' | 'gradient', onChange: (v: string) => void): HTMLElement {
@@ -136,7 +137,10 @@ export function setRef(p: PropsPanel, ref: { id: string | null; path: string; sl
 export function themeLink(p: PropsPanel, ref: { id: string | null; path: string; slide?: Slide }, input: HTMLInputElement, field: HTMLElement): HTMLElement {
   const palette = paletteOf(p.store.doc)
   const holder = (ref.id ? p.store.element(ref.id) : (ref.slide ?? p.store.slide)) as never
-  const linked = (holder ? refAt(holder, ref.path) : undefined)?.split(' ')[0] as (typeof PALETTE_SLOTS)[number] | undefined
+  const rawRef = holder ? refAt(holder, ref.path) : undefined
+  const tok = tokenName(rawRef)
+  const linked = tok ? undefined : rawRef?.split(' ')[0] as (typeof PALETTE_SLOTS)[number] | undefined
+  const linkedLabel = tok ?? (linked && slotLabel(linked))
   const outer = document.createElement('div')
   outer.className = 'ed-colorref'
   const list = document.createElement('div')
@@ -168,6 +172,32 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
     })
     list.appendChild(b)
   }
+  // the deck's colour tokens, under the theme slots: same gesture, a `$name` ref
+  const colorTokens = Object.entries(p.store.doc.theme.tokens?.set ?? {}).filter(([, v]) => v.type === 'color')
+  if (colorTokens.length) {
+    const tcap = document.createElement('div')
+    tcap.className = 'ed-palette-cap'
+    tcap.textContent = t('Tokens')
+    list.appendChild(tcap)
+  }
+  for (const [name] of colorTokens) {
+    const value = String(tokenValue(p.store.doc, name) ?? '')
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'ed-palette-item'
+    const chip = document.createElement('span')
+    chip.className = 'ed-swatch'
+    chip.style.background = cssColor(value, 'transparent')
+    const label = document.createElement('span')
+    label.textContent = name
+    b.append(chip, label)
+    if (name === tok) b.classList.add('is-on')
+    b.addEventListener('click', () => p.edit(() => {
+      const h = ref.id ? p.store.element(ref.id) : (ref.slide ?? p.store.slide)
+      if (h) bindToken(p.store.doc, h as never, ref.path, name)
+    }, true))
+    list.appendChild(b)
+  }
   const open = document.createElement('button')
   open.type = 'button'
   open.className = 'ed-btn ed-tool'
@@ -179,12 +209,14 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
     list.hidden = !list.hidden
     open.setAttribute('aria-expanded', String(!list.hidden))
   })
-  if (linked) {
+  if (linkedLabel) {
     const hex = field.querySelector<HTMLElement>('.ed-color-hex')
     const token = document.createElement('span')
     token.className = 'ed-color-token'
-    token.textContent = slotLabel(linked)
-    token.title = t('Follows the theme color “{name}”: change it under Theme and this changes with it.', { name: slotLabel(linked) })
+    token.textContent = linkedLabel
+    token.title = tok
+      ? t('Follows the token “{name}”. Click to detach.', { name: tok })
+      : t('Follows the theme color “{name}”: change it under Theme and this changes with it.', { name: linkedLabel })
     const detach = document.createElement('button')
     detach.type = 'button'
     detach.className = 'ed-color-detach'

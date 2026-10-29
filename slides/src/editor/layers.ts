@@ -202,6 +202,13 @@ export class LayersUI {
       label.className = 'ed-layer-label'
       label.textContent = r.label
       row.append(glyph, label)
+      if (r.comp) {
+        const mark = document.createElement('span')
+        mark.className = 'ed-layer-comp'
+        mark.textContent = r.comp === 'main' ? '◆' : '◇'
+        mark.title = r.comp === 'main' ? t('Main component — its copies follow it') : t('Component copy — follows its main')
+        row.appendChild(mark)
+      }
       row.title = r.label
       row.addEventListener('click', (ev) => this.onClick(ev, r))
       label.addEventListener('dblclick', (ev) => { ev.stopPropagation(); this.rename(r.id) })

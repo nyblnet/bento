@@ -2948,7 +2948,28 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-side-layers { width: 100%; }
 .ed-side-layers > .ed-section { display: none; } /* the tab already says Layers */
 .ed-side-layers .ed-layers { max-height: none; overflow: visible; }
-.ed-sidebar[data-view='slides'] .ed-side-layers, .ed-sidebar[data-view='layers'] .ed-thumbs { display: none; }
+.ed-sidebar:not([data-view='layers']) .ed-side-layers, .ed-sidebar:not([data-view='slides']) .ed-thumbs,
+.ed-sidebar:not([data-view='tokens']) .ed-side-tokens { display: none; }
+/* the Tokens view (editor/tokenspane.ts): tokens by type, then components */
+.ed-side-tokens { width: 100%; display: flex; flex-direction: column; gap: 14px; padding: 8px 10px; box-sizing: border-box; }
+.ed-tokens-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ed-tokens-head h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink); }
+.ed-tokens-mode { max-width: 50%; }
+.ed-tokens-group { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.ed-tokens-cap { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; color: var(--muted); }
+.ed-tokens-empty { font-size: 11.5px; color: var(--muted); }
+.ed-token-row { display: flex; align-items: center; gap: 6px; min-height: 28px; }
+.ed-token-row > input[type='color'] { flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
+.ed-token-row > input[type='number'] { flex: none; width: 52px; }
+.ed-token-name { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-token-uses { flex: none; min-width: 16px; font-size: 10.5px; color: var(--muted); text-align: end; font-variant-numeric: tabular-nums; }
+/* a bound numeric field (inspector/tokenbind.ts): the dot binds, the pill detaches */
+.ed-mini.ed-has-token input { padding-inline-end: 18px; }
+.ed-token-dot { position: absolute; inset-inline-end: 4px; width: 10px; height: 10px; padding: 0; border: 1.5px solid var(--muted); border-radius: 50%; background: none; cursor: pointer; opacity: 0; }
+.ed-mini:hover .ed-token-dot, .ed-token-dot:focus-visible { opacity: 1; }
+.ed-token-pill { position: absolute; inset: 1px; display: flex; align-items: center; gap: 4px; padding-inline: 8px; font: inherit; font-size: 11.5px; color: var(--ink); background: var(--chrome-2); border: 0; border-radius: 5px; cursor: pointer; overflow: hidden; white-space: nowrap; }
+.ed-token-pill::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.ed-layer-comp { flex: none; font-size: 10px; color: var(--accent); }
 .ed-scroll .bento-editing {
   -webkit-touch-callout: default;
 }

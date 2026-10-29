@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // Position, size, alignment and stacking order of the selection.
+import { tokenBind } from './tokenbind'
 import type { PropsPanel } from '../panels'
 import type { SlideElement, ShapeElement } from '../../model'
 import { section, row, labeledSelect, mini } from './fields'
@@ -115,7 +116,7 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
     p.setNum(el.id, 'opacity', Math.min(Math.max(v / 100, 0), 1), fin), undefined, { min: 0, max: 100 })
   opacity.title = t('Opacity')
   opacity.querySelector('input')!.setAttribute('aria-label', opacity.title) // not '%'
-  layer.append(blend, opacity)
+  layer.append(blend, tokenBind(p, opacity, el, 'opacity'))
   block.appendChild(layer)
 
   const geo = document.createElement('div')
@@ -128,8 +129,8 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
     mini(t('Angle'), el.rotation, (v, fin) => p.setNum(el.id, 'rotation', v, fin), ICONS.rotate),
   )
   if (el.type === 'shape' && el.shape === 'rect') {
-    geo.append(mini(t('Corner radius'), el.radius ?? 0, (v, fin) =>
-      p.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin), ICONS.radius, { min: 0 }))
+    geo.append(tokenBind(p, mini(t('Corner radius'), el.radius ?? 0, (v, fin) =>
+      p.mutate(el.id, (e) => { (e as ShapeElement).radius = Math.max(v, 0) }, fin), ICONS.radius, { min: 0 }), el, 'radius'))
   }
   block.appendChild(geo)
 }

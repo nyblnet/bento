@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // Text: font, size, weight, fill, stroke, fields.
+import { tokenBind } from './tokenbind'
 import type { PropsPanel } from '../panels'
 import type { TextElement } from '../../model'
 import { ICONS } from '../../icons'
@@ -112,7 +113,7 @@ export function buildFieldPicker(p: PropsPanel, el: TextElement): HTMLElement {
   const weight = weightSelect(p, el)
   weight.title = t('Weight')
   weight.setAttribute('aria-label', t('Weight'))
-  sizes.append(size, weight,
+  sizes.append(tokenBind(p, size, el, 'fontSize'), weight,
     mini(t('Line height'), el.lineHeight, (v, fin) =>
       p.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(Math.round(v * 100) / 100, 0.5) }, fin), ICONS.lineHeight, { min: 0.5 }),
     mini(t('Letter spacing'), el.letterSpacing ?? 0, (v, fin) =>
