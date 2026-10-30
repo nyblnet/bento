@@ -1345,4 +1345,9 @@ export const strings: Catalog = {
   "Add a token:": "Token ekle:",
   "Number": "Sayı",
   "Font size": "Yazı tipi boyutu",
+  "Add export setting": "Dışa aktarma ayarı ekle",
+  "Scale": "Ölçek",
+  "More export options": "Diğer dışa aktarma seçenekleri",
+  "Remove export setting": "Dışa aktarma ayarını kaldır",
+  "Export {what}": "Dışa aktar: {what}",
 }

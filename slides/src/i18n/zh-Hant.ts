@@ -1334,4 +1334,9 @@ export const zhHant: Catalog = {
   "Add a token:": "加入權杖：",
   "Number": "數字",
   "Font size": "字級",
+  "Add export setting": "新增匯出設定",
+  "Scale": "縮放",
+  "More export options": "更多匯出選項",
+  "Remove export setting": "移除匯出設定",
+  "Export {what}": "匯出 {what}",
 }

@@ -4,12 +4,16 @@
 // nothing is selected — as a PNG (1× or 2×), an SVG, or the Bento clipboard
 // JSON. The pixels come from the slide-image export's renderer
 // (editor/exportimages.ts); the JSON is exactly what ⌘C writes (clipboard.ts).
-import { section, field } from './fields'
+import { section, field, labeledSelect, opBtn } from './fields'
+import { ICONS } from '../../icons'
+import { openCtxMenu } from '../ctxmenu'
+import { labelIn } from '../layerrows'
 import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
 import type { Slide, SlideElement } from '../../model'
 import { measureContrast, type Area } from './contrast'
 import { rasterizeSlide, downloadBlob, type Box } from '../exportimages'
+import type { ImageScale } from '../../exportimages'
 import { nativeSlideSvg } from '../svgexport'
 import { exportBase } from '../../exportimages'
 import { serializeElements, serializeSlides } from '../clipboard'
@@ -54,44 +58,89 @@ export function coverBox(els: SlideElement[]): Box {
   return { x: Math.floor(x0), y: Math.floor(y0), w: Math.max(1, Math.ceil(x1) - Math.floor(x0)), h: Math.max(1, Math.ceil(y1) - Math.floor(y0)) }
 }
 
+/** One export setting: Figma's row — a scale and a format. */
+interface ExportSetting { scale: ImageScale; format: 'png' | 'jpeg' | 'svg' }
+const SCALES: ImageScale[] = [0.5, 1, 1.5, 2, 3, 4]
+/** The settings per subject (the selection's ids, or the slide), for the
+ *  session — editor state, never written into the file. */
+const settings = new Map<string, ExportSetting[]>()
+
 export function buildExport(p: PropsPanel, els: SlideElement[]) {
-  section(p, t('Export'))
   const doc = p.store.doc
   const slide = p.store.slide
+  const key = els.length ? els.map((e) => e.id).sort().join(' ') : `slide:${slide.id}`
+  const list = settings.get(key) ?? [{ scale: 1, format: 'png' }]
+  settings.set(key, list)
+  // Figma's Export section: a + on the header adds a setting row (scale ·
+  // format · ⋯ · −), and one full-width button exports every row at once.
+  section(p, t('Export'), {
+    add: true, hint: t('Add export setting'),
+    run: () => { list.push({ scale: list.some((x) => x.scale === 2) ? 3 : 2, format: list.at(-1)?.format ?? 'png' }); p.rebuild(true) },
+  })
   // the selection alone, on no background, cropped to what it covers
   // A child of a clipping frame exports clipped: its frame rides along hidden
   // (renderSlide resolves clips through every element, draws only visible ones).
   const ids = new Set(els.map((e) => e.id))
   const frames = slide.elements.filter((f) => !ids.has(f.id) && els.some((e) => e.parentId === f.id)).map((f) => ({ ...f, hidden: true as const }))
-  const subject = els.length ? { ...slide, background: 'transparent', elements: [...frames, ...els] } : slide
+  const subject = (opaque: boolean) => els.length ? { ...slide, background: opaque ? slide.background : 'transparent', elements: [...frames, ...els] } : slide
   const box = els.length ? coverBox(els) : undefined
-  const name = (ext: string) => `${exportBase(doc)}${els.length ? `-${els.length === 1 ? (els[0].name || els[0].type) : 'selection'}` : ''}.${ext}`
+  const what = els.length === 1 ? labelIn(slide, els[0], t) : els.length ? t('{n} elements', { n: els.length }) : t('Slide {n}', { n: p.store.currentIndex + 1 })
+  const fileBase = `${exportBase(doc)}${els.length ? `-${els.length === 1 ? (els[0].name || els[0].type) : 'selection'}` : ''}`
+  const name = (s: ExportSetting) => `${fileBase}${s.format !== 'svg' && s.scale !== 1 ? `@${s.scale}x` : ''}.${s.format === 'jpeg' ? 'jpg' : s.format}`
   const failed = (e: unknown) => {
     if ((e as { name?: string }).name === 'SecurityError') p.toast(t('This slide links to an image on the web, which cannot be drawn into a file'))
     else throw e
   }
-  const button = (label: string, run: () => void | Promise<void>) => {
-    const b = document.createElement('button')
-    b.type = 'button'
-    b.className = 'ed-btn ed-export-btn'
-    b.textContent = label
-    b.addEventListener('click', () => { void Promise.resolve(run()).catch(failed) })
-    return b
-  }
-  const png = (scale: 1 | 2) => button(`PNG ${scale}×`, async () =>
-    downloadBlob(await rasterizeSlide(doc, subject, 'png', scale, box), name(scale === 2 ? '2x.png' : 'png')))
-  // native vectors (svgexport.ts): opens as editable shapes and text in Figma, Illustrator, Inkscape
-  const svg = button('SVG', async () =>
-    downloadBlob(new Blob([await nativeSlideSvg(doc, subject, box)], { type: 'image/svg+xml' }), name('svg')))
-  const json = button(t('Copy as JSON'), async () => {
+  const one = async (s: ExportSetting) => s.format === 'svg'
+    // native vectors (svgexport.ts): opens as editable shapes and text in Figma, Illustrator, Inkscape
+    ? downloadBlob(new Blob([await nativeSlideSvg(doc, subject(false), box)], { type: 'image/svg+xml' }), name(s))
+    // a JPEG has no transparency: the selection sits on its slide's background
+    : downloadBlob(await rasterizeSlide(doc, subject(s.format === 'jpeg'), s.format, s.scale, box), name(s))
+
+  const rows = document.createElement('div')
+  rows.className = 'ed-export-rows'
+  list.forEach((s, i) => {
+    const row = document.createElement('div')
+    row.className = 'ed-export-row'
+    const scale = labeledSelect(SCALES.map((k) => [String(k), `${k}x`]), String(s.scale), (v) => { s.scale = Number(v) as ImageScale; p.rebuild(true) })
+    scale.setAttribute('aria-label', t('Scale'))
+    scale.disabled = s.format === 'svg' // a vector has no scale
+    const format = labeledSelect([['png', 'PNG'], ['jpeg', 'JPG'], ['svg', 'SVG']], s.format, (v) => { s.format = v as ExportSetting['format']; p.rebuild(true) })
+    format.setAttribute('aria-label', t('Format'))
+    const more = opBtn(ICONS.more, t('More export options'), () => {
+      const r = more.getBoundingClientRect()
+      openCtxMenu(r.left, r.bottom + 4, [
+        { label: t('Copy as JSON'), run: () => { void copyJson() } },
+      ])
+    })
+    more.setAttribute('aria-haspopup', 'menu')
+    const remove = opBtn(ICONS.minus, t('Remove export setting'), () => { list.splice(i, 1); p.rebuild(true) })
+    row.append(scale, format, more, remove)
+    rows.appendChild(row)
+  })
+  const copyJson = async () => {
     await navigator.clipboard.writeText(els.length ? serializeElements(els, doc) : serializeSlides([slide], doc))
     p.toast(t('Copied — ⌘V pastes it into any Bento deck'))
-  })
-  const images = [png(1), png(2), svg]
-  // nothing visible to draw: say so instead of handing over an empty picture
-  if (els.length && els.every((e) => e.hidden)) for (const b of images) { b.disabled = true; b.title = t('Hidden elements are not drawn — show one in Layers to export it') }
-  const row = field(p, ...images, json)
-  row.classList.add('ed-export')
+  }
+  if (list.length) {
+    const go = document.createElement('button')
+    go.type = 'button'
+    go.className = 'ed-btn ed-export-btn'
+    go.textContent = t('Export {what}', { what })
+    go.addEventListener('click', () => { void (async () => { for (const s of [...list]) await one(s) })().catch(failed) })
+    // nothing visible to draw: say so instead of handing over an empty picture
+    if (els.length && els.every((e) => e.hidden)) { go.disabled = true; go.title = t('Hidden elements are not drawn — show one in Layers to export it') }
+    rows.appendChild(go)
+  } else {
+    // no setting left: the JSON copy is still one click away
+    const json = document.createElement('button')
+    json.type = 'button'
+    json.className = 'ed-btn ed-link-btn ed-export-json'
+    json.textContent = t('Copy as JSON')
+    json.addEventListener('click', () => { void copyJson() })
+    rows.appendChild(json)
+  }
+  p.host.appendChild(rows)
   if (els.length === 1) accessibility(p, els[0], slide)
 }
 

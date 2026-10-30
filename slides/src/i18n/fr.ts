@@ -1334,4 +1334,9 @@ export const fr: Catalog = {
   "Add a token:": "Ajouter un jeton :",
   "Number": "Nombre",
   "Font size": "Taille de police",
+  "Add export setting": "Ajouter un réglage d’export",
+  "Scale": "Échelle",
+  "More export options": "Plus d’options d’export",
+  "Remove export setting": "Retirer le réglage d’export",
+  "Export {what}": "Exporter {what}",
 }

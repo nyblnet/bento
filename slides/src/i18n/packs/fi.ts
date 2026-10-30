@@ -1351,4 +1351,9 @@ export const strings: Catalog = {
   "Add a token:": "Lisää tokeni:",
   "Number": "Luku",
   "Font size": "Fonttikoko",
+  "Add export setting": "Lisää vientiasetus",
+  "Scale": "Mittakaava",
+  "More export options": "Lisää vientiasetuksia",
+  "Remove export setting": "Poista vientiasetus",
+  "Export {what}": "Vie: {what}",
 }

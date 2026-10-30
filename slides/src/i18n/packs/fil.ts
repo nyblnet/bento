@@ -1363,4 +1363,9 @@ export const strings: Catalog = {
   "Add a token:": "Magdagdag ng token:",
   "Number": "Numero",
   "Font size": "Laki ng font",
+  "Add export setting": "Magdagdag ng setting sa pag-export",
+  "Scale": "Sukat",
+  "More export options": "Iba pang opsyon sa pag-export",
+  "Remove export setting": "Alisin ang setting sa pag-export",
+  "Export {what}": "I-export ang {what}",
 }

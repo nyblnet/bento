@@ -50,7 +50,11 @@ try {
     return hs.at(-1)?.dataset.key
   })
   const download = async (label) => {
-    const [dl] = await Promise.all([p.waitForEvent('download'), p.click(`.ed-props .ed-export button:text-is("${label}")`)])
+    // the first setting row set to this label's scale and format, then Export (Figma's section)
+    const [fmt, scale] = label === 'SVG' ? ['svg', '1'] : label === 'JPG' ? ['jpeg', '1'] : ['png', label === 'PNG 2×' ? '2' : '1']
+    await p.selectOption('.ed-props .ed-export-row >> nth=0 >> select[aria-label="Format"]', fmt); await p.waitForTimeout(150)
+    if (fmt !== 'svg') { await p.selectOption('.ed-props .ed-export-row >> nth=0 >> select[aria-label="Scale"]', scale); await p.waitForTimeout(150) }
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click('.ed-props .ed-export-rows .ed-export-btn')])
     return { name: dl.suggestedFilename(), buf: readFileSync(await dl.path()) }
   }
   const select = async (id) => {
@@ -89,9 +93,32 @@ try {
 
   console.log('\ncopy as JSON\n')
   await select('a')
-  await p.click('.ed-props .ed-export button:text-is("Copy as JSON")'); await p.waitForTimeout(250)
+  // Copy as JSON lives in a setting row's ⋯ menu, as Figma keeps its extras
+  await p.click('.ed-props .ed-export-row >> nth=0 >> button[aria-haspopup="menu"]'); await p.waitForTimeout(150)
+  await p.click('.ed-ctxmenu-item:has-text("Copy as JSON")'); await p.waitForTimeout(250)
   const clip = JSON.parse(await p.evaluate(() => navigator.clipboard.readText()))
   ok(clip.__bento === 'clip' && clip.kind === 'elements' && clip.elements?.length === 1 && clip.elements[0].id === 'a', `the clipboard holds ⌘C's payload for the selection (${clip.kind}, ${clip.elements?.length})`)
+  console.log('\nFigma\'s settings rows\n')
+  const rowsN = () => p.$$eval('.ed-props .ed-export-row', (r) => r.length)
+  const n0 = await rowsN()
+  await p.click('.ed-props .ed-section[data-key="Export"] .ed-sec-act'); await p.waitForTimeout(250)
+  ok((await rowsN()) === n0 + 1, `the header's + adds a setting row (${n0} → ${await rowsN()})`)
+  await p.selectOption('.ed-props .ed-export-row >> nth=0 >> select[aria-label="Format"]', 'png'); await p.waitForTimeout(150)
+  await p.selectOption('.ed-props .ed-export-row >> nth=0 >> select[aria-label="Scale"]', '1'); await p.waitForTimeout(150)
+  await p.selectOption('.ed-props .ed-export-row >> nth=1 >> select[aria-label="Format"]', 'svg'); await p.waitForTimeout(150)
+  ok(await p.$eval('.ed-props .ed-export-row >> nth=1 >> select[aria-label="Scale"]', (s) => s.disabled), 'an SVG row has no scale to pick')
+  const files = []
+  p.on('download', (d) => files.push(d.suggestedFilename()))
+  ok(/Export/.test(await p.$eval('.ed-props .ed-export-rows .ed-export-btn', (b) => b.textContent)), 'one full-width button exports, named for what is selected')
+  await p.click('.ed-props .ed-export-rows .ed-export-btn'); await p.waitForTimeout(1500)
+  ok(files.length === 2 && files.some((n) => n.endsWith('.png')) && files.some((n) => n.endsWith('.svg')), `it exports every row at once (${files.join(', ')})`)
+  await p.click('.ed-props .ed-export-row >> nth=1 >> button[title*="Remove"]'); await p.waitForTimeout(250)
+  ok((await rowsN()) === n0, 'a row\'s − removes it')
+  const geo = await p.evaluate(() => {
+    const r = document.querySelector('.ed-props .ed-export-row'); const go = document.querySelector('.ed-props .ed-export-rows .ed-export-btn')
+    const [s1, s2] = r.querySelectorAll('select'); return { eq: Math.abs(s1.getBoundingClientRect().width - s2.getBoundingClientRect().width) < 1, full: Math.abs(go.getBoundingClientRect().width - r.getBoundingClientRect().width) < 1 }
+  })
+  ok(geo.eq && geo.full, 'scale and format share the row equally, and the button spans it')
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()
