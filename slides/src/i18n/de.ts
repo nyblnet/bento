@@ -1227,4 +1227,6 @@ export const de: Catalog = {
   "Alternative text": "Alternativtext",
   "Morph from the slide before": "Von der vorigen Folie morphen",
   "Nothing on the slide before to pair with.": "Auf der vorigen Folie gibt es nichts zum Koppeln.",
+  "Min": "Min.",
+  "Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish": "Klicken setzt Ecken, Ziehen zieht Kurven heraus (Alt bricht einen Griff); Klick auf den ersten Punkt schließt, Enter oder Esc beendet",
 }

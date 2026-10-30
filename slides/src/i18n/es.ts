@@ -1227,4 +1227,6 @@ export const es: Catalog = {
   "Alternative text": "Texto alternativo",
   "Morph from the slide before": "Transformar desde la diapositiva anterior",
   "Nothing on the slide before to pair with.": "No hay nada en la diapositiva anterior con qué emparejar.",
+  "Min": "Mín.",
+  "Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish": "Haz clic para poner esquinas, arrastra para sacar curvas (Alt rompe un tirador); clic en el primer punto para cerrar, Intro o Esc para terminar",
 }

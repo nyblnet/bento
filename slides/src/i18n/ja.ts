@@ -1227,4 +1227,6 @@ export const ja: Catalog = {
   "Alternative text": "代替テキスト",
   "Morph from the slide before": "前のスライドからモーフ",
   "Nothing on the slide before to pair with.": "前のスライドにペアにできるものがありません。",
+  "Min": "最小",
+  "Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish": "クリックで角を置き、ドラッグで曲線を引き出します（Alt でハンドルを分割）。最初の点をクリックで閉じ、Enter か Esc で終了",
 }
