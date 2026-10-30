@@ -3768,3 +3768,7 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 .ed-prefs h2, .ed-docprops h2 { margin: 0 0 12px; font-size: 17px; font-weight: 650; }
 /* the Select-only tool: nothing on the slide offers to move */
 .ed-marquee-tool .bento-el, .ed-marquee-tool .moveable-area { cursor: default !important; }
+/* Folded, the document zone keeps its content's width: squeezed to its flex
+   share it let undo/redo slide UNDER the right group (390px, measured). Past
+   the fold's floor the bar scrolls instead (CLAUDE.md, the topbar note). */
+.ed-topbar.ed-bar-fold .ed-zone-doc { min-width: max-content; }

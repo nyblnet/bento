@@ -83,7 +83,7 @@ try {
 
   console.log('\n4. The app cluster and Preferences\n')
   await run(async () => {
-    const app = await p.$$eval('.ed-topbar .ed-app button', (bs) => bs.map((b) => ({ cmd: b.dataset.cmd ?? '', name: b.getAttribute('aria-label') ?? b.title, title: b.title, w: Math.round(b.getBoundingClientRect().width) })))
+    const app = await p.$$eval('.ed-topbar .ed-app > button, .ed-topbar .ed-app > .ed-dropdown > button', (bs) => bs.map((b) => ({ cmd: b.dataset.cmd ?? '', name: b.getAttribute('aria-label') ?? b.title, title: b.title, w: Math.round(b.getBoundingClientRect().width) })))
     ok(app.length === 3, `one group of three (${app.map((a) => a.name).join(' · ')})`)
     ok(app.some((a) => a.cmd === 'help' && /\?/.test(a.title)) && app.some((a) => a.cmd === 'preferences' && /,/.test(a.title)), 'shortcuts (?) and preferences (⌘,) carry their keys')
     ok(new Set(app.map((a) => a.w)).size === 1, `same-size buttons (${app.map((a) => a.w).join('/')})`)
