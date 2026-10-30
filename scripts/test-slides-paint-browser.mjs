@@ -23,6 +23,11 @@
 //      model.
 //   6. Pointing at a Shadow preset or an entrance previews it on the canvas
 //      node and writes nothing.
+//   7. Stroke position by PIXELS, for rect, ellipse, triangle and a closed
+//      path: inside covers the band just inside the edge, center straddles
+//      it, outside covers the band just outside it and leaves the fill on the
+//      box — so a mask drawn inverted, a triangle's center drawn as outside,
+//      or an outside stroke dragging the fill past the box all fail here.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -198,6 +203,56 @@ try {
   ok(!(await el('corn')).fx, '…and writes nothing')
   await p.locator('.ed-props .ed-fx-pills button', { hasText: 'Fly in from below' }).click(); await p.waitForTimeout(250)
   ok((await el('corn')).fx?.enter === 'slide-up', 'a click on an entrance pill chooses it')
+
+  // 7. stroke position, read from the rasterised svg of each element
+  const SW = 20, W = 160
+  const kinds = { rect: {}, ellipse: {}, triangle: {}, path: { d: 'M0 0 L100 0 L100 100 L0 100 Z', pathBox: [0, 0, 100, 100] } }
+  const aligned = []
+  let n = 0
+  for (const [kind, extra] of Object.entries(kinds)) for (const align of ['inside', 'center', 'outside']) {
+    aligned.push(shape(`al-${kind}-${align}`, 60 + (n % 6) * 250, 60 + Math.floor(n / 6) * 260, W, W, { shape: kind, fill: '#ff0000', stroke: '#000000', strokeWidth: SW, strokeAlign: align, ...extra }))
+    n++
+  }
+  for (const kind of ['rect', 'ellipse']) aligned.push(shape(`tl-${kind}`, 60 + (n++ % 6) * 250, 600, W, W, { shape: kind, fill: '#ff0000', stroke: 'rgba(0,0,0,0.5)', strokeWidth: SW, strokeAlign: 'outside' }))
+  await p.evaluate((els) => {
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    d.slides = [{ id: 's1', background: '#ffffff', notes: '', transition: 'none', elements: els }]
+    window.bento.loadDoc(JSON.stringify(d))
+  }, aligned)
+  await p.waitForTimeout(500)
+  // the element's own svg, drawn on white with a margin, sampled at (x, y) in
+  // its box's units — measured off the renderer, not the model
+  // (a path's viewBox is its pathBox, so the margin is scaled into it and the
+  // image drawn at the element's own size, where non-scaling strokes are true)
+  const px = (id, pts) => p.evaluate(async ([id, pts, w, h]) => {
+    const svg = document.querySelector(`.ed-stage-scale [data-el-id="${id}"] svg`).cloneNode(true)
+    const [vx, vy, vw, vh] = svg.getAttribute('viewBox').split(' ').map(Number)
+    const m = 40, sx = vw / w, sy = vh / h
+    svg.setAttribute('viewBox', `${vx - m * sx} ${vy - m * sy} ${vw + 2 * m * sx} ${vh + 2 * m * sy}`)
+    svg.setAttribute('width', String(w + 2 * m)); svg.setAttribute('height', String(h + 2 * m))
+    svg.removeAttribute('style')
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    const img = new Image()
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg))
+    await img.decode()
+    const c = document.createElement('canvas'); c.width = w + 2 * m; c.height = h + 2 * m
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0)
+    return pts.map(([x, y]) => [...g.getImageData(Math.round(x + m), Math.round(y + m), 1, 1).data.slice(0, 3)])
+  }, [id, pts, W, W])
+  const cls = ([r, g, b]) => r < 70 && g < 70 && b < 70 ? 'stroke' : r > 190 && g < 70 && b < 70 ? 'fill' : r > 190 && g > 190 && b > 190 ? 'none' : `rgb(${r},${g},${b})`
+  // probes across one edge: 15px outside, 5px inside, 15px inside, the centre
+  const across = (kind) => kind === 'triangle'
+    ? [[W / 2, W + 15], [W / 2, W - 5], [W / 2, W - 15], [W / 2, W * 0.6]]
+    : [[-15, W / 2], [5, W / 2], [15, W / 2], [W / 2, W / 2]]
+  const want = { inside: ['none', 'stroke', 'stroke', 'fill'], center: ['none', 'stroke', 'fill', 'fill'], outside: ['stroke', 'fill', 'fill', 'fill'] }
+  for (const kind of Object.keys(kinds)) for (const align of ['inside', 'center', 'outside']) {
+    const got = (await px(`al-${kind}-${align}`, across(kind))).map(cls)
+    ok(JSON.stringify(got) === JSON.stringify(want[align]), `${kind} ${align} stroke: outside band · just inside · deeper · centre = ${got.join(' · ')}`)
+  }
+  for (const kind of ['rect', 'ellipse']) {
+    const [r, g, b] = (await px(`tl-${kind}`, [[-5, W / 2]]))[0]
+    ok(Math.abs(r - g) < 12 && Math.abs(g - b) < 12, `a translucent outside stroke on a ${kind} shows no fill beyond the box (rgb ${r},${g},${b})`)
+  }
 
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {

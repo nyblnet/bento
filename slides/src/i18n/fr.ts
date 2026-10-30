@@ -1247,4 +1247,5 @@ export const fr: Catalog = {
   "Soft light": "Lumière tamisée",
   "Saturation": "Saturation",
   "Luminosity": "Luminosité",
+  "Hidden elements are not drawn — show one in Layers to export it": "Les éléments masqués ne sont pas dessinés — affichez-en un dans Calques pour l’exporter",
 }

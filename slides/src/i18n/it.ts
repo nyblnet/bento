@@ -1247,4 +1247,5 @@ export const it: Catalog = {
   "Soft light": "Luce soffusa",
   "Saturation": "Saturazione",
   "Luminosity": "Luminosità",
+  "Hidden elements are not drawn — show one in Layers to export it": "Gli elementi nascosti non vengono disegnati: mostrane uno in Livelli per esportarlo",
 }

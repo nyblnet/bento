@@ -13,6 +13,7 @@ import { rasterizeSlide, downloadBlob, type Box } from '../exportimages'
 import { nativeSlideSvg } from '../svgexport'
 import { exportBase } from '../../exportimages'
 import { serializeElements, serializeSlides } from '../clipboard'
+import { ALT_TYPES } from '../../render'
 
 /**
  * How far an element's paint spills past its box, per side [left, top, right,
@@ -58,7 +59,11 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
   const doc = p.store.doc
   const slide = p.store.slide
   // the selection alone, on no background, cropped to what it covers
-  const subject = els.length ? { ...slide, background: 'transparent', elements: els } : slide
+  // A child of a clipping frame exports clipped: its frame rides along hidden
+  // (renderSlide resolves clips through every element, draws only visible ones).
+  const ids = new Set(els.map((e) => e.id))
+  const frames = slide.elements.filter((f) => !ids.has(f.id) && els.some((e) => e.parentId === f.id)).map((f) => ({ ...f, hidden: true as const }))
+  const subject = els.length ? { ...slide, background: 'transparent', elements: [...frames, ...els] } : slide
   const box = els.length ? coverBox(els) : undefined
   const name = (ext: string) => `${exportBase(doc)}${els.length ? `-${els.length === 1 ? (els[0].name || els[0].type) : 'selection'}` : ''}.${ext}`
   const failed = (e: unknown) => {
@@ -82,7 +87,10 @@ export function buildExport(p: PropsPanel, els: SlideElement[]) {
     await navigator.clipboard.writeText(els.length ? serializeElements(els, doc) : serializeSlides([slide], doc))
     p.toast(t('Copied — ⌘V pastes it into any Bento deck'))
   })
-  const row = field(p, png(1), png(2), svg, json)
+  const images = [png(1), png(2), svg]
+  // nothing visible to draw: say so instead of handing over an empty picture
+  if (els.length && els.every((e) => e.hidden)) for (const b of images) { b.disabled = true; b.title = t('Hidden elements are not drawn — show one in Layers to export it') }
+  const row = field(p, ...images, json)
   row.classList.add('ed-export')
   if (els.length === 1) accessibility(p, els[0], slide)
 }
@@ -153,7 +161,7 @@ function accessibility(p: PropsPanel, el: SlideElement, slide: Slide) {
     out.append(value, badge)
     p.host.appendChild(out)
   }
-  if (el.type === 'text') return
+  if (!ALT_TYPES.has(el.type)) return
   const alt = document.createElement('input')
   alt.type = 'text'
   alt.className = 'ed-a11y-alt'

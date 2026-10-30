@@ -689,7 +689,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
   if (el.link) node.dataset.link = el.link
   if (el.group) node.dataset.group = el.group
   if (el.showOnHover) node.dataset.showOnHover = el.showOnHover
-  if (el.alt && el.type !== 'text') { node.setAttribute('role', 'img'); node.setAttribute('aria-label', el.alt) }
+  if (el.alt && ALT_TYPES.has(el.type)) { node.setAttribute('role', 'img'); node.setAttribute('aria-label', el.alt) }
   applyElementFrame(node, el)
 
   switch (el.type) {
@@ -983,17 +983,32 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
   // Mirrored content (flipX/flipY): the box stays put, what is drawn in it is
   // mirrored about its centre. On the content, not the frame, so the frame's
   // transform (rotation, and the morph and fx tweens) is left alone.
-  if (el.flipX || el.flipY) {
-    const flip = `scale(${el.flipX ? -1 : 1}, ${el.flipY ? -1 : 1})`
-    for (const c of node.children) {
-      const s = (c as HTMLElement | SVGElement).style
-      s.transform = s.transform ? `${s.transform} ${flip}` : flip
-    }
-  }
+  flipContent(node, el)
   // Every element type funnels through here, so this is the one place that
   // sees author markup after it has been built into DOM.
   stripRemoteRefs(node)
   return node
+}
+
+/** Elements that ARE a picture to assistive technology and so take `alt`.
+ *  Text reads as itself; media, tables and embeds have controls and cells of
+ *  their own, which role="img" would hide. */
+export const ALT_TYPES = new Set<SlideElement['type']>(['shape', 'image', 'svg', 'chart'])
+
+/** An element's mirror as a CSS transform ('' when it has none). */
+export const flipOf = (el: { flipX?: boolean; flipY?: boolean }) =>
+  el.flipX || el.flipY ? `scale(${el.flipX ? -1 : 1}, ${el.flipY ? -1 : 1})` : ''
+
+/** Mirror a rendered node's content (flipX/flipY). Anything that rewrites the
+ *  content after render — the show's live charts, a crop morph — calls this
+ *  again, or the mirror is lost (the show would disagree with the editor). */
+export function flipContent(node: Element, el: { flipX?: boolean; flipY?: boolean }) {
+  const flip = flipOf(el)
+  if (!flip) return
+  for (const c of node.children) {
+    const s = (c as HTMLElement | SVGElement).style
+    s.transform = s.transform ? `${s.transform} ${flip}` : flip
+  }
 }
 
 /** Render a full slide surface (background + elements) at model coordinates. */

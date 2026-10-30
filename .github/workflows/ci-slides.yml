@@ -404,3 +404,11 @@ jobs:
         # the same clip and gradient mix; layer rows blend, dash, drag-reorder
         # and turn a stroke into a gradient.
         run: node scripts/test-slides-morph-render-browser.mjs
+      - name: Render review fixes in Chromium
+        # Morph paint lands on the drawn node (an outside stroke's mask stays
+        # white; marching ants march the stroke), fill layers and radial
+        # centres tween through the middle, radial → linear crossfades;
+        # mirrored charts and cropped pictures stay mirrored in the show; a
+        # clipped frame child exports clipped, a hidden selection cannot be
+        # exported to an image; alt is role="img" only where it is a picture.
+        run: node scripts/test-slides-render-fixes-browser.mjs

@@ -1247,4 +1247,5 @@ export const zhHans: Catalog = {
   "Soft light": "柔光",
   "Saturation": "饱和度",
   "Luminosity": "明度",
+  "Hidden elements are not drawn — show one in Layers to export it": "隐藏的元素不会被绘制——在“图层”中显示后即可导出",
 }

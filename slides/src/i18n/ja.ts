@@ -1247,4 +1247,5 @@ export const ja: Catalog = {
   "Soft light": "ソフトライト",
   "Saturation": "彩度",
   "Luminosity": "輝度",
+  "Hidden elements are not drawn — show one in Layers to export it": "非表示の要素は描画されません。書き出すにはレイヤーで表示してください",
 }

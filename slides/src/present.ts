@@ -12,7 +12,7 @@ import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from '
 import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
 import { fillLayers, strokeLayers } from './stacks'
 import { isFrame, morphClip } from './layout'
-import { applyElementFrame, cssColor, fetchFreeOption, gradientLineCoords, paintSafeShape, radialGeom, renderSlide } from './render'
+import { applyElementFrame, cssColor, fetchFreeOption, flipContent, flipOf, gradientLineCoords, paintSafeShape, radialGeom, renderSlide } from './render'
 import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { speakerWindowTitle } from './wintitle'
@@ -1611,7 +1611,16 @@ function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) 
     const fromEl = fromSlide?.elements.find((e) => e.id === el.id && e.type === 'chart')
     // the engine writes option colours into svg paint: hand it a fetch-free copy
     const live = { ...el, option: fetchFreeOption(el.option) }
-    const dispose = mountChart(live, node, fromEl && fromEl.type === 'chart' ? fetchFreeOption(fromEl.option) : undefined)
+    // a mirrored chart mounts inside a wrapper that carries the mirror: the
+    // engine empties its host and redraws its svg on every frame of a sweep
+    let host = node
+    if (flipOf(el)) {
+      host = document.createElement('div')
+      host.style.cssText = 'position:absolute;inset:0'
+      node.replaceChildren(host)
+      flipContent(node, el)
+    }
+    const dispose = mountChart(live, host, fromEl && fromEl.type === 'chart' ? fetchFreeOption(fromEl.option) : undefined)
     handles.push(() => {
       dispose()
       node.innerHTML = chartSnapshotSvg(live)
@@ -1620,6 +1629,7 @@ function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) 
         csvg.setAttribute('preserveAspectRatio', 'none')
         ;(csvg as SVGElement).style.cssText = 'width:100%;height:100%;display:block'
       }
+      flipContent(node, el)
     })
   }
   if (handles.length) chartHandles.set(section, handles)
@@ -1897,7 +1907,10 @@ function runAmbientFx(slide: Slide, section: HTMLElement) {
       }
     }
     if (fx.loop?.type === 'dash-march') {
-      const target = node.querySelector('path, line, rect, ellipse, polygon') as SVGElement | null
+      // the drawn stroke — a shape's top stroke node, never a <mask>/<clipPath>
+      // child or a tip <marker> in its <defs>; other svg (markup) as before
+      const target = [...node.querySelectorAll<SVGElement>(':scope > svg > [stroke-width]')].pop()
+        ?? node.querySelector<SVGElement>('path, line, rect, ellipse, polygon')
       if (target) {
         // Seamless marching ants: the offset must travel a WHOLE number of
         // dash+gap periods, or the pattern snaps back mid-cycle each loop and
@@ -2451,8 +2464,9 @@ function runMorph(
         const state = { p: 0 }
         anim.to(state, {
           p: 1, duration: MORPH_DURATION, ease: MORPH_EASE,
-          onUpdate() { img.style.cssText = cropImgStyle(lerpCrop(a.crop!, b.crop!, state.p)) },
-          onComplete() { img.style.cssText = cropImgStyle(b.crop!) },
+          // cssText replaces the whole style: the mirror goes back on each write
+          onUpdate() { img.style.cssText = cropImgStyle(lerpCrop(a.crop!, b.crop!, state.p)); img.style.transform = flipOf(b) },
+          onComplete() { img.style.cssText = cropImgStyle(b.crop!); img.style.transform = flipOf(b) },
         })
       }
     }
@@ -2577,7 +2591,9 @@ function playSteps(steps: Array<(p: number) => void>) {
  * null when they are the same. Solids mix. When a gradient is involved the
  * stops mix (each sampled from the other side at its own position) and the
  * gradient's geometry tweens between two of a kind — a linear line sweeps, a
- * radial centre and radius move; across kinds only the colours do. A solid
+ * radial centre and radius move. Across kinds no geometry maps onto the
+ * other, so the destination fades in over a copy painted with the source
+ * gradient (one copy per node, reused by repeated Preview calls). A solid
  * destination gets a temporary gradient that collapses to the flat colour and
  * is removed at p = 1.
  */
@@ -2613,9 +2629,37 @@ function paintTween(target: SVGElement, attr: 'fill' | 'stroke', a: Paint, b: Pa
   const stops = [...lin.querySelectorAll('stop')]
   // per rendered stop: where it sits, what it starts as, what it ends as
   const finals = bg ? bg.stops : ag!.stops.map((s) => ({ at: s.at, color: b.color }))
+  let fade: SVGElement | null = null
+  if (ag && bg && (ag.kind === 'radial') !== (bg.kind === 'radial')) {
+    const prev = target.previousElementSibling
+    fade = prev?.hasAttribute('data-morph-fade') ? prev as SVGElement : null
+    if (!fade) {
+      const src = document.createElementNS(SVG_NS, ag.kind === 'radial' ? 'radialGradient' : 'linearGradient')
+      src.id = `bento-morph-grad-${morphGradSeq++}`
+      for (const st of ag.stops) {
+        const stop = document.createElementNS(SVG_NS, 'stop')
+        stop.setAttribute('offset', String(st.at))
+        stop.setAttribute('stop-color', st.color)
+        src.appendChild(stop)
+      }
+      const geom: Record<string, number> = ag.kind === 'radial' ? radialGeom(ag) : gradientLineCoords(ag.angle)
+      for (const [k, v] of Object.entries(geom)) src.setAttribute(k, String(v))
+      const defs = document.createElementNS(SVG_NS, 'defs')
+      defs.appendChild(src)
+      svg.appendChild(defs)
+      fade = target.cloneNode() as SVGElement
+      fade.setAttribute('data-morph-fade', '')
+      fade.removeAttribute('data-layer')
+      fade.setAttribute(attr === 'fill' ? 'stroke' : 'fill', 'none')
+      fade.setAttribute(attr, `url(#${src.id})`)
+      target.before(fade)
+    }
+  }
   const colours = stops.map((_, i) => {
     const at = finals[i]?.at ?? 1
-    return [ag ? sampleGradient(ag.stops, at) : rgbaStr(colorParts(a.color)), finals[i]?.color ?? b.color]
+    const end = finals[i]?.color ?? b.color
+    // crossfading: the destination holds its own colours while it fades in
+    return [fade ? end : ag ? sampleGradient(ag.stops, at) : rgbaStr(colorParts(a.color)), end]
   })
   const ga = (ag ?? bg)!, gb = (bg ?? ag)!
   const linear = lin.tagName === 'linearGradient' && ga.kind !== 'radial' && gb.kind !== 'radial'
@@ -2626,6 +2670,14 @@ function paintTween(target: SVGElement, attr: 'fill' | 'stroke', a: Paint, b: Pa
   return (p) => {
     stops.forEach((s, i) => s.setAttribute('stop-color', p >= 1 ? colours[i][1] : mixColor(colours[i][0], colours[i][1], p)))
     for (const k of Object.keys(g0)) node.setAttribute(k, String(g0[k] + (g1[k] - g0[k]) * p))
+    if (fade) {
+      if (p >= 1) {
+        target.removeAttribute(`${attr}-opacity`)
+        const ref = /url\(#([^)]+)\)/.exec(fade.getAttribute(attr) ?? '')?.[1]
+        if (ref) svg.querySelector(`[id="${ref}"]`)?.parentElement?.remove()
+        fade.remove()
+      } else target.setAttribute(`${attr}-opacity`, String(p))
+    }
     if (p >= 1 && temp) {
       // solid destination: swap the temp gradient back to a flat paint
       target.setAttribute(attr, b.color)
