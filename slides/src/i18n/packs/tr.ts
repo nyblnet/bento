@@ -1304,7 +1304,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "Çerçevenin otomatik düzeniyle belirlenir",
   "Space evenly across": "Yatayda eşit dağıt",
   "Space evenly down": "Dikeyde eşit dağıt",
-  "Resizing": "Yeniden boyutlandırma",
   "Hug": "Sar",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Çerçeve kendi öğelerine göre boyutlanıyor, doldurulacak alan yok — önce çerçevenin “İçeriğe sar” ayarını kapatın",
   "“{v}” could be read two ways — type it without the separator": "“{v}” iki şekilde okunabilir — ayırıcı olmadan yazın",

@@ -1305,7 +1305,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "Задано автомакетом фрейма",
   "Space evenly across": "Распределить по горизонтали",
   "Space evenly down": "Распределить по вертикали",
-  "Resizing": "Размер",
   "Hug": "По содержимому",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Фрейм подстраивается под содержимое, поэтому заполнять нечего — сначала выключите у него «По содержимому»",
   "“{v}” could be read two ways — type it without the separator": "«{v}» можно прочитать двумя способами — введите без разделителя",

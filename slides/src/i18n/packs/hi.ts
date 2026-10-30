@@ -1313,7 +1313,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "फ़्रेम के ऑटो लेआउट से तय",
   "Space evenly across": "क्षैतिज बराबर दूरी",
   "Space evenly down": "लंबवत बराबर दूरी",
-  "Resizing": "आकार बदलना",
   "Hug": "कंटेंट के अनुसार",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "फ़्रेम अपने बच्चों के अनुसार आकार लेता है, इसलिए भरने को जगह नहीं है — पहले उसका “कंटेंट के अनुसार” बंद करें",
   "“{v}” could be read two ways — type it without the separator": "“{v}” को दो तरह से पढ़ा जा सकता है — इसे विभाजक के बिना लिखें",

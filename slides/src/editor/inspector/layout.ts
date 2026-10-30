@@ -14,8 +14,6 @@ const DIRS: Record<string, string> = { row: 'Row', col: 'Column', grid: 'Grid' }
 
 /** The Auto layout section: on a rect, the frame's own rules; on a frame's child, its sizing. */
 export function buildAutoLayout(p: PropsPanel, el: SlideElement) {
-  const parent = el.parentId ? p.store.element(el.parentId) : undefined
-  if (isFrame(parent)) resizing(p, el, parent)
   if (el.type !== 'shape' || el.shape !== 'rect') return
   const L = el.layout
   const set = (fn: (l: FrameLayout) => void, final = true) => p.mutate(el.id, (e) => fn((e as ShapeElement).layout!), final)
@@ -52,8 +50,14 @@ export function buildAutoLayout(p: PropsPanel, el: SlideElement) {
  * space to hand out — and says so. A nested frame shows this AND its own
  * Auto layout section below.
  */
+/** A frame's child: its sizing rows, laid out in the header-less top block
+ *  right under W and H (arrange.ts layerBlock). Nothing for a free element. */
+export function childResizing(p: PropsPanel, el: SlideElement) {
+  const parent = el.parentId ? p.store.element(el.parentId) : undefined
+  if (isFrame(parent)) resizing(p, el, parent)
+}
+
 function resizing(p: PropsPanel, el: SlideElement, parent: ShapeElement & { layout: FrameLayout }) {
-  section(p, t('Resizing'))
   const own = isFrame(el)
   const modeOf = (k: 'w' | 'h') => el.sizing?.[k] === 'fill' ? 'fill' : own && el.layout.hug ? 'hug' : 'fixed'
   const axis = (k: 'w' | 'h') => {

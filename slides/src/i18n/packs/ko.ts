@@ -1297,7 +1297,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "프레임의 자동 레이아웃이 정함",
   "Space evenly across": "가로로 균등 분배",
   "Space evenly down": "세로로 균등 분배",
-  "Resizing": "크기 조절",
   "Hug": "내용에 맞춤",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "프레임이 자식에 맞춰 크기가 정해지므로 채울 공간이 없습니다 — 먼저 프레임의 “내용에 맞춤”을 끄세요",
   "“{v}” could be read two ways — type it without the separator": "“{v}”은(는) 두 가지로 읽힐 수 있습니다 — 구분 기호 없이 입력하세요",

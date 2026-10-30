@@ -1293,7 +1293,6 @@ export const it: Catalog = {
   "Set by the frame’s auto layout": "Impostato dal layout automatico della cornice",
   "Space evenly across": "Distribuisci in orizzontale",
   "Space evenly down": "Distribuisci in verticale",
-  "Resizing": "Ridimensionamento",
   "Hug": "Adatta",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "La cornice si adatta ai suoi elementi, quindi non c’è spazio da riempire: disattiva prima il suo “Adatta al contenuto”",
   "“{v}” could be read two ways — type it without the separator": "“{v}” si può leggere in due modi: scrivilo senza il separatore",

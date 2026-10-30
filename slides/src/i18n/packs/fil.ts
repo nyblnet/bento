@@ -1322,7 +1322,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "Itinatakda ng auto layout ng frame",
   "Space evenly across": "Pantay na pagitan pahalang",
   "Space evenly down": "Pantay na pagitan patayo",
-  "Resizing": "Pagbabago ng laki",
   "Hug": "Sakto",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Sumasakto ang frame sa laman nito, kaya walang espasyong mapupunan — patayin muna ang “Sakto sa laman” nito",
   "“{v}” could be read two ways — type it without the separator": "Puwedeng basahin ang “{v}” sa dalawang paraan — i-type ito nang walang separator",

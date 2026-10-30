@@ -1309,7 +1309,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "تعیین‌شده با طرح‌بندی خودکارِ قاب",
   "Space evenly across": "فاصلهٔ یکسان افقی",
   "Space evenly down": "فاصلهٔ یکسان عمودی",
-  "Resizing": "تغییر اندازه",
   "Hug": "هم‌اندازهٔ محتوا",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "قاب هم‌اندازهٔ فرزندانش می‌شود، پس جایی برای پرکردن نیست — اول «هم‌اندازهٔ محتوا»ی آن را خاموش کنید",
   "“{v}” could be read two ways — type it without the separator": "«{v}» را می‌شود دو جور خواند — آن را بدون جداکننده بنویسید",

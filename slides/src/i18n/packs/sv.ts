@@ -1302,7 +1302,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "Bestäms av ramens automatiska layout",
   "Space evenly across": "Fördela jämnt vågrätt",
   "Space evenly down": "Fördela jämnt lodrätt",
-  "Resizing": "Storlek",
   "Hug": "Anpassa",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Ramen anpassar sig efter sitt innehåll, så det finns inget utrymme att fylla — stäng först av ”Anpassa efter innehåll” på den",
   "“{v}” could be read two ways — type it without the separator": "”{v}” kan läsas på två sätt — skriv det utan avgränsare",

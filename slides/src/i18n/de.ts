@@ -1293,7 +1293,6 @@ export const de: Catalog = {
   "Set by the frame’s auto layout": "Vom Auto-Layout des Rahmens festgelegt",
   "Space evenly across": "Horizontal gleichmäßig verteilen",
   "Space evenly down": "Vertikal gleichmäßig verteilen",
-  "Resizing": "Größenänderung",
   "Hug": "Anpassen",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Der Rahmen passt sich seinen Elementen an, es gibt also keinen Platz zum Füllen – schalte zuerst „An Inhalt anpassen“ aus",
   "“{v}” could be read two ways — type it without the separator": "„{v}“ lässt sich auf zwei Arten lesen – gib es ohne Trennzeichen ein",

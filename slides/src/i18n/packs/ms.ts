@@ -1306,7 +1306,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "Ditetapkan oleh susun atur automatik bingkai",
   "Space evenly across": "Jarakkan sama rata melintang",
   "Space evenly down": "Jarakkan sama rata menegak",
-  "Resizing": "Ubah saiz",
   "Hug": "Muat",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Bingkai menyesuaikan dirinya dengan kandungan, jadi tiada ruang untuk diisi — matikan dahulu “Muat kandungan” bingkai itu",
   "“{v}” could be read two ways — type it without the separator": "“{v}” boleh dibaca dalam dua cara — taip tanpa pemisah",
