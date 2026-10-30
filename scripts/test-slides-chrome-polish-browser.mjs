@@ -385,7 +385,7 @@ for (const [w, left] of [['default', 188], ['wide', 330]]) {
         rows: rows.length,
         valueRight: col('.ed-token-value', 'r'), lead: col(':scope > :first-child', 'l'), name: col('.ed-token-name', 'l'), uses: col('.ed-token-uses', 'l'), more: col('.ed-token-more, .ed-token-more-none', 'l'),
         header: [st(tok), st(insp)], sub: sub && tok ? [parseFloat(getComputedStyle(sub).fontSize), parseFloat(getComputedStyle(tok).fontSize), getComputedStyle(sub).color, getComputedStyle(tok).color] : [0, 0, '', ''],
-        emptyHeads: [...document.querySelectorAll('.ed-side-tokens .ed-tokens-group')].filter((gr) => !gr.querySelector('.ed-token-row') && gr.dataset.type !== 'color').length,
+        types: [...document.querySelectorAll('.ed-side-tokens .ed-tokens-group')].filter((gr) => gr.querySelector(':scope > .ed-section .ed-sec-act')).map((gr) => gr.dataset.type).join(','),
         addRow: !!document.querySelector('.ed-side-tokens .ed-tokens-addrow'),
         fill: rows.every((r) => { const b = r.getBoundingClientRect(); return b.width >= side.width - 24 - 16 }),
         modesInTitle: !!document.querySelector('.ed-side-tokens .ed-tokens-head .ed-tokens-modes'),
@@ -397,7 +397,7 @@ for (const [w, left] of [['default', 188], ['wide', 330]]) {
     ok(g.lead.length === 1 && g.name.length === 1 && g.uses.length === 1 && g.more.length === 1, `${where}: preview, name, uses and ⋯ start at the same x on every row (${[g.lead, g.name, g.uses, g.more].map((c) => c.join('/')).join(' · ')})`)
     ok(g.header[0] === g.header[1], `${where}: a type group's header is the inspector's section header (${g.header[0]} vs ${g.header[1]})`)
     ok(g.sub[0] < g.sub[1] && g.sub[2] !== g.sub[3], `${where}: the Theme subheading is smaller and quieter (${g.sub[0]}px vs ${g.sub[1]}px)`)
-    ok(g.emptyHeads === 0 && g.addRow, `${where}: no empty type heading — the kinds without tokens share one add row`)
+    ok(g.types === 'color,number,fontSize,opacity,fontFamily,shadow' && !g.addRow, `${where}: every token type is its own section with a fold and + — no link row (${g.types})`)
     ok(g.fill, `${where}: rows use the column's full width`)
     ok(g.modesInTitle, `${where}: the modes sit on the title line`)
     ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)

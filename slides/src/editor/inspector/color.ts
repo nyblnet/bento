@@ -343,7 +343,7 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
   }
   const open = document.createElement('button')
   open.type = 'button'
-  open.className = 'ed-btn ed-tool'
+  open.className = 'ed-btn ed-tool ed-color-open'
   open.innerHTML = ICONS.palette
   open.title = t('Colors & tokens')
   open.setAttribute('aria-label', t('Colors & tokens'))
@@ -392,7 +392,7 @@ export function sharedLink(p: PropsPanel, ids: string[], path: string, field: HT
   })
   const open = document.createElement('button')
   open.type = 'button'
-  open.className = 'ed-btn ed-tool'
+  open.className = 'ed-btn ed-tool ed-color-open'
   open.innerHTML = ICONS.palette
   open.title = t('Colors & tokens')
   open.setAttribute('aria-label', t('Colors & tokens'))
