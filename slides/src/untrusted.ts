@@ -465,9 +465,10 @@ const themeRefs: Check = tag((v) => {
 export const ELEMENT_CHECKS: Record<string, Check> = {
   themeRefs,
   // component membership: ids and keys are lookups, `over` names this element's own keys
-  component: shape(['id', 'key', 'main', 'over'], {
+  component: shape(['id', 'key', 'main', 'over', 'off'], {
     id: cssValue(), key: cssValue(), main: tag((v) => (v === true ? v : DROP), { const: true }),
     over: list(LIMITS.themeRefs, cssValue(64)),
+    off: tag((v) => (Array.isArray(v) && v.length === 2 ? list(2, num(-1e6, 1e6))(v) : DROP), { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } }),
   }, ['id', 'key']),
   // identity + geometry
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),

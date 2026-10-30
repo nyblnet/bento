@@ -16,6 +16,7 @@
 
 import type { BentoDoc, Slide, SlideElement, TextElement } from '../model'
 import { uid } from '../model'
+import { adoptComponents } from '../components'
 import { firstFamily } from '../fonts'
 import { stripEmbeddedEnvelopes } from '../envelope'
 import { LIMITS, sanitizeAssets, sanitizeElement, sanitizeFonts, sanitizeSlide } from '../untrusted'
@@ -222,6 +223,7 @@ export function insertElements(payload: ClipPayload, doc: BentoDoc, slide: Slide
     x: (e.x ?? 0) + d, y: (e.y ?? 0) + d,
   })))
   rewriteRefs(els, remap)
+  adoptComponents(els, doc)
   slide.elements.push(...els)
   return els
 }
@@ -237,6 +239,7 @@ export function insertSlides(payload: ClipPayload, doc: BentoDoc, at: number): S
     rewriteRefs(copy.elements, remap)
     return copy
   })
+  adoptComponents(slides.flatMap((s) => s.elements), doc)
   doc.slides.splice(at, 0, ...slides)
   return slides
 }

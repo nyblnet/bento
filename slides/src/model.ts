@@ -157,7 +157,11 @@ export interface ElementBase {
    * position offset, identity and the keys listed in `over` (its own local
    * overrides). An older shell sees ordinary grouped elements. See components.ts.
    */
-  component?: { id: string; key: string; main?: true; over?: string[] }
+  component?: {
+    id: string; key: string; main?: true; over?: string[]
+    /** a copy's offset from its main, kept so a reload places it as the live session did */
+    off?: [number, number]
+  }
   /**
    * Resize keeps the proportions (the padlock between W and H). Any element:
    * true = locked, absent = free. An IMAGE reads it the other way round —

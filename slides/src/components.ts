@@ -18,7 +18,8 @@
 // it becomes an override. When the main moves, copies follow on every key
 // they do not override. Position is the same rule per member: a member moved
 // alone inside its copy overrides x/y; the copy moved whole just has a new
-// offset, remembered per instance in the editor's map.
+// offset, kept on its members as `component.off` so a reload (or another
+// replica) reads the same instance position the live session had.
 
 import type { BentoDoc, SlideElement } from './model.ts'
 
@@ -69,16 +70,16 @@ export function syncComponents(doc: BentoDoc, lastMain: Map<string, string>): bo
         const g = el.groupId ?? el.id
         inst.set(g, [...(inst.get(g) ?? []), el])
       }
-      for (const [gid, els] of inst) {
-        // The instance's offset from its main, remembered per instance across
-        // passes. A member whose offset alone differs was moved by hand: its
-        // position becomes an override ('x'/'y' in `over`) and the rest of the
-        // copy stays put. All members moved together = the copy was moved.
-        const memo = `off:${comp.id}|${gid}`
+      for (const els of inst.values()) {
+        // The instance's offset from its main, kept on its members
+        // (`component.off`). A member whose offset alone differs was moved by
+        // hand: its position becomes an override ('x'/'y' in `over`) and the
+        // rest of the copy stays put. All members moved together = the copy
+        // was moved, and only the offset changes.
         const free = els.filter((el) => !el.component!.over?.includes('x'))
         const delta = (el: El) => { const m = byKey.get(el.component!.key)!; return [(el.x as number) - (m.x as number), (el.y as number) - (m.y as number)] }
-        const prev = lastMain.get(memo)?.split(',').map(Number)
-        let off = prev
+        const prev = els.find((el) => el.component!.off)?.component!.off
+        let off: number[] | undefined = prev
         const moved = new Set<El>()
         if (!mainMoved && free.length) {
           const ds = free.map(delta)
@@ -86,8 +87,8 @@ export function syncComponents(doc: BentoDoc, lastMain: Map<string, string>): bo
           if (!prev || ds.every((d) => same(d, ds[0]))) off = ds.every((d) => same(d, ds[0])) ? ds[0] : majority(ds)
           for (let i = 0; i < free.length; i++) if (!same(ds[i], off)) moved.add(free[i])
         }
-        if (off) lastMain.set(memo, off.join(','))
         for (const el of els) {
+          if (off && !eq(el.component!.off, off)) { el.component!.off = [off[0], off[1]]; changed = true }
           const m = byKey.get(el.component!.key)!
           const over = new Set(el.component!.over ?? [])
           if (moved.has(el)) { over.add('x'); over.add('y'); changed = true }
@@ -146,7 +147,7 @@ export function instanceOf(comp: ComponentInfo, uid: () => string, dx = 0, dy = 
     el.x = (m.x as number) + dx
     el.y = (m.y as number) + dy
     delete el.morphId
-    el.component = { id: comp.id, key: m.component!.key }
+    el.component = { id: comp.id, key: m.component!.key, off: [dx, dy] }
     return el
   })
 }
@@ -154,4 +155,30 @@ export function instanceOf(comp: ComponentInfo, uid: () => string, dx = 0, dy = 
 /** Detach: the elements keep every value and stop following anything. */
 export function detach(els: SlideElement[]): void {
   for (const el of els) delete el.component
+}
+
+/**
+ * Elements arriving in a deck by paste or duplicate keep their component only
+ * where it still means something: a copy whose main is not in the deck is
+ * detached (it has nothing to follow); a main whose component already has a
+ * main in the deck becomes a copy of it (one main per component — Penpot's
+ * duplicate); a main arriving in a deck without one stays a main there.
+ * Call before the elements join the deck.
+ */
+export function adoptComponents(els: SlideElement[], doc: BentoDoc): void {
+  const mains = new Map<string, El>()
+  for (const s of doc.slides) for (const e of s.elements as El[]) if (e.component?.main) mains.set(`${e.component.id}|${e.component.key}`, e)
+  const has = (id: string) => [...mains.keys()].some((k) => k.startsWith(id + '|'))
+  const bringsMain = new Set(els.filter((e) => e.component?.main).map((e) => e.component!.id))
+  for (const el of els as El[]) {
+    const c = el.component
+    if (!c) continue
+    if (has(c.id)) {
+      if (!c.main) continue
+      // a second main: it becomes a copy, its offset measured from the main
+      const m = mains.get(`${c.id}|${c.key}`)
+      delete c.main
+      if (m) c.off = [(el.x as number) - (m.x as number), (el.y as number) - (m.y as number)]
+    } else if (!bringsMain.has(c.id)) delete el.component
+  }
 }

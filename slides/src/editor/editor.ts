@@ -19,7 +19,7 @@ import { cssColor, renderSlide, renderThumbnail } from '../render'
 import { openExportImagesDialog } from './exportimages'
 import { paletteSignature, resolveThemeRefs } from '../palette'
 import { syncTokenRefs, tokenSignature } from '../tokens'
-import { detach, makeComponent, syncComponents } from '../components'
+import { adoptComponents, detach, makeComponent, syncComponents } from '../components'
 import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
@@ -3606,6 +3606,7 @@ export class Editor {
     const els = this.store.selectedElements
     if (!els.length) return
     const clones = freshGroups(els.map((el) => cloneElement(el)))
+    adoptComponents(clones, this.store.doc)
     this.store.commit(() => this.store.slide.elements.push(...clones))
     this.store.select(clones.map((c) => c.id))
   }

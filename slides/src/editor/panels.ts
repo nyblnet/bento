@@ -5,6 +5,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
+import { adoptComponents } from '../components'
 import { uid, type Slide, type SlideElement } from '../model'
 import { morphPairs } from './morph'
 
@@ -464,6 +465,7 @@ export class PropsPanel {
         ? { groupId: gidMap.get(el.groupId) ?? gidMap.set(el.groupId, `grp-${uid()}`).get(el.groupId)! }
         : {}),
     }))
+    adoptComponents(clones, this.store.doc)
     this.store.commit(() => this.store.slide.elements.push(...clones))
     this.store.select(clones.map((c) => c.id))
   }
