@@ -465,9 +465,10 @@ const themeRefs: Check = tag((v) => {
 export const ELEMENT_CHECKS: Record<string, Check> = {
   themeRefs,
   // component membership: ids and keys are lookups, `over` names this element's own keys
-  component: shape(['id', 'key', 'main', 'over'], {
+  component: shape(['id', 'key', 'main', 'over', 'off'], {
     id: cssValue(), key: cssValue(), main: tag((v) => (v === true ? v : DROP), { const: true }),
     over: list(LIMITS.themeRefs, cssValue(64)),
+    off: tag((v) => (Array.isArray(v) && v.length === 2 ? list(2, num(-1e6, 1e6))(v) : DROP), { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } }),
   }, ['id', 'key']),
   // identity + geometry
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),
@@ -516,7 +517,7 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
     cols: num(1, 64), clip: bool, hug: bool, wrap: bool,
   }, ['dir', 'gap', 'pad']),
   parentId: cssValue(),
-  sizing: shape(MODEL_KEYS.sizing, { w: oneOf('fixed', 'fill'), h: oneOf('fixed', 'fill') }),
+  sizing: shape(MODEL_KEYS.sizing, { w: oneOf('fixed', 'fill'), h: oneOf('fixed', 'fill'), minW: num(0, 1e5), minH: num(0, 1e5) }),
   // a boolean's operands are whole shapes, sanitized as any pasted element is;
   // one bad operand drops the operand list (and with it only re-editing — the
   // computed d above still draws)

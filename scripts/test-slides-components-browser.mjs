@@ -191,6 +191,44 @@ try {
   ea = await el('a')
   ok(!ea.themeRefs?.radius && ea.radius === 18, 'clicking the pill detaches; the value stays')
 
+  console.log('\nthe offset is in the file; paste and duplicate\n')
+  {
+    const copies = (await els()).filter((e) => e.component && !e.component.main && !e.component.over)
+    const one = copies[0]
+    const main = (await els()).find((e) => e.component?.main && e.component.key === one.component.key)
+    ok(Array.isArray(one.component.off) && one.component.off[0] === one.x - main.x && one.component.off[1] === one.y - main.y,
+      `a copy's offset from its main is kept on it (component.off ${JSON.stringify(one.component.off)})`)
+    // save-and-reopen: the offset survives the file gate and the copy follows by it
+    await p.evaluate(() => window.bento.loadDoc(JSON.stringify(window.bento.doc))); await p.waitForTimeout(400)
+    ok(JSON.stringify((await el(one.id)).component.off) === JSON.stringify(one.component.off), 'and it survives a reload')
+    const paste = (elements) => p.evaluate((elements) => {
+      const dt = new DataTransfer(); dt.setData('text/plain', JSON.stringify({ __bento: 'clip', kind: 'elements', elements }))
+      document.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }))
+    }, elements).then(() => p.waitForTimeout(300))
+    // ⌘D on the main, in the same deck: one main per component, so the duplicate is a copy
+    await p.keyboard.press('Escape'); await pick('a')
+    const before = new Set((await els()).map((e) => e.id))
+    await p.keyboard.press(`${MOD}+d`); await p.waitForTimeout(300)
+    const dup = (await els()).find((e) => !before.has(e.id) && e.component?.key === main.component.key)
+    const mainsNow = (await els()).filter((e) => e.component?.main && e.component.key === main.component.key)
+    ok(!!dup && !dup.component.main && mainsNow.length === 1 && dup.component.off?.[0] === dup.x - mainsNow[0].x, `duplicating the main in its own deck makes a copy of it, offset kept (${dup && JSON.stringify(dup.component)})`)
+    // a deck with no main: a pasted copy is detached, a pasted main stays a main
+    const snapshot = await els()
+    const copyEl = snapshot.find((e) => e.id === one.id), mainEl = snapshot.find((e) => e.id === 'a')
+    await p.evaluate(() => {
+      const d = JSON.parse(JSON.stringify(window.bento.doc))
+      d.slides = [{ id: 'other', background: '#ffffff', transition: 'none', notes: '', elements: [] }]
+      window.bento.loadDoc(JSON.stringify(d))
+    }); await p.waitForTimeout(400)
+    await paste([copyEl])
+    let there = await els()
+    ok(there.length === 1 && !there[0].component, 'a copy pasted into a deck without its main is detached')
+    await paste([mainEl])
+    there = await els()
+    const pm = there.find((e) => e.component)
+    ok(!!pm && pm.component.main === true, 'a main pasted into a deck without one stays a main there')
+  }
+
   ok(errors.length === 0, `no page error${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

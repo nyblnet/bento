@@ -157,7 +157,11 @@ export interface ElementBase {
    * position offset, identity and the keys listed in `over` (its own local
    * overrides). An older shell sees ordinary grouped elements. See components.ts.
    */
-  component?: { id: string; key: string; main?: true; over?: string[] }
+  component?: {
+    id: string; key: string; main?: true; over?: string[]
+    /** a copy's offset from its main, kept so a reload places it as the live session did */
+    off?: [number, number]
+  }
   /**
    * Resize keeps the proportions (the padlock between W and H). Any element:
    * true = locked, absent = free. An IMAGE reads it the other way round —
@@ -199,6 +203,11 @@ export interface ElementBase {
 export interface ElementSizing {
   w?: 'fixed' | 'fill'
   h?: 'fixed' | 'fill'
+  /** In a wrapping frame, the least a 'fill' child takes on that axis — what
+   *  the line breaking counts it as before the line's free space is shared.
+   *  Absent = 0: fills never push a line over, they share what is left. */
+  minW?: number
+  minH?: number
 }
 
 /**

@@ -18,6 +18,7 @@
 // clockwise, hole anticlockwise, and so on), so the default nonzero fill an
 // old shell uses draws the same holes evenodd would.
 import type { ShapeElement } from './model'
+import { parseBezier, serializeBezier, type BezNode } from '../../kernel/src/geom.ts'
 
 export type BoolOp = 'union' | 'subtract' | 'intersect' | 'exclude'
 export type Pt = { x: number; y: number }
@@ -242,23 +243,44 @@ type Edge = { a: Pt; b: Pt; cuts: Array<{ t: number; p: Pt }> }
 const edgesOf = (poly: Poly): Edge[] =>
   poly.flatMap((c) => c.map((a, i) => ({ a, b: c[(i + 1) % c.length], cuts: [] as Edge['cuts'] })))
 
-/** Split both operands' edges where they cross, sharing each crossing point. */
+const EPS = 1e-7 // px: two points this close are one point; t this close to 0/1 is the end
+
+/**
+ * Split both operands' edges at every point they meet, sharing that point so
+ * the pieces chain exactly: a proper crossing, a vertex of one lying on an
+ * edge of the other (a T), and the ends of a stretch where two edges run along
+ * each other (abutting shapes). After this every piece of A either lies along a
+ * piece of B end to end, or touches B only at its ends.
+ */
 function splitAll(ea: Edge[], eb: Edge[]) {
   // ponytail: O(n·m) pair test — fine for a few hundred chords a side; a sweep line if decks grow huge outlines
+  const onSeg = (e: Edge, q: Pt) => {
+    const rx = e.b.x - e.a.x, ry = e.b.y - e.a.y, L2 = rx * rx + ry * ry
+    if (L2 < EPS * EPS) return -1
+    const t = ((q.x - e.a.x) * rx + (q.y - e.a.y) * ry) / L2
+    if (t <= EPS || t >= 1 - EPS) return -1
+    const dx = e.a.x + t * rx - q.x, dy = e.a.y + t * ry - q.y
+    return dx * dx + dy * dy < EPS * EPS * 100 ? t : -1
+  }
   for (const e of ea) {
-    const minx = Math.min(e.a.x, e.b.x), maxx = Math.max(e.a.x, e.b.x)
-    const miny = Math.min(e.a.y, e.b.y), maxy = Math.max(e.a.y, e.b.y)
+    const minx = Math.min(e.a.x, e.b.x) - EPS, maxx = Math.max(e.a.x, e.b.x) + EPS
+    const miny = Math.min(e.a.y, e.b.y) - EPS, maxy = Math.max(e.a.y, e.b.y) + EPS
     for (const f of eb) {
       if (Math.max(f.a.x, f.b.x) < minx || Math.min(f.a.x, f.b.x) > maxx) continue
       if (Math.max(f.a.y, f.b.y) < miny || Math.min(f.a.y, f.b.y) > maxy) continue
+      // an end of one on the other (a T, or the ends of a shared stretch): cut at that very vertex
+      let touched = false
+      for (const q of [f.a, f.b]) { const t = onSeg(e, q); if (t >= 0) { e.cuts.push({ t, p: q }); touched = true } }
+      for (const q of [e.a, e.b]) { const u = onSeg(f, q); if (u >= 0) { f.cuts.push({ t: u, p: q }); touched = true } }
+      if (touched) continue
       const rx = e.b.x - e.a.x, ry = e.b.y - e.a.y
       const sx = f.b.x - f.a.x, sy = f.b.y - f.a.y
       const den = rx * sy - ry * sx
-      if (Math.abs(den) < 1e-12) continue // parallel — the perturbation keeps them from overlapping
+      if (Math.abs(den) < 1e-12) continue // parallel and not touching
       const qx = f.a.x - e.a.x, qy = f.a.y - e.a.y
       const t = (qx * sy - qy * sx) / den
       const u = (qx * ry - qy * rx) / den
-      if (t <= 0 || t >= 1 || u <= 0 || u >= 1) continue
+      if (t <= EPS || t >= 1 - EPS || u <= EPS || u >= 1 - EPS) continue // meeting at an end: a vertex already
       const p = { x: e.a.x + t * rx, y: e.a.y + t * ry }
       e.cuts.push({ t, p })
       f.cuts.push({ t: u, p })
@@ -267,15 +289,22 @@ function splitAll(ea: Edge[], eb: Edge[]) {
 }
 
 function pieces(e: Edge): Array<[Pt, Pt]> {
-  const pts = [e.a, ...e.cuts.sort((x, y) => x.t - y.t).map((c) => c.p), e.b]
+  const pts = [e.a]
+  for (const c of e.cuts.sort((x, y) => x.t - y.t)) {
+    const last = pts[pts.length - 1]
+    if (Math.hypot(c.p.x - last.x, c.p.y - last.y) > EPS) pts.push(c.p)
+  }
+  if (Math.hypot(e.b.x - pts[pts.length - 1].x, e.b.y - pts[pts.length - 1].y) > EPS) pts.push(e.b)
+  else pts[pts.length - 1] = e.b
   const out: Array<[Pt, Pt]> = []
   for (let i = 0; i < pts.length - 1; i++) out.push([pts[i], pts[i + 1]])
   return out
 }
 
+const key = (p: Pt) => `${Math.round(p.x * 1e5)},${Math.round(p.y * 1e5)}`
+
 /** Chain directed segments into closed contours (end of one = start of the next). */
 function chain(segs: Array<[Pt, Pt]>): Poly {
-  const key = (p: Pt) => `${Math.round(p.x * 1e6)},${Math.round(p.y * 1e6)}`
   const from = new Map<string, Array<[Pt, Pt]>>()
   for (const s of segs) {
     const k = key(s[0])
@@ -295,28 +324,52 @@ function chain(segs: Array<[Pt, Pt]>): Poly {
     }
     if (c.length > 2) out.push(c)
   }
-  return out
+  return out.map(straighten).filter((c) => c.length > 2)
+}
+
+/** Drop points that sit on the straight line between their neighbours — what a shared edge leaves behind. */
+function straighten(c: Pt[]): Pt[] {
+  let pts = c
+  for (let changed = true; changed && pts.length > 3;) {
+    changed = false
+    const out: Pt[] = []
+    for (let i = 0; i < pts.length; i++) {
+      const a = out.length ? out[out.length - 1] : pts[(i - 1 + pts.length) % pts.length], b = pts[i], d = pts[(i + 1) % pts.length]
+      const cross = (b.x - a.x) * (d.y - b.y) - (b.y - a.y) * (d.x - b.x)
+      const len = Math.hypot(d.x - a.x, d.y - a.y) || 1
+      if (Math.abs(cross) / len < EPS * 10 && (b.x - a.x) * (d.x - b.x) + (b.y - a.y) * (d.y - b.y) >= 0) { changed = true; continue }
+      out.push(b)
+    }
+    pts = out
+  }
+  return pts
 }
 
 /**
- * Nudge B by a sub-pixel amount so no vertex of one lies exactly on an edge of
- * the other and no edges overlap — the degenerate cases the split-and-classify
- * method cannot decide. ponytail: shapes that share an edge (two abutting
- * rects) come out a 1e-4px sliver apart or overlapping; invisible on a slide.
+ * Each piece of A is inside B, outside it, or lies ALONG a piece of B — a
+ * shared stretch, where abutting shapes meet. Both operands are wound the same
+ * way (orient), so a shared piece running the same direction has both
+ * interiors on one side, and one running opposite has them on either side.
+ * The classic rule: union and intersect keep a same-direction shared piece
+ * once, subtract keeps an opposite one; everything else is decided by the
+ * midpoint, which for a non-shared piece never lies on the other's boundary.
  */
-const nudge = (poly: Poly): Poly => poly.map((c) => c.map((p) => ({ x: p.x + 1.3e-4, y: p.y + 0.7e-4 })))
-
-function two(A: Poly, B0: Poly, op: Exclude<BoolOp, 'exclude'>): Poly {
-  const B = nudge(B0)
+function two(A: Poly, B: Poly, op: Exclude<BoolOp, 'exclude'>): Poly {
   const ea = edgesOf(A), eb = edgesOf(B)
   splitAll(ea, eb)
   const mid = (s: [Pt, Pt]): Pt => ({ x: (s[0].x + s[1].x) / 2, y: (s[0].y + s[1].y) / 2 })
+  const bp = eb.flatMap(pieces), ap = ea.flatMap(pieces)
+  const pk = (s: [Pt, Pt]) => key(s[0]) + '|' + key(s[1])
+  const bSet = new Set(bp.map(pk)), aSet = new Set(ap.map(pk))
   const keep: Array<[Pt, Pt]> = []
-  for (const e of ea) for (const s of pieces(e)) {
+  for (const s of ap) {
+    const same = bSet.has(pk(s)), opposite = bSet.has(pk([s[1], s[0]]))
+    if (same || opposite) { if (op === 'subtract' ? opposite : same) keep.push(s); continue }
     const inB = inside(mid(s), B)
     if (op === 'intersect' ? inB : !inB) keep.push(s)
   }
-  for (const e of eb) for (const s of pieces(e)) {
+  for (const s of bp) {
+    if (aSet.has(pk(s)) || aSet.has(pk([s[1], s[0]]))) continue // shared: decided on A's side
     const inA = inside(mid(s), A)
     if (op === 'union' && !inA) keep.push(s)
     if (op === 'intersect' && inA) keep.push(s)
@@ -361,4 +414,106 @@ export function polyArea(poly: Poly): number {
 /** Operands → the computed outline, in slide coordinates. */
 export function computeBool(shapes: ShapeElement[], op: BoolOp) {
   return polyToPath(boolPolys(shapes.map(shapeToPoly), op))
+}
+
+// ————————————————————————— operands back where the result stands —————————————————————————
+
+const KAPPA = 0.5522847498
+
+/** A shape's outline as cubic nodes in its own box (0..w, 0..h), or null when
+ *  the path is more than one M/L/C contour (then it travels as chords). */
+function localNodes(s: ShapeElement): { nodes: BezNode[]; closed: boolean } | null {
+  const { w, h } = s
+  const P = (x: number, y: number) => ({ x, y })
+  if (s.shape === 'ellipse') {
+    const rx = w / 2, ry = h / 2, kx = rx * KAPPA, ky = ry * KAPPA
+    return { closed: true, nodes: [
+      { p: P(rx, 0), in: P(rx - kx, 0), out: P(rx + kx, 0) },
+      { p: P(w, ry), in: P(w, ry - ky), out: P(w, ry + ky) },
+      { p: P(rx, h), in: P(rx + kx, h), out: P(rx - kx, h) },
+      { p: P(0, ry), in: P(0, ry + ky), out: P(0, ry - ky) },
+    ] }
+  }
+  if (s.shape === 'rect') {
+    const r = Math.min(s.radius || 0, w / 2, h / 2), k = r * (1 - KAPPA)
+    if (!r) return { closed: true, nodes: [{ p: P(0, 0) }, { p: P(w, 0) }, { p: P(w, h) }, { p: P(0, h) }] }
+    return { closed: true, nodes: [
+      { p: P(r, 0), in: P(k, 0) }, { p: P(w - r, 0), out: P(w - k, 0) },
+      { p: P(w, r), in: P(w, k) }, { p: P(w, h - r), out: P(w, h - k) },
+      { p: P(w - r, h), in: P(w - k, h) }, { p: P(r, h), out: P(k, h) },
+      { p: P(0, h - r), in: P(0, h - k) }, { p: P(0, r), out: P(0, k) },
+    ] }
+  }
+  if (s.shape === 'triangle') return { closed: true, nodes: [{ p: P(w / 2, 0) }, { p: P(w, h) }, { p: P(0, h) }] }
+  if (s.shape === 'path' && s.d && !/[^MLCZmlcz\d\s.,eE+-]/.test(s.d) && (s.d.match(/[Mm]/g) ?? []).length === 1 && !/[a-z]/.test(s.d.replace(/e/g, ''))) {
+    const [bx, by, bw, bh] = s.pathBox ?? [0, 0, w || 1, h || 1]
+    const sx = w / (bw || 1), sy = h / (bh || 1)
+    const m = (q?: { x: number; y: number }) => (q ? { x: (q.x - bx) * sx, y: (q.y - by) * sy } : undefined)
+    const { nodes, closed } = parseBezier(s.d)
+    return { closed, nodes: nodes.map((n) => ({ ...n, p: m(n.p)!, in: m(n.in), out: m(n.out) })) }
+  }
+  return null
+}
+
+/**
+ * Where the operands stand now. They were stored as they stood when combined;
+ * since then the result may have been moved, resized or turned, so the frame
+ * the result had then is mapped onto the one it has now: scale (sx, sy) into
+ * the new box, then the result's rotation about its centre. An operand that
+ * was itself turned by other than a multiple of 90° comes out of a
+ * non-uniform scale SKEWED — no box and rotation can say that, so it comes
+ * back as a path carrying the exact skewed outline.
+ */
+export function operandsAt(el: ShapeElement): ShapeElement[] {
+  const bool = el.bool!
+  const was = computeBool(bool.shapes, bool.op) ?? { x: el.x, y: el.y, w: el.w, h: el.h }
+  const sx = el.w / (was.w || 1), sy = el.h / (was.h || 1)
+  const a = ((el.rotation || 0) * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a)
+  const ecx = el.x + el.w / 2, ecy = el.y + el.h / 2
+  // a slide point of the frame then → where it stands now
+  const M = (q: Pt): Pt => {
+    const x = el.x + (q.x - was.x) * sx - ecx, y = el.y + (q.y - was.y) * sy - ecy
+    return { x: ecx + x * ca - y * sa, y: ecy + x * sa + y * ca }
+  }
+  const uniform = Math.abs(sx - sy) <= 1e-9 * Math.max(sx, sy, 1)
+  return bool.shapes.map((s0) => {
+    const s: ShapeElement = JSON.parse(JSON.stringify(s0))
+    const r0 = ((s.rotation || 0) % 360 + 360) % 360
+    const quarter = Math.abs(r0 / 90 - Math.round(r0 / 90)) < 1e-9
+    const c = M({ x: s.x + s.w / 2, y: s.y + s.h / 2 })
+    if (uniform || quarter) {
+      // the box survives: a quarter turn swaps which scale lands on which side
+      const swap = !uniform && Math.round(r0 / 90) % 2 === 1
+      s.w *= swap ? sy : sx
+      s.h *= swap ? sx : sy
+      s.x = c.x - s.w / 2
+      s.y = c.y - s.h / 2
+      if (el.rotation) s.rotation = (s.rotation || 0) + el.rotation
+      return s
+    }
+    // skewed: carry the outline itself through the map
+    const r = (r0 * Math.PI) / 180, cr = Math.cos(r), sr = Math.sin(r)
+    const toSlide = (q: Pt): Pt => {
+      const x = q.x - s.w / 2, y = q.y - s.h / 2
+      return M({ x: s.x + s.w / 2 + x * cr - y * sr, y: s.y + s.h / 2 + x * sr + y * cr })
+    }
+    const local = localNodes(s)
+    let contours: Array<{ nodes: BezNode[]; closed: boolean }>
+    if (local) {
+      const T = (q?: Pt) => (q ? toSlide(q) : undefined)
+      contours = [{ closed: local.closed, nodes: local.nodes.map((n) => ({ ...n, p: T(n.p)!, in: T(n.in), out: T(n.out) })) }]
+    } else {
+      // ponytail: a multi-contour or arc path travels as its chords (TOL px) — exact curves only for M/L/C
+      const unturned = shapeToPoly({ ...s, rotation: 0 })
+      const back = (q: Pt) => toSlide({ x: q.x - s.x, y: q.y - s.y })
+      contours = unturned.map((cn) => ({ closed: true, nodes: cn.map((q) => ({ p: back(q) })) }))
+    }
+    const pts = contours.flatMap((cn) => cn.nodes.flatMap((n) => [n.p, n.in, n.out].filter(Boolean) as Pt[]))
+    const x0 = Math.min(...pts.map((q) => q.x)), y0 = Math.min(...pts.map((q) => q.y))
+    const w = Math.max(Math.max(...pts.map((q) => q.x)) - x0, 1), h = Math.max(Math.max(...pts.map((q) => q.y)) - y0, 1)
+    const L = (q?: Pt) => (q ? { x: q.x - x0, y: q.y - y0 } : undefined)
+    const d = contours.map((cn) => serializeBezier(cn.nodes.map((n) => ({ ...n, p: L(n.p)!, in: L(n.in), out: L(n.out) })), cn.closed)).join(' ')
+    const out = { ...s, shape: 'path' as const, d, pathBox: [0, 0, w, h] as [number, number, number, number], x: x0, y: y0, w, h, rotation: 0, radius: 0 }
+    return out
+  })
 }

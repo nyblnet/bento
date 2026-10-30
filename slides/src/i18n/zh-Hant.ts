@@ -1227,4 +1227,6 @@ export const zhHant: Catalog = {
   "Alternative text": "替代文字",
   "Morph from the slide before": "從上一張投影片變形",
   "Nothing on the slide before to pair with.": "上一張投影片上沒有可配對的元素。",
+  "Min": "最小",
+  "Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish": "點按放置角點，拖曳拉出曲線（Alt 斷開控制點）；點按第一個點閉合，按 Enter 或 Esc 完成",
 }

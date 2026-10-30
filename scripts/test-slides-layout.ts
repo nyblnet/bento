@@ -120,6 +120,19 @@ console.log('\nwrap and rotated clip\n')
   ok(at(s, 'f').w === 600 && at(s, 'f').h === 20 + 50 + 10 + 40 + 20, 'a hugging wrapping frame keeps its width and hugs its lines')
 }
 {
+  // inner 560: a(200) + fill b(min 150) fit on line 1, c(200) + fill d(min 0) on line 2
+  const s = slide(frame({ dir: 'row', wrap: true }),
+    box('a', 0, 0, 200, 50, { parentId: 'f' }), box('b', 10, 0, 40, 50, { parentId: 'f', sizing: { w: 'fill', minW: 150 } }),
+    box('c', 20, 60, 200, 50, { parentId: 'f' }), box('d', 30, 60, 10, 50, { parentId: 'f', sizing: { w: 'fill' } }))
+  layoutSlide(s)
+  ok(at(s, 'b').w === 560 - 200 - 10 && at(s, 'b').y === at(s, 'a').y, 'a fill child takes its own line\'s free space')
+  // a fill with no minimum counts as 0, so it joins the first line too and shares it
+  ok(at(s, 'c').y > at(s, 'a').y && at(s, 'd').y === at(s, 'c').y && at(s, 'd').w === 560 - 200 - 10, 'line breaking counts a fill child as its minimum (0 when unset), and line 2 shares its own free space')
+  ok(!layoutSlide(s), 'per-line fill is a fixed point: the filled size never decides the line')
+  at(s, 'f').w = 900; layoutSlide(s)
+  ok(at(s, 'b').w < 900, 'widening the frame re-shares the space instead of keeping the grown size')
+}
+{
   const f = box('f', 0, 0, 100, 100, { layout: { dir: 'row', gap: 0, pad: [0, 0, 0, 0], clip: true } })
   const c = box('c', 50, 0, 100, 100, { parentId: 'f', rotation: 90 })
   const byId = new Map([[f.id, f], [c.id, c]])

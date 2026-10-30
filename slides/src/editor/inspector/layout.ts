@@ -21,8 +21,20 @@ export function buildAutoLayout(p: PropsPanel, el: SlideElement) {
         if (s[k] === 'fixed') delete s[k]
         if (Object.keys(s).length) e.sizing = s; else delete e.sizing
       }, true), { fixed: t('Fixed'), fill: t('Fill') })
-    row(p, 'Width', axis('w'))
-    row(p, 'Height', axis('h'))
+    // in a wrapping frame a fill child needs a least size, or every fill shares one line
+    const least = (k: 'w' | 'h') => {
+      const key = k === 'w' ? 'minW' : 'minH'
+      return mini(t('Min'), el.sizing?.[key] ?? 0, (v, fin) => p.mutate(el.id, (e) => {
+        const s = { ...e.sizing }
+        if (v > 0) s[key] = v; else delete s[key]
+        if (Object.keys(s).length) e.sizing = s; else delete e.sizing
+      }, fin), undefined, { min: 0 })
+    }
+    const wraps = !!parent.layout.wrap && parent.layout.dir !== 'grid'
+    for (const [k, label] of [['w', 'Width'], ['h', 'Height']] as const) {
+      row(p, label, axis(k))
+      if (wraps && el.sizing?.[k] === 'fill') field(p, least(k))
+    }
     return
   }
   if (el.type !== 'shape' || el.shape !== 'rect') return

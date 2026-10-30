@@ -1225,4 +1225,6 @@ export const pt: Catalog = {
   "Alternative text": "Texto alternativo",
   "Morph from the slide before": "Transformar a partir do slide anterior",
   "Nothing on the slide before to pair with.": "Nada no slide anterior para parear.",
+  "Min": "Mín",
+  "Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish": "Clique para pôr cantos, arraste para puxar curvas (Alt quebra uma alça); clique no primeiro ponto para fechar, Enter ou Esc para terminar",
 }

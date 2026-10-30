@@ -188,17 +188,45 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
   if (corners) block.appendChild(corners)
 }
 
-/** Mirror each element's content in its own box — one undo step. All flip
- *  together: if any is unflipped they all flip, else they all unflip. */
+/**
+ * Flip. One element mirrors its content in its own box; all flip together (if
+ * any is unflipped they all flip, else they all unflip). Several elements
+ * mirror as ONE picture across the selection's box, as Figma does: each centre
+ * reflects across the box's middle, each turn reverses, and each element's own
+ * content flips. One undo step.
+ */
 export function flip(p: PropsPanel, els: SlideElement[], key: 'flipX' | 'flipY') {
   if (!els.length) return
-  const on = els.some((e) => !e[key])
+  if (els.length === 1) {
+    const on = els.some((e) => !e[key])
+    p.edit(() => {
+      const el = p.store.element(els[0].id)
+      if (!el) return
+      if (on) el[key] = true
+      else delete el[key]
+    }, true)
+    return
+  }
+  // the selection's box: the turned corners of every element
+  const xs: number[] = [], ys: number[] = []
+  for (const e of els) {
+    const a = ((e.rotation || 0) * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a)
+    const cx = e.x + e.w / 2, cy = e.y + e.h / 2
+    for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const x = (dx * e.w) / 2, y = (dy * e.h) / 2
+      xs.push(cx + x * c - y * s); ys.push(cy + x * s + y * c)
+    }
+  }
+  const mid = key === 'flipX' ? (Math.min(...xs) + Math.max(...xs)) / 2 : (Math.min(...ys) + Math.max(...ys)) / 2
   p.edit(() => {
     for (const e of els) {
       const el = p.store.element(e.id)
       if (!el) continue
-      if (on) el[key] = true
-      else delete el[key]
+      if (key === 'flipX') el.x = 2 * mid - (el.x + el.w / 2) - el.w / 2
+      else el.y = 2 * mid - (el.y + el.h / 2) - el.h / 2
+      if (el.rotation) el.rotation = -el.rotation
+      if (el[key]) delete el[key]
+      else el[key] = true
     }
   }, true)
 }

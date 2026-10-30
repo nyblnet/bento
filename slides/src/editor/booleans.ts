@@ -5,7 +5,7 @@
 // undo step. The geometry is vector-bool.ts; this file only moves elements.
 import type { Store } from '../store'
 import { uid, type ShapeElement, type SlideElement } from '../model'
-import { canBool, computeBool, type BoolOp } from '../vector-bool'
+import { canBool, computeBool, operandsAt, type BoolOp } from '../vector-bool'
 import { ICONS } from '../icons'
 import { isMacOS } from '../screens'
 import { t } from '../i18n'
@@ -63,34 +63,8 @@ export function combine(store: Store, els: SlideElement[], op: BoolOp): string |
   return el.id
 }
 
-/**
- * The operands where the boolean now stands. They were stored as they stood
- * when combined; since then the result may have been moved, resized or turned,
- * so map the frame the result had then onto the one it has now.
- * ponytail: a non-uniform resize of a ROTATED operand only scales its box, so
- * it comes back un-skewed — the same approximation a group resize makes.
- */
-export function placeOperands(el: ShapeElement): ShapeElement[] {
-  const bool = el.bool!
-  const was = computeBool(bool.shapes, bool.op) ?? { x: el.x, y: el.y, w: el.w, h: el.h }
-  const sx = el.w / (was.w || 1), sy = el.h / (was.h || 1)
-  const a = ((el.rotation || 0) * Math.PI) / 180
-  const cx = el.x + el.w / 2, cy = el.y + el.h / 2
-  return bool.shapes.map((s0) => {
-    const s = clone(s0)
-    s.x = el.x + (s.x - was.x) * sx
-    s.y = el.y + (s.y - was.y) * sy
-    s.w *= sx
-    s.h *= sy
-    if (a) {
-      const ox = s.x + s.w / 2 - cx, oy = s.y + s.h / 2 - cy
-      s.x = cx + ox * Math.cos(a) - oy * Math.sin(a) - s.w / 2
-      s.y = cy + ox * Math.sin(a) + oy * Math.cos(a) - s.h / 2
-      s.rotation = (s.rotation || 0) + el.rotation
-    }
-    return s
-  })
-}
+/** The operands where the boolean now stands (vector-bool.ts operandsAt). */
+export const placeOperands = (el: ShapeElement): ShapeElement[] => operandsAt(el)
 
 /** Recompute a boolean under another operation (false when nothing would be left). */
 export function setOp(store: Store, el: ShapeElement, op: BoolOp): boolean {

@@ -148,14 +148,19 @@ function place(slide: Slide, f: Frame, set: Put) {
   const M = row ? 'w' : 'h', C = row ? 'h' : 'w', P = row ? 'x' : 'y', Q = row ? 'y' : 'x'
   const room = row ? iw : ih, cross = row ? ih : iw
   if (f.layout.wrap) {
-    // ponytail: in a wrapping run, fill children keep their size (Figma wraps fixed items only)
+    // each line breaks with its fill children at their minimum, then they share that line's free space
     let q = row ? y0 : x0
     for (const line of lines(kids, M, room, gap)) {
+      const lineFills = line.filter((k) => k.sizing?.[M] === 'fill')
+      const fixed = line.filter((k) => k.sizing?.[M] !== 'fill').reduce((a, k) => a + k[M], 0)
+      const free = room - fixed - gap * (line.length - 1)
+      for (const k of lineFills) set(k, M, Math.max(minOf(k, M), free / lineFills.length))
       const thick = Math.max(...line.map((k) => k[C]))
       const used = line.reduce((a, k) => a + k[M], 0) + gap * (line.length - 1)
       let step = gap
       let pos = (row ? x0 : y0)
-      if (justify === 'space-between' && line.length > 1) step = (room - used + gap * (line.length - 1)) / (line.length - 1)
+      if (lineFills.length) { /* the fills took the slack */ }
+      else if (justify === 'space-between' && line.length > 1) step = (room - used + gap * (line.length - 1)) / (line.length - 1)
       else pos += at(justify, room, used)
       for (const k of line) {
         if (align === 'stretch' || k.sizing?.[C] === 'fill') set(k, C, thick)
@@ -186,13 +191,18 @@ function place(slide: Slide, f: Frame, set: Put) {
   }
 }
 
-/** Greedy line breaking for a wrapping run: a child starts a new line when it would pass `room`. */
+/** A fill child's least size on axis M (sizing.minW/minH, else 0). */
+const minOf = (k: SlideElement, M: 'w' | 'h') => (M === 'w' ? k.sizing?.minW : k.sizing?.minH) ?? 0
+
+/** Greedy line breaking for a wrapping run: a child starts a new line when it would pass `room`.
+ *  A fill child counts as its minimum, so its own filled size never decides its line. */
 function lines(kids: SlideElement[], M: 'w' | 'h', room: number, gap: number): SlideElement[][] {
   const out: SlideElement[][] = []
   let cur: SlideElement[] = [], used = 0
   for (const k of kids) {
-    if (cur.length && used + gap + k[M] > room + 0.01) { out.push(cur); cur = [], used = 0 }
-    used += (cur.length ? gap : 0) + k[M]
+    const size = k.sizing?.[M] === 'fill' ? minOf(k, M) : k[M]
+    if (cur.length && used + gap + size > room + 0.01) { out.push(cur); cur = [], used = 0 }
+    used += (cur.length ? gap : 0) + size
     cur.push(k)
   }
   if (cur.length) out.push(cur)

@@ -12,7 +12,7 @@
 // shell's nonzero fill draws the holes) and an evenodd point grid over the
 // emitted `d` re-flattened from text. And the result round-trips through the
 // same path parser the editor uses for operands, so a boolean of a boolean works.
-import { boolPolys, shapeToPoly, polyArea, polyToPath, flattenPath, inside, computeBool, canBool } from '../slides/src/vector-bool.ts'
+import { boolPolys, shapeToPoly, polyArea, polyToPath, flattenPath, inside, computeBool, canBool, operandsAt } from '../slides/src/vector-bool.ts'
 
 let checks = 0
 let failures = 0
@@ -112,6 +112,56 @@ console.log('\nelliptical arcs\n')
   // radii too small for the endpoints are scaled up to just reach (a half circle)
   ok(near(Math.abs(polyArea(flattenPath('M 0 0 A 1 1 0 0 1 100 0 Z'))), (Math.PI * 2500) / 2, 0.01), 'radii too small are scaled up, as SVG does')
   check('arc-circle ∩ square', S({ shape: 'path', d: 'M 0 50 A 50 50 0 0 1 100 50 A 50 50 0 0 1 0 50 Z', pathBox: [0, 0, 100, 100] }), S({ x: 50, y: 0, w: 100, h: 100 }), 'intersect', (Math.PI * 2500) / 2)
+}
+
+console.log('\nexact shared edges (no nudge)\n')
+{
+  const exact = (poly: any) => poly.flat().every((p: any) => Number.isInteger(Math.round(p.x * 1e6) / 1e6) && Math.abs(p.x - Math.round(p.x)) < 1e-9 && Math.abs(p.y - Math.round(p.y)) < 1e-9)
+  const u = boolPolys([shapeToPoly(A), shapeToPoly(side)], 'union')
+  ok(u.length === 1 && u[0].length === 4 && polyArea(u) === 20000 && exact(u), `abutting squares unite into ONE 200×100 rectangle, four exact corners (${u.map((c) => c.length)})`)
+  const sub = boolPolys([shapeToPoly(A), shapeToPoly(side)], 'subtract')
+  ok(sub.length === 1 && sub[0].length === 4 && polyArea(sub) === 10000 && exact(sub), 'subtracting an abutting square leaves the first, exactly')
+  const int = boolPolys([shapeToPoly(A), shapeToPoly(side)], 'intersect')
+  ok(int.length === 0, 'abutting squares have no intersection (no sliver)')
+  const same = [shapeToPoly(A), shapeToPoly(S({}))]
+  ok(polyArea(boolPolys(same, 'union')) === 10000 && boolPolys(same, 'union')[0].length === 4, 'a shape united with itself is itself')
+  ok(polyArea(boolPolys(same, 'intersect')) === 10000, 'a shape intersected with itself is itself')
+  ok(boolPolys(same, 'subtract').length === 0, 'a shape minus itself is nothing')
+  // a stretch of shared edge: tops aligned, B starts half way along A
+  const half = S({ x: 50, h: 50 })
+  const uh = boolPolys([shapeToPoly(A), shapeToPoly(half)], 'union')
+  ok(uh.length === 1 && polyArea(uh) === 10000 + 2500 && exact(uh), `edges that run along each other for part of their length merge exactly (${polyArea(uh)})`)
+  ok(polyArea(boolPolys([shapeToPoly(A), shapeToPoly(half)], 'subtract')) === 10000 - 2500, 'and subtract exactly')
+  // a T: B's corner sits on A's edge
+  const t = S({ x: 50, y: 100, w: 100, h: 100 })
+  ok(polyArea(boolPolys([shapeToPoly(A), shapeToPoly(t)], 'union')) === 20000 && boolPolys([shapeToPoly(A), shapeToPoly(t)], 'union').length === 1, 'a corner touching an edge unites into one outline')
+  ok(boolPolys([shapeToPoly(A), shapeToPoly(t)], 'intersect').length === 0, '…and intersects to nothing')
+}
+
+console.log('\noperands where the result stands\n')
+{
+  // the result of two operands, then resized / turned; its outline now is the truth to match
+  const make = (shapes: any[], op: any) => { const r = computeBool(shapes, op)!; return { ...S({ shape: 'path' }), ...r, pathBox: [0, 0, r.w, r.h], bool: { op, shapes } } as any }
+  const now = (el: any) => polyArea(boolPolys(operandsAt(el).map(shapeToPoly), el.bool.op))
+  const outline = (el: any) => polyArea(shapeToPoly(el))
+  const plain = make([S({}), S({ x: 50, y: 50 })], 'union')
+  const moved = { ...plain, x: plain.x + 30, w: plain.w * 2, h: plain.h * 0.5 }
+  ok(near(now(moved), outline(moved), 0.005), `a stretched boolean's operands rebuild the stretched outline (${now(moved).toFixed(0)} ≈ ${outline(moved).toFixed(0)})`)
+  // an operand turned 30°, then the result stretched 2×1: that operand comes back skewed, as a path
+  const tilted = make([S({ w: 200, h: 200 }), S({ x: 60, y: 60, rotation: 30, shape: 'ellipse', w: 120, h: 60 })], 'subtract')
+  const wide = { ...tilted, w: tilted.w * 2 }
+  const ops = operandsAt(wide)
+  ok(ops[1].shape === 'path' && !ops[1].rotation && /C/.test(ops[1].d!), 'a turned operand under a non-uniform stretch comes back as an exact skewed curve, not an un-skewed box')
+  ok(near(now(wide), outline(wide), 0.005), `and the released shapes redraw the stretched result (${now(wide).toFixed(0)} ≈ ${outline(wide).toFixed(0)})`)
+  ok(ops[0].shape === 'rect' && ops[0].w === 400, 'an unturned operand keeps its kind and simply scales')
+  // a quarter-turned operand stays a box: its width takes the vertical scale
+  const quarter = make([S({ w: 200, h: 200 }), S({ x: 20, y: 20, w: 100, h: 40, rotation: 90 })], 'subtract')
+  const tall = { ...quarter, h: quarter.h * 3 }
+  const q = operandsAt(tall)[1]
+  ok(q.shape === 'rect' && q.w === 300 && q.h === 40 && q.rotation === 90, `a quarter-turned operand stays a box, the stretch landing on its turned side (${q.w}×${q.h})`)
+  // the result turned: operands turn with it
+  const turned = { ...plain, rotation: 40, w: plain.w * 1.5 }
+  ok(near(now(turned), outline(turned), 0.005), 'a turned and stretched boolean releases into the same outline')
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

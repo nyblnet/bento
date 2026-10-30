@@ -21,10 +21,11 @@ import { PathEditor } from './patheditor'
 import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors, boxAnchors, nearestAnchor, boxContains } from './lineedit'
 import { CropEditor } from './cropedit'
 import { BezierEditor, isCurve } from './beziereditor'
+import { serializeBezier, type BezNode } from './bezier'
 import { simplifyPoints } from './patheditor'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
-type DrawKind = 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly'
+type DrawKind = 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly' | 'pen'
 import { CommentsUI } from './comments'
 import { StepBadges } from './stepbadges'
 import type { Peer } from '../sync/session'
@@ -107,6 +108,8 @@ export class SlideCanvas {
   private cropEditor!: CropEditor
   private bezierEditor!: BezierEditor
   private drawOverlay: HTMLElement | null = null
+  /** the armed tool's own keys (the pen's Enter, Esc, Backspace), removed with it */
+  private drawKeys: ((ev: KeyboardEvent) => void) | null = null
   private comments!: CommentsUI
   private stepBadges!: StepBadges
 
@@ -1245,6 +1248,8 @@ export class SlideCanvas {
       node.style.width = `${e.w}px`; node.style.height = `${e.h}px`
       this.followed.add(e.id)
     }
+    // the padding and gap bands follow too
+    drawFrameOverlay(this.scaleHost, this.store, () => this.scale, false, clone)
   }
 
   private unfollow() {
@@ -2321,6 +2326,86 @@ export class SlideCanvas {
       return
     }
 
+    if (kind === 'pen') {
+      // The Pen, Figma's: click places a corner; click-drag pulls out a smooth
+      // point's handles (symmetric; Alt breaks them); click the first point,
+      // or Enter with 3+ points, closes; Enter (fewer) or Esc finishes an open
+      // path; Backspace takes back the last point.
+      const nodes: BezNode[] = []
+      let cursor: Pt | null = null
+      const near = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y) < 10 * Math.max(k(), 1)
+      const redraw = () => {
+        dots.innerHTML = ''
+        if (!nodes.length) return setPreview('')
+        const ghost = cursor && !near(cursor, nodes[nodes.length - 1].p) ? [...nodes, { p: cursor }] : nodes
+        setPreview(serializeBezier(ghost, false))
+        for (const n of nodes) {
+          for (const h of [n.in, n.out]) {
+            if (!h) continue
+            const l = document.createElementNS(SVG_NS, 'line')
+            l.setAttribute('x1', String(n.p.x)); l.setAttribute('y1', String(n.p.y)); l.setAttribute('x2', String(h.x)); l.setAttribute('y2', String(h.y))
+            l.setAttribute('stroke', '#2f6df6'); l.setAttribute('stroke-width', String(1 * k()))
+            const c = document.createElementNS(SVG_NS, 'circle')
+            c.setAttribute('cx', String(h.x)); c.setAttribute('cy', String(h.y)); c.setAttribute('r', String(3 * k())); c.setAttribute('fill', '#2f6df6')
+            dots.append(l, c)
+          }
+          const c = document.createElementNS(SVG_NS, 'circle')
+          c.setAttribute('cx', String(n.p.x)); c.setAttribute('cy', String(n.p.y)); c.setAttribute('r', String(4 * k()))
+          c.setAttribute('fill', '#fff'); c.setAttribute('stroke', '#2f6df6'); c.setAttribute('stroke-width', String(1.5 * k()))
+          dots.appendChild(c)
+        }
+      }
+      const finish = (closed: boolean) => {
+        if (nodes.length >= (closed ? 3 : 2)) {
+          const pts = nodes.flatMap((n) => [n.p, n.in, n.out].filter(Boolean) as Pt[])
+          const minX = Math.min(...pts.map((q) => q.x)), minY = Math.min(...pts.map((q) => q.y))
+          const w = Math.max(Math.max(...pts.map((q) => q.x)) - minX, 1), h = Math.max(Math.max(...pts.map((q) => q.y)) - minY, 1)
+          const rel = (q?: Pt) => (q ? { x: q.x - minX, y: q.y - minY } : undefined)
+          const el = defaultShape('path', closed
+            ? { fill: this.store.doc.theme.accent, stroke: 'transparent', strokeWidth: 0 }
+            : { fill: 'transparent', stroke: readableInk(this.store.slide.background), strokeWidth: 3 }) as ShapeElement
+          Object.assign(el, { x: minX, y: minY, w, h, pathBox: [0, 0, w, h], d: serializeBezier(nodes.map((n) => ({ ...n, p: rel(n.p)!, in: rel(n.in), out: rel(n.out) })), closed) })
+          this.insert(el)
+        }
+        this.cancelDraw()
+      }
+      ov.addEventListener('mousedown', (down: MouseEvent) => {
+        down.preventDefault()
+        down.stopPropagation()
+        const p = toSlide(down)
+        if (nodes.length >= 2 && near(p, nodes[0].p)) return finish(true)
+        const node: BezNode = { p, corner: true }
+        nodes.push(node)
+        let broken = false
+        const move = (e: MouseEvent) => {
+          const q = toSlide(e)
+          if (node.out || Math.hypot(q.x - p.x, q.y - p.y) > 3 * Math.max(k(), 1)) {
+            node.out = q
+            node.corner = e.altKey || broken
+            if (e.altKey) broken = true // Alt breaks the pair: the in-handle stays where it was
+            if (!broken) node.in = { x: 2 * p.x - q.x, y: 2 * p.y - q.y }
+          }
+          cursor = q
+          redraw()
+        }
+        const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
+        window.addEventListener('mousemove', move)
+        window.addEventListener('mouseup', up)
+        redraw()
+      })
+      ov.addEventListener('mousemove', (ev: MouseEvent) => { if (!(ev.buttons & 1)) { cursor = toSlide(ev); redraw() } })
+      this.drawKeys = (ev: KeyboardEvent) => {
+        if (ev.key === 'Enter') finish(nodes.length >= 3)
+        else if (ev.key === 'Escape') finish(false)
+        else if (ev.key === 'Backspace' || ev.key === 'Delete') { nodes.pop(); redraw() }
+        else return
+        ev.preventDefault()
+        ev.stopPropagation()
+      }
+      window.addEventListener('keydown', this.drawKeys, true)
+      return
+    }
+
     if (kind === 'free') {
       ov.addEventListener('mousedown', (down: MouseEvent) => {
         down.preventDefault()
@@ -2379,6 +2464,8 @@ export class SlideCanvas {
   cancelDraw() {
     this.drawOverlay?.remove()
     this.drawOverlay = null
+    if (this.drawKeys) window.removeEventListener('keydown', this.drawKeys, true)
+    this.drawKeys = null
   }
 
   /** SVG path 'd' for a gentle bow between two points (curve preview + default). */

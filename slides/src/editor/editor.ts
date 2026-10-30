@@ -19,7 +19,7 @@ import { cssColor, renderSlide, renderThumbnail } from '../render'
 import { openExportImagesDialog } from './exportimages'
 import { paletteSignature, resolveThemeRefs } from '../palette'
 import { syncTokenRefs, tokenSignature } from '../tokens'
-import { detach, makeComponent, syncComponents } from '../components'
+import { adoptComponents, detach, makeComponent, syncComponents } from '../components'
 import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
@@ -90,9 +90,9 @@ const LONG_PRESS_MS = 500
 const LONG_PRESS_SLOP = 10
 
 /** Shape-menu rows that are also one-letter tools (commands.ts), by label. */
-const SHAPE_TOOL: Record<string, string> = { Rectangle: 'tool-rect', Ellipse: 'tool-ellipse', Line: 'tool-line', Polygon: 'tool-pen' }
+const SHAPE_TOOL: Record<string, string> = { Rectangle: 'tool-rect', Ellipse: 'tool-ellipse', Line: 'tool-line', Pen: 'tool-pen' }
 
-const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 2; draw?: 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly'; tip: string }> = [
+const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 2; draw?: 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly' | 'pen'; tip: string }> = [
   { kind: 'rect', label: 'Rectangle', icon: ICONS.rect, tip: 'A rectangle — rounded corners, fills, gradients and shadows in the panel' },
   { kind: 'ellipse', label: 'Ellipse', icon: ICONS.ellipse, tip: 'An ellipse or circle' },
   { kind: 'triangle', label: 'Triangle', icon: ICONS.triangle, tip: 'A triangle' },
@@ -103,6 +103,7 @@ const SHAPE_MENU: Array<{ kind: ShapeKind; label: string; icon: string; heads?: 
   { kind: 'line', label: 'Connector', icon: ICONS.connector, draw: 'connector', tip: 'Drag between two elements — the ends snap on and re-route when they move' },
   { kind: 'path', label: 'Curved connector', icon: ICONS.curveConnector, draw: 'curve-connector', tip: 'A curved line between two elements — the ends snap on and re-route, the tip follows the curve' },
   { kind: 'path', label: 'Freeform', icon: ICONS.freeform, draw: 'free', tip: 'Draw by hand — the stroke smooths into an editable curve' },
+  { kind: 'path', label: 'Pen', icon: ICONS.pen, draw: 'pen', tip: 'Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish' },
   { kind: 'path', label: 'Polygon', icon: ICONS.polygon, draw: 'poly', tip: 'Click to place corners; click the first point (or double-click) to close the shape' },
 ]
 
@@ -3287,6 +3288,7 @@ export class Editor {
       [t('Drag a point'), t('Move an endpoint or anchor; drag the body to move the whole line')],
       [t('Click a point'), t('Reveal its bézier handles for a precise curve')],
       [`${t('Alt')}-${t('drag')}`, t('Break a smooth point into a sharp corner')],
+      [`${t('Pen')} · P`, t('Click to place corners, drag to pull out curves (Alt breaks a handle); click the first point to close, Enter or Esc to finish')],
       [t('Path bar'), t('Corner, Smooth or Symmetric for the clicked point (or every point); Close path joins the ends')],
       [t('Double-click'), t('Add a point on the line; double-click a point to remove it')],
     ])
@@ -3464,7 +3466,7 @@ export class Editor {
       { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: writable, match: tool('r'), run: () => this.canvas.insert(defaultShape('rect')) },
       { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: writable, match: tool('o'), run: () => this.canvas.insert(defaultShape('ellipse')) },
       { id: 'tool-line', label: 'Line', keys: 'L', scope: 'canvas', when: writable, match: tool('l'), run: () => this.canvas.armDraw('line') },
-      { id: 'tool-pen', label: 'Pen', keys: 'P', scope: 'canvas', when: writable, match: tool('p'), run: () => this.canvas.armDraw('poly') },
+      { id: 'tool-pen', label: 'Pen', keys: 'P', scope: 'canvas', when: writable, match: tool('p'), run: () => this.canvas.armDraw('pen') },
       { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: writable, match: tool('t'), run: () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 120 + Math.random() * 200 }), true) },
       { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
       { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => canvasFree() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
@@ -3606,6 +3608,7 @@ export class Editor {
     const els = this.store.selectedElements
     if (!els.length) return
     const clones = freshGroups(els.map((el) => cloneElement(el)))
+    adoptComponents(clones, this.store.doc)
     this.store.commit(() => this.store.slide.elements.push(...clones))
     this.store.select(clones.map((c) => c.id))
   }

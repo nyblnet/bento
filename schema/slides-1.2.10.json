@@ -352,6 +352,14 @@
                 "maxLength": 64,
                 "pattern": "^[^\"'<>{};]*$"
               }
+            },
+            "off": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
             }
           },
           "additionalProperties": false,
@@ -483,6 +491,16 @@
                 "fixed",
                 "fill"
               ]
+            },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
             },
             "w": {
               "type": "string",
@@ -714,6 +732,14 @@
                 "type": "string",
                 "maxLength": 64,
                 "pattern": "^[^\"'<>{};]*$"
+              }
+            },
+            "off": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
               }
             }
           },
@@ -1044,6 +1070,16 @@
                 "fill"
               ]
             },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
             "w": {
               "type": "string",
               "enum": [
@@ -1242,6 +1278,14 @@
                 "maxLength": 64,
                 "pattern": "^[^\"'<>{};]*$"
               }
+            },
+            "off": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
             }
           },
           "additionalProperties": false,
@@ -1358,6 +1402,16 @@
                 "fill"
               ]
             },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
             "w": {
               "type": "string",
               "enum": [
@@ -1453,6 +1507,14 @@
                 "type": "string",
                 "maxLength": 64,
                 "pattern": "^[^\"'<>{};]*$"
+              }
+            },
+            "off": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
               }
             }
           },
@@ -1562,6 +1624,16 @@
                 "fill"
               ]
             },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
             "w": {
               "type": "string",
               "enum": [
@@ -1664,6 +1736,14 @@
                 "type": "string",
                 "maxLength": 64,
                 "pattern": "^[^\"'<>{};]*$"
+              }
+            },
+            "off": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
               }
             }
           },
@@ -1772,6 +1852,16 @@
                 "fixed",
                 "fill"
               ]
+            },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
             },
             "w": {
               "type": "string",
@@ -1991,6 +2081,14 @@
                 "maxLength": 64,
                 "pattern": "^[^\"'<>{};]*$"
               }
+            },
+            "off": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
             }
           },
           "additionalProperties": false,
@@ -2097,6 +2195,16 @@
                 "fill"
               ]
             },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
             "w": {
               "type": "string",
               "enum": [
@@ -2189,6 +2297,14 @@
                 "type": "string",
                 "maxLength": 64,
                 "pattern": "^[^\"'<>{};]*$"
+              }
+            },
+            "off": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
               }
             }
           },
@@ -2324,6 +2440,16 @@
                 "fill"
               ]
             },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
             "w": {
               "type": "string",
               "enum": [
@@ -2432,6 +2558,14 @@
                 "maxLength": 64,
                 "pattern": "^[^\"'<>{};]*$"
               }
+            },
+            "off": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
             }
           },
           "additionalProperties": false,
@@ -2537,6 +2671,16 @@
                 "fixed",
                 "fill"
               ]
+            },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
             },
             "w": {
               "type": "string",
@@ -2644,6 +2788,14 @@
                 "type": "string",
                 "maxLength": 64,
                 "pattern": "^[^\"'<>{};]*$"
+              }
+            },
+            "off": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
               }
             }
           },
@@ -2772,6 +2924,16 @@
                 "fixed",
                 "fill"
               ]
+            },
+            "minH": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "minW": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
             },
             "w": {
               "type": "string",
