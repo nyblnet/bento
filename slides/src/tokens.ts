@@ -199,3 +199,71 @@ function eachHolder(doc: BentoDoc, fn: (h: Holder) => void) {
     for (const el of s.elements) fn(el as unknown as Holder)
   }
 }
+
+/** The colour paths a literal is adopted from: an element's paint and text, a slide's background. */
+const COLOR_PATHS = ['fill', 'stroke', 'color'] as const
+
+/** Every element (and slide background) whose literal colour is `hex`, ignoring
+ *  its opacity, with no reference on that path yet. */
+export function colorUses(doc: BentoDoc, hex: string): Array<{ slide: Slide; element?: SlideElement; path: string }> {
+  const out: Array<{ slide: Slide; element?: SlideElement; path: string }> = []
+  const want = hex.toLowerCase()
+  const is = (v: unknown) => typeof v === 'string' && hexOf(v) === want
+  for (const slide of doc.slides) {
+    if (is(slide.background) && !(slide as unknown as Holder).themeRefs?.background) out.push({ slide, path: 'background' })
+    for (const el of slide.elements) {
+      const h = el as unknown as Holder
+      for (const path of COLOR_PATHS) if (is(h[path]) && !h.themeRefs?.[path]) out.push({ slide, element: el, path })
+    }
+  }
+  return out
+}
+
+/** `#rrggbb` of a CSS colour (hex or rgb[a]); '' when it is neither. */
+function hexOf(v: string): string {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})([0-9a-f]{2})?$/i.exec(v.trim())
+  if (m) return '#' + (m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1]).toLowerCase()
+  const r = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(v.trim())
+  return r ? '#' + [r[1], r[2], r[3]].map((n) => Math.min(255, +n).toString(16).padStart(2, '0')).join('') : ''
+}
+
+/**
+ * Make a colour token from `hex` and bind every literal use of that colour in
+ * the deck to it (ponytail: element fill/stroke/colour and slide backgrounds —
+ * gradient stops and stacked layers stay literals). Returns how many uses
+ * now follow the token; the token is created even when none do.
+ */
+export function adoptColor(doc: BentoDoc, hex: string, name: string): number {
+  const tk = (doc.theme.tokens ??= { set: {} })
+  if (own(tk.set, name) || !tokenName(`$${name}`)) return 0
+  tk.set[name] = { type: 'color', values: Object.fromEntries(modesOf(tk).map((m) => [m, hex])) }
+  let n = 0
+  for (const u of colorUses(doc, hex)) if (bindToken(doc, (u.element ?? u.slide) as unknown as Holder, u.path, name)) n++
+  return n
+}
+
+/** A free token name: `base`, else `base.2`, `base.3`… */
+export function freeTokenName(doc: BentoDoc, base: string): string {
+  const set = doc.theme.tokens?.set
+  if (!own(set, base)) return base
+  for (let i = 2; ; i++) if (!own(set, `${base}.${i}`)) return `${base}.${i}`
+}
+
+/** Where each token is bound, in deck order: a slide, and the element (absent = the slide itself). */
+export function tokenTargets(doc: BentoDoc, name: string): Array<{ slideId: string; elementId?: string }> {
+  const out: Array<{ slideId: string; elementId?: string }> = []
+  const bound = (h: Holder) => Object.values(h.themeRefs ?? {}).some((r) => tokenName(r) === name)
+  for (const s of doc.slides) {
+    if (bound(s as unknown as Holder)) out.push({ slideId: s.id })
+    for (const el of s.elements) if (bound(el as unknown as Holder)) out.push({ slideId: s.id, elementId: el.id })
+  }
+  return out
+}
+
+/** Why `name` cannot name a token, or null when it can. */
+export function tokenNameError(doc: BentoDoc, name: string, except?: string): string | null {
+  if (!tokenName(`$${name}`)) return 'Start with a letter; then letters, digits, . - _ (64 at most)'
+  if (name !== except && own(doc.theme.tokens?.set, name)) return 'A token already has that name'
+  return null
+}
+

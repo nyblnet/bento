@@ -205,3 +205,54 @@ export function adoptComponents(els: SlideElement[], doc: BentoDoc): void {
     } else if (!bringsMain.has(c.id)) delete el.component
   }
 }
+
+/** The copies of a component, one array per instance (groupId), in deck order. */
+export function copiesOf(doc: BentoDoc, id: string): Array<{ slideId: string; els: El[] }> {
+  const out: Array<{ slideId: string; els: El[] }> = []
+  for (const s of doc.slides) {
+    const inst = new Map<string, El[]>()
+    for (const el of s.elements as El[]) {
+      if (el.component?.id !== id || el.component.main) continue
+      const g = el.groupId ?? el.id
+      inst.set(g, [...(inst.get(g) ?? []), el])
+    }
+    for (const els of inst.values()) out.push({ slideId: s.id, els })
+  }
+  return out
+}
+
+/** Components whose main is entirely among `ids` and that still have copies — what a delete would orphan. */
+export function mainsLost(doc: BentoDoc, ids: Set<string>): ComponentInfo[] {
+  return components(doc).filter((c) => c.main.every((m) => ids.has(m.id)) && copiesOf(doc, c.id).length)
+}
+
+/**
+ * The component lost its main: its first copy becomes the main, keeping its
+ * look, and the other copies keep theirs — their offsets are re-measured from
+ * the new main, and their differences from it stay as overrides.
+ */
+export function promoteCopy(doc: BentoDoc, id: string): void {
+  if (components(doc).some((c) => c.id === id)) return // it still has a main
+  const [first, ...rest] = copiesOf(doc, id)
+  if (!first) return
+  const base = first.els[0].component!.off ?? [0, 0]
+  for (const el of first.els) {
+    const c = el.component!
+    el.component = { id: c.id, key: c.key, main: true }
+  }
+  for (const { els } of rest) for (const el of els) {
+    const c = el.component!
+    if (c.off) c.off = [c.off[0] - base[0], c.off[1] - base[1]]
+    delete c.sig // the new main reads as unmoved: what differs from it stays the copy's own
+  }
+}
+
+/** A copy forgets its local edits: the next pass brings it back in step with its main. */
+export function resetOverrides(els: SlideElement[]): void {
+  for (const el of els) {
+    const c = el.component
+    if (!c || c.main) continue
+    delete c.over
+    c.sig = 'reset' // reads as "the main moved": every key follows it again
+  }
+}

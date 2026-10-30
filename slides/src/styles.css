@@ -2961,26 +2961,40 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-tokens-cap { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; color: var(--muted); }
 .ed-tokens-empty { font-size: 11.5px; color: var(--muted); }
 .ed-token-row { display: flex; align-items: center; gap: 6px; min-height: 28px; }
-.ed-token-row > input[type='color'] { flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
-.ed-token-row > input[type='number'] { flex: none; width: 52px; }
+/* a token row is two lines — the name (always readable, at any panel width)
+   with its uses and delete, then the value — so the value never squeezes the name */
+.ed-token-row:has(> .ed-token-top) { flex-direction: column; align-items: stretch; gap: 2px; padding-block: 2px; }
+.ed-token-top, .ed-token-val { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ed-token-val:empty { display: none; }
+.ed-token-val > .ed-token-uses { margin-inline-start: auto; }
+.ed-token-val > input[type='number'] { flex: none; width: 52px; }
+.ed-token-swatch { flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background-clip: padding-box; }
+.ed-token-swatch:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.ed-token-badge { flex: none; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.ed-token-builtin .ed-token-name { padding-inline: 2px; }
+.ed-token-why { font-size: 11px; color: var(--danger); line-height: 1.3; }
+.ed-token-name[aria-invalid='true'] { border-color: var(--danger); }
 .ed-token-name { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-token-preview { flex: none; width: 24px; height: 24px; display: grid; place-items: center; font-size: 12px; line-height: 1; border: 1px solid var(--line); border-radius: 6px; background: var(--ink); color: var(--surface); overflow: hidden; }
 .ed-tokens-group[data-type="fontFamily"] .ed-token-preview, .ed-tokens-group[data-type="fontSize"] .ed-token-preview { background: none; color: var(--ink); }
 .ed-tokens-group[data-type="shadow"] .ed-token-preview { background: var(--surface); border-color: transparent; margin: 4px; width: 18px; height: 18px; }
 .ed-tokens-group[data-type="shadow"] .ed-token-row > input[type="number"] { width: 38px; }
 .ed-token-font { flex: 1.4; min-width: 0; font-size: 12px; }
-.ed-token-uses { flex: none; min-width: 16px; font-size: 10.5px; color: var(--muted); text-align: end; font-variant-numeric: tabular-nums; }
+.ed-token-uses { flex: none; min-width: 22px; height: 20px; padding: 0 4px; font: inherit; font-size: 10.5px; color: var(--muted); text-align: end; font-variant-numeric: tabular-nums; background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
+.ed-token-uses:not(:disabled):hover, .ed-token-uses:focus-visible { color: var(--ink); border-color: var(--line); }
+.ed-token-uses:disabled { cursor: default; }
 /* a bound numeric field (inspector/tokenbind.ts): the dot binds, the pill detaches */
 .ed-mini.ed-has-token input { padding-inline-end: 18px; }
 .ed-token-dot { position: absolute; inset-inline-end: 4px; width: 10px; height: 10px; padding: 0; border: 1.5px solid var(--muted); border-radius: 50%; background: none; cursor: pointer; opacity: 0; }
-.ed-mini:hover .ed-token-dot, .ed-token-dot:focus-visible { opacity: 1; }
+/* the dot shows on hover AND whenever the field has keyboard focus — not a hover-only control */
+.ed-mini:hover .ed-token-dot, .ed-has-token:focus-within .ed-token-dot, .ed-token-dot:focus-visible { opacity: 1; }
 .ed-token-pill { position: absolute; inset: 1px; display: flex; align-items: center; gap: 4px; padding-inline: 8px; font: inherit; font-size: 11.5px; color: var(--ink); background: var(--chrome-2); border: 0; border-radius: 5px; cursor: pointer; overflow: hidden; white-space: nowrap; }
 .ed-token-pill::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .ed-token-wrap { position: relative; }
 .ed-token-wrap > select { width: 100%; }
 .ed-token-wrap.ed-has-token > select { padding-inline-end: 22px; }
 .ed-token-wrap > .ed-token-dot { top: 50%; translate: 0 -50%; inset-inline-end: 20px; }
-.ed-token-wrap:hover > .ed-token-dot { opacity: 1; }
+.ed-token-wrap:hover > .ed-token-dot, .ed-token-wrap:focus-within > .ed-token-dot { opacity: 1; }
 .ed-shadow-tiles + .ed-token-dot { top: 4px; translate: none; inset-inline-end: 4px; }
 .ed-layer-comp { flex: none; font-size: 10px; color: var(--accent); }
 .ed-scroll .bento-editing {
@@ -3514,3 +3528,15 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-a11y-badge.is-pass { color: var(--accent-ink); }
 .ed-a11y-badge.is-fail { color: var(--danger); }
 .ed-a11y-alt { width: 100%; }
+
+/* Tokens UX pass: the colour menu's adopt actions, the component header, the Theme → Tokens link */
+.ed-palette-acts { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+.ed-palette-act { font-size: 12px; color: var(--ink); }
+.ed-comp-head { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.ed-comp-title { font-size: 12px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-comp-acts { display: flex; flex-wrap: wrap; gap: 4px; }
+.ed-comp-acts .ed-btn { font-size: 11.5px; }
+.ed-theme-tokens { align-self: flex-start; margin: 2px 0 8px; font-size: 11.5px; }
+.ed-component-row.ed-flash { animation: ed-flash 1.2s ease-out; border-radius: 6px; }
+@keyframes ed-flash { from { background: color-mix(in srgb, var(--accent) 30%, transparent); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .ed-component-row.ed-flash { animation: none; outline: 2px solid var(--accent-ink); } }

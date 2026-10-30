@@ -17,7 +17,9 @@ import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpda
 import { CHART_PRESETS } from '../charts'
 import { cssColor, renderSlide, renderThumbnail } from '../render'
 import { openExportImagesDialog } from './exportimages'
-import { adoptComponents, detach, makeComponent } from '../components'
+import { adoptComponents, components, detach, mainsLost, makeComponent, promoteCopy, resetOverrides } from '../components'
+import { goToMain, selectedComponent } from './inspector/component'
+import { activeMode, bindToken, modesOf } from '../tokens'
 import { derive, deriveMemory, type DeriveMemory } from '../derive'
 import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
@@ -223,7 +225,7 @@ export class Editor {
     derive(store.doc, this.derived)
     store.on('replace', () => { this.derived = deriveMemory(store.doc); derive(store.doc, this.derived) })
     store.on('doc', () => this.syncDerived())
-    this.tokensPane = new TokensPane(store)
+    this.tokensPane = new TokensPane(store, { toast: (m) => this.toast(m) })
     this.tokensPane.mount(this.sideTokens)
     store.on('doc', () => this.tokensPane.refresh())
     store.on('current', () => this.tokensPane.refresh())
@@ -678,6 +680,7 @@ export class Editor {
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
     this.panel.titleOf = (id, label) => titleFor(this.commands, id, label)
+    this.panel.remove = () => this.deleteSelection()
     this.panel.layers.mount(this.sideLayers)
     const offs = (['doc', 'selection', 'current'] as const).map((e) => this.store.on(e, () => this.panel.layers.refresh()))
     this.buildScope.signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })
@@ -2700,6 +2703,9 @@ export class Editor {
     if (derive(this.store.doc, this.derived)) {
       this.canvas.render()
       this.scheduleThumbs()
+      // the inspector rebuilt on this same event, BEFORE the derived values
+      // landed: a bound swatch would show the token's old value until the next edit
+      this.panel.rebuild()
     }
   }
 
@@ -2707,10 +2713,21 @@ export class Editor {
   createComponent() {
     const els = this.store.selectedElements
     if (!els.length || els.some((e) => e.component)) return
+    const id = uid('comp')
     this.store.commit(() => {
       const live = els.map((e) => this.store.element(e.id)!).filter(Boolean)
-      makeComponent(live, uid('comp'), live[0].groupId && live.every((e) => e.groupId === live[0].groupId) ? live[0].groupId! : uid('g'))
+      makeComponent(live, id, live[0].groupId && live.every((e) => e.groupId === live[0].groupId) ? live[0].groupId! : uid('g'))
     })
+    // say it happened, and let it be named at once: the Tokens view, its name field focused
+    const n = components(this.store.doc).findIndex((c) => c.id === id) + 1
+    this.toast(t('Made Component {n} — name it in Tokens; insert copies from there', { n }))
+    this.showSideView('tokens')
+    this.tokensPane.showComponent(id)
+  }
+
+  /** Show one of the side column's views (Slides | Layers | Tokens). */
+  showSideView(view: 'slides' | 'layers' | 'tokens') {
+    this.sidebar.querySelector<HTMLElement>(`.ed-side-tabs [data-view="${view}"]`)?.click()
   }
 
   /** The selection stops following its component; a main's copies keep their values. */
@@ -3209,6 +3226,7 @@ export class Editor {
       cmd('duplicate', t('Duplicate selection')),
       [`${mod}G · ${mod}⇧G`, t('Group · ungroup')],
       cmd('component', t('Create component — copies inserted from the Tokens view follow it')),
+      [t('Tokens'), t('Name a color or number once and bind it anywhere (Colors & tokens, or a field’s dot); a mode — Dark — switches every bound value at once')],
       [`${mod}B · ${mod}I · ${mod}U`, t('Bold · italic · underline while editing text')],
       [t('Text ▸ Field'), t('Insert the page number, date, time, title or a document property; a date can pin its format — {{date:M/D/YY}}')],
       ['[ · ]', t('Collapse · expand the side panels')],
@@ -3404,7 +3422,8 @@ export class Editor {
    */
   private commandList?: Command[]
   get commands(): Command[] {
-    if (this.commandList) return this.commandList
+    // the deck's modes come and go, so their Switch mode commands are listed fresh
+    if (this.commandList) return [...this.commandList, ...this.modeCommands()]
     const sel = () => this.store.selectedElements
     const key = (ev: KeyboardEvent) => ev.key.toLowerCase()
     // Nothing modal is up: a sheet, dialog, the palette or an open menu owns the
@@ -3442,6 +3461,14 @@ export class Editor {
       ...BOOL_OPS.map((op): Command => ({ id: `bool-${op}`, label: boolUi(op).label, keys: boolUi(op).key, scope: 'canvas', when: () => toolFree() && !!boolOperands(this.store, sel()), match: (ev, mod) => !mod && ev.altKey && ev.shiftKey && letter(ev, boolUi(op).code), run: () => { combine(this.store, sel(), op) } })),
       { id: 'auto-layout', label: 'Add auto layout', keys: '⇧A', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => this.panel.addAutoLayout(sel()) },
       { id: 'component', label: 'Create component', keys: `⌥${MOD}K`, scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => mod && ev.altKey && letter(ev, 'KeyK'), run: () => this.createComponent() },
+      // tokens and components, for ⌘K (palette only: no keys of their own)
+      { id: 'component-main', label: 'Go to main component', scope: 'canvas', when: () => canvasFree() && !!selectedComponent(this.panel, sel()) && !selectedComponent(this.panel, sel())!.main, run: () => goToMain(this.panel, sel()[0].component!.id) },
+      { id: 'component-reset', label: 'Reset overrides', scope: 'canvas', when: () => writable() && sel().some((e) => e.component && !e.component.main && e.component.over?.length), run: () => this.resetSelectedOverrides() },
+      { id: 'component-detach', label: 'Detach component', scope: 'canvas', when: () => writable() && sel().some((e) => e.component), run: () => this.detachComponent() },
+      { id: 'token-new-color', label: 'New color token', scope: 'canvas', when: writable, run: () => { this.showSideView('tokens'); this.tokensPane.newToken('color') } },
+      { id: 'token-new-number', label: 'New number token', scope: 'canvas', when: writable, run: () => { this.showSideView('tokens'); this.tokensPane.newToken('number') } },
+      { id: 'token-bind', label: 'Bind to token…', scope: 'canvas', when: () => writable() && sel().length > 0, run: () => this.bindToTokenMenu() },
+      { id: 'tokens-show', label: 'Show tokens and components', scope: 'always', run: () => this.showSideView('tokens') },
       { id: 'redo', label: 'Redo', keys: `⇧${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && ((ev.shiftKey && key(ev) === 'z') || key(ev) === 'y'), run: () => this.store.redo() },
       { id: 'undo', label: 'Undo', keys: `${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && key(ev) === 'z', run: () => this.store.undo() },
       { id: 'duplicate', label: 'Duplicate', keys: `${MOD}D`, scope: 'canvas', when: writable, match: (ev, mod) => mod && key(ev) === 'd', run: () => this.duplicateSelection() },
@@ -3471,7 +3498,18 @@ export class Editor {
       { id: 'speaker', label: 'Speaker view', scope: 'always', run: () => this.openSpeakerView() },
       { id: 'about', label: 'About bento/slides', scope: 'always', run: () => this.openAbout() },
     ]
-    return (this.commandList = list)
+    this.commandList = list
+    return [...list, ...this.modeCommands()]
+  }
+
+  /** One Switch mode command per mode the deck has, but the active one. */
+  private modeCommands(): Command[] {
+    const tk = this.store.doc.theme.tokens
+    if (!tk || modesOf(tk).length < 2) return []
+    return modesOf(tk).filter((m) => m !== activeMode(tk)).map((m): Command => ({
+      id: `mode-${m}`, label: t('Switch mode → {mode}', { mode: m === 'default' ? t('Default') : m }), scope: 'canvas',
+      when: () => !this.store.readOnly, run: () => this.tokensPane.switchMode(m),
+    }))
   }
 
 
@@ -3580,11 +3618,17 @@ export class Editor {
   }
 
   /** Remove the selected elements. Shared by ⌫ and the context menu. */
-  private deleteSelection() {
+  /** Delete the selection. A main with copies asks first, and its first copy
+   *  becomes the main, so the copies keep following something (one undo step).
+   *  `cut` (⌘X, to paste elsewhere) moves a main rather than losing it: no question. */
+  private deleteSelection(cut = false) {
     if (!this.store.selection.length) return
     const ids = new Set(this.store.selection)
+    const lost = cut ? [] : mainsLost(this.store.doc, ids)
+    if (lost.length && !confirm(t('Delete the main of “{name}”? Its copies keep their look, and the first one becomes the new main.', { name: lost[0].name || t('Component') }))) return
     this.store.commit(() => {
       this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
+      for (const c of lost) promoteCopy(this.store.doc, c.id)
     })
     this.store.select([])
   }
@@ -3830,6 +3874,42 @@ export class Editor {
   }
 
   /** A command's keys as the chrome prints them (commands.ts is the one source). */
+  /** The element menu's component rows: make one, or — on a member — reach its
+   *  main, reset a copy's local edits, and detach (a part of a main is removed). */
+  private componentMenu(els: SlideElement[]): CtxItem[] {
+    const c = selectedComponent(this.panel, els)
+    if (!els.some((e) => e.component)) return [{ label: t('Create component'), hint: this.keysOf('component'), cmd: 'component', disabled: !els.length, run: () => this.createComponent() }]
+    return [
+      ...(c && !c.main ? [{ label: t('Go to main component'), cmd: 'component-main', run: () => goToMain(this.panel, c.info.id) }] : []),
+      ...(c && !c.main && els.some((e) => e.component?.over?.length) ? [{ label: t('Reset overrides'), cmd: 'component-reset', run: () => this.resetSelectedOverrides() }] : []),
+      { label: c?.main && !c.whole ? t('Remove from component') : t('Detach component'), cmd: 'component-detach', run: () => this.detachComponent() },
+    ]
+  }
+
+  private resetSelectedOverrides() {
+    const ids = new Set(this.store.selection)
+    this.store.commit(() => resetOverrides(this.store.slide.elements.filter((e) => ids.has(e.id))))
+  }
+
+  /** ⌘K's Bind to token…: the selection's main colour (a shape's fill, a text's
+   *  colour) to one of the deck's colour tokens, from a menu at the canvas centre. */
+  private bindToTokenMenu() {
+    const els = this.store.selectedElements
+    const set = this.store.doc.theme.tokens?.set ?? {}
+    const names = Object.keys(set).filter((n) => set[n].type === 'color')
+    if (!els.length || !names.length) { this.toast(names.length ? t('Select an element first') : t('Make a color token in the Tokens view first')); return }
+    const r = (document.querySelector('.ed-scroll') ?? document.body).getBoundingClientRect()
+    openCtxMenu(r.left + r.width / 2, r.top + r.height / 3, names.map((n) => ({
+      label: n,
+      run: () => this.store.commit(() => {
+        for (const e of els) {
+          const el = this.store.element(e.id)
+          if (el) bindToken(this.store.doc, el as never, el.type === 'text' || el.type === 'code' ? 'color' : 'fill', n)
+        }
+      }),
+    })))
+  }
+
   private keysOf(id: string): string | undefined {
     return this.commands.find((c) => c.id === id)?.keys
   }
@@ -3852,7 +3932,7 @@ export class Editor {
         else if (wholeGroup) this.panel.layers.renameGroup(wholeGroup)
       } },
       'sep',
-      { label: t('Cut'), hint: '⌘X', run: () => { this.copySelection(); this.deleteSelection() } },
+      { label: t('Cut'), hint: '⌘X', run: () => { this.copySelection(); this.deleteSelection(true) } },
       { label: t('Copy'), hint: this.keysOf('copy'), cmd: 'copy', run: () => this.copySelection() },
       { label: t('Duplicate'), hint: this.keysOf('duplicate'), cmd: 'duplicate', run: () => this.duplicateSelection() },
       'sep',
@@ -3863,9 +3943,7 @@ export class Editor {
         ? { label: t('Ungroup'), hint: this.keysOf('ungroup'), cmd: 'ungroup', run: () => this.panel.ungroup(els) }
         : { label: t('Group'), hint: this.keysOf('group'), cmd: 'group', disabled: els.length < 2, run: () => this.panel.group(els) },
       { label: t('Add auto layout'), hint: this.keysOf('auto-layout'), cmd: 'auto-layout', disabled: !els.length, run: () => this.panel.addAutoLayout(els) },
-      els.some((e) => e.component)
-        ? { label: t('Detach component'), run: () => this.detachComponent() }
-        : { label: t('Create component'), hint: this.keysOf('component'), cmd: 'component', disabled: !els.length, run: () => this.createComponent() },
+      ...this.componentMenu(els),
       ...(boolOperands(this.store, els)
         ? ['sep' as const, ...BOOL_OPS.map((op) => {
           const ui = boolUi(op)

@@ -15,6 +15,7 @@ import { ICONS } from '../icons'
 import { LayersUI, labelFor, GLYPH as LAYER_GLYPH } from './layers'
 
 import { t } from '../i18n'
+import { componentHeader } from './inspector/component'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { buildExport } from './inspector/export'
 import { buildSlidePanel } from './inspector/slide'
@@ -46,6 +47,9 @@ export class PropsPanel {
   /** A command's tooltip with its keys (commands.ts titleFor) — set by the
    *  editor, which owns the command list, so a hint cannot drift from the key. */
   titleOf: (id: string, label: string) => string = (_id, label) => label
+  /** Delete the selection — set by the editor, whose delete asks before a
+   *  component's main goes and promotes a copy; alone, the panel just deletes. */
+  remove: (els: SlideElement[]) => void = (els) => this.deleteEls(els)
   /** Morph preview on the canvas: 0..1 of the way in, null restores — set
    *  by the editor to the canvas, which owns the rendered nodes. */
   onMorphPreview: ((t: number | null) => void) | null = null
@@ -299,6 +303,7 @@ export class PropsPanel {
   }
 
   private buildMultiPanel(els: SlideElement[]) {
+    componentHeader(this, els)
     layerBlock(this, els)
     section(this, t('Animation'))
     revealRow(this, els)
@@ -308,6 +313,7 @@ export class PropsPanel {
     // Penpot's order: how it sits (align, order, blend, opacity, measures) with
     // no header, then what it IS (its type's own controls), then the optional
     // layers of paint — fill, stroke, shadow, blur — each added from its header.
+    componentHeader(this, [el])
     layerBlock(this, [el])
     section(this, t({ text: 'Text', shape: 'Shape', image: 'Image', svg: 'Diagram', chart: 'Chart', table: 'Table', code: 'Code', media: el.type === 'media' && el.kind === 'audio' ? 'Audio' : 'Video', embed: 'Embed' }[el.type]))
     const kindHead = this.host.lastElementChild!
@@ -412,7 +418,7 @@ export class PropsPanel {
     if (els.length) {
       bar.append(
         opBtn(ICONS.copy, this.titleOf('duplicate', t('Duplicate')), () => this.duplicate(els)),
-        opBtn(ICONS.trash, this.titleOf('delete', t('Delete')), () => this.deleteEls(els)),
+        opBtn(ICONS.trash, this.titleOf('delete', t('Delete')), () => this.remove(els)),
       )
     }
     this.host.querySelector(':scope > .ed-tabs-band')!.after(bar, how)
