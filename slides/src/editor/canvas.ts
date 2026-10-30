@@ -33,7 +33,7 @@ import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 import { drawFrameOverlay } from './frameoverlay'
-import { frameChildren, isFrame, layoutSlide, moveInFrame, withDescendants } from '../layout'
+import { canAccept, frameChildren, isFrame, layoutSlide, moveInFrame, moveIntoFrame, withDescendants } from '../layout'
 import { drawGradientOverlay } from './gradientoverlay'
 import { TransformHud, hudNum, mountModHint } from './hud'
 import { applyMorphPreview, morphGhost } from './morph'
@@ -613,6 +613,7 @@ export class SlideCanvas {
     this.scaleHost.style.transform = `scale(${this.scale})`
     this.moveable.zoom = 1 / this.scale
     this.moveable.updateRect()
+    this.fitHandles()
     if (this.zoomLabel) this.zoomLabel.textContent = `${Math.round(this.scale * 100)}%`
     this.comments?.refresh()
     this.stepBadges?.refresh()
@@ -621,6 +622,26 @@ export class SlideCanvas {
   }
 
   // --- zoom ------------------------------------------------------------------
+
+  /** The handles a selection gets, by its size ON SCREEN (Figma's rule): all
+   *  eight when there is room, the four corners when the side handles would
+   *  crowd it, none when even corners would cover it — the box still drags,
+   *  and zooming in brings them back. Re-picked on every zoom and selection. */
+  private fitHandles(targets = (this.moveable.target ?? []) as HTMLElement[]) {
+    // (the new targets are passed in: moveable.target still reads the old
+    // selection until its next render)
+    let side = Infinity
+    if (targets.length) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+      for (const n of targets) { const b = n.getBoundingClientRect(); x0 = Math.min(x0, b.left); y0 = Math.min(y0, b.top); x1 = Math.max(x1, b.right); y1 = Math.max(y1, b.bottom) }
+      side = Math.min(x1 - x0, y1 - y0)
+    }
+    const dirs = side < 24 ? [] : side < 64 ? ['nw', 'ne', 'sw', 'se'] : ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se']
+    const now = (this.moveable.renderDirections ?? []) as string[]
+    if (now.join() !== dirs.join()) this.moveable.renderDirections = dirs
+    const turn = side >= 24
+    if (this.moveable.rotatable !== turn) this.moveable.rotatable = turn
+  }
 
   setZoom(zoom: number) {
     this.zoom = Math.min(Math.max(zoom, 0.5), 8)
@@ -648,34 +669,80 @@ export class SlideCanvas {
     this.scroller.scrollTop += (before.y - after.y) * this.scale
   }
 
-  /** While a frame's child is dragged: the slot it will drop into, or `out`
-   *  when the pointer has left its frame (the drop takes it out, Figma's rule). */
-  private slotDrag: { id: string; slot: number; out: boolean } | null = null
+  /** While a drag is over a frame: the slot it will drop into — in the
+   *  element's own frame (a reorder) or in another frame (`into`, the drop puts
+   *  it inside) — or `out` when a child has left its frame (Figma's rules). */
+  private slotDrag: { id: string; ids: string[]; slot: number; out: boolean; into?: string } | null = null
 
-  /** Track a frame child's drag: work out its slot among the siblings (the
-   *  pointer past a sibling's middle is after it; a grid reads row by row)
-   *  and draw the insertion bar in the gap it will take. */
-  private trackSlot(clientX: number, clientY: number) {
+  /** Track a drag over frames: the slot among the target frame's children
+   *  (the pointer past a sibling's middle is after it; a grid reads row by
+   *  row), the insertion bar in that gap, and — when the drop would put the
+   *  selection INTO a frame — the frame outlined as the drop target. ⌘/Ctrl
+   *  held means "just move over it": no frame takes it. */
+  private trackSlot(clientX: number, clientY: number, hold = false) {
     this.scaleHost.querySelector(':scope > .ed-slot-bar')?.remove()
+    this.scaleHost.querySelector(':scope > .ed-drop-frame')?.remove()
+    this.slotDrag = null
+    if (this.pendingCopy) return
+    const slide = this.store.slide
     const sel = this.store.selectedElements
-    const one = sel.length === 1 && !this.pendingCopy ? sel[0] : null
-    const f = one?.parentId ? this.store.element(one.parentId) : undefined
-    if (!one || !isFrame(f)) { this.slotDrag = null; return }
+    // each moving unit once: a selected child whose frame is selected travels with it
+    const set = new Set(sel.map((e) => e.id))
+    const ids = sel.filter((e) => !(e.parentId && set.has(e.parentId))).map((e) => e.id)
+    if (!ids.length) return
     const pt = this.slidePointAt(clientX, clientY)
-    const out = pt.x < f.x || pt.x > f.x + f.w || pt.y < f.y || pt.y > f.y + f.h
-    const sibs = frameChildren(this.store.slide, f).filter((e) => e.id !== one.id)
+    const inside = (f: SlideElement) => pt.x >= f.x && pt.x <= f.x + f.w && pt.y >= f.y && pt.y <= f.y + f.h
+    const one = ids.length === 1 ? this.store.element(ids[0]) : undefined
+    const own = one?.parentId ? this.store.element(one.parentId) : undefined
+    // the topmost frame under the pointer that can take the selection
+    const target = hold ? undefined : [...slide.elements].reverse().find((f) =>
+      isFrame(f) && !f.hidden && !ids.includes(f.id) && inside(f) && canAccept(slide, ids, f.id))
+    if (isFrame(own) && (target?.id === own.id || (!target && inside(own)))) {
+      // inside its own frame: a reorder, as before
+      const slot = this.slotIn(own, pt, ids)
+      this.slotDrag = { id: ids[0], ids, slot, out: false }
+      this.drawSlotBar(own, ids, slot)
+      return
+    }
+    if (target && isFrame(target)) {
+      const slot = this.slotIn(target, pt, ids)
+      this.slotDrag = { id: ids[0], ids, slot, out: false, into: target.id }
+      this.drawSlotBar(target, ids, slot)
+      const k = 1 / (this.scale || 1)
+      const box = document.createElement('div')
+      box.className = 'ed-drop-frame'
+      box.dataset.frame = target.id
+      Object.assign(box.style, { left: `${target.x}px`, top: `${target.y}px`, width: `${target.w}px`, height: `${target.h}px` })
+      box.style.setProperty('--k', String(k))
+      this.scaleHost.appendChild(box)
+      return
+    }
+    // a child dragged past its frame's edge: the drop takes it out
+    if (isFrame(own)) this.slotDrag = { id: ids[0], ids, slot: 0, out: true }
+  }
+
+  /** The slot a drop at `pt` takes among frame `f`'s children (the moving ones aside). */
+  private slotIn(f: SlideElement, pt: { x: number; y: number }, ids: string[]): number {
+    if (!isFrame(f)) return 0
+    const sibs = frameChildren(this.store.slide, f).filter((e) => !ids.includes(e.id))
     const L = f.layout
-    const across = L.dir === 'col'
     let slot = 0
     for (const sb of sibs) {
       const before = L.dir === 'grid'
         ? pt.y > sb.y + sb.h || (pt.y >= sb.y && pt.x > sb.x + sb.w / 2)
-        : across ? pt.y > sb.y + sb.h / 2 : pt.x > sb.x + sb.w / 2
+        : L.dir === 'col' ? pt.y > sb.y + sb.h / 2 : pt.x > sb.x + sb.w / 2
       if (before) slot++
     }
-    this.slotDrag = { id: one.id, slot, out }
-    if (out) return
-    // in the gap before the sibling it lands ahead of (after the last one at the end)
+    return slot
+  }
+
+  /** The insertion bar, in the gap before the sibling the drop lands ahead of
+   *  (after the last one at the end). */
+  private drawSlotBar(f: SlideElement, ids: string[], slot: number) {
+    if (!isFrame(f)) return
+    const sibs = frameChildren(this.store.slide, f).filter((e) => !ids.includes(e.id))
+    const L = f.layout
+    const across = L.dir === 'col'
     const next = sibs[slot], prev = sibs[slot - 1]
     const ref = next ?? prev
     const half = L.gap / 2
@@ -694,15 +761,23 @@ export class SlideCanvas {
     this.scaleHost.appendChild(bar)
   }
 
-  /** Finish a frame child's drag at its slot — or out of the frame. Reports
-   *  whether it handled the drop (one undo step either way). */
+  /** Finish a drag over frames: into another frame at its slot, at a new slot
+   *  in its own, or out of its frame. Reports whether it handled the drop (one
+   *  undo step either way). */
   private dropInSlot(): boolean {
     const d = this.slotDrag
     this.slotDrag = null
     this.scaleHost.querySelector(':scope > .ed-slot-bar')?.remove()
+    this.scaleHost.querySelector(':scope > .ed-drop-frame')?.remove()
     if (!d) return false
-    const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(d.id)}"]`)
     const slide = this.store.slide
+    if (d.into) {
+      const into = d.into
+      this.store.commit(() => { moveIntoFrame(slide, d.ids, into, d.slot) })
+      this.store.select(d.ids)
+      return true
+    }
+    const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(d.id)}"]`)
     if (d.out) {
       // taken out: it stays where it was dropped, a free element again
       const x = Math.round((parseFloat(node?.style.left ?? '') || 0) * 10) / 10
@@ -1416,6 +1491,7 @@ export class SlideCanvas {
     const same = current.length === targets.length && targets.every((t, i) => current[i] === t)
     if (!same) this.moveable.target = targets
     this.moveable.updateRect()
+    this.fitHandles(targets)
     // Keep Selecto's continue-select memory in lockstep with the store —
     // otherwise shift-click resurrects targets from a previously shown slide.
     this.selecto.setSelectedTargets(targets)
@@ -1581,7 +1657,8 @@ export class SlideCanvas {
       e.target.style.top = `${p.top}px`
       this.hud.show(`X ${hudNum(p.left)}  Y ${hudNum(p.top)}`, e.clientX, e.clientY)
       this.followFrames()
-      this.trackSlot(e.clientX, e.clientY)
+      const ie = e.inputEvent as MouseEvent | undefined
+      this.trackSlot(e.clientX, e.clientY, !!(ie?.metaKey || ie?.ctrlKey))
     })
     mv.on('dragGroup', (e) => {
       e.events.forEach((ev) => {
@@ -1595,6 +1672,8 @@ export class SlideCanvas {
       const [dx, dy] = e.events[0]?.dist ?? [0, 0]
       this.hud.show(`X ${hudNum(left)}  Y ${hudNum(top)} · Δ ${hudNum(dx)}, ${hudNum(dy)}`, e.clientX, e.clientY)
       this.followFrames()
+      const ie = e.inputEvent as MouseEvent | undefined
+      this.trackSlot(e.clientX, e.clientY, !!(ie?.metaKey || ie?.ctrlKey))
     })
     // Shift while resizing keeps the aspect ratio; Alt/Option scales from
     // the center (both live per move, combinable)
@@ -1727,6 +1806,7 @@ export class SlideCanvas {
       if (e.isDrag && this.slotDrag) { this.hud.hide(); this.altPress = null; this.dropInSlot(); return }
       this.slotDrag = null
       this.scaleHost.querySelector(':scope > .ed-slot-bar')?.remove()
+      this.scaleHost.querySelector(':scope > .ed-drop-frame')?.remove()
       end(e)
     }
     mv.on('dragEnd', endDrag)

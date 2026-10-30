@@ -18,6 +18,63 @@
 
 import type { ShapeElement, Slide, SlideElement } from './model'
 
+/** Whether `frameId` can take `ids`: it is an unlocked auto-layout frame on
+ *  the slide, and none of the moving elements is that frame or holds it. */
+export function canAccept(slide: Slide, ids: readonly string[], frameId: string): boolean {
+  const f = slide.elements.find((e) => e.id === frameId)
+  if (!isFrame(f) || f.locked) return false
+  const units = withDescendants(slide, slide.elements.filter((e) => ids.includes(e.id)))
+  return !units.some((e) => e.id === frameId)
+}
+
+/**
+ * Put `ids` inside frame `frameId` at slot `slot` of its children (layout
+ * order), each with everything inside it. The frame's whole subtree is laid
+ * back into the array as one block — the frame, then each child's unit in
+ * flow order — so the children paint above their frame, and the solver,
+ * reading ties by array order after reflowByArray, flows them in that order.
+ * Reports whether anything moved; refuses a cycle or a frame that can't take them.
+ */
+export function moveIntoFrame(slide: Slide, ids: readonly string[], frameId: string, slot: number): boolean {
+  if (!ids.length || !canAccept(slide, ids, frameId)) return false
+  const f = slide.elements.find((e) => e.id === frameId) as Frame
+  const moving = slide.elements.filter((e) => ids.includes(e.id))
+  const stay = frameChildren(slide, f).filter((e) => !ids.includes(e.id))
+  const at = Math.max(0, Math.min(stay.length, slot))
+  const order = [...stay.slice(0, at), ...moving, ...stay.slice(at)]
+  for (const m of moving) { m.parentId = frameId; delete m.sizing }
+  const block = [f, ...order.flatMap((c) => withDescendants(slide, [c]))]
+  const inBlock = new Set(block.map((e) => e.id))
+  const rest = slide.elements.filter((e) => !inBlock.has(e.id))
+  const before = slide.elements.slice(0, slide.elements.indexOf(f)).filter((e) => !inBlock.has(e.id)).length
+  rest.splice(before, 0, ...block)
+  slide.elements = rest
+  reflowByArray(slide, frameId)
+  return true
+}
+
+/** Take `ids` out of their frames to the slide's top level, keeping where they
+ *  sit on the slide; each lands just above (or below) `targetId`'s unit in
+ *  paint order. Reports whether anything changed. */
+export function moveOutBeside(slide: Slide, ids: readonly string[], targetId: string | null, above: boolean): boolean {
+  const moving = slide.elements.filter((e) => ids.includes(e.id))
+  if (!moving.length) return false
+  for (const m of moving) { delete m.parentId; delete m.sizing }
+  const units = withDescendants(slide, moving)
+  const inUnits = new Set(units.map((e) => e.id))
+  const rest = slide.elements.filter((e) => !inUnits.has(e.id))
+  const target = targetId ? rest.find((e) => e.id === targetId) : undefined
+  let at = rest.length
+  if (target) {
+    const tb = withDescendants({ elements: rest } as Slide, [target])
+    at = above ? rest.indexOf(tb[tb.length - 1]) + 1 : rest.indexOf(tb[0])
+  }
+  rest.splice(at, 0, ...units)
+  slide.elements = rest
+  layoutSlide(slide)
+  return true
+}
+
 type Frame = ShapeElement & { layout: NonNullable<ShapeElement['layout']> }
 
 export const isFrame = (el: SlideElement | undefined): el is Frame =>

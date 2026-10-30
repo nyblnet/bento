@@ -12217,6 +12217,22 @@ Moving stays Move's job, as in Figma. The tool bar presses exactly one tool
 at a time (Move at rest), so which mode a drag will act in is always on
 screen.
 
+## 2026-10-30 — slides: drag INTO a frame, in Layers and on the canvas
+
+Frames could be made (⇧A, F) and their children reordered, but nothing could
+be put into one afterwards. Now, as in Figma and Penpot: in Layers, a row
+dropped on the middle of a frame row goes inside it (the top and bottom
+quarters still mean above and below), and a row dropped beside a frame's
+child joins that frame at that slot; dropped beside a top-level row, a child
+comes out. On the canvas, dragging over an auto-layout frame outlines it and
+shows the slot bar, and the drop puts the selection inside at that slot.
+⌘/Ctrl held while dragging moves over a frame without dropping in — the same
+modifier that, held at the press, duplicates; a duplicate-drag never drops
+into a frame either. A frame never goes inside itself or anything it holds,
+and a locked frame takes nothing. The frame's whole subtree is laid back into
+the array as one block (frame, then each child's unit in flow order), so
+children always paint above their frame and the solver reads the slot order
+(layout.ts moveIntoFrame / moveOutBeside / canAccept); one undo step each.
 ## 2026-10-30 — slides: the top bar's three kinds — Save saves, File acts on the document, the app cluster is the app
 
 Supersedes, for slides, the 2026-09-26 ruling "the Save menu holds the

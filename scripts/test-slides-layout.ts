@@ -15,7 +15,7 @@
 // changes nothing (the solver is a fixed point, so the editor's doc hook
 // cannot loop); and the layer list shows children under their frame.
 
-import { layoutSlide, frameClip, frameChildren, moveInFrame, reflowByArray } from '../slides/src/layout.ts'
+import { layoutSlide, frameClip, frameChildren, moveInFrame, reflowByArray, moveIntoFrame, moveOutBeside, canAccept } from '../slides/src/layout.ts'
 import { layerRows } from '../slides/src/editor/layerrows.ts'
 
 let failures = 0
@@ -256,6 +256,32 @@ console.log('\nreorder inside a frame (drop slot, arrow key, Layers)\n')
   reflowByArray(s2, 'f')
   ok(kids(s2) === 'cab', `a Layers reorder reflows the frame by array order (${kids(s2)})`)
   ok(!moveInFrame(slide(box('x', 0, 0, 1, 1)), 'x', 1), 'an element outside a frame does not move')
+}
+
+console.log('\ndrop into a frame, take out (Layers drag, canvas drag)\n')
+{
+  const kids = (s: any) => frameChildren(s, at(s, 'f')).map((e: any) => e.id).join('')
+  const ids = (s: any) => s.elements.map((e: any) => e.id).join('')
+  const mk = () => { const s = slide(box('x', 900, 400, 30, 30), frame({ dir: 'row', gap: 10, pad: [0, 0, 0, 0] }, 0, 0, 600, 100), box('a', 0, 0, 50, 40, { parentId: 'f' }), box('b', 0, 0, 60, 40, { parentId: 'f' }), box('y', 700, 400, 30, 30)); layoutSlide(s); return s }
+  let s = mk()
+  ok(moveIntoFrame(s, ['x'], 'f', 2) && at(s, 'x').parentId === 'f' && kids(s) === 'abx', `x dropped at the end of the row: a b x (${kids(s)})`)
+  ok(ids(s).indexOf('f') < ids(s).indexOf('x'), `it paints above its frame (${ids(s)})`)
+  ok(at(s, 'x').x === 130 && at(s, 'x').y === 0, `the layout places it in the flow (${at(s, 'x').x},${at(s, 'x').y})`)
+  s = mk()
+  ok(moveIntoFrame(s, ['y', 'x'], 'f', 1) && kids(s) === 'axyb', `two dropped at slot 1 keep their paint order: a x y b (${kids(s)})`)
+  s = mk()
+  const inner = box('g', 0, 0, 100, 50, { parentId: 'f', layout: { dir: 'row', gap: 0, pad: [0, 0, 0, 0] } })
+  s.elements.push(inner); layoutSlide(s)
+  ok(!moveIntoFrame(s, ['f'], 'g', 0) && !canAccept(s, ['f'], 'g'), 'a frame never goes inside its own child (no cycle)')
+  ok(!canAccept(s, ['f'], 'f'), 'nor inside itself')
+  s = mk(); at(s, 'f').locked = true
+  ok(!moveIntoFrame(s, ['x'], 'f', 0), 'a locked frame takes nothing')
+  s = mk()
+  ok(!moveIntoFrame(s, ['x'], 'y', 0), 'a plain rectangle (no layout) takes nothing')
+  s = mk()
+  const ax = at(s, 'a').x
+  ok(moveOutBeside(s, ['a'], 'y', true) && at(s, 'a').parentId === undefined && at(s, 'a').x === ax, 'taken out, a keeps its place on the slide')
+  ok(ids(s).indexOf('a') === ids(s).indexOf('y') + 1 && kids(s) === 'b', `…lands just above y in paint order, and the frame keeps b (${ids(s)})`)
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`)

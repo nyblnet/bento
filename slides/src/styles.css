@@ -733,6 +733,8 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-layer.dragging { opacity: 0.4; }
 .ed-layer.drop-above { box-shadow: 0 -2px 0 0 var(--accent); }
 .ed-layer.drop-below { box-shadow: 0 2px 0 0 var(--accent); }
+/* a frame row taking the drag inside it: the row itself is the target */
+.ed-layer.drop-into { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .ed-layer-glyph { flex: none; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); font-size: 10px; font-weight: 700; }
 .ed-layer-glyph svg { width: 14px; height: 14px; }
 .ed-layer-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1758,6 +1760,17 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 .moveable-control-box {
   --moveable-color: var(--blue);
 }
+/* Figma-sized handles: 8px squares-in-circles at any zoom (moveable.zoom keeps
+   them screen-sized), a short rotation stem — the defaults (14px, a 40px
+   stem) swallowed a small element whole when zoomed out */
+.moveable-control-box .moveable-control {
+  width: 8px !important; height: 8px !important; margin-top: -4px !important; margin-left: -4px !important;
+  border-width: 1px !important; box-sizing: border-box;
+}
+.moveable-control-box .moveable-rotation .moveable-rotation-control {
+  width: 10px !important; height: 10px !important; margin-top: -5px !important; margin-left: -5px !important;
+}
+.moveable-control-box .moveable-rotation { height: 18px !important; }
 
 /* ————— speaker view popup ————— */
 .bento-speaker {
@@ -3723,6 +3736,8 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 /* where a dragged frame child will land: a thick accent bar in the gap, with
    round end caps, a soft glow (canvas.ts trackSlot; slide px, scaled back) */
 .ed-slot-bar { position: absolute; z-index: 20; pointer-events: none; background: var(--accent); border-radius: calc(3px * var(--k, 1)); box-shadow: 0 0 0 calc(2px * var(--k, 1)) color-mix(in srgb, var(--accent) 30%, transparent); } /* resizing glyphs, turned for height */
+/* the frame a drag will drop INTO: outlined in the accent, the slot bar inside it */
+.ed-drop-frame { position: absolute; z-index: 19; pointer-events: none; box-sizing: border-box; border: calc(2px * var(--k, 1)) solid var(--accent); border-radius: calc(2px * var(--k, 1)); background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .ed-comp-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--ink); }
 .ed-comp-title > span:first-child { flex: none; color: var(--accent); }
 /* the name reads as text; a click makes it a field (click-to-edit) */
