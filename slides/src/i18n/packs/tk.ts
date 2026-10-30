@@ -1284,4 +1284,5 @@ export const strings: Catalog = {
   "Soft light": "Ýumşak ýagtylyk",
   "Saturation": "Doýgunlyk",
   "Luminosity": "Ýagtylyk derejesi",
+  "Hidden elements are not drawn — show one in Layers to export it": "Gizlin elementler çekilmeýär — eksport etmek üçin birini Gatlaklarda görkeziň",
 }

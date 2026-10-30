@@ -1270,4 +1270,5 @@ export const strings: Catalog = {
   "Soft light": "সফট লাইট",
   "Saturation": "স্যাচুরেশন",
   "Luminosity": "লুমিনোসিটি",
+  "Hidden elements are not drawn — show one in Layers to export it": "লুকানো উপাদান আঁকা হয় না — রপ্তানি করতে স্তরে একটি দেখান",
 }

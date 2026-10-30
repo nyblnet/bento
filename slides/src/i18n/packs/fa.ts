@@ -1263,4 +1263,5 @@ export const strings: Catalog = {
   "Soft light": "نور نرم",
   "Saturation": "اشباع",
   "Luminosity": "درخشندگی",
+  "Hidden elements are not drawn — show one in Layers to export it": "عناصر پنهان رسم نمی‌شوند — برای برون‌بری، یکی را در لایه‌ها نمایش دهید",
 }

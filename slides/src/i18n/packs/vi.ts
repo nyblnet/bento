@@ -1257,4 +1257,5 @@ export const strings: Catalog = {
   "Soft light": "Ánh sáng dịu",
   "Saturation": "Độ bão hòa",
   "Luminosity": "Độ chói",
+  "Hidden elements are not drawn — show one in Layers to export it": "Phần tử bị ẩn không được vẽ — hãy hiện một phần tử trong Lớp để xuất",
 }

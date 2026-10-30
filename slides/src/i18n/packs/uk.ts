@@ -1267,4 +1267,5 @@ export const strings: Catalog = {
   "Soft light": "М’яке світло",
   "Saturation": "Насиченість",
   "Luminosity": "Яскравість",
+  "Hidden elements are not drawn — show one in Layers to export it": "Приховані елементи не малюються — покажіть елемент у «Шарах», щоб експортувати його",
 }
