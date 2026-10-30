@@ -156,6 +156,8 @@ export const ICONS = {
   fxNone: svg('<circle cx="12" cy="12" r="8"/><path d="m6.5 17.5 11-11"/>'),
   fxFade: svg('<rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="2.5 2.5"/>'),
   fxFly: svg('<rect x="11" y="6" width="10" height="12" rx="1.5"/><path d="M3 9h5M2 12h6M3 15h5"/>'),
+  /** a panel handle's chevron, pointing right; CSS turns it by data-dir */
+  chevron: svg('<path d="m9 6 6 6-6 6"/>'),
   dirUp: svg('<path d="M12 19V5m-6 6 6-6 6 6"/>'),
   dirDown: svg('<path d="M12 5v14m-6-6 6 6 6-6"/>'),
   dirLeft: svg('<path d="M19 12H5m6-6-6 6 6 6"/>'),

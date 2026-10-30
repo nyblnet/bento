@@ -736,13 +736,16 @@ export class Editor {
       // chevron points where clicking will move the boundary. 'left'/'right'
       // name the DOM order, not the screen: under an RTL chrome the slide list
       // sits on the right, so the arrow that means "open me" turns around too.
-      const g = side === 'left' ? (collapsed ? '›' : '‹') : (collapsed ? '‹' : '›')
-      return isRtl() ? (g === '›' ? '‹' : '›') : g
+      const g = side === 'left' ? (collapsed ? 'right' : 'left') : (collapsed ? 'left' : 'right')
+      return isRtl() ? (g === 'right' ? 'left' : 'right') : g
     }
     for (const side of ['left', 'right'] as const) {
       const b = this.panelToggles[side]
       if (b) {
-        b.textContent = glyph(side)
+        // an SVG chevron, not a ‹ › character: a glyph sits on the font's
+        // baseline and never centres in the pill
+        if (!b.firstElementChild) b.innerHTML = ICONS.chevron
+        b.dataset.dir = glyph(side)
         const collapsed = (side === 'left' ? this.sidebar : this.props).classList.contains('ed-collapsed')
         b.title = collapsed
           ? side === 'left' ? t('Show slide list ([)') : t('Show properties (])')
