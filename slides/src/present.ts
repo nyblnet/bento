@@ -2436,7 +2436,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 let morphGradSeq = 0
 
 /** Any solid CSS color we author (#hex / rgb / rgba) → [r, g, b, a]. */
-function colorParts(v: string): [number, number, number, number] {
+export function colorParts(v: string): [number, number, number, number] {
   const m = v?.match(/rgba?\(([^)]+)\)/)
   if (m) {
     const p = m[1].split(/[\s,/]+/).map(Number)
@@ -2455,7 +2455,7 @@ function colorParts(v: string): [number, number, number, number] {
   return [0, 0, 0, v === 'transparent' || v === 'none' ? 0 : 1]
 }
 
-const rgbaStr = (c: [number, number, number, number]) =>
+export const rgbaStr = (c: [number, number, number, number]) =>
   `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${Math.round(c[3] * 1000) / 1000})`
 
 /** Color of a gradient evaluated at position t (piecewise-linear between stops). */
