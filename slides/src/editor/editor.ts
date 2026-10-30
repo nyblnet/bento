@@ -2268,6 +2268,7 @@ export class Editor {
     // get PowerPoint-Morph behaviour for free.
     const clone = JSON.parse(JSON.stringify(this.store.doc.slides[i]))
     clone.id = uid('slide')
+    adoptComponents(clone.elements, this.store.doc) // one main per component: the duplicate's main becomes a copy
     this.store.commit(() => {
       this.store.doc.slides.splice(i + 1, 0, clone)
     }, 'slides')
@@ -3608,7 +3609,7 @@ export class Editor {
   private duplicateSelection() {
     const els = this.store.selectedElements
     if (!els.length) return
-    const clones = freshGroups(els.map((el) => cloneElement(el)))
+    const clones = freshGroups(els.map((el) => cloneElement(el)), els)
     adoptComponents(clones, this.store.doc)
     this.store.commit(() => this.store.slide.elements.push(...clones))
     this.store.select(clones.map((c) => c.id))

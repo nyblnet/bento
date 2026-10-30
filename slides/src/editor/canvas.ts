@@ -16,6 +16,7 @@ import { inList, shiftList, shiftListHtml, undoIndent } from './listindent'
 import { bulletsToLists } from './bullets'
 import { clipboardToHtml } from './paste'
 import { freshGroups } from './clipboard'
+import { adoptComponents } from '../components'
 import { execFormat, hideFormatBar, syncFormatBar } from './richtext'
 import { PathEditor } from './patheditor'
 import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors, boxAnchors, nearestAnchor, boxContains } from './lineedit'
@@ -1568,7 +1569,8 @@ export class SlideCanvas {
           y: parseFloat(node.style.top) || 0,
         }))
         this.store.commit(() => {
-          const dupes = freshGroups(copies.map((el) => ({ ...el, id: uid(el.type[0]) })))
+          const dupes = freshGroups(copies.map((el) => ({ ...el, id: uid(el.type[0]) })), copies)
+          adoptComponents(dupes, this.store.doc) // one main per component: an Alt-dragged main leaves a copy
           this.store.slide.elements.push(...dupes)
           for (const f of frames) {
             const el = this.store.element(f.id)

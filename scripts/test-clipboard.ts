@@ -94,6 +94,19 @@ console.log('\npaste position (#569)')
   ok(at(unlike) === '100,80 300,80', `something different at the spot does not push the paste (${at(unlike)})`)
 }
 
+console.log('\npasting a frame with its children')
+{
+  const doc = newDoc()
+  const f = defaultShape('rect', { id: 'f', x: 100, y: 80 }) as any
+  f.layout = { dir: 'row', gap: 10, pad: [10, 10, 10, 10] }
+  const c = defaultShape('rect', { id: 'c', x: 110, y: 90, parentId: 'f' } as never)
+  doc.slides[0].elements = [f, c]
+  const both = insertElements(parseClip(serializeElements([f, c], doc))!, doc, doc.slides[0])
+  ok(both[1].parentId === both[0].id, `a child pasted with its frame sits in the pasted frame (${both[1].parentId})`)
+  const alone = insertElements(parseClip(serializeElements([c], doc))!, doc, doc.slides[0])
+  ok(alone[0].parentId === 'f', 'a child pasted alone stays a sibling in the same frame')
+}
+
 console.log('\nslide clipboard')
 {
   const source = sourceDoc()

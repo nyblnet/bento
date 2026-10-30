@@ -26,17 +26,25 @@ import type { BentoDoc, SlideElement } from './model.ts'
 type Comp = NonNullable<SlideElement['component']>
 type El = SlideElement & Record<string, unknown> & { component?: Comp }
 
-/** Keys a copy never takes from its main. x/y follow the main as an offset. */
-const OWN = new Set(['id', 'groupId', 'groupName', 'name', 'component', 'x', 'y', 'morphId'])  // x/y: see the per-instance offset
+/** Keys a copy never takes from its main. x/y follow the main as an offset;
+ *  parentId names a frame by id and sizing is relative to that frame, so both
+ *  are the copy's own (instanceOf translates them once, through the copy's ids). */
+const OWN = new Set(['id', 'groupId', 'groupName', 'name', 'component', 'x', 'y', 'morphId', 'parentId', 'sizing'])
 
 export interface ComponentInfo { id: string; name: string; slideId: string; main: El[] }
 
 /** Every component in the document, by its main. */
 export function components(doc: BentoDoc): ComponentInfo[] {
   const out = new Map<string, ComponentInfo>()
+  // one main per component: should a file carry two main sets (a duplicate
+  // made before paste adopted them), the first in deck order is the main
+  const mainGroup = new Map<string, string>()
   for (const s of doc.slides) for (const el of s.elements as El[]) {
     const c = el.component
     if (!c?.main) continue
+    const g = `${s.id}|${el.groupId ?? el.id}`
+    if ((mainGroup.get(c.id) ?? g) !== g) continue
+    mainGroup.set(c.id, g)
     const info = out.get(c.id) ?? { id: c.id, name: '', slideId: s.id, main: [] }
     info.main.push(el)
     info.name ||= el.groupName ?? el.name ?? ''
@@ -140,9 +148,13 @@ export function makeComponent(els: SlideElement[], id: string, groupId: string):
 /** A fresh copy of a component's main, ids minted by `uid`, offset by (dx, dy). */
 export function instanceOf(comp: ComponentInfo, uid: () => string, dx = 0, dy = 0): SlideElement[] {
   const gid = uid()
+  const ids = new Map(comp.main.map((m) => [m.id, uid()]))
   return comp.main.map((m) => {
     const el = clone(m) as El
-    el.id = uid()
+    el.id = ids.get(m.id)!
+    // a frame inside the component becomes the copy's frame; a frame outside it stays the main's alone
+    if (el.parentId && ids.has(el.parentId)) el.parentId = ids.get(el.parentId)
+    else { delete el.parentId; delete el.sizing }
     el.groupId = gid
     el.x = (m.x as number) + dx
     el.y = (m.y as number) + dy

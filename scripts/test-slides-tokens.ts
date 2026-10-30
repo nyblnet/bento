@@ -108,6 +108,54 @@ console.log('\ncomponents\n')
   ok(ca.fill === '#0000ff' && !ca.component, 'a detached element stops following')
 }
 
+console.log('\ncomponents and frames\n')
+{
+  // C2: a component whose main is a frame with a child; the copy's child belongs to the COPY's frame
+  const d = deck()
+  const [a, b] = [el(d, 'a'), el(d, 'b')]
+  a.layout = { dir: 'row', gap: 10, pad: [10, 10, 10, 10] }
+  b.parentId = 'a'
+  makeComponent([a, b], 'cf', 'g1')
+  let n = 0
+  const copy = instanceOf(components(d)[0], () => `n${++n}`, 0, 300) as any[]
+  d.slides[0].elements.push(...copy)
+  const last = new Map<string, string>()
+  syncComponents(d, last)
+  const [cf, cc] = [copy.find((e) => e.layout), copy.find((e) => !e.layout)]
+  ok(cc.parentId === cf.id, `a copy's child sits in the copy's frame (${cc.parentId}), not the main's`)
+  a.layout.gap = 40 // the main frame moves on
+  syncComponents(d, last)
+  ok(cc.parentId === cf.id && !cc.component.over?.includes('parentId'), 'and stays there when the main changes, with no override recorded')
+}
+{
+  // C3: a component made of one frame child; an instance placed elsewhere does not join the main's frame
+  const d = deck()
+  const [f, a] = [el(d, 'a'), el(d, 'b')]
+  f.layout = { dir: 'row', gap: 10, pad: [10, 10, 10, 10] }
+  a.parentId = 'a'; a.sizing = { w: 'fill' }
+  makeComponent([a], 'c1', 'g1')
+  const copy = instanceOf(components(d)[0], () => 'i', 500, 300) as any[]
+  d.slides[0].elements.push(...copy)
+  syncComponents(d, new Map())
+  ok(copy[0].parentId === undefined && copy[0].sizing === undefined, 'an instance of a frame child is placed free, not pulled into the main frame')
+  ok(!copy[0].component.over, 'and records no override for the frame link it does not share')
+}
+{
+  // M4: two main sets for one component (an old duplicate) — the first in deck order is THE main, deterministically
+  const d = deck()
+  makeComponent([el(d, 'a')], 'c1', 'g1')
+  const dup = JSON.parse(JSON.stringify(d.slides[0])); dup.id = 's2'
+  d.slides.push(dup)
+  const copy = instanceOf(components(d)[0], () => 'k', 0, 300) as any[]
+  d.slides[0].elements.push(...copy)
+  const last = new Map<string, string>()
+  syncComponents(d, last)
+  ok(components(d).length === 1 && components(d)[0].main.length === 1 && components(d)[0].main[0] === el(d, 'a'), 'two main sets: the first in deck order is the main')
+  el(d, 'a').fill = '#ff0000'
+  syncComponents(d, last)
+  ok(copy[0].fill === '#ff0000', 'an edit to that main reaches its copies')
+}
+
 console.log('\ntoken types beyond colour and number\n')
 {
   const d = deck()
