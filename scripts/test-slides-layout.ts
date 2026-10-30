@@ -152,6 +152,76 @@ console.log('\nold files and dangling links\n')
   ok(layoutSlide(s) && at(s, 'a').parentId === undefined && at(s, 'a').sizing === undefined && at(s, 'a').x === 1, 'a child of a deleted frame becomes an ordinary element where it was')
 }
 
+console.log('\nreachable bad input still settles\n')
+{
+  // a frame whose parentId is itself, and two frames that name each other
+  const self = slide(box('f', 100, 100, 300, 200, { parentId: 'f', layout: { dir: 'row', gap: 10, pad: [20, 20, 20, 20] } }))
+  layoutSlide(self)
+  ok(at(self, 'f').parentId === undefined && at(self, 'f').x === 100 && !layoutSlide(self), 'a frame that is its own parent loses the link and stays put')
+  const cyc = slide(
+    box('A', 100, 100, 300, 200, { parentId: 'B', layout: { dir: 'row', gap: 10, pad: [25, 25, 25, 25] } }),
+    box('B', 100, 100, 300, 200, { parentId: 'A', layout: { dir: 'row', gap: 10, pad: [25, 25, 25, 25] } }))
+  layoutSlide(cyc)
+  const after1 = JSON.stringify(cyc)
+  ok(!layoutSlide(cyc) && JSON.stringify(cyc) === after1, 'a parentId cycle is broken once and the slide settles')
+  ok([at(cyc, 'A'), at(cyc, 'B')].filter((e: any) => e.parentId).length === 1, 'one link of the cycle survives (the first element in paint order loses its link)')
+}
+{
+  // space-between in a frame its children overflow: no negative step, no flip-flop
+  const s = slide(box('f', 0, 0, 100, 50, { layout: { dir: 'col', gap: 0, pad: [0, 0, 0, 0], justify: 'space-between' } }),
+    box('a', 0, 0, 40, 300, { parentId: 'f' }), box('b', 0, 300, 40, 80, { parentId: 'f' }))
+  layoutSlide(s)
+  ok(at(s, 'a').y === 0 && at(s, 'b').y === 300 && !layoutSlide(s), 'overflowing space-between falls back to a plain run and settles')
+}
+{
+  // cols from a token (or a hand-written file) can be 0, fractional or huge; geometry never goes NaN
+  for (const cols of [0, -3, 2.6, 1e9, NaN, Infinity]) {
+    const s = slide(box('f', 0, 0, 300, 300, { layout: { dir: 'grid', gap: 10, pad: [0, 0, 0, 0], cols, hug: true } }),
+      box('a', 0, 0, 50, 50, { parentId: 'f' }), box('b', 60, 0, 50, 50, { parentId: 'f' }))
+    layoutSlide(s)
+    const all = s.elements.flatMap((e: any) => [e.x, e.y, e.w, e.h])
+    ok(all.every(Number.isFinite) && !layoutSlide(s), `cols ${cols}: every box stays finite and the layout settles`)
+  }
+}
+{
+  // a non-finite input never reaches the model
+  const s = slide(frame({ dir: 'row', gap: NaN }), box('a', 0, 0, 100, 50, { parentId: 'f' }))
+  layoutSlide(s)
+  ok([at(s, 'a').x, at(s, 'a').y].every(Number.isFinite) && !layoutSlide(s), 'a NaN gap writes no NaN and settles')
+}
+{
+  // an inner hugging frame that FILLS its outer frame's width: the outer frame owns that axis
+  const s = slide(box('o', 0, 0, 600, 200, { layout: { dir: 'row', gap: 0, pad: [0, 0, 0, 0] } }),
+    box('i', 0, 0, 100, 100, { parentId: 'o', sizing: { w: 'fill' }, layout: { dir: 'row', gap: 0, pad: [0, 0, 0, 0], hug: true } }),
+    box('c', 0, 0, 50, 50, { parentId: 'i' }))
+  layoutSlide(s)
+  ok(at(s, 'i').w === 600 && at(s, 'i').h === 50 && !layoutSlide(s), 'a hugging frame that fills its parent takes the fill width, hugs the other axis, and settles')
+}
+{
+  // fuzz: random nested frames settle after one pass
+  let seed = 7
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648)
+  const pick = <T>(xs: T[]) => xs[Math.floor(rnd() * xs.length)]
+  let unsettled = 0
+  for (let n = 0; n < 2000; n++) {
+    const els: any[] = []
+    const count = 2 + Math.floor(rnd() * 8)
+    for (let i = 0; i < count; i++) {
+      const isF = rnd() < 0.4
+      els.push(box(`e${i}`, rnd() * 800, rnd() * 600, 1 + rnd() * 300, 1 + rnd() * 300, {
+        ...(isF ? { layout: { dir: pick(['row', 'col', 'grid']), gap: Math.floor(rnd() * 30), pad: [0, 1, 2, 3].map(() => Math.floor(rnd() * 20)), justify: pick(['start', 'center', 'end', 'space-between']), align: pick(['start', 'center', 'end', 'stretch']), hug: rnd() < 0.3, wrap: rnd() < 0.2, cols: pick([1, 2, 3, 5]) } } : {}),
+        ...(rnd() < 0.6 ? { parentId: `e${Math.floor(rnd() * count)}` } : {}),
+        ...(rnd() < 0.3 ? { sizing: { w: pick(['fixed', 'fill']), h: pick(['fixed', 'fill']) } } : {}),
+      }))
+    }
+    const s = slide(...els)
+    layoutSlide(s)
+    const once = JSON.stringify(s)
+    if (layoutSlide(s) || JSON.stringify(s) !== once) unsettled++
+  }
+  ok(unsettled === 0, `2000 random nested layouts: one pass is a fixed point (${unsettled} unsettled)`)
+}
+
 console.log('\nlayer tree\n')
 {
   const s = slide(frame({ dir: 'col' }), box('a', 0, 0, 10, 10, { parentId: 'f' }), box('top', 0, 0, 10, 10))

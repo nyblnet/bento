@@ -25,13 +25,19 @@ export const isFrame = (el: SlideElement | undefined): el is Frame =>
 
 /** Children of a frame, in layout order. */
 export function frameChildren(slide: Slide, frame: Frame): SlideElement[] {
-  const kids = slide.elements.filter((e) => e.parentId === frame.id)
+  const kids = slide.elements.filter((e) => e.parentId === frame.id && e.id !== frame.id)
   const L = frame.layout
   if (L.dir === 'grid') {
-    // row band first, then x: a child dropped into another cell moves there
-    const band = Math.max(1, ...kids.map((k) => k.h)) + L.gap
-    const key = (k: SlideElement) => Math.round((k.y - frame.y - L.pad[0]) / band) * 1e7 + k.x
-    return stableSort(kids, key)
+    // the cell each child sits nearest, read by inverting place(): a settled
+    // grid reads back its own order, and a child dropped on another cell moves there
+    const g = gridGeom(frame, kids)
+    const { justify = 'start', align = 'start' } = L
+    const cell = (k: SlideElement) => {
+      const col = Math.min(g.cols - 1, Math.max(0, Math.round((k.x - inCell(justify, g.cw, k.w) - g.x0) / (g.cw + L.gap || 1))))
+      const row = Math.max(0, Math.round((k.y - inCell(align, g.ch, k.h) - g.y0) / (g.ch + L.gap || 1)))
+      return row * g.cols + col
+    }
+    return stableSort(kids, (k) => cell(k) * 1e7 + k.x)
   }
   if (L.wrap) return wrapOrder(kids, L.dir === 'row')
   return stableSort(kids, (k) => (L.dir === 'row' ? k.x : k.y))
@@ -73,25 +79,48 @@ export function layoutSlide(slide: Slide): boolean {
   // a child whose frame is gone (deleted, or no longer a frame) is an
   // ordinary element again — the dangling link is dropped, as connectors drop theirs
   for (const e of slide.elements) if (e.parentId && !isFrame(byId.get(e.parentId))) { delete e.parentId; delete e.sizing; changed = true }
+  // so is one whose chain of frames leads back to itself (a hand-written file,
+  // a bad merge): the first element in paint order on the loop lets go, which
+  // every replica decides the same way
+  for (const e of slide.elements) {
+    const seen = new Set<string>()
+    for (let p = e.parentId; p && !seen.has(p); p = byId.get(p)?.parentId) {
+      if (p === e.id) { delete e.parentId; delete e.sizing; changed = true; break }
+      seen.add(p)
+    }
+  }
   const frames = slide.elements.filter(isFrame)
   if (!frames.length) return changed
-  const depth = (el: SlideElement, seen = new Set<string>()): number => {
+  const depth = (el: SlideElement): number => {
     const p = el.parentId ? byId.get(el.parentId) : undefined
-    if (!isFrame(p) || seen.has(el.id)) return 0 // a cycle or dangling parent counts as top level
-    seen.add(el.id)
-    return 1 + depth(p, seen)
+    return isFrame(p) ? 1 + depth(p) : 0 // acyclic now
   }
   const order = frames.map((f) => ({ f, d: depth(f) }))
   const set = (el: SlideElement, k: 'x' | 'y' | 'w' | 'h', v: number) => {
+    if (!Number.isFinite(v)) return // a bad input (NaN gap, a token gone wrong) never reaches the model
     v = r2(Math.max(k === 'w' || k === 'h' ? 1 : -1e6, v))
     if (el[k] !== v) { el[k] = v; changed = true }
   }
-  for (const { f } of [...order].sort((a, b) => b.d - a.d)) if (f.layout.hug) hug(slide, f, set)
+  // a frame that fills its own parent on an axis is sized there by that parent, not by hugging
+  const hugSet = (f: Frame): Put => (el, k, v) => { if (el !== f || !ownedByParent(f, byId, k as 'w' | 'h')) set(el, k, v) }
+  for (const { f } of [...order].sort((a, b) => b.d - a.d)) if (f.layout.hug) hug(slide, f, hugSet(f))
   for (const { f } of [...order].sort((a, b) => a.d - b.d)) place(slide, f, set)
   return changed
 }
 
 type Put = (el: SlideElement, k: 'x' | 'y' | 'w' | 'h', v: number) => void
+
+/** Grid columns as the solver uses them: a whole number 1..64, whatever the file or a token says. */
+const colsOf = (f: Frame) => { const c = Math.round(f.layout.cols ?? 2); return Number.isFinite(c) ? Math.min(64, Math.max(1, c)) : 2 }
+
+/** Whether `f`'s parent frame sets `f`'s size on axis k (fill on that axis, or stretch across). */
+function ownedByParent(f: Frame, byId: Map<string, SlideElement>, k: 'w' | 'h'): boolean {
+  const p = f.parentId ? byId.get(f.parentId) : undefined
+  if (!isFrame(p)) return false
+  if (f.sizing?.[k] === 'fill') return true
+  const cross = p.layout.dir === 'grid' || (p.layout.dir === 'row' ? k === 'h' : k === 'w')
+  return cross && p.layout.align === 'stretch'
+}
 
 function hug(slide: Slide, f: Frame, set: Put) {
   const kids = frameChildren(slide, f)
@@ -100,10 +129,11 @@ function hug(slide: Slide, f: Frame, set: Put) {
   const sum = (ks: SlideElement[], k: 'w' | 'h') => ks.reduce((a, e) => a + e[k], 0)
   const max = (ks: SlideElement[], k: 'w' | 'h') => Math.max(...ks.map((e) => e[k]))
   if (dir === 'grid') {
-    const cols = Math.min(f.layout.cols ?? 2, kids.length)
+    const cols = Math.min(colsOf(f), kids.length)
     const rows = Math.ceil(kids.length / cols)
-    set(f, 'w', pad[1] + pad[3] + cols * max(kids, 'w') + gap * (cols - 1))
-    set(f, 'h', pad[0] + pad[2] + rows * max(kids, 'h') + gap * (rows - 1))
+    const g = gridGeom(f, kids) // the cells place() will use
+    set(f, 'w', pad[1] + pad[3] + cols * g.cw + gap * (cols - 1))
+    set(f, 'h', pad[0] + pad[2] + rows * g.ch + gap * (rows - 1))
   } else if (f.layout.wrap) {
     // a wrapping frame keeps its main size (the lines break against it) and hugs across
     const row = dir === 'row'
@@ -120,19 +150,33 @@ function hug(slide: Slide, f: Frame, set: Put) {
   }
 }
 
+/** Where a size sits in a room under a justify/align word. */
+const inCell = (a: string, room: number, size: number) => (a === 'center' ? (room - size) / 2 : a === 'end' ? room - size : 0)
+
+/** A grid frame's cells: one geometry for ordering (frameChildren) and placing (place). */
+function gridGeom(f: Frame, kids: SlideElement[]) {
+  const { gap, pad } = f.layout
+  const cols = colsOf(f)
+  const rows = Math.max(1, Math.ceil(kids.length / cols))
+  const iw = Math.max(0, f.w - pad[1] - pad[3]), ih = Math.max(0, f.h - pad[0] - pad[2])
+  // a hugging grid sizes its cells by the children that keep their own size:
+  // a child that fills (or is stretched) takes the cell's size, so it cannot also set it
+  const own = (k: 'w' | 'h') => kids.filter((c) => c.sizing?.[k] !== 'fill' && f.layout.align !== 'stretch')
+  const cw = f.layout.hug ? Math.max(1, ...own('w').map((k) => k.w)) : (iw - gap * (cols - 1)) / cols
+  const ch = f.layout.hug ? Math.max(1, ...own('h').map((k) => k.h)) : (ih - gap * (rows - 1)) / rows
+  return { cols, cw, ch, x0: f.x + pad[3], y0: f.y + pad[0] }
+}
+
 function place(slide: Slide, f: Frame, set: Put) {
   const kids = frameChildren(slide, f)
   if (!kids.length) return
   const { dir, gap, pad, justify = 'start', align = 'start' } = f.layout
   const x0 = f.x + pad[3], y0 = f.y + pad[0]
   const iw = Math.max(0, f.w - pad[1] - pad[3]), ih = Math.max(0, f.h - pad[0] - pad[2])
-  const at = (a: string, room: number, size: number) => (a === 'center' ? (room - size) / 2 : a === 'end' ? room - size : 0)
+  const at = inCell
 
   if (dir === 'grid') {
-    const cols = f.layout.cols ?? 2
-    const rows = Math.ceil(kids.length / cols)
-    const cw = f.layout.hug ? Math.max(...kids.map((k) => k.w)) : (iw - gap * (cols - 1)) / cols
-    const ch = f.layout.hug ? Math.max(...kids.map((k) => k.h)) : (ih - gap * (rows - 1)) / rows
+    const { cols, cw, ch } = gridGeom(f, kids)
     kids.forEach((k, i) => {
       const cx = x0 + (i % cols) * (cw + gap), cy = y0 + Math.floor(i / cols) * (ch + gap)
       if (k.sizing?.w === 'fill' || align === 'stretch') set(k, 'w', cw)
@@ -160,7 +204,7 @@ function place(slide: Slide, f: Frame, set: Put) {
       let step = gap
       let pos = (row ? x0 : y0)
       if (lineFills.length) { /* the fills took the slack */ }
-      else if (justify === 'space-between' && line.length > 1) step = (room - used + gap * (line.length - 1)) / (line.length - 1)
+      else if (justify === 'space-between' && line.length > 1) step = Math.max(gap, (room - used + gap * (line.length - 1)) / (line.length - 1))
       else pos += at(justify, room, used)
       for (const k of line) {
         if (align === 'stretch' || k.sizing?.[C] === 'fill') set(k, C, thick)
@@ -180,7 +224,7 @@ function place(slide: Slide, f: Frame, set: Put) {
   let step = gap
   let pos = (row ? x0 : y0)
   if (!fills.length) {
-    if (justify === 'space-between' && kids.length > 1) step = (room - used + gap * (kids.length - 1)) / (kids.length - 1)
+    if (justify === 'space-between' && kids.length > 1) step = Math.max(gap, (room - used + gap * (kids.length - 1)) / (kids.length - 1))
     else pos += at(justify, room, used)
   }
   for (const k of kids) {
