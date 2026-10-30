@@ -1359,4 +1359,6 @@ export const strings: Catalog = {
   "Keyboard shortcuts": "Kortkommandon",
   "Preferences": "Inställningar",
   "Looking at the pictures in this deck…": "Tittar på bilderna i den här presentationen…",
+  "New": "Ny",
+  "Document": "Dokument",
 }

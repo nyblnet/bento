@@ -1350,4 +1350,6 @@ export const it: Catalog = {
   "Keyboard shortcuts": "Scorciatoie da tastiera",
   "Preferences": "Preferenze",
   "Looking at the pictures in this deck…": "Esame delle immagini di questa presentazione…",
+  "New": "Nuovo",
+  "Document": "Documento",
 }

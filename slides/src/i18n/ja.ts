@@ -1350,4 +1350,6 @@ export const ja: Catalog = {
   "Keyboard shortcuts": "キーボードショートカット",
   "Preferences": "環境設定",
   "Looking at the pictures in this deck…": "このデッキの画像を確認しています…",
+  "New": "新規",
+  "Document": "ドキュメント",
 }

@@ -155,6 +155,23 @@ export function canWriteDeck(collab: { role?: string } | undefined): boolean {
  * along. An empty description adds nothing.
  */
 let menuDescSeq = 0
+/**
+ * One row of a command menu — Save ▾, File, Help: icon · label · optional key,
+ * the description as tooltip and ARIA description (D2). Every command menu
+ * builds its rows here, so their markup cannot drift apart.
+ */
+function menuRow(icon: string, label: string, title: string, onClick: () => void, keys?: string, cmd?: string): HTMLButtonElement {
+  const b = document.createElement('button')
+  b.type = 'button'
+  b.className = 'ed-btn ed-menu-row'
+  if (icon) b.innerHTML = icon
+  b.appendChild(menuLabel(label, title, b))
+  if (cmd) b.dataset.cmd = cmd
+  if (keys) { const k = document.createElement('kbd'); k.className = 'ed-menu-keys'; k.textContent = keys; b.appendChild(k) }
+  b.addEventListener('click', onClick)
+  return b
+}
+
 function menuLabel(label: string, desc: string, row: HTMLElement): HTMLSpanElement {
   if (!desc) return Object.assign(document.createElement('span'), { textContent: label })
   const span = document.createElement('span')
@@ -1068,7 +1085,7 @@ export class Editor {
 
   private saveDropdown(): HTMLElement {
     const wrap = div('ed-dropdown')
-    const menu = div('ed-menu ed-save-menu')
+    const menu = div('ed-menu ed-cmd-menu ed-save-menu')
     const trigger = btn('<span class="ed-caret" aria-hidden="true">▾</span>', '', () => {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) rebuild()
@@ -1102,17 +1119,8 @@ export class Editor {
       if (mark) el.dataset.phoneSaveas = '1'
       return el
     }
-    const item = (icon: string, label: string, title: string, onClick: () => void) => {
-      const b = document.createElement('button')
-      b.className = 'ed-btn'
-      if (icon) b.innerHTML = icon
-      b.appendChild(menuLabel(label, title, b))
-      b.addEventListener('click', () => {
-        close()
-        onClick()
-      })
-      into.appendChild(tag(b))
-    }
+    const item = (icon: string, label: string, title: string, onClick: () => void) =>
+      into.appendChild(tag(menuRow(icon, label, title, () => { close(); onClick() })))
     // SAVING only — the ways to write this deck to a file. What acts on the
     // document (export, import, history, data) is the File menu's (buildFileItems);
     // what goes to OTHER PEOPLE is the Share panel's.
@@ -1152,23 +1160,16 @@ export class Editor {
       if (mark) el.dataset.phoneSaveas = '1'
       return el
     }
-    const item = (icon: string, label: string, title: string, onClick: () => void, cmd?: string) => {
-      const b = document.createElement('button')
-      b.className = 'ed-btn'
-      if (icon) b.innerHTML = icon
-      b.appendChild(menuLabel(label, title, b))
-      const keys = cmd ? this.commands.find((c) => c.id === cmd)?.keys : undefined
-      if (cmd) b.dataset.cmd = cmd
-      if (keys) { const k = document.createElement('kbd'); k.className = 'ed-menu-keys'; k.textContent = keys; b.appendChild(k) }
-      b.addEventListener('click', () => { close(); onClick() })
-      into.appendChild(tag(b))
-    }
+    const item = (icon: string, label: string, title: string, onClick: () => void, cmd?: string) =>
+      into.appendChild(tag(menuRow(icon, label, title, () => { close(); onClick() }, cmd ? this.commands.find((c) => c.id === cmd)?.keys : undefined, cmd)))
     const cap = (text: string) => {
       const c = div('ed-menu-cap')
       c.textContent = text
       into.appendChild(tag(c))
     }
     const sep = () => into.appendChild(tag(div('ed-menu-sep')))
+    // every group under a caption — all or none
+    cap(t('New'))
     item(ICONS.template, t('Start from scratch…'),
       t('Replace every slide with one blank slide. Keeps the deck’s theme, name and live session — ⌘Z undoes.'),
       () => this.startFromScratch(), 'start-scratch')
@@ -1184,13 +1185,14 @@ export class Editor {
       t('Opens the converter on bento.page in a new tab — drop this deck’s saved file there to get a .pptx. The deck is not uploaded. Needs an internet connection.'),
       () => { window.open(EXPORT_PPTX_URL, '_blank', 'noopener,noreferrer') }, 'export-pptx')
     sep()
+    cap(t('Document'))
     item(ICONS.history, t('Version history…'),
       t('Restore an earlier auto-saved version of this deck (kept locally in this browser).'),
       () => void this.openVersionHistory(), 'version-history')
     item(ICONS.docInfo, t('Document properties…'),
       t('Title, author, company, subject, event and keywords — {{author}} and friends fill in from here.'),
       () => this.openDocProps(), 'doc-props')
-    item(ICONS.image, t('Compress pictures in this deck…'),
+    item(ICONS.compress, t('Compress pictures in this deck…'),
       t('Re-encodes every photo already in the deck at up to 2560 px; screenshots and logos stay sharp. Undo restores them until you save.'),
       () => void this.compressDeckPictures(), 'compress-images')
     sep()
@@ -1198,20 +1200,21 @@ export class Editor {
     item(ICONS.code, t('Copy document JSON'),
       t('Copies this deck as plain JSON — content only, no live-session keys. Edit it in another tool, then bring it back with Replace from JSON.'),
       () => void this.copyDocJson(), 'copy-json')
-    item(ICONS.code, t('Copy compact JSON (for agents)'),
+    item(ICONS.codeCompact, t('Copy compact JSON (for agents)'),
       t('The same deck with every default left out — the shape an AI agent should write. Replace from JSON takes it back; the saved file is always full.'),
       () => void this.copyDocJson(true), 'copy-compact-json')
     item(ICONS.code, t('Replace from JSON…'),
       t('Paste edited document JSON to replace this deck’s content — ⌘Z undoes.'),
       () => this.openReplaceJson(), 'replace-json')
     sep()
+    cap(t('App'))
     item(ICONS.info, t('About bento/slides'), t('Version, updates and licenses'), () => this.openAbout(), 'about')
   }
 
   /** The File menu's dropdown, opened from the wordmark. */
   private fileDropdown(trigger: HTMLElement): HTMLElement {
     const wrap = div('ed-dropdown ed-file')
-    const menu = div('ed-menu ed-file-menu')
+    const menu = div('ed-menu ed-cmd-menu ed-file-menu')
     trigger.addEventListener('click', () => {
       wrap.classList.toggle('open')
       if (wrap.classList.contains('open')) { menu.textContent = ''; this.buildFileItems(menu, () => wrap.classList.remove('open')) }
@@ -1998,18 +2001,14 @@ export class Editor {
     const wrap = div('ed-dropdown')
     const trigger = btn(ICONS.helpCircle, '', () => wrap.classList.toggle('open'), t('Help'))
     trigger.setAttribute('aria-haspopup', 'menu')
-    const menu = div('ed-menu ed-help-menu')
-    const link = (icon: string, label: string, href: string) => {
-      const b = btn(icon, label, () => { wrap.classList.remove('open'); window.open(href, '_blank', 'noopener,noreferrer') })
-      menu.appendChild(b)
-    }
+    const menu = div('ed-menu ed-cmd-menu ed-help-menu')
+    const link = (icon: string, label: string, href: string) =>
+      menu.appendChild(menuRow(icon, label, '', () => { wrap.classList.remove('open'); window.open(href, '_blank', 'noopener,noreferrer') }))
     link(ICONS.helpCircle, t('Guide on bento.page'), 'https://bento.page/help')
     link(ICONS.history, t('What’s new →'), `https://github.com/nyblnet/bento/releases/tag/v${APP_VERSION}`)
     link(ICONS.comment, t('Ask or report a problem'), 'https://github.com/nyblnet/bento/issues')
     menu.appendChild(div('ed-menu-sep'))
-    const keys = btn(ICONS.keyboard, t('Keyboard shortcuts'), () => { wrap.classList.remove('open'); this.openHelp() })
-    keys.dataset.cmd = 'help'
-    menu.appendChild(keys)
+    menu.appendChild(menuRow(ICONS.keyboard, t('Keyboard shortcuts'), '', () => { wrap.classList.remove('open'); this.openHelp() }, '?', 'help'))
     wrap.append(trigger, menu)
     document.addEventListener('pointerdown', (ev) => {
       if (!wrap.contains(ev.target as Node)) wrap.classList.remove('open')

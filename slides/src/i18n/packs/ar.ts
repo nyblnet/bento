@@ -1370,4 +1370,6 @@ export const strings: Catalog = {
   "Keyboard shortcuts": "اختصارات لوحة المفاتيح",
   "Preferences": "التفضيلات",
   "Looking at the pictures in this deck…": "جارٍ فحص الصور في هذا العرض…",
+  "New": "جديد",
+  "Document": "المستند",
 }
