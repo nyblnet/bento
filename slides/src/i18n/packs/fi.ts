@@ -1353,4 +1353,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "Siirrä — valitse ja siirrä; takaisin osoittimeen",
   "Select only": "Vain valinta",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Vain valinta — vetäminen valitsee myös elementtien päältä eikä siirrä mitään",
+  "Drag onto a frame": "Vedä kehyksen päälle",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Sijoittaa sen sisään palkin kohtaan — Tasoissa pudota kehyksen riville; pidä {mod} pohjassa vetäessä, niin se vain liikkuu päältä",
+  "held while dragging, nothing drops into a frame": "vetäessä pohjassa mikään ei putoa kehykseen",
 }

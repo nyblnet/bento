@@ -1336,4 +1336,7 @@ export const it: Catalog = {
   "Move — select and move; back to the pointer": "Sposta — seleziona e sposta; torna al puntatore",
   "Select only": "Solo selezione",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Solo selezione — trascinare seleziona, anche sopra gli elementi, e non sposta mai nulla",
+  "Drag onto a frame": "Trascina su una cornice",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Lo mette dentro, dove indica la barra — in Livelli, rilascialo sulla riga della cornice; tieni premuto {mod} trascinando per passarci solo sopra",
+  "held while dragging, nothing drops into a frame": "tenuto premuto trascinando, nulla entra in una cornice",
 }

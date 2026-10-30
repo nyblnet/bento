@@ -29,7 +29,7 @@ import { buildImageProps, buildMediaProps, buildCodeProps, buildEmbedProps } fro
 import { buildChartProps } from './inspector/chart'
 import { buildTableProps } from './inspector/table'
 import { buildAutoLayout, wrapInFrame } from './inspector/layout'
-import { reflowByArray, withDescendants } from '../layout'
+import { reflowByArray, moveIntoFrame, moveOutBeside, withDescendants } from '../layout'
 import { buildShadow, buildBlur } from './inspector/effects'
 import { freshGroups } from './clipboard'
 
@@ -259,6 +259,11 @@ export class PropsPanel {
       const before = kids(slide.elements)
       slide.elements = elements
       for (const [f, order] of kids(elements)) if (before.get(f) !== order) reflowByArray(slide, f)
+    }),
+    reparent: (ids, to) => this.store.commit(() => {
+      const slide = this.store.slide
+      if ('frame' in to) moveIntoFrame(slide, ids, to.frame, to.slot)
+      else moveOutBeside(slide, ids, to.beside, to.above)
     }),
     rename: (id, name) => this.store.commit(() => {
       const el = this.store.element(id)

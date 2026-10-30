@@ -1359,4 +1359,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "সরান — বাছাই করুন ও সরান; পয়েন্টারে ফিরুন",
   "Select only": "শুধু বাছাই",
   "Select only — a drag selects, from on top of things too, and never moves anything": "শুধু বাছাই — টেনে আনলে বাছাই হয়, উপাদানের ওপর থেকেও, কিছুই সরে না",
+  "Drag onto a frame": "ফ্রেমের উপর টেনে আনুন",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "বার যেখানে দেখায় সেখানে ভেতরে রাখে — স্তরে ফ্রেমের সারিতে ছাড়ুন; শুধু উপর দিয়ে নিতে টানার সময় {mod} ধরে রাখুন",
+  "held while dragging, nothing drops into a frame": "টানার সময় ধরে রাখলে কিছুই ফ্রেমে ঢোকে না",
 }

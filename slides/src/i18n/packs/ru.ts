@@ -1348,4 +1348,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "Перемещение — выбрать и сдвинуть; вернуться к указателю",
   "Select only": "Только выделение",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Только выделение — перетаскивание выделяет, даже поверх элементов, и ничего не сдвигает",
+  "Drag onto a frame": "Перетащить на рамку",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Кладёт внутрь, туда, где показывает полоса — в «Слоях» отпустите на строке рамки; удерживайте {mod} при перетаскивании, чтобы просто пройти над ней",
+  "held while dragging, nothing drops into a frame": "если удерживать при перетаскивании, ничего не попадает в рамку",
 }

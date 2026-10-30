@@ -1336,4 +1336,7 @@ export const fr: Catalog = {
   "Move — select and move; back to the pointer": "Déplacer — sélectionner et déplacer ; retour au pointeur",
   "Select only": "Sélection seule",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Sélection seule — un glisser sélectionne, même par-dessus les éléments, et ne déplace jamais rien",
+  "Drag onto a frame": "Glisser sur un cadre",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Le place dedans, là où la barre l’indique — dans Calques, déposez-le sur la ligne du cadre ; maintenez {mod} en glissant pour seulement passer dessus",
+  "held while dragging, nothing drops into a frame": "maintenu pendant le glisser, rien ne tombe dans un cadre",
 }
