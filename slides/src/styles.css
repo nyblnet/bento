@@ -2899,6 +2899,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   display: flex;
   flex-direction: column;
   min-width: 184px;
+  max-width: min(360px, calc(100vw - 16px)); /* a long layer name wraps, never a menu across the screen */
   padding: 4px;
   /* the token, not white: --surface is #ffffff in light and #21262e in dark,
      and a chrome surface pinned to a literal puts light text on a light
@@ -3142,10 +3143,12 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-context { display: flex; align-items: center; gap: 6px; min-height: 26px; margin: 4px 0 2px; }
 .ed-context-glyph { flex: none; display: grid; place-items: center; width: 22px; height: 22px; color: var(--muted); background: var(--chrome-2); border-radius: 5px; }
 .ed-context-glyph svg { width: 14px; height: 14px; }
-.ed-context-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-context-name { flex: 0 1 auto; min-width: 3em; max-width: 60%; font-size: 12.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-context .ed-btn-icon { flex: none; padding: 3px; color: var(--muted); }
 .ed-context .ed-btn-icon:hover { color: var(--ink); }
-.ed-context-how { margin: 0 0 6px; font-size: 11px; line-height: 1.4; color: var(--muted); }
+/* one line: the hint after the name, cut with an ellipsis (whole in its tooltip) */
+.ed-context-how { flex: 1 1 0; min-width: 0; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-context { margin-bottom: 6px; }
 
 /* rows: caption | control */
 .ed-props .ed-row {
