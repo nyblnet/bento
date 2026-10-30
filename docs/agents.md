@@ -280,7 +280,11 @@ without them — and elements should carry the full field set shown.
   `lineHeight`, optional `letterSpacing`.
 - **shape**: `shape` = `rect|ellipse|triangle|arrow|line|path`, `fill`, `stroke`,
   `strokeWidth`, `radius` (rect corner). Optional `fillGradient`
-  `{angle, stops:[{at:0..1, color}]}` (CSS-convention angle). Lines take
+  `{angle, stops:[{at:0..1, color}]}` (CSS-convention angle).
+  Optional, newer: `fillGradient.kind:"radial"` (+`cx`,`cy`,`r`),
+  `strokeAlign` (`inside|center|outside`), `strokeDashes:[dash,gap]`, rect
+  `radii:[tl,tr,br,bl]`, `flipX`/`flipY`, `hidden`, `alt`. A frame is a `rect`
+  with `layout`, and its children carry `parentId` (see format.md). Lines take
   their color from `fill` and draw horizontally across the box (rotate for
   vertical); `strokeStyle: solid|dashed|dotted`; tips `lineStart`/`lineEnd`
   = `arrow|dot|bar`. A `path` is a free vector: `d` (SVG path data) +

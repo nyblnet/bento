@@ -14,13 +14,15 @@ pre-1.0.
 - **Auto layout.** Select some elements and press ⇧A: they sit in a frame that
   lines them up in a row, a column or a grid, with the gap, padding and
   alignment you set in the inspector's Auto layout section. Children can fill
-  the free space, the frame can hug its content and clip what overflows, and
-  dragging a child past a sibling reorders it. A selected frame shows its
-  padding and gaps on the canvas; drag them to change them.
+  the free space, rows and columns can wrap, the frame can hug its content and
+  clip what overflows, and dragging a child past a sibling reorders it.
+  Children follow the frame while you drag it, and a selected frame shows its
+  padding and gaps on the canvas — drag them to change them.
 - **Design tokens.** A new Tokens view beside Slides and Layers holds named
-  colours and numbers, with modes such as light and dark. Bind a colour, a
-  corner radius, a stroke width, a font size or an opacity to a token, and
-  changing the token — or the mode — changes every place that uses it.
+  colours, numbers, font families, font sizes, opacities and shadows, with
+  modes such as light and dark. Bind a colour, a corner radius, a stroke
+  width, a gap or padding, a font, a size, an opacity or a shadow to a token,
+  and changing the token — or the mode — changes every place that uses it.
 - **Components.** ⌥⌘K makes the selection a main component; insert copies
   from the Tokens view. Copies follow the main, keep what you change on them,
   and can be detached.
@@ -28,48 +30,43 @@ pre-1.0.
   combine them from the toolbar, the right-click menu or ⌥⇧U/S/I/E. The result
   is a real path any version can draw, and it remembers its shapes: change the
   operation later, or release them.
-- **⌘K finds any command**, with its shortcut beside it.
+- **A pen and one-letter tools.** V select, F frame, R rectangle, O ellipse,
+  L line, P pen, T text — shown on the topbar's insert buttons and in the
+  ? sheet. The pen places corners with a click and curves with a drag. While a
+  path is selected, the topbar offers Corner, Smooth and Symmetric points and
+  Close path.
+- **⌘K opens a command palette**: search the editor's main actions by name,
+  with each one's shortcut beside it.
 - **Numbers take arithmetic.** Type `360/2`, `+24` or `*2` into any number in
   the inspector. Scrubbing a label no longer stops at the edge of the screen,
   and a multi-selection shows X, Y, W, H, rotation and opacity — "Mixed" where
-  they differ, and an edit moves each element by the same amount.
-- **A colour picker of our own**: saturation and hue, opacity, hex/RGB/HSL,
-  the eyedropper, the deck's theme colours and the colours on this slide.
+  they differ, and an edit moves each element by the same amount. A padlock
+  between W and H keeps any element's proportions.
+- **A colour picker of our own**: saturation and hue, opacity,
+  HEX/RGB/HSL/OKLCH, the eyedropper, the deck's tokens and theme colours, and
+  the colours on this slide.
+- **Gradients and layers of paint.** Fills and strokes can be solid, linear or
+  radial; add, drag and remove stops on the stop bar and aim the gradient by
+  its handle on the slide. A shape can carry several fills and several
+  strokes, each with its own visibility, order and blend; older versions draw
+  the top one.
+- **Strokes inside, centred or outside**, with custom dash and gap; **each
+  corner its own radius**; **flip horizontal / vertical**, for one element or
+  a whole selection.
 - **The canvas talks back.** Holding ⌥, ⌘ or ⇧ says what it does; moving,
   resizing and rotating show the numbers beside the pointer; an element that
-  morphs shows where it comes from, and the Animate tab previews the morph.
-- **One-letter tools.** V select, F frame, R rectangle, O ellipse, L line,
-  P pen, T text — shown on the topbar's insert buttons and in the ? sheet.
-  While a path is selected, the topbar offers Corner, Smooth and Symmetric
-  points and Close path.
-- **Radial gradients, gradient stops and a handle on the canvas.** Fills are
-  Solid, Linear or Radial; add, drag and remove stops on the stop bar, and aim
-  the gradient by dragging its handle on the slide.
-- **Strokes inside, centred or outside**, with custom dash and gap.
-- **Each corner its own radius**, and **Flip horizontal / vertical**.
-- **Previews on hover**: point at a shadow preset or an entrance effect to see
-  it on the slide before choosing.
-- **Frames follow while you drag**, rows and columns can **wrap**, and a
-  rotated child of a clipping frame is clipped correctly. Gap, padding and
-  columns can be bound to number tokens.
-- **Export from the inspector**: PNG at 1× or 2×, SVG, or Copy as JSON, for
-  the selection or the slide.
-- **Layers of paint.** A shape can carry several fills and several strokes,
-  each with its own visibility, order and colour; older versions draw the top
-  one.
-- **More kinds of token**: font family, font size, opacity and shadow, each
-  with its own preview in the Tokens view and a token dot where it applies.
-- **OKLCH** in the colour picker, beside HEX, RGB and HSL.
-- **A padlock between W and H** keeps any element's proportions.
-- **Accessibility at a glance**: the Export section grades the element's
-  contrast (AA / AAA) and takes alt text for pictures and shapes.
-- **Morph from the slide before** — one switch pairs an element with its
-  look-alike on the previous slide.
-- Popovers and menus open with a short scale-in, and sections fold smoothly;
-  both stop under reduced motion.
+  morphs shows where it comes from, the Animate tab previews the morph, and
+  one switch pairs an element with its look-alike on the slide before.
+  Pointing at a shadow preset or an entrance effect previews it.
+- **Export from the inspector**: PNG at 1× or 2× and SVG that design tools
+  open, or Copy as JSON, for the selection or the slide. The same section
+  grades the element's contrast (AA / AAA) and takes alt text for anything
+  that isn't text.
 - **Lock and hide from Layers.** A locked element can't be clicked or dragged
   on the canvas; a hidden one isn't drawn. Files opened in an older version
   still show hidden elements.
+- Popovers and menus open with a short scale-in, and sections fold smoothly;
+  both stop under the system's reduced-motion setting.
 
 ## [1.2.10] — 2026-10-24
 

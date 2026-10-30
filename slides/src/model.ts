@@ -171,8 +171,8 @@ export interface ElementBase {
   keepAspectRatio?: boolean
   /**
    * What a screen reader says for a picture, shape, chart or diagram (the
-   * Export section's Accessibility field). Rendered as the image's alt / the
-   * element's aria-label with role="img". Absent = decorative to assistive
+   * Export section's Accessibility field). Rendered as role="img" with this
+   * aria-label. Absent = decorative to assistive
    * technology, exactly as before. Text elements are read as their text.
    */
   alt?: string
