@@ -6,8 +6,8 @@
 //
 // WHAT THIS PROVES: handles are 8px on screen at any zoom, and how many show
 // depends on the selection's size ON SCREEN (Figma's rule): all eight with
-// room, the four corners when side handles would crowd it, none (and no
-// rotation stem) when even corners would cover it — zoomed out, a small
+// room, the four corners when side handles would crowd it — a thin line of
+// text included — and none (no stem either) only when it is small both ways — zoomed out, a small
 // element used to disappear under fourteen-pixel handles and a long stem.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
@@ -32,7 +32,7 @@ try {
   await p.evaluate(() => {
     const d = JSON.parse(JSON.stringify(window.bento.doc))
     const r = (id, x, y, w, h) => ({ id, type: 'shape', shape: 'ellipse', x, y, w, h, rotation: 0, opacity: 1, fill: '#4b8cf5', stroke: 'transparent', strokeWidth: 0, radius: 0 })
-    d.slides = [{ id: 's', background: '#fff', transition: 'none', notes: '', elements: [r('tiny', 100, 100, 30, 30), r('small', 300, 100, 90, 90), r('big', 600, 100, 500, 300)] }]
+    d.slides = [{ id: 's', background: '#fff', transition: 'none', notes: '', elements: [r('tiny', 100, 100, 30, 30), r('small', 300, 100, 90, 90), r('big', 600, 100, 500, 300), r('line', 100, 500, 400, 30)] }]
     window.bento.loadDoc(JSON.stringify(d))
   })
   await p.waitForTimeout(400)
@@ -60,6 +60,10 @@ try {
   h = await handles()
   ok(tw < 24 ? h.n === 0 && h.rot === 0 : h.n <= 4, `a ${tw}px-on-screen selection is not buried under handles (${h.n} handles, stem ${h.rot})`)
   ok(h.size === 0 || h.size === 8, `handles stay 8px on screen (${h.size})`)
+  // a thin line of text: short but wide — it keeps its corners and stem
+  await pick('line')
+  h = await handles()
+  ok(h.n === 4 && h.rot === 1, `a wide, short selection (a line of text) keeps its four corners and the stem (${h.n}, stem ${h.rot})`)
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()
