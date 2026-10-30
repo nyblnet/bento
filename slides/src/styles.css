@@ -716,6 +716,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-layer:hover { background: rgb(94 118 153 / 0.10); }
 .ed-layer.sel { background: rgb(94 118 153 / 0.18); border-color: rgb(94 118 153 / 0.35); }
+.ed-layer.in-sel { background: rgb(94 118 153 / 0.07); } /* inside a group selected whole: the group row carries the highlight */
 /* a group's own row heads its members, which nest under it on a guide line
    (layers.ts groupRow), as Penpot and Figma draw a group */
 .ed-layer.grouped { position: relative; padding-inline-start: 26px; }
