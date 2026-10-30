@@ -135,6 +135,17 @@ try {
   const json = await p.evaluate(() => JSON.stringify(window.bento.doc))
   await p.evaluate((j) => window.bento.loadDoc(j), json); await p.waitForTimeout(300)
   ok((await els()).find((e) => e.bool)?.bool.shapes.length === 2, 'a reload keeps `bool` (the sanitizer knows it)')
+  console.log('\na line in the selection is named, not silently refused\n')
+  {
+    await load([shape('r1', 100, 100, 200, 200), shape('ln', 400, 150, 200, 4, { shape: 'line', stroke: '#000000', strokeWidth: 4 })])
+    await p.waitForTimeout(300)
+    await select(['r1', 'ln'])
+    const bar = await p.evaluate(() => { const b = document.querySelector('.ed-topbar .ed-bool'); return { hidden: b.hidden, title: b.title, disabled: [...b.querySelectorAll('button')].every((x) => x.disabled) } })
+    ok(!bar.hidden && bar.disabled && /can’t be combined/.test(bar.title), `a shape and a line: the bar shows greyed, saying why ("${bar.title.slice(0, 40)}…")`)
+    await p.keyboard.press('Alt+Shift+KeyU'); await p.waitForTimeout(200)
+    ok((await ids()) === 'r1 ln', '⌥⇧U does nothing to it')
+  }
+
   ok(errors.length === 0, `no page error${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

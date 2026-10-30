@@ -77,9 +77,7 @@ const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y)
 // tight-curvature hairpin can stray past TOL; adaptive subdivision if it shows.
 const chords = (len: number) => Math.min(64, Math.max(2, Math.ceil(len / 4)))
 
-/** Flatten SVG path data to closed contours. Every command but the arc is exact
- *  to TOL; an arc is approximated by its chord's endpoint (no generator here or
- *  in the editor emits one). */
+/** Flatten SVG path data to closed contours, every command (arcs included) to short chords. */
 export function flattenPath(d: string): Poly {
   const tk = d.match(/[A-Za-z]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi) ?? []
   const out: Poly = []
@@ -91,6 +89,13 @@ export function flattenPath(d: string): Poly {
   let cmd = ''
   let i = 0
   const n = () => Number(tk[i++])
+  // an arc flag is one digit and may be packed against the next ("a5 5 0 01 10 10")
+  const flag = (): number => {
+    const t = tk[i]
+    if (t.length > 1 && /^[01]/.test(t)) { tk[i] = t.slice(1); return Number(t[0]) }
+    i++
+    return Number(t)
+  }
   const close = () => { if (cur.length > 2) out.push(cur); cur = [] }
   while (i < tk.length) {
     if (/^[A-Za-z]$/.test(tk[i])) {
@@ -132,13 +137,48 @@ export function flattenPath(d: string): Poly {
       cur.push(q); p = q; lastQ = c; lastC = null
       continue
     } else if (C === 'A') {
-      // ponytail: arc → straight to its endpoint; flatten properly if a deck ever carries one
-      i += 5
+      const rx = n(), ry = n(), rot = n(), large = flag(), sweep = flag()
       q = at(n(), n())
+      cur.push(...arcPts(p, q, rx, ry, rot, !!large, !!sweep))
+      p = q; lastC = lastQ = null
+      continue
     } else { i++; continue }
     cur.push(q); p = q; lastC = lastQ = null
   }
   close()
+  return out
+}
+
+/**
+ * An elliptical arc from p to q as chord points (q included), by the SVG
+ * spec's endpoint-to-centre conversion (SVG 1.1 F.6.5–F.6.6): radii too small
+ * for the endpoints are scaled up, a zero radius is a straight line.
+ */
+function arcPts(p: Pt, q: Pt, rx: number, ry: number, rotDeg: number, large: boolean, sweep: boolean): Pt[] {
+  rx = Math.abs(rx); ry = Math.abs(ry)
+  if (!rx || !ry || (p.x === q.x && p.y === q.y)) return [q]
+  const phi = (rotDeg * Math.PI) / 180, cos = Math.cos(phi), sin = Math.sin(phi)
+  const dx = (p.x - q.x) / 2, dy = (p.y - q.y) / 2
+  const x1 = cos * dx + sin * dy, y1 = -sin * dx + cos * dy
+  const lam = (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry)
+  if (lam > 1) { rx *= Math.sqrt(lam); ry *= Math.sqrt(lam) }
+  const num = rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1
+  const k = (large === sweep ? -1 : 1) * Math.sqrt(Math.max(0, num / (rx * rx * y1 * y1 + ry * ry * x1 * x1)))
+  const cx1 = (k * rx * y1) / ry, cy1 = (-k * ry * x1) / rx
+  const cx = cos * cx1 - sin * cy1 + (p.x + q.x) / 2, cy = sin * cx1 + cos * cy1 + (p.y + q.y) / 2
+  const ang = (ux: number, uy: number, vx: number, vy: number) => Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy)
+  const t0 = ang(1, 0, (x1 - cx1) / rx, (y1 - cy1) / ry)
+  let dt = ang((x1 - cx1) / rx, (y1 - cy1) / ry, (-x1 - cx1) / rx, (-y1 - cy1) / ry)
+  if (!sweep && dt > 0) dt -= 2 * Math.PI
+  else if (sweep && dt < 0) dt += 2 * Math.PI
+  const steps = chords(Math.abs(dt) * Math.max(rx, ry))
+  const out: Pt[] = []
+  for (let j = 1; j < steps; j++) {
+    const t = t0 + (dt * j) / steps
+    const ex = rx * Math.cos(t), ey = ry * Math.sin(t)
+    out.push({ x: cos * ex - sin * ey + cx, y: sin * ex + cos * ey + cy })
+  }
+  out.push(q)
   return out
 }
 

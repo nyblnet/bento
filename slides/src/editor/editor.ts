@@ -64,7 +64,7 @@ import { dryRun, applyCompress, type DryRun } from './compressdeck'
 import { createDialog } from '../../../kernel/src/ui/dialog.ts'
 import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
-import { BOOL_OPS, boolOperands, boolUi, combine, flatten, release } from './booleans'
+import { BOOL_OPS, boolBlocked, boolOperands, boolUi, combine, flatten, release } from './booleans'
 
 const i18nT = t
 
@@ -429,7 +429,14 @@ export class Editor {
       b.setAttribute('aria-label', ui.label)
       boolBar.appendChild(b)
     }
-    const syncBool = () => { boolBar.hidden = this.store.readOnly || !boolOperands(this.store, this.store.selectedElements) }
+    // a selection with a line or an open path in it shows the bar greyed, saying why
+    const syncBool = () => {
+      const els = this.store.selectedElements
+      const blocked = boolBlocked(els)
+      boolBar.hidden = this.store.readOnly || (!boolOperands(this.store, els) && !blocked)
+      boolBar.title = blocked ?? ''
+      for (const b of boolBar.querySelectorAll('button')) b.disabled = !!blocked
+    }
     syncBool()
     for (const e of ['selection', 'doc', 'current'] as const) {
       const off = this.store.on(e, syncBool)

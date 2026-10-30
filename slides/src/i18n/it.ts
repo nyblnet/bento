@@ -1081,6 +1081,7 @@ export const it: Catalog = {
   "Stretch children": "Estendi figli",
   "Hug contents": "Adatta al contenuto",
   "Wrap": "A capo",
+  "Lines, arrows and open paths can’t be combined — they have no inside. Deselect them to combine the rest.": "Linee, frecce e tracciati aperti non si possono combinare: non hanno un interno. Deselezionali per combinare il resto.",
   "Mode name, e.g. Dark": "Nome della modalità, ad es. Scuro",
   "Component name": "Nome del componente",
   "Clip content": "Ritaglia contenuto",

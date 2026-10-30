@@ -1081,6 +1081,7 @@ export const zhHans: Catalog = {
   "Stretch children": "拉伸子元素",
   "Hug contents": "适应内容",
   "Wrap": "换行",
+  "Lines, arrows and open paths can’t be combined — they have no inside. Deselect them to combine the rest.": "线条、箭头和开放路径没有内部,无法合并。取消选择它们即可合并其余图形。",
   "Mode name, e.g. Dark": "模式名称,例如 深色",
   "Component name": "组件名称",
   "Clip content": "裁剪内容",

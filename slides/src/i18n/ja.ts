@@ -1081,6 +1081,7 @@ export const ja: Catalog = {
   "Stretch children": "子要素を伸縮",
   "Hug contents": "内容に合わせる",
   "Wrap": "折り返し",
+  "Lines, arrows and open paths can’t be combined — they have no inside. Deselect them to combine the rest.": "線、矢印、開いたパスは内側がないため結合できません。選択を外すと残りを結合できます。",
   "Mode name, e.g. Dark": "モード名(例: ダーク)",
   "Component name": "コンポーネント名",
   "Clip content": "内容をクリップ",

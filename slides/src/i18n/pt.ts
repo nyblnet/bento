@@ -1079,6 +1079,7 @@ export const pt: Catalog = {
   "Stretch children": "Esticar filhos",
   "Hug contents": "Ajustar ao conteúdo",
   "Wrap": "Quebrar linha",
+  "Lines, arrows and open paths can’t be combined — they have no inside. Deselect them to combine the rest.": "Linhas, setas e caminhos abertos não podem ser combinados — não têm interior. Desmarque-os para combinar o resto.",
   "Mode name, e.g. Dark": "Nome do modo, ex.: Escuro",
   "Component name": "Nome do componente",
   "Clip content": "Recortar conteúdo",

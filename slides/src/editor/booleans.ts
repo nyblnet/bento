@@ -19,6 +19,13 @@ export function boolOperands(store: Store, els: SlideElement[]): ShapeElement[] 
   return [...els].sort((a, b) => order.indexOf(a) - order.indexOf(b)) as ShapeElement[]
 }
 
+/** Two or more shapes where some cannot take part (a line, an arrow, an open
+ *  path has no inside): the reason, for the bar to show instead of acting. */
+export function boolBlocked(els: SlideElement[]): string | null {
+  if (els.length < 2 || !els.every((e) => e.type === 'shape') || els.every(canBool)) return null
+  return t('Lines, arrows and open paths can’t be combined — they have no inside. Deselect them to combine the rest.')
+}
+
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
 
 /** The paint, effects and presentation the result inherits: the bottom shape's (Figma's rule). */

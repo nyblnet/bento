@@ -98,5 +98,21 @@ check('donut ∪ plug', asShape, small, 'union', 10000)
 ok(!canBool({ type: 'shape', shape: 'line' }) && !canBool({ type: 'shape', shape: 'path', d: 'M 0 0 L 10 10' }) && !canBool({ type: 'text' }), 'lines, open paths and text are refused')
 ok(flattenPath('m 0 0 h 10 v 10 h -10 z')[0].length === 4, 'relative h/v commands parse')
 
+console.log('\nelliptical arcs\n')
+{
+  // a circle of r=50 drawn as two half arcs
+  const circle = flattenPath('M 0 50 A 50 50 0 0 1 100 50 A 50 50 0 0 1 0 50 Z')
+  ok(near(Math.abs(polyArea(circle)), Math.PI * 2500, 0.01), `two arcs make a circle (area ${Math.abs(polyArea(circle)).toFixed(0)} ≈ ${(Math.PI * 2500).toFixed(0)})`)
+  // packed flags ("01") and a relative arc: a half disc
+  const half = flattenPath('M 0 50 a50 50 0 01 100 0 Z')
+  ok(near(Math.abs(polyArea(half)), (Math.PI * 2500) / 2, 0.01), 'packed arc flags and relative arcs parse (half disc)')
+  // the large-arc flag picks the far way round: three quarters of a circle
+  const big = flattenPath('M 50 0 A 50 50 0 1 0 100 50 L 50 50 Z')
+  ok(near(Math.abs(polyArea(big)), Math.PI * 2500 * 0.75, 0.01), 'the large-arc flag takes the long way (¾ disc)')
+  // radii too small for the endpoints are scaled up to just reach (a half circle)
+  ok(near(Math.abs(polyArea(flattenPath('M 0 0 A 1 1 0 0 1 100 0 Z'))), (Math.PI * 2500) / 2, 0.01), 'radii too small are scaled up, as SVG does')
+  check('arc-circle ∩ square', S({ shape: 'path', d: 'M 0 50 A 50 50 0 0 1 100 50 A 50 50 0 0 1 0 50 Z', pathBox: [0, 0, 100, 100] }), S({ x: 50, y: 0, w: 100, h: 100 }), 'intersect', (Math.PI * 2500) / 2)
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures ? 1 : 0)

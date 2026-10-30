@@ -1081,6 +1081,7 @@ export const zhHant: Catalog = {
   "Stretch children": "延展子元素",
   "Hug contents": "符合內容",
   "Wrap": "換行",
+  "Lines, arrows and open paths can’t be combined — they have no inside. Deselect them to combine the rest.": "線條、箭頭和開放路徑沒有內部,無法合併。取消選取它們即可合併其餘圖形。",
   "Mode name, e.g. Dark": "模式名稱,例如 深色",
   "Component name": "元件名稱",
   "Clip content": "裁切內容",
