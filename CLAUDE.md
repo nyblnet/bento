@@ -83,8 +83,8 @@ names provisional.
   `docContentKey` (content minus volatile modified/collab fields) to the loaded
   doc; a mismatch shows a Restore/Discard banner. Encrypted decks are NEVER
   snapshotted to IndexedDB (plaintext-to-disk) — their file write-back stays
-  encrypted. readonly players skip autosave. Version history UI in the About
-  dialog; restore = `store.replaceDoc` (undoable). Keyed by docId, so recovery
+  encrypted. readonly players skip autosave. Version history UI from File ▸
+  Version history…; restore = `store.replaceDoc` (undoable). Keyed by docId, so recovery
   needs a stable docId (saved files) — the fresh-each-load anonymous demo won't
   cross-reload-recover, by design.
 - `src/render.ts` — single model→DOM renderer shared by editor canvas, thumbnails, and
@@ -109,7 +109,7 @@ names provisional.
   (`resolveFields`); page/pages take a zero-pad width (`{{page:2}}`→"06"). The
   doc-props live in optional `doc.meta` (`{author,company,subject,event,keywords}`
   — additive, backward-compatible; old files lack it and tokens resolve empty)
-  and are edited in the About dialog's "Document properties" section (title stays
+  and are edited in File ▸ Document properties… (its own dialog; title stays
   top-level). `renderSlide` auto-fills `RenderOpts.fields` via `fieldContext(doc,
   slide)` (page = 1-based position among NON-state slides).
   The MODEL stores the raw token; only output is resolved, so inserting/removing
@@ -223,8 +223,8 @@ names provisional.
   home (v0.9.1 fix — v0.9.0 connected every visitor). "Stop sharing" opts
   out; Offline mode hard-blocks regardless.
 - `src/update.ts` — signed self-update: checks a release manifest at LAUNCH
-  by default (localStorage 'bento-auto-check'='off' disables; toggle in the
-  About dialog; found updates badge the topbar sync button) and on demand via
+  by default (localStorage 'bento-auto-check'='off' disables; toggle in
+  Preferences (⚙, ⌘,); found updates badge the topbar sync button) and on demand via
   About/topbar (`bento.page`; dev override localStorage 'bento-update-url'),
   verifies ECDSA P-256 signature against the embedded
   PUBLIC_KEY_JWK + sha256 of the fetched shell + version monotonicity, then
@@ -240,7 +240,7 @@ names provisional.
   {placeholder} interpolation, catalogs compiled in (ja, zh-Hans, zh-Hant, es,
   fr, de, it — 7 locales + English fallback = 8 UI languages);
   locale follows the VIEWER (navigator.language; localStorage 'bento-lang'
-  override; picker in About rebuilds the workspace). Language never enters the
+  override; picker in Preferences rebuilds the workspace). Language never enters the
   document format. select() localizes DISPLAY labels only (values stay model
   words). GOTCHAS: never call t() in module-level consts (frozen at import —
   translate at render time); keys must match source EXACTLY (validate with the
@@ -457,7 +457,7 @@ names provisional.
   a fork `snap` frame carries its state to peers (mergeSnapshot) — merge is
   two-way, verified under partition. hello replies include a `need` (ops
   minted before connecting flow back); onRelayReady re-sends log ops the
-  room's replay lacked. "Duplicate as new deck…" (About) = identity fork:
+  room's replay lacked. "Duplicate as new deck…" (Save ▾) = identity fork:
   new docId + fresh creds, never syncs with its ancestor. Relay:
   `server/sync-worker/` (blind DO, ciphertext-only storage — verified;
   `npx wrangler dev --port 8787` + localStorage 'bento-sync-url' for local
@@ -552,7 +552,7 @@ names provisional.
   the mark and the title — and an iPhone SE (or any iPhone with Display Zoom
   on) is 320px. `.ed-root` is `overflow: hidden` so a wide bar can never become
   document scroll, so the excess was simply CUT OFF: ⋯ — which on a phone
-  carries Redo, Comment, PDF, Share, Language, Help and the whole save-as list
+  carries Redo, Comment, Share, the app cluster, Print and the Save and File lists
   — sat at x=356 on a 320px screen and could not be reached at all (measured,
   not inferred). Hiding text is still the strategy and still does all the work;
   scrolling is only the floor beneath it, for the widths where the fold has
@@ -581,8 +581,15 @@ names provisional.
   aspect). Size changes reframe the canvas, never rescale elements.
   FULLSCREEN paints only the fullscreened element's subtree — anything
   body-mounted (chart tooltips!) must reparent into
-  document.fullscreenElement while it's active. Save is a dropdown: copy (identity-keeping invite) / new
-  deck (fresh identity) / template. "Live" button popover: name field,
+  document.fullscreenElement while it's active. **The bar's three kinds**
+  (DECISIONS 2026-10-30): Save ▾ holds only the ways to SAVE (a copy, a new
+  deck, with/without password); the wordmark opens the FILE menu — what acts
+  on the document (start from scratch, import, Export: print/PDF ⌘P, images,
+  PowerPoint; version history, document properties, compress pictures,
+  Advanced: the JSON round-trip; About); the corner app cluster — ⌨ shortcuts
+  (?), Help (guide, what's new, ask), ⚙ Preferences (⌘,: appearance,
+  language, update check, shrink photos, offline) — is the APP, never the
+  document. Print stays a visible bar button too. About is only about. "Live" button popover: name field,
   collaborator list (click follows), join/leave toasts. Deck buttons use
   ONE invisible hit-rect above button+label (hard-won #7) — never put
   `link` on both a rect and its label text (two mismatched hover pills).
@@ -713,7 +720,7 @@ names provisional.
   release.mjs runs a conformance GATE before signing every release.
 - **AI round-trip**: the DOCUMENT is the interchange unit (chat AIs can't emit
   1MB+ files). Save → "Copy document JSON" / "Replace from JSON…"
-  (store.replaceDoc, undoable); `window.bento.loadDoc(json)` for scripts; the
+  (File ▸ Advanced; store.replaceDoc, undoable); `window.bento.loadDoc(json)` for scripts; the
   shell carries a Tooling-note comment pointing AIs at #bento-doc + the API.
   Agent harnesses edit files in place; chat AIs round-trip the JSON.
 

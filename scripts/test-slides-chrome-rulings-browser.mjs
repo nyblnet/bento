@@ -62,13 +62,20 @@ try {
       desc: d?.textContent ?? '', hidden: !!(d && r.width <= 1 && r.height <= 1), inRow: !!(d && b.contains(d)), second: !!b.querySelector('.ed-mi-desc') }
   }))
   const described = save.filter((x) => x.desc)
-  ok(described.length >= 8, `${described.length} of ${save.length} Save-as rows carry a description (Export slides as images opens a dialog that explains itself)`)
+  ok(save.length >= 3 && described.length === save.length, `${described.length} of ${save.length} Save rows carry a description — Save holds only the ways to save`)
   ok(save.every((x) => Math.abs(x.h - 30) <= 0.5 && !x.second), `every row is one 30px line (${[...new Set(save.map((x) => x.h))].join('/')}px)`)
   ok(described.every((x) => x.title === x.desc), 'the description is the row\'s hover tooltip (title)')
   ok(described.every((x) => x.hidden && x.inRow), '…and the same text is the aria-describedby target, visually hidden inside the row')
   // the name stays the name: the description is announced AS a description
+  // the document's commands live in the File menu (on the wordmark), same row grammar
+  await p.evaluate(() => { document.querySelector('.ed-split-caret').click(); document.querySelector('.ed-logo').click() })
+  await p.waitForTimeout(150)
+  const file = await p.evaluate(() => [...document.querySelectorAll('.ed-file-menu > .ed-btn')].map((b) => ({ h: b.getBoundingClientRect().height, d: !!b.getAttribute('aria-describedby') })))
+  ok(file.length >= 10 && file.filter((x) => x.d).length >= 9 && file.every((x) => Math.abs(x.h - 30) <= 0.5), `the File menu's ${file.length} rows are the same one-line, described rows`)
   const replaceRow = p.getByRole('button', { name: 'Replace from JSON…', exact: true })
   ok(await replaceRow.count() === 1, 'a described row keeps its bare name ("Replace from JSON…"), not name+description')
+  await p.evaluate(() => { document.querySelector('.ed-logo').click(); document.querySelector('.ed-split-caret').click() })
+  await p.waitForTimeout(150)
   const menuW = await p.evaluate(() => document.querySelector('.ed-save-menu').getBoundingClientRect().width)
   ok(menuW <= 264.5 && menuW >= 240, `the list keeps spaces' width for it (${menuW}px, 240–264)`)
   // on a short window (phone landscape) it must scroll, not run off the
@@ -155,8 +162,9 @@ try {
   ok(k.font === k.ui && !/mono/i.test(k.font), `shortcut face = interface face (${k.font.split(',')[0]})`)
   ok(Math.abs(k.right - k.col) < 1, `shortcut ends at its column's edge (${k.right.toFixed(1)} of ${k.col}px)`)
   await closeAll()
-  await openSave()
-  await p.evaluate(() => [...document.querySelectorAll('.ed-save-menu .ed-btn')].find((b) => b.textContent.startsWith('Version history')).click())
+  // Version history is the document's: the File menu, on the wordmark
+  await p.evaluate(() => document.querySelector('.ed-logo').click())
+  await p.evaluate(() => document.querySelector('.ed-file-menu [data-cmd="version-history"]').click())
   await p.waitForSelector('.ed-version-box h2')
   ok(await title() === '17px/650', `Version history title ${await title()}`)
   await closeAll()
@@ -168,7 +176,7 @@ try {
   const caret = await p.evaluate(() => { const s = document.querySelector('.ed-split-caret .ed-caret'); const r = s.getBoundingClientRect(); return { w: r.width, text: s.textContent, disp: getComputedStyle(s).display } })
   ok(caret.disp !== 'none' && caret.w > 0 && caret.text === '▾', `▾ is drawn (${caret.disp}, ${caret.w.toFixed(1)}px)`)
   // the glyph is decoration: the button's name stays its title, at every tier
-  ok(await p.getByRole('button', { name: 'Save as… — copy, new deck, password', exact: true }).count() === 1, 'the caret is still named "Save as… — copy, new deck, password", not "▾"')
+  ok(await p.getByRole('button', { name: 'Save options — a copy, a new deck, a password', exact: true }).count() === 1, 'the caret is still named "Save options — a copy, a new deck, a password", not "▾"')
 
   // --- 5. phone rows --------------------------------------------------------------
   console.log('\nphone: ⋯ rows read from the start edge\n')

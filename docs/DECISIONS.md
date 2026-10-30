@@ -12216,3 +12216,35 @@ selections, and Esc lets go of the selection before returning to Move.
 Moving stays Move's job, as in Figma. The tool bar presses exactly one tool
 at a time (Move at rest), so which mode a drag will act in is always on
 screen.
+
+## 2026-10-30 — slides: the top bar's three kinds — Save saves, File acts on the document, the app cluster is the app
+
+Supersedes, for slides, the 2026-09-26 ruling "the Save menu holds the
+file's commands". In use the Save ▾ list had grown to eleven rows of which
+three were saving; the rest were the document's (import, export, history,
+JSON) — and About mixed the app's settings with the document's properties.
+The maintainer: "too much responsibility on the save menu that is not related
+to save at all … some are configuration for the application itself, while
+others are related to the file."
+
+- **Save ▾ — saving only**: Save a copy…, Duplicate as new deck…, Save with
+  password… (or Change password… / Save without password). ⌘S is Save.
+- **File — the wordmark**: what acts on the DOCUMENT, one list under
+  captions (one click deep — no flyouts, no hover timing, and the same list
+  fits the phone's ⋯): Start from scratch…, Import PowerPoint… · Export:
+  Print or save as PDF… ⌘P, Export slides as images…, Export for PowerPoint…
+  · Version history…, Document properties… (its own dialog), Compress
+  pictures in this deck… · Advanced: Copy document JSON, Copy compact JSON,
+  Replace from JSON… · About bento/slides.
+- **The app cluster — the corner**: ⌨ Keyboard shortcuts (?), Help (guide on
+  bento.page, what's new, ask or report), ⚙ Preferences (⌘,): appearance,
+  language, the launch update check, shrink photos on insert, offline mode.
+  No loose globe button: the language is a preference.
+- **Kept in sight**: Present, Share, the Save split button, Print (also in
+  File ▸ Export) and the app cluster. Print folds into ⋯ only with the rest
+  at the phone tier.
+- **About is only about**: version and format, the update check, credits.
+
+Every moved command is in the command list (⌘K finds it) with its key.
+Spaces still follows the 2026-09-26 map; porting it is a follow-up, not part
+of this change.
