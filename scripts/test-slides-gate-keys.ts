@@ -91,6 +91,9 @@ console.log('\ntoken references\n')
     ok(refs({ [path]: '$brand' })[path] === undefined, `a token ref on ${path} is dropped`)
   ok(refs({ fill: '$9bad' }).fill === undefined && refs({ fill: '$toString' }).fill === undefined, 'a ref to a name that is no token name is dropped')
   ok(refs({ fill: 'accent1' }).fill === 'accent1', 'palette refs are unchanged')
+  for (const path of ['html', 'link', 'id', 'src'])
+    ok(refs({ [path]: 'accent1' })[path] === undefined, `a palette ref on ${path} is dropped — it would write a colour over it`)
+  ok(refs({ 'shadow.color': 'accent2', 'fillGradient.stops.0.color': 'tx1' })['shadow.color'] === 'accent2', 'palette refs on paint paths are kept')
   const slide = (themeRefs: Record<string, string>) => (sanitizeSlide({ id: 's', background: '#fff', transition: 'none', notes: '', elements: [], themeRefs }) as any)?.themeRefs ?? {}
   ok(slide({ background: '$brand' }).background === '$brand' && slide({ notes: '$brand' }).notes === undefined, "a slide's token ref sits only on its background")
 }

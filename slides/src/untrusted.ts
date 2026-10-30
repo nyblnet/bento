@@ -448,7 +448,8 @@ const connectorEnd = shape(MODEL_KEYS.connectorEnd, {
  * here rather than carried. A `$token` ref may only sit on a property a token
  * can drive (tokens.ts TOKEN_KEYS): a token value is written straight into the
  * element, so a ref on `id`, `html`, `link` or `component` is refused here as
- * the writer refuses it.
+ * the writer refuses it. A palette ref is held to the same keys: it writes a
+ * colour, and a colour in `html` is content lost.
  */
 /** The element properties a token may be bound to: paint, size and spacing —
  *  never identity, content, links, structure or another feature's data. */
@@ -481,7 +482,10 @@ const themeRefsFor = (tokenKeys: ReadonlySet<string>): Check => tag((v) => {
     const segs = key.split('.')
     if (!segs.length || !segs.every((sg) => /^[A-Za-z_$][A-Za-z0-9_$]*$|^\d+$/.test(sg))) continue
     if (segs.some((sg) => sg === PROTO || sg === 'constructor' || sg === 'prototype')) continue
-    if (tokenName(token) ? !tokenKeys.has(segs[0]) : !parseThemeRef(token)) continue
+    // a palette slot is written into its path as a colour, a token as its
+    // value: either way only a paint/size/spacing key may receive it — a ref
+    // on `html` or `link` would overwrite content with a colour
+    if (!tokenKeys.has(segs[0]) || !(tokenName(token) || parseThemeRef(token))) continue
     out[key] = token
   }
   return Object.keys(out).length ? out : DROP
