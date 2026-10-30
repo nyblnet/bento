@@ -1080,6 +1080,7 @@ export const ja: Catalog = {
   "Space between": "均等配置",
   "Stretch children": "子要素を伸縮",
   "Hug contents": "内容に合わせる",
+  "Wrap": "折り返し",
   "Clip content": "内容をクリップ",
   "Top left": "左上",
   "Top right": "右上",

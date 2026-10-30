@@ -767,6 +767,9 @@
               "items": {
                 "type": "number"
               }
+            },
+            "wrap": {
+              "type": "boolean"
             }
           },
           "additionalProperties": false,

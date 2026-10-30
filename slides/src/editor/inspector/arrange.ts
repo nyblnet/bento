@@ -130,9 +130,17 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
 
   const geo = document.createElement('div')
   geo.className = 'ed-grid2'
+  // W and H can follow a size token — not where auto layout derives the size
+  // (a frame's child, a hugging frame): layout.ts would overwrite the literal
+  // and the binding would read as a hand edit and drop
+  const derived = !single || !!single.parentId || (single.type === 'shape' && !!single.layout?.hug)
+  const size = (key: 'w' | 'h', label: string) => {
+    const f = measure(p, els, key, label, { min: 1 })
+    return derived ? f : tokenBind(p, f, single!, key)
+  }
   geo.append(
-    measure(p, els, 'w', t('W'), { min: 1 }),
-    measure(p, els, 'h', t('H'), { min: 1 }),
+    size('w', t('W')),
+    size('h', t('H')),
     measure(p, els, 'x', t('X')),
     measure(p, els, 'y', t('Y')),
     measure(p, els, 'rotation', t('Angle'), { icon: ICONS.rotate, unit: '°' }),

@@ -1080,6 +1080,7 @@ export const zhHant: Catalog = {
   "Space between": "平均分布",
   "Stretch children": "延展子元素",
   "Hug contents": "符合內容",
+  "Wrap": "換行",
   "Clip content": "裁切內容",
   "Top left": "左上",
   "Top right": "右上",

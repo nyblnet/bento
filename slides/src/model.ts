@@ -199,6 +199,8 @@ export interface FrameLayout {
   clip?: boolean
   /** the frame sizes itself to its children */
   hug?: boolean
+  /** row/col only: children that would pass the frame's edge start a new line */
+  wrap?: boolean
 }
 
 /** Design tokens (`theme.tokens`); values are keyed by mode, 'default' when the deck has none. */

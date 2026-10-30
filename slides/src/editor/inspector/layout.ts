@@ -6,6 +6,7 @@ import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
 import { uid, type FrameLayout, type ShapeElement, type SlideElement } from '../../model'
 import { isFrame } from '../../layout'
+import { tokenBind } from './tokenbind'
 
 const DIRS: Record<string, string> = { row: 'Row', col: 'Column', grid: 'Grid' }
 
@@ -33,19 +34,23 @@ export function buildAutoLayout(p: PropsPanel, el: SlideElement) {
   if (!L) return
   row(p, 'Direction', segmented(['row', 'col', 'grid'], L.dir, (v) => set((l) => { l.dir = v as FrameLayout['dir'] }),
     Object.fromEntries(Object.entries(DIRS).map(([k, v]) => [k, t(v)]))))
-  const gap = mini(t('Gap'), L.gap, (v, fin) => set((l) => { l.gap = v }, fin), undefined, { min: 0 })
-  const parts = L.dir === 'grid' ? [gap, mini(t('Columns'), L.cols ?? 2, (v, fin) => set((l) => { l.cols = Math.max(1, Math.round(v)) }, fin), undefined, { min: 1, max: 64 })] : [gap]
+  // gap, columns and each padding side can follow a number token
+  const gap = tokenBind(p, mini(t('Gap'), L.gap, (v, fin) => set((l) => { l.gap = v }, fin), undefined, { min: 0 }), el, 'layout.gap')
+  const parts = L.dir === 'grid'
+    ? [gap, tokenBind(p, mini(t('Columns'), L.cols ?? 2, (v, fin) => set((l) => { l.cols = Math.max(1, Math.round(v)) }, fin), undefined, { min: 1, max: 64 }), el, 'layout.cols')]
+    : [gap]
   field(p, ...parts)
   // padding, top right bottom left: the arrow is the label, the side is the name
   const sides = [['↑', 'Top padding'], ['→', 'Right padding'], ['↓', 'Bottom padding'], ['←', 'Left padding']] as const
   field(p, ...sides.map(([glyph, name], i) => {
     const m = mini(glyph, L.pad[i], (v, fin) => set((l) => { l.pad[i] = v }, fin), undefined, { min: 0 })
     m.querySelector('input')!.setAttribute('aria-label', t(name))
-    return m
+    return tokenBind(p, m, el, `layout.pad.${i}`)
   }))
   row(p, 'Alignment', alignMatrix(L, (justify, align) => set((l) => { l.justify = justify; l.align = align })))
   row(p, 'Space between', toggle(L.justify === 'space-between', (on) => set((l) => { l.justify = on ? 'space-between' : 'start' })))
   row(p, 'Stretch children', toggle(L.align === 'stretch', (on) => set((l) => { l.align = on ? 'stretch' : 'start' })))
+  if (L.dir !== 'grid') row(p, 'Wrap', toggle(!!L.wrap, (on) => set((l) => { if (on) l.wrap = true; else delete l.wrap })))
   row(p, 'Hug contents', toggle(!!L.hug, (on) => set((l) => { if (on) l.hug = true; else delete l.hug })))
   row(p, 'Clip content', toggle(!!L.clip, (on) => set((l) => { if (on) l.clip = true; else delete l.clip })))
 }

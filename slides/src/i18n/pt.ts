@@ -1078,6 +1078,7 @@ export const pt: Catalog = {
   "Space between": "Espaço entre",
   "Stretch children": "Esticar filhos",
   "Hug contents": "Ajustar ao conteúdo",
+  "Wrap": "Quebrar linha",
   "Clip content": "Recortar conteúdo",
   "Top left": "Superior esquerdo",
   "Top right": "Superior direito",

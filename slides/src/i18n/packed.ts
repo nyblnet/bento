@@ -1086,6 +1086,7 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Space between": ["均等配置","两端分布","平均分布","Espacio entre","Espace entre","Abstand dazwischen","Spazio tra","Espaço entre"],
   "Stretch children": ["子要素を伸縮","拉伸子元素","延展子元素","Estirar elementos","Étirer les enfants","Kinder strecken","Estendi figli","Esticar filhos"],
   "Hug contents": ["内容に合わせる","适应内容","符合內容","Ajustar al contenido","Ajuster au contenu","An Inhalt anpassen","Adatta al contenuto","Ajustar ao conteúdo"],
+  "Wrap": ["折り返し","换行","換行","Ajustar en líneas","Retour à la ligne","Umbrechen","A capo","Quebrar linha"],
   "Clip content": ["内容をクリップ","裁剪内容","裁切內容","Recortar contenido","Rogner le contenu","Inhalt beschneiden","Ritaglia contenuto","Recortar conteúdo"],
   "Top left": ["左上","左上","左上","Arriba a la izquierda","En haut à gauche","Oben links","In alto a sinistra","Superior esquerdo"],
   "Top right": ["右上","右上","右上","Arriba a la derecha","En haut à droite","Oben rechts","In alto a destra","Superior direito"],

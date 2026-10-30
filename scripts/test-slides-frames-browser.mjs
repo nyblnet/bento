@@ -92,6 +92,29 @@ try {
   }, [box('f', 100, 100, { w: 200, layout: { dir: 'row', gap: 0, pad: [0, 0, 0, 0], clip: true } }), box('wide', 0, 0, { w: 400, parentId: 'f' })])
   await p.waitForTimeout(400)
   ok(await p.locator('.ed-stage-scale [data-el-id="wide"]').evaluate((n) => n.style.clipPath) === 'inset(0px 200px 0px 0px)', 'a clip frame clips its overflowing child on the canvas')
+  console.log('\nchildren follow a dragged frame live\n')
+  {
+    await p.evaluate((els) => {
+      const d = JSON.parse(JSON.stringify(window.bento.doc))
+      d.slides = [{ id: 's1', background: '#ffffff', transition: 'none', notes: '', elements: els }]
+      window.bento.loadDoc(JSON.stringify(d))
+    }, [box('g', 100, 100, { w: 900, h: 300, layout: { dir: 'row', gap: 0, pad: [0, 0, 0, 0] } }), box('k', 100, 100, { parentId: 'g' })])
+    await p.waitForTimeout(400)
+    const gb = await p.locator('.ed-stage-scale [data-el-id="g"]').boundingBox()
+    // an empty stretch of the frame, away from its child
+    const x0 = gb.x + gb.width * 0.7, y0 = gb.y + gb.height * 0.6
+    await p.mouse.click(x0, y0); await p.waitForTimeout(200)
+    await p.mouse.move(x0, y0); await p.mouse.down()
+    for (let i = 1; i <= 8; i++) await p.mouse.move(x0 + i * 10, y0 + i * 5)
+    const mid = await p.evaluate(() => {
+      const q = (id) => document.querySelector(`.ed-stage-scale [data-el-id="${id}"]`)
+      return { gx: parseFloat(q('g').style.left), gy: parseFloat(q('g').style.top), kx: parseFloat(q('k').style.left), ky: parseFloat(q('k').style.top) }
+    })
+    ok(mid.gx !== 100 && Math.abs(mid.kx - mid.gx) < 0.01 && Math.abs(mid.ky - mid.gy) < 0.01, `mid-drag, the child is already where the frame will put it (frame ${mid.gx},${mid.gy}; child ${mid.kx},${mid.ky})`)
+    await p.mouse.up(); await p.waitForTimeout(200)
+    const after = await els()
+    ok(at(after, 'k').x === at(after, 'g').x && at(after, 'g').x !== 100, 'on release the layout lands it there in the model')
+  }
   ok(!errors.length, `no page error${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

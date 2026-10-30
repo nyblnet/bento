@@ -34,7 +34,7 @@ export const MODEL_KEYS = {
     "tableCell": ["align", "bg", "bold", "color", "html"],
     "gradient": ["angle", "stops"],
     "imageCrop": ["scale", "x", "y"],
-    "frameLayout": ["align", "clip", "cols", "dir", "gap", "hug", "justify", "pad"],
+    "frameLayout": ["align", "clip", "cols", "dir", "gap", "hug", "justify", "pad", "wrap"],
     "sizing": ["h", "w"],
     "size": ["height", "width"],
     "meta": ["author", "company", "event", "keywords", "subject"],

@@ -1080,6 +1080,7 @@ export const fr: Catalog = {
   "Space between": "Espace entre",
   "Stretch children": "Étirer les enfants",
   "Hug contents": "Ajuster au contenu",
+  "Wrap": "Retour à la ligne",
   "Clip content": "Rogner le contenu",
   "Top left": "En haut à gauche",
   "Top right": "En haut à droite",
