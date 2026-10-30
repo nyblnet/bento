@@ -96,17 +96,31 @@ function alignMatrix(L: FrameLayout, pick: (justify: FrameLayout['justify'], ali
  * goes in behind the lowest selected element, takes their bounds plus the
  * padding, and runs along the axis they are already spread on.
  */
-export function wrapInFrame(p: PropsPanel, els: SlideElement[]) {
+export function wrapInFrame(p: PropsPanel, picked: SlideElement[]) {
+  // a picked element inside another picked one rides along with it: wrapping
+  // a card and its own text must not pull the text out of the card
+  const ids0 = new Set(picked.map((e) => e.id))
+  const byId = new Map(p.store.slide.elements.map((e) => [e.id, e]))
+  const inside = (e: SlideElement) => { for (let q = e.parentId, n = 0; q && n < 64; q = byId.get(q)?.parentId, n++) if (ids0.has(q)) return true; return false }
+  const els = picked.filter((e) => !inside(e))
   if (!els.length) return
   const x = Math.min(...els.map((e) => e.x)), y = Math.min(...els.map((e) => e.y))
   const r = Math.max(...els.map((e) => e.x + e.w)), b = Math.max(...els.map((e) => e.y + e.h))
   const spreadX = Math.max(...els.map((e) => e.x)) - x, spreadY = Math.max(...els.map((e) => e.y)) - y
+  const dir = spreadY > spreadX ? 'col' : 'row'
+  // the spacing they already have becomes the gap (the median, so one stray
+  // element does not set it); one element keeps the default
+  const run = [...els].sort((m, n) => (dir === 'row' ? m.x - n.x : m.y - n.y))
+  const gaps = run.slice(1).map((e, i) => (dir === 'row' ? e.x - (run[i].x + run[i].w) : e.y - (run[i].y + run[i].h))).sort((m, n) => m - n)
+  const gap = gaps.length ? Math.max(0, Math.round(gaps[Math.floor((gaps.length - 1) / 2)])) : 16
   const pad = 16
+  const parent = els.every((e) => e.parentId === els[0].parentId) ? els[0].parentId : undefined
   const frame: ShapeElement = {
     id: `frame-${uid()}`, type: 'shape', shape: 'rect', name: t('Frame'),
     x: x - pad, y: y - pad, w: r - x + 2 * pad, h: b - y + 2 * pad, rotation: 0, opacity: 1,
     fill: 'transparent', stroke: 'transparent', strokeWidth: 0, radius: 0,
-    layout: { dir: spreadY > spreadX ? 'col' : 'row', gap: 16, pad: [pad, pad, pad, pad], hug: true },
+    layout: { dir, gap, pad: [pad, pad, pad, pad], hug: true },
+    ...(parent ? { parentId: parent } : {}),
   }
   const ids = new Set(els.map((e) => e.id))
   p.store.commit(() => {

@@ -8,7 +8,7 @@ import type { Slide, SlideElement } from '../model'
 import { ICONS } from '../icons'
 import { t } from '../i18n'
 import { layerRows, moveInPaintOrder, highlighted, rowSignature, signatureDiff, type LayerRow } from './layerrows'
-export { excerpt, labelFor, layerRows, moveInPaintOrder, highlighted, rowSignature, signatureDiff, type LayerRow } from './layerrows'
+export { excerpt, labelFor, labelIn, layerRows, moveInPaintOrder, highlighted, rowSignature, signatureDiff, type LayerRow } from './layerrows'
 
 /** The store surface the list needs — narrow so the rig never needs one. */
 export interface LayersHost {

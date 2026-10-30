@@ -149,7 +149,7 @@ try {
   ok(await menu(row('c'), 'Rename'), 'the right-click menu offers Rename')
   ok(await field.count() === 1, 'and it opens the same field')
   await field.fill(''); await field.press('Enter'); await p.waitForTimeout(250)
-  ok(await name('c') === '' && await label(row('c')) === 'Rectangle', `an empty name gives the default back (${await label(row('c'))})`)
+  ok(await name('c') === '' && /^Rectangle( \d+)?$/.test(await label(row('c'))), `an empty name gives the default back (${await label(row('c'))})`)
   await groupRow().locator('.ed-layer-label').dblclick(); await p.waitForTimeout(150)
   await field.fill('Header'); await field.press('Enter'); await p.waitForTimeout(250)
   ok(await label(groupRow()) === 'Header', `a group's row renames the group (${await label(groupRow())})`)

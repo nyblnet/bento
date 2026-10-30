@@ -26,7 +26,7 @@ import { slidingPill } from './inspector/controls'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { mountNotesPane } from './notespane'
 import { mountHints } from './hints'
-import { labelFor } from './layerrows'
+import { labelIn } from './layerrows'
 import { startPresentation } from '../present'
 import { walkSource, wouldPair } from './morph'
 // serializeFile (plain output) is deliberately NOT imported here: every path
@@ -64,6 +64,7 @@ import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
 import { BOOL_OPS, boolBlocked, boolOperands, boolUi, combine, flatten, release } from './booleans'
 import type { NodeKind } from './beziereditor'
+import { withDescendants } from '../layout'
 
 const i18nT = t
 
@@ -473,7 +474,8 @@ export class Editor {
         this.updatesB.innerHTML = `${ICONS.sync}<span>v${r.release.version}</span>`
         this.updatesB.title = t('Version {v} is available — click to update', { v: r.release.version })
         this.toast(t('Update available: v{v} — click the peach button to update', { v: r.release.version }))
-      } else if (r.status === 'current') {
+      } else if (r.status === 'current' && !document.querySelector(MODAL)) {
+        // passive news: never over a dialog the author has opened meanwhile
         this.toast(t('Up to date — v{v}', { v: APP_VERSION }))
       }
     }, 1500)
@@ -922,7 +924,17 @@ export class Editor {
     // overflow visible, so "scrollWidth > clientWidth" IS the clipped-buttons
     // condition (ed-root clips whatever leaks). The 1px slack absorbs
     // subpixel rounding at fractional zoom levels.
-    const overflow = () => bar.scrollWidth - bar.clientWidth > 1
+    // …and the centred insert group can run over its neighbours without the
+    // bar overflowing at all (at 768px it sat on Undo and Redo): two of the
+    // bar's own groups overlapping is the same condition.
+    // (a group's buttons spill past its own box, so compare the buttons)
+    const collide = () => {
+      const boxes = [...bar.querySelectorAll<HTMLElement>('button')]
+        .filter((b) => !b.closest('.ed-menu'))
+        .map((b) => b.getBoundingClientRect()).filter((r) => r.width > 0).sort((a, b) => a.left - b.left)
+      return boxes.some((r, i) => i > 0 && boxes[i - 1].right - r.left > 1)
+    }
+    const overflow = () => bar.scrollWidth - bar.clientWidth > 1 || collide()
     // The title input is the bar's only shrinkable item, so flexbox crushes
     // it toward its 48px floor before anything overflows. Waiting for hard
     // overflow would mean full button labels beside an unusable title, so
@@ -3466,12 +3478,12 @@ export class Editor {
       { id: 'help', label: 'Shortcuts & tips', keys: '?', scope: 'always', when: canvasFree, match: (ev, mod) => !mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey)), run: () => this.openHelp() },
       // The tools, one letter each as in Figma and Penpot (C stays Comment)
       { id: 'tool-select', label: 'Select', keys: 'V', scope: 'canvas', when: canvasFree, match: tool('v'), run: () => this.selectTool() },
-      { id: 'tool-frame', label: 'Frame', keys: 'F', scope: 'canvas', when: toolFree, match: tool('f'), run: () => this.insertFrame() },
-      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: toolFree, match: tool('r'), run: () => this.canvas.insert(defaultShape('rect')) },
-      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: toolFree, match: tool('o'), run: () => this.canvas.insert(defaultShape('ellipse')) },
+      { id: 'tool-frame', label: 'Frame', keys: 'F', scope: 'canvas', when: toolFree, match: tool('f'), run: () => this.placeTool(() => this.newFrame()) },
+      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: toolFree, match: tool('r'), run: () => this.placeTool(() => defaultShape('rect')) },
+      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: toolFree, match: tool('o'), run: () => this.placeTool(() => defaultShape('ellipse')) },
       { id: 'tool-line', label: 'Line', keys: 'L', scope: 'canvas', when: toolFree, match: tool('l'), run: () => this.canvas.armDraw('line') },
       { id: 'tool-pen', label: 'Pen', keys: 'P', scope: 'canvas', when: toolFree, match: tool('p'), run: () => this.canvas.armDraw('pen') },
-      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: toolFree, match: tool('t'), run: () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 120 + Math.random() * 200 }), true) },
+      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: toolFree, match: tool('t'), run: () => this.placeTool(() => defaultText({ color: readableInk(this.store.slide.background) }), true) },
       { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
       { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => writable() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
       { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => writable() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
@@ -3488,7 +3500,7 @@ export class Editor {
       { id: 'ghost-cut', label: 'Cut to move', keys: `⇧${MOD}X`, scope: 'canvas', when: writable, match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'x', run: () => {
         if (!this.store.selection.length || this.store.readOnly) return
         this.copySelection()
-        const ids = [...this.store.selection]
+        const ids = withDescendants(this.store.slide, this.store.selectedElements).map((e) => e.id) // a frame moves with its contents
         this.store.select([])
         this.canvas.setGhost({ slideId: this.store.slide.id, ids })
       } },
@@ -3521,6 +3533,11 @@ export class Editor {
         ev.target instanceof Element &&
         ev.target.closest('input, textarea, select, [contenteditable="true"]') != null
 
+      // A key typed at a selected text box is text, as in PowerPoint and Keynote:
+      // it opens the box with the character. Before the command list, so the R
+      // of "Revenue" is never the rectangle tool; a shifted key a command claims
+      // (⇧A, ?) stays the command's.
+      if (!inField && this.typeIntoText(ev)) return
       if (dispatch(this.commands, ev, inField)) return
       if (inField) return
       // Crop mode owns the keyboard: Enter/Esc are its (cropedit.ts), and a
@@ -3533,7 +3550,7 @@ export class Editor {
         // clipboard as a Bento payload (works across decks/tabs). Elements when
         // any are selected; otherwise the current slide.
         if (this.store.selection.length) {
-          void navigator.clipboard?.writeText?.(serializeElements(this.store.selectedElements, this.store.doc)).catch(() => {})
+          void navigator.clipboard?.writeText?.(serializeElements(withDescendants(this.store.slide, this.store.selectedElements), this.store.doc)).catch(() => {})
         } else {
           const slides = this.selectedSlides()
           void navigator.clipboard?.writeText?.(serializeSlides(slides, this.store.doc)).catch(() => {})
@@ -3585,10 +3602,30 @@ export class Editor {
         if (this.thumbSel.length) this.setThumbSel([])
         if (this.canvas.isDrawing) this.canvas.cancelDraw()
         else if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
-        else this.store.select([])
+        else {
+          // out one level first, as in Figma: a frame's children → the frame
+          const sel = this.store.selectedElements
+          const up = sel[0]?.parentId
+          this.store.select(up && sel.every((e) => e.parentId === up) && this.store.element(up) ? [up] : [])
+        }
         return
       }
     })
+  }
+
+  /** Open the one selected text box with the key just typed: it replaces the
+   *  words the edit selects on opening, or fills an empty placeholder. */
+  private typeIntoText(ev: KeyboardEvent): boolean {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey || ev.isComposing || [...ev.key].length !== 1) return false
+    const sel = this.store.selectedElements
+    if (sel.length !== 1 || sel[0].type !== 'text' || sel[0].locked || this.store.readOnly) return false
+    if (document.querySelector(MODAL) || this.canvas.isCropEditing || this.canvas.isPathEditing) return false
+    if (ev.shiftKey && this.commands.some((c) => c.match?.(ev, false))) return false
+    ev.preventDefault()
+    this.canvas.editElement(sel[0].id)
+    if (!this.canvas.isEditingText) return true
+    document.execCommand('insertText', false, ev.key)
+    return true
   }
 
   /** V: back to the plain pointer — an armed draw tool, the comment tool
@@ -3601,26 +3638,44 @@ export class Editor {
 
   /** F: an empty auto-layout frame (a rect carrying `layout`, layout.ts) —
    *  whatever is later given it as a child lines up inside. */
-  private insertFrame() {
-    this.canvas.insert(defaultShape('rect', {
-      fill: '#FFFFFF', stroke: '#D0D5DD', strokeWidth: 1, radius: 8,
+  private newFrame(): SlideElement {
+    return defaultShape('rect', {
+      name: t('Frame'), fill: '#FFFFFF', stroke: '#D0D5DD', strokeWidth: 1, radius: 8,
       layout: { dir: 'row', gap: 16, pad: [16, 16, 16, 16] },
-    }))
+    })
+  }
+
+  /** R, O, F, T: with an auto-layout frame selected the new element goes
+   *  straight into it (the frame places it); otherwise the tool arms, and a
+   *  click or a drag on the slide puts it down. */
+  private placeTool(make: () => SlideElement, edit = false) {
+    const sel = this.store.selectedElements
+    const f = sel.length === 1 && sel[0].type === 'shape' && sel[0].layout ? sel[0] : null
+    if (f) {
+      const el = make()
+      el.parentId = f.id
+      this.canvas.insert(el, edit)
+      return
+    }
+    this.canvas.armPlace(make, edit)
   }
 
   private duplicateSelection() {
-    const els = this.store.selectedElements
-    if (!els.length) return
+    const picked = this.store.selectedElements
+    if (!picked.length) return
+    const els = withDescendants(this.store.slide, picked)
     const clones = freshGroups(els.map((el) => cloneElement(el)), els)
     adoptComponents(clones, this.store.doc)
     this.store.commit(() => this.store.slide.elements.push(...clones))
-    this.store.select(clones.map((c) => c.id))
+    // the copies of what was picked; their contents ride along unselected
+    const top = new Set(picked.map((e) => els.indexOf(e)))
+    this.store.select(clones.filter((_, i) => top.has(i)).map((c) => c.id))
   }
 
   /** Remove the selected elements. Shared by ⌫ and the context menu. */
   private deleteSelection() {
     if (!this.store.selection.length) return
-    const ids = new Set(this.store.selection)
+    const ids = new Set(withDescendants(this.store.slide, this.store.selectedElements).map((e) => e.id))
     this.store.commit(() => {
       this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
     })
@@ -3652,7 +3707,7 @@ export class Editor {
    *  clipboard as a Bento payload. Shared by ⌘C and the context menu. */
   private copySelection() {
     const text = this.store.selection.length
-      ? serializeElements(this.store.selectedElements, this.store.doc)
+      ? serializeElements(withDescendants(this.store.slide, this.store.selectedElements), this.store.doc)
       : serializeSlides(this.selectedSlides(), this.store.doc)
     void navigator.clipboard?.writeText?.(text).catch(() => {})
   }
@@ -3739,7 +3794,7 @@ export class Editor {
       const el = this.store.element(id)
       if (!el) continue
       const on = this.store.selection.length === 1 && this.store.selection[0] === id
-      rows.push({ label: t('Select {name}', { name: labelFor(el, t) }), hint: on ? '✓' : undefined, run: () => this.store.select([id]) })
+      rows.push({ label: t('Select {name}', { name: labelIn(this.store.slide, el, t) }), hint: on ? '✓' : undefined, run: () => this.store.select([id]) })
     }
     return [...rows, 'sep']
   }
@@ -4340,6 +4395,10 @@ export class Editor {
       t.append(' ', b)
       t.classList.add('has-act')
     }
+    // sit on the canvas's bottom edge, above the speaker-notes pane — a fixed
+    // 26px from the window's foot covered the notes the author was reading
+    const canvas = document.querySelector('.ed-scroll')?.getBoundingClientRect()
+    if (canvas?.height) t.style.bottom = `${Math.max(16, window.innerHeight - canvas.bottom + 16)}px`
     document.body.appendChild(t)
     setTimeout(() => t.classList.add('show'))
     setTimeout(() => {

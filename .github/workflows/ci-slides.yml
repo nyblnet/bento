@@ -347,6 +347,13 @@ jobs:
         # out of open sheets and read-only, the palette respects IME and
         # returns focus, and the HUD is built once per language switch.
         run: node scripts/test-slides-ui-fixes-browser.mjs
+      - name: UX audit canvas fixes in Chromium
+        # A press on an unselected element drags it; a key typed at a selected
+        # text box is text; a frame copies, duplicates and deletes with its
+        # contents; Figma's selection model (outermost first, double-click in,
+        # Esc out); the box tools draw; Layers rows read apart; the narrow
+        # topbar folds instead of overlapping; toasts clear the notes pane.
+        run: node scripts/test-slides-ux-canvas-browser.mjs
       - name: Vector booleans in Chromium
         # The contextual bar for 2+ closed shapes; Subtract makes one path in the
         # bottom slot with a real hole; one undo; the op switch; Release after a

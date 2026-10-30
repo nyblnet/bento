@@ -33,7 +33,7 @@ import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 import { drawFrameOverlay } from './frameoverlay'
-import { isFrame, layoutSlide } from '../layout'
+import { isFrame, layoutSlide, withDescendants } from '../layout'
 import { drawGradientOverlay } from './gradientoverlay'
 import { TransformHud, hudNum, mountModHint } from './hud'
 import { applyMorphPreview, morphGhost } from './morph'
@@ -419,6 +419,7 @@ export class SlideCanvas {
     }, true)
 
     this.stage.addEventListener('dblclick', (ev) => {
+      if (this.enterFrameAt(ev.clientX, ev.clientY)) return
       // Look for TextElement, and then CodeElement
       const selectors = [
         '.bento-el-text',
@@ -522,7 +523,7 @@ export class SlideCanvas {
 
     store.on('current', () => this.render())
     store.on('doc', () => this.render())
-    store.on('selection', () => { this.trackEnteredGroup(); this.syncTargets() })
+    store.on('selection', () => { this.trackEnteredGroup(); this.trackEnteredFrame(); this.syncTargets() })
 
     this.render()
   }
@@ -852,6 +853,46 @@ export class SlideCanvas {
     const inOne = !!g && sel.every((e) => e?.groupId === g)
     if (inOne && els.filter((e) => e.groupId === g).length > sel.length) this.enteredGroup = g
     else if (!inOne || g !== this.enteredGroup) this.enteredGroup = null
+  }
+
+  /** The frame the author has stepped into — double-click, ⌘-click, Alt-dig or
+   *  a child's layer row — or null. Figma's rule: a click picks the outermost
+   *  frame; inside an entered frame it picks that frame's direct children. */
+  private enteredFrame: string | null = null
+
+  /** Selected elements that all sit in one frame have entered it; anything
+   *  else (the slide's top level, a mix, nothing) has left. */
+  private trackEnteredFrame() {
+    const sel = this.store.selectedElements
+    const p = sel[0]?.parentId
+    this.enteredFrame = p && sel.every((e) => e.parentId === p) ? p : null
+  }
+
+  /** What a click on `id` picks: the element at the entered frame's depth —
+   *  its direct child — else the outermost frame holding it. */
+  private liftToFrame(id: string): string {
+    const byId = new Map(this.store.slide.elements.map((e) => [e.id, e]))
+    const chain = [id]
+    for (let q = byId.get(id)?.parentId; q && byId.has(q) && !chain.includes(q); q = byId.get(q)?.parentId) chain.push(q)
+    const i = this.enteredFrame ? chain.indexOf(this.enteredFrame) : -1
+    return i > 0 ? chain[i - 1] : chain[chain.length - 1]
+  }
+
+  /** Double-click into a frame: step in one level, to the element under the
+   *  pointer at that depth. Reports whether it stepped (else the double-click
+   *  means what it always did — edit the text under it). */
+  private enterFrameAt(clientX: number, clientY: number): boolean {
+    const hit = this.topElementAt(clientX, clientY)
+    const sel = this.store.selection
+    if (!hit || sel.length !== 1) return false
+    const byId = new Map(this.store.slide.elements.map((e) => [e.id, e]))
+    const chain = [hit]
+    for (let q = byId.get(hit)?.parentId; q && byId.has(q) && !chain.includes(q); q = byId.get(q)?.parentId) chain.push(q)
+    const i = chain.indexOf(sel[0])
+    if (i <= 0) return false
+    this.enteredFrame = sel[0]
+    this.store.select([chain[i - 1]])
+    return true
   }
 
   /** Grow a selection to whole groups: any member pulls in its groupId kin —
@@ -1417,8 +1458,9 @@ export class SlideCanvas {
   /** Shift-click toggles the element painted under the cursor in or out of the
    *  selection, whole groups at a time. */
   private toggleAt(clientX: number, clientY: number) {
-    const id = this.topElementAt(clientX, clientY)
-    if (!id || this.isGhost(id)) return
+    const hit = this.topElementAt(clientX, clientY)
+    if (!hit || this.isGhost(hit)) return
+    const id = this.liftToFrame(hit)
     const kin = this.expandGroups([id])
     const sel = this.store.selection
     this.store.select(sel.includes(id) ? sel.filter((s) => !kin.includes(s)) : [...sel, ...kin.filter((k) => !sel.includes(k))])
@@ -1441,7 +1483,7 @@ export class SlideCanvas {
       if (inputEvent && (inputEvent.metaKey || inputEvent.ctrlKey) && !this.pendingCopy) {
         // duplicate-drag: snapshot the selection now; the stationary copies
         // are committed in one undo step together with the moved frames
-        this.pendingCopy = this.store.selectedElements.map(
+        this.pendingCopy = withDescendants(this.store.slide, this.store.selectedElements).map(
           (el) => JSON.parse(JSON.stringify(el)) as SlideElement,
         )
       }
@@ -1707,9 +1749,10 @@ export class SlideCanvas {
     })
 
     this.selecto.on('selectEnd', (e) => {
-      const ids = (e.selected as HTMLElement[])
+      const ids = [...new Set((e.selected as HTMLElement[])
         .map((n) => n.dataset.elId)
         .filter((id): id is string => !!id && !this.isGhost(id)) // a marquee never picks up a ghost
+        .map((id) => this.liftToFrame(id)))] // a click or a marquee picks frames, not what is inside them
       this.store.select(this.expandGroups(ids))
       if (e.isDragStartEnd) {
         e.inputEvent.preventDefault()
@@ -1737,14 +1780,26 @@ export class SlideCanvas {
         // reaching into react-moveable's private _checkChangeTargets(). The real fix
         // is to stop replaying a stale press and start the drag from a live move
         // event instead; that is a rework of this gesture, not a tidy-up.
+        //
+        // And not at the resolve itself: Moveable reports the change before its
+        // manager has settled, and the update that settles it UNSETS a drag begun
+        // at the resolve — the gesture lived on with no drag state, so the
+        // element never moved and every move threw "Cannot set properties of
+        // null (setting 'dist')". Two frames later the manager is stable.
+        // ponytail: two rAFs is the measured settle; a Moveable event for "ready" would be exact
         let released = false
         const onMouseUp = () => { released = true }
         window.addEventListener('mouseup', onMouseUp, { capture: true, once: true })
-        this.moveable.waitToChangeTarget().then(() => {
+        this.moveable.waitToChangeTarget().then(() => requestAnimationFrame(() => requestAnimationFrame(() => {
           window.removeEventListener('mouseup', onMouseUp, true)
           if (released) return
-          this.moveable.dragStart(e.inputEvent)
-        })
+          // a press on a frame's child picked the frame (liftToFrame): the drag
+          // belongs to the frame, not to the node under the pointer
+          const at = e.inputEvent.target as Element
+          const nodes = this.selectedNodes()
+          const own = nodes.find((n) => n === at || n.contains(at)) ?? nodes[0]
+          if (own) this.moveable.dragStart(e.inputEvent, own)
+        })))
       }
     })
   }
@@ -2472,6 +2527,54 @@ export class SlideCanvas {
     this.drawOverlay = null
     if (this.drawKeys) window.removeEventListener('keydown', this.drawKeys, true)
     this.drawKeys = null
+  }
+
+  /** Arm a box tool (R, O, F, T): a drag draws the element at the dragged
+   *  size, a click drops the default one centred on the click. Esc or V
+   *  stands it down. */
+  armPlace(make: () => SlideElement, edit = false) {
+    this.cancelDraw()
+    const { width, height } = this.store.doc.size
+    const ov = document.createElement('div')
+    ov.className = 'ed-place'
+    ov.style.cssText = `position:absolute;left:0;top:0;width:${width}px;height:${height}px;z-index:60;cursor:crosshair`
+    const box = document.createElement('div')
+    box.style.cssText = 'position:absolute;border:1px dashed #2f6df6;display:none;pointer-events:none'
+    ov.appendChild(box)
+    this.scaleHost.appendChild(ov)
+    this.drawOverlay = ov
+    const toSlide = (ev: MouseEvent) => {
+      const r = this.scaleHost.getBoundingClientRect()
+      return { x: (ev.clientX - r.left) / this.scale, y: (ev.clientY - r.top) / this.scale }
+    }
+    ov.addEventListener('mousedown', (down: MouseEvent) => {
+      if (down.button !== 0) return
+      down.preventDefault()
+      down.stopPropagation()
+      const a = toSlide(down)
+      let b = a
+      const move = (ev: MouseEvent) => {
+        b = toSlide(ev)
+        Object.assign(box.style, { display: 'block', left: `${Math.min(a.x, b.x)}px`, top: `${Math.min(a.y, b.y)}px`, width: `${Math.abs(b.x - a.x)}px`, height: `${Math.abs(b.y - a.y)}px` })
+      }
+      const up = () => {
+        window.removeEventListener('mousemove', move, true)
+        window.removeEventListener('mouseup', up, true)
+        const el = make()
+        // a drag shorter than a few screen px was a click
+        if (Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) * this.scale > 4) {
+          el.x = Math.round(Math.min(a.x, b.x)); el.y = Math.round(Math.min(a.y, b.y))
+          el.w = Math.max(1, Math.round(Math.abs(b.x - a.x)))
+          if (el.type !== 'text') el.h = Math.max(1, Math.round(Math.abs(b.y - a.y))) // a text box sizes its own height
+        } else {
+          el.x = Math.round(a.x - el.w / 2); el.y = Math.round(a.y - el.h / 2)
+        }
+        this.cancelDraw()
+        this.insert(el, edit)
+      }
+      window.addEventListener('mousemove', move, true)
+      window.addEventListener('mouseup', up, true)
+    })
   }
 
   /** SVG path 'd' for a gentle bow between two points (curve preview + default). */

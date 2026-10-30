@@ -23,6 +23,18 @@ type Frame = ShapeElement & { layout: NonNullable<ShapeElement['layout']> }
 export const isFrame = (el: SlideElement | undefined): el is Frame =>
   !!el && el.type === 'shape' && el.shape === 'rect' && !!(el as ShapeElement).layout
 
+/** The elements and everything inside them (a frame's children, theirs, …),
+ *  in paint order. A frame and its contents are one unit: copy, duplicate
+ *  and delete act on this, never on the frame alone. */
+export function withDescendants(slide: Slide, els: readonly SlideElement[]): SlideElement[] {
+  const ids = new Set(els.map((e) => e.id))
+  for (let grew = true; grew;) {
+    grew = false
+    for (const e of slide.elements) if (e.parentId && ids.has(e.parentId) && !ids.has(e.id)) { ids.add(e.id); grew = true }
+  }
+  return slide.elements.filter((e) => ids.has(e.id))
+}
+
 /** Children of a frame, in layout order. */
 export function frameChildren(slide: Slide, frame: Frame): SlideElement[] {
   const kids = slide.elements.filter((e) => e.parentId === frame.id && e.id !== frame.id)
