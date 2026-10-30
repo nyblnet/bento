@@ -35,13 +35,13 @@ try {
   await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-stage-scale [data-el-id]'))
 
   // Fields with no handle in the inspector as it stands, named by section and caption.
-  const orphans = () => p.$$eval('.ed-props input[type="number"]', (inputs, exempt) => inputs
+  const orphans = () => p.$$eval('.ed-props input.ed-num', (inputs, exempt) => inputs
     .filter((i) => !i.matches(exempt) && i.offsetParent !== null)
     .filter((i) => {
       const own = i.closest('.ed-row, .ed-mini')
       const label = own?.querySelector(':scope > .ed-scrub')
       const chip = [i.previousElementSibling, i.nextElementSibling].some((n) => n?.classList.contains('ed-scrub'))
-      return !(label && (own.matches('.ed-mini') || own.querySelectorAll('input[type="number"]').length === 1)) && !chip
+      return !(label && (own.matches('.ed-mini') || own.querySelectorAll("input.ed-num").length === 1)) && !chip
     })
     .map((i) => i.closest('.ed-row')?.firstElementChild?.textContent || i.title || i.placeholder || '(no caption)'), EXEMPT)
 
@@ -54,14 +54,14 @@ try {
     await p.keyboard.press('Escape'); await p.waitForTimeout(150)
     const where = (what) => `slide ${s + 1} ${what}`
     for (const o of await orphans()) seen.add(`${where('(slide panel)')}: ${o}`)
-    fields += await p.locator('.ed-props input[type="number"]').count()
+    fields += await p.locator('.ed-props input.ed-num').count()
     const rows = await p.locator('.ed-layers .ed-layer').count()
     for (let r = 0; r < rows; r++) {
       const row = p.locator('.ed-layers .ed-layer').nth(r)
       const name = (await row.textContent())?.trim()
       await row.evaluate((n) => n.click()) // the Layers section may be folded; selecting is not what is under test
       await p.waitForTimeout(150)
-      fields += await p.locator('.ed-props input[type="number"]').count()
+      fields += await p.locator('.ed-props input.ed-num').count()
       for (const o of await orphans()) seen.add(`${where(`"${name}"`)}: ${o}`)
     }
   }

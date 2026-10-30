@@ -79,7 +79,7 @@ try {
     await pick('a')
     ok(await p.locator('.ed-props .ed-tabs [role="tab"]').count() === 3, `${tag} three tabs`)
     ok(await p.$eval('.ed-props', (h) => !!h.firstElementChild?.querySelector(':scope > .ed-tabs')), `${tag} the tabs head the panel`)
-    const field = await p.locator('.ed-props input[type="number"]').first().elementHandle()
+    const field = await p.locator('.ed-props input.ed-num').first().elementHandle()
 
     let v = await on(L.format)
     ok(JSON.stringify(v) === JSON.stringify([L.text, L.fill, L.stroke, L.shadow, L.blur, L.layout]), `${tag} Format: the look, in order (${v.join(', ')})`)

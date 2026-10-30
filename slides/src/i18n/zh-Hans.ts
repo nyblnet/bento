@@ -1146,4 +1146,11 @@ export const zhHans: Catalog = {
   "Release shapes": "释放形状",
   "Boolean": "布尔",
   "Nothing would be left of these shapes": "这些形状将不留下任何内容",
+  "Mixed": "混合",
+  "Saturation and brightness": "饱和度和亮度",
+  "Hue": "色相",
+  "Color model": "颜色模式",
+  "Color value": "颜色值",
+  "Pick a color from the screen": "从屏幕取色",
+  "On this slide": "本幻灯片",
 }

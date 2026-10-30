@@ -1146,4 +1146,11 @@ export const ja: Catalog = {
   "Release shapes": "図形を解除",
   "Boolean": "ブーリアン",
   "Nothing would be left of these shapes": "これらの図形は何も残りません",
+  "Mixed": "混在",
+  "Saturation and brightness": "彩度と明度",
+  "Hue": "色相",
+  "Color model": "カラーモデル",
+  "Color value": "カラー値",
+  "Pick a color from the screen": "画面から色を取得",
+  "On this slide": "このスライド",
 }

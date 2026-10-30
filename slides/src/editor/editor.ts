@@ -23,6 +23,7 @@ import { detach, makeComponent, syncComponents } from '../components'
 import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
+import { slidingPill } from './inspector/controls'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { mountNotesPane } from './notespane'
 import { mountHints } from './hints'
@@ -1989,6 +1990,7 @@ export class Editor {
     }
     const saved = lsGet('bento-side-view')
     show(saved === 'layers' || saved === 'tokens' ? saved : 'slides')
+    slidingPill(bar)
     // the inspector's band (panels.ts mountTabs): sticky, edge to edge
     const band = div('ed-tabs-band ed-side-band')
     band.appendChild(bar)

@@ -1146,4 +1146,11 @@ export const fr: Catalog = {
   "Release shapes": "Libérer les formes",
   "Boolean": "Booléenne",
   "Nothing would be left of these shapes": "Il ne resterait rien de ces formes",
+  "Mixed": "Mixte",
+  "Saturation and brightness": "Saturation et luminosité",
+  "Hue": "Teinte",
+  "Color model": "Modèle de couleur",
+  "Color value": "Valeur de la couleur",
+  "Pick a color from the screen": "Prélever une couleur à l’écran",
+  "On this slide": "Sur cette diapositive",
 }

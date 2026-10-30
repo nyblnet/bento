@@ -2,7 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 // Colour fields: the swatch + hex + opacity row, palette links, gradients.
 import { segmented, mini, field } from './fields'
-import { fillStyles, parseColor, unitHandle, slotLabel, combineColor, alphaOf, SCRUB } from './controls'
+import { fillStyles, parseColor, unitHandle, slotLabel, combineColor, alphaOf, SCRUB, numeric } from './controls'
 import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
 import { ICONS } from '../../icons'
@@ -10,6 +10,7 @@ import type { Slide } from '../../model'
 import { setColor, paletteOf, refAt, PALETTE_SLOTS, slotIsSet } from '../../palette'
 import { cssColor } from '../../render'
 import { bindToken, tokenName, tokenValue } from '../../tokens'
+import { openColorPopover } from './colorpopover'
 
 /** Solid | Gradient, one click. */
 export function fillKind(value: 'solid' | 'gradient', onChange: (v: string) => void): HTMLElement {
@@ -21,7 +22,7 @@ export function fillKind(value: 'solid' | 'gradient', onChange: (v: string) => v
 /** A gradient's angle and stops, shared by text and shapes. `edit` hands
  *  the live gradient to change. */
 export function gradientRows(p: PropsPanel, grad: { angle: number; stops: Array<{ at: number; color: string }> }, edit: (fn: (g: typeof grad) => void, final: boolean) => void) {
-  const angle = mini(t('Gradient angle'), grad.angle, (v, fin) => edit((g) => { g.angle = v }, fin), ICONS.rotate)
+  const angle = mini(t('Gradient angle'), grad.angle, (v, fin) => edit((g) => { g.angle = v }, fin), ICONS.rotate, { unit: '°' })
   const add = document.createElement('button')
   add.type = 'button'
   add.className = 'ed-btn ed-tool'
@@ -72,6 +73,7 @@ export function gradientRows(p: PropsPanel, grad: { angle: number; stops: Array<
     else onEdit(input.value, true)
   })
   const field = colorField(input)
+  popoverOn(p, input)
   return ref ? themeLink(p, ref, input, field) : field
 }
 
@@ -243,11 +245,11 @@ export function colorAlpha(p: PropsPanel, value: string, onEdit: (v: string, fin
   col.type = 'color'
   col.value = parsed.hex
   const alpha = document.createElement('input')
-  alpha.type = 'number'
   alpha.min = '0'
   alpha.max = '100'
   alpha.step = '1'
   alpha.value = String(Math.round(parsed.a * 100))
+  numeric(alpha, '%')
   alpha.title = t('Opacity %')
   alpha.setAttribute('aria-label', alpha.title) // the wrapping label's '%' would name it otherwise
   const emit = (final: boolean) => onEdit(combineColor(col.value, alphaOf(alpha)), final)
@@ -262,5 +264,59 @@ export function colorAlpha(p: PropsPanel, value: string, onEdit: (v: string, fin
   alpha.addEventListener('change', () => emit(true))
   alpha.addEventListener(SCRUB, () => emit(false))
   const wrap = colorField(col, alpha)
+  popoverOn(p, col, alpha)
   return ref ? themeLink(p, ref, col, wrap) : wrap
+}
+
+/**
+ * The swatch opens the colour popover instead of the browser's picker. The
+ * popover drives the same <input type=color> (and % field) the inline row
+ * does, so it takes every path a typed hex takes: live preview, the palette
+ * reference cleared by a hand-picked colour, one undo step. Esc undoes the
+ * preview burst, so a cancelled pick leaves no step and no change.
+ */
+function popoverOn(p: PropsPanel, col: HTMLInputElement, alpha?: HTMLInputElement) {
+  const swatch = () => {
+    const a = alpha ? alphaOf(alpha) : 1
+    col.classList.toggle('ed-see-through', a < 1)
+    col.style.setProperty('--see', combineColor(col.value, a))
+  }
+  swatch()
+  col.addEventListener('input', swatch)
+  alpha?.addEventListener('change', swatch)
+  alpha?.addEventListener(SCRUB, swatch)
+  col.addEventListener('click', (e) => {
+    e.preventDefault() // never the native picker
+    const set = (hex: string, a: number) => {
+      col.value = hex
+      if (alpha) alpha.value = String(Math.round(a * 100))
+      col.dispatchEvent(new Event('input'))
+    }
+    const theme = [...col.closest('.ed-colorref')?.querySelectorAll<HTMLButtonElement>('.ed-palette-item') ?? []]
+    openColorPopover(col, {
+      hex: col.value,
+      alpha: alpha ? alphaOf(alpha) : undefined,
+      groups: [
+        { title: t('Theme colors'), swatches: theme.map((b) => ({ label: b.textContent ?? '', color: b.querySelector<HTMLElement>('.ed-swatch')?.style.background ?? '', pick: () => b.click() })) },
+        { title: t('On this slide'), swatches: slideColors(p).map((c) => ({ label: c, color: cssColor(c, 'transparent'), pick: () => { const v = parseColor(c); set(v.hex, v.a); col.dispatchEvent(new Event('change')) } })) },
+      ],
+      preview: set,
+      commit: () => col.dispatchEvent(new Event('change')),
+      cancel: () => { if (p.burst) { p.burst = false; p.store.undo() } },
+    })
+  })
+}
+
+/** The distinct colours the current slide already uses, for one-click reuse. */
+function slideColors(p: PropsPanel): string[] {
+  const out = new Map<string, string>()
+  const add = (v: unknown) => {
+    if (typeof v !== 'string' || !v || v === 'none' || v === 'transparent' || v.includes('gradient')) return
+    const c = parseColor(v)
+    if (c.a > 0) out.set(combineColor(c.hex, c.a), combineColor(c.hex, c.a))
+  }
+  const slide = p.store.slide
+  add(slide.background)
+  for (const el of slide.elements) for (const k of ['fill', 'color', 'stroke'] as const) add((el as unknown as Record<string, unknown>)[k])
+  return [...out.values()].slice(0, 16)
 }

@@ -346,3 +346,11 @@ jobs:
         # bottom slot with a real hole; one undo; the op switch; Release after a
         # move; ⌥⇧I; Flatten; `bool` survives a reload.
         run: node scripts/test-slides-booleans-browser.mjs
+      - name: Numeric fields take arithmetic; Mixed values in Chromium
+        # 360/2 and +24 in a field, ↑/↓ stepping, the locked scrub (or its
+        # fallback), and a multi-selection's Mixed X moved by one delta each.
+        run: node scripts/test-slides-inspector-scrub-browser.mjs
+      - name: Colour popover in Chromium
+        # Opens from the swatch instead of the native picker; live preview,
+        # one undo step, typed hex/RGB/names, theme swatch links, Esc cancels.
+        run: node scripts/test-slides-color-popover-browser.mjs

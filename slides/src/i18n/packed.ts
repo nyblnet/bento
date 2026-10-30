@@ -1152,4 +1152,11 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Release shapes": ["図形を解除","释放形状","釋放形狀","Liberar formas","Libérer les formes","Formen freigeben","Rilascia forme","Liberar formas"],
   "Boolean": ["ブーリアン","布尔","布林","Booleana","Booléenne","Boolesch","Booleana","Booleana"],
   "Nothing would be left of these shapes": ["これらの図形は何も残りません","这些形状将不留下任何内容","這些形狀將不留下任何內容","No quedaría nada de estas formas","Il ne resterait rien de ces formes","Von diesen Formen bliebe nichts übrig","Di queste forme non resterebbe nulla","Não sobraria nada destas formas"],
+  "Mixed": ["混在","混合","混合","Mixto","Mixte","Gemischt","Misto","Misto"],
+  "Saturation and brightness": ["彩度と明度","饱和度和亮度","飽和度和亮度","Saturación y brillo","Saturation et luminosité","Sättigung und Helligkeit","Saturazione e luminosità","Saturação e brilho"],
+  "Hue": ["色相","色相","色相","Tono","Teinte","Farbton","Tonalità","Matiz"],
+  "Color model": ["カラーモデル","颜色模式","顏色模式","Modelo de color","Modèle de couleur","Farbmodell","Modello colore","Modelo de cor"],
+  "Color value": ["カラー値","颜色值","顏色值","Valor del color","Valeur de la couleur","Farbwert","Valore colore","Valor da cor"],
+  "Pick a color from the screen": ["画面から色を取得","从屏幕取色","從螢幕取色","Tomar un color de la pantalla","Prélever une couleur à l’écran","Farbe vom Bildschirm aufnehmen","Preleva un colore dallo schermo","Capturar uma cor da tela"],
+  "On this slide": ["このスライド","本幻灯片","本投影片","En esta diapositiva","Sur cette diapositive","Auf dieser Folie","In questa slide","Neste slide"],
 }

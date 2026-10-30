@@ -1146,4 +1146,11 @@ export const zhHant: Catalog = {
   "Release shapes": "釋放形狀",
   "Boolean": "布林",
   "Nothing would be left of these shapes": "這些形狀將不留下任何內容",
+  "Mixed": "混合",
+  "Saturation and brightness": "飽和度和亮度",
+  "Hue": "色相",
+  "Color model": "顏色模式",
+  "Color value": "顏色值",
+  "Pick a color from the screen": "從螢幕取色",
+  "On this slide": "本投影片",
 }

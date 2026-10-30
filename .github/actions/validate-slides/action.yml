@@ -611,3 +611,9 @@ runs:
       # so an old shell's nonzero fill draws them) and by evenodd over the d.
       shell: bento-step {0}
       run: node scripts/test-slides-vector-bool.ts
+    - name: Inspector arithmetic rig
+      # A numeric field's entry is evaluated by a hand-written parser, never
+      # eval: precedence, the relative forms (+24, *2), a typed unit, and
+      # junk refused.
+      shell: bento-step {0}
+      run: node scripts/test-slides-inspector-math.ts
