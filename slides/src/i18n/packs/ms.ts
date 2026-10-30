@@ -1343,4 +1343,8 @@ export const strings: Catalog = {
   "Component copy": "Salinan komponen",
   "Select all": "Pilih semua",
   "Select parent": "Pilih induk",
+  "Yours": "Milik anda",
+  "Add a token:": "Tambah token:",
+  "Number": "Nombor",
+  "Font size": "Saiz fon",
 }

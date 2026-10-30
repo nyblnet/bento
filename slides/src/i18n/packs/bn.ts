@@ -1353,4 +1353,8 @@ export const strings: Catalog = {
   "Component copy": "কম্পোনেন্টের কপি",
   "Select all": "সব নির্বাচন করুন",
   "Select parent": "প্যারেন্ট নির্বাচন করুন",
+  "Yours": "আপনার",
+  "Add a token:": "টোকেন যোগ করুন:",
+  "Number": "সংখ্যা",
+  "Font size": "ফন্টের আকার",
 }

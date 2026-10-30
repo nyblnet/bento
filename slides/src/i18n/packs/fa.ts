@@ -1346,4 +1346,8 @@ export const strings: Catalog = {
   "Component copy": "کپی مؤلفه",
   "Select all": "انتخاب همه",
   "Select parent": "انتخاب والد",
+  "Yours": "مال شما",
+  "Add a token:": "افزودن توکن:",
+  "Number": "عدد",
+  "Font size": "اندازه‌ی قلم",
 }

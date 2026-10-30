@@ -1340,4 +1340,8 @@ export const strings: Catalog = {
   "Component copy": "Salinan komponen",
   "Select all": "Pilih semua",
   "Select parent": "Pilih induk",
+  "Yours": "Milik Anda",
+  "Add a token:": "Tambah token:",
+  "Number": "Angka",
+  "Font size": "Ukuran font",
 }

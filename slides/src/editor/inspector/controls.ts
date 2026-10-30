@@ -436,12 +436,34 @@ export function slidingPill(bar: HTMLElement) {
   const place = () => {
     const on = bar.querySelector<HTMLElement>(':scope > [aria-selected="true"]')
     if (!on?.offsetWidth) return
-    bar.style.setProperty('--pill-x', `${on.offsetLeft}px`)
-    bar.style.setProperty('--pill-w', `${on.offsetWidth}px`)
-    bar.classList.add('ed-tabs-pill')
+    // sub-pixel boxes, not offsetLeft/Width (whole pixels): the pill must sit
+    // on the tab, not half a pixel off it; measured from the bar's padding edge,
+    // where the pill's left: 0 is
+    const b = bar.getBoundingClientRect(), r = on.getBoundingClientRect()
+    bar.style.setProperty('--pill-x', `${r.left - b.left - bar.clientLeft}px`)
+    bar.style.setProperty('--pill-w', `${r.width}px`)
+    // only when missing: adding a class always rewrites the attribute, and the
+    // observer below watches classes — re-adding would loop
+    if (!bar.classList.contains('ed-tabs-pill')) bar.classList.add('ed-tabs-pill')
   }
-  new MutationObserver(place).observe(bar, { subtree: true, attributeFilter: ['aria-selected'] })
-  new ResizeObserver(place).observe(bar)
+  // The pill must match the chosen tab's box exactly, and that box moves for
+  // more reasons than the bar resizing: a tab choosing (aria-selected), the
+  // names showing or hiding (fitTabNames' class), a tab growing as its name
+  // lays out, fonts arriving, a hidden panel opening (0 → width). Each tab is
+  // observed, not just the bar.
+  new MutationObserver(place).observe(bar, { subtree: true, attributeFilter: ['aria-selected', 'class'] })
+  const sizes = new ResizeObserver(place)
+  sizes.observe(bar)
+  for (const tab of bar.children) sizes.observe(tab)
+  document.fonts?.ready.then(place)
+  // The inspector builds a new bar on every selection change, before it is in
+  // the page; whatever the observers' order, measure once more when the bar is
+  // attached and laid out — two frames, so the names (fitTabNames) have shown.
+  const settle = (tries = 20) => requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (bar.isConnected) place()
+    else if (tries) settle(tries - 1)
+  }))
+  settle()
 }
 
 /** An opacity % field as 0..1; empty or junk reads as opaque, 0 stays 0. */

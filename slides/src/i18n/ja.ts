@@ -1330,4 +1330,8 @@ export const ja: Catalog = {
   "Component copy": "コンポーネントのコピー",
   "Select all": "すべて選択",
   "Select parent": "親を選択",
+  "Yours": "自分の",
+  "Add a token:": "トークンを追加:",
+  "Number": "数値",
+  "Font size": "フォントサイズ",
 }

@@ -98,7 +98,7 @@ try {
   ok(!!(await p.$('.ed-cpop')), "…it opens the app's colour popover")
   await p.keyboard.press('Escape'); await p.waitForTimeout(100)
 
-  await tap('.ed-tokens-group[data-type="number"] .ed-tokens-add')
+  await tap('.ed-tokens-group[data-type="number"] .ed-sec-act')
   await p.keyboard.type('Brand Primary!'); await p.keyboard.press('Enter'); await p.waitForTimeout(120)
   const why = await p.evaluate(() => {
     const i = document.querySelector('.ed-tokens .ed-token-new')

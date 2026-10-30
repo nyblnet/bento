@@ -1359,4 +1359,8 @@ export const strings: Catalog = {
   "Component copy": "Kopya ng component",
   "Select all": "Piliin lahat",
   "Select parent": "Piliin ang magulang",
+  "Yours": "Sa iyo",
+  "Add a token:": "Magdagdag ng token:",
+  "Number": "Numero",
+  "Font size": "Laki ng font",
 }

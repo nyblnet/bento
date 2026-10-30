@@ -1360,4 +1360,8 @@ export const strings: Catalog = {
   "Component copy": "جزو کی نقل",
   "Select all": "سب منتخب کریں",
   "Select parent": "والد منتخب کریں",
+  "Yours": "آپ کے",
+  "Add a token:": "ٹوکن شامل کریں:",
+  "Number": "عدد",
+  "Font size": "فونٹ کا سائز",
 }

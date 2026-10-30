@@ -1342,4 +1342,8 @@ export const strings: Catalog = {
   "Component copy": "Komponentkopi",
   "Select all": "Markér alt",
   "Select parent": "Markér overordnet",
+  "Yours": "Dine",
+  "Add a token:": "Tilføj et token:",
+  "Number": "Tal",
+  "Font size": "Skriftstørrelse",
 }

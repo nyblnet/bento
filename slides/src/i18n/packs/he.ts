@@ -1343,4 +1343,8 @@ export const strings: Catalog = {
   "Component copy": "עותק קומפוננטה",
   "Select all": "בחירת הכול",
   "Select parent": "בחירת ההורה",
+  "Yours": "שלך",
+  "Add a token:": "הוספת טוקן:",
+  "Number": "מספר",
+  "Font size": "גודל גופן",
 }

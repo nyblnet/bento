@@ -1367,4 +1367,8 @@ export const strings: Catalog = {
   "Component copy": "Komponent nusgasy",
   "Select all": "Hemmesini saýlamak",
   "Select parent": "Ene elementi saýlamak",
+  "Yours": "Siziňki",
+  "Add a token:": "Token goş:",
+  "Number": "San",
+  "Font size": "Şrift ölçegi",
 }

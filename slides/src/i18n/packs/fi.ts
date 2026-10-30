@@ -1347,4 +1347,8 @@ export const strings: Catalog = {
   "Component copy": "Komponentin kopio",
   "Select all": "Valitse kaikki",
   "Select parent": "Valitse ylätaso",
+  "Yours": "Omat",
+  "Add a token:": "Lisää tokeni:",
+  "Number": "Luku",
+  "Font size": "Fonttikoko",
 }

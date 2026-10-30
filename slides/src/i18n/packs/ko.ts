@@ -1334,4 +1334,8 @@ export const strings: Catalog = {
   "Component copy": "컴포넌트 사본",
   "Select all": "모두 선택",
   "Select parent": "상위 요소 선택",
+  "Yours": "내 것",
+  "Add a token:": "토큰 추가:",
+  "Number": "숫자",
+  "Font size": "글꼴 크기",
 }

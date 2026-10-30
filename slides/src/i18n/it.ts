@@ -1330,4 +1330,8 @@ export const it: Catalog = {
   "Component copy": "Copia del componente",
   "Select all": "Seleziona tutto",
   "Select parent": "Seleziona il contenitore",
+  "Yours": "I tuoi",
+  "Add a token:": "Aggiungi un token:",
+  "Number": "Numero",
+  "Font size": "Dimensione font",
 }

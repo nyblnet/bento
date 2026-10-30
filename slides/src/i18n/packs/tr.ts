@@ -1341,4 +1341,8 @@ export const strings: Catalog = {
   "Component copy": "Bileşen kopyası",
   "Select all": "Tümünü seç",
   "Select parent": "Üst öğeyi seç",
+  "Yours": "Sizinkiler",
+  "Add a token:": "Token ekle:",
+  "Number": "Sayı",
+  "Font size": "Yazı tipi boyutu",
 }

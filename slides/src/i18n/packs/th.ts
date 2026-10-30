@@ -1344,4 +1344,8 @@ export const strings: Catalog = {
   "Component copy": "สำเนาคอมโพเนนต์",
   "Select all": "เลือกทั้งหมด",
   "Select parent": "เลือกพาเรนต์",
+  "Yours": "ของคุณ",
+  "Add a token:": "เพิ่มโทเค็น:",
+  "Number": "ตัวเลข",
+  "Font size": "ขนาดฟอนต์",
 }

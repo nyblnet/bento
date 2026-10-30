@@ -1342,4 +1342,8 @@ export const strings: Catalog = {
   "Component copy": "Копия компонента",
   "Select all": "Выделить всё",
   "Select parent": "Выделить родителя",
+  "Yours": "Ваши",
+  "Add a token:": "Добавить токен:",
+  "Number": "Число",
+  "Font size": "Размер шрифта",
 }

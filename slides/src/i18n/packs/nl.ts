@@ -1338,4 +1338,8 @@ export const strings: Catalog = {
   "Component copy": "Componentkopie",
   "Select all": "Alles selecteren",
   "Select parent": "Bovenliggende selecteren",
+  "Yours": "Van jou",
+  "Add a token:": "Token toevoegen:",
+  "Number": "Getal",
+  "Font size": "Lettergrootte",
 }

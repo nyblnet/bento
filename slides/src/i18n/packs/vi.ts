@@ -1340,4 +1340,8 @@ export const strings: Catalog = {
   "Component copy": "Bản sao thành phần",
   "Select all": "Chọn tất cả",
   "Select parent": "Chọn phần tử cha",
+  "Yours": "Của bạn",
+  "Add a token:": "Thêm token:",
+  "Number": "Số",
+  "Font size": "Cỡ chữ",
 }

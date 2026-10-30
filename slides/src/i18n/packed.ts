@@ -1336,4 +1336,8 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Component copy": ["コンポーネントのコピー","组件副本","元件副本","Copia del componente","Copie du composant","Komponentenkopie","Copia del componente","Cópia do componente"],
   "Select all": ["すべて選択","全选","全選","Seleccionar todo","Tout sélectionner","Alles auswählen","Seleziona tutto","Selecionar tudo"],
   "Select parent": ["親を選択","选择父级","選取上層","Seleccionar el contenedor","Sélectionner le parent","Übergeordnetes auswählen","Seleziona il contenitore","Selecionar o pai"],
+  "Yours": ["自分の","你的","你的","Tuyos","Les vôtres","Eigene","I tuoi","Seus"],
+  "Add a token:": ["トークンを追加:","添加令牌：","加入權杖：","Añadir un token:","Ajouter un jeton :","Token hinzufügen:","Aggiungi un token:","Adicionar um token:"],
+  "Number": ["数値","数字","數字","Número","Nombre","Zahl","Numero","Número"],
+  "Font size": ["フォントサイズ","字号","字級","Tamaño de fuente","Taille de police","Schriftgröße","Dimensione font","Tamanho da fonte"],
 }

@@ -1330,4 +1330,8 @@ export const zhHant: Catalog = {
   "Component copy": "元件副本",
   "Select all": "全選",
   "Select parent": "選取上層",
+  "Yours": "你的",
+  "Add a token:": "加入權杖：",
+  "Number": "數字",
+  "Font size": "字級",
 }

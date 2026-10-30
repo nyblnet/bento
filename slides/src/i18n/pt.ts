@@ -1328,4 +1328,8 @@ export const pt: Catalog = {
   "Component copy": "Cópia do componente",
   "Select all": "Selecionar tudo",
   "Select parent": "Selecionar o pai",
+  "Yours": "Seus",
+  "Add a token:": "Adicionar um token:",
+  "Number": "Número",
+  "Font size": "Tamanho da fonte",
 }

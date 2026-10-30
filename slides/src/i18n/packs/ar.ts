@@ -1350,4 +1350,8 @@ export const strings: Catalog = {
   "Component copy": "نسخة المكوّن",
   "Select all": "تحديد الكل",
   "Select parent": "تحديد الأصل",
+  "Yours": "الخاصة بك",
+  "Add a token:": "إضافة رمز:",
+  "Number": "رقم",
+  "Font size": "حجم الخط",
 }
