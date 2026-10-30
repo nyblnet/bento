@@ -309,7 +309,7 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
   }
   const pick = (anchor: HTMLElement) => {
     const hex = () => input.value.toLowerCase()
-    const manage = { label: t('Manage tokens'), run: () => document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click() }
+    const manage = { icon: ICONS.settings, label: t('Manage tokens'), run: () => document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click() }
     openTokenPicker(anchor, {
       title: t('Colors & tokens'),
       choices: choices(p.store.doc, ['color']),
@@ -319,22 +319,22 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
       // places before anyone thinks of a token — make the token from it, and
       // every use follows; or find every use on this slide
       actions: linkedLabel
-        ? [{ label: tok ? t('Detach from token') : t('Detach from theme color'), run: detach }, manage]
+        ? [{ icon: ICONS.minus, label: tok ? t('Detach from token') : t('Detach from theme color'), run: detach }, manage]
         : [
           // the colour is already a theme colour or a token: bind its uses to
           // that one rather than make a second token with the same value
-          ...((same) => same ? [{ label: t('Bind {n} uses to {name}', { n: colorUses(p.store.doc, hex()).length, name: same.kind === 'token' ? same.key : same.label }), run: () => {
+          ...((same) => same ? [{ icon: ICONS.viewTokens, label: t('Bind {n} uses to {name}', { n: colorUses(p.store.doc, hex()).length, name: same.kind === 'token' ? same.key : same.label }), run: () => {
             const uses = colorUses(p.store.doc, hex())
             p.store.commit(() => followChoice(p.store.doc, uses.map((u) => ({ holder: (u.element ?? u.slide) as unknown as Record<string, unknown>, path: u.path })), same))
             p.toast(t('{n} uses now follow {name}', { n: uses.length, name: same.kind === 'token' ? same.key : same.label }))
-          } }] : [{ label: t('Make a token from this color'), run: () => {
+          } }] : [{ icon: ICONS.tokenNew, label: t('Make a token from this color'), run: () => {
             const name = freeTokenName(p.store.doc, 'color.brand')
             let n = 0
             p.store.commit(() => { n = adoptColor(p.store.doc, hex(), name) })
             p.toast(t('Made {name} — {n} uses follow it', { name, n }))
             document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click()
           } }])(sameAs(p.store.doc, hex())),
-          { label: t('Select all with this color'), run: () => {
+          { icon: ICONS.selectSame, label: t('Select all with this color'), run: () => {
             const ids = colorUses(p.store.doc, hex()).filter((u) => u.slide === p.store.slide && u.element).map((u) => u.element!.id)
             p.store.select([...new Set(ids)])
             p.toast(t('{n} elements on this slide use this color', { n: new Set(ids).size }))
@@ -396,7 +396,7 @@ export function sharedLink(p: PropsPanel, ids: string[], path: string, field: HT
     choices: choices(p.store.doc, ['color']),
     bound,
     pick: (c) => p.edit(() => followChoice(p.store.doc, holders().map((holder) => ({ holder, path })), c), true),
-    actions: bound ? [{ label: tok ? t('Detach from token') : t('Detach from theme color'), run: detach }] : [],
+    actions: bound ? [{ icon: ICONS.minus, label: tok ? t('Detach from token') : t('Detach from theme color'), run: detach }] : [],
   })
   const open = document.createElement('button')
   open.type = 'button'

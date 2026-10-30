@@ -93,17 +93,18 @@ try {
   ok(h1 > h0 + 60, `dragging the pane's top edge up makes the notes taller (${h0} → ${h1}px)`)
   await p.reload()
   await p.waitForFunction(() => document.querySelector('.ed-notespane-text'))
-  ok(Math.abs((await p.locator('.ed-notespane-text').boundingBox()).height - h1) < 2, 'the height holds across a reload')
+  const hr = (await p.locator('.ed-notespane-text').boundingBox()).height
+  ok(Math.abs(hr - h1) < 2, `the height holds across a reload (${h1} → ${hr})`)
   await p.locator('.ed-notes-grip').dblclick({ position: { x: 20, y: 3 } }); await p.waitForTimeout(150)
   ok(Math.abs((await p.locator('.ed-notespane-text').boundingBox()).height - h0) < 2, 'a double-click on the edge resets it')
-  await p.locator('.ed-notes-toggle').click(); await p.waitForTimeout(150)
+  await p.locator('.ed-notes-toggle').click(); await p.waitForTimeout(350) // the fold animates (.18s)
   ok(!(await p.locator('.ed-notespane-text').isVisible()), 'the chevron folds the pane')
-  await p.locator('.ed-notes-toggle').click(); await p.waitForTimeout(150)
+  await p.locator('.ed-notes-toggle').click(); await p.waitForTimeout(350) // the fold animates (.18s)
   ok(await p.locator('.ed-notespane-text').isVisible(), 'and opens it again')
   const area2 = p.locator('.ed-notespane-text')
 
   // 5. Fold, reload.
-  await p.locator('.ed-notespane-head').click(); await p.waitForTimeout(150)
+  await p.locator('.ed-notespane-head').click(); await p.waitForTimeout(350)
   ok(!(await area2.isVisible()), 'the header folds the pane')
   await p.reload()
   await p.waitForFunction(() => document.querySelector('.ed-notespane'))

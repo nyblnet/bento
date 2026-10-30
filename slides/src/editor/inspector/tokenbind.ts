@@ -26,8 +26,8 @@ export function tokenPicker(p: PropsPanel, el: SlideElement, path: string, types
     bound: bound ?? undefined,
     pick: (c) => p.mutate(el.id, (e) => bindToken(p.store.doc, e as never, path, c.key), true),
     actions: (bound
-      ? [{ label: t('Detach from token'), run: () => p.mutate(el.id, (e) => unbindToken(e as never, path), true) }]
-      : [{ label: t('Make a token from this value'), run: () => {
+      ? [{ icon: ICONS.minus, label: t('Detach from token'), run: () => p.mutate(el.id, (e) => unbindToken(e as never, path), true) }]
+      : [{ icon: ICONS.tokenNew, label: t('Make a token from this value'), run: () => {
         const value = readAt(p.store.element(el.id), path)
         if (value === undefined) return
         const name = freeTokenName(p.store.doc, STEM[types[0]])
@@ -38,7 +38,7 @@ export function tokenPicker(p: PropsPanel, el: SlideElement, path: string, types
           if (e) bindToken(p.store.doc, e as never, path, name)
         }, true)
         p.toast(t('Made {name} — {n} uses follow it', { name, n: 1 }))
-      } }]).concat([{ label: t('Manage tokens'), run: () => document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click() }]),
+      } }]).concat([{ icon: ICONS.settings, label: t('Manage tokens'), run: () => document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click() }]),
   })
 }
 

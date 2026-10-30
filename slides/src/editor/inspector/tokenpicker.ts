@@ -64,7 +64,7 @@ export interface PickerOpts {
   /** the key the field follows now (a slot or a token name), checked */
   bound?: string
   pick: (c: Choice) => void
-  actions: Array<{ label: string; run: () => void }>
+  actions: Array<{ label: string; run: () => void; icon?: string }>
 }
 
 /** Open the picker under `anchor`. */
@@ -133,7 +133,9 @@ export function openTokenPicker(anchor: HTMLElement, o: PickerOpts) {
       const b = document.createElement('button')
       b.type = 'button'
       b.className = 'ed-tokpick-act'
-      b.textContent = a.label
+      // every action carries its glyph, as every menu row does
+      if (a.icon) { const i = document.createElement('span'); i.className = 'ed-tokpick-ico'; i.innerHTML = a.icon; b.append(i) }
+      b.append(a.label)
       b.addEventListener('click', () => { close(); a.run() })
       foot.append(b)
     }

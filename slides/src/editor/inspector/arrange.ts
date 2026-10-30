@@ -6,7 +6,7 @@ import { tokenBind } from './tokenbind'
 import type { PropsPanel } from '../panels'
 import { BOOL_OPS, boolOperands, boolUi, combine } from '../booleans'
 import { ratioLocked, type ImageElement, type SlideElement, type ShapeElement } from '../../model'
-import { section, row, labeledSelect, mini } from './fields'
+import { section, row, labeledSelect, mini, withIcon } from './fields'
 import { t } from '../../i18n'
 import { optLabel, relOf } from './controls'
 import { applyRel } from './numexpr'
@@ -160,7 +160,7 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
       }, true))
     blend.title = t('Blend mode')
     blend.setAttribute('aria-label', t('Blend mode'))
-    layer.append(blend)
+    layer.append(withIcon(blend, ICONS.blendMode))
   }
   const opacity = measure(p, els, 'opacity', '%', { min: 0, max: 100, scale: 100 })
   opacity.title = t('Opacity')

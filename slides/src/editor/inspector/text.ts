@@ -9,7 +9,7 @@ import { t } from '../../i18n'
 import { measureElement } from '../../measure'
 import { formatDate, DATE_PRESETS, TIME_PRESETS, OTHER_FIELDS } from '../../datefmt'
 import { openCtxMenu } from '../ctxmenu'
-import { field, mini, segmented, section } from './fields'
+import { field, mini, segmented, section, withIcon } from './fields'
 import { paintRow, colorCatalog } from './paintrow'
 import { colorAlpha, gradientRows, gradientChip, paintHost } from './color'
 import { firstFamily, FONT_CHOICES, injectFonts } from '../../fonts'
@@ -98,7 +98,7 @@ export function buildTextProps(p: PropsPanel, el: TextElement) {
   const font = fontSelect(p, el)
   font.setAttribute('aria-label', t('Font'))
   font.title = t('Font')
-  field(p, tokenWrap(p, font, el, 'fontFamily', ['fontFamily']))
+  field(p, tokenWrap(p, withIcon(font, ICONS.text), el, 'fontFamily', ['fontFamily']))
 
   const sizes = document.createElement('div')
   sizes.className = 'ed-grid2'
@@ -113,7 +113,7 @@ export function buildTextProps(p: PropsPanel, el: TextElement) {
   const weight = weightSelect(p, el)
   weight.title = t('Weight')
   weight.setAttribute('aria-label', t('Weight'))
-  sizes.append(tokenBind(p, size, el, 'fontSize', ['fontSize', 'number']), weight,
+  sizes.append(tokenBind(p, size, el, 'fontSize', ['fontSize', 'number']), withIcon(weight, ICONS.weight),
     mini(t('Line height'), el.lineHeight, (v, fin) =>
       p.mutate(el.id, (e) => { (e as TextElement).lineHeight = Math.max(Math.round(v * 100) / 100, 0.5) }, fin), ICONS.lineHeight, { min: 0.5 }),
     mini(t('Letter spacing'), el.letterSpacing ?? 0, (v, fin) =>
@@ -156,17 +156,22 @@ export function buildTextProps(p: PropsPanel, el: TextElement) {
 
 /** Text fill: a solid colour, or a multi-stop gradient painted into the glyphs. */
 export function buildTextFill(p: PropsPanel, el: TextElement) {
-  // text always has its fill: ⠿ on the header, 👁 on the row, no −
-  section(p, t('Fill'), undefined, colorCatalog(p))
+  // Figma's: a text fill is a layer like any other — 👁 hides it, − removes it
+  // (the text keeps its place, drawn with no fill), + brings one back
+  const none = el.color === 'transparent' && !el.colorGradient
+  const add = () => p.mutate(el.id, (e) => { (e as TextElement).color = '#1E2A3A'; delete e.fillHidden }, true)
+  section(p, t('Fill'), none ? { add: true, hint: t('Add fill'), run: add } : undefined, colorCatalog(p, none ? add : undefined))
+  if (none) return
   const tgrad = el.colorGradient
   const host = paintHost(p, el.id, 'color', 'colorGradient', 90)
   const eye = { hidden: !!el.fillHidden, toggle: () => p.mutate(el.id, (e) => { if (e.fillHidden) delete e.fillHidden; else e.fillHidden = true }, true) }
+  const remove = () => p.mutate(el.id, (e) => { const tx = e as TextElement; tx.color = 'transparent'; delete tx.colorGradient; delete tx.fillHidden; delete tx.themeRefs?.color }, true)
   if (host.kind === 'solid' || !tgrad) {
     paintRow(p, colorAlpha(p, el.color, (v, fin) =>
       p.mutate(el.id, (e) => { (e as TextElement).color = v }, fin),
-      { id: el.id, path: 'color' }, host), eye)
+      { id: el.id, path: 'color' }, host), eye, remove)
   } else {
-    paintRow(p, gradientChip(p, host), eye)
+    paintRow(p, gradientChip(p, host), eye, remove)
     gradientRows(p, tgrad, (fn, fin) => p.mutate(el.id, (e) => {
       const g = (e as TextElement).colorGradient
       if (g) fn(g)
