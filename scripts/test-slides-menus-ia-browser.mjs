@@ -124,6 +124,51 @@ try {
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
   await ctx.close()
 
+  console.log('\n8. Menus fit their rows, in every language\n')
+  for (const [w, h] of [[1440, 900], [1280, 800]]) for (const lang of ['en', 'pt', 'de']) {
+    await run(async () => {
+      const c = await browser.newContext({ viewport: { width: w, height: h } })
+      await c.addInitScript((l) => { try { localStorage.setItem('bento-slideshow-started', '1'); localStorage.setItem('bento-lang', l) } catch {} }, lang)
+      await c.route(/^https?:/, (r) => r.abort())
+      const q = await c.newPage()
+      await q.goto('file://' + SHELL)
+      await q.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-topbar'))
+      await q.waitForTimeout(300)
+      const fit = (sel) => q.evaluate((sel) => {
+        const m = document.querySelector(sel)
+        const rows = [...m.querySelectorAll(':scope > .ed-btn')]
+        return {
+          rows: rows.length,
+          noIcon: rows.filter((b) => !(b.querySelector('svg')?.getBoundingClientRect().width > 0)).length,
+          cut: rows.filter((b) => b.scrollWidth > b.clientWidth + 0.5).length,
+          xScroll: m.scrollWidth > m.clientWidth + 0.5, yScroll: m.scrollHeight > m.clientHeight + 0.5,
+          sameLine: rows.every((b) => { const i = b.querySelector('svg')?.getBoundingClientRect(), l = b.querySelector('span')?.getBoundingClientRect(); return !i || !l || Math.abs((i.top + i.bottom) / 2 - (l.top + l.bottom) / 2) < 4 }),
+          // captions all-or-none: every group between separators opens with one, or none does
+          caps: (() => { const groups = []; let g = []; for (const ch of m.children) { if (ch.classList.contains('ed-menu-sep')) { groups.push(g); g = [] } else g.push(ch) } groups.push(g); const withCap = groups.filter((x) => x[0]?.classList.contains('ed-menu-cap')).length; return withCap === 0 || withCap === groups.length })(),
+        }
+      }, sel)
+      const tag = `${lang} ${w}×${h}`
+      await q.click('.ed-logo'); await q.waitForTimeout(150)
+      const file = await fit('.ed-file-menu')
+      ok(file.noIcon === 0, `${tag}: every File row has an icon (${file.noIcon} without)`)
+      ok(file.caps, `${tag}: File captions are all-or-none`)
+      ok(file.cut === 0 && !file.xScroll && !file.yScroll, `${tag}: File fits — no cut row, no scrollbar (cut ${file.cut}, x ${file.xScroll}, y ${file.yScroll})`)
+      await q.keyboard.press('Escape'); await q.mouse.click(w / 2, h - 40)
+      await q.click('.ed-split-caret'); await q.waitForTimeout(150)
+      const save = await fit('.ed-save-menu')
+      ok(save.cut === 0 && !save.xScroll && !save.yScroll && save.noIcon === 0, `${tag}: Save fits with its icons`)
+      await q.click('.ed-split-caret')
+      await q.click('.ed-app > .ed-dropdown > .ed-btn'); await q.waitForTimeout(150)
+      const help = await fit('.ed-help-menu')
+      ok(help.sameLine && help.noIcon === 0 && help.cut === 0 && !help.xScroll, `${tag}: Help rows are icon and label on one line, none cut`)
+      await q.mouse.click(w / 2, h - 40)
+      await q.click('.ed-topbar [data-cmd="preferences"]'); await q.waitForTimeout(150)
+      const pw = await q.$eval('.ed-prefs', (b) => b.getBoundingClientRect().width)
+      ok(pw >= 520, `${tag}: Preferences is wide enough for label and control on one line (${Math.round(pw)}px)`)
+      await c.close()
+    })
+  }
+
   console.log('\n7. Nothing overlaps on the bar\n')
   for (const w of [1280, 768, 390]) {
     await run(async () => {

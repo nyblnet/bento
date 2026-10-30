@@ -1367,4 +1367,6 @@ export const strings: Catalog = {
   "Keyboard shortcuts": "Pikanäppäimet",
   "Preferences": "Asetukset",
   "Looking at the pictures in this deck…": "Tarkistetaan esityksen kuvia…",
+  "New": "Uusi",
+  "Document": "Asiakirja",
 }

@@ -3777,8 +3777,8 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 .ed-menu .ed-btn > .ed-menu-keys { margin-inline-start: auto; padding-inline-start: 12px; font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); background: none; border: 0; }
 /* the app cluster: one group, same-size icon buttons, a hairline before it */
 .ed-app { display: flex; align-items: center; gap: 2px; padding-inline-start: 8px; margin-inline-start: 4px; border-inline-start: 1px solid var(--line); }
-.ed-app .ed-btn, .ed-app .ed-dropdown > .ed-btn { width: 30px; min-width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
-.ed-app svg { width: 17px; height: 17px; }
+.ed-app > .ed-btn, .ed-app > .ed-dropdown > .ed-btn { width: 30px; min-width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
+.ed-app > .ed-btn svg, .ed-app > .ed-dropdown > .ed-btn svg { width: 17px; height: 17px; }
 .ed-prefs .ed-about-auto select { min-width: 0; flex: 1 1 auto; }
 .ed-prefs h2, .ed-docprops h2 { margin: 0 0 12px; font-size: 17px; font-weight: 650; }
 /* the Select-only tool: nothing on the slide offers to move */
@@ -3787,3 +3787,16 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
    share it let undo/redo slide UNDER the right group (390px, measured). Past
    the fold's floor the bar scrolls instead (CLAUDE.md, the topbar note). */
 .ed-topbar.ed-bar-fold .ed-zone-doc { min-width: max-content; }
+
+/* The command menus — Save ▾, File, Help — share one row and one width rule:
+   as wide as their longest row (German and Portuguese run longest), never
+   cut, never a sideways scrollbar; an icon never shrinks to make room. Only a
+   very short window scrolls them vertically. */
+.ed-cmd-menu { width: max-content; min-width: 240px; max-width: calc(100vw - 16px); overflow-x: hidden; }
+.ed-cmd-menu .ed-menu-row { display: flex; align-items: center; justify-content: flex-start; gap: 8px; white-space: nowrap; text-align: start; }
+.ed-cmd-menu .ed-menu-row > svg { flex: none; width: 16px; height: 16px; }
+.ed-cmd-menu .ed-menu-row > span:not(.ed-sr-only) { flex: 1 1 auto; }
+.ed-save-menu, .ed-file-menu { width: max-content; }
+/* Preferences: room for a label and its control on one line */
+.ed-about.ed-prefs { width: min(560px, calc(100vw - 32px)); }
+.ed-prefs .ed-about-auto { flex-wrap: nowrap; }

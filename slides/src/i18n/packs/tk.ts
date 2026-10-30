@@ -1387,4 +1387,6 @@ export const strings: Catalog = {
   "Keyboard shortcuts": "Klawiatura gysga ýollary",
   "Preferences": "Saýlawlar",
   "Looking at the pictures in this deck…": "Bu prezentasiýanyň suratlary barlanýar…",
+  "New": "Täze",
+  "Document": "Resminama",
 }

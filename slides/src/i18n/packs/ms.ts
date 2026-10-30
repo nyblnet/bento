@@ -1363,4 +1363,6 @@ export const strings: Catalog = {
   "Keyboard shortcuts": "Pintasan papan kekunci",
   "Preferences": "Keutamaan",
   "Looking at the pictures in this deck…": "Menyemak gambar dalam persembahan ini…",
+  "New": "Baharu",
+  "Document": "Dokumen",
 }

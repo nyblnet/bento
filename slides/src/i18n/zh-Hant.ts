@@ -1350,4 +1350,6 @@ export const zhHant: Catalog = {
   "Keyboard shortcuts": "鍵盤快速鍵",
   "Preferences": "偏好設定",
   "Looking at the pictures in this deck…": "正在檢查此簡報中的圖片…",
+  "New": "新增",
+  "Document": "文件",
 }

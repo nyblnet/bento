@@ -1361,4 +1361,6 @@ export const strings: Catalog = {
   "Keyboard shortcuts": "Klavye kısayolları",
   "Preferences": "Tercihler",
   "Looking at the pictures in this deck…": "Bu sunudaki görseller inceleniyor…",
+  "New": "Yeni",
+  "Document": "Belge",
 }

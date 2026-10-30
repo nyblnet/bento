@@ -1364,4 +1364,6 @@ export const strings: Catalog = {
   "Keyboard shortcuts": "แป้นพิมพ์ลัด",
   "Preferences": "การตั้งค่า",
   "Looking at the pictures in this deck…": "กำลังตรวจรูปภาพในงานนำเสนอนี้…",
+  "New": "ใหม่",
+  "Document": "เอกสาร",
 }

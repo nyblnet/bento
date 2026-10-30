@@ -1356,4 +1356,6 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Keyboard shortcuts": ["キーボードショートカット","键盘快捷键","鍵盤快速鍵","Atajos de teclado","Raccourcis clavier","Tastenkürzel","Scorciatoie da tastiera","Atalhos de teclado"],
   "Preferences": ["環境設定","偏好设置","偏好設定","Preferencias","Préférences","Einstellungen","Preferenze","Preferências"],
   "Looking at the pictures in this deck…": ["このデッキの画像を確認しています…","正在检查此演示文稿中的图片…","正在檢查此簡報中的圖片…","Revisando las imágenes de esta presentación…","Examen des images de cette présentation…","Bilder in dieser Präsentation werden geprüft…","Esame delle immagini di questa presentazione…","Verificando as imagens desta apresentação…"],
+  "New": ["新規","新建","新增","Nuevo","Nouveau","Neu","Nuovo","Novo"],
+  "Document": ["ドキュメント","文档","文件","Documento","Document","Dokument","Documento","Documento"],
 }
