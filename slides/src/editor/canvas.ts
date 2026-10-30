@@ -33,7 +33,7 @@ import type { Peer } from '../sync/session'
 import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 import { drawFrameOverlay } from './frameoverlay'
-import { isFrame, layoutSlide } from '../layout'
+import { isFrame, layoutSlide, withDescendants } from '../layout'
 import { drawGradientOverlay } from './gradientoverlay'
 import { TransformHud, hudNum, mountModHint } from './hud'
 import { applyMorphPreview, morphGhost } from './morph'
@@ -1440,7 +1440,7 @@ export class SlideCanvas {
       if (inputEvent && (inputEvent.metaKey || inputEvent.ctrlKey) && !this.pendingCopy) {
         // duplicate-drag: snapshot the selection now; the stationary copies
         // are committed in one undo step together with the moved frames
-        this.pendingCopy = this.store.selectedElements.map(
+        this.pendingCopy = withDescendants(this.store.slide, this.store.selectedElements).map(
           (el) => JSON.parse(JSON.stringify(el)) as SlideElement,
         )
       }

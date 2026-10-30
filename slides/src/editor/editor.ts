@@ -63,6 +63,7 @@ import '../../../kernel/src/ui/dialog.css'
 import { PresenceToasts } from './presencetoasts'
 import { BOOL_OPS, boolBlocked, boolOperands, boolUi, combine, flatten, release } from './booleans'
 import type { NodeKind } from './beziereditor'
+import { withDescendants } from '../layout'
 
 const i18nT = t
 
@@ -3451,7 +3452,7 @@ export class Editor {
       { id: 'ghost-cut', label: 'Cut to move', keys: `⇧${MOD}X`, scope: 'canvas', when: writable, match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'x', run: () => {
         if (!this.store.selection.length || this.store.readOnly) return
         this.copySelection()
-        const ids = [...this.store.selection]
+        const ids = withDescendants(this.store.slide, this.store.selectedElements).map((e) => e.id) // a frame moves with its contents
         this.store.select([])
         this.canvas.setGhost({ slideId: this.store.slide.id, ids })
       } },
@@ -3500,7 +3501,7 @@ export class Editor {
         // clipboard as a Bento payload (works across decks/tabs). Elements when
         // any are selected; otherwise the current slide.
         if (this.store.selection.length) {
-          void navigator.clipboard?.writeText?.(serializeElements(this.store.selectedElements, this.store.doc)).catch(() => {})
+          void navigator.clipboard?.writeText?.(serializeElements(withDescendants(this.store.slide, this.store.selectedElements), this.store.doc)).catch(() => {})
         } else {
           const slides = this.selectedSlides()
           void navigator.clipboard?.writeText?.(serializeSlides(slides, this.store.doc)).catch(() => {})
@@ -3591,18 +3592,21 @@ export class Editor {
   }
 
   private duplicateSelection() {
-    const els = this.store.selectedElements
-    if (!els.length) return
+    const picked = this.store.selectedElements
+    if (!picked.length) return
+    const els = withDescendants(this.store.slide, picked)
     const clones = freshGroups(els.map((el) => cloneElement(el)), els)
     adoptComponents(clones, this.store.doc)
     this.store.commit(() => this.store.slide.elements.push(...clones))
-    this.store.select(clones.map((c) => c.id))
+    // the copies of what was picked; their contents ride along unselected
+    const top = new Set(picked.map((e) => els.indexOf(e)))
+    this.store.select(clones.filter((_, i) => top.has(i)).map((c) => c.id))
   }
 
   /** Remove the selected elements. Shared by ⌫ and the context menu. */
   private deleteSelection() {
     if (!this.store.selection.length) return
-    const ids = new Set(this.store.selection)
+    const ids = new Set(withDescendants(this.store.slide, this.store.selectedElements).map((e) => e.id))
     this.store.commit(() => {
       this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
     })
@@ -3634,7 +3638,7 @@ export class Editor {
    *  clipboard as a Bento payload. Shared by ⌘C and the context menu. */
   private copySelection() {
     const text = this.store.selection.length
-      ? serializeElements(this.store.selectedElements, this.store.doc)
+      ? serializeElements(withDescendants(this.store.slide, this.store.selectedElements), this.store.doc)
       : serializeSlides(this.selectedSlides(), this.store.doc)
     void navigator.clipboard?.writeText?.(text).catch(() => {})
   }

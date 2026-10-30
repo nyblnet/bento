@@ -39,7 +39,19 @@ const frame = (id, x, y, w, h, layout = {}) => rect(id, x, y, w, h, { fill: '#ee
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
-  await ctx.addInitScript(() => { try { localStorage.setItem('bento-slideshow-started', '1') } catch {} })
+  await ctx.addInitScript(() => {
+    try { localStorage.setItem('bento-slideshow-started', '1') } catch {}
+    // the editor's copies, observed without clipboard permissions
+    window.__clips = []
+    const clip = navigator.clipboard ?? {}
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: Object.assign(Object.create(Object.getPrototypeOf(clip) ?? Object.prototype), clip, {
+        writeText: (t) => { window.__clips.push(String(t)); return Promise.resolve() },
+        readText: () => Promise.resolve(window.__clips.at(-1) ?? ''),
+      }),
+    })
+  })
   await ctx.route(/^https?:/, (r) => r.abort())
   const p = await ctx.newPage()
   const errors = []
@@ -60,6 +72,8 @@ try {
   const node = (id) => p.locator(`.ed-stage-scale [data-el-id="${id}"]`).first()
   const centre = async (id, dx = 0, dy = 0) => { const b = await node(id).boundingBox(); return [b.x + b.width / 2 + dx, b.y + b.height / 2 + dy] }
   const deselect = async () => { await p.evaluate(() => document.activeElement?.blur()); for (let i = 0; i < 3; i++) await p.keyboard.press('Escape'); await p.waitForTimeout(150) }
+  const pick = async (id, add = false) => { await p.evaluate(([id, add]) => document.querySelector(`.ed-layer[data-id="${id}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: add })), [id, add]); await p.waitForTimeout(200) }
+  const paste = () => p.evaluate(() => { const dt = new DataTransfer(); dt.setData('text/plain', window.__clips.at(-1) ?? ''); document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true })) }).then(() => p.waitForTimeout(300))
   const drag = async (from, to, steps = 12) => {
     await p.mouse.move(...from); await p.mouse.down()
     for (let i = 1; i <= steps; i++) { await p.mouse.move(from[0] + (to[0] - from[0]) * i / steps, from[1] + (to[1] - from[1]) * i / steps); await p.waitForTimeout(16) }
@@ -95,6 +109,48 @@ try {
   await p.mouse.click(...(await centre('t'))); await p.waitForTimeout(250)
   await p.keyboard.press('Shift+A'); await p.waitForTimeout(300)
   ok((await els()).some((e) => e.layout), '⇧A on a selected text box still wraps it in a frame')
+
+  console.log('\n3. a frame is one unit\n')
+  const card = () => [frame('f', 100, 100, 400, 120), rect('c1', 110, 110, 100, 100, { parentId: 'f' }), text('c2', 230, 110, 200, 60, 'Card', { parentId: 'f' })]
+  const kidsOf = (all, fid) => all.filter((e) => e.parentId === fid)
+  await load(card()); await deselect(); await pick('f')
+  await p.keyboard.press('Meta+d'); await p.waitForTimeout(300)
+  let all = await els()
+  const dup = all.find((e) => e.layout && e.id !== 'f')
+  ok(!!dup && kidsOf(all, dup.id).length === 2, `⌘D on a frame copies its two children into the copy (${dup ? kidsOf(all, dup.id).length : 'no copy'})`)
+  ok(kidsOf(all, 'f').length === 2, 'the original keeps its own two')
+  ok((await selection()).join() === dup?.id, 'the copy of the frame is what is selected')
+  await load(card()); await deselect(); await pick('f')
+  await p.keyboard.press('Meta+c'); await p.waitForTimeout(150)
+  await paste()
+  all = await els()
+  const pasted = all.find((e) => e.layout && e.id !== 'f')
+  ok(!!pasted && kidsOf(all, pasted.id).length === 2, `⌘C ⌘V of a frame pastes its children inside the pasted frame (${pasted ? kidsOf(all, pasted.id).length : 'no paste'})`)
+  await load(card()); await deselect(); await pick('f')
+  {
+    // press on the frame's own body: under the short child, clear of the
+    // padding and gap bands (dragging those sets the spacing)
+    const [c2, fb] = [await node('c2').boundingBox(), await node('f').boundingBox()]
+    const gx = c2.x + c2.width / 2, gy = (c2.y + c2.height + fb.y + fb.height) / 2 - 4
+    await p.keyboard.down('Meta')
+    await drag([gx, gy], [gx, gy + 200])
+    await p.keyboard.up('Meta')
+    all = await els()
+    const frames = all.filter((e) => e.layout)
+    ok(frames.length === 2 && frames.every((f) => kidsOf(all, f.id).length === 2), `⌘-drag a frame: the copy left behind holds its own children (${frames.map((f) => kidsOf(all, f.id).length).join('/')})`)
+  }
+  await load(card()); await deselect(); await pick('f')
+  await p.keyboard.press('Backspace'); await p.waitForTimeout(250)
+  ok((await els()).length === 0, `Delete on a frame takes its contents too (${(await els()).length} left)`)
+  await p.keyboard.press('Meta+z'); await p.waitForTimeout(250)
+  ok((await els()).length === 3, 'one ⌘Z brings the frame and its contents back')
+  await load(card(), [{ id: 's2', background: '#fff', transition: 'none', notes: '', elements: [] }])
+  await p.evaluate(() => document.querySelector('.ed-sidebar .ed-thumb')?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 120 })))
+  await p.waitForTimeout(200)
+  const dupRow = p.locator('.ed-ctxmenu button, .ed-ctxmenu [role=menuitem]', { hasText: /^Duplicate/ }).first()
+  if (await dupRow.count()) { await dupRow.click(); await p.waitForTimeout(300) }
+  const s1 = await els(1)
+  ok(s1.length === 3 && kidsOf(s1, 'f').length === 2, `a duplicated slide's frame still holds its children (${s1.length} elements)`)
 
   console.log(`\n${checks - failures}/${checks} checks passed`)
 } finally {

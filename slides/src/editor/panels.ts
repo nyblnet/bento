@@ -28,6 +28,7 @@ import { buildImageProps, buildMediaProps, buildCodeProps, buildEmbedProps } fro
 import { buildChartProps } from './inspector/chart'
 import { buildTableProps } from './inspector/table'
 import { buildAutoLayout, wrapInFrame } from './inspector/layout'
+import { withDescendants } from '../layout'
 import { buildShadow, buildBlur } from './inspector/effects'
 import { freshGroups } from './clipboard'
 
@@ -461,8 +462,10 @@ export class PropsPanel {
     }, true)
   }
 
-  private duplicate(els: SlideElement[]) {
-    // the batch keeps its groups and frames among its copies (clipboard.freshGroups)
+  private duplicate(picked: SlideElement[]) {
+    // a frame brings its contents; the batch keeps its groups and frames among
+    // its copies (clipboard.freshGroups)
+    const els = withDescendants(this.store.slide, picked)
     const clones = freshGroups(els.map((el) => ({
       ...JSON.parse(JSON.stringify(el)),
       id: `${el.id.replace(/-copy\d*$/, '')}-copy${Math.floor(Math.random() * 1000)}`,
@@ -471,11 +474,12 @@ export class PropsPanel {
     })), els)
     adoptComponents(clones, this.store.doc)
     this.store.commit(() => this.store.slide.elements.push(...clones))
-    this.store.select(clones.map((c) => c.id))
+    const top = new Set(picked.map((e) => els.indexOf(e)))
+    this.store.select(clones.filter((_, i) => top.has(i)).map((c) => c.id))
   }
 
   private deleteEls(els: SlideElement[]) {
-    const ids = new Set(els.map((e) => e.id))
+    const ids = new Set(withDescendants(this.store.slide, els).map((e) => e.id))
     this.store.commit(() => {
       this.store.slide.elements = this.store.slide.elements.filter((e) => !ids.has(e.id))
     })
