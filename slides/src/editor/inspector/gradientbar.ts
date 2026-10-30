@@ -17,10 +17,14 @@ export function colorAt(stops: GradientFill['stops'], at: number): string {
   return combineColor(`#${ch(1)}${ch(3)}${ch(5)}`, A.a * (1 - k) + B.a * k)
 }
 
+/** The stop index a keyboard move left focused, for the bar that replaces this one. */
+let refocus: number | null = null
+
 /**
  * The stops on a bar, Figma's: the gradient drawn left to right, a handle per
  * stop. Drag a handle to move its stop, click the bar to add one (in the
- * colour already there), Backspace removes the focused one (two always stay).
+ * colour already there), Backspace removes the focused one (two always stay),
+ * Enter/Space selects it and the arrows move it.
  * `selected` is the stop being edited; `onSelect` hears a press on a handle.
  */
 export function gradientBar(live: GradientFill, edit: (fn: (g: GradientFill) => void, final: boolean) => void, selected = 0, onSelect: (i: number) => void = () => {}): HTMLElement {
@@ -44,13 +48,13 @@ export function gradientBar(live: GradientFill, edit: (fn: (g: GradientFill) => 
     h.style.setProperty('--c', cssColor(st.color, 'transparent'))
     h.classList.toggle('is-on', i === selected)
     h.setAttribute('aria-pressed', String(i === selected))
+    h.setAttribute('aria-label', `${t('Stop {n}', { n: i + 1 })} · ${Math.round(st.at * 100)}%`)
   })
   grad.stops.forEach((_st, i) => {
     const h = document.createElement('button')
     h.type = 'button'
     h.className = 'ed-gradbar-stop'
     h.title = t('Stop {n}', { n: i + 1 })
-    h.setAttribute('aria-label', h.title)
     h.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return
       e.preventDefault(); e.stopPropagation()
@@ -75,22 +79,41 @@ export function gradientBar(live: GradientFill, edit: (fn: (g: GradientFill) => 
       window.addEventListener('pointerup', up)
       window.addEventListener('pointercancel', up)
     })
+    // The stop owns its keys: Backspace, Delete and the arrows never reach
+    // the editor, which would delete or nudge the element behind the panel.
     h.addEventListener('keydown', (e) => {
-      if ((e.key === 'Backspace' || e.key === 'Delete') && grad.stops.length > 2) {
-        e.preventDefault(); e.stopPropagation() // not the canvas's Delete
-        edit((g) => { if (g.stops.length > 2) g.stops.splice(i, 1) }, true)
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        e.preventDefault(); e.stopPropagation()
-        const v = Math.min(Math.max(grad.stops[i].at + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 0.1 : 0.01), 0), 1)
-        grad.stops[i].at = Math.round(v * 100) / 100
-        edit((g) => { if (g.stops[i]) g.stops[i].at = grad.stops[i].at }, true)
-        paint(); place()
+      const k = e.key
+      if (k !== 'Enter' && k !== ' ' && k !== 'Backspace' && k !== 'Delete' && !k.startsWith('Arrow')) return
+      e.preventDefault(); e.stopPropagation()
+      if (k === 'Enter' || k === ' ') { selected = i; onSelect(i); place(); return }
+      if (k === 'Backspace' || k === 'Delete') {
+        if (grad.stops.length > 2) edit((g) => { if (g.stops.length > 2) g.stops.splice(i, 1) }, true) // two always stay
+        return
       }
+      // ←/↓ earlier, →/↑ later; the stops re-sort and focus follows the moved one
+      const dir = k === 'ArrowLeft' || k === 'ArrowDown' ? -1 : 1
+      const v = Math.round(Math.min(Math.max(grad.stops[i].at + dir * (e.shiftKey ? 0.1 : 0.01), 0), 1) * 100) / 100
+      const moved = grad.stops[i]
+      moved.at = v
+      grad.stops.sort((a, b) => a.at - b.at)
+      const j = grad.stops.indexOf(moved)
+      refocus = j // every bar built during this key press focuses stop j
+      queueMicrotask(() => { refocus = null })
+      edit((g) => { if (!g.stops[i]) return; const m = g.stops[i]; m.at = v; g.stops.sort((a, b) => a.at - b.at) }, true)
+      selected = j
+      onSelect(j)
+      paint(); place()
     })
     handles.push(h)
     bar.appendChild(h)
   })
   place()
+  // a stop moved from the keyboard rebuilds its bar (panel or popover): the
+  // new bar takes the focus back, on the stop that moved
+  if (refocus !== null) {
+    const j = refocus
+    queueMicrotask(() => { if (bar.isConnected) handles[j]?.focus({ preventScroll: true }) })
+  }
   bar.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || e.target !== bar) return
     const v = Math.round(at(e.clientX) * 100) / 100

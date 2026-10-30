@@ -22,11 +22,12 @@ function modHint(e: { altKey: boolean; metaKey: boolean; ctrlKey: boolean; shift
   return ''
 }
 
-/** The modifier line at the foot of the canvas. `over` is the canvas surface. */
-export function mountModHint(host: HTMLElement, over: HTMLElement, selected: () => number) {
+/** The modifier line at the foot of the canvas. `over` is the canvas surface;
+ *  `signal` ends it with the editor build that made it. Not a live region: a
+ *  screen reader would read a sentence on every Shift. */
+export function mountModHint(host: HTMLElement, over: HTMLElement, selected: () => number, signal?: AbortSignal) {
   const line = document.createElement('div')
   line.className = 'ed-modhint'
-  line.setAttribute('aria-live', 'polite')
   line.hidden = true
   host.appendChild(line)
   let inside = false
@@ -37,9 +38,9 @@ export function mountModHint(host: HTMLElement, over: HTMLElement, selected: () 
   }
   over.addEventListener('mouseenter', (e) => { inside = true; update(e) })
   over.addEventListener('mouseleave', (e) => { inside = false; update(e) })
-  window.addEventListener('keydown', update)
-  window.addEventListener('keyup', update)
-  window.addEventListener('blur', () => { line.hidden = true })
+  window.addEventListener('keydown', update, { signal })
+  window.addEventListener('keyup', update, { signal })
+  window.addEventListener('blur', () => { line.hidden = true }, { signal })
   return line
 }
 
@@ -48,19 +49,22 @@ export class TransformHud {
   private pill = document.createElement('div')
   private x = 0
   private y = 0
-  constructor() {
+  /** `signal` takes the pill and its listeners away with the editor build that made it. */
+  constructor(signal?: AbortSignal) {
     this.pill.className = 'ed-hud'
     this.pill.hidden = true
     document.body.appendChild(this.pill)
-    window.addEventListener('pointermove', (e) => { this.x = e.clientX; this.y = e.clientY }, true)
+    signal?.addEventListener('abort', () => this.pill.remove(), { once: true })
+    const on = { capture: true, signal }
+    window.addEventListener('pointermove', (e) => { this.x = e.clientX; this.y = e.clientY }, on)
     // A scrubbed field (fields.ts / controls.ts) fires a non-bubbling event on
     // its input; capture still sees it, so the scrub needs no hook of its own.
     document.addEventListener('ed-scrub', (e) => {
       const input = e.target as HTMLInputElement
       this.show(`${input.getAttribute('aria-label') ?? ''} ${input.value}`.trim())
-    }, true)
-    document.addEventListener('change', () => this.hide(), true)
-    window.addEventListener('pointerup', () => this.hide(), true)
+    }, on)
+    document.addEventListener('change', () => this.hide(), on)
+    window.addEventListener('pointerup', () => this.hide(), on)
   }
 
   show(text: string, x = this.x, y = this.y) {

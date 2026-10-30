@@ -107,7 +107,7 @@ export function gradientChip(p: PropsPanel, host: PaintHost): HTMLElement {
       groups: [],
       preview: (hex, a) => host.write('solid', undefined, combineColor(hex, a), false),
       commit: (hex, a) => host.write('solid', undefined, combineColor(hex, a), true),
-      cancel: () => { if (p.burst) { p.burst = false; p.store.undo() } },
+      cancel: () => p.cancelBurst(),
       paint: host,
       done: () => settle(p),
     })
@@ -434,7 +434,7 @@ function popoverOn(p: PropsPanel, col: HTMLInputElement, alpha?: HTMLInputElemen
       ],
       preview: set,
       commit: () => col.dispatchEvent(new Event('change')),
-      cancel: () => { if (p.burst) { p.burst = false; p.store.undo() } },
+      cancel: () => p.cancelBurst(),
       paint,
       done: paint ? () => settle(p) : undefined,
     })

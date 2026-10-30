@@ -7,7 +7,8 @@ import { BOOL_OPS, boolOperands, boolUi, combine } from '../booleans'
 import { ratioLocked, type ImageElement, type SlideElement, type ShapeElement } from '../../model'
 import { section, row, labeledSelect, mini } from './fields'
 import { t } from '../../i18n'
-import { optLabel } from './controls'
+import { optLabel, relOf } from './controls'
+import { applyRel } from './numexpr'
 import { isMacOS } from '../../screens'
 import { ICONS } from '../../icons'
 
@@ -248,13 +249,14 @@ function measure(p: PropsPanel, els: SlideElement[], key: Measure, label: string
   const mixed = vals.some((v) => Math.abs(v - vals[0]) > 1e-9)
   const hold = (v: number) => Math.min(o.max ?? Infinity, Math.max(o.min ?? -Infinity, v))
   const wrap = mini(label, mixed ? NaN : vals[0], (v, final) => {
-    const rel = input.dataset.rel
-    const delta = mixed ? (final ? (rel === undefined ? null : parseFloat(rel)) : v) : null
+    // Mixed: a relative entry (+12, *2, an arrow step, a scrub) works on each
+    // element's own value; a plain value sets them all
+    const rel = !mixed ? null : final ? relOf(input) : { op: '+' as const, x: v }
     p.edit(() => els.forEach((e, i) => {
       const el = p.store.element(e.id)
       if (!el) return
       const before = el[key]
-      el[key] = hold(delta === null ? v : vals[i] + delta) / k
+      el[key] = hold(rel ? applyRel(rel, vals[i]) : v) / k
       // a locked element's other side follows a typed or scrubbed W/H
       if ((key === 'w' || key === 'h') && ratioLocked(el) && before > 0) {
         const other = key === 'w' ? 'h' : 'w'

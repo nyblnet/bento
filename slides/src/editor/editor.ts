@@ -72,6 +72,12 @@ const i18nT = t
 
 /** Per-BROWSER, not per-deck: whether the "this browser can't rewrite files"
  *  notice has been acknowledged. It is a property of the browser. */
+/** What owns the keyboard while it shows: the editor's sheets and dialogs,
+ *  the return gate, a context menu or an open topbar menu. (The ⌘K palette
+ *  keeps its keys to itself — its field stops them — and must still list
+ *  the commands, so it is not one of these.) */
+const MODAL = '.ed-about-overlay, .ed-gate-overlay, .ed-ctxmenu, .ed-dropdown.open, dialog[open]'
+
 const SAVE_NOTICE_KEY = 'bento-save-notice'
 
 /** sessionStorage: set just before the post-update reload, read once by the
@@ -672,7 +678,7 @@ export class Editor {
 
     this.wireDrawerDismiss()
     this.restorePanelWidths()
-    this.canvas = new SlideCanvas(canvasWrap, this.store)
+    this.canvas = new SlideCanvas(canvasWrap, this.store, this.buildScope.signal)
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
@@ -3449,8 +3455,16 @@ export class Editor {
     if (this.commandList) return this.commandList
     const sel = () => this.store.selectedElements
     const key = (ev: KeyboardEvent) => ev.key.toLowerCase()
-    const canvasFree = () => !this.canvas.isCropEditing
+    // Nothing modal is up: a sheet, dialog, the palette or an open menu owns the
+    // keyboard while it shows, so R or ⌘Z must not reach the slide behind it.
+    const canvasFree = () => !this.canvas.isCropEditing && !document.querySelector(MODAL)
     const writable = () => canvasFree() && !this.store.readOnly
+    // the tools and selection verbs also wait while a path is being edited
+    const toolFree = () => writable() && !this.canvas.isPathEditing
+    // A letter as the keyboard's layout writes it (Dvorak's K is K); only when
+    // Option turned it into a symbol (macOS: ⌥K is ˚) does the physical key
+    // decide — the one case a layout cannot answer.
+    const letter = (ev: KeyboardEvent, code: string) => /^[a-z]$/i.test(ev.key) ? `Key${ev.key.toUpperCase()}` === code : ev.code === code
     // a bare letter: no modifier, so ⌘R, ⇧A and ⌥⇧O stay theirs
     const tool = (k: string) => (ev: KeyboardEvent, mod: boolean) => !mod && !ev.altKey && !ev.shiftKey && key(ev) === k
     const list: Command[] = [
@@ -3463,27 +3477,26 @@ export class Editor {
       { id: 'help', label: 'Shortcuts & tips', keys: '?', scope: 'always', when: canvasFree, match: (ev, mod) => !mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey)), run: () => this.openHelp() },
       // The tools, one letter each as in Figma and Penpot (C stays Comment)
       { id: 'tool-select', label: 'Select', keys: 'V', scope: 'canvas', when: canvasFree, match: tool('v'), run: () => this.selectTool() },
-      { id: 'tool-frame', label: 'Frame', keys: 'F', scope: 'canvas', when: writable, match: tool('f'), run: () => this.insertFrame() },
-      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: writable, match: tool('r'), run: () => this.canvas.insert(defaultShape('rect')) },
-      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: writable, match: tool('o'), run: () => this.canvas.insert(defaultShape('ellipse')) },
-      { id: 'tool-line', label: 'Line', keys: 'L', scope: 'canvas', when: writable, match: tool('l'), run: () => this.canvas.armDraw('line') },
-      { id: 'tool-pen', label: 'Pen', keys: 'P', scope: 'canvas', when: writable, match: tool('p'), run: () => this.canvas.armDraw('pen') },
-      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: writable, match: tool('t'), run: () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 120 + Math.random() * 200 }), true) },
+      { id: 'tool-frame', label: 'Frame', keys: 'F', scope: 'canvas', when: toolFree, match: tool('f'), run: () => this.insertFrame() },
+      { id: 'tool-rect', label: 'Rectangle', keys: 'R', scope: 'canvas', when: toolFree, match: tool('r'), run: () => this.canvas.insert(defaultShape('rect')) },
+      { id: 'tool-ellipse', label: 'Ellipse', keys: 'O', scope: 'canvas', when: toolFree, match: tool('o'), run: () => this.canvas.insert(defaultShape('ellipse')) },
+      { id: 'tool-line', label: 'Line', keys: 'L', scope: 'canvas', when: toolFree, match: tool('l'), run: () => this.canvas.armDraw('line') },
+      { id: 'tool-pen', label: 'Pen', keys: 'P', scope: 'canvas', when: toolFree, match: tool('p'), run: () => this.canvas.armDraw('pen') },
+      { id: 'insert-text', label: 'Add a text box', keys: 'T', scope: 'canvas', when: toolFree, match: tool('t'), run: () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 120 + Math.random() * 200 }), true) },
       { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
-      { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => canvasFree() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
-      { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => canvasFree() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
-      // ⌥⇧U/S/I/E — by code: on a Mac, Option turns the key into another letter
-      ...BOOL_OPS.map((op): Command => ({ id: `bool-${op}`, label: boolUi(op).label, keys: boolUi(op).key, scope: 'canvas', when: () => canvasFree() && !!boolOperands(this.store, sel()), match: (ev, mod) => !mod && ev.altKey && ev.shiftKey && ev.code === boolUi(op).code, run: () => { combine(this.store, sel(), op) } })),
-      { id: 'auto-layout', label: 'Add auto layout', keys: '⇧A', scope: 'canvas', when: () => canvasFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => this.panel.addAutoLayout(sel()) },
-      // ⌥ changes ev.key on macOS (⌥K is ˚), so the physical key decides
-      { id: 'component', label: 'Create component', keys: `⌥${MOD}K`, scope: 'canvas', when: () => canvasFree() && sel().length > 0, match: (ev, mod) => mod && ev.altKey && ev.code === 'KeyK', run: () => this.createComponent() },
+      { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => writable() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },
+      { id: 'group', label: 'Group', keys: `${MOD}G`, scope: 'canvas', when: () => writable() && sel().length > 1, match: (ev, mod) => mod && !ev.shiftKey && key(ev) === 'g', run: () => this.panel.group(sel()) },
+      // ⌥⇧U/S/I/E (letter(): on a Mac, Option turns the key into a symbol)
+      ...BOOL_OPS.map((op): Command => ({ id: `bool-${op}`, label: boolUi(op).label, keys: boolUi(op).key, scope: 'canvas', when: () => toolFree() && !!boolOperands(this.store, sel()), match: (ev, mod) => !mod && ev.altKey && ev.shiftKey && letter(ev, boolUi(op).code), run: () => { combine(this.store, sel(), op) } })),
+      { id: 'auto-layout', label: 'Add auto layout', keys: '⇧A', scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => !mod && ev.shiftKey && !ev.altKey && key(ev) === 'a', run: () => this.panel.addAutoLayout(sel()) },
+      { id: 'component', label: 'Create component', keys: `⌥${MOD}K`, scope: 'canvas', when: () => toolFree() && sel().length > 0, match: (ev, mod) => mod && ev.altKey && letter(ev, 'KeyK'), run: () => this.createComponent() },
       { id: 'redo', label: 'Redo', keys: `⇧${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && ((ev.shiftKey && key(ev) === 'z') || key(ev) === 'y'), run: () => this.store.redo() },
       { id: 'undo', label: 'Undo', keys: `${MOD}Z`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && key(ev) === 'z', run: () => this.store.undo() },
-      { id: 'duplicate', label: 'Duplicate', keys: `${MOD}D`, scope: 'canvas', when: canvasFree, match: (ev, mod) => mod && key(ev) === 'd', run: () => this.duplicateSelection() },
+      { id: 'duplicate', label: 'Duplicate', keys: `${MOD}D`, scope: 'canvas', when: writable, match: (ev, mod) => mod && key(ev) === 'd', run: () => this.duplicateSelection() },
       // Ghost Cut: the selection fades where it stands and ⌘V MOVES it (same
       // ids, one undo step); Esc cancels. Also copied, so pasting elsewhere
       // works as after ⌘C. Plain ⌘X is unchanged.
-      { id: 'ghost-cut', label: 'Cut to move', keys: `⇧${MOD}X`, scope: 'canvas', when: canvasFree, match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'x', run: () => {
+      { id: 'ghost-cut', label: 'Cut to move', keys: `⇧${MOD}X`, scope: 'canvas', when: writable, match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'x', run: () => {
         if (!this.store.selection.length || this.store.readOnly) return
         this.copySelection()
         const ids = [...this.store.selection]
@@ -3495,12 +3508,12 @@ export class Editor {
       { id: 'next-slide', label: 'Next slide', keys: 'PageDown', scope: 'canvas', when: canvasFree, match: (ev) => ev.key === 'PageDown', run: () => this.store.goToLinear(1) },
       { id: 'prev-slide', label: 'Previous slide', keys: 'PageUp', scope: 'canvas', when: canvasFree, match: (ev) => ev.key === 'PageUp', run: () => this.store.goToLinear(-1) },
       // palette only: what the topbar inserts, and its other one-click actions
-      { id: 'insert-image', label: 'Add an image', scope: 'canvas', run: () => this.pickImage() },
-      { id: 'insert-table', label: 'Add a table', scope: 'canvas', run: () => this.canvas.insert(this.newTable()) },
-      { id: 'insert-chart', label: 'Add a chart', scope: 'canvas', run: () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))) },
-      { id: 'insert-code', label: 'Add a code snippet', scope: 'canvas', run: () => this.canvas.insert(defaultCode({ color: readableInk(this.store.slide.background) }), true) },
+      { id: 'insert-image', when: toolFree, label: 'Add an image', scope: 'canvas', run: () => this.pickImage() },
+      { id: 'insert-table', when: toolFree, label: 'Add a table', scope: 'canvas', run: () => this.canvas.insert(this.newTable()) },
+      { id: 'insert-chart', when: toolFree, label: 'Add a chart', scope: 'canvas', run: () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))) },
+      { id: 'insert-code', when: toolFree, label: 'Add a code snippet', scope: 'canvas', run: () => this.canvas.insert(defaultCode({ color: readableInk(this.store.slide.background) }), true) },
       { id: 'copy', label: 'Copy', keys: `${MOD}C`, scope: 'canvas', when: () => sel().length > 0, run: () => this.copySelection() },
-      { id: 'delete', label: 'Delete', keys: '⌫', scope: 'canvas', when: () => sel().length > 0, run: () => this.deleteSelection() },
+      { id: 'delete', label: 'Delete', keys: '⌫', scope: 'canvas', when: () => writable() && sel().length > 0, run: () => this.deleteSelection() },
       { id: 'slideshow', label: 'Slideshow', scope: 'always', run: () => this.present(false, true) },
       { id: 'export-pdf', label: 'Export PDF (print)', scope: 'always', run: () => this.exportPdf() },
       { id: 'speaker', label: 'Speaker view', scope: 'always', run: () => this.openSpeakerView() },

@@ -4,7 +4,7 @@
 import { type BentoDoc, uid } from '../../model'
 import { t } from '../../i18n'
 import { ICONS } from '../../icons'
-import { evalNumber } from './numexpr'
+import { evalNumber, type RelOp } from './numexpr'
 
 // Hover help for panel rows, keyed by the RAW English label (translated at
 // render). A missing entry means no tooltip — better silence than an echo.
@@ -232,6 +232,12 @@ export function scrub(handle: HTMLElement, input: HTMLInputElement) {
   })
 }
 
+/** The relative operation the last change of a numeric() field carried, if any. */
+export function relOf(input: HTMLInputElement): RelOp | null {
+  const m = /^([+*/])(.+)$/.exec(input.dataset.rel ?? '')
+  return m ? { op: m[1] as RelOp['op'], x: parseFloat(m[2]) } : null
+}
+
 /** True for the `change` a scrub fires on release. */
 export const endedScrub = (e: Event) => (e as CustomEvent).detail === 'scrub'
 
@@ -246,8 +252,9 @@ export const endedScrub = (e: Event) => (e as CustomEvent).detail === 'scrub'
  * The entry is evaluated in a CAPTURE listener, which at the target runs
  * before every ordinary `change` listener: those read a plain number in
  * `value` as they always did. Junk restores the last value and the change
- * goes no further. A relative entry (`+12`, `*2`) and a scrub leave their
- * delta in `dataset.rel` for a multi-selection to apply per element.
+ * goes no further. A relative entry (`+12`, `*2`), a scrub and an arrow
+ * step leave their operation in `dataset.rel` (see relOf) for a
+ * multi-selection to apply to each element's own value.
  */
 export function numeric(input: HTMLInputElement, unit?: string): HTMLInputElement {
   input.type = 'text'
@@ -267,13 +274,13 @@ export function numeric(input: HTMLInputElement, unit?: string): HTMLInputElemen
   input.addEventListener('focus', () => { prev = input.value })
   input.addEventListener('change', (e) => {
     delete input.dataset.rel
-    if (endedScrub(e)) { input.dataset.rel = String((parseFloat(input.value) || 0) - (parseFloat(prev) || 0)); prev = input.value; aria(); return }
+    if (endedScrub(e)) { input.dataset.rel = `+${(parseFloat(input.value) || 0) - (parseFloat(prev) || 0)}`; prev = input.value; aria(); return }
     if (input.value.trim() === '') { prev = ''; aria(); return } // cleared: the field's own meaning (auto, unset)
     const r = evalNumber(input.value, parseFloat(prev) || 0)
     if (!r) { input.value = prev; e.stopImmediatePropagation(); return }
     const v = bound(input, r.v)
     input.value = String(Math.round(v * 1000) / 1000)
-    if (r.rel !== undefined) input.dataset.rel = String(v - (parseFloat(prev) || 0))
+    if (r.op) input.dataset.rel = `${r.op.op}${r.op.x}`
     prev = input.value
     aria()
   }, true)
@@ -284,7 +291,10 @@ export function numeric(input: HTMLInputElement, unit?: string): HTMLInputElemen
     e.stopPropagation() // the editor's arrows nudge the selection
     const k = (parseFloat(input.step) || 1) * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1)
     const digits = Math.max(0, Math.ceil(-Math.log10(k) - 1e-9))
-    const v = bound(input, (parseFloat(input.value) || 0) + (e.key === 'ArrowUp' ? k : -k))
+    const d = e.key === 'ArrowUp' ? k : -k
+    // an empty field (Mixed) steps each element from its own value
+    if (input.value.trim() === '') { input.value = `+${d}`; input.dispatchEvent(new Event('change')); return }
+    const v = bound(input, (parseFloat(input.value) || 0) + d)
     input.value = v.toFixed(digits).replace(/\.0+$/, '')
     input.dispatchEvent(new Event('change'))
   })

@@ -34,15 +34,21 @@ export interface Command {
 /** ⌘ on a Mac, Ctrl elsewhere — as the ? sheet writes it */
 export const MOD = typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'
 
-/** Run the first command this key press matches. Reports whether one ran. */
+/** Run the first command this key press matches. Reports whether one ran.
+ *  A ⌘/Ctrl chord the editor declares stays the editor's even when its
+ *  command does not apply right now: ⌘G with nothing to group must not turn
+ *  into the browser's Find next. */
 export function dispatch(cmds: Command[], ev: KeyboardEvent, inField: boolean): boolean {
   const mod = ev.metaKey || ev.ctrlKey
+  let owned = false
   for (const c of cmds) {
-    if (!c.match || (inField && !c.inField) || !c.match(ev, mod) || (c.when && !c.when())) continue
+    if (!c.match || (inField && !c.inField) || !c.match(ev, mod)) continue
+    if (c.when && !c.when()) { owned ||= mod; continue }
     ev.preventDefault()
     c.run(ev)
     return true
   }
+  if (owned) ev.preventDefault()
   return false
 }
 
@@ -93,6 +99,7 @@ export function rank(cmds: Command[], query: string): Command[] {
 /** ⌘K: search every command, ↑↓ to choose, Enter runs, Esc closes. */
 export function openPalette(cmds: Command[]) {
   document.querySelector('.ed-cmdk-overlay')?.remove()
+  const opener = document.activeElement as HTMLElement | null
   const overlay = document.createElement('div')
   overlay.className = 'ed-cmdk-overlay'
   const box = document.createElement('div')
@@ -149,18 +156,20 @@ export function openPalette(cmds: Command[]) {
     input.setAttribute('aria-activedescendant', shown.length ? `ed-cmdk-${at}` : '')
     list.children[at]?.scrollIntoView?.({ block: 'nearest' })
   }
-  const close = () => overlay.remove()
+  // Esc and a run hand focus back to where ⌘K was pressed; a click elsewhere keeps its own
+  const close = (restore = false) => { overlay.remove(); if (restore && opener?.isConnected) opener.focus({ preventScroll: true }) }
   const runAt = (i: number) => {
     const c = shown[i]
     if (!c) return
-    close()
+    close(true)
     lsSetJson(RECENT, [c.id, ...lsJson<string[]>(RECENT, []).filter((x) => x !== c.id)].slice(0, 8))
     c.run()
   }
   input.addEventListener('input', () => { at = 0; paint() })
   input.addEventListener('keydown', (e) => {
     e.stopPropagation() // the editor's own keys stay out of the palette
-    if (e.key === 'Escape') { e.preventDefault(); close() }
+    if (e.isComposing || e.keyCode === 229) return // Enter ends an IME composition, it does not run
+    if (e.key === 'Escape') { e.preventDefault(); close(true) }
     else if (e.key === 'ArrowDown') { e.preventDefault(); at = (at + 1) % Math.max(1, shown.length); paint() }
     else if (e.key === 'ArrowUp') { e.preventDefault(); at = (at - 1 + shown.length) % Math.max(1, shown.length); paint() }
     else if (e.key === 'Enter') { e.preventDefault(); runAt(at) }

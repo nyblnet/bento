@@ -116,7 +116,10 @@ export class SlideCanvas {
   constructor(
     private wrap: HTMLElement,
     private store: Store,
+    /** the editor build this canvas belongs to: its global listeners end with it */
+    signal?: AbortSignal,
   ) {
+    this.hud = new TransformHud(signal)
     this.scroller = document.createElement('div')
     this.scroller.className = 'ed-scroll'
     this.stage = document.createElement('div')
@@ -132,7 +135,7 @@ export class SlideCanvas {
     this.stage.appendChild(this.scaleHost)
     this.scroller.appendChild(this.stage)
     wrap.appendChild(this.scroller)
-    mountModHint(wrap, this.scroller, () => this.store.selection.length)
+    mountModHint(wrap, this.scroller, () => this.store.selection.length, signal)
     this.buildZoomBar()
     // pinch / ctrl+wheel zooms like every design tool
     this.scroller.addEventListener('wheel', (ev) => {
@@ -1419,7 +1422,7 @@ export class SlideCanvas {
     this.store.select(sel.includes(id) ? sel.filter((s) => !kin.includes(s)) : [...sel, ...kin.filter((k) => !sel.includes(k))])
   }
 
-  private hud = new TransformHud()
+  private hud: TransformHud
 
   private wireMoveable() {
     const mv = this.moveable

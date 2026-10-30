@@ -424,6 +424,9 @@ export function openColorPopover(anchor: HTMLElement, o: ColorPopoverOpts) {
     else if (e.key === 'Enter' && e.target !== text) { e.preventDefault(); finish(true) }
     else if (e.key === 'Enter') { text.dispatchEvent(new Event('change')); e.preventDefault(); finish(true) }
   }
+  // keys pressed inside the popover are the popover's: the editor must not
+  // read a Backspace or an arrow here as delete or nudge the element
+  pop.addEventListener('keydown', (e) => e.stopPropagation())
   document.addEventListener('pointerdown', outside, true)
   document.addEventListener('keydown', key, true)
   open = () => finish(true)

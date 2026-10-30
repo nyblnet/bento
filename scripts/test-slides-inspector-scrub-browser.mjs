@@ -14,6 +14,7 @@
 //   2b. with the lock GRANTED (stubbed, as headless refuses it) the value keeps
 //      changing on movementX while clientX sits at the screen's edge, the
 //      drag is one undo step, and release and pointercancel both exit the lock;
+//   2c. a scrub is held to the field's min/max and turns back without a dead zone.
 //   3. two elements with different X show "Mixed"; a scrub moves EACH by the
 //      same delta from its own value, typed `+10` too, and a plain typed
 //      value sets them all — one undo step each; equal values show the value.
@@ -103,6 +104,19 @@ try {
   const scrubbedX = (await el('a')).x
   ok(mid.held || scrubbedX > 100, `the drag moved X (${scrubbedX})`)
   if (scrubbedX !== 100) { await undo(); ok((await el('a')).x === 100, 'the whole drag is one undo step') }
+
+  // a scrub is held to the field's own limits: opacity stops at 0%, and turning
+  // back moves it at once (no dead zone as long as the overshoot)
+  await select('a')
+  const os = await field('%').locator('span').boundingBox()
+  await p.mouse.move(os.x + 3, os.y + 5); await p.mouse.down()
+  await p.mouse.move(os.x - 400, os.y + 5, { steps: 20 }); await p.waitForTimeout(50)
+  const held = (await el('a')).opacity
+  await p.mouse.move(os.x - 390, os.y + 5, { steps: 2 }); await p.mouse.up(); await p.waitForTimeout(250)
+  ok(held === 0, `a scrub past the limit is held at 0% (${held})`)
+  const back = (await el('a')).opacity
+  ok(back > 0 && back <= 0.06, `turning back moves it at once (${back})`)
+  await undo()
 
   console.log('\n2b. the locked path, with the lock granted (stubbed: headless refuses it)\n')
   // Chrome freezes clientX while locked and reports only movementX; the stub
