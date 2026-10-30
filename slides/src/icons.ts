@@ -164,6 +164,11 @@ export const ICONS = {
   // side column views
   viewSlides: svg('<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8"/><path d="M12 16v4"/>'),
   viewLayers: svg('<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>'),
+  // the inspector's tabs: how it looks (sliders), how it moves (a path with
+  // its trail), what it does when pointed at (a pointer with a tap ring)
+  tabFormat: svg('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>'),
+  tabAnimate: svg('<path d="M3 18c4 0 6-12 11-12"/><circle cx="17.5" cy="6" r="3"/><path d="M3 13h2M3 8h4" opacity=".55"/>'),
+  tabInteract: svg('<path d="M9 9l4.5 11 1.6-4.4L20 14z"/><path d="M6.2 6.2a4 4 0 0 1 5.6 0M4.1 4.1a7 7 0 0 1 9.8 0" opacity=".55"/>'),
   viewTokens: svg('<circle cx="7.5" cy="7.5" r="3.5"/><circle cx="16.5" cy="16.5" r="3.5"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/>'),
   swap: svg('<path d="M7 7h13m-3-3 3 3-3 3"/><path d="M17 17H4m3-3-3 3 3 3"/>'),
 } as const

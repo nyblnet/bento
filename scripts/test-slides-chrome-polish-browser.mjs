@@ -135,6 +135,28 @@ for (const locale of ['en-US', 'pt-BR', 'de-DE']) {
   })
 }
 
+await run(async () => {
+  const { p, ctx } = await open({ locale: 'pt-BR' })
+  const tabs = await p.evaluate(() => [...document.querySelectorAll('.ed-props .ed-tabs > button')].map((b) => ({ glyph: !!b.querySelector('svg'), on: b.getAttribute('aria-selected') === 'true', name: getComputedStyle(b.querySelector('.ed-tab-name') ?? b).display !== 'none' })))
+  ok(tabs.length === 3 && tabs.every((t) => t.glyph), 'the inspector tabs carry glyphs, like the side column')
+  ok(tabs.filter((t) => t.name).length === 1 && tabs.find((t) => t.on)?.name, 'and only the chosen tab says its name')
+  // the panel's resize edge: its hint sits beside the pointer, never over a tab bar
+  const edge = p.locator('.ed-resizer').last()
+  const eb = await edge.boundingBox()
+  await p.mouse.move(eb.x + eb.width / 2, eb.y + 24)
+  await p.waitForTimeout(800)
+  const over = await p.evaluate((y) => {
+    const t = document.querySelector('.ed-tip:not([hidden])')?.getBoundingClientRect()
+    if (!t) return 'no hint'
+    if (t.top < 0) return `off the top of the window (${Math.round(t.top)})`
+    if (Math.abs((t.top + t.bottom) / 2 - y) > 30) return `away from the pointer (${Math.round(t.top)}–${Math.round(t.bottom)}, pointer ${y})`
+    const hit = [...document.querySelectorAll('.ed-tabs')].some((bar) => { const r = bar.getBoundingClientRect(); return t.left < r.right && t.right > r.left && t.top < r.bottom && t.bottom > r.top })
+    return hit ? 'over the tabs' : 'clear'
+  }, Math.round(eb.y + 24))
+  ok(over === 'clear', `the resize edge's hint sits beside the pointer, clear of the tabs (${over})`)
+  await ctx.close()
+})
+
 // ---------------------------------------------------------------- 3
 console.log('\n3. the speaker view explains itself with the app hint\n')
 await run(async () => {

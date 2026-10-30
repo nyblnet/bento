@@ -19,7 +19,7 @@ import { componentHeader } from './inspector/component'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
 import { buildExport } from './inspector/export'
 import { buildSlidePanel } from './inspector/slide'
-import { roving, slidingPill } from './inspector/controls'
+import { fitTabNames, iconTab, roving, slidingPill } from './inspector/controls'
 import { layerBlock, buildLayoutRole } from './inspector/arrange'
 import { section, opBtn } from './inspector/fields'
 import { revealRow, buildPresentingProps, buildMorphProps, applySteps } from './inspector/animate'
@@ -207,16 +207,13 @@ export class PropsPanel {
    *  selection says so, rather than showing a blank. */
   private mountTabs() {
     const bar = document.createElement('div')
-    bar.className = 'ed-tabs'
+    bar.className = 'ed-tabs ed-icon-tabs'
     bar.setAttribute('role', 'tablist')
-    const tabs = [['format', t('Format')], ['animate', t('Animate')], ['interact', t('Interact')]] as const
-    for (const [id, label] of tabs) {
-      const b = document.createElement('button')
-      b.type = 'button'
-      b.setAttribute('role', 'tab')
+    // icon tabs, as the side column's: the glyph, and the chosen tab's name
+    const tabs = [['format', t('Format'), ICONS.tabFormat], ['animate', t('Animate'), ICONS.tabAnimate], ['interact', t('Interact'), ICONS.tabInteract]] as const
+    for (const [id, label, glyph] of tabs) {
+      const b = iconTab(glyph, label)
       b.setAttribute('aria-selected', String(this.tab === id))
-      b.textContent = label
-      b.title = label // the whole name, when a narrow panel cuts it
       b.addEventListener('click', () => {
         this.tab = id
         lsSet('bento-panel-tab', JSON.stringify(id))
@@ -237,6 +234,7 @@ export class PropsPanel {
     // it covers what scrolls under it edge to edge instead of floating over it
     roving(bar, 'tab')
     slidingPill(bar)
+    fitTabNames(bar)
     const band = document.createElement('div')
     band.className = 'ed-tabs-band'
     band.appendChild(bar)

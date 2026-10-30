@@ -24,7 +24,7 @@ import { derive, deriveMemory, type DeriveMemory } from '../derive'
 import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
-import { slidingPill } from './inspector/controls'
+import { fitTabNames, iconTab, slidingPill } from './inspector/controls'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { mountNotesPane } from './notespane'
 import { mountHints } from './hints'
@@ -2021,43 +2021,21 @@ export class Editor {
 
   /** Slides | Layers, in the same tab look as the inspector's. */
   private sideTabs(): HTMLElement {
-    const bar = div('ed-tabs ed-side-tabs')
+    const bar = div('ed-tabs ed-side-tabs ed-icon-tabs')
     bar.setAttribute('role', 'tablist')
-    let show = (view: string) => {
+    const show = (view: string) => {
       this.sidebar.dataset.view = view
       for (const b of bar.children) b.setAttribute('aria-selected', String((b as HTMLElement).dataset.view === view))
     }
-    // Each tab is its glyph; the chosen one also says its name. Three words
-    // never fit 188px in every language ('Diapositivas', 'Camadas'), and a
-    // tab cut to 'Cam…' says nothing: the name is always the accessible name.
+    // Each tab is its glyph; the chosen one also says its name (fitTabNames)
     const glyphs = { slides: ICONS.viewSlides, layers: ICONS.viewLayers, tokens: ICONS.viewTokens }
     for (const [view, label] of [['slides', t('Slides')], ['layers', t('Layers')], ['tokens', t('Tokens')]] as const) {
-      const b = document.createElement('button')
-      b.type = 'button'
-      b.setAttribute('role', 'tab')
+      const b = iconTab(glyphs[view], label)
       b.dataset.view = view
-      b.title = label
-      b.setAttribute('aria-label', label)
-      b.innerHTML = glyphs[view]
-      const name = document.createElement('span')
-      name.className = 'ed-tab-name'
-      name.textContent = label
-      b.appendChild(name)
       b.addEventListener('click', () => { show(view); lsSet('bento-side-view', view) })
       bar.appendChild(b)
     }
-    // a name cut short ends in an ellipsis ('Diapositi…'); one with room for
-    // too little to read is dropped, and the glyph and the accessible name stay
-    const fit = () => {
-      for (const b of bar.children) {
-        b.classList.remove('ed-tab-glyph-only')
-        const n = b.querySelector<HTMLElement>('.ed-tab-name')
-        if (n?.offsetParent && n.scrollWidth > n.clientWidth + 1 && n.clientWidth < 28) b.classList.add('ed-tab-glyph-only')
-      }
-    }
-    const shown = show
-    show = (view: string) => { shown(view); fit() }
-    new ResizeObserver(fit).observe(bar)
+    fitTabNames(bar)
     const saved = lsGet('bento-side-view')
     show(saved === 'layers' || saved === 'tokens' ? saved : 'slides')
     slidingPill(bar)

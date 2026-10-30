@@ -2963,12 +2963,13 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-sidebar { padding-top: 0; }
 .ed-side-band { flex: none; align-self: stretch; margin-bottom: 0; }
 .ed-side-tabs { width: 100%; flex: none; }
-.ed-side-tabs button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 4px; }
-.ed-side-tabs button[aria-selected='true'] { flex: 3 1 auto; }
-.ed-side-tabs button svg { flex: none; width: 14px; height: 14px; }
-.ed-side-tabs button:not([aria-selected='true']) .ed-tab-name { display: none; }
-.ed-side-tabs .ed-tab-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.ed-side-tabs button.ed-tab-glyph-only .ed-tab-name { display: none; }
+/* icon tabs — the side column's and the inspector's (controls.ts fitTabNames) */
+.ed-icon-tabs button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 4px; }
+.ed-icon-tabs button[aria-selected='true'] { flex: 3 1 auto; }
+.ed-icon-tabs button svg { flex: none; width: 14px; height: 14px; }
+.ed-icon-tabs button:not([aria-selected='true']) .ed-tab-name { display: none; }
+.ed-icon-tabs .ed-tab-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ed-icon-tabs button.ed-tab-glyph-only .ed-tab-name { display: none; }
 .ed-thumbs { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
 .ed-side-layers { width: 100%; }
 .ed-side-layers > .ed-section { display: none; } /* the tab already says Layers */

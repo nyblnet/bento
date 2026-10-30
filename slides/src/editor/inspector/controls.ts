@@ -370,6 +370,38 @@ export function roving(group: HTMLElement, role: 'radio' | 'tab', cols = 0) {
 /** A tab strip's selected pill, drawn once and SLID to the chosen tab
  *  (styles.css .ed-tabs-pill). It follows aria-selected, so the strip's own
  *  code stays as it is; until it can measure, the selected tab paints its own. */
+/** Icon tabs (the side column's Slides | Layers | Tokens, the inspector's
+ *  Format | Animate | Interact): each tab is its glyph, the chosen one also
+ *  says its name, cut with an ellipsis inside its own tab; a name with too
+ *  little room to read is dropped and the glyph and accessible name stay. */
+export function fitTabNames(bar: HTMLElement) {
+  const fit = () => {
+    for (const b of bar.children) {
+      b.classList.remove('ed-tab-glyph-only')
+      const n = b.querySelector<HTMLElement>('.ed-tab-name')
+      if (n?.offsetParent && n.scrollWidth > n.clientWidth + 1 && n.clientWidth < 28) b.classList.add('ed-tab-glyph-only')
+    }
+  }
+  new ResizeObserver(fit).observe(bar)
+  new MutationObserver(fit).observe(bar, { subtree: true, attributeFilter: ['aria-selected'] })
+  fit()
+}
+
+/** One glyph-and-name tab button for fitTabNames. */
+export function iconTab(glyph: string, label: string): HTMLButtonElement {
+  const b = document.createElement('button')
+  b.type = 'button'
+  b.setAttribute('role', 'tab')
+  b.title = label
+  b.setAttribute('aria-label', label)
+  b.innerHTML = glyph
+  const name = document.createElement('span')
+  name.className = 'ed-tab-name'
+  name.textContent = label
+  b.appendChild(name)
+  return b
+}
+
 export function slidingPill(bar: HTMLElement) {
   const place = () => {
     const on = bar.querySelector<HTMLElement>(':scope > [aria-selected="true"]')

@@ -32,6 +32,7 @@ export function mountHints(root: HTMLElement, signal: AbortSignal) {
   let timer = 0
   let current: HTMLElement | null = null
   let coldAt = 0
+  let pointerY: number | null = null
 
   /** The hinted control an event reached, adopting its title on the way. */
   const hinted = (target: EventTarget | null): HTMLElement | null => {
@@ -81,6 +82,14 @@ export function mountHints(root: HTMLElement, signal: AbortSignal) {
     tip.hidden = false
     const r = el.getBoundingClientRect()
     const t = tip.getBoundingClientRect()
+    // a tall, thin control (a panel's resize edge) is hinted beside the
+    // pointer: above or below it would land on whatever heads the column
+    if (r.height > 120 && pointerY !== null) {
+      const right = r.right + 8 + t.width < win.innerWidth
+      tip.style.left = `${right ? r.right + 8 : r.left - 8 - t.width}px`
+      tip.style.top = `${Math.min(Math.max(pointerY - t.height / 2, 8), win.innerHeight - t.height - 8)}px`
+      return
+    }
     const below = r.bottom + 8 + t.height < win.innerHeight
     const x = Math.min(Math.max(r.left + r.width / 2 - t.width / 2, 8), win.innerWidth - t.width - 8)
     tip.style.left = `${x}px`
@@ -109,11 +118,13 @@ export function mountHints(root: HTMLElement, signal: AbortSignal) {
   const opts = { capture: true, signal }
   doc.addEventListener('pointerover', (ev) => {
     if (ev.pointerType === 'touch') return
+    pointerY = ev.clientY
     const el = hinted(ev.target)
     if (el) enter(el, true)
     else if (current && !current.contains(ev.target as Node)) leave()
   }, opts)
   doc.addEventListener('focusin', (ev) => {
+    pointerY = null // a keyboard hint sits by the control, not where the mouse was
     const el = hinted(ev.target)
     if (el && (ev.target as Element).matches(':focus-visible')) enter(el, false)
   }, opts)
