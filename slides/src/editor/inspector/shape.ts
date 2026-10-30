@@ -11,7 +11,7 @@ import { row, labeledSelect, toggle, section, field, mini, opBtn } from './field
 import { ICONS } from '../../icons'
 import { fillLayers, setFillLayers, setStrokeLayers, strokeLayers } from '../../stacks'
 import { t } from '../../i18n'
-import { colorAlpha, gradientRows, gradientChip, paintHost } from './color'
+import { colorAlpha, gradientRows, gradientChip, paintHost, sharedLink } from './color'
 import { segmented } from './fields'
 import { BOOL_OPS, boolUi, flatten, release, setOp } from '../booleans'
 import { openCtxMenu } from '../ctxmenu'
@@ -465,7 +465,7 @@ export function buildSharedPaint(p: PropsPanel, els: SlideElement[]) {
       if (hex) { hex.value = ''; hex.placeholder = t('Mixed') }
     }
     f.dataset.shared = key
-    field(p, f)
+    field(p, sharedLink(p, els.map((e) => e.id), key, f))
   }
   const texts = els.every((e) => e.type === 'text') ? els as TextElement[] : null
   if (shapes && closed && shapes.every((s) => !s.fills && !s.fillGradient)) {

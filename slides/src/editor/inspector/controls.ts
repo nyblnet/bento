@@ -370,22 +370,49 @@ export function roving(group: HTMLElement, role: 'radio' | 'tab', cols = 0) {
 /** A tab strip's selected pill, drawn once and SLID to the chosen tab
  *  (styles.css .ed-tabs-pill). It follows aria-selected, so the strip's own
  *  code stays as it is; until it can measure, the selected tab paints its own. */
-/** Icon tabs (the side column's Slides | Layers | Tokens, the inspector's
- *  Format | Animate | Interact): each tab is its glyph, the chosen one also
- *  says its name, cut with an ellipsis inside its own tab; a name with too
- *  little room to read is dropped and the glyph and accessible name stay. */
+/**
+ * Icon tabs — the side column's Slides | Layers | Tokens and the inspector's
+ * Format | Animate | Interact, one component on both sides. Every tab is a
+ * glyph and a name. The chosen tab always shows its name (the panels' minimum
+ * width, tabBarNeed, guarantees the room); the others show theirs only when
+ * every name fits, and otherwise all of them are glyphs at once — never a
+ * word cut in half. The whole name is the tab's accessible name and its hint.
+ */
 export function fitTabNames(bar: HTMLElement) {
   const fit = () => {
-    for (const b of bar.children) {
-      b.classList.remove('ed-tab-glyph-only')
-      const n = b.querySelector<HTMLElement>('.ed-tab-name')
-      if (n?.offsetParent && n.scrollWidth > n.clientWidth + 1 && n.clientWidth < 28) b.classList.add('ed-tab-glyph-only')
-    }
+    const m = tabMetrics(bar)
+    if (!m) return
+    bar.classList.toggle('ed-tabs-all', bar.clientWidth >= m.chrome + m.labels.reduce((a, w) => a + w + m.inner, 0))
   }
   new ResizeObserver(fit).observe(bar)
   new MutationObserver(fit).observe(bar, { subtree: true, attributeFilter: ['aria-selected'] })
   fit()
 }
+
+/** The narrowest an icon-tab bar can be: the chosen tab's whole name, every
+ *  other tab its glyph. A panel never resizes below this (editor.ts). */
+export function tabBarNeed(bar: HTMLElement): number {
+  const m = tabMetrics(bar)
+  return m ? Math.ceil(m.chrome + Math.max(...m.labels) + m.inner) : 0
+}
+
+/** What an icon-tab bar is made of, measured: its glyph-only width (bar padding,
+ *  gaps, each tab's glyph and padding), each name's natural width, and the
+ *  space between a glyph and its name. */
+function tabMetrics(bar: HTMLElement): { chrome: number; labels: number[]; inner: number } | null {
+  const tabs = [...bar.children] as HTMLElement[]
+  if (!tabs.length || !bar.isConnected) return null
+  const bs = getComputedStyle(bar)
+  const px = (v: string) => parseFloat(v) || 0
+  const ts = getComputedStyle(tabs[0])
+  const glyph = 14 + px(ts.paddingLeft) + px(ts.paddingRight) + px(ts.borderLeftWidth) + px(ts.borderRightWidth)
+  const chrome = px(bs.paddingLeft) + px(bs.paddingRight) + px(bs.columnGap) * (tabs.length - 1) + glyph * tabs.length + 2
+  const ctx = (tabMetrics.canvas ??= document.createElement('canvas').getContext('2d')!)
+  ctx.font = `${ts.fontWeight} ${ts.fontSize} ${ts.fontFamily}`
+  const labels = tabs.map((t) => ctx.measureText(t.querySelector('.ed-tab-name')?.textContent ?? '').width)
+  return { chrome, labels, inner: px(ts.columnGap) || 5 }
+}
+tabMetrics.canvas = null as CanvasRenderingContext2D | null
 
 /** One glyph-and-name tab button for fitTabNames. */
 export function iconTab(glyph: string, label: string): HTMLButtonElement {

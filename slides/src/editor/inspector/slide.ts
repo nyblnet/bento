@@ -9,7 +9,6 @@ import { type Slide, uid, type TransitionKind } from '../../model'
 import { ROW_TIPS } from './controls'
 import { slideLabel, syncStateFromParent } from './animate'
 import { ICONS } from '../../icons'
-import { slotIsSet, paletteOf } from '../../palette'
 import { CODE_SCOPES, DEFAULT_CODE_COLORS } from '../../code'
 
   // --- builders ---------------------------------------------------------------
@@ -270,36 +269,28 @@ export function buildSlidePanel(p: PropsPanel) {
  * re-brandable rather than a pile of literals.
  */
 export function buildThemeProps(p: PropsPanel) {
+  // One home for the deck's colours: the Tokens view, where the theme colours
+  // lead as built-in tokens beside the deck's own, with their uses and modes.
+  // This section only points there — listing them again here made "theme" and
+  // "tokens" look like two systems.
   section(p, t('Theme'))
-  const hint = document.createElement('p')
-  hint.className = 'ed-hint'
-  hint.textContent = t('Deck-wide brand colours. Anything using a theme colour follows when you change it here.')
-  p.host.appendChild(hint)
-  // the theme colours are the built-in tokens: the Tokens view shows them with
-  // the deck's own tokens, their uses, and modes — one place for a brand
   const link = document.createElement('button')
   link.type = 'button'
-  link.className = 'ed-btn ed-theme-tokens'
-  link.textContent = t('Open in Tokens')
-  link.title = t('Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used')
+  link.className = 'ed-btn ed-btn-block ed-theme-tokens'
+  link.textContent = t('Colors live in Tokens →')
+  link.title = t('The deck’s theme colors and your color tokens, with where each is used')
   link.addEventListener('click', () => document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click())
   p.host.appendChild(link)
-  const theme = p.store.doc.theme
+  // Code colours only mean something to a deck with code in it
+  if (p.store.doc.slides.some((s) => s.elements.some((e) => e.type === 'code'))) buildCodeColors(p)
+}
+
+/** The colours of code snippets, one per kind of token — their own section,
+ *  folded by default; not the deck's brand, so not in Tokens either. */
+function buildCodeColors(p: PropsPanel) {
+  section(p, t('Code colors'))
   const slot = (label: string, get: () => string, set: (v: string) => void) =>
     row(p, label, color(p, get(), (v, fin) => p.edit(() => set(v), fin)))
-  slot('Background', () => theme.background, (v) => { p.store.doc.theme.background = v })
-  slot('Text', () => theme.color, (v) => { p.store.doc.theme.color = v })
-  slot(t('Accent {n}', { n: '1' }), () => theme.accent, (v) => { p.store.doc.theme.accent = v })
-  // Accent 2–6 rows only for slots the deck carries (palette.ts slotIsSet):
-  // an unset one resolves to accent 1 and showed as a sixth identical swatch.
-  for (const n of [2, 3, 4, 5, 6] as const) {
-    const key = `accent${n}` as const
-    if (!slotIsSet(p.store.doc, key)) continue
-    slot(t('Accent {n}', { n: String(n) }), () => paletteOf(p.store.doc)[key], (v) => {
-      const t2 = p.store.doc.theme
-      ;(t2.palette ??= {})[key] = v
-    })
-  }
   // Code colours: theme.codePalette (#450), one row per token scope. Plain
   // literals, deliberately — the palette-swatch reference (themeRefs) is a
   // per-element/per-slide path resolved through resolveRef, and codePalette
@@ -308,10 +299,6 @@ export function buildThemeProps(p: PropsPanel) {
   // with no codePalette shows the built-in scheme as its starting values and
   // the field is written only when a colour is changed, so a deck without
   // one keeps rendering exactly as before.
-  const codeHead = document.createElement('p')
-  codeHead.className = 'ed-hint'
-  codeHead.textContent = t('Code colours — one per kind of token in code snippets.')
-  p.host.appendChild(codeHead)
   for (const scope of CODE_SCOPES) {
     slot(t(scope.label), () => p.store.doc.theme.codePalette?.[scope.key] ?? DEFAULT_CODE_COLORS[scope.key], (v) => {
       const t2 = p.store.doc.theme

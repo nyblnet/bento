@@ -24,7 +24,7 @@ import { derive, deriveMemory, type DeriveMemory } from '../derive'
 import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
-import { fitTabNames, iconTab, slidingPill } from './inspector/controls'
+import { fitTabNames, iconTab, slidingPill, tabBarNeed } from './inspector/controls'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { mountNotesPane } from './notespane'
 import { mountHints } from './hints'
@@ -614,6 +614,7 @@ export class Editor {
     main.append(this.sidebar, this.makeResizer('left'), centre, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
+    requestAnimationFrame(() => this.holdPanelMins())
     // the whole page, not just the editor root: menus, the ⌘K palette and
     // dialogs are appended to <body>, and their titles were native tooltips
     mountHints(document.body, this.buildScope.signal)
@@ -726,6 +727,30 @@ export class Editor {
     this.applyPanelWidths()
   }
 
+  /**
+   * The narrowest a panel may be: its bound, or wider when its tab bar needs
+   * the room — the chosen tab's whole name and the other tabs' glyphs, in the
+   * current language (controls.ts tabBarNeed) — so dragging can never break
+   * the tabs. Collapsing the panel is the chevron's job, not the resizer's.
+   */
+  private panelMin(side: 'left' | 'right'): number {
+    const panel = side === 'left' ? this.sidebar : this.props
+    const bar = panel.querySelector<HTMLElement>('.ed-icon-tabs')
+    const need = bar ? tabBarNeed(bar) + (panel.getBoundingClientRect().width - bar.getBoundingClientRect().width) : 0
+    return Math.max(Editor.PANEL_BOUNDS[side][0], Math.ceil(need))
+  }
+
+  /** A stored or default width under the minimum (a longer language, a
+   *  file from before the minimum) is raised to it once the tabs exist. */
+  private holdPanelMins() {
+    let changed = false
+    for (const side of ['left', 'right'] as const) {
+      const min = this.panelMin(side)
+      if (this.panelW[side] < min) { this.panelW[side] = min; changed = true }
+    }
+    if (changed) this.applyPanelWidths()
+  }
+
   private applyPanelWidths() {
     this.sidebar.style.setProperty('--panew', `${this.panelW.left}px`)
     this.props.style.setProperty('--panew', `${this.panelW.right}px`)
@@ -778,7 +803,8 @@ export class Editor {
       down.preventDefault()
       const startX = down.clientX
       const startW = this.panelW[side]
-      const [min, max] = Editor.PANEL_BOUNDS[side]
+      const [, max] = Editor.PANEL_BOUNDS[side]
+      const min = this.panelMin(side)
       panel.classList.add('ed-noanim')
       document.body.classList.add('ed-col-resizing')
       const move = (ev: MouseEvent) => {

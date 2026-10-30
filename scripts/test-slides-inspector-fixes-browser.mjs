@@ -71,7 +71,7 @@ try {
   }
   const pickTheme = async (scope, name) => {
     await p.locator(`${scope} button[aria-label="Colors & tokens"]`).first().click()
-    await p.locator(`${scope} .ed-palette-item`, { hasText: name }).first().click()
+    await p.locator('.ed-tokpick-opt', { hasText: name }).first().click()
     await p.waitForTimeout(200)
   }
 
@@ -85,10 +85,14 @@ try {
   t = await el('t')
   ok(t.color === 'rgba(247, 166, 0, 0.5)' && t.themeRefs?.color === 'accent1', `50% keeps the link (${t.color}, ${JSON.stringify(t.themeRefs)})`)
   await p.keyboard.press('Escape'); await p.evaluate(() => document.activeElement?.blur()); await p.waitForTimeout(200)
-  const accentRow = p.locator('.ed-props .ed-row', { has: p.locator(':scope > span', { hasText: /^Accent 1$/ }) })
-  ok(await accentRow.count() === 1, 'the Theme section has its Accent 1 row')
-  await typeHex('.ed-props .ed-row:has(> span:text-is("Accent 1"))', '123456')
-  ok((await p.evaluate(() => window.bento.doc.theme.accent)).toLowerCase() === '#123456', 'the theme editor changed Accent 1')
+  // Accent 1 lives in the Tokens view's Theme group (one home for the deck's colours)
+  await p.locator('.ed-side-tabs [data-view="tokens"]').click(); await p.waitForTimeout(200)
+  const accentRow = p.locator('.ed-side-tokens .ed-token-builtin[data-slot="accent1"]')
+  ok(await accentRow.count() === 1, 'the Tokens view has its Accent 1 row')
+  await accentRow.locator('.ed-token-value').click()
+  await accentRow.locator('input.ed-edit-field').fill('123456'); await accentRow.locator('input.ed-edit-field').press('Enter'); await p.waitForTimeout(300)
+  await p.locator('.ed-side-tabs [data-view="layers"]').click(); await p.waitForTimeout(150)
+  ok((await p.evaluate(() => window.bento.doc.theme.accent)).toLowerCase() === '#123456', 'editing it changed Accent 1')
   t = await el('t')
   ok(t.color === 'rgba(18, 52, 86, 0.5)', `the linked text colour re-derives with its 50% kept (${t.color})`)
 

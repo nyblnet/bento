@@ -147,10 +147,10 @@ try {
     const second = [await current(), await selection()]
     ok(first[1] === 'a' && second[1] === 'c' && second[0] === 1, `…it walks the uses across slides (${first} → ${second})`)
   }
-  await p.selectOption('.ed-tokens-mode', 'Dark', { timeout: 1500 }).catch(() => {}); await p.waitForTimeout(250)
+  await p.locator('.ed-tokens-mode', { hasText: /^Dark$/ }).click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(250)
   ok(/2 properties changed/.test(await toast()), `a mode switch says what it changed ("${await toast()}")`)
   ok(/didn’t follow/.test(await toast()), '…and what it did not (the hard-coded colours on those slides)')
-  await p.selectOption('.ed-tokens-mode', 'default', { timeout: 1500 }).catch(() => {}); await p.waitForTimeout(200)
+  await p.locator('.ed-tokens-mode', { hasText: /^Default$/ }).click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(200)
   await goSlide(0); await select('a'); await sideView('tokens'); await p.waitForTimeout(100)
   await tap('.ed-tokens [data-token="color.brand"] .ed-token-swatch'); await p.waitForTimeout(150)
   await fill('.ed-cpop .ed-cpop-text', '#00aa44'); await p.keyboard.press('Enter'); await p.waitForTimeout(300)
@@ -172,14 +172,14 @@ try {
   if (link) { await link.click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(150) }
   ok(!!link && (await p.evaluate(() => document.querySelector('.ed-side-tabs [aria-selected="true"]')?.dataset.view)) === 'tokens', 'the Theme section opens Tokens')
   await select('a')
-  const words = await p.evaluate(() => ({ open: document.querySelector('.ed-props .ed-colorref button[aria-expanded]')?.title, detach: document.querySelector('.ed-props .ed-color-detach')?.title }))
+  const words = await p.evaluate(() => ({ open: document.querySelector('.ed-props .ed-colorref button[aria-label="Colors & tokens"]')?.title, detach: document.querySelector('.ed-props .ed-color-detach')?.title }))
   ok(words.open === 'Colors & tokens' && words.detach === 'Detach from token', `one vocabulary (${words.open} · ${words.detach})`)
 
   console.log('\n5. adoption\n')
   await load({ set: {} }); await p.waitForTimeout(300)
   await select('a')
-  await tap('.ed-props .ed-colorref button[aria-expanded]'); await p.waitForTimeout(100)
-  const make = p.locator('.ed-props .ed-palette-act', { hasText: 'Make a token from this color' })
+  await tap('.ed-props .ed-colorref button[aria-label="Colors & tokens"]'); await p.waitForTimeout(100)
+  const make = p.locator('.ed-tokpick-act', { hasText: 'Make a token from this color' })
   if (await make.count()) { await make.click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(250) }
   const d5 = await doc()
   const bound = [d5.slides[0].elements[0].themeRefs?.fill, d5.slides[1].elements[0].themeRefs?.fill, d5.slides[1].themeRefs?.background]
@@ -192,8 +192,8 @@ try {
   await goSlide(0); await p.waitForTimeout(150)
   await p.evaluate(() => window.bento.loadDoc(JSON.stringify((() => { const d = window.bento.doc; d.slides[0].elements.push({ ...d.slides[0].elements[0], id: 'a2', x: 900 }); return d })())))
   await p.waitForTimeout(300); await select('a')
-  await tap('.ed-props .ed-colorref button[aria-expanded]'); await p.waitForTimeout(100)
-  const pick = p.locator('.ed-props .ed-palette-act', { hasText: 'Select all with this color' })
+  await tap('.ed-props .ed-colorref button[aria-label="Colors & tokens"]'); await p.waitForTimeout(100)
+  const pick = p.locator('.ed-tokpick-act', { hasText: 'Select all with this color' })
   if (await pick.count()) { await pick.click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(200) }
   ok((await selection()) === 'a,a2', 'Select all with this color selects every use on the slide')
 

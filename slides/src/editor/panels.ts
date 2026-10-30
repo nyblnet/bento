@@ -184,7 +184,7 @@ export class PropsPanel {
 
   /** Collapsed by default until the user opens them (persisted per title).
    *  English keys, matched against the TRANSLATED header like SHOW_SECTIONS. */
-  private static CLOSED_BY_DEFAULT = ['Layout', 'Placeholder role', 'Advanced (JSON)', 'Export']
+  private static CLOSED_BY_DEFAULT = ['Layout', 'Placeholder role', 'Advanced (JSON)', 'Export', 'Code colors']
 
   /** Which tab a section lives on, by its English title — matched against
    *  the TRANSLATED header, like CLOSED_BY_DEFAULT. Format is the rest: how

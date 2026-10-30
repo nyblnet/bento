@@ -618,7 +618,18 @@ names provisional.
   (inspector/numexpr.ts, never eval), show Mixed on a multi-selection (an
   edit there is a per-element delta), and scrub from their label under
   pointer lock, held to their min/max. The side column is Slides | Layers |
-  Tokens (tokenspane.ts: design tokens and components); layer rows carry a
+  Tokens (tokenspane.ts: design tokens and components) — the ONE home for the
+  deck's colours: its Colors group leads with the theme colours as built-in
+  tokens (+ adds a palette slot, − removes an optional one; they write the
+  palette), then the deck's own; names and values are text that edits in
+  place. The slide panel's Theme section only links there; code colours have
+  their own section, shown when the deck has code. Binding any field to a
+  token or theme colour goes through one picker (inspector/tokenpicker.ts:
+  search, Theme first, tokens grouped by dotted name, actions at the foot);
+  a bound field shows a pill that reopens it. Both bars' tabs are one icon-tab
+  component (controls.ts fitTabNames/iconTab): the chosen tab always shows its
+  name, the others all do or none do, and a panel never resizes below the
+  width its tabs need (editor.ts panelMin); layer rows carry a
   padlock (`locked`) and an eye (`hidden`); layer rows and
   group rows rename in place (double-click or Rename) — `name` / `groupName`,
   display only. Group (⌘G/⇧⌘G — `groupId`, distinct from presentation
@@ -634,7 +645,8 @@ names provisional.
   chars (NBSP, ZWSP, U+E000) — they don't survive retyping; edit that file
   with line-targeted scripts, not copy-typed strings.
   Sidebar has hover insert-gaps between thumbnails (never between a parent and
-  its states). Selecto's continue-select list is synced in syncTargets — stale
+  its states); a slide drag lights the gap it will land in as a thick accent
+  line (one dragover listener on the list, editor.ts wireThumbDrop). Selecto's continue-select list is synced in syncTargets — stale
   cross-slide shift-click selections were a real bug.
 
 ## Hard-won details — do not regress

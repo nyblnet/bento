@@ -105,31 +105,40 @@ await run(async () => {
 console.log('\n2. tabs in the narrowest sidebars\n')
 for (const locale of ['en-US', 'pt-BR', 'de-DE']) {
   await run(async () => {
-    // the resizers' minimums (editor.ts PANEL_BOUNDS)
-    const { p, ctx } = await open({ locale, width: 1280, storage: { 'bento-ed-panels': JSON.stringify({ left: 110, right: 190 }) } })
+    const { p, ctx } = await open({ locale, width: 1280 })
     await p.evaluate(() => document.querySelector('.ed-stage-scale [data-el-id]')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     await p.waitForTimeout(300)
-    const bars = await p.evaluate(() => [...document.querySelectorAll('.ed-tabs.ed-side-tabs, .ed-props .ed-tabs')].map((bar) => {
+    // drag each resizer far past where it may go
+    for (const [i, dx] of [[0, -600], [1, 600]]) {
+      const h = await p.locator('.ed-resizer').nth(i).boundingBox()
+      await p.mouse.move(h.x + h.width / 2, h.y + 200)
+      await p.mouse.down()
+      await p.mouse.move(h.x + h.width / 2 + dx, h.y + 200, { steps: 8 })
+      await p.mouse.up()
+      await p.waitForTimeout(250)
+    }
+    const bars = await p.evaluate(() => [...document.querySelectorAll('.ed-sidebar .ed-icon-tabs, .ed-props .ed-icon-tabs, .ed-props .ed-tabs')].filter((b, i, a) => a.indexOf(b) === i).map((bar) => {
       const r = bar.getBoundingClientRect()
+      const panel = bar.closest('.ed-sidebar, .ed-props').getBoundingClientRect()
       const tabs = [...bar.querySelectorAll(':scope > button')].map((b) => {
         const br = b.getBoundingClientRect()
-        // the label's own box: the name span, or the button's text
-        const label = b.querySelector('.ed-tab-name') ?? b
-        const cs = getComputedStyle(label)
-        const shown = getComputedStyle(label).display !== 'none' && label.textContent.trim() !== ''
-        const cut = shown && label.scrollWidth > label.clientWidth + 1
-        return { l: br.left, r: br.right, name: b.getAttribute('aria-label') || b.textContent.trim(), titled: !!(b.title || b.getAttribute('aria-label') || b.dataset.hint), cut, clipped: cs.overflow === 'hidden' || cs.overflowX === 'hidden', ellipsis: cs.textOverflow === 'ellipsis' }
+        const n = b.querySelector('.ed-tab-name')
+        const shown = !!n && getComputedStyle(n).display !== 'none'
+        return { l: br.left, r: br.right, on: b.getAttribute('aria-selected') === 'true', glyph: !!b.querySelector('svg'), shown, cut: shown && n.scrollWidth > n.clientWidth + 1, named: !!(b.getAttribute('aria-label') || b.title) }
       })
-      return { side: bar.classList.contains('ed-side-tabs'), l: r.left, r: r.right, tabs }
+      return { side: !!bar.closest('.ed-sidebar'), w: Math.round(panel.width), l: r.left, r: r.right, tabs }
     }))
+    ok(bars.length === 2, `${locale}: one icon-tab bar on each side (${bars.length})`)
     for (const bar of bars) {
-      const where = `${locale} ${bar.side ? 'side' : 'inspector'} tabs`
-      const inside = bar.tabs.every((t) => t.l >= bar.l - 0.5 && t.r <= bar.r + 0.5)
-      const apart = bar.tabs.every((t, i) => i === 0 || t.l >= bar.tabs[i - 1].r - 0.5)
-      ok(inside && apart, `${where}: every tab inside the bar, none over another`)
-      const bad = bar.tabs.filter((t) => t.cut && !(t.clipped && t.ellipsis))
-      ok(!bad.length, `${where}: a cut label ends in an ellipsis inside its own tab${bad.length ? ' — ' + bad.map((t) => t.name).join(', ') : ''}`)
-      ok(bar.tabs.every((t) => t.titled), `${where}: every tab keeps its full name for the hint and screen readers`)
+      const where = `${locale} ${bar.side ? 'side' : 'inspector'} tabs at ${bar.w}px`
+      ok(bar.w > 0 && bar.w < 400, `${where}: the drag stopped at the panel's minimum`)
+      ok(bar.tabs.every((t) => t.glyph), `${where}: every tab has its glyph`)
+      ok(bar.tabs.every((t) => t.l >= bar.l - 0.5 && t.r <= bar.r + 0.5) && bar.tabs.every((t, i) => i === 0 || t.l >= bar.tabs[i - 1].r - 0.5), `${where}: no tab over another or outside the bar`)
+      const sel = bar.tabs.find((t) => t.on)
+      ok(!!sel && sel.shown && !sel.cut, `${where}: the chosen tab's name shows whole`)
+      const others = bar.tabs.filter((t) => !t.on)
+      ok(others.every((t) => t.shown && !t.cut) || others.every((t) => !t.shown), `${where}: the other tabs are all named or all glyphs — never a cut word`)
+      ok(bar.tabs.every((t) => t.named), `${where}: every tab keeps its full name for the hint and screen readers`)
     }
     await ctx.close()
   })
@@ -139,7 +148,7 @@ await run(async () => {
   const { p, ctx } = await open({ locale: 'pt-BR' })
   const tabs = await p.evaluate(() => [...document.querySelectorAll('.ed-props .ed-tabs > button')].map((b) => ({ glyph: !!b.querySelector('svg'), on: b.getAttribute('aria-selected') === 'true', name: getComputedStyle(b.querySelector('.ed-tab-name') ?? b).display !== 'none' })))
   ok(tabs.length === 3 && tabs.every((t) => t.glyph), 'the inspector tabs carry glyphs, like the side column')
-  ok(tabs.filter((t) => t.name).length === 1 && tabs.find((t) => t.on)?.name, 'and only the chosen tab says its name')
+  ok(!!tabs.find((t) => t.on)?.name && (tabs.every((t) => t.name) || tabs.filter((t) => t.name).length === 1), 'the chosen tab says its name; the others all do or none do')
   // the panel's resize edge: its hint sits beside the pointer, never over a tab bar
   const edge = p.locator('.ed-resizer').last()
   const eb = await edge.boundingBox()
@@ -188,7 +197,145 @@ await run(async () => {
   await ctx.close()
 })
 
-// ITEMS-4
+// ---------------------------------------------------------------- 4
+console.log('\n4. one home for the deck\'s colours, and one token picker\n')
+await run(async () => {
+  const { p, ctx, errors } = await open({ slides: [slide('s1', [rect('r', 100)]), slide('s2')] })
+  const el = () => p.evaluate(() => JSON.parse(JSON.stringify(window.bento.doc.slides[0].elements[0])))
+  const undo = async () => { await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250) }
+  // the slide's Theme section: no colours, a way to where they live
+  await p.evaluate(() => window.bento.store?.select?.([]))
+  await p.mouse.click(5, 450) // nothing selected: the slide's panel
+  await p.waitForTimeout(300)
+  const theme = await p.evaluate(() => {
+    const head = [...document.querySelectorAll('.ed-props .ed-section')].find((h) => h.dataset.key === 'Theme')
+    const body = head?.nextElementSibling
+    return head ? { colours: body?.querySelectorAll('input[type=color]').length ?? 0, link: !!body?.querySelector('.ed-theme-tokens') } : null
+  })
+  ok(!!theme && theme.colours === 0 && theme.link, `the slide's Theme section lists no colours, only the way to Tokens (${JSON.stringify(theme)})`)
+  ok(!(await p.locator('.ed-props .ed-section[data-key="Code colors"]').count()), 'a deck with no code has no Code colors section')
+  await p.locator('.ed-props .ed-theme-tokens').click()
+  await p.waitForTimeout(250)
+  ok((await p.getAttribute('.ed-sidebar', 'data-view')) === 'tokens', 'its link opens the Tokens view')
+
+  // the Tokens view: the theme colours as a built-in group, a slot added from +
+  const builtins = await p.evaluate(() => [...document.querySelectorAll('.ed-tokens-group[data-type="color"] .ed-token-builtin')].map((r) => r.dataset.slot))
+  ok(JSON.stringify(builtins) === JSON.stringify(['bg1', 'tx1', 'accent1']), `Theme lists Background, Text, Accent 1 (${builtins.join(',')})`)
+  ok(!(await p.locator('.ed-token-badge').count()), 'no per-row Theme badge — the group says it')
+  await p.locator('.ed-tokens-sub .ed-tokens-add').click()
+  await p.waitForTimeout(150)
+  await p.locator('.ed-ctxmenu button, .ed-ctxmenu [role=menuitem]').filter({ hasText: /Accent 3/ }).first().click()
+  await p.waitForTimeout(300)
+  ok(await p.evaluate(() => !!window.bento.doc.theme.palette?.accent3), 'Theme ＋ adds Accent 3 to the palette')
+
+  // the shape's fill follows Accent 3 from the picker — one undo step
+  await p.evaluate(() => document.querySelector('.ed-layer[data-id="r"], .ed-side-layers [data-id="r"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  await p.evaluate(() => { const r = document.querySelector('.ed-stage-scale [data-el-id="r"]'); r?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 0, clientY: 0 })) })
+  await p.evaluate(() => window.bento.select?.(['r']) ?? null)
+  await p.waitForTimeout(300)
+  if (!(await p.locator('.ed-props button[aria-label="Colors & tokens"]').count())) {
+    const box = await p.locator('.ed-stage-scale [data-el-id="r"]').boundingBox()
+    await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2); await p.waitForTimeout(300)
+  }
+  await p.locator('.ed-props button[aria-label="Colors & tokens"]').first().click()
+  await p.waitForTimeout(250)
+  const groups = await p.evaluate(() => [...document.querySelectorAll('.ed-tokpick .ed-morph-pick-h')].map((h) => h.textContent))
+  ok(groups[0] === 'Theme', `the colour picker opens on the Theme group (${groups.join(' · ')})`)
+  ok(!!(await p.locator('.ed-tokpick input[type=search]').count()) && !!(await p.locator('.ed-tokpick-foot').count()), 'with a search box, and its actions as a list at the foot')
+  await p.locator('.ed-tokpick input[type=search]').fill('accent 3')
+  ok((await p.locator('.ed-tokpick-opt:not([hidden])').count()) === 1, 'typing filters the rows')
+  await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter')
+  await p.waitForTimeout(300)
+  let r = await el()
+  ok(r.themeRefs?.fill === 'accent3' && r.fill.toLowerCase().startsWith(await p.evaluate(() => window.bento.doc.theme.palette.accent3.toLowerCase())), `picking Accent 3 makes the fill follow it (${r.themeRefs?.fill}, ${r.fill})`)
+  ok(!!(await p.locator('.ed-props .ed-color-token-name').filter({ hasText: 'Accent 3' }).count()), 'the field shows Accent 3 as a pill')
+  await undo()
+  r = await el()
+  ok(!r.themeRefs?.fill && r.fill === '#ff0000', 'one undo lets go of it')
+  await p.evaluate(() => window.bento.redo()); await p.waitForTimeout(250)
+
+  // editing Accent 3 in the Tokens view re-colours the shape — one undo step
+  await p.click('.ed-side-tabs [data-view="tokens"]'); await p.waitForTimeout(250)
+  const val = p.locator('.ed-token-builtin[data-slot="accent3"] .ed-token-value')
+  await val.click()
+  const field = p.locator('.ed-token-builtin[data-slot="accent3"] input.ed-edit-field')
+  ok(await field.count() === 1, 'a click on the value turns the text into a field')
+  await field.fill('123456'); await field.press('Enter')
+  await p.waitForTimeout(400)
+  ok(!(await p.locator('.ed-side-tokens input.ed-edit-field').count()), 'Enter commits and the field is text again')
+  r = await el()
+  ok(r.fill.toLowerCase().startsWith('#123456'), `the shape follows the new Accent 3 (${r.fill})`)
+  await undo()
+  r = await el()
+  ok(!r.fill.toLowerCase().startsWith('#123456') && r.themeRefs?.fill === 'accent3', 'one undo puts Accent 3 and the shape back')
+
+  // a number field: the dot opens the same picker; a made token binds; the pill reopens it
+  await p.evaluate(() => { const d = window.bento.doc; d.theme.tokens = { set: { 'space.md': { type: 'number', values: { default: 24 } } } } })
+  await p.evaluate(() => window.bento.store?.emit?.('doc'))
+  const radius = p.locator('.ed-props .ed-mini:has(input[aria-label="Corner radius"]) .ed-token-dot')
+  if (await radius.count()) {
+    await radius.evaluate((d) => d.click()); await p.waitForTimeout(250)
+    ok(!!(await p.locator('.ed-tokpick').count()), 'a number field\'s dot opens the same picker')
+    await p.locator('.ed-tokpick-act').filter({ hasText: /token from this value/ }).click(); await p.waitForTimeout(300)
+    r = await el()
+    ok(/^\$/.test(r.themeRefs?.radius ?? ''), `"Make a token from this value" binds the field to a new token (${r.themeRefs?.radius})`)
+    await p.locator('.ed-props .ed-token-pill-name').first().click(); await p.waitForTimeout(250)
+    ok(!!(await p.locator('.ed-tokpick-opt[aria-selected="true"]').count()), 'the pill reopens the picker with its token checked')
+    await p.keyboard.press('Escape')
+  } else ok(false, 'the corner radius field has a token dot')
+
+  // a token's name edits in place and returns to text
+  await p.click('.ed-side-tabs [data-view="tokens"]'); await p.waitForTimeout(250)
+  const nm = p.locator('.ed-token-row[data-token] .ed-token-name').first()
+  const before = await nm.textContent()
+  await nm.click()
+  await p.locator('.ed-token-row[data-token] input.ed-edit-field').fill('space.lg'); await p.keyboard.press('Enter')
+  await p.waitForTimeout(350)
+  ok(!(await p.locator('.ed-side-tokens input.ed-edit-field').count()) && (await p.locator('.ed-token-row[data-token="space.lg"] .ed-token-name').textContent()) === 'space.lg', `a renamed token reads as text again (${before} → space.lg)`)
+  ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
+  await ctx.close()
+})
+
+await run(async () => {
+  // (b) a literal that already IS a theme colour binds to it, not to a twin token;
+  // (a) a multi-selection binds every element and shows the shared pill
+  const { p, ctx, errors } = await open({ slides: [slide('s1', [rect('a', 100, { fill: '#ff9e8a' }), rect('b', 400, { fill: '#ff9e8a' }), rect('c', 700)])] })
+  await p.evaluate(() => { window.bento.doc.theme.accent = '#ff9e8a' })
+  const els = () => p.evaluate(() => JSON.parse(JSON.stringify(window.bento.doc.slides[0].elements)))
+  const pickLayers = async (...ids) => { await p.evaluate((ids) => ids.forEach((id, i) => document.querySelector(`.ed-layer[data-id="${id}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: i > 0 }))), ids); await p.waitForTimeout(300) }
+  await pickLayers('a')
+  await p.locator('.ed-props button[aria-label="Colors & tokens"]').first().click(); await p.waitForTimeout(250)
+  const acts = await p.locator('.ed-tokpick-act').allTextContents()
+  ok(acts.some((a) => /Bind 2 uses to Accent 1/.test(a)) && !acts.some((a) => /Make a token/.test(a)), `a colour equal to Accent 1 offers to bind its uses to Accent 1 (${acts.join(' / ')})`)
+  await p.locator('.ed-tokpick-act').filter({ hasText: /Bind 2 uses/ }).click(); await p.waitForTimeout(300)
+  let e = await els()
+  ok(e[0].themeRefs?.fill === 'accent1' && e[1].themeRefs?.fill === 'accent1' && !(await p.evaluate(() => Object.keys(window.bento.doc.theme.tokens?.set ?? {}).length)), 'both uses now follow Accent 1, and no duplicate token was made')
+  await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250)
+  e = await els()
+  ok(!e[0].themeRefs?.fill && !e[1].themeRefs?.fill, 'one undo takes it back')
+  await pickLayers('a', 'b', 'c')
+  const btn = p.locator('.ed-props [data-shared="fill"] button[aria-label="Colors & tokens"]')
+  ok(await btn.count() === 1, 'a multi-selection\'s Fill has the token picker')
+  await btn.click(); await p.waitForTimeout(250)
+  await p.locator('.ed-tokpick-opt[data-key="accent1"]').click(); await p.waitForTimeout(300)
+  e = await els()
+  ok(e.every((x) => x.themeRefs?.fill === 'accent1'), 'picking Accent 1 binds all three')
+  ok(await p.locator('.ed-props [data-shared="fill"] .ed-color-token-name').filter({ hasText: 'Accent 1' }).count() === 1, 'and the shared field shows the Accent 1 pill')
+  await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(250)
+  e = await els()
+  ok(e.every((x) => !x.themeRefs?.fill), 'one undo lets go of all three')
+  ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
+  await ctx.close()
+})
+
+await run(async () => {
+  const code = { id: 'c', type: 'code', x: 100, y: 100, w: 400, h: 200, rotation: 0, opacity: 1, code: 'let x = 1', lang: 'js', fontSize: 18, fontFamily: 'monospace' }
+  const { p, ctx } = await open({ slides: [slide('s1', [code])] })
+  await p.mouse.click(5, 450); await p.waitForTimeout(300)
+  const sec = await p.evaluate(() => { const h = [...document.querySelectorAll('.ed-props .ed-section')].find((x) => x.dataset.key === 'Code colors'); return h ? { closed: h.classList.contains('closed'), rows: h.nextElementSibling?.querySelectorAll('input[type=color]').length } : null })
+  ok(!!sec && sec.closed && sec.rows > 0, `a deck with code has its own Code colors section, folded (${JSON.stringify(sec)})`)
+  await ctx.close()
+})
 
 await browser.close()
 console.log(`\n${checks - failures}/${checks} checks passed`)

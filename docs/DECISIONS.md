@@ -12129,3 +12129,37 @@ From docs/audit/ux-pyramid-2026-10-30.md. Amends the 2026-10-29 entries where no
 - **A multi-selection shows Fill, Stroke and Shadow** when every element has
   them in the same plain form; a paint stack or gradient stays the element's
   own and hides the shared section rather than flattening it.
+
+## 2026-10-30 — slides: one home for colours, one token picker, one tab component
+
+- **The Tokens view is the single home for the deck's colours.** Theme colours
+  are its built-in "Theme" group (Background, Text, Accent 1 always; Accent
+  2–6, Background 2, Text 2, Link added with + and removed with −), then the
+  deck's own colour tokens. They still write the palette — the format's
+  palette contract and themeRefs are unchanged. The slide panel's Theme
+  section lists no colour (two lists made "theme" and "tokens" look like two
+  systems); code colours, which are not the brand, get their own section,
+  shown only in a deck with code, folded.
+- **One picker binds any field** (inspector/tokenpicker.ts, after Figma's
+  variables picker and Penpot's tokens panel): search, the theme colours first
+  for colour fields, then tokens grouped by the dotted prefix of their names,
+  each row preview · name · value · ✓, and the actions — make a token from
+  this value, select all using it, detach — as a list at the foot. A colour
+  that already equals a theme colour or token offers to bind its uses to that
+  one instead of minting a twin. A multi-selection binds every element at
+  once and shows the pill when they all share one. Every colour popover offers
+  the same swatches, applied as a ref where the field can follow one.
+- **Names and values are text that edits in place**, in the Tokens view, for
+  components and for modes (chips): a click (or F2) makes it a field, Enter
+  or leaving commits and it is text again, Esc puts it back.
+- **Both bars' tabs are one icon-tab component.** The chosen tab always shows
+  its name; the others show theirs only when every one fits, otherwise all are
+  glyphs at once — never a word cut in half. A panel's minimum width is
+  measured from its tab bar in the current language (editor.ts panelMin), so
+  the resizer stops before the tabs could break; the chevron still collapses.
+- **A slide drag lights the gap where it will land** — a thick accent line —
+  and none where the drop would change nothing; the end of the list is a gap
+  too.
+- **The speaker view uses the app's hints** (the hint system takes its own
+  document; both ways of opening the window mount it once), and a lone key —
+  "(L)", "(→)" — is a key chip.
