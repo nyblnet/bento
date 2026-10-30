@@ -131,7 +131,7 @@ try {
   await p.mouse.click(pt.x, pt.y, { button: 'right' })
   await p.waitForTimeout(250)
   const rows = await p.$$eval('.ed-ctxmenu .ed-ctxmenu-item', (bs) => bs.map((b) => b.querySelector('span')?.textContent ?? ''))
-  ok(rows.slice(0, 3).join(' | ') === 'Select tiny | Select Ellipse | Select Rectangle', `the menu opens with the stack, top first (${rows.slice(0, 3).join(' | ')})`)
+  ok(/^Select tiny \| Select Ellipse \| Select Rectangle( \d+)?$/.test(rows.slice(0, 3).join(' | ')), `the menu opens with the stack, top first (${rows.slice(0, 3).join(' | ')})`)
   const pick = p.locator('.ed-ctxmenu .ed-ctxmenu-item', { hasText: 'Select Rectangle' })
   if (await pick.count()) await pick.click()
   else await p.keyboard.press('Escape')

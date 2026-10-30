@@ -8,8 +8,9 @@
 // WHAT THIS PROVES.
 //   1. The topbar's tools carry data-cmd, a letter badge and the letter in
 //      their tooltip — all read from the command list (commands.ts).
-//   2. V F R O L P T do what they say on the canvas (one element each, or an
-//      armed draw tool V cancels), and do nothing while a text field has focus.
+//   2. V F R O L P T do what they say on the canvas (each arms its tool and a
+//      click on the slide puts one element down; V cancels an armed tool),
+//      and do nothing while a text field has focus.
 //   3. The path bar is there only for one path shape: Smooth rounds every
 //      corner of a polygon into a curve, a pressed anchor is the one Corner /
 //      Symmetric act on, Close path opens and closes it, ⌘Z undoes each.
@@ -40,6 +41,7 @@ try {
     window.bento.loadDoc(JSON.stringify(d))
   }, els)
   const els = () => p.evaluate(() => window.bento.doc.slides[0].elements)
+  const slideAt = async (fx, fy) => { const b = await p.locator('.ed-stage-scale').boundingBox(); return [b.x + b.width * fx, b.y + b.height * fy] }
   const deselect = async () => { await p.keyboard.press('Escape'); await p.waitForTimeout(120) }
 
   console.log('\nthe tools on the bar\n')
@@ -66,14 +68,17 @@ try {
   ]) {
     const before = (await els()).length
     await deselect()
-    await p.keyboard.press(k); await p.waitForTimeout(250)
+    // the box tools arm; a click on the slide puts the element down
+    await p.keyboard.press(k); await p.waitForTimeout(150)
+    await p.mouse.click(...(await slideAt(0.3 + 0.1 * before, 0.5))); await p.waitForTimeout(250)
     const after = await els()
-    ok(after.length === before + 1 && check(after.at(-1)), `${k.toUpperCase()} inserts ${what}`)
+    ok(after.length === before + 1 && check(after.at(-1)), `${k.toUpperCase()} then a click puts down ${what}`)
   }
   await deselect()
   const beforeT = (await els()).length
-  await p.keyboard.press('t'); await p.waitForTimeout(300)
-  ok((await els()).length === beforeT + 1 && (await els()).at(-1).type === 'text', 'T inserts a text box')
+  await p.keyboard.press('t'); await p.waitForTimeout(150)
+  await p.mouse.click(...(await slideAt(0.5, 0.2))); await p.waitForTimeout(300)
+  ok((await els()).length === beforeT + 1 && (await els()).at(-1).type === 'text', 'T then a click puts down a text box')
   await p.keyboard.press('Escape'); await p.keyboard.press('Escape'); await p.waitForTimeout(150)
   const armed = () => p.evaluate(() => [...document.querySelectorAll('.ed-stage-scale > div')].some((d) => d.style.cursor === 'crosshair'))
   await p.keyboard.press('l'); await p.waitForTimeout(150)

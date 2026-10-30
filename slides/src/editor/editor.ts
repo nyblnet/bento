@@ -472,7 +472,8 @@ export class Editor {
         this.updatesB.innerHTML = `${ICONS.sync}<span>v${r.release.version}</span>`
         this.updatesB.title = t('Version {v} is available — click to update', { v: r.release.version })
         this.toast(t('Update available: v{v} — click the peach button to update', { v: r.release.version }))
-      } else if (r.status === 'current') {
+      } else if (r.status === 'current' && !document.querySelector(MODAL)) {
+        // passive news: never over a dialog the author has opened meanwhile
         this.toast(t('Up to date — v{v}', { v: APP_VERSION }))
       }
     }, 1500)
@@ -920,7 +921,17 @@ export class Editor {
     // overflow visible, so "scrollWidth > clientWidth" IS the clipped-buttons
     // condition (ed-root clips whatever leaks). The 1px slack absorbs
     // subpixel rounding at fractional zoom levels.
-    const overflow = () => bar.scrollWidth - bar.clientWidth > 1
+    // …and the centred insert group can run over its neighbours without the
+    // bar overflowing at all (at 768px it sat on Undo and Redo): two of the
+    // bar's own groups overlapping is the same condition.
+    // (a group's buttons spill past its own box, so compare the buttons)
+    const collide = () => {
+      const boxes = [...bar.querySelectorAll<HTMLElement>('button')]
+        .filter((b) => !b.closest('.ed-menu'))
+        .map((b) => b.getBoundingClientRect()).filter((r) => r.width > 0).sort((a, b) => a.left - b.left)
+      return boxes.some((r, i) => i > 0 && boxes[i - 1].right - r.left > 1)
+    }
+    const overflow = () => bar.scrollWidth - bar.clientWidth > 1 || collide()
     // The title input is the bar's only shrinkable item, so flexbox crushes
     // it toward its 48px floor before anything overflows. Waiting for hard
     // overflow would mean full button labels beside an unusable title, so
@@ -4337,6 +4348,10 @@ export class Editor {
     document.querySelector('.ed-toast')?.remove()
     const t = div('ed-toast')
     t.textContent = message
+    // sit on the canvas's bottom edge, above the speaker-notes pane — a fixed
+    // 26px from the window's foot covered the notes the author was reading
+    const canvas = document.querySelector('.ed-scroll')?.getBoundingClientRect()
+    if (canvas?.height) t.style.bottom = `${Math.max(16, window.innerHeight - canvas.bottom + 16)}px`
     document.body.appendChild(t)
     setTimeout(() => t.classList.add('show'))
     setTimeout(() => {

@@ -223,6 +223,23 @@ try {
   ok(new Set(labels).size === labels.length, `every row reads differently (${labels.join(' · ')})`)
   ok(labels.some((l) => /Quarterly revenue/.test(l)), 'a text row shows its words')
 
+  console.log('\n7. chrome: a narrow topbar, and toasts clear of the notes\n')
+  await deselect()
+  await p.keyboard.press('Meta+c'); await p.waitForTimeout(400) // nothing selected: "Slide copied"
+  const clash = await p.evaluate(() => {
+    const t = document.querySelector('.ed-toast')?.getBoundingClientRect(), n = document.querySelector('.ed-notespane')?.getBoundingClientRect()
+    return !t || !n ? 'missing' : t.bottom > n.top + 1 ? `toast ${Math.round(t.top)}–${Math.round(t.bottom)} over notes from ${Math.round(n.top)}` : ''
+  })
+  ok(clash === '', `a toast sits above the speaker-notes pane (${clash || 'clear'})`)
+  await p.setViewportSize({ width: 768, height: 900 }); await p.waitForTimeout(500)
+  const overlaps = await p.evaluate(() => {
+    const bs = [...document.querySelectorAll('.ed-topbar button')].filter((b) => !b.closest('.ed-menu')).map((b) => [b.dataset.cmd || b.getAttribute('aria-label') || '', b.getBoundingClientRect()]).filter(([, r]) => r.width > 0)
+    const out = []
+    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const [a, r] = bs[i], [b, q] = bs[j]; if (r.left < q.right - 1 && q.left < r.right - 1 && r.top < q.bottom - 1 && q.top < r.bottom - 1) out.push(`${a}×${b}`) }
+    return out
+  })
+  ok(!overlaps.length, `at 768px no topbar button sits on another (${overlaps.join(', ') || 'none'})`)
+
   console.log(`\n${checks - failures}/${checks} checks passed`)
 } finally {
   await browser.close()

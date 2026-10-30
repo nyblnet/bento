@@ -56,6 +56,9 @@ try {
   await p.keyboard.press('Enter')
   ok(!(await p.$('.ed-cmdk')), 'Enter closes the palette')
   await p.waitForTimeout(200)
+  // the text tool arms, as T does; a click on the slide puts the box down
+  { const b = await p.locator('.ed-stage-scale').boundingBox(); await p.mouse.click(b.x + b.width / 2, b.y + b.height * 0.85) }
+  await p.waitForTimeout(250)
   await p.keyboard.press('Escape') // leave the new text box's editing; it stays selected
   ok(await nEls() === before + 1, `Enter ran the chosen command — a text box was added (${before} → ${await nEls()})`)
   const added = await selection()

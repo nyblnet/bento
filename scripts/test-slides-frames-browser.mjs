@@ -10,9 +10,9 @@
 // moving the frame moves its children (the solver, not a group); changing the
 // gap from the inspector re-lays them; the canvas draws the padding and gap
 // bands; the layer list shows the children under the frame; a clip frame
-// clips an overflowing child on the canvas; deleting the frame leaves its
-// children where they were, as ordinary elements; one undo of ⇧A restores
-// the slide exactly.
+// clips an overflowing child on the canvas; deleting the frame deletes its
+// children with it (a frame and its contents are one unit); undoing back
+// past ⇧A restores the slide exactly.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 
 let checks = 0
@@ -57,8 +57,10 @@ try {
   ok(!!f && f.shape === 'rect' && list.indexOf(f) === 0, 'a frame (a rect with layout) is inserted behind the selection')
   ok(f && ['a', 'b', 'c'].every((id) => at(list, id).parentId === f.id), 'the selection becomes its children')
   ok(f && f.layout.dir === 'row', 'children spread across become a row')
-  ok(f && at(list, 'a').x === f.x + 16 && at(list, 'b').x === at(list, 'a').x + 160 + 16 && at(list, 'a').y === f.y + 16, 'the children are laid out: padding then gap')
-  ok(f && f.w === 16 * 2 + 160 * 3 + 16 * 2, 'the frame hugs them')
+  // the gap is the spacing they had (140 between each), not a stock value
+  ok(f && f.layout.gap === 140, `the gap is the spacing they had (${f?.layout.gap})`)
+  ok(f && at(list, 'a').x === f.x + 16 && at(list, 'b').x === at(list, 'a').x + 160 + 140 && at(list, 'a').y === f.y + 16, 'the children are laid out: padding then gap')
+  ok(f && f.w === 16 * 2 + 160 * 3 + 140 * 2, 'the frame hugs them')
   ok(await p.evaluate(() => window.bento.selection.join()) === f?.id, 'the frame is selected')
   ok(await p.locator('.ed-props .ed-section', { hasText: /^Auto layout/ }).count() === 1, 'the inspector shows the Auto layout section')
   ok(await p.locator('.ed-stage-scale .ed-frame-band').count() === 4 + 2, 'the canvas shows four padding bands and two gap bands')
@@ -76,11 +78,10 @@ try {
   ok(at(list, 'b').x - at(list, 'a').x === 160 + 40, 'the inspector gap re-lays the row')
 
   console.log('\nclip, delete, undo\n')
-  const kept = at(await els(), 'b')
   await p.evaluate(() => document.activeElement?.blur()) // the gap field had focus
   await p.keyboard.press('Delete'); await p.waitForTimeout(200)
   list = await els()
-  ok(!at(list, f.id) && !at(list, 'b').parentId && at(list, 'b').x === kept.x, 'deleting the frame leaves the children where they were, unparented')
+  ok(!at(list, f.id) && !at(list, 'b') && !list.length, 'deleting the frame deletes what is in it (Figma); Remove auto layout is how to unwrap')
   for (let i = 0; i < 4; i++) { await p.evaluate(() => window.bento.undo()); await p.waitForTimeout(100) }
   ok(JSON.stringify(await els()) === before, 'undoing back past ⇧A restores the slide exactly')
 
