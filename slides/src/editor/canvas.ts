@@ -419,6 +419,7 @@ export class SlideCanvas {
     }, true)
 
     this.stage.addEventListener('dblclick', (ev) => {
+      if (this.enterFrameAt(ev.clientX, ev.clientY)) return
       // Look for TextElement, and then CodeElement
       const selectors = [
         '.bento-el-text',
@@ -522,7 +523,7 @@ export class SlideCanvas {
 
     store.on('current', () => this.render())
     store.on('doc', () => this.render())
-    store.on('selection', () => { this.trackEnteredGroup(); this.syncTargets() })
+    store.on('selection', () => { this.trackEnteredGroup(); this.trackEnteredFrame(); this.syncTargets() })
 
     this.render()
   }
@@ -852,6 +853,46 @@ export class SlideCanvas {
     const inOne = !!g && sel.every((e) => e?.groupId === g)
     if (inOne && els.filter((e) => e.groupId === g).length > sel.length) this.enteredGroup = g
     else if (!inOne || g !== this.enteredGroup) this.enteredGroup = null
+  }
+
+  /** The frame the author has stepped into — double-click, ⌘-click, Alt-dig or
+   *  a child's layer row — or null. Figma's rule: a click picks the outermost
+   *  frame; inside an entered frame it picks that frame's direct children. */
+  private enteredFrame: string | null = null
+
+  /** Selected elements that all sit in one frame have entered it; anything
+   *  else (the slide's top level, a mix, nothing) has left. */
+  private trackEnteredFrame() {
+    const sel = this.store.selectedElements
+    const p = sel[0]?.parentId
+    this.enteredFrame = p && sel.every((e) => e.parentId === p) ? p : null
+  }
+
+  /** What a click on `id` picks: the element at the entered frame's depth —
+   *  its direct child — else the outermost frame holding it. */
+  private liftToFrame(id: string): string {
+    const byId = new Map(this.store.slide.elements.map((e) => [e.id, e]))
+    const chain = [id]
+    for (let q = byId.get(id)?.parentId; q && byId.has(q) && !chain.includes(q); q = byId.get(q)?.parentId) chain.push(q)
+    const i = this.enteredFrame ? chain.indexOf(this.enteredFrame) : -1
+    return i > 0 ? chain[i - 1] : chain[chain.length - 1]
+  }
+
+  /** Double-click into a frame: step in one level, to the element under the
+   *  pointer at that depth. Reports whether it stepped (else the double-click
+   *  means what it always did — edit the text under it). */
+  private enterFrameAt(clientX: number, clientY: number): boolean {
+    const hit = this.topElementAt(clientX, clientY)
+    const sel = this.store.selection
+    if (!hit || sel.length !== 1) return false
+    const byId = new Map(this.store.slide.elements.map((e) => [e.id, e]))
+    const chain = [hit]
+    for (let q = byId.get(hit)?.parentId; q && byId.has(q) && !chain.includes(q); q = byId.get(q)?.parentId) chain.push(q)
+    const i = chain.indexOf(sel[0])
+    if (i <= 0) return false
+    this.enteredFrame = sel[0]
+    this.store.select([chain[i - 1]])
+    return true
   }
 
   /** Grow a selection to whole groups: any member pulls in its groupId kin —
@@ -1416,8 +1457,9 @@ export class SlideCanvas {
   /** Shift-click toggles the element painted under the cursor in or out of the
    *  selection, whole groups at a time. */
   private toggleAt(clientX: number, clientY: number) {
-    const id = this.topElementAt(clientX, clientY)
-    if (!id || this.isGhost(id)) return
+    const hit = this.topElementAt(clientX, clientY)
+    if (!hit || this.isGhost(hit)) return
+    const id = this.liftToFrame(hit)
     const kin = this.expandGroups([id])
     const sel = this.store.selection
     this.store.select(sel.includes(id) ? sel.filter((s) => !kin.includes(s)) : [...sel, ...kin.filter((k) => !sel.includes(k))])
@@ -1706,9 +1748,10 @@ export class SlideCanvas {
     })
 
     this.selecto.on('selectEnd', (e) => {
-      const ids = (e.selected as HTMLElement[])
+      const ids = [...new Set((e.selected as HTMLElement[])
         .map((n) => n.dataset.elId)
         .filter((id): id is string => !!id && !this.isGhost(id)) // a marquee never picks up a ghost
+        .map((id) => this.liftToFrame(id)))] // a click or a marquee picks frames, not what is inside them
       this.store.select(this.expandGroups(ids))
       if (e.isDragStartEnd) {
         e.inputEvent.preventDefault()
@@ -1748,7 +1791,13 @@ export class SlideCanvas {
         window.addEventListener('mouseup', onMouseUp, { capture: true, once: true })
         this.moveable.waitToChangeTarget().then(() => requestAnimationFrame(() => requestAnimationFrame(() => {
           window.removeEventListener('mouseup', onMouseUp, true)
-          if (!released) this.moveable.dragStart(e.inputEvent)
+          if (released) return
+          // a press on a frame's child picked the frame (liftToFrame): the drag
+          // belongs to the frame, not to the node under the pointer
+          const at = e.inputEvent.target as Element
+          const nodes = this.selectedNodes()
+          const own = nodes.find((n) => n === at || n.contains(at)) ?? nodes[0]
+          if (own) this.moveable.dragStart(e.inputEvent, own)
         })))
       }
     })

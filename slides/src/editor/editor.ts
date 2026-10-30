@@ -3553,7 +3553,12 @@ export class Editor {
         if (this.thumbSel.length) this.setThumbSel([])
         if (this.canvas.isDrawing) this.canvas.cancelDraw()
         else if (this.canvas.isPathEditing) this.canvas.stopPathEdit(true)
-        else this.store.select([])
+        else {
+          // out one level first, as in Figma: a frame's children → the frame
+          const sel = this.store.selectedElements
+          const up = sel[0]?.parentId
+          this.store.select(up && sel.every((e) => e.parentId === up) && this.store.element(up) ? [up] : [])
+        }
         return
       }
     })
