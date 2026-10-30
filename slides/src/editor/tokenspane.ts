@@ -230,6 +230,7 @@ export class TokensPane {
       ? t('{n} properties follow {name} — click to select the next', { n: used, name: label })
       : t('Nothing follows {name} yet', { name: label }))
     count.disabled = !used
+    if (!used) count.classList.add('ed-token-unused') // no "0" on every row
     count.addEventListener('click', () => this.step(key, targets()))
     return count
   }
@@ -246,12 +247,10 @@ export class TokensPane {
     sec.appendChild(head)
 
     const uses = tokenUses(doc)
-    const empty: TokenType[] = []
     for (const type of TOKEN_TYPES) {
       const names = Object.keys(tk?.set ?? {}).filter((n) => tk!.set[n].type === type).sort()
-      // colours always (the theme's are there); another type once it has a
-      // token or one is being named — the rest share one quiet "add" row
-      if (type !== 'color' && !names.length && this.adding !== type) { empty.push(type); continue }
+      // every type is a section of its own — chevron, count, + — the way the
+      // inspector lists Fill, Stroke, Shadow; an empty one is just its header
       const group = div('ed-tokens-group')
       group.dataset.type = type
       const count = type === 'color' ? names.length + PALETTE_SLOTS.filter((s) => slotIsSet(doc, s)).length : names.length
@@ -271,19 +270,6 @@ export class TokensPane {
       for (const name of names) body.appendChild(this.tokenRow(name, uses.get(name) ?? 0))
       sec.appendChild(group)
       if (this.adding === type) queueMicrotask(() => this.startNew(type, body, null))
-    }
-    if (empty.length) {
-      // five empty headings said nothing; one row offers every kind left
-      const row = div('ed-tokens-addrow')
-      const cap = document.createElement('span')
-      cap.textContent = t('Add a token:')
-      row.appendChild(cap)
-      empty.forEach((type, i) => {
-        const b = button('ed-tokens-addkind', t(TYPE_KIND[type]), t(TYPE_LABEL[type][1]))
-        b.addEventListener('click', () => { this.adding = type; this.refresh() })
-        row.append(...(i ? [document.createTextNode(' · ')] : []), b)
-      })
-      sec.appendChild(row)
     }
     return sec
   }
@@ -457,11 +443,11 @@ export class TokensPane {
       name.title = slotLabel(slot)
       const label = slotLabel(slot)
       const optional = !(slot === 'bg1' || slot === 'tx1' || slot === 'accent1')
-      const more = optional ? this.moreButton(label, [{ label: t('Remove {name}', { name: label }), run: () => this.store.commit(() => {
+      const more = this.acts(label, optional ? () => this.store.commit(() => {
         const th = this.store.doc.theme
         delete th.palette?.[slot as 'accent2']
         if (th.palette && !Object.keys(th.palette).length) delete th.palette
-      }) }]) : div('ed-token-more-none')
+      }) : null, [])
       row.append(this.swatch(palette[slot]!, t('Value of {name}', { name: label }), set), name,
         this.colorValue(palette[slot]!, label, set),
         this.usesButton(`slot:${slot}`, n.get(slot)?.length ?? 0, () => n.get(slot) ?? [], label), more)
@@ -477,6 +463,21 @@ export class TokensPane {
       const raw = v.trim()
       set(/^#?[0-9a-f]{3,8}$/i.test(raw) ? `#${raw.replace(/^#/, '')}` : raw)
     }, undefined, 'ed-token-value', true)
+  }
+
+  /** A row's actions — − removes, ⋯ the rest — laid over the row's end and
+   *  shown on hover or focus (Figma's list): at rest the value reaches the
+   *  edge instead of a column of buttons standing empty. */
+  private acts(label: string, remove: (() => void) | null, items: Array<{ label: string; run: () => void }>): HTMLElement {
+    const box = div('ed-token-acts')
+    if (remove) {
+      const minus = button('ed-btn ed-tool ed-token-remove', '', t('Remove {name}', { name: label }))
+      minus.innerHTML = ICONS.minus
+      minus.addEventListener('click', remove)
+      box.appendChild(minus)
+    }
+    if (items.length) box.appendChild(this.moreButton(label, items))
+    return box
   }
 
   /** ⋯: the row's other actions, as a menu. */
@@ -550,7 +551,7 @@ export class TokensPane {
       if (to === name) return
       this.store.commit(() => renameToken(this.store.doc, name, to))
     }, undefined, 'ed-token-name')
-    const more = this.moreButton(name, [
+    const more = this.acts(name, () => this.store.commit(() => deleteToken(this.store.doc, name)), [
       { label: t('Rename'), run: () => label.click() },
       { label: t('Duplicate'), run: () => this.edit((x) => { x.set[freeTokenName(this.store.doc, `${name}-copy`)] = structuredClone(x.set[name]) }) },
       { label: t('Delete token'), run: () => this.store.commit(() => deleteToken(this.store.doc, name)) },
@@ -636,9 +637,6 @@ const bounds = (els: Box[]): Box => {
   return { x, y, w: Math.max(...els.map((e) => e.x + e.w)) - x, h: Math.max(...els.map((e) => e.y + e.h)) - y }
 }
 const hits = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
-
-/** Per type: the word in the "Add a token" row. */
-const TYPE_KIND: Record<TokenType, string> = { color: 'Color', number: 'Number', fontSize: 'Font size', opacity: 'Opacity', fontFamily: 'Font', shadow: 'Shadow' }
 
 /** Per type: caption, the + button's label, a placeholder name. */
 const TYPE_LABEL: Record<TokenType, [string, string, string]> = {
