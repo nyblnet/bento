@@ -175,7 +175,18 @@ export function moveInPaintOrder<E extends { id: string; groupId?: string }>(ele
  *  alone, and a group selected by a canvas click lights every row of it. */
 export function highlighted(rows: readonly LayerRow[], selection: readonly string[]): Set<string> {
   const sel = new Set(selection)
-  return new Set(rows.filter((r) => sel.has(r.id)).map((r) => r.id))
+  // A group selected whole is lit on its own row only, as in Figma and Penpot:
+  // lighting every member too read as "these were picked one by one".
+  const whole = wholeGroups(rows, selection)
+  return new Set(rows.filter((r) => sel.has(r.id) && !(r.groupId && whole.has(r.groupId))).map((r) => r.id))
+}
+
+/** The groups every member of which is selected — the selection IS the group. */
+export function wholeGroups(rows: readonly LayerRow[], selection: readonly string[]): Set<string> {
+  const sel = new Set(selection)
+  const byGroup = new Map<string, boolean>()
+  for (const r of rows) if (r.groupId) byGroup.set(r.groupId, (byGroup.get(r.groupId) ?? true) && sel.has(r.id))
+  return new Set([...byGroup].filter(([, all]) => all).map(([g]) => g))
 }
 
 /** What the rows depend on, as one comparable string — ids in paint order,

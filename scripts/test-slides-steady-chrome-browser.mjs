@@ -9,7 +9,8 @@
 // only fade in; they used to be display:none until hover, so every row jumped
 // under the pointer). And the panel handles draw an SVG chevron centred in
 // their pill, turned toward where a click moves the edge — not a ‹ › character
-// sitting on the font's baseline.
+// sitting on the font's baseline. And a group selected whole lights its own
+// row only; its members carry a faint tint, not the selection highlight.
 import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const SHELL = process.env.SHELL_HTML || fileURLToPath(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url))
@@ -54,6 +55,19 @@ try {
   ok(handles.length >= 3, `the two side handles and the notes handle are there (${handles.length})`)
   ok(handles.every((h) => h.text === '' && h.off <= 0.75), `each is an SVG chevron centred in its pill, no text glyph (worst off-centre ${Math.max(...handles.map((h) => h.off)).toFixed(2)}px)`)
   ok(handles.every((h) => ['left', 'right', 'up', 'down'].includes(h.dir)), `each points somewhere (${handles.map((h) => h.dir).join(', ')})`)
+  console.log('\na group selected whole lights its own row only\n')
+  await p.evaluate(() => {
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    const r = (id, x) => ({ id, type: 'shape', shape: 'rect', x, y: 100, w: 100, h: 100, rotation: 0, opacity: 1, fill: '#f00', stroke: 'transparent', strokeWidth: 0, radius: 0, groupId: 'g', groupName: 'Pair' })
+    d.slides = [{ id: 's', background: '#fff', transition: 'none', notes: '', elements: [r('a', 100), r('b', 300)] }]
+    window.bento.loadDoc(JSON.stringify(d))
+  })
+  await p.waitForTimeout(300)
+  await p.evaluate(() => window.bento.select?.(['a', 'b']) ?? document.querySelector('.ed-layer-group')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  await p.waitForTimeout(300)
+  const lit = await p.evaluate(() => ({ group: !!document.querySelector('.ed-layer-group.sel'), members: document.querySelectorAll('.ed-layer.sel:not(.ed-layer-group)').length, tinted: document.querySelectorAll('.ed-layer.in-sel').length }))
+  ok(lit.group && lit.members === 0, `the group row is lit and no member row is (members lit: ${lit.members})`)
+  ok(lit.tinted === 2, `its members carry only the faint inside-the-selection tint (${lit.tinted})`)
   ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
 } finally {
   await browser.close()

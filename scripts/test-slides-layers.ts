@@ -101,7 +101,7 @@ ok(agree, 'every ±1 move on every element equals the panel step')
 console.log('\nhighlight\n')
 ok([...highlighted(grows, ['a'])].join() === 'a', 'a selected element lights its row')
 ok([...highlighted(grows, ['g1'])].join() === 'g1', 'a member reached on its own lights alone — the group has its own row, lit when the whole group is selected')
-ok([...highlighted(grows, ['g1', 'g2'])].sort().join() === 'g1,g2', 'a group selected whole (a canvas click) lights every member row')
+ok(highlighted(grows, ['g1', 'g2']).size === 0, 'a group selected whole (a canvas click) lights no member row — only the group row carries the highlight')
 ok(highlighted(grows, []).size === 0, 'nothing selected, nothing lit')
 
 console.log('\nsignature — what a drag must not touch\n')

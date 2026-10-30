@@ -7,7 +7,7 @@
 import type { Slide, SlideElement } from '../model'
 import { ICONS } from '../icons'
 import { t } from '../i18n'
-import { layerRows, moveInPaintOrder, highlighted, rowSignature, signatureDiff, type LayerRow } from './layerrows'
+import { layerRows, moveInPaintOrder, highlighted, wholeGroups, rowSignature, signatureDiff, type LayerRow } from './layerrows'
 export { excerpt, labelFor, labelIn, layerRows, moveInPaintOrder, highlighted, rowSignature, signatureDiff, type LayerRow } from './layerrows'
 
 /** The store surface the list needs — narrow so the rig never needs one. */
@@ -157,6 +157,7 @@ export class LayersUI {
     const rows = layerRows(this.host.slide(), t, this.host.paired?.())
     const lit = highlighted(rows, this.host.selection())
     const sel = new Set(this.host.selection())
+    const whole = wholeGroups(rows, this.host.selection())
     for (const n of this.list.children) {
       const row = n as HTMLElement
       const gid = row.dataset.group
@@ -164,6 +165,10 @@ export class LayersUI {
         ? rows.filter((r) => r.groupId === gid).every((r) => sel.has(r.id))
         : !!row.dataset.id && lit.has(row.dataset.id)
       if (!gid && !row.dataset.id) continue
+      // a member of a group selected whole: a faint tint says "inside the
+      // selection", the group row carries the highlight
+      const member = rows.find((r) => r.id === row.dataset.id)
+      row.classList.toggle('in-sel', !gid && !!member?.groupId && whole.has(member.groupId))
       row.classList.toggle('sel', on)
       row.setAttribute('aria-selected', on ? 'true' : 'false')
     }
@@ -178,6 +183,7 @@ export class LayersUI {
     this.list.innerHTML = ''
     const rows = layerRows(this.host.slide(), t, this.host.paired?.())
     const lit = highlighted(rows, this.host.selection())
+    const whole = wholeGroups(rows, this.host.selection())
     if (!rows.length) {
       const empty = document.createElement('p')
       empty.className = 'ed-hint'
@@ -193,7 +199,7 @@ export class LayersUI {
       }
       if (r.groupId && this.folded.has(r.groupId)) continue
       const row = document.createElement('div')
-      row.className = 'ed-layer' + (lit.has(r.id) ? ' sel' : '') + (r.grouped ? ' grouped' : '') + (r.hidden ? ' is-hidden' : '')
+      row.className = 'ed-layer' + (lit.has(r.id) ? ' sel' : '') + (r.groupId && whole.has(r.groupId) ? ' in-sel' : '') + (r.grouped ? ' grouped' : '') + (r.hidden ? ' is-hidden' : '')
       row.dataset.id = r.id
       row.draggable = true
       row.setAttribute('role', 'option')
