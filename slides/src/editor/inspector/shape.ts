@@ -50,7 +50,7 @@ export function buildShapeProps(p: PropsPanel, el: ShapeElement) {
   }
 }
 
-  export function buildShapeFill(p: PropsPanel, el: ShapeElement) {
+export function buildShapeFill(p: PropsPanel, el: ShapeElement) {
   if (el.shape === 'line') return // its one colour is `fill`, shown under Stroke (buildShapeStroke)
   section(p, t('Fill'))
   const grad = el.fillGradient

@@ -424,7 +424,7 @@ export function slideLabel(p: PropsPanel, s: { id: string; name?: string; stateO
   return `${t('Slide {n}', { n: pageAt(i) })}${mark}${s.name ? ` — ${s.name}` : ''}`
 }
 
-  export function applySteps(p: PropsPanel, patches: StepPatch[]) {
+export function applySteps(p: PropsPanel, patches: StepPatch[]) {
   if (!patches.length) return
   p.edit(() => {
     for (const { id, step } of patches) {

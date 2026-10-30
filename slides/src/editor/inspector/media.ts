@@ -11,7 +11,7 @@ import { normalizeCrop, CROP_MAX_SCALE } from '../../crop'
 import { rasterView, internView } from './controls'
 import { LANGS } from '../../../../kernel/src/tokenize.ts'
 
-  export function buildImageProps(p: PropsPanel, el: SlideElement) {
+export function buildImageProps(p: PropsPanel, el: SlideElement) {
   section(p, t('Picture'))
   const src = (el as ImageElement).src
   // what is stored: size and pixels for an embed, the URL otherwise
@@ -106,7 +106,7 @@ export function buildCropProps(p: PropsPanel, el: ImageElement) {
   }
 }
 
-  export function buildMediaProps(p: PropsPanel, el: MediaElement) {
+export function buildMediaProps(p: PropsPanel, el: MediaElement) {
   section(p, t('Source & playback'))
 
   // source status: embedded (with size) / linked / none
@@ -266,7 +266,7 @@ export function buildEmbedProps(p: PropsPanel, el: EmbedElement) {
   p.host.appendChild(trade)
 }
 
-  export function buildCodeProps(p: PropsPanel, el: CodeElement) {
+export function buildCodeProps(p: PropsPanel, el: CodeElement) {
   section(p, t('Source Code'))
   const status = document.createElement('p')
   status.className = 'ed-hint ed-status' // a state line, not help: never folded behind '?'

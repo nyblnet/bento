@@ -60,7 +60,7 @@ export function field(p: PropsPanel, ...controls: HTMLElement[]): HTMLElement {
   return line
 }
 
-  export function row(p: PropsPanel, label: string, input: HTMLElement): HTMLElement {
+export function row(p: PropsPanel, label: string, input: HTMLElement): HTMLElement {
   // A segmented control is a group of buttons, and a <label> hands a click on
   // its caption to the first of them: clicking the word "Align" would align
   // left. A colour field's first control is the native picker: a click on
@@ -126,7 +126,7 @@ export function mini(label: string, value: number, onChange: (v: number, final: 
   return wrap
 }
 
-  export function number(value: number, step: number, onEdit: (v: number, final: boolean) => void, range?: { min?: number; max?: number }): HTMLElement {
+export function number(value: number, step: number, onEdit: (v: number, final: boolean) => void, range?: { min?: number; max?: number }): HTMLElement {
   const input = document.createElement('input')
   input.step = String(step)
   input.value = String(value)
@@ -145,7 +145,7 @@ export function mini(label: string, value: number, onChange: (v: number, final: 
   return input
 }
 
-  export function select(options: string[], value: string, onChange: (v: string) => void): HTMLElement {
+export function select(options: string[], value: string, onChange: (v: string) => void): HTMLElement {
   const sel = document.createElement('select')
   for (const opt of options) {
     const o = document.createElement('option')
@@ -186,7 +186,7 @@ export function segmented(options: string[], value: string, onChange: (v: string
   return wrap
 }
 
-  export function toggle(value: boolean, onChange: (v: boolean) => void): HTMLElement {
+export function toggle(value: boolean, onChange: (v: boolean) => void): HTMLElement {
   const cb = document.createElement('input')
   cb.type = 'checkbox'
   cb.className = 'ed-toggle'
@@ -195,7 +195,7 @@ export function segmented(options: string[], value: string, onChange: (v: string
   return cb
 }
 
-  export function opBtn(icon: string, title: string, onClick: () => void): HTMLElement {
+export function opBtn(icon: string, title: string, onClick: () => void): HTMLElement {
   const btn = document.createElement('button')
   btn.className = 'ed-btn ed-btn-icon'
   btn.title = title

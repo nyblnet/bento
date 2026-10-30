@@ -7,7 +7,7 @@ import { opBtn, row, toggle, section, labeledSelect, mini } from './fields'
 import { t } from '../../i18n'
 import { colorAlpha } from './color'
 
-  export function buildTableProps(p: PropsPanel, el: TableElement) {
+export function buildTableProps(p: PropsPanel, el: TableElement) {
   const stepper = (label: string, count: number, onDelta: (d: number) => void) => {
     const wrap = document.createElement('div')
     wrap.className = 'ed-stepper'

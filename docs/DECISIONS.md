@@ -11939,3 +11939,58 @@ Selection Pane and Penpot (Design | Prototype, layers on the left).
 - **D8's help layout** moved from a fixed 128px key column to a per-section
   `fit-content` grid: long keys (and their translations) spilled over the
   other column. chrome-rulings checks the right edge against the section grid.
+
+## 2026-10-29 — slides: the Penpot-grade editor revamp — everything new is additive
+
+Carried out from the "Extending Bento" architecture brief, with one rule
+overriding the brief wherever they disagreed: **no format version bump and no
+new element type or shape kind.** Shipped shells switch on `type`/`shape`
+with no default and fail the slide on a kind they do not know (the reason
+`heads: 2` is a property). So every new capability is an optional key on an
+existing element, and an older shell sees an ordinary deck.
+
+- **The inspector is a package.** `editor/panels.ts` keeps the PropsPanel
+  controller (rebuild, tabs, accordion, dispatch, the public verbs); each
+  section's builders live under `editor/inspector/` as functions taking the
+  panel. A moved body changed only `this.` to `p.`.
+- **Auto-layout frames are derived geometry, not a container type.** A frame
+  is a `rect` with `layout` (row/col/grid, gap, pad, justify, align, cols,
+  clip, hug); children name it by `parentId` and may `fill` an axis.
+  `layout.ts` writes each child's box (and a hugging frame's size) into the
+  model, derived without committing exactly like connector routing, so the
+  morph, exporters, thumbnails and old shells read plain positioned
+  elements and lose only `clip`. Main-axis order is current position, so a
+  drag reorders. Cost: in an old shell, moving a frame leaves its children
+  until a current editor re-lays the slide.
+- **Tokens extend the palette contract.** `theme.tokens` (values per mode, an
+  active mode); an element binds with `themeRefs[path] = '$name'` and the
+  literal always stays in place. Hand edits are detected, not declared: a
+  bound literal that disagrees with an unchanged token was edited, so the
+  binding drops — one rule covering the inspector, scripts, pastes and old
+  shells.
+- **Components are Penpot's main/copy on ordinary grouped elements**
+  (`component {id, key, main?, over?}`), copies re-derived on every change
+  like connectors; overrides are detected the same way tokens' hand edits are.
+- **A vector boolean is a computed path that remembers its operands.**
+  `d`/`pathBox` are the result, `bool {op, shapes}` keeps the operands for
+  re-editing. Render-time masks were rejected because old shells would show
+  the raw operands. Geometry is zero-dependency (`vector-bool.ts`); exactly
+  abutting shapes are nudged 1e-4px apart, a known ceiling.
+- **One command list.** Keyed editor actions are declared once
+  (`editor/commands.ts`); keydown dispatches through it, ⌘K searches it,
+  tooltips read their keys from it. Gestures stay prose in the ? sheet.
+- **Numbers are text spinbuttons** so `/` and `*` can be typed; a hand-written
+  parser (`inspector/numexpr.ts`, never eval) evaluates them. A leading
+  `+ * /` is relative, a leading `−` is a negative number. On a
+  multi-selection a differing field shows Mixed and an edit there is a delta
+  per element. Field height stays 26px: the one-field-look rule wins over the
+  brief's 28px.
+- **The colour popover drives the same hidden colour input** the inline row
+  uses, so preview, undo, palette links and opacity keep one path.
+- **Canvas feedback never writes the model**: the modifier line, transform
+  pill, morph ghost and morph preview are overlays.
+- **`locked` and `hidden` are `true`-or-absent element keys.** `locked` is
+  editor-only. `hidden` is honoured by renderSlide everywhere; an older shell
+  draws a hidden element — accepted over a non-additive encoding.
+- **The brief's size budget did not hold**: the shell was 737KB compressed
+  before this work (not 560KB) and is 770KB after it.

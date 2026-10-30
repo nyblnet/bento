@@ -88,7 +88,7 @@ export function buildFieldPicker(p: PropsPanel, el: TextElement): HTMLElement {
   return b
 }
 
-  export function buildTextProps(p: PropsPanel, el: TextElement) {
+export function buildTextProps(p: PropsPanel, el: TextElement) {
   const hint = document.createElement('p')
   hint.className = 'ed-hint'
   hint.innerHTML = t('While editing: <b>⌘B</b>/<b>⌘I</b>/<b>⌘U</b> · markdown auto-converts — **bold*&#8203;* *italic*&#8203; `code` ~~strike~~ and "- " bullets; pasting markdown converts too. Escape with \\ or press ⌘Z right after to keep the literal characters.')

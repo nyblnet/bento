@@ -11,6 +11,37 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Auto layout.** Select some elements and press ⇧A: they sit in a frame that
+  lines them up in a row, a column or a grid, with the gap, padding and
+  alignment you set in the inspector's Auto layout section. Children can fill
+  the free space, the frame can hug its content and clip what overflows, and
+  dragging a child past a sibling reorders it. A selected frame shows its
+  padding and gaps on the canvas; drag them to change them.
+- **Design tokens.** A new Tokens view beside Slides and Layers holds named
+  colours and numbers, with modes such as light and dark. Bind a colour, a
+  corner radius, a stroke width, a font size or an opacity to a token, and
+  changing the token — or the mode — changes every place that uses it.
+- **Components.** ⌥⌘K makes the selection a main component; insert copies
+  from the Tokens view. Copies follow the main, keep what you change on them,
+  and can be detached.
+- **Union, subtract, intersect, exclude.** Select two or more shapes and
+  combine them from the toolbar, the right-click menu or ⌥⇧U/S/I/E. The result
+  is a real path any version can draw, and it remembers its shapes: change the
+  operation later, or release them.
+- **⌘K finds any command**, with its shortcut beside it.
+- **Numbers take arithmetic.** Type `360/2`, `+24` or `*2` into any number in
+  the inspector. Scrubbing a label no longer stops at the edge of the screen,
+  and a multi-selection shows X, Y, W, H, rotation and opacity — "Mixed" where
+  they differ, and an edit moves each element by the same amount.
+- **A colour picker of our own**: saturation and hue, opacity, hex/RGB/HSL,
+  the eyedropper, the deck's theme colours and the colours on this slide.
+- **The canvas talks back.** Holding ⌥, ⌘ or ⇧ says what it does; moving,
+  resizing and rotating show the numbers beside the pointer; an element that
+  morphs shows where it comes from, and the Animate tab previews the morph.
+- **Lock and hide from Layers.** A locked element can't be clicked or dragged
+  on the canvas; a hidden one isn't drawn. Files opened in an older version
+  still show hidden elements.
+
 ## [1.2.10] — 2026-10-24
 
 - **Code can type itself out.** Give a code block the new Typewriter effect

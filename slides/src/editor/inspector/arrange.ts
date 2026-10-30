@@ -11,7 +11,7 @@ import { optLabel } from './controls'
 import { isMacOS } from '../../screens'
 import { ICONS } from '../../icons'
 
-  export function buildLayoutRole(p: PropsPanel, el: SlideElement) {
+export function buildLayoutRole(p: PropsPanel, el: SlideElement) {
   // What the box IS to the slide's layout — its own section, said in
   // words: a bare 'Layout role' dropdown among the text settings told
   // nobody what it did.

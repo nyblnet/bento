@@ -14,7 +14,7 @@ export function editOption(p: PropsPanel, id: string, fn: (o: Record<string, any
   p.mutate(id, (e) => { fn((e as ChartElement).option as Record<string, any>) }, final)
 }
 
-  export function buildChartProps(p: PropsPanel, el: ChartElement) {
+export function buildChartProps(p: PropsPanel, el: ChartElement) {
   const opt = el.option as Record<string, any>
   const series: any[] = Array.isArray(opt.series) ? opt.series : opt.series ? [opt.series] : []
   const isPie = series.some((s) => s?.type === 'pie')
@@ -67,19 +67,19 @@ export function editOption(p: PropsPanel, id: string, fn: (o: Record<string, any
   p.host.appendChild(ta)
 }
 
-  export function seriesColor(s: any, palette: string[] | undefined, i: number): string {
+export function seriesColor(s: any, palette: string[] | undefined, i: number): string {
   const c = s?.type === 'line' ? s?.lineStyle?.color : s?.itemStyle?.color
   if (typeof c === 'string') return c
   const p = palette && palette.length ? palette : ['#5470c6', '#91cc75', '#fac858', '#ee6666']
   return p[i % p.length]
 }
 
-  export function setSeriesColor(s: any, v: string) {
+export function setSeriesColor(s: any, v: string) {
   if (s?.type === 'line') s.lineStyle = { ...(s.lineStyle ?? {}), color: v }
   else s.itemStyle = { ...(s.itemStyle ?? {}), color: v }
 }
 
-  export function buildChartCartesian(p: PropsPanel, el: ChartElement, opt: Record<string, any>, series: any[]) {
+export function buildChartCartesian(p: PropsPanel, el: ChartElement, opt: Record<string, any>, series: any[]) {
   const yAxis: any[] = Array.isArray(opt.yAxis) ? opt.yAxis : opt.yAxis ? [opt.yAxis] : [{ type: 'value' }]
   const twoAxes = yAxis.length > 1
 
@@ -285,7 +285,7 @@ export function buildChartPie(p: PropsPanel, el: ChartElement, series: any[]) {
   p.host.appendChild(addRow)
 }
 
-  export function editPieDatum(p: PropsPanel, id: string, i: number, fn: ((d: any) => void) | null, final: boolean) {
+export function editPieDatum(p: PropsPanel, id: string, i: number, fn: ((d: any) => void) | null, final: boolean) {
   editOption(p, id, (o) => {
     const ps = (Array.isArray(o.series) ? o.series : [o.series]).find((x: any) => x?.type === 'pie') ?? o.series[0]
     if (!ps?.data) return

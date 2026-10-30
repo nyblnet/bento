@@ -3412,7 +3412,7 @@ export class Editor {
       { id: 'zoom-out', label: 'Zoom out', keys: `${MOD}−`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '-', run: () => this.canvas.zoomOut() },
       { id: 'zoom-fit', label: 'Fit the slide', keys: `${MOD}0`, scope: 'canvas', inField: true, match: (ev, mod) => mod && ev.key === '0', run: () => this.canvas.zoomReset() },
       { id: 'present', label: 'Present', keys: 'F5', scope: 'always', inField: true, match: (ev) => ev.key === 'F5', run: (ev) => this.present(!ev?.shiftKey) },
-      { id: 'palette', label: 'Command palette', keys: `${MOD}K`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && key(ev) === 'k', run: () => openPalette(this.commands) },
+      { id: 'palette', label: 'Command palette', keys: `${MOD}K`, scope: 'always', when: canvasFree, match: (ev, mod) => mod && !ev.altKey && key(ev) === 'k', run: () => openPalette(this.commands) },
       { id: 'help', label: 'Shortcuts & tips', keys: '?', scope: 'always', when: canvasFree, match: (ev, mod) => !mod && (ev.key === '?' || (ev.key === '/' && ev.shiftKey)), run: () => this.openHelp() },
       { id: 'comment', label: 'Comment mode', keys: 'C', scope: 'canvas', when: canvasFree, match: (ev, mod) => !mod && key(ev) === 'c', run: () => this.canvas.toggleCommentMode() },
       { id: 'ungroup', label: 'Ungroup', keys: `⇧${MOD}G`, scope: 'canvas', when: () => canvasFree() && sel().some((e) => e.groupId), match: (ev, mod) => mod && ev.shiftKey && key(ev) === 'g', run: () => this.panel.ungroup(sel()) },

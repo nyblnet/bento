@@ -59,7 +59,7 @@ export function gradientRows(p: PropsPanel, grad: { angle: number; stops: Array<
   })
 }
 
-  export function color(p: PropsPanel, value: string, onEdit: (v: string, final: boolean) => void, ref?: { id: string | null; path: string; slide?: Slide }): HTMLElement {
+export function color(p: PropsPanel, value: string, onEdit: (v: string, final: boolean) => void, ref?: { id: string | null; path: string; slide?: Slide }): HTMLElement {
   const input = document.createElement('input')
   input.type = 'color'
   input.value = /^#[0-9a-fA-F]{6}$/.test(value) ? value : parseColor(value).hex

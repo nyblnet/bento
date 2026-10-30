@@ -23,7 +23,7 @@ export const PAGE_PRESETS: Record<string, { w: number; h: number }> = {
   'A4 portrait': { w: 794, h: 1123 },
 }
 
-  export function buildSlidePanel(p: PropsPanel) {
+export function buildSlidePanel(p: PropsPanel) {
   const slide = p.store.slide
   // Track the `slide.id` so when updating you can find the slide to update using its `id`. 
   // This way if the doc is actively replaced and the references are stale the update still succeeds.
