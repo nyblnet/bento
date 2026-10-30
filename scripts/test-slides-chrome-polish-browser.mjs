@@ -101,7 +101,72 @@ await run(async () => {
   await ctx.close()
 })
 
-// ITEMS-2-4
+// ---------------------------------------------------------------- 2
+console.log('\n2. tabs in the narrowest sidebars\n')
+for (const locale of ['en-US', 'pt-BR', 'de-DE']) {
+  await run(async () => {
+    // the resizers' minimums (editor.ts PANEL_BOUNDS)
+    const { p, ctx } = await open({ locale, width: 1280, storage: { 'bento-ed-panels': JSON.stringify({ left: 110, right: 190 }) } })
+    await p.evaluate(() => document.querySelector('.ed-stage-scale [data-el-id]')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await p.waitForTimeout(300)
+    const bars = await p.evaluate(() => [...document.querySelectorAll('.ed-tabs.ed-side-tabs, .ed-props .ed-tabs')].map((bar) => {
+      const r = bar.getBoundingClientRect()
+      const tabs = [...bar.querySelectorAll(':scope > button')].map((b) => {
+        const br = b.getBoundingClientRect()
+        // the label's own box: the name span, or the button's text
+        const label = b.querySelector('.ed-tab-name') ?? b
+        const cs = getComputedStyle(label)
+        const shown = getComputedStyle(label).display !== 'none' && label.textContent.trim() !== ''
+        const cut = shown && label.scrollWidth > label.clientWidth + 1
+        return { l: br.left, r: br.right, name: b.getAttribute('aria-label') || b.textContent.trim(), titled: !!(b.title || b.getAttribute('aria-label') || b.dataset.hint), cut, clipped: cs.overflow === 'hidden' || cs.overflowX === 'hidden', ellipsis: cs.textOverflow === 'ellipsis' }
+      })
+      return { side: bar.classList.contains('ed-side-tabs'), l: r.left, r: r.right, tabs }
+    }))
+    for (const bar of bars) {
+      const where = `${locale} ${bar.side ? 'side' : 'inspector'} tabs`
+      const inside = bar.tabs.every((t) => t.l >= bar.l - 0.5 && t.r <= bar.r + 0.5)
+      const apart = bar.tabs.every((t, i) => i === 0 || t.l >= bar.tabs[i - 1].r - 0.5)
+      ok(inside && apart, `${where}: every tab inside the bar, none over another`)
+      const bad = bar.tabs.filter((t) => t.cut && !(t.clipped && t.ellipsis))
+      ok(!bad.length, `${where}: a cut label ends in an ellipsis inside its own tab${bad.length ? ' — ' + bad.map((t) => t.name).join(', ') : ''}`)
+      ok(bar.tabs.every((t) => t.titled), `${where}: every tab keeps its full name for the hint and screen readers`)
+    }
+    await ctx.close()
+  })
+}
+
+// ---------------------------------------------------------------- 3
+console.log('\n3. the speaker view explains itself with the app hint\n')
+await run(async () => {
+  const { p, ctx, errors } = await open({ slides: [slide('a', [rect('r', 100)]), slide('b')] })
+  await p.keyboard.press('F5')
+  await p.waitForTimeout(900)
+  const [sv] = await Promise.all([ctx.waitForEvent('page', { timeout: 8000 }), p.keyboard.press('s')])
+  await sv.waitForSelector('.sv-btn', { timeout: 8000 })
+  const btn = sv.locator('.sv-btn[data-nav="laser"], .sv-btn').first()
+  const name = await btn.getAttribute('aria-label')
+  await btn.hover()
+  await sv.waitForTimeout(150)
+  const early = await sv.evaluate(() => { const t = document.querySelector('.ed-tip'); return !!t && !t.hidden })
+  await sv.waitForTimeout(600)
+  const tip = await sv.evaluate(() => { const t = document.querySelector('.ed-tip'); return t && !t.hidden ? { text: t.textContent, keys: t.querySelectorAll('kbd').length } : null })
+  const titled = await btn.getAttribute('title')
+  ok(!early, 'the hint waits for the pointer to rest (not shown at 150ms)')
+  ok(!!tip && !!tip.text, `then the app's hint shows (${tip?.text ?? 'none'}) for "${name}"`)
+  ok(titled === null, `and the native title is borrowed while it shows, so the browser draws no second tooltip (title=${titled})`)
+  // any speaker button with a key in its name gets the key as a chip
+  const keyed = sv.locator('.sv-btn[title*="("]').first()
+  if (await keyed.count()) {
+    await sv.mouse.move(0, 0); await sv.waitForTimeout(400)
+    await keyed.hover(); await sv.waitForTimeout(700)
+    const k = await sv.evaluate(() => document.querySelectorAll('.ed-tip:not([hidden]) kbd').length)
+    ok(k > 0, 'a button with a shortcut shows it as a key chip')
+  }
+  ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
+  await ctx.close()
+})
+
+// ITEMS-4
 
 await browser.close()
 console.log(`\n${checks - failures}/${checks} checks passed`)

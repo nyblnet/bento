@@ -671,3 +671,9 @@ runs:
       run: |
         slides/node_modules/.bin/esbuild scripts/test-slides-contrast.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-contrast.mjs"
         node "$RUNNER_TEMP/test-slides-contrast.mjs"
+
+    - name: Hint key chips rig
+      # A tooltip's trailing (…) becomes key chips only when it is keys,
+      # a lone key like the speaker view's (L) included.
+      shell: bento-step {0}
+      run: node scripts/test-slides-hint-keys.ts

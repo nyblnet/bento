@@ -216,6 +216,7 @@ export class PropsPanel {
       b.setAttribute('role', 'tab')
       b.setAttribute('aria-selected', String(this.tab === id))
       b.textContent = label
+      b.title = label // the whole name, when a narrow panel cuts it
       b.addEventListener('click', () => {
         this.tab = id
         lsSet('bento-panel-tab', JSON.stringify(id))

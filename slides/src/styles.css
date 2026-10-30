@@ -760,8 +760,11 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-tabs button {
   flex: 1 1 auto; min-width: 0; height: 26px; padding: 0 6px;
   font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap;
+  /* a narrow sidebar cuts each label inside its OWN tab — never over the next */
+  overflow: hidden; text-overflow: ellipsis;
   color: var(--muted); background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer;
 }
+.ed-tabs button[aria-selected='true'] { flex-shrink: .35; } /* the chosen tab keeps more of its name */
 .ed-tabs button:hover:not([aria-selected='true']) { color: var(--ink); background: var(--chrome-2); }
 .ed-tabs button[aria-selected='true'] {
   color: var(--ink); background: var(--tab-on); border-color: var(--tab-on-line);
@@ -2960,11 +2963,11 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-sidebar { padding-top: 0; }
 .ed-side-band { flex: none; align-self: stretch; margin-bottom: 0; }
 .ed-side-tabs { width: 100%; flex: none; }
-.ed-side-tabs button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 7px; }
-.ed-side-tabs button[aria-selected='true'] { flex: 1 1 auto; }
+.ed-side-tabs button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 4px; }
+.ed-side-tabs button[aria-selected='true'] { flex: 3 1 auto; }
 .ed-side-tabs button svg { flex: none; width: 14px; height: 14px; }
 .ed-side-tabs button:not([aria-selected='true']) .ed-tab-name { display: none; }
-.ed-side-tabs .ed-tab-name { min-width: 0; overflow: hidden; white-space: nowrap; }
+.ed-side-tabs .ed-tab-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ed-side-tabs button.ed-tab-glyph-only .ed-tab-name { display: none; }
 .ed-thumbs { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
 .ed-side-layers { width: 100%; }

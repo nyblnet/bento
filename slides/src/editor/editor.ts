@@ -614,7 +614,9 @@ export class Editor {
     main.append(this.sidebar, this.makeResizer('left'), centre, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
-    mountHints(this.root, this.buildScope.signal)
+    // the whole page, not just the editor root: menus, the ⌘K palette and
+    // dialogs are appended to <body>, and their titles were native tooltips
+    mountHints(document.body, this.buildScope.signal)
 
     // phones/small windows: start with both panels collapsed so the CANVAS
     // is what you see — the topbar toggles (and [ / ]) bring them back
@@ -2044,13 +2046,13 @@ export class Editor {
       b.addEventListener('click', () => { show(view); lsSet('bento-side-view', view) })
       bar.appendChild(b)
     }
-    // a name that would be cut ('Diapositivas' in 188px) is dropped rather
-    // than shown as 'Diapo…': the glyph and the accessible name stay
+    // a name cut short ends in an ellipsis ('Diapositi…'); one with room for
+    // too little to read is dropped, and the glyph and the accessible name stay
     const fit = () => {
       for (const b of bar.children) {
         b.classList.remove('ed-tab-glyph-only')
         const n = b.querySelector<HTMLElement>('.ed-tab-name')
-        if (n?.offsetParent && n.scrollWidth > n.clientWidth + 1) b.classList.add('ed-tab-glyph-only')
+        if (n?.offsetParent && n.scrollWidth > n.clientWidth + 1 && n.clientWidth < 28) b.classList.add('ed-tab-glyph-only')
       }
     }
     const shown = show
