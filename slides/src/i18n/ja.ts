@@ -1352,4 +1352,5 @@ export const ja: Catalog = {
   "Looking at the pictures in this deck…": "このデッキの画像を確認しています…",
   "New": "新規",
   "Document": "ドキュメント",
+  "Updates": "アップデート",
 }

@@ -1352,4 +1352,5 @@ export const zhHant: Catalog = {
   "Looking at the pictures in this deck…": "正在檢查此簡報中的圖片…",
   "New": "新增",
   "Document": "文件",
+  "Updates": "更新",
 }

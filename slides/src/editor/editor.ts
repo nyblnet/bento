@@ -4347,6 +4347,9 @@ export class Editor {
   /** About dialog: version, user-initiated update check, licenses. */
   private openAbout(runCheck = false) {
     const { box, show } = this.dialogShell()
+    // as wide as Preferences, in three blocks: who (head + links), updates
+    // (status beside its button), and the fine print at the foot
+    box.classList.add('ed-about-main')
 
     const head = div('ed-about-head')
     // The logo/wordmark links home (new tab) — a gentle route back to the site.
@@ -4519,7 +4522,11 @@ export class Editor {
       }
     })
     row.appendChild(checkB)
-    box.append(row, status)
+    const updates = div('ed-about-updates')
+    const cap = document.createElement('h3')
+    cap.textContent = t('Updates')
+    updates.append(cap, status, row)
+    box.append(updates)
 
     const fine = div('ed-about-fine')
     fine.innerHTML =
