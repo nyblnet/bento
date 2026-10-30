@@ -412,7 +412,6 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-thumb.selected { border-color: var(--accent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .ed-thumb.selected::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--accent) 12%, transparent); pointer-events: none; }
 .ed-thumb.dragging { opacity: .5; }
-.ed-thumb.drop { border-color: var(--blue); }
 .ed-thumb-num {
   position: absolute;
   top: 4px; inset-inline-start: 4px;
@@ -771,8 +770,11 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-tabs button {
   flex: 1 1 auto; min-width: 0; height: 26px; padding: 0 6px;
   font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap;
+  /* a narrow sidebar cuts each label inside its OWN tab — never over the next */
+  overflow: hidden; text-overflow: ellipsis;
   color: var(--muted); background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer;
 }
+.ed-tabs button[aria-selected='true'] { flex-shrink: .35; } /* the chosen tab keeps more of its name */
 .ed-tabs button:hover:not([aria-selected='true']) { color: var(--ink); background: var(--chrome-2); }
 .ed-tabs button[aria-selected='true'] {
   color: var(--ink); background: var(--tab-on); border-color: var(--tab-on-line);
@@ -1655,6 +1657,22 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
   transition: opacity 0.12s ease;
 }
 .ed-insertgap:hover { opacity: 1; }
+/* Where dragged slides will land: a thick accent line with round caps in the
+   gap, glowing just enough to read over any thumbnail. Hover's + stays out of
+   it, and the other gaps stay hidden while a drag is on. */
+.ed-insertgap.drop { opacity: 1; transition: none; } /* it tracks the pointer: no fade */
+.ed-insertgap.drop::before {
+  left: 0; right: 0; height: 4px; margin-top: -2px; border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--surface), 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.ed-insertgap.drop::after {
+  content: ''; position: absolute; inset-inline: -3px; top: 50%; height: 10px; margin-top: -5px;
+  background: radial-gradient(circle at 5px 50%, var(--accent) 4px, transparent 4.5px), radial-gradient(circle at calc(100% - 5px) 50%, var(--accent) 4px, transparent 4.5px);
+  pointer-events: none;
+}
+.ed-insertgap.drop .ed-insertgap-btn,
+.ed-thumbs-dragging .ed-insertgap:not(.drop) { visibility: hidden; }
 .ed-insertgap::before {
   content: '';
   position: absolute;
@@ -2960,12 +2978,14 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-sidebar { padding-top: 0; }
 .ed-side-band { flex: none; align-self: stretch; margin-bottom: 0; }
 .ed-side-tabs { width: 100%; flex: none; }
-.ed-side-tabs button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 7px; }
-.ed-side-tabs button[aria-selected='true'] { flex: 1 1 auto; }
-.ed-side-tabs button svg { flex: none; width: 14px; height: 14px; }
-.ed-side-tabs button:not([aria-selected='true']) .ed-tab-name { display: none; }
-.ed-side-tabs .ed-tab-name { min-width: 0; overflow: hidden; white-space: nowrap; }
-.ed-side-tabs button.ed-tab-glyph-only .ed-tab-name { display: none; }
+/* icon tabs — the side column's and the inspector's (controls.ts fitTabNames) */
+.ed-icon-tabs button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 4px; }
+.ed-icon-tabs button[aria-selected='true'] { flex: 0 0 auto; }
+.ed-icon-tabs.ed-tabs-all button { flex: 1 0 auto; }
+.ed-icon-tabs button svg { flex: none; width: 14px; height: 14px; }
+/* names: the chosen tab's always; the others' only when every one fits */
+.ed-icon-tabs:not(.ed-tabs-all) button:not([aria-selected='true']) .ed-tab-name { display: none; }
+.ed-icon-tabs .ed-tab-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ed-thumbs { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
 .ed-side-layers { width: 100%; }
 .ed-side-layers > .ed-section { display: none; } /* the tab already says Layers */
@@ -2973,7 +2993,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-sidebar:not([data-view='layers']) .ed-side-layers, .ed-sidebar:not([data-view='slides']) .ed-thumbs,
 .ed-sidebar:not([data-view='tokens']) .ed-side-tokens { display: none; }
 /* the Tokens view (editor/tokenspane.ts): tokens by type, then components */
-.ed-side-tokens { width: 100%; display: flex; flex-direction: column; gap: 14px; padding: 8px 10px; box-sizing: border-box; }
+.ed-side-tokens { width: 100%; display: flex; flex-direction: column; gap: 14px; padding: 8px 0; box-sizing: border-box; container-type: inline-size; } /* the sidebar's own padding is the margin */
 .ed-tokens-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ed-tokens-head h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink); }
 .ed-tokens-mode { max-width: 50%; }
@@ -2981,9 +3001,42 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-tokens-cap { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; color: var(--muted); }
 .ed-tokens-empty { font-size: 11.5px; color: var(--muted); }
 .ed-token-row { display: flex; align-items: center; gap: 6px; min-height: 28px; }
-/* a token row is two lines — the name (always readable, at any panel width)
-   with its uses and delete, then the value — so the value never squeezes the name */
-.ed-token-row:has(> .ed-token-top) { flex-direction: column; align-items: stretch; gap: 2px; padding-block: 2px; }
+/* one line, Penpot's: preview · name · value · uses · ⋯ — and when the column
+   is too narrow for the name to read, the value drops under it */
+.ed-tokens-group > .ed-token-row:not(.ed-token-adding) {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(0, auto) auto 22px; gap: 4px 6px;
+}
+@container (max-width: 240px) {
+  /* line one: preview · name · ⋯; line two, under the name: value · uses */
+  .ed-tokens-group > .ed-token-row:not(.ed-token-adding) { grid-template-columns: 22px minmax(0, 1fr) auto 22px; row-gap: 0; }
+  .ed-tokens-group > .ed-token-row > :nth-child(2) { grid-column: 2 / 4; grid-row: 1; }
+  .ed-tokens-group > .ed-token-row > :nth-child(5) { grid-column: 4; grid-row: 1; }
+  .ed-tokens-group > .ed-token-row > .ed-token-value { grid-column: 2; grid-row: 2; justify-self: start; }
+  .ed-tokens-group > .ed-token-row > .ed-token-uses { grid-column: 3; grid-row: 2; }
+}
+.ed-tokens-group > .ed-token-row > .ed-token-swatch, .ed-tokens-group > .ed-token-row > .ed-tokpick-prev { width: 22px; height: 22px; }
+.ed-token-more-none { width: 22px; }
+.ed-token-more { width: 22px; height: 22px; padding: 0; }
+.ed-tokens-sub { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+.ed-tokens-sub-own:last-child { display: none; } /* "Your tokens" with none under it */
+/* text that edits in place (tokenspane.ts editing): looks like text, a click makes it a field */
+.ed-edit {
+  min-width: 0; max-width: 100%; height: 24px; padding: 0 4px; font: inherit; font-size: 12px; color: var(--ink); text-align: start;
+  background: none; border: 1px solid transparent; border-radius: 5px; cursor: text;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ed-edit:hover { border-color: var(--line); }
+.ed-edit.ed-token-value { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ed-edit.ed-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.ed-edit-placeholder { color: var(--muted); font-style: italic; }
+.ed-edit-field { min-width: 0; width: 100%; height: 24px; box-sizing: border-box; font-size: 12px; }
+/* modes as chips: the shown one pressed */
+.ed-tokens-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ed-tokens-mode {
+  height: 22px; max-width: 100%; padding: 0 8px; font: inherit; font-size: 11.5px; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ed-tokens-mode[aria-pressed='true'] { color: var(--ink); background: var(--tab-on); border-color: var(--tab-on-line); }
 .ed-token-top, .ed-token-val { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .ed-token-val:empty { display: none; }
 .ed-token-val > .ed-token-uses { margin-inline-start: auto; }
@@ -3008,8 +3061,16 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-token-dot { position: absolute; inset-inline-end: 4px; width: 10px; height: 10px; padding: 0; border: 1.5px solid var(--muted); border-radius: 50%; background: none; cursor: pointer; opacity: 0; }
 /* the dot shows on hover AND whenever the field has keyboard focus — not a hover-only control */
 .ed-mini:hover .ed-token-dot, .ed-has-token:focus-within .ed-token-dot, .ed-token-dot:focus-visible { opacity: 1; }
-.ed-token-pill { position: absolute; inset: 1px; display: flex; align-items: center; gap: 4px; padding-inline: 8px; font: inherit; font-size: 11.5px; color: var(--ink); background: var(--chrome-2); border: 0; border-radius: 5px; cursor: pointer; overflow: hidden; white-space: nowrap; }
+.ed-token-pill { position: absolute; inset: 1px; display: flex; align-items: center; gap: 4px; padding-inline: 8px 2px; font-size: 11.5px; color: var(--ink); background: var(--chrome-2); border-radius: 5px; overflow: hidden; white-space: nowrap; }
 .ed-token-pill::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+/* the pill's name reopens the picker; its detach shows on hover or focus */
+.ed-token-pill-name, .ed-color-token-name {
+  flex: 1 1 0; min-width: 0; padding: 0; font: inherit; color: inherit; text-align: start; background: none; border: 0; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ed-token-pill .ed-color-detach, .ed-color-token .ed-color-detach { opacity: 0; }
+.ed-token-pill:hover .ed-color-detach, .ed-token-pill:focus-within .ed-color-detach,
+.ed-color-token:hover .ed-color-detach, .ed-color-token:focus-within .ed-color-detach { opacity: 1; }
 .ed-token-wrap { position: relative; }
 .ed-token-wrap > select { width: 100%; }
 .ed-token-wrap.ed-has-token > select { padding-inline-end: 22px; }
@@ -3592,6 +3653,19 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   box-shadow: 0 10px 30px rgb(0 0 0 / .28); animation: var(--ed-pop-in);
 }
 .ed-morph-pick input[type=search] { height: 26px; }
+/* the token picker (inspector/tokenpicker.ts): the morph picker's look, plus
+   preview · name · value · ✓ rows and a foot of actions */
+.ed-tokpick-opt { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto 12px; }
+.ed-tokpick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-tokpick-val { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-tokpick-check { color: var(--ink); font-size: 11px; }
+.ed-tokpick-opt[aria-selected='true'] { background: var(--chip); }
+.ed-tokpick-prev { flex: none; width: 18px; height: 18px; box-sizing: border-box; display: grid; place-items: center; font-size: 10px; line-height: 1; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; background: var(--chrome); overflow: hidden; }
+.ed-tokpick-shadow { background: var(--surface); border-color: transparent; }
+.ed-tokpick-foot { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; padding-top: 6px; border-top: 1px solid var(--line); }
+.ed-tokpick-act { min-height: 26px; padding: 0 6px; font: inherit; font-size: 12px; color: var(--ink); text-align: start; background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.ed-tokpick-act:hover, .ed-tokpick-act:focus-visible { background: var(--chip); outline: none; }
+.ed-tokpick-none[hidden] { display: none; }
 .ed-morph-pick [role=listbox] { overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
 .ed-morph-pick-h, .ed-morph-pick-more > summary { font-size: 11px; color: var(--muted); padding: 6px 6px 2px; cursor: default; }
 .ed-morph-pick-more > summary { cursor: pointer; }

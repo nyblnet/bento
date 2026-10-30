@@ -178,7 +178,7 @@ try {
     ok(await body.locator('.ed-color-hex').getAttribute('placeholder') === 'None' && (await body.locator('.ed-color-hex').inputValue()) === '', 'a transparent fill reads None')
     ok(!!(await body.locator('input[type=color]').getAttribute('aria-label')), 'the swatch has an accessible name')
     await body.locator('button[aria-label="Colors & tokens"]').click()
-    await body.locator('.ed-palette-item').first().click(); await p.waitForTimeout(250)
+    await p.locator('.ed-tokpick-opt').first().click(); await p.waitForTimeout(250)
     const f = (await el('a')).fill
     ok(!/,\s*0\)$/.test(f) && (await el('a')).themeRefs?.fill, `a theme colour picked onto a 0% fill is opaque (${f})`)
     await ctx.close()

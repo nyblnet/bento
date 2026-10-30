@@ -6,10 +6,11 @@ import { parseColor, unitHandle, slotLabel, combineColor, alphaOf, SCRUB, numeri
 import { t } from '../../i18n'
 import type { PropsPanel } from '../panels'
 import { ICONS } from '../../icons'
-import type { GradientFill, Slide } from '../../model'
-import { setColor, paletteOf, refAt, PALETTE_SLOTS, slotIsSet } from '../../palette'
+import type { BentoDoc, GradientFill, Slide } from '../../model'
+import { setColor, refAt, keepAlpha, PALETTE_SLOTS } from '../../palette'
 import { cssColor, cssGradient, radialGeom } from '../../render'
 import { adoptColor, bindToken, colorUses, freeTokenName, tokenName, tokenValue } from '../../tokens'
+import { choices, openTokenPicker, slotOf, type Choice } from './tokenpicker'
 import { openColorPopover } from './colorpopover'
 import { gradientBar } from './gradientbar'
 import { gradTarget } from '../gradientoverlay'
@@ -279,102 +280,66 @@ export function setRef(p: PropsPanel, ref: { id: string | null; path: string; sl
  * re-branded and one that has 400 hex literals in it.
  */
 export function themeLink(p: PropsPanel, ref: { id: string | null; path: string; slide?: Slide }, input: HTMLInputElement, field: HTMLElement): HTMLElement {
-  const palette = paletteOf(p.store.doc)
   const holder = (ref.id ? p.store.element(ref.id) : (ref.slide ?? p.store.slide)) as never
   const rawRef = holder ? refAt(holder, ref.path) : undefined
   const tok = tokenName(rawRef)
-  const linked = tok ? undefined : rawRef?.split(' ')[0] as (typeof PALETTE_SLOTS)[number] | undefined
+  const linked = tok ? undefined : slotOf(rawRef)
   const linkedLabel = tok ?? (linked && slotLabel(linked))
   const outer = document.createElement('div')
   outer.className = 'ed-colorref'
-  const list = document.createElement('div')
-  list.className = 'ed-palette'
-  list.hidden = true
-  const cap = document.createElement('div')
-  cap.className = 'ed-palette-cap'
-  cap.textContent = t('Theme colors')
-  list.appendChild(cap)
-  for (const slot of PALETTE_SLOTS) {
-    const base = palette[slot]
-    if (!base) continue // hlink/folHlink are usually unset — don't show empties
-    if (!slotIsSet(p.store.doc, slot)) continue // accent 2–6 unset: a copy of accent 1, not a choice
-    const b = document.createElement('button')
-    b.type = 'button'
-    b.className = 'ed-palette-item'
-    const chip = document.createElement('span')
-    chip.className = 'ed-swatch'
-    chip.style.background = cssColor(base, 'transparent') // a document colour: gated
-    const name = document.createElement('span')
-    name.textContent = slotLabel(slot) // the slot's name, not its id (bg1, tx1…)
-    b.append(chip, name)
-    if (slot === linked) b.classList.add('is-on')
-    b.addEventListener('click', () => {
+  // follow a theme colour (a palette ref) or a colour token (a `$name` ref);
+  // either way the field keeps its own opacity — unless it had none: a pick must show
+  const follow = (c: Choice) => {
+    const a = field.querySelector<HTMLInputElement>('.ed-color-alpha input')
+    if (c.kind === 'slot') {
+      const base = String(c.value)
       input.value = /^#[0-9a-fA-F]{6}$/.test(base) ? base : parseColor(base).hex
-      // a theme colour names the hue; the field keeps its own opacity
-      const a = field.querySelector<HTMLInputElement>('.ed-color-alpha input')
-      // the field keeps its opacity — unless it had none: a pick must show
-      setRef(p, ref, a ? combineColor(input.value, alphaOf(a) || 1) : base, slot)
-    })
-    list.appendChild(b)
-  }
-  // the deck's colour tokens, under the theme slots: same gesture, a `$name` ref
-  const colorTokens = Object.entries(p.store.doc.theme.tokens?.set ?? {}).filter(([, v]) => v.type === 'color')
-  if (colorTokens.length) {
-    const tcap = document.createElement('div')
-    tcap.className = 'ed-palette-cap'
-    tcap.textContent = t('Tokens')
-    list.appendChild(tcap)
-  }
-  for (const [name] of colorTokens) {
-    const value = String(tokenValue(p.store.doc, name) ?? '')
-    const b = document.createElement('button')
-    b.type = 'button'
-    b.className = 'ed-palette-item'
-    const chip = document.createElement('span')
-    chip.className = 'ed-swatch'
-    chip.style.background = cssColor(value, 'transparent')
-    const label = document.createElement('span')
-    label.textContent = name
-    b.append(chip, label)
-    if (name === tok) b.classList.add('is-on')
-    b.addEventListener('click', () => p.edit(() => {
-      const h = ref.id ? p.store.element(ref.id) : (ref.slide ?? p.store.slide)
-      if (h) { opaque(h, ref.path); bindToken(p.store.doc, h as never, ref.path, name) }
-    }, true))
-    list.appendChild(b)
-  }
-  // adopting a literal: the deck's brand colour is usually typed in many
-  // places before anyone thinks of a token — make the token from it, and every
-  // use follows; or just find every use on this slide
-  if (!tok) {
-    const acts = document.createElement('div')
-    acts.className = 'ed-palette-acts'
-    const act = (label: string, run: () => void) => {
-      const b = document.createElement('button')
-      b.type = 'button'
-      b.className = 'ed-palette-item ed-palette-act'
-      b.textContent = label
-      b.addEventListener('click', run)
-      acts.appendChild(b)
+      setRef(p, ref, a ? combineColor(input.value, alphaOf(a) || 1) : base, c.key as (typeof PALETTE_SLOTS)[number])
+    } else {
+      p.edit(() => {
+        const h = ref.id ? p.store.element(ref.id) : (ref.slide ?? p.store.slide)
+        if (h) { opaque(h, ref.path); bindToken(p.store.doc, h as never, ref.path, c.key) }
+      }, true)
     }
+  }
+  choosers.set(input, follow)
+  const detach = () => {
+    const a = field.querySelector<HTMLInputElement>('.ed-color-alpha input')
+    setRef(p, ref, a ? combineColor(input.value, alphaOf(a)) : input.value, null)
+  }
+  const pick = (anchor: HTMLElement) => {
     const hex = () => input.value.toLowerCase()
-    act(t('Make a token from this color'), () => {
-      const doc = p.store.doc
-      const name = freeTokenName(doc, 'color.brand')
-      let n = 0
-      p.store.commit(() => { n = adoptColor(p.store.doc, hex(), name) })
-      p.toast(t('Made {name} — {n} uses follow it', { name, n }))
-      // the new token, ready to be named, in the Tokens view
-      document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click()
-      const field = document.querySelector<HTMLInputElement>(`.ed-tokens [data-token="${CSS.escape(name)}"] .ed-token-name`)
-      field?.focus(); field?.select()
+    openTokenPicker(anchor, {
+      title: t('Colors & tokens'),
+      choices: choices(p.store.doc, ['color']),
+      bound: tok ?? linked,
+      pick: follow,
+      // adopting a literal: the deck's brand colour is usually typed in many
+      // places before anyone thinks of a token — make the token from it, and
+      // every use follows; or find every use on this slide
+      actions: linkedLabel
+        ? [{ label: tok ? t('Detach from token') : t('Detach from theme color'), run: detach }]
+        : [
+          // the colour is already a theme colour or a token: bind its uses to
+          // that one rather than make a second token with the same value
+          ...((same) => same ? [{ label: t('Bind {n} uses to {name}', { n: colorUses(p.store.doc, hex()).length, name: same.kind === 'token' ? same.key : same.label }), run: () => {
+            const uses = colorUses(p.store.doc, hex())
+            p.store.commit(() => followChoice(p.store.doc, uses.map((u) => ({ holder: (u.element ?? u.slide) as unknown as Record<string, unknown>, path: u.path })), same))
+            p.toast(t('{n} uses now follow {name}', { n: uses.length, name: same.kind === 'token' ? same.key : same.label }))
+          } }] : [{ label: t('Make a token from this color'), run: () => {
+            const name = freeTokenName(p.store.doc, 'color.brand')
+            let n = 0
+            p.store.commit(() => { n = adoptColor(p.store.doc, hex(), name) })
+            p.toast(t('Made {name} — {n} uses follow it', { name, n }))
+            document.querySelector<HTMLElement>('.ed-side-tabs [data-view="tokens"]')?.click()
+          } }])(sameAs(p.store.doc, hex())),
+          { label: t('Select all with this color'), run: () => {
+            const ids = colorUses(p.store.doc, hex()).filter((u) => u.slide === p.store.slide && u.element).map((u) => u.element!.id)
+            p.store.select([...new Set(ids)])
+            p.toast(t('{n} elements on this slide use this color', { n: new Set(ids).size }))
+          } },
+        ],
     })
-    act(t('Select all with this color'), () => {
-      const ids = colorUses(p.store.doc, hex()).filter((u) => u.slide === p.store.slide && u.element).map((u) => u.element!.id)
-      p.store.select([...new Set(ids)])
-      p.toast(t('{n} elements on this slide use this color', { n: new Set(ids).size }))
-    })
-    list.appendChild(acts)
   }
   const open = document.createElement('button')
   open.type = 'button'
@@ -382,36 +347,91 @@ export function themeLink(p: PropsPanel, ref: { id: string | null; path: string;
   open.innerHTML = ICONS.palette
   open.title = t('Colors & tokens')
   open.setAttribute('aria-label', t('Colors & tokens'))
-  open.setAttribute('aria-expanded', 'false')
-  open.addEventListener('click', () => {
-    list.hidden = !list.hidden
-    open.setAttribute('aria-expanded', String(!list.hidden))
-  })
-  if (linkedLabel) {
-    const hex = field.querySelector<HTMLElement>('.ed-color-hex')
-    const token = document.createElement('span')
-    token.className = 'ed-color-token'
-    token.textContent = linkedLabel
-    token.title = tok
-      ? t('Follows the token “{name}”. Click to detach.', { name: tok })
-      : t('Follows the theme color “{name}”: change it under Theme and this changes with it.', { name: linkedLabel })
-    const detach = document.createElement('button')
-    detach.type = 'button'
-    detach.className = 'ed-color-detach'
-    detach.innerHTML = ICONS.unlink
-    detach.title = tok ? t('Detach from token') : t('Detach from theme color')
-    detach.setAttribute('aria-label', detach.title)
-    detach.addEventListener('click', () => {
-      const a = field.querySelector<HTMLInputElement>('.ed-color-alpha input')
-      setRef(p, ref, a ? combineColor(input.value, alphaOf(a)) : input.value, null)
-    })
-    token.appendChild(detach)
-    hex?.replaceWith(token)
-  }
+  open.setAttribute('aria-haspopup', 'dialog')
+  open.addEventListener('click', () => pick(open))
+  // a bound field shows the name as a pill (Figma's)
+  if (linkedLabel) field.querySelector<HTMLElement>('.ed-color-hex')?.replaceWith(boundPill(linkedLabel, !!tok, () => pick(open), detach))
   field.appendChild(open)
-  outer.append(field, list)
+  outer.append(field)
   return outer
 }
+
+/** Make every (holder, path) follow a theme colour or a colour token; each
+ *  keeps its own opacity. The caller wraps it in one commit (one undo step). */
+export function followChoice(doc: BentoDoc, uses: Array<{ holder: Record<string, unknown>; path: string }>, c: Choice) {
+  for (const { holder, path } of uses) {
+    if (c.kind === 'slot') setColor(holder as never, path, keepAlpha(readAt(holder, path), String(c.value)), c.key)
+    else { opaque(holder, path); bindToken(doc, holder as never, path, c.key) }
+  }
+}
+
+/** The theme colour or token whose value is this colour, if one is. */
+function sameAs(doc: BentoDoc, hex: string): Choice | undefined {
+  const want = parseColor(hex).hex.toLowerCase()
+  return choices(doc, ['color']).find((c) => parseColor(String(c.value)).hex.toLowerCase() === want)
+}
+
+/**
+ * Fill, Stroke or Text colour on a multi-selection: the same picker, binding
+ * every element at once (one undo step); when every element follows the same
+ * theme colour or token the field shows it as a pill, like a single one.
+ */
+export function sharedLink(p: PropsPanel, ids: string[], path: string, field: HTMLElement): HTMLElement {
+  const holders = () => ids.map((id) => p.store.element(id)).filter(Boolean) as unknown as Array<Record<string, unknown> & { themeRefs?: Record<string, string> }>
+  const refs = holders().map((h) => h.themeRefs?.[path])
+  const common = refs.every((r) => r && r === refs[0]) ? refs[0] : undefined
+  const tok = tokenName(common)
+  const bound = tok ?? slotOf(common)
+  const detach = () => p.edit(() => { for (const h of holders()) setColor(h as never, path, String(readAt(h, path) ?? ''), null) }, true)
+  const pick = (anchor: HTMLElement) => openTokenPicker(anchor, {
+    title: t('Colors & tokens'),
+    choices: choices(p.store.doc, ['color']),
+    bound,
+    pick: (c) => p.edit(() => followChoice(p.store.doc, holders().map((holder) => ({ holder, path })), c), true),
+    actions: bound ? [{ label: tok ? t('Detach from token') : t('Detach from theme color'), run: detach }] : [],
+  })
+  const open = document.createElement('button')
+  open.type = 'button'
+  open.className = 'ed-btn ed-tool'
+  open.innerHTML = ICONS.palette
+  open.title = t('Colors & tokens')
+  open.setAttribute('aria-label', t('Colors & tokens'))
+  open.setAttribute('aria-haspopup', 'dialog')
+  open.addEventListener('click', () => pick(open))
+  if (bound) field.querySelector<HTMLElement>('.ed-color-hex')?.replaceWith(boundPill(tok ?? slotLabel(bound), !!tok, () => pick(open), detach))
+  // the popover's theme swatches bind every element too
+  const col = field.querySelector<HTMLInputElement>('input[type=color]')
+  if (col) choosers.set(col, (c) => p.edit(() => followChoice(p.store.doc, holders().map((holder) => ({ holder, path })), c), true))
+  field.appendChild(open)
+  return field
+}
+
+/** The name a bound colour field shows instead of its hex: a click reopens
+ *  the picker, the detach icon (on hover or focus) lets go and keeps the value. */
+function boundPill(label: string, isToken: boolean, reopen: () => void, detach: () => void): HTMLElement {
+  const token = document.createElement('span')
+  token.className = 'ed-color-token'
+  const name = document.createElement('button')
+  name.type = 'button'
+  name.className = 'ed-color-token-name'
+  name.textContent = label
+  name.title = isToken
+    ? t('Follows the token “{name}”. Click to change.', { name: label })
+    : t('Follows the theme color “{name}”. Click to change.', { name: label })
+  name.addEventListener('click', reopen)
+  const off = document.createElement('button')
+  off.type = 'button'
+  off.className = 'ed-color-detach'
+  off.innerHTML = ICONS.unlink
+  off.title = isToken ? t('Detach from token') : t('Detach from theme color')
+  off.setAttribute('aria-label', off.title)
+  off.addEventListener('click', detach)
+  token.append(name, off)
+  return token
+}
+
+/** How a colour field follows a theme colour or token picked in its popover. */
+const choosers = new WeakMap<HTMLInputElement, (c: Choice) => void>()
 
 /** Color swatch + opacity %. Native color inputs have no alpha channel, so
  *  the pair round-trips rgba()/#rrggbbaa strings losslessly. */
@@ -468,14 +488,18 @@ function popoverOn(p: PropsPanel, col: HTMLInputElement, alpha?: HTMLInputElemen
       if (alpha) alpha.value = String(Math.round(a * 100))
       col.dispatchEvent(new Event('input'))
     }
-    const theme = [...col.closest('.ed-colorref')?.querySelectorAll<HTMLButtonElement>('.ed-palette-item') ?? []]
     openColorPopover(col, {
       hex: col.value,
       alpha: alpha ? alphaOf(alpha) : undefined,
-      groups: [
-        { title: t('Theme colors'), swatches: theme.map((b) => ({ label: b.textContent ?? '', color: b.querySelector<HTMLElement>('.ed-swatch')?.style.background ?? '', pick: () => b.click() })) },
+      groups: colorGroups(p.store.doc, (c) => {
+        // a field that can follow (a palette/token ref) follows; any other
+        // colour — a gradient stop, a token's own value — takes the literal
+        const follow = choosers.get(col)
+        if (follow) return follow(c)
+        const v = parseColor(String(c.value)); set(v.hex, v.a); col.dispatchEvent(new Event('change'))
+      }).concat([
         { title: t('On this slide'), swatches: slideColors(p).map((c) => ({ label: c, color: cssColor(c, 'transparent'), pick: () => { const v = parseColor(c); set(v.hex, v.a); col.dispatchEvent(new Event('change')) } })) },
-      ],
+      ]),
       preview: set,
       commit: () => col.dispatchEvent(new Event('change')),
       cancel: () => p.cancelBurst(),
@@ -483,6 +507,15 @@ function popoverOn(p: PropsPanel, col: HTMLInputElement, alpha?: HTMLInputElemen
       done: paint ? () => settle(p) : undefined,
     })
   })
+}
+
+/** The theme colours and colour tokens as the colour popover's swatch groups,
+ *  named as the Tokens view and the token picker name them. */
+export function colorGroups(doc: BentoDoc, pick: (c: Choice) => void): Array<{ title: string; swatches: Array<{ label: string; color: string; pick: () => void }> }> {
+  const all = choices(doc, ['color'])
+  const groups = new Map<string, Choice[]>()
+  for (const c of all) groups.set(c.group, [...(groups.get(c.group) ?? []), c])
+  return [...groups].map(([title, cs]) => ({ title, swatches: cs.map((c) => ({ label: c.kind === 'token' ? c.key : c.label, color: cssColor(String(c.value), 'transparent'), pick: () => pick(c) })) }))
 }
 
 /** The distinct colours the current slide already uses, for one-click reuse. */

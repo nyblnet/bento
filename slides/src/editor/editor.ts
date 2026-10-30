@@ -24,7 +24,7 @@ import { derive, deriveMemory, type DeriveMemory } from '../derive'
 import { TokensPane } from './tokenspane'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
-import { slidingPill } from './inspector/controls'
+import { fitTabNames, iconTab, slidingPill, tabBarNeed } from './inspector/controls'
 import { openCtxMenu, type CtxItem } from './ctxmenu'
 import { mountNotesPane } from './notespane'
 import { mountHints } from './hints'
@@ -561,6 +561,7 @@ export class Editor {
     // way Penpot (Pages / Layers) and Figma (Layers) lay it out. The layer
     // list used to sit at the top of the inspector, on every tab.
     this.thumbs = div('ed-thumbs')
+    this.wireThumbDrop()
     this.sideLayers = div('ed-side-layers')
     this.sideTokens = div('ed-side-tokens')
     this.sidebar.append(this.sideTabs(), this.thumbs, this.sideLayers, this.sideTokens)
@@ -613,7 +614,10 @@ export class Editor {
     main.append(this.sidebar, this.makeResizer('left'), centre, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
-    mountHints(this.root, this.buildScope.signal)
+    requestAnimationFrame(() => this.holdPanelMins())
+    // the whole page, not just the editor root: menus, the ⌘K palette and
+    // dialogs are appended to <body>, and their titles were native tooltips
+    mountHints(document.body, this.buildScope.signal)
 
     // phones/small windows: start with both panels collapsed so the CANVAS
     // is what you see — the topbar toggles (and [ / ]) bring them back
@@ -723,6 +727,30 @@ export class Editor {
     this.applyPanelWidths()
   }
 
+  /**
+   * The narrowest a panel may be: its bound, or wider when its tab bar needs
+   * the room — the chosen tab's whole name and the other tabs' glyphs, in the
+   * current language (controls.ts tabBarNeed) — so dragging can never break
+   * the tabs. Collapsing the panel is the chevron's job, not the resizer's.
+   */
+  private panelMin(side: 'left' | 'right'): number {
+    const panel = side === 'left' ? this.sidebar : this.props
+    const bar = panel.querySelector<HTMLElement>('.ed-icon-tabs')
+    const need = bar ? tabBarNeed(bar) + (panel.getBoundingClientRect().width - bar.getBoundingClientRect().width) : 0
+    return Math.max(Editor.PANEL_BOUNDS[side][0], Math.ceil(need))
+  }
+
+  /** A stored or default width under the minimum (a longer language, a
+   *  file from before the minimum) is raised to it once the tabs exist. */
+  private holdPanelMins() {
+    let changed = false
+    for (const side of ['left', 'right'] as const) {
+      const min = this.panelMin(side)
+      if (this.panelW[side] < min) { this.panelW[side] = min; changed = true }
+    }
+    if (changed) this.applyPanelWidths()
+  }
+
   private applyPanelWidths() {
     this.sidebar.style.setProperty('--panew', `${this.panelW.left}px`)
     this.props.style.setProperty('--panew', `${this.panelW.right}px`)
@@ -778,7 +806,8 @@ export class Editor {
       down.preventDefault()
       const startX = down.clientX
       const startW = this.panelW[side]
-      const [min, max] = Editor.PANEL_BOUNDS[side]
+      const [, max] = Editor.PANEL_BOUNDS[side]
+      const min = this.panelMin(side)
       panel.classList.add('ed-noanim')
       document.body.classList.add('ed-col-resizing')
       const move = (ev: MouseEvent) => {
@@ -2021,43 +2050,21 @@ export class Editor {
 
   /** Slides | Layers, in the same tab look as the inspector's. */
   private sideTabs(): HTMLElement {
-    const bar = div('ed-tabs ed-side-tabs')
+    const bar = div('ed-tabs ed-side-tabs ed-icon-tabs')
     bar.setAttribute('role', 'tablist')
-    let show = (view: string) => {
+    const show = (view: string) => {
       this.sidebar.dataset.view = view
       for (const b of bar.children) b.setAttribute('aria-selected', String((b as HTMLElement).dataset.view === view))
     }
-    // Each tab is its glyph; the chosen one also says its name. Three words
-    // never fit 188px in every language ('Diapositivas', 'Camadas'), and a
-    // tab cut to 'Cam…' says nothing: the name is always the accessible name.
+    // Each tab is its glyph; the chosen one also says its name (fitTabNames)
     const glyphs = { slides: ICONS.viewSlides, layers: ICONS.viewLayers, tokens: ICONS.viewTokens }
     for (const [view, label] of [['slides', t('Slides')], ['layers', t('Layers')], ['tokens', t('Tokens')]] as const) {
-      const b = document.createElement('button')
-      b.type = 'button'
-      b.setAttribute('role', 'tab')
+      const b = iconTab(glyphs[view], label)
       b.dataset.view = view
-      b.title = label
-      b.setAttribute('aria-label', label)
-      b.innerHTML = glyphs[view]
-      const name = document.createElement('span')
-      name.className = 'ed-tab-name'
-      name.textContent = label
-      b.appendChild(name)
       b.addEventListener('click', () => { show(view); lsSet('bento-side-view', view) })
       bar.appendChild(b)
     }
-    // a name that would be cut ('Diapositivas' in 188px) is dropped rather
-    // than shown as 'Diapo…': the glyph and the accessible name stay
-    const fit = () => {
-      for (const b of bar.children) {
-        b.classList.remove('ed-tab-glyph-only')
-        const n = b.querySelector<HTMLElement>('.ed-tab-name')
-        if (n?.offsetParent && n.scrollWidth > n.clientWidth + 1) b.classList.add('ed-tab-glyph-only')
-      }
-    }
-    const shown = show
-    show = (view: string) => { shown(view); fit() }
-    new ResizeObserver(fit).observe(bar)
+    fitTabNames(bar)
     const saved = lsGet('bento-side-view')
     show(saved === 'layers' || saved === 'tokens' ? saved : 'slides')
     slidingPill(bar)
@@ -2184,6 +2191,7 @@ export class Editor {
   /** Slim hover strip between thumbnails — click inserts a blank slide there. */
   private insertGap(at: number): HTMLElement {
     const gap = div('ed-insertgap')
+    gap.dataset.at = String(at)
     gap.title = t('Insert slide here')
     const plus = document.createElement('button')
     plus.className = 'ed-insertgap-btn'
@@ -2222,21 +2230,61 @@ export class Editor {
     item.addEventListener('dragstart', (ev) => {
       // the payload is every parent index that moves — the selection when
       // this thumb is part of it, else this one; states follow their parent
-      ev.dataTransfer!.setData('text/bento-slide', JSON.stringify(this.thumbTargets(index)))
+      this.dragFrom = this.thumbTargets(index)
+      ev.dataTransfer!.setData('text/bento-slide', JSON.stringify(this.dragFrom))
       ev.dataTransfer!.effectAllowed = 'move'
       item.classList.add('dragging')
     })
-    item.addEventListener('dragend', () => item.classList.remove('dragging'))
-    item.addEventListener('dragover', (ev) => {
+    item.addEventListener('dragend', () => { item.classList.remove('dragging'); this.dragFrom = null; this.showDropLine(null) })
+  }
+
+  /** The slides being dragged in the list (dataTransfer is unreadable during
+   *  dragover, so the drop line needs its own copy). */
+  private dragFrom: number[] | null = null
+
+  /**
+   * Where dragged slides would land, drawn as a thick line in the gap: the
+   * pointer above a thumbnail's middle means before its unit, below means
+   * after it — never between a parent and its states, since those gaps do not
+   * exist. A drop that would change nothing shows no line. One listener on the
+   * list, so the line follows the pointer across thumbnails and gaps alike.
+   */
+  private wireThumbDrop() {
+    const at = (ev: DragEvent): number | null => {
+      if (!this.dragFrom) return null
+      const slides = this.store.doc.slides
+      for (const item of this.thumbs.querySelectorAll<HTMLElement>('.ed-thumb')) {
+        const r = item.getBoundingClientRect()
+        if (ev.clientY > r.bottom) continue
+        const i = Number(item.dataset.index)
+        const unit = expand(slides, [i])
+        return ev.clientY < r.top + r.height / 2 ? unit[0] : unit[unit.length - 1] + 1
+      }
+      return slides.length
+    }
+    this.thumbs.addEventListener('dragover', (ev) => {
+      const to = at(ev)
+      if (to === null) return
       ev.preventDefault()
-      item.classList.add('drop')
+      ev.dataTransfer!.dropEffect = 'move'
+      this.showDropLine(moveBlock(this.store.doc.slides, this.dragFrom!, to) === this.store.doc.slides ? null : to)
     })
-    item.addEventListener('dragleave', () => item.classList.remove('drop'))
-    item.addEventListener('drop', (ev) => {
+    this.thumbs.addEventListener('dragleave', (ev) => {
+      if (!this.thumbs.contains(ev.relatedTarget as Node | null)) this.showDropLine(null)
+    })
+    this.thumbs.addEventListener('drop', (ev) => {
+      const to = at(ev)
+      this.showDropLine(null)
+      if (to === null) return
       ev.preventDefault()
-      item.classList.remove('drop')
-      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), index)
+      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), to)
     })
+  }
+
+  private showDropLine(at: number | null) {
+    this.thumbs.querySelectorAll('.ed-insertgap.drop').forEach((g) => { if (g.getAttribute('data-at') !== String(at)) g.classList.remove('drop') })
+    if (at !== null) this.thumbs.querySelector(`.ed-insertgap[data-at="${at}"]`)?.classList.add('drop')
+    this.thumbs.classList.toggle('ed-thumbs-dragging', at !== null)
   }
 
   /** Move the dragged units (a JSON list of parent indices, or one index

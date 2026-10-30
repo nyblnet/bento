@@ -14,7 +14,7 @@ import { fillLayers, strokeLayers } from './stacks'
 import { isFrame, morphClip } from './layout'
 import { applyElementFrame, cssColor, fetchFreeOption, flipContent, flipOf, gradientLineCoords, paintSafeShape, radialGeom, renderSlide } from './render'
 import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
-import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
+import { hintWindow, paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { speakerWindowTitle } from './wintitle'
 import { ICONS } from './icons'
 import { t } from './i18n'
@@ -1026,6 +1026,7 @@ export function startPresentation(
       for (const st of document.querySelectorAll('style')) d.head.appendChild(d.importNode(st, true))
     }
     d.body.className = 'bento-speaker'
+    hintWindow(speaker)
     const navBtn = (k: string, glyph: string, label: string, pressed = false) =>
       `<button class="sv-btn" data-nav="${k}" title="${label}" aria-label="${label}"${pressed ? ' aria-pressed="false"' : ''}>${glyph}</button>`
     d.body.innerHTML =

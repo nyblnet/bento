@@ -19,20 +19,25 @@ const REST_MS = 450
 const WARM_MS = 300
 
 export function mountHints(root: HTMLElement, signal: AbortSignal) {
-  const tip = document.createElement('div')
+  // the root's own document: the speaker view is another window
+  const doc = root.ownerDocument
+  const win = doc.defaultView!
+  const tip = doc.createElement('div')
   tip.className = 'ed-tip'
   tip.setAttribute('role', 'tooltip')
   tip.hidden = true
-  document.body.appendChild(tip)
+  doc.body.appendChild(tip)
   signal.addEventListener('abort', () => tip.remove(), { once: true })
 
   let timer = 0
   let current: HTMLElement | null = null
   let coldAt = 0
+  let pointerY: number | null = null
 
   /** The hinted control an event reached, adopting its title on the way. */
   const hinted = (target: EventTarget | null): HTMLElement | null => {
-    if (!(target instanceof Element) || target.closest('.ed-stage-scale, .ed-tip')) return null
+    // the slide is content, not chrome — on the canvas and in the show alike
+    if (!(target instanceof win.Element) || target.closest('.ed-stage-scale, .ed-tip, .reveal .slides')) return null
     const el = target.closest<HTMLElement>('[title], [data-hint]')
     if (!el || !root.contains(el)) return null
     return el.getAttribute('title')?.trim() || el.dataset.hint ? el : null
@@ -61,12 +66,14 @@ export function mountHints(root: HTMLElement, signal: AbortSignal) {
   const show = (el: HTMLElement) => {
     const text = el.dataset.hint ?? el.getAttribute('title')?.trim() ?? ''
     const m = SHORTCUT.exec(text)
+    // a window that repaints its body (the speaker view) took the tip with it
+    if (!tip.isConnected) doc.body.appendChild(tip)
     tip.replaceChildren(m ? text.slice(0, m.index) : text)
     if (m) {
-      const keys = document.createElement('span')
+      const keys = doc.createElement('span')
       keys.className = 'ed-tip-keys'
       for (const k of m[1].split(/\s*(?:·|\/)\s*/)) {
-        const kbd = document.createElement('kbd')
+        const kbd = doc.createElement('kbd')
         kbd.textContent = k
         keys.appendChild(kbd)
       }
@@ -75,8 +82,16 @@ export function mountHints(root: HTMLElement, signal: AbortSignal) {
     tip.hidden = false
     const r = el.getBoundingClientRect()
     const t = tip.getBoundingClientRect()
-    const below = r.bottom + 8 + t.height < innerHeight
-    const x = Math.min(Math.max(r.left + r.width / 2 - t.width / 2, 8), innerWidth - t.width - 8)
+    // a tall, thin control (a panel's resize edge) is hinted beside the
+    // pointer: above or below it would land on whatever heads the column
+    if (r.height > 120 && pointerY !== null) {
+      const right = r.right + 8 + t.width < win.innerWidth
+      tip.style.left = `${right ? r.right + 8 : r.left - 8 - t.width}px`
+      tip.style.top = `${Math.min(Math.max(pointerY - t.height / 2, 8), win.innerHeight - t.height - 8)}px`
+      return
+    }
+    const below = r.bottom + 8 + t.height < win.innerHeight
+    const x = Math.min(Math.max(r.left + r.width / 2 - t.width / 2, 8), win.innerWidth - t.width - 8)
     tip.style.left = `${x}px`
     tip.style.top = `${below ? r.bottom + 8 : r.top - 8 - t.height}px`
   }
@@ -85,15 +100,15 @@ export function mountHints(root: HTMLElement, signal: AbortSignal) {
    *  keyboard focus leaves it alone — browsers show no native tooltip there. */
   const enter = (el: HTMLElement, byPointer: boolean) => {
     if (el === current) return
-    clearTimeout(timer)
+    win.clearTimeout(timer)
     if (current) giveBack(current)
     current = el
     if (byPointer) borrow(el)
     if (!tip.hidden || performance.now() - coldAt < WARM_MS) show(el)
-    else timer = window.setTimeout(() => current === el && show(el), REST_MS)
+    else timer = win.setTimeout(() => current === el && show(el), REST_MS)
   }
   const leave = () => {
-    clearTimeout(timer)
+    win.clearTimeout(timer)
     if (!tip.hidden) coldAt = performance.now()
     if (current) giveBack(current)
     current = null
@@ -101,22 +116,26 @@ export function mountHints(root: HTMLElement, signal: AbortSignal) {
   }
 
   const opts = { capture: true, signal }
-  document.addEventListener('pointerover', (ev) => {
+  doc.addEventListener('pointerover', (ev) => {
     if (ev.pointerType === 'touch') return
+    pointerY = ev.clientY
     const el = hinted(ev.target)
     if (el) enter(el, true)
     else if (current && !current.contains(ev.target as Node)) leave()
   }, opts)
-  document.addEventListener('focusin', (ev) => {
+  doc.addEventListener('focusin', (ev) => {
+    pointerY = null // a keyboard hint sits by the control, not where the mouse was
     const el = hinted(ev.target)
     if (el && (ev.target as Element).matches(':focus-visible')) enter(el, false)
   }, opts)
   for (const type of ['pointerdown', 'keydown', 'focusout', 'scroll', 'wheel'] as const) {
-    document.addEventListener(type, () => { if (current) leave() }, { ...opts, passive: true })
+    doc.addEventListener(type, () => { if (current) leave() }, { ...opts, passive: true })
   }
-  window.addEventListener('blur', leave, { signal })
+  win.addEventListener('blur', leave, { signal })
 }
 
 /** "Group (⌘G)" → "⌘G"; "Undo · redo (⌘Z · ⌘⇧Z)" → "⌘Z · ⌘⇧Z". */
-// keys only — '(⇧Tab while editing)' is a sentence and stays text
-const SHORTCUT = /\s*\(((?:[⌘⇧⌥⌃⌫]|Ctrl|Alt|Shift|Esc|Tab|Del|F\d)[^()\s]*(?:\s*·\s*[^()\s]+)*)\)\s*$/
+// keys only — '(⇧Tab while editing)' is a sentence and stays text; a lone
+// key ('(L)', '(→)', '(?)') counts, a word like '(PDF)' does not
+const KEY = '(?:(?:[⌘⇧⌥⌃⌫]|Ctrl|Alt|Shift|Esc|Tab|Del|F\\d)[^()\\s]*|[A-Z0-9?←→↑↓](?![^()\\s·])|Space|Home|End|PgUp|PgDn)'
+export const SHORTCUT = new RegExp(`\\s*\\((${KEY}(?:\\s*·\\s*[^()\\s]+)*)\\)\\s*$`)

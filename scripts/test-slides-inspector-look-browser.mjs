@@ -160,7 +160,7 @@ try {
       const fillBody = p.locator('.ed-props .ed-section[data-key="Fill"] + .ed-section-body')
       ok(await fillBody.locator('.ed-swatch').count() === 0 || !(await fillBody.locator('.ed-palette').isVisible()), 'the theme colours are not strewn above the field')
       await fillBody.locator('.ed-color .ed-tool').click(); await p.waitForTimeout(150)
-      const items = fillBody.locator('.ed-palette-item')
+      const items = p.locator('.ed-tokpick-opt')
       ok(await items.count() >= 3 && (await items.first().textContent()).trim().length > 0, `the palette button opens the theme's colours, named (${await items.count()})`)
       await items.nth(2).click(); await p.waitForTimeout(250)
       const linked = await p.evaluate(() => JSON.stringify(window.bento.doc.slides[0].elements[0].themeRefs ?? null))
