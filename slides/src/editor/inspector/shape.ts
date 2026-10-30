@@ -13,6 +13,7 @@ import { t } from '../../i18n'
 import { fillKind, colorAlpha, gradientRows, gradientChip, gradientFor, paintHost, type PaintKind } from './color'
 import { segmented } from './fields'
 import { BOOL_OPS, boolUi, flatten, release, setOp } from '../booleans'
+import { openCtxMenu } from '../ctxmenu'
 
 /** What only some shapes have: line tips, a second arrow head, a boolean's operation. */
 export function buildShapeProps(p: PropsPanel, el: ShapeElement) {
@@ -39,11 +40,20 @@ export function buildShapeProps(p: PropsPanel, el: ShapeElement) {
   // options are tips.ts's catalogue — display labels localized, values the
   // model's words. A closed path (polygon) has no ends to tip.
   if (el.shape === 'line' || (el.shape === 'path' && !/z\s*$/i.test(el.d ?? ''))) {
-    const ENDINGS: Array<[string, string]> = TIPS.map((tip) => [tip.kind, optLabel(tip.label)])
-    row(p, 'Line start', labeledSelect(ENDINGS, el.lineStart ?? 'none', (v) =>
-      p.mutate(el.id, (e) => { (e as ShapeElement).lineStart = v === 'none' ? undefined : (v as LineEnding) }, true)))
-    row(p, 'Line end', labeledSelect(ENDINGS, el.lineEnd ?? 'none', (v) =>
-      p.mutate(el.id, (e) => { (e as ShapeElement).lineEnd = v === 'none' ? undefined : (v as LineEnding) }, true)))
+    // start · swap · end, each a glyph that opens the catalogue as previews
+    const set = (k: 'lineStart' | 'lineEnd', v: string) =>
+      p.mutate(el.id, (e) => { (e as ShapeElement)[k] = v === 'none' ? undefined : (v as LineEnding) }, true)
+    const swap = opBtn(ICONS.swap, t('Swap ends'), () => p.mutate(el.id, (e) => {
+      const s = e as ShapeElement
+      const [a, b] = [s.lineStart, s.lineEnd]
+      if (b) s.lineStart = b; else delete s.lineStart
+      if (a) s.lineEnd = a; else delete s.lineEnd
+    }, true))
+    const ends = document.createElement('div')
+    ends.className = 'ed-tips'
+    ends.append(tipPicker(t('Line start'), el.lineStart, true, (v) => set('lineStart', v)), swap,
+      tipPicker(t('Line end'), el.lineEnd, false, (v) => set('lineEnd', v)))
+    row(p, 'Ends', ends)
   }
   if (el.shape === 'arrow') {
     // #304: a head at both ends is a property of the arrow, not a kind
@@ -130,9 +140,12 @@ const BLEND_LABEL: Record<string, string> = {
   difference: 'Difference', exclusion: 'Exclusion', hue: 'Hue', saturation: 'Saturation', color: 'Color', luminosity: 'Luminosity',
 }
 
+/** The one blend list, for a layer and for the element alike. */
+export const blendPairs = (): Array<[string, string]> => BLENDS.map((b) => [b, t(BLEND_LABEL[b])])
+
 /** A layer's blend mode — absent is normal. */
 function blendSelect(value: string | undefined, set: (v: string | undefined) => void): HTMLElement {
-  const sel = labeledSelect(BLENDS.map((b) => [b, t(BLEND_LABEL[b])]), value ?? 'normal', (v) => set(v === 'normal' ? undefined : v))
+  const sel = labeledSelect(blendPairs(), value ?? 'normal', (v) => set(v === 'normal' ? undefined : v))
   sel.title = t('Layer blend mode')
   sel.setAttribute('aria-label', sel.title)
   sel.classList.add('ed-layer-blend')
@@ -249,8 +262,8 @@ function buildStrokeStack(p: PropsPanel, el: ShapeElement, open: boolean) {
     const width = mini(t('Width'), l.width, (v, fin) => edit((s) => { s.width = Math.max(v, 0) }, fin), undefined, { min: 0 })
     if (open) grid.append(width)
     else {
-      const align = labeledSelect([['inside', t('Inside')], ['center', t('Center')], ['outside', t('Outside')]], l.align ?? def, (v) =>
-        edit((s) => { if (v === def) delete s.align; else s.align = v as StrokeLayer['align'] }, true))
+      const align = segmented(['inside', 'center', 'outside'], l.align ?? def, (v) =>
+        edit((s) => { if (v === def) delete s.align; else s.align = v as StrokeLayer['align'] }, true), alignWords(), ALIGN_GLYPHS)
       align.setAttribute('aria-label', t('Stroke position'))
       grid.append(width, align)
     }
@@ -322,8 +335,7 @@ export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
   }
   // 'custom' is a dash and gap of the author's own (strokeDashes); the
   // nearest named style stays under it for a shell that predates it
-  const style = labeledSelect(
-    [['solid', t('Solid')], ['dashed', t('Dashed')], ['dotted', t('Dotted')], ['custom', t('Custom dashes')]],
+  const style = segmented(['solid', 'dashed', 'dotted', 'custom'],
     el.strokeDashes ? 'custom' : el.strokeStyle ?? (el.strokeDash ? 'dashed' : 'solid'),
     (v) => p.mutate(el.id, (e) => {
       const s = e as ShapeElement
@@ -335,8 +347,8 @@ export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
       delete s.strokeDashes
       s.strokeStyle = v === 'solid' ? undefined : (v as 'dashed' | 'dotted')
       if (v === 'solid') delete s.strokeDash // clear the legacy dash too
-    }, true))
-  style.title = t('Line style')
+    }, true), { solid: t('Solid'), dashed: t('Dashed'), dotted: t('Dotted'), custom: t('Custom dashes') },
+    { solid: ICONS.lineSolid, dashed: ICONS.lineDashed, dotted: ICONS.lineDotted, custom: ICONS.lineCustom })
   style.setAttribute('aria-label', t('Line style'))
   const grid = document.createElement('div')
   grid.className = 'ed-grid2'
@@ -360,9 +372,46 @@ export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
       const s = e as ShapeElement
       if (v === def) delete s.strokeAlign
       else s.strokeAlign = v as 'inside' | 'center' | 'outside'
-    }, true), { inside: t('Inside'), center: t('Center'), outside: t('Outside') })
+    }, true), alignWords(), ALIGN_GLYPHS)
     align.setAttribute('aria-label', t('Stroke position'))
     row(p, 'Stroke position', align)
   }
   addStroke()
+}
+
+const ALIGN_GLYPHS = { inside: ICONS.strokeInside, center: ICONS.strokeCenter, outside: ICONS.strokeOutside }
+const alignWords = () => ({ inside: t('Inside'), center: t('Center'), outside: t('Outside') })
+
+/** A line with this tip at one end, drawn from the catalogue's own geometry —
+ *  the preview cannot drift from what the renderer draws. */
+function tipGlyph(kind: string | undefined, atStart: boolean): string {
+  const tip = TIPS.find((x) => x.kind === (kind ?? 'none'))
+  const g = tip?.geom
+  const fill = tip?.hollow ? 'none' : 'currentColor'
+  const shape = !g || !tip?.size ? ''
+    : g.tag === 'path' ? `<path d="${g.d}" fill="${fill}"/>`
+    : g.tag === 'circle' ? `<circle cx="${g.cx}" cy="${g.cy}" r="${g.r}" fill="${fill}"/>`
+    : `<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="${fill}"/>`
+  // the tip's 8-unit box sits at the line's end, pointing outward
+  const place = atStart ? 'translate(9 16) scale(-1.4 1.4) translate(0 -4)' : 'translate(15 16) scale(1.4) translate(0 -4)'
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="18" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M${atStart ? 9 : 2} 16H${atStart ? 22 : 15}" stroke-width="2"/><g transform="${place}" stroke-width="1">${shape}</g></svg>`
+}
+
+function tipPicker(name: string, kind: string | undefined, atStart: boolean, pick: (v: string) => void): HTMLElement {
+  const b = document.createElement('button')
+  b.type = 'button'
+  b.className = 'ed-btn ed-tip-btn'
+  b.innerHTML = tipGlyph(kind, atStart)
+  const current = optLabel(TIPS.find((x) => x.kind === (kind ?? 'none'))?.label ?? 'none')
+  b.title = `${name}: ${current}`
+  b.setAttribute('aria-label', b.title)
+  b.setAttribute('aria-haspopup', 'menu')
+  b.addEventListener('click', () => {
+    const r = b.getBoundingClientRect()
+    openCtxMenu(r.left, r.bottom + 4, TIPS.map((tip) => ({
+      label: optLabel(tip.label), icon: tipGlyph(tip.kind, atStart),
+      checked: tip.kind === (kind ?? 'none'), run: () => pick(tip.kind),
+    })))
+  })
+  return b
 }

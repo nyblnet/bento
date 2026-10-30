@@ -1306,4 +1306,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "Màu chủ đề là các token có sẵn của bộ trình chiếu: xem chúng cạnh token của bạn, kèm nơi mỗi màu được dùng",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Bắt đầu bằng một chữ cái; sau đó chữ cái, chữ số, . - _ (tối đa 64)",
   "A token already has that name": "Đã có token mang tên đó",
+  "Fly in": "Bay vào",
+  "Swap ends": "Đổi hai đầu",
+  "Ends": "Hai đầu",
+  "Fill container": "Lấp đầy vùng chứa",
+  "Placeholder role": "Vai trò chỗ dành sẵn",
 }

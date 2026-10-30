@@ -150,7 +150,7 @@ export class PropsPanel {
 
   /** Collapsed by default until the user opens them (persisted per title).
    *  English keys, matched against the TRANSLATED header like SHOW_SECTIONS. */
-  private static CLOSED_BY_DEFAULT = ['Layout', 'Advanced (JSON)', 'Export']
+  private static CLOSED_BY_DEFAULT = ['Layout', 'Placeholder role', 'Advanced (JSON)', 'Export']
 
   /** Which tab a section lives on, by its English title — matched against
    *  the TRANSLATED header, like CLOSED_BY_DEFAULT. Format is the rest: how
@@ -379,6 +379,14 @@ export class PropsPanel {
       const valueW = ctx.measureText(sel.options[sel.selectedIndex]?.text ?? '').width + 30 // padding + arrow
       row.classList.toggle('ed-row-stack', valueW > sel.clientWidth)
     }
+    // a caption that would take more than two lines beside its control (de,
+    // pt: 'Transformar a partir do slide anterior') goes above it instead
+    // (cleared, measured, then applied in batches: one reflow, not one per row)
+    const caps = [...host.querySelectorAll<HTMLElement>('.ed-row:not(:has(> select)) > span:first-child')]
+    for (const cap of caps) cap.parentElement!.classList.remove('ed-row-stack')
+    const line = caps[0] ? parseFloat(getComputedStyle(caps[0]).lineHeight) || 14 : 14
+    const tall = caps.filter((cap) => cap.offsetParent && cap.offsetHeight > line * 2 + 1)
+    for (const cap of tall) cap.parentElement!.classList.add('ed-row-stack')
     if (!this.watchingWidth) {
       this.watchingWidth = true
       let last = host.clientWidth

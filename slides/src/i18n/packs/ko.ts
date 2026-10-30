@@ -1300,4 +1300,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "테마 색은 덱에 내장된 토큰입니다. 내 토큰 옆에서 각각이 어디에 쓰이는지 함께 확인하세요",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "영문자로 시작하고, 이어서 영문자·숫자·. - _ (최대 64자)",
   "A token already has that name": "같은 이름의 토큰이 이미 있습니다",
+  "Fly in": "날아오기",
+  "Swap ends": "끝 바꾸기",
+  "Ends": "끝",
+  "Fill container": "컨테이너 채우기",
+  "Placeholder role": "자리 표시자 역할",
 }

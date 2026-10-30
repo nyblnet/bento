@@ -1316,4 +1316,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "ألوان السمة هي الرموز المدمجة في العرض: شاهدها بجانب رموزك، مع مكان استخدام كلٍّ منها",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "ابدأ بحرف؛ ثم أحرف أو أرقام أو . - _ (64 كحد أقصى)",
   "A token already has that name": "يوجد رمز بهذا الاسم بالفعل",
+  "Fly in": "طيران للداخل",
+  "Swap ends": "تبديل الطرفين",
+  "Ends": "الطرفان",
+  "Fill container": "ملء الحاوية",
+  "Placeholder role": "دور العنصر النائب",
 }

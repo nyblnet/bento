@@ -158,9 +158,9 @@ try {
 
   console.log('\nstroke, corners, flip\n')
   await select('tri')
-  await p.locator('.ed-props .ed-seg[aria-label="Stroke position"] button', { hasText: 'Center' }).click(); await p.waitForTimeout(250)
+  await p.locator('.ed-props .ed-seg[aria-label="Stroke position"] button[aria-label="Center"]').click(); await p.waitForTimeout(250)
   ok((await el('tri')).strokeAlign === 'center', 'Stroke position writes strokeAlign')
-  await p.locator('.ed-props select[aria-label="Line style"]').selectOption('custom'); await p.waitForTimeout(250)
+  await p.locator('.ed-props .ed-seg[aria-label="Line style"] button[aria-label="Custom dashes"]').click(); await p.waitForTimeout(250)
   e = await el('tri')
   ok(Array.isArray(e.strokeDashes) && e.strokeDashes.length === 2 && e.strokeStyle === 'dashed', `Custom dashes writes a pair, with dashed underneath for an older shell (${JSON.stringify(e.strokeDashes)})`)
   await select('corn')
@@ -198,10 +198,10 @@ try {
   await p.mouse.move(5, 5); await p.waitForTimeout(150)
   ok(await p.evaluate((s) => document.querySelector(s).style.filter, node('corn')) === filter0, 'leaving restores it')
   await p.locator('.ed-props .ed-tabs [role=tab]').nth(1).click(); await p.waitForTimeout(200)
-  await p.locator('.ed-props .ed-fx-pills button', { hasText: 'Fly in from below' }).hover(); await p.waitForTimeout(100)
+  await p.locator('.ed-props .ed-seg button[aria-label="Fly in"]').hover(); await p.waitForTimeout(100)
   ok(await p.evaluate((s) => document.querySelector(s).getAnimations().length > 0, node('corn')), 'pointing at an entrance plays it on the element')
   ok(!(await el('corn')).fx, '…and writes nothing')
-  await p.locator('.ed-props .ed-fx-pills button', { hasText: 'Fly in from below' }).click(); await p.waitForTimeout(250)
+  await p.locator('.ed-props .ed-seg button[aria-label="Fly in"]').click(); await p.waitForTimeout(250)
   ok((await el('corn')).fx?.enter === 'slide-up', 'a click on an entrance pill chooses it')
 
   // 7. stroke position, read from the rasterised svg of each element

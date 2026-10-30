@@ -3,7 +3,8 @@
 // Charts: type, series, axes, pies.
 import type { PropsPanel } from '../panels'
 import { type ChartElement, applyChartPalette } from '../../model'
-import { section, row, labeledSelect, toggle, opBtn } from './fields'
+import { section, row, toggle, opBtn, segmented } from './fields'
+import { ICONS } from '../../icons'
 import { t } from '../../i18n'
 import { CHART_PRESETS } from '../../charts'
 import { color } from './color'
@@ -36,12 +37,15 @@ export function buildChartProps(p: PropsPanel, el: ChartElement) {
     linkRow.append(label, unlink)
     p.host.appendChild(linkRow)
   }
-  row(p, 'Type', labeledSelect(Object.keys(CHART_PRESETS).map((k): [string, string] => [k, t(({ bar: 'Bar', line: 'Line', pie: 'Pie', scatter: 'Scatter' } as Record<string, string>)[k] ?? k)]), el.preset ?? 'bar', (v) =>
+  const kinds = Object.keys(CHART_PRESETS)
+  row(p, 'Type', segmented(kinds, el.preset ?? 'bar', (v) =>
     p.mutate(el.id, (e) => {
       const c = e as ChartElement
       c.preset = v
       c.option = applyChartPalette(CHART_PRESETS[v](), p.store.doc.theme)
-    }, true)))
+    }, true),
+    Object.fromEntries(kinds.map((k) => [k, t(CHART_WORDS[k] ?? k)])),
+    kinds.every((k) => CHART_GLYPHS[k]) ? CHART_GLYPHS : undefined))
 
   if (!isPie && !isScatter) buildChartCartesian(p, el, opt, series)
   else if (isPie) buildChartPie(p, el, series)
@@ -109,12 +113,13 @@ export function buildChartCartesian(p: PropsPanel, el: ChartElement, opt: Record
     name.placeholder = t('Series {n}', { n: i + 1 })
     name.addEventListener('input', () => editOption(p, el.id, (o) => { o.series[i].name = name.value }, false))
     name.addEventListener('change', () => editOption(p, el.id, (o) => { o.series[i].name = name.value }, true))
-    const type = labeledSelect([['bar', t('Bar')], ['line', t('Line')]], s?.type === 'line' ? 'line' : 'bar',
-      (v) => editOption(p, el.id, (o) => { o.series[i].type = v }))
+    const type = segmented(['bar', 'line'], s?.type === 'line' ? 'line' : 'bar',
+      (v) => editOption(p, el.id, (o) => { o.series[i].type = v }), { bar: t('Bar'), line: t('Line') },
+      { bar: CHART_GLYPHS.bar, line: CHART_GLYPHS.line })
     row.append(name, type)
     if (twoAxes) {
-      row.append(labeledSelect([['0', t('Left')], ['1', t('Right')]], String(Math.round(s?.yAxisIndex ?? 0)),
-        (v) => editOption(p, el.id, (o) => { o.series[i].yAxisIndex = parseInt(v) })))
+      row.append(segmented(['0', '1'], String(Math.round(s?.yAxisIndex ?? 0)),
+        (v) => editOption(p, el.id, (o) => { o.series[i].yAxisIndex = parseInt(v) }), { 0: t('Left'), 1: t('Right') }))
     }
     row.append(color(p, seriesColor(s, palette, i), (v, final) =>
       editOption(p, el.id, (o) => setSeriesColor(o.series[i], v), final)))
@@ -129,8 +134,9 @@ export function buildChartCartesian(p: PropsPanel, el: ChartElement, opt: Record
   const addRow = document.createElement('div')
   addRow.className = 'ed-chart-add'
   const addBtn = document.createElement('button')
-  addBtn.className = 'ed-btn'
-  addBtn.textContent = t('＋ Add series')
+  addBtn.className = 'ed-btn ed-addlayer' // the panel's one "add" look
+  addBtn.innerHTML = ICONS.plus
+  addBtn.append(t('＋ Add series').replace(/^＋\s*/, ''))
   addBtn.addEventListener('click', () => editOption(p, el.id, (o) => {
     const ss: any[] = Array.isArray(o.series) ? o.series : o.series ? [o.series] : []
     const n = (o.xAxis?.data?.length) || 4
@@ -234,8 +240,9 @@ export function buildChartGrid(p: PropsPanel, el: ChartElement, opt: Record<stri
   const addRow = document.createElement('div')
   addRow.className = 'ed-chart-add'
   const addBtn = document.createElement('button')
-  addBtn.className = 'ed-btn'
-  addBtn.textContent = t('＋ Add row')
+  addBtn.className = 'ed-btn ed-addlayer'
+  addBtn.innerHTML = ICONS.plus
+  addBtn.append(t('＋ Add row').replace(/^＋\s*/, ''))
   addBtn.addEventListener('click', () => editOption(p, el.id, (o) => {
     if (!Array.isArray(o.xAxis?.data)) o.xAxis = { ...(o.xAxis ?? { type: 'category' }), data: [] }
     o.xAxis.data.push(t('Item {n}', { n: o.xAxis.data.length + 1 }))
@@ -293,3 +300,6 @@ export function editPieDatum(p: PropsPanel, id: string, i: number, fn: ((d: any)
     else fn(ps.data[i])
   }, final)
 }
+
+const CHART_WORDS: Record<string, string> = { bar: 'Bar', line: 'Line', pie: 'Pie', scatter: 'Scatter' }
+const CHART_GLYPHS: Record<string, string> = { bar: ICONS.chart, line: ICONS.chartLine, pie: ICONS.chartPie, scatter: ICONS.chartScatter }

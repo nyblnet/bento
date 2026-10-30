@@ -1325,4 +1325,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "Ang mga kulay ng tema ang built-in na token ng deck: makikita mo sila katabi ng sarili mong mga token, kasama kung saan ginamit ang bawat isa",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Magsimula sa isang titik; pagkatapos ay mga titik, digit, . - _ (hanggang 64)",
   "A token already has that name": "May token na sa pangalang iyan",
+  "Fly in": "Lumipad papasok",
+  "Swap ends": "Pagpalitin ang mga dulo",
+  "Ends": "Mga dulo",
+  "Fill container": "Punuin ang container",
+  "Placeholder role": "Tungkulin ng placeholder",
 }

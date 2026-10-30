@@ -1333,4 +1333,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "Tema reňkleri prezentasiýanyň içine gurlan tokenleridir: olary öz tokenleriňiziň ýanynda, her biriniň nirede ulanylýany bilen görüň",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Harp bilen başlaň; soňra harplar, sanlar, . - _ (iň köp 64)",
   "A token already has that name": "Bu atly token eýýäm bar",
+  "Fly in": "Uçup girmek",
+  "Swap ends": "Uçlary çalyşmak",
+  "Ends": "Uçlar",
+  "Fill container": "Konteýneri doldurmak",
+  "Placeholder role": "Orun saklaýjynyň roly",
 }

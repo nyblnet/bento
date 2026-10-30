@@ -1296,4 +1296,9 @@ export const it: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "I colori del tema sono i token incorporati della presentazione: vedili accanto ai tuoi token, con dove è usato ciascuno",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Inizia con una lettera; poi lettere, cifre, . - _ (al massimo 64)",
   "A token already has that name": "Un token ha già questo nome",
+  "Fly in": "Entrata in volo",
+  "Swap ends": "Scambia estremità",
+  "Ends": "Estremità",
+  "Fill container": "Riempi contenitore",
+  "Placeholder role": "Ruolo segnaposto",
 }

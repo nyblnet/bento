@@ -1308,4 +1308,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "Temafarver er præsentationens indbyggede tokens: se dem ved siden af dine egne tokens, med hvor hver bruges",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Start med et bogstav; derefter bogstaver, cifre, . - _ (højst 64)",
   "A token already has that name": "Der findes allerede et token med det navn",
+  "Fly in": "Flyv ind",
+  "Swap ends": "Byt ender",
+  "Ends": "Ender",
+  "Fill container": "Fyld beholder",
+  "Placeholder role": "Pladsholderrolle",
 }

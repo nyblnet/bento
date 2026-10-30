@@ -3,35 +3,30 @@
 // Tables, and turning one into a chart.
 import type { PropsPanel } from '../panels'
 import { type TableElement, tableStyleFor, applyChartPalette, defaultChart } from '../../model'
-import { opBtn, row, toggle, section, labeledSelect, mini } from './fields'
+import { row, toggle, section, labeledSelect, mini, number } from './fields'
 import { t } from '../../i18n'
 import { colorAlpha } from './color'
 
 export function buildTableProps(p: PropsPanel, el: TableElement) {
-  const stepper = (label: string, count: number, onDelta: (d: number) => void) => {
-    const wrap = document.createElement('div')
-    wrap.className = 'ed-stepper'
-    const minus = opBtn('−', t('Remove'), () => onDelta(-1))
-    const val = document.createElement('span')
-    val.className = 'ed-stepper-val'
-    val.textContent = String(count)
-    const plus = opBtn('+', t('Add'), () => onDelta(1))
-    wrap.append(minus, val, plus)
-    row(p, label, wrap)
-  }
-  const cols = el.columns.length
-  const rows = el.rows.length
-  stepper(t('Columns'), cols, (d) => p.mutate(el.id, (e) => {
-    const tb = e as TableElement
-    if (d > 0) { tb.columns.push({ w: 1 }); tb.rows.forEach((r) => r.cells.push({ html: '' })) }
-    else if (tb.columns.length > 1) { tb.columns.pop(); tb.rows.forEach((r) => r.cells.pop()) }
-  }, true))
-  stepper(t('Rows'), rows, (d) => p.mutate(el.id, (e) => {
-    const tb = e as TableElement
-    const minRows = tb.header ? 2 : 1
-    if (d > 0) tb.rows.push({ cells: tb.columns.map(() => ({ html: '' })) })
-    else if (tb.rows.length > minRows) tb.rows.pop()
-  }, true))
+  // a count is a number field like any other: typed, stepped with ↑↓, or
+  // worked out (+2); one undo step however far it moves
+  const count = (label: string, n: number, min: number, grow: (tb: TableElement) => void, shrink: (tb: TableElement) => void) =>
+    row(p, label, number(n, 1, (v, fin) => {
+      if (!fin) return
+      const want = Math.max(min, Math.min(Math.round(v), 64))
+      p.mutate(el.id, (e) => {
+        const tb = e as TableElement
+        const now = () => label === 'Columns' ? tb.columns.length : tb.rows.length
+        while (now() < want) grow(tb)
+        while (now() > want) shrink(tb)
+      }, true)
+    }, { min, max: 64 }))
+  count('Columns', el.columns.length, 1,
+    (tb) => { tb.columns.push({ w: 1 }); tb.rows.forEach((r) => r.cells.push({ html: '' })) },
+    (tb) => { tb.columns.pop(); tb.rows.forEach((r) => r.cells.pop()) })
+  count('Rows', el.rows.length, el.header ? 2 : 1,
+    (tb) => { tb.rows.push({ cells: tb.columns.map(() => ({ html: '' })) }) },
+    (tb) => { tb.rows.pop() })
 
   row(p, 'Header row', toggle(el.header, (v) => p.mutate(el.id, (e) => {
     (e as TableElement).header = v

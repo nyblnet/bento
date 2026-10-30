@@ -1306,4 +1306,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "Warna tema adalah token bawaan dek: lihat di samping token Anda sendiri, beserta tempat masing-masing dipakai",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Awali dengan huruf; lalu huruf, angka, . - _ (paling banyak 64)",
   "A token already has that name": "Sudah ada token dengan nama itu",
+  "Fly in": "Terbang masuk",
+  "Swap ends": "Tukar ujung",
+  "Ends": "Ujung",
+  "Fill container": "Isi kontainer",
+  "Placeholder role": "Peran placeholder",
 }

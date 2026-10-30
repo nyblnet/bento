@@ -7,6 +7,7 @@ import type { PropsPanel } from '../panels'
 import { uid, type FrameLayout, type ShapeElement, type SlideElement } from '../../model'
 import { isFrame } from '../../layout'
 import { tokenBind } from './tokenbind'
+import { ICONS } from '../../icons'
 
 const DIRS: Record<string, string> = { row: 'Row', col: 'Column', grid: 'Grid' }
 
@@ -20,7 +21,7 @@ export function buildAutoLayout(p: PropsPanel, el: SlideElement) {
         const s = { ...e.sizing, [k]: v as 'fixed' | 'fill' }
         if (s[k] === 'fixed') delete s[k]
         if (Object.keys(s).length) e.sizing = s; else delete e.sizing
-      }, true), { fixed: t('Fixed'), fill: t('Fill') })
+      }, true), { fixed: t('Fixed'), fill: t('Fill container') })
     // in a wrapping frame a fill child needs a least size, or every fill shares one line
     const least = (k: 'w' | 'h') => {
       const key = k === 'w' ? 'minW' : 'minH'
@@ -45,18 +46,17 @@ export function buildAutoLayout(p: PropsPanel, el: SlideElement) {
     : { add: true, hint: t('Add auto layout'), run: () => p.mutate(el.id, (e) => { (e as ShapeElement).layout = { dir: 'row', gap: 16, pad: [16, 16, 16, 16], hug: true } }, true) })
   if (!L) return
   row(p, 'Direction', segmented(['row', 'col', 'grid'], L.dir, (v) => set((l) => { l.dir = v as FrameLayout['dir'] }),
-    Object.fromEntries(Object.entries(DIRS).map(([k, v]) => [k, t(v)]))))
+    Object.fromEntries(Object.entries(DIRS).map(([k, v]) => [k, t(v)])), { row: ICONS.frameRow, col: ICONS.frameCol, grid: ICONS.frameGrid }))
   // gap, columns and each padding side can follow a number token
-  const gap = tokenBind(p, mini(t('Gap'), L.gap, (v, fin) => set((l) => { l.gap = v }, fin), undefined, { min: 0 }), el, 'layout.gap')
+  const gap = tokenBind(p, mini(t('Gap'), L.gap, (v, fin) => set((l) => { l.gap = v }, fin), ICONS.gap, { min: 0 }), el, 'layout.gap')
   const parts = L.dir === 'grid'
     ? [gap, tokenBind(p, mini(t('Columns'), L.cols ?? 2, (v, fin) => set((l) => { l.cols = Math.max(1, Math.round(v)) }, fin), undefined, { min: 1, max: 64 }), el, 'layout.cols')]
     : [gap]
   field(p, ...parts)
   // padding, top right bottom left: the arrow is the label, the side is the name
-  const sides = [['↑', 'Top padding'], ['→', 'Right padding'], ['↓', 'Bottom padding'], ['←', 'Left padding']] as const
+  const sides = [[ICONS.dirUp, 'Top padding'], [ICONS.dirRight, 'Right padding'], [ICONS.dirDown, 'Bottom padding'], [ICONS.dirLeft, 'Left padding']] as const
   field(p, ...sides.map(([glyph, name], i) => {
-    const m = mini(glyph, L.pad[i], (v, fin) => set((l) => { l.pad[i] = v }, fin), undefined, { min: 0 })
-    m.querySelector('input')!.setAttribute('aria-label', t(name))
+    const m = mini(t(name), L.pad[i], (v, fin) => set((l) => { l.pad[i] = v }, fin), glyph, { min: 0 })
     return tokenBind(p, m, el, `layout.pad.${i}`)
   }))
   row(p, 'Alignment', alignMatrix(L, (justify, align) => set((l) => { l.justify = justify; l.align = align })))

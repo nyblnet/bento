@@ -1310,4 +1310,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "Temafarger er presentasjonens innebygde tokener: se dem ved siden av dine egne tokener, med hvor hver brukes",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Begynn med en bokstav; deretter bokstaver, sifre, . - _ (høyst 64)",
   "A token already has that name": "Det finnes allerede et token med det navnet",
+  "Fly in": "Fly inn",
+  "Swap ends": "Bytt ender",
+  "Ends": "Ender",
+  "Fill container": "Fyll beholder",
+  "Placeholder role": "Plassholderrolle",
 }

@@ -1310,4 +1310,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "สีธีมคือโทเค็นในตัวของเด็ค ดูได้ข้างโทเค็นของคุณเอง พร้อมตำแหน่งที่ใช้แต่ละสี",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "ขึ้นต้นด้วยตัวอักษร ตามด้วยตัวอักษร ตัวเลข . - _ (ไม่เกิน 64 ตัว)",
   "A token already has that name": "มีโทเค็นชื่อนี้อยู่แล้ว",
+  "Fly in": "บินเข้า",
+  "Swap ends": "สลับปลาย",
+  "Ends": "ปลาย",
+  "Fill container": "เติมคอนเทนเนอร์",
+  "Placeholder role": "บทบาทของตัวยึดตำแหน่ง",
 }

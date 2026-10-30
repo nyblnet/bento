@@ -1296,4 +1296,9 @@ export const zhHans: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "主题颜色是演示文稿内置的令牌:在你自己的令牌旁查看它们,以及各自的使用位置",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "以字母开头;其后为字母、数字、. - _(最多 64 个)",
   "A token already has that name": "已有同名令牌",
+  "Fly in": "飞入",
+  "Swap ends": "交换端点",
+  "Ends": "端点",
+  "Fill container": "填充容器",
+  "Placeholder role": "占位符角色",
 }

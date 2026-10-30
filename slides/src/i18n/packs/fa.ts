@@ -1312,4 +1312,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "رنگ‌های پوسته توکن‌های درونی ارائه‌اند: آن‌ها را کنار توکن‌های خودتان ببینید، همراه با جای کاربرد هر یک",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "با یک حرف آغاز کنید؛ سپس حرف، رقم، . - _ (حداکثر ۶۴)",
   "A token already has that name": "توکنی با این نام از پیش وجود دارد",
+  "Fly in": "پرواز به داخل",
+  "Swap ends": "جابه‌جایی دو سر",
+  "Ends": "دو سر",
+  "Fill container": "پر کردن ظرف",
+  "Placeholder role": "نقش جای‌نگهدار",
 }

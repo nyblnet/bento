@@ -1316,4 +1316,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "Кольори теми — вбудовані токени презентації: дивіться їх поруч зі своїми токенами разом із місцями використання",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Почніть із літери; далі літери, цифри, . - _ (не більше 64)",
   "A token already has that name": "Токен із такою назвою вже є",
+  "Fly in": "Вліт",
+  "Swap ends": "Поміняти кінці місцями",
+  "Ends": "Кінці",
+  "Fill container": "Заповнити контейнер",
+  "Placeholder role": "Роль заповнювача",
 }

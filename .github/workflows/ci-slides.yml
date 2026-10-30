@@ -361,6 +361,11 @@ jobs:
         # a literal colour can become a token for every use, and a component
         # copy reaches its main.
         run: node scripts/test-slides-ux-brand-browser.mjs
+      - name: Inspector craft in Chromium
+        # Icon pickers where the options are visual, one two-column grid, the
+        # padlock inside W, captions that fit in en/de/pt, side tabs that never
+        # cut a word in any core locale, and a dark field edge at 3:1.
+        run: node scripts/test-slides-ux-craft-browser.mjs
       - name: Vector booleans in Chromium
         # The contextual bar for 2+ closed shapes; Subtract makes one path in the
         # bottom slot with a real hole; one undo; the op switch; Release after a

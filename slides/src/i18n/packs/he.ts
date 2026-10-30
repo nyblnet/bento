@@ -1309,4 +1309,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "צבעי ערכת הנושא הם הטוקנים המובנים של המצגת: ראו אותם לצד הטוקנים שלכם, יחד עם המקומות שבהם כל אחד משמש",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "התחילו באות; אחר כך אותיות, ספרות, . - _ (עד 64)",
   "A token already has that name": "כבר יש טוקן בשם הזה",
+  "Fly in": "כניסה בתעופה",
+  "Swap ends": "החלפת קצוות",
+  "Ends": "קצוות",
+  "Fill container": "מילוי המכל",
+  "Placeholder role": "תפקיד מציין מיקום",
 }

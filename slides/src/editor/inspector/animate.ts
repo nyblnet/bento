@@ -3,9 +3,10 @@
 // Animate and Interact: entrances, steps, morph pairing, links, states.
 import type { PropsPanel } from '../panels'
 import { type Slide, type SlideElement, morphKey, isWebUrl, uid, paginates } from '../../model'
-import { section, row, labeledSelect, number, select, toggle } from './fields'
+import { section, row, number, toggle, segmented } from './fields'
+import { ICONS } from '../../icons'
 import { t } from '../../i18n'
-import { UNPAIR, roving } from './controls'
+import { UNPAIR } from './controls'
 import { endPreview, previewEnter } from '../fxpreview'
 import type { StepPatch } from '../reveal'
 import { stepOf } from '../../steps'
@@ -340,46 +341,47 @@ export function buildPresentingProps(p: PropsPanel, el: SlideElement) {
       else e.fx = fx
     }, true)
 
-  // labelled by where the element comes FROM: slide-left starts on the right
-  // and travels left (present.ts enterSpec)
-  // pills, not a dropdown: every choice visible, and pointing at one plays
-  // it on the canvas (fxpreview.ts) before it is chosen
+  // An effect (None · Fade · Fly) and, for an effect that moves, the way it
+  // travels. The arrows point the way the element MOVES: slide-left starts on
+  // the right and travels left (present.ts enterSpec), so its tooltip says
+  // where it comes from. Pointing at a choice plays it on the canvas
+  // (fxpreview.ts) before it is chosen.
   type Enter = NonNullable<NonNullable<typeof el.fx>['enter']>
-  const ENTERS: Array<[Enter | 'none', string]> = [['none', t('None')], ['fade', t('Fade')], ['fade-up', t('Fade up')], ['fade-down', t('Fade down')],
-    ['slide-left', t('Fly in from right')], ['slide-right', t('Fly in from left')],
-    ['slide-up', t('Fly in from below')], ['slide-down', t('Fly in from above')]]
-  const pills = document.createElement('div')
-  pills.className = 'ed-fx-pills'
-  pills.setAttribute('role', 'radiogroup')
-  for (const [v, label] of ENTERS) {
-    const b = document.createElement('button')
-    b.type = 'button'
-    b.setAttribute('role', 'radio')
-    b.setAttribute('aria-checked', String(v === (el.fx?.enter ?? 'none')))
-    b.textContent = label
-    b.addEventListener('click', () => {
-      endPreview()
-      setFx(v === 'none' ? { enter: undefined, enterDur: undefined } : { enter: v })
-    })
-    if (v !== 'none') {
-      b.addEventListener('pointerenter', () => previewEnter(el, v))
-      b.addEventListener('focus', () => previewEnter(el, v))
-    }
+  const enter = el.fx?.enter
+  const effect = !enter ? 'none' : enter.startsWith('slide-') ? 'fly' : 'fade'
+  const DIRS: Record<'fade' | 'fly', Array<[string, Enter, string]>> = {
+    fade: [['none', 'fade', 'Fade'], ['up', 'fade-up', 'Fade up'], ['down', 'fade-down', 'Fade down']],
+    fly: [['left', 'slide-left', 'Fly in from right'], ['right', 'slide-right', 'Fly in from left'],
+      ['up', 'slide-up', 'Fly in from below'], ['down', 'slide-down', 'Fly in from above']],
+  }
+  const choose = (v: Enter | 'none') => {
+    endPreview()
+    setFx(v === 'none' ? { enter: undefined, enterDur: undefined } : { enter: v })
+  }
+  // keep the direction across a change of effect where both have it
+  const dirOf = (v: Enter | undefined) => v?.endsWith('-up') ? 'up' : v?.endsWith('-down') ? 'down' : v?.endsWith('-left') ? 'left' : v?.endsWith('-right') ? 'right' : 'none'
+  const firstFor = (fx: 'fade' | 'fly'): Enter =>
+    (DIRS[fx].find(([d]) => d === dirOf(enter)) ?? DIRS[fx][fx === 'fly' ? 2 : 0])[1]
+  const fxPick = segmented(['none', 'fade', 'fly'], effect, (v) => choose(v === 'none' ? 'none' : firstFor(v as 'fade' | 'fly')),
+    { none: t('None'), fade: t('Fade'), fly: t('Fly in') }, { none: ICONS.fxNone, fade: ICONS.fxFade, fly: ICONS.fxFly })
+  const preview = (b: Element, v: Enter) => {
+    b.addEventListener('pointerenter', () => previewEnter(el, v))
+    b.addEventListener('focus', () => previewEnter(el, v))
     b.addEventListener('pointerleave', endPreview)
     b.addEventListener('blur', endPreview)
-    pills.appendChild(b)
   }
-  roving(pills, 'radio')
-  const enterRow = document.createElement('div')
-  enterRow.className = 'ed-row ed-row-pills'
-  enterRow.setAttribute('role', 'group')
-  const cap = document.createElement('span')
-  cap.textContent = t('Entrance')
-  cap.id = `ed-enter-${el.id}`
-  enterRow.setAttribute('aria-labelledby', cap.id)
-  pills.setAttribute('aria-labelledby', cap.id)
-  enterRow.append(cap, pills)
-  p.host.appendChild(enterRow)
+  const fxButtons = fxPick.querySelectorAll('button')
+  preview(fxButtons[1], firstFor('fade'))
+  preview(fxButtons[2], firstFor('fly'))
+  row(p, 'Entrance', fxPick)
+  if (effect !== 'none') {
+    const dirs = DIRS[effect]
+    const ICON: Record<string, string> = { none: ICONS.dirNone, up: ICONS.dirUp, down: ICONS.dirDown, left: ICONS.dirLeft, right: ICONS.dirRight }
+    const pad = segmented(dirs.map(([d]) => d), dirOf(enter), (d) => choose(dirs.find(([x]) => x === d)![1]),
+      Object.fromEntries(dirs.map(([d, , label]) => [d, t(label)])), Object.fromEntries(dirs.map(([d]) => [d, ICON[d]])))
+    pad.querySelectorAll('button').forEach((b, k) => preview(b, dirs[k][1]))
+    row(p, 'Direction', pad)
+  }
   if (el.fx?.enter) {
     // per-kind default (slide-* 0.75s, fade-* 0.55s); lower = snappier
     row(p, 'Entrance (s)', number(
@@ -399,28 +401,26 @@ export function buildPresentingProps(p: PropsPanel, el: SlideElement) {
     hint.textContent = t('Hidden until that press of → while presenting; ← hides it again. Give several elements the same step to reveal them together.')
     p.host.appendChild(hint)
   }
-  row(p, 'Count up numbers', select(
-    ['off', 'on'], el.fx?.countUp ? 'on' : 'off',
-    (v) => setFx({ countUp: v === 'on' ? true : undefined })))
-  if (el.type === 'code') row(p, 'Typewriter', select(
-    ['off', 'on'], el.fx?.typeWriter ? 'on' : 'off',
-    (v) => setFx({ typeWriter: v === 'on' ? true : undefined })))
-  row(p, 'Pan & zoom', labeledSelect(
-    [['none', t('None')], ['kenburns', t('Ken Burns')]], el.fx?.ambient ?? 'none',
-    (v) => setFx(v === 'none' ? { ambient: undefined, ken: undefined } : { ambient: 'kenburns' })))
+  // counting up only means something where there is a number to count
+  if (el.fx?.countUp || hasNumber(el)) row(p, 'Count up numbers', toggle(!!el.fx?.countUp,
+    (on) => setFx({ countUp: on ? true : undefined })))
+  if (el.type === 'code') row(p, 'Typewriter', toggle(!!el.fx?.typeWriter,
+    (on) => setFx({ typeWriter: on ? true : undefined })))
+  row(p, 'Pan & zoom', toggle(el.fx?.ambient === 'kenburns',
+    (on) => setFx(on ? { ambient: 'kenburns' } : { ambient: undefined, ken: undefined })))
   if (el.fx?.ambient === 'kenburns') {
     const ken = el.fx.ken ?? {}
     const dir = ken.dir ?? 'drift'
     const setKen = (patch: Partial<NonNullable<NonNullable<SlideElement['fx']>['ken']>>) =>
       setFx({ ken: { ...ken, ...patch } })
-    row(p, 'Motion', labeledSelect(
-      [['drift', t('Drift')], ['zoom-out', t('Zoom out')], ['zoom-in', t('Zoom in')]],
+    row(p, 'Motion', segmented(['drift', 'zoom-out', 'zoom-in'],
       dir === 'out' ? 'zoom-out' : dir === 'in' ? 'zoom-in' : 'drift',
       (v) => {
         const d = v === 'zoom-out' ? 'out' : v === 'zoom-in' ? 'in' : 'drift'
         // give each style its natural pace when switching
         setFx({ ken: d === 'drift' ? undefined : { dir: d, scale: 1.06, duration: 2.5 } })
-      }))
+      }, { drift: t('Drift'), 'zoom-out': t('Zoom out'), 'zoom-in': t('Zoom in') },
+      { drift: ICONS.kenDrift, 'zoom-out': ICONS.kenOut, 'zoom-in': ICONS.kenIn }))
     row(p, 'Zoom amount %', number(
       Math.round(((ken.scale ?? (dir === 'drift' ? 1.1 : 1.06)) - 1) * 100), 1,
       (v, fin) => { if (fin) setKen({ scale: 1 + Math.min(Math.max(v, 0), 100) / 100 }) }, { min: 0, max: 100 }))
@@ -431,14 +431,13 @@ export function buildPresentingProps(p: PropsPanel, el: SlideElement) {
 
   // continuous loop animation
   const loop = el.fx?.loop
-  row(p, 'Loop animation', labeledSelect(
-    [['none', t('None')], ['dash-march', t('Marching dashes')], ['motion-path', t('Follow a path')]],
+  row(p, 'Loop animation', segmented(['none', 'dash-march', 'motion-path'],
     loop?.type ?? 'none',
     (v) => setFx({
       loop: v === 'none' ? undefined
         : v === 'dash-march' ? { type: 'dash-march', distance: 18, duration: (loop as any)?.duration ?? 1.4 }
         : { type: 'motion-path', path: (loop as any)?.path ?? 'M 0 0 L 100 0', duration: (loop as any)?.duration ?? 3 },
-    })))
+    }), { none: t('None'), 'dash-march': t('Marching dashes'), 'motion-path': t('Follow a path') }))
   if (loop) {
     row(p, 'Seconds per lap', number(loop.duration ?? 2, 0.1, (v, fin) =>
       p.mutate(el.id, (e) => { if (e.fx?.loop) e.fx.loop.duration = Math.max(v, 0.1) }, fin), { min: 0.1 }))
@@ -452,14 +451,15 @@ export function buildPresentingProps(p: PropsPanel, el: SlideElement) {
       row(p, 'Motion path', path)
 
       // lap easing — the tempo of a whole lap (per-anchor speed is edited on canvas)
-      row(p, 'Lap speed', labeledSelect(
-        [['none', t('Constant')], ['sine.inOut', t('Ease in-out')], ['power2.in', t('Ease in')], ['power2.out', t('Ease out')]],
+      row(p, 'Lap speed', segmented(['none', 'sine.inOut', 'power2.in', 'power2.out'],
         (loop as { ease?: string }).ease ?? 'none',
         (v) => p.mutate(el.id, (e) => {
           const lp = e.fx?.loop
           if (lp?.type !== 'motion-path') return
           if (v === 'none') delete lp.ease; else lp.ease = v
-        }, true)))
+        }, true),
+        { none: t('Constant'), 'sine.inOut': t('Ease in-out'), 'power2.in': t('Ease in'), 'power2.out': t('Ease out') },
+        { none: ICONS.easeLinear, 'sine.inOut': ICONS.easeInOut, 'power2.in': ICONS.easeIn, 'power2.out': ICONS.easeOut }))
 
       const editPath = document.createElement('button')
       editPath.className = 'ed-btn ed-btn-block'
@@ -679,4 +679,10 @@ export function revealRow(p: PropsPanel, els: SlideElement[]) {
   hint.className = 'ed-hint'
   hint.textContent = t('Numbered badges on the canvas show the order; click one for the next step.')
   p.host.appendChild(hint)
+}
+
+/** A number in the element's text, the thing Count up animates. */
+function hasNumber(el: SlideElement): boolean {
+  const text = el.type === 'text' ? el.html : el.type === 'code' ? (el as { code?: string }).code : undefined
+  return !!text && /\d/.test(text.replace(/<[^>]*>/g, ''))
 }

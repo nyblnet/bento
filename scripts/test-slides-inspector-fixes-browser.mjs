@@ -85,9 +85,9 @@ try {
   t = await el('t')
   ok(t.color === 'rgba(247, 166, 0, 0.5)' && t.themeRefs?.color === 'accent1', `50% keeps the link (${t.color}, ${JSON.stringify(t.themeRefs)})`)
   await p.keyboard.press('Escape'); await p.evaluate(() => document.activeElement?.blur()); await p.waitForTimeout(200)
-  const accentRow = p.locator('.ed-props .ed-row', { has: p.locator(':scope > span', { hasText: /^Accent$/ }) })
-  ok(await accentRow.count() === 1, 'the Theme section has its Accent row')
-  await typeHex('.ed-props .ed-row:has(> span:text-is("Accent"))', '123456')
+  const accentRow = p.locator('.ed-props .ed-row', { has: p.locator(':scope > span', { hasText: /^Accent 1$/ }) })
+  ok(await accentRow.count() === 1, 'the Theme section has its Accent 1 row')
+  await typeHex('.ed-props .ed-row:has(> span:text-is("Accent 1"))', '123456')
   ok((await p.evaluate(() => window.bento.doc.theme.accent)).toLowerCase() === '#123456', 'the theme editor changed Accent 1')
   t = await el('t')
   ok(t.color === 'rgba(18, 52, 86, 0.5)', `the linked text colour re-derives with its 50% kept (${t.color})`)
@@ -124,7 +124,7 @@ try {
   ok(await p.locator(`${body('Shadow')} .ed-shadow-tiles`).isVisible(), 'and its section opened to show it')
 
   // 8a. a scrub held at a limit is no undo step
-  const op = p.locator('.ed-props .ed-layer-block .ed-mini[title="Opacity"] span')
+  const op = p.locator('.ed-props .ed-layer-block .ed-mini:has(input[aria-label="Opacity"]) span')
   const b = await op.boundingBox()
   await p.mouse.move(b.x + 3, b.y + 5); await p.mouse.down(); await p.mouse.move(b.x + 80, b.y + 5, { steps: 5 }); await p.mouse.up(); await p.waitForTimeout(250)
   ok((await el('r')).opacity === 1, 'opacity held at 100%')
@@ -133,7 +133,7 @@ try {
 
   // 8b. pointercancel ends the scrub like a release
   await select('r')
-  const op2 = p.locator('.ed-props .ed-layer-block .ed-mini[title="Opacity"] span')
+  const op2 = p.locator('.ed-props .ed-layer-block .ed-mini:has(input[aria-label="Opacity"]) span')
   const b2 = await op2.boundingBox()
   await p.mouse.move(b2.x + 3, b2.y + 5); await p.mouse.down(); await p.mouse.move(b2.x - 40, b2.y + 5, { steps: 5 })
   // the OS takes the pointer: a cancel and NO release follows

@@ -1296,4 +1296,9 @@ export const ja: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "テーマカラーはデッキに組み込まれたトークンです。自分のトークンと並べて、それぞれの使用箇所を確認できます",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "先頭は英字、続けて英字・数字・. - _(64 文字まで)",
   "A token already has that name": "その名前のトークンはすでにあります",
+  "Fly in": "フライイン",
+  "Swap ends": "端を入れ替え",
+  "Ends": "端",
+  "Fill container": "コンテナに合わせる",
+  "Placeholder role": "プレースホルダーの役割",
 }

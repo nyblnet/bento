@@ -1313,4 +1313,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "Teemavärit ovat esityksen sisäänrakennetut tokenit: näet ne omien tokeniesi rinnalla ja kunkin käyttöpaikat",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Aloita kirjaimella; sitten kirjaimia, numeroita, . - _ (enintään 64)",
   "A token already has that name": "Samanniminen tokeni on jo olemassa",
+  "Fly in": "Lennä sisään",
+  "Swap ends": "Vaihda päät",
+  "Ends": "Päät",
+  "Fill container": "Täytä säiliö",
+  "Placeholder role": "Paikkamerkin rooli",
 }

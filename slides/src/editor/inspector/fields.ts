@@ -162,12 +162,16 @@ export function select(options: string[], value: string, onChange: (v: string) =
  *  <select> hid them behind two. Same call shape as select(). Options with a
  *  SEG_ICONS entry show the icon, with the word as its tooltip; otherwise the
  *  words show and the control takes the row's full width. */
-export function segmented(options: string[], value: string, onChange: (v: string) => void, labels?: Record<string, string>): HTMLElement {
+/** A one-of-N picker. Options that read better as a glyph show one —
+ *  `glyphs` (per call, keyed by option) or the shared SEG_ICONS — with the
+ *  word as tooltip and accessible name; otherwise the words themselves. */
+export function segmented(options: string[], value: string, onChange: (v: string) => void, labels?: Record<string, string>, glyphs?: Record<string, string>): HTMLElement {
   const say = (o: string) => labels?.[o] ?? optLabel(o)
   const wrap = document.createElement('div')
   wrap.className = 'ed-seg'
   wrap.setAttribute('role', 'radiogroup')
-  const icons = !labels && options.every((o) => SEG_ICONS[o])
+  const glyph = (o: string) => glyphs ? glyphs[o] : labels ? undefined : SEG_ICONS[o]
+  const icons = options.every((o) => glyph(o))
   if (!icons) wrap.classList.add('ed-seg-text')
   for (const opt of options) {
     const b = document.createElement('button')
@@ -175,11 +179,16 @@ export function segmented(options: string[], value: string, onChange: (v: string
     b.setAttribute('role', 'radio')
     b.setAttribute('aria-checked', String(opt === value))
     if (icons) {
-      b.innerHTML = SEG_ICONS[opt]
+      b.innerHTML = glyph(opt)!
       b.title = say(opt)
       b.setAttribute('aria-label', say(opt))
     } else b.textContent = say(opt)
-    b.addEventListener('click', () => { if (opt !== value) onChange(opt) })
+    b.addEventListener('click', () => {
+      if (opt === value) return
+      value = opt // a picker that is not rebuilt (a dialog) still shows the choice
+      for (const x of wrap.children) x.setAttribute('aria-checked', String(x === b))
+      onChange(opt)
+    })
     wrap.appendChild(b)
   }
   roving(wrap, 'radio')
@@ -199,6 +208,7 @@ export function opBtn(icon: string, title: string, onClick: () => void): HTMLEle
   const btn = document.createElement('button')
   btn.className = 'ed-btn ed-btn-icon'
   btn.title = title
+  btn.setAttribute('aria-label', title) // a glyph button is named, not only tooltipped
   btn.innerHTML = icon
   btn.addEventListener('click', onClick)
   return btn

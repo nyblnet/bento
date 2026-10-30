@@ -1307,4 +1307,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "Tema renkleri sununun yerleşik token'larıdır: onları kendi token'larınızın yanında, her birinin nerede kullanıldığıyla birlikte görün",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "Bir harfle başlayın; ardından harf, rakam, . - _ (en fazla 64)",
   "A token already has that name": "Bu adda bir token zaten var",
+  "Fly in": "Uçarak giriş",
+  "Swap ends": "Uçları değiştir",
+  "Ends": "Uçlar",
+  "Fill container": "Kapsayıcıyı doldur",
+  "Placeholder role": "Yer tutucu rolü",
 }

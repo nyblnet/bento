@@ -1326,4 +1326,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "تھیم کے رنگ ڈیک کے اندرونی ٹوکنز ہیں: انہیں اپنے ٹوکنز کے ساتھ دیکھیں، اور یہ بھی کہ ہر ایک کہاں استعمال ہوا ہے",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "کسی حرف سے شروع کریں؛ پھر حروف، ہندسے، . - _ (زیادہ سے زیادہ 64)",
   "A token already has that name": "اس نام کا ٹوکن پہلے سے موجود ہے",
+  "Fly in": "اڑ کر آنا",
+  "Swap ends": "سرے بدلیں",
+  "Ends": "سرے",
+  "Fill container": "کنٹینر بھریں",
+  "Placeholder role": "پلیس ہولڈر کا کردار",
 }

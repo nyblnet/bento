@@ -116,6 +116,55 @@ export const ICONS = {
   gap: svg('<rect x="3" y="6" width="6" height="12" rx="1"/><rect x="15" y="6" width="6" height="12" rx="1"/><path d="M12 9v6"/>'),
   padding: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/>'),
   valignBottom: svg('<path d="M3 21h18"/><rect x="6" y="11" width="12" height="6" rx="1.5"/>'),
+  // stroke position: the dashed square is the shape's edge
+  strokeInside: svg('<rect x="3" y="3" width="18" height="18" rx="1" stroke-dasharray="2 2" stroke-width="1.5"/><rect x="6.5" y="6.5" width="11" height="11" rx="1" stroke-width="3"/>'),
+  strokeCenter: svg('<rect x="3" y="3" width="18" height="18" rx="1" stroke-dasharray="2 2" stroke-width="1.5"/><rect x="3" y="3" width="18" height="18" rx="1" stroke-width="3" stroke-opacity=".55"/>'),
+  strokeOutside: svg('<rect x="6.5" y="6.5" width="11" height="11" rx="1" stroke-dasharray="2 2" stroke-width="1.5"/><rect x="2.5" y="2.5" width="19" height="19" rx="2" stroke-width="3"/>'),
+  // line style
+  lineSolid: svg('<path d="M3 12h18" stroke-width="2.5"/>'),
+  lineDashed: svg('<path d="M3 12h18" stroke-width="2.5" stroke-dasharray="5 3" stroke-linecap="butt"/>'),
+  lineDotted: svg('<path d="M4 12h17" stroke-width="2.5" stroke-dasharray="0.1 4.4"/>'),
+  lineCustom: svg('<path d="M3 12h18" stroke-width="2.5" stroke-dasharray="7 2 1.5 2" stroke-linecap="butt"/>'),
+  // chart types (bar is ICONS.chart)
+  chartLine: svg('<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 15 4-5 3 3 5-6"/>'),
+  chartPie: svg('<path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>'),
+  chartScatter: svg('<path d="M3 3v16a2 2 0 0 0 2 2h16"/><circle cx="9" cy="14" r="1.2" fill="currentColor"/><circle cx="13" cy="9" r="1.2" fill="currentColor"/><circle cx="17" cy="12" r="1.2" fill="currentColor"/><circle cx="18" cy="6" r="1.2" fill="currentColor"/>'),
+  // picture fit: the frame, and the picture inside it
+  fitContain: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="3" y="8" width="18" height="8" fill="currentColor" stroke="none" opacity=".45"/>'),
+  fitCover: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="0" y="3" width="24" height="18" fill="currentColor" stroke="none" opacity=".45"/>'),
+  fitFill: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="3" y="3" width="18" height="18" fill="currentColor" stroke="none" opacity=".45"/><path d="m7 7 3 3m7-3-3 3m-7 7 3-3m7 3-3-3"/>'),
+  // slide transitions
+  transNone: svg('<rect x="2" y="6" width="9" height="12" rx="1"/><rect x="13" y="6" width="9" height="12" rx="1"/>'),
+  transFade: svg('<rect x="2" y="6" width="9" height="12" rx="1"/><rect x="13" y="6" width="9" height="12" rx="1" stroke-dasharray="2 2"/>'),
+  transPush: svg('<rect x="2" y="6" width="9" height="12" rx="1"/><rect x="13" y="6" width="9" height="12" rx="1"/><path d="m6 12h11m-3-3 3 3-3 3"/>'),
+  transZoom: svg('<rect x="3" y="5" width="18" height="14" rx="1"/><rect x="8" y="9" width="8" height="6" rx="1"/><path d="m3 5 5 4m13-4-5 4M3 19l5-4m13 4-5-4"/>'),
+  transMorph: svg('<rect x="2" y="13" width="7" height="7" rx="1"/><rect x="13" y="4" width="9" height="9" rx="1"/><path d="M6 11c0-5 3-7 6-7" stroke-dasharray="2 2"/>'),
+  // easing curves (time →, progress ↑)
+  easeLinear: svg('<path d="M4 20 20 4"/>'),
+  easeInOut: svg('<path d="M4 20C12 20 12 4 20 4"/>'),
+  easeIn: svg('<path d="M4 20C14 20 20 12 20 4"/>'),
+  easeOut: svg('<path d="M4 20C4 12 10 4 20 4"/>'),
+  // pan & zoom motion
+  kenDrift: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 12h8m-2-2 2 2-2 2m-6-4-2 2 2 2"/>'),
+  kenOut: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><rect x="8" y="9" width="8" height="6" rx="1"/><path d="m8 9-3-2m11 2 3-2"/>'),
+  kenIn: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><rect x="8" y="9" width="8" height="6" rx="1"/><path d="m5 7 3 2m11-2-3 2"/>'),
+  // appearance
+  sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+  moon: svg('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'),
+  // entrance effects and directions
+  fxNone: svg('<circle cx="12" cy="12" r="8"/><path d="m6.5 17.5 11-11"/>'),
+  fxFade: svg('<rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="2.5 2.5"/>'),
+  fxFly: svg('<rect x="11" y="6" width="10" height="12" rx="1.5"/><path d="M3 9h5M2 12h6M3 15h5"/>'),
+  dirUp: svg('<path d="M12 19V5m-6 6 6-6 6 6"/>'),
+  dirDown: svg('<path d="M12 5v14m-6-6 6 6 6-6"/>'),
+  dirLeft: svg('<path d="M19 12H5m6-6-6 6 6 6"/>'),
+  dirRight: svg('<path d="M5 12h14m-6-6 6 6-6 6"/>'),
+  dirNone: svg('<circle cx="12" cy="12" r="2.5" fill="currentColor"/>'),
+  // side column views
+  viewSlides: svg('<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8"/><path d="M12 16v4"/>'),
+  viewLayers: svg('<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>'),
+  viewTokens: svg('<circle cx="7.5" cy="7.5" r="3.5"/><circle cx="16.5" cy="16.5" r="3.5"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/>'),
+  swap: svg('<path d="M7 7h13m-3-3 3 3-3 3"/><path d="M17 17H4m3-3-3 3 3 3"/>'),
 } as const
 
 export type IconName = keyof typeof ICONS

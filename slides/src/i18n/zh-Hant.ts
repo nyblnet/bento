@@ -1296,4 +1296,9 @@ export const zhHant: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "主題顏色是簡報內建的權杖:在你自己的權杖旁查看它們,以及各自的使用位置",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "以字母開頭;其後為字母、數字、. - _(最多 64 個)",
   "A token already has that name": "已有同名權杖",
+  "Fly in": "飛入",
+  "Swap ends": "交換端點",
+  "Ends": "端點",
+  "Fill container": "填滿容器",
+  "Placeholder role": "預留位置角色",
 }

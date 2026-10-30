@@ -1319,4 +1319,9 @@ export const strings: Catalog = {
   "Theme colors are the deck’s built-in tokens: see them beside your own tokens, with where each is used": "থিমের রংগুলো ডেকের নিজস্ব টোকেন: আপনার টোকেনের পাশে এগুলো দেখুন, প্রতিটি কোথায় ব্যবহৃত তা সহ",
   "Start with a letter; then letters, digits, . - _ (64 at most)": "একটি অক্ষর দিয়ে শুরু করুন; তারপর অক্ষর, অঙ্ক, . - _ (সর্বোচ্চ ৬৪টি)",
   "A token already has that name": "এই নামে একটি টোকেন আগে থেকেই আছে",
+  "Fly in": "উড়ে আসা",
+  "Swap ends": "প্রান্ত বদলান",
+  "Ends": "প্রান্ত",
+  "Fill container": "কন্টেইনার পূরণ",
+  "Placeholder role": "প্লেসহোল্ডারের ভূমিকা",
 }
