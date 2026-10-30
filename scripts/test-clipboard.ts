@@ -107,6 +107,22 @@ console.log('\npasting a frame with its children')
   ok(alone[0].parentId === 'f', 'a child pasted alone stays a sibling in the same frame')
 }
 
+console.log('\na pasted main never takes over a component')
+{
+  const doc = newDoc()
+  const m = defaultShape('rect', { id: 'm', x: 0, y: 0 }) as any
+  m.component = { id: 'c1', key: 'k0', main: true }
+  m.groupId = 'g1'
+  doc.slides[0].elements = [m]
+  // a hostile (or merely stale) clip claiming to be the main of a component this deck has
+  const forged = { ...JSON.parse(JSON.stringify(m)), fill: '#ff0000' }
+  const els = insertElements(parseClip(serializeElements([forged], doc))!, doc, doc.slides[0]) as any[]
+  const mains = doc.slides[0].elements.filter((e: any) => e.component?.main)
+  ok(mains.length === 1 && mains[0] === m && els[0].component && !els[0].component.main, 'a pasted element claiming main of an existing component arrives as a copy')
+  const slides = insertSlides(parseClip(serializeSlides([{ ...doc.slides[0], elements: [forged] } as never], doc))!, doc, 1)
+  ok(!(slides[0].elements[0] as any).component?.main && doc.slides.flatMap((s) => s.elements).filter((e: any) => e.component?.main).length === 1, 'and so does one pasted on a slide')
+}
+
 console.log('\nslide clipboard')
 {
   const source = sourceDoc()

@@ -598,6 +598,15 @@ runs:
       # layer tree lists children under their frame.
       shell: bento-step {0}
       run: node scripts/test-slides-layout.ts
+    - name: Gate rules for the revamp's keys rig
+      # untrusted.ts + restoregate.ts, DOM-free: every rule a new key is held
+      # to (booleans, components, frames, paint stacks, token refs, theme
+      # tokens on restore AND on open) takes a good value and refuses a bad
+      # one, so loosening a rule fails here rather than only in schema drift.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-gate-keys.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-gate-keys.mjs"
+        node "$RUNNER_TEMP/test-slides-gate-keys.mjs"
     - name: Derive pass rig
       # slides/src/derive.ts, DOM-free: palette, tokens, components, layout,
       # connectors and stack fallbacks run as ONE pass in dependency order, so
