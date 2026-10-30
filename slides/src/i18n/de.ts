@@ -1081,6 +1081,8 @@ export const de: Catalog = {
   "Stretch children": "Kinder strecken",
   "Hug contents": "An Inhalt anpassen",
   "Wrap": "Umbrechen",
+  "Mode name, e.g. Dark": "Modusname, z. B. Dunkel",
+  "Component name": "Komponentenname",
   "Clip content": "Inhalt beschneiden",
   "Top left": "Oben links",
   "Top right": "Oben rechts",

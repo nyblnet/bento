@@ -1081,6 +1081,8 @@ export const zhHant: Catalog = {
   "Stretch children": "延展子元素",
   "Hug contents": "符合內容",
   "Wrap": "換行",
+  "Mode name, e.g. Dark": "模式名稱,例如 深色",
+  "Component name": "元件名稱",
   "Clip content": "裁切內容",
   "Top left": "左上",
   "Top right": "右上",

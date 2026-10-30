@@ -1081,6 +1081,8 @@ export const zhHans: Catalog = {
   "Stretch children": "拉伸子元素",
   "Hug contents": "适应内容",
   "Wrap": "换行",
+  "Mode name, e.g. Dark": "模式名称,例如 深色",
+  "Component name": "组件名称",
   "Clip content": "裁剪内容",
   "Top left": "左上",
   "Top right": "右上",

@@ -1079,6 +1079,8 @@ export const pt: Catalog = {
   "Stretch children": "Esticar filhos",
   "Hug contents": "Ajustar ao conteúdo",
   "Wrap": "Quebrar linha",
+  "Mode name, e.g. Dark": "Nome do modo, ex.: Escuro",
+  "Component name": "Nome do componente",
   "Clip content": "Recortar conteúdo",
   "Top left": "Superior esquerdo",
   "Top right": "Superior direito",

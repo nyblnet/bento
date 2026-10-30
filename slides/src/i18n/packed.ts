@@ -1087,6 +1087,8 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Stretch children": ["子要素を伸縮","拉伸子元素","延展子元素","Estirar elementos","Étirer les enfants","Kinder strecken","Estendi figli","Esticar filhos"],
   "Hug contents": ["内容に合わせる","适应内容","符合內容","Ajustar al contenido","Ajuster au contenu","An Inhalt anpassen","Adatta al contenuto","Ajustar ao conteúdo"],
   "Wrap": ["折り返し","换行","換行","Ajustar en líneas","Retour à la ligne","Umbrechen","A capo","Quebrar linha"],
+  "Mode name, e.g. Dark": ["モード名(例: ダーク)","模式名称,例如 深色","模式名稱,例如 深色","Nombre del modo, p. ej. Oscuro","Nom du mode, p. ex. Sombre","Modusname, z. B. Dunkel","Nome della modalità, ad es. Scuro","Nome do modo, ex.: Escuro"],
+  "Component name": ["コンポーネント名","组件名称","元件名稱","Nombre del componente","Nom du composant","Komponentenname","Nome del componente","Nome do componente"],
   "Clip content": ["内容をクリップ","裁剪内容","裁切內容","Recortar contenido","Rogner le contenu","Inhalt beschneiden","Ritaglia contenuto","Recortar conteúdo"],
   "Top left": ["左上","左上","左上","Arriba a la izquierda","En haut à gauche","Oben links","In alto a sinistra","Superior esquerdo"],
   "Top right": ["右上","右上","右上","Arriba a la derecha","En haut à droite","Oben rechts","In alto a destra","Superior direito"],
