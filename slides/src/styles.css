@@ -1034,7 +1034,7 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
   position: fixed;
   left: 50%;
   bottom: 26px;
-  transform: translate(-50%, 12px);
+  transform: translate(-50%, -8px);
   background: var(--ink);
   color: var(--surface);
   font-size: 13px;
@@ -3580,7 +3580,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-morph-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ed-morph-use, .ed-morph-play { height: 26px; padding: 0 10px; }
 .ed-morph-play { margin-top: 6px; }
-.ed-morph-pick-btn { width: 100%; height: 26px; justify-content: flex-start; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ed-morph-pick-btn { box-sizing: border-box; width: 100%; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; justify-content: space-between; background: var(--field); border: 1px solid var(--field-line); border-radius: 6px; }
+.ed-morph-pick-txt { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: start; }
+.ed-morph-pick-btn svg { flex: none; width: 12px; height: 12px; stroke-width: 2.25; transform: rotate(90deg); color: var(--muted); }
 .ed-morph-pick {
   position: fixed; z-index: 60; box-sizing: border-box; width: 260px; max-height: min(420px, calc(100vh - 16px));
   display: flex; flex-direction: column; gap: 6px; padding: 8px; overflow: hidden;
@@ -3606,7 +3608,17 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 .ed-palette-acts { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
 .ed-palette-act { font-size: 12px; color: var(--ink); }
 .ed-comp-head { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
-.ed-comp-title { font-size: 12px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-seg[data-axis='h'] svg { transform: rotate(90deg); }
+/* where a dragged frame child will land: a thick accent bar in the gap, with
+   round end caps, a soft glow (canvas.ts trackSlot; slide px, scaled back) */
+.ed-slot-bar { position: absolute; z-index: 20; pointer-events: none; background: var(--accent); border-radius: calc(3px * var(--k, 1)); box-shadow: 0 0 0 calc(2px * var(--k, 1)) color-mix(in srgb, var(--accent) 30%, transparent); } /* resizing glyphs, turned for height */
+.ed-comp-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--ink); }
+.ed-comp-title > span:first-child { flex: none; color: var(--accent); }
+/* the name reads as text; a click makes it a field (click-to-edit) */
+.ed-comp-name { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 4px; margin-inline-start: -4px; border: 1px solid transparent; border-radius: 4px; background: none; font: inherit; color: inherit; text-align: start; cursor: text; }
+.ed-comp-name:hover { border-color: var(--field-line-hot, var(--line)); }
+.ed-comp-name-field { flex: 1 1 auto; min-width: 0; height: 24px; font-weight: 600; }
+.ed-comp-role { flex: none; font-weight: 400; font-size: 11px; color: var(--muted); }
 .ed-comp-acts { display: flex; flex-wrap: wrap; gap: 4px; }
 .ed-comp-acts .ed-btn { font-size: 11.5px; }
 .ed-theme-tokens { align-self: flex-start; margin: 2px 0 8px; font-size: 11.5px; }

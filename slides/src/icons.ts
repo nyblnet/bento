@@ -156,6 +156,11 @@ export const ICONS = {
   fxNone: svg('<circle cx="12" cy="12" r="8"/><path d="m6.5 17.5 11-11"/>'),
   fxFade: svg('<rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="2.5 2.5"/>'),
   fxFly: svg('<rect x="11" y="6" width="10" height="12" rx="1.5"/><path d="M3 9h5M2 12h6M3 15h5"/>'),
+  /** auto-layout resizing on an axis (CSS turns them for height): hug the
+   *  content, a fixed size, fill the frame */
+  sizeHug: svg('<path d="M4 12h5m-2.5-2.5L9 12l-2.5 2.5M20 12h-5m2.5-2.5L15 12l2.5 2.5"/><path d="M12 7v10"/>'),
+  sizeFixed: svg('<path d="M5 7v10M19 7v10M5 12h14"/>'),
+  sizeFill: svg('<path d="M3 12h18M6 9l-3 3 3 3M18 9l3 3-3 3"/>'),
   /** a panel handle's chevron, pointing right; CSS turns it by data-dir */
   chevron: svg('<path d="m9 6 6 6-6 6"/>'),
   dirUp: svg('<path d="M12 19V5m-6 6 6-6 6 6"/>'),

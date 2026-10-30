@@ -89,7 +89,13 @@ export function buildMorphProps(p: PropsPanel, el: SlideElement) {
   pick.type = 'button'
   pick.className = 'ed-btn ed-morph-pick-btn'
   pick.setAttribute('aria-haspopup', 'listbox')
-  pick.textContent = from && src ? pairLabel(p, src, from) : t('Choose an element…')
+  // a select-like chip: the choice ellipsed on one line, a chevron at the end
+  const chosen = document.createElement('span')
+  chosen.className = 'ed-morph-pick-txt'
+  chosen.textContent = from && src ? pairLabel(p, src, from) : t('Choose an element…')
+  pick.title = chosen.textContent
+  pick.append(chosen)
+  pick.insertAdjacentHTML('beforeend', ICONS.chevron)
   pick.addEventListener('click', () => openMorphPicker(p, el, pick, say))
   row(p, 'Morph with', pick)
 
@@ -188,7 +194,7 @@ function openMorphPicker(p: PropsPanel, el: SlideElement, anchor: HTMLElement, s
     h.textContent = slideLabel(p, src, doc.slides.indexOf(src))
     list.append(h)
     const mine = src.elements.filter(pairable)
-    for (const e of mine) list.append(option(labelFor(e, t), morphKey(e), e))
+    for (const e of mine) list.append(option(labelFor(e, t, src), morphKey(e), e))
     if (!mine.length) { const n = document.createElement('div'); n.className = 'ed-hint'; n.textContent = t('Everything there is already paired.'); list.append(n) }
   }
   const more = document.createElement('details')
@@ -203,7 +209,7 @@ function openMorphPicker(p: PropsPanel, el: SlideElement, anchor: HTMLElement, s
       const key = morphKey(e)
       if (!pairable(e) || seen.has(key) || key === el.id) continue
       seen.add(key)
-      more.append(option(`${slideLabel(p, s, i)} · ${labelFor(e, t)}`, key, e))
+      more.append(option(`${slideLabel(p, s, i)} · ${labelFor(e, t, s)}`, key, e))
     }
   })
   if (seen.size) list.append(more)
@@ -437,7 +443,8 @@ export function buildPresentingProps(p: PropsPanel, el: SlideElement) {
       loop: v === 'none' ? undefined
         : v === 'dash-march' ? { type: 'dash-march', distance: 18, duration: (loop as any)?.duration ?? 1.4 }
         : { type: 'motion-path', path: (loop as any)?.path ?? 'M 0 0 L 100 0', duration: (loop as any)?.duration ?? 3 },
-    }), { none: t('None'), 'dash-march': t('Marching dashes'), 'motion-path': t('Follow a path') }))
+    }), { none: t('None'), 'dash-march': t('Marching dashes'), 'motion-path': t('Follow a path') },
+    { none: ICONS.fxNone, 'dash-march': ICONS.lineDashed, 'motion-path': ICONS.curve }))
   if (loop) {
     row(p, 'Seconds per lap', number(loop.duration ?? 2, 0.1, (v, fin) =>
       p.mutate(el.id, (e) => { if (e.fx?.loop) e.fx.loop.duration = Math.max(v, 0.1) }, fin), { min: 0.1 }))

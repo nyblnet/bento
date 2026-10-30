@@ -66,7 +66,9 @@ function resizing(p: PropsPanel, el: SlideElement, parent: ShapeElement & { layo
         // ponytail: hug is one switch for both axes (layout.ts); per-axis hug when a deck needs it
         const L = (e as ShapeElement).layout
         if (L) { if (v === 'hug') L.hug = true; else if (v === 'fixed') delete L.hug }
-      }, true), { hug: t('Hug'), fixed: t('Fixed'), fill: t('Fill container') })
+      }, true), { hug: t('Hug contents'), fixed: t('Fixed'), fill: t('Fill container') },
+      { hug: ICONS.sizeHug, fixed: ICONS.sizeFixed, fill: ICONS.sizeFill })
+    seg.dataset.axis = k
     if (parent.layout.hug && modeOf(k) !== 'fill') {
       const fill = seg.querySelector<HTMLButtonElement>('[data-value="fill"]')
       if (fill) { fill.disabled = true; fill.title = t('The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first') }
@@ -138,11 +140,13 @@ export function wrapInFrame(p: PropsPanel, picked: SlideElement[]) {
   // element does not set it); one element keeps the default
   const run = [...els].sort((m, n) => (dir === 'row' ? m.x - n.x : m.y - n.y))
   const gaps = run.slice(1).map((e, i) => (dir === 'row' ? e.x - (run[i].x + run[i].w) : e.y - (run[i].y + run[i].h))).sort((m, n) => m - n)
-  const gap = gaps.length ? Math.max(0, Math.round(gaps[Math.floor((gaps.length - 1) / 2)])) : 16
+  // overlapping copies (⌘D offsets 24px) have no real spacing to keep: 16, as with none
+  const median = gaps.length ? Math.round(gaps[Math.floor((gaps.length - 1) / 2)]) : 0
+  const gap = median > 0 ? median : 16
   const pad = 16
   const parent = els.every((e) => e.parentId === els[0].parentId) ? els[0].parentId : undefined
   const frame: ShapeElement = {
-    id: `frame-${uid()}`, type: 'shape', shape: 'rect', name: t('Frame'),
+    id: `frame-${uid()}`, type: 'shape', shape: 'rect',
     x: x - pad, y: y - pad, w: r - x + 2 * pad, h: b - y + 2 * pad, rotation: 0, opacity: 1,
     fill: 'transparent', stroke: 'transparent', strokeWidth: 0, radius: 0,
     layout: { dir, gap, pad: [pad, pad, pad, pad], hug: true },

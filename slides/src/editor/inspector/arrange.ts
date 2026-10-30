@@ -85,10 +85,12 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
   // A frame's child is placed by its frame: aligning it would write X/Y the
   // layout overwrites at once, so the frame's own alignment is offered instead.
   const tools: HTMLElement[] = []
-  const inFrame = els.length === 1 && !!els[0].parentId && !!p.store.element(els[0].parentId)
+  // one child or several, every one placed by a frame: align and spacing would
+  // do nothing (the layout puts them back), so say why and point at the frame
+  const inFrame = els.length > 0 && els.every((e) => !!e.parentId && !!p.store.element(e.parentId))
   const tip = (id: string, label: string) => p.titleOf(id, label)
   if (inFrame) {
-    const frame = p.store.element(els[0].parentId!)!
+    const frames = [...new Set(els.map((e) => e.parentId!))]
     const hint = document.createElement('p')
     hint.className = 'ed-hint ed-keep ed-frame-placed'
     hint.textContent = t('Placed by its frame’s auto layout — align and space it on the frame.')
@@ -96,7 +98,7 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
     go.type = 'button'
     go.className = 'ed-btn ed-link-btn'
     go.textContent = t('Select the frame')
-    go.addEventListener('click', () => p.store.select([frame.id]))
+    go.addEventListener('click', () => p.store.select(frames))
     hint.append(' ', go)
     block.appendChild(hint)
   } else {

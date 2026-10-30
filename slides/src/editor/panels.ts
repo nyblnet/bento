@@ -29,7 +29,7 @@ import { buildImageProps, buildMediaProps, buildCodeProps, buildEmbedProps } fro
 import { buildChartProps } from './inspector/chart'
 import { buildTableProps } from './inspector/table'
 import { buildAutoLayout, wrapInFrame } from './inspector/layout'
-import { withDescendants } from '../layout'
+import { reflowByArray, withDescendants } from '../layout'
 import { buildShadow, buildBlur } from './inspector/effects'
 import { freshGroups } from './clipboard'
 
@@ -252,7 +252,15 @@ export class PropsPanel {
     slide: () => this.store.slide,
     selection: () => this.store.selection,
     select: (ids) => this.store.select(ids),
-    setOrder: (elements) => this.store.commit(() => { this.store.slide.elements = elements }),
+    setOrder: (elements) => this.store.commit(() => {
+      const slide = this.store.slide
+      // a frame's flow follows Layers: children whose array order changed are
+      // reflowed in it (the solver reads order from position otherwise)
+      const kids = (els: typeof elements) => { const m = new Map<string, string>(); for (const e of els) if (e.parentId) m.set(e.parentId, (m.get(e.parentId) ?? '') + e.id + '|'); return m }
+      const before = kids(slide.elements)
+      slide.elements = elements
+      for (const [f, order] of kids(elements)) if (before.get(f) !== order) reflowByArray(slide, f)
+    }),
     rename: (id, name) => this.store.commit(() => {
       const el = this.store.element(id)
       if (!el) return
@@ -439,13 +447,15 @@ export class PropsPanel {
       const valueW = ctx.measureText(sel.options[sel.selectedIndex]?.text ?? '').width + 30 // padding + arrow
       row.classList.toggle('ed-row-stack', valueW > sel.clientWidth)
     }
-    // a caption that would take more than two lines beside its control (de,
-    // pt: 'Transformar a partir do slide anterior') goes above it instead
-    // (cleared, measured, then applied in batches: one reflow, not one per row)
-    const caps = [...host.querySelectorAll<HTMLElement>('.ed-row:not(:has(> select)) > span:first-child')]
-    for (const cap of caps) cap.parentElement!.classList.remove('ed-row-stack')
+    // a caption that would wrap beside its control (de 'Erscheint bei Klick',
+    // pt 'Aparece no clique') goes above it instead: a caption reads on one
+    // line or not beside the control at all (cleared, measured, then applied
+    // in batches: one reflow, not one per row). A dropdown row stacked above
+    // for its value keeps that.
+    const caps = [...host.querySelectorAll<HTMLElement>('.ed-row > span:first-child')]
+    for (const cap of caps) if (!cap.parentElement!.querySelector(':scope > select')) cap.parentElement!.classList.remove('ed-row-stack')
     const line = caps[0] ? parseFloat(getComputedStyle(caps[0]).lineHeight) || 14 : 14
-    const tall = caps.filter((cap) => cap.offsetParent && cap.offsetHeight > line * 2 + 1)
+    const tall = caps.filter((cap) => cap.offsetParent && cap.offsetHeight > line + 1)
     for (const cap of tall) cap.parentElement!.classList.add('ed-row-stack')
     if (!this.watchingWidth) {
       this.watchingWidth = true
