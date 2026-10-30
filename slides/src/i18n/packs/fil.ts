@@ -1365,4 +1365,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "Ilipat — pumili at maglipat; balik sa pointer",
   "Select only": "Pumili lang",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Pumili lang — pumipili ang pag-drag, kahit mula sa ibabaw ng mga elemento, at hindi naglilipat ng kahit ano",
+  "Drag onto a frame": "I-drag sa ibabaw ng frame",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Ilalagay sa loob, kung saan ipinapakita ng bar — sa Layers, ihulog sa row ng frame; pindutin ang {mod} habang nagda-drag para dumaan lang sa ibabaw",
+  "held while dragging, nothing drops into a frame": "habang pinindot sa pag-drag, walang papasok sa frame",
 }

@@ -1336,4 +1336,7 @@ export const ja: Catalog = {
   "Move — select and move; back to the pointer": "移動 — 選択して移動。ポインターに戻る",
   "Select only": "選択のみ",
   "Select only — a drag selects, from on top of things too, and never moves anything": "選択のみ — ドラッグで選択します。要素の上から始めても、何も動かしません",
+  "Drag onto a frame": "フレームの上へドラッグ",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "バーの位置に中へ入れます — レイヤーではフレームの行にドロップ。上を通るだけにするにはドラッグ中に {mod} を押す",
+  "held while dragging, nothing drops into a frame": "ドラッグ中に押すと、フレームの中へは入りません",
 }

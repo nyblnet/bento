@@ -17,7 +17,7 @@ function modHint(e: { altKey: boolean; metaKey: boolean; ctrlKey: boolean; shift
   if (e.altKey) return selected
     ? t('Alt: measure to the element under the pointer · click selects the element behind · resize from the centre')
     : t('Alt: click selects the element behind the one on top')
-  if (e.metaKey || e.ctrlKey) return t('{mod}: click selects exactly the element under the pointer, even in a group · drag duplicates', { mod: MOD })
+  if (e.metaKey || e.ctrlKey) return `${t('{mod}: click selects exactly the element under the pointer, even in a group · drag duplicates', { mod: MOD })} · ${t('held while dragging, nothing drops into a frame')}`
   if (e.shiftKey) return t('Shift: click adds to the selection or takes out · drag along one axis · resize keeps the ratio · rotate in 15° steps')
   return ''
 }

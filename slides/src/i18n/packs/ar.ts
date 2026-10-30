@@ -1356,4 +1356,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "تحريك — حدّد وحرّك؛ عودة إلى المؤشر",
   "Select only": "تحديد فقط",
   "Select only — a drag selects, from on top of things too, and never moves anything": "تحديد فقط — السحب يحدّد، حتى فوق العناصر، ولا يحرّك شيئًا أبدًا",
+  "Drag onto a frame": "اسحب فوق إطار",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "يضعه داخله حيث يظهر الشريط — في الطبقات أفلته على صف الإطار؛ اضغط {mod} أثناء السحب لتمريره فوقه فقط",
+  "held while dragging, nothing drops into a frame": "مع الضغط أثناء السحب لا يدخل شيء في إطار",
 }

@@ -1347,4 +1347,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "Przesuń — zaznacz i przesuń; powrót do wskaźnika",
   "Select only": "Tylko zaznaczanie",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Tylko zaznaczanie — przeciąganie zaznacza, także znad elementów, i nigdy niczego nie przesuwa",
+  "Drag onto a frame": "Przeciągnij na ramkę",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Umieszcza w środku, tam gdzie wskazuje pasek — w Warstwach upuść na wierszu ramki; przytrzymaj {mod} podczas przeciągania, aby tylko przesunąć nad nią",
+  "held while dragging, nothing drops into a frame": "przytrzymany podczas przeciągania — nic nie trafia do ramki",
 }

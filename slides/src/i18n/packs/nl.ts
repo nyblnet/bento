@@ -1344,4 +1344,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "Verplaatsen — selecteren en verplaatsen; terug naar de aanwijzer",
   "Select only": "Alleen selecteren",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Alleen selecteren — slepen selecteert, ook vanaf elementen, en verplaatst nooit iets",
+  "Drag onto a frame": "Op een frame slepen",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Zet het erin, waar de balk het aangeeft — in Lagen zet je het op de framerij; houd {mod} ingedrukt tijdens het slepen om er alleen overheen te gaan",
+  "held while dragging, nothing drops into a frame": "ingedrukt tijdens het slepen valt niets in een frame",
 }

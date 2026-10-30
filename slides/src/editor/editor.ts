@@ -3389,6 +3389,7 @@ export class Editor {
     section(colR, t('Tools'), [
       ...['tool-select', 'tool-marquee', 'tool-frame', 'tool-rect', 'tool-ellipse', 'tool-line', 'tool-pen', 'insert-text'].map((id) => cmd(id)),
       cmd('auto-layout', t('Wrap the selection in an auto-layout frame')),
+      [t('Drag onto a frame'), t('Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead', { mod })],
       [BOOL_OPS.map((op) => boolUi(op).key).join(' · '), BOOL_OPS.map((op) => boolUi(op).label).join(' · ')],
     ])
     section(colR, t('Inspector'), [

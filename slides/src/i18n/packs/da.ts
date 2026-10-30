@@ -1348,4 +1348,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "Flyt — markér og flyt; tilbage til markøren",
   "Select only": "Kun markering",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Kun markering — et træk markerer, også oven på elementer, og flytter aldrig noget",
+  "Drag onto a frame": "Træk ind på en ramme",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Lægger det ind, hvor bjælken viser — i Lag slipper du det på rammens række; hold {mod} nede under træk for kun at flytte hen over",
+  "held while dragging, nothing drops into a frame": "holdt nede under træk falder intet ind i en ramme",
 }

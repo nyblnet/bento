@@ -1340,4 +1340,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "이동 — 선택하고 이동; 포인터로 돌아가기",
   "Select only": "선택만",
   "Select only — a drag selects, from on top of things too, and never moves anything": "선택만 — 드래그하면 요소 위에서 시작해도 선택만 하고, 아무것도 움직이지 않습니다",
+  "Drag onto a frame": "프레임 위로 드래그",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "막대가 표시한 자리에 안으로 넣습니다 — 레이어에서는 프레임 행에 놓으세요. 위로만 지나가려면 드래그하는 동안 {mod}를 누르세요",
+  "held while dragging, nothing drops into a frame": "드래그 중 누르고 있으면 프레임 안으로 들어가지 않습니다",
 }

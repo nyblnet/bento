@@ -1373,4 +1373,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "Süýşür — saýla we süýşür; görkezijä dolan",
   "Select only": "Diňe saýla",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Diňe saýla — çekmek saýlaýar, elementleriň üstünden hem, we hiç zady süýşürmeýär",
+  "Drag onto a frame": "Ramkanyň üstüne süýräň",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Zolak görkezýän ýerde içine goýýar — Gatlaklarda ramkanyň setirine taşlaň; diňe üstünden geçirmek üçin süýrenyňizde {mod} basyp saklaň",
+  "held while dragging, nothing drops into a frame": "süýrelende basylyp saklansa, hiç zat ramka girmeýär",
 }

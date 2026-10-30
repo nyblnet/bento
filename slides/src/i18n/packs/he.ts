@@ -1349,4 +1349,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "הזזה — בחירה והזזה; חזרה לסמן",
   "Select only": "בחירה בלבד",
   "Select only — a drag selects, from on top of things too, and never moves anything": "בחירה בלבד — גרירה בוחרת, גם מעל רכיבים, ואף פעם לא מזיזה דבר",
+  "Drag onto a frame": "גרירה אל מסגרת",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "מכניס פנימה, במקום שהפס מראה — בשכבות, שחררו על שורת המסגרת; החזיקו {mod} בזמן הגרירה כדי רק לעבור מעליה",
+  "held while dragging, nothing drops into a frame": "בהחזקה בזמן גרירה, שום דבר לא נכנס למסגרת",
 }

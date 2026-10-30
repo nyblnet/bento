@@ -1336,4 +1336,7 @@ export const de: Catalog = {
   "Move — select and move; back to the pointer": "Verschieben — auswählen und bewegen; zurück zum Zeiger",
   "Select only": "Nur auswählen",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Nur auswählen — Ziehen wählt aus, auch über Elementen, und verschiebt nie etwas",
+  "Drag onto a frame": "Auf einen Rahmen ziehen",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Legt es hinein, wo der Balken zeigt — in Ebenen auf die Rahmenzeile ziehen; {mod} beim Ziehen halten, um nur darüber zu bewegen",
+  "held while dragging, nothing drops into a frame": "beim Ziehen gehalten, fällt nichts in einen Rahmen",
 }

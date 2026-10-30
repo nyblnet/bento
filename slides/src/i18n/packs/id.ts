@@ -1346,4 +1346,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "Pindahkan — pilih dan pindahkan; kembali ke penunjuk",
   "Select only": "Pilih saja",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Pilih saja — seret untuk memilih, juga dari atas elemen, dan tidak pernah memindahkan apa pun",
+  "Drag onto a frame": "Seret ke atas bingkai",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Memasukkannya ke dalam, di tempat yang ditunjuk bilah — di Lapisan, lepaskan di baris bingkai; tahan {mod} saat menyeret untuk sekadar lewat di atasnya",
+  "held while dragging, nothing drops into a frame": "ditahan saat menyeret, tidak ada yang masuk ke bingkai",
 }

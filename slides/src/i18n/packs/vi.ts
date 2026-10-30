@@ -1346,4 +1346,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "Di chuyển — chọn và di chuyển; trở về con trỏ",
   "Select only": "Chỉ chọn",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Chỉ chọn — kéo để chọn, cả khi bắt đầu trên phần tử, và không bao giờ di chuyển gì",
+  "Drag onto a frame": "Kéo lên một khung",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Đặt nó vào trong, tại chỗ thanh chỉ — trong Lớp, thả lên hàng của khung; giữ {mod} khi kéo để chỉ đi qua phía trên",
+  "held while dragging, nothing drops into a frame": "giữ khi kéo thì không gì rơi vào khung",
 }

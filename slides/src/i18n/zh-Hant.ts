@@ -1336,4 +1336,7 @@ export const zhHant: Catalog = {
   "Move — select and move; back to the pointer": "移動 — 選取並移動；回到指標",
   "Select only": "僅選取",
   "Select only — a drag selects, from on top of things too, and never moves anything": "僅選取 — 拖曳即選取，從元素上開始也一樣，絕不移動任何東西",
+  "Drag onto a frame": "拖到框架上",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "放進框架，位置如指示條所示 — 在圖層中，拖放到框架列上；拖曳時按住 {mod} 只從上方經過",
+  "held while dragging, nothing drops into a frame": "拖曳時按住，不會放進任何框架",
 }

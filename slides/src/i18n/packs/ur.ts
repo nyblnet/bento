@@ -1366,4 +1366,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "منتقل کریں — منتخب کریں اور منتقل کریں؛ پوائنٹر پر واپس",
   "Select only": "صرف انتخاب",
   "Select only — a drag selects, from on top of things too, and never moves anything": "صرف انتخاب — گھسیٹنے سے انتخاب ہوتا ہے، عناصر کے اوپر سے بھی، اور کچھ بھی منتقل نہیں ہوتا",
+  "Drag onto a frame": "فریم پر گھسیٹیں",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "بار جہاں دکھائے وہاں اندر رکھتا ہے — پرتوں میں فریم کی قطار پر چھوڑیں؛ صرف اوپر سے گزارنے کے لیے گھسیٹتے وقت {mod} دبائے رکھیں",
+  "held while dragging, nothing drops into a frame": "گھسیٹتے وقت دبائے رکھنے پر کچھ بھی فریم میں نہیں جاتا",
 }

@@ -1347,4 +1347,7 @@ export const strings: Catalog = {
   "Move — select and move; back to the pointer": "Taşı — seç ve taşı; işaretçiye dön",
   "Select only": "Yalnızca seç",
   "Select only — a drag selects, from on top of things too, and never moves anything": "Yalnızca seç — sürüklemek seçer, öğelerin üstünden de, ve hiçbir şeyi taşımaz",
+  "Drag onto a frame": "Bir çerçevenin üzerine sürükleyin",
+  "Puts it inside, where the bar shows — in Layers, drop it on the frame row; hold {mod} while dragging to move over it instead": "Çubuğun gösterdiği yere içine koyar — Katmanlar'da çerçeve satırına bırakın; yalnızca üzerinden geçmek için sürüklerken {mod} tuşunu basılı tutun",
+  "held while dragging, nothing drops into a frame": "sürüklerken basılı tutulursa hiçbir şey çerçeveye girmez",
 }

@@ -7,6 +7,7 @@
 import type { Slide, SlideElement } from '../model'
 import { ICONS } from '../icons'
 import { t } from '../i18n'
+import { canAccept, frameChildren, isFrame } from '../layout'
 import { layerRows, moveInPaintOrder, highlighted, wholeGroups, rowSignature, signatureDiff, type LayerRow } from './layerrows'
 export { excerpt, labelFor, labelIn, layerRows, moveInPaintOrder, highlighted, rowSignature, signatureDiff, type LayerRow } from './layerrows'
 
@@ -23,6 +24,9 @@ export interface LayersHost {
   renameGroup: (groupId: string, name: string) => void
   /** a read-only document offers no renaming */
   readOnly?: () => boolean
+  /** put elements inside a frame at a slot, or beside an element (taking
+   *  them out of their frames), as one undo step */
+  reparent?: (ids: string[], to: { frame: string; slot: number } | { beside: string; above: boolean }) => void
   /** flip an element's `locked` or `hidden`, as one undo step */
   toggle?: (id: string, key: 'locked' | 'hidden') => void
   /** ids on this slide that morph from an element on the slide before */
@@ -39,6 +43,9 @@ export class LayersUI {
   private list: HTMLElement
   private header: HTMLElement
   private dragId: string | null = null
+  /** everything a drag carries: the dragged row, or the whole selection when
+   *  the row is part of it (a group row carries its members) */
+  private dragIds: string[] = []
   /** what the rows on screen were built from — see layerrows.ts rowSignature */
   private sig: ReturnType<typeof rowSignature> | null = null
   /** groups folded to their one row (by groupId, for the session) */
@@ -233,24 +240,29 @@ export class LayersUI {
       label.addEventListener('dblclick', (ev) => { ev.stopPropagation(); this.rename(r.id) })
       row.addEventListener('dragstart', (ev) => {
         this.dragId = r.id
+        const sel = this.host.selection()
+        this.dragIds = sel.includes(r.id) ? [...sel] : [r.id]
         ev.dataTransfer?.setData('text/plain', r.id)
         if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move'
         row.classList.add('dragging')
       })
-      row.addEventListener('dragend', () => { this.dragId = null; this.clearDropMarks() })
+      row.addEventListener('dragend', () => { this.dragId = null; this.dragIds = []; this.clearDropMarks() })
       row.addEventListener('dragover', (ev) => {
-        if (!this.dragId || this.dragId === r.id) return
+        if (!this.dragId || this.dragIds.includes(r.id)) return
+        const where = this.dropWhere(ev, row, r)
+        if (!where) { this.clearDropMarks(); return }
         ev.preventDefault()
         if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move'
         this.clearDropMarks()
-        row.classList.add(this.dropAbove(ev, row) ? 'drop-above' : 'drop-below')
+        row.classList.add(where === 'into' ? 'drop-into' : where === 'above' ? 'drop-above' : 'drop-below')
       })
       row.addEventListener('drop', (ev) => {
         ev.preventDefault()
         const id = this.dragId ?? ev.dataTransfer?.getData('text/plain')
+        const where = this.dropWhere(ev, row, r)
         this.clearDropMarks()
-        if (!id || id === r.id) return
-        this.dropOn(id, r, this.dropAbove(ev, row))
+        if (!id || this.dragIds.includes(r.id) || !where) return
+        this.dropAt(id, r, where)
       })
       this.list.appendChild(row)
     }
@@ -309,11 +321,12 @@ export class LayersUI {
     // the whole group along; a drop on it lands above or below the whole run
     row.addEventListener('dragstart', (ev) => {
       this.dragId = members[0].id
+      this.dragIds = members.map((m) => m.id)
       ev.dataTransfer?.setData('text/plain', members[0].id)
       if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move'
       row.classList.add('dragging')
     })
-    row.addEventListener('dragend', () => { this.dragId = null; this.clearDropMarks() })
+    row.addEventListener('dragend', () => { this.dragId = null; this.dragIds = []; this.clearDropMarks() })
     row.addEventListener('dragover', (ev) => {
       if (!this.dragId || all.includes(this.dragId)) return
       ev.preventDefault()
@@ -353,7 +366,57 @@ export class LayersUI {
   }
 
   private clearDropMarks() {
-    for (const n of this.list.querySelectorAll('.drop-above, .drop-below, .dragging')) n.classList.remove('drop-above', 'drop-below', 'dragging')
+    for (const n of this.list.querySelectorAll('.drop-above, .drop-below, .drop-into, .dragging')) n.classList.remove('drop-above', 'drop-below', 'drop-into', 'dragging')
+  }
+
+  /**
+   * Where a drag over row `r` would land: INSIDE a frame row when over its
+   * middle (Figma's rule — the top and bottom quarters still mean above and
+   * below), else above or below the row. Null when the drop is refused: a
+   * frame never goes inside itself or anything it holds, and a locked frame
+   * takes nothing.
+   */
+  private dropWhere(ev: DragEvent, row: HTMLElement, r: LayerRow): 'into' | 'above' | 'below' | null {
+    const slide = this.host.slide() as Slide
+    const b = row.getBoundingClientRect()
+    const y = (ev.clientY - b.top) / (b.height || 1)
+    if (r.frame && this.host.reparent && y > 0.25 && y < 0.75) return canAccept(slide, this.moving(), r.id) ? 'into' : null
+    // beside a frame's child is inside that frame — it must accept them too
+    const parent = slide.elements.find((e) => e.id === r.id)?.parentId
+    if (parent && this.host.reparent && !canAccept(slide, this.moving(), parent)) return null
+    return y < 0.5 ? 'above' : 'below'
+  }
+
+  /** The dragged elements, each counted once: a selected element whose frame
+   *  is selected too travels with its frame. */
+  private moving(): string[] {
+    const slide = this.host.slide() as Slide
+    const set = new Set(this.dragIds)
+    const byId = new Map(slide.elements.map((e) => [e.id, e]))
+    const under = (e: SlideElement | undefined): boolean => !!e?.parentId && (set.has(e.parentId) || under(byId.get(e.parentId)))
+    return this.dragIds.filter((id) => !under(byId.get(id)))
+  }
+
+  /** Land the drag on row `r`. Same parent, one element: a plain reorder, as
+   *  before. Otherwise the elements change frame: inside `r` (a frame), at
+   *  `r`'s slot when `r` is a frame's child, or out to the top level beside it. */
+  private dropAt(id: string, r: LayerRow, where: 'into' | 'above' | 'below') {
+    const slide = this.host.slide() as Slide
+    const ids = this.moving()
+    const target = slide.elements.find((e) => e.id === r.id)
+    const parent = target?.parentId
+    if (where === 'into') { this.host.reparent!(ids, { frame: r.id, slot: Infinity }); return this.refresh() }
+    const sameParent = ids.every((x) => slide.elements.find((e) => e.id === x)?.parentId === parent)
+    if (ids.length === 1 && sameParent || !this.host.reparent) return this.dropOn(id, r, where === 'above')
+    if (parent) {
+      // rows are top-first and a frame's children paint in flow order, so the
+      // row above `r` comes after it in the flow
+      const f = slide.elements.find((e) => e.id === parent)
+      const stay = isFrame(f) ? frameChildren(slide, f).filter((e) => !ids.includes(e.id)) : []
+      const i = stay.findIndex((e) => e.id === r.id)
+      this.host.reparent(ids, { frame: parent, slot: i + (where === 'above' ? 1 : 0) })
+    } else this.host.reparent(ids, { beside: r.id, above: where === 'above' })
+    this.refresh()
   }
 
   /** Drop `id` above or below row `r` (rows are top-first, paint index runs
