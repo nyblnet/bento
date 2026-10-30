@@ -676,6 +676,7 @@ export class Editor {
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
     this.panel = new PropsPanel(this.props, this.store)
+    this.panel.titleOf = (id, label) => titleFor(this.commands, id, label)
     this.panel.layers.mount(this.sideLayers)
     const offs = (['doc', 'selection', 'current'] as const).map((e) => this.store.on(e, () => this.panel.layers.refresh()))
     this.buildScope.signal.addEventListener('abort', () => offs.forEach((off) => off()), { once: true })

@@ -13,7 +13,6 @@ import { revealInOrder, revealTogether, removeReveal } from './reveal'
 
 import { ICONS } from '../icons'
 import { LayersUI, labelFor, GLYPH as LAYER_GLYPH } from './layers'
-import { isMacOS } from '../screens'
 
 import { t } from '../i18n'
 import { lsJson, lsSet } from '../../../kernel/src/storage.ts'
@@ -36,6 +35,9 @@ export class PropsPanel {
   /** Indent (+1) / outdent (−1) bullets — set by the editor to the canvas,
    *  which knows whether a text box is open and where its caret is. */
   onListIndent: ((dir: 1 | -1) => void) | null = null
+  /** A command's tooltip with its keys (commands.ts titleFor) — set by the
+   *  editor, which owns the command list, so a hint cannot drift from the key. */
+  titleOf: (id: string, label: string) => string = (_id, label) => label
   /** Morph preview on the canvas: 0..1 of the way in, null restores — set
    *  by the editor to the canvas, which owns the rendered nodes. */
   onMorphPreview: ((t: number | null) => void) | null = null
@@ -400,10 +402,9 @@ export class PropsPanel {
     name.title = name.textContent ?? ''
     bar.append(glyph, name)
     if (els.length) {
-      const mod = isMacOS() ? '⌘' : 'Ctrl+'
       bar.append(
-        opBtn(ICONS.copy, `${t('Duplicate')} (${mod}D)`, () => this.duplicate(els)),
-        opBtn(ICONS.trash, `${t('Delete')} (⌫)`, () => this.deleteEls(els)),
+        opBtn(ICONS.copy, this.titleOf('duplicate', t('Duplicate')), () => this.duplicate(els)),
+        opBtn(ICONS.trash, this.titleOf('delete', t('Delete')), () => this.deleteEls(els)),
       )
     }
     this.host.querySelector(':scope > .ed-tabs-band')!.after(bar, how)

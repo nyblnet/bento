@@ -95,7 +95,7 @@ names provisional.
   `morphId`), but an optional `morphId` re-targets the pairing WITHOUT mutating
   `id` — so two independently-created elements on different slides can morph. This
   one line is the whole engine change; everything downstream reads `data-flip-id`.
-  Edited in the panel's Morph section (`panels.ts buildMorphProps`): a "Morph id"
+  Edited in the panel's Morph section (`inspector/animate.ts buildMorphProps`): a "Morph id"
   field (writing the element's own id clears the override) + a "Pair with" picker
   that adopts another slide element's key; both reject a key that would collide
   with another element's effective key on the SAME slide (present.ts maps by flip
@@ -274,7 +274,7 @@ names provisional.
   `symbolSize`. Legend measurement treats CJK characters as full-width so
   localized series names do not overlap.
   **Visual
-  chart editor** (panels.ts buildChartProps): structured UI over the option —
+  chart editor** (inspector/chart.ts buildChartProps): structured UI over the option —
   Type, Legend + Second-axis toggles, a Series list (name · bar/line · left/right
   axis · colour · remove), per-axis min/max, and an editable categories×series
   data grid (add/remove rows keep xAxis.data + every series.data in lockstep);
@@ -306,7 +306,7 @@ names provisional.
   (updateTableHandles/startColResize — live DOM update during drag, commit on
   release; needs real-mouse QA like Moveable). Panel: row/col steppers, header
   toggle, style presets (Lined/Zebra/Boxed/Minimal), colours, and a
-  table→chart bridge (buildTableProps/tableToChart: first column = labels,
+  table→chart bridge (inspector/table.ts buildTableProps/tableToChart: first column = labels,
   first numeric column = series). Morphs as a BOX (cell content does not
   morph); under collab `rows` is a whole-value LWW register (concurrent
   different-cell edits are last-writer-wins — documented limitation).
@@ -324,7 +324,7 @@ names provisional.
   `startMediaIn`/`pauseMediaIn` play flagged clips (`data-autoplay="1"`) on
   slide-enter and pause on exit/teardown; browsers need `muted` for video
   autoplay so `defaultMedia` mutes video. Panel 'Source & playback'
-  (buildMediaProps): embedded/linked status+size, Choose/Replace file, URL,
+  (inspector/media.ts buildMediaProps): embedded/linked status+size, Choose/Replace file, URL,
   controls/autoplay/loop/muted, and (video) fit/corner/poster.
 - **Diagram philosophy**: complex diagrams are ordinary Bento elements (rects, texts,
   `path` shapes) with groups — interactivity = linked state slides + morph (filters,
@@ -399,6 +399,13 @@ names provisional.
   "Sync from parent" (id-lineage merge — generators must emit deterministic
   element ids for it and for cross-state morphs); slide deletion cascades states
   and clears inbound links after confirm; `[`/`]` collapse the side panels.
+- **Keys are commands**: every keyed editor action is one entry in the
+  `commands` list (editor.ts; the type, `dispatch`, `titleFor` and the ⌘K
+  palette live in editor/commands.ts). keydown dispatches through it in list
+  order; topbar tooltips, the insert buttons' letter badges, the element
+  menu's hints and the ? sheet's one-command rows read their keys from it.
+  ⌘C, Delete/Backspace, the arrows and Esc stay hand-coded in the keydown
+  handler because they branch on canvas state.
 - **Panel accordion**: every `.ed-section` header is retrofitted into a
   collapsible group after each rebuild (panels.applyAccordion) — open state
   persisted per title in localStorage; Presenting/Interactivity/Layout
@@ -588,16 +595,28 @@ names provisional.
   Alt-HOVER measures from the selection to the element under the pointer
   (measure-geom.ts; an overlay in .ed-stage-scale, pointer-events none,
   inspection only). Fill/stroke colors carry alpha (swatch · hex · % field,
-  rgba round-trip; theme colours behind a palette button, a linked colour
-  shows its slot name until detached); shapes support `fillGradient` (linear,
-  CSS-convention angle, multi-stop) — rendered as per-instance svg `<defs>`
+  rgba round-trip; the swatch opens our own colour popover — inspector/
+  colorpopover.ts: saturation/hue, opacity, HEX/RGB/HSL/OKLCH, eyedropper,
+  theme and on-slide swatches — driving the same hidden colour input as the
+  inline row; a linked colour shows its slot name until detached); shapes
+  support `fillGradient` (linear, CSS-convention angle, multi-stop;
+  `kind:'radial'` + cx/cy/r; aimed by a canvas handle, gradientoverlay.ts) — rendered as per-instance svg `<defs>`
   gradients (unique ids: url(#…) refs are document-global across
-  canvas/thumbs/present). Inspector (panels.ts): Format | Animate | Interact
-  tabs; Format opens with a header-less block (align/order toolbar, blend ·
-  opacity, W H X Y, rotation, radius), then the kind's section, Fill, Stroke,
-  Shadow, Blur (optional layers added/removed from their header's + / −) and
-  Layout (layout role, explained). Numeric fields scrub from their label,
-  held to their min/max. The side column is Slides | Layers; layer rows and
+  canvas/thumbs/present). Inspector: `panels.ts` is the PropsPanel
+  controller (rebuild, tabs, accordion, dispatch, public verbs); each
+  section's builders live in `editor/inspector/*.ts` as functions taking the
+  panel. Format | Animate | Interact tabs; Format opens with a header-less
+  block (align/order toolbar, blend · opacity, W · padlock · H, X Y, rotation,
+  radius), then the kind's section, Fill and Stroke (each a stack of layers,
+  stacks.ts), Shadow, Blur (optional, added/removed from their header's
+  + / −), Auto layout (frames, layout.ts), Layout (layout role, explained)
+  and Export at the foot (PNG 1×/2×, SVG, Copy as JSON, contrast, alt text).
+  Numeric fields are text spinbuttons: they take arithmetic
+  (inspector/numexpr.ts, never eval), show Mixed on a multi-selection (an
+  edit there is a per-element delta), and scrub from their label under
+  pointer lock, held to their min/max. The side column is Slides | Layers |
+  Tokens (tokenspane.ts: design tokens and components); layer rows carry a
+  padlock (`locked`) and an eye (`hidden`); layer rows and
   group rows rename in place (double-click or Rename) — `name` / `groupName`,
   display only. Group (⌘G/⇧⌘G — `groupId`, distinct from presentation
   `group`; click selects the group, Alt-click reaches a member; duplicate,
@@ -668,7 +687,7 @@ names provisional.
   for a local build, never for a release.
   blocks + ~1KB loader (DecompressionStream → blob import; pre-2023 browsers
   get a plain-HTML message). Byte order: chrome → NOTICE → tooling comment →
-  PLAINTEXT #bento-doc → splash → payloads last. Shell ~560KB (was 1.33MB).
+  PLAINTEXT #bento-doc → splash → payloads last. Shell ~800KB compressed (was 1.33MB before compression).
   The loader's injected `<style>` carries `data-bento-transient` and
   `serializeBody` (kernel/src/save.ts) strips marked nodes from the clone —
   `capturePristine()` clones the LIVE document, so without that the inflated

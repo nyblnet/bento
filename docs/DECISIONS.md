@@ -11942,7 +11942,7 @@ Selection Pane and Penpot (Design | Prototype, layers on the left).
 
 ## 2026-10-29 — slides: the Penpot-grade editor revamp — everything new is additive
 
-Carried out from the "Extending Bento" architecture brief, with one rule
+Carried out from an architecture brief ("Extending Bento", not in the repo), with one rule
 overriding the brief wherever they disagreed: **no format version bump and no
 new element type or shape kind.** Shipped shells switch on `type`/`shape`
 with no default and fail the slide on a kind they do not know (the reason
@@ -11976,9 +11976,12 @@ existing element, and an older shell sees an ordinary deck.
   re-editing. Render-time masks were rejected because old shells would show
   the raw operands. Geometry is zero-dependency (`vector-bool.ts`); exactly
   abutting shapes are nudged 1e-4px apart, a known ceiling.
-- **One command list.** Keyed editor actions are declared once
-  (`editor/commands.ts`); keydown dispatches through it, ⌘K searches it,
-  tooltips read their keys from it. Gestures stay prose in the ? sheet.
+- **One command list.** Keyed editor actions are declared once (the
+  `commands` list in editor.ts, typed and dispatched by
+  `editor/commands.ts`); keydown dispatches through it, ⌘K searches it, and
+  tooltips read their keys from it. ⌘C, Delete, the arrows and Esc stay in
+  the keydown handler because they branch on canvas state; Copy and Delete
+  are listed for the palette only. Gestures stay prose in the ? sheet.
 - **Numbers are text spinbuttons** so `/` and `*` can be typed; a hand-written
   parser (`inspector/numexpr.ts`, never eval) evaluates them. A leading
   `+ * /` is relative, a leading `−` is a negative number. On a
@@ -11993,7 +11996,7 @@ existing element, and an older shell sees an ordinary deck.
   editor-only. `hidden` is honoured by renderSlide everywhere; an older shell
   draws a hidden element — accepted over a non-additive encoding.
 - **The brief's size budget did not hold**: the shell was 737KB compressed
-  before this work (not 560KB) and is 770KB after it.
+  before this work (not 560KB) and 770KB after this first pass.
 
 ## 2026-10-29 — slides: the revamp's second pass — tools, paint, polish
 
