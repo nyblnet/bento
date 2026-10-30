@@ -3434,7 +3434,9 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   position: absolute; box-sizing: border-box; border-style: solid; border-color: #fff; border-radius: 50%;
   background: var(--blue); box-shadow: 0 0 0 1px rgb(0 0 0 / .5); pointer-events: auto; cursor: grab; z-index: 6;
 }
-.ed-corners-btn { position: absolute; inset-inline-end: 2px; top: 50%; translate: 0 -50%; width: 20px; height: 20px; min-height: 0; padding: 0; }
+/* left of the token dot (tokenbind.ts), which owns the field's end */
+.ed-mini:has(> .ed-corners-btn) input { padding-inline-end: 38px; }
+.ed-corners-btn { position: absolute; inset-inline-end: 16px; top: 50%; translate: 0 -50%; width: 20px; height: 20px; min-height: 0; padding: 0; }
 .ed-corners-btn svg { width: 12px; height: 12px; }
 .ed-corners-btn[aria-pressed='true'] { color: var(--ink); background: var(--chrome-2); }
 .ed-props .ed-grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-bottom: 6px; }

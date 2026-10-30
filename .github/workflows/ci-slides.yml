@@ -354,3 +354,8 @@ jobs:
         # Opens from the swatch instead of the native picker; live preview,
         # one undo step, typed hex/RGB/names, theme swatch links, Esc cancels.
         run: node scripts/test-slides-color-popover-browser.mjs
+      - name: Paint in Chromium
+        # Radial/per-corner/outside-stroke/flip render; Solid | Linear | Radial,
+        # the stop bar, the popover's kinds, the canvas gradient knob, stroke
+        # position, dashes, corners, flip; hover previews write nothing.
+        run: node scripts/test-slides-paint-browser.mjs
