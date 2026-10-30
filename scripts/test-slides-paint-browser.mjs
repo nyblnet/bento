@@ -148,6 +148,18 @@ try {
   await p.click('.ed-props .ed-tool[aria-label="Flip vertical"]'); await p.waitForTimeout(250)
   ok((await el('corn')).flipY === true, 'Flip vertical writes flipY')
 
+  // several: one picture mirrored across the selection's box (corn 100..300, flip 500..700 → box 100..700)
+  await select('corn')
+  await p.keyboard.down('Shift')
+  { const b = await p.locator(node('flip')).boundingBox(); await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2) }
+  await p.keyboard.up('Shift'); await p.waitForTimeout(250)
+  await p.click('.ed-props .ed-tool[aria-label="Flip horizontal"]'); await p.waitForTimeout(250)
+  const [c2, f2] = [await el('corn'), await el('flip')]
+  ok(c2.x === 500 && f2.x === 100, `Flip horizontal on two elements swaps their places across the selection's box (corn ${c2.x}, flip ${f2.x})`)
+  ok(c2.flipX === true && !f2.flipX, 'and each one\'s own content flips (the already-flipped arrow unflips)')
+  await undo()
+  ok((await el('corn')).x === 100 && (await el('flip')).x === 500 && (await el('flip')).flipX === true, 'one undo puts both back')
+
   console.log('\nhover previews\n')
   await select('corn')
   await p.evaluate(() => { const b = [...document.querySelectorAll('.ed-props .ed-sec-act')].find((x) => x.title === 'Add shadow'); b?.click() })
