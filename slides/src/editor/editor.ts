@@ -3483,6 +3483,11 @@ export class Editor {
         ev.target instanceof Element &&
         ev.target.closest('input, textarea, select, [contenteditable="true"]') != null
 
+      // A key typed at a selected text box is text, as in PowerPoint and Keynote:
+      // it opens the box with the character. Before the command list, so the R
+      // of "Revenue" is never the rectangle tool; a shifted key a command claims
+      // (⇧A, ?) stays the command's.
+      if (!inField && this.typeIntoText(ev)) return
       if (dispatch(this.commands, ev, inField)) return
       if (inField) return
       // Crop mode owns the keyboard: Enter/Esc are its (cropedit.ts), and a
@@ -3551,6 +3556,21 @@ export class Editor {
         return
       }
     })
+  }
+
+  /** Open the one selected text box with the key just typed: it replaces the
+   *  words the edit selects on opening, or fills an empty placeholder. */
+  private typeIntoText(ev: KeyboardEvent): boolean {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey || ev.isComposing || [...ev.key].length !== 1) return false
+    const sel = this.store.selectedElements
+    if (sel.length !== 1 || sel[0].type !== 'text' || sel[0].locked || this.store.readOnly) return false
+    if (document.querySelector(MODAL) || this.canvas.isCropEditing || this.canvas.isPathEditing) return false
+    if (ev.shiftKey && this.commands.some((c) => c.match?.(ev, false))) return false
+    ev.preventDefault()
+    this.canvas.editElement(sel[0].id)
+    if (!this.canvas.isEditingText) return true
+    document.execCommand('insertText', false, ev.key)
+    return true
   }
 
   /** V: back to the plain pointer — an armed draw tool, the comment tool

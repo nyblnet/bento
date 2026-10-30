@@ -1736,14 +1736,20 @@ export class SlideCanvas {
         // reaching into react-moveable's private _checkChangeTargets(). The real fix
         // is to stop replaying a stale press and start the drag from a live move
         // event instead; that is a rework of this gesture, not a tidy-up.
+        //
+        // And not at the resolve itself: Moveable reports the change before its
+        // manager has settled, and the update that settles it UNSETS a drag begun
+        // at the resolve — the gesture lived on with no drag state, so the
+        // element never moved and every move threw "Cannot set properties of
+        // null (setting 'dist')". Two frames later the manager is stable.
+        // ponytail: two rAFs is the measured settle; a Moveable event for "ready" would be exact
         let released = false
         const onMouseUp = () => { released = true }
         window.addEventListener('mouseup', onMouseUp, { capture: true, once: true })
-        this.moveable.waitToChangeTarget().then(() => {
+        this.moveable.waitToChangeTarget().then(() => requestAnimationFrame(() => requestAnimationFrame(() => {
           window.removeEventListener('mouseup', onMouseUp, true)
-          if (released) return
-          this.moveable.dragStart(e.inputEvent)
-        })
+          if (!released) this.moveable.dragStart(e.inputEvent)
+        })))
       }
     })
   }
