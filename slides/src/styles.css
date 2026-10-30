@@ -3751,3 +3751,6 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 }
 .ed-props .ed-color-open:hover { border-color: var(--field-line-hot); color: var(--ink); }
 .ed-props .ed-color-open svg { width: 15px; height: 15px; }
+
+/* the Select-only tool: nothing on the slide offers to move */
+.ed-marquee-tool .bento-el, .ed-marquee-tool .moveable-area { cursor: default !important; }
