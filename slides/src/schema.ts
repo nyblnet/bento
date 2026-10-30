@@ -95,8 +95,8 @@ export function buildSchema(version: string): JsonSchema {
       mode: str(64, 'the active mode; absent = the first'),
       set: { type: 'object', maxProperties: 500, description: 'token name → {type, values: mode → value}; bound with themeRefs "$name"', additionalProperties: {
         type: 'object', required: ['type', 'values'], additionalProperties: false, properties: {
-          type: { enum: ['color', 'number'] },
-          values: { type: 'object', additionalProperties: { type: ['string', 'number'] } },
+          type: { enum: ['color', 'number', 'fontFamily', 'fontSize', 'shadow', 'opacity'] },
+          values: { type: 'object', additionalProperties: { type: ['string', 'number', 'object'], description: 'a shadow token holds {x, y, blur, color}' } },
         } } },
     }, ['set']),
   }, ['background', 'color', 'accent', 'fontFamily'])

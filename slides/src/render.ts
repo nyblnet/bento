@@ -680,6 +680,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
   if (el.link) node.dataset.link = el.link
   if (el.group) node.dataset.group = el.group
   if (el.showOnHover) node.dataset.showOnHover = el.showOnHover
+  if (el.alt && el.type !== 'text') { node.setAttribute('role', 'img'); node.setAttribute('aria-label', el.alt) }
   applyElementFrame(node, el)
 
   switch (el.type) {

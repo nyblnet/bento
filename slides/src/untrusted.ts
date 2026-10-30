@@ -463,7 +463,7 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
   id: cssValue(), morphId: cssValue(), role: cssValue(), group: cssValue(),
   groupId: cssValue(), showOnHover: cssValue(),
   // the author's names in the layer list — display text, only ever set as textContent
-  name: str(LIMITS.prose), groupName: str(LIMITS.prose),
+  name: str(LIMITS.prose), groupName: str(LIMITS.prose), alt: str(LIMITS.prose),
   // Layers' lock and eye: true or absent
   locked: bool, hidden: bool,
   flipX: bool, flipY: bool,

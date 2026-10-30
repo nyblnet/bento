@@ -4,7 +4,7 @@
 import { tokenBind } from './tokenbind'
 import type { PropsPanel } from '../panels'
 import { BOOL_OPS, boolOperands, boolUi, combine } from '../booleans'
-import type { SlideElement, ShapeElement } from '../../model'
+import { ratioLocked, type ImageElement, type SlideElement, type ShapeElement } from '../../model'
 import { section, row, labeledSelect, mini } from './fields'
 import { t } from '../../i18n'
 import { optLabel } from './controls'
@@ -129,7 +129,7 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
   const opacity = measure(p, els, 'opacity', '%', { min: 0, max: 100, scale: 100 })
   opacity.title = t('Opacity')
   opacity.querySelector('input')!.setAttribute('aria-label', opacity.title) // not '%'
-  layer.append(single ? tokenBind(p, opacity, single, 'opacity') : opacity)
+  layer.append(single ? tokenBind(p, opacity, single, 'opacity', ['opacity', 'number']) : opacity)
   block.appendChild(layer)
 
   const geo = document.createElement('div')
@@ -145,6 +145,7 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
   geo.append(
     size('w', t('W')),
     size('h', t('H')),
+    ...(single && !derived ? [ratioLock(p, single)] : []),
     measure(p, els, 'x', t('X')),
     measure(p, els, 'y', t('Y')),
     measure(p, els, 'rotation', t('Angle'), { icon: ICONS.rotate, unit: '°' }),
@@ -223,7 +224,14 @@ function measure(p: PropsPanel, els: SlideElement[], key: Measure, label: string
     const delta = mixed ? (final ? (rel === undefined ? null : parseFloat(rel)) : v) : null
     p.edit(() => els.forEach((e, i) => {
       const el = p.store.element(e.id)
-      if (el) el[key] = hold(delta === null ? v : vals[i] + delta) / k
+      if (!el) return
+      const before = el[key]
+      el[key] = hold(delta === null ? v : vals[i] + delta) / k
+      // a locked element's other side follows a typed or scrubbed W/H
+      if ((key === 'w' || key === 'h') && ratioLocked(el) && before > 0) {
+        const other = key === 'w' ? 'h' : 'w'
+        el[other] = Math.max(1, el[other] * el[key] / before)
+      }
     }), final)
   }, o.icon, mixed ? { unit: o.unit } : { min: o.min, max: o.max, unit: o.unit })
   const input = wrap.querySelector('input')!
@@ -292,4 +300,23 @@ export function step(p: PropsPanel, els: SlideElement[], dir: 1 | -1) {
       ;[arr[i], arr[j]] = [arr[j], arr[i]]
     }
   })
+}
+
+/** The padlock between W and H: resizes keep the element's proportions. */
+function ratioLock(p: PropsPanel, el: SlideElement): HTMLElement {
+  const on = ratioLocked(el)
+  const b = document.createElement('button')
+  b.type = 'button'
+  b.className = 'ed-btn ed-tool ed-ratio-lock'
+  b.innerHTML = on ? ICONS.lock : ICONS.unlock
+  b.setAttribute('aria-pressed', String(on))
+  b.title = on ? t('Proportions locked — click to unlock') : t('Lock proportions')
+  b.setAttribute('aria-label', t('Lock proportions'))
+  b.addEventListener('click', () => p.mutate(el.id, (e) => {
+    // an image is locked when the key is absent; anything else when it is true
+    if (e.type === 'image') { if (on) { e.keepAspectRatio = false; (e as ImageElement).fit = 'fill' } else delete e.keepAspectRatio }
+    else if (on) delete e.keepAspectRatio
+    else e.keepAspectRatio = true
+  }, true))
+  return b
 }

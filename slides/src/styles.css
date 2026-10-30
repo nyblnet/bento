@@ -2964,6 +2964,11 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-token-row > input[type='color'] { flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
 .ed-token-row > input[type='number'] { flex: none; width: 52px; }
 .ed-token-name { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-token-preview { flex: none; width: 24px; height: 24px; display: grid; place-items: center; font-size: 12px; line-height: 1; border: 1px solid var(--line); border-radius: 6px; background: var(--ink); color: var(--surface); overflow: hidden; }
+.ed-tokens-group[data-type="fontFamily"] .ed-token-preview, .ed-tokens-group[data-type="fontSize"] .ed-token-preview { background: none; color: var(--ink); }
+.ed-tokens-group[data-type="shadow"] .ed-token-preview { background: var(--surface); border-color: transparent; margin: 4px; width: 18px; height: 18px; }
+.ed-tokens-group[data-type="shadow"] .ed-token-row > input[type="number"] { width: 38px; }
+.ed-token-font { flex: 1.4; min-width: 0; font-size: 12px; }
 .ed-token-uses { flex: none; min-width: 16px; font-size: 10.5px; color: var(--muted); text-align: end; font-variant-numeric: tabular-nums; }
 /* a bound numeric field (inspector/tokenbind.ts): the dot binds, the pill detaches */
 .ed-mini.ed-has-token input { padding-inline-end: 18px; }
@@ -2971,6 +2976,12 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-mini:hover .ed-token-dot, .ed-token-dot:focus-visible { opacity: 1; }
 .ed-token-pill { position: absolute; inset: 1px; display: flex; align-items: center; gap: 4px; padding-inline: 8px; font: inherit; font-size: 11.5px; color: var(--ink); background: var(--chrome-2); border: 0; border-radius: 5px; cursor: pointer; overflow: hidden; white-space: nowrap; }
 .ed-token-pill::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.ed-token-wrap { position: relative; }
+.ed-token-wrap > select { width: 100%; }
+.ed-token-wrap.ed-has-token > select { padding-inline-end: 22px; }
+.ed-token-wrap > .ed-token-dot { top: 50%; translate: 0 -50%; inset-inline-end: 20px; }
+.ed-token-wrap:hover > .ed-token-dot { opacity: 1; }
+.ed-shadow-tiles + .ed-token-dot { top: 4px; translate: none; inset-inline-end: 4px; }
 .ed-layer-comp { flex: none; font-size: 10px; color: var(--accent); }
 .ed-scroll .bento-editing {
   -webkit-touch-callout: default;
@@ -3246,7 +3257,6 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   display: flex; flex-direction: column; gap: 8px;
   background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 10px 30px rgb(0 0 0 / .28);
-  animation: ed-cpop-in 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 @keyframes ed-cpop-in { from { opacity: 0; transform: scale(.96); } }
 .ed-cpop-sv {
@@ -3270,6 +3280,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-cpop-line { display: flex; gap: 4px; align-items: center; }
 .ed-cpop-line select { flex: none; width: 64px; }
 .ed-cpop-text { flex: 1 1 0; min-width: 0; font-variant-numeric: tabular-nums; }
+.ed-cpop-text.is-clamped { box-shadow: inset 0 0 0 1px var(--danger); }
 .ed-cpop-swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
 .ed-cpop-swatch { aspect-ratio: 1; width: auto; height: auto; padding: 0; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
 .ed-cpop-swatch:hover { box-shadow: 0 0 0 2px var(--accent-ink); }
@@ -3465,3 +3476,27 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-fx-pills button:hover { color: var(--ink); background: var(--chrome-2); }
 .ed-fx-pills button[aria-checked='true'] { color: var(--ink); border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
 .ed-fx-pills button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
+
+/* the padlock between W and H (arrange.ts ratioLock): in the gap of the first row */
+.ed-grid2:has(> .ed-ratio-lock) { position: relative; column-gap: 22px; }
+.ed-ratio-lock { position: absolute; top: 4px; left: 50%; translate: -50% 0; width: 18px; height: 18px; min-height: 0; padding: 1px; color: var(--muted); }
+.ed-ratio-lock[aria-pressed="true"] { color: var(--accent-ink); }
+.ed-ratio-lock svg { width: 14px; height: 14px; }
+
+/* Motion: floating surfaces arrive with a short, slightly springy scale + fade;
+   section bodies fold over --ed-fold-ms (panels.ts foldSection). One place to tune. */
+:root { --ed-pop-in: ed-cpop-in 120ms cubic-bezier(0.34, 1.36, 0.64, 1); --ed-fold-ms: 140; }
+.ed-cpop, .ed-ctxmenu, .ed-menu, .ed-cmdk { animation: var(--ed-pop-in); }
+.ed-ctxmenu, .ed-menu { transform-origin: top left; }
+.ed-cmdk { transform-origin: top center; }
+@media (prefers-reduced-motion: reduce) {
+  :root { --ed-fold-ms: 0; }
+  .ed-cpop, .ed-ctxmenu, .ed-menu, .ed-cmdk { animation: none; }
+}
+
+/* Export ▸ accessibility: the contrast readout and its grade */
+.ed-a11y { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 26px; margin: 2px 7px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.ed-a11y-badge { padding: 1px 6px; border-radius: 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; border: 1px solid currentColor; }
+.ed-a11y-badge.is-pass { color: var(--accent-ink); }
+.ed-a11y-badge.is-fail { color: var(--danger); }
+.ed-a11y-alt { width: 100%; }

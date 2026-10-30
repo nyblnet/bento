@@ -2,8 +2,8 @@
 // Copyright (c) 2026 The Bento authors
 // Animate and Interact: entrances, steps, morph pairing, links, states.
 import type { PropsPanel } from '../panels'
-import { type SlideElement, morphKey, type TextElement, isWebUrl, uid, paginates } from '../../model'
-import { section, row, labeledSelect, number, select } from './fields'
+import { type Slide, type SlideElement, morphKey, type TextElement, isWebUrl, uid, paginates } from '../../model'
+import { section, row, labeledSelect, number, select, toggle } from './fields'
 import { t } from '../../i18n'
 import { UNPAIR, roving } from './controls'
 import { endPreview, previewEnter } from '../fxpreview'
@@ -37,6 +37,17 @@ export function buildMorphProps(p: PropsPanel, el: SlideElement) {
     if (err) { warn.textContent = err; warn.style.display = ''; input.value = effective }
   })
   row(p, 'Morph name', input)
+
+  // The link toggle: pair with the most similar element on the slide before,
+  // or stop pairing — the picker below says which one it chose.
+  const prev = morphSource(p.store.doc, p.store.slide) ?? p.store.doc.slides[p.store.doc.slides.indexOf(p.store.slide) - 1]
+  if (prev) {
+    const linked = prev.elements.some((e) => morphKey(e) === effective)
+    row(p, 'Morph from the slide before', toggle(linked, (on) => {
+      const err = on ? linkPrevious(p, el, prev) : unlinkPrevious(p, el, prev)
+      if (err) { warn.textContent = err; warn.style.display = '' }
+    }))
+  }
 
   const targets = morphTargets(p, el)
   // `|| el.morphId`: a paired element with no OTHER slide to pair with still
@@ -98,6 +109,29 @@ export function buildMorphProps(p: PropsPanel, el: SlideElement) {
     ? t('Morphs as <code>{id}</code> instead of its own name, <code>{own}</code>. Choose “Don’t pair” below to undo.', { id: effective, own: el.id })
     : t('Elements with the same morph name morph into each other between slides. Rename it, or pick below, to pair it with an element on another slide.')
   p.host.appendChild(hint)
+}
+
+/**
+ * Pair `el` with its best match on `prev`: the same name, else the same type
+ * nearest in place and size. Keys already used on this slide are skipped.
+ */
+export function linkPrevious(p: PropsPanel, el: SlideElement, prev: Slide): string | null {
+  const here = new Set(p.store.slide.elements.filter((e) => e.id !== el.id).map(morphKey))
+  const free = prev.elements.filter((e) => !here.has(morphKey(e)))
+  const cost = (e: SlideElement) => (e.type === el.type ? 0 : 1e6)
+    + Math.hypot(e.x + e.w / 2 - el.x - el.w / 2, e.y + e.h / 2 - el.y - el.h / 2) + Math.abs(e.w - el.w) + Math.abs(e.h - el.h)
+  const best = (el.name && free.find((e) => e.name === el.name && e.type === el.type))
+    ?? [...free].sort((a, b) => cost(a) - cost(b))[0]
+  return best ? setMorphId(p, el, morphKey(best)) : t('Nothing on the slide before to pair with.')
+}
+
+/** Stop `el` morphing from `prev`: clear an override, or — when its own id is what pairs it — give it a name of its own. */
+export function unlinkPrevious(p: PropsPanel, el: SlideElement, prev: Slide): string | null {
+  const ownPairs = prev.elements.some((e) => morphKey(e) === el.id)
+  if (el.morphId && !ownPairs) return setMorphId(p, el, el.id)
+  let name = `${el.id}-solo`
+  for (let i = 2; [...prev.elements, ...p.store.slide.elements].some((e) => morphKey(e) === name); i++) name = `${el.id}-solo${i}`
+  return setMorphId(p, el, name)
 }
 
 /** Set or clear an element's morph-key override. Writing the element's own

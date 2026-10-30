@@ -8,7 +8,7 @@ import Moveable from 'moveable'
 import Selecto from 'selecto'
 import type { Store } from '../store'
 import { t } from '../i18n'
-import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type SlideElement, type TableElement, type TextElement } from '../model'
+import { defaultShape, internAsset, ratioLocked, readableInk, uid, type ShapeElement, type SlideElement, type TableElement, type TextElement } from '../model'
 import { estimatedFrames, fencedElements, splitFences, toggleCodeOnSelection, type FencePart, type PartFrame } from './codefence'
 import { cssColor, renderSlide, sanitizeHtml } from '../render'
 import { autoformatAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
@@ -1500,12 +1500,13 @@ export class SlideCanvas {
         target.style.top = `${top}px`
       }
     }
-    // Shift keeps the ratio — except for an image, whose own setting is the
-    // default and Shift is the one-drag exception either way: a locked image
-    // (keepAspectRatio absent/true) is freed by Shift, an unlocked one held.
+    // Shift keeps the ratio — except for an element whose padlock is on (an
+    // image's is on unless turned off): its own setting is the default and
+    // Shift is the one-drag exception either way — a locked element is freed
+    // by Shift, an unlocked one held.
     const syncKeepRatio = (inputEvent: MouseEvent | undefined, target: HTMLElement) => {
       const el = target.dataset.elId ? this.store.element(target.dataset.elId) : undefined
-      const locked = el?.type === 'image' && el.keepAspectRatio !== false
+      const locked = !!el && ratioLocked(el)
       const want = inputEvent?.shiftKey ? !locked : locked
       if (mv.keepRatio !== want) mv.keepRatio = want
     }

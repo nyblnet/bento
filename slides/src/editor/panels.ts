@@ -278,7 +278,7 @@ export class PropsPanel {
       h.addEventListener('click', () => {
         const nowClosed = h.classList.toggle('closed')
         const live = h.nextElementSibling as HTMLElement | null
-        if (live?.classList.contains('ed-section-body')) live.style.display = nowClosed ? 'none' : ''
+        if (live?.classList.contains('ed-section-body')) foldSection(live, nowClosed)
         if (!nowClosed) this.stackCrampedRows()
         const state = lsJson<Record<string, boolean>>('bento-panel-open', {})
         state[key] = !nowClosed
@@ -501,3 +501,21 @@ export class PropsPanel {
 }
 
 type PanelTab = 'format' | 'animate' | 'interact'
+
+/**
+ * Open or close a section body with a short height tween (styles.css
+ * --ed-fold). Opening shows it at once and grows it, so anything that reads
+ * the open section reads it immediately; closing shrinks, then hides.
+ * Reduced motion: no tween.
+ */
+function foldSection(body: HTMLElement, close: boolean) {
+  body.getAnimations().forEach((a) => a.cancel())
+  if (!close) body.style.display = ''
+  const ms = parseFloat(getComputedStyle(body).getPropertyValue('--ed-fold-ms')) || 0
+  if (!ms || matchMedia('(prefers-reduced-motion: reduce)').matches) { body.style.display = close ? 'none' : ''; return }
+  const h = `${body.scrollHeight}px`
+  const a = body.animate(
+    [{ height: close ? h : '0px', opacity: close ? 1 : 0, overflow: 'hidden' }, { height: close ? '0px' : h, opacity: close ? 0 : 1, overflow: 'hidden' }],
+    { duration: ms, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
+  if (close) a.onfinish = () => { body.style.display = 'none' }
+}

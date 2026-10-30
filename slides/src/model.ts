@@ -159,6 +159,20 @@ export interface ElementBase {
    */
   component?: { id: string; key: string; main?: true; over?: string[] }
   /**
+   * Resize keeps the proportions (the padlock between W and H). Any element:
+   * true = locked, absent = free. An IMAGE reads it the other way round —
+   * absent = locked (ImageElement) — so every existing deck resizes as it did.
+   * Shift inverts it for one drag.
+   */
+  keepAspectRatio?: boolean
+  /**
+   * What a screen reader says for a picture, shape, chart or diagram (the
+   * Export section's Accessibility field). Rendered as the image's alt / the
+   * element's aria-label with role="img". Absent = decorative to assistive
+   * technology, exactly as before. Text elements are read as their text.
+   */
+  alt?: string
+  /**
    * Locked: the canvas will not pick, drag or nudge it — a click passes
    * through to what lies beneath, and a marquee leaves it out. It is still
    * listed in Layers, where it can be selected and unlocked. Editor-only:
@@ -211,14 +225,22 @@ export interface FrameLayout {
   wrap?: boolean
 }
 
+/** Whether a resize of `el` keeps its proportions (Shift inverts it for one drag). */
+export const ratioLocked = (el: SlideElement): boolean =>
+  el.type === 'image' ? el.keepAspectRatio !== false : el.keepAspectRatio === true
+
 /** Design tokens (`theme.tokens`); values are keyed by mode, 'default' when the deck has none. */
 export interface DesignTokens {
   /** mode names, in order; absent = the single mode 'default' */
   modes?: string[]
   /** the active mode; absent = the first */
   mode?: string
-  set: Record<string, { type: 'color' | 'number'; values: Record<string, string | number> }>
+  set: Record<string, { type: TokenType; values: Record<string, TokenValue> }>
 }
+
+/** 'number' is any dimension (gap, radius, stroke); 'opacity' is stored 0..1 and shown as %. */
+export type TokenType = 'color' | 'number' | 'fontFamily' | 'fontSize' | 'shadow' | 'opacity'
+export type TokenValue = string | number | ShadowSpec
 
 export interface ShadowSpec {
   x?: number

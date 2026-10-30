@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // Shadow and blur.
+import { tokenWrap } from './tokenbind'
 import type { PropsPanel } from '../panels'
 import type { SlideElement } from '../../model'
 import { SHADOW_PRESETS, optLabel, roving } from './controls'
@@ -45,7 +46,7 @@ export function buildShadow(p: PropsPanel, el: SlideElement) {
     tiles.appendChild(b)
   }
   roving(tiles, 'radio')
-  p.host.appendChild(tiles)
+  p.host.appendChild(tokenWrap(p, tiles, el, 'shadow', ['shadow']))
   // editing any value turns a preset into 'custom' on the next rebuild
   const shadows = Array.isArray(el.shadow) ? el.shadow : [el.shadow]
   const setShadow = (i: number, patch: Record<string, unknown>, fin = true) =>

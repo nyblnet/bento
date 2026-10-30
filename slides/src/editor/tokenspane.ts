@@ -9,9 +9,9 @@
 // main, Insert drops a copy on the current slide. Every change is one
 // store.commit — one undo step — and the editor's derivations do the rest.
 import type { Store } from '../store'
-import type { DesignTokens } from '../model'
+import type { DesignTokens, ShadowSpec, TokenType } from '../model'
 import { uid } from '../model'
-import { activeMode, deleteToken, modesOf, renameToken, tokenUses, tokenName } from '../tokens'
+import { TOKEN_TYPES, activeMode, deleteToken, modesOf, renameToken, tokenUses, tokenName } from '../tokens'
 import { components, instanceOf } from '../components'
 import { parseColor } from './inspector/controls'
 import { t } from '../i18n'
@@ -120,20 +120,22 @@ export class TokensPane {
     sec.appendChild(head)
 
     const uses = tokenUses(doc)
-    for (const type of ['color', 'number'] as const) {
+    for (const type of TOKEN_TYPES) {
       const names = Object.keys(tk?.set ?? {}).filter((n) => tk!.set[n].type === type)
       const group = div('ed-tokens-group')
+      group.dataset.type = type
       const cap = div('ed-tokens-cap')
-      cap.textContent = type === 'color' ? t('Colors') : t('Numbers')
-      const add = button('ed-btn ed-tool ed-tokens-add', '+', type === 'color' ? t('New color token') : t('New number token'))
+      cap.textContent = t(TYPE_LABEL[type][0])
+      const add = button('ed-btn ed-tool ed-tokens-add', '+', t(TYPE_LABEL[type][1]))
       add.addEventListener('click', () => {
         // a new row under the caption takes the name; Enter creates the token
         if (group.querySelector('.ed-token-new')) return (group.querySelector('.ed-token-new') as HTMLInputElement).focus()
         const row = div('ed-token-row ed-token-adding')
-        const field = inlineName(type === 'color' ? 'color.brand' : 'space.md', t('Token name (e.g. color.brand or space.md)'), (name) => {
+        const field = inlineName(TYPE_LABEL[type][2], t('Token name (e.g. color.brand or space.md)'), (name) => {
           if (!tokenName(`$${name}`) || this.store.doc.theme.tokens?.set[name]) return false
           this.edit((x) => {
-            const v = type === 'color' ? doc.theme.accent : 16
+            const v = type === 'color' ? doc.theme.accent : type === 'fontFamily' ? doc.theme.fontFamily
+              : type === 'shadow' ? { x: 0, y: 4, blur: 12, color: 'rgba(0, 0, 0, 0.25)' } : DEFAULT_NUM[type]
             x.set[name] = { type, values: Object.fromEntries(modesOf(x).map((m) => [m, v])) }
           })
           return true
@@ -157,24 +159,53 @@ export class TokensPane {
     const value = tok.values[m] ?? ''
     const row = div('ed-token-row')
     row.dataset.token = name
-    let input: HTMLInputElement
+    const set = (v: string | number | ShadowSpec) => this.edit((x) => { x.set[name].values[m] = v })
+    const num = (v: number, onSet: (n: number) => void, label: string) => {
+      const i = document.createElement('input')
+      i.type = 'number'
+      i.value = String(v)
+      i.setAttribute('aria-label', label)
+      i.addEventListener('change', () => { const n = parseFloat(i.value); if (Number.isFinite(n)) onSet(n) })
+      return i
+    }
+    const valueLabel = t('Value of {name}', { name })
+    // a preview of what the token does, then its editor
+    const preview = div('ed-token-preview')
     if (tok.type === 'color') {
-      input = document.createElement('input')
+      const input = document.createElement('input')
       input.type = 'color'
       input.value = parseColor(String(value)).hex
-      input.addEventListener('change', () => this.edit((x) => { x.set[name].values[m] = input.value }))
+      input.setAttribute('aria-label', valueLabel)
+      input.addEventListener('change', () => set(input.value))
       row.appendChild(input)
-    } else {
-      input = document.createElement('input')
-      input.type = 'number'
+    } else if (tok.type === 'shadow') {
+      const sh = (typeof value === 'object' ? value : { blur: 0, color: '#000' }) as ShadowSpec
+      preview.style.boxShadow = `${sh.x ?? 0}px ${sh.y ?? 0}px ${sh.blur}px ${sh.color}`
+      const col = document.createElement('input')
+      col.type = 'color'
+      col.value = parseColor(sh.color).hex
+      col.setAttribute('aria-label', t('Shadow color'))
+      col.addEventListener('change', () => set({ ...sh, color: col.value }))
+      row.append(preview, col,
+        num(sh.x ?? 0, (n) => set({ ...sh, x: n }), 'X'), num(sh.y ?? 0, (n) => set({ ...sh, y: n }), 'Y'),
+        num(sh.blur, (n) => set({ ...sh, blur: Math.max(n, 0) }), t('Blur')))
+    } else if (tok.type === 'fontFamily') {
+      preview.textContent = 'Aa'
+      preview.style.fontFamily = String(value)
+      const input = document.createElement('input')
+      input.className = 'ed-token-font'
       input.value = String(value)
-      input.addEventListener('change', () => {
-        const v = parseFloat(input.value)
-        if (Number.isFinite(v)) this.edit((x) => { x.set[name].values[m] = v })
-      })
-      row.appendChild(input)
+      input.setAttribute('aria-label', valueLabel)
+      input.addEventListener('keydown', (e) => e.stopPropagation())
+      input.addEventListener('change', () => { if (input.value.trim()) set(input.value.trim()) })
+      row.append(preview, input)
+    } else if (tok.type === 'opacity') {
+      preview.style.opacity = String(value)
+      row.append(preview, num(Math.round(Number(value) * 100), (n) => set(Math.min(Math.max(n, 0), 100) / 100), `${valueLabel} (%)`))
+    } else {
+      if (tok.type === 'fontSize') { preview.textContent = 'Aa'; preview.style.fontSize = `${Math.min(Number(value), 22)}px` }
+      row.append(...(tok.type === 'fontSize' ? [preview] : []), num(Number(value), set, valueLabel))
     }
-    input.setAttribute('aria-label', t('Value of {name}', { name }))
     const label = document.createElement('input')
     label.className = 'ed-token-name'
     label.value = name
@@ -243,3 +274,14 @@ export class TokensPane {
     return sec
   }
 }
+
+/** Per type: caption, the + button's label, a placeholder name. */
+const TYPE_LABEL: Record<TokenType, [string, string, string]> = {
+  color: ['Colors', 'New color token', 'color.brand'],
+  number: ['Numbers', 'New number token', 'space.md'],
+  fontSize: ['Font sizes', 'New font size token', 'type.body'],
+  opacity: ['Opacity', 'New opacity token', 'opacity.muted'],
+  fontFamily: ['Fonts', 'New font token', 'font.body'],
+  shadow: ['Shadows', 'New shadow token', 'shadow.card'],
+}
+const DEFAULT_NUM: Record<string, number> = { number: 16, fontSize: 24, opacity: 0.6 }

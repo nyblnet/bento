@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // Binding a numeric field to a design token: a small dot at the field's end
-// lists the deck's number tokens; a bound field shows the token's name as a
+// lists the deck's tokens of the field's types; a bound field shows the token's name as a
 // pill, and clicking the pill unbinds (the value stays). See tokens.ts.
 import type { PropsPanel } from '../panels'
-import type { SlideElement } from '../../model'
+import type { SlideElement, TokenType } from '../../model'
 import { bindToken, tokenName, tokenValue, unbindToken } from '../../tokens'
 import { openCtxMenu } from '../ctxmenu'
 import { t } from '../../i18n'
 
-/** Give a mini() field a token binding for `path` on `el`. Returns the field. */
-export function tokenBind(p: PropsPanel, field: HTMLElement, el: SlideElement, path: string): HTMLElement {
+/** Give a field a token binding for `path` on `el`, offering tokens of `types`. Returns the field. */
+export function tokenBind(p: PropsPanel, field: HTMLElement, el: SlideElement, path: string, types: TokenType[] = ['number']): HTMLElement {
   const tokens = p.store.doc.theme.tokens?.set ?? {}
-  const names = Object.keys(tokens).filter((n) => tokens[n].type === 'number')
+  const names = Object.keys(tokens).filter((n) => types.includes(tokens[n].type))
   const bound = tokenName(el.themeRefs?.[path])
   if (!bound && !names.length) return field
   const b = document.createElement('button')
@@ -34,7 +34,7 @@ export function tokenBind(p: PropsPanel, field: HTMLElement, el: SlideElement, p
       ev.preventDefault()
       const r = b.getBoundingClientRect()
       openCtxMenu(r.left, r.bottom + 4, names.map((n) => ({
-        label: `${n} · ${tokenValue(p.store.doc, n)}`,
+        label: `${n} · ${shown(tokens[n].type, tokenValue(p.store.doc, n))}`,
         run: () => p.mutate(el.id, (e) => bindToken(p.store.doc, e as never, path, n), true),
       })))
     })
@@ -42,4 +42,19 @@ export function tokenBind(p: PropsPanel, field: HTMLElement, el: SlideElement, p
   field.classList.add('ed-has-token')
   field.appendChild(b)
   return field
+}
+
+/** A control that cannot hold the dot itself (a select, a row of tiles), boxed so it can. */
+export function tokenWrap(p: PropsPanel, control: HTMLElement, el: SlideElement, path: string, types: TokenType[]): HTMLElement {
+  const box = document.createElement('div')
+  box.className = 'ed-token-wrap'
+  box.appendChild(control)
+  return tokenBind(p, box, el, path, types)
+}
+
+/** A token value as the picker lists it. */
+function shown(type: TokenType, v: unknown): string {
+  if (type === 'opacity' && typeof v === 'number') return `${Math.round(v * 100)}%`
+  if (v && typeof v === 'object') { const s = v as { x?: number; y?: number; blur: number }; return `${s.x ?? 0} ${s.y ?? 0} ${s.blur}` }
+  return String(v)
 }
