@@ -403,7 +403,6 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-thumb.selected { border-color: var(--accent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .ed-thumb.selected::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--accent) 12%, transparent); pointer-events: none; }
 .ed-thumb.dragging { opacity: .5; }
-.ed-thumb.drop { border-color: var(--blue); }
 .ed-thumb-num {
   position: absolute;
   top: 4px; inset-inline-start: 4px;
@@ -1645,6 +1644,22 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
   transition: opacity 0.12s ease;
 }
 .ed-insertgap:hover { opacity: 1; }
+/* Where dragged slides will land: a thick accent line with round caps in the
+   gap, glowing just enough to read over any thumbnail. Hover's + stays out of
+   it, and the other gaps stay hidden while a drag is on. */
+.ed-insertgap.drop { opacity: 1; transition: none; } /* it tracks the pointer: no fade */
+.ed-insertgap.drop::before {
+  left: 0; right: 0; height: 4px; margin-top: -2px; border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--surface), 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.ed-insertgap.drop::after {
+  content: ''; position: absolute; inset-inline: -3px; top: 50%; height: 10px; margin-top: -5px;
+  background: radial-gradient(circle at 5px 50%, var(--accent) 4px, transparent 4.5px), radial-gradient(circle at calc(100% - 5px) 50%, var(--accent) 4px, transparent 4.5px);
+  pointer-events: none;
+}
+.ed-insertgap.drop .ed-insertgap-btn,
+.ed-thumbs-dragging .ed-insertgap:not(.drop) { visibility: hidden; }
 .ed-insertgap::before {
   content: '';
   position: absolute;

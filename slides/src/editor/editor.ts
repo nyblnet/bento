@@ -561,6 +561,7 @@ export class Editor {
     // way Penpot (Pages / Layers) and Figma (Layers) lay it out. The layer
     // list used to sit at the top of the inspector, on every tab.
     this.thumbs = div('ed-thumbs')
+    this.wireThumbDrop()
     this.sideLayers = div('ed-side-layers')
     this.sideTokens = div('ed-side-tokens')
     this.sidebar.append(this.sideTabs(), this.thumbs, this.sideLayers, this.sideTokens)
@@ -2181,6 +2182,7 @@ export class Editor {
   /** Slim hover strip between thumbnails — click inserts a blank slide there. */
   private insertGap(at: number): HTMLElement {
     const gap = div('ed-insertgap')
+    gap.dataset.at = String(at)
     gap.title = t('Insert slide here')
     const plus = document.createElement('button')
     plus.className = 'ed-insertgap-btn'
@@ -2219,21 +2221,61 @@ export class Editor {
     item.addEventListener('dragstart', (ev) => {
       // the payload is every parent index that moves — the selection when
       // this thumb is part of it, else this one; states follow their parent
-      ev.dataTransfer!.setData('text/bento-slide', JSON.stringify(this.thumbTargets(index)))
+      this.dragFrom = this.thumbTargets(index)
+      ev.dataTransfer!.setData('text/bento-slide', JSON.stringify(this.dragFrom))
       ev.dataTransfer!.effectAllowed = 'move'
       item.classList.add('dragging')
     })
-    item.addEventListener('dragend', () => item.classList.remove('dragging'))
-    item.addEventListener('dragover', (ev) => {
+    item.addEventListener('dragend', () => { item.classList.remove('dragging'); this.dragFrom = null; this.showDropLine(null) })
+  }
+
+  /** The slides being dragged in the list (dataTransfer is unreadable during
+   *  dragover, so the drop line needs its own copy). */
+  private dragFrom: number[] | null = null
+
+  /**
+   * Where dragged slides would land, drawn as a thick line in the gap: the
+   * pointer above a thumbnail's middle means before its unit, below means
+   * after it — never between a parent and its states, since those gaps do not
+   * exist. A drop that would change nothing shows no line. One listener on the
+   * list, so the line follows the pointer across thumbnails and gaps alike.
+   */
+  private wireThumbDrop() {
+    const at = (ev: DragEvent): number | null => {
+      if (!this.dragFrom) return null
+      const slides = this.store.doc.slides
+      for (const item of this.thumbs.querySelectorAll<HTMLElement>('.ed-thumb')) {
+        const r = item.getBoundingClientRect()
+        if (ev.clientY > r.bottom) continue
+        const i = Number(item.dataset.index)
+        const unit = expand(slides, [i])
+        return ev.clientY < r.top + r.height / 2 ? unit[0] : unit[unit.length - 1] + 1
+      }
+      return slides.length
+    }
+    this.thumbs.addEventListener('dragover', (ev) => {
+      const to = at(ev)
+      if (to === null) return
       ev.preventDefault()
-      item.classList.add('drop')
+      ev.dataTransfer!.dropEffect = 'move'
+      this.showDropLine(moveBlock(this.store.doc.slides, this.dragFrom!, to) === this.store.doc.slides ? null : to)
     })
-    item.addEventListener('dragleave', () => item.classList.remove('drop'))
-    item.addEventListener('drop', (ev) => {
+    this.thumbs.addEventListener('dragleave', (ev) => {
+      if (!this.thumbs.contains(ev.relatedTarget as Node | null)) this.showDropLine(null)
+    })
+    this.thumbs.addEventListener('drop', (ev) => {
+      const to = at(ev)
+      this.showDropLine(null)
+      if (to === null) return
       ev.preventDefault()
-      item.classList.remove('drop')
-      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), index)
+      this.dropSlides(ev.dataTransfer!.getData('text/bento-slide'), to)
     })
+  }
+
+  private showDropLine(at: number | null) {
+    this.thumbs.querySelectorAll('.ed-insertgap.drop').forEach((g) => { if (g.getAttribute('data-at') !== String(at)) g.classList.remove('drop') })
+    if (at !== null) this.thumbs.querySelector(`.ed-insertgap[data-at="${at}"]`)?.classList.add('drop')
+    this.thumbs.classList.toggle('ed-thumbs-dragging', at !== null)
   }
 
   /** Move the dragged units (a JSON list of parent indices, or one index
