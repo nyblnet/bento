@@ -341,6 +341,12 @@ jobs:
         # The modifier line, the transform pill, morph pairing (badge, ghost,
         # preview) and Layers' padlock and eye.
         run: node scripts/test-slides-hud-browser.mjs
+      - name: Editor-UI review fixes in Chromium
+        # Keys a control owns never reach the editor (a gradient stop's
+        # Backspace), Mixed fields step and multiply per element, tools stay
+        # out of open sheets and read-only, the palette respects IME and
+        # returns focus, and the HUD is built once per language switch.
+        run: node scripts/test-slides-ui-fixes-browser.mjs
       - name: Vector booleans in Chromium
         # The contextual bar for 2+ closed shapes; Subtract makes one path in the
         # bottom slot with a real hole; one undo; the op switch; Release after a
