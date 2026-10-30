@@ -313,9 +313,13 @@ const gradient = shape(MODEL_KEYS.gradient, {
 // fill and stroke stacks (stacks.ts): a whole stack drops on one bad layer —
 // a layer out of place would repaint the shape in a different order
 const strokeDashPair = tag((v) => (Array.isArray(v) && v.length === 2 ? list(2, num(0, 1e4))(v) : DROP), { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } })
-const paintLayer = shape(MODEL_KEYS.paintLayer, { color: paint, gradient, hidden: bool }, ['color'])
+// a layer's blend is a word from CSS's closed mix-blend-mode list, never free CSS
+const layerBlend = oneOf('multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn',
+  'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity')
+const paintLayer = shape(MODEL_KEYS.paintLayer, { color: paint, gradient, hidden: bool, blend: layerBlend }, ['color'])
 const strokeLayer = shape(MODEL_KEYS.strokeLayer, {
   color: paint, width: num(0, 1e4), align: oneOf('inside', 'center', 'outside'), dashes: strokeDashPair, hidden: bool,
+  gradient, blend: layerBlend,
 }, ['color', 'width'])
 
 const shadowSpec = shape(MODEL_KEYS.shadow, {
@@ -496,7 +500,7 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
   // shape
   shape: oneOf('rect', 'ellipse', 'triangle', 'arrow', 'line', 'path'),
   heads: num(2, 2),
-  fill: paint, fillGradient: gradient, stroke: paint,
+  fill: paint, fillGradient: gradient, stroke: paint, strokeGradient: gradient,
   strokeWidth: num(0, 1e4), strokeDash: num(0, 1e4),
   strokeStyle: oneOf('solid', 'dashed', 'dotted'),
   strokeDashes: tag((v) => (Array.isArray(v) && v.length === 2 ? list(2, num(0, 1e4))(v) : DROP), { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } }),

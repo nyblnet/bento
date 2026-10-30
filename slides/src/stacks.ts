@@ -4,7 +4,8 @@
 // Fill and stroke STACKS (Figma's, Penpot's): a shape can carry several fill
 // layers and several stroke layers (`fills`, `strokes`, bottom first). The
 // renderer draws the layers; the single-paint fields an older shell knows —
-// `fill`/`fillGradient`, `stroke`/`strokeWidth`/`strokeAlign`/`strokeDashes` —
+// `fill`/`fillGradient`, `stroke`/`strokeWidth`/`strokeAlign`/`strokeDashes`/
+// `strokeGradient` (a line's stroke colour is its `fill`) —
 // MIRROR the top visible layer, so a shell that predates stacks draws the
 // paint that matters most. The mirror is derived, like connector routing:
 // every replica computes it from the layers, on every doc change, so a palette
@@ -19,8 +20,9 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
 
 /** Bring a shape's single-paint fields in line with its stacks. True if anything changed. */
 export function mirrorStacks(el: ShapeElement): boolean {
-  const before = JSON.stringify([el.fill, el.fillGradient, el.stroke, el.strokeWidth, el.strokeAlign, el.strokeDashes])
-  if (el.fills) {
+  const snap = () => JSON.stringify([el.fill, el.fillGradient, el.stroke, el.strokeWidth, el.strokeAlign, el.strokeDashes, el.strokeGradient])
+  const before = snap()
+  if (el.fills && el.shape !== 'line') {
     const top = [...el.fills].reverse().find((l) => !l.hidden)
     el.fill = top?.color ?? 'transparent'
     if (top?.gradient?.stops.length) el.fillGradient = clone(top.gradient)
@@ -29,15 +31,23 @@ export function mirrorStacks(el: ShapeElement): boolean {
   if (el.strokes) {
     const top = [...el.strokes].reverse().find((l) => !l.hidden)
     if (top) {
-      el.stroke = top.color
-      el.strokeWidth = top.width
-      if (top.align) el.strokeAlign = top.align
-      else delete el.strokeAlign
-      if (top.dashes) el.strokeDashes = [...top.dashes]
-      else delete el.strokeDashes
+      writeStroke(el, top)
     } else el.strokeWidth = 0
   }
-  return JSON.stringify([el.fill, el.fillGradient, el.stroke, el.strokeWidth, el.strokeAlign, el.strokeDashes]) !== before
+  return snap() !== before
+}
+
+/** One stroke layer onto the single-paint keys. A line's stroke colour is its `fill`. */
+function writeStroke(el: ShapeElement, top: StrokeLayer) {
+  if (el.shape === 'line') el.fill = top.color
+  else el.stroke = top.color
+  el.strokeWidth = top.width
+  if (top.gradient?.stops.length) el.strokeGradient = clone(top.gradient)
+  else delete el.strokeGradient
+  if (top.align) el.strokeAlign = top.align
+  else delete el.strokeAlign
+  if (top.dashes) el.strokeDashes = [...top.dashes]
+  else delete el.strokeDashes
 }
 
 /** Every shape in the deck (layouts too); true if any fallback moved. */
@@ -54,14 +64,17 @@ export function fillLayers(el: ShapeElement): PaintLayer[] {
   return el.fills ?? [{ color: el.fill, ...(el.fillGradient?.stops.length ? { gradient: el.fillGradient } : {}) }]
 }
 
-/** The shape's strokes as a list — its stack, its one stroke, or none. */
+/** The shape's strokes as a list — its stack, its one stroke, or none. A
+ *  line always has its one stroke (drawn in `fill`, at least 2px wide). */
 export function strokeLayers(el: ShapeElement): StrokeLayer[] {
   if (el.strokes) return el.strokes
-  if (!(el.strokeWidth > 0)) return []
+  const line = el.shape === 'line'
+  if (!(el.strokeWidth > 0) && !line) return []
   return [{
-    color: el.stroke, width: el.strokeWidth,
+    color: line ? el.fill : el.stroke, width: line ? Math.max(el.strokeWidth, 2) : el.strokeWidth,
     ...(el.strokeAlign ? { align: el.strokeAlign } : {}),
     ...(el.strokeDashes ? { dashes: el.strokeDashes } : {}),
+    ...(el.strokeGradient?.stops.length ? { gradient: el.strokeGradient } : {}),
   }]
 }
 
@@ -87,7 +100,7 @@ export function setFillLayers(el: ShapeElement, layers: PaintLayer[], order: num
 
 /** Replace a shape's stroke layers; as setFillLayers. None = no stroke. */
 export function setStrokeLayers(el: ShapeElement, layers: StrokeLayer[], order: number[]): void {
-  remapRefs(el, 'strokes', 'stroke', null, order, layers.length, null)
+  remapRefs(el, 'strokes', el.shape === 'line' ? 'fill' : 'stroke', 'strokeGradient', order, layers.length, 'gradient')
   if (layers.length >= 2) {
     el.strokes = layers
     mirrorStacks(el)
@@ -95,13 +108,8 @@ export function setStrokeLayers(el: ShapeElement, layers: StrokeLayer[], order: 
   }
   delete el.strokes
   const only = layers[0]
-  if (!only || only.hidden) { el.strokeWidth = 0; return }
-  el.stroke = only.color
-  el.strokeWidth = only.width
-  if (only.align) el.strokeAlign = only.align
-  else delete el.strokeAlign
-  if (only.dashes) el.strokeDashes = only.dashes
-  else delete el.strokeDashes
+  if (!only || only.hidden) { el.strokeWidth = 0; delete el.strokeGradient; return }
+  writeStroke(el, only)
 }
 
 /**

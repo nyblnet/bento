@@ -8,9 +8,10 @@ import Reveal from 'reveal.js'
 import 'reveal.js/dist/reveal.css'
 import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
-import type { BentoDoc, GradientFill, PaintLayer, ShapeElement, Slide, SlideElement } from './model'
+import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
-import { fillLayers } from './stacks'
+import { fillLayers, strokeLayers } from './stacks'
+import { isFrame, morphClip } from './layout'
 import { applyElementFrame, cssColor, fetchFreeOption, gradientLineCoords, paintSafeShape, radialGeom, renderSlide } from './render'
 import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
@@ -2382,6 +2383,33 @@ function runMorph(
     })
   }
 
+  // A child of a clipping frame stays clipped by the frame while both travel:
+  // each step maps the frame's box at that moment into the child node as the
+  // box tween above draws it. The resting clip (renderSlide) takes over at the end.
+  const toById = new Map((toSlide?.elements ?? []).map((e) => [e.id, e]))
+  for (const node of matchedTo) {
+    const id = node.dataset.flipId!
+    const a = fromModel.get(id)
+    const b = toModel.get(id)
+    const fb = b?.parentId ? toById.get(b.parentId) : undefined
+    if (!a || !b || !isFrame(fb) || !fb.layout.clip) continue
+    const fa = fromModel.get(morphKey(fb)) ?? fb
+    const rest = node.style.clipPath
+    const state = { p: 0 }
+    anim.to(state, {
+      p: 1, duration: MORPH_DURATION, ease: MORPH_EASE,
+      onUpdate() {
+        const p = state.p
+        const L = (u: number, v: number) => u + (v - u) * p
+        node.style.clipPath = morphClip(
+          { x: L(fa.x, fb.x), y: L(fa.y, fb.y), w: L(fa.w, fb.w), h: L(fa.h, fb.h) },
+          L(a.x, b.x), L(a.y, b.y), L(a.w, b.w) / Math.max(b.w, 0.01), L(a.h, b.h) / Math.max(b.h, 0.01),
+          L(a.rotation ?? 0, b.rotation ?? 0), b.w, b.h)
+      },
+      onComplete() { node.style.clipPath = rest },
+    })
+  }
+
   // Symbol-level math morph, layered on top of the box morph above. The
   // from-side offsets come from the cache captured while that slide was
   // visible — measuring it now would read zeros (it has no layout).
@@ -2403,11 +2431,8 @@ function runMorph(
       anim.fromTo(to, { opacity: a.opacity }, { opacity: b.opacity, duration: MORPH_DURATION, ease: MORPH_EASE })
     }
     if (a.type === 'shape' && b.type === 'shape') {
-      if (a.fills || b.fills) morphFillLayers(to, a, b)
-      else {
-        const target = to.querySelector<SVGElement>('rect,ellipse,polygon,line,path')
-        if (target) morphShapeFill(target, a, b)
-      }
+      const svg = to.querySelector(':scope > svg')
+      if (svg) playSteps(shapePaintSteps(svg, a, b))
     }
     if (a.type === 'text' && b.type === 'text' && a.color !== b.color) {
       const inner = to.querySelector<HTMLElement>('.bento-text-inner')
@@ -2479,103 +2504,132 @@ function sampleGradient(stops: GradientFill['stops'], t: number): string {
   return rgbaStr(colorParts(s[s.length - 1].color))
 }
 
+/** One paint as the morph sees it: a colour, and the gradient that wins over it. */
+interface Paint { color: string; gradient?: GradientFill }
+
+/** Two colours mixed at p, as rgba() (what every colour tween here writes). */
+export function mixColor(a: string, b: string, p: number): string {
+  const ca = colorParts(a), cb = colorParts(b)
+  return rgbaStr([0, 1, 2, 3].map((k) => ca[k] + (cb[k] - ca[k]) * p) as [number, number, number, number])
+}
+
 /**
- * A fill stack morphs layer by layer when both sides have the same layers
+ * Everything a shape's paint does between two of its frames, as steppers:
+ * each takes p (0 = element a's paint, 1 = b's) and writes it onto the
+ * rendered node — the show drives them with a tween (runMorph), the editor's
+ * Preview scrubber calls them at its slider's value (editor/morph.ts). One
+ * code path, so the preview is the show.
+ *
+ * Fills and strokes morph layer by layer when both sides have the same layers
  * (count and eyes); otherwise the destination's layers simply appear — there
- * is no honest pairing between a two-layer fill and a three-layer one.
- * ponytail: stroke layers snap, as a single stroke always has.
+ * is no honest pairing between a two-layer stack and a three-layer one. A
+ * single paint is a stack of one. A stroke layer's width tweens with its paint.
  */
-function morphFillLayers(to: HTMLElement, a: ShapeElement, b: ShapeElement) {
-  const la = fillLayers(a), lb = fillLayers(b)
-  if (la.length !== lb.length || la.some((l, i) => !!l.hidden !== !!lb[i].hidden)) return
-  lb.forEach((l, i) => {
-    const target = to.querySelector<SVGElement>(`[data-layer="fill${i}"]`)
-    if (!target || l.hidden) return
-    const one = (e: ShapeElement, x: PaintLayer): ShapeElement => ({ ...e, fills: undefined, fill: x.color, fillGradient: x.gradient })
-    morphShapeFill(target, one(a, la[i]), one(b, l))
+export function shapePaintSteps(svg: Element, a: ShapeElement, b: ShapeElement): Array<(p: number) => void> {
+  // the model's paint goes into fill/stroke/stop-color attributes: gated first
+  a = paintSafeShape(a)
+  b = paintSafeShape(b)
+  const steps: Array<(p: number) => void> = []
+  const same = <L extends { hidden?: true }>(x: L[], y: L[]) => x.length === y.length && x.every((l, i) => !!l.hidden === !!y[i].hidden)
+  // single paint: the node that carries it; a stack: the layer's own node
+  const node = (stack: boolean, kind: 'fill' | 'stroke', i: number) => stack
+    ? svg.querySelector<SVGElement>(`[data-layer="${kind}${i}"]`)
+    : kind === 'fill'
+      ? svg.querySelector<SVGElement>(':scope > rect, :scope > ellipse, :scope > polygon, :scope > path')
+      : [...svg.querySelectorAll<SVGElement>(':scope > [stroke-width]')].pop() ?? null
+  if (b.shape !== 'line') {
+    const fa = fillLayers(a), fb = fillLayers(b)
+    if (same(fa, fb)) fb.forEach((l, i) => {
+      const target = l.hidden ? null : node(!!b.fills, 'fill', i)
+      const step = target && paintTween(target, 'fill', fa[i], l)
+      if (step) steps.push(step)
+    })
+  }
+  const sa = strokeLayers(a), sb = strokeLayers(b)
+  if (same(sa, sb)) sb.forEach((l, i) => {
+    const target = l.hidden ? null : node(!!b.strokes, 'stroke', i)
+    if (!target) return
+    const step = paintTween(target, 'stroke', sa[i], l)
+    if (step) steps.push(step)
+    // the drawn width is the layer's (an aligned stroke draws it doubled): scale it by the ratio
+    const w = parseFloat(target.getAttribute('stroke-width') ?? '')
+    if (sa[i].width !== l.width && l.width > 0 && Number.isFinite(w)) {
+      const from = (w * sa[i].width) / l.width
+      steps.push((p) => target.setAttribute('stroke-width', String(p >= 1 ? w : from + (w - from) * p)))
+    }
+  })
+  return steps
+}
+
+/** Play paint steppers over the morph's duration. */
+function playSteps(steps: Array<(p: number) => void>) {
+  if (!steps.length) return
+  const state = { p: 0 }
+  anim.to(state, {
+    p: 1, duration: MORPH_DURATION, ease: MORPH_EASE,
+    onUpdate() { for (const s of steps) s(state.p) },
+    onComplete() { for (const s of steps) s(1) },
   })
 }
 
 /**
- * Tween a shape's fill from element a's to element b's. Solids tween the fill
- * attribute; when a gradient is involved the tween runs on the <stop> nodes
- * (colors sampled from the other side at matching positions) and on the
- * gradient line, so angle changes sweep too. A solid destination gets a
- * temporary gradient that collapses to the flat color and is then removed.
+ * The stepper for one paint attribute (`fill` or `stroke`) from a to b, or
+ * null when they are the same. Solids mix. When a gradient is involved the
+ * stops mix (each sampled from the other side at its own position) and the
+ * gradient's geometry tweens between two of a kind — a linear line sweeps, a
+ * radial centre and radius move; across kinds only the colours do. A solid
+ * destination gets a temporary gradient that collapses to the flat colour and
+ * is removed at p = 1.
  */
-function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
-  // the model's paint goes into fill/stroke/stop-color attributes: gated first
-  a = paintSafeShape(a)
-  b = paintSafeShape(b)
-  if (a.fill === b.fill && JSON.stringify(a.fillGradient) === JSON.stringify(b.fillGradient)) return
-  // line shapes paint with stroke (fill is the line color in the model)
-  if (b.shape === 'line' && target.tagName === 'line') {
-    anim.fromTo(target, { attr: { stroke: a.fill } }, { attr: { stroke: b.fill }, duration: MORPH_DURATION, ease: MORPH_EASE })
-    return
-  }
-  const ag = a.fillGradient?.stops.length ? a.fillGradient : undefined
-  const bg = b.fillGradient?.stops.length ? b.fillGradient : undefined
-  if (!ag && !bg) {
-    if (a.fill !== b.fill) {
-      anim.fromTo(target, { attr: { fill: a.fill } }, { attr: { fill: b.fill }, duration: MORPH_DURATION, ease: MORPH_EASE })
-    }
-    return
-  }
+function paintTween(target: SVGElement, attr: 'fill' | 'stroke', a: Paint, b: Paint): ((p: number) => void) | null {
+  const ag = a.gradient?.stops.length ? a.gradient : undefined
+  const bg = b.gradient?.stops.length ? b.gradient : undefined
+  if (a.color === b.color && JSON.stringify(ag) === JSON.stringify(bg)) return null
+  if (!ag && !bg) return (p) => target.setAttribute(attr, p >= 1 ? b.color : mixColor(a.color, b.color, p))
   const svg = target.ownerSVGElement
-  if (!svg) return
-
-  // the gradient THIS node paints with — a fill stack has one per layer
-  const ref = /url\(#([^)]+)\)/.exec(target.getAttribute('fill') ?? '')?.[1]
+  if (!svg) return null
+  // the gradient THIS node paints with — a stack has one per layer
+  const ref = /url\(#([^)]+)\)/.exec(target.getAttribute(attr) ?? '')?.[1]
   let lin = ref ? svg.querySelector<SVGElement>(`[id="${ref}"]`) : null
+  let temp = false
   if (!lin) {
     // destination is solid — fabricate a gradient shaped like the source so
-    // there is something to tween through, then collapse it to b.fill
-    lin = document.createElementNS(SVG_NS, 'linearGradient')
+    // there is something to tween through, then collapse it to b's colour
+    temp = true
+    lin = document.createElementNS(SVG_NS, ag!.kind === 'radial' ? 'radialGradient' : 'linearGradient')
     lin.id = `bento-morph-grad-${morphGradSeq++}`
     for (const s of ag!.stops) {
       const stop = document.createElementNS(SVG_NS, 'stop')
       stop.setAttribute('offset', String(s.at))
       lin.appendChild(stop)
     }
+    const geom: Record<string, number> = ag!.kind === 'radial' ? radialGeom(ag!) : gradientLineCoords(ag!.angle)
+    for (const [k, v] of Object.entries(geom)) lin.setAttribute(k, String(v))
     const defs = document.createElementNS(SVG_NS, 'defs')
     defs.appendChild(lin)
     svg.appendChild(defs)
-    target.setAttribute('fill', `url(#${lin.id})`)
+    target.setAttribute(attr, `url(#${lin.id})`)
   }
-
   const stops = [...lin.querySelectorAll('stop')]
   // per rendered stop: where it sits, what it starts as, what it ends as
-  const finals = bg ? bg.stops : ag!.stops.map((s) => ({ at: s.at, color: b.fill }))
-  stops.forEach((node, i) => {
+  const finals = bg ? bg.stops : ag!.stops.map((s) => ({ at: s.at, color: b.color }))
+  const colours = stops.map((_, i) => {
     const at = finals[i]?.at ?? 1
-    const fromColor = ag ? sampleGradient(ag.stops, at) : rgbaStr(colorParts(a.fill))
-    const toColor = finals[i]?.color ?? b.fill
-    anim.fromTo(
-      node,
-      { attr: { 'stop-color': fromColor } },
-      {
-        attr: { 'stop-color': toColor },
-        duration: MORPH_DURATION,
-        ease: MORPH_EASE,
-        ...(i === 0 && !bg
-          ? {
-              // solid destination: swap the temp gradient back to a flat fill
-              onComplete: () => {
-                target.setAttribute('fill', b.fill)
-                lin!.parentElement?.remove()
-              },
-            }
-          : {}),
-      },
-    )
+    return [ag ? sampleGradient(ag.stops, at) : rgbaStr(colorParts(a.color)), finals[i]?.color ?? b.color]
   })
-
-  // the geometry tweens only between two of a kind (linear: the line sweeps;
-  // radial: the centre and radius move); across kinds only the colours do
   const ga = (ag ?? bg)!, gb = (bg ?? ag)!
-  if (lin.tagName === 'linearGradient' && ga.kind !== 'radial' && gb.kind !== 'radial') {
-    anim.fromTo(lin, { attr: gradientLineCoords(ga.angle) }, { attr: gradientLineCoords(gb.angle), duration: MORPH_DURATION, ease: MORPH_EASE })
-  } else if (lin.tagName === 'radialGradient' && ga.kind === 'radial' && gb.kind === 'radial') {
-    anim.fromTo(lin, { attr: radialGeom(ga) }, { attr: radialGeom(gb), duration: MORPH_DURATION, ease: MORPH_EASE })
+  const linear = lin.tagName === 'linearGradient' && ga.kind !== 'radial' && gb.kind !== 'radial'
+  const radial = lin.tagName === 'radialGradient' && ga.kind === 'radial' && gb.kind === 'radial'
+  const g0: Record<string, number> = linear ? gradientLineCoords(ga.angle) : radial ? radialGeom(ga) : {}
+  const g1: Record<string, number> = linear ? gradientLineCoords(gb.angle) : radial ? radialGeom(gb) : {}
+  const node = lin
+  return (p) => {
+    stops.forEach((s, i) => s.setAttribute('stop-color', p >= 1 ? colours[i][1] : mixColor(colours[i][0], colours[i][1], p)))
+    for (const k of Object.keys(g0)) node.setAttribute(k, String(g0[k] + (g1[k] - g0[k]) * p))
+    if (p >= 1 && temp) {
+      // solid destination: swap the temp gradient back to a flat paint
+      target.setAttribute(attr, b.color)
+      node.parentElement?.remove()
+    }
   }
 }

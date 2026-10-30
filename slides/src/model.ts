@@ -307,6 +307,8 @@ export interface PaintLayer {
   gradient?: GradientFill
   /** the layer's eye in the panel: kept but not drawn */
   hidden?: true
+  /** how the layer mixes with what lies beneath it (CSS mix-blend-mode); absent = normal */
+  blend?: string
 }
 
 /** One layer of a stroke stack. */
@@ -316,6 +318,10 @@ export interface StrokeLayer {
   align?: 'inside' | 'center' | 'outside'
   dashes?: [number, number]
   hidden?: true
+  /** a gradient along the stroke; `color` stays its solid fallback */
+  gradient?: GradientFill
+  /** as a fill layer's */
+  blend?: string
 }
 
 export interface GradientFill {
@@ -369,6 +375,9 @@ export interface ShapeElement extends ElementBase {
    * arrows. An older shell draws it the absent way.
    */
   strokeAlign?: 'inside' | 'center' | 'outside'
+  /** A gradient stroke (a line: its one colour); wins over `stroke` (a line's
+   *  `fill`), which stays the solid an older shell draws. */
+  strokeGradient?: GradientFill
   /** rect only: per-corner radius [top-left, top-right, bottom-right, bottom-left]; wins over `radius` */
   radii?: [number, number, number, number]
   /**

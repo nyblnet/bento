@@ -218,3 +218,22 @@ export function frameClip(el: SlideElement, byId: Map<string, SlideElement>): st
   if (!top && !left && !bottom && !right) return ''
   return `inset(${r2(top)}px ${r2(right)}px ${r2(bottom)}px ${r2(left)}px)`
 }
+
+/**
+ * A frame child's clip mid-morph: the frame's box `f` (slide px, as it stands
+ * at that moment) mapped into the child node's own untransformed box. The node
+ * is drawn as the morph draws it (present.ts runMorph, editor/morph.ts): put
+ * at (x, y), scaled (sx, sy), and turned r° about the centre of its resting
+ * box (bw × bh) — rotate first, then scale. So a slide point F lies at
+ * c + R⁻¹((F − (x, y)) ⁄ s − c) in the node's box. At rest (s = 1) this is
+ * frameClip's polygon.
+ */
+export function morphClip(f: { x: number; y: number; w: number; h: number }, x: number, y: number, sx: number, sy: number, r: number, bw: number, bh: number): string {
+  const a = (-r * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a)
+  const cx = bw / 2, cy = bh / 2
+  const pt = (X: number, Y: number) => {
+    const vx = (X - x) / (sx || 1) - cx, vy = (Y - y) / (sy || 1) - cy
+    return `${r2(vx * cos - vy * sin + cx)}px ${r2(vx * sin + vy * cos + cy)}px`
+  }
+  return `polygon(${pt(f.x, f.y)}, ${pt(f.x + f.w, f.y)}, ${pt(f.x + f.w, f.y + f.h)}, ${pt(f.x, f.y + f.h)})`
+}
