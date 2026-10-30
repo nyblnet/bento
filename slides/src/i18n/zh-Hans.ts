@@ -1201,4 +1201,11 @@ export const zhHans: Catalog = {
   "Gradient radius": "渐变半径",
   "Gradient start": "渐变起点",
   "Gradient end": "渐变终点",
+  "Add fill layer": "添加填充图层",
+  "Add stroke layer": "添加描边图层",
+  "Show layer": "显示图层",
+  "Hide layer": "隐藏图层",
+  "Move layer up": "上移图层",
+  "Move layer down": "下移图层",
+  "Remove layer": "移除图层",
 }

@@ -146,6 +146,8 @@ export const LIMITS = {
   cols: 200,
   comments: 500,
   stops: 64,
+  /** layers in one shape's fill or stroke stack */
+  paintLayers: 16,
   speeds: 2_000,
   /** a chart option is free-form JSON — bounded, not typed */
   optionNodes: 20_000,
@@ -307,6 +309,14 @@ const gradient = shape(MODEL_KEYS.gradient, {
   )),
   kind: oneOf('radial'), cx: num(-10, 10), cy: num(-10, 10), r: num(0, 100),
 }, ['stops'])
+
+// fill and stroke stacks (stacks.ts): a whole stack drops on one bad layer —
+// a layer out of place would repaint the shape in a different order
+const strokeDashPair = tag((v) => (Array.isArray(v) && v.length === 2 ? list(2, num(0, 1e4))(v) : DROP), { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } })
+const paintLayer = shape(MODEL_KEYS.paintLayer, { color: paint, gradient, hidden: bool }, ['color'])
+const strokeLayer = shape(MODEL_KEYS.strokeLayer, {
+  color: paint, width: num(0, 1e4), align: oneOf('inside', 'center', 'outside'), dashes: strokeDashPair, hidden: bool,
+}, ['color', 'width'])
 
 const shadowSpec = shape(MODEL_KEYS.shadow, {
   x: num(-1e4, 1e4), y: num(-1e4, 1e4), blur: num(0, 1e4), color: color(),
@@ -491,6 +501,7 @@ export const ELEMENT_CHECKS: Record<string, Check> = {
   strokeStyle: oneOf('solid', 'dashed', 'dotted'),
   strokeDashes: tag((v) => (Array.isArray(v) && v.length === 2 ? list(2, num(0, 1e4))(v) : DROP), { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } }),
   strokeAlign: oneOf('inside', 'center', 'outside'),
+  fills: list(LIMITS.paintLayers, paintLayer), strokes: list(LIMITS.paintLayers, strokeLayer),
   radii: tag((v) => (Array.isArray(v) && v.length === 4 ? list(4, num(0, 1e5))(v) : DROP), { type: 'array', minItems: 4, maxItems: 4, items: { type: 'number' } }),
   // the tip list is tips.ts's — one catalogue for the gate, the panel and the renderer
   lineStart: oneOf(...TIP_KINDS), lineEnd: oneOf(...TIP_KINDS),

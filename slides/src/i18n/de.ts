@@ -1201,4 +1201,11 @@ export const de: Catalog = {
   "Gradient radius": "Verlaufsradius",
   "Gradient start": "Verlaufsanfang",
   "Gradient end": "Verlaufsende",
+  "Add fill layer": "Füllebene hinzufügen",
+  "Add stroke layer": "Konturebene hinzufügen",
+  "Show layer": "Ebene einblenden",
+  "Hide layer": "Ebene ausblenden",
+  "Move layer up": "Ebene nach oben",
+  "Move layer down": "Ebene nach unten",
+  "Remove layer": "Ebene entfernen",
 }

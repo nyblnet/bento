@@ -8,8 +8,9 @@ import Reveal from 'reveal.js'
 import 'reveal.js/dist/reveal.css'
 import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
-import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
+import type { BentoDoc, GradientFill, PaintLayer, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
+import { fillLayers } from './stacks'
 import { applyElementFrame, cssColor, fetchFreeOption, gradientLineCoords, paintSafeShape, radialGeom, renderSlide } from './render'
 import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
@@ -2402,8 +2403,11 @@ function runMorph(
       anim.fromTo(to, { opacity: a.opacity }, { opacity: b.opacity, duration: MORPH_DURATION, ease: MORPH_EASE })
     }
     if (a.type === 'shape' && b.type === 'shape') {
-      const target = to.querySelector<SVGElement>('rect,ellipse,polygon,line,path')
-      if (target) morphShapeFill(target, a, b)
+      if (a.fills || b.fills) morphFillLayers(to, a, b)
+      else {
+        const target = to.querySelector<SVGElement>('rect,ellipse,polygon,line,path')
+        if (target) morphShapeFill(target, a, b)
+      }
     }
     if (a.type === 'text' && b.type === 'text' && a.color !== b.color) {
       const inner = to.querySelector<HTMLElement>('.bento-text-inner')
@@ -2476,6 +2480,23 @@ function sampleGradient(stops: GradientFill['stops'], t: number): string {
 }
 
 /**
+ * A fill stack morphs layer by layer when both sides have the same layers
+ * (count and eyes); otherwise the destination's layers simply appear — there
+ * is no honest pairing between a two-layer fill and a three-layer one.
+ * ponytail: stroke layers snap, as a single stroke always has.
+ */
+function morphFillLayers(to: HTMLElement, a: ShapeElement, b: ShapeElement) {
+  const la = fillLayers(a), lb = fillLayers(b)
+  if (la.length !== lb.length || la.some((l, i) => !!l.hidden !== !!lb[i].hidden)) return
+  lb.forEach((l, i) => {
+    const target = to.querySelector<SVGElement>(`[data-layer="fill${i}"]`)
+    if (!target || l.hidden) return
+    const one = (e: ShapeElement, x: PaintLayer): ShapeElement => ({ ...e, fills: undefined, fill: x.color, fillGradient: x.gradient })
+    morphShapeFill(target, one(a, la[i]), one(b, l))
+  })
+}
+
+/**
  * Tween a shape's fill from element a's to element b's. Solids tween the fill
  * attribute; when a gradient is involved the tween runs on the <stop> nodes
  * (colors sampled from the other side at matching positions) and on the
@@ -2503,7 +2524,9 @@ function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
   const svg = target.ownerSVGElement
   if (!svg) return
 
-  let lin = svg.querySelector<SVGElement>('linearGradient, radialGradient')
+  // the gradient THIS node paints with — a fill stack has one per layer
+  const ref = /url\(#([^)]+)\)/.exec(target.getAttribute('fill') ?? '')?.[1]
+  let lin = ref ? svg.querySelector<SVGElement>(`[id="${ref}"]`) : null
   if (!lin) {
     // destination is solid — fabricate a gradient shaped like the source so
     // there is something to tween through, then collapse it to b.fill

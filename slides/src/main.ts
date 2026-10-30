@@ -33,6 +33,7 @@ import { buildSchema } from './schema'
 import { resolveThemeRefs } from './palette'
 import { routeAllConnectors } from './connectors'
 import { layoutAll } from './layout'
+import { mirrorAllStacks } from './stacks'
 import { measureText, measureElement, type TextMeasureSpec } from './measure'
 import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
@@ -157,6 +158,7 @@ function bootWith(doc: BentoDoc, docIsFresh = false) {
   // re-derives through the editor's `doc` hook; nothing else would visit a
   // player file at all.
   resolveThemeRefs(doc)
+  mirrorAllStacks(doc) // a hand-written stack's fallback paint, for older shells
   // Same reason, connectors (#493): a hand- or agent-written deck can name a
   // connector's from/to elements with endpoints that are stale or placeholder.
   // The editor re-routes on edits, but nothing routed a slide nobody touched,

@@ -1207,4 +1207,11 @@ export const PACKED: Record<string, ReadonlyArray<string | 0>> = {
   "Gradient radius": ["グラデーションの半径","渐变半径","漸層半徑","Radio del degradado","Rayon du dégradé","Verlaufsradius","Raggio del gradiente","Raio do gradiente"],
   "Gradient start": ["グラデーションの始点","渐变起点","漸層起點","Inicio del degradado","Début du dégradé","Verlaufsanfang","Inizio del gradiente","Início do gradiente"],
   "Gradient end": ["グラデーションの終点","渐变终点","漸層終點","Fin del degradado","Fin du dégradé","Verlaufsende","Fine del gradiente","Fim do gradiente"],
+  "Add fill layer": ["塗りレイヤーを追加","添加填充图层","新增填色圖層","Añadir capa de relleno","Ajouter un calque de remplissage","Füllebene hinzufügen","Aggiungi livello di riempimento","Adicionar camada de preenchimento"],
+  "Add stroke layer": ["線レイヤーを追加","添加描边图层","新增描邊圖層","Añadir capa de trazo","Ajouter un calque de contour","Konturebene hinzufügen","Aggiungi livello di contorno","Adicionar camada de contorno"],
+  "Show layer": ["レイヤーを表示","显示图层","顯示圖層","Mostrar capa","Afficher le calque","Ebene einblenden","Mostra livello","Mostrar camada"],
+  "Hide layer": ["レイヤーを非表示","隐藏图层","隱藏圖層","Ocultar capa","Masquer le calque","Ebene ausblenden","Nascondi livello","Ocultar camada"],
+  "Move layer up": ["レイヤーを上へ","上移图层","上移圖層","Subir capa","Monter le calque","Ebene nach oben","Sposta livello su","Subir camada"],
+  "Move layer down": ["レイヤーを下へ","下移图层","下移圖層","Bajar capa","Descendre le calque","Ebene nach unten","Sposta livello giù","Descer camada"],
+  "Remove layer": ["レイヤーを削除","移除图层","移除圖層","Quitar capa","Supprimer le calque","Ebene entfernen","Rimuovi livello","Remover camada"],
 }

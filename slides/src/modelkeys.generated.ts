@@ -15,7 +15,7 @@ export const MODEL_KEYS = {
     "comment": ["at", "author", "elementId", "id", "replies", "resolved", "text", "x", "y"],
     "element": {
       "text": ["align", "backdropFilter", "blend", "blur", "color", "colorGradient", "component", "flipX", "flipY", "fontFamily", "fontSize", "fontWeight", "fx", "group", "groupId", "groupName", "h", "hidden", "html", "id", "letterSpacing", "lineHeight", "link", "locked", "morphId", "name", "opacity", "parentId", "placeholder", "role", "rotation", "shadow", "showOnHover", "sizing", "textStroke", "themeRefs", "type", "valign", "w", "x", "y"],
-      "shape": ["backdropFilter", "blend", "blur", "bool", "component", "d", "fill", "fillGradient", "flipX", "flipY", "from", "fx", "group", "groupId", "groupName", "h", "heads", "hidden", "id", "layout", "lineEnd", "lineStart", "link", "locked", "morphId", "name", "opacity", "parentId", "pathBox", "radii", "radius", "role", "rotation", "shadow", "shape", "showOnHover", "sizing", "stroke", "strokeAlign", "strokeDash", "strokeDashes", "strokeStyle", "strokeWidth", "themeRefs", "to", "type", "w", "x", "y"],
+      "shape": ["backdropFilter", "blend", "blur", "bool", "component", "d", "fill", "fillGradient", "fills", "flipX", "flipY", "from", "fx", "group", "groupId", "groupName", "h", "heads", "hidden", "id", "layout", "lineEnd", "lineStart", "link", "locked", "morphId", "name", "opacity", "parentId", "pathBox", "radii", "radius", "role", "rotation", "shadow", "shape", "showOnHover", "sizing", "stroke", "strokeAlign", "strokeDash", "strokeDashes", "strokeStyle", "strokeWidth", "strokes", "themeRefs", "to", "type", "w", "x", "y"],
       "image": ["backdropFilter", "blend", "blur", "component", "crop", "fit", "flipX", "flipY", "fx", "group", "groupId", "groupName", "h", "hidden", "id", "keepAspectRatio", "link", "locked", "morphId", "name", "opacity", "parentId", "radius", "role", "rotation", "shadow", "showOnHover", "sizing", "src", "themeRefs", "type", "w", "x", "y"],
       "svg": ["asset", "backdropFilter", "blend", "blur", "component", "css", "flipX", "flipY", "fx", "group", "groupId", "groupName", "h", "hidden", "id", "link", "locked", "markup", "morphId", "name", "opacity", "parentId", "role", "rotation", "shadow", "showOnHover", "sizing", "themeRefs", "type", "w", "x", "y"],
       "chart": ["backdropFilter", "blend", "blur", "component", "flipX", "flipY", "fx", "group", "groupId", "groupName", "h", "hidden", "id", "link", "locked", "morphId", "name", "opacity", "option", "parentId", "preset", "role", "rotation", "shadow", "showOnHover", "sizing", "source", "themeRefs", "type", "w", "x", "y"],
@@ -33,6 +33,8 @@ export const MODEL_KEYS = {
     "tableRow": ["cells"],
     "tableCell": ["align", "bg", "bold", "color", "html"],
     "gradient": ["angle", "cx", "cy", "kind", "r", "stops"],
+    "paintLayer": ["color", "gradient", "hidden"],
+    "strokeLayer": ["align", "color", "dashes", "hidden", "width"],
     "imageCrop": ["scale", "x", "y"],
     "frameLayout": ["align", "clip", "cols", "dir", "gap", "hug", "justify", "pad", "wrap"],
     "sizing": ["h", "w"],

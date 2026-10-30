@@ -1201,4 +1201,11 @@ export const es: Catalog = {
   "Gradient radius": "Radio del degradado",
   "Gradient start": "Inicio del degradado",
   "Gradient end": "Fin del degradado",
+  "Add fill layer": "Añadir capa de relleno",
+  "Add stroke layer": "Añadir capa de trazo",
+  "Show layer": "Mostrar capa",
+  "Hide layer": "Ocultar capa",
+  "Move layer up": "Subir capa",
+  "Move layer down": "Bajar capa",
+  "Remove layer": "Quitar capa",
 }

@@ -63,6 +63,10 @@ export interface ShapeSpec {
   d?: string
   /** path only: [x, y, w, h] viewBox the path was authored in */
   pathBox?: [number, number, number, number]
+  /** fill layers, bottom first; when set they are drawn instead of fill/fillGradient */
+  fills?: Array<{ color: string; gradient?: GradientSpec; hidden?: boolean }>
+  /** stroke layers, bottom first; when set they are drawn instead of stroke/strokeWidth */
+  strokes?: Array<{ color: string; width: number; align?: 'inside' | 'center' | 'outside'; dashes?: [number, number]; hidden?: boolean }>
 }
 
 // Module-global id counters: svg url(#…) references resolve DOCUMENT-WIDE (the
@@ -194,7 +198,38 @@ function roundedRectPath(x: number, y: number, w: number, h: number, radii: [num
     + `H${x + bl}A${bl},${bl} 0 0 1 ${x},${y + h - bl}V${y + tl}A${tl},${tl} 0 0 1 ${x + tl},${y}Z`
 }
 
+/**
+ * Model → <svg>. A shape with fill or stroke STACKS draws each visible layer,
+ * bottom first, as the one-paint shape it would be with only that layer —
+ * fills under strokes, as Figma and Penpot paint them — and merges the
+ * layers' nodes into one <svg>. Every layer keeps the geometry of the
+ * shape's own (top) stroke width, so fills sit where they always sat.
+ * Each layer's paint node carries `data-layer` ('fill'/'stroke' + index) so
+ * the morph can find it.
+ */
 export function shapeSvg(el: ShapeSpec): SVGSVGElement {
+  if ((!el.fills && !el.strokes) || el.shape === 'line') return paintSvg(el)
+  const base: ShapeSpec = { ...el, fills: undefined, strokes: undefined }
+  const parts: Array<[ShapeSpec, string]> = []
+  const fills = el.fills ?? [{ color: el.fill, gradient: el.fillGradient }]
+  fills.forEach((f, i) => {
+    if (!f.hidden) parts.push([{ ...base, fill: f.color, fillGradient: f.gradient, stroke: 'transparent' }, `fill${i}`])
+  })
+  const strokes = el.strokes ?? (el.strokeWidth > 0 ? [{ color: el.stroke, width: el.strokeWidth, align: el.strokeAlign, dashes: el.strokeDashes }] : [])
+  strokes.forEach((s, i) => {
+    if (!s.hidden) parts.push([{ ...base, fill: 'none', fillGradient: undefined, stroke: s.color, strokeWidth: s.width, strokeAlign: s.align, strokeDashes: s.dashes }, `stroke${i}`])
+  })
+  const svg = paintSvg({ ...base, fill: 'none', fillGradient: undefined, stroke: 'transparent' })
+  svg.replaceChildren()
+  for (const [spec, tag] of parts) {
+    const one = paintSvg(spec)
+    for (const node of one.querySelectorAll(':scope > :not(defs)')) node.setAttribute('data-layer', tag)
+    svg.append(...one.childNodes)
+  }
+  return svg
+}
+
+function paintSvg(el: ShapeSpec): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg')
   const { w, h } = el
   const sw = el.strokeWidth

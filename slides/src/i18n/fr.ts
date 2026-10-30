@@ -1201,4 +1201,11 @@ export const fr: Catalog = {
   "Gradient radius": "Rayon du dégradé",
   "Gradient start": "Début du dégradé",
   "Gradient end": "Fin du dégradé",
+  "Add fill layer": "Ajouter un calque de remplissage",
+  "Add stroke layer": "Ajouter un calque de contour",
+  "Show layer": "Afficher le calque",
+  "Hide layer": "Masquer le calque",
+  "Move layer up": "Monter le calque",
+  "Move layer down": "Descendre le calque",
+  "Remove layer": "Supprimer le calque",
 }

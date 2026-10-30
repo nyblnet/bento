@@ -1201,4 +1201,11 @@ export const it: Catalog = {
   "Gradient radius": "Raggio del gradiente",
   "Gradient start": "Inizio del gradiente",
   "Gradient end": "Fine del gradiente",
+  "Add fill layer": "Aggiungi livello di riempimento",
+  "Add stroke layer": "Aggiungi livello di contorno",
+  "Show layer": "Mostra livello",
+  "Hide layer": "Nascondi livello",
+  "Move layer up": "Sposta livello su",
+  "Move layer down": "Sposta livello giù",
+  "Remove layer": "Rimuovi livello",
 }
