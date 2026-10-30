@@ -5,7 +5,8 @@ import type { PropsPanel } from '../panels'
 import { type SlideElement, morphKey, type TextElement, isWebUrl, uid, paginates } from '../../model'
 import { section, row, labeledSelect, number, select } from './fields'
 import { t } from '../../i18n'
-import { UNPAIR } from './controls'
+import { UNPAIR, roving } from './controls'
+import { endPreview, previewEnter } from '../fxpreview'
 import type { StepPatch } from '../reveal'
 import { stepOf } from '../../steps'
 import { morphSource } from '../morph'
@@ -156,14 +157,44 @@ export function buildPresentingProps(p: PropsPanel, el: SlideElement) {
 
   // labelled by where the element comes FROM: slide-left starts on the right
   // and travels left (present.ts enterSpec)
-  row(p, 'Entrance', labeledSelect(
-    [['none', t('None')], ['fade', t('Fade')], ['fade-up', t('Fade up')], ['fade-down', t('Fade down')],
-      ['slide-left', t('Fly in from right')], ['slide-right', t('Fly in from left')],
-      ['slide-up', t('Fly in from below')], ['slide-down', t('Fly in from above')]],
-    el.fx?.enter ?? 'none',
-    (v) => setFx(v === 'none'
-      ? { enter: undefined, enterDur: undefined }
-      : { enter: v as NonNullable<typeof el.fx>['enter'] })))
+  // pills, not a dropdown: every choice visible, and pointing at one plays
+  // it on the canvas (fxpreview.ts) before it is chosen
+  type Enter = NonNullable<NonNullable<typeof el.fx>['enter']>
+  const ENTERS: Array<[Enter | 'none', string]> = [['none', t('None')], ['fade', t('Fade')], ['fade-up', t('Fade up')], ['fade-down', t('Fade down')],
+    ['slide-left', t('Fly in from right')], ['slide-right', t('Fly in from left')],
+    ['slide-up', t('Fly in from below')], ['slide-down', t('Fly in from above')]]
+  const pills = document.createElement('div')
+  pills.className = 'ed-fx-pills'
+  pills.setAttribute('role', 'radiogroup')
+  for (const [v, label] of ENTERS) {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.setAttribute('role', 'radio')
+    b.setAttribute('aria-checked', String(v === (el.fx?.enter ?? 'none')))
+    b.textContent = label
+    b.addEventListener('click', () => {
+      endPreview()
+      setFx(v === 'none' ? { enter: undefined, enterDur: undefined } : { enter: v })
+    })
+    if (v !== 'none') {
+      b.addEventListener('pointerenter', () => previewEnter(el, v))
+      b.addEventListener('focus', () => previewEnter(el, v))
+    }
+    b.addEventListener('pointerleave', endPreview)
+    b.addEventListener('blur', endPreview)
+    pills.appendChild(b)
+  }
+  roving(pills, 'radio')
+  const enterRow = document.createElement('div')
+  enterRow.className = 'ed-row ed-row-pills'
+  enterRow.setAttribute('role', 'group')
+  const cap = document.createElement('span')
+  cap.textContent = t('Entrance')
+  cap.id = `ed-enter-${el.id}`
+  enterRow.setAttribute('aria-labelledby', cap.id)
+  pills.setAttribute('aria-labelledby', cap.id)
+  enterRow.append(cap, pills)
+  p.host.appendChild(enterRow)
   if (el.fx?.enter) {
     // per-kind default (slide-* 0.75s, fade-* 0.55s); lower = snappier
     row(p, 'Entrance (s)', number(

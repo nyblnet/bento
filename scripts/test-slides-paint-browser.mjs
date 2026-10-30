@@ -1,0 +1,175 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+// Paint in the editor: gradients (Solid | Linear | Radial, the stop bar, the
+// popover's kinds, the canvas handle), stroke position and dashes, per-corner
+// radii, flip, and the hover previews — end to end in the built shell.
+//
+//   npm run build:single --prefix slides && node scripts/test-slides-paint-browser.mjs
+//
+// WHAT THIS PROVES.
+//   1. The renderer draws the new keys: a radialGradient with its centre and
+//      radius, a radial text fill, a per-corner rect as a path with arcs, an
+//      outside stroke on a triangle as a masked doubled stroke, a flip as a
+//      mirrored content node.
+//   2. Fill kind is one click; the stop bar adds a stop where it is clicked
+//      and Backspace removes the focused one; each is one undo step.
+//   3. The colour popover on a gradient offers Solid | Linear | Radial | Tokens;
+//      switching previews at once, Esc puts the fill back.
+//   4. A selected radial gradient has a centre knob on the canvas; dragging it
+//      moves the centre, one undo step.
+//   5. Stroke position, Custom dashes, the corners button and Flip write the
+//      model.
+//   6. Pointing at a Shadow preset or an entrance previews it on the canvas
+//      node and writes nothing.
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
+
+let checks = 0
+let failures = 0
+function ok(cond, msg) {
+  checks++
+  if (!cond) { failures++; console.log(`  FAIL  ${msg}`) } else console.log(`  ok    ${msg}`)
+}
+const MOD = process.platform === 'darwin' ? 'Meta' : 'Control'
+
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true })
+try {
+  const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
+  await ctx.route(/^https?:/, (r) => r.abort())
+  const p = await ctx.newPage()
+  const errors = []
+  p.on('pageerror', (e) => errors.push(e.message))
+  await p.goto(new URL('../slides/dist-single/Bento_Slides.bento.html', import.meta.url).href)
+  await p.waitForFunction(() => window.bento?.doc && document.querySelector('.ed-stage-scale [data-el-id]'))
+  const shape = (id, x, y, w, h, extra = {}) => ({ id, type: 'shape', shape: 'rect', x, y, w, h, rotation: 0, opacity: 1, fill: '#5E7699', stroke: 'transparent', strokeWidth: 0, radius: 0, ...extra })
+  const stops = [{ at: 0, color: '#ff0000' }, { at: 1, color: '#0000ff' }]
+  await p.evaluate((els) => {
+    const d = JSON.parse(JSON.stringify(window.bento.doc))
+    d.slides = [{ id: 's1', background: '#ffffff', notes: '', transition: 'none', elements: els }]
+    window.bento.loadDoc(JSON.stringify(d))
+  }, [
+    shape('rad', 100, 100, 300, 200, { fillGradient: { angle: 180, kind: 'radial', cx: 0.3, cy: 0.4, r: 0.6, stops } }),
+    shape('tri', 500, 100, 200, 200, { shape: 'triangle', stroke: '#000000', strokeWidth: 8, strokeAlign: 'outside' }),
+    shape('corn', 100, 400, 200, 150, { radii: [0, 10, 20, 40], radius: 40 }),
+    shape('flip', 500, 400, 200, 100, { shape: 'arrow', flipX: true }),
+    { id: 'tx', type: 'text', html: 'Hello', x: 800, y: 100, w: 300, h: 80, rotation: 0, opacity: 1, fontSize: 40, fontFamily: 'system-ui', fontWeight: 700, color: '#000', align: 'left', valign: 'top', lineHeight: 1.2, colorGradient: { angle: 90, kind: 'radial', stops } },
+  ])
+  await p.waitForTimeout(500)
+  const el = (id) => p.evaluate((id) => window.bento.doc.slides[0].elements.find((e) => e.id === id), id)
+  const node = (id) => `.ed-stage-scale [data-el-id="${id}"]`
+  const select = async (id) => {
+    await p.keyboard.press('Escape'); await p.waitForTimeout(80)
+    const b = await p.locator(node(id)).boundingBox()
+    await p.mouse.click(b.x + 12, b.y + b.height / 2); await p.waitForTimeout(250)
+  }
+  const undo = async () => { await p.keyboard.press(`${MOD}+z`); await p.waitForTimeout(250) }
+
+  console.log('\nthe renderer\n')
+  const r = await p.evaluate(() => {
+    const sel = (id) => `.ed-stage-scale [data-el-id="${id}"]`
+    const g = document.querySelector(`${sel('rad')} radialGradient`)
+    const tx = document.querySelector(`${sel('tx')} .bento-text-inner`)
+    const corn = document.querySelector(`${sel('corn')} svg path`)
+    const tri = document.querySelector(`${sel('tri')} svg`)
+    const flip = document.querySelector(`${sel('flip')} svg`)
+    return {
+      g: g && [g.getAttribute('cx'), g.getAttribute('cy'), g.getAttribute('r')].join(),
+      tx: tx?.style.backgroundImage ?? '',
+      corn: corn?.getAttribute('d') ?? '',
+      mask: !!tri?.querySelector('mask') && !!tri?.querySelector('[mask]') && tri.querySelector('[mask]').getAttribute('stroke-width') === '16',
+      flip: flip?.style.transform ?? '',
+    }
+  })
+  ok(r.g === '0.3,0.4,0.6', `a radial fill is a radialGradient at its centre and radius (${r.g})`)
+  ok(r.tx.startsWith('radial-gradient('), `a radial text fill is a CSS radial gradient (${r.tx.slice(0, 40)}…)`)
+  ok((r.corn.match(/A/g) ?? []).length === 4, 'per-corner radii draw a path with one arc per corner')
+  ok(r.mask, 'an outside stroke on a triangle is a doubled stroke, masked off the fill')
+  ok(r.flip.includes('scale(-1, 1)'), `a flipped element draws its content mirrored (${r.flip})`)
+
+  console.log('\nfill kind and the stop bar\n')
+  await select('rad')
+  await p.locator('.ed-props .ed-seg[aria-label="Fill style"] button', { hasText: 'Linear' }).click(); await p.waitForTimeout(250)
+  let e = await el('rad')
+  ok(e.fillGradient && !e.fillGradient.kind && e.fillGradient.stops.length === 2, 'Linear: the same stops, no kind')
+  await p.locator('.ed-props .ed-seg[aria-label="Fill style"] button', { hasText: 'Radial' }).click(); await p.waitForTimeout(250)
+  e = await el('rad')
+  ok(e.fillGradient?.kind === 'radial', 'Radial: kind radial')
+  const bar = await p.locator('.ed-props .ed-gradbar').boundingBox()
+  await p.mouse.click(bar.x + bar.width / 2, bar.y + 2); await p.waitForTimeout(250)
+  e = await el('rad')
+  ok(e.fillGradient.stops.length === 3 && Math.abs(e.fillGradient.stops[1].at - 0.5) < 0.05, `a click on the bar adds a stop there (${e.fillGradient.stops.map((s) => s.at).join(' ')})`)
+  ok(/^(#|rgb)/.test(e.fillGradient.stops[1].color) && e.fillGradient.stops[1].color !== '#ff0000', `…in the colour already there (${e.fillGradient.stops[1].color})`)
+  await p.locator('.ed-props .ed-gradbar-stop').nth(1).focus()
+  await p.keyboard.press('Backspace'); await p.waitForTimeout(250)
+  e = await el('rad')
+  ok(e.fillGradient.stops.length === 2, 'Backspace on a stop removes it')
+  ok(!!(await el('rad')), 'Backspace on a stop does not delete the element')
+  await undo()
+  ok((await el('rad')).fillGradient.stops.length === 3, 'one undo brings the stop back')
+  await undo()
+  ok((await el('rad')).fillGradient.stops.length === 2, 'one more undo takes the added one away')
+
+  console.log('\nthe popover\n')
+  await p.click('.ed-props .ed-gradchip'); await p.waitForTimeout(250)
+  ok(await p.locator('.ed-cpop .ed-cpop-kinds button').count() === 4, 'the popover offers Solid | Linear | Radial | Tokens')
+  ok(await p.locator('.ed-cpop .ed-gradbar').count() === 1, 'a gradient shows its stop bar in the popover')
+  await p.click('.ed-cpop .ed-cpop-kinds [data-kind="linear"]'); await p.waitForTimeout(250)
+  ok(!(await el('rad')).fillGradient.kind, 'Linear previews at once')
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300)
+  ok((await el('rad')).fillGradient.kind === 'radial', 'Esc puts the radial back')
+  ok(await p.locator('.ed-cpop').count() === 0, 'and closes the popover')
+
+  console.log('\nthe canvas handle\n')
+  await select('rad')
+  const knobs = p.locator('.ed-grad-layer .ed-grad-knob')
+  ok(await knobs.count() === 2, 'a radial gradient shows a centre and a radius knob')
+  const k = await knobs.first().boundingBox()
+  const before = (await el('rad')).fillGradient
+  await p.mouse.move(k.x + k.width / 2, k.y + k.height / 2)
+  await p.mouse.down(); await p.mouse.move(k.x + 40, k.y + 20, { steps: 5 }); await p.mouse.up(); await p.waitForTimeout(250)
+  const moved = (await el('rad')).fillGradient
+  ok(moved.cx > before.cx && moved.cy > before.cy, `dragging the centre knob moves the centre (${before.cx},${before.cy} → ${moved.cx},${moved.cy})`)
+  await undo()
+  ok((await el('rad')).fillGradient.cx === before.cx, 'one undo puts the centre back')
+
+  console.log('\nstroke, corners, flip\n')
+  await select('tri')
+  await p.locator('.ed-props .ed-seg[aria-label="Stroke position"] button', { hasText: 'Center' }).click(); await p.waitForTimeout(250)
+  ok((await el('tri')).strokeAlign === 'center', 'Stroke position writes strokeAlign')
+  await p.locator('.ed-props select[aria-label="Line style"]').selectOption('custom'); await p.waitForTimeout(250)
+  e = await el('tri')
+  ok(Array.isArray(e.strokeDashes) && e.strokeDashes.length === 2 && e.strokeStyle === 'dashed', `Custom dashes writes a pair, with dashed underneath for an older shell (${JSON.stringify(e.strokeDashes)})`)
+  await select('corn')
+  ok(await p.locator('.ed-props .ed-corners .ed-mini').count() === 4, 'split corners show four fields')
+  await p.click('.ed-props .ed-corners-btn'); await p.waitForTimeout(250)
+  e = await el('corn')
+  ok(!e.radii && e.radius === 40, 'the corners button joins them again (radius keeps the largest)')
+  await p.click('.ed-props .ed-corners-btn'); await p.waitForTimeout(250)
+  ok(JSON.stringify((await el('corn')).radii) === '[40,40,40,40]', 'and splits them from the one radius')
+  await p.click('.ed-props .ed-tool[aria-label="Flip vertical"]'); await p.waitForTimeout(250)
+  ok((await el('corn')).flipY === true, 'Flip vertical writes flipY')
+
+  console.log('\nhover previews\n')
+  await select('corn')
+  await p.evaluate(() => { const b = [...document.querySelectorAll('.ed-props .ed-sec-act')].find((x) => x.title === 'Add shadow'); b?.click() })
+  await p.waitForTimeout(300)
+  const filter0 = await p.evaluate((s) => document.querySelector(s).style.filter, node('corn'))
+  const shadow0 = JSON.stringify((await el('corn')).shadow)
+  await p.locator('.ed-props .ed-shadow-tile').nth(2).hover(); await p.waitForTimeout(150)
+  const filter1 = await p.evaluate((s) => document.querySelector(s).style.filter, node('corn'))
+  ok(filter1 !== filter0 && filter1.includes('drop-shadow'), 'pointing at a shadow preset shows it on the element')
+  ok(JSON.stringify((await el('corn')).shadow) === shadow0, '…and writes nothing')
+  await p.mouse.move(5, 5); await p.waitForTimeout(150)
+  ok(await p.evaluate((s) => document.querySelector(s).style.filter, node('corn')) === filter0, 'leaving restores it')
+  await p.locator('.ed-props .ed-tabs [role=tab]').nth(1).click(); await p.waitForTimeout(200)
+  await p.locator('.ed-props .ed-fx-pills button', { hasText: 'Fly in from below' }).hover(); await p.waitForTimeout(100)
+  ok(await p.evaluate((s) => document.querySelector(s).getAnimations().length > 0, node('corn')), 'pointing at an entrance plays it on the element')
+  ok(!(await el('corn')).fx, '…and writes nothing')
+  await p.locator('.ed-props .ed-fx-pills button', { hasText: 'Fly in from below' }).click(); await p.waitForTimeout(250)
+  ok((await el('corn')).fx?.enter === 'slide-up', 'a click on an entrance pill chooses it')
+
+  ok(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`)
+} finally {
+  await browser.close()
+}
+console.log(`\n${checks - failures}/${checks} checks passed`)
+process.exit(failures ? 1 : 0)

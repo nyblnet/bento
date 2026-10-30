@@ -8,6 +8,7 @@ import { section, mini, field } from './fields'
 import { t } from '../../i18n'
 import { ICONS } from '../../icons'
 import { colorAlpha } from './color'
+import { endPreview, previewShadow } from '../fxpreview'
 
 /** Shadow — added and removed from its header; a preset to start from,
  *  then the concrete values (per layer when stacked). */
@@ -37,7 +38,10 @@ export function buildShadow(p: PropsPanel, el: SlideElement) {
     const name = document.createElement('span')
     name.textContent = optLabel(key)
     b.append(swatch, name)
-    b.addEventListener('click', () => { if (key !== current) p.mutate(el.id, (e) => { e.shadow = { ...SHADOW_PRESETS[key] } }, true) })
+    b.addEventListener('click', () => { endPreview(); if (key !== current) p.mutate(el.id, (e) => { e.shadow = { ...SHADOW_PRESETS[key] } }, true) })
+    // pointing at a preset shows it on the element; nothing is written
+    b.addEventListener('pointerenter', () => previewShadow(el, p.store.doc, SHADOW_PRESETS[key]))
+    b.addEventListener('pointerleave', endPreview)
     tiles.appendChild(b)
   }
   roving(tiles, 'radio')

@@ -172,6 +172,14 @@ export interface ElementBase {
    * key); that is the cost of keeping the format additive.
    */
   hidden?: true
+  /**
+   * Mirrored across the vertical (flipX) or horizontal (flipY) axis through
+   * the box centre — the content is drawn mirrored, the box is unchanged.
+   * Absent = as authored. A shell that predates these keys draws the element
+   * unmirrored.
+   */
+  flipX?: true
+  flipY?: true
 }
 
 export interface ElementSizing {
@@ -276,6 +284,16 @@ export interface GradientFill {
   angle: number
   /** ordered stops; `at` is 0..1 along the gradient line */
   stops: Array<{ at: number; color: string }>
+  /**
+   * 'radial': the stops run from the centre (cx, cy) out to radius r, all in
+   * fractions of the element box (an ellipse in a non-square box); `angle` is
+   * kept and unused. Absent = linear. A shell that predates radial gradients
+   * draws the same stops as a linear gradient along `angle`.
+   */
+  kind?: 'radial'
+  cx?: number
+  cy?: number
+  r?: number
 }
 
 /** Decoration at a line's tip. Sized relative to the stroke width. The
@@ -292,7 +310,7 @@ export interface ShapeElement extends ElementBase {
   fillGradient?: GradientFill
   stroke: string
   strokeWidth: number
-  /** corner radius, rect only */
+  /** corner radius, rect only (with `radii`, the largest corner — what an older shell draws) */
   radius: number
   /** arrow only (v1.1.1, #304): 2 = a head at both ends. Absent = one head.
    *  A property, not a shape kind, on purpose: a shipped shell's renderer
@@ -304,6 +322,16 @@ export interface ShapeElement extends ElementBase {
   strokeDash?: number
   /** stroke pattern; wins over strokeDash when set */
   strokeStyle?: 'solid' | 'dashed' | 'dotted'
+  /** [dash, gap] in px; wins over strokeStyle. An older shell draws strokeStyle. */
+  strokeDashes?: [number, number]
+  /**
+   * Where the stroke sits on the outline. Absent = as before: inside on rect,
+   * ellipse and triangle (the box is the outer edge), centred on paths and
+   * arrows. An older shell draws it the absent way.
+   */
+  strokeAlign?: 'inside' | 'center' | 'outside'
+  /** rect only: per-corner radius [top-left, top-right, bottom-right, bottom-left]; wins over `radius` */
+  radii?: [number, number, number, number]
   /** line and (v1.1.1, #302) open path shapes: tip decorations. On a path
    *  the tip points along the curve's end tangent. */
   lineStart?: LineEnding

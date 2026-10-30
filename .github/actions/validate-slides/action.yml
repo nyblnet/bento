@@ -617,3 +617,11 @@ runs:
       # junk refused.
       shell: bento-step {0}
       run: node scripts/test-slides-inspector-math.ts
+    - name: Paint keys rig
+      # The file gate keeps radial gradients, stroke position and dashes,
+      # per-corner radii and flip, and drops a bad value without the element;
+      # a radial gradient's CSS is sized like its SVG.
+      shell: bento-step {0}
+      run: |
+        slides/node_modules/.bin/esbuild scripts/test-slides-paint.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/test-slides-paint.mjs"
+        node "$RUNNER_TEMP/test-slides-paint.mjs"

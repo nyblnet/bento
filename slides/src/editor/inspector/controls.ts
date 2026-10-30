@@ -112,7 +112,7 @@ export function internView(doc: BentoDoc, markup: string): string {
  * import time.
  */
 export const fillStyles = (): Array<[string, string]> =>
-  [['solid', t('Solid colour')], ['gradient', t('Gradient')]]
+  [['solid', t('Solid')], ['linear', t('Linear')], ['radial', t('Radial')]]
 
 /**
  * Stored model words → the sentence-case English key that labels them, for

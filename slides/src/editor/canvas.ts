@@ -32,6 +32,7 @@ import { isMacOS } from '../screens'
 import { aabb, fmt, measureBoxes, union, type Box } from './measure-geom'
 import { drawFrameOverlay } from './frameoverlay'
 import { isFrame, layoutSlide } from '../layout'
+import { drawGradientOverlay } from './gradientoverlay'
 import { TransformHud, hudNum, mountModHint } from './hud'
 import { applyMorphPreview, morphGhost } from './morph'
 
@@ -1278,6 +1279,7 @@ export class SlideCanvas {
     else { this.lineEditor.detach(); this.bezierEditor.detach() }
     const handled = curve || lineLike
     drawFrameOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active)
+    drawGradientOverlay(this.scaleHost, this.store, () => this.scale, !!this.editing || !!this.pathEditor?.active || !!this.cropEditor?.active || handled)
     const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes().filter((n) => !n.classList.contains('ed-locked'))
     // snap against slide bounds/center and every non-selected element
     const others = this.surface

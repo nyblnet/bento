@@ -5,10 +5,10 @@ import { tokenBind } from './tokenbind'
 import type { PropsPanel } from '../panels'
 import type { ShapeElement, LineEnding } from '../../model'
 import { TIPS } from '../../tips'
-import { optLabel, parseColor, combineColor } from './controls'
+import { optLabel, parseColor } from './controls'
 import { row, labeledSelect, toggle, section, field, mini } from './fields'
 import { t } from '../../i18n'
-import { fillKind, colorAlpha, gradientRows } from './color'
+import { fillKind, colorAlpha, gradientRows, gradientChip, gradientFor, paintHost, type PaintKind } from './color'
 import { segmented } from './fields'
 import { BOOL_OPS, boolUi, flatten, release, setOp } from '../booleans'
 
@@ -54,27 +54,15 @@ export function buildShapeFill(p: PropsPanel, el: ShapeElement) {
   if (el.shape === 'line') return // its one colour is `fill`, shown under Stroke (buildShapeStroke)
   section(p, t('Fill'))
   const grad = el.fillGradient
-  field(p, fillKind(grad ? 'gradient' : 'solid', (v) =>
-    p.mutate(el.id, (e) => {
-      const s = e as ShapeElement
-      if (v === 'gradient') {
-        const base = parseColor(s.fill)
-        s.fillGradient ??= {
-          angle: 180,
-          stops: [
-            { at: 0, color: combineColor(base.hex, Math.max(base.a, 0.85)) },
-            { at: 1, color: combineColor(base.hex, 0) },
-          ],
-        }
-      } else {
-        delete s.fillGradient
-      }
-    }, true)))
-  if (!grad) {
+  const host = paintHost(p, el.id, 'fill', 'fillGradient')
+  field(p, fillKind(host.kind, (v) =>
+    host.write(v as PaintKind, v === 'solid' ? undefined : gradientFor(v as 'linear' | 'radial', grad, el.fill), undefined, true)))
+  if (host.kind === 'solid' || !grad) {
     field(p, colorAlpha(p, el.fill, (v, fin) =>
       p.mutate(el.id, (e) => { (e as ShapeElement).fill = v }, fin),
-      { id: el.id, path: 'fill' }))
+      { id: el.id, path: 'fill' }, host))
   } else {
+    field(p, gradientChip(p, host))
     gradientRows(p, grad, (fn, fin) => p.mutate(el.id, (e) => {
       const g = (e as ShapeElement).fillGradient
       if (g) fn(g)
@@ -106,11 +94,19 @@ export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
     field(p, colorAlpha(p, el.stroke === 'transparent' ? 'rgba(30, 42, 58, 0)' : el.stroke, (v, fin) =>
       p.mutate(el.id, (e) => { (e as ShapeElement).stroke = v }, fin)))
   }
+  // 'custom' is a dash and gap of the author's own (strokeDashes); the
+  // nearest named style stays under it for a shell that predates it
   const style = labeledSelect(
-    [['solid', t('Solid')], ['dashed', t('Dashed')], ['dotted', t('Dotted')]],
-    el.strokeStyle ?? (el.strokeDash ? 'dashed' : 'solid'),
+    [['solid', t('Solid')], ['dashed', t('Dashed')], ['dotted', t('Dotted')], ['custom', t('Custom dashes')]],
+    el.strokeDashes ? 'custom' : el.strokeStyle ?? (el.strokeDash ? 'dashed' : 'solid'),
     (v) => p.mutate(el.id, (e) => {
       const s = e as ShapeElement
+      if (v === 'custom') {
+        s.strokeDashes = [Math.max(s.strokeWidth * 3, 6), Math.max(s.strokeWidth * 2, 4)]
+        s.strokeStyle = 'dashed'
+        return
+      }
+      delete s.strokeDashes
       s.strokeStyle = v === 'solid' ? undefined : (v as 'dashed' | 'dotted')
       if (v === 'solid') delete s.strokeDash // clear the legacy dash too
     }, true))
@@ -121,4 +117,25 @@ export function buildShapeStroke(p: PropsPanel, el: ShapeElement) {
   grid.append(tokenBind(p, mini(t('Width'), el.strokeWidth, (v, fin) =>
     p.mutate(el.id, (e) => { (e as ShapeElement).strokeWidth = Math.max(v, 0) }, fin), undefined, { min: 0 }), el, 'strokeWidth'), style)
   p.host.appendChild(grid)
+  if (el.strokeDashes) {
+    const dashes = document.createElement('div')
+    dashes.className = 'ed-grid2'
+    const part = (i: 0 | 1, label: string) => mini(label, el.strokeDashes![i], (v, fin) => p.mutate(el.id, (e) => {
+      const s = e as ShapeElement
+      if (s.strokeDashes) s.strokeDashes[i] = Math.max(v, 0)
+    }, fin), undefined, { min: 0 })
+    dashes.append(part(0, t('Dash')), part(1, t('Gap')))
+    p.host.appendChild(dashes)
+  }
+  // Inside | Center | Outside — closed outlines only; a line has no inside
+  if (!isLine) {
+    const def = el.shape === 'rect' || el.shape === 'ellipse' || el.shape === 'triangle' ? 'inside' : 'center'
+    const align = segmented(['inside', 'center', 'outside'], el.strokeAlign ?? def, (v) => p.mutate(el.id, (e) => {
+      const s = e as ShapeElement
+      if (v === def) delete s.strokeAlign
+      else s.strokeAlign = v as 'inside' | 'center' | 'outside'
+    }, true), { inside: t('Inside'), center: t('Center'), outside: t('Outside') })
+    align.setAttribute('aria-label', t('Stroke position'))
+    row(p, 'Stroke position', align)
+  }
 }

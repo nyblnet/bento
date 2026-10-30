@@ -260,8 +260,8 @@ export function applyElementFrame(node: HTMLElement, el: SlideElement) {
 // diagrams render shapes through one engine. Re-exported here so render.ts stays
 // the import site (present.ts imports gradientLineCoords; renderElement below uses
 // shapeSvg and cssLinearGradient) and the pixels are unchanged.
-import { cssLinearGradient, shapeSvg } from '../../kernel/src/shape.ts'
-export { cssLinearGradient, gradientLineCoords, shapeSvg } from '../../kernel/src/shape.ts'
+import { cssGradient, shapeSvg } from '../../kernel/src/shape.ts'
+export { cssGradient, cssLinearGradient, gradientLineCoords, radialGeom, shapeSvg } from '../../kernel/src/shape.ts'
 
 // --- math ($…$ → MathML) -----------------------------------------------------
 
@@ -702,7 +702,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.style.fontWeight = String(el.fontWeight)
       const cg = el.colorGradient
       if (cg && cg.stops && cg.stops.length) {
-        inner.style.backgroundImage = cssLinearGradient(cg)
+        inner.style.backgroundImage = cssGradient(cg)
         inner.style.setProperty('-webkit-background-clip', 'text')
         inner.style.setProperty('background-clip', 'text')
         inner.style.color = 'transparent'
@@ -965,6 +965,16 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       }
       node.appendChild(inner)
       break
+    }
+  }
+  // Mirrored content (flipX/flipY): the box stays put, what is drawn in it is
+  // mirrored about its centre. On the content, not the frame, so the frame's
+  // transform (rotation, and the morph and fx tweens) is left alone.
+  if (el.flipX || el.flipY) {
+    const flip = `scale(${el.flipX ? -1 : 1}, ${el.flipY ? -1 : 1})`
+    for (const c of node.children) {
+      const s = (c as HTMLElement | SVGElement).style
+      s.transform = s.transform ? `${s.transform} ${flip}` : flip
     }
   }
   // Every element type funnels through here, so this is the one place that

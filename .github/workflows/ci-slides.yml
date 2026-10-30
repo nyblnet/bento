@@ -363,3 +363,8 @@ jobs:
         # PNG 1×/2× and SVG of the slide or the selection's box (rotation
         # included), and Copy as JSON = ⌘C's payload.
         run: node scripts/test-slides-export-section-browser.mjs
+      - name: Paint in Chromium
+        # Radial/per-corner/outside-stroke/flip render; Solid | Linear | Radial,
+        # the stop bar, the popover's kinds, the canvas gradient knob, stroke
+        # position, dashes, corners, flip; hover previews write nothing.
+        run: node scripts/test-slides-paint-browser.mjs

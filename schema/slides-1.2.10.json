@@ -201,6 +201,27 @@
           "minimum": -3600,
           "maximum": 3600
         },
+        "cx": {
+          "type": "number",
+          "minimum": -10,
+          "maximum": 10
+        },
+        "cy": {
+          "type": "number",
+          "minimum": -10,
+          "maximum": 10
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "radial"
+          ]
+        },
+        "r": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
         "stops": {
           "type": "array",
           "maxItems": 64,
@@ -334,6 +355,12 @@
             "id",
             "key"
           ]
+        },
+        "flipX": {
+          "type": "boolean"
+        },
+        "flipY": {
+          "type": "boolean"
         },
         "fontFamily": {
           "type": "string",
@@ -509,6 +536,27 @@
           "minimum": -3600,
           "maximum": 3600
         },
+        "cx": {
+          "type": "number",
+          "minimum": -10,
+          "maximum": 10
+        },
+        "cy": {
+          "type": "number",
+          "minimum": -10,
+          "maximum": 10
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "radial"
+          ]
+        },
+        "r": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
         "stops": {
           "type": "array",
           "maxItems": 64,
@@ -677,6 +725,12 @@
         "fillGradient": {
           "$ref": "#/$defs/prop-fillGradient"
         },
+        "flipX": {
+          "type": "boolean"
+        },
+        "flipY": {
+          "type": "boolean"
+        },
         "from": {
           "$ref": "#/$defs/prop-from"
         },
@@ -844,6 +898,14 @@
             "type": "number"
           }
         },
+        "radii": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "number"
+          }
+        },
         "radius": {
           "type": "number",
           "minimum": 0,
@@ -903,10 +965,26 @@
           "maxLength": 64,
           "description": "CSS colour or url(#local-id)"
         },
+        "strokeAlign": {
+          "type": "string",
+          "enum": [
+            "inside",
+            "center",
+            "outside"
+          ]
+        },
         "strokeDash": {
           "type": "number",
           "minimum": 0,
           "maximum": 10000
+        },
+        "strokeDashes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number"
+          }
         },
         "strokeStyle": {
           "type": "string",
@@ -1041,6 +1119,12 @@
             "cover",
             "fill"
           ]
+        },
+        "flipX": {
+          "type": "boolean"
+        },
+        "flipY": {
+          "type": "boolean"
         },
         "fx": {
           "$ref": "#/$defs/prop-fx"
@@ -1237,6 +1321,12 @@
           "type": "string",
           "maxLength": 131072
         },
+        "flipX": {
+          "type": "boolean"
+        },
+        "flipY": {
+          "type": "boolean"
+        },
         "fx": {
           "$ref": "#/$defs/prop-fx"
         },
@@ -1430,6 +1520,12 @@
             "id",
             "key"
           ]
+        },
+        "flipX": {
+          "type": "boolean"
+        },
+        "flipY": {
+          "type": "boolean"
         },
         "fx": {
           "$ref": "#/$defs/prop-fx"
@@ -1744,6 +1840,12 @@
             "key"
           ]
         },
+        "flipX": {
+          "type": "boolean"
+        },
+        "flipY": {
+          "type": "boolean"
+        },
         "fx": {
           "$ref": "#/$defs/prop-fx"
         },
@@ -1940,6 +2042,12 @@
             "cover",
             "fill"
           ]
+        },
+        "flipX": {
+          "type": "boolean"
+        },
+        "flipY": {
+          "type": "boolean"
         },
         "fx": {
           "$ref": "#/$defs/prop-fx"
@@ -2162,6 +2270,12 @@
         "doc": {
           "$ref": "#/$defs/prop-doc"
         },
+        "flipX": {
+          "type": "boolean"
+        },
+        "flipY": {
+          "type": "boolean"
+        },
         "fx": {
           "$ref": "#/$defs/prop-fx"
         },
@@ -2362,6 +2476,12 @@
         "content": {
           "type": "string",
           "maxLength": 65536
+        },
+        "flipX": {
+          "type": "boolean"
+        },
+        "flipY": {
+          "type": "boolean"
         },
         "fontFamily": {
           "type": "string",
