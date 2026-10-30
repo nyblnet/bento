@@ -630,16 +630,19 @@ export class SlideCanvas {
   private fitHandles(targets = (this.moveable.target ?? []) as HTMLElement[]) {
     // (the new targets are passed in: moveable.target still reads the old
     // selection until its next render)
-    let side = Infinity
+    let side = Infinity, long = Infinity
     if (targets.length) {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
       for (const n of targets) { const b = n.getBoundingClientRect(); x0 = Math.min(x0, b.left); y0 = Math.min(y0, b.top); x1 = Math.max(x1, b.right); y1 = Math.max(y1, b.bottom) }
       side = Math.min(x1 - x0, y1 - y0)
+      long = Math.max(x1 - x0, y1 - y0)
     }
-    const dirs = side < 24 ? [] : side < 64 ? ['nw', 'ne', 'sw', 'se'] : ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se']
+    // Small in BOTH directions loses its handles; a thin line of text (wide,
+    // short) keeps its corners — it only lost them because its height was small
+    const dirs = long < 24 ? [] : side < 64 ? ['nw', 'ne', 'sw', 'se'] : ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se']
     const now = (this.moveable.renderDirections ?? []) as string[]
     if (now.join() !== dirs.join()) this.moveable.renderDirections = dirs
-    const turn = side >= 24
+    const turn = long >= 24
     if (this.moveable.rotatable !== turn) this.moveable.rotatable = turn
   }
 
