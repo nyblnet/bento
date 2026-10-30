@@ -227,3 +227,16 @@ export function opBtn(icon: string, title: string, onClick: () => void): HTMLEle
   btn.addEventListener('click', onClick)
   return btn
 }
+
+/** A select with its glyph inside the field's start, as the number fields
+ *  carry theirs — so Blend, Font and Weight read like the fields beside them. */
+export function withIcon(sel: HTMLElement, icon: string): HTMLElement {
+  const w = document.createElement('span')
+  w.className = 'ed-isel'
+  const i = document.createElement('span')
+  i.className = 'ed-isel-ico'
+  i.setAttribute('aria-hidden', 'true')
+  i.innerHTML = icon
+  w.append(i, sel)
+  return w
+}

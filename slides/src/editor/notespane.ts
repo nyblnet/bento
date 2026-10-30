@@ -66,6 +66,9 @@ export function mountNotesPane(store: Store, into: HTMLElement, signal: AbortSig
   window.addEventListener('resize', () => setH(Number(lsGet('bento-notes-h')) || DEFAULT_H), { signal })
   pane.append(grip, head, area)
   into.appendChild(pane)
+  // the fold animates only once the pane has painted at its saved height —
+  // otherwise every load would grow the notes up from nothing
+  requestAnimationFrame(() => requestAnimationFrame(() => pane.classList.add('ed-anim')))
 
   const setOpen = (open: boolean) => {
     pane.classList.toggle('closed', !open)

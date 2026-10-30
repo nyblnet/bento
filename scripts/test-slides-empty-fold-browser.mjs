@@ -68,7 +68,7 @@ try {
   await p.waitForTimeout(250)
 
   console.log('\nadding the shadow makes it a fold\n')
-  await head('Shadow').locator('.ed-sec-act').click()
+  await head('Shadow').locator('.ed-sec-act:not(.ed-sec-cat)').click()
   await p.waitForTimeout(300)
   const after = await state('Shadow')
   ok(!after.flat && after.role === 'button', 'with a shadow, Shadow is a fold button again')

@@ -684,10 +684,13 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   flex: none;
   overflow-y: auto;
   overflow-x: hidden;           /* no horizontal scrollbar, ever */
+  /* a slim 6px scrollbar whose gutter is paid for out of the right padding
+     (12 − 6): the right margin equals the left. A full-width gutter on one
+     side only made the right margin twice the left. */
   scrollbar-gutter: stable;
   background: var(--surface);
   border-inline-start: 1px solid var(--line);
-  padding: 0 12px 16px;
+  padding: 0 6px 16px 12px;
 }
 
 .ed-section {
@@ -838,7 +841,18 @@ body.ed-scrubbing, body.ed-scrubbing * { cursor: ew-resize; }
 .ed-notespane-head { display: block; width: 100%; margin: 0; padding-block: 8px 6px; padding-inline: 14px 0; font-family: inherit; text-align: start; background: none; border: 0; }
 .ed-notespane-head.ed-sec-toggle::before { inset-inline-start: 1px; }
 .ed-notespane-text { display: block; width: 100%; height: 84px; margin: 0; resize: none; }
-.ed-notespane.closed .ed-notespane-text { display: none; }
+/* the side panes' reveal contract, on the vertical: the notes fold and open
+   over the same .18s ease (height, padding, fade) instead of snapping; once
+   folded the field is out of the tab order (visibility, after the fold) */
+.ed-notespane.ed-anim { transition: padding .18s ease; }
+.ed-notespane.ed-anim .ed-notespane-text { transition: height .18s ease, padding .18s ease, opacity .18s ease, border-width .18s ease, visibility 0s linear 0s; }
+.ed-notespane.closed .ed-notespane-text {
+  height: 0 !important; padding-block: 0; border-width: 0; opacity: 0; visibility: hidden;
+}
+.ed-notespane.ed-anim.closed .ed-notespane-text {
+  transition: height .18s ease, padding .18s ease, opacity .12s ease, border-width .18s ease, visibility 0s linear .18s;
+}
+@media (prefers-reduced-motion: reduce) { .ed-notespane, .ed-notespane-text, .ed-notespane.closed .ed-notespane-text { transition: none; } }
 .ed-notes-grip { position: absolute; inset-inline: 0; top: -3px; height: 6px; cursor: ns-resize; touch-action: none; z-index: 5; transition: background .12s ease .08s; }
 .ed-notes-grip:hover, body.ed-row-resizing .ed-notes-grip { background: color-mix(in srgb, var(--blue) 45%, transparent); }
 .ed-notespane.closed .ed-notes-grip { cursor: default; background: none; }
@@ -3643,7 +3657,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
    the − in a trailing column of 26px squares, the same right edge in Fill,
    Stroke, Shadow and Blur, under the header's ⠿ and + */
 .ed-paintrow { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 26px 26px; gap: 4px; align-items: center; margin: 0 0 4px; }
-.ed-paintrow > .ed-btn-icon { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; color: var(--muted); }
+.ed-paintrow > .ed-btn-icon { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; color: var(--muted); border: 0; background: none; border-radius: 6px; } /* bare icons, like the header's ⠿ and + */
 .ed-paintrow > .ed-btn-icon:hover { color: var(--ink); background: var(--chrome-2); }
 .ed-paintrow > .ed-btn-icon svg { width: 16px; height: 16px; }
 .ed-paintrow.off > :first-child, .ed-paintrow.off > .ed-paintlayer-grip + * { opacity: .45; }
@@ -3835,3 +3849,31 @@ body.ed-morph-previewing .ed-morph-ghost { visibility: hidden !important; }
 /* an update card (notes, actions) takes the whole block width under the line */
 .ed-about-updates > .ed-about-status:has(.ed-about-update) { grid-column: 1 / -1; grid-row: 3; }
 .ed-about-main .ed-about-fine { margin-top: 16px; }
+
+/* the token picker's footer actions carry a glyph like every menu row */
+.ed-tokpick-act { display: flex; align-items: center; gap: 8px; }
+.ed-tokpick-ico { flex: none; display: grid; place-items: center; width: 16px; height: 16px; color: var(--muted); }
+.ed-tokpick-ico svg { width: 16px; height: 16px; }
+
+/* every section header is one box, whatever it carries: a ⠿ and + made a
+   header 33px and a bare one 28px, so an empty section and a folded one
+   stepped by 5px down the column */
+.ed-props .ed-section { box-sizing: border-box; height: 34px; min-height: 34px; }
+.ed-props .ed-section > .ed-sec-act, .ed-props .ed-section > .ed-sec-cat { height: 24px; }
+.ed-props .ed-section-body:not(:has(> *:not(.ed-help-btn))) { display: none; } /* an empty body is no box: the gap is the same as under a folded section */
+
+/* a select carrying its glyph at the start, like the number fields */
+.ed-isel { position: relative; display: block; min-width: 0; }
+.ed-isel > select { width: 100%; padding-inline-start: 26px; }
+.ed-isel-ico { position: absolute; inset-inline-start: 7px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 14px; height: 14px; color: var(--muted); pointer-events: none; }
+.ed-isel-ico svg { width: 14px; height: 14px; }
+
+.ed-props::-webkit-scrollbar { width: 6px; }
+/* Chrome ignores ::-webkit-scrollbar once scrollbar-width is set; elsewhere thin is the closest */
+@supports not selector(::-webkit-scrollbar) { .ed-props { scrollbar-width: thin; } }
+.ed-props::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 45%, transparent); border-radius: 3px; }
+.ed-props::-webkit-scrollbar-track { background: transparent; }
+[dir='rtl'] .ed-props { padding: 0 12px 16px 6px; }
+/* dragging the pane's edge is direct manipulation: no easing, or the height
+   lags the pointer and the size saved on release is a frame of the tween */
+body.ed-row-resizing .ed-notespane-text { transition: none !important; }
