@@ -1248,4 +1248,9 @@ export const es: Catalog = {
   "Saturation": "Saturación",
   "Luminosity": "Luminosidad",
   "Hidden elements are not drawn — show one in Layers to export it": "Los elementos ocultos no se dibujan: muestra uno en Capas para exportarlo",
+  "Fly in": "Entrar volando",
+  "Swap ends": "Intercambiar extremos",
+  "Ends": "Extremos",
+  "Fill container": "Llenar contenedor",
+  "Placeholder role": "Función de marcador de posición",
 }

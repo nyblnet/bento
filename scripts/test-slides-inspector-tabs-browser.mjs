@@ -32,12 +32,12 @@ function ok(cond, msg) {
 }
 const EN = {
   format: 'Format', animate: 'Animate', interact: 'Interact', text: 'Text', fill: 'Fill', stroke: 'Stroke', shadow: 'Shadow', blur: 'Blur',
-  anim: 'Animation', morph: 'Morph', inter: 'Interactivity', slide: 'Slide', layout: 'Layout', theme: 'Theme', deck: 'Deck', trans: 'Transition', exp: 'Export',
+  anim: 'Animation', morph: 'Morph', inter: 'Interactivity', slide: 'Slide', layout: 'Layout', roleSec: 'Placeholder role', theme: 'Theme', deck: 'Deck', trans: 'Transition', exp: 'Export',
   role: 'Layout role', opacity: 'Opacity', pageSize: 'Page size', link: 'Link to', empty: 'Nothing to set here for this selection.',
 }
 const PT = {
   format: 'Formato', animate: 'Animar', interact: 'Interação', text: 'Texto', fill: 'Preenchimento', stroke: 'Contorno', shadow: 'Sombra', blur: 'Desfoque',
-  anim: 'Animação', morph: 'Morph', inter: 'Interatividade', slide: 'Slide', layout: 'Layout', theme: 'Tema', deck: 'Documento', trans: 'Transição', exp: 'Exportar',
+  anim: 'Animação', morph: 'Morph', inter: 'Interatividade', slide: 'Slide', layout: 'Layout', roleSec: 'Função do espaço reservado', theme: 'Tema', deck: 'Documento', trans: 'Transição', exp: 'Exportar',
   role: 'Função no layout', opacity: 'Opacidade', pageSize: 'Tamanho da página', link: 'Vincular a', empty: 'Nada a ajustar aqui para esta seleção.',
 }
 
@@ -82,8 +82,8 @@ try {
     const field = await p.locator('.ed-props input.ed-num').first().elementHandle()
 
     let v = await on(L.format)
-    ok(JSON.stringify(v) === JSON.stringify([L.text, L.fill, L.stroke, L.shadow, L.blur, L.layout, L.exp]), `${tag} Format: the look, in order, Export last (${v.join(', ')})`)
-    ok((await rowsIn(L.layout)).includes(L.role), `${tag} Role sits in Layout, which says what it does`)
+    ok(JSON.stringify(v) === JSON.stringify([L.text, L.fill, L.stroke, L.shadow, L.blur, L.roleSec, L.exp]), `${tag} Format: the look, in order, Export last (${v.join(', ')})`)
+    ok((await rowsIn(L.roleSec)).includes(L.role), `${tag} Role sits in its own section, named for what it holds`)
     const block = await p.evaluate(() => {
       const b = document.querySelector('.ed-props > .ed-layer-block')
       const first = [...document.querySelectorAll('.ed-props > .ed-section')][0]

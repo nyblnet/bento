@@ -1258,4 +1258,9 @@ export const strings: Catalog = {
   "Saturation": "Saturasi",
   "Luminosity": "Luminositas",
   "Hidden elements are not drawn — show one in Layers to export it": "Elemen tersembunyi tidak digambar — tampilkan di Lapisan untuk mengekspornya",
+  "Fly in": "Terbang masuk",
+  "Swap ends": "Tukar ujung",
+  "Ends": "Ujung",
+  "Fill container": "Isi kontainer",
+  "Placeholder role": "Peran placeholder",
 }

@@ -1278,4 +1278,9 @@ export const strings: Catalog = {
   "Saturation": "سیچوریشن",
   "Luminosity": "لومینوسٹی",
   "Hidden elements are not drawn — show one in Layers to export it": "چھپے ہوئے عناصر نہیں بنائے جاتے — برآمد کرنے کے لیے پرتوں میں کوئی ایک دکھائیں",
+  "Fly in": "اڑ کر آنا",
+  "Swap ends": "سرے بدلیں",
+  "Ends": "سرے",
+  "Fill container": "کنٹینر بھریں",
+  "Placeholder role": "پلیس ہولڈر کا کردار",
 }

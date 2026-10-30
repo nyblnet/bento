@@ -1252,4 +1252,9 @@ export const strings: Catalog = {
   "Saturation": "채도",
   "Luminosity": "광도",
   "Hidden elements are not drawn — show one in Layers to export it": "숨긴 요소는 그려지지 않습니다 — 내보내려면 레이어에서 표시하세요",
+  "Fly in": "날아오기",
+  "Swap ends": "끝 바꾸기",
+  "Ends": "끝",
+  "Fill container": "컨테이너 채우기",
+  "Placeholder role": "자리 표시자 역할",
 }

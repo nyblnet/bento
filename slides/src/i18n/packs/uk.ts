@@ -1268,4 +1268,9 @@ export const strings: Catalog = {
   "Saturation": "Насиченість",
   "Luminosity": "Яскравість",
   "Hidden elements are not drawn — show one in Layers to export it": "Приховані елементи не малюються — покажіть елемент у «Шарах», щоб експортувати його",
+  "Fly in": "Вліт",
+  "Swap ends": "Поміняти кінці місцями",
+  "Ends": "Кінці",
+  "Fill container": "Заповнити контейнер",
+  "Placeholder role": "Роль заповнювача",
 }

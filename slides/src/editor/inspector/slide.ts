@@ -2,7 +2,7 @@
 // Copyright (c) 2026 The Bento authors
 // The slide's own panel (background, transition, page) and the deck theme.
 import type { PropsPanel } from '../panels'
-import { section, row, toggle, mini, select, labeledSelect, number } from './fields'
+import { section, row, toggle, mini, select, labeledSelect, number, segmented, field } from './fields'
 import { t } from '../../i18n'
 import { color } from './color'
 import { type Slide, uid, type TransitionKind } from '../../model'
@@ -176,12 +176,13 @@ export function buildSlidePanel(p: PropsPanel) {
 
 
   // interactivity: naming, state-of, hover focus
+  // the section names it: the picker needs no second label
   section(p, t('Transition'))
-  row(p, 'Transition', select(
-    ['none', 'fade', 'slide', 'zoom', 'morph'],
-    slide.transition,
-    (v) => p.editSlideAttrs(slideId, (slide: Slide) => { slide.transition = v as TransitionKind }, true),
-  ))
+  const trans = segmented(['none', 'fade', 'slide', 'zoom', 'morph'], slide.transition,
+    (v) => p.editSlideAttrs(slideId, (slide: Slide) => { slide.transition = v as TransitionKind }, true), undefined,
+    { none: ICONS.transNone, fade: ICONS.transFade, slide: ICONS.transPush, zoom: ICONS.transZoom, morph: ICONS.transMorph })
+  trans.setAttribute('aria-label', t('Transition'))
+  field(p, trans)
   if (slide.transition === 'morph') {
     const hint = document.createElement('p')
     hint.className = 'ed-hint'
@@ -279,7 +280,7 @@ export function buildThemeProps(p: PropsPanel) {
     row(p, label, color(p, get(), (v, fin) => p.edit(() => set(v), fin)))
   slot('Background', () => theme.background, (v) => { p.store.doc.theme.background = v })
   slot('Text', () => theme.color, (v) => { p.store.doc.theme.color = v })
-  slot('Accent', () => theme.accent, (v) => { p.store.doc.theme.accent = v })
+  slot(t('Accent {n}', { n: '1' }), () => theme.accent, (v) => { p.store.doc.theme.accent = v })
   // Accent 2–6 rows only for slots the deck carries (palette.ts slotIsSet):
   // an unset one resolves to accent 1 and showed as a sixth identical swatch.
   for (const n of [2, 3, 4, 5, 6] as const) {

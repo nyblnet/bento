@@ -41,6 +41,7 @@ import { estimatedFrames, fencedElements, splitFences } from './codefence'
 import { openSpeakerWindow, speakerIdleBody, speakerWindow } from '../screens'
 import { neutralWindowTitle, speakerWindowTitle, titleSealed } from '../wintitle'
 import { ICONS } from '../icons'
+import { segmented } from './inspector/fields'
 import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, isRtl } from '../i18n'
 import { MOD, dispatch, openPalette, titleFor, type Command } from './commands'
 import { stepOf } from '../steps'
@@ -2000,19 +2001,41 @@ export class Editor {
   private sideTabs(): HTMLElement {
     const bar = div('ed-tabs ed-side-tabs')
     bar.setAttribute('role', 'tablist')
-    const show = (view: string) => {
+    let show = (view: string) => {
       this.sidebar.dataset.view = view
       for (const b of bar.children) b.setAttribute('aria-selected', String((b as HTMLElement).dataset.view === view))
     }
+    // Each tab is its glyph; the chosen one also says its name. Three words
+    // never fit 188px in every language ('Diapositivas', 'Camadas'), and a
+    // tab cut to 'Cam…' says nothing: the name is always the accessible name.
+    const glyphs = { slides: ICONS.viewSlides, layers: ICONS.viewLayers, tokens: ICONS.viewTokens }
     for (const [view, label] of [['slides', t('Slides')], ['layers', t('Layers')], ['tokens', t('Tokens')]] as const) {
       const b = document.createElement('button')
       b.type = 'button'
       b.setAttribute('role', 'tab')
       b.dataset.view = view
-      b.textContent = label
+      b.title = label
+      b.setAttribute('aria-label', label)
+      b.innerHTML = glyphs[view]
+      const name = document.createElement('span')
+      name.className = 'ed-tab-name'
+      name.textContent = label
+      b.appendChild(name)
       b.addEventListener('click', () => { show(view); lsSet('bento-side-view', view) })
       bar.appendChild(b)
     }
+    // a name that would be cut ('Diapositivas' in 188px) is dropped rather
+    // than shown as 'Diapo…': the glyph and the accessible name stay
+    const fit = () => {
+      for (const b of bar.children) {
+        b.classList.remove('ed-tab-glyph-only')
+        const n = b.querySelector<HTMLElement>('.ed-tab-name')
+        if (n?.offsetParent && n.scrollWidth > n.clientWidth + 1) b.classList.add('ed-tab-glyph-only')
+      }
+    }
+    const shown = show
+    show = (view: string) => { shown(view); fit() }
+    new ResizeObserver(fit).observe(bar)
     const saved = lsGet('bento-side-view')
     show(saved === 'layers' || saved === 'tokens' ? saved : 'slides')
     slidingPill(bar)
@@ -4109,18 +4132,15 @@ export class Editor {
     // auto-update) rather than anywhere near the document's own settings.
     // "Auto" is first and is the default: most people want their machine's
     // choice, and the explicit options exist for the ones who do not.
-    const themeRow = document.createElement('label')
+    const themeRow = document.createElement('div')
     themeRow.className = 'ed-about-auto'
-    const themeSel = document.createElement('select')
-    for (const c of THEME_CHOICES) {
-      const o = document.createElement('option')
-      o.value = c
-      o.textContent = c === 'auto' ? t('Match my system') : c === 'light' ? t('Light mode') : t('Dark mode')
-      if (c === themeChoice()) o.selected = true
-      themeSel.appendChild(o)
-    }
-    themeSel.addEventListener('change', () => setTheme(themeSel.value as never))
-    themeRow.append(document.createTextNode(t('Appearance') + ' '), themeSel)
+    const themeCap = document.createElement('span')
+    themeCap.textContent = t('Appearance')
+    themeCap.id = 'ed-about-theme'
+    const themeSel = segmented([...THEME_CHOICES], themeChoice(), (v) => setTheme(v as never), { auto: t('Match my system'), light: t('Light mode'), dark: t('Dark mode') },
+    { auto: ICONS.window, light: ICONS.sun, dark: ICONS.moon })
+    themeSel.setAttribute('aria-labelledby', themeCap.id)
+    themeRow.append(themeCap, themeSel)
     box.appendChild(themeRow)
 
     const autoRow = document.createElement('label')

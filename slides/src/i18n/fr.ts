@@ -1248,4 +1248,9 @@ export const fr: Catalog = {
   "Saturation": "Saturation",
   "Luminosity": "Luminosité",
   "Hidden elements are not drawn — show one in Layers to export it": "Les éléments masqués ne sont pas dessinés — affichez-en un dans Calques pour l’exporter",
+  "Fly in": "Arrivée en vol",
+  "Swap ends": "Inverser les extrémités",
+  "Ends": "Extrémités",
+  "Fill container": "Remplir le conteneur",
+  "Placeholder role": "Rôle d’espace réservé",
 }

@@ -1259,4 +1259,9 @@ export const strings: Catalog = {
   "Saturation": "Nasycenie",
   "Luminosity": "Jasność",
   "Hidden elements are not drawn — show one in Layers to export it": "Ukryte elementy nie są rysowane — pokaż element w Warstwach, aby go wyeksportować",
+  "Fly in": "Wlot",
+  "Swap ends": "Zamień końce",
+  "Ends": "Końce",
+  "Fill container": "Wypełnij kontener",
+  "Placeholder role": "Rola symbolu zastępczego",
 }

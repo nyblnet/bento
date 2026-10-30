@@ -28,6 +28,7 @@
   --accent-on: #3a2a00;      /* text sitting ON the solid --accent fill */
   --blue: #5b8def;
   --field: #ffffff;          /* form-control surface — CHROME, not the slide */
+  --field-line: var(--line); /* a form control's edge */
   --surface: #ffffff;        /* panels, dialogs, menus */
   --tab-track: var(--chrome-2); /* a tab strip's track */
   --tab-on: var(--surface);  /* the selected tab's pill, lifted off its track */
@@ -65,6 +66,7 @@
   --accent-on: #3a2a00;
   --blue: #7aa5f5;           /* lifted: #5b8def is unreadable on dark chrome */
   --field: #12151a;
+  --field-line: #6b7585;     /* 3.3:1 on the panel, 3.9:1 on a field: a control's edge must read (WCAG 1.4.11) */
   --surface: #21262e;
   --tab-track: #12151a;      /* sunk below the panel, as Penpot does */
   --tab-on: #363d49;
@@ -156,7 +158,7 @@ option { background: var(--field); color: var(--ink); }
   font-size: 12.5px;
   color: var(--ink);
   background: var(--field);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-line);
   border-radius: 6px;
 }
 :where(textarea) { height: auto; padding: 6px 8px; line-height: 1.5; resize: vertical; }
@@ -165,7 +167,7 @@ option { background: var(--field); color: var(--ink); }
   height: 26px;
   padding: 1px 2px;
   background: var(--field);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-line);
   border-radius: 6px;
 }
 :where(input, select, textarea):focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
@@ -774,7 +776,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
    line of their own under the caption, so no translation has to squeeze. */
 .ed-seg {
   box-sizing: border-box; display: flex; width: 110px; height: 26px; padding: 2px; gap: 2px;
-  background: var(--field); border: 1px solid var(--line); border-radius: 6px;
+  background: var(--field); border: 1px solid var(--field-line); border-radius: 6px;
 }
 .ed-seg-text { width: 100%; }
 .ed-seg button {
@@ -1329,7 +1331,7 @@ body.ed-row-resizing, body.ed-row-resizing * { cursor: ns-resize; user-select: n
 .ed-series-rm { flex: 0 0 auto; color: #9aa4b2; }
 .ed-series-rm:hover { color: #c9302c; }
 .ed-chart-add { margin: 4px 0 2px; }
-.ed-chart-add .ed-btn { width: 100%; justify-content: center; font-size: 12px; }
+.ed-chart-add .ed-btn { width: 100%; font-size: 12px; }
 .ed-chart-grid-wrap { overflow-x: auto; margin: 2px 0; }
 .ed-chart-grid { border-collapse: collapse; width: 100%; }
 .ed-chart-grid th {
@@ -2708,9 +2710,6 @@ dialog.ed-pwdialog .ed-pwerr { color: #C33; }
 .bento-el-table.bento-editing td { cursor: text; }
 
 /* table properties: steppers + toggle */
-.ed-stepper { display: inline-flex; align-items: center; gap: 6px; }
-.ed-stepper .ed-btn-icon { width: 24px; height: 24px; line-height: 1; font-size: 15px; padding: 0; }
-.ed-stepper-val { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; font-size: 13px; }
 input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: pointer; }
 /* --- rich text inside a box ------------------------------------------------
    Every size here is in `em`, never px: the element's own `fontSize` is the
@@ -2946,6 +2945,12 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-sidebar { padding-top: 0; }
 .ed-side-band { flex: none; align-self: stretch; margin-bottom: 0; }
 .ed-side-tabs { width: 100%; flex: none; }
+.ed-side-tabs button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 7px; }
+.ed-side-tabs button[aria-selected='true'] { flex: 1 1 auto; }
+.ed-side-tabs button svg { flex: none; width: 14px; height: 14px; }
+.ed-side-tabs button:not([aria-selected='true']) .ed-tab-name { display: none; }
+.ed-side-tabs .ed-tab-name { min-width: 0; overflow: hidden; white-space: nowrap; }
+.ed-side-tabs button.ed-tab-glyph-only .ed-tab-name { display: none; }
 .ed-thumbs { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
 .ed-side-layers { width: 100%; }
 .ed-side-layers > .ed-section { display: none; } /* the tab already says Layers */
@@ -3119,14 +3124,17 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 }
 .ed-props .ed-row > span:first-child { line-height: 1.2; overflow-wrap: anywhere; }
 .ed-props .ed-row > :not(span:first-child) { width: 100%; min-width: 0; max-width: none; justify-self: stretch; }
-.ed-props .ed-row > .ed-toggle { width: auto; justify-self: start; }
+/* a switch row: the caption has the room, the box sits at the panel's edge
+   (it used to stretch to the field column and overrun the edge by 4px) */
+.ed-props .ed-row:has(> .ed-toggle) { grid-template-columns: minmax(0, 1fr) auto; }
+.ed-props .ed-row > .ed-toggle { width: 16px; margin: 0; justify-self: end; }
 .ed-props .ed-row > select { height: 26px; }
 /* caption above, control full width: a dropdown whose value would be cut off
    (panels.ts stackCrampedRows), a colour field with opacity or theme colours
    (one with only swatch and hex — the theme's slots — stays beside its
    caption), a chart axis range (min and max side by side) */
 .ed-props .ed-row.ed-row-stack,
-.ed-props .ed-row:has(> .ed-color .ed-color-alpha), .ed-props .ed-row:has(> .ed-colorref),
+.ed-props .ed-row:has(> .ed-color), .ed-props .ed-row:has(> .ed-colorref),
 .ed-props .ed-row:has(> .ed-axis-range) { grid-template-columns: minmax(0, 1fr); gap: 3px; }
 /* a stacked row, and a colour row beside its caption, top-align the caption */
 .ed-props .ed-row.ed-row-stack, .ed-props .ed-row:has(> .ed-color), .ed-props .ed-row:has(> .ed-colorref) { align-items: stretch; }
@@ -3145,7 +3153,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-props .ed-grid2 { grid-template-columns: 1fr 1fr; }
 .ed-props .ed-grid3 { grid-template-columns: 1fr 1fr 1fr; }
 .ed-props .ed-grid3 > *, .ed-props .ed-grid2 > * { min-width: 0; width: 100%; }
-.ed-props .ed-grid-wide { grid-template-columns: minmax(0, 1fr) 72px; }
+.ed-props .ed-grid-wide { grid-template-columns: 1fr 1fr; } /* one grid: blend · opacity line up with W · H */
 
 /* the block above the sections: the toolbar, blend · opacity, measures */
 .ed-layer-block { margin-bottom: 2px; }
@@ -3163,7 +3171,7 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-props .ed-toolbar { display: flex; align-items: center; flex-wrap: nowrap; gap: 0; margin-bottom: 6px; }
 .ed-toolbar-kind { flex: var(--n, 1) 1 0; min-width: 0; display: flex; align-items: center; gap: 0; }
 .ed-toolbar-kind + .ed-toolbar-kind { border-inline-start: 1px solid var(--line); padding-inline-start: 3px; margin-inline-start: 3px; }
-.ed-props .ed-toolbar .ed-tool { flex: 1 1 0; width: auto; min-width: 20px; max-width: 40px; height: 30px; }
+.ed-props .ed-toolbar .ed-tool { flex: 1 1 0; width: auto; min-width: 20px; max-width: 40px; height: 26px; }
 .ed-props .ed-toolbar .ed-tool svg { width: 16px; height: 16px; }
 
 /* the colour field (panels.ts colorField), Penpot's: swatch · hex · % opacity.
@@ -3343,7 +3351,8 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 /* Auto layout (inspector/layout.ts): the 3×3 alignment box, Penpot's */
 .ed-align-matrix {
   box-sizing: border-box; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;
-  width: 66px; height: 66px; padding: 4px; background: var(--field); border: 1px solid var(--line); border-radius: 6px;
+  grid-template-rows: repeat(3, 1fr); /* square cells: rows were sized by content, 21/15/15 */
+  width: 66px; height: 66px; padding: 4px; background: var(--field); border: 1px solid var(--field-line); border-radius: 6px;
 }
 .ed-align-matrix button { padding: 0; border: 0; border-radius: 3px; background: none; cursor: pointer; display: grid; place-items: center; }
 .ed-align-matrix button::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
@@ -3490,10 +3499,12 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 .ed-paintlayer.is-over { box-shadow: inset 0 2px 0 var(--blue); }
 .ed-layer-blend { width: 100%; }
 .ed-grad-knob.ed-grad-stop { border-radius: 3px; cursor: ew-resize; }
-.ed-addlayer { display: inline-flex; align-items: center; gap: 6px; }
-/* the padlock between W and H (arrange.ts ratioLock): in the gap of the first row */
-.ed-grid2:has(> .ed-ratio-lock) { position: relative; column-gap: 22px; }
-.ed-ratio-lock { position: absolute; top: 4px; left: 50%; translate: -50% 0; width: 18px; height: 18px; min-height: 0; padding: 1px; color: var(--muted); }
+.ed-addlayer { display: inline-flex; align-items: center; gap: 6px; height: 26px; }
+/* the padlock (arrange.ts ratioLock): at the end of W's own field */
+.ed-has-lock { position: relative; }
+.ed-has-lock input { padding-inline-end: 24px; }
+.ed-has-lock .ed-token-dot { inset-inline-end: 24px; }
+.ed-ratio-lock { position: absolute; top: 4px; inset-inline-end: 4px; width: 18px; height: 18px; min-height: 0; padding: 1px; color: var(--muted); border: 0; background: none; }
 .ed-ratio-lock[aria-pressed="true"] { color: var(--accent-ink); }
 .ed-ratio-lock svg { width: 14px; height: 14px; }
 

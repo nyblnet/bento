@@ -52,7 +52,8 @@ function measure(scope) {
   const probe = document.createElement('div')
   document.body.appendChild(probe)
   const resolve = (v) => { probe.style.color = v; return getComputedStyle(probe).color }
-  const tok = { line: resolve(root.getPropertyValue('--line')), field: resolve(root.getPropertyValue('--field')), ring: resolve(root.getPropertyValue('--accent-ink')) }
+  // a control's edge is its own token (dark mode lifts it to 3:1 against the panel)
+  const tok = { line: resolve(root.getPropertyValue('--field-line')), field: resolve(root.getPropertyValue('--field')), ring: resolve(root.getPropertyValue('--accent-ink')) }
   probe.remove()
   const out = []
   for (const el of document.querySelectorAll('input, textarea, select')) {
@@ -87,7 +88,7 @@ function problems(f, tok) {
   if (f.styles.some((x) => x === 'inset' || x === 'outset')) p.push(`${f.styles[0]} border (browser default)`)
   else if (f.styles.some((x) => x !== 'solid')) p.push(`border ${f.styles.join('/')}`)
   if (f.widths.some((w) => w !== '1px')) p.push(`border ${f.widths.join('/')}`)
-  if (f.colors.some((c) => c !== tok.line)) p.push(`border ${f.colors[0]} ≠ --line ${tok.line}`)
+  if (f.colors.some((c) => c !== tok.line)) p.push(`border ${f.colors[0]} ≠ --field-line ${tok.line}`)
   if (f.bg !== tok.field) p.push(`fill ${f.bg} ≠ --field ${tok.field}`)
   if (f.radius !== '6px') p.push(`radius ${f.radius}`)
   if (f.type !== 'textarea' && Math.abs(f.h - 26) > 0.5) p.push(`height ${f.h}`)

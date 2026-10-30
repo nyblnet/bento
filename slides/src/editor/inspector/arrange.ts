@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // Position, size, alignment and stacking order of the selection.
+import { blendPairs } from './shape'
 import { tokenBind } from './tokenbind'
 import type { PropsPanel } from '../panels'
 import { BOOL_OPS, boolOperands, boolUi, combine } from '../booleans'
@@ -16,7 +17,8 @@ export function buildLayoutRole(p: PropsPanel, el: SlideElement) {
   // What the box IS to the slide's layout — its own section, said in
   // words: a bare 'Layout role' dropdown among the text settings told
   // nobody what it did.
-  section(p, t('Layout'))
+  // named for what it holds: beside 'Auto layout' a second 'Layout' read as the same thing
+  section(p, t('Placeholder role'))
   const why = document.createElement('p')
   why.className = 'ed-hint ed-keep' // the section's whole point: shown, not folded behind '?'
   why.textContent = t('Which box of the slide’s layout this is. When you switch the slide to another layout, the content moves into the new layout’s box with the same role — as a placeholder does in PowerPoint.')
@@ -115,10 +117,7 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
   layer.className = 'ed-grid2 ed-grid-wide'
   if (single) {
     const el = single
-    const blend = labeledSelect(
-      [['normal', t('Normal')], ['multiply', t('Multiply')], ['screen', t('Screen')], ['overlay', t('Overlay')],
-        ['darken', t('Darken')], ['lighten', t('Lighten')], ['difference', t('Difference')], ['exclusion', t('Exclusion')]],
-      el.blend || 'normal',
+    const blend = labeledSelect(blendPairs(), el.blend || 'normal',
       (v) => p.mutate(el.id, (e) => {
         if (v === 'normal') delete e.blend
         else e.blend = v
@@ -143,10 +142,13 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
     const f = measure(p, els, key, label, { min: 1 })
     return derived ? f : tokenBind(p, f, single!, key)
   }
+  // the padlock rides inside W's field, at its end: the pair keeps the
+  // panel's one two-column grid (Figma puts it beside W the same way)
+  const w = size('w', t('W'))
+  if (single && !derived) { w.classList.add('ed-has-lock'); w.append(ratioLock(p, single)) }
   geo.append(
-    size('w', t('W')),
+    w,
     size('h', t('H')),
-    ...(single && !derived ? [ratioLock(p, single)] : []),
     measure(p, els, 'x', t('X')),
     measure(p, els, 'y', t('Y')),
     measure(p, els, 'rotation', t('Angle'), { icon: ICONS.rotate, unit: '°' }),

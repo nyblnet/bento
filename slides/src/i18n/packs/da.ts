@@ -1260,4 +1260,9 @@ export const strings: Catalog = {
   "Saturation": "Mætning",
   "Luminosity": "Lysstyrke",
   "Hidden elements are not drawn — show one in Layers to export it": "Skjulte elementer tegnes ikke — vis et i Lag for at eksportere det",
+  "Fly in": "Flyv ind",
+  "Swap ends": "Byt ender",
+  "Ends": "Ender",
+  "Fill container": "Fyld beholder",
+  "Placeholder role": "Pladsholderrolle",
 }

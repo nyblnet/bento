@@ -1248,4 +1248,9 @@ export const zhHans: Catalog = {
   "Saturation": "饱和度",
   "Luminosity": "明度",
   "Hidden elements are not drawn — show one in Layers to export it": "隐藏的元素不会被绘制——在“图层”中显示后即可导出",
+  "Fly in": "飞入",
+  "Swap ends": "交换端点",
+  "Ends": "端点",
+  "Fill container": "填充容器",
+  "Placeholder role": "占位符角色",
 }

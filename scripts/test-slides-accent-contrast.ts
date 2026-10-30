@@ -100,6 +100,12 @@ for (const [theme, t] of Object.entries(THEMES)) {
     const c = contrast(ink, hex(t[bg]))
     ok(c >= 3, `${theme}: a focus outline in --accent-ink on ${bg} — ${c.toFixed(2)}:1 (non-text, ≥3)`)
   }
+  // 6. a form control's edge reads against the panel and against its own fill
+  // (WCAG 1.4.11 non-text, 3:1) — dark only: light keeps the hairline look
+  if (theme === 'dark') for (const bg of ['--surface', '--field']) {
+    const c = contrast(hex(t['--field-line']), hex(t[bg]))
+    ok(c >= 3, `${theme}: a field's edge (--field-line) on ${bg} — ${c.toFixed(2)}:1 (non-text, ≥3)`)
+  }
   // 4. text on the orange
   const on = contrast(hex(t['--accent-on']), accent)
   ok(on >= 4.5, `${theme}: --accent-on on the --accent fill — ${on.toFixed(2)}:1`)

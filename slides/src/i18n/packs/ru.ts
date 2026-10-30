@@ -1260,4 +1260,9 @@ export const strings: Catalog = {
   "Saturation": "Насыщенность",
   "Luminosity": "Яркость",
   "Hidden elements are not drawn — show one in Layers to export it": "Скрытые элементы не отображаются — покажите элемент в «Слоях», чтобы экспортировать его",
+  "Fly in": "Влёт",
+  "Swap ends": "Поменять концы местами",
+  "Ends": "Концы",
+  "Fill container": "Заполнить контейнер",
+  "Placeholder role": "Роль заполнителя",
 }

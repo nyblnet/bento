@@ -1256,4 +1256,9 @@ export const strings: Catalog = {
   "Saturation": "Verzadiging",
   "Luminosity": "Lichtsterkte",
   "Hidden elements are not drawn — show one in Layers to export it": "Verborgen elementen worden niet getekend — toon er een in Lagen om het te exporteren",
+  "Fly in": "Invliegen",
+  "Swap ends": "Uiteinden omwisselen",
+  "Ends": "Uiteinden",
+  "Fill container": "Container vullen",
+  "Placeholder role": "Rol van tijdelijke aanduiding",
 }

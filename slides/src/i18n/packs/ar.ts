@@ -1268,4 +1268,9 @@ export const strings: Catalog = {
   "Saturation": "التشبع",
   "Luminosity": "السطوع",
   "Hidden elements are not drawn — show one in Layers to export it": "العناصر المخفية لا تُرسم — أظهر أحدها في الطبقات لتصديره",
+  "Fly in": "طيران للداخل",
+  "Swap ends": "تبديل الطرفين",
+  "Ends": "الطرفان",
+  "Fill container": "ملء الحاوية",
+  "Placeholder role": "دور العنصر النائب",
 }

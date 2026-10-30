@@ -3,7 +3,8 @@
 // Pictures, crops, video and audio, embeds, code.
 import type { PropsPanel } from '../panels'
 import { type SlideElement, type ImageElement, internAsset, type MediaElement, MEDIA_EMBED_BUDGET, type EmbedElement, type CodeElement } from '../../model'
-import { section, row, segmented, number, toggle, select } from './fields'
+import { section, row, segmented, number, toggle, select, mini, field } from './fields'
+import { ICONS } from '../../icons'
 import { t } from '../../i18n'
 import { resolveAsset } from '../../render'
 import { fmtBytes, shrinkImageFile, shrinkNote } from '../shrink'
@@ -54,7 +55,7 @@ export function buildImageProps(p: PropsPanel, el: SlideElement) {
   pick(t('Replace file (original size)…'), true)
   section(p, t('Fit & corners'))
   row(p, 'Fit', segmented(['contain', 'cover', 'fill'], (el as any).fit, (v) =>
-    p.mutate(el.id, (e) => { (e as any).fit = v }, true)))
+    p.mutate(el.id, (e) => { (e as any).fit = v }, true), undefined, { contain: ICONS.fitContain, cover: ICONS.fitCover, fill: ICONS.fitFill }))
   row(p, 'Corner radius', number((el as any).radius, 1, (v, fin) =>
     p.mutate(el.id, (e) => { (e as any).radius = Math.max(v, 0) }, fin), { min: 0 }))
   // Off = width and height resize independently. Unlocking also sets
@@ -170,7 +171,7 @@ export function buildMediaProps(p: PropsPanel, el: MediaElement) {
 
   if (el.kind === 'video') {
     row(p, 'Fit', segmented(['contain', 'cover', 'fill'], el.fit ?? 'contain', (v) =>
-      p.mutate(el.id, (e) => { (e as MediaElement).fit = v as MediaElement['fit'] }, true)))
+      p.mutate(el.id, (e) => { (e as MediaElement).fit = v as MediaElement['fit'] }, true), undefined, { contain: ICONS.fitContain, cover: ICONS.fitCover, fill: ICONS.fitFill }))
     row(p, 'Corner radius', number(el.radius ?? 0, 1, (v, fin) =>
       p.mutate(el.id, (e) => { (e as MediaElement).radius = Math.max(v, 0) }, fin), { min: 0 }))
     const poster = document.createElement('input')
@@ -269,19 +270,23 @@ export function buildCodeProps(p: PropsPanel, el: CodeElement) {
   // Font Size
   // Shown in POINTS (the unit office users know); the model stores slide-space
   // px. 1pt = 4/3 px at the slide's 96dpi space, so 32px = 24pt exactly.
-  row(p, 'Size (pt)', number(Math.round(el.fontSize * 0.75 * 10) / 10, 1, (v, fin) =>
+  // size and line height in-field, as on a text box: the same property reads the same way
+  const size = mini('pt', Math.round(el.fontSize * 0.75 * 10) / 10, (v, fin) =>
     p.mutate(el.id, (e) => {
       (e as CodeElement).fontSize = Math.round(Math.max(v, 3) * (4 / 3) * 100) / 100
-    }, fin), { min: 3 }))
+    }, fin), undefined, { min: 3 })
+  size.title = t('Size (pt)')
+  size.querySelector('input')!.setAttribute('aria-label', size.title)
+  const lh = mini(t('Line height'), el.lineHeight, (v, fin) =>
+    p.mutate(el.id, (e) => { (e as CodeElement).lineHeight = Math.max(v, 0.5) }, fin), ICONS.lineHeight, { min: 0.5 })
+  ;(lh.querySelector('input') as HTMLInputElement).step = '0.05'
+  field(p, size, lh)
   // Alignment
   row(p, 'Align', segmented(['left', 'center', 'right'], el.align, (v) =>
     p.mutate(el.id, (e) => { (e as CodeElement).align = v as CodeElement['align'] }, true)))
   // V-Alignment
   row(p, 'Vertical align', segmented(['top', 'middle', 'bottom'], el.valign, (v) =>
     p.mutate(el.id, (e) => { (e as CodeElement).valign = v as CodeElement['valign'] }, true)))
-  // Line height
-  row(p, 'Line height', number(el.lineHeight, 0.05, (v, fin) =>
-    p.mutate(el.id, (e) => { (e as CodeElement).lineHeight = Math.max(v, 0.5) }, fin), { min: 0.5 }))
   // Language — selects the built-in tokenizer table. grammarName doubles as
   // the language id; grammarAssetId/themeAssetId stay in the format as the
   // seam for a future signed-extension tier carrying real TextMate grammars

@@ -1248,4 +1248,9 @@ export const de: Catalog = {
   "Saturation": "Sättigung",
   "Luminosity": "Luminanz",
   "Hidden elements are not drawn — show one in Layers to export it": "Ausgeblendete Elemente werden nicht gezeichnet – blende eines in Ebenen ein, um es zu exportieren",
+  "Fly in": "Hereinfliegen",
+  "Swap ends": "Enden tauschen",
+  "Ends": "Enden",
+  "Fill container": "Container füllen",
+  "Placeholder role": "Platzhalterrolle",
 }

@@ -1277,4 +1277,9 @@ export const strings: Catalog = {
   "Saturation": "Saturation",
   "Luminosity": "Luminosity",
   "Hidden elements are not drawn — show one in Layers to export it": "Hindi iginuguhit ang mga nakatagong elemento — ipakita ang isa sa Layers para i-export ito",
+  "Fly in": "Lumipad papasok",
+  "Swap ends": "Pagpalitin ang mga dulo",
+  "Ends": "Mga dulo",
+  "Fill container": "Punuin ang container",
+  "Placeholder role": "Tungkulin ng placeholder",
 }

@@ -1285,4 +1285,9 @@ export const strings: Catalog = {
   "Saturation": "Doýgunlyk",
   "Luminosity": "Ýagtylyk derejesi",
   "Hidden elements are not drawn — show one in Layers to export it": "Gizlin elementler çekilmeýär — eksport etmek üçin birini Gatlaklarda görkeziň",
+  "Fly in": "Uçup girmek",
+  "Swap ends": "Uçlary çalyşmak",
+  "Ends": "Uçlar",
+  "Fill container": "Konteýneri doldurmak",
+  "Placeholder role": "Orun saklaýjynyň roly",
 }

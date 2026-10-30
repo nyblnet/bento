@@ -43,7 +43,8 @@ try {
     await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2)
     await p.waitForTimeout(300)
     const model = () => p.evaluate(() => { const e = window.bento.doc.slides[0].elements[0]; return `${e.align}/${e.valign}/${e.textStroke?.fill ?? 'filled'}` })
-    const segs = p.locator('.ed-props .ed-seg')
+    // the Format tab's: Animate now has its own pickers (entrance, loop)
+    const segs = p.locator('.ed-props .ed-seg:visible')
     const tag = `[${locale}]`
 
     if (locale === 'en-US') {

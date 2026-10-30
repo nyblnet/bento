@@ -1258,4 +1258,9 @@ export const strings: Catalog = {
   "Saturation": "Độ bão hòa",
   "Luminosity": "Độ chói",
   "Hidden elements are not drawn — show one in Layers to export it": "Phần tử bị ẩn không được vẽ — hãy hiện một phần tử trong Lớp để xuất",
+  "Fly in": "Bay vào",
+  "Swap ends": "Đổi hai đầu",
+  "Ends": "Hai đầu",
+  "Fill container": "Lấp đầy vùng chứa",
+  "Placeholder role": "Vai trò chỗ dành sẵn",
 }

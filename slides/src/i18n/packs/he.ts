@@ -1261,4 +1261,9 @@ export const strings: Catalog = {
   "Saturation": "רוויה",
   "Luminosity": "בהירות",
   "Hidden elements are not drawn — show one in Layers to export it": "רכיבים מוסתרים אינם מצוירים — הצג אחד בשכבות כדי לייצא אותו",
+  "Fly in": "כניסה בתעופה",
+  "Swap ends": "החלפת קצוות",
+  "Ends": "קצוות",
+  "Fill container": "מילוי המכל",
+  "Placeholder role": "תפקיד מציין מיקום",
 }

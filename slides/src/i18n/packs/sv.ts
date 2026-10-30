@@ -1257,4 +1257,9 @@ export const strings: Catalog = {
   "Saturation": "Mättnad",
   "Luminosity": "Luminans",
   "Hidden elements are not drawn — show one in Layers to export it": "Dolda element ritas inte — visa ett i Lager för att exportera det",
+  "Fly in": "Flyg in",
+  "Swap ends": "Byt ändar",
+  "Ends": "Ändar",
+  "Fill container": "Fyll behållare",
+  "Placeholder role": "Platshållarroll",
 }

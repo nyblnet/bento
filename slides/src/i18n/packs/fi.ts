@@ -1265,4 +1265,9 @@ export const strings: Catalog = {
   "Saturation": "Kylläisyys",
   "Luminosity": "Valoisuus",
   "Hidden elements are not drawn — show one in Layers to export it": "Piilotettuja elementtejä ei piirretä — näytä elementti Tasoissa viedäksesi sen",
+  "Fly in": "Lennä sisään",
+  "Swap ends": "Vaihda päät",
+  "Ends": "Päät",
+  "Fill container": "Täytä säiliö",
+  "Placeholder role": "Paikkamerkin rooli",
 }
