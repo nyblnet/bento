@@ -1330,7 +1330,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "Çarçuwanyň awtomatik ýerleşişi bilen kesgitlenýär",
   "Space evenly across": "Keseligine deň aralyk",
   "Space evenly down": "Dikligine deň aralyk",
-  "Resizing": "Ölçeg üýtgetmek",
   "Hug": "Mazmuna görä",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Çarçuwa öz elementlerine görä ulalýar, şonuň üçin dolduryljak ýer ýok — ilki onuň «Mazmuna görä» sazlamasyny öçüriň",
   "“{v}” could be read two ways — type it without the separator": "«{v}» iki hili okalyp bilner — bölüji belgisiz ýazyň",

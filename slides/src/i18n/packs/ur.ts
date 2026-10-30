@@ -1323,7 +1323,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "فریم کے خودکار خاکے سے طے شدہ",
   "Space evenly across": "افقی برابر فاصلہ",
   "Space evenly down": "عمودی برابر فاصلہ",
-  "Resizing": "سائز بدلنا",
   "Hug": "مواد کے مطابق",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "فریم اپنے اجزا کے مطابق سائز لیتا ہے، اس لیے بھرنے کو جگہ نہیں — پہلے اس کا «مواد کے مطابق» بند کریں",
   "“{v}” could be read two ways — type it without the separator": "«{v}» کو دو طرح پڑھا جا سکتا ہے — اسے علامتِ فاصل کے بغیر لکھیں",

@@ -1316,7 +1316,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "ফ্রেমের অটো লেআউট ঠিক করে",
   "Space evenly across": "আড়াআড়ি সমান ফাঁক",
   "Space evenly down": "লম্বালম্বি সমান ফাঁক",
-  "Resizing": "আকার পরিবর্তন",
   "Hug": "কনটেন্ট অনুযায়ী",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "ফ্রেমটি তার উপাদান অনুযায়ী আকার নেয়, তাই ভরাট করার জায়গা নেই — আগে এর “কনটেন্ট অনুযায়ী” বন্ধ করুন",
   "“{v}” could be read two ways — type it without the separator": "“{v}” দুইভাবে পড়া যায় — বিভাজক ছাড়া লিখুন",

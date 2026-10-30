@@ -12,6 +12,7 @@ import { optLabel, relOf } from './controls'
 import { applyRel } from './numexpr'
 import { isMacOS } from '../../screens'
 import { ICONS } from '../../icons'
+import { childResizing } from './layout'
 import { openCtxMenu } from '../ctxmenu'
 
 export function buildLayoutRole(p: PropsPanel, el: SlideElement) {
@@ -224,6 +225,10 @@ export function layerBlock(p: PropsPanel, els: SlideElement[]) {
   }
   block.appendChild(geo)
   if (corners) block.appendChild(corners)
+  // A frame's child sizes by its frame: Hug / Fixed / Fill sit right under W
+  // and H, which they decide — Figma keeps them there too, not in a section
+  // further down.
+  if (els.length === 1) childResizing(p, els[0])
 }
 
 /**

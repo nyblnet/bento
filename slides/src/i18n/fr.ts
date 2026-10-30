@@ -1293,7 +1293,6 @@ export const fr: Catalog = {
   "Set by the frame’s auto layout": "Défini par la mise en page auto du cadre",
   "Space evenly across": "Répartir horizontalement",
   "Space evenly down": "Répartir verticalement",
-  "Resizing": "Redimensionnement",
   "Hug": "Ajuster",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Le cadre s’ajuste à ses enfants : il n’y a pas d’espace à remplir — désactivez d’abord son « Ajuster au contenu »",
   "“{v}” could be read two ways — type it without the separator": "« {v} » peut se lire de deux façons — saisissez-le sans séparateur",

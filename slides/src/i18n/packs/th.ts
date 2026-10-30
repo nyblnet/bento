@@ -1307,7 +1307,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "กำหนดโดยเลย์เอาต์อัตโนมัติของเฟรม",
   "Space evenly across": "กระจายระยะเท่ากันแนวนอน",
   "Space evenly down": "กระจายระยะเท่ากันแนวตั้ง",
-  "Resizing": "การปรับขนาด",
   "Hug": "พอดีกับเนื้อหา",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "เฟรมปรับขนาดตามองค์ประกอบลูก จึงไม่มีพื้นที่ให้เติม — ปิด “พอดีกับเนื้อหา” ของเฟรมก่อน",
   "“{v}” could be read two ways — type it without the separator": "“{v}” อ่านได้สองแบบ — พิมพ์โดยไม่มีตัวคั่น",

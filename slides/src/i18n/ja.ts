@@ -1293,7 +1293,6 @@ export const ja: Catalog = {
   "Set by the frame’s auto layout": "フレームの自動レイアウトで決まります",
   "Space evenly across": "左右に均等配置",
   "Space evenly down": "上下に均等配置",
-  "Resizing": "サイズ変更",
   "Hug": "内容に合わせる",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "フレームが子要素に合わせて大きさを変えるため、埋める余白がありません — 先にフレームの「内容に合わせる」をオフにしてください",
   "“{v}” could be read two ways — type it without the separator": "「{v}」は2通りに読めます — 区切り記号なしで入力してください",

@@ -1310,7 +1310,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "Kehyksen automaattisen asettelun määräämä",
   "Space evenly across": "Tasaa välit vaakasuunnassa",
   "Space evenly down": "Tasaa välit pystysuunnassa",
-  "Resizing": "Koon muutos",
   "Hug": "Sovita",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Kehys sovittuu sisältöönsä, joten täytettävää tilaa ei ole — poista ensin kehyksen ”Sovita sisältöön”",
   "“{v}” could be read two ways — type it without the separator": "Arvon ”{v}” voi lukea kahdella tavalla — kirjoita se ilman erotinta",

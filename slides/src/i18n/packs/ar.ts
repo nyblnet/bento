@@ -1313,7 +1313,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "يحدده التخطيط التلقائي للإطار",
   "Space evenly across": "توزيع متساوٍ أفقيًا",
   "Space evenly down": "توزيع متساوٍ رأسيًا",
-  "Resizing": "تغيير الحجم",
   "Hug": "احتضان",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "يتكيّف الإطار مع عناصره، فلا توجد مساحة لملئها — أوقف أولًا «احتضان المحتوى» فيه",
   "“{v}” could be read two ways — type it without the separator": "يمكن قراءة «{v}» بطريقتين — اكتبه دون الفاصل",

@@ -1301,7 +1301,6 @@ export const strings: Catalog = {
   "Set by the frame’s auto layout": "Bepaald door de auto-indeling van het frame",
   "Space evenly across": "Gelijkmatig horizontaal verdelen",
   "Space evenly down": "Gelijkmatig verticaal verdelen",
-  "Resizing": "Formaat",
   "Hug": "Passend",
   "The frame sizes itself to its children, so there is no space to fill — turn off its Hug contents first": "Het frame past zich aan zijn inhoud aan, dus er is geen ruimte om te vullen — zet eerst ‘Passend om inhoud’ van het frame uit",
   "“{v}” could be read two ways — type it without the separator": "‘{v}’ kan op twee manieren gelezen worden — typ het zonder scheidingsteken",
